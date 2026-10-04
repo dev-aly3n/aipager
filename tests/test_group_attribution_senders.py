@@ -937,11 +937,11 @@ def test_wizard_rejects_a_typed_shared_id(wizard, monkeypatch, uid):
 
 
 def test_wizard_rejects_an_auto_detected_shared_id(wizard, monkeypatch):
-    # The third answer is the label if the shared id were taken (it must
-    # not be), else the second "continue?" (its value is not read).
-    _stub_ask(monkeypatch, wizard, ["auto", True, "", ""])
+    # The third answer would be "is this the person?" if the shared id
+    # were offered (it must not be), else the second "continue?".
+    _stub_ask(monkeypatch, wizard, ["auto", True, True, True, ""])
     found = iter([(ANON, "GroupAnonymousBot", None), (5151, "carol", None)])
-    monkeypatch.setattr(wizard, "_fetch_id_from_updates", lambda t, *, want: next(found))
+    monkeypatch.setattr(wizard, "_detect_id", lambda t, *, want, **k: next(found))
     printed = []
     monkeypatch.setattr(wizard.err_console, "print", lambda s, *a, **k: printed.append(s))
     out = wizard._capture_user_identity(1, existing_ids=set(), existing_labels=set(),
@@ -1297,8 +1297,8 @@ def test_wizard_auto_detect_says_why_when_only_anonymous_messages_were_seen(monk
 def test_wizard_prints_the_advisory(wizard, monkeypatch):
     from aipager.wizard import telegram_api
     _stub_ask(monkeypatch, wizard, ["auto", True, "cancel"])
-    monkeypatch.setattr(wizard, "_fetch_id_from_updates",
-                        lambda t, *, want: (None, None, telegram_api.ANONYMOUS_SENDER_ADVISORY))
+    monkeypatch.setattr(wizard, "_detect_id",
+                        lambda t, *, want, **k: (None, None, telegram_api.ANONYMOUS_SENDER_ADVISORY))
     printed = []
     monkeypatch.setattr(wizard.err_console, "print", lambda s, *a, **k: printed.append(s))
     assert wizard._capture_user_identity(1, existing_ids=set(), existing_labels=set(),

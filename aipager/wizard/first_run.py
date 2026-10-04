@@ -19,14 +19,17 @@ from aipager.wizard.settings_patch import (
     _step_settings,
 )
 from aipager.wizard.telegram_api import (
+    WATCH_SOURCE_LINES,
+    _detect_id,
     _fetch_id_from_updates,
+    _watch_source,
     _normalize_token,
     _test_send,
     _verify_token,
 )
 
 
-def _step_token(step_label: str = "[1/5]") -> tuple[str, str]:
+def _step_token(step_label: str = "[1/4]") -> tuple[str, str]:
     step(f"{step_label}  Telegram bot")
     hint("Get a token from @BotFather (https://t.me/BotFather)")
     while True:
@@ -53,7 +56,7 @@ def _step_token(step_label: str = "[1/5]") -> tuple[str, str]:
 
 def _step_chat_id(
     token: str, bot_username: str,
-    *, mode: str = "personal", step_label: str = "[2/5]",
+    *, mode: str = "personal", step_label: str = "[2/4]",
 ) -> int:
     """Capture the chat ID (DM for personal mode, group for team mode).
 
@@ -83,6 +86,7 @@ def _step_chat_id(
             f"DM the bot here, then continue: https://t.me/{bot_username}"
         )
 
+    turned_down: set[int] = set()
     while True:
         method = _ask(questionary.select(
             "How should we find the chat id?",
@@ -109,14 +113,28 @@ def _step_chat_id(
                 continue
         else:
             hint(detect_hint)
+            # A group is usually added from the edit menu while the daemon
+            # runs, and its long poll takes the bot's updates (roadmap
+            # 8.88): read what it noted instead, and say which. Your own
+            # DM (first run) is read from Telegram, as always.
+            source = _watch_source() if mode == "team" else "telegram"
+            if mode == "team":
+                hint(WATCH_SOURCE_LINES[source])
             _ask(questionary.confirm(
                 "Sent - continue?",
                 default=True, qmark="?", style=_PROMPT_STYLE,
             ))
             with _spin(spinner_msg):
-                found_id, who, advisory = _fetch_id_from_updates(
-                    token, want=("group" if mode == "team" else "dm"),
-                )
+                if mode == "team":
+                    # Groups already set up are looked past too: a test
+                    # message must not go to a working group (8.88).
+                    from aipager.wizard.scope_io import configured_chat_ids
+                    found_id, who, advisory = _detect_id(
+                        token, want="group", source=source,
+                        exclude=configured_chat_ids() | frozenset(turned_down))
+                else:
+                    found_id, who, advisory = _fetch_id_from_updates(
+                        token, want="dm")
             if found_id is None:
                 if advisory:
                     err_console.print(f"  [err]{advisory}[/err]")
@@ -141,6 +159,10 @@ def _step_chat_id(
             ))
             if confirmed:
                 return cid
+            if mode == "team":
+                # Not this group: the next auto-detect looks past it
+                # (roadmap 8.88), or it would come back every time.
+                turned_down.add(cid)
             hint("Let's try again - the message went somewhere unexpected.")
             continue
 
@@ -163,6 +185,13 @@ def _step_chat_id(
         err_console.print(f"  [err]Test send failed: {err}[/err]")
 
 
+#: The last line of the first run (roadmap 8.89): the wizard no longer
+#: asks for a default mode (its answer was never read); this is where
+#: new sessions really get theirs (``new_flow.resolve_new_session_settings``).
+NEW_SESSIONS_LINE = ("New sessions start in Auto for owners and admins; "
+                     "change it in Telegram under /settings → New sessions.")
+
+
 def _completion_screen() -> None:
     """Show the post-setup summary in a panel (or plain text off-TTY)."""
     from rich.panel import Panel
@@ -175,6 +204,8 @@ def _completion_screen() -> None:
         "  Health check:        [path]aipager doctor[/path]",
         "  Mini App:             on - opens a public tunnel "
         "([path]aipager miniapp disable[/path] to turn off)",
+        "",
+        f"  {NEW_SESSIONS_LINE}",
     ]
     body = "\n".join(lines)
     if console.is_terminal:
@@ -190,6 +221,8 @@ def _completion_screen() -> None:
         console.print("  Health check:        aipager doctor")
         console.print("  Mini App:             on - opens a public tunnel "
                       "(aipager miniapp disable to turn off)")
+        console.print()
+        console.print(f"  {NEW_SESSIONS_LINE}")
 
 
 def _grant_owner_step(chat_id: int, step_label: str = "[3/4]") -> str:
@@ -243,52 +276,6 @@ def _commit_owner_dm(token: str, chat_id: int, role: str) -> None:
             pass
 
 
-def _step_default_mode(step_label: str = "[5/5]") -> str:
-    """Ask the user which default permission mode to use for new sessions.
-
-    Returns ``"ask"`` or ``"auto"``. The result is stored in ``aipager.yaml``
-    as ``default_mode: ask | auto`` by the caller.
-    """
-    step(f"{step_label}  Default session mode")
-    console.print()
-    console.print(
-        "[muted]  💬 Ask  - Claude prompts before each tool call (recommended).[/muted]"
-    )
-    console.print(
-        "[muted]  🤖 Auto - Claude runs tools without prompting "
-        "(<code>--dangerously-skip-permissions</code>).[/muted]"
-    )
-    console.print()
-    ask_choice = questionary.Choice(
-        "💬 Ask - Claude prompts for each tool call", value="ask")
-    mode = _ask(questionary.select(
-        "Default mode for new sessions:",
-        choices=[
-            ask_choice,
-            questionary.Choice(
-                "🤖 Auto - Claude runs tools without prompting", value="auto"),
-        ],
-        default=ask_choice,
-        qmark="?",
-        style=_PROMPT_STYLE,
-    ))
-    return mode
-
-
-def _commit_default_mode(mode: str) -> None:
-    """Persist ``default_mode`` in ``aipager.yaml``.
-
-    Reads the current scopes so the write is additive — existing scope
-    config is preserved and only ``default_mode`` changes.
-    """
-    from aipager.wizard.scope_io import read_config
-    from aipager import scope as scope_mod
-
-    scopes, token = read_config()
-    scope_mod.dump_scopes(scopes, token, scope_mod.CONFIG_PATH, default_mode=mode)
-    ok(f"Default mode set to {mode}.")
-
-
 def _first_run_flow() -> int:
     """Connect a brand-new install to its bot — no mode question.
 
@@ -305,20 +292,16 @@ def _first_run_flow() -> int:
         console.print("Welcome to aipager setup.")
 
     try:
-        token, bot_username = _step_token(step_label="[1/5]")
+        token, bot_username = _step_token(step_label="[1/4]")
         chat_id = _step_chat_id(
-            token, bot_username, mode="personal", step_label="[2/5]",
+            token, bot_username, mode="personal", step_label="[2/4]",
         )
-        role = _grant_owner_step(chat_id, step_label="[3/5]")
+        role = _grant_owner_step(chat_id, step_label="[3/4]")
         # Token + DM scope committed here — a Ctrl+C in any later step
         # leaves a working config; re-running falls into the edit flow.
         _commit_owner_dm(token, chat_id, role)
 
-        # Default mode for new sessions (Ask vs Auto).
-        default_mode = _step_default_mode(step_label="[4/5]")
-        _commit_default_mode(default_mode)
-
-        deps_ok = _step_deps(step_label="[5/5]")
+        deps_ok = _step_deps(step_label="[4/4]")
         if not deps_ok:
             cont = _ask(questionary.confirm(
                 "Continue anyway? (the daemon will likely fail until you "
@@ -331,7 +314,7 @@ def _first_run_flow() -> int:
                     "re-run `aipager config`.",
                 )
                 return 2
-        _step_settings(step_label="[5/5]")
+        _step_settings(step_label="[4/4]")
     except KeyboardInterrupt:
         friendly_warn("Cancelled.")
         return 130

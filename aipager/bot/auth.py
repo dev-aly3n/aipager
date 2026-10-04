@@ -456,19 +456,24 @@ class AuthMixin:
         scope = self._scope_for(chat.id)
         if scope is None:
             # Unknown chat. Groups: silent (someone added the bot to a
-            # group we don't serve). DMs (positive chat_id): one polite
-            # reply so the person knows to ask the operator.
-            if chat.id > 0 and not remember_unauthorized(tg_user.id):
-                msg = update.effective_message
-                if msg is not None:
-                    try:
-                        await reply_text(msg,
-                            "🚫 This bot isn't configured to talk to you. "
-                            f"Ask the operator to add your Telegram user ID "
-                            f"({tg_user.id}) via `aipager config`.",
-                        )
-                    except Exception:
-                        log.debug("reply to unknown-DM user failed", exc_info=True)
+            # group we don't serve), but the sender is noted for
+            # `aipager config` to find (roadmap 8.88). DMs (positive
+            # chat_id): one polite reply so the person knows to ask the
+            # operator; nothing is noted.
+            if chat.id > 0:
+                if not remember_unauthorized(tg_user.id):
+                    msg = update.effective_message
+                    if msg is not None:
+                        try:
+                            await reply_text(msg,
+                                "🚫 This bot isn't configured to talk to you. "
+                                f"Ask the operator to add your Telegram user ID "
+                                f"({tg_user.id}) via `aipager config`.",
+                            )
+                        except Exception:
+                            log.debug("reply to unknown-DM user failed", exc_info=True)
+            else:
+                self._note_unknown_group_sender(tg_user, chat)
             self._audit_event(update, denied=True, reason="unknown-chat")
             return False
 
@@ -518,6 +523,46 @@ class AuthMixin:
         self._audit_event(update, denied=False)
         return True
 
+    @staticmethod
+    def _note_unknown_group_sender(tg_user, chat) -> None:
+        """Note who wrote in a group this daemon does not serve, with the
+        group's id, title and type, in the pending-users file (roadmap
+        8.88): while the daemon runs, its long poll takes every update, so
+        this is where `aipager config` finds a new group and its people.
+        Groups and supergroups only; never a reply. Best-effort."""
+        if getattr(chat, "type", None) not in ("group", "supergroup"):
+            return
+        if tg_user is None or getattr(tg_user, "is_bot", False):
+            return
+        handle = getattr(tg_user, "username", None) or ""
+        first = getattr(tg_user, "first_name", None) or ""
+        last = getattr(tg_user, "last_name", None) or ""
+        try:
+            record_pending_user(
+                tg_user.id, username=handle,
+                display_name=f"{first} {last}".strip(), chat_id=chat.id,
+                chat_title=getattr(chat, "title", None) or "",
+                chat_type=chat.type,
+            )
+        except Exception:
+            log.debug("noting an unknown group's sender failed", exc_info=True)
+
+    async def _note_unknown_group_message(self, update: Update, ctx=None) -> None:
+        """A message for this bot in a group it does not serve (the message
+        chat gate drops those before any handler sees them): note its
+        sender (:meth:`_note_unknown_group_sender`). Commands reach
+        :meth:`_authorize_scoped`, which does the same. Never replies."""
+        if self.scopes is None:
+            return
+        chat = getattr(update, "effective_chat", None)
+        if chat is None or self._scope_for(chat.id) is not None:
+            return
+        if group_intake.is_anonymous_sender(
+                getattr(update, "effective_message", None)):
+            return
+        self._note_unknown_group_sender(
+            getattr(update, "effective_user", None), chat)
+
     async def _auto_deny(
         self,
         sess: TrackedSession,
@@ -527,9 +572,11 @@ class AuthMixin:
         """Auto-deny a tool prompt via the same key-injection path the
         ``[❌ Deny]`` button uses. Called when a team rule matches.
 
-        Posts a one-line notice in the chat naming the rule and the
-        triggering user. Writes a structured audit record. Returns the
-        session to BUSY so the next claude tick proceeds normally.
+        Posts a one-line notice in the chat naming the tool and who it
+        was blocked for, with their role ("⛔ x1 · Edit blocked for @bob
+        (role user)"), plus the call's summary. Writes a structured audit
+        record. Returns the session to BUSY so the next claude tick
+        proceeds normally.
         """
         tool_name = tool_info.get("name", "?")
         summary = tool_info.get("summary", "")[:120]
@@ -550,17 +597,21 @@ class AuthMixin:
         self.registry.transition(sess.name, Status.BUSY)
         sess.pending_permission = None
 
-        by_attr = (
-            f" (triggered by {attribution_label(triggerer)})"
-            if triggerer is not None
-            else ""
-        )
+        # Plain words, no config key (roadmap 8.88c): who it was blocked
+        # for, and under which role.
+        role = getattr(triggerer, "role", None)
+        role = getattr(role, "value", role)
+        for_whom = ""
+        if triggerer is not None:
+            for_whom = f" for {attribution_label(triggerer)}"
+            if role:
+                for_whom += f" (role {role})"
         try:
             await send_text(self._app.bot,
                 resolve_chat_id(sess),
                 f"⛔ <b>{html_mod.escape(sess.label)}</b> · "
-                f"Auto-denied · {html_mod.escape(tool_name)} · "
-                f"per rules.deny_tools{html_mod.escape(by_attr)}\n"
+                f"{html_mod.escape(tool_name)} blocked"
+                f"{html_mod.escape(for_whom)}\n"
                 f"<i>{html_mod.escape(summary)}</i>",
                 parse_mode="HTML",
                 reply_to_message_id=(sess.busy_msg_id
@@ -590,7 +641,7 @@ class AuthMixin:
             log.debug("[%s] auto-deny audit failed", sess.label, exc_info=True)
 
         log.info(
-            "[%s] auto-denied %s per rules.deny_tools (triggerer=%s)",
+            "[%s] auto-denied %s by the chat's deny rules (triggerer=%s)",
             sess.label, tool_name,
             triggerer.label if triggerer else "unknown",
         )

@@ -20,7 +20,7 @@ from aipager.ui import console, ok, step, warn
 from aipager.wizard._constants import _PROMPT_STYLE
 from aipager.wizard.display import _ask
 from aipager.wizard.draft import clear_draft, load_draft, save_draft
-from aipager.wizard.scope_io import commit_scope
+from aipager.wizard.scope_io import add_new_scope, commit_scope, configured_scope_for
 
 _ROLE_GLOSS = {
     "owner": "unrestricted; bypasses safety + all deny rules",
@@ -51,6 +51,12 @@ def _role_choices(*, include_owner: bool = True) -> list[questionary.Choice]:
         gloss = _ROLE_GLOSS.get(n, "custom role")
         choices.append(questionary.Choice(f"{n} - {gloss}", value=n))
     return choices
+
+
+#: "Add a group scope" for a chat that already is one (roadmap 8.88): it
+#: used to replace the scope, dropping every member but the new ones.
+GROUP_ALREADY_SET_UP = ("This group is already set up. Use Edit a scope → "
+                        "Add a member.")
 
 
 # Shown above a group's role picker, where owner is offered (roadmap 8.83).
@@ -139,6 +145,11 @@ def add_group_scope(token: str, bot_username: str,
     step("[~]  Add a group scope")
     if resume:
         chat_id = int(resume["chat_id"])
+        if configured_scope_for(chat_id) is not None:
+            friendly_warn(GROUP_ALREADY_SET_UP,
+                          "The unfinished draft for it was discarded.")
+            clear_draft()
+            return False
         label = str(resume.get("label") or f"group-{abs(chat_id)}")
         members: list[dict] = list(resume.get("members", []))
         console.print(
@@ -148,6 +159,9 @@ def add_group_scope(token: str, bot_username: str,
     else:
         chat_id = _step_chat_id(token, bot_username, mode="team",
                                 step_label="[~]")
+        if configured_scope_for(chat_id) is not None:
+            friendly_warn(GROUP_ALREADY_SET_UP)
+            return False
         label = _ask(questionary.text(
             "Label for this group (shown in status):",
             default=f"group-{abs(chat_id)}", qmark="?", style=_PROMPT_STYLE,
@@ -214,7 +228,14 @@ def add_group_scope(token: str, bot_username: str,
                       for m in members),
         deny_tools=tuple(deny_tools),
     )
-    commit_scope(scope, token)
+    # Never commit_scope here: it replaces a scope with the same chat,
+    # and someone may have set this group up meanwhile (roadmap 8.88).
+    if not add_new_scope(scope, token):
+        friendly_warn(GROUP_ALREADY_SET_UP,
+                      "Nothing was changed; the members drafted here were "
+                      "not added.")
+        clear_draft()
+        return False
     clear_draft()
     ok(f"Added group '{label}' with {len(members)} member(s).")
     return True

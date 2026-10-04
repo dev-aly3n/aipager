@@ -17,9 +17,23 @@ from aipager.wizard.display import (
     _spin,
 )
 from aipager.wizard.telegram_api import (
+    WATCH_SOURCE_LINES,
+    NameOnly,
+    _detect_id,
     _fetch_id_from_updates,
     _http_json,
+    _watch_source,
 )
+
+
+def _shown(who) -> str:
+    """How a detected person is shown: ``@handle`` only for a real
+    username; a name alone says it has none (roadmap 8.88)."""
+    if not who:
+        return "someone with no username or name"
+    if isinstance(who, NameOnly):
+        return f"{who} (no username)"
+    return f"@{who}"
 
 
 #: Roadmap 8.91e: what the wizard says to a shared sender id
@@ -194,18 +208,33 @@ def _capture_user_identity(
         return None
 
     if method == "auto":
-        hint(
-            "Ask the new user to either DM the bot (tap /start) or "
-            "mention the bot in the group - any message the bot can see "
-            "will reveal their numeric id."
-        )
+        source = _watch_source()
+        if source == "daemon":
+            hint(
+                "Ask the new person to mention the bot (or send /start) in "
+                "a group the bot is in - the running daemon notes their "
+                "numeric id."
+            )
+        else:
+            hint(
+                "Ask the new user to either DM the bot (tap /start) or "
+                "mention the bot in the group - any message the bot can see "
+                "will reveal their numeric id."
+            )
+        hint(WATCH_SOURCE_LINES[source])
+        # People shown and turned down this time (roadmap 8.88): skipped
+        # like the ones already captured, so "look again" finds the next.
+        passed_over: set[int] = set()
         while True:
             _ask(questionary.confirm(
                 "They've sent something - continue?",
                 default=True, qmark="?", style=_PROMPT_STYLE,
             ))
             with _spin("Watching for a new user…"):
-                uid, who, adv = _fetch_id_from_updates(token, want="user")
+                uid, who, adv = _detect_id(
+                    token, want="user", source=source,
+                    exclude=frozenset(existing_ids) | frozenset(passed_over),
+                )
             if uid is None:
                 err_console.print(
                     f"  [err]{adv}[/err]" if adv else
@@ -229,14 +258,24 @@ def _capture_user_identity(
                 return None
             if is_shared_sender_id(uid):
                 err_console.print(f"  [err]{SHARED_SENDER_REFUSAL}[/err]")
+                passed_over.add(uid)
                 continue
             if uid in existing_ids:
                 err_console.print(
                     f"  [err]User {uid} ({who or 'no handle'}) is already "
                     "on the allow-list. Ask someone else to mention.[/err]"
                 )
+                passed_over.add(uid)
                 continue
-            ok(f"Captured user_id={uid} (@{who or 'no handle'})")
+            if not _ask(questionary.confirm(
+                f"Found {_shown(who)} (id {uid}). Is this the "
+                "person to add?",
+                default=True, qmark="?", style=_PROMPT_STYLE,
+            )):
+                passed_over.add(uid)
+                hint("Skipped them - looking for someone else next.")
+                continue
+            ok(f"Captured user_id={uid} ({_shown(who)})")
             suggested_label = (who or f"user{uid}").lower()
             finalized = _finalize_user(uid, suggested_label, existing_labels)
             if finalized is None:
@@ -380,17 +419,22 @@ def _finalize_user(
         return {"id": uid, "label": label}
 
 
+#: The optional group rule (roadmap 8.88c), in plain words. It used to
+#: default to yes and promise "an admin override" that does not exist: a
+#: blocked call is denied at once, with nothing to tap.
+DENY_EDITS_QUESTION = ("Block file edits (Write, Edit) for `user` members in "
+                       "this group? Admins and the owner are not affected.")
+
+
 def _collect_deny_tools() -> list[str]:
-    """Ask whether to enable the default deny rule. Returns the list
-    of tool names to put in ``rules.deny_tools`` (possibly empty)."""
+    """Ask whether to block file edits for ``user`` members. Returns the
+    tool names for the scope's ``deny_tools`` (possibly empty). Default
+    No: the ``user`` role already keeps its writes in the session's
+    folder."""
     console.print()
-    console.print("[title]Optional safety rule[/title]")
-    console.print(
-        "[muted]  Auto-deny Write and Edit tools so file changes always "
-        "need an admin override.[/muted]"
-    )
-    enable_default_deny = _ask(questionary.confirm(
-        "Enable default deny_tools = [Write, Edit]?",
-        default=True, qmark="?", style=_PROMPT_STYLE,
+    console.print("[title]Optional rule[/title]")
+    block = _ask(questionary.confirm(
+        DENY_EDITS_QUESTION,
+        default=False, qmark="?", style=_PROMPT_STYLE,
     ))
-    return ["Write", "Edit"] if enable_default_deny else []
+    return ["Write", "Edit"] if block else []

@@ -13,13 +13,15 @@ from dataclasses import replace
 import questionary
 
 from aipager.errors import friendly_error, friendly_warn
-from aipager.scope import ScopeConfigError
+from aipager.scope import Member, ScopeConfigError
 from aipager.ui import console, ok, rule, step
 from aipager.wizard._constants import _PROMPT_STYLE
 from aipager.wizard.daemon_io import _apply_team_change_hint, _restart_hint
 from aipager.wizard.display import _ask, _show_current_config
 from aipager.wizard.scope_flows import _pick_role, add_dm_scope, add_group_scope
-from aipager.wizard.scope_io import commit_scope, read_config, remove_scope, replace_scopes
+from aipager.wizard.scope_io import (
+    append_member, commit_scope, read_config, remove_scope, replace_scopes,
+)
 from aipager.wizard.settings_patch import _step_settings
 from aipager.wizard.telegram_api import _normalize_token, _test_send, _verify_token
 
@@ -74,19 +76,25 @@ def _toggle_tools(current: tuple[str, ...]) -> tuple[str, ...]:
 
 
 def _edit_scope(scope, token: str) -> bool:
-    """Rename / edit deny_tools / remove a scope. Returns True if changed."""
+    """Add a member (groups) / rename / edit deny_tools / remove a scope.
+    Returns True if changed."""
+    choices = []
+    if scope.kind == "group":
+        choices.append(questionary.Choice("Add a member", value="add_member"))
+    choices += [
+        questionary.Choice("Rename", value="rename"),
+        questionary.Choice("Edit scope deny_tools", value="deny"),
+        questionary.Choice("Remove this scope", value="remove"),
+        questionary.Choice("Cancel", value="cancel"),
+    ]
     action = _ask(questionary.select(
         f'Edit {scope.kind} "{scope.label}":',
-        choices=[
-            questionary.Choice("Rename", value="rename"),
-            questionary.Choice("Edit scope deny_tools", value="deny"),
-            questionary.Choice("Remove this scope", value="remove"),
-            questionary.Choice("Cancel", value="cancel"),
-        ],
-        qmark="?", style=_PROMPT_STYLE,
+        choices=choices, qmark="?", style=_PROMPT_STYLE,
     ))
     if action == "cancel":
         return False
+    if action == "add_member":
+        return _add_member(scope, token)
     if action == "rename":
         new = _ask(questionary.text(
             "New label:", default=scope.label,
@@ -120,6 +128,40 @@ def _edit_scope(scope, token: str) -> bool:
         )
         return False
     ok(f"Removed {scope.label}.")
+    return True
+
+
+def _add_member(scope, token: str) -> bool:
+    """Edit a scope → Add a member (roadmap 8.88): capture one person the
+    way "Add a group scope" does, pick their role, and append them to the
+    group. Everyone already in it keeps their place and role. Returns
+    True iff written (the caller then reloads the daemon live)."""
+    from aipager.wizard.team_setup import _capture_user_identity
+
+    if scope.kind != "group":
+        friendly_warn("A DM scope is one person - add a DM scope instead.")
+        return False
+    step(f'[~]  Add a member to "{scope.label}"')
+    captured = _capture_user_identity(
+        len(scope.members) + 1,
+        existing_ids={m.id for m in scope.members},
+        existing_labels={m.label for m in scope.members},
+        token=token,
+    )
+    if captured is None:
+        friendly_warn("Cancelled - no member added.")
+        return False
+    role = _pick_role(f"Role for @{captured['label']}:",
+                      default="user", warn_owner=True)
+    problem = append_member(
+        scope.chat_id,
+        Member(id=captured["id"], label=captured["label"], role=role),
+        token,
+    )
+    if problem is not None:
+        friendly_warn(problem)
+        return False
+    ok(f"Added @{captured['label']} ({role}) to {scope.label}.")
     return True
 
 
@@ -269,7 +311,6 @@ def _menu_choices(has_error: bool) -> list[questionary.Choice]:
         questionary.Choice("Add a DM scope", value="add_dm"),
         questionary.Choice("Edit a scope", value="edit_scope"),
         questionary.Choice("Edit a member", value="edit_member"),
-        questionary.Choice("Change default mode (Ask / Auto)", value="default_mode"),
         questionary.Choice("Test bot reachability", value="test"),
         questionary.Choice("View policy", value="view_policy"),
         questionary.Choice("Re-install Claude Code hooks",
@@ -302,8 +343,8 @@ def _edit_flow() -> int:
             return 130
 
         # A live reload (SIGUSR1) applies scope, member, role and
-        # deny_tools edits (roadmap 8.80); the bot token and the default
-        # mode are read at start only, so they still need a restart.
+        # deny_tools edits (roadmap 8.80); the bot token is read at start
+        # only, so it still needs a restart.
         changed = False
         needs_restart = False
         try:
@@ -337,18 +378,10 @@ def _edit_flow() -> int:
                 sc = _pick_scope(scopes, "Member of which scope?")
                 if sc is not None and _edit_member(sc, token):
                     changed = True
-            elif choice == "default_mode":
-                from aipager.wizard.first_run import (
-                    _commit_default_mode, _step_default_mode,
-                )
-                mode = _step_default_mode(step_label="[~]")
-                _commit_default_mode(mode)
-                changed = True
-                needs_restart = True
         except KeyboardInterrupt:
             friendly_warn("Cancelled this action.")
             continue
-        except ValueError as e:
+        except (ValueError, ScopeConfigError) as e:
             friendly_error(str(e))
             continue
         except OSError as e:

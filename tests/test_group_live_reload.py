@@ -1067,16 +1067,10 @@ def test_the_receiver_records_a_mixed_turns_authors(run_async):
     ("edit_scope", "_edit_scope", True),
     ("edit_member", "_edit_member", True),
     ("refresh_token", "_refresh_token", False),
-    ("default_mode", None, False),
 ])
 def test_the_wizard_reloads_live_after_scope_edits(
         monkeypatch, choice, patch_name, live):
-    from aipager.wizard import edit_menu, first_run
-    monkeypatch.setattr(first_run, "_step_default_mode",
-                        lambda **k: "ask")
-    monkeypatch.setattr(first_run, "_commit_default_mode", lambda m: None)
-    if patch_name is None:
-        patch_name = "_view_policy"   # any harmless attribute
+    from aipager.wizard import edit_menu
 
     answers = iter([choice, "exit"])
     monkeypatch.setattr(edit_menu, "_ask", lambda q: next(answers))

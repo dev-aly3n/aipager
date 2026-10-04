@@ -9,8 +9,10 @@ can always start. See architecture §3.0b.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from aipager import scope as _scope
-from aipager.scope import Scope
+from aipager.scope import Member, Scope
 
 
 def config_exists() -> bool:
@@ -65,3 +67,64 @@ def remove_scope(chat_id: int) -> bool:
         return False
     _scope.dump_scopes(out, token, _scope.CONFIG_PATH)
     return True
+
+
+def configured_scope_for(chat_id: int, scopes: list[Scope] | None = None
+                         ) -> Scope | None:
+    """The scope already set up for *chat_id*, or ``None``. A group Telegram
+    upgraded to a supergroup counts under either id (roadmap 8.87): its
+    old id names the same group."""
+    if scopes is None:
+        scopes, _ = read_config()
+    moved = _scope.load_chat_migrations(_scope.CONFIG_PATH)
+    ids = {chat_id, moved.get(chat_id, chat_id)}
+    ids |= {old for old, new in moved.items() if new == chat_id}
+    return next((s for s in scopes if s.chat_id in ids), None)
+
+
+def configured_chat_ids() -> frozenset[int]:
+    """Every chat already set up, with the other id of each group
+    Telegram upgraded (roadmap 8.87): what group auto-detect looks past
+    (roadmap 8.88). Empty when ``aipager.yaml`` is absent or unreadable
+    (the commit still refuses a duplicate)."""
+    try:
+        scopes, _ = read_config()
+    except Exception:
+        return frozenset()
+    ids = {s.chat_id for s in scopes}
+    for old, new in _scope.load_chat_migrations(_scope.CONFIG_PATH).items():
+        if old in ids or new in ids:
+            ids |= {old, new}
+    return frozenset(ids)
+
+
+def add_new_scope(new: Scope, token: str) -> bool:
+    """Append ``new`` to ``aipager.yaml`` unless a scope for its chat is
+    already there. Returns True iff written. Never replaces a scope: that
+    would drop its members (roadmap 8.88), so the caller tells the
+    operator to add members to it instead."""
+    scopes, existing_token = read_config()
+    if configured_scope_for(new.chat_id, scopes) is not None:
+        return False
+    _scope.dump_scopes([*scopes, new], token or existing_token,
+                       _scope.CONFIG_PATH)
+    return True
+
+
+def append_member(chat_id: int, member: Member, token: str) -> str | None:
+    """Add *member* to the scope of *chat_id* as it is on disk NOW (other
+    members, roles and rules kept). Returns ``None`` when written, else
+    why not (no such scope, already a member, label taken)."""
+    scopes, existing_token = read_config()
+    current = next((s for s in scopes if s.chat_id == chat_id), None)
+    if current is None:
+        return "That scope is no longer in aipager.yaml."
+    if any(m.id == member.id for m in current.members):
+        return f"User id {member.id} is already a member of {current.label}."
+    if any(m.label == member.label for m in current.members):
+        return (f"Label {member.label!r} is already used in "
+                f"{current.label}.")
+    out = [replace(s, members=(*s.members, member))
+           if s.chat_id == chat_id else s for s in scopes]
+    _scope.dump_scopes(out, token or existing_token, _scope.CONFIG_PATH)
+    return None

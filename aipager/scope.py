@@ -283,11 +283,14 @@ def _parse_scope(entry, i: int) -> Scope:
 
 
 def load_default_mode(path: Path = CONFIG_PATH) -> str:
-    """Return the configured default session mode: ``"ask"`` or ``"auto"``.
+    """Return the file's ``default_mode`` key: ``"ask"`` or ``"auto"``.
 
-    Reads ``aipager.yaml`` and returns the ``default_mode`` key. When the
-    file is absent, unreadable, or the key is missing, returns ``"ask"``
-    so the safe default is always explicit.
+    Kept only so an older ``aipager.yaml`` round-trips through
+    :func:`dump_scopes` (roadmap 8.89). Nothing acts on the key: the
+    daemon ignores it, and the wizard no longer asks for it. New sessions
+    take their mode from ``/settings → New sessions``
+    (``new_flow.resolve_new_session_settings``). When the file is absent,
+    unreadable, or the key is missing, returns ``"ask"``.
     """
     if not path.exists():
         return "ask"
@@ -489,10 +492,14 @@ def dump_scopes(
     non-empty (``"ask"`` or ``"auto"``). Passing ``""`` (the default) leaves
     any existing ``default_mode`` key in the file unchanged — this function
     reads the existing value and re-emits it, so callers that don't care
-    about the mode key don't accidentally wipe it.
+    about the mode key don't accidentally wipe it. The key is a leftover
+    the daemon ignores (roadmap 8.89); it is kept only so an older file
+    round-trips unchanged.
     """
-    # Preserve the existing default_mode when the caller didn't pass one.
-    if not default_mode:
+    # Preserve an existing default_mode when the caller didn't pass one,
+    # and only when the file has one: a file without the key stays
+    # without it (nothing reads it any more, roadmap 8.89).
+    if not default_mode and "default_mode" in _raw_yaml(path):
         default_mode = load_default_mode(path)
     # Same reasoning for the Mini App block: this function rebuilds the
     # document from scratch, so anything not re-emitted here is silently
@@ -538,12 +545,9 @@ def dump_scopes(
             sd["deny_tools"] = list(s.deny_tools)
         data["scopes"].append(sd)
 
-    # Write default_mode when it's non-default (auto) or when explicitly
-    # requested — always preserve if already set.
-    if default_mode and default_mode != "ask":
-        data["default_mode"] = default_mode
-    elif default_mode == "ask":
-        # Explicitly set to ask — write it so the file is self-documenting.
+    # A leftover key, re-emitted so an older file round-trips; the
+    # daemon ignores it (roadmap 8.89).
+    if default_mode:
         data["default_mode"] = default_mode
 
     if isinstance(existing_miniapp, dict):

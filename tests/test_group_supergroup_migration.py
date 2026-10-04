@@ -814,8 +814,9 @@ def test_the_yaml_edit_is_surgical(tmp_path):
 
 
 def test_an_existing_record_falls_back_to_a_full_rewrite(tmp_path):
+    # default_mode: a leftover key older wizards wrote (roadmap 8.89).
     _write_config([_dm(), _group(), _group(chat_id=OTHER, label="o")],
-                  extra="chat_migrations:\n  -1003: -1004\n")
+                  extra="chat_migrations:\n  -1003: -1004\ndefault_mode: ask\n")
     raw_before = scope_mod._raw_yaml(_cfg())
     scope_mod.migrate_scope_chat_id(GROUP, NEW)
     raw_after = scope_mod._raw_yaml(_cfg())

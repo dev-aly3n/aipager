@@ -10,11 +10,20 @@ Two questions follow:
 
 Every handler the bot exposes — message, file, voice, callback —
 is gated by `python-telegram-bot`'s chat filter, built from the
-chat(s) configured in `~/.config/aipager/aipager.yaml`. **Only the
-configured chat(s) can interact with the bot.** Messages from any
-other chat are silently ignored at the framework layer. In team
-mode a per-user allow-list with roles is layered on top — see
-[groups](groups.md).
+chat(s) configured in `~/.config/aipager/aipager.yaml`, or (commands)
+by the same check in aipager's own authorization. The one exception
+only notes senders in groups that are not configured (below). **Only the
+configured chat(s) can interact with the bot.** Nothing from any other
+chat is acted on or routed to a session. A private chat that is not
+configured gets one "This bot isn't configured to talk to you" reply.
+In a group that is not configured the bot never answers, but it does
+note who sent it a message there (their Telegram id, username and
+name, and the group's id, title and type) in
+`~/.claude/aipager-pending-users.json`, so `aipager config` can find a
+new group and its people while the daemon runs. Anyone can add the bot
+to a group, so anyone can add a line to that file; it grants nothing.
+In team mode a per-user allow-list with roles is layered on top (see
+[groups](groups.md)).
 
 This means the surface to "outside the world" is:
 

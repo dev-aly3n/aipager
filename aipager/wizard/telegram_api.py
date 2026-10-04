@@ -118,8 +118,139 @@ ANONYMOUS_SENDER_ADVISORY = (
     "say who sent them. Ask the person to post as themselves, then try again.")
 
 
+#: Roadmap 8.88: the one line that says where auto-detect looks.
+WATCH_SOURCE_LINES = {
+    "daemon": "Watching through the running daemon (it notes who "
+              "messages the bot).",
+    "telegram": "Watching Telegram directly.",
+}
+
+#: getUpdates answered 409: another program (an aipager daemon this
+#: wizard could not see, say in a container) reads this bot's updates.
+UPDATES_CONFLICT_ADVISORY = (
+    "Another program is reading this bot's messages (an aipager daemon "
+    "running elsewhere?). Stop it and try again, or paste the id instead.")
+
+#: The daemon notes senders only in groups: a DM from someone who is not
+#: set up yet is answered, never written down.
+DAEMON_DM_ADVISORY = (
+    "With the daemon running, only messages in a group the bot is in are "
+    "seen. Ask them to mention the bot (or send /start) in such a group, "
+    "paste their id instead, or stop the daemon (aipager service stop, "
+    "or Ctrl-C a foreground aipager start) and try again.")
+
+#: Nothing new in the daemon's records (roadmap 8.88).
+DAEMON_NO_USER_ADVISORY = (
+    "The running daemon has noted nobody new. It notes people who message "
+    "the bot in a group (a DM from someone not set up is not noted). Ask "
+    "them to mention the bot in a group it is in, or paste their id.")
+DAEMON_NO_GROUP_ADVISORY = (
+    "The running daemon has seen no message in a group it does not serve "
+    "yet. Add the bot to the group and send /start there, then try again.")
+
+#: Auto-detect saw only groups already set up or turned down (8.88).
+ONLY_KNOWN_GROUPS_ADVISORY = (
+    "Only groups that are already set up (or that you turned down here) "
+    "were seen. Add the bot to the new group and send /start there. To "
+    "add someone to a group already set up, use Edit a scope → Add a "
+    "member.")
+
+#: Auto-detect saw only people already captured (roadmap 8.88).
+ONLY_KNOWN_SENDERS_ADVISORY = (
+    "Only messages from people already added were seen. Ask the new "
+    "person to mention the bot, then try again.")
+
+_WANTS = ("dm", "group", "user")
+
+
+class NameOnly(str):
+    """A detected person's name when they have no Telegram username: it
+    reads like a plain string (the label suggestion), but must never be
+    shown as an @handle (roadmap 8.88: anyone can pick any name)."""
+
+
+def _sender_name(username, name) -> str:
+    """``username`` if the sender has one, else their name as
+    :class:`NameOnly` (``""`` when neither is known)."""
+    if isinstance(username, str) and username:
+        return username
+    if isinstance(name, str) and name:
+        return NameOnly(name)
+    return ""
+
+
+def _watch_source() -> str:
+    """``"daemon"`` while the aipager daemon runs (its long poll takes the
+    bot's updates, so the wizard reads what the daemon wrote down),
+    ``"telegram"`` otherwise (the wizard calls ``getUpdates`` itself)."""
+    from aipager.wizard.daemon_io import _detect_daemon_running
+    try:
+        running = _detect_daemon_running() is not None
+    except Exception:
+        running = False
+    return "daemon" if running else "telegram"
+
+
+def _detect_id(
+    token: str, *, want: str, exclude=frozenset(), source: str = "telegram",
+) -> tuple[int | None, str | None, str | None]:
+    """Auto-detect from *source* (:func:`_watch_source`): the daemon's
+    records or ``getUpdates``. Same contract as
+    :func:`_fetch_id_from_updates`."""
+    if source == "daemon":
+        return _fetch_id_from_pending(want=want, exclude=exclude)
+    return _fetch_id_from_updates(token, want=want, exclude=exclude)
+
+
+def _fetch_id_from_pending(
+    *, want: str, exclude=frozenset(),
+) -> tuple[int | None, str | None, str | None]:
+    """The newest matching record in the daemon's pending-users file
+    (``team.PENDING_USERS_PATH``), skipping ids in *exclude*.
+
+    The daemon writes a record (latest last) for every non-member who
+    messages a configured chat and for every sender in a group it does
+    not serve (roadmap 8.88). ``want="group"`` returns that group's chat
+    id and title; ``want="user"`` the sender. ``want="dm"`` finds
+    nothing: a DM from someone not set up is never written down.
+    """
+    if want not in _WANTS:
+        raise ValueError(f"unknown auto-detect target: {want!r}")
+    from aipager.team import list_pending_users
+    if want == "dm":
+        return None, None, DAEMON_DM_ADVISORY
+    saw_known = False
+    for r in reversed(list_pending_users()):
+        if not isinstance(r, dict):
+            continue
+        if want == "group":
+            cid = r.get("chat_id")
+            if (r.get("chat_type") not in ("group", "supergroup")
+                    or not isinstance(cid, int) or isinstance(cid, bool)):
+                continue
+            if cid in exclude:
+                saw_known = True
+                continue
+            return cid, (r.get("chat_title") or ""), None
+        uid = r.get("user_id")
+        # (list_pending_users already hides Telegram's shared sender ids.)
+        if not isinstance(uid, int) or isinstance(uid, bool):
+            continue
+        if uid in exclude:
+            saw_known = True
+            continue
+        who = _sender_name(r.get("username"), r.get("display_name"))
+        return uid, who, None
+    if saw_known:
+        return None, None, (ONLY_KNOWN_GROUPS_ADVISORY if want == "group"
+                            else ONLY_KNOWN_SENDERS_ADVISORY)
+    if want == "group":
+        return None, None, DAEMON_NO_GROUP_ADVISORY
+    return None, None, DAEMON_NO_USER_ADVISORY
+
+
 def _fetch_id_from_updates(
-    token: str, *, want: str,
+    token: str, *, want: str, exclude=frozenset(),
 ) -> tuple[int | None, str | None, str | None]:
     """Poll ``getUpdates`` for the most recent matching id.
 
@@ -129,19 +260,29 @@ def _fetch_id_from_updates(
       - ``"user"``  — most recent ``from.user.id`` (any chat); useful
                        for capturing a new team member's Telegram id.
 
+    Newest first (roadmap 8.88): Telegram lists updates oldest first, and
+    nothing here confirms them, so the oldest match came back on every
+    call. Ids in *exclude* (people already captured, chats the caller
+    rules out) are skipped, so the next person is found.
+
     Returns ``(id, friendly_name, advisory)`` where ``advisory`` is a
     user-facing hint when the wrong kind of update was seen (so the
     wizard can nudge them in the right direction).
     """
-    body, _code, _err = _http_json(
+    if want not in _WANTS:
+        raise ValueError(f"unknown auto-detect target: {want!r}")
+    body, code, _err = _http_json(
         f"https://api.telegram.org/bot{token}/getUpdates"
     )
+    if code == 409:
+        return None, None, UPDATES_CONFLICT_ADVISORY
     if not body or not body.get("ok"):
         return None, None, None
 
     saw_other: list[str] = []
     saw_anonymous = False
-    for u in body.get("result", []):
+    saw_known = False
+    for u in reversed(body.get("result") or []):
         msg = u.get("message") or u.get("edited_message") or {}
         chat = msg.get("chat") or {}
         sender = msg.get("from") or {}
@@ -157,6 +298,9 @@ def _fetch_id_from_updates(
             saw_other.append(ctype or "?")
         elif want == "group":
             if ctype in ("group", "supergroup"):
+                if int(cid) in exclude:
+                    saw_known = True
+                    continue
                 who = chat.get("title", "")
                 return int(cid), who, None
             saw_other.append(ctype or "?")
@@ -168,11 +312,19 @@ def _fetch_id_from_updates(
                 saw_anonymous = True
                 continue
             if uid is not None:
-                who = sender.get("username") or sender.get("first_name", "")
+                if int(uid) in exclude:
+                    saw_known = True
+                    continue
+                who = _sender_name(sender.get("username"),
+                                   sender.get("first_name"))
                 return int(uid), who, None
 
     if want == "user" and saw_anonymous:
         return None, None, ANONYMOUS_SENDER_ADVISORY
+    if want == "user" and saw_known:
+        return None, None, ONLY_KNOWN_SENDERS_ADVISORY
+    if want == "group" and saw_known:
+        return None, None, ONLY_KNOWN_GROUPS_ADVISORY
     if saw_other:
         if want == "dm":
             advisory = (

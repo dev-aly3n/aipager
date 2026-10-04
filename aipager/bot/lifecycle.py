@@ -536,6 +536,17 @@ class LifecycleMixin:
             filters.TEXT & chat_gate,
             self._handle_message,
         ))
+        # Last: a message for this bot in a group it does not serve (the
+        # handlers above drop it at the chat gate). Its sender is noted
+        # for `aipager config`, never answered (roadmap 8.88). `~chat_gate`
+        # follows a live reload, like the gate itself.
+        # Messages only (text, media), never a service message.
+        if self.scopes:
+            self._app.add_handler(MessageHandler(
+                (filters.TEXT | filters.PHOTO | filters.Document.ALL
+                 | filters.VOICE) & filters.ChatType.GROUPS & ~chat_gate,
+                self._note_unknown_group_message,
+            ))
 
         await self._app.initialize()
         await self._app.start()

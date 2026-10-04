@@ -84,16 +84,11 @@ def test_sc13_load_default_mode_absent_file_returns_ask(tmp_path):
     )
 
 
-def test_sc13_config_DEFAULT_MODE_is_string(monkeypatch, tmp_path):
-    """SC13: config.DEFAULT_MODE is a string, not None or a boolean."""
+def test_sc13_config_has_no_DEFAULT_MODE():
+    """SC13, roadmap 8.89: nothing read config.DEFAULT_MODE, so it is gone;
+    new sessions take their mode from /settings → New sessions."""
     from aipager import config
-    # DEFAULT_MODE must be one of "ask" or "auto"
-    assert isinstance(config.DEFAULT_MODE, str), (
-        f"DEFAULT_MODE must be str; got {type(config.DEFAULT_MODE)}"
-    )
-    assert config.DEFAULT_MODE in ("ask", "auto"), (
-        f"DEFAULT_MODE must be 'ask' or 'auto'; got '{config.DEFAULT_MODE}'"
-    )
+    assert not hasattr(config, "DEFAULT_MODE")
 
 
 # --------------------------------------------------------------------------- #

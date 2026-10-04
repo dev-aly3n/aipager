@@ -148,10 +148,11 @@ def test_capture_user_identity_auto_happy(monkeypatch):
     _stub_ask(monkeypatch, [
         "auto",      # method
         True,        # "they've sent something — continue?"
+        True,        # "Found @alice (id 42). Is this the person to add?"
         "",          # use suggested label
     ])
-    monkeypatch.setattr(team_setup, "_fetch_id_from_updates",
-                        lambda t, *, want: (42, "alice", None))
+    monkeypatch.setattr(team_setup, "_detect_id",
+                        lambda t, *, want, **k: (42, "alice", None))
     out = team_setup._capture_user_identity(
         1, existing_ids=set(), existing_labels=set(), token="tok")
     assert out == {"id": 42, "label": "alice"}
@@ -163,15 +164,16 @@ def test_capture_user_identity_auto_no_result_retry(monkeypatch):
         True,         # continue
         "retry",      # what now? — retry
         True,         # continue
+        True,         # is this the person?
         "",           # label
     ])
     calls = []
-    def _fetch(t, *, want):
+    def _fetch(t, *, want, **k):
         calls.append(1)
         if len(calls) == 1:
             return None, None, None
         return 42, "alice", None
-    monkeypatch.setattr(team_setup, "_fetch_id_from_updates", _fetch)
+    monkeypatch.setattr(team_setup, "_detect_id", _fetch)
     out = team_setup._capture_user_identity(
         1, existing_ids=set(), existing_labels=set(), token="tok")
     assert out == {"id": 42, "label": "alice"}
@@ -185,8 +187,8 @@ def test_capture_user_identity_auto_switch_to_manual(monkeypatch):
         "55",          # numeric id
         "bob",         # label
     ])
-    monkeypatch.setattr(team_setup, "_fetch_id_from_updates",
-                        lambda t, *, want: (None, None, None))
+    monkeypatch.setattr(team_setup, "_detect_id",
+                        lambda t, *, want, **k: (None, None, None))
     monkeypatch.setattr(team_setup, "_resolve_user", lambda t, q: None)
     out = team_setup._capture_user_identity(
         1, existing_ids=set(), existing_labels=set(), token="tok")
@@ -198,8 +200,8 @@ def test_capture_user_identity_auto_cancel(monkeypatch):
         "auto", True,
         "cancel",
     ])
-    monkeypatch.setattr(team_setup, "_fetch_id_from_updates",
-                        lambda t, *, want: (None, None, None))
+    monkeypatch.setattr(team_setup, "_detect_id",
+                        lambda t, *, want, **k: (None, None, None))
     out = team_setup._capture_user_identity(
         1, existing_ids=set(), existing_labels=set(), token="tok")
     assert out is None
@@ -211,15 +213,16 @@ def test_capture_user_identity_auto_existing_id_continues(monkeypatch):
     _stub_ask(monkeypatch, [
         "auto", True,    # first attempt — already-existing user
         True,            # continue
+        True,            # is this the person?
         "",              # label for the new user
     ])
     calls = []
-    def _fetch(t, *, want):
+    def _fetch(t, *, want, **k):
         calls.append(1)
         if len(calls) == 1:
             return 12345, "alice", None  # already exists
         return 67890, "bob", None
-    monkeypatch.setattr(team_setup, "_fetch_id_from_updates", _fetch)
+    monkeypatch.setattr(team_setup, "_detect_id", _fetch)
     out = team_setup._capture_user_identity(
         1, existing_ids={12345}, existing_labels=set(), token="tok")
     assert out == {"id": 67890, "label": "bob"}

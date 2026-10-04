@@ -229,7 +229,7 @@ def _apply_team_change_hint() -> None:
     Sends the running daemon a live reload (SIGUSR1) when it can be
     found; otherwise falls back to the restart hint (which says nothing
     when no daemon runs). Use the bare :func:`_restart_hint` for edits a
-    reload does not apply (the bot token, the default mode).
+    reload does not apply (the bot token).
     """
     problem = _config_problem()
     if problem is not None:

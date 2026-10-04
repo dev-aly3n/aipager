@@ -29,13 +29,24 @@ who did what so you can review later, but it's after-the-fact.
 
 Run `aipager config`. The wizard adapts:
 
-- **No config yet** → first-run wizard. Picks mode upfront, then
-  walks token → mode → chat (group or DM) → members + roles (if
-  team) → deps → settings → write.
-- **Config exists** → edit menu. Opens a current-state panel and
-  offers focused actions: add a user, remove a user, change a
-  user's role, edit deny rules, switch mode, refresh the bot token,
-  or run the full setup again.
+- **No config yet** → first-run wizard: bot token → your own DM
+  (auto-detected or pasted) → owner access for your account → deps →
+  Claude Code hooks. It writes your DM as the first chat, then offers to
+  add a group or another person's DM. It does not ask for a default
+  mode: new sessions start in Auto for owners and admins and in Ask for
+  everyone else, and you change that in Telegram under `/settings` →
+  New sessions.
+- **Config exists** → edit menu. It shows the current chats and offers:
+  Add a group scope, Add a DM scope, Edit a scope (Add a member for a
+  group, Rename, Edit scope deny_tools, Remove this scope), Edit a member
+  (Set role, Edit member deny_tools, Remove member), Test bot
+  reachability, View policy, Re-install Claude Code hooks and Refresh bot
+  token.
+
+To add someone to a group that is already set up, use Edit a scope →
+the group → Add a member. "Add a group scope" for a group that is
+already set up stops with "This group is already set up. Use Edit a
+scope → Add a member." and changes nothing.
 
 The wizard writes everything to `~/.config/aipager/aipager.yaml`
 (mode 0600): the bot token, the chat(s) the bot serves, and each
@@ -47,13 +58,37 @@ by the daemon at startup, or by the wizard on its next run.
 
 For the group chat ID you can paste it manually, or pick
 "Auto-detect" and let the wizard watch for a `/start` in the group
-(add the bot first). The same auto-detect works for member user IDs
-— the wizard captures the next message's sender id and suggests
-their Telegram username as the label. A message from an anonymous
-admin or one posted as a channel does not count: its sender id
-(1087968824, 136817688 or 777000) is shared by everyone who posts
-that way, so the wizard refuses it, typed or detected. Ask the person
-to post as themselves.
+(add the bot first). The same auto-detect works for member user IDs:
+the wizard takes the newest message from someone not added yet and
+asks "Is this the person to add?" before using it (answer No and it
+looks past them), then suggests their Telegram username as the label.
+It says where it watches:
+
+- **"Watching through the running daemon"**: while `aipager start`
+  runs, it receives every message for the bot, so the wizard reads what
+  the daemon noted instead (`~/.claude/aipager-pending-users.json`). The
+  daemon notes who sends the bot a message in a group it does not serve
+  yet (the group's id, title and type, and the person's id, username and
+  name), and anyone who is not a member of a group it does serve. It
+  never answers in a group it does not serve. A DM from someone who is
+  not set up is answered and not noted, so to add a person's DM while
+  the daemon runs, paste their id (or stop the daemon first).
+- **"Watching Telegram directly"**: when the daemon is stopped, the
+  wizard asks Telegram for the bot's recent messages itself.
+
+Your own DM in the first run is always read from Telegram. A message
+from an anonymous admin or one posted as a channel does not count: its
+sender id (1087968824, 136817688 or 777000) is shared by everyone who
+posts that way, so the wizard refuses it, typed or detected. Ask the
+person to post as themselves.
+
+When a group is added, the wizard asks one optional question: "Block
+file edits (Write, Edit) for `user` members in this group? Admins and
+the owner are not affected." The answer defaults to No: a `user`
+already writes only inside the session's folder. With Yes, every Write
+and Edit from a `user` member's turn in that group is denied without a
+prompt (there is nothing to tap); an admin or the owner has to send
+that work instead.
 
 When you add a group, the wizard first offers you (the member of your
 own DM) as the group's first member with the `owner` role; you can
@@ -381,8 +416,9 @@ driver's role does not bypass rules:
 
 - The bot **does not show the permission prompt**.
 - It writes a deny back to claude.
-- It posts a one-line notice in the chat, e.g.
-  `⛔ [jim] · Auto-denied · Write · (triggered by @bob)`.
+- It posts a notice in the chat naming the tool, the person and their
+  role, with the call's summary on the next line, e.g.
+  `⛔ jim · Write blocked for @bob (role user)`.
 - It writes an audit record with `denied: true`.
 
 ## Who can tap what
@@ -475,7 +511,7 @@ their own DM sends, taps and runs commands in the group as `user`.
 ```
 ✅ [jim] · Allowed by @alice · Bash: ls -la /tmp
 🚫 [jim] · Denied by @bob · WebFetch: https://example.com
-⛔ [jim] · Auto-denied · Edit · (triggered by @bob)
+⛔ jim · Edit blocked for @bob (role user)
 ```
 
 So even if you weren't watching live, scrolling back tells you
@@ -517,7 +553,10 @@ post-hoc reconstruct what each user did.
 
 - The chat filter still applies. Even with team mode, the bot only
   listens to **the configured chat(s)**. Adding the bot to a second
-  group doesn't activate it there.
+  group doesn't activate it there: it never answers there. It does
+  note who sends it a message there (their id, username and name, and
+  the group's id and title) in `~/.claude/aipager-pending-users.json`,
+  so `aipager config` can add that group.
 - Read-only users **can read** prompts and tool inputs. They can't
   act, but they see everything. If you need to hide some
   conversations from an observer, that observer doesn't belong in
@@ -537,9 +576,9 @@ post-hoc reconstruct what each user did.
 
 1. Run `aipager config` → Edit a member → the chat → them → Remove
    member (or hand-edit `aipager.yaml` and delete their member
-   entry). To
-   take away their right to prompt but keep them reading, set their
-   role to `read_only` instead.
+   entry). To take away their right to prompt but keep them reading,
+   use Set role and pick `read_only` instead. (To add someone back
+   later: Edit a scope → the group → Add a member.)
 2. The wizard reloads the daemon live (SIGUSR1), no restart needed.
    After a hand-edit, send the signal yourself (see
    [Live reload](#live-reload)). At once, their held messages are dropped (🤷 and a "Dropped" reply)

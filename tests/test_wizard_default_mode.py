@@ -1,4 +1,5 @@
-"""Tests for default_mode wizard step and load_default_mode."""
+"""Tests for load_default_mode and dump_scopes' round trip of a leftover
+``default_mode`` key (the wizard no longer asks for it, roadmap 8.89)."""
 
 from __future__ import annotations
 
@@ -111,49 +112,3 @@ def test_dump_scopes_preserves_existing_default_mode(tmp_path):
     # Second write: no default_mode kwarg — should preserve "auto"
     dump_scopes(scopes, "tok", cfg)
     assert load_default_mode(cfg) == "auto"
-
-
-# ---- _step_default_mode ----------------------------------------------------
-
-def test_step_default_mode_returns_ask(monkeypatch):
-    """Selecting Ask returns 'ask'."""
-    from aipager.wizard import first_run
-    monkeypatch.setattr(first_run, "_ask", lambda prompt: "ask")
-    result = first_run._step_default_mode()
-    assert result == "ask"
-
-
-def test_step_default_mode_returns_auto(monkeypatch):
-    """Selecting Auto returns 'auto'."""
-    from aipager.wizard import first_run
-    monkeypatch.setattr(first_run, "_ask", lambda prompt: "auto")
-    result = first_run._step_default_mode()
-    assert result == "auto"
-
-
-def test_commit_default_mode_writes_to_yaml(tmp_path, monkeypatch):
-    """_commit_default_mode writes default_mode to aipager.yaml."""
-    import aipager.scope as scope_mod
-    from aipager.scope import Member, Scope, dump_scopes
-
-    cfg = tmp_path / "aipager.yaml"
-    monkeypatch.setattr(scope_mod, "CONFIG_PATH", cfg)
-
-    # Write a valid yaml first so read_config can read it
-    scopes = [Scope(
-        chat_id=42, kind="dm", label="owner DM",
-        members=(Member(id=42, label="owner", role="owner"),),
-    )]
-    dump_scopes(scopes, "TOK", cfg)
-
-    # Redirect scope_io to use the tmp path too
-    from aipager.wizard import scope_io as _scope_io
-    monkeypatch.setattr(_scope_io, "_scope", scope_mod)
-
-    from aipager.wizard.first_run import _commit_default_mode
-    # Override load_default_mode in scope_mod to use our cfg
-    # _commit_default_mode calls scope_mod.dump_scopes which internally
-    # calls load_default_mode; redirect CONFIG_PATH in scope_mod
-    _commit_default_mode("auto")
-
-    assert scope_mod.load_default_mode(cfg) == "auto"

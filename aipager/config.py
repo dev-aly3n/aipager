@@ -111,10 +111,6 @@ if SCOPES and not CHAT_ID:
     del _home, _home_scope
 del _load_scopes, _load_policy, _v2, _ScopeConfigError, _PolicyError
 
-from aipager.scope import load_default_mode as _load_dm  # noqa: E402
-DEFAULT_MODE: str = _load_dm()
-del _load_dm
-
 from aipager import scope as _scope_mod  # noqa: E402
 
 

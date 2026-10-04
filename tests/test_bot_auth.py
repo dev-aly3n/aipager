@@ -211,9 +211,8 @@ def test_auto_deny_sends_chat_notice_with_triggerer_attribution(mk_bot, run_asyn
     run_async(bot._auto_deny(sess, {"name": "Bash", "summary": "rm -rf /"}, driver))
     bot._app.bot.send_message.assert_awaited_once()
     text = bot._app.bot.send_message.await_args.args[1]
-    assert "Auto-denied" in text
-    assert "Bash" in text
-    assert "dave" in text
+    assert "Bash blocked for @dave (role developer)" in text
+    assert "rules.deny_tools" not in text
 
 
 def test_auto_deny_swallows_key_injection_failure(mk_bot, run_async, monkeypatch):

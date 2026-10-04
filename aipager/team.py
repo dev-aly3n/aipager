@@ -359,10 +359,16 @@ def record_pending_user(
     username: str = "",
     display_name: str = "",
     chat_id: int | None = None,
+    *,
+    chat_title: str | None = None,
+    chat_type: str | None = None,
 ) -> None:
     """Persist (or refresh) a record of an unauthorized user who
     mentioned the bot. Idempotent — latest record overwrites prior
-    entries for the same ``user_id``.
+    entries for the same ``user_id``, and goes last, so the file reads
+    oldest to newest (the wizard's auto-detect reads it newest first,
+    roadmap 8.88). ``chat_title`` and ``chat_type`` are written when
+    given (a sender in a group the daemon does not serve).
 
     Best-effort: write failures are logged and swallowed so a full
     disk can't break the daemon's auth path. A shared sender id
@@ -382,6 +388,10 @@ def record_pending_user(
         "chat_id": chat_id,
         "first_seen": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     })
+    if chat_title is not None:
+        records[-1]["chat_title"] = chat_title
+    if chat_type is not None:
+        records[-1]["chat_type"] = chat_type
     try:
         PENDING_USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
         PENDING_USERS_PATH.write_text(
