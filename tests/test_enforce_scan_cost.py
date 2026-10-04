@@ -270,6 +270,13 @@ _THIS = sys.modules[__name__]
 _ORACLE_ITER = _iter_lines_reversed
 _ORACLE_ORIGIN = _origin_from_transcript
 _ORACLE_BLOCKED = _turn_already_blocked
+
+
+def _oracle_origin_patch(path, note_bodies=()):
+    """The frozen origin scan in ``_decide``'s call shape. The frozen copy
+    predates ``note_bodies`` (roadmap 8.74); these comparisons write no
+    slash-command record, where the bodies are the only thing read."""
+    return _ORACLE_ORIGIN(path)
 _NEW_RAW = enforce._iter_raw_lines_reversed
 
 CHUNKS = (7, 64, 65536)
@@ -925,7 +932,7 @@ def _decide_both(monkeypatch, data):
     new = enforce.decide(dict(data))
     with monkeypatch.context() as m:
         m.setattr(enforce, "_readable_snapshot", lambda s: None)
-        m.setattr(enforce, "_origin_from_transcript", _ORACLE_ORIGIN)
+        m.setattr(enforce, "_origin_from_transcript", _oracle_origin_patch)
         m.setattr(enforce, "_turn_already_blocked", _ORACLE_BLOCKED)
         old = enforce.decide(dict(data))
     return old, new
@@ -1069,7 +1076,7 @@ def _hook_stdout(monkeypatch, tmp_path, capsys, payload, oracle: bool) -> str:
         m.setattr(notify_hook, "SOCKET_PATH", str(tmp_path / "nope.sock"))
         m.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
         if oracle:
-            m.setattr(enforce, "_origin_from_transcript", _ORACLE_ORIGIN)
+            m.setattr(enforce, "_origin_from_transcript", _oracle_origin_patch)
             m.setattr(enforce, "_turn_already_blocked", _ORACLE_BLOCKED)
         notify_hook._run(SESSION, [b""])
     return capsys.readouterr().out

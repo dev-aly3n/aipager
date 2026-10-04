@@ -71,7 +71,14 @@ from aipager.bot.transport import (  # noqa: F401
     _TRUNC_SUFFIX,
     _truncate_diff,
     calling_chat_id,
+    driver_id_from_update,
+    NEEDS_ADMIN_REPLY,
+    PROMPT_REFUSED,
 )
+
+# ``/model <name>``: a model switch, which any member may send (roadmap
+# 8.74, D-G). One argument, nothing after it.
+_MODEL_SWITCH_COMMAND = re.compile(r"/model[ \t]+[^\s]+")
 
 if TYPE_CHECKING:
     pass
@@ -525,20 +532,73 @@ class SessionOpsMixin:
             sess.label = target_label
         return sess
 
-    def _prompt_marker(self, sess) -> str:
+    def _prompt_marker(self, sess, member) -> str:
         """Identity/origin marker prepended to Telegram free-text prompts.
 
-        DM scope → ``[via Telegram · @label]``; group → adds ``· role:X``.
-        Empty for legacy/no-driver sessions (→ no marker).
+        ``member`` is THIS message's sender, resolved by the caller from
+        the id it was handed (roadmap 8.74), never the session's last
+        driver: a message must never reach Claude labelled as someone
+        else. DM scope gives ``[via Telegram · @label]``; a group adds
+        ``· role:X``. A sender aipager cannot resolve (unknown, or removed
+        by a reload) still gets ``[via Telegram]``: the marker is what
+        tells the hook the prompt came from Telegram, and without it the
+        prompt would run as an unrestricted terminal prompt. Its note
+        already carries the floor rules. Personal/legacy mode: no marker.
         """
         if self.scopes is None:
             return ""
-        member = self._driver_user(sess)
         if member is None:
-            return ""
+            return "[via Telegram]"
         if sess.scope_kind == "group":
             return f"[via Telegram · @{member.label} · role:{member.role}]"
         return f"[via Telegram · @{member.label}]"
+
+    def _command_needs_admin(self, text: str,
+                             driver_user_id: int | None) -> bool:
+        """True when ``text`` is a slash command its sender may not send
+        (roadmap 8.74, D-G).
+
+        Scope mode only. A slash command is typed raw, with no marker, and
+        a prompt-type command or skill runs a whole turn on its own text,
+        so a role without ``bypass_role_denies`` (and a sender aipager
+        cannot resolve) may send only aipager's own keyboard commands
+        (the Commands keyboard, plus ``/compact``, which aipager's own
+        Compact button and the Mini App type) and model switches. Owners
+        and admins send any. Personal and legacy team mode: never.
+        """
+        if self.scopes is None:
+            return False
+        stripped = text.strip()
+        if not stripped.startswith("/"):
+            return False
+        allowed = {"/compact",
+                   *getattr(self, "_command_map", {}).values(),
+                   *getattr(self, "_model_map", {}).values()}
+        if stripped in {c.strip() for c in allowed}:
+            return False
+        if _MODEL_SWITCH_COMMAND.fullmatch(stripped):
+            return False
+        member = self._driver_user_by_id(driver_user_id)
+        role = (self.policy.get_role(member.role)
+                if member is not None else None)
+        return not (role is not None
+                    and getattr(role, "bypass_role_denies", False) is True)
+
+    async def _refuse_admin_command(self, update, text: str) -> bool:
+        """Reply ``That command needs an admin.`` with a 🤷 and return True
+        when the sender of ``update`` may not send ``text`` (see
+        :meth:`_command_needs_admin`). Callers run it before anything
+        moves (trigger, hold, tracking), so a refused command leaves no
+        trace; :meth:`_inject_prompt` refuses it again regardless."""
+        if not self._command_needs_admin(text, driver_id_from_update(update)):
+            return False
+        await self._reply_needs_admin(update)
+        return True
+
+    async def _reply_needs_admin(self, update) -> None:
+        """The one answer to a refused slash command: a reply and a 🤷."""
+        await reply_text(update.message, NEEDS_ADMIN_REPLY)
+        await self._react(update, reactions.NOT_DELIVERED)
 
     async def _inject_prompt(self, sess, text: str, reply_context: str = "",
                              *, msg_id: int | None = None,
@@ -548,7 +608,11 @@ class SessionOpsMixin:
 
         Marks the session origin = "telegram" (the safety boundary keys
         off this) and prepends the identity marker for free-text prompts.
-        Slash commands are sent raw (a marker line would break them).
+        Slash commands are sent raw (a marker line would break them); a
+        slash command the sender may not send is refused before anything
+        is written or typed and returns :data:`PROMPT_REFUSED` (falsy;
+        roadmap 8.74, see :meth:`_command_needs_admin`). The explicit
+        sender becomes the session's driver.
 
         ``reply_context`` defaults to ``""`` — deliberately, so that any
         caller (existing or future) that doesn't pass it explicitly
@@ -615,12 +679,30 @@ class SessionOpsMixin:
         unrelated sender's ``bypass_safety`` to it.
         """
         explicit_driver_user_id = driver_user_id
+        # Roadmap 8.74 (D-G): refused before anything is written or typed,
+        # whichever path brought the text here.
+        if self._command_needs_admin(text, explicit_driver_user_id):
+            log.info("[%s] Refused a slash command from %s: %s",
+                     sess.label, explicit_driver_user_id, text[:80])
+            return PROMPT_REFUSED
         if driver_user_id is None:
             driver_user_id = sess.last_driver_user_id
         sess.last_prompt_origin = "telegram"
-        body = text
-        if not text.lstrip().startswith("/"):
-            marker = self._prompt_marker(sess)
+        # The sender of THIS message, never the session's last driver
+        # (roadmap 8.74): it labels the marker, and it becomes the
+        # session's driver on every path that reaches here.
+        sender = self._driver_user_by_id(explicit_driver_user_id)
+        if sender is not None:
+            sess.last_driver_user_id = sender.id
+            if sess.created_by_user_id is None:
+                sess.created_by_user_id = sender.id
+        if text.lstrip().startswith("/"):
+            # Typed as checked: a slash command with leading whitespace
+            # could reach Claude Code as a plain, markerless prompt.
+            body = text.lstrip()
+        else:
+            body = text
+            marker = self._prompt_marker(sess, sender)
             if marker:
                 body = f"{marker}\n{text}"
         # Write a per-message policy note for this turn (design.md "queue
@@ -649,7 +731,7 @@ class SessionOpsMixin:
                 # for sender_key below. scope is unaffected — it can
                 # only add restrictions, never grant them, so it is safe
                 # to resolve regardless of whether the sender is known.
-                member = self._driver_user_by_id(explicit_driver_user_id)
+                member = sender
                 role = (self.policy.get_role(member.role)
                         if member is not None else None)
                 scope = self._scope_for(sess.scope_chat_id)
@@ -666,6 +748,7 @@ class SessionOpsMixin:
                 # sender_key fallback must never be recorded as one.
                 author_user_id=explicit_driver_user_id,
                 body=body, raw_text=text,
+                scope_mode=self.scopes is not None,
                 style_text=style, reply_context=reply_context,
             )
         except Exception:

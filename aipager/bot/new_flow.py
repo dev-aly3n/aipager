@@ -603,6 +603,12 @@ async def create_from_text(
     skip_perms = wants_auto and may_auto
     note = "Auto mode needs an admin, so this one asks." if wants_auto and not may_auto else ""
 
+    if first and await bot._refuse_admin_command(update, first):
+        # A slash command its sender may not send (roadmap 8.74): the
+        # session starts (or the conflict card asks about it), the command
+        # is never queued.
+        first = ""
+
     existing = bot.registry.find_by_label(name, chat_id, include_gone=True)
     if existing is not None and (
         existing.status != Status.GONE or existing.claude_session_id

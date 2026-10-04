@@ -237,8 +237,16 @@ def write_note(
     body: str, raw_text: str,
     style_text: str = "", reply_context: str = "",
     author_user_id=_FROM_SENDER_KEY,
+    scope_mode: bool = False,
 ) -> Path | None:
     """Write one per-message policy note (design.md "queue handoff").
+
+    ``scope_mode`` marks a note written by a daemon running with scopes
+    (``aipager.yaml``). Only such notes make a slash-command record count
+    as a Telegram prompt at the hook (roadmap 8.74,
+    ``enforce._command_from_telegram``): in personal and legacy team mode
+    every Telegram prompt is the operator's and stays unrestricted, as
+    before.
 
     Carries the same resolved permission fields ``write_snapshot`` would
     have written (via :func:`resolve_snapshot`), plus everything the
@@ -266,6 +274,7 @@ def write_note(
     note["body"] = body
     note["raw_text"] = raw_text
     note["queued_at"] = time.time()
+    note["scope_mode"] = scope_mode is True
 
     d = notes_dir(session_name)
     try:
@@ -480,6 +489,45 @@ def match_notes_prefix_run(outstanding: list[dict], content: str) -> list[dict]:
             break
         matched.append(note)
         cursor = idx + len(body)
+    return matched
+
+
+def _first_token(text) -> str:
+    parts = str(text or "").split(None, 1)
+    return parts[0] if parts else ""
+
+
+def match_notes_for_prompt(outstanding: list[dict], prompt: str) -> list[dict]:
+    """The notes a ``UserPromptSubmit`` with *prompt* consumes:
+    :func:`match_notes_prefix_run`, plus, for a slash command, the oldest
+    command note that sent it when the run missed it (roadmap 8.74).
+
+    A slash command is never batched with other messages, but a note
+    still outstanding ahead of it (a local command such as ``/model`` or
+    ``/clear``, which fires no prompt hook and lingers for
+    :data:`RAN_COMMAND_NOTE_GRACE_SECONDS`) stops the prefix run at once.
+    Unconsumed, the command's turn would keep the previous turn's
+    snapshot and provenance, and the hook would read it as a terminal
+    prompt: no rules at all. So for a prompt whose first token is ``/x``
+    the oldest outstanding note whose body is in the prompt and whose own
+    first token is ``/x`` is consumed too. Taking it can only hold the
+    turn to that note's sender (fail closed). A command typed in the
+    terminal at the same moment can take a Telegram note of the same text;
+    the Telegram command, picked up later with no note, is still named by
+    the bodies :func:`snapshot_for_prompt` carries forward. Pure.
+    """
+    matched = match_notes_prefix_run(outstanding, prompt)
+    name = _first_token(prompt)
+    if not name.startswith("/"):
+        return matched
+    if any(_first_token(n.get("body")) == name for n in matched):
+        return matched
+    for note in outstanding:
+        if note in matched:
+            continue
+        body = note.get("body") or ""
+        if body and _first_token(body) == name and body.strip() in prompt:
+            return [*matched, note]
     return matched
 
 
@@ -851,7 +899,41 @@ def snapshot_for_unattributed_prompt(
     carried["reply_context"] = ""
     merged = merge_snapshots([carried, *outstanding])
     merged["note_bodies"] = bodies
+    merged["scope_mode"] = current.get("scope_mode") is True
     return merged
+
+
+#: How many earlier Telegram slash-command bodies a snapshot keeps
+#: (roadmap 8.74). Enough for every command queued behind a running turn.
+CARRIED_COMMAND_BODIES = 16
+
+
+def _carried_command_bodies(current, fresh: list[str]) -> list[str]:
+    """The slash-command bodies of *current* (the snapshot being replaced)
+    to keep beside *fresh* (roadmap 8.74).
+
+    Claude Code fires ``UserPromptSubmit`` when a message is queued, not
+    when it runs, so a message sent while a Telegram slash command's turn
+    runs (or a second command queued behind it) replaces the snapshot
+    before that command is done or has even started. The command's turn
+    is still governed by its ``<command-name>`` record, and the hook can
+    only tell it came from Telegram while some body still names it. Kept
+    newest first, without duplicates, at most
+    :data:`CARRIED_COMMAND_BODIES`. Keeping one longer can only make a
+    later prompt of the same command Telegram (held to the snapshot's
+    rules), never unrestricted.
+    """
+    if not isinstance(current, dict):
+        return []
+    old = current.get("note_bodies")
+    if not isinstance(old, list):
+        return []
+    out: list[str] = []
+    for body in old:
+        if (isinstance(body, str) and body.lstrip().startswith("/")
+                and body not in fresh and body not in out):
+            out.append(body)
+    return out[:CARRIED_COMMAND_BODIES]
 
 
 def snapshot_for_prompt(
@@ -871,17 +953,38 @@ def snapshot_for_prompt(
     """
     if consumed:
         merged = merge_snapshots(consumed)
-        merged["note_bodies"] = [
+        bodies = [
             n["body"] for n in consumed
             if isinstance(n.get("body"), str) and n["body"]
         ]
+        current = read_snapshot(session_name)
+        carried = _carried_command_bodies(current, bodies)
+        merged["note_bodies"] = bodies + carried
+        # Any scope-mode contributor makes the bodies count at the hook
+        # (roadmap 8.74): stricter, never looser.
+        merged["scope_mode"] = any(n.get("scope_mode") is True for n in consumed)
         return merged
-    kept = snapshot_for_unattributed_prompt(
-        read_snapshot(session_name), outstanding, prompt_text,
-    )
+    current = read_snapshot(session_name)
+    kept = snapshot_for_unattributed_prompt(current, outstanding, prompt_text)
     if kept is not None:
+        # The kept snapshot keeps its bodies whole, the carried commands
+        # included (roadmap 8.74). Dropping one here because this prompt
+        # names it (the operator typing the same command) cannot be told
+        # apart from Claude Code delivering a running Telegram command a
+        # second time after a compact, and that turn would then run with
+        # no rules. Kept, a terminal command Telegram also sent in this
+        # session runs under the turn's rules instead: fail closed. The
+        # snapshot, carried bodies and all, goes when the session ends.
         return kept
-    return merge_snapshots(outstanding)  # all-outstanding fallback, or floor
+    merged = merge_snapshots(outstanding)  # all-outstanding fallback, or floor
+    carried = _carried_command_bodies(current, [])
+    if carried:
+        # Telegram text no note matched: keep the commands still queued
+        # or running named, as the consumed branch does (8.74).
+        merged["note_bodies"] = carried
+        merged["scope_mode"] = current.get("scope_mode") is True
+    return merged
+
 
 
 def clear_snapshot(session_name: str) -> None:

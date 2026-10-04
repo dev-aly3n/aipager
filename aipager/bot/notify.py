@@ -92,6 +92,9 @@ from aipager.bot.transport import (  # noqa: F401
     _truncate_diff,
     resolve_chat_id,
     resolve_chat_id_int,
+    send_text,
+    NEEDS_ADMIN_REPLY,
+    PROMPT_REFUSED,
 )
 
 if TYPE_CHECKING:
@@ -1201,6 +1204,28 @@ class NotifyMixin:
         else:
             # Popped and not sent: this held message is gone (R3).
             await self._mark_not_delivered(sess, [{"msg_id": queued_trigger}])
+            if ok is PROMPT_REFUSED:
+                # A slash command its sender may not send (roadmap 8.74),
+                # held before the check could run (a /new conflict card)
+                # or from a sender removed while it waited.
+                await self._reply_needs_admin_queued(sess, queued_trigger)
+
+    async def _reply_needs_admin_queued(
+        self, sess: TrackedSession, msg_id: int | None,
+    ) -> None:
+        """Say why a held slash command was dropped, as a reply to it in
+        the session's own chat. Best-effort."""
+        chat_id = resolve_chat_id_int(sess)
+        if not chat_id or self._app is None:
+            return
+        kwargs = {"chat_id": chat_id, "text": NEEDS_ADMIN_REPLY}
+        if msg_id:
+            kwargs["reply_to_message_id"] = msg_id
+        try:
+            await send_text(self._app.bot, **kwargs)
+        except Exception:
+            log.debug("[%s] could not send the needs-admin reply",
+                      sess.label, exc_info=True)
 
     def _release_finish_gate(self, sess: TrackedSession, gate) -> None:
         """Let newer turns' cards through (roadmap 8.57). Idempotent; only

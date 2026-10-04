@@ -151,7 +151,29 @@ reads them. Two properties are load-bearing:
   runs under the built-in floor — no bypass, all deny rules active —
   never as an unrestricted terminal prompt. Prompts you type directly
   into the terminal remain unrestricted; anything carrying the
-  Telegram marker on any line is enforced.
+  Telegram marker on any line is enforced. Every Telegram message
+  carries that marker, labelled with the person who sent that message
+  (never whoever drove the session last); a sender aipager does not
+  know, for example one removed from `aipager.yaml` while their message
+  waited, gets a bare `[via Telegram]` and the floor.
+- **Slash commands need an admin.** A slash command is typed into
+  Claude raw, with no marker, and a command or skill such as `/deliver`
+  runs a whole turn from its own text. So a member whose role does not
+  bypass role rules (the built-in `user` and `read_only`, and anyone
+  aipager does not know) may send only the commands on aipager's
+  Commands keyboard (plus `/compact`) and model switches (`/model
+  <name>`); any other slash command, typed, sent to a session with
+  `/<name>`, as a file caption, as `/new`'s first message or as a
+  template, is refused with "That command needs an admin." and a 🤷.
+  Owners and admins send any. A slash command that does reach Claude
+  from Telegram is still enforced: the hook sees that the turn picked
+  up a Telegram message that sent this command and holds it to that
+  sender's rules. A slash command you type in the terminal stays
+  unrestricted, unless the same command (with any arguments) was sent
+  from Telegram earlier in that session: aipager cannot tell your copy
+  from Claude Code delivering the Telegram one again, so yours then
+  runs under the rules of the latest Telegram turn. This ends when the
+  session ends.
 - **A prompt with no new sender keeps the turn's rules.** Claude Code
   also reports prompts that no Telegram message accounts for while a
   Telegram turn is running: a message typed in the terminal and queued

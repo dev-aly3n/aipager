@@ -26,19 +26,24 @@ def _sess(chat=-100, kind="group"):
     return s
 
 
+def _bob(bot):
+    return bot._driver_user_by_id(2)
+
+
 def test_marker_group_includes_role(mk_bot):
     bot = _bot(mk_bot)
-    assert bot._prompt_marker(_sess()) == "[via Telegram · @bob · role:user]"
+    assert bot._prompt_marker(_sess(), _bob(bot)) == "[via Telegram · @bob · role:user]"
 
 
 def test_marker_dm_omits_role(mk_bot):
     bot = _bot(mk_bot, kind="dm", chat=555)
-    assert bot._prompt_marker(_sess(chat=555, kind="dm")) == "[via Telegram · @bob]"
+    assert (bot._prompt_marker(_sess(chat=555, kind="dm"), _bob(bot))
+            == "[via Telegram · @bob]")
 
 
 def test_marker_empty_when_legacy(mk_bot):
     bot = mk_bot()  # scopes=None
-    assert bot._prompt_marker(_sess()) == ""
+    assert bot._prompt_marker(_sess(), None) == ""
 
 
 def test_inject_free_text_prefixes_marker(mk_bot, run_async, monkeypatch):
@@ -52,7 +57,7 @@ def test_inject_free_text_prefixes_marker(mk_bot, run_async, monkeypatch):
 
     monkeypatch.setattr(inject, "send_text_and_enter", _capture)
     sess = _sess()
-    run_async(bot._inject_prompt(sess, "fix the bug"))
+    run_async(bot._inject_prompt(sess, "fix the bug", driver_user_id=2))
     assert sent["text"] == "[via Telegram · @bob · role:user]\nfix the bug"
     assert sess.last_prompt_origin == "telegram"
 
@@ -90,7 +95,7 @@ def test_inject_writes_policy_snapshot(mk_bot, run_async, monkeypatch):
     def _fake_write_note(name, role, scope, member, *, msg_id=None,
                          chat_id=None, sender_key=None, body="",
                          raw_text="", style_text="", reply_context="",
-                         author_user_id=None):
+                         author_user_id=None, scope_mode=False):
         captured.update(name=name, role=role, member=member,
                         style_text=style_text)
         return None
@@ -120,7 +125,7 @@ def test_inject_prompt_role_resolution_requires_an_explicit_driver_user_id(
     def _fake_write_note(name, role, scope, member, *, msg_id=None,
                          chat_id=None, sender_key=None, body="",
                          raw_text="", style_text="", reply_context="",
-                         author_user_id=None):
+                         author_user_id=None, scope_mode=False):
         captured.update(role=role, member=member)
         return None
     monkeypatch.setattr(policy_snapshot, "write_note", _fake_write_note)
@@ -150,7 +155,7 @@ def test_inject_prompt_style_text_reflects_session_override(mk_bot, run_async, m
     def _fake_write_note(name, role, scope, member, *, msg_id=None,
                          chat_id=None, sender_key=None, body="",
                          raw_text="", style_text="", reply_context="",
-                         author_user_id=None):
+                         author_user_id=None, scope_mode=False):
         captured.update(style_text=style_text)
         return None
     monkeypatch.setattr(policy_snapshot, "write_note", _fake_write_note)
@@ -191,7 +196,8 @@ def test_inject_prompt_writes_a_note_with_msg_id_chat_id_and_body(mk_bot, run_as
     monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
     sess = _sess()
 
-    run_async(bot._inject_prompt(sess, "fix the bug", msg_id=555, chat_id=-100))
+    run_async(bot._inject_prompt(sess, "fix the bug", msg_id=555, chat_id=-100,
+                                 driver_user_id=2))
 
     notes = ps.list_outstanding_notes(sess.name)
     assert len(notes) == 1

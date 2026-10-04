@@ -630,7 +630,7 @@ def test_an_exception_in_the_decision_still_allows_the_owner(
         tmp_path, project, monkeypatch):
     _use_role(_builtin("owner"))
     monkeypatch.setattr(enforce, "_origin_from_transcript",
-                        lambda p: (_ for _ in ()).throw(RuntimeError("boom")))
+                        lambda p, *a: (_ for _ in ()).throw(RuntimeError("boom")))
     assert _decide(tmp_path, "Bash", {"command": "ls"}, cwd=project) is None
 
 
@@ -638,7 +638,7 @@ def test_an_exception_with_an_unreadable_snapshot_denies(
         tmp_path, project, monkeypatch):
     _use_role(_builtin("owner"))
     monkeypatch.setattr(enforce, "_origin_from_transcript",
-                        lambda p: (_ for _ in ()).throw(RuntimeError("boom")))
+                        lambda p, *a: (_ for _ in ()).throw(RuntimeError("boom")))
     monkeypatch.setattr(enforce, "read_snapshot",
                         lambda s: (_ for _ in ()).throw(OSError("gone")))
     assert _decide(tmp_path, "Bash", {"command": "ls"}, cwd=project)

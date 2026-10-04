@@ -56,6 +56,7 @@ from aipager.state import QUEUE_CAP, Status, TrackedSession
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
+    PROMPT_REFUSED,
     MUTED,
     reply_text,
     edit_message,
@@ -1457,6 +1458,8 @@ class CommandHandlersMixin:
             allow_file=sess.status != Status.BUSY,
         )
 
+        if await self._refuse_admin_command(update, text):
+            return
         if await self._hold_for_open_dialog(update, sess, text, reply_context):
             return
 
@@ -1485,6 +1488,8 @@ class CommandHandlersMixin:
             self.registry.transition(sess.name, Status.BUSY)
             await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] Sent text: %s", sess.label, text[:80])
+        elif ok is PROMPT_REFUSED:
+            await self._reply_needs_admin(update)
         else:
             await reply_text(update.message, f"❌ Failed to send to [{sess.label}]")
 
@@ -1630,6 +1635,8 @@ class CommandHandlersMixin:
             allow_file=sess.status != Status.BUSY,
         )
 
+        if await self._refuse_admin_command(update, transcript):
+            return
         if await self._hold_for_open_dialog(update, sess, transcript, reply_context):
             return
 
@@ -1655,6 +1662,8 @@ class CommandHandlersMixin:
             self.registry.transition(sess.name, Status.BUSY)
             await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] Voice injected: %r", sess.label, transcript[:80])
+        elif ok is PROMPT_REFUSED:
+            await self._reply_needs_admin(update)
         else:
             await reply_text(update.message,
                 f"❌ Failed to inject transcript into [{sess.label}]",
@@ -1785,6 +1794,8 @@ class CommandHandlersMixin:
             allow_file=sess.status != Status.BUSY,
         )
 
+        if await self._refuse_admin_command(update, prompt):
+            return
         if await self._hold_for_open_dialog(update, sess, prompt, reply_context):
             return
 
@@ -1807,6 +1818,8 @@ class CommandHandlersMixin:
             self.registry.transition(sess.name, Status.BUSY)
             await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] File sent: %s", sess.label, log_name)
+        elif ok is PROMPT_REFUSED:
+            await self._reply_needs_admin(update)
         else:
             await reply_text(msg, f"❌ Failed to send to [{sess.label}]")
 
@@ -1903,6 +1916,8 @@ class CommandHandlersMixin:
             await reply_text(update.message, f"⚠️ Session '{sess.name}' not found")
             return
 
+        if await self._refuse_admin_command(update, prompt_text):
+            return
         if await self._hold_for_open_dialog(update, sess, prompt_text):
             return
 
@@ -1926,6 +1941,8 @@ class CommandHandlersMixin:
             self.registry.transition(sess.name, Status.BUSY)
             await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] Template sent: %s", sess.label, prompt_text[:80])
+        elif ok is PROMPT_REFUSED:
+            await self._reply_needs_admin(update)
         else:
             await reply_text(update.message, f"❌ Failed to send to [{sess.label}]")
 
@@ -2034,7 +2051,11 @@ class CommandHandlersMixin:
         else:
             if is_model_switch:
                 clear_model_switch_pending(sess)
-            await reply_text(update.message, f"❌ Failed to send to [{sess.label}]")
+            if ok is PROMPT_REFUSED:
+                await self._reply_needs_admin(update)
+            else:
+                await reply_text(update.message,
+                                 f"❌ Failed to send to [{sess.label}]")
 
     async def _confirm_model_feedback(
         self, message, sess, previous_model: str, header: str,
@@ -2092,6 +2113,8 @@ class CommandHandlersMixin:
             if not await inject.is_alive(name):
                 await reply_text(update.message, f"⚠️ [{target_label}] session not alive")
                 return
+            if await self._refuse_admin_command(update, prompt_text):
+                return
             # Targeting is the operator's explicit choice and applies even
             # when the message itself is held, so it is recorded first.
             self.registry.last_active_session = name
@@ -2117,6 +2140,8 @@ class CommandHandlersMixin:
                 self.registry.transition(name, Status.BUSY)
                 await self._card_for_injected(sess, was_busy=was_busy)
                 log.info("[%s] Direct send: %s", target_label, prompt_text[:80])
+            elif ok is PROMPT_REFUSED:
+                await self._reply_needs_admin(update)
             else:
                 await reply_text(update.message, f"❌ Failed to send to [{target_label}]")
             return
@@ -2124,6 +2149,8 @@ class CommandHandlersMixin:
         # Not found in registry — try session discovery
         session_name = f"claude-{target_label}"
         if await inject.is_alive(session_name):
+            if await self._refuse_admin_command(update, prompt_text):
+                return
             new_sess = self._adopt_by_typed_name(session_name, target_label)
             self.registry.last_active_session = session_name
             if await self._hold_for_open_dialog(update, new_sess, prompt_text):
@@ -2146,6 +2173,8 @@ class CommandHandlersMixin:
                 await self._react(update, reactions.HANDED_OFF)
                 self.registry.transition(session_name, Status.BUSY)
                 await self._send_busy_and_animate(new_sess)
+            elif ok is PROMPT_REFUSED:
+                await self._reply_needs_admin(update)
             else:
                 await reply_text(update.message, f"❌ Failed to send to [{target_label}]")
         else:

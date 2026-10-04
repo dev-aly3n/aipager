@@ -193,7 +193,7 @@ def _match_and_promote(session: str, prompt_text: str) -> tuple[list[dict], list
     from aipager.policy_snapshot import (
         delete_notes,
         list_outstanding_notes,
-        match_notes_prefix_run,
+        match_notes_for_prompt,
         snapshot_for_prompt,
         write_merged_snapshot,
     )
@@ -210,7 +210,9 @@ def _match_and_promote(session: str, prompt_text: str) -> tuple[list[dict], list
     # `expired_out` collection above ever sees them, under-reporting
     # `expired` on the datagram (double-prune trap — see
     # `policy_snapshot.consume_notes_matching`'s own docstring).
-    consumed = match_notes_prefix_run(outstanding, prompt_text)
+    # The prefix run, plus the note that sent a slash command when a
+    # lingering note ahead of it stopped the run (roadmap 8.74).
+    consumed = match_notes_for_prompt(outstanding, prompt_text)
 
     if consumed:
         delete_notes(session, consumed)

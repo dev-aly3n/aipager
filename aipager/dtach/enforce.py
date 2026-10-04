@@ -59,6 +59,15 @@ _BLOCK_MARKER = "aipager safety policy"
 # Telegram marker."
 _TASK_NOTIFICATION_PREFIX = "<task-notification>"
 
+# How Claude Code records a slash command in the transcript (roadmap
+# 8.74): a non-meta user entry
+# ``<command-message>x</command-message>\n<command-name>/x</command-name>\n
+# <command-args>…</command-args>``, the expanded body following as an
+# ``isMeta`` entry. The text carries no aipager marker (a marker line
+# would break the command), so whether it came from Telegram is read from
+# the session's snapshot instead: see ``_command_from_telegram``.
+_COMMAND_NAME = re.compile(r"<command-name>\s*(/[^<\s]+)\s*</command-name>")
+
 
 def _iter_raw_lines_reversed(
     path: str | Path, chunk_bytes: int = 65536,
@@ -297,7 +306,7 @@ def _is_tool_result(entry: dict) -> bool:
     )
 
 
-def _origin_from_transcript(path: str | None) -> str:
+def _origin_from_transcript(path: str | None, note_bodies=()) -> str:
     """`"telegram"` if the governing user prompt carries the marker on
     ANY line of its (possibly multi-block) text, else `"terminal"`.
     Fail-closed to `"telegram"` when unreadable.
@@ -316,6 +325,16 @@ def _origin_from_transcript(path: str | None) -> str:
     messages' bodies are joined — checking only line 1 would misread a
     Telegram-originated batch as terminal (a safety bypass) whenever the
     marker isn't in the very first block.
+
+    A governing prompt with no marker that is a Claude Code slash-command
+    record (``<command-name>/x</command-name>``) is Telegram when
+    ``note_bodies`` (the canonical snapshot's ``note_bodies``: the
+    Telegram messages its UserPromptSubmit consumed) holds a body whose
+    first token is ``/x`` (roadmap 8.74; prompt-type commands fire that
+    hook, 8.37). A slash command is typed raw, so before this a
+    restricted member's ``/deliver …`` ran as an unrestricted terminal
+    prompt. Any other markerless prompt stays terminal. Pure: the caller
+    reads the snapshot.
     """
     if not path:
         return "telegram"
@@ -352,10 +371,35 @@ def _origin_from_transcript(path: str | None) -> str:
             for block_line in text.split("\n"):
                 if block_line.lstrip().startswith("[via Telegram"):
                     return "telegram"
+            if _command_from_telegram(text, note_bodies):
+                return "telegram"
             return "terminal"
     except OSError:
         return "telegram"
     return "telegram"
+
+
+def _command_from_telegram(text: str, note_bodies) -> bool:
+    """True when ``text`` is a markerless prompt one of ``note_bodies``
+    sent: a slash-command record (``<command-name>/x``) and a body whose
+    first whitespace token is exactly ``/x``, or a plain prompt equal to a
+    body (slash text Claude Code took as a plain prompt, e.g. a path).
+    Malformed bodies (not a list of strings) are ignored; a match makes
+    the prompt Telegram, which can only add rules, never remove them."""
+    if not isinstance(note_bodies, (list, tuple)):
+        return False
+    bodies = [b for b in note_bodies if isinstance(b, str) and b.strip()]
+    if not bodies:
+        return False
+    names = {m.group(1) for m in _COMMAND_NAME.finditer(text)}
+    whole = text.strip()
+    for body in bodies:
+        if body.strip() == whole:
+            return True
+        first = body.split(None, 1)
+        if first and first[0] in names:
+            return True
+    return False
 
 
 def _turn_already_blocked(path: str | None) -> bool:
@@ -529,7 +573,18 @@ def _decide(data: dict) -> dict | None:
     if early is not None and early.get("bypass_safety"):
         return None
 
-    if _origin_from_transcript(data.get("transcript_path")) == "terminal":
+    # The Telegram messages this turn consumed: they tell a slash command
+    # sent from Telegram (typed raw, no marker) from one typed in the
+    # terminal (roadmap 8.74). Only a scope-mode snapshot's count: in
+    # personal and legacy team mode every Telegram prompt is the
+    # operator's and stays unrestricted. An unreadable snapshot names
+    # none, which leaves a markerless prompt terminal as before; with no
+    # snapshot there is normally no Telegram turn to hold.
+    bodies = (early.get("note_bodies")
+              if early is not None and early.get("scope_mode") is True
+              else None)
+    if _origin_from_transcript(data.get("transcript_path"),
+                               bodies or ()) == "terminal":
         return None  # terminal users are unrestricted
 
     session = data.get("session", "")

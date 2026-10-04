@@ -209,6 +209,16 @@ happens to interrupt:
   because someone else's message was still waiting — is delivered
   later **with the original sender's permissions**, not whoever
   drove the session most recently.
+  Claude sees the person who sent each message, never the one who
+  drove the session before them, and whoever sends a message becomes
+  the session's driver, whether they typed it, used `/<name>`, a
+  template or a keyboard command. A sender aipager no longer knows
+  (removed while their message waited) runs on the floor.
+- Slash commands other than the Commands keyboard's (plus `/compact`)
+  and model switches need an admin: a `user` or `read_only` member who
+  sends `/x1 /deliver …`, a file captioned `/x1 /review`, or
+  `/new x1 /review the diff` gets "That command needs an admin." and a
+  🤷, and nothing reaches Claude. Owners and admins send any.
 - Messages from different users are never merged into one turn:
   while one user's message is still waiting to be picked up, another
   user's message is held until it clears. If a mixed turn happens

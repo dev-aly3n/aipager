@@ -101,6 +101,32 @@ def resolve_chat_id_int(sess) -> int | None:
         return None
 
 
+# Roadmap 8.74 (D-G): the reply to a slash command a restricted sender may
+# not send. Plain words, no em dash (UI text).
+NEEDS_ADMIN_REPLY = "That command needs an admin."
+# Retry of another member's slash command, tapped by someone who could
+# send it themselves: it would run with no sender, which may send none.
+RETRY_OTHERS_COMMAND_REPLY = "Only its sender can retry that command."
+
+
+class _PromptRefused:
+    """``_inject_prompt``'s result for a slash command its sender may not
+    send (roadmap 8.74, D-G). Falsy, so a caller that only tests ``ok``
+    still treats it as "not sent"; a caller that wants to say why compares
+    it with ``is PROMPT_REFUSED``."""
+
+    __slots__ = ()
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __repr__(self) -> str:
+        return "PROMPT_REFUSED"
+
+
+PROMPT_REFUSED = _PromptRefused()
+
+
 def driver_id_from_update(update) -> int | None:
     """The raw Telegram user id of whoever sent ``update``, or ``None``.
 

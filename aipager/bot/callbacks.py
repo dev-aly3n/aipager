@@ -67,6 +67,9 @@ from aipager.bot.transport import (  # noqa: F401
     calling_chat_id,
     driver_id_from_update,
     mixed_sender_note_outstanding,
+    NEEDS_ADMIN_REPLY,
+    PROMPT_REFUSED,
+    RETRY_OTHERS_COMMAND_REPLY,
     _detect_api_error,
     _DIFF_MAX_CHARS,
     _DIFF_MAX_LINES,
@@ -716,6 +719,15 @@ class CallbackDispatchMixin:
                 self.registry.transition(session_name, Status.BUSY)
                 await self._card_for_injected(sess, was_busy=was_busy)
                 log.info("[%s] Retry: %s", sess.label, prompt[:80])
+            elif ok is PROMPT_REFUSED:
+                # A slash command that may not be resent (roadmap 8.74).
+                # Someone else's text runs with no sender, which may send
+                # none, so even an owner cannot resend another member's.
+                await self._safe_answer(
+                    query,
+                    NEEDS_ADMIN_REPLY
+                    if self._command_needs_admin(prompt, tapper)
+                    else RETRY_OTHERS_COMMAND_REPLY)
             else:
                 await self._safe_answer(query, "Failed to retry")
             return
@@ -740,6 +752,8 @@ class CallbackDispatchMixin:
                 except Exception:
                     pass
                 log.info("[%s] Compact triggered by user", sess.label)
+            elif ok is PROMPT_REFUSED:
+                await self._safe_answer(query, NEEDS_ADMIN_REPLY)
             else:
                 await self._safe_answer(query, "Failed to send /compact")
             return
