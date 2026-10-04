@@ -126,13 +126,14 @@ behaviour.
 | `$XDG_RUNTIME_DIR/aipager.sock` | Unix datagram for hook events (falls back to `/tmp/aipager.sock`) | aipager daemon (binds) |
 | `/tmp/claude-dtach-<name>.sock` | dtach control socket per session | dtach |
 | `/tmp/claude-status-<name>.json` | Statusline data per session | `aipager-statusline` hook |
-| `/tmp/claude-notes-<name>/` | One permission note per not-yet-picked-up Telegram message | aipager daemon (written), `aipager-hook` (consumed) |
+| `/tmp/claude-notes-<name>/` | One permission note per not-yet-picked-up Telegram message, and a `turn-open` mark the hook keeps while a turn runs (a message that joins the turn can only narrow its rules) | aipager daemon (notes, written), `aipager-hook` (notes consumed; `turn-open` written, and cleared by both) |
 | `/tmp/claude-policy-<name>.json` | Canonical permission snapshot for the running turn | `aipager-hook` (written at pick-up), read by the `PreToolUse` check |
 | `~/.claude/aipager-sessions.json` | Durable registry state | aipager daemon |
 | `~/.claude/aipager-audit.jsonl` | Allow / Deny / answer log | aipager daemon (append-only) |
+| `~/.claude/aipager-pending-users.json` | People who addressed the bot in a group it does not serve, or who are not members of a group it serves, for `aipager config` to add | aipager daemon (written), `aipager config` (read) |
 | `~/.claude/settings.json` | Claude Code hook config | written by `aipager config` |
 | `~/.claude/settings.json.bak.*` | Backups before each rewrite | `aipager config` |
-| `~/.config/aipager/aipager.yaml` | Bot token, chats, members + roles, Mini App settings | `aipager config` (mode 600) |
+| `~/.config/aipager/aipager.yaml` | Bot token, chats, members + roles, Mini App settings | `aipager config` (mode 600); the daemon moves a group's entry when Telegram upgrades it to a supergroup |
 | `~/.config/aipager/policy.yaml` | Per-role rules + safety overrides | user (checked via `aipager policy validate`) |
 | `~/.config/aipager/daemon.env` | Claude credential for launched sessions | user / `aipager doctor --fix` (mode 600) |
 | `~/.config/aipager/keyboard.json` | Optional keyboard overrides | user |

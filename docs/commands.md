@@ -30,9 +30,9 @@ and on every session change.
 | `/diff [label]` | optional | Show the session's working-directory git diff. Bare, it shows the session your messages go to. |
 | `/clearqueue` | — | Drop every not-yet-picked-up message for the active session — both messages aipager is holding and messages already queued inside Claude — without interrupting the running turn. Replies with the count cleared. |
 | `/mode [label] [ask\|auto]` | optional | Show a session's permission mode with a button to switch to the other one: `✍️ x1 is 🤖 Auto.` `[💬 Switch to Ask]`. `/mode ask`, `/mode auto` or `/mode x1 ask` switch straight away. Going to Auto needs an admin and a confirm; going to Ask happens at once. Tapping the switch changes the card itself instead of sending a second message: it becomes the confirm, then shows the new mode with the opposite switch. On a busy session, offers `Stop task & switch` / `Not now`. `/perms` is the old name and still works the same. |
-| `/settings` | — | Message layout, diff previews (off by default), long-turn card updates (on by default: a busy card refreshes every 10 s after 2 minutes of a turn, 30 s after 10, once a minute after an hour, counting in minutes then hours; switch off to keep the first-minutes pace for the whole turn; see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)), formatting and language preferences, and New sessions: the mode (Auto or Ask), model and folder `/new` starts a session with. Whatever the layout, every busy card ends with its session's status line (`⏳`/`✅ name · …`) and every answer starts with its result line (`💬 name`, plus `· Finished (…)` when no finished card is left to show the stats); the merged layout stacks the two, each line in its own section. In the card layout the answer deliberately follows the finished card by a moment, so the card is seen to say Finished before the answer lands under it; tune or disable that head start with `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at once). The message layout decides the card for every turn, whether or not tools ran (see [Idle responses](#idle-responses)). |
-| `/whoami` | — | Show your Telegram id and (in team mode) your role. |
-| `/update` | — | Admin only. Check aipager and Claude Code for newer versions, then update whatever has one with a single button. See [Update](#update). |
+| `/settings` | - | Message layout, diff previews (off by default), long-turn card updates (on by default: a busy card refreshes every 10 s after 2 minutes of a turn, 30 s after 10, once a minute after an hour, counting in minutes then hours; switch off to keep the first-minutes pace for the whole turn; see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)), formatting and language preferences, and New sessions: the mode (Auto or Ask), model and folder `/new` starts a session with. Whatever the layout, every busy card ends with its session's status line (`⏳`/`✅ name · …`) and every answer starts with its result line (`💬 name`, plus `· Finished (…)` when no finished card is left to show the stats); the merged layout stacks the two, each line in its own section. In the card layout the answer deliberately follows the finished card by a moment, so the card is seen to say Finished before the answer lands under it; tune or disable that head start with `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at once). The message layout decides the card for every turn, whether or not tools ran (see [Idle responses](#idle-responses)). In a group anyone can look, and changing a setting needs an admin. |
+| `/whoami` | - | Show who you are here: in team mode your label, your role in this chat and the rules it gives you. |
+| `/update` | - | Admin only (the `owner` and `admin` roles, or a role with `can_manage`). Check aipager and Claude Code for newer versions, then update whatever has one with a single button. See [Update](#update). |
 
 The `/` menu shows your sessions first (`/x1 · Talk to x1`), then the
 frequent commands: `new`, `status`, `stop`, `now`, `resume`, `mode`,
@@ -143,7 +143,9 @@ session this chat last talked with: the one you last switched to with
 A bare `/mode`, `/clearqueue`, `/diff` or `/now` acts on the same session
 (`/stop` stops whichever session is working). Each chat has its own: a message in one chat never goes to a
 session that belongs to another chat. In a group only a reply to the bot, a message that mentions it, a command
-or a keyboard tap counts (see [groups](groups.md#privacy-mode-admin-rights-and-what-the-bot-reads)).
+or a tap on the group's keyboard counts (see [groups](groups.md#what-the-bot-reads-in-a-group)), and each person
+has their own target, which a session's answer does not move (see
+[groups](groups.md#talking-to-a-session-in-a-group)).
 
 Buttons on the pinned message:
 
@@ -257,7 +259,7 @@ run, under its own description of it — approve what you can read.
 
 Every tap is recorded in `~/.claude/aipager-audit.jsonl` and mirrored
 as a one-line reply threaded under the busy message:
-`✅ [jim] · Allowed · Bash: ls -la /tmp`.
+`✅ jim · Allowed by @alice · Bash: ls -la /tmp` (with a chat set up by `aipager config`; `Allowed` alone in personal mode).
 
 While a prompt — or an AskUserQuestion — waits for you, the session
 shows as waiting, never idle. If Claude Code nudges about idle input
@@ -574,7 +576,8 @@ that last answered you here (see
 [the pinned status bar](#the-pinned-status-bar)). In a group each person
 has their own target, which a session's answer does not move (see
 [groups](groups.md#talking-to-a-session-in-a-group)). Messages reach Claude **immediately**,
-even while a turn is running — exactly like typing into the terminal.
+even while your own turn is running, exactly like typing into the terminal
+(in a group, a message from someone else waits for that turn to end; see below).
 Send several and they queue inside Claude itself, which picks each up
 at a natural boundary:
 
@@ -638,22 +641,33 @@ started a turn
 is judged this way — one queued behind a running turn keeps its 👀
 until Claude takes it or it is dropped.
 
-Two cases are held back instead of sent, and delivered automatically
+Three cases are held back instead of sent, and delivered automatically
 once resolved:
 
-- A permission or question prompt is open — your text would otherwise
+- A permission or question prompt is open: your text would otherwise
   be read as an answer to that dialog.
-- (Team mode) a different user's message is still waiting to be
-  picked up — messages from different people are never merged into
-  one turn.
+- (Team mode) a different person's message is still waiting to be
+  picked up.
+- (Team mode) a different person's turn is running, including a
+  background agent it started. A turn typed in the terminal counts as
+  the owner's, so only an owner's message (or, in a DM, its own
+  member's) joins it.
+
+The last two keep messages from different people out of one turn, so
+each runs with its own sender's rights. If one joins anyway (for
+example a sender aipager does not know, which is never held), the turn
+runs under the strictest rules of everyone in it (see
+[groups](groups.md#who-a-message-runs-as)). If the turn a message waits
+for is stopped, or halted by a blocked tool, held messages are dropped
+with a 🤷.
 
 Held messages are capped at 50 per session and expire after 24 h;
 `/clearqueue` drops them along with anything Claude is holding.
 
 #### Send a queued message now
 
-A message you send while Claude is working goes to Claude at once
-(aipager never holds it back) and waits in Claude's queue until the
+A message you send while Claude is working on your own turn goes to
+Claude at once (aipager does not hold it back) and waits in Claude's queue until the
 current step ends. As soon as Claude's queue shows it, aipager replies
 under it:
 

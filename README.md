@@ -134,15 +134,17 @@ input and pick its package up from `environment.systemPackages`:
 
 ### Group mode (multi-user)
 
-aipager runs by default as a 1:1 DM bot. To run it in a Telegram
-group with multiple devs (mention `@aipagerbot deploy`,
-`@aipagerbot /jim run the tests`), re-run `aipager config` and
-pick **Team** at the mode prompt. You'll set up an allow-list of
-Telegram user IDs and roles (`owner` / `admin` / `user` / `read_only`)
-plus optional `deny_tools` rules that auto-block restricted tool
-calls. **Adding a user grants them code-execution rights on the
-host** — see [docs/groups.md](docs/groups.md) for the full trust
-model.
+aipager runs by default as a 1:1 DM bot. To use it in a Telegram
+group with several developers, add the bot to the group (as an admin,
+so it can pin the group's status bar), re-run `aipager config` and
+pick **Add a group scope**. The wizard offers you (the owner of your
+own DM) as the group's owner, then adds each member with a role (`owner` / `admin` / `user` /
+`read_only`), and reloads the running daemon. In the group the bot
+acts only on commands, replies to its messages and mentions
+(`@aipagerbot fix the tests`, `/jim run the tests`); each message runs
+with its sender's role. **Adding a user grants them code-execution
+rights on the host**: see [docs/groups.md](docs/groups.md) for the
+full trust model.
 
 ### AUR (Arch Linux)
 

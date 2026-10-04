@@ -22,8 +22,10 @@ name, and the group's id, title and type) in
 `~/.claude/aipager-pending-users.json`, so `aipager config` can find a
 new group and its people while the daemon runs. Anyone can add the bot
 to a group, so anyone can add a line to that file; it grants nothing.
-In team mode a per-user allow-list with roles is layered on top (see
-[groups](groups.md)).
+In team mode a per-user allow-list with roles is layered on top, and
+in a group only a message addressed to the bot (a command, a reply to
+it, a mention, or a tap on its keyboard) is acted on, whether or not
+the bot is a group admin (see [groups](groups.md)).
 
 This means the surface to "outside the world" is:
 
@@ -149,7 +151,7 @@ and what their role allows — written to
 `/tmp/claude-notes-<session>/`, one file per message. When Claude
 picks a prompt up, the `aipager-hook` helper matches it against those
 notes and installs the sender's rules where the `PreToolUse` check
-reads them. Two properties are load-bearing:
+reads them. These properties are load-bearing:
 
 - **Strictest wins.** If Claude picks up messages from more than one
   contributor as a single turn (aipager holds messages to prevent
@@ -178,8 +180,9 @@ reads them. Two properties are load-bearing:
 - **Slash commands need an admin.** A slash command is typed into
   Claude raw, with no marker, and a command or skill such as `/deliver`
   runs a whole turn from its own text. So a member whose role does not
-  bypass role rules (the built-in `user` and `read_only`, and anyone
-  aipager does not know) may send only the commands on aipager's
+  bypass role rules (the built-in `user` and `read_only`, roles you
+  define without `bypass_role_denies`, and anyone aipager does not
+  know) may send only the commands on aipager's
   Commands keyboard (plus `/compact`) and model switches (`/model
   <name>`); any other slash command, typed, sent to a session with
   `/<name>`, as a file caption, as `/new`'s first message or as a
@@ -534,6 +537,9 @@ per-project `~/.claude/settings.json` overrides or a container
 | Stolen bot token | Use `/revoke` in @BotFather, re-config |
 | Compromised claude tool call | Claude's `settings.json` is the gate; aipager respects it |
 | Restricted Telegram user escalates to the owner | No shell, writes and searches confined to the project (never the home folder), credential files unreadable, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
+| A group member borrows someone else's rights | Each message runs with its own sender's role in the chat it came from; a different sender's message waits for the running turn; if one joins anyway, the strictest rules win; slash commands from restricted roles are limited to the keyboard's ([team-mode enforcement](#team-mode-enforcement)) |
+| Group chatter reaches a session | In a group only commands, replies to the bot, mentions of it and marked keyboard taps are acted on ([groups](groups.md#what-the-bot-reads-in-a-group)) |
+| A removed member keeps access | `aipager config` reloads the daemon live; their held messages are dropped and a turn of theirs still running loses their old rights; removing them from the Telegram group stops them reading it ([groups → live reload](groups.md#live-reload)) |
 | Audit log tampering | Append-only; out of scope to prevent without a separate signing daemon |
 | Network attacker | No inbound port, not directly reachable |
 | Local privilege escalation | No sudo / setuid; daemon stays in user space |
