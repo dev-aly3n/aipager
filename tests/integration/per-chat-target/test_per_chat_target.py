@@ -277,8 +277,10 @@ def test_nothing_outside_the_registry_reads_the_install_wide_target():
 
 
 def test_the_reader_check_still_sees_real_code():
-    """Pins the check above against passing vacuously: setters of the
-    same attribute exist in the bot, so the walk does reach it."""
+    """Pins the check above against passing vacuously: writers of the
+    target exist in the bot, so the walk does reach it. (The bot writes
+    it through `registry.set_target` since 8.90; the setter is the one
+    store left, inside the registry.)"""
     import aipager
 
     root = pathlib.Path(aipager.__file__).parent
@@ -287,6 +289,9 @@ def test_the_reader_check_still_sees_real_code():
         for node in ast.walk(ast.parse(path.read_text(), str(path))):
             if (isinstance(node, ast.Attribute) and node.attr == "last_active_session"
                     and isinstance(node.ctx, ast.Store)):
+                setters += 1
+            elif (isinstance(node, ast.Attribute) and node.attr == "set_target"
+                    and isinstance(node.ctx, ast.Load) and path.name != "state.py"):
                 setters += 1
     assert setters >= 5
 

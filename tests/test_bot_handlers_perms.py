@@ -154,7 +154,9 @@ def test_bare_perms_shows_the_mode_and_switches_nothing(mk_bot, mk_update, run_a
     bot.registry._sessions["claude-dev"] = sess
     bot.registry.last_active_session = "claude-dev"
     bot._do_perms_switch_via_fn = AsyncMock()
-    update = mk_update("/perms")
+    # A DM: in a group (mk_update's default -1001) the card marks no
+    # target, since each member has their own (8.90).
+    update = mk_update("/perms", chat_id=12345)
 
     run_async(bot._handle_perms_cmd(update, MagicMock()))
 

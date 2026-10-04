@@ -72,6 +72,7 @@ from aipager.bot.transport import (  # noqa: F401
     _TRUNC_SUFFIX,
     _truncate_diff,
     calling_chat_id,
+    calling_user_id,
     driver_id_from_update,
     NEEDS_ADMIN_REPLY,
     PROMPT_REFUSED,
@@ -1091,7 +1092,9 @@ class SessionOpsMixin:
         if driver_user_id is not None:
             sess.created_by_user_id = sess.created_by_user_id or driver_user_id
             sess.last_driver_user_id = driver_user_id
-        self.registry.last_active_session = session_name
+        # The person who started it now talks to it; in a group that is
+        # their own target, not the rest of the chat's (roadmap 8.90).
+        self.registry.set_target(session_name, scope_chat_id, driver_user_id)
         self.registry.mark_dirty()
         asyncio.create_task(self._maybe_update_bot_name(session_name))
         asyncio.create_task(self._update_bot_commands())
@@ -1501,7 +1504,8 @@ class SessionOpsMixin:
                 sess.created_by_user_id = (
                     sess.created_by_user_id or driver_user_id
                 )
-            self.registry.last_active_session = session_name
+            self.registry.set_target(
+                session_name, sess.scope_chat_id or None, driver_user_id)
             self.registry.mark_dirty()
         finally:
             sess.resuming_until = 0.0
@@ -1728,7 +1732,8 @@ class SessionOpsMixin:
         sess = self.registry.find_by_label(target_label, calling_chat_id(update))
         if sess is not None:
             name = sess.name
-            self.registry.last_active_session = name
+            self.registry.set_target(
+                name, calling_chat_id(update), calling_user_id(update))
             self.registry.mark_dirty()
             asyncio.create_task(self._maybe_update_bot_name(name))
             text, kb = self._render_switch_reply(
@@ -1743,7 +1748,8 @@ class SessionOpsMixin:
             sess = self._adopt_by_typed_name(
                 session_name, target_label, calling_chat_id(update))
         if sess is not None:
-            self.registry.last_active_session = session_name
+            self.registry.set_target(
+                session_name, calling_chat_id(update), calling_user_id(update))
             self.registry.mark_dirty()
             asyncio.create_task(self._maybe_update_bot_name(session_name))
             asyncio.create_task(self._update_bot_commands())

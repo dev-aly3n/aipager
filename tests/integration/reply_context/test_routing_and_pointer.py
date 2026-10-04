@@ -155,7 +155,8 @@ def test_reply_to_own_earlier_message_routes_to_that_messages_session(
     # Turn 1: the user's own prompt to A (routed via last_active, which is
     # A for this one call), message_id=100 -- Part 1 requires this be
     # tracked automatically as a side effect of routing.
-    bot.registry.last_active_session = sess_a.name
+    # CHAT_ID is a group: the target is the sender's own (8.90).
+    bot.registry.set_target(sess_a.name, CHAT_ID, 12345)  # mk_update's user
     first = mk_update("hello A", chat_id=CHAT_ID, message_id=100)
     run_async(bot._handle_message(first, _ctx()))
     assert sess_a.status == Status.BUSY
@@ -166,7 +167,7 @@ def test_reply_to_own_earlier_message_routes_to_that_messages_session(
 
     # Reset for turn 2's routing assertion.
     sess_a.status = Status.IDLE
-    bot.registry.last_active_session = sess_b.name
+    bot.registry.set_target(sess_b.name, CHAT_ID, 12345)
 
     # Turn 2: a DIFFERENT message replies to msg 100 (the user's own
     # earlier prompt). It must route to A, not to last_active (B).

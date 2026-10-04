@@ -166,6 +166,8 @@ def test_caption_with_a_slash_elsewhere_is_plain_text(
     bot = mk_bot()
     jim, sent = _wire(bot, monkeypatch, tmp_path)
     ann = _second_session(bot)
+    # mk_update's chat (-1001) is a group: the sender's own target (8.90).
+    bot.registry.set_target("claude-jim", -1001, 12345)
     downloads = _Downloads()
     update, _photo, _tg = _photo_update(mk_update, downloads, caption="check /ann")
 

@@ -58,6 +58,18 @@ def calling_chat_id(source) -> int | None:
     return chat
 
 
+def calling_user_id(source) -> int | None:
+    """Telegram user id of whoever sent an inbound Update or tapped a
+    CallbackQuery, or ``None``. Only a real int counts: a group member's
+    own message target (roadmap 8.90) is keyed by it."""
+    user = (getattr(source, "effective_user", None)
+            or getattr(source, "from_user", None))
+    uid = getattr(user, "id", None)
+    if isinstance(uid, int) and not isinstance(uid, bool):
+        return uid
+    return None
+
+
 def home_chat() -> tuple[int, str] | None:
     """``(chat_id, kind)`` of the home chat (``scope.home_scope`` over the
     bot's LIVE scopes and policy, so a SIGUSR1 reload is honoured), or

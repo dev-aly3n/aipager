@@ -49,7 +49,9 @@ def gbot(mk_bot, monkeypatch):
         s = TrackedSession(name=name, label=label, status=Status.IDLE)
         s.scope_chat_id = chat
         r._sessions[name] = s
-    r.last_active_session = X1
+    # Both members talk to x1 (each has their own target in a group, 8.90).
+    r.set_target(X1, G, ALICE)
+    r.set_target(X1, G, BOB)
     bot = mk_bot(r, scopes=_scopes())
     bot.policy = load_policy()
     monkeypatch.setattr(

@@ -2001,6 +2001,17 @@ def _derive_label(name: str) -> str:
     return strip_scope_suffix(core)
 
 
+def _is_group_chat(chat_id) -> bool:
+    """A group or supergroup: Telegram gives them negative chat ids (the
+    rule ``bot.group_intake.is_group_chat`` applies too)."""
+    return (isinstance(chat_id, int) and not isinstance(chat_id, bool)
+            and chat_id < 0)
+
+
+def _is_user_id(user_id) -> bool:
+    return isinstance(user_id, int) and not isinstance(user_id, bool)
+
+
 def _load_pinned_msg_ids(data: dict) -> dict[int, int]:
     """The per-chat pinned-bar ids from a state file (8.31).
 
@@ -2069,6 +2080,14 @@ class SessionRegistry:
         # It used to be one value for the whole install, so a message in
         # one chat could be typed into another chat's session.
         self._targets: dict[int, tuple[str, int]] = {}
+        # A group's targets, one per PERSON (roadmap 8.90): (chat_id,
+        # user_id) -> (session name, order). In a team the chat-level
+        # target above follows whichever session answered last, so one
+        # member's message or keyboard Clear went to another member's
+        # session. Moved only by that person's own actions
+        # (`set_target`), never by session output. Read through
+        # `target_for(chat, user)`; a DM never uses it.
+        self._user_targets: dict[tuple[int, int], tuple[str, int]] = {}
         self._target_seq: int = 0
         self._last_active_session: str = ""
         # The pinned "needs you" bar's message in each chat that has one
@@ -2175,8 +2194,9 @@ class SessionRegistry:
         self._last_active_session = name or ""
         if not name:
             # "No target" is what the one install-wide value meant: none
-            # in any chat.
+            # in any chat, and for no one.
             self._targets.clear()
+            self._user_targets.clear()
             return
         self._target_seq += 1
         # A session is the target of one chat: drop it from any other
@@ -2195,13 +2215,38 @@ class SessionRegistry:
         with the label lookups)."""
         return sess.scope_chat_id if sess is not None and sess.scope_chat_id else 0
 
-    def target_for(self, chat_id: int | None) -> TrackedSession | None:
+    def set_target(
+        self, name: str, chat_id: int | None = None, user_id: int | None = None,
+    ) -> None:
+        """A person made *name* their target by their own action (a send,
+        a switch, a reply, a new session). The chat-level target moves
+        exactly as the ``last_active_session`` setter moves it; in a group
+        the person's own target is recorded too (roadmap 8.90)."""
+        self.last_active_session = name
+        if not name or not _is_group_chat(chat_id) or not _is_user_id(user_id):
+            return
+        sess = self._sessions.get(name)
+        if sess is None or self._target_chat(sess) not in (0, chat_id):
+            return
+        self._user_targets[(chat_id, user_id)] = (name, self._target_seq)
+        self._dirty = True
+
+    def target_for(
+        self, chat_id: int | None, user_id: int | None = None,
+    ) -> TrackedSession | None:
         """Where an unaddressed message in *chat_id* goes: the newest
         target made in that chat, or by a session with no chat stamped,
         that is still one of the chat's sessions (a newer one since
         stamped into another chat is skipped, not a dead end). Never a
         session that belongs to another chat. ``None`` chat (a legacy
-        unscoped update) falls back to the install-wide latest."""
+        unscoped update) falls back to the install-wide latest.
+
+        In a group with *user_id* (roadmap 8.90): that person's own
+        target while it is a live session of the chat, else the chat's
+        only live session, else ``None`` (ask which). Session output never
+        moves it, so it is never another member's latest conversation."""
+        if user_id is not None and _is_group_chat(chat_id) and _is_user_id(user_id):
+            return self._person_target(chat_id, user_id)
         if chat_id is None:
             name = self._last_active_session
             return self._sessions.get(name) if name else None
@@ -2214,10 +2259,24 @@ class SessionRegistry:
                 return sess
         return None
 
+    def _person_target(self, chat_id: int, user_id: int) -> TrackedSession | None:
+        entry = self._user_targets.get((chat_id, user_id))
+        if entry is not None:
+            sess = self._sessions.get(entry[0])
+            if (sess is not None and sess.status != Status.GONE
+                    and self._target_chat(sess) in (0, chat_id)):
+                return sess
+        live = [s for s in self.all_sessions(chat_id).values()
+                if s.label and s.status != Status.GONE]
+        return live[0] if len(live) == 1 else None
+
     def _forget_target(self, name: str) -> None:
         for chat, (target, _order) in list(self._targets.items()):
             if target == name:
                 del self._targets[chat]
+        for key, (target, _order) in list(self._user_targets.items()):
+            if target == name:
+                del self._user_targets[key]
         if self._last_active_session == name:
             # The newest target left, for an update with no chat.
             self._last_active_session = max(
@@ -2661,6 +2720,8 @@ class SessionRegistry:
             "version": 1,
             "last_active_session": self.last_active_session,
             "targets": {str(c): [n, o] for c, (n, o) in self._targets.items()},
+            "user_targets": {f"{c}:{u}": [n, o]
+                             for (c, u), (n, o) in self._user_targets.items()},
             "pinned_msg_ids": {str(c): m for c, m in self.pinned_msg_ids.items()},
             "msg_map": {f"{cid}:{mid}": v for (cid, mid), v in msg_map.items()},
             "sessions": sessions,
@@ -2938,6 +2999,7 @@ class SessionRegistry:
         # Otherwise it stays False (load alone doesn't dirty the state).
 
         self._load_targets(data.get("targets"), saved_last_active)
+        self._load_user_targets(data.get("user_targets"))
 
         # Age out sessions that ended more than GONE_SESSION_MAX_AGE_DAYS
         # ago (roadmap 8.12) — after msg_map and last_active_session are
@@ -2970,6 +3032,28 @@ class SessionRegistry:
                 self.last_active_session = saved_last_active
             else:
                 self._last_active_session = saved_last_active
+
+    def _load_user_targets(self, raw) -> None:
+        """Restore the group members' own targets (roadmap 8.90). State
+        saved before they existed has none: everyone starts without one,
+        which is the chat's only session or a "which session?"."""
+        self._user_targets = {}
+        if not isinstance(raw, dict):
+            return
+        for key, value in raw.items():
+            try:
+                chat_s, user_s = str(key).split(":")
+                chat, user = int(chat_s), int(user_s)
+                name, order = value
+                order = int(order)
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if not (_is_group_chat(chat) and isinstance(name, str)
+                    and name in self._sessions):
+                continue
+            self._user_targets[(chat, user)] = (name, order)
+        self._target_seq = max(
+            [self._target_seq] + [o for _n, o in self._user_targets.values()])
 
     def save_if_dirty(self) -> None:
         """Save state if it has been modified since last save."""

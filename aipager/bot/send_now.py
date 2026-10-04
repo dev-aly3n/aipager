@@ -54,6 +54,7 @@ from aipager.bot.notify import _BACKGROUND_TASKS
 from aipager.bot.session_ops import held_by_claude
 from aipager.bot.transport import (
     calling_chat_id,
+    calling_user_id,
     edit_text_at,
     MUTED,
     reply_text,
@@ -768,10 +769,13 @@ class SendNowMixin:
         if not await self._authorize(update):
             return
         chat_id = calling_chat_id(update)
-        sess = self.registry.target_for(chat_id)
+        sess = self.registry.target_for(chat_id, calling_user_id(update))
         if sess is None:
             # Including a chat whose last target is another chat's
-            # session: `target_for` never returns one (F11).
+            # session: `target_for` never returns one (F11). In a group,
+            # the sender's own target (8.90), or ask which.
+            if await self._ask_which_session(update):
+                return
             await reply_text(update.message, REPLY_NO_SESSION)
             return
         outcome = await self._send_now_core(sess, None)

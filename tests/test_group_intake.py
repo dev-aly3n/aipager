@@ -373,7 +373,8 @@ def hbot(gate_bot, monkeypatch):
     bot._react = AsyncMock()
     bot._maybe_update_bot_name = AsyncMock()
     bot.refresh_pinned = AsyncMock()
-    bot.registry.last_active_session = X1
+    # alice's own target (8.90): in a group each member has their own.
+    bot.registry.set_target(X1, G, ALICE)
     return bot
 
 
@@ -568,6 +569,8 @@ def _file_bot(mk_bot, monkeypatch, tmp_path):
     sess, sent = _wire(bot, monkeypatch, tmp_path)
     x1 = TrackedSession(name="claude-x1", label="x1", status=Status.IDLE)
     bot.registry._sessions[x1.name] = x1
+    # mk_update's chat (-1001) is a group: the sender's own target (8.90).
+    bot.registry.set_target("claude-jim", -1001, 12345)
     bot.refresh_pinned = AsyncMock()
     return bot, sent
 

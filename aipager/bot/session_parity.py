@@ -50,6 +50,7 @@ from aipager.bot.transport import (
     MUTED,
     SKIPPED,
     calling_chat_id,
+    calling_user_id,
     edit_text,
     reply_document,
     reply_text,
@@ -290,15 +291,19 @@ async def _edit(query, text: str, kb: InlineKeyboardMarkup | None) -> None:
 
 def session_picker(
     bot: "TelegramBot", chat_id, sessions, verb: str, *, glyph: str = "",
-    keyed: bool = False,
+    keyed: bool = False, user_id: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Only the sessions the command makes sense for, this chat's target
     first and marked ✍️, then by label, and a Cancel. A tap leads to the
     same card the typed name does (``verb``).
 
     ``keyed``: the tap acts at once (no card of its own to re-check on),
-    so each button carries the turn it was shown for, `<verb><turn_key>`."""
-    target = bot.registry.target_for(chat_id)
+    so each button carries the turn it was shown for, `<verb><turn_key>`.
+
+    ``user_id``: who the picker is for. In a group each member has their
+    own target (roadmap 8.90), so without one nothing is marked."""
+    target = (bot.registry.target_for(chat_id, user_id)
+              if user_id is not None or not group_intake.is_group_chat(chat_id) else None)
     ordered = sorted(sessions, key=lambda s: (s is not target, s.label.lower(), s.name))
     rows = [[InlineKeyboardButton(
         f"{'✍️ ' if s is target else glyph}{s.label}",
@@ -431,7 +436,8 @@ async def handle_restart_cmd(
             return
         await reply_text(update.message, "Which session to restart?",
                          reply_markup=session_picker(bot, chat_id, sessions, "restart",
-                                                     glyph="🔄 "))
+                                                     glyph="🔄 ",
+                                                     user_id=calling_user_id(update)))
         return
 
     label = parts[1].strip().lstrip("/")
@@ -544,7 +550,8 @@ async def handle_rename_cmd(
         return
     await reply_text(update.message, "Which session to rename?",
                      reply_markup=session_picker(bot, chat_id, sessions, "rename",
-                                                 glyph="✏️ "))
+                                                 glyph="✏️ ",
+                                                 user_id=calling_user_id(update)))
 
 
 # ---- delete --------------------------------------------------------------
@@ -706,7 +713,7 @@ async def handle_diff_cmd(
     chat_id = calling_chat_id(update)
 
     if len(parts) < 2:
-        sess = bot.registry.target_for(chat_id)
+        sess = bot.registry.target_for(chat_id, calling_user_id(update))
         if sess is None:
             live = [s for s in bot.registry.all_sessions(chat_id).values()
                     if s.label and s.status != Status.GONE]
@@ -1118,7 +1125,7 @@ async def handle_callback(
                 sess.scope_chat_id and chat_id is not None and sess.scope_chat_id != chat_id):
             await bot._safe_answer(query, "That session isn't running here.")
             return True
-        bot.registry.last_active_session = sess.name
+        bot.registry.set_target(sess.name, chat_id, user_id)
         bot.registry.mark_dirty()
         # The pinned bar's target line (it returns at once: its own task).
         await bot._maybe_update_bot_name(sess.name)

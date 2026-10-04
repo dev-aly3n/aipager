@@ -65,6 +65,7 @@ from aipager.bot.transport import (  # noqa: F401
     TruncationFailed,
     _build_diff_block,
     calling_chat_id,
+    calling_user_id,
     driver_id_from_update,
     mixed_sender_note_outstanding,
     NEEDS_ADMIN_REPLY,
@@ -1144,7 +1145,9 @@ class CallbackDispatchMixin:
                 self._new_conflict_pending.pop(session_name, None)
                 # Live session → switch to it; GONE session → /resume flow.
                 if sess and sess.status != Status.GONE:
-                    self.registry.last_active_session = session_name
+                    self.registry.set_target(
+                        session_name, calling_chat_id(update),
+                        calling_user_id(update))
                     self.registry.mark_dirty()
                     asyncio.create_task(
                         self._maybe_update_bot_name(session_name)

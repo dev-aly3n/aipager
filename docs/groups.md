@@ -147,7 +147,7 @@ happens, send it again instead.
 
 Reply to one of a session's messages (its answer, its card) and your
 message goes to that session. Or mention the bot: `@aipagerbot fix the
-tests` goes to the group's current session as `fix the tests` (the
+tests` goes to your current session as `fix the tests` (the
 mention is removed, so Claude never sees it as a file mention).
 `@aipagerbot status` and `@aipagerbot x2` work like typing `status` or
 `x2` in a DM, and `@aipagerbot` alone shows where messages go. A photo,
@@ -166,6 +166,15 @@ to this message with the new name", and the Ready card, the reply to
 mention the bot. Each person's `/new` card and rename question are
 their own: the card shows whose it is, only that person's reply answers
 it, and two people can start or rename sessions at the same time.
+
+Each person also has their own current session: the one they last
+switched to, sent a message to, replied to or started. Another member's
+session answering does not change it, and neither do other people's
+messages, so a mention, a template or a keyboard Clear goes to your
+session, and the reply names it ("🧹 /clear sent to x1"). With no current
+session of your own and more than one session running, the bot asks
+"Which session?" and sends nothing; with only one running, it goes
+there. The pinned bar has no "Messages go to" line in a group.
 
 ## Roles
 

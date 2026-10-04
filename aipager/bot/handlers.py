@@ -85,6 +85,7 @@ from aipager.bot.transport import (  # noqa: F401
     _TRUNC_SUFFIX,
     _truncate_diff,
     calling_chat_id,
+    calling_user_id,
     driver_id_from_update,
     mixed_sender_note_outstanding,
 )
@@ -183,6 +184,12 @@ def _unique_save_path(directory: Path, filename: str) -> Path:
         path = directory / f"{stem}-{n}{suffix}"
         n += 1
     return path
+
+
+def _sent_to_line(glyph: str, what: str, label: str) -> str:
+    """``🧹 /clear sent to x1``: the reply to a keyboard command or
+    template, naming the session it went to (roadmap 8.90). Plain text."""
+    return f"{glyph} {what} sent to {label}"
 
 
 def _file_prompt(caption: str, paths: list[Path], *, all_photos: bool) -> str:
@@ -588,7 +595,7 @@ class CommandHandlersMixin:
         was only a mention of the bot."""
         chat_id = calling_chat_id(update)
         listing, _kb = self._render_status_list(chat_id, update, with_buttons=False)
-        target = self.registry.target_for(chat_id)
+        target = self._target(update)
         if target is not None and target.status != Status.GONE:
             label = f"<b>{html_mod.escape(target.label)}</b>"
             next_line = group_intake.talk_hint(
@@ -839,7 +846,7 @@ class CommandHandlersMixin:
             await reply_text(update.message, "Which one to stop?",
                              reply_markup=session_parity.session_picker(
                                  self, chat_id, working, "pstop", glyph="⏹ ",
-                                 keyed=True))
+                                 keyed=True, user_id=calling_user_id(update)))
             return
         sess = working[0]
         outcome = await self._stop_session(sess, update=update)
@@ -866,8 +873,10 @@ class CommandHandlersMixin:
         """
         if not await self._authorize(update):
             return
-        sess = self.registry.target_for(calling_chat_id(update))
+        sess = self._target(update)
         if not sess:
+            if await self._ask_which_session(update):
+                return
             await reply_text(update.message,
                 "No active session - switch to one with /<label> first.",
             )
@@ -904,7 +913,8 @@ class CommandHandlersMixin:
             if len(alive) > 1:
                 await reply_text(update.message, "Which session to end?",
                                  reply_markup=session_parity.session_picker(
-                                     self, chat_id, alive, "end", glyph="⏹ "))
+                                     self, chat_id, alive, "end", glyph="⏹ ",
+                                     user_id=calling_user_id(update)))
                 return
             sess = alive[0]
         else:
@@ -1106,7 +1116,7 @@ class CommandHandlersMixin:
                     parse_mode="HTML")
                 return
         else:
-            sess = self.registry.target_for(chat_id)
+            sess = self._target(update)
             if sess is None or sess.status == Status.GONE:
                 live = [s for s in self.registry.all_sessions(chat_id).values()
                         if s.label and s.status != Status.GONE]
@@ -1147,8 +1157,11 @@ class CommandHandlersMixin:
     _handle_perms_cmd = _handle_mode_cmd
 
     def _render_mode_card(self, chat_id, sess: TrackedSession):
-        """`x1 is 🤖 Auto.` and the one switch that makes sense."""
-        target = self.registry.target_for(chat_id)
+        """`x1 is 🤖 Auto.` and the one switch that makes sense. ✍️ marks
+        the chat's target, never in a group: there each member has their
+        own (roadmap 8.90), and the card is everyone's."""
+        target = (None if group_intake.is_group_chat(chat_id)
+                  else self.registry.target_for(chat_id))
         auto = sess.skip_perms
         text = (f"{'✍️ ' if sess is target else ''}<b>{html_mod.escape(sess.label)}</b> "
                 f"is {'🤖 Auto' if auto else '💬 Ask'}.")
@@ -1341,6 +1354,42 @@ class CommandHandlersMixin:
         await reply_text(update.message,
             "🪪 Personal mode - full control of this machine from this DM.")
 
+    def _target(self, update) -> TrackedSession | None:
+        """Where an unaddressed message from whoever sent *update* goes.
+        In a group each person has their own (roadmap 8.90): a message
+        never lands in the session another member last talked to. A DM
+        is the chat's target, as before."""
+        return self.registry.target_for(
+            calling_chat_id(update), calling_user_id(update))
+
+    def _set_target(self, name: str, update) -> None:
+        """*update*'s sender made *name* their target by their own action
+        (a send, a switch, a reply). The chat's target moves as before."""
+        self.registry.set_target(
+            name, calling_chat_id(update), calling_user_id(update))
+
+    async def _ask_which_session(self, update) -> bool:
+        """A group member with no target of their own while the chat has
+        several live sessions is asked which one, and nothing is sent
+        (roadmap 8.90). True when it asked."""
+        chat_id = calling_chat_id(update)
+        user_id = calling_user_id(update)
+        if user_id is None or not group_intake.is_group_chat(chat_id):
+            return False
+        live = sorted(
+            (s for s in self.registry.all_sessions(chat_id).values()
+             if s.label and s.status != Status.GONE),
+            key=lambda s: (s.label.lower(), s.name))
+        if len(live) < 2:
+            return False
+        await reply_text(
+            update.message,
+            "Which session? Reply to one of its messages, or send "
+            f"/{live[0].label} your message.",
+            reply_markup=session_parity.session_picker(
+                self, chat_id, live, "talk", glyph="✍️ ", user_id=user_id))
+        return True
+
     def _own_text(self, update: Update) -> str:
         """The message's text without this bot's own mentions, stripped:
         what a command or the text router reads (roadmap 8.84)."""
@@ -1410,7 +1459,7 @@ class CommandHandlersMixin:
 
         # Quick template buttons — inject predefined prompt into active session
         if text in self._template_map:
-            await self._send_template(update, self._template_map[text])
+            await self._send_template(update, self._template_map[text], button=text)
             return
 
         # Claude Code slash commands — inject instantly, no BUSY transition
@@ -1481,10 +1530,13 @@ class CommandHandlersMixin:
                 "routed by last_active fallback"
             )
         if not sess:
-            # This chat's own target: never another chat's session (F11).
-            sess = self.registry.target_for(chat_id)
+            # This chat's own target: never another chat's session (F11),
+            # and in a group the sender's own (8.90).
+            sess = self._target(update)
 
         if not sess:
+            if await self._ask_which_session(update):
+                return
             log.warning("Dropped text %r — no session to route to", text[:80])
             await reply_text(update.message,
                 "⚠️ I don't know which session this is for. Pick one with "
@@ -1495,7 +1547,7 @@ class CommandHandlersMixin:
         if fallback_reason:
             log.info("[%s] %s", sess.label, fallback_reason)
 
-        self.registry.last_active_session = sess.name  # user is talking to this session now
+        self._set_target(sess.name, update)  # user is talking to this session now
         asyncio.create_task(self._maybe_update_bot_name(sess.name))
 
         if not await inject.is_alive(sess.name):
@@ -1664,15 +1716,17 @@ class CommandHandlersMixin:
         chat_id = calling_chat_id(update)
         sess = self._resolve_reply_target(reply_to, chat_id)
         if not sess:
-            sess = self.registry.target_for(chat_id)
+            sess = self._target(update)
         if not sess:
+            if await self._ask_which_session(update):
+                return
             await reply_text(update.message,
                 "⚠️ Voice transcribed but no active session to send it to. "
                 "Pick one with /<label> first."
             )
             return
 
-        self.registry.last_active_session = sess.name
+        self._set_target(sess.name, update)
         asyncio.create_task(self._maybe_update_bot_name(sess.name))
 
         if not await inject.is_alive(sess.name):
@@ -1821,17 +1875,19 @@ class CommandHandlersMixin:
             # pointer, then the last active session.
             sess = self._resolve_reply_target(msg.reply_to_message, chat_id)
             if not sess:
-                sess = self.registry.target_for(chat_id)
+                sess = self._target(update)
         prompt = _file_prompt(caption, paths, all_photos=all_photos)
 
         if not sess:
+            if await self._ask_which_session(update):
+                return
             await reply_text(msg,
                 "⚠️ I don't know which session this file is for. Pick one with "
                 "/<label> or the keyboard."
             )
             return
 
-        self.registry.last_active_session = sess.name
+        self._set_target(sess.name, update)
         asyncio.create_task(self._maybe_update_bot_name(sess.name))
 
         if not await inject.is_alive(sess.name):
@@ -1960,11 +2016,16 @@ class CommandHandlersMixin:
                     key[1], now - album.touched, len(album.paths),
                 )
 
-    async def _send_template(self, update: Update, prompt_text: str) -> None:
-        """Inject a quick-template prompt into this chat's target session."""
-        sess = self.registry.target_for(calling_chat_id(update))
+    async def _send_template(
+        self, update: Update, prompt_text: str, *, button: str = "",
+    ) -> None:
+        """Inject a quick-template prompt into this chat's target session
+        (the sender's own in a group), and say which session got it."""
+        sess = self._target(update)
 
         if not sess or sess.status == Status.GONE:
+            if await self._ask_which_session(update):
+                return
             await reply_text(update.message, "⚠️ No active session")
             return
 
@@ -1994,6 +2055,10 @@ class CommandHandlersMixin:
         )
         if ok:
             await self._react(update, reactions.HANDED_OFF)
+            # Before the card, so the line sits under the tap, not under
+            # the Working card or the answer it becomes.
+            await reply_text(update.message, _sent_to_line(
+                "📝", button or prompt_text, sess.label))
             self.registry.transition(sess.name, Status.BUSY)
             await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] Template sent: %s", sess.label, prompt_text[:80])
@@ -2008,10 +2073,15 @@ class CommandHandlersMixin:
         Unlike _send_template(), this does NOT transition to BUSY or start
         animation. Slash commands like /model, /cost, /context complete
         instantly and produce no Claude response.
+
+        It names the session it went to (roadmap 8.90): a Clear tapped in a
+        group used to wipe whichever session answered last, unannounced.
         """
-        sess = self.registry.target_for(calling_chat_id(update))
+        sess = self._target(update)
 
         if not sess or sess.status == Status.GONE:
+            if await self._ask_which_session(update):
+                return
             await reply_text(update.message, "⚠️ No active session")
             return
 
@@ -2103,6 +2173,11 @@ class CommandHandlersMixin:
                 )
                 _MODEL_CONFIRM_TASKS.add(task)
                 task.add_done_callback(_MODEL_CONFIRM_TASKS.discard)
+            else:
+                # The model line above names it already.
+                await reply_text(update.message, _sent_to_line(
+                    "🧹" if command_text == "/clear" else "↪️",
+                    command_text, sess.label))
             log.info("[%s] Command sent: %s", sess.label, command_text)
         else:
             if is_model_switch:
@@ -2176,7 +2251,7 @@ class CommandHandlersMixin:
                 return
             # Targeting is the operator's explicit choice and applies even
             # when the message itself is held, so it is recorded first.
-            self.registry.last_active_session = name
+            self._set_target(name, update)
             if await self._hold_for_open_dialog(update, sess, prompt_text):
                 return
             # R1 (design.md "turn anchor follows consumption"): the
@@ -2219,7 +2294,7 @@ class CommandHandlersMixin:
             if new_sess is None:
                 await reply_text(update.message, f"⚠️ Unknown session: {target_label}")
                 return
-            self.registry.last_active_session = session_name
+            self._set_target(session_name, update)
             if await self._hold_for_open_dialog(update, new_sess, prompt_text):
                 return
             # R1 (design.md "turn anchor follows consumption"): the

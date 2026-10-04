@@ -426,7 +426,11 @@ class DashboardMixin:
         # Where a plain message goes (4.9, 2026-09-30), once there is a
         # choice: with one session it can only go there. The target moves
         # with the conversation, so the bar says which one it is now.
-        target = self.registry.target_for(chat) if len(sessions) > 1 else None
+        # Not in a group: there each member has their own target (8.90),
+        # and one bar cannot say all of them.
+        target = (self.registry.target_for(chat)
+                  if len(sessions) > 1 and not group_intake.is_group_chat(chat)
+                  else None)
         if target is not None and any(target is s for s in sessions):
             lines.append(f"✍️ Messages go to <b>{esc(target.label)}</b>")
         for s in sessions:
@@ -880,7 +884,10 @@ class DashboardMixin:
         waits, ⋮ for the rest. Ended sessions wait behind one button.
         ``with_buttons=False``: the list alone (/start's home screen)."""
         live, ended = self._status_sessions(chat_id)
-        target = self.registry.target_for(chat_id)
+        # No ✍️ in a group: each member has their own target (8.90), and
+        # the list is everyone's (a tap re-renders it for the whole chat).
+        target = (None if group_intake.is_group_chat(chat_id)
+                  else self.registry.target_for(chat_id))
         cb_chat = chat_id or 0
         if live:
             text = f"📊 <b>Sessions ({len(live)})</b>\n\n" + "\n\n".join(

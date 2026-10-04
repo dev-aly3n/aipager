@@ -122,7 +122,8 @@ Telegram warning` (the six hours after a 429) or `⏸ card updates paused
 (hourly limit)` / `(rate limit)` (minimal mode, see
 [troubleshooting](troubleshooting.md#the-hourly-budget)) — and then,
 when the chat has more than one live session, `✍️ Messages go to jim`
-(the session a plain message in this chat goes to, see below) and one line
+(the session a plain message in this chat goes to, see below; not in a
+group, where each person has their own) and one line
 per session with its state: `working`, `needs you`, `idle` or `starting`. The bar names
 each session once: the waiting session the first line names gets no
 line of its own, and the first line never lists names the lines below
@@ -188,7 +189,8 @@ entry sends a canned prompt or slash command:
   e.g. `Write tests for the changes`, `Explain your plan before
   making changes`, `Update CLAUDE.md with what you learned`.
 - **Commands** — slash commands claude code natively handles
-  (`/compact`, `/clear`, etc.), injected instantly.
+  (`/compact`, `/clear`, etc.), injected instantly. A command or
+  template names the session it went to (`🧹 /clear sent to x1`).
 - **Models** — quick model switches for the active session. There
   are the family aliases (`sonnet`, `opus`, `haiku`, `fable`,
   `opusplan`), which always mean the latest model in that family, and
@@ -568,7 +570,9 @@ takes at most 8 s in total.
 Treated as the next prompt for the **active session**: this chat's
 target, the session you last switched to, sent a message to, started, or
 that last answered you here (see
-[the pinned status bar](#the-pinned-status-bar)). Messages reach Claude **immediately**,
+[the pinned status bar](#the-pinned-status-bar)). In a group each person
+has their own target, which a session's answer does not move (see
+[groups](groups.md#talking-to-a-session-in-a-group)). Messages reach Claude **immediately**,
 even while a turn is running — exactly like typing into the terminal.
 Send several and they queue inside Claude itself, which picks each up
 at a natural boundary:

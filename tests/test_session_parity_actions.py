@@ -246,7 +246,8 @@ def test_restart_cmd_no_label_shows_picker_of_live_sessions(mk_bot, mk_update, r
     gone = _session(name="claude-gone", label="gone", status=Status.GONE)
     for sess in (live, aaa, gone):
         bot.registry._sessions[sess.name] = sess
-    bot.registry.last_active_session = live.name
+    # mk_update's chat (-1001) is a group: the sender's own target (8.90).
+    bot.registry.set_target(live.name, -1001, 12345)
 
     update = mk_update("/restart")
     run_async(session_parity.handle_restart_cmd(bot, update, MagicMock()))
