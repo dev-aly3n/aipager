@@ -108,9 +108,55 @@ previous config in memory. A typo or a file moved aside can neither
 lock you out nor let anyone in: a reload never switches a daemon
 that has scopes back to personal mode (only a restart does).
 
-Also, on `@BotFather`, leave **privacy mode ON** (the default).
-That way the bot only sees messages that mention it or reply to
-its messages — not every chat in the group.
+### Privacy mode, admin rights, and what the bot reads
+
+On `@BotFather`, leave **privacy mode ON** (the default). Telegram then
+sends the bot only commands, replies to its messages and messages that
+mention it. Making the bot a group **admin** (it needs that to pin the
+group's status bar, see [What everyone sees](#what-everyone-sees))
+changes this: Telegram sends an admin bot every message in the group,
+whatever the privacy setting.
+
+aipager ignores group chatter either way. In a group it acts only on a
+message that is:
+
+- a command (`/status`, `/x1 fix the tests`, or the same with
+  `@aipagerbot` after the command, which Telegram adds when you pick it
+  from the menu). A command for another bot (`/x1@otherbot`) is ignored;
+- a reply to one of the bot's messages;
+- a message that mentions the bot (`@aipagerbot fix the tests`);
+- a tap on the keyboard the bot puts in the group (a session's name,
+  status, stop, new, Templates, Commands and their buttons). Telegram
+  sends a tap as plain text, so typing one of those exact words counts
+  as a tap too: a member who types `stop` stops the working session,
+  as the button would.
+
+Anything else (team members talking to each other, a photo or voice
+note that is not a reply to the bot) gets no reaction and no reply.
+Edited messages are ignored everywhere: edit a message and nothing
+happens, send it again instead.
+
+### Talking to a session in a group
+
+Reply to one of a session's messages (its answer, its card) and your
+message goes to that session. Or mention the bot: `@aipagerbot fix the
+tests` goes to the group's current session as `fix the tests` (the
+mention is removed, so Claude never sees it as a file mention).
+`@aipagerbot status` and `@aipagerbot x2` work like typing `status` or
+`x2` in a DM, and `@aipagerbot` alone shows where messages go. A photo,
+file or voice note works the same way: send it as a reply to the bot, or
+mention the bot in the caption. For an album, put the caption on its
+first item: the album's items that arrive after the one with the
+caption, mention or reply are taken, any before it are not. Commands
+work as before, and so do `/x1 your message` and a caption that starts
+with `/x1`. A command after the mention (`@aipagerbot /stop`) is not
+run: the bot asks you to send `/stop` on its own.
+
+The cards that wait for an answer say so in a group: the new-session
+card says "Reply to this message with a name", the rename card "Reply
+to this message with the new name", and the Ready card, the reply to
+`/x1`, `/start` and `/help` say to reply to a session's message or
+mention the bot.
 
 ## Roles
 

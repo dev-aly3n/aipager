@@ -68,6 +68,7 @@ from typing import TYPE_CHECKING
 from telegram import ExternalReplyInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
 from aipager import preferences
+from aipager.bot import group_intake
 from aipager.bot.transport import (
     MUTED,
     calling_chat_id,
@@ -194,6 +195,10 @@ def _leaves_the_card_open(bot: TelegramBot, update: Update) -> bool:
         return False      # forwarded, or posted through a bot: for a session, never a name
     text = getattr(msg, "text", None)
     if isinstance(text, str):
+        # Judged as the router reads it: "@bot /x1 fix it" is "/x1 fix it".
+        stripped, mentioned = group_intake.text_without_own_mentions(bot, msg)
+        if mentioned:
+            text = stripped.strip()
         if text.startswith("/"):
             head = text[1:].split(maxsplit=1)[0] if len(text) > 1 else ""
             command, _, target = head.partition("@")
@@ -356,12 +361,19 @@ def _settings_line(settings: dict) -> str:
 
 # ---- the Name card ------------------------------------------------------
 
-def _render_name_card(pending: dict, *, error: str = "") -> tuple[str, InlineKeyboardMarkup]:
+#: The Name card's ask in a group, where a plain message does not reach a
+#: bot in privacy mode but a reply to the card does (roadmap 8.84).
+_GROUP_NAME_ASK = "Reply to this message with a name, and what to do first if you like:"
+
+
+def _render_name_card(pending: dict, *, error: str = "",
+                      chat_id=None) -> tuple[str, InlineKeyboardMarkup]:
     lines = ["🆕 <b>New session</b>", ""]
     if error:
         lines += [f"⚠️ {html_mod.escape(error)}", ""]
     lines += [
-        "Send a name, and what to do first if you like:",
+        (_GROUP_NAME_ASK if group_intake.is_group_chat(chat_id)
+         else "Send a name, and what to do first if you like:"),
         "<code>x1</code>",
         "<code>x1 fix the failing tests</code>",
         "",
@@ -440,18 +452,29 @@ def _render_opt_path(
             InlineKeyboardMarkup(rows))
 
 
-def _model_custom_prompt_text(error: str = "") -> str:
+def _type_or_reply(chat_id, what: str) -> str:
+    """"Type <what>" in a private chat; in a group, where a plain message
+    does not reach a bot in privacy mode, "Reply to this message with
+    <what>" (roadmap 8.84)."""
+    if group_intake.is_group_chat(chat_id):
+        return f"Reply to this message with {what}"
+    return f"Type {what}"
+
+
+def _model_custom_prompt_text(error: str = "", chat_id=None) -> str:
     header = "🧠 <b>Other model</b>\n\n"
     if error:
-        return header + f"⚠️ {html_mod.escape(error)}\n\nType the model name."
-    return header + "Type the model name (e.g. claude-opus-5)."
+        return (header + f"⚠️ {html_mod.escape(error)}\n\n"
+                + _type_or_reply(chat_id, "the model name."))
+    return header + _type_or_reply(chat_id, "the model name (e.g. claude-opus-5).")
 
 
-def _path_newfolder_prompt_text(error: str = "") -> str:
+def _path_newfolder_prompt_text(error: str = "", chat_id=None) -> str:
     header = "📁 <b>New folder</b>\n\n"
     if error:
-        return header + f"⚠️ {html_mod.escape(error)}\n\nType the new folder's name."
-    return header + "Type the new folder's name."
+        return (header + f"⚠️ {html_mod.escape(error)}\n\n"
+                + _type_or_reply(chat_id, "the new folder's name."))
+    return header + _type_or_reply(chat_id, "the new folder's name.")
 
 
 # ---- message editing ---------------------------------------------------
@@ -483,7 +506,7 @@ async def _goto_name(
 ) -> None:
     pending["step"] = "name"
     _note_folder_choices(bot, chat_id, pending)
-    text, kb = _render_name_card(pending, error=error)
+    text, kb = _render_name_card(pending, error=error, chat_id=chat_id)
     await _edit_wizard(bot, chat_id, pending, text, kb)
 
 
@@ -559,7 +582,7 @@ async def _open_card(bot: TelegramBot, chat_id: int, user_id: int | None, send,
         **resolve_new_session_settings(bot, chat_id, user_id),
     }
     _note_folder_choices(bot, chat_id, pending)
-    text, kb = _render_name_card(pending, error=error)
+    text, kb = _render_name_card(pending, error=error, chat_id=chat_id)
     sent = await send(text, kb)
     if sent is MUTED or getattr(sent, "message_id", None) is None:
         # The chat is flood-muted: the card never went out, so nothing may
@@ -730,6 +753,7 @@ def render_ready(
              or (chosen if sess.model_switch_pending() else "")
              or sess.model_name or chosen or "Default model")
     folder = sess.cwd or _project_dir()
+    chat_id = sess.scope_chat_id or (calling_chat_id(update) if update else 0) or 0
     lines = [
         f"✅ <b>{label}</b> is ready",
         f"{mode} · 🧠 {html_mod.escape(model)} · 📁 <code>"
@@ -741,10 +765,9 @@ def render_ready(
     if first_message:
         lines.append("▶️ Working on your first message.")
     else:
-        lines.append(f"✍️ Just send a message, it goes to {label}.")
+        lines.append(group_intake.talk_hint(
+            bot, chat_id, label, dm=f"✍️ Just send a message, it goes to {label}."))
     lines.append(f"Later: tap {label} on the keyboard, or reply to any {label} message.")
-
-    chat_id = sess.scope_chat_id or (calling_chat_id(update) if update else 0) or 0
     switch = (InlineKeyboardButton("💬 Switch to Ask", callback_data=session_parity.session_cb(
                   bot, chat_id, sess, "rdy_ask"))
               if sess.skip_perms else
@@ -1027,7 +1050,7 @@ async def maybe_handle_text(
         resolved, err = launch.validate_model(text, MODEL_CHOICES)
         if err:
             pending["step"] = "opt_model_custom"
-            await _edit_wizard(bot, chat_id, pending, _model_custom_prompt_text(err),
+            await _edit_wizard(bot, chat_id, pending, _model_custom_prompt_text(err, chat_id),
                                InlineKeyboardMarkup([_back_cancel_row("_:nw:opt:model")]))
             return True
         pending["model"] = resolved or None
@@ -1044,7 +1067,7 @@ async def maybe_handle_text(
         path, existed, err = launch.create_directory(
             parent, text, roots, confined=bool(pending.get("confined")))
         if err:
-            await _edit_wizard(bot, chat_id, pending, _path_newfolder_prompt_text(err),
+            await _edit_wizard(bot, chat_id, pending, _path_newfolder_prompt_text(err, chat_id),
                                InlineKeyboardMarkup([_back_cancel_row("_:nw:opt:path")]))
             return True
         if not existed:
@@ -1166,7 +1189,7 @@ async def _handle_model_token(
         return
     if token == "custom":
         pending["step"] = "opt_model_custom"
-        await _edit_wizard(bot, chat_id, pending, _model_custom_prompt_text(),
+        await _edit_wizard(bot, chat_id, pending, _model_custom_prompt_text(chat_id=chat_id),
                            InlineKeyboardMarkup([_back_cancel_row("_:nw:opt:model")]))
         return
     if token.isdigit():
@@ -1215,7 +1238,7 @@ async def _handle_path_token(
             return
         pending["new_folder_parent"] = parent
         pending["step"] = "opt_path_newfolder"
-        await _edit_wizard(bot, chat_id, pending, _path_newfolder_prompt_text(),
+        await _edit_wizard(bot, chat_id, pending, _path_newfolder_prompt_text(chat_id=chat_id),
                            InlineKeyboardMarkup([_back_cancel_row("_:nw:opt:path")]))
         return
     if token.isdigit():

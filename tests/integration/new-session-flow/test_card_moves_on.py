@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from aipager.bot import new_flow
+from aipager.bot import group_intake, new_flow
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 CHAT = 555
@@ -177,14 +177,20 @@ def test_the_close_runs_before_every_other_handler(mk_bot, run_async, monkeypatc
 
     run_async(bot.start())
 
-    first = [(h, g) for h, g in registered if isinstance(h, TypeHandler)]
+    # The group intake gate (group -2, tests/test_group_intake.py) runs
+    # before it; it lets a DM's every message and a group's addressed ones
+    # through, so the close still sees them.
+    first = [(h, g) for h, g in registered if isinstance(h, TypeHandler)
+             and getattr(h.callback, "func", None) is not group_intake.intake_gate]
     assert len(first) == 1
     handler, group = first[0]
-    assert group < 0 and handler.type is Update
+    assert group == -1 and handler.type is Update
     assert isinstance(handler.callback, functools.partial)
     assert handler.callback.func is new_flow.close_if_moved_on
     assert handler.callback.args == (bot,)
-    assert all(g >= 0 for h, g in registered if h is not handler)
+    assert all(g >= 0 for h, g in registered
+               if h is not handler
+               and getattr(h.callback, "func", None) is not group_intake.intake_gate)
 
 
 # ---- anything else the person does closes the card ---------------------------

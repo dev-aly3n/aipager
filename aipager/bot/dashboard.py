@@ -36,7 +36,7 @@ from aipager.config import (
     PINNED_MIN_EDIT_GAP,
     PINNED_RECREATE_MIN_INTERVAL,
 )
-from aipager.bot import session_parity
+from aipager.bot import group_intake, session_parity
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import (
     PRIORITY_ESSENTIAL,
@@ -971,7 +971,8 @@ class DashboardMixin:
                 f"Answer {sess.label}",
                 callback_data=session_parity.session_cb(self, chat_id, sess, "pin_answer"))])
         else:
-            lines.append(f"Send a message and it goes to {label}.")
+            lines.append(group_intake.talk_hint(
+                self, chat_id, label, dm=f"Send a message and it goes to {label}."))
         rows.append([InlineKeyboardButton(
             "⋮ More", callback_data=session_parity.session_cb(self, chat_id, sess, "menu"))])
         if update is not None:

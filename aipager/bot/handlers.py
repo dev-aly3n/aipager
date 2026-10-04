@@ -36,7 +36,7 @@ from telegram.ext import (
 from aipager.dtach import inject
 
 from aipager import statusline_file
-from aipager.bot import new_flow, reactions, session_parity
+from aipager.bot import group_intake, new_flow, reactions, session_parity
 from aipager.bot.session_ops import (
     await_model_change,
     clear_model_switch_pending,
@@ -94,12 +94,19 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+#: /help's Talk line in a private chat. In a group it is
+#: ``group_intake.group_help_talk_line`` (a plain message does not reach
+#: the bot there).
+_HELP_TALK_LINE = (
+    "<b>Talk:</b> just type (it goes to the ✍️ session) · reply to a message"
+    " · /&lt;label&gt; message"
+)
+
 #: /help (4.3): what you can do, grouped by task, in one screen.
 HELP_TEXT = (
     "<b>How to use aipager</b>\n\n"
     "<b>Start:</b> /new name · /resume\n"
-    "<b>Talk:</b> just type (it goes to the ✍️ session) · reply to a message"
-    " · /&lt;label&gt; message\n"
+    f"{_HELP_TALK_LINE}\n"
     "<b>Control:</b> /stop · /now (send queued) · /clearqueue\n"
     "<b>Manage:</b> /status, then ⋮ (restart, rename, diff, end, delete)\n"
     "<b>Settings:</b> /settings · /mode (Auto or Ask)\n"
@@ -196,7 +203,7 @@ def _file_prompt(caption: str, paths: list[Path], *, all_photos: bool) -> str:
     return f"check {'this' if len(paths) == 1 else 'these'}: {joined}"
 
 
-def _split_caption_target(caption: str) -> tuple[str | None, str]:
+def _split_caption_target(caption: str, own_username: str = "") -> tuple[str | None, str]:
     """``(label, rest)`` for a caption whose FIRST token is ``/<label>``,
     ``(None, caption)`` otherwise.
 
@@ -208,14 +215,15 @@ def _split_caption_target(caption: str) -> tuple[str | None, str]:
     command and rejects it without firing a hook (observed 2026-09-05,
     roadmap 8.10). A bare slash (``/`` or ``/ text``) has no label and
     is returned as the label ``/`` so the caller refuses it as an
-    unknown session rather than sending it."""
+    unknown session rather than sending it. A trailing ``@<own_username>``
+    on the label (group clients add it, roadmap 8.85) is dropped."""
     stripped = caption.strip()
     if not stripped.startswith("/"):
         return None, caption
     parts = stripped.split(None, 1)
     head = parts[0]
     rest = parts[1] if len(parts) > 1 else ""
-    return head[1:] or head, rest
+    return group_intake.drop_own_suffix(head[1:], own_username) or head, rest
 
 
 async def _download_with_retry(media, save_path: Path, *, display_name: str) -> None:
@@ -572,11 +580,18 @@ class CommandHandlersMixin:
         sessions; the manual is /help now."""
         if not await self._authorize(update, allow_read_only=True):
             return
+        await self._send_home(update)
+
+    async def _send_home(self, update: Update) -> None:
+        """The home screen: /start's reply, and the answer to a message that
+        was only a mention of the bot."""
         chat_id = calling_chat_id(update)
         listing, _kb = self._render_status_list(chat_id, update, with_buttons=False)
         target = self.registry.target_for(chat_id)
         if target is not None and target.status != Status.GONE:
-            next_line = f"✍️ Messages go to <b>{html_mod.escape(target.label)}</b>."
+            label = f"<b>{html_mod.escape(target.label)}</b>"
+            next_line = group_intake.talk_hint(
+                self, chat_id, label, dm=f"✍️ Messages go to {label}.")
         elif listing.startswith("📊"):
             next_line = "Tap a session on the keyboard to talk to it."
         else:
@@ -608,7 +623,10 @@ class CommandHandlersMixin:
         """/help: a short guide grouped by task (4.3)."""
         if not await self._authorize(update, allow_read_only=True):
             return
-        await reply_text(update.message, HELP_TEXT, parse_mode="HTML")
+        text = HELP_TEXT
+        if group_intake.is_group_chat(calling_chat_id(update)):
+            text = HELP_TEXT.replace(_HELP_TALK_LINE, group_intake.group_help_talk_line(self))
+        await reply_text(update.message, text, parse_mode="HTML")
 
     def _app_button_row(self, update: Update) -> list:
         """One inline row linking to the Mini App, or [] when it doesn't belong.
@@ -793,7 +811,7 @@ class CommandHandlersMixin:
         if not await self._authorize(update):
             return
         chat_id = calling_chat_id(update)
-        parts = update.message.text.strip().split(maxsplit=1)
+        parts = self._own_text(update).split(maxsplit=1)
         if len(parts) > 1:
             label = parts[1].strip().lstrip("/")
             sess = self.registry.find_by_label(label, chat_id)
@@ -875,7 +893,7 @@ class CommandHandlersMixin:
         if not await self._authorize(update):
             return
         chat_id = calling_chat_id(update)
-        parts = update.message.text.strip().split(maxsplit=1)
+        parts = self._own_text(update).split(maxsplit=1)
         if len(parts) < 2:
             alive = [s for s in self.registry.all_sessions(chat_id).values()
                      if s.status != Status.GONE and s.label]
@@ -910,7 +928,7 @@ class CommandHandlersMixin:
         the legacy Auto shorthand."""
         if not await self._authorize(update):
             return
-        parts = update.message.text.strip().split(maxsplit=1)  # /new <rest>
+        parts = self._own_text(update).split(maxsplit=1)  # /new <rest>
         if len(parts) < 2:
             await new_flow.start_wizard(self, update, ctx)
             return
@@ -1320,13 +1338,39 @@ class CommandHandlersMixin:
         await reply_text(update.message,
             "🪪 Personal mode - full control of this machine from this DM.")
 
+    def _own_text(self, update: Update) -> str:
+        """The message's text without this bot's own mentions, stripped:
+        what a command or the text router reads (roadmap 8.84)."""
+        return group_intake.text_without_own_mentions(self, update.message)[0].strip()
+
+    def _own_caption(self, msg) -> str:
+        """A file's caption without this bot's own mentions (stripped only
+        when one was removed, so a private chat's caption is unchanged)."""
+        caption, mentioned = group_intake.text_without_own_mentions(self, msg, caption=True)
+        return caption.strip() if mentioned else (caption or "")
+
     async def _handle_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle text messages — replies to notifications or /<label> commands."""
         if not await self._authorize(update):
             return
-        text = update.message.text.strip()
+        # This bot's own mention is how a group addresses it, never part of
+        # the message: "@bot fix the tests" is "fix the tests" (to Claude
+        # Code `@word` is a file), "@bot status" is `status` (roadmap 8.84).
+        raw, mentioned = group_intake.text_without_own_mentions(self, update.message)
+        text = raw.strip()
         if not text:
+            if mentioned:
+                await self._send_home(update)
             return
+        own_name = group_intake.own_username(self)
+        if mentioned and text.startswith("/") and len(text) > 1:
+            # "@bot /stop": a command once the mention is gone, but no
+            # command handler saw it. Never type it into a session.
+            word = group_intake.drop_own_suffix(text[1:].split(maxsplit=1)[0], own_name)
+            if word.lower() in group_intake.OWN_COMMANDS:
+                await reply_text(update.message,
+                                 f"Send /{word} on its own, without mentioning the bot.")
+                return
         # Multi-step flows get first refusal on free text. Each returns
         # False unless it is genuinely mid-capture for THIS chat, so
         # ordinary session routing below is untouched outside those
@@ -1379,7 +1423,8 @@ class CommandHandlersMixin:
         # /<label> <prompt> — direct send
         if text.startswith("/") and " " in text:
             parts = text.split(" ", 1)
-            target_label = parts[0][1:]
+            # `/x1@thisbot fix it`: group clients add the bot's name (8.85).
+            target_label = group_intake.drop_own_suffix(parts[0][1:], own_name)
             prompt_text = parts[1].strip()
             if target_label and prompt_text:
                 if prompt_text.lower() == "stop":
@@ -1390,7 +1435,7 @@ class CommandHandlersMixin:
 
         # Bare /<label> — switch active session (e.g. keyboard tap)
         if text.startswith("/") and " " not in text:
-            target_label = text[1:]
+            target_label = group_intake.drop_own_suffix(text[1:], own_name)
             if target_label and target_label not in ("status", "stop", "kill"):
                 await self._switch_session(update, target_label)
                 return
@@ -1743,7 +1788,7 @@ class CommandHandlersMixin:
             return
 
         await self._inject_file_prompt(
-            update, ctx, msg.caption or "", [save_path],
+            update, ctx, self._own_caption(msg), [save_path],
             all_photos=bool(msg.photo), log_name=save_path.name,
         )
 
@@ -1763,7 +1808,7 @@ class CommandHandlersMixin:
         msg = update.message
         chat_id = calling_chat_id(update)
 
-        label, caption = _split_caption_target(caption)
+        label, caption = _split_caption_target(caption, group_intake.own_username(self))
         if label is not None:
             sess = await self._session_for_typed_label(update, label)
             if sess is None:
@@ -1863,8 +1908,9 @@ class CommandHandlersMixin:
             album.paths.append(save_path)
         else:
             album.failed.append(display_name)
-        if msg.caption and not album.caption:
-            album.caption = msg.caption
+        caption = self._own_caption(msg)
+        if caption and not album.caption:
+            album.caption = caption
         if not msg.photo:
             album.all_photos = False
         if album.pending == 0:

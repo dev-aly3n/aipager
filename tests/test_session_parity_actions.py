@@ -483,7 +483,9 @@ def test_rename_cmd_no_args_one_session_asks_for_the_name(mk_bot, mk_update, run
     sess = _session(label="dev")
     bot.registry._sessions[sess.name] = sess
 
-    update = mk_update("/rename")
+    # A private chat (positive id): a group's prompt says to reply instead
+    # (tests/test_group_intake.py).
+    update = mk_update("/rename", chat_id=12345)
     run_async(session_parity.handle_rename_cmd(bot, update, MagicMock()))
 
     args = update.message.reply_text.await_args

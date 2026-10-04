@@ -35,7 +35,7 @@ from telegram.error import BadRequest, Forbidden, RetryAfter
 
 from aipager.dtach import inject
 
-from aipager.bot import new_flow, session_parity, update_flow
+from aipager.bot import group_intake, new_flow, session_parity, update_flow
 from aipager.bot.flood import MUTE, FloodMuted, _key as _chat_key
 from aipager.bot import flood_state
 from aipager.bot.flood_budget import BudgetRateLimiter, clear_backoff_signal
@@ -444,7 +444,15 @@ class LifecycleMixin:
         flood_state.load()
 
         # Register handlers
-        # First, for every update (group -1 runs before the rest and never
+        # Before anything else (group -2): in a group, only messages
+        # addressed to this bot go on (a command for it, a reply to it, a
+        # mention, a keyboard tap); everything else stops here. Telegram
+        # sends an admin bot every group message (roadmap 8.84). Edited
+        # messages stop here everywhere.
+        self._app.add_handler(
+            TypeHandler(Update, functools.partial(group_intake.intake_gate, self)),
+            group=-2)
+        # Then, for every update (group -1 runs before the rest and never
         # stops them): an open /new Name card closes the moment its person
         # does anything but answer it or look around.
         self._app.add_handler(

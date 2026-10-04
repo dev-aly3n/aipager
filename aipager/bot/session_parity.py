@@ -44,7 +44,7 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from aipager.bot import settings_menu
+from aipager.bot import group_intake, settings_menu
 from aipager.bot.transport import calling_chat_id, edit_text, reply_document, reply_text
 from aipager.preferences import get_preferences, is_valid_value, resolve_preferences
 from aipager.state import PREFERENCE_OVERRIDE_FIELDS, Status, TrackedSession
@@ -191,7 +191,9 @@ def _start_rename(bot: "TelegramBot", chat_id, sess: TrackedSession,
                   user_id) -> tuple[str, InlineKeyboardMarkup]:
     """Wait for the new name, and say so."""
     _start_rename_capture(bot, chat_id, sess, user_id)
-    text = f"✏️ New name for [<b>{html_mod.escape(sess.label)}</b>]? Send it as a message."
+    ask = ("Reply to this message with the new name." if group_intake.is_group_chat(chat_id)
+           else "Send it as a message.")
+    text = f"✏️ New name for [<b>{html_mod.escape(sess.label)}</b>]? {ask}"
     kb = InlineKeyboardMarkup([[InlineKeyboardButton(
         "Cancel", callback_data=session_cb(bot, chat_id, sess, "rename-cancel"))]])
     return text, kb
