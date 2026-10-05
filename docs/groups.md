@@ -288,6 +288,7 @@ on the machine does that, which keeps it the owner's.
 | Any slash command | ✅ | ✅ | only the Commands keyboard's, `/compact` and model switches | same as `user` |
 | Where file writes land | anywhere | anywhere the safety floor allows | the session's project folder and its scratchpad, never the home folder | same as `user` |
 | Credential files (`~/.ssh`, `~/.git-credentials`, ...) | readable | readable | never (by default) | never (by default) |
+| `Grep`/`Glob` | anywhere | anywhere except aipager's protected folders (not a folder that is one, lies inside one or holds one) | the session's project folder and its scratchpad | same as `user` |
 
 - **owner**: full control, including the built-in safety floor. There
   should be exactly one: the person who runs the machine.
@@ -300,7 +301,12 @@ on the machine does that, which keeps it the owner's.
   - changing members and roles: only `aipager config` on the machine
     does that, and nothing in Telegram or the Mini App can;
   - bypassing the safety floor (aipager's config and bot token, Claude
-    Code's credentials, aipager's control files).
+    Code's credentials, aipager's control files). An admin's `Grep` and
+    `Glob` may search anywhere else, but not a folder that is one of
+    these, lies inside one or holds one: `Grep` of `~`, `/` or `/tmp`
+    (or with no folder from a session in the home folder) is denied,
+    and so is a `Glob` whose pattern starts in one (such as
+    `/home/you/.config/aipager/*`). Search inside a project folder instead.
 
   An admin keeps Bash, and with a shell the floor's command patterns
   are best-effort, not a boundary: only make someone an admin if you

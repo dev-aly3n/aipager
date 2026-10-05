@@ -309,9 +309,20 @@ them again (the strictest rules win).
 A credential file somewhere else (a `.env` in a project, a token in
 another folder) is not covered: add it to the role's
 `deny_paths_no_access`. Owners are not held to any of this.
-Admins' writes are not confined, and their `Grep`/`Glob` are checked on
-the folder they start in only — they have Bash, so their rules are
-best-effort anyway (below).
+Admins' writes are not confined. Their `Grep`/`Glob` may search any
+folder that does not reach a protected path: a search is denied when the
+folder it searches (its `path`, or the session's folder when it has
+none; for a `Glob`, also the folder its pattern names, as in
+`/home/you/.config/aipager/*`, or the folder above a pattern with no
+wildcard, which Claude Code searches for that name at any depth), with
+symlinks resolved, is a protected folder, lies inside one, or holds one.
+So `Grep` of `~`, `/`, the folder above your home folder or `/tmp` is
+denied (they hold `~/.config/aipager`, `~/.claude` or aipager's
+`/tmp/claude-*` files), while `Grep` of a project or of `/tmp/myproj` is
+not. A protected-path rule without a leading `/` or `~` (such as
+`**/.env`) can match in any folder, so with it in an admin's rules every
+admin search is denied, as for restricted roles. Admins have Bash, so
+their rules stay best-effort (below).
 
 **Known limits.** These are not covered:
 

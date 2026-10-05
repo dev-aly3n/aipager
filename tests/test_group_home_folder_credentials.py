@@ -260,9 +260,11 @@ def test_a_search_inside_a_project_is_fine(tmp_path, project, tool, extra):
     assert _decide(tmp_path, tool, {**extra, "path": "src"}, cwd=project) is None
 
 
-@pytest.mark.parametrize("role", ["owner", "admin"])
-def test_owner_and_admin_still_search_from_the_home_folder(tmp_path, home, role):
-    _use_role(role)
+def test_owner_still_searches_from_the_home_folder(tmp_path, home):
+    # An admin's search of the home folder holds aipager's protected
+    # folders, so it is denied since roadmap 8.61
+    # (tests/test_admin_search_floor.py).
+    _use_role("owner")
     assert _decide(tmp_path, "Grep", {"pattern": "x"}, cwd=home) is None
 
 

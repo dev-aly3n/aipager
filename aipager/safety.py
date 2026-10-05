@@ -470,6 +470,128 @@ def _search_violation(
     return None
 
 
+# What can stand for something other than itself in a Glob tool pattern
+# (picomatch: wildcards, classes, braces, extglob and regex groups, and
+# the ``\`` escape, which makes ``aipage\r`` name ``aipager``). The
+# literal part of a pattern ends at the first component holding one;
+# stopping too early only makes the search root wider, so stricter.
+_SEARCH_GLOB_MAGIC = re.compile(r"[*?\[\]{}()\\]")
+
+
+def _pattern_dirs(pattern: str, base: str) -> set[str]:
+    """The folder a Glob ``pattern`` searches: its literal leading
+    components joined to ``base`` (the search folder) unless the pattern
+    is absolute or ``~``-anchored, ``..`` resolved the way Claude Code
+    reads it (lexically) and, separately, through the disk (symlinks).
+    A pattern with no wildcard at all searches its parent folder: Claude
+    Code splits ``/a/b/name`` into the folder ``/a/b`` and the glob
+    ``name``, which ripgrep matches at any depth there (so
+    ``~/.config/aipager.yaml`` lists ``~/.config/aipager/aipager.yaml``).
+    Claude Code itself expands no ``~`` in a pattern and reads a relative
+    one as a filter inside ``base``; treating those as folders too only
+    makes the check stricter."""
+    p = _expand_tool_home(pattern)
+    if not os.path.isabs(p):
+        p = base.rstrip("/") + "/" + p
+    keep: list[str] = []
+    parts = p.split("/")
+    for part in parts:
+        if _SEARCH_GLOB_MAGIC.search(part):
+            break
+        keep.append(part)
+    literal = "/".join(keep) or "/"
+    spelled = os.path.abspath(literal)
+    if len(keep) == len(parts):
+        # No wildcard: the search folder is the parent.
+        spelled = os.path.dirname(spelled)
+        literal = os.path.dirname(literal.rstrip("/")) or "/"
+    return {spelled, _realpath(spelled), _realpath(literal)}
+
+
+def _protected_spots(glob: str) -> list[tuple[str, str | None]] | None:
+    """Where a no-access ``glob`` lives, as ``(folder, name)`` pairs: the
+    folder is its literal leading part, ``name`` the first component that
+    is a pattern (``None`` when the glob is a literal path, so the folder
+    itself is protected). ``~/.config/aipager/**`` is the folder
+    ``~/.config/aipager`` (name ``**``, i.e. everything in it);
+    ``/tmp/claude-policy-*`` is the entries of ``/tmp`` named
+    ``claude-policy-*``. ``None`` for an unanchored glob, which can match
+    in any folder."""
+    g = os.path.expanduser(glob)
+    if not g.startswith("/"):
+        return None
+    spots: list[tuple[str, str | None]] = []
+    for v in _glob_variants(g):
+        parts = v.split("/")
+        for i, part in enumerate(parts):
+            if _GLOB_MAGIC.search(part):
+                spots.append((os.path.normpath("/".join(parts[:i]) or "/"),
+                              part))
+                break
+        else:
+            spots.append((os.path.normpath(v), None))
+    return spots
+
+
+def _reaches(root: str, folder: str, name: str | None) -> bool:
+    """True when a search of ``root`` reads something at the protected
+    spot ``(folder, name)``: ``root`` is ``folder`` or holds it, or lies
+    inside it (inside an entry matching ``name``, when there is one)."""
+    if _under(folder, root):
+        return True  # the root is the folder or a folder above it
+    if not _under(root, folder):
+        return False
+    if name is None or "{" in name:
+        # A literal protected path, or a brace pattern fnmatch cannot
+        # read (``/srv/{a,b}/**``): everything in the folder counts.
+        return True
+    rel = _fold(root)[len(_fold(folder).rstrip("/")):].lstrip("/")
+    return fnmatch.fnmatchcase(rel.split("/")[0], _fold(name))
+
+
+def _unconfined_search_violation(
+    tool_name: str, tool_input: dict, no_access: tuple[str, ...],
+    cwd: str | None,
+) -> str | None:
+    """An unconfined turn's Grep/Glob (an admin, or a custom role with
+    ``bypass_role_denies``; roadmap 8.61). Owners never get here
+    (``enforce``'s short-circuit). The search may go anywhere except
+    into aipager's protected paths: it is denied when a search root is a
+    protected folder, lies inside one, or holds one (``Grep ~`` holds
+    ``~/.config/aipager``). The roots are ``path`` (else the payload
+    ``cwd``) and, for a Glob, the folder its pattern names (Claude Code
+    takes the search folder from an absolute pattern; for one with no
+    wildcard, that is its parent folder, :func:`_pattern_dirs`). An unanchored protected glob (``**/.env``) can match in any
+    folder, so it denies every search. Odd input denies (fail closed)."""
+    root = _js_trim(tool_input.get("path")) or cwd
+    if not isinstance(root, str) or not root or "\x00" in root:
+        return f"{tool_name} with an unreadable search folder"
+    base = _norm(root, cwd)
+    roots = {base, _realpath(base)}
+    if tool_name == "Glob" and tool_input.get("pattern") is not None:
+        pattern = tool_input["pattern"]
+        if not isinstance(pattern, str) or "\x00" in pattern:
+            return f"{tool_name} with an unreadable pattern"
+        # The whole pattern, never its brace or comma pieces: Claude Code
+        # takes the search folder from the whole pattern, and a piece of
+        # ``{src,tests}/*.py`` would read as the folder ``/``.
+        if pattern:
+            roots |= _pattern_dirs(pattern, base)
+    for glob in no_access:
+        spots = _protected_spots(glob)
+        if spots is None:
+            return (f"{tool_name} denied - the protected path {glob} can be "
+                    "in any folder, so this role cannot search with Grep "
+                    "or Glob")
+        if any(_reaches(r, folder, name)
+               for r in roots for folder, name in spots):
+            shown = glob[:-3] if glob.endswith("/**") else glob
+            return (f"{tool_name} denied - this search would reach "
+                    f"protected files ({shown}); search inside a project "
+                    "folder instead")
+    return None
+
+
 def _confinement_violation(tool_name: str, real: str,
                            write_roots: tuple[str, ...],
                            wide_cwd: bool = False) -> str | None:
@@ -514,8 +636,9 @@ def path_violation(
     - ``write_roots``: when given, a write tool may only land under one
       of these (the session's cwd and scratchpad) — roadmap 8.50 — and a
       Grep/Glob must pass the allow-list in :func:`_search_violation`.
-      ``None`` means unconfined (owner/admin): a Grep/Glob is then
-      checked on its ``path`` only, as before.
+      ``None`` means unconfined (admin): a Grep/Glob may then search
+      anywhere that does not reach a protected path
+      (:func:`_unconfined_search_violation`, roadmap 8.61).
     - ``readable``: exact files the Read tool may open even though a
       no-access glob covers them (the session's own reply file).
     - ``wide_cwd``: the session runs in the home folder or above it, so
@@ -526,9 +649,12 @@ def path_violation(
     if not key:
         return None
     tool_input = tool_input or {}
-    if tool_name in _SEARCH_TOOLS and write_roots is not None:
-        return _search_violation(tool_name, tool_input, no_access, cwd,
-                                 write_roots, wide_cwd)
+    if tool_name in _SEARCH_TOOLS:
+        if write_roots is not None:
+            return _search_violation(tool_name, tool_input, no_access, cwd,
+                                     write_roots, wide_cwd)
+        return _unconfined_search_violation(tool_name, tool_input,
+                                            no_access, cwd)
     raw = _js_trim(tool_input.get(key))
     if raw is None or raw == "":
         return None
