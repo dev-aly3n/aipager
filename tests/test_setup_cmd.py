@@ -1233,3 +1233,19 @@ def test_unknown_daemon_fresh_install_next_step_is_conditional(
     assert doc["next_step"].startswith(
         "If an aipager daemon is running, restart it to use the new bot "
         "token: run `aipager service stop`")
+
+
+def test_reload_raising_with_no_daemon_detected_is_not_needed(env):
+    """Nit: no daemon detected, the reload raises anyway: nothing needed
+    reloading, the same as the bot_token branch."""
+    from aipager.wizard import daemon_io
+    _write_yaml([_dm(CHAT, role="admin")])
+
+    def _boom():
+        raise OSError("socket gone")
+
+    env.mp.setattr(daemon_io, "_live_reload", _boom)
+    code, doc, _o, _e = env.setup("--force")
+    assert code == 0
+    assert doc["daemon"] == {"running": False, "reload": "not_needed",
+                             "restart_needed": False}

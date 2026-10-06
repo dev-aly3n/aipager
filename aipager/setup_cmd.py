@@ -756,7 +756,7 @@ def _after_yaml_change(run: _Run, plan: _Plan, changed: list[str],
     try:
         outcome, problem = daemon_io._live_reload()
     except Exception:
-        daemon["reload"] = "not_reloaded"
+        daemon["reload"] = "not_reloaded" if running else "not_needed"
         daemon["restart_needed"] = running
         return
     daemon["reload"] = outcome
@@ -800,7 +800,6 @@ def _install_service_step(run: _Run, running: bool, changed: list[str]) -> None:
     rc = service.install_service(yes=True)
     if rc != 0:
         svc["result"] = "failed"
-        run.doc["changed"] = _ordered(changed)
         raise SetupError(EXIT_FAILURE, "service_failed",
                          f"The service install failed (exit {rc}). The config "
                          "is already written.", fail_fix)
