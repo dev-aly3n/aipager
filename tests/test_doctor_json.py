@@ -148,7 +148,10 @@ def test_json_output_never_carries_a_token_shape(monkeypatch, capsys):
     monkeypatch.setattr(doctor, "CHECKS", [check_leaky])
     doctor.cmd_doctor(argparse.Namespace(as_json=True))
     out = capsys.readouterr().out
-    doc = json.loads(out)
-    assert "<redacted>" in doc["checks"][0]["detail"][0]
+    # Fixed failure messages only: a plain `assert ... in out` would print
+    # the output, token included, on the very regression this catches.
     if token in out or token.split(":", 1)[1] in out:
         pytest.fail("token shape in doctor --json output", pytrace=False)
+    detail = json.loads(out)["checks"][0]["detail"][0]
+    if "<redacted>" not in detail:
+        pytest.fail("the crash row was not redacted", pytrace=False)

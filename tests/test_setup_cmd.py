@@ -1018,9 +1018,9 @@ def test_plain_warning_lines_are_scrubbed(env):
     os.chmod(shared, 0o644)
     code, out, err = env.run("setup", "--token-file", str(shared),
                              "--chat-id", str(CHAT))
+    _fail_if_token_in("plain output", out, err)
     assert code == 0
     assert "readable by other users" in err and "<redacted>" in err
-    _fail_if_token_in("plain output", out, err)
 
 
 class _PipeStdin:
@@ -1050,10 +1050,10 @@ def test_token_stdin_times_out_on_a_pipe_that_never_closes(env, monkeypatch):
     finally:
         os.close(w)
         os.close(r)
+    _fail_if_token_in("the JSON", json.dumps(doc))
     assert code == 2 and doc["error"] == "token_stdin_timeout"
     assert "--token-file PATH" in doc["fix"]
     assert env.tg.urls == []
-    _fail_if_token_in("the JSON", json.dumps(doc))
 
 
 def test_token_stdin_reads_a_pipe_that_closes(env, monkeypatch):
@@ -1086,8 +1086,8 @@ def test_token_stdin_pipe_oversize_is_refused(env, monkeypatch):
 
 def test_help_topic_never_echoes_a_token(env):
     code, out, err = env.run("help", TOKEN)
-    assert code == 2 and "Unknown subcommand" in out + err
     _fail_if_token_in("help output", out, err)
+    assert code == 2 and "Unknown subcommand" in out + err
 
 
 def test_building_the_document_is_inside_the_json_quarantine(env, monkeypatch):
