@@ -606,6 +606,15 @@ def _setup(args: argparse.Namespace, run: _Run) -> int:
         raise first_error
     assert plan is not None and settings_plan is not None
 
+    # Under pytest, refuse before anything is sent or written when a target
+    # is in the operator's real home (roadmap 8.97); a no-op otherwise.
+    from aipager import audit
+    from aipager import scope as _scope
+    from aipager._test_guard import check_write
+    for target in (_scope.CONFIG_PATH, settings_plan.path,
+                   audit.AUDIT_LOG_PATH):
+        check_write(target)
+
     # -- test send, before anything is written --
     yaml_changes = [c for c in plan.changes if c in _YAML_CHANGES]
     if yaml_changes:

@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from aipager import bg_shells as _bg_shells
+from aipager._test_guard import check_write
 from aipager.scope import (
     chat_from_suffix, follow_chat_migrations, home_scope, load_chat_migrations,
     strip_scope_suffix,
@@ -3003,6 +3004,7 @@ class SessionRegistry:
         }
 
         state_file = Path(SESSION_STATE_FILE)
+        check_write(state_file)
         state_file.parent.mkdir(parents=True, exist_ok=True)
         tmp = state_file.with_suffix(".tmp")
         try:

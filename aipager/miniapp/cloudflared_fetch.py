@@ -43,6 +43,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from aipager._test_guard import check_write
+
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------
@@ -141,6 +143,7 @@ def cache_dir() -> Path:
             Path.home() / ".local" / "share" / "aipager"
             / "cloudflared" / _CLOUDFLARED_VERSION
         )
+    check_write(directory)
     directory.mkdir(parents=True, exist_ok=True)
     try:
         os.chmod(directory, 0o700)
@@ -197,6 +200,7 @@ def _atomic_install(dest: Path, data: bytes) -> bool:
     raises; a failure at any step returns ``False`` and best-effort
     cleans up the temp file."""
     tmp = dest.with_name(f"{dest.name}.download-{os.getpid()}")
+    check_write(dest)
     try:
         tmp.write_bytes(data)
         tmp.chmod(0o755)

@@ -43,6 +43,7 @@ import dataclasses
 import logging
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
+from aipager._test_guard import RealHomeWriteError
 from aipager.scope import _as_chat_id
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -237,6 +238,8 @@ def _write_config(old_id: int, new_id: int) -> None:
     from aipager import scope as scope_mod
     try:
         scope_mod.migrate_scope_chat_id(old_id, new_id)
+    except RealHomeWriteError:
+        raise
     except Exception as e:
         log.warning(
             "Could not rewrite aipager.yaml for group %s -> %s (%s); the "

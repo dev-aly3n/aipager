@@ -70,6 +70,8 @@ import urllib.request
 from pathlib import Path
 from typing import Callable
 
+from aipager._test_guard import check_write
+
 log = logging.getLogger(__name__)
 
 SDK_URL = "https://telegram.org/js/telegram-web-app.js"
@@ -118,6 +120,7 @@ def cache_dir() -> Path:
         directory = Path(override)
     else:
         directory = Path.home() / ".local" / "share" / "aipager" / "webapp-sdk"
+    check_write(directory)
     directory.mkdir(parents=True, exist_ok=True)
     try:
         os.chmod(directory, 0o700)
@@ -235,6 +238,7 @@ def _atomic_write(dest: Path, data: bytes) -> bool:
     Never raises; returns ``False`` and best-effort cleans up on
     failure."""
     tmp = dest.with_name(f"{dest.name}.download-{os.getpid()}")
+    check_write(dest)
     try:
         tmp.write_bytes(data)
         tmp.replace(dest)

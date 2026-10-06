@@ -827,11 +827,12 @@ a wall; see
    and permission prompts.
 
 Check what the wizard says after step 1. If it says to restart the
-daemon, it could not reach it: restart it (`aipager service restart`),
-since until then the previous member list is still in memory. If it
-says "Not applied", fix the problem it names: the daemon keeps the
-previous config until then. After a hand-edit of `aipager.yaml`, send
-the reload yourself (see [Live reload](#live-reload)).
+daemon, it could not reach it: restart it (`aipager service stop`,
+then `aipager service start`), since until then the previous member
+list is still in memory. If it says "Not applied", fix the problem it
+names: the daemon keeps the previous config until then. After a
+hand-edit of `aipager.yaml`, send the reload yourself (see
+[Live reload](#live-reload)).
 
 ## Related docs
 

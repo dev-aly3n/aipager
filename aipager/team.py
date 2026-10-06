@@ -34,6 +34,8 @@ from pathlib import Path
 
 import yaml
 
+from aipager._test_guard import check_write
+
 log = logging.getLogger(__name__)
 
 # Canonical location for the team config. ``aipager config`` writes
@@ -248,8 +250,8 @@ class TeamConfigError(Exception):
 _TEAM_YAML_HEADER = """\
 # aipager team mode (managed by `aipager config`).
 # Edit by hand to add / remove users. Restart the daemon after
-# changes (`aipager service restart`, or kill the foreground daemon
-# and re-run `aipager start`).
+# changes (`aipager service stop`, then `aipager service start`, or
+# stop the foreground `aipager start` and run it again).
 """
 
 
@@ -275,6 +277,7 @@ def dump_team(team: Team, path: Path = TEAM_CONFIG_PATH) -> None:
         + yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
     )
 
+    check_write(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(body, encoding="utf-8")
@@ -294,6 +297,7 @@ def archive_team(path: Path = TEAM_CONFIG_PATH) -> Path | None:
     """
     if not path.exists():
         return None
+    check_write(path)
     backup = path.with_suffix(path.suffix + f".bak.{int(time.time())}")
     os.replace(path, backup)
     return backup
@@ -453,6 +457,7 @@ def _write_pending_users(records: list[dict]) -> None:
     moved over the file with ``os.replace``. A crash before the move
     leaves the old file whole. Raises OSError."""
     path = PENDING_USERS_PATH
+    check_write(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp",
                                dir=path.parent)
@@ -503,6 +508,7 @@ def clear_pending_user(user_id: int) -> bool:
         if new:
             _write_pending_users(new)
         else:
+            check_write(PENDING_USERS_PATH)
             PENDING_USERS_PATH.unlink(missing_ok=True)
     except OSError as e:
         log.warning("pending-users update failed: %s", e)

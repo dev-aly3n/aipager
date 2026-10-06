@@ -108,11 +108,13 @@ def _acquire_daemon_lock() -> None:
     so a function-local would silently drop the guard once this
     function returned.
     """
+    from aipager._test_guard import check_write
     from aipager.errors import friendly_error
     global _daemon_lock_fd
     lock_path = (
         Path.home() / ".local" / "share" / "aipager" / "daemon.lock"
     )
+    check_write(lock_path)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o600)
     try:

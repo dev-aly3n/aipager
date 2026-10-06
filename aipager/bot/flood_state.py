@@ -44,6 +44,8 @@ import os
 import time
 from pathlib import Path
 
+from aipager._test_guard import check_write
+
 log = logging.getLogger(__name__)
 
 #: Schema version. A document with any other value is ignored outright
@@ -144,6 +146,7 @@ def save_if_dirty(*, path=None, force: bool = False) -> bool:
             and (now - _last_write_at) < floor):
         return False
     target = _path(path)
+    check_write(target)
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp = target.with_name(target.name + ".tmp")

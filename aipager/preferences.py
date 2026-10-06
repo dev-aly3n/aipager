@@ -39,6 +39,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from aipager._test_guard import check_write
 from aipager.config import KEEP_FINISHED_CARD
 
 log = logging.getLogger(__name__)
@@ -125,6 +126,7 @@ def _save_raw(store: dict[str, object]) -> None:
     observes a torn file. Best-effort: a write failure is logged, not
     raised, so a read-only filesystem can't crash a prompt handler.
     """
+    check_write(_PREFERENCES_PATH)
     try:
         _PREFERENCES_PATH.parent.mkdir(parents=True, exist_ok=True)
         tmp = _PREFERENCES_PATH.with_suffix(_PREFERENCES_PATH.suffix + ".tmp")

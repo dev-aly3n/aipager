@@ -27,6 +27,8 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
+from aipager._test_guard import check_write
+
 log = logging.getLogger(__name__)
 
 AUDIT_LOG_PATH = Path.home() / ".claude" / "aipager-audit.jsonl"
@@ -82,6 +84,7 @@ def append(*, session: str, label: str, action: str,
         "via": via,
     }
     target = path or AUDIT_LOG_PATH
+    check_write(target)
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("a", encoding="utf-8") as f:

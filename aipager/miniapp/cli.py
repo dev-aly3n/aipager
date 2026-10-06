@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 
+from aipager._test_guard import check_write
 from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import console
 
@@ -72,6 +73,7 @@ def _write_config_env(updates: dict[str, str]) -> None:
         if key not in seen:
             out.append(f"{key}={value}")
 
+    check_write(CONFIG_ENV)
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     CONFIG_ENV.write_text("\n".join(out) + "\n")
     try:

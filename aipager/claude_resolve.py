@@ -70,6 +70,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from aipager._test_guard import RealHomeWriteError, check_write
+
 log = logging.getLogger(__name__)
 
 _VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)\s*\(Claude Code\)")
@@ -578,7 +580,10 @@ def _cleanup_probe_artifacts(tmpdir: str) -> None:
         if (project.parent == projects_root
                 and _PROBE_DIR_PREFIX in project.name
                 and project.is_dir()):
+            check_write(project)
             shutil.rmtree(project, ignore_errors=True)
+    except RealHomeWriteError:
+        raise
     except Exception:
         pass
 

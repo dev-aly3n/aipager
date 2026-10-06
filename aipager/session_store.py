@@ -20,6 +20,8 @@ import logging
 import os
 from pathlib import Path
 
+from aipager._test_guard import check_write
+
 log = logging.getLogger(__name__)
 
 SESSIONS_ROOT = Path.home() / ".local" / "share" / "aipager" / "sessions"
@@ -77,6 +79,7 @@ def write_session_files(scope, policy, label: str) -> str:
     Returns the SESSION.md body (to feed --append-system-prompt).
     """
     folder = session_folder(scope.chat_id, scope.kind, label)
+    check_write(folder)
     folder.mkdir(parents=True, exist_ok=True)
     try:
         os.chmod(folder, 0o700)
@@ -100,6 +103,7 @@ def write_session_files(scope, policy, label: str) -> str:
 
 
 def _atomic_write(path: Path, text: str, mode: int) -> None:
+    check_write(path)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(text, encoding="utf-8")
     try:

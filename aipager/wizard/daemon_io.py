@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import sys
 
 
+from aipager._test_guard import check_write
 from aipager.ui import console
 from aipager.wizard._constants import (
     CONFIG_DIR, CONFIG_ENV,
@@ -37,6 +39,7 @@ def _read_env_file() -> tuple[str, str]:
 
 def _write_env_file(token: str, chat_id: int | str) -> None:
     """Overwrite CONFIG_ENV (mode 0600)."""
+    check_write(CONFIG_ENV)
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     CONFIG_ENV.write_text(
         f"CLAUDE_TG_BOT_TOKEN={token}\nCLAUDE_TG_CHAT_ID={chat_id}\n"
@@ -185,9 +188,13 @@ def _pick_daemon_pid(pgrep_out: str) -> int | None:
     return None
 
 
+def _is_linux() -> bool:
+    return sys.platform.startswith("linux")
+
+
 def _restart_hint() -> None:
-    """Print a one-line reminder that the daemon must be restarted
-    for config changes to take effect."""
+    """Print a short reminder that the daemon must be restarted for
+    config changes to take effect, naming commands that exist."""
     pid = _detect_daemon_running()
     if pid is None:
         # Daemon not running — nothing to restart.
@@ -196,9 +203,19 @@ def _restart_hint() -> None:
     console.print(
         "[warn]⚠[/warn]  [warn]Restart the daemon to apply this change:[/warn]"
     )
+    # There is no `aipager service restart`: stop, then start (the same
+    # commands `aipager setup` names in its next step).
     console.print(
-        "    [path]aipager service restart[/path]"
-        "  [muted](or kill the foreground daemon and re-run `aipager start`)[/muted]"
+        "    [path]aipager service stop[/path], then "
+        "[path]aipager service start[/path]"
+    )
+    if _is_linux():
+        console.print(
+            "    [muted](or [path]systemctl --user restart aipager[/path])[/muted]"
+        )
+    console.print(
+        "    [muted](for a foreground daemon: stop `aipager start` and run "
+        "it again)[/muted]"
     )
 
 

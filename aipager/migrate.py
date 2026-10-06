@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 from aipager import scope as _scope
+from aipager._test_guard import check_write
 from aipager import team as _team
 
 log = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ def _backup(src: Path) -> Path | None:
     if not src.exists():
         return None
     dst = src.with_suffix(src.suffix + f".bak.{int(time.time())}")
+    check_write(dst)
     shutil.copy2(src, dst)
     return dst
 
@@ -130,6 +132,7 @@ def migrate_to_v2() -> bool:
 
     # Seed policy.yaml only if absent (never overwrite a user's file).
     if not POLICY_PATH.exists():
+        check_write(POLICY_PATH)
         POLICY_PATH.parent.mkdir(parents=True, exist_ok=True)
         POLICY_PATH.write_text(_POLICY_SEED, encoding="utf-8")
 
@@ -250,6 +253,7 @@ def retire_v1() -> bool:
     renamed = False
     for src in (config._XDG_CONFIG, _team.TEAM_CONFIG_PATH):
         if src.exists():
+            check_write(src)
             src.rename(src.with_suffix(src.suffix + f".retired.{ts}"))
             renamed = True
     if renamed:

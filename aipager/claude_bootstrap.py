@@ -41,6 +41,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from aipager._test_guard import check_write
+
 log = logging.getLogger(__name__)
 
 
@@ -129,6 +131,7 @@ def _load(path: Path) -> dict:
 
 
 def _atomic_write(path: Path, data: dict) -> None:
+    check_write(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")

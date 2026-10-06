@@ -13,6 +13,7 @@ import json
 import logging
 import os
 
+from aipager._test_guard import check_write
 from aipager.wizard._constants import CONFIG_DIR
 
 log = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ DRAFT_PATH = CONFIG_DIR / ".wizard-draft.json"
 
 def save_draft(draft: dict) -> None:
     """Atomic-write the in-progress sub-flow state (mode 0600)."""
+    check_write(DRAFT_PATH)
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     tmp = DRAFT_PATH.with_suffix(DRAFT_PATH.suffix + ".tmp")
     tmp.write_text(json.dumps(draft), encoding="utf-8")
@@ -45,6 +47,7 @@ def load_draft() -> dict | None:
 
 def clear_draft() -> None:
     """Delete the draft file (no-op if absent)."""
+    check_write(DRAFT_PATH)
     try:
         DRAFT_PATH.unlink()
     except FileNotFoundError:

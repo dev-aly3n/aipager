@@ -22,6 +22,7 @@ import platform
 import shutil
 from pathlib import Path
 
+from aipager._test_guard import check_write
 from aipager.errors import friendly_error, friendly_warn
 from aipager.install_source import _EXTRA_PACKAGES  # noqa: F401  (re-export)
 from aipager.ui import console, ok as ui_ok
@@ -177,6 +178,7 @@ def _remove_path(path: Path) -> bool:
     """Remove a file or directory tree. Return True if something was removed."""
     if not path.exists() and not path.is_symlink():
         return False
+    check_write(path)
     try:
         if path.is_dir() and not path.is_symlink():
             import shutil as _shutil
@@ -196,6 +198,7 @@ def _unlink_quietly(path: Path) -> None:
     by another user (or on a read-only mount) raises other ``OSError``
     subtypes that must not abort a best-effort uninstall.
     """
+    check_write(path)
     try:
         path.unlink(missing_ok=True)
     except OSError:

@@ -19,6 +19,8 @@ from pathlib import Path
 
 import yaml
 
+from aipager._test_guard import check_write
+
 log = logging.getLogger(__name__)
 
 CONFIG_PATH: Path = Path.home() / ".config" / "aipager" / "aipager.yaml"
@@ -327,6 +329,7 @@ def _atomic_write_yaml(data: dict, path: Path) -> None:
         _AIPAGER_YAML_HEADER
         + yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
     )
+    check_write(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(body, encoding="utf-8")
@@ -769,6 +772,7 @@ def _add_migration_line(text: str, old: int, new: int, current) -> str | None:
 
 
 def _atomic_write_text(body: str, path: Path) -> None:
+    check_write(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(body, encoding="utf-8")

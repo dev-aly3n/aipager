@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from aipager import install_source
+from aipager._test_guard import check_write
 
 log = logging.getLogger("aipager.self_update")
 
@@ -647,6 +648,7 @@ class UpdateLock:
         if self._fd is not None:
             return False
         path = Path(self._path if self._path is not None else UPDATE_LOCK_PATH)
+        check_write(path)
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             fd = os.open(str(path), os.O_RDWR | os.O_CREAT, 0o600)
@@ -965,6 +967,7 @@ def cli_restart_instruction() -> list[str]:
 def write_marker(data: dict) -> None:
     """Atomically write the marker (mode 0600). Raises OSError on failure."""
     path = Path(UPDATE_MARKER_PATH)
+    check_write(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -976,6 +979,7 @@ def write_marker(data: dict) -> None:
 
 
 def clear_marker() -> None:
+    check_write(UPDATE_MARKER_PATH)
     try:
         Path(UPDATE_MARKER_PATH).unlink()
     except FileNotFoundError:

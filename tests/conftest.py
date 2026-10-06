@@ -389,6 +389,73 @@ def _guard_real_home():
         )
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _allow_pytest_basetemp(tmp_path_factory):
+    """Let the writers' real-home guard (``aipager._test_guard``, roadmap
+    8.97) accept pytest's own temp root even when it lies under the real
+    home (``--basetemp=~/x``, or ``TMPDIR`` there). Every other path
+    under the real home stays refused while the suite runs."""
+    from aipager import _test_guard
+    _test_guard.allow_root(tmp_path_factory.getbasetemp())
+
+
+def swallowed_refusals_report(refusals) -> str | None:
+    """The failure text for real-home refusals a test left behind, or
+    ``None`` when there are none."""
+    if not refusals:
+        return None
+    return ("a writer refused a path under the operator's real home "
+            "(roadmap 8.97) and something swallowed the error; point the "
+            "writer at a tmp path:\n  " + "\n  ".join(refusals))
+
+
+@pytest.fixture
+def real_home_refusals_expected():
+    """Request this in a test that provokes real-home refusals on purpose
+    (tests/test_real_home_guard.py): ``_no_swallowed_real_home_refusal``
+    then lets them pass."""
+
+
+@pytest.fixture(autouse=True)
+def _no_swallowed_real_home_refusal(request):
+    """Fail a test in which ``aipager._test_guard.check_write`` refused a
+    real-home write, even when the refusal never reached the test: the
+    daemon wraps many saves in a broad ``except`` that logs and carries
+    on, which would hide it. A refusal left from outside any test body
+    (a module or session fixture's setup, an earlier fixture, a thread)
+    fails the next test's setup; one after the last test fails the run
+    (``pytest_sessionfinish`` below)."""
+    from aipager import _test_guard
+    leftover = swallowed_refusals_report(_test_guard.refusals)
+    _test_guard.refusals.clear()
+    if leftover:
+        pytest.fail("before this test started: " + leftover, pytrace=False)
+    yield
+    report = swallowed_refusals_report(_test_guard.refusals)
+    _test_guard.refusals.clear()
+    if report and "real_home_refusals_expected" not in request.fixturenames:
+        pytest.fail(report, pytrace=False)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """A real-home refusal after the last test (a session fixture's
+    teardown, a thread) fails the run. A run that already ends worse
+    (interrupted, an internal error, ``pytest.exit(returncode=N)``) keeps
+    its own status; the report is printed either way. Known gap: on an
+    interrupted run the fixtures are torn down after this hook, so a
+    refusal swallowed in a fixture's teardown then goes unreported (the
+    write is still refused, and the run is not green)."""
+    from aipager import _test_guard
+    report = swallowed_refusals_report(_test_guard.refusals)
+    if report:
+        _test_guard.refusals.clear()
+        session.config.get_terminal_writer().line(
+            "\nafter the last test: " + report, red=True)
+        if session.exitstatus in (pytest.ExitCode.OK,
+                                  pytest.ExitCode.NO_TESTS_COLLECTED):
+            session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
+
 @pytest.fixture(autouse=True)
 def _no_real_claude_candidates(request, monkeypatch):
     """Make claude_resolve discovery return zero candidates by default.

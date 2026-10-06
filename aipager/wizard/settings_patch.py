@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+from aipager._test_guard import check_write
 from aipager.ui import console, ok, step
 from aipager.wizard._constants import (
     CLAUDE_SETTINGS,
@@ -354,6 +355,7 @@ def _backup_settings(plan: SettingsPlan) -> Path | None:
     """Copy the existing file aside (``settings.json.bak.<epoch>``) before
     it changes, or make the parent directory for a new one. Returns the
     backup path, or ``None`` when there was nothing to back up."""
+    check_write(plan.path)
     if plan.exists:
         backup = plan.path.with_name(f"{plan.path.name}.bak.{int(time.time())}")
         backup.write_text(plan.existing_text)
@@ -363,6 +365,7 @@ def _backup_settings(plan: SettingsPlan) -> Path | None:
 
 
 def _write_settings(plan: SettingsPlan) -> None:
+    check_write(plan.path)
     try:
         plan.path.write_text(plan.new_text)
     except OSError as e:

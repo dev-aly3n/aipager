@@ -23,6 +23,7 @@ import sys
 import time
 from pathlib import Path
 
+from aipager._test_guard import check_write
 from aipager.daemon_secrets import DAEMON_ENV_PATH
 from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import console, ok, step
@@ -218,6 +219,7 @@ def _backup_existing(path: Path) -> None:
     if not path.exists():
         return
     backup = path.with_name(f"{path.name}.bak.{int(time.time())}")
+    check_write(backup)
     try:
         backup.write_text(path.read_text())
         console.print(
@@ -249,6 +251,7 @@ def _extract_token_line(path: Path) -> str | None:
 
 
 def _write_daemon_env(content: str) -> None:
+    check_write(DAEMON_ENV_PATH)
     DAEMON_ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
     DAEMON_ENV_PATH.write_text(content, encoding="utf-8")
     try:
@@ -371,6 +374,7 @@ def _install_linux(*, yes: bool = False) -> int:
     ensure_daemon_env()
 
     rendered = _render_linux_unit()
+    check_write(LINUX_UNIT_PATH)
     if existing_text is None:
         LINUX_UNIT_PATH.parent.mkdir(parents=True, exist_ok=True)
         LINUX_UNIT_PATH.write_text(rendered)
@@ -505,6 +509,8 @@ def _install_macos(*, yes: bool = False) -> int:
     # for a uniform cmd_service() call signature; macOS has no
     # diff-and-ask prompt to skip.
     ensure_daemon_env()
+    check_write(MACOS_PLIST_PATH)
+    check_write(MACOS_LOG_PATH)
     MACOS_PLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
     MACOS_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     _backup_existing(MACOS_PLIST_PATH)
@@ -678,6 +684,7 @@ def cmd_logs(*, follow: bool = True, lines: int = 10) -> int:
 
 def _uninstall_linux() -> int:
     _run(["systemctl", "--user", "disable", "--now", "aipager.service"])
+    check_write(LINUX_UNIT_PATH)
     LINUX_UNIT_PATH.unlink(missing_ok=True)
     _run(["systemctl", "--user", "daemon-reload"])
     ok(f"removed [path]{LINUX_UNIT_PATH}[/path]")
@@ -686,6 +693,7 @@ def _uninstall_linux() -> int:
 
 def _uninstall_macos() -> int:
     _run(["launchctl", "bootout", f"gui/{os.getuid()}/{MACOS_LABEL}"])
+    check_write(MACOS_PLIST_PATH)
     MACOS_PLIST_PATH.unlink(missing_ok=True)
     ok(f"removed [path]{MACOS_PLIST_PATH}[/path]")
     return 0
