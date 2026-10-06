@@ -1,46 +1,39 @@
 """design.md success criterion 11 (second half): plain ``aipager doctor``
-output is byte-identical to before. Oracle: the doctor module of the
-branch's base commit (dc5f9fe), loaded in-process beside the current one
-and fed the same checks and environment."""
+output is byte-identical to before. Oracle: a golden captured once from
+the doctor module of the branch's base commit (dc5f9fe), fed these same
+fake checks and environment. It is committed here so no test runs git
+(or any subprocess) or depends on the base commit being in the checkout.
+A deliberate change to the plain doctor output updates this golden."""
 
 from __future__ import annotations
 
-import subprocess
 import sys
-import types
 from pathlib import Path
 
 import pytest
 
-BASE = "dc5f9fe"
-REPO = Path(__file__).resolve().parents[3]
+
+def _golden_stdout() -> str:
+    """Captured from dc5f9fe's ``cmd_doctor`` with :func:`_fake_checks`."""
+    from aipager import __version__
+    py = f"{sys.version_info.major}.{sys.version_info.minor}"
+    return (
+        f"aipager {__version__} on linux (python {py})\n\n"
+        "  \u2713  Config file                        parses\n"
+        "  \u26a0  Telegram bot token    network: timed out \u00b7 second line\n"
+        "  \u2717  dtach                            \n"
+        "  \u26a0  crashes                            check crashed: "
+        "RuntimeError: kaboom [x]\n"
+        "\nSuggested next steps\n"
+        "  \u2022 Telegram bot token: check your network\n"
+        "  \u2022 dtach: uv tool install dtach-bin\n"
+        "  \u2022 crashes: Re-run `aipager doctor`; if it keeps crashing, "
+        "report the line \nabove.\n"
+        "\n1 ok \u00b7 2 warn \u00b7 1 fail\n\n")
 
 
-def _base_source() -> str | None:
-    try:
-        return subprocess.run(
-            ["git", "-C", str(REPO), "show", f"{BASE}:aipager/doctor.py"],
-            capture_output=True, text=True, timeout=20, check=True).stdout
-    except Exception:
-        return None
-
-
-_SRC = _base_source()   # at collection, before the env fixture traps spawns
-pytestmark = pytest.mark.skipif(_SRC is None,
-                                reason="base commit not in this checkout")
-
-
-def _oracle():
-    name = "aipager._doctor_base_oracle"
-    mod = types.ModuleType(name)
-    mod.__package__ = "aipager"
-    mod.__file__ = "<doctor@base>"
-    sys.modules[name] = mod
-    try:
-        exec(compile(_SRC, mod.__file__, "exec"), mod.__dict__)
-    finally:
-        sys.modules.pop(name, None)
-    return mod
+GOLDEN_EXIT = 1
+GOLDEN_STDERR = ""
 
 
 def _fake_checks(doctor):
@@ -82,42 +75,33 @@ def _plain(env, monkeypatch, mod, checks=None):
 
 
 @pytest.fixture
-def both(env, monkeypatch):
+def doctor_now(env, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: env.home)
-    from aipager import doctor
-    return doctor, _oracle()
+    from aipager import doctor, ui
+    # The golden wraps at rich's non-terminal default width; pin it so a
+    # COLUMNS in the environment cannot move the wrap.
+    monkeypatch.setattr(ui.console, "width", 80)
+    return doctor
 
 
-def test_plain_doctor_stdout_identical_on_fake_checks(env, monkeypatch, both):
-    now, base = both
-    a = _plain(env, monkeypatch, now, _fake_checks(now))
-    b = _plain(env, monkeypatch, base, _fake_checks(base))
-    assert a[1] == b[1]
+def test_plain_doctor_stdout_identical_on_fake_checks(env, monkeypatch,
+                                                      doctor_now):
+    out = _plain(env, monkeypatch, doctor_now, _fake_checks(doctor_now))[1]
+    assert out == _golden_stdout()
 
 
 def test_plain_doctor_exit_code_identical_on_fake_checks(env, monkeypatch,
-                                                         both):
-    now, base = both
-    a = _plain(env, monkeypatch, now, _fake_checks(now))
-    b = _plain(env, monkeypatch, base, _fake_checks(base))
-    assert a[0] == b[0]
+                                                         doctor_now):
+    code = _plain(env, monkeypatch, doctor_now, _fake_checks(doctor_now))[0]
+    assert code == GOLDEN_EXIT
 
 
-def test_plain_doctor_stderr_identical_on_fake_checks(env, monkeypatch, both):
-    now, base = both
-    a = _plain(env, monkeypatch, now, _fake_checks(now))
-    b = _plain(env, monkeypatch, base, _fake_checks(base))
-    assert a[2] == b[2]
-
-
-def test_plain_doctor_stdout_identical_on_real_checks(env, monkeypatch, both):
-    now, base = both
-    a = _plain(env, monkeypatch, now)
-    b = _plain(env, monkeypatch, base)
-    assert a[1] == b[1]
+def test_plain_doctor_stderr_identical_on_fake_checks(env, monkeypatch,
+                                                      doctor_now):
+    err = _plain(env, monkeypatch, doctor_now, _fake_checks(doctor_now))[2]
+    assert err == GOLDEN_STDERR
 
 
 def test_plain_doctor_real_checks_output_is_not_empty(env, monkeypatch,
-                                                      both):
-    now, _base = both
-    assert len(_plain(env, monkeypatch, now)[1].strip().splitlines()) >= 10
+                                                      doctor_now):
+    assert len(_plain(env, monkeypatch, doctor_now)[1].strip().splitlines()) >= 10
