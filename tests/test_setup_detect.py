@@ -147,6 +147,7 @@ def test_lookback_boundary(env):
     nb = NOW - setup_detect.DETECT_LOOKBACK_SECONDS
     env.updates = [_msg(1, nb - 1), _msg(2, nb)]
     cand, others, _c, _e = telegram_api._newest_private_chat(TOKEN, not_before=nb)
+    assert cand is not None, "a message dated exactly not_before must count"
     assert cand["id"] == 2 and others == 0
     env.updates = [_msg(1, nb - 1)]
     cand, others, _c, _e = telegram_api._newest_private_chat(TOKEN, not_before=nb)

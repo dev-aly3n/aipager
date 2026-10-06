@@ -89,7 +89,12 @@ def test_json_stdout_quarantine(monkeypatch, capsys):
     rc = doctor.cmd_doctor(argparse.Namespace(as_json=True))
     out = capsys.readouterr()
     assert rc == 0
-    assert json.loads(out.out)["checks"][0]["key"] == "noisy"
+    try:
+        doc = json.loads(out.out)
+    except ValueError:
+        doc = None
+    assert doc is not None, "stdout must be exactly one JSON object"
+    assert doc["checks"][0]["key"] == "noisy"
     assert "noise from a check" in out.err
 
 
