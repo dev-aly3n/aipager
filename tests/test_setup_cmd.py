@@ -93,6 +93,13 @@ class Env:
 
         monkeypatch.setattr(service, "install_service", _install)
         monkeypatch.setattr(service, "_platform", lambda: "linux")
+        # A detect-chat that a broken flag check let through must end at
+        # once (a timeout), never really wait.
+        from aipager import setup_detect
+        clock = [0.0]
+        monkeypatch.setattr(setup_detect, "_monotonic", lambda: clock[0])
+        monkeypatch.setattr(setup_detect, "_sleep",
+                            lambda s: clock.__setitem__(0, clock[0] + s))
         self.token_file = tmp_path / "token.txt"
         self.token_file.write_text(TOKEN + "\n")
         os.chmod(self.token_file, 0o600)
