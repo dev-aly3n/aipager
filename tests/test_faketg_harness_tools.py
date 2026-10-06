@@ -243,3 +243,29 @@ def test_harness_names_are_recognised():
              "claude-ftx", "claude-dev", "claude-1000"]
     assert ftc.harness_names_in(names) == ["claude-ft1__g4000000001", "claude-ftx",
                                            "claude-x__d900000002"]
+
+
+def test_real_install_check_catches_a_changed_file_and_a_dead_daemon(tmp_path, monkeypatch):
+    """The session guard, on stand-in files (never the operator's)."""
+    f = tmp_path / "aipager.yaml"
+    f.write_text("a")
+    monkeypatch.setattr(ftc, "_real_files", lambda: [f])
+    sleeper = _sleeper()
+    try:
+        monkeypatch.setattr(ftc, "RECORDED", {"files": {str(f): ftc._fingerprint(f)},
+                                               "pids": [sleeper.pid]})
+        ftc.check_real_install()
+        f.write_text("b")
+        with pytest.raises(AssertionError, match="real files changed"):
+            ftc.check_real_install()
+        f.write_text("a")
+        os.utime(f, ns=(ftc.RECORDED["files"][str(f)][1],) * 2)
+        ftc.check_real_install()
+        sleeper.kill()
+        sleeper.wait(10)
+        with pytest.raises(AssertionError, match="real daemon died"):
+            ftc.check_real_install()
+    finally:
+        if sleeper.poll() is None:
+            sleeper.kill()
+            sleeper.wait(10)

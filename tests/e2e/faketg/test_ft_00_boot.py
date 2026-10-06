@@ -25,6 +25,8 @@ def test_isolated_instance_paths_and_api(faketg):
     assert not list(faketg.inst_dir.glob("claude-dtach-*.sock"))
     floor = f"/tmp/claude-policy-.floor-{__import__('os').getuid()}.json"
     assert floor not in faketg.log_text()
+    # The operator's real files and daemon, mid-run, with a daemon up.
+    ftc.check_real_install()
 
 
 def _answer_seen(fake, since, text):

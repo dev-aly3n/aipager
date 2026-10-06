@@ -96,21 +96,36 @@ def harness_names_in(names) -> list[str]:
                   or n.removeprefix("claude-").startswith("ft"))
 
 
+def _real_files() -> list[Path]:
+    home = _real_home()
+    return [home / ".config" / "aipager" / "aipager.yaml",
+            home / ".claude" / "settings.json",
+            Path(f"/tmp/claude-policy-.floor-{os.getuid()}.json")]
+
+
+#: What the session fixture recorded first; read by mid-run checks.
+RECORDED: dict = {}
+
+
+def check_real_install() -> None:
+    """The operator's files and daemons as recorded at session start
+    (callable mid-run; the session fixture calls it at the end too)."""
+    before = RECORDED["files"]
+    after = {str(p): _fingerprint(p) for p in _real_files()}
+    changed = [p for p in before if before[p] != after[p]]
+    assert not changed, f"the operator's real files changed: {changed}"
+    dead = [p for p in RECORDED["pids"] if not fti._alive(p)]
+    assert not dead, f"a real daemon died during the run: {dead}"
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _real_install_untouched():
     home = _real_home()
-    files = [home / ".config" / "aipager" / "aipager.yaml",
-             home / ".claude" / "settings.json"]
-    floor = Path(f"/tmp/claude-policy-.floor-{os.getuid()}.json")
-    before = {str(p): _fingerprint(p) for p in files + [floor]}
-    pids = _real_daemon_pids()
+    RECORDED["files"] = {str(p): _fingerprint(p) for p in _real_files()}
+    RECORDED["pids"] = _real_daemon_pids()
     tmp_before = _tmp_claude_names()
     yield
-    after = {str(p): _fingerprint(p) for p in files + [floor]}
-    changed = [p for p in before if before[p] != after[p]]
-    assert not changed, f"the operator's real files changed: {changed}"
-    dead = [p for p in pids if not fti._alive(p)]
-    assert not dead, f"a real daemon died during the run: {dead}"
+    check_real_install()
     registry = home / ".claude" / "aipager-sessions.json"
     try:
         names = json.loads(registry.read_text()).get("sessions", {})
