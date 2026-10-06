@@ -758,9 +758,28 @@ A chat's `deny_tools` and a member's `deny_tools` in `aipager.yaml` add
 to the role's. All of these apply only to roles without
 `bypass_role_denies`: an owner or admin is not affected by them.
 
-Underneath all roles sits a built-in **safety floor** (protected paths
-and command patterns) that only `owner` bypasses. The protected paths
-hold for Claude Code's file tools (`Read`, `Write`, `Edit`,
+Underneath all roles sits a **safety floor** (protected paths and
+command patterns) that only `owner` bypasses: admins are held to it too.
+It is aipager's built-in list plus the `safety:` section of
+`policy.yaml`, which can only add to it:
+
+```yaml
+safety:
+  deny_paths_no_access: [/srv/secrets/**]   # no read, write or search
+  deny_paths_no_write: [~/notes/**]         # read, but no write
+  deny_bash_patterns: ['\bcurl\b']          # Bash commands to block
+```
+
+Every turn of every role except `owner` gets all of it, as do turns
+aipager cannot attribute; `aipager doctor --safety-check` lists what is
+in force. After a live reload, a change to it applies to messages sent
+after the reload; a turn already running, or a message already waiting
+in the queue, keeps the old list (stop that turn to apply the change at
+once).
+A `deny_paths_no_access` path there with no leading `/` or `~` matches
+anywhere, so while one is in place every `Grep`/`Glob` of every role
+except `owner` is denied (`aipager doctor` warns about it). The
+protected paths hold for Claude Code's file tools (`Read`, `Write`, `Edit`,
 `MultiEdit`, `NotebookEdit`, `LSP`, `Grep`, `Glob`); a restricted
 role's `Grep`/`Glob` must also stay inside the session's folder (a
 search of `~/.config` for `aipager/**` is denied). Tools such as

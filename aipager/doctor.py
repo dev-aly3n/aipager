@@ -821,6 +821,25 @@ def _print_summary(results: list[CheckResult]) -> None:
     console.print(f"\n[muted]{' · '.join(parts)}[/muted]")
 
 
+def _unanchored_safety_paths(policy) -> list[str]:
+    """The safety section's no-access paths with no leading ``/`` or
+    ``~``: such a rule can match in any folder, so it denies every search
+    of every non-owner role (``safety._search_violation`` and
+    ``_unconfined_search_violation``, roadmap 8.96)."""
+    return [p for p in policy.safety_deny_paths_no_access
+            if not os.path.expanduser(p).startswith("/")]
+
+
+def _print_unanchored_safety_paths(console, policy) -> None:
+    from rich.markup import escape
+
+    for p in _unanchored_safety_paths(policy):
+        console.print(
+            f"  [warn]⚠[/warn]  safety path {escape(p)} in policy.yaml has no leading "
+            "/ or ~, so it can match in any folder: every Grep and Glob of "
+            "every role except owner is denied while it is there.")
+
+
 def _print_safety_policy() -> None:
     """Render the active safety policy (paths + bash patterns + roles)."""
     from aipager.config import POLICY
@@ -837,6 +856,9 @@ def _print_safety_policy() -> None:
     console.print("  Blocked bash patterns:")
     for p in POLICY.safety_deny_bash_patterns:
         console.print(f"    • /{p}/")
+    console.print("  These apply to every role except owner (built-in, plus "
+                  "the safety: section of policy.yaml).")
+    _print_unanchored_safety_paths(console, POLICY)
     console.print("  Roles:")
     for name, role in sorted(POLICY.roles.items()):
         flags = []
@@ -987,6 +1009,13 @@ def cmd_doctor(args: argparse.Namespace | None = None) -> int:
     _print_results(results)
     _print_fixes(results)
     _print_summary(results)
+    try:
+        from aipager.config import POLICY
+        if _unanchored_safety_paths(POLICY):
+            console.print()
+            _print_unanchored_safety_paths(console, POLICY)
+    except Exception:
+        pass  # a display extra: never stops the doctor
     if SCOPES and len(SCOPES) > 1:
         console.print()
         console.print(

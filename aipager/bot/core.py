@@ -147,6 +147,11 @@ class TelegramBot(
         _v2 = load_scopes()
         self.scopes = _v2[0] if _v2 else None
         self.policy = load_policy()
+        # Every snapshot this daemon writes holds non-owners to the
+        # policy's safety section, and the hook's fallbacks read it from
+        # the file this writes (roadmap 8.96).
+        from aipager.policy_snapshot import set_live_policy
+        set_live_policy(self.policy)
         # The home chat of an unstamped session (roadmap 8.82) reads this
         # bot's live scopes/policy, which reload_team swaps in place.
         from aipager.state import set_live_scope_source

@@ -183,8 +183,10 @@ def _match_and_promote(
       the most restrictive thing still waiting" — nothing is deleted, so
       an unmatched note keeps feeding future merges too, never widening
       anything (design.md "Why the fallback is safe").
-    - Otherwise, no notes outstanding at all: merges to :data:`FLOOR_SNAPSHOT`
-      exactly (the "empty floor" path) — never assumed unrestricted,
+    - Otherwise, no notes outstanding at all: merges to the floor
+      (``policy_snapshot.floor_snapshot``, built-in plus policy.yaml's
+      ``safety:`` section; the "empty floor" path) — never assumed
+      unrestricted,
       and never labelled terminal origin (that would be
       ``enforce.decide()`` returning ``None``, which this never does).
 

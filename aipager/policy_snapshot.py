@@ -170,15 +170,174 @@ FLOOR_SNAPSHOT: dict = {
 # What every snapshot carries whoever it is for: the built-in path and
 # command floor, without the floor role's own additions (the credential
 # files are a restricted-role default, which an admin's turn never has).
+# The operator's ``safety:`` section of policy.yaml adds to it
+# (:func:`safety_floor_lists`, roadmap 8.96).
 _BASE_FLOOR_LISTS: dict = {
     "deny_paths_no_access": safety.DENY_PATHS_NO_ACCESS,
     "deny_paths_no_write": safety.DENY_PATHS_NO_WRITE,
     "deny_bash_patterns": safety.DENY_BASH_PATTERNS,
 }
 
+#: The three safety-floor lists and the ``Policy`` attributes that extend
+#: each (``policy.yaml``'s ``safety:`` section, built-ins first).
+_FLOOR_LIST_ATTRS: tuple[tuple[str, str], ...] = (
+    ("deny_paths_no_access", "safety_deny_paths_no_access"),
+    ("deny_paths_no_write", "safety_deny_paths_no_write"),
+    ("deny_bash_patterns", "safety_deny_bash_patterns"),
+)
+
+# ---------------------------------------------------------------------------
+# The effective safety floor (roadmap 8.96).
+#
+# Every non-owner turn is held to the built-in floor plus the operator's
+# ``safety:`` section of policy.yaml. The daemon knows the policy: it
+# registers it here (:func:`set_live_policy`, at start and on every live
+# reload) and writes the resulting lists to :func:`floor_path`. The hook
+# never parses policy.yaml: when it needs the floor without a snapshot
+# to read it from (no snapshot, a failed pick-up, an unattributed turn),
+# it reads that small file once per process. A missing, unreadable or
+# malformed file gives the built-in floor: never less than the built-ins
+# (anything the file adds is only ever added).
+# ---------------------------------------------------------------------------
+
+#: The largest floor file read; anything bigger reads as corrupt.
+_FLOOR_FILE_MAX_BYTES = 1 << 20
+
+#: The daemon's floor lists, set by :func:`set_live_policy`.
+_live_floor_lists: dict | None = None
+#: The floor lists read from :func:`floor_path` (a process with no live
+#: policy, i.e. the hook), cached for the process.
+_file_floor_lists: dict | None = None
+
+
+def floor_path() -> Path:
+    """The daemon-written effective floor. Under the protected
+    ``/tmp/claude-policy-*`` path, named so no session's snapshot can
+    collide with it (session names never hold a dot), and per OS user, so
+    two users' daemons on one host never share it (each hook ignores a
+    file it does not own). A plain function, like :func:`snapshot_path`,
+    so tests can redirect it."""
+    return Path(f"/tmp/claude-policy-.floor-{_own_uid()}.json")
+
+
+def _with_builtins(base, extra) -> tuple[str, ...]:
+    """*base* (a built-in list) followed by the strings of *extra* it
+    does not already hold, in order. Anything that is not a list or
+    tuple of strings adds nothing."""
+    out = list(base)
+    if isinstance(extra, (list, tuple)):
+        for x in extra:
+            if isinstance(x, str) and x not in out:
+                out.append(x)
+    return tuple(out)
+
+
+def policy_floor_lists(policy) -> dict:
+    """The effective floor lists of *policy*: the built-in lists, then
+    the policy's ``safety:`` additions. Pure."""
+    return {f: _with_builtins(_BASE_FLOOR_LISTS[f],
+                              getattr(policy, attr, ()))
+            for f, attr in _FLOOR_LIST_ATTRS}
+
+
+def _own_uid() -> int:
+    """This process's user id (a seam for tests)."""
+    return os.getuid()
+
+
+def _read_floor_file() -> dict:
+    """The floor lists in :func:`floor_path`, each on top of the
+    built-ins; the built-ins alone when the file is missing, not ours
+    (another user could have created the name first in ``/tmp``), too
+    big, not JSON, not a mapping, or fails in any other way: fail
+    closed, never less, and never raises."""
+    try:
+        with open(floor_path(), "rb") as f:
+            if os.fstat(f.fileno()).st_uid != _own_uid():
+                raise ValueError("floor file owned by another user")
+            raw = f.read(_FLOOR_FILE_MAX_BYTES + 1)
+        if len(raw) > _FLOOR_FILE_MAX_BYTES:
+            raise ValueError("floor file too big")
+        data = json.loads(raw)
+        # Not a mapping: ``.get`` raises below, which reads as corrupt.
+        return {f: _with_builtins(_BASE_FLOOR_LISTS[f], data.get(f))
+                for f, _attr in _FLOOR_LIST_ATTRS}
+    except Exception:
+        # Anything at all (a parser RecursionError on deeply nested
+        # brackets included): the built-in floor.
+        return {f: tuple(_BASE_FLOOR_LISTS[f]) for f, _a in _FLOOR_LIST_ATTRS}
+
+
+def safety_floor_lists(policy=None) -> dict:
+    """The floor lists every non-owner turn is held to: *policy*'s when
+    given, else the daemon's live policy (:func:`set_live_policy`), else
+    (the hook) the daemon-written :func:`floor_path`, read once."""
+    global _file_floor_lists
+    if policy is not None:
+        return policy_floor_lists(policy)
+    if _live_floor_lists is not None:
+        return _live_floor_lists
+    if _file_floor_lists is None:
+        _file_floor_lists = _read_floor_file()
+    return _file_floor_lists
+
+
+def write_floor_file(lists: dict) -> None:
+    """Atomic-write the effective floor lists for the hook (best-effort,
+    0600, like the snapshots)."""
+    path = floor_path()
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(json.dumps({f: list(lists[f])
+                                   for f, _a in _FLOOR_LIST_ATTRS}),
+                       encoding="utf-8")
+        try:
+            os.chmod(tmp, 0o600)
+        except OSError:
+            pass
+        os.replace(tmp, path)
+    except OSError:
+        log.warning("could not write the safety floor %s: the hook's "
+                    "fallbacks use the built-in floor", path, exc_info=True)
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def set_live_policy(policy) -> None:
+    """Make *policy*'s safety section the floor of every snapshot this
+    process writes from now on, and hand it to the hook
+    (:func:`write_floor_file`). Called by the daemon at start and after
+    every live reload."""
+    global _live_floor_lists
+    _live_floor_lists = policy_floor_lists(policy)
+    write_floor_file(_live_floor_lists)
+
+
+def floor_snapshot(policy=None) -> dict:
+    """:data:`FLOOR_SNAPSHOT` with the effective floor lists
+    (:func:`safety_floor_lists`) added: the answer for a turn nobody can
+    be held to. Equal to :data:`FLOOR_SNAPSHOT`, list order included,
+    when policy.yaml adds nothing. A fresh dict each call. Never raises:
+    it is the last-resort answer of every failure path (the hook's
+    ``snapshot_after_failure`` included), so anything going wrong here
+    gives the built-in floor."""
+    try:
+        lists = safety_floor_lists(policy)
+        snap = dict(FLOOR_SNAPSHOT)
+        for f, _attr in _FLOOR_LIST_ATTRS:
+            snap[f] = list(_with_builtins(FLOOR_SNAPSHOT[f], lists[f]))
+        return snap
+    except Exception:
+        log.debug("effective floor failed, using the built-in one",
+                  exc_info=True)
+        return {k: list(v) if isinstance(v, list) else v
+                for k, v in FLOOR_SNAPSHOT.items()}
+
 
 def resolve_snapshot(role, scope, member, style_text: str = "",
-                     reply_context: str = "") -> dict:
+                     reply_context: str = "", *, policy=None) -> dict:
     """Compute the effective rule sets for a driver (pure).
 
     ``role`` is a policy.Role (or None), ``scope`` a scope.Scope (or
@@ -199,15 +358,20 @@ def resolve_snapshot(role, scope, member, style_text: str = "",
     a caller that forgets to pass it clears any stale value from a
     prior turn rather than leaking it (the staleness guard — see
     ``write_snapshot`` below and ``session_ops._inject_prompt``).
+
+    The safety floor is the built-in one plus policy.yaml's ``safety:``
+    section (roadmap 8.96): *policy*'s when given, else the daemon's
+    live policy (:func:`safety_floor_lists`).
     """
+    floor_lists = safety_floor_lists(policy)
     bypass_safety = bool(role and role.bypass_safety)
     bypass_role_denies = bool(role and role.bypass_role_denies)
 
     deny_tools: set[str] = set()
     allow_tools: set[str] = set()
-    no_access: set[str] = set(safety.DENY_PATHS_NO_ACCESS)
-    no_write: set[str] = set(safety.DENY_PATHS_NO_WRITE)
-    bash: set[str] = set(safety.DENY_BASH_PATTERNS)
+    no_access: set[str] = set(floor_lists["deny_paths_no_access"])
+    no_write: set[str] = set(floor_lists["deny_paths_no_write"])
+    bash: set[str] = set(floor_lists["deny_bash_patterns"])
 
     if role is None:
         # No role: a sender aipager cannot attribute. Held to the floor's
@@ -246,7 +410,8 @@ def resolve_snapshot(role, scope, member, style_text: str = "",
 
 
 def write_snapshot(session_name: str, role, scope, member,
-                   style_text: str = "", reply_context: str = "") -> None:
+                   style_text: str = "", reply_context: str = "", *,
+                   policy=None) -> None:
     """Atomic-write the resolved snapshot for a session (best-effort).
 
     ``reply_context`` defaults to ``""`` — every one of the (12+)
@@ -254,7 +419,8 @@ def write_snapshot(session_name: str, role, scope, member,
     so the snapshot is overwritten with an explicit "not a reply" on
     every turn rather than silently keeping a prior turn's value.
     """
-    data = resolve_snapshot(role, scope, member, style_text, reply_context)
+    data = resolve_snapshot(role, scope, member, style_text, reply_context,
+                            policy=policy)
     path = snapshot_path(session_name)
     try:
         tmp = path.with_suffix(path.suffix + ".tmp")
@@ -317,6 +483,7 @@ def write_note(
     style_text: str = "", reply_context: str = "",
     author_user_id=_FROM_SENDER_KEY,
     scope_mode: bool = False,
+    policy=None,
 ) -> Path | None:
     """Write one per-message policy note (design.md "queue handoff").
 
@@ -340,8 +507,12 @@ def write_note(
     logged and swallowed rather than raised, so a full ``/tmp`` or a
     permissions problem never blocks sending a prompt. Returns the
     written path, or ``None`` on failure.
+
+    ``policy`` supplies the safety floor's policy.yaml additions (the
+    daemon's live policy when ``None``, :func:`resolve_snapshot`).
     """
-    note = resolve_snapshot(role, scope, member, style_text, reply_context)
+    note = resolve_snapshot(role, scope, member, style_text, reply_context,
+                            policy=policy)
     note["msg_id"] = msg_id
     note["chat_id"] = chat_id
     note["sender_key"] = list(sender_key) if sender_key is not None else None
@@ -700,7 +871,7 @@ async def expire_notes_after_turn_end(
     exception: if a genuine (not absorbed) resubmit takes longer than
     ``grace`` and the swept note was the note's session's ONLY
     outstanding one, the next merge falls back to
-    :data:`FLOOR_SNAPSHOT` instead of that note's own resolved rules.
+    :func:`floor_snapshot` instead of that note's own resolved rules.
     For the common ``bypass_safety`` case this is still safe (the floor
     denies more, never less); for a team/scope-mode member whose ROLE
     adds ``deny_tools``/``deny_paths`` beyond the hardcoded floor, that
@@ -839,9 +1010,10 @@ def merge_snapshots(notes: list[dict]) -> dict:
     fields — "what should the hook print for this turn" is naturally
     "whatever the most recent contributor asked for").
 
-    At ``notes == []`` returns :data:`FLOOR_SNAPSHOT` exactly (the
-    "empty floor" promotion path) — the most restrictive answer when
-    there is nothing to reason from at all.
+    At ``notes == []`` returns :func:`floor_snapshot` (the "empty floor"
+    promotion path): the most restrictive answer when there is nothing
+    to reason from at all. That is the only case that reads anything
+    (in the hook, the daemon-written floor file, once per process).
 
     The merge never widens:
 
@@ -865,7 +1037,7 @@ def merge_snapshots(notes: list[dict]) -> dict:
       rather than reading the empty result as "unrestricted".
     """
     if not notes:
-        return dict(FLOOR_SNAPSHOT)
+        return floor_snapshot()
 
     ordered = sorted(notes, key=lambda n: n.get("queued_at") or 0)
 
@@ -985,7 +1157,8 @@ def carried_snapshot(current) -> dict | None:
     :func:`merge_snapshots` can merge, or ``None`` when it is missing or
     not a well-formed snapshot.
 
-    The built-in path and command floor is re-applied (a hand-edited
+    The effective path and command floor (:func:`safety_floor_lists`) is
+    re-applied (a hand-edited
     snapshot missing its deny lists is not carried without them; the
     credential files only for a confined turn, so an owner's or admin's
     turn does not gain them), the bypass is
@@ -1009,8 +1182,8 @@ def carried_snapshot(current) -> dict | None:
     carried["confine_writes"] = current.get("confine_writes") is not False
     # A confined turn gets the whole floor back, credential files included;
     # an owner's or admin's only the part every snapshot carries.
-    floor = (FLOOR_SNAPSHOT if carried["confine_writes"]
-             and not carried["bypass_safety"] else _BASE_FLOOR_LISTS)
+    floor = (floor_snapshot() if carried["confine_writes"]
+             and not carried["bypass_safety"] else safety_floor_lists())
     for f in ("deny_paths_no_access", "deny_paths_no_write",
               "deny_bash_patterns"):
         carried[f] = sorted(set(carried[f]) | set(floor[f]))
@@ -1069,7 +1242,7 @@ def snapshot_for_prompt(
     - No note matched: :func:`snapshot_for_unattributed_prompt` keeps the
       current snapshot when the prompt adds no unattributed Telegram text.
     - Otherwise: the old answer — every outstanding note's merge, or
-      :data:`FLOOR_SNAPSHOT` when none is waiting.
+      :func:`floor_snapshot` when none is waiting.
 
     It also records the turn's origin (``turn_origin``, see
     :func:`_fresh_turn_origin`).
@@ -1094,14 +1267,14 @@ def snapshot_after_failure(
 ) -> dict:
     """What the UserPromptSubmit hook writes when its pick-up failed.
 
-    A fresh turn: :data:`FLOOR_SNAPSHOT`, as before. A running turn
+    A fresh turn: :func:`floor_snapshot`, as before. A running turn
     (roadmap 8.77): the floor joined to the running turn as any other
     answer is (:func:`_join_running_turn`), so the turn keeps its own
     rules where they are stricter (a ``read_only`` turn's ``allow_tools``)
     and Telegram text joining a terminal turn is still enforced. If even
     that fails: the floor, read as a Telegram turn.
     """
-    floor = dict(FLOOR_SNAPSHOT)
+    floor = floor_snapshot()
     if not turn_open:
         return floor
     try:
@@ -1213,7 +1386,7 @@ def _join_running_turn(
     else:
         base = carried_snapshot(current)
         if base is None:
-            base = dict(FLOOR_SNAPSHOT)
+            base = floor_snapshot()
             base["queued_at"] = float("-inf")
             base["style_text"] = ""
             base["reply_context"] = ""
@@ -1268,14 +1441,14 @@ def safety_rules(snap) -> dict:
 def narrowed_snapshot(current, rules: list[dict]) -> dict:
     """*current* (a running turn's snapshot) held to the strictest of
     itself and every one of *rules* (each a :func:`resolve_snapshot`-shaped
-    dict, or :data:`FLOOR_SNAPSHOT`). Never wider than *current* on any
+    dict, or :func:`floor_snapshot`). Never wider than *current* on any
     axis: *current* is carried as :func:`carried_snapshot` carries it (the
     floor when it is missing or malformed) and :func:`merge_snapshots`
     never widens. Everything that is not a rule is kept from *current*.
     Pure."""
     base = carried_snapshot(current)
     if base is None:
-        base = dict(FLOOR_SNAPSHOT)
+        base = floor_snapshot()
         base["queued_at"] = float("-inf")
     parts = [base]
     for r in rules:

@@ -160,6 +160,7 @@ _CHILD = textwrap.dedent("""
     from aipager.dtach import enforce, notify_hook
     base = Path(cfg["snapdir"])
     ps.snapshot_path = lambda n: base / f"claude-policy-{n}.json"
+    ps.floor_path = lambda: base / "claude-policy-.floor.json"
     reply = lambda n: base / f"claude-reply-{n}.txt"
     ps.reply_context_path = reply
     enforce.reply_context_path = reply

@@ -20,7 +20,7 @@ from typing import Iterator
 
 from aipager import safety
 from aipager.policy_snapshot import (
-    FLOOR_SNAPSHOT,
+    floor_snapshot,
     read_snapshot,
     reply_context_path,
 )
@@ -609,10 +609,13 @@ def _decide(data: dict) -> dict | None:
     session = data.get("session", "")
     snap = read_snapshot(session)
     if snap is None:
-        # Fail-closed: no snapshot → apply the built-in floor, no bypass.
-        # Same object policy_snapshot.merge_snapshots([]) returns for the
-        # "no outstanding notes" case — one constant, two fallback sites.
-        snap = dict(FLOOR_SNAPSHOT)
+        # Fail-closed: no snapshot → apply the floor, no bypass: the
+        # built-in one plus policy.yaml's ``safety:`` section, which the
+        # daemon writes for the hook (roadmap 8.96; the built-ins alone
+        # when that file cannot be read). The same answer
+        # policy_snapshot.merge_snapshots([]) gives for "no outstanding
+        # notes". Only this fallback reads that file.
+        snap = floor_snapshot()
     if snap.get("bypass_safety"):
         return None  # owner
 

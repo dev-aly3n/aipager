@@ -282,11 +282,25 @@ cover):
   while deciding, the call is denied — unless the session's rules could
   be read and grant the owner's bypass. It used to be let through.
 
+**Your own protected paths.** The `safety:` section of `policy.yaml`
+(`deny_paths_no_access`, `deny_paths_no_write`, `deny_bash_patterns`)
+adds to the built-in protected paths and command patterns. It is part
+of the floor every turn of every role except `owner` gets, admins
+included, and it applies to the file tools, searches and Bash commands
+exactly like the built-in list. The daemon writes the combined list to
+`/tmp/claude-policy-.floor-<uid>.json` (itself a protected path) for
+the safety hook's fallbacks; if that file is missing, unreadable or
+owned by another OS user, the hook uses the built-in list, never less.
+A change made with a live reload applies to messages sent after the
+reload, not to a turn already running or a message already waiting.
+Before this release the section was read and shown by
+`aipager doctor --safety-check` but not enforced.
+
 **Turns aipager cannot attribute.** A Telegram turn with no sender to
-hold it to runs under the built-in floor, which matches the built-in
-`user` role (not any extra restrictions you add to `user` in
-`policy.yaml`): no code-running tools, writes and searches confined, the
-protected paths. That happens for a message whose permission note
+hold it to runs under the floor, which matches the built-in `user` role
+(not any extra restrictions you add to `user` in `policy.yaml`) plus
+your `safety:` section: no code-running tools, writes and searches
+confined, the protected paths. That happens for a message whose permission note
 expired (after 24 hours) or could not be written, and for a prompt
 carrying Telegram text that no note matches. The Retry button runs as
 whoever tapped it when they also sent the prompt being retried, so an
@@ -320,8 +334,10 @@ So `Grep` of `~`, `/`, the folder above your home folder or `/tmp` is
 denied (they hold `~/.config/aipager`, `~/.claude` or aipager's
 `/tmp/claude-*` files), while `Grep` of a project or of `/tmp/myproj` is
 not. A protected-path rule without a leading `/` or `~` (such as
-`**/.env`) can match in any folder, so with it in an admin's rules every
-admin search is denied, as for restricted roles. Admins have Bash, so
+`**/.env`) can match in any folder, so with it in an admin's rules (or in
+the `safety:` section, which every role except owner gets) every admin
+search is denied, as for restricted roles; `aipager doctor` warns about
+one in the `safety:` section. Admins have Bash, so
 their rules stay best-effort (below).
 
 **Known limits.** These are not covered:

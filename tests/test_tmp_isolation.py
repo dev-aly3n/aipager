@@ -48,6 +48,17 @@ def test_policy_paths_resolve_inside_this_tests_tmp_path(tmp_path):
     assert _under(policy_snapshot.notes_dir(NEVER_LIVE), tmp_path)
 
 
+def test_the_safety_floor_file_resolves_inside_this_tests_tmp_path(tmp_path):
+    """The daemon-written effective floor (roadmap 8.96) is redirected
+    too, and a daemon start in a test writes it there."""
+    floor = policy_snapshot.floor_path()
+    _require_under(tmp_path, floor)
+    from aipager.policy import load_policy
+    policy_snapshot.set_live_policy(
+        load_policy(Path("/nonexistent/p.yaml"), Path("/nonexistent/p.d")))
+    assert floor.exists()
+
+
 def test_import_time_bindings_are_redirected_too(tmp_path):
     """Modules that bound a path at import time read their own name, not
     the module attribute: each binding is redirected as well."""

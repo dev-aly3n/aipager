@@ -77,16 +77,21 @@ def sender_rules(scopes, policy, chat_id, user_id) -> list[dict]:
     rules (``resolve_snapshot``), plus the floor when the sender may not
     prompt there (removed from the chat, or a role without
     ``can_prompt``). Pure."""
-    from aipager.policy_snapshot import FLOOR_SNAPSHOT, resolve_snapshot
+    from aipager.policy_snapshot import floor_snapshot, resolve_snapshot
 
+    # The safety floor is the live one on both sides of a comparison
+    # (roadmap 8.96): a reload that changes only policy.yaml's
+    # ``safety:`` section takes no role's rights away, so it narrows no
+    # running turn and drops no waiting note (an owner's included); the
+    # new floor holds from the next message on.
     scope = _scope_for(scopes, chat_id)
     member = _member_in(scope, user_id)
     if member is None:
-        return [dict(FLOOR_SNAPSHOT)]
+        return [floor_snapshot()]
     role = policy.get_role(member.role)
     rules = [resolve_snapshot(role, scope, member)]
     if not (role and role.can_prompt):
-        rules.append(dict(FLOOR_SNAPSHOT))
+        rules.append(floor_snapshot())
     return rules
 
 
@@ -123,11 +128,11 @@ def narrowed_rules(old_scopes, old_policy, new_scopes, new_policy, chat_id,
     With no known chat (an unstamped session aipager cannot place), only
     one thing is certain: someone who was in a scope and is in none now
     has no rights anywhere, so the floor."""
-    from aipager.policy_snapshot import FLOOR_SNAPSHOT
+    from aipager.policy_snapshot import floor_snapshot
 
     if not chat_id:
         if _in_any(old_scopes, user_id) and not _in_any(new_scopes, user_id):
-            return [dict(FLOOR_SNAPSHOT)]
+            return [floor_snapshot()]
         return None
     if rules_narrowed(old_scopes, old_policy, new_scopes, new_policy,
                       chat_id, user_id):

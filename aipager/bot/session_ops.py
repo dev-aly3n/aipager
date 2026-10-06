@@ -914,6 +914,9 @@ class SessionOpsMixin:
                 body=body, raw_text=text,
                 scope_mode=self.scopes is not None,
                 style_text=style, reply_context=reply_context,
+                # The safety floor's policy.yaml additions (roadmap
+                # 8.96), from the same policy the role came from.
+                policy=getattr(self, "policy", None),
             )
         except Exception:
             log.debug("policy note write failed", exc_info=True)

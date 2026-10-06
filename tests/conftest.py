@@ -292,6 +292,21 @@ def _isolate_home_paths(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_safety_floor(tmp_path, monkeypatch):
+    """The effective safety floor (roadmap 8.96) is per-process state the
+    daemon sets (``set_live_policy``) and a file it writes for the hook
+    under real ``/tmp``. Every test starts with neither: the floor file
+    is redirected under ``tmp_path`` (absent until a test writes it) and
+    the module's live and cached lists are cleared, then restored."""
+    from aipager import policy_snapshot as _ps
+    floor = tmp_path / "claude-policy-.floor-test.json"
+    monkeypatch.setattr(_ps, "floor_path", lambda: floor)
+    monkeypatch.setattr(_ps, "_live_floor_lists", None)
+    monkeypatch.setattr(_ps, "_file_floor_lists", None)
+    return floor
+
+
+@pytest.fixture(autouse=True)
 def _reset_preferences_cache(_isolate_home_paths):
     """Reset ``preferences``'s in-memory cache for every test.
 

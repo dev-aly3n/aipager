@@ -11,8 +11,10 @@ Two ownership domains back this module:
 layer with replace-per-field semantics**; the **safety floor is
 union-only** (built-in baseline can never be shrunk by a policy edit).
 
-Phase A only *loads + validates* — nothing here is enforced yet.
-See ``researches/multi-scope-mode/02-security-model.md``.
+This module only *loads + validates*. Enforcement happens in the hook,
+from the per-turn snapshots :mod:`aipager.policy_snapshot` resolves:
+the roles there, and the safety section as the floor of every non-owner
+turn (``policy_snapshot.set_live_policy``, roadmap 8.96).
 """
 
 from __future__ import annotations

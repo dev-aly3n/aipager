@@ -197,6 +197,10 @@ class LifecycleMixin:
                 # leave new scopes running under the old policy.
                 self.scopes = _v2[0] if _v2 else None
                 self.policy = new_policy
+                # The new safety section holds from the next message on
+                # (roadmap 8.96), for the daemon and the hook alike.
+                from aipager.policy_snapshot import set_live_policy
+                set_live_policy(new_policy)
                 reloaded = self.scopes is not None
                 log.info("Scope reload: %s scope(s)",
                          len(self.scopes) if self.scopes else 0)
