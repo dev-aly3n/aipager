@@ -82,6 +82,182 @@ CREDENTIAL_PATHS: tuple[str, ...] = (
 DENY_PATHS_NO_WRITE: tuple[str, ...] = ()
 
 # ---------------------------------------------------------------------------
+# Recursive searches and listings of the whole home folder or above
+# (roadmap 8.98). Claude Code builds without a Grep/Glob tool (2.1.289 on
+# the operator's box) search with ``grep -rn … $HOME`` through Bash, which
+# read ``~/.config/aipager`` for an admin: the path patterns below only see
+# a command that NAMES aipager's folders. These deny a search or listing
+# command whose folder is the home folder (``~``, ``~user``, ``$HOME``,
+# ``${HOME}``, ``"$HOME"``), ``/home``, ``/home/<user>`` (``$USER``
+# included), ``/Users``, ``/Users/<user>``, ``/root`` or ``/`` (each with
+# or without a trailing ``/``, ``/.`` or ``/*``), or ``~/.config`` /
+# ``~/.local`` (``/share``, ``/state``), which hold the protected folders.
+# The deny reason says to search inside a project folder instead.
+#
+# What is a folder: the command must be the command word (first in its
+# command, after ``;``, ``&``, ``|``, ``(``, a newline, ``sh -c "`` or a
+# wrapper such as ``xargs``, ``env`` or ``timeout 5``; a line ending in
+# ``\`` goes on to the next), and for the tools
+# whose first word is the text to find (grep, rg, ag, ack, fd) that first
+# word is the text, not a folder, unless ``-e``/``-f`` gives the text
+# (and then the word right after a lone ``-e``/``-f``/``--regexp``/
+# ``--file`` is a text, never a folder; in a cluster such as ``-rne`` it
+# is still read as a folder). So
+# a project search FOR a home path (``grep -rn "$HOME" src``,
+# ``rg -n '/Users/' .``) and ``find . -path '/home/*'`` are not denied.
+# Quoted text the shell does not expand (``'~'``, ``'$HOME'``) is never a
+# folder. A search inside a project (``grep -r x ~/proj``, ``rg x src/``,
+# ``find . -name y``) is not touched.
+#
+# Best effort, like every Bash pattern: a regex sees words, not what the
+# shell will do. Not caught, for example: a search with no folder, or
+# ``.`` or ``..``, run from (or below) the home folder
+# (``cd ~ && grep -r x .``), a folder spelled through another variable or a
+# glob (``H=~; grep -r x $H``), a path written out in full that is not
+# under /home, /Users or /root, a wrapper not listed below
+# (``sudo -u bob grep …``, ``\grep``). Known false positives: an option
+# that takes a separate value before the text (``rg -t py "$HOME" .``,
+# ``grep -rn -A 3 "/home/x" src``: ``py`` and ``3`` read as the text),
+# and a command quoted inside another command's text (``echo "a; rg x
+# ~"``), since a separator inside quotes may start a ``bash -c`` command.
+#
+# Cost: each pattern starts only at a command word, then reads that one
+# command (never past ``;``, ``&``, ``|`` or a bare newline outside
+# quotes, a quoted string as one unit). No repetition is ambiguous (each
+# repeated unit starts with a different character), so there is no
+# exponential backtracking. Real commands take milliseconds (a 270 KB
+# heredoc about 0.02 s per pattern); input crafted so that commands start
+# inside quotes is quadratic (40 KB about 3 s), which only delays the
+# answer. tests/test_bash_search_floor.py times long and adversarial
+# commands.
+# ---------------------------------------------------------------------------
+
+#: A space between two words of one command (a backslash-newline joins
+#: the next line).
+_SP = r"(?:[ \t]|\\\n)"
+#: One unit of a word: a plain character, an escaped one, or a whole
+#: quoted string (so a ``|`` inside ``"a|b"`` does not end the command).
+_UNIT = r"""(?:[^\s;&|()<>`"'\\]|\\[^\n]|'[^'\n]*'|"[^"\n]*")"""
+#: One unit of a single command: a word unit, a space, or a redirection
+#: (which ends a word). A parenthesis or a backquote ends the command.
+_SEG = rf"(?:{_UNIT}|{_SP}|[<>])"
+#: Where a word ends.
+_WORD_END = r"(?=[\s;&|()<>`]|\\\n|$)"
+#: A whole word that is not an option (the lookahead keeps it whole).
+_WORD = rf"(?!-){_UNIT}+{_WORD_END}"
+#: Options before the first word.
+_OPTS = rf"(?:{_SP}+-{_UNIT}*)*"
+
+#: Commands that run the next word as a command, with their own options
+#: (``xargs -0``, ``timeout 5``; ``env A=1`` is ``env`` then a setting),
+#: and shell keywords
+#: (``if``, ``then``, ``!``, ``{``).
+_WRAP = (r"(?:sudo|doas|xargs|env|nice|nohup|time|command|exec|builtin"
+         r"|timeout|stdbuf|ionice|watch|if|then|do|else|elif|while|until|!|\{)")
+_WRAP_ARG = rf"(?:-{_UNIT}*|\d{_UNIT}*)"
+#: A variable set for the command alone: ``LC_ALL=C grep …``.
+_ASSIGN = rf"[A-Za-z_]\w*={_UNIT}*{_SP}+"
+#: A shell running a quoted command: ``bash -c "``, ``sh -lc '``.
+_SHELL_C = rf"""(?:ba|da|z|k)?sh(?:{_SP}+-[A-Za-z]+)+{_SP}+["']{_SP}*"""
+#: Where a command word starts (the start, or after ``;``, ``&``, ``|``,
+#: ``(``, a backquote or a newline that does not continue a line), then
+#: variables set for it, wrappers (``{ `` is one) and a path
+#: (``/usr/bin/``). Outside quotes, only characters that also end a
+#: command start one, so no two scans overlap.
+_CMD = (r"(?:^|(?<=[;&|(`])|(?<!\\\n)(?<=\n))"
+        rf"{_SP}*(?:{_WRAP}(?:{_SP}+{_WRAP_ARG})*{_SP}+|{_SHELL_C}|{_ASSIGN})*"
+        r"(?:[\w.~+-]*/)*")
+
+
+def _command(names: str) -> str:
+    """One of ``names`` as the command word (``/usr/bin/find`` counts,
+    ``--find-renames``, ``ls-tree``, ``find.py`` and ``find/x`` do not)."""
+    return rf"{_CMD}(?:{names})(?![\w./-])"
+
+
+#: One user name in ``/home/<user>`` or ``/Users/<user>``.
+_USER = r"""(?:[^/\s"'`;&|()<>$]+|\$\{?(?:USER|LOGNAME)\}?)"""
+#: The home folder as a path: ``/home``, ``/home/<user>``, ``/Users``,
+#: ``/Users/<user>`` or ``/root`` (quoted or not, the shell reads it so).
+_HOME_PATH = rf"(?:/home(?:/{_USER})?|/Users(?:/{_USER})?|/root)"
+#: The home folder as a variable: expanded bare or in double quotes only.
+_HOME_VAR = r"(?:\$HOME|\$\{HOME\})"
+#: The home folder as a tilde (``~``, ``~user``): expanded bare only.
+_HOME_TILDE = r"(?:~(?:[A-Za-z_][\w.-]*)?)"
+#: Folders in the home folder that hold aipager's protected folders.
+_HOME_PARENTS = r"(?:/\.config|/\.local(?:/share|/state)?)"
+
+
+def _target_body(*homes: str) -> str:
+    """One of ``homes`` (or one of the folders in it that hold the
+    protected ones), or ``/``; then an optional ``/``, ``/.`` or ``/*``."""
+    return rf"(?:(?:{'|'.join(homes)}){_HOME_PARENTS}?|/)/?[.*]?"
+
+
+#: A whole-home (or ``/``) folder word: bare, or quoted as a whole the way
+#: the shell would still expand it (a quote opened here must close right
+#: after it, so ``'/ x'`` is not a folder, and ``'~'`` or ``'$HOME'`` is
+#: plain text), then an optional unquoted ``/.config``-style folder and
+#: ``/``, ``/.`` or ``/*`` (``"$HOME"/.config``), ending where the shell
+#: word ends (or the string around a ``bash -c "…"``).
+_TARGET = (
+    r"(?:"
+    rf"{_target_body(_HOME_TILDE, _HOME_VAR, _HOME_PATH)}"
+    rf'|"{_target_body(_HOME_VAR, _HOME_PATH)}"'
+    rf"|'{_target_body(_HOME_PATH)}'"
+    rf"){_HOME_PARENTS}?/?[.*]?"
+    r"""(?=[\s;&|()<>`"']|\\\n|$)""")
+
+#: The text to find is given by an option (``-e x``, ``-f file``,
+#: ``--regexp``, ``--file``), so every other word may be a folder.
+_TEXT_BY_OPTION = (rf"(?={_SEG}*?{_SP}"
+                   r"(?:-[A-Za-z0-9]*[ef]|--regexp\b|--file\b))")
+#: After a search tool's name: a folder word anywhere after the text to
+#: find (the first word that is not an option, unless an option gave it),
+#: never the word right after ``-e``/``-f``/``--regexp``/``--file``.
+_FOLDER_AFTER_TEXT = (
+    rf"(?:{_TEXT_BY_OPTION}{_SEG}*?|{_OPTS}{_SP}+{_WORD}{_SEG}*?)"
+    rf"(?<!-e)(?<!-f)(?<!--regexp)(?<!--file){_SP}{_TARGET}")
+#: After a listing tool's name: a folder word anywhere.
+_FOLDER_ANYWHERE = rf"{_SEG}*?{_SP}{_TARGET}"
+
+#: rgrep, rg, ag, ack, fd: always recursive, the first word is the text.
+SEARCH_TEXT_FIRST = (rf"{_command('rgrep|rg|ag|ack|ack-grep|fd|fdfind')}"
+                     rf"{_FOLDER_AFTER_TEXT}")
+#: grep / egrep / fgrep with a recursive option anywhere in the command.
+SEARCH_GREP_RECURSIVE = (
+    rf"{_command('[ef]?grep')}"
+    rf"(?={_SEG}*?{_SP}(?:-[A-Za-z0-9]*[rR]|--recursive|--dereference-recursive"
+    rf"|-d{_SP}*recurse|--directories(?:=|{_SP}+)recurse))"
+    rf"{_FOLDER_AFTER_TEXT}")
+#: find: a folder among the start points (before the first ``-``, ``(``
+#: or ``!`` word), after find's own ``-H``/``-L``/``-P``/``-D x``/``-O1``.
+SEARCH_FIND = (rf"{_command('find')}(?:{_SP}+-[HLP])*"
+               rf"(?:{_SP}+-D{_SP}+{_UNIT}+)?(?:{_SP}+-O\d*)?"
+               rf"(?:{_SP}+(?![-(!\\]){_WORD})*?{_SP}+{_TARGET}")
+#: tree and du: every word that is not an option is a folder.
+LIST_TREE_DU = rf"{_command('tree|du')}{_FOLDER_ANYWHERE}"
+#: ls -R / ls --recursive (capital R: ``ls -r`` only reverses the order).
+LIST_LS_RECURSIVE = (rf"{_command('ls')}"
+                     rf"(?={_SEG}*?{_SP}(?:-[A-Za-z0-9]*R|--recursive))"
+                     rf"{_FOLDER_ANYWHERE}")
+#: rg --files and ack -f: list every file, every word is a folder (rg's
+#: own ``-f`` reads a file of texts to find instead).
+LIST_FILES = (
+    rf"(?:{_command('rg')}(?={_SEG}*?{_SP}--files(?![\w-]))"
+    rf"|{_command('ack|ack-grep')}(?={_SEG}*?{_SP}-f(?![\w-])))"
+    rf"{_FOLDER_ANYWHERE}")
+
+DENY_BASH_SEARCH_PATTERNS: tuple[str, ...] = (
+    SEARCH_TEXT_FIRST,
+    SEARCH_GREP_RECURSIVE,
+    SEARCH_FIND,
+    LIST_TREE_DU,
+    LIST_LS_RECURSIVE,
+    LIST_FILES,
+)
+
+# ---------------------------------------------------------------------------
 # Bash command patterns denied from Telegram (case-sensitive regex).
 # Covers daemon manipulation, escalation, pipe-to-shell, and — critically —
 # nested ``claude`` invocations + privilege flags that would let an
@@ -116,6 +292,8 @@ DENY_BASH_PATTERNS: tuple[str, ...] = (
     # only act together with `--resume`, which this still blocks.
     r"--resume(?![\w-])",
     r"--mcp-config\b",
+    # A recursive search or listing of the whole home folder or / (8.98).
+    *DENY_BASH_SEARCH_PATTERNS,
 )
 
 # ---------------------------------------------------------------------------
@@ -706,6 +884,16 @@ def normalize_scratchpad(command: str) -> str:
     return _SCRATCHPAD_ROOT_RE.sub(_SCRATCHPAD_PLACEHOLDER, command)
 
 
+#: The deny reason for a Bash command that matched a pattern.
+BASH_REASON = "Bash command blocked by safety policy"
+#: The same for a recursive search of the whole home folder or ``/``
+#: (:data:`DENY_BASH_SEARCH_PATTERNS`): it says what to do instead, and
+#: names the rule in words, never the regex.
+BASH_SEARCH_REASON = (
+    f"{BASH_REASON}: a recursive search or listing of the whole home folder "
+    "or / is not allowed; search inside a project folder instead")
+
+
 def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
     """Reason string if a Bash command matches a deny pattern, else None.
 
@@ -729,7 +917,9 @@ def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
         try:
             if re.search(pat, subject):
                 log.info("bash_violation: command blocked by pattern %r", pat)
-                return "Bash command blocked by safety policy"
+                if pat in DENY_BASH_SEARCH_PATTERNS:
+                    return BASH_SEARCH_REASON
+                return BASH_REASON
         except re.error:
             continue
     return None

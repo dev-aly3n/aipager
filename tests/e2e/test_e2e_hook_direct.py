@@ -10,7 +10,8 @@ hook binary. It checks the harness and the installed hook agree on every
 scenario, deny AND allow, in seconds and with no credentials: if one of
 these fails, the matching real-Claude test cannot mean what it says.
 What only real Claude can show (the transcript records it really writes,
-the tool calls it really makes) stays with those tests.
+the tool calls it really makes) stays with those tests. The 8.98 cases
+check the search hint, so the hook must come from a tree that has it.
 
 Needs only ``aipager-hook`` installed (``AIPAGER_E2E_HOOK`` overrides
 it). Writes the session's ``/tmp/claude-policy-<session>.json`` (removed
@@ -259,3 +260,51 @@ def test_policy_safety_path(call, session, tmp_path, role, allowed):
     # is what denied it.
     harness.write_snapshot(session, role_name=role)
     assert call(t, "Read", {"file_path": str(secret / "x")}) is None
+
+
+# ---- 8.98: Bash searches of the whole home folder --------------------------
+
+_SEARCH_HINT = "search inside a project folder instead"
+
+
+@pytest.mark.parametrize("command", [
+    f"grep -rn {harness.FAKE_SEARCH_CANARY} ~",
+    f"grep -rn {harness.FAKE_SEARCH_CANARY} $HOME",
+    f'grep -rn {harness.FAKE_SEARCH_CANARY} "$HOME"/',
+    "rg TOKEN ~/.config | head",
+    "cd /tmp && find / -name aipager.yaml",
+    "ls -R ~",
+])
+@pytest.mark.parametrize("role,denied", [("admin", True), ("owner", False)])
+def test_bash_search_of_home(call, session, tmp_path, fake_home, command, role,
+                             denied):
+    harness.write_snapshot(session, role_name=role)
+    t = _transcript(tmp_path, _prompt(_MARKED))
+    reason = call(t, "Bash", {"command": command}, home=fake_home)
+    if denied:
+        _denied(reason, "Bash command blocked by safety policy", _SEARCH_HINT)
+    else:
+        assert reason is None
+
+
+@pytest.mark.parametrize("command", [
+    "grep -rn TOKEN .",
+    "grep -rn TOKEN ~/proj",
+    "rg TOKEN src/",
+    "find . -name README.md",
+    "grep TOKEN ~/.bashrc",
+    'grep -rn "$HOME" src',
+    "rg -n '/home/' .",
+])
+def test_bash_search_in_project_allowed(call, session, tmp_path, fake_home, command):
+    harness.write_snapshot(session, role_name="admin")
+    t = _transcript(tmp_path, _prompt(_MARKED))
+    assert call(t, "Bash", {"command": command}, home=fake_home) is None
+
+
+def test_user_bash_search_denied_by_the_tool_deny(call, session, tmp_path, fake_home):
+    """``user`` has no shell: its search is denied before any pattern."""
+    harness.write_snapshot(session, role_name="user")
+    t = _transcript(tmp_path, _prompt(_MARKED))
+    _denied(call(t, "Bash", {"command": "grep -rn TOKEN ~/proj"}, home=fake_home),
+            "Bash is in this role's deny_tools")

@@ -7,7 +7,7 @@ cleanly when what it needs is missing:
 - Real-Claude hook tests (``test_e2e_bash_denies``, ``_benign``,
   ``_origin``, ``_path_denies``, ``_roles``, ``_sticky``,
   ``_slash_command`` (8.74), ``_joined_turn`` (8.77), ``_home_folder``
-  (8.79, 8.61), ``_policy_safety`` (8.96)): one real ``claude -p`` turn
+  (8.79, 8.61), ``_policy_safety`` (8.96), ``_bash_search`` (8.98)): one real ``claude -p`` turn
   each in a temp project wired to the real installed ``aipager-hook``,
   with the policy snapshot written through the production pipeline
   (see ``harness``). Claude loads project settings only
@@ -17,7 +17,10 @@ cleanly when what it needs is missing:
   (``claude_available``); the fake-home ones also need Claude to
   authenticate with ``HOME`` elsewhere (``fake_home_claude``: export
   ``CLAUDE_CODE_OAUTH_TOKEN``). They post nothing to Telegram and never
-  reach the running daemon.
+  reach the running daemon. Runs read the session's tool list from
+  Claude's ``init`` event (``--output-format stream-json``); a test that
+  needs the Grep or Glob tool skips, naming the version, when the session
+  does not offer it (``require_tools``, ``ClaudeRun.skip_unless_offered``).
 - ``test_e2e_hook_direct``: the same scenarios with no Claude, piping
   ``PreToolUse`` payloads into the real hook. Needs only ``aipager-hook``.
 - ``test_e2e_whoami``: ``/whoami`` from a real policy.yaml file, no Claude.
@@ -105,6 +108,27 @@ def fake_home_claude(claude_available, tmp_path_factory) -> bool:
     if why:
         pytest.skip(why)
     return True
+
+
+@pytest.fixture(scope="session")
+def claude_tools(claude_available, tmp_path_factory):
+    """The tools a Claude session offers here and the Claude Code
+    version, read once from a probe's ``init`` event (``(None, "")`` when
+    the probe printed none: tests then run, they never skip on a guess)."""
+    return harness.probe_tools(tmp_path_factory.mktemp("tools-probe"))
+
+
+@pytest.fixture
+def require_tools(claude_tools):
+    """``require_tools("Grep")`` skips the test before any Claude run when
+    the session would not offer that tool (roadmap 8.98: Claude Code
+    2.1.289 here has no Grep or Glob tool). Tests also call
+    ``ClaudeRun.skip_unless_offered`` on their own run's tool list."""
+    tools, version = claude_tools
+
+    def _require(*names: str) -> None:
+        harness.skip_unless_offered(tools, *names, version=version)
+    return _require
 
 
 @pytest.fixture

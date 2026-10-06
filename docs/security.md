@@ -389,6 +389,41 @@ aipager's control files, and a pattern cannot tell them apart. Rules
 you add in `policy.yaml` see the command exactly as typed, scratchpad
 included.
 
+**Searches through Bash.** Some Claude Code versions offer no `Grep` or
+`Glob` tool (2.1.289 is one), and Claude then searches with `grep`,
+`rg` or `find` through Bash, where the `Grep`/`Glob` rule above does not
+apply. For every role except owner, the command patterns also deny a
+recursive search or listing of the whole home folder or `/`: `grep -r`
+(`-R`, `--recursive`, `-d recurse`, `egrep`, `fgrep`, `rgrep`), `rg`
+(and `rg --files`), `ag`, `ack` (and `ack -f`), `find`, `fd`, `tree`,
+`du` and `ls -R`
+whose folder is `~`, `~user`, `$HOME`, `${HOME}` or `"$HOME"`, `/home`,
+`/home/<user>` (or `/home/$USER`), `/Users`, `/Users/<user>`, `/root` or
+`/` (with or without a trailing `/`, `/.` or `/*`), or `~/.config` or
+`~/.local`, which hold aipager's folders. This holds after `cd x &&`,
+in a pipe, inside `bash -c "..."`, after `xargs`, `env` or `timeout` and
+after `LC_ALL=C`-style settings.
+The reply says to search inside a project folder instead. Searches of a
+project folder (`grep -rn x ~/proj`, `rg x src/`, `find . -name y`),
+searches inside a project FOR a home path (`grep -rn "$HOME" src`, the
+first word after the options is the text to find, not a folder) and
+searches that are not recursive (`grep x ~/.bashrc`, `ls ~`) are not
+affected. This is best effort, like every command pattern: a pattern
+sees the words, not where the shell runs them, so it cannot see a search
+with no folder, or `.` or `..`, run from (or below) the home folder
+(`cd ~ && grep -r x .`), a home folder reached through another variable
+or a glob, nor one written out in full outside `/home`, `/Users` and
+`/root`, nor `\grep`, nor a folder right after a word ending in `-e`
+or `-f` (taken for the text `-e`/`-f` gives grep and rg, so
+`ag x -f ~` gets through). It also does not know which options take a
+separate value, so `rg -t py "$HOME" .` or `grep -rn -A 3 "/home/you"
+src` reads `py` or `3` as the text and the home path as a folder, and is
+denied (write `-A3`, `--include=*.py`, or put the option after the
+text), and so is a home path given to `-e` inside a cluster
+(`grep -rne "/home" src`; `-r -n -e` is fine); a command quoted inside
+another command's text (`echo "a; rg x ~"`) is denied too, and so is
+`du -sh ~` (sizes only).
+
 **Why one block halts the whole turn.** After a tool call is blocked,
 every later call in the same turn is denied too, until the next
 prompt. Without this, the agent simply retries the same action

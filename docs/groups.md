@@ -307,6 +307,13 @@ on the machine does that, which keeps it the owner's.
     (or with no folder from a session in the home folder) is denied,
     and so is a `Glob` whose pattern starts in one (such as
     `/home/you/.config/aipager/*`). Search inside a project folder instead.
+    On Claude Code versions without a `Grep` tool, Claude searches
+    through Bash; there a recursive search or listing of the whole home
+    folder or `/` (`grep -rn x ~`, `rg x $HOME`, `find / -name x`) is
+    denied too, best effort (a search with no folder, or `..`, run from
+    the home folder or below it is not seen), and project searches are
+    not, including a search FOR a home path (`grep -rn "$HOME" src`)
+    ([security](security.md#team-mode-enforcement)).
 
   An admin keeps Bash, and with a shell the floor's command patterns
   are best-effort, not a boundary: only make someone an admin if you

@@ -49,6 +49,8 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import pytest
+
 from aipager import policy as _policy
 from aipager import policy_snapshot as _snap
 from aipager.scope import Member, Scope
@@ -317,6 +319,80 @@ def _blocks(entry: dict) -> list:
     return content if isinstance(content, list) else []
 
 
+def _spawn(argv: list[str], **kwargs) -> subprocess.CompletedProcess:
+    """``subprocess.run`` for the claude runs below (one name for the unit
+    tests to replace, rather than the global ``subprocess.run``)."""
+    return subprocess.run(argv, **kwargs)
+
+
+def parse_stream(stdout: str) -> tuple[dict | None, tuple[str, ...] | None, str]:
+    """Read ``claude -p --output-format stream-json --verbose`` output:
+    the final ``result`` event (the object ``--output-format json``
+    prints, with ``session_id``, ``result`` and ``permission_denials``),
+    the tools the session offered (the ``system``/``init`` event's
+    ``tools``; ``None`` when no such event or list was seen) and the
+    Claude Code version that event names (``""`` if none)."""
+    result: dict | None = None
+    tools: tuple[str, ...] | None = None
+    version = ""
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") == "system" and event.get("subtype") == "init":
+            listed = event.get("tools")
+            if isinstance(listed, list) and tools is None:
+                tools = tuple(str(t) for t in listed)
+                version = str(event.get("claude_code_version") or "")
+        elif event.get("type") == "result":
+            result = event
+    return result, tools, version
+
+
+def missing_tools(offered: tuple[str, ...] | None, *needed: str) -> list[str]:
+    """The tools in ``needed`` that ``offered`` lacks. Nothing is missing
+    when ``offered`` is unknown (``None``): a test then runs its
+    assertions, it never skips on a guess."""
+    if offered is None:
+        return []
+    return [t for t in needed if t not in offered]
+
+
+def skip_unless_offered(offered: tuple[str, ...] | None, *needed: str,
+                        version: str = "") -> None:
+    """Skip the calling test when the Claude session does not offer every
+    tool in ``needed`` (Claude Code 2.1.289 on the operator's box has no
+    Grep or Glob tool: it searches through Bash). A test that depends on
+    a tool must never pass because Claude could not call it."""
+    missing = missing_tools(offered, *needed)
+    if missing:
+        where = f"Claude Code {version}" if version else "this Claude Code"
+        pytest.skip(f"{where} offers no {', '.join(missing)} tool in the "
+                    f"session (it offers: {', '.join(offered or ())})")
+
+
+def probe_tools(cwd: Path, timeout: int = 90) -> tuple[tuple[str, ...] | None, str]:
+    """The tools a one-shot ``claude -p`` session in ``cwd`` offers, and
+    its version, read from the ``init`` event (``(None, "")`` when the
+    probe fails or prints none)."""
+    try:
+        p = _spawn(
+            ["claude", "-p", "reply with exactly: OK", "--max-turns", "1",
+             "--output-format", "stream-json", "--verbose",
+             "--setting-sources", "project,local"],
+            cwd=str(cwd), capture_output=True, text=True, timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError):
+        return None, ""
+    _result, tools, version = parse_stream(p.stdout)
+    return tools, version
+
+
 @dataclass
 class ClaudeRun:
     raw: dict
@@ -324,6 +400,16 @@ class ClaudeRun:
     session_id: str = ""
     denials: list[str] = field(default_factory=list)
     result: str = ""
+    #: The tools this session offered (its ``init`` event), ``None`` if
+    #: unknown.
+    offered_tools: tuple[str, ...] | None = None
+    claude_version: str = ""
+
+    def skip_unless_offered(self, *tools: str) -> None:
+        """Skip the test if this run's session lacked any of ``tools``
+        (see :func:`skip_unless_offered`). Call it before asserting."""
+        skip_unless_offered(self.offered_tools, *tools,
+                            version=self.claude_version)
 
     @property
     def transcript(self) -> Path | None:
@@ -461,13 +547,16 @@ def run(task: str, *, session: str, project: Path,
     # user-level ~/.claude/settings.json wires aipager-hook on
     # UserPromptSubmit too, which would rewrite this session's snapshot
     # before the first tool call (review 2026-10-06).
-    argv = ["claude", "-p", prompt, "--output-format", "json",
+    # stream-json (which needs --verbose in -p mode) adds the init event
+    # with the session's tool list; its last event is the same result
+    # object --output-format json prints.
+    argv = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose",
             "--dangerously-skip-permissions", "--setting-sources", "project,local"]
     if resume:
         argv += ["--resume", resume]
     snap_file = PRODUCTION_SNAPSHOT_PATH(session)
     written = _read_bytes(snap_file)
-    proc = subprocess.run(
+    proc = _spawn(
         argv,
         cwd=str(project), env=env, capture_output=True, text=True,
         timeout=timeout,
@@ -478,12 +567,11 @@ def run(task: str, *, session: str, project: Path,
     assert _read_bytes(snap_file) == written, (
         f"{snap_file} changed during the claude run: another hook rewrote "
         "the snapshot this test wrote")
-    try:
-        raw = json.loads(proc.stdout)
-    except json.JSONDecodeError as e:
+    raw, tools, version = parse_stream(proc.stdout)
+    if raw is None:
         raise AssertionError(
-            f"claude -p produced no JSON (rc={proc.returncode}): "
-            f"{e}\nstdout[:300]={proc.stdout[:300]!r}\n"
+            f"claude -p printed no result event (rc={proc.returncode}): "
+            f"stdout[-300:]={proc.stdout[-300:]!r}\n"
             f"stderr[:300]={proc.stderr[:300]!r}")
     return ClaudeRun(
         raw=raw,
@@ -491,6 +579,8 @@ def run(task: str, *, session: str, project: Path,
         session_id=raw.get("session_id", ""),
         denials=[d.get("tool_name", "") for d in raw.get("permission_denials", [])],
         result=raw.get("result") or "",
+        offered_tools=tools,
+        claude_version=version,
     )
 
 
