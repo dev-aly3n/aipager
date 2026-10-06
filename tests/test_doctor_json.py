@@ -111,7 +111,13 @@ def test_plain_output_is_byte_identical_to_before(monkeypatch, capsys):
     """Golden captured from cmd_doctor before run_all became run_all_keyed."""
     from aipager import __version__, ui
     _stub_checks(monkeypatch)
-    monkeypatch.setattr(ui.console, "width", 80)   # the golden's width
+    # The golden is the off-terminal rendering at width 80: pin both, so
+    # TTY_COMPATIBLE, FORCE_COLOR or COLUMNS cannot change it (`_width`:
+    # undoing the `width` property setter would leave it fixed).
+    for con in (ui.console, ui.err_console):
+        monkeypatch.setattr(con, "_force_terminal", False)
+        monkeypatch.setattr(con, "_color_system", None)
+        monkeypatch.setattr(con, "_width", 80)
     rc = doctor.cmd_doctor(argparse.Namespace())
     out = capsys.readouterr()
     py = f"{sys.version_info.major}.{sys.version_info.minor}"

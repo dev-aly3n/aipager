@@ -78,9 +78,16 @@ def _plain(env, monkeypatch, mod, checks=None):
 def doctor_now(env, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: env.home)
     from aipager import doctor, ui
-    # The golden wraps at rich's non-terminal default width; pin it so a
-    # COLUMNS in the environment cannot move the wrap.
-    monkeypatch.setattr(ui.console, "width", 80)
+    # The golden is the off-terminal rendering at rich's default width on
+    # Linux: pin all three, so neither the host OS nor TTY_COMPATIBLE,
+    # FORCE_COLOR or COLUMNS in the environment can change it. `_width`,
+    # not the `width` property: undoing the property setter would leave
+    # the width fixed for the rest of the session.
+    monkeypatch.setattr(doctor.platform, "system", lambda: "Linux")
+    for con in (ui.console, ui.err_console):
+        monkeypatch.setattr(con, "_force_terminal", False)
+        monkeypatch.setattr(con, "_color_system", None)
+        monkeypatch.setattr(con, "_width", 80)
     return doctor
 
 
