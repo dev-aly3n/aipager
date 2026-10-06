@@ -199,9 +199,10 @@ def cmd_detect_chat(args: argparse.Namespace, run: _Run) -> int:
                 "Telegram rejected the bot token.",
                 "Check the token (copy it again from @BotFather), then run "
                 "this again.")
+        # Only the last poll decides: when it failed, the run ends as
+        # telegram_unreachable below and the backlog is never read.
         last_failed = code is None or code == 429 or code >= 500
-        if not last_failed:
-            backlog = full
+        backlog = full
         remaining = deadline - _monotonic()
         if remaining <= 0:
             break

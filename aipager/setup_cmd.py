@@ -226,6 +226,8 @@ def _read_stdin(stdin) -> str | bytes:
                 "Pipe the token in and let the pipe close (for example `printf "
                 "'%s\\n' \"$TOKEN\" | aipager setup --token-stdin ...`), or use "
                 "--token-file PATH.")
+        # Windows cannot select() a pipe (OSError, read as no token by the
+        # caller); the platform is not supported.
         ready, _w, _x = select.select([fd], [], [], remaining)
         if not ready:
             continue
