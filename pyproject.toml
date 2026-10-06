@@ -102,6 +102,7 @@ testpaths = ["tests"]
 addopts = "-m 'not e2e'"
 markers = [
     "e2e: real-Claude end-to-end safety test (opt-in; needs claude auth + network + tokens)",
+    "fake_telegram: group-mode scenarios against an isolated daemon and a local fake Bot API (opt-in: AIPAGER_E2E_FAKETG=1)",
 ]
 
 [tool.ruff]

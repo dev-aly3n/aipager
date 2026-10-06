@@ -31,6 +31,14 @@ cleanly when what it needs is missing:
   daemon tests post cards and answers to the operator's DM (each module
   docstring lists what). The restart test also needs
   ``AIPAGER_E2E_RESTART=1``.
+- ``faketg/`` (``test_ft_00_boot`` … ``test_ft_06_migration``, marker
+  ``fake_telegram``): a SECOND, isolated daemon (``AIPAGER_INSTANCE_DIR``,
+  a throwaway HOME) against a local fake Bot API
+  (``tests/e2e/fake_telegram``), driving the group-mode scenarios with
+  real dtach sessions. Need ``AIPAGER_E2E_FAKETG=1``; real Claude by
+  default (``CLAUDE_CODE_OAUTH_TOKEN`` in the environment, else they
+  skip), or ``AIPAGER_E2E_FAKETG_CLAUDE=standin`` for a credential-free
+  plumbing run. Nothing reaches Telegram or the operator's daemon.
 
 Run the whole suite memory-capped, with ``AIPAGER_E2E_LIVE=1``, under
 ``aipager.daemon_secrets.build_session_env()`` (so a nested ``claude`` is

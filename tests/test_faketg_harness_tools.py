@@ -1,0 +1,245 @@
+"""The fake-Telegram harness's pure parts (tests/e2e/fake_telegram), with
+no daemon: the instance config, the daemon environment and its isolation
+check, the shims, the socket-length check, the stand-in claude, and the
+kill helpers' refusal to signal anything that is not the instance's.
+
+These guards are what keep a test daemon away from the operator's real
+install, so each has a test that fails when the guard is removed.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import pytest
+import yaml
+
+from aipager import claude_resolve, scope
+from tests.e2e.fake_telegram import instance as fti
+from tests.e2e.fake_telegram import standin_claude
+from tests.e2e.faketg import conftest as ftc
+
+
+@pytest.fixture
+def root():
+    r = fti.make_root()
+    try:
+        yield r
+    finally:
+        shutil.rmtree(r, ignore_errors=True)
+
+
+def test_make_root_is_a_short_apg_folder_in_tmp(root):
+    assert root.parent == Path("/tmp") and root.name.startswith("apg-")
+    assert not root.name.startswith("claude-")
+    assert not str(root).startswith(fti.real_home())
+    fti.assert_socket_lengths(root / "i", ["ft1", "ft14"])
+
+
+def test_config_ids_roles_and_loads(tmp_path):
+    cfg = fti.build_config("/x/claude")
+    p = tmp_path / "aipager.yaml"
+    p.write_text(yaml.safe_dump(cfg, sort_keys=False))
+    scopes, token = scope.load_scopes(p)
+    assert token == fti.FAKE_TOKEN
+    by_kind = {s.kind: s for s in scopes}
+    assert by_kind["dm"].chat_id == fti.DM_ID
+    assert by_kind["group"].chat_id == fti.GROUP_ID
+    roles = {m.id: str(getattr(m.role, "value", m.role)) for m in by_kind["group"].members}
+    assert roles == {fti.ALICE: "owner", fti.BOB: "user", fti.CAROL: "read_only",
+                     fti.DAVE: "admin"}
+    assert scope.load_miniapp(p)["enabled"] is False
+    assert scope.load_default_mode(p) == "ask"
+    assert scope.load_claude_path(p) == "/x/claude"
+    every_id = [fti.DM_ID, fti.GROUP_ID, fti.SUPERGROUP_ID, *fti.MEMBERS]
+    assert fti.REAL_CHAT_ID not in every_id and -fti.REAL_CHAT_ID not in every_id
+
+
+@pytest.mark.parametrize("bad", ["member", "dm", "group"])
+def test_config_refuses_the_operators_real_chat_id(bad):
+    members = dict(fti.MEMBERS)
+    kw = {}
+    if bad == "member":
+        members[fti.REAL_CHAT_ID] = ("op", "user")
+    elif bad == "dm":
+        kw["dm_id"] = fti.REAL_CHAT_ID
+    else:
+        kw["group_id"] = -fti.REAL_CHAT_ID
+    with pytest.raises(AssertionError, match="real chat id"):
+        fti.build_config("/x/claude", members, **kw)
+
+
+def _env(root, mode="standin", base=None, **extra):
+    base_env = {
+        "PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": fti.real_home(),
+        "CLAUDE_CODE_OAUTH_TOKEN": "x", "CLAUDE_TG_CHAT_ID": "256113222",
+        "CLAUDE_TG_BOT_TOKEN": "1:real", "AIPAGER_SOCKET_PATH": "/run/x.sock",
+        "CREDENTIALS_DIRECTORY": "/run/credentials/aipager.service",
+        "OBSERVER_BOTS": "a:b", "MINIAPP_ENABLED": "1", "XDG_RUNTIME_DIR": "/run/user/1",
+        "PYTHONPATH": "/elsewhere", "LANG": "C.UTF-8",
+    }
+    base_env.update(extra)
+    return fti.daemon_env(base_env, root=root, base_url=base or "http://127.0.0.1:4321",
+                          claude_bin=str(root / "b" / "claude"), repo=fti.REPO,
+                          python=sys.executable, claude_mode=mode)
+
+
+def test_daemon_env_is_built_from_scratch(root):
+    env = _env(root)
+    assert env["PATH"].split(os.pathsep)[0] == str(root / "b")
+    assert env["PATH"].split(os.pathsep)[1] == str(Path(sys.executable).parent)
+    assert env["CLAUDE_TG_CHAT_ID"] == "" and env["OBSERVER_BOTS"] == ""
+    assert env["CLAUDE_TG_BOT_TOKEN"] == fti.FAKE_TOKEN
+    for gone in ("CREDENTIALS_DIRECTORY", "CLAUDE_CODE_OAUTH_TOKEN", "AIPAGER_SOCKET_PATH",
+                 "XDG_RUNTIME_DIR"):
+        assert gone not in env, gone
+    assert env["HOME"] == str(root / "h") and env["AIPAGER_INSTANCE_DIR"] == str(root / "i")
+    assert env["AIPAGER_WORK_DIR"] == str(root / "h" / "proj")
+    assert env["PYTHONPATH"] == str(fti.REPO) and env["MINIAPP_ENABLED"] == "0"
+    assert env["LANG"] == "C.UTF-8"
+    assert env["PYTEST_CURRENT_TEST"]
+    assert fti.env_problems(env, root) == []
+    fti.assert_env_isolated(env, root)
+
+
+def test_standin_env_drops_every_real_claude_from_path(root, tmp_path):
+    real = tmp_path / "realbin"
+    real.mkdir()
+    (real / "claude").write_text("#!/bin/sh\n")
+    (real / "claude").chmod(0o755)
+    env = _env(root, PATH=f"{real}:/usr/bin")
+    assert str(real) not in env["PATH"].split(os.pathsep)
+    env = _env(root, mode="real", PATH=f"{real}:/usr/bin")
+    assert str(real) in env["PATH"].split(os.pathsep)
+
+
+@pytest.mark.parametrize("mutate,problem", [
+    (lambda e, r: e.update(PATH="/usr/bin:" + e["PATH"]), "shim folder is not first"),
+    (lambda e, r: e.update(HOME=fti.real_home()), "HOME"),
+    (lambda e, r: e.update(AIPAGER_INSTANCE_DIR="/tmp"), "AIPAGER_INSTANCE_DIR"),
+    (lambda e, r: e.update(CLAUDE_TG_CHAT_ID="256113222"), "CLAUDE_TG_CHAT_ID"),
+    (lambda e, r: e.pop("OBSERVER_BOTS"), "OBSERVER_BOTS"),
+    (lambda e, r: e.update(CREDENTIALS_DIRECTORY="/run/c"), "CREDENTIALS_DIRECTORY"),
+    (lambda e, r: e.update(AIPAGER_TELEGRAM_API_BASE="https://api.telegram.org"), "API base"),
+    (lambda e, r: e.update(MINIAPP_ENABLED="1"), "Mini App"),
+])
+def test_env_isolation_check_catches_each_leak(root, mutate, problem):
+    env = _env(root)
+    mutate(env, root)
+    problems = fti.env_problems(env, root)
+    assert any(problem in p for p in problems), problems
+    with pytest.raises(AssertionError, match="not isolated"):
+        fti.assert_env_isolated(env, root)
+
+
+def test_shims_run_this_repo(root):
+    fti.write_shims(root / "b", sys.executable, fti.REPO, "standin")
+    hook = (root / "b" / "aipager-hook").read_text()
+    assert hook.startswith("#!/bin/sh\n")
+    assert sys.executable in hook and "aipager.dtach.notify_hook import main" in hook
+    assert f"PYTHONPATH={fti.REPO}" in hook
+    assert "statusline_notify import main" in (root / "b" / "aipager-statusline").read_text()
+    assert "aipager.cli import main" in (root / "b" / "aipager").read_text()
+    assert str(fti.STANDIN) in (root / "b" / "claude").read_text()
+    for name in ("aipager", "aipager-hook", "aipager-statusline", "claude"):
+        assert os.access(root / "b" / name, os.X_OK)
+    fti.write_shims(root / "c", sys.executable, fti.REPO, "real")
+    assert not (root / "c" / "claude").exists()
+
+
+def test_socket_length_check_refuses_a_long_folder(tmp_path):
+    with pytest.raises(AssertionError, match="socket path too long"):
+        fti.assert_socket_lengths(tmp_path / ("x" * 90), ["ft1"])
+
+
+def test_standin_cli_answers_like_claude(root):
+    fti.write_shims(root / "b", sys.executable, fti.REPO, "standin")
+    claude = str(root / "b" / "claude")
+    out = subprocess.run([claude, "--version"], capture_output=True, text=True, timeout=30)
+    assert out.returncode == 0 and claude_resolve._VERSION_RE.match(out.stdout.strip())
+    install, why = claude_resolve._verify_candidate(claude)
+    assert install is not None, why
+    auth = subprocess.run([claude, "auth", "status"], capture_output=True, text=True,
+                          timeout=30)
+    assert json.loads(auth.stdout)["loggedIn"] is True
+    probe = subprocess.run([claude, "-p", "say ok"], capture_output=True, text=True,
+                           timeout=30)
+    assert probe.returncode == 0 and probe.stdout.strip() == "ok"
+
+
+def test_standin_turn_writes_a_transcript_aipager_reads(tmp_path, monkeypatch):
+    from aipager import transcript
+    from aipager.dtach import enforce
+    home, inst, proj = tmp_path / "h", tmp_path / "i", tmp_path / "p"
+    for d in (home / ".claude", inst, proj):
+        d.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(inst))
+    monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-ftt__d1")
+    monkeypatch.chdir(proj)
+    s = standin_claude.StandIn(["--dangerously-skip-permissions"])
+    s.run_turn("[via Telegram · @alice]\nReply with exactly: OK")
+    assert transcript.extract_last_response(s.transcript) == "OK"
+    s.run_turn("Use the Write tool to create ftt.txt containing hi")
+    assert (proj / "ftt.txt").read_text() == "hi"
+    entries = [json.loads(line) for line in Path(s.transcript).read_text().splitlines()]
+    users = [enforce._user_text(e) for e in entries if e["type"] == "user"
+             and not enforce._is_tool_result(e)]
+    assert users[0].startswith("[via Telegram · @alice]")
+    log = [json.loads(line) for line in (inst / "standin-claude-ftt__d1.jsonl").read_text()
+           .splitlines()]
+    assert [e["event"] for e in log] == ["prompt", "stop", "prompt", "decision", "stop"]
+    assert log[3]["decision"] == "allowed"
+
+
+def _sleeper(env=None):
+    return subprocess.Popen(["sleep", "30"], env=env)
+
+
+def test_kill_helpers_refuse_a_process_that_is_not_the_instances(root):
+    inst = root / "i"
+    inst.mkdir()
+    stranger = _sleeper()
+    ours = _sleeper(dict(os.environ, AIPAGER_INSTANCE_DIR=str(inst)))
+    try:
+        time.sleep(0.2)
+        assert not fti.pid_references(stranger.pid, inst)
+        assert fti.pid_references(ours.pid, inst)
+        assert fti.kill_pid_if_ours(stranger.pid, inst) is False
+        assert fti.kill_pid_if_ours(os.getpid(), inst) is False
+        assert stranger.poll() is None
+        assert fti.pids_referencing(inst) == [ours.pid]
+        assert fti.kill_pids_referencing(inst) == [ours.pid]
+        ours.wait(10)
+        assert stranger.poll() is None
+    finally:
+        for p in (stranger, ours):
+            if p.poll() is None:
+                p.kill()
+                p.wait(10)
+
+
+def test_opt_in_and_credential_skips(monkeypatch):
+    monkeypatch.delenv("AIPAGER_E2E_FAKETG", raising=False)
+    assert "opt-in" in ftc.why_skip()
+    monkeypatch.setenv("AIPAGER_E2E_FAKETG", "1")
+    monkeypatch.setenv("AIPAGER_E2E_FAKETG_CLAUDE", "standin")
+    assert ftc.why_skip() is None
+    monkeypatch.setenv("AIPAGER_E2E_FAKETG_CLAUDE", "real")
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    assert ftc.why_skip() == ftc.SKIP_NO_CREDENTIAL
+    monkeypatch.delenv("AIPAGER_E2E_FAKETG_CLAUDE")
+    assert ftc.why_skip() == ftc.SKIP_NO_CREDENTIAL
+
+
+def test_harness_names_are_recognised():
+    names = ["claude-ft1__g4000000001", "claude-x__d900000002", "claude-real__d256113222",
+             "claude-ftx", "claude-dev", "claude-1000"]
+    assert ftc.harness_names_in(names) == ["claude-ft1__g4000000001", "claude-ftx",
+                                           "claude-x__d900000002"]
