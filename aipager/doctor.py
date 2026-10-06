@@ -7,7 +7,9 @@ verdict for each, then summarizes failing checks with concrete fixes.
 
 Doctor is **idempotent**: it never sends a Telegram message, never
 mutates configuration, never starts/stops the daemon. It only reads
-state. ``aipager doctor --fix`` (``cmd_doctor_fix``) is the one
+state. ``aipager doctor --json`` prints the same checks as one JSON
+object, keyed by check name (:func:`run_all_keyed`), for scripts and
+coding agents. ``aipager doctor --fix`` (``cmd_doctor_fix``) is the one
 deliberate exception — interactive, and the only place that writes
 ``daemon.env`` or ``claude_path`` outside of ``aipager config`` /
 ``aipager service install``.
@@ -729,7 +731,25 @@ def _check_title(fn: Callable[[], CheckResult]) -> str:
     return name.replace("_", " ") or "check"
 
 
+def _check_key(fn: Callable[[], CheckResult]) -> str:
+    """The stable machine key of a check (``aipager doctor --json``): its
+    function name minus the ``check_`` prefix (``check_token_valid`` ->
+    ``token_valid``), ``"check"`` for a callable with no name. Titles are
+    not keys: they differ by platform and a crashed check has none."""
+    name = getattr(fn, "__name__", "") or "check"
+    for prefix in ("_check_", "check_"):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+            break
+    return name or "check"
+
+
 def run_all() -> list[CheckResult]:
+    """Every check's result, in order (see :func:`run_all_keyed`)."""
+    return [r for _k, r in run_all_keyed()]
+
+
+def run_all_keyed() -> list[tuple[str, CheckResult]]:
     """Run every check in order. A check that raises becomes one WARN
     row naming the check and the error (roadmap 8.8) instead of taking
     the whole report down: every check is written never to raise, but
@@ -741,10 +761,10 @@ def run_all() -> list[CheckResult]:
     """
     from rich.markup import escape
 
-    results: list[CheckResult] = []
+    results: list[tuple[str, CheckResult]] = []
     for fn in CHECKS:
         try:
-            results.append(fn())
+            results.append((_check_key(fn), fn()))
         except Exception as e:
             title = _check_title(fn)
             log.debug("doctor check %s crashed",
@@ -756,10 +776,10 @@ def run_all() -> list[CheckResult]:
             text = f"check crashed: {type(e).__name__}"
             if first_line:
                 text += f": {first_line}"
-            results.append(CheckResult(
+            results.append((_check_key(fn), CheckResult(
                 WARN, title, detail=[escape(text)],
                 fix="Re-run `aipager doctor`; if it keeps crashing, report the line above.",
-            ))
+            )))
     return results
 
 
@@ -984,7 +1004,60 @@ def cmd_doctor_fix() -> int:
     return 0
 
 
+def _plain(text: str | None) -> str | None:
+    """Rich markup -> plain text for the JSON report (crash details are
+    markup-escaped; a few titles and details carry tags)."""
+    if text is None:
+        return None
+    from rich.errors import MarkupError
+    from rich.text import Text
+    try:
+        return Text.from_markup(str(text)).plain
+    except MarkupError:
+        return str(text)
+
+
+def _doctor_json(args) -> int:
+    """``aipager doctor --json``: one JSON object on stdout, nothing else.
+    Anything a check prints goes to stderr."""
+    import contextlib
+
+    from aipager import __version__
+
+    out = sys.stdout
+    if getattr(args, "fix", False) or getattr(args, "safety_check", False):
+        flag = "--fix" if getattr(args, "fix", False) else "--safety-check"
+        out.write(json.dumps({
+            "command": "doctor", "status": "error", "ok": False,
+            "exit_code": 2, "error": "usage",
+            "message": f"--json cannot be combined with {flag}.",
+            "fix": f"Run `aipager doctor --json` without {flag}.",
+        }, indent=2) + "\n")
+        return 2
+    with contextlib.redirect_stdout(sys.stderr):
+        keyed = run_all_keyed()
+    checks = [{
+        "key": key,
+        "status": r.status,
+        "title": _plain(r.title),
+        "detail": [_plain(d) for d in r.detail],
+        "fix": _plain(r.fix),
+    } for key, r in keyed]
+    summary = {s: sum(1 for c in checks if c["status"] == s)
+               for s in (OK, WARN, FAIL)}
+    failed = summary[FAIL] > 0
+    out.write(json.dumps({
+        "command": "doctor", "version": __version__, "ok": not failed,
+        "summary": summary, "checks": checks,
+    }, indent=2) + "\n")
+    out.flush()
+    return 1 if failed else 0
+
+
 def cmd_doctor(args: argparse.Namespace | None = None) -> int:
+    if getattr(args, "as_json", False):
+        return _doctor_json(args)
+
     from aipager import __version__
     from aipager.config import SCOPES
     from aipager.ui import console, rule

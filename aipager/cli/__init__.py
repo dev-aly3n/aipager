@@ -130,6 +130,10 @@ def main() -> None:
         help="interactively offer to discover a daemon credential and "
              "pin claude_path on a multi-install ambiguity",
     )
+    doctor_p.add_argument(
+        "--json", dest="as_json", action="store_true",
+        help="print the checks as one JSON object (for scripts and agents)",
+    )
     doctor_p.set_defaults(fn=_cmd_doctor)
 
     status_p = sub.add_parser(
