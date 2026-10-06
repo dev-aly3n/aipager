@@ -145,8 +145,9 @@ def _api_url(method: str) -> str:
 
     NEVER log the return value — it embeds the bot token.
     """
+    from aipager import telegram_endpoint
     from aipager.config import BOT_TOKEN
-    return f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
+    return telegram_endpoint.method_url(BOT_TOKEN, method)
 
 
 def set_rate_limiter(limiter) -> None:

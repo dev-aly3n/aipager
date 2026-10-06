@@ -17,21 +17,29 @@ import socket
 import sys
 from pathlib import Path
 
-# Same precedence as aipager.config._default_socket_path() (kept
+# Same precedence as aipager.instance.control_socket_path() (kept
 # inlined, stdlib-only here rather than importing aipager.config — this
 # hook must stay <5ms and importing config transitively pulls in yaml,
 # team.py, policy.py, and does I/O). If that function's precedence ever
 # changes, mirror the change here and in statusline_notify.py.
+# An isolated instance (AIPAGER_INSTANCE_DIR) wins first: its sessions'
+# hooks must reach that instance's daemon, never the operator's.
 # NOTE: bind the *stripped* runtime dir once and use that same value.
 # Reading os.environ["XDG_RUNTIME_DIR"] unstripped while guarding on the
 # stripped copy meant a padded value produced a path the daemon never
 # bound, silently dropping every hook event.
+_INSTANCE_DIR = os.environ.get("AIPAGER_INSTANCE_DIR", "").strip()
+_INSTANCE_DIR = os.path.normpath(_INSTANCE_DIR) if _INSTANCE_DIR else ""
 _XDG_RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR", "").strip()
 SOCKET_PATH = (
-    os.environ.get("AIPAGER_SOCKET_PATH", "").strip()
+    (os.path.join(_INSTANCE_DIR, "aipager.sock") if _INSTANCE_DIR else "")
+    or os.environ.get("AIPAGER_SOCKET_PATH", "").strip()
     or (os.path.join(_XDG_RUNTIME_DIR, "aipager.sock") if _XDG_RUNTIME_DIR else "")
     or "/tmp/aipager.sock"
 )
+# Where aipager-statusline writes the per-session status file
+# (aipager.instance.runtime_tmp_dir(), inlined for the same reason).
+_STATUS_DIR = _INSTANCE_DIR or "/tmp"
 
 # Address-space cap for the hook subprocess. Baseline is ~34 MB VmSize
 # and realistic post-streaming-rewrite max is ~100 MB (recent-transcript
@@ -105,7 +113,7 @@ def _debug(msg: str) -> None:
 
 def _read_statusline_tokens(session: str) -> dict | None:
     """Read token data from the statusLine JSON file for this session."""
-    status_file = Path(f"/tmp/claude-status-{session}.json")
+    status_file = Path(_STATUS_DIR) / f"claude-status-{session}.json"
     try:
         sl = json.loads(status_file.read_text())
     except (FileNotFoundError, PermissionError, json.JSONDecodeError) as e:

@@ -546,7 +546,8 @@ class CommandHandlersMixin:
         # (HookReceiver.stop unlinks the control socket as part of
         # cli.py's SIGTERM handler) the wrapper execs aipager start.
         parent_pid = os.getpid()
-        log_path = "/tmp/aipager.log"
+        from aipager import instance
+        log_path = instance.self_restart_log_path()
         try:
             log_fd = os.open(
                 log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644,

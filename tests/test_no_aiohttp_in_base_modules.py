@@ -66,3 +66,33 @@ def test_module_imports_cleanly_without_aiohttp(module, monkeypatch):
     # anywhere in this module (or anything it imports at module level)
     # would fail here.
     importlib.reload(module)
+
+
+# The two resolvers every hook-side helper and every Bot API URL go
+# through (aipager.instance, aipager.telegram_endpoint) must stay
+# stdlib-only: the hooks' lazily imported helpers reach instance on
+# every Claude event, against the same <5 ms budget.
+_STDLIB_ONLY = {
+    "aipager/instance.py": {"__future__", "os", "pathlib", "pwd"},
+    "aipager/telegram_endpoint.py": {"__future__", "ipaddress", "os", "urllib.parse"},
+}
+
+
+@pytest.mark.parametrize("relpath", sorted(_STDLIB_ONLY))
+def test_resolver_modules_import_only_the_stdlib(relpath):
+    import ast
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parent.parent / relpath).read_text()
+    imported = set()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Import):
+            imported.update(a.name for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imported.add(node.module or "")
+    assert imported <= _STDLIB_ONLY[relpath], imported - _STDLIB_ONLY[relpath]
+
+
+def test_instance_module_reloads_without_aiohttp(monkeypatch):
+    from aipager import instance
+    _block_aiohttp(monkeypatch)
+    importlib.reload(instance)

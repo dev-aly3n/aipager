@@ -7,6 +7,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from aipager import telegram_endpoint
 from aipager.errors import redact_token
 from aipager.team import is_shared_sender_id
 from aipager.ui import err_console
@@ -67,7 +68,7 @@ def _get_me(token: str) -> tuple[dict | None, int | None, str]:
     ``explained`` says why (:func:`_explain_http_error`). Shared by the
     wizard's :func:`_verify_token` and ``aipager setup``."""
     body, code, err = _http_json(
-        f"https://api.telegram.org/bot{token}/getMe"
+        telegram_endpoint.method_url(token, "getMe")
     )
     if body and body.get("ok"):
         result = body.get("result")
@@ -92,7 +93,7 @@ def _send_message(token: str, chat_id: int, text: str
     """POST ``sendMessage``: ``(True, "", status)`` or ``(False,
     redacted_description, http_status_or_None)``. ``None`` as the status
     means Telegram was never reached (network, bad response)."""
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    url = telegram_endpoint.method_url(token, "sendMessage")
     data = urllib.parse.urlencode({
         "chat_id": str(chat_id),
         "text": text,
@@ -144,7 +145,7 @@ def _newest_private_chat(
     :data:`GET_UPDATES_BATCH` updates: with no ``offset`` those are the
     OLDEST unconfirmed ones, so a newer ``/start`` may not be in it."""
     body, code, err = _http_json(
-        f"https://api.telegram.org/bot{token}/getUpdates"
+        telegram_endpoint.method_url(token, "getUpdates")
     )
     if not body or not body.get("ok"):
         return None, 0, code, err, False
@@ -355,7 +356,7 @@ def _fetch_id_from_updates(
     if want not in _WANTS:
         raise ValueError(f"unknown auto-detect target: {want!r}")
     body, code, _err = _http_json(
-        f"https://api.telegram.org/bot{token}/getUpdates"
+        telegram_endpoint.method_url(token, "getUpdates")
     )
     if code == 409:
         return None, None, UPDATES_CONFLICT_ADVISORY

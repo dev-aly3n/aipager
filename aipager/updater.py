@@ -228,20 +228,24 @@ def _remove_tmp_sockets() -> None:
     and updater is reachable from cold CLI paths that must not pay that
     cost just to print a help string.
     """
+    from aipager import instance
     from aipager.config import SOCKET_PATH
 
     _unlink_quietly(Path(SOCKET_PATH))
-    if str(SOCKET_PATH) != "/tmp/aipager.sock":
+    runtime_dir = instance.runtime_tmp_dir()
+    # The legacy /tmp socket belongs to the normal install only; an
+    # isolated instance must never touch another daemon's files.
+    if instance.instance_dir() is None and str(SOCKET_PATH) != "/tmp/aipager.sock":
         # Runs on every uninstall where the socket has moved (i.e. any
         # host with $XDG_RUNTIME_DIR set), not only when a genuine
         # pre-move leftover exists — it is a no-op when there is none.
         _unlink_quietly(Path("/tmp/aipager.sock"))
-    for p in Path("/tmp").glob("claude-dtach-*.sock"):
+    for p in Path(runtime_dir).glob("claude-dtach-*.sock"):
         try:
             p.unlink()
         except OSError:
             pass
-    for p in Path("/tmp").glob("claude-status-*.json"):
+    for p in Path(runtime_dir).glob("claude-status-*.json"):
         try:
             p.unlink()
         except OSError:

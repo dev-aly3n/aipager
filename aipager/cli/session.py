@@ -77,7 +77,9 @@ def _session_kill(args: argparse.Namespace) -> int:
     session = name if name.startswith("claude-") else f"claude-{name}"
 
     from pathlib import Path
-    sock = Path(f"/tmp/claude-dtach-{name.removeprefix('claude-')}.sock")
+
+    from aipager import instance
+    sock = Path(f"{instance.dtach_sock_prefix()}{name.removeprefix('claude-')}.sock")
     if not sock.exists():
         from aipager.errors import friendly_error
         friendly_error(

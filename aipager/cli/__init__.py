@@ -362,7 +362,15 @@ def main() -> None:
     if args.cmd == "miniapp" and not getattr(args, "miniapp_cmd", None):
         miniapp_p.print_help()
         sys.exit(0)
-    sys.exit(args.fn(args))
+    from aipager.telegram_endpoint import TelegramApiBaseError
+    try:
+        rc = args.fn(args)
+    except TelegramApiBaseError as e:
+        # A bad AIPAGER_TELEGRAM_API_BASE reached a wizard / doctor call.
+        from aipager.errors import friendly_error
+        friendly_error(*e.lines())
+        sys.exit(2)
+    sys.exit(rc)
 
 
 if __name__ == "__main__":

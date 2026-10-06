@@ -21,7 +21,7 @@ import threading
 import time
 from pathlib import Path
 
-from aipager import daemon_secrets
+from aipager import daemon_secrets, instance
 from aipager.dtach import redraw as _dtach_redraw
 from aipager.dtach.inject import _RESERVED, normalize_session_name
 from aipager.errors import friendly_error, friendly_warn
@@ -296,7 +296,7 @@ def _resolve_launch_name(name: str) -> str:
     dead socket about to be cleaned up — gets the canonical spelling.
     """
     raw = name.strip()
-    sock = f"/tmp/claude-dtach-{raw}.sock"
+    sock = f"{instance.dtach_sock_prefix()}{raw}.sock"
     if Path(sock).exists():
         if _socket_alive(sock):
             return raw
@@ -350,7 +350,7 @@ def launch(name: str, claude_args: list[str] | None = None,
 
     claude_args = list(claude_args) if claude_args else []
     session = f"claude-{name}"
-    sock = f"/tmp/claude-dtach-{name}.sock"
+    sock = f"{instance.dtach_sock_prefix()}{name}.sock"
 
     dtach = _resolve_dtach()
     if not dtach:

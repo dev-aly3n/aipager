@@ -15,6 +15,7 @@ import logging
 
 from telegram import Bot
 
+from aipager import telegram_endpoint
 from aipager.bot.transport import document_upload
 
 log = logging.getLogger(__name__)
@@ -36,7 +37,11 @@ class ObserverBroadcaster:
         """Initialize all telegram.Bot instances."""
         for token, chat_id in self._config:
             try:
-                bot = Bot(token=token)
+                bot = Bot(
+                    token=token,
+                    base_url=telegram_endpoint.ptb_base_url(),
+                    base_file_url=telegram_endpoint.ptb_base_file_url(),
+                )
                 await bot.initialize()
                 self._bots.append((bot, chat_id))
                 log.info("Observer bot initialized for chat_id=%s", chat_id)

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import questionary
 
+from aipager import telegram_endpoint
 from aipager.errors import friendly_warn
 from aipager.team import is_shared_sender_id
 from aipager.ui import console, err_console, hint, ok
@@ -125,7 +126,7 @@ def _resolve_user(
     # Path 1: getChat. Works for numeric ids the bot has seen, and
     # for @handles tied to private users when Telegram permits.
     body, _code, _err = _http_json(
-        f"https://api.telegram.org/bot{token}/getChat?chat_id={chat_id}"
+        f"{telegram_endpoint.method_url(token, 'getChat')}?chat_id={chat_id}"
     )
     if body and body.get("ok"):
         result = body.get("result") or {}
@@ -151,7 +152,7 @@ def _resolve_user(
 
     # Path 2: scan getUpdates for a from.username match (lowercased).
     body, _code, _err = _http_json(
-        f"https://api.telegram.org/bot{token}/getUpdates"
+        telegram_endpoint.method_url(token, "getUpdates")
     )
     if not body or not body.get("ok"):
         return None

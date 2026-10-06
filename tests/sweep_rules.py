@@ -112,6 +112,13 @@ BOT_RECEIVERS: frozenset = frozenset({
 #: ``rich_message.py`` is the one IN-daemon URL builder and is handled by
 #: name below. Keep this list minimal: each entry is a path the R1 gate
 #: does not cover.
+#:
+#: Since AIPAGER_TELEGRAM_API_BASE, the host itself is spelled only in
+#: ``telegram_endpoint.py`` (the resolver every URL is built from), and
+#: every caller builds through its URL functions instead. So the sweep
+#: polices BOTH: the host string, and a call of a URL function
+#: (:data:`URL_FUNCTIONS`) outside these files, ``rich_message.py`` and
+#: ``lifecycle.py`` (the app's own limiter-bound bot).
 URL_ALLOWLIST: set[str] = {
     "observer.py", "doctor.py", "daemon.py",
     "team_setup.py", "telegram_api.py",
@@ -119,6 +126,15 @@ URL_ALLOWLIST: set[str] = {
 
 #: The in-daemon URL builder, allowed to name the host exactly once.
 URL_BUILDER = "rich_message.py"
+
+#: The resolver: names the default host, builds every URL.
+URL_RESOLVER = "telegram_endpoint.py"
+
+#: The resolver's URL builders. ``lifecycle.py`` may use them for the
+#: app's PTB base URLs: every call through that bot passes the limiter.
+URL_FUNCTIONS = frozenset({"method_url", "ptb_base_url", "ptb_base_file_url",
+                           "api_base"})
+URL_FUNCTION_USERS = frozenset({"lifecycle.py"})
 
 #: Exception names that tolerate the gate's refusal.
 _TOLERANT = {"FloodMuted", "Exception", "BaseException",
@@ -174,7 +190,8 @@ def gated_family_offenders(filename: str, source: str) -> list[str]:
 
 
 def telegram_url_offenders(filename: str, source: str) -> list[str]:
-    """``api.telegram.org`` in any string constant or f-string.
+    """``api.telegram.org`` in any string constant or f-string, or a use
+    of a ``telegram_endpoint`` URL function (:data:`URL_FUNCTIONS`).
 
     Docstrings are skipped — the first statement of a Module, ClassDef,
     FunctionDef or AsyncFunctionDef — which is what keeps ``errors.py``'s
@@ -182,11 +199,21 @@ def telegram_url_offenders(filename: str, source: str) -> list[str]:
     still fails it.
     """
     base = _basename(filename)
-    if base in URL_ALLOWLIST or base == URL_BUILDER:
+    if base in URL_ALLOWLIST or base in (URL_BUILDER, URL_RESOLVER):
         return []
     tree = _parse(filename, source)
     if tree is None:
         return []
+    offenders = []
+    if base not in URL_FUNCTION_USERS:
+        for node in ast.walk(tree):
+            name = None
+            if isinstance(node, ast.Attribute) and node.attr in URL_FUNCTIONS:
+                name = node.attr
+            elif isinstance(node, ast.alias) and node.name in URL_FUNCTIONS:
+                name = node.name
+            if name is not None:
+                offenders.append(f"{base}:{getattr(node, 'lineno', 0)} {name}")
     skip = set()
     for node in ast.walk(tree):
         if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
@@ -196,7 +223,6 @@ def telegram_url_offenders(filename: str, source: str) -> list[str]:
                     and isinstance(body[0].value, ast.Constant)
                     and isinstance(body[0].value.value, str)):
                 skip.add(id(body[0].value))
-    offenders = []
     for node in ast.walk(tree):
         if (isinstance(node, ast.Constant) and isinstance(node.value, str)
                 and id(node) not in skip

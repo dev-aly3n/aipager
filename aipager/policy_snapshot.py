@@ -18,13 +18,13 @@ import secrets
 import time
 from pathlib import Path
 
-from aipager import safety
+from aipager import instance, safety
 
 log = logging.getLogger(__name__)
 
 
 def snapshot_path(session_name: str) -> Path:
-    return Path(f"/tmp/claude-policy-{session_name}.json")
+    return Path(instance.runtime_tmp_dir()) / f"claude-policy-{session_name}.json"
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ def notes_dir(session_name: str) -> Path:
     A plain function, like :func:`snapshot_path` — tests monkeypatch this
     name to redirect writes to ``tmp_path`` rather than real ``/tmp``.
     """
-    return Path(f"/tmp/claude-notes-{session_name}")
+    return Path(instance.runtime_tmp_dir()) / f"claude-notes-{session_name}"
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +217,7 @@ def floor_path() -> Path:
     two users' daemons on one host never share it (each hook ignores a
     file it does not own). A plain function, like :func:`snapshot_path`,
     so tests can redirect it."""
-    return Path(f"/tmp/claude-policy-.floor-{_own_uid()}.json")
+    return Path(instance.runtime_tmp_dir()) / f"claude-policy-.floor-{_own_uid()}.json"
 
 
 def _with_builtins(base, extra) -> tuple[str, ...]:
@@ -1503,7 +1503,7 @@ def clear_snapshot(session_name: str) -> None:
 
 
 def reply_context_path(session_name: str) -> Path:
-    return Path(f"/tmp/claude-reply-{session_name}.txt")
+    return Path(instance.runtime_tmp_dir()) / f"claude-reply-{session_name}.txt"
 
 
 def write_reply_context_file(session_name: str, header: str, full_text: str) -> None:

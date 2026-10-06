@@ -282,8 +282,10 @@ def test_scan_stale_busy_fires_when_compact_exceeds_inflight_cap(steady_clock, m
 # ---- _scan: stale_busy suppressed by recent statusLine heartbeat --------
 
 def _statusline_path(name):
-    from pathlib import Path
-    return Path(f"/tmp/claude-status-{name}.json")
+    # The monitor reads through statusline_file (whose STATUS_DIR the
+    # conftest points at a tmp dir), so the test file goes there too.
+    from aipager import statusline_file
+    return statusline_file.status_file_path(name)
 
 
 def test_scan_stale_busy_suppressed_by_recent_statusline(monkeypatch,

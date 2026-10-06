@@ -32,6 +32,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from aipager import telegram_endpoint
+
 log = logging.getLogger(__name__)
 
 OK = "ok"
@@ -117,7 +119,11 @@ def check_token_valid() -> CheckResult:
         return CheckResult(FAIL, "Telegram bot token",
                            detail=["no token configured"],
                            fix="aipager config")
-    body, err = _http_json(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe")
+    bad_base = telegram_endpoint.check()
+    if bad_base:
+        return CheckResult(FAIL, "Telegram bot token", detail=bad_base,
+                           fix=f"unset {telegram_endpoint.BASE_ENV}")
+    body, err = _http_json(telegram_endpoint.method_url(BOT_TOKEN, "getMe"))
     if err:
         if "401" in err:
             return CheckResult(FAIL, "Telegram bot token",
@@ -142,8 +148,12 @@ def check_chat_reachable() -> CheckResult:
         return CheckResult(FAIL, "Telegram chat",
                            detail=["bot token or chat id missing"],
                            fix="aipager config")
+    bad_base = telegram_endpoint.check()
+    if bad_base:
+        return CheckResult(FAIL, "Telegram chat", detail=bad_base,
+                           fix=f"unset {telegram_endpoint.BASE_ENV}")
     body, err = _http_json(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/getChat?chat_id={CHAT_ID}"
+        f"{telegram_endpoint.method_url(BOT_TOKEN, 'getChat')}?chat_id={CHAT_ID}"
     )
     if err:
         if "chat not found" in err.lower():

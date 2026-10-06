@@ -149,6 +149,7 @@ def _telegram_preflight() -> str:
     username. Exits with code 2 (misconfiguration) on user-fixable failures
     so wrappers can distinguish setup problems from crashes.
     """
+    from aipager import telegram_endpoint
     from aipager.config import BOT_TOKEN, CHAT_ID
     from aipager.errors import friendly_error, redact_token
 
@@ -169,7 +170,7 @@ def _telegram_preflight() -> str:
         except (OSError, json.JSONDecodeError) as e:
             return None, None, redact_token(str(e))
 
-    body, code, err = _call(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe")
+    body, code, err = _call(telegram_endpoint.method_url(BOT_TOKEN, "getMe"))
     if code == 401:
         friendly_error(
             "Telegram rejected the bot token (HTTP 401).",
@@ -199,7 +200,7 @@ def _telegram_preflight() -> str:
     username = body["result"].get("username", "")
 
     body, code, err = _call(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/getChat?chat_id={CHAT_ID}"
+        f"{telegram_endpoint.method_url(BOT_TOKEN, 'getChat')}?chat_id={CHAT_ID}"
     )
     if err and "chat not found" in err.lower():
         friendly_error(
@@ -521,6 +522,19 @@ async def _shutdown_updates(bot) -> None:
 
 
 def _cmd_start(args: argparse.Namespace) -> int:
+    from aipager import instance, telegram_endpoint
+    from aipager.errors import friendly_error
+    # Isolated-instance and API-base checks come FIRST: before reading
+    # config, migrating, locking or touching the network, so a mistyped
+    # setting cannot write into the real home or send the token anywhere.
+    problems = instance.start_check()
+    if problems:
+        friendly_error(*problems)
+        sys.exit(2)
+    problems = telegram_endpoint.check()
+    if problems:
+        friendly_error(*problems)
+        sys.exit(2)
     from aipager.preflight import require_config
     require_config()
     logging.basicConfig(

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import argparse
 
+from aipager import instance
+
 _RESUME_PAGE_SIZE = 10
 
 
@@ -121,7 +123,7 @@ def _resume_one(label: str, *, force_auto: bool = False) -> int:
             )
             return 1
         live_label = live_sd["name"].removeprefix("claude-") if live_sd else label
-        sock = Path(f"/tmp/claude-dtach-{live_label}.sock")
+        sock = Path(f"{instance.dtach_sock_prefix()}{live_label}.sock")
         if sock.is_socket():
             friendly_error(
                 f"session {live_label!r} is already running.",
@@ -139,7 +141,7 @@ def _resume_one(label: str, *, force_auto: bool = False) -> int:
     # Everything downstream keys off the resolved name, never the raw input:
     # the socket and the label dtach launches under both carry the scope suffix.
     full_label = sd["name"].removeprefix("claude-")
-    sock = Path(f"/tmp/claude-dtach-{full_label}.sock")
+    sock = Path(f"{instance.dtach_sock_prefix()}{full_label}.sock")
 
     if sock.is_socket():
         friendly_error(

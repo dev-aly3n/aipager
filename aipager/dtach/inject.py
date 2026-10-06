@@ -2,7 +2,9 @@
 
 Uses `dtach -p <socket>` to send raw bytes to the session's PTY via stdin.
 
-Socket naming: session "claude-dev" → /tmp/claude-dtach-dev.sock
+Socket naming: session "claude-dev" → /tmp/claude-dtach-dev.sock (under
+$AIPAGER_INSTANCE_DIR instead of /tmp for an isolated instance, see
+aipager.instance).
 """
 
 import asyncio
@@ -16,7 +18,7 @@ import signal
 import time
 from pathlib import Path
 
-from aipager import claude_resolve, daemon_secrets
+from aipager import claude_resolve, daemon_secrets, instance
 
 log = logging.getLogger(__name__)
 
@@ -185,7 +187,8 @@ def _stash_expired_credentials_file() -> Path | None:
         return None
 
 
-SOCK_PREFIX = "/tmp/claude-dtach-"
+# Computed once at import (the daemon env is fixed for its lifetime).
+SOCK_PREFIX = instance.dtach_sock_prefix()
 
 
 def _resolve_dtach() -> str:
@@ -248,7 +251,8 @@ async def _run(args: list[str], stdin: bytes = b"",
 
 
 def _sock_path(session: str) -> str:
-    """Convert session name 'claude-dev' to socket path '/tmp/claude-dtach-dev.sock'."""
+    """Convert session name 'claude-dev' to socket path
+    '<SOCK_PREFIX>dev.sock' ('/tmp/claude-dtach-dev.sock' by default)."""
     name = session.removeprefix("claude-")
     return f"{SOCK_PREFIX}{name}.sock"
 
@@ -897,10 +901,12 @@ async def launch_session(
 async def list_sessions() -> list[str]:
     """Return names of all active claude-dtach sessions.
 
-    Scans /tmp for claude-dtach-*.sock files that are Unix sockets.
+    Scans the runtime folder (``/tmp``, or the instance folder; see
+    :func:`aipager.instance.runtime_tmp_dir`) for claude-dtach-*.sock
+    files that are Unix sockets.
     """
     results = []
-    for sock_file in Path("/tmp").glob("claude-dtach-*.sock"):
+    for sock_file in Path(instance.runtime_tmp_dir()).glob("claude-dtach-*.sock"):
         if not sock_file.is_socket():
             continue
         name = "claude-" + sock_file.stem.removeprefix("claude-dtach-")

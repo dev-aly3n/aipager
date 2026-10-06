@@ -17,6 +17,8 @@ import os
 import re
 import sys
 
+from aipager import instance as _instance
+
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -45,7 +47,11 @@ DENY_PATHS_NO_ACCESS: tuple[str, ...] = (
     "/tmp/claude-status-*",
     "/tmp/claude-reply-*",
     "/tmp/claude-dtach-*",
-)
+    # The same five under an isolated instance's folder
+    # (AIPAGER_INSTANCE_DIR), where those files live instead; empty for
+    # a normal install. Computed at import with the process env, which
+    # the daemon and its hooks share, so their floor lists agree.
+) + _instance.protected_globs()
 
 # ---------------------------------------------------------------------------
 # Credential files (roadmap 8.79): keys, tokens and passwords other

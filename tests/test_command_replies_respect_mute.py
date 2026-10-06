@@ -872,6 +872,20 @@ def test_the_url_sweep_allows_the_builder_and_the_out_of_process_callers():
         assert telegram_url_offenders(f"aipager/{name}", src) == [], name
 
 
+def test_the_url_sweep_names_a_url_built_through_the_resolver():
+    """Since AIPAGER_TELEGRAM_API_BASE the host lives in telegram_endpoint;
+    building a URL through it outside the allowlist is the same bypass."""
+    src = ("from aipager import telegram_endpoint\n"
+           "def f(t):\n    return telegram_endpoint.method_url(t, 'getMe')\n")
+    assert telegram_url_offenders("aipager/bot/x.py", src) == ["x.py:3 method_url"]
+    src2 = "from aipager.telegram_endpoint import ptb_base_url\n"
+    assert telegram_url_offenders("aipager/bot/x.py", src2) == ["x.py:1 ptb_base_url"]
+    assert telegram_url_offenders("aipager/bot/rich_message.py", src) == []
+    assert telegram_url_offenders("aipager/bot/lifecycle.py", src) == []
+    assert telegram_url_offenders("aipager/telegram_endpoint.py",
+                                  "BASE = 'https://api.telegram.org'\n") == []
+
+
 @pytest.mark.parametrize("ctor", ["Bot", "ApplicationBuilder"])
 def test_the_constructor_sweep_names_a_second_bot(ctor):
     src = f"def f(t):\n    return {ctor}(token=t)\n"

@@ -2,7 +2,8 @@
 """StatusLine hook for Claude Code → aipager.
 
 Reads statusLine JSON from stdin and does three things on every tick:
-  1. Writes the raw JSON to /tmp/claude-status-<session>.json
+  1. Writes the raw JSON to /tmp/claude-status-<session>.json (or under
+     $AIPAGER_INSTANCE_DIR for an isolated instance)
      (hook_receiver reads this for fresh token counts on hook events)
   2. Sends a compact UDP datagram to the daemon control socket
      (see SOCKET_PATH below) with model/ctx/cost
@@ -21,18 +22,25 @@ import socket
 import sys
 from pathlib import Path
 
-# Same precedence as aipager.config._default_socket_path() — kept
+# Same precedence as aipager.instance.control_socket_path() — kept
 # inlined and stdlib-only, see notify_hook.py's identical comment for why.
+# An isolated instance (AIPAGER_INSTANCE_DIR) wins first.
 # NOTE: bind the *stripped* runtime dir once and use that same value.
 # Reading os.environ["XDG_RUNTIME_DIR"] unstripped while guarding on the
 # stripped copy meant a padded value produced a path the daemon never
 # bound, silently dropping every hook event.
+_INSTANCE_DIR = os.environ.get("AIPAGER_INSTANCE_DIR", "").strip()
+_INSTANCE_DIR = os.path.normpath(_INSTANCE_DIR) if _INSTANCE_DIR else ""
 _XDG_RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR", "").strip()
 SOCKET_PATH = (
-    os.environ.get("AIPAGER_SOCKET_PATH", "").strip()
+    (os.path.join(_INSTANCE_DIR, "aipager.sock") if _INSTANCE_DIR else "")
+    or os.environ.get("AIPAGER_SOCKET_PATH", "").strip()
     or (os.path.join(_XDG_RUNTIME_DIR, "aipager.sock") if _XDG_RUNTIME_DIR else "")
     or "/tmp/aipager.sock"
 )
+# Where the per-session status file goes: aipager.instance.runtime_tmp_dir(),
+# inlined (aipager.statusline_file.status_file_path reads the same place).
+_STATUS_DIR = _INSTANCE_DIR or "/tmp"
 
 # Address-space cap for the statusline subprocess. Mirrors notify_hook:
 # baseline ~34 MB, 1 GB gives ~30× headroom over realistic legitimate
@@ -91,10 +99,11 @@ def _run(session: str) -> None:
     raw = sys.stdin.read()
 
     if raw.strip() and session:
+        status_file = Path(_STATUS_DIR) / f"claude-status-{session}.json"
         try:
-            Path(f"/tmp/claude-status-{session}.json").write_text(raw)
+            status_file.write_text(raw)
         except OSError as e:
-            _debug(f"could not write /tmp/claude-status-{session}.json: {e}")
+            _debug(f"could not write {status_file}: {e}")
 
         try:
             data = json.loads(raw)

@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 
+from aipager import instance as _instance
+
 _XDG_CONFIG = Path.home() / ".config" / "aipager" / "config.env"
 _PROJECT_DOTENV = Path(__file__).parent.parent / ".env"
 
@@ -14,8 +16,14 @@ def _load_env_file() -> None:
     Source priority (first existing file wins):
       1. ~/.config/aipager/config.env (XDG, written by `aipager config`)
       2. <project-root>/.env (legacy / development checkouts)
+
+    An isolated instance (``AIPAGER_INSTANCE_DIR``) reads only the first:
+    a checkout's ``.env`` belongs to the operator's own install, and its
+    chat id or token must never leak into a test instance.
     """
-    for candidate in (_XDG_CONFIG, _PROJECT_DOTENV):
+    candidates = (_XDG_CONFIG,) if _instance.instance_dir() else (
+        _XDG_CONFIG, _PROJECT_DOTENV)
+    for candidate in candidates:
         if candidate.exists():
             for line in candidate.read_text().splitlines():
                 line = line.strip()
@@ -237,20 +245,16 @@ TUNNEL_KILL_TIMEOUT_SECONDS: float = float(
 def _default_socket_path() -> str:
     """Resolve the control socket path.
 
+    A thin delegate to :func:`aipager.instance.control_socket_path`:
+    ``$AIPAGER_INSTANCE_DIR/aipager.sock`` for an isolated instance; else
     ``$AIPAGER_SOCKET_PATH`` wins outright; else
     ``$XDG_RUNTIME_DIR/aipager.sock`` (what the systemd unit's ``%t/``
     expands to); else ``/tmp/aipager.sock`` (containers, WSL1, minimal
     distros, and every platform without a runtime dir). Only the
     daemon's control socket moves this way — per-session dtach sockets
-    stay under ``/tmp``.
+    stay under ``/tmp`` unless an instance folder is set.
     """
-    override = os.environ.get("AIPAGER_SOCKET_PATH", "").strip()
-    if override:
-        return override
-    runtime_dir = os.environ.get("XDG_RUNTIME_DIR", "").strip()
-    if runtime_dir:
-        return str(Path(runtime_dir) / "aipager.sock")
-    return "/tmp/aipager.sock"
+    return _instance.control_socket_path()
 
 
 # Unix datagram socket for hook → daemon communication
@@ -956,4 +960,4 @@ KEYBOARD_PARENTS: dict[str, str] = {
 }
 
 # Directory for files downloaded from Telegram (photos, documents)
-FILE_DOWNLOAD_DIR = Path("/tmp/aipager-files")
+FILE_DOWNLOAD_DIR = Path(_instance.file_download_dir())

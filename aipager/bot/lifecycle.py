@@ -33,6 +33,7 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest, ChatMigrated, Forbidden, RetryAfter
 
+from aipager import telegram_endpoint
 from aipager.dtach import inject
 
 from aipager.bot import (
@@ -377,7 +378,14 @@ class LifecycleMixin:
         exactly the shape that let a missing rate limiter pass a test
         named after it.
         """
-        builder = ApplicationBuilder().token(BOT_TOKEN)
+        # The Bot API base: PTB's own defaults unless
+        # AIPAGER_TELEGRAM_API_BASE names a (loopback) test server.
+        builder = (
+            ApplicationBuilder()
+            .token(BOT_TOKEN)
+            .base_url(telegram_endpoint.ptb_base_url())
+            .base_file_url(telegram_endpoint.ptb_base_file_url())
+        )
 
         # Long-poll config: timeout=30 means Telegram holds the connection
         # for up to 30s waiting for updates → instant response to taps.

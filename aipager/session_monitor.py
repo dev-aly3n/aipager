@@ -13,8 +13,8 @@ import asyncio
 import logging
 import os
 import time
-from pathlib import Path
 
+from aipager import statusline_file
 from aipager.dtach import inject as dtach_inject
 from aipager.config import (
     COMPACT_INFLIGHT_MAX_SECONDS,
@@ -1081,7 +1081,7 @@ class SessionMonitor:
                 # session is doing something even if no aipager-tracked
                 # hook has fired. mtime is walltime, so compare via
                 # time.time() (not the monotonic `now` above).
-                statusline_path = Path(f"/tmp/claude-status-{name}.json")
+                statusline_path = statusline_file.status_file_path(name)
                 try:
                     sl_age = time.time() - statusline_path.stat().st_mtime
                     if sl_age < STATUSLINE_ALIVE_SECONDS:

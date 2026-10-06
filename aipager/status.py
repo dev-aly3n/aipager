@@ -6,7 +6,7 @@ files written by the daemon and Claude Code's statusLine hook:
 - `$XDG_RUNTIME_DIR/aipager.sock`  daemon liveness probe (see config.SOCKET_PATH)
 - `$XDG_RUNTIME_DIR/aipager-flood-mute.json`  chats the daemon is
   flood-muting (see config.FLOOD_MUTE_FILE, bot/flood.py)
-- `/tmp/claude-dtach-*.sock`   live dtach sessions
+- `/tmp/claude-dtach-*.sock`   live dtach sessions (instance folder if set)
 - `~/.claude/aipager-sessions.json`  persisted session state
 - `/tmp/claude-status-claude-{label}.json`  live per-session stats
 
@@ -26,7 +26,7 @@ import socket
 import time
 from pathlib import Path
 
-from aipager import statusline_file
+from aipager import instance, statusline_file
 from aipager.config import BOT_TOKEN, CHAT_ID, SESSION_STATE_FILE, SOCKET_PATH
 from aipager.flood_policy import (
     bans_within,
@@ -55,7 +55,7 @@ def _read_statusline(session_name: str) -> dict:
 def _live_sessions() -> set[str]:
     """Names (``claude-<label>``) of dtach sessions with a live socket file."""
     out: set[str] = set()
-    for sock in Path("/tmp").glob("claude-dtach-*.sock"):
+    for sock in Path(instance.runtime_tmp_dir()).glob("claude-dtach-*.sock"):
         name = "claude-" + sock.stem.removeprefix("claude-dtach-")
         out.add(name)
     return out

@@ -45,7 +45,25 @@ CASES = [
     ),
     ({"AIPAGER_SOCKET_PATH": "  /x/y.sock  "}, "override-padded"),
     ({"AIPAGER_SOCKET_PATH": "   ", "XDG_RUNTIME_DIR": "/run/user/1000"}, "override-blank-falls-through"),
+    # Isolated instance (aipager.instance): its folder wins over both.
+    ({"AIPAGER_INSTANCE_DIR": "/srv/apg/i"}, "instance-only"),
+    ({"AIPAGER_INSTANCE_DIR": "  /srv/apg/i  "}, "instance-padded"),
+    ({"AIPAGER_INSTANCE_DIR": "/srv/apg/i/"}, "instance-trailing-slash"),
+    (
+        {"AIPAGER_INSTANCE_DIR": "/srv/apg/i", "AIPAGER_SOCKET_PATH": "/x/y.sock"},
+        "instance-beats-override",
+    ),
+    (
+        {"AIPAGER_INSTANCE_DIR": "/srv/apg/i", "XDG_RUNTIME_DIR": "/run/user/1000"},
+        "instance-beats-xdg",
+    ),
+    (
+        {"AIPAGER_INSTANCE_DIR": "   ", "XDG_RUNTIME_DIR": "/run/user/1000"},
+        "instance-blank-falls-through",
+    ),
 ]
+
+ENV_KEYS = ("AIPAGER_INSTANCE_DIR", "AIPAGER_SOCKET_PATH", "XDG_RUNTIME_DIR")
 
 
 @pytest.fixture
@@ -60,8 +78,8 @@ def reload_hooks(monkeypatch):
     reloaded: list[str] = []
 
     def _load(modname: str, env: dict):
-        monkeypatch.delenv("AIPAGER_SOCKET_PATH", raising=False)
-        monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
+        for key in ENV_KEYS:
+            monkeypatch.delenv(key, raising=False)
         for key, value in env.items():
             monkeypatch.setenv(key, value)
         mod = importlib.import_module(modname)
@@ -78,7 +96,7 @@ def reload_hooks(monkeypatch):
 @pytest.mark.parametrize("modname", HOOK_MODULES)
 @pytest.mark.parametrize("env,case_id", CASES, ids=[c[1] for c in CASES])
 def test_hook_socket_path_matches_config(modname, env, case_id, monkeypatch, reload_hooks):
-    for key in ("AIPAGER_SOCKET_PATH", "XDG_RUNTIME_DIR"):
+    for key in ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
     for key, value in env.items():
         monkeypatch.setenv(key, value)
@@ -100,3 +118,79 @@ def test_both_hooks_agree_with_each_other(reload_hooks):
     env = {"XDG_RUNTIME_DIR": "  /run/user/1000  "}
     paths = {name: reload_hooks(name, env).SOCKET_PATH for name in HOOK_MODULES}
     assert len(set(paths.values())) == 1, f"hook copies diverged: {paths}"
+
+
+def test_instance_case_resolves_inside_the_instance(reload_hooks):
+    """The agreement test above would pass if all three copies ignored
+    the instance folder together; pin the actual value once."""
+    env = {"AIPAGER_INSTANCE_DIR": " /srv/apg/i/ ", "AIPAGER_SOCKET_PATH": "/x/y.sock"}
+    for name in HOOK_MODULES:
+        assert reload_hooks(name, env).SOCKET_PATH == "/srv/apg/i/aipager.sock"
+
+
+# ---------------------------------------------------------------------------
+# The status-line file: one writer (aipager-statusline), two readers
+# (aipager-hook and aipager.statusline_file). All three must agree on the
+# folder, or token counts silently stop reaching the card.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def status_env(monkeypatch, tmp_path, reload_hooks):
+    """Reload statusline_file and both hooks under an env; restore after."""
+    from aipager import statusline_file
+
+    def _load(env: dict):
+        mods = {name: reload_hooks(name, env) for name in HOOK_MODULES}
+        importlib.reload(statusline_file)
+        return mods
+
+    yield _load
+    monkeypatch.undo()
+    importlib.reload(statusline_file)
+
+
+@pytest.mark.parametrize("use_instance", [True, False], ids=["instance", "unset"])
+def test_status_file_writer_and_readers_agree(use_instance, status_env, tmp_path,
+                                              monkeypatch):
+    import io
+    import os
+
+    from aipager import statusline_file
+
+    # A path nobody listens on, so the writer's datagram reaches no daemon.
+    env = {"AIPAGER_SOCKET_PATH": str(tmp_path / "sink.sock")}
+    if use_instance:
+        env["AIPAGER_INSTANCE_DIR"] = str(tmp_path)
+    mods = status_env(env)
+    if not use_instance:
+        # Unset: the folder is the real /tmp; check the rule without
+        # writing there.
+        assert statusline_file.STATUS_DIR == "/tmp"
+        for mod in mods.values():
+            assert mod._STATUS_DIR == "/tmp"
+        return
+
+    session = f"claude-statusagree{os.getpid()}"
+    expected = statusline_file.status_file_path(session)
+    assert expected.parent == tmp_path
+    stray = f"/tmp/claude-status-{session}.json"
+    try:
+        writer = mods["aipager.dtach.statusline_notify"]
+        payload = (
+            '{"context_window": {"used_percentage": 42, "total_output_tokens": 7},'
+            ' "cost": {"total_lines_added": 3}}'
+        )
+        monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+        monkeypatch.setattr("sys.stdout", io.StringIO())
+        writer._run(session)
+        assert expected.exists(), "aipager-statusline wrote somewhere else"
+
+        reader = mods["aipager.dtach.notify_hook"]
+        tokens = reader._read_statusline_tokens(session)
+        assert tokens is not None, "aipager-hook read somewhere else"
+        assert tokens["context_pct"] == 42
+        assert statusline_file.read_raw(session)["context_window"]["used_percentage"] == 42
+    finally:
+        # Only a regressed writer could have put a file here.
+        if os.path.exists(stray):
+            os.unlink(stray)

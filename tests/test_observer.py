@@ -19,8 +19,9 @@ def fake_bot_cls(monkeypatch):
     instances = []
 
     class _FakeBot:
-        def __init__(self, token):
+        def __init__(self, token, **kwargs):
             self.token = token
+            self.kwargs = kwargs
             self.initialize = AsyncMock()
             self.shutdown = AsyncMock()
             self.send_message = AsyncMock()

@@ -21,12 +21,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from aipager import instance
 from aipager.state import Status
 
 if TYPE_CHECKING:
     from aipager.state import TrackedSession
 
-STATUS_DIR = "/tmp"
+#: ``/tmp``, or the instance folder (:func:`aipager.instance.runtime_tmp_dir`).
+#: The writer, ``dtach/statusline_notify.py``, inlines the same rule.
+STATUS_DIR = instance.runtime_tmp_dir()
 
 
 def status_file_path(session_name: str) -> Path:

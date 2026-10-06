@@ -142,6 +142,34 @@ The daemon writes nothing outside `~/.config/aipager`, `~/.claude/`,
 and its control socket. It never elevates — see
 [security](security.md#privilege-boundary).
 
+### Isolated instance (for testing)
+
+Set `AIPAGER_INSTANCE_DIR` to an absolute folder you own and every
+shared runtime file above moves into it: the control socket (and the
+reply sockets, flood signal files and model-switch marker beside it),
+the `claude-dtach-*` sockets, the `claude-policy-*`, `claude-notes-*`,
+`claude-status-*` and `claude-reply-*` files, the policy floor file,
+the `aipager-files` download folder and the self-restart log. Sessions
+the instance starts inherit the setting, so their hooks talk only to
+that instance, and the safety rules protect the moved files the same
+way. The instance does not read a checkout's `.env`.
+
+The files under your home folder do not move, so point `HOME` at a
+separate folder too. `aipager start` refuses to run when the instance
+folder is set and `HOME` is your real home folder, when the folder is
+not an absolute path to a folder you own, or when it is too long for a
+socket path.
+
+`AIPAGER_TELEGRAM_API_BASE` (for example `http://127.0.0.1:41234`)
+sends every Bot API request and file download to that address instead
+of `https://api.telegram.org`. It must be this machine (`localhost` or
+a loopback address) unless `AIPAGER_TELEGRAM_API_ALLOW_REMOTE=1`, so a
+typo cannot send the bot token anywhere else.
+
+Both settings exist so the end-to-end tests can run a second daemon
+against a local stand-in for Telegram beside your real one. With
+neither set, every path and address is the one in the table above.
+
 ## Why dtach
 
 dtach gives each Claude Code session a real PTY without binding it
