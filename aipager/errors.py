@@ -191,3 +191,15 @@ def redact_token(text: str) -> str:
     """
     return _TOKEN_IN_URL.sub(r"bot\1:<redacted>", text)
 
+
+
+_BARE_TOKEN = re.compile(r"\d{6,12}:[A-Za-z0-9_-]{20,80}")
+
+
+def redact_bare_token(text: str) -> str:
+    """:func:`redact_token`, plus any bare token-shaped string
+    (``<bot id>:<secret>`` with no ``bot`` prefix) replaced by
+    ``<redacted>``. For text that may echo what a person typed, such as
+    an argparse error quoting an argument, where a token can appear on
+    its own rather than inside a Telegram URL."""
+    return _BARE_TOKEN.sub("<redacted>", redact_token(text))

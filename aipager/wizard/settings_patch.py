@@ -8,6 +8,7 @@ import re
 import shutil
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -19,12 +20,20 @@ from aipager.wizard._constants import (
 )
 
 
-def _step_deps(step_label: str = "[3/5]") -> bool:
-    """Returns True if all required deps are present."""
-    from rich.table import Table
+@dataclass(frozen=True)
+class DepStatus:
+    """One row of the dependency check: ``path`` is ``None`` when missing,
+    and ``fix`` is the command that installs it."""
 
-    step(f"{step_label}  System dependencies")
+    name: str
+    path: str | None
+    fix: str
 
+
+def check_deps() -> list[DepStatus]:
+    """The four things the daemon needs (dtach, claude, both hook
+    scripts), resolved exactly as :func:`_step_deps` shows them. Never
+    prints."""
     dtach_p: str | None = None
     try:
         from dtach_bin import path as _dtach_path
@@ -40,16 +49,25 @@ def _step_deps(step_label: str = "[3/5]") -> bool:
     hook_p = shutil.which(HOOK_CMD)
     statusline_p = shutil.which(STATUSLINE_CMD)
 
-    rows = [
-        ("dtach", dtach_p,
-         "uv tool install --reinstall aipager  # or `brew install dtach`"),
-        ("claude", claude_p,
-         "Install Claude Code: https://docs.anthropic.com/claude/docs/claude-code"),
-        ("aipager-hook", hook_p,
-         "uv tool install --reinstall aipager"),
-        ("aipager-statusline", statusline_p,
-         "uv tool install --reinstall aipager"),
+    return [
+        DepStatus("dtach", dtach_p,
+                  "uv tool install --reinstall aipager  # or `brew install dtach`"),
+        DepStatus("claude", claude_p,
+                  "Install Claude Code: https://docs.anthropic.com/claude/docs/claude-code"),
+        DepStatus("aipager-hook", hook_p,
+                  "uv tool install --reinstall aipager"),
+        DepStatus("aipager-statusline", statusline_p,
+                  "uv tool install --reinstall aipager"),
     ]
+
+
+def _step_deps(step_label: str = "[3/5]") -> bool:
+    """Returns True if all required deps are present."""
+    from rich.table import Table
+
+    step(f"{step_label}  System dependencies")
+
+    rows = [(d.name, d.path, d.fix) for d in check_deps()]
 
     if console.is_terminal:
         t = Table(show_header=False, box=None, pad_edge=False, padding=(0, 2))
@@ -67,7 +85,7 @@ def _step_deps(step_label: str = "[3/5]") -> bool:
             console.print(f"  {mark} {name}  {path or fix}")
 
     # Required for the daemon: dtach + claude + both hook scripts.
-    return bool(dtach_p and claude_p and hook_p and statusline_p)
+    return all(path for _name, path, _fix in rows)
 
 
 def _resolve(cmd: str) -> str:
@@ -279,15 +297,36 @@ def _merge_hooks(settings: dict) -> int:
     return repointed + int(sl_is_ours_but_stale)
 
 
-def _step_settings(step_label: str = "[4/5]") -> None:
-    step(f"{step_label}  Claude Code integration")
+@dataclass(frozen=True)
+class SettingsPlan:
+    """What :func:`apply_settings` would do to ``~/.claude/settings.json``:
+    ``new_text`` is the merged file, ``changed`` whether it differs from
+    ``existing_text`` (always ``True`` for a file that does not exist
+    yet), ``repointed`` how many entries an earlier install left that the
+    merge moves to this one."""
+
+    path: Path
+    exists: bool
+    existing_text: str
+    new_text: str
+    changed: bool
+    repointed: int
+
+
+def plan_settings() -> SettingsPlan:
+    """Read, validate and merge ``settings.json`` in memory. Writes
+    nothing and prints nothing. Raises ``ValueError`` for a file that is
+    not valid JSON or has the wrong shape, ``OSError`` when it cannot be
+    read, with the same messages :func:`_step_settings` shows."""
+    path = CLAUDE_SETTINGS
     settings: dict = {}
     existing_text = ""
-    if CLAUDE_SETTINGS.exists():
+    exists = path.exists()
+    if exists:
         try:
-            existing_text = CLAUDE_SETTINGS.read_text()
+            existing_text = path.read_text()
         except OSError as e:
-            raise OSError(f"cannot read {CLAUDE_SETTINGS}: {e}") from e
+            raise OSError(f"cannot read {path}: {e}") from e
         try:
             settings = json.loads(existing_text)
         except json.JSONDecodeError as e:
@@ -296,36 +335,65 @@ def _step_settings(step_label: str = "[4/5]") -> None:
                 extra = ("\n     Looks like the file has // or /* */ comments. "
                          "Claude Code uses strict JSON - strip them.")
             raise ValueError(
-                f"{CLAUDE_SETTINGS} is not valid JSON ({e}).{extra}"
+                f"{path} is not valid JSON ({e}).{extra}"
             ) from e
         try:
             _validate_settings_schema(settings)
         except ValueError as e:
-            raise ValueError(f"{CLAUDE_SETTINGS} schema problem: {e}") from e
-        new_settings = json.loads(existing_text)
-        # Dry run on a copy purely to decide whether anything changed — its
-        # return value is discarded; the real write below reports.
-        _merge_hooks(new_settings)
-        new_text = json.dumps(new_settings, indent=2) + "\n"
-        if new_text == existing_text:
-            ok(f"{CLAUDE_SETTINGS} already up to date")
-            return
-        backup = CLAUDE_SETTINGS.with_name(
-            f"{CLAUDE_SETTINGS.name}.bak.{int(time.time())}"
-        )
-        backup.write_text(existing_text)
-        console.print(f"  [muted]• backed up existing settings → {backup.name}[/muted]")
-    else:
-        CLAUDE_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+            raise ValueError(f"{path} schema problem: {e}") from e
     repointed = _merge_hooks(settings)
+    new_text = json.dumps(settings, indent=2) + "\n"
+    return SettingsPlan(
+        path=path, exists=exists, existing_text=existing_text,
+        new_text=new_text, changed=(not exists or new_text != existing_text),
+        repointed=repointed,
+    )
+
+
+def _backup_settings(plan: SettingsPlan) -> Path | None:
+    """Copy the existing file aside (``settings.json.bak.<epoch>``) before
+    it changes, or make the parent directory for a new one. Returns the
+    backup path, or ``None`` when there was nothing to back up."""
+    if plan.exists:
+        backup = plan.path.with_name(f"{plan.path.name}.bak.{int(time.time())}")
+        backup.write_text(plan.existing_text)
+        return backup
+    plan.path.parent.mkdir(parents=True, exist_ok=True)
+    return None
+
+
+def _write_settings(plan: SettingsPlan) -> None:
+    try:
+        plan.path.write_text(plan.new_text)
+    except OSError as e:
+        raise OSError(f"cannot write {plan.path}: {e}") from e
+
+
+def apply_settings(plan: SettingsPlan) -> str | None:
+    """Carry out *plan* (no-op when nothing changes): back up, then write.
+    Returns the backup's file name, or ``None``. Never prints."""
+    if not plan.changed:
+        return None
+    backup = _backup_settings(plan)
+    _write_settings(plan)
+    return backup.name if backup is not None else None
+
+
+def _step_settings(step_label: str = "[4/5]") -> None:
+    step(f"{step_label}  Claude Code integration")
+    plan = plan_settings()
+    if not plan.changed:
+        ok(f"{plan.path} already up to date")
+        return
+    backup = _backup_settings(plan)
+    if backup is not None:
+        console.print(f"  [muted]• backed up existing settings → {backup.name}[/muted]")
+    repointed = plan.repointed
     if repointed:
         console.print(
             f"  [muted]• repointed {repointed} "
             f"entr{'y' if repointed == 1 else 'ies'} from an earlier "
             f"install[/muted]"
         )
-    try:
-        CLAUDE_SETTINGS.write_text(json.dumps(settings, indent=2) + "\n")
-    except OSError as e:
-        raise OSError(f"cannot write {CLAUDE_SETTINGS}: {e}") from e
-    ok(f"Patched {CLAUDE_SETTINGS} ({len(HOOK_EVENTS)} hooks + statusLine)")
+    _write_settings(plan)
+    ok(f"Patched {plan.path} ({len(HOOK_EVENTS)} hooks + statusLine)")

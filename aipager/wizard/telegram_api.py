@@ -60,41 +60,115 @@ def _explain_http_error(code: int | None, err: str) -> str:
     return err or "unknown error"
 
 
-def _verify_token(token: str) -> dict | None:
+def _get_me(token: str) -> tuple[dict | None, int | None, str]:
+    """``getMe`` without printing: ``(bot_info, http_status, explained)``.
+
+    ``bot_info`` is Telegram's ``result`` on success, else ``None`` and
+    ``explained`` says why (:func:`_explain_http_error`). Shared by the
+    wizard's :func:`_verify_token` and ``aipager setup``."""
     body, code, err = _http_json(
         f"https://api.telegram.org/bot{token}/getMe"
     )
     if body and body.get("ok"):
-        return body["result"]
-    err_console.print(f"  [err]{_explain_http_error(code, err)}[/err]")
+        result = body.get("result")
+        return (result if isinstance(result, dict) else {}), code, ""
+    return None, code, _explain_http_error(code, err)
+
+
+def _verify_token(token: str) -> dict | None:
+    info, _code, explained = _get_me(token)
+    if info is not None:
+        return info
+    err_console.print(f"  [err]{explained}[/err]")
     return None
 
 
-def _test_send(token: str, chat_id: int) -> tuple[bool, str]:
-    """Probe sendMessage — returns (True, "") or (False, error_desc)."""
+#: The wizard's test message (unchanged since before ``aipager setup``).
+WIZARD_TEST_TEXT = "✓ aipager linked to this chat."
+
+
+def _send_message(token: str, chat_id: int, text: str
+                  ) -> tuple[bool, str, int | None]:
+    """POST ``sendMessage``: ``(True, "", status)`` or ``(False,
+    redacted_description, http_status_or_None)``. ``None`` as the status
+    means Telegram was never reached (network, bad response)."""
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     data = urllib.parse.urlencode({
         "chat_id": str(chat_id),
-        "text": "✓ aipager linked to this chat.",
+        "text": text,
     }).encode()
     req = urllib.request.Request(url, data=data, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             result = json.load(r)
+            status = getattr(r, "status", None)
     except urllib.error.HTTPError as e:
         # Same redaction as _http_json: this URL carries the token too.
         try:
             body = json.loads(e.read())
             desc = redact_token(body.get("description", str(e)))
         except Exception:
-            return False, redact_token(str(e))
-        return False, desc + _migrated_hint(body)
+            return False, redact_token(str(e)), e.code
+        return False, desc + _migrated_hint(body), e.code
     except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
-        return False, redact_token(str(e))
+        return False, redact_token(str(e)), None
     if not result.get("ok"):
         return False, (result.get("description", "unknown error")
-                       + _migrated_hint(result))
-    return True, ""
+                       + _migrated_hint(result)), status
+    return True, "", status
+
+
+def _test_send(token: str, chat_id: int) -> tuple[bool, str]:
+    """Probe sendMessage — returns (True, "") or (False, error_desc)."""
+    ok, desc, _code = _send_message(token, chat_id, WIZARD_TEST_TEXT)
+    return ok, desc
+
+
+def _newest_private_chat(
+    token: str, *, not_before: int,
+) -> tuple[dict | None, int, int | None, str]:
+    """ONE read-only ``getUpdates`` (no ``offset``, ``timeout`` or
+    ``limit``: a positive offset would confirm, and so delete, the very
+    ``/start`` the wizard or a later daemon still needs) for the newest
+    private message dated ``not_before`` or later.
+
+    Returns ``(candidate, other_count, http_status, error)``.
+    ``candidate`` is ``{id, first_name, last_name, username, date}`` or
+    ``None``; ``other_count`` counts the other private chats seen in the
+    same window, so a caller can tell a person to double-check."""
+    body, code, err = _http_json(
+        f"https://api.telegram.org/bot{token}/getUpdates"
+    )
+    if not body or not body.get("ok"):
+        return None, 0, code, err
+    best: dict | None = None
+    seen: set[int] = set()
+    for u in body.get("result") or []:
+        if not isinstance(u, dict):
+            continue
+        msg = u.get("message") or u.get("edited_message") or {}
+        if not isinstance(msg, dict):
+            continue
+        chat = msg.get("chat") or {}
+        if not isinstance(chat, dict) or chat.get("type") != "private":
+            continue
+        cid, date = chat.get("id"), msg.get("date")
+        if (not isinstance(cid, int) or isinstance(cid, bool)
+                or not isinstance(date, int) or isinstance(date, bool)):
+            continue
+        if date < not_before:
+            continue
+        seen.add(cid)
+        if best is None or date >= best["date"]:
+            best = {
+                "id": cid,
+                "first_name": chat.get("first_name") or None,
+                "last_name": chat.get("last_name") or None,
+                "username": chat.get("username") or None,
+                "date": date,
+            }
+    others = len(seen - {best["id"]}) if best is not None else 0
+    return best, others, code, ""
 
 
 def _migrated_hint(body) -> str:

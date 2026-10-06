@@ -255,25 +255,37 @@ def _grant_owner_step(chat_id: int, step_label: str = "[3/4]") -> str:
     return "owner" if grant else "admin"
 
 
-def _commit_owner_dm(token: str, chat_id: int, role: str) -> None:
-    """Write the operator's DM scope to ``aipager.yaml`` (token + scope
-    hit disk together — the early-commit resilience guarantee)."""
+def _owner_dm_scope(chat_id: int, role: str):
+    """The operator's own DM scope: one member, the operator, as *role*.
+    The first run and ``aipager setup`` both write exactly this."""
     from aipager.scope import Member, Scope
-    from aipager.wizard.scope_io import commit_scope
 
-    scope = Scope(
+    return Scope(
         chat_id=chat_id, kind="dm", label="owner DM",
         members=(Member(id=chat_id, label="owner", role=role),),
     )
-    commit_scope(scope, token)
+
+
+def _record_owner_grant(chat_id: int) -> None:
+    """Audit an owner grant (best effort: an audit failure never stops
+    the setup that made the grant)."""
+    try:
+        from aipager import audit
+        audit.append(session="(config)", label="owner",
+                     action="grant-owner", user_id=chat_id)
+    except Exception:
+        pass
+
+
+def _commit_owner_dm(token: str, chat_id: int, role: str) -> None:
+    """Write the operator's DM scope to ``aipager.yaml`` (token + scope
+    hit disk together — the early-commit resilience guarantee)."""
+    from aipager.wizard.scope_io import commit_scope
+
+    commit_scope(_owner_dm_scope(chat_id, role), token)
     ok(f"Wrote aipager.yaml - your DM, role {role}.")
     if role == "owner":
-        try:
-            from aipager import audit
-            audit.append(session="(config)", label="owner",
-                         action="grant-owner", user_id=chat_id)
-        except Exception:
-            pass
+        _record_owner_grant(chat_id)
 
 
 def _first_run_flow() -> int:

@@ -231,8 +231,8 @@ def _apply_team_change_hint() -> None:
     when no daemon runs). Use the bare :func:`_restart_hint` for edits a
     reload does not apply (the bot token).
     """
-    problem = _config_problem()
-    if problem is not None:
+    outcome, problem = _live_reload()
+    if outcome == "refused":
         # The daemon would refuse this reload and keep its previous
         # config: never claim the change is live. With no daemon running
         # there is no previous config to keep: say only what is wrong.
@@ -246,7 +246,7 @@ def _apply_team_change_hint() -> None:
                 "is fixed.[/muted]"
             )
         return
-    if _signal_reload():
+    if outcome == "reloaded":
         console.print()
         console.print(
             "[ok]✓[/ok]  Scopes reloaded live "
@@ -254,6 +254,20 @@ def _apply_team_change_hint() -> None:
         )
         return
     _restart_hint()
+
+
+def _live_reload() -> tuple[str, str | None]:
+    """Ask the running daemon to reload the config on disk, without
+    printing. ``("refused", problem)`` when the daemon would refuse it
+    (:func:`_config_problem`; nothing is sent), ``("reloaded", None)``
+    when SIGUSR1 was delivered, ``("not_reloaded", None)`` when no daemon
+    PID could be signalled (none running, or its PID unknown)."""
+    problem = _config_problem()
+    if problem is not None:
+        return "refused", problem
+    if _signal_reload():
+        return "reloaded", None
+    return "not_reloaded", None
 
 
 def _config_problem() -> str | None:

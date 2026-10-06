@@ -703,6 +703,34 @@ _DISPATCH = {
 }
 
 
+def install_service(*, yes: bool) -> int:
+    """Install and start the service for this platform, with no config
+    preflight: the caller has made sure ``aipager.yaml`` loads (``aipager
+    setup`` checks the file on disk, because ``preflight.require_config``
+    reads the import-time ``aipager.config`` snapshot, stale in a process
+    that has just written the config). Returns the installer's exit code,
+    1 on an unsupported platform."""
+    plat = _platform()
+    if plat not in _DISPATCH:
+        friendly_error(
+            f"Unsupported platform: {plat}",
+            "  Run `aipager start` under screen, tmux, or nohup.",
+        )
+        return 1
+    return _DISPATCH[plat]["install"](yes=yes)
+
+
+def unit_path() -> Path | None:
+    """The service unit (Linux) or plist (macOS) path, read at call
+    time; ``None`` on any other platform."""
+    plat = _platform()
+    if plat == "linux":
+        return LINUX_UNIT_PATH
+    if plat == "macos":
+        return MACOS_PLIST_PATH
+    return None
+
+
 def cmd_service(args: argparse.Namespace) -> int:
     plat = _platform()
     if plat not in _DISPATCH:
@@ -722,5 +750,5 @@ def cmd_service(args: argparse.Namespace) -> int:
     if sub == "install":
         from aipager.preflight import require_config
         require_config()
-        return handler(yes=getattr(args, "yes", False))
+        return install_service(yes=getattr(args, "yes", False))
     return handler()
