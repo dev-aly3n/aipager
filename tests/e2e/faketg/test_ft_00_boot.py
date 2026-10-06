@@ -11,9 +11,11 @@ starts in the fresh HOME (real mode) or the stand-in's plumbing works.
 from __future__ import annotations
 
 import re
+import time
 
 from tests.e2e.fake_telegram import instance as fti
 from tests.e2e.faketg import conftest as ftc
+from tests.e2e.faketg import flows
 
 STUCK = "Claude is stuck on a first-run screen in the instance HOME"
 
@@ -52,10 +54,7 @@ def test_claude_boots_in_instance(fresh):
         if inst.claude_mode == "real" and re.search(r"trust", screen, re.I):
             # The folder-trust dialog (test_e2e_live_daemon's fallback):
             # Enter once, then the prompt again.
-            import asyncio
-
-            from aipager.dtach import inject
-            asyncio.run(inject.send_keys(name, "Enter"))
+            inst.send_keys(name, b"\r")
             fake.inject_text(fti.DM_ID, fti.user(fti.ALICE), "Reply with exactly: OK")
             inst.wait_log("[ft0]", "BUSY → IDLE", since=log_since, timeout=120)
         else:
@@ -64,6 +63,13 @@ def test_claude_boots_in_instance(fresh):
     if inst.claude_mode == "standin":
         events = [e["event"] for e in inst.standin_log(name)]
         assert events[:2] == ["start", "prompt"] and "stop" in events
+        # The harness's own typing path (the trust fallback above) reaches
+        # this instance's session, as the daemon's does.
+        n = len(inst.prompts_seen(name))
+        inst.send_keys(name, b"typed in the terminal")
+        time.sleep(0.3)
+        inst.send_keys(name, b"\r")
+        flows.wait_prompt(inst, name, "typed in the terminal", after=n, timeout=30)
 
 
 def test_no_unknown_methods_called(faketg):

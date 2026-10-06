@@ -631,6 +631,15 @@ class TestInstance:
     def release_tools(self, name: str) -> None:
         (self.inst_dir / f"standin-hold-{name}").unlink(missing_ok=True)
 
+    def send_keys(self, name: str, data: bytes) -> None:
+        """Type *data* into this instance's session *name* (``dtach -p`` on
+        the instance socket; never through the test process's own
+        ``aipager.dtach.inject``, whose socket folder is ``/tmp``)."""
+        sock = self.socket_for(name)
+        assert sock.exists() and str(sock).startswith(str(self.inst_dir) + os.sep), sock
+        dtach = shutil.which("dtach") or "/usr/bin/dtach"
+        subprocess.run([dtach, "-p", str(sock)], input=data, timeout=10, check=True)
+
     def standin_log(self, name: str) -> list[dict]:
         p = self.inst_dir / f"standin-{name}.jsonl"
         try:
