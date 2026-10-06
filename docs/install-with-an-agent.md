@@ -32,6 +32,7 @@ two ways and let them choose.
 
   ```sh
   mkdir -p ~/.config/aipager
+  rm -f ~/.config/aipager/bot-token
   (umask 077 && cat > ~/.config/aipager/bot-token)
   chmod 600 ~/.config/aipager/bot-token
   ```
@@ -53,9 +54,11 @@ two ways and let them choose.
 
   ```sh
   mkdir -p ~/.config/aipager
+  rm -f ~/.config/aipager/bot-token
   (umask 077 && cat > ~/.config/aipager/bot-token) <<'EOF'
   <the token>
   EOF
+  chmod 600 ~/.config/aipager/bot-token
   ```
 
   Then use `--token-file` as below.

@@ -21,6 +21,7 @@ press Enter, then Ctrl-D):
 
 ```sh
 mkdir -p ~/.config/aipager
+rm -f ~/.config/aipager/bot-token
 (umask 077 && cat > ~/.config/aipager/bot-token)
 chmod 600 ~/.config/aipager/bot-token
 ```
