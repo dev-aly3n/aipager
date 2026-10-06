@@ -22,6 +22,15 @@ from aipager import scope as scope_mod
 from aipager.scope import Member, Scope
 from aipager.wizard import daemon_io as _daemon_io
 
+
+@pytest.fixture(autouse=True)
+def _no_live_daemon_socket(tmp_path, monkeypatch):
+    """Never let a check here reach the operator's live daemon socket."""
+    no_daemon = str(tmp_path / "no-daemon.sock")
+    monkeypatch.setattr("aipager.config.SOCKET_PATH", no_daemon)
+    monkeypatch.setattr("aipager.status.SOCKET_PATH", no_daemon)
+
+
 # The real reload path, saved at import (before any fixture stubs it).
 REAL_LIVE_RELOAD = _daemon_io._live_reload
 

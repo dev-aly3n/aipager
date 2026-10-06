@@ -13,6 +13,15 @@ import pytest
 
 from aipager.wizard import daemon_io, settings_patch, telegram_api
 
+
+@pytest.fixture(autouse=True)
+def _no_live_daemon_socket(tmp_path, monkeypatch):
+    """Never let a check here reach the operator's live daemon socket."""
+    no_daemon = str(tmp_path / "no-daemon.sock")
+    monkeypatch.setattr("aipager.config.SOCKET_PATH", no_daemon)
+    monkeypatch.setattr("aipager.status.SOCKET_PATH", no_daemon)
+
+
 TOKEN = "123456789:AAHf3kLmQ9zXwV7bN2pR8sT4uY6cE1dG0jK"
 
 

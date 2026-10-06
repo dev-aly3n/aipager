@@ -76,7 +76,13 @@ def env(tmp_path, monkeypatch, capsys, caplog):
     monkeypatch.setattr("aipager.claude_resolve.try_resolve_claude_binary",
                         _resolve_claude)
 
-    # daemon
+    # daemon: the real doctor checks probe config.SOCKET_PATH (and
+    # status.py holds a copy by value); point both at a socket that does
+    # not exist, never the operator's live daemon. The flood files those
+    # checks read are already redirected by tests/conftest.py.
+    no_daemon = str(tmp_path / "no-daemon.sock")
+    monkeypatch.setattr("aipager.config.SOCKET_PATH", no_daemon)
+    monkeypatch.setattr("aipager.status.SOCKET_PATH", no_daemon)
     monkeypatch.setattr(daemon_io, "_detect_daemon_running",
                         lambda: e.daemon_pid)
 

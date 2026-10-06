@@ -10,6 +10,15 @@ import pytest
 
 from aipager import doctor
 
+
+@pytest.fixture(autouse=True)
+def _no_live_daemon_socket(tmp_path, monkeypatch):
+    """Never let a check here reach the operator's live daemon socket."""
+    no_daemon = str(tmp_path / "no-daemon.sock")
+    monkeypatch.setattr("aipager.config.SOCKET_PATH", no_daemon)
+    monkeypatch.setattr("aipager.status.SOCKET_PATH", no_daemon)
+
+
 DOCUMENTED_KEYS = [
     "config_parses", "config", "token_valid", "chat_reachable", "team",
     "role_shell_access", "claude", "claude_auth", "dtach", "hook_scripts",
@@ -155,3 +164,11 @@ def test_json_output_never_carries_a_token_shape(monkeypatch, capsys):
     detail = json.loads(out)["checks"][0]["detail"][0]
     if "<redacted>" not in detail:
         pytest.fail("the crash row was not redacted", pytrace=False)
+
+
+def test_daemon_check_probes_only_the_test_socket(tmp_path):
+    """The real check_daemon looks at the redirected socket path (see
+    ``_no_live_daemon_socket``), never the operator's live daemon."""
+    r = doctor.check_daemon()
+    assert r.status == doctor.FAIL
+    assert r.detail == [f"socket {tmp_path / 'no-daemon.sock'} missing"]

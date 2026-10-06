@@ -233,3 +233,14 @@ def test_plain_doctor_shows_the_same_titles(doc_env, monkeypatch):
     _patch_checks(monkeypatch, {})
     r = doc_env.run("doctor")
     assert all(f"title {k}" in r.out for k in ORDER)
+
+
+def test_doctor_json_daemon_check_probes_only_the_test_socket(doc_env):
+    """rev-iter2-002: the real daemon check must look at a socket under
+    tmp_path, never the operator's live one (the env fixture moves
+    config.SOCKET_PATH)."""
+    row = next(c for c in _doctor(doc_env).json["checks"]
+               if c["key"] == "daemon")
+    assert row["status"] == "fail"
+    assert row["detail"] == [
+        f"socket {doc_env.tmp / 'no-daemon.sock'} missing"]
