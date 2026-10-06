@@ -3,6 +3,7 @@
 Subcommands:
   start    run the daemon in the foreground
   config   interactive setup wizard (configures Telegram + Claude Code)
+  setup    the same setup with no prompts, for scripts and coding agents
   version  print version
   doctor   run health checks
   status   show daemon and session snapshot
@@ -38,6 +39,71 @@ from aipager.cli.session import (
 def _cmd_config(args: argparse.Namespace) -> int:
     from aipager.wizard import run
     return run()
+
+
+def _cmd_setup(args: argparse.Namespace) -> int:
+    from aipager.setup_cmd import cmd_setup
+    return cmd_setup(args)
+
+
+class _RedactingArgumentParser(argparse.ArgumentParser):
+    """An argparse parser whose usage errors never echo a bot token.
+
+    argparse quotes the offending argument (``unrecognized arguments:
+    123:AA...``, ``invalid choice: '123:AA...'``), and a token pasted in
+    the wrong place would land on the screen and in a log. Subparsers
+    inherit this class from ``add_subparsers``."""
+
+    def error(self, message: str):
+        from aipager.errors import redact_bare_token
+        self.print_usage(sys.stderr)
+        self.exit(2, f"{self.prog}: error: {redact_bare_token(message)}\n")
+
+
+def _add_setup_parser(sub) -> None:
+    setup_p = sub.add_parser(
+        "setup",
+        help="set aipager up with no prompts (for scripts and coding agents)",
+        description=(
+            "Set aipager up with no prompts: the same result as the first "
+            "run of `aipager config`. `aipager setup detect-chat` finds the "
+            "person's Telegram id and saves nothing. See docs/commands.md "
+            "for the exit codes and the --json document."),
+        allow_abbrev=False,
+    )
+    setup_p.add_argument(
+        "setup_action", nargs="?", choices=("detect-chat",), default=None,
+        metavar="detect-chat",
+        help="find the newest private message to the bot and print its "
+             "sender (saves nothing)",
+    )
+    setup_p.add_argument("--token-file", dest="token_file", metavar="PATH",
+                         help="read the bot token from this file")
+    setup_p.add_argument("--token-stdin", dest="token_stdin",
+                         action="store_true",
+                         help="read the bot token from stdin (a pipe)")
+    setup_p.add_argument("--chat-id", dest="chat_id", metavar="N",
+                         help="the person's numeric Telegram user id")
+    setup_p.add_argument("--role", dest="role", metavar="owner|admin",
+                         default=None,
+                         help="the person's role (default: owner)")
+    setup_p.add_argument("--service", action="store_true",
+                         help="also install and start the background service")
+    setup_p.add_argument("--force", action="store_true",
+                         help="allow replacing the token, the owner DM chat "
+                              "or the role of an existing install")
+    setup_p.add_argument("--dry-run", dest="dry_run", action="store_true",
+                         help="check everything, send and write nothing")
+    setup_p.add_argument("--json", dest="as_json", action="store_true",
+                         help="print one JSON object on stdout")
+    setup_p.add_argument("--timeout", dest="timeout", metavar="SECONDS",
+                         default=None,
+                         help="detect-chat: how long to wait (default 300)")
+    # Never accepted: refused by cmd_setup without echoing the value.
+    setup_p.add_argument("--token", "--bot-token", dest="token_flag",
+                         nargs="?", const="", default=None,
+                         help=argparse.SUPPRESS)
+    setup_p.set_defaults(fn=_cmd_setup)
 
 
 def _cmd_version(args: argparse.Namespace) -> int:
@@ -106,7 +172,7 @@ def _cmd_miniapp(args: argparse.Namespace) -> int:
 def main() -> None:
     from aipager.errors import install_excepthook
     install_excepthook()
-    parser = argparse.ArgumentParser(
+    parser = _RedactingArgumentParser(
         prog="aipager",
         description="Telegram remote-control daemon for Claude Code sessions",
     )
@@ -117,6 +183,7 @@ def main() -> None:
                    ).set_defaults(fn=_cmd_start)
     sub.add_parser("config", help="interactive setup wizard"
                    ).set_defaults(fn=_cmd_config)
+    _add_setup_parser(sub)
     sub.add_parser("version", help="print version"
                    ).set_defaults(fn=_cmd_version)
     doctor_p = sub.add_parser("doctor",
