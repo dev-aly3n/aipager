@@ -224,7 +224,7 @@ def test_observer_bot_urls(monkeypatch, run_async, base):
     params = inspect.signature(Bot.__init__).parameters
     want = (f"{base}/bot", f"{base}/file/bot") if base else (
         params["base_url"].default, params["base_file_url"].default)
-    assert (made[0]["base_url"], made[0]["base_file_url"]) == want
+    assert (made[0].get("base_url"), made[0].get("base_file_url")) == want
     assert made[0]["token"] == TOKEN
 
 
@@ -330,7 +330,14 @@ def test_cmd_start_refuses_a_remote_base_before_any_network(monkeypatch, capsys)
     monkeypatch.setattr(httpx.Client, "send", _no_net)
     monkeypatch.setattr(httpx.AsyncClient, "send", _no_net)
     called = []
-    monkeypatch.setattr(preflight, "require_config", lambda: called.append(1))
+
+    def _require():
+        # Stop right here: a regressed check must not run the rest of
+        # start-up inside the test process.
+        called.append(1)
+        raise SystemExit(99)
+
+    monkeypatch.setattr(preflight, "require_config", _require)
     with pytest.raises(SystemExit) as exc:
         daemon._cmd_start(None)
     assert exc.value.code == 2

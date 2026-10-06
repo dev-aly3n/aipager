@@ -328,8 +328,18 @@ def fake_real_home(monkeypatch, tmp_path):
 OWN_MSG = "AIPAGER_INSTANCE_DIR must be an absolute path to an existing folder you own."
 
 
-def test_start_check_refuses_a_relative_path(monkeypatch, fake_real_home):
-    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", "relative/dir")
+def test_start_check_refuses_a_relative_path(monkeypatch, fake_real_home, short_root):
+    # An EXISTING relative folder: only the absolute-path rule refuses it.
+    (short_root / "rel").mkdir()
+    monkeypatch.chdir(short_root)
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", "rel")
+    assert instance.start_check() == [OWN_MSG]
+
+
+def test_start_check_refuses_a_file(monkeypatch, fake_real_home, short_root):
+    f = short_root / "afile"
+    f.write_text("")
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(f))
     assert instance.start_check() == [OWN_MSG]
 
 
@@ -387,6 +397,21 @@ class _Stop(Exception):
     pass
 
 
+def _stop_at_require_config(monkeypatch) -> list:
+    """Record a call of require_config and stop _cmd_start right there
+    (exit 99), so a regressed check can never run the rest of start-up
+    (migrations, lock, network) inside the test process."""
+    from aipager import preflight
+    called: list = []
+
+    def _require():
+        called.append(1)
+        raise SystemExit(99)
+
+    monkeypatch.setattr(preflight, "require_config", _require)
+    return called
+
+
 def test_cmd_start_checks_run_first_in_order(monkeypatch):
     from aipager import preflight, telegram_endpoint
     from aipager.cli import daemon
@@ -408,13 +433,11 @@ def test_cmd_start_checks_run_first_in_order(monkeypatch):
 
 def test_cmd_start_exits_2_when_home_is_the_real_home(monkeypatch, fake_real_home,
                                                       short_root, capsys):
-    from aipager import preflight
     from aipager.cli import daemon
     monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(short_root))
     monkeypatch.setenv("HOME", str(fake_real_home))
     monkeypatch.delenv("AIPAGER_TELEGRAM_API_BASE", raising=False)
-    called = []
-    monkeypatch.setattr(preflight, "require_config", lambda: called.append(1))
+    called = _stop_at_require_config(monkeypatch)
     with pytest.raises(SystemExit) as exc:
         daemon._cmd_start(None)
     assert exc.value.code == 2
