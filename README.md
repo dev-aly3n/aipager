@@ -179,6 +179,10 @@ Interactive wizard — asks for your Telegram bot token (from
 patches `~/.claude/settings.json` to wire the necessary hooks
 automatically. You never edit any file by hand.
 
+Setting aipager up for someone from a script or a coding agent?
+`aipager setup --token-file FILE --chat-id ID` does the same with no
+prompts (see [the setup command](docs/commands.md#command-line-aipager-setup-for-coding-agents)).
+
 ## Run
 
 ```sh

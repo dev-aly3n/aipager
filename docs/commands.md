@@ -767,6 +767,212 @@ or a pending rename. See
 [hooks → UserPromptSubmit](hooks.md#userpromptsubmit) for what
 happens next.
 
+---
+
+## Command line: `aipager setup` (for coding agents)
+
+The sections above describe the Telegram bot. This one describes a
+command you run in a terminal, or that a script or your coding agent
+runs for you: `aipager setup` sets aipager up with no prompts and gives
+the same result as the first run of `aipager config`.
+
+```sh
+# 1. find the person's Telegram id (they open the bot and press Start)
+aipager setup detect-chat --token-file ~/bot-token.txt --json
+# 2. once they confirm it is them, set aipager up
+aipager setup --token-file ~/bot-token.txt --chat-id 123456789 --service --json
+# 3. check the install
+aipager doctor --json
+```
+
+What it does, in this order: reads the bot token, checks it with
+Telegram (getMe), checks everything on this machine without writing
+(the existing config, the dependencies, `~/.claude/settings.json`,
+whether a daemon runs), sends one test message to the person ("aipager
+is set up for you. ..."), and only then writes. Files written, the same
+as the wizard writes them:
+
+- `~/.config/aipager/aipager.yaml` (mode 0600): `bot_token` and one DM
+  scope whose only member is the person (`label: owner`, role owner or
+  admin).
+- `~/.claude/settings.json`: the aipager hooks and the statusLine (the
+  existing file is backed up to `settings.json.bak.<time>` when it
+  changes).
+- The audit log gets a `grant-owner` record when someone becomes owner.
+- With `--service`, the background service (the same as `aipager
+  service install --yes`).
+
+If any check fails, nothing is sent and nothing is written. When a
+daemon is already running, a change of chat or role is reloaded live; a
+new bot token needs a restart (`aipager service stop`, then `aipager
+service start`), which setup never does itself, and `--service` is
+skipped.
+
+### `aipager setup` flags
+
+| Flag | Meaning |
+|---|---|
+| `--token-file PATH` | Read the bot token from this file (at most 4096 bytes; text around one token is fine). A file other users can read works but gives the warning `token_file_shared`: `chmod 600` it, or delete it once setup succeeds. |
+| `--token-stdin` | Read the bot token from stdin (a pipe, never a terminal). |
+| `--chat-id N` | Required. The person's numeric Telegram user id, which is also their DM chat id. Groups are added with `aipager config`. |
+| `--role owner\|admin` | The person's role (default `owner`). |
+| `--service` | Also install and start the background service (skipped while a daemon runs). |
+| `--force` | Allow replacing the bot token, the owner DM chat, or the role of an existing install. Group scopes and other DMs are kept. |
+| `--dry-run` | Run every check, send nothing, write nothing, and report what would change. |
+| `--json` | Print exactly one JSON object on stdout; everything else goes to stderr. |
+
+Give exactly one of `--token-file` and `--token-stdin`. The token is
+never accepted as a flag value: `--token` and `--bot-token` are refused
+(`token_on_command_line`) and the value is not shown. Abbreviated flags
+(`--token-f`, `--dry`) are not accepted. Setup never asks a question,
+never needs a terminal, and never reads the token from an environment
+variable.
+
+Re-running with the same token, chat and role changes nothing and says
+so (`unchanged`, no test message). A different token, chat or role on an
+existing install exits 6 until you add `--force`. An old `config.env`
+install is migrated first, as the wizard does (it gives the role
+`admin`, so `--role owner` on it needs `--force`).
+
+### `aipager setup detect-chat`
+
+```sh
+aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS] [--json]
+```
+
+Waits for the newest private message to the bot (pressing Start sends
+one) and prints its sender: id, name and username. It saves nothing, so
+show the person to the user and run `aipager setup --chat-id` only once
+they confirm. Only messages sent at most 10 minutes before the command
+started count. `--timeout` is 0 to 3600 seconds (default 300; 0 means
+one look). It reads Telegram without confirming any message, so the
+`/start` stays available to the wizard and the daemon.
+
+While an aipager daemon for the same bot runs, the daemon holds the
+bot's messages, and it does not note private messages from people who
+are not set up yet. detect-chat then exits 9 (`source: "daemon"`): stop
+the daemon (`aipager service stop`) and run it again, or ask the person
+for their numeric id. With a daemon for a different bot, it reads
+Telegram directly (`source: "telegram"`).
+
+### Exit codes
+
+| Code | `error` | Meaning |
+|---|---|---|
+| 0 | | Success (`installed`, `updated`, `unchanged`, `dry_run`, or detect-chat `found`). |
+| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | Failure. `ambiguous_install`: more than one DM could be the owner's; fix it in `aipager config`. |
+| 2 | `usage`, `missing_token_source`, `token_source_conflict`, `token_file_unreadable`, `token_stdin_is_tty`, `token_malformed`, `token_on_command_line`, `bad_chat_id`, `bad_role`, `bad_timeout` | Bad or missing input; `fix` names the flag. An unknown flag or a wrong word after `setup` is reported by the argument parser (plain text, no JSON), also exit 2. |
+| 3 | `deps_missing` | dtach, claude, aipager-hook or aipager-statusline is missing; `fix` has the commands. Nothing was written. |
+| 4 | `token_rejected` | Telegram rejected the token. |
+| 5 | `chat_not_started`, `bot_blocked` | The person has not pressed Start in the bot ("Open t.me/<bot> and press Start, then run this again."), or has blocked it. Nothing was written. |
+| 6 | `existing_install` | A different token, chat or role is already set up; add `--force`. |
+| 7 | `telegram_unreachable` | Network error, or Telegram answered 429 or 5xx. |
+| 8 | `detect_timeout` | detect-chat saw no private message before `--timeout`. |
+| 9 | `daemon_running` | detect-chat: a running daemon holds the bot's messages. |
+| 10 | `updates_conflict` | detect-chat: another program reads this bot's messages. |
+| 130 | `interrupted` | Ctrl-C. |
+
+When several checks fail at once, the code follows this order:
+`config_malformed`, `ambiguous_install`, `existing_install`,
+`settings_invalid`, `deps_missing`. `--dry-run` exits with the code the
+real run would have from these checks.
+
+### JSON: `aipager setup --json`
+
+Every key is always present; a value not known yet is `null`.
+
+```json
+{
+  "command": "setup",
+  "status": "installed",
+  "ok": true,
+  "exit_code": 0,
+  "error": null,
+  "message": "aipager is set up for @example_bot (chat 123456789, role owner). ...",
+  "fix": null,
+  "dry_run": false,
+  "bot_username": "example_bot",
+  "chat_id": 123456789,
+  "role": "owner",
+  "changed": ["bot_token", "owner_dm", "settings_json"],
+  "test_message": "sent",
+  "deps": {"ok": true, "items": [{"name": "dtach", "found": true, "path": "/usr/bin/dtach", "fix": null}]},
+  "settings_json": {"path": "/home/you/.claude/settings.json", "status": "created", "backup": null, "repointed": 0},
+  "daemon": {"running": false, "reload": "not_needed", "restart_needed": false},
+  "service": {"requested": false, "result": "not_requested"},
+  "warnings": [],
+  "next_step": "Start aipager with `aipager service install` ..."
+}
+```
+
+- `status`: `installed`, `updated`, `unchanged`, `dry_run` or `error`.
+- `changed`: what changed (or would change, in a dry run), in this
+  order: `migrated_v1`, `bot_token`, `owner_dm`, `role`,
+  `settings_json`, `service`.
+- `test_message`: `sent`, `not_needed`, `skipped_dry_run`, `failed` or
+  `not_attempted`.
+- `settings_json.status`: `created`, `patched`, `unchanged`,
+  `would_change` or `not_checked`.
+- `daemon.reload`: `reloaded`, `refused`, `not_reloaded` or
+  `not_needed`. `restart_needed` is true after a new token while a
+  daemon runs.
+- `service.result`: `not_requested`, `installed`, `already_installed`,
+  `skipped_daemon_running`, `would_install`, `failed`, or `null` when
+  setup stopped before it.
+- `warnings`: objects with `code` (`token_file_shared`,
+  `reload_refused`) and `message`.
+- On an error, `status` is `error` and `error`, `message` and `fix` say
+  what went wrong and what to do; `next_step` repeats `fix`.
+
+### JSON: `aipager setup detect-chat --json`
+
+```json
+{
+  "command": "detect-chat",
+  "status": "found",
+  "ok": true,
+  "exit_code": 0,
+  "error": null,
+  "message": "Found Ada L (@ada), Telegram id 123456789.",
+  "fix": null,
+  "bot_username": "example_bot",
+  "source": "telegram",
+  "candidate": {"id": 123456789, "first_name": "Ada", "last_name": "L", "username": "ada", "date": 1700000000},
+  "other_candidates": 0,
+  "warnings": [],
+  "next_step": "Show this person to the user; once they confirm, run: aipager setup --token-file <path> --chat-id 123456789"
+}
+```
+
+`candidate` is `null` unless `status` is `found`. `other_candidates`
+counts other people who messaged the bot in the same 10 minutes: when
+it is not 0, make sure you have the right person. `next_step` repeats
+the token flag you used, never the token.
+
+### `aipager doctor --json`
+
+The checks of `aipager doctor` as one JSON object on stdout. Like plain
+`aipager doctor` it only reads, and it sends no Telegram message. Exit
+1 when any check fails, else 0. It cannot be combined with `--fix` or
+`--safety-check` (exit 2 with an error object).
+
+```json
+{
+  "command": "doctor",
+  "version": "0.8.0",
+  "ok": true,
+  "summary": {"ok": 14, "warn": 1, "fail": 0},
+  "checks": [{"key": "token_valid", "status": "ok", "title": "Telegram bot token", "detail": ["@example_bot"], "fix": null}]
+}
+```
+
+`checks` are in this order, with these keys: `config_parses`,
+`config`, `token_valid`, `chat_reachable`, `team`, `role_shell_access`,
+`claude`, `claude_auth`, `dtach`, `hook_scripts`, `settings_json`,
+`daemon`, `service_installed`, `service_unit_path`, `miniapp`. A check
+that crashes keeps its key with status `warn`. Texts are plain (no
+markup).
+
 ## See also
 
 - [Architecture](architecture.md) — where the bot fits.
