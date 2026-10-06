@@ -943,6 +943,12 @@ Every key is always present; a value not known yet is `null`.
 - `next_step` after a change while a daemon runs that could not be
   reloaded says to restart it (`aipager service stop`, then `aipager
   service start`); it names the bot token only when the token changed.
+- With the warning `daemon_unknown`, `next_step` never says aipager is
+  running. It says setup could not tell, points at `aipager doctor
+  --json`, and says to start aipager with `aipager service install` or
+  `aipager start` if it is not running. When a restart would be needed,
+  it asks for one only if a daemon is running, and otherwise says to
+  start it the same way.
 - On an error, `status` is `error` and `error`, `message` and `fix` say
   what went wrong and what to do; `next_step` repeats `fix`. When the
   error came after a write, `changed` lists what was written, and the

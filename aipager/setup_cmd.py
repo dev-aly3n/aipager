@@ -818,16 +818,21 @@ def _install_service_step(run: _Run, running: bool, changed: list[str]) -> None:
         changed.append("service")
 
 
+_START_HOW = ("`aipager service install` (background service) or "
+              "`aipager start` (foreground)")
+
+
 def _next_step(doc: dict) -> str:
     daemon = doc.get("daemon") or {}
+    unknown = any(w.get("code") == "daemon_unknown" for w in doc["warnings"])
     if daemon.get("restart_needed"):
         why = ("to use the new bot token" if "bot_token" in doc.get("changed", [])
                else "to apply the change")
         how = ("run `aipager service stop` and then `aipager service start` "
                "(or stop a foreground `aipager start` and run it again).")
-        if any(w.get("code") == "daemon_unknown" for w in doc["warnings"]):
+        if unknown:
             return (f"If an aipager daemon is running, restart it {why}: "
-                    f"{how}")
+                    f"{how} Otherwise start it with {_START_HOW}.")
         return f"Restart the daemon {why}: {how}"
     if any(w.get("code") == "reload_refused" for w in doc["warnings"]):
         return ("Fix the problem in the warning (run `aipager config`), then "
@@ -836,10 +841,14 @@ def _next_step(doc: dict) -> str:
         return ("aipager runs as a background service. Check the install with "
                 "`aipager doctor --json`.")
     if daemon.get("running"):
+        if unknown:
+            return ("Setup could not tell whether aipager is running (see "
+                    "the daemon_unknown warning). Check with `aipager doctor "
+                    "--json`, and if it is not running, start it with "
+                    f"{_START_HOW}.")
         return ("aipager is running. Check the install with "
                 "`aipager doctor --json`.")
-    return ("Start aipager with `aipager service install` (background "
-            "service) or `aipager start` (foreground), then check it with "
+    return (f"Start aipager with {_START_HOW}, then check it with "
             "`aipager doctor --json`.")
 
 

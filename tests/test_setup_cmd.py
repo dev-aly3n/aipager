@@ -1235,6 +1235,59 @@ def test_unknown_daemon_fresh_install_next_step_is_conditional(
         "token: run `aipager service stop`")
 
 
+
+def test_unknown_daemon_fresh_install_next_step_says_how_to_start_it(
+        env, monkeypatch):
+    """review-4 nit: a first install with an unknown daemon also says how
+    to start aipager when none is running (`--service` was skipped)."""
+    def _boom():
+        raise PermissionError("cannot read the daemon socket")
+
+    monkeypatch.setattr(_daemon_io, "_detect_daemon_running", _boom)
+    code, doc, _o, _e = env.setup("--service")
+    assert code == 0 and env.installs == []
+    assert doc["next_step"].endswith(
+        "Otherwise start it with `aipager service install` (background "
+        "service) or `aipager start` (foreground).")
+
+
+def test_unknown_daemon_unchanged_rerun_never_claims_it_is_running(
+        env, monkeypatch):
+    """rev-iter4-001: nothing to restart and the daemon state unknown:
+    next_step must not say "aipager is running"."""
+    code, _doc, _o, _e = env.setup()
+    assert code == 0
+
+    def _boom():
+        raise PermissionError("cannot read the daemon socket")
+
+    monkeypatch.setattr(_daemon_io, "_detect_daemon_running", _boom)
+    code, doc, _o, _e = env.setup("--service")
+    assert code == 0 and doc["status"] == "unchanged"
+    assert doc["service"]["result"] == "skipped_daemon_running"
+    assert env.installs == []
+    assert doc["daemon"]["restart_needed"] is False
+    assert "daemon_unknown" in [w["code"] for w in doc["warnings"]]
+    assert not doc["next_step"].startswith("aipager is running")
+    assert doc["next_step"] == (
+        "Setup could not tell whether aipager is running (see the "
+        "daemon_unknown warning). Check with `aipager doctor --json`, and "
+        "if it is not running, start it with `aipager service install` "
+        "(background service) or `aipager start` (foreground).")
+
+
+def test_known_running_daemon_unchanged_rerun_says_it_is_running(env):
+    """The positive partner: a detected daemon still gets the short
+    "aipager is running" next step."""
+    code, _doc, _o, _e = env.setup()
+    assert code == 0
+    env.daemon_pid = 4321
+    code, doc, _o, _e = env.setup()
+    assert code == 0 and doc["status"] == "unchanged"
+    assert doc["warnings"] == []
+    assert doc["next_step"] == (
+        "aipager is running. Check the install with `aipager doctor --json`.")
+
 # ----- iteration 4: plain errors say what was written; audit failure -----
 
 def test_plain_error_after_a_write_says_what_was_already_written(
