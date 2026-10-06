@@ -47,7 +47,8 @@ SETUP_KEYS = (
 )
 DETECT_KEYS = (
     "command", "status", "ok", "exit_code", "error", "message", "fix",
-    "bot_username", "source", "candidate", "other_candidates", "next_step",
+    "bot_username", "source", "candidate", "other_candidates", "warnings",
+    "next_step",
 )
 CHANGED_ORDER = ("migrated_v1", "bot_token", "owner_dm", "role",
                  "settings_json", "service")
