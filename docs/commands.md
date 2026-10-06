@@ -813,7 +813,8 @@ new bot token needs a restart (`aipager service stop`, then `aipager
 service start`), which setup never does itself, and `--service` is
 skipped. If setup cannot tell whether a daemon runs, it acts as if one
 does (warning `daemon_unknown`): it never installs the service then, so
-it can never restart a live daemon.
+it can never restart a live daemon, and after any change it sends no
+reload and reports `restart_needed: true` instead.
 
 ### `aipager setup` flags
 
@@ -929,7 +930,8 @@ Every key is always present; a value not known yet is `null`.
   `would_change` or `not_checked`.
 - `daemon.reload`: `reloaded`, `refused`, `not_reloaded` or
   `not_needed`. `restart_needed` is true after a new token while a
-  daemon runs.
+  daemon runs, and after any change when the daemon could not be
+  reloaded or setup could not tell whether one runs.
 - `service.result`: `not_requested`, `installed`, `already_installed`,
   `skipped_daemon_running`, `would_install`, `failed`, or `null` when
   setup stopped before it.

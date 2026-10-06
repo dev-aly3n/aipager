@@ -20,6 +20,10 @@ import yaml
 
 from aipager import scope as scope_mod
 from aipager.scope import Member, Scope
+from aipager.wizard import daemon_io as _daemon_io
+
+# The real reload path, saved at import (before any fixture stubs it).
+REAL_LIVE_RELOAD = _daemon_io._live_reload
 
 TOKEN = "123456789:AAHf3kLmQ9zXwV7bN2pR8sT4uY6cE1dG0jK"
 SECRET = TOKEN.split(":", 1)[1]
@@ -1102,3 +1106,96 @@ def test_building_the_document_is_inside_the_json_quarantine(env, monkeypatch):
     code, doc, _out, err = env.setup()
     assert code == 0 and doc is not None, "stdout must be one JSON object"
     assert "import-time noise" in err
+
+
+# ----- after the first write, nothing may hide what was written -----
+
+def _real_reload_counted(monkeypatch):
+    """The REAL ``_live_reload`` (config check, ``_signal_reload``, the
+    detector), counted."""
+    calls: list[int] = []
+
+    def _counted():
+        calls.append(1)
+        return REAL_LIVE_RELOAD()
+
+    monkeypatch.setattr(_daemon_io, "_live_reload", _counted)
+    return calls
+
+
+def test_unknown_daemon_scope_change_asks_for_a_restart_without_reloading(
+        env, monkeypatch):
+    """rev-iter2-001: detection raises, the change is a scope only. The
+    real reload would detect again (and raise) after the yaml is written."""
+    _write_yaml([_dm(CHAT, role="admin")])
+    calls = _real_reload_counted(monkeypatch)
+
+    def _boom():
+        raise PermissionError("cannot read the daemon socket")
+
+    monkeypatch.setattr(_daemon_io, "_detect_daemon_running", _boom)
+    code, doc, _o, _e = env.setup("--force")
+    assert code == 0, f"exit {code}, error {doc and doc.get('error')}"
+    assert doc["changed"] == ["role", "settings_json"]
+    assert doc["daemon"] == {"running": True, "reload": "not_reloaded",
+                             "restart_needed": True}
+    assert calls == [], "no reload may be tried while the daemon is unknown"
+    assert "daemon_unknown" in [w["code"] for w in doc["warnings"]]
+    assert doc["next_step"].startswith(
+        "If an aipager daemon is running, restart it to apply the change")
+    assert scope_mod.load_scopes(scope_mod.CONFIG_PATH)[0][0].members[0].role \
+        == "owner"
+
+
+def test_reload_that_raises_after_the_write_asks_for_a_restart(
+        env, monkeypatch):
+    """Detection answers once (a running daemon), then raises inside the
+    real reload: the yaml is written, so the run still succeeds."""
+    _write_yaml([_dm(CHAT, role="admin")])
+    calls = _real_reload_counted(monkeypatch)
+    seen: list[int] = []
+
+    def _then_boom():
+        seen.append(1)
+        if len(seen) > 1:
+            raise PermissionError("the daemon socket went away")
+        return 4321
+
+    monkeypatch.setattr(_daemon_io, "_detect_daemon_running", _then_boom)
+    code, doc, _o, _e = env.setup("--force")
+    assert code == 0, f"exit {code}, error {doc and doc.get('error')}"
+    assert calls == [1] and len(seen) == 2
+    assert doc["changed"] == ["role", "settings_json"]
+    assert doc["daemon"] == {"running": True, "reload": "not_reloaded",
+                             "restart_needed": True}
+    assert doc["warnings"] == []
+    assert doc["next_step"].startswith("Restart the daemon to apply the change")
+
+
+def test_unexpected_error_after_the_first_write_still_lists_it(
+        env, monkeypatch):
+    from aipager.wizard import settings_patch
+
+    def _boom(plan):
+        raise RuntimeError("settings exploded")
+
+    monkeypatch.setattr(settings_patch, "apply_settings", _boom)
+    code, doc, _o, _e = env.setup()
+    assert code == 1 and doc["error"] == "internal_error"
+    assert doc["changed"] == ["bot_token", "owner_dm"]
+    assert scope_mod.CONFIG_PATH.exists()
+
+
+def test_unknown_daemon_fresh_install_next_step_is_conditional(
+        env, monkeypatch):
+    """tester-iter2-002: a first install with an unknown daemon must not
+    say there is a daemon to restart."""
+    def _boom():
+        raise PermissionError("cannot read the daemon socket")
+
+    monkeypatch.setattr(_daemon_io, "_detect_daemon_running", _boom)
+    code, doc, _o, _e = env.setup()
+    assert code == 0 and doc["status"] == "installed"
+    assert doc["next_step"].startswith(
+        "If an aipager daemon is running, restart it to use the new bot "
+        "token: run `aipager service stop`")

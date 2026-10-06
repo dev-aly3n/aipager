@@ -613,32 +613,37 @@ def _setup(args: argparse.Namespace, run: _Run) -> int:
         doc["test_message"] = "not_needed"
 
     # -- writes --
+    # From the first write on, whatever fails (an error setup raises, or
+    # an exception nobody expected) must still report what was written:
+    # `changed: []` after a write would tell an agent nothing happened.
     changed: list[str] = []
     try:
-        _write_config(run, plan, from_v1, chat_id, role, changed)
-        if plan.grants_owner and any(c in changed for c in ("owner_dm", "role")):
-            from aipager.wizard.first_run import _record_owner_grant
-            _record_owner_grant(chat_id)
-        if settings_plan.changed:
-            backup = settings_patch.apply_settings(settings_plan)
-            changed.append("settings_json")
-            doc["settings_json"]["status"] = ("patched" if settings_plan.exists
-                                              else "created")
-            doc["settings_json"]["backup"] = backup
-    except SetupError:
+        try:
+            _write_config(run, plan, from_v1, chat_id, role, changed)
+            if plan.grants_owner and any(c in changed
+                                         for c in ("owner_dm", "role")):
+                from aipager.wizard.first_run import _record_owner_grant
+                _record_owner_grant(chat_id)
+            if settings_plan.changed:
+                backup = settings_patch.apply_settings(settings_plan)
+                changed.append("settings_json")
+                doc["settings_json"]["status"] = (
+                    "patched" if settings_plan.exists else "created")
+                doc["settings_json"]["backup"] = backup
+        except OSError as e:
+            raise SetupError(EXIT_FAILURE, "write_failed",
+                             f"Writing failed: {e}",
+                             "Fix the cause above, then run this again "
+                             "(setup picks up where it stopped).")
+
+        _after_yaml_change(run, plan, changed, running,
+                           unknown=detected is None)
+
+        if want_service:
+            _install_service_step(run, running, changed)
+    except BaseException:
         doc["changed"] = _ordered(changed)
         raise
-    except OSError as e:
-        doc["changed"] = _ordered(changed)
-        raise SetupError(EXIT_FAILURE, "write_failed",
-                         f"Writing failed: {e}",
-                         "Fix the cause above, then run this again (setup "
-                         "picks up where it stopped).")
-
-    _after_yaml_change(run, plan, changed, running)
-
-    if want_service:
-        _install_service_step(run, running, changed)
 
     doc["changed"] = _ordered(changed)
     if plan.fresh:
@@ -730,18 +735,28 @@ def _write_config(run: _Run, plan: _Plan, from_v1: bool, chat_id: int,
 
 
 def _after_yaml_change(run: _Run, plan: _Plan, changed: list[str],
-                       running: bool) -> None:
+                       running: bool, *, unknown: bool = False) -> None:
     """Live-reload a running daemon after a scope change; a new token
-    needs a restart, which setup never does itself."""
+    needs a restart, which setup never does itself.
+
+    *unknown*: daemon detection failed. No reload is tried (it would
+    detect again, and signal a PID nobody could confirm); a restart is
+    asked for instead. A reload that raises is reported the same way:
+    the yaml is already written, so the run must not fail over it."""
     daemon = run.doc["daemon"]
     if not any(c in changed for c in _YAML_CHANGES):
         return
-    if "bot_token" in changed:
+    if "bot_token" in changed or unknown:
         daemon["reload"] = "not_reloaded" if running else "not_needed"
         daemon["restart_needed"] = running
         return
     from aipager.wizard import daemon_io
-    outcome, problem = daemon_io._live_reload()
+    try:
+        outcome, problem = daemon_io._live_reload()
+    except Exception:
+        daemon["reload"] = "not_reloaded"
+        daemon["restart_needed"] = running
+        return
     daemon["reload"] = outcome
     if outcome == "refused":
         run.doc["warnings"].append({
@@ -799,9 +814,12 @@ def _next_step(doc: dict) -> str:
     if daemon.get("restart_needed"):
         why = ("to use the new bot token" if "bot_token" in doc.get("changed", [])
                else "to apply the change")
-        return (f"Restart the daemon {why}: run `aipager "
-                "service stop` and then `aipager service start` (or stop a "
-                "foreground `aipager start` and run it again).")
+        how = ("run `aipager service stop` and then `aipager service start` "
+               "(or stop a foreground `aipager start` and run it again).")
+        if any(w.get("code") == "daemon_unknown" for w in doc["warnings"]):
+            return (f"If an aipager daemon is running, restart it {why}: "
+                    f"{how}")
+        return f"Restart the daemon {why}: {how}"
     if any(w.get("code") == "reload_refused" for w in doc["warnings"]):
         return ("Fix the problem in the warning (run `aipager config`), then "
                 "check with `aipager doctor --json`.")

@@ -8,7 +8,12 @@ from __future__ import annotations
 
 import pytest
 
+import aipager.wizard.daemon_io as _daemon_io
 from agent_setup_support import OTHER_TOKEN, TOKEN, assert_no_secret
+
+# The real reload seams, saved at import (before the env fixture stubs them).
+REAL_LIVE_RELOAD = _daemon_io._live_reload
+REAL_SIGNAL_RELOAD = _daemon_io._signal_reload
 
 
 @pytest.fixture
@@ -141,3 +146,30 @@ def test_no_daemon_service_still_installs(env):
     """Boundary: a clean None detection keeps the installer path."""
     env.setup("--service")
     assert env.installs == [True]
+
+
+def _real_reload(monkeypatch):
+    kills: list = []
+    monkeypatch.setattr(_daemon_io, "_live_reload", REAL_LIVE_RELOAD)
+    monkeypatch.setattr(_daemon_io, "_signal_reload", REAL_SIGNAL_RELOAD)
+    monkeypatch.setattr(_daemon_io.os, "kill",
+                        lambda pid, sig: kills.append((pid, sig)))
+    return kills
+
+
+def test_unknown_daemon_role_change_through_the_real_reload(unknown,
+                                                            monkeypatch):
+    """rev-iter2-001: the real reload detects again, and that raises, after
+    aipager.yaml is written. The run must still succeed, list the change
+    and ask for a restart."""
+    assert unknown.setup().code == 0
+    kills = _real_reload(monkeypatch)
+    r = unknown.setup("--force", "--role", "admin")
+    assert r.code == 0, f"exit {r.code}, error {r.json.get('error')}"
+    assert "role" in r.json["changed"]
+    assert r.json["daemon"] == {"running": True, "reload": "not_reloaded",
+                                "restart_needed": True}
+    assert "daemon_unknown" in _codes(r)
+    assert unknown.config()["scopes"][0]["members"][0]["role"] == "admin"
+    assert kills == []
+
