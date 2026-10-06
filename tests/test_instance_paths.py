@@ -368,7 +368,8 @@ def test_start_check_refuses_the_real_home(monkeypatch, fake_real_home, short_ro
 def test_start_check_refuses_an_unset_home(monkeypatch, fake_real_home, short_root):
     monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(short_root))
     monkeypatch.delenv("HOME")
-    assert instance.start_check()[0].startswith("AIPAGER_INSTANCE_DIR is set but HOME")
+    lines = instance.start_check()
+    assert lines and lines[0].startswith("AIPAGER_INSTANCE_DIR is set but HOME")
 
 
 def test_start_check_refuses_a_folder_too_long_for_sockets(monkeypatch, fake_real_home,

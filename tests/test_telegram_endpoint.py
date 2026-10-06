@@ -116,8 +116,8 @@ def test_invalid_override_is_refused(monkeypatch, base):
 def test_allow_remote_accepts_a_remote_base(monkeypatch):
     _set(monkeypatch, "https://bots.example.com")
     monkeypatch.setenv(telegram_endpoint.ALLOW_REMOTE_ENV, "1")
-    assert telegram_endpoint.api_base() == "https://bots.example.com"
     assert telegram_endpoint.check() is None
+    assert telegram_endpoint.api_base() == "https://bots.example.com"
 
 
 @pytest.mark.parametrize("value", ["0", "yes", "true", " 1"])
