@@ -941,7 +941,10 @@ Every key is always present; a value not known yet is `null`.
   reloaded says to restart it (`aipager service stop`, then `aipager
   service start`); it names the bot token only when the token changed.
 - On an error, `status` is `error` and `error`, `message` and `fix` say
-  what went wrong and what to do; `next_step` repeats `fix`.
+  what went wrong and what to do; `next_step` repeats `fix`. When the
+  error came after a write, `changed` lists what was written, and the
+  plain output adds a stderr line `Already written: aipager.yaml, ...
+  (changed: ...)`.
 
 ### JSON: `aipager setup detect-chat --json`
 

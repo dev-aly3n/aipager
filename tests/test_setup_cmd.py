@@ -1235,6 +1235,49 @@ def test_unknown_daemon_fresh_install_next_step_is_conditional(
         "token: run `aipager service stop`")
 
 
+# ----- iteration 4: plain errors say what was written; audit failure -----
+
+def test_plain_error_after_a_write_says_what_was_already_written(
+        env, monkeypatch):
+    """rev-iter3-001: plain output of a write_failed after the yaml write
+    names the yaml (stderr, scrubbed), like JSON's `changed`."""
+    from aipager.wizard import settings_patch
+
+    def _boom(plan):
+        raise PermissionError(f"denied {TOKEN}")
+
+    monkeypatch.setattr(settings_patch, "apply_settings", _boom)
+    code, out, err = env.setup(json_out=False)
+    assert code == 1
+    assert ("  Already written: aipager.yaml (changed: bot_token, "
+            "owner_dm).") in err.splitlines()
+    _assert_no_token(out, err)
+
+
+def test_plain_service_failure_lists_the_yaml_and_settings(env):
+    env.install_rc = 2
+    code, _out, err = env.setup("--service", json_out=False)
+    assert code == 1
+    assert ("  Already written: aipager.yaml, settings.json (changed: "
+            "bot_token, owner_dm, settings_json).") in err.splitlines()
+
+
+def test_plain_error_before_any_write_says_nothing_was_written(env):
+    env.deps_missing = {"dtach"}
+    code, _out, err = env.setup(json_out=False)
+    assert code == 3
+    assert "Already written" not in err
+
+
+def test_plain_dry_run_refusal_never_claims_a_write(env):
+    """A dry run's `changed` is what would change: a refusal in a dry run
+    must not print it as already written."""
+    _write_yaml([_dm(111)])
+    code, _out, err = env.setup("--dry-run", json_out=False)
+    assert code == 6
+    assert "Already written" not in err
+
+
 def test_reload_raising_with_no_daemon_detected_is_not_needed(env):
     """Nit: no daemon detected, the reload raises anyway: nothing needed
     reloading, the same as the bot_token branch."""

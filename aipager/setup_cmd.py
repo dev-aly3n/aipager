@@ -845,6 +845,22 @@ def _fail(run: _Run, code: int, error: str, message: str,
     return code
 
 
+def _written_files(doc: dict) -> str:
+    """For an error after a write: the files already written, and the
+    ``changed`` codes, as one line (empty when nothing was written; a dry
+    run's ``changed`` is what *would* change, so it never counts)."""
+    changed = doc.get("changed") or []
+    if doc.get("dry_run") or not changed:
+        return ""
+    files: list[str] = []
+    for code in changed:
+        name = {"settings_json": "settings.json",
+                "service": "the service unit"}.get(code, "aipager.yaml")
+        if name not in files:
+            files.append(name)
+    return f"{', '.join(files)} (changed: {', '.join(changed)})."
+
+
 def _emit(run: _Run, out) -> None:
     """Write the result: one scrubbed JSON object to *out*, or plain lines
     (results to *out*, warnings and errors to stderr)."""
@@ -858,6 +874,9 @@ def _emit(run: _Run, out) -> None:
         err.write(_scrub(f"! {w['message']}", run.token) + "\n")
     if doc.get("status") == "error":
         err.write(_scrub(f"✗ {doc['message']}", run.token) + "\n")
+        written = _written_files(doc)
+        if written:
+            err.write(_scrub(f"  Already written: {written}", run.token) + "\n")
         if doc.get("fix"):
             err.write(_scrub(f"  {doc['fix']}", run.token) + "\n")
         err.flush()
