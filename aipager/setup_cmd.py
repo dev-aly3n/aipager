@@ -206,8 +206,12 @@ def _read_stdin(stdin) -> str | bytes:
     open without ever closing it, and a plain ``read()`` would then wait
     forever. Raises ``SetupError(token_stdin_timeout)`` (exit 2) when the
     pipe has not closed by then. A stdin with no descriptor (a test's
-    ``StringIO``) is read directly."""
-    import select
+    ``StringIO``) is read directly.
+
+    The wait uses ``poll`` (through :mod:`selectors`), not
+    ``select.select``, which fails for a descriptor numbered 1024 or more,
+    and not epoll, which refuses a regular file (``< token.txt``)."""
+    import selectors
     import time
     try:
         fd = stdin.fileno()
@@ -216,26 +220,28 @@ def _read_stdin(stdin) -> str | bytes:
     deadline = time.monotonic() + STDIN_READ_TIMEOUT
     chunks: list[bytes] = []
     total = 0
-    while total <= TOKEN_INPUT_MAX:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise SetupError(
-                EXIT_USAGE, "token_stdin_timeout",
-                f"--token-stdin waited {STDIN_READ_TIMEOUT:g} seconds for stdin "
-                "to close, and it did not.",
-                "Pipe the token in and let the pipe close (for example `printf "
-                "'%s\\n' \"$TOKEN\" | aipager setup --token-stdin ...`), or use "
-                "--token-file PATH.")
-        # Windows cannot select() a pipe (OSError, read as no token by the
-        # caller); the platform is not supported.
-        ready, _w, _x = select.select([fd], [], [], remaining)
-        if not ready:
-            continue
-        chunk = os.read(fd, TOKEN_INPUT_MAX + 1 - total)
-        if not chunk:
-            break
-        chunks.append(chunk)
-        total += len(chunk)
+    # Windows has no poll and cannot wait on a pipe (OSError, read as no
+    # token by the caller); the platform is not supported.
+    selector_cls = getattr(selectors, "PollSelector", selectors.DefaultSelector)
+    with selector_cls() as selector:
+        selector.register(fd, selectors.EVENT_READ)
+        while total <= TOKEN_INPUT_MAX:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SetupError(
+                    EXIT_USAGE, "token_stdin_timeout",
+                    f"--token-stdin waited {STDIN_READ_TIMEOUT:g} seconds for "
+                    "stdin to close, and it did not.",
+                    "Pipe the token in and let the pipe close (for example "
+                    "`printf '%s\\n' \"$TOKEN\" | aipager setup --token-stdin "
+                    "...`), or use --token-file PATH.")
+            if not selector.select(remaining):
+                continue
+            chunk = os.read(fd, TOKEN_INPUT_MAX + 1 - total)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
     return b"".join(chunks)
 
 

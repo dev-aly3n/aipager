@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import resource
 import stat
 import sys
 from pathlib import Path
@@ -1105,6 +1106,96 @@ def test_token_stdin_reads_a_pipe_that_closes(env, monkeypatch):
                                          str(CHAT), stdin=_PipeStdin(r))
     finally:
         os.close(r)
+    assert code == 0 and doc["status"] == "installed"
+
+
+_HIGH_FD = 1100
+# The real setrlimit, taken at import: conftest's autouse
+# ``_never_clamp_the_test_process`` replaces ``resource.setrlimit`` with a
+# recorder that applies nothing, so a call made inside a test is a no-op.
+_REAL_SETRLIMIT = resource.setrlimit
+
+
+def _allow_high_fds(request):
+    """Make descriptors numbered above :data:`_HIGH_FD` usable, raising the
+    soft RLIMIT_NOFILE when needed (restored after the test); skips when
+    the hard limit is too low. Call it before opening anything."""
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    want = _HIGH_FD + 256
+    if soft != resource.RLIM_INFINITY and soft < want:
+        if hard != resource.RLIM_INFINITY and hard < want:
+            pytest.skip(f"RLIMIT_NOFILE hard limit {hard} is below {want}")
+        _REAL_SETRLIMIT(resource.RLIMIT_NOFILE, (want, hard))
+        request.addfinalizer(
+            lambda: _REAL_SETRLIMIT(resource.RLIMIT_NOFILE, (soft, hard)))
+
+
+def _move_to_high_fd(fd):
+    """Move *fd* to the first free descriptor numbered at least
+    :data:`_HIGH_FD` and return it; the old number is closed."""
+    target = _HIGH_FD
+    while True:
+        try:
+            os.fstat(target)
+        except OSError:
+            break
+        target += 1
+    os.dup2(fd, target)
+    os.close(fd)
+    return target
+
+
+def test_token_stdin_reads_a_pipe_on_a_descriptor_above_1024(
+        env, monkeypatch, request):
+    # select.select() refuses a descriptor >= FD_SETSIZE (1024), which a
+    # process with many open files reaches; the read must not depend on it.
+    from aipager import setup_cmd
+    monkeypatch.setattr(setup_cmd, "STDIN_READ_TIMEOUT", 5.0)
+    _allow_high_fds(request)
+    r, w = os.pipe()
+    r = _move_to_high_fd(r)
+    assert r >= 1024
+    os.write(w, (TOKEN + "\n").encode())
+    os.close(w)
+    try:
+        code, doc, _o, _e = env.run_json("setup", "--token-stdin", "--chat-id",
+                                         str(CHAT), stdin=_PipeStdin(r))
+    finally:
+        os.close(r)
+    assert code == 0 and doc["status"] == "installed"
+
+
+def test_token_stdin_times_out_on_a_descriptor_above_1024(
+        env, monkeypatch, request):
+    from aipager import setup_cmd
+    monkeypatch.setattr(setup_cmd, "STDIN_READ_TIMEOUT", 0.2)
+    _allow_high_fds(request)
+    r, w = os.pipe()
+    r = _move_to_high_fd(r)
+    assert r >= 1024
+    writer = _Writer(w, after=3.0)
+    try:
+        code, doc, _o, _e = env.run_json("setup", "--token-stdin", "--chat-id",
+                                         str(CHAT), stdin=_PipeStdin(r))
+    finally:
+        writer.stop()
+        os.close(r)
+    assert code == 2 and doc["error"] == "token_stdin_timeout"
+
+
+def test_token_stdin_reads_a_redirected_regular_file(env, monkeypatch, tmp_path):
+    # `aipager setup --token-stdin < token.txt`: stdin is a regular file,
+    # which epoll refuses to watch; the read must still work.
+    from aipager import setup_cmd
+    monkeypatch.setattr(setup_cmd, "STDIN_READ_TIMEOUT", 5.0)
+    path = tmp_path / "token.txt"
+    path.write_text(TOKEN + "\n")
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        code, doc, _o, _e = env.run_json("setup", "--token-stdin", "--chat-id",
+                                         str(CHAT), stdin=_PipeStdin(fd))
+    finally:
+        os.close(fd)
     assert code == 0 and doc["status"] == "installed"
 
 

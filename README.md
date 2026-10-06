@@ -13,6 +13,31 @@ requests, switch sessions — without an SSH session staying open.
 
 ## Install
 
+Have a coding agent (Claude Code, or any agent with a shell)? Create a
+bot with [@BotFather](https://t.me/BotFather), press Start in it, and
+make sure you are logged in to Claude Code on this machine. Save the
+bot token to a file your agent never has to read (paste the token,
+press Enter, then Ctrl-D):
+
+```sh
+mkdir -p ~/.config/aipager
+(umask 077 && cat > ~/.config/aipager/bot-token)
+chmod 600 ~/.config/aipager/bot-token
+```
+
+Then give your agent this prompt:
+
+```text
+Install aipager for me by following https://aipager.run/agent.md. My Telegram bot token is in ~/.config/aipager/bot-token and my Telegram user id is <your id>.
+```
+
+If you do not know your Telegram user id, say so instead; the agent
+can find it.
+
+The guide it follows, including how to hand over the token safely, is
+[docs/install-with-an-agent.md](docs/install-with-an-agent.md). To
+install it yourself, read on.
+
 Linux or macOS, any architecture. `dtach` is installed automatically
 via the [`dtach-bin`](https://pypi.org/project/dtach-bin/) dependency —
 no separate system package needed.
@@ -181,7 +206,8 @@ automatically. You never edit any file by hand.
 
 Setting aipager up for someone from a script or a coding agent?
 `aipager setup --token-file FILE --chat-id ID` does the same with no
-prompts (see [the setup command](docs/commands.md#command-line-aipager-setup-for-coding-agents)).
+prompts (see [the setup command](docs/commands.md#command-line-aipager-setup-for-coding-agents)
+and [the guide for agents](docs/install-with-an-agent.md)).
 
 ## Run
 

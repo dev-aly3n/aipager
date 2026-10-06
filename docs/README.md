@@ -7,6 +7,7 @@ them.
 
 | Doc | What it covers |
 |---|---|
+| [Install with an agent](install-with-an-agent.md) | The steps a coding agent follows to install and set up aipager for its person |
 | [Architecture](architecture.md) | Process model, component diagram, file & socket layout |
 | [Hook events](hooks.md) | Every event the daemon ingests from Claude Code, with payload fields |
 | [Bot commands](commands.md) | Slash commands, inline buttons, voice / file routing |
