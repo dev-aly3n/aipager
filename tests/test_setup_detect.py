@@ -111,13 +111,14 @@ def test_found_prints_candidate_and_writes_nothing(env):
     env.updates = [_msg(5555, NOW - 30)]
     before = env.snapshot()
     code, doc, out, err = env.run()
-    assert code == 0, err
+    assert code == 0, "unexpected exit code"
     assert set(doc) == KEYS
     assert doc["status"] == "found" and doc["source"] == "telegram"
     assert doc["candidate"] == {"id": 5555, "first_name": "Ada", "last_name": None,
                                 "username": "ada", "date": NOW - 30}
     assert f"--token-file {env.token_file} --chat-id 5555" in doc["next_step"]
-    assert TOKEN not in out + err and SECRET not in out + err
+    if TOKEN in out + err or SECRET in out + err:
+        pytest.fail("token leaked", pytrace=False)
     assert env.snapshot() == before
     assert env.sends == []
     assert not scope_mod.CONFIG_PATH.exists()
@@ -146,11 +147,11 @@ def test_lookback_boundary(env):
     from aipager.wizard import telegram_api
     nb = NOW - setup_detect.DETECT_LOOKBACK_SECONDS
     env.updates = [_msg(1, nb - 1), _msg(2, nb)]
-    cand, others, _c, _e = telegram_api._newest_private_chat(TOKEN, not_before=nb)
+    cand, others, _c, _e, _f = telegram_api._newest_private_chat(TOKEN, not_before=nb)
     assert cand is not None, "a message dated exactly not_before must count"
     assert cand["id"] == 2 and others == 0
     env.updates = [_msg(1, nb - 1)]
-    cand, others, _c, _e = telegram_api._newest_private_chat(TOKEN, not_before=nb)
+    cand, others, _c, _e, _f = telegram_api._newest_private_chat(TOKEN, not_before=nb)
     assert cand is None
 
 
@@ -165,7 +166,7 @@ def test_newest_private_wins_and_others_are_counted(env):
     from aipager.wizard import telegram_api
     env.updates = [_msg(1, NOW - 50), _msg(-100, NOW - 5, kind="group"),
                    _msg(2, NOW - 10), _msg(3, NOW - 40)]
-    cand, others, _c, _e = telegram_api._newest_private_chat(TOKEN,
+    cand, others, _c, _e, _f = telegram_api._newest_private_chat(TOKEN,
                                                              not_before=NOW - 600)
     assert cand["id"] == 2 and others == 2
 
@@ -266,3 +267,45 @@ def test_daemon_source_that_finds_an_id_succeeds(env, monkeypatch):
     code, doc, _o, _e = env.run()
     assert code == 0 and doc["candidate"]["id"] == 77
     assert doc["candidate"]["username"] == "bob"
+
+
+# ----- fix iteration 2 -----
+
+def test_empty_timeout_is_a_bad_timeout(env):
+    code, doc, _o, _e = env.run("--timeout", "")
+    assert code == 2 and doc["error"] == "bad_timeout"
+    assert env.urls == []
+
+
+def _old_updates(n):
+    # Older than the lookback window, so none is a candidate.
+    return [_msg(1000 + i, NOW - 3600) for i in range(n)]
+
+
+def test_full_batch_of_old_updates_says_the_backlog_hides_new_ones(env):
+    env.updates = _old_updates(100)
+    code, doc, _o, _e = env.run("--timeout", "4")
+    assert code == 8 and doc["error"] == "detect_timeout"
+    assert [w["code"] for w in doc["warnings"]] == ["updates_backlog"]
+    assert "oldest 100" in doc["message"]
+    assert "--chat-id" in doc["fix"] and "press Start" not in doc["fix"]
+
+
+def test_a_batch_under_100_is_a_plain_timeout(env):
+    env.updates = _old_updates(99)
+    code, doc, _o, _e = env.run("--timeout", "4")
+    assert code == 8 and doc["warnings"] == []
+    assert "press Start" in doc["fix"]
+
+
+def test_backlog_is_judged_by_the_last_answered_poll(env):
+    full = ({"ok": True, "result": _old_updates(100)}, 200, "")
+    env.polls = [full, full]          # then empty batches until the deadline
+    code, doc, _o, _e = env.run("--timeout", "6")
+    assert code == 8 and doc["warnings"] == []
+
+
+def test_backlog_shows_in_plain_output(env):
+    env.updates = _old_updates(100)
+    code, _doc, _o, err = env.run("--timeout", "0", as_json=False)
+    assert code == 8 and "oldest 100" in err

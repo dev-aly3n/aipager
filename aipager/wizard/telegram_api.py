@@ -124,26 +124,35 @@ def _test_send(token: str, chat_id: int) -> tuple[bool, str]:
     return ok, desc
 
 
+#: Telegram's default (and maximum) ``getUpdates`` batch size.
+GET_UPDATES_BATCH = 100
+
+
 def _newest_private_chat(
     token: str, *, not_before: int,
-) -> tuple[dict | None, int, int | None, str]:
+) -> tuple[dict | None, int, int | None, str, bool]:
     """ONE read-only ``getUpdates`` (no ``offset``, ``timeout`` or
     ``limit``: a positive offset would confirm, and so delete, the very
     ``/start`` the wizard or a later daemon still needs) for the newest
     private message dated ``not_before`` or later.
 
-    Returns ``(candidate, other_count, http_status, error)``.
+    Returns ``(candidate, other_count, http_status, error, batch_full)``.
     ``candidate`` is ``{id, first_name, last_name, username, date}`` or
     ``None``; ``other_count`` counts the other private chats seen in the
-    same window, so a caller can tell a person to double-check."""
+    same window, so a caller can tell a person to double-check.
+    ``batch_full`` is true when Telegram returned a full batch of
+    :data:`GET_UPDATES_BATCH` updates: with no ``offset`` those are the
+    OLDEST unconfirmed ones, so a newer ``/start`` may not be in it."""
     body, code, err = _http_json(
         f"https://api.telegram.org/bot{token}/getUpdates"
     )
     if not body or not body.get("ok"):
-        return None, 0, code, err
+        return None, 0, code, err, False
     best: dict | None = None
     seen: set[int] = set()
-    for u in body.get("result") or []:
+    result = body.get("result") or []
+    batch_full = isinstance(result, list) and len(result) >= GET_UPDATES_BATCH
+    for u in result:
         if not isinstance(u, dict):
             continue
         msg = u.get("message") or u.get("edited_message") or {}
@@ -168,7 +177,7 @@ def _newest_private_chat(
                 "date": date,
             }
     others = len(seen - {best["id"]}) if best is not None else 0
-    return best, others, code, ""
+    return best, others, code, "", batch_full
 
 
 def _migrated_hint(body) -> str:

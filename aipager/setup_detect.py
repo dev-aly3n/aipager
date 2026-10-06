@@ -49,6 +49,13 @@ AGENT_DAEMON_DM_FIX = (
     "`aipager start`) and run this again, or ask the person for their "
     "numeric Telegram id and pass it to `aipager setup --chat-id`.")
 
+#: Telegram returned a full batch of old updates, hiding newer ones.
+DETECT_BACKLOG_ADVISORY = (
+    "The bot has 100 or more unread updates from the last 24 hours, and "
+    "Telegram shows detect-chat only the oldest 100 of them (detect-chat "
+    "never confirms updates, so it cannot page past them), so a new /start "
+    "cannot be seen.")
+
 _TIMEOUT_RE = re.compile(r"\d{1,6}")
 
 
@@ -173,8 +180,9 @@ def cmd_detect_chat(args: argparse.Namespace, run: _Run) -> int:
     not_before = int(start) - DETECT_LOOKBACK_SECONDS
     deadline = _monotonic() + timeout
     last_failed = False
+    backlog = False
     while True:
-        candidate, others, code, _err = telegram_api._newest_private_chat(
+        candidate, others, code, _err, full = telegram_api._newest_private_chat(
             run.token, not_before=not_before)
         if candidate is not None:
             return _found(run, candidate, others)
@@ -192,6 +200,8 @@ def cmd_detect_chat(args: argparse.Namespace, run: _Run) -> int:
                 "Check the token (copy it again from @BotFather), then run "
                 "this again.")
         last_failed = code is None or code == 429 or code >= 500
+        if not last_failed:
+            backlog = full
         remaining = deadline - _monotonic()
         if remaining <= 0:
             break
@@ -201,6 +211,19 @@ def cmd_detect_chat(args: argparse.Namespace, run: _Run) -> int:
             EXIT_TELEGRAM_UNREACHABLE, "telegram_unreachable",
             "Could not reach Telegram to look for the person's message.",
             "Check the network connection, then run this again.")
+    if backlog:
+        # Without an offset Telegram shows only the oldest 100 unread
+        # updates, so pressing Start again cannot help: say so.
+        doc["warnings"].append({
+            "code": "updates_backlog",
+            "message": DETECT_BACKLOG_ADVISORY,
+        })
+        raise SetupError(
+            EXIT_DETECT_TIMEOUT, "detect_timeout",
+            f"No private message to the bot was found within {timeout} "
+            f"seconds. {DETECT_BACKLOG_ADVISORY}",
+            "Ask the person for their numeric Telegram id and pass it to "
+            "`aipager setup --chat-id`.")
     raise SetupError(
         EXIT_DETECT_TIMEOUT, "detect_timeout",
         f"No private message to the bot arrived within {timeout} seconds.",
