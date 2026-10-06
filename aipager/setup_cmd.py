@@ -52,6 +52,8 @@ SETUP_TEST_TEXT = ("aipager is set up for you. Messages from your Claude Code "
 
 #: The token file / stdin is read up to this many bytes (characters).
 TOKEN_INPUT_MAX = 4096
+#: Seconds ``--token-stdin`` waits for the pipe to close.
+STDIN_READ_TIMEOUT = 30.0
 
 #: `changed` values, in the order they are reported.
 CHANGE_ORDER = ("migrated_v1", "bot_token", "owner_dm", "role",
@@ -175,18 +177,18 @@ def _read_token(args: argparse.Namespace) -> tuple[str, list[dict]]:
                 "Pipe the token in (for example `aipager setup --token-stdin ... "
                 "< token.txt`), or use --token-file PATH.")
         try:
-            raw = stdin.read(TOKEN_INPUT_MAX + 1) if stdin is not None else ""
+            raw = _read_stdin(stdin) if stdin is not None else ""
         except (OSError, UnicodeError, ValueError):
             raw = ""
         raw = raw or ""
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8", "replace")
         where = "stdin"
         fix = "Pipe only the bot token into --token-stdin."
         if len(raw) > TOKEN_INPUT_MAX:
             raise SetupError(EXIT_USAGE, "token_malformed",
                              f"stdin held more than {TOKEN_INPUT_MAX} characters; "
                              "it should hold only the bot token.", fix)
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8", "replace")
     token = _normalize_token(raw)
     if not _TOKEN_RE.fullmatch(token):
         raise SetupError(
@@ -194,6 +196,45 @@ def _read_token(args: argparse.Namespace) -> tuple[str, list[dict]]:
             f"{where} does not hold a bot token (it looks like "
             "123456789:AA... and comes from @BotFather).", fix)
     return token, warnings
+
+
+def _read_stdin(stdin) -> str | bytes:
+    """At most ``TOKEN_INPUT_MAX + 1`` bytes of stdin, up to its end.
+
+    A real pipe is read through its file descriptor with a deadline of
+    :data:`STDIN_READ_TIMEOUT` seconds: some agent harnesses leave stdin
+    open without ever closing it, and a plain ``read()`` would then wait
+    forever. Raises ``SetupError(token_stdin_timeout)`` (exit 2) when the
+    pipe has not closed by then. A stdin with no descriptor (a test's
+    ``StringIO``) is read directly."""
+    import select
+    import time
+    try:
+        fd = stdin.fileno()
+    except (AttributeError, OSError, ValueError):
+        return stdin.read(TOKEN_INPUT_MAX + 1)
+    deadline = time.monotonic() + STDIN_READ_TIMEOUT
+    chunks: list[bytes] = []
+    total = 0
+    while total <= TOKEN_INPUT_MAX:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise SetupError(
+                EXIT_USAGE, "token_stdin_timeout",
+                f"--token-stdin waited {STDIN_READ_TIMEOUT:g} seconds for stdin "
+                "to close, and it did not.",
+                "Pipe the token in and let the pipe close (for example `printf "
+                "'%s\\n' \"$TOKEN\" | aipager setup --token-stdin ...`), or use "
+                "--token-file PATH.")
+        ready, _w, _x = select.select([fd], [], [], remaining)
+        if not ready:
+            continue
+        chunk = os.read(fd, TOKEN_INPUT_MAX + 1 - total)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+    return b"".join(chunks)
 
 
 # ----- flag validation -----
@@ -263,7 +304,10 @@ def _validate_flags(args: argparse.Namespace, run: _Run) -> None:
             "Pass --chat-id N with the person's numeric Telegram user id "
             "(`aipager setup detect-chat` finds it).")
     run.doc["chat_id"] = int(raw_chat)
-    role = getattr(args, "role", None) or "owner"
+    # `--role ''` is a given-but-empty value, not "use the default".
+    role = getattr(args, "role", None)
+    if role is None:
+        role = "owner"
     if role not in ROLES:
         raise SetupError(EXIT_USAGE, "bad_role",
                          "--role must be owner or admin.",
@@ -422,12 +466,15 @@ def _ordered(changed) -> list[str]:
     return [c for c in CHANGE_ORDER if c in changed]
 
 
-def _daemon_running() -> bool:
+def _daemon_running() -> bool | None:
+    """``True``/``False``, or ``None`` when detection itself failed.
+    Callers treat ``None`` as running: ``--service`` must never restart a
+    live daemon because the check could not tell."""
     from aipager.wizard import daemon_io
     try:
         return daemon_io._detect_daemon_running() is not None
     except Exception:
-        return False
+        return None
 
 
 def _load_existing():
@@ -513,9 +560,18 @@ def _setup(args: argparse.Namespace, run: _Run) -> int:
             + ". Nothing was written.",
             "Install them, then run this again: "
             + "; ".join(f"{d.name}: {d.fix}" for d in missing))
-    running = _daemon_running()
+    detected = _daemon_running()
+    running = detected is not False
     doc["daemon"] = {"running": running, "reload": "not_needed",
                      "restart_needed": False}
+    if detected is None:
+        doc["warnings"].append({
+            "code": "daemon_unknown",
+            "message": ("Could not tell whether an aipager daemon is running, "
+                        "so setup treats it as running (it installs no "
+                        "service and asks for a restart where one would be "
+                        "needed). Check with `aipager doctor --json`."),
+        })
 
     first_error = next((errors[k] for k in (
         "config_malformed", "ambiguous_install", "existing_install",
@@ -617,8 +673,10 @@ def _test_send_or_raise(run: _Run, chat_id: int, username: str | None) -> None:
         raise SetupError(
             EXIT_CHAT_NOT_STARTED, "chat_not_started",
             f"Telegram will not let the bot message chat {chat_id} yet: that "
-            "person has not pressed Start in the bot. Nothing was written.",
-            f"Open {link} and press Start, then run this again.")
+            "person has not pressed Start in the bot (or the id is not theirs). "
+            "Nothing was written.",
+            f"Open {link} and press Start, then run this again. Also check "
+            "that --chat-id is the person's own numeric Telegram id.")
     if _BLOCKED_RE.search(desc):
         who = f"@{username}" if username else "the bot"
         raise SetupError(
@@ -739,7 +797,9 @@ def _install_service_step(run: _Run, running: bool, changed: list[str]) -> None:
 def _next_step(doc: dict) -> str:
     daemon = doc.get("daemon") or {}
     if daemon.get("restart_needed"):
-        return ("Restart the daemon to use the new bot token: run `aipager "
+        why = ("to use the new bot token" if "bot_token" in doc.get("changed", [])
+               else "to apply the change")
+        return (f"Restart the daemon {why}: run `aipager "
                 "service stop` and then `aipager service start` (or stop a "
                 "foreground `aipager start` and run it again).")
     if any(w.get("code") == "reload_refused" for w in doc["warnings"]):
@@ -802,11 +862,13 @@ def cmd_setup(args: argparse.Namespace) -> int:
     as_json = bool(getattr(args, "as_json", False))
     out = sys.stdout
     run = _Run(command=command, as_json=as_json, doc={})
+    quarantine = (contextlib.redirect_stdout(sys.stderr) if as_json
+                  else contextlib.nullcontext())
     try:
-        run.doc = _base_doc(command, args)
-        quarantine = (contextlib.redirect_stdout(sys.stderr) if as_json
-                      else contextlib.nullcontext())
         with quarantine:
+            # Inside the quarantine: building the document imports modules,
+            # and import-time output must not reach the JSON stdout.
+            run.doc = _base_doc(command, args)
             code = _dispatch(args, run)
     except SetupError as e:
         code = _fail(run, e.code, e.error, e.message, e.fix)
@@ -814,6 +876,8 @@ def cmd_setup(args: argparse.Namespace) -> int:
         code = _fail(run, EXIT_INTERRUPTED, "interrupted", "Interrupted.",
                      "Run the command again.")
     except BaseException as e:  # noqa: BLE001 (the boundary: scrub and report)
+        # Defense in depth only: _emit scrubs every line it writes, and is
+        # the guard of record (its tests cover this path).
         code = _fail(run, EXIT_FAILURE, "internal_error",
                      _scrub(f"{type(e).__name__}: {e}", run.token),
                      "Run `aipager doctor --json`; if this keeps happening, "

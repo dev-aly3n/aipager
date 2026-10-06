@@ -181,7 +181,7 @@ GROUP = Scope(chat_id=-1001234, kind="group", label="team",
 
 def test_fresh_install_writes_the_wizard_result(env):
     code, doc, out, err = env.setup()
-    assert code == 0, err
+    assert code == 0, "unexpected exit code"
     assert doc["status"] == "installed" and doc["ok"] is True
     assert doc["changed"] == ["bot_token", "owner_dm", "settings_json"]
     data = yaml.safe_load(env.yaml_path.read_text())
@@ -203,7 +203,7 @@ def test_fresh_install_via_stdin(env):
     code, doc, out, err = env.run_json(
         "setup", "--token-stdin", "--chat-id", str(CHAT),
         stdin=io.StringIO(TOKEN + "\n"))
-    assert code == 0, err
+    assert code == 0, "unexpected exit code"
     assert yaml.safe_load(env.yaml_path.read_text())["bot_token"] == TOKEN
 
 
@@ -226,9 +226,11 @@ def test_plain_unchanged_rerun_says_nothing_to_change(env):
 # ----- token hygiene -----
 
 def _assert_no_token(*texts):
+    # pytest.fail with a fixed message: an `assert TOKEN not in t` would
+    # print t (which then holds the token) in the failure report.
     for t in texts:
-        assert TOKEN not in t, "token leaked"
-        assert SECRET not in t, "token secret leaked"
+        if TOKEN in t or SECRET in t:
+            pytest.fail("token leaked", pytrace=False)
 
 
 def test_token_never_in_argv_output_or_json(env, caplog):
@@ -291,7 +293,7 @@ def test_garbage_token_file_is_refused_before_any_http(env):
 def test_token_with_text_around_it_is_accepted(env):
     env.token_file.write_text(f'# my bot\nTOKEN="{TOKEN}"\n')
     code, doc, _o, err = env.setup()
-    assert code == 0, err
+    assert code == 0, "unexpected exit code"
 
 
 def test_token_file_must_be_a_regular_file(env):
@@ -368,16 +370,18 @@ def test_both_token_sources_conflict(env):
 
 def test_scrub_removes_token_secret_and_shapes():
     from aipager.setup_cmd import _scrub
-    assert TOKEN not in _scrub(f"a {TOKEN} b", TOKEN)
-    assert SECRET not in _scrub(f"secret={SECRET}", TOKEN)
-    assert TOKEN2 not in _scrub(f"other {TOKEN2}", TOKEN)
+    for text, secret in ((f"a {TOKEN} b", TOKEN), (f"secret={SECRET}", SECRET),
+                         (f"other {TOKEN2}", TOKEN2)):
+        if secret in _scrub(text, TOKEN):
+            pytest.fail("_scrub left a token in place", pytrace=False)
     assert _scrub("plain text", TOKEN) == "plain text"
 
 
 def test_run_repr_hides_token():
     from aipager.setup_cmd import _Run
     r = _Run(command="setup", as_json=True, doc={}, token=TOKEN)
-    assert TOKEN not in repr(r)
+    if TOKEN in repr(r):
+        pytest.fail("token in repr", pytrace=False)
 
 
 def test_plain_error_path_is_scrubbed(env):
@@ -620,7 +624,7 @@ def _v1(env, monkeypatch, chat=CHAT, token=TOKEN):
 def test_v1_install_is_migrated_then_planned(env, monkeypatch):
     _v1(env, monkeypatch)
     code, doc, _o, err = env.setup("--role", "admin")
-    assert code == 0, err
+    assert code == 0, "unexpected exit code"
     assert doc["changed"][:1] == ["migrated_v1"]
     scopes, tok = scope_mod.load_scopes(scope_mod.CONFIG_PATH)
     assert tok == TOKEN and scopes == [_dm(CHAT, role="admin")]
@@ -695,7 +699,7 @@ def test_service_install_ignores_the_stale_config_snapshot(env, monkeypatch):
     monkeypatch.setattr("aipager.config.SCOPES", None)
     monkeypatch.setattr("aipager.config.CONFIG_ERROR", None)
     code, doc, _o, err = env.setup("--service")
-    assert code == 0, err
+    assert code == 0, "unexpected exit code"
     assert env.installs == [True]
 
 
@@ -867,5 +871,234 @@ def test_no_prompt_and_no_tty_needed(env, monkeypatch):
     code, doc, _o, err = env.run_json(
         "setup", "--token-stdin", "--chat-id", str(CHAT),
         stdin=io.StringIO(TOKEN))
-    assert code == 0, err
+    assert code == 0, "unexpected exit code"
     assert calls == []
+
+
+# ----- fix iteration 2 -----
+
+def _fail_if_token_in(what, *texts):
+    """Fail with a fixed message: never echo text that may hold a token."""
+    for t in texts:
+        if TOKEN in t or SECRET in t:
+            pytest.fail(f"token leaked in {what}", pytrace=False)
+
+
+def test_empty_role_is_a_bad_role_not_the_default(env):
+    code, doc, _o, _e = env.setup("--role", "")
+    assert code == 2 and doc["error"] == "bad_role" and "--role" in doc["fix"]
+    assert env.tg.urls == [] and not env.yaml_path.exists()
+
+
+def test_empty_token_file_path_is_unreadable(env):
+    code, doc, _o, _e = env.run_json("setup", "--token-file", "",
+                                     "--chat-id", str(CHAT))
+    assert code == 2 and doc["error"] == "token_file_unreadable"
+    assert env.tg.urls == []
+
+
+def test_empty_timeout_without_detect_chat_is_a_usage_error(env):
+    code, doc, _o, _e = env.setup("--timeout", "")
+    assert code == 2 and doc["error"] == "usage" and "--timeout" in doc["fix"]
+
+
+@pytest.mark.parametrize("extra", [["--role", ""], ["--chat-id", ""]])
+def test_empty_install_flags_rejected_with_detect_chat(env, extra):
+    code, doc, _o, _e = env.run_json("setup", "detect-chat", "--token-file",
+                                     str(env.token_file), *extra)
+    assert code == 2 and doc["error"] == "usage"
+    assert env.tg.urls == []
+
+
+@pytest.mark.parametrize("how", ["none", "raises"])
+def test_service_not_installed_when_the_written_yaml_does_not_load(
+        env, monkeypatch, how):
+    """The fresh load_scopes before the installer is the guard: the yaml
+    is broken only for the service step (after the write and reload)."""
+    from aipager import setup_cmd
+
+    real_after = setup_cmd._after_yaml_change
+
+    def _broken_load(path):
+        if how == "raises":
+            raise scope_mod.ScopeConfigError("broken")
+        return None
+
+    def _after_then_break(*a, **kw):
+        real_after(*a, **kw)
+        monkeypatch.setattr(scope_mod, "load_scopes", _broken_load)
+
+    monkeypatch.setattr(setup_cmd, "_after_yaml_change", _after_then_break)
+    code, doc, _o, _e = env.setup("--service")
+    assert code == 1 and doc["error"] == "service_failed"
+    assert doc["service"]["result"] == "failed"
+    assert env.installs == []
+
+
+def test_scope_change_restart_wording_names_no_token(env):
+    _write_yaml([_dm(CHAT, role="admin")])
+    env.daemon_pid = -1
+    env.reload_outcome = ("not_reloaded", None)
+    code, doc, _o, _e = env.setup("--force")
+    assert code == 0 and doc["changed"][0] == "role"
+    assert doc["daemon"]["restart_needed"] is True
+    assert "bot token" not in doc["next_step"]
+    assert "Restart the daemon to apply the change" in doc["next_step"]
+
+
+def test_token_change_restart_wording_names_the_token(env):
+    _write_yaml([_dm(CHAT)], token=TOKEN2)
+    env.daemon_pid = 4321
+    code, doc, _o, _e = env.setup("--force")
+    assert code == 0
+    assert "Restart the daemon to use the new bot token" in doc["next_step"]
+
+
+def test_daemon_detection_error_counts_as_running_for_the_service(env, monkeypatch):
+    from aipager.wizard import daemon_io
+
+    def _boom():
+        raise RuntimeError("socket probe failed")
+
+    monkeypatch.setattr(daemon_io, "_detect_daemon_running", _boom)
+    code, doc, _o, _e = env.setup("--service")
+    assert code == 0 and env.installs == []
+    assert doc["service"]["result"] == "skipped_daemon_running"
+    assert doc["daemon"]["running"] is True
+    assert "daemon_unknown" in [w["code"] for w in doc["warnings"]]
+
+
+def test_service_already_installed_when_the_unit_is_unchanged(env, monkeypatch):
+    from aipager import service
+    unit = env.tmp / "aipager.service"
+    unit.write_bytes(b"[Unit]\nDescription=aipager\n")
+    monkeypatch.setattr(service, "unit_path", lambda: unit)
+    code, doc, _o, _e = env.setup("--service")
+    assert code == 0 and env.installs == [True]
+    assert doc["service"]["result"] == "already_installed"
+    assert "service" not in doc["changed"]
+
+
+def test_service_installed_when_the_installer_rewrites_the_unit(env, monkeypatch):
+    from aipager import service
+    unit = env.tmp / "aipager.service"
+    unit.write_bytes(b"old")
+    monkeypatch.setattr(service, "unit_path", lambda: unit)
+    monkeypatch.setattr(service, "install_service",
+                        lambda *, yes: unit.write_bytes(b"new") and 0)
+    code, doc, _o, _e = env.setup("--service")
+    assert code == 0 and doc["service"]["result"] == "installed"
+    assert "service" in doc["changed"]
+
+
+def test_token_change_with_no_daemon_needs_no_restart(env):
+    _write_yaml([_dm(CHAT)], token=TOKEN2)
+    env.daemon_pid = None
+    code, doc, _o, _e = env.setup("--force")
+    assert code == 0 and "bot_token" in doc["changed"]
+    assert doc["daemon"] == {"running": False, "reload": "not_needed",
+                             "restart_needed": False}
+    assert "Restart" not in doc["next_step"]
+    assert env.reloads == []
+
+
+def test_dry_run_service_skipped_while_a_daemon_runs(env):
+    env.daemon_pid = 4321
+    before = env.snapshot()
+    code, doc, _o, _e = env.setup("--dry-run", "--service")
+    assert code == 0 and doc["status"] == "dry_run"
+    assert doc["service"]["result"] == "skipped_daemon_running"
+    assert "service" not in doc["changed"]
+    assert env.installs == [] and env.snapshot() == before
+
+
+def test_plain_warning_lines_are_scrubbed(env):
+    shared = env.tmp / f"{TOKEN}.txt"
+    shared.write_text(TOKEN + "\n")
+    os.chmod(shared, 0o644)
+    code, out, err = env.run("setup", "--token-file", str(shared),
+                             "--chat-id", str(CHAT))
+    assert code == 0
+    assert "readable by other users" in err and "<redacted>" in err
+    _fail_if_token_in("plain output", out, err)
+
+
+class _PipeStdin:
+    """stdin backed by a real pipe (an fd, no socket), never a TTY."""
+
+    def __init__(self, fd):
+        self._fd = fd
+
+    def fileno(self):
+        return self._fd
+
+    def isatty(self):
+        return False
+
+    def read(self, n=-1):  # a blocking read here would be the bug
+        raise AssertionError("stdin read without the bounded fd path")
+
+
+def test_token_stdin_times_out_on_a_pipe_that_never_closes(env, monkeypatch):
+    from aipager import setup_cmd
+    monkeypatch.setattr(setup_cmd, "STDIN_READ_TIMEOUT", 0.2)
+    r, w = os.pipe()
+    try:
+        os.write(w, (TOKEN + "\n").encode())
+        code, doc, _o, _e = env.run_json("setup", "--token-stdin", "--chat-id",
+                                         str(CHAT), stdin=_PipeStdin(r))
+    finally:
+        os.close(w)
+        os.close(r)
+    assert code == 2 and doc["error"] == "token_stdin_timeout"
+    assert "--token-file PATH" in doc["fix"]
+    assert env.tg.urls == []
+    _fail_if_token_in("the JSON", json.dumps(doc))
+
+
+def test_token_stdin_reads_a_pipe_that_closes(env, monkeypatch):
+    from aipager import setup_cmd
+    monkeypatch.setattr(setup_cmd, "STDIN_READ_TIMEOUT", 5.0)
+    r, w = os.pipe()
+    os.write(w, (TOKEN + "\n").encode())
+    os.close(w)
+    try:
+        code, doc, _o, _e = env.run_json("setup", "--token-stdin", "--chat-id",
+                                         str(CHAT), stdin=_PipeStdin(r))
+    finally:
+        os.close(r)
+    assert code == 0 and doc["status"] == "installed"
+
+
+def test_token_stdin_pipe_oversize_is_refused(env, monkeypatch):
+    from aipager import setup_cmd
+    monkeypatch.setattr(setup_cmd, "STDIN_READ_TIMEOUT", 5.0)
+    r, w = os.pipe()
+    os.write(w, (TOKEN + "\n").encode().ljust(4097, b" "))
+    os.close(w)
+    try:
+        code, doc, _o, _e = env.run_json("setup", "--token-stdin", "--chat-id",
+                                         str(CHAT), stdin=_PipeStdin(r))
+    finally:
+        os.close(r)
+    assert code == 2 and doc["error"] == "token_malformed"
+
+
+def test_help_topic_never_echoes_a_token(env):
+    code, out, err = env.run("help", TOKEN)
+    assert code == 2 and "Unknown subcommand" in out + err
+    _fail_if_token_in("help output", out, err)
+
+
+def test_building_the_document_is_inside_the_json_quarantine(env, monkeypatch):
+    from aipager import setup_cmd
+    real = setup_cmd._base_doc
+
+    def _noisy(command, args):
+        print("import-time noise")
+        return real(command, args)
+
+    monkeypatch.setattr(setup_cmd, "_base_doc", _noisy)
+    code, doc, _out, err = env.setup()
+    assert code == 0 and doc is not None, "stdout must be one JSON object"
+    assert "import-time noise" in err
