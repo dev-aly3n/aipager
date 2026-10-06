@@ -801,19 +801,26 @@ as the wizard writes them:
 - The audit log gets a `grant-owner` record when someone becomes owner.
 - With `--service`, the background service (the same as `aipager
   service install --yes`).
+- On an old `config.env` install only (no `aipager.yaml` yet), the
+  migration the wizard does: a copy `config.env.bak.<time>` (and
+  `team.yaml.bak.<time>` when there is a `team.yaml`), and a starter
+  `~/.config/aipager/policy.yaml` when none exists. `config.env` itself
+  is left as it is.
 
 If any check fails, nothing is sent and nothing is written. When a
 daemon is already running, a change of chat or role is reloaded live; a
 new bot token needs a restart (`aipager service stop`, then `aipager
 service start`), which setup never does itself, and `--service` is
-skipped.
+skipped. If setup cannot tell whether a daemon runs, it acts as if one
+does (warning `daemon_unknown`): it never installs the service then, so
+it can never restart a live daemon.
 
 ### `aipager setup` flags
 
 | Flag | Meaning |
 |---|---|
 | `--token-file PATH` | Read the bot token from this file (at most 4096 bytes; text around one token is fine). A file other users can read works but gives the warning `token_file_shared`: `chmod 600` it, or delete it once setup succeeds. |
-| `--token-stdin` | Read the bot token from stdin (a pipe, never a terminal). |
+| `--token-stdin` | Read the bot token from stdin (a pipe or a redirected file, never a terminal). The pipe must close: setup waits at most 30 seconds for the end of stdin, then exits 2 with `token_stdin_timeout`. `printf '%s\n' "$TOKEN" \| aipager setup --token-stdin ...` and `< token.txt` both close it. |
 | `--chat-id N` | Required. The person's numeric Telegram user id, which is also their DM chat id. Groups are added with `aipager config`. |
 | `--role owner\|admin` | The person's role (default `owner`). |
 | `--service` | Also install and start the background service (skipped while a daemon runs). |
@@ -855,19 +862,26 @@ the daemon (`aipager service stop`) and run it again, or ask the person
 for their numeric id. With a daemon for a different bot, it reads
 Telegram directly (`source: "telegram"`).
 
+Limit: since detect-chat never confirms a message, Telegram shows it
+only the oldest 100 unread updates of the last 24 hours. When the bot
+has that many waiting, a new `/start` cannot be seen: detect-chat then
+times out (exit 8) with the warning `updates_backlog`, and pressing
+Start again does not help. Ask the person for their numeric Telegram id
+instead (or start the daemon once, which reads and clears the backlog).
+
 ### Exit codes
 
 | Code | `error` | Meaning |
 |---|---|---|
 | 0 | | Success (`installed`, `updated`, `unchanged`, `dry_run`, or detect-chat `found`). |
 | 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | Failure. `ambiguous_install`: more than one DM could be the owner's; fix it in `aipager config`. |
-| 2 | `usage`, `missing_token_source`, `token_source_conflict`, `token_file_unreadable`, `token_stdin_is_tty`, `token_malformed`, `token_on_command_line`, `bad_chat_id`, `bad_role`, `bad_timeout` | Bad or missing input; `fix` names the flag. An unknown flag or a wrong word after `setup` is reported by the argument parser (plain text, no JSON), also exit 2. |
+| 2 | `usage`, `missing_token_source`, `token_source_conflict`, `token_file_unreadable`, `token_stdin_is_tty`, `token_stdin_timeout`, `token_malformed`, `token_on_command_line`, `bad_chat_id`, `bad_role`, `bad_timeout` | Bad or missing input; `fix` names the flag. An unknown flag or a wrong word after `setup` is reported by the argument parser (plain text, no JSON), also exit 2. |
 | 3 | `deps_missing` | dtach, claude, aipager-hook or aipager-statusline is missing; `fix` has the commands. Nothing was written. |
 | 4 | `token_rejected` | Telegram rejected the token. |
 | 5 | `chat_not_started`, `bot_blocked` | The person has not pressed Start in the bot ("Open t.me/<bot> and press Start, then run this again."), or has blocked it. Nothing was written. |
 | 6 | `existing_install` | A different token, chat or role is already set up; add `--force`. |
 | 7 | `telegram_unreachable` | Network error, or Telegram answered 429 or 5xx. |
-| 8 | `detect_timeout` | detect-chat saw no private message before `--timeout`. |
+| 8 | `detect_timeout` | detect-chat saw no private message before `--timeout` (with the warning `updates_backlog` when 100 old unread updates hide newer ones). |
 | 9 | `daemon_running` | detect-chat: a running daemon holds the bot's messages. |
 | 10 | `updates_conflict` | detect-chat: another program reads this bot's messages. |
 | 130 | `interrupted` | Ctrl-C. |
@@ -920,7 +934,10 @@ Every key is always present; a value not known yet is `null`.
   `skipped_daemon_running`, `would_install`, `failed`, or `null` when
   setup stopped before it.
 - `warnings`: objects with `code` (`token_file_shared`,
-  `reload_refused`) and `message`.
+  `reload_refused`, `daemon_unknown`) and `message`.
+- `next_step` after a change while a daemon runs that could not be
+  reloaded says to restart it (`aipager service stop`, then `aipager
+  service start`); it names the bot token only when the token changed.
 - On an error, `status` is `error` and `error`, `message` and `fix` say
   what went wrong and what to do; `next_step` repeats `fix`.
 
@@ -944,7 +961,9 @@ Every key is always present; a value not known yet is `null`.
 }
 ```
 
-`candidate` is `null` unless `status` is `found`. `other_candidates`
+`candidate` is `null` unless `status` is `found`. `warnings` holds
+objects with `code` (`token_file_shared`, `updates_backlog`) and
+`message`. `other_candidates`
 counts other people who messaged the bot in the same 10 minutes: when
 it is not 0, make sure you have the right person. `next_step` repeats
 the token flag you used, never the token.
@@ -971,7 +990,8 @@ The checks of `aipager doctor` as one JSON object on stdout. Like plain
 `claude`, `claude_auth`, `dtach`, `hook_scripts`, `settings_json`,
 `daemon`, `service_installed`, `service_unit_path`, `miniapp`. A check
 that crashes keeps its key with status `warn`. Texts are plain (no
-markup).
+markup), and anything shaped like a bot token is replaced by
+`<redacted>`.
 
 ## See also
 
