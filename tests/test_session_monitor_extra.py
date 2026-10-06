@@ -143,7 +143,7 @@ def test_loop_swallows_scan_exception(monkeypatch, run_async):
         sleep_calls["n"] += 1
         if sleep_calls["n"] >= 2:
             raise asyncio.CancelledError("done")
-    monkeypatch.setattr("aipager.session_monitor.asyncio.sleep", _sleep)
+    monkeypatch.setattr("aipager.session_monitor._loop_sleep", _sleep)
     async def _go():
         try:
             await monitor._loop()

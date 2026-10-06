@@ -95,6 +95,10 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# Seam: tests replace THIS, never ``asyncio.create_subprocess_exec``
+# (``aipager.bot.handlers.asyncio`` IS the global module; CLAUDE.md).
+_create_subprocess_exec = asyncio.create_subprocess_exec
+
 #: What :meth:`_hold_for_open_dialog` returns when it had to hold a message
 #: but the queue was full, so it was dropped (and the sender told). Truthy,
 #: like "held", for every caller that only asks "stop here?"; the
@@ -385,7 +389,7 @@ class CommandHandlersMixin:
         # Launch the install. Capture stdout/stderr so a failure message
         # can show the user what went wrong.
         try:
-            proc = await asyncio.create_subprocess_exec(
+            proc = await _create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,

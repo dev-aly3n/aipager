@@ -10,12 +10,14 @@ to fake a seam here must fail LOUDLY, not silently spawn a real
 1. ``AIPAGER_CLOUDFLARED_CACHE_DIR`` is redirected to ``tmp_path`` so
    ``cloudflared_fetch.cache_dir()`` never writes under the operator's
    real ``~/.local/share/aipager/cloudflared/``.
-2. ``asyncio.create_subprocess_exec`` is patched to raise by default.
-   Every test that wants a "spawn" must fake
+2. Every subprocess spawn is patched to raise by default
+   (``tests.conftest.forbid_every_spawn``: the global
+   ``asyncio.create_subprocess_exec`` and each module's
+   ``_create_subprocess_exec`` seam, tunnel_manager's included). Every
+   test that wants a "spawn" must fake
    ``aipager.miniapp.tunnel_manager.spawn_and_discover_url`` itself (the
-   documented seam) — nothing in this package should ever reach the real
-   ``asyncio.create_subprocess_exec``, so a leak here is a real bug, not
-   test noise.
+   documented seam) — nothing in this package should ever reach a real
+   spawn, so a leak here is a real bug, not test noise.
 3. ``urllib.request.urlopen`` is patched to raise by default. Tests that
    exercise ``ensure_cloudflared()``'s download path override it locally
    with an explicit fake; nothing here should ever touch the real
@@ -33,6 +35,8 @@ import urllib.request
 from dataclasses import dataclass, field
 
 import pytest
+
+from tests.conftest import forbid_every_spawn
 
 # ---------------------------------------------------------------------------
 # Shared black-box test doubles, exposed as fixtures rather than imported
@@ -223,7 +227,8 @@ def leak_guard(tmp_path, monkeypatch):
     async def _raise_subprocess(*args, **kwargs):
         guard.subprocess_calls.append((args, kwargs))
         raise UnexpectedSubprocessSpawn(
-            f"real asyncio.create_subprocess_exec reached with args={args!r} "
+            f"a real subprocess spawn (asyncio.create_subprocess_exec or a "
+            f"module's _create_subprocess_exec seam) reached with args={args!r} "
             "— fake aipager.miniapp.tunnel_manager.spawn_and_discover_url instead"
         )
 
@@ -234,7 +239,9 @@ def leak_guard(tmp_path, monkeypatch):
             "it explicitly in the test if this call is expected"
         )
 
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", _raise_subprocess)
+    # Global AND module seams: tunnel_manager spawns through its own
+    # ``_create_subprocess_exec``, which a global patch alone never reaches.
+    forbid_every_spawn(monkeypatch, _raise_subprocess)
     monkeypatch.setattr(urllib.request, "urlopen", _raise_urlopen)
 
     return guard

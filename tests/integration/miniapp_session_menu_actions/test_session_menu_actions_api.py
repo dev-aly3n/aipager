@@ -16,7 +16,7 @@ HARD RULE (design.md, spec.md): every test that reaches
 ``inject.kill_session``, ``inject.launch_session``, ``inject.send_keys``
 or ``inject.is_alive`` monkeypatches it — no test here may kill a real
 dtach session, launch a real claude process, touch a real dtach socket,
-or send real keys. ``aipager.bot.session_ops.asyncio.sleep`` is
+or send real keys. ``aipager.bot.session_ops._sleep`` is
 neutered wherever a poll loop might run so no test actually waits.
 """
 
@@ -163,7 +163,7 @@ def _mock_inject_happy(monkeypatch):
         AsyncMock(return_value=(True, "")),
     )
     monkeypatch.setattr(
-        "aipager.bot.session_ops.asyncio.sleep", AsyncMock(),
+        "aipager.bot.session_ops._sleep", AsyncMock(),
     )
 
 
@@ -507,7 +507,7 @@ def test_perms_launch_failed_returns_400(server, run_async, monkeypatch):
         "aipager.dtach.inject.launch_session",
         AsyncMock(return_value=(False, "dtach broken")),
     )
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", AsyncMock())
 
     async def _run():
         _mk_session(server, "dev", status=Status.IDLE, skip_perms=False)
@@ -856,7 +856,7 @@ def test_restart_never_reports_gone_mid_flight(server, run_async, monkeypatch):
         "aipager.dtach.inject.launch_session",
         AsyncMock(return_value=(True, "")),
     )
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", AsyncMock())
 
     async def _run():
         nonlocal probe_client
@@ -959,7 +959,7 @@ def test_restart_launch_failed_returns_400(server, run_async, monkeypatch):
         "aipager.dtach.inject.launch_session",
         AsyncMock(return_value=(False, "boom")),
     )
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", AsyncMock())
 
     async def _run():
         _mk_session(server, "dev", status=Status.IDLE, claude_session_id="uuid-1")

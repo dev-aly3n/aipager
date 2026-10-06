@@ -71,6 +71,10 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# Seam: tests replace THIS, never ``asyncio.sleep`` (``aipager.bot.auth.
+# asyncio`` IS the global module; CLAUDE.md). Defaults to the real function.
+_sleep = asyncio.sleep
+
 
 def _is_person_id(value) -> bool:
     """A Telegram user id (a positive int, never a bool)."""
@@ -672,7 +676,7 @@ class AuthMixin:
         # walk claude's "Allow / Deny" picker.
         ok = await inject.send_keys(sess.name, "Down")
         if ok:
-            await asyncio.sleep(0.1)
+            await _sleep(0.1)
             ok = await inject.send_keys(sess.name, "Enter")
         if not ok:
             log.warning(

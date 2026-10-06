@@ -856,7 +856,7 @@ def test_animate_compact_never_calls_edit_message_text_rich(
         if iteration >= 2:
             sess.busy_msg_id = None
 
-    monkeypatch.setattr("aipager.bot.animation.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.animation._compact_sleep", _no_sleep)
     # _edit_busy_raw uses PTB bot, not raw HTTP; we mock it to avoid network
     bot._app.bot.edit_message_text = AsyncMock()
 

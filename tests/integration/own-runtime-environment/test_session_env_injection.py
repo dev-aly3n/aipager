@@ -14,8 +14,6 @@ subprocess sees it is via the explicit env= table.
 """
 from __future__ import annotations
 
-import asyncio
-
 from aipager.dtach.inject import launch_session
 
 
@@ -47,7 +45,7 @@ def test_session_subprocess_env_carries_token_from_daemon_env_file(
         return _FakeDtachProc()
 
     monkeypatch.setattr(
-        asyncio, "create_subprocess_exec", _fake_create_subprocess_exec,
+        "aipager.dtach.inject._create_subprocess_exec", _fake_create_subprocess_exec,
     )
 
     ok, err = run_async(launch_session("envinjsession"))
@@ -89,7 +87,7 @@ def test_session_subprocess_env_is_absent_the_token_when_no_credential_exists(
         return _FakeDtachProc()
 
     monkeypatch.setattr(
-        asyncio, "create_subprocess_exec", _fake_create_subprocess_exec,
+        "aipager.dtach.inject._create_subprocess_exec", _fake_create_subprocess_exec,
     )
 
     run_async(launch_session("envinjsession2"))

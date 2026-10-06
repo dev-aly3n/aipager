@@ -64,7 +64,7 @@ def test_allow_advances_to_next_question(mk_bot, mk_query, run_async, monkeypatc
     bot._build_busy_text = MagicMock(return_value="text")
     bot._build_inline_ask_keyboard = MagicMock(return_value=MagicMock())
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
 
     update, query = mk_query("claude-jim:allow", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
@@ -95,7 +95,7 @@ def test_allow_last_question_completes(mk_bot, mk_query, run_async, monkeypatch)
     bot._build_stop_keyboard = MagicMock(return_value=MagicMock())
     bot._start_animation = MagicMock()
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
 
     update, query = mk_query("claude-jim:allow", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
@@ -122,7 +122,7 @@ def test_audit_send_failure_swallowed(mk_bot, mk_query, run_async, monkeypatch):
     bot._build_stop_keyboard = MagicMock(return_value=MagicMock())
     bot._start_animation = MagicMock()
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
 
     update, query = mk_query("claude-jim:allow", message_id=100)
     # MUST NOT raise
@@ -152,7 +152,7 @@ def test_multi_select_submit_no_options_selected(mk_bot, mk_query, run_async, mo
     bot._build_stop_keyboard = MagicMock(return_value=MagicMock())
     bot._start_animation = MagicMock()
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
 
     update, query = mk_query("claude-jim:submit", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
@@ -210,7 +210,7 @@ def test_allow_multi_question_final_submit_sends_extra_enter(mk_bot, mk_query, r
     bot._build_stop_keyboard = MagicMock(return_value=MagicMock())
     bot._start_animation = MagicMock()
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
 
     update, query = mk_query("claude-jim:allow", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
@@ -243,7 +243,7 @@ def test_allow_discounts_wait_time_from_busy_started_at(mk_bot, mk_query, run_as
     bot._build_stop_keyboard = MagicMock(return_value=MagicMock())
     bot._start_animation = MagicMock()
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
 
     update, query = mk_query("claude-jim:allow", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))

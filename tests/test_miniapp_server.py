@@ -20,6 +20,7 @@ from aiohttp.test_utils import TestClient, TestServer
 from aipager.miniapp.server import MiniAppServer, MiniAppUnavailable
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry, Status
+from tests.conftest import forbid_every_spawn
 
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
@@ -352,7 +353,7 @@ def test_sessions_never_invokes_git(scoped_server, run_async, monkeypatch):
     succeed 200."""
     async def _boom(*args, **kwargs):
         raise AssertionError("GET /api/sessions must never invoke git")
-    monkeypatch.setattr("asyncio.create_subprocess_exec", _boom)
+    forbid_every_spawn(monkeypatch, _boom)
 
     async def _run():
         client = await _client_for(scoped_server)

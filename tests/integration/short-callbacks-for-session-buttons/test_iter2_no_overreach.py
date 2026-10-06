@@ -133,7 +133,7 @@ def test_new_replace_still_kills_and_relaunches_a_genuinely_existing_session(
 
     async def _no_sleep(_):
         pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
 
     bot = scb_bot()
     s = TrackedSession(name="claude-liveone__d123456789012", label="liveone",

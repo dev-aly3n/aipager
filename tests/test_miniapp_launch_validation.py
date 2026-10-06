@@ -481,7 +481,7 @@ def test_launch_session_puts_the_model_on_the_command_line(monkeypatch, run_asyn
         captured["argv"] = args
         raise RuntimeError("stop before spawning anything")
 
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", fake_exec)
     monkeypatch.setattr(inject, "_socket_exists", lambda name: False, raising=False)
 
     with pytest.raises(RuntimeError):
@@ -499,7 +499,7 @@ def test_launch_session_omits_the_flag_when_no_model_is_given(monkeypatch, run_a
         captured["argv"] = args
         raise RuntimeError("stop before spawning anything")
 
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", fake_exec)
     monkeypatch.setattr(inject, "_socket_exists", lambda name: False, raising=False)
 
     with pytest.raises(RuntimeError):
@@ -520,7 +520,7 @@ def test_a_model_with_shell_metacharacters_is_quoted(monkeypatch, run_async):
         captured["argv"] = args
         raise RuntimeError("stop before spawning anything")
 
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", fake_exec)
     monkeypatch.setattr(inject, "_socket_exists", lambda name: False, raising=False)
 
     with pytest.raises(RuntimeError):
@@ -556,7 +556,7 @@ def test_launch_session_refuses_a_model_that_would_read_as_a_flag(
         spawned.append(args)
         raise RuntimeError("should never be reached")
 
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", fake_exec)
 
     ok, err = run_async(inject.launch_session("dev", model=model))
     assert ok is False

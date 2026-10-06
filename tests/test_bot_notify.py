@@ -740,8 +740,7 @@ def test_compact_done_edits_busy_message(mk_bot, run_async, monkeypatch):
     bot._stop_animation = MagicMock()
     bot._start_animation = MagicMock()
     # Skip the 2-second pause
-    async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.notify.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.notify.COMPACT_DONE_PAUSE_SECONDS", 0)
     run_async(bot.notify(sess, "compact_done", {
         "before_pct": 80, "after_pct": 5,
     }))
@@ -756,8 +755,7 @@ def test_compact_done_sends_new_when_no_busy(mk_bot, run_async, monkeypatch):
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=999))
     bot._stop_animation = MagicMock()
     bot._start_animation = MagicMock()
-    async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.notify.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.notify.COMPACT_DONE_PAUSE_SECONDS", 0)
     run_async(bot.notify(sess, "compact_done", {
         "before_pct": 80, "after_pct": 10,
     }))

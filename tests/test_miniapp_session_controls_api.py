@@ -130,7 +130,7 @@ def test_stop_busy_session_returns_200_idles_it_and_mirrors_once(
             "aipager.dtach.inject.send_keys", AsyncMock(return_value=True),
         )
         monkeypatch.setattr(
-            "aipager.bot.session_ops.asyncio.sleep", AsyncMock(),
+            "aipager.bot.session_ops._sleep", AsyncMock(),
         )
         client = await _client_for(server)
         send = server.bot._app.bot.send_message
@@ -210,7 +210,7 @@ def test_stop_rate_limited(server, run_async, monkeypatch):
             "aipager.dtach.inject.send_keys", AsyncMock(return_value=True),
         )
         monkeypatch.setattr(
-            "aipager.bot.session_ops.asyncio.sleep", AsyncMock(),
+            "aipager.bot.session_ops._sleep", AsyncMock(),
         )
         client = await _client_for(server)
         try:

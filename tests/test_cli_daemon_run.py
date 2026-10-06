@@ -109,7 +109,7 @@ def _patch_components(monkeypatch, *, with_observers=False, with_miniapp=None):
         ev = real_event()
         ev.set()  # immediately resolved → wait() returns instantly
         return ev
-    monkeypatch.setattr("aipager.cli.daemon.asyncio.Event", _fake_event)
+    monkeypatch.setattr("aipager.cli.daemon._new_stop_event", _fake_event)
 
     return bot, hook_receiver, session_monitor, registry, observers, miniapp_server
 

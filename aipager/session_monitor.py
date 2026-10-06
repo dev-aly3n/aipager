@@ -38,6 +38,10 @@ from aipager.transcript import (
 
 log = logging.getLogger(__name__)
 
+# The monitor loop's wait between ticks. A seam: tests replace THIS, never
+# ``asyncio.sleep`` (the global module; CLAUDE.md). Defaults to the real one.
+_loop_sleep = asyncio.sleep
+
 # Item 2.2 — auto-demote INTERACTIVE sessions back to BUSY if they've sat
 # in INTERACTIVE state with no hook activity for this long. The assumption:
 # claude crashed mid-permission-prompt, the user can never see / answer
@@ -582,7 +586,7 @@ class SessionMonitor:
     async def _loop(self) -> None:
         while True:
             await self.tick()
-            await asyncio.sleep(PANE_POLL_INTERVAL)
+            await _loop_sleep(PANE_POLL_INTERVAL)
 
     async def tick(self) -> None:
         """One pass of the loop: scan, save, the mute catch-up, the bar.

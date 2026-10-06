@@ -17,7 +17,6 @@ separately executes.
 """
 from __future__ import annotations
 
-import asyncio
 import subprocess
 
 import pytest
@@ -75,7 +74,7 @@ def test_shell_metacharacters_in_resolved_path_do_not_execute(
         return _FakeDtachProc()
 
     monkeypatch.setattr(
-        asyncio, "create_subprocess_exec", _fake_create_subprocess_exec,
+        "aipager.dtach.inject._create_subprocess_exec", _fake_create_subprocess_exec,
     )
 
     ok, err = run_async(launch_session("injsession"))

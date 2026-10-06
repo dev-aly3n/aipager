@@ -1,8 +1,9 @@
 """Tests for aipager.miniapp.tunnel_manager — spawn_and_discover_url,
 _backoff_seconds, and the TunnelManager supervision loop.
 
-No test here spawns a real subprocess: `asyncio.create_subprocess_exec`
-is always monkeypatched to a fake. TunnelManager tests additionally
+No test here spawns a real subprocess: tunnel_manager's spawn seam
+`_create_subprocess_exec` is always monkeypatched to a fake (never the
+global `asyncio.create_subprocess_exec`, which that seam does not read). TunnelManager tests additionally
 patch `ensure_cloudflared` to a fixed AsyncMock so the restart loop
 never touches the real cloudflared_fetch download path (that module has
 its own test file) — the one thing under test here is TunnelManager's
@@ -161,7 +162,7 @@ def test_finds_the_url_inside_the_real_box_art_banner(monkeypatch):
         banner,
     ])
     captured: dict = {}
-    monkeypatch.setattr(tm.asyncio, "create_subprocess_exec",
+    monkeypatch.setattr(tm, "_create_subprocess_exec",
                         _fake_exec_returning(proc, captured))
 
     result_proc, url = _run_and_drain(tm.spawn_and_discover_url("/fake/cloudflared", 8765))
@@ -178,7 +179,7 @@ def test_finds_the_url_inside_the_real_box_art_banner(monkeypatch):
 
 def test_raises_when_the_process_exits_before_a_url_appears(monkeypatch, run_async):
     proc = _FakeProcess([b"some unrelated log line\n"])  # then EOF, no URL
-    monkeypatch.setattr(tm.asyncio, "create_subprocess_exec",
+    monkeypatch.setattr(tm, "_create_subprocess_exec",
                         _fake_exec_returning(proc))
 
     with pytest.raises(tm.TunnelLaunchError):
@@ -189,7 +190,7 @@ def test_kills_and_raises_on_discovery_timeout(monkeypatch, run_async):
     monkeypatch.setattr("aipager.config.TUNNEL_URL_DISCOVERY_TIMEOUT_SECONDS", 0.02)
     proc = _FakeProcess()
     proc.stderr = _HangingStderr()
-    monkeypatch.setattr(tm.asyncio, "create_subprocess_exec",
+    monkeypatch.setattr(tm, "_create_subprocess_exec",
                         _fake_exec_returning(proc))
 
     with pytest.raises(tm.TunnelLaunchError):
@@ -200,7 +201,7 @@ def test_kills_and_raises_on_discovery_timeout(monkeypatch, run_async):
 def test_wraps_a_spawn_oserror(monkeypatch, run_async):
     async def _raise(*a, **k):
         raise OSError("no such file or directory")
-    monkeypatch.setattr(tm.asyncio, "create_subprocess_exec", _raise)
+    monkeypatch.setattr(tm, "_create_subprocess_exec", _raise)
 
     with pytest.raises(tm.TunnelLaunchError):
         run_async(tm.spawn_and_discover_url("/fake/cloudflared", 8765))
@@ -546,7 +547,7 @@ def test_cancelling_during_discovery_kills_the_child(run_async, monkeypatch):
         # stderr that stays silent — exactly a tunnel still negotiating.
         await asyncio.sleep(3600)
 
-    monkeypatch.setattr(tm.asyncio, "create_subprocess_exec",
+    monkeypatch.setattr(tm, "_create_subprocess_exec",
                         _make_spawn_returning(fake), raising=False)
 
     async def _run():

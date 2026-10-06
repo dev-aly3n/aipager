@@ -41,6 +41,10 @@ from aipager.miniapp.tunnel import set_managed_tunnel_url
 
 log = logging.getLogger(__name__)
 
+# Seam: tests replace THIS, never ``asyncio.create_subprocess_exec``
+# (``tunnel_manager.asyncio`` IS the global module; CLAUDE.md).
+_create_subprocess_exec = asyncio.create_subprocess_exec
+
 # cloudflared writes ALL of its log output — including the quick-tunnel
 # banner carrying the assigned hostname — to stderr, not stdout
 # (empirically confirmed against the real 2026.8.2 binary; see
@@ -142,7 +146,7 @@ async def spawn_and_discover_url(
     from aipager.config import TUNNEL_URL_DISCOVERY_TIMEOUT_SECONDS
 
     try:
-        proc = await asyncio.create_subprocess_exec(
+        proc = await _create_subprocess_exec(
             binary, "tunnel", "--url", f"http://127.0.0.1:{port}",
             "--no-autoupdate",
             stdin=asyncio.subprocess.DEVNULL,

@@ -26,6 +26,15 @@ log = logging.getLogger(__name__)
 _KILL_TIMEOUT: float = 3.0
 _KILL_POLL_INTERVAL: float = 0.02
 
+# Seams: tests replace THESE, never the ``asyncio`` attributes themselves
+# (``inject.asyncio`` IS the global module; patching it reaches every
+# coroutine in the process, CLAUDE.md). Both default to the real functions.
+# ``_key_gap_sleep`` is the pause between two writes of one key sequence
+# (``send_text_and_enter``'s text-to-Enter gap, ``discard_queued_input``'s
+# Escape-to-KillLine gap).
+_create_subprocess_exec = asyncio.create_subprocess_exec
+_key_gap_sleep = asyncio.sleep
+
 
 def _credentials_file_is_fresh() -> bool:
     """Return True iff ~/.claude/.credentials.json holds an unexpired token.
@@ -217,7 +226,7 @@ async def _run(args: list[str], stdin: bytes = b"",
                timeout: float = 5) -> tuple[bool, str]:
     """Run subprocess, optionally piping stdin, return (success, stdout)."""
     try:
-        proc = await asyncio.create_subprocess_exec(
+        proc = await _create_subprocess_exec(
             *args,
             stdin=asyncio.subprocess.PIPE if stdin else asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
@@ -397,7 +406,7 @@ async def send_text_and_enter(session: str, text: str) -> bool:
         # Enter is recognized as "submit". Too short → \r is swallowed.
         # Scale with text length: longer text = more rendering time needed.
         delay = max(0.15, min(0.5, len(text) * 0.003))
-        await asyncio.sleep(delay)
+        await _key_gap_sleep(delay)
         ok, _ = await _run([_DTACH, "-p", sock], stdin=b"\r")
     if ok:
         log.info("Sent text %r + Enter → %s", text[:50], session)
@@ -431,7 +440,7 @@ async def discard_queued_input(session: str) -> bool:
     """
     await _await_chord(session)
     await send_keys(session, "Escape")
-    await asyncio.sleep(0.15)
+    await _key_gap_sleep(0.15)
     return await send_keys(session, "KillLine")
 
 
@@ -472,7 +481,7 @@ async def _fuser_socket_pids(sock: str) -> list[int]:
     a missing binary is an expected outcome, not an error.
     """
     try:
-        proc = await asyncio.create_subprocess_exec(
+        proc = await _create_subprocess_exec(
             "fuser", sock,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -857,7 +866,7 @@ async def launch_session(
     )
 
     try:
-        proc = await asyncio.create_subprocess_exec(
+        proc = await _create_subprocess_exec(
             _DTACH, "-n", sock, "-Ez", "bash", "-c", bash_cmd,
             cwd=launch_cwd,
             env=daemon_secrets.build_session_env(),

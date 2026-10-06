@@ -64,7 +64,7 @@ def test_run_success(monkeypatch, run_async):
         proc.communicate = AsyncMock(return_value=(b"hello", b""))
         return proc
 
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
     ok, out = run_async(inject._run(["echo"]))
     assert ok is True
     assert out == "hello"
@@ -78,7 +78,7 @@ def test_run_nonzero_exit_returns_false(monkeypatch, run_async):
         proc.communicate = AsyncMock(return_value=(b"", b"err"))
         return proc
 
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
     ok, out = run_async(inject._run(["false"]))
     assert ok is False
     assert out == ""
@@ -91,7 +91,7 @@ def test_run_timeout(monkeypatch, run_async):
         proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError)
         return proc
 
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
     ok, out = run_async(inject._run(["sleep", "999"], timeout=0.01))
     assert ok is False
 
@@ -100,7 +100,7 @@ def test_run_file_not_found(monkeypatch, run_async):
     async def _fake_exec(*args, **kwargs):
         raise FileNotFoundError("dtach gone")
 
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
     ok, out = run_async(inject._run(["nope"]))
     assert ok is False
 
@@ -154,7 +154,7 @@ def test_send_text_and_enter_sends_text_then_cr(monkeypatch, run_async):
     # Skip the sleep
     async def _no_sleep(_):
         pass
-    monkeypatch.setattr(inject.asyncio, "sleep", _no_sleep)
+    monkeypatch.setattr(inject, "_key_gap_sleep", _no_sleep)
 
     assert run_async(inject.send_text_and_enter("claude-jim", "hi")) is True
     assert sent == [b"hi", b"\r"]
@@ -223,7 +223,7 @@ def test_kill_session_sigterms_fuser_pids(tmp_path, monkeypatch, run_async):
         return proc
 
     monkeypatch.setattr(inject, "_proc_socket_pids", lambda sock: [])
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
 
     # Model a process that actually dies: SIGTERM is recorded, and the
     # liveness probe (signal 0) reports it gone from then on. kill_session
@@ -266,7 +266,7 @@ def test_kill_session_fails_and_keeps_socket_when_fuser_missing(
     async def _fake_exec(*args, **kwargs):
         raise OSError("fuser binary missing")
 
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
 
     try:
         assert run_async(inject.kill_session("claude-jim")) is False
@@ -289,7 +289,7 @@ def test_kill_session_fails_when_no_pids_found(tmp_path, monkeypatch, run_async)
         proc.communicate = AsyncMock(return_value=(b"\n", b""))
         return proc
 
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
 
     try:
         assert run_async(inject.kill_session("claude-jim")) is False
@@ -342,7 +342,7 @@ def test_kill_session_uses_proc_scan_without_fuser(tmp_path, monkeypatch, run_as
     async def _fail(*args, **kwargs):
         raise AssertionError("fuser must not run when /proc found a PID")
 
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fail)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", _fail)
 
     try:
         assert run_async(inject.kill_session("claude-jim")) is True
@@ -526,7 +526,7 @@ def test_launch_drops_resume_when_the_conversation_is_missing(
         return proc
 
     monkeypatch.setattr(inject, "_conversation_exists", lambda sid: False)
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
     monkeypatch.setattr(inject, "_PROJECT_DIR", str(tmp_path))
     run_async(inject.launch_session("jim", resume_id="ghost-id",
                                     cwd=str(tmp_path)))
@@ -548,7 +548,7 @@ def test_launch_keeps_resume_when_the_conversation_exists(
         return proc
 
     monkeypatch.setattr(inject, "_conversation_exists", lambda sid: True)
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
     monkeypatch.setattr(inject, "_PROJECT_DIR", str(tmp_path))
     run_async(inject.launch_session("jim", resume_id="real-id",
                                     cwd=str(tmp_path)))
@@ -612,7 +612,7 @@ def test_kill_session_warns_when_the_socket_cannot_be_removed(
         proc.communicate = AsyncMock(return_value=(b"12345\n", b""))
         return proc
     monkeypatch.setattr(inject, "_proc_socket_pids", lambda sock: [])
-    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
     dead = set()
 
     def _fake_kill(pid, sig):

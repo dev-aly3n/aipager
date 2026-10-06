@@ -272,7 +272,7 @@ def test_sc17_allow_always_uses_sleep_between_keystrokes():
     update, query = _make_query("claude-ben:allow_always")
     with patch("aipager.dtach.inject.send_keys", side_effect=mock_send_keys), \
          patch("aipager.dtach.inject.is_alive", side_effect=mock_is_alive), \
-         patch("asyncio.sleep", side_effect=mock_sleep):
+         patch("aipager.bot.callbacks._sleep", side_effect=mock_sleep):
         _run(bot._handle_callback(update, MagicMock()))
 
     assert len(sleep_calls) >= 1, (

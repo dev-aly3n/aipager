@@ -477,13 +477,14 @@ COMPACT_CARD_TIMEOUT_SECONDS: float = float(
 # resolves the card first in production, while still guaranteeing the
 # loop terminates on its own.
 #
-# This exists because much of the test suite patches `asyncio.sleep` via
-# the SHARED asyncio module object (e.g. `setattr("aipager.bot.notify.
-# asyncio.sleep", ...)` — `module.asyncio` IS `asyncio`), which silently
-# removes the pacing from EVERY module's sleeps, not just the target's.
-# A leaked animation task then spins as fast as the loop allows, growing
-# an AsyncMock's `mock_calls` until the machine OOMs. A tick ceiling is
-# the only bound that survives a neutralised clock.
+# Defence in depth. Tests once patched `asyncio.sleep` via the SHARED
+# asyncio module object (`setattr("aipager.bot.notify.asyncio.sleep", ...)`
+# — `module.asyncio` IS `asyncio`), which removed the pacing from EVERY
+# module's sleeps; a leaked animation task then spun as fast as the loop
+# allowed, growing an AsyncMock's `mock_calls` until the machine OOMed.
+# Tests now patch module seams (`animation._compact_sleep`) and
+# tests/test_no_global_asyncio_patch.py forbids the old pattern, but any
+# neutralised tick sleep still needs a bound no clock can remove.
 COMPACT_ANIMATE_MAX_TICKS: int = int(
     os.environ.get("COMPACT_ANIMATE_MAX_TICKS", "720")
 )

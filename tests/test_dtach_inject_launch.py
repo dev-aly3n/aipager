@@ -28,7 +28,7 @@ def test_launch_session_includes_resume_flag(tmp_path, monkeypatch, run_async):
         captured["cwd"] = kwargs.get("cwd")
         return _make_proc(returncode=0)
 
-    monkeypatch.setattr(dtach_inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _fake_exec)
     # The flag is only passed when a conversation actually exists to resume;
     # this test is about the pass-through, so say it does.
     monkeypatch.setattr(dtach_inject, "_conversation_exists", lambda sid: True)
@@ -65,7 +65,7 @@ def test_launch_session_no_resume_flag_when_id_missing(tmp_path, monkeypatch, ru
         captured["args"] = args
         return _make_proc(returncode=0)
 
-    monkeypatch.setattr(dtach_inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _fake_exec)
     calls = {"n": 0}
 
     def _is_socket(self):
@@ -93,7 +93,7 @@ def test_launch_session_passes_explicit_env_with_daemon_credential(
         captured["kwargs"] = kwargs
         return _make_proc(returncode=0)
 
-    monkeypatch.setattr(dtach_inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _fake_exec)
     calls = {"n": 0}
 
     def _is_socket(self):
@@ -133,7 +133,7 @@ def test_launch_session_quotes_claude_bin_with_metacharacters(
         captured["args"] = args
         return _make_proc(returncode=0)
 
-    monkeypatch.setattr(dtach_inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _fake_exec)
     calls = {"n": 0}
 
     def _is_socket(self):
@@ -199,7 +199,7 @@ def test_launch_session_strips_inherited_oauth_token(tmp_path, monkeypatch, run_
         captured["args"] = args
         return _make_proc(returncode=0)
 
-    monkeypatch.setattr(dtach_inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _fake_exec)
     calls = {"n": 0}
 
     def _is_socket(self):
@@ -228,7 +228,7 @@ def test_launch_session_keeps_oauth_token_when_no_credentials_file(
         captured["args"] = args
         return _make_proc(returncode=0)
 
-    monkeypatch.setattr(dtach_inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _fake_exec)
     calls = {"n": 0}
 
     def _is_socket(self):
@@ -426,8 +426,8 @@ def test_launch_session_stashes_expired_creds_and_keeps_env_token(
         captured["args"] = args
         return _make_proc(returncode=0)
 
-    monkeypatch.setattr(dtach_inject.asyncio,
-                        "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(dtach_inject,
+                        "_create_subprocess_exec", _fake_exec)
     calls = {"n": 0}
 
     def _is_socket(self):

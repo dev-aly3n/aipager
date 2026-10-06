@@ -29,6 +29,7 @@ import pytest
 from aipager.miniapp.server import MiniAppServer
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry, Status
+from tests.conftest import forbid_every_spawn
 
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 _CLIENT_TIMEOUT = aiohttp.ClientTimeout(total=5)
@@ -195,7 +196,7 @@ def test_git_never_invoked_for_diff_on_injection_labels(live_server, run_async, 
 
     async def _boom(*args, **kwargs):
         raise AssertionError("git must never be invoked for an unresolved label")
-    monkeypatch.setattr("asyncio.create_subprocess_exec", _boom)
+    forbid_every_spawn(monkeypatch, _boom)
 
     async def _run():
         results = []

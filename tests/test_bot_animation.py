@@ -334,7 +334,7 @@ def test_animate_compact_loops_dot_then_message_gone(mk_bot, run_async, monkeypa
         if len(calls) >= 1:
             sess.busy_msg_id = -1
 
-    monkeypatch.setattr("aipager.bot.animation.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.animation._compact_sleep", _no_sleep)
     edit_calls = []
     async def _edit(msg_id, text, **k):
         edit_calls.append(text)
@@ -352,7 +352,7 @@ def test_animate_compact_handles_message_gone(mk_bot, run_async, monkeypatch):
     sess.push_compacting(42, time.monotonic(), deadline_seconds=None)
 
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.animation.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.animation._compact_sleep", _no_sleep)
     monkeypatch.setattr(bot, "_edit_busy_raw",
                         AsyncMock(return_value=None))  # message gone
     run_async(bot._animate_compact(sess))

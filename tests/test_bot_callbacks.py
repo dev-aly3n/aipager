@@ -1130,7 +1130,7 @@ def test_deny_overshoots_then_enters(mk_bot, mk_query, run_async, monkeypatch):
     bot._edit_busy_raw = AsyncMock(return_value=True)
     bot._start_animation = MagicMock()
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
     update, query = mk_query("claude-jim:deny")
     run_async(bot._handle_callback(update, MagicMock()))
     keys_sent = [c.args[1] for c in sent.await_args_list]
@@ -1174,7 +1174,7 @@ def test_opt_single_select_navigates_down_then_enter(mk_bot, mk_query, run_async
     bot._edit_busy_raw = AsyncMock(return_value=True)
     bot._start_animation = MagicMock()
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
     update, query = mk_query("claude-jim:opt2")
     run_async(bot._handle_callback(update, MagicMock()))
     keys = [c.args[1] for c in sent.await_args_list]
@@ -1201,7 +1201,7 @@ def test_opt_multi_select_toggles_checkbox(mk_bot, mk_query, run_async, monkeypa
     bot._build_busy_text = MagicMock(return_value="text")
     bot._build_inline_ask_keyboard = MagicMock(return_value=MagicMock())
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
     update, query = mk_query("claude-jim:opt1", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     # Down once to opt1, then Enter to toggle
@@ -1258,7 +1258,7 @@ def test_submit_multi_select_advances_question(mk_bot, mk_query, run_async, monk
     bot._build_busy_text = MagicMock(return_value="text")
     bot._build_inline_ask_keyboard = MagicMock(return_value=MagicMock())
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
     update, query = mk_query("claude-jim:submit", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     # After submit on a non-last question, pending_permission advances to next
@@ -1291,7 +1291,7 @@ def test_submit_multi_select_last_question_finishes(mk_bot, mk_query, run_async,
     bot._build_stop_keyboard = MagicMock(return_value=MagicMock())
     bot._start_animation = MagicMock()
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
     update, query = mk_query("claude-jim:submit", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     # On last question: pending_permission cleared, session transitions to BUSY
@@ -1316,7 +1316,7 @@ def test_allow_with_pending_permission_records_tool(mk_bot, mk_query, run_async,
     bot._build_stop_keyboard = MagicMock(return_value=MagicMock())
     bot._start_animation = MagicMock()
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
     update, query = mk_query("claude-jim:allow", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     sess = bot.registry.get("claude-jim")

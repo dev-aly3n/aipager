@@ -91,7 +91,7 @@ def test_run_daemon_completes_and_starts_every_component_with_auth_absent(
     # SIGINT/SIGTERM -- the established pattern in this suite for
     # driving _run_daemon() to completion (see tests/test_cli_daemon_run.py).
     monkeypatch.setattr(
-        daemon_mod.asyncio, "Event", lambda: _make_stop_event_pre_set())
+        daemon_mod, "_new_stop_event", lambda: _make_stop_event_pre_set())
 
     loop = asyncio.new_event_loop()
     try:

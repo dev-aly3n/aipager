@@ -173,7 +173,7 @@ def test_kill_still_works_on_an_ordinary_gone_session(mk_bot, run_async, monkeyp
     _gone_session(registry)
     bot = _bot(mk_bot, registry)
     monkeypatch.setattr(inject, "kill_session", AsyncMock(return_value=True))
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.create_task",
+    monkeypatch.setattr("aipager.bot.session_ops._spawn",
                         lambda coro: coro.close())
 
     outcome = run_async(bot._kill_session_core(NAME, "proj"))

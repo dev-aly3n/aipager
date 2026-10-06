@@ -374,7 +374,7 @@ def test_install_voice_extra_success(mk_bot, run_async, monkeypatch):
         proc.stdout = _FakeStdout()
         return proc
 
-    monkeypatch.setattr("aipager.bot.handlers.asyncio.create_subprocess_exec",
+    monkeypatch.setattr("aipager.bot.handlers._create_subprocess_exec",
                         _fake_create)
     monkeypatch.setattr("aipager.updater._detect_installer", lambda: "pip")
     monkeypatch.setattr("aipager.updater.install_extra_cmd",
@@ -402,7 +402,7 @@ def test_install_voice_extra_failure(mk_bot, run_async, monkeypatch):
         proc.stdout = _FakeStdout()
         return proc
 
-    monkeypatch.setattr("aipager.bot.handlers.asyncio.create_subprocess_exec",
+    monkeypatch.setattr("aipager.bot.handlers._create_subprocess_exec",
                         _fake_create)
     monkeypatch.setattr("aipager.updater._detect_installer", lambda: "pip")
     monkeypatch.setattr("aipager.updater.install_extra_cmd",
@@ -434,7 +434,7 @@ def test_install_voice_extra_subprocess_spawn_failure(mk_bot, run_async, monkeyp
     async def _boom(*a, **k):
         raise OSError("ENOENT")
 
-    monkeypatch.setattr("aipager.bot.handlers.asyncio.create_subprocess_exec",
+    monkeypatch.setattr("aipager.bot.handlers._create_subprocess_exec",
                         _boom)
     monkeypatch.setattr("aipager.updater._detect_installer", lambda: "pip")
     monkeypatch.setattr("aipager.updater.install_extra_cmd",
@@ -454,7 +454,7 @@ def test_install_voice_extra_subprocess_error_swallowed(mk_bot, run_async, monke
     async def _boom(*a, **k):
         raise subprocess.SubprocessError("bad")
 
-    monkeypatch.setattr("aipager.bot.handlers.asyncio.create_subprocess_exec",
+    monkeypatch.setattr("aipager.bot.handlers._create_subprocess_exec",
                         _boom)
     monkeypatch.setattr("aipager.updater._detect_installer", lambda: "pip")
     monkeypatch.setattr("aipager.updater.install_extra_cmd",

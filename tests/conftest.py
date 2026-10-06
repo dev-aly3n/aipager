@@ -923,6 +923,34 @@ def steady_clock(monkeypatch):
     return now
 
 
+#: Every production module that spawns through its own
+#: ``_create_subprocess_exec`` seam. Each seam is bound to the real function
+#: at import, so patching the global ``asyncio.create_subprocess_exec`` no
+#: longer reaches these call sites; a tripwire that means "nothing may
+#: spawn" must go through :func:`forbid_every_spawn`.
+#: tests/test_no_global_asyncio_patch.py fails if a module grows a spawn
+#: seam that is not listed here.
+SPAWN_SEAMS = (
+    "aipager.bot.handlers._create_subprocess_exec",
+    "aipager.dtach.inject._create_subprocess_exec",
+    "aipager.miniapp.tunnel_manager._create_subprocess_exec",
+)
+
+
+def forbid_every_spawn(monkeypatch, fake) -> None:
+    """Route EVERY subprocess spawn in the process to *fake*, a tripwire.
+
+    The global ``asyncio.create_subprocess_exec`` (modules that call it at
+    call time, e.g. ``miniapp/diff.py``'s git) plus each module seam in
+    :data:`SPAWN_SEAMS`. Only for fakes that raise or record: a global
+    replacement is deliberate here, because "nothing anywhere spawns" is
+    the claim under test.
+    """
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake)
+    for target in SPAWN_SEAMS:
+        monkeypatch.setattr(target, fake)
+
+
 @pytest.fixture(autouse=True)
 def _never_spawn_real_dtach(monkeypatch):
     """Make it impossible for a test to fork a real dtach + claude.

@@ -187,7 +187,7 @@ def test_auto_deny_injects_down_enter_and_marks_busy(mk_bot, run_async, monkeypa
     sent = AsyncMock(return_value=True)
     monkeypatch.setattr("aipager.dtach.inject.send_keys", sent)
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.auth.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.auth._sleep", _no_sleep)
 
     run_async(bot._auto_deny(sess, {"name": "Bash", "summary": "git push --force"}, _admin()))
     # Sent Down then Enter
@@ -205,7 +205,7 @@ def test_auto_deny_sends_chat_notice_with_triggerer_attribution(mk_bot, run_asyn
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.auth.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.auth._sleep", _no_sleep)
 
     driver = _developer(uid=42, label="dave")
     run_async(bot._auto_deny(sess, {"name": "Bash", "summary": "rm -rf /"}, driver))
@@ -222,7 +222,7 @@ def test_auto_deny_swallows_key_injection_failure(mk_bot, run_async, monkeypatch
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=False))
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.auth.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.auth._sleep", _no_sleep)
     # MUST NOT raise
     run_async(bot._auto_deny(sess, {"name": "Edit", "summary": "/etc/passwd"}, None))
     # Session still transitions to BUSY
@@ -236,7 +236,7 @@ def test_auto_deny_swallows_send_message_failure(mk_bot, run_async, monkeypatch)
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.auth.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.auth._sleep", _no_sleep)
     bot._app.bot.send_message = AsyncMock(side_effect=RuntimeError("flooded"))
     # MUST NOT raise
     run_async(bot._auto_deny(sess, {"name": "Bash", "summary": ""}, None))
@@ -249,7 +249,7 @@ def test_auto_deny_writes_audit_record(mk_bot, run_async, monkeypatch):
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.auth.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.auth._sleep", _no_sleep)
     audit_calls = []
     def _fake_append(**kwargs):
         audit_calls.append(kwargs)

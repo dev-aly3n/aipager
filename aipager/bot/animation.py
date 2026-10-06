@@ -180,6 +180,10 @@ FIRST_TICK_DELAY = 1.5
 # (see CLAUDE.md). Same pattern as notify._finish_sleep.
 _lazy_card_sleep = asyncio.sleep
 
+# The wait between ``_animate_compact``'s dot ticks. A seam for the same
+# reason: tests replace THIS, never ``asyncio.sleep``.
+_compact_sleep = asyncio.sleep
+
 # Card starts waiting on a previous turn's finish (roadmap 8.57), kept
 # referenced until done so the loop cannot collect them mid-wait.
 _GATED_CARDS: set = set()
@@ -3154,10 +3158,10 @@ class AnimationMixin:
            or the monitor's deadline sweeper) also ends the animation.
         2. ``COMPACT_ANIMATE_MAX_TICKS`` — a hard iteration ceiling, sized
            to comfortably outlast the deadline sweeper. This is the guard
-           that holds even when ``asyncio.sleep`` has been neutralised, as
-           much of the test suite does by patching the shared ``asyncio``
-           module object. Without it a leaked task spins free and grows an
-           AsyncMock's ``mock_calls`` until the machine OOMs.
+           that holds even when the tick's sleep has been neutralised, as
+           tests do through ``_compact_sleep``. Without it a leaked task
+           spins free and grows an AsyncMock's ``mock_calls`` until the
+           machine OOMs.
         3. The pre-existing ``busy_msg_id`` checks below, unchanged.
         """
         dots = [".", "..", "..."]
@@ -3174,7 +3178,7 @@ class AnimationMixin:
                         sess.label, COMPACT_ANIMATE_MAX_TICKS,
                     )
                     break
-                await asyncio.sleep(COMPACT_ANIMATE_INTERVAL_SECONDS)
+                await _compact_sleep(COMPACT_ANIMATE_INTERVAL_SECONDS)
                 if not sess.busy_msg_id or sess.busy_msg_id < 0:
                     break
                 dot = dots[idx % len(dots)]

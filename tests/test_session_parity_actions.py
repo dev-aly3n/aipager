@@ -64,7 +64,7 @@ def _no_op_bot_command_refresh(monkeypatch):
     instead of running it, so the test never depends on bot._app's
     unconfigured MagicMock surface."""
     monkeypatch.setattr(
-        "aipager.bot.session_ops.asyncio.create_task",
+        "aipager.bot.session_ops._spawn",
         lambda coro: coro.close(),
     )
 

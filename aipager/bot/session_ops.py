@@ -88,6 +88,14 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# Seams: tests replace THESE module attributes, never ``asyncio.sleep`` /
+# ``asyncio.create_task`` themselves. ``aipager.bot.session_ops.asyncio`` IS
+# the global asyncio module, so patching through it reaches every coroutine
+# in the process and has hung this suite twice (CLAUDE.md). Both default
+# to the real functions; production behaviour is unchanged.
+_sleep = asyncio.sleep
+_spawn = asyncio.create_task
+
 #: How long aipager remembers the Claude Code session id its own /kill
 #: ended, so that process's SessionEnd is not announced (the operator
 #: already has "💀 Killed"). Only prunes: the id itself decides.
@@ -330,7 +338,7 @@ async def await_model_change(
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return None
-        await asyncio.sleep(min(interval, remaining))
+        await _sleep(min(interval, remaining))
 
 
 @dataclass
@@ -1051,8 +1059,6 @@ class SessionOpsMixin:
         folding them in here would force one surface to fake the other's
         interaction model.
         """
-        import asyncio
-
         from aipager.scope import disambiguated_name
         from aipager.state import Status
 
@@ -1115,8 +1121,8 @@ class SessionOpsMixin:
         # their own target, not the rest of the chat's (roadmap 8.90).
         self.registry.set_target(session_name, scope_chat_id, driver_user_id)
         self.registry.mark_dirty()
-        asyncio.create_task(self._maybe_update_bot_name(session_name))
-        asyncio.create_task(self._update_bot_commands())
+        _spawn(self._maybe_update_bot_name(session_name))
+        _spawn(self._update_bot_commands())
         return session_name, ""
 
     def _session_system_prompt(self, scope_chat_id, label: str) -> str | None:
@@ -1175,7 +1181,7 @@ class SessionOpsMixin:
         # 1. Send Escape twice to Claude Code — proven interrupt
         # behaviour this change does not touch.
         await inject.send_keys(sess.name, "Escape")
-        await asyncio.sleep(0.15)
+        await _sleep(0.15)
         await inject.send_keys(sess.name, "Escape")
 
         # 1b. Wipe whatever Claude's own not-yet-picked-up queue
@@ -1315,7 +1321,7 @@ class SessionOpsMixin:
         # 1. Interrupt Claude's turn.
         try:
             await inject.send_keys(sess.name, "Escape")
-            await asyncio.sleep(0.15)
+            await _sleep(0.15)
             await inject.send_keys(sess.name, "Escape")
         except Exception:
             log.debug("[%s] safety halt interrupt failed", sess.label,
@@ -1443,7 +1449,7 @@ class SessionOpsMixin:
             # internal name and silently undoes a /rename.
             self.registry.remove(session_name, remember_label=True)
             self.registry.mark_dirty()
-            asyncio.create_task(self._update_bot_commands())
+            _spawn(self._update_bot_commands())
             return KillOutcome(result="killed", label=label, session_name=session_name)
         if await inject.is_alive(session_name):
             # Socket still there: the process survived. Saying "not found"
@@ -1536,8 +1542,8 @@ class SessionOpsMixin:
             self.registry.mark_dirty()
         finally:
             sess.resuming_until = 0.0
-        asyncio.create_task(self._maybe_update_bot_name(session_name))
-        asyncio.create_task(self._update_bot_commands())
+        _spawn(self._maybe_update_bot_name(session_name))
+        _spawn(self._update_bot_commands())
 
         log.info("[%s] Resumed (claude_session_id=%s, cwd=%s)",
                  label, resume_id, cwd or "<daemon>")
@@ -1762,7 +1768,7 @@ class SessionOpsMixin:
             self.registry.set_target(
                 name, calling_chat_id(update), calling_user_id(update))
             self.registry.mark_dirty()
-            asyncio.create_task(self._maybe_update_bot_name(name))
+            _spawn(self._maybe_update_bot_name(name))
             text, kb = self._render_switch_reply(
                 calling_chat_id(update) or 0, sess, update)
             await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
@@ -1778,8 +1784,8 @@ class SessionOpsMixin:
             self.registry.set_target(
                 session_name, calling_chat_id(update), calling_user_id(update))
             self.registry.mark_dirty()
-            asyncio.create_task(self._maybe_update_bot_name(session_name))
-            asyncio.create_task(self._update_bot_commands())
+            _spawn(self._maybe_update_bot_name(session_name))
+            _spawn(self._update_bot_commands())
             text, kb = self._render_switch_reply(
                 calling_chat_id(update) or 0, sess, update)
             await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
@@ -1861,13 +1867,13 @@ class SessionOpsMixin:
             await inject.send_keys(session_name, "C-c")
             # Short pause to let the Ctrl-C signal be processed before
             # the poll loop starts checking for the socket.
-            await asyncio.sleep(0.5)
+            await _sleep(0.5)
         else:
             await inject.kill_session(session_name)
 
         # Poll for socket disappearance (up to 3 s).
         for _ in range(_PERMS_POLL_COUNT):
-            await asyncio.sleep(_PERMS_POLL_INTERVAL)
+            await _sleep(_PERMS_POLL_INTERVAL)
             if not Path(sock).is_socket():
                 break
         else:
@@ -2109,7 +2115,7 @@ class SessionOpsMixin:
         # autocomplete (it now resolves to nothing, since find_by_label
         # matches on the live label, which just changed) and `/newlabel`
         # never appears until something else happens to trigger a sync.
-        asyncio.create_task(self._update_bot_commands())
+        _spawn(self._update_bot_commands())
         log.info("[%s] renamed to %s from Mini App", previous, new_label)
         return RenameOutcome(
             ok=True, previous_label=previous, new_label=new_label, changed=True,

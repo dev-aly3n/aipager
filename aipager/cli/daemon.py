@@ -39,6 +39,11 @@ from pathlib import Path
 
 log = logging.getLogger("aipager")
 
+# The factory for the Event ``_run_daemon`` waits on until SIGINT/SIGTERM.
+# A seam: tests replace THIS to hand back a pre-set event, never
+# ``asyncio.Event`` (``daemon.asyncio`` IS the global module; CLAUDE.md).
+_new_stop_event = asyncio.Event
+
 # Held-for-lifetime file descriptor for the daemon's advisory lock.
 # Module-level so garbage collection can't close it and silently
 # release the lock while the daemon is still running.
@@ -438,7 +443,7 @@ async def _run_daemon(bot_username: str) -> None:
 
     log.info("AIPager running — all components started")
 
-    stop = asyncio.Event()
+    stop = _new_stop_event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop.set)

@@ -123,7 +123,7 @@ def test_stop_succeeds_while_waiting_on_background_work(mk_bot, run_async, monke
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
 
     outcome = run_async(bot._stop_session_core(sess))
 
@@ -145,7 +145,7 @@ def test_stop_clears_active_subagents_so_the_job_is_genuinely_over(
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
 
     run_async(bot._stop_session_core(sess))
 

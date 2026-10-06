@@ -38,7 +38,7 @@ def test_stop_session_sends_two_escapes(mk_bot, run_async, monkeypatch):
     sent = AsyncMock(return_value=True)
     monkeypatch.setattr("aipager.dtach.inject.send_keys", sent)
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
     run_async(bot._stop_session(sess))
@@ -55,7 +55,7 @@ def test_stop_session_discards_pending_queue(mk_bot, run_async, monkeypatch):
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
     run_async(bot._stop_session(sess))
@@ -70,7 +70,7 @@ def test_stop_session_via_query_edits_message(mk_bot, run_async, monkeypatch):
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
     query = MagicMock()
@@ -88,7 +88,7 @@ def test_stop_session_via_update_reacts_with_emoji(mk_bot, mk_update, run_async,
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
     bot._react = AsyncMock()
@@ -104,7 +104,7 @@ def test_stop_session_swallows_query_edit_failure(mk_bot, run_async, monkeypatch
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
     query = MagicMock()
@@ -357,7 +357,7 @@ def test_stop_session_core_ok_true_with_dropped_count(mk_bot, run_async, monkeyp
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
 
@@ -391,7 +391,9 @@ def test_stop_session_core_discards_input_and_counts_notes_when_outstanding(
         return True
     monkeypatch.setattr("aipager.dtach.inject.send_keys", _send_keys)
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
+    # discard_queued_input's Escape-to-KillLine gap lives in inject.
+    monkeypatch.setattr("aipager.dtach.inject._key_gap_sleep", _no_sleep)
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
 
@@ -418,7 +420,7 @@ def test_stop_session_core_omits_discard_when_no_notes_outstanding(
         return True
     monkeypatch.setattr("aipager.dtach.inject.send_keys", _send_keys)
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
 
@@ -443,7 +445,7 @@ def test_stop_session_core_succeeds_while_job_background_open(
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
 
@@ -464,7 +466,7 @@ def test_stop_session_core_clears_active_subagents(mk_bot, run_async, monkeypatc
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
 
@@ -650,8 +652,9 @@ def test_do_resume_core_no_driver_when_none_given(mk_bot, run_async, monkeypatch
 #
 # The single kill/poll/relaunch seam chat's /perms (both branches) and the
 # Mini App's perms + restart routes all go through now (design.md
-# ORCHESTRATOR OVERRIDE). asyncio.sleep is neutered so no test actually
-# waits out the 0.5s Ctrl-C pause or the up-to-3s poll loop; the socket
+# ORCHESTRATOR OVERRIDE). session_ops._sleep (never the global
+# asyncio.sleep) is neutered so no test actually waits out the 0.5s
+# Ctrl-C pause or the up-to-3s poll loop; the socket
 # poll itself is controlled via aipager.bot.session_ops.Path so the
 # still-stopping/success branches are deterministic regardless of what is
 # or isn't a real file on this machine.
@@ -659,7 +662,7 @@ def test_do_resume_core_no_driver_when_none_given(mk_bot, run_async, monkeypatch
 def _neuter_sleep(monkeypatch):
     async def _no_sleep(_):
         pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
 
 
 def _fake_path_cls(exists):
@@ -1169,7 +1172,7 @@ def test_rename_session_core_real_change_schedules_command_refresh(
         scheduled.append(coro)
         coro.close()  # avoid an "unawaited coroutine" warning
         return MagicMock()
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.create_task", fake_create_task)
+    monkeypatch.setattr("aipager.bot.session_ops._spawn", fake_create_task)
 
     outcome = run_async(bot._rename_session_core(sess, "james"))
     assert outcome.ok is True

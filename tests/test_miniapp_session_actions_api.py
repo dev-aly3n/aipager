@@ -14,9 +14,10 @@ test that reaches ``inject.kill_session``, ``inject.launch_session``,
 ``inject.is_alive`` monkeypatches it — no test here may kill a real
 dtach session, launch a real claude process, send real keys, or touch a
 real dtach socket. Every test whose route reaches the kill/poll/relaunch
-core (perms, restart) also neuters ``aipager.bot.session_ops.asyncio.
-sleep`` and controls ``aipager.bot.session_ops.Path`` so it never
-actually waits out the 0.5s Ctrl-C pause or the up-to-3s socket poll.
+core (perms, restart) also neuters ``aipager.bot.session_ops._sleep``
+(never the global ``asyncio.sleep``) and controls
+``aipager.bot.session_ops.Path`` so it never actually waits out the 0.5s
+Ctrl-C pause or the up-to-3s socket poll.
 """
 
 from __future__ import annotations
@@ -134,7 +135,7 @@ def _neuter_kill_relaunch(monkeypatch, *, socket_gone=True):
     """
     async def _no_sleep(_):
         pass
-    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
     monkeypatch.setattr("aipager.bot.session_ops.Path", MagicMock(
         return_value=MagicMock(is_socket=MagicMock(return_value=not socket_gone)),
     ))

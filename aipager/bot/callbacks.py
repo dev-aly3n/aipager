@@ -93,6 +93,11 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# Seam: tests replace THIS, never ``asyncio.sleep`` (``aipager.bot.callbacks.
+# asyncio`` IS the global module; patching it has hung the suite twice,
+# CLAUDE.md). Defaults to the real function.
+_sleep = asyncio.sleep
+
 #: Seconds a tap waits for its handler to answer (with a toast) before the
 #: dispatcher sends the empty ack that stops the button's spinner.
 CALLBACK_ACK_BOUND = 1.0
@@ -482,7 +487,7 @@ class CallbackDispatchMixin:
                 _ACKS.pop(id(query), None)
 
     async def _ack_after_bound(self, query) -> None:
-        await asyncio.sleep(CALLBACK_ACK_BOUND)
+        await _sleep(CALLBACK_ACK_BOUND)
         # Claim the query HERE, synchronously, in the step the bound wakes
         # in: a claim made inside a new (shielded) task would run a loop
         # step later, when the handler may already have answered and
@@ -1289,7 +1294,7 @@ class CallbackDispatchMixin:
                             f"{session_name.removeprefix('claude-')}.sock")
                     from pathlib import Path as _Path
                     for _ in range(10):
-                        await asyncio.sleep(0.2)
+                        await _sleep(0.2)
                         if not _Path(sock).is_socket():
                             break
                 # Drop the resume metadata so the new session is truly fresh.
@@ -1446,7 +1451,7 @@ class CallbackDispatchMixin:
                     ok = False
                     break
             if ok:
-                await asyncio.sleep(0.1)
+                await _sleep(0.1)
                 ok = await inject.send_keys(session_name, "Enter")  # toggle checkbox
 
             if ok:
@@ -1496,7 +1501,7 @@ class CallbackDispatchMixin:
             ok = await inject.send_keys(session_name, "Right")
             if ok and is_last:
                 # Last question — landed on Submit tab, press Enter to submit
-                await asyncio.sleep(0.15)
+                await _sleep(0.15)
                 ok = await inject.send_keys(session_name, "Enter")
 
             if ok:
@@ -1556,7 +1561,7 @@ class CallbackDispatchMixin:
                         "tool_info": perm.get("tool_info"),
                         "wait_started_at": perm.get("wait_started_at"),
                     }
-                    await asyncio.sleep(0.3)
+                    await _sleep(0.3)
                     keyboard = self._build_inline_ask_keyboard(
                         sess, next_options,
                         multi_select=next_multi)
@@ -1592,7 +1597,7 @@ class CallbackDispatchMixin:
                     ok = False
                     break
             if ok:
-                await asyncio.sleep(0.1)
+                await _sleep(0.1)
                 ok = await inject.send_keys(session_name, "Enter")
         elif action == "allow":
             verb = ACTION_VERBS[action]
@@ -1668,7 +1673,7 @@ class CallbackDispatchMixin:
                 # suggestions (hook_receiver's PermissionRequest branch).
                 ok = await inject.send_keys(session_name, "Down")
                 if ok:
-                    await asyncio.sleep(0.1)
+                    await _sleep(0.1)
                     ok = await inject.send_keys(session_name, "Enter")
             else:
                 # No standing rule on offer, or unknown (a button from
@@ -1720,7 +1725,7 @@ class CallbackDispatchMixin:
                     if not await inject.send_keys(session_name, "Down"):
                         ok = False
                         break
-                    await asyncio.sleep(0.1)
+                    await _sleep(0.1)
                 if ok:
                     ok = await inject.send_keys(session_name, "Enter")
         elif action == "continue":
@@ -1822,7 +1827,7 @@ class CallbackDispatchMixin:
                         "tool_info": perm.get("tool_info"),
                         "wait_started_at": perm.get("wait_started_at"),
                     }
-                    await asyncio.sleep(0.3)  # let TUI process and auto-advance
+                    await _sleep(0.3)  # let TUI process and auto-advance
                     keyboard = self._build_inline_ask_keyboard(
                         sess, next_options,
                         multi_select=next_multi)
@@ -1837,7 +1842,7 @@ class CallbackDispatchMixin:
                     if perm.get("ask_question") and len(questions) > 1:
                         # Multi-question form: TUI auto-advances to Submit tab
                         # after last option selection. Send Enter to submit.
-                        await asyncio.sleep(0.3)
+                        await _sleep(0.3)
                         await inject.send_keys(session_name, "Enter")
                     # Discount wait time from elapsed timer
                     wait_start = perm.get("wait_started_at", 0)
