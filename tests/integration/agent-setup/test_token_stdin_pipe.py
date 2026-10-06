@@ -19,7 +19,7 @@ import pytest
 from agent_setup_support import CHAT, TOKEN, Result, assert_no_secret
 
 DEADLINE = 0.3
-WATCHDOG = 5.0
+WATCHDOG = 3.0
 
 
 class Pipe:
@@ -33,7 +33,12 @@ class Pipe:
         self._timer.start()
 
     def write(self, data: str) -> None:
-        os.write(self._w, data.encode())
+        # Under the lock, so a write never races the watchdog's close (a
+        # closed fd number can be reused by another file at once).
+        with self._lock:
+            if self._w is None:
+                raise OSError("the write end is closed")
+            os.write(self._w, data.encode())
 
     def close_writer(self) -> None:
         with self._lock:

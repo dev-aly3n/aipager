@@ -1052,16 +1052,41 @@ class _PipeStdin:
         raise AssertionError("stdin read without the bounded fd path")
 
 
+class _Writer:
+    """A pipe's write end with a watchdog: it is closed after *after*
+    seconds, so a reader that ignores the deadline reads EOF and the test
+    fails by assertion instead of hanging. Closing is guarded (once)."""
+
+    def __init__(self, fd, after):
+        import threading
+        self._fd = fd
+        self._lock = threading.Lock()
+        self._timer = threading.Timer(after, self.close)
+        self._timer.daemon = True
+        self._timer.start()
+
+    def close(self):
+        with self._lock:
+            if self._fd is not None:
+                os.close(self._fd)
+                self._fd = None
+
+    def stop(self):
+        self._timer.cancel()
+        self.close()
+
+
 def test_token_stdin_times_out_on_a_pipe_that_never_closes(env, monkeypatch):
     from aipager import setup_cmd
     monkeypatch.setattr(setup_cmd, "STDIN_READ_TIMEOUT", 0.2)
     r, w = os.pipe()
+    os.write(w, (TOKEN + "\n").encode())
+    writer = _Writer(w, after=3.0)
     try:
-        os.write(w, (TOKEN + "\n").encode())
         code, doc, _o, _e = env.run_json("setup", "--token-stdin", "--chat-id",
                                          str(CHAT), stdin=_PipeStdin(r))
     finally:
-        os.close(w)
+        writer.stop()
         os.close(r)
     _fail_if_token_in("the JSON", json.dumps(doc))
     assert code == 2 and doc["error"] == "token_stdin_timeout"
