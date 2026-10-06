@@ -296,6 +296,16 @@ def test_token_file_must_be_a_regular_file(env):
     assert env.tg.urls == []
 
 
+def test_token_file_device_is_not_a_regular_file(env):
+    """A readable non-regular file (a character device) is refused by the
+    regular-file check itself, not by a later read error."""
+    code, doc, _o, _e = env.run_json("setup", "--token-file", os.devnull,
+                                     "--chat-id", str(CHAT))
+    assert code == 2 and doc["error"] == "token_file_unreadable"
+    assert "not a regular file" in doc["message"]
+    assert env.tg.urls == []
+
+
 def test_token_file_missing(env):
     code, doc, _o, _e = env.run_json("setup", "--token-file",
                                      str(env.tmp / "nope"), "--chat-id", str(CHAT))
