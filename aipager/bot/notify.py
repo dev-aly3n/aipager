@@ -3181,6 +3181,11 @@ class NotifyMixin:
                                 filename=filename,
                                 reply_to_message_id=msg_id or None,
                             )
+                            # The one positive trace of the attachment (the
+                            # live e2e suite's oracle): a held or refused
+                            # send raises instead of returning.
+                            log.info("[%s] full-log attachment sent: %s (%d bytes)",
+                                     label, filename, len(content_bytes))
                         except Forbidden as e:
                             _log_blocked_once(e)
                         except Exception:

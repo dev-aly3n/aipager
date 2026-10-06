@@ -34,7 +34,37 @@ which is the escape hatch that guard documents. The session is addressed
 to the default scope's chat, which on a personal install is the
 operator's DM. Nothing here reads or
 writes ``~/.claude`` or ``~/.config/aipager`` directly — the daemon does
-its own bookkeeping — and the bot token only ever signs initData.
+its own bookkeeping — and the bot token only ever signs initData. The
+launch's "move an expired ``~/.claude/.credentials.json`` aside" step is
+switched off in this process (the daemon does that for its own launches).
+The real-home write guard (roadmap 8.97) stays on: the session inherits
+``PYTEST_CURRENT_TEST``, and its hooks write only under ``/tmp``.
+
+What each test proves, and what it leaves in the operator's DM:
+
+- ``test_prompt_round_trip``: an injected prompt becomes a turn with a
+  card and an answer. One card + one answer ("OK").
+- ``test_subagent_hooks_and_cost``: a background agent is attributed by
+  its own hooks and the session's cost rises. One card + one answer.
+- ``test_miniapp_diff_detail_and_auth``: the diff route shows a file the
+  session wrote; a forged initData gets 401. One card + one answer.
+- ``test_replayed_idle_nudge_reminds_not_idles``: an AskUserQuestion stays
+  INTERACTIVE through Claude Code's idle nudge. One card + a question
+  card, left unanswered (the session is killed).
+- ``test_long_answer_attaches_full_log``: an answer past the card limit is
+  cut and goes out with a ``<label>_full_log.md`` attachment. One card,
+  a long answer and the attachment.
+- ``test_miniapp_chats_and_scope_header``: ``GET /api/chats`` lists the
+  operator's chat as the current one; a request naming a chat they are
+  not in is 403;
+  the sessions list works with no chat named. Posts nothing.
+- ``test_restart_mid_answer_recovers_card_and_delivers`` (also needs
+  ``AIPAGER_E2E_RESTART=1``): restarts the daemon mid-answer. One card +
+  one essay.
+- ``test_kill_route_ends_session``: the Mini App kill route ends the
+  session. Posts the "Ended" line.
+
+Every test also leaves a gone row for its throwaway session.
 """
 
 from __future__ import annotations
@@ -43,6 +73,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -130,6 +161,16 @@ def journal(label: str, since: str) -> list[str]:
     return keep
 
 
+def journal_all(since: str) -> list[str]:
+    """Every daemon journal line since ``since`` (for warnings logged
+    without a session label)."""
+    out = subprocess.run(
+        ["journalctl", "--user", "-u", "aipager", "--since", since, "--no-pager",
+         "-o", "short-precise"], capture_output=True, text=True, timeout=30,
+    ).stdout
+    return [line.split("]: ", 1)[-1] for line in out.splitlines()]
+
+
 def wait_for(label: str, since: str, *needles: str, timeout: float = TURN_TIMEOUT) -> list[str]:
     """Poll the journal until every needle has appeared; fail with the
     lines seen so far otherwise. Never a bare sleep."""
@@ -159,13 +200,14 @@ def _init_data() -> str:
     return encoded
 
 
-def api(method: str, path: str, body=None, *, init_data: str | None = None):
+def api(method: str, path: str, body=None, *, init_data: str | None = None,
+        headers: dict | None = None):
     """(status, json) from the Mini App with a signed initData header
-    (or a caller-supplied one, to probe the auth gate)."""
+    (or a caller-supplied one, to probe the auth gate), plus ``headers``."""
     req = urllib.request.Request(
         API + path, method=method,
         headers={"X-Telegram-Init-Data": _init_data() if init_data is None else init_data,
-                 "Content-Type": "application/json"},
+                 "Content-Type": "application/json", **(headers or {})},
         data=json.dumps(body).encode() if body is not None else None,
     )
     try:
@@ -215,6 +257,8 @@ def live_session(monkeypatch, run_async) -> LiveSession:
         pytest.skip("no dtach binary available to launch a live session")
     monkeypatch.setattr(inject, "_resolve_dtach", lambda: dtach)
     monkeypatch.setattr(inject, "_DTACH", dtach, raising=False)
+    # No moving the operator's ~/.claude/.credentials.json from a test.
+    monkeypatch.setattr(inject, "_stash_expired_credentials_file", lambda: None)
     _child_env_clean(monkeypatch)
     label = f"e2elive-{uuid.uuid4().hex[:6]}"
     name = f"{label}__d{CHAT_ID}"
@@ -308,6 +352,115 @@ def test_replayed_idle_nudge_reminds_not_idles(claude_available, live_session, r
     lines = journal(s.label, s.since)
     assert sum("reminding, not idling" in ln for ln in lines) == 1
     assert not any("INTERACTIVE → IDLE" in ln for ln in lines)
+
+
+_RICH_LINE = re.compile(r"sendRichMessage: (\d+) chars, rtl=\w+, overflow=(True|False)")
+#: Over the 32,768-byte rich-message ceiling with room to spare.
+_LONG_LINES = 800
+_RICH_LIMIT = 32_768
+_SENT = "full-log attachment sent:"
+
+
+def _daemon_logs_attachment() -> bool:
+    """Whether the running daemon's aipager has the "full-log attachment
+    sent" log line (added with this suite). Asks the daemon process's own
+    interpreter (its ``argv[0]``: ``/proc/<pid>/exe`` resolves past the
+    venv to the system binary) in isolated mode from ``/``, so this
+    checkout (the cwd, ``PYTHONPATH``) cannot answer for it, and locates
+    the package without importing it (an import reads the operator's
+    config). Reads the installed source, which a reinstall without a
+    restart can put ahead of what the process loaded; that only turns a
+    skip into a fail. Skips when the install cannot be inspected at all."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+    problems = []
+    for pid in harness.daemon_pids():
+        try:
+            python = (Path("/proc") / pid / "cmdline").read_bytes().split(b"\0")[0].decode()
+            if not os.path.isabs(python):
+                # A bare `python -m aipager start`: PATH's python may not be its.
+                problems.append(f"{pid}: interpreter {python!r} is not an absolute path")
+                continue
+            p = subprocess.run(
+                [python, "-I", "-c", "import importlib.util, pathlib; "
+                 "o = importlib.util.find_spec('aipager').origin; "
+                 "print(" + repr(_SENT) + " in (pathlib.Path(o).parent / 'bot' / "
+                 "'notify.py').read_text())"],
+                cwd="/", env=env, capture_output=True, text=True, timeout=60)
+        except (OSError, UnicodeDecodeError, subprocess.TimeoutExpired) as e:
+            problems.append(f"{pid}: {type(e).__name__}")
+            continue
+        if p.returncode == 0 and p.stdout.strip() in ("True", "False"):
+            return p.stdout.strip() == "True"
+        problems.append(f"{pid}: rc={p.returncode} {p.stderr.strip()[-160:]!r}")
+    pytest.skip("could not inspect the running daemon's install for the "
+                f"'{_SENT}' line: {problems or 'no daemon process found'}")
+
+
+def test_long_answer_attaches_full_log(claude_available, live_session, run_async):
+    """An answer past the card limit is cut (``overflow=True`` on its
+    ``sendRichMessage`` line) and the whole turn goes out as
+    ``<label>_full_log.md`` (md-attachments): the daemon logs
+    ``[<label>] full-log attachment sent: <label>_full_log.md`` only after
+    Telegram took the document. A daemon installed before that line
+    existed cannot show it: the test then skips after the overflow check."""
+    s = live_session
+    filename = f"{s.label}_full_log.md"
+    send(run_async, s.name,
+         f"Without using any tools, write a numbered list from 1 to {_LONG_LINES}, one "
+         "item per line, each line exactly: <n>. mountains rivers valleys forests "
+         "meadows glaciers. Write every line, no headings, no commentary, do not "
+         "stop early or abbreviate.")
+    wait_for(s.label, s.since, "BUSY → IDLE", timeout=600)
+    deadline = time.monotonic() + 90
+    while True:
+        lines = journal(s.label, s.since)
+        rich = next((m for m in map(_RICH_LINE.search, lines) if m), None)
+        sent = any(f"[{s.label}] {_SENT} {filename}" in ln for ln in lines)
+        if (rich and sent) or time.monotonic() > deadline:
+            break
+        time.sleep(3)
+    if rich is None:
+        pytest.skip("no sendRichMessage line: the answer went out with the card "
+                    "(the merged layout delivers an answer that fits), nothing overflowed")
+    chars, overflow = int(rich.group(1)), rich.group(2) == "True"
+    if not overflow:
+        assert chars < _RICH_LIMIT, f"a {chars}-char answer was sent whole (overflow=False)"
+        pytest.skip(f"Claude wrote only {chars} chars: the answer fit, nothing to attach")
+    if sent:
+        return
+    bad = (f"[{s.label}] Response too large", f"[{s.label}] full-log attachment skipped",
+           "Failed to send full response file")
+    hit = [ln for ln in journal_all(s.since) if any(b in ln for b in bad)]
+    assert not hit, "the full-log attachment did not go out:\n" + "\n".join(hit)
+    if not _daemon_logs_attachment():
+        pytest.skip("the running daemon predates the 'full-log attachment sent' line; "
+                    "the answer overflowed and no failure was logged, but the document "
+                    "itself is not observable: deploy this branch to check it")
+    pytest.fail(f"no '{_SENT} {filename}' line within 90 s of the overflowing answer")
+
+
+def test_miniapp_chats_and_scope_header():
+    """Mini App chat switcher (roadmap 8.73): ``GET /api/chats`` lists the
+    operator's chat, once, as the current one (a personal install has only
+    that one; any group they are in is listed too); a request naming a
+    chat they are not in (``X-Aipager-Scope``) is refused with 403, while
+    naming their own chat, or none, lists the sessions."""
+    status, body = api("GET", "/api/chats")
+    assert status == 200, body
+    scopes = [c.get("scope") for c in body.get("chats", [])]
+    assert str(CHAT_ID) in scopes and len(scopes) == len(set(scopes)), body
+    assert body.get("current") == str(CHAT_ID), body
+
+    foreign = "-1009999999999"  # a group the operator is certainly not in
+    status, body = api("GET", "/api/sessions", headers={"X-Aipager-Scope": foreign})
+    assert status == 403, body
+    status, body = api("GET", "/api/chats", headers={"X-Aipager-Scope": foreign})
+    assert status == 403, body
+
+    status, body = api("GET", "/api/sessions", headers={"X-Aipager-Scope": str(CHAT_ID)})
+    assert status == 200 and isinstance(body.get("sessions"), list), body
+    status, body = api("GET", "/api/sessions")
+    assert status == 200 and isinstance(body.get("sessions"), list), body
 
 
 @pytest.mark.skipif(os.environ.get("AIPAGER_E2E_RESTART") != "1",

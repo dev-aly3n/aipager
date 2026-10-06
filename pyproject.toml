@@ -94,8 +94,10 @@ testpaths = ["tests"]
 # Run them with:  pytest -m e2e        (all)
 #                 pytest tests/e2e/test_e2e_sticky.py -m e2e   (one file)
 # tests/e2e/test_e2e_live_daemon.py drives the RUNNING daemon and posts to
-# the operator's chat; it also needs AIPAGER_E2E_LIVE=1 (and
-# AIPAGER_E2E_RESTART=1 for the test that restarts the daemon).
+# the operator's chat, and test_e2e_live_cli.py runs the installed CLI
+# against the real install; both also need AIPAGER_E2E_LIVE=1 (and
+# AIPAGER_E2E_RESTART=1 for the test that restarts the daemon). What each
+# part needs and proves: tests/e2e/conftest.py.
 # The CLI -m overrides this addopts default.
 addopts = "-m 'not e2e'"
 markers = [

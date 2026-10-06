@@ -12,6 +12,7 @@ depends on), not only by string matching.
 
 from __future__ import annotations
 
+import logging
 import mimetypes
 import time
 from unittest.mock import AsyncMock, MagicMock
@@ -260,7 +261,7 @@ def test_a_non_md_upload_keeps_ptbs_own_guess(monkeypatch):
 # ---- the three sends' file names ----------------------------------------------
 
 def test_long_idle_answer_sends_full_log_md_and_the_observer_copy_md(
-    mk_bot, run_async, monkeypatch,
+    mk_bot, run_async, monkeypatch, caplog,
 ):
     monkeypatch.setattr("aipager.bot.notify.send_rich_message",
                         AsyncMock(return_value={}))
@@ -275,11 +276,14 @@ def test_long_idle_answer_sends_full_log_md_and_the_observer_copy_md(
     bot.observers.broadcast = AsyncMock()
 
     long_md = "x" * 34_000
-    run_async(bot.notify(sess, "idle_prompt", {"raw_md": long_md}))
+    with caplog.at_level(logging.INFO, logger="aipager.bot.notify"):
+        run_async(bot.notify(sess, "idle_prompt", {"raw_md": long_md}))
 
     bot._app.bot.send_document.assert_awaited_once()
     kw = bot._app.bot.send_document.await_args.kwargs
     assert kw["filename"] == "jim_full_log.md"
+    # The live e2e suite's oracle for the attachment.
+    assert "[jim] full-log attachment sent: jim_full_log.md" in caplog.text
     assert kw["document"].filename == "jim_full_log.md"
     assert kw["document"].mimetype == "text/markdown"
     body = kw["document"].input_file_content.decode("utf-8")
@@ -290,6 +294,26 @@ def test_long_idle_answer_sends_full_log_md_and_the_observer_copy_md(
     _text, doc_bytes, filename = bot.observers.broadcast_document.call_args.args
     assert filename == "jim_response.md"
     assert doc_bytes == kw["document"].input_file_content
+
+
+def test_a_failed_full_log_send_logs_no_success(mk_bot, run_async, monkeypatch, caplog):
+    """The "sent" line follows only a send that returned: the live e2e
+    suite reads it as proof the document went out."""
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message",
+                        AsyncMock(return_value={}))
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.busy_started_at = time.monotonic()
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
+    bot._app.bot.send_document = AsyncMock(side_effect=RuntimeError("held"))
+    bot._maybe_update_bot_name = AsyncMock()
+
+    with caplog.at_level(logging.INFO, logger="aipager.bot.notify"):
+        run_async(bot.notify(sess, "idle_prompt", {"raw_md": "x" * 34_000}))
+
+    bot._app.bot.send_document.assert_awaited_once()
+    assert "Failed to send full response file" in caplog.text
+    assert "full-log attachment sent" not in caplog.text
 
 
 def test_observer_document_goes_out_as_markdown(monkeypatch, run_async):

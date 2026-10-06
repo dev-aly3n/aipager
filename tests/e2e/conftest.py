@@ -1,16 +1,55 @@
-"""Fixtures for the real-Claude E2E safety suite.
+"""Fixtures for the opt-in E2E suite (``pytest tests/e2e -m e2e``).
 
-All tests here are marked ``e2e`` (auto-applied) and skipped unless real
-Claude is available + authenticated. Excluded from the default `pytest`
-run via the ``addopts = -m 'not e2e'`` in pyproject.
+Everything here is marked ``e2e`` (auto-applied) and excluded from the
+default run by ``addopts = -m 'not e2e'`` in pyproject. Each part skips
+cleanly when what it needs is missing:
+
+- Real-Claude hook tests (``test_e2e_bash_denies``, ``_benign``,
+  ``_origin``, ``_path_denies``, ``_roles``, ``_sticky``,
+  ``_slash_command`` (8.74), ``_joined_turn`` (8.77), ``_home_folder``
+  (8.79, 8.61), ``_policy_safety`` (8.96)): one real ``claude -p`` turn
+  each in a temp project wired to the real installed ``aipager-hook``,
+  with the policy snapshot written through the production pipeline
+  (see ``harness``). Claude loads project settings only
+  (``--setting-sources project,local``), so the operator's own hooks never
+  rewrite the snapshot; the hook is the first ``aipager-hook`` on ``PATH``
+  (else this venv's, or ``AIPAGER_E2E_HOOK``). Need ``claude`` installed and authenticated
+  (``claude_available``); the fake-home ones also need Claude to
+  authenticate with ``HOME`` elsewhere (``fake_home_claude``: export
+  ``CLAUDE_CODE_OAUTH_TOKEN``). They post nothing to Telegram and never
+  reach the running daemon.
+- ``test_e2e_hook_direct``: the same scenarios with no Claude, piping
+  ``PreToolUse`` payloads into the real hook. Needs only ``aipager-hook``.
+- ``test_e2e_whoami``: ``/whoami`` from a real policy.yaml file, no Claude.
+- ``test_e2e_daemon_halt``: a real dtach session halted on a safety
+  block. Skips while a daemon runs.
+- ``test_e2e_live_daemon`` and ``test_e2e_live_cli``: the RUNNING daemon,
+  its Mini App and the installed CLI. Need ``AIPAGER_E2E_LIVE=1``; the
+  daemon tests post cards and answers to the operator's DM (each module
+  docstring lists what). The restart test also needs
+  ``AIPAGER_E2E_RESTART=1``.
+
+Run the whole suite memory-capped, with ``AIPAGER_E2E_LIVE=1``, under
+``aipager.daemon_secrets.build_session_env()`` (so a nested ``claude`` is
+logged in)::
+
+    AIPAGER_E2E_LIVE=1 systemd-run --user --scope -q -p MemoryMax=2G \\
+      -p MemorySwapMax=0 .venv/bin/python -c 'import sys, subprocess; \\
+      from aipager.daemon_secrets import build_session_env; \\
+      sys.exit(subprocess.call([sys.executable, "-m", "pytest", "-q", \\
+      "-p", "no:cacheprovider", "tests/e2e", "-m", "e2e", "-rA"], \\
+      env=build_session_env()))'
 """
 
 from __future__ import annotations
 
+import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
+from aipager import policy_snapshot
 from tests.e2e import harness
 
 
@@ -26,13 +65,14 @@ def pytest_collection_modifyitems(config, items):
 def claude_available() -> bool:
     """Skip the whole e2e suite unless `claude` is on PATH AND a one-shot
     probe succeeds (i.e. authenticated + reachable)."""
-    if harness.claude_bin() is None:
+    if harness.claude_bin() is None or shutil.which("claude") is None:
         pytest.skip("claude CLI not on PATH")
     if harness.aipager_hook_bin() is None:
         pytest.skip("aipager-hook not installed")
     try:
         p = subprocess.run(
-            ["claude", "-p", "reply with exactly: OK", "--max-turns", "1"],
+            ["claude", "-p", "reply with exactly: OK", "--max-turns", "1",
+             "--setting-sources", "project,local"],
             capture_output=True, text=True, timeout=90,
         )
     except (subprocess.TimeoutExpired, OSError) as e:
@@ -43,14 +83,55 @@ def claude_available() -> bool:
 
 
 @pytest.fixture
+def _snapshots_where_the_hook_reads(_isolate_session_tmp_files, monkeypatch):
+    """Undo tests/conftest.py's per-test redirect of the policy snapshot
+    for e2e tests: the real ``aipager-hook`` (a subprocess) reads
+    ``/tmp/claude-policy-<session>.json``, so the harness must write it
+    there (see ``harness.PRODUCTION_SNAPSHOT_PATH``). Each e2e session
+    name is unique and its file is removed by the ``session`` fixture."""
+    path = harness.PRODUCTION_SNAPSHOT_PATH("claude-e2e-probe")
+    assert path.parent == Path("/tmp") and path.name == "claude-policy-claude-e2e-probe.json", (
+        f"harness captured a redirected snapshot_path: {path}")
+    monkeypatch.setattr(policy_snapshot, "snapshot_path", harness.PRODUCTION_SNAPSHOT_PATH)
+
+
+@pytest.fixture(scope="session")
+def fake_home_claude(claude_available, tmp_path_factory) -> bool:
+    """Skip unless real Claude also works with ``HOME`` pointed at a fake
+    home (the fake-home tests need it: they never let a broken guard near
+    the operator's real files)."""
+    probe_home = tmp_path_factory.mktemp("probe-home")
+    why = harness.probe_claude(probe_home, probe_home)
+    if why:
+        pytest.skip(why)
+    return True
+
+
+@pytest.fixture
+def hook_installed() -> str:
+    hook = harness.aipager_hook_bin()
+    if hook is None:
+        pytest.skip("aipager-hook not installed")
+    return hook
+
+
+@pytest.fixture
 def project(tmp_path):
     """A temp Claude project wiring the real aipager-hook (PreToolUse)."""
     return harness.make_project(tmp_path)
 
 
 @pytest.fixture
-def session(request):
-    """Unique session name + automatic snapshot cleanup."""
+def fake_home(tmp_path):
+    """A fake home folder with canary copies of protected files
+    (:func:`harness.make_fake_home`)."""
+    return harness.make_fake_home(tmp_path)
+
+
+@pytest.fixture
+def session(_snapshots_where_the_hook_reads):
+    """Unique session name whose snapshot the real hook reads, removed
+    afterwards."""
     s = harness.new_session()
     yield s
     harness.clear_snapshot(s)
