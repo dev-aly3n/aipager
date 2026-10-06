@@ -936,7 +936,10 @@ Every key is always present; a value not known yet is `null`.
   `skipped_daemon_running`, `would_install`, `failed`, or `null` when
   setup stopped before it.
 - `warnings`: objects with `code` (`token_file_shared`,
-  `reload_refused`, `daemon_unknown`) and `message`.
+  `reload_refused`, `daemon_unknown`, `audit_write_failed`) and
+  `message`. `audit_write_failed`: the owner grant is written, but its
+  `grant-owner` record could not be added to the audit log; the record
+  is best effort, so the exit code stays 0.
 - `next_step` after a change while a daemon runs that could not be
   reloaded says to restart it (`aipager service stop`, then `aipager
   service start`); it names the bot token only when the token changed.

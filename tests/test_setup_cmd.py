@@ -1278,6 +1278,60 @@ def test_plain_dry_run_refusal_never_claims_a_write(env):
     assert "Already written" not in err
 
 
+def _ro_audit(env, monkeypatch):
+    from aipager import audit
+    ro = env.tmp / "ro-audit"
+    ro.mkdir()
+    monkeypatch.setattr(audit, "AUDIT_LOG_PATH", ro / "audit.jsonl")
+    os.chmod(ro, 0o500)
+    return ro
+
+
+def test_audit_write_failure_is_a_warning_with_exit_0(env, monkeypatch):
+    """tester-iter3-001: the owner grant's audit record is best effort,
+    but a failure is reported, not silent."""
+    ro = _ro_audit(env, monkeypatch)
+    try:
+        code, doc, _o, _e = env.setup()
+    finally:
+        os.chmod(ro, 0o700)
+    assert code == 0 and doc["status"] == "installed"
+    assert [w["code"] for w in doc["warnings"]] == ["audit_write_failed"]
+    assert str(ro / "audit.jsonl") in doc["warnings"][0]["message"]
+    assert doc["changed"] == ["bot_token", "owner_dm", "settings_json"]
+
+
+def test_audit_write_failure_warning_in_plain_output(env, monkeypatch):
+    ro = _ro_audit(env, monkeypatch)
+    try:
+        code, _out, err = env.setup(json_out=False)
+    finally:
+        os.chmod(ro, 0o700)
+    assert code == 0
+    assert any(line.startswith("! The owner grant for chat ")
+               and "audit record could not be added" in line
+               for line in err.splitlines())
+
+
+def test_audit_written_gives_no_warning(env):
+    code, doc, _o, _e = env.setup()
+    assert code == 0 and doc["warnings"] == []
+    assert len(env.audit_lines()) == 1
+
+
+def test_record_owner_grant_reports_whether_it_wrote(tmp_path, monkeypatch):
+    from aipager import audit
+    from aipager.wizard.first_run import _record_owner_grant
+    monkeypatch.setattr(audit, "AUDIT_LOG_PATH", tmp_path / "a.jsonl")
+    assert _record_owner_grant(CHAT) is True
+
+    def _raise(**kw):
+        raise RuntimeError("no")
+
+    monkeypatch.setattr(audit, "append", _raise)
+    assert _record_owner_grant(CHAT) is False
+
+
 def test_reload_raising_with_no_daemon_detected_is_not_needed(env):
     """Nit: no daemon detected, the reload raises anyway: nothing needed
     reloading, the same as the bot_token branch."""

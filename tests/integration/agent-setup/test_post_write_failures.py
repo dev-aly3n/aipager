@@ -149,8 +149,9 @@ def test_audit_write_failure_changed_lists_the_yaml(env, monkeypatch):
 
 
 def test_audit_write_failure_exit_code_is_documented(env, monkeypatch):
-    """Exit 1 `write_failed` (an OSError in the writes), or 0 if the audit
-    record is best effort; never another code."""
+    """The audit record is best effort (docs/commands.md): exit 0, no
+    error, and the warning `audit_write_failed` says the grant has no
+    audit record."""
     import aipager.audit as audit_mod
     ro = env.tmp / "ro-audit"
     ro.mkdir()
@@ -160,7 +161,8 @@ def test_audit_write_failure_exit_code_is_documented(env, monkeypatch):
         r = env.setup()
     finally:
         os.chmod(ro, 0o700)
-    assert (r.code, r.json["error"]) in {(1, "write_failed"), (0, None)}
+    assert (r.code, r.json["error"]) == (0, None)
+    assert [w["code"] for w in r.json["warnings"]] == ["audit_write_failed"]
 
 
 # ── service installer fails (step f) ──────────────────────────────────

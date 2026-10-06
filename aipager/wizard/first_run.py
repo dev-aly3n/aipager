@@ -266,15 +266,16 @@ def _owner_dm_scope(chat_id: int, role: str):
     )
 
 
-def _record_owner_grant(chat_id: int) -> None:
+def _record_owner_grant(chat_id: int) -> bool:
     """Audit an owner grant (best effort: an audit failure never stops
-    the setup that made the grant)."""
+    the setup that made the grant). Returns whether the record was
+    written, so a caller can say so."""
     try:
         from aipager import audit
-        audit.append(session="(config)", label="owner",
-                     action="grant-owner", user_id=chat_id)
+        return bool(audit.append(session="(config)", label="owner",
+                                 action="grant-owner", user_id=chat_id))
     except Exception:
-        pass
+        return False
 
 
 def _commit_owner_dm(token: str, chat_id: int, role: str) -> None:

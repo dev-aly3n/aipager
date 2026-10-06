@@ -625,7 +625,15 @@ def _setup(args: argparse.Namespace, run: _Run) -> int:
             if plan.grants_owner and any(c in changed
                                          for c in ("owner_dm", "role")):
                 from aipager.wizard.first_run import _record_owner_grant
-                _record_owner_grant(chat_id)
+                if not _record_owner_grant(chat_id):
+                    from aipager import audit
+                    doc["warnings"].append({
+                        "code": "audit_write_failed",
+                        "message": (f"The owner grant for chat {chat_id} is "
+                                    "written, but its audit record could not "
+                                    f"be added to {audit.AUDIT_LOG_PATH}. "
+                                    "Check that this file can be written."),
+                    })
             if settings_plan.changed:
                 backup = settings_patch.apply_settings(settings_plan)
                 changed.append("settings_json")
