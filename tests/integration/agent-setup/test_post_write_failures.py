@@ -14,7 +14,7 @@ import os
 import pytest
 
 import aipager.wizard.daemon_io as _daemon_io
-from agent_setup_support import CHAT, TOKEN, assert_no_secret
+from agent_setup_support import CHAT, TOKEN, assert_no_secret, make_unwritable
 
 # The real reload seams, saved at import (before the env fixture stubs them).
 REAL_LIVE_RELOAD = _daemon_io._live_reload
@@ -34,7 +34,7 @@ def ro_settings_dir(env):
     the write raises PermissionError."""
     d = env.settings_path.parent
     d.mkdir(parents=True, exist_ok=True)
-    os.chmod(d, 0o500)
+    make_unwritable(d)
     yield env
     os.chmod(d, 0o700)
 
@@ -93,7 +93,7 @@ def test_settings_write_failure_on_role_change_lists_only_role(env):
     assert env.setup().code == 0
     env.settings_path.write_text("{}\n")
     d = env.settings_path.parent
-    os.chmod(d, 0o500)
+    make_unwritable(d)
     try:
         r = env.setup("--force", "--role", "admin")
     finally:
@@ -106,7 +106,7 @@ def test_settings_write_failure_on_role_change_role_is_on_disk(env):
     assert env.setup().code == 0
     env.settings_path.write_text("{}\n")
     d = env.settings_path.parent
-    os.chmod(d, 0o500)
+    make_unwritable(d)
     try:
         env.setup("--force", "--role", "admin")
     finally:
@@ -140,7 +140,7 @@ def test_audit_write_failure_changed_lists_the_yaml(env, monkeypatch):
     ro = env.tmp / "ro-audit"
     ro.mkdir()
     monkeypatch.setattr(audit_mod, "AUDIT_LOG_PATH", ro / "audit.jsonl")
-    os.chmod(ro, 0o500)
+    make_unwritable(ro)
     try:
         r = env.setup()
     finally:
@@ -156,7 +156,7 @@ def test_audit_write_failure_exit_code_is_documented(env, monkeypatch):
     ro = env.tmp / "ro-audit"
     ro.mkdir()
     monkeypatch.setattr(audit_mod, "AUDIT_LOG_PATH", ro / "audit.jsonl")
-    os.chmod(ro, 0o500)
+    make_unwritable(ro)
     try:
         r = env.setup()
     finally:

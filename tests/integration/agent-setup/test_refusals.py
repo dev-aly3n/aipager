@@ -8,7 +8,7 @@ import urllib.error
 
 import pytest
 
-from agent_setup_support import BOT, HTTP, NET
+from agent_setup_support import BOT, HTTP, NET, make_unwritable
 
 
 START = f"Open t.me/{BOT} and press Start, then run this again."
@@ -321,7 +321,7 @@ def test_unwritable_config_dir_is_write_failed(env, monkeypatch, tmp_path):
     ro = tmp_path / "ro"
     ro.mkdir()
     monkeypatch.setattr(scope_mod, "CONFIG_PATH", ro / "aipager.yaml")
-    os.chmod(ro, 0o500)
+    make_unwritable(ro)
     try:
         r = env.setup()
     finally:

@@ -10,7 +10,14 @@ import os
 
 import pytest
 
-from agent_setup_support import HTTP, NET, OTHER_TOKEN, TOKEN, assert_no_secret
+from agent_setup_support import (
+    HTTP,
+    NET,
+    OTHER_TOKEN,
+    TOKEN,
+    assert_no_secret,
+    make_unwritable,
+)
 
 PREFIX = "Already written:"
 NEW_CHAT = 777000111
@@ -29,7 +36,7 @@ def _plain(env, *extra, **kw):
 def ro_settings(env):
     d = env.settings_path.parent
     d.mkdir(parents=True, exist_ok=True)
-    os.chmod(d, 0o500)
+    make_unwritable(d)
     yield env
     os.chmod(d, 0o700)
 
@@ -38,7 +45,7 @@ def _ro_settings_on_role_change(env):
     assert env.setup().code == 0
     env.settings_path.write_text("{}\n")
     d = env.settings_path.parent
-    os.chmod(d, 0o500)
+    make_unwritable(d)
     try:
         return _plain(env, "--force", "--role", "admin")
     finally:

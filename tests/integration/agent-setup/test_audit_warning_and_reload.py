@@ -17,7 +17,13 @@ import os
 import pytest
 
 import aipager.wizard.daemon_io as _daemon_io
-from agent_setup_support import CHAT, OTHER_TOKEN, TOKEN, assert_no_secret
+from agent_setup_support import (
+    CHAT,
+    OTHER_TOKEN,
+    TOKEN,
+    assert_no_secret,
+    make_unwritable,
+)
 
 NEW_CHAT = 777000111
 CODE = "audit_write_failed"
@@ -34,7 +40,7 @@ def ro_audit(env, monkeypatch):
     ro = env.tmp / "ro-audit"
     ro.mkdir()
     monkeypatch.setattr(audit_mod, "AUDIT_LOG_PATH", ro / "audit.jsonl")
-    os.chmod(ro, 0o500)
+    make_unwritable(ro)
     yield env
     os.chmod(ro, 0o700)
 
@@ -45,7 +51,7 @@ def _lock_audit(env, monkeypatch):
     ro = env.tmp / "ro-audit-later"
     ro.mkdir()
     monkeypatch.setattr(audit_mod, "AUDIT_LOG_PATH", ro / "audit.jsonl")
-    os.chmod(ro, 0o500)
+    make_unwritable(ro)
     return ro
 
 

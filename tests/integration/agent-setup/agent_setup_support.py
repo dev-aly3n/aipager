@@ -68,6 +68,17 @@ def assert_no_secret(text: str, where: str, *, token: str = TOKEN) -> None:
         pytest.fail(f"bot token leaked into {where}", pytrace=False)
 
 
+def make_unwritable(d) -> None:
+    """chmod ``d`` to 0o500 and skip the test when that does not make it
+    unwritable (root, or CAP_DAC_OVERRIDE): the test would then fail for a
+    reason unrelated to its name."""
+    os.chmod(d, 0o500)
+    if os.access(d, os.W_OK):
+        os.chmod(d, 0o700)
+        pytest.skip("chmod 0o500 does not make a directory unwritable here "
+                    "(running as root?)")
+
+
 # ── fake Telegram ─────────────────────────────────────────────────────
 
 @dataclass

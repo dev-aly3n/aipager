@@ -1284,6 +1284,10 @@ def _ro_audit(env, monkeypatch):
     ro.mkdir()
     monkeypatch.setattr(audit, "AUDIT_LOG_PATH", ro / "audit.jsonl")
     os.chmod(ro, 0o500)
+    if os.access(ro, os.W_OK):
+        os.chmod(ro, 0o700)
+        pytest.skip("chmod 0o500 does not make a directory unwritable here "
+                    "(running as root?)")
     return ro
 
 
