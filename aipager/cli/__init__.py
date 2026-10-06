@@ -347,9 +347,9 @@ def main() -> None:
         if topic in choices:
             choices[topic].print_help()
             sys.exit(0)
-        from aipager.errors import friendly_error
+        from aipager.errors import friendly_error, redact_bare_token
         friendly_error(
-            f"Unknown subcommand: {topic}",
+            f"Unknown subcommand: {redact_bare_token(topic)}",
             f"  Available: {', '.join(sorted(choices))}",
         )
         sys.exit(2)

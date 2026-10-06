@@ -1046,10 +1046,13 @@ def _doctor_json(args) -> int:
     summary = {s: sum(1 for c in checks if c["status"] == s)
                for s in (OK, WARN, FAIL)}
     failed = summary[FAIL] > 0
-    out.write(json.dumps({
+    from aipager.errors import redact_bare_token
+    # The JSON goes straight into an agent's context: scrub anything shaped
+    # like a bot token (a crash row carries the exception's first line).
+    out.write(redact_bare_token(json.dumps({
         "command": "doctor", "version": __version__, "ok": not failed,
         "summary": summary, "checks": checks,
-    }, indent=2) + "\n")
+    }, indent=2)) + "\n")
     out.flush()
     return 1 if failed else 0
 

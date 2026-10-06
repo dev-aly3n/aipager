@@ -100,8 +100,9 @@ def test_json_stdout_quarantine(monkeypatch, capsys):
 
 def test_plain_output_is_byte_identical_to_before(monkeypatch, capsys):
     """Golden captured from cmd_doctor before run_all became run_all_keyed."""
-    from aipager import __version__
+    from aipager import __version__, ui
     _stub_checks(monkeypatch)
+    monkeypatch.setattr(ui.console, "width", 80)   # the golden's width
     rc = doctor.cmd_doctor(argparse.Namespace())
     out = capsys.readouterr()
     py = f"{sys.version_info.major}.{sys.version_info.minor}"
@@ -136,3 +137,18 @@ def test_cli_doctor_json(monkeypatch, capsys):
         cli.main()
     assert e.value.code == 0
     assert json.loads(capsys.readouterr().out)["command"] == "doctor"
+
+
+def test_json_output_never_carries_a_token_shape(monkeypatch, capsys):
+    token = "123456789:AAHf3kLmQ9zXwV7bN2pR8sT4uY6cE1dG0jK"
+
+    def check_leaky():
+        raise RuntimeError(f"bad token {token} in config")
+
+    monkeypatch.setattr(doctor, "CHECKS", [check_leaky])
+    doctor.cmd_doctor(argparse.Namespace(as_json=True))
+    out = capsys.readouterr().out
+    doc = json.loads(out)
+    assert "<redacted>" in doc["checks"][0]["detail"][0]
+    if token in out or token.split(":", 1)[1] in out:
+        pytest.fail("token shape in doctor --json output", pytrace=False)
