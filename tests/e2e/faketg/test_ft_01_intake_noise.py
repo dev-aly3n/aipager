@@ -30,13 +30,17 @@ def _ignored(inst, uid: int, text: str, name: str, word: str, *,
     n_before = len(inst.prompts_seen(name))
     msg = fake.inject_text(G, fti.user(uid), text, **kw)
     window = flows.quiet(fake, 3.0, since=since)
-    assert flows.calls_about(fake, since, message_id=msg["message_id"]) == []
-    assert flows.calls_about(fake, since, text=text) == []
+    flows.assert_no_calls(flows.calls_about(fake, since, message_id=msg["message_id"]),
+                          "calls about the ignored message")
+    flows.assert_no_calls(flows.calls_about(fake, since, text=text),
+                          "calls carrying the ignored text")
     if forbidden_text:
-        assert not [c for c in window if forbidden_text in c.text], forbidden_text
+        flows.assert_no_calls([c for c in window if forbidden_text in c.text],
+                              f"calls with {forbidden_text!r}")
     flows.control(inst, G, fti.ALICE, name, word)
     assert not any(text in p for p in inst.prompts_seen(name)[n_before:])
-    assert flows.calls_about(fake, since, message_id=msg["message_id"]) == []
+    flows.assert_no_calls(flows.calls_about(fake, since, message_id=msg["message_id"]),
+                          "calls about the ignored message")
     assert fake.reactions(G, msg["message_id"]) == []
     return msg
 
@@ -80,7 +84,8 @@ def test_intake_routes_only_what_is_addressed(fresh):
     n = len(inst.prompts_seen(name))
     fake.inject_edited(G, fti.user(fti.ALICE), first["message_id"], f"{BOT} after edit e2")
     flows.quiet(fake, 3.0, since=since)
-    assert flows.calls_about(fake, since, text="after edit e2") == []
+    flows.assert_no_calls(flows.calls_about(fake, since, text="after edit e2"),
+                          "calls about the edited message")
     flows.control(inst, G, fti.ALICE, name, "ping3")
     assert not any("after edit e2" in p for p in inst.prompts_seen(name)[n:])
 
@@ -108,8 +113,9 @@ def test_noise_read_only_told_once_and_anonymous_told_once(fresh):
     since = fake.mark()
     second = fake.inject_sender_chat(G, f"{BOT} anon two", sender_chat)
     flows.quiet(fake, 3.0, since=since)
-    assert flows.calls_about(fake, since, message_id=second["message_id"]) == []
+    flows.assert_no_calls(flows.calls_about(fake, since, message_id=second["message_id"]),
+                          "calls about the second anonymous message")
     flows.control(inst, G, fti.ALICE, name, "ping5")
-    assert len([t for t in flows.chat_texts(fake, G, 0)
-                if "Post as yourself" in t]) == 1
+    told_anon = len([t for t in flows.chat_texts(fake, G, 0) if "Post as yourself" in t])
+    assert told_anon == 1, f"'Post as yourself' sent {told_anon} times"
     assert not any("anon" in p or "carol" in p for p in inst.prompts_seen(name))

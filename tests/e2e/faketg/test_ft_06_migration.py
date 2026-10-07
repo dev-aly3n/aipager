@@ -37,7 +37,8 @@ def test_group_upgrade_is_followed(fresh):
     assert cfg.get("chat_migrations") in ({G: SG}, {str(G): SG})
     fti.wait_until(lambda: _registry_chat(inst, name) == SG, 30,
                    "the session registry to follow the move")
-    assert not [c for c in fake.calls(chat_id=SG, since=since) if c.status != 200]
+    flows.assert_no_calls([c for c in fake.calls(chat_id=SG, since=since) if c.status != 200],
+                          "failed calls in the new chat")
 
     # The session answers in the new chat.
     flows.prompt_turn(inst, SG, fti.ALICE, name, f"@{fti.BOT_USERNAME} after the move",

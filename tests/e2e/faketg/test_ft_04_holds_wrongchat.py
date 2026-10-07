@@ -63,7 +63,7 @@ def test_dm_session_traffic_stays_in_the_dm(fresh):
     inst.release_tools(name)
     flows.settle(fake)
 
-    leaked = [c.summary() for c in fake.calls(chat_id=G, since=start) if "ft11" in c.text]
-    assert leaked == [], leaked
+    flows.assert_no_calls([c for c in fake.calls(chat_id=G, since=start) if "ft11" in c.text],
+                          "the DM session's calls leaked into the group")
     dm_calls = [c for c in fake.calls(chat_id=DM, since=start) if "ft11" in c.text]
     assert any(c.method == "editMessageText" for c in dm_calls), "no card edit in the DM"

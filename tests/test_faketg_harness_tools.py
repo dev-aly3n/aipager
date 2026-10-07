@@ -486,3 +486,19 @@ def test_teardown_reports_a_process_working_inside_the_root_without_killing_it(
             if q.poll() is None:
                 q.kill()
                 q.wait(10)
+
+
+def test_assert_no_calls_names_calls_redacted(monkeypatch):
+    from tests.e2e.fake_telegram.server import Call
+    from tests.e2e.faketg import flows
+    bot = "123456789:" + "A" * 35
+    oauth = "sk-ant-oat01-" + "x" * 30
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    flows.assert_no_calls([], "nothing")  # empty: no failure
+    calls = [Call(seq=4, ts=0.0, method="sendMessage",
+                  params={"chat_id": -1, "text": f"tok {bot} and {oauth}"})]
+    with pytest.raises(AssertionError) as exc:
+        flows.assert_no_calls(calls, "leaked")
+    msg = str(exc.value)
+    assert msg.startswith("leaked:") and "#4 sendMessage chat=-1" in msg
+    assert bot not in msg and oauth not in msg and "sk-ant-<redacted>" in msg

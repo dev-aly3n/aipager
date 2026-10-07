@@ -10,6 +10,7 @@ import re
 import time
 
 from tests.e2e.fake_telegram import instance as fti
+from tests.e2e.fake_telegram.redaction import redact
 
 SEND_METHODS = ("sendMessage", "sendRichMessage", "editMessageText", "sendDocument")
 _BUSY_SENT = re.compile(r"\[([^\]]+)\] Busy message sent(?: late| again)? \(msg_id=(\d+)")
@@ -59,6 +60,14 @@ def busy_card_ids(log_lines: list[str], label: str) -> list[int]:
     (``Busy message sent``, ``... sent late`` and ``... sent again``)."""
     return [int(m.group(2)) for line in log_lines
             if (m := _BUSY_SENT.search(line)) and m.group(1) == label]
+
+
+def assert_no_calls(calls: list, what: str) -> None:
+    """Fail if *calls* is not empty, naming each call by its redacted
+    one-line summary. A plain ``assert calls == []`` would print every
+    call's full repr (all its parameters) unredacted."""
+    if calls:
+        raise AssertionError(redact(f"{what}:\n  " + "\n  ".join(c.summary() for c in calls)))
 
 
 def chat_texts(fake, chat_id: int, since: int) -> list[str]:
