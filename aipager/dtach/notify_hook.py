@@ -12,6 +12,7 @@ fires right before PreToolUse, so the file is always current.
 
 import json
 import os
+import re
 import resource
 import socket
 import sys
@@ -73,6 +74,13 @@ _DEBUG = os.environ.get("AIPAGER_DEBUG") == "1"
 # separation to leak. See enforce.py's own copy of this note for the
 # full reasoning.
 _TASK_NOTIFICATION_PREFIX = "<task-notification>"
+
+#: A PreToolUse payload, recognised from its raw text before it is decoded
+#: (roadmap 8.107): one the hook then cannot decode or handle is denied,
+#: never let through by an exit Claude Code reads as non-blocking. An
+#: escaped event name in a payload that also cannot be decoded is missed;
+#: Claude Code's serializer never escapes ASCII.
+_PRE_TOOL_USE_RAW = re.compile(r'"hook_event_name"\s*:\s*"PreToolUse"')
 
 # design.md "answer PermissionRequest hooks with a decision instead of
 # keystrokes": how long THIS hook process itself waits, after a
@@ -399,6 +407,47 @@ def main():
             except OSError:
                 pass
         sys.exit(2 if cap_slot[1] else 1)
+    except Exception as e:
+        # Roadmap 8.107: anything else escaping a PreToolUse (a payload
+        # nested past the decoder's limit, a non-object, a crash before
+        # the decision) used to exit 1, which Claude Code reads as a
+        # NON-blocking error: the tool ran unchecked. Give enforce's own
+        # fail-closed answer instead. Any other event keeps its old exit:
+        # a non-zero one there never blocks Claude.
+        if not cap_slot[1]:
+            raise
+        try:
+            _deny_unhandled_pre_tool_use(session, e)
+        except BaseException:
+            # Even the answer could not be written: exit 2, which Claude
+            # Code reads as a deny for PreToolUse.
+            sys.exit(2)
+
+
+def _deny_unhandled_pre_tool_use(session: str, error: Exception) -> None:
+    """Answer a PreToolUse the hook could not handle as ``enforce`` answers
+    a decision that failed: deny, unless the session's snapshot grants
+    the owner's bypass (``enforce.fail_closed``). Called only for an
+    error that escaped ``_run`` before any decision was printed (the
+    decision branch catches its own errors)."""
+    try:
+        _debug(f"PreToolUse could not be handled (denying unless owner): {error!r}")
+        from aipager.dtach import enforce
+        # The session is the hook's own (the payload's "session" is set
+        # from it), so the owner's bypass is found without the payload.
+        block = enforce.fail_closed({"session": session, "tool_name": ""})
+        if block is not None:
+            print(enforce.deny_decision_json(block["reason"]))
+    except Exception:
+        # The enforcer itself is unavailable: nothing can read the
+        # snapshot either, so deny.
+        print(json.dumps({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason":
+                "aipager safety policy: the safety check could not run",
+        }}))
+    sys.stdout.flush()
 
 
 def _run(session: str, cap_slot: list) -> None:
@@ -413,16 +462,34 @@ def _run(session: str, cap_slot: list) -> None:
     any failure to serialize the richer payload silently keeps the
     fallback bytes, so the notification path never crashes the hook.
     """
+    # (A read that fails here, at hundreds of MB or on invalid UTF-8, is
+    # still the old non-blocking exit: neither comes from Claude Code.)
     raw = sys.stdin.read()
     if not raw.strip():
         sys.exit(0)
+    # A PreToolUse from here on denies on any failure (main()), the
+    # decode itself included (roadmap 8.107).
+    pre_tool_use = len(cap_slot) > 1 and bool(_PRE_TOOL_USE_RAW.search(raw))
+    if pre_tool_use:
+        cap_slot[1] = True
 
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
+        if pre_tool_use:
+            raise
         sys.exit(0)
+    if not isinstance(data, dict):
+        if pre_tool_use:
+            raise TypeError("hook payload is not a JSON object")
+        sys.exit(0)
+    if len(cap_slot) > 1:
+        # Decoded, the event's own name decides (an escaped one the raw
+        # match missed, or a nested "PreToolUse" text the raw match took
+        # for it): only a PreToolUse may ever answer with a deny.
+        cap_slot[1] = data.get("hook_event_name") == "PreToolUse"
 
-    if isinstance(data, dict) and data.get("hook_event_name") == "PreModelSwitch":
+    if data.get("hook_event_name") == "PreModelSwitch":
         _answer_model_switch(session, data)
         return
 
