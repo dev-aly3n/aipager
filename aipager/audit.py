@@ -54,7 +54,8 @@ def append(*, session: str, label: str, action: str,
 
     Multi-scope (Phase H) attribution: ``scope_label`` / ``scope_chat_id``
     say *in which scope* the action happened; ``denied`` (+ ``reason``)
-    records authorization/safety rejections; ``bypass_safety`` flags an
+    records any refusal, tap-driven (a Deny tap) or rule-driven
+    (authorization, ``deny_tools``, safety); ``bypass_safety`` flags an
     owner acting with the safety boundary bypassed. All default-empty, so
     legacy/personal records keep their original shape.
 

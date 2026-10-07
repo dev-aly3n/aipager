@@ -1911,7 +1911,8 @@ class CallbackDispatchMixin:
             username=actor.label if actor else "",
             scope_label=self._scope_label(sess.scope_chat_id),
             scope_chat_id=sess.scope_chat_id or None,
-            denied=(verb == "Deny"),
+            # Any refusal, tap-driven or rule-driven (docs/security.md).
+            denied=(verb == ACTION_VERBS["deny"]),
             via=via,
         )
 
@@ -1919,10 +1920,10 @@ class CallbackDispatchMixin:
         # the user just made. Threaded under the busy message so
         # the scrollback reads as a conversation.
         audit_icon = {
-            "Allowed": "✅",
-            "Allowed always": "🟢",
-            "Denied": "🚫",
-            "Continue": "▶️",
+            ACTION_VERBS["allow"]: "✅",
+            ACTION_VERBS["allow_always"]: "🟢",
+            ACTION_VERBS["deny"]: "🚫",
+            ACTION_VERBS["continue"]: "▶️",
         }.get(verb, "·")
         by_attr = f" by {attribution_label(actor)}" if actor else ""
         anchor = (sess.busy_msg_id if sess.busy_msg_id and sess.busy_msg_id > 0

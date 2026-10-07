@@ -133,7 +133,8 @@ def test_allow_tap_with_live_hook_delivers_zero_keystrokes_and_via_hook_decision
     keys, _sess, _query = _run_callback(mk_bot(), mk_query, run_async, "allow", pending)
 
     assert keys == []
-    assert _read_last_audit_record()["via"] == "hook_decision"
+    rec = _read_last_audit_record()
+    assert (rec["via"], rec["denied"]) == ("hook_decision", False)
 
     wire = _recv_or_none(sock)
     assert wire is not None, "send_decision never reached the live socket"
@@ -152,7 +153,8 @@ def test_deny_tap_with_live_hook_sends_permission_request_deny_shape(
     keys, _sess, _query = _run_callback(mk_bot(), mk_query, run_async, "deny", pending)
 
     assert keys == []
-    assert _read_last_audit_record()["via"] == "hook_decision"
+    rec = _read_last_audit_record()
+    assert (rec["via"], rec["denied"]) == ("hook_decision", True)  # roadmap 8.100
 
     wire = _recv_or_none(sock)
     assert wire is not None
@@ -180,7 +182,8 @@ def test_allow_always_tap_echoes_standing_rule_verbatim(
     wire = _recv_or_none(sock)
     assert wire is not None
     assert wire["decision"] == {"behavior": "allow", "updatedPermissions": [_SUGGESTION]}
-    assert _read_last_audit_record()["via"] == "hook_decision"
+    rec = _read_last_audit_record()
+    assert (rec["via"], rec["denied"]) == ("hook_decision", False)
 
 
 def test_allow_always_degraded_no_rule_still_tries_a_plain_hook_decision(
@@ -232,7 +235,8 @@ def test_allow_tap_without_hook_reply_falls_back_to_keystroke(mk_bot, mk_query, 
     pending = {"tool_summary": "Bash: ls", "tool_info": {"name": "Bash"}}
     keys, _sess, _query = _run_callback(mk_bot(), mk_query, run_async, "allow", pending)
     assert keys == ["Enter"]
-    assert _read_last_audit_record()["via"] == "keystroke_fallback"
+    rec = _read_last_audit_record()
+    assert (rec["via"], rec["denied"]) == ("keystroke_fallback", False)
 
 
 def test_deny_tap_with_dead_hook_reply_falls_back_to_keystrokes(
@@ -243,7 +247,8 @@ def test_deny_tap_with_dead_hook_reply_falls_back_to_keystrokes(
     keys, _sess, _query = _run_callback(mk_bot(), mk_query, run_async, "deny", pending)
     assert keys, "deny fallback must still send some keys"
     assert keys[-1] == "Enter"
-    assert _read_last_audit_record()["via"] == "keystroke_fallback"
+    rec = _read_last_audit_record()
+    assert (rec["via"], rec["denied"]) == ("keystroke_fallback", True)  # roadmap 8.100
 
 
 def test_allow_always_with_dead_hook_reply_falls_back_to_existing_keystrokes(
@@ -309,3 +314,28 @@ def test_two_sessions_distinct_request_ids_each_only_answer_their_own(
     finally:
         sock_a.close()
         sock_b.close()
+
+
+# ---- the chat line's icon -------------------------------------------------
+
+def _chat_lines(bot):
+    out = []
+    for c in bot._app.bot.send_message.await_args_list:
+        text = c.kwargs.get("text") or (c.args[1] if len(c.args) > 1 else None)
+        if isinstance(text, str):
+            out.append(text)
+    return out
+
+
+@pytest.mark.parametrize("action,icon", [
+    ("allow", "✅"), ("deny", "🚫"), ("continue", "▶️")])
+def test_the_answer_line_carries_the_taps_icon(mk_bot, mk_query, run_async, action, icon):
+    """The icon is keyed by the verb the tap reports (``ACTION_VERBS``):
+    a Continue tap reports "Continued", which a table keyed "Continue"
+    missed, so its line fell back to "·"."""
+    bot = mk_bot()
+    bot._watch_keystroke_answer = MagicMock()  # the typed Deny's turn-end watch: not under test
+    pending = {"tool_summary": "Bash: ls", "tool_info": {"name": "Bash"}}
+    _run_callback(bot, mk_query, run_async, action, pending)
+    lines = [t for t in _chat_lines(bot) if "<b>dev</b>" in t]
+    assert lines and lines[-1].startswith(f"{icon} "), _chat_lines(bot)

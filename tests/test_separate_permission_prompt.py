@@ -193,8 +193,8 @@ def test_allow_on_a_separate_prompt_answers_through_the_hook_and_names_who(
     lines = world.lines(GROUP)
     assert lines == [("✅ <b>api</b> · Allowed by @bob · Bash: rm -rf build/", PROMPT_ID)]
     rec = _audit()[-1]
-    assert (rec["action"], rec["via"], rec["username"], rec["tool"]) == (
-        "Allowed", "hook_decision", "bob", "Bash")
+    assert (rec["action"], rec["via"], rec["username"], rec["tool"], rec["denied"]) == (
+        "Allowed", "hook_decision", "bob", "Bash", False)
     assert sess.status is Status.BUSY
     assert any("Allowed" in a for a in _answers(q))
     world.bot._watch_keystroke_answer.assert_not_called()
@@ -230,7 +230,8 @@ def test_deny_on_a_separate_prompt_answers_through_the_hook(world, run_async):
     assert "@bob" in decision["message"]
     assert world.lines(GROUP) == [
         ("🚫 <b>api</b> · Denied by @bob · Bash: rm -rf build/", PROMPT_ID)]
-    assert _audit()[-1]["via"] == "hook_decision"
+    rec = _audit()[-1]
+    assert (rec["action"], rec["via"], rec["denied"]) == ("Denied", "hook_decision", True)  # 8.100
     world.bot._watch_keystroke_answer.assert_not_called()
 
 
@@ -262,7 +263,8 @@ def test_once_the_hook_gave_up_the_answer_is_typed_and_still_named(
     assert world.keys == ["Down"] * 5 + ["Enter"]     # overshoot, unchanged
     assert world.lines(GROUP) == [
         ("🚫 <b>api</b> · Denied by @bob · Bash: rm -rf build/", PROMPT_ID)]
-    assert _audit()[-1]["via"] == "keystroke_fallback"
+    rec = _audit()[-1]
+    assert (rec["action"], rec["via"], rec["denied"]) == ("Denied", "keystroke_fallback", True)
     # The typed refusal row ends the turn like an interrupt: watched.
     world.bot._watch_keystroke_answer.assert_called_once()
     assert world.bot._watch_keystroke_answer.call_args.kwargs["refusal"] is True
