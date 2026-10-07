@@ -35,6 +35,7 @@ def test_roles_and_buttons(fresh):
     # Bob asks for a file write: the prompt shows Allow/Deny in the group,
     # on the turn's busy card (the stand-in asks once that card exists).
     since = fake.mark()
+    turn_log = inst.log_mark()
     card, allow = flows.ask_write(inst, name, "ft3", G, fti.BOB, "ft3")
     target = inst.file_in_project("ft3.txt")
 
@@ -53,7 +54,7 @@ def test_roles_and_buttons(fresh):
     fti.wait_until(target.exists, 60, "the file bob allowed")
     if inst.claude_mode == "standin":
         assert [d["decision"] for d in _decisions(inst, name)] == ["allowed"]
-    flows.wait_turn_end(inst, name, "ft3", since_log=0)
+    flows.wait_turn_end(inst, name, "ft3", since_log=turn_log)
     flows.settle(fake)
 
     # Switching to Auto: refused for bob (user), done for dave (admin).
@@ -95,7 +96,6 @@ def test_slash_rule_user_refused_admin_allowed(fresh):
     flows.control(inst, G, fti.BOB, name, "ping6")
     assert not any("/ftcmd" in p for p in inst.prompts_seen(name)[n:])
 
-    n = len(inst.prompts_seen(name))
-    fake.inject_text(G, fti.user(fti.DAVE), "/ft5 /ftcmd")
-    prompt = flows.wait_prompt(inst, name, "/ftcmd", after=n)
+    prompt = flows.prompt_turn(inst, G, fti.DAVE, name, "/ft5 /ftcmd", "/ftcmd")
     assert prompt.strip().startswith("/ftcmd")
+

@@ -17,11 +17,8 @@ def test_targets_are_per_person_and_which_session(fresh):
     n7 = inst.new_session(G, fti.BOB, "ft7")
 
     # Each person's plain mention goes to their own session.
-    a, b = len(inst.prompts_seen(n6)), len(inst.prompts_seen(n7))
-    fake.inject_text(G, fti.user(fti.ALICE), f"{BOT} alpha one")
-    flows.wait_prompt(inst, n6, "alpha one", after=a)
-    fake.inject_text(G, fti.user(fti.BOB), f"{BOT} bravo one")
-    flows.wait_prompt(inst, n7, "bravo one", after=b)
+    flows.prompt_turn(inst, G, fti.ALICE, n6, f"{BOT} alpha one", "alpha one")
+    flows.prompt_turn(inst, G, fti.BOB, n7, f"{BOT} bravo one", "bravo one")
     assert not any("alpha one" in p for p in inst.prompts_seen(n7))
     assert not any("bravo one" in p for p in inst.prompts_seen(n6))
 
@@ -33,10 +30,12 @@ def test_targets_are_per_person_and_which_session(fresh):
     flows.wait_text(fake, G, "Which session?", since=since)
     card, data = fake.wait_button(G, "ft6", since=since, message_text_contains="Which session?")
     assert len(inst.prompts_seen(n6)) == a and len(inst.prompts_seen(n7)) == b
+    log_since = inst.log_mark()
     cb = fake.inject_callback(fti.user(fti.DAVE), card, data)
     fake.wait_answer(cb)
     flows.wait_prompt(inst, n6, "delta held", after=a)
     flows.wait_text(fake, G, "Sent to ft6.", since=since)
+    flows.wait_turn_end(inst, n6, "ft6", since_log=log_since)
     assert not any("delta held" in p for p in inst.prompts_seen(n7))
 
     # bob's own session ends: his next message asks instead of going anywhere.

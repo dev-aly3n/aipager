@@ -47,22 +47,19 @@ def test_intake_routes_only_what_is_addressed(fresh):
 
     _ignored(inst, fti.ALICE, "just chatting about lunch", name, "ping1")
 
-    n = len(inst.prompts_seen(name))
-    fake.inject_text(G, fti.user(fti.ALICE), f"{BOT} hi there mention")
-    prompt = flows.wait_prompt(inst, name, "hi there mention", after=n)
+    prompt = flows.prompt_turn(inst, G, fti.ALICE, name, f"{BOT} hi there mention",
+                               "hi there mention")
     assert BOT not in prompt, "the mention was not stripped"
     assert prompt.splitlines()[-1].strip() == "hi there mention"
 
     # A reply to one of the bot's messages in the group.
     bot_msgs = fake.visible_messages(G)
     assert bot_msgs, "the bot has sent nothing in the group"
-    n = len(inst.prompts_seen(name))
-    fake.inject_text(G, fti.user(fti.ALICE), "reply to the bot r1", reply_to=bot_msgs[-1])
-    flows.wait_prompt(inst, name, "reply to the bot r1", after=n)
+    flows.prompt_turn(inst, G, fti.ALICE, name, "reply to the bot r1", "reply to the bot r1",
+                      reply_to=bot_msgs[-1])
 
-    n = len(inst.prompts_seen(name))
-    fake.inject_text(G, fti.user(fti.ALICE), f"/ft1@{fti.BOT_USERNAME} do it now")
-    prompt = flows.wait_prompt(inst, name, "do it now", after=n)
+    prompt = flows.prompt_turn(inst, G, fti.ALICE, name, f"/ft1@{fti.BOT_USERNAME} do it now",
+                               "do it now")
     assert "/ft1" not in prompt
 
     # A keyboard word typed without the marker is chatter ...
@@ -74,8 +71,10 @@ def test_intake_routes_only_what_is_addressed(fresh):
 
     # An edited message is ignored everywhere.
     n = len(inst.prompts_seen(name))
+    log_since = inst.log_mark()
     first = fake.inject_text(G, fti.user(fti.ALICE), f"{BOT} before edit e1")
     flows.wait_prompt(inst, name, "before edit e1", after=n)
+    flows.wait_turn_end(inst, name, "ft1", since_log=log_since)
     flows.settle(fake)
     since = fake.mark()
     n = len(inst.prompts_seen(name))

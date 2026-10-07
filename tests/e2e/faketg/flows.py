@@ -26,7 +26,30 @@ def wait_prompt(inst, name: str, contains: str, *, after: int = 0, timeout: floa
 
 
 def wait_turn_end(inst, name: str, label: str, *, since_log: int, timeout: float = 120) -> None:
+    """The session's turn that started after the log mark *since_log*
+    ended. Pass a mark taken BEFORE the prompt was sent: the session's
+    start also logs ``→ IDLE``."""
     inst.wait_log(f"[{label}]", "→ IDLE", since=since_log, timeout=timeout)
+
+
+def label_of(name: str) -> str:
+    """``claude-ft6__g4000000001`` -> ``ft6``."""
+    return name.removeprefix("claude-").split("__", 1)[0]
+
+
+def prompt_turn(inst, chat_id: int, uid: int, name: str, text: str, contains: str, *,
+                timeout: float = 120, **kw) -> str:
+    """*uid* sends *text*; wait until session *name* got it AND its turn
+    ended. Real Claude takes seconds per turn: the next message sent while
+    this one still runs would be absorbed (same sender) or held (another
+    sender) instead of starting its own turn. Not for scenarios that are
+    about holds."""
+    before = len(inst.prompts_seen(name))
+    log_since = inst.log_mark()
+    inst.fake.inject_text(chat_id, fti.user(uid), text, **kw)
+    prompt = wait_prompt(inst, name, contains, after=before, timeout=timeout)
+    wait_turn_end(inst, name, label_of(name), since_log=log_since, timeout=timeout)
+    return prompt
 
 
 def chat_texts(fake, chat_id: int, since: int) -> list[str]:
@@ -83,10 +106,10 @@ def wait_reaction(fake, chat_id: int, message_id: int, emoji: str, timeout: floa
 def control(inst, chat_id: int, uid: int, name: str, word: str, timeout: float = 120) -> str:
     """The positive control behind every negative check: a mention from
     *uid* that must reach *name*. Updates are handled one at a time, so
-    once it arrived every earlier update was handled too."""
-    before = len(inst.prompts_seen(name))
-    inst.fake.inject_text(chat_id, fti.user(uid), f"@{fti.BOT_USERNAME} {word}")
-    return wait_prompt(inst, name, word, after=before, timeout=timeout)
+    once it arrived every earlier update was handled too. Returns after
+    the control's turn ended (see :func:`prompt_turn`)."""
+    target = f"@{fti.BOT_USERNAME} " if chat_id < 0 else ""
+    return prompt_turn(inst, chat_id, uid, name, f"{target}{word}", word, timeout=timeout)
 
 
 def settle(fake, idle: float = 2.0, timeout: float = 60) -> None:

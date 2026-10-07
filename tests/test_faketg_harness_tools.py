@@ -368,3 +368,57 @@ def test_every_harness_output_path_is_redacted(root, tmp_path, monkeypatch):
     assert len(copies) == 1
     _assert_clean(copies[0].read_text())
     assert not root.exists()
+
+
+def _jl(*entries) -> list[str]:
+    return [json.dumps(e) for e in entries]
+
+
+def test_transcript_prompts_counts_queued_and_absorbed_messages_once():
+    lines = _jl(
+        {"type": "user", "message": {"role": "user", "content": "first"}},
+        {"type": "assistant", "message": {"content": [{"type": "text", "text": "ok"}]}},
+        # Sent mid-turn and absorbed by the running turn: no user record.
+        {"type": "queue-operation", "operation": "enqueue", "content": "absorbed one"},
+        {"type": "queue-operation", "operation": "remove", "reason": "absorbed_mid_turn",
+         "content": "absorbed one"},
+        # Sent mid-turn, then run as its own turn: enqueue + a user record.
+        {"type": "queue-operation", "operation": "enqueue", "content": "queued two"},
+        {"type": "queue-operation", "operation": "dequeue"},
+        {"type": "user", "message": {"content": [{"type": "text", "text": "queued two"}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "content": "x"}]}},
+        {"type": "user", "isMeta": True, "message": {"content": "meta"}},
+        {"type": "user", "message": {"content": "queued two"}},
+    ) + ["not json"]
+    assert fti.transcript_prompts(lines) == ["first", "absorbed one", "queued two",
+                                             "queued two"]
+
+
+def test_real_mode_prompts_are_per_session_and_survive_a_new_transcript(root):
+    inst = fti.TestInstance(claude_mode="real")
+    inst.root = root
+    proj = inst.home / ".claude" / "projects" / "p"
+    proj.mkdir(parents=True)
+    registry = inst.home / ".claude" / "aipager-sessions.json"
+
+    def point(name_to_path):
+        registry.write_text(json.dumps({"sessions": {
+            n: {"transcript_path": str(p)} for n, p in name_to_path.items()}}))
+
+    a1, a2, b = proj / "a1.jsonl", proj / "a2.jsonl", proj / "b.jsonl"
+    a1.write_text("\n".join(_jl({"type": "user", "message": {"content": "alpha"}})) + "\n")
+    b.write_text("\n".join(_jl({"type": "user", "message": {"content": "bravo"}})) + "\n")
+    assert inst.prompts_seen("claude-ft6__g4000000001") == []
+    point({"claude-ft6__g4000000001": a1, "claude-ft7__g4000000001": b})
+    assert inst.prompts_seen("claude-ft6__g4000000001") == ["alpha"]
+    assert inst.prompts_seen("claude-ft7__g4000000001") == ["bravo"]
+    # A restart (Auto switch) gives the session a new transcript.
+    a2.write_text("\n".join(_jl({"type": "user", "message": {"content": "again"}})) + "\n")
+    point({"claude-ft6__g4000000001": a2, "claude-ft7__g4000000001": b})
+    assert inst.prompts_seen("claude-ft6__g4000000001") == ["alpha", "again"]
+
+
+def test_flow_label_of_a_session_name():
+    from tests.e2e.faketg import flows
+    assert flows.label_of("claude-ft6__g4000000001") == "ft6"
+    assert flows.label_of("claude-ft8r__d900000001") == "ft8r"

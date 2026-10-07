@@ -41,6 +41,7 @@ def test_dm_session_traffic_stays_in_the_dm(fresh):
     name = inst.new_session(DM, fti.ALICE, "ft11")
     start = fake.mark()
 
+    turn_log = inst.log_mark()
     card, allow = flows.ask_write(inst, name, "ft11", DM, fti.ALICE, "ft11")
     assert card["chat"]["id"] == DM
     since = fake.mark()
@@ -48,6 +49,7 @@ def test_dm_session_traffic_stays_in_the_dm(fresh):
     fake.wait_answer(cb)
     flows.wait_text(fake, DM, "Allowed", since=since)
     fti.wait_until(inst.file_in_project("ft11.txt").exists, 60, "alice's file")
+    flows.wait_turn_end(inst, name, "ft11", since_log=turn_log)
     flows.settle(fake)
 
     # /stop on a running turn: the result goes to the DM too.

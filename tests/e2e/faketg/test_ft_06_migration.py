@@ -40,6 +40,5 @@ def test_group_upgrade_is_followed(fresh):
     assert not [c for c in fake.calls(chat_id=SG, since=since) if c.status != 200]
 
     # The session answers in the new chat.
-    n = len(inst.prompts_seen(name))
-    fake.inject_text(SG, fti.user(fti.ALICE), f"@{fti.BOT_USERNAME} after the move")
-    flows.wait_prompt(inst, name, "after the move", after=n)
+    flows.prompt_turn(inst, SG, fti.ALICE, name, f"@{fti.BOT_USERNAME} after the move",
+                      "after the move")

@@ -387,6 +387,7 @@ class TestInstance:
         self.env: dict = {}
         self._log_fh = None
         self.sessions: dict[str, dict] = {}
+        self._transcripts: dict[str, list[str]] = {}
 
     # -- layout --------------------------------------------------------------
 
@@ -664,22 +665,34 @@ class TestInstance:
             return []
 
     def prompts_seen(self, name: str) -> list[str]:
-        """Prompts the session's Claude received, in order."""
+        """Prompts the session's Claude received, in order.
+
+        Stand-in: its own event log. Real Claude: the session's own
+        transcripts (every ``transcript_path`` the instance registry has
+        named for *name*, in the order first seen, so an Auto restart's
+        new transcript adds to the list instead of replacing it), read
+        with :func:`transcript_prompts`. Never every transcript of the
+        project: two sessions share the project folder."""
         if self.claude_mode == "standin":
             return [e["prompt"] for e in self.standin_log(name) if e.get("event") == "prompt"]
-        out = []
-        for path in sorted((self.home / ".claude" / "projects").glob("*/*.jsonl")):
-            for line in path.read_text(errors="replace").splitlines():
-                try:
-                    e = json.loads(line)
-                except ValueError:
-                    continue
-                if e.get("type") != "user" or e.get("isMeta"):
-                    continue
-                c = (e.get("message") or {}).get("content")
-                if isinstance(c, str):
-                    out.append(c)
+        paths = self._transcripts.setdefault(name, [])
+        current = self._registry_transcript(name)
+        if current and current not in paths:
+            paths.append(current)
+        out: list[str] = []
+        for path in paths:
+            try:
+                out += transcript_prompts(Path(path).read_text(errors="replace").splitlines())
+            except OSError:
+                continue
         return out
+
+    def _registry_transcript(self, name: str) -> str:
+        try:
+            data = json.loads((self.home / ".claude" / "aipager-sessions.json").read_text())
+            return str(data["sessions"][name].get("transcript_path") or "")
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return ""
 
     def notes(self, name: str) -> list[dict]:
         """The session's outstanding notes (not yet picked up)."""
@@ -787,6 +800,57 @@ class TestInstance:
                 shutil.rmtree(self.root, ignore_errors=True)
         if errors:
             raise AssertionError("teardown: " + "; ".join(errors))
+
+
+def _user_record_text(entry: dict) -> str:
+    content = (entry.get("message") or {}).get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):  # text blocks only: a tool result has none
+        return "\n".join(str(b.get("text", "")) for b in content
+                         if isinstance(b, dict) and b.get("type") == "text")
+    return ""
+
+
+def transcript_prompts(lines) -> list[str]:
+    """The user prompts a real Claude transcript shows, in order, once each.
+
+    A prompt does not always become its own ``type=user`` record when it
+    arrives. One typed while a turn is running is queued first (a
+    ``queue-operation`` line, ``operation=enqueue``): later it is either
+    dequeued into a turn of its own (a user record follows) or absorbed
+    by the running turn (``remove`` / ``absorbed_mid_turn``) and never
+    gets a user record. Counting user records only would miss absorbed
+    messages and every wait on them would time out, so the enqueue
+    counts as the arrival and the user record a dequeue later writes for
+    the same text is not counted again. Tool results and meta records
+    are not prompts."""
+    out: list[str] = []
+    queued: list[str] = []
+    for line in lines:
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(e, dict):
+            continue
+        kind = e.get("type")
+        if kind == "queue-operation":
+            content = e.get("content")
+            if e.get("operation") == "enqueue" and isinstance(content, str) and content:
+                out.append(content)
+                queued.append(content.strip())
+            continue
+        if kind != "user" or e.get("isMeta"):
+            continue
+        text = _user_record_text(e)
+        if not text:
+            continue
+        if text.strip() in queued:
+            queued.remove(text.strip())
+            continue
+        out.append(text)
+    return out
 
 
 def needle_in_any(needle: bytes) -> bool:
