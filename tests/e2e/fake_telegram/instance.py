@@ -872,6 +872,9 @@ def transcript_prompts(lines) -> list[str]:
         text = _user_record_text(e)
         if not text:
             continue
+        # Matched by text: a still-pending enqueue also swallows a later,
+        # separate user record with the same text. Harmless here, because
+        # every harness prompt carries its own unique word.
         if text.strip() in queued:
             queued.remove(text.strip())
             continue
