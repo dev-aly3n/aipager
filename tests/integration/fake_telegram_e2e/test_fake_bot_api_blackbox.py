@@ -787,10 +787,9 @@ def test_wait_for_timeout_fails(fake):
 def test_wait_for_timeout_never_prints_token(fake):
     api, base = fake
     sent(api, base, "x")
-    try:
+    with pytest.raises((AssertionError, TimeoutError)) as exc:
         api.wait_for(lambda c: False, timeout=0.5)
-    except (AssertionError, TimeoutError) as exc:
-        assert SECRET not in str(exc)
+    assert SECRET not in str(exc.value)
 
 
 def test_find_button(fake):
@@ -811,6 +810,203 @@ def test_visible_messages_has_sent_text(fake):
     api, base = fake
     sent(api, base, "visible", chat=GROUP)
     assert "visible" in [m.get("text") for m in api.visible_messages(GROUP)]
+
+
+# ---- query helpers, iteration 2 ---------------------------------------------------------
+
+def _kb(*pairs):
+    return InlineKeyboardMarkup([[InlineKeyboardButton(t, callback_data=d) for t, d in pairs]])
+
+
+def _timeout_text(api) -> str:
+    with pytest.raises((AssertionError, TimeoutError)) as exc:
+        api.wait_for(lambda c: False, timeout=0.3)
+    return str(exc.value)
+
+
+def test_wait_for_timeout_hides_token_after_file_download(fake):
+    api, base = fake
+    u = _one(api, base, lambda: api.inject_document(DM, alice(api), "a.txt", b"D"))
+
+    async def dl(b):
+        f = await b.get_file(u.message.document.file_id)
+        return bytes(await f.download_as_bytearray())
+    run(base, dl)
+    assert SECRET not in _timeout_text(api)
+
+
+def test_wait_for_timeout_hides_token_after_wrong_token_call(fake):
+    api, base = fake
+    httpx.get(f"{base}/bot1:wrong/getMe")
+    sent(api, base, "x")
+    assert SECRET not in _timeout_text(api)
+
+
+def test_wait_for_timeout_hides_token_echoed_in_text(fake):
+    # Error guess: a message that carries the token must not surface it either.
+    api, base = fake
+    sent(api, base, f"oops {TOKEN}")
+    assert SECRET not in _timeout_text(api)
+
+
+def test_wait_for_timeout_lists_recent_calls(fake):
+    api, base = fake
+    sent(api, base, "x")
+    assert "sendMessage" in _timeout_text(api)
+
+
+def test_wait_for_timeout_includes_last_call(fake):
+    api, base = fake
+    for i in range(25):
+        sent(api, base, f"m{i:02d}")
+    assert "m24" in _timeout_text(api)
+
+
+def test_wait_for_timeout_drops_calls_older_than_last_20(fake):
+    api, base = fake
+    for i in range(25):
+        sent(api, base, f"m{i:02d}")
+    assert "m04" not in _timeout_text(api)
+
+
+def test_wait_for_returns_without_waiting_for_existing_call(fake):
+    api, base = fake
+    sent(api, base, "here")
+    t0 = time.monotonic()
+    api.wait_for(lambda c: c.method == "sendMessage", timeout=30)
+    assert time.monotonic() - t0 < 2
+
+
+def test_wait_for_since_ignores_earlier_calls(fake):
+    api, base = fake
+    sent(api, base, "before")
+    m = api.mark()
+    with pytest.raises((AssertionError, TimeoutError)):
+        api.wait_for(lambda c: c.method == "sendMessage", timeout=0.3, since=m)
+
+
+def test_wait_for_sees_call_made_while_waiting(fake):
+    api, base = fake
+    threading.Timer(0.3, lambda: sent(api, base, "later")).start()
+    c = api.wait_for(lambda c: c.method == "sendMessage", timeout=10)
+    assert c.params.get("text") == "later"
+
+
+def test_find_button_returns_message(fake):
+    api, base = fake
+    m = sent(api, base, "perm", chat=GROUP, reply_markup=_kb(("Allow", "a")))
+    assert api.find_button(GROUP, "Allow")[0]["message_id"] == m.message_id
+
+
+def test_find_button_substring_match(fake):
+    api, base = fake
+    sent(api, base, "perm", chat=GROUP, reply_markup=_kb(("Allow once", "a1")))
+    assert api.find_button(GROUP, "once")[1] == "a1"
+
+
+def test_find_button_newest_wins(fake):
+    api, base = fake
+    sent(api, base, "old", chat=GROUP, reply_markup=_kb(("Allow", "old")))
+    sent(api, base, "new", chat=GROUP, reply_markup=_kb(("Allow", "new")))
+    assert api.find_button(GROUP, "Allow")[1] == "new"
+
+
+def test_find_button_since_ignores_older(fake):
+    api, base = fake
+    sent(api, base, "old", chat=GROUP, reply_markup=_kb(("Allow", "old")))
+    m = api.mark()
+    assert not api.find_button(GROUP, "Allow", since=m)
+
+
+def test_find_button_since_finds_newer(fake):
+    api, base = fake
+    m = api.mark()
+    sent(api, base, "new", chat=GROUP, reply_markup=_kb(("Allow", "new")))
+    assert api.find_button(GROUP, "Allow", since=m)[1] == "new"
+
+
+def test_find_button_other_chat_ignored(fake):
+    api, base = fake
+    sent(api, base, "dm", chat=DM, reply_markup=_kb(("Allow", "dm")))
+    assert not api.find_button(GROUP, "Allow")
+
+
+def test_find_button_gone_after_delete(fake):
+    api, base = fake
+    m = sent(api, base, "perm", chat=GROUP, reply_markup=_kb(("Allow", "a")))
+    run(base, lambda b: b.delete_message(GROUP, m.message_id))
+    assert not api.find_button(GROUP, "Allow")
+
+
+def test_find_button_gone_after_keyboard_removed(fake):
+    api, base = fake
+    m = sent(api, base, "perm", chat=GROUP, reply_markup=_kb(("Allow", "a")))
+    run(base, lambda b: b.edit_message_reply_markup(GROUP, m.message_id, reply_markup=None))
+    assert not api.find_button(GROUP, "Allow")
+
+
+def test_find_button_follows_edited_keyboard(fake):
+    api, base = fake
+    m = sent(api, base, "perm", chat=GROUP, reply_markup=_kb(("Allow", "a")))
+    run(base, lambda b: b.edit_message_text("perm2", GROUP, m.message_id,
+                                            reply_markup=_kb(("Deny", "d"))))
+    assert api.find_button(GROUP, "Deny")[1] == "d"
+
+
+def test_reactions_empty_when_none_set(fake):
+    api, base = fake
+    m = sent(api, base)
+    assert api.reactions(DM, m.message_id) == []
+
+
+def test_reactions_replaced_by_newer_call(fake):
+    api, base = fake
+    m = sent(api, base)
+    run(base, lambda b: b.set_message_reaction(DM, m.message_id, "👍"))
+    run(base, lambda b: b.set_message_reaction(DM, m.message_id, "🎉"))
+    assert api.reactions(DM, m.message_id) == ["🎉"]
+
+
+def test_reactions_cleared_by_empty_list(fake):
+    api, base = fake
+    m = sent(api, base)
+    run(base, lambda b: b.set_message_reaction(DM, m.message_id, "👍"))
+    run(base, lambda b: b.set_message_reaction(DM, m.message_id, []))
+    assert api.reactions(DM, m.message_id) == []
+
+
+def test_reactions_scoped_to_message(fake):
+    api, base = fake
+    m1, m2 = sent(api, base, "a"), sent(api, base, "b")
+    run(base, lambda b: b.set_message_reaction(DM, m1.message_id, "👍"))
+    assert api.reactions(DM, m2.message_id) == []
+
+
+def test_visible_messages_shows_edited_text(fake):
+    api, base = fake
+    m = sent(api, base, "before", chat=GROUP)
+    run(base, lambda b: b.edit_message_text("after", GROUP, m.message_id))
+    assert "after" in [v.get("text") for v in api.visible_messages(GROUP)]
+
+
+def test_visible_messages_drops_pre_edit_text(fake):
+    api, base = fake
+    m = sent(api, base, "before", chat=GROUP)
+    run(base, lambda b: b.edit_message_text("after", GROUP, m.message_id))
+    assert "before" not in [v.get("text") for v in api.visible_messages(GROUP)]
+
+
+def test_visible_messages_scoped_to_chat(fake):
+    api, base = fake
+    sent(api, base, "dm-only", chat=DM)
+    assert "dm-only" not in [v.get("text") for v in api.visible_messages(GROUP)]
+
+
+def test_visible_messages_after_delete_messages(fake):
+    api, base = fake
+    m1, m2 = sent(api, base, "a", chat=GROUP), sent(api, base, "b", chat=GROUP)
+    run(base, lambda b: b.delete_messages(GROUP, [m1.message_id, m2.message_id]))
+    assert {"a", "b"} & {v.get("text") for v in api.visible_messages(GROUP)} == set()
 
 
 # ---- teardown ----------------------------------------------------------------------------

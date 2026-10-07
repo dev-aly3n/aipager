@@ -222,18 +222,39 @@ def test_check_never_raises(monkeypatch, raw):
     assert te.check()
 
 
-def test_check_returns_lines_per_contract(monkeypatch):
-    # entrypoints.md: `check() -> list[str]`: the refusal lines, empty
-    # when the base is acceptable.
+def test_check_returns_a_list_per_contract(monkeypatch):
+    # entrypoints.md (amended): `check() -> list[str]`: the refusal lines,
+    # empty when the base is acceptable.
     monkeypatch.setenv(BASE, "http://example.com")
-    out = te.check()
-    assert isinstance(out, list) and all(isinstance(line, str) for line in out)
-    assert out == [
+    assert isinstance(te.check(), list)
+
+
+def test_check_lines_are_strings(monkeypatch):
+    monkeypatch.setenv(BASE, "http://example.com")
+    assert all(isinstance(line, str) for line in te.check())
+
+
+def test_check_remote_lines_exact(monkeypatch):
+    monkeypatch.setenv(BASE, "http://example.com")
+    assert te.check() == [
         "AIPAGER_TELEGRAM_API_BASE points at example.com, which is not this machine.",
         "Set AIPAGER_TELEGRAM_API_ALLOW_REMOTE=1 to allow it.",
     ]
+
+
+def test_check_invalid_is_one_documented_line(monkeypatch):
+    monkeypatch.setenv(BASE, "ftp://127.0.0.1")
+    assert te.check() == ["AIPAGER_TELEGRAM_API_BASE is not a valid http(s) URL."]
+
+
+def test_check_empty_for_loopback_with_port(monkeypatch):
     monkeypatch.setenv(BASE, "http://127.0.0.1:41234")
     assert te.check() == []
+
+
+def test_check_empty_after_override_removed(monkeypatch):
+    monkeypatch.setenv(BASE, "http://example.com")
+    te.check()
     monkeypatch.delenv(BASE)
     assert te.check() == []
 
