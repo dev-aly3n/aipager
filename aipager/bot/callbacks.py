@@ -1393,8 +1393,10 @@ class CallbackDispatchMixin:
                 and (sess.pending_permission or sess.pending_prompt_msg)):
             # A prompt is pending, and this tap is on a message that is
             # neither the busy card it is shown in nor registered to it: a
-            # copy or a separate prompt from before a restart (the map is
-            # not persisted), or any other stale surface. Fail closed.
+            # copy the bar re-sent before a restart (the map is not
+            # persisted; only the prompt a restart restored re-registers
+            # its own separate message, roadmap 8.102), an older prompt's
+            # message, or any other stale surface. Fail closed.
             #
             # Fails OPEN, like `tap_is_for_this_turn`, when there is nothing
             # to compare against: a tap with no message id, or an inline
@@ -1408,7 +1410,8 @@ class CallbackDispatchMixin:
                         refusal = "this prompt has expired"
                 else:
                     # A separate-message prompt is always registered when
-                    # it is sent; an unregistered message is not it.
+                    # it is sent, and again when a restart restores it
+                    # (8.102); an unregistered message is not it.
                     refusal = "this prompt has expired"
         if refusal is not None:
             await self._safe_answer(query, refusal)

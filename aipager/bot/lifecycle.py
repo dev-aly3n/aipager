@@ -55,8 +55,9 @@ from aipager.config import (
     TELEGRAM_PRIVATE_MAX_RATE,
 )
 from aipager.state import Status, TrackedSession
-from aipager.bot.transport import resolve_chat_id
-from aipager.transcript import turn_appears_complete
+from aipager.bot.dashboard import new_prompt_token
+from aipager.bot.transport import resolve_chat_id, resolve_chat_id_int
+from aipager.transcript import saved_prompt_evidence, turn_appears_complete
 
 # Pure-function helpers and constants live in aipager.bot.transport
 # now. Re-export the names this module uses internally so the
@@ -795,6 +796,17 @@ class LifecycleMixin:
         # A sign of life, so the stale-BUSY note measures silence from the
         # adoption and not from before the restart.
         sess.last_hook_at = now_mono
+        clock = self._restore_card_clock(sess, now_mono)
+        log.info("[%s] busy card %d adopted — the turn looks still running; "
+                 "working again, %s", sess.label, sess.busy_msg_id, clock)
+        self._resume_animation_if_dead(sess, reason="card adopted at startup")
+
+    @staticmethod
+    def _restore_card_clock(sess: TrackedSession, now_mono: float) -> str:
+        """Put back the restored card's clock (roadmap 8.101) from the
+        anchor the previous run saved (``restored_card_started_wall``, read
+        once here), for an adopted card and a restored prompt (8.102)
+        alike. Returns how, for the log line."""
         started_wall = sess.restored_card_started_wall
         sess.restored_card_started_wall = 0.0
         elapsed = time.time() - started_wall if started_wall else -1.0
@@ -815,9 +827,160 @@ class LifecycleMixin:
             clock = "its clock restarted (no saved start)"
         else:
             clock = "its clock kept"
-        log.info("[%s] busy card %d adopted — the turn looks still running; "
-                 "working again, %s", sess.label, sess.busy_msg_id, clock)
-        self._resume_animation_if_dead(sess, reason="card adopted at startup")
+        return clock
+
+    def _open_prompt_drop_reason(self, name: str, sess: TrackedSession,
+                                 rec: dict, live_names: set) -> str | None:
+        """Why the saved prompt *rec* must not be restored, or None."""
+        if name not in live_names:
+            return "session not alive"
+        # Load leaves a live session UNKNOWN (or GONE with a backfilled
+        # gone_at). Anything else means a hook landed between the hook
+        # receiver's start and here: a newer PermissionRequest
+        # (INTERACTIVE), a PreToolUse (BUSY: answered) or a Stop (IDLE).
+        # The live state wins, IDLE included (unlike 8.101's adoption).
+        if sess.status not in (Status.GONE, Status.UNKNOWN):
+            return "session already moved"
+        if rec["kind"] == "separate" and rec["chat_id"] != (
+                resolve_chat_id_int(sess) or 0):
+            return "chat changed"  # a chat migration rewrote ids (8.87)
+        # Not "the tail is the pending tool_use": Claude Code does not
+        # write it while its dialog waits, so only a contradiction drops
+        # the prompt (see saved_prompt_evidence).
+        evidence = saved_prompt_evidence(
+            sess.transcript_path, rec["shown_wall"], rec["tool_use_id"],
+            rec["perm"]["tool_name"])
+        return {"none": None,
+                "answered": "answered in the transcript",
+                "moved_on": "transcript moved on"}.get(
+                    evidence, "transcript unreadable")
+
+    def _restore_open_prompt(self, name: str, sess: TrackedSession,
+                             rec: dict, live_names: set) -> bool:
+        """Bring *sess* back waiting on the prompt the state file kept
+        (roadmap 8.102), or drop that prompt. True when restored.
+
+        Restored: INTERACTIVE with the prompt rebuilt from *rec*, no
+        animation, the card left as the chat shows it (the "Waiting"
+        frame with these very buttons, whose callback data resolves
+        through 8.103's persisted index; a repaint would wipe the tool
+        rows the restart lost). The prompt's buttons answer it: the busy
+        card's through ``pending_permission``, a separate message's
+        because it is registered as this prompt's surface again. The
+        answer goes through the parked hook if it still waits, else by
+        keystrokes, exactly as before a restart.
+
+        Synchronous on purpose: no hook can interleave with the decision.
+        """
+        reason = self._open_prompt_drop_reason(name, sess, rec, live_names)
+        if reason is not None:
+            log.info("[%s] saved permission prompt dropped - %s",
+                     sess.label, reason)
+            return False
+        now_mono = time.monotonic()
+        now_wall = time.time()
+        card = sess.busy_msg_id if sess.busy_msg_id and sess.busy_msg_id > 0 else 0
+        # Its socket is live: not a GONE entry for /resume any more.
+        sess.gone_at = None
+        if card:
+            sess.card_adopt_until = now_mono + CARD_ADOPT_SECONDS
+        # A real turn entry first (turn stamps, turn_seq): the answer's
+        # INTERACTIVE -> BUSY resumes this turn and stamps none of that.
+        self.registry.transition(name, Status.BUSY, preserve_job_state=False)
+        if card:
+            # The turn's own card (8.57 R1), as an adoption claims it.
+            sess.card_turn_seq = sess.turn_seq
+        # No turn start is coming to clear it (as in 8.101).
+        sess.job_reclaim_pending = False
+        self._restore_card_clock(sess, now_mono)
+        # The whole wait is discounted at the answer (the saved anchor
+        # counted the open wait as time so far), never past now.
+        waited = min(max(now_wall - rec["shown_wall"], 0.0), now_mono)
+        wait_started_at = max(now_mono - waited, sess.busy_started_at or 0.0)
+        where = self._rebuild_open_prompt(sess, rec, wait_started_at)
+        self.registry.transition(name, Status.INTERACTIVE)
+        # So the next save keeps the prompt (a second restart).
+        sess.interactive_entered_at = wait_started_at
+        # The INTERACTIVE watchdog counts its silence from here, not from
+        # the turn's start before the restart.
+        sess.last_hook_at = now_mono
+        # The prompt's tool is in flight once answered (its PostToolUse
+        # clears this): without it, idle-recovery could end the answered
+        # turn on a quiet transcript whose tail is the previous turn's end.
+        sess.pending_tool_started_at = now_mono
+        self._stop_animation(sess)
+        log.info("[%s] permission prompt restored after restart - waiting "
+                 "for an answer (%s)", sess.label, where)
+        return True
+
+    def _rebuild_open_prompt(self, sess: TrackedSession, rec: dict,
+                             wait_started_at: float) -> str:
+        """The live prompt objects for *rec*: ``pending_permission`` for
+        an inline prompt, ``pending_prompt_msg`` (registered as a prompt
+        surface) for a separate one. Returns where its buttons are."""
+        perm = rec["perm"]
+        question = perm["question"]
+        tool_info: dict = {"name": perm["tool_name"],
+                           "summary": perm["tool_summary"],
+                           "tool_use_id": rec["tool_use_id"]}
+        if question is not None:
+            q = {"question": question["question"],
+                 "options": [dict(o) for o in question["options"]],
+                 "multiSelect": False}
+            tool_info["input"] = {"questions": [q]}
+        else:
+            tool_info.update(input={},
+                             always_available=perm["always_available"],
+                             standing_rule_suggestion=perm["standing_rule_suggestion"],
+                             detail=perm["detail"])
+        if rec["kind"] == "inline":
+            if question is not None:
+                sess.pending_permission = {
+                    "ask_question": True, "question": q["question"],
+                    "options": q["options"], "questions": [q],
+                    "current_idx": 0, "multi_select": False,
+                    "cursor_pos": 0, "selected": set(),
+                    "tool_info": tool_info,
+                    "wait_started_at": wait_started_at,
+                    "shown_wall": rec["shown_wall"],
+                }
+            else:
+                sess.pending_permission = {
+                    "tool_summary": perm["tool_summary"],
+                    "tool_info": tool_info,
+                    "wait_started_at": wait_started_at,
+                    "shown_wall": rec["shown_wall"],
+                    "hook_reply": (dict(perm["hook_reply"])
+                                   if perm["hook_reply"] else None),
+                }
+            sess.pending_prompt_msg = None
+            return f"inline card {rec['card_msg_id']}"
+        sep_perm: dict = {"tool_summary": perm["tool_summary"],
+                          "tool_info": tool_info,
+                          "wait_started_at": wait_started_at,
+                          "shown_wall": rec["shown_wall"]}
+        if question is not None:
+            sep_perm["ask_question"] = True
+            sep_perm["question"] = q["question"]
+            keyboard = self._build_ask_keyboard(
+                sess, sess.label, {"questions": [q]})[1]
+        else:
+            sep_perm["hook_reply"] = (dict(perm["hook_reply"])
+                                      if perm["hook_reply"] else None)
+            keyboard = self._separate_permission_keyboard(sess)
+        token = new_prompt_token()
+        sess.pending_permission = None
+        sess.pending_prompt_msg = {
+            "text": rec["text"], "keyboard": keyboard,
+            "summary": rec["summary"], "prompt_token": token,
+            "msg_id": rec["msg_id"], "chat_id": rec["chat_id"],
+            "perm": sep_perm,
+        }
+        # Its message answers this prompt again. Not track_message: the
+        # message map is persisted already, and tracking would move
+        # last_active_session.
+        self.register_prompt_surface(rec["chat_id"], rec["msg_id"], sess, token)
+        return f"separate msg {rec['msg_id']}"
 
     async def recover_sessions(self) -> None:
         """Clean up orphaned busy messages from a previous daemon lifecycle.
@@ -836,11 +999,37 @@ class LifecycleMixin:
         adoption is released); its Stop finishes it as usual. And a card a
         previous run owed a delete (``pending_card_deletes``) is deleted
         now.
+
+        Roadmap 8.102: before all that, a session the state file saved
+        waiting on a permission prompt is restored as waiting on it
+        (:meth:`_restore_open_prompt`), its card kept as is (outcome
+        ``restored``); a saved prompt that cannot be restored is dropped,
+        and a dropped separate prompt's message loses its buttons.
         """
         if not self._app:
             return
         bot = self._app.bot
         live_names = set(await inject.list_sessions())
+
+        # Roadmap 8.102: a session waiting on a permission prompt comes
+        # back waiting on it, or its saved prompt is dropped. First, and
+        # with no await, so no hook can interleave with the decision; and
+        # independent of the card loop below, which a separate prompt with
+        # no card never reaches and whose "turn still running" reading
+        # misses a prompt whose tool_use is not on disk yet.
+        restored: set[str] = set()
+        unkeyed: list[tuple[TrackedSession, dict]] = []
+        for name, sess in list(self.registry.all_sessions().items()):
+            rec = sess.restored_open_prompt
+            if rec is None:
+                continue
+            sess.restored_open_prompt = None  # read once
+            if self._restore_open_prompt(name, sess, rec, live_names):
+                restored.add(name)
+            elif rec["kind"] == "separate":
+                unkeyed.append((sess, rec))
+        if restored:
+            self.registry.mark_dirty()
 
         # "⏳ Queued" lines the previous run sent and never deleted: their
         # messages' fate is unknown now, so no line may outlive a restart.
@@ -852,6 +1041,17 @@ class LifecycleMixin:
             if sess.pending_card_deletes:
                 await self._delete_pending_cards(bot, sess)
                 self.registry.mark_dirty()
+
+        # A dropped separate prompt's message keeps buttons that would type
+        # into a session no longer waiting on it: taken off, best effort.
+        for sess, rec in unkeyed:
+            try:
+                await bot.edit_message_reply_markup(
+                    chat_id=rec["chat_id"] or resolve_chat_id(sess),
+                    message_id=rec["msg_id"], reply_markup=None)
+            except Exception as e:  # noqa: BLE001 - best effort
+                log.info("[%s] dropped prompt msg %d kept its buttons: %s",
+                         sess.label, rec["msg_id"], e)
 
         targets = [(name, sess) for name, sess in self.registry.all_sessions().items()
                    if sess.busy_msg_id and sess.busy_msg_id > 0]
@@ -866,6 +1066,10 @@ class LifecycleMixin:
                 # to edit (which would just generate more Forbidden noise).
                 sess.busy_msg_id = None
                 outcomes["skipped_blocked"] = outcomes.get("skipped_blocked", 0) + 1
+                continue
+            if name in restored:
+                # Its card carries the restored prompt (8.102): kept as is.
+                outcomes["restored"] = outcomes.get("restored", 0) + 1
                 continue
             if name in live_names and self._turn_still_running(sess):
                 self._adopt_running_card(name, sess)
