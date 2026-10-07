@@ -112,6 +112,10 @@ def test_allow_by_a_user_is_attributed_when_the_prompt_beats_the_busy_card(fresh
     Finding A: that path has no hook reply channel and posts no "Allowed
     by @bob" line. Flips to XPASS (a failure, strict) once it is fixed."""
     inst, fake = fresh, fresh.fake
+    if inst.claude_mode != "standin":
+        # Real Claude thinks before its tool call, so its busy card
+        # usually exists by then: the path taken is timing, not the test.
+        pytest.skip("stand-in only: the stand-in asks before the busy card exists")
     name = inst.new_session(G, fti.BOB, "ft15")
     flows.settle(fake)
     since = fake.mark()
