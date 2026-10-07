@@ -336,7 +336,12 @@ def test_scope_mode_send_now_refuses_an_unstamped_session(
 # ---- its output, and the one WARNING -----------------------------------
 
 def test_scope_mode_output_goes_to_the_chat_it_would_be_stamped_with(mkbot):
-    mkbot()
+    # Kept for the whole test: the live scopes are read through a WEAK
+    # reference to the bot (state.set_live_scope_source), so a dropped bot
+    # leaves at the next garbage collection and the home chat with it
+    # (flaky on GitHub's 3.13, 2026-10-07).
+    bot = mkbot()
+    assert bot.scopes
     plain = TrackedSession(name="claude-x", label="x")
     grp = TrackedSession(name="claude-y__g1001", label="y")
     other = TrackedSession(name="claude-z__d777", label="z")
