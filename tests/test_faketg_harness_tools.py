@@ -422,3 +422,52 @@ def test_flow_label_of_a_session_name():
     from tests.e2e.faketg import flows
     assert flows.label_of("claude-ft6__g4000000001") == "ft6"
     assert flows.label_of("claude-ft8r__d900000001") == "ft8r"
+
+
+def test_teardown_reports_a_process_working_inside_the_root_without_killing_it(
+        root, monkeypatch):
+    """A process with no instance variable but a working directory inside
+    the root is not killed, is named by the teardown, and keeps the
+    folder from being removed under it."""
+    work = root / "h" / "proj"
+    work.mkdir(parents=True)
+    (root / "i").mkdir()
+    clean = {k: v for k, v in os.environ.items() if k != "AIPAGER_INSTANCE_DIR"}
+    p = subprocess.Popen(["sleep", "30"], cwd=work, env=clean)
+    outside = subprocess.Popen(["sleep", "30"], cwd=root.parent, env=clean)
+    try:
+        fti.wait_until(lambda: fti._read(f"/proc/{p.pid}/cmdline").startswith(b"sleep\0"),
+                       10, "the sleeper to exec")
+        assert not fti.pid_references(p.pid, root / "i")
+        found = fti.pids_with_cwd_under(root)
+        assert p.pid in found
+        assert outside.pid not in found
+        # A sibling sharing the name prefix is not inside.
+        sibling_dir = root / "hx"
+        sibling_dir.mkdir()
+        sibling = subprocess.Popen(["sleep", "30"], cwd=sibling_dir, env=clean)
+        try:
+            fti.wait_until(lambda: os.readlink(f"/proc/{sibling.pid}/cwd") == str(sibling_dir),
+                           10, "the sibling sleeper to start")
+            assert sibling.pid not in fti.pids_with_cwd_under(root / "h")
+            assert p.pid in fti.pids_with_cwd_under(root / "h")
+        finally:
+            sibling.kill()
+            sibling.wait(10)
+        with monkeypatch.context() as m:
+            m.chdir(work)  # the test process itself is never reported
+            assert os.getpid() not in fti.pids_with_cwd_under(root)
+        inst = fti.TestInstance()
+        inst.root = root
+        with pytest.raises(AssertionError) as exc:
+            inst.stop()
+        assert f"working directory inside the instance (not killed): [{p.pid}]" \
+            in str(exc.value)
+        with pytest.raises(subprocess.TimeoutExpired):
+            p.wait(0.5)  # still running: the report-only check never kills
+        assert root.exists()
+    finally:
+        for q in (p, outside):
+            if q.poll() is None:
+                q.kill()
+                q.wait(10)

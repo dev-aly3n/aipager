@@ -325,6 +325,27 @@ def kill_pid_if_ours(pid: int, inst_dir: Path, sig: int = signal.SIGTERM) -> boo
     return True
 
 
+def pids_with_cwd_under(root: Path) -> list[int]:
+    """This uid's processes (not the test process) whose working directory
+    is *root* or inside it. Report only, never used to kill: a process
+    that dropped ``AIPAGER_INSTANCE_DIR`` from its environment is not
+    provably ours, but it would make ``rmtree`` pull the folder out from
+    under it, so teardown refuses and names it instead."""
+    base = os.path.realpath(root)
+    me = os.getpid()
+    out = []
+    for p in _own_pids():
+        if p == me:
+            continue
+        try:
+            cwd = os.readlink(f"/proc/{p}/cwd")
+        except OSError:
+            continue
+        if cwd == base or cwd.startswith(base + os.sep):
+            out.append(p)
+    return out
+
+
 def _alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
@@ -796,7 +817,12 @@ class TestInstance:
             left = pids_referencing(self.inst_dir)
             if left:
                 errors.append(f"processes still reference the instance: {left}")
-            else:
+            # Report only (never killed): see pids_with_cwd_under.
+            inside = [p for p in pids_with_cwd_under(self.root) if p not in left]
+            if inside:
+                errors.append(f"processes have a working directory inside the "
+                              f"instance (not killed): {inside}")
+            if not left and not inside:
                 shutil.rmtree(self.root, ignore_errors=True)
         if errors:
             raise AssertionError("teardown: " + "; ".join(errors))
