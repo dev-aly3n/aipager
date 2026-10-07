@@ -479,6 +479,18 @@ def saved_prompt_evidence(transcript_path: str, since_wall: float,
         return "none"
     except Exception:  # noqa: BLE001 - never raises, by contract
         return "unreadable"
+    try:
+        return _saved_prompt_evidence_in(tail, mtime, since_wall,
+                                         tool_use_id, tool_name)
+    except Exception:  # noqa: BLE001 - never raises, by contract
+        return "unreadable"
+
+
+def _saved_prompt_evidence_in(tail: list[str], mtime: float, since_wall: float,
+                              tool_use_id: str, tool_name: str) -> str:
+    """:func:`saved_prompt_evidence` over the read *tail*; may raise on a
+    line shape nothing here foresaw (the caller turns that into
+    ``"unreadable"``)."""
     moved_on = False
     for line in tail:
         line = line.strip()
@@ -486,8 +498,8 @@ def saved_prompt_evidence(transcript_path: str, since_wall: float,
             continue
         try:
             entry = json.loads(line)
-        except (json.JSONDecodeError, ValueError):
-            continue
+        except (ValueError, RecursionError):
+            continue  # torn, or nested past the parser's depth
         if not isinstance(entry, dict):
             continue
         etype = entry.get("type")
@@ -500,7 +512,8 @@ def saved_prompt_evidence(transcript_path: str, since_wall: float,
         if stamp < since_wall:
             continue
         if etype == "system":
-            if entry.get("subtype") in _TURN_END_SUBTYPES:
+            subtype = entry.get("subtype")
+            if isinstance(subtype, str) and subtype in _TURN_END_SUBTYPES:
                 moved_on = True
             continue
         if etype not in ("user", "assistant") or "message" not in entry:

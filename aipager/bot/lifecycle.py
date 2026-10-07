@@ -1024,7 +1024,18 @@ class LifecycleMixin:
             if rec is None:
                 continue
             sess.restored_open_prompt = None  # read once
-            if self._restore_open_prompt(name, sess, rec, live_names):
+            try:
+                was_restored = self._restore_open_prompt(
+                    name, sess, rec, live_names)
+            except Exception as exc:  # noqa: BLE001 - never block the start
+                # Dropped, never a daemon that dies on every start: the
+                # session is left to the card handling below (8.101).
+                log.warning("[%s] saved permission prompt dropped - %s: %s",
+                            sess.label, type(exc).__name__, exc)
+                sess.pending_permission = None
+                sess.pending_prompt_msg = None
+                was_restored = False
+            if was_restored:
                 restored.add(name)
             elif rec["kind"] == "separate":
                 unkeyed.append((sess, rec))
@@ -1061,15 +1072,16 @@ class LifecycleMixin:
         outcomes: dict[str, int] = {}
         stop_early = False
         for name, sess in targets:
+            if name in restored:
+                # Its card carries the restored prompt (8.102): kept as is,
+                # even when the bot is blocked (no edit is attempted).
+                outcomes["restored"] = outcomes.get("restored", 0) + 1
+                continue
             if stop_early:
                 # Bot is blocked — clear remaining busy_msg_ids without trying
                 # to edit (which would just generate more Forbidden noise).
                 sess.busy_msg_id = None
                 outcomes["skipped_blocked"] = outcomes.get("skipped_blocked", 0) + 1
-                continue
-            if name in restored:
-                # Its card carries the restored prompt (8.102): kept as is.
-                outcomes["restored"] = outcomes.get("restored", 0) + 1
                 continue
             if name in live_names and self._turn_still_running(sess):
                 self._adopt_running_card(name, sess)

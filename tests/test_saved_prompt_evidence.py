@@ -166,3 +166,54 @@ def test_garbage_lines_are_skipped(tmp_path):
     path.write_text("not json\n[1, 2]\n\n" + json.dumps(_PREVIOUS_TURN[0]) + "\n")
     os.utime(path, (SHOWN - 100, SHOWN - 100))
     assert saved_prompt_evidence(str(path), SHOWN, TUID, "Bash") == "none"
+
+
+def _evidence_or_exception(tp: str) -> str:
+    """The check's answer, or the name of what it raised: a raise fails
+    the caller's equality assertion instead of erroring the test."""
+    try:
+        return saved_prompt_evidence(tp, SHOWN, TUID, "Bash")
+    except Exception as exc:  # noqa: BLE001 - the contract under test
+        return f"raised {type(exc).__name__}"
+
+
+# Lines Claude Code never writes, dated after the prompt: each is either
+# skipped or read as what its known fields say, never a crash at startup.
+@pytest.mark.parametrize(("line", "expected"), [
+    ({"type": "system", "subtype": ["turn_duration"]}, "none"),
+    ({"type": "system", "subtype": {"k": "v"}}, "none"),
+    ({"type": ["user"], "subtype": ["x"], "message": {}}, "none"),
+    ({"type": "assistant", "message": ["not", "a", "dict"]}, "moved_on"),
+    ({"type": "user", "message": {"content": [{"type": ["tool_result"],
+                                               "tool_use_id": ["x"]}]}},
+     "moved_on"),
+    ({"type": "system", "subtype": "turn_duration",
+      "timestamp": {"not": "a string"}}, "moved_on"),
+], ids=["subtype-list", "subtype-dict", "type-list", "message-list",
+        "block-fields-lists", "timestamp-dict"])
+def test_hostile_line_shapes_return_a_value(tmp_path, line, expected):
+    entry = dict(line)
+    if "timestamp" not in entry:
+        entry["timestamp"] = _ts(SHOWN + 5)
+    tp = _write(tmp_path / "t.jsonl", *_PREVIOUS_TURN, entry, mtime=SHOWN + 10)
+    assert _evidence_or_exception(tp) == expected
+
+
+def test_a_line_nested_past_the_parsers_depth_is_skipped(tmp_path):
+    path = tmp_path / "t.jsonl"
+    path.write_text(json.dumps(_PREVIOUS_TURN[0]) + "\n" + "[" * 100_000 + "\n")
+    os.utime(path, (SHOWN - 100, SHOWN - 100))
+    assert _evidence_or_exception(str(path)) == "none"
+
+
+def test_an_unforeseen_failure_reads_as_unreadable(tmp_path, monkeypatch):
+    """Whatever a line does to the reader, the restart gets an answer
+    (and drops the prompt): never an exception out of the startup path."""
+    import aipager.transcript as transcript_mod
+
+    def _boom(entry):
+        raise RuntimeError("a shape nothing foresaw")
+
+    monkeypatch.setattr(transcript_mod, "_entry_timestamp", _boom)
+    tp = _write(tmp_path / "t.jsonl", *_PREVIOUS_TURN)
+    assert _evidence_or_exception(tp) == "unreadable"
