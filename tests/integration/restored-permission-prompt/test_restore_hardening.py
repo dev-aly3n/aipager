@@ -342,6 +342,8 @@ def test_a_second_tap_on_the_card_is_already_answered(replay, vloop, tmp_path):
     assert toast == "already answered"
     assert r.keys == before
     assert r.sess.status is Status.BUSY
+    # The working card keeps its Stop button: the refusal edits nothing.
+    r.last_query.edit_message_reply_markup.assert_not_awaited()
 
 
 def test_a_second_tap_without_a_restart_is_already_answered(replay, vloop,

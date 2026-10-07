@@ -1386,6 +1386,7 @@ class CallbackDispatchMixin:
         is_resent_copy = surface is not None
         current_token = current_prompt_token(sess)
         refusal = None
+        strip_refused = True  # take the refused message's buttons away
         if is_resent_copy:
             # Kept, not popped: the entry IS the guard, and the message
             # keeps its buttons if the edit below does not land. A missing
@@ -1432,12 +1433,15 @@ class CallbackDispatchMixin:
             if (isinstance(tapped_id, int) and not isinstance(tapped_id, bool)
                     and card and card > 0 and tapped_id == card):
                 refusal = "already answered"
+                # The live card: its keyboard is the turn's Stop now.
+                strip_refused = False
         if refusal is not None:
             await self._safe_answer(query, refusal)
-            try:
-                await edit_markup(query, reply_markup=None)
-            except Exception:
-                pass
+            if strip_refused:
+                try:
+                    await edit_markup(query, reply_markup=None)
+                except Exception:
+                    pass
             return
 
         if not await inject.is_alive(session_name):
