@@ -16,6 +16,15 @@ import pytest
 from aipager.transcript import turn_appears_complete
 
 
+def _complete(path) -> object:
+    """``turn_appears_complete``, or what it raised (so a raise fails an
+    assertion instead of erroring the test)."""
+    try:
+        return turn_appears_complete(str(path))
+    except Exception as exc:  # noqa: BLE001 - the guard under test
+        return f"raised {type(exc).__name__}"
+
+
 # ── the transcript reader the restart's adoption uses ────────────────────
 
 @pytest.mark.parametrize("line", [
@@ -27,7 +36,7 @@ def test_a_non_object_line_is_skipped(tmp_path, line):
     p = tmp_path / "t.jsonl"
     p.write_text(json.dumps({"type": "assistant", "message": {
         "stop_reason": "end_turn", "content": []}}) + "\n" + line + "\n")
-    assert turn_appears_complete(str(p)) is True
+    assert _complete(p) is True
 
 
 @pytest.mark.parametrize("message", ["hi", [1, 2], 5],
@@ -38,7 +47,7 @@ def test_a_turn_entry_of_an_unknown_shape_is_not_a_turn_end(tmp_path,
     p.write_text(json.dumps({"type": "assistant", "message": {
         "stop_reason": "end_turn", "content": []}}) + "\n"
         + json.dumps({"type": "assistant", "message": message}) + "\n")
-    assert turn_appears_complete(str(p)) is False
+    assert _complete(p) is False
 
 
 def test_a_non_string_text_block_does_not_raise(tmp_path):
@@ -46,7 +55,7 @@ def test_a_non_string_text_block_does_not_raise(tmp_path):
     p.write_text(json.dumps({"type": "user", "message": {"content": [
         {"type": "text", "text": 5}, {"type": "text", "text": ["x"]}]}})
         + "\n")
-    assert turn_appears_complete(str(p)) is False
+    assert _complete(p) is False
 
 
 def test_invalid_utf8_does_not_raise(tmp_path):
@@ -54,4 +63,4 @@ def test_invalid_utf8_does_not_raise(tmp_path):
     p.write_bytes(json.dumps({"type": "assistant", "message": {
         "stop_reason": "end_turn", "content": []}}).encode() + b"\n"
         + b"\xc3\x28\xff\n")
-    assert turn_appears_complete(str(p)) is True
+    assert _complete(p) is True

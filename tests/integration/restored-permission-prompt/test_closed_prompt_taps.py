@@ -286,3 +286,92 @@ def test_an_unreadable_transcript_drop_is_not_known_closed(
         return r.keys[before:]
 
     assert _run(vloop, scenario()) == ["Enter"]
+
+
+# ── every way a tap answers closes its surface ───────────────────────────
+
+MULTI_SELECT = [{"question": "Which files?", "multiSelect": True,
+                 "options": [{"label": "a.py"}, {"label": "b.py"}]}]
+
+
+def test_a_submitted_multi_select_card_types_nothing_more(replay, vloop):
+    r = replay
+
+    async def scenario():
+        card = await r.open_card()
+        await r.ask(MULTI_SELECT)
+        await r.shown(card, "submit")
+        opt, submit = r.cb(card, "opt0"), r.cb(card, "submit")
+        await r.tap(card, opt)
+        await asyncio.sleep(1)
+        await r.tap(card, submit)
+        await asyncio.sleep(1)
+        assert r.sess.pending_permission is None  # premise: answered
+        before = len(r.keys)
+        toasts = [await r.tap(card, submit), await r.tap(card, opt)]
+        await asyncio.sleep(1)
+        return toasts, r.keys[before:]
+
+    toasts, typed = _run(vloop, scenario())
+    assert typed == []
+    assert toasts == ["already answered"] * 2
+
+
+async def _separate_prompt(r, tmp_path) -> int:
+    r.bot.registry.transition(r.sess.name, Status.BUSY)
+    r.sess.trigger_msg_id = 1
+    await r.permission(hook=_dead_hook(tmp_path))
+    assert r.sess.status is Status.INTERACTIVE and not r.sess.busy_msg_id
+    (msg_id,) = [m for m, rec in r.chat.messages.items()
+                 if "Permission needed" in rec["text"]]
+    return msg_id
+
+
+def test_an_answered_separate_prompt_stays_closed_after_a_restart(
+        replay, vloop, tmp_path):
+    """Its registration (which refuses a second tap) is gone after a
+    restart; the closed record is not."""
+    r = replay
+
+    async def scenario():
+        msg = await _separate_prompt(r, tmp_path)
+        allow, deny = r.cb(msg, "allow"), r.cb(msg, "deny")
+        await r.tap(msg, allow)
+        await asyncio.sleep(1)
+        await r.restart()
+        await asyncio.sleep(2)
+        before = len(r.keys)
+        toast = await r.tap(msg, deny)
+        await asyncio.sleep(1)
+        return toast, r.keys[before:]
+
+    toast, typed = _run(vloop, scenario())
+    assert typed == []
+    assert toast == "already answered"
+
+
+def test_a_restored_prompt_answers_even_if_its_card_was_recorded_closed(
+        replay, vloop, tmp_path):
+    """A restored prompt opens its card again, whatever the file's closed
+    record said about the card."""
+    r = replay
+
+    async def scenario():
+        r.append({"type": "user", "timestamp": _ts(r.loop.wall() - 60),
+                  "message": {"role": "user", "content": "clean the build"}})
+        card = await _inline_prompt(r, tmp_path)
+        data = r.cb(card, "allow")
+
+        def edit(file):
+            sd = next(iter(file["sessions"].values()))
+            assert "open_prompt" in sd  # premise: it is restored
+            sd["closed_prompt_msgs"] = [card]
+
+        await r.restart(edit=edit)
+        assert r.sess.status is Status.INTERACTIVE
+        before = len(r.keys)
+        await r.tap(card, data)
+        await asyncio.sleep(1)
+        return r.keys[before:]
+
+    assert _run(vloop, scenario()) == ["Enter"]
