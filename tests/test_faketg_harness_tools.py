@@ -643,3 +643,38 @@ def test_settled_denied_card_is_what_the_daemon_writes_as_the_fake_shows_it():
                  params={"chat_id": fti.GROUP_ID, "parse_mode": "HTML",
                          "text": _refused_card_text("ft16", "@bob")}).text
     assert shown.strip() == ft07.settled_denied_card("ft16", "@bob")
+
+
+def test_dialog_signals_and_readiness_for_the_typed_deny():
+    from tests.e2e.faketg import test_ft_07_typed_deny as ft07
+    lines = ["[ft1] hook permission_prompt (agent_id=-, status=BUSY)",
+             "[ft16] PermissionRequest: Write: /x/ft16.txt"]
+    assert ft07.dialog_signals(lines, "ft16") == set()
+    timeout = "[ft16] hook permission_reply_timeout (agent_id=-, status=INTERACTIVE)"
+    notif = "[ft16] hook permission_prompt (agent_id=-, status=INTERACTIVE)"
+    assert ft07.dialog_signals(lines + [timeout], "ft16") == {"reply_timeout"}
+    assert ft07.dialog_signals(lines + [timeout, notif], "ft16") == {
+        "reply_timeout", "notification"}
+    # The Notification alone is enough; the hook's give-up only after a wait.
+    assert ft07.dialog_ready({"notification"}, None, 0.0)
+    assert not ft07.dialog_ready(set(), None, 100.0)
+    assert not ft07.dialog_ready({"reply_timeout"}, 10.0, 10.0 + ft07.AFTER_REPLY_TIMEOUT - 1)
+    assert ft07.dialog_ready({"reply_timeout"}, 10.0, 10.0 + ft07.AFTER_REPLY_TIMEOUT)
+    line = ft07.signals_line({"reply_timeout"})
+    assert line == ("dialog signals seen: the hook's permission_reply_timeout; "
+                    "not seen: Claude Code's permission_prompt Notification")
+    assert ft07.signals_line(set()).startswith("dialog signals seen: none; not seen: ")
+
+
+def test_pane_report_counts_bytes_and_strips_controls_redacted(monkeypatch):
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    assert fti.pane_report(b"") == ("pane read: 0 bytes; excerpt (control-stripped): "
+                                    "(nothing printable)")
+    raw = (b"\x1b[?1049h\x1b[2J\x1b]0;title\x07\x1b[1;1H Do you want\r\n"
+           b"\x1b[7m 3. No, and tell Claude\x1b[0m\x07\x08 " + _OAUTH.encode())
+    out = fti.pane_report(raw)
+    assert out.startswith(f"pane read: {len(raw)} bytes; excerpt (control-stripped): ")
+    assert "Do you want" in out and "3. No, and tell Claude" in out
+    assert "\x1b" not in out and "title" not in out and "\x07" not in out
+    assert _OAUTH not in out and "sk-ant-<redacted>" in out
+    assert fti.pane_text(b"\x1b[1mhi\x1b[0m\rthere") == "hi\nthere"

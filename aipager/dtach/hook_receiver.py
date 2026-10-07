@@ -56,6 +56,13 @@ log = logging.getLogger(__name__)
 _BOUNDARY_EVENTS = frozenset({
     "UserPromptSubmit", "Stop", "StopFailure", "SubagentStop", "queue_pickup",
 })
+# Logged the same way: Claude Code's own permission dialog is up (its
+# Notification, ``notification_type`` permission_prompt, fired a few
+# seconds after the dialog shows and not yet answered) and a
+# PermissionRequest hook stopped waiting for the daemon's verdict. The
+# journal otherwise has no trace of either; at most one line each per
+# dialog.
+_DIALOG_EVENTS = frozenset({"permission_prompt", "permission_reply_timeout"})
 
 # A Stop hook landing on an already-IDLE session within this many seconds
 # of an explicit /stop (or safety halt) is Claude finalising the turn the
@@ -499,8 +506,8 @@ class HookReceiver:
             return
         self._recent_fingerprints[fp] = now_mono
 
-        if event in _BOUNDARY_EVENTS:
-            # One line per turn-boundary hook, with the session's status
+        if event in _BOUNDARY_EVENTS or event in _DIALOG_EVENTS:
+            # One line per turn-boundary (or dialog) hook, with the session's status
             # BEFORE handling: the only way to see from the journal that
             # a next turn's prompt hooks overtook the previous Stop, or
             # that a Stop landed on an already-IDLE session (the log level

@@ -1225,3 +1225,21 @@ def test_stop_on_an_already_idle_session_is_logged(receiver, run_async, caplog):
               last_assistant_message="late answer")
     msgs = [r.getMessage() for r in caplog.records]
     assert any("Stop while already IDLE" in m for m in msgs), msgs
+
+
+def test_dialog_hooks_log_their_arrival(receiver, run_async, caplog):
+    """Claude Code's permission_prompt Notification (its dialog is up) and
+    the hook's permission_reply_timeout (it stopped waiting) each leave one
+    INFO line: the fake-Telegram typed-Deny scenario waits on them."""
+    import logging
+    registry, recv, _notify = receiver
+    registry.transition("claude-x", Status.BUSY)
+    with caplog.at_level(logging.INFO, logger="aipager.dtach.hook_receiver"):
+        _send(recv, run_async, hook_event_name="permission_reply_timeout",
+              session="claude-x", aipager_request_id="r1")
+        _send(recv, run_async, hook_event_name="Notification",
+              notification_type="permission_prompt", session="claude-x",
+              message="Claude needs your permission to use Write")
+    lines = [r.getMessage() for r in caplog.records if " hook " in r.getMessage()]
+    assert lines == ["[x] hook permission_reply_timeout (agent_id=-, status=BUSY)",
+                     "[x] hook permission_prompt (agent_id=-, status=BUSY)"]

@@ -792,11 +792,23 @@ class TestInstance:
         return self.project / name
 
     def screen(self, name: str, seconds: float = 2.0) -> str:
-        """The session's visible screen, redacted (diagnostics only).
+        """The session's visible screen, redacted (diagnostics only); see
+        :meth:`screen_bytes`."""
+        return pane_text(self.screen_bytes(name, seconds))
+
+    def screen_report(self, name: str, seconds: float = 2.0) -> str:
+        """What a read of the session's pane returned, for a failure
+        message (:func:`pane_report`)."""
+        return pane_report(self.screen_bytes(name, seconds))
+
+    def screen_bytes(self, name: str, seconds: float = 2.0) -> bytes:
+        """The raw bytes a read of the session's pane returned.
 
         Attaches with dtach on a private pty, asks for a redraw, reads for
         *seconds* and kills the attach by PID. Nothing is ever written to
-        the pty, so not a single key reaches the session."""
+        the pty, so not a single key reaches the session. Best effort: a
+        session started by ``dtach -n`` has no window size, and a TUI may
+        draw nothing at 0x0."""
         import pty
         import select
         sock = self.socket_for(name)
@@ -809,7 +821,7 @@ class TestInstance:
         except OSError:
             os.close(master)
             os.close(slave)
-            return ""
+            return b""
         chunks = []
         deadline = time.monotonic() + seconds
         try:
@@ -828,9 +840,7 @@ class TestInstance:
                 pass
             os.close(master)
             os.close(slave)
-        text = b"".join(chunks).decode(errors="replace")
-        text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][A-Z0-9]|\x1b[=>]", "", text)
-        return redact("\n".join(text.replace("\r", "\n").splitlines()[-25:]))
+        return b"".join(chunks)
 
     # -- teardown ------------------------------------------------------------
 
@@ -888,6 +898,30 @@ class TestInstance:
                 shutil.rmtree(self.root, ignore_errors=True)
         if errors:
             raise AssertionError("teardown: " + "; ".join(errors))
+
+
+_ESC_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?"
+                     r"|\x1b[()][A-Z0-9]|\x1b[=>]|\x1b.")
+_CTRL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+
+def pane_text(raw: bytes) -> str:
+    """A pane read's last 25 lines, escape sequences removed, redacted."""
+    text = raw.decode(errors="replace")
+    text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b[()][A-Z0-9]|\x1b[=>]", "", text)
+    return redact("\n".join(text.replace("\r", "\n").splitlines()[-25:]))
+
+
+def pane_report(raw: bytes, limit: int = 600) -> str:
+    """``<n> bytes`` and the end of the pane read with every escape
+    sequence and control character removed, redacted: what a failure
+    message shows when the pane was expected to show something."""
+    text = _CTRL_RE.sub("", _ESC_RE.sub("", raw.decode(errors="replace")
+                                        .replace("\r", "\n")))
+    text = "\n".join(line.rstrip() for line in text.splitlines() if line.strip())
+    excerpt = text[-limit:]
+    return redact(f"pane read: {len(raw)} bytes; excerpt (control-stripped): "
+                  + (repr(excerpt) if excerpt else "(nothing printable)"))
 
 
 def _user_record_text(entry: dict) -> str:

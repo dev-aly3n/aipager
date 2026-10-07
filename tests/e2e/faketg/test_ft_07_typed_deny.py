@@ -13,7 +13,8 @@ Stand-in: the stand-in shortens the hook's wait for one session (a
 test builds a daemon of its own whose sessions run the hook with a
 ``AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS`` of
 :data:`REAL_HOOK_DEADLINE`, so the real hook gives up within seconds,
-and it reads from the daemon log how the turn ended. Only the
+waits (from the daemon log) for Claude Code's own dialog to be up, taps
+Deny, and reads from the daemon log how the turn ended. Only the
 transcript's interrupt marker passes: the 10 s grace or "the transcript
 moved on" means 8.99's assumption about Claude Code is wrong for the
 version under test. ``[separate]`` stays stand-in only: real Claude's own
@@ -143,27 +144,79 @@ def verdict_problem(verdict: str, line: str, transcript_tail: str) -> str | None
                   f"the transcript's last entries:\n{transcript_tail}")
 
 
-#: The row of Claude Code's dialog the typed Deny lands on (8.99 pins it).
-_REFUSAL_ROW = "tell Claude what to do differently"
-
-
 def settled_denied_card(label: str, by: str) -> str:
     """The busy card's last word after a typed refusal ended the turn
     (``session_ops._refused_card_text``, as the fake shows it: plain)."""
     return f"🚫 {label} · Denied by {by}"
 
 
-def dialog_on_screen(inst, name: str) -> bool:
-    """Claude Code's own permission dialog is drawn in the session's pane
-    (read only: :meth:`TestInstance.screen` never types a key)."""
-    return _REFUSAL_ROW in inst.screen(name, seconds=1.0)
+#: How long, after the prompt reached the chat, the dialog may take to
+#: be signalled (the hook gives up after REAL_HOOK_DEADLINE seconds;
+#: Claude Code's permission_prompt Notification follows its dialog by
+#: about 6 s, the delay 2.1.292 schedules it with).
+DIALOG_WITHIN = 30.0
+#: With the hook's give-up seen but no Notification, how long to wait
+#: before typing anyway (the dialog has been drawn by then).
+AFTER_REPLY_TIMEOUT = 12.0
+
+#: Daemon log lines (``hook_receiver``) that say Claude Code's dialog is up.
+DIALOG_SIGNALS = {
+    "notification": "hook permission_prompt (",  # Claude Code's own Notification
+    "reply_timeout": "hook permission_reply_timeout (",  # the hook stopped waiting
+}
 
 
-def _real_card(inst, dialog_open=dialog_on_screen):
-    """Real Claude: the hook gives up after REAL_HOOK_DEADLINE seconds and
-    the Deny is typed; the turn must end on the transcript's marker.
-    *dialog_open(inst, name)*: Claude Code's dialog is up (the Deny is
-    typed blind, so the tap waits for it)."""
+def dialog_signals(lines: list[str], label: str) -> set[str]:
+    """Which of :data:`DIALOG_SIGNALS` the daemon logged for *label*."""
+    return {key for key, needle in DIALOG_SIGNALS.items()
+            if any(f"[{label}] {needle}" in line for line in lines)}
+
+
+def dialog_ready(seen: set[str], reply_timeout_at: float | None, now: float) -> bool:
+    """The Deny may be typed: Claude Code's Notification says its dialog is
+    up, or the hook gave up :data:`AFTER_REPLY_TIMEOUT` seconds ago."""
+    if "notification" in seen:
+        return True
+    return reply_timeout_at is not None and now - reply_timeout_at >= AFTER_REPLY_TIMEOUT
+
+
+def signals_line(seen: set[str]) -> str:
+    """``seen: ...; not seen: ...`` over :data:`DIALOG_SIGNALS`."""
+    names = {"notification": "Claude Code's permission_prompt Notification",
+             "reply_timeout": "the hook's permission_reply_timeout"}
+    yes = [names[k] for k in DIALOG_SIGNALS if k in seen] or ["none"]
+    no = [names[k] for k in DIALOG_SIGNALS if k not in seen] or ["none"]
+    return f"dialog signals seen: {', '.join(yes)}; not seen: {', '.join(no)}"
+
+
+def wait_for_dialog(inst, name: str, label: str, since: int) -> set[str]:
+    """Wait until Claude Code's own permission dialog is up (see
+    :func:`dialog_ready`), bounded by :data:`DIALOG_WITHIN`; the signals
+    seen. On a timeout, fail naming the signals seen and not seen, the
+    daemon's last log lines and what a read of the pane returned."""
+    deadline = time.monotonic() + DIALOG_WITHIN
+    reply_timeout_at = None
+    while True:
+        seen = dialog_signals(inst.log_lines(since), label)
+        now = time.monotonic()
+        if "reply_timeout" in seen and reply_timeout_at is None:
+            reply_timeout_at = now
+        if dialog_ready(seen, reply_timeout_at, now):
+            return seen
+        if now >= deadline:
+            pytest.fail(redact(
+                f"Claude Code's permission dialog was not signalled within "
+                f"{DIALOG_WITHIN:.0f}s of the prompt reaching the chat\n"
+                f"{signals_line(seen)}\n"
+                f"the daemon's last log lines:\n{inst.log_tail(30)}\n"
+                f"{inst.screen_report(name)}"), pytrace=False)
+        time.sleep(0.2)
+
+
+def _real_card(inst):
+    """Real Claude: the hook gives up after REAL_HOOK_DEADLINE seconds,
+    Claude Code shows its own dialog, and the Deny is typed into it; the
+    turn must end on the transcript's marker."""
     fake = inst.fake
     label = "ft16"
     name = inst.new_session(G, fti.BOB, label)
@@ -173,13 +226,9 @@ def _real_card(inst, dialog_open=dialog_on_screen):
     flows.settle(fake)
     log_since = inst.log_mark()
     card, _allow = flows.ask_write(inst, name, label, G, fti.BOB, label)
-    # The hook unlinks its reply socket when it stops waiting; then Claude
-    # Code draws its own dialog, which the Deny below is typed into.
-    fti.wait_until(lambda: not list(inst.inst_dir.glob("aipager-reply-*.sock")),
-                   30, "the real hook to stop waiting", lambda: inst.log_tail(20))
-    fti.wait_until(lambda: dialog_open(inst, name), 30,
-                   f"Claude Code's permission dialog (a {_REFUSAL_ROW!r} row) in the pane",
-                   lambda: inst.screen(name))
+    # The Deny is typed blind, so the tap waits for the dialog to be up.
+    seen = wait_for_dialog(inst, name, label, log_since)
+    signals = signals_line(seen)
 
     since = fake.mark()
     _msg, deny = fake.wait_button(G, "Deny", since=0, message_text_contains=label)
@@ -189,7 +238,7 @@ def _real_card(inst, dialog_open=dialog_on_screen):
     # Typed (the keystroke fallback), never the hook's decision.
     typed = inst.wait_log(f"[{label}]", "Denied (via=", since=log_since, timeout=30)
     assert "(via=keystroke_fallback)" in typed, redact(
-        f"the Deny was not typed into the dialog: {typed.strip()}")
+        f"the Deny was not typed into the dialog: {typed.strip()}\n{signals}")
 
     verdict = fti.wait_until(
         lambda: turn_end_verdict(inst.log_lines(log_since), label), REAL_IDLE_WITHIN,
@@ -198,10 +247,10 @@ def _real_card(inst, dialog_open=dialog_on_screen):
                  "carried on (a Stop, a new tool call or a new turn after the typed "
                  "refusal), or a background job was open: either way 8.99's assumption "
                  "that a typed refusal ends the turn like an interrupt does not hold "
-                 "for this Claude Code version\n"
+                 "for this Claude Code version\n" + signals + "\n"
                  + inst.log_tail(30) + "\nthe transcript's last entries:\n"
                  + inst.transcript_tail(name)))
-    problem = verdict_problem(*verdict, inst.transcript_tail(name))
+    problem = verdict_problem(*verdict, inst.transcript_tail(name) + "\n" + signals)
     if problem is not None:
         pytest.fail(problem, pytrace=False)
 
