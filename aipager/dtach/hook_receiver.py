@@ -209,6 +209,35 @@ def _permission_tool_use_id(msg: dict, tool_name: str, sess) -> str:
     return ""
 
 
+def _finishes_open_prompt(msg: dict, tool_name: str, tool_input,
+                          sess) -> bool:
+    """Whether this PostToolUse / PostToolUseFailure is the end of the very
+    tool call the busy card's open prompt asks about (roadmap 8.102): the
+    tool ran or failed, so its dialog is closed, however it was answered.
+
+    Proof only on a full match: the prompt's own non-empty tool_use_id,
+    the same tool, the same agent (none for the parent's), and, for a
+    tool permission, the same input. A PermissionRequest that carries no
+    id takes the parent's latest PreToolUse's, which can be a parallel
+    call of the same tool: its end must not close a dialog still up."""
+    perm = sess.pending_permission if sess is not None else None
+    if not isinstance(perm, dict):
+        return False
+    info = perm.get("tool_info")
+    if not isinstance(info, dict):
+        return False
+    want = info.get("tool_use_id")
+    if not (isinstance(want, str) and want):
+        return False
+    if _payload_tool_use_id(msg) != want or info.get("name") != tool_name:
+        return False
+    if (msg.get("agent_id") or "") != (info.get("agent_id") or ""):
+        return False
+    if tool_name == "AskUserQuestion":
+        return True  # its id is always its own PreToolUse's
+    return info.get("summary") == _summarize_tool(tool_name, tool_input)
+
+
 def _extract_pending_tool(transcript_path: str) -> dict | None:
     """Read the last lines of the transcript to find the pending tool_use."""
     try:
@@ -1049,6 +1078,10 @@ class HookReceiver:
                 tool_input = msg.get("tool_input", {})
                 summary = _summarize_tool(tool_name, tool_input)
                 sess = self.registry.get_or_create(session_name)
+                if _finishes_open_prompt(msg, tool_name, tool_input, sess):
+                    # Answered (in the terminal, if not by a tap): an old
+                    # answer button on the card types nothing now (8.102).
+                    sess.mark_prompt_closed(sess.busy_msg_id)
                 if (not msg.get("agent_id")
                         or msg.get("agent_id") in sess.active_subagents):
                     # A detached background agent's tool ending says
@@ -1090,6 +1123,10 @@ class HookReceiver:
             if tool_name:
                 summary = _summarize_tool(tool_name, msg.get("tool_input", {}))
                 sess = self.registry.get_or_create(session_name)
+                if _finishes_open_prompt(msg, tool_name,
+                                         msg.get("tool_input", {}), sess):
+                    # Answered or refused: the dialog is closed (8.102).
+                    sess.mark_prompt_closed(sess.busy_msg_id)
                 if (not msg.get("agent_id")
                         or msg.get("agent_id") in sess.active_subagents):
                     # A detached background agent's tool ending says

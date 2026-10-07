@@ -2562,6 +2562,9 @@ class NotifyMixin:
                 # Stop animation and clean up busy message
                 self._stop_animation(sess)
                 sess.pending_permission = None  # clear stale inline permission if any
+                # The turn is over: no prompt on its card is open any more,
+                # so an old answer button on it types nothing (8.102).
+                sess.mark_prompt_closed(sess.busy_msg_id)
                 # `layout` resolves per-session first: this session's own override
                 # (if any) wins; otherwise falls back to the scope's stored
                 # /settings preference; an untouched scope falls back further to
@@ -3357,6 +3360,9 @@ class NotifyMixin:
                 # pinned bar's "Answer" re-send (8.31).
                 keyboard = self._pending_prompt_keyboard(sess)
                 sess.pending_prompt_msg = None
+                # The card holds an open prompt again: its buttons answer
+                # it, whatever an earlier prompt on it was (8.102).
+                sess.reopen_prompt_surface(sess.busy_msg_id)
                 # The state file keeps the open prompt (roadmap 8.102).
                 self.registry.mark_dirty()
 

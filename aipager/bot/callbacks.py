@@ -188,8 +188,9 @@ _DENY_OVERSHOOT = 5
 # (allow_always) for why this check exists here too, not only there.
 _STANDING_RULE_SUGGESTION_TYPES = frozenset({"addRules", "addDirectories"})
 
-# The answer verbs the busy card shows only while it holds the inline
-# prompt (with ``opt<N>``): a tap on them with no prompt there is refused.
+# The verbs (with ``opt<N>``) that answer a prompt by typing into Claude's
+# dialog: refused on a surface whose prompt is known closed (roadmap 8.102).
+# ``submit`` is a multi-select question's Submit button.
 _CARD_ANSWER_VERBS = frozenset({"allow", "allow_always", "deny", "submit"})
 
 
@@ -1387,6 +1388,7 @@ class CallbackDispatchMixin:
         current_token = current_prompt_token(sess)
         refusal = None
         strip_refused = True  # take the refused message's buttons away
+        tapped_id = resent_key[1]
         if is_resent_copy:
             # Kept, not popped: the entry IS the guard, and the message
             # keeps its buttons if the edit below does not land. A missing
@@ -1394,6 +1396,21 @@ class CallbackDispatchMixin:
             if (surface[1] is None or current_token is None
                     or surface[1] != current_token):
                 refusal = "already answered"
+        elif ((is_option or action in _CARD_ANSWER_VERBS)
+                and sess.prompt_known_closed(tapped_id)):
+            # An answer button on a message whose prompt is KNOWN to be
+            # closed (roadmap 8.102): answered by a tap already, answered
+            # in the terminal (its tool finished), its turn ended, or a
+            # saved prompt the restart did not bring back. A double tap or
+            # a client still showing the old keyboard: typed now, the keys
+            # would land in Claude's input, not in a dialog. A prompt that
+            # is only not known open (the INTERACTIVE watchdog's demotion,
+            # a stale BUSY) is not in the record: its buttons still type.
+            # Its buttons are not taken off: the message is the working
+            # card (its Stop), a finished card (its own buttons) or a
+            # prompt already marked answered.
+            refusal = "already answered"
+            strip_refused = False
         elif (sess.status == Status.INTERACTIVE
                 and (sess.pending_permission or sess.pending_prompt_msg)):
             # A prompt is pending, and this tap is on a message that is
@@ -1407,7 +1424,6 @@ class CallbackDispatchMixin:
             # to compare against: a tap with no message id, or an inline
             # prompt with no busy card id (it cannot be shown inline without
             # one, so that is not a state a real tap meets).
-            tapped_id = resent_key[1]
             card = sess.busy_msg_id
             if isinstance(tapped_id, int) and not isinstance(tapped_id, bool):
                 if sess.pending_permission:
@@ -1418,23 +1434,6 @@ class CallbackDispatchMixin:
                     # it is sent, and again when a restart restores it
                     # (8.102); an unregistered message is not it.
                     refusal = "this prompt has expired"
-        elif (not sess.pending_permission
-                and (is_option or action in _CARD_ANSWER_VERBS)):
-            # An answer button tapped on the busy card itself while the
-            # card holds no prompt: a second tap after the answer (a
-            # double tap, or a client still showing the old keyboard),
-            # or a saved prompt a restart dropped while the card was
-            # adopted as working (8.102). The card only ever shows these
-            # buttons for `pending_permission`, and with none there is no
-            # dialog its keys were meant for: typed now, they would land
-            # in a working session. Other messages keep today's handling.
-            tapped_id = resent_key[1]
-            card = sess.busy_msg_id
-            if (isinstance(tapped_id, int) and not isinstance(tapped_id, bool)
-                    and card and card > 0 and tapped_id == card):
-                refusal = "already answered"
-                # The live card: its keyboard is the turn's Stop now.
-                strip_refused = False
         if refusal is not None:
             await self._safe_answer(query, refusal)
             if strip_refused:
@@ -1619,6 +1618,8 @@ class CallbackDispatchMixin:
                     if wait_start and sess.busy_started_at:
                         sess.busy_started_at += time.monotonic() - wait_start
                     sess.pending_permission = None
+                    # Answered: a later tap on the card is refused (8.102).
+                    sess.mark_prompt_closed(sess.busy_msg_id)
                     self.registry.transition(session_name, Status.BUSY)
                     keyboard = self._build_stop_keyboard(sess)
                     text = self._build_busy_text(sess.label, "Working", sess)
@@ -1849,6 +1850,8 @@ class CallbackDispatchMixin:
                     if wait_start and sess.busy_started_at:
                         sess.busy_started_at += time.monotonic() - wait_start
                     sess.pending_permission = None
+                    # Answered: a later tap on the card is refused (8.102).
+                    sess.mark_prompt_closed(sess.busy_msg_id)
                     # Transition back to BUSY and restart animation
                     self.registry.transition(session_name, Status.BUSY)
                     keyboard = self._build_stop_keyboard(sess)
@@ -1872,6 +1875,9 @@ class CallbackDispatchMixin:
                     if wait_start and sess.busy_started_at:
                         sess.busy_started_at += time.monotonic() - max(
                             wait_start, sess.busy_started_at)
+                # Answered: a later tap on this message is refused, after
+                # a restart too (8.102).
+                sess.mark_prompt_closed(tapped_id)
                 # Mark session as busy after user interaction
                 self.registry.transition(session_name, Status.BUSY)
                 log.info("[%s] %s (via=%s)", sess.label, verb, via or "n/a")

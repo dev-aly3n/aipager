@@ -208,6 +208,10 @@ BG_SHELL_EARLY_ENDS_CAP: int = 50
 # is evicted. Lives on disk in aipager-sessions.json — kept here so
 # /clear_gone still gives users a manual "forget everything" lever.
 MAX_GONE_HISTORY: int = 50
+# Roadmap 8.102: how many closed prompt surfaces a session remembers
+# (``TrackedSession.closed_prompt_msgs``). A stale client shows the last
+# few cards at most; older ids fall back to the answer taps' old handling.
+MAX_CLOSED_PROMPT_SURFACES: int = 16
 
 # How many delivered answer digests a session remembers
 # (``TrackedSession.delivered_digests``). Small on purpose: it exists to
@@ -567,6 +571,17 @@ class TrackedSession:
     # read once by the startup recovery, which restores the session as
     # waiting on it or drops it. Transient.
     restored_open_prompt: dict | None = None
+    # Roadmap 8.102: message ids of prompt surfaces (the busy card, a
+    # separate prompt message) whose prompt is KNOWN to be closed: answered
+    # by a tap, answered in the terminal (its tool's PostToolUse), its turn
+    # ended, or a saved prompt the restart dropped as answered, moved on or
+    # unreadable as a record. An answer tap on one of them is refused with
+    # no keys (callbacks.py). A prompt shown on a surface again takes it
+    # off (``reopen_prompt_surface``). Never stamped by the INTERACTIVE
+    # watchdog: a prompt nobody answered is not known closed, and its
+    # buttons still answer it. Bounded (MAX_CLOSED_PROMPT_SURFACES, newest
+    # kept) and persisted, so a stale tap after a restart is refused too.
+    closed_prompt_msgs: list[int] = field(default_factory=list)
     # Active subagents — keyed by agent_id ("agent activity rows on the
     # busy card"). Format: {agent_id: {"type": str, "started_at": float,
     # "last_seen": float, "history_idx": int | None, "activity": str,
@@ -1957,6 +1972,28 @@ class TrackedSession:
         if selected_wall > self.answer_delivered_wall:
             self.answer_delivered_wall = selected_wall
 
+    def mark_prompt_closed(self, msg_id: object) -> None:
+        """Record that the prompt shown on message *msg_id* is closed
+        (see ``closed_prompt_msgs``). Anything but a positive int is
+        ignored."""
+        if type(msg_id) is not int or msg_id <= 0:
+            return
+        if msg_id in self.closed_prompt_msgs:
+            self.closed_prompt_msgs.remove(msg_id)
+        self.closed_prompt_msgs.append(msg_id)
+        del self.closed_prompt_msgs[:-MAX_CLOSED_PROMPT_SURFACES]
+
+    def reopen_prompt_surface(self, msg_id: object) -> None:
+        """A prompt is shown on message *msg_id* again: its buttons
+        answer that prompt, whatever an earlier one on it was."""
+        if msg_id in self.closed_prompt_msgs:
+            self.closed_prompt_msgs.remove(msg_id)
+
+    def prompt_known_closed(self, msg_id: object) -> bool:
+        """Whether the prompt on message *msg_id* is known to be closed."""
+        return (type(msg_id) is int and msg_id > 0
+                and msg_id in self.closed_prompt_msgs)
+
     def persisted_digests(self) -> list[str]:
         """The ring as written to the state file: confirmed digests only,
         oldest first."""
@@ -1977,6 +2014,7 @@ class TrackedSession:
         self.busy_card_trigger = None
         self.card_settled_msg_id = 0
         self.pending_card_deletes = []
+        self.closed_prompt_msgs = []
         self.prompt_sent_msg = None
         busy = self.busy_msg_id
         if busy is not None and busy > 0:
@@ -3031,6 +3069,8 @@ class SessionRegistry:
         "delivered_digests", "answer_delivered_wall",
         # Roadmap 8.55: cards whose delete a restart may have cut off.
         "pending_card_deletes",
+        # Roadmap 8.102: prompt surfaces whose prompt is known closed.
+        "closed_prompt_msgs",
         # NOT here, and not by oversight: `active_subagents` /
         # `finished_subagents` / `tool_history` are per-turn state, and the
         # subagent rows carry `started_at` / `last_seen` as
@@ -3086,6 +3126,9 @@ class SessionRegistry:
                     val = sess.persisted_digests()
                 elif f == "pending_card_deletes":
                     val = [m for m in val if type(m) is int and m > 0]
+                elif f == "closed_prompt_msgs":
+                    val = [m for m in val if type(m) is int and m > 0][
+                        -MAX_CLOSED_PROMPT_SURFACES:]
                 d[f] = val
             # Roadmap 8.101: computed, not a field (see card_started_wall).
             started_wall = sess.card_started_wall(time.monotonic(), time.time())
@@ -3103,6 +3146,17 @@ class SessionRegistry:
                 open_prompt = None
             if open_prompt is not None:
                 d["open_prompt"] = open_prompt
+            elif (sess.status == Status.INTERACTIVE and sess.pending_permission
+                    and sess.busy_msg_id and sess.busy_msg_id > 0):
+                # The card's open prompt is not saved (asked inside a
+                # subagent, or its snapshot failed): a restart cannot bring
+                # it back and adopts the card as working, so after one its
+                # old answer buttons type nothing. In the file only: the
+                # live prompt here still answers.
+                d["closed_prompt_msgs"] = (
+                    [m for m in d.get("closed_prompt_msgs", [])
+                     if m != sess.busy_msg_id] + [sess.busy_msg_id]
+                )[-MAX_CLOSED_PROMPT_SURFACES:]
             sessions[name] = d
 
         # Cap _msg_map: keep only the most recent entries (by insertion order)
@@ -3279,6 +3333,13 @@ class SessionRegistry:
             if isinstance(raw_deletes, list):
                 sess.pending_card_deletes = [
                     m for m in raw_deletes if type(m) is int and m > 0]
+            # Roadmap 8.102: prompt surfaces known closed (ints only, the
+            # newest MAX_CLOSED_PROMPT_SURFACES).
+            raw_closed = sd.get("closed_prompt_msgs") or []
+            if isinstance(raw_closed, list):
+                sess.closed_prompt_msgs = [
+                    m for m in raw_closed if type(m) is int and m > 0][
+                        -MAX_CLOSED_PROMPT_SURFACES:]
             try:
                 sess.answer_delivered_wall = float(
                     sd.get("answer_delivered_wall") or 0.0)
@@ -3304,6 +3365,13 @@ class SessionRegistry:
                 if rec is None:
                     log.warning("[%s] saved permission prompt ignored - "
                                 "invalid record", sess.label)
+                    # Its card is adopted as working (8.101) and its old
+                    # buttons can no longer be read: what their keys would
+                    # pick in the dialog is unknown, so none is typed.
+                    raw = sd.get("open_prompt")
+                    if (isinstance(raw, dict)
+                            and raw.get("kind") != "separate"):
+                        sess.mark_prompt_closed(sess.busy_msg_id)
                 sess.restored_open_prompt = rec
             # A stamp in the future (a hand edit, or the clock stepped back
             # since the save) would make every late answer "predate" it.

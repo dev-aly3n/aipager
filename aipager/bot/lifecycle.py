@@ -860,6 +860,12 @@ class LifecycleMixin:
         evidence = saved_prompt_evidence(
             sess.transcript_path, rec["shown_wall"], rec["tool_use_id"],
             rec["perm"]["tool_name"])
+        if evidence in ("answered", "moved_on"):
+            # The transcript shows the dialog closed: an old answer button
+            # on its message types nothing (8.102). Not for an unreadable
+            # transcript, which proves nothing.
+            sess.mark_prompt_closed(rec["card_msg_id"] if rec["kind"] == "inline"
+                                    else rec["msg_id"])
         return {"none": None,
                 "answered": "answered in the transcript",
                 "moved_on": "transcript moved on"}.get(
@@ -943,6 +949,9 @@ class LifecycleMixin:
                              always_available=perm["always_available"],
                              standing_rule_suggestion=perm["standing_rule_suggestion"],
                              detail=perm["detail"])
+        # Its message holds an open prompt again (8.102).
+        sess.reopen_prompt_surface(rec["card_msg_id"] if rec["kind"] == "inline"
+                                   else rec["msg_id"])
         if rec["kind"] == "inline":
             if question is not None:
                 sess.pending_permission = {
