@@ -24,6 +24,7 @@ this module).
 from __future__ import annotations
 
 import math
+import re
 
 #: The record's schema version; any other value is ignored at load.
 RECORD_VERSION = 1
@@ -49,6 +50,13 @@ MAX_OPTIONS = 4          # the question keyboard shows the first four
 STANDING_RULE_SUGGESTION_TYPES = frozenset({"addRules", "addDirectories"})
 
 ASK_TOOL = "AskUserQuestion"
+
+#: The optional ``input_digest`` key: the sha256 hex digest of the tool
+#: call's whole input that the PermissionRequest stored, so a restored
+#: prompt is still closed by its own call's PostToolUse and by no other.
+#: Absent when the live prompt had none; then nothing but a tap, its
+#: turn's end or the restart's own check closes the restored prompt.
+_DIGEST_RE = re.compile(r"[0-9a-f]{64}")
 
 _INLINE_KEYS = frozenset({"v", "shown_wall", "tool_use_id", "kind",
                           "card_msg_id", "perm"})
@@ -191,6 +199,9 @@ def snapshot(sess, now_mono: float, now_wall: float) -> dict | None:
     tuid = tool_info.get("tool_use_id")
     record["tool_use_id"] = (tuid if _str_within(tuid, MAX_TOOL_USE_ID)
                              else "")
+    digest = tool_info.get("input_digest")
+    if name != ASK_TOOL and _is_digest(digest):
+        record["input_digest"] = digest
 
     if name == ASK_TOOL:
         if not src.get("ask_question"):
@@ -247,6 +258,10 @@ def snapshot(sess, now_mono: float, now_wall: float) -> dict | None:
 
 
 # ── reading it back ─────────────────────────────────────────────────────
+
+def _is_digest(x) -> bool:
+    return type(x) is str and _DIGEST_RE.fullmatch(x) is not None
+
 
 def _valid_question(q) -> dict | None:
     if not (isinstance(q, dict) and set(q) == _QUESTION_KEYS):
@@ -312,7 +327,8 @@ def _valid_perm(p) -> dict | None:
         if question is None:
             return None
     # A question exactly when the tool is AskUserQuestion, and a question
-    # never answers through a hook.
+    # never answers through a hook (nor carries an input digest: see
+    # ``validate``).
     if (name == ASK_TOOL) != (question is not None):
         return None
     if question is not None and hr is not None:
@@ -331,7 +347,8 @@ def validate(raw, *, busy_msg_id, now_wall: float) -> dict | None:
     ``shown_wall`` in the future, an inline prompt whose card is not the
     session's saved busy card (*busy_msg_id*), a standing suggestion of
     another type, a question on a tool other than AskUserQuestion or the
-    reverse. Fail closed: the whole record goes. Never raises."""
+    reverse, an ``input_digest`` (optional) that is not 64 lowercase hex
+    characters or that sits on a question. Fail closed: the whole record goes. Never raises."""
     try:
         return _validate(raw, busy_msg_id=busy_msg_id, now_wall=now_wall)
     except Exception:  # noqa: BLE001 - a loader of untrusted data
@@ -344,13 +361,17 @@ def _validate(raw, *, busy_msg_id, now_wall: float) -> dict | None:
     if not (_is_int(raw.get("v")) and raw["v"] == RECORD_VERSION):
         return None
     kind = raw.get("kind")
+    keys = set(raw) - {"input_digest"}
     if kind == "inline":
-        if set(raw) != _INLINE_KEYS:
+        if keys != _INLINE_KEYS:
             return None
     elif kind == "separate":
-        if set(raw) != _SEPARATE_KEYS:
+        if keys != _SEPARATE_KEYS:
             return None
     else:
+        return None
+    has_digest = "input_digest" in raw
+    if has_digest and not _is_digest(raw["input_digest"]):
         return None
     shown = raw["shown_wall"]
     if not (_is_number(shown) and 0 < shown <= now_wall):
@@ -361,8 +382,12 @@ def _validate(raw, *, busy_msg_id, now_wall: float) -> dict | None:
     perm = _valid_perm(raw["perm"])
     if perm is None:
         return None
+    if has_digest and perm["question"] is not None:
+        return None  # a question is closed by its own id alone
     out: dict = {"v": RECORD_VERSION, "kind": kind, "shown_wall": float(shown),
                  "tool_use_id": tuid, "perm": perm}
+    if has_digest:
+        out["input_digest"] = raw["input_digest"]
     if kind == "inline":
         card = raw["card_msg_id"]
         if not (_is_int(card) and card > 0 and card == busy_msg_id):

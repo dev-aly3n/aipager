@@ -209,6 +209,19 @@ def _permission_tool_use_id(msg: dict, tool_name: str, sess) -> str:
     return ""
 
 
+def _input_digest(tool_input) -> str:
+    """The sha256 hex digest of the canonical JSON of a hook's whole
+    ``tool_input`` (sorted keys, no spaces), or ``""`` when it cannot be
+    serialised (roadmap 8.102). Tells two calls of one tool apart where
+    :func:`_summarize_tool` cannot (a Bash summary is its description
+    only, an MCP tool's just its name)."""
+    try:
+        canon = json.dumps(tool_input, sort_keys=True, separators=(",", ":"))
+    except (TypeError, ValueError, RecursionError):
+        return ""
+    return hashlib.sha256(canon.encode()).hexdigest()
+
+
 def _finishes_open_prompt(msg: dict, tool_name: str, tool_input,
                           sess) -> bool:
     """Whether this PostToolUse / PostToolUseFailure is the end of the very
@@ -217,9 +230,15 @@ def _finishes_open_prompt(msg: dict, tool_name: str, tool_input,
 
     Proof only on a full match: the prompt's own non-empty tool_use_id,
     the same tool, the same agent (none for the parent's), and, for a
-    tool permission, the same input. A PermissionRequest that carries no
-    id takes the parent's latest PreToolUse's, which can be a parallel
-    call of the same tool: its end must not close a dialog still up."""
+    tool permission, the same whole input: the ending call's
+    :func:`_input_digest` equals the one the PermissionRequest stored in
+    ``tool_info["input_digest"]``. A PermissionRequest that carries no id
+    takes the parent's latest PreToolUse's, which can be a parallel call
+    of the same tool, even one with the same summary: its end must not
+    close a dialog still up. A tool permission with no stored digest (its
+    input could not be serialised, or it was restored from a record that
+    carried none) is never closed here; a tap, its turn's end or the
+    restart's transcript check still close it."""
     perm = sess.pending_permission if sess is not None else None
     if not isinstance(perm, dict):
         return False
@@ -235,7 +254,10 @@ def _finishes_open_prompt(msg: dict, tool_name: str, tool_input,
         return False
     if tool_name == "AskUserQuestion":
         return True  # its id is always its own PreToolUse's
-    return info.get("summary") == _summarize_tool(tool_name, tool_input)
+    digest = info.get("input_digest")
+    if not (isinstance(digest, str) and digest):
+        return False
+    return digest == _input_digest(tool_input)
 
 
 def _extract_pending_tool(transcript_path: str) -> dict | None:
@@ -677,6 +699,11 @@ class HookReceiver:
                     "tool_use_id": _permission_tool_use_id(
                         msg, tool_name, sess_ref),
                 }
+                # The whole input's digest: only the ending call with the
+                # very same input closes this prompt (_finishes_open_prompt).
+                digest = _input_digest(tool_input)
+                if digest:
+                    tool_info["input_digest"] = digest
                 # Asked inside a subagent: its answer lands in the
                 # subagent's own transcript, so a restart could not tell
                 # it was answered; such a prompt is never saved (8.102).

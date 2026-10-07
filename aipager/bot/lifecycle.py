@@ -939,6 +939,9 @@ class LifecycleMixin:
         tool_info: dict = {"name": perm["tool_name"],
                            "summary": perm["tool_summary"],
                            "tool_use_id": rec["tool_use_id"]}
+        if "input_digest" in rec:
+            # Its own call's end still closes it, no other's (8.102).
+            tool_info["input_digest"] = rec["input_digest"]
         if question is not None:
             q = {"question": question["question"],
                  "options": [dict(o) for o in question["options"]],
