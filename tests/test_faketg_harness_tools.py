@@ -202,24 +202,61 @@ def _sleeper(env=None):
     return subprocess.Popen(["sleep", "30"], env=env)
 
 
+_SLEEP = "import time; time.sleep(30)"
+
+
+def _named(argv0: str, *args: str, env=None):
+    """A sleeping python whose /proc cmdline is ``argv0 -c <sleep> args``
+    (``argv0`` may be ``dtach``: nothing real is run). Waits for the exec
+    so the cmdline checked is the new one."""
+    p = subprocess.Popen([argv0, "-c", _SLEEP, *args], executable=sys.executable,
+                         env=env, stdin=subprocess.DEVNULL)
+    want = os.fsencode(argv0) + b"\0-c\0"
+    fti.wait_until(lambda: fti._read(f"/proc/{p.pid}/cmdline").startswith(want), 10,
+                   f"the {argv0} test process to exec")
+    return p
+
+
 def test_kill_helpers_refuse_a_process_that_is_not_the_instances(root):
     inst = root / "i"
     inst.mkdir()
-    stranger = _sleeper()
-    ours = _sleeper(dict(os.environ, AIPAGER_INSTANCE_DIR=str(inst)))
+    sock = str(inst / "claude-dtach-ft1__g4000000001.sock")
+    clean = {k: v for k, v in os.environ.items() if k != "AIPAGER_INSTANCE_DIR"}
+    procs = []
     try:
+        # Strangers: a bare process, ones that only NAME the folder (an
+        # operator's tail -f on the log, a grep for a socket), a dtach on
+        # a socket outside the folder or on a non-socket file in it, and
+        # one whose instance variable is a different folder.
+        strangers = [
+            _sleeper(clean),
+            _named("tail", str(inst / "daemon.log"), env=clean),
+            _named("grep", "x", sock, env=clean),
+            _named("dtach", "-a", str(inst / "sub" / "claude-dtach-ft1__d1.sock"), env=clean),
+            _named("dtach", "-a", str(inst / "daemon.log"), env=clean),
+            _named("sleeper", env=dict(clean, AIPAGER_INSTANCE_DIR=str(inst / "sub"))),
+        ]
+        procs += strangers
+        # Ours: the daemon's tree (exact instance variable) and the
+        # harness's own dtach attach on a session socket in the folder.
+        ours = [_sleeper(dict(clean, AIPAGER_INSTANCE_DIR=str(inst))),
+                _named("dtach", "-a", sock, "-E", "-r", "winch", "-z", env=clean)]
+        procs += ours
         time.sleep(0.2)
-        assert not fti.pid_references(stranger.pid, inst)
-        assert fti.pid_references(ours.pid, inst)
-        assert fti.kill_pid_if_ours(stranger.pid, inst) is False
+        for p in strangers:
+            assert not fti.pid_references(p.pid, inst), fti._read(f"/proc/{p.pid}/cmdline")
+            assert fti.kill_pid_if_ours(p.pid, inst) is False
+        for p in ours:
+            assert fti.pid_references(p.pid, inst)
         assert fti.kill_pid_if_ours(os.getpid(), inst) is False
-        assert stranger.poll() is None
-        assert fti.pids_referencing(inst) == [ours.pid]
-        assert fti.kill_pids_referencing(inst) == [ours.pid]
-        ours.wait(10)
-        assert stranger.poll() is None
+        assert sorted(fti.pids_referencing(inst)) == sorted(p.pid for p in ours)
+        assert sorted(fti.kill_pids_referencing(inst)) == sorted(p.pid for p in ours)
+        for p in ours:
+            p.wait(10)
+        assert [p.pid for p in strangers if p.poll() is not None] == []
     finally:
-        for p in (stranger, ours):
+        # Only the PIDs this test spawned, by PID.
+        for p in procs:
             if p.poll() is None:
                 p.kill()
                 p.wait(10)

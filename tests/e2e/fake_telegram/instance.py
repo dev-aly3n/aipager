@@ -14,8 +14,9 @@ about the operator's real install on the same machine:
 - the Bot API base is the fake's loopback URL (asserted before start);
 - the hooks Claude runs are this repo's (the shims are first on PATH,
   asserted from the instance's settings.json after start);
-- teardown kills by PID only, and only a PID whose command line or
-  environment names this instance's folder.
+- teardown kills by PID only, and only a PID whose environment names
+  this instance's folder exactly, or a dtach attached to one of its
+  session sockets (see :func:`pid_references`).
 
 Test ids are fake and never the operator's real chat id.
 """
@@ -263,16 +264,34 @@ def _read(path: str) -> bytes:
         return b""
 
 
+_SESSION_SOCK_RE = re.compile(rb"claude-dtach-[^/\0]+\.sock")
+
+
 def pid_references(pid: int, inst_dir: Path) -> bool:
-    """True when the process's command line or environment names
-    *inst_dir* (the instance's own processes: the daemon, dtach, claude,
-    the hooks)."""
+    """True only for one of the instance's own processes.
+
+    - Environment: an element exactly ``AIPAGER_INSTANCE_DIR=<inst_dir>``.
+      The daemon has it and everything it spawns inherits it (dtach,
+      claude, the hooks).
+    - Command line: a ``dtach`` process (``argv[0]`` basename) with an
+      argument that is a session socket directly inside *inst_dir*. These
+      are the harness's own attaches (``screen()``, ``send_keys()``), which
+      run with the test process's environment.
+
+    A process that merely names the folder (``tail -f`` on the daemon log,
+    an editor, a grep, an strace) is never ours: no substring match."""
     needle = os.fsencode(str(inst_dir))
-    cmdline = _read(f"/proc/{pid}/cmdline")
-    if needle in cmdline:
-        return True
     environ = _read(f"/proc/{pid}/environ").split(b"\0")
-    return b"AIPAGER_INSTANCE_DIR=" + needle in environ
+    if b"AIPAGER_INSTANCE_DIR=" + needle in environ:
+        return True
+    argv = _read(f"/proc/{pid}/cmdline").split(b"\0")
+    if not argv or os.path.basename(argv[0]) != b"dtach":
+        return False
+    for arg in argv[1:]:
+        folder, base = os.path.split(arg)
+        if folder == needle and _SESSION_SOCK_RE.fullmatch(base):
+            return True
+    return False
 
 
 def _own_pids() -> list[int]:
