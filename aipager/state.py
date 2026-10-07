@@ -29,6 +29,9 @@ from typing import Any
 
 from aipager import bg_shells as _bg_shells
 from aipager._test_guard import check_write
+from aipager.open_prompt import (
+    snapshot as snapshot_open_prompt, validate as validate_open_prompt,
+)
 from aipager.scope import (
     chat_from_suffix, follow_chat_migrations, home_scope, load_chat_migrations,
     strip_scope_suffix,
@@ -546,7 +549,8 @@ class TrackedSession:
     # 8.102: what a restart needs to bind the message to the restored
     # prompt). What the pinned bar's "Answer" button re-sends (8.31).
     # Meaningful only while ``status`` is INTERACTIVE (it is never cleared
-    # when the prompt is answered); transient, never in _PERSIST_FIELDS.
+    # when the prompt is answered); transient, never in _PERSIST_FIELDS:
+    # the state file keeps a sanitized copy instead (aipager.open_prompt).
     pending_prompt_msg: dict | None = None
     # Roadmap 8.102: the parent's latest PreToolUse ``(tool_name,
     # tool_use_id)``, the id a PermissionRequest that carries none takes
@@ -558,6 +562,11 @@ class TrackedSession:
     # prompt only if its ``wait_started_at`` is not older: that shuts out
     # the ``pending_prompt_msg`` an earlier wait left behind. Transient.
     interactive_entered_at: float = 0.0
+    # Roadmap 8.102: the open prompt the state file held for this session
+    # (``open_prompt``, validated by ``aipager.open_prompt.validate``),
+    # read once by the startup recovery, which restores the session as
+    # waiting on it or drops it. Transient.
+    restored_open_prompt: dict | None = None
     # Active subagents — keyed by agent_id ("agent activity rows on the
     # busy card"). Format: {agent_id: {"type": str, "started_at": float,
     # "last_seen": float, "history_idx": int | None, "activity": str,
@@ -3082,6 +3091,12 @@ class SessionRegistry:
             started_wall = sess.card_started_wall(time.monotonic(), time.time())
             if started_wall > 0:
                 d["card_started_wall"] = started_wall
+            # Roadmap 8.102: computed from the live prompt, only while the
+            # session waits on it, so every way out of the wait drops it
+            # from the next save with no clear site of its own.
+            open_prompt = snapshot_open_prompt(sess, time.monotonic(), time.time())
+            if open_prompt is not None:
+                d["open_prompt"] = open_prompt
             sessions[name] = d
 
         # Cap _msg_map: keep only the most recent entries (by insertion order)
@@ -3273,6 +3288,17 @@ class SessionRegistry:
             # (A NaN or an infinity fails the range test too.)
             if sess.busy_msg_id and 0.0 < started_wall <= time.time():
                 sess.restored_card_started_wall = started_wall
+            # Roadmap 8.102: the prompt the session waited on, for the
+            # startup recovery. Anything but a valid record is ignored as
+            # a whole: the session then loads exactly as before 8.102.
+            if "open_prompt" in sd:
+                rec = validate_open_prompt(
+                    sd.get("open_prompt"), busy_msg_id=sess.busy_msg_id,
+                    now_wall=time.time())
+                if rec is None:
+                    log.warning("[%s] saved permission prompt ignored - "
+                                "invalid record", sess.label)
+                sess.restored_open_prompt = rec
             # A stamp in the future (a hand edit, or the clock stepped back
             # since the save) would make every late answer "predate" it.
             if not 0.0 <= sess.answer_delivered_wall <= time.time():
