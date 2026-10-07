@@ -10,13 +10,15 @@ black-box Tester exercises. Everything not named in that document (every
 Design constraints this module is written to (see design.md Alternatives
 + Non-negotiable orchestrator rules):
 
-- No module-level mutable state. All pending state (the per-chat rename
-  capture, the per-chat session→preferences index) lives on
-  lazily-initialised ``TelegramBot`` instance attributes
-  (``bot._rename_pending``, ``bot._session_pref_index``), created via a
-  ``getattr``/``setattr`` guard rather than a ``core.py`` edit — a module
-  dict would leak across pytest tests that build a fresh ``TelegramBot``
-  per test; an instance attribute dies with the instance.
+- No module-level mutable state. The per-chat rename capture lives on a
+  lazily-initialised ``TelegramBot`` instance attribute
+  (``bot._rename_pending``), created via a ``getattr``/``setattr`` guard
+  rather than a ``core.py`` edit — a module dict would leak across pytest
+  tests that build a fresh ``TelegramBot`` per test; an instance
+  attribute dies with the instance. The per-chat session index
+  (``bot._session_pref_index``) is set the same way, but to the bot's
+  registry's own ``button_index``: persisted with the sessions since
+  roadmap 8.103, so it outlives a restart on purpose.
 - Every session-scoped write (restart, rename, delete, and a per-session
   preference set/clear) is gated by ``bot._can_prompt_user`` at the exact
   moment of the mutating tap/text — not only when the surface offering it
@@ -40,6 +42,7 @@ import html as html_mod
 import io
 import logging
 import re
+import secrets
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -115,7 +118,7 @@ _RESTART_REASON_TEXT = {
 
 # ---- lazily-initialised TelegramBot instance state -----------------------
 
-def _pref_index_map(bot: "TelegramBot") -> dict[int, list[str]]:
+def _pref_index_map(bot: "TelegramBot") -> dict[int, list[str | None]]:
     """``bot._session_pref_index`` — created on first use, never at
     ``TelegramBot.__init__`` (that would need a core.py edit, which this
     stream does not own). See entrypoints.md's per-session-preferences
@@ -123,12 +126,37 @@ def _pref_index_map(bot: "TelegramBot") -> dict[int, list[str]]:
     """
     index = getattr(bot, "_session_pref_index", None)
     if index is None:
-        index = {}
+        # The registry's own table (roadmap 8.103): persisted with the
+        # sessions, so an index means the same session across a restart.
+        index = getattr(getattr(bot, "registry", None), "button_index", None)
+        if not isinstance(index, dict):
+            index = {}
         bot._session_pref_index = index
     return index
 
 
-def _register_pref_index(bot: "TelegramBot", chat_id: int, names) -> list[str]:
+#: Where a table created with its predecessor lost starts counting (see
+#: ``SessionRegistry.button_tables_lost``): above any index a process
+#: could have handed out, and random, so a second loss lands elsewhere.
+_LOST_TABLE_BASE_MIN = 100_000
+_LOST_TABLE_BASE_SPAN = 900_000
+
+
+def _pref_base(bot: "TelegramBot", chat_id: int) -> int:
+    """The index this chat's first slot stands for (0 unless its table was
+    created after a lost one)."""
+    bases = getattr(getattr(bot, "registry", None), "button_base", None)
+    return bases.get(chat_id, 0) if isinstance(bases, dict) else 0
+
+
+def _pref_idx(bot: "TelegramBot", chat_id: int, table: list[str | None],
+              name: str) -> int:
+    """The index a button names *name* by in this chat's *table*."""
+    return _pref_base(bot, chat_id) + table.index(name)
+
+
+def _register_pref_index(bot: "TelegramBot", chat_id: int,
+                         names) -> list[str | None]:
     """Give every name a STABLE index in this chat's table, appending any
     it has not seen before. Returns the whole table.
 
@@ -143,19 +171,46 @@ def _register_pref_index(bot: "TelegramBot", chat_id: int, names) -> list[str]:
     POSITIONAL, so evicting an old entry would shift every still-visible
     button onto a different session — exactly the bug the stable table
     exists to prevent. Growth is bounded by the number of DISTINCT
-    sessions a chat has rendered since the daemon started, at roughly 80
-    bytes each: a chat that showed ten thousand different sessions
-    between restarts would hold about 780 KiB. Both halves of that claim
+    sessions a chat has rendered, at roughly 80 bytes each; since roadmap
+    8.103 the table is persisted, so that is over the life of the install
+    (a removed session's name becomes a None tombstone in its slot). Both
+    halves of that claim
     are pinned by tests rather than asserted here — see
     ``tests/test_parity_integration.py``: re-rendering the same sessions
     does not grow the table, an early index survives arbitrary churn, and
     a deleted session resolves to ``None`` rather than to its neighbour
     because :func:`_resolve_pref_index` re-checks the registry.
     """
-    table = _pref_index_map(bot).setdefault(chat_id, [])
+    index = _pref_index_map(bot)
+    table = index.get(chat_id)
+    registry = getattr(bot, "registry", None)
+    if table is None:
+        table = index[chat_id] = []
+        if getattr(registry, "button_tables_lost", False) is True:
+            # Buttons from before this start may name any small index of
+            # a table that is gone: count from where none of them can.
+            registry.button_base[chat_id] = (
+                _LOST_TABLE_BASE_MIN + secrets.randbelow(_LOST_TABLE_BASE_SPAN))
+    grew = False
     for name in names:
         if name not in table:
             table.append(name)
+            grew = True
+    if grew and registry is not None and hasattr(registry, "save"):
+        # Written at once, not at the next 2 s save: a crash in between
+        # would lose the slot while a button naming it is in the chat, and
+        # the next new session would take its index. New slots are rare
+        # (one per new session per chat). A failed save must not stop the
+        # card or prompt being built: the slot is right in memory, and any
+        # later save writes the whole table. (A disk error is already
+        # logged inside save(); this catches anything else it raises.)
+        try:
+            registry.save()
+        except Exception:
+            log.warning("saving a new button slot failed; the next save "
+                        "retries it", exc_info=True)
+            if hasattr(registry, "mark_dirty"):
+                registry.mark_dirty()
     return table
 
 
@@ -177,11 +232,12 @@ def _resolve_pref_index(
     one that was actually shown."""
     if not isinstance(idx_token, str) or not _STRICT_IDX_RE.fullmatch(idx_token):
         return None
-    idx = int(idx_token)
+    pos = int(idx_token) - _pref_base(bot, chat_id)
     names = _pref_index_map(bot).get(chat_id) or []
-    if idx < 0 or idx >= len(names):
+    if pos < 0 or pos >= len(names):
         return None
-    return bot.registry.get(names[idx])
+    # A None tombstone (roadmap 8.103) resolves to no session here too.
+    return bot.registry.get(names[pos])
 
 
 def _rename_pending_map(bot: "TelegramBot") -> dict[tuple, dict]:
@@ -379,7 +435,7 @@ def _render_session_menu(
     own picker/confirm flow uses, so there is one code path per action
     regardless of which surface reached it."""
     names = _register_pref_index(bot, chat_id, [sess.name])
-    pref_cb = f"_:spref:{names.index(sess.name)}"
+    pref_cb = f"_:spref:{_pref_idx(bot, chat_id, names, sess.name)}"
     gone = sess.status == Status.GONE
     # Restart kills and relaunches a RUNNING process; on a gone session
     # `_kill_and_relaunch_core` can only answer `not_live`, so the button
@@ -845,7 +901,8 @@ def _render_session_pref_picker(
     # are not the same once a ⋮ menu has registered a session first.
     rows = [
         [InlineKeyboardButton(
-            sess.label, callback_data=f"_:spref:{table.index(sess.name)}")]
+            sess.label,
+            callback_data=f"_:spref:{_pref_idx(bot, chat_id, table, sess.name)}")]
         for sess in sessions
     ]
     rows.append([InlineKeyboardButton("✖️ Close", callback_data="_:spref:close")])
@@ -1114,7 +1171,7 @@ def session_cb(bot: "TelegramBot", chat_id: int, sess: TrackedSession,
     was rejected.
     """
     table = _register_pref_index(bot, chat_id, [sess.name])
-    return f"_:sx:{table.index(sess.name)}:{verb}"
+    return f"_:sx:{_pref_idx(bot, chat_id, table, sess.name)}:{verb}"
 
 
 def resolve_short_cb(

@@ -127,9 +127,10 @@ ALLOWED_JOINEDSTR_SIGNATURES = frozenset({
     "_:set:{section}:{token}",
     # session_parity.py's per-session-preferences index scheme —
     # already short-form before this ship (entrypoints.md).
-    # Interpolates a table INDEX (int) or a `cb_prefix` string built
+    # Interpolates a table INDEX (int: the table's base, below 1,000,000
+    # since roadmap 8.103, plus a position) or a `cb_prefix` string built
     # the same way, never a session name.
-    "_:spref:{table.index(sess.name)}",
+    "_:spref:{_pref_idx(bot, chat_id, table, sess.name)}",
     "{cb_prefix}:{section}",
     "{cb_prefix}:{section}:{token}",
     "{cb_prefix}:{section}:default",

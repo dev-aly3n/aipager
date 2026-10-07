@@ -2181,6 +2181,36 @@ CARD_OWNER_KINDS = frozenset({
 MAX_CARD_OWNERS = 4096
 
 
+def _load_button_index(
+    raw: object, known: set[str],
+) -> tuple[dict[int, list[str | None]], dict[int, int], bool]:
+    """The persisted button tables (``SessionRegistry.button_index``):
+    ``(tables, bases, lost)``. A name the registry no longer knows comes
+    back as a None tombstone in its slot. A missing key (a file from
+    before 8.103) or any malformed chat entry sets *lost* and leaves that
+    chat out, so its next table starts where no old button points."""
+    if not isinstance(raw, dict):
+        return {}, {}, True
+    tables: dict[int, list[str | None]] = {}
+    bases: dict[int, int] = {}
+    lost = False
+    for chat, entry in raw.items():
+        try:
+            chat_id = int(chat)
+        except (TypeError, ValueError):
+            lost = True
+            continue
+        names = entry.get("names") if isinstance(entry, dict) else None
+        base = entry.get("base") if isinstance(entry, dict) else None
+        if (not isinstance(names, list) or type(base) is not int or base < 0
+                or not all(n is None or isinstance(n, str) for n in names)):
+            lost = True
+            continue
+        tables[chat_id] = [n if n in known else None for n in names]
+        bases[chat_id] = base
+    return tables, bases, lost
+
+
 def _load_card_owners(raw: object) -> dict[tuple[int, int], dict]:
     """The persisted card owners (roadmap 8.94h), oldest first, at most
     :data:`MAX_CARD_OWNERS` of the newest. State saved before they were
@@ -2280,9 +2310,36 @@ class SessionRegistry:
         # MAX_CARD_OWNERS. Persisted (roadmap 8.94h), so a restart does
         # not open a member's confirm card to everyone in the group.
         self.card_owners: dict[tuple[int, int], dict] = {}
+        # The per-chat table behind the short session buttons
+        # (`_:sx:<idx>:<verb>`, `_:spref:<idx>`, bot/session_parity.py):
+        # chat_id -> session names by position, and the number its first
+        # position stands for. Persisted (roadmap 8.103): an old message's
+        # button must name the same session after a restart, and a table
+        # rebuilt in render order would hand its index to another one. A
+        # removed session's slot becomes a None tombstone (at `remove`, and
+        # at load for a name no longer known), never dropped: positions
+        # must not shift. Grows by one slot per distinct session a chat
+        # has shown, for the life of the install.
+        self.button_index: dict[int, list[str | None]] = {}
+        self.button_base: dict[int, int] = {}
+        # True when a state file existed but its button tables could not
+        # be read (written before 8.103, unreadable, corrupt): buttons
+        # from before this start are unknown, so a table created now
+        # starts at a random base no old button can name (fail closed).
+        self.button_tables_lost = False
 
     def get(self, name: str) -> TrackedSession | None:
         return self._sessions.get(name)
+
+    def _blank_button_slots(self, name: str) -> None:
+        """A dropped session's button slots name nothing from now on
+        (roadmap 8.103): a later session reusing the internal name gets a
+        slot of its own, so an old message's button cannot act on it.
+        Every path that drops a session from the registry calls this."""
+        for table in self.button_index.values():
+            for i, slot in enumerate(table):
+                if slot == name:
+                    table[i] = None
 
     def _prune_remembered_labels(self) -> None:
         """Drop remembered labels past their TTL."""
@@ -2559,6 +2616,7 @@ class SessionRegistry:
         for name in victims:
             log.info("Evicting GONE session from history (LRU): %s", name)
             self._sessions.pop(name, None)
+            self._blank_button_slots(name)
             self._dirty = True
 
     def transition(self, name: str, new_status: Status,
@@ -2846,6 +2904,7 @@ class SessionRegistry:
         """
         sess = self._sessions.pop(name, None)
         self._forget_target(name)
+        self._blank_button_slots(name)
         if sess and remember_label and sess.label:
             # Only worth remembering a label derivation would NOT reproduce:
             # for an unrenamed session the two are identical, so storing it
@@ -3025,6 +3084,9 @@ class SessionRegistry:
             "msg_map": {f"{cid}:{mid}": v for (cid, mid), v in msg_map.items()},
             "sessions": sessions,
             "queued_line_deletes": _clean_line_deletes(self.queued_line_deletes),
+            "button_index": {
+                str(c): {"base": self.button_base.get(c, 0), "names": list(names)}
+                for c, names in self.button_index.items()},
             "card_owners": [
                 {"chat_id": c, "msg_id": m, **rec}
                 for (c, m), rec in list(self.card_owners.items())[-MAX_CARD_OWNERS:]],
@@ -3048,15 +3110,25 @@ class SessionRegistry:
             raw = state_file.read_text()
         except FileNotFoundError:
             log.info("No saved session state — starting fresh")
+            # A first start and a deleted file (`aipager uninstall`, a new
+            # machine on the same bot) look alike, and only the second has
+            # old buttons in the chat: counted as lost (roadmap 8.103).
+            self.button_tables_lost = True
             return
         except OSError:
             log.warning("Cannot read session state file — starting fresh")
+            self.button_tables_lost = True
             return
 
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
             log.warning("Corrupt session state JSON — starting fresh")
+            self.button_tables_lost = True
+            return
+        if not isinstance(data, dict):
+            log.warning("Corrupt session state JSON — starting fresh")
+            self.button_tables_lost = True
             return
 
         # Set once the sessions are loaded (below): the per-chat targets
@@ -3270,6 +3342,11 @@ class SessionRegistry:
                          "(orphan session — was missing the stamp)",
                          sess.label)
                 self._dirty = True  # persist on next save_if_dirty
+
+        # Roadmap 8.103: after the sessions, to tombstone the names gone.
+        self.button_index, self.button_base, lost = _load_button_index(
+            data.get("button_index"), set(self._sessions))
+        self.button_tables_lost = lost
 
         # Rebuild _msg_map AFTER the sessions loop above, not before it.
         # ORCHESTRATOR-VERIFIED LOAD-ORDER BUG: the migration below needs
