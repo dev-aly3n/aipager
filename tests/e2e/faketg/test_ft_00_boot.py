@@ -23,10 +23,10 @@ STUCK = "Claude is stuck on a first-run screen in the instance HOME"
 def test_isolated_instance_paths_and_api(faketg):
     faketg.assert_isolated()
     assert faketg.inst_dir.joinpath("aipager.sock").exists()
-    # Nothing of this instance went to /tmp/claude-* or the real home.
+    # No session yet. (That every runtime path resolves inside the
+    # instance is proved by tests/test_instance_paths.py's subprocess
+    # probe, not here.)
     assert not list(faketg.inst_dir.glob("claude-dtach-*.sock"))
-    floor = f"/tmp/claude-policy-.floor-{__import__('os').getuid()}.json"
-    assert floor not in faketg.log_text()
     # The operator's real files and daemon, mid-run, with a daemon up.
     ftc.check_real_install()
 
@@ -75,4 +75,3 @@ def test_claude_boots_in_instance(fresh):
 def test_no_unknown_methods_called(faketg):
     assert faketg.fake.unknown_methods == []
     assert faketg.fake.bad_token_calls == []
-    assert ftc.harness_names_in([]) == []

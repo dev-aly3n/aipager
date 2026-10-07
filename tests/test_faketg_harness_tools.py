@@ -83,6 +83,7 @@ def _env(root, mode="standin", base=None, **extra):
         "CREDENTIALS_DIRECTORY": "/run/credentials/aipager.service",
         "OBSERVER_BOTS": "a:b", "MINIAPP_ENABLED": "1", "XDG_RUNTIME_DIR": "/run/user/1",
         "PYTHONPATH": "/elsewhere", "LANG": "C.UTF-8",
+        "ANTHROPIC_API_KEY": "x", "ANTHROPIC_BASE_URL": "http://elsewhere",
     }
     base_env.update(extra)
     return fti.daemon_env(base_env, root=root, base_url=base or "http://127.0.0.1:4321",
@@ -97,7 +98,7 @@ def test_daemon_env_is_built_from_scratch(root):
     assert env["CLAUDE_TG_CHAT_ID"] == "" and env["OBSERVER_BOTS"] == ""
     assert env["CLAUDE_TG_BOT_TOKEN"] == fti.FAKE_TOKEN
     for gone in ("CREDENTIALS_DIRECTORY", "CLAUDE_CODE_OAUTH_TOKEN", "AIPAGER_SOCKET_PATH",
-                 "XDG_RUNTIME_DIR"):
+                 "XDG_RUNTIME_DIR", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"):
         assert gone not in env, gone
     assert env["HOME"] == str(root / "h") and env["AIPAGER_INSTANCE_DIR"] == str(root / "i")
     assert env["AIPAGER_WORK_DIR"] == str(root / "h" / "proj")
@@ -277,9 +278,10 @@ def test_opt_in_and_credential_skips(monkeypatch):
 
 def test_harness_names_are_recognised():
     names = ["claude-ft1__g4000000001", "claude-x__d900000002", "claude-real__d256113222",
-             "claude-ftx", "claude-dev", "claude-1000"]
-    assert ftc.harness_names_in(names) == ["claude-ft1__g4000000001", "claude-ftx",
-                                           "claude-x__d900000002"]
+             "claude-ft12", "claude-ft8r", "claude-ftp-sync", "claude-ftx", "claude-dev",
+             "claude-1000"]
+    assert ftc.harness_names_in(names) == sorted([
+        "claude-ft1__g4000000001", "claude-ft12", "claude-ft8r", "claude-x__d900000002"])
 
 
 def test_real_install_check_catches_a_changed_file_and_a_dead_daemon(tmp_path, monkeypatch):

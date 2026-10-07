@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import pwd
+import re
 from pathlib import Path
 
 import pytest
@@ -90,13 +91,22 @@ def _tmp_claude_names() -> set[str]:
     return {p.name for p in Path("/tmp").glob("claude-*")}
 
 
+#: The harness's session labels: ``ft`` and a number (``ft0`` ... ``ft14``,
+#: ``ft8r`` after the rename). A real label like ``ftp-sync`` is not one.
+_HARNESS_LABEL_RE = re.compile(r"ft\d")
+
+
 def harness_names_in(names) -> list[str]:
     return sorted(n for n in names
                   if any(m in n for m in _FAKE_ID_MARKERS)
-                  or n.removeprefix("claude-").startswith("ft"))
+                  or _HARNESS_LABEL_RE.match(n.removeprefix("claude-")))
 
 
 def _real_files() -> list[Path]:
+    """Fingerprinted by sha256 AND mtime. The real policy floor is
+    rewritten whenever the operator's daemon starts or reloads, so a
+    reload during the run (``aipager config``, a SIGUSR1, a restart)
+    fails the session check: it errs on the side of a false alarm."""
     home = _real_home()
     return [home / ".config" / "aipager" / "aipager.yaml",
             home / ".claude" / "settings.json",
