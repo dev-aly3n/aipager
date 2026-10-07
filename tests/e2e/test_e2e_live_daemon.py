@@ -59,8 +59,11 @@ What each test proves, and what it leaves in the operator's DM:
   not in is 403;
   the sessions list works with no chat named. Posts nothing.
 - ``test_restart_mid_answer_recovers_card_and_delivers`` (also needs
-  ``AIPAGER_E2E_RESTART=1``): restarts the daemon mid-answer. One card +
-  one essay.
+  ``AIPAGER_E2E_RESTART=1``): restarts the daemon mid-answer; the new
+  daemon adopts the card and delivers the answer. One card + one essay.
+  The restart rewrites ``~/.local/share/aipager/daemon.lock``, the one
+  real-home change the test registers with the session's real-home
+  guard (``expect_real_home_change`` in tests/conftest.py).
 - ``test_kill_route_ends_session``: the Mini App kill route ends the
   session. Posts the "Ended" line.
 
@@ -74,7 +77,6 @@ import hmac
 import json
 import os
 import re
-import shutil
 import socket
 import subprocess
 import time
@@ -82,6 +84,7 @@ import urllib.error
 import urllib.request
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -100,6 +103,7 @@ from aipager import config  # noqa: E402
 from aipager.dtach import inject  # noqa: E402
 from aipager.dtach.notify_hook import SOCKET_PATH  # noqa: E402
 from aipager.miniapp.auth import _secret_key, verify_init_data  # noqa: E402
+from aipager.policy_snapshot import TURN_OPEN_FILE  # noqa: E402
 from aipager.state import _default_scope  # noqa: E402
 
 _SCOPE = _default_scope()
@@ -108,33 +112,8 @@ if _SCOPE is None:
                 allow_module_level=True)
 CHAT_ID = int(_SCOPE[0])
 API = f"http://127.0.0.1:{config.MINIAPP_PORT}"
-REPO_ROOT = Path(__file__).resolve().parents[2]  # trusted by Claude Code; see the docstring
+REPO_ROOT = harness.REPO_ROOT  # trusted by Claude Code; see the docstring
 TURN_TIMEOUT = 240.0
-
-
-def _real_dtach() -> str | None:
-    """The resolver the daemon uses, minus the conftest null: the bundled
-    binary, then PATH, then the pipx venv the daemon itself runs from."""
-    try:
-        from dtach_bin import path
-        return path()
-    except (ImportError, FileNotFoundError):
-        pass
-    found = shutil.which("dtach")
-    if found:
-        return found
-    pipx = Path.home() / ".local/share/pipx/venvs/aipager/bin/dtach"
-    return str(pipx) if pipx.exists() else None
-
-
-def _child_env_clean(monkeypatch) -> None:
-    """A child claude must not inherit this process's nesting vars (the
-    daemon's sessions get their credential from its own env overlay).
-    Through ``monkeypatch`` so the test process's environment is restored
-    afterwards, like every other env-isolation fixture in this suite."""
-    for k in list(os.environ):
-        if k.startswith("CLAUDE") and k != "CLAUDE_CODE_OAUTH_TOKEN":
-            monkeypatch.delenv(k, raising=False)
 
 
 # ---- oracle + helpers -----------------------------------------------------
@@ -143,11 +122,12 @@ def now_stamp() -> str:
     return time.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def journal(label: str, since: str) -> list[str]:
+def journal(label: str, since: str, until: str | None = None) -> list[str]:
     """Daemon journal lines about ``label`` since ``since`` (wall clock),
-    minus the noise every turn produces."""
+    and before ``until`` when given, minus the noise every turn produces."""
     out = subprocess.run(
-        ["journalctl", "--user", "-u", "aipager", "--since", since, "--no-pager",
+        ["journalctl", "--user", "-u", "aipager", "--since", since,
+         *(["--until", until] if until else []), "--no-pager",
          "-o", "short-precise"], capture_output=True, text=True, timeout=30,
     ).stdout
     keep = []
@@ -252,14 +232,14 @@ class LiveSession:
 
 @pytest.fixture
 def live_session(monkeypatch, run_async) -> LiveSession:
-    dtach = _real_dtach()
+    dtach = harness.real_dtach()
     if not dtach:
         pytest.skip("no dtach binary available to launch a live session")
     monkeypatch.setattr(inject, "_resolve_dtach", lambda: dtach)
     monkeypatch.setattr(inject, "_DTACH", dtach, raising=False)
     # No moving the operator's ~/.claude/.credentials.json from a test.
     monkeypatch.setattr(inject, "_stash_expired_credentials_file", lambda: None)
-    _child_env_clean(monkeypatch)
+    harness.child_env_clean(monkeypatch)
     label = f"e2elive-{uuid.uuid4().hex[:6]}"
     name = f"{label}__d{CHAT_ID}"
     since = now_stamp()
@@ -463,23 +443,134 @@ def test_miniapp_chats_and_scope_header():
     assert status == 200 and isinstance(body.get("sessions"), list), body
 
 
+#: The busy card's message id, on any of its "sent" lines (first send,
+#: late send, re-send after a lost card).
+_BUSY_SENT = re.compile(r"Busy message sent(?: late| again)? \(msg_id=(\d+)")
+#: The daemon's own lock, rewritten by every daemon start
+#: (``cli/daemon.py::_acquire_daemon_lock`` computes it inline).
+_DAEMON_LOCK = Path.home() / ".local" / "share" / "aipager" / "daemon.lock"
+
+
+def precise_stamp() -> str:
+    """A journal anchor to the microsecond (``journalctl --since`` takes
+    fractional seconds): nothing logged before this instant matches."""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+
+
 @pytest.mark.skipif(os.environ.get("AIPAGER_E2E_RESTART") != "1",
                     reason="set AIPAGER_E2E_RESTART=1: this restarts the operator's daemon")
-def test_restart_mid_answer_recovers_card_and_delivers(claude_available, live_session, run_async):
-    """Roadmap 2.1/2.2: a daemon restart while a turn is mid-answer
-    rewrites the orphan card (`recovered N sessions: N edited`) and the
-    answer still goes out once the Stop lands on the restored session."""
+def test_restart_mid_answer_recovers_card_and_delivers(claude_available, live_session, run_async,
+                                                         expect_real_home_change):
+    """Roadmap 2.1/2.2 and 8.55: a daemon restart while a turn is
+    mid-answer ADOPTS the turn's busy card, it is not closed or edited.
+    The new daemon logs ``[<label>] busy card <id> adopted — the turn
+    looks still running`` for the very card the old one sent (the id on
+    its ``Busy message sent (msg_id=<id>`` line) and counts it in
+    ``recovered N sessions: … adopted``; the answer then goes out
+    (``[<label>] sendRichMessage``) once the Stop lands on the restored
+    session. The answer's line is read only from journal entries written
+    after ``systemctl restart`` returned, so the old daemon cannot
+    satisfy it, and no fresh card goes out for the turn after it. Skips
+    when the essay finished before the restart, or had ended by the time
+    recovery ran (the hook's turn-open file gone, the transcript complete
+    and last written before the recovery's journal timestamp: the card
+    is then rightly closed, not adopted)."""
     s = live_session
+    nonce = uuid.uuid4().hex[:8]
     send(run_async, s.name, "Write a 1200-word essay about mountains. Plain paragraphs, "
-                            "no headings, no lists, no tools. Do not stop early.")
+                            f"no headings, no lists, no tools. Do not stop early. ({nonce})")
     wait_for(s.label, s.since, "IDLE → BUSY", "Busy message sent", timeout=60)
     time.sleep(12)
-    if any("BUSY → IDLE" in ln for ln in journal(s.label, s.since)):
+    lines = journal(s.label, s.since)
+    if any("BUSY → IDLE" in ln for ln in lines):
         pytest.skip("the essay finished before the restart — nothing mid-answer to recover")
+    cards = [int(m.group(1)) for ln in lines
+             if f"[{s.label}]" in ln and (m := _BUSY_SENT.search(ln))]
+    assert cards, "no 'Busy message sent (msg_id=' line for this session:\n" + "\n".join(lines)
+    card = cards[-1]
+    # The new daemon rewrites its lock file; the session-wide real-home
+    # guard lets exactly that path through (tests/conftest.py).
+    expect_real_home_change(_DAEMON_LOCK)
+    before_restart = precise_stamp()
     subprocess.run(["systemctl", "--user", "restart", "aipager"], check=True, timeout=60)
-    lines = wait_for(s.label, s.since, f"Restored session: claude-{s.name}", "recovered",
-                     "sendRichMessage")
-    assert any("recovered" in ln and "edited" in ln for ln in lines)
+    restarted = precise_stamp()
+    if any("BUSY → IDLE" in ln for ln in journal(s.label, s.since, until=restarted)):
+        pytest.skip("the essay finished just before the restart — nothing mid-answer to recover")
+
+    # The new daemon's verdict on this card, read only from lines logged
+    # since the restart began (the old daemon logs neither line).
+    adopted = f"[{s.label}] busy card {card} adopted — the turn looks still running"
+    restored = f"Restored session: claude-{s.name}"
+    turn_open = harness.PRODUCTION_NOTES_DIR(f"claude-{s.name}") / TURN_OPEN_FILE
+    deadline = time.monotonic() + 60
+    while True:
+        lines = journal(s.label, before_restart)
+        if any(restored in ln for ln in lines) and any(adopted in ln for ln in lines):
+            break
+        if time.monotonic() > deadline:
+            recovered_at = _recovery_logged_at(before_restart)
+            # Skip only when every sign agrees: the hook's turn-open file is
+            # gone (its Stop fired, at some point), and the transcript is
+            # complete and was last written before recovery ran (the bound
+            # that places the turn's end before recovery).
+            if (recovered_at is not None and not turn_open.exists()
+                    and _turn_ended_by(nonce, recovered_at)):
+                pytest.skip("the essay's turn had ended by the time recovery ran: "
+                            "the card was rightly closed, not adopted")
+            pytest.fail(f"journal never showed {restored!r} and {adopted!r} within 60s:\n"
+                        + "\n".join(lines[-20:]))
+        time.sleep(2)
+    # The adopted line is the contract: in one recovery pass a card is
+    # either adopted or recovered (closed), never both. This only rules
+    # out a recovery attempt that failed loudly.
+    assert not any(f"[{s.label}] orphan msg" in ln for ln in lines), lines
+    lines = wait_for(s.label, restarted, f"[{s.label}] sendRichMessage")
+    # And the turn finished on the adopted card: no fresh card for it.
+    assert not any(f"[{s.label}]" in ln and _BUSY_SENT.search(ln) for ln in lines), lines
+
+
+def _recovery_logged_at(since: str) -> float | None:
+    """The epoch time the daemon logged its startup ``recovered N
+    sessions:`` summary since ``since``, from the journal's own timestamp
+    (``-o short-unix``), or None when it did not."""
+    out = subprocess.run(
+        ["journalctl", "--user", "-u", "aipager", "--since", since, "--no-pager",
+         "-o", "short-unix"], capture_output=True, text=True, timeout=30,
+    ).stdout
+    for line in out.splitlines():
+        body = line.split("]: ", 1)[-1]
+        if "recovered" in body and "sessions:" in body:
+            try:
+                return float(line.split(None, 1)[0])
+            except ValueError:
+                return None
+    return None
+
+
+def _mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _turn_ended_by(nonce: str, when: float) -> bool:
+    """Whether the throwaway session's transcript (the one holding
+    *nonce*, under Claude Code's project folder for the repo root) shows
+    its turn complete and was last written at or before *when* (epoch
+    seconds): the file's own mtime, so a late write only ever turns a
+    skip into a failure. Read-only."""
+    from aipager import transcript
+    from aipager.claude_resolve import _probe_project_dir
+    for tp in sorted(_probe_project_dir(str(REPO_ROOT)).glob("*.jsonl"),
+                     key=_mtime, reverse=True)[:20]:
+        try:
+            if nonce not in tp.read_text(errors="replace"):
+                continue
+        except OSError:
+            continue
+        return transcript.turn_appears_complete(str(tp)) and 0.0 < _mtime(tp) <= when
+    return False
 
 
 def test_kill_route_ends_session(claude_available, live_session, run_async):

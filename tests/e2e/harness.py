@@ -67,6 +67,10 @@ MARKER = "[via Telegram · @e2e]"
 #: and terminal tests failed and the deny tests passed for the wrong
 #: reason (2026-10-06, since f679e95).
 PRODUCTION_SNAPSHOT_PATH = _snap.snapshot_path
+#: ``policy_snapshot.notes_dir`` as the hook resolves it, captured the
+#: same way (tests/conftest.py redirects the module's own): where a real
+#: session's hook keeps its notes and turn-open file under ``/tmp``.
+PRODUCTION_NOTES_DIR = _snap.notes_dir
 
 #: The member and group every snapshot is written for.
 E2E_USER_ID = 999
@@ -163,6 +167,38 @@ def daemon_running() -> bool:
     daemon keeps running, since the daemon holds the socket bound even
     after it is unlinked from disk)."""
     return bool(daemon_pids()) or Path("/tmp/aipager.sock").exists()
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def real_dtach() -> str | None:
+    """The dtach binary the daemon would launch with, resolved the way the
+    daemon does, minus tests/conftest.py's ``_never_spawn_real_dtach``
+    null: the bundled binary, then PATH, then the pipx venv the daemon
+    itself runs from. For the e2e tests that genuinely launch a session
+    (they then override ``inject._DTACH`` themselves, the escape hatch
+    that guard documents)."""
+    try:
+        from dtach_bin import path
+        return path()
+    except (ImportError, FileNotFoundError):
+        pass
+    found = shutil.which("dtach")
+    if found:
+        return found
+    pipx = Path.home() / ".local/share/pipx/venvs/aipager/bin/dtach"
+    return str(pipx) if pipx.exists() else None
+
+
+def child_env_clean(monkeypatch) -> None:
+    """A child claude must not inherit this process's nesting vars (the
+    daemon's sessions get their credential from its own env overlay).
+    Through ``monkeypatch`` so the test process's environment is restored
+    afterwards, like every other env-isolation fixture in this suite."""
+    for k in list(os.environ):
+        if k.startswith("CLAUDE") and k != "CLAUDE_CODE_OAUTH_TOKEN":
+            monkeypatch.delenv(k, raising=False)
 
 
 # ---- project, fake home, policy ------------------------------------------

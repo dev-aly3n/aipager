@@ -351,17 +351,97 @@ _GUARDED_HOME_PATHS = (
 )
 
 
+def _stat_key(p: Path) -> tuple[int, int] | None:
+    try:
+        st = p.stat()
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
 def _snapshot_guarded() -> dict[str, tuple[int, int]]:
     snap: dict[str, tuple[int, int]] = {}
     for root in _GUARDED_HOME_PATHS:
         paths = [root, *root.rglob("*")] if root.is_dir() else [root]
         for p in paths:
-            try:
-                st = p.stat()
-            except OSError:
-                continue
-            snap[str(p)] = (st.st_mtime_ns, st.st_size)
+            key = _stat_key(p)
+            if key is not None:
+                snap[str(p)] = key
     return snap
+
+
+def real_home_changes(
+    before: dict[str, tuple[int, int]],
+    after: dict[str, tuple[int, int]],
+    expected: dict[str, tuple[int, int] | None],
+) -> list[str]:
+    """The guarded real-home paths that changed between two snapshots, in
+    ``_guard_real_home``'s report order (changed or created, then deleted).
+
+    *expected* maps a path a test registered through
+    :func:`expect_real_home_change` to the state that test left it in. A
+    path is let through only while it still sits in exactly that state:
+    changed again later (by anything) it is reported like any other. A
+    deletion is always reported, registered or not; the opt-in covers a
+    file being rewritten, never one disappearing.
+    """
+    changed = sorted(k for k, v in after.items()
+                     if before.get(k) != v and expected.get(k, ()) != v)
+    changed += sorted(set(before) - set(after))
+    return changed
+
+
+def check_expected_real_home_path(path: Path) -> str:
+    """*path* as a key :func:`real_home_changes` compares, or ValueError
+    when it is not one exact guarded path: outside every root
+    ``_guard_real_home`` snapshots, a relative path included (registering
+    it would exempt nothing, and saying so beats a silent no-op)."""
+    path = Path(path)
+    if not any(path == root or root in path.parents for root in _GUARDED_HOME_PATHS):
+        raise ValueError(f"not under a guarded real-home path: {path}")
+    return str(path)
+
+
+def real_home_change_registrar(store: dict[str, tuple[int, int] | None]):
+    """``(register, finish)`` behind :func:`expect_real_home_change`:
+    ``register(path)`` accepts one exact guarded path
+    (:func:`check_expected_real_home_path`), a second call raises;
+    ``finish()``, at the end of the test, records into *store* the state
+    the test left that path in."""
+    registered: list[str] = []
+
+    def register(path: Path) -> None:
+        if registered:
+            raise RuntimeError("expect_real_home_change takes one path per test; "
+                               f"already registered {registered[0]}")
+        registered.append(check_expected_real_home_path(path))
+
+    def finish() -> None:
+        for key in registered:
+            store[key] = _stat_key(Path(key))
+
+    return register, finish
+
+
+#: Paths tests registered through :func:`expect_real_home_change`, with
+#: the state each registering test left them in. Read once, by
+#: ``_guard_real_home`` at the end of the session.
+_EXPECTED_REAL_HOME_CHANGES: dict[str, tuple[int, int] | None] = {}
+
+
+@pytest.fixture
+def expect_real_home_change():
+    """Opt-in for a test that changes ONE exact guarded real-home file on
+    purpose, e.g. the live e2e restart test: ``systemctl --user restart
+    aipager`` makes the new daemon rewrite
+    ``~/.local/share/aipager/daemon.lock``. Call the yielded function
+    with that path before causing the change. When the test ends, the
+    path's state is recorded; ``_guard_real_home`` then ignores the path
+    only while it is still in that state (:func:`real_home_changes`).
+    Nothing is exempt by default, and one registration per test."""
+    register, finish = real_home_change_registrar(_EXPECTED_REAL_HOME_CHANGES)
+    yield register
+    finish()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -373,19 +453,22 @@ def _guard_real_home():
     adds re-opens the hole silently. This turns that silence into a
     failure. Paths computed inline rather than as module constants
     (e.g. the daemon lock in ``cli/daemon.py``) are only caught here.
+    The one exception is a path a test registered through
+    :func:`expect_real_home_change`, left as that test left it.
     """
     before = _snapshot_guarded()
     yield
-    after = _snapshot_guarded()
-    changed = sorted(k for k, v in after.items() if before.get(k) != v)
-    changed += sorted(set(before) - set(after))
+    changed = real_home_changes(before, _snapshot_guarded(),
+                                _EXPECTED_REAL_HOME_CHANGES)
     if changed:
         pytest.fail(
             "tests mutated the operator's real config under $HOME:\n  "
             + "\n  ".join(changed)
             + "\n\nAdd the responsible path to _isolate_home_paths in "
-              "tests/conftest.py. (If you edited Claude Code settings "
-              "while the suite ran, this is a false positive.)"
+              "tests/conftest.py, or, for a live e2e test that changes it "
+              "on purpose, register it with expect_real_home_change. (If "
+              "you edited Claude Code settings while the suite ran, this "
+              "is a false positive.)"
         )
 
 
