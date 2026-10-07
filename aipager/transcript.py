@@ -253,7 +253,9 @@ def _content_text(content) -> str:
         parts = []
         for block in content:
             if isinstance(block, dict) and block.get("type") == "text":
-                parts.append(block.get("text", ""))
+                text = block.get("text", "")
+                if isinstance(text, str):  # a hostile line's never joins
+                    parts.append(text)
             elif isinstance(block, str):
                 parts.append(block)
         return "\n".join(parts)
@@ -279,7 +281,10 @@ def turn_appears_complete(transcript_path: str) -> bool:
     if not transcript_path:
         return False
     try:
-        with open(transcript_path, "r") as f:
+        # Undecodable bytes are replaced, never raised: the line then
+        # fails to parse and is skipped like a torn one.
+        with open(transcript_path, "r", encoding="utf-8",
+                  errors="replace") as f:
             tail = deque(f, maxlen=40)
     except (FileNotFoundError, PermissionError, OSError):
         return False
@@ -290,8 +295,11 @@ def turn_appears_complete(transcript_path: str) -> bool:
             continue
         try:
             entry = json.loads(line)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, RecursionError):
+            # A torn line, or one nested past the parser's depth.
             continue
+        if not isinstance(entry, dict):
+            continue  # a bare number, string or null is no entry at all
 
         etype = entry.get("type")
         # Hook/bookkeeping records carry no turn signal — skip past them.
@@ -306,6 +314,9 @@ def turn_appears_complete(transcript_path: str) -> bool:
             continue
 
         msg = entry.get("message") or {}
+        if not isinstance(msg, dict):
+            # A turn entry of an unknown shape: don't risk a premature idle.
+            return False
         if etype == "assistant":
             # tool_use → paused to call a tool, still mid-turn.
             # end_turn / stop_sequence / max_tokens / None → turn finished.

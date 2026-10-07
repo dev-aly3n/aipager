@@ -746,7 +746,17 @@ class LifecycleMixin:
             has_turn = False
         # Adopt only on evidence: a missing or empty transcript says
         # nothing about a turn, and the card is closed instead.
-        return has_turn and not turn_appears_complete(tp)
+        if not has_turn:
+            return False
+        try:
+            return not turn_appears_complete(tp)
+        except Exception as exc:  # noqa: BLE001 - never block the start
+            # A transcript that cannot be read is no evidence of a running
+            # turn either: the card is closed as before 8.101 (adopting on
+            # no evidence could leave a BUSY session no Stop ever ends).
+            log.warning("[%s] transcript not readable at startup - %s: %s",
+                        sess.label, type(exc).__name__, exc)
+            return False
 
     def _adopt_running_card(self, name: str, sess: TrackedSession) -> None:
         """Take over a restored card whose turn is still running (roadmap
@@ -1024,16 +1034,19 @@ class LifecycleMixin:
             if rec is None:
                 continue
             sess.restored_open_prompt = None  # read once
+            loaded_status = sess.status
             try:
                 was_restored = self._restore_open_prompt(
                     name, sess, rec, live_names)
             except Exception as exc:  # noqa: BLE001 - never block the start
                 # Dropped, never a daemon that dies on every start: the
-                # session is left to the card handling below (8.101).
+                # session is left to the card handling below (8.101), in
+                # the status it was loaded with.
                 log.warning("[%s] saved permission prompt dropped - %s: %s",
                             sess.label, type(exc).__name__, exc)
                 sess.pending_permission = None
                 sess.pending_prompt_msg = None
+                sess.status = loaded_status
                 was_restored = False
             if was_restored:
                 restored.add(name)
@@ -1083,12 +1096,21 @@ class LifecycleMixin:
                 sess.busy_msg_id = None
                 outcomes["skipped_blocked"] = outcomes.get("skipped_blocked", 0) + 1
                 continue
-            if name in live_names and self._turn_still_running(sess):
-                self._adopt_running_card(name, sess)
-                outcomes["adopted"] = outcomes.get("adopted", 0) + 1
-                continue
-            sess.restored_card_started_wall = 0.0  # only an adoption reads it
-            outcome = await self._recover_busy_message(bot, name, sess, live_names)
+            try:
+                if name in live_names and self._turn_still_running(sess):
+                    self._adopt_running_card(name, sess)
+                    outcomes["adopted"] = outcomes.get("adopted", 0) + 1
+                    continue
+                sess.restored_card_started_wall = 0.0  # only an adoption reads it
+                outcome = await self._recover_busy_message(
+                    bot, name, sess, live_names)
+            except Exception as exc:  # noqa: BLE001 - never block the start
+                # One session's failure never stops the others' recovery
+                # or the daemon's start; its card is left as it is.
+                log.warning("[%s] busy card %s not recovered - %s: %s",
+                            sess.label, sess.busy_msg_id,
+                            type(exc).__name__, exc)
+                outcome = "error:" + type(exc).__name__
             key = outcome.split(":", 1)[0]  # "error:foo" → "error"
             outcomes[key] = outcomes.get(key, 0) + 1
             if outcome == "blocked":
