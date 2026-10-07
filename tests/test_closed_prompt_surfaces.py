@@ -181,3 +181,32 @@ def test_an_invalid_separate_record_does_not_close_the_card():
 
     loaded = _saved_and_loaded(lambda r, s: _inline_wait(r, s), edit)
     assert not loaded.prompt_known_closed(77)
+
+
+def test_a_stale_busy_prompt_is_not_written_closed():
+    """A BUSY session still holding ``pending_permission`` (a stale BUSY,
+    or the hook-deadline race) on its busy card: the dialog may still be
+    up, so the file must not list the card as closed (review
+    rev-iter3-001); after a restart its Allow still types."""
+    def build(reg, sess):
+        reg.transition(NAME, Status.BUSY)
+        sess.busy_msg_id = 77
+        sess.pending_permission = {
+            "tool_summary": "Bash: ls",
+            "tool_info": {"name": "Bash", "input": {"command": "ls"},
+                          "summary": "Bash: ls", "tool_use_id": "toolu_1"},
+            "wait_started_at": time.monotonic(),
+            "shown_wall": time.time() - 5, "hook_reply": None}
+        assert sess.status is Status.BUSY  # premise
+
+    seen = {}
+
+    def edit(sd):
+        seen.update(sd)
+
+    loaded = _saved_and_loaded(build, edit)
+    # The premise: the card was saved, and no prompt with it.
+    assert seen["busy_msg_id"] == 77
+    assert "open_prompt" not in seen
+    assert 77 not in seen.get("closed_prompt_msgs", [])
+    assert not loaded.prompt_known_closed(77)
