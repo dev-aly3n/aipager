@@ -159,9 +159,10 @@ Buttons on the pinned message:
   the meantime you get an "already answered" toast instead, and a copy
   (or the original prompt) tapped after its prompt was answered elsewhere
   is refused the same way — it never answers a later prompt. After a
-  daemon restart aipager no longer knows which prompt an old copy showed,
-  so while a prompt is waiting, a tap on anything but its own message is
-  refused with "this prompt has expired". Anyone who
+  daemon restart, the prompt that was waiting keeps working from the
+  busy card or from its own message, but aipager no longer knows which
+  prompt an older copy showed, so a tap on a copy the bar re-sent before
+  the restart is refused with "this prompt has expired". Anyone who
   may answer the prompt may use it; nobody else.
 - **📱 App** opens the Mini App, in your DM, while the Mini App is up.
 
@@ -321,7 +322,12 @@ layout says. After a daemon restart, a card whose turn is still running
 is kept and keeps ticking right away, its time counting on from when the
 turn started, and the session shows as working until the turn ends; any
 other card left from before the restart is closed ("Daemon restarted",
-Stop removed).
+Stop removed). A session that was waiting on a permission prompt or on a
+single question from Claude comes back waiting, not working: its card
+and the pinned bar say it needs you and the prompt's buttons still
+answer it, unless the transcript shows it was answered in the terminal
+meanwhile. Questions with several parts or several choices are left to
+the terminal.
 
 A turn Claude starts **by itself** — a background agent reporting back
 with a `<task-notification>` when no job is open — gets its busy card
