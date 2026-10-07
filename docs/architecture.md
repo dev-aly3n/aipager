@@ -160,6 +160,10 @@ folder is set and `HOME` is your real home folder, when the folder is
 not an absolute path to a folder you own, or when it is too long for a
 socket path.
 
+`/update` and `/restart` are not isolated: they act on the installed
+aipager package and the `aipager.service` unit, so never send them to a
+test instance.
+
 `AIPAGER_TELEGRAM_API_BASE` (for example `http://127.0.0.1:41234`)
 sends every Bot API request and file download to that address instead
 of `https://api.telegram.org`. It must be this machine (`localhost` or
