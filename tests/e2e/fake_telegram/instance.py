@@ -156,7 +156,10 @@ def write_shims(bin_dir: Path, python: str, repo: Path, claude_mode: str) -> Non
         p.chmod(0o755)
 
 
-_STRIP_PREFIXES = ("CLAUDE", "AIPAGER_", "MINIAPP_")
+# ANTHROPIC_*: a real-mode session authenticates only from the token the
+# harness copies into the instance's daemon.env, never from an API key,
+# base URL or model setting in the operator's shell.
+_STRIP_PREFIXES = ("CLAUDE", "ANTHROPIC_", "AIPAGER_", "MINIAPP_")
 _STRIP_EXACT = {"OBSERVER_BOTS", "CREDENTIALS_DIRECTORY", "PYTHONPATH",
                 "XDG_RUNTIME_DIR"}
 
