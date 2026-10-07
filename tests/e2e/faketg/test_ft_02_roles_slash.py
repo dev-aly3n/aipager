@@ -10,6 +10,8 @@ not send a project slash command; an admin may.
 
 from __future__ import annotations
 
+import pytest
+
 from tests.e2e.fake_telegram import instance as fti
 from tests.e2e.faketg import flows
 
@@ -99,3 +101,26 @@ def test_slash_rule_user_refused_admin_allowed(fresh):
     prompt = flows.prompt_turn(inst, G, fti.DAVE, name, "/ft5 /ftcmd", "/ftcmd")
     assert prompt.strip().startswith("/ftcmd")
 
+
+@pytest.mark.xfail(strict=True, reason=(
+    "Finding A: a permission prompt before the busy card loses the hook reply "
+    "channel and the 'by @bob' line (notify.py separate-message path)"))
+def test_allow_by_a_user_is_attributed_when_the_prompt_beats_the_busy_card(fresh):
+    """Scenario 2's Allow by bob WITHOUT the stand-in's hold: the tool call
+    comes the moment the prompt arrives, before the turn's busy card is
+    sent, so the daemon shows the prompt as a separate message. Pins
+    Finding A: that path has no hook reply channel and posts no "Allowed
+    by @bob" line. Flips to XPASS (a failure, strict) once it is fixed."""
+    inst, fake = fresh, fresh.fake
+    name = inst.new_session(G, fti.BOB, "ft15")
+    flows.settle(fake)
+    since = fake.mark()
+    inst.release_tools(name)  # no hold: the stand-in asks at once
+    fake.inject_text(G, fti.user(fti.BOB),
+                     f"{BOT} Use the Write tool to create ft15.txt containing hi")
+    card, allow = fake.wait_button(G, "Allow", since=since, timeout=120)
+    since = fake.mark()
+    cb = fake.inject_callback(fti.user(fti.BOB), card, allow)
+    fake.wait_answer(cb)
+    flows.wait_text(fake, G, "Allowed by @bob", since=since, timeout=30)
+    fti.wait_until(inst.file_in_project("ft15.txt").exists, 60, "the file bob allowed")
