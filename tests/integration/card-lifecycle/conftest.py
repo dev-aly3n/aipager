@@ -115,6 +115,8 @@ class CardChat:
         self.cards: dict[int, dict] = {}
         #: answer msg_id -> reply_to
         self.answers: dict[int, object] = {}
+        #: answer msg_id -> its text (the markdown of a rich answer)
+        self.answer_texts: dict[int, str] = {}
         #: msg_id -> [emoji, ...]
         self.reactions: dict[int, list[str]] = {}
 
@@ -124,6 +126,10 @@ class CardChat:
 
     def record(self, endpoint: str) -> None:
         self.calls.append((endpoint, self.clock()))
+
+    def sent_texts(self) -> list[str]:
+        """Every answer's text, in the order sent."""
+        return list(self.answer_texts.values())
 
     def live_cards(self) -> list[int]:
         """Cards still showing their Stop button."""
@@ -275,6 +281,9 @@ def rich_chat(monkeypatch, card_chat):
                     "text": text, "texts": [text], "t": card_chat.clock()}
             else:
                 card_chat.answers[msg_id] = payload.get("reply_to_message_id")
+                card_chat.answer_texts[msg_id] = (
+                    (payload.get("rich_message") or {}).get("markdown")
+                    or payload.get("text") or "")
         result = {"message_id": msg_id or 4242}
         if "reply_markup" in payload:
             result["reply_markup"] = payload["reply_markup"]

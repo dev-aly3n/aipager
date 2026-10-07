@@ -408,8 +408,9 @@ def test_restart_finalizes_a_recorded_card_of_an_idle_session(
 
 def test_restart_adopts_a_card_whose_turn_still_runs(replay, vloop,
                                                      monkeypatch):
-    """Mid-turn at the restart: the card is kept, its turn's next hook
-    resumes its animation, and that turn's Stop settles it."""
+    """Mid-turn at the restart: the card is kept and ticks (since 8.101
+    from the adoption itself, see test_adopted_card_busy.py), the turn's
+    next hook leaves it animating, and that turn's Stop settles it."""
     _layout()
     r = replay
     sess, card = _restored_card(r, monkeypatch, finished=False)
@@ -432,13 +433,23 @@ def test_restart_adopts_a_card_whose_turn_still_runs(replay, vloop,
     assert sess.busy_msg_id is None
 
 
-def test_adopted_card_with_no_hook_is_settled_by_the_sweep(replay, vloop,
-                                                           monkeypatch):
+def test_adopted_card_left_unfinished_is_settled_by_the_sweep(replay, vloop,
+                                                              monkeypatch):
+    """The adoption window's remaining job (8.101): the adopted session is
+    BUSY, which the sweep never touches; should it leave BUSY with the card
+    not finished, the card is settled once the window has run out."""
     r = replay
     sess, card = _restored_card(r, monkeypatch, finished=False)
     _run(vloop, r.bot.recover_sessions())
     now = vloop.time()
     assert sess.card_adopt_until == now + lifecycle_mod.CARD_ADOPT_SECONDS
+    assert sess.status is Status.BUSY
+    sess.card_adopt_until = now - 1  # past the window, still BUSY
+    assert orphan_card_due(sess, now + ORPHAN_CARD_GRACE_SECONDS) is False
+    # Out of BUSY without a finish: the window protects it, then not.
+    r.bot._stop_animation(sess)
+    sess.status = Status.IDLE
+    sess.card_adopt_until = now + lifecycle_mod.CARD_ADOPT_SECONDS
     assert orphan_card_due(sess, now) is False  # adopted
     assert orphan_card_due(sess, now + ORPHAN_CARD_GRACE_SECONDS) is False
     sess.card_adopt_until = now - 1  # the window ran out, no hook came
@@ -446,8 +457,8 @@ def test_adopted_card_with_no_hook_is_settled_by_the_sweep(replay, vloop,
     assert orphan_card_due(sess, now + ORPHAN_CARD_GRACE_SECONDS) is True
     _run(vloop, r.bot.notify(sess, "orphan_card", {}))
     assert r.chat.cards[card]["stop"] is False
-    # This process has none of that turn's rows: the restart's own line.
-    assert "Daemon restarted" in r.chat.cards[card]["text"]
+    # Adopted as the running turn's card (8.101), it is settled like one.
+    assert "Done" in r.chat.cards[card]["text"]
     assert sess.busy_msg_id is None
 
 

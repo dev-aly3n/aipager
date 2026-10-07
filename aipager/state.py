@@ -489,6 +489,9 @@ class TrackedSession:
     # is shifted forward while a permission prompt is waiting so the
     # "thought Xs" display excludes that wait — shifting this one would
     # let the idle-recovery guard accept a pre-turn transcript again.
+    # (One exception, harmless: a card adopted at a restart (8.101) sets it
+    # to the saved card anchor, which is shifted by the waits answered
+    # before the save; a later stamp only makes that guard stricter.)
     busy_started_wall: float = 0.0
     # Wall-clock stamp of the most recent entry into BUSY from any status
     # other than INTERACTIVE — INCLUDING the background-job re-entries
@@ -1053,10 +1056,17 @@ class TrackedSession:
     notify_in_flight: int = 0
     orphan_card_seen_at: float = 0.0
     # A card restored from disk whose turn looked still running at startup
-    # is ADOPTED until this monotonic deadline (roadmap 8.55): the first
-    # hook of that turn resumes its animation, and the orphan sweep leaves
-    # it alone until then. Transient.
+    # is ADOPTED (roadmap 8.55): the orphan sweep leaves it alone until
+    # this monotonic deadline. Since 8.101 the adoption makes the session
+    # BUSY with the card ticking at once (``_adopt_running_card``), so the
+    # deadline only matters if it leaves BUSY unfinished. Transient.
     card_adopt_until: float = 0.0
+    # The persisted card's clock anchor as the previous run left it
+    # (``card_started_wall`` in the state file, see ``card_started_wall``
+    # below): read once by the adoption at startup (roadmap 8.101) so the
+    # adopted card's elapsed counter continues from the turn's real start.
+    # 0.0 when the file had none. Transient.
+    restored_card_started_wall: float = 0.0
     # Cards owed a delete that has not landed yet (a deferred tool-less
     # delete, an orphan's). Persisted, so a restart that kills the delete
     # still removes the card at the next startup (roadmap 8.55).
@@ -1841,6 +1851,19 @@ class TrackedSession:
         return (self.send_now_pressed_at > 0.0
                 and time.monotonic() - self.send_now_pressed_at
                 <= SEND_NOW_DEQUEUE_WINDOW)
+
+    def card_started_wall(self, now_mono: float, now_wall: float) -> float:
+        """The live busy card's clock anchor (``busy_started_at``, the
+        instant its elapsed counter counts from) as wall-clock seconds, or
+        0.0 when no card is up or its clock never started. Monotonic stamps
+        mean nothing to the next process; this is what the state file keeps
+        so a card adopted after a restart (roadmap 8.101) goes on counting
+        from the same instant (permission waits answered by then already
+        discounted; one still open at the save counts as time so far)."""
+        msg_id = self.busy_msg_id
+        if not msg_id or msg_id < 0 or not self.busy_started_at:
+            return 0.0
+        return now_wall - (now_mono - self.busy_started_at)
 
     def card_orphaned(self, now: float, *, own_notify: int = 0,
                       own_lock: bool = False) -> bool:
@@ -2980,6 +3003,10 @@ class SessionRegistry:
                 elif f == "pending_card_deletes":
                     val = [m for m in val if type(m) is int and m > 0]
                 d[f] = val
+            # Roadmap 8.101: computed, not a field (see card_started_wall).
+            started_wall = sess.card_started_wall(time.monotonic(), time.time())
+            if started_wall > 0:
+                d["card_started_wall"] = started_wall
             sessions[name] = d
 
         # Cap _msg_map: keep only the most recent entries (by insertion order)
@@ -3148,6 +3175,16 @@ class SessionRegistry:
                     sd.get("answer_delivered_wall") or 0.0)
             except (TypeError, ValueError):
                 sess.answer_delivered_wall = 0.0
+            # Roadmap 8.101: the card's clock anchor, only with its card.
+            # An unusable value restores as 0.0 (the adoption then counts
+            # from itself).
+            try:
+                started_wall = float(sd.get("card_started_wall") or 0.0)
+            except (TypeError, ValueError):
+                started_wall = 0.0
+            # (A NaN or an infinity fails the range test too.)
+            if sess.busy_msg_id and 0.0 < started_wall <= time.time():
+                sess.restored_card_started_wall = started_wall
             # A stamp in the future (a hand edit, or the clock stepped back
             # since the save) would make every late answer "predate" it.
             if not 0.0 <= sess.answer_delivered_wall <= time.time():

@@ -318,9 +318,10 @@ runs never adds a second card for that turn, and a card whose turn has
 ended no longer keeps its Stop button: if nothing closed it (a lost
 Stop hook, a restart), aipager closes it after 30 seconds, as your
 layout says. After a daemon restart, a card whose turn is still running
-is kept and picks up again at that turn's next step (closed after 3
-minutes if nothing more is heard); any other card left from before the
-restart is closed ("Daemon restarted", Stop removed).
+is kept and keeps ticking right away, its time counting on from when the
+turn started, and the session shows as working until the turn ends; any
+other card left from before the restart is closed ("Daemon restarted",
+Stop removed).
 
 A turn Claude starts **by itself** — a background agent reporting back
 with a `<task-notification>` when no job is open — gets its busy card

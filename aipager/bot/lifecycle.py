@@ -54,7 +54,7 @@ from aipager.config import (
     TELEGRAM_OVERALL_MAX_RATE, TELEGRAM_OVERALL_TIME_PERIOD,
     TELEGRAM_PRIVATE_MAX_RATE,
 )
-from aipager.state import TrackedSession
+from aipager.state import Status, TrackedSession
 from aipager.bot.transport import resolve_chat_id
 from aipager.transcript import turn_appears_complete
 
@@ -86,9 +86,10 @@ from aipager.bot.transport import (  # noqa: F401
     _truncate_diff,
 )
 
-# How long a busy card restored mid-turn is kept waiting for that turn's
-# next hook before the orphan sweep settles it (roadmap 8.55). A long
-# tool call fires no hook until it ends, so this is generous.
+# How long the orphan sweep leaves a busy card restored mid-turn alone
+# (roadmap 8.55). Since 8.101 the adopted session is BUSY, which the sweep
+# never touches; this still covers one that leaves BUSY without its card
+# being finished.
 CARD_ADOPT_SECONDS = 180.0
 
 if TYPE_CHECKING:
@@ -746,6 +747,78 @@ class LifecycleMixin:
         # nothing about a turn, and the card is closed instead.
         return has_turn and not turn_appears_complete(tp)
 
+    def _adopt_running_card(self, name: str, sess: TrackedSession) -> None:
+        """Take over a restored card whose turn is still running (roadmap
+        8.55, 8.101): the session is BUSY again and the card ticks at once,
+        its elapsed counter going on from the turn's real start (the anchor
+        the previous run saved, ``card_started_wall``; with none, from the
+        adoption).
+
+        Waiting for the turn's next hook instead (8.55) left the card
+        frozen and the session IDLE for the rest of a text-only answer,
+        which fires no hook before its Stop: a message sent meanwhile was
+        handled as for an idle session, and an answer longer than
+        CARD_ADOPT_SECONDS lost its card to the orphan sweep.
+
+        A misjudged adoption (the transcript ends mid-turn while Claude
+        waits on something only the terminal can answer, such as its own
+        permission dialog once the hook gave up) is a BUSY session whose
+        Stop does not come, and is released like any other: idle-recovery
+        as soon as the transcript shows the turn finished (written after
+        this restart: its ``written_this_turn`` guard), else the stale-BUSY
+        note after STALE_BUSY_TIMEOUT of silence counted from here
+        (``last_hook_at``), whose Stop button ends the turn. Not the
+        CARD_ADOPT_SECONDS window: the orphan sweep never takes a BUSY
+        session's card (``card_orphaned``), so the window only still covers
+        a session that leaves BUSY without its card being finished.
+        """
+        now_mono = time.monotonic()
+        sess.card_adopt_until = now_mono + CARD_ADOPT_SECONDS
+        # Its socket is live: not a GONE entry for /resume any more.
+        sess.gone_at = None
+        if sess.status in (Status.GONE, Status.UNKNOWN, Status.IDLE):
+            # The entry a turn's first PreToolUse after a restart makes
+            # (hook_receiver), the path an adopted card resumed on before.
+            # (No job state survives a restart, so preserve_job_state is
+            # False here; kept identical to that path on purpose.)
+            self.registry.transition(name, Status.BUSY,
+                                     preserve_job_state=sess.job_work_running())
+        if sess.status is Status.BUSY:
+            # The running turn's own card (roadmap 8.57 R1): a message sent
+            # meanwhile asks for "the running turn's card" and must find
+            # this one, not reclaim it as an earlier job's waiting card.
+            sess.card_turn_seq = sess.turn_seq
+            # And no turn start is coming to clear the transition's "a new
+            # turn is about to start" mark: left set, it would keep a card
+            # the flood gate refuses later in this turn owed for good.
+            sess.job_reclaim_pending = False
+        # A sign of life, so the stale-BUSY note measures silence from the
+        # adoption and not from before the restart.
+        sess.last_hook_at = now_mono
+        started_wall = sess.restored_card_started_wall
+        sess.restored_card_started_wall = 0.0
+        elapsed = time.time() - started_wall if started_wall else -1.0
+        if 0.0 <= elapsed < now_mono:
+            # The turn's start as the card counted it (answered permission
+            # waits discounted): the card's counter, the answer's time and
+            # the transcript reads that skip earlier turns' text
+            # (turn_entered_wall) all go from it, across the restart.
+            sess.busy_started_at = now_mono - elapsed
+            sess.busy_started_wall = sess.turn_entered_wall = started_wall
+            clock = f"its clock at {elapsed:.0f}s"
+        elif not sess.busy_started_at:
+            # No start the clocks can place (a state file written before
+            # 8.101): counted from the adoption, never left unset, because
+            # idle-recovery measures how long a session has been BUSY from
+            # this stamp and would otherwise never release it.
+            sess.busy_started_at = now_mono
+            clock = "its clock restarted (no saved start)"
+        else:
+            clock = "its clock kept"
+        log.info("[%s] busy card %d adopted — the turn looks still running; "
+                 "working again, %s", sess.label, sess.busy_msg_id, clock)
+        self._resume_animation_if_dead(sess, reason="card adopted at startup")
+
     async def recover_sessions(self) -> None:
         """Clean up orphaned busy messages from a previous daemon lifecycle.
 
@@ -757,12 +830,12 @@ class LifecycleMixin:
         startup is visible in `aipager logs`.
 
         Roadmap 8.55: a live session whose transcript shows its turn still
-        running keeps its card instead — ADOPTED for
-        ``CARD_ADOPT_SECONDS``: the turn's next hook resumes its animation
-        (the ``tool_use`` path) and its Stop finishes it as usual; with no
-        hook by then, the session monitor's orphan sweep settles it. And a
-        card a previous run owed a delete (``pending_card_deletes``) is
-        deleted now.
+        running keeps its card instead — ADOPTED: since 8.101 the session
+        is BUSY again at once and the card ticks on
+        (:meth:`_adopt_running_card`, which also says how a misjudged
+        adoption is released); its Stop finishes it as usual. And a card a
+        previous run owed a delete (``pending_card_deletes``) is deleted
+        now.
         """
         if not self._app:
             return
@@ -795,12 +868,10 @@ class LifecycleMixin:
                 outcomes["skipped_blocked"] = outcomes.get("skipped_blocked", 0) + 1
                 continue
             if name in live_names and self._turn_still_running(sess):
-                sess.card_adopt_until = time.monotonic() + CARD_ADOPT_SECONDS
-                log.info("[%s] busy card %d adopted — the turn looks still "
-                         "running; its next hook resumes it", sess.label,
-                         sess.busy_msg_id)
+                self._adopt_running_card(name, sess)
                 outcomes["adopted"] = outcomes.get("adopted", 0) + 1
                 continue
+            sess.restored_card_started_wall = 0.0  # only an adoption reads it
             outcome = await self._recover_busy_message(bot, name, sess, live_names)
             key = outcome.split(":", 1)[0]  # "error:foo" → "error"
             outcomes[key] = outcomes.get(key, 0) + 1
