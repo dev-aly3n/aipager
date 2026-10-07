@@ -96,6 +96,29 @@ def test_watchdog_demoted_prompt_in_a_suppressed_chat_still_answers(
     assert toast != "already answered"
 
 
+def test_a_second_tap_after_a_watchdog_demoted_answer_types_nothing(
+        replay, vloop, tmp_path, suppressed):
+    """The demoted prompt answered by a tap on the card is closed: a
+    double tap types nothing more."""
+    r = replay
+
+    async def scenario():
+        card = await _inline_prompt(r, tmp_path)
+        allow, deny = r.cb(card, "allow"), r.cb(card, "deny")
+        await _demote(r)
+        await r.tap(card, allow)
+        await asyncio.sleep(1)
+        before = len(r.keys)
+        toast = await r.tap(card, deny)
+        await asyncio.sleep(1)
+        return toast, r.keys[:before], r.keys[before:]
+
+    toast, first, second = _run(vloop, scenario())
+    assert first == ["Enter"]  # premise: the first tap answered
+    assert second == []
+    assert toast == "already answered"
+
+
 def test_watchdog_demoted_prompt_answers_in_an_animated_chat_too(
         replay, vloop, tmp_path):
     """Not suppressed: the card repaints to Stop, but a client still

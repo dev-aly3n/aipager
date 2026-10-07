@@ -1876,8 +1876,11 @@ class CallbackDispatchMixin:
                         sess.busy_started_at += time.monotonic() - max(
                             wait_start, sess.busy_started_at)
                 # Answered: a later tap on this message is refused, after
-                # a restart too (8.102).
-                sess.mark_prompt_closed(tapped_id)
+                # a restart too (8.102). Only the separate prompt or the
+                # busy card (a prompt the watchdog stopped waiting on); any
+                # other message keeps its old handling.
+                if separate_perm or (tapped_id and tapped_id == sess.busy_msg_id):
+                    sess.mark_prompt_closed(tapped_id)
                 # Mark session as busy after user interaction
                 self.registry.transition(session_name, Status.BUSY)
                 log.info("[%s] %s (via=%s)", sess.label, verb, via or "n/a")
