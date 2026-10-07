@@ -34,6 +34,7 @@ from typing import Any, Callable
 from aiohttp import web
 
 from tests.e2e.fake_telegram import updates as U
+from tests.e2e.fake_telegram.redaction import redact
 
 SUPPORTED_METHODS = (
     "getMe", "getUpdates", "deleteWebhook", "getChat", "sendMessage",
@@ -686,10 +687,13 @@ class FakeBotApi:
                 if predicate(c):
                     return c
             if time.monotonic() >= deadline:
-                tail = "\n  ".join(c.summary() for c in self.calls()[-20:])
                 raise AssertionError(f"timed out after {timeout}s waiting for {what}; "
-                                     f"last calls:\n  {tail}")
+                                     f"last calls:\n  {self._tail()}")
             time.sleep(0.05)
+
+    def _tail(self, n: int = 20) -> str:
+        """The last *n* calls, one line each, credentials redacted."""
+        return redact("\n  ".join(c.summary() for c in self.calls()[-n:]))
 
     def visible_messages(self, chat_id: int, *, include_users: bool = False) -> list[dict]:
         with self._lock:
@@ -732,9 +736,8 @@ class FakeBotApi:
             if found:
                 return found
             if time.monotonic() >= deadline:
-                tail = "\n  ".join(c.summary() for c in self.calls()[-20:])
                 raise AssertionError(f"no button {text_contains!r} in chat {chat_id} "
-                                     f"after {timeout}s; last calls:\n  {tail}")
+                                     f"after {timeout}s; last calls:\n  {self._tail()}")
             time.sleep(0.05)
 
     def reactions(self, chat_id: int, message_id: int) -> list[str]:

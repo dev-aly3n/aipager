@@ -40,6 +40,7 @@ from typing import Callable
 import yaml
 
 from tests.e2e.fake_telegram import updates as U
+from tests.e2e.fake_telegram.redaction import redact
 from tests.e2e.fake_telegram.server import FakeBotApi, FakeBotApiThread
 
 BOT_ID = 7000000001
@@ -64,7 +65,6 @@ REPO = Path(__file__).resolve().parents[3]
 STANDIN = Path(__file__).resolve().parent / "standin_claude.py"
 
 _SUN_PATH_MAX = 107
-_TOKEN_RE = re.compile(r"\d{5,}:[A-Za-z0-9_-]{20,}")
 
 
 def user(uid: int) -> dict:
@@ -246,12 +246,6 @@ def assert_socket_lengths(inst_dir: Path, labels: list[str]) -> None:
         assert n <= _SUN_PATH_MAX, f"socket path too long ({n} bytes): {p}"
 
 
-def redact(text: str) -> str:
-    """Remove anything token-shaped (used on every log or screen we show)."""
-    from aipager.errors import redact_token
-    return _TOKEN_RE.sub("<redacted>", redact_token(text))
-
-
 # ---------------------------------------------------------------------------
 # Process discovery and kill (PIDs only, never by pattern).
 # ---------------------------------------------------------------------------
@@ -363,7 +357,7 @@ def wait_until(cond: Callable[[], object], timeout: float, what: str,
             return v
         if time.monotonic() >= deadline:
             extra = ("\n" + detail()) if detail else ""
-            raise AssertionError(f"timed out after {timeout}s waiting for {what}{extra}")
+            raise AssertionError(redact(f"timed out after {timeout}s waiting for {what}{extra}"))
         time.sleep(interval)
 
 

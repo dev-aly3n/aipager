@@ -306,3 +306,63 @@ def test_real_install_check_catches_a_changed_file_and_a_dead_daemon(tmp_path, m
         if sleeper.poll() is None:
             sleeper.kill()
             sleeper.wait(10)
+
+
+# A made-up OAuth-token shape and a bot-token shape (neither is real).
+_OAUTH = "sk-ant-oat01-" + "Zx9_-" * 12
+_BOT = "7000000009:" + "AAFakeSecretPartForRedaction_-x"
+_ODD = "odd-shaped-secret-value-0042"
+
+
+def _leaky() -> str:
+    return (f"auth {_OAUTH} then https://api.telegram.org/bot{_BOT}/getMe "
+            f"and {_BOT} and {_ODD} end")
+
+
+def _assert_clean(text: str) -> None:
+    for secret in (_OAUTH, _OAUTH[len("sk-ant-"):], _BOT, _BOT.split(":")[1], _ODD):
+        assert secret not in text, "a credential survived redaction"
+    assert "end" in text
+
+
+def test_redact_removes_oauth_bot_and_literal_env_tokens(monkeypatch):
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    out = fti.redact(_leaky())
+    assert "sk-ant-<redacted>" in out
+    for secret in (_OAUTH, _OAUTH[len("sk-ant-"):], _BOT, _BOT.split(":")[1]):
+        assert secret not in out
+    assert _ODD in out  # not token-shaped and not the configured credential
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", _ODD)
+    _assert_clean(fti.redact(_leaky()))
+
+
+def test_every_harness_output_path_is_redacted(root, tmp_path, monkeypatch):
+    """log_tail, wait_until's message, the fake's last-calls tails, the
+    teardown's KEEP_LOG copy: none carries a credential."""
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", _ODD)
+    inst = fti.TestInstance()
+    inst.root = root
+    inst.inst_dir.mkdir()
+    inst.log_path.write_text("start\n" + _leaky() + "\n")
+    _assert_clean(inst.log_tail())
+    with pytest.raises(AssertionError) as exc:
+        fti.wait_until(lambda: False, 0, f"x {_OAUTH}", detail=_leaky)
+    _assert_clean(str(exc.value))
+
+    from tests.e2e.fake_telegram.server import FakeBotApi
+    api = FakeBotApi(fti.FAKE_TOKEN, fti.BOT_ID, fti.BOT_USERNAME)
+    api._record("sendMessage", {"chat_id": fti.GROUP_ID, "text": _leaky()}, {}, 200, {})
+    with pytest.raises(AssertionError) as exc:
+        api.wait_for(lambda c: False, timeout=0)
+    _assert_clean(str(exc.value))
+    with pytest.raises(AssertionError) as exc:
+        api.wait_button(fti.GROUP_ID, "Allow", timeout=0)
+    _assert_clean(str(exc.value))
+
+    keep = tmp_path / "kept"
+    monkeypatch.setenv("AIPAGER_E2E_FAKETG_KEEP_LOG", str(keep))
+    inst.stop()
+    copies = list(keep.iterdir())
+    assert len(copies) == 1
+    _assert_clean(copies[0].read_text())
+    assert not root.exists()
