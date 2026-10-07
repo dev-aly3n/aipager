@@ -19,6 +19,7 @@ notify path and the real tap handler:
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -183,11 +184,15 @@ def test_allow_on_a_separate_prompt_answers_through_the_hook_and_names_who(
         world, run_async):
     sess = world.session()
     world.prompt(sess, run_async=run_async)
-    sess.busy_started_at = 1000.0
+    # The card's clock started before the prompt. Relative to the real
+    # clock, never a literal: monotonic is the machine's uptime, and a CI
+    # runner booted minutes ago reads below any fixed "earlier" value.
+    started = time.monotonic() / 2
+    sess.busy_started_at = started
     q = world.tap(run_async, GROUP, BOB, "allow")
 
     assert world.keys == []                           # nothing typed
-    assert sess.busy_started_at > 1000.0              # the wait is not "thinking"
+    assert sess.busy_started_at > started             # the wait is not "thinking"
     assert [d for _r, d in world.decisions] == [{"behavior": "allow"}]
     assert world.decisions[0][0] == HOOK
     lines = world.lines(GROUP)

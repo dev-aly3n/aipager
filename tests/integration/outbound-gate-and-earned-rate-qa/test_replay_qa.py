@@ -22,7 +22,6 @@ evidence, and this row was reported vacuous three times before it bit.
 from __future__ import annotations
 
 import asyncio
-import time
 
 import pytest
 from telegram.error import RetryAfter
@@ -100,11 +99,16 @@ class _Sent:
         return True
 
 
-def _busy(label: str, msg_id: int) -> TrackedSession:
+def _busy(label: str, msg_id: int, now: float) -> TrackedSession:
+    """A session BUSY since *now* on the replay's own clock. Never the real
+    monotonic clock: its value is the machine's uptime, so the card's age
+    (now - busy_started_at, read on the virtual loop) would depend on how
+    long the box had been up, a fresh CI runner making every card days old
+    (slowest edit tier, no ban: red on GitHub since 2026-09-27)."""
     sess = TrackedSession(name=f"claude-{label}", label=label,
                           status=Status.BUSY)
     sess.busy_msg_id = msg_id
-    sess.busy_started_at = time.monotonic()
+    sess.busy_started_at = now
     sess.stream_last_rendered = ""
     sess.scope_kind = "dm"
     sess.scope_chat_id = CHAT
@@ -163,7 +167,7 @@ def replay(vloop, penalised_telegram, replay_limiter, mk_bot, monkeypatch):
         bot = mk_bot()
         bot._app.bot = _ReplayBot(replay_limiter, penalised_telegram)
         bot._maybe_update_bot_name = _noop
-        cards = [_busy("jim", 10), _busy("bob", 11)]
+        cards = [_busy("jim", 10, vloop.time()), _busy("bob", 11, vloop.time())]
         # One session per prompt. The held buffer keeps ONE ENTRY PER
         # SESSION ("newest per turn wins"), so nine prompts to a single
         # session would collapse to one answer and the row would be
