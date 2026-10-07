@@ -327,9 +327,14 @@ single question from Claude comes back waiting, not working: its card
 and the pinned bar say it needs you and the prompt's buttons still
 answer it, unless the transcript shows it was answered in the terminal
 meanwhile. Questions with several parts or several choices, and prompts
-asked by a subagent, are left to the terminal. Once the card's
-prompt is answered, its old Allow and Deny buttons answer "already
-answered" and type nothing.
+asked by a subagent, are left to the terminal. Once a prompt is known
+to be over (answered by a tap or in the terminal, its turn ended, or not
+brought back by a restart because it was answered meanwhile or could not
+be saved and read back), its old answer buttons answer "already
+answered" and type nothing, after a restart too. A prompt nobody
+answered that aipager stopped waiting on (5 minutes with no news from
+Claude) is not known to be over, so its buttons still answer the
+dialog.
 
 A turn Claude starts **by itself** — a background agent reporting back
 with a `<task-notification>` when no job is open — gets its busy card
