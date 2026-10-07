@@ -8,13 +8,16 @@ plays Claude, for plumbing runs).
 
 Each module gets ONE isolated daemon (``faketg``) against its own fake
 Bot API, torn down at module end even when a test fails; ``fresh`` ends
-that daemon's sessions between tests. A session-wide autouse fixture
-records the operator's real files and daemon first and asserts at the
-end that nothing of theirs changed.
+that daemon's sessions between tests. A test that needs its own session
+environment builds its own daemon with ``own_faketg`` instead. A failed
+test's report names the daemon log of every instance alive at the time.
+A session-wide autouse fixture records the operator's real files and
+daemon first and asserts at the end that nothing of theirs changed.
 """
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -150,19 +153,69 @@ def _real_install_untouched():
 # One isolated daemon per module.
 # ---------------------------------------------------------------------------
 
-@pytest.fixture(scope="module")
-def faketg():
-    inst = fti.TestInstance(claude_mode=claude_mode())
+#: The instances alive right now, named in a failed test's report.
+LIVE: list = []
+
+
+@contextlib.contextmanager
+def faketg_instance(session_env: dict | None = None):
+    """An isolated daemon, built, started, and always torn down."""
+    inst = fti.TestInstance(claude_mode=claude_mode(), session_env=session_env)
+    LIVE.append(inst)
     try:
         inst.build()
         inst.start()
         yield inst
     finally:
         root = inst.root
-        inst.stop()
+        try:
+            inst.stop()
+        finally:
+            LIVE.remove(inst)
         if root is not None:
             assert not root.exists(), f"instance root left behind: {root}"
             assert not fti.pids_referencing(root / "i")
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if report.failed and LIVE:
+        report.sections.append(("fake-Telegram daemon log",
+                                "\n".join(inst.log_where() for inst in LIVE)))
+
+
+@pytest.fixture(scope="module")
+def faketg():
+    with faketg_instance() as inst:
+        yield inst
+
+
+@contextlib.contextmanager
+def own_instances():
+    """What ``own_faketg`` yields: a factory for ONE daemon of the test's
+    own, built with *session_env* (see ``fti.SESSION_ENV_ALLOWED``), torn
+    down on exit. Refused while another instance is alive: a module allows
+    one daemon at a time (do not combine with ``fresh``)."""
+    made: list = []
+    with contextlib.ExitStack() as stack:
+        def make(session_env: dict):
+            assert not made, "one own instance per test"
+            assert not LIVE, "own_faketg while another instance is alive"
+            inst = stack.enter_context(faketg_instance(session_env))
+            made.append(inst)
+            return inst
+        yield make
+        for inst in made:
+            assert inst.fake.unknown_methods == [], inst.fake.unknown_methods
+
+
+@pytest.fixture
+def own_faketg():
+    """A daemon of this test's own (see :func:`own_instances`)."""
+    with own_instances() as make:
+        yield make
 
 
 @pytest.fixture

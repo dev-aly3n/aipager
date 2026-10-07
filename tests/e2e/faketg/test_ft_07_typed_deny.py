@@ -8,9 +8,16 @@ and no Stop. The daemon must still settle the card as Denied and return
 the session to IDLE (it used to stay BUSY until its 900 s cap), whether
 the prompt was on the busy card or a separate message.
 
-Stand-in only: it can shorten the hook's wait for one session (real
-Claude runs with the instance's 120 s wait, and its timing decides where
-the prompt lands).
+Stand-in: the stand-in shortens the hook's wait for one session (a
+``standin-hook-deadline-<name>`` file). Real Claude, ``[card]`` only: the
+test builds a daemon of its own whose sessions run the hook with a
+``AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS`` of
+:data:`REAL_HOOK_DEADLINE`, so the real hook gives up within seconds,
+and it reads from the daemon log how the turn ended. Only the
+transcript's interrupt marker passes: the 10 s grace or "the transcript
+moved on" means 8.99's assumption about Claude Code is wrong for the
+version under test. ``[separate]`` stays stand-in only: real Claude's own
+timing decides whether it asks before the busy card exists.
 """
 
 from __future__ import annotations
@@ -20,17 +27,40 @@ import time
 import pytest
 
 from tests.e2e.fake_telegram import instance as fti
+from tests.e2e.fake_telegram.redaction import redact
 from tests.e2e.faketg import flows
 
 G = fti.GROUP_ID
 BOT = f"@{fti.BOT_USERNAME}"
 
+#: The real hook's reply deadline in this test's own daemon (seconds).
+REAL_HOOK_DEADLINE = "2"
+#: How long real Claude's session may take to be IDLE after the tap: far
+#: below the 900 s tool-in-flight cap, above the daemon's 10 s grace.
+REAL_IDLE_WITHIN = 60
+
+_ENDED = "turn ended at the permission dialog"
+_MARKER = f"{_ENDED} (refused, transcript marker)"
+_GRACE = f"{_ENDED} (refused, grace)"
+_NOT_ENDED = "typed answer: the turn did not end at the dialog"
+
 
 @pytest.mark.parametrize("where", ["card", "separate"])
-def test_typed_deny_ends_the_turn_and_frees_the_session(fresh, where):
-    inst, fake = fresh, fresh.fake
-    if inst.claude_mode != "standin":
-        pytest.skip("stand-in only: it shortens the permission hook's wait")
+def test_typed_deny_ends_the_turn_and_frees_the_session(request, where):
+    from tests.e2e.faketg import conftest as ftc
+    if ftc.claude_mode() != "standin":
+        if where == "separate":
+            pytest.skip("stand-in only: real Claude's timing decides whether it asks "
+                        "before the busy card exists, so it cannot be made to on demand")
+        inst = request.getfixturevalue("own_faketg")(
+            {"AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS": REAL_HOOK_DEADLINE})
+        _real_card(inst)
+        return
+    _standin(request.getfixturevalue("fresh"), where)
+
+
+def _standin(inst, where):
+    fake = inst.fake
     label = "ft16" if where == "card" else "ft17"
     name = inst.new_session(G, fti.BOB, label)
     # The hook gives up after 1 s, so the tap below is typed into the dialog.
@@ -75,4 +105,119 @@ def test_typed_deny_ends_the_turn_and_frees_the_session(fresh, where):
 
     # And it takes the next message as a new turn.
     (inst.inst_dir / f"standin-hook-deadline-{name}").unlink(missing_ok=True)
+    flows.control(inst, G, fti.BOB, name, f"ping{label}")
+
+
+def turn_end_verdict(lines: list[str], label: str) -> tuple[str, str] | None:
+    """How the daemon log says session *label*'s typed refusal ended:
+    ``("marker" | "grace" | "not_ended", line)``, or None while it says
+    nothing yet."""
+    for line in lines:
+        if f"[{label}]" not in line:
+            continue
+        if _MARKER in line:
+            return "marker", line
+        if _GRACE in line:
+            return "grace", line
+        if _NOT_ENDED in line:
+            return "not_ended", line
+    return None
+
+
+def verdict_problem(verdict: str, line: str, transcript_tail: str) -> str | None:
+    """None when the turn ended on the transcript's interrupt marker, else
+    why the test fails (with the transcript's last entries)."""
+    if verdict == "marker":
+        return None
+    if verdict == "grace":
+        why = ("the daemon ended the turn on its 10 s grace, not on the transcript's "
+               "interrupt marker: 8.99's assumption that Claude Code writes "
+               "'[Request interrupted by user ...]' as the newest entry after a typed "
+               "refusal is wrong for this Claude Code version")
+    else:
+        why = ("the daemon left the turn to its hooks after the typed Deny (the "
+               "transcript moved on, or Claude had queued messages): 8.99's assumption "
+               "that a typed refusal ends the turn like an interrupt is wrong for this "
+               "Claude Code version")
+    return redact(f"{why}\ndaemon log: {line.strip()}\n"
+                  f"the transcript's last entries:\n{transcript_tail}")
+
+
+#: The row of Claude Code's dialog the typed Deny lands on (8.99 pins it).
+_REFUSAL_ROW = "tell Claude what to do differently"
+
+
+def settled_denied_card(label: str, by: str) -> str:
+    """The busy card's last word after a typed refusal ended the turn
+    (``session_ops._refused_card_text``, as the fake shows it: plain)."""
+    return f"🚫 {label} · Denied by {by}"
+
+
+def dialog_on_screen(inst, name: str) -> bool:
+    """Claude Code's own permission dialog is drawn in the session's pane
+    (read only: :meth:`TestInstance.screen` never types a key)."""
+    return _REFUSAL_ROW in inst.screen(name, seconds=1.0)
+
+
+def _real_card(inst, dialog_open=dialog_on_screen):
+    """Real Claude: the hook gives up after REAL_HOOK_DEADLINE seconds and
+    the Deny is typed; the turn must end on the transcript's marker.
+    *dialog_open(inst, name)*: Claude Code's dialog is up (the Deny is
+    typed blind, so the tap waits for it)."""
+    fake = inst.fake
+    label = "ft16"
+    name = inst.new_session(G, fti.BOB, label)
+    values = inst.session_env_values(name, "AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS")
+    assert values and set(values) == {REAL_HOOK_DEADLINE}, (
+        f"the session's processes do not carry the short hook deadline: {values}")
+    flows.settle(fake)
+    log_since = inst.log_mark()
+    card, _allow = flows.ask_write(inst, name, label, G, fti.BOB, label)
+    # The hook unlinks its reply socket when it stops waiting; then Claude
+    # Code draws its own dialog, which the Deny below is typed into.
+    fti.wait_until(lambda: not list(inst.inst_dir.glob("aipager-reply-*.sock")),
+                   30, "the real hook to stop waiting", lambda: inst.log_tail(20))
+    fti.wait_until(lambda: dialog_open(inst, name), 30,
+                   f"Claude Code's permission dialog (a {_REFUSAL_ROW!r} row) in the pane",
+                   lambda: inst.screen(name))
+
+    since = fake.mark()
+    _msg, deny = fake.wait_button(G, "Deny", since=0, message_text_contains=label)
+    cb = fake.inject_callback(fti.user(fti.BOB), fake.message(G, card["message_id"]), deny)
+    fake.wait_answer(cb, timeout=90)
+    answered = time.monotonic()
+    # Typed (the keystroke fallback), never the hook's decision.
+    typed = inst.wait_log(f"[{label}]", "Denied (via=", since=log_since, timeout=30)
+    assert "(via=keystroke_fallback)" in typed, redact(
+        f"the Deny was not typed into the dialog: {typed.strip()}")
+
+    verdict = fti.wait_until(
+        lambda: turn_end_verdict(inst.log_lines(log_since), label), REAL_IDLE_WITHIN,
+        "the daemon to log how the typed Deny ended the turn",
+        lambda: ("no verdict line means the daemon's watch stood down because Claude "
+                 "carried on (a Stop, a new tool call or a new turn after the typed "
+                 "refusal), or a background job was open: either way 8.99's assumption "
+                 "that a typed refusal ends the turn like an interrupt does not hold "
+                 "for this Claude Code version\n"
+                 + inst.log_tail(30) + "\nthe transcript's last entries:\n"
+                 + inst.transcript_tail(name)))
+    problem = verdict_problem(*verdict, inst.transcript_tail(name))
+    if problem is not None:
+        pytest.fail(problem, pytrace=False)
+
+    # The card is settled as Denied (not the tap's own "Working" edit, whose
+    # tool history also reads "Denied"), and the session is IDLE, well
+    # before the cap.
+    settled = settled_denied_card(label, "@bob")
+    cards = {card["message_id"], *flows.busy_card_ids(inst.log_lines(log_since), label)}
+    fake.wait_for(lambda c: c.method == "editMessageText" and c.chat_id == G
+                  and c.params.get("message_id") in cards and c.text.strip() == settled,
+                  timeout=30, since=since,
+                  what=f"the busy card to be settled as {settled!r}")
+    flows.wait_turn_end(inst, name, label, since_log=log_since,
+                        timeout=max(1.0, REAL_IDLE_WITHIN - (time.monotonic() - answered)))
+    assert time.monotonic() - answered < REAL_IDLE_WITHIN
+    assert not inst.file_in_project(f"{label}.txt").exists()
+
+    # And it takes the next message as a new turn.
     flows.control(inst, G, fti.BOB, name, f"ping{label}")

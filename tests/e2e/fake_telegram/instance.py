@@ -164,11 +164,20 @@ _STRIP_EXACT = {"OBSERVER_BOTS", "CREDENTIALS_DIRECTORY", "PYTHONPATH",
                 "XDG_RUNTIME_DIR"}
 
 
+#: The only variables a test may set for its own instance on top of
+#: :func:`daemon_env` (``TestInstance(session_env=...)``). The daemon
+#: passes its environment to the sessions it launches, and Claude Code to
+#: the hooks it runs, so these reach the instance's ``aipager-hook``.
+SESSION_ENV_ALLOWED = frozenset({"AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS"})
+
+
 def daemon_env(base_env: dict, *, root: Path, base_url: str, claude_bin: str,
-               repo: Path, python: str, claude_mode: str) -> dict:
+               repo: Path, python: str, claude_mode: str,
+               session_env: dict | None = None) -> dict:
     """The daemon's environment, built from scratch: nothing of the
     operator's aipager, Claude or credential settings, the instance
-    folder, the fake HOME, the shims first on PATH."""
+    folder, the fake HOME, the shims first on PATH. *session_env*: a
+    test's own overrides, only names in :data:`SESSION_ENV_ALLOWED`."""
     env = {k: v for k, v in base_env.items()
            if not k.startswith(_STRIP_PREFIXES) and k not in _STRIP_EXACT}
     bin_dir = root / "b"
@@ -195,6 +204,10 @@ def daemon_env(base_env: dict, *, root: Path, base_url: str, claude_bin: str,
         "PYTEST_CURRENT_TEST": "faketg-daemon",
         "PYTHONDONTWRITEBYTECODE": "1",
     })
+    extra = dict(session_env or {})
+    bad = sorted(set(extra) - SESSION_ENV_ALLOWED)
+    assert not bad, f"not a per-instance session setting: {bad}"
+    env.update({k: str(v) for k, v in extra.items()})
     return env
 
 
@@ -393,8 +406,10 @@ class TestInstance:
     __test__ = False  # not a pytest class
 
     def __init__(self, repo: Path | None = None, claude_mode: str = "standin",
-                 members: dict | None = None, labels: list[str] | None = None):
+                 members: dict | None = None, labels: list[str] | None = None,
+                 session_env: dict | None = None):
         assert claude_mode in ("real", "standin"), claude_mode
+        self.session_env = dict(session_env or {})
         self.repo = Path(repo or os.environ.get("AIPAGER_E2E_REPO") or REPO)
         self.claude_mode = claude_mode
         self.members = dict(MEMBERS if members is None else members)
@@ -487,7 +502,8 @@ class TestInstance:
                 self.fake.add_chat(uid, "private", who=user(uid))
         self.env = daemon_env(dict(os.environ), root=self.root, base_url=base,
                               claude_bin=self.claude_bin, repo=self.repo,
-                              python=self.python, claude_mode=self.claude_mode)
+                              python=self.python, claude_mode=self.claude_mode,
+                              session_env=self.session_env)
         assert_env_isolated(self.env, self.root)
         return self
 
@@ -519,6 +535,23 @@ class TestInstance:
                    timeout, "the daemon to poll the fake", self.log_tail)
         assert self.proc.poll() is None, "daemon exited:\n" + self.log_tail()
         return self
+
+    @property
+    def kept_log_path(self) -> Path | None:
+        """Where :meth:`stop` keeps a redacted copy of the daemon log
+        (``AIPAGER_E2E_FAKETG_KEEP_LOG``), or None when it keeps none."""
+        keep = os.environ.get("AIPAGER_E2E_FAKETG_KEEP_LOG", "").strip()
+        if not keep or self.root is None:
+            return None
+        return Path(keep, f"{self.root.name}-daemon.log")
+
+    def log_where(self) -> str:
+        """One line naming this instance's daemon log, for a failure."""
+        kept = self.kept_log_path
+        return (f"instance daemon log: {self.log_path} ("
+                + (f"a redacted copy is kept at {kept})" if kept else
+                   "removed at teardown; set AIPAGER_E2E_FAKETG_KEEP_LOG=<dir> "
+                   "to keep a redacted copy)"))
 
     def log_text(self) -> str:
         try:
@@ -715,6 +748,35 @@ class TestInstance:
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             return ""
 
+    def session_env_values(self, name: str, key: str) -> list[str]:
+        """*key*'s value in every live process of session *name* (its
+        environment names this instance and ``CLAUDE_DTACH_SESSION=<name>``:
+        the session's Claude and whatever it runs). Read-only."""
+        inst = b"AIPAGER_INSTANCE_DIR=" + os.fsencode(str(self.inst_dir))
+        sess = b"CLAUDE_DTACH_SESSION=" + os.fsencode(name)
+        prefix = os.fsencode(key) + b"="
+        out = []
+        for pid in _own_pids():
+            environ = _read(f"/proc/{pid}/environ").split(b"\0")
+            if inst not in environ or sess not in environ:
+                continue
+            vals = [e[len(prefix):].decode(errors="replace")
+                    for e in environ if e.startswith(prefix)]
+            out.append(vals[-1] if vals else "")
+        return out
+
+    def transcript_tail(self, name: str, n: int = 8) -> str:
+        """The last *n* entries of session *name*'s transcript, one
+        redacted line each (diagnostics only)."""
+        path = self._registry_transcript(name)
+        if not path:
+            return "(no transcript path in the instance registry)"
+        try:
+            lines = Path(path).read_text(errors="replace").splitlines()
+        except OSError as e:
+            return f"(transcript unreadable: {type(e).__name__})"
+        return transcript_tail_lines(lines, n)
+
     def notes(self, name: str) -> list[dict]:
         """The session's outstanding notes (not yet picked up)."""
         d = self.inst_dir / f"claude-notes-{name}"
@@ -803,11 +865,11 @@ class TestInstance:
         if self._log_fh is not None:
             self._log_fh.close()
             self._log_fh = None
-        keep = os.environ.get("AIPAGER_E2E_FAKETG_KEEP_LOG", "").strip()
-        if keep and self.root is not None and self.log_path.exists():
+        kept = self.kept_log_path
+        if kept is not None and self.log_path.exists():
             # Debugging aid: a redacted copy of the daemon log.
-            os.makedirs(keep, exist_ok=True)
-            Path(keep, f"{self.root.name}-daemon.log").write_text(redact(self.log_text()))
+            os.makedirs(kept.parent, exist_ok=True)
+            kept.write_text(redact(self.log_text()))
         if self.root is not None and self.root.exists():
             denv = self.home / ".config" / "aipager" / "daemon.env"
             try:
@@ -836,6 +898,56 @@ def _user_record_text(entry: dict) -> str:
         return "\n".join(str(b.get("text", "")) for b in content
                          if isinstance(b, dict) and b.get("type") == "text")
     return ""
+
+
+def _entry_summary(e: dict) -> str:
+    content = (e.get("message") or {}).get("content") if isinstance(e.get("message"), dict) \
+        else None
+    if isinstance(content, str):
+        parts = [content]
+    elif isinstance(content, list):
+        parts = []
+        for b in content:
+            if not isinstance(b, dict):
+                continue
+            kind = b.get("type")
+            if kind == "text":
+                parts.append(str(b.get("text", "")))
+            elif kind == "tool_use":
+                parts.append(f"<tool_use {b.get('name')}>")
+            elif kind == "tool_result":
+                inner = b.get("content")
+                if isinstance(inner, list):
+                    inner = " ".join(str(x.get("text", "")) for x in inner
+                                     if isinstance(x, dict))
+                err = " error" if b.get("is_error") else ""
+                parts.append(f"<tool_result{err}: {inner}>")
+            else:
+                parts.append(f"<{kind}>")
+    else:
+        parts = [f"operation={e.get('operation')}"] if e.get("operation") else []
+    text = " ".join(" ".join(parts).split())
+    return text[:160] + ("..." if len(text) > 160 else "")
+
+
+def transcript_tail_lines(lines, n: int = 8) -> str:
+    """The last *n* JSON entries of a Claude transcript, one redacted line
+    each: ``<timestamp> <type>: <what it says>``, at most 160 characters
+    of content (diagnostics for a failure message)."""
+    out = []
+    for line in reversed(list(lines)):
+        if len(out) >= n:
+            break
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(e, dict):
+            continue
+        out.append(f"{e.get('timestamp', '?')} {e.get('type', '?')}: {_entry_summary(e)}")
+    if not out:
+        return "(the transcript has no entries)"
+    return redact("\n".join(reversed(out)))
 
 
 def transcript_prompts(lines) -> list[str]:

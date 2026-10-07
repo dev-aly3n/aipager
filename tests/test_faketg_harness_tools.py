@@ -9,6 +9,7 @@ install, so each has a test that fails when the guard is removed.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
@@ -502,3 +503,143 @@ def test_assert_no_calls_names_calls_redacted(monkeypatch):
     msg = str(exc.value)
     assert msg.startswith("leaked:") and "#4 sendMessage chat=-1" in msg
     assert bot not in msg and oauth not in msg and "sk-ant-<redacted>" in msg
+
+
+def test_session_env_reaches_the_daemon_env_and_only_allowed_names(root):
+    env = _env(root)
+    assert env["AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS"] == "120"
+    env = fti.daemon_env({"PATH": "/usr/bin"}, root=root, base_url="http://127.0.0.1:4321",
+                         claude_bin=str(root / "b" / "claude"), repo=fti.REPO,
+                         python=sys.executable, claude_mode="standin",
+                         session_env={"AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS": 2})
+    assert env["AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS"] == "2"
+    fti.assert_env_isolated(env, root)
+    for bad in ("HOME", "AIPAGER_INSTANCE_DIR", "CLAUDE_TG_CHAT_ID"):
+        with pytest.raises(AssertionError, match="not a per-instance session setting"):
+            fti.daemon_env({"PATH": "/usr/bin"}, root=root, base_url="http://127.0.0.1:1",
+                           claude_bin="c", repo=fti.REPO, python=sys.executable,
+                           claude_mode="standin", session_env={bad: "x"})
+
+
+def test_session_env_values_reads_only_the_sessions_own_processes(root):
+    inst = fti.TestInstance()
+    inst.root = root
+    inst.inst_dir.mkdir()
+    name = "claude-ft16__g4000000001"
+    base = {"PATH": os.environ.get("PATH", "/usr/bin:/bin")}
+    mine = dict(base, AIPAGER_INSTANCE_DIR=str(inst.inst_dir), CLAUDE_DTACH_SESSION=name,
+                AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS="2")
+    other = dict(mine, CLAUDE_DTACH_SESSION="claude-ft17__g4000000001",
+                 AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS="120")
+    elsewhere = dict(mine, AIPAGER_INSTANCE_DIR=str(root / "x"),
+                     AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS="120")
+    procs = [subprocess.Popen(["sleep", "30"], env=e) for e in (mine, other, elsewhere)]
+    try:
+        assert inst.session_env_values(name, "AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS") \
+            == ["2"]
+        assert inst.session_env_values(name, "NOT_SET_ANYWHERE") == [""]
+    finally:
+        for p in procs:
+            p.kill()
+            p.wait(10)
+
+
+def test_transcript_tail_lines_summarises_the_newest_entries_redacted(monkeypatch):
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    lines = _jl(
+        {"type": "user", "timestamp": "t0", "message": {"content": "old prompt"}},
+        {"type": "assistant", "timestamp": "t1", "message": {"content": [
+            {"type": "tool_use", "name": "Write", "input": {}}]}},
+        {"type": "user", "timestamp": "t2", "message": {"content": [
+            {"type": "tool_result", "is_error": True,
+             "content": [{"type": "text", "text": "rejected " + _OAUTH}]}]}},
+        {"type": "user", "timestamp": "t3", "message": {"content": [
+            {"type": "text", "text": "[Request interrupted by user for tool use]"}]}},
+    ) + ["not json"]
+    out = fti.transcript_tail_lines(lines, 3)
+    assert out.splitlines() == [
+        "t1 assistant: <tool_use Write>",
+        "t2 user: <tool_result error: rejected sk-ant-<redacted>>",
+        "t3 user: [Request interrupted by user for tool use]",
+    ]
+    assert fti.transcript_tail_lines([], 3) == "(the transcript has no entries)"
+    long = fti.transcript_tail_lines(_jl({"type": "user", "message": {"content": "x" * 500}}))
+    assert long.endswith("x...") and len(long) < 200
+
+
+def test_typed_deny_verdict_passes_only_on_the_transcript_marker():
+    from tests.e2e.faketg import test_ft_07_typed_deny as ft07
+    log = ["[ft1] turn ended at the permission dialog (refused, transcript marker) - IDLE",
+           "[ft16] Inline permission: Denied (via=keystroke_fallback)"]
+    assert ft07.turn_end_verdict(log, "ft16") is None
+    marker = "[ft16] turn ended at the permission dialog (refused, transcript marker) - IDLE"
+    grace = "[ft16] turn ended at the permission dialog (refused, grace) - IDLE"
+    moved = ("[ft16] typed answer: the turn did not end at the dialog (the transcript "
+             "moved on) - left to its hooks")
+    assert ft07.turn_end_verdict(log + [marker], "ft16") == ("marker", marker)
+    assert ft07.turn_end_verdict(log + [grace], "ft16") == ("grace", grace)
+    assert ft07.turn_end_verdict(log + [moved], "ft16") == ("not_ended", moved)
+    assert ft07.verdict_problem("marker", marker, "tail") is None
+    g = ft07.verdict_problem("grace", grace, "t3 user: hi")
+    assert "wrong for this Claude Code version" in g and "10 s grace" in g
+    assert grace in g and "t3 user: hi" in g
+    m = ft07.verdict_problem("not_ended", moved, "t3 user: hi")
+    assert "transcript moved on" in m and "wrong for this Claude Code version" in m
+
+
+def test_a_failed_report_names_every_live_instance_log(root, monkeypatch):
+    inst = fti.TestInstance()
+    inst.root = root
+    monkeypatch.delenv("AIPAGER_E2E_FAKETG_KEEP_LOG", raising=False)
+    assert str(inst.log_path) in inst.log_where() and "removed at teardown" in inst.log_where()
+    monkeypatch.setenv("AIPAGER_E2E_FAKETG_KEEP_LOG", "/k")
+    assert f"/k/{root.name}-daemon.log" in inst.log_where()
+
+    class Report:
+        failed = True
+        sections: list = []
+
+    class Outcome:
+        def get_result(self):
+            return Report
+
+    def run(report_failed):
+        Report.failed, Report.sections = report_failed, []
+        gen = ftc.pytest_runtest_makereport(None, None)
+        next(gen)
+        with pytest.raises(StopIteration):
+            gen.send(Outcome())
+        return Report.sections
+
+    monkeypatch.setattr(ftc, "LIVE", [inst])
+    assert run(True) == [("fake-Telegram daemon log", inst.log_where())]
+    assert run(False) == []
+    monkeypatch.setattr(ftc, "LIVE", [])
+    assert run(True) == []
+
+
+def test_own_instance_is_refused_while_another_instance_is_alive(monkeypatch):
+    built = []
+    monkeypatch.setattr(ftc, "faketg_instance",
+                        lambda env: contextlib.nullcontext(built.append(env)))
+    monkeypatch.setattr(ftc, "LIVE", [object()])
+    with ftc.own_instances() as make:
+        with pytest.raises(AssertionError, match="another instance is alive"):
+            make({"AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS": "2"})
+    assert built == []
+    monkeypatch.setattr(ftc, "LIVE", [])
+    with pytest.raises(AssertionError, match="one own instance per test"):
+        with ftc.own_instances() as make:
+            make({"AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS": "2"})
+            make({"AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS": "2"})
+    assert built == [{"AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS": "2"}]
+
+
+def test_settled_denied_card_is_what_the_daemon_writes_as_the_fake_shows_it():
+    from aipager.bot.session_ops import _refused_card_text
+    from tests.e2e.fake_telegram.server import Call
+    from tests.e2e.faketg import test_ft_07_typed_deny as ft07
+    shown = Call(seq=1, ts=0.0, method="editMessageText",
+                 params={"chat_id": fti.GROUP_ID, "parse_mode": "HTML",
+                         "text": _refused_card_text("ft16", "@bob")}).text
+    assert shown.strip() == ft07.settled_denied_card("ft16", "@bob")
