@@ -103,7 +103,12 @@ def test_confirm_card_answers_its_owner_and_names_who(fresh):
     assert inst.socket_for(name).exists()
 
     log_since = inst.log_mark()
+    since = fake.mark()
     cb = fake.inject_callback(fti.user(fti.BOB), card, end)
     assert flows.wait_toast(fake, cb, timeout=60) == "⏹ Ended ft9 by @bob"
+    # The toast is bob's alone; the group sees the card itself edited.
+    edit = flows.wait_text(fake, G, "Ended ft9 by @bob", since=since,
+                           methods=("editMessageText",))
+    assert edit.params.get("message_id") == card["message_id"]
     inst.wait_log("Killed dtach PID", name, since=log_since)
     fti.wait_until(lambda: not inst.socket_for(name).exists(), 30, "ft9's socket to go")
