@@ -519,6 +519,11 @@ def _assert_allowed_shape(line: bytes) -> None:
                          parse_int=_short_int)
     except json.JSONDecodeError:
         return
+    except RecursionError:
+        # Python 3.10/3.11's decoder gives up at roughly the recursion
+        # limit, a little under 1,000 levels inside pytest (3.12+ parses
+        # them and the walk below rejects them): the same class.
+        raise _ShapeError("nesting of 1,000 levels or more") from None
     # Walk in serialization order (each key, then its value, then the next
     # key), so the first "message" token met is the first in the bytes.
     first_message = None
