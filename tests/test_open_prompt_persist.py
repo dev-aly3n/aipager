@@ -451,3 +451,54 @@ def test_the_inline_prompt_records_when_it_was_shown(mk_bot, run_async):
     assert perm["tool_info"]["tool_use_id"] == "toolu_1"
     bot.registry.save()
     assert _saved()["kind"] == "inline"
+
+
+# ── a subagent's prompt is never saved (review rev-iter1-004) ────────────
+
+def test_a_subagents_inline_prompt_is_not_saved():
+    """Its answer lands in the subagent's own transcript, which the
+    restart's check does not read: answered in the terminal while the
+    daemon was down, it would come back as open."""
+    reg = SessionRegistry()
+    _inline(_waiting(reg), agent_id="a1agent")
+    reg.save()
+    assert _saved() is None
+
+
+def test_a_subagents_separate_prompt_is_not_saved():
+    reg = SessionRegistry()
+    sess = _separate(_waiting(reg))
+    sess.pending_prompt_msg["perm"]["tool_info"]["agent_id"] = "a1agent"
+    reg.save()
+    assert _saved() is None
+
+
+def test_a_subagents_question_is_not_saved():
+    reg = SessionRegistry()
+    sess = _waiting(reg)
+    sess.busy_msg_id = 77
+    perm = _question()
+    perm["tool_info"]["agent_id"] = "a1agent"
+    sess.pending_permission = perm
+    reg.save()
+    assert _saved() is None
+
+
+def test_a_failing_snapshot_does_not_stop_the_save(monkeypatch, caplog):
+    """The state file is still written, the session in it, with no prompt."""
+    reg = SessionRegistry()
+    _inline(_waiting(reg))
+
+    def _boom(*args, **kwargs):
+        raise TypeError("unhashable type: 'list'")
+
+    monkeypatch.setattr(state, "snapshot_open_prompt", _boom)
+    try:
+        reg.save()
+        outcome = "saved"
+    except Exception as exc:  # noqa: BLE001 - the guard under test
+        outcome = f"raised {type(exc).__name__}"
+    assert outcome == "saved"
+    data = json.loads(state.SESSION_STATE_FILE.read_text())
+    assert NAME in data["sessions"]
+    assert "open_prompt" not in data["sessions"][NAME]

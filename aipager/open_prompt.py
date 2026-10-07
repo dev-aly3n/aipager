@@ -127,8 +127,9 @@ def snapshot(sess, now_mono: float, now_wall: float) -> dict | None:
     ``pending_permission`` on a busy card; separate: ``pending_prompt_msg``
     whose message reached the chat), the prompt was shown during this wait
     (its ``wait_started_at`` is not older than ``interactive_entered_at``)
-    at a known wall time, its tool is named, and, for an AskUserQuestion,
-    it is the restorable kind (one question, single choice, untouched).
+    at a known wall time, its tool is named, it was not asked inside a
+    subagent, and, for an AskUserQuestion, it is the restorable kind (one
+    question, single choice, untouched).
     *now_mono* is unused today and kept for symmetry with the other
     computed keys of the save."""
     from aipager.state import Status  # local: state imports this module
@@ -181,6 +182,12 @@ def snapshot(sess, now_mono: float, now_wall: float) -> dict | None:
     name = tool_info.get("name")
     if not _str_within(name, MAX_TOOL_NAME, non_empty=True):
         return None
+    # Asked inside a subagent: its answer goes to the subagent's own
+    # transcript, which the restart's check does not read, so a prompt
+    # answered in the terminal while the daemon was down would look open.
+    # Not saved: the restart handles the session as before 8.102.
+    if tool_info.get("agent_id"):
+        return None
     tuid = tool_info.get("tool_use_id")
     record["tool_use_id"] = (tuid if _str_within(tuid, MAX_TOOL_USE_ID)
                              else "")
@@ -219,8 +226,8 @@ def snapshot(sess, now_mono: float, now_wall: float) -> dict | None:
         if type(always) is not bool:
             always = None  # unknown: no Allow always is offered
         rule = tool_info.get("standing_rule_suggestion")
-        if not (isinstance(rule, dict)
-                and rule.get("type") in STANDING_RULE_SUGGESTION_TYPES):
+        if not (isinstance(rule, dict) and isinstance(rule.get("type"), str)
+                and rule["type"] in STANDING_RULE_SUGGESTION_TYPES):
             rule = None
         summary = src.get("tool_summary")
         if not isinstance(summary, str):

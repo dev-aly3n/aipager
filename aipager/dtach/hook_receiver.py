@@ -648,6 +648,12 @@ class HookReceiver:
                     "tool_use_id": _permission_tool_use_id(
                         msg, tool_name, sess_ref),
                 }
+                # Asked inside a subagent: its answer lands in the
+                # subagent's own transcript, so a restart could not tell
+                # it was answered; such a prompt is never saved (8.102).
+                perm_agent = msg.get("agent_id")
+                if perm_agent:
+                    tool_info["agent_id"] = perm_agent
                 # design.md "answer PermissionRequest hooks with a
                 # decision instead of keystrokes": the hook offers a
                 # reply channel by embedding these two keys on the
@@ -918,6 +924,10 @@ class HookReceiver:
                              "summary": _summarize_tool("AskUserQuestion", tool_input),
                              # Its own call's id (roadmap 8.102).
                              "tool_use_id": _payload_tool_use_id(msg)}
+                if ask_agent:
+                    # A subagent's question: never saved (see the
+                    # PermissionRequest branch).
+                    tool_info["agent_id"] = ask_agent
                 sess_aq = self.registry.transition(session_name, Status.INTERACTIVE)
                 if sess_aq:
                     await self.notify_fn(sess_aq, "permission_prompt", {

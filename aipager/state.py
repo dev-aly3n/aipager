@@ -3094,7 +3094,13 @@ class SessionRegistry:
             # Roadmap 8.102: computed from the live prompt, only while the
             # session waits on it, so every way out of the wait drops it
             # from the next save with no clear site of its own.
-            open_prompt = snapshot_open_prompt(sess, time.monotonic(), time.time())
+            try:
+                open_prompt = snapshot_open_prompt(
+                    sess, time.monotonic(), time.time())
+            except Exception:  # noqa: BLE001 - the save itself must go on
+                log.warning("[%s] open prompt not saved", sess.label,
+                            exc_info=True)
+                open_prompt = None
             if open_prompt is not None:
                 d["open_prompt"] = open_prompt
             sessions[name] = d

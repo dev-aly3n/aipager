@@ -137,3 +137,29 @@ def test_the_notification_fallback_has_no_id(receiver, run_async, tmp_path):
           transcript_path=str(transcript),
           message="Claude needs your permission to use Bash")
     assert _prompt_tool_info(notify_fn)["tool_use_id"] == ""
+
+
+# ── a subagent's prompt is marked, so the save leaves it out ─────────────
+
+def test_a_subagents_permission_request_carries_its_agent(receiver, run_async):
+    registry, recv, notify_fn = receiver
+    _permission(recv, run_async, agent_id="a1agent", tool_use_id="toolu_own")
+    assert _prompt_tool_info(notify_fn)["agent_id"] == "a1agent"
+
+
+def test_the_parents_permission_request_carries_no_agent(receiver, run_async):
+    registry, recv, notify_fn = receiver
+    _permission(recv, run_async, tool_use_id="toolu_own")
+    assert "agent_id" not in _prompt_tool_info(notify_fn)
+
+
+def test_a_subagents_question_carries_its_agent(receiver, run_async):
+    """Asked while the turn runs (BUSY), so it is shown, not filtered as a
+    helper's question."""
+    registry, recv, notify_fn = receiver
+    _send(recv, run_async, hook_event_name="PreToolUse",
+          tool_name="AskUserQuestion", agent_id="a1agent",
+          tool_use_id="toolu_q",
+          tool_input={"questions": [{"question": "Which?", "options": [
+              {"label": "A"}, {"label": "B"}]}]})
+    assert _prompt_tool_info(notify_fn)["agent_id"] == "a1agent"
