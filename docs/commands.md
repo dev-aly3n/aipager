@@ -261,6 +261,14 @@ run, under its own description of it — approve what you can read.
   any of these; change modes deliberately with `/mode`.
 - **Stop** — interrupt the turn instead of answering.
 
+The answer goes to Claude Code through aipager's permission hook, which
+waits up to 20 seconds for it. A prompt that came before the busy
+message (it is then sent as its own message) is answered the same way.
+Once that wait is over, the buttons type the answer into Claude Code's
+own dialog instead; Deny then picks the dialog's last row ("No, and tell
+Claude what to do differently"), which ends Claude's turn like Stop, and
+the card says `🚫 jim · Denied`.
+
 Every tap is recorded in `~/.claude/aipager-audit.jsonl` and mirrored
 as a one-line reply threaded under the busy message:
 `✅ jim · Allowed by @alice · Bash: ls -la /tmp` (with a chat set up by `aipager config`; `Allowed` alone in personal mode).

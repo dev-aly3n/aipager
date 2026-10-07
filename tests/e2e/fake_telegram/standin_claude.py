@@ -22,12 +22,24 @@ payloads (so the real ``aipager-hook`` and ``aipager-statusline`` run).
   The file is written only when allowed.
 - A prompt containing "Reply with exactly: X" answers ``X``; any other
   answers ``stand-in: <decision or ok>``. Then ``Stop``.
-- Escape interrupts a running turn (no ``Stop``, like Claude). Enter
-  while the permission hook is still waiting answers the dialog: "Yes"
-  on the first row, "No" after a Down arrow (aipager's keystroke
-  fallback).
+- Escape interrupts a running turn (no ``Stop``, like Claude). The
+  permission dialog is up while the hook waits and, when the hook gives
+  no decision, after it (as Claude shows its own dialog then). Its rows
+  are Claude Code 2.1.291's for Write: "Yes", "Yes, allow all edits
+  during this session", "No, and tell Claude what to do differently
+  (esc)"; arrows move and clamp at the ends, Enter chooses. A key while
+  the hook still waits ends the hook, as Claude does. The last row ends
+  the turn like an interrupt, as 2.1.291 does: a rejected tool result,
+  ``[Request interrupted by user for tool use]``, no ``PostToolUse``
+  and no ``Stop`` (aipager's keystroke-fallback Deny).
+- Hooks run in their own process group and a key kills the whole group,
+  so the hook really stops (``sh -c`` under dash forks it, and killing
+  only the shell left the hook waiting out its deadline).
 - A test can hold the next tool call with ``standin-hold-<session>`` in
-  the instance folder, to choose when the permission is asked.
+  the instance folder, to choose when the permission is asked, and give
+  the PermissionRequest hook a shorter reply deadline with
+  ``standin-hook-deadline-<session>`` (seconds), so the hook stops
+  waiting and the answer is typed into the dialog.
 - Every prompt and decision goes to
   ``$AIPAGER_INSTANCE_DIR/standin-<CLAUDE_DTACH_SESSION>.jsonl``.
 """
@@ -48,7 +60,19 @@ import uuid
 VERSION = "2.1.291"
 
 _REPLY_RE = re.compile(r"Reply with exactly:\s*(.+)", re.I)
+
+#: Claude Code 2.1.291's Write permission dialog, top to bottom. Row 1
+#: reads as a plain "allowed" here: the stand-in keeps no session mode.
+DIALOG_ROWS = ("Yes", "Yes, allow all edits during this session",
+               "No, and tell Claude what to do differently (esc)")
+#: What Claude Code records for a tool the dialog's last row rejected.
+REJECTED_TOOL_RESULT = ("The user doesn't want to proceed with this tool use. The tool "
+                        "use was rejected (eg. if it was a file edit, the new_string was "
+                        "NOT written to the file). STOP what you are doing and wait for "
+                        "the user to tell you how to proceed.")
+INTERRUPT_MARKER = "[Request interrupted by user for tool use]"
 _NAME_RE = re.compile(r"create\s+([A-Za-z0-9_-]+)\.txt", re.I)
+_ARROWS_RE = re.compile(r"(?:\x1b\[[AB])+")
 
 
 def _now_iso() -> str:
@@ -74,6 +98,8 @@ class StandIn:
         inst = os.environ.get("AIPAGER_INSTANCE_DIR", "").strip() or self.cwd
         self.log_path = os.path.join(inst, f"standin-{self.session or 'nosession'}.jsonl")
         self.hold_path = os.path.join(inst, f"standin-hold-{self.session or 'nosession'}")
+        self.deadline_path = os.path.join(
+            inst, f"standin-hook-deadline-{self.session or 'nosession'}")
         self.dialog_answer: str | None = None
         self.in_permission = False
         self.dialog_row = 0
@@ -150,11 +176,22 @@ class StandIn:
         }
         payload.update(extra or {})
         outputs = []
+        env = None
+        if event == "PermissionRequest":
+            try:
+                with open(self.deadline_path, encoding="utf-8") as f:
+                    deadline = f.read().strip()
+            except OSError:
+                deadline = ""
+            if deadline:
+                env = dict(os.environ, AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS=deadline)
         for cmd, timeout in self._hook_commands(event, tool):
             try:
+                # Its own process group: a key at the dialog kills the
+                # hook itself, not only the shell that started it.
                 proc = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE,
                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                        text=True)
+                                        text=True, env=env, start_new_session=True)
             except OSError as e:
                 self.log(event="hook_error", hook=event, error=str(e))
                 continue
@@ -163,7 +200,7 @@ class StandIn:
             try:
                 out, _ = proc.communicate(json.dumps(payload), timeout=timeout)
             except subprocess.TimeoutExpired:
-                proc.kill()
+                _kill_group(proc)
                 out, _ = proc.communicate()
             finally:
                 with self.lock:
@@ -221,6 +258,13 @@ class StandIn:
                 self.user_text("[Request interrupted by user]")
                 return
             self.log(event="decision", tool="Write", decision=decision, path=path)
+            if decision == "rejected":
+                # The dialog's last row: Claude Code 2.1.291 ends the turn
+                # like an interrupt (no PostToolUse, no Stop) and waits.
+                self.tool_result(tool_use_id, REJECTED_TOOL_RESULT, True)
+                self.user_text(INTERRUPT_MARKER)
+                self.log(event="interrupted", by="dialog")
+                return
             if decision == "allowed":
                 with open(path, "w", encoding="utf-8") as f:
                     f.write("hi")
@@ -272,8 +316,8 @@ class StandIn:
             with self.lock:
                 self.in_permission = False
         if self.dialog_answer is not None:
-            # A key reached the permission dialog (aipager's keystroke
-            # fallback): Enter takes the highlighted first row, "Yes".
+            # A key reached the permission dialog while the hook waited
+            # (aipager's keystroke fallback).
             return self.dialog_answer
         for o in outs:
             behavior = ((o.get("hookSpecificOutput") or {}).get("decision") or {}).get("behavior")
@@ -281,7 +325,22 @@ class StandIn:
                 return "allowed"
             if behavior == "deny":
                 return "denied"
-        return "no decision"
+        # No decision from the hook: Claude Code shows its own dialog and
+        # waits for a key (or an Escape).
+        with self.lock:
+            if self.dialog_answer is None and not self.interrupted:
+                self.in_permission = True
+        self.log(event="dialog_open")
+        deadline = time.monotonic() + 600
+        while time.monotonic() < deadline:
+            with self.lock:
+                answer, stopped = self.dialog_answer, self.interrupted
+            if answer is not None or stopped:
+                break
+            time.sleep(0.05)
+        with self.lock:
+            self.in_permission = False
+        return self.dialog_answer or "no decision"
 
     # -- terminal ------------------------------------------------------------
 
@@ -315,10 +374,7 @@ class StandIn:
             proc = self.hook_proc
         self.log(event="dialog_key", answer=answer)
         if proc is not None:
-            try:
-                proc.kill()
-            except OSError:
-                pass
+            _kill_group(proc)
         return True
 
     def interrupt(self) -> None:
@@ -329,10 +385,7 @@ class StandIn:
                 self.interrupted = True
                 self.queue.clear()
         if proc is not None:
-            try:
-                proc.kill()
-            except OSError:
-                pass
+            _kill_group(proc)
         if busy:
             self.log(event="escape")
 
@@ -370,12 +423,18 @@ class StandIn:
             if not data:
                 _bye()
             text = data.decode("utf-8", errors="replace")
-            if text in ("\x1b[A", "\x1b[B") and self.in_permission:
+            # aipager paces its keys (0.1 s apart), so an arrow and the
+            # Enter after it arrive in separate reads; an Enter in the same
+            # read as an arrow would fall through to the input buffer.
+            if self.in_permission and _ARROWS_RE.fullmatch(text):
                 with self.lock:
-                    self.dialog_row = max(0, self.dialog_row + (1 if text.endswith("B") else -1))
+                    for key in re.findall(r"\x1b\[([AB])", text):
+                        # Claude's menu clamps at both ends; it never wraps.
+                        self.dialog_row = min(len(DIALOG_ROWS) - 1, max(
+                            0, self.dialog_row + (1 if key == "B" else -1)))
                 continue
             if text == "\r" and self._answer_dialog(
-                    "allowed" if self.dialog_row == 0 else "denied"):
+                    "rejected" if self.dialog_row == len(DIALOG_ROWS) - 1 else "allowed"):
                 buf = ""
                 continue
             if text == "\r":
@@ -391,6 +450,17 @@ class StandIn:
             if text in ("\x18", "\x13", "\x03", "\x15"):
                 continue  # send-now chord / Ctrl+C / Ctrl+U: nothing queued here
             buf += text
+
+
+def _kill_group(proc: subprocess.Popen) -> None:
+    """Kill a hook and everything it started (its own process group)."""
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except OSError:
+        try:
+            proc.kill()
+        except OSError:
+            pass
 
 
 def main(argv: list[str] | None = None) -> int:

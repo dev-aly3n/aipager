@@ -1425,6 +1425,22 @@ class CallbackDispatchMixin:
         # Inject keystrokes
         ok = True
         perm = sess.pending_permission or {}
+        # A separate-message prompt (sent before the turn's busy card
+        # existed) keeps the same answer context in its own record
+        # (roadmap 8.99): its Allow/Deny answer through the parked hook
+        # and post the same attributed line as the inline prompt. Only a
+        # tap on that message (or the bar's copy of it) reaches here with
+        # the prompt still current (the refusal check above).
+        separate_perm = None
+        if not perm and is_resent_copy:
+            separate_perm = (sess.pending_prompt_msg or {}).get("perm") or None
+            perm = separate_perm or {}
+        # Taken before any key is typed: the keystroke fallback's watch
+        # reads only what Claude wrote after it (roadmap 8.99).
+        answered_at = time.time()
+        # What Claude's own queue held before a refusal was typed (the
+        # watch's /stop-like end needs it; read before the keys).
+        claude_held: list[dict] = []
         answer_text = None  # a branch may override the "<verb> [label]" toast
         # design.md "answer PermissionRequest hooks with a decision
         # instead of keystrokes": allow/allow_always/deny set this to
@@ -1615,6 +1631,7 @@ class CallbackDispatchMixin:
             if hook_answered:
                 via = "hook_decision"
                 ok = True
+                perm["hook_reply"] = None  # one decision per parked hook
             else:
                 via = "keystroke_fallback"
                 ok = await inject.send_keys(session_name, "Enter")
@@ -1655,6 +1672,7 @@ class CallbackDispatchMixin:
             if hook_answered:
                 via = "hook_decision"
                 ok = True
+                perm["hook_reply"] = None  # one decision per parked hook
                 if standing_rule is not None:
                     verb = ACTION_VERBS[action]
                 else:
@@ -1718,8 +1736,12 @@ class CallbackDispatchMixin:
             if hook_answered:
                 via = "hook_decision"
                 ok = True
+                perm["hook_reply"] = None  # one decision per parked hook
             else:
                 via = "keystroke_fallback"
+                if (perm.get("tool_info") or {}).get("name") != "AskUserQuestion":
+                    claude_held = await self._claude_queue_before_typed_refusal(sess)
+                    answered_at = time.time()
                 # Overshoot to the last item — see _DENY_OVERSHOOT.
                 for _ in range(_DENY_OVERSHOOT):
                     if not await inject.send_keys(session_name, "Down"):
@@ -1750,58 +1772,10 @@ class CallbackDispatchMixin:
                     pass
 
             if sess.pending_permission:
-                # Collapse current question into tool_history
+                # Collapse current question into tool_history, write the
+                # audit record and post the attributed line.
                 perm = sess.pending_permission
-                if perm.get("ask_question"):
-                    audit_detail = perm["question"][:80]
-                    collapsed = f"❓ {audit_detail[:40]} → {verb}"
-                    audit_tool_name = "AskUserQuestion"
-                else:
-                    audit_detail = perm.get("tool_summary", "Permission")[:80]
-                    collapsed = f"🔑 {audit_detail[:60]} → {verb}"
-                    audit_tool_name = (perm.get("tool_info") or {}).get("name", "")
-                sess.record_tool(collapsed, True)
-
-                # Persistent audit trail to disk (jsonl).
-                from aipager import audit as audit_mod
-                actor = (
-                    member if member is not None and member.id != 0 else None
-                )
-                audit_mod.append(
-                    session=sess.name, label=sess.label, action=verb,
-                    tool=audit_tool_name, summary=audit_detail,
-                    user_id=actor.id if actor else None,
-                    username=actor.label if actor else "",
-                    scope_label=self._scope_label(sess.scope_chat_id),
-                    scope_chat_id=sess.scope_chat_id or None,
-                    denied=(verb == "Deny"),
-                    via=via,
-                )
-
-                # Audit reply in chat — persistent record of the decision
-                # the user just made. Threaded under the busy message so
-                # the scrollback reads as a conversation.
-                audit_icon = {
-                    "Allowed": "✅",
-                    "Allowed always": "🟢",
-                    "Denied": "🚫",
-                    "Continue": "▶️",
-                }.get(verb, "·")
-                by_attr = f" by {attribution_label(actor)}" if actor else ""
-                try:
-                    await send_text(self._app.bot,
-                        resolve_chat_id(sess),
-                        f"{audit_icon} <b>{html_mod.escape(sess.label)}</b> · "
-                        f"{verb}{html_mod.escape(by_attr)} · "
-                        f"{html_mod.escape(audit_detail)}",
-                        parse_mode="HTML",
-                        reply_to_message_id=(sess.busy_msg_id
-                                             if sess.busy_msg_id and sess.busy_msg_id > 0
-                                             else None),
-                    )
-                except Exception:
-                    log.debug("[%s] audit message send failed", sess.label,
-                              exc_info=True)
+                await self._record_prompt_answer(sess, perm, verb, member, via)
 
                 # Multi-question AskUserQuestion: advance to next question
                 questions = perm.get("questions", [])
@@ -1860,7 +1834,21 @@ class CallbackDispatchMixin:
                     log.info("[%s] Inline permission: %s (via=%s)",
                              sess.label, verb, via or "n/a")
             else:
-                # Original behavior: edit the separate permission message
+                # The separate permission message. Claude has its answer
+                # already: the state is claimed before any send below
+                # waits in the flood pacing, so a quick Stop is not undone
+                # by a late BUSY.
+                if separate_perm:
+                    # The wait is not "thinking" time: discounted from the
+                    # card's clock, from when the card's clock started if
+                    # the card came after the prompt.
+                    wait_start = separate_perm.get("wait_started_at", 0)
+                    if wait_start and sess.busy_started_at:
+                        sess.busy_started_at += time.monotonic() - max(
+                            wait_start, sess.busy_started_at)
+                # Mark session as busy after user interaction
+                self.registry.transition(session_name, Status.BUSY)
+                log.info("[%s] %s (via=%s)", sess.label, verb, via or "n/a")
                 try:
                     await edit_text(query, f"{original_text}\n\n→ {verb}")
                 except Exception:
@@ -1868,8 +1856,86 @@ class CallbackDispatchMixin:
                 self.registry.remove_message(
                     query.message.message_id, calling_chat_id(query) or 0,
                 )
-                # Mark session as busy after user interaction
-                self.registry.transition(session_name, Status.BUSY)
-                log.info("[%s] %s", sess.label, verb)
+                if separate_perm:
+                    # The same record and attributed line as the inline
+                    # prompt (roadmap 8.99), threaded under the busy card
+                    # when there is one, else under the prompt itself.
+                    await self._record_prompt_answer(
+                        sess, separate_perm, verb, member, via,
+                        reply_to=getattr(query.message, "message_id", None))
+            if via == "keystroke_fallback":
+                # Typed into Claude Code's dialog: a refusal row ends the
+                # turn like an interrupt, with no Stop hook (roadmap 8.99).
+                person = getattr(query, "from_user", None)
+                self._watch_keystroke_answer(
+                    sess,
+                    # Only a tool's Deny chose the dialog's refusal row; a
+                    # question's rows are its options (the degraded
+                    # "AskUserQuestion (loading...)" prompt has Deny too).
+                    refusal=(action == "deny" and (perm.get("tool_info") or {})
+                             .get("name") != "AskUserQuestion"),
+                    held=claude_held,
+                    by=self._actor_label(
+                        getattr(person, "id", None),
+                        _message_chat_id(getattr(query, "message", None)), person),
+                    answered_at=answered_at)
         else:
             await self._safe_answer(query, f"Failed to send to {session_name}")
+
+    async def _record_prompt_answer(self, sess, perm: dict, verb: str, member,
+                                    via: str, *, reply_to: int | None = None) -> None:
+        """The record of an answered prompt, the same for the inline prompt
+        and a separate-message one (roadmap 8.99): the collapsed row in
+        the tool history, the audit-log record, and the attributed line in
+        the session's chat ("✅ x1 · Allowed by @bob · Write: ...").
+        Threaded under the busy card, else under *reply_to*."""
+        if perm.get("ask_question"):
+            audit_detail = (perm.get("question") or "?")[:80]
+            collapsed = f"❓ {audit_detail[:40]} → {verb}"
+            audit_tool_name = "AskUserQuestion"
+        else:
+            audit_detail = (perm.get("tool_summary") or "Permission")[:80]
+            collapsed = f"🔑 {audit_detail[:60]} → {verb}"
+            audit_tool_name = (perm.get("tool_info") or {}).get("name", "")
+        sess.record_tool(collapsed, True)
+
+        # Persistent audit trail to disk (jsonl).
+        from aipager import audit as audit_mod
+        actor = (
+            member if member is not None and member.id != 0 else None
+        )
+        audit_mod.append(
+            session=sess.name, label=sess.label, action=verb,
+            tool=audit_tool_name, summary=audit_detail,
+            user_id=actor.id if actor else None,
+            username=actor.label if actor else "",
+            scope_label=self._scope_label(sess.scope_chat_id),
+            scope_chat_id=sess.scope_chat_id or None,
+            denied=(verb == "Deny"),
+            via=via,
+        )
+
+        # Audit reply in chat — persistent record of the decision
+        # the user just made. Threaded under the busy message so
+        # the scrollback reads as a conversation.
+        audit_icon = {
+            "Allowed": "✅",
+            "Allowed always": "🟢",
+            "Denied": "🚫",
+            "Continue": "▶️",
+        }.get(verb, "·")
+        by_attr = f" by {attribution_label(actor)}" if actor else ""
+        anchor = (sess.busy_msg_id if sess.busy_msg_id and sess.busy_msg_id > 0
+                  else reply_to)
+        try:
+            await send_text(self._app.bot,
+                resolve_chat_id(sess),
+                f"{audit_icon} <b>{html_mod.escape(sess.label)}</b> · "
+                f"{verb}{html_mod.escape(by_attr)} · "
+                f"{html_mod.escape(audit_detail)}",
+                parse_mode="HTML",
+                reply_to_message_id=anchor or None,
+            )
+        except Exception:
+            log.debug("[%s] audit message send failed", sess.label,
+                      exc_info=True)

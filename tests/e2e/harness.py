@@ -433,6 +433,28 @@ class ClaudeRun:
                 if isinstance(b, dict) and b.get("type") == "tool_use"
                 and b.get("name") == tool]
 
+    def tool_calls(self) -> list[dict]:
+        """Every tool call Claude made, in order, each with the text of its
+        own result: ``{"name", "input", "result"}`` (``result`` is ``None``
+        when the transcript holds no result for it)."""
+        calls: list[dict] = []
+        results: dict[str, str] = {}
+        for e in _entries(self.transcript):
+            for b in _blocks(e):
+                if not isinstance(b, dict):
+                    continue
+                if b.get("type") == "tool_use":
+                    calls.append({"id": b.get("id"), "name": b.get("name", ""),
+                                  "input": b.get("input") or {}})
+                elif b.get("type") == "tool_result":
+                    c = b.get("content")
+                    if isinstance(c, list):
+                        c = "\n".join(str(p.get("text", "")) if isinstance(p, dict)
+                                      else str(p) for p in c)
+                    results[str(b.get("tool_use_id"))] = c if isinstance(c, str) else ""
+        return [{"name": c["name"], "input": c["input"],
+                 "result": results.get(str(c["id"]))} for c in calls]
+
     def tool_result_texts(self) -> list[str]:
         """All tool_result payloads from the transcript (for deny-reason
         inspection)."""

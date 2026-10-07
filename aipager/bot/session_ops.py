@@ -120,6 +120,32 @@ def _stopped_card_text(label: str, by: str = "") -> str:
     return f"{text} by {html_mod.escape(by)}" if by else text
 
 
+def _refused_card_text(label: str, by: str = "", *, refused: bool = True) -> str:
+    """The busy card after an answer typed into Claude Code's dialog ended
+    the turn (roadmap 8.99): `🚫 x1 · Denied`, in a group `🚫 x1 · Denied
+    by @bob`. When the typed answer was not a refusal but the turn still
+    ended like an interrupt, it reads as a Stop."""
+    if not refused:
+        return _stopped_card_text(label, by)
+    text = f"🚫 <b>{html_mod.escape(label)}</b> · Denied"
+    return f"{text} by {html_mod.escape(by)}" if by else text
+
+
+#: How long, after an answer was TYPED into Claude Code's permission dialog
+#: (the keystroke fallback), the daemon watches for the turn having ended
+#: like an interrupt (roadmap 8.99). For a refusal, also the bounded grace
+#: after which the turn is treated as ended without seeing the transcript's
+#: marker, as long as nothing shows Claude carried on. Far below the 900 s
+#: tool-in-flight cap, which was the only thing that released it before.
+KEYSTROKE_ANSWER_WATCH_SECONDS: float = 10.0
+#: How often the watch above reads the transcript's end.
+KEYSTROKE_ANSWER_POLL_SECONDS: float = 0.5
+
+#: session name -> the running watch (one per session; a newer answer
+#: replaces it). Also keeps a reference so the task is not collected.
+_KEYSTROKE_WATCHES: dict[str, asyncio.Task] = {}
+
+
 @dataclass
 class KillOutcome:
     """Result of :meth:`SessionOpsMixin._kill_session_core`.
@@ -1143,6 +1169,195 @@ class SessionOpsMixin:
         except Exception:
             log.debug("SESSION.md generation failed", exc_info=True)
             return None
+
+    # ── A turn ended by an answer typed into the dialog (roadmap 8.99) ──
+
+    async def _claude_queue_before_typed_refusal(self, sess: TrackedSession) -> list[dict]:
+        """What Claude Code holds in its own queue, read BEFORE a refusal
+        is typed into its dialog, as `_stop_session_core` reads it before
+        its Escapes: the refusal row ("(esc)") ends the turn like Escape,
+        which pulls the queue into the input box and writes `popAll`, after
+        which the transcript no longer shows what was held. Best effort:
+        ``[]`` on any failure."""
+        from aipager.policy_snapshot import list_outstanding_notes
+        try:
+            await self._settle_queued_targets(sess, reanchor=False)
+            return held_by_claude(
+                sess, list_outstanding_notes(sess.name) + self._queued_candidates(sess))
+        except Exception:
+            log.debug("[%s] reading Claude's queue before a typed refusal failed",
+                      sess.label, exc_info=True)
+            return []
+
+    def _watch_keystroke_answer(self, sess: TrackedSession, *, refusal: bool,
+                                by: str = "", answered_at: float,
+                                held: list[dict] | None = None) -> None:
+        """Start watching a turn whose permission prompt was answered by
+        typing into Claude Code's dialog (the hook was no longer waiting).
+
+        Pinned Claude Code behaviour (roadmap 8.99): the Deny fallback's
+        overshoot (``callbacks._DENY_OVERSHOOT``) lands on the dialog's
+        last row, "No, and tell Claude what to do differently (esc)", which
+        ends the turn the way Escape does: Claude Code writes
+        ``[Request interrupted by user for tool use]`` and waits for input.
+        What the live 2.1.291 run (2026-10-07) showed: no PostToolUse and
+        no Stop after the typed Deny, and the session kept BUSY ("tool
+        still in flight") until the 900 s cap. The row choice itself is
+        unchanged: the last row is the only one that is a refusal in every
+        dialog shape.
+
+        *refusal*: the typed answer chose that refusal row (a tool's Deny;
+        never a question's, whose rows are its options). Any other typed
+        answer is watched too, but only the transcript's interrupt marker
+        may end its turn (a wrong guess about the row, or an Escape in the
+        terminal). *answered_at*: ``time.time()`` taken before the keys
+        were sent. *held*: what Claude's own queue held before the keys
+        (:meth:`_claude_queue_before_typed_refusal`)."""
+        old = _KEYSTROKE_WATCHES.pop(sess.name, None)
+        if old is not None and not old.done():
+            try:
+                old.cancel()
+            except RuntimeError:
+                pass  # its loop is gone (never in the daemon's one loop)
+        task = _spawn(self._keystroke_answer_watch(
+            sess, refusal=refusal, by=by, answered_at=answered_at,
+            held=list(held or ())))
+        _KEYSTROKE_WATCHES[sess.name] = task
+
+        def _forget(t, name=sess.name):
+            if _KEYSTROKE_WATCHES.get(name) is t:
+                del _KEYSTROKE_WATCHES[name]
+        task.add_done_callback(_forget)
+
+    async def _keystroke_answer_watch(self, sess: TrackedSession, *,
+                                      refusal: bool, by: str,
+                                      answered_at: float,
+                                      held: list[dict] | None = None) -> None:
+        """The watch :meth:`_watch_keystroke_answer` starts.
+
+        Ends the turn as interrupted (:meth:`_end_turn_ended_at_dialog`)
+        once the transcript's newest entry is Claude's interrupt marker
+        written since the answer. For a refusal it also ends it once the
+        bounded grace passes with NOTHING written since the answer and
+        nothing else showing Claude carried on, unless Claude's own queue
+        held messages (it may run one as the next turn): then only the
+        marker ends it. Stands down the moment anything shows the turn
+        going on: the session leaving BUSY (a Stop, a new prompt), a new
+        turn, the parent's tool-in-flight stamp changing (a new PreToolUse
+        restamps it, the tool's own PostToolUse clears it), or, at the
+        grace, any other entry written since the answer (the rejected
+        tool's result with no marker after it, a new prompt)."""
+        from aipager.transcript import turn_tail_since
+        turn = sess.turn_seq
+        tool_stamp = sess.pending_tool_started_at
+        deadline = time.monotonic() + KEYSTROKE_ANSWER_WATCH_SECONDS
+        held = list(held or ())
+
+        def carried_on() -> bool:
+            return (self.registry.get(sess.name) is not sess
+                    or sess.status != Status.BUSY
+                    or sess.turn_seq != turn
+                    or sess.pending_tool_started_at != tool_stamp)
+
+        confirmed = False
+        while True:
+            await _sleep(KEYSTROKE_ANSWER_POLL_SECONDS)
+            if carried_on():
+                return
+            tail = turn_tail_since(sess.transcript_path, answered_at)
+            if tail == "marker":
+                confirmed = True
+                break
+            if time.monotonic() >= deadline:
+                if not refusal or held or tail is not None:
+                    log.info("[%s] typed answer: the turn did not end at the "
+                             "dialog (%s) - left to its hooks", sess.label,
+                             "not a refusal" if not refusal
+                             else "Claude had queued messages" if held
+                             else "the transcript moved on")
+                    return
+                log.warning("[%s] typed refusal: no interrupt marker within "
+                            "%.0fs and nothing since - ending the turn",
+                            sess.label, KEYSTROKE_ANSWER_WATCH_SECONDS)
+                break
+        await self._end_turn_ended_at_dialog(
+            sess, refused=refusal, by=by, confirmed=confirmed,
+            carried_on=carried_on, held=held)
+
+    async def _end_turn_ended_at_dialog(self, sess: TrackedSession, *,
+                                        refused: bool, by: str,
+                                        confirmed: bool,
+                                        carried_on=None,
+                                        held: list[dict] | None = None) -> bool:
+        """End the running turn the way /stop does, minus the Escapes: the
+        answer typed into the dialog already interrupted it. Settles the
+        card ("Denied"), clears the tool-in-flight state and the hook's
+        turn-open mark, and moves the session to IDLE. What Claude's queue
+        held (*held*, read before the keys) was pulled into its input box
+        by the interrupt, as by /stop's Escape: wiped there and marked not
+        delivered, as /stop does. Then the messages aipager held while the
+        prompt was open go out, as at any turn end.
+
+        A background job still open keeps its own endgame: only the
+        refused tool's in-flight stamp is cleared (it will never run).
+
+        *carried_on*: re-checked after the card lock's await; when it
+        reports Claude carried on, nothing is changed. Returns True when
+        the turn was ended here."""
+        held = list(held or ())
+        async with sess.animate_lock:
+            if carried_on is not None and carried_on():
+                return False
+            if sess.job_background_open():
+                sess.pending_tool_started_at = None
+                sess.parent_tool_started_at = None
+                log.info("[%s] turn ended at the dialog with a background "
+                         "job open: tool in flight cleared, the job ends it",
+                         sess.label)
+                return False
+            self._cancel_lazy_card(sess)
+            sess.close_turn()  # no card for this turn from here (8.57)
+            # The state flips here, synchronously, before any other await.
+            sess.pending_tool_started_at = None
+            sess.parent_tool_started_at = None
+            sess.pending_permission = None
+            _clear_turn_open(sess.name)
+            sess.turn_sender_id = None
+            if confirmed:
+                # A Stop hook landing after this is Claude finalising the
+                # interrupted turn, not an answer still owed (the
+                # already-IDLE delivery guard). Not set on the grace
+                # path: there, a late Stop's answer must still go out.
+                sess.user_stopped_at = time.monotonic()
+            self.registry.transition(sess.name, Status.IDLE)
+        log.info("[%s] turn ended at the permission dialog (%s, %s) - IDLE",
+                 sess.label, "refused" if refused else "answered",
+                 "transcript marker" if confirmed else "grace")
+        self._stop_animation(sess)
+        await self._settle_card_text(
+            sess, _refused_card_text(sess.label, by, refused=refused))
+        sess.busy_msg_id = None
+        sess.trigger_msg_id = None
+        sess.busy_card_trigger = None
+        if held:
+            # Only ever with the marker seen (the grace stands down when
+            # Claude's queue held anything).
+            try:
+                await inject.discard_queued_input(sess.name)
+                await self._mark_not_delivered(sess, held)
+            except Exception:
+                log.warning("[%s] wiping Claude's queue after the dialog's "
+                            "interrupt failed", sess.label, exc_info=True)
+            from aipager.policy_snapshot import clear_notes_dir
+            clear_notes_dir(sess.name)
+            self._discard_queued_targets(sess)
+        self.registry.mark_dirty()
+        try:
+            await self._drain_next_queued(sess)
+        except Exception:
+            log.warning("[%s] draining held messages after the dialog's "
+                        "interrupt failed", sess.label, exc_info=True)
+        return True
 
     # ── Telegram handlers ──
 

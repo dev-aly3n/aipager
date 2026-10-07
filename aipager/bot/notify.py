@@ -220,6 +220,28 @@ def _plain_text_chunks(body_content: str) -> list[str]:
     return chunks
 
 
+def _separate_prompt_perm(tool_info: dict | None, summary: str,
+                          hook_reply: dict | None) -> dict:
+    """What answering a separate-message prompt needs (roadmap 8.99): the
+    same fields the inline prompt keeps in ``pending_permission``, kept in
+    ``pending_prompt_msg["perm"]`` instead, so an Allow/Deny tapped on it
+    answers through the parked PermissionRequest hook and posts the same
+    attributed audit line. ``pending_permission`` itself stays None on this
+    path: it means "the prompt is shown on the busy card".
+
+    The hook's reply channel rides only on a plain tool permission, as on
+    the inline path: never on an AskUserQuestion, whose answer is a
+    choice of option rows, not an allow/deny."""
+    perm: dict = {"tool_summary": summary or "Permission needed",
+                  "tool_info": tool_info, "wait_started_at": time.monotonic()}
+    if tool_info and tool_info.get("name") == "AskUserQuestion":
+        perm["ask_question"] = True
+        perm["question"] = summary or "?"
+    elif tool_info:
+        perm["hook_reply"] = hook_reply
+    return perm
+
+
 #: :meth:`NotifyMixin._end_job_turn`'s answer when the job is still open.
 _JOB_STILL_OPEN = object()
 
@@ -3334,12 +3356,12 @@ class NotifyMixin:
                         text += _format_perm_detail(
                             tool_summary, (tool_info or {}).get("detail") or "")
                     # This separate-message prompt keeps its Allow/Deny-only
-                    # keyboard on purpose (review rev-iter1-004): with no
-                    # ``pending_permission`` on this path there is no
-                    # always_available flag, so Allow-always must not be
-                    # offered — and it never was here. Stop stays absent as
-                    # before; unifying with _build_permission_keyboard would
-                    # change this surface's behaviour beyond the fix.
+                    # keyboard on purpose (review rev-iter1-004): Allow-always
+                    # was never offered here. Stop stays absent as before;
+                    # unifying with _build_permission_keyboard would change
+                    # this surface's behaviour beyond the fix. Its taps
+                    # answer through the hook like the inline prompt's
+                    # (roadmap 8.99, ``pending_prompt_msg["perm"]`` below).
                     # Local import, not top-level — avoids an import cycle
                     # with session_parity; mirrors keyboards.py's own
                     # local-import precedent (see
@@ -3367,7 +3389,10 @@ class NotifyMixin:
                 prompt_token = new_prompt_token()
                 sess.pending_prompt_msg = {"text": text, "keyboard": keyboard,
                                            "summary": prompt_summary,
-                                           "prompt_token": prompt_token}
+                                           "prompt_token": prompt_token,
+                                           "perm": _separate_prompt_perm(
+                                               tool_info, prompt_summary,
+                                               context.get("hook_reply"))}
 
                 # Wrapped for the gate (8.26 R2, the tolerance sweep). This
                 # is a DIRECT send inside `notify`, a 1726-line method: an

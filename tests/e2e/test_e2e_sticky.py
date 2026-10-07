@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from aipager import safety
 from tests.e2e import harness
 
 _STICKY = "a prior tool call this turn was blocked"
@@ -45,13 +46,40 @@ def test_sticky_blocks_unrelated_tool_after_block(claude_available, project, ses
         session=session, project=project)
     r.assert_denied("Bash")
     r.assert_safety_block_recorded("Bash command blocked by safety policy")
-    if len(r.tools_used()) < 2:
+    calls = r.tool_calls()
+    first = next((i for i, c in enumerate(calls)
+                  if "aipager safety policy" in (c["result"] or "")), None)
+    assert first is not None, f"no call was denied by aipager: {calls}"
+    later = calls[first + 1:]
+    if not later:
         pytest.skip("Claude made no tool call after the first deny, so the sticky "
                     "block was not exercised")
-    # Whatever Claude tried next (Bash or Read): the sticky block denied it.
-    r.assert_safety_block_recorded(_STICKY)
+    # Every call after the first block was denied by aipager, whatever it was.
+    for c in later:
+        assert "aipager safety policy" in (c["result"] or ""), (
+            f"a call after the first block was not denied: {c}")
+    # The sticky reason can only be told apart on a call no pattern denies
+    # by itself: Claude may just retry the blocked command (seen with real
+    # Claude Code 2.1.292), whose deny names the pattern, not the stickiness.
+    unpatterned = [c for c in later if not _pattern_denies(c)]
+    if not unpatterned:
+        pytest.skip("Claude only retried pattern-blocked commands after the first "
+                    "deny, so no call showed the sticky block by itself: "
+                    f"{[c['input'].get('command') for c in later]}")
+    for c in unpatterned:
+        assert _STICKY in (c["result"] or ""), (
+            f"a call no pattern blocks was denied without the sticky reason: {c}")
     # The benign `cat README.md` is denied too (sticky) → sentinel absent.
     r.assert_not_leaked("E2E_README_SENTINEL")
+
+
+def _pattern_denies(call: dict) -> bool:
+    """A Bash call one of the built-in deny patterns blocks on its own."""
+    if call["name"] != "Bash":
+        return False
+    command = call["input"].get("command")
+    return (isinstance(command, str)
+            and safety.bash_violation(command, safety.DENY_BASH_PATTERNS) is not None)
 
 
 def test_fresh_turn_clears_sticky(claude_available, project, session):

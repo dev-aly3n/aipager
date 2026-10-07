@@ -322,6 +322,96 @@ def turn_appears_complete(transcript_path: str) -> bool:
     return False
 
 
+#: Slack for :func:`turn_tail_since`: its ``since`` is taken before the
+#: keys that answer the dialog are typed, so what Claude writes in reply is
+#: never older; this only absorbs the millisecond timestamps.
+INTERRUPT_SLACK_SECONDS: float = 0.5
+
+#: How much of the transcript's end :func:`turn_tail_since` reads: it is
+#: polled on the daemon's one event loop, and a long session's transcript
+#: is tens of MB. Its newest turn entries are always within this.
+TAIL_READ_BYTES: int = 256 * 1024
+
+
+def _tail_lines(path: str, max_bytes: int = TAIL_READ_BYTES) -> list[str]:
+    """The complete lines in the last *max_bytes* of *path* (a first line
+    cut by the seek is dropped). Raises OSError like ``open``."""
+    with open(path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        start = max(0, size - max_bytes)
+        f.seek(start)
+        data = f.read()
+    lines = data.decode("utf-8", errors="replace").splitlines()
+    if start > 0 and lines:
+        lines = lines[1:]
+    return lines
+
+
+def turn_tail_since(transcript_path: str, since: float) -> str | None:
+    """What the transcript's newest turn entry says about a turn whose
+    permission prompt was answered by typing into Claude Code's dialog at
+    *since* (epoch seconds, taken before the keys):
+
+    - ``"marker"``: Claude Code's interrupt marker (a user record reading
+      "[Request interrupted by user ...]") written since then: the turn
+      ended the way an interrupt ends it, and Claude waits for input;
+    - ``"other"``: some other turn entry written since then (the rejected
+      tool's result with no marker after it yet, a new prompt, Claude's
+      own text): something happened that is not that end;
+    - ``None``: nothing written since then, or no transcript.
+
+    Pinned Claude Code behaviour (roadmap 8.99): choosing the dialog's last
+    row, "No, and tell Claude what to do differently (esc)", ends the turn
+    like Escape does, which writes ``[Request interrupted by user for tool
+    use]``. The live 2.1.291 run (2026-10-07) showed the rest: no
+    PostToolUse and no Stop after the typed Deny, and a transcript that
+    read as a finished turn while the tool was still counted in flight.
+
+    Bookkeeping and sidecar records are skipped exactly as
+    :func:`turn_appears_complete` skips them. An entry with no usable
+    timestamp is dated by the file's own time. Reads only the file's last
+    :data:`TAIL_READ_BYTES`. Never raises.
+    """
+    if not transcript_path:
+        return None
+    try:
+        tail = _tail_lines(transcript_path)
+        mtime = os.path.getmtime(transcript_path)
+    except (FileNotFoundError, PermissionError, OSError):
+        return None
+    for line in reversed(tail):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("type") in ("system", "file-history-snapshot", "summary"):
+            continue
+        if "message" not in entry:
+            continue
+        ts = _entry_timestamp(entry)
+        stamp = ts if ts is not None else mtime
+        if stamp < since - INTERRUPT_SLACK_SECONDS:
+            return None
+        msg = entry.get("message") or {}
+        if (entry.get("type") == "user" and isinstance(msg, dict)
+                and "Request interrupted" in _content_text(msg.get("content"))):
+            return "marker"
+        return "other"
+    return None
+
+
+def interrupted_since(transcript_path: str, since: float) -> bool:
+    """True when :func:`turn_tail_since` reads Claude Code's interrupt
+    marker written at or after *since*."""
+    return turn_tail_since(transcript_path, since) == "marker"
+
+
 def read_turn_stream(
     transcript_path: str, offset: int,
 ) -> tuple[list[tuple[str, str]], int]:

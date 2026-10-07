@@ -10,6 +10,8 @@ not send a project slash command; an admin may.
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from tests.e2e.fake_telegram import instance as fti
@@ -66,8 +68,7 @@ def test_roles_and_buttons(fresh):
     assert flows.wait_toast(fake, cb) in ("Auto mode needs an admin.", REFUSED)
     starts = [e for e in inst.standin_log(name) if e.get("event") == "start"]
     since = fake.mark()
-    cb = fake.inject_callback(fti.user(fti.DAVE), ready, auto)
-    fake.wait_answer(cb)
+    _tap_once_the_turn_is_over(fake, fti.user(fti.DAVE), ready, auto, "ft3")
     flows.wait_text(fake, G, "Switched to 🤖 Auto by @dave", since=since, timeout=90)
     if inst.claude_mode == "standin":
         fti.wait_until(lambda: len([e for e in inst.standin_log(name)
@@ -99,25 +100,40 @@ def test_slash_rule_user_refused_admin_allowed(fresh):
     assert not any("/ftcmd" in p for p in inst.prompts_seen(name)[n:])
 
     prompt = flows.prompt_turn(inst, G, fti.DAVE, name, "/ft5 /ftcmd", "/ftcmd")
-    assert prompt.strip().startswith("/ftcmd")
+    # Typed as the command itself: the stand-in records it raw, real Claude
+    # Code as its command record (what the hook's slash rule reads too).
+    assert (prompt.strip().startswith("/ftcmd")
+            or "<command-name>/ftcmd</command-name>" in prompt), prompt
 
 
-FINDING_A = ("Finding A: a permission prompt sent before the busy card loses the "
-             "hook reply channel and the 'by @bob' line (notify.py separate-message "
-             "path)")
+def _tap_once_the_turn_is_over(fake, user: dict, message: dict, data: str, label: str,
+                               timeout: float = 90) -> str:
+    """Tap a mode switch once the session's turn is fully over.
+
+    The turn's log line ``→ IDLE`` comes before its finish has retired the
+    busy card: with real Claude in a busy group the finish's card edits and
+    answer are paced by the flood limit for seconds, and until the card is
+    retired a tap on the older Ready card reads as stale, so the product
+    answers "<label> is working. Switch after it finishes" (correctly, and
+    with no other effect). Only that answer is retried, after the daemon
+    went quiet; any other answer is returned."""
+    busy = f"{label} is working. Switch after it finishes"
+    deadline = time.monotonic() + timeout
+    while True:
+        cb = fake.inject_callback(user, message, data)
+        toast = flows.wait_toast(fake, cb)
+        if busy not in toast or time.monotonic() >= deadline:
+            assert busy not in toast, f"{label} still working after {timeout}s"
+            return toast
+        flows.settle(fake)
 
 
 def test_allow_by_a_user_is_attributed_when_the_prompt_beats_the_busy_card(fresh):
     """Scenario 2's Allow by bob WITHOUT the stand-in's hold: the tool call
     comes the moment the prompt arrives, before the turn's busy card is
-    sent, so the daemon shows the prompt as a separate message. Pins
-    Finding A: that path has no hook reply channel and posts no "Allowed
-    by @bob" line.
-
-    Everything up to the tap is asserted normally, including that the
-    prompt really took the separate-message path; only the missing
-    attribution becomes an xfail, and its presence fails the test so the
-    pin is removed once Finding A is fixed."""
+    sent, so the daemon shows the prompt as a separate message (roadmap
+    8.99). Its Allow answers through the parked hook (no key is typed into
+    the dialog) and the group is told who allowed it, as on the card."""
     inst, fake = fresh, fresh.fake
     if inst.claude_mode != "standin":
         # Real Claude thinks before its tool call, so its busy card
@@ -142,8 +158,9 @@ def test_allow_by_a_user_is_attributed_when_the_prompt_beats_the_busy_card(fresh
     since = fake.mark()
     cb = fake.inject_callback(fti.user(fti.BOB), card, allow)
     fake.wait_answer(cb)
-    try:
-        flows.wait_text(fake, G, "Allowed by @bob", since=since, timeout=30)
-    except AssertionError:
-        pytest.xfail(FINDING_A)
-    pytest.fail("Finding A is fixed: remove this pin and assert the attribution plainly")
+    flows.wait_text(fake, G, "Allowed by @bob", since=since, timeout=30)
+    fti.wait_until(inst.file_in_project("ft15.txt").exists, 60, "the file bob allowed")
+    flows.wait_turn_end(inst, name, "ft15", since_log=log_since)
+    # Answered by the hook's decision, not by keys typed into the dialog.
+    assert [d["decision"] for d in _decisions(inst, name)] == ["allowed"]
+    assert not [e for e in inst.standin_log(name) if e.get("event") == "dialog_key"]

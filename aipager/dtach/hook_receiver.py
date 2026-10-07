@@ -652,10 +652,15 @@ class HookReceiver:
             # notice for a session that's already gone must not
             # resurrect a fresh, empty TrackedSession.
             sess = self.registry.get(session_name)
-            pending = sess.pending_permission if sess else None
-            hr = pending.get("hook_reply") if pending else None
-            if isinstance(hr, dict) and hr.get("request_id") == msg.get("aipager_request_id"):
-                pending["hook_reply"] = None
+            # The inline prompt's context, and a separate-message prompt's
+            # (roadmap 8.99: ``pending_prompt_msg["perm"]``), alike.
+            separate = (sess.pending_prompt_msg or {}) if sess else {}
+            for pending in ((sess.pending_permission if sess else None),
+                            separate.get("perm")):
+                hr = pending.get("hook_reply") if isinstance(pending, dict) else None
+                if (isinstance(hr, dict)
+                        and hr.get("request_id") == msg.get("aipager_request_id")):
+                    pending["hook_reply"] = None
             return
 
         elif event == "permission_prompt":
