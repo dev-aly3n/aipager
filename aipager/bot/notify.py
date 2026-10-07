@@ -233,7 +233,10 @@ def _separate_prompt_perm(tool_info: dict | None, summary: str,
     the inline path: never on an AskUserQuestion, whose answer is a
     choice of option rows, not an allow/deny."""
     perm: dict = {"tool_summary": summary or "Permission needed",
-                  "tool_info": tool_info, "wait_started_at": time.monotonic()}
+                  "tool_info": tool_info, "wait_started_at": time.monotonic(),
+                  # When it was shown, on the clock a restart can read
+                  # (roadmap 8.102).
+                  "shown_wall": time.time()}
     if tool_info and tool_info.get("name") == "AskUserQuestion":
         perm["ask_question"] = True
         perm["question"] = summary or "?"
@@ -260,6 +263,30 @@ class NotifyMixin:
                 multi_select=perm.get("multi_select", False),
                 selected=perm.get("selected") or None)
         return self._build_permission_keyboard(sess)
+
+    def _separate_permission_keyboard(self, sess: TrackedSession):
+        """Allow / Deny for a tool permission sent as its own message (the
+        separate-message prompt, roadmap 8.99), shared by the send and by
+        the restore of that prompt after a restart (8.102).
+
+        This surface keeps its Allow/Deny-only keyboard on purpose (review
+        rev-iter1-004): Allow-always was never offered here, and Stop
+        stays absent; unifying with ``_build_permission_keyboard`` would
+        change this surface's behaviour."""
+        # Local import, not top-level — avoids an import cycle with
+        # session_parity; mirrors keyboards.py's own local-import precedent
+        # (see keyboards.py:_build_resume_mode_keyboard).
+        from aipager.bot import session_parity
+
+        chat_id = resolve_chat_id_int(sess) or 0
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton(
+                "✅ Allow",
+                callback_data=session_parity.session_cb(self, chat_id, sess, "allow")),
+            InlineKeyboardButton(
+                "❌ Deny",
+                callback_data=session_parity.session_cb(self, chat_id, sess, "deny")),
+        ]])
 
     def _pending_prompt_markup(self, sess: TrackedSession):
         """``(text, keyboard)`` of the prompt *sess* is waiting on, as the
@@ -3300,6 +3327,7 @@ class NotifyMixin:
                             "selected": set(),
                             "tool_info": tool_info,
                             "wait_started_at": time.monotonic(),
+                            "shown_wall": time.time(),
                         }
                     else:
                         # AskUserQuestion detected but no questions data (transcript
@@ -3308,6 +3336,7 @@ class NotifyMixin:
                             "tool_summary": "AskUserQuestion (loading…)",
                             "tool_info": tool_info,
                             "wait_started_at": time.monotonic(),
+                            "shown_wall": time.time(),
                         }
                 else:
                     tool_summary = tool_info["summary"] if tool_info else "Permission needed"
@@ -3315,6 +3344,8 @@ class NotifyMixin:
                         "tool_summary": tool_summary,
                         "tool_info": tool_info,
                         "wait_started_at": time.monotonic(),
+                        # The wall clock a restart reads (roadmap 8.102).
+                        "shown_wall": time.time(),
                         # design.md "answer PermissionRequest hooks with
                         # a decision instead of keystrokes": deliberately
                         # NOT added to either AskUserQuestion-flavored
@@ -3326,6 +3357,8 @@ class NotifyMixin:
                 # pinned bar's "Answer" re-send (8.31).
                 keyboard = self._pending_prompt_keyboard(sess)
                 sess.pending_prompt_msg = None
+                # The state file keeps the open prompt (roadmap 8.102).
+                self.registry.mark_dirty()
 
                 text = self._build_busy_text(label, "Waiting", sess)
                 result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess))
@@ -3362,21 +3395,7 @@ class NotifyMixin:
                     # this surface's behaviour beyond the fix. Its taps
                     # answer through the hook like the inline prompt's
                     # (roadmap 8.99, ``pending_prompt_msg["perm"]`` below).
-                    # Local import, not top-level — avoids an import cycle
-                    # with session_parity; mirrors keyboards.py's own
-                    # local-import precedent (see
-                    # keyboards.py:_build_resume_mode_keyboard).
-                    from aipager.bot import session_parity
-
-                    chat_id = resolve_chat_id_int(sess) or 0
-                    keyboard = InlineKeyboardMarkup([[
-                        InlineKeyboardButton(
-                            "✅ Allow",
-                            callback_data=session_parity.session_cb(self, chat_id, sess, "allow")),
-                        InlineKeyboardButton(
-                            "❌ Deny",
-                            callback_data=session_parity.session_cb(self, chat_id, sess, "deny")),
-                    ]])
+                    keyboard = self._separate_permission_keyboard(sess)
                     prompt_summary = tool_summary or "Permission needed"
 
                 # Kept as SENT, before the send: the pinned bar summarises
@@ -3387,12 +3406,13 @@ class NotifyMixin:
                 # the limiter while the prompt is answered and another one
                 # shown, and the message must be bound to THIS prompt.
                 prompt_token = new_prompt_token()
-                sess.pending_prompt_msg = {"text": text, "keyboard": keyboard,
-                                           "summary": prompt_summary,
-                                           "prompt_token": prompt_token,
-                                           "perm": _separate_prompt_perm(
-                                               tool_info, prompt_summary,
-                                               context.get("hook_reply"))}
+                prompt_record = {"text": text, "keyboard": keyboard,
+                                 "summary": prompt_summary,
+                                 "prompt_token": prompt_token,
+                                 "perm": _separate_prompt_perm(
+                                     tool_info, prompt_summary,
+                                     context.get("hook_reply"))}
+                sess.pending_prompt_msg = prompt_record
 
                 # Wrapped for the gate (8.26 R2, the tolerance sweep). This
                 # is a DIRECT send inside `notify`, a 1726-line method: an
@@ -3420,6 +3440,15 @@ class NotifyMixin:
                     self.register_prompt_surface(
                         resolve_chat_id_int(sess) or 0, msg.message_id, sess,
                         prompt_token)
+                    # Where the message is, for a restart to bind it to the
+                    # restored prompt (roadmap 8.102). Only on THIS prompt's
+                    # record: the send may have waited in the limiter while
+                    # it was answered and another one shown.
+                    if sess.pending_prompt_msg is prompt_record:
+                        sess.pending_prompt_msg["msg_id"] = msg.message_id
+                        sess.pending_prompt_msg["chat_id"] = (
+                            resolve_chat_id_int(sess) or 0)
+                        self.registry.mark_dirty()
                     await self._maybe_update_bot_name(sess.name)
 
         elif sess.status == Status.BUSY:

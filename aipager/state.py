@@ -541,10 +541,23 @@ class TrackedSession:
     pending_permission: dict | None = None
     # The prompt as it was SENT when it could not go inline into the busy
     # card (the separate-message fallback leaves ``pending_permission``
-    # None): ``{"text", "keyboard", "summary"}``. What the pinned bar's
-    # "Answer" button re-sends (8.31). Meaningful only while ``status`` is
-    # INTERACTIVE; transient, never in _PERSIST_FIELDS.
+    # None): ``{"text", "keyboard", "summary", "prompt_token", "perm"}``,
+    # plus ``"msg_id"`` and ``"chat_id"`` once the send landed (roadmap
+    # 8.102: what a restart needs to bind the message to the restored
+    # prompt). What the pinned bar's "Answer" button re-sends (8.31).
+    # Meaningful only while ``status`` is INTERACTIVE (it is never cleared
+    # when the prompt is answered); transient, never in _PERSIST_FIELDS.
     pending_prompt_msg: dict | None = None
+    # Roadmap 8.102: the parent's latest PreToolUse ``(tool_name,
+    # tool_use_id)``, the id a PermissionRequest that carries none takes
+    # for its prompt when the names match. None when that PreToolUse had
+    # no id. Transient.
+    last_parent_tool_use: tuple[str, str] | None = None
+    # Roadmap 8.102: monotonic stamp of the latest entry into INTERACTIVE
+    # (``SessionRegistry.transition``). A prompt dict counts as the open
+    # prompt only if its ``wait_started_at`` is not older: that shuts out
+    # the ``pending_prompt_msg`` an earlier wait left behind. Transient.
+    interactive_entered_at: float = 0.0
     # Active subagents — keyed by agent_id ("agent activity rows on the
     # busy card"). Format: {agent_id: {"type": str, "started_at": float,
     # "last_seen": float, "history_idx": int | None, "activity": str,
@@ -2681,6 +2694,9 @@ class SessionRegistry:
         # A new wait on a human gets its own reminder (roadmap 8.4).
         if new_status == Status.INTERACTIVE:
             sess.waiting_reminder_sent = False
+            # The wait's start: only a prompt shown from here on is the
+            # open one the state file may keep (roadmap 8.102).
+            sess.interactive_entered_at = time.monotonic()
         # Reset idle timer when entering BUSY so next IDLE always notifies
         if new_status == Status.BUSY:
             sess.last_idle_at = 0.0

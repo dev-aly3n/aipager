@@ -186,6 +186,29 @@ def _extract_token_usage(transcript_path: str) -> dict | None:
     return None
 
 
+def _payload_tool_use_id(msg: dict) -> str:
+    """The hook payload's ``tool_use_id`` when it is a non-empty string,
+    else ``""`` (roadmap 8.102)."""
+    tuid = msg.get("tool_use_id")
+    return tuid if isinstance(tuid, str) and tuid else ""
+
+
+def _permission_tool_use_id(msg: dict, tool_name: str, sess) -> str:
+    """The id of the tool call a PermissionRequest asks about (roadmap
+    8.102): the payload's own, else the parent's latest PreToolUse's when
+    it named the same tool and the request is the parent's (no
+    ``agent_id``), else ``""``. Only a supplement to the prompt's time in
+    the restart's transcript check: a wrong id (parallel calls of one
+    tool) can only miss a restore, never make a wrong one."""
+    own = _payload_tool_use_id(msg)
+    if own:
+        return own
+    last = sess.last_parent_tool_use if sess is not None else None
+    if not (msg.get("agent_id") or "") and last and last[0] == tool_name:
+        return last[1]
+    return ""
+
+
 def _extract_pending_tool(transcript_path: str) -> dict | None:
     """Read the last lines of the transcript to find the pending tool_use."""
     try:
@@ -622,6 +645,8 @@ class HookReceiver:
                     "always_available": always,
                     "standing_rule_suggestion": standing_rule_suggestion,
                     "detail": _tool_detail(tool_name, tool_input),
+                    "tool_use_id": _permission_tool_use_id(
+                        msg, tool_name, sess_ref),
                 }
                 # design.md "answer PermissionRequest hooks with a
                 # decision instead of keystrokes": the hook offers a
@@ -696,6 +721,10 @@ class HookReceiver:
             # This path never sees permission_suggestions, so tool_info
             # carries no "always_available" key: unknown. The keyboard then
             # offers no Allow-always and the callback never navigates.
+            # Nor a tool_use_id (roadmap 8.102): a restart's check of the
+            # transcript goes by the prompt's time alone.
+            if tool_info:
+                tool_info["tool_use_id"] = ""
             new_status = Status.INTERACTIVE
             context = {"tool_info": tool_info, "transcript_path": transcript_path}
 
@@ -886,7 +915,9 @@ class HookReceiver:
                 log.info("[%s] AskUserQuestion (agent %s): %s", label,
                          ask_agent or "-", first_q[:80])
                 tool_info = {"name": "AskUserQuestion", "input": tool_input,
-                             "summary": _summarize_tool("AskUserQuestion", tool_input)}
+                             "summary": _summarize_tool("AskUserQuestion", tool_input),
+                             # Its own call's id (roadmap 8.102).
+                             "tool_use_id": _payload_tool_use_id(msg)}
                 sess_aq = self.registry.transition(session_name, Status.INTERACTIVE)
                 if sess_aq:
                     await self.notify_fn(sess_aq, "permission_prompt", {
@@ -942,6 +973,10 @@ class HookReceiver:
                 sess.pending_tool_started_at = time.monotonic()
                 # The parent's own step (the "⏳ Queued" line's clock).
                 sess.parent_tool_started_at = sess.pending_tool_started_at
+                # Its call's id, for a PermissionRequest that carries none
+                # (roadmap 8.102). Replaced, never kept from an older call.
+                tuid = _payload_tool_use_id(msg)
+                sess.last_parent_tool_use = (tool_name, tuid) if tuid else None
                 # Ensure we're in BUSY state. A PreToolUse arriving while
                 # NOT already BUSY is background activity ONLY when there
                 # is actual evidence of an open background job —
