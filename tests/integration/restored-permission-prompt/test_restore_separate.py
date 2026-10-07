@@ -13,9 +13,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+from datetime import datetime, timezone
 
 from aipager import audit as audit_mod
 from aipager.bot.dashboard import _pinned_state
+from aipager.session_monitor import IDLE_RECOVERY_GRACE, SessionMonitor
 from aipager.state import Status
 
 # The harness's (conftest.py; a hyphenated directory is no package).
@@ -130,3 +133,36 @@ def test_a_tap_after_the_restored_prompt_was_answered_is_refused(
     toast = _run(vloop, scenario())
     assert toast == "already answered"
     assert r.keys == ["Enter"]
+
+
+def test_a_lost_stop_after_the_answer_is_recovered(replay, vloop, tmp_path,
+                                                   caplog):
+    """The restore enters the turn for real (BUSY first: the turn's start
+    stamps), so once the answered tool is done and the transcript shows
+    the turn finished, idle-recovery releases a session whose Stop hook
+    never came, as for any turn."""
+    r = replay
+    monitor = SessionMonitor(r.bot.registry, r.bot.notify)
+
+    async def scenario():
+        msg = await _separate_prompt(r, tmp_path)
+        await r.restart()
+        await r.tap(msg, r.cb(msg, "allow"), text=r.chat.messages[msg]["text"])
+        await asyncio.sleep(1)
+        r.hook(hook_event_name="PostToolUse", tool_name="Bash",
+               tool_input={"command": "rm -rf build"})
+        await asyncio.sleep(2)
+        stamp = datetime.fromtimestamp(vloop.wall(), timezone.utc).isoformat()
+        r.append({"type": "assistant", "timestamp": stamp, "message": {
+            "role": "assistant", "stop_reason": "end_turn",
+            "content": [{"type": "text", "text": "build removed"}]}})
+        os.utime(r.transcript, (vloop.wall(), vloop.wall()))
+        await asyncio.sleep(IDLE_RECOVERY_GRACE + 2)
+        await monitor._scan()
+        await asyncio.sleep(10)
+
+    with caplog.at_level(logging.INFO):
+        _run(vloop, scenario())
+    assert r.sess.status is Status.IDLE
+    assert any("recovering to IDLE (missed Stop hook)" in m
+               for m in caplog.messages)

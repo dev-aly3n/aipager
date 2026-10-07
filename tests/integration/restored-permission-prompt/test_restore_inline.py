@@ -142,6 +142,82 @@ def test_stop_after_answer_finishes_the_same_card(replay, vloop, tmp_path):
         "build removed" in r.chat.cards[card]["text"]
 
 
+def test_a_message_during_the_answered_turn_waits_like_any_busy_turns(
+        replay, vloop, tmp_path):
+    """After the answer the card is the running turn's own (8.57 R1): a
+    message sent meanwhile waits for the turn and starts no card of its
+    own, and the card stays the one live card."""
+    r = replay
+
+    async def scenario():
+        card = await _at_prompt(r, tmp_path)
+        await r.restart()
+        await r.tap(card, r.cb(card, "allow"))
+        await asyncio.sleep(2)
+        w = asyncio.ensure_future(r._updates())
+        r.say(3, "one more thing")
+        await r.updates.join()
+        await asyncio.sleep(5)
+        w.cancel()
+        return card
+
+    card = _run(vloop, scenario())
+    assert r.sess.status is Status.BUSY
+    assert r.chat.card_sends_for(3) == 0
+    assert r.chat.live_cards() == [card]
+
+
+def test_a_repeated_turn_start_after_the_answer_reuses_the_card(
+        replay, vloop, tmp_path):
+    """After the answer the card is the running turn's own (8.57 R1): a
+    second card request for this turn (its animator died meanwhile) puts
+    the same card back to work instead of sending another."""
+    r = replay
+
+    async def scenario():
+        card = await _at_prompt(r, tmp_path)
+        await r.restart()
+        await r.tap(card, r.cb(card, "allow"))
+        await asyncio.sleep(2)
+        r.bot._stop_animation(r.sess)
+        await r.bot._send_busy_and_animate(r.sess)
+        await asyncio.sleep(2)
+        return card
+
+    card = _run(vloop, scenario())
+    assert r.sess.busy_msg_id == card
+    assert list(r.chat.cards) == [card]
+    assert r.sess.animation_running()
+
+
+def test_a_card_lost_after_the_answer_is_still_paid(replay, vloop, tmp_path):
+    """After the answer the card is the running turn's own (8.57 R1), as an
+    adopted card is (8.101): lost and then refused by the flood gate, it is
+    owed to THIS turn and paid when the chat can take it."""
+    r = replay
+
+    async def scenario():
+        card = await _at_prompt(r, tmp_path)
+        await r.restart()
+        await r.tap(card, r.cb(card, "allow"))
+        await asyncio.sleep(2)
+        r.bot._stop_animation(r.sess)
+        r.sess.busy_msg_id = None     # the card was lost ...
+        r.sess.busy_card_owed = True  # ... and its re-send refused
+        await r.bot._send_owed_card(r.sess, reason="the chat can take it")
+        await asyncio.sleep(15)  # its first frames
+        return card
+
+    card = _run(vloop, scenario())
+    new = r.sess.busy_msg_id
+    assert new and new != card
+    assert new in r.chat.live_cards()
+    # Re-sent as this turn's card, not as a new turn's: the answered
+    # prompt's row is still on it.
+    assert any("rm -rf build" in t for t in r.chat.cards[new]["texts"]), \
+        r.chat.cards[new]["texts"]
+
+
 def test_deny_on_the_restored_card_ends_the_turn_like_a_typed_refusal(
         replay, vloop, tmp_path):
     r = replay
@@ -158,7 +234,7 @@ def test_deny_on_the_restored_card_ends_the_turn_like_a_typed_refusal(
         await asyncio.sleep(10)
         return card
 
-    card = _run(vloop, scenario())
+    _run(vloop, scenario())
     assert r.keys == ["Down"] * 5 + ["Enter"]
     record = _audit()
     assert (record["via"], record["action"], record["denied"]) == (
@@ -184,11 +260,14 @@ def test_live_hook_answers_after_quick_restart(replay, vloop, tmp_path):
             await asyncio.sleep(1)
 
         _run(vloop, scenario())
-        decision = json.loads(listener.recvfrom(65536)[0].decode())
+        try:
+            decision = json.loads(listener.recvfrom(65536)[0].decode())
+        except socket.timeout:
+            decision = None  # nothing reached the hook
     finally:
         listener.close()
     assert r.keys == []
-    assert decision["request_id"] == "req-live"
+    assert decision is not None and decision["request_id"] == "req-live"
     assert _audit()["via"] == "hook_decision"
     assert r.sess.status is Status.BUSY
 
