@@ -398,3 +398,120 @@ def test_a_restored_prompt_answers_even_if_its_card_was_recorded_closed(
         return r.keys[before:]
 
     assert _run(vloop, scenario()) == ["Enter"]
+
+
+# ── a parallel call with the same summary (review rev-iter3-002) ─────────
+
+CLEAN_A = {"command": "rm -rf build", "description": "Clean"}
+CLEAN_B = {"command": "rm -rf dist", "description": "Clean"}
+
+
+async def _parallel_same_summary(r, tmp_path) -> int:
+    """Two parallel Bash calls A and B whose summaries are equal (the same
+    description), only A asks permission. Its request carries no id, so
+    it takes the latest PreToolUse's: B's."""
+    card = await r.open_card()
+    r.hook(hook_event_name="PreToolUse", tool_name="Bash",
+           tool_input=CLEAN_A, tool_use_id="toolu_A")
+    await asyncio.sleep(0.2)
+    r.hook(hook_event_name="PreToolUse", tool_name="Bash",
+           tool_input=CLEAN_B, tool_use_id="toolu_B")
+    await asyncio.sleep(0.2)
+    hook = _dead_hook(tmp_path)
+    r.hook(hook_event_name="PermissionRequest", tool_name="Bash",
+           tool_input=CLEAN_A, aipager_reply_addr=hook["addr"],
+           aipager_request_id=hook["request_id"])
+    await asyncio.sleep(2)
+    await r.shown(card, "allow")
+    await asyncio.sleep(5)
+    # The premise: the prompt took B's id, and the summaries match.
+    info = r.sess.pending_permission["tool_info"]
+    assert info["tool_use_id"] == "toolu_B"
+    assert info["summary"] == "Bash: Clean"
+    return card
+
+
+@pytest.mark.parametrize("event", ["PostToolUse", "PostToolUseFailure"])
+def test_a_parallel_same_summary_call_ending_leaves_the_prompt_answering(
+        replay, vloop, tmp_path, event):
+    r = replay
+
+    async def scenario():
+        card = await _parallel_same_summary(r, tmp_path)
+        data = r.cb(card, "allow")
+        r.hook(hook_event_name=event, tool_name="Bash",
+               tool_input=CLEAN_B, tool_use_id="toolu_B")
+        await asyncio.sleep(1)
+        assert not r.sess.prompt_known_closed(card)
+        before = len(r.keys)
+        await r.tap(card, data)
+        await asyncio.sleep(1)
+        return r.keys[before:]
+
+    assert _run(vloop, scenario()) == ["Enter"]
+
+
+def test_the_prompts_own_input_ending_closes_it(replay, vloop, tmp_path):
+    """The control: the same id with the prompt's own whole input (a
+    description, so the summary is not the command) closes the card."""
+    r = replay
+
+    async def scenario():
+        card = await _parallel_same_summary(r, tmp_path)
+        data = r.cb(card, "allow")
+        r.hook(hook_event_name="PostToolUse", tool_name="Bash",
+               tool_input=dict(reversed(list(CLEAN_A.items()))),
+               tool_use_id="toolu_B")
+        await asyncio.sleep(1)
+        before = len(r.keys)
+        toast = await r.tap(card, data)
+        await asyncio.sleep(1)
+        return toast, r.keys[before:]
+
+    toast, typed = _run(vloop, scenario())
+    assert typed == []
+    assert toast == "already answered"
+
+
+# ── a restored prompt: its digest decides ────────────────────────────────
+
+async def _restored(r, tmp_path, *, drop_digest: bool) -> int:
+    r.append({"type": "user", "timestamp": _ts(r.loop.wall() - 60),
+              "message": {"role": "user", "content": "clean the build"}})
+    card = await _inline_prompt(r, tmp_path)
+
+    def edit(file):
+        sd = next(iter(file["sessions"].values()))
+        if drop_digest:
+            # The premise: an older file, whose record carries none.
+            assert "input_digest" in sd["open_prompt"]
+            del sd["open_prompt"]["input_digest"]
+
+    await r.restart(edit=edit)
+    assert r.sess.status is Status.INTERACTIVE  # premise: restored
+    return card
+
+
+@pytest.mark.parametrize("drop_digest, closed", [
+    (False, True), (True, False)], ids=["with-digest", "no-digest"])
+def test_a_restored_prompt_is_closed_by_its_own_end_only_with_a_digest(
+        replay, vloop, tmp_path, drop_digest, closed):
+    """A restored record with no digest (an older file) closes nothing on
+    a PostToolUse, even its own; its tap still answers."""
+    r = replay
+
+    async def scenario():
+        card = await _restored(r, tmp_path, drop_digest=drop_digest)
+        data = r.cb(card, "allow")
+        r.hook(hook_event_name="PostToolUse", tool_name="Bash",
+               tool_input={"command": "rm -rf build"}, tool_use_id=TUID)
+        await asyncio.sleep(1)
+        known = r.sess.prompt_known_closed(card)
+        before = len(r.keys)
+        await r.tap(card, data)
+        await asyncio.sleep(1)
+        return known, r.keys[before:]
+
+    known, typed = _run(vloop, scenario())
+    assert known is closed
+    assert typed == ([] if closed else ["Enter"])

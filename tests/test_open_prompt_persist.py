@@ -352,6 +352,19 @@ _INVALID = [
     ("separate", "missing-summary", _drop(["summary"])),
     ("separate", "card-key-on-separate", _set(["card_msg_id"], 77)),
     ("inline", "not-a-dict", None),
+    # The optional input digest (review rev-iter3-002): exactly 64
+    # lowercase hex characters, and never on a question.
+    ("inline", "digest-upper", _set(["input_digest"], "A" * 64)),
+    ("inline", "digest-short", _set(["input_digest"], "a" * 63)),
+    ("inline", "digest-long", _set(["input_digest"], "a" * 65)),
+    ("inline", "digest-non-hex", _set(["input_digest"], "g" * 64)),
+    ("inline", "digest-newline", _set(["input_digest"], "a" * 64 + "\n")),
+    ("inline", "digest-empty", _set(["input_digest"], "")),
+    ("inline", "digest-int", _set(["input_digest"], 7)),
+    ("inline", "digest-null", _set(["input_digest"], None)),
+    ("inline", "digest-list", _set(["input_digest"], ["a" * 64])),
+    ("separate", "separate-digest-upper", _set(["input_digest"], "F" * 64)),
+    ("question", "digest-on-a-question", _set(["input_digest"], "a" * 64)),
 ]
 
 
@@ -382,6 +395,58 @@ def test_a_valid_record_loads_unchanged(kind, caplog):
         sess = _reload().get(NAME)
     assert sess.restored_open_prompt is not None
     assert not any("invalid record" in m for m in caplog.messages)
+
+
+DIGEST = "0123456789abcdef" * 4
+
+
+@pytest.mark.parametrize("kind", ["inline", "separate"])
+def test_a_valid_input_digest_loads_unchanged(kind, caplog):
+    data = _valid_file(kind)
+    data["sessions"][NAME]["open_prompt"]["input_digest"] = DIGEST
+    state.SESSION_STATE_FILE.write_text(json.dumps(data))
+    with caplog.at_level(logging.WARNING, logger="aipager.state"):
+        rec = _reload().get(NAME).restored_open_prompt
+    assert rec is not None and rec.get("input_digest") == DIGEST
+    assert not any("invalid record" in m for m in caplog.messages)
+
+
+def test_the_input_digest_survives_a_save_and_load():
+    reg = SessionRegistry()
+    _inline(_waiting(reg), input_digest=DIGEST)
+    reg.save()
+    assert _saved().get("input_digest") == DIGEST
+    assert _reload().get(NAME).restored_open_prompt.get("input_digest") == DIGEST
+
+
+def test_no_input_digest_saves_no_key():
+    reg = SessionRegistry()
+    _inline(_waiting(reg))
+    reg.save()
+    assert "input_digest" not in _saved()
+    assert "input_digest" not in _reload().get(NAME).restored_open_prompt
+
+
+@pytest.mark.parametrize("bad", ["A" * 64, "a" * 63, 7, ""])
+def test_a_malformed_live_digest_is_left_out_of_the_record(bad):
+    """The prompt is still saved, only without the digest (a restored
+    prompt with none is closed by no PostToolUse)."""
+    reg = SessionRegistry()
+    _inline(_waiting(reg), input_digest=bad)
+    reg.save()
+    assert _saved() is not None
+    assert "input_digest" not in _saved()
+
+
+def test_a_question_never_saves_a_digest():
+    reg = SessionRegistry()
+    sess = _waiting(reg)
+    sess.busy_msg_id = 77
+    sess.pending_permission = _question()
+    sess.pending_permission["tool_info"]["input_digest"] = DIGEST
+    reg.save()
+    assert _saved() is not None
+    assert "input_digest" not in _saved()
 
 
 def test_a_file_without_the_key_loads_no_prompt(caplog):
