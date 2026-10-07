@@ -47,7 +47,7 @@ def test_defaults_match_telegram_and_ptb():
     params = inspect.signature(Bot.__init__).parameters
     assert telegram_endpoint.ptb_base_url() == params["base_url"].default
     assert telegram_endpoint.ptb_base_file_url() == params["base_file_url"].default
-    assert telegram_endpoint.check() is None
+    assert telegram_endpoint.check() == []
 
 
 @pytest.mark.parametrize("base,expected", [
@@ -65,7 +65,7 @@ def test_loopback_override_is_used(monkeypatch, base, expected):
     assert telegram_endpoint.method_url(TOKEN, "getMe") == f"{expected}/bot{TOKEN}/getMe"
     assert telegram_endpoint.ptb_base_url() == f"{expected}/bot"
     assert telegram_endpoint.ptb_base_file_url() == f"{expected}/file/bot"
-    assert telegram_endpoint.check() is None
+    assert telegram_endpoint.check() == []
 
 
 def test_blank_override_means_unset(monkeypatch):
@@ -116,7 +116,7 @@ def test_invalid_override_is_refused(monkeypatch, base):
 def test_allow_remote_accepts_a_remote_base(monkeypatch):
     _set(monkeypatch, "https://bots.example.com")
     monkeypatch.setenv(telegram_endpoint.ALLOW_REMOTE_ENV, "1")
-    assert telegram_endpoint.check() is None
+    assert telegram_endpoint.check() == []
     assert telegram_endpoint.api_base() == "https://bots.example.com"
 
 

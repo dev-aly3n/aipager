@@ -24,11 +24,8 @@ def _clean(monkeypatch):
 
 
 def _msg() -> str:
-    """The refusal text, whatever container check() uses for its lines."""
-    out = te.check()
-    if out is None:
-        return ""
-    return out if isinstance(out, str) else "\n".join(out)
+    """The refusal text: check()'s lines joined."""
+    return "\n".join(te.check())
 
 
 # ---- unset: today's URLs ---------------------------------------------------------------
@@ -51,8 +48,8 @@ def test_unset_ptb_base_file_url_matches_ptb_default():
     assert te.ptb_base_file_url() + TOKEN == Bot(TOKEN).base_file_url
 
 
-def test_unset_check_is_none():
-    assert te.check() is None
+def test_unset_check_is_empty():
+    assert te.check() == []
 
 
 @pytest.mark.parametrize("blank", ["", "   ", "\t"])
@@ -87,7 +84,7 @@ def test_loopback_override_used(monkeypatch, raw, expected):
 @pytest.mark.parametrize("raw,_", LOOPBACK)
 def test_loopback_override_check_ok(monkeypatch, raw, _):
     monkeypatch.setenv(BASE, raw)
-    assert te.check() is None
+    assert te.check() == []
 
 
 def test_override_method_url(monkeypatch):
@@ -115,7 +112,7 @@ def test_override_read_at_call_time(monkeypatch):
 def test_uppercase_localhost_is_this_machine(monkeypatch):
     # Hostnames are case-insensitive; LOCALHOST is still this machine.
     monkeypatch.setenv(BASE, "http://LOCALHOST:8081")
-    assert te.check() is None
+    assert te.check() == []
 
 
 # ---- remote hosts refused ---------------------------------------------------------------
@@ -210,7 +207,7 @@ def test_invalid_override_raises(monkeypatch, raw):
 @pytest.mark.parametrize("raw", INVALID)
 def test_invalid_override_check_refuses(monkeypatch, raw):
     monkeypatch.setenv(BASE, raw)
-    assert te.check() is not None
+    assert te.check() != []
 
 
 @pytest.mark.parametrize("raw", ["ftp://127.0.0.1", "127.0.0.1:8081", "http://"])
@@ -225,10 +222,20 @@ def test_check_never_raises(monkeypatch, raw):
     assert te.check()
 
 
-def test_check_returns_a_string_per_contract(monkeypatch):
-    # entrypoints.md: `check() -> str | None`: the refusal message or None.
+def test_check_returns_lines_per_contract(monkeypatch):
+    # entrypoints.md: `check() -> list[str]`: the refusal lines, empty
+    # when the base is acceptable.
     monkeypatch.setenv(BASE, "http://example.com")
-    assert isinstance(te.check(), str)
+    out = te.check()
+    assert isinstance(out, list) and all(isinstance(line, str) for line in out)
+    assert out == [
+        "AIPAGER_TELEGRAM_API_BASE points at example.com, which is not this machine.",
+        "Set AIPAGER_TELEGRAM_API_ALLOW_REMOTE=1 to allow it.",
+    ]
+    monkeypatch.setenv(BASE, "http://127.0.0.1:41234")
+    assert te.check() == []
+    monkeypatch.delenv(BASE)
+    assert te.check() == []
 
 
 # ---- allow-remote: only the exact value "1" ----------------------------------------------
@@ -242,7 +249,7 @@ def test_allow_remote_one_accepts_remote(monkeypatch):
 def test_allow_remote_one_check_ok(monkeypatch):
     monkeypatch.setenv(BASE, "https://bots.example.com")
     monkeypatch.setenv(ALLOW, "1")
-    assert te.check() is None
+    assert te.check() == []
 
 
 @pytest.mark.parametrize("val", ["0", "true", "yes", "TRUE", "", "2", "01", "on"])

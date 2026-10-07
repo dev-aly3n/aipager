@@ -95,10 +95,11 @@ def ptb_base_file_url() -> str:
     return f"{api_base()}/file/bot"
 
 
-def check() -> list[str] | None:
-    """The refusal lines for a bad override, or ``None``. Never raises."""
+def check() -> list[str]:
+    """The refusal lines for a bad override; an empty list when the base
+    is acceptable (unset, loopback, or allowed remote). Never raises."""
     try:
         api_base()
     except TelegramApiBaseError as e:
         return e.lines()
-    return None
+    return []

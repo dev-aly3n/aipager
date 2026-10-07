@@ -461,7 +461,7 @@ class TestInstance:
         old = os.environ.get(telegram_endpoint.BASE_ENV)
         os.environ[telegram_endpoint.BASE_ENV] = self.env["AIPAGER_TELEGRAM_API_BASE"]
         try:
-            assert telegram_endpoint.check() is None
+            assert telegram_endpoint.check() == []
             assert telegram_endpoint.api_base().startswith("http://127.0.0.1:")
         finally:
             if old is None:
