@@ -113,7 +113,11 @@ def test_a_saved_record_of_another_type_loads_empty(raw):
     def edit(sd):
         sd["closed_prompt_msgs"] = raw
 
-    assert _saved_and_loaded(lambda r, s: None, edit).closed_prompt_msgs == []
+    try:
+        loaded = _saved_and_loaded(lambda r, s: None, edit).closed_prompt_msgs
+    except Exception as exc:  # noqa: BLE001 - the guard under test
+        loaded = f"raised {type(exc).__name__}"
+    assert loaded == []
 
 
 def test_a_long_saved_record_loads_bounded():
