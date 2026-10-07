@@ -406,6 +406,113 @@ def turn_tail_since(transcript_path: str, since: float) -> str | None:
     return None
 
 
+#: ``system`` subtypes Claude Code writes when a turn ends: one dated after
+#: a saved prompt was shown means the turn it belonged to is over.
+_TURN_END_SUBTYPES = frozenset({"turn_duration", "stop_hook_summary"})
+
+
+def _only_the_saved_tool_use(msg: dict, tool_use_id: str, tool_name: str) -> bool:
+    """True when every content block of the assistant message *msg* is a
+    ``tool_use`` of the saved prompt: the same id when one was saved, else
+    the same tool name."""
+    content = msg.get("content")
+    if not isinstance(content, list) or not content:
+        return False
+    for block in content:
+        if not isinstance(block, dict) or block.get("type") != "tool_use":
+            return False
+        if tool_use_id:
+            if block.get("id") != tool_use_id:
+                return False
+        elif not tool_name or block.get("name") != tool_name:
+            return False
+    return True
+
+
+def _answers_tool_use(msg: dict, tool_use_id: str) -> bool:
+    """True when the user message *msg* carries a ``tool_result`` for
+    *tool_use_id*."""
+    content = msg.get("content")
+    if not isinstance(content, list):
+        return False
+    return any(isinstance(block, dict) and block.get("type") == "tool_result"
+               and block.get("tool_use_id") == tool_use_id
+               for block in content)
+
+
+def saved_prompt_evidence(transcript_path: str, since_wall: float,
+                          tool_use_id: str, tool_name: str) -> str:
+    """What the transcript says about a permission prompt shown at
+    *since_wall* (epoch seconds) that the state file kept across a daemon
+    restart (roadmap 8.102):
+
+    - ``"answered"``: a ``tool_result`` for the saved *tool_use_id* (a
+      non-empty one), whatever its date: the tool was answered;
+    - ``"moved_on"``: a turn entry dated at or after *since_wall*: a user
+      line (a tool result, the interrupt marker, a new prompt), a
+      ``system`` ``turn_duration`` / ``stop_hook_summary`` line, or an
+      assistant line other than the prompt's own pending ``tool_use``;
+    - ``"none"``: nothing contradicts the prompt (also when the file does
+      not exist yet: a first turn not flushed);
+    - ``"unreadable"``: no path, or the file could not be read.
+
+    Not a positive match, by necessity: Claude Code writes its transcript
+    only after a tool-result round, so while its permission dialog waits
+    the pending tool_use is normally NOT on disk and the tail can still be
+    the previous turn's end (orchestrator evidence, 2026-10-07). So the
+    check asks only whether anything contradicts the saved prompt. When the
+    prompt's own tool_use does show (same id, or same tool name when no
+    id was saved), it is not a contradiction.
+
+    ``queue-operation`` lines, other ``system`` subtypes,
+    ``file-history-snapshot``, ``summary`` and message-less sidecar lines
+    are skipped. An entry with no usable timestamp is dated by the file's
+    own time. Reads only the file's last :data:`TAIL_READ_BYTES`. Never
+    raises.
+    """
+    if not transcript_path:
+        return "unreadable"
+    try:
+        tail = _tail_lines(transcript_path)
+        mtime = os.path.getmtime(transcript_path)
+    except FileNotFoundError:
+        return "none"
+    except Exception:  # noqa: BLE001 - never raises, by contract
+        return "unreadable"
+    moved_on = False
+    for line in tail:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if not isinstance(entry, dict):
+            continue
+        etype = entry.get("type")
+        msg = entry.get("message")
+        if (etype == "user" and tool_use_id and isinstance(msg, dict)
+                and _answers_tool_use(msg, tool_use_id)):
+            return "answered"
+        ts = _entry_timestamp(entry)
+        stamp = ts if ts is not None else mtime
+        if stamp < since_wall:
+            continue
+        if etype == "system":
+            if entry.get("subtype") in _TURN_END_SUBTYPES:
+                moved_on = True
+            continue
+        if etype not in ("user", "assistant") or "message" not in entry:
+            continue
+        if etype == "user":
+            moved_on = True
+        elif not (isinstance(msg, dict)
+                  and _only_the_saved_tool_use(msg, tool_use_id, tool_name)):
+            moved_on = True
+    return "moved_on" if moved_on else "none"
+
+
 def interrupted_since(transcript_path: str, since: float) -> bool:
     """True when :func:`turn_tail_since` reads Claude Code's interrupt
     marker written at or after *since*."""
