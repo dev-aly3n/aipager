@@ -364,18 +364,33 @@ def test_answered_turn_not_idle_recovered(replay, vloop, tmp_path, caplog):
     assert not any("recovering to IDLE" in m for m in caplog.messages)
 
 
-def test_a_restored_prompt_survives_a_second_restart(replay, vloop, tmp_path):
+def test_a_restored_prompt_survives_a_second_restart(replay, vloop, tmp_path,
+                                                    caplog):
     r = replay
+    restored = (f"[{LABEL}] permission prompt restored after restart - "
+                "waiting for an answer (inline card ")
 
     async def scenario():
         card = await _at_prompt(r, tmp_path)
         await r.restart()
         await asyncio.sleep(30)
         await r.restart()
-        await r.tap(card, r.cb(card, "allow"))
+        # The save between the restarts kept the prompt: restored again.
+        after_second = r.sess.status
+        lines = sum(m.startswith(restored) for m in caplog.messages)
+        # Looked up, not r.cb(): a lost prompt must fail the asserts below,
+        # not this lookup.
+        allow = next((d for d in r.buttons(card).values()
+                      if d.endswith(":allow")), None)
+        if allow is not None:
+            await r.tap(card, allow)
         await asyncio.sleep(1)
+        return after_second, lines
 
-    _run(vloop, scenario())
+    with caplog.at_level(logging.INFO):
+        after_second, lines = _run(vloop, scenario())
+    assert after_second is Status.INTERACTIVE
+    assert lines == 2
     assert r.keys == ["Enter"]
     assert r.sess.status is Status.BUSY
 
