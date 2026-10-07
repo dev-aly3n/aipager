@@ -102,15 +102,22 @@ def test_slash_rule_user_refused_admin_allowed(fresh):
     assert prompt.strip().startswith("/ftcmd")
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Finding A: a permission prompt before the busy card loses the hook reply "
-    "channel and the 'by @bob' line (notify.py separate-message path)"))
+FINDING_A = ("Finding A: a permission prompt sent before the busy card loses the "
+             "hook reply channel and the 'by @bob' line (notify.py separate-message "
+             "path)")
+
+
 def test_allow_by_a_user_is_attributed_when_the_prompt_beats_the_busy_card(fresh):
     """Scenario 2's Allow by bob WITHOUT the stand-in's hold: the tool call
     comes the moment the prompt arrives, before the turn's busy card is
     sent, so the daemon shows the prompt as a separate message. Pins
     Finding A: that path has no hook reply channel and posts no "Allowed
-    by @bob" line. Flips to XPASS (a failure, strict) once it is fixed."""
+    by @bob" line.
+
+    Everything up to the tap is asserted normally, including that the
+    prompt really took the separate-message path; only the missing
+    attribution becomes an xfail, and its presence fails the test so the
+    pin is removed once Finding A is fixed."""
     inst, fake = fresh, fresh.fake
     if inst.claude_mode != "standin":
         # Real Claude thinks before its tool call, so its busy card
@@ -118,13 +125,25 @@ def test_allow_by_a_user_is_attributed_when_the_prompt_beats_the_busy_card(fresh
         pytest.skip("stand-in only: the stand-in asks before the busy card exists")
     name = inst.new_session(G, fti.BOB, "ft15")
     flows.settle(fake)
-    since = fake.mark()
+    since, log_since = fake.mark(), inst.log_mark()
     inst.release_tools(name)  # no hold: the stand-in asks at once
     fake.inject_text(G, fti.user(fti.BOB),
                      f"{BOT} Use the Write tool to create ft15.txt containing hi")
     card, allow = fake.wait_button(G, "Allow", since=since, timeout=120)
+
+    # Precondition: the prompt is its own message, sent before any busy
+    # card of this turn (a busy card sent first has the smaller id).
+    assert "Permission needed" in card.get("text", ""), \
+        f"the prompt landed on the busy card, not the early path: {card.get('text')!r}"
+    earlier = [i for i in flows.busy_card_ids(inst.log_lines(log_since), "ft15")
+               if i < card["message_id"]]
+    assert earlier == [], f"a busy card ({earlier}) was sent before the prompt"
+
     since = fake.mark()
     cb = fake.inject_callback(fti.user(fti.BOB), card, allow)
     fake.wait_answer(cb)
-    flows.wait_text(fake, G, "Allowed by @bob", since=since, timeout=30)
-    fti.wait_until(inst.file_in_project("ft15.txt").exists, 60, "the file bob allowed")
+    try:
+        flows.wait_text(fake, G, "Allowed by @bob", since=since, timeout=30)
+    except AssertionError:
+        pytest.xfail(FINDING_A)
+    pytest.fail("Finding A is fixed: remove this pin and assert the attribution plainly")

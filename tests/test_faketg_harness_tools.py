@@ -424,6 +424,21 @@ def test_flow_label_of_a_session_name():
     assert flows.label_of("claude-ft8r__d900000001") == "ft8r"
 
 
+def test_busy_card_ids_reads_every_busy_send_of_one_label():
+    from tests.e2e.faketg import flows
+    lines = [
+        "x INFO [ft15] Busy message sent (msg_id=7, trigger=3, turn=1)",
+        "x INFO [ft15] Busy message sent late (msg_id=9, trigger=3, turn=1, after=2s)",
+        "x INFO [ft15] Busy message sent again (msg_id=12, reason=moved)",
+        "x INFO [ft1] Busy message sent (msg_id=4, trigger=2, turn=1)",
+        "x INFO [ft150] Busy message sent (msg_id=5, trigger=2, turn=1)",
+        "x INFO [ft15] Busy message edit failed (msg_id=8)",
+    ]
+    assert flows.busy_card_ids(lines, "ft15") == [7, 9, 12]
+    assert flows.busy_card_ids(lines, "ft1") == [4]
+    assert flows.busy_card_ids([], "ft15") == []
+
+
 def test_teardown_reports_a_process_working_inside_the_root_without_killing_it(
         root, monkeypatch):
     """A process with no instance variable but a working directory inside

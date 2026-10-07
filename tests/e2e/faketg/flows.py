@@ -6,11 +6,13 @@ fake's last calls or the daemon's last log lines, token redacted.
 
 from __future__ import annotations
 
+import re
 import time
 
 from tests.e2e.fake_telegram import instance as fti
 
 SEND_METHODS = ("sendMessage", "sendRichMessage", "editMessageText", "sendDocument")
+_BUSY_SENT = re.compile(r"\[([^\]]+)\] Busy message sent(?: late| again)? \(msg_id=(\d+)")
 
 
 def wait_prompt(inst, name: str, contains: str, *, after: int = 0, timeout: float = 120) -> str:
@@ -50,6 +52,13 @@ def prompt_turn(inst, chat_id: int, uid: int, name: str, text: str, contains: st
     prompt = wait_prompt(inst, name, contains, after=before, timeout=timeout)
     wait_turn_end(inst, name, label_of(name), since_log=log_since, timeout=timeout)
     return prompt
+
+
+def busy_card_ids(log_lines: list[str], label: str) -> list[int]:
+    """The busy-card message ids the daemon logged for session *label*
+    (``Busy message sent``, ``... sent late`` and ``... sent again``)."""
+    return [int(m.group(2)) for line in log_lines
+            if (m := _BUSY_SENT.search(line)) and m.group(1) == label]
 
 
 def chat_texts(fake, chat_id: int, since: int) -> list[str]:
