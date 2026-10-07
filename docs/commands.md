@@ -326,8 +326,10 @@ Stop removed). A session that was waiting on a permission prompt or on a
 single question from Claude comes back waiting, not working: its card
 and the pinned bar say it needs you and the prompt's buttons still
 answer it, unless the transcript shows it was answered in the terminal
-meanwhile. Questions with several parts or several choices are left to
-the terminal.
+meanwhile. Questions with several parts or several choices, and prompts
+asked by a subagent, are left to the terminal. Once the card's
+prompt is answered, its old Allow and Deny buttons answer "already
+answered" and type nothing.
 
 A turn Claude starts **by itself** — a background agent reporting back
 with a `<task-notification>` when no job is open — gets its busy card

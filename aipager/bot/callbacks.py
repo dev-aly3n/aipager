@@ -188,6 +188,10 @@ _DENY_OVERSHOOT = 5
 # (allow_always) for why this check exists here too, not only there.
 _STANDING_RULE_SUGGESTION_TYPES = frozenset({"addRules", "addDirectories"})
 
+# The answer verbs the busy card shows only while it holds the inline
+# prompt (with ``opt<N>``): a tap on them with no prompt there is refused.
+_CARD_ANSWER_VERBS = frozenset({"allow", "allow_always", "deny", "submit"})
+
 
 _PERMS_POLL_COUNT = 15
 _PERMS_POLL_INTERVAL = 0.2
@@ -1413,6 +1417,21 @@ class CallbackDispatchMixin:
                     # it is sent, and again when a restart restores it
                     # (8.102); an unregistered message is not it.
                     refusal = "this prompt has expired"
+        elif (not sess.pending_permission
+                and (is_option or action in _CARD_ANSWER_VERBS)):
+            # An answer button tapped on the busy card itself while the
+            # card holds no prompt: a second tap after the answer (a
+            # double tap, or a client still showing the old keyboard),
+            # or a saved prompt a restart dropped while the card was
+            # adopted as working (8.102). The card only ever shows these
+            # buttons for `pending_permission`, and with none there is no
+            # dialog its keys were meant for: typed now, they would land
+            # in a working session. Other messages keep today's handling.
+            tapped_id = resent_key[1]
+            card = sess.busy_msg_id
+            if (isinstance(tapped_id, int) and not isinstance(tapped_id, bool)
+                    and card and card > 0 and tapped_id == card):
+                refusal = "already answered"
         if refusal is not None:
             await self._safe_answer(query, refusal)
             try:
