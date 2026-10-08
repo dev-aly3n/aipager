@@ -143,6 +143,12 @@ _OFFER_ANSWERS = {"op": "send", "on": "not_now", "od": "dont_ask"}
 _INSTANT = rate_limit_args(priority=PRIORITY_INSTANT)
 
 
+def _mono() -> float:
+    """The one monotonic clock this module reads (kept cards, the note
+    capture): a seam, so a test can move it without touching ``time``."""
+    return time.monotonic()
+
+
 class OpenResult(enum.Enum):
     OPENED = "opened"
     NO_OWNER = "no_owner"
@@ -159,7 +165,7 @@ class KeptReport:
     mode: str = "inline"          # "inline" | "document"
     doc_msg_id: int | None = None
     state: str = "open"           # "open" | "note" | "sending" | "done"
-    created: float = 0.0          # time.monotonic()
+    created: float = 0.0          # _mono()
     #: The background task running this card's Send (None until tapped).
     send_task: "asyncio.Task | None" = field(default=None, repr=False, compare=False)
 
@@ -298,7 +304,7 @@ def _cards(bot: "TelegramBot") -> dict:
 
 def _prune(bot: "TelegramBot") -> None:
     cards = _cards(bot)
-    now = time.monotonic()
+    now = _mono()
     for key in [k for k, kept in cards.items() if now - kept.created > KEPT_CARD_TTL]:
         del cards[key]
 
@@ -515,7 +521,7 @@ async def open_preview(bot: "TelegramBot", *, trigger: str,
         return OpenResult.NOT_SENT
     kept = KeptReport(report=report, preview=preview, chat_id=owner,
                       mode="inline" if _fits_inline(preview) else "document",
-                      created=time.monotonic())
+                      created=_mono())
     if not await _post_card(bot, kept):
         return OpenResult.NOT_SENT
     _keep(bot, kept)
@@ -562,7 +568,7 @@ def _is_note_answer(bot: "TelegramBot", update, pending: dict) -> bool:
         return False
     if getattr(getattr(update, "effective_user", None), "id", None) != pending["user_id"]:
         return False
-    if time.monotonic() - pending["last_active"] > NOTE_TTL:
+    if _mono() - pending["last_active"] > NOTE_TTL:
         return False
     text = getattr(msg, "text", None)
     if not isinstance(text, str) or text.strip().startswith("/"):
@@ -792,7 +798,7 @@ async def _tap_note(bot: "TelegramBot", query, kept: KeptReport, user_id: int) -
     if previous and (previous["chat_id"], previous["msg_id"]) != (kept.chat_id, kept.msg_id):
         close_note(bot)
     bot._report_note_pending = {"chat_id": kept.chat_id, "user_id": user_id,
-                                "msg_id": kept.msg_id, "last_active": time.monotonic()}
+                                "msg_id": kept.msg_id, "last_active": _mono()}
 
 
 async def _tap_back(bot: "TelegramBot", query, kept: KeptReport) -> None:

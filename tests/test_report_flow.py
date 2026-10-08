@@ -371,6 +371,31 @@ def test_a_send_that_raises_is_final_not_try_later(mk_bot, run_async, monkeypatc
     assert toasts(query) == [report_flow.ALREADY_SENT]
 
 
+def test_an_expired_card_sends_nothing(mk_bot, run_async, net, monkeypatch):
+    """A kept card lives KEPT_CARD_TTL; after that its Send finds nothing
+    kept, sends nothing and says to open a fresh preview."""
+    bot, tg = make_bot(mk_bot)
+    _open(run_async, bot)
+    kept = _kept(bot)
+    later = kept.created + report_flow.KEPT_CARD_TTL + 1
+    monkeypatch.setattr(report_flow, "_mono", lambda: later)
+    query = _press_card(run_async, bot, "send", kept)
+    assert net.posts == []
+    assert bot._report_cards == {}
+    assert report_flow.LOST_TEXT in query.edit_message_text.await_args.args[0]
+
+
+def test_a_card_inside_its_ttl_still_sends(mk_bot, run_async, net, monkeypatch):
+    """The positive control for the expiry test above."""
+    bot, tg = make_bot(mk_bot)
+    _open(run_async, bot)
+    kept = _kept(bot)
+    later = kept.created + report_flow.KEPT_CARD_TTL - 1
+    monkeypatch.setattr(report_flow, "_mono", lambda: later)
+    _press_card(run_async, bot, "send", kept)
+    assert len(net.posts) == 1
+
+
 def _today() -> str:
     return _dt.datetime.now(_dt.timezone.utc).date().isoformat()
 
