@@ -1036,6 +1036,12 @@ that crashes keeps its key with status `warn`. Texts are plain (no
 markup), and anything shaped like a bot token is replaced by
 `<redacted>`.
 
+## Command line: `aipager uninstall`
+
+`aipager uninstall` stops the daemon and removes its service, removes the config folder (`~/.config/aipager`: the bot token, chats and settings) and the session list (`~/.claude/aipager-sessions.json`), cleans up aipager's files in `/tmp`, and uninstalls aipager itself. It asks first (`-y` skips the question).
+
+It keeps aipager's data, so a reinstall picks up where it left off: `~/.local/share/aipager` (session folders, downloaded helpers, lock and marker files), `~/.local/state/aipager` (problem report records), `~/.claude/aipager-audit.jsonl` (the log of permission answers), `~/.claude/aipager-flood-state.json` (Telegram rate-limit history) and `~/.claude/aipager-pending-users.json` (people who tried the bot without access). Before asking, it lists the ones that exist on your machine, and at the end it prints the `rm -rf` command that removes them too. Your Telegram bot, Claude Code's `settings.json` and its `settings.json.bak.*` backups are not touched.
+
 ## Command line: `aipager report`
 
 `aipager report` builds a problem report of the same kind as the bot's Report a problem button, from what aipager recorded on this machine (with fewer of the running daemon's facts: the mode, chats, features, uptime, sessions and Claude Code details are left unknown or empty), prints all of it, and asks `Send this report? [y/N]`. Only `y` or `yes` sends it; anything else, or no terminal at all (a script, a pipe, a Claude Code session's shell), sends nothing. `--note "text"` adds a note of at most 500 characters, shown in the printed report. It exits 0 when the report was sent, not sent by your choice, or only printed, and 1 when a send you confirmed did not go out. See [Problem reports](problem-reports.md) for what a report holds and where it goes.

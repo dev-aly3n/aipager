@@ -19,8 +19,11 @@ does the restart safely.
 from __future__ import annotations
 
 import platform
+import shlex
 import shutil
 from pathlib import Path
+
+from rich.markup import escape as rich_escape
 
 from aipager._test_guard import check_write
 from aipager.errors import friendly_error, friendly_warn
@@ -143,6 +146,28 @@ _MACOS_PATHS_TO_REMOVE = [
     Path.home() / "Library" / "LaunchAgents" / "com.aipager.daemon.plist",
     Path.home() / "Library" / "Logs" / "aipager.log",
 ]
+
+# What uninstall keeps on purpose (roadmap 8.114): aipager's data, so a
+# reinstall picks up where it left off. Named before and after the
+# uninstall, with how to remove it by hand. tests/test_uninstall_paths.py
+# fails when aipager gains a home path that is neither removed above nor
+# named here.
+_USER_PATHS_KEPT = [
+    (Path.home() / ".local" / "share" / "aipager",
+     "session folders, downloaded helpers, lock and marker files"),
+    (Path.home() / ".local" / "state" / "aipager", "problem report records"),
+    (Path.home() / ".claude" / "aipager-audit.jsonl",
+     "the log of permission answers"),
+    (Path.home() / ".claude" / "aipager-flood-state.json",
+     "Telegram rate-limit history"),
+    (Path.home() / ".claude" / "aipager-pending-users.json",
+     "people who tried the bot without access"),
+]
+
+
+def _kept_paths() -> list[tuple[Path, str]]:
+    """The kept paths that exist on this machine, with what each holds."""
+    return [(p, what) for p, what in _USER_PATHS_KEPT if p.exists()]
 
 
 def _stop_daemon() -> None:
@@ -284,6 +309,14 @@ def cmd_uninstall(args=None) -> int:
         for p in _MACOS_PATHS_TO_REMOVE:
             console.print(f"  • [path]{p}[/path]")
     console.print()
+    kept = _kept_paths()
+    if kept:
+        console.print("[title]Kept, so a reinstall picks up where you left off:[/title]")
+        for p, what in kept:
+            # soft_wrap: a long path is never split into two lines.
+            console.print(f"  • [path]{rich_escape(str(p))}[/path] [muted]({what})[/muted]",
+                          soft_wrap=True)
+        console.print()
     console.print("[muted]Not touched: your Telegram bot, Claude Code's "
                   "settings.json, and any[/muted]")
     console.print("[muted]                ~/.claude/settings.json.bak.* "
@@ -322,6 +355,13 @@ def cmd_uninstall(args=None) -> int:
 
     console.print()
     ui_ok("aipager uninstalled.")
+    # Again: the daemon may have written a kept file as it stopped.
+    kept = _kept_paths()
+    if kept:
+        console.print("  [muted]Your data is kept. To remove it too:[/muted]")
+        command = "rm -rf " + " ".join(shlex.quote(str(p)) for p, _what in kept)
+        # One line however long, so it copies as one command.
+        console.print(f"  {rich_escape(command)}", soft_wrap=True)
     console.print(
         "  [muted]Want to reinstall? "
         "https://aipager.run/install (or `uv tool install aipager`)[/muted]"

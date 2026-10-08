@@ -11,6 +11,10 @@ import time
 
 import pytest
 
+#: The home every module-level ``Path.home()`` path was built from (a test
+#: may point ``HOME`` elsewhere later).
+_HOME_AT_IMPORT = Path.home()
+
 # ── color-environment scrub — MUST run before any aipager import ──────
 #
 # ``aipager/ui.py`` builds its rich ``Console`` objects at module import
@@ -287,6 +291,11 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         "aipager.wizard.draft.DRAFT_PATH": cfg / ".wizard-draft.json",
         # Deletion targets — see docstring.
         "aipager.updater._USER_PATHS_TO_REMOVE": [cfg, sessions_json],
+        # Never deleted, but uninstall checks which exist (roadmap 8.114):
+        # the same entries under this test's home.
+        "aipager.updater._USER_PATHS_KEPT": [
+            (home / path.relative_to(_HOME_AT_IMPORT), what)
+            for path, what in import_module("aipager.updater")._USER_PATHS_KEPT],
         "aipager.updater._MACOS_PATHS_TO_REMOVE": [
             home / "Library" / "LaunchAgents" / "com.aipager.daemon.plist",
             home / "Library" / "Logs" / "aipager.log",

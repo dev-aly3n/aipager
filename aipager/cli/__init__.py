@@ -9,7 +9,7 @@ Subcommands:
   status   show daemon and session snapshot
   logs     tail the daemon log
   update   upgrade aipager via uv / pipx / Homebrew
-  uninstall  stop the daemon, remove config + state, uninstall the binary
+  uninstall  stop the daemon, remove the config and session list, uninstall the binary (data is kept)
   resume   resume a previously-gone Claude session
   session  open / manage a Claude Code session under dtach
   service  install / manage daemon as a systemd-user or launchd service
@@ -240,7 +240,8 @@ def main() -> None:
 
     uninstall_p = sub.add_parser(
         "uninstall",
-        help="stop the daemon, remove config + state, uninstall the binary",
+        help="stop the daemon, remove the config and session list, uninstall the binary "
+             "(data is kept)",
     )
     uninstall_p.add_argument("-y", "--yes", dest="force", action="store_true",
                              help="skip the confirmation prompt")

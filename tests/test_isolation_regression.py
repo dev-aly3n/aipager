@@ -127,3 +127,6 @@ def test_uninstall_removal_lists_are_isolated():
             assert "pytest-" in str(path), (
                 f"updater.{name} entry escapes tmp_path: {path}"
             )
+    # Only checked for existence, never removed: still the test's home.
+    for path, _what in _updater._USER_PATHS_KEPT:
+        assert "pytest-" in str(path), f"updater._USER_PATHS_KEPT escapes tmp_path: {path}"
