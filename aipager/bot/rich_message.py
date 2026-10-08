@@ -61,6 +61,8 @@ from aipager.bot.flood_budget import (
     rate_limit_args as _rate_limit_args,
 )
 from aipager.config import TELEGRAM_MAX_RETRY_AFTER
+from aipager.report import counters as report_counters
+from aipager.report import store as report_store
 
 log = logging.getLogger(__name__)
 
@@ -366,6 +368,7 @@ async def _send_rich_message_once(payload: dict, *, allow_retry: bool,
         raise
     except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
         log.warning("sendRichMessage network error: %s", type(exc).__name__)
+        report_store.record_counter("tg_network")
         raise RichMessageFallbackRequired("network error") from exc
     except Exception as exc:
         log.warning("sendRichMessage unexpected error: %s", exc)
@@ -396,6 +399,8 @@ async def _handle_response(
 
     error_code: int = data.get("error_code", 0)
     description: str = data.get("description", "")
+    # Problem reports (8.112): the failure's class, never its text.
+    report_store.record_counter(report_counters.tg_failure_key(error_code, description))
 
     if error_code == 403:
         log.warning("%s blocked (403): %s", method, description)
@@ -406,6 +411,7 @@ async def _handle_response(
         # A retry_after past the cap is a ban: mute + raise, first and
         # unchanged (R6). Only a SMALL one reaches the limiter below.
         _ban_if_excessive(method, payload, raw_retry_after)
+        report_store.record_counter("tg_429_small")  # not a ban: that raised above
         # 8.21: no private clamp, no private sleep. The limiter bars the
         # whole chat for exactly the time Telegram asked and doubles its
         # card cadence; the re-POST below waits that out in its OWN
@@ -426,6 +432,7 @@ async def _handle_response(
                 raise
             except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
                 log.warning("%s network error on retry: %s", method, type(exc).__name__)
+                report_store.record_counter("tg_network")
                 raise RichMessageFallbackRequired("network error on retry") from exc
             except Exception as exc:
                 log.warning("%s unexpected error on retry: %s", method, exc)
@@ -511,6 +518,7 @@ async def edit_message_text_rich(
         raise
     except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
         log.warning("editMessageText network error: %s", type(exc).__name__)
+        report_store.record_counter("tg_network")
         return None
     except Exception as exc:
         log.warning("editMessageText unexpected error: %s", exc)
@@ -538,6 +546,8 @@ async def _handle_edit_response(data: dict, *, payload: dict,
     error_code: int = data.get("error_code", 0)
     description: str = data.get("description", "")
     desc_lower = description.lower()
+    # Problem reports (8.112): the failure's class, never its text.
+    report_store.record_counter(report_counters.tg_failure_key(error_code, description))
 
     if error_code == 403:
         log.warning("editMessageText blocked (403): %s", description)
@@ -557,6 +567,7 @@ async def _handle_edit_response(data: dict, *, payload: dict,
     if error_code == 429:
         raw_retry_after = _retry_after_of(data)
         _ban_if_excessive("editMessageText", payload, raw_retry_after)
+        report_store.record_counter("tg_429_small")  # not a ban: that raised above
         # 8.21: THIS is the busy-card path, i.e. the 2026-09-11 incident
         # itself — a fix that converts only `_handle_response` fixes
         # nothing. Same rule as there: report it, never sleep privately.
@@ -579,10 +590,13 @@ async def _handle_edit_response(data: dict, *, payload: dict,
             raise
         except Exception as exc:
             log.warning("editMessageText retry error: %s", exc)
+            if isinstance(exc, (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError)):
+                report_store.record_counter("tg_network")
             return None
         # Second 429 → give up quietly (unless it is a ban — then mute)
         if not data2.get("ok") and data2.get("error_code") == 429:
             _ban_if_excessive("editMessageText", payload, _retry_after_of(data2))
+            report_store.record_counter("tg_429_small")  # not a ban: that raised above
             log.warning("editMessageText rate-limited again after retry")
             return None
         return await _handle_edit_response(data2, payload=payload, kind=kind,

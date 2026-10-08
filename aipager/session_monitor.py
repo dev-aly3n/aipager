@@ -725,6 +725,7 @@ class SessionMonitor:
                         "demoting to BUSY (likely a crashed permission prompt)",
                         sess.label, int(INTERACTIVE_TIMEOUT_SECONDS / 60),
                     )
+                    report_store.record_counter("interactive_demoted")
                     sess.pending_permission = None
                     self.registry.transition(name, Status.BUSY)
                     self.registry.mark_dirty()
@@ -735,6 +736,7 @@ class SessionMonitor:
             # handler does; the card watchdog is skipped for this scan
             # because the handler is about to settle the card itself.
             if prompt_not_taken(sess, now):
+                report_store.record_counter("prompt_not_taken")
                 sess.prompt_sent_at = 0.0
                 try:
                     await self.notify_fn(sess, "prompt_not_taken", {
@@ -779,6 +781,8 @@ class SessionMonitor:
             if card_action is not None:
                 action_kind, since = card_action
                 sess.card_watchdog_at = now
+                report_store.record_counter(
+                    "watchdog_restart" if action_kind == "restart" else "watchdog_refresh")
                 if action_kind == "restart":
                     log.warning(
                         "[%s] no animate task while BUSY — restarting the "
@@ -797,6 +801,7 @@ class SessionMonitor:
             # Orphaned busy card (roadmap 8.55/8.57): a card whose turn
             # has ended with nothing left to settle it.
             if orphan_card_due(sess, now):
+                report_store.record_counter("orphan_card")
                 try:
                     await self.notify_fn(sess, "orphan_card", {})
                 except Exception:
@@ -1094,6 +1099,7 @@ class SessionMonitor:
                     pass  # no statusLine yet — fall through
                 sess.stale_warned = True
                 stale_mins = int((now - baseline) / 60)
+                report_store.record_counter("stale_busy")
                 try:
                     await self.notify_fn(sess, "stale_busy", {"minutes": stale_mins})
                 except Exception:

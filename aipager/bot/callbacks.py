@@ -32,6 +32,7 @@ from telegram.ext import (
 
 from aipager.bot import card_owner, held_message, new_flow, session_parity, tap_gate, update_flow
 from aipager.dtach import hook_reply, inject
+from aipager.report import store as report_store
 
 from aipager import preferences
 from aipager.bot.settings_menu import (
@@ -1710,6 +1711,7 @@ class CallbackDispatchMixin:
                     log.info("[%s] allow_always degraded to a single allow "
                              "(always_available=%r)", sess.label,
                              perm_info.get("always_available"))
+                    report_store.record_counter("allow_always_degraded")
             elif perm_info.get("always_available") is True:
                 via = "keystroke_fallback"
                 verb = ACTION_VERBS[action]
@@ -1736,6 +1738,7 @@ class CallbackDispatchMixin:
                 log.info("[%s] allow_always degraded to a single allow "
                          "(always_available=%r)", sess.label,
                          perm_info.get("always_available"))
+                report_store.record_counter("allow_always_degraded")
                 ok = await inject.send_keys(session_name, "Enter")
         elif action == "deny":
             verb = ACTION_VERBS[action]
@@ -1899,6 +1902,11 @@ class CallbackDispatchMixin:
                         sess, separate_perm, verb, member, via,
                         reply_to=getattr(query.message, "message_id", None))
             if via == "keystroke_fallback":
+                # A tool's prompt is answered by its hook when the hook is
+                # still waiting; typing it is the fallback (problem reports,
+                # 8.112). A question is always typed: not counted.
+                if (perm.get("tool_info") or {}).get("name") != "AskUserQuestion":
+                    report_store.record_counter("keystroke_fallback")
                 # Typed into Claude Code's dialog: a refusal row ends the
                 # turn like an interrupt, with no Stop hook (roadmap 8.99).
                 person = getattr(query, "from_user", None)

@@ -41,6 +41,8 @@ from telegram.error import BadRequest, ChatMigrated, Forbidden, RetryAfter
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import FloodSkipped
 from aipager.config import TELEGRAM_MAX_RETRY_AFTER
+from aipager.report import counters as report_counters
+from aipager.report import store as report_store
 from aipager.team import Role, User as TeamUser
 
 log = logging.getLogger("aipager.bot.transport")
@@ -518,6 +520,8 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
             # is how a handled 429 becomes a ban.
             raise
         except BadRequest as e:
+            # Problem reports (8.112): the refusal's class, never its text.
+            report_store.record_counter(report_counters.tg_400_key(str(e)))
             if "too long" in str(e).lower():
                 truncations += 1
                 if truncations > _MAX_TRUNCATIONS:

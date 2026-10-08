@@ -225,6 +225,17 @@ KEYS = {
 }
 
 
+def _count_dtach_failure() -> None:
+    """Problem reports (8.112): one more dtach failure. Imported here, on a
+    failure only: the hook imports this package and must not load the
+    report modules on every tool call."""
+    try:
+        from aipager.report import store as report_store
+        report_store.record_counter("dtach_failed")
+    except Exception:  # noqa: BLE001 - a counter never fails a dtach call
+        pass
+
+
 async def _run(args: list[str], stdin: bytes = b"",
                timeout: float = 5) -> tuple[bool, str]:
     """Run subprocess, optionally piping stdin, return (success, stdout)."""
@@ -241,9 +252,11 @@ async def _run(args: list[str], stdin: bytes = b"",
         if proc.returncode == 0:
             return True, stdout.decode()
         log.error("dtach cmd failed: %s — %s", args, stderr.decode().strip())
+        _count_dtach_failure()
         return False, ""
     except asyncio.TimeoutError:
         log.error("dtach cmd timed out: %s", args)
+        _count_dtach_failure()
         return False, ""
     except FileNotFoundError:
         log.error("dtach not found")
@@ -883,6 +896,7 @@ async def launch_session(
             first = (raw.splitlines() or [""])[0][:_DTACH_STDERR_LOG_MAX]
             log.warning("[%s] dtach launch failed (rc=%d): %s",
                         name, proc.returncode, first)
+            _count_dtach_failure()
             return False, f"dtach failed: {_describe_dtach_failure(proc.returncode, raw)}"
     except FileNotFoundError:
         return False, "dtach not installed"

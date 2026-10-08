@@ -32,6 +32,7 @@ from aipager.policy_snapshot import (
     note_driver_id,
 )
 from aipager.report import relay as report_relay
+from aipager.report import schema as report_schema
 from aipager.report import store as report_store
 from aipager.state import (
     ACTIVE_SUBAGENTS_CAP,
@@ -50,6 +51,10 @@ from aipager.transcript import (
 )
 
 log = logging.getLogger(__name__)
+
+#: The ``hook_event_name`` values aipager's own hook sends for its own
+#: datagrams (not Claude Code events); kept equal to the hook's by a test.
+_INTERNAL_HOOK_EVENTS = frozenset({"queue_pickup", "safety_blocked", "permission_reply_timeout"})
 
 #: Where a hook's memory-cap hit is recorded (problem reports, 8.112): the
 #: hook's own main, by the hook name its cap datagram carries.
@@ -601,6 +606,14 @@ class HookReceiver:
             )
             return
         self._recent_fingerprints[fp] = now_mono
+
+        # Problem reports (8.112): a hook event aipager never installed is
+        # Claude Code drift, counted (its name never kept).
+        hook_event = msg.get("hook_event_name")
+        if (isinstance(hook_event, str) and hook_event
+                and hook_event not in report_schema.HOOK_EVENTS
+                and hook_event not in _INTERNAL_HOOK_EVENTS):
+            report_store.record_counter("unknown_hook_event")
 
         if event in _BOUNDARY_EVENTS or event in _DIALOG_EVENTS:
             # One line per turn-boundary (or dialog) hook, with the session's status
