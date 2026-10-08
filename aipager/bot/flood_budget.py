@@ -2430,6 +2430,12 @@ class BudgetRateLimiter(BaseRateLimiter):
 
     # ── observability ────────────────────────────────────────────────────
 
+    def waiting_sends(self) -> int:
+        """Blocking calls queued in every chat's gate right now: a plain
+        count, nothing decayed, earned or evaluated (cheap enough for the
+        session monitor's 2 s tick, unlike :meth:`snapshot`)."""
+        return sum(len(budget.waiters) for budget in self._budgets.values())
+
     def snapshot(self) -> dict:
         """The whole budget, decayed to now, for tests and the status file.
 

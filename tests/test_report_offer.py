@@ -366,9 +366,34 @@ def test_busy_now(mk_bot, monkeypatch):
     assert report_offer.busy_now(bot) is True
     bot._keyboard_owed = {}
     limiter = MagicMock()
-    limiter.snapshot.return_value = {"chats": [{"chat_id": OWNER, "waiters": 2}]}
+    limiter.waiting_sends.return_value = 2
     monkeypatch.setattr("aipager.bot.rich_message._rate_limiter", limiter)
     assert report_offer.busy_now(bot) is True
+    limiter.waiting_sends.return_value = 0
+    assert report_offer.busy_now(bot) is False
+
+
+def test_busy_now_never_takes_a_limiter_snapshot(mk_bot, monkeypatch):
+    """It runs every 2 s: a snapshot decays, earns and evaluates every
+    chat's budget; the waiter count is a plain read."""
+    bot, _tg = make_bot(mk_bot)
+    limiter = MagicMock()
+    limiter.waiting_sends.return_value = 0
+    limiter.snapshot.return_value = {"chats": [{"chat_id": OWNER, "waiters": 0}]}
+    monkeypatch.setattr("aipager.bot.rich_message._rate_limiter", limiter)
+    assert report_offer.busy_now(bot) is False
+    limiter.snapshot.assert_not_called()
+    limiter.waiting_sends.assert_called()
+
+
+def test_waiting_sends_counts_every_chats_waiters():
+    from aipager.bot.flood_budget import BudgetRateLimiter
+    limiter = BudgetRateLimiter(signal_path=config.FLOOD_BACKOFF_FILE)
+    assert limiter.waiting_sends() == 0
+    limiter._budget_for(OWNER).waiters.append(object())
+    limiter._budget_for(GROUP).waiters.extend([object(), object()])
+    assert limiter.waiting_sends() == 3
+    assert sum(row["waiters"] for row in limiter.snapshot()["chats"]) == 3
 
 
 # ---- the notice --------------------------------------------------------------------

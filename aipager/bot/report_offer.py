@@ -101,8 +101,8 @@ def busy_now(bot: "TelegramBot") -> bool:
             return True
         from aipager.bot.rich_message import get_rate_limiter
         limiter = get_rate_limiter()
-        if limiter is not None and any(
-                row.get("waiters") for row in limiter.snapshot().get("chats", [])):
+        # A plain count (this runs every 2 s): no budget decayed or earned.
+        if limiter is not None and limiter.waiting_sends():
             return True
     except Exception as e:  # noqa: BLE001
         log.debug("report offer busy check failed (%s)", type(e).__name__)
