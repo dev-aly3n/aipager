@@ -382,6 +382,51 @@ def test_stale_tap_does_nothing(ready, run_async):
     assert store.policy_state() == before
 
 
+@pytest.mark.parametrize("ts", ["\u00b2", "\u0661\u0662", "\uff11"],
+                         ids=["superscript", "arabic_indic", "fullwidth"])
+def test_unicode_digit_ts_is_stale_not_a_crash(ready, run_async, ts):
+    """``str.isdigit`` says yes to these, ``int()`` refuses or misreads
+    them: only ASCII digits are an offer's ts."""
+    bot, tg = ready
+    _offer(run_async, bot)
+    before = store.policy_state()
+    query = _answer(run_async, bot, "on", ts)
+    assert toasts(query) == [report_flow.OFFER_STALE_TEXT]
+    assert store.policy_state() == before
+
+
+def test_preview_notice_says_opened_only_after_the_card_went_out(ready, run_async):
+    bot, tg = ready
+    _offer(run_async, bot)
+    order = []
+    real_send = tg.send_message
+
+    async def _send(chat_id, text, **kw):
+        order.append("card")
+        return await real_send(chat_id, text, **kw)
+
+    tg.send_message = _send
+    update, query = tap(f"_:rp:op:{NOW}")
+
+    async def _edit(*a, **kw):
+        order.append("notice")
+    query.edit_message_text.side_effect = _edit
+    run_async(bot._handle_callback(update, MagicMock()))
+    assert order == ["card", "notice"]
+    assert query.edit_message_text.await_args.args[0] == report_flow.OFFER_PREVIEW_TEXT
+
+
+def test_preview_that_did_not_open_says_so_on_the_notice(ready, run_async):
+    bot, tg = ready
+    _offer(run_async, bot)
+    tg.send_result = MUTED          # the card does not go out
+    query = _answer(run_async, bot, "op", NOW)
+    text = query.edit_message_text.await_args.args[0]
+    assert text == report_flow.OFFER_NOT_OPENED_TEXT
+    assert report_flow.OFFER_PREVIEW_TEXT not in text
+    assert bot._report_cards == {}
+
+
 def test_foreign_tap_does_nothing(ready, run_async):
     bot, tg = ready
     _offer(run_async, bot)

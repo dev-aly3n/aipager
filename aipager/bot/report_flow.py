@@ -104,6 +104,8 @@ ALREADY_SENT = "Already sent."
 INVALID_TEXT = "Invalid callback"
 OFFER_STALE_TEXT = "This offer is no longer open."
 OFFER_PREVIEW_TEXT = "Opened the report preview below."
+OFFER_NOT_OPENED_TEXT = ("Could not open the report preview. "
+                         "Report a problem in /help opens a fresh one.")
 OFFER_DECLINED_TEXT = "OK. aipager won't ask about this again on this version."
 OFFER_OFF_TEXT = ("Automatic offers are now off. To turn them back on: "
                   "/settings, then Problem reports.")
@@ -843,7 +845,8 @@ async def _answer_offer(bot: "TelegramBot", query, verb: str, ts_text: str) -> N
     settled = policy.settle(state, now)
     if settled != state:
         store.save_policy(settled)
-    offer_ts = int(ts_text) if ts_text.isdigit() and len(ts_text) <= 12 else None
+    offer_ts = (int(ts_text) if ts_text.isascii() and ts_text.isdigit() and len(ts_text) <= 12
+                else None)
     if offer_ts is None or not settled.pending or settled.last_offer_ts != offer_ts:
         await bot._safe_answer(query, OFFER_STALE_TEXT)
         await _strip_keyboard(query)
@@ -852,16 +855,18 @@ async def _answer_offer(bot: "TelegramBot", query, verb: str, ts_text: str) -> N
     answered = policy.note_answer(settled, _OFFER_ANSWERS[verb])
     store.save_policy(answered)
     if verb == "op":
-        try:
-            await edit_text(query, OFFER_PREVIEW_TEXT, reply_markup=None,
-                            rate_limit_args=_INSTANT)
-        except Exception as e:  # noqa: BLE001
-            log.debug("offer notice edit failed (%s)", type(e).__name__)
         entries = {r["entry"]["fingerprint"]: r["entry"] for r in store.records()}
         errors = [entries[fp] for fp in offered if fp in entries]
         result = await open_preview(bot, trigger="auto", errors=errors)
-        if result is not OpenResult.OPENED:
+        opened = result is OpenResult.OPENED
+        if not opened:
             await bot._safe_answer(query, NOT_OPENED_TEXT, show_alert=True)
+        # Said only once the outcome is known.
+        try:
+            await edit_text(query, OFFER_PREVIEW_TEXT if opened else OFFER_NOT_OPENED_TEXT,
+                            reply_markup=None, rate_limit_args=_INSTANT)
+        except Exception as e:  # noqa: BLE001
+            log.debug("offer notice edit failed (%s)", type(e).__name__)
         return
     text = OFFER_DECLINED_TEXT
     if answered.auto_off and not settled.auto_off:
