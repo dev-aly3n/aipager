@@ -56,7 +56,8 @@ def is_no_response_entry(entry: dict) -> bool:
     """
     if entry.get("isApiErrorMessage"):
         return False
-    return entry.get("message", {}).get("model") == SYNTHETIC_MODEL
+    message = entry.get("message")
+    return isinstance(message, dict) and message.get("model") == SYNTHETIC_MODEL
 
 
 # Long-context degradation on newer Claude models occasionally causes
@@ -214,20 +215,27 @@ def extract_last_response_entry(
             continue
         try:
             entry = json.loads(line)
-        except json.JSONDecodeError:
+        except (ValueError, RecursionError):  # not JSON, or too deep to read
             continue
 
-        if entry.get("type") != "assistant":
+        if not isinstance(entry, dict) or entry.get("type") != "assistant":
             continue
 
         if is_no_response_entry(entry):
             return "", None
 
-        content = entry.get("message", {}).get("content", [])
+        message = entry.get("message")
+        content = message.get("content", []) if isinstance(message, dict) else []
+        if isinstance(content, str):
+            content = [content]     # one text block, not a run of characters
+        elif not isinstance(content, list):
+            continue
         texts = []
         for block in content:
             if isinstance(block, dict) and block.get("type") == "text":
-                texts.append(block.get("text", ""))
+                text = block.get("text", "")
+                if isinstance(text, str):
+                    texts.append(text)
             elif isinstance(block, str):
                 texts.append(block)
 
@@ -295,8 +303,9 @@ def turn_appears_complete(transcript_path: str) -> bool:
             continue
         try:
             entry = json.loads(line)
-        except (json.JSONDecodeError, RecursionError):
-            # A torn line, or one nested past the parser's depth.
+        except (ValueError, RecursionError):
+            # A torn line, one nested past the parser's depth, or an
+            # integer too long to read.
             continue
         if not isinstance(entry, dict):
             continue  # a bare number, string or null is no entry at all
@@ -397,7 +406,7 @@ def turn_tail_since(transcript_path: str, since: float) -> str | None:
             continue
         try:
             entry = json.loads(line)
-        except json.JSONDecodeError:
+        except (ValueError, RecursionError):  # not JSON, or too deep to read
             continue
         if not isinstance(entry, dict):
             continue
@@ -634,7 +643,9 @@ def read_turn_blocks(
             continue
         try:
             entry = json.loads(line)
-        except json.JSONDecodeError:
+        except (ValueError, RecursionError):  # not JSON, or too deep to read
+            continue
+        if not isinstance(entry, dict):
             continue
         etype = entry.get("type")
         if etype == "queue-operation":
@@ -675,11 +686,13 @@ def read_turn_blocks(
             if isinstance(block, dict):
                 kind = block.get("type")
                 if kind == "text":
-                    t = _strip_leaked_tool_xml(block.get("text", ""))
+                    text = block.get("text", "")
+                    t = _strip_leaked_tool_xml(text) if isinstance(text, str) else ""
                     if t:
                         items.append(("text", t, mid))
                 elif kind == "tool_use":
-                    items.append(("tool", block.get("name", ""), mid))
+                    name = block.get("name", "")
+                    items.append(("tool", name if isinstance(name, str) else "", mid))
             elif isinstance(block, str) and block:
                 t = _strip_leaked_tool_xml(block)
                 if t:
@@ -728,7 +741,7 @@ def read_queue_events(
             continue
         try:
             entry = json.loads(line_bytes.decode("utf-8", errors="replace"))
-        except json.JSONDecodeError:
+        except (ValueError, RecursionError):  # not JSON, or too deep to read
             continue
         if not isinstance(entry, dict) or entry.get("type") != "queue-operation":
             continue
@@ -795,7 +808,7 @@ def read_still_queued(
             continue
         try:
             entry = json.loads(line_bytes.decode("utf-8", errors="replace"))
-        except json.JSONDecodeError:
+        except (ValueError, RecursionError):  # not JSON, or too deep to read
             continue
         if not isinstance(entry, dict) or entry.get("type") != "queue-operation":
             continue
@@ -939,7 +952,7 @@ def _real_text_of_line(raw: bytes) -> str:
         return ""
     try:
         entry = json.loads(line)
-    except (json.JSONDecodeError, UnicodeDecodeError):
+    except (ValueError, RecursionError):  # not JSON, or too deep to read
         return ""
     if not isinstance(entry, dict) or entry.get("type") != "assistant":
         return ""

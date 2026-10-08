@@ -179,23 +179,23 @@ def _extract_token_usage(transcript_path: str) -> dict | None:
     the transcript are unreliable (placeholder values in many versions).
     """
     try:
-        lines = Path(transcript_path).read_text().strip().splitlines()
-    except (FileNotFoundError, PermissionError):
+        lines = Path(transcript_path).read_text(errors="replace").strip().splitlines()
+    except OSError:
         return None
 
     for line in reversed(lines[-20:]):
         try:
             entry = json.loads(line)
-        except json.JSONDecodeError:
+        except (ValueError, RecursionError):  # not JSON, or too deep to read
             continue
-        if entry.get("type") != "assistant":
-            continue
-        usage = entry.get("message", {}).get("usage")
-        if usage:
-            inp = usage.get("input_tokens", 0)
-            cache_read = usage.get("cache_read_input_tokens", 0)
-            cache_create = usage.get("cache_creation_input_tokens", 0)
-            total_ctx = inp + cache_read + cache_create
+        message = _assistant_message(entry)
+        usage = message.get("usage") if message is not None else None
+        if usage and isinstance(usage, dict):
+            def _count(key: str) -> int:
+                value = usage.get(key, 0)
+                return value if type(value) is int else 0
+            total_ctx = (_count("input_tokens") + _count("cache_read_input_tokens")
+                         + _count("cache_creation_input_tokens"))
             pct = round(total_ctx / _CTX_WINDOW_SIZE * 100) if total_ctx else 0
             return {"context_pct": pct, "total_input": total_ctx,
                     "total_output": 0, "total_tokens": total_ctx}
@@ -276,21 +276,31 @@ def _finishes_open_prompt(msg: dict, tool_name: str, tool_input,
     return digest == _input_digest(tool_input)
 
 
+def _assistant_message(entry) -> dict | None:
+    """The ``message`` of an assistant transcript entry, or None for any
+    other line (another type, or not the shape Claude Code writes)."""
+    if not isinstance(entry, dict) or entry.get("type") != "assistant":
+        return None
+    message = entry.get("message")
+    return message if isinstance(message, dict) else None
+
+
 def _extract_pending_tool(transcript_path: str) -> dict | None:
     """Read the last lines of the transcript to find the pending tool_use."""
     try:
-        lines = Path(transcript_path).read_text().strip().splitlines()
-    except (FileNotFoundError, PermissionError):
+        lines = Path(transcript_path).read_text(errors="replace").strip().splitlines()
+    except OSError:
         return None
 
     for line in reversed(lines[-10:]):
         try:
             entry = json.loads(line)
-        except json.JSONDecodeError:
+        except (ValueError, RecursionError):  # not JSON, or too deep to read
             continue
-        if entry.get("type") != "assistant":
+        message = _assistant_message(entry)
+        content = message.get("content") if message is not None else None
+        if not isinstance(content, list):
             continue
-        content = entry.get("message", {}).get("content", [])
         for block in reversed(content):
             if not isinstance(block, dict) or block.get("type") != "tool_use":
                 continue
@@ -303,18 +313,19 @@ def _extract_pending_tool(transcript_path: str) -> dict | None:
 def _extract_specific_tool(transcript_path: str, target_name: str) -> dict | None:
     """Search transcript for a specific tool_use by name (handles parallel tools)."""
     try:
-        lines = Path(transcript_path).read_text().strip().splitlines()
-    except (FileNotFoundError, PermissionError):
+        lines = Path(transcript_path).read_text(errors="replace").strip().splitlines()
+    except OSError:
         return None
 
     for line in reversed(lines[-20:]):
         try:
             entry = json.loads(line)
-        except json.JSONDecodeError:
+        except (ValueError, RecursionError):  # not JSON, or too deep to read
             continue
-        if entry.get("type") != "assistant":
+        message = _assistant_message(entry)
+        content = message.get("content") if message is not None else None
+        if not isinstance(content, list):
             continue
-        content = entry.get("message", {}).get("content", [])
         for block in reversed(content):
             if not isinstance(block, dict) or block.get("type") != "tool_use":
                 continue
