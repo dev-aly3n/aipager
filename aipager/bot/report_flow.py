@@ -693,6 +693,12 @@ async def maybe_handle_text(bot: "TelegramBot", update, ctx, text: str) -> bool:
 
 # ---- taps ---------------------------------------------------------------------
 
+def outcome_line(outcome: str, reference: str | None = None) -> str:
+    """The card's line for one send outcome (the CLI's wording); an
+    unknown one reads as try later."""
+    return wording.OUTCOME_LINES.get(outcome, wording.TRY_LATER).format(reference=reference)
+
+
 async def _tap_open(bot: "TelegramBot", query, chat_id) -> None:
     owner = resolve_owner(bot)
     result = await open_preview(bot, trigger="manual")
@@ -739,7 +745,7 @@ async def _tap_send(bot: "TelegramBot", query, kept: KeptReport) -> None:
     except Exception as e:  # noqa: BLE001 - send.send never raises; belt and braces
         log.warning("problem report send failed (%s)", type(e).__name__)
         result = send.SendResult(send.OFFLINE)
-    line = wording.outcome_line(result.outcome, result.reference)
+    line = outcome_line(result.outcome, result.reference)
     log.info("problem report send: %s", result.outcome)
     if result.outcome in wording.RETRYABLE:
         kept.state = "open"

@@ -27,8 +27,12 @@ def test_the_intro_is_the_heading_and_the_explanation():
 def test_retryable_outcomes_are_the_try_later_ones():
     assert wording.RETRYABLE == {k for k, v in wording.OUTCOME_LINES.items()
                                  if v == wording.TRY_LATER}
-    assert wording.outcome_line("sent", "ap1-x").startswith("Sent. Reference ap1-x ")
-    assert wording.outcome_line("no-such-outcome") == wording.TRY_LATER
+    assert report_flow.outcome_line("sent", "ap1-x").startswith("Sent. Reference ap1-x ")
+    assert report_flow.outcome_line("no-such-outcome") == wording.TRY_LATER
+
+
+def test_the_daily_cap_line_names_the_real_cap():
+    assert f"limited to {send.SENDS_PER_DAY} a day" in wording.OUTCOME_LINES["daily_cap"]
 
 
 def _strings(module):
