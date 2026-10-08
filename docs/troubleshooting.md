@@ -598,10 +598,9 @@ reinstall command from the message (for example
 
 ## Still stuck?
 
-Open an issue at
-[github.com/dev-aly3n/aipager/issues](https://github.com/dev-aly3n/aipager/issues)
-and include the output of `aipager doctor` plus the last ~50 lines
-of `aipager logs`.
+Send a problem report: tap **Report a problem** under `/help` in your private chat with the bot, or run `aipager report` in a terminal. You see the whole report before anything is sent, and it holds no chats, prompts, names, paths or tokens (see [Problem reports](problem-reports.md)). After sending, you get a reference such as `ap1-7c41d09e2b3a`.
+
+Then, if you want to talk about it, open an issue at [github.com/dev-aly3n/aipager/issues](https://github.com/dev-aly3n/aipager/issues) and quote that reference. Please do not paste `aipager doctor` output or `aipager logs` into an issue: they hold your chat id, your home folder's paths, session names and the start of your prompts. If a log line is needed, the maintainer will ask for that one line, and you can remove anything private from it first.
 
 ## See also
 

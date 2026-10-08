@@ -139,9 +139,14 @@ def err_block(title: str, body_lines: Iterable[str] = (), *,
     if bug and issue_url:
         if body:
             body += "\n"
+        # Roadmap 8.108: never ask for logs or doctor output, which hold
+        # the chat id, home paths and the start of prompts; the problem
+        # report is built to hold none of that.
         body += (
-            f"\nIf this looks like a bug, file an issue with the output\n"
-            f"of `aipager doctor`:\n  [path]{issue_url}[/path]"
+            "\nIf this looks like a bug, run `aipager report` to send an\n"
+            "anonymous report (you see all of it first). In an issue, quote\n"
+            "its reference and never paste logs or `aipager doctor` output:\n"
+            f"  [path]{issue_url}[/path]"
         )
     if err_console.is_terminal:
         err_console.print(Panel(

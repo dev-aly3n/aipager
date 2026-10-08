@@ -74,7 +74,11 @@ def test_err_block_includes_issue_url_when_bug(capsys):
     assert "crash" in err
     assert "something broke" in err
     assert "https://example.test/issues" in err
-    assert "aipager doctor" in err
+    # Roadmap 8.108: the footer points to the problem report, never asks
+    # for logs or doctor output.
+    assert "aipager report" in err
+    assert "never paste logs" in err
+    assert "file an issue with the output" not in err
 
 
 def test_err_block_no_url_when_not_bug(capsys):

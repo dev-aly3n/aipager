@@ -1312,10 +1312,11 @@ class HookReceiver:
 
         elif event == "hook_memory_cap_hit":
             # A hook subprocess tripped its RLIMIT_AS cap and died with
-            # MemoryError. The tool call proceeded (Claude Code treats
-            # non-zero hook exit as allow), but one aipager notification
-            # was dropped. Surface so the user knows something abnormal
-            # happened. ``tool`` is present when the hook had already
+            # MemoryError. On a PreToolUse it exits 2, which Claude Code
+            # reads as a refusal of that tool call; on any other event
+            # it exits 1 and only that event is skipped (roadmap 8.109:
+            # the notice used to say the call "proceeded"). Surface so
+            # the user knows something abnormal happened. ``tool`` is present when the hook had already
             # parsed stdin before the balloon (best-effort — empty
             # otherwise).
             hook_name = msg.get("hook", "aipager-hook")

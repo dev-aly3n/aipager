@@ -1390,25 +1390,19 @@ class NotifyMixin:
                 f" during <code>{html_mod.escape(tool_name)}</code>"
                 if tool_name else ""
             )
-            text = (
-                f"⚠️ <b>{html_mod.escape(label)}</b> · memory cap hit"
-                f"{tool_suffix}\n"
-                "\n"
-                f"<code>{html_mod.escape(hook_name)}</code> exceeded its "
-                "1 GB limit - one event was dropped. The session is still "
-                "running; the tool call that triggered this proceeded "
-                "normally.\n"
-                "\n"
-                "<i>If this repeats, aipager is compensating for a runaway "
-                "allocation somewhere in the hook path - please report.</i>"
-            )
             # "Report this" (roadmap 8.112): opens the problem report
             # preview in the owner's DM; only the owner's tap does
             # anything (report_flow re-checks it).
             from aipager.bot import report_flow  # local: import cycle
+            has_owner = report_flow.resolve_owner(self) is not None
+            text = (
+                f"⚠️ <b>{html_mod.escape(label)}</b> · memory cap hit"
+                f"{tool_suffix}\n"
+                "\n"
+                + memory_cap_body(hook_name, has_owner)
+            )
             extra = ({"reply_markup": report_flow.report_button_markup(
-                report_flow.REPORT_THIS_BUTTON)}
-                if report_flow.resolve_owner(self) is not None else {})
+                report_flow.REPORT_THIS_BUTTON)} if has_owner else {})
             try:
                 await bot.send_message(
                     resolve_chat_id(sess), text, parse_mode="HTML", **extra,
@@ -3476,3 +3470,29 @@ class NotifyMixin:
                     )
                 except Exception:
                     pass  # message may be too old or already edited
+
+
+def memory_cap_body(hook_name: str, has_owner: bool) -> str:
+    """What a hook's memory-cap hit did (roadmap 8.109). The hook stops
+    with exit 2 on a PreToolUse, which Claude Code reads as a refusal of
+    that tool call, and with exit 1 on any other event, which skips only
+    that event; the cap-hit message does not say which event it was, so
+    the text says both ("most likely": a cap hit while the hook was still
+    reading a very large request exits 1 even on a PreToolUse, and the
+    tool runs). The status line helper only skips an update."""
+    name = html_mod.escape(hook_name)
+    if hook_name == "aipager-statusline":
+        what = (f"<code>{name}</code> ran out of its 1 GB memory limit, so one "
+                "status line update was skipped. The session keeps running.")
+    else:
+        what = (f"<code>{name}</code> ran out of its 1 GB memory limit and stopped. "
+                "If it was checking a tool call, Claude Code most likely refused that "
+                "call and Claude can try it again; otherwise only that one event was "
+                "skipped. "
+                "The session keeps running.")
+    # The notice may go to a group: only the owner's tap does anything.
+    nudge = ("<i>If this keeps happening, the owner can tap Report this to send "
+             "the maintainer a report.</i>" if has_owner else
+             "<i>If this keeps happening, run <code>aipager report</code> in a "
+             "terminal to send the maintainer a report.</i>")
+    return what + "\n\n" + nudge

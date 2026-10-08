@@ -950,8 +950,11 @@ def cmd_setup(args: argparse.Namespace) -> int:
         # the guard of record (its tests cover this path).
         code = _fail(run, EXIT_FAILURE, "internal_error",
                      _scrub(f"{type(e).__name__}: {e}", run.token),
-                     "Run `aipager doctor --json`; if this keeps happening, "
-                     "report it at https://github.com/dev-aly3n/aipager/issues.")
+                     "Run `aipager doctor --json` to see what is wrong; if this keeps "
+                     "happening, have the person run `aipager report` in a terminal "
+                     "(it shows the report and sends nothing private) and quote its "
+                     "reference at https://github.com/dev-aly3n/aipager/issues; never "
+                     "paste doctor output or logs there.")
     else:
         run.doc.update(ok=(code == EXIT_OK), exit_code=code)
     try:

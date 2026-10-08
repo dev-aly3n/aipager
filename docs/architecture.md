@@ -137,9 +137,12 @@ behaviour.
 | `~/.config/aipager/policy.yaml` | Per-role rules + safety overrides | user (checked via `aipager policy validate`) |
 | `~/.config/aipager/daemon.env` | Claude credential for launched sessions | user / `aipager doctor --fix` (mode 600) |
 | `~/.config/aipager/keyboard.json` | Optional keyboard overrides | user |
+| `~/.local/state/aipager/reports.json` | Problem reports: recorded error fingerprints, counts and the offer state (mode 600); see [problem reports](problem-reports.md#what-is-kept-on-your-machine) | aipager daemon |
+| `~/.local/state/aipager/report-sends.json` | Problem reports sent today (the daily limit) | aipager daemon, `aipager report` |
+| `~/.local/share/aipager/install.json`, `running.json` | When aipager first started here; whether it is running now (to tell a crash from a clean stop) | aipager daemon |
 
 The daemon writes nothing outside `~/.config/aipager`, `~/.claude/`,
-and its control socket. It never elevates — see
+`~/.local/share/aipager`, `~/.local/state/aipager`, and its control socket. It never elevates — see
 [security](security.md#privilege-boundary).
 
 ### Isolated instance (for testing)

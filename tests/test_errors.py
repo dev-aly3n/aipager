@@ -20,7 +20,7 @@ def test_friendly_error_with_bug_appends_issue_url(capsys):
     errors.friendly_error("Crashed", bug=True)
     err = capsys.readouterr().err
     assert errors.ISSUE_URL in err
-    assert "aipager doctor" in err
+    assert "aipager report" in err and "never paste logs" in err
 
 
 def test_friendly_error_without_bug_omits_issue_url(capsys):

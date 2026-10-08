@@ -13,6 +13,7 @@ them.
 | [Bot commands](commands.md) | Slash commands, inline buttons, voice / file routing |
 | [Team / group mode](groups.md) | Multi-user setup, roles, rules, audit attribution |
 | [Troubleshooting](troubleshooting.md) | Common failures and the `aipager doctor` fix table |
+| [Problem reports](problem-reports.md) | What a problem report contains, where it goes, and when aipager offers one |
 | [Security model](security.md) | Trust boundary, secrets, audit log, network surface |
 
 For getting started, see the top-level [README](../README.md). For

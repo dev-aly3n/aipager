@@ -11,6 +11,7 @@ import asyncio
 import time
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from telegram.error import BadRequest, Forbidden
 
 from aipager import preferences
@@ -691,6 +692,39 @@ def test_hook_memory_cap_hit_sends_message(mk_bot, run_async):
     assert "1 GB" in text
     assert "aipager-hook" in text
     assert "jim" in text  # session label surfaces
+
+
+def test_hook_memory_cap_hit_says_what_really_happened(mk_bot, run_async):
+    # Roadmap 8.109: the hook exits 2 on a PreToolUse (Claude Code refuses
+    # the tool call) and 1 on other events (that event is skipped); the
+    # notice used to say the call "proceeded normally".
+    bot = mk_bot()
+    run_async(bot.notify(_sess(), "hook_memory_cap_hit",
+                         {"hook": "aipager-hook", "tool": "Bash"}))
+    text = bot._app.bot.send_message.await_args.args[1]
+    assert "proceeded normally" not in text and "please report" not in text
+    assert "refused that call" in text
+    assert "only that one event was skipped" in text
+    assert "\u2014" not in text and "\u2013" not in text
+
+
+@pytest.mark.parametrize("has_owner, nudge, other", [
+    (True, "the owner can tap Report this", "aipager report"),
+    (False, "run <code>aipager report</code>", "Report this"),
+])
+def test_the_memory_cap_nudge_matches_what_the_reader_can_do(has_owner, nudge, other):
+    from aipager.bot.notify import memory_cap_body
+
+    body = memory_cap_body("aipager-hook", has_owner)
+    assert nudge in body and other not in body
+
+
+def test_the_status_line_cap_hit_only_skipped_an_update():
+    from aipager.bot.notify import memory_cap_body
+
+    body = memory_cap_body("aipager-statusline", True)
+    assert "status line update was skipped" in body
+    assert "refused" not in body and "tool call" not in body
 
 
 def test_hook_memory_cap_hit_default_hook_name(mk_bot, run_async):

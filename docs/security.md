@@ -510,6 +510,7 @@ tunnel described below. Outbound:
 - The Mini App tunnel to Cloudflare, while enabled (the default).
 - HTTPS to `pypi.org` and friends, only when the user taps the
   voice install button.
+- HTTPS to `raw.githubusercontent.com` (the report key file) and to Sentry's ingest host, only when you confirm sending a problem report: the report you previewed and a short summary made from it, nothing else. See [Problem reports](problem-reports.md).
 
 Inbound:
 
