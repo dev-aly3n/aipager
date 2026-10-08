@@ -21,17 +21,10 @@ happen to run as subprocesses spawned by Claude rather than imports
 from the daemon.
 """
 
-from aipager.dtach.inject import (
-    SOCK_PREFIX,
-    is_alive,
-    kill_session,
-    launch_session,
-    list_sessions,
-    send_keys,
-    send_text_and_enter,
-)
-
-__all__ = [
+# The re-exports are resolved on first use: importing ``inject`` (and
+# asyncio with it) here would cost every hook and status line process
+# Claude Code starts ~20 ms for names they never use.
+_REEXPORTS = (
     "SOCK_PREFIX",
     "is_alive",
     "kill_session",
@@ -39,4 +32,14 @@ __all__ = [
     "list_sessions",
     "send_keys",
     "send_text_and_enter",
-]
+)
+
+__all__ = list(_REEXPORTS)
+
+
+def __getattr__(name: str) -> object:
+    if name in _REEXPORTS:
+        from aipager.dtach import inject
+
+        return getattr(inject, name)
+    raise AttributeError(f"module 'aipager.dtach' has no attribute {name!r}")
