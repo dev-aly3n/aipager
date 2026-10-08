@@ -35,10 +35,17 @@ from tests.report_ui_harness import (
     inline_block,
     key_doc,
     make_bot,
+    pin_version,
     tap,
     text_update,
     toasts,
 )
+
+
+@pytest.fixture(autouse=True)
+def _pinned_version(monkeypatch):
+    """Run as a known release whether or not the package is installed."""
+    pin_version(monkeypatch)
 
 
 @pytest.fixture
@@ -433,6 +440,25 @@ def test_outcome_lines(mk_bot, run_async, monkeypatch, case, outcome, keeps_butt
         assert kept.report is not None
     else:
         assert edit["reply_markup"] is None and kept.state == "done"
+
+
+@pytest.mark.parametrize("floor", ["0.1.0", "0.0.0"])
+def test_an_unknown_build_may_not_send(mk_bot, run_async, net, monkeypatch, floor):
+    """A build without package metadata reports "0.0.0+unknown", which is
+    below any min_version (even "0.0.0", which every real release meets):
+    the card says too_old and nothing is posted."""
+    pin_version(monkeypatch, "0.0.0+unknown")
+    net.doc = key_doc(min_version=floor)
+    bot, tg = make_bot(mk_bot)
+    _open(run_async, bot)
+    kept = _kept(bot)
+    assert kept.report["aipager"]["version"] == "0.0.0+unknown"
+    _press_card(run_async, bot, "send", kept)
+    edit = tg.last_edit_of(kept.msg_id)
+    assert wording.OUTCOME_LINES["too_old"] in edit["text"]
+    assert edit["reply_markup"] is None and kept.state == "done"
+    assert net.posts == []
+    assert not Path(config.REPORT_SENDS_FILE).exists()
 
 
 def test_send_without_kept_report_sends_nothing(mk_bot, run_async, no_net):

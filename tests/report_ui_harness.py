@@ -19,6 +19,16 @@ OWNER = 256113222          # tests/conftest.py pins config.CHAT_ID to this
 STRANGER = 4242
 GROUP = -1001234
 
+# The release these tests run as. aipager.__version__ comes from package
+# metadata: "0.0.0+unknown" when the package is not installed (an unknown
+# build may not send), a stale number in a dev venv. builder and store read
+# it at call time, so a per-test monkeypatch pins it.
+PINNED_VERSION = "0.7.20"
+
+
+def pin_version(monkeypatch, version: str = PINNED_VERSION) -> None:
+    monkeypatch.setattr("aipager.__version__", version)
+
 
 class FakeTg:
     """The bot-level Telegram calls report_flow and report_offer make."""

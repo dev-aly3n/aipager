@@ -24,11 +24,26 @@ from aipager.bot.flood_budget import FloodSkipped
 from aipager.bot.transport import MUTED, SKIPPED
 from aipager.report import markers, policy, store
 from aipager.state import Status, TrackedSession
-from tests.report_ui_harness import GROUP, OWNER, STRANGER, make_bot, tap, text_update, toasts
+from tests.report_ui_harness import (
+    GROUP,
+    OWNER,
+    STRANGER,
+    make_bot,
+    pin_version,
+    tap,
+    text_update,
+    toasts,
+)
 
 NOW = int(time.time())
 MONO = 50_000.0
 DAY = 86400
+
+
+@pytest.fixture(autouse=True)
+def _pinned_version(monkeypatch):
+    """Run as a known release whether or not the package is installed."""
+    pin_version(monkeypatch)
 
 
 def _src(kind="pipx", origin="index"):

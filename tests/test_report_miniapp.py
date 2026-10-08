@@ -18,10 +18,16 @@ from aipager.miniapp.server import SCOPE_HEADER, MiniAppServer
 from aipager.policy import load_policy
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry
-from tests.report_ui_harness import GROUP, OWNER, FakeTg
+from tests.report_ui_harness import GROUP, OWNER, FakeTg, pin_version
 from tests.test_miniapp_preferences_api import BOT_TOKEN, _init_data
 
 ADMIN = 555
+
+
+@pytest.fixture(autouse=True)
+def _pinned_version(monkeypatch):
+    """Run as a known release whether or not the package is installed."""
+    pin_version(monkeypatch)
 
 
 @pytest.fixture(autouse=True)

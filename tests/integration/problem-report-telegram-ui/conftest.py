@@ -57,6 +57,18 @@ SENDING = "Sending..."
 
 PRE = re.compile(r"<pre>(.*?)</pre>", re.S)
 
+# The release these scenarios run as. aipager.__version__ comes from package
+# metadata: "0.0.0+unknown" when the package is not installed (an unknown
+# build may not send), a stale number in a dev venv. The report builder and
+# store read it at call time.
+PINNED_VERSION = "0.7.20"
+
+
+@pytest.fixture(autouse=True)
+def _pinned_version(monkeypatch):
+    """Run as a known release whether or not the package is installed."""
+    monkeypatch.setattr("aipager.__version__", PINNED_VERSION)
+
 
 # ---- event loop -------------------------------------------------------------
 
