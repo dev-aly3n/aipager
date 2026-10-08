@@ -1245,6 +1245,15 @@ def _never_spawn_real_dtach(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _fresh_terminal_write_stamps(monkeypatch):
+    """Start every test with no record of aipager's terminal writes
+    (``inject.last_write_at``). Most fixtures reuse a few session names,
+    so a key one test typed would otherwise read, in the next, as aipager
+    having typed into that test's dialog (roadmap 8.113)."""
+    monkeypatch.setattr("aipager.dtach.inject._LAST_WRITE_AT", {})
+
+
+@pytest.fixture(autouse=True)
 def _never_clamp_the_test_process(monkeypatch):
     """Keep a hook's ``RLIMIT_AS`` clamp inside the hook, out of pytest.
 

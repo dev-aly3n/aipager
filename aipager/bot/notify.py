@@ -1728,6 +1728,49 @@ class NotifyMixin:
             self._resume_animation_if_dead(sess, reason="tool_use while BUSY")
             return
 
+        if event == "dialog_ended_in_terminal":
+            # Roadmap 8.113: "No" chosen in Claude Code's own dialog at the
+            # terminal (or Escape on a question there) ended the turn like
+            # an interrupt, and no hook fires for that; the session monitor
+            # saw the transcript's interrupt marker. End the turn the way
+            # aipager's own typed Deny does, unless something moved on in
+            # the meantime: a Telegram answer, another dialog, a hook, or
+            # keys aipager typed into the dialog (their own path ends it).
+            #
+            # Two things are left as they are. What Claude's own queue
+            # held is in the terminal's input box now (popAll): the person
+            # at the terminal can send or edit it, as after any Escape
+            # there, so it is not wiped; a message aipager held while the
+            # dialog was open still goes out below, typed after it, as at
+            # any turn end. And an Escape while a tool allowed at the
+            # terminal runs (no hook says the dialog closed) reads as
+            # Denied too: the turn did end there.
+            from aipager.bot.session_ops import _terminal_card_text
+            from aipager.dtach import inject as dtach_inject
+            entered = context.get("entered_at")
+
+            def carried_on() -> bool:
+                return (self.registry.get(sess.name) is not sess
+                        or sess.status != Status.INTERACTIVE
+                        or sess.interactive_entered_at != entered
+                        or dtach_inject.last_write_at(sess.name) >= entered)
+
+            # carried_on is checked once the card's lock is held, so a
+            # Telegram answer that lands first is left alone. A prompt sent
+            # as its own message keeps its fields there (8.99), and only
+            # one shown during this wait is this dialog.
+            perm = sess.pending_permission
+            if not perm:
+                sent = (sess.pending_prompt_msg or {}).get("perm") or {}
+                if (sent.get("wait_started_at") or 0) >= sess.interactive_entered_at:
+                    perm = sent
+            refused = not (perm or {}).get("ask_question")
+            await self._end_turn_ended_at_dialog(
+                sess, refused=refused, by="", confirmed=True,
+                carried_on=carried_on,
+                card_text=_terminal_card_text(sess.label, refused=refused))
+            return
+
         if event == "waiting_reminder":
             # Claude Code nudged about idle input while this session is
             # blocked on a permission prompt or a question (roadmap 8.4).

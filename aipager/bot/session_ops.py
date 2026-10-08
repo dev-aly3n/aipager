@@ -131,6 +131,16 @@ def _refused_card_text(label: str, by: str = "", *, refused: bool = True) -> str
     return f"{text} by {html_mod.escape(by)}" if by else text
 
 
+def _terminal_card_text(label: str, *, refused: bool) -> str:
+    """The busy card after Claude Code's own dialog was answered at the
+    terminal in a way that ended the turn (roadmap 8.113): `🚫 x1 · Denied
+    in the terminal` for a permission, `⚠️ x1 · Stopped in the terminal`
+    for a question left with Escape."""
+    if refused:
+        return f"🚫 <b>{html_mod.escape(label)}</b> · Denied in the terminal"
+    return f"⚠️ <b>{html_mod.escape(label)}</b> · Stopped in the terminal"
+
+
 #: How long, after an answer was TYPED into Claude Code's permission dialog
 #: (the keystroke fallback), the daemon watches for the turn having ended
 #: like an interrupt (roadmap 8.99). For a refusal, also the bounded grace
@@ -1288,7 +1298,8 @@ class SessionOpsMixin:
                                         refused: bool, by: str,
                                         confirmed: bool,
                                         carried_on=None,
-                                        held: list[dict] | None = None) -> bool:
+                                        held: list[dict] | None = None,
+                                        card_text: str | None = None) -> bool:
         """End the running turn the way /stop does, minus the Escapes: the
         answer typed into the dialog already interrupted it. Settles the
         card ("Denied"), clears the tool-in-flight state and the hook's
@@ -1302,8 +1313,10 @@ class SessionOpsMixin:
         refused tool's in-flight stamp is cleared (it will never run).
 
         *carried_on*: re-checked after the card lock's await; when it
-        reports Claude carried on, nothing is changed. Returns True when
-        the turn was ended here."""
+        reports Claude carried on, nothing is changed. *card_text*: the
+        card's final text when not the typed answer's ("Denied in the
+        terminal", roadmap 8.113). Returns True when the turn was ended
+        here."""
         held = list(held or ())
         async with sess.animate_lock:
             if carried_on is not None and carried_on():
@@ -1321,6 +1334,9 @@ class SessionOpsMixin:
             sess.pending_tool_started_at = None
             sess.parent_tool_started_at = None
             sess.pending_permission = None
+            # No prompt on the card is open any more: a stale answer
+            # button on it types nothing (8.102).
+            sess.mark_prompt_closed(sess.busy_msg_id)
             _clear_turn_open(sess.name)
             sess.turn_sender_id = None
             if confirmed:
@@ -1335,7 +1351,7 @@ class SessionOpsMixin:
                  "transcript marker" if confirmed else "grace")
         self._stop_animation(sess)
         await self._settle_card_text(
-            sess, _refused_card_text(sess.label, by, refused=refused))
+            sess, card_text or _refused_card_text(sess.label, by, refused=refused))
         sess.busy_msg_id = None
         sess.trigger_msg_id = None
         sess.busy_card_trigger = None

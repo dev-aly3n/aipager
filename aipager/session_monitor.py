@@ -35,6 +35,7 @@ from aipager.transcript import (
     extract_last_response,
     last_assistant_preview,
     turn_appears_complete,
+    turn_tail_since,
 )
 
 log = logging.getLogger(__name__)
@@ -541,6 +542,36 @@ def _sweep_flood_backoff() -> None:
     flood_state.save_if_dirty()
 
 
+def dialog_interrupted_in_terminal(sess: TrackedSession, now_mono: float,
+                                   now_wall: float) -> bool:
+    """True when a session waiting on a dialog (INTERACTIVE) has Claude
+    Code's interrupt marker as the newest turn entry of its transcript,
+    written since the dialog appeared (roadmap 8.113). Choosing "No" in
+    Claude Code's own permission dialog at the terminal, or Escape on a
+    question there, ends the turn like an interrupt: it writes the marker
+    and fires no hook. An Allow writes the tool's result (or nothing yet,
+    the transcript being lazy), a dialog still open writes nothing: neither
+    reads as the marker (:func:`aipager.transcript.turn_tail_since`).
+
+    False once aipager itself has typed into the terminal since the dialog
+    appeared (:func:`aipager.dtach.inject.last_write_at`): its own typed
+    Deny and /stop's Escapes write the same marker while the session is
+    still INTERACTIVE, and the path that typed them ends the turn itself.
+    A terminal answer given after such keys (a question's Escape after a
+    Telegram tap moved its cursor) is left to the INTERACTIVE watchdog.
+
+    *now_mono* / *now_wall*: the monotonic and the wall clock of this tick,
+    to place the dialog's start (a monotonic stamp) on the transcript's
+    wall-clock time line. Never raises."""
+    if (sess.status != Status.INTERACTIVE or not sess.transcript_path
+            or sess.interactive_entered_at <= 0):
+        return False
+    if dtach_inject.last_write_at(sess.name) >= sess.interactive_entered_at:
+        return False
+    since = now_wall - max(0.0, now_mono - sess.interactive_entered_at)
+    return turn_tail_since(sess.transcript_path, since) == "marker"
+
+
 class SessionMonitor:
     """Periodically discovers dtach sessions and marks dead ones GONE."""
 
@@ -566,6 +597,10 @@ class SessionMonitor:
         # when suppression starts and one when it lifts (8.29 R7) rather
         # than 1,800 an hour at a 2 s tick.
         self._cards_suppressed_seen: set = set()
+        # Roadmap 8.113: per session waiting on a dialog, the (dialog start,
+        # transcript mtime, size) last read, so the transcript is read
+        # again only after it changed.
+        self._dialog_seen: dict[str, tuple[float, int, int]] = {}
         # One deprecation line per process, emitted here rather than at
         # import: `logging.basicConfig` runs in cli/daemon.py's start
         # command, so a message logged while this module is being imported
@@ -588,6 +623,25 @@ class SessionMonitor:
         while True:
             await self.tick()
             await _loop_sleep(PANE_POLL_INTERVAL)
+
+    def _dialog_transcript_changed(self, name: str, sess: TrackedSession) -> bool:
+        """Whether the transcript of a session waiting on a dialog changed
+        since this monitor last read it for this dialog (roadmap 8.113):
+        the transcript is read only when it did, so a long wait costs one
+        stat a tick. The size is part of it: a file's time is coarse (two
+        appends a few ms apart can share it), but an append always grows
+        the file."""
+        try:
+            st = os.stat(sess.transcript_path) if sess.transcript_path else None
+        except OSError:
+            st = None
+        if st is None:
+            return False
+        key = (sess.interactive_entered_at, st.st_mtime_ns, st.st_size)
+        if self._dialog_seen.get(name) == key:
+            return False
+        self._dialog_seen[name] = key
+        return True
 
     async def tick(self) -> None:
         """One pass of the loop: scan, save, the mute catch-up, the bar.
@@ -716,6 +770,27 @@ class SessionMonitor:
                 log.warning("Failed to notify compact_timeout for %s", expired_name)
 
         for name, sess in self.registry.all_sessions().items():
+            # A dialog answered "No" at the terminal (roadmap 8.113): Claude
+            # Code ends the turn like an interrupt and fires no hook, so
+            # only the transcript tells. Checked before the watchdog below,
+            # which would otherwise wait out its 5 minutes.
+            if sess.status != Status.INTERACTIVE:
+                self._dialog_seen.pop(name, None)
+            elif (self._dialog_transcript_changed(name, sess)
+                  and dialog_interrupted_in_terminal(sess, now, time.time())):
+                log.info("[%s] the dialog was answered in the terminal: "
+                         "interrupt marker in the transcript", sess.label)
+                try:
+                    await self.notify_fn(sess, "dialog_ended_in_terminal", {
+                        "entered_at": sess.interactive_entered_at})
+                except Exception:
+                    log.warning("Failed to notify dialog_ended_in_terminal "
+                                "for %s", name, exc_info=True)
+                    # Read again next tick: the transcript may not change
+                    # again after the interrupt.
+                    self._dialog_seen.pop(name, None)
+                continue
+
             # INTERACTIVE watchdog (item 2.2)
             if sess.status == Status.INTERACTIVE:
                 baseline = _quiet_since(sess)

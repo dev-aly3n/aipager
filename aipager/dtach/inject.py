@@ -289,6 +289,9 @@ _CHORD_POLL: float = 0.02
 # Every write to a session's terminal, counted as its lock is taken
 # (``_note_write``): once per lock hold, which is what the chord compares.
 _WRITES: dict[str, int] = {}
+# When aipager last wrote to each session's terminal (``time.monotonic()``),
+# stamped with the count, before the bytes go out (``last_write_at``).
+_LAST_WRITE_AT: dict[str, float] = {}
 # The per-session terminal write lock. Every ``dtach -p`` write holds its
 # session's lock until the write has returned (``dtach -p`` exits only
 # after writing), so writes are delivered one at a time and in order, not
@@ -325,10 +328,21 @@ def _write_lock(session: str) -> asyncio.Lock:
 
 
 def _note_write(session: str) -> int:
-    """Count one write to *session*'s terminal; return the new count."""
+    """Count one write to *session*'s terminal and stamp its time
+    (:func:`last_write_at`); return the new count."""
     count = _WRITES.get(session, 0) + 1
     _WRITES[session] = count
+    _LAST_WRITE_AT[session] = time.monotonic()
     return count
+
+
+def last_write_at(session: str) -> float:
+    """When aipager last wrote to *session*'s terminal (``time.monotonic()``,
+    taken under the write lock before the bytes went out), or 0.0 when it
+    has not in this process. Whatever Claude Code writes in answer to
+    aipager's keys (an interrupt marker after a typed Deny or /stop's
+    Escape, roadmap 8.113) comes after this stamp."""
+    return _LAST_WRITE_AT.get(session, 0.0)
 
 
 async def _await_chord(session: str) -> None:
