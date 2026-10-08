@@ -84,6 +84,37 @@ def _inside(path: str, root: str) -> bool:
     return path == root or path.startswith(root.rstrip(os.sep) + os.sep)
 
 
+class LiveSocketSendError(RuntimeError):
+    """A datagram to the live daemon's control socket was refused under
+    pytest."""
+
+
+def _live_control_sockets() -> set[str]:
+    """Where the operator's own daemon listens (``instance``'s defaults,
+    from the uid rather than ``$XDG_RUNTIME_DIR``, which tests redirect).
+    A daemon on ``AIPAGER_SOCKET_PATH`` or in an ``AIPAGER_INSTANCE_DIR``
+    is not covered here; the conftest redirect of every sender is."""
+    return {"/tmp/aipager.sock", f"/run/user/{os.getuid()}/aipager.sock"}
+
+
+def check_send(path) -> None:
+    """Raise :class:`LiveSocketSendError` when running under pytest and
+    *path* is the live daemon's control socket (roadmap 8.112: a test's
+    made-up crash must never reach the operator's report store). A no-op
+    outside pytest."""
+    if not under_pytest():
+        return
+    target = os.path.realpath(os.fspath(path))
+    if target not in {os.path.realpath(p) for p in _live_control_sockets()}:
+        return
+    message = (f"refusing to send to the live daemon socket {target} while pytest "
+               "is running (roadmap 8.112): point the sender at a tmp path")
+    refusals.append(
+        f"{message} [test: {os.environ.get('PYTEST_CURRENT_TEST', '?')}; "
+        f"thread: {threading.current_thread().name}]")
+    raise LiveSocketSendError(message)
+
+
 def check_write(path) -> None:
     """Raise :class:`RealHomeWriteError` (a :class:`RuntimeError`) when
     running under pytest and *path* resolves inside the operator's real

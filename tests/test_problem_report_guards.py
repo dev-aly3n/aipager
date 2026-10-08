@@ -245,8 +245,9 @@ FILE_READ_RE = r"^[A-Z][A-Z0-9_]*$"
 #: Besides those, the files aipager itself writes and validates again on
 #: every read, each by this one local name: ``store_path`` in
 #: ``store._read`` (reports.json) and ``marker_path`` in ``markers._read``
-#: (install.json, running.json).
-FILE_READ_LOCALS = {"store_path", "marker_path"}
+#: (install.json, running.json); and ``source_path`` in ``relay._source``,
+#: aipager's own shipped source, read to check a relayed frame names real code.
+FILE_READ_LOCALS = {"store_path", "marker_path", "source_path"}
 #: What an f-string in aipager/report may interpolate. A new entry must be
 #: a typed value (a count, a version part, a checked name), never text.
 #: It matches the expression's text, so it is a tripwire, not a proof: a

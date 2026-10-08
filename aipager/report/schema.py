@@ -14,6 +14,7 @@ builder bug puts into it (the tests also fail on any ``"<invalid>"``).
 
 from __future__ import annotations
 
+import errno as _errno
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -30,7 +31,15 @@ VERSION_RE = re.compile(
 #: An os-release VERSION_ID: Debian's "12" as well as Ubuntu's "24.04".
 DISTRO_VERSION_RE = re.compile(r"^\d{1,4}(\.\d{1,6}){0,3}$")
 DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-HOOK_EVENT_RE = re.compile(r"^[A-Za-z]{1,32}$")
+#: The Claude Code hook events aipager installs its hook for (kept equal to
+#: ``claude_bootstrap._HOOK_EVENTS`` by a test): the only ones a hook
+#: error can happen in.
+HOOK_EVENTS = ("SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PostToolUse",
+               "PostToolUseFailure", "PermissionRequest", "Notification", "Stop",
+               "StopFailure", "SubagentStart", "SubagentStop", "PreCompact", "PostCompact",
+               "MessageDisplay", "PreModelSwitch")
+#: The symbolic errno names this platform knows (``ENOSPC``, ...).
+ERRNO_NAMES = tuple(sorted(set(_errno.errorcode.values())))
 LOGGER_RE = re.compile(
     r"^(aipager(\.[a-z_][a-z0-9_]{0,39}){0,6}|asyncio|telegram\.ext"
     r"(\.(Application|Updater|ExtBot|JobQueue|AIORateLimiter|ConversationHandler))?)$")
@@ -309,10 +318,10 @@ SCHEMA: dict = {
         "logger": Leaf("regex", pattern=LOGGER_RE, nullable=True),
         "type": Leaf("type_name", nullable=True),  # None: a call-site event
         "cause_types": ("list", TYPE_NAME, fp.MAX_CAUSES),
-        "errno": Leaf("regex", pattern=re.compile(r"^E[A-Z0-9]{1,15}$"), nullable=True),
+        "errno": enum(*ERRNO_NAMES, nullable=True),
         "tg_class": enum("message_deleted", "not_modified", "parse_entities", "too_long",
                          "chat_not_found", "canceled_by_edit", "other", nullable=True),
-        "event": Leaf("regex", pattern=HOOK_EVENT_RE, nullable=True),
+        "event": enum(*HOOK_EVENTS, nullable=True),
         "tool": enum(*TOOLS, nullable=True),
         "count": INT,
         "first_day": DAY,

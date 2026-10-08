@@ -31,6 +31,8 @@ from aipager.policy_snapshot import (
     list_outstanding_notes,
     note_driver_id,
 )
+from aipager.report import relay as report_relay
+from aipager.report import store as report_store
 from aipager.state import (
     ACTIVE_SUBAGENTS_CAP,
     JOB_CONTINUATION_GRACE_SECONDS,
@@ -48,6 +50,15 @@ from aipager.transcript import (
 )
 
 log = logging.getLogger(__name__)
+
+#: Where a hook's memory-cap hit is recorded (problem reports, 8.112): the
+#: hook's own main, by the hook name its cap datagram carries.
+_CAP_SITES = {
+    "aipager-hook": {"file": "aipager/dtach/notify_hook.py", "line": 0, "fn": "main",
+                     "where": "hook"},
+    "aipager-statusline": {"file": "aipager/dtach/statusline_notify.py", "line": 0,
+                           "fn": "main", "where": "statusline"},
+}
 
 # Hook events that mark a turn boundary. Each arrival is logged at INFO
 # with the session's status before handling (see _on_datagram) — the
@@ -547,7 +558,18 @@ class HookReceiver:
     async def _on_datagram(self, data: bytes) -> None:
         try:
             msg = json.loads(data)
-        except (json.JSONDecodeError, UnicodeDecodeError):
+        except (json.JSONDecodeError, UnicodeDecodeError, RecursionError):
+            return
+        if not isinstance(msg, dict):
+            return  # any local process can write here: not ours, not a crash
+        if msg.get("type") == report_relay.TYPE:
+            # An error another aipager process hit (problem reports, roadmap
+            # 8.112): its shape only, checked whole, never tied to a session.
+            # Before the dedup below on purpose: a double-wired hook then
+            # counts its crash twice, which only raises a count.
+            relayed = report_relay.read_error_datagram(msg)
+            if relayed is not None:
+                report_store.record_relayed(relayed)
             return
 
         event = msg.get("notification_type") or msg.get("hook_event_name") or msg.get("type", "")
@@ -1289,6 +1311,11 @@ class HookReceiver:
                 "hook memory cap hit for session=%s hook=%s tool=%s",
                 session_name, hook_name, tool_name or "?",
             )
+            # Problem reports (8.112): a cap hit is a bug at once.
+            site = _CAP_SITES.get(hook_name) if isinstance(hook_name, str) else None
+            if site is not None:
+                report_store.record_counter("hook_cap_hit")
+                report_store.record_site("hook_cap", **site, trigger="hook_cap", tier="bug")
             sess = self.registry.get(session_name)
             if sess is not None:
                 await self.notify_fn(sess, "hook_memory_cap_hit", {

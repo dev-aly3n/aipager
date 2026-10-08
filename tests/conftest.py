@@ -299,6 +299,20 @@ def _isolate_home_paths(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_problem_report_sends(tmp_path, monkeypatch):
+    """Problem reports (8.112): the hook and the command line send an
+    error's shape to the daemon's control socket. Every test sends to a
+    tmp path instead, never the live daemon (``_test_guard.check_send``
+    refuses that outright)."""
+    from aipager import errors
+    from aipager.dtach import notify_hook
+    target = str(tmp_path / "no-daemon-reports.sock")
+    monkeypatch.setattr(errors, "_report_socket_path", lambda: target)
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", target)
+    return target
+
+
+@pytest.fixture(autouse=True)
 def _reset_problem_report_store(_isolate_home_paths):
     """The problem-report store (8.112) is module state, like the
     preferences cache: every test starts with it empty and unread (it

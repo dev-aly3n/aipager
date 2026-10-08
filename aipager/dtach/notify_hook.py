@@ -346,6 +346,44 @@ def _answer_model_switch(session: str, data: dict) -> None:
         _debug(f"model switch marker error (no decision): {e}")
 
 
+# What the hook knows of its event when an error escapes (problem reports,
+# roadmap 8.112): the event and tool names only, set once they are known.
+_ERROR_CONTEXT: dict = {"event": None, "tool": None}
+
+
+def _report_error(error: BaseException, *, denied: bool) -> None:
+    """Tell the daemon about an error this hook hit: its shape only
+    (``aipager.report.relay``), never the payload or the error's text.
+    Called on an error path only, after any answer was printed. Best
+    effort: a non-blocking send to the control socket; never raises.
+
+    Every caller also wraps the call in ``try/except BaseException``: under
+    the address-space cap even entering this function can raise
+    MemoryError, and an escape after a printed deny would exit 1, which
+    Claude Code reads as a non-blocking error: the tool would run."""
+    try:
+        from aipager.report import relay
+        payload = relay.error_datagram(error, where="hook", event=_ERROR_CONTEXT["event"],
+                                       tool=_ERROR_CONTEXT["tool"], denied=denied)
+        if payload is None:
+            return
+        from aipager._test_guard import check_send
+        check_send(SOCKET_PATH)
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        try:
+            sock.setblocking(False)
+            sock.sendto(payload, SOCKET_PATH)
+        finally:
+            sock.close()
+    except BaseException:  # never wedge claude, never change an answer;
+        # allocate nothing here (the error may be the cap itself)
+        if _DEBUG:
+            try:
+                _debug("problem report not sent")
+            except BaseException:
+                pass
+
+
 def _prepare_cap_notifier(session: str) -> tuple[socket.socket | None, bytes]:
     """Pre-open the daemon socket + pre-serialize the cap-hit payload.
 
@@ -415,30 +453,44 @@ def main():
         # fail-closed answer instead. Any other event keeps its old exit:
         # a non-zero one there never blocks Claude.
         if not cap_slot[1]:
+            try:
+                _report_error(e, denied=False)
+            except BaseException:
+                pass
             raise
         try:
-            _deny_unhandled_pre_tool_use(session, e)
+            denied = _deny_unhandled_pre_tool_use(session, e)
         except BaseException:
             # Even the answer could not be written: exit 2, which Claude
             # Code reads as a deny for PreToolUse.
-            sys.exit(2)
+            try:
+                _report_error(e, denied=True)
+            finally:
+                sys.exit(2)
+        try:
+            _report_error(e, denied=denied)
+        except BaseException:
+            pass  # the answer is out and stands: exit 0
 
 
-def _deny_unhandled_pre_tool_use(session: str, error: Exception) -> None:
+def _deny_unhandled_pre_tool_use(session: str, error: Exception) -> bool:
     """Answer a PreToolUse the hook could not handle as ``enforce`` answers
     a decision that failed: deny, unless the session's snapshot grants
     the owner's bypass (``enforce.fail_closed``). Called only for an
     error that escaped ``_run`` before any decision was printed (the
-    decision branch catches its own errors)."""
+    decision branch catches its own errors). Returns whether it denied."""
+    denied = True
     try:
         _debug(f"PreToolUse could not be handled (denying unless owner): {error!r}")
         from aipager.dtach import enforce
         # The session is the hook's own (the payload's "session" is set
         # from it), so the owner's bypass is found without the payload.
         block = enforce.fail_closed({"session": session, "tool_name": ""})
-        if block is not None:
+        denied = block is not None
+        if denied:
             print(enforce.deny_decision_json(block["reason"]))
     except Exception:
+        denied = True
         # The enforcer itself is unavailable: nothing can read the
         # snapshot either, so deny.
         print(json.dumps({"hookSpecificOutput": {
@@ -448,6 +500,7 @@ def _deny_unhandled_pre_tool_use(session: str, error: Exception) -> None:
                 "aipager safety policy: the safety check could not run",
         }}))
     sys.stdout.flush()
+    return denied
 
 
 def _run(session: str, cap_slot: list) -> None:
@@ -472,6 +525,7 @@ def _run(session: str, cap_slot: list) -> None:
     pre_tool_use = len(cap_slot) > 1 and bool(_PRE_TOOL_USE_RAW.search(raw))
     if pre_tool_use:
         cap_slot[1] = True
+        _ERROR_CONTEXT["event"] = "PreToolUse"
 
     try:
         data = json.loads(raw)
@@ -488,6 +542,8 @@ def _run(session: str, cap_slot: list) -> None:
         # match missed, or a nested "PreToolUse" text the raw match took
         # for it): only a PreToolUse may ever answer with a deny.
         cap_slot[1] = data.get("hook_event_name") == "PreToolUse"
+    _ERROR_CONTEXT["event"] = data.get("hook_event_name")
+    _ERROR_CONTEXT["tool"] = data.get("tool_name")
 
     if data.get("hook_event_name") == "PreModelSwitch":
         _answer_model_switch(session, data)
@@ -689,8 +745,10 @@ def _run(session: str, cap_slot: list) -> None:
             cap_slot[1] = True
         try:
             from aipager.dtach import enforce
+            decide_error = None
             try:
                 block = enforce.decide(data)
+                decide_error = enforce.take_decide_error()
             except MemoryError:
                 raise
             except Exception as e:
@@ -698,6 +756,7 @@ def _run(session: str, cap_slot: list) -> None:
                 # it. Deny unless the snapshot grants the owner's bypass.
                 _debug(f"enforcement error (denying unless owner): {e}")
                 block = enforce.fail_closed(data)
+                decide_error = e
             if block:
                 # Deny first: a failure reporting it must not undo it.
                 print(enforce.deny_decision_json(block["reason"]))
@@ -711,6 +770,12 @@ def _run(session: str, cap_slot: list) -> None:
                     })
                 except Exception as e:
                     _debug(f"safety_blocked notify failed: {e}")
+            if decide_error is not None:
+                # After the answer: the report can neither delay nor undo it.
+                try:
+                    _report_error(decide_error, denied=bool(block))
+                except BaseException:
+                    pass
         except MemoryError:
             raise  # let main() handle it uniformly
         except Exception as e:
@@ -723,6 +788,11 @@ def _run(session: str, cap_slot: list) -> None:
                 "permissionDecisionReason":
                     "aipager safety policy: the safety check could not run",
             }}))
+            sys.stdout.flush()
+            try:
+                _report_error(e, denied=True)
+            except BaseException:
+                pass
 
     # /settings reply-style injection (item 6.2). The daemon precomputes
     # `style_text` on the session's policy snapshot at prompt-injection

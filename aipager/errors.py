@@ -103,6 +103,37 @@ def require_interactive(command: str | None = None) -> None:
     raise SystemExit(2)
 
 
+def _report_socket_path() -> str:
+    """The daemon's control socket (a test points this at tmp)."""
+    from aipager.instance import control_socket_path
+    return control_socket_path()
+
+
+def _report_crash(exc: BaseException) -> None:
+    """Tell a running daemon about this crash (problem reports, roadmap
+    8.112): the error's shape only (``aipager.report.relay``), one
+    non-blocking datagram, and nothing at all when no daemon listens;
+    never a file. Never raises."""
+    try:
+        import socket
+
+        from aipager._test_guard import check_send
+        from aipager.report import relay
+        payload = relay.error_datagram(exc, where="cli")
+        if payload is None:
+            return
+        path = _report_socket_path()
+        check_send(path)
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        try:
+            sock.setblocking(False)
+            sock.sendto(payload, path)
+        finally:
+            sock.close()
+    except Exception:  # noqa: BLE001 - a report must never hide the crash
+        pass
+
+
 def install_excepthook() -> None:
     """Replace ``sys.excepthook`` with a friendly one-screen summary."""
     def _hook(exc_type, exc, tb):  # noqa: ANN001
@@ -118,6 +149,7 @@ def install_excepthook() -> None:
             # require_interactive(); the message is the same either way.
             friendly_error(*_no_terminal_message(_invoked_command()))
             return
+        _report_crash(exc)
         friendly_error(
             "aipager hit an unexpected error.",
             "",
@@ -164,6 +196,7 @@ def with_friendly_errors(fn: Callable[..., T]) -> Callable[..., T]:
             if hint is not None:
                 friendly_error(hint[0], hint[1])
             else:
+                _report_crash(e)
                 friendly_error(f"{type(e).__name__}: {e}", bug=True)
             sys.exit(1)
     return wrapper

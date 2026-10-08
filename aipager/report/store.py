@@ -29,7 +29,6 @@ callers are a logging handler and the daemon's start and stop path.
 
 from __future__ import annotations
 
-import errno as _errno
 import json
 import logging
 import os
@@ -62,42 +61,16 @@ EXIT_KINDS = ("clean", "crash", "reboot")
 TS_MIN, TS_MAX = 1_000_000_000, 4_000_000_000
 HOUR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}$")
 #: What a call-site fingerprint may be keyed by.
-SITE_KINDS = frozenset({"log_error", "crash"})
+SITE_KINDS = frozenset({"log_error", "crash", "hook_cap"})
+#: At most this many NEW fingerprints an hour from other processes (any
+#: local process can write to the daemon's socket): a flood of made-up
+#: ones must not push real errors out of the store.
+RELAY_NEW_PER_HOUR = 10
 
 _ERROR_ITEM = sc.SCHEMA["errors"][1]
 _DIGEST_ROW = sc.SCHEMA["log_digest_24h"][1]
 _ENTRY_KEYS = frozenset(_ERROR_ITEM)
 _RECORD_KEYS = frozenset({"entry", "first_ts", "last_ts", "occasions", "occasion_ts"})
-
-#: Environment errors by errno: the user's disk, permissions or memory.
-_ENV_ERRNOS = {_errno.ENOSPC: "env_disk_full", _errno.EDQUOT: "env_disk_full",
-               _errno.EROFS: "env_read_only", _errno.EACCES: "env_permission",
-               _errno.ENOMEM: "env_no_memory"}
-#: Environment errors by class: the first name found among the exception's
-#: classes wins, so a ``BadRequest`` (a ``NetworkError`` subclass, and
-#: usually aipager's own malformed request) is never counted as weather.
-#: Matched by name, never imported: a logging handler takes no import lock.
-_ENV_TYPES = (
-    ("telegram.error.BadRequest", None),
-    ("telegram.error.RetryAfter", "tg_retry_after"),
-    ("telegram.error.Conflict", "tg_conflict"),
-    ("telegram.error.Forbidden", "tg_forbidden"),
-    ("telegram.error.InvalidToken", "tg_invalid_token"),
-    ("telegram.error.NetworkError", "tg_network"),
-    ("httpx.TransportError", "env_network"),
-    ("httpcore.NetworkError", "env_network"),
-    ("httpcore.TimeoutException", "env_network"),
-    ("httpcore.RemoteProtocolError", "env_network"),
-    ("aiohttp.client_exceptions.ClientConnectionError", "env_network"),
-    ("socket.gaierror", "env_network"),
-    ("builtins.ConnectionError", "env_network"),
-    # asyncio.TimeoutError is builtins.TimeoutError from 3.11 on.
-    ("builtins.TimeoutError", "env_timeout"),
-    ("asyncio.exceptions.TimeoutError", "env_timeout"),
-    ("concurrent.futures._base.TimeoutError", "env_timeout"),
-    ("asyncio.exceptions.CancelledError", "env_cancelled"),
-    ("builtins.MemoryError", "env_no_memory"),
-)
 
 _lock = threading.RLock()
 _errors: OrderedDict[str, dict] = OrderedDict()
@@ -105,6 +78,7 @@ _counters: dict[str, dict[str, int]] = {}
 _digest: dict[str, dict[tuple[str, str], int]] = {}
 _unclean: list[int] = []
 _last_exit: str = sc.UNKNOWN
+_relayed_new: list[int] = []  # when each new relayed fingerprint arrived
 _loaded = False
 _dirty = False
 _last_write = 0.0
@@ -138,18 +112,6 @@ def _version() -> str | None:
 
 # ---- classification ----------------------------------------------------------
 
-def _env_counter(exc: BaseException) -> str | None:
-    """The counter of an environment error (the user's network, disk,
-    memory or token, or a second poller on the token), else None."""
-    names = {fp.qualified_type(cls) for cls in type(exc).__mro__}
-    for name, key in _ENV_TYPES:
-        if name in names:
-            return key
-    if isinstance(exc, OSError) and type(exc.errno) is int:
-        return _ENV_ERRNOS.get(exc.errno)
-    return None
-
-
 def classify(exc: BaseException, trigger: str | None = None) -> tuple[str, str | None]:
     """``("env", counter)`` for an environment error, ``("bug", None)``
     for an error raised through aipager's own code, ``("anomaly", None)``
@@ -161,7 +123,7 @@ def classify(exc: BaseException, trigger: str | None = None) -> tuple[str, str |
     """
     if trigger == "crash":
         return "bug", None
-    key = _env_counter(exc) if trigger != "task" else None
+    key = fp.env_counter(exc) if trigger != "task" else None
     if key is not None:
         return "env", key
     return ("bug", None) if fp.aipager_frames(exc, limit=1) else ("anomaly", None)
@@ -208,6 +170,45 @@ def record_site(kind: str, *, file: str, line: int, fn: str, where: str, trigger
                 "cause_types": [], "errno": None, "tg_class": None, "event": None,
                 "tool": None, "count": 1, "first_day": _day(ts), "last_day": _day(ts),
                 "versions_seen": [], "frames": [location], "external": []}
+            return _upsert(entry, ts)
+    except Exception:  # noqa: BLE001 - a recorder must never raise
+        return None
+
+
+def record_relayed(message: dict, now=None) -> str | None:
+    """Record an error another aipager process told the daemon about: a
+    :func:`relay.read_error_datagram` result (already checked). A hook's
+    own crash counts ``hook_error``, a PreToolUse it refused because it
+    could not check it counts ``hook_fail_closed``; an environment error
+    is only its counter; anything else is a bug: a hook error or a
+    refused tool (``fail_closed``), or a command-line crash. Never
+    raises."""
+    try:
+        with _lock:
+            load()
+            ts = _now(now)
+            where = message["where"]
+            if where != "cli":
+                _count("hook_fail_closed" if message["denied"] else "hook_error", 1, ts)
+            if message["env"] is not None:
+                _count(message["env"], 1, ts)
+                return None
+            facts = message["facts"]
+            key = fp.fingerprint_of(facts["type"], facts["frames"])
+            if key not in _errors:
+                _relayed_new[:] = [t for t in _relayed_new if t > ts - 3600]
+                if len(_relayed_new) >= RELAY_NEW_PER_HOUR:
+                    return None
+                _relayed_new.append(ts)
+            trigger = ("crash" if where == "cli"
+                       else "fail_closed" if message["denied"] else "hook_error")
+            entry = {
+                "fingerprint": key, "tier": "bug", "where": where,
+                "trigger": trigger, "logger": None, "type": facts["type"],
+                "cause_types": facts["cause_types"], "errno": facts["errno"],
+                "tg_class": None, "event": message["event"], "tool": message["tool"],
+                "count": 1, "first_day": _day(ts), "last_day": _day(ts),
+                "versions_seen": [], "frames": facts["frames"], "external": facts["external"]}
             return _upsert(entry, ts)
     except Exception:  # noqa: BLE001 - a recorder must never raise
         return None
@@ -387,6 +388,7 @@ def reset_memory() -> None:
         _counters.clear()
         _digest.clear()
         _unclean.clear()
+        _relayed_new.clear()
         _last_exit = sc.UNKNOWN
 
 

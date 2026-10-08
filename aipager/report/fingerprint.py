@@ -63,6 +63,37 @@ EXTERNAL_PACKAGES = frozenset({
 })
 
 
+#: Environment errors by errno: the user's disk, permissions or memory.
+ENV_ERRNOS = {_errno.ENOSPC: "env_disk_full", _errno.EDQUOT: "env_disk_full",
+               _errno.EROFS: "env_read_only", _errno.EACCES: "env_permission",
+               _errno.ENOMEM: "env_no_memory"}
+#: Environment errors by class: the first name found among the exception's
+#: classes wins, so a ``BadRequest`` (a ``NetworkError`` subclass, and
+#: usually aipager's own malformed request) is never counted as weather.
+#: Matched by name, never imported: a logging handler takes no import lock.
+ENV_TYPES = (
+    ("telegram.error.BadRequest", None),
+    ("telegram.error.RetryAfter", "tg_retry_after"),
+    ("telegram.error.Conflict", "tg_conflict"),
+    ("telegram.error.Forbidden", "tg_forbidden"),
+    ("telegram.error.InvalidToken", "tg_invalid_token"),
+    ("telegram.error.NetworkError", "tg_network"),
+    ("httpx.TransportError", "env_network"),
+    ("httpcore.NetworkError", "env_network"),
+    ("httpcore.TimeoutException", "env_network"),
+    ("httpcore.RemoteProtocolError", "env_network"),
+    ("aiohttp.client_exceptions.ClientConnectionError", "env_network"),
+    ("socket.gaierror", "env_network"),
+    ("builtins.ConnectionError", "env_network"),
+    # asyncio.TimeoutError is builtins.TimeoutError from 3.11 on.
+    ("builtins.TimeoutError", "env_timeout"),
+    ("asyncio.exceptions.TimeoutError", "env_timeout"),
+    ("concurrent.futures._base.TimeoutError", "env_timeout"),
+    ("asyncio.exceptions.CancelledError", "env_cancelled"),
+    ("builtins.MemoryError", "env_no_memory"),
+)
+
+
 def _module_allowed(module) -> bool:
     if not isinstance(module, str):
         return False
@@ -205,19 +236,28 @@ def _digest(text: str) -> str:
     return FINGERPRINT_PREFIX + hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
+def module_of(file: str) -> str:
+    """The module a package file defines: ``aipager/dtach/enforce.py`` is
+    ``aipager.dtach.enforce``, ``aipager/bot/__init__.py`` is ``aipager.bot``."""
+    name = file[:-3] if file.endswith(".py") else file
+    if name.endswith("/__init__"):
+        name = name[: -len("/__init__")]
+    return name.replace("/", ".")
+
+
+def fingerprint_of(type_name: str, frames: list[dict]) -> str:
+    """``ap1-<12 hex>`` from an error's type and its innermost
+    ``KEY_FRAMES`` aipager frames, as module and function (no line numbers
+    and no version, so it survives edits and releases). The daemon uses it
+    to name an error another process reported by its frames alone."""
+    parts = [module_of(frame["file"]) + ":" + frame["fn"] for frame in frames[:KEY_FRAMES]]
+    return _digest(type_name + "|" + ";".join(parts))
+
+
 def fingerprint(exc: BaseException) -> str:
-    """``ap1-<12 hex>`` from the exception type and the innermost
-    ``KEY_FRAMES`` aipager frames (module and function, no line numbers
-    and no version, so it survives edits and releases)."""
-    parts = []
-    for frame, _lineno in _walk(exc.__traceback__):
-        if not is_aipager_frame(frame):
-            continue
-        fn = _function_name(frame.f_code) or "<?>"
-        parts.append(f"{frame.f_globals.get('__name__')}:{fn}")
-        if len(parts) >= KEY_FRAMES:
-            break
-    return _digest(qualified_type(type(exc)) + "|" + ";".join(parts))
+    """The fingerprint of *exc*: :func:`fingerprint_of` its qualified type
+    and its aipager frames."""
+    return fingerprint_of(qualified_type(type(exc)), aipager_frames(exc))
 
 
 def site_fingerprint(kind: str, file: str, fn: str) -> str:
@@ -237,3 +277,20 @@ def describe_exception(exc: BaseException) -> dict:
         "frames": aipager_frames(exc),
         "external": external_packages(exc),
     }
+
+
+def env_counter(exc: BaseException) -> str | None:
+    """The counter of an environment error (the user's network, disk,
+    memory, token, or a second poller on the token), else None. By type
+    name and errno only: nothing is imported, nothing is read."""
+    names = {qualified_type(cls) for cls in type(exc).__mro__}
+    for name, key in ENV_TYPES:
+        if name in names:
+            return key
+    if isinstance(exc, OSError) and type(exc.errno) is int:
+        return ENV_ERRNOS.get(exc.errno)
+    return None
+
+
+#: Every counter an environment error can bump.
+ENV_COUNTERS = frozenset([key for _name, key in ENV_TYPES if key] + list(ENV_ERRNOS.values()))

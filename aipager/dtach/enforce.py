@@ -564,12 +564,29 @@ def decide(data: dict) -> dict | None:
     """Return a block descriptor `{tool, reason}` if the PreToolUse call
     must be denied, else None (allow). Pure aside from file reads. Any
     exception while deciding is a deny (:func:`fail_closed`)."""
+    global _decide_error
+    _decide_error = None  # only this call's error, never an earlier one's
     if data.get("hook_event_name") != "PreToolUse":
         return None
     try:
         return _decide(data)
-    except Exception:
+    except Exception as exc:
+        _decide_error = exc  # for the hook's problem report, after its answer
         return fail_closed(data)
+
+
+#: The error the last :func:`decide` failed on (it answers with
+#: :func:`fail_closed` and never raises), taken by the hook to report it.
+#: Its traceback holds the frames' locals (the tool input): fine in the
+#: one-shot hook process; the daemon must never call :func:`decide`.
+_decide_error: Exception | None = None
+
+
+def take_decide_error() -> Exception | None:
+    """The error the last :func:`decide` swallowed, once; None if none."""
+    global _decide_error
+    error, _decide_error = _decide_error, None
+    return error
 
 
 def _decide(data: dict) -> dict | None:

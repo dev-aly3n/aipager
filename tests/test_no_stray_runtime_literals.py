@@ -40,6 +40,9 @@ ALLOWED = {
     # <5 ms); tests/test_hook_socket_path_precedence.py pins agreement.
     ("dtach/notify_hook.py", "/tmp/aipager.sock"),
     ("dtach/statusline_notify.py", "/tmp/aipager.sock"),
+    # The test-only guard names a normal install's live control socket, to
+    # refuse a test's datagram to it (problem reports, roadmap 8.112).
+    ("_test_guard.py", "/tmp/aipager.sock"),
 }
 
 
