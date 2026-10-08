@@ -321,13 +321,15 @@ def _reset_problem_report_store(_isolate_home_paths):
     reads the redirected file), and with no capture handler left on the
     loggers by a test that ran ``aipager start``'s wiring. The key file's
     cached decision (``endpoint``) is module state too."""
-    from aipager.report import capture, endpoint, store
+    from aipager.report import capture, endpoint, markers, store
     capture.uninstall()
     store.reset()
     endpoint.reset_cache()
+    markers.set_started_at(None)
     yield
     capture.uninstall()
     store.reset()
+    markers.set_started_at(None)
     endpoint.reset_cache()
 
 

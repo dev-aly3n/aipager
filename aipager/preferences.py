@@ -369,6 +369,51 @@ def set_new_session_default(chat_id: int, field: str, value: str) -> NewSessionD
     return get_new_session_defaults(chat_id)
 
 
+# ---- problem reports (/settings in the owner's DM, roadmap 8.112) ------
+#
+# "Problem reports: Ask me / Off": whether aipager may OFFER to send a
+# report on its own. One value per install (the owner's), kept under its
+# own top-level key, not in any chat's entry: it is not a reply style, so
+# it stays out of :class:`Preferences`, ``settings_schema()`` (every chat's
+# Mini App settings) and per-session overrides. Nothing here reads a key
+# as a chat id except :func:`get_preferences` and friends, which look up
+# ``str(chat_id)`` only.
+
+PROBLEM_REPORTS_VALUES = ("ask", "off")
+_INSTALL_KEY = "_install"
+_PROBLEM_REPORTS_KEY = "problem_reports"
+
+
+def get_problem_reports() -> str:
+    """``"ask"`` (the default) or ``"off"``. A stored value that is
+    neither reads as ``"off"``: a value we did not write errs quiet.
+    Never raises."""
+    try:
+        store = _ensure_loaded()
+        entry = store.get(_INSTALL_KEY)
+        if not isinstance(entry, dict) or _PROBLEM_REPORTS_KEY not in entry:
+            return "ask"
+        value = entry[_PROBLEM_REPORTS_KEY]
+        return value if value in PROBLEM_REPORTS_VALUES else "off"
+    except Exception:  # noqa: BLE001 - a broken file must not stop a tick
+        log.debug("could not read the problem reports preference", exc_info=True)
+        return "off"
+
+
+def set_problem_reports(value: str) -> str:
+    """Store ``"ask"`` or ``"off"``; anything else raises ``ValueError``
+    before anything is written. Returns the stored value."""
+    if not isinstance(value, str) or value not in PROBLEM_REPORTS_VALUES:
+        raise ValueError(f"invalid problem reports value: {value!r}")
+    store = _ensure_loaded()
+    existing = store.get(_INSTALL_KEY)
+    entry = dict(existing) if isinstance(existing, dict) else {}
+    entry[_PROBLEM_REPORTS_KEY] = value
+    store[_INSTALL_KEY] = entry
+    _save_raw(store)
+    return get_problem_reports()
+
+
 _STYLE_LEAD_IN = (
     "Apply this reply guidance to your next answer; "
     "do not mention or quote it:"

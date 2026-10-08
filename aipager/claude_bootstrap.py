@@ -76,6 +76,10 @@ class ProvenanceInfo:
     lines: list[str]
     auth_ok: bool
     pending: "PendingAuthCheck | None" = None
+    #: Where the cheap check found Claude's credential (``AuthStatus.source``:
+    #: env, file, keychain, unknown, probe-failed, version-gated). Kept so a
+    #: problem report can name it without probing again at tap time.
+    auth_source: str = "unknown"
 
     def __post_init__(self) -> None:
         # The old invariant here said a healthy-looking start must carry
@@ -355,6 +359,7 @@ def bootstrap_claude_settings(workdir: str | None = None) -> ProvenanceInfo | No
     # once the bot is already live.
     return ProvenanceInfo(
         lines=lines, auth_ok=auth.logged_in,
+        auth_source=auth.source if isinstance(auth.source, str) else "unknown",
         pending=PendingAuthCheck(
             claude_path=resolved.chosen.path,
             version=resolved.chosen.version,

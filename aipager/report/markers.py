@@ -117,6 +117,22 @@ def first_start(now=None) -> int:
     return ts
 
 
+def read_first_start(now=None) -> int | None:
+    """The install marker's first start, or None when there is no valid
+    one. Read only: unlike :func:`first_start` it never writes, so a
+    periodic check (the automatic offer) cannot start the clock itself.
+    Never raises."""
+    ts = int(time.time() if now is None else now)
+    try:
+        document = _read(_install_path())
+        value = document.get("first_start") if document is not None else None
+        if _is_ts(value) and value <= ts + FUTURE_SLACK:
+            return value
+    except Exception:  # noqa: BLE001 - unknown: no offer
+        pass
+    return None
+
+
 # ---- the running marker ------------------------------------------------------
 
 def previous_exit(now=None) -> tuple[str, bool] | None:
@@ -149,9 +165,8 @@ def previous_exit(now=None) -> tuple[str, bool] | None:
 
 def write_running(*, service: bool, now=None) -> bool:
     """Mark this daemon as running (and note when it started)."""
-    global _started_at
     ts = time.time() if now is None else now
-    _started_at = ts
+    set_started_at(ts)
     return _write(_running_path(), {"pid": os.getpid(), "started": int(ts),
                                     "boot": _boot_id() or "", "service": service is True})
 
@@ -169,3 +184,10 @@ def clear_running() -> None:
 def started_at() -> float | None:
     """When this daemon started (unix seconds), or None outside one."""
     return _started_at
+
+
+def set_started_at(ts: float | None) -> None:
+    """Set when this daemon started (unix seconds), in memory only;
+    None forgets it (the test suite resets it around every test)."""
+    global _started_at
+    _started_at = ts
