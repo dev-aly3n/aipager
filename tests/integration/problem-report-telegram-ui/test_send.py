@@ -208,8 +208,10 @@ def _double_tap(bot, d, h, fake, gate):
         cid, mid = await _open(bot, d, h)
         first = asyncio.ensure_future(d.tap("_:rp:send", chat=cid, message_id=mid))
         await _wait(lambda: len(fake.posts) >= 1)
-        await d.tap("_:rp:send", chat=cid, message_id=mid)
-        gate.set()
+        try:
+            await d.tap("_:rp:send", chat=cid, message_id=mid, wait_outcome=False)
+        finally:
+            gate.set()
         await first
         return cid, mid
     return go()
@@ -264,24 +266,28 @@ def test_send_runs_in_worker_thread(bot, drive, h, run_async, net):
 
 
 def test_loop_stays_responsive_during_send(bot, drive, h, run_async, use_net):
-    """While Sentry hangs, the loop still serves other updates."""
+    """While Sentry holds the send open, the next update (here /help in
+    the owner DM, delivered after the Send tap's handler returned, as
+    Telegram delivers updates one at a time) is answered."""
     fake, gate = _gated(h)
     use_net(fake)
     d = drive(bot)
 
     async def go():
         cid, mid = await _open(bot, d, h)
-        task = asyncio.ensure_future(d.tap("_:rp:send", chat=cid, message_id=mid))
-        await _wait(lambda: len(fake.posts) >= 1)
-        ticks = 0
-        for _ in range(5):
-            await asyncio.sleep(0.01)
-            ticks += 1
-        done_before_gate = task.done()
-        gate.set()
-        await task
-        return ticks, done_before_gate
-    assert run_async(go()) == (5, False)
+        try:
+            await asyncio.wait_for(d.tap("_:rp:send", chat=cid, message_id=mid,
+                                         wait_outcome=False), 2.0)
+            await _wait(lambda: len(fake.posts) >= 1)
+            before = len(bot.tg.sent(h.OWNER))
+            await asyncio.wait_for(d.command("/help"), 2.0)
+            answered = len(bot.tg.sent(h.OWNER)) - before
+            still_pending = not gate.is_set() and h.SENDING in bot.tg.text_of(cid, mid)
+        finally:
+            gate.set()
+        await h.wait_for_outcome(bot, cid, mid)
+        return answered, still_pending
+    assert run_async(go()) == (1, True)
 
 
 # ---- SC-11: outcome lines ------------------------------------------------------------

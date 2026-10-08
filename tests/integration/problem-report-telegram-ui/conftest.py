@@ -53,6 +53,7 @@ USER = 777
 READ_ONLY = 888
 DAY = 86400
 EM_DASH = "—"
+SENDING = "Sending..."
 
 PRE = re.compile(r"<pre>(.*?)</pre>", re.S)
 
@@ -485,7 +486,14 @@ class Driver:
         await settle()
         return update
 
-    async def tap(self, data, *, user=OWNER, chat=OWNER, message_id=42, settle_rounds=5):
+    async def tap(self, data, *, user=OWNER, chat=OWNER, message_id=42, settle_rounds=5,
+                  wait_outcome=None):
+        """Deliver a button tap. Send runs in the background, so after a
+        ``_:rp:send`` tap this waits (bounded, :data:`OUTCOME_DEADLINE`)
+        until the card's outcome edit has landed, i.e. the card no longer
+        reads "Sending...". ``wait_outcome=False`` skips that for a tap
+        made on purpose while a send is held open; by default it follows
+        ``settle_rounds`` (0 means "return as soon as the handler does")."""
         tg = self.bot.tg
         query = MagicMock()
         query.data = data
@@ -519,7 +527,29 @@ class Driver:
         await new_flow.close_if_moved_on(self.bot, update, MagicMock())
         await self.bot._handle_callback(update, MagicMock())
         await settle(settle_rounds)
+        if wait_outcome is None:
+            wait_outcome = settle_rounds > 0
+        if wait_outcome and data == "_:rp:send":
+            await wait_for_outcome(self.bot, chat, message_id)
         return query
+
+
+OUTCOME_DEADLINE = 5.0
+
+
+async def wait_for_outcome(bot, chat_id, message_id, *, deadline=OUTCOME_DEADLINE):
+    """Yield to the loop in short steps until the card no longer reads
+    "Sending..." (its background send has edited the outcome in), and
+    fail clearly if that does not happen within *deadline* seconds."""
+    loop = asyncio.get_running_loop()
+    end = loop.time() + deadline
+    while SENDING in bot.tg.text_of(chat_id, message_id):
+        if loop.time() >= end:
+            raise AssertionError(
+                f"card {chat_id}/{message_id} still reads {SENDING!r} {deadline} s after "
+                "the Send tap: the background send never edited its outcome in")
+        await asyncio.sleep(0.01)
+    await settle(2)
 
 
 @pytest.fixture
