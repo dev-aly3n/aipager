@@ -1084,10 +1084,50 @@ def run_async():
     Tests use this instead of `asyncio.run(...)` so that a single
     test file can interleave sync setup with `await` calls without
     inheriting an event loop from another fixture.
+
+    When the test ends, every loop it made is shut down the way
+    ``asyncio.run`` ends: what is still running is cancelled and the loop
+    closed (roadmap 8.116). Left pending on an abandoned loop, a task (a
+    keystroke-answer watch, a spawned send) used to be destroyed whenever
+    the garbage collector reached it, and asyncio's "Task was destroyed but
+    it is pending!" then landed in an unrelated test's log. A test may still
+    look at a task between its calls: nothing is cancelled before it ends.
     """
-    def _run(coro):
-        return asyncio.new_event_loop().run_until_complete(coro)
-    return _run
+    runner = LoopRunner()
+    yield runner
+    runner.close()
+
+
+class LoopRunner:
+    """``run_async``'s runner: one fresh loop per call, all shut down by
+    :meth:`close` (see the fixture)."""
+
+    #: How long :meth:`close` lets cancelled tasks finish their cleanup.
+    CLOSE_WAIT_SECONDS = 5.0
+
+    def __init__(self):
+        self.loops: list[asyncio.AbstractEventLoop] = []
+
+    def __call__(self, coro):
+        loop = asyncio.new_event_loop()
+        self.loops.append(loop)
+        return loop.run_until_complete(coro)
+
+    def close(self) -> None:
+        for loop in self.loops:
+            if loop.is_closed():
+                continue
+            try:
+                pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    loop.run_until_complete(
+                        asyncio.wait(pending, timeout=self.CLOSE_WAIT_SECONDS))
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            finally:
+                loop.close()
+        self.loops.clear()
 
 
 

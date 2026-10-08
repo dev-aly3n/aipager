@@ -59,7 +59,17 @@ def mbot(mk_bot):
     chat_migration.set_handler(None)
 
 
+def _ours(caplog):
+    """aipager's own log records (roadmap 8.116). asyncio logs "Task was
+    destroyed but it is pending!" for a task an earlier test left on an
+    abandoned loop, into whichever test is running when the garbage
+    collector reaches it: counting every logger's records made these
+    assertions fail now and then for that reason alone."""
+    return [r for r in caplog.records if r.name.split(".")[0] == "aipager"]
+
+
 # ---- 1. the Mini App's created folders -----------------------------------
+
 
 def test_the_created_folders_follow_the_group(mbot, run_async, tmp_path):
     bot = mbot()
@@ -200,7 +210,7 @@ def test_each_unreachable_group_gets_its_own_warning(mbot, run_async, caplog):
     bot._app.bot.get_chat = AsyncMock(side_effect=BadRequest("Chat not found"))
     caplog.set_level(logging.WARNING)
     run_async(bot._probe_group_chats())
-    warnings = [r.getMessage() for r in caplog.records]
+    warnings = [r.getMessage() for r in _ours(caplog)]
     assert len(warnings) == 2
     assert "'a'" in warnings[0] and "'b'" in warnings[1]
 
@@ -212,7 +222,7 @@ def test_a_passing_lookup_failure_is_not_a_warning(mbot, run_async, caplog, erro
     bot._app.bot.get_chat = AsyncMock(side_effect=error)
     caplog.set_level(logging.WARNING)
     run_async(bot._probe_group_chats())
-    assert caplog.records == []
+    assert _ours(caplog) == []
 
 
 def test_an_upgrade_the_lookup_reports_is_still_followed(mbot, run_async, caplog):
@@ -243,8 +253,8 @@ def test_the_menu_of_an_unreachable_group_is_not_a_second_warning(
     caplog.set_level(logging.WARNING)
     run_async(bot._update_bot_commands_per_scope())
     run_async(bot._probe_group_chats())
-    assert len(caplog.records) == 1
-    assert "could not be reached" in caplog.records[0].getMessage()
+    assert len(_ours(caplog)) == 1
+    assert "could not be reached" in _ours(caplog)[0].getMessage()
 
 
 def test_a_group_added_by_a_reload_and_unreachable_is_one_warning(
@@ -261,7 +271,7 @@ def test_a_group_added_by_a_reload_and_unreachable_is_one_warning(
     run_async(bot._update_bot_commands_per_scope())
     bot._registered_scope_labels.clear()        # labels changed: tried again
     run_async(bot._update_bot_commands_per_scope())
-    warnings = [r.getMessage() for r in caplog.records]
+    warnings = [r.getMessage() for r in _ours(caplog)]
     assert len(warnings) == 1
     assert "'team'" in warnings[0] and "aipager config" in warnings[0]
     bot._app.bot.send_message.assert_not_awaited()
@@ -277,7 +287,7 @@ def test_a_dm_menu_failure_still_warns(mbot, run_async, caplog):
     bot._app.bot.set_my_commands = AsyncMock(side_effect=_set)
     caplog.set_level(logging.WARNING)
     run_async(bot._update_bot_commands_per_scope())
-    assert [r.getMessage() for r in caplog.records] == [
+    assert [r.getMessage() for r in _ours(caplog)] == [
         f"Failed to set bot commands for scope {DM}"]
 
 
@@ -325,3 +335,12 @@ def test_not_applied_with_a_daemon_keeps_todays_text(monkeypatch, capsys, pid):
     out = capsys.readouterr().out
     assert "Not applied:" in out
     assert "The daemon keeps its previous config until this is fixed." in out
+
+
+def test_only_aipagers_own_records_are_counted(caplog):
+    # Roadmap 8.116: a record from another logger (asyncio's "Task was
+    # destroyed but it is pending!" for an earlier test's task) never counts.
+    caplog.set_level(logging.WARNING)
+    logging.getLogger("asyncio").error("Task was destroyed but it is pending!")
+    logging.getLogger("aipager.bot.core").warning("ours")
+    assert [r.getMessage() for r in _ours(caplog)] == ["ours"]
