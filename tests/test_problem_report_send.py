@@ -7,9 +7,11 @@ real ones; an un-injected send is refused by ``_test_guard.check_network``.
 
 from __future__ import annotations
 
+import copy
 import datetime as _dt
 import json
 import os
+import random
 import stat
 import threading
 from pathlib import Path
@@ -336,7 +338,8 @@ def test_the_envelope_is_an_event_and_the_exact_preview():
                              "os": report["os"]["system"],
                              "python": ".".join(report["python"]["version"].split(".")[:2]),
                              "claude_code": report["claude_code"]["version"] or "unknown",
-                             "trigger": "manual"}
+                             "trigger": "manual",
+                             "report_fp": report["errors"][0]["fingerprint"]}
     (value,) = event["exception"]["values"]
     assert value == {"type": "KeyError", "module": "builtins", "stacktrace": {"frames": [
         {"filename": "aipager/session_monitor.py", "function": "outermost", "lineno": 10,
@@ -353,7 +356,8 @@ def test_a_report_without_an_error_has_a_fixed_title():
     assert event["fingerprint"] == [send.NO_ERROR_FINGERPRINT]
     assert event["message"] == {"formatted": "aipager problem report (manual)"}
     assert "exception" not in event and not FORBIDDEN_EVENT_KEYS & set(event)
-    assert result.reference == event["event_id"][:12]
+    assert result.reference == event["event_id"] and len(result.reference) == 32
+    assert "report_fp" not in event["tags"]
 
 
 def test_the_request_is_one_authenticated_post():
@@ -886,3 +890,186 @@ def test_the_store_folder_is_private(monkeypatch):
     path = Path(config.REPORTS_FILE)
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+
+
+# ---- every error the store can hold sends (roadmap 8.112: a call-site record
+# has no exception type) --------------------------------------------------------
+
+SITE = {"file": "aipager/state.py", "line": 12, "fn": "load"}
+
+
+def _store_errors_from(record) -> list[dict]:
+    record()
+    return store.errors()
+
+
+def _typed():
+    exc = _caught(_aipager_raiser(None), lambda: KeyError("x"))
+    store.record_exception(exc, where="daemon", trigger="log_exception", now=NOW)
+
+
+def _site(kind, trigger):
+    def record():
+        store.record_site(kind, **SITE, where="daemon", trigger=trigger, tier="bug", now=NOW)
+    return record
+
+
+def _relayed(where):
+    def record():
+        store.record_relayed({
+            "where": where, "denied": False, "env": None,
+            "event": "PreToolUse" if where == "hook" else None, "tool": None,
+            "facts": {"type": "builtins.KeyError", "cause_types": [], "errno": None,
+                      "frames": [SITE], "external": []}}, now=NOW)
+    return record
+
+
+@pytest.mark.parametrize("record, exception_type", [
+    (_typed, "KeyError"),
+    (_site("log_error", "log_error"), "log_error"),
+    (_site("crash", "crash"), "crash"),
+    (_site("hook_cap", "hook_cap"), "hook_cap"),
+    (_relayed("hook"), "KeyError"),
+    (_relayed("cli"), "KeyError"),
+], ids=["exception", "log-error", "crash", "hook-cap", "relayed-hook", "relayed-cli"])
+def test_every_kind_of_stored_error_sends(record, exception_type):
+    errors = _store_errors_from(record)
+    assert len(errors) == 1
+    result, net = _sent(_report(errors=errors))
+    assert result.outcome == send.SENT
+    assert result.reference == errors[0]["fingerprint"]
+    _header, [(_h, event_bytes), (_a, att_bytes)] = parse_envelope(net.posts[0].content)
+    event = json.loads(event_bytes)
+    (value,) = event["exception"]["values"]
+    assert value["type"] == exception_type
+    assert ("module" in value) is (exception_type == "KeyError")
+    assert value["stacktrace"]["frames"][-1]["filename"] == errors[0]["frames"][0]["file"]
+    assert event["tags"]["report_fp"] == errors[0]["fingerprint"]
+    assert event["fingerprint"] == [errors[0]["fingerprint"]]
+
+
+def _with_errors(*items) -> dict:
+    report = _report(errors=[_error_entry(FRAMES)])
+    report["errors"] = list(items)
+    return report
+
+
+def test_an_invalid_error_item_is_skipped_for_the_event():
+    good = _error_entry(FRAMES)
+    report = _report(errors=[good])
+    report["errors"] = [sc.INVALID, report["errors"][0]]
+    result, net = _sent(report)
+    assert result.outcome == send.SENT and result.reference == good["fingerprint"]
+    event = json.loads(parse_envelope(net.posts[0].content)[1][0][1])
+    assert event["fingerprint"] == [good["fingerprint"]]
+
+
+def test_only_invalid_error_items_send_as_a_report_without_an_error():
+    report = _report()
+    report["errors"] = [sc.INVALID]
+    result, net = _sent(report)
+    assert result.outcome == send.SENT and len(result.reference) == 32
+    event = json.loads(parse_envelope(net.posts[0].content)[1][0][1])
+    assert event["fingerprint"] == [send.NO_ERROR_FINGERPRINT] and "exception" not in event
+
+
+@pytest.mark.parametrize("change, expected_type", [
+    (lambda e: e.update({"type": sc.INVALID}), "log_exception"),
+    (lambda e: e.update({"type": "<other>"}), "<other>"),
+    (lambda e: e.update({"type": None, "trigger": sc.INVALID}), sc.INVALID),
+    (lambda e: e.update({"type": "builtins."}), sc.INVALID),
+    (lambda e: e["frames"].insert(0, sc.INVALID), "KeyError"),
+    (lambda e: e.update({"frames": [sc.INVALID]}), "KeyError"),
+], ids=["invalid-type", "other-type", "untyped-invalid-trigger", "empty-type-name",
+        "one-invalid-frame", "only-invalid-frames"])
+def test_marked_fields_of_the_error_still_send(change, expected_type):
+    report = _report(errors=[_error_entry(FRAMES)])
+    change(report["errors"][0])
+    assert send.checked_preview(report) is not None, "the change must keep a sendable report"
+    result, net = _sent(report)
+    assert result.outcome == send.SENT
+    (value,) = json.loads(parse_envelope(net.posts[0].content)[1][0][1])["exception"]["values"]
+    assert value["type"] == expected_type
+    assert all(isinstance(f, dict) for f in value.get("stacktrace", {}).get("frames", []))
+
+
+def test_an_invalid_fingerprint_is_neither_the_group_nor_the_reference():
+    report = _report(errors=[_error_entry(FRAMES)])
+    report["errors"][0]["fingerprint"] = sc.INVALID
+    result, net = _sent(report)
+    event = json.loads(parse_envelope(net.posts[0].content)[1][0][1])
+    assert event["fingerprint"] == [send.UNKEYED_FINGERPRINT] != [send.NO_ERROR_FINGERPRINT]
+    assert "report_fp" not in event["tags"]
+    assert result.reference == event["event_id"]
+
+
+def _paths(value, path=()):
+    """Every container and leaf path in a report."""
+    yield path
+    if isinstance(value, dict):
+        for key, sub in value.items():
+            yield from _paths(sub, path + (key,))
+    elif isinstance(value, list):
+        for i, sub in enumerate(value):
+            yield from _paths(sub, path + (i,))
+
+
+def _mark(report, path):
+    target = report
+    for step in path[:-1]:
+        target = target[step]
+    target[path[-1]] = sc.INVALID
+
+
+@pytest.mark.parametrize("seed", range(200))
+def test_no_report_validation_leaves_unchanged_makes_send_raise(seed):
+    rng = random.Random(seed)
+    for record in (_typed, _site("log_error", "log_error"), _site("crash", "crash")):
+        record()
+    errors = store.errors()
+    rng.shuffle(errors)  # any kind of error may be the primary one
+    report = copy.deepcopy(_report(errors=errors))
+    paths = [p for p in _paths(report) if p]
+    for path in rng.sample(paths, k=rng.randint(1, 6)):
+        try:
+            _mark(report, path)
+        except (KeyError, IndexError, TypeError):
+            continue  # a parent was marked already
+    preview = send.checked_preview(report)
+    net = FakeNet()
+    result = send.send(report, transport=net.transport, now=NOW + seed)
+    if preview is None:
+        assert result.outcome == send.INVALID and net.requests == []
+    elif report["aipager"]["version"] == sc.INVALID:
+        # An unreadable version is below any min_version: refused, not sent.
+        assert result.outcome == send.TOO_OLD and net.posts == []
+    else:
+        assert result.outcome == send.SENT, result
+        _header, [(_h, event_bytes), (_a, att_bytes)] = parse_envelope(net.posts[0].content)
+        assert att_bytes == preview
+        json.loads(event_bytes)
+
+
+def test_aipager_report_sends_when_the_newest_error_has_no_exception(cli, released):
+    _typed()
+    store.record_site("log_error", **SITE, where="daemon", trigger="log_error", tier="bug",
+                      now=NOW + 60)
+    assert store.errors()[0]["type"] is None, "the newest error is a call-site record"
+    code, out, net = cli(answer="y")
+    assert code == 0 and len(net.posts) == 1
+    assert "Sent. Reference ap1-" in out
+
+
+@pytest.mark.parametrize("missing", [("frames",), ("type",), ("type", "trigger"),
+                                     ("fingerprint",), ("type", "trigger", "frames", "fingerprint")])
+def test_an_error_missing_its_fields_still_sends(missing):
+    # Validation keeps only the keys an item came with: a partial item is sendable.
+    report = _report(errors=[_error_entry(FRAMES)])
+    for key in missing:
+        report["errors"][0].pop(key)
+    assert send.checked_preview(report) is not None
+    result, net = _sent(report)
+    assert result.outcome == send.SENT
+    event = json.loads(parse_envelope(net.posts[0].content)[1][0][1])
+    (value,) = event["exception"]["values"]
+    assert isinstance(value["type"], str)
