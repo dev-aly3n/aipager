@@ -20,6 +20,7 @@ An operator-provided URL is still honoured as an override.
 from __future__ import annotations
 
 import functools
+import gzip
 import logging
 import os
 import re
@@ -193,6 +194,30 @@ def _auth_user_key():
 #: Methods that only read: everything else the Mini App sends is an action.
 _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
+
+def accepts_gzip(accept_encoding: str) -> bool:
+    """Whether an ``Accept-Encoding`` header value takes gzip: named with
+    a quality above 0, or, when gzip is not named, ``*`` above 0. A
+    quality that is not a number counts as 0."""
+    star = False
+    for part in accept_encoding.split(","):
+        name, _, params = part.partition(";")
+        name = name.strip().lower()
+        quality = 1.0
+        for param in params.split(";"):
+            key, _, value = param.partition("=")
+            if key.strip().lower() == "q":
+                try:
+                    quality = float(value)
+                except ValueError:
+                    quality = 0.0
+        if name in ("gzip", "x-gzip"):
+            return quality > 0
+        if name == "*":
+            star = quality > 0
+    return star
+
+
 class MiniAppServer:
     """``GET /`` (static shell) + read-only authenticated JSON routes.
 
@@ -227,6 +252,9 @@ class MiniAppServer:
         # a copy — see miniapp/webapp_sdk.py for the fetch/cache chain
         # and _handle_index for what the page does when we do not.
         self._sdk = WebAppSdk()
+        # The page's bytes, as is and gzipped, per variant (roadmap
+        # 8.117): built once, the first time each variant is asked for.
+        self._page_cache: dict[bool, tuple[bytes, bytes]] = {}
 
     def _build_app(self) -> "web.Application":
         """Construct the aiohttp Application. Split out from start() so
@@ -402,10 +430,23 @@ class MiniAppServer:
         # telegram.org when we do not (exactly the pre-8.18 page). get()
         # never waits on a fetch, so this cannot slow a page load down.
         body = await self._sdk.get()
-        return web.Response(
-            text=index_html(sdk_from_self=body is not None),
-            content_type="text/html",
-        )
+        sdk_from_self = body is not None
+        cached = self._page_cache.get(sdk_from_self)
+        if cached is None:
+            raw = index_html(sdk_from_self=sdk_from_self).encode("utf-8")
+            cached = (raw, gzip.compress(raw, compresslevel=9, mtime=0))
+            self._page_cache[sdk_from_self] = cached
+        raw, packed = cached
+        # Roadmap 8.117: about a quarter of the bytes for a client that
+        # takes gzip (Telegram's in-app browsers all do); the exact same
+        # page, uncompressed, for one that does not say so.
+        headers = {"Vary": "Accept-Encoding"}
+        if accepts_gzip(request.headers.get("Accept-Encoding", "")):
+            headers["Content-Encoding"] = "gzip"
+            return web.Response(body=packed, content_type="text/html",
+                                charset="utf-8", headers=headers)
+        return web.Response(body=raw, content_type="text/html",
+                            charset="utf-8", headers=headers)
 
     async def _handle_webapp_sdk(self, request):
         """``GET /telegram-web-app.js`` — Telegram's SDK from our origin.

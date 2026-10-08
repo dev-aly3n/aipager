@@ -22,8 +22,9 @@ from aipager.miniapp.static import (
 from miniapp_redesign_bb import client_for  # noqa: E402 - alias set by conftest
 
 TELEGRAM_SDK = "https://telegram.org/js/telegram-web-app.js"
-# 8.112 follow-up: the in-app problem report page (was 200_000, then 215_000); 8.117 will shrink the page at serve time
-BUDGET = 220_000
+# 8.117: the page is sent gzipped and that size is pinned in
+# tests/test_miniapp_page_rules.py; this is the ceiling on the page as built.
+BUDGET = 300_000
 
 
 @pytest.fixture(scope="module")

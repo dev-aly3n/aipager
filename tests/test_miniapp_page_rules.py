@@ -9,14 +9,19 @@ text rule; server strings are normalised at display time by `plain()`).
 
 from __future__ import annotations
 
+import gzip
 import re
 
 import pytest
 
 from aipager.miniapp.static import SDK_SRC_TELEGRAM, index_html
 
-# 8.112 follow-up: the in-app problem report page (was 200_000, then 215_000); 8.117 will shrink the page at serve time
-PAGE_BUDGET_BYTES = 220_000
+# Roadmap 8.117: the page goes over the wire gzipped (every Telegram in-app
+# browser takes gzip), so that is the budget that counts.
+SENT_BUDGET_BYTES = 80_000
+# A ceiling on the page as built: what a client that takes no gzip gets,
+# and a stop for an accidental embed (an image, a data file).
+PAGE_BUDGET_BYTES = 300_000
 
 SELF = index_html(sdk_from_self=True)
 FALLBACK = index_html(sdk_from_self=False)
@@ -26,6 +31,12 @@ FALLBACK = index_html(sdk_from_self=False)
 def test_the_page_stays_under_its_byte_budget(page):
     size = len(page.encode("utf-8"))
     assert size <= PAGE_BUDGET_BYTES, f"page is {size} bytes"
+
+
+@pytest.mark.parametrize("page", [SELF, FALLBACK], ids=["self-served", "fallback"])
+def test_the_page_sent_stays_under_its_byte_budget(page):
+    size = len(gzip.compress(page.encode("utf-8"), compresslevel=9, mtime=0))
+    assert size <= SENT_BUDGET_BYTES, f"page sent is {size} bytes"
 
 
 def test_the_self_served_page_names_no_external_url_at_all():
