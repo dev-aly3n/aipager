@@ -128,7 +128,7 @@ if (process.env.AIPAGER_TEST_REPORT) {
   REPORT = f.report; AREAS = f.areas; EXPECTED_EXACT = f.expected; NOTE = f.note;
 }
 if (SCENARIO === "escape") {
-  REPORT.errors[0] = ERR({ type: "builtins.<b>bold</b>" });
+  REPORT.errors[0] = ERR({ type: "builtins.<b>bold</b>", last_day: "<i>day</i>" });
   AREAS = ["<img src=x onerror=1>", "a&b", "x", "y"];
   REPORT.aipager.install = "<i>pipx</i>";
 }
@@ -340,7 +340,8 @@ S.escape = async () => {
     }
   }
   const row = byId["rp-errors"].children[0].innerHTML;
-  if (row.indexOf("&lt;b&gt;bold&lt;/b&gt; in &lt;img src=x onerror=1&gt;") < 0) fail("row: " + row);
+  if (row.indexOf("&lt;b&gt;bold&lt;/b&gt; in &lt;img src=x onerror=1&gt;") < 0 ||
+      row.indexOf("last seen &lt;i&gt;day&lt;/i&gt;") < 0) fail("row: " + row);
   if (byId["rp-exact"].textContent.indexOf("<script>x</script>") < 0) fail("exact lost the note");
   console.log("ok: report values and the note never reach markup");
 };
