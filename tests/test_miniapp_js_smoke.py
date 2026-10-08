@@ -1880,6 +1880,19 @@ def test_report_answer_without_a_line_never_reads_undefined(node_bin, tmp_path):
     _report_ok(node_bin, tmp_path, "no_line", "ok: an answer without a line")
 
 
+def test_report_other_status_reads_try_later_not_no_answer(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "other_status", "ok: another status shows the try-later")
+
+
+def test_report_page_try_later_is_the_shared_wording():
+    """The page's own copy of the try-later line (used when an answer has
+    no line, or an unexpected status) is wording.TRY_LATER, byte for byte."""
+    from aipager.miniapp.static import index_html
+    from aipager.report import wording
+
+    assert f"var RP_TRY = {json.dumps(wording.TRY_LATER)};" in index_html(sdk_from_self=True)
+
+
 def test_report_exact_block_matches_preview(node_bin, tmp_path, monkeypatch):
     """The page's live exact block is the very text the server sends for
     that note: Python's json.dumps(indent=2, ensure_ascii=False) of the

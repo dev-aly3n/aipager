@@ -202,6 +202,7 @@ function statusSeen(want, buzz) {
   if (global.__haptic !== buzz) fail("haptic " + global.__haptic + ", wanted " + buzz);
 }
 const LATER = "No answer from aipager in time.";
+const TRY = "Could not send right now. Nothing was lost; try again later.";
 
 // ---- scenarios ----------------------------------------------------------
 const S = {};
@@ -459,7 +460,9 @@ S.no_answer = async () => {
   console.log("ok: no answer is shown in view with a buzz");
 };
 
-// An answer without a line never reads "undefined".
+// An answer without a line never reads "undefined", and never claims
+// aipager did not answer: it did. Retryable or final, the line is the
+// shared try-later wording; the final one asks for no tap.
 S.no_line = async () => {
   await openPage();
   answer("/api/report/send", 200, { outcome: "offline", reference: null, retry: true });
@@ -467,12 +470,21 @@ S.no_line = async () => {
   byId["rp-send"].click();
   await tick();
   const st = byId["rp-status"].textContent;
-  if (st.indexOf("undefined") >= 0 || st.indexOf(LATER) !== 0) fail("status " + st);
+  if (st !== TRY) fail("status " + st);
   byId["rp-send"].click();
   await tick();
   const line = byId["rp-result-line"].textContent;
-  if (line.indexOf("undefined") >= 0 || line.indexOf(LATER) !== 0) fail("result line " + line);
+  if (line !== TRY) fail("result line " + line);
+  if (/tap/i.test(line)) fail("a final result asks for a tap: " + line);
   console.log("ok: an answer without a line shows the try-later words");
+};
+
+// Any other status: aipager answered, so it is the try-later wording,
+// not "no answer"; the report stays sendable.
+S.other_status = async () => {
+  await seenAfter({ status: 500, body: {} }, TRY, "warning");
+  if (byId["rp-status"].textContent !== TRY) fail("status " + byId["rp-status"].textContent);
+  console.log("ok: another status shows the try-later words");
 };
 
 S.exact = async () => {

@@ -2229,8 +2229,11 @@ APP_JS = r"""
   // kept draft and hands back a note not in its final form. Report values
   // reach the DOM only through textContent or escapeHtml.
 
+  // RP_LATER only when aipager never answered (timeout, network error).
+  // RP_TRY is wording.TRY_LATER (a test keeps the two equal).
   var RP_LATER = "No answer from aipager in time. Tap Send report again: " +
     "if it already went, you will see its reference, and it is not sent twice.";
+  var RP_TRY = "Could not send right now. Nothing was lost; try again later.";
   var RP_PANELS = {
     noowner: ["Can't send from here", "This aipager has no single owner chat. " +
               "In a terminal, `aipager report` still works."],
@@ -2527,7 +2530,7 @@ APP_JS = r"""
   }
 
   function rpOutcome(d) {
-    var line = d.line ? String(d.line) : RP_LATER;
+    var line = d.line ? String(d.line) : RP_TRY;
     if (d.retry) { rpStatus(line, 1); return; }
     haptic("notify", d.outcome === "sent" ? "success" : "error");
     rp.draft = null;
@@ -2571,7 +2574,7 @@ APP_JS = r"""
       } else if (s === 429) {
         rpStatus("Too many taps. Try again in a minute.", 1);
       } else {
-        rpStatus(RP_LATER);
+        rpStatus(RP_TRY);
       }
     }, function () {
       if (epoch !== chatEpoch) { return; }
