@@ -276,6 +276,16 @@ def test_restart_throttled_by_the_same_window():
     assert busy_card_watchdog_action(sess, now + CARD_STALE_SECONDS) == ("restart", 0.0)
 
 
+def test_a_card_never_acted_on_is_restarted_right_after_boot():
+    """Roadmap 8.105: ``card_watchdog_at`` 0.0 means never acted on, not
+    "just now". Five seconds after boot the monotonic clock is near 0, so
+    reading it as a time held a dead card back until second 20."""
+    now = 5.0
+    sess = _session(now, task="none")
+    assert sess.card_watchdog_at == 0.0
+    assert busy_card_watchdog_action(sess, now) == ("restart", 0.0)
+
+
 def test_fresh_card_measures_from_busy_started_until_first_edit():
     """``_send_busy_and_animate`` zeroes ``last_tool_edit_at`` on send;
     the first tick lands ~1.5s later. A brand-new card must not be

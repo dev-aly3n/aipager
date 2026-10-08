@@ -260,7 +260,7 @@ def busy_card_watchdog_action(
         return None
     if sess.animate_lock.locked():
         return None
-    if now - sess.card_watchdog_at < CARD_STALE_SECONDS:
+    if sess.card_watchdog_at and now - sess.card_watchdog_at < CARD_STALE_SECONDS:
         return None
     if not sess.animation_running():
         return "restart", 0.0
