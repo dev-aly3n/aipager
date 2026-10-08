@@ -17,8 +17,8 @@ After `pip install -e .`, four console scripts are on your PATH:
 | Script | What it does |
 |---|---|
 | `aipager` | the CLI dispatcher (`start`, `config`, `version`) |
-| `aipager-hook` | Claude Code hook handler — invoked by Claude per event |
-| `aipager-statusline` | Claude Code statusLine — invoked on every tick |
+| `aipager-hook` | Claude Code hook handler - invoked by Claude per event |
+| `aipager-statusline` | Claude Code statusLine - invoked on every tick |
 | `claude-dtach` | launches a Claude Code session under `dtach` |
 
 Tweak code, then `aipager start` runs the daemon with your changes
@@ -40,7 +40,7 @@ from PyPI.
 
 Releases are tag-driven. Tagging a commit on `main` triggers
 `.github/workflows/publish.yml`, which builds `sdist` + `wheel` and
-uploads via PyPI Trusted Publisher (OIDC — no stored API token).
+uploads via PyPI Trusted Publisher (OIDC - no stored API token).
 
 ### Cutting a release
 
@@ -78,7 +78,7 @@ ruff check aipager tests
 ruff format aipager tests  # if you want auto-formatting
 ```
 
-The CI matrix runs Python 3.10 through 3.13 — keep the codebase free of
+The CI matrix runs Python 3.10 through 3.13 - keep the codebase free of
 3.11+ syntax (no `Self`, no `TypeVarTuple` etc.). Use
 `from __future__ import annotations` for new files that need modern
 typing.
@@ -91,5 +91,5 @@ body. Examples:
 - `fix transcript path scan to handle multi-cwd setups`
 - `add aipager service subcommand for systemd-user installer`
 
-Squash-merge PRs that have noisy intermediate commits — the main branch
+Squash-merge PRs that have noisy intermediate commits - the main branch
 log should be a clean reading order.

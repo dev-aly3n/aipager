@@ -26,8 +26,8 @@ from aipager.state import Status, TrackedSession
 
 _REQUIRED_MODELS = {
     "opus", "sonnet", "haiku", "fable",
-    "claude-opus-5-5", "claude-opus-5-5[1m]", "claude-sonnet-5",
-    "claude-fable-5-1", "claude-haiku-4-5",
+    "claude-opus-5-5", "claude-opus-5-5[1m]", "claude-sonnet-5-5",
+    "claude-fable-5-1", "claude-haiku-5-5",
 }
 
 

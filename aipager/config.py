@@ -890,10 +890,18 @@ MODEL_CATALOG: tuple[tuple[str, str, str], ...] = (
     ("OpusPlan", "opusplan", "Opus for planning, Sonnet to execute"),
     ("Opus 5.5", "claude-opus-5-5", ""),
     ("Opus 5.5 1M", "claude-opus-5-5[1m]", ""),
-    ("Sonnet 5", "claude-sonnet-5", ""),
+    ("Sonnet 5.5", "claude-sonnet-5-5", ""),
     ("Fable 5.1", "claude-fable-5-1", ""),
-    ("Haiku 4.5", "claude-haiku-4-5", ""),
+    ("Haiku 5.5", "claude-haiku-5-5", ""),
 )
+#: Pinned rows taken off MODEL_CATALOG, by label, with the model each one
+#: launched. `/settings` -> New sessions stores the LABEL a chat picked, so
+#: a chat that chose one of these keeps getting that model rather than
+#: silently falling back to Claude Code's default (new_flow).
+RETIRED_MODEL_LABELS: dict[str, str] = {
+    "Sonnet 5": "claude-sonnet-5",
+    "Haiku 4.5": "claude-haiku-4-5",
+}
 _DEFAULT_MODELS: list[tuple[str, str]] = [
     (label, f"/model {model}") for label, model, _hint in MODEL_CATALOG
 ]

@@ -87,6 +87,7 @@ from aipager.config import (
     COMMANDS_BUTTON,
     MODEL_CHOICES,
     MODELS_BUTTON,
+    RETIRED_MODEL_LABELS,
     TEMPLATES_BUTTON,
 )
 from aipager.miniapp import launch
@@ -343,21 +344,25 @@ def resolve_new_session_settings(
     """What a session started now by ``user_id`` in ``chat_id`` gets when
     nobody chooses: the chat's stored defaults, checked against what is
     true NOW. Auto unless the chat's default says Ask, and never for
-    someone who may not use Auto. A stored model no longer offered, or a
-    folder no longer allowed, falls back to the built-in default."""
+    someone who may not use Auto. A stored model no longer offered (other
+    than a retired pinned row, which keeps its model), or a folder no
+    longer allowed, falls back to the built-in default."""
     stored = preferences.get_new_session_defaults(chat_id)
     can_auto = bool(bot._is_admin_user(user_id, chat_id))
     # Confined to the session's folder (roadmap 8.79): a stored default
     # that is the home folder, `/` or above the home folder is not theirs.
     confined = bool(bot._is_confined_user(user_id, chat_id))
     model = model_label = None
-    # Only a label still offered: the defaults screen stores a
-    # MODEL_CHOICES label, and one withdrawn since must not be passed on
-    # as if it were a custom model name.
+    # Only a label still offered, or a retired pinned row: the defaults
+    # screen stores a MODEL_CHOICES label, and one withdrawn since must
+    # not be passed on as if it were a custom model name.
     if stored.model and stored.model in {lbl for lbl, _cmd in MODEL_CHOICES}:
         resolved, err = launch.validate_model(stored.model, MODEL_CHOICES)
         if not err and resolved:
             model, model_label = resolved, stored.model
+    elif stored.model in RETIRED_MODEL_LABELS:
+        # Taken off the list since the chat chose it: still that model.
+        model, model_label = RETIRED_MODEL_LABELS[stored.model], stored.model
     cwd = None
     if stored.cwd and stored.cwd in launch.allowed_roots(
             bot.registry, chat_id, confined=confined):

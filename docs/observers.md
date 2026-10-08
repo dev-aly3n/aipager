@@ -1,6 +1,6 @@
 # Observer Bots
 
-Read-only Telegram bots that mirror notifications from the primary bot. They receive summaries, warnings, and errors — but can't control sessions.
+Read-only Telegram bots that mirror notifications from the primary bot. They receive summaries, warnings, and errors - but can't control sessions.
 
 ## Setup
 
@@ -21,7 +21,7 @@ Multiple observers (comma-separated):
 OBSERVER_BOTS=111:AAA_first:12345,222:BBB_second:67890
 ```
 
-The format is `token:chat_id` — parsing uses the **last** colon as delimiter (bot tokens contain an internal colon).
+The format is `token:chat_id` - parsing uses the **last** colon as delimiter (bot tokens contain an internal colon).
 
 5. Restart the daemon
 
@@ -31,7 +31,7 @@ The format is `token:chat_id` — parsing uses the **last** colon as delimiter (
 |-------|---------|
 | Idle summary | "Finished" + response text (+ .md file for long responses) |
 | API error | "Anthropic servers overloaded" (no retry button) |
-| Context warning | "Context at 82% — auto-compact soon" |
+| Context warning | "Context at 82% - auto-compact soon" |
 | Compacting | "Compacting" |
 | Compact done | "Compacted: 82% → 4%" |
 
@@ -43,4 +43,4 @@ The format is `token:chat_id` — parsing uses the **last** colon as delimiter (
 - AskUserQuestion dialogs
 - Any inline keyboards or buttons
 
-Observers are completely stateless — fire-and-forget sends. A failing observer never affects the primary bot.
+Observers are completely stateless - fire-and-forget sends. A failing observer never affects the primary bot.

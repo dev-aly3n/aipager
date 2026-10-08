@@ -8,7 +8,7 @@ Two questions follow:
 
 ## Trust boundary
 
-Every handler the bot exposes — message, file, voice, callback —
+Every handler the bot exposes - message, file, voice, callback -
 is gated by `python-telegram-bot`'s chat filter, built from the
 chat(s) configured in `~/.config/aipager/aipager.yaml`, or (commands)
 by the same check in aipager's own authorization. The one exception
@@ -38,7 +38,7 @@ This means the surface to "outside the world" is:
 If both leak, an attacker can drive your daemon. If only the token
 leaks, an attacker can read DMs sent to the bot from your chat but
 cannot send commands the daemon will act on. If only the chat ID
-leaks, nothing useful — the bot needs the token to talk to Telegram
+leaks, nothing useful - the bot needs the token to talk to Telegram
 at all.
 
 ## Secrets
@@ -48,8 +48,8 @@ at all.
 | Bot token | `~/.config/aipager/aipager.yaml` | 600 by default |
 | Chat ID(s) | same file | 600 by default |
 
-Neither value is ever logged — error messages and the wizard redact
-the token wherever it could appear. Neither is committed — the
+Neither value is ever logged - error messages and the wizard redact
+the token wherever it could appear. Neither is committed - the
 config lives in the user's `~/.config`, not the repo. The Trusted Publisher
 PyPI release flow never touches secrets either; OIDC handles auth.
 
@@ -57,7 +57,7 @@ If you suspect the token is compromised, revoke it from
 [@BotFather](https://t.me/BotFather) (`/revoke`), generate a new
 one, and re-run `aipager config`.
 
-## The Claude credential — what actually protects it
+## The Claude credential: what actually protects it
 
 **aipager runs an autonomous agent with Bash access as your UNIX
 user. Therefore any secret aipager can read, the agent it launches
@@ -68,7 +68,7 @@ reach for the wrong kind of control.
 Telegram-driven session from reading files under it. That is a
 **path** control, and it does nothing here: the Claude credential
 (`CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`) is not reached by
-path — it is inherited into every spawned session's own **process
+path - it is inherited into every spawned session's own **process
 environment**. Inside a session, `echo $CLAUDE_CODE_OAUTH_TOKEN`
 prints it, deny-list or not. A file-path rule is the wrong shape of
 control for an environment variable.
@@ -81,7 +81,7 @@ control for an environment variable.
 | macOS / Docker / no systemd | `~/.config/aipager/daemon.env`, read directly | 600 |
 
 Both paths are parsed by the same code (`aipager/daemon_secrets.py`)
-and handed to the launched session via the subprocess `env=` table —
+and handed to the launched session via the subprocess `env=` table -
 never interpolated into the `bash -c` command string. `/proc/PID/cmdline`
 is world-readable (0444); `/proc/PID/environ` is 0400 (owner-only).
 
@@ -90,14 +90,14 @@ same machine cannot read the credential, it never appears in
 `systemctl show`, in a unit-file backup, or in a screenshot of
 `journalctl` output an operator pastes into a bug report. **It does
 not create a boundary between aipager and the agent aipager
-launches** — that boundary does not exist, and no amount of file-
+launches** - that boundary does not exist, and no amount of file-
 permission engineering can create it, because the agent's whole job
 is to act as the operator inside that same environment.
 
 ### The one control that actually works
 
 **Scope the credential itself.** Run the daemon on a separate
-Anthropic account, or with an API key that carries a spend limit —
+Anthropic account, or with an API key that carries a spend limit -
 not the same token you use for your own interactive `claude` login.
 Revoking the daemon's credential must never log the human out; if it
 would, the two are the same credential and neither is scoped.
@@ -109,13 +109,13 @@ than the file permissions around it.
 ### Diagnosing auth without guessing
 
 `aipager doctor` (and the one-line notice sent once per daemon start)
-report auth via Claude Code's own `claude auth status` — never a
+report auth via Claude Code's own `claude auth status` - never a
 hand-rolled file check. Three states are kept textually distinct
 everywhere they appear:
 
-- `auth: <method> (<source>)` — confirmed logged in.
-- `auth: none (not logged in)` — confirmed *not* logged in.
-- `auth: unknown (...)` — the probe itself failed (timeout, missing
+- `auth: <method> (<source>)` - confirmed logged in.
+- `auth: none (not logged in)` - confirmed *not* logged in.
+- `auth: unknown (...)` - the probe itself failed (timeout, missing
   binary, unparseable output) or the binary predates the version that
   added JSON output. This is **never** reported as "not logged in":
   aipager does not refuse to launch a session on an auth check it
@@ -123,34 +123,63 @@ everywhere they appear:
   credentials, and Max-plan non-file auth are all invisible to any
   file check and would otherwise look identical to "logged out".
 
-## claude code's own permission system
+## Who decides whether a tool call runs
 
-aipager is **not** the permission gate for tool calls. Claude Code's
-`~/.claude/settings.json` is. The flow:
+Two separate checks decide whether a tool call runs, and they run in
+this order:
 
-1. Claude wants to run `Bash: rm -rf /`.
-2. Claude consults its settings → matches a rule that says `Ask`.
-3. Claude fires `PreToolUse` (see [hooks](hooks.md#pretooluse)).
-4. aipager relays the prompt to Telegram and waits for your tap.
-5. You tap `[✅ Allow]` or `[❌ Deny]`.
-6. aipager writes `approve` or `deny` back to claude via the hook
-   protocol.
-7. Claude honours the decision.
+1. **aipager's safety check.** Claude Code runs aipager's `PreToolUse`
+   hook before every tool call. For a turn started from Telegram it
+   holds the call to the sender's role rules and to the safety floor
+   (protected paths, command patterns), and denies what they refuse:
+   Claude Code then refuses the tool without asking anyone, whatever
+   its own rules say. A prompt typed in the terminal is not restricted
+   by this check. What it covers is below, under
+   [team-mode enforcement](#team-mode-enforcement).
+2. **Claude Code's own rules** (`~/.claude/settings.json`, the
+   session's permission mode). If they say ask, Claude Code fires
+   `PermissionRequest`, and aipager shows the prompt in Telegram (see
+   [hooks](hooks.md#permissionrequest)). Your tap goes back to Claude
+   Code as the hook's decision, or typed into Claude Code's own dialog
+   if the 20-second wait ran out. If Claude Code's rules deny the call,
+   it never reaches Telegram.
 
-If your `settings.json` says `Deny` for that tool + input combo,
-the prompt never even reaches Telegram — claude blocks the call
-itself. aipager only sees `Ask` cases.
+So aipager can refuse a call Claude Code would allow, and when Claude
+Code asks, aipager never answers yes on its own: an allow is always a
+person's tap. Two things let calls run with no prompt at all:
 
-This matters because: **aipager cannot expand claude's permissions.**
-It can only relay prompts claude code chose to surface. If you want
-to lock down further (e.g. forbid `Bash: rm`), edit
-`~/.claude/settings.json`; aipager will respect it.
+- **Auto mode, the default for admins.** A session in Auto is started
+  with `--dangerously-skip-permissions`: Claude Code asks for nothing,
+  so every call aipager's safety check does not deny runs without a tap.
+  A session an admin (the `owner` and `admin` roles, or a role with
+  `can_manage`) starts with `/new` is in Auto unless the chat chose Ask
+  under `/settings` → New sessions; the Mini App's new-session form
+  starts on Ask, and an admin can pick Auto there. Everyone else's
+  sessions start in Ask, and only an admin can switch one to Auto
+  (`/mode`). aipager's safety check still runs on every call in Auto,
+  but it denies nothing in an owner's own turns or in a prompt typed in
+  the terminal.
+  So that Auto works from Telegram, the daemon sets
+  `skipDangerousModePermissionPrompt` in `~/.claude/settings.json` at
+  every start (Claude Code's warning before it runs in this mode would
+  otherwise stop the session); that also turns the warning off for the
+  sessions you start yourself. It likewise marks its default session
+  folder as trusted in `~/.claude.json`, so Claude Code's "Do you trust
+  this folder?" question does not stop a session started from Telegram
+  in that folder.
+- **Allow always**, which hands Claude Code back the "don't ask again"
+  rule it offered with the prompt, exactly as that option in its own
+  dialog would.
+
+To lock a tool down for everyone, deny it in `~/.claude/settings.json`;
+to lock it down for some people, use their role's rules in
+`policy.yaml` (see [groups](groups.md#how-rules-work)).
 
 ### Team-mode enforcement
 
 In team mode aipager adds its own layer *underneath* the taps: every
-Telegram-originated message carries a permission note — who sent it
-and what their role allows — written to
+Telegram-originated message carries a permission note - who sent it
+and what their role allows - written to
 `/tmp/claude-notes-<session>/`, one file per message. When Claude
 picks a prompt up, the `aipager-hook` helper matches it against those
 notes and installs the sender's rules where the `PreToolUse` check
@@ -159,7 +188,7 @@ reads them. These properties are load-bearing:
 - **Strictest wins.** If Claude picks up messages from more than one
   contributor as a single turn (aipager holds messages to prevent
   this, but fails safe if it happens anyway), the turn runs under the
-  *most restrictive* combination — an owner's message can never lend
+  *most restrictive* combination - an owner's message can never lend
   its privileges to someone else's.
 - **A running turn never widens.** A message from a different person
   waits until the running turn ends, then runs as its own turn with its
@@ -172,7 +201,7 @@ reads them. These properties are load-bearing:
   the group role for everything they send or tap in the group and the
   DM role in the DM, whatever order the chats are in `aipager.yaml`.
 - **Unknown means restricted.** A prompt that cannot be attributed
-  runs under the built-in floor — no bypass, all deny rules active —
+  runs under the built-in floor - no bypass, all deny rules active -
   never as an unrestricted terminal prompt. Prompts you type directly
   into the terminal remain unrestricted; anything carrying the
   Telegram marker on any line is enforced. Every Telegram message
@@ -212,8 +241,9 @@ reads them. These properties are load-bearing:
   lowers the turn to that sender's rules.
 
 **What actually contains a restricted user.** The Claude session runs
-as the same OS user that owns aipager's config (including the bot token
-in `~/.config/aipager/daemon.env`) and its per-turn policy file
+as the same OS user that owns aipager's config (the bot token in
+`~/.config/aipager/aipager.yaml`, the Claude credential in
+`~/.config/aipager/daemon.env`) and its per-turn policy file
 (`/tmp/claude-policy-<session>.json`). A shell running as that user can
 reach both through spellings no pattern anticipates
 (`sed -i … /tmp/*-policy-*.json`, a `for` loop over a glob, a Python
@@ -261,7 +291,7 @@ cover):
   your home folder, as for writes) or scratchpad; that folder is not a
   protected path and holds none (a session started in your home folder holds
   `~/.config/aipager`, so it cannot search from its top); every glob is
-  a plain relative pattern — no leading `/`, `~`, `$` or drive letter,
+  a plain relative pattern - no leading `/`, `~`, `$` or drive letter,
   no `..`, no `#` (a comment to ripgrep) or `!` (a negation), no `\`
   escape; and you have no protected-path rule without a leading `/` or
   `~` (`**/.env` can sit anywhere in the project, so with one in place
@@ -279,7 +309,7 @@ cover):
   matched.
 - **A check that fails denies.** If deciding on a tool call raises an
   error (a NUL byte in a path, a bug), or the hook runs out of memory
-  while deciding, the call is denied — unless the session's rules could
+  while deciding, the call is denied - unless the session's rules could
   be read and grant the owner's bypass. It used to be let through.
 
 **Your own protected paths.** The `safety:` section of `policy.yaml`
@@ -293,7 +323,7 @@ the safety hook's fallbacks; if that file is missing, unreadable or
 owned by another OS user, the hook uses the built-in list, never less.
 A change made with a live reload applies to messages sent after the
 reload, not to a turn already running or a message already waiting.
-Before this release the section was read and shown by
+Up to 0.7.20 the section was read and shown by
 `aipager doctor --safety-check` but not enforced.
 
 **Turns aipager cannot attribute.** A Telegram turn with no sender to
@@ -361,9 +391,9 @@ their rules stay best-effort (below).
   or read yourself (source, `Makefile`, `package.json` scripts,
   `conftest.py`, a `CLAUDE.md` your own turns load).
 
-**A role that has Bash** — `admin`, which bypasses role deny rules, or
+**A role that has Bash** - `admin`, which bypasses role deny rules, or
 any role `policy.yaml` gives it back to (`allow_tools` naming `Bash`,
-or a replaced `deny_tools`) — **is held to best-effort rules only**:
+or a replaced `deny_tools`) - **is held to best-effort rules only**:
 the command patterns below, which a determined user can get around.
 `aipager doctor` warns once for every such role a member holds. Only
 give Bash to someone you would give a shell on the machine.
@@ -458,18 +488,18 @@ answer, appends one JSON line to `~/.claude/aipager-audit.jsonl`:
 
 Fields (see `aipager/audit.py` for the full set):
 
-- `ts` — ISO 8601 UTC timestamp, second precision.
-- `session` / `label` — internal name and friendly label.
-- `action` — what happened (`Allowed`, `Denied`, `Allowed always`,
+- `ts` - ISO 8601 UTC timestamp, second precision.
+- `session` / `label` - internal name and friendly label.
+- `action` - what happened (`Allowed`, `Denied`, `Allowed always`,
   an `AskUserQuestion` answer, an auto-deny, …).
-- `tool` / `summary` — the tool name and a truncated input or
+- `tool` / `summary` - the tool name and a truncated input or
   question body.
-- `user_id` / `username` — who tapped, for team-mode attribution;
+- `user_id` / `username` - who tapped, for team-mode attribution;
   `scope_label` / `scope_chat_id` where multiple chats are configured.
-- `denied` — true for any refusal, tap-driven or rule-driven.
+- `denied` - true for any refusal, tap-driven or rule-driven.
 
 Write is best-effort. If the disk fills up or `~/.claude/` becomes
-unwritable, the daemon logs a `WARNING` and keeps running — no
+unwritable, the daemon logs a `WARNING` and keeps running - no
 silent loss, no crash. See `aipager/audit.py`.
 
 The audit log is append-only on disk. Pair it with the in-chat
@@ -479,22 +509,32 @@ busy message) for two independent records.
 ## Privilege boundary
 
 The daemon **never elevates**. No sudo, no setuid, no doas. Every
-file written lives under `$HOME`. Every subprocess
-(`claude`, `dtach`, pip installs, npm) runs as the daemon user.
+file it writes is under your home folder, under `/tmp` (aipager's
+per-session control files, downloads and the restart log) or in the
+folder of its control socket (`$XDG_RUNTIME_DIR`); the full list is in
+[architecture](architecture.md#file-and-socket-layout). Every
+subprocess (`claude`, `dtach`, the installers, `claude update`) runs as
+the daemon's user.
 
-The Telegram-driven extra-install flow (e.g. tapping `[📦 Install
-voice]`) explicitly uses `sys.executable -m pip install`, which
-writes into the daemon's own venv — never the system Python.
+Installing the voice extra from Telegram (`[📦 Install voice]`) goes
+through the installer that owns aipager (`uv tool install --reinstall
+aipager[voice]`, `pipx install --force aipager[voice]`), and otherwise
+installs the extra's packages with the daemon's own Python
+(`<python> -m pip install`): always into aipager's own environment,
+never the system Python.
 
-The Telegram-driven daemon-restart flow (`[🔄 Restart daemon now]`)
-spawns a detached child with `start_new_session=True`, then SIGTERMs
-the current process. Both processes run as the same user; no
-escalation.
+The `[🔄 Restart daemon now]` button, under the systemd service,
+schedules `systemctl --user restart aipager.service` in a separate
+transient user unit; on macOS it runs `launchctl kickstart -k`; a daemon
+you started yourself spawns a detached copy of itself that waits for the
+old one to exit. After an update only the systemd service restarts by
+itself (see [commands → update](commands.md#update)). All of them run as
+the same user; no escalation.
 
 ## Network surface
 
 aipager listens on **no non-loopback TCP port**. The Mini App server
-binds `127.0.0.1` only (hardcoded — there is deliberately no host
+binds `127.0.0.1` only (hardcoded - there is deliberately no host
 option) and is reachable from outside solely through the managed
 tunnel described below. Outbound:
 
@@ -508,8 +548,21 @@ tunnel described below. Outbound:
   package, and when the daemon has no copy the page loads it from
   `telegram.org` directly, as it did before.
 - The Mini App tunnel to Cloudflare, while enabled (the default).
-- HTTPS to `pypi.org` and friends, only when the user taps the
-  voice install button.
+  The `cloudflared` binary it runs is downloaded once from
+  `github.com/cloudflare/cloudflared` releases, checked against a
+  pinned SHA-256, and cached under
+  `~/.local/share/aipager/cloudflared/`; a `cloudflared` on your `PATH`
+  is never used. None of this happens with your own Mini App URL (see
+  below).
+- Version checks, only when someone taps **Check for updates** or
+  **Update** (`/update`, the Mini App's Updates): `pypi.org` for aipager, and
+  `downloads.claude.ai` or `registry.npmjs.org` for Claude Code,
+  depending on how it was installed. An update then runs the installer
+  (which talks to PyPI or Homebrew) and `claude update`.
+  `aipager update` on the command line only runs the installer.
+- The voice extra's install, when you tap its button: the installer
+  fetches the packages from PyPI, and the speech model is downloaded
+  from Hugging Face (`huggingface.co`) on first use.
 - HTTPS to `raw.githubusercontent.com` (the report key file) and to Sentry's ingest host, only when you confirm sending a problem report: the report you previewed and a short summary made from it, nothing else. See [Problem reports](problem-reports.md).
 
 Inbound:
@@ -518,7 +571,7 @@ Inbound:
   `/tmp/aipager.sock` when `$XDG_RUNTIME_DIR` is unset). Bound and
   chmod'd by the daemon at startup
   (`aipager/dtach/hook_receiver.py`). Mode `0o666` so any local
-  process can send hook events to it — same trust as
+  process can send hook events to it - same trust as
   `~/.claude/settings.json`, which already controls what runs
   hooks.
 
@@ -528,8 +581,8 @@ level attacker cannot reach it without a foothold on the host.
 ## Mini App tunnel
 
 **The Mini App is on by default**, so on a stock install aipager opens
-this tunnel without being asked. That is a deliberate trade — an opt-in
-nobody discovered was a feature that did not exist — but it means a
+this tunnel without being asked. That is a deliberate trade - an opt-in
+nobody discovered was a feature that did not exist - but it means a
 fresh install reaches the internet. Turn it off with `aipager miniapp
 disable`, or set `enabled: false` under `miniapp:` in `aipager.yaml`;
 an explicit `false` is always respected. Note that a **missing or
@@ -547,13 +600,13 @@ the Mini App serves is verified against Telegram's `initData` signature
 (see [Trust boundary](#trust-boundary) above), the same check that
 protects it regardless of how the URL was obtained. Knowing the
 hostname alone gets an attacker nothing they could not already get by
-guessing a `trycloudflare.com` subdomain at random — the signature
+guessing a `trycloudflare.com` subdomain at random - the signature
 check is the actual gate. Treat it the way you'd treat any other
 unlisted-but-not-secret URL: fine to leave running, not something to
 paste into a public channel for no reason.
 
 The hostname changes on every daemon restart and is held only in
-memory — it is never written to `aipager.yaml` or anywhere under
+memory - it is never written to `aipager.yaml` or anywhere under
 `~/.config/aipager/`. If the tunnel dies mid-run,
 aipager restarts it with backoff and republishes the new address; if
 it cannot come back up after several attempts, the button is removed
@@ -562,8 +615,8 @@ surface](#network-surface) above for the same "no button is an honest
 absence" principle applied to the loopback server itself).
 
 Setting `MINIAPP_PUBLIC_URL` (or `aipager miniapp enable --url
-https://…`) disables the managed tunnel entirely — no cloudflared
-binary is ever fetched or spawned — and the given URL is used as-is,
+https://…`) disables the managed tunnel entirely - no cloudflared
+binary is ever fetched or spawned - and the given URL is used as-is,
 with the same `initData` verification underneath it. Tailscale
 auto-detect (`tailscale status --json`) remains available as a
 lower-effort alternative for anyone who already runs Tailscale and
@@ -572,8 +625,8 @@ would rather not depend on Cloudflare at all.
 ## Voice transcription
 
 `faster-whisper` runs in-process. The audio is downloaded as `.ogg`
-into `~/.config/aipager/files/`, transcribed locally on CPU, and
-the file stays under your control. **No audio leaves the machine.**
+into `/tmp/aipager-files/` (the folder uploaded files go to),
+transcribed locally on CPU, and the file stays under your control. **No audio leaves the machine.**
 No third-party API. No key needed beyond the bot token to talk to
 Telegram in the first place.
 
@@ -586,8 +639,9 @@ posture).
 
 Each Claude Code session runs in its own dtach. The control socket
 at `/tmp/claude-dtach-<name>.sock` is owned by the daemon user;
-dtach refuses cross-user attaches. Inside the session, claude code
-operates with whatever `--cwd` it was launched in.
+dtach refuses cross-user attaches. Each session starts in its own
+folder, the one chosen with `/new`, the Mini App, or the folder you ran
+`aipager session` in.
 
 aipager does not implement filesystem-level isolation between
 sessions: a session attached to `~/projects/foo` can in principle
@@ -601,7 +655,7 @@ per-project `~/.claude/settings.json` overrides or a container
 |---|---|
 | Stranger sends bot a command | Chat ID filter rejects |
 | Stolen bot token | Use `/revoke` in @BotFather, re-config |
-| Compromised claude tool call | Claude's `settings.json` is the gate; aipager respects it |
+| Compromised claude tool call | aipager's safety check refuses what a Telegram turn's rules deny; in Ask, Claude Code's own rules in `settings.json` decide what it asks about and a person's tap is the only allow; an Auto session (the default for admins' `/new`) asks nothing, so only the safety check stands in the way, and for an owner's own turns and terminal prompts nothing does ([who decides](#who-decides-whether-a-tool-call-runs)) |
 | Restricted Telegram user escalates to the owner | No shell, writes and searches confined to the project (never the home folder), credential files unreadable, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
 | A group member borrows someone else's rights | Each message runs with its own sender's role in the chat it came from; a different sender's message waits for the running turn; if one joins anyway, the strictest rules win; slash commands from restricted roles are limited to the keyboard's ([team-mode enforcement](#team-mode-enforcement)) |
 | Group chatter reaches a session | In a group only commands, replies to the bot, mentions of it and marked keyboard taps are acted on ([groups](groups.md#what-the-bot-reads-in-a-group)) |
@@ -610,10 +664,10 @@ per-project `~/.claude/settings.json` overrides or a container
 | Network attacker | No inbound port, not directly reachable |
 | Local privilege escalation | No sudo / setuid; daemon stays in user space |
 | Voice audio leaking to cloud | Transcription is local |
-| Agent reads the daemon's own Claude credential | Expected, not a bug — see [The Claude credential](#the-claude-credential--what-actually-protects-it). Scope the credential itself, not the file it's stored in |
+| Agent reads the daemon's own Claude credential | Expected, not a bug - see [The Claude credential](#the-claude-credential-what-actually-protects-it). Scope the credential itself, not the file it's stored in |
 
 ## See also
 
-- [Architecture](architecture.md) — process model.
-- [Hook events](hooks.md) — what the daemon actually sees from claude.
-- [Bot commands](commands.md) — the user-driven side.
+- [Architecture](architecture.md) - process model.
+- [Hook events](hooks.md) - what the daemon actually sees from claude.
+- [Bot commands](commands.md) - the user-driven side.

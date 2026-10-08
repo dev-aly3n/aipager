@@ -4,7 +4,7 @@ How you drive aipager from Telegram. Four input channels: slash
 commands, keyboard buttons, the Mini App dashboard, and free
 messages (text / files / voice).
 
-The bot only accepts input from the configured chat(s) — see
+The bot only accepts input from the configured chat(s) - see
 [security](security.md) for the trust boundary.
 
 ## Slash commands
@@ -17,7 +17,7 @@ and on every session change.
 |---|---|---|
 | `/start` | - | The home screen: this chat's sessions, where a plain message goes (`✍️ Messages go to x1.`), and `🆕 New session`, `↩️ Resume` and `⚙️ Settings`. Also shows the persistent keyboard. |
 | `/help` | - | A short guide by task (start, talk, control, manage, settings), with the tip that tapping a command sends it at once: long-press it (phone) or press Tab (desktop) to add text first. For the owner of the install (the person in its own private chat with the bot) it also has a `🐞 Report a problem` button: it opens a preview of the exact problem report in that private chat, with Send, Add a note and Cancel. Nothing is sent until you tap Send ([what a report contains](problem-reports.md)). |
-| `/app` | — | Open the Mini App dashboard (sessions, diff viewer, settings). |
+| `/app` | - | Open the Mini App dashboard (sessions, diff viewer, settings). |
 | `/status` | - | This chat's sessions as a list you can act on. Each says its state in words (`⚙️ working 3m · Bash: run tests`, `⏳ needs you · Bash: make deploy`, `💤 idle`), with `✍️` on the one a plain message goes to, and a second line with the model, context, cost, what is queued (`queue 3 (1 queued, 2 notes)`), and running agents and shells. Each has a row of buttons: `✍️ x1` sends your next messages there, `⏹ Stop` while it works, `Answer` while it waits for you, and `⋮` for the rest. Below: `🆕 New`, and `⚫ Ended (n)` for the sessions that ended (resume, delete, or clear them all from the list; they stay in `/resume`). |
 | `/stop [label]` | optional | Interrupt a session's current turn. Bare, it stops the one session of this chat that is working (even if your messages go to another one; a session whose background agent or shell is still running counts as working), asks which with a picker when several are, and says `Nothing is running.` when none is. `/stop x1` (or `/x1 stop`) stops x1 (or replies `x1 is not working.` when it is not). Also discards queued messages and replies with how many were discarded. |
 | `/now` | - | Send the messages Claude is holding in the active session's queue right now, instead of after the current step (Claude Code's own send-now keys, Ctrl+X Ctrl+S). Works any time, including while the chat is muted or in minimal mode; replies `Nothing is waiting in the queue` when Claude holds nothing. See [Send a queued message now](#send-a-queued-message-now). |
@@ -28,7 +28,7 @@ and on every session change.
 | `/rename [label] [new]` | optional | Give a session a new name (ended sessions too). Without the new name it asks for it (in a group, reply to that question with the name). |
 | `/delete [label]` | optional | Drop an ended session from the list, after a confirm. |
 | `/diff [label]` | optional | Show the session's working-directory git diff. Bare, it shows the session your messages go to. |
-| `/clearqueue` | — | Drop every not-yet-picked-up message for the active session — both messages aipager is holding and messages already queued inside Claude — without interrupting the running turn. Replies with the count cleared. |
+| `/clearqueue` | - | Drop every not-yet-picked-up message for the active session - both messages aipager is holding and messages already queued inside Claude - without interrupting the running turn. Replies with the count cleared. |
 | `/mode [label] [ask\|auto]` | optional | Show a session's permission mode with a button to switch to the other one: `✍️ x1 is 🤖 Auto.` `[💬 Switch to Ask]`. `/mode ask`, `/mode auto` or `/mode x1 ask` switch straight away. Going to Auto needs an admin and a confirm; going to Ask happens at once. Tapping the switch changes the card itself instead of sending a second message: it becomes the confirm, then shows the new mode with the opposite switch. On a busy session, offers `Stop task & switch` / `Not now`. `/perms` is the old name and still works the same. |
 | `/settings` | - | Message layout, diff previews (off by default), long-turn card updates (on by default: a busy card refreshes every 10 s after 2 minutes of a turn, 30 s after 10, once a minute after an hour, counting in minutes then hours; switch off to keep the first-minutes pace for the whole turn; see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)), formatting and language preferences, and New sessions: the mode (Auto or Ask), model and folder `/new` starts a session with. Whatever the layout, every busy card ends with its session's status line (`⏳`/`✅ name · …`) and every answer starts with its result line (`💬 name`, plus `· Finished (…)` when no finished card is left to show the stats); the merged layout stacks the two, each line in its own section. In the card layout the answer deliberately follows the finished card by a moment, so the card is seen to say Finished before the answer lands under it; tune or disable that head start with `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at once). The message layout decides the card for every turn, whether or not tools ran (see [Idle responses](#idle-responses)). In a group anyone can look, and changing a setting needs an admin. In the owner's private chat there is also Problem reports: Ask me (aipager may now and then offer to send a report of an internal error it hit more than once; at most once in 3 days) or Off (never offers; the Report a problem button in `/help` still works). Two offers turned down in a row switch the offers off, and this page says so with a button to turn them back on. See [Problem reports](problem-reports.md#when-aipager-offers-a-report). |
 | `/whoami` | - | Show who you are here: in team mode your label, your role in this chat and the rules it gives you. |
@@ -129,10 +129,10 @@ together, so that line says what most needs you:
 | `⚙️ 2 working · 1 idle` | several sessions, none waiting: how many are in each state (`working`, `idle`, `starting`); `🔄` when none is working and one is starting, `💤` when all are idle |
 | `💤 all idle` | no live session |
 
-Below it, only while it applies, a flood line — `🐢 slow mode after a
+Below it, only while it applies, a flood line - `🐢 slow mode after a
 Telegram warning` (the six hours after a 429) or `⏸ card updates paused
 (hourly limit)` / `(rate limit)` (minimal mode, see
-[troubleshooting](troubleshooting.md#the-hourly-budget)) — and then,
+[troubleshooting](troubleshooting.md#the-hourly-budget)) - and then,
 when the chat has more than one live session, `✍️ Messages go to jim`
 (the session a plain message in this chat goes to, see below; not in a
 group, where each person has their own) and one line
@@ -165,7 +165,7 @@ Buttons on the pinned message:
   the chat, so you can answer it without scrolling. If it was answered in
   the meantime you get an "already answered" toast instead, and a copy
   (or the original prompt) tapped after its prompt was answered elsewhere
-  is refused the same way — it never answers a later prompt. After a
+  is refused the same way - it never answers a later prompt. After a
   daemon restart, the prompt that was waiting keeps working from the
   busy card or from its own message, but aipager no longer knows which
   prompt an older copy showed, so a tap on a copy the bar re-sent before
@@ -200,18 +200,18 @@ A persistent keyboard sits below the chat input. Rows, top to bottom:
 `Model ›` lives inside the Commands submenu. Tapping a submenu
 entry sends a canned prompt or slash command:
 
-- **Templates** — bulk prompts you find yourself typing repeatedly,
+- **Templates** - bulk prompts you find yourself typing repeatedly,
   e.g. `Write tests for the changes`, `Explain your plan before
   making changes`, `Update CLAUDE.md with what you learned`.
-- **Commands** — slash commands claude code natively handles
+- **Commands** - slash commands claude code natively handles
   (`/compact`, `/clear`, etc.), injected instantly. A command or
   template names the session it went to (`🧹 /clear sent to x1`).
-- **Models** — quick model switches for the active session. There
+- **Models** - quick model switches for the active session. There
   are the family aliases (`sonnet`, `opus`, `haiku`, `fable`,
   `opusplan`), which always mean the latest model in that family, and
   pinned models (`claude-opus-5-5`, `claude-opus-5-5[1m]` with the 1M
-  context window, `claude-sonnet-5`, `claude-fable-5-1`,
-  `claude-haiku-4-5`). The Mini App's launch and session pickers use
+  context window, `claude-sonnet-5-5`, `claude-fable-5-1`,
+  `claude-haiku-5-5`). The Mini App's launch and session pickers use
   the same list. A switch is refused while the session is working or a
   prompt is open. The `🔄` reply then changes to show the model the
   session reports, or says the switch was not confirmed (see
@@ -228,7 +228,7 @@ Override the default layout by writing
 }
 ```
 
-Each section is independent — missing sections fall through to the
+Each section is independent - missing sections fall through to the
 built-in defaults so you can override one without specifying the
 others. Malformed JSON fails open with a logged warning. Changes
 require a daemon restart.
@@ -251,23 +251,23 @@ ls -la /tmp
 ```
 
 The card shows the real command (or file path) claude is asking to
-run, under its own description of it — approve what you can read.
+run, under its own description of it - approve what you can read.
 
-- **Allow** — approve this one call.
-- **Deny** — refuse it; claude blocks the tool call.
-- **Allow always** — approve and add the standing rule claude offers
+- **Allow** - approve this one call.
+- **Deny** - refuse it; claude blocks the tool call.
+- **Allow always** - approve and add the standing rule claude offers
   ("don't ask again for …"). The button appears **only when claude
   offers such a rule**; for a command it cannot derive one for (most
-  compound commands) the card carries Allow / Deny / Stop instead — as
+  compound commands) the card carries Allow / Deny / Stop instead - as
   it does for a read-only file access (`Read`, `Grep`, `Glob`) outside
   the session's working directory.
   Claude Code 2.1.259+ puts a "switch to auto mode" row in that slot of
   its own Bash dialog, a "block reads outside the working directories
-  from now on" row in the outside-read one, and — for a Write/Edit it
-  can't derive a per-file rule for — a permission-mode switch such as
+  from now on" row in the outside-read one, and - for a Write/Edit it
+  can't derive a per-file rule for - a permission-mode switch such as
   auto-accepting all file edits (`acceptEdits`); aipager never selects
   any of these; change modes deliberately with `/mode`.
-- **Stop** — interrupt the turn instead of answering.
+- **Stop** - interrupt the turn instead of answering.
 
 The answer goes to Claude Code through aipager's permission hook, which
 waits up to 20 seconds for it. A prompt that came before the busy
@@ -281,7 +281,7 @@ Every tap is recorded in `~/.claude/aipager-audit.jsonl` and mirrored
 as a one-line reply threaded under the busy message:
 `✅ jim · Allowed by @alice · Bash: ls -la /tmp` (with a chat set up by `aipager config`; `Allowed` alone in personal mode).
 
-While a prompt — or an AskUserQuestion — waits for you, the session
+While a prompt - or an AskUserQuestion - waits for you, the session
 shows as waiting, never idle. If Claude Code nudges about idle input
 during that wait, the chat gets `⬆️ jim · still waiting for your answer
 above` as a reply to the prompt, once per wait.
@@ -314,10 +314,10 @@ claude's last message is long enough to spill past Telegram's 4 KB
 limit it's sent as a `.md` attachment, which Telegram shows without
 another app, with a `📎 Full response attached below ↓` footer. Buttons:
 
-- **🔄 Retry** — re-send the last prompt to the same session. While
+- **🔄 Retry** - re-send the last prompt to the same session. While
   the chat is [flood-muted](troubleshooting.md#the-bot-went-quiet-flood-control)
-  a tap does nothing at all — the prompt is not re-sent and the button
-  stays — so tap it again once the ban has lifted.
+  a tap does nothing at all - the prompt is not re-sent and the button
+  stays - so tap it again once the ban has lifted.
 
 In the card layout ("Busy card + result") the finished card always stays above the answer, for every turn, as the record of how it was reached: its tool rows, agent rows and what Claude said between them, or just `✅ name · Done · Ns` for a turn that ran no tools. The answer arrives as its own (notifying) message. To have one message per turn instead, choose "Merged into busy message" (the answer goes into the card) or "Replace with result" (the card is removed and the answer stands alone).
 
@@ -343,13 +343,13 @@ answered that aipager stopped waiting on (5 minutes with no news from
 Claude) is not known to be over, so its buttons still answer the
 dialog.
 
-A turn Claude starts **by itself** — a background agent reporting back
-with a `<task-notification>` when no job is open — gets its busy card
+A turn Claude starts **by itself** - a background agent reporting back
+with a `<task-notification>` when no job is open - gets its busy card
 only once it does something: at its first tool call, or after 15 s,
 whichever comes first. Most such wake-ups are a few seconds of "nothing
 new"; those now show just the answer.
 The "typing…" indicator still shows while it runs, and the answer itself
-is always delivered — nothing is filtered as trivial.
+is always delivered - nothing is filtered as trivial.
 Turns you start, from Telegram or the terminal, still get their card at
 once.
 
@@ -358,7 +358,7 @@ While a session is busy, each background agent Claude launches (via
 <elapsed>`, showing the agent's type and what it's currently doing,
 refreshed as its own tool calls come in. Once that agent has made three
 or more tool calls, they fold into their own `▸ N tool calls` tap
-directly beneath its row — never appearing in the parent's timeline or
+directly beneath its row - never appearing in the parent's timeline or
 its `Bash ×N` tallies. When the agent finishes, its row settles to `✅
 🤖 <type> · N tool calls · <elapsed>` and keeps the same tap. The full
 play-by-play `.md` attachment above gains an Agents section listing
@@ -390,21 +390,21 @@ shell still working` with an agent too), and when the command ends
 Claude's follow-up continues on that same card. Commands started inside
 an agent are that agent's and are not shown. A command whose end
 aipager never sees (a restart, a lost event) stops counting after two
-hours (`AIPAGER_BG_SHELL_MAX_TRACK`, in seconds): its row reads `⏹ ...
-- no end seen`, and a job that was waiting only on it closes with
+hours (`AIPAGER_BG_SHELL_MAX_TRACK`, in seconds): its row reads
+`⏹ ... - no end seen`, and a job that was waiting only on it closes with
 `⚠️ name · Finished (no end seen for a background shell after 120m 4s)`.
 
 Once a turn's timeline grows long, each older run of tool calls (three
 or more in a row, and not the run currently in progress) folds into its
 own `▸ N tool calls` tap right where it happened, instead of piling up
-in full or being cut off by Telegram's own message-length limit — tap
+in full or being cut off by Telegram's own message-length limit - tap
 any one to read it in place. Commentary never folds; the newest activity
 and the status line are always visible without tapping anything. A
 still-running (or just-settled) background agent's own row is never
 folded into a tap itself, only its tool calls, and never while it's the
 one thing standing between the timeline and the ceiling. Only if the
 timeline is so large that even every fold together still can't fit does
-content get genuinely dropped from the card — in that case the `.md`
+content get genuinely dropped from the card - in that case the `.md`
 attachment above carries the complete record.
 
 #### Agents still running when the answer goes out
@@ -426,7 +426,7 @@ one that is still running stays counted here and in the pinned bar
 until it ends; its later follow-up then starts a turn of its own.
 
 That answer goes out the moment the turn ends, as a normal (notifying)
-message threaded to your prompt — the same text the terminal shows. The
+message threaded to your prompt - the same text the terminal shows. The
 busy card stays above it as the job's live status, in every layout:
 `🔄 name · 1 agent (general-purpose) still working · 1m 18s`, with its
 **Stop** button. When the agents report back, Claude's answer to that
@@ -436,7 +436,7 @@ than once produces one answer per report, each sent as it is written.
 
 Labels are the agents' types, cut at 32 characters, three at most
 (`+N more` for the rest). An agent that stopped while background work of
-its own is still running counts as running, since it resumes later —
+its own is still running counts as running, since it resumes later -
 aipager learns this from Claude's `<task-notification>` for it, when that
 notification starts a turn. The line is added in every layout.
 
@@ -617,22 +617,22 @@ at a natural boundary:
 The reaction on your message follows it, the way Claude Code's own
 queued prompt turns from grey to white:
 
-- 👀 — handed to the session (or held, see below), but Claude has not
+- 👀 - handed to the session (or held, see below), but Claude has not
   taken it yet. A message sent while a turn runs stays 👀 while it
   waits in Claude's queue.
-- 👍 — Claude took it: it started a turn, or Claude folded it into the
+- 👍 - Claude took it: it started a turn, or Claude folded it into the
   turn already running, or handed it to a running background agent.
-- 🤷 — it will never be taken: a held message dropped by `/stop`,
+- 🤷 - it will never be taken: a held message dropped by `/stop`,
   `/clearqueue` or `/kill`, or one that could not be sent on release; a
   message or command still waiting when `/stop`, `/clearqueue`, `/kill`
   or the session ending (not `/clear` or `/resume`) dropped it; or a
   prompt Claude Code refused (see below). Messages Claude had already
-  queued are only marked while aipager can see that queue — the live
+  queued are only marked while aipager can see that queue - the live
   transcript scan is running and no background job is waiting; otherwise
   they keep 👀. Escape in the
   terminal pulls Claude's queue back into its input box, where it may be
   sent again, so a message dropped that way keeps 👀 too.
-- 👌 — a Claude Code command that has run (see below), or aipager
+- 👌 - a Claude Code command that has run (see below), or aipager
   acknowledging `/stop`.
 
 A reaction only ever moves forward, so a message gets at most three,
@@ -641,20 +641,20 @@ skipped, not replayed later, and one teardown marks at most the ten
 newest messages it drops.
 
 Command buttons (`Compact`, `/model …`): tapped while the session is
-idle, the command is 👌 at once — Claude Code runs it on Enter, and a
+idle, the command is 👌 at once - Claude Code runs it on Enter, and a
 local command such as `/model` fires no hook that could say so later.
 Tapped while a turn runs (not `/model`: it is refused until the turn ends,
 see [switching a running session's model](#switching-a-running-sessions-model)),
-it is 👀 until that turn ends — normally, as
-a background job's interim stop, or on an API error — and then 👌;
+it is 👀 until that turn ends - normally, as
+a background job's interim stop, or on an API error - and then 👌;
 dropped before that by `/stop`, `/clearqueue`, `/kill` or the session
 ending, it never ran: 🤷. When Claude Code queues it as a prompt instead,
 it follows the 👀 → 👍 lifecycle. A voice note gets the same reactions as
 text once its transcript is sent.
 
 The busy card and the eventual answer follow whichever message Claude
-actually consumed for a turn — the one it started on if the session
-was idle, or the one it absorbed into the turn already running — never
+actually consumed for a turn - the one it started on if the session
+was idle, or the one it absorbed into the turn already running - never
 simply the last message you sent. Sending a follow-up mid-turn does
 not "jump the reply" to itself: if Claude folds it into the answer
 already forming, the card jumps to it the moment that happens; if
@@ -662,8 +662,8 @@ Claude instead finishes first and then picks it up, the first answer
 stays under the first message and the follow-up gets its own turn,
 with its own card and answer under it.
 
-If Claude Code refuses a message outright — an unknown slash command,
-or a built-in that only opens a dialog in the terminal — no hook fires,
+If Claude Code refuses a message outright - an unknown slash command,
+or a built-in that only opens a dialog in the terminal - no hook fires,
 so nothing would ever end the turn the daemon just announced. After
 8 s without any hook (`PROMPT_HOOK_GRACE_SECONDS`) the busy card
 becomes `⚠️ name · Not taken by Claude Code` with a one-line
@@ -671,7 +671,7 @@ explanation and the session is idle again; the reason is on the
 terminal, and the message gets 🤷 (a slash command gets 👌 instead: a
 built-in that opens a dialog fires no hook either). Only a message that
 started a turn
-is judged this way — one queued behind a running turn keeps its 👀
+is judged this way - one queued behind a running turn keeps its 👀
 until Claude takes it or it is dropped.
 
 Three cases are held back instead of sent, and delivered automatically
@@ -764,8 +764,8 @@ call for its line; lines that go together are removed in one call.
 
 ### Files
 
-Uploaded files are downloaded into the active session's workspace
-and the path is offered to claude: with a caption, the prompt is the
+Uploaded files are downloaded to `/tmp/aipager-files/` (named
+`<time>_<file name>`) and the path is offered to claude: with a caption, the prompt is the
 caption followed by the path(s); without one it is just
 `check this: <path>` (or `check these: <paths>` for an album), so
 claude is pointed at the file without being told what to do with it.
@@ -781,8 +781,8 @@ download cap is enforced up-front; oversized files get a clear
 rejection before any download attempt.
 A download that hits a transient network error is retried up to
 three times with a short backoff before you see an error, and that
-error names the file. An album — several photos or documents sent as
-one message — is handed to claude as a single prompt (the caption,
+error names the file. An album - several photos or documents sent as
+one message - is handed to claude as a single prompt (the caption,
 then every file path in order) once its last item has landed; if one
 item cannot be downloaded the rest still go out, with one note naming
 the missing one.
@@ -797,6 +797,33 @@ or a pending rename. See
 happens next.
 
 ---
+
+## Command line: every command
+
+Run `aipager <command> --help` for the same list on your machine.
+
+| Command | What it does |
+|---|---|
+| `aipager config` | The interactive setup wizard: bot token, chats, members and roles, Claude Code's hooks. Run it again to change anything (see [groups](groups.md#setup)). |
+| `aipager setup` | The same first setup with no questions, for scripts and coding agents (see [below](#command-line-aipager-setup-for-coding-agents)). |
+| `aipager start` | Run the daemon in the foreground. It refuses to start while another aipager daemon runs. |
+| `aipager service install [--yes]` | Install the daemon as a background service (systemd user unit on Linux, launchd agent on macOS) and start it. `--yes` skips the question when the installed unit differs. |
+| `aipager service start\|stop\|status\|logs\|uninstall` | Start, stop or show the service, follow its log, or remove it. |
+| `aipager status [--json]` | The daemon and every session at a glance: state, model, context, cost, and Telegram rate-limit state. |
+| `aipager logs [-f] [-n LINES]` | The daemon's log (journald on Linux, the launchd log on macOS): the last 100 lines, or `-n` lines; `-f` follows. |
+| `aipager doctor [--fix] [--safety-check] [--json]` | Health checks (see [troubleshooting](troubleshooting.md#aipager-doctor-check-list)). `--fix` offers to fix the Claude credential and an ambiguous `claude` install, asking first; `--safety-check` prints the safety rules in force; `--json` is for scripts (see [below](#aipager-doctor---json)). |
+| `aipager session <name> [claude args]` | Start a Claude Code session named `<name>` under dtach in the current folder, or attach to it if it runs. Arguments after the name (or after `--`) go to `claude` as they are, for example `--resume`. Needs a running daemon. |
+| `aipager session ls [-a] [--json]` | List the sessions; `-a` includes ended ones. Also `aipager session list`. |
+| `aipager session kill <name> [-y]` | End a session, after a question unless `-y`. |
+| `aipager resume [name]` | Bring back an ended session with its conversation; without a name, a picker. |
+| `aipager miniapp enable [--port PORT] [--url URL]` | Turn the Mini App on, on `127.0.0.1:PORT` (default 8765), behind the managed tunnel or your own `https://` URL. Takes effect at the next daemon restart. |
+| `aipager miniapp disable\|status` | Turn it off (at the next restart), or show its settings and address. |
+| `aipager policy validate` | Check `policy.yaml` (and `policy.d`); exits non-zero on a problem. |
+| `aipager update` | Upgrade aipager through the installer that owns it (uv, pipx, Homebrew, pip). It never restarts the daemon; restart it yourself, or use `/update` in Telegram, which can (see [Update](#update)). |
+| `aipager report [--note TEXT]` | Show a problem report and send it if you say yes (see [below](#command-line-aipager-report)). |
+| `aipager uninstall [-y]` | Stop and remove aipager and its config, keeping its data (see [below](#command-line-aipager-uninstall)). |
+| `aipager version`, `aipager --version` | Print the version. |
+| `aipager help [command]` | Help for aipager or one command. |
 
 ## Command line: `aipager setup` (for coding agents)
 
@@ -1048,8 +1075,45 @@ It also takes aipager's own entries out of Claude Code's `~/.claude/settings.jso
 
 `aipager report` builds a problem report of the same kind as the bot's Report a problem button, from what aipager recorded on this machine (with fewer of the running daemon's facts: the mode, chats, features, uptime, sessions and Claude Code details are left unknown or empty), prints all of it, and asks `Send this report? [y/N]`. Only `y` or `yes` sends it; anything else, or no terminal at all (a script, a pipe, a Claude Code session's shell), sends nothing. `--note "text"` adds a note of at most 500 characters, shown in the printed report. It exits 0 when the report was sent, not sent by your choice, or only printed, and 1 when a send you confirmed did not go out. See [Problem reports](problem-reports.md) for what a report holds and where it goes.
 
+## Settings in the environment
+
+A few settings are read from the daemon's environment rather than
+`aipager.yaml`. For the systemd service, add them with
+`systemctl --user edit aipager` under `[Service]`
+(`Environment=STALE_BUSY_TIMEOUT=900`), then `aipager service stop` and
+`aipager service start`; for the launchd service on macOS, add them to
+the plist's `EnvironmentVariables`
+(`~/Library/LaunchAgents/com.aipager.daemon.plist`; `aipager service
+install` writes that file again, so add them back after it); for a
+daemon you start yourself, set them before `aipager start`. None of
+them is needed for normal use.
+
+| Setting | Default | What it changes |
+|---|---|---|
+| `AIPAGER_WHISPER_MODEL` | `base` | The speech model for voice messages (`tiny`, `base`, `small`, `medium`, ...): bigger is more accurate and slower. |
+| `MINIAPP_PORT` | `8765` | The Mini App's port on `127.0.0.1` (`aipager miniapp enable --port` saves it instead). |
+| `MINIAPP_PUBLIC_URL` | none | Serve the Mini App at your own `https://` URL instead of the managed tunnel ([security](security.md#mini-app-tunnel)). |
+| `OBSERVER_BOTS` | none | Read-only observer bots ([observers](observers.md)). |
+| `KEEP_FINISHED_CARD` | `1` | `0` makes "Replace with result" the message layout for chats that never chose one in `/settings`. |
+| `STALE_BUSY_TIMEOUT` | `600` | Seconds a working session may go with no news before the chat gets a "still working (quiet for 10 min)" note. |
+| `PROMPT_HOOK_GRACE_SECONDS` | `8` | Seconds before a message Claude Code never took is marked "Not taken by Claude Code" ([free messages](#text)). |
+| `FINISH_CARD_GRACE_SECONDS` | `0.8` | How long the finished card leads the answer in the card layout; `0` sends both at once. |
+| `GONE_SESSION_MAX_AGE_DAYS` | `14` | Days an ended session stays in `/resume`; `0` keeps them. |
+| `STREAM_EDIT_INTERVAL`, `BUSY_EDIT_INTERVAL` | `1.2`, `3.0` | The busy card's refresh while streaming text and while quiet, in seconds; Telegram's per-chat limit still wins ([troubleshooting](troubleshooting.md#busy-cards-got-slower)). |
+| `TYPING_INDICATOR_INTERVAL` | `4.5` | Seconds between "typing…" bubbles; `0` turns them off. |
+| `TELEGRAM_MAX_RETRY_AFTER` | `90` | Telegram's wait, in seconds, beyond which aipager treats a rate limit as a ban (do not lower it; see [troubleshooting](troubleshooting.md#the-bot-went-quiet-flood-control)). |
+| `CLAUDE_RICH_SUMMARIES` | `1` | `0` turns off the rich formatting of answers that contain code blocks (a fallback kept from older versions). |
+| `AIPAGER_INTERACTIVE_TIMEOUT` | `300` | Seconds a permission prompt may wait with no news from Claude Code before the session counts as working again ([troubleshooting](troubleshooting.md#permission-prompt-stuck-on-interactive)). |
+| `AIPAGER_SUBAGENT_SILENCE` | `1800` | Seconds of silence after which a subagent with no stop seen is dropped ([hooks](hooks.md#subagentstart--subagentstop)). |
+| `AIPAGER_BG_SHELL_MAX_TRACK` | `7200` | Seconds after which a background command with no end seen stops counting. |
+| `AIPAGER_REPORT_PROMPTS` | on | `0` switches off the automatic problem-report offers ([problem reports](problem-reports.md#when-aipager-offers-a-report)). |
+| `AIPAGER_CLAUDE_BIN` | none | The `claude` to run, when several are installed (`claude_path` in `aipager.yaml` wins). |
+| `AIPAGER_SOCKET_PATH` | `$XDG_RUNTIME_DIR/aipager.sock` | The daemon's control socket. Sessions started by aipager pass it on to their hooks. |
+| `AIPAGER_DEBUG` | off | `1` in a session's environment makes `aipager-hook` and `aipager-statusline` print their diagnostics on stderr. |
+| `AIPAGER_INSTANCE_DIR`, `AIPAGER_TELEGRAM_API_BASE` | none | A second, isolated aipager for testing ([architecture](architecture.md#isolated-instance-for-testing)). |
+
 ## See also
 
-- [Architecture](architecture.md) — where the bot fits.
-- [Hook events](hooks.md) — what aipager hears back from claude.
-- [Troubleshooting](troubleshooting.md) — when commands misbehave.
+- [Architecture](architecture.md) - where the bot fits.
+- [Hook events](hooks.md) - what aipager hears back from claude.
+- [Troubleshooting](troubleshooting.md) - when commands misbehave.

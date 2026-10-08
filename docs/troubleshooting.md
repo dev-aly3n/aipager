@@ -32,10 +32,9 @@ aipager service start
 
 ## Telegram bot doesn't respond
 
-1. `aipager status` — is the daemon up? If "daemon down" → start it.
-2. `aipager doctor` — the `check_token_valid` and
-   `check_chat_reachable` checks ping the Telegram API end-to-end
-   and surface the exact error.
+1. `aipager status` - is the daemon up? If "daemon down" → start it.
+2. `aipager doctor`: the `token_valid` and `chat_reachable` checks
+   ping the Telegram API end-to-end and surface the exact error.
 3. Wrong chat ID: re-run `aipager config` and re-enter the chat ID
    (open the bot in Telegram, send any message, then check
    `https://api.telegram.org/bot<TOKEN>/getUpdates`).
@@ -51,14 +50,14 @@ burst, and the busy cards of that chat **share** it. The "typing…"
 indicator is in that budget too, as the **lowest** thing the chat sends
 (see "The typing bubble" below).
 
-The bubble's share is set aside first — one call every 4.5 seconds
+The bubble's share is set aside first - one call every 4.5 seconds
 while the chat's oldest working turn is under ten minutes old, less as it
-ages (see "The typing bubble") — and the cards divide what is left.
+ages (see "The typing bubble") - and the cards divide what is left.
 So a single card in a DM refreshes about every 4.8 seconds; with two
 sessions working in the same chat, each card about every 9.7 seconds;
 with three, about every 14.5. **A
 slower card is the budget working, not a bug.** Answers, replies and
-button responses are never slowed to make room for a card — they keep a
+button responses are never slowed to make room for a card - they keep a
 reserved token, and a card edit that cannot afford a call is simply
 skipped and retried on the next tick rather than queued in front of your
 answer.
@@ -66,16 +65,18 @@ answer.
 In a **group** the limit is 20 calls a minute however many sessions are
 in it, and the bubble alone would use two thirds of that. The group's
 cards together keep one refresh every 10 seconds (11 s for one card), and
-the bubble takes the rest — so in a group it can lapse for a second or
+the bubble takes the rest - so in a group it can lapse for a second or
 two now and then.
 
 To speed the cards up: run fewer simultaneous sessions per chat, or give
 the busiest ones a chat of their own (`aipager config`). You can also
 tune `STREAM_EDIT_INTERVAL` (default `1.2`, the cadence while the card is
 streaming text) and `BUSY_EDIT_INTERVAL` (default `3.0`, when it is
-quiet) in your config. Setting either *below* the per-chat floor is
-harmless and changes nothing — the floor wins, which is what keeps the
-chat under Telegram's limit whatever you put in the file.
+quiet), as environment variables of the daemon (see
+[settings in the environment](commands.md#settings-in-the-environment)).
+Setting either *below* the per-chat floor is harmless and changes
+nothing: the floor wins, which is what keeps the chat under Telegram's
+limit whatever you set.
 
 ### A long turn's card refreshes less often
 
@@ -91,8 +92,8 @@ switches unit so it never looks frozen:
 | over 60 min | 60 s | `1h 23m` |
 
 A new tool row or a new sentence waits for the next refresh; a **state
-change** — the session going from working to waiting on a background
-agent, and back — is shown at once, at most once every 10 seconds. The
+change** - the session going from working to waiting on a background
+agent, and back - is shown at once, at most once every 10 seconds. The
 live agent rows and the waiting line use the same unit. The finished card
 still shows its duration as it always has.
 
@@ -106,19 +107,19 @@ from the Mini App or `👤 Per-session preferences`).
 
 The "typing…" bubble is sent by **one** loop per chat, however many
 sessions are working in it (the bubble is per chat in every Telegram
-client), every `TYPING_INDICATOR_INTERVAL` seconds (default 4.5 —
+client), every `TYPING_INDICATOR_INTERVAL` seconds (default 4.5 -
 Telegram clears a typing status after 5; `0` turns the bubble off). It
 counts in the chat's budget as the lowest thing the chat sends:
 
 - it **slows as the turn gets older**, on the age of the chat's oldest
   working turn: every 4.5 s for the first ten minutes (a steady bubble),
-  every 15 s after that — Telegram shows it for 5 s, so an older turn's
+  every 15 s after that - Telegram shows it for 5 s, so an older turn's
   bubble flickers instead of staying lit. At 4.5 s
   it alone would be 800 calls an hour and the hourly limit (below) would
   switch it off for long stretches; switching off **⏱ Long-turn card
   updates** keeps it at 4.5 s;
 - it **shows from the start of every turn**; a young card refreshes
-  slightly slower to make room — the bubble's share of the chat is set
+  slightly slower to make room - the bubble's share of the chat is set
   aside before the cards divide the rest (above), so the two together
   never exceed the chat's limits;
 - it never takes a token a card edit needs: a bubble due just after a
@@ -127,7 +128,7 @@ counts in the chat's budget as the lowest thing the chat sends:
 - it is the first thing dropped when the chat's hourly volume gets high
   (below);
 - a 429 on the bubble itself blocks only the bubble, for as long as
-  Telegram asked — the cards carry on — but it does start the chat's
+  Telegram asked - the cards carry on - but it does start the chat's
   six-hour warning regime (the rate is capped at 0.5 calls/s, so the
   cards slow down too);
 - a **ban** on the bubble (a `retry_after` past the cap below) mutes the
@@ -152,7 +153,7 @@ What you see:
   shows **`Telegram flood backoff ×4 (chat …), last 429 12 s ago`**.
 - Exactly one line in `aipager logs`, with no traceback:
   `flood: chat … 429 retry_after=5s → cadence ×2`.
-- Nothing is muted, and **no answer is lost** — it is deferred, not
+- Nothing is muted, and **no answer is lost** - it is deferred, not
   dropped.
 - The chat's **earned send rate halves**, and the chat enters a
   **six-hour warning regime** (`FLOOD_WARNING_HOURS`): its rate may not
@@ -164,8 +165,8 @@ What you see:
 
 Nothing to do. It clears itself. The backoff line disappears once the
 chat has been quiet for a minute or two; the rate climbs back by 0.1
-calls/s per quiet window — a minute normally, 36 minutes during the
-warning regime — and the full ceiling returns when the regime ends.
+calls/s per quiet window - a minute normally, 36 minutes during the
+warning regime - and the full ceiling returns when the regime ends.
 `aipager doctor` keeps the daemon row green throughout: a chat backing off
 is normal operation. (A 429 used to be forgiven in about five
 minutes. Telegram's one warning before the 2026-09-23 ban came 3 h 23 min
@@ -174,7 +175,7 @@ earlier, and the chat was back at full speed within minutes of it.)
 ### The hourly budget
 
 Every chat also has a rolling **hour**: at most `FLOOD_HOURLY_MAX` (1200)
-calls in any 60 minutes — typing bubbles, card edits and answers alike;
+calls in any 60 minutes - typing bubbles, card edits and answers alike;
 only reactions are exempt. The last 120 (`FLOOD_HOURLY_ESSENTIAL_RESERVE`)
 are kept for answers, replies and prompts:
 
@@ -196,19 +197,19 @@ hour, against a modelled ~3,400 for the same work without it).
 
 Since 0.7.13 each chat's sustained send rate is **learned rather than
 assumed**. Telegram does not publish the limit that actually applies to
-your bot — it depends on your account's recent history — so the daemon
+your bot - it depends on your account's recent history - so the daemon
 starts each chat at 0.5 calls/s, adds 0.1 for every quiet minute up to a
 ceiling of 1/s, halves it on a 429 and drops it to 0.05 after a ban. A
 bot that has just been banned is therefore paced far more carefully than
 one that has not, and it earns its speed back over the following hours.
 
-If a chat's rate falls below 0.2 calls/s — or its hourly budget's share
-for cards and bubbles is spent — it enters **minimal mode**: busy cards
+If a chat's rate falls below 0.2 calls/s - or its hourly budget's share
+for cards and bubbles is spent - it enters **minimal mode**: busy cards
 stop animating and show one static `⏳ working (updates paused)` line,
 the typing bubble stops, and the pinned status bar shows
 `⏸ card updates paused (hourly limit)` (or `(rate limit)` when the rate
 is what put the chat there) and otherwise stops changing until it lifts.
-**Answers, replies and permission prompts keep flowing** — that is the
+**Answers, replies and permission prompts keep flowing** - that is the
 point. The card is about 95 % of what this bot sends and the answer about
 5 %, so under pressure it sheds pixels rather than work. `aipager doctor`
 reports minimal mode as a warning so a paused card is never mistaken for
@@ -217,7 +218,7 @@ a broken one; it lifts by itself as the rate recovers.
 ## The bot went quiet: flood control
 
 A `retry_after` past `TELEGRAM_MAX_RETRY_AFTER` (default 90 s) is not a
-rate limit — it is a **ban**, and it can run to hours. From the chat it
+rate limit - it is a **ban**, and it can run to hours. From the chat it
 looks like the bot died: prompts still reach Claude, sessions keep
 working, but no reply comes back.
 
@@ -235,13 +236,13 @@ What you see:
   last 7 days)`.
 
 The daemon mutes the chat for exactly the time Telegram asked and makes
-**no call of any kind** to it — answers, busy-card edits, attachments,
+**no call of any kind** to it - answers, busy-card edits, attachments,
 reactions, typing indicators, button-tap toasts and the replies your
 commands would have produced. Each one would be a fresh violation that
 extends the ban; a request into an active ban is what turned a 21-minute
 ban into a 9.5-hour one on 2026-09-15. A command typed during a mute
 therefore answers with nothing at all, and **a button tap is not
-acknowledged either** — up to 0.7.12 the toast still fired, on the theory
+acknowledged either** - up to 0.7.12 the toast still fired, on the theory
 that Telegram meters it separately. It does, for pacing; it does not for
 bans. Other chats are unaffected.
 
@@ -271,10 +272,10 @@ wait for minimal mode to end comes after the keyboard.
 **Answers are not lost.** An answer produced while the chat is muted is
 held and delivered once the ban lifts, within a couple of seconds, with
 its first line reading `⏳ delivered late (held 42 min during a Telegram
-rate limit)`. You do not need to ask again — and if you did ask again,
+rate limit)`. You do not need to ask again - and if you did ask again,
 both answers arrive, oldest first: a ban lasting hours spans several
 turns and each one's answer is yours. (Held answers live in memory: if
-you restart the daemon while any are waiting, they are lost — the
+you restart the daemon while any are waiting, they are lost - the
 shutdown log says how many. A chat holds at most 20, and nothing older
 than 24 hours; anything dropped for either reason is a warning in the
 log naming what it was.)
@@ -287,21 +288,21 @@ the chat's rate ceiling *and* its hourly budget are divided by one plus
 the number of bans in that week: one ban halves both, two third them.
 `aipager status` shows all of it. (The memory used to be 24 hours
 and only halved the ceiling; a chat banned on 2026-09-19 was back at full
-speed — and banned for seven hours — on 2026-09-23.) Five or more bans in
+speed - and banned for seven hours - on 2026-09-23.) Five or more bans in
 a week keep the chat in minimal mode until they age out: answers still
 flow, the cards stay paused.
 
 What NOT to do:
 
 - Don't restart the daemon to "fix" it. The mute self-clears at the time
-  shown. Since 0.7.13 a restart no longer forgets the ban — the deadline,
+  shown. Since 0.7.13 a restart no longer forgets the ban - the deadline,
   the chat's earned rate and its ban history are persisted to
   `~/.claude/aipager-flood-state.json` and restored on start, and so are
-  the chat's last hour of calls and its warning regime — so
+  the chat's last hour of calls and its warning regime - so
   restarting no longer extends it either. But it will throw away any
   answers still held, and it fixes nothing.
 - Don't lower `TELEGRAM_MAX_RETRY_AFTER` below the default 90 s hoping
-  to retry sooner — everything past that cap is a ban, not a rate limit.
+  to retry sooner - everything past that cap is a ban, not a rate limit.
 
 To avoid it: run fewer simultaneous sessions per chat, or give the
 busiest ones a chat of their own (`aipager config`).
@@ -310,11 +311,11 @@ busiest ones a chat of their own (`aipager config`).
 
 The dtach process for that session exited (machine reboot,
 `pkill claude`, user typed `exit` in the dtach attach session).
-Recreate from scratch — its `~/.claude/projects/...` directory still
+Recreate from scratch - its `~/.claude/projects/...` directory still
 has the conversation:
 
 The easiest path is `/resume <label>` in Telegram (or bare
-`/resume` for a picker) — it relaunches the session and picks the
+`/resume` for a picker) - it relaunches the session and picks the
 conversation back up. From the CLI:
 
 ```sh
@@ -350,7 +351,7 @@ last 500 chars of stderr. Common causes:
   which always uses a user-owned venv.
 
 If the bot lost connection mid-install, the install itself usually
-completed on the host — restart the daemon and try a voice message
+completed on the host - restart the daemon and try a voice message
 again.
 
 ## Open App shows "Open this page from the Telegram app to sign in"
@@ -362,7 +363,7 @@ network one.
 
 Recent versions of aipager fetch that script themselves and serve it
 from the page's own origin (`/telegram-web-app.js`), so the phone only
-needs to reach the host that delivered the page — not `telegram.org` as
+needs to reach the host that delivered the page - not `telegram.org` as
 well. If you see this on an older version, upgrade.
 
 Then, in order:
@@ -370,7 +371,7 @@ Then, in order:
 1. Look at the page source. If its `<script>` tag points at
    `https://telegram.org/js/telegram-web-app.js`, the daemon has not
    managed to fetch the script yet and the page is falling back to
-   loading it from Telegram — which is the case that fails on a phone
+   loading it from Telegram - which is the case that fails on a phone
    that cannot reach `telegram.org`. The daemon fetches it when the Mini
    App server starts and retries at most once a day, so restarting the
    daemon retries immediately; `journalctl --user -u aipager | grep
@@ -390,13 +391,13 @@ Then, in order:
 ## `pyexpat _XML_SetAllocTrackerActivationThreshold` on brew install
 
 Homebrew's `python@3.12` bottle was compiled against a newer
-libexpat than your system has — almost always because **Xcode and
+libexpat than your system has - almost always because **Xcode and
 Command Line Tools are out of date** on macOS Tahoe (26.x). Brew's
 own output usually tells you so. Two fixes:
 
 - **Use `uv tool install aipager`** instead. uv bundles its own
   python, dodging the issue entirely. This is the recommended path
-  on macOS — see the [README](../README.md#install).
+  on macOS - see the [README](../README.md#install).
 - **Update Xcode + Command Line Tools**:
   ```sh
   sudo rm -rf /Library/Developer/CommandLineTools
@@ -414,22 +415,29 @@ uv tool install --reinstall aipager
 # or whichever installer you started with: pipx, brew, pip
 ```
 
-## Daemon crashes on boot with `KeyError` in `state.py`
+## The session list was lost or damaged
 
-State file got corrupted (interrupted write). The daemon doesn't
-auto-recover destructive corruption — restore the latest backup:
+aipager keeps its sessions in `~/.claude/aipager-sessions.json`,
+rewritten atomically (a new file, then a rename), so an interrupted
+write leaves the old file whole. If the file is missing, unreadable or
+not valid JSON anyway, the daemon logs that it is starting fresh (a
+warning when the file was there but could not be read) and starts with
+an empty list; it does not stop.
+There are no backups of this file. Nothing is lost that matters:
 
-```sh
-ls -la ~/.claude/aipager-sessions.json.bak.*
-# pick the most recent, then:
-cp ~/.claude/aipager-sessions.json.bak.<timestamp> \
-   ~/.claude/aipager-sessions.json
-aipager start
-```
+- live sessions are found again on the first monitor tick, by their
+  dtach sockets (`/tmp/claude-dtach-*.sock`);
+- every conversation is still in Claude Code's own
+  `~/.claude/projects/...` folder, so `aipager session <name> --resume`
+  in that session's folder picks it up;
+- what is gone is the list of ended sessions (`/resume`), the cards
+  that were open, and the rest of what aipager remembered about each
+  session.
 
-If no backup is recoverable, you can safely delete the state file —
-the daemon will recover live sessions by scanning
-`/tmp/claude-dtach-*.sock` on first monitor tick.
+If the daemon keeps failing at start, `aipager logs` (or `journalctl
+--user -u aipager`) shows why; move the file aside
+(`mv ~/.claude/aipager-sessions.json ~/aipager-sessions.json.old`) to
+rule it out.
 
 ## A session launch fails
 
@@ -440,23 +448,30 @@ included, is in `aipager logs`.
 
 ## `aipager doctor` check list
 
-The order matters — each later check assumes earlier ones passed.
+The order matters - each later check assumes earlier ones passed.
 A check that crashes on an unexpected environment shows as a single
 ⚠ row naming the check and the error; the remaining checks still run.
 
-| Check | What it verifies | Fix hint |
+| Check (`--json` key) | What it verifies | Fix hint |
 |---|---|---|
-| `check_config` | `~/.config/aipager/aipager.yaml` exists and has token + chat ID | `aipager config` |
-| `check_token_valid` | Token works against Telegram `getMe` | re-run `aipager config` |
-| `check_chat_reachable` | Bot can send to the configured chat | open bot, tap Start |
-| `check_dtach` | `dtach` binary on PATH | `uv tool install --reinstall aipager` |
-| `check_claude` | Resolves the `claude` binary via the same precedence chain every launch uses (`claude_path` config → `$AIPAGER_CLAUDE_BIN` → `~/.local/bin` → PATH → Homebrew), and lists every OTHER distinct install found | install Claude Code, or set `claude_path` / `AIPAGER_CLAUDE_BIN` |
-| `check_claude_auth` | Probes `claude auth status` in the same environment a real session gets. **Never FAILs** — "not logged in" and "the probe itself failed" are reported distinctly, and neither stops a session from launching | `claude auth login`, or set an API key / `CLAUDE_CODE_OAUTH_TOKEN` |
-| `check_settings_json` | `~/.claude/settings.json` has the aipager hooks wired up | `aipager config` |
-| `check_hook_scripts` | `aipager-hook` and `aipager-statusline` are on PATH | `uv tool install --reinstall aipager` |
-| `check_daemon` | Daemon is running and socket is responsive | `aipager start` |
-| `check_service_installed` | Optional: service unit is present | `aipager service install` |
-| `check_service_unit_path` | Linux only: the *installed* unit's `Environment=PATH=` actually contains the resolved claude binary's directory — parsed as text, since doctor cannot see systemd's own PATH from the operator's interactive shell | `aipager service install --yes` |
+| `config_parses` | `aipager.yaml` and `policy.yaml` can be read; runs first, since every later check reads the config | the error names the file and line |
+| `config` | `~/.config/aipager/aipager.yaml` exists and has a token and a chat | `aipager config` |
+| `token_valid` | Token works against Telegram `getMe` | re-run `aipager config` |
+| `chat_reachable` | Bot can send to the configured chat | open bot, tap Start |
+| `team` | The chats and members (or a legacy `team.yaml`): says personal or team mode, and flags a malformed or mismatched old `team.yaml` | `aipager config` |
+| `role_shell_access` | Warns once for every role a member holds that can run Bash (its safety rules are best-effort, not a boundary; see [groups](groups.md#roles)) | give that role no Bash in `policy.yaml`, or accept it |
+| `claude` | Resolves the `claude` binary via the same precedence chain every launch uses (`claude_path` config → `$AIPAGER_CLAUDE_BIN` → `~/.local/bin` → PATH → Homebrew), and lists every OTHER distinct install found | install Claude Code, or set `claude_path` / `AIPAGER_CLAUDE_BIN` |
+| `claude_auth` | Probes `claude auth status` in the same environment a real session gets. **Never FAILs**: "not logged in" and "the probe itself failed" are reported distinctly, and neither stops a session from launching | `claude auth login`, or set an API key / `CLAUDE_CODE_OAUTH_TOKEN` |
+| `dtach` | `dtach` binary found (aipager's own `dtach-bin`, or one on PATH) | `uv tool install --reinstall aipager` |
+| `hook_scripts` | `aipager-hook` and `aipager-statusline` are on PATH | `uv tool install --reinstall aipager` |
+| `settings_json` | `~/.claude/settings.json` has the aipager hooks wired up | `aipager config` |
+| `daemon` | Daemon is running and its socket answers; also shows Telegram rate-limit state (see [above](#the-bot-slowed-down-a-rate-limit-429)) | `aipager start` |
+| `service_installed` | Optional: service unit is present | `aipager service install` |
+| `service_unit_path` | Linux only: the *installed* unit's `Environment=PATH=` actually contains the resolved claude binary's directory, parsed as text, since doctor cannot see systemd's own PATH from the operator's interactive shell | `aipager service install --yes` |
+| `miniapp` | Whether the Mini App can start when it is on. **Never FAILs**: the Mini App is optional | the fix it names |
+
+`aipager doctor --json` prints the same checks, in this order, with
+these keys (see [commands](commands.md#aipager-doctor---json)).
 
 Run `aipager doctor --fix` to interactively discover/copy a Claude
 credential into `daemon.env`, or pin `claude_path` when multiple
@@ -485,7 +500,7 @@ echo 'claude_path: /home/you/.local/bin/claude' >> ~/.config/aipager/aipager.yam
 `systemctl --user` units never source `~/.bashrc` / `~/.profile`, so
 an `export CLAUDE_CODE_OAUTH_TOKEN=…` line there never reaches the
 daemon. The service unit instead uses systemd's `LoadCredential=`,
-reading `~/.config/aipager/daemon.env` — a plain `KEY=VALUE` file,
+reading `~/.config/aipager/daemon.env` - a plain `KEY=VALUE` file,
 0600, created automatically the first time you run
 `aipager service install` (copied forward from a legacy `config.env`
 if one held a token, otherwise discovered from your login shell once,
@@ -498,7 +513,7 @@ chmod 600 ~/.config/aipager/daemon.env
 aipager service stop && aipager service start
 ```
 
-See [Security model — The Claude credential](security.md#the-claude-credential--what-actually-protects-it)
+See [Security model - The Claude credential](security.md#the-claude-credential-what-actually-protects-it)
 for what this file does and doesn't protect against.
 
 ## The daemon's control socket moved
@@ -506,7 +521,7 @@ for what this file does and doesn't protect against.
 `aipager doctor` / `aipager status` used to always look at
 `/tmp/aipager.sock`. Under the systemd service the control socket now
 lives at `$XDG_RUNTIME_DIR/aipager.sock` (falling back to `/tmp` only
-when `$XDG_RUNTIME_DIR` is unset — containers, WSL1, minimal distros).
+when `$XDG_RUNTIME_DIR` is unset - containers, WSL1, minimal distros).
 Only this one socket moved; per-session dtach sockets
 (`/tmp/claude-dtach-*.sock`) are unaffected. Override with
 `AIPAGER_SOCKET_PATH` if you need a specific location.
@@ -524,7 +539,7 @@ aipager service install
 ```
 
 It rewrites the unit with `KillMode=process`, reloads systemd, and
-restarts the daemon — and that restart already runs under the new
+restarts the daemon - and that restart already runs under the new
 setting. Check with
 `systemctl --user show -p KillMode aipager.service` (`KillMode=process`).
 With it, systemd logs "left-over process" lines for your sessions on
@@ -545,11 +560,11 @@ tool you have (`pipx install --force aipager`,
 writable by your own user, through the installer that created it. They
 refuse, and name the reason, for:
 
-- an editable (development) checkout — update it with `git pull`;
-- a Nix, Snap, Docker or OS-package install — use that system's own
+- an editable (development) checkout - update it with `git pull`;
+- a Nix, Snap, Docker or OS-package install - use that system's own
   update;
 - an install owned by another user (for example a root-owned venv under
-  `/opt`) — update it as that user.
+  `/opt`) - update it as that user.
 
 ## Updated, but the version didn't change
 
@@ -604,5 +619,5 @@ Then, if you want to talk about it, open an issue at [github.com/dev-aly3n/aipag
 
 ## See also
 
-- [Architecture](architecture.md) — what each component does.
-- [Security model](security.md) — what aipager touches and doesn't.
+- [Architecture](architecture.md) - what each component does.
+- [Security model](security.md) - what aipager touches and doesn't.

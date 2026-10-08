@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from aipager import preferences
+from aipager import config, preferences
 from aipager.bot import new_flow
 from aipager.bot.session_ops import ModelSwitchOutcome, RestartOutcome
 from aipager.config import MODEL_CHOICES
@@ -840,6 +840,15 @@ def test_a_stored_model_is_used_and_a_withdrawn_one_ignored(wbot):
 
     preferences.set_new_session_default(CHAT, "model", "not-a-model-we-offer")
     assert new_flow.resolve_new_session_settings(wbot(), CHAT, OWNER)["model"] is None
+
+
+@pytest.mark.parametrize("label, model", sorted(config.RETIRED_MODEL_LABELS.items()))
+def test_a_stored_model_taken_off_the_list_still_launches_it(wbot, label, model):
+    # /settings stored the label; the pinned row is gone from the list since.
+    assert label not in {lbl for lbl, _cmd in MODEL_CHOICES}
+    preferences.set_new_session_default(CHAT, "model", label)
+    got = new_flow.resolve_new_session_settings(wbot(), CHAT, OWNER)
+    assert (got["model"], got["model_label"]) == (model, label)
 
 
 def test_a_stored_folder_that_is_no_longer_allowed_falls_back(wbot, tmp_path, monkeypatch):
