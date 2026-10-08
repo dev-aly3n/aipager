@@ -234,6 +234,8 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         # Problem reports (8.112): read LATE by aipager.report.store and
         # .markers, so one entry each covers every reader.
         "aipager.config.REPORTS_FILE": home / ".local" / "state" / "aipager" / "reports.json",
+        "aipager.config.REPORT_SENDS_FILE":
+            home / ".local" / "state" / "aipager" / "report-sends.json",
         "aipager.config.REPORT_INSTALL_FILE":
             home / ".local" / "share" / "aipager" / "install.json",
         "aipager.config.REPORT_RUNNING_FILE":
@@ -317,13 +319,16 @@ def _reset_problem_report_store(_isolate_home_paths):
     """The problem-report store (8.112) is module state, like the
     preferences cache: every test starts with it empty and unread (it
     reads the redirected file), and with no capture handler left on the
-    loggers by a test that ran ``aipager start``'s wiring."""
-    from aipager.report import capture, store
+    loggers by a test that ran ``aipager start``'s wiring. The key file's
+    cached decision (``endpoint``) is module state too."""
+    from aipager.report import capture, endpoint, store
     capture.uninstall()
     store.reset()
+    endpoint.reset_cache()
     yield
     capture.uninstall()
     store.reset()
+    endpoint.reset_cache()
 
 
 @pytest.fixture(autouse=True)
@@ -525,9 +530,10 @@ def swallowed_refusals_report(refusals) -> str | None:
     ``None`` when there are none."""
     if not refusals:
         return None
-    return ("a writer refused a path under the operator's real home "
-            "(roadmap 8.97) and something swallowed the error; point the "
-            "writer at a tmp path:\n  " + "\n  ".join(refusals))
+    return ("a guard refused a real-home write (roadmap 8.97), a send to the "
+            "live daemon or a real network request (8.112) and something "
+            "swallowed the error; point it at a tmp path or a fake transport:\n  "
+            + "\n  ".join(refusals))
 
 
 @pytest.fixture

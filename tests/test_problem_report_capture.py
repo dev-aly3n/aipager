@@ -14,6 +14,7 @@ import concurrent.futures
 import errno
 import json
 import logging
+import os
 import random
 import socket
 import time
@@ -378,17 +379,6 @@ def test_a_file_that_breaks_half_way_through_leaves_nothing(monkeypatch):
     assert store.records() == [] and store.exit_facts(now=NOW) == (0, "unknown")
 
 
-def test_a_filesystem_that_refuses_a_mode_change_still_gets_the_files(boot, monkeypatch):
-    def _refuse(*a, **k):
-        raise OSError(errno.EPERM, "not supported")
-
-    monkeypatch.setattr(store.os, "chmod", _refuse)
-    _fill()
-    assert store.save_if_dirty(force=True) is True and config.REPORTS_FILE.exists()
-    assert markers.first_start(now=NOW) == NOW and config.REPORT_INSTALL_FILE.exists()
-    assert markers.write_running(service=True, now=NOW) is True
-
-
 def test_the_store_file_is_private():
     _fill()
     store.save_if_dirty(force=True)
@@ -458,7 +448,7 @@ def test_a_failed_write_keeps_the_old_file_and_never_raises(monkeypatch):
     before = _file_text()
     store.record_counter("tg_5xx", now=NOW)
 
-    real_replace, failures = store.os.replace, []
+    real_replace, failures = os.replace, []
 
     def _fails_once(*a, **k):
         if not failures:
@@ -468,7 +458,7 @@ def test_a_failed_write_keeps_the_old_file_and_never_raises(monkeypatch):
 
     # Never monkeypatch.undo() here: it would also undo conftest's redirect
     # of the store's path into tmp.
-    monkeypatch.setattr(store.os, "replace", _fails_once)
+    monkeypatch.setattr(os, "replace", _fails_once)
     assert store.save_if_dirty(force=True) is False
     assert _file_text() == before
     assert store.save_if_dirty(force=True) is True     # still dirty, written next time
@@ -705,6 +695,16 @@ def test_an_oversized_install_marker_is_not_trusted():
     config.REPORT_INSTALL_FILE.write_text(json.dumps({"first_start": NOW - 86400,
                                                       "pad": "x" * 5000}))
     assert markers.first_start(now=NOW) == NOW
+
+
+def test_a_boot_id_with_a_trailing_newline_is_no_boot_id(boot, monkeypatch):
+    markers.write_running(service=True, now=NOW - 60)
+    document = json.loads(config.REPORT_RUNNING_FILE.read_text())
+    document["boot"] = boot.read_text()          # the same id, newline kept
+    config.REPORT_RUNNING_FILE.write_text(json.dumps(document))
+    monkeypatch.setattr(markers, "_uptime", lambda: 3600.0)
+    # Judged by the clock (a crash on this boot), never compared as an id.
+    assert markers.previous_exit(now=NOW) == ("crash", True)
 
 
 def test_a_marker_without_a_boot_id_is_judged_by_the_clock(boot, monkeypatch):

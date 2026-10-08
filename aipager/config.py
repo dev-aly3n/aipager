@@ -311,6 +311,9 @@ FLOOD_STATE_MIN_INTERVAL: float = 5.0
 # fail the suite (tests/test_real_home_change_opt_in.py pins this). The two
 # markers stay there: they are written only at daemon start and stop.
 REPORTS_FILE = Path.home() / ".local" / "state" / "aipager" / "reports.json"
+# How many problem reports were sent today (``aipager.report.send``'s
+# daily cap, design section 6): written only when a report is sent.
+REPORT_SENDS_FILE = Path.home() / ".local" / "state" / "aipager" / "report-sends.json"
 REPORT_INSTALL_FILE = Path.home() / ".local" / "share" / "aipager" / "install.json"
 REPORT_RUNNING_FILE = Path.home() / ".local" / "share" / "aipager" / "running.json"
 

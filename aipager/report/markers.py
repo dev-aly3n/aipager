@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 
 from aipager._test_guard import check_write
-from aipager.report import store
+from aipager.private_file import write_private
 
 log = logging.getLogger(__name__)
 
@@ -61,11 +61,7 @@ def _is_ts(value) -> bool:
 def _write(target: Path, document: dict) -> bool:
     try:
         check_write(target)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        tmp = target.with_name(target.name + ".tmp")
-        tmp.write_text(json.dumps(document), encoding="utf-8")
-        store._private(tmp)
-        os.replace(tmp, target)
+        write_private(target, json.dumps(document))  # owner-only from the first byte
         return True
     except Exception:  # noqa: BLE001 - a marker must not stop the daemon
         log.debug("could not write the marker %s", target.name, exc_info=True)
@@ -99,7 +95,7 @@ def _boot_id() -> str | None:
         text = BOOT_ID.read_text(encoding="ascii").strip()
     except (OSError, ValueError):
         return None
-    return text if BOOT_ID_RE.match(text) else None
+    return text if BOOT_ID_RE.fullmatch(text) else None
 
 
 # ---- the first install -------------------------------------------------------
@@ -138,7 +134,7 @@ def previous_exit(now=None) -> tuple[str, bool] | None:
             return "unknown", False
         service = document.get("service") is True
         boot_then, boot_now = document.get("boot"), _boot_id()
-        if isinstance(boot_then, str) and BOOT_ID_RE.match(boot_then) and boot_now is not None:
+        if isinstance(boot_then, str) and BOOT_ID_RE.fullmatch(boot_then) and boot_now is not None:
             same_boot = boot_then == boot_now
         else:
             # No boot id (macOS): the boot time from the uptime. A clock

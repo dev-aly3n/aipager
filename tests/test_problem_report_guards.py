@@ -174,6 +174,49 @@ def test_a_version_is_pep_440_shaped():
         assert sc.VERSION.check(bad) == sc.INVALID
 
 
+@pytest.mark.parametrize("leaf, good", [
+    (sc.VERSION, "0.7.20"), (sc.DAY, "2026-10-08"), (sc.DISTRO_VERSION, "24.04"),
+    (sc.FINGERPRINT, "ap1-0123456789ab"), (sc.SCHEMA["errors"][1]["logger"], "aipager.state"),
+    (sc.SCHEMA["errors"][1]["type"], "builtins.KeyError"),
+])
+def test_a_trailing_newline_never_passes_a_shape(leaf, good):
+    # With re.match, "$" also matches just before a final newline.
+    assert leaf.check(good) == good
+    for bad in (good + "\n", good + "\r\n", "\n" + good):
+        assert leaf.check(bad) == sc.INVALID
+
+
+def test_a_trailing_newline_never_passes_a_name_or_a_stored_key():
+    from types import SimpleNamespace
+
+    from aipager import config
+    from aipager.report import store
+
+    def code(name):
+        return SimpleNamespace(co_qualname=name, co_name=name)
+
+    assert fp._function_name(code("raiser")) == "raiser"
+    assert fp._function_name(code("raiser\n")) is None
+    boom = type("Boom\n", (Exception,), {"__module__": "aipager.state"})
+    assert fp.qualified_type(boom) == "<other>"
+    assert fp.qualified_type(type("Boom", (Exception,), {"__module__": "aipager.state"})) == (
+        "aipager.state.Boom")
+    # The store drops an hour key with one, and a policy naming a
+    # fingerprint with one is not ours (automatic offers off).
+    config.REPORTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    config.REPORTS_FILE.write_text(json.dumps({"version": store.SCHEMA_VERSION, "counters": {
+        "2026-10-08T12": {"tg_5xx": 1}, "2026-10-08T12\n": {"tg_5xx": 5}}}))
+    noon = 1_791_460_800 + 1800  # 2026-10-08T12:30Z
+    assert store.counters_24h(now=noon) == {"tg_5xx": 1}
+    clean = {"last_offer_ts": 1_791_000_000, "pending": [], "declines_in_row": 0,
+             "auto_off": False, "offered": {}}
+    assert store._clean_policy(clean).auto_off is False
+    for broken in ({**clean, "pending": ["ap1-0123456789ab\n"]},
+                   {**clean, "offered": {"ap1-0123456789ab\n": {"version": None,
+                                                                 "ts": 1_791_000_000}}}):
+        assert store._clean_policy(broken).auto_off is True
+
+
 def test_a_site_line_is_ascii_digits():
     assert sc.SITE.check("aipager/state.py:12") == "aipager/state.py:12"
     assert sc.SITE.check("aipager/state.py:\u0661\u0662") == sc.INVALID
@@ -245,9 +288,10 @@ FILE_READ_RE = r"^[A-Z][A-Z0-9_]*$"
 #: Besides those, the files aipager itself writes and validates again on
 #: every read, each by this one local name: ``store_path`` in
 #: ``store._read`` (reports.json) and ``marker_path`` in ``markers._read``
-#: (install.json, running.json); and ``source_path`` in ``relay._source``,
-#: aipager's own shipped source, read to check a relayed frame names real code.
-FILE_READ_LOCALS = {"store_path", "marker_path", "source_path"}
+#: (install.json, running.json); ``source_path`` in ``relay._source``,
+#: aipager's own shipped source, read to check a relayed frame names real code;
+#: and ``sends_path`` in ``send.sends_today`` (report-sends.json, the daily count).
+FILE_READ_LOCALS = {"store_path", "marker_path", "source_path", "sends_path"}
 #: What an f-string in aipager/report may interpolate. A new entry must be
 #: a typed value (a count, a version part, a checked name), never text.
 #: It matches the expression's text, so it is a tripwire, not a proof: a
@@ -255,7 +299,17 @@ FILE_READ_LOCALS = {"store_path", "marker_path", "source_path"}
 ALLOWED_INTERPOLATIONS = {
     "v.major", "v.minor", "v.micro", "m.group(1)", "m.group(2)", "module",
     "qualname", "rel", "rel.as_posix()", "kind", "file", "fn",
-    "frame.f_globals.get('__name__')", "path", "key", "limit", "i", "line"}
+    "frame.f_globals.get('__name__')", "path", "key", "limit", "i", "line",
+    # concatenated with text: a checked module name, a type name, an allowed
+    # module prefix, a checked module path
+    "module_of(frame['file'])", "type_name", "m", "stem",
+    # hashed into a fingerprint: a checked function name, the module:fn pairs
+    "frame['fn']", "';'.join(parts)",
+    # the sender (step 2): the validated version, the trigger enum, and the
+    # parts of a key that passed endpoint.DSN_RE
+    "version", "trigger", "dsn.public_key", "self.host", "self.project",
+    # added in place: the key file's bytes as they arrive, a note's tag count
+    "chunk", "len(tags)"}
 
 
 def _sweep(source: str, name: str) -> list[str]:
@@ -316,7 +370,32 @@ def _sweep(source: str, name: str) -> list[str]:
             text = ast.unparse(node.value)
             if text not in ALLOWED_INTERPOLATIONS:
                 found.append(f"{where} f-string of {text}")
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            # Text joined with "+" is held to the f-string rule.
+            parts = _added(node)
+            if any(isinstance(p, ast.JoinedStr)
+                   or isinstance(p, ast.Constant) and isinstance(p.value, str) for p in parts):
+                for part in parts:
+                    if isinstance(part, ast.Constant | ast.JoinedStr):
+                        continue
+                    text = ast.unparse(part)
+                    if text not in ALLOWED_INTERPOLATIONS:
+                        found.append(f"{where} text joined with {text}")
+        elif isinstance(node, ast.AugAssign) and isinstance(node.op, ast.Add):
+            # x += value: x may be text, so value is held to the same rule
+            # (a constant is fine; an f-string is checked as one).
+            if not isinstance(node.value, ast.Constant | ast.JoinedStr):
+                text = ast.unparse(node.value)
+                if text not in ALLOWED_INTERPOLATIONS:
+                    found.append(f"{where} text added with {text}")
     return found
+
+
+def _added(node) -> list:
+    """The operands of a chain of ``+``."""
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return _added(node.left) + _added(node.right)
+    return [node]
 
 
 def test_the_report_modules_never_read_a_message_locals_env_or_host():
@@ -343,10 +422,21 @@ def test_the_report_modules_never_read_a_message_locals_env_or_host():
     "import pickle", "from copyreg import dispatch_table", "from string import Formatter",
     "import string", "Path('/etc/hostname').read_text()",
     "Path('/proc/self/environ').read_bytes()", "target.open()", "os.getenvb(b'HOME')",
+    "'chat ' + chat_id", "label + ' froze'", "'a' + version + 'b' + label",
+    "'x' + str(exc)", "prefix + f'{version}'", "text += label", "text += exc.args[0]",
     "os.getcwdb()", "os.path.abspath('.')", "importlib.import_module('socket')",
     "io.FileIO('/etc/hostname')", "import reprlib", "from pprint import pformat"])
 def test_the_sweep_flags_each_way_of_reading_data(line):
     assert _sweep(line, "probe.py"), f"the sweep misses {line!r}"
+
+
+@pytest.mark.parametrize("line", [
+    "f'aipager@{version}'", "'aipager@' + version", "version + '.' + 'x'",
+    "b'header' + payload", "count + 1", "rel.as_posix() + ':'", "i += 1", "text += 'x'",
+    "text += f'{version}'",
+])
+def test_the_sweep_lets_typed_text_through(line):
+    assert _sweep(line, "probe.py") == [], line
 
 
 # ---- frames: only inside the installed package -------------------------------

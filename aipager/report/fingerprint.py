@@ -105,7 +105,7 @@ def qualified_type(exc_type: type) -> str:
     module = getattr(exc_type, "__module__", "") or ""
     qualname = getattr(exc_type, "__qualname__", "") or ""
     name = f"{module}.{qualname}"
-    if not _module_allowed(module) or not TYPE_NAME_RE.match(name):
+    if not _module_allowed(module) or not TYPE_NAME_RE.fullmatch(name):
         return "<other>"
     return name
 
@@ -149,7 +149,7 @@ def _relative_file(filename) -> str | None:
 
 def _function_name(code) -> str | None:
     name = getattr(code, "co_qualname", None) or code.co_name
-    return name if FN_RE.match(name) else None
+    return name if FN_RE.fullmatch(name) else None
 
 
 def is_aipager_frame(frame) -> bool:

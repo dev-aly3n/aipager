@@ -136,6 +136,11 @@ def _cmd_uninstall(args: argparse.Namespace) -> int:
     return cmd_uninstall(args)
 
 
+def _cmd_report(args: argparse.Namespace) -> int:
+    from aipager.cli.report import cmd_report
+    return cmd_report(args)
+
+
 def _cmd_service(args: argparse.Namespace) -> int:
     from aipager.service import cmd_service
     return cmd_service(args)
@@ -240,6 +245,18 @@ def main() -> None:
     uninstall_p.add_argument("-y", "--yes", dest="force", action="store_true",
                              help="skip the confirmation prompt")
     uninstall_p.set_defaults(fn=_cmd_uninstall)
+
+    report_p = sub.add_parser(
+        "report",
+        help="show a problem report and send it to the aipager maintainer "
+             "if you choose (nothing is sent without your yes)",
+    )
+    report_p.add_argument(
+        "--note", default=None,
+        help="one short note to include (at most 500 characters, shown "
+             "before you decide)",
+    )
+    report_p.set_defaults(fn=_cmd_report)
 
     help_p = sub.add_parser("help",
                             help="show help for aipager or a subcommand")

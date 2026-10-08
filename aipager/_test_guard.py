@@ -115,6 +115,28 @@ def check_send(path) -> None:
     raise LiveSocketSendError(message)
 
 
+class LiveNetworkError(RuntimeError):
+    """A real network request was refused under pytest."""
+
+
+def check_network(what: str) -> None:
+    """Raise :class:`LiveNetworkError` when running under pytest: a
+    problem report (roadmap 8.112) sent by a test would reach the
+    maintainer's Sentry and spend the month's quota, and the key file
+    fetch would make the suite depend on GitHub. The sender takes an
+    ``httpx`` transport; a test injects one (``httpx.MockTransport``)
+    and only an un-injected client reaches this. A no-op outside
+    pytest."""
+    if not under_pytest():
+        return
+    message = (f"refusing real network access ({what}) while pytest is running "
+               "(roadmap 8.112): inject an httpx transport")
+    refusals.append(
+        f"{message} [test: {os.environ.get('PYTEST_CURRENT_TEST', '?')}; "
+        f"thread: {threading.current_thread().name}]")
+    raise LiveNetworkError(message)
+
+
 def check_write(path) -> None:
     """Raise :class:`RealHomeWriteError` (a :class:`RuntimeError`) when
     running under pytest and *path* resolves inside the operator's real

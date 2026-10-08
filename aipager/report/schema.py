@@ -50,7 +50,8 @@ LONG_DIGITS_RE = re.compile(r"\d{7}")
 
 
 def _shaped(value, pattern: re.Pattern) -> bool:
-    return (isinstance(value, str) and pattern.match(value) is not None
+    # fullmatch: with match, "$" also matches before a trailing newline.
+    return (isinstance(value, str) and pattern.fullmatch(value) is not None
             and LONG_DIGITS_RE.search(value) is None)
 
 
@@ -187,7 +188,7 @@ class Leaf:
                 return value
             return INVALID
         if kind == "fingerprint":
-            return value if isinstance(value, str) and fp.FINGERPRINT_RE.match(value) else INVALID
+            return value if isinstance(value, str) and fp.FINGERPRINT_RE.fullmatch(value) else INVALID
         if kind == "code_location":
             if (isinstance(value, dict) and set(value) == {"file", "line", "fn"}
                     and isinstance(value["file"], str)

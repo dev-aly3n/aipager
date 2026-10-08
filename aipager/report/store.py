@@ -18,7 +18,7 @@ first), counters for ``KEEP_COUNTER_HOURS``, the digest for
 The file is UNTRUSTED when read: every record goes back through the
 schema and anything else is dropped; a file that is not ours, too big or
 not JSON reads as empty and is replaced on the next write. Writes are
-atomic (a temporary file, then ``os.replace``), behind
+atomic and owner-only from the first byte (``private_file.write_private``), behind
 ``_test_guard.check_write``, and debounced: mutations set a dirty flag,
 the session monitor's 2 s tick writes at most every ``MIN_SAVE_INTERVAL``
 seconds, and a clean stop or a crash forces the write.
@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import threading
 import time
@@ -40,6 +39,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from aipager._test_guard import check_write
+from aipager.private_file import write_private
 from aipager.report import builder
 from aipager.report import fingerprint as fp
 from aipager.report import policy as report_policy
@@ -59,6 +59,7 @@ UNCLEAN_EXITS_WINDOW = 7 * 86400
 OCCASION_GAP = 600
 MIN_SAVE_INTERVAL = 30.0
 MAX_FILE_BYTES = 1_000_000
+STATE_DIR_MODE = 0o700
 COUNT_MAX = 10**6
 EXIT_KINDS = ("clean", "crash", "reboot")
 #: Unix seconds a stored timestamp may hold (2001 to 2096).
@@ -451,7 +452,7 @@ def _hourly(raw) -> list[tuple[str, object]]:
     if not isinstance(raw, dict):
         return []
     return [(hour, value) for hour, value in raw.items()
-            if isinstance(hour, str) and HOUR_RE.match(hour)]
+            if isinstance(hour, str) and HOUR_RE.fullmatch(hour)]
 
 
 def _adopt(document: dict) -> None:
@@ -510,12 +511,12 @@ def _clean_policy(raw) -> report_policy.State:
     if pending and last is None:
         return off  # an offer awaiting its answer was made at some time
     if (not isinstance(pending, list) or len(pending) > report_policy.MAX_PER_OFFER
-            or not all(isinstance(k, str) and fp.FINGERPRINT_RE.match(k) for k in pending)):
+            or not all(isinstance(k, str) and fp.FINGERPRINT_RE.fullmatch(k) for k in pending)):
         return off
     if not isinstance(offered, dict) or len(offered) > report_policy.OFFERED_KEPT:
         return off
     for key, value in offered.items():
-        if not (fp.FINGERPRINT_RE.match(key) and isinstance(value, dict)
+        if not (fp.FINGERPRINT_RE.fullmatch(key) and isinstance(value, dict)
                 and set(value) == {"version", "ts"} and _is_ts(value["ts"])
                 and (value["version"] is None or sc.VERSION.check(value["version"])
                      == value["version"] != sc.INVALID)):
@@ -576,15 +577,6 @@ def _document() -> dict:
     }
 
 
-def _private(path: Path) -> None:
-    """Owner-only, where the filesystem allows it (some mounts refuse a
-    mode change; the write must go on regardless)."""
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
-
-
 def save_if_dirty(*, force: bool = False) -> bool:
     """Write the file when something changed, at most every
     ``MIN_SAVE_INTERVAL`` seconds unless *force*. Returns whether it
@@ -600,11 +592,9 @@ def save_if_dirty(*, force: bool = False) -> bool:
             _trim(_now(None))
             target = _path()
             check_write(target)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            tmp = target.with_name(target.name + ".tmp")
-            tmp.write_text(json.dumps(_document(), allow_nan=False), encoding="utf-8")
-            _private(tmp)
-            os.replace(tmp, target)
+            # Owner-only from the first byte; a folder made here is owner-only.
+            write_private(target, json.dumps(_document(), allow_nan=False),
+                          dir_mode=STATE_DIR_MODE)
             _dirty = False
             _last_write = mono
             return True
