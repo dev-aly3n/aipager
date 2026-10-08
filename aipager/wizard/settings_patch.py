@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -400,3 +401,242 @@ def _step_settings(step_label: str = "[4/5]") -> None:
         )
     _write_settings(plan)
     ok(f"Patched {plan.path} ({len(HOOK_EVENTS)} hooks + statusLine)")
+
+
+# ── `aipager uninstall`: take aipager's entries out again (roadmap 8.119) ──
+#
+# Left behind, every hook event of every Claude Code session runs a missing
+# program (measured with Claude Code 2.1.294: exit 127, one
+# `hook_non_blocking_error` per event, the turn carries on). Only what
+# `_merge_hooks` and claude_bootstrap add is taken out, found the way they
+# find it (`_is_aipager_hook`); a user's own hooks, statusLine and every
+# other key stay. `skipDangerousModePermissionPrompt`, which the daemon
+# also sets, stays too: it cannot be told from the user's own acceptance.
+
+#: Why the file is left exactly as it is, by what went wrong.
+_UNPATCH_LINK = "it is a link to another file"
+_UNPATCH_UNREADABLE = "it cannot be read"
+_UNPATCH_NOT_TEXT = "it is not valid UTF-8 text"
+_UNPATCH_NOT_JSON = "it is not valid JSON"
+_UNPATCH_BAD_SHAPE = "it is not in the shape Claude Code reads"
+
+
+class SettingsChanged(OSError):
+    """Claude Code's settings changed after uninstall read them: they are
+    left alone rather than losing that change."""
+
+
+@dataclass(frozen=True)
+class UnpatchPlan:
+    """What :func:`apply_unpatch` would do to ``settings.json``.
+
+    ``new_text`` is the file without aipager's entries, or ``None`` when
+    nothing changes; ``hooks`` how many of aipager's hook commands it
+    removes; ``status_line`` whether it removes aipager's statusLine;
+    ``problem`` why a file that may hold aipager's entries is left exactly
+    as it is (``None`` otherwise); ``left`` the hook and statusLine
+    commands that still mention aipager's programs after the removal (a
+    user's own wrapper, such as the ``aipager-hook*`` scripts
+    claude_bootstrap honours): never removed, only named."""
+
+    path: Path
+    existing_text: str
+    new_text: str | None
+    hooks: int = 0
+    status_line: bool = False
+    problem: str | None = None
+    left: tuple[str, ...] = ()
+
+
+def _drop_aipager_hooks(settings: dict) -> int:
+    """Remove every hook command of aipager's from *settings*; a block, an
+    event or the whole ``hooks`` key left empty BY THAT goes too. Returns
+    how many were removed."""
+    hooks = settings.get("hooks")
+    if not isinstance(hooks, dict):
+        return 0
+
+    def ours(hook) -> bool:
+        return (isinstance(hook, dict) and isinstance(hook.get("command"), str)
+                and _is_aipager_hook(hook["command"], HOOK_CMD))
+
+    removed = 0
+    for event in list(hooks):
+        entries = hooks[event]
+        if not isinstance(entries, list):
+            continue
+        kept, removed_here = [], 0
+        for block in entries:
+            inner = block.get("hooks") if isinstance(block, dict) else None
+            mine = sum(1 for h in inner if ours(h)) if isinstance(inner, list) else 0
+            if not mine:
+                kept.append(block)
+                continue
+            removed_here += mine
+            block["hooks"] = [h for h in inner if not ours(h)]
+            if block["hooks"]:
+                kept.append(block)
+        if removed_here:
+            removed += removed_here
+            if kept:
+                hooks[event] = kept
+            else:
+                del hooks[event]
+    if removed and not hooks:
+        del settings["hooks"]
+    return removed
+
+
+def _drop_aipager_status_line(settings: dict) -> bool:
+    """Remove the statusLine when it runs aipager's helper."""
+    line = settings.get("statusLine")
+    if (isinstance(line, dict) and isinstance(line.get("command"), str)
+            and _is_aipager_hook(line["command"], STATUSLINE_CMD)):
+        del settings["statusLine"]
+        return True
+    return False
+
+
+def _commands_mentioning_us(settings: dict) -> tuple[str, ...]:
+    """Every hook or statusLine command in *settings* that mentions
+    aipager's programs."""
+    commands = []
+    hooks = settings.get("hooks")
+    for entries in (hooks.values() if isinstance(hooks, dict) else ()):
+        for block in entries if isinstance(entries, list) else ():
+            inner = block.get("hooks") if isinstance(block, dict) else None
+            for hook in inner if isinstance(inner, list) else ():
+                if isinstance(hook, dict) and isinstance(hook.get("command"), str):
+                    commands.append(hook["command"])
+    line = settings.get("statusLine")
+    if isinstance(line, dict) and isinstance(line.get("command"), str):
+        commands.append(line["command"])
+    return tuple(dict.fromkeys(
+        c for c in commands if HOOK_CMD in c or STATUSLINE_CMD in c))
+
+
+def plan_unpatch() -> UnpatchPlan:
+    """Read ``settings.json`` and work out the file without aipager's
+    entries. Writes nothing and never raises. A file that is a link, cannot
+    be read, is not JSON or has hooks Claude Code would not read is never
+    rewritten; it is reported as a problem only when it may hold aipager's
+    entries (it mentions them, or cannot be read at all)."""
+    path = CLAUDE_SETTINGS
+    try:
+        data = path.read_bytes()
+    except FileNotFoundError:
+        return UnpatchPlan(path, "", None)
+    except OSError:
+        return UnpatchPlan(path, "", None, problem=_UNPATCH_UNREADABLE)
+    mentions_us = HOOK_CMD.encode() in data or STATUSLINE_CMD.encode() in data
+
+    def left_as_is(problem: str, text: str = "") -> UnpatchPlan:
+        return UnpatchPlan(path, text, None, problem=problem if mentions_us else None)
+
+    if path.is_symlink():
+        return left_as_is(_UNPATCH_LINK)
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return left_as_is(_UNPATCH_NOT_TEXT)
+    try:
+        settings = json.loads(text)
+    except ValueError:              # not JSON, or an integer too long to read
+        return left_as_is(_UNPATCH_NOT_JSON, text)
+    except RecursionError:          # nested deeper than Python parses
+        return left_as_is(_UNPATCH_BAD_SHAPE, text)
+    if not isinstance(settings, dict):
+        return left_as_is(_UNPATCH_BAD_SHAPE, text)
+    try:
+        _validate_settings_schema(settings)
+    except ValueError:
+        return left_as_is(_UNPATCH_BAD_SHAPE, text)
+    hooks = _drop_aipager_hooks(settings)
+    status_line = _drop_aipager_status_line(settings)
+    left = _commands_mentioning_us(settings)
+    if not (hooks or status_line):
+        return UnpatchPlan(path, text, None, left=left)
+    try:
+        # allow_nan=False: a number too big for a float (1e999) would come
+        # back as `Infinity`, which Claude Code cannot read.
+        new_text = json.dumps(settings, indent=2, ensure_ascii=False,
+                              allow_nan=False) + "\n"
+        try:
+            # The user's own text stays readable (no \u escapes), unless
+            # it holds a lone surrogate (half an emoji, escaped in the
+            # file), which UTF-8 cannot write.
+            new_text.encode("utf-8")
+        except UnicodeEncodeError:
+            new_text = json.dumps(settings, indent=2, allow_nan=False) + "\n"
+    except (ValueError, RecursionError):    # Infinity/NaN, or too deep to write back
+        return left_as_is(_UNPATCH_BAD_SHAPE, text)
+    return UnpatchPlan(path, text, new_text,
+                       hooks=hooks, status_line=status_line, left=left)
+
+
+def _write_with_mode(target: Path, text: str, mode: int) -> None:
+    """Write *text* to a NEW file *target* with *mode* from the moment it
+    exists, so a copy of a private file is never readable by others, even
+    briefly. Never follows or reuses what is already there."""
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    try:
+        fh = os.fdopen(fd, "w", encoding="utf-8")
+    except BaseException:
+        os.close(fd)
+        raise
+    with fh:
+        os.fchmod(fd, mode)
+        fh.write(text)
+
+
+def _free_backup_path(path: Path) -> Path:
+    """``settings.json.bak.<epoch>``, as the wizard names it, or with
+    ``.1``, ``.2``... when a backup of that second is already there."""
+    base = path.with_name(f"{path.name}.bak.{int(time.time())}")
+    candidate, n = base, 0
+    while candidate.exists() or candidate.is_symlink():
+        n += 1
+        candidate = base.with_name(f"{base.name}.{n}")
+    return candidate
+
+
+def apply_unpatch(plan: UnpatchPlan) -> str | None:
+    """Carry out *plan*: back the file up (``settings.json.bak.<epoch>``,
+    as the wizard does), then replace it in one step, keeping its mode.
+    Returns the backup's file name, or ``None`` when nothing changes.
+    Raises :class:`SettingsChanged` when the file changed since *plan* read
+    it, and ``OSError`` when the backup or the write fails; the file is
+    then as it was."""
+    if plan.new_text is None:
+        return None
+    path = plan.path
+    backup = _free_backup_path(path)
+    tmp = path.with_name(f"{path.name}.aipager-tmp")
+    for target in (path, backup, tmp):
+        check_write(target)
+    # Claude Code writes this file too: one written since the plan read it
+    # is left alone rather than losing that change.
+    if path.read_bytes() != plan.existing_text.encode("utf-8"):
+        raise SettingsChanged("it changed while uninstall was running")
+    mode = path.stat().st_mode & 0o777
+    _write_with_mode(backup, plan.existing_text, mode)
+    # A temporary file left by a run that was cut short (or a link put in
+    # its place) is removed, never written through.
+    tmp.unlink(missing_ok=True)
+    try:
+        _write_with_mode(tmp, plan.new_text, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            tmp.unlink(missing_ok=True)
+        raise
+    return backup.name
+
+
+def unpatch_summary(plan: UnpatchPlan) -> str:
+    """``aipager's 16 hooks and its status line``, ``aipager's 1 hook`` or
+    ``aipager's status line``, for the uninstall lines."""
+    hooks = f"{plan.hooks} hook{'s' if plan.hooks != 1 else ''}"
+    if plan.hooks and plan.status_line:
+        return f"aipager's {hooks} and its status line"
+    return f"aipager's {hooks}" if plan.hooks else "aipager's status line"

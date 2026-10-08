@@ -34,7 +34,7 @@ PKG = Path(aipager.__file__).parent
 #: removes nor lists them. Exact paths (relative to the home folder).
 NOT_AIPAGERS_DATA = {
     (".claude",): "Claude Code's config folder (read)",
-    (".claude", "settings.json"): "Claude Code's settings; the preview says it is not touched",
+    (".claude", "settings.json"): "Claude Code's settings; uninstall takes out only aipager's entries",
     (".claude.json",): "Claude Code's own state",
     (".claude", ".credentials.json"): "Claude Code's login (read)",
     (".claude", "projects"): "Claude Code's transcripts (read)",
