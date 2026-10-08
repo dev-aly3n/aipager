@@ -2735,6 +2735,9 @@ class SessionRegistry:
                 sess.status = new_status  # update state silently
                 if summary:
                     sess.summary = summary
+                # Saved all the same: `aipager status` reads the status
+                # from the file (roadmap 8.118).
+                self._dirty = True
                 return None  # don't notify
             sess.last_idle_at = now
 
@@ -3130,6 +3133,16 @@ class SessionRegistry:
                     val = [m for m in val if type(m) is int and m > 0][
                         -MAX_CLOSED_PROMPT_SURFACES:]
                 d[f] = val
+            # Roadmap 8.118: the live status, and what a session waiting
+            # on a person waits on, for `aipager status` (aipager/status.py)
+            # only. load() never restores them: a restart finds each
+            # session's state again.
+            d["status"] = sess.status.name
+            if sess.status == Status.INTERACTIVE:
+                kind, summary = sess.waiting_on_human()
+                if kind:
+                    d["waiting_kind"] = kind
+                    d["waiting_summary"] = summary or ""
             # Roadmap 8.101: computed, not a field (see card_started_wall).
             started_wall = sess.card_started_wall(time.monotonic(), time.time())
             if started_wall > 0:

@@ -73,6 +73,13 @@ One command per live session, registered from its label:
 `/status` results come from the same data `aipager status` shows on
 the CLI; no Telegram round-trip for the session list itself.
 
+On the machine, `aipager status` and `aipager session ls` give each session
+one state: `IDLE`, `BUSY`, `WAITING` (a permission or a question waits for
+you, with what it is when known, for example `permission: Bash: make
+deploy`) or `GONE`. With `--json`, each session also has `waiting_kind`
+(`permission` or `question`) and `waiting_summary`, both `null` unless it
+is waiting.
+
 ## The Mini App
 
 `/app` (and the Telegram menu button) opens a dashboard served by the daemon itself. It is on by default; manage it with `aipager miniapp enable|disable|status`. Every request is verified against Telegram's `initData` signature (see [security → Mini App tunnel](security.md#mini-app-tunnel)). The page loads nothing from anywhere else: no fonts, images or scripts from other sites.

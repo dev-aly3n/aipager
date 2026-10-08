@@ -26,6 +26,8 @@ import socket
 import time
 from pathlib import Path
 
+from rich.markup import escape as rich_escape
+
 from aipager import instance, statusline_file
 from aipager.config import BOT_TOKEN, CHAT_ID, SESSION_STATE_FILE, SOCKET_PATH
 from aipager.flood_policy import (
@@ -341,7 +343,12 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
     """Returns (session_dicts, live_names).
 
     Each session_dict has: name, label, status, model, context_pct,
-    cost_usd, queue_depth.
+    cost_usd, queue_depth, waiting_kind, waiting_summary.
+
+    ``status`` is ``IDLE``, ``BUSY``, ``WAITING`` (a permission or a
+    question waits on a person; ``waiting_kind`` is ``permission`` or
+    ``question`` and ``waiting_summary`` says which, when known, else both
+    are None) or ``GONE``.
     """
     state = _read_state()
     persisted = state.get("sessions", {}) or {}
@@ -357,10 +364,16 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
         busy_msg_id = sess.get("busy_msg_id")
         if not is_alive:
             status = "GONE"
+        elif sess.get("status") == "INTERACTIVE":
+            # Waiting on a person: a permission or a question (roadmap
+            # 8.118). The daemon saves its live status; a file written
+            # before it did falls back to the card below.
+            status = "WAITING"
         elif busy_msg_id:
             status = "BUSY"
         else:
             status = "IDLE"
+        waiting = status == "WAITING"
         sl = _read_statusline(name) if is_alive else {}
         ctx = sl.get("context_window", {}) or {}
         cost = sl.get("cost", {}) or {}
@@ -373,6 +386,8 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
             "context_pct": ctx.get("used_percentage"),
             "cost_usd": cost.get("total_cost_usd"),
             "queue_depth": len(sess.get("pending_queue") or []),
+            "waiting_kind": (sess.get("waiting_kind") or None) if waiting else None,
+            "waiting_summary": (sess.get("waiting_summary") or None) if waiting else None,
         })
         seen_names.add(name)
 
@@ -389,6 +404,8 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
             "context_pct": ctx.get("used_percentage"),
             "cost_usd": cost.get("total_cost_usd"),
             "queue_depth": 0,
+            "waiting_kind": None,
+            "waiting_summary": None,
         })
 
     # Stable order: live first (alphabetical by label), then gone
@@ -401,9 +418,26 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
 _STATUS_STYLE = {
     "IDLE": ("ok", "✓"),
     "BUSY": ("step", "⚙"),
-    "INTERACTIVE": ("warn", "?"),
+    "WAITING": ("warn", "?"),
     "GONE": ("warn", "⚠"),
 }
+
+#: How much of what a waiting session waits on a session row shows.
+WAITING_TEXT_MAX = 60
+
+
+def waiting_text(row: dict) -> str:
+    """What a WAITING row waits on, in one line: ``permission: Bash: ls``,
+    ``question: Which one?``, or ``""`` when that is not known (a prompt
+    sent as its own message). Cut at :data:`WAITING_TEXT_MAX` characters."""
+    kind = row.get("waiting_kind")
+    if row.get("status") != "WAITING" or not kind:
+        return ""
+    summary = " ".join(str(row.get("waiting_summary") or "").split())
+    text = f"{kind}: {summary}" if summary else str(kind)
+    if len(text) > WAITING_TEXT_MAX:
+        text = text[:WAITING_TEXT_MAX - 1].rstrip() + "…"
+    return text
 
 
 def render_sessions_rich(sessions: list[dict]) -> None:
@@ -421,6 +455,9 @@ def render_sessions_rich(sessions: list[dict]) -> None:
     for s in sessions:
         style, glyph = _STATUS_STYLE.get(s["status"], ("muted", "·"))
         metrics_parts: list[str] = []
+        if waiting_text(s):
+            # Free text (a command, a question): never read as markup.
+            metrics_parts.append(rich_escape(waiting_text(s)))
         if s["model"]:
             metrics_parts.append(s["model"])
         if s["context_pct"] is not None:
@@ -445,6 +482,8 @@ def render_sessions_plain(sessions: list[dict]) -> None:
         return
     for s in sessions:
         parts = [s["label"], s["status"]]
+        if waiting_text(s):
+            parts.append(rich_escape(waiting_text(s)))
         if s["model"]:
             parts.append(s["model"])
         if s["context_pct"] is not None:
@@ -585,5 +624,6 @@ __all__ = [
     "read_flood_mutes",
     "render_sessions_rich",
     "render_sessions_plain",
+    "waiting_text",
     "_gather_sessions",
 ]
