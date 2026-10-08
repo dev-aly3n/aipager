@@ -1655,7 +1655,8 @@ def test_the_harness_detects_an_unguarded_mainbutton(node_bin, tmp_path):
     pytest.param("    } else if (!overlayCloser && currentView.type === \"detail\" && lastDetailData &&",
                  "    } else if (currentView.type === \"detail\" && lastDetailData &&",
                  "detail_waiting_mainbutton", False, id="mainbutton-hidden-under-overlay"),
-    pytest.param("    var off = currentView.type === \"new\" || !!overlayCloser;",
+    pytest.param("    var off = currentView.type === \"new\" || currentView.type === \"report\" || "
+                 "!!overlayCloser;",
                  "    var off = false;",
                  "mainbutton", True, id="swipes-off-on-the-form"),
     pytest.param("    try { tg.onEvent(\"themeChanged\", applyScheme); } catch (e) { /* older client */ }",
@@ -1774,3 +1775,128 @@ def test_chat_switcher_scenarios(node_bin, tmp_path, scenario, expected):
     proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, scenario)
     assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
     assert expected in proc.stdout, proc.stdout
+
+
+# ===== the problem report page (roadmap 8.112 follow-up) ===================
+#
+# tests/js/miniapp_report.js opens the page from Settings with a stubbed
+# server and drives it: what it shows, what it posts, and how the
+# Telegram chrome follows.
+
+REPORT_HARNESS = Path(__file__).parent / "js" / "miniapp_report.js"
+
+
+def _drive_report(node_bin, tmp_path, html, scenario, env=None):
+    import os
+    page = tmp_path / f"report-{scenario}.html"
+    page.write_text(html, encoding="utf-8")
+    return subprocess.run(
+        [node_bin, str(REPORT_HARNESS), str(page), scenario],
+        capture_output=True, text=True, timeout=60,
+        env=dict(os.environ, **(env or {})),
+    )
+
+
+def _report_ok(node_bin, tmp_path, scenario, expect, html=None, env=None):
+    from aipager.miniapp.static import INDEX_HTML
+    proc = _drive_report(node_bin, tmp_path, html or INDEX_HTML, scenario, env)
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert expect in proc.stdout, proc.stdout
+
+
+def test_report_page_opens_with_backbutton_and_summary(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "ready", "ok: report page opens")
+
+
+def test_report_send_posts_only_draft_and_note(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "send_ok", "ok: send posts {draft, note}")
+
+
+def test_report_mainbutton_mirrors_send(node_bin, tmp_path):
+    """Send report while the form can send, inactive while loading or
+    with an over-long note, Done on a result, Try again after a failed
+    build (driven through ready, emoji_count, send_ok and build_failed)."""
+    for scenario in ("ready", "emoji_count", "send_ok", "build_failed"):
+        _report_ok(node_bin, tmp_path, scenario, "ok:")
+
+
+def test_report_note_changed_is_shown_back(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "note_changed", "ok: a tidied note")
+
+
+def test_report_stale_draft_loads_a_fresh_one(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "stale", "ok: a stale draft")
+
+
+def test_report_try_later_keeps_the_page(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "try_later", "ok: try later")
+
+
+def test_report_too_old_shows_the_command_as_code(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "too_old", "ok: too old")
+
+
+def test_report_page_escapes_report_values(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "escape", "ok: report values and the note never reach markup")
+
+
+def test_report_back_while_sending_stays(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "back_while_sending", "ok: Back while sending stays")
+
+
+def test_report_back_sends_nothing(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "back_cancels", "ok: Back sends nothing")
+
+
+def test_report_counter_counts_code_points(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "emoji_count", "ok: the counter counts code points")
+
+
+def test_report_forbidden_shows_owner_only_and_app_lives(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "forbidden", "ok: 403 shows Owner only")
+
+
+def test_report_group_scope_points_to_the_private_chat(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "group", "ok: a group chat")
+
+
+def test_report_build_failure_offers_try_again(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "build_failed", "ok: a failed build")
+
+
+def test_report_exact_block_matches_preview(node_bin, tmp_path, monkeypatch):
+    """The page's live exact block is the very text the server sends for
+    that note: Python's json.dumps(indent=2, ensure_ascii=False) of the
+    draft with the note last, on a note with quotes, a backslash, a
+    newline, a ZWJ emoji, a subdivision flag and a direction mark."""
+    import copy
+
+    from aipager.report import builder, send
+    from aipager.report import schema as sc
+    from tests.report_ui_harness import pin_version
+
+    pin_version(monkeypatch)
+    report = builder.build_report("manual", errors=[], counters={"stale_busy": 2},
+                                  log_digest=[], context=builder.ReportContext())
+    note = 'It said "no" \\ then\nfroze 👩‍💻 🏴󠁧󠁢󠁷󠁬󠁳󠁿 a‎b'
+    assert sc.normalize_note(note) == note
+    candidate = copy.deepcopy(report)
+    candidate["note"] = note
+    expected = send.checked_preview(candidate)
+    assert expected is not None
+    fixture = tmp_path / "report.json"
+    fixture.write_text(json.dumps({"report": report, "areas": [], "note": note,
+                                   "expected": expected.decode("utf-8")}), encoding="utf-8")
+    _report_ok(node_bin, tmp_path, "exact", "ok: the exact block equals the bytes sent",
+               env={"AIPAGER_TEST_REPORT": str(fixture)})
+
+
+def test_the_report_harness_detects_a_broken_page(node_bin, tmp_path):
+    """Guard the guard: an rpSend that does nothing must fail send_ok."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    old = "  function rpSend() {\n    if (!rpCanSend()) { return; }\n"
+    assert INDEX_HTML.count(old) == 1
+    broken = INDEX_HTML.replace(old, "  function rpSend() {\n    return;\n", 1)
+    proc = _drive_report(node_bin, tmp_path, broken, "send_ok")
+    assert proc.returncode != 0, "harness passed a page whose Send does nothing"

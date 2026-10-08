@@ -1,16 +1,16 @@
-"""SC-21 and the Mini App half of SC-4: ``can_report`` is true only for the
-owner in a private scope; ``POST /api/report/preview`` opens the card in
-the owner's DM and is owner only and rate limited (design.md Success
-criteria 4, 21; spec.md "the Mini App row (API) triggers the card in the
-DM"; entrypoints.md "HTTP routes").
+"""SC-21: ``can_report`` is true only for the owner in a private scope, and
+the page carries the "Report a problem" row (design.md Success criterion
+21). Since the 8.112 follow-up the row opens the Mini App's own report
+page (POST /api/report/draft and /api/report/send, tested in
+tests/test_report_miniapp.py); the old POST /api/report/preview, which
+posted the card in the owner's DM, is gone.
 
 Real routes over aiohttp's test server, signed with the Mini App tests'
 own initData recipe.
 
 Methods: equivalence partitioning over the caller (owner, admin, user,
-stranger, no auth) and the chosen scope (private, group); boundary: the
-write budget's first refusal; error guessing: bad signature, no owner,
-an ambiguous owner, a muted DM."""
+stranger) and the chosen scope (private, group); error guessing: no
+owner, an ambiguous owner."""
 
 from __future__ import annotations
 
@@ -23,7 +23,6 @@ from urllib.parse import urlencode
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
-from aipager.bot.flood import MUTE
 from aipager.miniapp.server import SCOPE_HEADER, MiniAppServer
 
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
@@ -108,122 +107,6 @@ def test_can_report_false_without_owner(make_bot, h, run_async):
     assert body["can_report"] is False
 
 
-# ---- POST /api/report/preview ------------------------------------------------------------
-
-def test_owner_post_answers_opened(bot, h, run_async):
-    assert _one(bot, run_async, "POST", "/api/report/preview", _hdr(h.OWNER)) == \
-        (200, {"opened": True})
-
-
-def test_owner_post_opens_card_in_dm(bot, h, run_async):
-    _one(bot, run_async, "POST", "/api/report/preview", _hdr(h.OWNER))
-    assert len(bot.tg.cards(h.OWNER)) == 1
-
-
-def test_owner_post_from_group_scope_opens_card_in_dm(make_bot, h, run_async):
-    bot = make_bot("scope")
-    _one(bot, run_async, "POST", "/api/report/preview", _hdr(h.OWNER, scope=h.GROUP))
-    assert len(bot.tg.cards(h.OWNER)) == 1
-
-
-def test_owner_post_from_group_scope_posts_nothing_in_group(make_bot, h, run_async):
-    bot = make_bot("scope")
-    _one(bot, run_async, "POST", "/api/report/preview", _hdr(h.OWNER, scope=h.GROUP))
-    assert bot.tg.sent(h.GROUP) == []
-
-
-def test_miniapp_card_is_a_manual_report(bot, h, run_async):
-    _one(bot, run_async, "POST", "/api/report/preview", _hdr(h.OWNER))
-    card = bot.tg.cards(h.OWNER)[-1]
-    assert json.loads(h.preview_block(card["text"]))["trigger"] == "manual"
-
-
-def test_miniapp_card_is_sendable(bot, drive, h, run_async, net):
-    _one(bot, run_async, "POST", "/api/report/preview", _hdr(h.OWNER))
-    card = bot.tg.cards(h.OWNER)[-1]
-    run_async(drive(bot).tap("_:rp:send", message_id=card["message_id"]))
-    assert len(net.posts) == 1
-
-
-@pytest.mark.parametrize("member", ["ADMIN", "USER", "READ_ONLY"])
-def test_non_owner_post_is_403(make_bot, h, run_async, member):
-    bot = make_bot("scope")
-    assert _one(bot, run_async, "POST", "/api/report/preview",
-                _hdr(getattr(h, member))) == (403, {"error": "forbidden"})
-
-
-@pytest.mark.parametrize("member", ["ADMIN", "USER"])
-def test_non_owner_post_opens_nothing(make_bot, h, run_async, member):
-    bot = make_bot("scope")
-    _one(bot, run_async, "POST", "/api/report/preview", _hdr(getattr(h, member)))
-    assert bot.tg.sent() == []
-
-
-def test_unsigned_post_is_401(bot, h, run_async):
-    status, _ = _one(bot, run_async, "POST", "/api/report/preview", {})
-    assert status == 401
-
-
-def test_badly_signed_post_is_401(bot, h, run_async):
-    status, _ = _one(bot, run_async, "POST", "/api/report/preview",
-                     _hdr(h.OWNER, token="999:wrong-token-wrong-token"))
-    assert status == 401
-
-
-def test_badly_signed_post_opens_nothing(bot, h, run_async):
-    _one(bot, run_async, "POST", "/api/report/preview",
-         _hdr(h.OWNER, token="999:wrong-token-wrong-token"))
-    assert bot.tg.sent() == []
-
-
-@pytest.mark.parametrize("mode", ["scope_no_dm", "scope_two_owners"])
-def test_no_owner_post_is_409(make_bot, h, run_async, mode):
-    bot = make_bot(mode)
-    assert _one(bot, run_async, "POST", "/api/report/preview",
-                _hdr(h.ADMIN, scope=h.GROUP)) == (409, {"error": "no_owner"})
-
-
-def test_no_owner_post_opens_nothing(make_bot, h, run_async):
-    bot = make_bot("scope_no_dm")
-    _one(bot, run_async, "POST", "/api/report/preview", _hdr(h.OWNER, scope=h.GROUP))
-    assert bot.tg.sent() == []
-
-
-def test_owner_posts_are_rate_limited(bot, h, run_async):
-    statuses = [s for s, _ in _calls(bot, run_async,
-                                     [("POST", "/api/report/preview", _hdr(h.OWNER))] * 40)]
-    assert 429 in statuses
-
-
-def test_rate_limit_answer_body(bot, h, run_async):
-    out = _calls(bot, run_async, [("POST", "/api/report/preview", _hdr(h.OWNER))] * 40)
-    assert (429, {"error": "too_many_requests"}) in out
-
-
-def test_rate_limited_post_opens_no_extra_card(bot, h, run_async):
-    out = _calls(bot, run_async, [("POST", "/api/report/preview", _hdr(h.OWNER))] * 40)
-    assert len(bot.tg.cards(h.OWNER)) == sum(1 for s, _ in out if s == 200)
-
-
-def test_first_post_is_not_rate_limited(bot, h, run_async):
-    """Boundary: the budget lets a human's taps through."""
-    statuses = [s for s, _ in _calls(bot, run_async,
-                                     [("POST", "/api/report/preview", _hdr(h.OWNER))] * 3)]
-    assert statuses == [200, 200, 200]
-
-
-def test_muted_dm_post_is_503(bot, h, run_async):
-    """Error guessing: the card cannot be posted; the page must not claim it was."""
-    MUTE.mute(h.OWNER, 600.0)
-    assert _one(bot, run_async, "POST", "/api/report/preview", _hdr(h.OWNER)) == \
-        (503, {"error": "not_sent"})
-
-
-def test_get_on_post_route_opens_nothing(bot, h, run_async):
-    _one(bot, run_async, "GET", "/api/report/preview", _hdr(h.OWNER))
-    assert bot.tg.sent() == []
-
-
 # ---- the page --------------------------------------------------------------------------
 
 def _page(bot, run_async) -> str:
@@ -244,12 +127,10 @@ def test_page_has_report_a_problem_row(bot, run_async):
     assert "Report a problem" in _page(bot, run_async)
 
 
-@pytest.mark.parametrize("sentence", ["The report preview is in your private chat with the bot.",
-                                      "Nothing is sent until you tap Send there."])
-def test_page_says_where_the_card_went(bot, run_async, sentence):
-    """The page's success line (written as concatenated JS strings)."""
-    assert sentence in _page(bot, run_async)
-
-
-def test_page_calls_the_preview_route(bot, run_async):
-    assert "/api/report/preview" in _page(bot, run_async)
+def test_page_calls_the_draft_and_send_routes(bot, run_async):
+    """The Settings row opens the in-app report page (8.112 follow-up):
+    the page builds a draft and sends it, and never asks for the old
+    preview card in the private chat."""
+    page = _page(bot, run_async)
+    assert "/api/report/draft" in page and "/api/report/send" in page
+    assert "/api/report/preview" not in page

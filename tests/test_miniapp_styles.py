@@ -373,6 +373,22 @@ def test_mainbutton_hides_the_in_page_start_button_without_important():
     assert "display: none" in body and "!important" not in body
 
 
+def test_mainbutton_hides_the_in_page_report_buttons_without_important():
+    """The report page's Send report and Done live on the MainButton when
+    there is one; `hidden` (which is !important) stays free to win."""
+    body = _block("html.has-mainbutton .mb-mirror")
+    assert "display: none" in body and "!important" not in body
+    from aipager.miniapp.static import INDEX_HTML
+    assert re.search(r'class="[^"]*mb-mirror[^"]*" id="rp-send"', INDEX_HTML)
+    assert re.search(r'class="[^"]*mb-mirror[^"]*" id="rp-done"', INDEX_HTML)
+
+
+def test_the_report_note_field_and_rows_are_easy_to_hit():
+    assert int(re.search(r"min-height:\s*(\d+)px", _block(".rp-text")).group(1)) >= 44
+    assert int(re.search(r"min-height:\s*(\d+)px",
+                         _block("#rp-errors .sect-toggle")).group(1)) >= 44
+
+
 # ===========================================================================
 # Motion
 # ===========================================================================

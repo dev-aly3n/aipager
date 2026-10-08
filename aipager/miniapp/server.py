@@ -330,9 +330,11 @@ class MiniAppServer:
         # always show the same job.
         app.router.add_get("/api/update", self._handle_update_get)
         app.router.add_post("/api/update/{action}", self._handle_update_post)
-        # Problem reports (roadmap 8.112): owner only. Opens the preview
-        # card in the owner's private chat; nothing is sent from here.
-        app.router.add_post("/api/report/preview", self._handle_report_preview)
+        # Problem reports (roadmap 8.112): the Mini App's own report page.
+        # Owner only, from their private chat. A draft is built and kept
+        # here; a send sends that kept draft plus the note the page showed.
+        app.router.add_post("/api/report/draft", self._handle_report_draft)
+        app.router.add_post("/api/report/send", self._handle_report_send)
         # The Mini App's first mutating route. PUT (not POST) because
         # setting a field to a value is idempotent by construction — the
         # same request twice leaves the same state. The field lives in the
@@ -862,41 +864,116 @@ class MiniAppServer:
             # enforces the same rule itself.
             "can_update": bool(self.bot._is_update_admin(user_id, scope_chat_id)),
             # Whether to show "Report a problem" (8.112): the owner, in a
-            # private chat. A hint only: /api/report/preview checks itself.
+            # private chat. A hint only: /api/report/draft and
+            # /api/report/send check it themselves.
             "can_report": bool(isinstance(scope_chat_id, int) and scope_chat_id > 0
                                and report_flow.is_owner(self.bot, user_id)),
         })
 
     # ---- problem reports ---------------------------------------------------
 
-    async def _handle_report_preview(self, request):
-        """Open the problem report preview in the owner's private chat."""
+    async def _report_gate(self, request, route_name: str):
+        """The report routes' one gate: ``(scope_chat_id, user_id)`` for the
+        owner in a private chat within the write budget, else the refusal.
+        Order: 401, 403 (not a member), 409 no owner, 403 not the owner,
+        403 not a private chat, 429."""
         from aiohttp import web
 
         from aipager.bot import report_flow
 
-        result = await self._authenticate_user(request, "POST /api/report/preview")
+        result = await self._authenticate_user(request, route_name)
         if isinstance(result, web.Response):
             return result
         scope_chat_id, user_id = result
         if report_flow.resolve_owner(self.bot) is None:
-            log.info("miniapp: report preview refused (409) - no single owner chat")
+            log.info("miniapp: %s refused (409) - no single owner chat", route_name)
             return web.json_response({"error": "no_owner"}, status=409)
         if not report_flow.is_owner(self.bot, user_id):
-            log.info("miniapp: report preview refused (403) - not the owner")
+            log.info("miniapp: %s refused (403) - not the owner", route_name)
             return web.json_response({"error": "forbidden"}, status=403)
+        # The same rule as `can_report`: reports go from the private chat.
+        if not (type(scope_chat_id) is int and scope_chat_id > 0):
+            log.info("miniapp: %s refused (403) - not a private chat", route_name)
+            return web.json_response({"error": "private_only"}, status=403)
         if not self._allow_write(user_id):
-            log.info("miniapp: report preview refused (429) - rate limited")
+            log.info("miniapp: %s refused (429) - rate limited", route_name)
             return web.json_response({"error": "too_many_requests"}, status=429)
-        # Opening another card is another action: the caller's open Name
-        # card, rename question and note capture close (the middleware).
+        # Opening or sending a report is another action: the caller's open
+        # Name card, rename question and note capture close (the middleware,
+        # only when this request succeeds).
         request[_close_card_key()] = (scope_chat_id, user_id)
-        opened = await report_flow.open_preview(self.bot, trigger="manual")
-        if opened is report_flow.OpenResult.NO_OWNER:
-            return web.json_response({"error": "no_owner"}, status=409)
-        if opened is not report_flow.OpenResult.OPENED:
-            return web.json_response({"error": "not_sent"}, status=503)
-        return web.json_response({"opened": True})
+        return scope_chat_id, user_id
+
+    async def _handle_report_draft(self, request):
+        """Build a problem report for the owner and keep it as a draft."""
+        from aiohttp import web
+
+        from aipager.bot import report_drafts
+        from aipager.report import schema as sc
+
+        result = await self._report_gate(request, "report draft")
+        if isinstance(result, web.Response):
+            return result
+        _scope_chat_id, user_id = result
+        draft = await report_drafts.open_draft(self.bot, user_id)
+        if draft is None:
+            log.info("miniapp: report draft refused (503) - not built")
+            return web.json_response({"error": "not_built"}, status=503)
+        return web.json_response({
+            "draft": draft.id,
+            "report": draft.report,
+            # The exact text sent with no note: the page shows it, and
+            # renders the same text with the note added as the last key.
+            "preview": draft.preview.decode("utf-8"),
+            "areas": report_drafts.areas(draft.report),
+            "note_max": sc.NOTE_MAX,
+            "expires_in": report_drafts.DRAFT_TTL,
+        })
+
+    async def _handle_report_send(self, request):
+        """Send the owner's kept draft plus the note the page showed."""
+        from aiohttp import web
+
+        from aipager.bot import report_drafts
+
+        result = await self._report_gate(request, "report send")
+        if isinstance(result, web.Response):
+            return result
+        _scope_chat_id, user_id = result
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001 - any unreadable body is a bad request
+            body = None
+        # Only the draft id and the note are read: the server sends its
+        # own kept draft, never a report from the page.
+        draft_id = body.get("draft") if isinstance(body, dict) else None
+        note = body.get("note", "") if isinstance(body, dict) else None
+        if not (isinstance(draft_id, str) and 1 <= len(draft_id) <= 64
+                and isinstance(note, str) and len(note) <= report_drafts.NOTE_INPUT_MAX):
+            log.info("miniapp: report send refused (400) - bad request")
+            return web.json_response({"error": "bad_request"}, status=400)
+        draft = report_drafts.lookup(self.bot, user_id, draft_id)
+        if draft is None:
+            log.info("miniapp: report send refused (410) - draft gone")
+            return web.json_response({"error": "draft_gone"}, status=410)
+        if draft.state == "sending":
+            log.info("miniapp: report send refused (409) - already sending")
+            return web.json_response({"error": "sending"}, status=409)
+        if draft.state == "done" or draft.report is None:
+            outcome, reference = draft.result or (report_drafts.FAILED, None)
+            reply = report_drafts.reply_for(outcome, reference)
+            return web.json_response({"outcome": reply.outcome, "reference": reply.reference,
+                                      "line": reply.line, "retry": False, "repeat": True})
+        status, expected, candidate = report_drafts.check_note(draft, note)
+        if status == "changed":
+            log.info("miniapp: report send refused (422) - note not normalized")
+            return web.json_response({"error": "note_changed", "note": expected}, status=422)
+        if candidate is None:
+            log.info("miniapp: report send refused (422) - note refused")
+            return web.json_response({"error": "note_refused"}, status=422)
+        reply = await report_drafts.send_draft(self.bot, draft, candidate)
+        return web.json_response({"outcome": reply.outcome, "reference": reply.reference,
+                                  "line": reply.line, "retry": reply.retry, "repeat": False})
 
     # ---- self-update -----------------------------------------------------
 

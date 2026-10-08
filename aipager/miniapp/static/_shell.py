@@ -166,6 +166,51 @@ HTML_BODY = """\
   <button type="button" class="primary block" id="new-create">Start session</button>
 </section>
 
+<section id="view-report" hidden>
+  <div class="view-hero">
+    <div>
+      <h2 class="view-title">Report a problem</h2>
+      <p class="view-sub">It holds versions, counts and places in aipager's code. Never your chats, prompts, names or paths.</p>
+    </div>
+  </div>
+  <div id="rp-form">
+    <label class="reveal-label" for="rp-note">Your note (optional)</label>
+    <textarea id="rp-note" class="field-input rp-text" rows="3" autocapitalize="sentences"
+              placeholder="What were you doing when it went wrong?"></textarea>
+    <div class="rp-meta"><span id="rp-hint">Sent exactly as written.</span><span id="rp-count" class="rp-count">0 / 500</span></div>
+    <div id="rp-status" class="rp-status" role="status" hidden></div>
+    <h3 class="sect-title">What gets sent</h3>
+    <dl id="rp-facts" class="facts"></dl>
+    <div id="rp-body" hidden>
+      <h3 class="sect-title" id="rp-err-title">Errors</h3>
+      <div id="rp-errors" class="groups disclosures rp-list"></div>
+      <p id="rp-noerr" class="sect-note" hidden>No errors recorded lately. The facts above and your note still help.</p>
+      <div class="groups disclosures">
+        <button type="button" class="sect-toggle" id="rp-more-btn"></button>
+        <dl id="rp-more-facts" class="facts rp-more" hidden></dl>
+        <button type="button" class="sect-toggle" id="rp-exact-btn"></button>
+        <div id="rp-exact-wrap" hidden>
+          <p class="sect-note">This is the exact text that is sent, your note included.</p>
+          <pre id="rp-exact" class="diff-body rp-mono"></pre>
+        </div>
+      </div>
+      <button type="button" class="primary block mb-mirror rp-send" id="rp-send">Send report</button>
+      <p class="rp-foot">Nothing is sent until you tap Send report. It goes to the maintainer's error inbox, without your name.</p>
+    </div>
+  </div>
+  <div id="rp-result" class="rp-result" hidden>
+    <span id="rp-badge" class="rp-badge" aria-hidden="true"></span>
+    <h3 class="view-title" id="rp-result-title"></h3>
+    <p class="view-sub" id="rp-result-line"></p>
+    <div id="rp-ref-row" class="rp-ref-row" hidden>
+      <code id="rp-ref" class="rp-ref"></code>
+      <button type="button" class="updates-again" id="rp-copy">Copy</button>
+    </div>
+    <p id="rp-copy-hint" class="rp-foot" hidden>Long-press the reference to copy it.</p>
+    <button type="button" class="primary block mb-mirror" id="rp-done">Done</button>
+  </div>
+</section>
+
 <!--
   Scrim and confirm dialog. The action MENU is not here: it hangs off the
   kebab in the session header so it stays anchored to the button. Only
@@ -238,8 +283,7 @@ HTML_BODY = """\
       <span class="card-icon" aria-hidden="true"><svg class="ic"><use href="#i-question"></use></svg></span>
       <h3 class="card-title">Report a problem</h3>
     </div>
-    <div class="updates-small">See exactly what a problem report holds, then send it if you want. It holds no chats, prompts, names or paths.</div>
-    <div id="report-note" class="updates-small" hidden></div>
+    <div class="updates-small">Tell the maintainer what went wrong. You see the whole report before anything is sent.</div>
     <div class="updates-actions">
       <button type="button" class="primary" id="report-open">Report a problem</button>
     </div>

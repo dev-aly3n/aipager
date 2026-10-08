@@ -1126,9 +1126,10 @@ APP_JS = r"""
     updateDiffHeader();
   }
 
-  // A disclosure row. Page-owned text only, so markup is safe.
-  function setDisclosure(btn, title, open) {
-    var html = '<span class="dis-title">' + escapeHtml(title) + "</span>" +
+  // A disclosure row, with an optional second line; both escaped.
+  function setDisclosure(btn, title, open, sub) {
+    var html = '<span class="dis-title">' + escapeHtml(title) +
+      (sub ? '<span class="rp-sub">' + escapeHtml(sub) + "</span>" : "") + "</span>" +
       icon("chevron", "chev" + (open ? " is-open" : ""));
     if (btn.innerHTML !== html) { btn.innerHTML = html; }
     setAttr(btn, "aria-expanded", open ? "true" : "false");
@@ -2032,7 +2033,8 @@ APP_JS = r"""
     grid:     { section: "view-grid",     topLevel: true,  polls: "grid" },
     settings: { section: "view-settings", topLevel: true,  polls: null },
     detail:   { section: "view-detail",   topLevel: false, polls: "detail" },
-    "new":    { section: "view-new",      topLevel: false, polls: null }
+    "new":    { section: "view-new",      topLevel: false, polls: null },
+    report:   { section: "view-report",   topLevel: false, polls: null }
   };
 
   // ---- Telegram chrome: MainButton and vertical swipes ------------------
@@ -2072,9 +2074,15 @@ APP_JS = r"""
                lastDetailData.answer.available) {
       params = { text: "Answer in chat", is_visible: true, is_active: !answering[label] };
       action = function () { answerPrompt(label); };
+    } else if (!overlayCloser && currentView.type === "report") {
+      params = rp.result
+        ? { text: rp.result.retry ? "Try again" : "Done", is_visible: true, is_active: true }
+        : { text: "Send report", is_visible: true, is_active: rpCanSend() };
+      action = rp.result ? rpDone : rpSend;
     }
     mainAction = action;
-    var busy = submitting || (currentView.type === "detail" && !!answering[label]);
+    var busy = submitting || (currentView.type === "detail" && !!answering[label]) ||
+      (currentView.type === "report" && rp.sending);
     var key = JSON.stringify([params, busy && params.is_visible]);
     if (key === mainKey) { return; }
     mainKey = key;
@@ -2088,9 +2096,9 @@ APP_JS = r"""
     } catch (e) { /* older client */ }
   }
 
-  // No swipe-to-dismiss while typing a new session or in a dialog.
+  // No swipe-to-dismiss while typing (a new session, a report) or in a dialog.
   function syncSwipes() {
-    var off = currentView.type === "new" || !!overlayCloser;
+    var off = currentView.type === "new" || currentView.type === "report" || !!overlayCloser;
     if (off === swipesOff || !tg || !tgAtLeast("7.7")) { return; }
     var fn = off ? tg.disableVerticalSwipes : tg.enableVerticalSwipes;
     if (typeof fn !== "function") { return; }
@@ -2217,60 +2225,380 @@ APP_JS = r"""
   }
 
   // ---- problem reports (owner only, private chat) ---------------------
-  // The row only asks the daemon to post the preview card in the owner's
-  // private chat; the preview, the note and Send stay in Telegram.
-  // Shown only with `can_report`; the server checks it again.
+  // The page posts only the draft id and the note; the server sends its
+  // kept draft and hands back a note not in its final form. Report values
+  // reach the DOM only through textContent or escapeHtml.
 
-  var reportBusy = false;
+  var RP_LATER = "No answer from aipager in time. Tap Send report again: " +
+    "if it already went, you will see its reference, and it is not sent twice.";
+  var RP_PANELS = {
+    noowner: ["Can't send from here", "This aipager has no single owner chat. " +
+              "In a terminal, `aipager report` still works."],
+    owner: ["Owner only", "Only the owner of this aipager can send a problem report."],
+    group: ["Open your private chat",
+            "Reports are sent from the Mini App opened in your private chat with the bot."],
+    build: ["Couldn't prepare the report", "Try again in a moment."]
+  };
+  var RP_TITLES = { sent: "Report sent", too_old: "Update needed",
+                    daily_cap: "Daily limit reached" };
+  var RP_FEATURES = { miniapp: "Mini App", tunnel_managed: "managed tunnel",
+    tunnel_override: "own tunnel address", observers: "observer bots",
+    voice: "voice notes", diff_preview_any: "change previews",
+    rich_summaries: "rich summaries" };
+  var RP_UPTIME = { "<10m": "under 10 minutes", "10m-1h": "10 minutes to an hour",
+    "1-24h": "1 to 24 hours", "1-7d": "1 to 7 days", ">7d": "over a week" };
+  var RP_NAMES = { macos: "macOS", darwin: "macOS", nixos: "NixOS", freebsd: "FreeBSD" };
+
+  var rp = { max: 500, note: "", noteEpoch: -1, seq: 0, open: {} };
+
+  function rpEl(id) { return document.getElementById(id); }
 
   function hideReport() {
-    document.getElementById("report-block").hidden = true;
-    var note = document.getElementById("report-note");
-    note.hidden = true;
-    note.textContent = "";
+    rpEl("report-block").hidden = true;
+    rp.seq += 1;
+    rp.draft = rp.report = rp.result = null;
+    rp.note = "";
+    rp.loading = rp.sending = false;
   }
 
   function renderReport() {
     if (!settingsData || !settingsData.can_report) { hideReport(); return; }
-    document.getElementById("report-block").hidden = false;
+    rpEl("report-block").hidden = false;
   }
 
-  // A dedicated fetch, NOT apiFetch: a 403 here means "not the owner"
-  // and must hide this block, not end the whole app.
-  function reportOpen() {
-    if (reportBusy) { return; }
-    reportBusy = true;
-    var note = document.getElementById("report-note");
-    var epoch = chatEpoch;
-    fetch("/api/report/preview", {
-      method: "POST",
-      headers: authHeaders(true),
-      body: "{}"
-    }).then(function (res) {
-      reportBusy = false;
-      if (epoch !== chatEpoch) { return; }
-      if (res.status === 401 || res.status === 403) { hideReport(); return; }
-      if (res.ok) {
-        note.textContent = "The report preview is in your private chat with the bot. "
-          + "Nothing is sent until you tap Send there.";
-        note.hidden = false;
-        showNotice("Opened in your private chat.", "ok");
-        return;
-      }
-      if (res.status === 429) {
-        showNotice("Too many taps. Try again in a minute.", "err");
-      } else if (res.status === 409) {
-        showNotice("This install has no single owner chat, so no report can be opened.", "err");
-      } else {
-        showNotice("Could not open the report preview right now. Try again later.", "err");
-      }
-    }).catch(function () {
-      reportBusy = false;
-      showNotice("Could not open the report preview right now. Try again later.", "err");
+  // NOT apiFetch (a 403 must not end the app). No answer in 30 s rejects.
+  function rpPost(path, body) {
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      function end(fn, v) { if (!done) { done = true; fn(v); } }
+      setTimeout(function () { end(reject, new Error("timeout")); }, 30000);
+      fetch(path, { method: "POST", headers: authHeaders(true), body: JSON.stringify(body) })
+        .then(function (res) {
+          return res.json().then(null, function () { return {}; }).then(function (data) {
+            return { status: res.status, data: data || {} };
+          });
+        })
+        .then(function (r) { end(resolve, r); }, function (e) { end(reject, e); });
     });
   }
 
-  document.getElementById("report-open").addEventListener("click", reportOpen);
+  function rpNote() { return rpEl("rp-note").value.trim(); }
+  // Code points, as the server counts them (an emoji is one, not two).
+  function rpCount(s) { return s.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "x").length; }
+  function rpCanSend() {
+    return !!rp.draft && !rp.sending && !rp.result && rpCount(rpNote()) <= rp.max;
+  }
+
+  function rpSync() {
+    var btn = rpEl("rp-send");
+    btn.disabled = !rpCanSend();
+    setText(btn, rp.sending ? "Sending..." : "Send report");
+    rpEl("rp-note").readOnly = !!rp.sending;
+    syncMainButton();
+  }
+
+  function rpStatus(text, err) {
+    var el = rpEl("rp-status");
+    el.textContent = text || "";
+    el.className = "rp-status" + (err ? " is-err" : "");
+    el.hidden = !text;
+  }
+
+  function rpFact(dl, label, value, wide) {
+    var cell = make("div", "fact" + (wide ? " fact-wide" : ""));
+    cell.appendChild(make("dt")).textContent = label;
+    cell.appendChild(make("dd")).textContent = value;
+    dl.appendChild(cell);
+  }
+
+  function rpName(s) {
+    s = String(s || "");
+    return RP_NAMES[s] || s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  function rpTimes(n) { return n > 1 ? n + " times" : "once"; }
+  function rpN(n, one) { n = n || 0; return n + " " + one + (n === 1 ? "" : "s"); }
+  function rpObj(v) { return v && typeof v === "object" ? v : {}; }
+  function rpJoin(o, fn) { return Object.keys(o).map(function (k) { return fn(k, o[k]); }).join(", "); }
+
+  function rpFacts() {
+    var r = rp.report, a = rpObj(r.aipager), os = rpObj(r.os), c = rpObj(r.config);
+    var rt = rpObj(r.runtime), fl = rpObj(r.flood), dl = rpEl("rp-facts"), more = rpEl("rp-more-facts");
+    var sys = os.distro && os.distro !== "other"
+      ? rpName(os.distro) + (os.distro_version ? " " + os.distro_version : "") : rpName(os.system);
+    var mode = { personal: "Personal", team: "Team", scope: "Multi-chat" }[c.mode];
+    var digest = r.log_digest_24h || [], times = 0;
+    digest.forEach(function (d) { times += d.n || 0; });
+    dl.innerHTML = more.innerHTML = "";
+    rpFact(dl, "aipager", a.version + " (" + a.install + ")");
+    rpFact(dl, "Claude Code", rpObj(r.claude_code).version || "Not found");
+    rpFact(dl, "System", sys + (os.container && os.container !== "none" ? ", in " + os.container : ""));
+    rpFact(dl, "Python", rpObj(r.python).version);
+    rpFact(dl, "Setup", (mode ? mode + " setup, " : "") + rpN(c.scopes_dm, "private chat") +
+      (c.scopes_group ? ", " + rpN(c.scopes_group, "group") : "") + ", running " +
+      (RP_UPTIME[rt.uptime] || "for an unknown time"), 1);
+    rpFact(more, "Features", (c.features || []).map(function (f) {
+      return RP_FEATURES[f] || f;
+    }).join(", ") || "None", 1);
+    rpFact(more, "Libraries", rpJoin(rpObj(r.deps), function (k, v) {
+      return k + " " + (v === null ? "(missing)" : v);
+    }) || "None", 1);
+    rpFact(more, "Stops", "Last stop: " + ({ clean: "clean", crash: "a crash", reboot: "a reboot" }[
+      rt.last_exit] || "unknown") + ". Unexpected stops in 7 days: " + (rt.unclean_exits_7d || 0) + ".", 1);
+    rpFact(more, "Telegram limits", rpN(fl.bans_7d, "ban") + " in 7 days, busiest hour load " +
+      fl.hour_load, 1);
+    rpFact(more, "Counts, last 24 hours", rpJoin(rpObj(r.counters_24h), function (k, v) {
+      return k.replace(/_/g, " ") + " " + v;
+    }) || "None", 1);
+    rpFact(more, "Log, last 24 hours", digest.length ? rpN(digest.length, "place") +
+      " logged a warning or error (" + rpTimes(times) + ")" : "Nothing logged", 1);
+  }
+
+  function rpErrTitle(e, area) {
+    var t = String(e.type);
+    return e.trigger === "crash" ? "aipager stopped unexpectedly"
+      : e.trigger === "hook_cap" ? "The hook hit its memory cap"
+      : e.type === null || e.type === undefined ? "Logged error in " + area
+      : (t.charAt(0) === "<" ? "Error" : t.slice(t.lastIndexOf(".") + 1)) + " in " + area;
+  }
+
+  function rpRow(host, title, open, sub, onTap) {
+    var btn = host.appendChild(make("button", "sect-toggle"));
+    setDisclosure(btn, title, open, sub);
+    btn.addEventListener("click", onTap);
+  }
+
+  function rpErrors() {
+    var errs = rp.report.errors || [], host = rpEl("rp-errors");
+    host.innerHTML = "";
+    setText(rpEl("rp-err-title"), errs.length ? "Errors (" + errs.length + ")" : "Errors");
+    host.hidden = !errs.length;
+    rpEl("rp-noerr").hidden = !!errs.length;
+    errs.forEach(function (e, i) {
+      if (i > 2 && !rp.all) { return; }
+      var open = !!rp.open[i];
+      rpRow(host, rpErrTitle(e, rp.areas[i] || "aipager"), open,
+            rpTimes(e.count) + ", last seen " + e.last_day,
+            function () { rp.open[i] = !open; rpErrors(); });
+      if (!open) { return; }
+      var panel = host.appendChild(make("div", "panel"));
+      panel.appendChild(make("p", "sect-note")).textContent = e.fingerprint + ", first seen " +
+        e.first_day + ", on " + (e.versions_seen || []).join(", ");
+      var body = panel.appendChild(make("div", "diff-body"));
+      (e.frames || []).forEach(function (f) {
+        body.appendChild(make("div", "diff-line")).textContent = f.file + ":" + f.line + "  " + f.fn;
+      });
+      if ((e.external || []).length) {
+        panel.appendChild(make("p", "sect-note")).textContent =
+          "Also passed through: " + e.external.join(", ");
+      }
+    });
+    if (errs.length > 3 && !rp.all) {
+      rpRow(host, "Show " + (errs.length - 3) + " more", false, "",
+            function () { rp.all = true; rpErrors(); });
+    }
+  }
+
+  function rpToggles() {
+    setDisclosure(rpEl("rp-more-btn"), "More details", !!rp.more);
+    rpEl("rp-more-facts").hidden = !rp.more;
+    setDisclosure(rpEl("rp-exact-btn"), "Show the exact report", !!rp.exact);
+    rpEl("rp-exact-wrap").hidden = !rp.exact;
+    rpExact();
+  }
+
+  // The exact text sent: the draft in its own key order, the note last.
+  function rpExact() {
+    if (!rp.exact || !rp.report) { return; }
+    var copy = {}, note = rpNote();
+    for (var k in rp.report) {
+      if (Object.prototype.hasOwnProperty.call(rp.report, k)) { copy[k] = rp.report[k]; }
+    }
+    if (note) { copy.note = note; }
+    rpEl("rp-exact").textContent = JSON.stringify(copy, null, 2);
+  }
+
+  function rpOnInput() {
+    var ta = rpEl("rp-note"), count = rpEl("rp-count"), hint = rpEl("rp-hint");
+    rp.note = ta.value;
+    rp.noteEpoch = chatEpoch;
+    if (ta.scrollHeight) {
+      ta.style.height = "auto";
+      ta.style.height = ta.scrollHeight + 2 + "px";
+    }
+    var n = rpCount(rpNote()), over = n - rp.max;
+    setText(count, n + " / " + rp.max);
+    setClass(count, "rp-count" + (over > 0 ? " is-over" : over > -51 ? " is-near" : ""));
+    setText(hint, over > 0 ? "Too long by " + rpN(over, "character") + "." : "Sent exactly as written.");
+    setClass(hint, over > 0 ? "is-over" : "");
+    rpExact();
+    rpSync();
+  }
+
+  // The result panel. A `code` part of the line becomes a <code>.
+  function rpResult(title, line, ok, ref, retry) {
+    var el = rpEl("rp-result-line");
+    rp.result = { retry: retry };
+    rpEl("rp-form").hidden = true;
+    rpEl("rp-result").hidden = false;
+    rpEl("rp-badge").className = "rp-badge" + (ok ? " is-ok" : "");
+    rpEl("rp-badge").innerHTML = icon(ok ? "check" : "question");
+    rpEl("rp-result-title").textContent = title;
+    el.textContent = "";
+    String(line).split("`").forEach(function (part, i) {
+      el.appendChild(make(i % 2 ? "code" : "span", i % 2 ? "rp-code" : "")).textContent = part;
+    });
+    rpEl("rp-ref").textContent = ref || "";
+    rpEl("rp-ref-row").hidden = !ref;
+    rpEl("rp-copy").textContent = "Copy";
+    rpEl("rp-copy-hint").hidden = true;
+    rpEl("rp-done").textContent = retry ? "Try again" : "Done";
+    rpSync();
+  }
+
+  function rpPanel(key) {
+    var p = RP_PANELS[key];
+    rpResult(p[0], p[1], false, null, key === "build");
+  }
+
+  function rpRefused(status, d) {
+    if (status === 401) {
+      handleFetchError({ authFailed: true });
+    } else if (status === 403 && d.error === "private_only") {
+      rpPanel("group");
+    } else if (status === 403) {
+      if (settingsData) { settingsData.can_report = false; }
+      renderReport();
+      rpPanel("owner");
+    } else if (status === 409 && d.error === "no_owner") {
+      rpPanel("noowner");
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  function rpLoad(after) {
+    var seq = ++rp.seq, epoch = chatEpoch;
+    rp.draft = rp.report = rp.result = null;
+    rp.open = {};
+    rp.all = false;
+    rpEl("rp-form").hidden = false;
+    rpEl("rp-result").hidden = true;
+    rpEl("rp-body").hidden = true;
+    rpStatus("");
+    skeleton(rpEl("rp-facts"), 3, "skel-row");
+    rpSync();
+    function stale() { return seq !== rp.seq || epoch !== chatEpoch; }
+    rpPost("/api/report/draft", {}).then(function (r) {
+      if (stale()) { return; }
+      var d = r.data;
+      if (r.status === 200 && d.draft && d.report) {
+        rp.draft = d.draft;
+        rp.report = d.report;
+        rp.areas = d.areas || [];
+        rp.max = d.note_max || 500;
+        rpFacts();
+        rpErrors();
+        rpToggles();
+        rpEl("rp-body").hidden = false;
+        rpOnInput();
+        rpStatus(after);
+      } else if (!rpRefused(r.status, d)) {
+        rpPanel("build");
+      }
+    }, function () { if (!stale()) { rpPanel("build"); } });
+  }
+
+  function openReport() {
+    if (rp.noteEpoch !== chatEpoch) { rp.note = ""; }
+    rpEl("rp-note").value = rp.note;
+    rp.sending = false;
+    rp.result = null;
+    showView("report");
+    rpLoad();
+    rpOnInput();
+  }
+
+  function rpOutcome(d) {
+    haptic("notify", d.outcome === "sent" ? "success" : "error");
+    if (d.retry) { rpStatus(d.line, 1); return; }
+    rp.draft = null;
+    rp.note = "";
+    if (d.outcome === "sent") {
+      rpResult("Report sent", "Thank you. If you open a GitHub issue, quote this reference:",
+               true, d.reference);
+    } else {
+      rpResult(RP_TITLES[d.outcome] || "Not sent", d.line);
+    }
+  }
+
+  function rpSend() {
+    if (!rpCanSend()) { return; }
+    var epoch = chatEpoch;
+    var body = { draft: rp.draft, note: rpNote() };
+    rp.sending = true;
+    rpStatus("");
+    rpSync();
+    rpPost("/api/report/send", body).then(function (r) {
+      if (epoch !== chatEpoch) { return; }
+      var d = r.data, s = r.status;
+      rp.sending = false;
+      rpSync();
+      if (s === 200) {
+        rpOutcome(d);
+      } else if (rpRefused(s, d)) {
+        return;
+      } else if (s === 410) {
+        rpLoad("That report was out of date, so nothing was sent. " +
+               "Here is a fresh one: check it, then tap Send report again.");
+      } else if (s === 409) {
+        rpStatus("Still sending. Wait a moment, then tap Send report again.");
+      } else if (s === 422 && d.error === "note_changed") {
+        rpEl("rp-note").value = String(d.note || "");
+        rpOnInput();
+        rpStatus("Your note was tidied up (invisible characters, extra spaces or anything " +
+                 "past 500 characters were removed). Check it, then tap Send report again.");
+        haptic("notify", "warning");
+      } else if (s === 422) {
+        rpStatus("That note could not be added. Try a shorter, plainer one.", 1);
+      } else if (s === 429) {
+        rpStatus("Too many taps. Try again in a minute.", 1);
+      } else {
+        rpStatus(RP_LATER);
+      }
+    }, function () {
+      if (epoch !== chatEpoch) { return; }
+      rp.sending = false;
+      rpSync();
+      rpStatus(RP_LATER);
+    });
+  }
+
+  function rpDone() {
+    if (rp.result && rp.result.retry) { rpLoad(); } else { showGrid(); }
+  }
+
+  function rpCopy() {
+    var ref = rpEl("rp-ref"), cb = typeof navigator !== "undefined" && navigator.clipboard;
+    function fallback() {
+      try { window.getSelection().selectAllChildren(ref); } catch (e) { /* no selection API */ }
+      rpEl("rp-copy-hint").hidden = false;
+    }
+    if (!cb || typeof cb.writeText !== "function") { fallback(); return; }
+    cb.writeText(ref.textContent).then(function () {
+      rpEl("rp-copy").textContent = "Copied";
+      haptic("notify", "success");
+      showNotice("Copied.", "ok");
+    }, fallback);
+  }
+
+  rpEl("report-open").addEventListener("click", openReport);
+  rpEl("rp-note").addEventListener("input", rpOnInput);
+  rpEl("rp-send").addEventListener("click", rpSend);
+  rpEl("rp-done").addEventListener("click", rpDone);
+  rpEl("rp-copy").addEventListener("click", rpCopy);
+  rpEl("rp-more-btn").addEventListener("click", function () { rp.more = !rp.more; rpToggles(); });
+  rpEl("rp-exact-btn").addEventListener("click", function () { rp.exact = !rp.exact; rpToggles(); });
 
   // ---- updates (admin only) -------------------------------------------
   // As /update in chat (8.43): Check, then ONE Update button. The offer
@@ -3236,6 +3564,11 @@ APP_JS = r"""
     // Back closes an open layer before navigating: backing out of a
     // dialog must not drop the operator on the grid.
     tg.BackButton.onClick(function () {
+      // Leaving mid-send would lose the outcome (the reference).
+      if (currentView.type === "report" && rp.sending) {
+        showNotice("Sending. One moment.", "info");
+        return;
+      }
       if (overlayCloser) { overlayCloser(); return; }
       showGrid();
     });
