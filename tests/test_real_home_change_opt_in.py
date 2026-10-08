@@ -1,7 +1,8 @@
 """``_guard_real_home``'s comparison and its one opt-in
 (``expect_real_home_change``): the restart e2e test lets the new daemon
 rewrite ``~/.local/share/aipager/daemon.lock``, and nothing else may
-slip past the guard because of it."""
+slip past the guard because of it. Also what the guard may snapshot: no
+file the live daemon rewrites on its own."""
 
 from __future__ import annotations
 
@@ -74,3 +75,29 @@ def test_the_registrar_records_the_state_the_test_left(monkeypatch, tmp_path):
 
     other.write_text("333")
     assert guard.real_home_changes(before, guard._snapshot_guarded(), store) == [str(other)]
+
+
+#: Files the operator's running daemon rewrites on its own, whenever it
+#: saves sessions, flood state or a problem-report count.
+DAEMON_REWRITES = ("aipager.config.REPORTS_FILE", "aipager.config.SESSION_STATE_FILE",
+                   "aipager.config.FLOOD_STATE_FILE")
+
+
+@pytest.mark.parametrize("name", DAEMON_REWRITES)
+def test_a_file_the_live_daemon_rewrites_is_outside_the_guarded_snapshot(name, real_home_paths):
+    # The guard's rule (tests/conftest.py, above _GUARDED_HOME_PATHS):
+    # such a file is covered by its per-test redirect, never snapshotted.
+    # Inside a snapshotted folder, the live daemon's own save (and the
+    # folder's mtime its atomic rename bumps) fails a full run whenever
+    # the daemon counts something during it (2026-10-08, reports.json).
+    path = Path(real_home_paths[name])
+    # Not vacuous: the roots exist and the path is the production one
+    # (a redirected tmp path is never inside a real-home root).
+    assert guard._GUARDED_HOME_PATHS and Path.home() in path.parents, path
+    inside = [str(root) for root in guard._GUARDED_HOME_PATHS
+              if path == root or root in path.parents]
+    assert not inside, (
+        f"{name} ({path}) is rewritten by the live daemon but sits inside the "
+        f"real-home snapshot root {inside}: move it out (the problem report "
+        "store lives in ~/.local/state/aipager), never drop a root from "
+        "_GUARDED_HOME_PATHS")

@@ -1,7 +1,7 @@
 """The local problem-report store (roadmap 8.112, design section 4).
 
-``~/.local/share/aipager/reports.json`` holds what a report may carry and
-nothing more:
+``~/.local/state/aipager/reports.json`` (``config.REPORTS_FILE``) holds
+what a report may carry and nothing more:
 
 - error records keyed by fingerprint: an ``errors[]`` entry exactly as
   the report schema accepts it, plus the typed timestamps the offer

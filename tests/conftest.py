@@ -233,7 +233,7 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         "aipager.config.FLOOD_STATE_FILE": flood_state_json,
         # Problem reports (8.112): read LATE by aipager.report.store and
         # .markers, so one entry each covers every reader.
-        "aipager.config.REPORTS_FILE": home / ".local" / "share" / "aipager" / "reports.json",
+        "aipager.config.REPORTS_FILE": home / ".local" / "state" / "aipager" / "reports.json",
         "aipager.config.REPORT_INSTALL_FILE":
             home / ".local" / "share" / "aipager" / "install.json",
         "aipager.config.REPORT_RUNNING_FILE":
@@ -376,8 +376,11 @@ def real_home_paths(_isolate_home_paths):
 # may touch. Deliberately excludes paths a live aipager daemon or a
 # running Claude Code session rewrites on its own (``~/.claude.json``,
 # ``~/.claude/aipager-sessions.json``, ``~/.claude/projects/``,
-# ``~/.claude/aipager-audit.jsonl``) — those would false-positive. They
-# are still covered by the per-test redirects above.
+# ``~/.claude/aipager-audit.jsonl``, and the problem report store in
+# ``~/.local/state/aipager/``) — those would false-positive. They are
+# still covered by the per-test redirects above. A new file the daemon
+# rewrites on its own goes outside these roots, never a root removed
+# (tests/test_real_home_change_opt_in.py).
 _GUARDED_HOME_PATHS = (
     Path.home() / ".config" / "aipager",
     Path.home() / ".claude" / "settings.json",

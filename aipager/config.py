@@ -304,8 +304,13 @@ FLOOD_STATE_MIN_INTERVAL: float = 5.0
 # starts the 48 h quiet, and the running marker that tells an unclean exit
 # from a clean one (``aipager.report.markers``). Read LATE by those
 # modules, so tests/conftest.py::_isolate_home_paths redirects each with
-# one entry; `_guard_real_home` watches ~/.local/share/aipager as well.
-REPORTS_FILE = Path.home() / ".local" / "share" / "aipager" / "reports.json"
+# one entry. The store lives in the XDG state dir because the running
+# daemon rewrites it on its own whenever it counts something:
+# `_guard_real_home` snapshots ~/.local/share/aipager for the whole test
+# run, and a file there that the operator's live daemon rewrites would
+# fail the suite (tests/test_real_home_change_opt_in.py pins this). The two
+# markers stay there: they are written only at daemon start and stop.
+REPORTS_FILE = Path.home() / ".local" / "state" / "aipager" / "reports.json"
 REPORT_INSTALL_FILE = Path.home() / ".local" / "share" / "aipager" / "install.json"
 REPORT_RUNNING_FILE = Path.home() / ".local" / "share" / "aipager" / "running.json"
 
