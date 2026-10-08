@@ -6,7 +6,8 @@ envelope goes out in one HTTPS POST, only after the user confirmed it:
 
 - the envelope header: a random event id and the send time, nothing else;
 - the event: release, environment, a fixed set of tags taken from the
-  report's enums and versions, and the primary error as Sentry's
+  report's enums and versions (plus ``report_fp``, the checked fingerprint
+  the user may quote), and the primary error as Sentry's
   exception (its type and its aipager code locations, never a message);
   Sentry groups events by our fingerprint, not its own guess;
 - the attachment ``report.json``: exactly the bytes of
@@ -33,6 +34,7 @@ import httpx
 
 from aipager.private_file import write_private
 from aipager.report import builder, endpoint
+from aipager.report import fingerprint as fp
 from aipager.report import schema as sc
 
 SEND_TIMEOUT = 10.0
@@ -43,6 +45,8 @@ MAX_PREVIEW_BYTES = 256 * 1024
 SENDS_PER_DAY = 5
 #: The Sentry grouping key of a report that carries no error.
 NO_ERROR_FINGERPRINT = "aipager-report-without-error"
+#: ... and of one whose error has no usable fingerprint (kept apart from those).
+UNKEYED_FINGERPRINT = "aipager-report-unkeyed-error"
 ATTACHMENT_NAME = "report.json"
 STATE_DIR_MODE = 0o700
 
@@ -61,7 +65,7 @@ OUTCOMES = (SENT, RATE_LIMITED, REJECTED, OFFLINE, DISABLED, TOO_OLD, DAILY_CAP,
 class SendResult:
     outcome: str
     #: What the user may quote: the primary error's fingerprint, else the
-    #: first 12 hex digits of the event id. Only for a sent report.
+    #: event id (32 hex). Only for a sent report.
     reference: str | None = None
 
 
@@ -109,14 +113,37 @@ def is_developer_install(report: dict) -> bool:
     return facts["origin"] in ("local", "vcs") or facts["install"] == "editable"
 
 
+# A report is sent as validation left it, so any leaf may be the
+# "<invalid>" mark. The report's own sections are there (checked_preview's
+# _complete), but an errors[] item may be that mark instead of a dict, and a
+# dict item holds only the keys it was given: the helpers below read an
+# item's fields with a default and check their type before use.
+
+def primary_error(report: dict) -> dict | None:
+    """The error the event is about: the first errors[] item that is one."""
+    return next((e for e in report["errors"] if isinstance(e, dict)), None)
+
+
+def _fingerprint(error: dict | None) -> str | None:
+    value = error.get("fingerprint") if error is not None else None
+    return value if isinstance(value, str) and fp.FINGERPRINT_RE.fullmatch(value) else None
+
+
 def _exception(error: dict) -> dict:
-    module, _, name = error["type"].rpartition(".")
-    value = {"type": name}
+    type_name = error.get("type")
+    if isinstance(type_name, str) and type_name != sc.INVALID:
+        module, _, name = type_name.rpartition(".")
+    else:
+        # No exception (an ERROR log line, a crash, a hook memory-cap hit):
+        # named by its trigger, an enum.
+        trigger = error.get("trigger")
+        module, name = "", trigger if isinstance(trigger, str) else sc.INVALID
+    value = {"type": name or sc.INVALID}  # never empty ("builtins." would be)
     if module:
         value["module"] = module
     # The report keeps the innermost frame first; Sentry wants it last.
     frames = [{"filename": f["file"], "function": f["fn"], "lineno": f["line"],
-               "in_app": True} for f in reversed(error["frames"])]
+               "in_app": True} for f in reversed(error.get("frames") or []) if isinstance(f, dict)]
     if frames:
         value["stacktrace"] = {"frames": frames}
     return value
@@ -142,10 +169,13 @@ def event(report: dict, event_id: str, now: float) -> dict:
             "trigger": report["trigger"],
         },
     }
-    errors = report["errors"]
-    if errors:
-        out.update({"fingerprint": [errors[0]["fingerprint"]],
-                    "exception": {"values": [_exception(errors[0])]}})
+    primary = primary_error(report)
+    if primary is not None:
+        key = _fingerprint(primary)
+        out.update({"fingerprint": [key or UNKEYED_FINGERPRINT],
+                    "exception": {"values": [_exception(primary)]}})
+        if key is not None:
+            out["tags"]["report_fp"] = key  # searchable: the fingerprint field is not
     else:
         trigger = report["trigger"]  # the enum "auto" or "manual": a fixed title
         out.update({"fingerprint": [NO_ERROR_FINGERPRINT],
@@ -301,9 +331,9 @@ def send(report, transport: httpx.BaseTransport | None = None,
             return SendResult(OFFLINE)
     status = response.status_code
     if status == 200:
-        errors = report["errors"]
-        reference = errors[0]["fingerprint"] if errors else event_id[:12]
-        return SendResult(SENT, reference)
+        # The bug's fingerprint (Sentry: tag report_fp), else the whole event
+        # id (Sentry finds an event only by its full id).
+        return SendResult(SENT, _fingerprint(primary_error(report)) or event_id)
     if status == 429:
         return SendResult(RATE_LIMITED)
     if 400 <= status < 500:
