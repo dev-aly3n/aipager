@@ -22,7 +22,7 @@ import json
 import time
 
 import pytest
-from telegram.error import NetworkError
+from telegram.error import BadRequest
 
 from aipager import config
 from aipager.bot import rich_message
@@ -409,7 +409,7 @@ def test_offer_saved_before_notice_sent(offer_world, h, run_async):
 def test_failed_notice_restores_policy(offer_world, run_async, how):
     w = offer_world()
     if how == "raised":
-        w.bot.tg.fail_send = NetworkError("down")
+        w.bot.tg.fail_send = BadRequest("Chat not found")
     else:
         w.bot.tg.send_returns_none = True
     run_async(_offer(w, seconds=120))
@@ -420,7 +420,7 @@ def test_failed_notice_restores_policy(offer_world, run_async, how):
 def test_failed_notice_restores_policy_on_disk(offer_world, h, run_async, how):
     w = offer_world()
     if how == "raised":
-        w.bot.tg.fail_send = NetworkError("down")
+        w.bot.tg.fail_send = BadRequest("Chat not found")
     else:
         w.bot.tg.send_returns_none = True
     run_async(_offer(w, seconds=120))
@@ -432,7 +432,7 @@ def test_failed_notice_restores_policy_on_disk(offer_world, h, run_async, how):
 def test_failed_notice_is_offered_again_later(offer_world, run_async):
     """The slot was not burned: once Telegram is back, the offer comes."""
     w = offer_world()
-    w.bot.tg.fail_send = NetworkError("down")
+    w.bot.tg.fail_send = BadRequest("Chat not found")
     run_async(_offer(w, seconds=120))
     w.bot.tg.fail_send = None
     assert len(run_async(w.run_ticks(offset=300))) == 1

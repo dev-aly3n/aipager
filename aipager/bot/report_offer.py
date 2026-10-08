@@ -10,9 +10,11 @@ caller contract (roadmap 8.112, 1c):
 
 - ``settle()`` results are persisted;
 - the offer is recorded (``note_offer`` + ``store.save_policy``) BEFORE
-  the notice is sent, and put back as it was when the notice did not go
-  out (muted, skipped, refused), so an unseen offer neither spends the
-  3-day slot nor later counts as a decline;
+  the notice is sent, and put back as it was only when the notice
+  definitely did not go out (muted, skipped, refused by Telegram), so an
+  unseen offer neither spends the 3-day slot nor later counts as a
+  decline; a timeout or network error may have delivered it, so the
+  offer stays (never a second notice for one the owner may be reading);
 - each answer is bound to its offer through ``last_offer_ts`` in the
   button's callback data (handled in :mod:`aipager.bot.report_flow`);
 - the notice is the lowest-priority send there is (ORNAMENT, skippable)
@@ -30,6 +32,7 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest, Forbidden, RetryAfter
 
 from aipager.bot.flood import MUTE
 from aipager.bot.flood_budget import PRIORITY_ORNAMENT, rate_limit_args
@@ -68,6 +71,12 @@ NOTICE_TAIL = ("A report helps get it fixed. It holds only versions and code "
 PREVIEW_BUTTON = "Preview report"
 NOT_NOW_BUTTON = "Not now"
 DONT_ASK_BUTTON = "Don't ask for this"
+
+#: Errors that mean Telegram refused the notice: it was never shown. (The
+#: outbound gate's skip and mute come back from ``send_text`` as SKIPPED
+#: and MUTED.) Any other error, a timeout or a dropped connection above
+#: all, may come after Telegram delivered it.
+_NOT_DELIVERED = (BadRequest, Forbidden, RetryAfter)
 
 
 # ---- what is going on right now ---------------------------------------------
@@ -238,19 +247,25 @@ async def maybe_offer(bot: "TelegramBot", *, now: float | None = None,
     # Recorded BEFORE the notice goes out (the 1c contract): a crash in
     # between must not offer the same bugs again inside the gap.
     store.save_policy(offered)
-    sent = None
     try:
         sent = await send_text(
             bot._app.bot, owner, notice_text(offered_entries),
             reply_markup=notice_keyboard(offered.last_offer_ts),
             disable_notification=True,
             rate_limit_args=rate_limit_args(kind="skip", priority=PRIORITY_ORNAMENT))
-    except Exception as e:  # noqa: BLE001 - FloodSkipped, refusal, network
+    except _NOT_DELIVERED as e:
         log.info("problem report offer not sent (%s)", type(e).__name__)
         sent = None
+    except Exception as e:  # noqa: BLE001 - a timeout, network: maybe delivered
+        log.info("problem report offer may not have arrived (%s): kept as offered",
+                 type(e).__name__)
+        return False
     if sent is None or sent is MUTED or sent is SKIPPED:
-        # Not shown: as if never offered (no slot spent, no decline later).
-        store.save_policy(settled)
+        # Not shown: as if never offered (no slot spent, no decline later),
+        # unless the state moved on meanwhile (a /settings tap during the
+        # send): only the offer this check wrote is taken back.
+        if store.policy_state() == offered:
+            store.save_policy(settled)
         return False
     log.info("problem report offer sent (%d errors)", len(offered_entries))
     return True

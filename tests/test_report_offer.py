@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from telegram.error import BadRequest, Forbidden, NetworkError, RetryAfter, TimedOut
 
 from aipager import config, install_source, preferences
 from aipager.bot import report_flow, report_offer
@@ -195,6 +196,55 @@ def test_skipped_notice_restores_policy(ready, run_async, how):
     assert _offer(run_async, bot) is False
     store.reset()
     assert store.policy_state() == before
+
+
+@pytest.mark.parametrize("error", [
+    BadRequest("Chat not found"), Forbidden("bot was blocked by the user"), RetryAfter(30),
+], ids=["bad_request", "forbidden", "retry_after"])
+def test_refused_notice_restores_policy(ready, run_async, error):
+    """Telegram refused it: never shown, so as if never offered."""
+    bot, tg = ready
+    before = store.policy_state()
+    tg.send_error = error
+    assert _offer(run_async, bot) is False
+    store.reset()
+    assert store.policy_state() == before
+
+
+@pytest.mark.parametrize("error", [
+    TimedOut("timed out"), NetworkError("connection reset"), RuntimeError("?"),
+], ids=["timed_out", "network_error", "other"])
+def test_notice_of_unknown_delivery_keeps_the_offer(ready, run_async, error):
+    """A timeout can come after Telegram delivered the notice: the offer
+    stays recorded (its buttons still answer, no second notice soon)."""
+    bot, tg = ready
+    tg.send_error = error
+    assert _offer(run_async, bot) is False
+    store.reset()
+    state = store.policy_state()
+    assert state.last_offer_ts == NOW and len(state.pending) == 1
+    # Its answer is still bound to it.
+    query = _answer(run_async, bot, "on", NOW)
+    assert query.edit_message_text.await_args.args[0] == report_flow.OFFER_DECLINED_TEXT
+
+
+@pytest.mark.parametrize("how", ["skipped", "refused"])
+def test_restore_never_overwrites_a_newer_state(ready, run_async, how):
+    """Compare-and-restore: a policy change landing while the notice was
+    on its way (a /settings re-enable, say) is not undone."""
+    bot, tg = ready
+    newer = policy.State(declines_in_row=0, auto_off=False, last_offer_ts=NOW - 7 * DAY)
+
+    async def _send(chat_id, text, **kw):
+        store.save_policy(newer)
+        if how == "skipped":
+            return SKIPPED
+        raise BadRequest("Chat not found")
+
+    tg.send_message = _send
+    assert _offer(run_async, bot) is False
+    store.reset()
+    assert store.policy_state() == newer
 
 
 def test_settle_result_saved(ready, run_async, monkeypatch):
