@@ -1,8 +1,10 @@
 """Problem reports in Telegram (roadmap 8.112 step 3): one preview card.
 
-Every way in leads to the same card in the OWNER's private chat with the
-bot: the /help button, the Mini App's Settings row, the hook memory-cap
-notice's "Report this" and the automatic offer's "Preview report". The
+Every way in from Telegram leads to the same card in the OWNER's private
+chat with the bot: the /help button, the hook memory-cap notice's
+"Report this" and the automatic offer's "Preview report" (the Mini App
+has its own page, :mod:`aipager.bot.report_drafts`, built by the same
+:func:`build_checked`). The
 card shows the exact report (``builder.render_preview``: the bytes Send
 sends), and offers Send, Add a note and Cancel.
 
@@ -501,26 +503,39 @@ def _build(trigger: str, errors: list[dict] | None, ctx: "ReportContext") -> dic
                                 log_digest=store.digest_24h(), context=ctx)
 
 
-async def open_preview(bot: "TelegramBot", *, trigger: str,
-                       errors: list[dict] | None = None) -> OpenResult:
-    """Build a report and post its preview card in the owner's private
-    chat. *errors* None means the store's most recent ones (a manual
-    report); the automatic offer passes the offered entries."""
+async def build_checked(bot: "TelegramBot", trigger: str,
+                        errors: list[dict] | None = None) -> tuple[dict, bytes] | None:
+    """The one report build behind the preview card and the Mini App's
+    report page: the daemon's facts, the report built in a worker thread,
+    and its exact preview bytes (``send.checked_preview``). None when the
+    build fails or the report does not pass its own checks."""
     from aipager.report import send
 
-    owner = resolve_owner(bot)
-    if owner is None:
-        return OpenResult.NO_OWNER
     ctx = report_context(bot)
     try:
         report = await asyncio.to_thread(_build, trigger, errors, ctx)
     except Exception as e:  # noqa: BLE001
         log.warning("problem report could not be built (%s)", type(e).__name__)
-        return OpenResult.NOT_SENT
+        return None
     preview = send.checked_preview(report)
     if preview is None:
         log.warning("problem report did not pass its own checks: no preview")
+        return None
+    return report, preview
+
+
+async def open_preview(bot: "TelegramBot", *, trigger: str,
+                       errors: list[dict] | None = None) -> OpenResult:
+    """Build a report and post its preview card in the owner's private
+    chat. *errors* None means the store's most recent ones (a manual
+    report); the automatic offer passes the offered entries."""
+    owner = resolve_owner(bot)
+    if owner is None:
+        return OpenResult.NO_OWNER
+    built = await build_checked(bot, trigger, errors)
+    if built is None:
         return OpenResult.NOT_SENT
+    report, preview = built
     kept = KeptReport(report=report, preview=preview, chat_id=owner,
                       mode="inline" if _fits_inline(preview) else "document",
                       created=_mono())

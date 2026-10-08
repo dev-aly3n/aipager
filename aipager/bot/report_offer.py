@@ -152,7 +152,10 @@ def _developer_install() -> bool:
 
 # ---- the notice ----------------------------------------------------------------
 
-def _area(entry: dict) -> str:
+def area(entry: dict) -> str:
+    """The readable place of one error entry: its innermost aipager file in
+    plain words (:data:`_AREAS`), else that file's stem, else "aipager".
+    Shared by the offer notice and the Mini App's report page."""
     frames = entry.get("frames") or []
     file = frames[0].get("file") if frames and isinstance(frames[0], dict) else None
     if not isinstance(file, str) or not file:
@@ -178,7 +181,7 @@ def notice_text(entries: list[dict]) -> str:
         head = f"The aipager hook hit its memory cap {count}."
     else:
         kind = str(first.get("type") or "error").rpartition(".")[2] or "error"
-        head = f"aipager hit an internal error {count} ({kind} in {_area(first)})."
+        head = f"aipager hit an internal error {count} ({kind} in {area(first)})."
     others = len(entries) - 1
     if others == 1:
         head += " Also 1 other error."
