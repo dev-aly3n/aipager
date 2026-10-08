@@ -218,6 +218,7 @@ def test_final_outcome_drops_the_report(mk_bot, run_async, clock, net):
     draft = _open(run_async, bot)
     reply = run_async(report_drafts.send_draft(bot, draft, draft.report))
     assert draft.state == "done" and draft.report is None
+    assert draft.preview == b""
     assert draft.result == ("sent", reply.reference)
 
 

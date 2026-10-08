@@ -190,6 +190,10 @@ async def _run_send(draft: Draft, candidate: dict) -> SendOutcome:
         # Read at send time: tests put a fake network here.
         result = await asyncio.to_thread(send.send, candidate,
                                          transport=report_flow.SEND_TRANSPORT)
+    # Exception only, on purpose: a CancelledError (daemon shutdown) is let
+    # through and leaves the draft "sending"; harmless, as drafts live in
+    # memory and die with the daemon. A cancelled *request* never gets here
+    # (send_draft shields this task).
     except Exception as e:  # noqa: BLE001 - send.send never raises; belt and braces
         log.warning("problem report send failed (%s)", type(e).__name__)
         result = None
@@ -202,10 +206,12 @@ async def _run_send(draft: Draft, candidate: dict) -> SendOutcome:
     if reply.retry:
         draft.state = "open"
         return reply
-    # Final: the report is let go; the outcome stays so a repeat tap gets
-    # the same answer instead of a second send.
+    # Final: the report and everything rendered from it are let go; only
+    # the outcome and reference stay, so a repeat tap gets the same answer
+    # instead of a second send.
     draft.state = "done"
     draft.report = None
+    draft.preview = b""
     draft.result = (outcome, reference)
     return reply
 
