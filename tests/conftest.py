@@ -396,7 +396,9 @@ def real_home_paths(_isolate_home_paths):
 # ``~/.local/state/aipager/``) — those would false-positive. They are
 # still covered by the per-test redirects above. A new file the daemon
 # rewrites on its own goes outside these roots, never a root removed
-# (tests/test_real_home_change_opt_in.py).
+# (tests/test_real_home_change_opt_in.py), or into ``LIVE_DAEMON_PATHS``
+# below when every writer of it refuses the real home on its own
+# (tests/test_real_home_live_daemon_paths.py).
 _GUARDED_HOME_PATHS = (
     Path.home() / ".config" / "aipager",
     Path.home() / ".claude" / "settings.json",
@@ -405,23 +407,63 @@ _GUARDED_HOME_PATHS = (
 )
 
 
+#: Inside the guarded roots, what the operator's live daemon writes while a
+#: full run goes on (roadmap 8.115): a session launch writes its folder, a
+#: Mini App load the SDK cache, a restart the lock and the markers. Not
+#: snapshotted, or a deploy or a session launch during a run fails it. Safe
+#: because every writer of these goes through ``_test_guard.check_write``,
+#: which fails a test that writes there for real
+#: (tests/test_real_home_live_daemon_paths.py proves each one does).
+_SHARE = Path.home() / ".local" / "share" / "aipager"
+LIVE_DAEMON_PATHS = (
+    _SHARE / "sessions",             # session_store.write_session_files
+    _SHARE / "webapp-sdk",           # miniapp.webapp_sdk (Mini App load)
+    _SHARE / "cloudflared",          # miniapp.cloudflared_fetch
+    _SHARE / "daemon.lock",          # cli.daemon._acquire_daemon_lock
+    _SHARE / "install.json",         # report.markers.first_start
+    _SHARE / "running.json",         # report.markers.write_running
+    _SHARE / "update.lock",          # self_update.UpdateLock
+    _SHARE / "update-restart.json",  # self_update.write_marker
+)
+
+
 def _stat_key(p: Path) -> tuple[int, int] | None:
+    """A file by its time and size; a folder only by being there. A
+    folder's time moves with every file written into it (an atomic rename
+    bumps it), and each file in it is snapshotted on its own."""
     try:
         st = p.stat()
     except OSError:
         return None
+    if p.is_dir():
+        return (0, 0)
     return (st.st_mtime_ns, st.st_size)
 
 
-def _snapshot_guarded() -> dict[str, tuple[int, int]]:
+def snapshot_guarded(roots=None, skip=None) -> dict[str, tuple[int, int]]:
+    """Every path under *roots* (default the guarded real-home roots) with
+    its :func:`_stat_key`, leaving out *skip* (default
+    :data:`LIVE_DAEMON_PATHS`) and everything under it."""
+    roots = _GUARDED_HOME_PATHS if roots is None else roots
+    skip = LIVE_DAEMON_PATHS if skip is None else skip
     snap: dict[str, tuple[int, int]] = {}
-    for root in _GUARDED_HOME_PATHS:
+    for root in roots:
         paths = [root, *root.rglob("*")] if root.is_dir() else [root]
         for p in paths:
+            # A left-out file's atomic write passes through "<name>.tmp"
+            # beside it (private_file.write_private, write_marker).
+            if any(p == s or s in p.parents
+                   or (p.parent == s.parent and p.name == s.name + ".tmp")
+                   for s in skip):
+                continue
             key = _stat_key(p)
             if key is not None:
                 snap[str(p)] = key
     return snap
+
+
+def _snapshot_guarded() -> dict[str, tuple[int, int]]:
+    return snapshot_guarded()
 
 
 def real_home_changes(
@@ -505,10 +547,11 @@ def _guard_real_home():
     The per-test redirects above enumerate known constants, which is
     inherently incomplete — the next ``Path.home()`` constant someone
     adds re-opens the hole silently. This turns that silence into a
-    failure. Paths computed inline rather than as module constants
-    (e.g. the daemon lock in ``cli/daemon.py``) are only caught here.
-    The one exception is a path a test registered through
-    :func:`expect_real_home_change`, left as that test left it.
+    failure. Paths computed inline rather than as module constants are
+    only caught here. The exceptions: a path a test registered through
+    :func:`expect_real_home_change`, left as that test left it, and
+    :data:`LIVE_DAEMON_PATHS`, whose writers refuse the real home on
+    their own.
     """
     before = _snapshot_guarded()
     yield
