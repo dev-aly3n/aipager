@@ -13,6 +13,9 @@ const CFG = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
 
 const created = [];
 const errors = [];
+// Ordered record of what the user would feel or see move: scrolls (by
+// element id) and haptics (by kind).
+const events = [];
 class El {
   constructor(tag) {
     this.tagName = (tag || "div").toUpperCase();
@@ -69,7 +72,7 @@ class El {
   focus() { this.focused = true; }
   blur() { this.focused = false; }
   select() {}
-  scrollIntoView() {}
+  scrollIntoView() { events.push({ kind: "scroll", id: this.id || null }); }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   getAttribute(k) { return this.attrs[k]; }
   removeAttribute(k) { delete this.attrs[k]; }
@@ -96,6 +99,7 @@ function textNode(s) { const t = new El("#text"); t._text = String(s); return t;
 const byId = {};
 for (const m of page.matchAll(/<([a-zA-Z0-9]+)\b[^>]*\bid="([^"]+)"[^>]*>/g)) {
   const el = new El(m[1]);
+  el.id = m[2];
   el.hidden = /\shidden(\s|>|=)/.test(m[0]);
   byId[m[2]] = el;
 }
@@ -130,7 +134,11 @@ const W = {
   disableVerticalSwipes() {}, enableVerticalSwipes() {},
   BackButton: { show() { global.__backShown = true; }, hide() { global.__backShown = false; },
                 onClick(fn) { global.__back = fn; }, offClick() {} },
-  HapticFeedback: { notificationOccurred() {}, impactOccurred() {}, selectionChanged() {} },
+  HapticFeedback: {
+    notificationOccurred(t) { events.push({ kind: "haptic", type: "notification:" + t }); },
+    impactOccurred(t) { events.push({ kind: "haptic", type: "impact:" + t }); },
+    selectionChanged() { events.push({ kind: "haptic", type: "selection" }); },
+  },
   MainButton: {
     setParams(p) { global.__mbParams = Object.assign({}, global.__mbParams, p); },
     setText(t) { global.__mbParams = Object.assign({}, global.__mbParams, { text: t }); },
@@ -145,7 +153,9 @@ const W = {
 };
 if (!CFG.mainbutton) delete W.MainButton;
 global.window = { Telegram: { WebApp: W }, addEventListener() {}, location: { hash: "" },
-                  navigator: NAV };
+                  navigator: NAV,
+                  scrollTo() { events.push({ kind: "scroll", id: "window" }); },
+                  scrollBy() { events.push({ kind: "scroll", id: "window" }); } };
 global.Telegram = global.window.Telegram;
 
 // ---- the fake server ----------------------------------------------------
@@ -170,6 +180,7 @@ global.fetch = (url, opts) => {
     else next = { status: 200, body: {} };
   }
   if (next === "pending") return new Promise(() => {});
+  if (next === "reject") return Promise.reject(new TypeError("Failed to fetch"));
   return Promise.resolve({ ok: next.status < 400, status: next.status,
                            json: () => Promise.resolve(next.body),
                            text: () => Promise.resolve(JSON.stringify(next.body)) });
@@ -186,6 +197,12 @@ const script = page.match(/<script>([\s\S]*?)<\/script>/g)
 try { eval(script); } catch (e) { errors.push("boot: " + (e && e.stack || e)); }
 
 // ---- observation ----------------------------------------------------------
+// Hidden by the attribute or by an inline display:none.
+function hiddenEl(id) {
+  const el = byId[id];
+  if (!el) return null;
+  return !!el.hidden || el.style.display === "none";
+}
 function T(id) { return byId[id] ? byId[id].textContent : null; }
 function snap() {
   const st = byId["rp-status"];
@@ -211,6 +228,11 @@ function snap() {
     exactBtn: T("rp-exact-btn") + byId["rp-exact-btn"].innerHTML,
     errTitle: T("rp-err-title"),
     reportBlockHidden: byId["report-block"] ? byId["report-block"].hidden : null,
+    heroHidden: hiddenEl("rp-hero"),
+    formHidden: hiddenEl("rp-form"),
+    bodyHidden: hiddenEl("rp-body"),
+    statusClass: st.className,
+    events: events.length,
   };
 }
 
@@ -245,7 +267,7 @@ async function step(s) {
   const html = [];
   for (const el of all) for (const n of el.walk()) if (n._html) html.push(n._html);
   process.stdout.write(JSON.stringify({
-    snaps, posts, fetched, errors,
+    snaps, posts, fetched, errors, events,
     createdTags: created.map(e => e.tagName),
     html,
     copied: global.__copied || null,
