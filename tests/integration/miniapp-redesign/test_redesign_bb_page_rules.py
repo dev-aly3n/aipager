@@ -22,7 +22,8 @@ from aipager.miniapp.static import (
 from miniapp_redesign_bb import client_for  # noqa: E402 - alias set by conftest
 
 TELEGRAM_SDK = "https://telegram.org/js/telegram-web-app.js"
-BUDGET = 200_000
+# 8.112 follow-up: the in-app problem report page (was 200_000)
+BUDGET = 215_000
 
 
 @pytest.fixture(scope="module")
@@ -94,7 +95,7 @@ def test_page_script_ends_with_the_iife_close(self_page):
 # ── criterion 2: weight ────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("variant", [True, False])
-def test_page_is_within_the_200k_byte_ceiling(variant):
+def test_page_is_within_the_byte_ceiling(variant):
     assert len(index_html(sdk_from_self=variant).encode("utf-8")) <= BUDGET
 
 
@@ -191,10 +192,12 @@ def test_notice_has_role_status(self_page):
     assert 'role="status"' in _tag(self_page, "notice")
 
 
-def test_exactly_four_views(self_page):
+def test_exactly_five_views(self_page):
+    """The four of the redesign plus the problem report page (8.112
+    follow-up)."""
     ids = re.findall(r'<section[^>]*\bid="(view-[a-z]+)"', self_page)
     assert sorted(ids) == ["view-detail", "view-grid", "view-new",
-                           "view-settings"]
+                           "view-report", "view-settings"]
 
 
 def test_no_inline_event_handlers(self_page):
