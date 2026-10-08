@@ -1402,9 +1402,16 @@ class NotifyMixin:
                 "<i>If this repeats, aipager is compensating for a runaway "
                 "allocation somewhere in the hook path - please report.</i>"
             )
+            # "Report this" (roadmap 8.112): opens the problem report
+            # preview in the owner's DM; only the owner's tap does
+            # anything (report_flow re-checks it).
+            from aipager.bot import report_flow  # local: import cycle
+            extra = ({"reply_markup": report_flow.report_button_markup(
+                report_flow.REPORT_THIS_BUTTON)}
+                if report_flow.resolve_owner(self) is not None else {})
             try:
                 await bot.send_message(
-                    resolve_chat_id(sess), text, parse_mode="HTML",
+                    resolve_chat_id(sess), text, parse_mode="HTML", **extra,
                 )
             except Exception:
                 log.debug("hook_memory_cap_hit notify failed", exc_info=True)

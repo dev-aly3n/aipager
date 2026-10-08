@@ -232,6 +232,10 @@ class MiniAppServer:
                 new_flow.close_open_card(self.bot, *target)
                 # Their rename question in chat too (the same rule).
                 session_parity.close_rename(self.bot, *target)
+                # And their problem report note capture (8.112): any other
+                # action closes it.
+                from aipager.bot import report_flow
+                report_flow.close_note(self.bot, target[1])
             return resp
 
         app = web.Application(middlewares=[_close_card_after_action])
@@ -307,6 +311,9 @@ class MiniAppServer:
         # always show the same job.
         app.router.add_get("/api/update", self._handle_update_get)
         app.router.add_post("/api/update/{action}", self._handle_update_post)
+        # Problem reports (roadmap 8.112): owner only. Opens the preview
+        # card in the owner's private chat; nothing is sent from here.
+        app.router.add_post("/api/report/preview", self._handle_report_preview)
         # The Mini App's first mutating route. PUT (not POST) because
         # setting a field to a value is idempotent by construction — the
         # same request twice leaves the same state. The field lives in the
@@ -801,6 +808,7 @@ class MiniAppServer:
     async def _handle_preferences_get(self, request):
         from aiohttp import web
 
+        from aipager.bot import report_flow
         from aipager.bot.settings_menu import settings_schema
         from aipager.preferences import get_preferences
 
@@ -830,7 +838,42 @@ class MiniAppServer:
             # Whether to show the Updates block. A hint only: /api/update
             # enforces the same rule itself.
             "can_update": bool(self.bot._is_update_admin(user_id, scope_chat_id)),
+            # Whether to show "Report a problem" (8.112): the owner, in a
+            # private chat. A hint only: /api/report/preview checks itself.
+            "can_report": bool(isinstance(scope_chat_id, int) and scope_chat_id > 0
+                               and report_flow.is_owner(self.bot, user_id)),
         })
+
+    # ---- problem reports ---------------------------------------------------
+
+    async def _handle_report_preview(self, request):
+        """Open the problem report preview in the owner's private chat."""
+        from aiohttp import web
+
+        from aipager.bot import report_flow
+
+        result = await self._authenticate_user(request, "POST /api/report/preview")
+        if isinstance(result, web.Response):
+            return result
+        scope_chat_id, user_id = result
+        if report_flow.resolve_owner(self.bot) is None:
+            log.info("miniapp: report preview refused (409) - no single owner chat")
+            return web.json_response({"error": "no_owner"}, status=409)
+        if not report_flow.is_owner(self.bot, user_id):
+            log.info("miniapp: report preview refused (403) - not the owner")
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: report preview refused (429) - rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+        # Opening another card is another action: the caller's open Name
+        # card, rename question and note capture close (the middleware).
+        request[_close_card_key()] = (scope_chat_id, user_id)
+        opened = await report_flow.open_preview(self.bot, trigger="manual")
+        if opened is report_flow.OpenResult.NO_OWNER:
+            return web.json_response({"error": "no_owner"}, status=409)
+        if opened is not report_flow.OpenResult.OPENED:
+            return web.json_response({"error": "not_sent"}, status=503)
+        return web.json_response({"opened": True})
 
     # ---- self-update -----------------------------------------------------
 

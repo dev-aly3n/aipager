@@ -183,8 +183,14 @@ def _root_button_text(section: str, prefs: Preferences) -> str:
     return f"{_SECTION_TITLES[section]}: {label}{marker}"
 
 
-def render_settings_root(chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
-    """Root menu: one button per section (current value inline) + Close."""
+def render_settings_root(
+    chat_id: int, *, problem_reports: str | None = None,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Root menu: one button per section (current value inline) + Close.
+
+    ``problem_reports`` is the owner's "Problem reports" value as the row
+    shows it (``report_flow.settings_row_state``); None leaves the row
+    out (a group, someone else, or no owner)."""
     prefs = get_preferences(chat_id)
     rows = [
         [InlineKeyboardButton(_root_button_text(section, prefs),
@@ -199,6 +205,11 @@ def render_settings_root(chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
     # can set these per session and chat could not reach them at all.
     rows.append([InlineKeyboardButton(
         "👤 Per-session preferences", callback_data="_:spref")])
+    # The owner's install-wide switch (roadmap 8.112), owner DM only: kept
+    # out of SECTIONS so it never reaches settings_schema() or a group.
+    if problem_reports is not None:
+        rows.append([InlineKeyboardButton(
+            f"🐞 Problem reports: {problem_reports}", callback_data="_:rp:set")])
     rows.append([InlineKeyboardButton("✖️ Close", callback_data="_:set:close")])
     text = (
         "⚙️ <b>Settings</b>\n\n"

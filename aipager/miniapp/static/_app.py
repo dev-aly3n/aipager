@@ -2211,9 +2211,66 @@ APP_JS = r"""
         settingsData = data;
         renderSettings();
         loadUpdates();
+        renderReport();
       })
       .catch(handleFetchError);
   }
+
+  // ---- problem reports (owner only, private chat) ---------------------
+  // The row only asks the daemon to post the preview card in the owner's
+  // private chat; the preview, the note and Send stay in Telegram.
+  // Shown only with `can_report`; the server checks it again.
+
+  var reportBusy = false;
+
+  function hideReport() {
+    document.getElementById("report-block").hidden = true;
+    var note = document.getElementById("report-note");
+    note.hidden = true;
+    note.textContent = "";
+  }
+
+  function renderReport() {
+    if (!settingsData || !settingsData.can_report) { hideReport(); return; }
+    document.getElementById("report-block").hidden = false;
+  }
+
+  // A dedicated fetch, NOT apiFetch: a 403 here means "not the owner"
+  // and must hide this block, not end the whole app.
+  function reportOpen() {
+    if (reportBusy) { return; }
+    reportBusy = true;
+    var note = document.getElementById("report-note");
+    var epoch = chatEpoch;
+    fetch("/api/report/preview", {
+      method: "POST",
+      headers: authHeaders(true),
+      body: "{}"
+    }).then(function (res) {
+      reportBusy = false;
+      if (epoch !== chatEpoch) { return; }
+      if (res.status === 401 || res.status === 403) { hideReport(); return; }
+      if (res.ok) {
+        note.textContent = "The report preview is in your private chat with the bot. "
+          + "Nothing is sent until you tap Send there.";
+        note.hidden = false;
+        showNotice("Opened in your private chat.", "ok");
+        return;
+      }
+      if (res.status === 429) {
+        showNotice("Too many taps. Try again in a minute.", "err");
+      } else if (res.status === 409) {
+        showNotice("This install has no single owner chat, so no report can be opened.", "err");
+      } else {
+        showNotice("Could not open the report preview right now. Try again later.", "err");
+      }
+    }).catch(function () {
+      reportBusy = false;
+      showNotice("Could not open the report preview right now. Try again later.", "err");
+    });
+  }
+
+  document.getElementById("report-open").addEventListener("click", reportOpen);
 
   // ---- updates (admin only) -------------------------------------------
   // As /update in chat (8.43): Check, then ONE Update button. The offer
@@ -3331,6 +3388,7 @@ APP_JS = r"""
     newOptions = null;
     newState.cwd = "";
     hideUpdates();
+    hideReport();
   }
 
   function refreshChatView() {

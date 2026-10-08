@@ -14,6 +14,7 @@ composition only.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from telegram.ext import Application
@@ -35,6 +36,8 @@ from aipager.team import Team
 
 if TYPE_CHECKING:
     from aipager.bot.handlers import _PendingAlbum
+
+log = logging.getLogger("aipager.bot.core")
 
 
 class TelegramBot(
@@ -132,6 +135,21 @@ class TelegramBot(
         # handlers._handle_file and injected as ONE prompt once the group
         # settles; see handlers._flush_album.
         self._albums: dict[tuple[int, str], _PendingAlbum] = {}
+        # Problem reports (roadmap 8.112, bot/report_flow.py and
+        # bot/report_offer.py). Where Claude's credential was found at
+        # startup (set by cli/daemon.py; never probed again for a report).
+        self.claude_auth_source: str = "unknown"
+        # Open preview cards: (chat_id, message_id) -> report_flow.KeptReport.
+        self._report_cards: dict = {}
+        # The owner's open "Add a note" capture, or None (one owner).
+        self._report_note_pending: dict | None = None
+        # time.time() of the owner's last action in their private chat.
+        self._report_owner_seen_at: float | None = None
+        # time.monotonic() of the last tick anything was busy; None until
+        # the first tick (which counts as busy: idle starts there).
+        self._report_last_busy_mono: float | None = None
+        # time.monotonic() of the last offer check.
+        self._report_offer_checked_mono: float | None = None
         # Team / allow-list — None for personal-mode installs (no team.yaml),
         # which preserves the existing one-user-one-DM behaviour.
         from aipager.config import TEAM
@@ -160,3 +178,17 @@ class TelegramBot(
         # (roadmap 8.94h): none for a chat that is no longer a group scope.
         from aipager.bot import card_owner
         card_owner.prune(self)
+
+    async def monitor_tick(self) -> None:
+        """The session monitor's per-tick callback: the pinned bar, then
+        the problem report offer check, each on its own so one failing
+        never stops the other."""
+        try:
+            await self.pinned_tick()
+        except Exception:
+            log.warning("pinned bar tick failed", exc_info=True)
+        try:
+            from aipager.bot import report_offer
+            await report_offer.tick(self)
+        except Exception as e:
+            log.warning("problem report tick failed (%s)", type(e).__name__)

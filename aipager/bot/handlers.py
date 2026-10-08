@@ -36,7 +36,15 @@ from telegram.ext import (
 from aipager.dtach import inject
 
 from aipager import statusline_file
-from aipager.bot import card_owner, group_intake, held_message, new_flow, reactions, session_parity
+from aipager.bot import (
+    card_owner,
+    group_intake,
+    held_message,
+    new_flow,
+    reactions,
+    report_flow,
+    session_parity,
+)
 from aipager.bot.session_ops import (
     await_model_change,
     clear_model_switch_pending,
@@ -653,7 +661,11 @@ class CommandHandlersMixin:
         text = HELP_TEXT
         if group_intake.is_group_chat(calling_chat_id(update)):
             text = HELP_TEXT.replace(_HELP_TALK_LINE, group_intake.group_help_talk_line(self))
-        await reply_text(update.message, text, parse_mode="HTML")
+        # Problem reports (8.112): the owner's button only, in a DM or a
+        # group (the preview itself always opens in the owner's DM).
+        extra = ({"reply_markup": report_flow.report_button_markup()}
+                 if report_flow.is_owner(self, calling_user_id(update)) else {})
+        await reply_text(update.message, text, parse_mode="HTML", **extra)
 
     def _app_button_row(self, update: Update) -> list:
         """One inline row linking to the Mini App, or [] when it doesn't belong.
@@ -690,7 +702,9 @@ class CommandHandlersMixin:
         if not await self._authorize(update, allow_read_only=True):
             return
         chat_id = calling_chat_id(update)
-        text, kb = render_settings_root(chat_id or 0)
+        text, kb = render_settings_root(
+            chat_id or 0, problem_reports=report_flow.settings_row_state(
+                self, chat_id, calling_user_id(update)))
         app_row = self._app_button_row(update)
         if app_row:
             kb = InlineKeyboardMarkup(list(kb.inline_keyboard) + app_row)
@@ -1542,7 +1556,10 @@ class CommandHandlersMixin:
         # Multi-step flows get first refusal on free text. Each returns
         # False unless it is genuinely mid-capture for THIS chat, so
         # ordinary session routing below is untouched outside those
-        # narrow windows.
+        # narrow windows. The problem report note goes first: it is the
+        # owner's newest question when it is open (report_flow).
+        if await report_flow.maybe_handle_text(self, update, ctx, text):
+            return
         if await new_flow.maybe_handle_text(self, update, ctx, text):
             return
         if await session_parity.maybe_handle_text(self, update, ctx, text):

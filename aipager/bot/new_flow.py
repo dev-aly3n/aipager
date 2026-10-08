@@ -234,7 +234,18 @@ async def close_if_moved_on(
     /stop, a button on another message. Closed by default, with the few
     exceptions in :func:`_leaves_the_card_open`, instead of a list of
     exits to keep up to date (three reviews found one missing each time,
-    2026-09-30). Never raises, never stops the update."""
+    2026-09-30). Never raises, never stops the update.
+
+    The problem report note capture (roadmap 8.112) rides on this same
+    handler (PTB runs only the first matching handler of a group, so a
+    second group -1 handler would never run): ``report_flow.on_update``
+    goes first, on its own, and closes that capture on ANY other action,
+    whatever ``_leaves_the_card_open`` says about the Name card."""
+    try:
+        from aipager.bot import report_flow  # local: import cycle
+        report_flow.on_update(bot, update)
+    except Exception:
+        log.debug("new_flow: report note pre-check failed", exc_info=True)
     try:
         if not _leaves_the_card_open(bot, update):
             # Only the sender's own card and rename question, if they have

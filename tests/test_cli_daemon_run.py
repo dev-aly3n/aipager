@@ -151,8 +151,9 @@ def test_run_daemon_happy_path_personal_mode(monkeypatch):
 
 def test_run_daemon_wires_the_pinned_bar_to_the_monitor_tick(monkeypatch):
     """8.31: the session monitor's scan is what refreshes the pinned bar
-    for every transition no call site announces. Mutation: drop the
-    wiring and ``on_tick`` stays unset."""
+    for every transition no call site announces (8.112: through
+    ``monitor_tick``, which also runs the problem report offer check).
+    Mutation: drop the wiring and ``on_tick`` stays unset."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
     monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
@@ -160,7 +161,7 @@ def test_run_daemon_wires_the_pinned_bar_to_the_monitor_tick(monkeypatch):
     monitor.on_tick = None
     asyncio.new_event_loop().run_until_complete(
         daemon._run_daemon("bot_username"))
-    assert monitor.on_tick is bot.pinned_tick
+    assert monitor.on_tick is bot.monitor_tick
 
 
 def test_run_daemon_wires_the_keyboard_catch_up_to_the_monitor_tick(monkeypatch):

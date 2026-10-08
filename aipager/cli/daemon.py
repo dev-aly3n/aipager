@@ -326,6 +326,9 @@ async def _run_daemon(bot_username: str) -> None:
     registry = SessionRegistry()
     registry.load()
     bot = TelegramBot(registry)
+    # Kept for problem reports: never probed again at tap time.
+    bot.claude_auth_source = (provenance.auth_source if provenance is not None
+                              else "unknown")
     hook_receiver = HookReceiver(registry, bot.notify)
     session_monitor = SessionMonitor(registry, bot.notify)
 
@@ -375,7 +378,8 @@ async def _run_daemon(bot_username: str) -> None:
     await bot.recover_sessions()
     session_monitor.on_sessions_changed = bot._update_bot_commands
     session_monitor.on_mute_catchup = bot.flush_owed_keyboards
-    session_monitor.on_tick = bot.pinned_tick
+    # The pinned bar, then the problem report offer check (8.112).
+    session_monitor.on_tick = bot.monitor_tick
     await session_monitor.start()
 
     # A self-update (roadmap 8.36) that restarted the daemon left a marker:

@@ -30,7 +30,15 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from aipager.bot import card_owner, held_message, new_flow, session_parity, tap_gate, update_flow
+from aipager.bot import (
+    card_owner,
+    held_message,
+    new_flow,
+    report_flow,
+    session_parity,
+    tap_gate,
+    update_flow,
+)
 from aipager.dtach import hook_reply, inject
 from aipager.report import store as report_store
 
@@ -329,7 +337,9 @@ class CallbackDispatchMixin:
         parts = action.split(":")[1:]  # drop the leading "set"
 
         if not parts or parts == ["back"]:
-            text, kb = render_settings_root(chat_id or 0)
+            text, kb = render_settings_root(
+                chat_id or 0, problem_reports=report_flow.settings_row_state(
+                    self, chat_id, getattr(getattr(query, "from_user", None), "id", None)))
             try:
                 await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
             except Exception:
@@ -610,6 +620,9 @@ class CallbackDispatchMixin:
         # namespace, so every pre-existing callback below is unaffected.
         # `_:up:` (self-update) re-checks the admin rule on every tap.
         if await update_flow.handle_callback(self, update, query, session_name, action):
+            return
+        # `_:rp:` (problem reports) re-checks the owner on every tap.
+        if await report_flow.handle_callback(self, update, query, session_name, action):
             return
         if await new_flow.handle_callback(self, update, query, session_name, action):
             return

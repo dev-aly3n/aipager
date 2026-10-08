@@ -134,6 +134,9 @@ PREFIX_CAPS: tuple[tuple[str, Cap], ...] = (
     ("up:", UPDATE),            # /update (re-checked inside)
     ("set:", VIEW),             # /settings browsing; writes gated inside
     ("spref:", VIEW),           # preference browsing; writes: see below
+    # Problem reports: owner only, re-checked inside report_flow (no
+    # capability says "owner", so a member's tap must reach that check).
+    ("rp:", VIEW),
 )
 
 

@@ -233,6 +233,17 @@ HTML_BODY = """\
     <div id="updates-job" class="updates-job" hidden></div>
     <div id="updates-actions" class="updates-actions"></div>
   </div>
+  <div id="report-block" class="card updates" hidden>
+    <div class="card-head">
+      <span class="card-icon" aria-hidden="true"><svg class="ic"><use href="#i-question"></use></svg></span>
+      <h3 class="card-title">Report a problem</h3>
+    </div>
+    <div class="updates-small">See exactly what a problem report holds, then send it if you want. It holds no chats, prompts, names or paths.</div>
+    <div id="report-note" class="updates-small" hidden></div>
+    <div class="updates-actions">
+      <button type="button" class="primary" id="report-open">Report a problem</button>
+    </div>
+  </div>
 </section>
 
 <section id="view-detail" hidden>

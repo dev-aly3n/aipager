@@ -37,6 +37,8 @@ from aipager.bot import (
     callbacks,
     dashboard,
     new_flow,
+    report_flow,
+    report_offer,
     session_parity,
     settings_menu,
     tap_gate,
@@ -60,7 +62,7 @@ ROLE_OF = {ALY: "owner", BOB: "user", RO: "read_only", ADA: "admin"}
 
 BOT_DIR = Path(callbacks.__file__).resolve().parent
 DISPATCHERS = [callbacks, session_parity, new_flow, update_flow,
-               settings_menu, dashboard]
+               settings_menu, dashboard, report_flow, report_offer]
 
 REFUSED = tap_gate.REFUSED_TEXT
 OTHER_CHAT = tap_gate.OTHER_CHAT_TEXT
@@ -166,6 +168,7 @@ def test_the_scan_sees_the_dispatchers_verbs():
         _action_literals(session_parity))
     assert {"rdy_m", "nw:", "set:ns:"} <= _action_literals(new_flow)
     assert "up:" in _action_literals(update_flow)
+    assert "rp:" in _action_literals(report_flow)
 
 
 def test_every_session_action_and_answer_verb_is_in_the_table():

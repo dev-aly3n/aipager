@@ -147,6 +147,12 @@ ALLOWED_JOINEDSTR_SIGNATURES = frozenset({
     # The one Update button (roadmap 8.43): `_GO_VERBS` maps the offered
     # kind to "cc" / "ap" / "both", so at most "_:up:go:both" = 12 bytes.
     "_:up:go:{_GO_VERBS[offer.kind]}",
+    # bot/report_offer.py's automatic problem report offer (roadmap 8.112):
+    # the offer's `last_offer_ts`, an int epoch (10 digits for centuries),
+    # never a session name: "_:rp:op:" + 10 digits = 18 bytes.
+    "_:rp:op:{offer_ts}",
+    "_:rp:on:{offer_ts}",
+    "_:rp:od:{offer_ts}",
 })
 
 # verb= arguments to session_cb(...) that are f-strings rather than a
