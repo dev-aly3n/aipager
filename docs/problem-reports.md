@@ -4,10 +4,10 @@ When aipager hits a bug, you can send its maintainer a problem report with one t
 
 ## How to send one
 
-Only the owner of the aipager install can send a report from Telegram: the person in the install's own private chat with the bot (the operator; with several such chats and no single owner, there is no Report a problem button and no automatic offer, and `aipager report` in a terminal still works). Every way in from Telegram opens the same preview card in your private chat with the bot:
+Only the owner of the aipager install can send a report from Telegram: the person in the install's own private chat with the bot (the operator; with several such chats and no single owner, there is no Report a problem button and no automatic offer, and `aipager report` in a terminal still works). The Mini App has its own report page; every other way in from Telegram opens the same preview card in your private chat with the bot:
 
 - **`/help`**: when the owner sends it, the help text comes with a "🐞 Report a problem" button. In a group, only the owner's tap does anything, and the preview opens in the owner's private chat, never in the group.
-- **The Mini App**: Settings tab, "Report a problem" (when the app is open on your private chat). The card appears in your private chat; the app tells you so.
+- **The Mini App**: Settings tab, "Report a problem" (when the app is open on your private chat) opens a page inside the app. Your note goes at the top (optional, up to 500 characters, with a counter). Below it is a short summary of the report: versions, setup, the errors (tap one for its places in the code) and **More details**. **Show the exact report** shows the exact text that will be sent, your note included, and it follows your typing. **Send report** (Telegram's button at the bottom) sends exactly that, once, and the page then shows the reference with a **Copy** button. Back sends nothing. If aipager tidies your note (spaces at the ends, invisible characters, anything past 500 characters), the page shows the tidied note and nothing is sent until you tap Send report again.
 - **The memory-cap notice**: when aipager's hook runs out of memory, the notice in the chat has a "🐞 Report this" button.
 - **An automatic offer**: rarely, aipager offers to send a report about a bug it noticed (see [When aipager offers a report](#when-aipager-offers-a-report)).
 - **In a terminal**: `aipager report` prints a report and asks `Send this report? [y/N]`. It holds the same kinds of fields, but fewer of the running daemon's facts (the mode, chats, features, uptime, sessions and Claude Code details are left unknown or empty). `aipager report --note "what you were doing"` adds a note. Without a terminal (a script, a pipe, a Claude Code session's shell) it prints the report and never sends it.
@@ -18,7 +18,7 @@ The preview card shows the report exactly as it will be sent: the JSON in a coll
 - **✏️ Add a note**: your next message in that chat within 10 minutes becomes the report's note (cut at 500 characters), and the card shows the report again with the note in it before you send. Doing anything else instead (a command, another button, a photo, an action in the Mini App) closes the note question without adding a note, and after 10 minutes your next message goes to Claude as usual.
 - **✖️ Cancel**: nothing is sent.
 
-A preview stays open for 24 hours, and the 5 newest stay open (opening a 6th closes the oldest). After a restart of aipager, an old card can no longer be sent: open Report a problem again for a fresh one.
+A preview stays open for 24 hours, and the 5 newest stay open (opening a 6th closes the oldest). After a restart of aipager, an old card can no longer be sent: open Report a problem again for a fresh one. A report opened in the Mini App can be sent for 24 hours (the 3 newest); after a restart the page loads a fresh one.
 
 ## What a report holds
 
