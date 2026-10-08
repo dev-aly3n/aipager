@@ -242,6 +242,11 @@ FORBIDDEN_KEYS = {"message", "msg", "args", "exc_text", "stack_info", "source_tr
 #: ``.read_bytes()``, ``.open()``): module-level path constants, each a
 #: machine fact the builder takes one shaped value from.
 FILE_READ_RE = r"^[A-Z][A-Z0-9_]*$"
+#: Besides those, the files aipager itself writes and validates again on
+#: every read, each by this one local name: ``store_path`` in
+#: ``store._read`` (reports.json) and ``marker_path`` in ``markers._read``
+#: (install.json, running.json).
+FILE_READ_LOCALS = {"store_path", "marker_path"}
 #: What an f-string in aipager/report may interpolate. A new entry must be
 #: a typed value (a count, a version part, a checked name), never text.
 #: It matches the expression's text, so it is a tripwire, not a proof: a
@@ -249,7 +254,7 @@ FILE_READ_RE = r"^[A-Z][A-Z0-9_]*$"
 ALLOWED_INTERPOLATIONS = {
     "v.major", "v.minor", "v.micro", "m.group(1)", "m.group(2)", "module",
     "qualname", "rel", "rel.as_posix()", "kind", "file", "fn",
-    "frame.f_globals.get('__name__')", "path", "key", "limit", "i"}
+    "frame.f_globals.get('__name__')", "path", "key", "limit", "i", "line"}
 
 
 def _sweep(source: str, name: str) -> list[str]:
@@ -268,7 +273,8 @@ def _sweep(source: str, name: str) -> list[str]:
                 found.append(f"{where} .get({call.args[0].value!r})")
             if node.attr in ("read_text", "read_bytes", "open") and not (
                     isinstance(node.value, ast.Name)
-                    and re.match(FILE_READ_RE, node.value.id)):
+                    and (re.match(FILE_READ_RE, node.value.id)
+                         or node.value.id in FILE_READ_LOCALS)):
                 found.append(f"{where} a file read through {ast.unparse(node.value)}")
             if node.attr == "f_globals":
                 # Only ever f_globals.get("__name__"): the module's name.

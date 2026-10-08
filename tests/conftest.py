@@ -231,6 +231,13 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         # `_guard_real_home` deliberately excludes ~/.claude/ from its
         # snapshot, so nothing else would catch it.
         "aipager.config.FLOOD_STATE_FILE": flood_state_json,
+        # Problem reports (8.112): read LATE by aipager.report.store and
+        # .markers, so one entry each covers every reader.
+        "aipager.config.REPORTS_FILE": home / ".local" / "share" / "aipager" / "reports.json",
+        "aipager.config.REPORT_INSTALL_FILE":
+            home / ".local" / "share" / "aipager" / "install.json",
+        "aipager.config.REPORT_RUNNING_FILE":
+            home / ".local" / "share" / "aipager" / "running.json",
         "aipager.config._KEYBOARD_CONFIG_PATH": cfg / "keyboard.json",
         # migrate.upgrade_to_v3() reads this (and its .retired.* siblings)
         # to recover Mini App settings — without a redirect it would read
@@ -289,6 +296,20 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         originals[dotted] = getattr(import_module(module_name), attr)
         monkeypatch.setattr(dotted, value)
     return originals
+
+
+@pytest.fixture(autouse=True)
+def _reset_problem_report_store(_isolate_home_paths):
+    """The problem-report store (8.112) is module state, like the
+    preferences cache: every test starts with it empty and unread (it
+    reads the redirected file), and with no capture handler left on the
+    loggers by a test that ran ``aipager start``'s wiring."""
+    from aipager.report import capture, store
+    capture.uninstall()
+    store.reset()
+    yield
+    capture.uninstall()
+    store.reset()
 
 
 @pytest.fixture(autouse=True)

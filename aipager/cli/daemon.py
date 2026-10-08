@@ -546,6 +546,10 @@ def _cmd_start(args: argparse.Namespace) -> int:
     # Suppress it here so neither the getUpdates polling loop nor the
     # sendRichMessage / sendRichMessageDraft calls leak the token into logs.
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    # Problem reports (8.112): fingerprints and counts from the daemon's own
+    # log records, never their text. In memory until the lock is held.
+    from aipager.report import capture
+    capture.install()
     # Generate the v2 config (aipager.yaml + policy.yaml seed) from the
     # current install if it doesn't exist yet. Phase A: this is
     # additive — the runtime still authorizes via CHAT_ID/TEAM, and the
@@ -566,5 +570,38 @@ def _cmd_start(args: argparse.Namespace) -> int:
     _check_existing_daemon()   # fast socket-probe with friendly error
     _acquire_daemon_lock()     # airtight fcntl guard against startup races
     bot_username = _telegram_preflight()
-    asyncio.run(_run_daemon(bot_username))
+    _run_daemon_reporting_crashes(bot_username)
     return 0
+
+
+def _running_as_service() -> bool:
+    """Whether systemd or launchd runs this daemon. Only then is an unclean
+    exit a bug: a foreground ``aipager start`` dies with its terminal."""
+    try:
+        import platform
+        if platform.system() == "Linux":
+            from aipager import self_update
+            return self_update._under_unit_cgroup()
+        from aipager import service
+        return os.environ.get("XPC_SERVICE_NAME") == service.MACOS_LABEL
+    except Exception:
+        return False
+
+
+def _run_daemon_reporting_crashes(bot_username: str) -> None:
+    """Run the daemon between the problem-report markers (8.112), and log a
+    fatal error WITH its traceback before it propagates (8.110: the CLI's
+    friendly excepthook prints one line and drops every frame)."""
+    from aipager.report import capture, runtime
+    runtime.daemon_starting(service=_running_as_service())
+    try:
+        asyncio.run(_run_daemon(bot_username))
+    except (KeyboardInterrupt, SystemExit):
+        runtime.daemon_stopped(clean=True)
+        raise
+    except BaseException:
+        log.critical("aipager stopped on an unexpected error", exc_info=True,
+                     extra={capture.TRIGGER_ATTR: "crash"})
+        runtime.daemon_stopped(clean=False)
+        raise
+    runtime.daemon_stopped(clean=True)

@@ -299,6 +299,16 @@ FLOOD_STATE_FILE = Path.home() / ".claude" / "aipager-flood-state.json"
 # under that, so a burst of 429s costs one write rather than twenty.
 FLOOD_STATE_MIN_INTERVAL: float = 5.0
 
+# Problem reports (roadmap 8.112): the local store of error fingerprints
+# and counts (``aipager.report.store``), the first-install marker that
+# starts the 48 h quiet, and the running marker that tells an unclean exit
+# from a clean one (``aipager.report.markers``). Read LATE by those
+# modules, so tests/conftest.py::_isolate_home_paths redirects each with
+# one entry; `_guard_real_home` watches ~/.local/share/aipager as well.
+REPORTS_FILE = Path.home() / ".local" / "share" / "aipager" / "reports.json"
+REPORT_INSTALL_FILE = Path.home() / ".local" / "share" / "aipager" / "install.json"
+REPORT_RUNNING_FILE = Path.home() / ".local" / "share" / "aipager" / "running.json"
+
 # While calls flow, the file is ALSO rewritten this often even when
 # nothing material changed (roadmap 8.30). It carries each chat's rolling
 # HOUR now — the volume that got vm3 banned — and `aipager status`, a

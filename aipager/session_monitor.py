@@ -15,6 +15,7 @@ import os
 import time
 
 from aipager import statusline_file
+from aipager.report import store as report_store
 from aipager.dtach import inject as dtach_inject
 from aipager.config import (
     COMPACT_INFLIGHT_MAX_SECONDS,
@@ -600,6 +601,9 @@ class SessionMonitor:
             self.registry.save_if_dirty()
         except Exception:
             log.exception("Session monitor error")
+        # Problem reports (8.112): the same dirty-flag-plus-tick debounce as
+        # the registry; a no-op unless something was recorded. Never raises.
+        report_store.save_if_dirty()
         if self.on_mute_catchup is not None:
             try:
                 await self.on_mute_catchup()

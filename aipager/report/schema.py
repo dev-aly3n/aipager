@@ -31,7 +31,9 @@ VERSION_RE = re.compile(
 DISTRO_VERSION_RE = re.compile(r"^\d{1,4}(\.\d{1,6}){0,3}$")
 DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 HOOK_EVENT_RE = re.compile(r"^[A-Za-z]{1,32}$")
-LOGGER_RE = re.compile(r"^(aipager(\.[a-z_][a-z0-9_]{0,39}){0,6}|asyncio|telegram\.ext\.Updater)$")
+LOGGER_RE = re.compile(
+    r"^(aipager(\.[a-z_][a-z0-9_]{0,39}){0,6}|asyncio|telegram\.ext"
+    r"(\.(Application|Updater|ExtBot|JobQueue|AIORateLimiter|ConversationHandler))?)$")
 SCHEMA_ID = "aipager-report/1"
 #: Seven digits in a row is an id's shape (a chat id, a phone number), never
 #: a version's or a name's: refused in every patterned leaf.
@@ -224,7 +226,11 @@ COUNTER_KEYS = ("watchdog_restart", "watchdog_refresh", "interactive_demoted",
                 "allow_always_degraded", "unknown_hook_event", "tg_400_deleted",
                 "tg_400_parse_entities", "tg_400_too_long", "tg_400_other",
                 "tg_404_rich", "tg_5xx", "tg_network", "tg_429_small",
-                "hook_cap_hit", "hook_fail_closed", "hook_error", "dtach_failed")
+                "hook_cap_hit", "hook_fail_closed", "hook_error", "dtach_failed",
+                # Environment errors: counted, never a fingerprint or an offer.
+                "tg_retry_after", "tg_conflict", "tg_forbidden", "tg_invalid_token",
+                "env_network", "env_timeout", "env_cancelled", "env_disk_full",
+                "env_read_only", "env_permission", "env_no_memory")
 FEATURES = ("miniapp", "tunnel_managed", "tunnel_override", "observers", "voice",
             "diff_preview_any", "rich_summaries")
 DEPENDENCIES = ("python-telegram-bot", "httpx", "aiohttp", "PyYAML", "rich",
@@ -281,7 +287,7 @@ SCHEMA: dict = {
         "sessions_live": INT,
         "sessions_busy": INT,
         "unclean_exits_7d": INT,
-        "last_exit": enum("clean", "crash", "signal", "oom", UNKNOWN),
+        "last_exit": enum("clean", "crash", "reboot", UNKNOWN),
     },
     "doctor": ("map", enum(*DOCTOR_KEYS), enum("ok", "warn", "fail")),
     "flood": {
@@ -301,7 +307,7 @@ SCHEMA: dict = {
         "trigger": enum("log_exception", "log_error", "task", "ptb_handler", "crash",
                         "hook_error", "hook_cap", "fail_closed", "counter", "manual"),
         "logger": Leaf("regex", pattern=LOGGER_RE, nullable=True),
-        "type": TYPE_NAME,
+        "type": Leaf("type_name", nullable=True),  # None: a call-site event
         "cause_types": ("list", TYPE_NAME, fp.MAX_CAUSES),
         "errno": Leaf("regex", pattern=re.compile(r"^E[A-Z0-9]{1,15}$"), nullable=True),
         "tg_class": enum("message_deleted", "not_modified", "parse_entities", "too_long",
@@ -369,6 +375,13 @@ def _validate(schema, value, path: str, problems: list[str]):
         return out
     problems.append(path)  # an unknown schema form never passes
     return INVALID
+
+
+def validate_part(schema, value) -> tuple[object, list[str]]:
+    """*value* checked against one part of :data:`SCHEMA` (the local store
+    keeps ``errors[]`` entries and digest rows in these shapes)."""
+    problems: list[str] = []
+    return _validate(schema, value, "part", problems), problems
 
 
 def validate(report: dict) -> tuple[dict, list[str]]:

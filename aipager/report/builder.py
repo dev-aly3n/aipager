@@ -221,7 +221,7 @@ def _runtime_facts(ctx: ReportContext) -> dict:
         "sessions_live": _cap(ctx.sessions_live or 0),
         "sessions_busy": _cap(ctx.sessions_busy or 0),
         "unclean_exits_7d": _cap(ctx.unclean_exits_7d),
-        "last_exit": ctx.last_exit if ctx.last_exit in ("clean", "crash", "signal", "oom")
+        "last_exit": ctx.last_exit if ctx.last_exit in ("clean", "crash", "reboot")
         else sc.UNKNOWN,
     }
 
