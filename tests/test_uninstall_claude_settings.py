@@ -451,16 +451,41 @@ def test_half_an_emoji_in_the_users_settings_never_stops_the_uninstall(monkeypat
     assert "\\ud83d" in _path().read_text()
 
 
-def test_a_file_too_deep_to_write_back_is_left_as_it_is(monkeypatch, capsys):
-    # Python 3.12 reads 2000 levels but cannot write them back with an
-    # indent (the case this is about); 3.10 and 3.11 already refuse to read
-    # them, which ends the same way.
+def test_a_very_deep_file_never_stops_the_uninstall(monkeypatch, capsys):
+    # How deep Python reads and writes back depends on its version: 3.10
+    # and 3.11 refuse to read these 2000 levels, 3.12 reads them but cannot
+    # write them back with an indent, 3.13 does both. Whichever it is, the
+    # uninstall goes through, and the file is either left exactly as it was
+    # or rewritten with only aipager's entry gone.
     deep = "[" * 2000 + "]" * 2000
     before = _write('{"x": ' + deep + ", " + json.dumps(OURS_ONLY)[1:])
     plan = settings_patch.plan_unpatch()
-    assert plan.new_text is None and plan.problem == "it is not in the shape Claude Code reads"
     assert "aipager uninstalled." in _uninstall(monkeypatch, capsys).out
-    assert _path().read_text() == before
+    after = _path().read_text()
+    if plan.new_text is None:
+        assert plan.problem == "it is not in the shape Claude Code reads"
+        assert after == before
+    else:
+        assert plan.problem is None and plan.hooks == 1
+        assert "".join(after.split()) == '{"x":' + deep + "}"
+
+
+def test_a_file_it_cannot_write_back_is_left_as_it_is(monkeypatch):
+    # The way the deep file above ends on Python 3.12, on every Python.
+    before = _write(copy.deepcopy(OURS_ONLY))
+    tried = []
+
+    def _too_deep(*args, **kwargs):
+        tried.append(True)
+        raise RecursionError("maximum recursion depth exceeded")
+
+    with monkeypatch.context() as m:
+        m.setattr(settings_patch.json, "dumps", _too_deep)
+        plan = settings_patch.plan_unpatch()
+    assert tried, "plan_unpatch never tried to write the file back"
+    assert plan.new_text is None and plan.problem == "it is not in the shape Claude Code reads"
+    assert settings_patch.apply_unpatch(plan) is None
+    assert _path().read_text() == before and _backups() == []
 
 
 def test_a_backup_from_the_same_second_is_kept(tmp_path):
