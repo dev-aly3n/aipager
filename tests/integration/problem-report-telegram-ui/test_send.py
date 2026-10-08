@@ -137,16 +137,43 @@ def test_card_shows_the_sent_line(bot, drive, h, run_async, net):
     assert re.search(r"Sent\. Reference \S+ \(quote it if you open a GitHub issue\)\.", text)
 
 
-def test_sent_reference_has_the_ap1_form(bot, drive, h, run_async, net):
-    """spec.md item 2 and design.md SC-9: "Sent. Reference ap1-..."."""
-    d = drive(bot)
+_REFERENCE = re.compile(r"Sent\. Reference (\S+) \(quote it if you open a GitHub issue\)\.")
 
+
+def _sent_reference(bot, d, h, run_async, net):
     async def go():
         cid, mid = await _open(bot, d, h)
         await d.tap("_:rp:send", chat=cid, message_id=mid)
         return bot.tg.text_of(cid, mid)
-    text = run_async(go())
-    assert "Sent. Reference ap1-" in text
+    found = _REFERENCE.search(run_async(go()))
+    assert found, "no Sent line on the card"
+    (post,) = net.posts
+    header, items = h.parse_envelope(post.content)
+    event = next(json.loads(p) for i, p in items if i.get("type") == "event")
+    return found.group(1), header, event
+
+
+@pytest.mark.parametrize("stored", ["typed", "call_site"])
+def test_sent_reference_has_the_ap1_form(bot, drive, h, run_async, net, stored):
+    """The reference rule (coordinator decision, iteration 2): a report
+    that carries a keyed error is quoted by that error's checked ap1-
+    fingerprint, the same value Sentry can search as the report_fp tag;
+    both a typed (exception) and a call-site (log line) error count."""
+    if stored == "typed":
+        h.record_exc()
+    else:
+        h.record_bug()
+    ref, _header, event = _sent_reference(bot, drive(bot), h, run_async, net)
+    assert ref.startswith("ap1-")
+    assert event["tags"]["report_fp"] == ref
+
+
+def test_sent_reference_without_errors_is_the_event_id(bot, drive, h, run_async, net):
+    """A report with no errors has no fingerprint to quote: the reference
+    is the full 32-hex Sentry event id."""
+    ref, header, _event = _sent_reference(bot, drive(bot), h, run_async, net)
+    assert re.fullmatch(r"[0-9a-f]{32}", ref)
+    assert header["event_id"] == ref
 
 
 def test_sent_card_has_no_send_button(bot, drive, h, run_async, net):
