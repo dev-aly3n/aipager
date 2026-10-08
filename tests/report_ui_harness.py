@@ -4,6 +4,7 @@ and message builders, and the fake Sentry/GitHub network."""
 
 from __future__ import annotations
 
+import asyncio
 import html
 import json
 import re
@@ -68,6 +69,16 @@ def make_bot(mk_bot, **kw):
     tg = FakeTg()
     bot._app.bot = tg
     return bot, tg
+
+
+async def drain_sends(bot, timeout: float = 10.0) -> None:
+    """Wait for every Send started on *bot*'s cards (each runs in its own
+    task, off the update handler) to finish."""
+    cards = getattr(bot, "_report_cards", None) or {}
+    tasks = [k.send_task for k in cards.values()
+             if k.send_task is not None and not k.send_task.done()]
+    if tasks:
+        await asyncio.wait_for(asyncio.gather(*tasks), timeout)
 
 
 def tap(data, *, user_id=OWNER, chat_id=OWNER, message_id=1):

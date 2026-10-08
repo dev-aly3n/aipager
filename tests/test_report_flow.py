@@ -31,6 +31,7 @@ from tests.report_ui_harness import (
     STRANGER,
     FakeNet,
     attachment,
+    drain_sends,
     inline_block,
     key_doc,
     make_bot,
@@ -67,8 +68,13 @@ def _kept(bot) -> report_flow.KeptReport:
 
 
 def _press(run_async, bot, data, **kw):
+    """One tap, and the Send it may start, to the end."""
     update, query = tap(data, **kw)
-    run_async(bot._handle_callback(update, MagicMock()))
+
+    async def _go():
+        await bot._handle_callback(update, MagicMock())
+        await drain_sends(bot)
+    run_async(_go())
     return query
 
 
@@ -271,6 +277,7 @@ def test_double_tap_sends_once(mk_bot, run_async, net):
         u2, q2 = tap("_:rp:send", message_id=kept.msg_id)
         await asyncio.gather(bot._handle_callback(u1, MagicMock()),
                              bot._handle_callback(u2, MagicMock()))
+        await drain_sends(bot)
         return q1, q2
 
     q1, q2 = run_async(_both())
@@ -299,6 +306,69 @@ def test_send_runs_in_worker_thread(mk_bot, run_async, monkeypatch):
     _press_card(run_async, bot, "send", kept)
     assert seen == [(False, report, marker)]
     assert seen[0][1] is report        # the very object previewed
+
+
+def test_other_updates_are_handled_while_a_send_is_in_flight(mk_bot, run_async, monkeypatch):
+    """PTB handles one update at a time: the tap's handler must return
+    while Sentry is still answering, so the next update (another chat's
+    tap, a message, Stop) is not queued behind the send."""
+    gate = threading.Event()
+    fake = FakeNet()
+
+    def _gated(request):
+        if request.method == "POST":
+            gate.wait(10)
+        return fake(request)
+
+    monkeypatch.setattr(report_flow, "SEND_TRANSPORT", httpx.MockTransport(_gated))
+    bot, tg = make_bot(mk_bot)
+    _open(run_async, bot)
+    kept = _kept(bot)
+
+    async def _go():
+        try:
+            u1, _q1 = tap("_:rp:send", message_id=kept.msg_id)
+            # The handler returns with the send still waiting on the network.
+            await asyncio.wait_for(bot._handle_callback(u1, MagicMock()), 2.0)
+            assert kept.state == "sending" and not kept.send_task.done()
+            # Another update goes through meanwhile: the settings page...
+            u2, q2 = tap("_:rp:set")
+            await asyncio.wait_for(bot._handle_callback(u2, MagicMock()), 2.0)
+            q2.edit_message_text.assert_awaited()
+            # ...and a second Send tap is told it is already going.
+            u3, q3 = tap("_:rp:send", message_id=kept.msg_id)
+            await asyncio.wait_for(bot._handle_callback(u3, MagicMock()), 2.0)
+            assert not kept.send_task.done()
+        finally:
+            gate.set()
+        await drain_sends(bot)
+        return q3
+
+    q3 = run_async(_go())
+    assert toasts(q3) == [report_flow.ALREADY_SENDING]
+    assert len(fake.posts) == 1
+    assert "Sent. Reference " in tg.last_edit_of(kept.msg_id)["text"]
+
+
+def test_a_send_that_raises_is_final_not_try_later(mk_bot, run_async, monkeypatch):
+    """send.send should never raise; if it does, the same report would
+    fail the same way: a final line, no Send button to loop on."""
+    def _broken(rep, transport=None, now=None):
+        raise AttributeError("'NoneType' object has no attribute 'rpartition'")
+
+    monkeypatch.setattr(report_flow, "SEND_TRANSPORT", httpx.MockTransport(_no_network))
+    monkeypatch.setattr(send, "send", _broken)
+    bot, tg = make_bot(mk_bot)
+    _open(run_async, bot)
+    kept = _kept(bot)
+    _press_card(run_async, bot, "send", kept)
+    final = tg.last_edit_of(kept.msg_id)
+    assert report_flow.SEND_FAILED_TEXT in final["text"]
+    assert wording.TRY_LATER not in final["text"]
+    assert final["reply_markup"] is None
+    assert kept.state == "done" and kept.report is None
+    query = _press_card(run_async, bot, "send", kept)
+    assert toasts(query) == [report_flow.ALREADY_SENT]
 
 
 def _today() -> str:

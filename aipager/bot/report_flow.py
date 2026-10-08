@@ -34,13 +34,12 @@ import importlib.util
 import logging
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from telegram import ExternalReplyInfo, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 
-from aipager._test_guard import LiveNetworkError
 from aipager.bot.flood import MUTE
 from aipager.bot.flood_budget import PRIORITY_INSTANT, rate_limit_args
 from aipager.bot.transport import (
@@ -98,6 +97,8 @@ NOT_OWNER_TEXT = "Only the owner of this aipager can report a problem."
 NO_OWNER_TEXT = "I can't open a report preview: this install has no single owner chat."
 IN_DM_TEXT = "The report preview is in your private chat with the bot."
 NOT_OPENED_TEXT = "Could not open the report preview right now. Try again later."
+SEND_FAILED_TEXT = ("This report could not be sent because of a problem inside aipager. "
+                    "Nothing was sent.")
 ALREADY_SENDING = "Already sending."
 ALREADY_SENT = "Already sent."
 INVALID_TEXT = "Invalid callback"
@@ -132,6 +133,7 @@ TURN_ON_BUTTON = "Turn offers back on"
 #: for the longest, so a status never pushes a card over Telegram's limit.
 _STATUS_LINES = (
     SENDING_TEXT, NOTE_ADDED, NOTE_CUT, NOTE_EMPTY, NOTE_REFUSED, NOTE_CLOSED,
+    SEND_FAILED_TEXT,
     *wording.OUTCOME_LINES.values(),
 )
 _STATUS_RESERVE = max(len(line) for line in _STATUS_LINES) + 80
@@ -158,6 +160,8 @@ class KeptReport:
     doc_msg_id: int | None = None
     state: str = "open"           # "open" | "note" | "sending" | "done"
     created: float = 0.0          # time.monotonic()
+    #: The background task running this card's Send (None until tapped).
+    send_task: "asyncio.Task | None" = field(default=None, repr=False, compare=False)
 
 
 # ---- the owner ------------------------------------------------------------
@@ -574,11 +578,12 @@ def _is_note_answer(bot: "TelegramBot", update, pending: dict) -> bool:
     return not _keyboard_word(bot, text.strip())
 
 
-def _spawn(coro) -> None:
+def _spawn(coro) -> "asyncio.Task":
     from aipager.bot.notify import _BACKGROUND_TASKS  # local: import cycle
     task = asyncio.create_task(coro)
     _BACKGROUND_TASKS.add(task)
     task.add_done_callback(_BACKGROUND_TASKS.discard)
+    return task
 
 
 def close_note(bot: "TelegramBot", user_id=None) -> None:
@@ -726,31 +731,43 @@ def _drop_note_for(bot: "TelegramBot", kept: KeptReport) -> None:
 
 
 async def _tap_send(bot: "TelegramBot", query, kept: KeptReport) -> None:
-    from aipager.report import send
-
     if kept.state == "sending":
         await bot._safe_answer(query, ALREADY_SENDING)
         return
     if kept.state == "done" or kept.report is None:
         await bot._safe_answer(query, ALREADY_SENT)
         return
-    # Claimed before the first await: a second tap sees it.
+    # Claimed before anything awaits: a second tap sees it.
     kept.state = "sending"
     _drop_note_for(bot, kept)
+    # The network call (up to ~20 s) runs in its own task: PTB handles
+    # updates one at a time, so awaiting it here would hold every chat's
+    # messages and taps (Stop included) behind it.
+    kept.send_task = _spawn(_run_send(bot, kept))
+
+
+async def _run_send(bot: "TelegramBot", kept: KeptReport) -> None:
+    """Send *kept*'s report once, in a worker thread, and put the outcome
+    on its card. Never raises."""
+    from aipager.report import send
+
     await _edit_card(bot, kept, card_text(kept, SENDING_TEXT), None)
     try:
         result = await asyncio.to_thread(send.send, kept.report, transport=SEND_TRANSPORT)
-    except LiveNetworkError:
-        raise
     except Exception as e:  # noqa: BLE001 - send.send never raises; belt and braces
         log.warning("problem report send failed (%s)", type(e).__name__)
-        result = send.SendResult(send.OFFLINE)
-    line = outcome_line(result.outcome, result.reference)
-    log.info("problem report send: %s", result.outcome)
-    if result.outcome in wording.RETRYABLE:
-        kept.state = "open"
-        await _edit_card(bot, kept, card_text(kept, line), preview_keyboard())
-        return
+        result = None
+    if result is None:
+        # Something inside aipager broke: the same report would break the
+        # same way, so this is final (no Send button to tap again).
+        line = SEND_FAILED_TEXT
+    else:
+        line = outcome_line(result.outcome, result.reference)
+        log.info("problem report send: %s", result.outcome)
+        if result.outcome in wording.RETRYABLE:
+            kept.state = "open"
+            await _edit_card(bot, kept, card_text(kept, line), preview_keyboard())
+            return
     # Final: the report is let go; the entry stays so a late second tap
     # says "Already sent." instead of overwriting the outcome.
     kept.state = "done"
