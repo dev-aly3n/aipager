@@ -36,15 +36,19 @@ import re
 import threading
 import time
 from collections import OrderedDict
+from dataclasses import replace
 from pathlib import Path
 
 from aipager._test_guard import check_write
 from aipager.report import builder
 from aipager.report import fingerprint as fp
+from aipager.report import policy as report_policy
 from aipager.report import schema as sc
 
 log = logging.getLogger(__name__)
 
+#: Bumping this makes every existing file "not read whole", which turns
+#: automatic offers OFF (see load): a new version must migrate ``policy``.
 SCHEMA_VERSION = 1
 MAX_FINGERPRINTS = 50
 KEEP_COUNTER_HOURS = 8 * 24
@@ -79,6 +83,7 @@ _digest: dict[str, dict[tuple[str, str], int]] = {}
 _unclean: list[int] = []
 _last_exit: str = sc.UNKNOWN
 _relayed_new: list[int] = []  # when each new relayed fingerprint arrived
+_policy = report_policy.State()
 _loaded = False
 _dirty = False
 _last_write = 0.0
@@ -382,7 +387,7 @@ def reset() -> None:
 def reset_memory() -> None:
     """Empty the in-memory tables (a file that could not be read whole
     leaves none of itself behind)."""
-    global _last_exit
+    global _last_exit, _policy
     with _lock:
         _errors.clear()
         _counters.clear()
@@ -390,22 +395,34 @@ def reset_memory() -> None:
         _unclean.clear()
         _relayed_new.clear()
         _last_exit = sc.UNKNOWN
+        _policy = report_policy.State()
 
 
 def load() -> None:
-    """Read the file into memory, once; a bad file reads as empty."""
-    global _loaded
+    """Read the file into memory, once; a bad file reads as empty. A file
+    that exists but cannot be read whole (not JSON, another version, too
+    big, half written) leaves automatic offers OFF: its policy state is
+    unknown, and the defaults would undo two declines or the 3-day gap.
+    Only a missing file starts the policy fresh."""
+    global _loaded, _policy
     with _lock:
         if _loaded:
             return
         _loaded = True
         try:
+            exists = _path().exists()
+        except OSError:
+            exists = True
+        try:
             document = _read()
             if isinstance(document, dict) and document.get("version") == SCHEMA_VERSION:
                 _adopt(document)
+                return
         except Exception:  # noqa: BLE001 - unreadable reads as empty
             log.debug("the problem report store could not be read", exc_info=True)
             reset_memory()
+        if exists:
+            _policy = report_policy.State(auto_off=True)
 
 
 def _read():
@@ -465,7 +482,75 @@ def _adopt(document: dict) -> None:
             _unclean.extend(ts for ts in unclean[-UNCLEAN_EXITS_KEPT:] if _is_ts(ts))
         if exits.get("last") in EXIT_KINDS:
             _last_exit = exits["last"]
+    global _policy
+    _policy = _clean_policy(document.get("policy", _NO_POLICY))
     _trim(_now(None))
+
+
+_NO_POLICY = object()
+_POLICY_KEYS = frozenset({"last_offer_ts", "pending", "declines_in_row", "auto_off", "offered"})
+
+
+def _clean_policy(raw) -> report_policy.State:
+    """The offer policy's state from the file. Absent (a store from before
+    step 1c, or a fresh one): the defaults. Present but not exactly what
+    :func:`_document` writes: automatic offers off, which errs quiet (the
+    manual report still works)."""
+    if raw is _NO_POLICY:
+        return report_policy.State()
+    off = report_policy.State(auto_off=True)
+    if not isinstance(raw, dict) or set(raw) != _POLICY_KEYS:
+        return off
+    last, pending, declines = raw["last_offer_ts"], raw["pending"], raw["declines_in_row"]
+    offered = raw["offered"]
+    if not (last is None or _is_ts(last)) or type(raw["auto_off"]) is not bool:
+        return off
+    if type(declines) is not int or not 0 <= declines <= 1000:
+        return off
+    if pending and last is None:
+        return off  # an offer awaiting its answer was made at some time
+    if (not isinstance(pending, list) or len(pending) > report_policy.MAX_PER_OFFER
+            or not all(isinstance(k, str) and fp.FINGERPRINT_RE.match(k) for k in pending)):
+        return off
+    if not isinstance(offered, dict) or len(offered) > report_policy.OFFERED_KEPT:
+        return off
+    for key, value in offered.items():
+        if not (fp.FINGERPRINT_RE.match(key) and isinstance(value, dict)
+                and set(value) == {"version", "ts"} and _is_ts(value["ts"])
+                and (value["version"] is None or sc.VERSION.check(value["version"])
+                     == value["version"] != sc.INVALID)):
+            return off
+    # A time in the future (a clock that was wrong, or went back) is dated
+    # now: trusted as it is, it would hold offers off until that date. The
+    # store does this itself, so no caller can forget it.
+    now = _now(None)
+    last = min(last, now) if last is not None else None
+    offered = {k: {"version": v["version"], "ts": min(v["ts"], now)} for k, v in offered.items()}
+    return report_policy.State(last_offer_ts=last, pending=tuple(pending),
+                               declines_in_row=declines, auto_off=raw["auto_off"],
+                               offered=offered)
+
+
+def policy_state() -> report_policy.State:
+    """The offer policy's state (see :mod:`aipager.report.policy`): a copy."""
+    with _lock:
+        load()
+        return replace(_policy, offered={k: dict(v) for k, v in _policy.offered.items()})
+
+
+def save_policy(state: report_policy.State) -> None:
+    """Keep the offer policy's new *state* and write it NOW: a hard kill
+    before the next debounced save would forget an offer, and a daemon in
+    a crash loop would then offer the same bug again within the gap.
+    Offers are rare, so the write costs nothing."""
+    global _policy, _dirty
+    with _lock:
+        load()
+        if state == _policy:
+            return  # unchanged: a routine tick must not rewrite the file
+        _policy = state
+        _dirty = True
+        save_if_dirty(force=True)
 
 
 def _trim(ts: int) -> None:
@@ -485,6 +570,9 @@ def _document() -> dict:
                           for (site, level), n in bucket.items()]
                    for hour, bucket in sorted(_digest.items())},
         "exits": {"unclean": list(_unclean), "last": _last_exit},
+        "policy": {"last_offer_ts": _policy.last_offer_ts, "pending": list(_policy.pending),
+                   "declines_in_row": _policy.declines_in_row, "auto_off": _policy.auto_off,
+                   "offered": {k: dict(v) for k, v in _policy.offered.items()}},
     }
 
 
