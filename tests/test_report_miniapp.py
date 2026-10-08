@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
@@ -122,3 +124,72 @@ def test_the_route_closes_the_owners_note_capture(mk_bot, run_async):
     status, _body = _call(run_async, srv, "POST", "/api/report/preview", _hdr(OWNER))
     assert status == 200
     assert bot._report_note_pending is None and kept.state == "open"
+
+
+# ---- any other Mini App action closes the note capture (spec criterion 8) ---
+
+def _capturing(run_async, bot):
+    run_async(report_flow.open_preview(bot, trigger="manual"))
+    (kept,) = bot._report_cards.values()
+    kept.state = "note"
+    bot._report_note_pending = {"chat_id": OWNER, "user_id": OWNER, "msg_id": kept.msg_id,
+                                "last_active": time.monotonic()}
+    return kept
+
+
+def _send(run_async, srv, method, path, headers, body):
+    async def _run():
+        client = TestClient(TestServer(srv._build_app()))
+        await client.start_server()
+        try:
+            resp = await client.request(method, path, headers=headers, json=body)
+            return resp.status
+        finally:
+            await client.close()
+    return run_async(_run())
+
+
+def test_a_preference_write_closes_the_note_capture(mk_bot, run_async):
+    """A route that never opts into the session close target: the
+    capture closes all the same (one place, keyed on the caller)."""
+    srv, bot, _tg = _server(mk_bot)
+    kept = _capturing(run_async, bot)
+    status = _send(run_async, srv, "PUT", "/api/preferences/answer_length", _hdr(OWNER),
+                   {"value": "short"})
+    assert status == 200
+    assert bot._report_note_pending is None and kept.state == "open"
+
+
+def test_an_update_action_closes_the_note_capture(mk_bot, run_async):
+    srv, bot, _tg = _server(mk_bot)
+    bot.updates = MagicMock()
+    bot.updates.control.return_value = SimpleNamespace(ok=True, job={"id": 7}, error=None)
+    kept = _capturing(run_async, bot)
+    status = _send(run_async, srv, "POST", "/api/update/cancel", _hdr(OWNER), {"job_id": 7})
+    assert status == 200
+    assert bot._report_note_pending is None and kept.state == "open"
+
+
+def test_a_refused_write_leaves_the_note_capture_open(mk_bot, run_async):
+    srv, bot, _tg = _server(mk_bot)
+    kept = _capturing(run_async, bot)
+    status = _send(run_async, srv, "PUT", "/api/preferences/answer_length", _hdr(OWNER),
+                   {"value": "not-a-length"})
+    assert status == 400
+    assert bot._report_note_pending is not None and kept.state == "note"
+
+
+def test_a_read_leaves_the_note_capture_open(mk_bot, run_async):
+    srv, bot, _tg = _server(mk_bot)
+    kept = _capturing(run_async, bot)
+    assert _send(run_async, srv, "GET", "/api/preferences", _hdr(OWNER), None) == 200
+    assert bot._report_note_pending is not None and kept.state == "note"
+
+
+def test_someone_elses_write_leaves_the_owners_capture_open(mk_bot, run_async):
+    srv, bot, _tg = _server(mk_bot)
+    kept = _capturing(run_async, bot)
+    status = _send(run_async, srv, "PUT", "/api/preferences/answer_length",
+                   _hdr(ADMIN, GROUP), {"value": "short"})
+    assert status == 200
+    assert bot._report_note_pending is not None and kept.state == "note"

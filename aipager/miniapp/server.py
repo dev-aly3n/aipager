@@ -179,6 +179,20 @@ def _close_card_key():
     make = getattr(web, "RequestKey", None)
     return make("aipager_close_card", tuple) if make else "aipager_close_card"
 
+
+@functools.cache
+def _auth_user_key():
+    """The request key :meth:`MiniAppServer._authenticate_user` sets to the
+    caller's user id once they are authenticated (the middleware's close
+    of the problem report note capture keys on it)."""
+    from aiohttp import web
+    make = getattr(web, "RequestKey", None)
+    return make("aipager_auth_user", int) if make else "aipager_auth_user"
+
+
+#: Methods that only read: everything else the Mini App sends is an action.
+_READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
 class MiniAppServer:
     """``GET /`` (static shell) + read-only authenticated JSON routes.
 
@@ -232,10 +246,15 @@ class MiniAppServer:
                 new_flow.close_open_card(self.bot, *target)
                 # Their rename question in chat too (the same rule).
                 session_parity.close_rename(self.bot, *target)
-                # And their problem report note capture (8.112): any other
-                # action closes it.
+            # The problem report note capture (8.112) closes on ANY other
+            # action: every successful authenticated write, whatever the
+            # route (a preference, an update, a folder), not only the
+            # session actions above.
+            user_id = request.get(_auth_user_key())
+            if (user_id is not None and request.method not in _READ_METHODS
+                    and getattr(resp, "status", 500) < 400):
                 from aipager.bot import report_flow
-                report_flow.close_note(self.bot, target[1])
+                report_flow.close_note(self.bot, user_id)
             return resp
 
         app = web.Application(middlewares=[_close_card_after_action])
@@ -512,6 +531,10 @@ class MiniAppServer:
             scope_chat_id = self._default_chat(user_id, chats)
 
         log.debug("miniapp: %s authorized (scope_chat_id=%s)", route_name, scope_chat_id)
+        try:
+            request[_auth_user_key()] = user_id
+        except TypeError:  # a bare stand-in request (tests): nothing to close
+            pass
         return scope_chat_id, user_id
 
     async def _handle_status(self, request):
