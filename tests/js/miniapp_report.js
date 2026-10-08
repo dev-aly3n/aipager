@@ -39,6 +39,7 @@ class El {
     this.children.push(c); c.parent = this; return c;
   }
   focus() { this.focused = true; }
+  scrollIntoView(o) { this.scrolledInto = o || {}; }
   setAttribute(k, v) { this.attrs[k] = v; }
   getAttribute(k) { return this.attrs[k]; }
   addEventListener(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); }
@@ -157,6 +158,7 @@ global.fetch = (url, opts) => {
       : { status: 200, body: {} };
   }
   if (next === PENDING || next.pending) return new Promise(() => {});
+  if (next.reject) return Promise.reject(new Error("network down"));
   return Promise.resolve({ ok: next.status < 400, status: next.status,
                            json: () => Promise.resolve(next.body) });
 };
@@ -189,6 +191,17 @@ async function openPage() {
   await tick();
 }
 function noticeText() { return byId["notice"].textContent; }
+// Before a send: forget the last scroll and buzz.
+function arm() { byId["rp-status"].scrolledInto = null; global.__haptic = null; }
+// The status line shows `want`, was scrolled into view, and buzzed `buzz`.
+function statusSeen(want, buzz) {
+  const st = byId["rp-status"];
+  if (st.hidden || st.textContent.indexOf(want) < 0) fail("status: " + st.textContent);
+  if (!st.scrolledInto || st.scrolledInto.block !== "center")
+    fail("the status line was not scrolled into view: " + JSON.stringify(st.scrolledInto));
+  if (global.__haptic !== buzz) fail("haptic " + global.__haptic + ", wanted " + buzz);
+}
+const LATER = "No answer from aipager in time.";
 
 // ---- scenarios ----------------------------------------------------------
 const S = {};
@@ -203,6 +216,8 @@ S.ready = async () => {
     fail("MainButton: " + JSON.stringify(global.__mbParams));
   if (global.__mbParams.is_active) fail("MainButton active before the draft loaded");
   if (!byId["rp-body"].hidden) fail("the report body shows while loading");
+  if (!byId["rp-status"].hidden || byId["rp-status"].scrolledInto)
+    fail("an empty status line showed or scrolled");
   if (!(global.__swOff >= 1)) fail("swipes stay on while typing a report");
   await tick();
   if (!global.__mbParams.is_active) fail("MainButton inactive with a draft loaded");
@@ -272,11 +287,11 @@ S.note_changed = async () => {
   await openPage();
   answer("/api/report/send", 422, { error: "note_changed", note: "It froze." });
   type("It froze.​");
+  arm();
   byId["rp-send"].click();
   await tick();
   if (byId["rp-note"].value !== "It froze.") fail("the tidied note was not put back");
-  if (byId["rp-status"].hidden || byId["rp-status"].textContent.indexOf("tidied up") < 0)
-    fail("status: " + byId["rp-status"].textContent);
+  statusSeen("tidied up", "warning");
   if (byId["rp-send"].disabled || !global.__mbParams.is_active) fail("Send not active again");
   if (byId["rp-count"].textContent !== "9 / 500") fail("count " + byId["rp-count"].textContent);
   console.log("ok: a tidied note is shown back before anything is sent");
@@ -287,11 +302,14 @@ S.stale = async () => {
   answer("/api/report/send", 410, { error: "draft_gone" });
   answer("/api/report/draft", 200, { draft: "d-2", report: REPORT, areas: AREAS, note_max: 500 });
   type("keep me");
+  arm();
   byId["rp-send"].click();
   await tick(30);
   if (drafts().length !== 2) fail("no fresh draft after 410: " + drafts().length);
   if (byId["rp-note"].value !== "keep me") fail("the note was lost");
-  if (byId["rp-status"].textContent.indexOf("out of date") < 0) fail("status " + byId["rp-status"].textContent);
+  statusSeen("That report is no longer here. Here is a fresh one", "warning");
+  if (byId["rp-status"].textContent.indexOf("nothing was sent") >= 0)
+    fail("410 claims nothing was sent; it may have gone");
   if (api.rp.draft !== "d-2") fail("draft not replaced");
   console.log("ok: a stale draft loads a fresh one and keeps the note");
 };
@@ -301,11 +319,13 @@ S.try_later = async () => {
   const line = "Could not send right now. Nothing was lost; try again later.";
   answer("/api/report/send", 200, { outcome: "rate_limited", reference: null, line,
                                     retry: true, repeat: false });
+  arm();
   byId["rp-send"].click();
   await tick();
   if (byId["rp-form"].hidden) fail("try later left the form");
   if (byId["rp-status"].textContent !== line || !byId["rp-status"].className.includes("is-err"))
     fail("status " + byId["rp-status"].textContent);
+  statusSeen(line, "error");
   if (!global.__mbParams.is_active || global.__mbParams.text !== "Send report") fail("cannot retry");
   console.log("ok: try later keeps the page and lets Send retry");
 };
@@ -411,6 +431,45 @@ S.build_failed = async () => {
   if (drafts().length !== 2) fail("Try again did not load a draft");
   if (byId["rp-form"].hidden) fail("the form did not come back");
   console.log("ok: a failed build offers Try again");
+};
+
+// 409, 429 and no answer at all: each is seen where the user is, and buzzes.
+async function seenAfter(ans, want, buzz) {
+  await openPage();
+  queue["/api/report/send"].push(ans);
+  arm();
+  byId["rp-send"].click();
+  await tick();
+  statusSeen(want, buzz);
+  if (!global.__mbParams.is_active || byId["rp-form"].hidden) fail("cannot send again");
+}
+S.still_sending = async () => {
+  await seenAfter({ status: 409, body: { error: "sending" } }, "Still sending.", "warning");
+  console.log("ok: still sending is shown in view with a buzz");
+};
+S.too_many = async () => {
+  await seenAfter({ status: 429, body: { error: "too_many_requests" } }, "Too many taps.", "error");
+  console.log("ok: too many taps is shown in view with a buzz");
+};
+S.no_answer = async () => {
+  await seenAfter({ reject: true }, LATER, "warning");
+  console.log("ok: no answer is shown in view with a buzz");
+};
+
+// An answer without a line never reads "undefined".
+S.no_line = async () => {
+  await openPage();
+  answer("/api/report/send", 200, { outcome: "offline", reference: null, retry: true });
+  answer("/api/report/send", 200, { outcome: "disabled", reference: null, retry: false });
+  byId["rp-send"].click();
+  await tick();
+  const st = byId["rp-status"].textContent;
+  if (st.indexOf("undefined") >= 0 || st.indexOf(LATER) !== 0) fail("status " + st);
+  byId["rp-send"].click();
+  await tick();
+  const line = byId["rp-result-line"].textContent;
+  if (line.indexOf("undefined") >= 0 || line.indexOf(LATER) !== 0) fail("result line " + line);
+  console.log("ok: an answer without a line shows the try-later words");
 };
 
 S.exact = async () => {

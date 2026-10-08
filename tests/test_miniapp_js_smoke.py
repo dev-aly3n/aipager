@@ -1864,6 +1864,22 @@ def test_report_build_failure_offers_try_again(node_bin, tmp_path):
     _report_ok(node_bin, tmp_path, "build_failed", "ok: a failed build")
 
 
+@pytest.mark.parametrize("scenario, expect", [
+    ("still_sending", "ok: still sending is shown in view"),
+    ("too_many", "ok: too many taps is shown in view"),
+    ("no_answer", "ok: no answer is shown in view"),
+])
+def test_report_send_status_is_seen_and_felt(node_bin, tmp_path, scenario, expect):
+    """Send is often tapped from the bottom of the page and the status line
+    sits under the note: 409, 429 and no answer scroll it into view and
+    buzz (note_changed, stale and try_later assert the same)."""
+    _report_ok(node_bin, tmp_path, scenario, expect)
+
+
+def test_report_answer_without_a_line_never_reads_undefined(node_bin, tmp_path):
+    _report_ok(node_bin, tmp_path, "no_line", "ok: an answer without a line")
+
+
 def test_report_exact_block_matches_preview(node_bin, tmp_path, monkeypatch):
     """The page's live exact block is the very text the server sends for
     that note: Python's json.dumps(indent=2, ensure_ascii=False) of the

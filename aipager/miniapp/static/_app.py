@@ -2297,11 +2297,18 @@ APP_JS = r"""
     syncMainButton();
   }
 
+  // The line sits under the note; Send is often tapped from the bottom of
+  // the page, so a message is brought into view and buzzes.
   function rpStatus(text, err) {
     var el = rpEl("rp-status");
     el.textContent = text || "";
     el.className = "rp-status" + (err ? " is-err" : "");
     el.hidden = !text;
+    if (!text) { return; }
+    haptic("notify", err ? "error" : "warning");
+    if (el.scrollIntoView) {
+      try { el.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (e) { /* old webview */ }
+    }
   }
 
   function rpFact(dl, label, value, wide) {
@@ -2520,15 +2527,16 @@ APP_JS = r"""
   }
 
   function rpOutcome(d) {
+    var line = d.line ? String(d.line) : RP_LATER;
+    if (d.retry) { rpStatus(line, 1); return; }
     haptic("notify", d.outcome === "sent" ? "success" : "error");
-    if (d.retry) { rpStatus(d.line, 1); return; }
     rp.draft = null;
     rp.note = "";
     if (d.outcome === "sent") {
       rpResult("Report sent", "Thank you. If you open a GitHub issue, quote this reference:",
                true, d.reference);
     } else {
-      rpResult(RP_TITLES[d.outcome] || "Not sent", d.line);
+      rpResult(RP_TITLES[d.outcome] || "Not sent", line);
     }
   }
 
@@ -2549,8 +2557,8 @@ APP_JS = r"""
       } else if (rpRefused(s, d)) {
         return;
       } else if (s === 410) {
-        rpLoad("That report was out of date, so nothing was sent. " +
-               "Here is a fresh one: check it, then tap Send report again.");
+        rpLoad("That report is no longer here. Here is a fresh one: check it, " +
+               "then tap Send report again.");
       } else if (s === 409) {
         rpStatus("Still sending. Wait a moment, then tap Send report again.");
       } else if (s === 422 && d.error === "note_changed") {
@@ -2558,7 +2566,6 @@ APP_JS = r"""
         rpOnInput();
         rpStatus("Your note was tidied up (invisible characters, extra spaces or anything " +
                  "past 500 characters were removed). Check it, then tap Send report again.");
-        haptic("notify", "warning");
       } else if (s === 422) {
         rpStatus("That note could not be added. Try a shorter, plainer one.", 1);
       } else if (s === 429) {
