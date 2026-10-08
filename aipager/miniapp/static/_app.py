@@ -2445,7 +2445,7 @@ APP_JS = r"""
   function rpResult(title, line, ok, ref, retry) {
     var el = rpEl("rp-result-line");
     rp.result = { retry: retry };
-    rpEl("rp-form").hidden = true;
+    rpEl("rp-form").hidden = rpEl("rp-hero").hidden = true;
     rpEl("rp-result").hidden = false;
     rpEl("rp-badge").className = "rp-badge" + (ok ? " is-ok" : "");
     rpEl("rp-badge").innerHTML = icon(ok ? "check" : "question");
@@ -2489,7 +2489,7 @@ APP_JS = r"""
     rp.draft = rp.report = rp.result = null;
     rp.open = {};
     rp.all = false;
-    rpEl("rp-form").hidden = false;
+    rpEl("rp-form").hidden = rpEl("rp-hero").hidden = false;
     rpEl("rp-result").hidden = true;
     rpEl("rp-body").hidden = true;
     rpStatus("");

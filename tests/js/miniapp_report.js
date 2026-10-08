@@ -216,6 +216,7 @@ S.ready = async () => {
     fail("MainButton: " + JSON.stringify(global.__mbParams));
   if (global.__mbParams.is_active) fail("MainButton active before the draft loaded");
   if (!byId["rp-body"].hidden) fail("the report body shows while loading");
+  if (byId["rp-hero"].hidden) fail("the page title is hidden on the form");
   if (!byId["rp-status"].hidden || byId["rp-status"].scrolledInto)
     fail("an empty status line showed or scrolled");
   if (!(global.__swOff >= 1)) fail("swipes stay on while typing a report");
@@ -272,6 +273,7 @@ S.send_ok = async () => {
     fail("send body: " + JSON.stringify(s[0].body));
   if (!byId["rp-form"].hidden || byId["rp-result"].hidden) fail("no result panel");
   if (byId["rp-result-title"].textContent !== "Report sent") fail("title " + byId["rp-result-title"].textContent);
+  if (!byId["rp-hero"].hidden) fail("the page title and privacy line stay over the result");
   if (byId["rp-ref"].textContent !== "ap1-0123456789ab" || byId["rp-ref-row"].hidden)
     fail("reference not shown");
   if (global.__mbParams.text !== "Done") fail("MainButton after send: " + JSON.stringify(global.__mbParams));
@@ -430,6 +432,7 @@ S.build_failed = async () => {
   await tick();
   if (drafts().length !== 2) fail("Try again did not load a draft");
   if (byId["rp-form"].hidden) fail("the form did not come back");
+  if (byId["rp-hero"].hidden) fail("the page title did not come back with the form");
   console.log("ok: a failed build offers Try again");
 };
 

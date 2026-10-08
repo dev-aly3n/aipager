@@ -167,7 +167,7 @@ HTML_BODY = """\
 </section>
 
 <section id="view-report" hidden>
-  <div class="view-hero">
+  <div class="view-hero" id="rp-hero">
     <div>
       <h2 class="view-title">Report a problem</h2>
       <p class="view-sub">It holds versions, counts and places in aipager's code. Never your chats, prompts, names or paths.</p>
@@ -197,6 +197,7 @@ HTML_BODY = """\
       <button type="button" class="primary block mb-mirror rp-send" id="rp-send">Send report</button>
       <p class="rp-foot">Nothing is sent until you tap Send report. It goes to the maintainer's error inbox, without your name.</p>
     </div>
+    <p class="sect-note rp-wait">Preparing the report...</p>
   </div>
   <div id="rp-result" class="rp-result" hidden>
     <span id="rp-badge" class="rp-badge" aria-hidden="true"></span>

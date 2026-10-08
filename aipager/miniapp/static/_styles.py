@@ -1311,8 +1311,14 @@ CSS = """
   .rp-meta .is-over { color: var(--danger-ink); font-weight: 600; }
   .rp-count { font-variant-numeric: tabular-nums; }
   .rp-count.is-near { color: var(--ink-2); }
-  .rp-status { margin-top: var(--s4); padding: var(--s3) 14px; border-radius: var(--r-ctl); font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--ink-2); background: var(--surface); border: 1px solid var(--line); }
+  /* A notice, not a card: tinted, with the inset bar #error uses. */
+  .rp-status { position: relative; margin-top: var(--s4); padding: var(--s3) 14px var(--s3) 24px; border-radius: var(--r-ctl); font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--ink); background: var(--lamp-work-soft); }
+  .rp-status::before { content: ""; position: absolute; left: 8px; top: 10px; bottom: 10px; width: 4px; border-radius: 2px; background: var(--accent); }
   .rp-status.is-err { color: var(--danger-ink); background: var(--danger-soft); }
+  .rp-status.is-err::before { background: var(--danger-ink); }
+  #rp-noerr { margin-bottom: var(--s4); }
+  .rp-wait { text-align: center; }
+  #rp-body:not([hidden]) + .rp-wait { display: none; }
   #rp-body .disclosures { margin: 0 0 var(--s3); }
   .rp-sub { display: block; font-size: 13px; line-height: 18px; font-weight: 400; color: var(--ink-3); }
   #rp-errors .sect-toggle { min-height: 60px; padding-block: var(--s2); }
@@ -1320,8 +1326,9 @@ CSS = """
   #rp-errors .sect-note { border: 0; padding-bottom: var(--s2); }
   .rp-more { margin: 0; border-radius: 0; border-width: 1px 0 0; }
   .rp-more dd { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--ink-2); }
-  .rp-mono { margin: 0; padding: var(--s3) var(--s4); max-height: 380px; overflow: auto; white-space: pre; }
-  .rp-code { padding: 0 3px; border-radius: 4px; font-family: var(--mono); background: var(--surface); }
+  /* No inner scroller: the note, the last line, stays readable above Send. */
+  .rp-mono { margin: 0; padding: var(--s3) var(--s4); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .rp-code { font-family: var(--mono); }
   .rp-foot { margin: var(--s3) var(--s1) 0; font-size: 13px; line-height: 18px; color: var(--ink-3); text-align: center; }
   .rp-result { display: flex; flex-direction: column; align-items: center; gap: var(--s3); padding-top: var(--s6); text-align: center; }
   .rp-result .view-sub { max-width: 320px; margin: 0; }

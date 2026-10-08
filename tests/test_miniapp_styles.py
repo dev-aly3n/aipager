@@ -389,6 +389,32 @@ def test_the_report_note_field_and_rows_are_easy_to_hit():
                          _block("#rp-errors .sect-toggle")).group(1)) >= 44
 
 
+def test_the_report_status_reads_as_a_notice_not_a_card():
+    """"Your note was tidied up" must not look like the facts card next to
+    it: an accent tint and an inset accent bar, no card border."""
+    body = _block(".rp-status")
+    assert "background: var(--lamp-work-soft)" in body
+    assert "border:" not in body
+    assert "background: var(--accent)" in _block(".rp-status::before")
+    assert "background: var(--danger-ink)" in _block(".rp-status.is-err::before")
+
+
+def test_the_exact_report_scrolls_with_the_page_not_inside_itself():
+    """The note is the exact block's last line: no inner height cap and
+    long lines wrap, so the whole note sits right above Send report
+    instead of under a nested scroller."""
+    body = _block(".rp-mono")
+    assert "max-height" not in body and "overflow" not in body.replace("overflow-wrap", "")
+    assert "white-space: pre-wrap" in body
+
+
+def test_the_loading_caption_goes_once_the_report_shows():
+    assert "display: none" in _block("#rp-body:not([hidden]) + .rp-wait")
+    # Right after #rp-body, so the sibling rule above can see it.
+    assert re.search(r'without your name\.</p>\s*</div>\s*'
+                     r'<p class="sect-note rp-wait">Preparing the report\.\.\.</p>', INDEX_HTML)
+
+
 # ===========================================================================
 # Motion
 # ===========================================================================
