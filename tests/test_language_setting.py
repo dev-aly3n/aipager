@@ -196,3 +196,18 @@ def test_language_is_a_reserved_session_name_and_an_own_command():
     from aipager.bot import group_intake
     from aipager.dtach.inject import _RESERVED
     assert "language" in _RESERVED and "language" in group_intake.OWN_COMMANDS
+
+
+def test_back_to_automatic_leaves_no_empty_entry():
+    """Guard: clearing the only stored key removes the chat's entry; an
+    entry that holds other preferences keeps them."""
+    import json
+    preferences.set_ui_language(DM, "en")
+    preferences.set_ui_language(DM, "")
+    assert str(DM) not in json.loads(preferences._PREFERENCES_PATH.read_text())
+    preferences.set_preference(GROUP, "language_level", "advanced")
+    preferences.set_ui_language(GROUP, "en")
+    preferences.set_ui_language(GROUP, "")
+    stored = json.loads(preferences._PREFERENCES_PATH.read_text())
+    assert stored[str(GROUP)] == {"language_level": "advanced"}
+    assert preferences.get_preferences(GROUP).language_level == "advanced"

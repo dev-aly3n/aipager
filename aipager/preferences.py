@@ -415,7 +415,13 @@ def set_ui_language(chat_id: int, code: str) -> str:
         scope_raw.pop(_UI_LANGUAGE_KEY, None)
     else:
         scope_raw[_UI_LANGUAGE_KEY] = code
-    store[key] = scope_raw
+    if scope_raw:
+        store[key] = scope_raw
+    else:
+        # Back to Automatic, and the language was all this chat stored:
+        # leave no empty entry behind. (A stored language was there, or
+        # the early return above would have fired, so the entry was ours.)
+        store.pop(key, None)
     _save_raw(store)
     return get_ui_language(chat_id)
 
