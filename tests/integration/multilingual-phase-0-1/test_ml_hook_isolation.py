@@ -33,7 +33,7 @@ def _env(tmp_path):
     home.mkdir(exist_ok=True)
     inst = tmp_path / "inst"
     inst.mkdir(exist_ok=True)
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "AIPAGER"))}
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "AIPAGER", "XDG_"))}
     env.update(PYTHONPATH=str(REPO), AIPAGER_INSTANCE_DIR=str(inst),
                CLAUDE_DTACH_SESSION=SESSION, HOME=str(home),
                AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS="0.3",

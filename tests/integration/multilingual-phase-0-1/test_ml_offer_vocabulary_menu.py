@@ -81,6 +81,46 @@ def test_keep_english_on_the_offer_stores_english(tg_bot, tap):
     assert prefs.get_ui_language(DM) == "en"
 
 
+# entrypoints.md Amendment: "keep stores en. A disabled or pseudo code gets
+# the Invalid value toast and stores nothing."
+
+@pytest.mark.parametrize("code", ["fa", "ar", "qps", "qps-rtl"])
+def test_a_disabled_or_pseudo_offer_code_gets_invalid_value(tg_bot, tap, ml, code):
+    q = tap(tg_bot, f"_:set:lang_offer:{code}", chat_id=DM, user_id=OWNER)
+    assert "Invalid value" in [t for t, _alert in ml.toasts(q)]
+
+
+@pytest.mark.parametrize("code", ["fa", "ar", "qps", "qps-rtl", "xx", ""])
+def test_a_refused_offer_code_writes_nothing(tg_bot, tap, ml, code):
+    before = ml.prefs_bytes()
+    tap(tg_bot, f"_:set:lang_offer:{code}", chat_id=DM, user_id=OWNER)
+    assert ml.prefs_bytes() == before
+
+
+def test_a_refused_offer_code_keeps_the_previous_choice(tg_bot, tap):
+    prefs.set_ui_language(DM, "en")
+    tap(tg_bot, "_:set:lang_offer:fa", chat_id=DM, user_id=OWNER)
+    assert prefs.get_ui_language(DM) == "en"
+
+
+def test_keep_english_writes_nothing_when_english_is_already_stored(tg_bot, tap, ml):
+    prefs.set_ui_language(DM, "en")
+    before = ml.prefs_bytes()
+    tap(tg_bot, "_:set:lang_offer:keep", chat_id=DM, user_id=OWNER)
+    assert ml.prefs_bytes() == before
+
+
+def test_the_offer_keep_button_is_the_tapped_keep_callback(tg_bot, tap, ml):
+    """The card's own Keep English button, tapped as sent, stores English."""
+    from aipager import i18n
+    from aipager.bot.language_offer import render_offer
+    _text, kb = render_offer(i18n.get("en"), "de")
+    (data,) = [d for t, d in ml.buttons(kb) if t == "Keep English"]
+    tap(tg_bot, data, chat_id=DM, user_id=OWNER)
+    assert prefs.get_ui_language(DM) == "en"
+
+
+
 # ---- Vocabulary level ---------------------------------------------------------------
 
 def test_settings_shows_vocabulary_level(tg_bot, command, ml):
