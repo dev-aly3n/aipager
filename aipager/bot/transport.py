@@ -38,6 +38,7 @@ import time
 from telegram import InputFile
 from telegram.error import BadRequest, ChatMigrated, Forbidden, RetryAfter
 
+from aipager import bidi_guard
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import FloodSkipped
 from aipager.config import TELEGRAM_MAX_RETRY_AFTER
@@ -360,10 +361,16 @@ def _format_perm_detail(tool_summary: str, detail: str) -> str:
     permission prompt, or ``""`` when there is nothing to add: no detail,
     or the summary already spells it out (a short command with no
     description, a bare file path). Bounded on both axes — see the
-    constants above."""
+    constants above. Either way it ends with :data:`bidi_guard.WARNING`
+    when the summary or the detail held a direction control."""
     detail = (detail or "").strip()
+    # The summary and the detail come with any direction control already
+    # shown as a marker (hook_receiver, aipager.bidi_guard): say so, under
+    # whatever this prompt shows.
+    warning = (f"\n{html_mod.escape(bidi_guard.WARNING)}"
+               if bidi_guard.revealed(tool_summary, detail) else "")
     if not detail or detail in tool_summary:
-        return ""
+        return warning
     cut = len(detail) > _PERM_DETAIL_CHARS
     raw = detail[:_PERM_DETAIL_CHARS]
     escaped = html_mod.escape(raw)
@@ -379,7 +386,7 @@ def _format_perm_detail(tool_summary: str, detail: str) -> str:
         raw = raw[: max(1, min(len(raw) - 1, target))]
         escaped = html_mod.escape(raw)
         cut = True
-    return f"\n<pre>{escaped}{'…' if cut else ''}</pre>"
+    return f"\n<pre>{escaped}{'…' if cut else ''}</pre>{warning}"
 
 
 def _truncate_diff(lines: list[str]) -> tuple[str, int]:
@@ -409,10 +416,26 @@ def _build_diff_block(
 
     For Write: treat as a brand-new file (empty original → all new lines).
     For Edit: unified diff between ``old_string`` and ``new_string``.
+    The preview can sit beside the permission prompt for the same edit, so
+    a direction control in the path or the text is shown as a visible
+    marker and the header carries the warning (:mod:`aipager.bidi_guard`).
     """
     file_path = (tool_input.get("file_path") or "").strip()
     if not file_path:
         return None
+    built = _build_diff_block_raw(tool_name, tool_input, file_path)
+    if built is None:
+        return None
+    header, body = built
+    if bidi_guard.has_controls(file_path) or bidi_guard.has_controls(body):
+        header = (bidi_guard.reveal(header)
+                  + f"\n{html_mod.escape(bidi_guard.WARNING)}")
+    return header, bidi_guard.reveal(body)
+
+
+def _build_diff_block_raw(tool_name: str, tool_input: dict,
+                          file_path: str) -> tuple[str, str] | None:
+    """:func:`_build_diff_block`'s header and diff, as the input has them."""
     if tool_name == "Write":
         new = tool_input.get("content") or ""
         if not new:

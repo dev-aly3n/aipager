@@ -555,7 +555,7 @@ def assert_in_contract(raw: bytes) -> None:
 
 # Non-printable characters whose repr ends in the hex digit "a" (all
 # assigned: C1 controls, format characters, private use).
-REPR_A = ("\x8a", "\x9a", "\x1a", " ", "‪", "⁪", "￺",
+REPR_A = ("\x8a", "\x9a", "\x1a", " ", "\u202a", "⁪", "￺",
           "", "\U0001d17a", "\U000f000a", "\U0010fffa")
 # Characters whose repr does NOT end in "a", plus printable ones repr keeps
 # verbatim (controls: they supply no "a").

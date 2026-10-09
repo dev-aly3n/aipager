@@ -43,6 +43,7 @@ from aipager.bot.rich_message import (
 
 
 from aipager import bg_shells as _bg_shells
+from aipager import bidi_guard
 from aipager import preferences
 from aipager.config import (
     COMPACT_CARD_TIMEOUT_SECONDS,
@@ -3322,6 +3323,12 @@ class NotifyMixin:
         elif sess.status == Status.INTERACTIVE:
             self._stop_animation(sess)
             tool_info = context.get("tool_info")
+            if tool_info and tool_info.get("name") == "AskUserQuestion":
+                # Whatever found it (the hook, or the transcript fallback),
+                # a question and its options are shown with any direction
+                # control as a visible marker. Answers go by position.
+                tool_info = {**tool_info,
+                             "input": bidi_guard.reveal_questions(tool_info.get("input"))}
             selector_text = context.get("selector_text", "")
             selector_options = context.get("selector_options")
 

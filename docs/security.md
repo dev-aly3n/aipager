@@ -178,6 +178,16 @@ To lock a tool down for everyone, deny it in `~/.claude/settings.json`;
 to lock it down for some people, use their role's rules in
 `policy.yaml` (see [groups](groups.md#how-rules-work)).
 
+**What a prompt shows is what runs.** A permission prompt shows the real
+command or path under Claude's description of it. Unicode's direction
+controls (U+202A-U+202E, U+2066-U+2069, U+200E, U+200F, U+061C) change the
+order in which Telegram, a browser or a phone draws the text after them,
+while the shell runs the characters in order, so they could make a command
+read like a different one (the "Trojan Source" trick, CVE-2021-42574). In
+every prompt, question, diff preview and audit record they are shown as visible markers
+(`⟨U+202E⟩`), and the prompt warns that the command may not run what it
+looks like. Other invisible characters are left as they are.
+
 ### Team-mode enforcement
 
 In team mode aipager adds its own layer *underneath* the taps: every

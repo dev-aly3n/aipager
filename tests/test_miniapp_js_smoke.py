@@ -1907,7 +1907,7 @@ def test_report_exact_block_matches_preview(node_bin, tmp_path, monkeypatch):
     pin_version(monkeypatch)
     report = builder.build_report("manual", errors=[], counters={"stale_busy": 2},
                                   log_digest=[], context=builder.ReportContext())
-    note = 'It said "no" \\ then\nfroze 👩‍💻 🏴󠁧󠁢󠁷󠁬󠁳󠁿 a‎b'
+    note = 'It said "no" \\ then\nfroze 👩‍💻 🏴󠁧󠁢󠁷󠁬󠁳󠁿 a\u200eb'
     assert sc.normalize_note(note) == note
     candidate = copy.deepcopy(report)
     candidate["note"] = note

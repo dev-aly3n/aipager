@@ -290,7 +290,12 @@ ls -la /tmp
 ```
 
 The card shows the real command (or file path) claude is asking to
-run, under its own description of it - approve what you can read.
+run, under its own description of it - approve what you can read. A
+character that would change the order the text is drawn in (a Unicode
+direction control such as U+202E, which can make a command look like a
+different one) is shown as a marker like `⟨U+202E⟩`, and the card then
+adds `⚠️ This contains hidden direction characters, shown as ⟨U+...⟩. It
+may not run what it looks like.`
 
 - **Allow** - approve this one call.
 - **Deny** - refuse it; claude blocks the tool call.

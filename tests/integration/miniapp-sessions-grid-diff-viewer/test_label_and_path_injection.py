@@ -114,7 +114,7 @@ INJECTION_LABELS = [
     ("shell-metachar-pipe", "dev%7Cwhoami"),
     ("shell-metachar-backtick", "dev%60whoami%60"),
     ("unicode-emoji", quote("label-\U0001F600", safe="")),
-    ("unicode-rtl-override", quote("label-‮", safe="")),
+    ("unicode-rtl-override", quote("label-\u202e", safe="")),
     ("very-long-label", "x" * 8000),
     ("literal-dot-dot", ".."),
     ("literal-dot", "."),

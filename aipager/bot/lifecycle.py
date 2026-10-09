@@ -33,7 +33,7 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest, ChatMigrated, Forbidden, RetryAfter
 
-from aipager import telegram_endpoint
+from aipager import bidi_guard, telegram_endpoint
 from aipager.dtach import inject
 
 from aipager.bot import (
@@ -936,8 +936,11 @@ class LifecycleMixin:
         surface) for a separate one. Returns where its buttons are."""
         perm = rec["perm"]
         question = perm["question"]
+        # A prompt saved by an older daemon may still hold raw direction
+        # controls: shown as markers, like a live one (aipager.bidi_guard).
+        summary = bidi_guard.reveal(perm["tool_summary"])
         tool_info: dict = {"name": perm["tool_name"],
-                           "summary": perm["tool_summary"],
+                           "summary": summary,
                            "tool_use_id": rec["tool_use_id"]}
         if "input_digest" in rec:
             # Its own call's end still closes it, no other's (8.102).
@@ -946,12 +949,13 @@ class LifecycleMixin:
             q = {"question": question["question"],
                  "options": [dict(o) for o in question["options"]],
                  "multiSelect": False}
+            q = bidi_guard.reveal_questions({"questions": [q]})["questions"][0]
             tool_info["input"] = {"questions": [q]}
         else:
             tool_info.update(input={},
                              always_available=perm["always_available"],
                              standing_rule_suggestion=perm["standing_rule_suggestion"],
-                             detail=perm["detail"])
+                             detail=bidi_guard.reveal(perm["detail"]))
         # Its message holds an open prompt again (8.102).
         sess.reopen_prompt_surface(rec["card_msg_id"] if rec["kind"] == "inline"
                                    else rec["msg_id"])
@@ -968,7 +972,7 @@ class LifecycleMixin:
                 }
             else:
                 sess.pending_permission = {
-                    "tool_summary": perm["tool_summary"],
+                    "tool_summary": summary,
                     "tool_info": tool_info,
                     "wait_started_at": wait_started_at,
                     "shown_wall": rec["shown_wall"],
@@ -977,7 +981,7 @@ class LifecycleMixin:
                 }
             sess.pending_prompt_msg = None
             return f"inline card {rec['card_msg_id']}"
-        sep_perm: dict = {"tool_summary": perm["tool_summary"],
+        sep_perm: dict = {"tool_summary": summary,
                           "tool_info": tool_info,
                           "wait_started_at": wait_started_at,
                           "shown_wall": rec["shown_wall"]}
@@ -993,8 +997,8 @@ class LifecycleMixin:
         token = new_prompt_token()
         sess.pending_permission = None
         sess.pending_prompt_msg = {
-            "text": rec["text"], "keyboard": keyboard,
-            "summary": rec["summary"], "prompt_token": token,
+            "text": bidi_guard.reveal(rec["text"]), "keyboard": keyboard,
+            "summary": bidi_guard.reveal(rec["summary"]), "prompt_token": token,
             "msg_id": rec["msg_id"], "chat_id": rec["chat_id"],
             "perm": sep_perm,
         }

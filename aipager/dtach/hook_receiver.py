@@ -19,7 +19,7 @@ import socket
 import time
 from pathlib import Path
 
-from aipager import bg_shells, statusline_file
+from aipager import bg_shells, bidi_guard, statusline_file
 from aipager.config import (
     HOOK_DEDUP_WINDOW_SECONDS,
     RICH_SUMMARIES,
@@ -337,6 +337,14 @@ def _extract_specific_tool(transcript_path: str, target_name: str) -> dict | Non
 
 
 def _summarize_tool(name: str, inp: dict) -> str:
+    """The one-line summary of a tool call shown on the card, the permission
+    prompt, the audit line and the Mini App, with any direction control
+    shown as a visible marker (:mod:`aipager.bidi_guard`): text a person
+    approves must read in the order it runs."""
+    return bidi_guard.reveal(_summary_text(name, inp))
+
+
+def _summary_text(name: str, inp: dict) -> str:
     if name == "Bash":
         return f"Bash: {inp.get('description') or inp.get('command', '')[:80]}"
     if name == "AskUserQuestion":
@@ -453,8 +461,13 @@ def _tool_detail(name: str, inp: dict) -> str:
     """The thing the user is actually approving — the real shell command
     or file path — for the permission card ONLY (the timeline rows keep
     :func:`_summarize_tool`, which prefers Claude's own description).
-    Empty when the tool has no single such fact.
+    Empty when the tool has no single such fact. A direction control in
+    it is shown as a visible marker (:mod:`aipager.bidi_guard`).
     """
+    return bidi_guard.reveal(_detail_text(name, inp))
+
+
+def _detail_text(name: str, inp: dict) -> str:
     if name == "Bash":
         cmd = inp.get("command", "")
         return cmd.strip() if isinstance(cmd, str) else ""
@@ -1022,7 +1035,9 @@ class HookReceiver:
                     return
                 log.info("[%s] AskUserQuestion (agent %s): %s", label,
                          ask_agent or "-", first_q[:80])
-                tool_info = {"name": "AskUserQuestion", "input": tool_input,
+                tool_info = {"name": "AskUserQuestion",
+                             # A display copy: answers go by position.
+                             "input": bidi_guard.reveal_questions(tool_input),
                              "summary": _summarize_tool("AskUserQuestion", tool_input),
                              # Its own call's id (roadmap 8.102).
                              "tool_use_id": _payload_tool_use_id(msg)}
