@@ -30,7 +30,7 @@
  "aipager/bot/send_now.py": 25,
  "aipager/bot/session_ops.py": 53,
  "aipager/bot/session_parity.py": 141,
- "aipager/bot/settings_menu.py": 49,
+ "aipager/bot/settings_menu.py": 48,
  "aipager/bot/tap_gate.py": 2,
  "aipager/bot/transport.py": 22,
  "aipager/bot/update_flow.py": 138,

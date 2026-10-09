@@ -30,7 +30,7 @@ and on every session change.
 | `/diff [label]` | optional | Show the session's working-directory git diff. Bare, it shows the session your messages go to. |
 | `/clearqueue` | - | Drop every not-yet-picked-up message for the active session - both messages aipager is holding and messages already queued inside Claude - without interrupting the running turn. Replies with the count cleared. |
 | `/mode [label] [ask\|auto]` | optional | Show a session's permission mode with a button to switch to the other one: `✍️ x1 is 🤖 Auto.` `[💬 Switch to Ask]`. `/mode ask`, `/mode auto` or `/mode x1 ask` switch straight away. Going to Auto needs an admin and a confirm; going to Ask happens at once. Tapping the switch changes the card itself instead of sending a second message: it becomes the confirm, then shows the new mode with the opposite switch. On a busy session, offers `Stop task & switch` / `Not now`. `/perms` is the old name and still works the same. |
-| `/settings` | - | How this chat's sessions look and reply: message layout, diff previews, long-turn card updates, formatting, answer length, language level; what `/new` starts a session with; per-session overrides; and, in the owner's private chat, problem report offers. See [Settings](#settings). In a group anyone can look, and changing a setting needs an admin. |
+| `/settings` | - | How this chat's sessions look and reply: message layout, diff previews, long-turn card updates, formatting, answer length, vocabulary level; what `/new` starts a session with; per-session overrides; and, in the owner's private chat, problem report offers. See [Settings](#settings). In a group anyone can look, and changing a setting needs an admin. |
 | `/whoami` | - | Show who you are here: in team mode your label, your role in this chat and the rules it gives you. |
 | `/update` | - | Admin only (the `owner` and `admin` roles, or a role with `can_manage`). Check aipager and Claude Code for newer versions, then update whatever has one with a single button. See [Update](#update). |
 
@@ -76,12 +76,12 @@ layout always shows its choice).
 | ⏱ Long-turn card updates | On; Off | On, a busy card refreshes every 10 s after 2 minutes of a turn and every 30 s after 10 (never slower, however long the turn), and its clock then moves in 30 s steps; Off keeps the first-minutes pace for the whole turn (see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)). |
 | ✏️ Simple formatting | Off; On | On asks Claude for plain prose and dashed lists only: no tables, code blocks, headings or bold. |
 | 📏 Answer length | Don't apply any rule; Extra short; Short; Medium; Long | Asks Claude for answers of that length. |
-| 🎓 Language level | Don't apply any rule; Simple words; Normal; Advanced | Asks Claude for that vocabulary. |
+| 🎓 Vocabulary level | Don't apply any rule; Simple words; Normal; Advanced | Asks Claude for that vocabulary. |
 | 🆕 New sessions | Mode, Model, Folder | What `/new` starts a session with when you do not choose: Auto (the default for admins) or Ask, a model from the Models list or Claude Code's default, and a folder. Auto never applies to someone who may not use it. |
 | 👤 Per-session preferences | a session, then any setting above except New sessions | Overrides for one session (also in `/status` → `⋮` → `👤 Preferences`); ⭐ marks a setting it overrides, and "Use chat default" removes the override. The Mini App's session page sets the same overrides. |
 | 🐞 Problem reports | Ask me; Off | Only in the install owner's private chat. Ask me lets aipager now and then offer to send a report of an internal error it hit more than once (at most once in 3 days); Off never offers (the Report a problem button in `/help` still works). Two offers turned down in a row switch the offers off, and this row then says so, with a button to turn them back on. See [problem reports](problem-reports.md#when-aipager-offers-a-report). |
 
-Answer length, language level and simple formatting reach Claude as a
+Answer length, vocabulary level and simple formatting reach Claude as a
 short instruction added to each prompt sent from Telegram (by the hook,
 see [hooks](hooks.md#userpromptsubmit)), using the session's own
 overrides where it has them.

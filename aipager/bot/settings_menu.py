@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from aipager.i18n import Msg
 from aipager.preferences import Preferences, get_preferences
 
 SECTIONS = ("layout", "diffs", "cadence", "formatting", "length", "level")
@@ -28,7 +29,11 @@ _SECTION_TITLES = {
     "cadence": "⏱ Long-turn card updates",
     "formatting": "✏️ Simple formatting",
     "length": "📏 Answer length",
-    "level": "🎓 Language level",
+    # "Vocabulary", not "language" (multilingual design): the setting is
+    # about Claude's words, not the language aipager speaks. The stored
+    # key stays `language_level`.
+    "level": Msg("set.level.title", "🎓 Vocabulary level",
+                 note="/settings section: how plain Claude's words should be"),
 }
 
 _LAYOUT_LABELS = {
