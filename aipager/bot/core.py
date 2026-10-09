@@ -66,6 +66,11 @@ class TelegramBot(
         # Multi-scope: per-chat command-list state (chat_id → last labels set)
         # so we only re-register a scope's `/menu` when its labels change.
         self._registered_scope_labels: dict[int, set[str]] = {}
+        # The language each of those menus was registered in: the cache is
+        # keyed by (language, labels), so a language switch re-registers
+        # the menu even when no session changed (the multilingual design).
+        self._registered_lang: str | None = None
+        self._registered_scope_lang: dict[int, str] = {}
         # The message handlers' chat gate (``filters.Chat``), set by
         # ``start`` and updated in place by a live reload (roadmap 8.80).
         self._message_chat_gate = None

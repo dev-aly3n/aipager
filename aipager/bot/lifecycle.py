@@ -314,6 +314,7 @@ class LifecycleMixin:
                      and s.chat_id > 0]
         for scope in gone:
             self._registered_scope_labels.pop(scope.chat_id, None)
+            self._registered_scope_lang.pop(scope.chat_id, None)
             try:
                 await self._app.bot.delete_my_commands(
                     scope=BotCommandScopeChat(chat_id=scope.chat_id))
@@ -1169,14 +1170,19 @@ class LifecycleMixin:
             await self._send_keyboard(level="main")
 
     @staticmethod
-    def _command_list(labels: set[str], *, group: bool = False) -> list[BotCommand]:
+    def _command_list(labels: set[str], *, group: bool = False,
+                      tr=None) -> list[BotCommand]:
         """The / menu (4.6): one `/label` per live session first (what is
         tapped most), then the frequent commands. The rare ones (kill,
         restart, rename, delete, diff, clearqueue, whoami, update) still
         work when typed, and live in /status → ⋮ or /help.
 
         ``group``: a group's menu has no `/app` (roadmap 8.91d): the Mini
-        App opens only from a private chat."""
+        App opens only from a private chat.
+
+        ``tr``: the chat's language (English when None). Only descriptions
+        that are keys are rendered through it; the rest are migrated in a
+        later phase."""
         commands = []
         for label in sorted(labels):
             command = _label_command(label)
@@ -1206,23 +1212,37 @@ class LifecycleMixin:
             commands.append(BotCommand("app", "Open the Mini App dashboard"))
         return commands
 
+    @staticmethod
+    def _menu_tr(chat_id):
+        """The language a chat's `/` menu is registered in."""
+        from aipager import i18n
+        try:
+            return i18n.for_chat(int(chat_id))
+        except (TypeError, ValueError):
+            return i18n.get(i18n.default_code())
+
     async def _update_bot_commands_global(self) -> None:
-        """Single global `/menu` (legacy / single-scope mode)."""
+        """Single global `/menu` (legacy / single-scope mode). Cached by
+        (language, labels): a language switch re-registers it."""
+        from aipager.config import CHAT_ID
         labels = self.registry.live_labels()
+        tr = self._menu_tr(CHAT_ID)
         first_run = self._registered_labels is None
-        if not first_run and labels == self._registered_labels:
+        if (not first_run and labels == self._registered_labels
+                and tr.code == self._registered_lang):
             return  # no change
         try:
-            from aipager.config import CHAT_ID
             await self._app.bot.set_my_commands(self._command_list(
-                labels, group=group_intake.is_group_chat(CHAT_ID)))
+                labels, group=group_intake.is_group_chat(CHAT_ID), tr=tr))
             self._registered_labels = labels
+            self._registered_lang = tr.code
             log.info("Bot commands updated: status, stop + %s",
                      ", ".join(sorted(labels)) or "(none)")
         except Exception:
             log.warning("Failed to set bot commands", exc_info=True)
             if first_run:
                 self._registered_labels = labels
+                self._registered_lang = tr.code
 
     # ---- Mini App launch button ----------------------------------------
 
@@ -1506,16 +1526,20 @@ class LifecycleMixin:
         autocomplete lists only its own session labels (Phase G)."""
         for scope in self.scopes:
             labels = self.registry.live_labels(scope.chat_id)
+            tr = self._menu_tr(scope.chat_id)
             prev = self._registered_scope_labels.get(scope.chat_id)
-            if prev is not None and labels == prev:
+            # Keyed by (language, labels): a language switch re-registers.
+            if (prev is not None and labels == prev
+                    and self._registered_scope_lang.get(scope.chat_id) == tr.code):
                 continue
             try:
                 await self._app.bot.set_my_commands(
                     self._command_list(
-                        labels, group=group_intake.is_group_chat(scope.chat_id)),
+                        labels, group=group_intake.is_group_chat(scope.chat_id), tr=tr),
                     scope=BotCommandScopeChat(chat_id=scope.chat_id),
                 )
                 self._registered_scope_labels[scope.chat_id] = labels
+                self._registered_scope_lang[scope.chat_id] = tr.code
                 log.info("Bot commands for %s: status, stop + %s",
                          scope.chat_id, ", ".join(sorted(labels)) or "(none)")
             except ChatMigrated as e:
@@ -1524,6 +1548,7 @@ class LifecycleMixin:
                 chat_migration.note_chat_migrated(scope.chat_id, e.new_chat_id)
                 if prev is None:
                     self._registered_scope_labels[scope.chat_id] = labels
+                    self._registered_scope_lang[scope.chat_id] = tr.code
             except Exception as e:
                 # E.g. a group the bot isn't a member of: log + skip. A
                 # group it cannot reach at all gets ONE warning per run,
@@ -1537,3 +1562,4 @@ class LifecycleMixin:
                                 scope.chat_id, exc_info=True)
                 if prev is None:
                     self._registered_scope_labels[scope.chat_id] = labels
+                    self._registered_scope_lang[scope.chat_id] = tr.code
