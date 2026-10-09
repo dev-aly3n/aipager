@@ -66,8 +66,10 @@ def _is_today(edits, gaps) -> bool:
 
 
 def _is_decayed(edits, gaps) -> bool:
-    return (1 <= len(edits) <= 2
-            and all(g >= 60.0 - EPS for g in gaps)
+    """At 2 h with decay on: the 30 s hour tier, so two or three edits in
+    the minute, counting ``2h 0m``."""
+    return (1 <= len(edits) <= 3
+            and all(g >= 30.0 - EPS for g in gaps)
             and all(re.search(r"· 2h \d+m$", m.rsplit("\n", 1)[-1])
                     for _t, m in edits))
 
@@ -178,6 +180,24 @@ def test_s_settings_shows_the_section_and_persists_off_and_on(
     update, _q = _query("_:set:cadence:on")
     run_async(bot._handle_callback(update, MagicMock()))
     assert prefs.get_preferences(CHAT).card_age_decay is True
+
+
+def test_s_the_on_help_text_states_the_real_slowest_refresh():
+    """The help under "On" (``/settings`` and the Mini App, one schema)
+    must not promise a slower card than the daemon runs: since the
+    2026-10-09 ruling the slowest refresh is every 30 s, never "a minute
+    after an hour". Mutation: restore the old wording and this fails."""
+    from aipager import config
+
+    section = [s for s in settings_menu.settings_schema()
+               if s["section"] == "cadence"][0]
+    help_on = [o["help"] for o in section["options"] if o["value"] is True][0]
+    slowest = max(config.CARD_AGE_TIER1_INTERVAL,
+                  config.CARD_AGE_TIER2_INTERVAL,
+                  config.CARD_AGE_TIER3_INTERVAL)
+    assert slowest == 30.0
+    assert "every 30 s" in help_on, help_on
+    assert "a minute" not in help_on, help_on
 
 
 # ── the Mini App ─────────────────────────────────────────────────────────────

@@ -235,7 +235,7 @@ def busy_card_watchdog_action(
 
     ``stale_after`` defaults to ``CARD_STALE_SECONDS``; the scan passes
     ``max(CARD_STALE_SECONDS, 2 x the card's turn-age floor)`` (8.30), so a
-    card that is SUPPOSED to be edited once a minute is not force-refreshed
+    card that is SUPPOSED to be edited every 30 s is not force-refreshed
     every 20 s — which is what the log showed on vm3: "forced stale-card
     refresh (63s since last edit)", an extra edit per cycle on exactly the
     long-running card the decay exists to slow down.

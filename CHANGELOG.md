@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **A long turn's busy card now refreshes every 30 seconds after the first hour too (it was once a minute).** The card still slows down as a turn gets older (every 10 seconds after 2 minutes, every 30 seconds after 10 minutes), but it never refreshes less often than every 30 seconds, however long the turn runs. The counter still reads hours and minutes, like `1h 23m`, after an hour. Switching off **⏱ Long-turn card updates** in `/settings` still keeps the first-minutes pace for the whole turn.
+
 ## [1.0.1] - 2026-10-09
 
 ### Security

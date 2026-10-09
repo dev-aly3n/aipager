@@ -172,7 +172,9 @@ def card_age_floor(age_seconds: float, enabled: bool) -> float:
     """The minimum seconds between busy-card edits for a turn this old.
 
     ``0`` below ``CARD_AGE_TIER1_AT`` (2 min) — the card keeps today's
-    cadence exactly — then 10 s, 30 s from 10 min and 60 s from an hour.
+    cadence exactly — then 10 s, and 30 s from 10 min on (the hour tier
+    is 30 s too since the 2026-10-09 ruling "never slower than every
+    30 s"; it was 60 s).
     Always ``0`` when the ``card_age_decay`` preference is off, and for a
     negative or non-finite age (no age is not an old age).
     """
@@ -225,7 +227,7 @@ def elapsed_unit(age_seconds: float, enabled: bool) -> str:
 
     Seconds below 10 min (today's ``4m 10s``), minutes from 10 min, hours
     and minutes from an hour. THE UNIT MATCHES THE REFRESH: a card edited
-    once a minute that showed seconds would look frozen for 59 of them —
+    every 30 s that showed seconds would look frozen for 29 of them —
     and a counter that stops reads as a hung session, which the operator
     rejected outright on 2026-09-12. Always seconds when decay is off.
     """

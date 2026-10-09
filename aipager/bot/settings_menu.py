@@ -85,7 +85,7 @@ _OPTION_HELP = {
     ("diffs", False): "File edits show only as rows on the busy card.",
     ("diffs", True): "Each Write/Edit is also posted as its own diff message under the busy card.",
     ("cadence", True): ("The card refreshes less often as a turn runs on (every 10 s "
-                        "after 2 min, 30 s after 10 min, a minute after an hour) and "
+                        "after 2 min, every 30 s after 10 min) and "
                         "counts in minutes, so it never looks frozen. A state change "
                         "still shows at once."),
     ("cadence", False): "The card refreshes at the same pace for the whole turn, however long.",

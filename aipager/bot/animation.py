@@ -1109,8 +1109,8 @@ def _agent_live_row(info: dict, unit: str = "s") -> str:
     backslashes inside one, not protect anything), the legacy card wraps
     it in ``html.escape``. Pure — no I/O, no mutation.
 
-    ``unit`` is the card's elapsed unit (8.30 "other counters"): at a 30 s
-    or 60 s tier an agent row counting seconds would look frozen for most
+    ``unit`` is the card's elapsed unit (8.30 "other counters"): at the
+    30 s tiers an agent row counting seconds would look frozen for most
     of every refresh, exactly like the status line would.
     """
     agent_type = info.get("type") or "agent"
@@ -2534,8 +2534,9 @@ class AnimationMixin:
         ``STREAM_EDIT_INTERVAL``, the job interim and continuation with 0.
 
         The required gap is ``max(base_gap, age floor)``, where the floor
-        grows with the turn's age (0 / 10 / 30 / 60 s from 0 / 2 / 10 /
-        60 min, ``flood_policy.card_age_floor``). Below two minutes it is
+        grows with the turn's age (0 / 10 / 30 / 30 s from 0 / 2 / 10 /
+        60 min, ``flood_policy.card_age_floor``; the hour tier was 60 s
+        until 2026-10-09). Below two minutes it is
         0 and every path paces exactly as it did before 8.30.
 
         One exception, and only one: a STATE change — the card's frame
@@ -2760,7 +2761,7 @@ class AnimationMixin:
                 # by `_animate_tick`'s gate. Both derive from the same
                 # `_card_interval`, so they cannot drift; the TURN-AGE
                 # floor (8.30) is applied at the gate only, so a card in
-                # its 60 s tier still wakes every few seconds to read the
+                # its 30 s tier still wakes every few seconds to read the
                 # transcript, sync anchors and notice a state flip — none
                 # of which is a Telegram call.
                 #

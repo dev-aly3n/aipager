@@ -87,7 +87,7 @@ switches unit so it never looks frozen:
 | 0–2 min | as above (about 4.8 s for one card in a DM) | `45s` |
 | 2–10 min | 10 s | `4m 10s` |
 | 10–60 min | 30 s | `23m` |
-| over 60 min | 60 s | `1h 23m` |
+| over 60 min | 30 s | `1h 23m` |
 
 A new tool row or a new sentence waits for the next refresh; a **state
 change** - the session going from working to waiting on a background

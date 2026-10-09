@@ -697,8 +697,13 @@ CARD_AGE_TIER1_AT: float = 120.0
 CARD_AGE_TIER1_INTERVAL: float = 10.0
 CARD_AGE_TIER2_AT: float = 600.0
 CARD_AGE_TIER2_INTERVAL: float = 30.0
+# Tier 3 equals tier 2 since the operator's 2026-10-09 ruling ("at least
+# once half a minute"): a card is never refreshed slower than every 30 s,
+# however long the turn (it was 60 s from an hour, so a turn's second
+# hour now costs up to 120 card edits rather than 60). It stays its own
+# constant because the elapsed unit still switches to hours there.
 CARD_AGE_TIER3_AT: float = 3600.0
-CARD_AGE_TIER3_INTERVAL: float = 60.0
+CARD_AGE_TIER3_INTERVAL: float = 30.0
 CARD_STATE_BYPASS_MIN_GAP: float = 10.0
 
 # A small 429 (retry_after <= TELEGRAM_MAX_RETRY_AFTER) doubles that

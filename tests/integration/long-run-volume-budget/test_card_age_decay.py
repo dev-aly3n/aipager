@@ -7,7 +7,8 @@ some three thousand edits of one message, plus every hook event (676
 phantom SubagentStops among them) racing the animator for a 1.2 s debounce.
 
 Now: from 2 / 10 / 60 min of turn age the card is edited no more often than
-every 10 / 30 / 60 s, its counters switch to minutes and then hours so it
+every 10 / 30 / 30 s (the hour tier was 60 s until the operator's
+2026-10-09 ruling: never slower than every 30 s), its counters switch to minutes and then hours so it
 never looks frozen, and only a STATE change (busy -> waiting, a prompt) may
 jump the queue — once, and at most once per 10 s.
 
@@ -80,7 +81,7 @@ def _run_animator(vloop, bot, sess, seconds: float) -> None:
     (30.0, 60.0, 4.4, 4.4, r"(?:\d+m )?\d+s"),
     (5 * MIN, 2 * MIN, 10.0, 12.2, r"\d+m \d+s"),    # 10 s, seconds shown
     (30 * MIN, 3 * MIN, 30.0, 62.2, r"\d+m"),        # 30 s, minutes shown
-    (2 * HOUR, 5 * MIN, 60.0, 62.2, r"\d+h \d+m"),   # 60 s, hours shown
+    (2 * HOUR, 5 * MIN, 30.0, 32.2, r"\d+h \d+m"),   # 30 s, hours shown
 ])
 def test_d_the_card_cadence_and_unit_follow_the_turns_age(
     mk_bot, vbot, vloop, vlimiter, rich_http, age, run, min_gap, max_gap,
@@ -88,7 +89,8 @@ def test_d_the_card_cadence_and_unit_follow_the_turns_age(
 ):
     """Row D (R4). One card alone in a DM, driven by the real animator: at
     30 s the gaps are today's (4.4 s for a quiet card); at 5 min ≥ 10 s;
-    at 30 min ≥ 30 s; at 2 h ≥ 60 s. The status line's counter reads ``31s`` / ``5m 12s`` /
+    at 30 min ≥ 30 s; at 2 h ≥ 30 s and ≤ 32.2 s (never slower than every
+    30 s, 2026-10-09). The status line's counter reads ``31s`` / ``5m 12s`` /
     ``31m`` / ``2h 1m`` — the unit matches the refresh, so a slow card
     still shows a counter that moves. On 0.7.13 every one of these cards
     edits every 4.4 s and counts seconds.
@@ -128,14 +130,14 @@ def test_e_a_tool_row_waits_for_the_tier_and_a_state_change_does_not(
     """Row E, as amended by Q2. A card at 2 h:
 
     1. a new tool row causes NO immediate edit, and appears on the next
-       edit, ≥ 60 s after the last one;
+       edit, ≥ 30 s after the last one;
     2. BUSY -> waiting (a job interim) causes ONE immediate edit, and the
-       card is back on its 60 s tier after it;
+       card is back on its 30 s tier after it;
     3. a second state change inside 10 s does not edit early: it waits out
        the 10 s bypass gap, then shows once, and the tier resumes.
 
     Mutation: let a new tool row bypass (or drop the frame-state compare)
-    and step 1 edits at once; drop the bypass and step 2 waits a minute;
+    and step 1 edits at once; drop the bypass and step 2 waits for the tier;
     drop the 10 s gap and step 3 edits again.
     """
     bot, sess = _card(mk_bot, vbot, vloop, rich_http, age=2 * HOUR)
@@ -150,7 +152,7 @@ def test_e_a_tool_row_waits_for_the_tier_and_a_state_change_does_not(
         await asyncio.sleep(70)            # the animator the hook resumed
         after_tool = rich_http.edits()[1:]
         assert after_tool, "the tool row never reached the card"
-        assert after_tool[0][0] - t0 >= 60.0 - EPS
+        assert after_tool[0][0] - t0 >= 30.0 - EPS
         assert "Bash: make" in after_tool[0][1]
 
         # 2. a state change: shown at once.
@@ -165,7 +167,7 @@ def test_e_a_tool_row_waits_for_the_tier_and_a_state_change_does_not(
 
         # 3. a second state change 4 s later: no early edit — nothing
         # before the 10 s bypass gap has passed; then it takes the next
-        # bypass, once, and the card is back on its 60 s tier.
+        # bypass, once, and the card is back on its 30 s tier.
         await asyncio.sleep(4)
         sess.status = Status.BUSY
         sess.job_continuation_active = True
@@ -177,7 +179,7 @@ def test_e_a_tool_row_waits_for_the_tier_and_a_state_change_does_not(
         assert later[1][0] - t1 >= 10.0 - EPS
         assert "still working" not in _status(later[1][1])
         gaps = _gaps(later[1:])
-        assert gaps and min(gaps) >= 60.0 - EPS, gaps
+        assert gaps and min(gaps) >= 30.0 - EPS, gaps
 
     vloop.run_until_complete(_drive())
     bot._stop_animation(sess)
@@ -220,13 +222,13 @@ _EVENTS = (
 )
 
 
-def test_o_a_busy_hook_stream_at_two_hours_costs_one_edit_a_minute(
+def test_o_a_busy_hook_stream_at_two_hours_costs_one_edit_per_thirty_seconds(
     mk_bot, vbot, vloop, vlimiter, rich_http,
 ):
     """Row O (Q3). A 2 h card, and every hook event kind — tool_use,
     tool_done, subagent_start, subagent_stop, assistant_text — one every
     3 s for 5 minutes, with the animator the first tool_use resumes: at
-    most 6 edits (five on the 60 s tier plus at most one bypass). On
+    most 11 edits (ten on the 30 s tier plus at most one bypass). On
     0.7.13 each hook edits on a 1.2 s debounce: ~250.
 
     Mutation: put any one notify path back on a bare
@@ -243,7 +245,7 @@ def test_o_a_busy_hook_stream_at_two_hours_costs_one_edit_a_minute(
     vloop.run_until_complete(_drive())
     bot._stop_animation(sess)
     edits = rich_http.edits()
-    assert 1 <= len(edits) <= 6, [t for t, _m in edits]
+    assert 1 <= len(edits) <= 11, [t for t, _m in edits]
 
 
 @pytest.mark.parametrize("event,ctx", _EVENTS, ids=[e for e, _c in _EVENTS])
@@ -278,7 +280,7 @@ def test_o_each_hook_path_waits_for_the_tier(
         await bot.notify(sess, event, dict(ctx))
 
     vloop.run_until_complete(_drive())
-    assert attempts == [], f"{event} edited inside the 60 s tier"
+    assert attempts == [], f"{event} edited inside the 30 s tier"
     assert len(rich_http.edits()) == 1, rich_http.edits()
 
 
@@ -286,7 +288,7 @@ def test_p_phantom_subagent_stops_never_edit_before_the_tier(
     mk_bot, vbot, vloop, vlimiter, rich_http,
 ):
     """Row P (Q2). A phantom SubagentStop — empty type, unknown id, 0.0 s —
-    every second at 2 h: no edit attempted before the 60 s tier. vm3 took
+    every second at 2 h: no edit attempted before the 30 s tier. vm3 took
     676 of them in three hours, each a candidate edit on a 1.2 s debounce.
 
     Counted as ATTEMPTS through the real ``_edit_busy_rich``: a phantom
@@ -309,7 +311,7 @@ def test_p_phantom_subagent_stops_never_edit_before_the_tier(
     async def _drive():
         await _edit_now(bot, sess)
         bot._edit_busy_rich = _counting
-        for _ in range(58):
+        for _ in range(28):
             await asyncio.sleep(1)
             await bot.notify(sess, "subagent_stop", dict(phantom))
 
@@ -336,9 +338,9 @@ def _one_render(mk_bot, vbot, vloop, rich_http, *, age, agents, waiting=False):
 def test_r_agent_rows_and_the_waiting_frame_count_in_minutes_when_slow(
     mk_bot, vbot, vloop, vlimiter, rich_http,
 ):
-    """Row R ("other counters"). At the 60 s tier a live agent row counts
+    """Row R ("other counters"). At the hour tier a live agent row counts
     ``<1m`` / ``12m`` / ``1h 3m``, and so does the waiting frame's line —
-    a seconds counter there would look frozen for 59 seconds of every 60.
+    a seconds counter there would sit still for 29 seconds of every 30.
 
     Mutation: leave the agent row (or the waiting frame) on seconds.
     """
@@ -392,21 +394,21 @@ def _watched(now: float, *, age: float, edited_ago: float) -> TrackedSession:
 
 
 @pytest.mark.parametrize("age,edited_ago,expect", [
-    (2 * HOUR, 40.0, None),            # 60 s tier: 40 s is on schedule
-    (2 * HOUR, 125.0, "refresh"),      # ...125 s is not
+    (2 * HOUR, 45.0, None),            # hour tier (30 s): stale after 60 s
+    (2 * HOUR, 61.0, "refresh"),
     (30 * MIN, 45.0, None),            # 30 s tier: stale after 60 s
     (30 * MIN, 61.0, "refresh"),
     (60.0, 25.0, "refresh"),           # tier 0: the 20 s rule, unchanged
     (60.0, 15.0, None),
 ])
 def test_t_the_watchdog_waits_for_twice_the_tier(age, edited_ago, expect):
-    """Row T. A card on the 60 s tier last edited 40 s ago is on schedule —
-    no forced refresh (0.7.13 forced one at 20 s: "forced stale-card
-    refresh (63s since last edit)" on vm3). At 125 s it is stale. At tier
-    0 the 20 s rule is unchanged.
+    """Row T. A card on the 30 s tier (from 10 min, and from an hour)
+    last edited 45 s ago is on schedule — no forced refresh (0.7.13 forced
+    one at 20 s: "forced stale-card refresh (63s since last edit)" on
+    vm3). At 61 s it is stale. At tier 0 the 20 s rule is unchanged.
 
     Mutation: pass ``CARD_STALE_SECONDS`` instead of ``stale_after`` and
-    the 40 s row refreshes.
+    the 45 s row refreshes.
     """
     now = 5_000_000.0
     sess = _watched(now, age=age, edited_ago=edited_ago)
@@ -420,8 +422,8 @@ def test_t_the_watchdog_waits_for_twice_the_tier(age, edited_ago, expect):
 def test_t_the_scan_passes_the_tier_to_the_watchdog(
     steady_clock, monkeypatch, run_async,
 ):
-    """Row T, wiring half: the session monitor's own scan leaves a 60 s-tier
-    card edited 40 s ago alone. Mutation: drop ``stale_after=`` from the
+    """Row T, wiring half: the session monitor's own scan leaves an hour-tier
+    (30 s) card edited 40 s ago alone. Mutation: drop ``stale_after=`` from the
     scan's call and it forces a refresh."""
     from aipager.session_monitor import SessionMonitor
     from aipager.state import SessionRegistry

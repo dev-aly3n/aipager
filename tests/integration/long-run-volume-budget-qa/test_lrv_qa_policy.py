@@ -37,8 +37,8 @@ NOW = 1_800_000_000.0
     (599.9, 10.0),
     (600.0, 30.0),
     (3599.9, 30.0),
-    (3600.0, 60.0),
-    (86400.0 * 3, 60.0),   # no tier beyond 60 s
+    (3600.0, 30.0),        # the hour tier is 30 s too (2026-10-09)
+    (86400.0 * 3, 30.0),   # never slower than 30 s
 ])
 def test_card_age_floor_breakpoints(age, floor):
     assert card_age_floor(age, True) == floor

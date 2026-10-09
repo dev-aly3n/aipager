@@ -46,7 +46,7 @@ def test_the_contract_numbers_are_the_configured_ones():
     assert config.FLOOD_BAN_MEMORY_DAYS == 7.0
     assert (config.CARD_AGE_TIER1_AT, config.CARD_AGE_TIER1_INTERVAL) == (120.0, 10.0)
     assert (config.CARD_AGE_TIER2_AT, config.CARD_AGE_TIER2_INTERVAL) == (600.0, 30.0)
-    assert (config.CARD_AGE_TIER3_AT, config.CARD_AGE_TIER3_INTERVAL) == (3600.0, 60.0)
+    assert (config.CARD_AGE_TIER3_AT, config.CARD_AGE_TIER3_INTERVAL) == (3600.0, 30.0)
     assert config.CARD_STATE_BYPASS_MIN_GAP == 10.0
 
 
@@ -164,7 +164,8 @@ def test_the_hourly_limits_follow_the_arguments():
     (0.0, 0.0, "s"), (30.0, 0.0, "s"), (119.9, 0.0, "s"),
     (120.0, 10.0, "s"), (300.0, 10.0, "s"), (599.9, 10.0, "s"),
     (600.0, 30.0, "m"), (1800.0, 30.0, "m"), (3599.9, 30.0, "m"),
-    (3600.0, 60.0, "h"), (7200.0, 60.0, "h"), (86400.0, 60.0, "h"),
+    (600.1, 30.0, "m"), (3600.0, 30.0, "h"), (3600.1, 30.0, "h"),
+    (7200.0, 30.0, "h"), (86400.0, 30.0, "h"),
 ])
 def test_the_age_tiers(age, floor, unit):
     """R4's table, at and around each breakpoint. Mutation: move any

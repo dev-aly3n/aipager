@@ -79,9 +79,10 @@ class Preferences:
     # would land between the busy card and the job's single answer).
     # Defaulted here so every existing keyword construction stays valid.
     diff_preview: bool = False
-    # Slow the busy card as a turn gets long (roadmap 8.30): from 2 / 10 /
-    # 60 minutes the card is refreshed at most every 10 / 30 / 60 s and
-    # counts in minutes, then hours. ON by default — it is what keeps a
+    # Slow the busy card as a turn gets long (roadmap 8.30): from 2 / 10
+    # minutes the card is refreshed at most every 10 / 30 s (never slower
+    # than 30 s, however long the turn) and counts in minutes, then hours
+    # from an hour. ON by default — it is what keeps a
     # four-hour turn from editing one message thousands of times. Off is
     # 0.7.13's cadence for the whole turn.
     card_age_decay: bool = True

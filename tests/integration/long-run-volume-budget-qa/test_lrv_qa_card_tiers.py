@@ -161,13 +161,26 @@ def test_past_an_hour_the_counter_reads_hours(
         [status_line(m) for m in late]
 
 
-def test_no_gap_under_sixty_seconds_once_past_an_hour(
+def test_no_gap_under_thirty_seconds_once_past_an_hour(
     mk_bot, vbot, vloop, vlimiter, rich_http,
 ):
     bot, sess = card(mk_bot, vbot, vloop, rich_http, age=3590.0)
     animate(vloop, bot, sess, 300.0)
     late = gaps_after_age(rich_http.edits(), sess.busy_started_at, 3600.0 + EPS)
-    assert late and min(late) >= 60.0 - EPS, late
+    assert late and min(late) >= 30.0 - EPS, late
+
+
+def test_past_an_hour_a_quiet_card_is_edited_at_least_every_thirty_seconds(
+    mk_bot, vbot, vloop, vlimiter, rich_http,
+):
+    """Operator ruling 2026-10-09: never slower than every 30 s, however
+    long the turn. Mutation: put the hour tier back to 60 s and the gaps
+    here double."""
+    bot, sess = card(mk_bot, vbot, vloop, rich_http, age=2 * HOUR)
+    animate(vloop, bot, sess, 5 * MIN)
+    edits = rich_http.edits()
+    gaps = [b - a for (a, _), (b, _) in zip(edits, edits[1:])]
+    assert len(gaps) >= 8 and max(gaps) <= 30.0 + 2.2 + EPS, gaps
 
 
 def test_a_slow_card_still_moves_at_least_once_a_tier(
@@ -311,11 +324,19 @@ def test_thirty_second_tier_hook_edit_goes_at_thirty_one_seconds(
                            age=30 * MIN, wait=31.0) == 1
 
 
-def test_sixty_second_tier_hook_edit_waits_at_forty_seconds(
+def test_hour_tier_hook_edit_waits_at_twelve_seconds(
     mk_bot, vbot, vloop, vlimiter, rich_http,
 ):
     assert hook_after_edit(mk_bot, vbot, vloop, rich_http,
-                           age=2 * HOUR, wait=40.0) == 0
+                           age=2 * HOUR, wait=12.0) == 0
+
+
+def test_hour_tier_hook_edit_goes_at_thirty_one_seconds(
+    mk_bot, vbot, vloop, vlimiter, rich_http,
+):
+    """Past an hour the tier is 30 s, not a minute (2026-10-09)."""
+    assert hook_after_edit(mk_bot, vbot, vloop, rich_http,
+                           age=2 * HOUR, wait=31.0) == 1
 
 
 def test_decay_off_hook_edit_at_two_hours_is_immediate_as_today(

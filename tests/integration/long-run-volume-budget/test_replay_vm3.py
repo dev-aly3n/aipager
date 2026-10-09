@@ -192,8 +192,9 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
       (75 % of the ornament share) — no gap of ten minutes or more. It was
       dark for 71 minutes before ruling #2, and for 22.6 with a 9 s tier;
     * zero 429s and zero bans from a Telegram that bans on volume;
-    * bigdog's four-hour card: at most 60 edits in any hour after its
-      first (it has no state change to bypass on);
+    * bigdog's four-hour card: at most 120 edits in any hour after its
+      first, one per 30 s (it has no state change to bypass on; the hour
+      tier was 60 s, so 60 edits, until the 2026-10-09 ruling);
     * total calls ≤ 4,080 — the modelled 0.7.13 figure is ~11,500;
     * with the pinned "needs you" bar LIVE (8.31, refreshed by the
       session monitor's 2 s tick exactly as in the daemon), both sessions
@@ -286,7 +287,7 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
     late_gaps = [g for g in gaps if g > late + 1e-3]
     assert late_gaps == [], (late_gaps, report)
     after_first_hour = [t for t in bigdog if t >= bigdog[0] + HOUR]
-    assert _most_in_window(after_first_hour) <= 60, report
+    assert _most_in_window(after_first_hour) <= 120, report
     assert report["total"] <= 4080, report
     assert len(answers) == 9, report          # every short turn answered
     assert len(samples) >= int(T // 60.0) - 1, report
