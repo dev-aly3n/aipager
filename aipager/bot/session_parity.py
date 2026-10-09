@@ -49,7 +49,9 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from aipager.bot.mode_labels import mode_label
-from aipager.bot import card_owner, group_intake, held_message, settings_menu
+from aipager import i18n
+from aipager.bot import card_owner, group_intake, held_message, language_menu, settings_menu
+from aipager.i18n import Msg, Safe
 from aipager.bot.transport import (
     MUTED,
     SKIPPED,
@@ -886,12 +888,53 @@ async def handle_diff_cmd(
 
 # ---- per-session preferences ----------------------------------------
 
+SPREF_PICK = Msg("set.text.spref_pick",
+                 "👤 <b>Per-session preferences</b>\n\nPick a session to override its "
+                 "reply style.",
+                 note="/settings > Per-session preferences, above the session list")
+SPREF_NONE = Msg("set.text.spref_none", "👤 <b>Per-session preferences</b>\n\nNo sessions yet.",
+                 note="/settings > Per-session preferences with no session")
+SPREF_ROOT = Msg("set.text.spref_root",
+                 "👤 <b>Per-session preferences - [{session}]</b>\n\nOverrides this "
+                 "session's reply style. Unset fields fall back to this chat's /settings. "
+                 "⭐ marks a field this session has overridden.",
+                 note="One session's own reply style; {session} is its name",
+                 eg={"session": "x1"})
+SPREF_FIELD = Msg("set.text.spref_field",
+                  "{title} - for [<b>{session}</b>]\n\n{title} this session uses, "
+                  "overriding this chat's own /settings just for it.",
+                  note="One setting for one session; {title} is the setting's name "
+                       "(with its emoji), {session} the session's name",
+                  eg={"title": "📏 Answer length", "session": "x1"})
+CHAT_DEFAULT = Msg("set.opt.chat_default", "{option} (chat default)",
+                   note="A setting's option that is also the chat's own choice",
+                   eg={"option": "Short"})
+USE_CHAT_DEFAULT = Msg("set.btn.use_chat_default", "↩️ Use chat default",
+                       note="Drops this session's own value: the chat's /settings apply")
+CLOSED = Msg("set.text.closed", "Closed.", note="The Per-session preferences menu, closed")
+SESSION_GONE = Msg("toast.session_gone_settings",
+                   "This session is no longer available - reopen /settings.",
+                   note="Pop-up: the tapped session has ended or was renamed")
+SPREF_NOT_ALLOWED = Msg("toast.spref_not_allowed",
+                        "You can't change this session's preferences.",
+                        note="Pop-up: the person may not change this session")
+
+
+def _tapper(query):
+    """What only the tapper sees: their language."""
+    from types import SimpleNamespace
+    return i18n.for_person(SimpleNamespace(
+        callback_query=query, effective_user=getattr(query, "from_user", None),
+        effective_chat=None, message=None))
+
+
 def _render_session_pref_picker(
-    bot: "TelegramBot", chat_id: int,
+    bot: "TelegramBot", chat_id: int, tr=None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """``_:spref`` — every session in scope, freshly indexed on each
     render (entrypoints.md: "populated fresh every time the picker ...
     is rendered")."""
+    tr = tr or i18n.for_chat(chat_id)
     sessions = sorted(
         (s for s in bot.registry.all_sessions(chat_id).values() if s.label),
         key=lambda s: s.label.lower(),
@@ -906,16 +949,14 @@ def _render_session_pref_picker(
             callback_data=f"_:spref:{_pref_idx(bot, chat_id, table, sess.name)}")]
         for sess in sessions
     ]
-    rows.append([InlineKeyboardButton("✖️ Close", callback_data="_:spref:close")])
-    if sessions:
-        text = "👤 <b>Per-session preferences</b>\n\nPick a session to override its reply style."
-    else:
-        text = "👤 <b>Per-session preferences</b>\n\nNo sessions yet."
+    rows.append([InlineKeyboardButton(tr.text(settings_menu.CLOSE),
+                                      callback_data="_:spref:close")])
+    text = tr.html(SPREF_PICK if sessions else SPREF_NONE)
     return text, InlineKeyboardMarkup(rows)
 
 
 def render_session_preferences_root(
-    sess: TrackedSession, chat_id: int, *, cb_prefix: str,
+    sess: TrackedSession, chat_id: int, *, cb_prefix: str, tr=None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Root view: one row per settable field with its current EFFECTIVE
     value and an override marker, mirroring
@@ -924,11 +965,13 @@ def render_session_preferences_root(
     and a session's ⋮ menu "Preferences" row — with a different
     ``cb_prefix`` per call (design.md decision #3): the two paths can
     never show different fields, labels, or current-value markers
-    because they're the same function."""
+    because they're the same function. In *tr*'s language (the chat's
+    when None)."""
+    tr = tr or i18n.for_chat(chat_id)
     overrides = sess.preference_overrides()
     effective = resolve_preferences(sess.scope_chat_id or 0, overrides)
     rows = []
-    for entry in settings_menu.settings_schema():
+    for entry in settings_menu.settings_schema(tr):
         section, field = entry["section"], entry["field"]
         value = getattr(effective, field)
         label = next(
@@ -941,27 +984,25 @@ def render_session_preferences_root(
         # overridden even when it isn't.
         marker = " ⭐" if field in overrides else ""
         rows.append([InlineKeyboardButton(
-            f"{entry['title']}: {label}{marker}",
+            f"{tr.text(settings_menu.ROW, title=Safe(entry['title']), value=Safe(label))}"
+            f"{marker}",
             callback_data=f"{cb_prefix}:{section}",
         )])
-    rows.append([InlineKeyboardButton("« Back", callback_data="_:spref")])
-    text = (
-        f"👤 <b>Per-session preferences - [{html_mod.escape(sess.label)}]</b>\n\n"
-        "Overrides this session's reply style. Unset fields fall back to "
-        "this chat's /settings. ⭐ marks a field this session has overridden."
-    )
+    rows.append([InlineKeyboardButton(tr.text(language_menu.BACK), callback_data="_:spref")])
+    text = tr.html(SPREF_ROOT, session=sess.label)
     return text, InlineKeyboardMarkup(rows)
 
 
 def render_session_preferences_field(
-    sess: TrackedSession, chat_id: int, section: str, *, cb_prefix: str,
+    sess: TrackedSession, chat_id: int, section: str, *, cb_prefix: str, tr=None,
 ) -> tuple[str, InlineKeyboardMarkup] | None:
     """A field's value list + "Use chat default" + Back, or ``None`` for
     an unrecognised ``section`` — same contract as
     ``settings_menu.render_settings_section``."""
-    entry = _SCHEMA.get(section)
-    if entry is None:
+    if section not in _SCHEMA:
         return None
+    tr = tr or i18n.for_chat(chat_id)
+    entry = {e["section"]: e for e in settings_menu.settings_schema(tr)}[section]
     field = entry["field"]
     overrides = sess.preference_overrides()
     overridden = field in overrides
@@ -973,22 +1014,20 @@ def render_session_preferences_field(
         value = option["value"]
         token = _token_for_value(value)
         marker = " ✅" if overridden and value == override_value else ""
-        default_tag = " (chat default)" if value == scope_value else ""
+        label = (tr.text(CHAT_DEFAULT, option=Safe(option["label"]))
+                 if value == scope_value else option["label"])
         rows.append([InlineKeyboardButton(
-            f"{option['label']}{default_tag}{marker}",
+            f"{label}{marker}",
             callback_data=f"{cb_prefix}:{section}:{token}",
         )])
     rows.append([InlineKeyboardButton(
-        "↩️ Use chat default" + ("" if overridden else " ✅"),
+        tr.text(USE_CHAT_DEFAULT) + ("" if overridden else " ✅"),
         callback_data=f"{cb_prefix}:{section}:default",
     )])
-    rows.append([InlineKeyboardButton("« Back", callback_data=cb_prefix)])
+    rows.append([InlineKeyboardButton(tr.text(language_menu.BACK), callback_data=cb_prefix)])
 
-    text = (
-        f"{entry['title']} - for [<b>{html_mod.escape(sess.label)}</b>]\n\n"
-        f"{entry['title']} this session uses, overriding this chat's own "
-        "/settings just for it."
-    )
+    text = tr.html(SPREF_FIELD, title=Safe(html_mod.escape(entry["title"])),
+                   session=sess.label)
     return text, InlineKeyboardMarkup(rows)
 
 
@@ -1000,6 +1039,7 @@ async def _handle_spref_callback(
     in the docstring of :func:`handle_callback`."""
     rest = action[len("spref"):]  # "" | ":<idx>" | ":<idx>:<section>" | ":<idx>:<section>:<token>"
     parts = [p for p in rest.split(":") if p != ""]
+    person = _tapper(query)
 
     if not parts:
         text, kb = _render_session_pref_picker(bot, chat_id)
@@ -1008,13 +1048,11 @@ async def _handle_spref_callback(
 
     if len(parts) == 1:
         if parts[0] == "close":
-            await _edit(query, "Closed.", None)
+            await _edit(query, i18n.for_chat(chat_id).html(CLOSED), None)
             return True
         sess = _resolve_pref_index(bot, chat_id, parts[0])
         if sess is None:
-            await bot._safe_answer(
-                query, "This session is no longer available - reopen /settings.",
-            )
+            await bot._safe_answer(query, person.text(SESSION_GONE))
             return True
         text, kb = render_session_preferences_root(
             sess, chat_id, cb_prefix=f"_:spref:{parts[0]}",
@@ -1026,15 +1064,13 @@ async def _handle_spref_callback(
         idx_token, section = parts
         sess = _resolve_pref_index(bot, chat_id, idx_token)
         if sess is None:
-            await bot._safe_answer(
-                query, "This session is no longer available - reopen /settings.",
-            )
+            await bot._safe_answer(query, person.text(SESSION_GONE))
             return True
         rendered = render_session_preferences_field(
             sess, chat_id, section, cb_prefix=f"_:spref:{idx_token}",
         )
         if rendered is None:
-            await bot._safe_answer(query, "Invalid callback")
+            await bot._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))
             return True
         text, kb = rendered
         await _edit(query, text, kb)
@@ -1044,17 +1080,15 @@ async def _handle_spref_callback(
         idx_token, section, token = parts
         sess = _resolve_pref_index(bot, chat_id, idx_token)
         if sess is None:
-            await bot._safe_answer(
-                query, "This session is no longer available - reopen /settings.",
-            )
+            await bot._safe_answer(query, person.text(SESSION_GONE))
             return True
         user_id = query.from_user.id if getattr(query, "from_user", None) else None
         if not bot._can_prompt_user(user_id, chat_id):
-            await bot._safe_answer(query, "You can't change this session's preferences.")
+            await bot._safe_answer(query, person.text(SPREF_NOT_ALLOWED))
             return True
         entry = _SCHEMA.get(section)
         if entry is None:
-            await bot._safe_answer(query, "Invalid callback")
+            await bot._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))
             return True
         field = entry["field"]
         attr = PREFERENCE_OVERRIDE_FIELDS[field]
@@ -1064,7 +1098,7 @@ async def _handle_spref_callback(
         else:
             value = _value_for_token(section, token)
             if value is None or not is_valid_value(field, value):
-                await bot._safe_answer(query, "Invalid value")
+                await bot._safe_answer(query, person.text(language_menu.INVALID_VALUE))
                 return True
             setattr(sess, attr, value)
             bot.registry.mark_dirty()
@@ -1076,7 +1110,7 @@ async def _handle_spref_callback(
             await _edit(query, text, kb)
         return True
 
-    await bot._safe_answer(query, "Invalid callback")
+    await bot._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))
     return True
 
 

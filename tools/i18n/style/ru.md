@@ -21,3 +21,9 @@ Product names (Claude, Claude Code, Anthropic, aipager, Telegram, Mini App, GitH
 
 ## Placeholders and tags
 Keep every {placeholder} and every HTML tag of the English, exactly once each. Never translate inside <code> or <pre>.
+
+## Markers, keyboard words and modes
+- Keep `**`, `_`, every HTML tag and every {placeholder} exactly as in the English: the same number of `**` and `_`, never a backtick.
+- A keyboard word (status, stop, new, kill) is ONE word with no space: it is typed as a word.
+- A mode word (Auto, Ask) is ONE word after its emoji: people type it after /mode.
+- A default button label (Continue, Run tests...) stays short: it is a button.

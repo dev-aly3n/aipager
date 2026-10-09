@@ -89,7 +89,7 @@ def test_keep_english_sets_the_dm_and_confirms(bot, run_async):
 
 
 @pytest.mark.parametrize("chat, data", [
-    (DM, "_:set:lang_offer:fa"), (DM, "_:set:lang_offer:qps"), (GROUP, "_:set:lang_offer:en"),
+    (DM, "_:set:lang_offer:de"), (DM, "_:set:lang_offer:qps"), (GROUP, "_:set:lang_offer:en"),
     (DM, "_:set:lang_offer:en:x")])
 def test_an_offer_tap_that_does_not_fit_writes_nothing(bot, run_async, chat, data):
     q = tap(bot, run_async, data, chat=chat, user=ALY)

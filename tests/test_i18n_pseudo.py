@@ -78,8 +78,28 @@ def migrated_renders(monkeypatch) -> list[str]:
     return out
 
 
-def test_every_migrated_renderer_is_marked_under_qps(monkeypatch):
+def test_every_phase_1_renderer_is_marked_under_qps(monkeypatch):
     renders = migrated_renders(monkeypatch)
     assert len(renders) >= 20
     leaks = {t: unmarked_words(t, known=ENDONYMS) for t in renders}
     assert not {t: w for t, w in leaks.items() if w}, leaks
+
+
+def test_every_migrated_renderer_is_marked_under_qps(mk_bot, run_async, monkeypatch):
+    """Each phase 2 surface in the registry, driven with ``qps`` stored for
+    its chats: not one unmarked English word (G82)."""
+    from aipager.i18n import locales
+    from tests import i18n_surfaces
+    monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"qps"}))
+    renders = i18n_surfaces.render_all(mk_bot, run_async, monkeypatch, "qps",
+                                       names=i18n_surfaces.MIGRATED)
+    assert set(renders) == i18n_surfaces.MIGRATED
+    # Phase 2 is done: every registered surface is migrated.
+    assert i18n_surfaces.MIGRATED == {n for n, _f in i18n_surfaces.SURFACES}
+    leaks = {}
+    for name, texts in renders.items():
+        for text in texts:
+            words = i18n_surfaces.unmarked_words(text)
+            if words:
+                leaks.setdefault(name, []).append((text, words))
+    assert not leaks, leaks

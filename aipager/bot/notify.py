@@ -24,8 +24,9 @@ from telegram.error import Forbidden
 
 from aipager.bot import agents_line as _agents_line
 from aipager.bot import reactions
-from aipager.bot.dashboard import new_prompt_token
+from aipager.bot.dashboard import PIN_NEEDS_INPUT, new_prompt_token
 from aipager.bot.flood import MUTE, FloodMuted
+from aipager.bot.keyboards import PERM_NEEDED
 from aipager.bot.flood_budget import (
     PRIORITY_ORNAMENT,
     FloodSkipped,
@@ -44,7 +45,8 @@ from aipager.bot.rich_message import (
 
 from aipager import bg_shells as _bg_shells
 from aipager import bidi_guard
-from aipager import preferences
+from aipager import i18n, preferences
+from aipager.i18n import Msg, Safe, Span
 from aipager.clockfmt import elapsed as clock
 from aipager.config import (
     COMPACT_CARD_TIMEOUT_SECONDS,
@@ -138,6 +140,66 @@ def _result_line_md(label: str) -> str:
 
 def _result_line_plain(label: str) -> str:
     return f"{_RESULT_GLYPH} {label}"
+
+
+FINISHED = Msg("fin.finished", "{lead} · Finished ({stats})",
+               note="The answer's first line: the session's name, then how long the turn "
+                    "ran and the lines it changed",
+               eg={"lead": "💬 x1", "stats": "4:10, +10 -5"})
+FINISHED_BARE = Msg("fin.finished_bare", "{lead} · Finished",
+                    note="The answer's first line when there is nothing to count",
+                    eg={"lead": "💬 x1"})
+STATS = Msg("fin.stats", "{clock}, +{added} -{removed}",
+            note="How long the turn ran, then the lines added and removed",
+            eg={"clock": "4:10", "added": 10, "removed": 5})
+LINES = Msg("fin.lines", "+{added} -{removed}", note="The lines added and removed in a turn",
+            eg={"added": 10, "removed": 5})
+AGENT_LOST = Msg("fin.agent_lost", "⚠️ <b>{session}</b> · Finished (background agent lost)",
+                 note="A turn closed because its background agent disappeared",
+                 eg={"session": "x1"})
+AGENT_LOST_AFTER = Msg("fin.agent_lost_after",
+                       "⚠️ <b>{session}</b> · Finished (background agent lost after {clock})",
+                       note="A turn closed because its background agent disappeared, after "
+                            "how long", eg={"session": "x1", "clock": "4:10"})
+SHELL_LOST = Msg("fin.shell_lost",
+                 "⚠️ <b>{session}</b> · Finished (no end seen for a background shell)",
+                 note="A turn closed though aipager never saw its background shell end",
+                 eg={"session": "x1"})
+SHELL_LOST_AFTER = Msg("fin.shell_lost_after",
+                       "⚠️ <b>{session}</b> · Finished (no end seen for a background shell "
+                       "after {clock})",
+                       note="As fin.shell_lost, after how long",
+                       eg={"session": "x1", "clock": "4:10"})
+FULL_ATTACHED = Msg("fin.full_attached", "📎 <i>Full response attached below ↓</i>",
+                    note="Under the answer's first line: the whole answer is in the file "
+                         "that follows")
+
+
+def finished_line(tr, lead: str, kind: str, *, seconds: int = 0, added: int = 0,
+                  removed: int = 0) -> str:
+    """``<lead> · Finished (4:10, +10 -5)`` in *tr*'s language: *lead* is
+    the result line already written for *kind* (``💬 **x1**``), the clock
+    only when *seconds* > 0, the counts only when either is set."""
+    render = getattr(tr, kind)
+    clock_text = Safe(tr.clock(seconds)) if seconds > 0 else None
+    counted = bool(added or removed)
+    if clock_text is not None and counted:
+        stats = render(STATS, clock=clock_text, added=added, removed=removed)
+    elif clock_text is not None:
+        stats = clock_text
+    elif counted:
+        stats = render(LINES, added=added, removed=removed)
+    else:
+        return render(FINISHED_BARE, lead=Span(lead))
+    return render(FINISHED, lead=Span(lead), stats=Safe(stats))
+
+
+def settled_agent_row(agent_type: str, tool_count: int, elapsed: float) -> str:
+    """A finished agent's row as STORED in ``tool_history`` (English; the
+    card draws it in the chat's language, ``card_rows``)."""
+    plural = "" if tool_count == 1 else "s"
+    return (f"\U0001f916 {agent_type} · {tool_count} tool call{plural}"
+            f" · {clock(elapsed)}")
 
 
 def _drop_answer_tail(sess: TrackedSession, answer: str) -> None:
@@ -234,7 +296,7 @@ def _separate_prompt_perm(tool_info: dict | None, summary: str,
     The hook's reply channel rides only on a plain tool permission, as on
     the inline path: never on an AskUserQuestion, whose answer is a
     choice of option rows, not an allow/deny."""
-    perm: dict = {"tool_summary": summary or "Permission needed",
+    perm: dict = {"tool_summary": summary or str(PERM_NEEDED),
                   "tool_info": tool_info, "wait_started_at": time.monotonic(),
                   # When it was shown, on the clock a restart can read
                   # (roadmap 8.102).
@@ -280,13 +342,15 @@ class NotifyMixin:
         # (see keyboards.py:_build_resume_mode_keyboard).
         from aipager.bot import session_parity
 
+        from aipager.bot import keyboards
         chat_id = resolve_chat_id_int(sess) or 0
+        tr = i18n.for_sess(sess)
         return InlineKeyboardMarkup([[
             InlineKeyboardButton(
-                "✅ Allow",
+                tr.text(keyboards.ALLOW),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "allow")),
             InlineKeyboardButton(
-                "❌ Deny",
+                tr.text(keyboards.DENY),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "deny")),
         ]])
 
@@ -456,7 +520,7 @@ class NotifyMixin:
             return None
         kinds = ["agent"] * len(agents) + ["shell"] * len(shells)
         return {"line": _agents_line.running_line(labels, kinds=kinds,
-                                                  markdown=True),
+                                                  markdown=True, tr=i18n.for_sess(sess)),
                 "ids": list(sess.bg_agents) + list(sess.bg_shells),
                 "labels": labels, "kinds": kinds}
 
@@ -500,7 +564,7 @@ class NotifyMixin:
         finished with (settled, gone, or given up)."""
         done = _agents_line.done_line(
             rec["labels"], time.time() - rec["sent_wall"],
-            kinds=rec.get("kinds"), markdown=True)
+            kinds=rec.get("kinds"), markdown=True, tr=i18n.for_sess(sess))
         text = rec["text"][: -len(rec["line"])] + done
         rec["attempts"] += 1
         chat_id = rec["chat_id"]
@@ -1571,20 +1635,19 @@ class NotifyMixin:
             job_sender = self._end_job_turn(sess)
             sess.close_turn()  # no card for this turn from here (8.57)
             self._stop_animation(sess)
-            elapsed_str = ""
+            elapsed_s = 0
             if sess.busy_started_at:
                 elapsed_s = int(time.monotonic() - sess.busy_started_at)
-                if elapsed_s > 0:
-                    elapsed_str = clock(elapsed_s)
-            suffix = f" ({elapsed_str})" if elapsed_str else ""
             # Two forms of the same line ("session-name-on-every-message"):
             # the busy card settles to ITS glyph (✅ — the card's terminal
             # state), while a standalone notice, sent because no card is
             # left to settle, is the turn's result message and opens with
             # the result glyph like the idle path's standalone header.
             name = html_mod.escape(label)
-            text = f"✅ <b>{name}</b> · Finished{suffix}"
-            text_alone = f"{_RESULT_GLYPH} <b>{name}</b> · Finished{suffix}"
+            tr = i18n.for_sess(sess)
+            text = finished_line(tr, f"✅ <b>{name}</b>", "html", seconds=elapsed_s)
+            text_alone = finished_line(tr, f"{_RESULT_GLYPH} <b>{name}</b>", "html",
+                                       seconds=elapsed_s)
             # The card's last word, written and retired under the
             # card-edit lock (`_settle_card_text`).
             if not await self._settle_card_text(
@@ -1622,18 +1685,16 @@ class NotifyMixin:
             job_sender = self._end_job_turn(sess)
             sess.close_turn()  # no card for this turn from here (8.57)
             self._stop_animation(sess)
-            elapsed_str = ""
+            elapsed_s = 0
             if sess.busy_started_at:
                 elapsed_s = int(time.monotonic() - sess.busy_started_at)
-                if elapsed_s > 0:
-                    elapsed_str = clock(elapsed_s)
-            suffix = f" after {elapsed_str}" if elapsed_str else ""
-            if context.get("what", "agent") == "shell":
-                text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Finished "
-                        f"(no end seen for a background shell{suffix})")
+            tr = i18n.for_sess(sess)
+            shell = context.get("what", "agent") == "shell"
+            if elapsed_s > 0:
+                text = tr.html(SHELL_LOST_AFTER if shell else AGENT_LOST_AFTER,
+                               session=label, clock=Safe(tr.clock(elapsed_s)))
             else:
-                text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Finished "
-                        f"(background agent lost{suffix})")
+                text = tr.html(SHELL_LOST if shell else AGENT_LOST, session=label)
             # Written and retired under the card-edit lock, as above.
             if not await self._settle_card_text(
                     sess, text):
@@ -1766,7 +1827,8 @@ class NotifyMixin:
             await self._end_turn_ended_at_dialog(
                 sess, refused=refused, by="", confirmed=True,
                 carried_on=carried_on,
-                card_text=_terminal_card_text(sess.label, refused=refused))
+                card_text=_terminal_card_text(sess.label, refused=refused,
+                                              tr=i18n.for_sess(sess)))
             return
 
         if event == "waiting_reminder":
@@ -2068,12 +2130,7 @@ class NotifyMixin:
             # (was blank before this feature) so the settled row's
             # three-segment shape ("type · N tool calls · elapsed") is
             # always fixed ("agent activity rows on the busy card").
-            elapsed_str = clock(elapsed)
-            plural = "" if tool_count == 1 else "s"
-            done_summary = (
-                f"\U0001f916 {agent_type} · {tool_count} tool call{plural}"
-                f" · {elapsed_str}"
-            )
+            done_summary = settled_agent_row(agent_type, tool_count, elapsed)
             # Mark the matching tool_history entry as done SYNCHRONOUSLY
             if history_idx is not None and 0 <= history_idx < len(sess.tool_history):
                 sess.tool_history[history_idx] = (done_summary, True)
@@ -2853,7 +2910,6 @@ class NotifyMixin:
                     return
 
                 # Compute elapsed time since BUSY started
-                elapsed_str = ""
                 elapsed_s = 0
                 if sess.busy_started_at:
                     elapsed_s = int(time.monotonic() - sess.busy_started_at)
@@ -2862,25 +2918,21 @@ class NotifyMixin:
                     # that never got a card still has the transition's own
                     # stamp, so the header can report how long it ran.
                     elapsed_s = int(time.time() - sess.busy_started_wall)
-                if elapsed_s > 0:
-                    elapsed_str = clock(elapsed_s)
-                # Lines changed this turn
-                lines_str = ""
-                if sess.last_lines_added or sess.last_lines_removed:
-                    lines_str = f"+{sess.last_lines_added} -{sess.last_lines_removed}"
-                # Build suffix: combine non-empty parts with comma
-                parts = [p for p in (elapsed_str, lines_str) if p]
-                suffix = f" ({', '.join(parts)})" if parts else ""
                 # The result line in its STATS form — a result that is the only
                 # message left for its turn says Finished and how long it took
-                # ("session-name-on-every-message"). HTML for the standalone
-                # header message, the rich-message dialect (bold = **) for a
-                # composed send, bare for the plain-text fallback.
-                header_text = (
-                    f"{_RESULT_GLYPH} <b>{html_mod.escape(label)}</b> · Finished{suffix}"
-                )
-                header_md = f"{_result_line_md(label)} · Finished{suffix}"
-                header_plain = f"{_result_line_plain(label)} · Finished{suffix}"
+                # and the lines it changed ("session-name-on-every-message").
+                # HTML for the standalone header message, the rich-message
+                # dialect (bold = **) for a composed send, bare for the
+                # plain-text fallback.
+                header_tr = i18n.for_sess(sess)
+                stats = {"seconds": elapsed_s, "added": sess.last_lines_added,
+                         "removed": sess.last_lines_removed}
+                header_text = finished_line(
+                    header_tr, f"{_RESULT_GLYPH} <b>{html_mod.escape(label)}</b>", "html",
+                    **stats)
+                header_md = finished_line(header_tr, _result_line_md(label), "md", **stats)
+                header_plain = finished_line(header_tr, _result_line_plain(label), "text",
+                                             **stats)
 
                 # ── merged layout: one combined edit, timeline + answer ────────
                 # Attempted here — after the header text exists (used only by the
@@ -3056,7 +3108,7 @@ class NotifyMixin:
                     log.info("[%s] IDLE header skipped — chat flood-muted", label)
                 elif standalone_header:
                     if send_file:
-                        header_text += "\n\n📎 <i>Full response attached below ↓</i>"
+                        header_text += "\n\n" + header_tr.html(FULL_ATTACHED)
                     log.debug("[%s] Sending IDLE notification (%d chars header)",
                               label, len(header_text))
                     try:
@@ -3244,7 +3296,7 @@ class NotifyMixin:
                 attach_log = send_file or sess.last_card_truncated
                 file_content = (
                     build_full_log(label, log_tools, log_commentary, content,
-                                    agents=log_agents)
+                                    agents=log_agents, tr=i18n.for_sess(sess))
                     if attach_log else ""
                 )
                 if attach_log and file_content:
@@ -3385,7 +3437,7 @@ class NotifyMixin:
                             "shown_wall": time.time(),
                         }
                 else:
-                    tool_summary = tool_info["summary"] if tool_info else "Permission needed"
+                    tool_summary = tool_info["summary"] if tool_info else str(PERM_NEEDED)
                     sess.pending_permission = {
                         "tool_summary": tool_summary,
                         "tool_info": tool_info,
@@ -3429,14 +3481,17 @@ class NotifyMixin:
                 elif selector_options:
                     text, keyboard = self._build_selector_keyboard(sess, label,
                                                                     selector_text, selector_options)
-                    prompt_summary = selector_text or "Needs input"
+                    prompt_summary = selector_text or str(PIN_NEEDS_INPUT)
                 else:
+                    from aipager.bot import keyboards
+                    prompt_tr = i18n.for_sess(sess)
                     tool_summary = tool_info["summary"] if tool_info else ""
-                    text = f"🔐 <b>{html_mod.escape(label)}</b> · Permission needed"
+                    text = prompt_tr.html(keyboards.SEPARATE_PERM, session=label)
                     if tool_summary:
                         text += f"\n<code>{html_mod.escape(tool_summary)}</code>"
                         text += _format_perm_detail(
-                            tool_summary, (tool_info or {}).get("detail") or "")
+                            tool_summary, (tool_info or {}).get("detail") or "",
+                            tr=prompt_tr)
                     # This separate-message prompt keeps its Allow/Deny-only
                     # keyboard on purpose (review rev-iter1-004): Allow-always
                     # was never offered here. Stop stays absent as before;
@@ -3445,7 +3500,7 @@ class NotifyMixin:
                     # answer through the hook like the inline prompt's
                     # (roadmap 8.99, ``pending_prompt_msg["perm"]`` below).
                     keyboard = self._separate_permission_keyboard(sess)
-                    prompt_summary = tool_summary or "Permission needed"
+                    prompt_summary = tool_summary or str(PERM_NEEDED)
 
                 # Kept as SENT, before the send: the pinned bar summarises
                 # it and its "Answer" button re-sends it (8.31) — also after
@@ -3504,8 +3559,11 @@ class NotifyMixin:
             # Session went back to working — edit the last idle/interactive message
             if sess.last_msg_id:
                 try:
+                    from aipager.bot.animation import LEGACY_HEAD, _verb
+                    working_tr = i18n.for_sess(sess)
                     await bot.edit_message_text(
-                        f"⚙️ <b>{html_mod.escape(label)}</b> · Working…",
+                        working_tr.html(LEGACY_HEAD, session=label,
+                                        verb=Safe(_verb(working_tr, "Working", "html"))),
                         chat_id=resolve_chat_id(sess),
                         message_id=sess.last_msg_id,
                         parse_mode="HTML",

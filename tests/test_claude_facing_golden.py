@@ -304,3 +304,58 @@ def test_the_deny_reason_names_the_person():
     assert golden["prompt.group.member.typed"].startswith(
         "[via Telegram · @bob · role:user]\n")
 
+
+
+# ---- the same bytes in every chat language (multilingual phase 2) ------------
+
+@pytest.mark.parametrize("code", ["fa", "ru"])
+def test_claude_reads_the_same_in_persian_and_russian(code, mk_bot, monkeypatch, run_async):
+    """Every producer above, with the group and the private chat (and the
+    people in them) set to Persian or Russian: Claude reads exactly the
+    golden bytes (G73)."""
+    from aipager import preferences
+    for chat in (GROUP, DM, ALY, BOB):
+        preferences.set_ui_language(chat, code)
+    corpus = build_corpus(mk_bot, monkeypatch, run_async)
+    golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
+    changed = [k for k in corpus if corpus[k] != golden.get(k)]
+    assert not changed, f"Claude-facing text changed in {code}: {changed}"
+
+
+@pytest.mark.parametrize("code", ["fa", "ru"])
+def test_a_translated_template_or_command_tap_sends_the_english(
+        code, mk_bot, monkeypatch, run_async):
+    """The keyboard shows the default template and command buttons in the
+    chat's language; a tap on one sends Claude exactly the English prompt
+    or command."""
+    from aipager import config, i18n, preferences
+    from aipager.bot import kbwords
+    preferences.set_ui_language(DM, code)
+    bot, typed, _ = _bot(mk_bot, monkeypatch)
+    bot._template_map = dict(config._DEFAULT_TEMPLATES)
+    bot._command_map = dict(config._DEFAULT_COMMANDS)
+    sent_commands: list[str] = []
+
+    async def _command(update, payload):
+        sent_commands.append(payload)
+    bot._send_command = _command
+    sent_templates: list[str] = []
+
+    async def _template(update, payload, *, button=""):
+        sent_templates.append(payload)
+    bot._send_template = _template
+    tr = i18n.get(code)
+    for (label, payload) in list(config._DEFAULT_TEMPLATES) + list(config._DEFAULT_COMMANDS):
+        shown = kbwords.shown_label(tr, label, payload)
+        # Commit stays English (the glossary's keep_english); the rest move.
+        assert shown != label or label == "Commit", (code, label)
+        update = MagicMock()
+        update.message = MagicMock(text=shown, message_id=9, reply_to_message=None,
+                                   quote=None, external_reply=None, forward_origin=None,
+                                   via_bot=None, media_group_id=None, caption=None)
+        update.message.reply_text = AsyncMock()
+        update.effective_user = MagicMock(id=ALY)
+        update.effective_chat = MagicMock(id=DM, type="private")
+        run_async(bot._handle_message(update, MagicMock()))
+    assert sent_templates == [p for _l, p in config._DEFAULT_TEMPLATES]
+    assert sent_commands == [p for _l, p in config._DEFAULT_COMMANDS]

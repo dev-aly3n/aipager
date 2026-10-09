@@ -4,31 +4,82 @@
   "commit",
   "token",
   "diff",
-  "log"
+  "log",
+  "ctx"
  ],
  "language": "Russian",
  "terms": {
-  "admin": "",
-  "agent": "",
-  "allow": "",
-  "background": "",
-  "card": "",
-  "chat": "",
-  "deny": "",
-  "folder": "",
-  "group": "",
-  "member": "",
-  "model": "",
-  "owner": "",
-  "permission": "",
-  "prompt": "",
-  "question": "",
-  "queue": "",
-  "resume": "",
-  "session": "",
-  "settings": "",
-  "stop": "",
-  "turn": "",
-  "update": ""
+  "admin": [
+   "админ"
+  ],
+  "agent": [
+   "агент"
+  ],
+  "allow": [
+   "разреш"
+  ],
+  "background": [
+   "фон"
+  ],
+  "card": [
+   "карточ"
+  ],
+  "chat": [
+   "чат"
+  ],
+  "deny": [
+   "отклон",
+   "запрет"
+  ],
+  "folder": [
+   "папк"
+  ],
+  "group": [
+   "групп"
+  ],
+  "member": [
+   "участ"
+  ],
+  "model": [
+   "модел"
+  ],
+  "owner": [
+   "владел"
+  ],
+  "permission": [
+   "разрешени"
+  ],
+  "prompt": [
+   "запрос"
+  ],
+  "question": [
+   "вопрос"
+  ],
+  "queue": [
+   "очеред"
+  ],
+  "resume": [
+   "возобнов",
+   "продолж",
+   "/resume"
+  ],
+  "session": [
+   "сесси"
+  ],
+  "settings": [
+   "настрой",
+   "/settings"
+  ],
+  "stop": [
+   "стоп",
+   "останов",
+   "/stop"
+  ],
+  "turn": [
+   "ход"
+  ],
+  "update": [
+   "обнов"
+  ]
  }
 }

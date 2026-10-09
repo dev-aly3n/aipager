@@ -33,12 +33,15 @@ from telegram.ext import (
 from aipager.bot.mode_labels import mode_label
 from aipager.bot import (
     card_owner,
+    card_rows,
     held_message,
+    keyboards,
     language_menu,
     language_offer,
     new_flow,
     report_flow,
     session_parity,
+    settings_menu,
     tap_gate,
     update_flow,
 )
@@ -46,6 +49,7 @@ from aipager.dtach import hook_reply, inject
 from aipager.report import store as report_store
 
 from aipager import i18n, preferences
+from aipager.i18n import Command, Msg, Plural, Safe, Span
 from aipager.i18n.locales import is_selectable
 from aipager.bot.settings_menu import (
     SECTIONS as SETTINGS_SECTIONS,
@@ -61,7 +65,7 @@ from aipager.team import (
 # now. Re-export the names this module uses internally so the
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
-from aipager.bot.dashboard import PINNED_ANSWER_VERB, current_prompt_token
+from aipager.bot.dashboard import ALREADY_ANSWERED, PINNED_ANSWER_VERB, current_prompt_token
 from aipager.bot.flood import MUTE, clear_time
 from aipager.bot.transport import (  # noqa: F401
     _message_chat_id,
@@ -126,19 +130,111 @@ def _switch_refused(outcome) -> str:
     return f"⚠️ <b>{label}</b> is not running - mode not changed."
 
 
-def _stopped_line(outcome, *, html: bool = True) -> str:
+STOPPED = Msg("ans.stopped", "⏹ Stopped {session}",
+              note="After a Stop: the session's turn was stopped", eg={"session": "x1"})
+STOPPED_BY = Msg("ans.stopped_by", "⏹ Stopped {session} by {person}",
+                 note="After a Stop in a group: who stopped it; {person} is @username",
+                 eg={"session": "x1", "person": "@bob"})
+STOPPED_DROPPED = Plural(
+    "ans.stopped_dropped", one="⏹ Stopped {session} ({n} queued message discarded)",
+    other="⏹ Stopped {session} ({n} queued messages discarded)",
+    note="After a Stop: the messages waiting for the turn were thrown away",
+    eg={"session": "x1"})
+STOPPED_BY_DROPPED = Plural(
+    "ans.stopped_by_dropped",
+    one="⏹ Stopped {session} by {person} ({n} queued message discarded)",
+    other="⏹ Stopped {session} by {person} ({n} queued messages discarded)",
+    note="After a Stop in a group: who stopped it, and the waiting messages thrown away",
+    eg={"session": "x1", "person": "@bob"})
+NOT_FOUND = Msg("toast.session_not_found", "Session not found",
+                note="Pop-up: the button's session no longer exists")
+SESSION_GONE = Msg("toast.session_gone", "Session '{session}' not found",
+                   note="Pop-up after a prompt tap: the session's Claude Code is no longer "
+                        "running", eg={"session": "claude-x1"})
+SHORT_CB_GONE = Msg("toast.session_unavailable", "That session is no longer available",
+                    note="Pop-up: a button whose session has ended or is no longer known "
+                         "in this chat")
+PROMPT_EXPIRED = Msg("toast.prompt_expired", "this prompt has expired",
+                     note="Pop-up: a tap on a prompt message that is no longer the prompt "
+                          "Claude Code is waiting on")
+CANT_STOP = Msg("toast.cant_stop", "You can't stop this session.",
+                note="Pop-up: the person may not stop this session")
+NOT_HERE = Msg("toast.session_not_here", "That session isn't running here.",
+               note="Pop-up: the session belongs to another chat")
+ENDED = Msg("toast.session_ended", "That session has ended.", note="Pop-up")
+MOVED_ON_STATUS = Msg("toast.moved_on_status",
+                      "{session} moved on to new work - tap ⏹ Stop again to stop it",
+                      note="Pop-up on /status's Stop: the turn it showed is over and a new "
+                           "one runs", eg={"session": "x1"})
+MOVED_ON_STOP = Msg("toast.moved_on_stop", "{session} moved on to new work - send /stop again",
+                    note="Pop-up on the /stop list: the turn it showed is over",
+                    eg={"session": "x1"})
+NOT_WORKING = Msg("toast.not_working", "{session} is not working",
+                  note="Pop-up: Stop tapped while the session is idle", eg={"session": "x1"})
+SEND_KEYS_FAILED = Msg("toast.send_keys_failed", "Failed to send keys",
+                       note="Pop-up: the answer could not be typed into Claude Code")
+SEND_FAILED = Msg("toast.send_failed", "Failed to send to {session}",
+                  note="Pop-up: the answer could not reach the session",
+                  eg={"session": "x1"})
+ANSWERED_TOAST = Msg("toast.answered", "✅ {verb}",
+                     note="Pop-up after a question's answers were sent: how it was answered",
+                     eg={"verb": "Selected: Postgres"})
+VERB_TOAST = Msg("toast.verb", "{verb} [{session}]",
+                 note="Pop-up after a prompt tap: the answer and the session",
+                 eg={"verb": "Allowed", "session": "x1"})
+ALWAYS_DEGRADED = Msg("toast.always_degraded",
+                      "No always-rule for this command - allowed once [{session}]",
+                      note="Pop-up after Allow always when Claude Code offered no rule to "
+                           "save: the tool was allowed this once", eg={"session": "x1"})
+ARROW_VERB = Msg("ans.arrow_verb", "→ {verb}",
+                 note="Under an answered prompt message: how it was answered. RTL "
+                      "catalogs use ←", eg={"verb": "Allowed"})
+ANSWERED = Msg("ans.answered", "✓ <b>{session}</b> · Answered · {person} · {question} → {option}",
+               note="In the chat after a question was answered: who, the question, the "
+                    "answer. RTL catalogs use ←",
+               eg={"session": "x1", "person": "@bob", "question": "Which database?",
+                   "option": "Selected: Postgres"})
+ANSWERED_ANON = Msg("ans.answered_anon", "✓ <b>{session}</b> · Answered · {question} → {option}",
+                    note="After a question was answered (nobody named). RTL catalogs use ←",
+                    eg={"session": "x1", "question": "Which database?",
+                        "option": "Selected: Postgres"})
+ANSWER_LINE = Msg("ans.line", "{icon} <b>{session}</b> · {verb} · {person} · {detail}",
+                  note="In the chat after a prompt was answered: how, by whom, and the "
+                       "tool call or question",
+                  eg={"icon": "✅", "session": "x1", "verb": "Allowed", "person": "@bob",
+                      "detail": "Bash: ls"})
+ANSWER_LINE_ANON = Msg("ans.line_anon", "{icon} <b>{session}</b> · {verb} · {detail}",
+                       note="After a prompt was answered (nobody named)",
+                       eg={"icon": "✅", "session": "x1", "verb": "Allowed",
+                           "detail": "Bash: ls"})
+
+RATE_LIMITED = Msg("toast.rate_limited",
+                   "Telegram is rate-limiting this chat - try again after {time}",
+                   note="Pop-up on Retry while Telegram limits this chat; {time} is a clock "
+                        "time", eg={"time": "14:05"})
+
+#: The shown answer verb by the action id; the audit log keeps the English
+#: of ``transport.ACTION_VERBS``.
+ANSWER_VERBS = card_rows.ANSWER_VERBS
+
+
+def _stopped_line(outcome, *, html: bool = True, tr=None) -> str:
     """`⏹ Stopped x1`, with the queued messages it dropped: what every
-    Stop says (a toast is plain text, a message HTML). In a group, who
-    stopped it (`outcome.by`, roadmap 8.91c): `⏹ Stopped x1 by @bob`."""
-    label = html_mod.escape(outcome.label) if html else outcome.label
-    line = f"⏹ Stopped <b>{label}</b>" if html else f"⏹ Stopped {label}"
+    Stop says (a toast is plain text, a message HTML), in *tr*'s language
+    (English when None). In a group, who stopped it (`outcome.by`,
+    roadmap 8.91c): `⏹ Stopped x1 by @bob`."""
+    tr = tr or i18n.get("en")
+    render = tr.html if html else tr.text
+    session = (Span(f"<b>{html_mod.escape(outcome.label)}</b>") if html
+               else outcome.label)
     by = getattr(outcome, "by", "")
+    params = {"session": session}
     if isinstance(by, str) and by:
-        line += f" by {html_mod.escape(by) if html else by}"
+        params["person"] = Command(by)
     if outcome.dropped:
-        line += (f" ({outcome.dropped} queued message"
-                 f"{'s' if outcome.dropped > 1 else ''} discarded)")
-    return line
+        plural = STOPPED_BY_DROPPED if "person" in params else STOPPED_DROPPED
+        return tr.n(plural, outcome.dropped, kind="html" if html else "text", **params)
+    return render(STOPPED_BY if "person" in params else STOPPED, **params)
 
 
 class _QueryAck:
@@ -384,11 +480,15 @@ class CallbackDispatchMixin:
                 pass
             return
 
+        # A pop-up is seen only by the person who tapped: their language.
+        # The menu itself is the chat's.
+        person = i18n.for_person(update)
+        shared = i18n.for_update(update)
         if len(parts) == 1:
             section = parts[0]
-            rendered = render_settings_section(chat_id or 0, section)
+            rendered = render_settings_section(chat_id or 0, section, language=shared.code)
             if rendered is None:
-                await self._safe_answer(query, "Invalid callback")
+                await self._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))
                 return
             text, kb = rendered
             try:
@@ -400,7 +500,7 @@ class CallbackDispatchMixin:
         if len(parts) == 2:
             section, token = parts
             if section not in SETTINGS_SECTIONS:
-                await self._safe_answer(query, "Invalid callback")
+                await self._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))
                 return
 
             # Fail closed: an unresolvable chat_id (`calling_chat_id`
@@ -413,9 +513,7 @@ class CallbackDispatchMixin:
             # chat.
             if (chat_id is None or chat_id < 0) and not self._is_admin(update):
                 await self._safe_answer(
-                    query, "Only an admin can change settings in this group.",
-                    show_alert=True,
-                )
+                    query, person.text(language_menu.ADMIN_ONLY), show_alert=True)
                 return
 
             # Safe: `section` was checked against SETTINGS_SECTIONS above,
@@ -440,25 +538,29 @@ class CallbackDispatchMixin:
             try:
                 preferences.set_preference(chat_id or 0, field, value)
             except ValueError:
-                await self._safe_answer(query, "Invalid value")
+                await self._safe_answer(query, person.text(language_menu.INVALID_VALUE))
                 return
 
-            text, kb = render_settings_section(chat_id or 0, section)
-            text += self._changed_by_line(query, chat_id)
+            text, kb = render_settings_section(chat_id or 0, section, language=shared.code)
+            text += self._changed_by_line(query, chat_id, shared)
             try:
                 await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
             except Exception:
                 pass
             return
 
-        await self._safe_answer(query, "Invalid callback")
+        await self._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))
 
-    def _changed_by_line(self, query, chat_id) -> str:
+    def _changed_by_line(self, query, chat_id, tr=None) -> str:
         """``\\n\\n<i>Changed by @x.</i>`` under a changed setting in a
-        group (roadmap 8.91c); ``""`` in a private chat."""
+        group (roadmap 8.91c), in the chat's language *tr*; ``""`` in a
+        private chat."""
         tapper = getattr(query, "from_user", None)
         by = self._actor_label(getattr(tapper, "id", None), chat_id, tapper)
-        return f"\n\n<i>Changed by {html_mod.escape(by)}.</i>" if by else ""
+        if not by:
+            return ""
+        tr = tr or i18n.for_chat(chat_id)
+        return "\n\n" + tr.html(settings_menu.CHANGED_BY, person=Command(by))
 
     async def _dispatch_language_action(self, update: Update, query, chat_id,
                                         parts: list[str]) -> None:
@@ -510,7 +612,7 @@ class CallbackDispatchMixin:
             tr, private=private,
             current=language_menu.current_choice(chat_id, private=private))
         text = f"{language_menu.confirmation(tr, tr.code)}\n\n{menu_text}"
-        text += self._changed_by_line(query, chat_id)
+        text += self._changed_by_line(query, chat_id, tr)
         try:
             await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
         except Exception:
@@ -527,30 +629,32 @@ class CallbackDispatchMixin:
         refused outright (no such session, no right to prompt, another
         chat's session); ``outcome`` is None when a new turn started since,
         which is not stopped: the button was for the work it listed."""
+        person = i18n.for_person(update)
         sess = self.registry.get(session_name)
         if not sess:
-            await self._safe_answer(query, "Session not found")
+            await self._safe_answer(query, person.text(NOT_FOUND))
             return False, None
         chat = calling_chat_id(update)
         if not self._can_prompt_user(
                 getattr(getattr(query, "from_user", None), "id", None), chat):
-            await self._safe_answer(query, "You can't stop this session.")
+            await self._safe_answer(query, person.text(CANT_STOP))
             return False, None
         if session_foreign_to(sess, chat):
-            await self._safe_answer(query, "That session isn't running here.")
+            await self._safe_answer(query, person.text(NOT_HERE))
             return False, None
         if sess.status == Status.GONE:
-            await self._safe_answer(query, "That session has ended.")
+            await self._safe_answer(query, person.text(ENDED))
             return True, None
         if not sess.tap_is_for_this_turn(None, turn=turn):
-            await self._safe_answer(query, f"{sess.label} moved on to new work - {again}")
+            await self._safe_answer(query, person.text(again, session=sess.label))
             return True, None
         tapper = getattr(query, "from_user", None)
         outcome = await self._stop_session_core(sess, by=self._actor_label(
             getattr(tapper, "id", None), chat, tapper))
         # The count stays visible (tester-iter1-001 of /stop).
-        await self._safe_answer(query, _stopped_line(outcome, html=False) if outcome.ok
-                                else f"{sess.label} is not working")
+        await self._safe_answer(query, _stopped_line(outcome, html=False, tr=person)
+                                if outcome.ok
+                                else person.text(NOT_WORKING, session=sess.label))
         return True, outcome
 
     async def _handle_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -688,7 +792,7 @@ class CallbackDispatchMixin:
         resolved = session_parity.resolve_short_cb(
             self, calling_chat_id(update) or 0, session_name, action)
         if resolved is None:
-            await self._safe_answer(query, "That session is no longer available")
+            await self._safe_answer(query, i18n.for_person(update).text(SHORT_CB_GONE))
             return
         session_name, action = resolved
 
@@ -729,7 +833,7 @@ class CallbackDispatchMixin:
         if action == PINNED_ANSWER_VERB:
             sess = self.registry.get(session_name)
             if sess is None:
-                await self._safe_answer(query, "Session not found")
+                await self._safe_answer(query, i18n.for_person(update).text(NOT_FOUND))
                 return
             await self._pinned_answer(query, sess)
             return
@@ -737,7 +841,7 @@ class CallbackDispatchMixin:
         if action == "stop":
             sess = self.registry.get(session_name)
             if not sess:
-                await self._safe_answer(query, "Session not found")
+                await self._safe_answer(query, i18n.for_person(update).text(NOT_FOUND))
                 return
             # Staleness is checked inside `_stop_session` (the seam every
             # caller shares), not here — a Stop button outlives its turn
@@ -747,7 +851,8 @@ class CallbackDispatchMixin:
             if not outcome.ok and outcome.reason != "stale":
                 # A stale tap already explained itself at the seam; adding
                 # "is not busy" on top would be both wrong and louder.
-                await self._safe_answer(query, f"{sess.label} is not working")
+                await self._safe_answer(
+                    query, i18n.for_person(update).text(NOT_WORKING, session=sess.label))
             return
 
         if action.startswith("ststop") and action[6:].isdigit():
@@ -755,7 +860,7 @@ class CallbackDispatchMixin:
             # redraw the list in place (never overwrite it with one line).
             looked, _outcome = await self._stop_the_turn_shown(
                 update, query, session_name, int(action[6:]),
-                again="tap ⏹ Stop again to stop it")
+                again=MOVED_ON_STATUS)
             if not looked:
                 return
             text, kb = self._render_status_list(calling_chat_id(update), update)
@@ -769,13 +874,14 @@ class CallbackDispatchMixin:
             # The /stop picker's ⏹ (4.4): stop the turn it listed; the
             # picker becomes the result. A refused tap leaves the picker.
             _looked, outcome = await self._stop_the_turn_shown(
-                update, query, session_name, int(action[5:]), again="send /stop again")
+                update, query, session_name, int(action[5:]), again=MOVED_ON_STOP)
             if outcome is not None and outcome.ok:
                 # The picker is now the result: nobody's card (8.94j).
                 card_owner.release(self, calling_chat_id(update),
                                    getattr(query.message, "message_id", None))
                 try:
-                    await edit_text(query, _stopped_line(outcome), parse_mode="HTML")
+                    await edit_text(query, _stopped_line(outcome, tr=i18n.for_update(update)),
+                                    parse_mode="HTML")
                 except Exception:
                     pass
             return
@@ -832,7 +938,7 @@ class CallbackDispatchMixin:
         if action == "retry":
             sess = self.registry.get(session_name)
             if not sess:
-                await self._safe_answer(query, "Session not found")
+                await self._safe_answer(query, i18n.for_person(update).text(NOT_FOUND))
                 return
             if not sess.last_prompt:
                 await self._safe_answer(query, "Nothing to retry")
@@ -859,9 +965,9 @@ class CallbackDispatchMixin:
                 until = clear_time(MUTE.until(chat_muted))
                 log.info("[%s] Retry refused — chat %s is flood-muted until %s",
                          sess.label, chat_muted, until)
+                person = i18n.for_person(update)
                 await self._safe_answer(
-                    query, "Telegram is rate-limiting this chat - try again "
-                    f"after {until}")
+                    query, person.text(RATE_LIMITED, time=person.num(until)))
                 return
             if not await inject.is_alive(session_name):
                 await self._safe_answer(query, f"Session '{session_name}' not alive")
@@ -1474,9 +1580,11 @@ class CallbackDispatchMixin:
             await self._safe_answer(query, f"Unknown: {action}")
             return
 
+        # Pop-ups are the tapper's; the lines in the chat are the chat's.
+        person = i18n.for_person(update)
         sess = self.registry.get(session_name)
         if not sess:
-            await self._safe_answer(query, "Session not found")
+            await self._safe_answer(query, person.text(NOT_FOUND))
             return
 
         # A message carrying answer buttons outside the busy card — a
@@ -1501,7 +1609,7 @@ class CallbackDispatchMixin:
             # token on either side never matches (fail closed).
             if (surface[1] is None or current_token is None
                     or surface[1] != current_token):
-                refusal = "already answered"
+                refusal = ALREADY_ANSWERED
         elif ((is_option or action in _CARD_ANSWER_VERBS)
                 and sess.prompt_known_closed(tapped_id)):
             # An answer button on a message whose prompt is KNOWN to be
@@ -1515,7 +1623,7 @@ class CallbackDispatchMixin:
             # Its buttons are not taken off: the message is the working
             # card (its Stop), a finished card (its own buttons) or a
             # prompt already marked answered.
-            refusal = "already answered"
+            refusal = ALREADY_ANSWERED
             strip_refused = False
         elif (sess.status == Status.INTERACTIVE
                 and (sess.pending_permission or sess.pending_prompt_msg)):
@@ -1534,14 +1642,14 @@ class CallbackDispatchMixin:
             if isinstance(tapped_id, int) and not isinstance(tapped_id, bool):
                 if sess.pending_permission:
                     if card and card > 0 and tapped_id != card:
-                        refusal = "this prompt has expired"
+                        refusal = PROMPT_EXPIRED
                 else:
                     # A separate-message prompt is always registered when
                     # it is sent, and again when a restart restores it
                     # (8.102); an unregistered message is not it.
-                    refusal = "this prompt has expired"
+                    refusal = PROMPT_EXPIRED
         if refusal is not None:
-            await self._safe_answer(query, refusal)
+            await self._safe_answer(query, person.text(refusal))
             if strip_refused:
                 try:
                     await edit_markup(query, reply_markup=None)
@@ -1550,7 +1658,7 @@ class CallbackDispatchMixin:
             return
 
         if not await inject.is_alive(session_name):
-            await self._safe_answer(query, f"Session '{session_name}' not found")
+            await self._safe_answer(query, person.text(SESSION_GONE, session=session_name))
             return
 
         # Inject keystrokes
@@ -1573,6 +1681,7 @@ class CallbackDispatchMixin:
         # watch's /stop-like end needs it; read before the keys).
         claude_held: list[dict] = []
         answer_text = None  # a branch may override the "<verb> [label]" toast
+        shared = i18n.for_sess(sess)
         # design.md "answer PermissionRequest hooks with a decision
         # instead of keystrokes": allow/allow_always/deny set this to
         # "hook_decision" or "keystroke_fallback"; every other action
@@ -1614,7 +1723,9 @@ class CallbackDispatchMixin:
                 perm["selected"] = selected
                 perm["cursor_pos"] = option_index
 
-                opt_label = perm["options"][option_index].get("label", f"Option {option_index+1}")
+                option = perm["options"][option_index]
+                opt_label = (option["label"] if "label" in option
+                             else person.text(keyboards.OPTION, n=option_index + 1))
                 toggled = "☑" if option_index in selected else "⬜"
                 await self._safe_answer(query, f"{toggled} {opt_label}")
 
@@ -1629,7 +1740,7 @@ class CallbackDispatchMixin:
                 log.info("[%s] Multi-select toggle: opt%d (%s), selected=%s",
                          sess.label, option_index, toggled, selected)
             else:
-                await self._safe_answer(query, "Failed to send keys")
+                await self._safe_answer(query, person.text(SEND_KEYS_FAILED))
             return
 
         elif action == "submit" and perm.get("multi_select"):
@@ -1656,7 +1767,8 @@ class CallbackDispatchMixin:
                 ok = await inject.send_keys(session_name, "Enter")
 
             if ok:
-                await self._safe_answer(query, f"✅ {verb[:180]}")
+                await self._safe_answer(query, person.text(
+                    ANSWERED_TOAST, verb=Safe(card_rows.verb_text(person, verb, "text")[:180])))
 
                 # Collapse into tool_history
                 question_text = perm.get("question", "?")
@@ -1680,14 +1792,14 @@ class CallbackDispatchMixin:
                 )
                 # "· @bob", never "by @bob": a translated line then needs
                 # no grammatical gender for the person (multilingual design).
-                attr = f" · {attribution_label(actor)}" if actor else ""
+                params = {"session": sess.label, "question": question_text[:80],
+                          "option": Safe(card_rows.verb_text(shared, verb[:80], "html"))}
+                if actor:
+                    params["person"] = Command(attribution_label(actor))
                 try:
                     await send_text(self._app.bot,
                         resolve_chat_id(sess),
-                        f"✓ <b>{html_mod.escape(sess.label)}</b> · "
-                        f"Answered{html_mod.escape(attr)} · "
-                        f"{html_mod.escape(question_text[:80])} → "
-                        f"{html_mod.escape(verb[:80])}",
+                        shared.html(ANSWERED if actor else ANSWERED_ANON, **params),
                         parse_mode="HTML",
                         reply_to_message_id=(sess.busy_msg_id
                                              if sess.busy_msg_id and sess.busy_msg_id > 0
@@ -1741,7 +1853,7 @@ class CallbackDispatchMixin:
                     self._start_animation(sess)
                     log.info("[%s] Multi-select submit complete", sess.label)
             else:
-                await self._safe_answer(query, "Failed to send keys")
+                await self._safe_answer(query, person.text(SEND_KEYS_FAILED))
             return
 
         elif is_option:
@@ -1819,9 +1931,7 @@ class CallbackDispatchMixin:
                 else:
                     verb = ACTION_VERBS["allow"]
                     decision = "allow"
-                    answer_text = (
-                        f"No always-rule for this command - allowed once [{sess.label}]"
-                    )
+                    answer_text = person.text(ALWAYS_DEGRADED, session=sess.label)
                     log.info("[%s] allow_always degraded to a single allow "
                              "(always_available=%r)", sess.label,
                              perm_info.get("always_available"))
@@ -1848,9 +1958,7 @@ class CallbackDispatchMixin:
                 via = "keystroke_fallback"
                 verb = ACTION_VERBS["allow"]
                 decision = "allow"
-                answer_text = (
-                    f"No always-rule for this command - allowed once [{sess.label}]"
-                )
+                answer_text = person.text(ALWAYS_DEGRADED, session=sess.label)
                 log.info("[%s] allow_always degraded to a single allow "
                          "(always_available=%r)", sess.label,
                          perm_info.get("always_available"))
@@ -1905,7 +2013,9 @@ class CallbackDispatchMixin:
             verb = action
 
         if ok:
-            await self._safe_answer(query, answer_text or f"{verb} [{sess.label}]")
+            await self._safe_answer(query, answer_text or person.text(
+                VERB_TOAST, verb=Safe(card_rows.verb_text(person, verb, "text")),
+                session=sess.label))
 
             if is_resent_copy and sess.pending_permission:
                 # Answered from the bar's copy of an inline prompt: the
@@ -1915,7 +2025,8 @@ class CallbackDispatchMixin:
                 # stays: the prompt it was bound to is over, so any later
                 # tap on it is refused above.
                 try:
-                    await edit_text(query, f"{original_text}\n\n→ {verb}")
+                    await edit_text(query, f"{original_text}\n\n" + shared.text(
+                        ARROW_VERB, verb=Safe(card_rows.verb_text(shared, verb, "text"))))
                 except Exception:
                     pass
 
@@ -2007,7 +2118,8 @@ class CallbackDispatchMixin:
                 self.registry.transition(session_name, Status.BUSY)
                 log.info("[%s] %s (via=%s)", sess.label, verb, via or "n/a")
                 try:
-                    await edit_text(query, f"{original_text}\n\n→ {verb}")
+                    await edit_text(query, f"{original_text}\n\n" + shared.text(
+                        ARROW_VERB, verb=Safe(card_rows.verb_text(shared, verb, "text"))))
                 except Exception:
                     pass
                 self.registry.remove_message(
@@ -2042,7 +2154,7 @@ class CallbackDispatchMixin:
                         _message_chat_id(getattr(query, "message", None)), person),
                     answered_at=answered_at)
         else:
-            await self._safe_answer(query, f"Failed to send to {session_name}")
+            await self._safe_answer(query, person.text(SEND_FAILED, session=session_name))
 
     async def _record_prompt_answer(self, sess, perm: dict, verb: str, member,
                                     via: str, *, decision: str | None = None,
@@ -2089,16 +2201,22 @@ class CallbackDispatchMixin:
         # the scrollback reads as a conversation.
         audit_icon = _DECISION_ICONS.get(decision, "·")
         # "· @bob", never "by @bob": a translated line then needs no
-        # grammatical gender for the person (multilingual design).
-        attr = f" · {attribution_label(actor)}" if actor else ""
+        # grammatical gender for the person (multilingual design). The
+        # verb shown comes from the action id; the audit above keeps the
+        # English verb.
+        tr = i18n.for_sess(sess)
+        shown = (tr.html(ANSWER_VERBS[decision]) if decision in ANSWER_VERBS
+                 else card_rows.verb_text(tr, verb, "html"))
+        params = {"icon": Safe(audit_icon), "session": sess.label, "verb": Safe(shown),
+                  "detail": audit_detail}
+        if actor:
+            params["person"] = Command(attribution_label(actor))
         anchor = (sess.busy_msg_id if sess.busy_msg_id and sess.busy_msg_id > 0
                   else reply_to)
         try:
             await send_text(self._app.bot,
                 resolve_chat_id(sess),
-                f"{audit_icon} <b>{html_mod.escape(sess.label)}</b> · "
-                f"{verb}{html_mod.escape(attr)} · "
-                f"{html_mod.escape(audit_detail)}",
+                tr.html(ANSWER_LINE if actor else ANSWER_LINE_ANON, **params),
                 parse_mode="HTML",
                 reply_to_message_id=anchor or None,
             )

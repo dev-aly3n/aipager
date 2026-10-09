@@ -29,6 +29,7 @@ from telegram.constants import ChatType, MessageEntityType
 from telegram.ext import ApplicationHandlerStop
 
 from aipager.bot import kbwords
+from aipager.i18n import Command, Msg
 
 if TYPE_CHECKING:
     from telegram import Message, Update
@@ -185,13 +186,32 @@ def text_without_own_mentions(bot: TelegramBot, message: Message | None,
 
 # ---- wording ---------------------------------------------------------------
 
-def talk_hint(bot: TelegramBot, chat_id, label: str, *, dm: str) -> str:
+TALK_GROUP = Msg("status.talk_group",
+                 "Reply to a message from {session} (or mention {bot}) to talk to it.",
+                 note="How to talk to a session in a group; {bot} is the bot's @username",
+                 eg={"session": "x1", "bot": "@aipager_bot"})
+TALK_GROUP_UNNAMED = Msg("status.talk_group_unnamed",
+                         "Reply to a message from {session} (or mention the bot) to talk to it.",
+                         note="As status.talk_group when the bot's username is unknown",
+                         eg={"session": "x1"})
+
+
+def talk_hint(bot: TelegramBot, chat_id, label: str, *, dm: str, tr=None,
+              raw_label: str | None = None) -> str:
     """The "how do I talk to <label>" line. ``dm`` is returned unchanged in
     a private chat. In a group a plain message never reaches a bot in
     privacy mode, so the line says to reply or mention. ``label`` is used
-    as given (callers pass it HTML-escaped where the text is HTML)."""
+    as given (callers pass it HTML-escaped where the text is HTML). With
+    *tr* (and the unescaped *raw_label*), the group line is rendered in
+    that language as HTML."""
     if not is_group_chat(chat_id):
         return dm
+    if tr is not None:
+        me = own_username(bot)
+        session = raw_label if raw_label is not None else label
+        if me:
+            return tr.html(TALK_GROUP, session=session, bot=Command(f"@{me}"))
+        return tr.html(TALK_GROUP_UNNAMED, session=session)
     return f"Reply to a message from {label} (or mention {_mention(bot)}) to talk to it."
 
 
@@ -335,7 +355,7 @@ def _addressed_to_bot(bot: TelegramBot, msg, *, taps: bool = True) -> bool:
     # only the marked form (8.91f). The same word typed is chatter.
     if taps and isinstance(getattr(msg, "text", None), str):
         label, marked = keyboard_tap(msg.text)
-        if marked and label in kbwords.group_labels(bot, msg.chat_id):
+        if marked and kbwords.is_group_label(bot, msg.chat_id, label):
             return True
     return False
 

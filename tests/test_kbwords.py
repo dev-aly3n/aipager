@@ -148,3 +148,75 @@ def test_english_templates_and_commands_are_grandfathered():
     assert kbwords.GRANDFATHERED == {"Templates", "Commands"}
     from aipager.dtach.inject import _VALID_NAME
     assert all(_VALID_NAME.match(x) for x in kbwords.GRANDFATHERED)
+
+
+# ---- default labels, translated (phase 2) ------------------------------------------
+
+def test_default_labels_are_the_shipped_defaults():
+    pairs = list(config._DEFAULT_TEMPLATES) + list(config._DEFAULT_COMMANDS)
+    assert list(kbwords.DEFAULT_LABELS) == pairs
+    assert all(label == msg for (label, _p), msg in kbwords.DEFAULT_LABELS.items())
+
+
+def test_a_custom_label_is_never_translated(german):
+    german({"kbl.tpl.run_tests": "Tests laufen", "kbl.cmd.clear": "Leeren"})
+    from aipager import i18n
+    de = i18n.get("de")
+    assert kbwords.shown_label(de, "Run tests", "Run the tests") == "Tests laufen"
+    assert kbwords.shown_label(de, "Clear", "/clear") == "Leeren"
+    # keyboard.json's own label, or a default label with another payload,
+    # and every model: as written.
+    assert kbwords.shown_label(de, "Run tests", "npm test please") == "Run tests"
+    assert kbwords.shown_label(de, "Deploy", "Deploy it") == "Deploy"
+    assert kbwords.shown_label(de, "Opus", "/model opus") == "Opus"
+    assert kbwords.shown_label(i18n.get("en"), "Run tests", "Run the tests") == "Run tests"
+
+
+def test_a_translated_default_label_sends_the_english_payload(german, bot):
+    german({"kbl.tpl.run_tests": "Tests laufen", "kbl.cmd.clear": "Leeren"})
+    assert kbwords.custom_action(bot, "Tests laufen") == ("tpl", "Run the tests")
+    assert kbwords.custom_action(bot, "Leeren") == ("cmd", "/clear")
+    assert kbwords.classify(bot, "Leeren") == "acting"
+    assert "Leeren" in kbwords.group_labels(bot, -1001)
+    # Not once keyboard.json replaced the pair.
+    custom = SimpleNamespace(_template_map={"Run tests": "npm test please"},
+                             _command_map={}, _model_map={})
+    assert kbwords.custom_action(custom, "Tests laufen") is None
+    assert kbwords.custom_action(custom, "Run tests") == ("tpl", "npm test please")
+
+
+def test_a_group_tap_is_compared_normalized(german, bot):
+    german({"kb.status": "\u200fzustand"})
+    assert kbwords.is_group_label(bot, -1001, "zustand")
+    assert kbwords.is_group_label(bot, -1001, "\u200fzustand")
+    assert kbwords.is_group_label(bot, -1001, "status")
+    assert not kbwords.is_group_label(bot, -1001, "kill")
+    assert not kbwords.is_group_label(bot, -1001, "Zustand")
+    assert not kbwords.is_group_label(bot, -1001, "")
+
+
+def test_a_keyboard_word_with_a_space_fails(german):
+    german({"kb.stop": "\u200fhalt an"})
+    problems = kbwords.label_problems(("en", "de"))
+    assert any("(stop) must be one word" in p for p in problems)
+    german({"kb.stop": "\u200fhalt"})
+    assert not any("one word" in p for p in kbwords.label_problems(("en", "de")))
+
+
+def test_a_default_label_clash_fails(german):
+    german({"kbl.tpl.continue": "Weiter", "kbl.cmd.compact": "weiter"})
+    problems = kbwords.label_problems(("en", "de"))
+    assert any("means both tpl:Continue and cmd:Compact" in p for p in problems)
+    german({"kbl.tpl.commit": "status"})
+    assert any("means both status and tpl:Commit" in p
+               for p in kbwords.label_problems(("en", "de")))
+
+
+def test_a_mode_word_clash_fails(german):
+    german({"mode.ask": "💬 Modus", "mode.auto": "🤖 modus"})
+    problems = kbwords.label_problems(("en", "de"))
+    assert any("means both mode:ask and mode:auto" in p for p in problems)
+    german({"mode.ask": "💬 Frag mich", "mode.auto": "🤖 Auto"})
+    assert any("(mode:ask) must be one word" in p
+               for p in kbwords.label_problems(("en", "de")))
+    assert kbwords.mode_word("🤖️ Auto ") == "auto"

@@ -16,10 +16,13 @@ It records no line numbers, so an unrelated edit never churns the file.
 
 ``check`` runs the catalog checks of the multilingual design (section 9):
 1 every key in every enabled language, 2 no stale translation, 3 the same
-placeholders, 4 the same Telegram-allowed tags, 5 every plural form, 6 the
-glossary, 7 length budgets, 8 no long dash or direction control, 9 native
-digits for fa/ar, 10 reply-keyboard labels, 16 catalog format, plus the
-literal ratchet of check 11. The test suite imports these same functions,
+placeholders (3b: no command or mention glued to a placeholder), 4 the
+same Telegram-allowed tags (4b: no backtick, the same ``**`` and ``_``
+markers), 5 every plural form, 6 the glossary, 7 length budgets (with the
+invisible marks a right-to-left language adds), 8 no long dash or
+direction control, 9 native digits for fa/ar (9b: ``←`` there, never
+``→``), 10 reply-keyboard labels, 16 catalog format, plus the literal
+ratchet of check 11. The test suite imports these same functions,
 so CI and this command can never disagree.
 
 Agents never edit a catalog by hand: ``todo`` hands them a batch with
@@ -61,6 +64,9 @@ TRANSLATED = tuple(c for c in locales.LOCALES if c != "en")
 #: (pattern, kind, unit, limit, fill). ``unit`` is "cells" (display width,
 #: CJK counts 2) or "chars"; ``fill`` names what fills {language}.
 _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
+    # Specific before generic: the first match wins.
+    (r"kbl\.(tpl|cmd)\.[a-z0-9_]+", "keyboard", "cells", 24, ""),
+    (r"kbmsg\.[a-z0-9_]+", "message", "chars", 40, ""),
     (r"kb\.[a-z0-9_.]+", "keyboard", "cells", 14, ""),
     (r"btn\.[a-z0-9_.]+", "button", "cells", 40, ""),
     (r"mode\.[a-z0-9_.]+", "button", "cells", 40, ""),
@@ -73,8 +79,30 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"lang\.offer\.text", "message", "chars", 240, "endonym"),
     (r"lang\.offer\.keep", "button", "cells", 24, ""),
     (r"set\.[a-z0-9_]+\.title", "label", "cells", 40, ""),
+    (r"set\.btn\.[a-z0-9_.]+", "button", "cells", 40, ""),
+    (r"set\.opt\.[a-z0-9_.]+", "button", "cells", 40, ""),
+    (r"set\.help\.[a-z0-9_.]+", "hint", "chars", 200, ""),
+    (r"set\.text\.[a-z0-9_.]+", "message", "chars", 400, ""),
     (r"app\.[a-z0-9_]+\.title", "label", "cells", 40, ""),
     (r"app\.[a-z0-9_]+\.hint", "hint", "chars", 80, ""),
+    (r"card\.verb\.[a-z0-9_]+", "label", "cells", 24, ""),
+    (r"card\.[a-z0-9_.]+", "card", "chars", 160, ""),
+    (r"log\.[a-z0-9_.]+", "message", "chars", 200, ""),
+    (r"agents\.[a-z0-9_.]+", "message", "chars", 200, ""),
+    (r"perm\.btn\.[a-z0-9_]+", "button", "cells", 24, ""),
+    (r"perm\.[a-z0-9_.]+", "message", "chars", 300, ""),
+    (r"ans\.[a-z0-9_.]+", "message", "chars", 200, ""),
+    (r"fin\.[a-z0-9_.]+", "message", "chars", 120, ""),
+    # The pinned bar's first line is what Telegram's pinned preview shows
+    # (design 9.7): short in every language.
+    (r"pin\.first\.[a-z0-9_.]+", "message", "chars", 64, ""),
+    (r"pin\.btn\.[a-z0-9_]+", "button", "cells", 40, ""),
+    (r"pin\.[a-z0-9_.]+", "message", "chars", 120, ""),
+    (r"flood\.[a-z0-9_.]+", "message", "chars", 120, ""),
+    (r"status\.btn\.[a-z0-9_]+", "button", "cells", 40, ""),
+    (r"status\.[a-z0-9_.]+", "message", "chars", 200, ""),
+    (r"lang\.beta", "button", "cells", 40, "endonym"),
+    (r"lang\.first_contact", "message", "chars", 240, "endonym"),
 )
 
 
@@ -370,11 +398,71 @@ def check_translation(code: str, src: dict, value, *, glossary: dict | None = No
         ents = sorted(set(_entities(form)) - _ALLOWED_ENTITIES)
         if ents:
             problems.append(f"{code} {key}: entities {ents} (only &lt; &gt; &amp; &quot;)")
+        problems += check_pattern(f"{code} {key}", form)
+        problems += check_markers(code, src, form)
         problems += check_digits(code, key, form)
+        problems += check_arrows(code, key, form)
         problems += check_budget(key, form, src=src, code=code)
         if glossary is not None:
             problems += check_glossary(code, src, form, glossary)
     return problems
+
+
+# ---- checks 3b and 4b: commands and Markdown markers ------------------------------
+
+_GLUED = re.compile(r"[/@]\{")
+_HOLDER = re.compile(r"\{\{|\}\}|\{[A-Za-z_][A-Za-z0-9_]*\}")
+
+
+def check_pattern(where: str, form: str) -> list[str]:
+    """3b: a ``/`` or ``@`` is never glued to a placeholder (the isolate a
+    right-to-left language puts around a value would split the command):
+    the whole command goes in as a ``Command`` value. 4b: no backtick in a
+    pattern; a code span is a ``Span`` value."""
+    problems = []
+    if _GLUED.search(form):
+        problems.append(f"{where}: a command or mention glued to a placeholder "
+                        "(/{x} or @{x}); pass the whole command as a Command value")
+    if "`" in form:
+        problems.append(f"{where}: a backtick in a pattern; pass a code span as a "
+                        "Span value")
+    return problems
+
+
+def _markers(text: str) -> tuple[int, int]:
+    bare = _HOLDER.sub(" ", text)
+    return bare.count("**"), bare.replace("**", "").count("_")
+
+
+def check_markers(code: str, src: dict, form: str) -> list[str]:
+    """4b: a translation keeps the English's bold (``**``) and italic
+    (``_``) markers, counted outside placeholders."""
+    want = _markers(english_forms(src)[0])
+    got = _markers(form)
+    if got != want:
+        return [f"{code} {src['k']}: ** and _ markers {got} != the English {want}"]
+    return []
+
+
+def check_english_patterns(rows: list[dict]) -> list[str]:
+    """3b and 4b over the English of every key."""
+    problems = []
+    for row in rows:
+        for form in english_forms(row):
+            problems += check_pattern(f"en {row['k']}", form)
+    return problems
+
+
+# ---- check 9b: arrows -----------------------------------------------------------------
+
+_RTL_CODES = frozenset(c for c, loc in locales.LOCALES.items() if loc.rtl)
+
+
+def check_arrows(code: str, key: str, form: str) -> list[str]:
+    """A right-to-left catalog points with ``←`` (rule 4), never ``→``."""
+    if code in _RTL_CODES and "→" in form:
+        return [f"{code} {key}: → in a right-to-left entry; use ←"]
+    return []
 
 
 def check_catalogs(source_rows: list[dict], catalogs: dict[str, Path],
@@ -409,6 +497,33 @@ def check_catalogs(source_rows: list[dict], catalogs: dict[str, Path],
 _SLASH = re.compile(r"(?<![\w/])/[A-Za-z0-9_]+")
 
 
+#: key -> {word: why}: a word check 6 does not hold one key to, because
+#: that key uses it in another sense than the glossary's (``"Write"`` the
+#: ordinary verb, not Claude Code's tool). Exact: only these words, only
+#: for these keys; :func:`check_glossary_exemptions` fails a stale entry.
+GLOSSARY_EXEMPT: dict[str, dict[str, str]] = {
+    "kbl.tpl.write_tests": {"Write": "the ordinary verb (write tests), not the Write tool"},
+    "set.btn.reports_turn_on": {"turn": "the verb (turn offers on), not a turn of Claude's"},
+}
+
+
+def check_glossary_exemptions(rows: list[dict]) -> list[str]:
+    """Every exemption names a key that exists and a word its English
+    still uses."""
+    by_key = {r["k"]: r for r in rows}
+    problems = []
+    for key, words in sorted(GLOSSARY_EXEMPT.items()):
+        row = by_key.get(key)
+        if row is None:
+            problems.append(f"GLOSSARY_EXEMPT: no key {key!r} in the source")
+            continue
+        english = " ".join(english_forms(row))
+        for word in words:
+            if not re.search(rf"\b{re.escape(word)}\b", english, re.I):
+                problems.append(f"GLOSSARY_EXEMPT: {key}'s English no longer says {word!r}")
+    return problems
+
+
 def load_glossary(code: str, base: Path = GLOSSARY_DIR) -> dict:
     return json.loads((base / f"{code}.json").read_text(encoding="utf-8"))
 
@@ -418,17 +533,22 @@ def check_glossary(code: str, src: dict, form: str, glossary: dict) -> list[str]
     uses appears as one of its forms."""
     problems = []
     english = " ".join(english_forms(src))
+    exempt = {w.lower() for w in GLOSSARY_EXEMPT.get(src["k"], {})}
     for word in core.NEVER_TRANSLATE:
+        if word.lower() in exempt:
+            continue
         if re.search(rf"\b{re.escape(word)}\b", english) and word not in form:
             problems.append(f"{code} {src['k']}: {word!r} must stay spelled exactly")
     for cmd in _SLASH.findall(english):
         if cmd not in form:
             problems.append(f"{code} {src['k']}: the command {cmd} must stay as it is")
+    # A placeholder's name is not text: "Talk to {session}" holds no term.
+    words = _HOLDER.sub(" ", english)
     for term, forms in (glossary.get("terms") or {}).items():
-        if not forms:
+        if not forms or term.lower() in exempt:
             continue
         options = [forms] if isinstance(forms, str) else list(forms)
-        if re.search(rf"\b{re.escape(term)}s?\b", english, re.I):
+        if re.search(rf"\b{re.escape(term)}s?\b", words, re.I):
             if not any(o and o.lower() in form.lower() for o in options):
                 problems.append(f"{code} {src['k']}: {term!r} must be one of {options}")
     return problems
@@ -455,10 +575,25 @@ def check_budget(key: str, text: str, *, src: dict | None = None, code: str = "e
             value = str(examples.get(name, "{" + name + "}"))
         filled = filled.replace("{" + name + "}", value)
     measure = cells if budget["unit"] == "cells" else len
-    size = measure(filled)
+    size = measure(filled) + rtl_overhead(code, text, src)
     if size > budget["limit"]:
         return [f"{code} {key}: {size} {budget['unit']} > {budget['limit']}: {filled!r}"]
     return []
+
+
+def rtl_overhead(code: str, text: str, src: dict | None) -> int:
+    """The invisible marks a right-to-left language renders *text* with:
+    the leading U+200F, one more per line, and an isolate pair around
+    each text placeholder (a count, ``{n}`` or an example that is a
+    number, gets none). Telegram counts them toward its limits too (a
+    toast past 200 characters is dropped), so the budget does."""
+    loc = locales.LOCALES.get(code) or locales.PSEUDO.get(code)
+    if loc is None or not loc.rtl:
+        return 0
+    examples = (src or {}).get("eg") or {}
+    text_holders = [name for name in core.placeholders(text)
+                    if name != "n" and not isinstance(examples.get(name), (int, float))]
+    return 1 + text.count("\n") + 2 * len(text_holders)
 
 
 def check_english_budgets(rows: list[dict]) -> list[str]:
@@ -505,7 +640,10 @@ def scanned_files() -> list[Path]:
 
 _NATIVE = {"fa": "۰-۹", "ar": "٠-٩"}
 _ALL_FOREIGN = "۰-۹٠-٩"
-_CODE_SPAN = re.compile(r"<(code|pre)\b[^>]*>.*?</\1>|\{[A-Za-z_]\w*\}|<[^>]+>|&#?\w+;",
+_CODE_SPAN = re.compile(r"<(code|pre)\b[^>]*>.*?</\1>|\{[A-Za-z_]\w*\}|<[^>]+>|&#?\w+;"
+                        # An identifier written as it is (AIPAGER_REPORT_PROMPTS=0,
+                        # x1): code, never text.
+                        r"|[A-Za-z_][A-Za-z0-9_.=:/-]*[0-9][A-Za-z0-9_.=:/-]*",
                         re.S)
 
 
@@ -624,6 +762,8 @@ def run_checks() -> list[str]:
     problems = check_source_sync()
     rows = load_jsonl(SOURCE)
     problems += check_english_budgets(rows)
+    problems += check_english_patterns(rows)
+    problems += check_glossary_exemptions(rows)
     problems += check_catalogs(rows, all_catalogs(), locales.enabled_codes(),
                                glossaries=all_glossaries())
     problems += scan_files(scanned_files())

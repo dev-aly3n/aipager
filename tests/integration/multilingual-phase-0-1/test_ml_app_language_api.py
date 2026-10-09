@@ -84,6 +84,8 @@ def test_preferences_carry_the_app_language(http):
         "options": [
             {"value": "auto", "label": "Automatic (your Telegram language)"},
             {"value": "en", "label": "English"},
+            {"value": "ru", "label": "Русский"},
+            {"value": "fa", "label": "فارسی"},
         ],
     }
 
@@ -191,7 +193,7 @@ def test_the_choice_reads_back_through_get(http):
 
 # ---- PUT /api/app-language: errors ------------------------------------------------
 
-@pytest.mark.parametrize("value", ["fa", "ar", "es", "qps", "qps-rtl", "xx", "",
+@pytest.mark.parametrize("value", ["de", "ar", "es", "qps", "qps-rtl", "xx", "",
                                    "EN", "english", "en ", 5, None, True, ["en"],
                                    {"v": "en"}])
 def test_put_refuses_a_bad_value_with_400(http, value):
@@ -199,7 +201,7 @@ def test_put_refuses_a_bad_value_with_400(http, value):
     assert (status, body) == (400, {"error": "bad_request"})
 
 
-@pytest.mark.parametrize("value", ["fa", "qps", "xx", 5])
+@pytest.mark.parametrize("value", ["de", "qps", "xx", 5])
 def test_a_refused_value_writes_nothing(http, ml, value):
     before = ml.prefs_bytes()
     http("PUT", "/api/app-language", json={"value": value})

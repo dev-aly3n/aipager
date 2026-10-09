@@ -120,3 +120,29 @@ def test_the_offer_card_says_it():
                  "changes only aipager's own messages and buttons",
                  "not your Claude sessions",
                  "Claude still answers in the language you write to it"))
+
+
+# ---- in Persian and Russian (multilingual phase 2) -------------------------------
+
+@pytest.mark.parametrize("code", ["fa", "ru"])
+def test_every_seven_zero_line_says_it_in_persian_and_russian(code, monkeypatch):
+    """The list's line, the confirmation and the first-contact line, each in
+    the language: the whole catalog sentence, the 7.0 half included (G83)."""
+    from aipager import i18n
+    from aipager.bot import language_menu
+    from aipager.i18n import core, locales
+    tr = i18n.get(code)
+    catalog = core._catalog(code)
+    mark = "\u200f" if tr.rtl else ""
+    for private, key in ((True, "lang.list.private"), (False, "lang.list.group")):
+        assert language_menu.list_text(tr, private=private) == mark + catalog[key]
+    confirmation = language_menu.confirmation(tr, code)
+    first, rest = catalog["lang.changed"].split("{language}", 1)
+    assert confirmation.startswith(mark + first) and confirmation.endswith(rest)
+    assert len(rest.strip()) > 20          # the 7.0 sentence is there
+    monkeypatch.setattr(locales, "AUTO_DETECT", True)
+    monkeypatch.setattr(language_menu, "_FIRST_CONTACT_SHOWN", set())
+    line = language_menu.first_contact_line(tr, 9999)
+    before, after = catalog["lang.first_contact"].split("{language}", 1)
+    assert line.startswith(mark + before) and line.endswith(after)
+    assert "/language" in line

@@ -39,6 +39,7 @@ from telegram import InputFile
 from telegram.error import BadRequest, ChatMigrated, Forbidden, RetryAfter
 
 from aipager import bidi_guard
+from aipager.i18n import Msg
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import FloodSkipped
 from aipager.config import TELEGRAM_MAX_RETRY_AFTER
@@ -356,7 +357,17 @@ _PERM_DETAIL_CHARS = 300
 _PERM_DETAIL_HTML_MAX = 900
 
 
-def _format_perm_detail(tool_summary: str, detail: str) -> str:
+#: The line under a prompt whose command holds a direction control. Its
+#: English equals ``bidi_guard.WARNING`` (tested); ``bidi_guard`` stays a
+#: plain module.
+BIDI_WARNING = Msg("perm.bidi_warning",
+                   "⚠️ This contains hidden direction characters, shown as ⟨U+...⟩. It may "
+                   "not run what it looks like.",
+                   note="Under a permission prompt whose command hides direction-changing "
+                        "characters; keep ⟨U+...⟩ as it is")
+
+
+def _format_perm_detail(tool_summary: str, detail: str, *, tr=None) -> str:
     """HTML fragment (``"\n<pre>…</pre>"``) showing ``detail`` under a
     permission prompt, or ``""`` when there is nothing to add: no detail,
     or the summary already spells it out (a short command with no
@@ -367,7 +378,10 @@ def _format_perm_detail(tool_summary: str, detail: str) -> str:
     # The summary and the detail come with any direction control already
     # shown as a marker (hook_receiver, aipager.bidi_guard): say so, under
     # whatever this prompt shows.
-    warning = (f"\n{html_mod.escape(bidi_guard.WARNING)}"
+    if tr is None:
+        from aipager import i18n
+        tr = i18n.get("en")
+    warning = (f"\n{tr.html(BIDI_WARNING)}"
                if bidi_guard.revealed(tool_summary, detail) else "")
     if not detail or detail in tool_summary:
         return warning

@@ -77,13 +77,15 @@ def test_the_global_menu_follows_the_language_too(mk_bot, run_async, monkeypatch
     assert b._app.bot.set_my_commands.await_count == 2
 
 
-def test_the_command_list_renders_only_language_through_tr():
+def test_the_command_list_renders_every_description_through_tr():
+    """Phase 2: every description is a key (phase 1 had only /language's);
+    the command words never change."""
     from aipager.bot.lifecycle import LifecycleMixin
     from aipager.i18n import get
     english = {c.command: c.description for c in LifecycleMixin._command_list({"x1"})}
     pseudo = {c.command: c.description
               for c in LifecycleMixin._command_list({"x1"}, tr=get("qps"))}
     assert english["language"] == "Language of aipager's messages"
-    assert pseudo["language"] != english["language"]
-    assert {k: v for k, v in pseudo.items() if k != "language"} == {
-        k: v for k, v in english.items() if k != "language"}
+    assert english["x1"] == "Talk to x1"
+    assert list(pseudo) == list(english)
+    assert all(pseudo[k] != english[k] and pseudo[k].startswith("⟦") for k in english)

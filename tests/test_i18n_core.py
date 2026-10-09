@@ -227,3 +227,69 @@ def test_never_translate_lists_the_names():
 
 def test_the_test_switch_is_only_a_frozenset():
     assert locales._TEST_ENABLED == frozenset()
+
+
+# ---- Span, Command, block markers, separators (phase 2) ----------------------
+
+def test_a_span_is_isolated_whole():
+    from aipager.i18n import Span
+    fa, en = i18n.get("fa"), i18n.get("en")
+    span = Span("`Read: /a_b*.py`")
+    out = fa.md("a.b", "{row} done in {n}", row=span, n=12)
+    # Whole: the isolate sits outside the backticks, never inside, and the
+    # span is neither escaped nor digit-converted.
+    assert out == RLM + FSI + "`Read: /a_b*.py`" + PDI + " done in ۱۲"
+    inner = out[out.index("`"):out.rindex("`") + 1]
+    assert not any(ch in inner for ch in (RLM, FSI, PDI))
+    html = fa.html("a.b", "{c} ok", c=Span("<code>a&lt;1</code>"))
+    assert html == RLM + FSI + "<code>a&lt;1</code>" + PDI + " ok"
+    # Inside a code element the span is left alone.
+    assert fa.html("a.b", "<b>{c}</b>", c=Span("x 1")) == RLM + "<b>" + FSI + "x 1" + PDI + "</b>"
+    assert fa.html("a.b", "<code>{c}</code>", c=Span("x 1")) == RLM + "<code>x 1</code>"
+    # English: the bytes as passed.
+    assert en.md("a.b", "{row} done", row=span) == "`Read: /a_b*.py` done"
+    assert en.html("a.b", "{c}", c=Span("<i>&</i>")) == "<i>&</i>"
+
+
+def test_a_command_keeps_its_slash_next_to_the_isolate(monkeypatch):
+    from aipager.i18n import Command
+    fa, en = i18n.get("fa"), i18n.get("en")
+    out = fa.html("a.b", "Send {cmd} to {who}", cmd=Command("/x12"), who=Command("@b<b"))
+    assert out == RLM + "Send " + FSI + "/x12" + PDI + " to " + FSI + "@b&lt;b" + PDI
+    # Never digit-converted, never split: "/" directly before the name.
+    assert "/x12" in out and "۱" not in out
+    assert en.html("a.b", "Send {cmd}", cmd=Command("/x1&")) == "Send /x1&amp;"
+    assert en.text("a.b", "Send {cmd}", cmd=Command("/x1&")) == "Send /x1&"
+    # The one switch for rule 7: commands without isolates.
+    monkeypatch.setattr(core, "ISOLATE_COMMANDS", False)
+    assert fa.text("a.b", "Send {cmd}", cmd=Command("/x1")) == RLM + "Send /x1"
+
+
+def test_rtl_mark_follows_a_heading_or_list_marker():
+    fa, en = i18n.get("fa"), i18n.get("en")
+    out = fa.md("a.b", "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+                s="x1")
+    assert out.split("\n") == [
+        "# " + RLM + FSI + "x1" + PDI + " log", RLM, "- " + RLM + "item",
+        "> " + RLM + "quote", "## " + RLM + "Agents", "1. " + RLM + "one", RLM + "plain"]
+    # Only at a line start, and only where aipager put the mark.
+    assert fa.text("a.b", "a - b # c") == RLM + "a - b # c"
+    assert fa.text("a.b", "{x}", x="- y") == RLM + FSI + "- y" + PDI
+    assert fa.html("a.b", "#tag") == RLM + "#tag"
+    assert en.md("a.b", "# x\n- y") == "# x\n- y"
+
+
+def test_num_converts_separators_in_fa_only():
+    fa, ar, en, ru = (i18n.get(c) for c in ("fa", "ar", "en", "ru"))
+    assert fa.num("$1,234.50") == "$۱٬۲۳۴٫۵۰"
+    assert fa.num("45%") == "۴۵٪"
+    assert ar.num("45%") == "٤٥٪"
+    assert en.num("$1,234.50") == "$1,234.50"
+    assert ru.num("45%") == "45%"
+    assert en.num("45%") == "45%"
+    assert fa.clock(250) == "۴:۱۰"
+
+
+def test_the_line_mark_is_rtl_only():
+    assert i18n.get("fa").mark == RLM
+    assert i18n.get("en").mark == "" and i18n.get("ru").mark == ""

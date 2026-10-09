@@ -39,3 +39,22 @@ def test_the_language_is_measured_with_the_longest_name():
     assert len(text.replace("{language}", "Bahasa Indonesia")) <= 240
     assert tool.check_budget("lang.changed", text)
     assert tool.longest_endonym("chars") == "Português (Brasil)"
+
+
+def test_rtl_marks_count_toward_a_toast():
+    """A Persian toast gets a mark at its start, one per line and an isolate
+    pair around each text value: 196 visible characters with one text
+    value are 199 on the wire and fit; 198 are 201 and do not."""
+    src = {"k": "toast.x", "en": "x {name}", "eg": {}}
+    fits = "ب" * 189 + " {name}"
+    assert len(fits.replace("{name}", "{name}")) == 196
+    assert tool.check_budget("toast.x", fits, src=src, code="fa") == []
+    long = "ب" * 191 + " {name}"
+    assert tool.check_budget("toast.x", long, src=src, code="fa")
+    # The same text is fine where no marks are added, and a count is no
+    # text value.
+    assert tool.check_budget("toast.x", long, src=src, code="ru") == []
+    counted = {"k": "toast.x", "en": "x {n} {m}", "eg": {"m": 3}}
+    assert tool.rtl_overhead("fa", "{n} {m}\nx", counted) == 2
+    assert tool.rtl_overhead("fa", "{name}", src) == 3
+    assert tool.rtl_overhead("en", "{name}", src) == 0

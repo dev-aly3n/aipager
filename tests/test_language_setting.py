@@ -95,13 +95,17 @@ def test_the_language_row_opens_the_list(bot, run_async):
     q = tap(bot, run_async, "_:set:lang", chat=DM, user=ALY)
     text, rows = edited(q)
     assert text == LIST_PRIVATE
+    # Phase 2: Russian and Persian join the list, marked beta.
     assert rows == [[("Automatic (your Telegram language) ✅", "_:set:lang:auto")],
                     [("English", "_:set:lang:en")],
+                    [("Русский (beta)", "_:set:lang:ru")],
+                    [("فارسی (beta)", "_:set:lang:fa")],
                     [("« Back", "_:set:back")]]
     q = tap(bot, run_async, "_:set:lang", chat=GROUP, user=BOB)
     text, rows = edited(q)
     assert text == LIST_GROUP
-    assert rows == [[("English ✅", "_:set:lang:en")], [("« Back", "_:set:back")]]
+    assert rows == [[("English ✅", "_:set:lang:en")], [("Русский (beta)", "_:set:lang:ru")],
+                    [("فارسی (beta)", "_:set:lang:fa")], [("« Back", "_:set:back")]]
 
 
 def test_picking_english_confirms(bot, run_async):
@@ -137,7 +141,7 @@ def test_auto_is_refused_in_a_group(bot, run_async, monkeypatch):
     assert calls == [] and q.edit_message_text.await_count == 0
 
 
-@pytest.mark.parametrize("code", ["fa", "qps", "qps-rtl", "xx", "EN", ""])
+@pytest.mark.parametrize("code", ["de", "qps", "qps-rtl", "xx", "EN", ""])
 def test_a_disabled_or_pseudo_code_is_refused(bot, run_async, monkeypatch, code):
     calls = writes(monkeypatch)
     # Refused by the callback itself, before the store's own check.

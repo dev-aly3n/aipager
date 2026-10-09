@@ -45,7 +45,7 @@ from aipager.bot import flood_state
 from aipager.bot.flood_budget import BudgetRateLimiter, clear_backoff_signal
 from aipager.bot.rich_message import set_rate_limiter
 from aipager.config import (
-    APP_BUTTON, BOT_TOKEN, CHAT_ID,
+    BOT_TOKEN, CHAT_ID,
     FLOOD_MIN_RATE, FLOOD_MINIMAL_MODE_RATE_FLOOR,
     FLOOD_RATE_INCREASE, FLOOD_RATE_RECOVERY_HOURS,
     FLOOD_START_RATE, FLOOD_SUCCESS_WINDOW_SECONDS,
@@ -159,6 +159,28 @@ def _label_command(label: str) -> str | None:
 #: The /language command's description in the `/` menu.
 _CMD_LANGUAGE = Msg("cmd.language", "Language of aipager's messages",
                     note="/ menu description of /language")
+#: The other descriptions of the `/` menu (the command words stay English).
+_CMD_TALK = Msg("cmd.talk", "Talk to {session}",
+                note="/ menu description of a session's own command; {session} is its name",
+                eg={"session": "x1"})
+_CMD_DESCRIPTIONS = (
+    ("new", Msg("cmd.new", "Start a session", note="/ menu description of /new")),
+    ("status", Msg("cmd.status", "Your sessions", note="/ menu description of /status")),
+    ("stop", Msg("cmd.stop", "Stop what Claude is doing",
+                 note="/ menu description of /stop")),
+    ("now", Msg("cmd.now", "Send queued messages to Claude now",
+                note="/ menu description of /now: messages waiting for the turn go in now")),
+    ("resume", Msg("cmd.resume", "Resume an ended session",
+                   note="/ menu description of /resume")),
+    ("mode", Msg("cmd.mode", "Auto or Ask",
+                 note="/ menu description of /mode: the two permission modes, named as "
+                      "the mode.auto and mode.ask keys name them")),
+    ("settings", Msg("cmd.settings", "Message layout, formatting, new sessions",
+                     note="/ menu description of /settings")),
+    ("language", _CMD_LANGUAGE),
+    ("help", Msg("cmd.help", "What you can do", note="/ menu description of /help")),
+)
+_CMD_APP = Msg("cmd.app", "Open the Mini App dashboard", note="/ menu description of /app")
 
 
 def _english():
@@ -350,7 +372,7 @@ class LifecycleMixin:
                     await self._app.bot.set_chat_menu_button(
                         chat_id=chat_id,
                         menu_button=MenuButtonWebApp(
-                            text=APP_BUTTON,
+                            text=self._menu_button_text(chat_id),
                             web_app=WebAppInfo(url=self._miniapp_url)))
                 except Exception:
                     log.info("Could not set the Mini App button for new "
@@ -1010,8 +1032,12 @@ class LifecycleMixin:
         token = new_prompt_token()
         sess.pending_permission = None
         sess.pending_prompt_msg = {
-            "text": bidi_guard.reveal(rec["text"]), "keyboard": keyboard,
-            "summary": bidi_guard.reveal(rec["summary"]), "prompt_token": token,
+            # aipager's own right-to-left marks are dropped, not shown as
+            # markers; any other control is still revealed.
+            "text": bidi_guard.reveal(bidi_guard.strip_own_marks(rec["text"])),
+            "keyboard": keyboard,
+            "summary": bidi_guard.reveal(bidi_guard.strip_own_marks(rec["summary"])),
+            "prompt_token": token,
             "msg_id": rec["msg_id"], "chat_id": rec["chat_id"],
             "perm": sep_perm,
         }
@@ -1192,9 +1218,10 @@ class LifecycleMixin:
         ``group``: a group's menu has no `/app` (roadmap 8.91d): the Mini
         App opens only from a private chat.
 
-        ``tr``: the chat's language (English when None). Only descriptions
-        that are keys are rendered through it; the rest are migrated in a
-        later phase."""
+        ``tr``: the chat's language (English when None): every
+        description is rendered through it; the command words stay as
+        they are."""
+        tr = tr or _english()
         commands = []
         for label in sorted(labels):
             command = _label_command(label)
@@ -1206,24 +1233,20 @@ class LifecycleMixin:
                           "command; the session is still reachable by "
                           "keyboard button and by typing it in full", label)
                 continue
-            commands.append(BotCommand(command, f"Talk to {label}"))
-        commands += [
-            BotCommand("new", "Start a session"),
-            BotCommand("status", "Your sessions"),
-            BotCommand("stop", "Stop what Claude is doing"),
-            BotCommand("now", "Send queued messages to Claude now"),
-            BotCommand("resume", "Resume an ended session"),
-            BotCommand("mode", "Auto or Ask"),
-            BotCommand("settings", "Message layout, formatting, new sessions"),
-            BotCommand("language", (tr or _english()).text(_CMD_LANGUAGE)),
-            BotCommand("help", "What you can do"),
-        ]
+            commands.append(BotCommand(command, tr.text(_CMD_TALK, session=label)))
+        commands += [BotCommand(name, tr.text(msg)) for name, msg in _CMD_DESCRIPTIONS]
         # Read late (not module-level) so a live `aipager miniapp enable`
         # + restart is reflected without re-importing this module.
         from aipager.config import MINIAPP_ENABLED
         if MINIAPP_ENABLED and not group:
-            commands.append(BotCommand("app", "Open the Mini App dashboard"))
+            commands.append(BotCommand("app", tr.text(_CMD_APP)))
         return commands
+
+    @classmethod
+    def _menu_button_text(cls, chat_id) -> str:
+        """The Mini App menu button's text in *chat_id*'s language."""
+        from aipager.bot import kbwords
+        return cls._menu_tr(chat_id).text(kbwords.KB_APP)
 
     @staticmethod
     def _menu_tr(chat_id):
@@ -1238,10 +1261,17 @@ class LifecycleMixin:
         """A chat's language in force changed (multilingual design, 7.2):
         its `/` menu (the cache key includes the language, so this
         re-registers it), its main reply keyboard and its menu button are
-        sent again, all through the limiter-bound bot. Never called when
-        the language did not change."""
+        sent again, all through the limiter-bound bot, ONCE each. Never
+        called when the language did not change.
+
+        The menu alone, not :meth:`_update_bot_commands`: in single-scope
+        mode that also sends the main keyboard, which this sends below,
+        and the chat would get two."""
         try:
-            await self._update_bot_commands()
+            if self.scopes is None:
+                await self._update_bot_commands_global()
+            else:
+                await self._update_bot_commands_per_scope()
         except Exception:
             log.warning("Language change: menu refresh failed for %s", chat_id,
                         exc_info=True)
@@ -1263,7 +1293,8 @@ class LifecycleMixin:
         try:
             await self._app.bot.set_chat_menu_button(
                 chat_id=chat_id,
-                menu_button=MenuButtonWebApp(text=APP_BUTTON, web_app=WebAppInfo(url=url)))
+                menu_button=MenuButtonWebApp(text=self._menu_button_text(chat_id),
+                                             web_app=WebAppInfo(url=url)))
         except Exception:
             log.warning("Language change: menu button failed for %s", chat_id,
                         exc_info=True)
@@ -1472,10 +1503,13 @@ class LifecycleMixin:
 
         try:
             chats = self._miniapp_button_chats()
-            button = (
-                MenuButtonWebApp(text=APP_BUTTON, web_app=WebAppInfo(url=url))
-                if url else MenuButtonCommands()
-            )
+            # Each chat's button in that chat's language.
+            buttons = {
+                chat_id: (MenuButtonWebApp(text=self._menu_button_text(chat_id),
+                                           web_app=WebAppInfo(url=url))
+                          if url else MenuButtonCommands())
+                for chat_id in chats
+            }
         except Exception:
             # The docstring promises this never raises, so the work
             # BEFORE the API call has to be covered too — otherwise the
@@ -1504,7 +1538,7 @@ class LifecycleMixin:
                 # _miniapp_button_chats for why the no-chat_id form is
                 # not an acceptable shortcut here.
                 await self._app.bot.set_chat_menu_button(
-                    chat_id=chat_id, menu_button=button,
+                    chat_id=chat_id, menu_button=buttons[chat_id],
                 )
             except Exception:
                 log.warning(

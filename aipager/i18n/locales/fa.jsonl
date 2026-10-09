@@ -1,0 +1,299 @@
+{"k": "agents.count_agents", "src": "263711d4", "v": {"one": "{n} ایجنت", "other": "{n} ایجنت"}}
+{"k": "agents.count_shells", "src": "9b747b65", "v": {"one": "{n} دستور", "other": "{n} دستور"}}
+{"k": "agents.done_many", "src": "192b7df2", "v": "✅ {count} انجام شد ({clock})"}
+{"k": "agents.done_one", "src": "6caebe28", "v": "✅ {name} انجام شد ({clock})"}
+{"k": "agents.done_shell", "src": "e3681276", "v": "✅ دستور: {name} - انجام شد ({clock})"}
+{"k": "agents.names_more", "src": "8150de86", "v": {"one": "{names} و {n} مورد دیگر", "other": "{names} و {n} مورد دیگر"}}
+{"k": "agents.running", "src": "398a4343", "v": "⏳ {count} هنوز در حال اجرا ({names}) - نتیجه‌ها همین‌جا می‌آید"}
+{"k": "ans.answered", "src": "7b370125", "v": "✓ <b>{session}</b> · پاسخ داده شد · {person} · {question} ← {option}"}
+{"k": "ans.answered_anon", "src": "602dabe0", "v": "✓ <b>{session}</b> · پاسخ داده شد · {question} ← {option}"}
+{"k": "ans.arrow_verb", "src": "d2539150", "v": "← {verb}"}
+{"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
+{"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
+{"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ {session} متوقف شد"}
+{"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {session} توسط {person} متوقف شد"}
+{"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"one": "⏹ {session} توسط {person} متوقف شد ({n} پیام در صف کنار گذاشته شد)", "other": "⏹ {session} توسط {person} متوقف شد ({n} پیام در صف کنار گذاشته شد)"}}
+{"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"one": "⏹ {session} متوقف شد ({n} پیام در صف کنار گذاشته شد)", "other": "⏹ {session} متوقف شد ({n} پیام در صف کنار گذاشته شد)"}}
+{"k": "ans.verb.allow", "src": "77c7b490", "v": "اجازه داده شد"}
+{"k": "ans.verb.allow_always", "src": "141216b0", "v": "همیشه اجازه داده شد"}
+{"k": "ans.verb.continue", "src": "0e4aa789", "v": "ادامه داده شد"}
+{"k": "ans.verb.deny", "src": "63b16bd4", "v": "رد شد"}
+{"k": "ans.verb.option", "src": "7a8b9272", "v": "گزینهٔ {n} انتخاب شد"}
+{"k": "ans.verb.selected", "src": "5462eaaf", "v": "انتخاب شد: {options}"}
+{"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "ارسال شد (هیچ)"}
+{"k": "app.language.hint", "src": "90e01e41", "v": "فقط متن خود aipager. پاسخ‌های Claude تغییر نمی‌کنند."}
+{"k": "app.language.title", "src": "01e1787a", "v": "زبان برنامه"}
+{"k": "btn.settings_back", "src": "a4b7fcb6", "v": "« بازگشت"}
+{"k": "card.agents", "src": "263711d4", "v": {"one": "{n} ایجنت", "other": "{n} ایجنت"}}
+{"k": "card.agents_typed", "src": "af56f555", "v": {"one": "{n} ایجنت ({types})", "other": "{n} ایجنت ({types})"}}
+{"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · در حال فشرده‌سازی{dots}"}
+{"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · رد شد"}
+{"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · توسط {person} رد شد"}
+{"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · در ترمینال رد شد"}
+{"k": "card.finishing", "src": "1bfd382d", "v": "در حال پایان"}
+{"k": "card.fold", "src": "2061ab43", "v": {"one": "▸ {n} فراخوانی ابزار", "other": "▸ {n} فراخوانی ابزار"}}
+{"k": "card.legacy.agents", "src": "51aa5e62", "v": {"one": "({n} ایجنت)", "other": "({n} ایجنت)"}}
+{"k": "card.legacy.earlier", "src": "7062cc28", "v": {"one": "✅ <i>{n} ابزار قبلی</i>", "other": "✅ <i>{n} ابزار قبلی</i>"}}
+{"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.row.agent_done", "src": "d7362ffc", "v": {"one": "🤖 {agent} · {n} فراخوانی ابزار · {clock}", "other": "🤖 {agent} · {n} فراخوانی ابزار · {clock}"}}
+{"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
+{"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (هنوز در حال اجرا)"}
+{"k": "card.row.agent_word", "src": "0608c405", "v": "ایجنت"}
+{"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} ← {verb}"}
+{"k": "card.row.shell_done", "src": "3b615634", "v": "دستور: {label} - انجام شد ({clock})"}
+{"k": "card.row.shell_failed", "src": "3e240f07", "v": "دستور: {label} - ناموفق ({clock})"}
+{"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "دستور: {label} - ناموفق (کد خروج {code})"}
+{"k": "card.row.shell_live", "src": "6cebf6e9", "v": "دستور: {label} ({clock})"}
+{"k": "card.row.shell_lost", "src": "83289e16", "v": "دستور: {label} - پایانش دیده نشد ({clock})"}
+{"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "دستور: {label} (هنوز در حال اجرا)"}
+{"k": "card.row.shell_stopped", "src": "315cab29", "v": "دستور: {label} - متوقف شد ({clock})"}
+{"k": "card.row.starting", "src": "9493af05", "v": "در حال شروع"}
+{"k": "card.shells", "src": "9b747b65", "v": {"one": "{n} دستور", "other": "{n} دستور"}}
+{"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
+{"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · متوقف شد"}
+{"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · توسط {person} متوقف شد"}
+{"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · در ترمینال متوقف شد"}
+{"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · در حال فکر…"}
+{"k": "card.verb.done", "src": "e9b450d1", "v": "انجام شد"}
+{"k": "card.verb.waiting", "src": "33d30632", "v": "در انتظار"}
+{"k": "card.verb.working", "src": "3b4dfc97", "v": "در حال کار"}
+{"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
+{"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} هنوز در حال کار"}
+{"k": "cmd.app", "src": "486dfc4e", "v": "باز کردن داشبورد Mini App"}
+{"k": "cmd.help", "src": "fb2dbad1", "v": "چه کارهایی می‌توانید بکنید"}
+{"k": "cmd.language", "src": "9dc3a234", "v": "زبان پیام‌های aipager"}
+{"k": "cmd.mode", "src": "b677b7d9", "v": "خودکار یا پرسش"}
+{"k": "cmd.new", "src": "959b093b", "v": "شروع یک نشست"}
+{"k": "cmd.now", "src": "3673f6f7", "v": "ارسال همین حالای پیام‌های صف به Claude"}
+{"k": "cmd.resume", "src": "88f33259", "v": "ادامهٔ یک نشست پایان‌یافته"}
+{"k": "cmd.settings", "src": "5fdf8e23", "v": "چیدمان پیام، قالب‌بندی، نشست‌های تازه"}
+{"k": "cmd.status", "src": "b3ddc08d", "v": "نشست‌های شما"}
+{"k": "cmd.stop", "src": "7c4cbc32", "v": "توقف کاری که Claude می‌کند"}
+{"k": "cmd.talk", "src": "a0173425", "v": "گفتگو با {session}"}
+{"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · پایان یافت (ایجنت پس‌زمینه گم شد)"}
+{"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · پایان یافت (ایجنت پس‌زمینه پس از {clock} گم شد)"}
+{"k": "fin.finished", "src": "6f65069e", "v": "{lead} · پایان یافت ({stats})"}
+{"k": "fin.finished_bare", "src": "53b60c70", "v": "{lead} · پایان یافت"}
+{"k": "fin.full_attached", "src": "bcfddfdb", "v": "📎 <i>پاسخ کامل در فایل پایین ↓</i>"}
+{"k": "fin.lines", "src": "a6f39b46", "v": "+{added} -{removed}"}
+{"k": "fin.shell_lost", "src": "c6c919fb", "v": "⚠️ <b>{session}</b> · پایان یافت (پایان دستور پس‌زمینه دیده نشد)"}
+{"k": "fin.shell_lost_after", "src": "4692a050", "v": "⚠️ <b>{session}</b> · پایان یافت (پایان دستور پس‌زمینه پس از {clock} دیده نشد)"}
+{"k": "fin.stats", "src": "9160a66c", "v": "{clock}، +{added} -{removed}"}
+{"k": "flood.card_paused", "src": "61a88de1", "v": "⏳ **{session}** · در حال کار (به‌روزرسانی موقتاً متوقف است)"}
+{"k": "flood.card_paused_html", "src": "3815781e", "v": "⏳ <b>{session}</b> · در حال کار (به‌روزرسانی موقتاً متوقف است)"}
+{"k": "flood.paused_hourly", "src": "1be79366", "v": "⏸ به‌روزرسانی کارت‌ها موقتاً متوقف است (سقف ساعتی)"}
+{"k": "flood.paused_rate", "src": "57af71ab", "v": "⏸ به‌روزرسانی کارت‌ها موقتاً متوقف است (محدودیت سرعت)"}
+{"k": "flood.slow", "src": "fd8f3fd7", "v": "🐢 حالت کند پس از هشدار Telegram"}
+{"k": "kb.app", "src": "59b36d46", "v": "📱 برنامه"}
+{"k": "kb.back", "src": "a4b7fcb6", "v": "« بازگشت"}
+{"k": "kb.commands", "src": "45e5f3f7", "v": "فرمان‌ها"}
+{"k": "kb.kill", "src": "c80f5bc1", "v": "پایان"}
+{"k": "kb.models", "src": "d068cea1", "v": "مدل ›"}
+{"k": "kb.new", "src": "c2a6b03f", "v": "جدید"}
+{"k": "kb.status", "src": "48a3661d", "v": "وضعیت"}
+{"k": "kb.stop", "src": "1b480158", "v": "توقف"}
+{"k": "kb.templates", "src": "f25b700e", "v": "قالب‌ها"}
+{"k": "kbl.cmd.clear", "src": "719ea396", "v": "پاک کردن"}
+{"k": "kbl.cmd.compact", "src": "1df39aa5", "v": "فشرده کردن"}
+{"k": "kbl.cmd.init", "src": "19682bdb", "v": "راه‌اندازی"}
+{"k": "kbl.cmd.plan", "src": "bc0b2aff", "v": "حالت برنامه‌ریزی"}
+{"k": "kbl.cmd.security_review", "src": "52fab0c7", "v": "بازبینی امنیتی"}
+{"k": "kbl.tpl.commit", "src": "1a1873ab", "v": "Commit"}
+{"k": "kbl.tpl.continue", "src": "2e026239", "v": "ادامه"}
+{"k": "kbl.tpl.explain_plan", "src": "8197049c", "v": "توضیح برنامه"}
+{"k": "kbl.tpl.lgtm", "src": "fddf8bc1", "v": "خوب است، منتشر کن"}
+{"k": "kbl.tpl.run_tests", "src": "fcab481b", "v": "اجرای تست‌ها"}
+{"k": "kbl.tpl.show_diff", "src": "78016e77", "v": "نمایش diff"}
+{"k": "kbl.tpl.update_memory", "src": "cfa5cef7", "v": "به‌روزرسانی حافظه"}
+{"k": "kbl.tpl.write_tests", "src": "391b1a96", "v": "نوشتن تست"}
+{"k": "kbmsg.commands", "src": "52b6fd5f", "v": "🎛 فرمان‌ها"}
+{"k": "kbmsg.models", "src": "78548025", "v": "🤖 مدل"}
+{"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 قالب‌ها"}
+{"k": "lang.auto", "src": "a66c2e1b", "v": "خودکار (زبان Telegram شما)"}
+{"k": "lang.beta", "src": "07f92a33", "v": "{language} (آزمایشی)"}
+{"k": "lang.changed", "src": "4e8c6791", "v": "✅ aipager از این پس اینجا {language} حرف می‌زند. نشست‌های شما و پاسخ‌های Claude تغییری نمی‌کنند."}
+{"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager اینجا {language} حرف می‌زند (فقط پیام‌های خودش؛ Claude به همان زبانی پاسخ می‌دهد که شما می‌نویسید). تغییر با /language"}
+{"k": "lang.list.group", "src": "9462a94a", "v": "🌐 زبانی که aipager برای کارت‌ها و دکمه‌های این گروه به کار می‌برد. نشست‌های Claude تغییر نمی‌کنند: Claude به همان زبانی پاسخ می‌دهد که برایش می‌نویسید."}
+{"k": "lang.list.private", "src": "5d92850b", "v": "🌐 زبانی که aipager برای پیام‌ها و دکمه‌های خودش به کار می‌برد، اینجا و در Mini App. نشست‌های Claude شما تغییر نمی‌کنند: Claude به همان زبانی پاسخ می‌دهد که برایش می‌نویسید."}
+{"k": "lang.offer.keep", "src": "c383d509", "v": "ماندن در انگلیسی"}
+{"k": "lang.offer.text", "src": "788b2767", "v": "🌐 aipager حالا {language} حرف می‌زند. این فقط پیام‌ها و دکمه‌های خود aipager را اینجا و در Mini App تغییر می‌دهد، نه نشست‌های Claude شما را: Claude همچنان به همان زبانی پاسخ می‌دهد که برایش می‌نویسید."}
+{"k": "lang.row", "src": "69fc399f", "v": "🌐 زبان: {language}"}
+{"k": "log.agent", "src": "ff163576", "v": {"one": "- 🤖 {agent} ({clock}، {n} فراخوانی ابزار)", "other": "- 🤖 {agent} ({clock}، {n} فراخوانی ابزار)"}}
+{"k": "log.agents", "src": "5db5246b", "v": "## ایجنت‌ها"}
+{"k": "log.final_answer", "src": "f0ea5fc3", "v": "## پاسخ نهایی"}
+{"k": "log.memory", "src": "df926a90", "v": {"one": "_حافظه {n} ردیف آخر ابزار را نگه می‌دارد؛ ردیف‌های قدیمی‌تر نوبت‌های خیلی طولانی شاید دیگر نباشند._", "other": "_حافظه {n} ردیف آخر ابزار را نگه می‌دارد؛ ردیف‌های قدیمی‌تر نوبت‌های خیلی طولانی شاید دیگر نباشند._"}}
+{"k": "log.title", "src": "2d9e96f5", "v": "# {session} - لاگ کامل"}
+{"k": "mode.ask", "src": "8f9266a6", "v": "💬 پرسش"}
+{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 پرسش برای شما (🤖 خودکار: مدیران)"}
+{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 به جایش پرسش"}
+{"k": "mode.auto", "src": "a9e88621", "v": "🤖 خودکار"}
+{"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 به جایش خودکار"}
+{"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ این متن نویسه‌های پنهانِ تغییر جهت دارد که به شکل ⟨U+...⟩ نشان داده شده‌اند. شاید چیزی غیر از آنچه به نظر می‌رسد اجرا کند."}
+{"k": "perm.btn.allow", "src": "cf869136", "v": "✅ اجازه بده"}
+{"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 همیشه اجازه بده"}
+{"k": "perm.btn.cancel", "src": "d20b1713", "v": "↩️ لغو"}
+{"k": "perm.btn.compact_now", "src": "73357c1f", "v": "📦 الان فشرده کن"}
+{"k": "perm.btn.default_suffix", "src": "613e7977", "v": "{mode} (پیش‌فرض)"}
+{"k": "perm.btn.deny", "src": "8b9d9edb", "v": "❌ رد"}
+{"k": "perm.btn.not_now", "src": "f677ca32", "v": "⏳ الان نه"}
+{"k": "perm.btn.option", "src": "881fbd74", "v": "گزینهٔ {n}"}
+{"k": "perm.btn.retry", "src": "fabc7541", "v": "🔄 تلاش دوباره"}
+{"k": "perm.btn.stop", "src": "e3f8b9ee", "v": "⏹ توقف"}
+{"k": "perm.btn.stop_plain", "src": "9e253470", "v": "توقف"}
+{"k": "perm.btn.stop_switch", "src": "bc469329", "v": "🛑 توقف کار و تغییر"}
+{"k": "perm.btn.submit", "src": "c685950d", "v": "✅ ارسال"}
+{"k": "perm.btn.yes_switch", "src": "9f6e4eb9", "v": "✅ بله، تغییر بده"}
+{"k": "perm.loading", "src": "253222ec", "v": "{tool} (در حال بارگیری…)"}
+{"k": "perm.needed", "src": "7c7a8e5c", "v": "مجوز لازم است"}
+{"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · ورودی لازم است"}
+{"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · بدون سؤال"}
+{"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · مجوز لازم است"}
+{"k": "pin.btn.answer", "src": "24c3485a", "v": "پاسخ به {session}"}
+{"k": "pin.count.idle", "src": "6abeefbf", "v": {"one": "{n} بیکار", "other": "{n} بیکار"}}
+{"k": "pin.count.starting", "src": "836f5c27", "v": {"one": "{n} در حال شروع", "other": "{n} در حال شروع"}}
+{"k": "pin.count.working", "src": "c3aee490", "v": {"one": "{n} در حال کار", "other": "{n} در حال کار"}}
+{"k": "pin.first.all_idle", "src": "195ea8a9", "v": "💤 همه بیکار"}
+{"k": "pin.first.counts", "src": "b5d804ae", "v": "{glyph} {counts}"}
+{"k": "pin.first.single", "src": "5674b34c", "v": "{glyph} {session} {state}"}
+{"k": "pin.first.waiting", "src": "7fa7cc46", "v": "⏳ {session} منتظر شماست"}
+{"k": "pin.line", "src": "de9ddb7a", "v": "• <b>{session}</b> {state}"}
+{"k": "pin.more", "src": "66adc298", "v": {"one": "(+{n} مورد دیگر)", "other": "(+{n} مورد دیگر)"}}
+{"k": "pin.needs_input", "src": "9a9d6640", "v": "ورودی لازم است"}
+{"k": "pin.paren", "src": "d52abc3c", "v": "({running})"}
+{"k": "pin.running_agents", "src": "712d4c75", "v": {"one": "{n} ایجنت در حال اجرا", "other": "{n} ایجنت در حال اجرا"}}
+{"k": "pin.running_both", "src": "48ac24f8", "v": "{agents}، {shells} در حال اجرا"}
+{"k": "pin.running_shells", "src": "af023360", "v": {"one": "{n} دستور در حال اجرا", "other": "{n} دستور در حال اجرا"}}
+{"k": "pin.state", "src": "845c40c2", "v": "({state})"}
+{"k": "pin.state.idle", "src": "1adbcc34", "v": "بیکار"}
+{"k": "pin.state.needs_you", "src": "19622ace", "v": "منتظر شما"}
+{"k": "pin.state.starting", "src": "9493af05", "v": "در حال شروع"}
+{"k": "pin.state.working", "src": "8178ea20", "v": "در حال کار"}
+{"k": "pin.state_running", "src": "a390d47b", "v": "({state}، {running})"}
+{"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
+{"k": "pin.target", "src": "c9c5350f", "v": "✍️ پیام‌ها به <b>{session}</b> می‌روند"}
+{"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ بستن"}
+{"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 نشست‌های تازه"}
+{"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 پوشه: {folder} ›"}
+{"k": "set.btn.ns_model", "src": "6fb2e9a4", "v": "🧠 مدل: {model} ›"}
+{"k": "set.btn.per_session", "src": "9748363d", "v": "👤 تنظیمات هر نشست"}
+{"k": "set.btn.problem_reports", "src": "2478212a", "v": "🐞 گزارش مشکل: {value}"}
+{"k": "set.btn.reports_turn_on", "src": "8b383496", "v": "روشن کردن دوبارهٔ پیشنهادها"}
+{"k": "set.btn.use_chat_default", "src": "55c966bc", "v": "↩️ همان پیش‌فرض چت"}
+{"k": "set.cadence.title", "src": "ed8a634b", "v": "⏱ به‌روزرسانی کارت در نوبت طولانی"}
+{"k": "set.diffs.title", "src": "9f74873f", "v": "📝 پیش‌نمایش diff"}
+{"k": "set.formatting.title", "src": "6b0a66a0", "v": "✏️ قالب‌بندی ساده"}
+{"k": "set.help.cadence.off", "src": "71965ae1", "v": "کارت در تمام نوبت، هر قدر هم طول بکشد، با همان سرعت تازه می‌شود."}
+{"k": "set.help.cadence.on", "src": "cb462e4f", "v": "هرچه نوبت طولانی‌تر شود کارت کمتر تازه می‌شود (پس از ۲ دقیقه هر ۱۰ ثانیه، پس از ۱۰ دقیقه هر ۳۰ ثانیه) و ساعتش با گام‌های ۳۰ ثانیه جلو می‌رود تا یخ‌زده به نظر نرسد. تغییر وضعیت فوراً دیده می‌شود."}
+{"k": "set.help.diffs.off", "src": "e9b93bde", "v": "ویرایش فایل‌ها فقط به شکل ردیف روی کارت مشغول دیده می‌شود."}
+{"k": "set.help.diffs.on", "src": "1ad75bf3", "v": "هر Write/Edit جداگانه هم به شکل پیام diff زیر کارت مشغول فرستاده می‌شود."}
+{"k": "set.help.formatting.off", "src": "14016cc5", "v": "Claude پاسخ‌ها را هر طور بخواهد قالب‌بندی می‌کند."}
+{"k": "set.help.formatting.on", "src": "13c31447", "v": "فقط متن ساده و فهرست‌های خط‌تیره‌دار - بدون جدول و بلوک کد."}
+{"k": "set.help.layout.card", "src": "75971a73", "v": "کارت مشغول می‌ماند و پاسخ پیام جداگانه‌ای است."}
+{"k": "set.help.layout.merged", "src": "cb79a1a7", "v": "پاسخ جای متن کارت مشغول را در همان پیام می‌گیرد."}
+{"k": "set.help.layout.replace", "src": "7802aaf9", "v": "کارت مشغول جایش را فقط به پاسخ می‌دهد."}
+{"k": "set.help.length.long", "src": "6d4be59e", "v": "جزئیات کامل، وقتی پاسخ لازمش دارد."}
+{"k": "set.help.length.medium", "src": "1f258598", "v": "چند پاراگراف."}
+{"k": "set.help.length.none", "src": "c889d841", "v": "هیچ راهنمایی دربارهٔ طول."}
+{"k": "set.help.length.short", "src": "c4b9b1e2", "v": "چند جمله."}
+{"k": "set.help.length.xshort", "src": "b3629257", "v": "یک یا دو جمله. بی‌مقدمه، بی‌جمع‌بندی."}
+{"k": "set.help.level.advanced", "src": "820e1448", "v": "با فرض تخصص؛ بدون توضیح قدم‌به‌قدم."}
+{"k": "set.help.level.none", "src": "643f8019", "v": "هیچ راهنمایی دربارهٔ واژگان."}
+{"k": "set.help.level.normal", "src": "530e152e", "v": "نوشتار فنی معمولی."}
+{"k": "set.help.level.simple", "src": "748c89ff", "v": "واژه‌های روزمره، جمله‌های کوتاه."}
+{"k": "set.layout.title", "src": "415df682", "v": "🖼 چیدمان پیام"}
+{"k": "set.length.title", "src": "0b4f4428", "v": "📏 طول پاسخ"}
+{"k": "set.level.title", "src": "4e19b762", "v": "🎓 سطح واژگان"}
+{"k": "set.opt.cadence.off", "src": "b44b98a6", "v": "خاموش - همان سرعت در تمام نوبت"}
+{"k": "set.opt.cadence.on", "src": "3843eb22", "v": "روشن - آهسته‌تر در نوبت طولانی"}
+{"k": "set.opt.chat_default", "src": "58286063", "v": "{option} (پیش‌فرض چت)"}
+{"k": "set.opt.diffs.off", "src": "64a190d9", "v": "خاموش - فقط کارت مشغول"}
+{"k": "set.opt.diffs.on", "src": "3c616425", "v": "روشن - یک پیام diff برای هر ویرایش"}
+{"k": "set.opt.formatting.off", "src": "a779e619", "v": "خاموش - قالب‌بندی معمول"}
+{"k": "set.opt.formatting.on", "src": "4321e58a", "v": "روشن - فقط متن ساده"}
+{"k": "set.opt.layout.card", "src": "cb54ae30", "v": "کارت مشغول + نتیجه"}
+{"k": "set.opt.layout.merged", "src": "732da229", "v": "ادغام در پیام مشغول"}
+{"k": "set.opt.layout.replace", "src": "1f8e1a41", "v": "جایگزینی با نتیجه"}
+{"k": "set.opt.length.long", "src": "11eda67f", "v": "بلند"}
+{"k": "set.opt.length.medium", "src": "d404968e", "v": "متوسط"}
+{"k": "set.opt.length.none", "src": "e6752500", "v": "هیچ قاعده‌ای اعمال نشود"}
+{"k": "set.opt.length.short", "src": "0fe7d82f", "v": "کوتاه"}
+{"k": "set.opt.length.xshort", "src": "e937255b", "v": "خیلی کوتاه"}
+{"k": "set.opt.level.advanced", "src": "4d064726", "v": "پیشرفته"}
+{"k": "set.opt.level.none", "src": "e6752500", "v": "هیچ قاعده‌ای اعمال نشود"}
+{"k": "set.opt.level.normal", "src": "45e118d0", "v": "معمولی"}
+{"k": "set.opt.level.simple", "src": "0406a446", "v": "واژه‌های ساده"}
+{"k": "set.opt.ns_default_folder", "src": "56d18a09", "v": "پوشهٔ پیش‌فرض"}
+{"k": "set.opt.ns_default_model", "src": "5fbae11e", "v": "مدل پیش‌فرض"}
+{"k": "set.opt.ns_older_model", "src": "3e0492cf", "v": "{model} (مدل قدیمی‌تر)"}
+{"k": "set.opt.reports.ask", "src": "10a8fd63", "v": "از من بپرس"}
+{"k": "set.opt.reports.auto_off", "src": "7e82eed6", "v": "پیشنهادها خاموش"}
+{"k": "set.opt.reports.off", "src": "e3de5ab0", "v": "خاموش"}
+{"k": "set.text.changed_by", "src": "63c7cabd", "v": "<i>تغییر داده شده توسط {person}.</i>"}
+{"k": "set.text.closed", "src": "731152a0", "v": "بسته شد."}
+{"k": "set.text.intro.cadence", "src": "c2f74acd", "v": "کارت مشغول در یک نوبت طولانی هر چند وقت یک بار تازه شود. روشن: هرچه نوبت کهنه‌تر شود آهسته‌تر می‌شود و ساعتش با گام‌های ۳۰ ثانیه جلو می‌رود، و این یک چت پرکار را به‌خوبی زیر سقف‌های Telegram نگه می‌دارد. خاموش: همان سرعت دقیقه‌های اول در تمام نوبت."}
+{"k": "set.text.intro.diffs", "src": "7a426bb1", "v": "آیا هر ویرایش فایل به شکل پیام diff جداگانه زیر کارت مشغول فرستاده شود. خاموش یعنی یک کارت مشغول و یک پاسخ - کارت همچنان همهٔ ویرایش‌ها را فهرست می‌کند و Mini App نمایشگر diff دارد."}
+{"k": "set.text.intro.formatting", "src": "71988826", "v": "وقتی روشن است، پاسخ‌ها فقط متن ساده و فهرست‌های ساده با خط تیره دارند - بدون جدول، بلوک کد، تیتر یا متن پررنگ و کج."}
+{"k": "set.text.intro.layout", "src": "891af1fd", "v": "یک نوبت تمام‌شده در چت چطور نشان داده شود."}
+{"k": "set.text.intro.length", "src": "e64e4857", "v": "پاسخ‌های Claude چقدر بلند باشند."}
+{"k": "set.text.intro.level", "src": "5ca0f466", "v": "سطح واژگان پاسخ‌های Claude."}
+{"k": "set.text.ns_folder_title", "src": "f4eab7d6", "v": "📁 <b>پوشه برای نشست‌های تازه</b>"}
+{"k": "set.text.ns_model_title", "src": "386d1055", "v": "🧠 <b>مدل برای نشست‌های تازه</b>"}
+{"k": "set.text.ns_root", "src": "04b79bd3", "v": "🆕 <b>نشست‌های تازه</b>\n\nآنچه /new یک نشست را با آن شروع می‌کند. باز هم می‌توانید آن را روی کارت برای یک نشست تغییر دهید.\n\nحالت: {mode}\nمدل: {model}\nپوشه: {folder}"}
+{"k": "set.text.reports_auto_off", "src": "52adfc5a", "v": "پیشنهادهای خودکار: خاموش (دو بار پشت سر هم نه گفتید)."}
+{"k": "set.text.reports_env_off", "src": "408411eb", "v": "پیشنهادها روی این دستگاه با AIPAGER_REPORT_PROMPTS=0 هم خاموش است."}
+{"k": "set.text.reports_intro", "src": "4fe65258", "v": "وقتی aipager بیش از یک بار به همان خطای داخلی بخورد، می‌تواند پیشنهاد کند گزارشی بفرستد. شما همیشه اول گزارش را می‌بینید و تا روی ارسال نزنید چیزی فرستاده نمی‌شود.\n\nاز من بپرس: هر از گاهی پیشنهاد می‌دهد (حداکثر هر ۳ روز یک بار).\nخاموش: هرگز پیشنهاد نمی‌دهد. گزارش مشکل در /help همیشه کار می‌کند."}
+{"k": "set.text.reports_title", "src": "036f0be5", "v": "🐞 <b>گزارش مشکل</b>"}
+{"k": "set.text.root", "src": "25c10fde", "v": "⚙️ <b>تنظیمات</b>\n\nتنظیمات این چت برای شکل پاسخ‌های Claude اینجا. روی یک بخش بزنید تا تغییرش دهید."}
+{"k": "set.text.row", "src": "b98927cc", "v": "{title}: {value}"}
+{"k": "set.text.spref_field", "src": "53c8e84c", "v": "{title} - برای [<b>{session}</b>]\n\n{title} که این نشست به کار می‌برد، به جای /settings خود این چت، فقط برای همین نشست."}
+{"k": "set.text.spref_none", "src": "3856fe99", "v": "👤 <b>تنظیمات هر نشست</b>\n\nهنوز نشستی نیست."}
+{"k": "set.text.spref_pick", "src": "fb84677e", "v": "👤 <b>تنظیمات هر نشست</b>\n\nیک نشست را انتخاب کنید تا سبک پاسخش را جداگانه تعیین کنید."}
+{"k": "set.text.spref_root", "src": "b29b833e", "v": "👤 <b>تنظیمات هر نشست - [{session}]</b>\n\nسبک پاسخ همین نشست را تغییر می‌دهد. هر بخشی که تعیین نشده از /settings همین چت پیروی می‌کند. ⭐ یعنی این نشست آن بخش را جداگانه تعیین کرده است."}
+{"k": "status.btn.answer", "src": "a16a4eda", "v": "پاسخ"}
+{"k": "status.btn.clear_all", "src": "4944581b", "v": "🧹 پاک کردن همه"}
+{"k": "status.btn.ended", "src": "ae183190", "v": {"one": "⚫ پایان‌یافته ({n})", "other": "⚫ پایان‌یافته ({n})"}}
+{"k": "status.btn.more", "src": "a6bc69aa", "v": "⋮ بیشتر"}
+{"k": "status.btn.new", "src": "fb873221", "v": "🆕 جدید"}
+{"k": "status.btn.new_session", "src": "19b62fc4", "v": "🆕 نشست جدید"}
+{"k": "status.ctx", "src": "daeecae8", "v": "ctx {percent}"}
+{"k": "status.ended", "src": "63dbdb7e", "v": {"one": "⚫ <b>نشست‌های پایان‌یافته ({n})</b>\n\nیکی را ادامه دهید، یکی را حذف کنید، یا همه را از /status پاک کنید (در /resume می‌مانند).", "other": "⚫ <b>نشست‌های پایان‌یافته ({n})</b>\n\nیکی را ادامه دهید، یکی را حذف کنید، یا همه را از /status پاک کنید (در /resume می‌مانند)."}}
+{"k": "status.ended_shown", "src": "cdde3b66", "v": "{max} مورد تازه‌تر اینجاست؛ /resume همه را فهرست می‌کند."}
+{"k": "status.head", "src": "570c54fe", "v": "{mark}<b>{session}</b> · {glyph} {state}"}
+{"k": "status.no_ended", "src": "a33a986b", "v": "نشست پایان‌یافته‌ای نیست."}
+{"k": "status.no_live", "src": "8f779eb2", "v": "نشست فعالی نیست."}
+{"k": "status.none", "src": "a44ee05c", "v": "هنوز نشستی نیست."}
+{"k": "status.notes", "src": "2e411b05", "v": {"one": "{n} یادداشت", "other": "{n} یادداشت"}}
+{"k": "status.queue", "src": "20f40005", "v": "صف {total} ({queued}، {notes})"}
+{"k": "status.queued", "src": "45c54388", "v": {"one": "{n} در صف", "other": "{n} در صف"}}
+{"k": "status.sessions", "src": "65748ab3", "v": {"one": "📊 <b>نشست‌ها ({n})</b>", "other": "📊 <b>نشست‌ها ({n})</b>"}}
+{"k": "status.switch", "src": "52424cce", "v": "✍️ حالا با <b>{session}</b> گفتگو می‌کنید · {glyph} {state} · {mode}"}
+{"k": "status.talk_dm", "src": "777be8ce", "v": "پیامی بفرستید تا به {session} برسد."}
+{"k": "status.talk_group", "src": "bdc24dfd", "v": "به پیامی از {session} پاسخ دهید (یا {bot} را صدا بزنید) تا با آن گفتگو کنید."}
+{"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "به پیامی از {session} پاسخ دهید (یا ربات را صدا بزنید) تا با آن گفتگو کنید."}
+{"k": "status.waiting_answer", "src": "e5832740", "v": "{session} منتظر پاسخ شماست."}
+{"k": "toast.already_answered", "src": "3d131a46", "v": "قبلاً پاسخ داده شده"}
+{"k": "toast.always_degraded", "src": "038f4355", "v": "برای این دستور قاعدهٔ همیشگی نبود - فقط این بار اجازه داده شد [{session}]"}
+{"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}
+{"k": "toast.busy_retry", "src": "cfc92c41", "v": "شلوغ است - کمی بعد دوباره امتحان کنید"}
+{"k": "toast.cant_resend", "src": "3aa4d727", "v": "این درخواست دوباره فرستاده نمی‌شود - در ترمینال پاسخ دهید"}
+{"k": "toast.cant_stop", "src": "2bf57e30", "v": "شما نمی‌توانید این نشست را متوقف کنید."}
+{"k": "toast.choice_gone", "src": "54298c73", "v": "این گزینه دیگر در دسترس نیست."}
+{"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "دکمهٔ نامعتبر"}
+{"k": "toast.invalid_value", "src": "7e5ba817", "v": "مقدار نامعتبر"}
+{"k": "toast.moved_on_status", "src": "be925157", "v": "{session} سراغ کار تازه‌ای رفته - برای توقفش دوباره ⏹ توقف را بزنید"}
+{"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} سراغ کار تازه‌ای رفته - دوباره /stop بفرستید"}
+{"k": "toast.not_working", "src": "1ec204d3", "v": "{session} در حال کار نیست"}
+{"k": "toast.open_chat", "src": "202c3e06", "v": "برای پاسخ، چت را باز کنید"}
+{"k": "toast.prompt_expired", "src": "260f4c88", "v": "این درخواست دیگر معتبر نیست"}
+{"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram سرعت این چت را محدود کرده - بعد از {time} دوباره امتحان کنید"}
+{"k": "toast.send_failed", "src": "0fbea382", "v": "فرستادن به {session} نشد"}
+{"k": "toast.send_keys_failed", "src": "32458da9", "v": "فرستادن کلیدها نشد"}
+{"k": "toast.session_ended", "src": "3a3a8392", "v": "این نشست تمام شده است."}
+{"k": "toast.session_gone", "src": "9360b8a3", "v": "نشست «{session}» پیدا نشد"}
+{"k": "toast.session_gone_settings", "src": "8af767e3", "v": "این نشست دیگر در دسترس نیست - /settings را دوباره باز کنید."}
+{"k": "toast.session_not_found", "src": "4c2e72c7", "v": "نشست پیدا نشد"}
+{"k": "toast.session_not_here", "src": "54eb8580", "v": "این نشست اینجا اجرا نمی‌شود."}
+{"k": "toast.session_unavailable", "src": "773d1a0f", "v": "این نشست دیگر در دسترس نیست"}
+{"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "در این گروه فقط مدیر می‌تواند تنظیمات را تغییر دهد."}
+{"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "شما نمی‌توانید تنظیمات این نشست را تغییر دهید."}
+{"k": "toast.verb", "src": "985eb765", "v": "{verb} [{session}]"}

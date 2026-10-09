@@ -38,7 +38,7 @@ def _writes(monkeypatch):
 
 def test_an_unknown_code_writes_nothing(monkeypatch):
     calls = _writes(monkeypatch)
-    for bad in ("fa", "qps", "qps-rtl", "xx", "EN", None, 5):
+    for bad in ("de", "qps", "qps-rtl", "xx", "EN", None, 5):
         with pytest.raises(ValueError):
             preferences.set_ui_language(DM, bad)
     assert calls == []
@@ -61,8 +61,9 @@ def test_a_stored_value_of_the_wrong_shape_reads_as_unset(qps):
     assert i18n.for_chat(DM).code == "en"
 
 
-def test_a_stored_language_that_is_no_longer_enabled_reads_as_english(qps, monkeypatch):
-    preferences.set_ui_language(GROUP, "fa")
+def test_a_stored_language_that_is_no_longer_enabled_reads_as_english(monkeypatch):
+    monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"de"}))
+    preferences.set_ui_language(GROUP, "de")
     monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset())
     assert i18n.for_chat(GROUP).code == "en"
 
@@ -203,3 +204,45 @@ def test_check_12_the_language_surfaces_never_cross_chats(mk_bot, run_async, mk_
                                               for cmd in c.args[0]}
                   for c in bot._app.bot.set_my_commands.await_args_list})
     assert mark not in menus[DM]["language"]
+
+
+def test_check_12_a_persian_group_and_a_russian_dm_never_cross(mk_bot, run_async, monkeypatch):
+    """A group in Persian whose session's last sender keeps Russian in
+    their own chat, and a private chat in Russian: every shared message is
+    in its own chat's language, never the other's (G72)."""
+    import re
+    from unittest.mock import AsyncMock, MagicMock
+
+    from aipager.bot import animation, dashboard
+    from aipager.state import Status, TrackedSession
+
+    persian, cyrillic = re.compile("[؀-ۿ]"), re.compile("[Ѐ-ӿ]")
+    monkeypatch.setattr(dashboard, "get_rate_limiter", lambda: None)
+    preferences.set_ui_language(GROUP, "fa")
+    preferences.set_ui_language(BOB, "ru")
+    preferences.set_ui_language(DM, "ru")
+    bot = mk_bot()
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=5))
+    sessions = {}
+    for chat, name in ((GROUP, "claude-g"), (DM, "claude-d")):
+        s = TrackedSession(name=name, label=name[-1], status=Status.BUSY)
+        s.scope_chat_id, s.scope_kind = chat, ("group" if chat < 0 else "dm")
+        s.turn_sender_id = BOB
+        s.tool_history = [("🔑 Bash: ls → Allowed", True), ("Read: /a", False)]
+        bot.registry._sessions[name] = s
+        sessions[chat] = s
+
+    def surfaces(chat):
+        s = sessions[chat]
+        out = [animation.build_stream_card(s, "Working"),
+               bot._build_busy_text(s.label, "Working", s),
+               bot._render_pinned(chat, [s])[0]]
+        bot._app.bot.send_message.reset_mock()
+        run_async(bot._send_keyboard(level="main", chat_id=chat))
+        kb = bot._app.bot.send_message.await_args.kwargs["reply_markup"]
+        out += [b.text for row in kb.keyboard for b in row]
+        return " ".join(out)
+
+    group, dm = surfaces(GROUP), surfaces(DM)
+    assert persian.search(group) and not cyrillic.search(group)
+    assert cyrillic.search(dm) and not persian.search(dm)

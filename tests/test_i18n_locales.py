@@ -21,27 +21,33 @@ def test_the_fifteen_languages_in_order_with_their_own_names():
     assert locales.LOCALES["ar"].digits == "arab"
 
 
-def test_only_english_is_enabled():
-    assert locales.enabled_codes() == ("en",)
-    assert [c for c, loc in locales.LOCALES.items() if loc.enabled] == ["en"]
+def test_only_english_persian_and_russian_are_offered():
+    """Phase 2: Persian and Russian join English, both marked beta; the
+    other twelve stay off until phase 5 (G80)."""
+    assert locales.enabled_codes() == ("en", "ru", "fa")
+    assert [c for c, loc in locales.LOCALES.items() if loc.enabled] == ["en", "ru", "fa"]
+    assert [locales.LOCALES[c].quality for c in ("en", "ru", "fa")] == [
+        "stable", "beta", "beta"]
+    assert locales.AUTO_DETECT is False
 
 
 def test_normalize_ignores_disabled_languages(monkeypatch):
+    # Spanish and German are the disabled examples since phase 2.
     assert locales.normalize("en") == "en"
     assert locales.normalize("en-US") == "en"
     assert locales.normalize("EN_gb") == "en"
-    for code in ("fa", "ru", "pt-br", "zh-hans", "de-AT"):
+    for code in ("es", "de", "pt-br", "zh-hans", "de-AT"):
         assert locales.normalize(code) is None, code
-    monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"fa", "pt-BR", "zh-Hans", "id"}))
-    assert locales.normalize("fa") == "fa"
-    assert locales.normalize("fa-IR") == "fa"
+    monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"es", "pt-BR", "zh-Hans", "id"}))
+    assert locales.normalize("es") == "es"
+    assert locales.normalize("es-MX") == "es"
     assert locales.normalize("pt-br") == "pt-BR"
     assert locales.normalize("pt") == "pt-BR"
     assert locales.normalize("zh") == "zh-Hans"
     assert locales.normalize("zh-cn") == "zh-Hans"
     assert locales.normalize("zh-Hans-CN") == "zh-Hans"
     assert locales.normalize("in") == "id"
-    assert locales.normalize("ru") is None
+    assert locales.normalize("de") is None
 
 
 def test_traditional_chinese_never_becomes_simplified(monkeypatch):
@@ -67,7 +73,7 @@ def test_pseudo_codes_are_never_offered():
 
 def test_a_test_may_enable_a_pseudo_code(monkeypatch):
     monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"qps"}))
-    assert locales.enabled_codes() == ("en", "qps")
+    assert locales.enabled_codes() == ("en", "ru", "fa", "qps")
     assert locales.is_selectable("qps")
     assert locales.normalize("qps") is None
 

@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import time
+from types import SimpleNamespace
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -23,7 +24,9 @@ from telegram import (
     Update,
 )
 
+from aipager import i18n
 from aipager.config import RESUME_GUARD_SECONDS
+from aipager.i18n import Command, Msg
 from aipager.dtach import inject
 from aipager.bot import reactions
 
@@ -113,32 +116,62 @@ class StopOutcome:
     by: str = ""         # who stopped it, in a group (roadmap 8.91c)
 
 
-def _stopped_card_text(label: str, by: str = "") -> str:
+CARD_STOPPED = Msg("card.stopped", "⚠️ <b>{session}</b> · Stopped",
+                   note="The busy card after a Stop", eg={"session": "x1"})
+CARD_STOPPED_BY = Msg("card.stopped_by", "⚠️ <b>{session}</b> · Stopped by {person}",
+                      note="The busy card after a Stop in a group: who stopped it",
+                      eg={"session": "x1", "person": "@bob"})
+CARD_DENIED = Msg("card.denied", "🚫 <b>{session}</b> · Denied",
+                  note="The busy card after a refused permission ended the turn",
+                  eg={"session": "x1"})
+CARD_DENIED_BY = Msg("card.denied_by", "🚫 <b>{session}</b> · Denied by {person}",
+                     note="The busy card after a refusal in a group: who refused",
+                     eg={"session": "x1", "person": "@bob"})
+
+
+def _stopped_card_text(label: str, by: str = "", tr=None) -> str:
     """The busy card after a Stop: `⚠️ x1 · Stopped`, and in a group who
-    stopped it, `⚠️ x1 · Stopped by @bob` (roadmap 8.91c)."""
-    text = f"⚠️ <b>{html_mod.escape(label)}</b> · Stopped"
-    return f"{text} by {html_mod.escape(by)}" if by else text
+    stopped it, `⚠️ x1 · Stopped by @bob` (roadmap 8.91c). In *tr*'s
+    language (English when None)."""
+    tr = tr or i18n.get("en")
+    if by:
+        return tr.html(CARD_STOPPED_BY, session=label, person=Command(by))
+    return tr.html(CARD_STOPPED, session=label)
 
 
-def _refused_card_text(label: str, by: str = "", *, refused: bool = True) -> str:
+def _refused_card_text(label: str, by: str = "", *, refused: bool = True,
+                       tr=None) -> str:
     """The busy card after an answer typed into Claude Code's dialog ended
     the turn (roadmap 8.99): `🚫 x1 · Denied`, in a group `🚫 x1 · Denied
     by @bob`. When the typed answer was not a refusal but the turn still
     ended like an interrupt, it reads as a Stop."""
     if not refused:
-        return _stopped_card_text(label, by)
-    text = f"🚫 <b>{html_mod.escape(label)}</b> · Denied"
-    return f"{text} by {html_mod.escape(by)}" if by else text
+        return _stopped_card_text(label, by, tr)
+    tr = tr or i18n.get("en")
+    if by:
+        return tr.html(CARD_DENIED_BY, session=label, person=Command(by))
+    return tr.html(CARD_DENIED, session=label)
 
 
-def _terminal_card_text(label: str, *, refused: bool) -> str:
+CARD_DENIED_TERMINAL = Msg(
+    "card.denied_terminal", "🚫 <b>{session}</b> · Denied in the terminal",
+    note="The busy card after a permission was refused at the computer's own terminal",
+    eg={"session": "x1"})
+CARD_STOPPED_TERMINAL = Msg(
+    "card.stopped_terminal", "⚠️ <b>{session}</b> · Stopped in the terminal",
+    note="The busy card after a question was dismissed at the computer's own terminal",
+    eg={"session": "x1"})
+
+
+def _terminal_card_text(label: str, *, refused: bool, tr=None) -> str:
     """The busy card after Claude Code's own dialog was answered at the
     terminal in a way that ended the turn (roadmap 8.113): `🚫 x1 · Denied
     in the terminal` for a permission, `⚠️ x1 · Stopped in the terminal`
-    for a question left with Escape."""
-    if refused:
-        return f"🚫 <b>{html_mod.escape(label)}</b> · Denied in the terminal"
-    return f"⚠️ <b>{html_mod.escape(label)}</b> · Stopped in the terminal"
+    for a question left with Escape. In *tr*'s language (English when
+    None)."""
+    tr = tr or i18n.get("en")
+    return tr.html(CARD_DENIED_TERMINAL if refused else CARD_STOPPED_TERMINAL,
+                   session=label)
 
 
 #: How long, after an answer was TYPED into Claude Code's permission dialog
@@ -1351,7 +1384,8 @@ class SessionOpsMixin:
                  "transcript marker" if confirmed else "grace")
         self._stop_animation(sess)
         await self._settle_card_text(
-            sess, card_text or _refused_card_text(sess.label, by, refused=refused))
+            sess, card_text or _refused_card_text(sess.label, by, refused=refused,
+                                                  tr=i18n.for_sess(sess)))
         sess.busy_msg_id = None
         sess.trigger_msg_id = None
         sess.busy_card_trigger = None
@@ -1442,7 +1476,8 @@ class SessionOpsMixin:
         # it, under the card-edit lock: the Escapes above make Claude fire
         # tool hooks right now, and a card edit of theirs landing after
         # this line would put "Working" and a live Stop button back.
-        await self._settle_card_text(sess, _stopped_card_text(sess.label, by))
+        await self._settle_card_text(sess, _stopped_card_text(sess.label, by,
+                                                              i18n.for_sess(sess)))
         sess.busy_msg_id = None  # also a -1 claim, which the helper skips
 
         # 4. Transition to IDLE directly (skip notify — we handle UI here)
@@ -1513,10 +1548,13 @@ class SessionOpsMixin:
 
         # Acknowledge, in the words every Stop uses.
         if query:
-            await self._safe_answer(query, _stopped_line(outcome, html=False))
+            await self._safe_answer(query, _stopped_line(
+                outcome, html=False,
+                tr=i18n.for_person(update if update is not None
+                                   else SimpleNamespace(callback_query=query))))
             # Also edit the callback query's message if it's the busy message
             try:
-                await edit_text(query, _stopped_card_text(sess.label, by),
+                await edit_text(query, _stopped_card_text(sess.label, by, i18n.for_sess(sess)),
                                 parse_mode="HTML")
             except Exception:
                 pass
@@ -1534,7 +1572,8 @@ class SessionOpsMixin:
             await self._react(update, reactions.ACK)
             if getattr(update, "message", None) is not None:
                 try:
-                    await reply_text(update.message, _stopped_line(outcome),
+                    await reply_text(update.message,
+                                     _stopped_line(outcome, tr=i18n.for_update(update)),
                                      parse_mode="HTML")
                 except Exception:
                     log.debug("[%s] stop acknowledgement reply failed",

@@ -27,7 +27,11 @@ def test_every_language_has_a_glossary_and_a_style_guide():
         g = json.loads((tool.GLOSSARY_DIR / f"{code}.json").read_text(encoding="utf-8"))
         assert g["address"] == ADDRESS[code], code
         assert set(g["terms"]) == TERMS, code
-        assert all(v == "" for v in g["terms"].values()), "no translations in this run"
+        if code in ("fa", "ru"):
+            # Phase 2: filled, as lists of accepted forms (stems for Russian).
+            assert all(isinstance(v, list) and v and all(v) for v in g["terms"].values()), code
+        else:
+            assert all(v == "" for v in g["terms"].values()), "not translated yet"
         assert isinstance(g["keep_english"], list)
         style = (tool.STYLE_DIR / f"{code}.md").read_text(encoding="utf-8")
         assert ADDRESS[code] in style
@@ -62,3 +66,40 @@ def test_the_glossary_runs_inside_the_catalog_check(tmp_path):
                                 "src": tool.src_hash(SRC)}) + "\n", encoding="utf-8")
     problems = tool.check_catalogs([SRC], {"de": path}, (), glossaries={"de": {"terms": {}}})
     assert any("/compact" in p for p in problems)
+
+
+def test_only_listed_words_are_exempt(monkeypatch):
+    src = {"k": "kbl.tpl.write_tests", "en": "Write tests", "placeholders": [], "eg": {}}
+    gloss = {"terms": {}}
+    monkeypatch.setattr(tool, "GLOSSARY_EXEMPT", {})
+    assert tool.check_glossary("de", src, "Tests schreiben", gloss)
+    monkeypatch.setattr(tool, "GLOSSARY_EXEMPT",
+                        {"kbl.tpl.write_tests": {"Write": "the ordinary verb"}})
+    assert tool.check_glossary("de", src, "Tests schreiben", gloss) == []
+    # Only that word, only for that key.
+    other = {"k": "toast.y", "en": "Write tests with Bash", "placeholders": [], "eg": {}}
+    assert tool.check_glossary("de", other, "Tests schreiben mit Bash", gloss)
+    both = dict(src, en="Write tests with Bash")
+    assert any("Bash" in p for p in tool.check_glossary("de", both, "Tests schreiben",
+                                                        gloss))
+
+
+def test_a_stale_exemption_fails(monkeypatch):
+    rows = [{"k": "kbl.tpl.write_tests", "en": "Write tests"}]
+    monkeypatch.setattr(tool, "GLOSSARY_EXEMPT",
+                        {"kbl.tpl.write_tests": {"Write": "the ordinary verb"}})
+    assert tool.check_glossary_exemptions(rows) == []
+    assert tool.check_glossary_exemptions([{"k": "kbl.tpl.write_tests", "en": "Add tests"}])
+    assert tool.check_glossary_exemptions([])
+
+
+def test_the_shipped_exemptions_are_current():
+    assert tool.check_glossary_exemptions(tool.load_jsonl(tool.SOURCE)) == []
+
+
+def test_a_placeholder_name_is_not_a_term():
+    src = {"k": "cmd.talk", "en": "Talk to {session}", "placeholders": ["session"], "eg": {}}
+    gloss = {"terms": {"session": ["Sitzung"]}}
+    assert tool.check_glossary("de", src, "Mit {session} sprechen", gloss) == []
+    src = {"k": "cmd.new", "en": "Start a session", "placeholders": [], "eg": {}}
+    assert tool.check_glossary("de", src, "Starten", gloss)

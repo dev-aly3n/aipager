@@ -94,8 +94,10 @@ def test_get_carries_the_app_language(server):
     al = data["app_language"]
     assert al == {
         "title": "App language", "hint": HINT, "value": "auto", "effective": "en",
+        # Phase 2: Russian and Persian are offered (no beta mark here).
         "options": [{"value": "auto", "label": "Automatic (your Telegram language)"},
-                    {"value": "en", "label": "English"}]}
+                    {"value": "en", "label": "English"}, {"value": "ru", "label": "Русский"},
+                    {"value": "fa", "label": "فارسی"}]}
 
 
 def test_a_member_who_is_not_an_admin_may_set_it(server):
@@ -117,7 +119,7 @@ def test_a_member_who_is_not_an_admin_may_set_it(server):
 
 
 @pytest.mark.parametrize("body", [
-    {"value": "fa"}, {"value": "qps"}, {"value": "qps-rtl"}, {"value": "xx"},
+    {"value": "de"}, {"value": "qps"}, {"value": "qps-rtl"}, {"value": "xx"},
     {"value": ""}, {"value": 5}, {}, ["en"], "not json"])
 def test_anything_else_is_a_bad_request(server, body, monkeypatch):
     # Refused by the route itself, before the store's own check.

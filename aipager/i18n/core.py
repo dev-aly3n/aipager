@@ -17,13 +17,25 @@ escaped for its target and is never escaped again. Placeholders are
 form is refused, a missing parameter raises ``KeyError`` and an unused
 one ``ValueError``, so a typo cannot ship silently.
 
-Right-to-left languages (fa, ar) only: every line starts with U+200F,
-each text parameter is wrapped in U+2068...U+2069, and nothing invisible
-is ever placed inside ``<code>``, ``<pre>`` or a tag (a copied command
-must paste clean). Numeric parameters (``int``/``float``, not ``bool``)
-and ``Tr.num``/``Tr.clock`` get the language's own digits there; string
-parameters (session names, versions, paths) never do. English gets none
-of this.
+Right-to-left languages (fa, ar) only: every line starts with U+200F
+(right after a Markdown block marker such as ``# `` or ``- `` when the
+line has one), each text parameter is wrapped in U+2068...U+2069, and
+nothing invisible is ever placed inside ``<code>``, ``<pre>``, a tag, a
+:class:`Span` or a :class:`Command` (a copied command must paste clean).
+Numeric parameters (``int``/``float``, not ``bool``) and
+``Tr.num``/``Tr.clock`` get the language's own digits there (and, through
+``Tr.num``, its thousands separator and percent sign); string parameters
+(session names, versions, paths) never do. English gets none of this.
+
+Two parameter types say what a value is, so it is never broken:
+
+- :class:`Span`: text already formatted for its target (a card's code
+  span, an HTML ``<code>`` fragment built in code). Never escaped, never
+  digit-converted, isolated whole in a right-to-left language.
+- :class:`Command`: a whole slash command or @mention (``/x1``,
+  ``@bob``). Escaped like text, never digit-converted, isolated whole
+  while :data:`ISOLATE_COMMANDS` is on, so no mark ever lands between the
+  ``/`` and the name.
 
 The ``Tr`` is always passed explicitly, never through a context variable,
 so a task started in one chat can never carry its language to another.
@@ -44,7 +56,8 @@ from aipager.i18n import plurals as _plurals
 
 log = logging.getLogger(__name__)
 
-__all__ = ["Msg", "NEVER_TRANSLATE", "Plural", "Safe", "Tr", "get", "pseudo"]
+__all__ = ["Command", "ISOLATE_COMMANDS", "Msg", "NEVER_TRANSLATE", "Plural", "Safe",
+           "Span", "Tr", "get", "pseudo"]
 
 KEY_RE = re.compile(r"^[a-z0-9_]+(\.[a-z0-9_]+)+$")
 
@@ -114,6 +127,38 @@ class Plural:
 class Safe(str):
     """Text already escaped for its target. Never escaped or isolated
     again when used as a parameter."""
+
+
+class Span(str):
+    """A piece already formatted for its target and kept whole: a card's
+    code span (``animation._mono(...)``) or an HTML ``<code>`` fragment
+    built in code. Never escaped and never digit-converted; in a
+    right-to-left language wrapped in U+2068...U+2069 as a whole when it
+    sits outside a tag or code element, so nothing invisible ever lands
+    inside it."""
+
+
+class Command(str):
+    """A whole slash command or @mention (``"/x1"``, ``"@bob"``). Escaped
+    for the output like any text, never digit-converted, and in a
+    right-to-left language isolated as ONE unit while
+    :data:`ISOLATE_COMMANDS` is on. Patterns never glue a ``/`` or ``@``
+    to a placeholder (``check`` refuses ``/{x}`` and ``@{x}``), so the
+    mark can never split a command."""
+
+
+#: Whether a :class:`Command` is wrapped in U+2068...U+2069 in a
+#: right-to-left language. The one switch to turn off if a Telegram app
+#: stops treating ``/x1`` next to an isolate as a tappable command
+#: (multilingual design 5.7, rule 7).
+ISOLATE_COMMANDS = True
+
+#: A Markdown block marker at a line start. A right-to-left line that
+#: starts with one gets its mark right AFTER the marker: the paragraph's
+#: direction comes from its first strong character, and the marker must
+#: stay first or the heading, quote or list item is lost.
+_BLOCK_MARKER_AFTER_RLM = re.compile(
+    "(?m)^\u200f(#{1,6} |> |[-*+] |[0-9]{1,9}\\. )")
 
 
 # ---- placeholders -------------------------------------------------------
@@ -225,6 +270,13 @@ class Tr:
     def __repr__(self) -> str:
         return f"<Tr {self.code}>"
 
+    @property
+    def mark(self) -> str:
+        """U+200F in a right-to-left language, else ``""``: for a line
+        built in code from pieces (a /status details line) whose first
+        piece is a name, so the line still reads right to left."""
+        return _LRM_RTL if self.rtl else ""
+
     # -- lookup -----------------------------------------------------------
 
     def _pattern(self, key: str, english: str) -> str:
@@ -253,10 +305,15 @@ class Tr:
         table = _DIGITS.get(self._loc.digits)
         if table is None:
             return text
-        return text.replace(".", self._loc.decimal).translate(table)
+        loc = self._loc
+        return (text.replace(".", loc.decimal).replace(",", loc.group)
+                .replace("%", loc.percent).translate(table))
 
     def num(self, value) -> str:
-        """A number in this language's digits (``1.5`` -> ``۱٫۵`` in fa)."""
+        """A number in this language's digits (``1.5`` -> ``۱٫۵`` in fa).
+        A string keeps its own shape: ``"$1,234.50"`` -> ``$۱٬۲۳۴٫۵۰``
+        and ``"45%"`` -> ``۴۵٪`` in fa, unchanged in a language written
+        with 0-9."""
         if isinstance(value, float) and math.isfinite(value) and value.is_integer():
             text = str(int(value)) if abs(value) < 1e16 else str(value)
         else:
@@ -299,6 +356,13 @@ class Tr:
                 continue
             value = params[piece[0]]
             numeric = (isinstance(value, (int, float)) and not isinstance(value, bool))
+            if isinstance(value, (Span, Command)):
+                text = str(value) if isinstance(value, Span) else _escape(kind, str(value))
+                whole = isinstance(value, Span) or ISOLATE_COMMANDS
+                if rtl and whole and scan.plain:
+                    text = _FSI + text + _PDI
+                out.append(text)
+                continue
             if isinstance(value, Safe):
                 out.append(str(value))
                 continue
@@ -321,7 +385,10 @@ class Tr:
                         out[-1] = prev[:m.start()] + _FSI + prev[m.start():]
                         close_after_tag = True
             out.append(text)
-        return "".join(out)
+        text = "".join(out)
+        if rtl:
+            text = _BLOCK_MARKER_AFTER_RLM.sub("\\1" + _LRM_RTL, text)
+        return text
 
     def _render(self, kind: str, msg_or_key, english, params: dict):
         key, eng = self._key_english(msg_or_key, english)

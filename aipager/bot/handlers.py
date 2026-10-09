@@ -38,6 +38,7 @@ from aipager.dtach import inject
 
 from aipager import statusline_file
 from aipager import i18n
+from aipager.bot.mode_labels import mode_from_word
 from aipager.bot import (
     card_owner,
     group_intake,
@@ -57,7 +58,6 @@ from aipager.bot.session_ops import (
 )
 from aipager.bot.settings_menu import render_settings_root
 from aipager.config import (
-    APP_BUTTON,
     FILE_DOWNLOAD_DIR, KEYBOARD_PARENTS,
 )
 from aipager.state import QUEUE_CAP, Status, TrackedSession
@@ -630,7 +630,9 @@ class CommandHandlersMixin:
             label = f"<b>{html_mod.escape(target.label)}</b>"
             next_line = group_intake.talk_hint(
                 self, chat_id, label, dm=f"✍️ Messages go to {label}.")
-        elif listing.startswith("📊"):
+        elif self._status_sessions(chat_id)[0]:
+            # Live sessions listed (decided from the sessions, never from
+            # the listing's words, which follow the chat's language).
             next_line = "Tap a session on the keyboard to talk to it."
         else:
             next_line = "Start one with /new."
@@ -639,6 +641,11 @@ class CommandHandlersMixin:
             f"{listing}\n\n{next_line}\n\n"
             "<i>/help shows everything you can do.</i>"
         )
+        # The first-contact line (multilingual design 7.1): off while
+        # Telegram-language detection is (locales.AUTO_DETECT), so empty.
+        first = language_menu.first_contact_line(i18n.for_update(update), chat_id)
+        if first:
+            text = f"{first}\n\n{text}"
         # No inline App row: the keyboard sent right after carries 📱 App
         # (see _app_button_row). Resume only with something to resume, or
         # the tap would swap this screen for one line and no buttons.
@@ -692,7 +699,8 @@ class CommandHandlersMixin:
         url = getattr(self, "_miniapp_url", "")
         if not url:
             return []
-        return [[InlineKeyboardButton(APP_BUTTON, web_app=WebAppInfo(url=url))]]
+        label = i18n.for_chat(getattr(chat, "id", None)).text(kbwords.KB_APP)
+        return [[InlineKeyboardButton(label, web_app=WebAppInfo(url=url))]]
 
     async def _handle_settings_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /settings — open the root preferences menu.
@@ -1162,8 +1170,12 @@ class CommandHandlersMixin:
         chat_id = calling_chat_id(update)
         want = label = None
         for word in update.message.text.split()[1:]:
-            if want is None and word.lower() in ("ask", "auto"):
-                want = word.lower()
+            # `ask` / `auto`, or the mode's word in any enabled language
+            # (never a session name: those are ASCII). Stored and sent:
+            # the id.
+            mode = mode_from_word(word) if want is None else None
+            if mode is not None:
+                want = mode
             elif label is None:
                 label = word.lstrip("/")
             else:
@@ -1620,7 +1632,11 @@ class CommandHandlersMixin:
         # Quick template buttons inject their prompt into the active
         # session; Claude Code slash commands and model choices are sent
         # instantly, with no BUSY transition.
-        custom = kbwords.custom_action(self, text) if keyboard_words else None
+        # A default label in English or this chat's language only (the
+        # language its keyboard is drawn in): a translated "Clear" runs
+        # /clear, so another language's word stays a message for Claude.
+        custom = (kbwords.custom_action(self, text, i18n.for_chat(kb_chat).code)
+                  if keyboard_words else None)
         if custom is not None:
             kind, payload = custom
             if kind == "tpl":

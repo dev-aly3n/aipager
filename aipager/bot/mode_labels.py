@@ -24,6 +24,26 @@ MODE_ASK_FOR_YOU = Msg("mode.ask_for_you", "💬 Ask for you (🤖 Auto is for a
                        note="The mode a member who is not an admin gets on /new")
 
 
+def mode_from_word(word: str) -> str | None:
+    """``"ask"`` or ``"auto"`` for a word typed after ``/mode``: the ids
+    themselves (any case), or the mode's shown word in any enabled
+    language with its emoji and invisible marks dropped (``خودکار``,
+    ``авто``); None for anything else, a session name included (session
+    names are ASCII, and no mode word may be one, check 10)."""
+    if not isinstance(word, str):
+        return None
+    if word.lower() in ("ask", "auto"):
+        return word.lower()
+    from aipager.bot import kbwords
+    typed = kbwords.mode_word(word)
+    if not typed:
+        return None
+    for mode, msg in (("ask", MODE_ASK), ("auto", MODE_AUTO)):
+        if any(typed == kbwords.mode_word(label) for label in kbwords._labels(msg)):
+            return mode
+    return None
+
+
 def mode_label(auto: bool) -> Msg:
     """``MODE_AUTO`` or ``MODE_ASK``."""
     return MODE_AUTO if auto else MODE_ASK

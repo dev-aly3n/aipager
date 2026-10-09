@@ -2,8 +2,9 @@
 
 ``LOCALES`` holds the 15 languages of the multilingual design, each with
 its own name (the endonym, never translated), its direction and its
-digits. Only English is enabled: the others exist so the machinery can
-be built and checked before any translation ships.
+digits. English, Russian and Persian are enabled (the last two as beta);
+the others exist so the machinery can be built and checked before their
+translation ships.
 
 ``PSEUDO`` holds two fake languages for tests and tooling (``qps`` and
 its right-to-left twin ``qps-rtl``). They are reachable through
@@ -18,7 +19,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-__all__ = ["LOCALES", "Locale", "enabled_codes", "is_selectable", "normalize"]
+__all__ = ["AUTO_DETECT", "LOCALES", "Locale", "detect", "enabled_codes", "is_selectable",
+           "normalize"]
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,10 @@ class Locale:
     #: CLDR numbering system: "latn" (0-9), "arabext" (fa), "arab" (ar).
     digits: str = "latn"
     decimal: str = "."
+    #: The thousands separator and percent sign ``Tr.num`` writes into a
+    #: number already formatted as a string (native digits only).
+    group: str = ","
+    percent: str = "%"
     enabled: bool = False
     #: "stable" once reviewed, "beta" before, "" while not translated.
     quality: str = ""
@@ -41,20 +47,21 @@ LOCALES: dict[str, Locale] = {loc.code: loc for loc in (
     Locale("en", "English", "English", enabled=True, quality="stable",
            telegram_code="en"),
     Locale("es", "Español", "Spanish", telegram_code="es"),
-    Locale("ru", "Русский", "Russian", telegram_code="ru"),
+    # Phase 2: offered as beta (translated, not reviewed yet).
+    Locale("ru", "Русский", "Russian", enabled=True, quality="beta", telegram_code="ru"),
     Locale("pt-BR", "Português (Brasil)", "Portuguese (Brazil)", telegram_code="pt"),
     Locale("zh-Hans", "简体中文", "Chinese (Simplified)", telegram_code="zh"),
     Locale("fr", "Français", "French", telegram_code="fr"),
     Locale("de", "Deutsch", "German", telegram_code="de"),
     Locale("ko", "한국어", "Korean", telegram_code="ko"),
     Locale("ar", "العربية", "Arabic", rtl=True, digits="arab", decimal="٫",
-           telegram_code="ar"),
+           group="٬", percent="٪", telegram_code="ar"),
     Locale("id", "Bahasa Indonesia", "Indonesian", telegram_code="id"),
     Locale("uk", "Українська", "Ukrainian", telegram_code="uk"),
     Locale("it", "Italiano", "Italian", telegram_code="it"),
     Locale("tr", "Türkçe", "Turkish", telegram_code="tr"),
     Locale("fa", "فارسی", "Persian", rtl=True, digits="arabext", decimal="٫",
-           telegram_code="fa"),
+           group="٬", percent="٪", enabled=True, quality="beta", telegram_code="fa"),
     Locale("vi", "Tiếng Việt", "Vietnamese", telegram_code="vi"),
 )}
 
@@ -66,6 +73,14 @@ PSEUDO: dict[str, Locale] = {loc.code: loc for loc in (
 #: Codes a test has switched on. Tests monkeypatch this; nothing else
 #: writes it.
 _TEST_ENABLED: frozenset[str] = frozenset()
+
+#: Whether aipager follows a person's Telegram language for a chat that
+#: did not choose one (the DM default, background messages, the Mini App
+#: viewer). Off while every chat that already exists stays English until
+#: its people choose (decision 1.2): a language can be picked in
+#: /language without anyone being switched to it. The one switch phase 5
+#: flips, with the upgrade offer.
+AUTO_DETECT: bool = False
 
 # Telegram's language_code spellings that are not our codes.
 _ALIASES = {
@@ -128,4 +143,17 @@ def normalize(language_code: object) -> str | None:
         code = _ours(cand)
         if code:
             return code
+    return None
+
+
+def detect(language_code: object) -> str | None:
+    """The language to follow for a Telegram ``language_code`` when the
+    chat did not choose: English for an English app; any enabled language
+    only while :data:`AUTO_DETECT` is on (or a test switched that code on
+    through ``_TEST_ENABLED``); else None, which reads as English."""
+    code = normalize(language_code)
+    if code is None:
+        return None
+    if code == "en" or AUTO_DETECT or code in _TEST_ENABLED:
+        return code
     return None

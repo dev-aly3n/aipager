@@ -58,7 +58,22 @@ INVALID_CALLBACK = Msg("toast.invalid_callback", "Invalid callback",
 ADMIN_ONLY = Msg("toast.settings_admin_only", "Only an admin can change settings in this group.",
                  note="Alert: a member who is not an admin tapped a group setting")
 
+BETA = Msg("lang.beta", "{language} (beta)",
+           note="A language in the list whose translation is new and not reviewed yet; "
+                "{language} is its own name", eg={"language": "English"})
+FIRST_CONTACT = Msg(
+    "lang.first_contact",
+    "🌐 aipager speaks {language} here (only its own messages; Claude answers in the "
+    "language you write). Change with /language",
+    note="Once, in a new private chat that follows the person's Telegram language: "
+         "which language aipager uses, that Claude is not affected, and how to change it",
+    eg={"language": "English"})
+
 AUTO_TOKEN = "auto"
+
+#: Private chats that got the first-contact line in this run (memory only:
+#: at most once per chat per daemon run).
+_FIRST_CONTACT_SHOWN: set[int] = set()
 
 
 def endonym(code: str) -> str:
@@ -88,7 +103,13 @@ def render_language_menu(tr: Tr, *, private: bool, current: str
     tokens = ([AUTO_TOKEN] if private else []) + list(enabled_codes())
     rows = []
     for token in tokens:
-        label = tr.text(AUTO) if token == AUTO_TOKEN else endonym(token)
+        if token == AUTO_TOKEN:
+            label = tr.text(AUTO)
+        elif (lookup(token) or LOCALES["en"]).quality == "beta":
+            # Not reviewed yet: said in the list, in the viewer's language.
+            label = tr.text(BETA, language=endonym(token))
+        else:
+            label = endonym(token)
         mark = " ✅" if current == token else ""
         rows.append([InlineKeyboardButton(f"{label}{mark}",
                                           callback_data=f"_:set:{section}:{token}")])
@@ -110,3 +131,22 @@ def current_choice(chat_id, *, private: bool) -> str:
         stored = preferences.get_ui_language(chat_id) if chat_id else ""
         return stored if stored and is_selectable(stored) else AUTO_TOKEN
     return i18n.for_chat(chat_id).code
+
+
+def first_contact_line(tr: Tr, chat_id) -> str:
+    """The 7.1 line (HTML) for a private chat that follows its person's
+    Telegram language, once per chat per daemon run; ``""`` while
+    ``locales.AUTO_DETECT`` is off, in a group, once a language is stored
+    for the chat, or when the language is English."""
+    from aipager import preferences
+    from aipager.i18n import locales
+    if not locales.AUTO_DETECT:
+        return ""
+    if not isinstance(chat_id, int) or chat_id <= 0:
+        return ""
+    if preferences.get_ui_language(chat_id):
+        return ""
+    if tr.code == "en" or chat_id in _FIRST_CONTACT_SHOWN:
+        return ""
+    _FIRST_CONTACT_SHOWN.add(chat_id)
+    return tr.html(FIRST_CONTACT, language=endonym(tr.code))

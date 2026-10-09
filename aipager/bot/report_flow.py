@@ -56,6 +56,7 @@ from aipager.bot.transport import (
     edit_text_at,
     send_text,
 )
+from aipager.i18n import Msg
 from aipager.report import wording
 
 if TYPE_CHECKING:
@@ -120,18 +121,34 @@ REPORT_BUTTON = "🐞 Report a problem"
 REPORT_THIS_BUTTON = "🐞 Report this"
 
 # /settings (owner DM only)
-SETTINGS_TITLE = "🐞 <b>Problem reports</b>"
-SETTINGS_INTRO = (
+SETTINGS_TITLE = Msg("set.text.reports_title", "🐞 <b>Problem reports</b>",
+                     note="/settings > Problem reports: the page's title")
+SETTINGS_INTRO = Msg(
+    "set.text.reports_intro",
     "When aipager hits the same internal error more than once, it can offer "
     "to send a report. You always see the report first, and nothing is sent "
     "unless you tap Send.\n\n"
     "Ask me: offer it now and then (at most once in 3 days).\n"
-    "Off: never offer. Report a problem in /help always works."
-)
-SETTINGS_AUTO_OFF = "Automatic offers: off (you said no to two offers in a row)."
-SETTINGS_ENV_OFF = "Offers are also off on this machine through AIPAGER_REPORT_PROMPTS=0."
-SETTINGS_ROW_LABELS = {"ask": "Ask me", "off": "Off", "auto_off": "offers off"}
-TURN_ON_BUTTON = "Turn offers back on"
+    "Off: never offer. Report a problem in /help always works.",
+    note="/settings > Problem reports. 'Send' is the report card's button; 'Ask me' "
+         "and 'Off' are this page's two buttons; 'Report a problem' is a /help button: "
+         "use the same words as those keys")
+SETTINGS_AUTO_OFF = Msg("set.text.reports_auto_off",
+                        "Automatic offers: off (you said no to two offers in a row).",
+                        note="/settings > Problem reports, when offers stopped by themselves")
+SETTINGS_ENV_OFF = Msg("set.text.reports_env_off",
+                       "Offers are also off on this machine through AIPAGER_REPORT_PROMPTS=0.",
+                       note="/settings > Problem reports: an environment variable turned "
+                            "offers off; keep AIPAGER_REPORT_PROMPTS=0 as it is")
+SETTINGS_ROW_LABELS = {
+    "ask": Msg("set.opt.reports.ask", "Ask me",
+               note="Problem reports option: aipager may offer to send a report"),
+    "off": Msg("set.opt.reports.off", "Off", note="Problem reports option: never offer"),
+    "auto_off": Msg("set.opt.reports.auto_off", "offers off",
+                    note="Problem reports value: offers stopped after two refusals"),
+}
+TURN_ON_BUTTON = Msg("set.btn.reports_turn_on", "Turn offers back on",
+                     note="Problem reports button: offer reports again")
 
 #: Every status line a preview card can carry: the inline form keeps room
 #: for the longest, so a status never pushes a card over Telegram's limit.
@@ -904,26 +921,31 @@ def settings_row_state(bot: "TelegramBot", chat_id, user_id) -> str | None:
     return SETTINGS_ROW_LABELS["ask"]
 
 
-def render_settings_section() -> tuple[str, InlineKeyboardMarkup]:
-    """The Problem reports page of /settings."""
-    from aipager import preferences
+def render_settings_section(tr=None) -> tuple[str, InlineKeyboardMarkup]:
+    """The Problem reports page of /settings, in *tr*'s language (the
+    owner's private chat; English when None)."""
+    from aipager import i18n, preferences
+    from aipager.bot import language_menu
     from aipager.report import store
 
+    tr = tr or i18n.get("en")
     current = preferences.get_problem_reports()
     auto_off = store.policy_state().auto_off
-    lines = [SETTINGS_TITLE, _esc(SETTINGS_INTRO)]
+    lines = [tr.html(SETTINGS_TITLE), tr.html(SETTINGS_INTRO)]
     if auto_off:
-        lines.append(_esc(SETTINGS_AUTO_OFF))
+        lines.append(tr.html(SETTINGS_AUTO_OFF))
     if _env_off():
-        lines.append(_esc(SETTINGS_ENV_OFF))
+        lines.append(tr.html(SETTINGS_ENV_OFF))
     def _label(value: str) -> str:
-        return SETTINGS_ROW_LABELS[value] + (" ✅" if value == current else "")
+        return tr.text(SETTINGS_ROW_LABELS[value]) + (" ✅" if value == current else "")
 
     rows = [[InlineKeyboardButton(_label("ask"), callback_data="_:rp:set:ask")],
             [InlineKeyboardButton(_label("off"), callback_data="_:rp:set:off")]]
     if auto_off:
-        rows.append([InlineKeyboardButton(TURN_ON_BUTTON, callback_data="_:rp:set:on")])
-    rows.append([InlineKeyboardButton("« Back", callback_data="_:set:back")])
+        rows.append([InlineKeyboardButton(tr.text(TURN_ON_BUTTON),
+                                          callback_data="_:rp:set:on")])
+    rows.append([InlineKeyboardButton(tr.text(language_menu.BACK),
+                                      callback_data="_:set:back")])
     return "\n\n".join(lines), InlineKeyboardMarkup(rows)
 
 
@@ -940,7 +962,9 @@ async def _tap_settings(bot: "TelegramBot", query, parts: list[str]) -> None:
         else:
             await bot._safe_answer(query, INVALID_TEXT)
             return
-    text, kb = render_settings_section()
+    from aipager import i18n
+    text, kb = render_settings_section(
+        i18n.for_chat(_message_chat_id(getattr(query, "message", None))))
     try:
         await edit_text(query, text, parse_mode="HTML", reply_markup=kb,
                         rate_limit_args=_INSTANT)

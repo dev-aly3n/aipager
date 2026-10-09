@@ -4,31 +4,91 @@
   "commit",
   "token",
   "diff",
-  "log"
+  "log",
+  "ctx"
  ],
  "language": "Persian",
  "terms": {
-  "admin": "",
-  "agent": "",
-  "allow": "",
-  "background": "",
-  "card": "",
-  "chat": "",
-  "deny": "",
-  "folder": "",
-  "group": "",
-  "member": "",
-  "model": "",
-  "owner": "",
-  "permission": "",
-  "prompt": "",
-  "question": "",
-  "queue": "",
-  "resume": "",
-  "session": "",
-  "settings": "",
-  "stop": "",
-  "turn": "",
-  "update": ""
+  "admin": [
+   "مدیر",
+   "ادمین"
+  ],
+  "agent": [
+   "ایجنت"
+  ],
+  "allow": [
+   "اجازه"
+  ],
+  "background": [
+   "پس‌زمینه",
+   "پس زمینه",
+   "پسزمینه"
+  ],
+  "card": [
+   "کارت"
+  ],
+  "chat": [
+   "چت",
+   "گفتگو",
+   "گفت‌وگو"
+  ],
+  "deny": [
+   "رد"
+  ],
+  "folder": [
+   "پوشه"
+  ],
+  "group": [
+   "گروه"
+  ],
+  "member": [
+   "عضو",
+   "اعضا"
+  ],
+  "model": [
+   "مدل"
+  ],
+  "owner": [
+   "مالک"
+  ],
+  "permission": [
+   "مجوز",
+   "اجازه"
+  ],
+  "prompt": [
+   "درخواست",
+   "پرسش"
+  ],
+  "question": [
+   "سؤال",
+   "سوال",
+   "پرسش"
+  ],
+  "queue": [
+   "صف"
+  ],
+  "resume": [
+   "ادامه",
+   "/resume"
+  ],
+  "session": [
+   "نشست"
+  ],
+  "settings": [
+   "تنظیمات",
+   "/settings"
+  ],
+  "stop": [
+   "توقف",
+   "/stop"
+  ],
+  "turn": [
+   "نوبت"
+  ],
+  "update": [
+   "به‌روز",
+   "به روز",
+   "بهروز"
+  ]
  }
 }

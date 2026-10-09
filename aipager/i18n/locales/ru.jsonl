@@ -1,0 +1,299 @@
+{"k": "agents.count_agents", "src": "263711d4", "v": {"few": "{n} агента", "many": "{n} агентов", "one": "{n} агент", "other": "{n} агента"}}
+{"k": "agents.count_shells", "src": "9b747b65", "v": {"few": "{n} команды", "many": "{n} команд", "one": "{n} команда", "other": "{n} команды"}}
+{"k": "agents.done_many", "src": "192b7df2", "v": "✅ {count}: готово ({clock})"}
+{"k": "agents.done_one", "src": "6caebe28", "v": "✅ {name}: готово ({clock})"}
+{"k": "agents.done_shell", "src": "e3681276", "v": "✅ команда: {name} - готово ({clock})"}
+{"k": "agents.names_more", "src": "8150de86", "v": {"few": "{names} и ещё {n}", "many": "{names} и ещё {n}", "one": "{names} и ещё {n}", "other": "{names} и ещё {n}"}}
+{"k": "agents.running", "src": "398a4343", "v": "⏳ {count} ещё в работе ({names}) - результаты придут сюда"}
+{"k": "ans.answered", "src": "7b370125", "v": "✓ <b>{session}</b> · Ответ · {person} · {question} → {option}"}
+{"k": "ans.answered_anon", "src": "602dabe0", "v": "✓ <b>{session}</b> · Ответ · {question} → {option}"}
+{"k": "ans.arrow_verb", "src": "d2539150", "v": "→ {verb}"}
+{"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
+{"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
+{"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ {session} остановлена"}
+{"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {session} остановлена · {person}"}
+{"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"few": "⏹ {session} остановлена · {person} ({n} сообщения из очереди отброшены)", "many": "⏹ {session} остановлена · {person} ({n} сообщений из очереди отброшено)", "one": "⏹ {session} остановлена · {person} ({n} сообщение из очереди отброшено)", "other": "⏹ {session} остановлена · {person} ({n} сообщения из очереди отброшены)"}}
+{"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"few": "⏹ {session} остановлена ({n} сообщения из очереди отброшены)", "many": "⏹ {session} остановлена ({n} сообщений из очереди отброшено)", "one": "⏹ {session} остановлена ({n} сообщение из очереди отброшено)", "other": "⏹ {session} остановлена ({n} сообщения из очереди отброшены)"}}
+{"k": "ans.verb.allow", "src": "77c7b490", "v": "Разрешено"}
+{"k": "ans.verb.allow_always", "src": "141216b0", "v": "Разрешено всегда"}
+{"k": "ans.verb.continue", "src": "0e4aa789", "v": "Продолжено"}
+{"k": "ans.verb.deny", "src": "63b16bd4", "v": "Отклонено"}
+{"k": "ans.verb.option", "src": "7a8b9272", "v": "Выбран вариант {n}"}
+{"k": "ans.verb.selected", "src": "5462eaaf", "v": "Выбрано: {options}"}
+{"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "Отправлено (ничего)"}
+{"k": "app.language.hint", "src": "90e01e41", "v": "Только собственный текст aipager. Ответы Claude не меняются."}
+{"k": "app.language.title", "src": "01e1787a", "v": "Язык приложения"}
+{"k": "btn.settings_back", "src": "a4b7fcb6", "v": "« Назад"}
+{"k": "card.agents", "src": "263711d4", "v": {"few": "{n} агента", "many": "{n} агентов", "one": "{n} агент", "other": "{n} агента"}}
+{"k": "card.agents_typed", "src": "af56f555", "v": {"few": "{n} агента ({types})", "many": "{n} агентов ({types})", "one": "{n} агент ({types})", "other": "{n} агента ({types})"}}
+{"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · Сжатие{dots}"}
+{"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · Отклонено"}
+{"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · Отклонено · {person}"}
+{"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · Отклонено в терминале"}
+{"k": "card.finishing", "src": "1bfd382d", "v": "завершается"}
+{"k": "card.fold", "src": "2061ab43", "v": {"few": "▸ {n} вызова инструментов", "many": "▸ {n} вызовов инструментов", "one": "▸ {n} вызов инструмента", "other": "▸ {n} вызова инструментов"}}
+{"k": "card.legacy.agents", "src": "51aa5e62", "v": {"few": "({n} агента)", "many": "({n} агентов)", "one": "({n} агент)", "other": "({n} агента)"}}
+{"k": "card.legacy.earlier", "src": "7062cc28", "v": {"few": "✅ <i>{n} более ранних инструмента</i>", "many": "✅ <i>{n} более ранних инструментов</i>", "one": "✅ <i>{n} более ранний инструмент</i>", "other": "✅ <i>{n} более ранних инструмента</i>"}}
+{"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.row.agent_done", "src": "d7362ffc", "v": {"few": "🤖 {agent} · {n} вызова инструментов · {clock}", "many": "🤖 {agent} · {n} вызовов инструментов · {clock}", "one": "🤖 {agent} · {n} вызов инструмента · {clock}", "other": "🤖 {agent} · {n} вызова инструментов · {clock}"}}
+{"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
+{"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (ещё работает)"}
+{"k": "card.row.agent_word", "src": "0608c405", "v": "агент"}
+{"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.shell_done", "src": "3b615634", "v": "команда: {label} - готово ({clock})"}
+{"k": "card.row.shell_failed", "src": "3e240f07", "v": "команда: {label} - ошибка ({clock})"}
+{"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "команда: {label} - ошибка (код выхода {code})"}
+{"k": "card.row.shell_live", "src": "6cebf6e9", "v": "команда: {label} ({clock})"}
+{"k": "card.row.shell_lost", "src": "83289e16", "v": "команда: {label} - конец не замечен ({clock})"}
+{"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "команда: {label} (ещё работает)"}
+{"k": "card.row.shell_stopped", "src": "315cab29", "v": "команда: {label} - остановлена ({clock})"}
+{"k": "card.row.starting", "src": "9493af05", "v": "запускается"}
+{"k": "card.shells", "src": "9b747b65", "v": {"few": "{n} команды", "many": "{n} команд", "one": "{n} команда", "other": "{n} команды"}}
+{"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
+{"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Остановлено"}
+{"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · Остановлено · {person}"}
+{"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Остановлено в терминале"}
+{"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · Думает…"}
+{"k": "card.verb.done", "src": "e9b450d1", "v": "Готово"}
+{"k": "card.verb.waiting", "src": "33d30632", "v": "Ждёт"}
+{"k": "card.verb.working", "src": "3b4dfc97", "v": "Работает"}
+{"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
+{"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} ещё в работе"}
+{"k": "cmd.app", "src": "486dfc4e", "v": "Открыть панель Mini App"}
+{"k": "cmd.help", "src": "fb2dbad1", "v": "Что ты можешь сделать"}
+{"k": "cmd.language", "src": "9dc3a234", "v": "Язык сообщений aipager"}
+{"k": "cmd.mode", "src": "b677b7d9", "v": "Авто или Спрашивать"}
+{"k": "cmd.new", "src": "959b093b", "v": "Начать сессию"}
+{"k": "cmd.now", "src": "3673f6f7", "v": "Отправить очередь Claude сейчас"}
+{"k": "cmd.resume", "src": "88f33259", "v": "Возобновить завершённую сессию"}
+{"k": "cmd.settings", "src": "5fdf8e23", "v": "Вид сообщений, формат, новые сессии"}
+{"k": "cmd.status", "src": "b3ddc08d", "v": "Твои сессии"}
+{"k": "cmd.stop", "src": "7c4cbc32", "v": "Остановить то, что делает Claude"}
+{"k": "cmd.talk", "src": "a0173425", "v": "Говорить с {session}"}
+{"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · Завершено (фоновый агент потерян)"}
+{"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · Завершено (фоновый агент потерян через {clock})"}
+{"k": "fin.finished", "src": "6f65069e", "v": "{lead} · Завершено ({stats})"}
+{"k": "fin.finished_bare", "src": "53b60c70", "v": "{lead} · Завершено"}
+{"k": "fin.full_attached", "src": "bcfddfdb", "v": "📎 <i>Полный ответ во вложении ниже ↓</i>"}
+{"k": "fin.lines", "src": "a6f39b46", "v": "+{added} -{removed}"}
+{"k": "fin.shell_lost", "src": "c6c919fb", "v": "⚠️ <b>{session}</b> · Завершено (конец фоновой команды не замечен)"}
+{"k": "fin.shell_lost_after", "src": "4692a050", "v": "⚠️ <b>{session}</b> · Завершено (конец фоновой команды не замечен за {clock})"}
+{"k": "fin.stats", "src": "9160a66c", "v": "{clock}, +{added} -{removed}"}
+{"k": "flood.card_paused", "src": "61a88de1", "v": "⏳ **{session}** · работает (обновления на паузе)"}
+{"k": "flood.card_paused_html", "src": "3815781e", "v": "⏳ <b>{session}</b> · работает (обновления на паузе)"}
+{"k": "flood.paused_hourly", "src": "1be79366", "v": "⏸ обновления карточек на паузе (лимит на час)"}
+{"k": "flood.paused_rate", "src": "57af71ab", "v": "⏸ обновления карточек на паузе (лимит скорости)"}
+{"k": "flood.slow", "src": "fd8f3fd7", "v": "🐢 медленный режим после предупреждения Telegram"}
+{"k": "kb.app", "src": "59b36d46", "v": "📱 Приложение"}
+{"k": "kb.back", "src": "a4b7fcb6", "v": "« Назад"}
+{"k": "kb.commands", "src": "45e5f3f7", "v": "Команды"}
+{"k": "kb.kill", "src": "c80f5bc1", "v": "завершить"}
+{"k": "kb.models", "src": "d068cea1", "v": "Модель ›"}
+{"k": "kb.new", "src": "c2a6b03f", "v": "новая"}
+{"k": "kb.status", "src": "48a3661d", "v": "статус"}
+{"k": "kb.stop", "src": "1b480158", "v": "стоп"}
+{"k": "kb.templates", "src": "f25b700e", "v": "Шаблоны"}
+{"k": "kbl.cmd.clear", "src": "719ea396", "v": "Очистить"}
+{"k": "kbl.cmd.compact", "src": "1df39aa5", "v": "Сжать"}
+{"k": "kbl.cmd.init", "src": "19682bdb", "v": "Инициализация"}
+{"k": "kbl.cmd.plan", "src": "bc0b2aff", "v": "Режим плана"}
+{"k": "kbl.cmd.security_review", "src": "52fab0c7", "v": "Проверка безопасности"}
+{"k": "kbl.tpl.commit", "src": "1a1873ab", "v": "Commit"}
+{"k": "kbl.tpl.continue", "src": "2e026239", "v": "Продолжай"}
+{"k": "kbl.tpl.explain_plan", "src": "8197049c", "v": "Объясни план"}
+{"k": "kbl.tpl.lgtm", "src": "fddf8bc1", "v": "Всё хорошо, выпускай"}
+{"k": "kbl.tpl.run_tests", "src": "fcab481b", "v": "Запусти тесты"}
+{"k": "kbl.tpl.show_diff", "src": "78016e77", "v": "Покажи diff"}
+{"k": "kbl.tpl.update_memory", "src": "cfa5cef7", "v": "Обнови память"}
+{"k": "kbl.tpl.write_tests", "src": "391b1a96", "v": "Напиши тесты"}
+{"k": "kbmsg.commands", "src": "52b6fd5f", "v": "🎛 Команды"}
+{"k": "kbmsg.models", "src": "78548025", "v": "🤖 Модель"}
+{"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 Шаблоны"}
+{"k": "lang.auto", "src": "a66c2e1b", "v": "Автоматически (язык Telegram)"}
+{"k": "lang.beta", "src": "07f92a33", "v": "{language} (бета)"}
+{"k": "lang.changed", "src": "4e8c6791", "v": "✅ Теперь aipager говорит здесь на языке {language}. Твои сессии и ответы Claude не меняются."}
+{"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager говорит здесь на языке {language} (только свои сообщения; Claude отвечает на языке, на котором ты пишешь). Сменить: /language"}
+{"k": "lang.list.group", "src": "9462a94a", "v": "🌐 Язык, который aipager использует для карточек и кнопок этой группы. Сессии Claude не меняются: Claude отвечает на языке, на котором ему пишут."}
+{"k": "lang.list.private", "src": "5d92850b", "v": "🌐 Язык, который aipager использует для своих сообщений и кнопок, здесь и в Mini App. Твои сессии Claude не меняются: Claude отвечает на языке, на котором ты ему пишешь."}
+{"k": "lang.offer.keep", "src": "c383d509", "v": "Оставить английский"}
+{"k": "lang.offer.text", "src": "788b2767", "v": "🌐 Теперь aipager говорит на языке {language}. Это меняет только сообщения и кнопки самого aipager здесь и в Mini App, а не твои сессии Claude: Claude по-прежнему отвечает на языке, на котором ты ему пишешь."}
+{"k": "lang.row", "src": "69fc399f", "v": "🌐 Язык: {language}"}
+{"k": "log.agent", "src": "ff163576", "v": {"few": "- 🤖 {agent} ({clock}, {n} вызова инструментов)", "many": "- 🤖 {agent} ({clock}, {n} вызовов инструментов)", "one": "- 🤖 {agent} ({clock}, {n} вызов инструмента)", "other": "- 🤖 {agent} ({clock}, {n} вызова инструментов)"}}
+{"k": "log.agents", "src": "5db5246b", "v": "## Агенты"}
+{"k": "log.final_answer", "src": "f0ea5fc3", "v": "## Итоговый ответ"}
+{"k": "log.memory", "src": "df926a90", "v": {"few": "_В памяти последние {n} строки инструментов; более старые строки очень долгих ходов могут уже исчезнуть._", "many": "_В памяти последние {n} строк инструментов; более старые строки очень долгих ходов могут уже исчезнуть._", "one": "_В памяти последняя {n} строка инструментов; более старые строки очень долгих ходов могут уже исчезнуть._", "other": "_В памяти последние {n} строки инструментов; более старые строки очень долгих ходов могут уже исчезнуть._"}}
+{"k": "log.title", "src": "2d9e96f5", "v": "# {session} - полный лог"}
+{"k": "mode.ask", "src": "8f9266a6", "v": "💬 Спрашивать"}
+{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 Спрашивать для тебя (🤖 Авто: админы)"}
+{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 Лучше Спрашивать"}
+{"k": "mode.auto", "src": "a9e88621", "v": "🤖 Авто"}
+{"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 Лучше Авто"}
+{"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Здесь есть скрытые символы направления текста, показанные как ⟨U+...⟩. Выполнится может не то, что ты видишь."}
+{"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Разрешить"}
+{"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Разрешать всегда"}
+{"k": "perm.btn.cancel", "src": "d20b1713", "v": "↩️ Отмена"}
+{"k": "perm.btn.compact_now", "src": "73357c1f", "v": "📦 Сжать сейчас"}
+{"k": "perm.btn.default_suffix", "src": "613e7977", "v": "{mode} (по умолчанию)"}
+{"k": "perm.btn.deny", "src": "8b9d9edb", "v": "❌ Отклонить"}
+{"k": "perm.btn.not_now", "src": "f677ca32", "v": "⏳ Не сейчас"}
+{"k": "perm.btn.option", "src": "881fbd74", "v": "Вариант {n}"}
+{"k": "perm.btn.retry", "src": "fabc7541", "v": "🔄 Повторить"}
+{"k": "perm.btn.stop", "src": "e3f8b9ee", "v": "⏹ Стоп"}
+{"k": "perm.btn.stop_plain", "src": "9e253470", "v": "Стоп"}
+{"k": "perm.btn.stop_switch", "src": "bc469329", "v": "🛑 Стоп и сменить"}
+{"k": "perm.btn.submit", "src": "c685950d", "v": "✅ Отправить"}
+{"k": "perm.btn.yes_switch", "src": "9f6e4eb9", "v": "✅ Да, сменить"}
+{"k": "perm.loading", "src": "253222ec", "v": "{tool} (загрузка…)"}
+{"k": "perm.needed", "src": "7c7a8e5c", "v": "Нужно разрешение"}
+{"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · Нужен выбор"}
+{"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · Нет вопросов"}
+{"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · Нужно разрешение"}
+{"k": "pin.btn.answer", "src": "24c3485a", "v": "Ответить {session}"}
+{"k": "pin.count.idle", "src": "6abeefbf", "v": {"few": "{n} простаивают", "many": "{n} простаивают", "one": "{n} простаивает", "other": "{n} простаивают"}}
+{"k": "pin.count.starting", "src": "836f5c27", "v": {"few": "{n} запускаются", "many": "{n} запускаются", "one": "{n} запускается", "other": "{n} запускаются"}}
+{"k": "pin.count.working", "src": "c3aee490", "v": {"few": "{n} работают", "many": "{n} работают", "one": "{n} работает", "other": "{n} работают"}}
+{"k": "pin.first.all_idle", "src": "195ea8a9", "v": "💤 все простаивают"}
+{"k": "pin.first.counts", "src": "b5d804ae", "v": "{glyph} {counts}"}
+{"k": "pin.first.single", "src": "5674b34c", "v": "{glyph} {session} {state}"}
+{"k": "pin.first.waiting", "src": "7fa7cc46", "v": "⏳ {session} ждёт тебя"}
+{"k": "pin.line", "src": "de9ddb7a", "v": "• <b>{session}</b> {state}"}
+{"k": "pin.more", "src": "66adc298", "v": {"few": "(+ещё {n})", "many": "(+ещё {n})", "one": "(+ещё {n})", "other": "(+ещё {n})"}}
+{"k": "pin.needs_input", "src": "9a9d6640", "v": "Нужен выбор"}
+{"k": "pin.paren", "src": "d52abc3c", "v": "({running})"}
+{"k": "pin.running_agents", "src": "712d4c75", "v": {"few": "{n} агента работают", "many": "{n} агентов работают", "one": "{n} агент работает", "other": "{n} агента работают"}}
+{"k": "pin.running_both", "src": "48ac24f8", "v": "{agents}, {shells} работают"}
+{"k": "pin.running_shells", "src": "af023360", "v": {"few": "{n} команды работают", "many": "{n} команд работают", "one": "{n} команда работает", "other": "{n} команды работают"}}
+{"k": "pin.state", "src": "845c40c2", "v": "({state})"}
+{"k": "pin.state.idle", "src": "1adbcc34", "v": "простаивает"}
+{"k": "pin.state.needs_you", "src": "19622ace", "v": "ждёт тебя"}
+{"k": "pin.state.starting", "src": "9493af05", "v": "запускается"}
+{"k": "pin.state.working", "src": "8178ea20", "v": "работает"}
+{"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
+{"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
+{"k": "pin.target", "src": "c9c5350f", "v": "✍️ Сообщения идут в <b>{session}</b>"}
+{"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Закрыть"}
+{"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Новые сессии"}
+{"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 Папка: {folder} ›"}
+{"k": "set.btn.ns_model", "src": "6fb2e9a4", "v": "🧠 Модель: {model} ›"}
+{"k": "set.btn.per_session", "src": "9748363d", "v": "👤 Настройки сессий"}
+{"k": "set.btn.problem_reports", "src": "2478212a", "v": "🐞 Отчёты о проблемах: {value}"}
+{"k": "set.btn.reports_turn_on", "src": "8b383496", "v": "Снова включить предложения"}
+{"k": "set.btn.use_chat_default", "src": "55c966bc", "v": "↩️ Как в чате"}
+{"k": "set.cadence.title", "src": "ed8a634b", "v": "⏱ Обновление карточки в долгом ходе"}
+{"k": "set.diffs.title", "src": "9f74873f", "v": "📝 Предпросмотр diff"}
+{"k": "set.formatting.title", "src": "6b0a66a0", "v": "✏️ Простое оформление"}
+{"k": "set.help.cadence.off", "src": "71965ae1", "v": "Карточка обновляется в одном темпе весь ход, сколько бы он ни длился."}
+{"k": "set.help.cadence.on", "src": "cb462e4f", "v": "Чем дольше ход, тем реже обновляется карточка (каждые 10 с после 2 мин, каждые 30 с после 10 мин), а её часы шагают по 30 с и не выглядят зависшими. Смена состояния видна сразу."}
+{"k": "set.help.diffs.off", "src": "e9b93bde", "v": "Правки файлов видны только строками в рабочей карточке."}
+{"k": "set.help.diffs.on", "src": "1ad75bf3", "v": "Каждый Write/Edit также приходит отдельным сообщением с diff под рабочей карточкой."}
+{"k": "set.help.formatting.off", "src": "14016cc5", "v": "Claude оформляет ответы как хочет."}
+{"k": "set.help.formatting.on", "src": "13c31447", "v": "Только простой текст и списки через дефис - без таблиц и блоков кода."}
+{"k": "set.help.layout.card", "src": "75971a73", "v": "Рабочая карточка остаётся, ответ приходит отдельным сообщением."}
+{"k": "set.help.layout.merged", "src": "cb79a1a7", "v": "Ответ заменяет текст рабочей карточки на месте."}
+{"k": "set.help.layout.replace", "src": "7802aaf9", "v": "Рабочая карточка заменяется одним ответом."}
+{"k": "set.help.length.long", "src": "6d4be59e", "v": "Все подробности, когда ответу они нужны."}
+{"k": "set.help.length.medium", "src": "1f258598", "v": "Пара абзацев."}
+{"k": "set.help.length.none", "src": "c889d841", "v": "Никаких указаний о длине."}
+{"k": "set.help.length.short", "src": "c4b9b1e2", "v": "Несколько предложений."}
+{"k": "set.help.length.xshort", "src": "b3629257", "v": "Одно-два предложения. Без вступления и итогов."}
+{"k": "set.help.level.advanced", "src": "820e1448", "v": "Для знающих; без разжёвывания."}
+{"k": "set.help.level.none", "src": "643f8019", "v": "Никаких указаний о словах."}
+{"k": "set.help.level.normal", "src": "530e152e", "v": "Обычный технический текст."}
+{"k": "set.help.level.simple", "src": "748c89ff", "v": "Повседневные слова, короткие предложения."}
+{"k": "set.layout.title", "src": "415df682", "v": "🖼 Вид сообщений"}
+{"k": "set.length.title", "src": "0b4f4428", "v": "📏 Длина ответа"}
+{"k": "set.level.title", "src": "4e19b762", "v": "🎓 Уровень словаря"}
+{"k": "set.opt.cadence.off", "src": "b44b98a6", "v": "Выкл - один темп весь ход"}
+{"k": "set.opt.cadence.on", "src": "3843eb22", "v": "Вкл - реже в долгом ходе"}
+{"k": "set.opt.chat_default", "src": "58286063", "v": "{option} (как в чате)"}
+{"k": "set.opt.diffs.off", "src": "64a190d9", "v": "Выкл - только рабочая карточка"}
+{"k": "set.opt.diffs.on", "src": "3c616425", "v": "Вкл - diff на каждую правку"}
+{"k": "set.opt.formatting.off", "src": "a779e619", "v": "Выкл - обычное оформление"}
+{"k": "set.opt.formatting.on", "src": "4321e58a", "v": "Вкл - только простой текст"}
+{"k": "set.opt.layout.card", "src": "cb54ae30", "v": "Рабочая карточка + результат"}
+{"k": "set.opt.layout.merged", "src": "732da229", "v": "Ответ в рабочем сообщении"}
+{"k": "set.opt.layout.replace", "src": "1f8e1a41", "v": "Заменить результатом"}
+{"k": "set.opt.length.long", "src": "11eda67f", "v": "Длинный"}
+{"k": "set.opt.length.medium", "src": "d404968e", "v": "Средний"}
+{"k": "set.opt.length.none", "src": "e6752500", "v": "Без правил"}
+{"k": "set.opt.length.short", "src": "0fe7d82f", "v": "Короткий"}
+{"k": "set.opt.length.xshort", "src": "e937255b", "v": "Очень короткий"}
+{"k": "set.opt.level.advanced", "src": "4d064726", "v": "Продвинутый"}
+{"k": "set.opt.level.none", "src": "e6752500", "v": "Без правил"}
+{"k": "set.opt.level.normal", "src": "45e118d0", "v": "Обычный"}
+{"k": "set.opt.level.simple", "src": "0406a446", "v": "Простые слова"}
+{"k": "set.opt.ns_default_folder", "src": "56d18a09", "v": "Папка по умолчанию"}
+{"k": "set.opt.ns_default_model", "src": "5fbae11e", "v": "Модель по умолчанию"}
+{"k": "set.opt.ns_older_model", "src": "3e0492cf", "v": "{model} (старая модель)"}
+{"k": "set.opt.reports.ask", "src": "10a8fd63", "v": "Спрашивать меня"}
+{"k": "set.opt.reports.auto_off", "src": "7e82eed6", "v": "предложения выкл"}
+{"k": "set.opt.reports.off", "src": "e3de5ab0", "v": "Выкл"}
+{"k": "set.text.changed_by", "src": "63c7cabd", "v": "<i>Изменено: {person}.</i>"}
+{"k": "set.text.closed", "src": "731152a0", "v": "Закрыто."}
+{"k": "set.text.intro.cadence", "src": "c2f74acd", "v": "Как часто обновляется рабочая карточка во время ДОЛГОГО хода. Вкл: с возрастом хода она обновляется реже, а её часы шагают по 30 с, и активный чат остаётся далеко в пределах лимитов Telegram. Выкл: темп первых минут на весь ход."}
+{"k": "set.text.intro.diffs", "src": "7a426bb1", "v": "Присылать ли каждую правку файла отдельным сообщением с diff под рабочей карточкой. Выкл: одна рабочая карточка и один ответ - карточка всё равно перечисляет все правки, а в Mini App есть просмотр diff."}
+{"k": "set.text.intro.formatting", "src": "71988826", "v": "Если ВКЛ, ответы только из простого текста и простых списков через дефис - без таблиц, блоков кода, заголовков, жирного и курсива."}
+{"k": "set.text.intro.layout", "src": "891af1fd", "v": "Как в чате выглядит законченный ход."}
+{"k": "set.text.intro.length", "src": "e64e4857", "v": "Какой длины должны быть ответы Claude."}
+{"k": "set.text.intro.level", "src": "5ca0f466", "v": "Уровень словаря в ответах Claude."}
+{"k": "set.text.ns_folder_title", "src": "f4eab7d6", "v": "📁 <b>Папка для новых сессий</b>"}
+{"k": "set.text.ns_model_title", "src": "386d1055", "v": "🧠 <b>Модель для новых сессий</b>"}
+{"k": "set.text.ns_root", "src": "04b79bd3", "v": "🆕 <b>Новые сессии</b>\n\nС чем /new начинает сессию. Для одной сессии это можно поменять на её карточке.\n\nРежим: {mode}\nМодель: {model}\nПапка: {folder}"}
+{"k": "set.text.reports_auto_off", "src": "52adfc5a", "v": "Автоматические предложения: выкл (два предложения подряд отклонены)."}
+{"k": "set.text.reports_env_off", "src": "408411eb", "v": "На этой машине предложения также выключены через AIPAGER_REPORT_PROMPTS=0."}
+{"k": "set.text.reports_intro", "src": "4fe65258", "v": "Если aipager больше одного раза натыкается на одну и ту же внутреннюю ошибку, он может предложить отправить отчёт. Ты всегда сначала видишь отчёт, и ничего не уходит, пока ты не нажмёшь Отправить.\n\nСпрашивать меня: предлагать иногда (не чаще раза в 3 дня).\nВыкл: никогда не предлагать. Сообщить о проблеме в /help работает всегда."}
+{"k": "set.text.reports_title", "src": "036f0be5", "v": "🐞 <b>Отчёты о проблемах</b>"}
+{"k": "set.text.root", "src": "25c10fde", "v": "⚙️ <b>Настройки</b>\n\nНастройки этого чата: как Claude отвечает здесь. Нажми на раздел, чтобы изменить его."}
+{"k": "set.text.row", "src": "b98927cc", "v": "{title}: {value}"}
+{"k": "set.text.spref_field", "src": "53c8e84c", "v": "{title} - для [<b>{session}</b>]\n\n{title} для этой сессии, вместо /settings этого чата, только для неё."}
+{"k": "set.text.spref_none", "src": "3856fe99", "v": "👤 <b>Настройки сессий</b>\n\nСессий пока нет."}
+{"k": "set.text.spref_pick", "src": "fb84677e", "v": "👤 <b>Настройки сессий</b>\n\nВыбери сессию, чтобы задать ей свой стиль ответов."}
+{"k": "set.text.spref_root", "src": "b29b833e", "v": "👤 <b>Настройки сессии - [{session}]</b>\n\nЗадаёт стиль ответов только этой сессии. Незаданные поля берутся из /settings этого чата. ⭐ отмечает поле, заданное для этой сессии."}
+{"k": "status.btn.answer", "src": "a16a4eda", "v": "Ответить"}
+{"k": "status.btn.clear_all", "src": "4944581b", "v": "🧹 Убрать все"}
+{"k": "status.btn.ended", "src": "ae183190", "v": {"few": "⚫ Завершённые ({n})", "many": "⚫ Завершённые ({n})", "one": "⚫ Завершённые ({n})", "other": "⚫ Завершённые ({n})"}}
+{"k": "status.btn.more", "src": "a6bc69aa", "v": "⋮ Ещё"}
+{"k": "status.btn.new", "src": "fb873221", "v": "🆕 Новая"}
+{"k": "status.btn.new_session", "src": "19b62fc4", "v": "🆕 Новая сессия"}
+{"k": "status.ctx", "src": "daeecae8", "v": "ctx {percent}"}
+{"k": "status.ended", "src": "63dbdb7e", "v": {"few": "⚫ <b>Завершённые сессии ({n})</b>\n\nВозобнови одну, удали одну или убери все из /status (в /resume они останутся).", "many": "⚫ <b>Завершённые сессии ({n})</b>\n\nВозобнови одну, удали одну или убери все из /status (в /resume они останутся).", "one": "⚫ <b>Завершённые сессии ({n})</b>\n\nВозобнови одну, удали одну или убери все из /status (в /resume они останутся).", "other": "⚫ <b>Завершённые сессии ({n})</b>\n\nВозобнови одну, удали одну или убери все из /status (в /resume они останутся)."}}
+{"k": "status.ended_shown", "src": "cdde3b66", "v": "Здесь {max} самых новых; в /resume есть все."}
+{"k": "status.head", "src": "570c54fe", "v": "{mark}<b>{session}</b> · {glyph} {state}"}
+{"k": "status.no_ended", "src": "a33a986b", "v": "Завершённых сессий нет."}
+{"k": "status.no_live", "src": "8f779eb2", "v": "Активных сессий нет."}
+{"k": "status.none", "src": "a44ee05c", "v": "Сессий пока нет."}
+{"k": "status.notes", "src": "2e411b05", "v": {"few": "{n} заметки", "many": "{n} заметок", "one": "{n} заметка", "other": "{n} заметки"}}
+{"k": "status.queue", "src": "20f40005", "v": "очередь {total} ({queued}, {notes})"}
+{"k": "status.queued", "src": "45c54388", "v": {"few": "{n} в очереди", "many": "{n} в очереди", "one": "{n} в очереди", "other": "{n} в очереди"}}
+{"k": "status.sessions", "src": "65748ab3", "v": {"few": "📊 <b>Сессии ({n})</b>", "many": "📊 <b>Сессии ({n})</b>", "one": "📊 <b>Сессии ({n})</b>", "other": "📊 <b>Сессии ({n})</b>"}}
+{"k": "status.switch", "src": "52424cce", "v": "✍️ Теперь ты говоришь с <b>{session}</b> · {glyph} {state} · {mode}"}
+{"k": "status.talk_dm", "src": "777be8ce", "v": "Напиши сообщение, и оно уйдёт в {session}."}
+{"k": "status.talk_group", "src": "bdc24dfd", "v": "Ответь на сообщение от {session} (или упомяни {bot}), чтобы говорить с ней."}
+{"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "Ответь на сообщение от {session} (или упомяни бота), чтобы говорить с ней."}
+{"k": "status.waiting_answer", "src": "e5832740", "v": "{session} ждёт твоего ответа."}
+{"k": "toast.already_answered", "src": "3d131a46", "v": "уже отвечено"}
+{"k": "toast.always_degraded", "src": "038f4355", "v": "Для этой команды нет постоянного правила - разрешено один раз [{session}]"}
+{"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}
+{"k": "toast.busy_retry", "src": "cfc92c41", "v": "Занято - попробуй чуть позже"}
+{"k": "toast.cant_resend", "src": "3aa4d727", "v": "Этот запрос нельзя отправить заново - ответь в терминале"}
+{"k": "toast.cant_stop", "src": "2bf57e30", "v": "Ты не можешь остановить эту сессию."}
+{"k": "toast.choice_gone", "src": "54298c73", "v": "Этого варианта больше нет."}
+{"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "Неизвестная кнопка"}
+{"k": "toast.invalid_value", "src": "7e5ba817", "v": "Недопустимое значение"}
+{"k": "toast.moved_on_status", "src": "be925157", "v": "{session} уже занята новой работой - нажми ⏹ Стоп ещё раз, чтобы остановить"}
+{"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} уже занята новой работой - отправь /stop ещё раз"}
+{"k": "toast.not_working", "src": "1ec204d3", "v": "{session} сейчас не работает"}
+{"k": "toast.open_chat", "src": "202c3e06", "v": "Открой чат, чтобы ответить"}
+{"k": "toast.prompt_expired", "src": "260f4c88", "v": "этот запрос устарел"}
+{"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram ограничивает этот чат - попробуй после {time}"}
+{"k": "toast.send_failed", "src": "0fbea382", "v": "Не удалось отправить в {session}"}
+{"k": "toast.send_keys_failed", "src": "32458da9", "v": "Не удалось отправить нажатия"}
+{"k": "toast.session_ended", "src": "3a3a8392", "v": "Эта сессия завершена."}
+{"k": "toast.session_gone", "src": "9360b8a3", "v": "Сессия «{session}» не найдена"}
+{"k": "toast.session_gone_settings", "src": "8af767e3", "v": "Этой сессии больше нет - открой /settings заново."}
+{"k": "toast.session_not_found", "src": "4c2e72c7", "v": "Сессия не найдена"}
+{"k": "toast.session_not_here", "src": "54eb8580", "v": "Эта сессия работает не здесь."}
+{"k": "toast.session_unavailable", "src": "773d1a0f", "v": "Эта сессия больше недоступна"}
+{"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "В этой группе только админ может менять настройки."}
+{"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "Ты не можешь менять настройки этой сессии."}
+{"k": "toast.verb", "src": "985eb765", "v": "{verb} [{session}]"}

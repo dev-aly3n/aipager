@@ -6,7 +6,9 @@ started in one chat can never carry its language into another.
 
 - A chat's own language is its stored ``ui_language`` (an explicit
   choice), else, for a private chat only, the Telegram language aipager
-  last saw from that person, else English.
+  last saw from that person, else English. A Telegram language counts
+  only when :func:`aipager.i18n.locales.detect` takes it: English, or any
+  enabled language once ``locales.AUTO_DETECT`` is on (phase 5).
 - What only one person sees (a pop-up after a tap, their Mini App) uses
   that person's language: their DM's stored choice, else their Telegram
   language, else the chat's.
@@ -71,7 +73,7 @@ def _chat_id(update) -> int | None:
 
 
 def _telegram_code(update) -> str | None:
-    return locales.normalize(getattr(_user(update), "language_code", None))
+    return locales.detect(getattr(_user(update), "language_code", None))
 
 
 def for_update(update) -> Tr:
@@ -113,7 +115,7 @@ def for_viewer(user_id, language_code) -> Tr:
     Telegram app sent in initData, else English."""
     uid = _int(user_id)
     code = _stored(uid) if uid is not None and uid > 0 else None
-    return get(code or locales.normalize(language_code) or default_code())
+    return get(code or locales.detect(language_code) or default_code())
 
 
 def for_sess(sess) -> Tr:

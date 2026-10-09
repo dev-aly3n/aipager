@@ -690,7 +690,13 @@ is deleted rather than left unpinned in the history.
 
 **On-disk audit.** `~/.claude/aipager-audit.jsonl` records every
 decision with `user_id`, `username` and the chat, so you can
-reconstruct later what each person did.
+reconstruct later what each person did. It is always written in
+English, whatever language the chat uses.
+
+**Language.** A group has one language for aipager's own messages,
+cards and keyboards, set by an admin with `/language`. What only one
+person sees, the pop-up after a tap, is in that person's own choice
+from their private chat with the bot (else the group's language).
 
 ## Where messages go
 

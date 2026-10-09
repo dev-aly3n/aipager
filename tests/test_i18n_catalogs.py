@@ -290,3 +290,48 @@ def test_todo_and_review_pack_cover_missing_and_changed_keys(monkeypatch, tmp_pa
     assert pack == {"ru": [{"k": "toast.saved", "v": "<b>{name}</b> {n}"}]}
     assert "en" not in json.dumps(pack)
     assert answers["ru"]["toast.saved"] == SRC[1]["en"]
+
+
+# ---- checks 3b, 4b, 9b (phase 2) ------------------------------------------------
+
+def _translation(code, english, value, key="toast.x", **extra):
+    src = {"k": key, "en": english, "eg": {},
+           "placeholders": tool.core.placeholders(english), **extra}
+    return tool.check_translation(code, src, value, glossary=None)
+
+
+def test_a_command_glued_to_a_placeholder_fails():
+    assert _translation("de", "Send {cmd} now", "Sende {cmd} jetzt") == []
+    assert any("Command" in p for p in _translation("de", "Send {cmd} now",
+                                                      "Sende /{cmd} jetzt"))
+    assert any("Command" in p for p in _translation("de", "Ask {who}", "Frag @{who}"))
+    rows = [{"k": "toast.a", "en": "Talk to /{label}"}, {"k": "toast.b", "en": "Hi {x}"}]
+    problems = tool.check_english_patterns(rows)
+    assert len(problems) == 1 and "toast.a" in problems[0]
+
+
+def test_a_lost_markdown_marker_fails():
+    english = "⏳ **{session}** · _working_"
+    assert _translation("de", english, "⏳ **{session}** · _arbeitet_") == []
+    assert _translation("de", english, "⏳ {session} · _arbeitet_")
+    assert _translation("de", english, "⏳ **{session}** · arbeitet")
+    # A placeholder's own underscore is not a marker.
+    assert _translation("de", "{snake_case} ok", "{snake_case} gut") == []
+    # No backtick in any pattern, English or translated.
+    assert any("backtick" in p for p in _translation("de", "Run it", "Führe `x` aus"))
+    assert tool.check_english_patterns([{"k": "toast.c", "en": "Run `ls`"}])
+
+
+def test_an_rtl_entry_with_a_right_arrow_fails():
+    assert _translation("fa", "{a} → {b}", "{a} ← {b}") == []
+    assert any("←" in p for p in _translation("fa", "{a} → {b}", "{a} → {b}"))
+    assert any("←" in p for p in _translation("ar", "{a} → {b}", "{a} → {b}"))
+    assert _translation("ru", "{a} → {b}", "{a} → {b}") == []
+
+
+def test_an_identifier_keeps_its_latin_digits():
+    english = "Off through AIPAGER_REPORT_PROMPTS=0 on x1 after 3 days."
+    assert _translation("fa", english,
+                        "خاموش با AIPAGER_REPORT_PROMPTS=0 روی x1 پس از ۳ روز.") == []
+    assert _translation("fa", english,
+                        "خاموش با AIPAGER_REPORT_PROMPTS=0 روی x1 پس از 3 روز.")

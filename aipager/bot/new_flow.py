@@ -78,8 +78,9 @@ from aipager.bot.mode_labels import (
     MODE_AUTO_INSTEAD,
     mode_label,
 )
-from aipager import preferences
-from aipager.bot import group_intake, kbwords
+from aipager import i18n, preferences
+from aipager.bot import group_intake, kbwords, language_menu, settings_menu
+from aipager.i18n import Command, Msg, Safe
 from aipager.bot.transport import (
     MUTED,
     calling_chat_id,
@@ -972,12 +973,46 @@ def _defaults_folders_shown(bot: TelegramBot) -> dict[int, list[str]]:
     return shown
 
 
+NS_TITLE = Msg(
+    "set.text.ns_root",
+    "🆕 <b>New sessions</b>\n\nWhat /new starts a session with. You can still change it "
+    "on the card for one session.\n\nMode: {mode}\nModel: {model}\nFolder: {folder}",
+    note="/settings > New sessions: the defaults /new uses. {mode} is Auto or Ask, "
+         "{model} a model name or Default model, {folder} a path",
+    eg={"mode": "Auto", "model": "Opus 5.5", "folder": "~/work/app"})
+NS_MODEL_TITLE = Msg("set.text.ns_model_title", "🧠 <b>Model for new sessions</b>",
+                     note="Above the model list of /settings > New sessions")
+NS_FOLDER_TITLE = Msg("set.text.ns_folder_title", "📁 <b>Folder for new sessions</b>",
+                      note="Above the folder list of /settings > New sessions")
+NS_OLDER_MODEL = Msg("set.opt.ns_older_model", "{model} (older model)",
+                     note="A model no longer on the list but still chosen; {model} is "
+                          "its name",
+                     eg={"model": "Opus 4.7"})
+NS_DEFAULT_MODEL = Msg("set.opt.ns_default_model", "Default model",
+                       note="The model Claude Code picks itself")
+NS_DEFAULT_FOLDER = Msg("set.opt.ns_default_folder", "Default folder",
+                        note="The folder aipager starts sessions in when none is chosen")
+NS_MODEL_BUTTON = Msg("set.btn.ns_model", "🧠 Model: {model} ›",
+                      note="Opens the model list; {model} is the current choice",
+                      eg={"model": "Default model"})
+NS_FOLDER_BUTTON = Msg("set.btn.ns_folder", "📁 Folder: {folder} ›",
+                       note="Opens the folder list; {folder} is a shortened path",
+                       eg={"folder": "~/work/app"})
+CHOICE_GONE = Msg("toast.choice_gone", "That choice is no longer available.",
+                  note="Pop-up: the tapped model or folder is not on the list any more")
+
+
 def render_new_session_defaults(
     bot: TelegramBot, chat_id: int, *, view: str = "", viewer: int | None = None,
+    tr=None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """The chat's defaults for new sessions; ``view`` "model" / "cwd"
     lists that field's choices. ``viewer`` (the person looking) is told
-    when Auto does not apply to them."""
+    when Auto does not apply to them. In *tr*'s language (the chat's when
+    None); model names and paths are shown as they are."""
+    if tr is None:
+        tr = i18n.for_chat(chat_id)
+    back = tr.text(language_menu.BACK)
     stored = preferences.get_new_session_defaults(chat_id)
     roots = launch.allowed_roots(
         bot.registry, chat_id,
@@ -993,12 +1028,13 @@ def render_new_session_defaults(
             # /new starts with: shown as the choice, a tap only re-shows
             # the list (pick another row to change it).
             rows.append([InlineKeyboardButton(
-                f"{stored.model} (older model) ✅", callback_data="_:set:ns:model")])
+                f"{tr.text(NS_OLDER_MODEL, model=stored.model)} ✅",
+                callback_data="_:set:ns:model")])
         rows.append([InlineKeyboardButton(
-            f"Default model{' ✅' if not stored.model else ''}",
+            f"{tr.text(NS_DEFAULT_MODEL)}{' ✅' if not stored.model else ''}",
             callback_data="_:set:ns:model:default")])
-        rows.append([InlineKeyboardButton("« Back", callback_data="_:set:ns")])
-        return ("🧠 <b>Model for new sessions</b>", InlineKeyboardMarkup(rows))
+        rows.append([InlineKeyboardButton(back, callback_data="_:set:ns")])
+        return (tr.html(NS_MODEL_TITLE), InlineKeyboardMarkup(rows))
     if view == "cwd":
         _defaults_folders_shown(bot)[chat_id] = list(roots)
         rows = [[InlineKeyboardButton(
@@ -1006,34 +1042,33 @@ def render_new_session_defaults(
             callback_data=f"_:set:ns:cwd:{idx}")]
             for idx, root in enumerate(roots)]
         rows.append([InlineKeyboardButton(
-            f"Default folder{' ✅' if not stored.cwd else ''}",
+            f"{tr.text(NS_DEFAULT_FOLDER)}{' ✅' if not stored.cwd else ''}",
             callback_data="_:set:ns:cwd:default")])
-        rows.append([InlineKeyboardButton("« Back", callback_data="_:set:ns")])
-        return ("📁 <b>Folder for new sessions</b>", InlineKeyboardMarkup(rows))
+        rows.append([InlineKeyboardButton(back, callback_data="_:set:ns")])
+        return (tr.html(NS_FOLDER_TITLE), InlineKeyboardMarkup(rows))
 
     auto = stored.mode != "ask"
-    model = stored.model or "Default model"
+    # A model's name as written; "Default model" is words.
+    model_html = (stored.model if stored.model
+                  else Safe(tr.html(NS_DEFAULT_MODEL)))
+    model_text = (stored.model if stored.model
+                  else Safe(tr.text(NS_DEFAULT_MODEL)))
     folder = stored.cwd if stored.cwd in roots else _project_dir()
     mode = mode_label(auto)
     if auto and viewer is not None and not bot._is_admin_user(viewer, chat_id):
         mode = MODE_ASK_FOR_YOU
-    text = (
-        "🆕 <b>New sessions</b>\n\n"
-        "What /new starts a session with. You can still change it on the "
-        "card for one session.\n\n"
-        f"Mode: {mode}\n"
-        f"Model: {html_mod.escape(model)}\n"
-        f"Folder: {html_mod.escape(_short_path(folder))}"
-    )
+    text = tr.html(NS_TITLE, mode=Safe(tr.html(mode)), model=model_html,
+                   folder=_short_path(folder))
     rows = [
-        [InlineKeyboardButton(f"{MODE_AUTO}{' ✅' if auto else ''}",
+        [InlineKeyboardButton(f"{tr.text(MODE_AUTO)}{' ✅' if auto else ''}",
                               callback_data="_:set:ns:mode:auto"),
-         InlineKeyboardButton(f"{MODE_ASK}{' ✅' if not auto else ''}",
+         InlineKeyboardButton(f"{tr.text(MODE_ASK)}{' ✅' if not auto else ''}",
                               callback_data="_:set:ns:mode:ask")],
-        [InlineKeyboardButton(f"🧠 Model: {model} ›", callback_data="_:set:ns:model")],
-        [InlineKeyboardButton(f"📁 Folder: {_short_path(folder, 24)} ›",
+        [InlineKeyboardButton(tr.text(NS_MODEL_BUTTON, model=model_text),
+                              callback_data="_:set:ns:model")],
+        [InlineKeyboardButton(tr.text(NS_FOLDER_BUTTON, folder=_short_path(folder, 24)),
                               callback_data="_:set:ns:cwd")],
-        [InlineKeyboardButton("« Back", callback_data="_:set:back")],
+        [InlineKeyboardButton(back, callback_data="_:set:back")],
     ]
     return text, InlineKeyboardMarkup(rows)
 
@@ -1048,10 +1083,14 @@ async def handle_defaults_callback(
     scope = chat_id or 0
     viewer = _actor_id(update, query)
 
+    # The page is the chat's; a pop-up is the tapper's.
+    tr = i18n.for_chat(scope)
+    person = i18n.for_person(update)
+
     async def _show(view: str = "", by: str = "") -> None:
-        text, kb = render_new_session_defaults(bot, scope, view=view, viewer=viewer)
+        text, kb = render_new_session_defaults(bot, scope, view=view, viewer=viewer, tr=tr)
         if by:
-            text += f"\n\n<i>Changed by {html_mod.escape(by)}.</i>"
+            text += "\n\n" + tr.html(settings_menu.CHANGED_BY, person=Command(by))
         await _edit_at(bot, scope, getattr(getattr(query, "message", None),
                                            "message_id", None), text, kb)
 
@@ -1062,11 +1101,11 @@ async def handle_defaults_callback(
         await _show(parts[0])
         return
     if len(parts) != 2:
-        await bot._safe_answer(query, "Invalid callback")
+        await bot._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))
         return
     if (chat_id is None or chat_id < 0) and not bot._is_admin(update):
         await bot._safe_answer(
-            query, "Only an admin can change settings in this group.", show_alert=True)
+            query, person.text(language_menu.ADMIN_ONLY), show_alert=True)
         return
     field, token = parts
     value = None
@@ -1088,13 +1127,13 @@ async def handle_defaults_callback(
                   confined=bool(bot._is_confined_user(viewer, scope)))):
             value = shown[int(token)]
     if value is None:
-        await bot._safe_answer(query, "That choice is no longer available.")
+        await bot._safe_answer(query, person.text(CHOICE_GONE))
         await _show("cwd" if field == "cwd" else "")
         return
     try:
         preferences.set_new_session_default(scope, field, value)
     except ValueError:
-        await bot._safe_answer(query, "Invalid value")
+        await bot._safe_answer(query, person.text(language_menu.INVALID_VALUE))
         return
     # In a group, who changed it (roadmap 8.91c); a DM is as before.
     await _show(by=bot._actor_label(viewer, chat_id, getattr(query, "from_user", None)))
