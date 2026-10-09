@@ -687,7 +687,8 @@ CARD_CADENCE_FLOOR_GROUP: float = 3.0
 # few seconds for four hours. From these turn ages on, the card is edited
 # no more often than the paired interval, and from 10 min its elapsed
 # clock moves in 30 s steps (``23:30``, ``1:23:00``) so a slow card never
-# looks frozen: it shows a clock that moves at its own granularity. Below the first age the cadence is exactly as before.
+# looks frozen: it shows a clock that moves at its own granularity. Below
+# the first age the cadence is exactly as before.
 # A STATE change (busy -> waiting, a permission prompt) is shown at once,
 # at most once per CARD_STATE_BYPASS_MIN_GAP; new tool rows and prose wait
 # for the next due edit. Per-session opt-out: the `card_age_decay`
