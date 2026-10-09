@@ -4,7 +4,7 @@
  "aipager/bg_shells.py": 8,
  "aipager/bidi_guard.py": 1,
  "aipager/bot/agents_line.py": 11,
- "aipager/bot/animation.py": 30,
+ "aipager/bot/animation.py": 29,
  "aipager/bot/auth.py": 14,
  "aipager/bot/callbacks.py": 99,
  "aipager/bot/card_owner.py": 6,

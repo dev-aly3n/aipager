@@ -1119,17 +1119,22 @@ def _agent_live_row(info: dict, unit: str = "s") -> str:
     return f"{_SUBAGENT_MARK}{agent_type} · {activity} · {elapsed}"
 
 
-def _agent_phrase(sess: TrackedSession) -> str:
-    """Shared "N agent(s) (types), M shell(s)" fragment of the waiting
-    status line. During the continuation-grace
+#: The waiting line's two states (:func:`_agent_phrase`).
+_FINISHING, _WORKING = "finishing", "working"
+
+
+def _agent_phrase(sess: TrackedSession) -> tuple[str, str]:
+    """``(state, phrase)`` for the waiting status line: the state id
+    (:data:`_FINISHING` or :data:`_WORKING`) and the shown fragment, "N
+    agent(s) (types), M shell(s)". During the continuation-grace
     window the table is legitimately EMPTY (the agent finished, the
     wake-up hasn't arrived) — "0 agents still working" would read as
     broken (review rev-iter1-004), so that state says "finishing up"
-    instead."""
+    instead. The caller branches on the id, never on the words."""
     n = len(sess.active_subagents)
     shells = len(sess.job_shell_ids())
     if n == 0 and shells == 0:
-        return "finishing up"
+        return _FINISHING, "finishing up"
     parts = []
     if n:
         plural = "" if n == 1 else "s"
@@ -1142,7 +1147,7 @@ def _agent_phrase(sess: TrackedSession) -> str:
         parts.append(phrase)
     if shells:
         parts.append(f"{shells} shell{'' if shells == 1 else 's'}")
-    return ", ".join(parts)
+    return _WORKING, ", ".join(parts)
 
 
 def _card_unit(sess: TrackedSession, final: bool) -> str:
@@ -1179,8 +1184,8 @@ def _status_line(
     # refreshed, so a slow card still shows a counter that MOVES.
     unit = _card_unit(sess, final)
     if waiting and not final:
-        phrase = _agent_phrase(sess)
-        line = (f"🔄 **{label}** · {phrase}" if phrase == "finishing up"
+        state, phrase = _agent_phrase(sess)
+        line = (f"🔄 **{label}** · {phrase}" if state == _FINISHING
                 else f"🔄 **{label}** · {phrase} still working")
         if sess.busy_started_at:
             line += f" · {_elapsed_str(sess.busy_started_at, unit)}"
