@@ -56,8 +56,8 @@ def test_the_offer_buttons_are_the_language_and_keep_english(ml):
     from aipager import i18n
     from aipager.bot.language_offer import render_offer
     _text, kb = render_offer(i18n.get("en"), "de")
-    assert ml.buttons(kb) == [("Deutsch", "_:lang:offer:de"),
-                              ("Keep English", "_:lang:offer:keep")]
+    assert ml.buttons(kb) == [("Deutsch", "_:set:lang_offer:de"),
+                              ("Keep English", "_:set:lang_offer:keep")]
 
 
 def test_the_offer_callback_never_carries_the_endonym(ml):
@@ -71,13 +71,13 @@ def test_the_offer_callback_never_carries_the_endonym(ml):
 def test_a_forged_offer_tap_cannot_select_a_disabled_language(tg_bot, tap, code):
     """Error guessing: the card is never sent, but its callback is routed.
     A tap must not store a language users cannot select."""
-    tap(tg_bot, f"_:lang:offer:{code}", chat_id=DM, user_id=OWNER)
+    tap(tg_bot, f"_:set:lang_offer:{code}", chat_id=DM, user_id=OWNER)
     assert prefs.get_ui_language(DM) != code
 
 
 def test_keep_english_on_the_offer_stores_english(tg_bot, tap):
     """design.md 5: the offer callback 'sets the DM language (keep sets en)'."""
-    tap(tg_bot, "_:lang:offer:keep", chat_id=DM, user_id=OWNER)
+    tap(tg_bot, "_:set:lang_offer:keep", chat_id=DM, user_id=OWNER)
     assert prefs.get_ui_language(DM) == "en"
 
 
