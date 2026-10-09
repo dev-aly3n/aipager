@@ -577,6 +577,39 @@ refuse, and name the reason, for:
   installer owns this aipager`): reinstall it with `uv tool install
   aipager` or `pipx install aipager`.
 
+## Update failed: unexpected argument '--refresh'
+
+aipager 1.0.0 and older ran `uv tool upgrade aipager --refresh`, which no
+uv release accepts, so every update of a uv install stopped with `error:
+unexpected argument '--refresh' found` and restarted nothing. Newer
+versions run `uv tool upgrade aipager`. To get past it once, update from
+a terminal on that machine (`aipager update` has the same problem on
+those versions):
+
+```
+uv tool upgrade aipager
+systemctl --user restart aipager.service
+```
+
+Without the service (or on macOS), restart aipager the way you started it.
+
+## Claude Code update: installed with npm into a folder you can't write to
+
+A Claude Code installed with `sudo npm install -g` lives in a folder
+only root can change (such as `/usr/lib/node_modules`), so `claude
+update` run as your user fails with `global folder isn't writable`.
+`/update` and the Mini App show the newer version with `can't update
+from here: installed with npm into a folder your user can't write to`
+and no button for it. Run `claude install` once as the user aipager runs
+as: it switches to Claude Code's own installer under your home folder,
+which updates without sudo. Then restart aipager
+(`systemctl --user restart aipager.service`, or the way you started it):
+a running daemon keeps the Claude Code it found at start, and after the
+restart it takes the newest one it finds. If `claude_path` in
+`aipager.yaml` (`aipager doctor --fix` can set it) or `AIPAGER_CLAUDE_BIN`
+names the npm one, point it at `~/.local/bin/claude` or remove it first,
+since those always win.
+
 ## Updated, but the version didn't change
 
 A pipx install made from a git URL upgrades from that git source, not

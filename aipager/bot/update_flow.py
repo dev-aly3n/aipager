@@ -89,6 +89,9 @@ CHECK_BUTTON_TEXT = "🔄 Check for updates"
 CHECKING_TEXT = "Checking…"
 UP_TO_DATE_TEXT = "Everything is up to date."
 CHECK_FAILED_TEXT = "Nothing newer found, but a check failed. Try again later."
+# Something newer exists, but each such product can't be updated from here
+# (its line says why); never "Everything is up to date." under that line.
+CANT_UPDATE_HERE_TEXT = "An update is out, but it can't be installed from here."
 OFFER_STALE_TEXT = "⚠️ This check is out of date. Check again before updating."
 # How long an Update button (or the Mini App's) stays good after its check.
 # Past this, or once any job has run, the tap asks for a fresh check.
@@ -264,8 +267,9 @@ class UpdateOffer:
 def update_offer(status: dict) -> UpdateOffer:
     """THE decision both surfaces show: which products have an update this
     install can apply. A product is offered only when its lookup succeeded
-    and found a strictly newer version (aipager also needs an install that
-    can be upgraded from here)."""
+    and found a strictly newer version, and only when this install can apply
+    it (an aipager install that can be upgraded from here; a Claude Code not
+    held back by ``claude.blocked``)."""
     ap = status["aipager"]
     cl = status["claude"]
     rs = status["restart"]
@@ -277,6 +281,7 @@ def update_offer(status: dict) -> UpdateOffer:
     running = ap["running"]
     latest = ap.get("latest")
     offer_ap = False
+    held_back = False   # newer, but can't be updated from here
     if not latest:
         failed = True
         lines.append(f"aipager {running} (couldn't check)")
@@ -285,6 +290,7 @@ def update_offer(status: dict) -> UpdateOffer:
         if src["upgradable"]:
             offer_ap = True
         else:
+            held_back = True
             line += f" (can't update from here: {src.get('reason') or 'unknown install'})"
         lines.append(line)
     else:
@@ -303,8 +309,13 @@ def update_offer(status: dict) -> UpdateOffer:
         failed = True
         lines.append(f"Claude Code {cur} (couldn't check)")
     elif cl.get("update_available"):
-        offer_cc = True
-        lines.append(f"Claude Code {cur} → {cl_latest}")
+        line = f"Claude Code {cur} → {cl_latest}"
+        if cl.get("blocked"):
+            held_back = True
+            line += f" (can't update from here: {cl['blocked']})"
+        else:
+            offer_cc = True
+        lines.append(line)
     else:
         lines.append(f"Claude Code {cur} (up to date)")
 
@@ -318,7 +329,8 @@ def update_offer(status: dict) -> UpdateOffer:
         kind = label = None
     summary = None
     if kind is None:
-        summary = CHECK_FAILED_TEXT if failed else UP_TO_DATE_TEXT
+        summary = (CANT_UPDATE_HERE_TEXT if held_back
+                   else CHECK_FAILED_TEXT if failed else UP_TO_DATE_TEXT)
     restart = None
     if offer_ap:
         restart = ("Restart: automatic, once no turn is running." if rs["automatic"]
@@ -533,7 +545,10 @@ class UpdateManager:
             latest = None
             if method != "unknown":
                 latest = await bounded(self_update.latest_claude_version, method, channel)
-            return cur, method, channel, latest
+            # Off the loop (it looks at folders); a failure or a timeout
+            # is None, so the update is still offered.
+            blocked = await bounded(self_update.claude_update_blocker, realpath, method)
+            return cur, method, channel, latest, blocked
 
         source = install_source.detect_install_source()
         running = self_update.running_version()
@@ -543,7 +558,7 @@ class UpdateManager:
             claude_side(),
             bounded(self_update.restart_plan, self.bot.registry),
         )
-        cur, method, channel, latest_cl = claude
+        cur, method, channel, latest_cl, blocked_cl = claude
         if plan is None:
             plan = self_update.RestartPlan(
                 "foreground", False, "could not tell how this daemon is run")
@@ -564,6 +579,8 @@ class UpdateManager:
                 "update_available": bool(cur) and self_update.is_newer(latest_cl, cur[1]),
                 "method": method,
                 "channel": channel,
+                # Why the update can't work here (None: it can, or unknown).
+                "blocked": blocked_cl,
             },
             "restart": plan.to_dict(),
         }

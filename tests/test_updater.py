@@ -78,11 +78,13 @@ def test_update_refused_install(monkeypatch, capsys):
     assert "can't update this install" in capsys.readouterr().err
 
 
-def test_update_uv_adds_refresh(monkeypatch):
+def test_update_uv_command_has_no_refresh_flag(monkeypatch):
+    # No uv release accepts `tool upgrade --refresh` (exit 2, "unexpected
+    # argument"), so the flag made every uv self-update fail.
     monkeypatch.setattr(install_source, "detect_install_source", lambda: _source("uv"))
     calls = _fake_seam(monkeypatch)
     assert updater.cmd_update() == 0
-    assert calls[0][0] == ["/abs/bin/uv", "tool", "upgrade", "aipager", "--refresh"]
+    assert calls[0][0] == ["/abs/bin/uv", "tool", "upgrade", "aipager"]
     assert calls[0][1] == self_update.UPGRADE_TIMEOUT_SECONDS
     assert calls[0][2] is False  # live installer output in the terminal
 

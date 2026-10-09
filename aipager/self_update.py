@@ -521,6 +521,41 @@ def latest_claude_version(method: str, channel: str) -> str | None:
     return None
 
 
+#: Why ``claude update`` cannot work on an npm install in a folder this
+#: user cannot write (Claude Code's own error: "global folder isn't writable").
+NPM_NOT_WRITABLE_REASON = ("installed with npm into a folder your user can't write to; "
+                           "run \"claude install\" once to switch to Claude Code's own installer, "
+                           "then restart aipager")
+
+
+def claude_update_blocker(realpath: str | None, method: str) -> str | None:
+    """Why the Claude Code update would fail here, or None when it can work
+    or this cannot tell (the update itself then reports any failure).
+
+    An npm install updates in place: ``claude update`` rewrites the global
+    ``node_modules`` folder (and the package's own folder) it was installed
+    into. When this user cannot write there (npm run as root, the daemon
+    as a user), the update can only fail."""
+    if method != "npm" or not realpath:
+        return None
+    parts = Path(realpath).parts
+    if "node_modules" not in parts:
+        return None
+    i = parts.index("node_modules")
+    modules = Path(*parts[: i + 1])
+    folders = [modules]
+    if len(parts) > i + 1:
+        # The package folder: @scope/name or name.
+        end = i + 3 if parts[i + 1].startswith("@") and len(parts) > i + 2 else i + 2
+        folders.append(Path(*parts[:end]))
+    try:
+        if all(not f.exists() or os.access(f, os.W_OK) for f in folders):
+            return None
+    except OSError:
+        return None
+    return NPM_NOT_WRITABLE_REASON
+
+
 def _claude_version_at(path: str) -> str | None:
     res = run_command([path, "--version"], timeout=CLAUDE_VERSION_TIMEOUT_SECONDS,
                       env=_scrub_env())
@@ -1008,7 +1043,8 @@ def read_and_clear_marker() -> dict | None:
 
 __all__ = [
     "CURRENT_JOB_ID", "CommandResult", "ClaudeUpdateResult", "RestartPlan",
-    "UpdateLock", "begin_shutdown", "cancel_scheduled_restart", "claude_channel_info", "clear_marker", "cli_restart_instruction",
+    "NPM_NOT_WRITABLE_REASON", "UpdateLock", "begin_shutdown", "cancel_scheduled_restart",
+    "claude_channel_info", "claude_update_blocker", "clear_marker", "cli_restart_instruction",
     "current_claude", "installed_version", "is_newer",
     "latest_aipager_version", "latest_claude_version", "parse_version",
     "probe_installed_version", "read_and_clear_marker", "redact_output",

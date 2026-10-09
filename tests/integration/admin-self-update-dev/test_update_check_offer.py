@@ -654,3 +654,154 @@ def test_check_route_while_an_update_runs_is_409_and_looks_nothing_up(env, run):
         await env.finish()
         return r.status, body, len(env.fetches) - fetched
     assert _call(env, run, fn) == (409, {"error": "update_in_progress"}, 0)
+
+
+# ----- a Claude Code update that can only fail here (operator, 2026-10-09) ---------
+# Claude Code installed with npm into a folder this user can't write (`sudo
+# npm install -g`): `claude update` stops on "global folder isn't writable".
+# The check says why and offers no button for it.
+
+_NPM_REASON = self_update.NPM_NOT_WRITABLE_REASON
+_BLOCKED_LINE = f"Claude Code 2.1.281 → 2.1.290 (can't update from here: {_NPM_REASON})"
+
+
+def _npm_claude(env, monkeypatch, *, writable):
+    """A real npm layout under tmp: bin/claude -> node_modules/.../cli.js,
+    `installMethod: global`, the npm dist-tags lookup faked; the package
+    folder made read-only for this user through ``os.access``."""
+    import os
+    from aipager import claude_bootstrap
+    claude_bootstrap._CLAUDE_JSON.write_text(json.dumps({"installMethod": "global"}))
+    package = env.tmp_path / "usr" / "lib" / "node_modules" / "@anthropic-ai" / "claude-code"
+    package.mkdir(parents=True)
+    (package / "cli.js").write_text("")
+    bin_dir = env.tmp_path / "usr" / "bin"
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "claude").symlink_to(package / "cli.js")
+    env.claude_path = str(bin_dir / "claude")
+    fake_get = env._get
+
+    def _get(url, *, timeout, max_bytes):
+        if url == self_update.NPM_DIST_TAGS_URL:
+            env.fetches.append(url)
+            return json.dumps({"latest": env.claude_latest}).encode()
+        return fake_get(url, timeout=timeout, max_bytes=max_bytes)
+    monkeypatch.setattr(self_update, "_http_get", _get)
+    if not writable:
+        denied = os.path.realpath(package)
+        real_access = os.access
+
+        def _access(path, mode, *a, **k):
+            if mode & os.W_OK and os.path.realpath(os.fspath(path)) == denied:
+                return False
+            return real_access(path, mode, *a, **k)
+        monkeypatch.setattr(os, "access", _access)
+
+
+def test_unwritable_npm_claude_is_not_offered_and_says_why(env, run, monkeypatch):
+    _only_claude_newer(env)
+    _npm_claude(env, monkeypatch, writable=False)
+    offer = update_flow.update_offer(_status(env, run))
+    assert self_update.NPM_DIST_TAGS_URL in env.fetches     # really an npm check
+    assert offer.lines == ["aipager 0.7.13 (up to date)", _BLOCKED_LINE]
+    assert offer.kind is None and offer.label is None
+    assert offer.summary == update_flow.CANT_UPDATE_HERE_TEXT
+
+
+def test_unwritable_npm_claude_leaves_only_aipager_offered(env, run, monkeypatch):
+    _npm_claude(env, monkeypatch, writable=False)          # both newer
+    offer = update_flow.update_offer(_status(env, run))
+    assert (offer.kind, offer.label) == ("aipager", "Update aipager")
+    assert offer.lines[1] == _BLOCKED_LINE
+
+
+def test_writable_npm_claude_is_offered_as_before(env, run, monkeypatch):
+    _only_claude_newer(env)
+    _npm_claude(env, monkeypatch, writable=True)
+    offer = update_flow.update_offer(_status(env, run))
+    assert self_update.NPM_DIST_TAGS_URL in env.fetches
+    assert offer.lines == ["aipager 0.7.13 (up to date)", "Claude Code 2.1.281 → 2.1.290"]
+    assert (offer.kind, offer.label) == ("claude", "Update Claude Code")
+
+
+def test_a_failing_blocker_check_still_offers_claude(env, run, monkeypatch):
+    _only_claude_newer(env)
+    _npm_claude(env, monkeypatch, writable=False)
+
+    def _boom(*a, **k):
+        raise RuntimeError("cannot tell")
+    monkeypatch.setattr(self_update, "claude_update_blocker", _boom)
+    offer = update_flow.update_offer(_status(env, run))
+    assert (offer.kind, offer.label) == ("claude", "Update Claude Code")
+
+
+def test_aipager_that_cannot_be_updated_here_is_not_called_up_to_date(env, run):
+    _only_aipager_newer(env)
+    env.source = InstallSource(kind="editable", prefix="/src", python="/src/python",
+                               reason="this is an editable (development) install")
+    offer = update_flow.update_offer(_status(env, run))
+    assert offer.kind is None
+    assert offer.summary == update_flow.CANT_UPDATE_HERE_TEXT
+
+
+def test_cant_update_here_text_wins_over_a_failed_check(env, run, monkeypatch):
+    # aipager's lookup failed, Claude Code is newer but held back: something
+    # newer WAS found, so "Nothing newer found" would be wrong.
+    _npm_claude(env, monkeypatch, writable=False)
+    env.pypi_latest = None
+    offer = update_flow.update_offer(_status(env, run))
+    assert offer.kind is None
+    assert offer.summary == update_flow.CANT_UPDATE_HERE_TEXT
+
+
+def test_check_tap_shows_the_reason_and_no_claude_button(env, run, monkeypatch):
+    _only_claude_newer(env)
+    _npm_claude(env, monkeypatch, writable=False)
+    update, _ = _tap(env, "_:up:chk", env.chat_id, env.chat_id)
+
+    async def scenario():
+        await env.bot._handle_callback(update, MagicMock())
+        await _drain(env)
+    run(scenario)
+    text = env.last_text()
+    assert "can't update from here: installed with npm" in text
+    assert "&quot;claude install&quot;" not in text and '"claude install"' in text
+    assert update_flow.CANT_UPDATE_HERE_TEXT in text
+    assert "Everything is up to date." not in text
+    assert env.last_markup_data() == ["_:up:chk"]
+
+
+def test_update_tap_for_a_held_back_claude_runs_nothing(env, run, monkeypatch):
+    _only_claude_newer(env)
+    _npm_claude(env, monkeypatch, writable=False)
+    chk, _ = _tap(env, "_:up:chk", env.chat_id, env.chat_id)
+    go, _ = _tap(env, "_:up:go:cc", env.chat_id, env.chat_id)
+
+    async def scenario():
+        await env.bot._handle_callback(chk, MagicMock())
+        await _drain(env)
+        await env.bot._handle_callback(go, MagicMock())
+        await _drain(env)
+    run(scenario)
+    assert env.manager.snapshot() is None
+    assert [env.claude_path, "update"] not in env.calls
+
+
+def test_check_route_shows_the_reason_and_offers_nothing(env, run, monkeypatch):
+    _only_claude_newer(env)
+    _npm_claude(env, monkeypatch, writable=False)
+
+    async def fn(c, srv):
+        r = await c.post("/api/update/check", headers=_hdr(env.chat_id))
+        return r.status, await r.json()
+    status, body = _call(env, run, fn)
+    assert status == 200
+    check = body["check"]
+    assert check["lines"] == ["aipager 0.7.13 (up to date)", _BLOCKED_LINE]
+    assert check["offer"] is None
+    assert check["summary"] == update_flow.CANT_UPDATE_HERE_TEXT
+
+
+def test_held_back_text_has_no_em_dash():
+    assert "—" not in update_flow.CANT_UPDATE_HERE_TEXT
+    assert "—" not in _NPM_REASON

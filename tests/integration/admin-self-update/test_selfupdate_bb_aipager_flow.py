@@ -40,7 +40,7 @@ def test_happy_path_runs_the_installer_once(world, personal_bot, h, run_async):
 
 @pytest.mark.parametrize("kind,expected", [
     ("pipx", ["/abs/tools/pipx", "upgrade", "aipager"]),
-    ("uv", ["/abs/tools/uv", "tool", "upgrade", "aipager", "--refresh"]),
+    ("uv", ["/abs/tools/uv", "tool", "upgrade", "aipager"]),
 ])
 def test_installer_argv_matches_the_table(world, personal_bot, h, run_async, kind, expected):
     world.source_kind = kind

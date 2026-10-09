@@ -317,9 +317,10 @@ def upgrade_argv(source: InstallSource) -> list[str] | None:
     if source.kind == "pipx":
         return [tool, "upgrade", "aipager"]
     if source.kind == "uv":
-        # --refresh bypasses uv's index cache, which has bitten users when a
-        # fresh PyPI release was minutes old.
-        return [tool, "tool", "upgrade", "aipager", "--refresh"]
+        # No ``--refresh``: ``uv tool upgrade`` has never accepted it (0.3 to
+        # 0.12 stop on "unexpected argument"), and it re-checks the index page
+        # on every upgrade anyway, so a release minutes old is still found.
+        return [tool, "tool", "upgrade", "aipager"]
     if source.kind == "brew":
         return [tool, "upgrade", "aipager"]
     return None

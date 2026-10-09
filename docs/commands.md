@@ -591,7 +591,7 @@ No SSH required.
 
 Claude Code is compared with the latest on its own update channel (`autoUpdatesChannel`: latest, stable or rc). Below the lines, in small text, is how aipager was installed (e.g. `pipx, from PyPI` or `pipx, from local path …`; group chats never show paths).
 
-If anything is newer, there is ONE button that updates only the products that have an update: **Update aipager**, **Update Claude Code** or **Update both**, plus **Cancel**. When aipager is offered, the message also says how the restart happens: `Restart: automatic, once no turn is running.` or `Restart: manual (reason)`. A newer aipager on an install that cannot be updated from here (editable, Nix, Snap, a system package, a container, or another user's install) is shown with the reason and is not offered. If nothing is newer, the message reads "Everything is up to date." (or says a check failed) with a **Check again** button and no update button.
+If anything is newer, there is ONE button that updates only the products that have an update: **Update aipager**, **Update Claude Code** or **Update both**, plus **Cancel**. When aipager is offered, the message also says how the restart happens: `Restart: automatic, once no turn is running.` or `Restart: manual (reason)`. A newer aipager on an install that cannot be updated from here (editable, Nix, Snap, a system package, a container, or another user's install) is shown with the reason and is not offered. The same goes for a newer Claude Code installed with npm into a folder your user can't write to (for example `sudo npm install -g` under `/usr/lib/node_modules`), where `claude update` could only fail: the line says `can't update from here: installed with npm into a folder your user can't write to; run "claude install" once to switch to Claude Code's own installer, then restart aipager`. If nothing can be updated, the message reads "Everything is up to date.", says a check failed, or, when something newer exists but can't be installed from here, "An update is out, but it can't be installed from here.", with a **Check again** button and no update button.
 
 The Update button starts only what the check offered. If the check is more than 10 minutes old, another update has run since, or the versions no longer match the button, it asks you to check again instead. Buttons from an older `/update` menu (the per-product **Update Claude Code** / **Update aipager** / **Both**) answer "This menu is out of date, send /update again" and do nothing. Every tap re-checks the admin rule.
 
@@ -613,7 +613,7 @@ Updating aipager (**Update aipager**, or the second half of **Update both**, whi
    After 10 minutes it asks again: **Wait 10 more min**, **Restart
    now**, **Cancel**. Unanswered for an hour, it cancels itself.
 3. It upgrades through the installer that owns the running daemon
-   (`pipx upgrade aipager`, `uv tool upgrade aipager --refresh`,
+   (`pipx upgrade aipager`, `uv tool upgrade aipager`,
    `brew upgrade aipager`, or `<venv>/bin/python -m pip install
    --upgrade aipager`), by absolute path, with a 10 min timeout. There
    is no Cancel while the installer runs.

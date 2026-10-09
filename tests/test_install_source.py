@@ -259,7 +259,8 @@ def test_upgrade_argv_is_absolute(kind, tmp_path, monkeypatch):
     assert os.path.isabs(argv[0])
     expected = {
         "pipx": [str(local_bin / "pipx"), "upgrade", "aipager"],
-        "uv": [str(local_bin / "uv"), "tool", "upgrade", "aipager", "--refresh"],
+        # No --refresh: `uv tool upgrade` rejects it on every uv release.
+        "uv": [str(local_bin / "uv"), "tool", "upgrade", "aipager"],
         "brew": [str(local_bin / "brew"), "upgrade", "aipager"],
         "pip": [src.python, "-m", "pip", "install", "--upgrade", "aipager"],
     }[kind]
