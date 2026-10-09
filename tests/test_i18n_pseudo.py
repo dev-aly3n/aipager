@@ -69,6 +69,8 @@ def migrated_renders(monkeypatch) -> list[str]:
                                  mode_labels.MODE_ASK_FOR_YOU)]
     menu = {c.command: c.description for c in LifecycleMixin._command_list(set(), tr=tr)}
     out.append(menu["language"])
+    from aipager.miniapp import server
+    out += [tr.text(server._APP_LANGUAGE_TITLE), tr.text(server._APP_LANGUAGE_HINT)]
     return out
 
 

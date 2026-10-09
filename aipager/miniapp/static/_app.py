@@ -2158,10 +2158,38 @@ APP_JS = r"""
 
   var settingsData = null;   // {schema, values, can_edit} from the server
 
+  // The viewer's own App language: above the chat's preferences, never
+  // disabled (it is personal, not an admin's), every word from the server.
+  function renderAppLanguage() {
+    var host = document.getElementById("settings-app-language");
+    var hint = document.getElementById("settings-app-language-hint");
+    if (!host) { return; }
+    host.innerHTML = "";
+    var al = settingsData && settingsData.app_language;
+    if (!al) {
+      if (hint) { hint.hidden = true; hint.textContent = ""; }
+      return;
+    }
+    renderOptionGroup(host, {
+      key: "app:language",
+      title: al.title,
+      options: al.options || [],
+      current: al.value,
+      disabled: false,
+      rerender: renderSettings,
+      onPick: function (value) { saveAppLanguage(value); }
+    });
+    if (hint) {
+      hint.textContent = al.hint || "";
+      hint.hidden = !al.hint;
+    }
+  }
+
   function renderSettings() {
     var root = document.getElementById("settings-groups");
     root.innerHTML = "";
     if (!settingsData) { return; }
+    renderAppLanguage();
     document.getElementById("settings-readonly").hidden = !!settingsData.can_edit;
 
     settingsData.schema.forEach(function (group) {
@@ -2220,6 +2248,49 @@ APP_JS = r"""
       if (epoch !== chatEpoch) { return; }     // failed in the chat left behind
       if (saveSeq[field] !== seq) { return; }   // superseded - ignore
       settingsData.values[field] = previous;
+      renderSettings();
+      showNotice("Couldn't save. The value on screen is what's stored.", "err");
+    });
+  }
+
+  var appLanguageSeq = 0;
+  function saveAppLanguage(value) {
+    var al = settingsData && settingsData.app_language;
+    if (!al || al.value === value) { return; }
+    // Optimistic, with the previous choice kept for a failed write.
+    var previous = al.value;
+    var seq = ++appLanguageSeq;
+    al.value = value;
+    renderSettings();
+    fetch("/api/app-language", {
+      method: "PUT",
+      headers: authHeaders(true),
+      body: JSON.stringify({ value: value })
+    }).then(function (res) {
+      if (res.status === 401 || res.status === 403) {
+        var authErr = new Error("auth");
+        authErr.authFailed = true;
+        throw authErr;
+      }
+      if (!res.ok) { throw new Error("HTTP " + res.status); }
+      return res.json();
+    }).then(function (data) {
+      if (seq !== appLanguageSeq) { return; }   // superseded - ignore
+      var now = settingsData && settingsData.app_language;
+      if (now) {
+        now.value = data.value;
+        now.effective = data.effective;
+      }
+      renderSettings();
+      showNotice(data.confirmation, "ok");
+    }).catch(function (err) {
+      if (err && err.authFailed) {
+        handleFetchError(err);
+        return;
+      }
+      if (seq !== appLanguageSeq) { return; }   // superseded - ignore
+      var now = settingsData && settingsData.app_language;
+      if (now) { now.value = previous; }
       renderSettings();
       showNotice("Couldn't save. The value on screen is what's stored.", "err");
     });

@@ -27,6 +27,7 @@ import re
 import time
 from typing import TYPE_CHECKING
 
+from aipager.i18n import Msg
 from aipager.miniapp.webapp_sdk import WebAppSdk
 
 if TYPE_CHECKING:
@@ -190,6 +191,23 @@ def _auth_user_key():
     make = getattr(web, "RequestKey", None)
     return make("aipager_auth_user", int) if make else "aipager_auth_user"
 
+
+@functools.cache
+def _telegram_user_key():
+    """The request key holding the verified initData ``user`` dict (its
+    ``language_code`` picks the viewer's Mini App language). Cached: a
+    ``RequestKey`` matches only itself."""
+    from aiohttp import web
+    make = getattr(web, "RequestKey", None)
+    return make("aipager_user", dict) if make else "aipager_user"
+
+
+#: The Mini App's App language group (the multilingual design, 7.0/7.2).
+_APP_LANGUAGE_TITLE = Msg("app.language.title", "App language",
+                          note="Mini App Settings: the viewer's own language for aipager")
+_APP_LANGUAGE_HINT = Msg("app.language.hint",
+                         "Only aipager's own text. Claude's answers don't change.",
+                         note="Mini App: the line under App language (what it changes)")
 
 #: Methods that only read: everything else the Mini App sends is an action.
 _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -369,6 +387,11 @@ class MiniAppServer:
         # path so batch 4's per-session variant can slot in beside it as
         # /api/sessions/{label}/preferences/{field} without reshaping this.
         app.router.add_put("/api/preferences/{field}", self._handle_preferences_put)
+        # The viewer's own App language (the multilingual design, 7.2):
+        # personal, so any member may set it, never admin-gated, and it is
+        # written to the viewer's own private-chat entry, never to the chat
+        # being looked at, and never posted into a chat.
+        app.router.add_put("/api/app-language", self._handle_app_language_put)
         # Per-session preference overrides (batch 4) — same shape as the
         # scope-wide route above, one path segment deeper. GET is any
         # scope member (matches _handle_session_detail); PUT/DELETE are
@@ -576,6 +599,7 @@ class MiniAppServer:
         log.debug("miniapp: %s authorized (scope_chat_id=%s)", route_name, scope_chat_id)
         try:
             request[_auth_user_key()] = user_id
+            request[_telegram_user_key()] = user
         except TypeError:  # a bare stand-in request (tests): nothing to close
             pass
         return scope_chat_id, user_id
@@ -910,6 +934,81 @@ class MiniAppServer:
             # /api/report/send check it themselves.
             "can_report": bool(isinstance(scope_chat_id, int) and scope_chat_id > 0
                                and report_flow.is_owner(self.bot, user_id)),
+            # The viewer's own App language: personal, never admin-gated.
+            "app_language": self._app_language_payload(request, user_id),
+        })
+
+    @staticmethod
+    def _viewer_language_code(request):
+        try:
+            user = request.get(_telegram_user_key())
+        except (AttributeError, TypeError):
+            user = None
+        code = user.get("language_code") if isinstance(user, dict) else None
+        return code if isinstance(code, str) else None
+
+    def _app_language_payload(self, request, user_id) -> dict:
+        """The App language group: its title and the 7.0 hint in the
+        viewer's language, the stored choice (``auto`` when none), the
+        language in force, and the choices in their own names."""
+        from aipager import i18n
+        from aipager.bot import language_menu
+        from aipager.i18n.locales import enabled_codes, is_selectable
+        from aipager.preferences import get_ui_language
+        tr = i18n.for_viewer(user_id, self._viewer_language_code(request))
+        stored = get_ui_language(user_id) if isinstance(user_id, int) else ""
+        options = [{"value": language_menu.AUTO_TOKEN, "label": tr.text(language_menu.AUTO)}]
+        options += [{"value": c, "label": language_menu.endonym(c)} for c in enabled_codes()]
+        return {
+            "title": tr.text(_APP_LANGUAGE_TITLE),
+            "hint": tr.text(_APP_LANGUAGE_HINT),
+            "value": stored if is_selectable(stored) else language_menu.AUTO_TOKEN,
+            "effective": tr.code,
+            "options": options,
+        }
+
+    async def _handle_app_language_put(self, request):
+        """``PUT /api/app-language`` ``{"value": "auto" | <code>}``: the
+        viewer's own language for aipager's text (their DM's entry). Any
+        member, rate limited; 400 for anything but Automatic or a language
+        a person may pick."""
+        from aiohttp import web
+
+        from aipager import i18n
+        from aipager.bot import language_menu
+        from aipager.i18n.locales import is_selectable
+        from aipager.preferences import set_ui_language
+
+        result = await self._authenticate_user(request, "/api/app-language")
+        if isinstance(result, web.Response):
+            return result
+        _scope_chat_id, user_id = result
+        if not self._allow_write(user_id):
+            log.info("miniapp: app language write rejected (429) - rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad_request"}, status=400)
+        value = body.get("value") if isinstance(body, dict) else None
+        if value == language_menu.AUTO_TOKEN:
+            code = ""
+        elif isinstance(value, str) and is_selectable(value):
+            code = value
+        else:
+            return web.json_response({"error": "bad_request"}, status=400)
+        if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
+            return web.json_response({"error": "bad_request"}, status=400)
+        try:
+            set_ui_language(user_id, code)
+        except ValueError:
+            return web.json_response({"error": "bad_request"}, status=400)
+        tr = i18n.for_viewer(user_id, self._viewer_language_code(request))
+        return web.json_response({
+            "value": value,
+            "effective": tr.code,
+            "confirmation": tr.text(language_menu.CHANGED,
+                                    language=language_menu.endonym(tr.code)),
         })
 
     # ---- problem reports ---------------------------------------------------

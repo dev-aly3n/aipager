@@ -1367,6 +1367,39 @@ def test_the_harness_detects_a_failed_put_that_keeps_the_optimistic_value(
     )
 
 
+# ===== Settings tab: the viewer's App language (multilingual) =============
+
+@pytest.mark.parametrize("scenario, ok", [
+    ("app_language", "ok: app language tap -> PUT /api/app-language -> confirmed"),
+    ("app_language_fails",
+     "ok: app language tap -> PUT /api/app-language -> restored on failure"),
+    ("app_language_absent", "ok: no app_language -> nothing rendered"),
+])
+def test_app_language_row_saves_and_confirms(node_bin, tmp_path, scenario, ok):
+    """Above the chat's preferences, never disabled (personal, not an
+    admin's), saved with an optimistic PUT to /api/app-language, the
+    server's confirmation shown as a toast, the old value back on a
+    failure; a page fed an older payload shows nothing."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, scenario)
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert ok in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_a_broken_app_language_put(node_bin, tmp_path):
+    """Guard the guard: a wrong PUT URL fails the scenario, even one the
+    stub would answer exactly as the right one (its path ignores a query)."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace('fetch("/api/app-language"', 'fetch("/api/app-language?x=1"',
+                                1)
+    assert broken != INDEX_HTML, "the App language PUT not found - page changed shape"
+    proc = _drive_controls(node_bin, tmp_path, broken, "app_language",
+                           name="broken-app-language.html")
+    assert proc.returncode != 0
+
+
 # ===== em dashes in server strings (roadmap 8.44) ==========================
 
 def test_the_harness_detects_a_reason_shown_with_its_em_dash(node_bin, tmp_path):

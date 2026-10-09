@@ -263,6 +263,8 @@ HTML_BODY = """\
 </div>
 
 <section id="view-settings" hidden>
+  <div id="settings-app-language" class="groups"></div>
+  <p class="sect-note" id="settings-app-language-hint" hidden></p>
   <h2 class="sect-title">Chat preferences</h2>
   <p class="sect-note" id="settings-intro">These apply to every session in this chat.</p>
   <div id="settings-groups" class="groups"></div>

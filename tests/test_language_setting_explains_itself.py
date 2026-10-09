@@ -85,3 +85,28 @@ def test_the_lines_fit_a_phone():
                 language_menu.CHANGED):
         assert "\n" not in msg
         assert len(msg.replace("{language}", "Português (Brasil)")) <= 240
+
+
+# ---- the Mini App's App language -------------------------------------------
+
+from tests.test_app_language_api import (  # noqa: E402
+    MEMBER_ID,
+    _call,
+    _configured_bot_token,  # noqa: F401 - autouse: the token the initData is signed with
+    _hdr,
+    _run,
+)
+from tests.test_app_language_api import server  # noqa: E402, F401
+
+
+def test_the_mini_app_row_says_it(server):  # noqa: F811
+    _status, data = _run(_call(server, "GET", "/api/preferences", _hdr(MEMBER_ID)))
+    assert data["app_language"]["hint"] == (
+        "Only aipager's own text. Claude's answers don't change.")
+
+
+def test_the_mini_app_confirmation_says_it(server):  # noqa: F811
+    _status, data = _run(_call(server, "PUT", "/api/app-language", _hdr(MEMBER_ID),
+                               {"value": "en"}))
+    assert data["confirmation"] == CONFIRM
+    _says(data["confirmation"], CONFIRM_SAYS)
