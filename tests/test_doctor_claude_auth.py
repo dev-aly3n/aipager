@@ -4,6 +4,8 @@ check_claude_auth(), check_service_unit_path(), and `doctor --fix`.
 
 from __future__ import annotations
 
+import pytest
+
 from aipager import claude_resolve, doctor
 
 
@@ -211,7 +213,8 @@ def test_fix_daemon_credential_skips_when_already_populated(monkeypatch, tmp_pat
 
     doctor._fix_daemon_credential()
     out = capsys.readouterr().out
-    assert "already has content" in out
+    assert "already holds a Claude credential" in out
+    assert "already-here" not in out
 
 
 def test_fix_daemon_credential_declines_leaves_file_absent(monkeypatch, tmp_path, capsys):
@@ -223,17 +226,76 @@ def test_fix_daemon_credential_declines_leaves_file_absent(monkeypatch, tmp_path
     assert not p.exists()
 
 
-def test_fix_daemon_credential_accepts_calls_ensure_daemon_env(monkeypatch, tmp_path):
+TOKEN = "sk-ant-oat01-secret-value"
+
+
+@pytest.mark.parametrize("before", ["", "# my notes\nOTHER=1\n", "CLAUDE_CODE_OAUTH_TOKEN=\n"])
+def test_fix_daemon_credential_fills_an_existing_file_without_one(monkeypatch, tmp_path, capsys, before):
+    # `aipager service install` always creates daemon.env, often empty:
+    # discovery must still run, and keep what the file already holds.
     p = tmp_path / "daemon.env"
+    p.write_text(before)
     monkeypatch.setattr("aipager.daemon_secrets.DAEMON_ENV_PATH", p)
     monkeypatch.setattr("builtins.input", lambda *_: "y")
-
-    called = []
-    monkeypatch.setattr("aipager.service.ensure_daemon_env",
-                        lambda: called.append(1))
+    monkeypatch.setattr("aipager.service._discover_token_via_login_shell", lambda: TOKEN)
 
     doctor._fix_daemon_credential()
-    assert called == [1]
+
+    from aipager import daemon_secrets
+    assert p.read_text().startswith(before)
+    assert daemon_secrets._parse_env_file(p.read_text())["CLAUDE_CODE_OAUTH_TOKEN"] == TOKEN
+    assert (p.stat().st_mode & 0o777) == 0o600
+    out = capsys.readouterr().out
+    assert "added a CLAUDE_CODE_OAUTH_TOKEN line from your login shell" in out
+    assert TOKEN not in out
+
+
+def test_fix_daemon_credential_copies_a_legacy_config_env_line_first(monkeypatch, tmp_path, capsys):
+    from aipager import config
+    p = tmp_path / "daemon.env"
+    p.write_text("")
+    monkeypatch.setattr("aipager.daemon_secrets.DAEMON_ENV_PATH", p)
+    legacy = config._XDG_CONFIG
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text("CLAUDE_TG_CHAT_ID=1\nANTHROPIC_API_KEY=sk-ant-api-legacy\n")
+    monkeypatch.setattr("builtins.input", lambda *_: "y")
+    probed = []
+    monkeypatch.setattr("aipager.service._discover_token_via_login_shell",
+                        lambda: probed.append(1) or TOKEN)
+
+    doctor._fix_daemon_credential()
+
+    assert p.read_text() == "ANTHROPIC_API_KEY=sk-ant-api-legacy\n"
+    assert probed == []
+    out = capsys.readouterr().out
+    assert "from config.env" in out and "sk-ant-api-legacy" not in out
+
+
+def test_fix_daemon_credential_reports_when_nothing_is_found(monkeypatch, tmp_path, capsys):
+    p = tmp_path / "daemon.env"
+    p.write_text("OTHER=1\n")
+    monkeypatch.setattr("aipager.daemon_secrets.DAEMON_ENV_PATH", p)
+    monkeypatch.setattr("builtins.input", lambda *_: "y")
+    monkeypatch.setattr("aipager.service._discover_token_via_login_shell", lambda: None)
+
+    doctor._fix_daemon_credential()
+
+    assert p.read_text() == "OTHER=1\n"
+    assert "None found" in capsys.readouterr().out
+
+
+def test_fix_daemon_credential_declined_writes_nothing_to_an_existing_file(monkeypatch, tmp_path):
+    p = tmp_path / "daemon.env"
+    p.write_text("")
+    monkeypatch.setattr("aipager.daemon_secrets.DAEMON_ENV_PATH", p)
+    monkeypatch.setattr("builtins.input", lambda *_: "n")
+    probed = []
+    monkeypatch.setattr("aipager.service._discover_token_via_login_shell",
+                        lambda: probed.append(1) or TOKEN)
+
+    doctor._fix_daemon_credential()
+
+    assert p.read_text() == "" and probed == []
 
 
 # ----- doctor --fix: claude_path pinning -----------------------------------
@@ -357,3 +419,80 @@ def test_cmd_doctor_dispatches_to_fix_when_flag_set(monkeypatch):
     rc = doctor.cmd_doctor(argparse.Namespace(fix=True))
     assert rc == 0
     assert called == [1]
+
+
+def _fix_with_token(monkeypatch, p, answer="y", token=TOKEN):
+    monkeypatch.setattr("aipager.daemon_secrets.DAEMON_ENV_PATH", p)
+    monkeypatch.setattr("builtins.input", lambda *_: answer)
+    probed = []
+    monkeypatch.setattr("aipager.service._discover_token_via_login_shell",
+                        lambda: probed.append(1) or token)
+    doctor._fix_daemon_credential()
+    return probed
+
+
+def test_fix_daemon_credential_never_writes_through_a_planted_tmp_symlink(monkeypatch, tmp_path):
+    p = tmp_path / "daemon.env"
+    p.write_text("")
+    victim = tmp_path / "victim.txt"
+    victim.write_text("not yours\n")
+    (tmp_path / "daemon.env.tmp").symlink_to(victim)
+
+    _fix_with_token(monkeypatch, p)
+
+    assert victim.read_text() == "not yours\n"
+    assert not p.is_symlink() and TOKEN in p.read_text()
+    assert (p.stat().st_mode & 0o777) == 0o600
+    assert not (tmp_path / "daemon.env.tmp").exists()
+
+
+def test_fix_daemon_credential_replaces_a_leftover_tmp_and_leaves_none(monkeypatch, tmp_path):
+    p = tmp_path / "daemon.env"
+    p.write_text("OTHER=1\n")
+    leftover = tmp_path / "daemon.env.tmp"
+    leftover.write_text("junk from a crash\n")
+    leftover.chmod(0o644)
+
+    _fix_with_token(monkeypatch, p)
+
+    assert p.read_text() == f"OTHER=1\nCLAUDE_CODE_OAUTH_TOKEN={TOKEN}\n"
+    assert (p.stat().st_mode & 0o777) == 0o600
+    assert not leftover.exists()
+
+
+def test_fix_daemon_credential_leaves_an_unreadable_file_alone(monkeypatch, tmp_path, capsys):
+    p = tmp_path / "daemon.env"
+    p.write_bytes(b"X=\xff\n")
+
+    probed = _fix_with_token(monkeypatch, p)
+
+    assert p.read_bytes() == b"X=\xff\n" and probed == []
+    assert "could not be read" in capsys.readouterr().out
+
+
+def test_fix_daemon_credential_skips_an_unreadable_legacy_config_env(monkeypatch, tmp_path):
+    from aipager import config
+    p = tmp_path / "daemon.env"
+    p.write_text("")
+    legacy = config._XDG_CONFIG
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_bytes(b"ANTHROPIC_API_KEY=\xff\n")
+
+    probed = _fix_with_token(monkeypatch, p)
+
+    assert probed == [1] and TOKEN in p.read_text()
+
+
+def test_fix_daemon_credential_says_so_when_the_write_fails(monkeypatch, tmp_path, capsys):
+    p = tmp_path / "daemon.env"
+    p.write_text("")
+
+    def _refused(*_a, **_k):
+        raise PermissionError("read-only")
+
+    monkeypatch.setattr("aipager.private_file.write_private", _refused)
+    _fix_with_token(monkeypatch, p)
+
+    out = capsys.readouterr().out
+    assert "could not write" in out and TOKEN not in out
+    assert p.read_text() == ""

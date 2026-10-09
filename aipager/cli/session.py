@@ -29,11 +29,26 @@ def _cmd_session(args: argparse.Namespace) -> int:
                  claude_bin=claude_path)
 
 
+_HELP_FLAGS = frozenset({"-h", "--help"})
+
+_LS_USAGE = (
+    "usage: aipager session ls [-a|--all] [--json]\n\n"
+    "List the sessions. -a/--all includes ended ones; --json prints JSON."
+)
+_KILL_USAGE = (
+    "usage: aipager session kill <name> [-y]\n\n"
+    "End a session, after a question unless -y/--yes is given."
+)
+
+
 def _session_ls(args: argparse.Namespace) -> int:
     """`aipager session ls [-a|--all] [--json]` — list dtach sessions."""
     import json as _json
 
     rest = list(args.claude_args or [])
+    if _HELP_FLAGS & set(rest):
+        print(_LS_USAGE)
+        return 0
     show_all = bool({"-a", "--all"} & set(rest))
     as_json = "--json" in rest
 
@@ -63,6 +78,10 @@ def _session_ls(args: argparse.Namespace) -> int:
 def _session_kill(args: argparse.Namespace) -> int:
     """`aipager session kill <name> [-y]` — terminate a dtach session."""
     rest = list(args.claude_args or [])
+    if _HELP_FLAGS & set(rest):
+        # A help request, never a session name: nothing is looked up or ended.
+        print(_KILL_USAGE)
+        return 0
     force = bool({"-y", "--yes"} & set(rest))
     targets = [a for a in rest if a not in ("-y", "--yes")]
     if not targets:

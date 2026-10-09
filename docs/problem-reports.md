@@ -50,7 +50,6 @@ Each part, in plain words. Every value is checked against the list of allowed va
   - `fingerprint`: an `ap1-` name for the bug (a hash of the error's type and the names of up to 8 places in aipager's code, never of any text or data);
   - where it happened (the daemon, the hook, the status line, a command, the Mini App), how it was caught, and whether it is a bug or only something unusual (`tier`);
   - for an error logged by aipager, the logger's name (an `aipager` module, `asyncio` or a `telegram.ext` part);
-  - for a failed Telegram call, its kind (`message_deleted`, `not_modified`, `parse_entities`, `too_long`, `chat_not_found`, `canceled_by_edit` or `other`);
   - the exception's type name (for example `builtins.KeyError`, or `<other>` for one from outside a fixed list of packages), the types of up to three causes, and an error number name such as `ENOSPC`;
   - for a hook error, the hook event and the tool (a built-in tool by name, any MCP tool as `mcp`);
   - how many times, on which days and on which aipager versions it happened;

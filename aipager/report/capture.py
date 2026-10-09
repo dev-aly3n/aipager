@@ -92,13 +92,16 @@ def capture(record) -> None:
     if site is not None:
         file, line, _fn = site
         store.record_digest(f"{file}:{line}", level)
+    # The Mini App runs inside the daemon; its own loggers name it.
+    where = ("miniapp" if name == "aipager.miniapp" or name.startswith("aipager.miniapp.")
+             else "daemon")
     exc = _exception(record)
     if exc is not None:  # the store refuses anything that is no exception
-        store.record_exception(exc, where="daemon", trigger=_trigger(record, name, site),
+        store.record_exception(exc, where=where, trigger=_trigger(record, name, site),
                                logger=logger)
     elif level != "WARNING" and site is not None:
         file, line, fn = site
-        store.record_site("log_error", file=file, line=line, fn=fn, where="daemon",
+        store.record_site("log_error", file=file, line=line, fn=fn, where=where,
                           trigger="log_error", tier="anomaly", logger=logger)
 
 

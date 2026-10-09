@@ -238,7 +238,7 @@ def _extract_token_line(path: Path) -> str | None:
     the raw ``KEY=VALUE`` line verbatim, or ``None``."""
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return None
     for line in lines:
         stripped = line.strip()
@@ -281,6 +281,57 @@ def _discover_token_via_login_shell() -> str | None:
     return token or None
 
 
+#: Where :func:`discover_daemon_credential` says a login-shell token came from.
+LOGIN_SHELL_SOURCE = "your login shell"
+
+
+def discover_daemon_credential() -> tuple[str, str] | None:
+    """A credential line for ``daemon.env`` and where it came from, or
+    ``None``: a ``CLAUDE_CODE_OAUTH_TOKEN=`` / ``ANTHROPIC_API_KEY=`` line
+    from a legacy ``config.env`` (or its newest ``config.env.retired.*``
+    copy), else ``CLAUDE_CODE_OAUTH_TOKEN`` from the login shell. The
+    line holds the secret: callers write it and never print it."""
+    from aipager.config import _XDG_CONFIG
+
+    candidates: list[Path] = []
+    if _XDG_CONFIG.exists():
+        candidates.append(_XDG_CONFIG)
+    candidates.extend(sorted(
+        _XDG_CONFIG.parent.glob("config.env.retired.*"),
+        key=lambda p: p.name, reverse=True,
+    ))
+    for candidate in candidates:
+        line = _extract_token_line(candidate)
+        if line:
+            return line, candidate.name
+
+    token = _discover_token_via_login_shell()
+    if token:
+        return f"CLAUDE_CODE_OAUTH_TOKEN={token}", LOGIN_SHELL_SOURCE
+    return None
+
+
+def add_daemon_credential(line: str, path: Path | None = None) -> None:
+    """Append one credential line to ``daemon.env``, keeping every line
+    already there (a later line wins when the file is read). Written
+    owner-only from the first byte and renamed over the file
+    (:func:`aipager.private_file.write_private`: a leftover or planted
+    ``daemon.env.tmp`` is removed first, never written through, and
+    nothing is left behind on a failure). A ``daemon.env`` that is a
+    symlink becomes a regular file. Raises ``OSError`` or
+    ``UnicodeDecodeError`` when the file cannot be read or written."""
+    from aipager.private_file import write_private
+
+    path = path or DAEMON_ENV_PATH
+    try:
+        existing = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        existing = ""
+    if existing and not existing.endswith("\n"):
+        existing += "\n"
+    write_private(path, existing + line + "\n")
+
+
 def ensure_daemon_env() -> Path:
     """Ensure ``daemon.env`` exists (mode 0600), even if empty.
 
@@ -297,26 +348,14 @@ def ensure_daemon_env() -> Path:
     if DAEMON_ENV_PATH.exists():
         return DAEMON_ENV_PATH
 
-    from aipager.config import _XDG_CONFIG
-
-    candidates: list[Path] = []
-    if _XDG_CONFIG.exists():
-        candidates.append(_XDG_CONFIG)
-    candidates.extend(sorted(
-        _XDG_CONFIG.parent.glob("config.env.retired.*"),
-        key=lambda p: p.name, reverse=True,
-    ))
-    for candidate in candidates:
-        line = _extract_token_line(candidate)
-        if line:
-            _write_daemon_env(line + "\n")
-            ok(f"copied a token forward from {candidate.name} → daemon.env")
-            return DAEMON_ENV_PATH
-
-    token = _discover_token_via_login_shell()
-    if token:
-        _write_daemon_env(f"CLAUDE_CODE_OAUTH_TOKEN={token}\n")
-        ok("discovered CLAUDE_CODE_OAUTH_TOKEN from your login shell → daemon.env")
+    found = discover_daemon_credential()
+    if found is not None:
+        line, source = found
+        _write_daemon_env(line + "\n")
+        if source == LOGIN_SHELL_SOURCE:
+            ok("discovered CLAUDE_CODE_OAUTH_TOKEN from your login shell → daemon.env")
+        else:
+            ok(f"copied a token forward from {source} → daemon.env")
         return DAEMON_ENV_PATH
 
     _write_daemon_env("")

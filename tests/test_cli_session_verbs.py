@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 
+import pytest
+
 from aipager import cli
 
 
@@ -161,3 +163,39 @@ def test_session_launch_threads_resolved_claude_path(monkeypatch):
     assert rc == 0
     assert captured["name"] == "jim"
     assert captured["claude_bin"] == "/home/x/.local/bin/claude"
+
+
+# ----- help: `kill --help` used to look for a session named "--help" -----
+
+
+@pytest.mark.parametrize("flag", ["--help", "-h"])
+@pytest.mark.parametrize("extra", [[], ["jim"], ["jim", "-y"]])
+def test_session_kill_help_prints_usage_and_touches_nothing(monkeypatch, capsys, flag, extra):
+    # Even if a session socket existed for every name, help ends nothing.
+    monkeypatch.setattr("pathlib.Path.exists", lambda self: True)
+    killed: list = []
+
+    async def _fake_kill(session):
+        killed.append(session)
+        return True
+
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", _fake_kill)
+    monkeypatch.setattr("builtins.input", lambda *_: "y")
+
+    rc = cli._cmd_session(_ns("kill", [flag, *extra]))
+
+    assert rc == 0 and killed == []
+    assert capsys.readouterr().out.startswith("usage: aipager session kill <name> [-y]")
+
+
+@pytest.mark.parametrize("name", ["ls", "list"])
+@pytest.mark.parametrize("flag", ["--help", "-h"])
+def test_session_ls_help_prints_usage_and_lists_nothing(monkeypatch, capsys, name, flag):
+    gathered: list = []
+    monkeypatch.setattr("aipager.status._gather_sessions",
+                        lambda: gathered.append(1) or ([], set()))
+
+    rc = cli._cmd_session(_ns(name, [flag]))
+
+    assert rc == 0 and gathered == []
+    assert capsys.readouterr().out.startswith("usage: aipager session ls")

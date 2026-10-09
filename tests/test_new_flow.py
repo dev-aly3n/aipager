@@ -851,6 +851,29 @@ def test_a_stored_model_taken_off_the_list_still_launches_it(wbot, label, model)
     assert (got["model"], got["model_label"]) == (model, label)
 
 
+@pytest.mark.parametrize("label", sorted(config.RETIRED_MODEL_LABELS))
+def test_the_model_list_marks_a_stored_model_taken_off_the_list(wbot, label):
+    preferences.set_new_session_default(CHAT, "model", label)
+
+    _text, kb = new_flow.render_new_session_defaults(wbot(), CHAT, view="model")
+
+    rows = [(b.text, b.callback_data) for row in kb.inline_keyboard for b in row]
+    marked = [text for text, _cb in rows if text.endswith("✅")]
+    assert marked == [f"{label} (older model) ✅"]
+    # A tap only re-shows the list: it is already the choice.
+    assert (f"{label} (older model) ✅", "_:set:ns:model") in rows
+
+
+def test_the_model_list_shows_no_older_row_for_a_current_choice(wbot):
+    preferences.set_new_session_default(CHAT, "model", MODEL_CHOICES[0][0])
+
+    _text, kb = new_flow.render_new_session_defaults(wbot(), CHAT, view="model")
+
+    texts = [b.text for row in kb.inline_keyboard for b in row]
+    assert [t for t in texts if t.endswith("✅")] == [f"{MODEL_CHOICES[0][0]} ✅"]
+    assert not any("older model" in t for t in texts)
+
+
 def test_a_stored_folder_that_is_no_longer_allowed_falls_back(wbot, tmp_path, monkeypatch):
     preferences.set_new_session_default(CHAT, "cwd", str(tmp_path))
     monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat, **_kw: [str(tmp_path)])

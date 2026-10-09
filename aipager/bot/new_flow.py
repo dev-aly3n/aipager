@@ -989,6 +989,13 @@ def render_new_session_defaults(
             f"{label}{' ✅' if stored.model == label else ''}",
             callback_data=f"_:set:ns:model:{idx}")]
             for idx, (label, _cmd) in enumerate(MODEL_CHOICES)]
+        if (stored.model in RETIRED_MODEL_LABELS
+                and stored.model not in {lbl for lbl, _cmd in MODEL_CHOICES}):
+            # Taken off the list since the chat chose it, and still what
+            # /new starts with: shown as the choice, a tap only re-shows
+            # the list (pick another row to change it).
+            rows.append([InlineKeyboardButton(
+                f"{stored.model} (older model) ✅", callback_data="_:set:ns:model")])
         rows.append([InlineKeyboardButton(
             f"Default model{' ✅' if not stored.model else ''}",
             callback_data="_:set:ns:model:default")])

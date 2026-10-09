@@ -920,27 +920,66 @@ def _print_safety_policy() -> None:
     )
 
 
+def _daemon_env_state(path) -> str:
+    """``"credential"`` when ``daemon.env`` holds a non-empty Claude
+    credential, ``"unreadable"`` when it exists but cannot be read, else
+    ``"none"`` (missing, empty, or other lines only)."""
+    from aipager import daemon_secrets
+    from aipager.service import _TOKEN_KEYS
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return "none"
+    except (OSError, UnicodeDecodeError):
+        return "unreadable"
+    values = daemon_secrets._parse_env_file(text)
+    return "credential" if any(values.get(k) for k in _TOKEN_KEYS) else "none"
+
+
 def _fix_daemon_credential() -> None:
     """`--fix` step (a): offer to discover/copy a credential into
-    daemon.env when nothing is there yet. Interactive — the CLI-only
-    home for this class of question (see the contract's non-negotiable:
-    a Telegram-side credential-copy question was dropped from scope)."""
-    from aipager.daemon_secrets import DAEMON_ENV_PATH
+    daemon.env when it holds none, even when the file exists (`aipager
+    service install` always creates it, often empty). Interactive - the
+    CLI-only home for this class of question (see the contract's
+    non-negotiable: a Telegram-side credential-copy question was dropped
+    from scope). The credential itself is never printed."""
+    from aipager import daemon_secrets
     from aipager import service as _service
     from aipager.ui import console
 
-    has_content = DAEMON_ENV_PATH.exists() and DAEMON_ENV_PATH.stat().st_size > 0
-    if has_content:
-        console.print(f"  [ok]✓[/ok]  {DAEMON_ENV_PATH} already has content - leaving it alone")
+    path = daemon_secrets.DAEMON_ENV_PATH
+    state = _daemon_env_state(path)
+    if state == "credential":
+        console.print(f"  [ok]✓[/ok]  {path} already holds a Claude credential - leaving it alone")
         return
-    console.print(f"  No credential found at {DAEMON_ENV_PATH}.")
+    if state == "unreadable":
+        console.print(f"  [warn]⚠[/warn]  {path} could not be read - leaving it alone")
+        return
+    console.print(f"  No Claude credential in {path}.")
     from aipager.errors import require_interactive
     require_interactive()
     answer = input("  Try to discover one automatically? [y/N]: ").strip().lower()
     if answer not in ("y", "yes"):
         console.print("  [muted]skipped[/muted]")
         return
-    _service.ensure_daemon_env()
+    found = _service.discover_daemon_credential()
+    if found is None:
+        console.print(
+            "  None found (no legacy config.env, and none in your login shell).\n"
+            f"  Add a CLAUDE_CODE_OAUTH_TOKEN=... or ANTHROPIC_API_KEY=... line to {path}\n"
+            "  yourself (`claude setup-token` prints a token).")
+        return
+    line, source = found
+    key = line.split("=", 1)[0]
+    try:
+        _service.add_daemon_credential(line, path)
+    except (OSError, UnicodeDecodeError) as e:
+        console.print(f"  [warn]⚠[/warn]  could not write {path}: {type(e).__name__}")
+        return
+    console.print(
+        f"  [ok]✓[/ok]  added a {key} line from {source} to {path}\n"
+        "  Restart aipager to use it: `aipager service stop`, then `aipager service start`.")
 
 
 def _fix_claude_path() -> None:

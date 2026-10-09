@@ -473,8 +473,8 @@ A check that crashes on an unexpected environment shows as a single
 these keys (see [commands](commands.md#aipager-doctor---json)).
 
 Run `aipager doctor --fix` to interactively discover/copy a Claude
-credential into `daemon.env`, or pin `claude_path` when more than one
-install is found. It only ever acts after asking. For a service unit
+credential into `daemon.env` (also when the file is there but holds
+none), or pin `claude_path` when more than one install is found. It only ever acts after asking. For a service unit
 whose PATH lacks claude's folder, run `aipager service install --yes`.
 
 ## The daemon can't find `claude`, or picks the wrong install
@@ -504,7 +504,10 @@ reading `~/.config/aipager/daemon.env` - a plain `KEY=VALUE` file,
 0600, created automatically the first time you run
 `aipager service install` (copied forward from a legacy `config.env`
 if one held a token, otherwise discovered from your login shell once,
-otherwise left empty with a warning).
+otherwise left empty with a warning). If it is still empty,
+`aipager doctor --fix` searches the same places again when you say yes
+and adds the line it finds, keeping the file's other lines; it never
+prints the token. Or add the line yourself:
 
 ```sh
 cat ~/.config/aipager/daemon.env          # see what's there (or isn't)

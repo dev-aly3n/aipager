@@ -929,3 +929,26 @@ def test_the_monitor_tick_saves_the_store(monkeypatch):
     monkeypatch.setattr("aipager.dtach.inject.list_sessions", AsyncMock(return_value=[]))
     asyncio.run(monitor.tick())
     assert json.loads(_file_text())["counters"]
+
+
+# ---- where an error happened -----------------------------------------------------
+
+@pytest.mark.parametrize("logger, where", [
+    ("aipager.miniapp.server", "miniapp"), ("aipager.miniapp", "miniapp"),
+    ("aipager.bot.notify", "daemon"), ("aipager.miniapps_lookalike", "daemon")])
+def test_an_error_logged_by_the_mini_app_is_recorded_as_the_mini_apps(logger, where):
+    exc = _ours()
+    record = logging.LogRecord(logger, logging.ERROR, str(fp.PACKAGE_DIR / "state.py"),
+                               3, "m", (), (type(exc), exc, exc.__traceback__), func="save")
+    capture.capture(record)
+    [entry] = store.errors()
+    assert entry["where"] == where
+
+
+def test_a_mini_app_error_line_without_an_exception_is_the_mini_apps_too():
+    record = logging.LogRecord("aipager.miniapp.server", logging.ERROR,
+                               str(fp.PACKAGE_DIR / "miniapp" / "server.py"), 3, "m", (), None,
+                               func="handle")
+    capture.capture(record)
+    [entry] = store.errors()
+    assert entry["where"] == "miniapp" and entry["trigger"] == "log_error"
