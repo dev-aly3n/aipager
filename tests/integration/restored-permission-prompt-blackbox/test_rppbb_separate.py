@@ -99,7 +99,7 @@ def test_allow_on_restored_separate_prompt_posts_the_attributed_line(
     r = replay
     msg, sent_before, _k, _t = _run(vloop, _allow_separate(r, tmp_path))
     lines = [(t, reply) for _m, t, reply in r.chat.sent[sent_before:]]
-    assert any("Allowed by @owner" in t and reply == msg for t, reply in lines), \
+    assert any("Allowed · @owner" in t and reply == msg for t, reply in lines), \
         lines
 
 

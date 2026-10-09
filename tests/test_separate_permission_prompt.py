@@ -2,7 +2,7 @@
 
 The daemon shows it as its own message. Its Allow/Deny used to type keys
 into Claude Code's dialog straight away and never post the attributed
-line ("✅ api · Allowed by @bob · ..."). Pinned here, through the real
+line ("✅ api · Allowed · @bob · ..."). Pinned here, through the real
 notify path and the real tap handler:
 
 - Allow / Deny tapped on the separate message answer through the parked
@@ -196,7 +196,7 @@ def test_allow_on_a_separate_prompt_answers_through_the_hook_and_names_who(
     assert [d for _r, d in world.decisions] == [{"behavior": "allow"}]
     assert world.decisions[0][0] == HOOK
     lines = world.lines(GROUP)
-    assert lines == [("✅ <b>api</b> · Allowed by @bob · Bash: rm -rf build/", PROMPT_ID)]
+    assert lines == [("✅ <b>api</b> · Allowed · @bob · Bash: rm -rf build/", PROMPT_ID)]
     rec = _audit()[-1]
     assert (rec["action"], rec["via"], rec["username"], rec["tool"], rec["denied"]) == (
         "Allowed", "hook_decision", "bob", "Bash", False)
@@ -234,7 +234,7 @@ def test_deny_on_a_separate_prompt_answers_through_the_hook(world, run_async):
     assert decision["behavior"] == "deny" and decision["interrupt"] is False
     assert "@bob" in decision["message"]
     assert world.lines(GROUP) == [
-        ("🚫 <b>api</b> · Denied by @bob · Bash: rm -rf build/", PROMPT_ID)]
+        ("🚫 <b>api</b> · Denied · @bob · Bash: rm -rf build/", PROMPT_ID)]
     rec = _audit()[-1]
     assert (rec["action"], rec["via"], rec["denied"]) == ("Denied", "hook_decision", True)  # 8.100
     world.bot._watch_keystroke_answer.assert_not_called()
@@ -248,7 +248,7 @@ def test_the_line_threads_under_the_busy_card_once_there_is_one(world, run_async
     sess.busy_msg_id = 80
     world.tap(run_async, GROUP, BOB, "allow")
     assert world.lines(GROUP) == [
-        ("✅ <b>api</b> · Allowed by @bob · Bash: rm -rf build/", 80)]
+        ("✅ <b>api</b> · Allowed · @bob · Bash: rm -rf build/", 80)]
 
 
 # ---- typed only once the hook stopped waiting --------------------------------
@@ -267,7 +267,7 @@ def test_once_the_hook_gave_up_the_answer_is_typed_and_still_named(
     assert world.decisions == []
     assert world.keys == ["Down"] * 5 + ["Enter"]     # overshoot, unchanged
     assert world.lines(GROUP) == [
-        ("🚫 <b>api</b> · Denied by @bob · Bash: rm -rf build/", PROMPT_ID)]
+        ("🚫 <b>api</b> · Denied · @bob · Bash: rm -rf build/", PROMPT_ID)]
     rec = _audit()[-1]
     assert (rec["action"], rec["via"], rec["denied"]) == ("Denied", "keystroke_fallback", True)
     # The typed refusal row ends the turn like an interrupt: watched.
@@ -338,7 +338,7 @@ def test_an_option_on_a_separate_question_posts_the_line(world, run_async):
     assert world.decisions == []
     assert world.keys == ["Down", "Enter"]
     assert world.lines(GROUP) == [
-        ("· <b>api</b> · Selected option 2 by @bob · Pick one", PROMPT_ID)]
+        ("· <b>api</b> · Selected option 2 · @bob · Pick one", PROMPT_ID)]
     world.bot._watch_keystroke_answer.assert_not_called()
 
 
@@ -360,7 +360,7 @@ def test_the_inline_prompts_line_is_unchanged(world, run_async):
                                "hook_reply": dict(HOOK)}
     world.tap(run_async, GROUP, BOB, "allow", msg_id=50)
     assert world.keys == []
-    assert world.lines(GROUP) == [("✅ <b>api</b> · Allowed by @bob · Bash: ls", 50)]
+    assert world.lines(GROUP) == [("✅ <b>api</b> · Allowed · @bob · Bash: ls", 50)]
     assert sess.pending_permission is None and sess.status is Status.BUSY
 
 

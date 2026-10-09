@@ -6,7 +6,7 @@
  "aipager/bot/agents_line.py": 11,
  "aipager/bot/animation.py": 29,
  "aipager/bot/auth.py": 14,
- "aipager/bot/callbacks.py": 95,
+ "aipager/bot/callbacks.py": 93,
  "aipager/bot/card_owner.py": 6,
  "aipager/bot/chat_migration.py": 3,
  "aipager/bot/dashboard.py": 87,

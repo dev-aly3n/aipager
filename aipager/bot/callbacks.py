@@ -1597,12 +1597,14 @@ class CallbackDispatchMixin:
                     scope_label=self._scope_label(sess.scope_chat_id),
                     scope_chat_id=sess.scope_chat_id or None,
                 )
-                by_attr = f" by {attribution_label(actor)}" if actor else ""
+                # "· @bob", never "by @bob": a translated line then needs
+                # no grammatical gender for the person (multilingual design).
+                attr = f" · {attribution_label(actor)}" if actor else ""
                 try:
                     await send_text(self._app.bot,
                         resolve_chat_id(sess),
                         f"✓ <b>{html_mod.escape(sess.label)}</b> · "
-                        f"Answered{html_mod.escape(by_attr)} · "
+                        f"Answered{html_mod.escape(attr)} · "
                         f"{html_mod.escape(question_text[:80])} → "
                         f"{html_mod.escape(verb[:80])}",
                         parse_mode="HTML",
@@ -1967,7 +1969,7 @@ class CallbackDispatchMixin:
         """The record of an answered prompt, the same for the inline prompt
         and a separate-message one (roadmap 8.99): the collapsed row in
         the tool history, the audit-log record, and the attributed line in
-        the session's chat ("✅ x1 · Allowed by @bob · Write: ...").
+        the session's chat ("✅ x1 · Allowed · @bob · Write: ...").
         Threaded under the busy card, else under *reply_to*.
 
         *decision* is the effective action id (``"allow"``,
@@ -2005,14 +2007,16 @@ class CallbackDispatchMixin:
         # the user just made. Threaded under the busy message so
         # the scrollback reads as a conversation.
         audit_icon = _DECISION_ICONS.get(decision, "·")
-        by_attr = f" by {attribution_label(actor)}" if actor else ""
+        # "· @bob", never "by @bob": a translated line then needs no
+        # grammatical gender for the person (multilingual design).
+        attr = f" · {attribution_label(actor)}" if actor else ""
         anchor = (sess.busy_msg_id if sess.busy_msg_id and sess.busy_msg_id > 0
                   else reply_to)
         try:
             await send_text(self._app.bot,
                 resolve_chat_id(sess),
                 f"{audit_icon} <b>{html_mod.escape(sess.label)}</b> · "
-                f"{verb}{html_mod.escape(by_attr)} · "
+                f"{verb}{html_mod.escape(attr)} · "
                 f"{html_mod.escape(audit_detail)}",
                 parse_mode="HTML",
                 reply_to_message_id=anchor or None,

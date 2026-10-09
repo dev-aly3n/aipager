@@ -324,7 +324,7 @@ the card says `🚫 jim · Denied`.
 
 Every tap is recorded in `~/.claude/aipager-audit.jsonl` and mirrored
 as a one-line reply threaded under the busy message:
-`✅ jim · Allowed by @alice · Bash: List the temp directory` (the call's
+`✅ jim · Allowed · @alice · Bash: List the temp directory` (the call's
 description, or its command when it has none; with a chat set up by `aipager config`; `Allowed` alone in personal mode).
 
 While a prompt - or an AskUserQuestion - waits for you, the session

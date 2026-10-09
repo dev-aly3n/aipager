@@ -637,9 +637,9 @@ asked for them: confirm cards and the `/new` cards, below.)
 chat, under the session's card, with who did it:
 
 ```
-✅ x1 · Allowed by @alice · Bash: ls -la /tmp
-🚫 x1 · Denied by @bob · WebFetch: https://example.com
-✓ x1 · Answered by @carol · Which database? → Postgres
+✅ x1 · Allowed · @alice · Bash: ls -la /tmp
+🚫 x1 · Denied · @bob · WebFetch: https://example.com
+✓ x1 · Answered · @carol · Which database? → Postgres
 ```
 
 **Who changed a session.** A tap on a button is seen only by the
