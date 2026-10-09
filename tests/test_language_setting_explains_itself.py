@@ -110,3 +110,13 @@ def test_the_mini_app_confirmation_says_it(server):  # noqa: F811
                                {"value": "en"}))
     assert data["confirmation"] == CONFIRM
     _says(data["confirmation"], CONFIRM_SAYS)
+
+
+def test_the_offer_card_says_it():
+    from aipager import i18n
+    from aipager.bot import language_offer
+    text, _kb = language_offer.render_offer(i18n.get("en"), "en")
+    _says(text, ("aipager now speaks English",
+                 "changes only aipager's own messages and buttons",
+                 "not your Claude sessions",
+                 "Claude still answers in the language you write to it"))

@@ -35,6 +35,7 @@ from aipager.bot import (
     card_owner,
     held_message,
     language_menu,
+    language_offer,
     new_flow,
     report_flow,
     session_parity,
@@ -354,6 +355,15 @@ class CallbackDispatchMixin:
         # "Invalid callback" for it.
         if parts and parts[0] == "lang":
             await self._dispatch_language_action(update, query, chat_id, parts[1:])
+            return
+        # The upgrade offer card's buttons (language_offer, off until the
+        # other languages ship).
+        if parts and parts[0] == language_offer.SECTION:
+            if len(parts) != 2:
+                await self._safe_answer(
+                    query, i18n.for_person(update).text(language_menu.INVALID_CALLBACK))
+                return
+            await language_offer.handle_callback(self, update, query, parts[1])
             return
 
         if not parts or parts == ["back"]:

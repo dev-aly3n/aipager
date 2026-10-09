@@ -71,6 +71,9 @@ def migrated_renders(monkeypatch) -> list[str]:
     out.append(menu["language"])
     from aipager.miniapp import server
     out += [tr.text(server._APP_LANGUAGE_TITLE), tr.text(server._APP_LANGUAGE_HINT)]
+    from aipager.bot import language_offer
+    text, kb = language_offer.render_offer(tr, "qps")
+    out += [text, *_texts(kb)]
     return out
 
 
