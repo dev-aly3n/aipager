@@ -15,7 +15,7 @@
         aipager = python.pkgs.buildPythonApplication {
           pname  = "aipager";
           # Keep in sync with pyproject.toml [project].version.
-          version = "1.0.0";
+          version = "1.0.1";
           format = "pyproject";
 
           src = ./.;

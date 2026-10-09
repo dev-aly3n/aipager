@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-09
+
 ### Security
 - **A permission prompt can no longer show a command in a different order from the one that runs.** Unicode's direction controls (the right-to-left override U+202E and its relatives) change the order in which Telegram, a browser or a phone draws the text after them, while the shell runs the characters in order, so a command Claude asked to run could read like a harmless one on the card you approve (the "Trojan Source" trick). Such characters are now shown as visible markers, like `⟨U+202E⟩`, in the command, the path and the summary of every permission prompt (the busy card, a prompt sent as its own message, the pinned bar's Answer, the Mini App, a prompt brought back after a restart), in questions and their options, in the optional diff preview of a file edit, and in the audit log, and the prompt adds the line "⚠️ This contains hidden direction characters, shown as ⟨U+...⟩. It may not run what it looks like." Nothing else changes: other invisible characters (such as the zero-width non-joiner in ordinary Persian words) are shown as before, and what is approved is exactly what Claude asked for.
 
