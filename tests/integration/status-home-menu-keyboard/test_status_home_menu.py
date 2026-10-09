@@ -401,7 +401,7 @@ def test_the_menu_puts_sessions_then_the_frequent_commands_first(mk_bot, monkeyp
     assert [(c.command, c.description) for c in commands[:2]] == [
         ("dev", "Talk to dev"), ("x1", "Talk to x1")]
     assert [c.command for c in commands[2:]] == [
-        "new", "status", "stop", "now", "resume", "mode", "settings", "help"]
+        "new", "status", "stop", "now", "resume", "mode", "settings", "language", "help"]
 
 
 def test_the_rare_commands_leave_the_menu_but_still_answer(mk_bot, run_async):

@@ -46,7 +46,7 @@ _GROUP_TYPES = frozenset({ChatType.GROUP, ChatType.SUPERGROUP})
 #: handler saw: the text router must not type it into a session.
 OWN_COMMANDS = frozenset({
     "start", "help", "status", "stop", "now", "kill", "new", "resume",
-    "clearqueue", "whoami", "mode", "perms", "settings", "app", "update",
+    "clearqueue", "whoami", "mode", "perms", "settings", "language", "app", "update",
     "restart", "rename", "delete", "diff",
 })
 

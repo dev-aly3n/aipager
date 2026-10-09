@@ -646,7 +646,7 @@ _VALID_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
 # drifting a third time; adding a command means adding it here too.
 _RESERVED = {
     # Telegram bot commands (see bot/lifecycle.py::_command_list)
-    "status", "stop", "kill", "new", "help", "start", "settings",
+    "status", "stop", "kill", "new", "help", "start", "settings", "language",
     "restart", "rename", "delete", "diff",
     "app", "clearqueue", "perms", "mode", "resume", "whoami", "update", "now",
     # `aipager session` subcommand verbs (see cli/session.py) — these are

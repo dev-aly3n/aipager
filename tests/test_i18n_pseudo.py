@@ -40,3 +40,40 @@ def test_the_pseudo_command():
     out = subprocess.run([sys.executable, tool_path, "pseudo", "--rtl", "Hi"],
                          capture_output=True, text=True, check=True, cwd=tool.ROOT)
     assert out.stdout.strip() == "\u200f" + core.pseudo("Hi")
+
+
+ENDONYMS = ("English", "Pseudo", "Pseudo RTL")
+
+
+def _texts(kb):
+    return [b.text for row in kb.inline_keyboard for b in row]
+
+
+def migrated_renders(monkeypatch) -> list[str]:
+    """Every renderer migrated to keys so far, under ``qps``."""
+    from aipager import i18n
+    from aipager.bot import kbwords, language_menu, mode_labels
+    from aipager.bot.lifecycle import LifecycleMixin
+    from aipager.i18n import locales
+    monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"qps"}))
+    tr = i18n.get("qps")
+    out = []
+    for private in (True, False):
+        text, kb = language_menu.render_language_menu(tr, private=private, current="qps")
+        out += [text, *_texts(kb)]
+    out.append(language_menu.confirmation(tr, "qps"))
+    out.append(language_menu.row_text(tr, "qps"))
+    out += [tr.text(m) for m in (*kbwords.NAV.values(), *kbwords.WORDS.values())]
+    out += [tr.text(m) for m in (mode_labels.MODE_AUTO, mode_labels.MODE_ASK,
+                                 mode_labels.MODE_ASK_INSTEAD, mode_labels.MODE_AUTO_INSTEAD,
+                                 mode_labels.MODE_ASK_FOR_YOU)]
+    menu = {c.command: c.description for c in LifecycleMixin._command_list(set(), tr=tr)}
+    out.append(menu["language"])
+    return out
+
+
+def test_every_migrated_renderer_is_marked_under_qps(monkeypatch):
+    renders = migrated_renders(monkeypatch)
+    assert len(renders) >= 20
+    leaks = {t: unmarked_words(t, known=ENDONYMS) for t in renders}
+    assert not {t: w for t, w in leaks.items() if w}, leaks

@@ -140,3 +140,66 @@ def test_junk_updates_give_english():
     assert i18n.for_person(SimpleNamespace()).code == "en"
     assert i18n.for_chat("x").code == "en"
     assert i18n.default_code() == "en"
+
+
+# ---- check 12 through the real surfaces --------------------------------------
+
+def test_check_12_the_language_surfaces_never_cross_chats(mk_bot, run_async, mk_update,
+                                                         monkeypatch):
+    """A DM in English and a group set to the pseudo language, driven
+    through /language, the language callbacks, /settings and the menu
+    registration: every group-bound text is pseudo-marked, and no
+    DM-bound text is."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from aipager.policy import load_policy
+    from aipager.scope import Member, Scope
+    from tests.test_language_setting import edited, tap
+
+    monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"qps"}))
+    bot = mk_bot(scopes=[
+        Scope(chat_id=GROUP, kind="group", label="team", members=(
+            Member(id=ALY, label="aly", role="owner"),
+            Member(id=BOB, label="bob", role="user"))),
+        Scope(chat_id=DM, kind="dm", label="aly DM",
+              members=(Member(id=ALY, label="aly", role="owner"),)),
+    ])
+    from pathlib import Path
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
+    bot._app.bot.set_my_commands = AsyncMock()
+    bot._app.bot.set_chat_menu_button = AsyncMock()
+    bot._send_keyboard = AsyncMock()
+    mark = "⟦"
+
+    # An admin switches the group: the confirmation is the group's.
+    text, rows = edited(tap(bot, run_async, "_:set:lang:qps", chat=GROUP, user=ALY))
+    assert text.count(mark) >= 2 and rows[-1][0][0].startswith(mark)
+
+    def language_cmd(chat, user):
+        update = mk_update("/language", chat_id=chat, user_id=user)
+        update.effective_user.language_code = "en"
+        run_async(bot._handle_language_cmd(update, MagicMock()))
+        call = update.message.reply_text.await_args
+        kb = call.kwargs["reply_markup"]
+        return call.args[0], [b.text for row in kb.inline_keyboard for b in row]
+
+    group_text, group_buttons = language_cmd(GROUP, BOB)
+    dm_text, dm_buttons = language_cmd(DM, ALY)
+    assert group_text.startswith(mark) and group_buttons[-1].startswith(mark)
+    assert mark not in dm_text and not any(mark in b for b in dm_buttons)
+
+    for chat, user, marked in ((GROUP, BOB, True), (DM, ALY, False)):
+        text, rows = edited(tap(bot, run_async, "_:set:lang", chat=chat, user=user))
+        assert (mark in text) is marked
+        assert (mark in rows[-1][0][0]) is marked
+        _text, rows = edited(tap(bot, run_async, "_:set", chat=chat, user=user))
+        assert (mark in rows[0][0][0]) is marked, rows[0]
+
+    menus = {c.kwargs["scope"].chat_id: {cmd.command: cmd.description for cmd in c.args[0]}
+             for c in bot._app.bot.set_my_commands.await_args_list}
+    assert menus[GROUP]["language"].startswith(mark)
+    run_async(bot._update_bot_commands_per_scope())
+    menus.update({c.kwargs["scope"].chat_id: {cmd.command: cmd.description
+                                              for cmd in c.args[0]}
+                  for c in bot._app.bot.set_my_commands.await_args_list})
+    assert mark not in menus[DM]["language"]

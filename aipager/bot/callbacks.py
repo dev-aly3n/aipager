@@ -34,6 +34,7 @@ from aipager.bot.mode_labels import mode_label
 from aipager.bot import (
     card_owner,
     held_message,
+    language_menu,
     new_flow,
     report_flow,
     session_parity,
@@ -43,7 +44,8 @@ from aipager.bot import (
 from aipager.dtach import hook_reply, inject
 from aipager.report import store as report_store
 
-from aipager import preferences
+from aipager import i18n, preferences
+from aipager.i18n.locales import is_selectable
 from aipager.bot.settings_menu import (
     SECTIONS as SETTINGS_SECTIONS,
     render_settings_root,
@@ -347,10 +349,18 @@ class CallbackDispatchMixin:
         chat_id = calling_chat_id(update)
         parts = action.split(":")[1:]  # drop the leading "set"
 
+        # The Language row (multilingual design, 7.2): its own branch,
+        # before the generic section branches below, which would answer
+        # "Invalid callback" for it.
+        if parts and parts[0] == "lang":
+            await self._dispatch_language_action(update, query, chat_id, parts[1:])
+            return
+
         if not parts or parts == ["back"]:
             text, kb = render_settings_root(
                 chat_id or 0, problem_reports=report_flow.settings_row_state(
-                    self, chat_id, getattr(getattr(query, "from_user", None), "id", None)))
+                    self, chat_id, getattr(getattr(query, "from_user", None), "id", None)),
+                language=i18n.for_update(update).code)
             try:
                 await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
             except Exception:
@@ -424,11 +434,7 @@ class CallbackDispatchMixin:
                 return
 
             text, kb = render_settings_section(chat_id or 0, section)
-            # In a group, who changed it (roadmap 8.91c); a DM is as before.
-            tapper = getattr(query, "from_user", None)
-            by = self._actor_label(getattr(tapper, "id", None), chat_id, tapper)
-            if by:
-                text += f"\n\n<i>Changed by {html_mod.escape(by)}.</i>"
+            text += self._changed_by_line(query, chat_id)
             try:
                 await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
             except Exception:
@@ -436,6 +442,71 @@ class CallbackDispatchMixin:
             return
 
         await self._safe_answer(query, "Invalid callback")
+
+    def _changed_by_line(self, query, chat_id) -> str:
+        """``\\n\\n<i>Changed by @x.</i>`` under a changed setting in a
+        group (roadmap 8.91c); ``""`` in a private chat."""
+        tapper = getattr(query, "from_user", None)
+        by = self._actor_label(getattr(tapper, "id", None), chat_id, tapper)
+        return f"\n\n<i>Changed by {html_mod.escape(by)}.</i>" if by else ""
+
+    async def _dispatch_language_action(self, update: Update, query, chat_id,
+                                        parts: list[str]) -> None:
+        """``_:set:lang`` opens the list (anyone may look);
+        ``_:set:lang:<code|auto>`` sets the chat's language.
+
+        The token must be ``auto`` (a private chat only) or a language a
+        person may pick, else "Invalid value". In a group (or a chat that
+        cannot be identified) only an admin may change it, as every other
+        setting. Nothing is written when the value would not change. The
+        menu, keyboard and menu button are re-sent only when the language
+        in force actually changed."""
+        private = isinstance(chat_id, int) and chat_id > 0
+        if not parts:
+            tr = i18n.for_update(update)
+            text, kb = language_menu.render_language_menu(
+                tr, private=private,
+                current=language_menu.current_choice(chat_id, private=private))
+            try:
+                await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
+            except Exception:
+                pass
+            return
+        # A pop-up is seen only by the person who tapped: their language.
+        person = i18n.for_person(update)
+        if len(parts) != 1:
+            await self._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))
+            return
+        token = parts[0]
+        if token == language_menu.AUTO_TOKEN and private:
+            code = ""
+        elif token != language_menu.AUTO_TOKEN and is_selectable(token):
+            code = token
+        else:
+            await self._safe_answer(query, person.text(language_menu.INVALID_VALUE))
+            return
+        if (chat_id is None or chat_id < 0) and not self._is_admin(update):
+            await self._safe_answer(
+                query, person.text(language_menu.ADMIN_ONLY), show_alert=True)
+            return
+        before = i18n.for_chat(chat_id).code
+        try:
+            preferences.set_ui_language(chat_id, code)
+        except ValueError:
+            await self._safe_answer(query, person.text(language_menu.INVALID_VALUE))
+            return
+        tr = i18n.for_chat(chat_id)
+        menu_text, kb = language_menu.render_language_menu(
+            tr, private=private,
+            current=language_menu.current_choice(chat_id, private=private))
+        text = f"{language_menu.confirmation(tr, tr.code)}\n\n{menu_text}"
+        text += self._changed_by_line(query, chat_id)
+        try:
+            await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
+        except Exception:
+            pass
+        if tr.code != before:
+            await self._on_language_changed(chat_id)
 
     async def _stop_the_turn_shown(self, update: Update, query, session_name: str,
                                    turn: int, *, again: str):

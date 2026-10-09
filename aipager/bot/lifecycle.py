@@ -35,6 +35,7 @@ from telegram.error import BadRequest, ChatMigrated, Forbidden, RetryAfter
 
 from aipager import bidi_guard, telegram_endpoint
 from aipager.dtach import inject
+from aipager.i18n import Msg
 
 from aipager.bot import (
     card_owner, chat_migration, group_intake, new_flow, session_parity, update_flow,
@@ -153,6 +154,16 @@ def _label_command(label: str) -> str | None:
     autocomplete entry is missing, which is the cheapest thing to lose.
     """
     return label if _TELEGRAM_COMMAND.match(label) else None
+
+
+#: The /language command's description in the `/` menu.
+_CMD_LANGUAGE = Msg("cmd.language", "Language of aipager's messages",
+                    note="/ menu description of /language")
+
+
+def _english():
+    from aipager import i18n
+    return i18n.get("en")
 
 
 class LifecycleMixin:
@@ -524,6 +535,7 @@ class LifecycleMixin:
         self._app.add_handler(CommandHandler("mode", self._handle_mode_cmd))
         self._app.add_handler(CommandHandler("perms", self._handle_mode_cmd))
         self._app.add_handler(CommandHandler("settings", self._handle_settings_cmd))
+        self._app.add_handler(CommandHandler("language", self._handle_language_cmd))
         self._app.add_handler(CommandHandler("app", self._handle_app_cmd))
         # Admin-only self-update (roadmap 8.36); the handler gates itself.
         self._app.add_handler(CommandHandler(
@@ -1203,6 +1215,7 @@ class LifecycleMixin:
             BotCommand("resume", "Resume an ended session"),
             BotCommand("mode", "Auto or Ask"),
             BotCommand("settings", "Message layout, formatting, new sessions"),
+            BotCommand("language", (tr or _english()).text(_CMD_LANGUAGE)),
             BotCommand("help", "What you can do"),
         ]
         # Read late (not module-level) so a live `aipager miniapp enable`
@@ -1220,6 +1233,40 @@ class LifecycleMixin:
             return i18n.for_chat(int(chat_id))
         except (TypeError, ValueError):
             return i18n.get(i18n.default_code())
+
+    async def _on_language_changed(self, chat_id: int) -> None:
+        """A chat's language in force changed (multilingual design, 7.2):
+        its `/` menu (the cache key includes the language, so this
+        re-registers it), its main reply keyboard and its menu button are
+        sent again, all through the limiter-bound bot. Never called when
+        the language did not change."""
+        try:
+            await self._update_bot_commands()
+        except Exception:
+            log.warning("Language change: menu refresh failed for %s", chat_id,
+                        exc_info=True)
+        try:
+            await self._send_keyboard(level="main", chat_id=chat_id)
+        except Exception:
+            log.warning("Language change: keyboard re-send failed for %s", chat_id,
+                        exc_info=True)
+        await self._set_menu_button_for(chat_id)
+
+    async def _set_menu_button_for(self, chat_id: int) -> None:
+        """Set *chat_id*'s Mini App menu button again, as
+        :meth:`publish_miniapp_url` does for every chat that may have one.
+        Nothing for a chat with no button (a group, no Mini App)."""
+        url = getattr(self, "_miniapp_url", "") or ""
+        if not self._app or not url or chat_id not in self._miniapp_button_chats():
+            return
+        from telegram import MenuButtonWebApp, WebAppInfo
+        try:
+            await self._app.bot.set_chat_menu_button(
+                chat_id=chat_id,
+                menu_button=MenuButtonWebApp(text=APP_BUTTON, web_app=WebAppInfo(url=url)))
+        except Exception:
+            log.warning("Language change: menu button failed for %s", chat_id,
+                        exc_info=True)
 
     async def _update_bot_commands_global(self) -> None:
         """Single global `/menu` (legacy / single-scope mode). Cached by

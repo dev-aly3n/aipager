@@ -34,6 +34,13 @@ def _chats(b):
     return [c.kwargs["scope"].chat_id for c in b._app.bot.set_my_commands.await_args_list]
 
 
+def _descriptions(b, chat):
+    for c in b._app.bot.set_my_commands.await_args_list:
+        if c.kwargs["scope"].chat_id == chat:
+            commands = c.args[0]
+    return {cmd.command: cmd.description for cmd in commands}
+
+
 def test_same_language_same_labels_no_call(bot, run_async):
     run_async(bot._update_bot_commands_per_scope())
     assert sorted(_chats(bot)) == [GROUP, DM]
@@ -51,6 +58,7 @@ def test_a_language_switch_reregisters_the_menu(bot, run_async, monkeypatch):
     preferences.set_ui_language(GROUP, "qps")
     run_async(bot._update_bot_commands_per_scope())
     assert _chats(bot) == [GROUP]
+    assert _descriptions(bot, GROUP)["language"].startswith("⟦")
     bot._app.bot.set_my_commands.reset_mock()
     run_async(bot._update_bot_commands_per_scope())
     assert _chats(bot) == []
@@ -67,3 +75,15 @@ def test_the_global_menu_follows_the_language_too(mk_bot, run_async, monkeypatch
     preferences.set_ui_language(int(config.CHAT_ID), "qps")
     run_async(b._update_bot_commands_global())
     assert b._app.bot.set_my_commands.await_count == 2
+
+
+def test_the_command_list_renders_only_language_through_tr():
+    from aipager.bot.lifecycle import LifecycleMixin
+    from aipager.i18n import get
+    english = {c.command: c.description for c in LifecycleMixin._command_list({"x1"})}
+    pseudo = {c.command: c.description
+              for c in LifecycleMixin._command_list({"x1"}, tr=get("qps"))}
+    assert english["language"] == "Language of aipager's messages"
+    assert pseudo["language"] != english["language"]
+    assert {k: v for k, v in pseudo.items() if k != "language"} == {
+        k: v for k, v in english.items() if k != "language"}

@@ -8,6 +8,7 @@ callable directly from tests without constructing a ``TelegramBot``.
 Callback-data contract (``callbacks.py`` parses these; see
 ``entrypoints.md`` for the full enumerated set):
     _:set                    → re-render the root menu
+    _:set:lang[:<code>]      → the Language list (``language_menu``)
     _:set:<section>          → open a section's value list
     _:set:back               → return to the root menu
     _:set:close               → remove the keyboard
@@ -190,14 +191,25 @@ def _root_button_text(section: str, prefs: Preferences) -> str:
 
 def render_settings_root(
     chat_id: int, *, problem_reports: str | None = None,
+    language: str | None = None,
 ) -> tuple[str, InlineKeyboardMarkup]:
-    """Root menu: one button per section (current value inline) + Close.
+    """Root menu: the Language row, one button per section (current value
+    inline) + Close.
 
     ``problem_reports`` is the owner's "Problem reports" value as the row
     shows it (``report_flow.settings_row_state``); None leaves the row
-    out (a group, someone else, or no owner)."""
+    out (a group, someone else, or no owner).
+
+    ``language`` is the code of the language in force for the caller
+    (``i18n.for_update``); None reads the chat's own (``for_chat``). The
+    Language row comes first: it opens the list, ``_:set:lang``."""
+    from aipager import i18n
+    from aipager.bot import language_menu
+    tr = i18n.get(language) if language else i18n.for_chat(chat_id)
     prefs = get_preferences(chat_id)
-    rows = [
+    rows = [[InlineKeyboardButton(language_menu.row_text(tr, tr.code),
+                                  callback_data="_:set:lang")]]
+    rows += [
         [InlineKeyboardButton(_root_button_text(section, prefs),
                               callback_data=f"_:set:{section}")]
         for section in SECTIONS

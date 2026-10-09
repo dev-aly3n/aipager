@@ -37,11 +37,13 @@ from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO, mode_label
 from aipager.dtach import inject
 
 from aipager import statusline_file
+from aipager import i18n
 from aipager.bot import (
     card_owner,
     group_intake,
     held_message,
     kbwords,
+    language_menu,
     new_flow,
     reactions,
     report_flow,
@@ -705,10 +707,25 @@ class CommandHandlersMixin:
         chat_id = calling_chat_id(update)
         text, kb = render_settings_root(
             chat_id or 0, problem_reports=report_flow.settings_row_state(
-                self, chat_id, calling_user_id(update)))
+                self, chat_id, calling_user_id(update)),
+            language=i18n.for_update(update).code)
         app_row = self._app_button_row(update)
         if app_row:
             kb = InlineKeyboardMarkup(list(kb.inline_keyboard) + app_row)
+        await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
+
+    async def _handle_language_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /language: the list of languages aipager speaks, the same
+        one the /settings Language row opens (multilingual design, 7.2).
+        Anyone allowed to look may (``allow_read_only=True``); changing a
+        group's language is admin-gated in the callback."""
+        if not await self._authorize(update, allow_read_only=True):
+            return
+        chat_id = calling_chat_id(update)
+        private = isinstance(chat_id, int) and chat_id > 0
+        text, kb = language_menu.render_language_menu(
+            i18n.for_update(update), private=private,
+            current=language_menu.current_choice(chat_id, private=private))
         await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
 
     async def _handle_app_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
