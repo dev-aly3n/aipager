@@ -17,6 +17,7 @@
  "aipager/bot/handlers.py": 183,
  "aipager/bot/held.py": 1,
  "aipager/bot/held_message.py": 1,
+ "aipager/bot/kbwords.py": 5,
  "aipager/bot/keyboards.py": 27,
  "aipager/bot/lifecycle.py": 29,
  "aipager/bot/live_reload.py": 3,

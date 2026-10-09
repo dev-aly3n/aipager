@@ -71,7 +71,7 @@ from typing import TYPE_CHECKING
 from telegram import ExternalReplyInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
 from aipager import preferences
-from aipager.bot import group_intake
+from aipager.bot import group_intake, kbwords
 from aipager.bot.transport import (
     MUTED,
     calling_chat_id,
@@ -82,13 +82,8 @@ from aipager.bot.transport import (
     send_text,
 )
 from aipager.config import (
-    APP_BUTTON,
-    BACK_BUTTON,
-    COMMANDS_BUTTON,
     MODEL_CHOICES,
-    MODELS_BUTTON,
     RETIRED_MODEL_LABELS,
-    TEMPLATES_BUTTON,
 )
 from aipager.miniapp import launch
 from aipager.state import Status
@@ -117,11 +112,6 @@ _TEXT_CAPTURE_STEPS = _NAME_STEPS | {"opt_model_custom", "opt_path_newfolder"}
 _EXPIRED_TEXT = "⏱ This new-session card expired. Send /new again."
 _CLOSED_TEXT = "✖️ Closed, you moved on. Send /new to start a session."
 
-#: Main-keyboard words that only look at things (or reopen the card):
-#: the card keeps waiting through them. `stop` and `kill` act on a
-#: session, so they close it.
-_LOOKING_WORDS = frozenset({"new", "status"})
-_ACTING_WORDS = frozenset({"stop", "kill"})
 
 
 # ---- pending-state plumbing ------------------------------------------
@@ -299,13 +289,13 @@ def _not_for_the_card(bot: TelegramBot, update: Update, pending: dict,
         return "close"    # a quote from another chat: a reply, never a name
     if pending["step"] == "opt_model_custom":
         return ""         # a custom model may well be a model label
-    word = text.strip().lower()
-    if word in _LOOKING_WORDS or text in (
-            TEMPLATES_BUTTON, COMMANDS_BUTTON, MODELS_BUTTON, BACK_BUTTON, APP_BUTTON):
+    # Main-keyboard words that only look at things (new, status, the
+    # navigation buttons) keep the card waiting; stop, kill and a template,
+    # command or model button act on a session, so they close it.
+    kind = kbwords.classify(bot, text)
+    if kind == "looking":
         return "keep"
-    if word in _ACTING_WORDS or any(
-            text in (getattr(bot, attr, None) or {})
-            for attr in ("_template_map", "_command_map", "_model_map")):
+    if kind == "acting":
         return "close"
     return ""
 

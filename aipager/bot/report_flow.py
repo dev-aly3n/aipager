@@ -554,22 +554,8 @@ def _note_pending(bot: "TelegramBot") -> dict | None:
 def _keyboard_word(bot: "TelegramBot", text: str) -> bool:
     """A main-keyboard word (the sets the /new Name card tells apart):
     a tap on the keyboard, never a note."""
-    from aipager.bot import new_flow
-    from aipager.config import (
-        APP_BUTTON,
-        BACK_BUTTON,
-        COMMANDS_BUTTON,
-        MODELS_BUTTON,
-        TEMPLATES_BUTTON,
-    )
-
-    word = text.strip().lower()
-    if word in new_flow._LOOKING_WORDS or word in new_flow._ACTING_WORDS:
-        return True
-    if text in (TEMPLATES_BUTTON, COMMANDS_BUTTON, MODELS_BUTTON, BACK_BUTTON, APP_BUTTON):
-        return True
-    return any(text in (getattr(bot, attr, None) or {})
-               for attr in ("_template_map", "_command_map", "_model_map"))
+    from aipager.bot import kbwords
+    return kbwords.classify(bot, text) is not None
 
 
 def _is_note_answer(bot: "TelegramBot", update, pending: dict) -> bool:

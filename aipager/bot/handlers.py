@@ -40,6 +40,7 @@ from aipager.bot import (
     card_owner,
     group_intake,
     held_message,
+    kbwords,
     new_flow,
     reactions,
     report_flow,
@@ -53,9 +54,8 @@ from aipager.bot.session_ops import (
 )
 from aipager.bot.settings_menu import render_settings_root
 from aipager.config import (
-    APP_BUTTON, BACK_BUTTON, COMMANDS_BUTTON,
-    FILE_DOWNLOAD_DIR, KEYBOARD_PARENTS, MODELS_BUTTON,
-    TEMPLATES_BUTTON,
+    APP_BUTTON,
+    FILE_DOWNLOAD_DIR, KEYBOARD_PARENTS,
 )
 from aipager.state import QUEUE_CAP, Status, TrackedSession
 
@@ -1572,23 +1572,26 @@ class CommandHandlersMixin:
         # a marked tap nor addressed to the bot (8.91f). The intake gate
         # stops such a message first; this keeps a path around the gate
         # from turning a typed "stop" or "Clear" into a button.
-        if keyboard_words and text == TEMPLATES_BUTTON:
+        # One resolver for every keyboard text (bot/kbwords.py): it knows
+        # every enabled language's labels.
+        nav = kbwords.nav_action(text) if keyboard_words else None
+        if nav == "nav:templates":
             await self._send_keyboard(level="templates", chat_id=kb_chat, tap=update)
             return
-        if keyboard_words and text == COMMANDS_BUTTON:
+        if nav == "nav:commands":
             await self._send_keyboard(level="commands", chat_id=kb_chat, tap=update)
             return
-        if keyboard_words and text == MODELS_BUTTON:
+        if nav == "nav:models":
             await self._send_keyboard(level="models", chat_id=kb_chat, tap=update)
             return
-        if keyboard_words and text == APP_BUTTON:
+        if nav == "nav:app":
             # A `web_app` keyboard button sends no text when tapped, so
             # reaching here means a client too old to know what one is.
             # Fall back to /app's inline button rather than letting the
             # label through as a prompt to Claude.
             await self._handle_app_cmd(update, ctx)
             return
-        if keyboard_words and text == BACK_BUTTON:
+        if nav == "nav:back":
             # Context-aware: go to parent of current level (models→commands, etc.)
             # The level is this chat's, and in a group this member's (8.91b).
             parent = KEYBOARD_PARENTS.get(
@@ -1596,19 +1599,16 @@ class CommandHandlersMixin:
             await self._send_keyboard(level=parent, chat_id=kb_chat, tap=update)
             return
 
-        # Quick template buttons — inject predefined prompt into active session
-        if keyboard_words and text in self._template_map:
-            await self._send_template(update, self._template_map[text], button=text)
-            return
-
-        # Claude Code slash commands — inject instantly, no BUSY transition
-        if keyboard_words and text in self._command_map:
-            await self._send_command(update, self._command_map[text])
-            return
-
-        # Model choices — instant commands
-        if keyboard_words and text in self._model_map:
-            await self._send_command(update, self._model_map[text])
+        # Quick template buttons inject their prompt into the active
+        # session; Claude Code slash commands and model choices are sent
+        # instantly, with no BUSY transition.
+        custom = kbwords.custom_action(self, text) if keyboard_words else None
+        if custom is not None:
+            kind, payload = custom
+            if kind == "tpl":
+                await self._send_template(update, payload, button=text)
+            else:
+                await self._send_command(update, payload)
             return
 
         # /<label> <prompt> — direct send
@@ -1632,18 +1632,18 @@ class CommandHandlersMixin:
                 return
 
         # Bare text matching keyboard buttons (no slash)
-        text_lower = text.lower()
         if keyboard_words and " " not in text and not text.startswith("/"):
-            if text_lower == "status":
+            word = kbwords.bare_word(text)
+            if word == "status":
                 await self._handle_status(update, ctx)
                 return
-            if text_lower == "stop":
+            if word == "stop":
                 await self._handle_stop_cmd(update, ctx)
                 return
-            if text_lower == "kill":
+            if word == "kill":
                 await self._handle_kill_cmd(update, ctx)
                 return
-            if text_lower == "new":
+            if word == "new":
                 await self._handle_new_cmd(update, ctx)
                 return
             # Check if it matches a known session label (scoped to caller)

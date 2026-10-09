@@ -28,13 +28,7 @@ from typing import TYPE_CHECKING
 from telegram.constants import ChatType, MessageEntityType
 from telegram.ext import ApplicationHandlerStop
 
-from aipager.config import (
-    APP_BUTTON,
-    BACK_BUTTON,
-    COMMANDS_BUTTON,
-    MODELS_BUTTON,
-    TEMPLATES_BUTTON,
-)
+from aipager.bot import kbwords
 
 if TYPE_CHECKING:
     from telegram import Message, Update
@@ -45,14 +39,6 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 _GROUP_TYPES = frozenset({ChatType.GROUP, ChatType.SUPERGROUP})
-
-#: The main keyboard's own words (keyboards._send_keyboard) and its
-#: navigation buttons. Template, command and model labels and the chat's
-#: session labels are added per message from the same sources.
-_KEYBOARD_WORDS = frozenset({
-    "status", "stop", "new",
-    TEMPLATES_BUTTON, COMMANDS_BUTTON, MODELS_BUTTON, BACK_BUTTON, APP_BUTTON,
-})
 
 #: aipager's own slash commands (the ``CommandHandler`` names
 #: ``lifecycle.start`` registers; a test keeps the two equal). After the
@@ -349,7 +335,7 @@ def _addressed_to_bot(bot: TelegramBot, msg, *, taps: bool = True) -> bool:
     # only the marked form (8.91f). The same word typed is chatter.
     if taps and isinstance(getattr(msg, "text", None), str):
         label, marked = keyboard_tap(msg.text)
-        if marked and label in _keyboard_labels(bot, msg.chat_id):
+        if marked and label in kbwords.group_labels(bot, msg.chat_id):
             return True
     return False
 
@@ -360,17 +346,6 @@ def explicitly_addressed(bot: TelegramBot, msg) -> bool:
     keyboard tap. Its words are read as before, including keyboard words
     ("@bot stop" stops)."""
     return _addressed_to_bot(bot, msg, taps=False)
-
-
-def _keyboard_labels(bot: TelegramBot, chat_id) -> set[str]:
-    labels = set(_KEYBOARD_WORDS)
-    for attr in ("_template_map", "_command_map", "_model_map"):
-        labels.update(getattr(bot, attr, None) or {})
-    try:
-        labels.update(bot.registry.live_labels(chat_id))
-    except Exception:
-        log.debug("group intake: live labels unavailable", exc_info=True)
-    return labels
 
 
 async def intake_gate(

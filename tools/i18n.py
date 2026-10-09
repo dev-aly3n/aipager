@@ -600,10 +600,7 @@ def load_baseline(path: Path = BASELINE) -> dict[str, int]:
 def check_keyboard_labels(codes) -> list[str]:
     """No two keyboard actions share a label in any language, and no
     Latin label could be a session name unless reserved or grandfathered."""
-    try:
-        from aipager.bot import kbwords
-    except ImportError:
-        return []
+    from aipager.bot import kbwords
     return kbwords.label_problems(codes)
 
 

@@ -104,7 +104,7 @@ def test_instance_module_reloads_without_aiohttp(monkeypatch):
 _FRESH_BOOT_PATH = (
     "aipager.i18n", "aipager.i18n.core", "aipager.i18n.locales",
     "aipager.i18n.plurals", "aipager.i18n.resolve", "aipager.i18n.clock",
-    "aipager.clockfmt",
+    "aipager.clockfmt", "aipager.bot.kbwords",
 )
 
 
