@@ -376,6 +376,21 @@ def _reset_preferences_cache(_isolate_home_paths):
     _prefs._cache = None
 
 
+@pytest.fixture(autouse=True)
+def _reset_i18n_state(monkeypatch):
+    """The i18n package's module state starts empty for every test: the
+    last-seen Telegram languages (``resolve._seen``, memory only), the
+    loaded catalogs, and the languages a test switched on
+    (``locales._TEST_ENABLED``, restored by monkeypatch)."""
+    from aipager.i18n import core, locales, resolve
+    resolve._seen.clear()
+    core.reset_caches()
+    monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset())
+    yield
+    resolve._seen.clear()
+    core.reset_caches()
+
+
 @pytest.fixture
 def real_home_paths(_isolate_home_paths):
     """Pre-redirect values of the constants ``_isolate_home_paths``

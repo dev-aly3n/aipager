@@ -370,6 +370,56 @@ def set_new_session_default(chat_id: int, field: str, value: str) -> NewSessionD
     return get_new_session_defaults(chat_id)
 
 
+# ---- the language aipager speaks in a chat (multilingual design) --------
+#
+# ``ui_language`` inside a chat's entry: the language of aipager's own
+# text there, set only by an explicit choice (/language, the /settings
+# Language row, the Mini App's App language). For a private chat the entry
+# is the person's user id, so the same key is also their personal
+# language (what only they see in a group, their Mini App). Not part of
+# :class:`Preferences`, ``settings_schema()`` or per-session overrides:
+# it is not a reply style and Claude never sees it. ``move_chat`` carries
+# it with the rest of the entry.
+
+_UI_LANGUAGE_KEY = "ui_language"
+
+
+def get_ui_language(chat_id: int) -> str:
+    """The stored code, or ``""`` when nothing was chosen (or the stored
+    value has the wrong shape). Never raises."""
+    store = _ensure_loaded()
+    raw = store.get(str(chat_id))
+    value = raw.get(_UI_LANGUAGE_KEY, "") if isinstance(raw, dict) else ""
+    return value if isinstance(value, str) else ""
+
+
+def set_ui_language(chat_id: int, code: str) -> str:
+    """Store *code* as *chat_id*'s language; ``""`` clears it (back to
+    automatic). Raises ``ValueError`` for a code a person may not pick,
+    before anything is written. Writes nothing when the stored value
+    would not change, so viewing, re-picking the language in force or
+    choosing "Automatic" with nothing stored never creates an entry.
+    Returns the stored value."""
+    # Function-level: aipager.i18n must stay out of every module that a
+    # lighter process imports at load time.
+    from aipager.i18n.locales import is_selectable
+    if code != "" and not is_selectable(code):
+        raise ValueError(f"not a selectable language: {code!r}")
+    if get_ui_language(chat_id) == code:
+        return code
+    store = _ensure_loaded()
+    key = str(chat_id)
+    existing = store.get(key)
+    scope_raw = dict(existing) if isinstance(existing, dict) else {}
+    if code == "":
+        scope_raw.pop(_UI_LANGUAGE_KEY, None)
+    else:
+        scope_raw[_UI_LANGUAGE_KEY] = code
+    store[key] = scope_raw
+    _save_raw(store)
+    return get_ui_language(chat_id)
+
+
 # ---- problem reports (/settings in the owner's DM, roadmap 8.112) ------
 #
 # "Problem reports: Ask me / Off": whether aipager may OFFER to send a

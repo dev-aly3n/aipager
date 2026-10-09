@@ -12,5 +12,15 @@ modules in that closure use :mod:`aipager.clockfmt` for the clock.
 from __future__ import annotations
 
 from aipager.i18n.core import NEVER_TRANSLATE, Msg, Plural, Safe, Tr, get
+from aipager.i18n.resolve import (
+    default_code,
+    for_chat,
+    for_person,
+    for_sess,
+    for_stranger,
+    for_update,
+    for_viewer,
+)
 
-__all__ = ["NEVER_TRANSLATE", "Msg", "Plural", "Safe", "Tr", "get"]
+__all__ = ["NEVER_TRANSLATE", "Msg", "Plural", "Safe", "Tr", "default_code", "for_chat",
+           "for_person", "for_sess", "for_stranger", "for_update", "for_viewer", "get"]

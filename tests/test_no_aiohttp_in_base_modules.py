@@ -96,3 +96,36 @@ def test_instance_module_reloads_without_aiohttp(monkeypatch):
     from aipager import instance
     _block_aiohttp(monkeypatch)
     importlib.reload(instance)
+
+
+# Boot-path modules that are never reloaded in process (``aipager.i18n``
+# holds the ``Msg`` class every label constant is an instance of; a reload
+# would make them strangers to it): checked in a fresh interpreter.
+_FRESH_BOOT_PATH = (
+    "aipager.i18n", "aipager.i18n.core", "aipager.i18n.locales",
+    "aipager.i18n.plurals", "aipager.i18n.resolve",
+)
+
+
+@pytest.mark.parametrize("module", _FRESH_BOOT_PATH)
+def test_fresh_module_imports_cleanly_without_aiohttp(module):
+    import subprocess
+    import sys
+    from pathlib import Path
+    script = (
+        "import builtins\n"
+        "real = builtins.__import__\n"
+        "def fake(name, *a, **k):\n"
+        "    if name == 'aiohttp' or name.startswith('aiohttp.'):\n"
+        "        raise ImportError('simulated: aiohttp not installed')\n"
+        "    return real(name, *a, **k)\n"
+        "builtins.__import__ = fake\n"
+        f"import {module}\n"
+        "import sys\n"
+        "assert not any(m == 'aiohttp' or m.startswith('aiohttp.') for m in sys.modules)\n"
+    )
+    root = Path(__file__).resolve().parents[1]
+    proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True,
+                          cwd=root, env={"PYTHONPATH": str(root), "PATH": "/usr/bin:/bin"},
+                          timeout=60)
+    assert proc.returncode == 0, proc.stderr[-800:]
