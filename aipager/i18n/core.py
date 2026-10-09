@@ -21,7 +21,7 @@ Right-to-left languages (fa, ar) only: every line starts with U+200F,
 each text parameter is wrapped in U+2068...U+2069, and nothing invisible
 is ever placed inside ``<code>``, ``<pre>`` or a tag (a copied command
 must paste clean). Numeric parameters (``int``/``float``, not ``bool``)
-and ``Tr.num`` get the language's own digits there; string
+and ``Tr.num``/``Tr.clock`` get the language's own digits there; string
 parameters (session names, versions, paths) never do. English gets none
 of this.
 
@@ -38,6 +38,7 @@ import math
 import re
 from pathlib import Path
 
+from aipager.clockfmt import elapsed as _elapsed
 from aipager.i18n import locales as _locales
 from aipager.i18n import plurals as _plurals
 
@@ -261,6 +262,11 @@ class Tr:
         else:
             text = str(value)
         return self._digits(text)
+
+    def clock(self, seconds, unit: str = "s") -> str:
+        """The elapsed clock (``4:10``, ``1:23:30``) in this language's
+        digits."""
+        return self._digits(_elapsed(seconds, unit))
 
     def join(self, items) -> str:
         return _LIST_SEPARATORS.get(self.code, ", ").join(str(i) for i in items)
