@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import sys
 import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -21,6 +22,8 @@ import pytest
 
 from aipager.policy import load_policy
 from aipager.scope import Member, Scope
+
+_THIS = sys.modules[__name__]
 
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
@@ -196,6 +199,7 @@ async def client_for(server):
 @pytest.fixture
 def ml():
     """This module's helpers and constants (the directory name has hyphens,
-    so test modules cannot import it relatively)."""
-    import sys
-    return sys.modules[__name__]
+    so test modules cannot import it relatively). Bound at import time:
+    pytest loads every hyphenated conftest as the bare name ``conftest``,
+    so a lookup when the test runs finds whichever one was imported last."""
+    return _THIS
