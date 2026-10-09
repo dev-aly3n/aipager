@@ -13,6 +13,7 @@ import math
 import pytest
 
 from aipager import config, flood_policy
+from aipager.clockfmt import elapsed as clock_elapsed
 from aipager.flood_policy import (
     bans_within,
     card_age_floor,
@@ -20,7 +21,6 @@ from aipager.flood_policy import (
     clamp_warned_until,
     effective_ceiling,
     elapsed_unit,
-    format_elapsed,
     hourly_limits,
     typing_interval,
 )
@@ -188,24 +188,30 @@ def test_no_age_is_not_an_old_age(age):
     assert elapsed_unit(age, True) == "s"
 
 
-# ── format_elapsed ───────────────────────────────────────────────────────────
+# ── the elapsed clock at each unit (aipager.clockfmt) ─────────────────────────
 
 @pytest.mark.parametrize("seconds,unit,text", [
-    (0, "s", "0s"), (45, "s", "45s"), (250, "s", "4m 10s"), (7200, "s", "120m 0s"),
-    (30, "m", "<1m"), (59.9, "m", "<1m"), (60, "m", "1m"), (1380, "m", "23m"),
-    (30, "h", "<1m"), (1380, "h", "23m"), (3600, "h", "1h 0m"),
-    (4980, "h", "1h 23m"), (7200, "h", "2h 0m"), (3780, "h", "1h 3m"),
+    (0, "s", "0:00"), (45, "s", "0:45"), (250, "s", "4:10"), (7200, "s", "2:00:00"),
+    (30, "m", "0:30"), (59.9, "m", "0:30"), (60, "m", "1:00"), (1380, "m", "23:00"),
+    (30, "h", "0:30"), (1380, "h", "23:00"), (3600, "h", "1:00:00"),
+    (4980, "h", "1:23:00"), (7200, "h", "2:00:00"), (3780, "h", "1:03:00"),
 ])
 def test_the_formats(seconds, unit, text):
-    """Seconds is today's rule unchanged; minutes and hours drop the
-    seconds the card is no longer refreshed often enough to show."""
-    assert format_elapsed(seconds, unit) == text
+    """Seconds is the plain clock; minutes and hours move in 30 s steps,
+    as often as the card is refreshed."""
+    assert clock_elapsed(seconds, unit) == text
 
 
 def test_format_is_total_on_bad_input():
-    assert format_elapsed(-4, "s") == "0s"
-    assert format_elapsed(math.nan, "m") == "<1m"
-    assert format_elapsed(90, "?") == "1m 30s"
+    assert clock_elapsed(-4, "s") == "0:00"
+    assert clock_elapsed(math.nan, "m") == "0:00"
+    assert clock_elapsed(90, "?") == "1:30"
+
+
+def test_the_words_formatter_is_gone():
+    """One clock: flood_policy no longer formats elapsed time itself."""
+    assert not hasattr(flood_policy, "format_elapsed")
+    assert "format_elapsed" not in flood_policy.__all__
 
 
 # ── the warning regime read back from a file ────────────────────────────────

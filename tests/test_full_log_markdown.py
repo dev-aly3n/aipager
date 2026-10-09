@@ -186,7 +186,7 @@ def test_agents_then_the_final_answer_verbatim_at_the_end():
     assert log.endswith(
         "> note\n\n"
         "## Agents\n\n"
-        "- \U0001f916 `Explore` (1m 15s, 2 tool calls)\n"
+        "- \U0001f916 `Explore` (1:15, 2 tool calls)\n"
         "  - `Grep: # TODO`\n"
         "  - `Read: a_b_c.py`\n\n"
         "## Final answer\n\n" + answer
@@ -208,7 +208,7 @@ def test_agents_follow_the_last_row_after_a_blank_line():
                          agents=[{"type": "t", "elapsed": 1.0,
                                   "tool_count": 0, "tools": []}])
     assert log.endswith("- \u2705 `Bash: a`\n\n## Agents\n\n"
-                        "- \U0001f916 `t` (1s, 0 tool calls)")
+                        "- \U0001f916 `t` (0:01, 0 tool calls)")
 
 
 def test_an_empty_tool_history_still_works():

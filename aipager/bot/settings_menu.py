@@ -85,8 +85,8 @@ _OPTION_HELP = {
     ("diffs", False): "File edits show only as rows on the busy card.",
     ("diffs", True): "Each Write/Edit is also posted as its own diff message under the busy card.",
     ("cadence", True): ("The card refreshes less often as a turn runs on (every 10 s "
-                        "after 2 min, every 30 s after 10 min) and "
-                        "counts in minutes, so it never looks frozen. A state change "
+                        "after 2 min, every 30 s after 10 min) and its clock then "
+                        "moves in 30 s steps, so it never looks frozen. A state change "
                         "still shows at once."),
     ("cadence", False): "The card refreshes at the same pace for the whole turn, however long.",
     ("formatting", False): "Claude formats replies however it likes.",
@@ -228,7 +228,7 @@ _SECTION_INTRO = {
     ),
     "cadence": (
         "How often a busy card refreshes during a LONG turn. On, it slows "
-        "down as the turn gets older and its counter switches to minutes, "
+        "down as the turn gets older and its clock moves in 30 s steps, "
         "which keeps a long-running chat well inside Telegram's limits. "
         "Off keeps the first-minutes pace for the whole turn."
     ),

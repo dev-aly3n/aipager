@@ -36,7 +36,7 @@ ENTRY_POINTS = ("aipager.dtach.notify_hook", "aipager.dtach.statusline_notify")
 #: background shell rows). Missing one means the harness stopped
 #: exercising that path.
 CANARIES = ("aipager.state", "aipager.policy_snapshot", "aipager.bg_shells",
-            "aipager.config")
+            "aipager.config", "aipager.clockfmt")
 
 _DUMP = (
     "import atexit, json, sys\n"

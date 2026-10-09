@@ -8,6 +8,7 @@ _send_busy_and_animate, _safe_edit_callback.
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from unittest.mock import AsyncMock, MagicMock
 
@@ -100,7 +101,7 @@ def test_build_busy_text_elapsed_appears_after_2s(mk_bot):
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.busy_started_at = time.monotonic() - 10
     text = bot._build_busy_text("jim", "Thinking", sess)
-    assert "10s" in text or "s" in text
+    assert "Thinking… 0:10" in text
 
 
 def test_build_busy_text_with_cost_delta(mk_bot):
@@ -169,7 +170,7 @@ def test_build_busy_text_with_subagent_elapsed(mk_bot):
     }
     text = bot._build_busy_text("jim", "Working", sess)
     # Subagent elapsed time shown
-    assert "15s" in text or "m" in text
+    assert "explore · starting · 0:15" in text
 
 
 def test_build_busy_text_agent_row_shows_activity(mk_bot):
@@ -186,7 +187,7 @@ def test_build_busy_text_agent_row_shows_activity(mk_bot):
         "activity": "Bash: ls",
     }
     text = bot._build_busy_text("jim", "Working", sess)
-    assert "explore · Bash: ls · 15s" in text
+    assert "explore · Bash: ls · 0:15" in text
 
 
 def test_build_busy_text_agent_row_settled_shows_frozen_text(mk_bot):
@@ -913,7 +914,7 @@ def test_build_sections_agent_row_shows_starting_before_first_activity():
     sess = _agent_sess({"type": "explore", "started_at": time.monotonic()})
     sections = _build_sections(sess)
     assert sections == [
-        ("agent-run", ["⏳ `\U0001f916 explore · starting · 0s`"], []),
+        ("agent-run", ["⏳ `\U0001f916 explore · starting · 0:00`"], []),
     ]
 
 
@@ -927,8 +928,7 @@ def test_build_sections_agent_row_shows_activity_and_elapsed_when_active():
     kind, rows, agent_tools = sections[0]
     assert kind == "agent-run"
     assert "· Bash: run tests ·" in rows[0]
-    assert "2m " in rows[0]
-    assert rows[0].endswith("s`")
+    assert re.search(r" · 2:1\d`$", rows[0])      # 130 s, as a clock
     assert agent_tools == []
 
 
@@ -1085,7 +1085,7 @@ def test_build_stream_card_ex_keeps_active_agent_row_visible_under_pressure():
     card, dropped = build_stream_card_ex(sess, "Working")
     assert dropped is True
     assert len(card) <= _CARD_CHAR_BUDGET
-    assert "\U0001f916 explore · Bash: ls · 5s" in card
+    assert "\U0001f916 explore · Bash: ls · 0:05" in card
 
 
 # ---- live and settled agent nested folds ------------------------------------
@@ -1100,7 +1100,7 @@ def test_live_agent_gets_a_nested_fold_once_it_has_three_or_more_tools():
     }
     card = build_stream_card(sess, "Working")
     assert "<details><summary>▸ 3 tool calls</summary>" in card
-    assert f"{MARK} explore · Bash: ls · 10s" in card
+    assert f"{MARK} explore · Bash: ls · 0:10" in card
     # The nested fold sits directly beneath the agent's own row.
     assert card.index(f"{MARK} explore") < card.index("<details>")
 
@@ -1163,10 +1163,10 @@ def test_build_full_log_agents_section_lists_type_elapsed_count_and_tools():
         "jim", [("Bash: parent", True)], [], "the answer", agents=agents,
     )
     assert "\n## Agents\n" in log
-    assert "- \U0001f916 `explore` (7s, 2 tool calls)" in log
+    assert "- \U0001f916 `explore` (0:07, 2 tool calls)" in log
     assert "  - `Bash: ls`" in log
     assert "  - `Read: /x`" in log
-    assert "- \U0001f916 `review` (1m 5s, 1 tool call)" in log
+    assert "- \U0001f916 `review` (1:05, 1 tool call)" in log
     assert "1 tool calls" not in log  # singular, not plural
     assert log.index("## Agents") < log.index("## Final answer")
 

@@ -771,12 +771,15 @@ APP_JS = r"""
 
   // ---- drill-down: timeline ------------------------------------------
 
+  // The clock unit of the session whose timeline is shown (its busy card's).
+  var timelineUnit = "s";
+
   function renderTimelineRow(row) {
     if (row.kind === "commentary") {
       return '<div class="timeline-row timeline-commentary">' + escapeHtml(row.text) + '</div>';
     }
     var elapsed = (row.state === "running" && typeof row.elapsed_seconds === "number")
-      ? " (" + row.elapsed_seconds + "s)" : "";
+      ? " (" + clockText(row.elapsed_seconds, timelineUnit) + ")" : "";
     return (
       '<div class="timeline-row timeline-tool state-' + escapeHtml(row.state) + '">' +
         escapeHtml(row.text) + escapeHtml(elapsed) +
@@ -784,7 +787,8 @@ APP_JS = r"""
     );
   }
 
-  function renderTimeline(rows) {
+  function renderTimeline(rows, unit) {
+    timelineUnit = unit || "s";
     var panel = document.getElementById("panel-timeline");
     if (!rows || rows.length === 0) {
       panel.innerHTML = '<div class="muted">No activity yet.</div>';
@@ -807,19 +811,31 @@ APP_JS = r"""
     return true;
   }
 
-  // "3m 12s", "45s", "1h 4m".
-  function duration(seconds) {
-    var sec = Math.max(0, Math.round(Number(seconds) || 0));
-    if (sec < 60) { return sec + "s"; }
-    var min = Math.floor(sec / 60);
-    if (min < 60) { return min + "m " + (sec % 60) + "s"; }
-    return Math.floor(min / 60) + "h " + (min % 60) + "m";
+  // clock: port of aipager/clockfmt.py
+  // "0:45", "4:10", "1:23:00": m:ss under an hour, h:mm:ss after. At the
+  // busy card's unit "m" or "h" (a turn past 10 min) it moves in 30 s
+  // steps, as the card does. Line for line the Python one; a test runs
+  // both over the same inputs.
+  var CLOCK_STEP_SECONDS = 30;
+  function clockText(seconds, unit) {
+    var value = Number(seconds);
+    if (!isFinite(value) || value < 0) { value = 0; }
+    var total = Math.floor(value);
+    if (unit === "m" || unit === "h") { total -= total % CLOCK_STEP_SECONDS; }
+    var hours = Math.floor(total / 3600);
+    var rest = total % 3600;
+    var minutes = Math.floor(rest / 60);
+    var secs = rest % 60;
+    var ss = (secs < 10 ? "0" : "") + secs;
+    if (hours) { return hours + ":" + (minutes < 10 ? "0" : "") + minutes + ":" + ss; }
+    return minutes + ":" + ss;
   }
+  // end clock
 
   function stateLine(d) {
     if (d.status === "busy") {
       return typeof d.busy_elapsed_seconds === "number"
-        ? "Working for " + duration(d.busy_elapsed_seconds) : "Working";
+        ? "Working for " + clockText(d.busy_elapsed_seconds, d.busy_elapsed_unit) : "Working";
     }
     if (d.status === "waiting") {
       return d.waiting_kind ? "Needs you (" + d.waiting_kind + ")" : "Needs you";
@@ -881,7 +897,7 @@ APP_JS = r"""
     var chips = [];
     if (data.queue_depth) { chips.push(data.queue_depth + " queued"); }
     if (data.status === "busy" && typeof data.busy_elapsed_seconds === "number") {
-      chips.push(duration(data.busy_elapsed_seconds));
+      chips.push(clockText(data.busy_elapsed_seconds, data.busy_elapsed_unit));
     }
     if (!recent.length && !chips.length) { btn.hidden = true; btn.innerHTML = ""; return; }
     btn.hidden = false;
@@ -910,7 +926,8 @@ APP_JS = r"""
     var last = recent[recent.length - 1];
     var line = make("span", "act-last");
     line.textContent = (last.text || "") + (last.state === "running"
-      ? (typeof last.elapsed_seconds === "number" ? " (running " + duration(last.elapsed_seconds) + ")" : " (running)")
+      ? (typeof last.elapsed_seconds === "number"
+        ? " (running " + clockText(last.elapsed_seconds, data.busy_elapsed_unit) + ")" : " (running)")
       : last.state === "failed" ? " (failed)" : "");
     btn.appendChild(line);
     btn.setAttribute("aria-label", "Recent activity: " + recent.length +
@@ -979,7 +996,7 @@ APP_JS = r"""
                                 modelChoices ? modelChoices.length : -1])) {
       renderModelControl(data);
     }
-    if (detailChanged("timeline", data.timeline)) { renderTimeline(data.timeline); }
+    if (detailChanged("timeline", data.timeline)) { renderTimeline(data.timeline, data.busy_elapsed_unit); }
     updateSectionHeaders(data);
     syncMainButton();
   }

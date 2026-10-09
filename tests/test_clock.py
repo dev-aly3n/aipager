@@ -66,3 +66,20 @@ def test_tr_clock_uses_native_digits_only_where_it_should():
     assert i18n.get("en").clock(5010, "h") == "1:23:30"
     assert i18n.get("fa").clock(5010, "h") == "۱:۲۳:۳۰"
     assert i18n.get("ar").clock(45) == "٠:٤٥"
+
+
+def test_the_final_card_shows_true_seconds():
+    """A settled card is not a live counter: whatever unit the turn
+    reached, its clock reads true seconds."""
+    import time
+
+    from aipager.bot.animation import build_stream_card
+    from aipager.state import Status, TrackedSession
+    sess = TrackedSession(name="claude-dev", label="dev", status=Status.BUSY)
+    sess.scope_kind, sess.scope_chat_id = "dm", 12345
+    sess.busy_started_at = time.monotonic() - 1397.5
+    sess.card_elapsed_unit = "m"
+    live = build_stream_card(sess, "Working").rsplit("\n", 1)[-1]
+    final = build_stream_card(sess, "Done", final=True).rsplit("\n", 1)[-1]
+    assert live.endswith(" · 23:00"), live
+    assert final.endswith(" · 23:17"), final

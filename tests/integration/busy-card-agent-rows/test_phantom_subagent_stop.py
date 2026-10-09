@@ -30,7 +30,7 @@ def test_phantom_zero_elapsed_does_not_crash_with_a_real_type(mk_bot, run_async)
     """A zero-elapsed stop for a real (non-empty) agent_type is not a
     "phantom" by the empty-type test — it's a legitimately instant agent
     (or one racing a very fast SubagentStart→Stop) — must not raise and
-    must render a usable elapsed string ("0s" floor, never empty)."""
+    must render a usable elapsed string ("0:00" floor, never empty)."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.busy_msg_id = None
@@ -41,7 +41,7 @@ def test_phantom_zero_elapsed_does_not_crash_with_a_real_type(mk_bot, run_async)
     }))
     summary, done = sess.tool_history[0]
     assert done is True
-    assert "0s" in summary  # floor, never blank
+    assert summary.endswith(" · 0:00")  # floor, never blank
 
 
 def test_phantom_stop_does_not_pollute_finished_subagents(mk_bot, run_async):

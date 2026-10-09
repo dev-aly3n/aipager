@@ -247,6 +247,33 @@ def test_session_detail_busy_elapsed_seconds_populated_when_busy():
     assert detail["busy_elapsed_seconds"] >= 29
 
 
+@pytest.mark.parametrize("unit, shown", [("s", "23:17"), ("m", "23:00"), ("h", "23:00"),
+                                         ("x", "23:17"), (None, "23:17")])
+def test_detail_carries_the_cards_unit(unit, shown):
+    """The Mini App shows the clock the busy card shows: the seconds are
+    floored like the card's (never rounded up), and the detail carries the
+    unit the card last rendered with, so a turn past 10 minutes moves in
+    30 s steps in the app too."""
+    now = 10_000.0
+    sess = _sess(status=Status.BUSY)
+    sess.busy_started_at = now - 1397.9
+    sess.card_elapsed_unit = unit
+    detail = session_detail(sess, now)
+    assert detail["busy_elapsed_seconds"] == 1397
+    assert detail["busy_elapsed_unit"] == (unit if unit in ("s", "m", "h") else "s")
+    facts = {f["label"]: f["value"] for f in detail["facts"]}
+    assert facts["Working for"] == shown
+
+
+def test_the_timeline_floors_a_running_agent():
+    sess = _sess(status=Status.BUSY)
+    sess.tool_history = [("\U0001f916 Explore", False)]
+    sess.active_subagents["a1"] = {"type": "Explore", "history_idx": 0,
+                                   "started_at": time.monotonic() - 42.9}
+    (row,) = build_timeline(sess)
+    assert row["elapsed_seconds"] == 42
+
+
 def test_session_detail_busy_elapsed_seconds_none_when_idle():
     sess = _sess(status=Status.IDLE)
     sess.busy_started_at = time.monotonic() - 30

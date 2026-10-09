@@ -18,7 +18,7 @@ R2  an answer delivered while the set is non-empty ends with one line
     "⏳ N agent(s) still running (<labels>) - results will follow here",
     in every layout and on 8.32's tool-less one-message path.
 R3  once every agent that line named is gone (and stayed gone for the
-    settle window), the line is edited ONCE to "✅ … done (Nm)": an
+    settle window), the line is edited ONCE to "✅ … done (m:ss)": an
     ORNAMENT skip-class edit, one retry at most, never into a deleted
     message or a gone session.
 R4  the pinned bar says "· ⏳ N agent(s) running" on the session's line.
@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from unittest.mock import MagicMock
 
@@ -520,8 +521,10 @@ def test_the_agents_stop_edits_the_line_once_to_done(mk_bot, run_async, wire):
     assert [m for m, _p in new] == ["editMessageText"]
     edit = new[0][1]
     assert edit["message_id"] == rec["msg_id"]
-    assert _last_line(_markdown(edit)) == "✅ pipeline-runner done (6m)"
-    assert _markdown(edit)[: -len("✅ pipeline-runner done (6m)")] == \
+    # Six minutes ago plus the few milliseconds the test took, in true
+    # seconds (the clock).
+    assert re.fullmatch(r"✅ pipeline-runner done \(6:0\d\)", _last_line(_markdown(edit)))
+    assert _markdown(edit)[: -len("✅ pipeline-runner done (6:00)")] == \
         rec["text"][: -len(RUNNING_1)]
     # ORNAMENT, skip-class: the flood gate may refuse it, never queue it.
     assert edit["_kw"] == {"kind": "skip", "priority": "ornament"}
@@ -552,7 +555,7 @@ def test_one_of_two_finishing_is_no_edit_both_is_one(mk_bot, run_async, wire):
     assert bool(sess.agents_lines_due(later)) is True
     _settle(run_async, bot, sess, later)
     (edit,) = [p for m, p in wire.calls[before:]]
-    assert _last_line(_markdown(edit)) == "✅ 2 agents done (6m)"
+    assert re.fullmatch(r"✅ 2 agents done \(6:0\d\)", _last_line(_markdown(edit)))
 
 
 def test_a_phantom_stop_never_settles_the_line(mk_bot, run_async, wire):
@@ -655,8 +658,8 @@ def test_the_monitor_scan_makes_the_edit(mk_bot, run_async, wire, monkeypatch):
 
     run_async(_bounded(SessionMonitor(bot.registry, _notify)._scan()))
     assert seen.count("agents_line_done") == 1
-    assert _last_line(_markdown(wire.of("editMessageText")[-1])) == \
-        "✅ pipeline-runner done (6m)"
+    assert re.fullmatch(r"✅ pipeline-runner done \(6:0\d\)",
+                        _last_line(_markdown(wire.of("editMessageText")[-1])))
 
 
 def test_a_deleted_answer_is_never_retried(mk_bot, run_async, wire, monkeypatch):
@@ -793,9 +796,9 @@ def test_the_bar_never_names_the_agents(mk_bot, monkeypatch):
 def test_done_line_durations():
     from aipager.bot.agents_line import done_line
 
-    assert done_line(["x"], 45) == "✅ x done (45s)"
-    assert done_line(["x"], 6 * 60 + 59) == "✅ x done (6m)"
-    assert done_line(["x", "y"], 3 * 3600 + 5 * 60) == "✅ 2 agents done (3h 5m)"
+    assert done_line(["x"], 45) == "✅ x done (0:45)"
+    assert done_line(["x"], 6 * 60 + 59) == "✅ x done (6:59)"
+    assert done_line(["x", "y"], 3 * 3600 + 5 * 60) == "✅ 2 agents done (3:05:00)"
 
 
 def test_the_running_line_names_at_most_three_and_counts_the_rest():

@@ -22,6 +22,7 @@ import httpx
 from telegram.error import RetryAfter
 
 from aipager import bg_shells, flood_policy, preferences
+from aipager.clockfmt import elapsed as clock
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CARD_CADENCE_FLOOR_GROUP, CARD_CADENCE_FLOOR_PRIVATE,
     CARD_RETRY_WAKE, CARD_STATE_BYPASS_MIN_GAP,
@@ -1092,11 +1093,11 @@ def _assemble_card(body: str, status: str) -> str:
 
 
 def _elapsed_str(started_at: float, unit: str = "s") -> str:
-    """``"45s"`` under a minute, else ``"2m 5s"`` — or, in a decayed
-    card's unit (8.30), ``"23m"`` / ``"1h 23m"``. One formatter
-    (``flood_policy.format_elapsed``) so every card surface agrees on how
-    elapsed time reads."""
-    return flood_policy.format_elapsed(time.monotonic() - started_at, unit)
+    """The clock since *started_at*: ``"0:45"``, ``"2:05"``, and in a
+    decayed card's unit (8.30) 30 s steps, ``"23:30"`` / ``"1:23:00"``.
+    One formatter (``aipager.clockfmt``) so every surface, the Mini App
+    included, reads elapsed time alike."""
+    return clock(time.monotonic() - started_at, unit)
 
 
 def _agent_live_row(info: dict, unit: str = "s") -> str:
@@ -1110,8 +1111,8 @@ def _agent_live_row(info: dict, unit: str = "s") -> str:
     it in ``html.escape``. Pure — no I/O, no mutation.
 
     ``unit`` is the card's elapsed unit (8.30 "other counters"): at the
-    30 s tiers an agent row counting seconds would look frozen for most
-    of every refresh, exactly like the status line would.
+    30 s tiers an agent row moves in 30 s steps like the status line,
+    rather than counting seconds that would sit frozen between refreshes.
     """
     agent_type = info.get("type") or "agent"
     activity = info.get("activity") or "starting"
@@ -1152,8 +1153,7 @@ def _agent_phrase(sess: TrackedSession) -> tuple[str, str]:
 
 def _card_unit(sess: TrackedSession, final: bool) -> str:
     """The unit this render's live counters use: the card's current tier
-    unit, or seconds for the settled final card, whose format is as it
-    always was."""
+    unit, or true seconds for the settled final card."""
     if final:
         return "s"
     unit = getattr(sess, "card_elapsed_unit", "s")
@@ -1179,8 +1179,8 @@ def _status_line(
     tail this line sits at the end of.
     """
     label = _md_escape(sess.label)
-    # The card's tier unit (8.30): seconds for the first ten minutes of a
-    # turn, then minutes, then hours — matching how often the card is now
+    # The card's tier unit (8.30): true seconds for the first ten minutes
+    # of a turn, then 30 s steps — matching how often the card is now
     # refreshed, so a slow card still shows a counter that MOVES.
     unit = _card_unit(sess, final)
     if waiting and not final:
@@ -1322,14 +1322,11 @@ def build_stream_card(
 
 
 def _fmt_duration(seconds: float) -> str:
-    """``"0s"`` / ``"Xs"`` / ``"Xm Ys"`` — the same three-branch elapsed
-    rule as :func:`_elapsed_str`, but over an already-computed duration
-    (an agent's own frozen ``elapsed``, not "now minus started_at") for
+    """``"0:00"`` / ``"1:05"`` — the clock in true seconds, like
+    :func:`_elapsed_str`, but over an already-computed duration (an
+    agent's own frozen ``elapsed``, not "now minus started_at") for
     :func:`build_full_log`'s AGENTS section."""
-    secs = max(0, int(seconds))
-    if secs >= 60:
-        return f"{secs // 60}m {secs % 60}s"
-    return f"{secs}s"
+    return clock(seconds)
 
 
 def _log_code(text: str) -> str:
@@ -1934,9 +1931,9 @@ class AnimationMixin:
             unit = self._card_elapsed_unit(sess, now)
             if unit != "s":
                 # A decayed card (8.30): the same tier unit as the rich card.
-                elapsed = f" {flood_policy.format_elapsed(secs, unit)}"
+                elapsed = f" {clock(secs, unit)}"
             elif secs >= 2:
-                elapsed = f" {secs}s"
+                elapsed = f" {clock(secs)}"
         text = f"⚙️ <b>{html_mod.escape(label)}</b> · {html_mod.escape(verb)}…{elapsed}"
         # Live cost delta this turn (item 4.6) + subagent count (item 4.5).
         # Only shown when there's a positive delta — sessions that haven't

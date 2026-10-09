@@ -73,20 +73,19 @@ def test_waiting_header_omits_types_beyond_three_distinct():
 def test_waiting_header_elapsed_under_60s_uses_seconds_form():
     sess = _waiting_sess(elapsed_s=45)
     out = animation.build_stream_card(sess, "Verb", waiting=True)
-    assert re.search(r"\b4[0-9]s\b", out), out
+    assert re.search(r"still working · 0:4[0-9]$", out), out
 
 
 def test_waiting_header_elapsed_at_60s_boundary_uses_minutes_form():
     sess = _waiting_sess(elapsed_s=60)
     out = animation.build_stream_card(sess, "Verb", waiting=True)
-    assert re.search(r"\b1m\b", out), out
+    assert re.search(r"still working · 1:0[0-9]$", out), out
 
 
 def test_waiting_header_elapsed_just_under_60s_boundary_stays_seconds_form():
     sess = _waiting_sess(elapsed_s=59)
     out = animation.build_stream_card(sess, "Verb", waiting=True)
-    assert "1m" not in out
-    assert re.search(r"\b59s\b", out), out
+    assert re.search(r"still working · 0:59$", out), out
 
 
 def test_waiting_status_omits_elapsed_when_busy_started_at_falsy():

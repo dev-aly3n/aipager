@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
@@ -94,7 +95,8 @@ def test_adopted_card_ticks_with_no_hook_and_the_stop_finishes_it(
     status_mid, age, texts = mid
     assert status_mid is Status.BUSY
     assert 69 <= age <= 72           # 40 s before the restart + 30 s since
-    assert texts and "1m" in texts[-1]  # the counter went on from 40 s
+    # The clock went on from 40 s: past a minute by the last tick.
+    assert texts and re.search(r"· 1:(?:0\d|1[0-2])$", texts[-1]), texts[-1:]
     assert r.chat.live_cards() == []
     assert sess.busy_msg_id is None and sess.status is Status.IDLE
     assert not any("Stop while already IDLE" in m for m in caplog.messages)

@@ -80,7 +80,7 @@ def test_each_state_reads_in_words_with_the_target_marked(bot, mk_update, run_as
         "<b>boot1</b> · 🔄 starting",
         "<b>idle1</b> · 💤 idle",
         "<b>wait1</b> · ⏳ needs you · Bash: make deploy",
-        "✍️ <b>work1</b> · ⚙️ working 3m · Bash: run the tests",
+        "✍️ <b>work1</b> · ⚙️ working 3:05 · Bash: run the tests",
     ]
     assert "—" not in text
 

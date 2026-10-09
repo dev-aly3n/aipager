@@ -79,21 +79,25 @@ limit whatever you set.
 ### A long turn's card refreshes less often
 
 The cadence above is for the first two minutes of a turn. After that the
-card **slows down as the turn gets older**, and its elapsed counter
-switches unit so it never looks frozen:
+card **slows down as the turn gets older**, and from 10 minutes its
+clock moves in 30 s steps, matching the refresh, so it never looks frozen:
 
-| turn age | card refreshes at most every | counter reads |
+| turn age | card refreshes at most every | clock reads |
 |---|---|---|
-| 0–2 min | as above (about 4.8 s for one card in a DM) | `45s` |
-| 2–10 min | 10 s | `4m 10s` |
-| 10–60 min | 30 s | `23m` |
-| over 60 min | 30 s | `1h 23m` |
+| 0–2 min | as above (about 4.8 s for one card in a DM) | `0:45` |
+| 2–10 min | 10 s | `4:10` |
+| 10–60 min | 30 s | `23:00`, `23:30` |
+| over 60 min | 30 s | `1:23:00`, `1:23:30` |
+
+A refresh that lands a moment after a 30 s step can skip one now and
+then (`23:00`, then `24:00`): the clock is rounded down to the step, and
+a refresh is never early.
 
 A new tool row or a new sentence waits for the next refresh; a **state
 change** - the session going from working to waiting on a background
 agent, and back - is shown at once, at most once every 10 seconds. The
-live agent rows and the waiting line use the same unit. The finished card
-still shows its duration as it always has.
+live agent rows and the waiting line use the same steps. The finished
+card shows the turn's duration in true seconds (`23:17`).
 
 This is what keeps a four-hour turn from editing one message thousands of
 times: on 2026-09-23 one card did exactly that, and the chat was banned

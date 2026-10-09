@@ -23,7 +23,7 @@ def test_legacy_card_live_agent_row_shows_type_activity_and_elapsed(mk_bot):
         "activity": "Glob: **/*.py",
     }
     text = bot._build_busy_text("jim", "Working", sess)
-    assert "auditor · Glob: **/*.py · 22s" in text
+    assert "auditor · Glob: **/*.py · 0:22" in text
 
 
 def test_legacy_card_live_agent_row_shows_starting_with_no_activity(mk_bot):
@@ -69,7 +69,7 @@ def test_legacy_card_agent_row_settled_shows_frozen_plural_count(mk_bot, run_asy
         "elapsed": 90.0, "history_idx": 0, "tool_count": 12,
     }))
     text = bot._build_busy_text("jim", "Working", sess)
-    assert "auditor · 12 tool calls · 1m 30s" in text
+    assert "auditor · 12 tool calls · 1:30" in text
 
 
 def test_legacy_card_agent_row_settled_shows_frozen_singular_count(mk_bot, run_async):

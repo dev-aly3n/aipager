@@ -8,7 +8,7 @@ phantom SubagentStops among them) racing the animator for a 1.2 s debounce.
 
 Now: from 2 / 10 / 60 min of turn age the card is edited no more often than
 every 10 / 30 / 30 s (the hour tier was 60 s until the operator's
-2026-10-09 ruling: never slower than every 30 s), its counters switch to minutes and then hours so it
+2026-10-09 ruling: never slower than every 30 s), its clocks move in 30 s steps from 10 min so it
 never looks frozen, and only a STATE change (busy -> waiting, a prompt) may
 jump the queue — once, and at most once per 10 s.
 
@@ -78,10 +78,10 @@ def _run_animator(vloop, bot, sess, seconds: float) -> None:
     # Tier 0 is today exactly: a QUIET card (no new prose) is gated by
     # BUSY_EDIT_INTERVAL x margin (3.3 s) on the 2.2 s wake grid, so it
     # edits every 4.4 s — the same number 0.7.13 gives.
-    (30.0, 60.0, 4.4, 4.4, r"(?:\d+m )?\d+s"),
-    (5 * MIN, 2 * MIN, 10.0, 12.2, r"\d+m \d+s"),    # 10 s, seconds shown
-    (30 * MIN, 3 * MIN, 30.0, 62.2, r"\d+m"),        # 30 s, minutes shown
-    (2 * HOUR, 5 * MIN, 30.0, 32.2, r"\d+h \d+m"),   # 30 s, hours shown
+    (30.0, 60.0, 4.4, 4.4, r"\d+:\d\d"),
+    (5 * MIN, 2 * MIN, 10.0, 12.2, r"\d+:\d\d"),           # 10 s, true seconds
+    (30 * MIN, 3 * MIN, 30.0, 62.2, r"\d+:(?:00|30)"),       # 30 s, 30 s steps
+    (2 * HOUR, 5 * MIN, 30.0, 32.2, r"\d+:\d\d:(?:00|30)"),  # 30 s, 30 s steps
 ])
 def test_d_the_card_cadence_and_unit_follow_the_turns_age(
     mk_bot, vbot, vloop, vlimiter, rich_http, age, run, min_gap, max_gap,
@@ -90,13 +90,13 @@ def test_d_the_card_cadence_and_unit_follow_the_turns_age(
     """Row D (R4). One card alone in a DM, driven by the real animator: at
     30 s the gaps are today's (4.4 s for a quiet card); at 5 min ≥ 10 s;
     at 30 min ≥ 30 s; at 2 h ≥ 30 s and ≤ 32.2 s (never slower than every
-    30 s, 2026-10-09). The status line's counter reads ``31s`` / ``5m 12s`` /
-    ``31m`` / ``2h 1m`` — the unit matches the refresh, so a slow card
-    still shows a counter that moves. On 0.7.13 every one of these cards
+    30 s, 2026-10-09). The status line's clock reads ``0:31`` / ``5:12`` /
+    ``31:00`` / ``2:01:00`` — from 10 min it moves in 30 s steps, matching
+    the refresh, so a slow card still shows a clock that moves. On 0.7.13 every one of these cards
     edits every 4.4 s and counts seconds.
 
     Mutation: drop the age floor from ``_card_edit_due`` and every gap is
-    4.4 s; pass ``unit`` nowhere and the 2 h card reads ``120m 13s``.
+    4.4 s; pass ``unit`` nowhere and the 2 h card reads ``2:00:13``.
     """
     bot, sess = _card(mk_bot, vbot, vloop, rich_http, age=age)
     _run_animator(vloop, bot, sess, run)
@@ -338,44 +338,46 @@ def _one_render(mk_bot, vbot, vloop, rich_http, *, age, agents, waiting=False):
 def test_r_agent_rows_and_the_waiting_frame_count_in_minutes_when_slow(
     mk_bot, vbot, vloop, vlimiter, rich_http,
 ):
-    """Row R ("other counters"). At the hour tier a live agent row counts
-    ``<1m`` / ``12m`` / ``1h 3m``, and so does the waiting frame's line —
-    a seconds counter there would sit still for 29 seconds of every 30.
+    """Row R ("other counters"). At the hour tier a live agent row's clock
+    moves in 30 s steps, ``0:30`` / ``12:00`` / ``1:03:00``, and so does the
+    waiting frame's line — a seconds counter there would sit still for 29
+    seconds of every 30.
 
     Mutation: leave the agent row (or the waiting frame) on seconds.
     """
     card = _one_render(mk_bot, vbot, vloop, rich_http, age=2 * HOUR,
                        agents=[30.0, 12 * MIN, 63 * MIN])
-    assert "Explore · starting · <1m" in card
-    assert "Explore · starting · 12m" in card
-    assert "Explore · starting · 1h 3m" in card
-    assert not re.search(r"\d+m \d+s", card), card
+    assert "Explore · starting · 0:30" in card
+    assert "Explore · starting · 12:00" in card
+    assert "Explore · starting · 1:03:00" in card
+    clocks = re.findall(r"(?<![\d:])\d+:\d\d(?::\d\d)?(?![\d:])", card)
+    assert clocks and all(c.endswith(("00", "30")) for c in clocks), card
 
     waiting = _one_render(mk_bot, vbot, vloop, rich_http, age=2 * HOUR,
                           agents=[12 * MIN], waiting=True)
-    assert re.search(r"still working · 2h 0m$", _status(waiting)), waiting
+    assert re.search(r"still working · 2:00:00$", _status(waiting)), waiting
 
 
 def test_r_under_ten_minutes_the_counters_read_exactly_as_today(
     mk_bot, vbot, vloop, vlimiter, rich_http,
 ):
-    """Below the minutes tier nothing about the text changes: ``4m 10s``.
+    """Below the 30 s steps tier the clock shows true seconds: ``4:10``.
     Mutation: switch units at the 10 s tier and a 4-minute card loses its
     seconds."""
     card = _one_render(mk_bot, vbot, vloop, rich_http, age=250.0,
                        agents=[250.0])
-    assert "Explore · starting · 4m 10s" in card
-    assert re.search(r"· 4m 10s$", _status(card)), card
+    assert "Explore · starting · 4:10" in card
+    assert re.search(r"· 4:10$", _status(card)), card
 
 
 def test_r_the_final_card_keeps_todays_format(
     mk_bot, vbot, vloop, vlimiter, rich_http,
 ):
-    """The settled card is not a live counter: its duration reads as it
-    always has, even for a 2 h turn."""
+    """The settled card is not a live counter: its clock shows true
+    seconds, even for a 2 h turn."""
     bot, sess = _card(mk_bot, vbot, vloop, rich_http, age=2 * HOUR)
     vloop.run_until_complete(bot._edit_busy_rich(sess, "Done", final=True))
-    assert re.search(r"· 120m 0s$", _status(rich_http.edits()[-1][1]))
+    assert re.search(r"· 2:00:00$", _status(rich_http.edits()[-1][1]))
 
 
 # ── T: the stale-card watchdog knows the tier ────────────────────────────────

@@ -72,8 +72,8 @@ def running_line(labels: list[str], *, kinds: list[str] | None = None,
 def done_line(labels: list[str], seconds: float, *,
               kinds: list[str] | None = None,
               markdown: bool = False) -> str:
-    """``✅ pipeline-runner done (6m)``, ``✅ shell: sleep 90 - done (2m)``
-    for a single shell, or ``✅ 2 agents, 1 shell done (6m)``."""
+    """``✅ pipeline-runner done (6:12)``, ``✅ shell: sleep 90 - done
+    (1:30)`` for a single shell, or ``✅ 2 agents, 1 shell done (6:12)``."""
     if len(labels) == 1:
         name = _label(labels[0])
         if markdown:

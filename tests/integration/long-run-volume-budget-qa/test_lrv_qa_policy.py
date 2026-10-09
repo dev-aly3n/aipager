@@ -13,12 +13,12 @@ import pytest
 
 from aipager import config
 from aipager.bot.flood_budget import card_interval
+from aipager.clockfmt import elapsed as clock_elapsed
 from aipager.flood_policy import (
     bans_within,
     card_age_floor,
     effective_ceiling,
     elapsed_unit,
-    format_elapsed,
     hourly_limits,
 )
 
@@ -61,7 +61,7 @@ def test_card_age_floor_negative_age_is_tier_zero():
 @pytest.mark.parametrize("age,unit", [
     (0.0, "s"),
     (119.9, "s"),
-    (120.0, "s"),          # the 10 s tier still shows seconds ("4m 10s")
+    (120.0, "s"),          # the 10 s tier still shows true seconds ("4:10")
     (599.9, "s"),
     (600.0, "m"),
     (3599.9, "m"),
@@ -77,22 +77,22 @@ def test_elapsed_unit_is_seconds_when_disabled(age):
     assert elapsed_unit(age, False) == "s"
 
 
-# ── format_elapsed ───────────────────────────────────────────────────────────
+# ── the elapsed clock at each unit ───────────────────────────────────────────
 
 @pytest.mark.parametrize("seconds,unit,text", [
-    (45.0, "s", "45s"),
-    (250.0, "s", "4m 10s"),
-    (0.0, "m", "<1m"),
-    (59.9, "m", "<1m"),
-    (60.0, "m", "1m"),
-    (1380.0, "m", "23m"),
-    (1380.0, "h", "23m"),          # under an hour, the h unit reads minutes
-    (3600.0, "h", "1h 0m"),
-    (4980.0, "h", "1h 23m"),
-    (7259.0, "h", "2h 0m"),        # truncates, never rounds up
+    (45.0, "s", "0:45"),
+    (250.0, "s", "4:10"),
+    (0.0, "m", "0:00"),
+    (59.9, "m", "0:30"),
+    (60.0, "m", "1:00"),
+    (1380.0, "m", "23:00"),
+    (1380.0, "h", "23:00"),        # under an hour, the h unit reads m:ss
+    (3600.0, "h", "1:00:00"),
+    (4980.0, "h", "1:23:00"),
+    (7259.0, "h", "2:00:30"),      # truncates to the 30 s step, never rounds up
 ])
 def test_format_elapsed(seconds, unit, text):
-    assert format_elapsed(seconds, unit) == text
+    assert clock_elapsed(seconds, unit) == text
 
 
 # ── bans_within: the 7-day memory (rows H, I) ────────────────────────────────

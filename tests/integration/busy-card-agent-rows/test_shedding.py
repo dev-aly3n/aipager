@@ -91,14 +91,14 @@ def test_active_agent_row_text_survives_forced_truncation_in_the_middle():
     sess = _oversized_sess(agent_position="middle")
     card, truncated = build_stream_card_ex(sess, "Working")
     assert truncated is True
-    assert f"{MARK} crawler · Bash: find . -name '*.py' · 8s" in card
+    assert f"{MARK} crawler · Bash: find . -name '*.py' · 0:08" in card
 
 
 def test_active_agent_row_text_survives_forced_truncation_as_newest():
     sess = _oversized_sess(agent_position="newest")
     card, truncated = build_stream_card_ex(sess, "Working")
     assert truncated is True
-    assert f"{MARK} crawler · Bash: find . -name '*.py' · 8s" in card
+    assert f"{MARK} crawler · Bash: find . -name '*.py' · 0:08" in card
 
 
 def test_active_agent_row_is_never_folded_behind_a_details_block():
@@ -121,7 +121,7 @@ def test_active_agent_row_survives_when_only_step_b_pressure_reaches_it():
     sess = _oversized_sess(agent_position="step-b-only")
     card, truncated = build_stream_card_ex(sess, "Working")
     assert truncated is True
-    assert f"{MARK} crawler · Bash: find . -name '*.py' · 8s" in card
+    assert f"{MARK} crawler · Bash: find . -name '*.py' · 0:08" in card
 
 
 def test_active_agent_row_is_never_inside_the_details_block_under_step_b_pressure():

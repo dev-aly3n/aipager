@@ -29,6 +29,7 @@ from telegram.error import (
 
 
 from aipager.bot.mode_labels import mode_label
+from aipager.clockfmt import elapsed as clock
 from aipager.config import (
     APP_BUTTON,
     # Only the pinned bar reads CHAT_ID (`_pinned_chats`, `_pinned_chat_of`):
@@ -848,8 +849,7 @@ class DashboardMixin:
                 f" · {glyph} {word}")
         if sess.status == Status.BUSY:
             if sess.busy_started_at:
-                secs = int(time.monotonic() - sess.busy_started_at)
-                head += f" {secs // 60}m" if secs >= 60 else f" {secs}s"
+                head += f" {clock(time.monotonic() - sess.busy_started_at)}"
             if sess.tool_history:
                 step = " ".join(str(sess.tool_history[-1][0]).split())
                 if len(step) > _STATUS_STEP_MAX:
@@ -1027,10 +1027,8 @@ class DashboardMixin:
         elapsed = ""
         if sess.status == Status.BUSY and sess.busy_started_at:
             secs = int(time.monotonic() - sess.busy_started_at)
-            if secs >= 60:
-                elapsed = f" {secs // 60}m{secs % 60}s"
-            elif secs >= 2:
-                elapsed = f" {secs}s"
+            if secs >= 2:
+                elapsed = f" {clock(secs)}"
 
         header = f"{icon} <b>[{html_mod.escape(sess.label)}]</b> \u00b7 {status_str}{elapsed}"
 

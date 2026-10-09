@@ -371,10 +371,10 @@ def test_build_session_dashboard_idle(mk_bot):
 def test_build_session_dashboard_busy_shows_elapsed(mk_bot):
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
-    sess.busy_started_at = time.monotonic() - 65  # 1m 5s ago
+    sess.busy_started_at = time.monotonic() - 65  # 1:05 ago
     dashboard = bot._build_session_dashboard(sess)
-    # Should contain a minute marker
-    assert "m" in dashboard
+    # The clock, in true seconds
+    assert "</b> · busy 1:05" in dashboard
 
 
 def test_build_session_dashboard_with_queue(mk_bot):

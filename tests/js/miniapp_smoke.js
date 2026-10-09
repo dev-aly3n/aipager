@@ -2371,7 +2371,7 @@ Object.assign(DRIVERS, {
 function driveDetailActivity() {
   api.openDetail("dev");
   setTimeoutReal(() => {
-    if (byId["detail-state"].textContent !== "Working for 3m 12s")
+    if (byId["detail-state"].textContent !== "Working for 3:12")
       fail("state line: " + JSON.stringify(byId["detail-state"].textContent));
     if (byId["detail-status"].textContent !== "working") fail("status chip: " + byId["detail-status"].textContent);
     if (byId["detail-ring"].attrs.style !== "--pct:57") fail("header ring: " + byId["detail-ring"].attrs.style);
@@ -2383,7 +2383,7 @@ function driveDetailActivity() {
     if (classes.join(",") !== "bead bead-done,bead bead-failed,bead bead-done,bead bead-running")
       fail("bead states: " + JSON.stringify(classes));
     if (strip.textContent.indexOf("2 queued") === -1) fail("no queue chip: " + strip.textContent);
-    if (strip.textContent.indexOf("Bash: pytest -q (running 14s)") === -1)
+    if (strip.textContent.indexOf("Bash: pytest -q (running 0:14)") === -1)
       fail("no latest-tool line: " + strip.textContent);
     const html = byId["detail-preview"].innerHTML;
     if (html.indexOf("<code>pytest</code>") === -1 || html.indexOf("<b>") !== -1)

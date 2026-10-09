@@ -18,7 +18,7 @@ and on every session change.
 | `/start` | - | The home screen: this chat's sessions, where a plain message goes (`✍️ Messages go to x1.`), and `🆕 New session`, `⚙️ Settings` and, when this chat has an ended session to bring back, `↩️ Resume`. Also shows the persistent keyboard. |
 | `/help` | - | A short guide by task (start, talk, control, manage, settings, and for admins `/update`), with the tip that tapping a command sends it at once: long-press it (phone) or press Tab (desktop) to add text first. For the owner of the install (the person in its own private chat with the bot) it also has a `🐞 Report a problem` button: it opens a preview of the exact problem report in that private chat, with Send, Add a note and Cancel. Nothing is sent until you tap Send ([what a report contains](problem-reports.md)). |
 | `/app` | - | Open the Mini App dashboard (sessions, diff viewer, settings). |
-| `/status` | - | This chat's sessions as a list you can act on. Each says its state in words (`⚙️ working 3m · Bash: run tests`, `⏳ needs you · Bash: make deploy`, `💤 idle`), with `✍️` on the one a plain message goes to, and a second line with the model, context, cost, what is queued (`queue 3 (1 queued, 2 notes)`), and running agents and shells. Each has a row of buttons: `✍️ x1` sends your next messages there, `⏹ Stop` while it works, `Answer` while it waits for you, and `⋮` for the rest. Below: `🆕 New`, and `⚫ Ended (n)` for the sessions that ended (resume, delete, or clear them all from the list; they stay in `/resume`). |
+| `/status` | - | This chat's sessions as a list you can act on. Each says its state in words (`⚙️ working 3:12 · Bash: run tests`, `⏳ needs you · Bash: make deploy`, `💤 idle`), with `✍️` on the one a plain message goes to, and a second line with the model, context, cost, what is queued (`queue 3 (1 queued, 2 notes)`), and running agents and shells. Each has a row of buttons: `✍️ x1` sends your next messages there, `⏹ Stop` while it works, `Answer` while it waits for you, and `⋮` for the rest. Below: `🆕 New`, and `⚫ Ended (n)` for the sessions that ended (resume, delete, or clear them all from the list; they stay in `/resume`). |
 | `/stop [label]` | optional | Interrupt a session's current turn. Bare, it stops the one session of this chat that is working (even if your messages go to another one; a session whose background agent or shell is still running counts as working), asks which with a picker when several are, and says `Nothing is running.` when none is. `/stop x1` (or `/x1 stop`) stops x1 (or replies `x1 is not working.` when it is not). Also discards queued messages and replies with how many were discarded. |
 | `/now` | - | Send the messages Claude is holding in the active session's queue right now, instead of after the current step (Claude Code's own send-now keys, Ctrl+X Ctrl+S). Works any time, including while the chat is muted or in minimal mode; replies `Nothing is waiting in the queue` when Claude holds nothing. See [Send a queued message now](#send-a-queued-message-now). |
 | `/new [name] [first message]` | all optional | Start a session. `/new x1` starts it at once, and `/new x1 fix the tests` also sends "fix the tests" as its first message. Sent bare (for example tapped from the menu), `/new` asks for the name, and the next message you send is used exactly like the argument, so `/new` then `x1 fix the tests` gives the same result. In a group, reply to the card with the name (or mention the bot: `@aipagerbot x1`), since a plain message there does not reach the bot. Only that next message: if you do anything else first (a photo, another command, a reply to another message, a keyboard template, another button), it is handled as usual and the card closes; `/status`, `/settings` and the keyboard's menus leave it open. The card that asks also shows the mode, model and folder the session will get, with buttons to change them first. Every way ends in the same Ready card: what the session got, that your next message goes to it, and one-tap buttons to switch to the other mode or change the model. New sessions start in Auto for an admin (the `owner` and `admin` roles; Ask for everyone else); change what /new uses in `/settings` → New sessions. A `!` before the name still means Auto. A name that is in use offers `↩️ Switch to it` (when that session runs) or `♻️ Resume` (when it ended), `🆕 Replace (fresh)` and `↩️ Cancel`, for the person who sent `/new` only. The card that asks for a name expires after 10 minutes unused (`⏱ This new-session card expired. Send /new again.`). |
@@ -73,7 +73,7 @@ layout always shows its choice).
 |---|---|---|
 | 🖼 Message layout | Busy card + result; Merged into busy message; Replace with result | How a finished turn appears. Busy card + result keeps the card above the answer as the record of how it was reached; Merged puts the answer into the card; Replace removes the card and leaves the answer alone. The default is Busy card + result (`KEEP_FINISHED_CARD=0` makes it Replace for chats that never chose). See [idle responses](#idle-responses). |
 | 📝 Diff previews | Off; On | On posts each `Write`/`Edit` as its own diff message under the busy card. Off keeps one card and one answer; the card still lists every edit, and the Mini App has a diff viewer. |
-| ⏱ Long-turn card updates | On; Off | On, a busy card refreshes every 10 s after 2 minutes of a turn and every 30 s after 10 (never slower, however long the turn), and counts in minutes then hours; Off keeps the first-minutes pace for the whole turn (see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)). |
+| ⏱ Long-turn card updates | On; Off | On, a busy card refreshes every 10 s after 2 minutes of a turn and every 30 s after 10 (never slower, however long the turn), and its clock then moves in 30 s steps; Off keeps the first-minutes pace for the whole turn (see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)). |
 | ✏️ Simple formatting | Off; On | On asks Claude for plain prose and dashed lists only: no tables, code blocks, headings or bold. |
 | 📏 Answer length | Don't apply any rule; Extra short; Short; Medium; Long | Asks Claude for answers of that length. |
 | 🎓 Language level | Don't apply any rule; Simple words; Normal; Advanced | Asks Claude for that vocabulary. |
@@ -124,7 +124,7 @@ is waiting.
 - **Chats.** The app shows one chat at a time. If you belong to more than one chat (your DM and a group, say), a row of chat names at the top switches between them; the app opens on your own DM and remembers your last choice on that phone. Everything below is for the chosen chat, with your role in it. With one chat the row is not shown. See [groups](groups.md).
 - **Sessions.** One sentence sums up the chat, for example "1 needs you, 2 working, 3 resting", with what has been spent beneath it. Each live session is a tile with a context ring, its folder, model and cost; working ones glow in the accent colour. Finished sessions rest on a collapsible **Finished** shelf. The **+** button starts a new session.
 - **Needs you.** A session waiting on a permission prompt or a question sits in an amber tray at the top, showing what it is asking. **Answer in chat** re-sends that prompt, with its buttons, to the bottom of the chat, the same as the pinned bar's **Answer** button, and you answer it there. If it was the only session waiting, the app closes so the prompt is right in front of you; otherwise it stays open and says "Sent to the chat". It needs the right to prompt the session, and a copy tapped after the prompt was answered or replaced says "already answered".
-- **A session's page.** The header shows the context ring, the state ("Working for 3m 12s", "Needs you (permission)", "Resting, last active 5m ago", "Finished") and a one-tap **Stop** (while working or waiting) or **Resume** (once finished). Below it: the waiting prompt with **Answer in chat**, the last few tool calls as a strip (tap it for the full timeline), the latest reply, the facts, the model control, the session's own settings, and the changed files and timeline. The ⋮ menu carries every action, with the same confirmations as before.
+- **A session's page.** The header shows the context ring, the state ("Working for 3:12", "Needs you (permission)", "Resting, last active 5m ago", "Finished") and a one-tap **Stop** (while working or waiting) or **Resume** (once finished). Below it: the waiting prompt with **Answer in chat**, the last few tool calls as a strip (tap it for the full timeline), the latest reply, the facts, the model control, the session's own settings, and the changed files and timeline. The ⋮ menu carries every action, with the same confirmations as before.
 - **New session.** A guided card: name, then where (with **Recent** chips for the folders your sessions use, newest first), then model (with **Suggested** chips), then **More options** for the permission mode and reply style. Telegram's own button at the bottom reads **Start session**.
 - **Settings.** The chat's preferences and, for an admin, **Updates**, which mirrors [`/update`](#update). For the owner in their private chat, **Report a problem** opens its own page: write a note, check the report, send it and see its reference without leaving the app (see [problem reports](problem-reports.md#how-to-send-one)).
 
@@ -436,21 +436,21 @@ make aipager think a new turn started.
 
 A command Claude runs in the background (`run_in_background`, Ctrl+B,
 or one Claude Code moves there when it times out) gets a row of its own
-while it runs: `⏳ shell: <description> (3m)`, named by the call's
+while it runs: `⏳ shell: <description> (3:12)`, named by the call's
 description or else the first line of the command. When it ends the row
-settles to `✅ shell: <description> - done (6m)`, `❌ ... - failed (exit
-1)`, or `⏹ ... - stopped (6m)` (Claude stopped it with TaskStop, or
+settles to `✅ shell: <description> - done (6:12)`, `❌ ... - failed (exit
+1)`, or `⏹ ... - stopped (6:12)` (Claude stopped it with TaskStop, or
 Claude Code stopped it under memory pressure); failed and stopped rows
 keep that mark on the finished card. A turn that ends while such a
 command still runs is not finished: the card waits as the job's status
-(`🔄 name · 1 shell still working · 4m`, or `1 agent (ship-reviewer), 1
+(`🔄 name · 1 shell still working · 4:10`, or `1 agent (ship-reviewer), 1
 shell still working` with an agent too), and when the command ends
 Claude's follow-up continues on that same card. Commands started inside
 an agent are that agent's and are not shown. A command whose end
 aipager never sees (a restart, a lost event) stops counting after two
 hours (`AIPAGER_BG_SHELL_MAX_TRACK`, in seconds): its row reads
 `⏹ ... - no end seen`, and a job that was waiting only on it closes with
-`⚠️ name · Finished (no end seen for a background shell after 120m 4s)`.
+`⚠️ name · Finished (no end seen for a background shell after 2:00:04)`.
 
 Once a turn's timeline grows long, each older run of tool calls (three
 or more in a row, and not the run currently in progress) folds into its
@@ -486,7 +486,7 @@ until it ends; its later follow-up then starts a turn of its own.
 That answer goes out the moment the turn ends, as a normal (notifying)
 message threaded to your prompt - the same text the terminal shows. The
 busy card stays above it as the job's live status, in every layout:
-`🔄 name · 1 agent (general-purpose) still working · 1m 18s`, with its
+`🔄 name · 1 agent (general-purpose) still working · 1:18`, with its
 **Stop** button. When the agents report back, Claude's answer to that
 arrives as a new message of its own; the earlier answer is never sent
 again, a daemon restart included. A job whose agents report back more
@@ -499,9 +499,9 @@ aipager learns this from Claude's `<task-notification>` for it, when that
 notification starts a turn. The line is added in every layout.
 
 Once every agent a line named has finished, aipager edits that line
-once, silently, to `✅ pipeline-runner done (6m)` (or `✅ 2 agents done
-(6m)`, `✅ shell: run the tests - done (6m)`, `✅ 1 agent, 1 shell done
-(6m)`, with the time since the answer went out; a failed command is
+once, silently, to `✅ pipeline-runner done (6:12)` (or `✅ 2 agents done
+(6:12)`, `✅ shell: run the tests - done (6:12)`, `✅ 1 agent, 1 shell done
+(6:12)`, with the time since the answer went out; a failed command is
 also "done" here, its card row says how it ended); the results themselves
 arrive as their own message. Each answer that carried the line is edited
 this way (up to five pending per session). The edit is a low-priority

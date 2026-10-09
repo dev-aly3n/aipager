@@ -45,6 +45,7 @@ from aipager.bot.rich_message import (
 from aipager import bg_shells as _bg_shells
 from aipager import bidi_guard
 from aipager import preferences
+from aipager.clockfmt import elapsed as clock
 from aipager.config import (
     COMPACT_CARD_TIMEOUT_SECONDS,
     COMPACT_DONE_PAUSE_SECONDS,
@@ -1573,10 +1574,8 @@ class NotifyMixin:
             elapsed_str = ""
             if sess.busy_started_at:
                 elapsed_s = int(time.monotonic() - sess.busy_started_at)
-                if elapsed_s >= 60:
-                    elapsed_str = f"{elapsed_s // 60}m {elapsed_s % 60}s"
-                elif elapsed_s > 0:
-                    elapsed_str = f"{elapsed_s}s"
+                if elapsed_s > 0:
+                    elapsed_str = clock(elapsed_s)
             suffix = f" ({elapsed_str})" if elapsed_str else ""
             # Two forms of the same line ("session-name-on-every-message"):
             # the busy card settles to ITS glyph (✅ — the card's terminal
@@ -1626,10 +1625,8 @@ class NotifyMixin:
             elapsed_str = ""
             if sess.busy_started_at:
                 elapsed_s = int(time.monotonic() - sess.busy_started_at)
-                if elapsed_s >= 60:
-                    elapsed_str = f"{elapsed_s // 60}m {elapsed_s % 60}s"
-                elif elapsed_s > 0:
-                    elapsed_str = f"{elapsed_s}s"
+                if elapsed_s > 0:
+                    elapsed_str = clock(elapsed_s)
             suffix = f" after {elapsed_str}" if elapsed_str else ""
             if context.get("what", "agent") == "shell":
                 text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Finished "
@@ -2067,14 +2064,11 @@ class NotifyMixin:
             elapsed = context.get("elapsed", 0.0)
             history_idx = context.get("history_idx")
             tool_count = context.get("tool_count", 0)
-            # Format elapsed time — floored to "0s" rather than "" below
-            # 1s (was blank before this feature) so the settled row's
+            # The clock in true seconds, "0:00" rather than "" below 1s
+            # (was blank before this feature) so the settled row's
             # three-segment shape ("type · N tool calls · elapsed") is
             # always fixed ("agent activity rows on the busy card").
-            if elapsed >= 60:
-                elapsed_str = f"{int(elapsed) // 60}m {int(elapsed) % 60}s"
-            else:
-                elapsed_str = f"{int(elapsed)}s"
+            elapsed_str = clock(elapsed)
             plural = "" if tool_count == 1 else "s"
             done_summary = (
                 f"\U0001f916 {agent_type} · {tool_count} tool call{plural}"
@@ -2868,10 +2862,8 @@ class NotifyMixin:
                     # that never got a card still has the transition's own
                     # stamp, so the header can report how long it ran.
                     elapsed_s = int(time.time() - sess.busy_started_wall)
-                if elapsed_s >= 60:
-                    elapsed_str = f"{elapsed_s // 60}m {elapsed_s % 60}s"
-                elif elapsed_s > 0:
-                    elapsed_str = f"{elapsed_s}s"
+                if elapsed_s > 0:
+                    elapsed_str = clock(elapsed_s)
                 # Lines changed this turn
                 lines_str = ""
                 if sess.last_lines_added or sess.last_lines_removed:

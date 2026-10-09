@@ -367,21 +367,21 @@ def test_bb_running_line_without_kinds_is_all_agents():
 
 def test_bb_done_line_one_shell():
     assert done_line(["sleep 90"], 45, kinds=["shell"]) == \
-        "✅ shell: sleep 90 - done (45s)"
+        "✅ shell: sleep 90 - done (0:45)"
 
 
 def test_bb_done_line_mixed():
     assert done_line(["a", "b"], 6 * 60, kinds=["agent", "shell"]) == \
-        "✅ 1 agent, 1 shell done (6m)"
+        "✅ 1 agent, 1 shell done (6:00)"
 
 
 def test_bb_done_line_two_shells_hours():
     assert done_line(["a", "b"], 3 * 3600 + 3 * 60,
-                     kinds=["shell", "shell"]) == "✅ 2 shells done (3h 3m)"
+                     kinds=["shell", "shell"]) == "✅ 2 shells done (3:03:00)"
 
 
 def test_bb_done_line_single_agent_unchanged():
-    assert done_line(["x"], 45, kinds=["agent"]) == "✅ x done (45s)"
+    assert done_line(["x"], 45, kinds=["agent"]) == "✅ x done (0:45)"
 
 
 @pytest.mark.parametrize("kinds", [["shell"], ["agent", "shell"],

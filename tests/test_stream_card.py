@@ -99,7 +99,7 @@ def test_card_status_rides_on_the_last_line():
     sess.tool_history = [("Bash: ls", True)]
     sess.stream_commentary = [(0, "body text")]
     status = build_stream_card(sess, "Working").rpartition("\n\n")[2]
-    assert status == "⏳ **dev** · Working · 7s · $0.25 · Bash ×1"
+    assert status == "⏳ **dev** · Working · 0:07 · $0.25 · Bash ×1"
 
 
 # ── build_stream_card: status-line segments ─────────────────────────────────
@@ -109,23 +109,23 @@ def test_card_elapsed_shown_when_ge_2s():
     sess = _sess()
     sess.busy_started_at = time.monotonic() - 5
     card = build_stream_card(sess, "Working")
-    assert "5s" in card
+    assert " · 0:05" in card
 
 
 def test_card_elapsed_shown_from_the_first_second():
-    """The clock counts from 0s. It used to appear blank until 2s, then jump."""
+    """The clock counts from 0:00. It used to appear blank until 2s, then jump."""
     sess = _sess()
     sess.busy_started_at = time.monotonic() - 1
-    assert "1s" in build_stream_card(sess, "Working")
+    assert " · 0:01" in build_stream_card(sess, "Working")
     sess.busy_started_at = time.monotonic()
-    assert "0s" in build_stream_card(sess, "Working")
+    assert " · 0:00" in build_stream_card(sess, "Working")
 
 
 def test_card_elapsed_format_minutes():
     sess = _sess()
     sess.busy_started_at = time.monotonic() - 125
     card = build_stream_card(sess, "Working")
-    assert "2m" in card
+    assert " · 2:05" in card
 
 
 def test_card_cost_shown_when_delta_above_threshold():
@@ -494,7 +494,7 @@ def test_timeline_subagent_elapsed_suffix_preserved():
                 "started_at": time.monotonic() - 5},
     }
     rows = _body(build_stream_card(sess, "Working"))
-    assert rows == ["⏳ `\U0001f916 Explore · starting · 5s`"]
+    assert rows == ["⏳ `\U0001f916 Explore · starting · 0:05`"]
 
 
 def test_timeline_commentary_budget_drops_oldest_blocks():
@@ -1514,11 +1514,11 @@ def _header(card: str) -> str:
 
 def test_waiting_header_single_agent_no_types_over_three():
     sess = _sess("hiva")
-    sess.busy_started_at = time.monotonic() - 260  # 4m 20s
+    sess.busy_started_at = time.monotonic() - 260  # 4:20
     sess.active_subagents["a1"] = {"type": "Explore"}
     header = _header(build_stream_card(sess, "Working", waiting=True))
     assert header == (
-        "🔄 **hiva** · 1 agent (Explore) still working · 4m 20s"
+        "🔄 **hiva** · 1 agent (Explore) still working · 4:20"
     )
 
 

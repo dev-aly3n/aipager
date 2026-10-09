@@ -37,6 +37,7 @@ import time
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
+from aipager.clockfmt import elapsed as clock
 from aipager.policy_snapshot import combined_queue_depth
 from aipager.state import QUEUE_CAP, Status
 from aipager.statusline_file import latest_stats
@@ -375,7 +376,12 @@ def session_detail(
     last_active = round(now - sess.last_hook_at) if sess.last_hook_at else None
     busy_elapsed = None
     if sess.busy_started_at and sess.status in (Status.BUSY, Status.INTERACTIVE):
-        busy_elapsed = round(now - sess.busy_started_at)
+        # Floored, never rounded: the busy card truncates, and the app and
+        # the card show the same clock for the same moment.
+        busy_elapsed = int(max(0.0, now - sess.busy_started_at))
+    # The unit the busy card last rendered its clock in (true seconds, or
+    # 30 s steps on an old turn): the app shows the clock the card shows.
+    unit = getattr(sess, "card_elapsed_unit", "s")
     queue_depth = combined_queue_depth(sess)
     stats = latest_stats(sess)
     detail = {
@@ -389,6 +395,7 @@ def session_detail(
         "cwd": sess.cwd or "",
         "last_active_seconds_ago": last_active,
         "busy_elapsed_seconds": busy_elapsed,
+        "busy_elapsed_unit": unit if unit in ("s", "m", "h") else "s",
         # The session's current permission mode and how many prompts sit
         # behind its in-progress turn — both consulted client-side to
         # word the perms confirm dialog and to decide whether Clear
@@ -490,7 +497,8 @@ def display_facts(detail: dict[str, Any]) -> list[dict[str, str]]:
     if detail.get("busy_elapsed_seconds"):
         facts.append({
             "label": "Working for",
-            "value": _short_duration(detail["busy_elapsed_seconds"]),
+            "value": clock(detail["busy_elapsed_seconds"],
+                           detail.get("busy_elapsed_unit") or "s"),
         })
     age = detail.get("last_active_seconds_ago")
     if age is not None:
@@ -542,7 +550,7 @@ def build_timeline(sess: "TrackedSession") -> list[dict[str, Any]]:
         state = "failed" if done == "failed" else ("done" if done else "running")
         elapsed = None
         if state == "running" and idx in subagent_started:
-            elapsed = round(time.monotonic() - subagent_started[idx])
+            elapsed = int(max(0.0, time.monotonic() - subagent_started[idx]))
         rows.append({
             "kind": "tool", "text": summary, "state": state,
             "elapsed_seconds": elapsed,

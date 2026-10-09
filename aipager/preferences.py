@@ -81,8 +81,8 @@ class Preferences:
     diff_preview: bool = False
     # Slow the busy card as a turn gets long (roadmap 8.30): from 2 / 10
     # minutes the card is refreshed at most every 10 / 30 s (never slower
-    # than 30 s, however long the turn) and counts in minutes, then hours
-    # from an hour. ON by default — it is what keeps a
+    # than 30 s, however long the turn) and its clock moves in 30 s steps
+    # from 10 minutes. ON by default — it is what keeps a
     # four-hour turn from editing one message thousands of times. Off is
     # 0.7.13's cadence for the whole turn.
     card_age_decay: bool = True
