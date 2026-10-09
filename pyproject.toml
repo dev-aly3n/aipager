@@ -44,7 +44,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "ruff>=0.5", "build", "twine"]
+# babel: CI checks the hand-written plural rules against CLDR (dev only;
+# it would add about 31 MB to an install at runtime).
+dev = ["pytest>=7", "ruff>=0.5", "build", "twine", "babel>=2.10"]
 # Voice input support — install with `pip install 'aipager[voice]'` /
 # `uv tool install 'aipager[voice]'`. faster-whisper transitively pulls
 # ctranslate2 (~60 MB), onnxruntime (~55 MB), av, numpy and tokenizers,
