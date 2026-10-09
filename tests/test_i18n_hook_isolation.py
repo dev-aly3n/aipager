@@ -12,8 +12,12 @@ machinery in. Three tests:
 (b) the static scan: every module of that closure, plus the AST closure
     of the two entry points, holds no import of ``aipager.i18n`` at any
     nesting level. A lazy import inside a function (which the dynamic run
-    might never trigger) fails here;
-(c) the scanner itself flags a function-level import.
+    might never trigger) fails here. So does a function-level import of
+    any ``aipager`` module whose own module-level closure loads
+    ``aipager.i18n`` (an indirect lazy import), and relative imports are
+    resolved;
+(c) the scanners themselves flag a function-level import, a relative
+    one and an indirect lazy one in a synthetic package.
 """
 
 from __future__ import annotations
@@ -98,30 +102,42 @@ def test_the_hook_never_loads_i18n(closure):
 
 # ---- the static scan ----------------------------------------------------------------
 
-def _path(module: str) -> Path | None:
-    base = REPO.joinpath(*module.split("."))
+def _is_i18n(module: str) -> bool:
+    return module == "aipager.i18n" or module.startswith("aipager.i18n.")
+
+
+def _path(module: str, root: Path = REPO) -> Path | None:
+    base = root.joinpath(*module.split("."))
     for p in (base.with_suffix(".py"), base / "__init__.py"):
         if p.is_file():
             return p
     return None
 
 
-def _imported(tree: ast.AST, module: str, nodes) -> set[str]:
+def _resolved(node: ast.AST, module: str, root: Path = REPO) -> set[str]:
+    """Every ``aipager`` name one import node may load, relative forms
+    (``from .i18n import x``, ``from .. import i18n``) resolved against
+    ``module``."""
     out: set[str] = set()
-    is_pkg = (_path(module) or Path()).name == "__init__.py"
-    package = module if is_pkg else module.rpartition(".")[0]
-    for node in nodes:
-        if isinstance(node, ast.Import):
-            out.update(a.name for a in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            base = node.module or ""
-            if node.level:
-                parts = package.split(".")
-                parts = parts[:len(parts) - node.level + 1]
-                base = ".".join(parts + ([node.module] if node.module else []))
-            out.add(base)
-            out.update(f"{base}.{a.name}" for a in node.names)
+    if isinstance(node, ast.Import):
+        out.update(a.name for a in node.names)
+    elif isinstance(node, ast.ImportFrom):
+        base = node.module or ""
+        if node.level:
+            is_pkg = (_path(module, root) or Path()).name == "__init__.py"
+            parts = (module if is_pkg else module.rpartition(".")[0]).split(".")
+            parts = parts[:len(parts) - node.level + 1]
+            base = ".".join(parts + ([node.module] if node.module else []))
+        out.add(base)
+        out.update(f"{base}.{a.name}" for a in node.names)
     return {m for m in out if m == "aipager" or m.startswith("aipager.")}
+
+
+def _imported(module: str, nodes, root: Path = REPO) -> set[str]:
+    out: set[str] = set()
+    for node in nodes:
+        out |= _resolved(node, module, root)
+    return out
 
 
 def _module_level(tree: ast.Module):
@@ -136,36 +152,57 @@ def _module_level(tree: ast.Module):
         todo.extend(ast.iter_child_nodes(node))
 
 
-def static_closure(entries=ENTRY_POINTS) -> set[str]:
+def _function_level(tree: ast.Module):
+    """Import nodes that run only when a function is called."""
+    eager = {id(n) for n in _module_level(tree)}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)) and id(node) not in eager:
+            yield node
+
+
+def static_closure(entries=ENTRY_POINTS, root: Path = REPO, deep=None) -> set[str]:
+    """Modules loaded by importing ``entries``. Modules in ``deep``
+    (default: the entries) count their function-level imports too."""
+    deep = set(entries if deep is None else deep)
     seen: set[str] = set()
     todo = list(entries)
     while todo:
         module = todo.pop()
-        if module in seen or _path(module) is None:
+        if module in seen or _path(module, root) is None:
             continue
         seen.add(module)
         parts = module.split(".")
         todo.extend(".".join(parts[:i]) for i in range(1, len(parts)))
-        tree = ast.parse(_path(module).read_text(encoding="utf-8"))
-        nodes = ast.walk(tree) if module in entries else _module_level(tree)
-        todo.extend(_imported(tree, module, nodes))
+        tree = ast.parse(_path(module, root).read_text(encoding="utf-8"))
+        nodes = ast.walk(tree) if module in deep else _module_level(tree)
+        todo.extend(_imported(module, nodes, root))
     return seen
 
 
-def i18n_imports(source: str) -> list[int]:
-    """Line numbers of every import of ``aipager.i18n``, at any depth."""
-    lines = []
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.Import):
-            if any(a.name == "aipager.i18n" or a.name.startswith("aipager.i18n.")
-                   for a in node.names):
-                lines.append(node.lineno)
-        elif isinstance(node, ast.ImportFrom):
-            mod = node.module or ""
-            if (mod == "aipager.i18n" or mod.startswith("aipager.i18n.")
-                    or (mod == "aipager" and any(a.name == "i18n" for a in node.names))):
-                lines.append(node.lineno)
-    return lines
+def i18n_imports(source: str, module: str = "aipager._scanned",
+                 root: Path = REPO) -> list[int]:
+    """Line numbers of every import of ``aipager.i18n``, at any depth,
+    relative forms resolved as if ``source`` were ``module``."""
+    return sorted({node.lineno for node in ast.walk(ast.parse(source))
+                   if isinstance(node, (ast.Import, ast.ImportFrom))
+                   and any(_is_i18n(m) for m in _resolved(node, module, root))})
+
+
+def lazy_i18n_imports(module: str, root: Path = REPO) -> dict[int, str]:
+    """Function-level imports of ``module`` whose target loads
+    ``aipager.i18n`` at module level, even through other modules
+    (``def f(): from aipager.bot.kbwords import norm`` when kbwords
+    imports i18n at its top): line -> the target."""
+    path = _path(module, root)
+    if path is None:
+        return {}
+    hits: dict[int, str] = {}
+    for node in _function_level(ast.parse(path.read_text(encoding="utf-8"))):
+        for target in sorted(_resolved(node, module, root)):
+            if any(_is_i18n(m) for m in static_closure((target,), root, deep=())):
+                hits[node.lineno] = target
+                break
+    return hits
 
 
 def test_no_closure_module_imports_i18n_anywhere(closure):
@@ -176,10 +213,16 @@ def test_no_closure_module_imports_i18n_anywhere(closure):
         path = _path(module)
         if path is None:
             continue
-        hits = i18n_imports(path.read_text(encoding="utf-8"))
+        hits = i18n_imports(path.read_text(encoding="utf-8"), module)
         if hits:
             bad[module] = hits
     assert not bad, f"the hook's import closure reaches aipager.i18n: {bad}"
+
+
+def test_no_closure_module_reaches_i18n_through_a_lazy_import(closure):
+    modules = static_closure() | closure
+    bad = {m: hits for m in sorted(modules) if (hits := lazy_i18n_imports(m))}
+    assert not bad, f"a lazy import in the hook's closure loads aipager.i18n: {bad}"
 
 
 def test_the_static_scan_sees_a_lazy_import():
@@ -196,3 +239,38 @@ def test_the_static_scan_sees_a_lazy_import():
     )
     assert i18n_imports(source) == [4, 8, 9]
     assert i18n_imports("from aipager import config\nimport aipager.i18nx\n") == []
+
+
+def test_the_static_scan_resolves_relative_imports():
+    assert i18n_imports("def f():\n    from .i18n import clock\n", "aipager.clockfmt") == [2]
+    assert i18n_imports("from .. import i18n\n", "aipager.bot.kbwords") == [1]
+    assert i18n_imports("from ..i18n.core import Msg\n", "aipager.bot.kbwords") == [1]
+    assert i18n_imports("from . import i18n\n", "aipager.bot.kbwords") == []
+    assert i18n_imports("from .. import config\n", "aipager.bot.kbwords") == []
+
+
+def _package(root: Path, files: dict[str, str]) -> None:
+    for rel, text in {"aipager/__init__.py": "", "aipager/i18n/__init__.py": "",
+                      "aipager/bot/__init__.py": "", **files}.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text, encoding="utf-8")
+
+
+def test_an_indirect_lazy_import_of_i18n_is_flagged(tmp_path):
+    """Guard the guard: a function-level import of a module that itself
+    loads ``aipager.i18n`` at module level, directly or two hops away,
+    absolutely or relatively, is flagged; one that does not is not."""
+    _package(tmp_path, {
+        "aipager/bot/kbwords.py": "from aipager.i18n import get\n",
+        "aipager/bot/hop.py": "from . import kbwords\n",
+        "aipager/plain.py": "import os\ndef f():\n    from aipager.i18n import get\n",
+        "aipager/hookmod.py": (
+            "def a():\n    from aipager.bot.kbwords import norm\n"
+            "def b():\n    from .bot import hop\n"
+            "def c():\n    import aipager.plain\n"),
+    })
+    assert lazy_i18n_imports("aipager.hookmod", tmp_path) == {
+        2: "aipager.bot.kbwords", 4: "aipager.bot.hop"}
+    # Neither form is a direct import, so the direct scan alone misses it.
+    source = (tmp_path / "aipager/hookmod.py").read_text(encoding="utf-8")
+    assert i18n_imports(source, "aipager.hookmod", tmp_path) == []
