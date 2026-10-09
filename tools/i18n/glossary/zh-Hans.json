@@ -1,0 +1,34 @@
+{
+ "address": "你",
+ "keep_english": [
+  "commit",
+  "token",
+  "diff",
+  "log"
+ ],
+ "language": "Chinese (Simplified)",
+ "terms": {
+  "admin": "",
+  "agent": "",
+  "allow": "",
+  "background": "",
+  "card": "",
+  "chat": "",
+  "deny": "",
+  "folder": "",
+  "group": "",
+  "member": "",
+  "model": "",
+  "owner": "",
+  "permission": "",
+  "prompt": "",
+  "question": "",
+  "queue": "",
+  "resume": "",
+  "session": "",
+  "settings": "",
+  "stop": "",
+  "turn": "",
+  "update": ""
+ }
+}
