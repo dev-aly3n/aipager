@@ -197,6 +197,16 @@ _DENY_OVERSHOOT = 5
 # (allow_always) for why this check exists here too, not only there.
 _STANDING_RULE_SUGGESTION_TYPES = frozenset({"addRules", "addDirectories"})
 
+#: The icon of an answered prompt's line, by the EFFECTIVE decision's id
+#: (never by the verb shown, which is display text). Anything else (an
+#: option, an unknown action) gets "·".
+_DECISION_ICONS = {
+    "allow": "✅",
+    "allow_always": "🟢",
+    "deny": "🚫",
+    "continue": "▶️",
+}
+
 # The verbs (with ``opt<N>``) that answer a prompt by typing into Claude's
 # dialog: refused on a surface whose prompt is known closed (roadmap 8.102).
 # ``submit`` is a multi-select question's Submit button.
@@ -1488,6 +1498,10 @@ class CallbackDispatchMixin:
         # own `via` kwarg defaults to "" too, so this changes nothing for
         # them.
         via = ""
+        # The effective decision's id (``_DECISION_ICONS``), decided next
+        # to ``verb`` in every branch: the record and the line read it,
+        # never the verb shown. None for an option or an unknown action.
+        decision: str | None = None
         if is_option or action == "submit":
             log.info("[%s] Callback: action=%s, multi_select=%s, has_perm=%s",
                      sess.label, action, perm.get("multi_select"), bool(perm))
@@ -1658,6 +1672,7 @@ class CallbackDispatchMixin:
                 ok = await inject.send_keys(session_name, "Enter")
         elif action == "allow":
             verb = ACTION_VERBS[action]
+            decision = "allow"
             # design.md "answer PermissionRequest hooks with a decision
             # instead of keystrokes": try the hook-returned-decision fast
             # path first — skipped entirely for AskUserQuestion, which
@@ -1716,8 +1731,10 @@ class CallbackDispatchMixin:
                 perm["hook_reply"] = None  # one decision per parked hook
                 if standing_rule is not None:
                     verb = ACTION_VERBS[action]
+                    decision = "allow_always"
                 else:
                     verb = ACTION_VERBS["allow"]
+                    decision = "allow"
                     answer_text = (
                         f"No always-rule for this command - allowed once [{sess.label}]"
                     )
@@ -1728,6 +1745,7 @@ class CallbackDispatchMixin:
             elif perm_info.get("always_available") is True:
                 via = "keystroke_fallback"
                 verb = ACTION_VERBS[action]
+                decision = "allow_always"
                 # One Down → "Yes, and don't ask again for …", the second
                 # row — present exactly when the hook carried permission
                 # suggestions (hook_receiver's PermissionRequest branch).
@@ -1745,6 +1763,7 @@ class CallbackDispatchMixin:
                 # pre-selected "Yes" and say so.
                 via = "keystroke_fallback"
                 verb = ACTION_VERBS["allow"]
+                decision = "allow"
                 answer_text = (
                     f"No always-rule for this command - allowed once [{sess.label}]"
                 )
@@ -1755,6 +1774,7 @@ class CallbackDispatchMixin:
                 ok = await inject.send_keys(session_name, "Enter")
         elif action == "deny":
             verb = ACTION_VERBS[action]
+            decision = "deny"
             hook_answered = False
             if (perm.get("tool_info") or {}).get("name") != "AskUserQuestion":
                 actor_for_reason = (
@@ -1795,6 +1815,7 @@ class CallbackDispatchMixin:
                     ok = await inject.send_keys(session_name, "Enter")
         elif action == "continue":
             verb = ACTION_VERBS[action]
+            decision = "continue"
             ok = await inject.send_keys(session_name, "Enter")
         else:
             verb = action
@@ -1818,7 +1839,8 @@ class CallbackDispatchMixin:
                 # Collapse current question into tool_history, write the
                 # audit record and post the attributed line.
                 perm = sess.pending_permission
-                await self._record_prompt_answer(sess, perm, verb, member, via)
+                await self._record_prompt_answer(sess, perm, verb, member, via,
+                                                 decision=decision)
 
                 # Multi-question AskUserQuestion: advance to next question
                 questions = perm.get("questions", [])
@@ -1912,7 +1934,7 @@ class CallbackDispatchMixin:
                     # prompt (roadmap 8.99), threaded under the busy card
                     # when there is one, else under the prompt itself.
                     await self._record_prompt_answer(
-                        sess, separate_perm, verb, member, via,
+                        sess, separate_perm, verb, member, via, decision=decision,
                         reply_to=getattr(query.message, "message_id", None))
             if via == "keystroke_fallback":
                 # A tool's prompt is answered by its hook when the hook is
@@ -1939,12 +1961,18 @@ class CallbackDispatchMixin:
             await self._safe_answer(query, f"Failed to send to {session_name}")
 
     async def _record_prompt_answer(self, sess, perm: dict, verb: str, member,
-                                    via: str, *, reply_to: int | None = None) -> None:
+                                    via: str, *, decision: str | None = None,
+                                    reply_to: int | None = None) -> None:
         """The record of an answered prompt, the same for the inline prompt
         and a separate-message one (roadmap 8.99): the collapsed row in
         the tool history, the audit-log record, and the attributed line in
         the session's chat ("✅ x1 · Allowed by @bob · Write: ...").
-        Threaded under the busy card, else under *reply_to*."""
+        Threaded under the busy card, else under *reply_to*.
+
+        *decision* is the effective action id (``"allow"``,
+        ``"allow_always"``, ``"deny"``, ``"continue"``, or None): it alone
+        decides ``denied`` and the icon. *verb* is what is shown and
+        audited as the action, and may be reworded or translated."""
         if perm.get("ask_question"):
             audit_detail = (perm.get("question") or "?")[:80]
             collapsed = f"❓ {audit_detail[:40]} → {verb}"
@@ -1968,19 +1996,14 @@ class CallbackDispatchMixin:
             scope_label=self._scope_label(sess.scope_chat_id),
             scope_chat_id=sess.scope_chat_id or None,
             # Any refusal, tap-driven or rule-driven (docs/security.md).
-            denied=(verb == ACTION_VERBS["deny"]),
+            denied=(decision == "deny"),
             via=via,
         )
 
         # Audit reply in chat — persistent record of the decision
         # the user just made. Threaded under the busy message so
         # the scrollback reads as a conversation.
-        audit_icon = {
-            ACTION_VERBS["allow"]: "✅",
-            ACTION_VERBS["allow_always"]: "🟢",
-            ACTION_VERBS["deny"]: "🚫",
-            ACTION_VERBS["continue"]: "▶️",
-        }.get(verb, "·")
+        audit_icon = _DECISION_ICONS.get(decision, "·")
         by_attr = f" by {attribution_label(actor)}" if actor else ""
         anchor = (sess.busy_msg_id if sess.busy_msg_id and sess.busy_msg_id > 0
                   else reply_to)
