@@ -23,6 +23,7 @@ import pytest
 
 from aipager import clockfmt
 from aipager.state import Status
+from tests.i18n_tool import isolated_env
 
 START = "// clock: port of aipager/clockfmt.py"
 END = "// end clock"
@@ -72,7 +73,7 @@ def _run_js(node, tmp_path, port_src, cases_js):
         + "process.stdout.write(JSON.stringify(out));\n",
         encoding="utf-8")
     proc = subprocess.run([node, str(script)], capture_output=True, text=True,
-                          timeout=60)
+                          timeout=60, env=isolated_env(tmp_path))
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout)
 

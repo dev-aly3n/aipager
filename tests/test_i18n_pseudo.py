@@ -32,13 +32,14 @@ def test_the_sweep_sees_unmarked_english():
     assert unmarked_words("Hello " + core.pseudo("world")) == ["Hello"]
 
 
-def test_the_pseudo_command():
+def test_the_pseudo_command(tmp_path):
     tool_path = str(tool.ROOT / "tools" / "i18n.py")
+    env = i18n_tool.isolated_env(tmp_path)
     out = subprocess.run([sys.executable, tool_path, "pseudo", "Send /new"],
-                         capture_output=True, text=True, check=True, cwd=tool.ROOT)
+                         capture_output=True, text=True, check=True, cwd=tool.ROOT, env=env)
     assert out.stdout.strip() == core.pseudo("Send /new")
     out = subprocess.run([sys.executable, tool_path, "pseudo", "--rtl", "Hi"],
-                         capture_output=True, text=True, check=True, cwd=tool.ROOT)
+                         capture_output=True, text=True, check=True, cwd=tool.ROOT, env=env)
     assert out.stdout.strip() == "\u200f" + core.pseudo("Hi")
 
 

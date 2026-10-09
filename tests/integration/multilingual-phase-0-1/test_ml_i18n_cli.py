@@ -31,8 +31,10 @@ CODES = ("es", "ru", "pt-BR", "zh-Hans", "fr", "de", "ko", "ar", "id", "uk",
 def _env(tmp_path, root):
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
+    (tmp_path / "instance").mkdir(exist_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "AIPAGER"))}
-    env.update(PYTHONPATH=str(root), HOME=str(home), PYTHONDONTWRITEBYTECODE="1")
+    env.update(PYTHONPATH=str(root), HOME=str(home), PYTHONDONTWRITEBYTECODE="1",
+               AIPAGER_INSTANCE_DIR=str(tmp_path / "instance"), TMPDIR=str(tmp_path))
     return env
 
 

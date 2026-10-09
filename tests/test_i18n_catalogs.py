@@ -70,10 +70,25 @@ def test_source_file_matches_the_code():
     assert tool.check_source_sync() == []
 
 
-def test_extract_check_from_the_command_line():
+def test_extract_check_from_the_command_line(tmp_path):
     out = subprocess.run([sys.executable, str(tool.ROOT / "tools" / "i18n.py"), "extract",
-                          "--check"], capture_output=True, text=True, cwd=tool.ROOT)
+                          "--check"], capture_output=True, text=True, cwd=tool.ROOT,
+                         env=i18n_tool.isolated_env(tmp_path))
     assert out.returncode == 0, out.stderr
+
+
+def test_a_child_process_gets_a_throwaway_home(tmp_path):
+    """Guard for ``isolated_env``: the child's home, instance dir and temp
+    dir are all under ``tmp_path``, never the operator's."""
+    script = ("import os, tempfile; from pathlib import Path; "
+              "print(Path.home()); print(os.environ.get('AIPAGER_INSTANCE_DIR')); "
+              "print(tempfile.gettempdir())")
+    out = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True,
+                         check=True, env=i18n_tool.isolated_env(tmp_path))
+    home, instance, tmp = out.stdout.split("\n")[:3]
+    assert home == str(tmp_path / "home")
+    assert instance == str(tmp_path / "instance")
+    assert tmp == str(tmp_path)
 
 
 def test_a_stale_source_file_is_caught(tmp_path):

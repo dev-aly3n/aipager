@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from aipager.clockfmt import elapsed
+from tests.i18n_tool import isolated_env
 
 HARNESS = Path(__file__).parent / "js" / "miniapp_clock.js"
 
@@ -38,7 +39,8 @@ def _run(node_bin, tmp_path, page_text):
     cases = tmp_path / "cases.json"
     cases.write_text(json.dumps(CASES), encoding="utf-8")
     proc = subprocess.run([node_bin, str(HARNESS), str(page), str(cases)],
-                          capture_output=True, text=True, timeout=60)
+                          capture_output=True, text=True, timeout=60,
+                          env=isolated_env(tmp_path))
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout)
 
