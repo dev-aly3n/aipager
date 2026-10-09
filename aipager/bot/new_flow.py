@@ -70,6 +70,14 @@ from typing import TYPE_CHECKING
 
 from telegram import ExternalReplyInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
+from aipager.bot.mode_labels import (
+    MODE_ASK,
+    MODE_ASK_FOR_YOU,
+    MODE_ASK_INSTEAD,
+    MODE_AUTO,
+    MODE_AUTO_INSTEAD,
+    mode_label,
+)
 from aipager import preferences
 from aipager.bot import group_intake, kbwords
 from aipager.bot.transport import (
@@ -384,7 +392,7 @@ def _note_folder_choices(bot: TelegramBot, chat_id: int, pending: dict) -> None:
 
 
 def _settings_line(settings: dict) -> str:
-    mode = "🤖 Auto" if settings.get("skip_perms") else "💬 Ask"
+    mode = mode_label(settings.get("skip_perms"))
     model = settings.get("model_label") or "Default model"
     if _needs_folder(settings):
         return (f"{mode} · 🧠 {html_mod.escape(model)} · "
@@ -444,10 +452,10 @@ def _render_name_card(pending: dict, *, error: str = "",
     row = []
     if pending.get("can_auto"):
         if pending.get("skip_perms"):
-            row.append(InlineKeyboardButton("💬 Ask instead",
+            row.append(InlineKeyboardButton(MODE_ASK_INSTEAD,
                                             callback_data="_:nw:mode:ask"))
         else:
-            row.append(InlineKeyboardButton("🤖 Auto instead",
+            row.append(InlineKeyboardButton(MODE_AUTO_INSTEAD,
                                             callback_data="_:nw:mode:auto"))
     row += [
         InlineKeyboardButton("🧠 Model", callback_data="_:nw:opt:model"),
@@ -746,7 +754,7 @@ async def create_from_text(
         return
 
     launching = (f"🚀 Starting <b>{html_mod.escape(name)}</b> "
-                 f"{'🤖 Auto' if skip_perms else '💬 Ask'}…")
+                 f"{mode_label(skip_perms)}…")
     sent = None
     if pending is not None:
         store.pop(key, None)
@@ -806,7 +814,7 @@ def render_ready(
     changed and who did it, shown in a group (roadmap 8.91c)."""
     from aipager.bot import session_parity  # local: avoids an import cycle
     label = html_mod.escape(sess.label)
-    mode = "🤖 Auto" if sess.skip_perms else "💬 Ask"
+    mode = mode_label(sess.skip_perms)
     # The model just picked wins; then, while a switch is not yet
     # confirmed, the one it was switched to; then what the statusline
     # reports; then what it was started with.
@@ -910,7 +918,7 @@ async def _handle_ready_callback(
             await _rerender(note="Couldn't switch mode"
                             + (f": {outcome.err}" if getattr(outcome, "err", "") else "."))
             return
-        await _rerender(changed=(f"Switched to {'🤖 Auto' if target else '💬 Ask'} by {by}."
+        await _rerender(changed=(f"Switched to {mode_label(target)} by {by}."
                                  if by else ""))
         return
 
@@ -1006,9 +1014,9 @@ def render_new_session_defaults(
     auto = stored.mode != "ask"
     model = stored.model or "Default model"
     folder = stored.cwd if stored.cwd in roots else _project_dir()
-    mode = "🤖 Auto" if auto else "💬 Ask"
+    mode = mode_label(auto)
     if auto and viewer is not None and not bot._is_admin_user(viewer, chat_id):
-        mode = "💬 Ask for you (🤖 Auto is for admins)"
+        mode = MODE_ASK_FOR_YOU
     text = (
         "🆕 <b>New sessions</b>\n\n"
         "What /new starts a session with. You can still change it on the "
@@ -1018,9 +1026,9 @@ def render_new_session_defaults(
         f"Folder: {html_mod.escape(_short_path(folder))}"
     )
     rows = [
-        [InlineKeyboardButton(f"🤖 Auto{' ✅' if auto else ''}",
+        [InlineKeyboardButton(f"{MODE_AUTO}{' ✅' if auto else ''}",
                               callback_data="_:set:ns:mode:auto"),
-         InlineKeyboardButton(f"💬 Ask{' ✅' if not auto else ''}",
+         InlineKeyboardButton(f"{MODE_ASK}{' ✅' if not auto else ''}",
                               callback_data="_:set:ns:mode:ask")],
         [InlineKeyboardButton(f"🧠 Model: {model} ›", callback_data="_:set:ns:model")],
         [InlineKeyboardButton(f"📁 Folder: {_short_path(folder, 24)} ›",

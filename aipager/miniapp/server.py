@@ -724,7 +724,8 @@ class MiniAppServer:
         """Announce the new session in chat. Best-effort — the process is
         already running by now, so a failed notification must not turn a
         successful launch into an error the operator might retry."""
-        mode = "🤖 Auto" if skip_perms else "💬 Ask"
+        from aipager.bot.mode_labels import mode_label
+        mode = mode_label(skip_perms)
         where = f"\n📁 {cwd}" if cwd else ""
         try:
             await self.bot._app.bot.send_message(

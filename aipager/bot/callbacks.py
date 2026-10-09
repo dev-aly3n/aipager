@@ -30,6 +30,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
+from aipager.bot.mode_labels import mode_label
 from aipager.bot import (
     card_owner,
     held_message,
@@ -300,12 +301,12 @@ class CallbackDispatchMixin:
             # The buttons go at once: a second tap during the relaunch has
             # nothing left to press.
             await edit_fn(f"⚙️ Switching <b>{label}</b> to "
-                          f"{'🤖 Auto' if target_skip_perms else '💬 Ask'} mode…",
+                          f"{mode_label(target_skip_perms)} mode…",
                           parse_mode="HTML")
         outcome = await self._perms_switch_core(sess, target_skip_perms)
 
         if outcome.ok:
-            note = (f"⚙️ Switched to {'🤖 Auto' if target_skip_perms else '💬 Ask'} "
+            note = (f"⚙️ Switched to {mode_label(target_skip_perms)} "
                     f"by {html_mod.escape(by)}." if by else "")
             log.info("[%s] perms switched to skip_perms=%s", sess.label, target_skip_perms)
         elif outcome.reason == "still_stopping":

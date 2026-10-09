@@ -23,6 +23,7 @@ from telegram import (
 from telegram.error import BadRequest, Forbidden
 
 
+from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO
 from aipager.config import (
     APP_BUTTON, BACK_BUTTON, CHAT_ID, COMMANDS_BUTTON,
     MODEL_CHOICES, MODELS_BUTTON,
@@ -509,8 +510,8 @@ class KeyboardMixin:
         """
         from aipager.bot import session_parity
 
-        ask_label = "💬 Ask" + (" (default)" if not persisted_skip_perms else "")
-        auto_label = "🤖 Auto" + (" (default)" if persisted_skip_perms else "")
+        ask_label = MODE_ASK + (" (default)" if not persisted_skip_perms else "")
+        auto_label = MODE_AUTO + (" (default)" if persisted_skip_perms else "")
 
         return InlineKeyboardMarkup([
             [InlineKeyboardButton(

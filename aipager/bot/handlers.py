@@ -33,6 +33,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
+from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO, mode_label
 from aipager.dtach import inject
 
 from aipager import statusline_file
@@ -1181,11 +1182,11 @@ class CommandHandlersMixin:
                         kb = session_parity.session_picker(
                             self, chat_id, live, "mode_show", user_id=picker_for)
                     elif want == "ask":
-                        question = "Which session to switch to 💬 Ask?"
+                        question = f"Which session to switch to {MODE_ASK}?"
                         kb = session_parity.session_picker(
                             self, chat_id, live, "modeask", keyed=True, user_id=picker_for)
                     else:
-                        question = "Which session to switch to 🤖 Auto?"
+                        question = f"Which session to switch to {MODE_AUTO}?"
                         kb = session_parity.session_picker(
                             self, chat_id, live, "modeauto", keyed=True,
                             user_id=picker_for)
@@ -1206,7 +1207,7 @@ class CommandHandlersMixin:
         if sess.skip_perms == target:
             await reply_text(update.message,
                 f"<b>{html_mod.escape(sess.label)}</b> is already in "
-                f"{'🤖 Auto' if target else '💬 Ask'}.", parse_mode="HTML")
+                f"{mode_label(target)}.", parse_mode="HTML")
             return
         await self._perms_flow(sess, target, update.message,
                                may_auto=self._is_admin(update), chat_id=chat_id,
@@ -1223,7 +1224,7 @@ class CommandHandlersMixin:
                   else self.registry.target_for(chat_id))
         auto = sess.skip_perms
         text = (f"{'✍️ ' if sess is target else ''}<b>{html_mod.escape(sess.label)}</b> "
-                f"is {'🤖 Auto' if auto else '💬 Ask'}.")
+                f"is {mode_label(auto)}.")
         # The switch relaunches the session, so the button carries the turn
         # it was shown for (a new turn since refuses it, as Stop and End do).
         if auto:
@@ -1315,7 +1316,7 @@ class CommandHandlersMixin:
             # switch) becomes this flow's: no earlier owner holds it.
             card_owner.release(self, chat_id,
                                getattr(getattr(query, "message", None), "message_id", None))
-        mode = "🤖 Auto" if target_skip_perms else "💬 Ask"
+        mode = mode_label(target_skip_perms)
         tg_user = (getattr(query, "from_user", None) if query is not None
                    else getattr(message, "from_user", None))
 
@@ -1349,7 +1350,7 @@ class CommandHandlersMixin:
         if target_skip_perms:
             # Ask→Auto: require confirmation.
             card_id = await show(
-                f"⚙️ Switch <b>{label}</b> to 🤖 Auto mode?\n"
+                f"⚙️ Switch <b>{label}</b> to {MODE_AUTO} mode?\n"
                 f"<i>Claude will run tools without prompting "
                 f"(<code>--dangerously-skip-permissions</code>).</i>",
                 self._build_perms_confirm_keyboard(sess))
@@ -1364,7 +1365,7 @@ class CommandHandlersMixin:
             own(card_id)
         else:
             # Auto→Ask: execute immediately, no confirmation needed.
-            await show(f"⚙️ Switching <b>{label}</b> to 💬 Ask mode…")
+            await show(f"⚙️ Switching <b>{label}</b> to {MODE_ASK} mode…")
 
             async def _edit(text, **kw):
                 await show(text, kw.get("reply_markup"))

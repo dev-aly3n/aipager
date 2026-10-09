@@ -28,6 +28,7 @@ from telegram.error import (
 )
 
 
+from aipager.bot.mode_labels import mode_label
 from aipager.config import (
     APP_BUTTON,
     # Only the pinned bar reads CHAT_ID (`_pinned_chats`, `_pinned_chat_of`):
@@ -993,7 +994,7 @@ class DashboardMixin:
         glyph = _STATUS_GLYPHS.get(word, "🔄")
         label = esc(sess.label)
         lines = [f"✍️ Now talking to <b>{label}</b> · {glyph} {word} · "
-                 f"{'🤖 Auto' if sess.skip_perms else '💬 Ask'}"]
+                 f"{mode_label(sess.skip_perms)}"]
         rows: list[list[InlineKeyboardButton]] = []
         if sess.status == Status.INTERACTIVE:
             lines.append(f"{label} is waiting for your answer.")

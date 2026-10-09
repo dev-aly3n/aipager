@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
+from aipager.bot.mode_labels import mode_label
 from aipager.bot import card_owner, group_intake, held_message, settings_menu
 from aipager.bot.transport import (
     MUTED,
@@ -1398,7 +1399,7 @@ async def handle_callback(
             # session (a new turn), and "already in" is what happened. It
             # changes nothing, so it is right on any turn.
             await bot._safe_answer(
-                query, f"{sess.label} is already in {'🤖 Auto' if target else '💬 Ask'}.")
+                query, f"{sess.label} is already in {mode_label(target)}.")
             text, kb = bot._render_mode_card(chat_id, sess)
             await _edit(query, text, kb)
             return True
