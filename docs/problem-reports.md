@@ -15,7 +15,7 @@ Only the owner of the aipager install can send a report from Telegram: the perso
 The preview card shows the report exactly as it will be sent: the JSON in a collapsed block you can expand, or, when it is too long for one message, as a `report.json` file that replies to the card. Its buttons:
 
 - **📤 Send**: sends that exact report, once. The card then says `Sent. Reference ap1-...`.
-- **✏️ Add a note**: your next message in that chat within 10 minutes becomes the report's note (cut at 500 characters), and the card shows the report again with the note in it before you send. Doing anything else instead (a command, another button, a photo, an action in the Mini App) closes the note question without adding a note, and after 10 minutes your next message goes to Claude as usual.
+- **✏️ Add a note**: your next message in that chat within 10 minutes becomes the report's note (cut at 500 characters), and the card shows the report again with the note in it before you send. Doing anything else instead (a command, another button, a photo, an action in the Mini App) closes the note question without adding a note, and after 10 minutes your next message goes to Claude as usual. The question has **‹ Back**, which returns to the preview without a note, and Cancel.
 - **✖️ Cancel**: nothing is sent.
 
 A preview stays open for 24 hours, and the 5 newest stay open (opening a 6th closes the oldest). After a restart of aipager, an old card can no longer be sent: open Report a problem again for a fresh one. A report opened in the Mini App can be sent for 24 hours (the 3 newest); after a restart the page loads a fresh one.
@@ -76,7 +76,7 @@ Just before sending, aipager reads [report-endpoint.json](https://github.com/dev
 aipager notices its own bugs and, rarely, offers to send a report about them in your private chat: `aipager hit an internal error N times (TypeError in the busy card). A report helps get it fixed. ...` with **Preview report**, **Not now** and **Don't ask for this**. Preview report opens the preview card with just those errors; nothing is sent until you tap Send there.
 
 An offer comes only when all of this holds:
-- It is a real bug in aipager: an error in aipager's own code that happened at least twice, at least 10 minutes apart, or at once for a crash of aipager. Errors that the hook, the status line helper or a command tells aipager about (the hook running out of memory included) must also have happened over at least a day, so a single one never causes an offer; the notice's Report this button is there for those. Things that are not aipager's fault (Telegram's limits, the network, a full disk) never cause an offer; they are only counted for a report you send yourself.
+- It is a real bug in aipager: an error in aipager's own code that happened at least twice, at least 10 minutes apart, or at once when aipager crashed while running as a service (a foreground `aipager start` that is killed, for example by closing its terminal, is only counted). Errors that the hook, the status line helper or a command tells aipager about (the hook running out of memory included) must also have happened over at least a day, so a single one never causes an offer; the notice's Report this button is there for those. Things that are not aipager's fault (Telegram's limits, the network, a full disk) never cause an offer; they are only counted for a report you send yourself.
 - At most one offer every 3 days, with everything pending in that one offer.
 - Not in the first 48 hours after aipager first started on this machine (updates do not restart that), and not in the first hour after aipager restarts.
 - Only when nothing is running or waiting to be sent for 2 minutes, and you used your private chat with the bot in the last 30 minutes. Never in a group, and never while Telegram is limiting that chat.
@@ -84,7 +84,7 @@ An offer comes only when all of this holds:
 - **Not now** and **Don't ask for this** both count as a no, and so does an offer you do not answer within a day. **Preview report** resets the count, even if you then cancel. Two no's in a row turn automatic offers off: when the second one is a tap, a line says so; either way `/settings` shows it.
 - Never for a developer install (aipager installed from a local folder, a git checkout, or in editable mode).
 
-To turn automatic offers off, use `/settings` in your private chat: **Problem reports: Off**. When two no's turned them off, the same page has **Turn offers back on**. On a machine without a chat to ask in, set `AIPAGER_REPORT_PROMPTS=0` in the daemon's environment. Report a problem and `aipager report` always work, whatever these settings say.
+To turn automatic offers off, use `/settings` in your private chat: **Problem reports: Off**. When two no's turned them off, the same page has **Turn offers back on**. A `reports.json` that exists but cannot be read also turns automatic offers off (aipager can no longer tell what you answered before); **Turn offers back on** clears that too. On a machine without a chat to ask in, set `AIPAGER_REPORT_PROMPTS=0` in the daemon's environment. Report a problem and `aipager report` always work, whatever these settings say.
 
 ## What is kept on your machine
 
@@ -93,7 +93,7 @@ To turn automatic offers off, use `/settings` in your private chat: **Problem re
 - `~/.local/share/aipager/install.json`: when aipager first started on this machine (for the 48 hours above).
 - `~/.local/share/aipager/running.json`: written while aipager runs (its process number, start time, whether it runs as a service, and this boot's id), to tell a crash from a clean stop.
 
-None of them holds a chat, a prompt, a name, a path or a token. `aipager uninstall` keeps them, with the rest of aipager's data, so a reinstall picks up where it left off; it lists what it keeps and prints the command that removes it (see [`aipager uninstall`](commands.md#command-line-aipager-uninstall)). To remove only these, delete those four files, or the whole `~/.local/state/aipager` folder (not `~/.local/share/aipager`, which also holds aipager's session folders).
+None of them holds a chat, a prompt, a name, a path or a token. `aipager uninstall` keeps them, with the rest of aipager's data, so a reinstall picks up where it left off; it lists what it keeps and prints the command that removes it (see [`aipager uninstall`](commands.md#command-line-aipager-uninstall)). To remove only these, delete those four files: deleting the whole `~/.local/state/aipager` folder removes the first two, but `install.json` and `running.json` must be deleted by name (do not delete `~/.local/share/aipager`, which also holds aipager's session folders).
 
 ## See also
 

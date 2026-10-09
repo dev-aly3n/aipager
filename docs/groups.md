@@ -204,7 +204,8 @@ has chats configured back to personal mode (only a restart does).
 **Make the bot an admin of the group, with the right to pin
 messages.** It needs that to pin the group's status bar (see
 [What everyone sees](#what-everyone-sees)). Without it, the group
-works but has no status bar.
+works but has no status bar; if you give the bot the right later,
+restart the daemon for the bar to appear.
 
 A bot that is a group admin receives every message in the group,
 whatever its BotFather privacy mode. That is safe: aipager acts only on
@@ -249,9 +250,10 @@ that the group cannot be found or the bot may not use it (the group was
 deleted, the bot was removed, or the group was upgraded while the
 daemon was stopped and Telegram did not say to which id), the daemon log
 has one warning naming the scope: check that the bot is still in the
-group, and if it was upgraded, set the scope's new chat id with
-`aipager config` (the old id no longer works). aipager posts nothing
-and does not keep trying.
+group, and if it was upgraded, add the group again in `aipager config`
+with Add a group scope (it gets the new id; add its members again), then
+remove the old one with Edit a scope → Remove this scope (the old id no
+longer works). aipager posts nothing and does not keep trying.
 
 ### Forum topics are not supported
 
@@ -338,8 +340,8 @@ on the machine does that, which keeps it the owner's.
   Commands keyboard, `/compact` and model switches (see
   [Who a message runs as](#who-a-message-runs-as)).
 - **read_only**: observers. They see everything in the group, and can
-  use `/status`, `/diff`, `/whoami`, `/help` and `/start`, look at
-  `/settings`, and page through a `/resume` list someone opened. Their own text, voice and file
+  use `/status`, `/diff`, `/whoami`, `/help`, `/start` and `/app`, look
+  at `/settings`, and page through a `/resume` list someone opened. Their own text, voice and file
   messages are not sent anywhere. The first one they send in a chat gets
   one reply saying their role is `read_only`; after that the bot stays
   silent for them in that chat (no reply, no reaction) until the daemon
@@ -478,9 +480,9 @@ session, as before.
   it asked about (a text, a voice note's transcript or a file) to that
   session, as if you had sent it there, and the question changes to
   "Sent to x2.". Only the person who sent the message can use the
-  buttons, and only for ten minutes: after that the button only makes
-  the session your current one ("That message is too old to send; send
-  it again."). ▶️ Resume brings x1 back but sends nothing: send your
+  buttons, and only for ten minutes and until the daemon restarts: after
+  that the button only makes the session your current one ("That
+  message is too old to send; send it again."). ▶️ Resume brings x1 back but sends nothing: send your
   message again.
 - The pinned bar has no "Messages go to" line in a group, since that
   differs per person.
@@ -667,7 +669,10 @@ prompt, and posts `⛔ x1 · Edit blocked for @bob (role user)` with the
 call's summary below, naming that person. A turn several people's
 messages started is blocked when any one of them may not use the tool,
 and names that one. A turn typed in the terminal is yours and is never
-blocked by a member's rules. When aipager does not know whose turn it
+blocked by a member's rules, unless a Telegram message joined it: it is
+then checked against the rules of whoever sent the session's last
+message (the group's own list when that is not known). When aipager
+does not know whose turn it
 is (it was already running when the daemon restarted), it uses the
 rules of whoever sent the session's last message, and the group's own
 list when that is not known either.
@@ -762,8 +767,14 @@ ones in [Custom roles](#custom-roles)):
   (any search could read such a file), which halts that turn.
 
 A chat's `deny_tools` and a member's `deny_tools` in `aipager.yaml` add
-to the role's. All of these apply only to roles without
+to the role's, and a member's `allow_tools` adds to the role's
+allow-list. All of these apply only to roles without
 `bypass_role_denies`: an owner or admin is not affected by them.
+
+Files in `~/.config/aipager/policy.d/*.yaml` are read after
+`policy.yaml`, in name order, in the same format: a role field set in a
+later file replaces the earlier value, and a `safety:` list only adds.
+`aipager policy validate` checks them all.
 
 Underneath all roles sits a **safety floor** (protected paths and
 command patterns) that only `owner` bypasses: admins are held to it too.
@@ -814,8 +825,14 @@ a wall; see
   [Where messages go](#where-messages-go)). A terminal session that an
   older aipager already moved to the group stays the group's: end it,
   delete it from the group's ended sessions, and start it again.
-- `aipager.yaml` and `policy.yaml` are mode 0600 (owner-only).
-- The audit log is owner-only (`~/.claude/aipager-audit.jsonl`).
+- `aipager.yaml` is mode 0600 (owner-only). aipager does not set
+  `policy.yaml`'s mode: keep it owner-only yourself (`chmod 600
+  ~/.config/aipager/policy.yaml`).
+- The audit log (`~/.claude/aipager-audit.jsonl`) gets no mode of its
+  own: it is as private as your `~/.claude` folder.
+- [Observer bots](observers.md) get notices from every chat the bot
+  serves, groups included: set one up only for a chat you trust with
+  all of it.
 
 ## Revoking a user
 

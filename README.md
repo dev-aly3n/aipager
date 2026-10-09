@@ -49,9 +49,9 @@ no separate system package needed.
 curl -fsSL https://raw.githubusercontent.com/dev-aly3n/aipager/main/install.sh | sh
 ```
 
-This auto-detects `uv` / `pipx` / `brew` and uses whichever is already on
-your system. If none is present, it bootstraps `uv` (Astral's Python tool
-manager) and installs through it.
+It uses `uv` if present, else `pipx`, else (on macOS only) Homebrew. If
+none is found, it bootstraps `uv` (Astral's Python tool manager) and
+installs through it.
 
 ### uv (recommended on macOS)
 
@@ -146,11 +146,11 @@ input and pick its package up from `environment.systemPackages`:
 
   outputs = { self, nixpkgs, aipager, ... }: {
     nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
-      modules = [{
+      modules = [({ pkgs, ... }: {
         environment.systemPackages = [
           aipager.packages.${pkgs.system}.default
         ];
-      }];
+      })];
     };
   };
 }
@@ -219,10 +219,10 @@ later; to leave without stopping Claude, close the terminal or tmux
 pane (the session keeps running).
 
 If the dtach session was killed (machine reboot, etc.) but you want
-to pick up the Claude conversation from disk, add `--resume`:
+to pick up the Claude conversation from disk, add `--continue`:
 
 ```sh
-aipager session dev --resume    # resume the last claude conversation in this cwd
+aipager session dev --continue    # the last claude conversation in this folder
 ```
 
 You can also pass `--resume <session-id>` (or any other claude flag)

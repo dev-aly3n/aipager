@@ -21,7 +21,19 @@ Ask the person to do these. You cannot do them for them.
    who has not done this.
 3. **Log in to Claude Code on this machine.** If they already use
    Claude Code here, nothing to do. On a headless server, they run
-   `claude setup-token` once in their own terminal.
+   `claude` once in their own terminal and log in (it shows a link to
+   open on another device). If they prefer a long-lived token instead,
+   they run `claude setup-token`, which only prints the token: they save
+   it for aipager's sessions themselves, in their own terminal (paste
+   the token, press Enter, then Ctrl-D):
+
+   ```sh
+   mkdir -p ~/.config/aipager
+   (umask 077 && { printf 'CLAUDE_CODE_OAUTH_TOKEN='; cat; } >> ~/.config/aipager/daemon.env)
+   ```
+
+   aipager hands that token to every session it starts (see
+   [security](security.md#the-claude-credential-what-actually-protects-it)). You never read it.
 
 ## 2. How the person gives you the token
 
@@ -75,8 +87,8 @@ The person's Telegram user id (their chat id, a number like
 curl -fsSL https://raw.githubusercontent.com/dev-aly3n/aipager/main/install.sh | sh
 ```
 
-It uses uv, pipx or Homebrew, whichever is there, and installs uv
-first if none is. You can also run `uv tool install aipager` or
+It uses uv or pipx, whichever is there (Homebrew too, on macOS), and
+installs uv first if none is. You can also run `uv tool install aipager` or
 `pipx install aipager` yourself. If `aipager` is then not found, add
 `~/.local/bin` to `PATH` for your shell (`export PATH="$HOME/.local/bin:$PATH"`).
 

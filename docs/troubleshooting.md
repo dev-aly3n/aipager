@@ -11,33 +11,31 @@ hint for each failure. Source: `aipager/doctor.py`.
 
 ## "Another aipager daemon already owns the socket"
 
-Two daemons can't share one control socket. It lives at
-`$XDG_RUNTIME_DIR/aipager.sock` under the systemd service (falls back
-to `/tmp/aipager.sock` when `$XDG_RUNTIME_DIR` is unset). If a
-previous daemon crashed without unlinking, the new one detects the
-stale socket and exits.
+Two daemons can't share one control socket. This error means a daemon
+is still running and answering on it (the socket is
+`$XDG_RUNTIME_DIR/aipager.sock`, or `/tmp/aipager.sock` when
+`$XDG_RUNTIME_DIR` is unset). A socket file left behind by a daemon that
+crashed is not a problem: the next start removes it and binds a new
+one. Stop the running daemon first:
 
 ```sh
-pkill -f 'aipager start'
-rm -f "${XDG_RUNTIME_DIR:-/tmp}/aipager.sock"
-aipager start
+aipager service stop          # if it runs as the service
+pkill -f 'aipager start'      # otherwise
 ```
 
-Or, if you're using the service unit:
-
-```sh
-aipager service stop
-aipager service start
-```
+If the socket check misses it, `aipager start` still refuses with
+`aipager is already running (pid=N)` and names its lock file
+(`~/.local/share/aipager/daemon.lock`): stop that process the same way.
 
 ## Telegram bot doesn't respond
 
-1. `aipager status` - is the daemon up? If "daemon down" → start it.
+1. `aipager status`: if the daemon row says `not running`, start it.
 2. `aipager doctor`: the `token_valid` and `chat_reachable` checks
    ping the Telegram API end-to-end and surface the exact error.
-3. Wrong chat ID: re-run `aipager config` and re-enter the chat ID
-   (open the bot in Telegram, send any message, then check
-   `https://api.telegram.org/bot<TOKEN>/getUpdates`).
+3. Wrong chat: run `aipager config` and pick **Test bot reachability**.
+   To fix a wrong DM, add the right one with **Add a DM scope** (see
+   [finding ids](groups.md#finding-ids-auto-detect)), then remove the
+   wrong one under **Edit a scope**.
 4. Bot was never `/start`ed: open the bot in Telegram and tap Start
    once.
 
@@ -321,7 +319,7 @@ conversation back up. From the CLI:
 ```sh
 aipager resume <label>             # same thing from the terminal
 aipager session <label>            # or a fresh session, no history
-aipager session <label> --resume   # fresh dtach, resumed conversation
+aipager session <label> --continue # fresh dtach, the folder's last conversation
 ```
 
 ## Permission prompt stuck on INTERACTIVE
@@ -339,9 +337,10 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # in seconds
 
 ## Voice extra won't install via Telegram
 
-The `[📦 Install voice]` button runs an installer subprocess and
-streams the result. If the install fails, the bot replies with the
-last 500 chars of stderr. Common causes:
+The `[📦 Install voice]` button runs the installer and edits its
+message every few seconds while it works (`still working… (25s)`). If
+the install fails, the message shows the exit code and the last 500
+characters of the installer's output. Common causes:
 
 - Network: pip can't reach PyPI. Check connectivity from the daemon
   host.
@@ -428,8 +427,8 @@ There are no backups of this file. Nothing is lost that matters:
 - live sessions are found again on the first monitor tick, by their
   dtach sockets (`/tmp/claude-dtach-*.sock`);
 - every conversation is still in Claude Code's own
-  `~/.claude/projects/...` folder, so `aipager session <name> --resume`
-  in that session's folder picks it up;
+  `~/.claude/projects/...` folder, so `aipager session <name> --continue`
+  in that session's folder picks it up (`--resume` lets you pick one);
 - what is gone is the list of ended sessions (`/resume`), the cards
   that were open, and the rest of what aipager remembered about each
   session.
@@ -457,10 +456,10 @@ A check that crashes on an unexpected environment shows as a single
 | `config_parses` | `aipager.yaml` and `policy.yaml` can be read; runs first, since every later check reads the config | the error names the file and line |
 | `config` | `~/.config/aipager/aipager.yaml` exists and has a token and a chat | `aipager config` |
 | `token_valid` | Token works against Telegram `getMe` | re-run `aipager config` |
-| `chat_reachable` | Bot can send to the configured chat | open bot, tap Start |
+| `chat_reachable` | Telegram knows the configured chat (`getChat`; nothing is sent) | open bot, tap Start |
 | `team` | The chats and members (or a legacy `team.yaml`): says personal or team mode, and flags a malformed or mismatched old `team.yaml` | `aipager config` |
 | `role_shell_access` | Warns once for every role a member holds that can run Bash (its safety rules are best-effort, not a boundary; see [groups](groups.md#roles)) | give that role no Bash in `policy.yaml`, or accept it |
-| `claude` | Resolves the `claude` binary via the same precedence chain every launch uses (`claude_path` config → `$AIPAGER_CLAUDE_BIN` → `~/.local/bin` → PATH → Homebrew), and lists every OTHER distinct install found | install Claude Code, or set `claude_path` / `AIPAGER_CLAUDE_BIN` |
+| `claude` | Resolves the `claude` binary the way every launch does (`claude_path` in `aipager.yaml` or `$AIPAGER_CLAUDE_BIN` win outright; otherwise the newest of `~/.local/bin`, PATH and Homebrew), and lists every OTHER distinct install found | install Claude Code, or set `claude_path` / `AIPAGER_CLAUDE_BIN` |
 | `claude_auth` | Probes `claude auth status` in the same environment a real session gets. **Never FAILs**: "not logged in" and "the probe itself failed" are reported distinctly, and neither stops a session from launching | `claude auth login`, or set an API key / `CLAUDE_CODE_OAUTH_TOKEN` |
 | `dtach` | `dtach` binary found (aipager's own `dtach-bin`, or one on PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` and `aipager-statusline` are on PATH | `uv tool install --reinstall aipager` |
@@ -474,20 +473,21 @@ A check that crashes on an unexpected environment shows as a single
 these keys (see [commands](commands.md#aipager-doctor---json)).
 
 Run `aipager doctor --fix` to interactively discover/copy a Claude
-credential into `daemon.env`, or pin `claude_path` when multiple
-installs are found (or the unit's PATH disagrees with the resolved
-one). It only ever acts after asking.
+credential into `daemon.env`, or pin `claude_path` when more than one
+install is found. It only ever acts after asking. For a service unit
+whose PATH lacks claude's folder, run `aipager service install --yes`.
 
 ## The daemon can't find `claude`, or picks the wrong install
 
 Six places used to resolve `claude` independently and could disagree
 with each other. They now all go through one resolver
-(`aipager/claude_resolve.py`), in this order: `claude_path` in
-`aipager.yaml` → `$AIPAGER_CLAUDE_BIN` → `~/.local/bin/claude` →
-every `claude` on `$PATH` → the fixed Homebrew prefixes. Run
+(`aipager/claude_resolve.py`). `claude_path` in `aipager.yaml`, then
+`$AIPAGER_CLAUDE_BIN`, win outright when they work. Otherwise every
+`claude` found in `~/.local/bin`, on `$PATH` and in the Homebrew
+prefixes is checked, and the newest version wins (so reordering `$PATH`
+does not change the pick when the other install is newer). Run
 `aipager doctor` to see exactly which one it picked and what else it
-found; if the wrong one wins, either fix `$PATH` for the process that
-launches aipager, or pin the right one explicitly:
+found; if the wrong one wins, pin the right one:
 
 ```sh
 aipager doctor --fix        # interactive picker among discovered installs
@@ -564,17 +564,23 @@ refuse, and name the reason, for:
 - a Nix, Snap, Docker or OS-package install - use that system's own
   update;
 - an install owned by another user (for example a root-owned venv under
-  `/opt`) - update it as that user.
+  `/opt`) - update it as that user;
+- an install made from a local folder (`pipx install /path/to/aipager`):
+  `can't update from here: it was installed from a local folder; update
+  it from that folder`. Pull the new version into that folder and
+  reinstall from it, or switch to PyPI with `pipx install --force
+  aipager`;
+- an install whose installer cannot be told (`could not tell which
+  installer owns this aipager`): reinstall it with `uv tool install
+  aipager` or `pipx install aipager`.
 
 ## Updated, but the version didn't change
 
-A pipx install made from a local path (`pipx install /path/to/aipager`)
-upgrades from that same path, not from PyPI. `/update` says
-`already at A - this pipx install upgrades from the local path …`. Pull
-or check out the new version there first, or switch to PyPI with
-`pipx install --force aipager`. (The voice extra's install button uses
-`pipx install --force aipager[voice]`, which also switches a local-path
-install to PyPI.)
+A pipx install made from a git URL upgrades from that git source, not
+from PyPI. When the source has nothing newer, `/update` says `already
+at A - this pipx install upgrades from its git source, which has
+nothing newer`. Push or pick the new version there, or switch to PyPI
+with `pipx install --force aipager`.
 
 ## The daemon didn't come back after an update
 

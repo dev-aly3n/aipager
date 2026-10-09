@@ -6,35 +6,36 @@
 git clone https://github.com/dev-aly3n/aipager && cd aipager
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
-pytest -q
+systemd-run --user --scope -q -p MemoryMax=2G -p MemorySwapMax=0 \
+  .venv/bin/python -m pytest -q -p no:cacheprovider
 ruff check aipager tests
 ```
 
+Run the tests under a memory cap as above (on macOS, without
+`systemd-run`): a runaway test can otherwise take the machine's memory.
+
 ### Running the daemon during development
 
-After `pip install -e .`, four console scripts are on your PATH:
+After `pip install -e .`, three console scripts are on your PATH:
 
 | Script | What it does |
 |---|---|
-| `aipager` | the CLI dispatcher (`start`, `config`, `version`) |
+| `aipager` | the CLI (`aipager --help`; sessions start with `aipager session <name>`) |
 | `aipager-hook` | Claude Code hook handler - invoked by Claude per event |
-| `aipager-statusline` | Claude Code statusLine - invoked on every tick |
-| `claude-dtach` | launches a Claude Code session under `dtach` |
+| `aipager-statusline` | Claude Code statusLine - invoked on every redraw |
 
 Tweak code, then `aipager start` runs the daemon with your changes
 (editable install means no reinstall needed for `.py` edits).
 
 ### `dtach` during development
 
-`dtach-bin` is a runtime dependency. If it's not yet on PyPI (or you're
-testing changes to it), install from a local checkout:
+`dtach-bin` is a runtime dependency, so `pip install -e '.[dev]'`
+pulls the published version from PyPI. To test changes to `dtach-bin`
+itself, install it from a local checkout:
 
 ```sh
 pip install /path/to/dtach-bin
 ```
-
-Otherwise `pip install -e '.[dev]'` will pull the published version
-from PyPI.
 
 ## Release process
 
@@ -44,11 +45,22 @@ uploads via PyPI Trusted Publisher (OIDC - no stored API token).
 
 ### Cutting a release
 
-1. Bump `version` in `pyproject.toml`
-2. Add a `[X.Y.Z]` section at the top of `CHANGELOG.md`
-3. Commit: `git commit -m "bump version to X.Y.Z"`
+1. Bump the version in `pyproject.toml`, `flake.nix` (`version =`),
+   `packaging/snap/snapcraft.yaml` (the snap job refuses a tag that does
+   not match it) and the README's Docker `Tags:` line.
+2. In `CHANGELOG.md`, turn `## [Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD`
+   and start a new empty `## [Unreleased]` above it.
+3. Commit: `git commit -m "release X.Y.Z"`
 4. Tag: `git tag vX.Y.Z && git push origin main --tags`
-5. CI builds and publishes within ~2 minutes
+5. CI builds and publishes to PyPI within a few minutes.
+6. Create the GitHub Release by hand (CI does not).
+
+The tag also runs `docker.yml` (the ghcr.io image for amd64 and arm64,
+tagged `X.Y.Z` and `X.Y`), `publish.yml`'s `bump-tap` job (regenerates
+the Homebrew formula in dev-aly3n/homebrew-tap; needs the `TAP_TOKEN`
+secret), `snap.yml` (publishes to the Snap Store once
+`SNAPCRAFT_STORE_CREDENTIALS` exists) and `aur.yml` (publishes to the
+AUR once `AUR_SSH_PRIVATE_KEY` exists).
 
 ### First-time PyPI Trusted Publisher setup (one-time)
 

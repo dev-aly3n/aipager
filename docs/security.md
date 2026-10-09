@@ -48,9 +48,12 @@ at all.
 | Bot token | `~/.config/aipager/aipager.yaml` | 600 by default |
 | Chat ID(s) | same file | 600 by default |
 
-Neither value is ever logged - error messages and the wizard redact
-the token wherever it could appear. Neither is committed - the
-config lives in the user's `~/.config`, not the repo. The Trusted Publisher
+The token is kept out of the daemon's log: the HTTP request lines that
+carry it are not logged, and error messages, `aipager doctor` and the
+wizard redact anything shaped like a bot token. Chat ids do appear in
+the daemon's log (for example in rate-limit lines), so treat `aipager
+logs` output as private. Neither is committed: the config lives in the
+user's `~/.config`, not the repo. The Trusted Publisher
 PyPI release flow never touches secrets either; OIDC handles auth.
 
 If you suspect the token is compromised, revoke it from
