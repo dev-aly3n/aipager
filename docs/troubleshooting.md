@@ -89,9 +89,10 @@ clock moves in 30 s steps, matching the refresh, so it never looks frozen:
 | 10–60 min | 30 s | `23:00`, `23:30` |
 | over 60 min | 30 s | `1:23:00`, `1:23:30` |
 
-A refresh that lands a moment after a 30 s step can skip one now and
-then (`23:00`, then `24:00`): the clock is rounded down to the step, and
-a refresh is never early.
+The clock is rounded down to its 30 s step, and refreshes are at least
+30 s apart, sometimes a little more. So the card skips a step now and
+then: a refresh at 23 min 29 s shows `23:00`, and if the next one comes
+at 24 min 1 s it shows `24:00`, so `23:30` is skipped.
 
 A new tool row or a new sentence waits for the next refresh; a **state
 change** - the session going from working to waiting on a background
