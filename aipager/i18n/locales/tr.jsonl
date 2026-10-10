@@ -1,10 +1,25 @@
+{"k": "agents.act.agent", "src": "725242a6", "v": "Bir ajan başlatılıyor"}
+{"k": "agents.act.editing", "src": "ee3a643f", "v": "{file} düzenleniyor"}
+{"k": "agents.act.fetching", "src": "1d031002", "v": "{site} açılıyor"}
+{"k": "agents.act.reading", "src": "cdd7eff5", "v": "{file} okunuyor"}
+{"k": "agents.act.running", "src": "6e789785", "v": "Bir komut çalıştırılıyor"}
+{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "{pattern} aranıyor"}
+{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "Web'de aranıyor: {query}"}
+{"k": "agents.act.tool", "src": "924babaf", "v": "{tool} kullanılıyor"}
+{"k": "agents.act.writing", "src": "ebe99935", "v": "{file} yazılıyor"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"one": "{n} ajan", "other": "{n} ajan"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"one": "{n} kabuk komutu", "other": "{n} kabuk komutu"}}
-{"k": "agents.done_many", "src": "192b7df2", "v": "✅ {count} bitti ({clock})"}
-{"k": "agents.done_one", "src": "6caebe28", "v": "✅ {name} bitti ({clock})"}
-{"k": "agents.done_shell", "src": "e3681276", "v": "✅ kabuk: {name} - bitti ({clock})"}
-{"k": "agents.names_more", "src": "8150de86", "v": {"one": "{names} ve {n} tane daha", "other": "{names} ve {n} tane daha"}}
-{"k": "agents.running", "src": "398a4343", "v": "⏳ {count} hâlâ çalışıyor ({names}) - sonuçlar buraya gelecek"}
+{"k": "agents.head.done", "src": "e20b4f9e", "v": {"one": "✅ {n} ajan tamamlandı ({clock})", "other": "✅ {n} ajan tamamlandı ({clock})"}}
+{"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"one": "{n} kabuk komutu bitti ({clock})", "other": "{n} kabuk komutu bitti ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"one": "🖥 {n} kabuk komutu çalışıyor", "other": "🖥 {n} kabuk komutu çalışıyor"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"one": "{n} kabuk komutu durduruldu ({clock})", "other": "{n} kabuk komutu durduruldu ({clock})"}}
+{"k": "agents.head.working", "src": "6d8170f5", "v": {"one": "⏳ {n} ajan çalışıyor", "other": "⏳ {n} ajan çalışıyor"}}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"one": "+{n} tane daha", "other": "+{n} tane daha"}}
+{"k": "agents.promise", "src": "29723a21", "v": "Ajanların sonuçları buraya gelecek."}
+{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · tamamlandı ({clock})"}
+{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
 {"k": "ago.days", "src": "3650e46d", "v": {"one": "{n} g önce", "other": "{n} g önce"}}
 {"k": "ago.earlier", "src": "f12e996a", "v": "daha önce"}
 {"k": "ago.hours", "src": "72292bb6", "v": {"one": "{n} sa önce", "other": "{n} sa önce"}}

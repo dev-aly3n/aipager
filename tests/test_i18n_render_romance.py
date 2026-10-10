@@ -173,6 +173,12 @@ def _form(code: str, key: str, n: int, **params) -> str:
     return text
 
 
+def _working_header(n: int, tr) -> str:
+    """The first line of an answer's status block with *n* agents working."""
+    view = agents_line.BlockView(agents=(agents_line.AgentRow("a", False),) * n)
+    return agents_line.render_block(view, tr).split("\n\n")[0]
+
+
 @pytest.mark.parametrize("code", CODES)
 def test_plural_categories(code):
     assert [plurals.category(code, n) for n in COUNTS] == EXPECTED[code]
@@ -188,9 +194,8 @@ def test_plural_forms_through_the_code_that_sends_them(code, monkeypatch):
         assert animation._tool_fold_summary(n, tr) == _form(code, "card.fold", n)
         row = card_rows.render_md(tr, settled_agent_row("Explore", n, 65))
         assert row == _form(code, "card.row.agent_done", n, agent="`Explore`", clock="1:05")
-        line = agents_line.running_line([f"a{i}" for i in range(max(n, 1))][:30], tr=tr)
         if n and n <= 30:
-            assert line.startswith("⏳ " + _form(code, "agents.count_agents", n))
+            assert _working_header(n, tr) == _form(code, "agents.head.working", n)
     # The forms themselves, written out: a swapped one/other or a plural
     # left in the singular fails here, not only against the catalog.
     one, two = FOLD[code]

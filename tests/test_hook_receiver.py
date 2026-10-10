@@ -1063,26 +1063,56 @@ def test_message_display_from_active_subagent_is_not_forwarded(receiver, run_asy
     """Orchestrator amendment 7 ("agent activity rows on the busy card"):
     a subagent's own prose is folded under its row like its tool calls,
     not forwarded into the parent's commentary/card — mirrors the
-    tool-attribution guard."""
+    tool-attribution guard. It becomes that agent's latest activity (the
+    status block under an answer)."""
     registry, recv, notify_fn = receiver
     sess = registry.get_or_create("claude-x")
     sess.active_subagents["agent-1"] = {
         "type": "explore", "started_at": 0.0, "history_idx": 0,
     }
+    sess.bg_agent_started("agent-1", "Explore", 0.0)
     _send(recv, run_async, session="claude-x", hook_event_name="MessageDisplay",
           delta="agent's own prose", message_id="m1", index=0, final=False,
           agent_id="agent-1")
     notify_fn.assert_not_awaited()
+    assert sess.bg_agents["agent-1"]["prose"] == "agent's own prose"
 
 
-def test_message_display_with_unknown_agent_id_still_forwards(receiver, run_async):
-    """An agent_id that doesn't match a LIVE active_subagents entry (empty,
-    already stopped, evicted) is the parent's own prose — forwarded exactly
-    as before this feature."""
+def test_message_display_from_a_detached_agent_is_never_the_parents_prose(
+    receiver, run_async,
+):
+    """The parent's own hook events carry no agent_id. A background agent
+    a new card, /stop or the silence sweep took off active_subagents still
+    says what it does in its MessageDisplay: that is ITS prose, never the
+    parent's commentary (it used to land on the current turn's card, the
+    Mini App timeline and the turn's log)."""
+    registry, recv, notify_fn = receiver
+    sess = registry.get_or_create("claude-x")
+    sess.bg_agent_started("agent-bg", "pipeline-runner", 0.0)
+    assert "agent-bg" not in sess.active_subagents
+    _send(recv, run_async, session="claude-x", hook_event_name="MessageDisplay",
+          delta="Writing final.md for the pipeline", message_id="m1", index=0,
+          final=False, agent_id="agent-bg")
+    notify_fn.assert_not_awaited()
+    assert sess.bg_agents["agent-bg"]["prose"] == "Writing final.md for the pipeline"
+
+
+def test_message_display_from_a_never_seen_agent_is_dropped(receiver, run_async):
+    """An agent_id this daemon never saw start (it started before a
+    restart): still not the parent's, and it records nothing."""
+    registry, recv, notify_fn = receiver
+    sess = registry.get_or_create("claude-x")
+    _send(recv, run_async, session="claude-x", hook_event_name="MessageDisplay",
+          delta="who am I", message_id="m1", index=0, final=False,
+          agent_id="unknown-agent")
+    notify_fn.assert_not_awaited()
+    assert sess.bg_agents == {}
+
+
+def test_message_display_without_an_agent_id_is_the_parents(receiver, run_async):
     _registry, recv, notify_fn = receiver
     _send(recv, run_async, session="claude-x", hook_event_name="MessageDisplay",
-          delta="parent prose", message_id="m1", index=0, final=False,
-          agent_id="unknown-agent")
+          delta="parent prose", message_id="m1", index=0, final=False)
     notify_fn.assert_awaited_once()
     _sess, event, ctx = notify_fn.await_args.args
     assert event == "assistant_text"

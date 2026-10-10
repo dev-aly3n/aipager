@@ -1,10 +1,25 @@
+{"k": "agents.act.agent", "src": "725242a6", "v": "يشغّل وكيلًا"}
+{"k": "agents.act.editing", "src": "ee3a643f", "v": "يعدّل {file}"}
+{"k": "agents.act.fetching", "src": "1d031002", "v": "يجلب {site}"}
+{"k": "agents.act.reading", "src": "cdd7eff5", "v": "يقرأ {file}"}
+{"k": "agents.act.running", "src": "6e789785", "v": "يشغّل أمرًا"}
+{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "يبحث عن {pattern}"}
+{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "يبحث في الويب عن {query}"}
+{"k": "agents.act.tool", "src": "924babaf", "v": "يستخدم {tool}"}
+{"k": "agents.act.writing", "src": "ebe99935", "v": "يكتب {file}"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"few": "{n} وكلاء", "many": "{n} وكيلًا", "one": "وكيل واحد", "other": "{n} وكيل", "two": "وكيلان", "zero": "لا وكلاء"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"few": "{n} أوامر", "many": "{n} أمرًا", "one": "أمر واحد", "other": "{n} أمر", "two": "أمران", "zero": "لا أوامر"}}
-{"k": "agents.done_many", "src": "192b7df2", "v": "✅ {count}: اكتمل ({clock})"}
-{"k": "agents.done_one", "src": "6caebe28", "v": "✅ {name}: اكتمل ({clock})"}
-{"k": "agents.done_shell", "src": "e3681276", "v": "✅ أمر: {name} - اكتمل ({clock})"}
-{"k": "agents.names_more", "src": "8150de86", "v": {"few": "{names} و{n} أخرى", "many": "{names} و{n} أخرى", "one": "{names} وواحد آخر", "other": "{names} و{n} أخرى", "two": "{names} واثنان آخران", "zero": "{names} و{n} غيرها"}}
-{"k": "agents.running", "src": "398a4343", "v": "⏳ لا يزال قيد التشغيل: {count} ({names}) - ستصل النتائج إلى هنا"}
+{"k": "agents.head.done", "src": "e20b4f9e", "v": {"few": "✅ اكتمل عمل {n} وكلاء ({clock})", "many": "✅ اكتمل عمل {n} وكيلًا ({clock})", "one": "✅ اكتمل عمل وكيل واحد ({clock})", "other": "✅ اكتمل عمل {n} وكيل ({clock})", "two": "✅ اكتمل عمل وكيلين ({clock})", "zero": "✅ اكتمل عمل {n} وكيل ({clock})"}}
+{"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"few": "انتهت {n} أوامر ({clock})", "many": "انتهى {n} أمرًا ({clock})", "one": "انتهى أمر واحد ({clock})", "other": "انتهى {n} أمر ({clock})", "two": "انتهى أمران ({clock})", "zero": "انتهى {n} أمر ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"few": "🖥 {n} أوامر قيد التشغيل", "many": "🖥 {n} أمرًا قيد التشغيل", "one": "🖥 أمر واحد قيد التشغيل", "other": "🖥 {n} أمر قيد التشغيل", "two": "🖥 أمران قيد التشغيل", "zero": "🖥 {n} أمر قيد التشغيل"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"few": "أُوقفت {n} أوامر ({clock})", "many": "أُوقف {n} أمرًا ({clock})", "one": "أُوقف أمر واحد ({clock})", "other": "أُوقف {n} أمر ({clock})", "two": "أُوقف أمران ({clock})", "zero": "أُوقف {n} أمر ({clock})"}}
+{"k": "agents.head.working", "src": "6d8170f5", "v": {"few": "⏳ {n} وكلاء يعملون", "many": "⏳ {n} وكيلًا يعملون", "one": "⏳ وكيل واحد يعمل", "other": "⏳ {n} وكيل يعملون", "two": "⏳ وكيلان يعملان", "zero": "⏳ {n} وكيل يعمل"}}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"few": "+{n} آخرون", "many": "+{n} آخرون", "one": "+{n} آخر", "other": "+{n} آخرون", "two": "+{n} آخران", "zero": "+{n} آخرون"}}
+{"k": "agents.promise", "src": "29723a21", "v": "ستصل نتائج الوكلاء إلى هنا."}
+{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · اكتمل ({clock})"}
+{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
 {"k": "ago.days", "src": "3650e46d", "v": {"few": "منذ {n} أيام", "many": "منذ {n} يومًا", "one": "منذ يوم", "other": "منذ {n} يوم", "two": "منذ يومين", "zero": "اليوم"}}
 {"k": "ago.earlier", "src": "f12e996a", "v": "سابقًا"}
 {"k": "ago.hours", "src": "72292bb6", "v": {"few": "منذ {n} ساعات", "many": "منذ {n} ساعة", "one": "منذ ساعة", "other": "منذ {n} ساعة", "two": "منذ ساعتين", "zero": "منذ أقل من ساعة"}}

@@ -297,6 +297,56 @@ def test_apply_writes_a_sorted_stamped_catalog(tmp_path, monkeypatch):
     assert tool.apply("en", [], catalog_path=cat)
 
 
+# ---- prune: keys the code no longer has ---------------------------------------------------
+
+def _prune_world(tmp_path):
+    source = tmp_path / "source.jsonl"
+    source.write_text(tool.dump_jsonl(SRC), encoding="utf-8")
+    gone = {"k": "toast.gone", "v": "weg", "src": "0"}
+    raw = "".join(json.dumps(e, ensure_ascii=False, sort_keys=True) + "\n"
+                  for e in sorted([_row(GOOD_DE[0]), gone, _row(GOOD_DE[1])],
+                                  key=lambda e: e["k"]))
+    de = tmp_path / "de.jsonl"
+    de.write_text(raw, encoding="utf-8")
+    fr = _write(tmp_path / "fr.jsonl", [
+        {"k": "toast.saved", "v": "<b>{name}</b> enregistré pour {n} min"}])
+    return source, {"de": de, "fr": fr}
+
+
+def test_prune_drops_only_the_keys_gone_from_the_source(tmp_path):
+    source, cats = _prune_world(tmp_path)
+    fr_before = cats["fr"].read_bytes()
+    assert tool.prune(catalogs=cats, source=source) == [("de", "toast.gone")]
+    rows = [json.loads(line) for line in cats["de"].read_text(encoding="utf-8").splitlines()]
+    assert [r["k"] for r in rows] == ["toast.agents", "toast.saved"]
+    assert rows == [_row(GOOD_DE[0]), _row(GOOD_DE[1])]       # values and stamps kept
+    assert tool.check_catalog_format(cats["de"]) == []
+    assert cats["fr"].read_bytes() == fr_before                # nothing to drop there
+    assert tool.prune(catalogs=cats, source=source) == []      # idempotent
+
+
+def test_prune_dry_run_changes_nothing(tmp_path):
+    source, cats = _prune_world(tmp_path)
+    before = cats["de"].read_bytes()
+    assert tool.prune(dry_run=True, catalogs=cats, source=source) == [("de", "toast.gone")]
+    assert cats["de"].read_bytes() == before
+
+
+def test_prune_refuses_a_stale_source(monkeypatch, capsys):
+    monkeypatch.setattr(tool, "check_source_sync", lambda *a, **k: ["source.jsonl is stale"])
+
+    def _never(**_kw):
+        raise AssertionError("prune ran on a stale source")
+
+    monkeypatch.setattr(tool, "prune", _never)
+    assert tool.main(["prune"]) == 1
+    assert "extract" in capsys.readouterr().err
+
+
+def test_the_shipped_catalogs_have_nothing_to_prune():
+    assert tool.prune(dry_run=True) == []
+
+
 def test_todo_and_review_pack_cover_missing_and_changed_keys(monkeypatch, tmp_path):
     monkeypatch.setattr(tool, "SOURCE", tmp_path / "source.jsonl")
     monkeypatch.setattr(tool, "LOCALES_DIR", tmp_path)

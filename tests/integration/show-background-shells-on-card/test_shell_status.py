@@ -18,7 +18,7 @@ from aipager import preferences as prefs
 from aipager import session_monitor
 from aipager import state as state_mod
 from aipager.session_monitor import SessionMonitor, resolve_bg_shell_max_track
-from aipager.state import BG_AGENTS_SETTLE_SECONDS, BG_SHELLS_CAP
+from aipager.state import AGENTS_LINE_EDIT_INTERVAL, BG_AGENTS_SETTLE_SECONDS, BG_SHELLS_CAP
 
 CHAT = 256113222
 DESC = "run the tests"
@@ -138,7 +138,8 @@ def test_pin_counts_agents_and_shells(replay, vloop):
 # ── the answer line ─────────────────────────────────────────────────────────
 
 def test_answer_line_names_the_running_shell(replay, vloop):
-    """G29: the answer sent while the shell runs says so, by name."""
+    """G29: the answer sent while the shell runs says so (a count, never
+    the command)."""
     _layout()
     r = replay
 
@@ -148,8 +149,8 @@ def test_answer_line_names_the_running_shell(replay, vloop):
         w.cancel()
 
     _run(vloop, scenario())
-    assert _answer(r)[0].endswith(
-        f"⏳ 1 shell still running ({DESC}) - results will follow here")
+    assert _answer(r)[0].endswith("🖥 1 shell running")
+    assert DESC not in _answer(r)[0].rpartition("\n\n")[2]
 
 
 def test_answer_line_names_agents_and_shells(replay, vloop):
@@ -168,9 +169,9 @@ def test_answer_line_names_agents_and_shells(replay, vloop):
         w.cancel()
 
     _run(vloop, scenario())
-    assert _answer(r)[0].endswith(
-        "⏳ 1 agent, 1 shell still running (ship-reviewer, run the tests) - "
-        "results will follow here")
+    assert _answer(r)[0].split("\n\n")[-3:] == [
+        "⏳ 1 agent working · 🖥 1 shell running", "○ **ship-reviewer**",
+        "Results from the agents will follow here."]
 
 
 def test_answer_line_settles_only_after_the_shell_ends(replay, vloop,
@@ -194,6 +195,9 @@ def test_answer_line_settles_only_after_the_shell_ends(replay, vloop,
         await mon._scan()
         await asyncio.sleep(BG_AGENTS_SETTLE_SECONDS + 1)
         await mon._scan()
+        # Past the block's edit interval (its send counts as an edit).
+        await asyncio.sleep(AGENTS_LINE_EDIT_INTERVAL)
+        await mon._scan()
         await asyncio.sleep(3)
         w.cancel()
         return before
@@ -202,8 +206,8 @@ def test_answer_line_settles_only_after_the_shell_ends(replay, vloop,
     assert len(before) == 1  # not edited while the shell ran
     after = _answer(r)
     assert len(after) == 2
-    assert f"✅ shell: {DESC} - done (" in after[-1]
-    assert "still running" not in after[-1]
+    assert after[-1].rpartition("\n\n")[2].startswith("1 shell finished (")
+    assert "🖥" not in after[-1]
 
 
 # ── the max age ─────────────────────────────────────────────────────────────
@@ -284,7 +288,7 @@ def test_lost_shell_leaves_the_answer_line_as_sent(replay, vloop,
 
     _run(vloop, scenario())
     assert len(_answer(r)) == 1
-    assert "still running" in _answer(r)[0]
+    assert _answer(r)[0].endswith("🖥 1 shell running")
 
 
 def test_max_track_env_override(caplog):
@@ -600,7 +604,7 @@ def test_end_read_before_its_launch_settles_the_launch(replay, vloop):
     assert f"❌ `shell: {DESC} - failed (exit 3)`" in card["text"]
     assert card["stop"] is False
     assert "Done" in card["text"]
-    assert "still running" not in _answer(r)[-1]
+    assert "🖥" not in _answer(r)[-1]
     assert r.sess.bg_shell_early_ends == {}
 
 
@@ -627,7 +631,7 @@ def test_wakeup_before_its_launch_settles_the_launch(replay, vloop):
     card = _only_card(r)
     assert f"✅ `shell: {DESC} - done (" in card["text"]
     assert card["stop"] is False
-    assert "still running" not in _answer(r)[-1]
+    assert "🖥" not in _answer(r)[-1]
 
 
 def _bare_session() -> state_mod.TrackedSession:

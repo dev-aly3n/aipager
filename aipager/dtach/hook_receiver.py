@@ -18,6 +18,7 @@ import re
 import socket
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from aipager import bg_shells, bidi_guard, statusline_file
 from aipager.config import (
@@ -369,6 +370,43 @@ def _summary_text(name: str, inp: dict) -> str:
     if name == "NotebookEdit":
         return f"NotebookEdit: {inp.get('notebook_path', '')}"
     return name
+
+
+def _clean_text(value, limit: int) -> str:
+    """*value* as one short line: a string only, direction controls shown
+    as visible markers, whitespace collapsed, at most *limit* characters."""
+    if not isinstance(value, str):
+        return ""
+    return " ".join(bidi_guard.reveal(value).split())[:limit]
+
+
+def _activity_arg(name: str, inp) -> str:
+    """The short argument of a subagent's tool call that the status block
+    under an answer names: a file's base name, a search pattern, a web
+    query, a site's host. Never a command. "" for anything else."""
+    if not isinstance(inp, dict):
+        return ""
+    value = ""
+    if name in ("Read", "Write", "Edit", "MultiEdit"):
+        value = inp.get("file_path", "")
+    elif name == "NotebookEdit":
+        value = inp.get("notebook_path", "")
+    elif name in ("Grep", "Glob"):
+        return _clean_text(inp.get("pattern", ""), 80)
+    elif name == "WebSearch":
+        return _clean_text(inp.get("query", ""), 80)
+    elif name == "WebFetch":
+        url = inp.get("url", "")
+        if not isinstance(url, str):
+            return ""
+        try:
+            host = urlsplit(url.strip()).hostname or ""
+        except ValueError:
+            host = ""
+        return _clean_text(host, 80)
+    if not isinstance(value, str):
+        return ""
+    return _clean_text(value.rstrip("/").rsplit("/", 1)[-1], 80)
 
 
 # Tools that can draw Claude Code 2.1.259's one-time "block reads outside
@@ -1084,6 +1122,11 @@ class HookReceiver:
                             session_name, Status.BUSY,
                             preserve_job_state=bool(sess.active_subagents),
                         )
+                    # Its latest tool, for the status block under an
+                    # answer (any agent, attached to a card or not).
+                    sess.bg_agent_tool(agent_id, tool_name,
+                                       _activity_arg(tool_name, tool_input),
+                                       now_mono)
                     await self.notify_fn(sess, "tool_use", {
                         "tool_name": tool_name,
                         "tool_summary": summary,
@@ -1093,6 +1136,13 @@ class HookReceiver:
                         "agent_id": agent_id,
                     })
                     return
+                if tool_name in ("Agent", "Task") and isinstance(tool_input, dict):
+                    # The parent launching an agent: its type and
+                    # description, for the SubagentStart that follows.
+                    sess.agent_call_launched(
+                        _clean_text(tool_input.get("subagent_type"), 80),
+                        _clean_text(tool_input.get("description"), 200),
+                        now_mono)
                 # Mark tool-in-flight so session_monitor's stale-busy
                 # warning stands down for the duration — no hooks fire
                 # between PreToolUse and PostToolUse, so a long tool
@@ -1236,12 +1286,17 @@ class HookReceiver:
             delta = msg.get("delta", "")
             if delta:
                 sess = self.registry.get_or_create(session_name)
-                agent_id = msg.get("agent_id", "")
-                if agent_id and agent_id in sess.active_subagents:
-                    # A subagent's own prose — folded under its row like
-                    # its tool calls are, not forwarded into the parent's
-                    # commentary/card ("agent activity rows on the busy
-                    # card"; mirrors the tool-attribution guard above).
+                agent_id = msg.get("agent_id", "") or ""
+                if agent_id:
+                    # A subagent's own prose, whichever agent and whatever
+                    # the card knows of it: the parent's own hook events
+                    # carry no agent_id. Never the parent's commentary (a
+                    # background agent a new card, /stop or the silence
+                    # sweep took off `active_subagents` used to land
+                    # there); it is that agent's latest activity, for the
+                    # status block under an answer.
+                    sess.bg_agent_prose(agent_id, msg.get("message_id", ""),
+                                        delta, now_mono)
                     return
                 await self.notify_fn(sess, "assistant_text", {
                     "delta": delta,
@@ -1255,9 +1310,12 @@ class HookReceiver:
             agent_type = msg.get("agent_type", "unknown")
             if agent_id:
                 sess = self.registry.get_or_create(session_name)
-                # Roadmap 8.41's running set; the raw type, so a start
-                # with none (the phantom shape) adds nothing there.
-                sess.bg_agent_started(agent_id, msg.get("agent_type") or "",
+                # Roadmap 8.41's running set. The type is normalised the
+                # way the Agent call's is (PreToolUse above), so the two
+                # always match; a start with none (the phantom shape)
+                # adds nothing there.
+                sess.bg_agent_started(agent_id,
+                                      _clean_text(msg.get("agent_type"), 80),
                                       now_mono)
                 # The cap lives inside add_subagent (state.py), enforced
                 # by the data structure itself so a future second caller

@@ -42,71 +42,86 @@ def _has_exact(text, phrase):
     return re.search(re.escape(phrase) + r"(?!\w)", text) is not None
 
 
+def _working(n, tr, *, shells=0, labels=None):
+    names = labels or [f"a{i}" for i in range(n)]
+    view = agents_line.BlockView(
+        agents=tuple(agents_line.AgentRow(x, False) for x in names),
+        shells_running=shells)
+    return agents_line.render_block(view, tr)
+
+
+def _done(n, seconds, tr):
+    view = agents_line.BlockView(
+        agents=tuple(agents_line.AgentRow(f"a{i}", True, seconds) for i in range(n)),
+        agents_done_seconds=seconds)
+    return agents_line.render_block(view, tr)
+
+
 @pytest.mark.parametrize("n", sorted(FORM_OF))
 def test_russian_running_agents_pick_the_cldr_form(n):
-    out = agents_line.running_line([f"a{i}" for i in range(n)], tr=i18n.get("ru"))
-    assert _has_exact(out, _form("agents.count_agents", n))
+    out = _working(n, i18n.get("ru"))
+    assert _has_exact(out, _form("agents.head.working", n))
 
 
 @pytest.mark.parametrize("n", sorted(FORM_OF))
 def test_russian_running_shells_pick_the_cldr_form(n):
-    out = agents_line.running_line([f"s{i}" for i in range(n)], kinds=["shell"] * n,
-                                   tr=i18n.get("ru"))
-    assert _has_exact(out, _form("agents.count_shells", n))
+    out = agents_line.render_block(agents_line.BlockView(shells_running=n),
+                                   i18n.get("ru"))
+    assert _has_exact(out, _form("agents.head.shells_running", n))
 
 
 @pytest.mark.parametrize("n", [2, 5, 11, 21, 22])
 def test_russian_done_line_picks_the_cldr_form(n):
-    out = agents_line.done_line([f"a{i}" for i in range(n)], 65, tr=i18n.get("ru"))
-    assert _has_exact(out, _form("agents.count_agents", n))
+    out = _done(n, 65, i18n.get("ru"))
+    assert _has_exact(out, _form("agents.head.done", n).replace("{clock}", "1:05"))
 
 
 @pytest.mark.parametrize("n", [1, 2, 5, 21])
 def test_russian_agents_line_has_no_marks(n):
-    out = agents_line.running_line([f"a{i}" for i in range(n)], tr=i18n.get("ru"))
+    out = _working(n, i18n.get("ru"), shells=n)
     assert not BIDI_CONTROLS.search(out)
 
 
 def test_russian_done_line_keeps_latin_clock():
-    out = agents_line.done_line(["a1"], 65, tr=i18n.get("ru"))
+    out = _done(1, 65, i18n.get("ru"))
     assert "1:05" in out
 
 
 # ---- Persian digits on numbers only ---------------------------------------------
 
 def test_persian_running_count_uses_persian_digits():
-    out = agents_line.running_line([f"a{i}" for i in range(12)], tr=i18n.get("fa"))
+    out = _working(12, i18n.get("fa"))
     assert "\u06f1\u06f2" in out
 
 
 def test_persian_running_line_has_no_latin_count():
-    out = agents_line.running_line(["alpha", "beta"], tr=i18n.get("fa"))
+    out = _working(2, i18n.get("fa"), labels=["alpha", "beta"])
     assert not LATIN_DIGITS.search(out)
 
 
 def test_persian_agent_name_keeps_latin_digits():
-    out = agents_line.running_line(["agent7"], tr=i18n.get("fa"))
+    out = _working(1, i18n.get("fa"), labels=["agent7"])
     assert "agent7" in out
 
 
 def test_persian_done_clock_is_in_persian_digits():
-    out = agents_line.done_line(["a1"], 65, tr=i18n.get("fa"))
+    out = _done(1, 65, i18n.get("fa"))
     assert "\u06f1:\u06f0\u06f5" in out
 
 
 def test_persian_done_clock_long_boundary():
-    out = agents_line.done_line(["a1"], 3600 + 59, tr=i18n.get("fa"))
+    out = _done(1, 3600 + 59, i18n.get("fa"))
     assert not re.search(r"[0-9]:[0-9][0-9]", strip_marks(out).replace("a1", ""))
 
 
 def test_english_agents_line_is_marked_free():
-    out = agents_line.running_line(["a1", "a2"], tr=i18n.get("en"))
+    out = _working(2, i18n.get("en"))
     assert not BIDI_CONTROLS.search(out)
 
 
 def test_english_agents_line_default_language_is_english():
-    assert agents_line.running_line(["a1"]) == agents_line.running_line(
-        ["a1"], tr=i18n.get("en"))
+    view = agents_line.BlockView(agents=(agents_line.AgentRow("a1", False),))
+    assert agents_line.render_block(view) == agents_line.render_block(view, i18n.get("en"))
 
 
 # ---- the busy card ---------------------------------------------------------------

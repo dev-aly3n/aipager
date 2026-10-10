@@ -192,6 +192,12 @@ def _form(code: str, key: str, n: int, **params) -> str:
     return text
 
 
+def _working_header(n: int, tr) -> str:
+    """The first line of an answer's status block with *n* agents working."""
+    view = agents_line.BlockView(agents=(agents_line.AgentRow("a", False),) * n)
+    return agents_line.render_block(view, tr).split("\n\n")[0]
+
+
 @pytest.mark.parametrize("code", CODES)
 def test_every_count_reads_the_one_form(mk_bot, run_async, monkeypatch, code):
     """Every count picks the one form these languages have and fills it
@@ -205,8 +211,7 @@ def test_every_count_reads_the_one_form(mk_bot, run_async, monkeypatch, code):
         assert animation._tool_fold_summary(n, tr) == _form(code, "card.fold", n)
         row = card_rows.render_md(tr, settled_agent_row("Explore", n, 65))
         assert row == _form(code, "card.row.agent_done", n, agent="`Explore`", clock="1:05")
-        line = agents_line.running_line([f"a{i}" for i in range(max(n, 1))], tr=tr)
-        assert _form(code, "agents.count_agents", max(n, 1)) in line
+        assert _working_header(max(n, 1), tr) == _form(code, "agents.head.working", max(n, 1))
         # A late marker counts at least one minute.
         assert held_message.late_marker_text(tr, n * 60) == _form(
             code, "held.late_marker", max(n, 1))

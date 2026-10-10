@@ -1,10 +1,25 @@
+{"k": "agents.act.agent", "src": "725242a6", "v": "Iniciando un agente"}
+{"k": "agents.act.editing", "src": "ee3a643f", "v": "Editando {file}"}
+{"k": "agents.act.fetching", "src": "1d031002", "v": "Abriendo {site}"}
+{"k": "agents.act.reading", "src": "cdd7eff5", "v": "Leyendo {file}"}
+{"k": "agents.act.running", "src": "6e789785", "v": "Ejecutando un comando"}
+{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "Buscando {pattern}"}
+{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "Buscando en la web: {query}"}
+{"k": "agents.act.tool", "src": "924babaf", "v": "Usando {tool}"}
+{"k": "agents.act.writing", "src": "ebe99935", "v": "Escribiendo {file}"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"many": "{n} agentes", "one": "{n} agente", "other": "{n} agentes"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"many": "{n} shells", "one": "{n} shell", "other": "{n} shells"}}
-{"k": "agents.done_many", "src": "192b7df2", "v": "✅ Terminado: {count} ({clock})"}
-{"k": "agents.done_one", "src": "6caebe28", "v": "✅ Terminado: {name} ({clock})"}
-{"k": "agents.done_shell", "src": "e3681276", "v": "✅ shell: {name} - terminado ({clock})"}
-{"k": "agents.names_more", "src": "8150de86", "v": {"many": "{names} +{n} más", "one": "{names} +{n} más", "other": "{names} +{n} más"}}
-{"k": "agents.running", "src": "398a4343", "v": "⏳ {count} aún en curso ({names}) - los resultados llegarán aquí"}
+{"k": "agents.head.done", "src": "e20b4f9e", "v": {"many": "✅ {n} agentes terminados ({clock})", "one": "✅ {n} agente terminado ({clock})", "other": "✅ {n} agentes terminados ({clock})"}}
+{"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"many": "{n} shells terminados ({clock})", "one": "{n} shell terminado ({clock})", "other": "{n} shells terminados ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"many": "🖥 {n} shells en ejecución", "one": "🖥 {n} shell en ejecución", "other": "🖥 {n} shells en ejecución"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"many": "{n} shells detenidos ({clock})", "one": "{n} shell detenido ({clock})", "other": "{n} shells detenidos ({clock})"}}
+{"k": "agents.head.working", "src": "6d8170f5", "v": {"many": "⏳ {n} agentes trabajando", "one": "⏳ {n} agente trabajando", "other": "⏳ {n} agentes trabajando"}}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"many": "+{n} más", "one": "+{n} más", "other": "+{n} más"}}
+{"k": "agents.promise", "src": "29723a21", "v": "Los resultados de los agentes llegarán aquí."}
+{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · terminado ({clock})"}
+{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
 {"k": "ago.days", "src": "3650e46d", "v": {"many": "hace {n} d", "one": "hace {n} d", "other": "hace {n} d"}}
 {"k": "ago.earlier", "src": "f12e996a", "v": "antes"}
 {"k": "ago.hours", "src": "72292bb6", "v": {"many": "hace {n} h", "one": "hace {n} h", "other": "hace {n} h"}}

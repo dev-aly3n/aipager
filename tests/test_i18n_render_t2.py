@@ -285,6 +285,12 @@ def _form(code: str, key: str, n: int, **params) -> str:
     return text
 
 
+def _working_header(n: int, tr) -> str:
+    """The first line of an answer's status block with *n* agents working."""
+    view = agents_line.BlockView(agents=(agents_line.AgentRow("a", False),) * n)
+    return agents_line.render_block(view, tr).split("\n\n")[0]
+
+
 @pytest.mark.parametrize("code", CODES)
 def test_every_plural_entry_has_exactly_the_languages_forms(code):
     cats = set(plurals.categories(code))
@@ -315,8 +321,9 @@ def test_plural_forms_through_the_code(code, mk_bot, run_async, monkeypatch):
         row = card_rows.render_md(tr, settled_agent_row("Explore", n, 65))
         assert _strip(row) == _form(code, "card.row.agent_done", n, agent="`Explore`",
                                     clock=clock), n
-        line = _strip(agents_line.running_line([f"a{i}" for i in range(n)], tr=tr))
-        assert _form(code, "agents.count_agents", n) in line, (n, line)
+        if n:
+            line = _strip(_working_header(n, tr))
+            assert line == _form(code, "agents.head.working", n), (n, line)
         if n:   # a held answer is late by a minute at least
             assert _strip(held_message.late_marker_text(tr, n * 60)) == _form(
                 code, "held.late_marker", n), n

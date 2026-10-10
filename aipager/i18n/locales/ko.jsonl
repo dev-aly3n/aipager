@@ -1,10 +1,25 @@
+{"k": "agents.act.agent", "src": "725242a6", "v": "에이전트 시작 중"}
+{"k": "agents.act.editing", "src": "ee3a643f", "v": "{file} 수정 중"}
+{"k": "agents.act.fetching", "src": "1d031002", "v": "{site} 가져오는 중"}
+{"k": "agents.act.reading", "src": "cdd7eff5", "v": "{file} 읽는 중"}
+{"k": "agents.act.running", "src": "6e789785", "v": "명령 실행 중"}
+{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "{pattern} 검색 중"}
+{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "웹 검색 중: {query}"}
+{"k": "agents.act.tool", "src": "924babaf", "v": "{tool} 사용 중"}
+{"k": "agents.act.writing", "src": "ebe99935", "v": "{file} 쓰는 중"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"other": "에이전트 {n}개"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"other": "셸 {n}개"}}
-{"k": "agents.done_many", "src": "192b7df2", "v": "✅ {count} 완료 ({clock})"}
-{"k": "agents.done_one", "src": "6caebe28", "v": "✅ {name} 완료 ({clock})"}
-{"k": "agents.done_shell", "src": "e3681276", "v": "✅ 셸: {name} 완료 ({clock})"}
-{"k": "agents.names_more", "src": "8150de86", "v": {"other": "{names} 외 {n}개"}}
-{"k": "agents.running", "src": "398a4343", "v": "⏳ {count} 아직 실행 중 ({names}) - 결과는 여기로 올 거예요"}
+{"k": "agents.head.done", "src": "e20b4f9e", "v": {"other": "✅ 에이전트 {n}개 완료 ({clock})"}}
+{"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"other": "셸 {n}개 종료 ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"other": "🖥 셸 {n}개 실행 중"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"other": "셸 {n}개 중지됨 ({clock})"}}
+{"k": "agents.head.working", "src": "6d8170f5", "v": {"other": "⏳ 에이전트 {n}개 작업 중"}}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"other": "+{n}개 더"}}
+{"k": "agents.promise", "src": "29723a21", "v": "에이전트 결과가 여기에 표시돼요."}
+{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · 완료 ({clock})"}
+{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
 {"k": "ago.days", "src": "3650e46d", "v": {"other": "{n}일 전"}}
 {"k": "ago.earlier", "src": "f12e996a", "v": "이전"}
 {"k": "ago.hours", "src": "72292bb6", "v": {"other": "{n}시간 전"}}

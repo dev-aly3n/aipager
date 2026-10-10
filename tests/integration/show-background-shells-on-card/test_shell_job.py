@@ -556,7 +556,7 @@ def test_wakeup_waits_behind_the_turns_held_hooks(replay, vloop,
     assert turn2[0]["stop"] is False
     interim = [m for m, texts in r.chat.answer_texts.items()
                if "started it" in texts[0]]
-    assert interim and any("1 shell still running" in t
+    assert interim and any("🖥 1 shell running" in t
                            for t in r.chat.answer_texts[interim[0]])
     last = r.chat.answer_texts[max(r.chat.answer_texts)][-1]
     assert "the tests passed" in last

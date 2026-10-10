@@ -1,10 +1,25 @@
+{"k": "agents.act.agent", "src": "725242a6", "v": "正在启动代理"}
+{"k": "agents.act.editing", "src": "ee3a643f", "v": "正在编辑 {file}"}
+{"k": "agents.act.fetching", "src": "1d031002", "v": "正在获取 {site}"}
+{"k": "agents.act.reading", "src": "cdd7eff5", "v": "正在读取 {file}"}
+{"k": "agents.act.running", "src": "6e789785", "v": "正在运行命令"}
+{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "正在搜索 {pattern}"}
+{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "正在网上搜索：{query}"}
+{"k": "agents.act.tool", "src": "924babaf", "v": "正在使用 {tool}"}
+{"k": "agents.act.writing", "src": "ebe99935", "v": "正在写入 {file}"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"other": "{n} 个代理"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"other": "{n} 个 shell"}}
-{"k": "agents.done_many", "src": "192b7df2", "v": "✅ {count} 已完成（{clock}）"}
-{"k": "agents.done_one", "src": "6caebe28", "v": "✅ {name} 已完成（{clock}）"}
-{"k": "agents.done_shell", "src": "e3681276", "v": "✅ shell：{name} 已完成（{clock}）"}
-{"k": "agents.names_more", "src": "8150de86", "v": {"other": "{names} 及另外 {n} 个"}}
-{"k": "agents.running", "src": "398a4343", "v": "⏳ {count} 仍在运行（{names}），结果稍后会发到这里"}
+{"k": "agents.head.done", "src": "e20b4f9e", "v": {"other": "✅ {n} 个代理已完成（{clock}）"}}
+{"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"other": "{n} 个 shell 已结束（{clock}）"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"other": "🖥 {n} 个 shell 运行中"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"other": "{n} 个 shell 已停止（{clock}）"}}
+{"k": "agents.head.working", "src": "6d8170f5", "v": {"other": "⏳ {n} 个代理工作中"}}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"other": "还有 {n} 个"}}
+{"k": "agents.promise", "src": "29723a21", "v": "代理的结果稍后会发到这里。"}
+{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · 已完成（{clock}）"}
+{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
 {"k": "ago.days", "src": "3650e46d", "v": {"other": "{n} 天前"}}
 {"k": "ago.earlier", "src": "f12e996a", "v": "更早"}
 {"k": "ago.hours", "src": "72292bb6", "v": {"other": "{n} 小时前"}}

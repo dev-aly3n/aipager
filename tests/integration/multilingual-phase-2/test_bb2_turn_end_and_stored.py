@@ -222,23 +222,26 @@ def test_the_persian_pinned_summary_keeps_its_line_right_to_left(no_details):
 PLURAL_VERB = re.compile(r"\b(работают|работает)\b")
 
 
+def _block(agents=0, shells=0):
+    view = agents_line.BlockView(
+        agents=tuple(agents_line.AgentRow(f"a{i}", False) for i in range(agents)),
+        shells_running=shells)
+    return agents_line.render_block(view, i18n.get("ru"))
+
+
 @pytest.mark.parametrize("n", [1, 2, 5, 11, 21, 22, 25])
 def test_russian_running_agents_line_has_no_counted_verb(n):
-    out = agents_line.running_line([f"a{i}" for i in range(n)], tr=i18n.get("ru"))
-    assert not PLURAL_VERB.search(out)
+    assert not PLURAL_VERB.search(_block(agents=n))
 
 
 @pytest.mark.parametrize("n", [1, 21])
 def test_russian_running_shells_line_has_no_counted_verb(n):
-    out = agents_line.running_line([f"s{i}" for i in range(n)], kinds=["shell"] * n,
-                                   tr=i18n.get("ru"))
-    assert not PLURAL_VERB.search(out)
+    assert not PLURAL_VERB.search(_block(shells=n))
 
 
 @pytest.mark.parametrize("n", [1, 21])
 def test_russian_running_line_for_one_agent_still_reads_russian(n):
-    out = agents_line.running_line([f"a{i}" for i in range(n)], tr=i18n.get("ru"))
-    assert CYRILLIC.search(out)
+    assert CYRILLIC.search(_block(agents=n).split("\n\n")[0])
 
 
 WAITING = i18n.Msg("card.waiting.working", "\U0001f504 **{session}** · {agents} still working")

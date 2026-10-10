@@ -1,10 +1,25 @@
+{"k": "agents.act.agent", "src": "725242a6", "v": "در حال راه‌اندازی یک ایجنت"}
+{"k": "agents.act.editing", "src": "ee3a643f", "v": "در حال ویرایش {file}"}
+{"k": "agents.act.fetching", "src": "1d031002", "v": "در حال دریافت {site}"}
+{"k": "agents.act.reading", "src": "cdd7eff5", "v": "در حال خواندن {file}"}
+{"k": "agents.act.running", "src": "6e789785", "v": "در حال اجرای یک دستور"}
+{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "در حال جستجوی {pattern}"}
+{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "در حال جستجو در وب: {query}"}
+{"k": "agents.act.tool", "src": "924babaf", "v": "در حال استفاده از {tool}"}
+{"k": "agents.act.writing", "src": "ebe99935", "v": "در حال نوشتن {file}"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"one": "{n} ایجنت", "other": "{n} ایجنت"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"one": "{n} دستور", "other": "{n} دستور"}}
-{"k": "agents.done_many", "src": "192b7df2", "v": "✅ {count} انجام شد ({clock})"}
-{"k": "agents.done_one", "src": "6caebe28", "v": "✅ {name} انجام شد ({clock})"}
-{"k": "agents.done_shell", "src": "e3681276", "v": "✅ دستور: {name} - انجام شد ({clock})"}
-{"k": "agents.names_more", "src": "8150de86", "v": {"one": "{names} و {n} مورد دیگر", "other": "{names} و {n} مورد دیگر"}}
-{"k": "agents.running", "src": "398a4343", "v": "⏳ {count} هنوز در حال اجرا ({names}) - نتیجه‌ها همین‌جا می‌آید"}
+{"k": "agents.head.done", "src": "e20b4f9e", "v": {"one": "✅ کار {n} ایجنت تمام شد ({clock})", "other": "✅ کار {n} ایجنت تمام شد ({clock})"}}
+{"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"one": "{n} دستور تمام شد ({clock})", "other": "{n} دستور تمام شد ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"one": "🖥 {n} دستور در حال اجرا", "other": "🖥 {n} دستور در حال اجرا"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"one": "{n} دستور متوقف شد ({clock})", "other": "{n} دستور متوقف شد ({clock})"}}
+{"k": "agents.head.working", "src": "6d8170f5", "v": {"one": "⏳ {n} ایجنت در حال کار", "other": "⏳ {n} ایجنت در حال کار"}}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"one": "+{n} مورد دیگر", "other": "+{n} مورد دیگر"}}
+{"k": "agents.promise", "src": "29723a21", "v": "نتیجه‌های ایجنت‌ها همین‌جا می‌آید."}
+{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · تمام شد ({clock})"}
+{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
 {"k": "ago.days", "src": "3650e46d", "v": {"one": "{n} روز پیش", "other": "{n} روز پیش"}}
 {"k": "ago.earlier", "src": "f12e996a", "v": "پیش‌تر"}
 {"k": "ago.hours", "src": "72292bb6", "v": {"one": "{n} ساعت پیش", "other": "{n} ساعت پیش"}}

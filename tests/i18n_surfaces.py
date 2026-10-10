@@ -599,25 +599,44 @@ def _card_compacting(env):
 
 @surface("agents_line")
 def _agents_line(env):
-    from aipager.bot import agents_line
+    """The status block under an answer, in every state the spec names
+    (markdown: the only form an answer carries)."""
+    from aipager.bot import agents_line as al
     env.store(CHAT)
-    out = []
-    for markdown in (True, False):
-        def run(fn, *a, **k):
-            return env.with_tr(fn, *a, markdown=markdown, **k)
-        out += [
-            run(agents_line.running_line, ["Explore"]),
-            run(agents_line.running_line, ["Explore", "general_purpose"]),
-            run(agents_line.running_line, ["a", "b", "c", "d", "e"]),
-            run(agents_line.running_line, ["a", "npm run dev"], kinds=["agent", "shell"]),
-            run(agents_line.running_line, ["sleep 9"], kinds=["shell"]),
-            run(agents_line.running_line, ["s1", "s2"], kinds=["shell", "shell"]),
-            run(agents_line.done_line, ["Explore"], 372),
-            run(agents_line.done_line, ["sleep 90"], 90, kinds=["shell"]),
-            run(agents_line.done_line, ["a", "b"], 3700),
-            run(agents_line.done_line, ["a", "s"], 61, kinds=["agent", "shell"]),
-        ]
-    return out
+    A, V = al.AgentRow, al.BlockView
+    views = [
+        # Two agents and a shell, working: prose, then a tool phrase.
+        V(agents=(A("pipeline-runner", False, prose="Writing final.md for the pipeline"),
+                  A("Explore", False, tool="Read", tool_arg="state.py")),
+          shells_running=1),
+        # One done, the other still going (its Agent call's description).
+        V(agents=(A("Explore", True, 42),
+                  A("pipeline-runner", False, description="Running the full suite")),
+          shells_running=1),
+        # Agents done, a shell still up; then that shell finished.
+        V(agents=(A("Explore", True, 42), A("pipeline-runner", True, 300)),
+          agents_done_seconds=372, shells_running=1),
+        V(agents=(A("Explore", True, 42), A("pipeline-runner", True, 300)),
+          agents_done_seconds=372, shells_finished=1, shells_finished_seconds=7985),
+        # Only shells: running, finished, stopped, both.
+        V(shells_running=1),
+        V(shells_running=2),
+        V(shells_finished=1, shells_finished_seconds=90),
+        V(shells_stopped=2, shells_stopped_seconds=61),
+        V(shells_finished=1, shells_finished_seconds=90, shells_stopped=1,
+          shells_stopped_seconds=30),
+        # One agent done alone; more than four rows; a bare row.
+        V(agents=(A("Explore", True, 42),), agents_done_seconds=42),
+        V(agents=tuple(A(f"general_purpose{i}", False) for i in range(6))),
+        V(agents=(A("Explore", False),)),
+    ]
+    tools = (("Read", "state.py"), ("Write", "final.md"), ("Edit", "notify.py"),
+             ("MultiEdit", "a.py"), ("NotebookEdit", "n.ipynb"), ("Bash", ""),
+             ("Grep", "agents_line"), ("Glob", "*.py"), ("WebSearch", "telegram bot api"),
+             ("WebFetch", "docs.python.org"), ("Agent", ""), ("Task", ""),
+             ("TodoWrite", ""), ("Read", ""))
+    views += [V(agents=(A("Explore", False, tool=t, tool_arg=arg),)) for t, arg in tools]
+    return [env.with_tr(al.render_block, view) for view in views]
 
 
 # ---- permission and question prompts, taps and answered lines -------------------------
@@ -2296,5 +2315,14 @@ def unmarked_words(text: str, known=KNOWN) -> list[str]:
 #: sweep must not count as English, by surface. Both are filled by the
 #: phase 3a registry imported below.
 PENDING: set[str] = set()
-KNOWN_EXTRA: dict[str, tuple[str, ...]] = {}
+KNOWN_EXTRA: dict[str, tuple[str, ...]] = {
+    # Claude's own text (an agent's prose, its Agent call's description),
+    # agent types, tool names and a tool's file, pattern, query or site:
+    # shown as written in every language.
+    "agents_line": ("Writing final.md for the pipeline", "Running the full suite",
+                    "Writing", "for", "the", "pipeline", "Running", "full", "suite",
+                    "pipeline-runner", "state.py", "final.md", "notify.py", "a.py",
+                    "n.ipynb", "agents\\_line", "agents_line", "telegram bot api",
+                    "docs.python.org", "TodoWrite", "Read"),
+}
 from tests import i18n_surfaces_p3a  # noqa: E402,F401

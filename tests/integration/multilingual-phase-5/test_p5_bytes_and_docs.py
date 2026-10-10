@@ -70,10 +70,18 @@ def _surfaces(raw):
     return json.loads(raw.decode("utf-8"))
 
 
+#: Surfaces a later feature changed on purpose: the line under an answer
+#: became a live status block (Claude Code style), so its English moved on.
+CHANGED_SINCE = {"agents_line"}
+
+
 def test_every_english_surface_of_the_base_is_unchanged():
     rel = "tests/golden/english_surfaces.json"
     base, cur = _surfaces(at_base(rel)), _surfaces(now(rel))
-    assert {k: cur.get(k) for k in base} == base
+    kept = {k: v for k, v in base.items() if k not in CHANGED_SINCE}
+    assert {k: cur.get(k) for k in kept} == kept
+    # Each exemption is real: the surface did change, and still exists.
+    assert all(k in base and k in cur and cur[k] != base[k] for k in CHANGED_SINCE)
 
 
 def test_the_english_surfaces_only_gain_the_three_new_ones():

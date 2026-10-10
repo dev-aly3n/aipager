@@ -11,7 +11,7 @@ import pytest
 
 from aipager import preferences as prefs
 from aipager import session_monitor
-from aipager.bot.agents_line import done_line, running_line
+from aipager.bot.agents_line import AgentRow, BlockView, render_block
 from aipager.session_monitor import SessionMonitor, resolve_bg_shell_max_track
 from aipager.state import BG_SHELLS_CAP
 
@@ -111,8 +111,7 @@ def test_bb_stop_closes_the_job_card(replay, vloop, monkeypatch):
 
 def test_bb_stop_keeps_the_answer_line_running(replay, vloop, monkeypatch):
     out = _stopped(replay, vloop, monkeypatch)
-    assert out["answers"][0].rstrip().splitlines()[-1] == (
-        f"⏳ 1 shell still running ({DESC}) - results will follow here")
+    assert out["answers"][0].rstrip().splitlines()[-1] == "🖥 1 shell running"
 
 
 def test_bb_wakeup_after_stop_opens_a_fresh_card(replay, vloop, monkeypatch):
@@ -337,59 +336,51 @@ def test_bb_shells_are_not_written_to_the_state_file(replay, vloop,
     assert "bpersist42" not in raw and "zq unique shell label" not in raw
 
 
-# ── agents_line helpers ─────────────────────────────────────────────────────
+# ── the answer's status block: shells ───────────────────────────────────────
 
-def test_bb_running_line_one_shell():
-    assert running_line(["sleep 90"], kinds=["shell"]) == (
-        "⏳ 1 shell still running (sleep 90) - results will follow here")
-
-
-def test_bb_running_line_two_shells():
-    assert running_line(["a", "b"], kinds=["shell", "shell"]).startswith(
-        "⏳ 2 shells still running (a, b)")
+def test_bb_block_one_shell():
+    assert render_block(BlockView(shells_running=1)) == "🖥 1 shell running"
 
 
-def test_bb_running_line_mixed():
-    assert running_line(["ship-reviewer", "run tests"],
-                        kinds=["agent", "shell"]) == (
-        "⏳ 1 agent, 1 shell still running (ship-reviewer, run tests) - "
-        "results will follow here")
+def test_bb_block_two_shells():
+    assert render_block(BlockView(shells_running=2)) == "🖥 2 shells running"
 
 
-def test_bb_running_line_mixed_plural():
-    line = running_line(["a", "b", "c"], kinds=["agent", "agent", "shell"])
-    assert line.startswith("⏳ 2 agents, 1 shell still running")
+def test_bb_block_mixed():
+    view = BlockView(agents=(AgentRow("ship-reviewer", False),), shells_running=1)
+    assert render_block(view).split("\n\n")[0] == (
+        "⏳ 1 agent working · 🖥 1 shell running")
 
 
-def test_bb_running_line_without_kinds_is_all_agents():
-    assert running_line(["x"]) == running_line(["x"], kinds=["agent"])
+def test_bb_block_never_names_a_shell():
+    """A count only: the shell's command never shows."""
+    assert DESC not in render_block(BlockView(shells_running=1))
 
 
-def test_bb_done_line_one_shell():
-    assert done_line(["sleep 90"], 45, kinds=["shell"]) == \
-        "✅ shell: sleep 90 - done (0:45)"
+def test_bb_block_one_shell_finished():
+    assert render_block(BlockView(shells_finished=1, shells_finished_seconds=45)) == \
+        "1 shell finished (0:45)"
 
 
-def test_bb_done_line_mixed():
-    assert done_line(["a", "b"], 6 * 60, kinds=["agent", "shell"]) == \
-        "✅ 1 agent, 1 shell done (6:00)"
+def test_bb_block_agents_done_and_a_shell_finished():
+    view = BlockView(agents=(AgentRow("a", True, 1), AgentRow("b", True, 2)),
+                     agents_done_seconds=6 * 60, shells_finished=1,
+                     shells_finished_seconds=3 * 3600 + 3 * 60)
+    assert render_block(view) == "✅ 2 agents done (6:00) · 1 shell finished (3:03:00)"
 
 
-def test_bb_done_line_two_shells_hours():
-    assert done_line(["a", "b"], 3 * 3600 + 3 * 60,
-                     kinds=["shell", "shell"]) == "✅ 2 shells done (3:03:00)"
+def test_bb_block_two_shells_stopped():
+    assert render_block(BlockView(shells_stopped=2, shells_stopped_seconds=61)) == \
+        "2 shells stopped (1:01)"
 
 
-def test_bb_done_line_single_agent_unchanged():
-    assert done_line(["x"], 45, kinds=["agent"]) == "✅ x done (0:45)"
-
-
-@pytest.mark.parametrize("kinds", [["shell"], ["agent", "shell"],
-                                   ["shell", "shell"]])
-def test_bb_helper_lines_have_no_em_dash(kinds):
-    labels = [f"l{i}" for i in range(len(kinds))]
-    assert "—" not in running_line(labels, kinds=kinds) + done_line(
-        labels, 100, kinds=kinds)
+@pytest.mark.parametrize("view", [
+    BlockView(shells_running=1),
+    BlockView(agents=(AgentRow("a", False),), shells_running=1),
+    BlockView(shells_finished=1, shells_stopped=1),
+], ids=["shell", "agent-and-shell", "finished-and-stopped"])
+def test_bb_helper_lines_have_no_em_dash(view):
+    assert "—" not in render_block(view)
 
 
 def test_bb_no_em_dash_across_status_scenarios(replay, vloop, monkeypatch):

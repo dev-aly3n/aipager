@@ -1,10 +1,25 @@
+{"k": "agents.act.agent", "src": "725242a6", "v": "Đang khởi chạy một tác tử"}
+{"k": "agents.act.editing", "src": "ee3a643f", "v": "Đang sửa {file}"}
+{"k": "agents.act.fetching", "src": "1d031002", "v": "Đang tải {site}"}
+{"k": "agents.act.reading", "src": "cdd7eff5", "v": "Đang đọc {file}"}
+{"k": "agents.act.running", "src": "6e789785", "v": "Đang chạy một lệnh"}
+{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "Đang tìm {pattern}"}
+{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "Đang tìm trên web: {query}"}
+{"k": "agents.act.tool", "src": "924babaf", "v": "Đang dùng {tool}"}
+{"k": "agents.act.writing", "src": "ebe99935", "v": "Đang ghi {file}"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"other": "{n} tác tử"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"other": "{n} shell"}}
-{"k": "agents.done_many", "src": "192b7df2", "v": "✅ {count} đã xong ({clock})"}
-{"k": "agents.done_one", "src": "6caebe28", "v": "✅ {name} đã xong ({clock})"}
-{"k": "agents.done_shell", "src": "e3681276", "v": "✅ shell: {name} - đã xong ({clock})"}
-{"k": "agents.names_more", "src": "8150de86", "v": {"other": "{names} và {n} khác"}}
-{"k": "agents.running", "src": "398a4343", "v": "⏳ {count} vẫn đang chạy ({names}) - kết quả sẽ gửi đến đây"}
+{"k": "agents.head.done", "src": "e20b4f9e", "v": {"other": "✅ {n} tác tử đã xong ({clock})"}}
+{"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"other": "{n} shell đã xong ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"other": "🖥 {n} shell đang chạy"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"other": "{n} shell đã bị dừng ({clock})"}}
+{"k": "agents.head.working", "src": "6d8170f5", "v": {"other": "⏳ {n} tác tử đang làm việc"}}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"other": "+{n} khác"}}
+{"k": "agents.promise", "src": "29723a21", "v": "Kết quả từ các tác tử sẽ được gửi đến đây."}
+{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · đã xong ({clock})"}
+{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
 {"k": "ago.days", "src": "3650e46d", "v": {"other": "{n} ngày trước"}}
 {"k": "ago.earlier", "src": "f12e996a", "v": "trước đó"}
 {"k": "ago.hours", "src": "72292bb6", "v": {"other": "{n} giờ trước"}}

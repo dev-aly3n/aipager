@@ -900,8 +900,9 @@ class SessionMonitor:
 
             # Roadmap 8.41: the running-agents set gets the same silence
             # bound as the job's table — a lost SubagentStop can pin
-            # "still running" for at most one window — and an answer whose
-            # ⏳ line is owed its ✅ gets it once its agents are all gone.
+            # "still running" for at most one window — and each answer's
+            # status block is looked at once its edit interval has passed
+            # (edited only when what it shows changed).
             for aid in sess.sweep_bg_agents(now, SUBAGENT_SILENCE_SECONDS):
                 log.info("[%s] background agent %s silent for %d min — no "
                          "longer counted as running", sess.label, aid,

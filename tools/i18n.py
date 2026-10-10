@@ -5,6 +5,7 @@
     python tools/i18n.py check [--write-baseline]
     python tools/i18n.py todo --lang CODE [--changed]
     python tools/i18n.py apply --lang CODE FILE
+    python tools/i18n.py prune [--dry-run]
     python tools/i18n.py review-pack [--lang CODE] [--changed] [--golden] [--answers FILE]
     python tools/i18n.py pseudo [--rtl] TEXT
 
@@ -31,7 +32,8 @@ so CI and this command can never disagree.
 
 Agents never edit a catalog by hand: ``todo`` hands them a batch with
 everything a translator needs, ``apply`` validates it and writes the
-catalog.
+catalog. ``prune`` removes the entries of keys the code no longer has
+(after ``extract``), in every catalog.
 """
 
 from __future__ import annotations
@@ -919,10 +921,35 @@ def apply(code: str, batch, *, catalog_path: Path | None = None) -> list[str]:
         catalog[item["k"]] = {"k": item["k"], "v": item["v"], "src": src_hash(src)}
     if problems:
         return problems
+    write_catalog(path, catalog)
+    return []
+
+
+def write_catalog(path: Path, catalog: dict) -> None:
+    """Write *catalog* (key -> ``{"k", "v", "src"}``) as ``apply`` always
+    has: one entry per line, sorted by key, with its ``src`` stamp."""
     lines = [json.dumps({"k": e["k"], "v": e["v"], "src": e["src"]}, ensure_ascii=False,
                         sort_keys=True) for _, e in sorted(catalog.items())]
     path.write_text("".join(line + "\n" for line in lines), encoding="utf-8")
-    return []
+
+
+def prune(*, dry_run: bool = False, catalogs: dict[str, Path] | None = None,
+          source: Path | None = None) -> list[tuple[str, str]]:
+    """Drop, from every translated catalog, the entries whose key is no
+    longer in the source (a key the code stopped using). Returns
+    ``[(code, key)]`` removed (or, with *dry_run*, that would be); the
+    other entries keep their values, stamps and order."""
+    keys = {r["k"] for r in load_jsonl(source or SOURCE)}
+    removed: list[tuple[str, str]] = []
+    for code, path in sorted((catalogs if catalogs is not None else all_catalogs()).items()):
+        catalog = load_catalog(path)
+        gone = sorted(k for k in catalog if k not in keys)
+        if not gone:
+            continue
+        removed += [(code, k) for k in gone]
+        if not dry_run:
+            write_catalog(path, {k: e for k, e in catalog.items() if k in keys})
+    return removed
 
 
 def _english(src: dict):
@@ -1034,6 +1061,8 @@ def main(argv=None) -> int:
     p = sub.add_parser("apply")
     p.add_argument("--lang", required=True)
     p.add_argument("file")
+    p = sub.add_parser("prune")
+    p.add_argument("--dry-run", action="store_true")
     p = sub.add_parser("review-pack")
     p.add_argument("--lang")
     p.add_argument("--changed", action="store_true")
@@ -1083,6 +1112,16 @@ def main(argv=None) -> int:
         for line in problems:
             print(line, file=sys.stderr)
         return 1 if problems else 0
+    if args.cmd == "prune":
+        stale = check_source_sync()
+        if stale:
+            for line in stale:
+                print(line, file=sys.stderr)
+            print("prune: run extract first", file=sys.stderr)
+            return 1
+        for code, key in prune(dry_run=args.dry_run):
+            print(f"{code} {key}")
+        return 0
     if args.cmd == "review-pack":
         if args.lang and args.lang not in TRANSLATED:
             print(f"{args.lang}: not a translated language", file=sys.stderr)

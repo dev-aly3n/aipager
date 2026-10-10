@@ -519,20 +519,55 @@ attachment above carries the complete record.
 #### Agents still running when the answer goes out
 
 Claude Code can run agents in the background, and the turn that launched
-them can end while they work. The answer then ends with one line saying
-so:
+them can end while they work. The answer then ends with a short status of
+that background work, in the style of Claude Code's own agent panel, kept
+up to date while it runs:
 
 ```
-⏳ 1 agent still running (pipeline-runner) - results will follow here
-⏳ 2 agents still running (pipeline-runner, ship-reviewer) - results will follow here
-⏳ 1 shell still running (run the tests) - results will follow here
-⏳ 1 agent, 1 shell still running (ship-reviewer, run the tests) - results will follow here
+⏳ 2 agents working · 🖥 1 shell running
+
+○ pipeline-runner · Writing final.md for the pipeline
+
+○ Explore · Reading state.py
+
+Results from the agents will follow here.
 ```
 
-Background commands (shells) count in this line the same way agents do.
-`/stop` ends the job, but Escape does not end a background command, so
-one that is still running stays counted here and in the pinned bar
-until it ends; its later follow-up then starts a turn of its own.
+- **The first line counts.** Agents working (or done), and the background
+  commands (shells) of this job running, finished or stopped. A shell is
+  only ever a count, never its command.
+- **One row per agent,** its type in bold, then what it is doing now:
+  its own latest line of text (Claude's words, shown as written, never
+  translated), else its latest tool as a short phrase (`Reading
+  state.py`, `Writing final.md`, `Running a command`, `Searching for
+  …`), else the description Claude gave the agent when it launched it,
+  else just the type. At most four rows, then `+N more`.
+- **The promise** "Results from the agents will follow here." stays only
+  while an agent is still working. Shells never carry it: a dev server
+  may never end.
+
+Each agent's row settles on its own when that agent stops, to `✓
+Explore · done (0:42)` (how long that agent ran), and the first line
+counts down. Once every agent is done, the rows give way to one line,
+with the time from the answer to the last agent's end:
+
+```
+✅ 2 agents done (6:12) · 🖥 1 shell running
+```
+
+and when that shell ends, `✅ 2 agents done (6:12) · 1 shell finished
+(2:13:05)` (how long the shell ran; `stopped` when it was killed or
+stopped by Claude, `finished` when it ended on its own, failing or not;
+its card row says how). An answer with only a shell of its job shows
+`🖥 1 shell running`, which settles to `1 shell finished (…)` or `1 shell
+stopped (…)`.
+
+Only the shells of the answer's own job are counted: a dev server an
+earlier task left running is not repeated under every answer (the
+pinned bar still counts every shell). `/stop` ends the job, but Escape
+does not end a background command: one that is still running stays in
+the pinned bar until it ends, and is no longer counted under later
+answers; its later follow-up then starts a turn of its own.
 
 That answer goes out the moment the turn ends, as a normal (notifying)
 message threaded to your prompt - the same text the terminal shows. The
@@ -543,26 +578,28 @@ arrives as a new message of its own; the earlier answer is never sent
 again, a daemon restart included. A job whose agents report back more
 than once produces one answer per report, each sent as it is written.
 
-Labels are the agents' types, cut at 32 characters, three at most
-(`+N more` for the rest). An agent that stopped while background work of
-its own is still running counts as running, since it resumes later -
-aipager learns this from Claude's `<task-notification>` for it, when that
-notification starts a turn. The line is added in every layout.
+An agent that stopped while background work of its own is still running
+counts as working, since it resumes later - aipager learns this from
+Claude's `<task-notification>` for it, when that notification starts a
+turn. A row waits a few seconds before it shows done, so that note can
+take it back first. The status is added in every layout, in the chat's
+language.
 
-Once every agent a line named has finished, aipager edits that line
-once, silently, to `✅ pipeline-runner done (6:12)` (or `✅ 2 agents done
-(6:12)`, `✅ shell: run the tests - done (6:12)`, `✅ 1 agent, 1 shell done
-(6:12)`, with the time since the answer went out; a failed command is
-also "done" here, its card row says how it ended); the results themselves
-arrive as their own message. Each answer that carried the line is edited
-this way (up to five pending per session). The edit is a low-priority
-one: it is never made while the chat is flood-muted, is tried once more
-after the mute lifts or the budget refuses it, and is then dropped. It
-is never made into a deleted answer or for a session that has ended or
-been killed.
+**How it is kept up to date.** aipager edits the answer silently, only
+when what the status shows has changed, and at most once every 30
+seconds per answer (the answer itself counts as the first). Each answer
+with a status is kept up to date this way (up to five pending per
+session). The edits are low priority: one the flood budget refuses, or
+that would come while the chat is flood-muted, is not made, and the
+status waits for its next change. The final edit, once everything has
+ended, is tried once more after the mute lifts or the budget refuses
+it, and is then dropped. No edit is made into a deleted answer, for a
+session that has ended or been killed, or when it would make the answer
+too long for Telegram (room for the status is kept when a long answer
+is cut).
 
-The line is left as sent, never turned into ✅, when aipager cannot know
-the agents finished:
+The status is left as last shown, never turned into done, when aipager
+cannot know the work finished:
 
 - an agent aipager hears nothing from for 30 minutes
   (`AIPAGER_SUBAGENT_SILENCE`) is no longer counted as running, but
@@ -572,7 +609,7 @@ the agents finished:
 - a daemon restart forgets which answers are pending.
 
 An answer held back by a flood mute, or delivered as plain text after
-the formatted send failed, goes out without the line, as does a turn
+the formatted send failed, goes out without the status, as does a turn
 that ends with no answer text (only a header). If Claude takes
 an agent's notification in the middle of a running turn, aipager does
 not see it; an agent that stopped with work still running can then be

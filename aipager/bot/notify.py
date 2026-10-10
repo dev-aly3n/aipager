@@ -56,10 +56,15 @@ from aipager.config import (
     STALE_BUSY_TIMEOUT,
     STREAM_EDIT_INTERVAL,
 )
-from aipager.state import BG_AGENTS_RETRY_SECONDS, Status, TrackedSession
+from aipager.state import (
+    BG_AGENTS_RETRY_SECONDS,
+    BG_AGENTS_SETTLE_SECONDS,
+    Status,
+    TrackedSession,
+)
 from aipager.policy_snapshot import clear_turn_open, mark_turn_open, note_driver_id
 from aipager.bot.animation import (
-    COMPACTING, FINAL_VERB, _RICH_LIMIT, _card_edit_lock, _exact_anchors_available,
+    COMPACTING, FINAL_VERB, _CARD_CHAR_BUDGET, _RICH_LIMIT, _card_edit_lock, _exact_anchors_available,
     _expire_tool_batch,
     _md_escape, _read_stream_text, _sync_anchors_from_transcript,
     build_full_log,
@@ -433,6 +438,13 @@ class NotifyMixin:
         # out late, and a line frozen into it could not be settled.
         held = combined
         if agents:
+            # Room for the block's largest form, so no later edit of it can
+            # push this message past the ceiling.
+            if len(combined.encode("utf-8")) + agents["reserve"] > _RICH_LIMIT:
+                log.info("[%s] merged: combined card+answer plus the agents "
+                         "block over the byte ceiling — falling back to "
+                         "replace", sess.label)
+                return False
             combined = f"{combined}\n\n{agents['line']}"
         if len(combined.encode("utf-8")) > _RICH_LIMIT:
             log.info("[%s] merged: combined card+answer over the byte ceiling "
@@ -511,83 +523,180 @@ class NotifyMixin:
     # ── roadmap 8.41: background agents still running ─────────────────────
 
     def _agents_snapshot(self, sess: TrackedSession) -> dict | None:
-        """The agents running as an answer goes out — ONE snapshot, taken
-        once, so the line shown, the ids it waits for and the labels the ✅
-        repeats all describe the same agents — or ``None`` with none."""
-        agents = sess.bg_agent_labels()
-        shells = sess.bg_shell_labels()
-        labels = agents + shells
-        if not labels:
+        """The background work running as an answer goes out (roadmap
+        8.41) — ONE snapshot, taken once, so the block shown and the items
+        it keeps current describe the same agents and shells — or ``None``
+        with none. The agents are all this session's running background
+        agents; the shells only this job's own (``in_job``): a dev server
+        an earlier task left up is not repeated under every answer (the
+        pinned bar still counts it)."""
+        now = time.monotonic()
+        items = [{"id": agent_id, "kind": "agent", "label": info["label"],
+                  "started": info.get("started")}
+                 for agent_id, info in sess.bg_agents.items()]
+        items += [{"id": task_id, "kind": "shell",
+                   "label": sess.bg_shells[task_id]["label"],
+                   "started": sess.bg_shells[task_id].get("started")}
+                  for task_id in sess.job_shell_ids()]
+        if not items:
             return None
-        kinds = ["agent"] * len(agents) + ["shell"] * len(shells)
-        return {"line": _agents_line.running_line(labels, kinds=kinds,
-                                                  markdown=True, tr=i18n.for_sess(sess)),
-                "ids": list(sess.bg_agents) + list(sess.bg_shells),
-                "labels": labels, "kinds": kinds}
+        tr = i18n.for_sess(sess)
+        rec = {"items": items, "ids": [item["id"] for item in items],
+               "ends": {}, "sent_at": now}
+        return {"line": _agents_line.render_block(
+                    self._agents_view(sess, rec, now), tr),
+                "items": items, "ids": rec["ids"], "sent_at": now,
+                "reserve": _agents_line.reserve_bytes(tr)}
+
+    def _agents_view(self, sess: TrackedSession, rec: dict,
+                     now: float) -> _agents_line.BlockView:
+        """What an answer's block shows at *now*: its own items, each
+        ended only once its end is BG_AGENTS_SETTLE_SECONDS old (an agent
+        the still-running note brings back stays working), the activity
+        of the agents still working read live from ``bg_agents``."""
+        ends = rec.get("ends") or {}
+        sent_at = rec["sent_at"]
+
+        def settled(item_id: str) -> dict | None:
+            end = ends.get(item_id)
+            if end is not None and now - end["at"] >= BG_AGENTS_SETTLE_SECONDS:
+                return end
+            return None
+
+        rows = []
+        agent_ends = []
+        shells = {"running": 0, "finished": [], "stopped": []}
+        for item in rec["items"]:
+            end = settled(item["id"])
+            started = item.get("started")
+            if item["kind"] == "shell":
+                if end is None:
+                    shells["running"] += 1
+                else:
+                    ran = end["at"] - started if started is not None else end["at"] - sent_at
+                    shells["stopped" if end["outcome"] == "stopped"
+                           else "finished"].append(ran)
+                continue
+            if end is not None:
+                agent_ends.append(end["at"])
+                ran = end["at"] - (started if started is not None else sent_at)
+                rows.append(_agents_line.AgentRow(item["label"], True, ran))
+                continue
+            info = sess.bg_agents.get(item["id"]) or {}
+            rows.append(_agents_line.AgentRow(
+                item["label"], False, prose=info.get("prose", ""),
+                tool=info.get("tool", ""), tool_arg=info.get("tool_arg", ""),
+                description=info.get("desc", "")))
+        all_done = bool(rows) and len(agent_ends) == len(rows)
+        return _agents_line.BlockView(
+            agents=tuple(rows),
+            agents_done_seconds=(max(agent_ends) - sent_at) if all_done else None,
+            shells_running=shells["running"],
+            shells_finished=len(shells["finished"]),
+            shells_finished_seconds=max(shells["finished"], default=0.0),
+            shells_stopped=len(shells["stopped"]),
+            shells_stopped_seconds=max(shells["stopped"], default=0.0))
 
     def _remember_agents_line(
         self, sess: TrackedSession, chat_id: int, msg_id: int, text: str,
         agents: dict, is_rtl: bool,
     ) -> None:
-        """An answer carrying the ⏳ line landed as *msg_id*: keep exactly
-        what went out, so the ✅ edit rebuilds it rather than re-rendering."""
+        """An answer carrying the status block landed as *msg_id*: keep
+        exactly what went out before the block, so every later edit is
+        that text plus the block, never a re-render of the answer."""
+        tail = f"\n\n{agents['line']}"
+        if not text.endswith(tail):
+            log.warning("[%s] agents block: the sent text does not end with "
+                        "it - not kept current", sess.label)
+            return
+        sent_at = agents.get("sent_at") or time.monotonic()
         sess.add_agents_line({
-            "chat_id": chat_id, "msg_id": msg_id, "text": text,
-            "line": agents["line"], "ids": list(agents["ids"]),
-            "labels": list(agents["labels"]),
-            "kinds": list(agents.get("kinds") or []) or None,
-            "is_rtl": is_rtl,
-            "sent_wall": time.time(), "attempts": 0, "next_try": 0.0,
-            "gone_at": 0.0,
+            "chat_id": chat_id, "msg_id": msg_id,
+            "body": text[:-len(tail)], "shown": agents["line"],
+            "items": [dict(item) for item in agents["items"]],
+            "ids": list(agents["ids"]), "ends": {}, "is_rtl": is_rtl,
+            "sent_at": sent_at, "last_try": sent_at, "refused": "",
+            "final": False, "attempts": 0, "next_try": 0.0, "gone_at": 0.0,
         })
 
-    async def _settle_agents_lines(self, sess: TrackedSession,
-                                   now: float) -> None:
-        """Edit each due answer's ⏳ line to ✅, once (roadmap 8.41 R3).
+    async def _tick_agents_lines(self, sess: TrackedSession,
+                                 now: float) -> None:
+        """Keep each due answer's status block current (roadmap 8.41).
 
-        An ORNAMENT, skip-class edit: the flood gate may refuse it, never
-        queue an answer behind it. Each answer gets two attempts at most:
-        a refused or muted one (a muted try makes no call) is followed by
-        ONE more — after the mute lifts when there is one — and then the
-        line is left as sent: a courtesy, never worth more pressure. A
-        deleted message (or a blocked bot) ends it at once. A gone session
-        has none to settle: the GONE transition clears them
-        (SessionRegistry.transition), and /kill drops the whole entry.
-        """
+        An ORNAMENT, skip-class edit, and only when the block's visible
+        text changed: the flood gate may refuse it, never queue an answer,
+        a prompt or a card behind it. A live edit that is refused (budget
+        short, muted, minimal mode) is not tried again for the same text;
+        the next change tries. The final one (everything ended and
+        settled) gets two attempts at most: a refused or muted one is
+        followed by ONE more, after the mute lifts when there is one, and
+        then the block is left as last shown. A deleted message (or a
+        blocked bot) ends it at once. A gone session has none: the GONE
+        transition clears them (SessionRegistry.transition), and /kill
+        drops the whole entry."""
         for rec in sess.agents_lines_due(now):
-            if await self._settle_agents_line(sess, rec, now):
+            if await self._tick_agents_line(sess, rec, now):
                 sess.agents_lines = [
                     r for r in sess.agents_lines if r is not rec]
 
-    async def _settle_agents_line(self, sess: TrackedSession, rec: dict,
-                                  now: float) -> bool:
-        """One attempt at one answer's ✅ edit. True when that answer is
-        finished with (settled, gone, or given up)."""
-        done = _agents_line.done_line(
-            rec["labels"], time.time() - rec["sent_wall"],
-            kinds=rec.get("kinds"), markdown=True, tr=i18n.for_sess(sess))
-        text = rec["text"][: -len(rec["line"])] + done
-        rec["attempts"] += 1
+    async def _tick_agents_line(self, sess: TrackedSession, rec: dict,
+                                now: float) -> bool:
+        """One look at one answer's block, and at most one edit. True when
+        that answer is finished with (settled, gone, or given up)."""
+        final = bool(rec.get("final"))
+        if sess.busy_msg_id and rec["msg_id"] == sess.busy_msg_id:
+            # The message is the live card again: an edit here would
+            # replace the card with the old answer. Never; wait.
+            return False
+        block = _agents_line.render_block(
+            self._agents_view(sess, rec, now), i18n.for_sess(sess))
+        if block == rec["shown"]:
+            return final
+        if not final and block == rec.get("refused"):
+            return False
+        text = f"{rec['body']}\n\n{block}"
+        shown = f"{rec['body']}\n\n{rec['shown']}"
+        if (len(text.encode("utf-8")) > _RICH_LIMIT
+                or (len(text) > _CARD_CHAR_BUDGET and len(text) > len(shown))):
+            # Never past the ceiling, never longer past Telegram's fold:
+            # an ornament that does not fit is skipped.
+            log.info("[%s] agents block: the edit would not fit - skipped",
+                     sess.label)
+            if final:
+                return True
+            rec["refused"] = block
+            return False
         chat_id = rec["chat_id"]
+        rec["last_try"] = now
+        if final:
+            rec["attempts"] = rec.get("attempts", 0) + 1
         try:
             result = await edit_message_text_rich(
                 chat_id, rec["msg_id"], text, is_rtl=rec["is_rtl"],
                 kind="skip", priority=PRIORITY_ORNAMENT,
             )
         except (RichMessageGone, RichMessageBlocked):
-            log.info("[%s] agents line: the answer is gone — not edited",
+            log.info("[%s] agents block: the answer is gone — not edited",
                      sess.label)
             return True
         except (FloodSkipped, FloodMuted):
             # RichMessageFloodBanned is a FloodMuted: the chat is muted.
             result = None
         except Exception:
-            log.debug("[%s] agents line edit failed", sess.label,
+            log.debug("[%s] agents block edit failed", sess.label,
                       exc_info=True)
             result = None
         if result is not None:
-            log.info("[%s] agents line settled: %s", sess.label, done)
-            return True
+            rec["shown"] = block
+            rec["refused"] = ""
+            if final:
+                log.info("[%s] agents line settled", sess.label)
+            return final
+        if not final:
+            log.debug("[%s] agents block edit refused - waits for the next "
+                      "change", sess.label)
+            rec["refused"] = block
+            return False
         if rec["attempts"] >= 2:
             log.info("[%s] agents line left as sent — the edit was refused "
                      "twice", sess.label)
@@ -1135,7 +1244,7 @@ class NotifyMixin:
         # still last, and the full text follows as an attachment.
         body_limit = _RICH_LIMIT - len(f"{lead_md}\n\n".encode("utf-8"))
         if agents:
-            body_limit -= len(f"\n\n{agents['line']}".encode("utf-8"))
+            body_limit -= agents["reserve"]
         body = content
         overflow = len(content.encode("utf-8")) > body_limit
         if overflow:
@@ -1446,11 +1555,11 @@ class NotifyMixin:
             await self._send_owed_card(sess, reason="mute lifted")
             return
 
-        # ── the answer's ⏳ line is owed its ✅ (roadmap 8.41) ──
-        # Dispatched by `SessionMonitor._scan` once every agent the line
-        # named has been gone for the settle window.
+        # ── the answer's status block, kept current (roadmap 8.41) ──
+        # Dispatched by `SessionMonitor._scan` whenever a block's edit
+        # interval has passed; it is edited only when what it shows changed.
         if event == "agents_line_done":
-            await self._settle_agents_lines(
+            await self._tick_agents_lines(
                 sess, context.get("now") or time.monotonic())
             return
 
@@ -3017,7 +3126,7 @@ class NotifyMixin:
                 lead_plain = _result_line_plain(label) if card_kept else header_plain
                 body_limit = _RICH_LIMIT - len(f"{lead_md}\n\n".encode("utf-8"))
                 if agents:
-                    body_limit -= len(f"\n\n{agents['line']}".encode("utf-8"))
+                    body_limit -= agents["reserve"]
                 if not merged_delivered and content:
                     content_utf8 = content.encode("utf-8")
                     if len(content_utf8) > body_limit:

@@ -1,10 +1,25 @@
+{"k": "agents.act.agent", "src": "725242a6", "v": "Запускает агента"}
+{"k": "agents.act.editing", "src": "ee3a643f", "v": "Редактирует {file}"}
+{"k": "agents.act.fetching", "src": "1d031002", "v": "Загружает {site}"}
+{"k": "agents.act.reading", "src": "cdd7eff5", "v": "Читает {file}"}
+{"k": "agents.act.running", "src": "6e789785", "v": "Выполняет команду"}
+{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "Ищет {pattern}"}
+{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "Ищет в интернете: {query}"}
+{"k": "agents.act.tool", "src": "924babaf", "v": "Использует {tool}"}
+{"k": "agents.act.writing", "src": "ebe99935", "v": "Пишет {file}"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"few": "{n} агента", "many": "{n} агентов", "one": "{n} агент", "other": "{n} агента"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"few": "{n} команды", "many": "{n} команд", "one": "{n} команда", "other": "{n} команды"}}
-{"k": "agents.done_many", "src": "192b7df2", "v": "✅ {count}: готово ({clock})"}
-{"k": "agents.done_one", "src": "6caebe28", "v": "✅ {name}: готово ({clock})"}
-{"k": "agents.done_shell", "src": "e3681276", "v": "✅ команда: {name} - готово ({clock})"}
-{"k": "agents.names_more", "src": "8150de86", "v": {"few": "{names} и ещё {n}", "many": "{names} и ещё {n}", "one": "{names} и ещё {n}", "other": "{names} и ещё {n}"}}
-{"k": "agents.running", "src": "398a4343", "v": "⏳ {count} ещё в работе ({names}) - результаты придут сюда"}
+{"k": "agents.head.done", "src": "e20b4f9e", "v": {"few": "✅ Готово: {n} агента ({clock})", "many": "✅ Готово: {n} агентов ({clock})", "one": "✅ Готово: {n} агент ({clock})", "other": "✅ Готово: {n} агента ({clock})"}}
+{"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"few": "Завершено: {n} команды ({clock})", "many": "Завершено: {n} команд ({clock})", "one": "Завершено: {n} команда ({clock})", "other": "Завершено: {n} команды ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"few": "🖥 В работе: {n} команды", "many": "🖥 В работе: {n} команд", "one": "🖥 В работе: {n} команда", "other": "🖥 В работе: {n} команды"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"few": "Остановлено: {n} команды ({clock})", "many": "Остановлено: {n} команд ({clock})", "one": "Остановлено: {n} команда ({clock})", "other": "Остановлено: {n} команды ({clock})"}}
+{"k": "agents.head.working", "src": "6d8170f5", "v": {"few": "⏳ В работе: {n} агента", "many": "⏳ В работе: {n} агентов", "one": "⏳ В работе: {n} агент", "other": "⏳ В работе: {n} агента"}}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"few": "и ещё {n}", "many": "и ещё {n}", "one": "и ещё {n}", "other": "и ещё {n}"}}
+{"k": "agents.promise", "src": "29723a21", "v": "Результаты агентов придут сюда."}
+{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · готово ({clock})"}
+{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
 {"k": "ago.days", "src": "3650e46d", "v": {"few": "{n} д назад", "many": "{n} д назад", "one": "{n} д назад", "other": "{n} д назад"}}
 {"k": "ago.earlier", "src": "f12e996a", "v": "ранее"}
 {"k": "ago.hours", "src": "72292bb6", "v": {"few": "{n} ч назад", "many": "{n} ч назад", "one": "{n} ч назад", "other": "{n} ч назад"}}

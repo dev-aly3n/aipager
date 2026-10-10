@@ -1,10 +1,25 @@
+{"k": "agents.act.agent", "src": "725242a6", "v": "Memulai agen"}
+{"k": "agents.act.editing", "src": "ee3a643f", "v": "Mengedit {file}"}
+{"k": "agents.act.fetching", "src": "1d031002", "v": "Membuka {site}"}
+{"k": "agents.act.reading", "src": "cdd7eff5", "v": "Membaca {file}"}
+{"k": "agents.act.running", "src": "6e789785", "v": "Menjalankan perintah"}
+{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "Mencari {pattern}"}
+{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "Mencari di web: {query}"}
+{"k": "agents.act.tool", "src": "924babaf", "v": "Memakai {tool}"}
+{"k": "agents.act.writing", "src": "ebe99935", "v": "Menulis {file}"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"other": "{n} agen"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"other": "{n} shell"}}
-{"k": "agents.done_many", "src": "192b7df2", "v": "✅ {count} selesai ({clock})"}
-{"k": "agents.done_one", "src": "6caebe28", "v": "✅ {name} selesai ({clock})"}
-{"k": "agents.done_shell", "src": "e3681276", "v": "✅ shell: {name} - selesai ({clock})"}
-{"k": "agents.names_more", "src": "8150de86", "v": {"other": "{names} +{n} lainnya"}}
-{"k": "agents.running", "src": "398a4343", "v": "⏳ {count} masih berjalan ({names}) - hasilnya akan menyusul di sini"}
+{"k": "agents.head.done", "src": "e20b4f9e", "v": {"other": "✅ {n} agen selesai ({clock})"}}
+{"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"other": "{n} shell selesai ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"other": "🖥 {n} shell berjalan"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"other": "{n} shell dihentikan ({clock})"}}
+{"k": "agents.head.working", "src": "6d8170f5", "v": {"other": "⏳ {n} agen bekerja"}}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"other": "+{n} lainnya"}}
+{"k": "agents.promise", "src": "29723a21", "v": "Hasil dari agen akan menyusul di sini."}
+{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · selesai ({clock})"}
+{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
 {"k": "ago.days", "src": "3650e46d", "v": {"other": "{n} hari lalu"}}
 {"k": "ago.earlier", "src": "f12e996a", "v": "sebelumnya"}
 {"k": "ago.hours", "src": "72292bb6", "v": {"other": "{n} jam lalu"}}

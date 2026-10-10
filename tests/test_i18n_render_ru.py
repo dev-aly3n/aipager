@@ -40,6 +40,12 @@ def _form(key: str, n: int, **params) -> str:
     return text
 
 
+def _working_header(n: int, tr) -> str:
+    """The first line of an answer's status block with *n* agents working."""
+    view = agents_line.BlockView(agents=(agents_line.AgentRow("a", False),) * n)
+    return agents_line.render_block(view, tr).split("\n\n")[0]
+
+
 def test_plural_forms(mk_bot, run_async, monkeypatch):
     preferences.set_ui_language(i18n_surfaces.CHAT, "ru")
     ru = i18n.get("ru")
@@ -51,9 +57,8 @@ def test_plural_forms(mk_bot, run_async, monkeypatch):
         # The settled agent row.
         row = card_rows.render_md(ru, settled_agent_row("Explore", n, 65))
         assert row == _form("card.row.agent_done", n, agent="`Explore`", clock="1:05")
-        # The background agents line.
-        line = agents_line.running_line([f"a{i}" for i in range(n)], tr=ru)
-        assert line.startswith("⏳ " + _form("agents.count_agents", n))
+        # The answer's status block.
+        assert _working_header(n, ru) == _form("agents.head.working", n)
         # The full log's memory note.
         log = animation.build_full_log("x1", [("Read: /a", True)] * n, [], "", tr=ru)
         assert log.split("\n")[2] == _form("log.memory", n)
@@ -136,15 +141,10 @@ def test_the_words_after_a_count_agree_with_one_and_twenty_one(mk_bot, run_async
     preferences.set_ui_language(i18n_surfaces.CHAT, "ru")
     ru = i18n.get("ru")
     for n in (1, 2, 5, 21):
-        count = _form("agents.count_agents", n)
-        line = agents_line.running_line([f"a{i}" for i in range(n)], tr=ru)
-        assert line.startswith(f"⏳ {count} ещё в работе ("), (n, line)
-        shells = agents_line.running_line(["sleep 90"] * n, kinds=["shell"] * n, tr=ru)
-        assert shells.startswith(f"⏳ {_form('agents.count_shells', n)} ещё в работе ("), shells
         agents = _form("card.agents_typed", n, types="Explore")
         assert _waiting_line(n, ru) == f"🔄 **x1** · {agents} ещё в работе", n
     for n in (1, 21):
-        assert "работают" not in agents_line.running_line(["a"] * n, tr=ru)
+        assert "работают" not in _working_header(n, ru)
         assert "работают" not in _waiting_line(n, ru)
 
 
