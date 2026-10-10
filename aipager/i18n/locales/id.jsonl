@@ -1,12 +1,3 @@
-{"k": "agents.act.agent", "src": "725242a6", "v": "Memulai agen"}
-{"k": "agents.act.editing", "src": "ee3a643f", "v": "Mengedit {file}"}
-{"k": "agents.act.fetching", "src": "1d031002", "v": "Membuka {site}"}
-{"k": "agents.act.reading", "src": "cdd7eff5", "v": "Membaca {file}"}
-{"k": "agents.act.running", "src": "6e789785", "v": "Menjalankan perintah"}
-{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "Mencari {pattern}"}
-{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "Mencari di web: {query}"}
-{"k": "agents.act.tool", "src": "924babaf", "v": "Memakai {tool}"}
-{"k": "agents.act.writing", "src": "ebe99935", "v": "Menulis {file}"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"other": "{n} agen"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"other": "{n} shell"}}
 {"k": "agents.head.done", "src": "e20b4f9e", "v": {"other": "✅ {n} agen selesai ({clock})"}}

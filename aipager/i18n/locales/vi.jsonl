@@ -1,12 +1,3 @@
-{"k": "agents.act.agent", "src": "725242a6", "v": "Đang khởi chạy một tác tử"}
-{"k": "agents.act.editing", "src": "ee3a643f", "v": "Đang sửa {file}"}
-{"k": "agents.act.fetching", "src": "1d031002", "v": "Đang tải {site}"}
-{"k": "agents.act.reading", "src": "cdd7eff5", "v": "Đang đọc {file}"}
-{"k": "agents.act.running", "src": "6e789785", "v": "Đang chạy một lệnh"}
-{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "Đang tìm {pattern}"}
-{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "Đang tìm trên web: {query}"}
-{"k": "agents.act.tool", "src": "924babaf", "v": "Đang dùng {tool}"}
-{"k": "agents.act.writing", "src": "ebe99935", "v": "Đang ghi {file}"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"other": "{n} tác tử"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"other": "{n} shell"}}
 {"k": "agents.head.done", "src": "e20b4f9e", "v": {"other": "✅ {n} tác tử đã xong ({clock})"}}

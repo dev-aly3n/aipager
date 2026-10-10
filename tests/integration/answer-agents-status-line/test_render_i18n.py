@@ -104,8 +104,8 @@ def test_rtl_prose_is_isolated_and_untranslated(code):
 
 
 @pytest.mark.parametrize("code", RTL)
-def test_rtl_tool_argument_is_isolated(code):
-    assert f"{FSI}state.py{PDI}" in _render("working", code)
+def test_rtl_tool_activity_is_one_isolated_english_phrase(code):
+    assert f"{FSI}Reading state.py{PDI}" in _render("working", code)
 
 
 @pytest.mark.parametrize("code", RTL)

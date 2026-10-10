@@ -34,7 +34,7 @@ from dataclasses import dataclass
 # clock in the block's language).
 from aipager.bg_shells import duration  # noqa: F401
 from aipager.bidi_guard import reveal
-from aipager.i18n import Msg, Plural, Safe, Span
+from aipager.i18n import Msg, Plural, Safe
 
 #: A label (an agent type, a tool name) longer than this is cut, with an
 #: ellipsis.
@@ -138,50 +138,20 @@ PROMISE = Msg(
     note="Last line under an answer while background agents still work: their results "
          "will arrive in this chat")
 
-ACT_READING = Msg("agents.act.reading", "Reading {file}",
-                  note="What a background agent is doing: reading a file ({file} is its name)",
-                  eg={"file": "state.py"})
-ACT_WRITING = Msg("agents.act.writing", "Writing {file}",
-                  note="What a background agent is doing: writing a file ({file} is its name)",
-                  eg={"file": "final.md"})
-ACT_EDITING = Msg("agents.act.editing", "Editing {file}",
-                  note="What a background agent is doing: changing a file ({file} is its name)",
-                  eg={"file": "notify.py"})
-ACT_RUNNING = Msg("agents.act.running", "Running a command",
-                  note="What a background agent is doing: running a shell command (never "
-                       "shown)")
-ACT_SEARCHING = Msg("agents.act.searching", "Searching for {pattern}",
-                    note="What a background agent is doing: searching files for a text or "
-                         "file name pattern",
-                    eg={"pattern": "agents_line"})
-ACT_SEARCHING_WEB = Msg("agents.act.searching_web", "Searching the web for {query}",
-                        note="What a background agent is doing: a web search",
-                        eg={"query": "telegram bot api"})
-ACT_FETCHING = Msg("agents.act.fetching", "Fetching {site}",
-                   note="What a background agent is doing: loading a web page from a site",
-                   eg={"site": "docs.python.org"})
-ACT_AGENT = Msg("agents.act.agent", "Starting an agent",
-                note="What a background agent is doing: starting another agent of its own")
-ACT_TOOL = Msg("agents.act.tool", "Using {tool}",
-               note="What a background agent is doing: using a tool ({tool} is the tool's "
-                    "name, never translated)",
-               eg={"tool": "TodoWrite"})
-
-#: Tool name -> (phrase, the parameter its argument fills, or "").
-_TOOL_PHRASES: dict[str, tuple[Msg, str]] = {
-    "Read": (ACT_READING, "file"),
-    "Write": (ACT_WRITING, "file"),
-    "Edit": (ACT_EDITING, "file"),
-    "MultiEdit": (ACT_EDITING, "file"),
-    "NotebookEdit": (ACT_EDITING, "file"),
-    "Bash": (ACT_RUNNING, ""),
-    "Grep": (ACT_SEARCHING, "pattern"),
-    "Glob": (ACT_SEARCHING, "pattern"),
-    "WebSearch": (ACT_SEARCHING_WEB, "query"),
-    "WebFetch": (ACT_FETCHING, "site"),
-    "Agent": (ACT_AGENT, ""),
-    "Task": (ACT_AGENT, ""),
+#: What an agent is doing, in Claude Code's own English words and never
+#: translated (operator, 2026-10-10: show "Verifying the mutation copy
+#: matches the worktree", not a translated "running a command"): a tool that
+#: names a file, a pattern, a query or a site reads "<phrase> <argument>";
+#: a Bash, Agent or Task call shows its own description (Claude's words,
+#: never the command), else the phrase alone.
+_TOOL_PHRASES: dict[str, str] = {
+    "Read": "Reading", "Write": "Writing", "Edit": "Editing", "MultiEdit": "Editing",
+    "NotebookEdit": "Editing", "Grep": "Searching for", "Glob": "Searching for",
+    "WebSearch": "Searching the web for", "WebFetch": "Fetching",
+    "Bash": "Running a command", "Agent": "Starting an agent", "Task": "Starting an agent",
 }
+#: Tools whose argument is the call's own description, shown alone.
+_DESCRIBED = frozenset({"Bash", "Agent", "Task"})
 
 
 @dataclass(frozen=True)
@@ -267,16 +237,19 @@ def _trim(text: str, limit: int) -> str:
     return cut.rstrip() + "…"
 
 
-def _tool_phrase(tool: str, arg: str, tr) -> Safe | None:
+def _tool_phrase(tool: str, arg: str) -> str | None:
+    """The agent's tool call as Claude Code would say it, in English."""
     if not tool:
         return None
-    phrase, param = _TOOL_PHRASES.get(tool, (None, ""))
-    arg = _bs(_cut(reveal(arg or ""), ARG_MAX))
-    if phrase is not None and not param:
-        return tr.md(phrase)
+    arg = reveal(arg or "")
+    if tool in _DESCRIBED:
+        text = first_line(arg) or _TOOL_PHRASES[tool]
+        return _bs(text)
+    phrase = _TOOL_PHRASES.get(tool)
+    arg = _cut(arg, ARG_MAX)
     if phrase is not None and arg:
-        return tr.md(phrase, **{param: arg})
-    return tr.md(ACT_TOOL, tool=Span(_md_escape(_label(tool))))
+        return _bs(f"{phrase} {arg}")
+    return _bs(f"Using {_label(tool)}")
 
 
 def _activity(row: AgentRow, tr):
@@ -286,7 +259,7 @@ def _activity(row: AgentRow, tr):
     prose = first_line(row.prose)
     if prose:
         return _bs(prose)
-    phrase = _tool_phrase(row.tool, row.tool_arg, tr)
+    phrase = _tool_phrase(row.tool, row.tool_arg)
     if phrase is not None:
         return phrase
     desc = first_line(row.description)

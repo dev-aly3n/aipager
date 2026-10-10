@@ -30,10 +30,12 @@ OLD_KEYS = ("agents.running", "agents.names_more", "agents.done_one",
 NEW_KEYS = ("agents.head.working", "agents.head.done", "agents.head.shells_running",
             "agents.head.shells_finished", "agents.head.shells_stopped",
             "agents.head.join", "agents.row.working", "agents.row.working_bare",
-            "agents.row.done", "agents.more", "agents.promise",
-            "agents.act.reading", "agents.act.writing", "agents.act.editing",
-            "agents.act.running", "agents.act.searching", "agents.act.searching_web",
-            "agents.act.fetching", "agents.act.agent", "agents.act.tool")
+            "agents.row.done", "agents.more", "agents.promise")
+#: The activity phrases became Claude Code's English words, never translated
+#: (operator, 2026-10-10): their keys are gone from every catalog.
+OLD_ACTIVITY_KEYS = ("agents.act.reading", "agents.act.writing", "agents.act.editing",
+                     "agents.act.running", "agents.act.searching", "agents.act.searching_web",
+                     "agents.act.fetching", "agents.act.agent", "agents.act.tool")
 
 
 def _sha_tree(root: Path) -> str:
@@ -150,12 +152,12 @@ def test_every_catalog_holds_every_new_key(code):
 @pytest.mark.parametrize("code", TRANSLATED)
 def test_no_catalog_keeps_an_old_key(code):
     keys = set(_keys(LOCALES / f"{code}.jsonl"))
-    assert [k for k in OLD_KEYS if k in keys] == []
+    assert [k for k in OLD_KEYS + OLD_ACTIVITY_KEYS if k in keys] == []
 
 
 def test_the_source_has_no_old_key():
     keys = set(_keys(SOURCE))
-    assert [k for k in OLD_KEYS if k in keys] == []
+    assert [k for k in OLD_KEYS + OLD_ACTIVITY_KEYS if k in keys] == []
 
 
 def test_the_source_has_every_new_key():

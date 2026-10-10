@@ -1,12 +1,3 @@
-{"k": "agents.act.agent", "src": "725242a6", "v": "Запускає агента"}
-{"k": "agents.act.editing", "src": "ee3a643f", "v": "Редагує {file}"}
-{"k": "agents.act.fetching", "src": "1d031002", "v": "Завантажує {site}"}
-{"k": "agents.act.reading", "src": "cdd7eff5", "v": "Читає {file}"}
-{"k": "agents.act.running", "src": "6e789785", "v": "Виконує команду"}
-{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "Шукає {pattern}"}
-{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "Шукає в інтернеті: {query}"}
-{"k": "agents.act.tool", "src": "924babaf", "v": "Використовує {tool}"}
-{"k": "agents.act.writing", "src": "ebe99935", "v": "Пише {file}"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"few": "{n} агенти", "many": "{n} агентів", "one": "{n} агент", "other": "{n} агента"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"few": "{n} команди", "many": "{n} команд", "one": "{n} команда", "other": "{n} команди"}}
 {"k": "agents.head.done", "src": "e20b4f9e", "v": {"few": "✅ Готово: {n} агенти ({clock})", "many": "✅ Готово: {n} агентів ({clock})", "one": "✅ Готово: {n} агент ({clock})", "other": "✅ Готово: {n} агента ({clock})"}}

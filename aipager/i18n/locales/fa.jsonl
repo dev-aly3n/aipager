@@ -1,12 +1,3 @@
-{"k": "agents.act.agent", "src": "725242a6", "v": "در حال راه‌اندازی یک ایجنت"}
-{"k": "agents.act.editing", "src": "ee3a643f", "v": "در حال ویرایش {file}"}
-{"k": "agents.act.fetching", "src": "1d031002", "v": "در حال دریافت {site}"}
-{"k": "agents.act.reading", "src": "cdd7eff5", "v": "در حال خواندن {file}"}
-{"k": "agents.act.running", "src": "6e789785", "v": "در حال اجرای یک دستور"}
-{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "در حال جستجوی {pattern}"}
-{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "در حال جستجو در وب: {query}"}
-{"k": "agents.act.tool", "src": "924babaf", "v": "در حال استفاده از {tool}"}
-{"k": "agents.act.writing", "src": "ebe99935", "v": "در حال نوشتن {file}"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"one": "{n} ایجنت", "other": "{n} ایجنت"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"one": "{n} دستور", "other": "{n} دستور"}}
 {"k": "agents.head.done", "src": "e20b4f9e", "v": {"one": "✅ کار {n} ایجنت تمام شد ({clock})", "other": "✅ کار {n} ایجنت تمام شد ({clock})"}}

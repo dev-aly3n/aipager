@@ -2359,6 +2359,10 @@ KNOWN_EXTRA: dict[str, tuple[str, ...]] = {
                     "Writing", "for", "the", "pipeline", "Running", "full", "suite",
                     "pipeline-runner", "state.py", "final.md", "notify.py", "a.py",
                     "n.ipynb", "agents\\_line", "agents_line", "telegram bot api",
-                    "docs.python.org", "TodoWrite", "Read"),
+                    "docs.python.org", "TodoWrite", "Read",
+                    # The activity phrases: Claude Code's English words,
+                    # never translated (operator, 2026-10-10).
+                    "Reading", "Editing", "Searching", "web", "Fetching", "command",
+                    "Starting", "an", "agent", "Using"),
 }
 from tests import i18n_surfaces_p3a  # noqa: E402,F401

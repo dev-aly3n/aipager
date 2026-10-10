@@ -3,6 +3,7 @@
  "aipager/_test_guard.py": 13,
  "aipager/bg_shells.py": 8,
  "aipager/bidi_guard.py": 1,
+ "aipager/bot/agents_line.py": 7,
  "aipager/bot/animation.py": 9,
  "aipager/bot/auth.py": 1,
  "aipager/bot/callbacks.py": 6,

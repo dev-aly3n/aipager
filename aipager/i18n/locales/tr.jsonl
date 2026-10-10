@@ -1,12 +1,3 @@
-{"k": "agents.act.agent", "src": "725242a6", "v": "Bir ajan başlatılıyor"}
-{"k": "agents.act.editing", "src": "ee3a643f", "v": "{file} düzenleniyor"}
-{"k": "agents.act.fetching", "src": "1d031002", "v": "{site} açılıyor"}
-{"k": "agents.act.reading", "src": "cdd7eff5", "v": "{file} okunuyor"}
-{"k": "agents.act.running", "src": "6e789785", "v": "Bir komut çalıştırılıyor"}
-{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "{pattern} aranıyor"}
-{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "Web'de aranıyor: {query}"}
-{"k": "agents.act.tool", "src": "924babaf", "v": "{tool} kullanılıyor"}
-{"k": "agents.act.writing", "src": "ebe99935", "v": "{file} yazılıyor"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"one": "{n} ajan", "other": "{n} ajan"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"one": "{n} kabuk komutu", "other": "{n} kabuk komutu"}}
 {"k": "agents.head.done", "src": "e20b4f9e", "v": {"one": "✅ {n} ajan tamamlandı ({clock})", "other": "✅ {n} ajan tamamlandı ({clock})"}}

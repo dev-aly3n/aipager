@@ -281,18 +281,23 @@ def test_rtl_a_backslash_before_a_bracket_leaves_no_mark_unescaped(field, code):
     assert [s for s in _isolates(row) if _unescaped_meta(s)] == []
 
 
+#: A tool's activity is one English phrase (operator, 2026-10-10), isolated
+#: whole in an RTL row: the raw value reads back after its phrase word.
+_PHRASE = {"tool-arg": "Reading ", "tool-name": "Using "}
+
+
 @pytest.mark.parametrize("code", ["fa", "ar"])
 @pytest.mark.parametrize("field", FA_FIELDS)
 def test_rtl_a_backslash_before_a_bracket_reads_back_as_written(field, code):
     row = _fa_row(field, f"q {BS}[z]", code)
-    assert f"q {BS}[z]" in [_unescape(s) for s in _isolates(row)]
+    assert _PHRASE.get(field, "") + f"q {BS}[z]" in [_unescape(s) for s in _isolates(row)]
 
 
 @pytest.mark.parametrize("code", ["fa", "ar"])
 @pytest.mark.parametrize("field", FA_FIELDS)
 def test_rtl_a_trailing_backslash_is_an_even_run_before_the_isolate_closes(field, code):
     row = _fa_row(field, "end" + BS, code)
-    shown = [s for s in _isolates(row) if _unescape(s) == "end" + BS]
+    shown = [s for s in _isolates(row) if _unescape(s) == _PHRASE.get(field, "") + "end" + BS]
     assert [s for s in shown if _run_before(s, len(s)) % 2] == [] and shown
 
 

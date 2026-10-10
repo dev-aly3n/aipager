@@ -240,8 +240,11 @@ def test_tool_phrase(tool, arg, phrase):
     assert _row(tool=tool, tool_arg=arg) == f"○ **t** · {phrase}"
 
 
-def test_bash_never_shows_its_command():
-    assert "secret" not in _row(tool="Bash", tool_arg="cat secret.txt")
+def test_bash_shows_its_description_or_running_a_command():
+    # tool_arg is what the hook recorded: the call's description, never
+    # its command (tests/integration/.../test_hook_capture.py).
+    assert _row(tool="Bash", tool_arg="Verify the build") == "○ **t** · Verify the build"
+    assert _row(tool="Bash", tool_arg="") == "○ **t** · Running a command"
 
 
 def test_a_file_tool_with_no_file_names_the_tool():

@@ -1,12 +1,3 @@
-{"k": "agents.act.agent", "src": "725242a6", "v": "Lancement d'un agent"}
-{"k": "agents.act.editing", "src": "ee3a643f", "v": "Modification de {file}"}
-{"k": "agents.act.fetching", "src": "1d031002", "v": "Chargement de {site}"}
-{"k": "agents.act.reading", "src": "cdd7eff5", "v": "Lecture de {file}"}
-{"k": "agents.act.running", "src": "6e789785", "v": "Exécution d'une commande"}
-{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "Recherche de {pattern}"}
-{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "Recherche sur le web : {query}"}
-{"k": "agents.act.tool", "src": "924babaf", "v": "Utilisation de {tool}"}
-{"k": "agents.act.writing", "src": "ebe99935", "v": "Écriture de {file}"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"many": "{n} agents", "one": "{n} agent", "other": "{n} agents"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"many": "{n} shells", "one": "{n} shell", "other": "{n} shells"}}
 {"k": "agents.head.done", "src": "e20b4f9e", "v": {"many": "✅ {n} agents terminés ({clock})", "one": "✅ {n} agent terminé ({clock})", "other": "✅ {n} agents terminés ({clock})"}}

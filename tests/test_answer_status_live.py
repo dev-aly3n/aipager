@@ -109,8 +109,9 @@ def test_an_agents_tool_is_its_row_and_a_command_never_shows(mk_bot, run_async, 
           tool_input={"command": "rm -rf build", "description": "clean"})
     _settle(run_async, bot, sess, time.monotonic() + AGENTS_LINE_EDIT_INTERVAL)
     last = _markdown(_edits(wire, before)[-1])
-    assert "○ **Explore** · Running a command" in last
-    assert "rm -rf" not in last and "clean" not in last
+    # The call's own description (Claude's words), never its command.
+    assert "○ **Explore** · clean" in last
+    assert "rm -rf" not in last
 
 
 def test_prose_stays_ahead_of_a_later_tool(mk_bot, run_async, wire):
@@ -588,7 +589,7 @@ def test_a_merged_answer_is_not_the_next_turns_card(mk_bot, run_async, wire):
     ("WebSearch", {"query": "telegram  bot\napi"}, "telegram bot api"),
     ("WebFetch", {"url": "https://docs.python.org/3/library/re.html"}, "docs.python.org"),
     ("WebFetch", {"url": "not a url"}, ""),
-    ("Bash", {"command": "rm -rf /", "description": "wipe"}, ""),
+    ("Bash", {"command": "rm -rf /", "description": "wipe"}, "wipe"),
     ("Read", {"file_path": 7}, ""),
 ], ids=["read", "write", "edit", "multiedit-dir", "notebook", "grep", "glob", "websearch",
         "webfetch", "webfetch-bad", "bash", "read-not-str"])

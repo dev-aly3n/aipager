@@ -1,12 +1,3 @@
-{"k": "agents.act.agent", "src": "725242a6", "v": "에이전트 시작 중"}
-{"k": "agents.act.editing", "src": "ee3a643f", "v": "{file} 수정 중"}
-{"k": "agents.act.fetching", "src": "1d031002", "v": "{site} 가져오는 중"}
-{"k": "agents.act.reading", "src": "cdd7eff5", "v": "{file} 읽는 중"}
-{"k": "agents.act.running", "src": "6e789785", "v": "명령 실행 중"}
-{"k": "agents.act.searching", "src": "e3ecf2fe", "v": "{pattern} 검색 중"}
-{"k": "agents.act.searching_web", "src": "4aec52ea", "v": "웹 검색 중: {query}"}
-{"k": "agents.act.tool", "src": "924babaf", "v": "{tool} 사용 중"}
-{"k": "agents.act.writing", "src": "ebe99935", "v": "{file} 쓰는 중"}
 {"k": "agents.count_agents", "src": "263711d4", "v": {"other": "에이전트 {n}개"}}
 {"k": "agents.count_shells", "src": "9b747b65", "v": {"other": "셸 {n}개"}}
 {"k": "agents.head.done", "src": "e20b4f9e", "v": {"other": "✅ 에이전트 {n}개 완료 ({clock})"}}

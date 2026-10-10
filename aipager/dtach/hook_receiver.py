@@ -384,9 +384,12 @@ def _clean_text(value, limit: int) -> str:
 def _activity_arg(name: str, inp) -> str:
     """The short argument of a subagent's tool call that the status block
     under an answer names: a file's base name, a search pattern, a web
-    query, a site's host. Never a command. "" for anything else."""
+    query, a site's host, or a Bash, Agent or Task call's own description
+    (Claude's words for it). Never a command. "" for anything else."""
     if not isinstance(inp, dict):
         return ""
+    if name in ("Bash", "Agent", "Task"):
+        return _clean_text(inp.get("description", ""), 120)
     value = ""
     if name in ("Read", "Write", "Edit", "MultiEdit"):
         value = inp.get("file_path", "")

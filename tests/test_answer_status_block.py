@@ -162,25 +162,33 @@ def test_blank_prose_falls_through():
     ("Edit", "notify.py", "Editing notify.py"),
     ("MultiEdit", "a.py", "Editing a.py"),
     ("NotebookEdit", "n.ipynb", "Editing n.ipynb"),
-    ("Bash", "rm -rf /", "Running a command"),
+    ("Bash", "Verify the mutation copy matches the worktree",
+     "Verify the mutation copy matches the worktree"),
+    ("Bash", "", "Running a command"),
     ("Grep", "agents_line", "Searching for agents\\_line"),
     ("Glob", "*.py", "Searching for \\*.py"),
     ("WebSearch", "telegram bot api", "Searching the web for telegram bot api"),
     ("WebFetch", "docs.python.org", "Fetching docs.python.org"),
+    ("Agent", "Ship phase 5", "Ship phase 5"),
     ("Agent", "", "Starting an agent"),
     ("Task", "", "Starting an agent"),
     ("TodoWrite", "", "Using TodoWrite"),
     ("Read", "", "Using Read"),
     ("my_tool", "", "Using my\\_tool"),
-], ids=["read", "write", "edit", "multiedit", "notebookedit", "bash", "grep", "glob",
-        "websearch", "webfetch", "agent", "task", "other", "file-without-arg", "escaped-name"])
+], ids=["read", "write", "edit", "multiedit", "notebookedit", "bash-described", "bash",
+        "grep", "glob", "websearch", "webfetch", "agent-described", "agent", "task", "other",
+        "file-without-arg", "escaped-name"])
 def test_each_tool_phrase(tool, arg, text):
     assert _activity(A("t", False, tool=tool, tool_arg=arg)) == text
 
 
-def test_a_command_is_never_shown():
-    assert "rm" not in al.render_block(V(agents=(A("t", False, tool="Bash",
-                                                    tool_arg="rm -rf /"),)))
+def test_a_bash_row_shows_its_description_in_english_in_every_language():
+    # The hook records a Bash call's description, never its command (see
+    # tests/test_answer_status_live.py); the row shows it as written.
+    for code in ("en", "fa", "ru"):
+        block = al.render_block(V(agents=(A("t", False, tool="Bash",
+                                            tool_arg="Verify the build"),)), tr=i18n.get(code))
+        assert "Verify the build" in block, code
 
 
 def test_a_long_argument_is_cut():
@@ -328,7 +336,7 @@ def test_rtl_claudes_text_and_names_are_isolated_never_converted(code):
         A("Plan", False, description="Audit 3 modules"))), tr)
     assert f"**{FSI}agent7{PDI}**" in block
     assert f"{FSI}Checked 42 files{PDI}" in block
-    assert f"{FSI}v2.py{PDI}" in block
+    assert f"{FSI}Reading v2.py{PDI}" in block      # the English activity, whole
     assert f"{FSI}Audit 3 modules{PDI}" in block
 
 
@@ -379,8 +387,10 @@ def test_zh_hans_frame_words_are_translated():
     tr = i18n.get("zh-Hans")
     for state, view in STATES.items():
         block = al.render_block(view, tr)
+        # The frame words are Chinese; the activity stays Claude Code's
+        # English ("Reading state.py"), by design (operator, 2026-10-10).
         for word in ("agent", "working", "shell running", "done", "finished",
-                     "stopped", "Results", "Reading", "Running a command"):
+                     "stopped", "Results"):
             assert word not in block, (state, word, block)
 
 

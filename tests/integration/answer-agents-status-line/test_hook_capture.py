@@ -184,8 +184,21 @@ def test_an_agents_bash_never_shows_the_command(bot, sess, wire, run_async):
     bb.hook(run_async, recv, sess, "PreToolUse", agent_id="a1",
             tool_name="Bash",
             tool_input={"command": "cat topsecret.env", "description": "peek"})
-    assert _row_of(_block(run_async, bot, sess, wire), "Explore") == \
-        "○ **Explore** · Running a command"
+    # Its own description (Claude's words), never the command.
+    row = _row_of(_block(run_async, bot, sess, wire), "Explore")
+    assert row == "○ **Explore** · peek"
+    assert "topsecret" not in row
+
+
+def test_an_agents_bash_with_no_description_says_running_a_command(bot, sess, wire,
+                                                                    run_async):
+    recv = bb.receiver(bot.registry)
+    bb.hook(run_async, recv, sess, "SubagentStart", agent_id="a1",
+            agent_type="Explore")
+    bb.hook(run_async, recv, sess, "PreToolUse", agent_id="a1",
+            tool_name="Bash", tool_input={"command": "cat topsecret.env"})
+    row = _row_of(_block(run_async, bot, sess, wire), "Explore")
+    assert row == "○ **Explore** · Running a command"
 
 
 def test_an_agents_grep_shows_the_pattern(bot, sess, wire, run_async):
