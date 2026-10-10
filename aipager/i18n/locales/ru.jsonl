@@ -113,6 +113,14 @@
 {"k": "app.reason.perms_admin", "src": "7202c2fd", "v": "Переключиться в режим Авто может только админ."}
 {"k": "app.reason.queue_empty", "src": "35da34dc", "v": "В очереди нечего очищать."}
 {"k": "app.reason.queue_full", "src": "2bf9f868", "v": "Очередь заполнена ({cap} в ожидании) - очисти её или дождись, пока она разойдётся."}
+{"k": "appcmd.btn.open", "src": "0bfb9312", "v": "📱 Открыть Mini App"}
+{"k": "appcmd.cant_start", "src": "24d56baf", "v": "📱 Mini App не может запуститься на этой машине - похоже, установка неполная.\n\nВсё остальное работает; попроси того, кто это настраивал, переустановить aipager."}
+{"k": "appcmd.in_group", "src": "edb98eb2", "v": "📱 Mini App работает только в личном чате - напиши боту в личку и отправь /app там."}
+{"k": "appcmd.no_dm", "src": "96dd0730", "v": "Mini App открывается из твоего личного чата с ботом. Попроси оператора добавить тебя."}
+{"k": "appcmd.not_enabled", "src": "31154296", "v": "Сервер Mini App не включён на этой машине.\nПопроси оператора выполнить {command} и перезапустить сервис aipager."}
+{"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 Ссылка на Mini App ещё настраивается - попробуй /app снова через несколько секунд."}
+{"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 Этот бот не настроен общаться с тобой. Попроси оператора добавить твой Telegram ID ({user_id}) через {command}."}
+{"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "Нажми, чтобы открыть панель aipager:"}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} заблокирован"}
 {"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {tool} заблокирован для {person}"}
 {"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {tool} заблокирован для {person} (роль {role})"}
@@ -178,6 +186,7 @@
 {"k": "card.verb.working", "src": "3b4dfc97", "v": "Работает"}
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
 {"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} ещё в работе"}
+{"k": "chatmove.notice", "src": "01364acb", "v": "Telegram обновил эту группу. aipager переехал вместе с ней, ничего делать не нужно."}
 {"k": "cmd.app", "src": "486dfc4e", "v": "Открыть панель Mini App"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "Что ты можешь сделать"}
 {"k": "cmd.language", "src": "9dc3a234", "v": "Язык сообщений aipager"}
@@ -211,6 +220,26 @@
 {"k": "grp.help_talk", "src": "07beac8e", "v": "<b>Общение:</b> ответь на сообщение сессии или упомяни {mention} · /&lt;имя&gt; сообщение"}
 {"k": "grp.help_talk_no_username", "src": "4c1fc9fd", "v": "<b>Общение:</b> ответь на сообщение сессии или упомяни бота · /&lt;имя&gt; сообщение"}
 {"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "Пиши от своего имени, чтобы пользоваться ботом."}
+{"k": "held.late_marker", "src": "e38c307b", "v": {"few": "⏳ доставлено с опозданием (задержано на {n} минуты из-за ограничения скорости Telegram)", "many": "⏳ доставлено с опозданием (задержано на {n} минут из-за ограничения скорости Telegram)", "one": "⏳ доставлено с опозданием (задержано на {n} минуту из-за ограничения скорости Telegram)", "other": "⏳ доставлено с опозданием (задержано на {n} минуты из-за ограничения скорости Telegram)"}}
+{"k": "held.too_old", "src": "7391de5a", "v": "Это сообщение слишком старое, чтобы его отправить; отправь его ещё раз."}
+{"k": "help.admin", "src": "29ac6154", "v": "<b>Админ:</b> /update (обновить aipager и Claude Code)"}
+{"k": "help.control", "src": "8bb13acf", "v": "<b>Управление:</b> /stop · /now (отправить очередь) · /clearqueue"}
+{"k": "help.manage", "src": "75144040", "v": "<b>Сессии:</b> /status, затем ⋮ (перезапуск, переименование, diff, завершение, удаление)"}
+{"k": "help.settings", "src": "d51d2171", "v": "<b>Настройки:</b> /settings · /mode (Авто или Спрашивать)"}
+{"k": "help.start", "src": "276a9c1b", "v": "<b>Начать:</b> /new имя · /resume"}
+{"k": "help.talk_dm", "src": "c3ef5195", "v": "<b>Говорить:</b> просто пиши (уйдёт в сессию ✍️) · ответь на сообщение · /&lt;имя&gt; сообщение"}
+{"k": "help.talk_group", "src": "d8843feb", "v": "<b>Говорить:</b> ответь на сообщение сессии или упомяни {bot} · /&lt;имя&gt; сообщение"}
+{"k": "help.talk_group_unnamed", "src": "4c1fc9fd", "v": "<b>Говорить:</b> ответь на сообщение сессии или упомяни бота · /&lt;имя&gt; сообщение"}
+{"k": "help.tip", "src": "67a93e6b", "v": "<i>Совет: нажатие на команду сразу её отправляет. Удерживай её (телефон) или нажми Tab (компьютер), чтобы сначала дописать текст.</i>"}
+{"k": "help.title", "src": "8fffe930", "v": "<b>Как пользоваться aipager</b>"}
+{"k": "home.btn.new", "src": "19b62fc4", "v": "🆕 Новая сессия"}
+{"k": "home.btn.resume", "src": "12a3163c", "v": "↩️ Возобновить"}
+{"k": "home.btn.settings", "src": "b1f2d607", "v": "⚙️ Настройки"}
+{"k": "home.dm_target", "src": "099ec348", "v": "✍️ Сообщения уходят в <b>{session}</b>."}
+{"k": "home.help_hint", "src": "d62b118c", "v": "<i>/help покажет всё, что ты можешь сделать.</i>"}
+{"k": "home.start_one", "src": "ef9f6ba9", "v": "Начни сессию командой /new."}
+{"k": "home.tap_session", "src": "f14797d7", "v": "Нажми на сессию на клавиатуре, чтобы говорить с ней."}
+{"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code прямо из Telegram"}
 {"k": "kb.app", "src": "59b36d46", "v": "📱 Приложение"}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« Назад"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "Команды"}
@@ -252,11 +281,148 @@
 {"k": "log.final_answer", "src": "f0ea5fc3", "v": "## Итоговый ответ"}
 {"k": "log.memory", "src": "df926a90", "v": {"few": "_В памяти последние {n} строки инструментов; более старые строки очень долгих ходов могут уже исчезнуть._", "many": "_В памяти последние {n} строк инструментов; более старые строки очень долгих ходов могут уже исчезнуть._", "one": "_В памяти последняя {n} строка инструментов; более старые строки очень долгих ходов могут уже исчезнуть._", "other": "_В памяти последние {n} строки инструментов; более старые строки очень долгих ходов могут уже исчезнуть._"}}
 {"k": "log.title", "src": "2d9e96f5", "v": "# {session} - полный лог"}
+{"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ Не удалось скачать файлы: {names}"}
+{"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ Не удалось скачать файл: {names}"}
+{"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ Не удалось скачать файлы: {names} (не вошли в альбом)"}
+{"k": "media.album_left_out_one", "src": "c91cd106", "v": "❌ Не удалось скачать файл: {names} (не вошёл в альбом)"}
+{"k": "media.brew_footer", "src": "accb7c5a", "v": "<i>Важно: будущий {command} может пересобрать venv формулы и удалить faster-whisper. Если голос остановится, снова нажми «Установить».</i>"}
+{"k": "media.btn.cancel", "src": "77dfd213", "v": "Отмена"}
+{"k": "media.btn.install", "src": "75e85c25", "v": "📦 Установить голос"}
+{"k": "media.btn.restart", "src": "ec740c6a", "v": "🔄 Перезапустить сервис сейчас"}
+{"k": "media.download_failed", "src": "cd9ea0b9", "v": "❌ Не удалось скачать голосовое сообщение."}
+{"k": "media.file_download_failed", "src": "fd5ed5a0", "v": "❌ Не удалось скачать файл: {name}"}
+{"k": "media.file_too_big", "src": "85d942ae", "v": "⚠️ Файл весит {size} МБ. API ботов Telegram позволяет скачивать файлы до {limit} МБ. Раздели его или вставь содержимое текстом."}
+{"k": "media.heard", "src": "3164d86a", "v": "🎙️ <i>Услышано:</i> {text}"}
+{"k": "media.install_cant_start", "src": "8f8e8cec", "v": "❌ Не удалось запустить установщик: {error}"}
+{"k": "media.install_failed", "src": "31267ed7", "v": "❌ Установка не удалась (код выхода {code}):\n<pre>{output}</pre>"}
+{"k": "media.install_no_recipe", "src": "065dd801", "v": "⚠️ В этой сборке aipager нет рецепта установки для\nголосового модуля. Обнови aipager и попробуй снова."}
+{"k": "media.install_working", "src": "7ef2a045", "v": "📦 Устанавливаю голосовой модуль - всё ещё работаю… ({seconds} с)"}
+{"k": "media.installed", "src": "6e9fbf9b", "v": "✅ Установлено. Чтобы загрузить новый модуль, нужно перезапустить сервис aipager."}
+{"k": "media.installing", "src": "1978f3ef", "v": "📦 Устанавливаю голосовой модуль…"}
+{"k": "media.needs_extra", "src": "153956ee", "v": "⚠️ Для голосовых сообщений нужен дополнительный голосовой модуль (~{install} МБ установка · ~{model} МБ модель при первом использовании)."}
+{"k": "media.no_speech", "src": "8d84c0b6", "v": "⚠️ Не удалось разобрать речь."}
+{"k": "media.not_installed", "src": "911c9456", "v": "faster-whisper не установлен. Выполни:\n    {uv}\nили:\n    {pip}"}
+{"k": "media.restart_busy_update", "src": "a6e0a620", "v": "⏳ Не перезапускаю: идёт обновление aipager или оно вот-вот перезапустит сервис. Попробуй снова, когда оно закончится."}
+{"k": "media.restart_cant_open", "src": "d591e073", "v": "⚠️ Не удалось открыть {path}: {error}\nПерезапусти вручную."}
+{"k": "media.restart_cant_schedule", "src": "aa7ee7e7", "v": "⚠️ Не удалось запланировать перезапуск: {detail}\nПерезапусти вручную."}
+{"k": "media.restart_cant_spawn", "src": "30877338", "v": "⚠️ Не удалось запустить замену: {error}\nПерезапусти вручную."}
+{"k": "media.restart_failed_start", "src": "0aad8df0", "v": "⚠️ Новый сервис не запустился. Перезапусти вручную."}
+{"k": "media.restart_killmode", "src": "08a54162", "v": "⚠️ Не перезапускаю: KillMode сервиса остановит твои сессии."}
+{"k": "media.restart_launchctl", "src": "1c55d98b", "v": "🔄 Перезапускаю через {command}…"}
+{"k": "media.restart_locked", "src": "3f061ea2", "v": "⏳ Не перезапускаю: идёт обновление aipager (блокировка обновления занята). Попробуй снова, когда оно закончится."}
+{"k": "media.restart_refused", "src": "41b49bd1", "v": "⚠️ Не перезапускаю: {reason}."}
+{"k": "media.restart_resend_voice", "src": "f5ed81e2", "v": "🔄 Перезапускаю - через несколько секунд отправь голосовое сообщение ещё раз."}
+{"k": "media.restart_would_kill", "src": "d49632de", "v": "Сессии, которые остановит перезапуск: {sessions}"}
+{"k": "media.restarting_in", "src": "f8016b1a", "v": "🔄 Перезапуск через {seconds} с - через несколько секунд отправь голосовое сообщение ещё раз."}
+{"k": "media.transcribe_failed", "src": "930964f7", "v": "❌ Не удалось расшифровать: {error}"}
+{"k": "media.transcribing", "src": "56629b0b", "v": "🎙️ <i>Расшифровываю…</i>"}
+{"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ Хорошо, голосовой модуль не установлен."}
+{"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ Голосовое сообщение весит {size} МБ; боты Telegram ограничены {limit} МБ."}
 {"k": "mode.ask", "src": "8f9266a6", "v": "💬 Спрашивать"}
 {"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 Спрашивать для тебя (🤖 Авто: админы)"}
 {"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 Лучше Спрашивать"}
 {"k": "mode.auto", "src": "a9e88621", "v": "🤖 Авто"}
 {"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 Лучше Авто"}
+{"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> уже в режиме {mode}."}
+{"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 Включить Спрашивать"}
+{"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 Включить Авто"}
+{"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> занята.\nПереключить в режим Спрашивать?"}
+{"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> занята.\nПереключить в режим Авто?"}
+{"k": "modecard.confirm_auto", "src": "7ab3092b", "v": "⚙️ Переключить <b>{session}</b> в режим {mode}?\n<i>Claude будет запускать инструменты без вопросов ({flag}).</i>"}
+{"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ Состояние <b>{session}</b> ещё не определено. Попробуй /mode чуть позже."}
+{"k": "modecard.is", "src": "43da1dce", "v": "<b>{session}</b> в режиме {mode}."}
+{"k": "modecard.is_target", "src": "bb92330e", "v": "✍️ <b>{session}</b> в режиме {mode}."}
+{"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ <b>{session}</b> уже занята новой работой, поэтому ничего не изменилось."}
+{"k": "modecard.needs_admin", "src": "fe68d230", "v": "Режим Авто доступен только админу."}
+{"k": "modecard.none_live", "src": "ae432c8c", "v": "Здесь нет запущенных сессий. Начни новую командой /new."}
+{"k": "modecard.refused_not_running", "src": "d62cf188", "v": "⚠️ <b>{session}</b> не запущена - режим не изменён."}
+{"k": "modecard.refused_restarting", "src": "06433ed3", "v": "⚠️ <b>{session}</b> сейчас перезапускается - режим не изменён. Попробуй чуть позже."}
+{"k": "modecard.session_missing", "src": "adf0d420", "v": "⚠️ Сессия не найдена."}
+{"k": "modecard.stale", "src": "9f0f5572", "v": "⚠️ Эта карточка устарела, поэтому ничего не изменилось."}
+{"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> ещё останавливается - режим не изменён."}
+{"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ Не удалось переключить режим: {error}"}
+{"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ Переключено на {mode} · {person}."}
+{"k": "modecard.switching", "src": "93eaa8f4", "v": "⚙️ Переключаю <b>{session}</b> в режим {mode}…"}
+{"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ /mode принимает имя сессии и ask или auto, например {example} или {example_ask}."}
+{"k": "modecard.which", "src": "107abca0", "v": "Какая сессия?"}
+{"k": "modecard.which_to", "src": "4694464a", "v": "Какую сессию переключить на {mode}?"}
+{"k": "newflow.auto_needs_admin_note", "src": "6bb45da7", "v": "Режим Авто доступен только админу, поэтому эта сессия будет спрашивать."}
+{"k": "newflow.btn.cancel", "src": "196a9f45", "v": "✖️ Отмена"}
+{"k": "newflow.btn.folder", "src": "2fb30e02", "v": "📁 Папка"}
+{"k": "newflow.btn.model", "src": "e252b8c8", "v": "🧠 Модель"}
+{"k": "newflow.btn.new_folder", "src": "27a1f4a2", "v": "➕ Новая папка"}
+{"k": "newflow.btn.other_model", "src": "48915641", "v": "✏️ Другая модель..."}
+{"k": "newflow.btn.replace", "src": "caede00c", "v": "🆕 Заменить (заново)"}
+{"k": "newflow.btn.resume", "src": "cad6f900", "v": "♻️ Возобновить"}
+{"k": "newflow.btn.switch_to", "src": "8f04f92d", "v": "↩️ Перейти к ней"}
+{"k": "newflow.cancelled_nothing", "src": "4c346842", "v": "↩️ Отменено - ни одна сессия не изменилась."}
+{"k": "newflow.changed_mode", "src": "a1779ae6", "v": "Переключено на {mode} · {person}."}
+{"k": "newflow.changed_model", "src": "1f771c06", "v": "Модель переключена на {model} · {person}."}
+{"k": "newflow.closed", "src": "87aee987", "v": "✖️ Закрыто, потому что было другое действие. Отправь /new, чтобы начать сессию."}
+{"k": "newflow.conflict_replaced", "src": "0ab47818", "v": "↩️ Более новая команда /new для <b>{session}</b> заменила эту карточку."}
+{"k": "newflow.conflict_running", "src": "b36a4e23", "v": "⚠️ <b>{session}</b> уже запущена.\nЧто сделать?"}
+{"k": "newflow.conflict_used", "src": "5d97ff8c", "v": "♻️ <b>{session}</b> уже использовалась.\nЧто сделать?"}
+{"k": "newflow.conflict_used_preview", "src": "b46e358d", "v": "♻️ <b>{session}</b> уже использовалась.\n<i>Последний ответ:</i>\n<blockquote>{preview}</blockquote>\nЧто сделать?"}
+{"k": "newflow.create_failed", "src": "3beecd9f", "v": "❌ {error}"}
+{"k": "newflow.example_line", "src": "ab8b1839", "v": "<code>{session} почини падающие тесты</code>"}
+{"k": "newflow.expired", "src": "6f9c9ea0", "v": "⏱ Карточка новой сессии устарела. Отправь /new снова."}
+{"k": "newflow.folder_page", "src": "f6e221a1", "v": "📁 <b>Папка</b>\n\nВыбери, где будет работать эта сессия."}
+{"k": "newflow.group_name_ask", "src": "eb31141c", "v": "Ответь на это сообщение именем и, если хочешь, тем, что сделать сначала:"}
+{"k": "newflow.hint_folder", "src": "f27c8294", "v": "📁 Сначала выбери папку проекта через 📁 Папка."}
+{"k": "newflow.just_send", "src": "0b7a9b82", "v": "✍️ Просто отправь сообщение, оно уйдёт в {session}."}
+{"k": "newflow.model_page", "src": "580279ec", "v": "🧠 <b>Модель</b>\n\nВыбери модель для этой сессии."}
+{"k": "newflow.name_empty", "src": "e00fbfca", "v": "Имя сессии не может быть пустым."}
+{"k": "newflow.new_folder_title", "src": "64007145", "v": "📁 <b>Новая папка</b>"}
+{"k": "newflow.note_mode_failed", "src": "12f5a535", "v": "Не удалось переключить режим."}
+{"k": "newflow.note_mode_failed_err", "src": "8e216733", "v": "Не удалось переключить режим: {error}"}
+{"k": "newflow.note_mode_not_switched", "src": "43b54091", "v": "{session} начала работу, поэтому режим не переключён."}
+{"k": "newflow.other_model_title", "src": "3c30c486", "v": "🧠 <b>Другая модель</b>"}
+{"k": "newflow.others_card_named", "src": "6ad64798", "v": "Это карточка {owner}. Отправь /new, чтобы получить свою."}
+{"k": "newflow.others_card_someone", "src": "e2435dc7", "v": "Это чужая карточка. Отправь /new, чтобы получить свою."}
+{"k": "newflow.prompt_folder_reply", "src": "21f1cb23", "v": "Ответь на это сообщение именем новой папки."}
+{"k": "newflow.prompt_folder_type", "src": "e8783fd7", "v": "Напиши имя новой папки."}
+{"k": "newflow.prompt_model_reply", "src": "7d73f8ac", "v": "Ответь на это сообщение названием модели."}
+{"k": "newflow.prompt_model_reply_eg", "src": "b8f4f722", "v": "Ответь на это сообщение названием модели (например, {example})."}
+{"k": "newflow.prompt_model_type", "src": "9d5677e2", "v": "Напиши название модели."}
+{"k": "newflow.prompt_model_type_eg", "src": "8bac428b", "v": "Напиши название модели (например, {example})."}
+{"k": "newflow.prompt_queued", "src": "85768278", "v": "📝 Запрос в очереди"}
+{"k": "newflow.ready", "src": "4edcea75", "v": "✅ <b>{session}</b> готова"}
+{"k": "newflow.ready_changed", "src": "39a18ac6", "v": "🔁 {changed}"}
+{"k": "newflow.ready_later", "src": "4d69ea9f", "v": "Потом: нажми {session} на клавиатуре или ответь на любое сообщение {session}."}
+{"k": "newflow.ready_models", "src": "1bccc9f4", "v": "🧠 <b>{session}</b>: выбери модель.\n\nОна переключится на месте, разговор сохранится."}
+{"k": "newflow.ready_settings", "src": "d40af8c6", "v": "{mode} · 🧠 {model} · 📁 <code>{folder}</code>"}
+{"k": "newflow.send_name", "src": "9b892a4c", "v": "Отправь имя и, если хочешь, то, что сделать сначала:"}
+{"k": "newflow.settings_line", "src": "a770b6d4", "v": "{mode} · 🧠 {model} · 📁 {folder}"}
+{"k": "newflow.settings_no_folder", "src": "810727a6", "v": "{mode} · 🧠 {model} · 📁 папка проекта ещё не выбрана"}
+{"k": "newflow.started_over", "src": "3a2633bc", "v": "↩️ Отменено - начато заново."}
+{"k": "newflow.starting", "src": "ff87493a", "v": "🚀 Запускаю <b>{session}</b> в режиме {mode}…"}
+{"k": "newflow.starting_fresh", "src": "fff58191", "v": "🚀 Запускаю <b>{session}</b> заново…"}
+{"k": "newflow.switched_to", "src": "03553586", "v": "↩️ Переключено на <b>{session}</b>"}
+{"k": "newflow.title", "src": "79dee51b", "v": "🆕 <b>Новая сессия</b>"}
+{"k": "newflow.title_owner", "src": "b8803b0f", "v": "🆕 <b>Новая сессия</b> ({owner})"}
+{"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ Работаю над твоим первым сообщением."}
+{"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"few": "⏱️ <b>{session}</b> · Сжатие не подтвердило завершение за {n} минуты", "many": "⏱️ <b>{session}</b> · Сжатие не подтвердило завершение за {n} минут", "one": "⏱️ <b>{session}</b> · Сжатие не подтвердило завершение за {n} минуту", "other": "⏱️ <b>{session}</b> · Сжатие не подтвердило завершение за {n} минуты"}}
+{"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · Сжато: {before} → {after}"}
+{"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · Контекст заполнен на {percent} - скоро автосжатие"}
+{"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · превышен лимит памяти"}
+{"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · превышен лимит памяти во время <code>{tool}</code>"}
+{"k": "notice.memcap_hook", "src": "657f02c3", "v": "<code>{hook}</code> исчерпал свой лимит памяти в {limit} ГБ и остановился. Если он проверял вызов инструмента, Claude Code, скорее всего, отклонил этот вызов, и Claude может попробовать снова; иначе пропущено только это одно событие. Сессия продолжает работать."}
+{"k": "notice.memcap_nudge_cli", "src": "726ab6ea", "v": "<i>Если это повторяется, выполни {command} в терминале, чтобы отправить отчёт разработчику.</i>"}
+{"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>Если это повторяется, владелец может нажать «Сообщить об этом», чтобы отправить отчёт разработчику.</i>"}
+{"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> исчерпал свой лимит памяти в {limit} ГБ, поэтому одно обновление строки состояния пропущено. Сессия продолжает работать."}
+{"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Claude Code не принял сообщение\n\nЗа {grace} с после отправки не пришёл ни один hook. Сообщение, которое начинается с «/», читается как slash-команда - проверь терминал."}
+{"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · не удалось вовремя подтвердить, что сообщение из очереди забрано - Claude может ещё его обработать."}
+{"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · не удалось вовремя подтвердить, что сообщение из очереди забрано: «{preview}» - Claude может ещё его обработать."}
+{"k": "notice.quiet_turn", "src": "baa52794", "v": {"few": "⏳ <b>{session}</b> · всё ещё работает (без новостей уже {n} минуты)\n\nОбновлений статуса пока нет. Обычно это нормально.\n\n<blockquote expandable>Что может происходить\n  • Долгий вызов инструмента (Bash, WebSearch, большая загрузка)\n  • Тяжёлая генерация на очень большом контексте\n  • Идёт сжатие\n  • Ожидание из-за ограничения скорости или лимита подписки\n  • Зависание сети или сбой Claude</blockquote>", "many": "⏳ <b>{session}</b> · всё ещё работает (без новостей уже {n} минут)\n\nОбновлений статуса пока нет. Обычно это нормально.\n\n<blockquote expandable>Что может происходить\n  • Долгий вызов инструмента (Bash, WebSearch, большая загрузка)\n  • Тяжёлая генерация на очень большом контексте\n  • Идёт сжатие\n  • Ожидание из-за ограничения скорости или лимита подписки\n  • Зависание сети или сбой Claude</blockquote>", "one": "⏳ <b>{session}</b> · всё ещё работает (без новостей уже {n} минуту)\n\nОбновлений статуса пока нет. Обычно это нормально.\n\n<blockquote expandable>Что может происходить\n  • Долгий вызов инструмента (Bash, WebSearch, большая загрузка)\n  • Тяжёлая генерация на очень большом контексте\n  • Идёт сжатие\n  • Ожидание из-за ограничения скорости или лимита подписки\n  • Зависание сети или сбой Claude</blockquote>", "other": "⏳ <b>{session}</b> · всё ещё работает (без новостей уже {n} минуты)\n\nОбновлений статуса пока нет. Обычно это нормально.\n\n<blockquote expandable>Что может происходить\n  • Долгий вызов инструмента (Bash, WebSearch, большая загрузка)\n  • Тяжёлая генерация на очень большом контексте\n  • Идёт сжатие\n  • Ожидание из-за ограничения скорости или лимита подписки\n  • Зависание сети или сбой Claude</blockquote>"}}
+{"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · Сессия очищена"}
+{"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · Сессия упала или была убита"}
+{"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · Сессия завершилась"}
+{"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · Сессия вышла из аккаунта"}
+{"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · Сессия: ошибка разрешений"}
+{"k": "notice.session_end.resume", "src": "86761a3d", "v": "🔴 <b>{session}</b> · Сессия переключилась на другой разговор"}
+{"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · всё ещё ждёт твоего ответа выше"}
+{"k": "notice.waiting_permission", "src": "e39388ee", "v": "Разрешение: {summary}"}
+{"k": "notice.waiting_question", "src": "2348fa66", "v": "Вопрос: {summary}"}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Здесь есть скрытые символы направления текста, показанные как ⟨U+...⟩. Выполнится может не то, что ты видишь."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Разрешить"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Разрешать всегда"}
@@ -372,6 +538,147 @@
 {"k": "resume.state.unknown", "src": "50d8b4a9", "v": "неизвестно"}
 {"k": "resume.tap", "src": "c118e3b9", "v": "Нажми кнопку ниже, чтобы возобновить."}
 {"k": "resume.title", "src": "d5cecda8", "v": {"few": "📚 <b>Прошлые сессии</b> (всего {n})", "many": "📚 <b>Прошлые сессии</b> (всего {n})", "one": "📚 <b>Прошлые сессии</b> (всего {n})", "other": "📚 <b>Прошлые сессии</b> (всего {n})"}}
+{"k": "route.btn.resume", "src": "2db3fd81", "v": "🔁 Возобновить"}
+{"k": "route.btn.resume_label", "src": "5a3f876a", "v": "▶️ Возобновить {session}"}
+{"k": "route.cant_clear_busy", "src": "cf8384cd", "v": "⚠️ Нельзя очистить, пока сессия занята"}
+{"k": "route.clear_no_active", "src": "1ada2799", "v": "Нет активной сессии - сначала переключись на сессию через {command}."}
+{"k": "route.clear_nothing", "src": "75578929", "v": "В [{session}] нечего очищать."}
+{"k": "route.cleared", "src": "fd716ebc", "v": {"few": "🗑️ Удалено {n} сообщения из очереди [<b>{session}</b>].", "many": "🗑️ Удалено {n} сообщений из очереди [<b>{session}</b>].", "one": "🗑️ Удалено {n} сообщение из очереди [<b>{session}</b>].", "other": "🗑️ Удалено {n} сообщения из очереди [<b>{session}</b>]."}}
+{"k": "route.ended_which", "src": "eb950d37", "v": "{session} завершена. Какая сессия?"}
+{"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Не знаю, для какой сессии этот файл. Выбери её через {command} или на клавиатуре."}
+{"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Не удалось передать расшифровку в [{session}]"}
+{"k": "route.kill_none", "src": "1c62fda9", "v": "Нет сессий, которые можно завершить."}
+{"k": "route.kill_which", "src": "65bf98de", "v": "Какую сессию завершить?"}
+{"k": "route.mention_alone", "src": "c8588bc4", "v": "Отправь {command} отдельно, без упоминания бота."}
+{"k": "route.model_now", "src": "721a5dbc", "v": "🧠 теперь {model}"}
+{"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "сообщение другого участника ещё ждёт, пока его заберут - смени модель после него."}
+{"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
+{"k": "route.no_active", "src": "96477f98", "v": "⚠️ Нет активной сессии"}
+{"k": "route.no_live_here", "src": "2a22b699", "v": "⚠️ Здесь нет запущенной сессии <b>{session}</b>."}
+{"k": "route.no_session", "src": "f3bc5d54", "v": "⚠️ Не знаю, для какой это сессии. Выбери её через {command} или на клавиатуре."}
+{"k": "route.no_session_here", "src": "d6bac23e", "v": "⚠️ Здесь нет сессии <b>{session}</b>."}
+{"k": "route.not_alive", "src": "248cf0d5", "v": "⚠️ Сессия [{session}] не запущена"}
+{"k": "route.not_working", "src": "40bb3d05", "v": "<b>{session}</b> сейчас не работает."}
+{"k": "route.nothing_running", "src": "3c49e2a3", "v": "Ничего не выполняется."}
+{"k": "route.queue_full", "src": "f6582eab", "v": {"few": "⚠️ Очередь [{session}] заполнена ({n} в ожидании). Ответь на запрос или очисти очередь.", "many": "⚠️ Очередь [{session}] заполнена ({n} в ожидании). Ответь на запрос или очисти очередь.", "one": "⚠️ Очередь [{session}] заполнена ({n} в ожидании). Ответь на запрос или очисти очередь.", "other": "⚠️ Очередь [{session}] заполнена ({n} в ожидании). Ответь на запрос или очисти очередь."}}
+{"k": "route.refusal_frame", "src": "e19d24e3", "v": "⚠️ [{session}] {reason}"}
+{"k": "route.resume_then_resend", "src": "df2cce7e", "v": "После ▶️ Возобновить отправь сообщение ещё раз."}
+{"k": "route.retry_note_others", "src": "f54d6bb2", "v": "⏸ Не повторено - сейчас идёт ход другого человека. Нажми «Повторить» ещё раз, когда он закончится."}
+{"k": "route.retry_note_prompt", "src": "a9f6356e", "v": "⏸ Не повторено - открыт запрос. Ответь на него, потом снова нажми «Повторить»."}
+{"k": "route.send_failed", "src": "3c65fe20", "v": "❌ Не удалось отправить в [{session}]"}
+{"k": "route.sent_to", "src": "72283da2", "v": "{glyph} {what} отправлено в {session}"}
+{"k": "route.session_missing", "src": "e8086da8", "v": "⚠️ Сессия «{name}» не найдена"}
+{"k": "route.unknown_session", "src": "2823272e", "v": "⚠️ Неизвестная сессия: {session}"}
+{"k": "route.voice_no_session", "src": "6c2d2821", "v": "⚠️ Голосовое расшифровано, но нет активной сессии, куда его отправить. Сначала выбери её через {command}."}
+{"k": "route.warning", "src": "4329faf5", "v": "⚠️ {text}"}
+{"k": "route.which_reply", "src": "6771e2f8", "v": "Какая сессия? Ответь на одно из её сообщений или отправь {command} и своё сообщение."}
+{"k": "route.which_stop", "src": "aba80827", "v": "Какую остановить?"}
+{"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · Заблокировано правилами безопасности: {reason} (остановлено)"}
+{"k": "safety.reason.bash", "src": "f380389e", "v": "Команда Bash заблокирована правилами безопасности"}
+{"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Команда Bash заблокирована правилами безопасности: рекурсивный поиск или просмотр всей домашней папки или / запрещён; ищи внутри папки проекта"}
+{"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} с glob, который выходит наружу через .."}
+{"k": "safety.reason.glob_escaped", "src": "bf605149", "v": "{tool} с экранированным glob"}
+{"k": "safety.reason.glob_not_plain", "src": "6db7d611", "v": "{tool} с glob, который не является простым относительным шаблоном"}
+{"k": "safety.reason.glob_unreadable", "src": "da95c3b5", "v": "{tool} с нечитаемым glob"}
+{"k": "safety.reason.halted", "src": "343e090e", "v": "сессия остановлена - предыдущий вызов инструмента в этом ходе был заблокирован правилами безопасности; начни новый запрос"}
+{"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool} за пределами папки сессии - ограниченный ход ищет только в своём проекте и scratchpad"}
+{"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool} за пределами папки сессии - ограниченный ход пишет только в свой проект и scratchpad"}
+{"k": "safety.reason.path_protected", "src": "feff9877", "v": "{tool} на защищённом пути {glob}"}
+{"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool}: запись в защищённый путь {glob}"}
+{"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool} с нечитаемым путём"}
+{"k": "safety.reason.pattern_unreadable", "src": "88053cf7", "v": "{tool} с нечитаемым шаблоном"}
+{"k": "safety.reason.runs_commands", "src": "e180a703", "v": "{tool} в файл, который запускает команды (.claude/, .git/, .mcp.json)"}
+{"k": "safety.reason.search_anywhere", "src": "c1ad4431", "v": "{tool} отклонён - защищённый путь {glob} может быть в любой папке, поэтому эта роль не может искать через Grep или Glob"}
+{"k": "safety.reason.search_could_reach", "src": "a95243b1", "v": "Поиск {tool} может добраться до защищённого пути {glob}"}
+{"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool} с нечитаемой папкой поиска"}
+{"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "{tool} отклонён - этот поиск добрался бы до защищённых файлов ({shown}); ищи внутри папки проекта"}
+{"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "Поиск {tool} добирается до защищённого пути {glob}"}
+{"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} есть в deny_tools этой роли"}
+{"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} нет в allow_tools этой роли"}
+{"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "этот вызов инструмента не удалось проверить, поэтому он отклонён"}
+{"k": "safety.reason.wide_cwd_search", "src": "5112bac1", "v": "{tool} отклонён - эта сессия работает в домашней папке (или в папке выше неё), а эта роль может искать только внутри папки проекта"}
+{"k": "safety.reason.wide_cwd_write", "src": "90769493", "v": "{tool} отклонён - эта сессия работает в домашней папке (или в папке выше неё), а эта роль может писать только внутри папки проекта"}
+{"k": "sendnow.btn.send", "src": "edac6f66", "v": "⚡ Отправить сейчас"}
+{"k": "sendnow.line", "src": "41e9ef1b", "v": "⏳ В очереди - Claude прочитает после текущего шага"}
+{"k": "sendnow.line_unreached", "src": "d8eeb821", "v": "⏳ В очереди - не удалось достучаться до Claude, нажми «Отправить сейчас», чтобы попробовать снова"}
+{"k": "sendnow.reply_no_session", "src": "cfa31918", "v": "Нет активной сессии."}
+{"k": "sendnow.reply_nothing", "src": "7f03c384", "v": "В очереди ничего не ждёт"}
+{"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ Отправлено Claude сейчас"}
+{"k": "sess.btn.cancel", "src": "77dfd213", "v": "Отмена"}
+{"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ Отмена"}
+{"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ Закрыть"}
+{"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ Удалить"}
+{"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 Diff"}
+{"k": "sess.btn.end", "src": "58096fa3", "v": "⏹ Завершить"}
+{"k": "sess.btn.end_session", "src": "cad78af6", "v": "⏹ Завершить сессию"}
+{"k": "sess.btn.prefs", "src": "28784f50", "v": "👤 Предпочтения"}
+{"k": "sess.btn.rename", "src": "7decc377", "v": "✏️ Переименовать"}
+{"k": "sess.btn.restart", "src": "06188389", "v": "🔄 Перезапустить"}
+{"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ Возобновить"}
+{"k": "sess.cancelled", "src": "3678513b", "v": "↩️ Отменено."}
+{"k": "sess.delete_cancelled", "src": "7105554d", "v": "Удаление [<b>{session}</b>] отменено."}
+{"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ Убрать [<b>{session}</b>] из списка сессий? Это нельзя отменить."}
+{"k": "sess.delete_none", "src": "58e4ba7f", "v": "Нет завершённых сессий для удаления."}
+{"k": "sess.delete_still_running", "src": "ff86cceb", "v": "⚠️ [<b>{session}</b>] ещё работает. Сначала заверши её командой /kill."}
+{"k": "sess.delete_which", "src": "b568401d", "v": "Какую завершённую сессию убрать?"}
+{"k": "sess.deleted", "src": "5af8d1c8", "v": "🗑️ [<b>{session}</b>] удалена."}
+{"k": "sess.deleted_by", "src": "38b3ffbc", "v": "🗑️ [<b>{session}</b>] удалена · {person}."}
+{"k": "sess.diff_files", "src": "84597d92", "v": {"few": "📝 [<b>{session}</b>] изменено {n} файла, +{added}/-{removed}", "many": "📝 [<b>{session}</b>] изменено {n} файлов, +{added}/-{removed}", "one": "📝 [<b>{session}</b>] изменён {n} файл, +{added}/-{removed}", "other": "📝 [<b>{session}</b>] изменено {n} файла, +{added}/-{removed}"}}
+{"k": "sess.diff_none", "src": "3b2e4538", "v": "В рабочей папке [<b>{session}</b>] нет изменений."}
+{"k": "sess.diff_none_live", "src": "3f72a95c", "v": "Нет запущенных сессий для diff."}
+{"k": "sess.diff_reason.cwd_missing", "src": "e6e5befa", "v": "Рабочей папки [{label}] больше нет."}
+{"k": "sess.diff_reason.git_error", "src": "18d7631e", "v": "Не удалось прочитать diff - попробуй ещё раз."}
+{"k": "sess.diff_reason.git_not_installed", "src": "171dd6a9", "v": "git недоступен на этой машине."}
+{"k": "sess.diff_reason.no_commits_yet", "src": "94fb37e6", "v": "В репозитории [{label}] ещё нет коммитов."}
+{"k": "sess.diff_reason.not_a_git_repo", "src": "c639ff9f", "v": "Папка [{label}] не является git-репозиторием."}
+{"k": "sess.diff_which", "src": "2485be52", "v": "Diff какой сессии?"}
+{"k": "sess.end_confirm", "src": "dffc4f34", "v": "⏹ Завершить <b>{session}</b>? Claude остановится, и сессия закроется."}
+{"k": "sess.ended", "src": "6659a4fd", "v": "⏹ <b>{session}</b> завершена"}
+{"k": "sess.ended_by", "src": "9e9bdbd1", "v": "⏹ <b>{session}</b> завершена · {person}"}
+{"k": "sess.kill_cancelled", "src": "cf4e32bb", "v": "↩️ Отменено. Ничего не завершено."}
+{"k": "sess.menu_closed", "src": "e2a2c077", "v": "Меню [<b>{session}</b>] закрыто."}
+{"k": "sess.menu_no_transcript", "src": "72c75098", "v": "<i>Нет сохранённой истории разговора, чтобы возобновить сессию.</i>"}
+{"k": "sess.menu_title", "src": "2a8eb73c", "v": "⋮ <b>{session}</b> - выбери действие:"}
+{"k": "sess.model_refusal.busy", "src": "9dd1a5eb", "v": "Claude работает - смени модель, когда этот ход закончится."}
+{"k": "sess.model_refusal.not_live", "src": "af9ca5bc", "v": "Сессия не запущена."}
+{"k": "sess.model_refusal.prompt_open", "src": "c3641605", "v": "В терминале открыт запрос - ответь на него, прежде чем менять модель."}
+{"k": "sess.model_refusal.switch_pending", "src": "a3384cf1", "v": "Прошлая смена модели ещё не подтверждена - проверь в терминале вопрос Claude Code «Switch model?», прежде чем менять снова."}
+{"k": "sess.model_refusal.unknown", "src": "4e5022f6", "v": "aipager ещё не видел состояние этой сессии - попробуй чуть позже."}
+{"k": "sess.model_unconfirmed", "src": "316e6e23", "v": "не подтверждено - проверь сессию. Возможно, Claude Code спрашивает «Switch model?» в терминале, или это уже была та же модель."}
+{"k": "sess.not_sent_to", "src": "0d040f9f", "v": "Не отправлено в {session}."}
+{"k": "sess.pick_cancelled", "src": "d3e4142f", "v": "Отменено."}
+{"k": "sess.rename_cancelled", "src": "abe2ee6d", "v": "Переименование отменено."}
+{"k": "sess.rename_closed", "src": "d06e8a83", "v": "✖️ Переименование закрыто: было другое действие. Отправь /rename, чтобы попробовать снова."}
+{"k": "sess.rename_exists", "src": "3367e703", "v": "⚠️ Сессия {session} уже есть в этом чате."}
+{"k": "sess.rename_expired", "src": "0235f755", "v": "⏱ Время на переименование вышло. Отправь /rename снова."}
+{"k": "sess.rename_gone", "src": "86c694ee", "v": "⚠️ Эта сессия больше недоступна - выполни /rename снова."}
+{"k": "sess.rename_none", "src": "2d24aff4", "v": "Нет сессий для переименования."}
+{"k": "sess.rename_not_allowed", "src": "97c2b455", "v": "🚫 Ты не можешь переименовать эту сессию."}
+{"k": "sess.rename_prompt_reply", "src": "eaadafac", "v": "✏️ Новое имя для [<b>{session}</b>]? Ответь на это сообщение новым именем."}
+{"k": "sess.rename_prompt_type", "src": "fdf5e253", "v": "✏️ Новое имя для [<b>{session}</b>]? Отправь его сообщением."}
+{"k": "sess.rename_unchanged", "src": "f41d7d6e", "v": "Имя [<b>{session}</b>] не изменилось."}
+{"k": "sess.rename_which", "src": "d74e26c1", "v": "Какую сессию переименовать?"}
+{"k": "sess.renamed", "src": "53a36720", "v": "✏️ [<b>{old}</b>] переименована в [<b>{new}</b>]."}
+{"k": "sess.restart_cancelled", "src": "e2123246", "v": "Перезапуск [<b>{session}</b>] отменён."}
+{"k": "sess.restart_confirm", "src": "eea1e9db", "v": "🔄 Перезапустить сессию [<b>{session}</b>]? Claude остановится и запустится снова, сохранив разговор."}
+{"k": "sess.restart_failed", "src": "be8ef8e6", "v": "Перезапуск [{label}] не удался."}
+{"k": "sess.restart_none", "src": "fefd4861", "v": "Нет запущенных сессий для перезапуска."}
+{"k": "sess.restart_reason.already_restarting", "src": "119c20da", "v": "[{label}] уже перезапускается."}
+{"k": "sess.restart_reason.launch_failed", "src": "fc0525be", "v": "Перезапуск [{label}] не удался: {err}"}
+{"k": "sess.restart_reason.not_live", "src": "d841d7b0", "v": "[{label}] не запущена."}
+{"k": "sess.restart_reason.still_stopping", "src": "635882f7", "v": "[{label}] не остановилась вовремя - попробуй чуть позже."}
+{"k": "sess.restart_which", "src": "0eada720", "v": "Какую сессию перезапустить?"}
+{"k": "sess.restarted", "src": "dc0ed3cb", "v": "🔄 [<b>{session}</b>] перезапущена."}
+{"k": "sess.restarted_by", "src": "f2ddb551", "v": "🔄 [<b>{session}</b>] перезапущена · {person}."}
+{"k": "sess.resume_as", "src": "95516616", "v": "Возобновить <b>{session}</b> в режиме:"}
+{"k": "sess.resume_failed", "src": "f19c1968", "v": "❌ Не удалось возобновить <b>{session}</b>: {error}"}
+{"k": "sess.resume_last_response", "src": "9e8e3733", "v": "<i>📜 Последний ответ этой сессии</i>\n<blockquote>{preview}</blockquote>"}
+{"k": "sess.resume_no_transcript", "src": "6b8a4001", "v": "⚠️ У сессии <b>{session}</b> нет сохранённой истории на диске, её нельзя возобновить.\nНачни новую командой {command}."}
+{"k": "sess.resume_not_found", "src": "4c1d68d2", "v": "⚠️ Сессии <b>{session}</b> нет в истории.\nОтправь {command} без имени, чтобы увидеть доступные."}
+{"k": "sess.resume_running", "src": "c090af67", "v": "⚠️ <b>{session}</b> уже запущена.\nНажми {command} на клавиатуре, чтобы переключиться на неё."}
+{"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> возобновлена"}
+{"k": "sess.resumed_in_ask", "src": "ff0be86d", "v": "♻️ <b>{session}</b> возобновлена в режиме Спрашивать: {reason}"}
+{"k": "sess.sent_to", "src": "d856101f", "v": "Отправлено в {session}."}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Закрыть"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Новые сессии"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 Папка: {folder} ›"}
@@ -480,12 +787,42 @@
 {"k": "toast.cant_resend", "src": "3aa4d727", "v": "Этот запрос нельзя отправить заново - ответь в терминале"}
 {"k": "toast.cant_stop", "src": "2bf57e30", "v": "Ты не можешь остановить эту сессию."}
 {"k": "toast.choice_gone", "src": "54298c73", "v": "Этого варианта больше нет."}
+{"k": "toast.clear_done", "src": "0e4a4845", "v": {"few": "Убраны {n} сессии из /status (остаются в /resume)", "many": "Убрано {n} сессий из /status (остаются в /resume)", "one": "Убрана {n} сессия из /status (остаётся в /resume)", "other": "Убрано {n} сессии из /status (остаются в /resume)"}}
+{"k": "toast.clear_nothing", "src": "ec219a9c", "v": "Нечего убирать"}
+{"k": "toast.compact_failed", "src": "84398886", "v": "Не удалось отправить /compact"}
+{"k": "toast.compact_sending", "src": "afcbfe26", "v": "Сжимаю [{session}]"}
+{"k": "toast.gate_other_chat", "src": "fcc9d88a", "v": "Эта кнопка из другого чата."}
+{"k": "toast.gate_refused", "src": "c6436f0e", "v": "Твоя роль здесь этого не позволяет."}
 {"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "Неизвестная кнопка"}
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "Недопустимое значение"}
+{"k": "toast.kill_stale", "src": "90e64cd6", "v": "Эта кнопка устарела - отправь /kill снова"}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} уже занята новой работой - нажми ⏹ Стоп ещё раз, чтобы остановить"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} уже занята новой работой - отправь /stop ещё раз"}
+{"k": "toast.new_cant_change", "src": "279d4392", "v": "Ты не можешь изменить эту сессию."}
+{"k": "toast.new_cant_start_here", "src": "9f749720", "v": "Ты не можешь запускать здесь сессии."}
+{"k": "toast.new_cant_start_resume", "src": "25c7e34f", "v": "Ты не можешь запускать или возобновлять здесь сессии."}
+{"k": "toast.new_card_expired", "src": "c7d3826b", "v": "Эта карточка устарела."}
+{"k": "toast.new_card_replaced", "src": "8e108c47", "v": "Эту карточку заменили. Используй новую."}
+{"k": "toast.new_expired", "src": "85077001", "v": "Эта карточка устарела. Отправь /new снова."}
+{"k": "toast.new_folder_gone", "src": "4b183fca", "v": "Эта папка больше недоступна."}
+{"k": "toast.new_invalid_model", "src": "ae01cc11", "v": "Неверная модель"}
+{"k": "toast.new_model_gone", "src": "0f464c34", "v": "Эта модель больше не предлагается."}
+{"k": "toast.new_no_folder_yet", "src": "87860358", "v": "Пока нет доступной папки - сначала запусти сессию из настоящей папки проекта."}
+{"k": "toast.new_not_yours", "src": "393f95a6", "v": "Это не твоя новая сессия."}
+{"k": "toast.new_only_sender", "src": "9e109f78", "v": "Только тот, кто отправил /new, может пользоваться этой карточкой."}
+{"k": "toast.new_started_since", "src": "e8602889", "v": "{session} с тех пор начала работу. Отправь /new снова, чтобы заменить её."}
+{"k": "toast.new_switch_failed", "src": "a8ef2ee3", "v": "Не удалось переключить модель."}
+{"k": "toast.new_switching", "src": "8c8980ce", "v": "Переключаю..."}
+{"k": "toast.new_switching_to", "src": "09c7272f", "v": "Переключаю на {model}"}
+{"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} работает. Переключи после окончания или используй /mode."}
 {"k": "toast.not_working", "src": "1ec204d3", "v": "{session} сейчас не работает"}
 {"k": "toast.open_chat", "src": "202c3e06", "v": "Открой чат, чтобы ответить"}
+{"k": "toast.owner_card", "src": "80b06bcd", "v": "Это карточка {owner}."}
+{"k": "toast.owner_card_send", "src": "7b051dc9", "v": "Это карточка {owner}. Отправь {command}, чтобы получить свою."}
+{"k": "toast.perms_needs_admin", "src": "fe68d230", "v": "Режим Авто доступен только админу."}
+{"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} сейчас перезапускается - нажми ещё раз чуть позже"}
+{"k": "toast.perms_stale", "src": "4e34769b", "v": "Эта карточка устарела - ничего не изменилось"}
+{"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} ещё запускается - попробуй чуть позже"}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "этот запрос устарел"}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram ограничивает этот чат - попробуй после {time}"}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "Уже отправляется."}
@@ -495,8 +832,46 @@
 {"k": "toast.rep.not_opened", "src": "8841123f", "v": "Сейчас не удалось открыть предпросмотр отчёта. Попробуй позже."}
 {"k": "toast.rep.not_owner", "src": "ed142ea6", "v": "Сообщить о проблеме может только владелец этого aipager."}
 {"k": "toast.rep.offer_stale", "src": "f5aa4d59", "v": "Это предложение больше не действует."}
+{"k": "toast.retry_failed", "src": "8954b4b9", "v": "Не удалось повторить"}
+{"k": "toast.retry_not_alive", "src": "807834ac", "v": "Сессия «{session}» не запущена"}
+{"k": "toast.retry_nothing", "src": "def91a40", "v": "Нечего повторять"}
+{"k": "toast.retry_others_turn", "src": "b243bab8", "v": "Сейчас идёт ход другого человека - повтори, когда он закончится"}
+{"k": "toast.retry_prompt_open", "src": "2554567b", "v": "Сначала ответь на открытый запрос, потом повтори"}
+{"k": "toast.retry_retrying", "src": "b5a61b76", "v": "Повторяю [{session}]"}
 {"k": "toast.send_failed", "src": "0fbea382", "v": "Не удалось отправить в {session}"}
 {"k": "toast.send_keys_failed", "src": "32458da9", "v": "Не удалось отправить нажатия"}
+{"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "Занято, попробуй чуть позже"}
+{"k": "toast.sendnow_cant_prompt", "src": "bf90455f", "v": "Ты не можешь отправлять в эту сессию"}
+{"k": "toast.sendnow_failed", "src": "57a26c8a", "v": "Не удалось достучаться до Claude, попробуй ещё раз"}
+{"k": "toast.sendnow_interactive", "src": "1b518935", "v": "Сначала ответь на открытый вопрос"}
+{"k": "toast.sendnow_sending", "src": "d05719f1", "v": "Отправляю Claude"}
+{"k": "toast.sendnow_sent", "src": "9ab32ed2", "v": "Отправлено Claude сейчас"}
+{"k": "toast.sendnow_taken", "src": "00735887", "v": "Уже забрано"}
+{"k": "toast.sendnow_typing", "src": "84af1903", "v": "Сейчас печатается запрос, попробуй чуть позже"}
+{"k": "toast.sess_already_ended", "src": "26dff17c", "v": "Эта сессия уже завершена."}
+{"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} уже в режиме {mode}."}
+{"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "Ты не можешь удалить эту сессию."}
+{"k": "toast.sess_cant_end", "src": "ab082660", "v": "Ты не можешь завершить эту сессию."}
+{"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "Ты не можешь переименовать эту сессию."}
+{"k": "toast.sess_cant_restart", "src": "5e8c842b", "v": "Ты не можешь перезапустить эту сессию."}
+{"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "Ты не можешь возобновить эту сессию."}
+{"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "Эту сессию сейчас нельзя возобновить."}
+{"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "Ты не можешь отправлять в эту сессию."}
+{"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "{session} не остановилась - попробуй ещё раз"}
+{"k": "toast.sess_ended", "src": "394de850", "v": "⏹ {session} завершена"}
+{"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {session} завершена · {person}"}
+{"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} уже занята новой работой - нажми ⏹ Завершить сессию ещё раз, чтобы завершить её"}
+{"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} уже занята новой работой - нажми 🔄 Перезапустить ещё раз, чтобы перезапустить её"}
+{"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} уже занята новой работой - нажми переключатель ещё раз, если это ещё нужно"}
+{"k": "toast.sess_not_found_named", "src": "a71f5ae2", "v": "{session} не найдена"}
+{"k": "toast.sess_not_your_rename", "src": "ed45ef6a", "v": "Это не твоё переименование."}
+{"k": "toast.sess_restart_stale", "src": "753fe0fb", "v": "Эта кнопка устарела - отправь /restart снова"}
+{"k": "toast.sess_restarting", "src": "5f69a1ca", "v": "Перезапускаю {session}..."}
+{"k": "toast.sess_resuming", "src": "2a557399", "v": "Эта сессия сейчас возобновляется. Попробуй чуть позже."}
+{"k": "toast.sess_resuming_kill", "src": "227bdae1", "v": "{session} возобновляется - отправь /kill чуть позже"}
+{"k": "toast.sess_resuming_retry", "src": "2845ff55", "v": "{session} возобновляется - попробуй чуть позже"}
+{"k": "toast.sess_still_running", "src": "1ab407e3", "v": "Эта сессия ещё работает. Сначала заверши её."}
+{"k": "toast.sess_target", "src": "d28d6d9c", "v": "✍️ Сообщения уходят в {session}"}
 {"k": "toast.session_ended", "src": "3a3a8392", "v": "Эта сессия завершена."}
 {"k": "toast.session_gone", "src": "9360b8a3", "v": "Сессия «{session}» не найдена"}
 {"k": "toast.session_gone_settings", "src": "8af767e3", "v": "Этой сессии больше нет - открой /settings заново."}
@@ -505,6 +880,8 @@
 {"k": "toast.session_unavailable", "src": "773d1a0f", "v": "Эта сессия больше недоступна"}
 {"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "В этой группе только админ может менять настройки."}
 {"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "Ты не можешь менять настройки этой сессии."}
+{"k": "toast.stop_stale", "src": "51073518", "v": "Эта задача уже закончилась - используй текущую карточку"}
+{"k": "toast.unknown_action", "src": "967e7e51", "v": "Неизвестно: {action}"}
 {"k": "toast.upd.checking", "src": "820d6004", "v": "Проверяю…"}
 {"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 Обновлять aipager может только админ."}
 {"k": "toast.upd.menu_old", "src": "6c988fa7", "v": "Это меню устарело, отправь /update ещё раз"}
@@ -953,3 +1330,19 @@
 {"k": "upd.summary.up_to_date", "src": "2772acac", "v": "Всё актуально."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ Обновление остановилось из-за непредвиденной ошибки (подробности в логе демона)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ Запланированный перезапуск не произошёл - новая версия установлена, но всё ещё работает старая. Перезапусти вручную: {command}"}
+{"k": "whoami.any", "src": "195d97a4", "v": "(любые)"}
+{"k": "whoami.bypass_role_denies", "src": "9ed1452d", "v": "  bypass_role_denies: {value}"}
+{"k": "whoami.bypass_safety", "src": "a09645db", "v": "  bypass_safety: {value}"}
+{"k": "whoami.can_manage", "src": "e889ca71", "v": "  can_manage: {value}"}
+{"k": "whoami.effective_allow", "src": "50a8e776", "v": "  итоговые allow_tools: {tools}"}
+{"k": "whoami.effective_deny", "src": "3b0b5420", "v": "  итоговые deny_tools: {tools}"}
+{"k": "whoami.head", "src": "ac5935f7", "v": "🪪 <b>{member}</b> в <b>{scope}</b>"}
+{"k": "whoami.no", "src": "fd128635", "v": "нет"}
+{"k": "whoami.none", "src": "3c6b183d", "v": "(нет)"}
+{"k": "whoami.not_allowed", "src": "c9bfc640", "v": "🪪 Тебя нет в списке разрешённых пользователей этого бота."}
+{"k": "whoami.not_member", "src": "d86fddf7", "v": "🪪 Ты не участник этой части конфигурации."}
+{"k": "whoami.personal", "src": "10ab5a55", "v": "🪪 Личный режим - полный доступ к этой машине из этого личного чата."}
+{"k": "whoami.role", "src": "8ffb44b5", "v": "  роль: <b>{role}</b>"}
+{"k": "whoami.team_deny", "src": "e88735e1", "v": "  deny_tools: {tools}"}
+{"k": "whoami.team_head", "src": "c413798c", "v": "🪪 <b>{member}</b>"}
+{"k": "whoami.yes", "src": "fb360f9c", "v": "да"}

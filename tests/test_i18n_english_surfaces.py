@@ -1,12 +1,11 @@
-"""English is byte-identical on every phase 2 surface (G81).
+"""English is byte-identical on every phase 2 and phase 3a surface (G81).
 
-``tests/golden/english_surfaces.json`` was recorded on the base of phase 2
-(a2dd9db), before any surface was routed through a key, by running this
-module with ``AIPAGER_RECORD_SURFACES=1``; phase 3b's surfaces (/update,
-problem reports, refusals, groups, /resume...) were added the same way on
-its own base. Every surface of the registry
-(``tests/i18n_surfaces.py``) must still render exactly those bytes for an
-English chat."""
+``tests/golden/english_surfaces.json`` was recorded on the base of each
+phase (phase 2's surfaces on a2dd9db; phase 3a's and phase 3b's on
+5a1f929), before any of its surfaces was routed through a key, by running
+this module with ``AIPAGER_RECORD_SURFACES=1``. Every surface of the
+registry (``tests/i18n_surfaces.py`` and ``tests/i18n_surfaces_p3a.py``)
+must still render exactly those bytes for an English chat."""
 
 from __future__ import annotations
 

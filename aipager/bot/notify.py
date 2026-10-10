@@ -24,6 +24,7 @@ from telegram.error import Forbidden
 
 from aipager.bot import agents_line as _agents_line
 from aipager.bot import reactions
+from aipager.bot.sibling_text import shown
 from aipager.bot.dashboard import PIN_NEEDS_INPUT, new_prompt_token
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.keyboards import PERM_NEEDED
@@ -46,7 +47,7 @@ from aipager.bot.rich_message import (
 from aipager import bg_shells as _bg_shells
 from aipager import bidi_guard
 from aipager import i18n, preferences
-from aipager.i18n import Msg, Safe, Span
+from aipager.i18n import Msg, Plural, Safe, Span
 from aipager.clockfmt import elapsed as clock
 from aipager.config import (
     COMPACT_CARD_TIMEOUT_SECONDS,
@@ -58,7 +59,7 @@ from aipager.config import (
 from aipager.state import BG_AGENTS_RETRY_SECONDS, Status, TrackedSession
 from aipager.policy_snapshot import clear_turn_open, mark_turn_open, note_driver_id
 from aipager.bot.animation import (
-    FINAL_VERB, _RICH_LIMIT, _card_edit_lock, _exact_anchors_available,
+    COMPACTING, FINAL_VERB, _RICH_LIMIT, _card_edit_lock, _exact_anchors_available,
     _expire_tool_batch,
     _md_escape, _read_stream_text, _sync_anchors_from_transcript,
     build_full_log,
@@ -1010,7 +1011,8 @@ class NotifyMixin:
         the session and its size — not silently, which is the whole point
         of R6.
         """
-        from aipager.bot.held import HELD, HELD_ANSWER_MAX_ATTEMPTS, late_marker
+        from aipager.bot import held_message
+        from aipager.bot.held import HELD, HELD_ANSWER_MAX_ATTEMPTS
 
         chat_id = resolve_chat_id_int(sess) or resolve_chat_id(sess)
         if not chat_id or MUTE.is_muted(chat_id):
@@ -1019,9 +1021,11 @@ class NotifyMixin:
         if not entries:
             return 0
 
+        # The marker in the chat's language (held.py stays import-free).
+        tr = i18n.for_sess(sess)
         delivered = 0
         for entry in entries:
-            marker = late_marker(entry.held_seconds())
+            marker = held_message.late_marker_text(tr, entry.held_seconds())
             try:
                 sent = await send_rich_message(
                     int(chat_id), f"{marker}\n\n{entry.rich_text}",
@@ -1377,7 +1381,8 @@ class NotifyMixin:
         chat_id = resolve_chat_id_int(sess)
         if not chat_id or self._app is None:
             return
-        kwargs = {"chat_id": chat_id, "text": NEEDS_ADMIN_REPLY}
+        kwargs = {"chat_id": chat_id,
+                  "text": shown(i18n.for_chat(chat_id), NEEDS_ADMIN_REPLY)}
         if msg_id:
             kwargs["reply_to_message_id"] = msg_id
         try:
@@ -1452,21 +1457,15 @@ class NotifyMixin:
         if event == "hook_memory_cap_hit":
             hook_name = context.get("hook", "aipager-hook")
             tool_name = context.get("tool", "")
-            tool_suffix = (
-                f" during <code>{html_mod.escape(tool_name)}</code>"
-                if tool_name else ""
-            )
             # "Report this" (roadmap 8.112): opens the problem report
             # preview in the owner's DM; only the owner's tap does
             # anything (report_flow re-checks it).
             from aipager.bot import report_flow  # local: import cycle
             has_owner = report_flow.resolve_owner(self) is not None
-            text = (
-                f"⚠️ <b>{html_mod.escape(label)}</b> · memory cap hit"
-                f"{tool_suffix}\n"
-                "\n"
-                + memory_cap_body(hook_name, has_owner)
-            )
+            tr = i18n.for_sess(sess)
+            head = (tr.html(MEMCAP_HEAD_TOOL, session=label, tool=tool_name) if tool_name
+                    else tr.html(MEMCAP_HEAD, session=label))
+            text = f"{head}\n\n" + memory_cap_body(hook_name, has_owner, tr)
             extra = ({"reply_markup": report_flow.report_button_markup(
                 report_flow.REPORT_THIS_BUTTON)} if has_owner else {})
             try:
@@ -1532,12 +1531,11 @@ class NotifyMixin:
             if expired:
                 try:
                     preview = (expired[0].get("raw_text") or "")[:80]
-                    suffix = f': "{html_mod.escape(preview)}"' if preview else ""
+                    tr = i18n.for_sess(sess)
                     await bot.send_message(
                         default_chat_id,
-                        f"⏳ <b>{html_mod.escape(label)}</b> · a queued "
-                        f"message wasn't confirmed picked up in time"
-                        f"{suffix} - Claude may still process it.",
+                        tr.html(QUEUE_TIMEOUT_PREVIEW, session=label, preview=preview)
+                        if preview else tr.html(QUEUE_TIMEOUT, session=label),
                         parse_mode="HTML",
                     )
                 except Exception:
@@ -1553,7 +1551,8 @@ class NotifyMixin:
             # "thinking" stops automatically and doesn't hang. Sticky
             # repeats ("session halted …" — the hook denying every later
             # tool this turn) are audited only: no extra halt, no 🛑 spam.
-            sticky = reason.startswith("session halted")
+            from aipager.bot import safety_notice
+            sticky = safety_notice.is_sticky(reason)
             if not sticky:
                 await self._halt_for_safety(sess, reason)
             try:
@@ -1840,11 +1839,12 @@ class NotifyMixin:
             # prompt itself.
             kind = context.get("kind")
             summary = context.get("summary")
-            reminder = (f"⬆️ <b>{html_mod.escape(label)}</b> · still waiting "
-                        "for your answer above")
+            tr = i18n.for_sess(sess)
+            reminder = tr.html(WAITING, session=label)
             if summary:
-                head = "Question" if kind == "question" else "Permission"
-                reminder += f"\n{head}: {html_mod.escape(str(summary)[:120])}"
+                reminder += "\n" + tr.html(
+                    WAITING_QUESTION if kind == "question" else WAITING_PERMISSION,
+                    summary=str(summary)[:120])
             reply_to = (sess.busy_msg_id
                         if sess.busy_msg_id and sess.busy_msg_id > 0 else None)
             try:
@@ -1879,13 +1879,8 @@ class NotifyMixin:
             )
             sess.close_turn()  # no card for this turn from here (8.57)
             self._stop_animation(sess)
-            warn_text = (
-                f"⚠️ <b>{html_mod.escape(label)}</b> · Not taken by Claude Code\n"
-                "\n"
-                f"No hook arrived within {grace:.0f} s of the send. A message "
-                "that starts with \"/\" is read as a slash command - check "
-                "the terminal."
-            )
+            tr = i18n.for_sess(sess)
+            warn_text = tr.html(NOT_TAKEN, session=label, grace=tr.num(f"{grace:.0f}"))
             # Written and retired under the card-edit lock
             # (`_settle_card_text`): a merely late hook's card edit must
             # not land after the warning and put "Working" back.
@@ -2165,14 +2160,15 @@ class NotifyMixin:
             # "no phantom entries" rule).
             existing_msg_id = sess.busy_msg_id
             pushed_msg_id: int | None = None
+            compacting = i18n.for_sess(sess).html(COMPACTING, session=label, dots="")
             if existing_msg_id and existing_msg_id > 0:
-                text = f"🔄 <b>{html_mod.escape(label)}</b> · Compacting"
+                text = compacting
                 await self._edit_busy_raw(existing_msg_id, text, chat_id=resolve_chat_id(sess))
                 pushed_msg_id = existing_msg_id
             else:
                 # No busy message — send a new one
                 try:
-                    text = f"🔄 <b>{html_mod.escape(label)}</b> · Compacting"
+                    text = compacting
                     msg = await bot.send_message(
                         resolve_chat_id(sess), text, parse_mode="HTML",
                         reply_to_message_id=sess.trigger_msg_id,
@@ -2196,14 +2192,13 @@ class NotifyMixin:
             sess.animate_task = asyncio.create_task(
                 self._animate_compact(sess))
             if self.observers:
-                obs_text = f"🔄 <b>{html_mod.escape(label)}</b> · Compacting"
-                asyncio.create_task(self.observers.broadcast(obs_text))
+                asyncio.create_task(self.observers.broadcast(compacting))
             return
 
         if event == "context_warning":
             ctx_pct = context.get("context_pct", 0)
-            warn_text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Context at "
-                         f"{ctx_pct}% - auto-compact soon")
+            tr = i18n.for_sess(sess)
+            warn_text = tr.html(CONTEXT_WARNING, session=label, percent=tr.num(f"{ctx_pct}%"))
             try:
                 keyboard = self._build_compact_keyboard(sess)
                 await bot.send_message(resolve_chat_id(sess), warn_text, parse_mode="HTML",
@@ -2229,19 +2224,7 @@ class NotifyMixin:
             # max(1, …) so a sub-60s STALE_BUSY_TIMEOUT override (ops
             # testing) never renders "quiet for 0 min".
             minutes = context.get("minutes", max(1, int(STALE_BUSY_TIMEOUT / 60)))
-            stale_text = (
-                f"⏳ <b>{html_mod.escape(label)}</b> · still working "
-                f"(quiet for {minutes} min)\n"
-                "\n"
-                "No status updates yet. This is usually normal.\n"
-                "\n"
-                "<blockquote expandable>What could be happening\n"
-                "  • Long-running tool call (Bash, WebSearch, large fetch)\n"
-                "  • Heavy generation on a very large context\n"
-                "  • Compaction in progress\n"
-                "  • Rate-limit backoff or subscription limit\n"
-                "  • Network wedge or claude crash</blockquote>"
-            )
+            stale_text = i18n.for_sess(sess).n(QUIET_TURN, int(minutes), session=label)
             try:
                 keyboard = self._build_stop_keyboard(sess)
                 await bot.send_message(resolve_chat_id(sess), stale_text, parse_mode="HTML",
@@ -2272,8 +2255,9 @@ class NotifyMixin:
             target_msg_id = sess.busy_msg_id
             if not target_msg_id and popped is not None:
                 target_msg_id = popped.msg_id
-            text = (f"📦 <b>{html_mod.escape(label)}</b> · "
-                    f"Compacted: {before_pct}% → {after_pct}%")
+            tr = i18n.for_sess(sess)
+            text = tr.html(COMPACTED, session=label, before=tr.num(f"{before_pct}%"),
+                           after=tr.num(f"{after_pct}%"))
             if target_msg_id and target_msg_id > 0:
                 result = await self._edit_busy_raw(target_msg_id, text, chat_id=resolve_chat_id(sess))
                 if result is None:
@@ -2335,8 +2319,7 @@ class NotifyMixin:
             # behind the text below would land after it and leave the card
             # on "Compacting." for good. A BUSY card is resumed below.
             self._stop_animation(sess)
-            text = (f"⏱️ <b>{html_mod.escape(label)}</b> · Compaction didn't "
-                    f"confirm completion after {minutes} min")
+            text = i18n.for_sess(sess).n(COMPACT_TIMEOUT, minutes, session=label)
             # Under the card-edit lock: when nothing is resumed, the text
             # below is this message's last word, and a busy-card edit that
             # took the lock while it was out would land after it (both are
@@ -2392,19 +2375,6 @@ class NotifyMixin:
                     pass
                 sess.busy_msg_id = None
             source = context.get("source", "unknown")
-            source_labels = {
-                "clear": "cleared",
-                "resume": "switched to another conversation",
-                "logout": "logged out",
-                "prompt_input_exit": "exited",
-                "bypass_permissions_disabled": "permissions error",
-                "disappeared": "crashed or killed",
-                # Claude Code's default reason — a signal among others —
-                # not evidence of a crash ("disappeared" is the one with
-                # evidence: the socket vanished).
-                "other": "exited",
-                "unknown": "exited",
-            }
             if sess.is_restarting():
                 # The user asked for this exit — `/perms` kills the session to
                 # relaunch it under the other permission mode. Reporting it as
@@ -2427,8 +2397,9 @@ class NotifyMixin:
                 log.info("[%s] session_end right after /kill (%s) — not "
                          "alerting", label, source)
                 return
-            reason = source_labels.get(source, "exited")
-            text = f"🔴 <b>{html_mod.escape(label)}</b> · Session {reason}"
+            # By the hook's source id, one whole line each.
+            text = i18n.for_sess(sess).html(
+                SESSION_END_MSGS[_SESSION_END_SOURCES.get(source, "exited")], session=label)
             try:
                 await bot.send_message(resolve_chat_id(sess), text, parse_mode="HTML")
             except Exception:
@@ -3572,27 +3543,131 @@ class NotifyMixin:
                     pass  # message may be too old or already edited
 
 
-def memory_cap_body(hook_name: str, has_owner: bool) -> str:
+# The notices about a session (HTML; the session's chat's, sent to its
+# observers as rendered).
+MEMCAP_HEAD = Msg("notice.memcap_head", "⚠️ <b>{session}</b> · memory cap hit",
+                  note="A helper of aipager ran out of its memory limit", eg={"session": "x1"})
+MEMCAP_HEAD_TOOL = Msg("notice.memcap_head_tool",
+                       "⚠️ <b>{session}</b> · memory cap hit during <code>{tool}</code>",
+                       note="As notice.memcap_head, while checking that tool",
+                       eg={"session": "x1", "tool": "Bash"})
+MEMCAP_STATUSLINE = Msg("notice.memcap_statusline",
+                        "<code>{hook}</code> ran out of its {limit} GB memory limit, so one "
+                        "status line update was skipped. The session keeps running.",
+                        note="The status line helper hit its memory limit; {hook} is its name",
+                        eg={"hook": "aipager-statusline", "limit": 1})
+MEMCAP_HOOK = Msg("notice.memcap_hook",
+                  "<code>{hook}</code> ran out of its {limit} GB memory limit and stopped. If "
+                  "it was checking a tool call, Claude Code most likely refused that call and "
+                  "Claude can try it again; otherwise only that one event was skipped. The "
+                  "session keeps running.",
+                  note="The hook hit its memory limit; {hook} is its name",
+                  eg={"hook": "aipager-hook", "limit": 1})
+MEMCAP_NUDGE_OWNER = Msg("notice.memcap_nudge_owner",
+                         "<i>If this keeps happening, the owner can tap Report this to send "
+                         "the maintainer a report.</i>",
+                         note="Report this is the button under the notice (use its "
+                              "translation)")
+MEMCAP_NUDGE_CLI = Msg("notice.memcap_nudge_cli",
+                       "<i>If this keeps happening, run {command} in a terminal to send the "
+                       "maintainer a report.</i>",
+                       note="{command} is the command that sends a problem report",
+                       eg={"command": "aipager report"})
+QUEUE_TIMEOUT = Msg("notice.queue_timeout",
+                    "⏳ <b>{session}</b> · a queued message wasn't confirmed picked up in time - "
+                    "Claude may still process it.",
+                    note="A message Claude Code held was not seen taken", eg={"session": "x1"})
+QUEUE_TIMEOUT_PREVIEW = Msg("notice.queue_timeout_preview",
+                            "⏳ <b>{session}</b> · a queued message wasn't confirmed picked up "
+                            "in time: \"{preview}\" - Claude may still process it.",
+                            note="As notice.queue_timeout, with the start of the message",
+                            eg={"session": "x1", "preview": "fix the tests"})
+WAITING = Msg("notice.waiting", "⬆️ <b>{session}</b> · still waiting for your answer above",
+              note="A reminder: a question or permission prompt above waits",
+              eg={"session": "x1"})
+WAITING_QUESTION = Msg("notice.waiting_question", "Question: {summary}",
+                       note="Under notice.waiting: the question", eg={"summary": "Which one?"})
+WAITING_PERMISSION = Msg("notice.waiting_permission", "Permission: {summary}",
+                         note="Under notice.waiting: what wants permission",
+                         eg={"summary": "Bash: ls"})
+NOT_TAKEN = Msg("notice.not_taken",
+                "⚠️ <b>{session}</b> · Not taken by Claude Code\n\nNo hook arrived within "
+                "{grace} s of the send. A message that starts with \"/\" is read as a slash "
+                "command - check the terminal.",
+                note="A message sent to Claude Code that it never took; {grace} is seconds",
+                eg={"session": "x1", "grace": "45"})
+CONTEXT_WARNING = Msg("notice.context",
+                      "⚠️ <b>{session}</b> · Context at {percent} - auto-compact soon",
+                      note="The session's context is nearly full", eg={"session": "x1",
+                                                                         "percent": "92%"})
+QUIET_TURN = Plural(
+    "notice.quiet_turn",
+    one="⏳ <b>{session}</b> · still working (quiet for {n} min)\n\nNo status updates yet. "
+        "This is usually normal.\n\n<blockquote expandable>What could be happening\n"
+        "  • Long-running tool call (Bash, WebSearch, large fetch)\n"
+        "  • Heavy generation on a very large context\n"
+        "  • Compaction in progress\n"
+        "  • Rate-limit backoff or subscription limit\n"
+        "  • Network wedge or claude crash</blockquote>",
+    other="⏳ <b>{session}</b> · still working (quiet for {n} min)\n\nNo status updates yet. "
+          "This is usually normal.\n\n<blockquote expandable>What could be happening\n"
+          "  • Long-running tool call (Bash, WebSearch, large fetch)\n"
+          "  • Heavy generation on a very large context\n"
+          "  • Compaction in progress\n"
+          "  • Rate-limit backoff or subscription limit\n"
+          "  • Network wedge or claude crash</blockquote>",
+    note="A turn with no news for {n} minutes; the list opens on a tap",
+    eg={"session": "x1"})
+COMPACTED = Msg("notice.compacted", "📦 <b>{session}</b> · Compacted: {before} → {after}",
+                note="The context was compacted: how full before and after; RTL catalogs use ←",
+                eg={"session": "x1", "before": "88%", "after": "12%"})
+COMPACT_TIMEOUT = Plural(
+    "notice.compact_timeout",
+    one="⏱️ <b>{session}</b> · Compaction didn't confirm completion after {n} min",
+    other="⏱️ <b>{session}</b> · Compaction didn't confirm completion after {n} min",
+    note="Compaction gave no sign of finishing within {n} minutes", eg={"session": "x1"})
+#: The session ended, by the hook's ``source`` id (an unknown one: exited).
+SESSION_END_MSGS: dict[str, Msg] = {
+    "clear": Msg("notice.session_end.clear", "🔴 <b>{session}</b> · Session cleared",
+                 note="The session's conversation was cleared (/clear)", eg={"session": "x1"}),
+    "resume": Msg("notice.session_end.resume",
+                  "🔴 <b>{session}</b> · Session switched to another conversation",
+                  note="The session moved to another conversation (/resume in Claude Code)",
+                  eg={"session": "x1"}),
+    "logout": Msg("notice.session_end.logout", "🔴 <b>{session}</b> · Session logged out",
+                  note="Claude Code logged out", eg={"session": "x1"}),
+    "exited": Msg("notice.session_end.exited", "🔴 <b>{session}</b> · Session exited",
+                  note="Claude Code exited", eg={"session": "x1"}),
+    "permissions": Msg("notice.session_end.permissions",
+                       "🔴 <b>{session}</b> · Session permissions error",
+                       note="Claude Code stopped on a permissions error", eg={"session": "x1"}),
+    "crashed": Msg("notice.session_end.crashed", "🔴 <b>{session}</b> · Session crashed or killed",
+                   note="The session's process vanished", eg={"session": "x1"}),
+}
+_SESSION_END_SOURCES = {
+    "clear": "clear", "resume": "resume", "logout": "logout",
+    "prompt_input_exit": "exited", "bypass_permissions_disabled": "permissions",
+    "disappeared": "crashed",
+    # Claude Code's default reason — a signal among others — not evidence
+    # of a crash ("disappeared" is the one with evidence: the socket
+    # vanished).
+    "other": "exited", "unknown": "exited",
+}
+
+
+def memory_cap_body(hook_name: str, has_owner: bool, tr=None) -> str:
     """What a hook's memory-cap hit did (roadmap 8.109). The hook stops
     with exit 2 on a PreToolUse, which Claude Code reads as a refusal of
     that tool call, and with exit 1 on any other event, which skips only
     that event; the cap-hit message does not say which event it was, so
     the text says both ("most likely": a cap hit while the hook was still
     reading a very large request exits 1 even on a PreToolUse, and the
-    tool runs). The status line helper only skips an update."""
-    name = html_mod.escape(hook_name)
-    if hook_name == "aipager-statusline":
-        what = (f"<code>{name}</code> ran out of its 1 GB memory limit, so one "
-                "status line update was skipped. The session keeps running.")
-    else:
-        what = (f"<code>{name}</code> ran out of its 1 GB memory limit and stopped. "
-                "If it was checking a tool call, Claude Code most likely refused that "
-                "call and Claude can try it again; otherwise only that one event was "
-                "skipped. "
-                "The session keeps running.")
+    tool runs). The status line helper only skips an update. In *tr*'s
+    language (English when None)."""
+    tr = tr or i18n.get("en")
+    what = tr.html(MEMCAP_STATUSLINE if hook_name == "aipager-statusline" else MEMCAP_HOOK,
+                   hook=hook_name, limit=1)
     # The notice may go to a group: only the owner's tap does anything.
-    nudge = ("<i>If this keeps happening, the owner can tap Report this to send "
-             "the maintainer a report.</i>" if has_owner else
-             "<i>If this keeps happening, run <code>aipager report</code> in a "
-             "terminal to send the maintainer a report.</i>")
+    nudge = (tr.html(MEMCAP_NUDGE_OWNER) if has_owner else
+             tr.html(MEMCAP_NUDGE_CLI, command=Span("<code>aipager report</code>")))
     return what + "\n\n" + nudge

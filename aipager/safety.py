@@ -578,6 +578,35 @@ def _matches_targets(targets: set[str], glob: str) -> bool:
                for g in _glob_variants(glob) for t in targets)
 
 
+# ---------------------------------------------------------------------------
+# Reason codes (multilingual phase 3a). Every deny reason below is what
+# Claude reads, byte for byte, and also what the daemon is told. The daemon
+# reads it back into a code and its parameters to show the block in the
+# chat's language (``aipager/bot/safety_notice.py``); Claude keeps the
+# sentence. Plain data only: each writer has its code and its anchored
+# shape right beside it, and changing a writer's words means changing its
+# shape and the daemon's key with it (``tests/test_safety_notice.py`` pins
+# every one against its writer). Nothing here imports the daemon.
+# ---------------------------------------------------------------------------
+
+#: What a placeholder in a shape stands for: a tool name is one word, a
+#: path or glob anything (up to the fixed words after it, or the end).
+_SHAPE_PARAMS = {"{tool}": r"(?P<tool>\S+)", "{glob}": r"(?P<glob>.+)",
+                 "{shown}": r"(?P<shown>.+)"}
+_SHAPE_PARAM = re.compile(r"(\{tool\}|\{glob\}|\{shown\})")
+
+
+def reason_shape(*words: str, tail: str = "") -> str:
+    """The anchored pattern of a reason written as *words* joined by single
+    spaces: ``{tool}``, ``{glob}`` and ``{shown}`` (alone or inside a word,
+    as in ``({shown});``) stand for their values, everything else is
+    literal. *tail* is a raw pattern after the last word."""
+    def word(w: str) -> str:
+        return "".join(_SHAPE_PARAMS.get(piece) or re.escape(piece)
+                       for piece in _SHAPE_PARAM.split(w))
+    return r"\A" + " ".join(word(w) for w in words) + tail + r"\Z"
+
+
 def _glob_problem(glob) -> str | None:
     """Why a Grep ``glob`` / Glob ``pattern`` is not a plain relative
     pattern, or ``None``. Plain means: every piece relative (no leading
@@ -600,12 +629,40 @@ def _glob_problem(glob) -> str | None:
     return None
 
 
+#: "{tool} with {problem}" for each problem above (see _search_violation).
+REASON_GLOB_UNREADABLE = "glob_unreadable"
+REASON_GLOB_ESCAPED = "glob_escaped"
+REASON_GLOB_NOT_PLAIN = "glob_not_plain"
+REASON_GLOB_CLIMBS = "glob_climbs"
+_SHAPE_GLOB_UNREADABLE = reason_shape("{tool}", "with", "an", "unreadable", "glob")
+_SHAPE_GLOB_ESCAPED = reason_shape("{tool}", "with", "an", "escaped", "glob")
+_SHAPE_GLOB_NOT_PLAIN = reason_shape("{tool}", "with", "a", "glob", "that", "is", "not", "a",
+                                     "plain", "relative", "pattern")
+_SHAPE_GLOB_CLIMBS = reason_shape("{tool}", "with", "a", "glob", "that", "climbs", "out",
+                                  "with", "..")
+
+
 # The deny reason when a restricted turn's session runs in the home folder
 # (or above it), whose folder is then no write or search root (8.79).
 def _wide_cwd_reason(tool_name: str, verb: str) -> str:
     return (f"{tool_name} denied - this session runs in the home folder "
             f"(or a folder above it), and this role can only {verb} inside "
             "a project folder")
+
+
+REASON_WIDE_CWD_WRITE = "wide_cwd_write"
+REASON_WIDE_CWD_SEARCH = "wide_cwd_search"
+
+
+def _wide_cwd_shape(verb: str) -> str:
+    return reason_shape("{tool}", "denied", "-", "this", "session", "runs", "in", "the",
+                        "home", "folder", "(or", "a", "folder", "above", "it),", "and",
+                        "this", "role", "can", "only", verb, "inside", "a", "project",
+                        "folder")
+
+
+_SHAPE_WIDE_CWD_WRITE = _wide_cwd_shape("write")
+_SHAPE_WIDE_CWD_SEARCH = _wide_cwd_shape("search")
 
 
 def _search_violation(
@@ -630,6 +687,10 @@ def _search_violation(
         # A NUL byte is never a real path; denied explicitly rather than by
         # relying on something downstream raising on it.
         return f"{tool_name} with an unreadable search folder"
+    # The shapes this writes: REASON_SEARCH_FOLDER_UNREADABLE (above, and
+    # in _unconfined_search_violation), REASON_OUTSIDE_SEARCH,
+    # REASON_PATH_PROTECTED, REASON_SEARCH_COULD_REACH,
+    # REASON_SEARCH_REACHES and the REASON_GLOB_* codes (below).
     spelled = _norm(root, cwd)
     real = _realpath(spelled)
     if not any(_under(real, _realpath(_norm(r))) for r in roots):
@@ -652,6 +713,21 @@ def _search_violation(
         if problem:
             return f"{tool_name} with {problem}"
     return None
+
+
+REASON_SEARCH_FOLDER_UNREADABLE = "search_folder_unreadable"
+REASON_OUTSIDE_SEARCH = "outside_search"
+REASON_SEARCH_COULD_REACH = "search_could_reach"
+REASON_SEARCH_REACHES = "search_reaches"
+_SHAPE_SEARCH_FOLDER_UNREADABLE = reason_shape("{tool}", "with", "an", "unreadable", "search",
+                                               "folder")
+_SHAPE_OUTSIDE_SEARCH = reason_shape("{tool}", "outside", "the", "session's", "folder", "-", "a",
+                                     "restricted", "turn", "searches", "only", "its",
+                                     "project", "and", "scratchpad")
+_SHAPE_SEARCH_COULD_REACH = reason_shape("{tool}", "search", "could", "reach", "protected",
+                                         "path", "{glob}")
+_SHAPE_SEARCH_REACHES = reason_shape("{tool}", "search", "reaches", "protected", "path",
+                                     "{glob}")
 
 
 # What can stand for something other than itself in a Glob tool pattern
@@ -776,6 +852,20 @@ def _unconfined_search_violation(
     return None
 
 
+REASON_PATTERN_UNREADABLE = "pattern_unreadable"
+REASON_SEARCH_ANYWHERE = "search_anywhere"
+REASON_SEARCH_PROTECTED_FILES = "search_protected_files"
+_SHAPE_PATTERN_UNREADABLE = reason_shape("{tool}", "with", "an", "unreadable", "pattern")
+_SHAPE_SEARCH_ANYWHERE = reason_shape("{tool}", "denied", "-", "the", "protected", "path",
+                                      "{glob}", "can", "be", "in", "any", "folder,", "so",
+                                      "this", "role", "cannot", "search", "with", "Grep",
+                                      "or", "Glob")
+_SHAPE_SEARCH_PROTECTED_FILES = reason_shape("{tool}", "denied", "-", "this", "search",
+                                             "would", "reach", "protected", "files",
+                                             "({shown});", "search", "inside", "a",
+                                             "project", "folder", "instead")
+
+
 def _confinement_violation(tool_name: str, real: str,
                            write_roots: tuple[str, ...],
                            wide_cwd: bool = False) -> str | None:
@@ -801,6 +891,15 @@ def _confinement_violation(tool_name: str, real: str,
         return _wide_cwd_reason(tool_name, "write")
     return (f"{tool_name} outside the session's folder - a restricted turn "
             "writes only in its project and scratchpad")
+
+
+REASON_RUNS_COMMANDS = "runs_commands"
+REASON_OUTSIDE_WRITE = "outside_write"
+_SHAPE_RUNS_COMMANDS = reason_shape("{tool}", "to", "a", "file", "that", "runs", "commands",
+                                    "(.claude/,", ".git/,", ".mcp.json)")
+_SHAPE_OUTSIDE_WRITE = reason_shape("{tool}", "outside", "the", "session's", "folder", "-", "a",
+                                    "restricted", "turn", "writes", "only", "in", "its",
+                                    "project", "and", "scratchpad")
 
 
 def path_violation(
@@ -863,6 +962,16 @@ def path_violation(
     return None
 
 
+REASON_PATH_UNREADABLE = "path_unreadable"
+REASON_PATH_PROTECTED = "path_protected"
+REASON_PATH_PROTECTED_WRITE = "path_protected_write"
+_SHAPE_PATH_UNREADABLE = reason_shape("{tool}", "with", "an", "unreadable", "path")
+# Written here and by _search_violation.
+_SHAPE_PATH_PROTECTED = reason_shape("{tool}", "on", "protected", "path", "{glob}")
+_SHAPE_PATH_PROTECTED_WRITE = reason_shape("{tool}", "write", "to", "protected", "path",
+                                           "{glob}")
+
+
 # A session's own scratchpad root: Claude Code gives every session a
 # directory under ``/tmp/claude-<uid>/<project>/<session>/scratchpad`` and
 # points it there, so ordinary commands carry the path. The built-in
@@ -898,6 +1007,11 @@ BASH_REASON = "Bash command blocked by safety policy"
 BASH_SEARCH_REASON = (
     f"{BASH_REASON}: a recursive search or listing of the whole home folder "
     "or / is not allowed; search inside a project folder instead")
+
+REASON_BASH = "bash"
+REASON_BASH_SEARCH = "bash_search"
+_SHAPE_BASH = r"\A" + re.escape(BASH_REASON) + r"\Z"
+_SHAPE_BASH_SEARCH = r"\A" + re.escape(BASH_SEARCH_REASON) + r"\Z"
 
 
 def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
@@ -940,3 +1054,52 @@ def tool_violation(
     if tool_name in deny_tools:
         return f"{tool_name} is in this role's deny_tools"
     return None
+
+
+REASON_TOOL_NOT_ALLOWED = "tool_not_allowed"
+REASON_TOOL_DENIED = "tool_denied"
+_SHAPE_TOOL_NOT_ALLOWED = reason_shape("{tool}", "not", "in", "this", "role's", "allow_tools")
+_SHAPE_TOOL_DENIED = reason_shape("{tool}", "is", "in", "this", "role's", "deny_tools")
+
+#: Enforce's own two reasons (``aipager/dtach/enforce.py`` writes them;
+#: this file never imports it): every tool call after a block in the same
+#: turn ("session halted - ...", told apart by that prefix alone, so any
+#: wording after it is the same repeat), and a call whose check could not
+#: run. Matched by pattern, as plain data; ``tests/test_safety_notice.py``
+#: pins both against enforce's real sentences.
+REASON_HALTED = "halted"
+REASON_UNCHECKED = "unchecked"
+_SHAPE_HALTED = reason_shape("session", "halted", tail=".*")
+_SHAPE_UNCHECKED = reason_shape("this", "tool", "call", "could", "not", "be", "checked,", "so",
+                                "it", "was", "denied")
+
+#: ``(code, shape)`` for every reason a block can carry, in the order the
+#: daemon tries them (enforce's two first, then exact sentences; every
+#: shape is anchored, so no two match the same reason). Compile with
+#: ``re.S``: a path or glob may span lines.
+REASON_SHAPES: tuple[tuple[str, str], ...] = (
+    (REASON_HALTED, _SHAPE_HALTED),
+    (REASON_UNCHECKED, _SHAPE_UNCHECKED),
+    (REASON_BASH_SEARCH, _SHAPE_BASH_SEARCH),
+    (REASON_BASH, _SHAPE_BASH),
+    (REASON_TOOL_NOT_ALLOWED, _SHAPE_TOOL_NOT_ALLOWED),
+    (REASON_TOOL_DENIED, _SHAPE_TOOL_DENIED),
+    (REASON_PATH_UNREADABLE, _SHAPE_PATH_UNREADABLE),
+    (REASON_PATH_PROTECTED_WRITE, _SHAPE_PATH_PROTECTED_WRITE),
+    (REASON_PATH_PROTECTED, _SHAPE_PATH_PROTECTED),
+    (REASON_RUNS_COMMANDS, _SHAPE_RUNS_COMMANDS),
+    (REASON_WIDE_CWD_WRITE, _SHAPE_WIDE_CWD_WRITE),
+    (REASON_WIDE_CWD_SEARCH, _SHAPE_WIDE_CWD_SEARCH),
+    (REASON_OUTSIDE_WRITE, _SHAPE_OUTSIDE_WRITE),
+    (REASON_OUTSIDE_SEARCH, _SHAPE_OUTSIDE_SEARCH),
+    (REASON_SEARCH_FOLDER_UNREADABLE, _SHAPE_SEARCH_FOLDER_UNREADABLE),
+    (REASON_PATTERN_UNREADABLE, _SHAPE_PATTERN_UNREADABLE),
+    (REASON_GLOB_UNREADABLE, _SHAPE_GLOB_UNREADABLE),
+    (REASON_GLOB_ESCAPED, _SHAPE_GLOB_ESCAPED),
+    (REASON_GLOB_NOT_PLAIN, _SHAPE_GLOB_NOT_PLAIN),
+    (REASON_GLOB_CLIMBS, _SHAPE_GLOB_CLIMBS),
+    (REASON_SEARCH_COULD_REACH, _SHAPE_SEARCH_COULD_REACH),
+    (REASON_SEARCH_REACHES, _SHAPE_SEARCH_REACHES),
+    (REASON_SEARCH_ANYWHERE, _SHAPE_SEARCH_ANYWHERE),
+    (REASON_SEARCH_PROTECTED_FILES, _SHAPE_SEARCH_PROTECTED_FILES),
+)

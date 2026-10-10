@@ -13,6 +13,7 @@ import asyncio
 import html as html_mod
 import logging
 import time
+from types import SimpleNamespace
 # Path itself is no longer dereferenced in this module (the poll loop
 # that used it moved to session_ops.py's _kill_and_relaunch_core — see
 # design.md ORCHESTRATOR OVERRIDE) but the name is kept importable here
@@ -31,6 +32,7 @@ from telegram.ext import (
 )
 
 from aipager.bot.mode_labels import mode_label
+from aipager.bot.sibling_text import shown
 from aipager.bot import (
     card_owner,
     card_rows,
@@ -120,14 +122,124 @@ _sleep = asyncio.sleep
 CALLBACK_ACK_BOUND = 1.0
 
 
-def _switch_refused(outcome) -> str:
+# The mode card's notes (HTML, the chat's language): what a switch did.
+MODE_REFUSED_RESTARTING = Msg(
+    "modecard.refused_restarting",
+    "⚠️ <b>{session}</b> is restarting right now - mode not changed. Try again in a moment.",
+    note="HTML. A mode switch refused: the session is restarting", eg={"session": "x1"})
+MODE_REFUSED_NOT_RUNNING = Msg(
+    "modecard.refused_not_running", "⚠️ <b>{session}</b> is not running - mode not changed.",
+    note="HTML. A mode switch refused: the session is not running", eg={"session": "x1"})
+MODE_MOVED_ON = Msg("modecard.moved_on",
+                    "⚠️ <b>{session}</b> moved on to new work, so nothing changed.",
+                    note="HTML. A mode card tapped after a new turn began", eg={"session": "x1"})
+MODE_SWITCHING = Msg("modecard.switching", "⚙️ Switching <b>{session}</b> to {mode} mode…",
+                     note="HTML. A mode switch is under way",
+                     eg={"session": "x1", "mode": "Ask"})
+MODE_SWITCHED_BY = Msg("modecard.switched_by", "⚙️ Switched to {mode} by {person}.",
+                       note="HTML. Above the mode card in a group: who switched it",
+                       eg={"mode": "Ask", "person": "@bob"})
+MODE_STILL_STOPPING = Msg("modecard.still_stopping",
+                          "⚠️ <b>{session}</b> is still stopping - mode not changed.",
+                          note="HTML. The session did not stop in time for the switch",
+                          eg={"session": "x1"})
+MODE_SWITCH_FAILED = Msg("modecard.switch_failed", "❌ Couldn't switch mode: {error}",
+                         note="HTML. The switch failed; {error} is why (often English)",
+                         eg={"error": "dtach not installed"})
+MODE_STALE = Msg("modecard.stale", "⚠️ That card was out of date, so nothing changed.",
+                 note="HTML. A mode confirm whose record is gone")
+MODE_SESSION_MISSING = Msg("modecard.session_missing", "⚠️ Session not found.",
+                           note="HTML. The mode card's session no longer exists")
+CANCELLED = Msg("sess.cancelled", "↩️ Cancelled.", note="A card cancelled")
+TOAST_KILL_STALE = Msg("toast.kill_stale", "This button is out of date - send /kill again",
+                       note="Pop-up: an old /kill button")
+KILL_CANCELLED = Msg("sess.kill_cancelled", "↩️ Cancelled. Nothing was ended.",
+                     note="The End confirm, cancelled")
+# Retry, Compact and /status's Clear all (pop-ups: the tapper's; a note
+# on the card: the chat's).
+TOAST_RETRY_NOTHING = Msg("toast.retry_nothing", "Nothing to retry",
+                          note="Pop-up: Retry with no message to send again")
+TOAST_RETRY_NOT_ALIVE = Msg("toast.retry_not_alive", "Session '{session}' not alive",
+                            note="Pop-up: Retry while the session's process is gone; {session} "
+                                 "is its internal name", eg={"session": "claude-x1"})
+TOAST_RETRY_OTHERS_TURN = Msg("toast.retry_others_turn",
+                              "Another person's turn is running - retry when it ends",
+                              note="Pop-up: Retry refused while someone else's turn runs")
+TOAST_RETRY_PROMPT_OPEN = Msg("toast.retry_prompt_open",
+                              "Answer the open prompt first, then retry",
+                              note="Pop-up: Retry refused while a prompt waits")
+TOAST_RETRY_RETRYING = Msg("toast.retry_retrying", "Retrying [{session}]",
+                           note="Pop-up: the message was sent again", eg={"session": "x1"})
+TOAST_RETRY_FAILED = Msg("toast.retry_failed", "Failed to retry",
+                         note="Pop-up: the message could not be sent again")
+RETRY_NOTE_OTHERS = Msg("route.retry_note_others",
+                        "⏸ Not retried - another person's turn is running. Tap Retry again when "
+                        "it ends.", note="Added under the error card: Retry refused; Retry is "
+                                         "the button (perm.btn.retry)")
+RETRY_NOTE_PROMPT = Msg("route.retry_note_prompt",
+                        "⏸ Not retried - a prompt is open. Answer it, then tap Retry again.",
+                        note="Added under the error card: Retry refused; Retry is the button "
+                             "(perm.btn.retry)")
+TOAST_COMPACT_SENDING = Msg("toast.compact_sending", "Compacting [{session}]",
+                            note="Pop-up: /compact was sent", eg={"session": "x1"})
+TOAST_COMPACT_FAILED = Msg("toast.compact_failed", "Failed to send /compact",
+                           note="Pop-up: /compact could not be sent")
+TOAST_CLEAR_DONE = Plural("toast.clear_done",
+                          one="Cleared {n} from /status (still in /resume)",
+                          other="Cleared {n} from /status (still in /resume)",
+                          note="Pop-up: {n} ended sessions hidden from /status; /resume still "
+                               "lists them")
+TOAST_CLEAR_NOTHING = Msg("toast.clear_nothing", "Nothing to clear",
+                          note="Pop-up: no ended session to hide")
+UNKNOWN_ACTION = Msg("toast.unknown_action", "Unknown: {action}",
+                     note="Pop-up: a button aipager does not know; {action} is its code",
+                     eg={"action": "zzz"})
+PICK_CANCELLED = Msg("sess.pick_cancelled", "Cancelled.",
+                     note="A list of sessions to pick from, cancelled")
+# /new's conflict card taps (edits: the chat's; pop-ups: the tapper's).
+TOAST_NEW_ONLY_SENDER = Msg("toast.new_only_sender",
+                            "Only the person who sent /new can use this card.",
+                            note="Pop-up: a tap on someone else's /new card")
+TOAST_NEW_CANT_START_RESUME = Msg("toast.new_cant_start_resume",
+                                  "You can't start or resume sessions here.",
+                                  note="Pop-up: the person may not start sessions here")
+NEW_CANCELLED_NOTHING = Msg("newflow.cancelled_nothing", "↩️ Cancelled - no session changed.",
+                            note="The conflict card, cancelled")
+NEW_SWITCHED_TO = Msg("newflow.switched_to", "↩️ Switched to <b>{session}</b>",
+                      note="HTML. The conflict card: messages now go to the running session",
+                      eg={"session": "x1"})
+NEW_PROMPT_QUEUED = Msg("newflow.prompt_queued", "📝 Prompt queued",
+                        note="Under newflow.switched_to: the first message waits for it")
+TOAST_NEW_EXPIRED = Msg("toast.new_expired", "This card has expired. Send /new again.",
+                        note="Pop-up: the conflict card's record is gone")
+TOAST_NEW_STARTED_SINCE = Msg("toast.new_started_since",
+                              "{session} started working since. Send /new again to replace "
+                              "it.", note="Pop-up: Replace refused for work the card never "
+                                          "showed", eg={"session": "x1"})
+NEW_STARTING_FRESH = Msg("newflow.starting_fresh", "🚀 Starting <b>{session}</b> (fresh)…",
+                         note="HTML. Replace: a fresh session starts with the name",
+                         eg={"session": "x1"})
+NEW_CREATE_FAILED = Msg("newflow.create_failed", "❌ {error}",
+                        note="Starting the session failed; {error} is why (English)",
+                        eg={"error": "a session named x1 already exists"})
+VOICE_NOT_INSTALLED_OK = Msg("media.voice_not_installed_ok", "↩️ OK, voice not installed.",
+                             note="The voice extra's offer, declined")
+TOAST_PERMS_RESTARTING = Msg("toast.perms_restarting",
+                             "{session} is restarting right now - tap again in a moment",
+                             note="Pop-up: a switch or restart is already running",
+                             eg={"session": "x1"})
+TOAST_PERMS_STALE = Msg("toast.perms_stale", "This card is out of date - nothing changed",
+                        note="Pop-up: the mode confirm's record is gone")
+
+
+def _switch_refused(outcome, tr=None) -> str:
     """Why a mode switch did not happen, for the reasons left after
-    still_stopping and launch_failed, which say their own."""
-    label = html_mod.escape(outcome.label)
+    still_stopping and launch_failed, which say their own (in *tr*'s
+    language, English when None)."""
+    tr = tr or i18n.get("en")
     if outcome.reason == "already_restarting":
-        return (f"⚠️ <b>{label}</b> is restarting right now - mode not changed. "
-                "Try again in a moment.")
-    return f"⚠️ <b>{label}</b> is not running - mode not changed."
+        return tr.html(MODE_REFUSED_RESTARTING, session=outcome.label)
+    return tr.html(MODE_REFUSED_NOT_RUNNING, session=outcome.label)
 
 
 STOPPED = Msg("ans.stopped", "⏹ Stopped {session}",
@@ -386,36 +498,36 @@ class CallbackDispatchMixin:
         above the card in a group (roadmap 8.91c; ``""`` in a DM). Returns
         the outcome, or None when the tap was refused as stale.
         """
-        label = html_mod.escape(sess.label)
+        # The mode card is the chat's (a stand-in may take this exact call:
+        # the language is resolved here).
+        tr = i18n.for_chat(chat_id)
+        mode = Safe(tr.html(mode_label(target_skip_perms)))
         if not (sess.tap_is_for_this_turn(None, turn=turn) if turn is not None
                 else sess.tap_is_for_this_turn(tapped_msg_id)):
             # A card offered while the session was idle can be tapped much
             # later, by which time a different turn is running — and this
             # path kills and relaunches it.
-            text, kb = self._mode_card(chat_id, sess, (
-                f"⚠️ <b>{label}</b> moved on to new work, so nothing changed."))
+            text, kb = self._mode_card(chat_id, sess, tr.html(MODE_MOVED_ON, session=sess.label))
             await edit_fn(text, parse_mode="HTML", reply_markup=kb)
             return None
         if announce:
             # The buttons go at once: a second tap during the relaunch has
             # nothing left to press.
-            await edit_fn(f"⚙️ Switching <b>{label}</b> to "
-                          f"{mode_label(target_skip_perms)} mode…",
+            await edit_fn(tr.html(MODE_SWITCHING, session=sess.label, mode=mode),
                           parse_mode="HTML")
         outcome = await self._perms_switch_core(sess, target_skip_perms)
 
         if outcome.ok:
-            note = (f"⚙️ Switched to {mode_label(target_skip_perms)} "
-                    f"by {html_mod.escape(by)}." if by else "")
+            note = (tr.html(MODE_SWITCHED_BY, mode=mode, person=Command(by)) if by else "")
             log.info("[%s] perms switched to skip_perms=%s", sess.label, target_skip_perms)
         elif outcome.reason == "still_stopping":
-            note = f"⚠️ <b>{label}</b> is still stopping - mode not changed."
+            note = tr.html(MODE_STILL_STOPPING, session=sess.label)
         elif outcome.reason == "launch_failed":
-            note = f"❌ Couldn't switch mode: {html_mod.escape(outcome.err)}"
+            note = tr.html(MODE_SWITCH_FAILED, error=outcome.err)
         else:
             # not_live / already_restarting: never silence (a refused
             # switch used to leave its card and buttons as they were).
-            note = _switch_refused(outcome)
+            note = _switch_refused(outcome, tr)
         text, kb = self._mode_card(chat_id, sess, note)
         await edit_fn(text, parse_mode="HTML", reply_markup=kb)
         return outcome
@@ -739,7 +851,8 @@ class CallbackDispatchMixin:
                     warn_unstamped(sess)
                 log.info("tap refused: %s:%s belongs to chat %s, tapped in %s",
                          session_name, action, sess.scope_chat_id, chat_id)
-                await self._safe_answer(query, tap_gate.OTHER_CHAT_TEXT)
+                await self._safe_answer(query, i18n.for_person(
+                    SimpleNamespace(callback_query=query)).text(tap_gate.OTHER_CHAT_TEXT))
                 return False
         perms_target_auto = False
         if action in ("perms_confirm", "perms_stop_switch"):
@@ -763,7 +876,9 @@ class CallbackDispatchMixin:
         await self._safe_answer(
             query,
             update_flow.tapper_tr(query).text(update_flow.DENIED_TEXT)
-            if cap is tap_gate.UPDATE else tap_gate.REFUSED_TEXT,
+            if cap is tap_gate.UPDATE
+            else i18n.for_person(SimpleNamespace(callback_query=query)).text(
+                tap_gate.REFUSED_TEXT),
             show_alert=True)
         return False
 
@@ -771,7 +886,8 @@ class CallbackDispatchMixin:
                                  cb_data: str, original_text: str) -> None:
         """The body of :meth:`_handle_callback`, after authorization."""
         if ":" not in cb_data:
-            await self._safe_answer(query, "Invalid callback")
+            await self._safe_answer(query, i18n.for_person(update).text(
+                language_menu.INVALID_CALLBACK))
             return
 
         session_name, action = cb_data.split(":", 1)
@@ -808,7 +924,7 @@ class CallbackDispatchMixin:
             self, calling_chat_id(update),
             getattr(getattr(query, "message", None), "message_id", None),
             getattr(getattr(query, "from_user", None), "id", None),
-            session_name, action)
+            session_name, action, tr=i18n.for_person(update))
         if toast is not None:
             await self._safe_answer(query, toast)
             return
@@ -901,16 +1017,14 @@ class CallbackDispatchMixin:
             # End confirm (session_parity "end" / "endok<turn_key>"). One
             # still sitting in a chat does nothing; it was shown for a
             # session and a turn nothing can check any more.
-            await self._safe_answer(query, "This button is out of date - send /kill again")
+            await self._safe_answer(query, i18n.for_person(update).text(TOAST_KILL_STALE))
             return
 
         if action == "kill-cancel":
             card_owner.release(self, calling_chat_id(update),
                                getattr(query.message, "message_id", None))
             try:
-                await edit_text(query,
-                    "↩️ Cancelled. Nothing was ended.",
-                )
+                await edit_text(query, i18n.for_update(update).text(KILL_CANCELLED))
             except Exception:
                 pass
             return
@@ -919,9 +1033,7 @@ class CallbackDispatchMixin:
         if session_name == "__voice__":
             if action == "cancel":
                 try:
-                    await edit_text(query,
-                        "↩️ OK, voice not installed."
-                    )
+                    await edit_text(query, i18n.for_update(update).text(VOICE_NOT_INSTALLED_OK))
                 except Exception:
                     pass
                 return
@@ -941,8 +1053,10 @@ class CallbackDispatchMixin:
             if not sess:
                 await self._safe_answer(query, i18n.for_person(update).text(NOT_FOUND))
                 return
+            # Pop-ups are the tapper's; the card's note is the chat's.
+            person = i18n.for_person(update)
             if not sess.last_prompt:
-                await self._safe_answer(query, "Nothing to retry")
+                await self._safe_answer(query, person.text(TOAST_RETRY_NOTHING))
                 return
             # Roadmap 8.17c R3: not during a flood mute — neither the
             # tapped card's chat nor the session's. Retry is three steps
@@ -966,12 +1080,12 @@ class CallbackDispatchMixin:
                 until = clear_time(MUTE.until(chat_muted))
                 log.info("[%s] Retry refused — chat %s is flood-muted until %s",
                          sess.label, chat_muted, until)
-                person = i18n.for_person(update)
                 await self._safe_answer(
                     query, person.text(RATE_LIMITED, time=person.num(until)))
                 return
             if not await inject.is_alive(session_name):
-                await self._safe_answer(query, f"Session '{session_name}' not alive")
+                await self._safe_answer(query, person.text(TOAST_RETRY_NOT_ALIVE,
+                                                           session=session_name))
                 return
             if (not sess.dialog_is_open()
                     and not mixed_sender_note_outstanding(sess, update)
@@ -982,14 +1096,11 @@ class CallbackDispatchMixin:
                 # Re-injected now, the prompt would join that turn under its
                 # rules; refused like the open-prompt case below, the card
                 # keeps its button for a tap once the turn ends.
-                await self._safe_answer(
-                    query, "Another person's turn is running - retry when "
-                    "it ends")
+                await self._safe_answer(query, person.text(TOAST_RETRY_OTHERS_TURN))
                 try:
                     await edit_message(query.message,
-                        f"{original_text}\n\n⏸ Not retried - another "
-                        "person's turn is running. Tap Retry again when it "
-                        "ends.",
+                        f"{original_text}\n\n"
+                        + i18n.for_update(update).text(RETRY_NOTE_OTHERS),
                         reply_markup=query.message.reply_markup,
                     )
                 except Exception:
@@ -1006,8 +1117,7 @@ class CallbackDispatchMixin:
                 # be typing the old prompt somewhere it doesn't belong.
                 # Refuse rather than queue: the operator is looking at the
                 # prompt, and tapping Retry again after answering is one tap.
-                await self._safe_answer(
-                    query, "Answer the open prompt first, then retry")
+                await self._safe_answer(query, person.text(TOAST_RETRY_PROMPT_OPEN))
                 # A toast is gone the moment the operator looks away, and
                 # tapping Retry is exactly the sort of thing done on the way
                 # out. Leave the reason on the card itself, keeping the
@@ -1015,8 +1125,8 @@ class CallbackDispatchMixin:
                 # answered. `last_prompt` is untouched, so nothing is lost.
                 try:
                     await edit_message(query.message,
-                        f"{original_text}\n\n⏸ Not retried - a prompt is "
-                        "open. Answer it, then tap Retry again.",
+                        f"{original_text}\n\n"
+                        + i18n.for_update(update).text(RETRY_NOTE_PROMPT),
                         reply_markup=query.message.reply_markup,
                     )
                 except Exception:
@@ -1039,7 +1149,8 @@ class CallbackDispatchMixin:
                 chat_id=calling_chat_id(update),
                 driver_user_id=tapper if tapper == author else None)
             if ok:
-                await self._safe_answer(query, f"Retrying [{sess.label}]")
+                await self._safe_answer(query, person.text(TOAST_RETRY_RETRYING,
+                                                           session=sess.label))
                 # Delete the error message — busy animation replaces it.
                 # In the chat the tapped message lives in: the same id in
                 # another chat is someone else's message.
@@ -1059,26 +1170,28 @@ class CallbackDispatchMixin:
                 # none, so even an owner cannot resend another member's.
                 await self._safe_answer(
                     query,
-                    NEEDS_ADMIN_REPLY
-                    if self._command_needs_admin(
-                        prompt, tapper, chat_id=self._attribution_chat(
-                            sess, calling_chat_id(update)))
-                    else RETRY_OTHERS_COMMAND_REPLY)
+                    shown(person, NEEDS_ADMIN_REPLY
+                          if self._command_needs_admin(
+                              prompt, tapper, chat_id=self._attribution_chat(
+                                  sess, calling_chat_id(update)))
+                          else RETRY_OTHERS_COMMAND_REPLY))
             else:
-                await self._safe_answer(query, "Failed to retry")
+                await self._safe_answer(query, person.text(TOAST_RETRY_FAILED))
             return
 
         if action == "compact":
+            person = i18n.for_person(update)
             sess = self.registry.get(session_name)
             if not sess:
-                await self._safe_answer(query, "Session not found")
+                await self._safe_answer(query, person.text(NOT_FOUND))
                 return
             if not await inject.is_alive(session_name):
-                await self._safe_answer(query, f"Session '{session_name}' not found")
+                await self._safe_answer(query, person.text(SESSION_GONE, session=session_name))
                 return
             ok = await self._inject_prompt(sess, "/compact")
             if ok:
-                await self._safe_answer(query, f"Compacting [{sess.label}]")
+                await self._safe_answer(query, person.text(TOAST_COMPACT_SENDING,
+                                                           session=sess.label))
                 # The tapped message, in its own chat (see Retry).
                 try:
                     await self._app.bot.delete_message(
@@ -1089,9 +1202,9 @@ class CallbackDispatchMixin:
                     pass
                 log.info("[%s] Compact triggered by user", sess.label)
             elif ok is PROMPT_REFUSED:
-                await self._safe_answer(query, NEEDS_ADMIN_REPLY)
+                await self._safe_answer(query, shown(person, NEEDS_ADMIN_REPLY))
             else:
-                await self._safe_answer(query, "Failed to send /compact")
+                await self._safe_answer(query, person.text(TOAST_COMPACT_FAILED))
             return
 
         # ---- /settings menu callbacks ----------------------------------
@@ -1113,7 +1226,7 @@ class CallbackDispatchMixin:
             held_message.drop(self, calling_chat_id(update),
                               getattr(query.message, "message_id", None))
             try:
-                await edit_text(query, "Cancelled.")
+                await edit_text(query, i18n.for_update(update).text(PICK_CANCELLED))
             except Exception:
                 pass
             return
@@ -1140,13 +1253,14 @@ class CallbackDispatchMixin:
                 if sess.status == Status.GONE and not sess.hidden_from_status:
                     sess.hidden_from_status = True
                     hidden.append(sess.label)
+            person = i18n.for_person(update)
             if hidden:
                 self.registry.mark_dirty()
                 await self._safe_answer(
-                    query, f"Cleared {len(hidden)} from /status (still in /resume)")
+                    query, person.n(TOAST_CLEAR_DONE, len(hidden), kind="text"))
                 log.info("Hid gone sessions from /status: %s", hidden)
             else:
-                await self._safe_answer(query, "Nothing to clear")
+                await self._safe_answer(query, person.text(TOAST_CLEAR_NOTHING))
             text, kb = self._render_status_list(chat, update)
             try:
                 await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
@@ -1176,11 +1290,13 @@ class CallbackDispatchMixin:
                     del self._perms_pending[session_name]
 
             chat = calling_chat_id(update)
+            shared = i18n.for_update(update)
+            person = i18n.for_person(update)
 
             async def _show_card(note: str = "") -> None:
                 """Back to the /mode card (the current mode, a fresh switch)."""
                 if sess is None:
-                    text, kb = (note or "↩️ Cancelled."), None
+                    text, kb = (note or shared.html(CANCELLED)), None
                 else:
                     text, kb = self._mode_card(chat, sess, note)
                 try:
@@ -1200,7 +1316,7 @@ class CallbackDispatchMixin:
                 # card's own, tapped twice). Say so, and keep the card and
                 # any record: the same button works in a moment.
                 await self._safe_answer(
-                    query, f"{sess.label} is restarting right now - tap again in a moment")
+                    query, person.text(TOAST_PERMS_RESTARTING, session=sess.label))
                 return
 
             if pending is None:
@@ -1209,15 +1325,15 @@ class CallbackDispatchMixin:
                 # restarted). Never guess: it used to default to Ask, so a
                 # "Switch to Auto?" card relaunched the session in Ask. It
                 # becomes the current card, so a tap on it is a fresh one.
-                await self._safe_answer(query, "This card is out of date - nothing changed")
-                await _show_card("⚠️ That card was out of date, so nothing changed.")
+                await self._safe_answer(query, person.text(TOAST_PERMS_STALE))
+                await _show_card(shared.html(MODE_STALE))
                 return
             target_skip_perms = pending["target_skip_perms"]
 
             if sess is None:
                 _consume()
                 try:
-                    await edit_text(query, "⚠️ Session not found.")
+                    await edit_text(query, shared.text(MODE_SESSION_MISSING))
                 except Exception:
                     pass
                 return
@@ -1272,7 +1388,7 @@ class CallbackDispatchMixin:
 
             if action == "resume_mode_cancel":
                 try:
-                    await edit_text(query, "↩️ Cancelled.")
+                    await edit_text(query, i18n.for_update(update).text(CANCELLED))
                 except Exception:
                     pass
                 return
@@ -1356,24 +1472,22 @@ class CallbackDispatchMixin:
             # (`_resume_auto_gate`, roadmap 8.83).
             tapper = getattr(getattr(query, "from_user", None), "id", None)
             author = (pending or {}).get("user_id")
+            shared = i18n.for_update(update)
+            person = i18n.for_person(update)
             if author and tapper != author:
                 await self._safe_answer(
-                    query, "Only the person who sent /new can use this card.",
-                    show_alert=True)
+                    query, person.text(TOAST_NEW_ONLY_SENDER), show_alert=True)
                 return
             if action != "new_cancel" and not self._can_prompt_user(
                     tapper, calling_chat_id(update)):
                 await self._safe_answer(
-                    query, "You can't start or resume sessions here.",
-                    show_alert=True)
+                    query, person.text(TOAST_NEW_CANT_START_RESUME), show_alert=True)
                 return
 
             if action == "new_cancel":
                 self._new_conflict_pending.pop(session_name, None)
                 try:
-                    await edit_text(query,
-                        "↩️ Cancelled - no session changed.",
-                    )
+                    await edit_text(query, shared.text(NEW_CANCELLED_NOTHING))
                 except Exception:
                     pass
                 return
@@ -1390,7 +1504,7 @@ class CallbackDispatchMixin:
                 # name (the severe case design.md's success criteria and
                 # the "Old buttons" section both promise against).
                 self._new_conflict_pending.pop(session_name, None)
-                await self._safe_answer(query, "Session not found")
+                await self._safe_answer(query, person.text(NOT_FOUND))
                 return
 
             prompt = (pending or {}).get("prompt", "")
@@ -1425,8 +1539,8 @@ class CallbackDispatchMixin:
                         self.registry.mark_dirty()
                     try:
                         await edit_text(query,
-                            f"↩️ Switched to <b>{html_mod.escape(label)}</b>"
-                            + ("\n📝 Prompt queued" if prompt else ""),
+                            shared.html(NEW_SWITCHED_TO, session=label)
+                            + ("\n" + shared.html(NEW_PROMPT_QUEUED) if prompt else ""),
                             parse_mode="HTML",
                         )
                     except Exception:
@@ -1463,9 +1577,8 @@ class CallbackDispatchMixin:
                 # card whose state is known (author and choices), and only
                 # on the work the card showed.
                 if pending is None:
-                    await self._safe_answer(
-                        query, "This card has expired. Send /new again.",
-                        show_alert=True)
+                    await self._safe_answer(query, person.text(TOAST_NEW_EXPIRED),
+                                            show_alert=True)
                     return
                 working = sess.status in (Status.BUSY, Status.INTERACTIVE)
                 if (not sess.tap_is_for_this_turn(pending.get("msg_id"))
@@ -1479,8 +1592,7 @@ class CallbackDispatchMixin:
                     # socket and drops resume_id: a stale tap would destroy
                     # a live session for good.
                     await self._safe_answer(
-                        query, f"{sess.label} started working since. "
-                               "Send /new again to replace it.",
+                        query, person.text(TOAST_NEW_STARTED_SINCE, session=sess.label),
                         show_alert=True)
                     return
                 # The fresh session's folder must be one its author may
@@ -1524,11 +1636,8 @@ class CallbackDispatchMixin:
                     self.registry.mark_dirty()
 
                 try:
-                    await edit_text(query,
-                        f"🚀 Starting <b>{html_mod.escape(label)}</b> "
-                        f"(fresh)…",
-                        parse_mode="HTML",
-                    )
+                    await edit_text(query, shared.html(NEW_STARTING_FRESH, session=label),
+                                    parse_mode="HTML")
                 except Exception:
                     pass
 
@@ -1549,7 +1658,7 @@ class CallbackDispatchMixin:
                 )
                 if not new_name:
                     try:
-                        await edit_text(query, f"❌ {html_mod.escape(err)}",
+                        await edit_text(query, shared.html(NEW_CREATE_FAILED, error=err),
                                         parse_mode="HTML")
                     except Exception:
                         pass
@@ -1578,7 +1687,8 @@ class CallbackDispatchMixin:
         is_option = action.startswith("opt") and action[3:].isdigit()
 
         if action not in ACTION_VERBS and not is_option and action != "submit":
-            await self._safe_answer(query, f"Unknown: {action}")
+            await self._safe_answer(query, i18n.for_person(update).text(
+                UNKNOWN_ACTION, action=action))
             return
 
         # Pop-ups are the tapper's; the lines in the chat are the chat's.
@@ -2206,9 +2316,9 @@ class CallbackDispatchMixin:
         # verb shown comes from the action id; the audit above keeps the
         # English verb.
         tr = i18n.for_sess(sess)
-        shown = (tr.html(ANSWER_VERBS[decision]) if decision in ANSWER_VERBS
-                 else card_rows.verb_text(tr, verb, "html"))
-        params = {"icon": Safe(audit_icon), "session": sess.label, "verb": Safe(shown),
+        verb_shown = (tr.html(ANSWER_VERBS[decision]) if decision in ANSWER_VERBS
+                      else card_rows.verb_text(tr, verb, "html"))
+        params = {"icon": Safe(audit_icon), "session": sess.label, "verb": Safe(verb_shown),
                   "detail": audit_detail}
         if actor:
             params["person"] = Command(attribution_label(actor))

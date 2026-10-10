@@ -26,9 +26,10 @@ from telegram import (
 
 from aipager import i18n
 from aipager.config import RESUME_GUARD_SECONDS
-from aipager.i18n import Command, Msg
+from aipager.i18n import Command, Msg, Span
 from aipager.dtach import inject
 from aipager.bot import reactions
+from aipager.bot.sibling_text import shown
 
 # Single source of truth for the poll timing (design.md ORCHESTRATOR
 # OVERRIDE) — callbacks.py does not import this module, so this is not
@@ -152,6 +153,46 @@ def _refused_card_text(label: str, by: str = "", *, refused: bool = True,
         return tr.html(CARD_DENIED_BY, session=label, person=Command(by))
     return tr.html(CARD_DENIED, session=label)
 
+
+# Resume, stop and switch replies (HTML unless said; the calling chat's,
+# a pop-up the tapper's).
+TOAST_STOP_STALE = Msg("toast.stop_stale", "That task already finished - use the current card",
+                       note="Pop-up: Stop tapped on the card of a turn that ended")
+NOT_WORKING = Msg("route.not_working", "<b>{session}</b> is not working.",
+                  note="HTML. Stop asked of a session that is idle", eg={"session": "x1"})
+NO_SESSION_HERE = Msg("route.no_session_here", "⚠️ No session named <b>{session}</b> here.",
+                      note="HTML. A typed name matches no session in this chat",
+                      eg={"session": "x1"})
+UNKNOWN_SESSION = Msg("route.unknown_session", "⚠️ Unknown session: {session}",
+                      note="A typed /name that is no session here", eg={"session": "x1"})
+RESUME_NOT_FOUND = Msg("sess.resume_not_found",
+                       "⚠️ No session named <b>{session}</b> in history.\nSend {command} with no "
+                       "name to see what's available.",
+                       note="/resume of a name nobody had; {command} is /resume",
+                       eg={"session": "x1", "command": "/resume"})
+RESUME_RUNNING = Msg("sess.resume_running",
+                     "⚠️ <b>{session}</b> is already running.\nTap {command} in the keyboard to "
+                     "switch to it.", note="/resume of a running session; {command} is its "
+                                           "/name", eg={"session": "x1", "command": "/x1"})
+RESUME_NO_TRANSCRIPT = Msg("sess.resume_no_transcript",
+                           "⚠️ Session <b>{session}</b> has no resumable transcript on disk.\n"
+                           "Start a fresh one with {command}.",
+                           note="/resume of a session with nothing to resume from; {command} "
+                                "is /new with its name", eg={"session": "x1",
+                                                              "command": "/new x1"})
+RESUME_FAILED = Msg("sess.resume_failed", "❌ Couldn't resume <b>{session}</b>: {error}",
+                    note="The resume failed; {error} is why (English)",
+                    eg={"session": "x1", "error": "dtach not installed"})
+RESUMED = Msg("sess.resumed", "♻️ Resumed <b>{session}</b>", note="The session is back",
+              eg={"session": "x1"})
+RESUMED_IN_ASK = Msg("sess.resumed_in_ask", "♻️ Resumed <b>{session}</b> in Ask: {reason}",
+                     note="The session is back in Ask mode; {reason} is why (English)",
+                     eg={"session": "x1", "reason": "Auto needs an admin."})
+RESUME_LAST_RESPONSE = Msg("sess.resume_last_response",
+                           "<i>📜 Last response from this session</i>\n"
+                           "<blockquote>{preview}</blockquote>",
+                           note="Under a resumed session: the start of its last answer",
+                           eg={"preview": "All tests pass."})
 
 CARD_DENIED_TERMINAL = Msg(
     "card.denied_terminal", "🚫 <b>{session}</b> · Denied in the terminal",
@@ -289,6 +330,47 @@ MODEL_SWITCH_CONFIRM_SECONDS = 15.0
 # a marker must never outlive the refusal that stops a second /model.
 MODEL_SWITCH_PENDING_SECONDS = 60.0
 _MODEL_SWITCH_POLL_SECONDS = 0.25
+
+
+#: The chat's words for each refusal code of :func:`model_switch_refusal`
+#: (the Mini App keeps its own English, ``miniapp.sessions``; a test keeps
+#: the two equal in English).
+MODEL_REFUSAL_MSGS: dict[str, Msg] = {
+    "not_live": Msg("sess.model_refusal.not_live", "Session isn't running.",
+                    note="Why /model was refused: the session is not running"),
+    "busy": Msg("sess.model_refusal.busy",
+                "Claude is working - switch the model when this turn ends.",
+                note="Why /model was refused: a turn is running"),
+    "prompt_open": Msg("sess.model_refusal.prompt_open",
+                       "A prompt is open in the terminal - answer it before switching the "
+                       "model.",
+                       note="Why /model was refused: Claude Code is waiting on a question"),
+    "unknown": Msg("sess.model_refusal.unknown",
+                   "aipager hasn't seen this session's state yet - try again in a moment.",
+                   note="Why /model was refused: just after a restart, the state is not "
+                        "known yet"),
+    "switch_pending": Msg("sess.model_refusal.switch_pending",
+                          "The last model switch isn't confirmed yet - check the terminal for "
+                          "Claude Code's \"Switch model?\" question before switching again.",
+                          note="Why /model was refused: the previous switch may be waiting "
+                               "on Claude Code's own question"),
+}
+#: A /model whose switch the statusline never confirmed (the Mini App's
+#: ``MODEL_SWITCH_UNCONFIRMED``, equal in English).
+MODEL_UNCONFIRMED = Msg(
+    "sess.model_unconfirmed",
+    "not confirmed - check the session. Claude Code may be asking \"Switch model?\" in the "
+    "terminal, or it was already on that model.",
+    note="Under the /model reply when the switch was not confirmed in time")
+
+
+def model_refusal_text(tr, code: str, detail: str) -> str:
+    """Why /model was refused, in *tr*'s language (plain text): the key of
+    *code*, or *detail* as received for a code without one. In English,
+    *detail* itself: the same words (a test keeps the keys equal to the
+    Mini App's)."""
+    msg = MODEL_REFUSAL_MSGS.get(code)
+    return tr.text(msg) if msg is not None and tr.code != "en" else detail
 
 
 def model_switch_refusal(sess) -> tuple[str, str] | None:
@@ -820,7 +902,7 @@ class SessionOpsMixin:
 
     async def _reply_needs_admin(self, update) -> None:
         """The one answer to a refused slash command: a reply and a 🤷."""
-        await reply_text(update.message, NEEDS_ADMIN_REPLY)
+        await reply_text(update.message, shown(i18n.for_update(update), NEEDS_ADMIN_REPLY))
         await self._react(update, reactions.NOT_DELIVERED)
 
     async def _inject_prompt(self, sess, text: str, reply_context: str = "",
@@ -1532,8 +1614,9 @@ class SessionOpsMixin:
             # Button taps are checked HERE rather than at the call site, so a
             # future caller cannot forget. `update`-driven callers (the /stop
             # command, `/<label> stop`) pass no query and are always current.
-            await self._safe_answer(
-                query, "That task already finished - use the current card")
+            await self._safe_answer(query, i18n.for_person(
+                update if update is not None else SimpleNamespace(callback_query=query)
+            ).text(TOAST_STOP_STALE))
             return StopOutcome(ok=False, label=sess.label, reason="stale")
         # Who stopped it, named in a group (roadmap 8.91c): the tapper or
         # the command's sender, in the chat the tap or command came from.
@@ -1606,9 +1689,10 @@ class SessionOpsMixin:
             self._cancel_lazy_card(sess)
             sess.close_turn()  # no card for this turn from here (8.57)
         self._stop_animation(sess)
-        # 3. Replace the busy message with the block notice (or send fresh).
-        notice = (f"🛑 <b>{html_mod.escape(sess.label)}</b> · Blocked by "
-                  f"safety policy: {html_mod.escape(reason)} (stopped)")
+        # 3. Replace the busy message with the block notice (or send fresh),
+        # in the chat's language; the reason Claude got stays English.
+        from aipager.bot import safety_notice
+        notice = safety_notice.notice_html(i18n.for_sess(sess), sess.label, reason)
         try:
             # Written and retired under the card-edit lock, as in
             # `_stop_session_core`.
@@ -1858,6 +1942,10 @@ class SessionOpsMixin:
         place that resolves the label to a session and handles "no such
         session" — the core is never called with ``sess is None``.
         """
+        # The chat the command or tap came from (keyword signature kept:
+        # stand-ins take this exact call).
+        tr = i18n.for_update(update if update is not None
+                             else SimpleNamespace(callback_query=query))
         if sess is None:
             # ``sess``: a caller that already holds the exact session (the
             # /new conflict card) passes it; a label can name another
@@ -1866,11 +1954,9 @@ class SessionOpsMixin:
                 label, calling_chat_id(update or query), include_gone=True)
 
         if sess is None:
-            await reply_fn(
-                f"⚠️ No session named <b>{html_mod.escape(label)}</b> in history.\n"
-                f"Send <code>/resume</code> with no name to see what's available.",
-                parse_mode="HTML",
-            )
+            await reply_fn(tr.html(RESUME_NOT_FOUND, session=label,
+                                   command=Span("<code>/resume</code>")),
+                           parse_mode="HTML")
             return
 
         driver_user_id = (
@@ -1898,29 +1984,19 @@ class SessionOpsMixin:
         )
 
         if outcome.reason == "not_gone":
-            await reply_fn(
-                f"⚠️ <b>{html_mod.escape(label)}</b> is already running.\n"
-                f"Tap <code>/{html_mod.escape(label)}</code> in the keyboard "
-                f"to switch to it.",
-                parse_mode="HTML",
-            )
+            # The command is code, kept whole (nothing invisible inside it).
+            await reply_fn(tr.html(RESUME_RUNNING, session=label, command=Span(
+                f"<code>/{html_mod.escape(label)}</code>")), parse_mode="HTML")
             return
 
         if outcome.reason == "no_transcript":
-            await reply_fn(
-                f"⚠️ Session <b>{html_mod.escape(label)}</b> has no resumable "
-                f"transcript on disk.\n"
-                f"Start a fresh one with <code>/new {html_mod.escape(label)}</code>.",
-                parse_mode="HTML",
-            )
+            await reply_fn(tr.html(RESUME_NO_TRANSCRIPT, session=label, command=Span(
+                f"<code>/new {html_mod.escape(label)}</code>")), parse_mode="HTML")
             return
 
         if outcome.reason == "launch_failed":
-            await reply_fn(
-                f"❌ Couldn't resume <b>{html_mod.escape(label)}</b>: "
-                f"{html_mod.escape(outcome.err)}",
-                parse_mode="HTML",
-            )
+            await reply_fn(tr.html(RESUME_FAILED, session=label, error=outcome.err),
+                           parse_mode="HTML")
             return
 
         # Resumed — dashboard out the result.
@@ -1932,16 +2008,17 @@ class SessionOpsMixin:
         preview = snapshot or _read_preview(
             sess.transcript_path, max_chars=500,
         )
-        header = f"♻️ Resumed <b>{html_mod.escape(label)}</b>"
-        if auto_refused:
-            header += f" in Ask: {RESUME_AUTO_NEEDS_ADMIN}"
+        # The Ask reason is the sibling's constant: in the chat's language
+        # once it is a key there, else its English as it is.
+        header = (tr.html(RESUMED_IN_ASK, session=label,
+                          reason=shown(tr, RESUME_AUTO_NEEDS_ADMIN, "html"))
+                  if auto_refused else tr.html(RESUMED, session=label))
         if preview:
             body = (
                 f"{header}\n\n"
                 f"{dashboard}\n\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"<i>📜 Last response from this session</i>\n"
-                f"<blockquote>{html_mod.escape(preview)}</blockquote>"
+                f"{tr.html(RESUME_LAST_RESPONSE, preview=preview)}"
             )
         else:
             body = f"{header}\n\n{dashboard}"
@@ -1951,16 +2028,15 @@ class SessionOpsMixin:
     async def _stop_by_label(self, update: Update, target_label: str) -> None:
         """Stop a session by its label."""
         sess = self.registry.find_by_label(target_label, calling_chat_id(update))
+        tr = i18n.for_update(update)
         if sess is not None:
             outcome = await self._stop_session(sess, update=update)
             if not outcome.ok:
-                await reply_text(update.message,
-                    f"<b>{html_mod.escape(sess.label)}</b> is not working.",
-                    parse_mode="HTML")
+                await reply_text(update.message, tr.html(NOT_WORKING, session=sess.label),
+                                 parse_mode="HTML")
             return
-        await reply_text(update.message,
-            f"⚠️ No session named <b>{html_mod.escape(target_label)}</b> here.",
-            parse_mode="HTML")
+        await reply_text(update.message, tr.html(NO_SESSION_HERE, session=target_label),
+                         parse_mode="HTML")
 
     def _guess_session_from_text(
         self, text: str, scope_chat_id: int | None = None,
@@ -2064,7 +2140,8 @@ class SessionOpsMixin:
             await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
             return
 
-        await reply_text(update.message, f"⚠️ Unknown session: {target_label}")
+        await reply_text(update.message, i18n.for_update(update).text(
+            UNKNOWN_SESSION, session=target_label))
 
     # ── Mini App session menu actions (perms / clear-queue / compact /
     #    restart / rename) — see design.md's ORCHESTRATOR OVERRIDE ──

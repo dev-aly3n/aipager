@@ -20,8 +20,9 @@ COUNTS = (1, 2, 5, 11, 12, 21, 22, 25)
 
 
 def test_every_surface_reads_in_russian(mk_bot, run_async, monkeypatch):
-    renders = i18n_surfaces.render_all(mk_bot, run_async, monkeypatch, "ru")
-    assert set(renders) == {n for n, _f in i18n_surfaces.SURFACES}
+    names = {n for n, _f in i18n_surfaces.SURFACES} - i18n_surfaces.PENDING
+    renders = i18n_surfaces.render_all(mk_bot, run_async, monkeypatch, "ru", names=names)
+    assert set(renders) == names
     for name, texts in renders.items():
         assert any(CYRILLIC.search(t) for t in texts), name
         for text in texts:
@@ -56,6 +57,43 @@ def test_plural_forms(mk_bot, run_async, monkeypatch):
         # The full log's memory note.
         log = animation.build_full_log("x1", [("Read: /a", True)] * n, [], "", tr=ru)
         assert log.split("\n")[2] == _form("log.memory", n)
+
+
+#: Every counted phase 3a key and a surface-free way to render it.
+P3A_PLURALS = ("route.cleared", "route.queue_full", "sess.diff_files", "toast.clear_done",
+               "notice.quiet_turn", "notice.compact_timeout", "held.late_marker")
+
+
+def test_phase_3a_plural_forms(mk_bot, run_async, monkeypatch):
+    """Each counted phase 3a line, through the code that sends it, reads
+    the catalog's form for n's category (one, few, many)."""
+    from aipager.bot import callbacks, handlers, held_message, notify, session_parity
+    ru = i18n.get("ru")
+    msgs = {m.key: m for m in (handlers.CLEARED, handlers.QUEUE_FULL,
+                               session_parity.DIFF_FILES, notify.QUIET_TURN,
+                               notify.COMPACT_TIMEOUT, held_message.LATE_MARKER,
+                               callbacks.TOAST_CLEAR_DONE)}
+    assert set(msgs) == set(P3A_PLURALS)
+    for key in P3A_PLURALS:
+        assert set(core._catalog("ru")[key]) == {"one", "few", "many", "other"}, key
+    for n in COUNTS:
+        assert held_message.late_marker_text(ru, n * 60) == _form("held.late_marker", n)
+        for key, params in (("route.cleared", {"session": "x1"}),
+                            ("route.queue_full", {"session": "x1"}),
+                            ("sess.diff_files", {"session": "x1", "added": "3",
+                                                 "removed": "1"})):
+            text = ru.n(msgs[key], n, kind="text", **params)
+            assert text == _form(key, n, **params), (key, n)
+    renders = i18n_surfaces.render_all(
+        mk_bot, run_async, monkeypatch, "ru",
+        names={"route.clearqueue", "notice.quiet_turn", "notice.compact_timeout",
+               "taps.clear_gone", "route.queue_full", "sess.diff"})
+    flat = "\n".join(t for texts in renders.values() for t in texts)
+    for key, counts in (("route.cleared", (1, 2, 5)), ("notice.quiet_turn", (1, 2, 5, 21)),
+                        ("notice.compact_timeout", (1, 2, 5, 21)),
+                        ("toast.clear_done", (1, 2, 5))):
+        for n in counts:
+            assert _form(key, n, session="x1") in flat, (key, n)
 
 
 def test_plural_forms_on_status_and_the_bar(mk_bot, run_async, monkeypatch):

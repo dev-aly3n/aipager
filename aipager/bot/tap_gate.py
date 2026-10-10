@@ -27,6 +27,8 @@ from __future__ import annotations
 
 from enum import Enum
 
+from aipager.i18n import Msg
+
 
 class Cap(str, Enum):
     VIEW = "view"
@@ -176,8 +178,10 @@ def required_capability(session_name: str, action: str, *,
     return PROMPT
 
 
-REFUSED_TEXT = "Your role can't do that here."
-OTHER_CHAT_TEXT = "This button belongs to another chat."
+REFUSED_TEXT = Msg("toast.gate_refused", "Your role can't do that here.",
+                   note="Pop-up: the tapper's role in this chat may not use this button")
+OTHER_CHAT_TEXT = Msg("toast.gate_other_chat", "This button belongs to another chat.",
+                      note="Pop-up: a button tapped in a chat that is not its own")
 
 
 __all__ = [

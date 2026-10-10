@@ -51,7 +51,7 @@ from telegram.ext import ContextTypes
 from aipager.bot.mode_labels import mode_label
 from aipager import i18n
 from aipager.bot import card_owner, group_intake, held_message, language_menu, settings_menu
-from aipager.i18n import Msg, Safe
+from aipager.i18n import Command, Msg, Plural, Safe
 from aipager.bot.transport import (
     MUTED,
     SKIPPED,
@@ -71,9 +71,9 @@ log = logging.getLogger(__name__)
 # Both delete taps refuse with this while a resume is mid-launch:
 # the session is still GONE, so the status guard alone would let
 # the removal through (roadmap 8.16).
-_RESUMING_REFUSAL = (
-    "This session is being resumed right now. Try again in a moment."
-)
+_RESUMING_REFUSAL = Msg(
+    "toast.sess_resuming", "This session is being resumed right now. Try again in a moment.",
+    note="Pop-up: delete refused while the session is being resumed")
 
 if TYPE_CHECKING:
     from aipager.bot.core import TelegramBot
@@ -103,20 +103,219 @@ _SESSION_ACTIONS = frozenset({
 
 _DIFF_INLINE_THRESHOLD = 3500  # chars — entrypoints.md's "~3500" cutoff
 
+# Why /diff and a restart did not happen, by the core's reason code (HTML).
 _DIFF_REASON_TEXT = {
-    "cwd_missing": "[{label}]'s working directory is no longer there.",
-    "git_not_installed": "git isn't available on this machine.",
-    "not_a_git_repo": "[{label}]'s directory isn't a git repo.",
-    "no_commits_yet": "[{label}]'s repo has no commits yet.",
-    "git_error": "Couldn't read the diff right now - try again.",
+    "cwd_missing": Msg("sess.diff_reason.cwd_missing",
+                       "[{label}]'s working directory is no longer there.",
+                       note="/diff: the session's folder is gone", eg={"label": "x1"}),
+    "git_not_installed": Msg("sess.diff_reason.git_not_installed",
+                             "git isn't available on this machine.",
+                             note="/diff: git is not installed"),
+    "not_a_git_repo": Msg("sess.diff_reason.not_a_git_repo",
+                          "[{label}]'s directory isn't a git repo.",
+                          note="/diff: the session's folder is not in git", eg={"label": "x1"}),
+    "no_commits_yet": Msg("sess.diff_reason.no_commits_yet",
+                          "[{label}]'s repo has no commits yet.",
+                          note="/diff: nothing committed yet", eg={"label": "x1"}),
+    "git_error": Msg("sess.diff_reason.git_error",
+                     "Couldn't read the diff right now - try again.",
+                     note="/diff: git failed"),
 }
 
 _RESTART_REASON_TEXT = {
-    "not_live": "[{label}] isn't running.",
-    "already_restarting": "[{label}] is already restarting.",
-    "still_stopping": "[{label}] didn't stop in time - try again shortly.",
-    "launch_failed": "Restart failed for [{label}]: {err}",
+    "not_live": Msg("sess.restart_reason.not_live", "[{label}] isn't running.",
+                    note="A restart refused: the session is not running", eg={"label": "x1"}),
+    "already_restarting": Msg("sess.restart_reason.already_restarting",
+                              "[{label}] is already restarting.",
+                              note="A restart refused: one is running", eg={"label": "x1"}),
+    "still_stopping": Msg("sess.restart_reason.still_stopping",
+                          "[{label}] didn't stop in time - try again shortly.",
+                          note="A restart that could not stop the session",
+                          eg={"label": "x1"}),
+    "launch_failed": Msg("sess.restart_reason.launch_failed", "Restart failed for [{label}]: {err}",
+                         note="A restart that could not start it again; {err} is why "
+                              "(English)", eg={"label": "x1", "err": "dtach not installed"}),
 }
+RESTART_FAILED = Msg("sess.restart_failed", "Restart failed for [{label}].",
+                     note="A restart that failed for another reason", eg={"label": "x1"})
+
+# The session commands' cards and replies (HTML unless said; a card is the
+# chat's, a pop-up the tapper's).
+NO_SESSION_HERE = Msg("route.no_session_here", "⚠️ No session named <b>{session}</b> here.",
+                      note="HTML. A typed name matches no session in this chat",
+                      eg={"session": "x1"})
+NO_LIVE_HERE = Msg("route.no_live_here", "⚠️ No live session named <b>{session}</b> here.",
+                   note="HTML. A typed name matches no running session in this chat",
+                   eg={"session": "x1"})
+WARNING_LINE = Msg("route.warning", "⚠️ {text}",
+                   note="A warning line; {text} is the warning",
+                   eg={"text": "not confirmed - check the session."})
+BTN_CANCEL = Msg("sess.btn.cancel", "Cancel", note="Button: do not do it")
+RENAME_PROMPT_REPLY = Msg("sess.rename_prompt_reply",
+                          "✏️ New name for [<b>{session}</b>]? Reply to this message with the new "
+                          "name.", note="/rename in a group: the question", eg={"session": "x1"})
+RENAME_PROMPT_TYPE = Msg("sess.rename_prompt_type",
+                         "✏️ New name for [<b>{session}</b>]? Send it as a message.",
+                         note="/rename in a private chat: the question", eg={"session": "x1"})
+END_CONFIRM = Msg("sess.end_confirm",
+                  "⏹ End <b>{session}</b>? Claude stops and the session closes.",
+                  note="The confirm before ending a session", eg={"session": "x1"})
+BTN_END = Msg("sess.btn.end", "⏹ End", note="Button: end the session")
+BTN_RESTART = Msg("sess.btn.restart", "🔄 Restart", note="Button: restart the session")
+BTN_END_SESSION = Msg("sess.btn.end_session", "⏹ End session",
+                      note="Menu button: end the session")
+BTN_RESUME = Msg("sess.btn.resume", "▶️ Resume", note="Menu button: resume the session")
+BTN_RENAME = Msg("sess.btn.rename", "✏️ Rename", note="Menu button: rename the session")
+BTN_PREFS = Msg("sess.btn.prefs", "👤 Preferences",
+                note="Menu button: the session's own preferences")
+BTN_DIFF = Msg("sess.btn.diff", "📝 Diff", note="Menu button: show what changed in its folder")
+BTN_DELETE = Msg("sess.btn.delete", "🗑️ Delete", note="Button: remove the ended session")
+BTN_CLOSE = Msg("sess.btn.close", "✖️ Close", note="Menu button: close the menu")
+MENU_TITLE = Msg("sess.menu_title", "⋮ <b>{session}</b> - choose an action:",
+                 note="Above a session's menu", eg={"session": "x1"})
+MENU_NO_TRANSCRIPT = Msg("sess.menu_no_transcript", "<i>No saved transcript to resume from.</i>",
+                         note="Under the menu of an ended session that cannot be resumed")
+RESTART_CONFIRM = Msg("sess.restart_confirm",
+                      "🔄 Restart session [<b>{session}</b>]? Claude stops and starts again, "
+                      "keeping its conversation.", note="The confirm before a restart",
+                      eg={"session": "x1"})
+RESTART_NONE = Msg("sess.restart_none", "No live sessions to restart.",
+                   note="/restart with no session running")
+RESTART_WHICH = Msg("sess.restart_which", "Which session to restart?",
+                    note="/restart: above the list")
+RESTARTED = Msg("sess.restarted", "🔄 [<b>{session}</b>] restarted.",
+                note="The restart worked", eg={"session": "x1"})
+RESTARTED_BY = Msg("sess.restarted_by", "🔄 [<b>{session}</b>] restarted by {person}.",
+                   note="The restart worked; in a group, who did it",
+                   eg={"session": "x1", "person": "@bob"})
+RENAME_EXISTS = Msg("sess.rename_exists", "⚠️ A session named {session} already exists in this "
+                    "chat.", note="/rename to a name in use", eg={"session": "x2"})
+RENAMED = Msg("sess.renamed", "✏️ [<b>{old}</b>] renamed to [<b>{new}</b>].",
+              note="The rename worked", eg={"old": "x1", "new": "api"})
+RENAME_UNCHANGED = Msg("sess.rename_unchanged", "[<b>{session}</b>] name unchanged.",
+                       note="/rename to the same name", eg={"session": "x1"})
+RENAME_NONE = Msg("sess.rename_none", "No sessions to rename.", note="/rename with no session")
+RENAME_WHICH = Msg("sess.rename_which", "Which session to rename?",
+                   note="/rename: above the list")
+DELETE_CONFIRM = Msg("sess.delete_confirm",
+                     "🗑️ Remove [<b>{session}</b>] from the session list? This cannot be "
+                     "undone.", note="The confirm before removing an ended session",
+                     eg={"session": "x1"})
+DELETE_NONE = Msg("sess.delete_none", "No ended sessions to delete.",
+                  note="/delete with no ended session")
+DELETE_WHICH = Msg("sess.delete_which", "Which ended session to remove?",
+                   note="/delete: above the list")
+DELETE_STILL_RUNNING = Msg("sess.delete_still_running",
+                           "⚠️ [<b>{session}</b>] is still running. End it first with /kill.",
+                           note="/delete of a running session", eg={"session": "x1"})
+DIFF_NONE = Msg("sess.diff_none", "No changes in [<b>{session}</b>]'s working directory.",
+                note="/diff: nothing changed", eg={"session": "x1"})
+DIFF_FILES = Plural("sess.diff_files",
+                    one="📝 [<b>{session}</b>] {n} files changed, +{added}/-{removed}",
+                    other="📝 [<b>{session}</b>] {n} files changed, +{added}/-{removed}",
+                    note="/diff: {n} files, {added} lines added and {removed} removed",
+                    eg={"session": "x1", "added": 12, "removed": 3})
+DIFF_NONE_LIVE = Msg("sess.diff_none_live", "No live sessions to diff.",
+                     note="/diff with no session running")
+DIFF_WHICH = Msg("sess.diff_which", "Which session's diff?", note="/diff: above the list")
+RENAME_GONE = Msg("sess.rename_gone",
+                  "⚠️ That session is no longer available - run /rename again.",
+                  note="The name for a rename arrived after the session went")
+RENAME_NOT_ALLOWED = Msg("sess.rename_not_allowed", "🚫 You can't rename this session.",
+                         note="The name for a rename from someone who may not")
+TOAST_NOT_FOUND = Msg("toast.session_not_found", "Session not found",
+                      note="Pop-up: the button's session no longer exists")
+TOAST_CANT_SEND = Msg("toast.sess_cant_send", "You can't send to this session.",
+                      note="Pop-up: the person may not send to this session")
+TOAST_NOT_HERE = Msg("toast.session_not_here", "That session isn't running here.",
+                     note="Pop-up: the session belongs to another chat")
+TOAST_TARGET = Msg("toast.sess_target", "✍️ Messages go to {session}",
+                   note="Pop-up: the tapped session is where messages go now",
+                   eg={"session": "x1"})
+SENT_TO = Msg("sess.sent_to", "Sent to {session}.",
+              note="A \"Which session?\" card: the message went there", eg={"session": "x1"})
+NOT_SENT_TO = Msg("sess.not_sent_to", "Not sent to {session}.",
+                  note="A \"Which session?\" card: the message could not go there",
+                  eg={"session": "x1"})
+TOAST_CANT_END = Msg("toast.sess_cant_end", "You can't end this session.",
+                     note="Pop-up: the person may not end this session")
+TOAST_ALREADY_ENDED = Msg("toast.sess_already_ended", "That session has already ended.",
+                          note="Pop-up")
+TOAST_RESUMING_KILL = Msg("toast.sess_resuming_kill",
+                          "{session} is being resumed - send /kill again in a moment",
+                          note="Pop-up: End tapped while the session is being resumed",
+                          eg={"session": "x1"})
+TOAST_MOVED_ON_END = Msg("toast.sess_moved_on_end",
+                         "{session} moved on to new work - tap ⏹ End session again to end it",
+                         note="Pop-up: the End confirm was for an earlier turn",
+                         eg={"session": "x1"})
+TOAST_ENDED = Msg("toast.sess_ended", "⏹ Ended {session}", note="Pop-up: the session ended",
+                  eg={"session": "x1"})
+TOAST_ENDED_BY = Msg("toast.sess_ended_by", "⏹ Ended {session} by {person}",
+                     note="Pop-up: the session ended; in a group, who did it",
+                     eg={"session": "x1", "person": "@bob"})
+TOAST_RESUMING_RETRY = Msg("toast.sess_resuming_retry",
+                           "{session} is being resumed - try again in a moment",
+                           note="Pop-up", eg={"session": "x1"})
+TOAST_DID_NOT_STOP = Msg("toast.sess_did_not_stop", "{session} did not stop - try again",
+                         note="Pop-up: ending the session failed", eg={"session": "x1"})
+TOAST_NOT_FOUND_NAMED = Msg("toast.sess_not_found_named", "{session} was not found",
+                            note="Pop-up", eg={"session": "x1"})
+ENDED = Msg("sess.ended", "⏹ Ended <b>{session}</b>", note="Above the session list",
+            eg={"session": "x1"})
+ENDED_BY = Msg("sess.ended_by", "⏹ Ended <b>{session}</b> by {person}",
+               note="Above the session list in a group: who ended it",
+               eg={"session": "x1", "person": "@bob"})
+TOAST_ENDED_SESSION = Msg("toast.session_ended", "That session has ended.", note="Pop-up")
+TOAST_CANT_CHANGE = Msg("toast.new_cant_change", "You can't change this session.",
+                        note="Pop-up: the person may not change this session")
+TOAST_ALREADY_IN = Msg("toast.sess_already_in", "{session} is already in {mode}.",
+                       note="Pop-up: the mode tapped is the session's mode",
+                       eg={"session": "x1", "mode": "Auto"})
+TOAST_MOVED_ON_SWITCH = Msg("toast.sess_moved_on_switch",
+                            "{session} moved on to new work - tap the switch again if you "
+                            "still want it", note="Pop-up: the mode card was for an earlier "
+                                                  "turn", eg={"session": "x1"})
+MENU_CLOSED = Msg("sess.menu_closed", "Closed menu for [<b>{session}</b>].",
+                  note="A session's menu, closed", eg={"session": "x1"})
+TOAST_CANT_RESUME = Msg("toast.sess_cant_resume", "You can't resume this session.",
+                        note="Pop-up: the person may not resume this session")
+TOAST_CANT_RESUME_NOW = Msg("toast.sess_cant_resume_now", "That session can't be resumed now.",
+                            note="Pop-up: the session came back or has nothing to resume")
+RESUME_AS = Msg("sess.resume_as", "Resume <b>{session}</b> as:",
+                note="Above the mode buttons for a resume", eg={"session": "x1"})
+CANCELLED = Msg("sess.cancelled", "↩️ Cancelled.", note="A card cancelled")
+TOAST_CANT_RESTART = Msg("toast.sess_cant_restart", "You can't restart this session.",
+                         note="Pop-up: the person may not restart this session")
+TOAST_MOVED_ON_RESTART = Msg("toast.sess_moved_on_restart",
+                             "{session} moved on to new work - tap 🔄 Restart again to restart "
+                             "it", note="Pop-up: the restart confirm was for an earlier turn",
+                             eg={"session": "x1"})
+TOAST_RESTARTING = Msg("toast.sess_restarting", "Restarting {session}...",
+                       note="Pop-up: the restart began", eg={"session": "x1"})
+TOAST_RESTART_STALE = Msg("toast.sess_restart_stale",
+                          "This button is out of date - send /restart again",
+                          note="Pop-up: an old restart button")
+RESTART_CANCELLED = Msg("sess.restart_cancelled", "Restart cancelled for [<b>{session}</b>].",
+                        note="The restart confirm, cancelled", eg={"session": "x1"})
+TOAST_CANT_RENAME = Msg("toast.sess_cant_rename", "You can't rename this session.",
+                        note="Pop-up: the person may not rename this session")
+TOAST_NOT_YOUR_RENAME = Msg("toast.sess_not_your_rename", "This isn't your rename.",
+                            note="Pop-up: someone else's rename question")
+RENAME_CANCELLED = Msg("sess.rename_cancelled", "Rename cancelled.",
+                       note="The rename question, cancelled")
+TOAST_CANT_DELETE = Msg("toast.sess_cant_delete", "You can't delete this session.",
+                        note="Pop-up: the person may not delete this session")
+TOAST_STILL_RUNNING = Msg("toast.sess_still_running",
+                          "That session is still running. End it first.",
+                          note="Pop-up: delete refused for a running session")
+DELETED = Msg("sess.deleted", "🗑️ Deleted [<b>{session}</b>].",
+              note="The ended session was removed", eg={"session": "x1"})
+DELETED_BY = Msg("sess.deleted_by", "🗑️ Deleted [<b>{session}</b>] by {person}.",
+                 note="The ended session was removed; in a group, who did it",
+                 eg={"session": "x1", "person": "@bob"})
+DELETE_CANCELLED = Msg("sess.delete_cancelled", "Delete cancelled for [<b>{session}</b>].",
+                       note="The delete confirm, cancelled", eg={"session": "x1"})
 
 
 # ---- lazily-initialised TelegramBot instance state -----------------------
@@ -257,19 +456,23 @@ def _rename_pending_map(bot: "TelegramBot") -> dict[tuple, dict]:
     return pending
 
 
-_RENAME_EXPIRED_TEXT = "⏱ This rename expired. Send /rename again."
-_RENAME_CLOSED_TEXT = "✖️ Rename closed, you moved on. Send /rename to try again."
+_RENAME_EXPIRED_TEXT = Msg("sess.rename_expired", "⏱ This rename expired. Send /rename again.",
+                           note="HTML. A rename question left unanswered too long")
+_RENAME_CLOSED_TEXT = Msg("sess.rename_closed",
+                          "✖️ Rename closed, you moved on. Send /rename to try again.",
+                          note="HTML. A rename question closed because its person did "
+                               "something else")
 
 
 def _start_rename(bot: "TelegramBot", chat_id, sess: TrackedSession,
                   user_id, msg_id: int | None = None) -> tuple[str, InlineKeyboardMarkup]:
-    """Wait for the new name, and say so."""
+    """Wait for the new name, and say so (in the chat's language)."""
     _start_rename_capture(bot, chat_id, sess, user_id, msg_id)
-    ask = ("Reply to this message with the new name." if group_intake.is_group_chat(chat_id)
-           else "Send it as a message.")
-    text = f"✏️ New name for [<b>{html_mod.escape(sess.label)}</b>]? {ask}"
+    tr = i18n.for_chat(chat_id)
+    text = tr.html(RENAME_PROMPT_REPLY if group_intake.is_group_chat(chat_id)
+                   else RENAME_PROMPT_TYPE, session=sess.label)
     kb = InlineKeyboardMarkup([[InlineKeyboardButton(
-        "Cancel", callback_data=session_cb(bot, chat_id, sess, "rename-cancel"))]])
+        tr.text(BTN_CANCEL), callback_data=session_cb(bot, chat_id, sess, "rename-cancel"))]])
     return text, kb
 
 
@@ -303,6 +506,8 @@ def close_rename(bot: "TelegramBot", chat_id, user_id, text: str = _RENAME_CLOSE
     pending = drop_rename(bot, chat_id, user_id)
     if pending is None or pending.get("msg_id") is None:
         return
+    if isinstance(text, Msg):
+        text = i18n.for_chat(chat_id).html(text)
     from aipager.bot import new_flow  # local: import cycle
     from aipager.bot.notify import _BACKGROUND_TASKS  # local: import cycle
     task = asyncio.create_task(new_flow._edit_at(bot, chat_id, pending["msg_id"], text))
@@ -356,9 +561,14 @@ async def _edit(query, text: str, kb: InlineKeyboardMarkup | None) -> None:
 
 # ---- the one picker every session command shows (4.4) -------------------
 
+#: The Cancel under every session picker (and "Which session?").
+PICK_CANCEL = Msg("sess.btn.cancel_x", "✖️ Cancel",
+                  note="Closes a list of sessions to pick from")
+
+
 def session_picker(
     bot: "TelegramBot", chat_id, sessions, verb: str, *, glyph: str = "",
-    keyed: bool = False, user_id: int | None = None,
+    keyed: bool = False, user_id: int | None = None, tr=None,
 ) -> InlineKeyboardMarkup:
     """Only the sessions the command makes sense for, this chat's target
     first and marked ✍️, then by label, and a Cancel. A tap leads to the
@@ -383,7 +593,8 @@ def session_picker(
         callback_data=session_cb(bot, chat_id or 0, s,
                                  f"{verb}{s.turn_key}" if keyed else verb))]
             for s in ordered]
-    rows.append([InlineKeyboardButton("✖️ Cancel", callback_data="_:pick:cancel")])
+    tr = tr or i18n.for_chat(chat_id)
+    rows.append([InlineKeyboardButton(tr.text(PICK_CANCEL), callback_data="_:pick:cancel")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -412,31 +623,32 @@ def bare_pick(bot: "TelegramBot", chat_id, user_id, candidates) -> TrackedSessio
 
 
 def render_end_confirm(
-    bot: "TelegramBot", chat_id, sess: TrackedSession,
+    bot: "TelegramBot", chat_id, sess: TrackedSession, tr=None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """`⏹ End x1?` from /kill, its picker and ⋮. The confirm carries the
     turn it was shown for (`endok<turn_key>`): it is often a message
     edited in place, whose id says nothing about when."""
+    tr = tr or i18n.for_chat(chat_id)
     kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton("⏹ End", callback_data=session_cb(
+        InlineKeyboardButton(tr.text(BTN_END), callback_data=session_cb(
             bot, chat_id or 0, sess, f"endok{sess.turn_key}")),
-        InlineKeyboardButton("Cancel", callback_data=session_cb(
+        InlineKeyboardButton(tr.text(BTN_CANCEL), callback_data=session_cb(
             bot, chat_id or 0, sess, "kill-cancel")),
     ]])
-    return (f"⏹ End <b>{html_mod.escape(sess.label)}</b>? "
-            "Claude stops and the session closes.", kb)
+    return tr.html(END_CONFIRM, session=sess.label), kb
 
 
 # ---- ⋮ session menu --------------------------------------------------
 
 def _render_session_menu(
-    bot: "TelegramBot", chat_id: int, sess: TrackedSession,
+    bot: "TelegramBot", chat_id: int, sess: TrackedSession, tr=None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Restart, Rename, Preferences, Diff, and — only when GONE —
     Delete, in that order (entrypoints.md's "⋮ session menu" section).
     Every row reuses the exact same callback the standalone command's
     own picker/confirm flow uses, so there is one code path per action
     regardless of which surface reached it."""
+    tr = tr or i18n.for_chat(chat_id)
     names = _register_pref_index(bot, chat_id, [sess.name])
     pref_cb = f"_:spref:{_pref_idx(bot, chat_id, names, sess.name)}"
     gone = sess.status == Status.GONE
@@ -450,24 +662,26 @@ def _render_session_menu(
     rows = []
     if not gone:
         rows.append([InlineKeyboardButton(
-            "🔄 Restart", callback_data=session_cb(bot, chat_id, sess, "restart"))])
+            tr.text(BTN_RESTART), callback_data=session_cb(bot, chat_id, sess, "restart"))])
         # Off the main keyboard since 2026-09-30 (it sat beside Stop).
         rows.append([InlineKeyboardButton(
-            "⏹ End session", callback_data=session_cb(bot, chat_id, sess, "end"))])
+            tr.text(BTN_END_SESSION), callback_data=session_cb(bot, chat_id, sess, "end"))])
     elif sess.claude_session_id:
         rows.append([InlineKeyboardButton(
-            "▶️ Resume", callback_data=session_cb(bot, chat_id, sess, "resume"))])
+            tr.text(BTN_RESUME), callback_data=session_cb(bot, chat_id, sess, "resume"))])
     rows += [
-        [InlineKeyboardButton("✏️ Rename", callback_data=session_cb(bot, chat_id, sess, "rename"))],
-        [InlineKeyboardButton("👤 Preferences", callback_data=pref_cb)],
-        [InlineKeyboardButton("📝 Diff", callback_data=session_cb(bot, chat_id, sess, "diff"))],
+        [InlineKeyboardButton(tr.text(BTN_RENAME),
+                              callback_data=session_cb(bot, chat_id, sess, "rename"))],
+        [InlineKeyboardButton(tr.text(BTN_PREFS), callback_data=pref_cb)],
+        [InlineKeyboardButton(tr.text(BTN_DIFF),
+                              callback_data=session_cb(bot, chat_id, sess, "diff"))],
     ]
     if gone:
         rows.append([InlineKeyboardButton(
-            "🗑️ Delete", callback_data=session_cb(bot, chat_id, sess, "delete"))])
+            tr.text(BTN_DELETE), callback_data=session_cb(bot, chat_id, sess, "delete"))])
     rows.append([InlineKeyboardButton(
-        "✖️ Close", callback_data=session_cb(bot, chat_id, sess, "menu-close"))])
-    text = f"⋮ <b>{html_mod.escape(sess.label)}</b> - choose an action:"
+        tr.text(BTN_CLOSE), callback_data=session_cb(bot, chat_id, sess, "menu-close"))])
+    text = tr.html(MENU_TITLE, session=sess.label)
     if gone and not sess.claude_session_id:
         # Say why, rather than quietly showing a shorter menu — "where did
         # Resume go" is a worse question than a one-line answer.
@@ -483,27 +697,25 @@ def _render_session_menu(
         # transitional status through the state machine and its persistence
         # costs far more than it buys; saying something that stays TRUE in
         # both states costs nothing.
-        text += ("\n\n<i>No saved transcript to resume from.</i>")
+        text += "\n\n" + tr.html(MENU_NO_TRANSCRIPT)
     return text, InlineKeyboardMarkup(rows)
 
 
 # ---- restart ---------------------------------------------------------
 
 def _render_restart_confirm(
-    bot: "TelegramBot", chat_id: int, sess: TrackedSession,
+    bot: "TelegramBot", chat_id: int, sess: TrackedSession, tr=None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     # Carries the turn it was shown for (like ⋮ End): it is often the ⋮
     # menu edited in place, and a busy card may have moved since.
+    tr = tr or i18n.for_chat(chat_id)
     kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🔄 Restart", callback_data=session_cb(
+        InlineKeyboardButton(tr.text(BTN_RESTART), callback_data=session_cb(
             bot, chat_id, sess, f"restartok{sess.turn_key}")),
-        InlineKeyboardButton("Cancel", callback_data=session_cb(bot, chat_id, sess, "restart-cancel")),
+        InlineKeyboardButton(tr.text(BTN_CANCEL),
+                             callback_data=session_cb(bot, chat_id, sess, "restart-cancel")),
     ]])
-    text = (
-        f"🔄 Restart session [<b>{html_mod.escape(sess.label)}</b>]? "
-        "Claude stops and starts again, keeping its conversation."
-    )
-    return text, kb
+    return tr.html(RESTART_CONFIRM, session=sess.label), kb
 
 
 async def handle_restart_cmd(
@@ -517,6 +729,7 @@ async def handle_restart_cmd(
     text = update.message.text.strip()
     parts = text.split(maxsplit=1)
     chat_id = calling_chat_id(update)
+    tr = i18n.for_update(update)
 
     if len(parts) < 2:
         sessions = [
@@ -524,7 +737,7 @@ async def handle_restart_cmd(
             if sess.status != Status.GONE and sess.label
         ]
         if not sessions:
-            await reply_text(update.message, "No live sessions to restart.")
+            await reply_text(update.message, tr.text(RESTART_NONE))
             return
         pick = bare_pick(bot, chat_id, calling_user_id(update), sessions)
         if pick is not None:
@@ -536,7 +749,7 @@ async def handle_restart_cmd(
                                   kind="restart", command=f"/restart {pick.label}",
                                   who=update.effective_user)
             return
-        sent = await reply_text(update.message, "Which session to restart?",
+        sent = await reply_text(update.message, tr.text(RESTART_WHICH),
                                 reply_markup=session_picker(bot, chat_id, sessions, "restart",
                                                             glyph="🔄 ",
                                                             user_id=calling_user_id(update)))
@@ -548,10 +761,8 @@ async def handle_restart_cmd(
     label = parts[1].strip().lstrip("/")
     sess = bot.registry.find_by_label(label, chat_id)
     if sess is None:
-        await reply_text(update.message,
-            f"⚠️ No live session named <b>{html_mod.escape(label)}</b> here.",
-            parse_mode="HTML",
-        )
+        await reply_text(update.message, tr.html(NO_LIVE_HERE, session=label),
+                         parse_mode="HTML")
         return
     body, kb = _render_restart_confirm(bot, chat_id, sess)
     sent = await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
@@ -560,18 +771,20 @@ async def handle_restart_cmd(
                           who=update.effective_user)
 
 
-def _restart_outcome_text(outcome, by: str = "") -> str:
-    """The Restart confirm's result. ``by``: who restarted it, in a group
-    (roadmap 8.91c): `🔄 [x1] restarted by @bob.`"""
+def _restart_outcome_text(outcome, by: str = "", tr=None) -> str:
+    """The Restart confirm's result (HTML, in *tr*'s language; English when
+    None). ``by``: who restarted it, in a group (roadmap 8.91c):
+    `🔄 [x1] restarted by @bob.`"""
+    tr = tr or i18n.get("en")
     if outcome.ok:
         if by:
-            return (f"🔄 [<b>{html_mod.escape(outcome.label)}</b>] restarted "
-                    f"by {html_mod.escape(by)}.")
-        return f"🔄 [<b>{html_mod.escape(outcome.label)}</b>] restarted."
-    template = _RESTART_REASON_TEXT.get(outcome.reason, "Restart failed for [{label}].")
-    return template.format(
-        label=html_mod.escape(outcome.label), err=html_mod.escape(outcome.err),
-    )
+            return tr.html(RESTARTED_BY, session=outcome.label, person=Command(by))
+        return tr.html(RESTARTED, session=outcome.label)
+    msg = _RESTART_REASON_TEXT.get(outcome.reason, RESTART_FAILED)
+    params = {"label": outcome.label}
+    if "{err}" in msg:
+        params["err"] = outcome.err
+    return tr.html(msg, **params)
 
 
 # ---- rename ------------------------------------------------------------
@@ -587,9 +800,11 @@ async def _apply_rename(
     is always one the Mini App would accept too."""
     from aipager.miniapp.launch import validate_session_name
 
+    tr = i18n.for_chat(chat_id)
     clean, err = validate_session_name(new_label)
     if err:
-        await reply_text(reply_target, f"⚠️ {html_mod.escape(err)}", parse_mode="HTML")
+        # The Mini App's own rule (English), as it is.
+        await reply_text(reply_target, tr.html(WARNING_LINE, text=err), parse_mode="HTML")
         return
 
     if clean != sess.label:
@@ -597,24 +812,17 @@ async def _apply_rename(
         if existing is not None and (
             existing.status != Status.GONE or existing.claude_session_id
         ):
-            await reply_text(reply_target,
-                f"⚠️ A session named {html_mod.escape(clean)} already exists in this chat.",
-                parse_mode="HTML",
-            )
+            await reply_text(reply_target, tr.html(RENAME_EXISTS, session=clean),
+                             parse_mode="HTML")
             return
 
     outcome = await bot._rename_session_core(sess, clean)
     if outcome.changed:
-        await reply_text(reply_target,
-            f"✏️ [<b>{html_mod.escape(outcome.previous_label)}</b>] renamed to "
-            f"[<b>{html_mod.escape(outcome.new_label)}</b>].",
-            parse_mode="HTML",
-        )
+        await reply_text(reply_target, tr.html(RENAMED, old=outcome.previous_label,
+                                               new=outcome.new_label), parse_mode="HTML")
     else:
-        await reply_text(reply_target,
-            f"[<b>{html_mod.escape(sess.label)}</b>] name unchanged.",
-            parse_mode="HTML",
-        )
+        await reply_text(reply_target, tr.html(RENAME_UNCHANGED, session=sess.label),
+                         parse_mode="HTML")
 
 
 async def handle_rename_cmd(
@@ -629,22 +837,21 @@ async def handle_rename_cmd(
     text = update.message.text.strip()
     parts = text.split(maxsplit=2)
     chat_id = calling_chat_id(update)
+    tr = i18n.for_update(update)
 
     if len(parts) >= 3:
         old_label, new_label = parts[1].strip().lstrip("/"), parts[2].strip()
         sess = bot.registry.find_by_label(old_label, chat_id, include_gone=True)
         if sess is None:
-            await reply_text(update.message,
-                f"⚠️ No session named <b>{html_mod.escape(old_label)}</b> here.",
-                parse_mode="HTML",
-            )
+            await reply_text(update.message, tr.html(NO_SESSION_HERE, session=old_label),
+                             parse_mode="HTML")
             return
         await _apply_rename(bot, sess, new_label, chat_id, reply_target=update.message)
         return
 
     sessions = [s for s in bot.registry.all_sessions(chat_id).values() if s.label]
     if not sessions:
-        await reply_text(update.message, "No sessions to rename.")
+        await reply_text(update.message, tr.text(RENAME_NONE))
         return
     pick = bare_pick(bot, chat_id, calling_user_id(update), sessions)
     if pick is not None:
@@ -663,7 +870,7 @@ async def handle_rename_cmd(
             elif isinstance(sent_id, int):
                 pending["msg_id"] = sent_id
         return
-    sent = await reply_text(update.message, "Which session to rename?",
+    sent = await reply_text(update.message, tr.text(RENAME_WHICH),
                             reply_markup=session_picker(bot, chat_id, sessions, "rename",
                                                         glyph="✏️ ",
                                                         user_id=calling_user_id(update)))
@@ -676,17 +883,16 @@ async def handle_rename_cmd(
 # ---- delete --------------------------------------------------------------
 
 def _render_delete_confirm(
-    bot: "TelegramBot", chat_id: int, sess: TrackedSession,
+    bot: "TelegramBot", chat_id: int, sess: TrackedSession, tr=None,
 ) -> tuple[str, InlineKeyboardMarkup]:
+    tr = tr or i18n.for_chat(chat_id)
     kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🗑️ Delete", callback_data=session_cb(bot, chat_id, sess, "delete-confirm")),
-        InlineKeyboardButton("Cancel", callback_data=session_cb(bot, chat_id, sess, "delete-cancel")),
+        InlineKeyboardButton(tr.text(BTN_DELETE),
+                             callback_data=session_cb(bot, chat_id, sess, "delete-confirm")),
+        InlineKeyboardButton(tr.text(BTN_CANCEL),
+                             callback_data=session_cb(bot, chat_id, sess, "delete-cancel")),
     ]])
-    text = (
-        f"🗑️ Remove [<b>{html_mod.escape(sess.label)}</b>] from the session list? "
-        "This cannot be undone."
-    )
-    return text, kb
+    return tr.html(DELETE_CONFIRM, session=sess.label), kb
 
 
 async def handle_delete_cmd(
@@ -700,6 +906,7 @@ async def handle_delete_cmd(
     text = update.message.text.strip()
     parts = text.split(maxsplit=1)
     chat_id = calling_chat_id(update)
+    tr = i18n.for_update(update)
 
     if len(parts) < 2:
         sessions = [
@@ -707,7 +914,7 @@ async def handle_delete_cmd(
             if sess.status == Status.GONE and sess.label
         ]
         if not sessions:
-            await reply_text(update.message, "No ended sessions to delete.")
+            await reply_text(update.message, tr.text(DELETE_NONE))
             return
         pick = bare_pick(bot, chat_id, calling_user_id(update), sessions)
         if pick is not None:
@@ -719,7 +926,7 @@ async def handle_delete_cmd(
                                   kind="delete", command=f"/delete {pick.label}",
                                   who=update.effective_user)
             return
-        sent = await reply_text(update.message, "Which ended session to remove?",
+        sent = await reply_text(update.message, tr.text(DELETE_WHICH),
                                 reply_markup=session_picker(
                                     bot, chat_id, sessions, "delete", glyph="🗑️ ",
                                     # A shared group marks the sender's own (8.93).
@@ -733,17 +940,12 @@ async def handle_delete_cmd(
     label = parts[1].strip().lstrip("/")
     sess = bot.registry.find_by_label(label, chat_id, include_gone=True)
     if sess is None:
-        await reply_text(update.message,
-            f"⚠️ No session named <b>{html_mod.escape(label)}</b> here.",
-            parse_mode="HTML",
-        )
+        await reply_text(update.message, tr.html(NO_SESSION_HERE, session=label),
+                         parse_mode="HTML")
         return
     if sess.status != Status.GONE:
-        await reply_text(update.message,
-            f"⚠️ [<b>{html_mod.escape(sess.label)}</b>] is still running. "
-            "End it first with /kill.",
-            parse_mode="HTML",
-        )
+        await reply_text(update.message, tr.html(DELETE_STILL_RUNNING, session=sess.label),
+                         parse_mode="HTML")
         return
     body, kb = _render_delete_confirm(bot, chat_id, sess)
     sent = await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
@@ -785,6 +987,11 @@ async def _run_diff(bot: "TelegramBot", sess: TrackedSession, *, target_message)
     entry points."""
     from aipager.miniapp.diff import collect_diff
 
+    # The chat it is asked in (resolved here: stand-ins take this exact call).
+    chat = getattr(target_message, "chat_id", None)
+    if not isinstance(chat, int):
+        chat = getattr(getattr(target_message, "chat", None), "id", None)
+    tr = i18n.for_chat(chat)
     try:
         result = await collect_diff(sess.cwd)
     except Exception:
@@ -796,26 +1003,21 @@ async def _run_diff(bot: "TelegramBot", sess: TrackedSession, *, target_message)
 
     if not result.get("available"):
         reason = result.get("reason", "git_error")
-        template = _DIFF_REASON_TEXT.get(reason, _DIFF_REASON_TEXT["git_error"])
+        msg = _DIFF_REASON_TEXT.get(reason, _DIFF_REASON_TEXT["git_error"])
         await reply_text(target_message,
-            template.format(label=html_mod.escape(sess.label)),
+            tr.html(msg, label=sess.label) if "{label}" in msg else tr.html(msg),
             parse_mode="HTML",
         )
         return
 
     files = result.get("files") or []
     if not files:
-        await reply_text(target_message,
-            f"No changes in [<b>{html_mod.escape(sess.label)}</b>]'s working directory.",
-            parse_mode="HTML",
-        )
+        await reply_text(target_message, tr.html(DIFF_NONE, session=sess.label),
+                         parse_mode="HTML")
         return
 
     n_files, added, removed = _diff_stats(files)
-    stat_line = (
-        f"📝 [<b>{html_mod.escape(sess.label)}</b>] "
-        f"{n_files} files changed, +{added}/-{removed}"
-    )
+    stat_line = tr.n(DIFF_FILES, n_files, session=sess.label, added=added, removed=removed)
     any_unusable = any(f.get("truncated") or f.get("binary") for f in files)
     patch_text = _concat_patch(files)
 
@@ -844,6 +1046,7 @@ async def handle_diff_cmd(
     text = update.message.text.strip()
     parts = text.split(maxsplit=1)
     chat_id = calling_chat_id(update)
+    tr = i18n.for_update(update)
 
     if len(parts) < 2:
         user_id = calling_user_id(update)
@@ -858,11 +1061,11 @@ async def handle_diff_cmd(
             live = [s for s in bot.registry.all_sessions(chat_id).values()
                     if s.label and s.status != Status.GONE]
             if not live:
-                await reply_text(update.message, "No live sessions to diff.")
+                await reply_text(update.message, tr.text(DIFF_NONE_LIVE))
                 return
             sess = bare_pick(bot, chat_id, user_id, live)
             if sess is None:
-                sent = await reply_text(update.message, "Which session's diff?",
+                sent = await reply_text(update.message, tr.text(DIFF_WHICH),
                                         reply_markup=session_picker(
                                             bot, chat_id, live, "diff", glyph="📝 ",
                                             user_id=user_id if shared_group(bot, chat_id)
@@ -877,10 +1080,8 @@ async def handle_diff_cmd(
         label = parts[1].strip().lstrip("/")
         sess = bot.registry.find_by_label(label, chat_id, include_gone=True)
         if sess is None:
-            await reply_text(update.message,
-                f"⚠️ No session named <b>{html_mod.escape(label)}</b> here.",
-                parse_mode="HTML",
-            )
+            await reply_text(update.message, tr.html(NO_SESSION_HERE, session=label),
+                             parse_mode="HTML")
             return
 
     await _run_diff(bot, sess, target_message=update.message)
@@ -1149,13 +1350,11 @@ async def maybe_handle_text(
 
     sess = bot.registry.get(pending["session_name"])
     if sess is None:
-        await reply_text(update.message,
-            "⚠️ That session is no longer available - run /rename again.",
-        )
+        await reply_text(update.message, i18n.for_update(update).text(RENAME_GONE))
         return True
 
     if not bot._can_prompt_user(user_id, chat_id):
-        await reply_text(update.message, "🚫 You can't rename this session.")
+        await reply_text(update.message, i18n.for_update(update).text(RENAME_NOT_ALLOWED))
         return True
 
     await _apply_rename(bot, sess, text.strip(), chat_id, reply_target=update.message)
@@ -1285,9 +1484,12 @@ async def handle_callback(
             or (action.startswith("modeauto") and action[8:].isdigit())):
         return False
 
+    # The card is the chat's; a pop-up is the tapper's.
+    shared = i18n.for_update(update)
+    person = i18n.for_person(update)
     sess = bot.registry.get(session_name)
     if sess is None:
-        await bot._safe_answer(query, "Session not found")
+        await bot._safe_answer(query, person.text(TOAST_NOT_FOUND))
         return True
 
     user_id = query.from_user.id if getattr(query, "from_user", None) else None
@@ -1299,17 +1501,17 @@ async def handle_callback(
 
     if action == "talk":
         if not bot._can_prompt_user(user_id, chat_id):
-            await bot._safe_answer(query, "You can't send to this session.")
+            await bot._safe_answer(query, person.text(TOAST_CANT_SEND))
             return True
         if sess.status == Status.GONE or (
                 session_foreign_to(sess, chat_id)):
-            await bot._safe_answer(query, "That session isn't running here.")
+            await bot._safe_answer(query, person.text(TOAST_NOT_HERE))
             return True
         bot.registry.set_target(sess.name, chat_id, user_id)
         bot.registry.mark_dirty()
         # The pinned bar's target line (it returns at once: its own task).
         await bot._maybe_update_bot_name(sess.name)
-        await bot._safe_answer(query, f"✍️ Messages go to {sess.label}")
+        await bot._safe_answer(query, person.text(TOAST_TARGET, session=sess.label))
         # A "Which session?" card: the message it asked about goes there
         # too, as if it had been sent there (roadmap 8.94i).
         held = held_message.take(bot, chat_id, _tapped_id(query), user_id)
@@ -1320,9 +1522,8 @@ async def handle_callback(
         # status list below).
         card_owner.release(bot, chat_id, _tapped_id(query))
         if held is not None:
-            label = html_mod.escape(sess.label)
             if not held_message.is_fresh(held):
-                await _edit(query, held_message.TOO_OLD, None)
+                await _edit(query, shared.html(held_message.TOO_OLD), None)
                 return True
             try:
                 went = await held.resend(sess)
@@ -1331,7 +1532,8 @@ async def handle_callback(
                 log.exception("[%s] sending a held message failed", sess.label)
                 went = False
             # A refusal said why under the message itself.
-            await _edit(query, f"{'Sent' if went else 'Not sent'} to {label}.", None)
+            await _edit(query, shared.html(SENT_TO if went else NOT_SENT_TO,
+                                           session=sess.label), None)
             return True
         text, kb = bot._render_status_list(chat_id, update)
         await _edit(query, text, kb)
@@ -1339,14 +1541,14 @@ async def handle_callback(
 
     if action == "end":
         if not bot._can_prompt_user(user_id, chat_id):
-            await bot._safe_answer(query, "You can't end this session.")
+            await bot._safe_answer(query, person.text(TOAST_CANT_END))
             return True
         if sess.status == Status.GONE:
             text, kb = _render_session_menu(bot, chat_id, sess)
             await _edit(query, text, kb)
             # A /kill picker it may have been is now the menu, everyone's.
             card_owner.release(bot, chat_id, _tapped_id(query))
-            await bot._safe_answer(query, "That session has already ended.")
+            await bot._safe_answer(query, person.text(TOAST_ALREADY_ENDED))
             return True
         text, kb = render_end_confirm(bot, chat_id, sess)
         await _edit(query, text, kb)
@@ -1357,23 +1559,21 @@ async def handle_callback(
 
     if action.startswith("endok") and action[5:].isdigit():
         if not bot._can_prompt_user(user_id, chat_id):
-            await bot._safe_answer(query, "You can't end this session.")
+            await bot._safe_answer(query, person.text(TOAST_CANT_END))
             return True
         if session_foreign_to(sess, chat_id):
-            await bot._safe_answer(query, "That session isn't running here.")
+            await bot._safe_answer(query, person.text(TOAST_NOT_HERE))
             return True
         if sess.is_resuming():
             # GONE until the resume's launch lands, and the End it would
             # need then carries a new turn: this button cannot be the one.
-            await bot._safe_answer(
-                query, f"{sess.label} is being resumed - send /kill again in a moment")
+            await bot._safe_answer(query, person.text(TOAST_RESUMING_KILL, session=sess.label))
         elif sess.status == Status.GONE:
-            await bot._safe_answer(query, "That session has already ended.")
+            await bot._safe_answer(query, person.text(TOAST_ALREADY_ENDED))
         elif not sess.tap_is_for_this_turn(None, turn=int(action[5:])):
             # A new turn started since End was tapped: the confirm is for
             # work the person never saw.
-            await bot._safe_answer(
-                query, f"{sess.label} moved on to new work - tap ⏹ End session again to end it")
+            await bot._safe_answer(query, person.text(TOAST_MOVED_ON_END, session=sess.label))
             text, kb = _render_session_menu(bot, chat_id, sess)
             await _edit(query, text, kb)
             return True
@@ -1381,19 +1581,22 @@ async def handle_callback(
             outcome = await bot._kill_session_core(sess.name, sess.label)
             # In a group, who ended it (roadmap 8.91c); "" in a DM.
             by = bot._actor_label(user_id, chat_id, getattr(query, "from_user", None))
-            await bot._safe_answer(query, {
-                "killed": f"⏹ Ended {sess.label}" + (f" by {by}" if by else ""),
-                "resuming": f"{sess.label} is being resumed - try again in a moment",
-                "still_running": f"{sess.label} did not stop - try again",
-            }.get(outcome.result, f"{sess.label} was not found"))
+            if outcome.result == "killed":
+                toast = (person.text(TOAST_ENDED_BY, session=sess.label, person=Command(by))
+                         if by else person.text(TOAST_ENDED, session=sess.label))
+            else:
+                toast = person.text({
+                    "resuming": TOAST_RESUMING_RETRY,
+                    "still_running": TOAST_DID_NOT_STOP,
+                }.get(outcome.result, TOAST_NOT_FOUND_NAMED), session=sess.label)
+            await bot._safe_answer(query, toast)
             if outcome.result == "killed":
                 card_owner.release(bot, chat_id, _tapped_id(query))
                 # What remains, under what happened: the ended session has
                 # left the list, so the list alone would not say.
                 text, kb = bot._render_status_list(chat_id, update)
-                ended = f"⏹ Ended <b>{html_mod.escape(sess.label)}</b>"
-                if by:
-                    ended += f" by {html_mod.escape(by)}"
+                ended = (shared.html(ENDED_BY, session=sess.label, person=Command(by)) if by
+                         else shared.html(ENDED, session=sess.label))
                 await _edit(query, f"{ended}\n\n{text}", kb)
                 return True
         text, kb = bot._render_status_list(chat_id, update)
@@ -1402,10 +1605,10 @@ async def handle_callback(
 
     if action == "mode_show":
         if session_foreign_to(sess, chat_id):
-            await bot._safe_answer(query, "That session isn't running here.")
+            await bot._safe_answer(query, person.text(TOAST_NOT_HERE))
             return True
         if sess.status == Status.GONE:
-            await bot._safe_answer(query, "That session has ended.")
+            await bot._safe_answer(query, person.text(TOAST_ENDED_SESSION))
             return True
         text, kb = bot._render_mode_card(chat_id, sess)
         await _edit(query, text, kb)
@@ -1420,26 +1623,25 @@ async def handle_callback(
         target = action.startswith("modeauto")
         shown = int(action[8:] if target else action[7:])
         if not bot._can_prompt_user(user_id, chat_id):
-            await bot._safe_answer(query, "You can't change this session.")
+            await bot._safe_answer(query, person.text(TOAST_CANT_CHANGE))
             return True
         if session_foreign_to(sess, chat_id):
-            await bot._safe_answer(query, "That session isn't running here.")
+            await bot._safe_answer(query, person.text(TOAST_NOT_HERE))
             return True
         if sess.status == Status.GONE:
-            await bot._safe_answer(query, "That session has ended.")
+            await bot._safe_answer(query, person.text(TOAST_ENDED_SESSION))
             return True
         if sess.skip_perms == target:
             # Before the turn check: a switch made elsewhere relaunched the
             # session (a new turn), and "already in" is what happened. It
             # changes nothing, so it is right on any turn.
-            await bot._safe_answer(
-                query, f"{sess.label} is already in {mode_label(target)}.")
+            await bot._safe_answer(query, person.text(
+                TOAST_ALREADY_IN, session=sess.label, mode=Safe(person.text(mode_label(target)))))
             text, kb = bot._render_mode_card(chat_id, sess)
             await _edit(query, text, kb)
             return True
         if not sess.tap_is_for_this_turn(None, turn=shown):
-            await bot._safe_answer(
-                query, f"{sess.label} moved on to new work - tap the switch again if you still want it")
+            await bot._safe_answer(query, person.text(TOAST_MOVED_ON_SWITCH, session=sess.label))
             text, kb = bot._render_mode_card(chat_id, sess)
             await _edit(query, text, kb)
             return True
@@ -1451,14 +1653,14 @@ async def handle_callback(
         return True
 
     if action == "menu-close":
-        await _edit(query, f"Closed menu for [<b>{html_mod.escape(sess.label)}</b>].", None)
+        await _edit(query, shared.html(MENU_CLOSED, session=sess.label), None)
         return True
 
     if action == "resume":
         # Authorization re-checked at TAP time, like every other verb here:
         # a gone session's menu can sit on screen for days.
         if not bot._can_prompt_user(user_id, chat_id):
-            await bot._safe_answer(query, "You can't resume this session.")
+            await bot._safe_answer(query, person.text(TOAST_CANT_RESUME))
             return True
         if sess.status != Status.GONE or not sess.claude_session_id:
             # State moved under the button — it was resumed elsewhere, or
@@ -1466,13 +1668,13 @@ async def handle_callback(
             # `_do_resume_core`'s `not_gone`/`no_transcript`.
             text, kb = _render_session_menu(bot, chat_id, sess)
             await _edit(query, text, kb)
-            await bot._safe_answer(query, "That session can't be resumed now.")
+            await bot._safe_answer(query, person.text(TOAST_CANT_RESUME_NOW))
             return True
         # Same Ask/Auto step `/resume` uses, and the same keyboard builder
         # — one resume flow, reached from two places.
         bot._resume_mode_pending[sess.name] = sess.label
         await _edit(
-            query, f"Resume <b>{html_mod.escape(sess.label)}</b> as:",
+            query, shared.html(RESUME_AS, session=sess.label),
             # "(default)" marks what a plain resume gives this person: a
             # session saved in Auto comes back in Ask for a non-admin
             # (roadmap 8.83).
@@ -1488,12 +1690,12 @@ async def handle_callback(
 
     if action in ("resume-ask", "resume-auto", "resume-cancel"):
         if not bot._can_prompt_user(user_id, chat_id):
-            await bot._safe_answer(query, "You can't resume this session.")
+            await bot._safe_answer(query, person.text(TOAST_CANT_RESUME))
             return True
         bot._resume_mode_pending.pop(sess.name, None)
         if action == "resume-cancel":
             card_owner.release(bot, chat_id, _tapped_id(query))
-            await _edit(query, "↩️ Cancelled.", None)
+            await _edit(query, shared.html(CANCELLED), None)
             return True
 
         async def _reply(text, **kw):
@@ -1517,7 +1719,7 @@ async def handle_callback(
 
     if action == "restart":
         if not bot._can_prompt_user(user_id, chat_id):
-            await bot._safe_answer(query, "You can't restart this session.")
+            await bot._safe_answer(query, person.text(TOAST_CANT_RESTART))
             return True
         text, kb = _render_restart_confirm(bot, chat_id, sess)
         await _edit(query, text, kb)
@@ -1528,24 +1730,24 @@ async def handle_callback(
 
     if action.startswith("restartok") and action[9:].isdigit():
         if not bot._can_prompt_user(user_id, chat_id):
-            await bot._safe_answer(query, "You can't restart this session.")
+            await bot._safe_answer(query, person.text(TOAST_CANT_RESTART))
             return True
         if session_foreign_to(sess, chat_id):
-            await bot._safe_answer(query, "That session isn't running here.")
+            await bot._safe_answer(query, person.text(TOAST_NOT_HERE))
             return True
         if not sess.tap_is_for_this_turn(None, turn=int(action[9:])):
             # A new turn started since the confirm was shown: restarting
             # would destroy work the person never saw.
-            await bot._safe_answer(
-                query, f"{sess.label} moved on to new work - tap 🔄 Restart again to restart it")
+            await bot._safe_answer(query, person.text(TOAST_MOVED_ON_RESTART,
+                                                      session=sess.label))
             text, kb = _render_session_menu(bot, chat_id, sess)
             await _edit(query, text, kb)
             return True
-        await bot._safe_answer(query, f"Restarting {sess.label}...")
+        await bot._safe_answer(query, person.text(TOAST_RESTARTING, session=sess.label))
         outcome = await bot._restart_session_core(sess)
         await _edit(query, _restart_outcome_text(
-            outcome, bot._actor_label(user_id, chat_id, getattr(query, "from_user", None))),
-            None)
+            outcome, bot._actor_label(user_id, chat_id, getattr(query, "from_user", None)),
+            tr=shared), None)
         # Only now: the card keeps its buttons for the whole restart, and
         # until it shows the result they stay the requester's (8.91c).
         card_owner.release(bot, chat_id, _tapped_id(query))
@@ -1554,19 +1756,17 @@ async def handle_callback(
     if action == "restart-confirm":
         # The confirm before restartok<turn_key> (P4). One still sitting in
         # a chat does nothing: nothing can tell which turn it was for.
-        await bot._safe_answer(query, "This button is out of date - send /restart again")
+        await bot._safe_answer(query, person.text(TOAST_RESTART_STALE))
         return True
 
     if action == "restart-cancel":
         card_owner.release(bot, chat_id, _tapped_id(query))
-        await _edit(
-            query, f"Restart cancelled for [<b>{html_mod.escape(sess.label)}</b>].", None,
-        )
+        await _edit(query, shared.html(RESTART_CANCELLED, session=sess.label), None)
         return True
 
     if action == "rename":
         if not bot._can_prompt_user(user_id, chat_id):
-            await bot._safe_answer(query, "You can't rename this session.")
+            await bot._safe_answer(query, person.text(TOAST_CANT_RENAME))
             return True
         msg_id = getattr(getattr(query, "message", None), "message_id", None)
         text, kb = _start_rename(bot, chat_id, sess, user_id,
@@ -1594,26 +1794,24 @@ async def handle_callback(
                 key[0] == chat_id and key[1] != user_id and _is_this_question(p)
                 for key, p in renames.items()):
             # Someone else's question (roadmap 8.86): theirs to cancel.
-            await bot._safe_answer(query, "This isn't your rename.", show_alert=True)
+            await bot._safe_answer(query, person.text(TOAST_NOT_YOUR_RENAME), show_alert=True)
             return True
         if own_here:
             renames.pop((chat_id, user_id), None)
-        await _edit(query, "Rename cancelled.", None)
+        await _edit(query, shared.html(RENAME_CANCELLED), None)
         return True
 
     if action == "delete":
         if not bot._can_prompt_user(user_id, chat_id):
-            await bot._safe_answer(query, "You can't delete this session.")
+            await bot._safe_answer(query, person.text(TOAST_CANT_DELETE))
             return True
         if sess.status != Status.GONE:
-            await bot._safe_answer(
-                query, "That session is still running. End it first.",
-            )
+            await bot._safe_answer(query, person.text(TOAST_STILL_RUNNING))
             return True
         if sess.is_resuming():
             # Don't even draw the confirm: the tap after it would be
             # refused anyway (roadmap 8.16).
-            await bot._safe_answer(query, _RESUMING_REFUSAL)
+            await bot._safe_answer(query, person.text(_RESUMING_REFUSAL))
             return True
         text, kb = _render_delete_confirm(bot, chat_id, sess)
         await _edit(query, text, kb)
@@ -1624,18 +1822,16 @@ async def handle_callback(
 
     if action == "delete-confirm":
         if not bot._can_prompt_user(user_id, chat_id):
-            await bot._safe_answer(query, "You can't delete this session.")
+            await bot._safe_answer(query, person.text(TOAST_CANT_DELETE))
             return True
         if sess.status != Status.GONE:
-            await bot._safe_answer(
-                query, "That session is still running. End it first.",
-            )
+            await bot._safe_answer(query, person.text(TOAST_STILL_RUNNING))
             return True
         # A session stays GONE for the whole of a resume's launch, so the
         # check above passes while it is coming back; removing it here
         # would strand that resume on an orphan (roadmap 8.16).
         if sess.is_resuming():
-            await bot._safe_answer(query, _RESUMING_REFUSAL)
+            await bot._safe_answer(query, person.text(_RESUMING_REFUSAL))
             return True
         label = sess.label
         card_owner.release(bot, chat_id, _tapped_id(query))
@@ -1644,15 +1840,13 @@ async def handle_callback(
         bot.registry.remove(sess.name)
         bot.registry.mark_dirty()
         by = bot._actor_label(user_id, chat_id, getattr(query, "from_user", None))
-        await _edit(query, f"🗑️ Deleted [<b>{html_mod.escape(label)}</b>]"
-                    + (f" by {html_mod.escape(by)}" if by else "") + ".", None)
+        await _edit(query, shared.html(DELETED_BY, session=label, person=Command(by)) if by
+                    else shared.html(DELETED, session=label), None)
         return True
 
     if action == "delete-cancel":
         card_owner.release(bot, chat_id, _tapped_id(query))
-        await _edit(
-            query, f"Delete cancelled for [<b>{html_mod.escape(sess.label)}</b>].", None,
-        )
+        await _edit(query, shared.html(DELETE_CANCELLED, session=sess.label), None)
         return True
 
     if action == "diff":

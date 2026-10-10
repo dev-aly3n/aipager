@@ -22,6 +22,9 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from aipager import i18n
+from aipager.i18n import Msg, Span
+
 if TYPE_CHECKING:
     from faster_whisper import WhisperModel
 
@@ -39,7 +42,26 @@ _model_lock = threading.Lock()
 
 
 class VoiceUnavailable(Exception):
-    """Raised when faster-whisper isn't installed or can't be loaded."""
+    """Raised when faster-whisper isn't installed or can't be loaded.
+    ``reason_id`` says which (``"not_installed"``), so the chat can say it
+    in its own language; the message itself stays English (logs)."""
+
+    reason_id = ""
+
+
+#: What to run when the voice extra is missing (the commands as they are).
+NOT_INSTALLED = Msg("media.not_installed",
+                    "faster-whisper is not installed. Run:\n    {uv}\nor:\n    {pip}",
+                    note="The voice extra is missing; {uv} and {pip} are the commands that "
+                         "install it",
+                    eg={"uv": "uv tool install --reinstall 'aipager[voice]'",
+                        "pip": "pip install 'aipager[voice]'"})
+
+
+def not_installed_text(tr) -> str:
+    """:data:`NOT_INSTALLED` in *tr*'s language (plain text)."""
+    return tr.text(NOT_INSTALLED, uv=Span("uv tool install --reinstall 'aipager[voice]'"),
+                   pip=Span("pip install 'aipager[voice]'"))
 
 
 def is_available() -> bool:
@@ -62,12 +84,9 @@ def _get_model() -> "WhisperModel":
         try:
             from faster_whisper import WhisperModel
         except ImportError as e:
-            raise VoiceUnavailable(
-                "faster-whisper is not installed. Run:\n"
-                "    uv tool install --reinstall 'aipager[voice]'\n"
-                "or:\n"
-                "    pip install 'aipager[voice]'"
-            ) from e
+            missing = VoiceUnavailable(not_installed_text(i18n.get("en")))
+            missing.reason_id = "not_installed"
+            raise missing from e
         log.info("loading whisper model %r (first time may download ~74 MB)",
                  DEFAULT_MODEL)
         # int8 quantization keeps memory + latency low on CPU. The model

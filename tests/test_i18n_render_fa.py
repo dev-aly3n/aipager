@@ -24,8 +24,13 @@ _DATA = sorted({label for label, _cmd in config.MODEL_CHOICES} | {"Opus 4.7"},
                key=len, reverse=True)
 
 
+def _names():
+    """Every registered surface whose migration has landed."""
+    return {n for n, _f in i18n_surfaces.SURFACES} - i18n_surfaces.PENDING
+
+
 def _all(mk_bot, run_async, monkeypatch):
-    return i18n_surfaces.render_all(mk_bot, run_async, monkeypatch, "fa")
+    return i18n_surfaces.render_all(mk_bot, run_async, monkeypatch, "fa", names=_names())
 
 
 def _texts(renders):
@@ -39,7 +44,7 @@ def _texts(renders):
 
 def test_every_surface_reads_in_persian(mk_bot, run_async, monkeypatch):
     renders = _all(mk_bot, run_async, monkeypatch)
-    assert set(renders) == {n for n, _f in i18n_surfaces.SURFACES}
+    assert set(renders) == _names()
     for name, texts in renders.items():
         assert any(PERSIAN.search(t) for t in texts), name
         for text in texts:
@@ -109,6 +114,22 @@ def test_arrows_point_left(mk_bot, run_async, monkeypatch):
         assert "→" not in outside, (name, text)
         seen_left = seen_left or "←" in outside
     assert seen_left
+
+
+def test_phase_3a_arrows_and_commands(mk_bot, run_async, monkeypatch):
+    """The compacted line and the model switch point left; the command the
+    resume-running reply names is whole inside its <code>, isolated
+    outside it (phase 3a)."""
+    renders = i18n_surfaces.render_all(
+        mk_bot, run_async, monkeypatch, "fa",
+        names={"notice.compacted", "route.model_feedback", "sess.resume"})
+    compacted = renders["notice.compacted"][0]
+    assert "\u2190" in compacted and "\u2192" not in compacted
+    assert all("\u2190" in t and "\u2192" not in t for t in renders["route.model_feedback"])
+    running = [t for t in renders["sess.resume"] if "<code>/x1</code>" in t]
+    assert running == [t for t in renders["sess.resume"]
+                       if FSI + "<code>/x1</code>" + PDI in t]
+    assert running
 
 
 def test_the_clock_is_in_persian_digits(mk_bot, run_async, monkeypatch):

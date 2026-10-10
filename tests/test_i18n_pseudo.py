@@ -94,12 +94,15 @@ def test_every_migrated_renderer_is_marked_under_qps(mk_bot, run_async, monkeypa
     renders = i18n_surfaces.render_all(mk_bot, run_async, monkeypatch, "qps",
                                        names=i18n_surfaces.MIGRATED)
     assert set(renders) == i18n_surfaces.MIGRATED
-    # Phase 2 is done: every registered surface is migrated.
-    assert i18n_surfaces.MIGRATED == {n for n, _f in i18n_surfaces.SURFACES}
+    # Every registered surface is migrated, but those whose migration has
+    # not landed yet (phase 3a's PENDING).
+    assert i18n_surfaces.MIGRATED == ({n for n, _f in i18n_surfaces.SURFACES}
+                                      - i18n_surfaces.PENDING)
     leaks = {}
     for name, texts in renders.items():
+        known = i18n_surfaces.KNOWN + i18n_surfaces.KNOWN_EXTRA.get(name, ())
         for text in texts:
-            words = i18n_surfaces.unmarked_words(text)
+            words = i18n_surfaces.unmarked_words(text, known)
             if words:
                 leaks.setdefault(name, []).append((text, words))
     assert not leaks, leaks

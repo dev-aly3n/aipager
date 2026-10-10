@@ -21,6 +21,8 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Awaitable, Callable
 
+from aipager.i18n import Msg, Plural
+
 if TYPE_CHECKING:
     from aipager.bot import TelegramBot
     from aipager.state import TrackedSession
@@ -32,7 +34,32 @@ MAX_AGE = 600.0
 MAX_RECORDS = 256
 
 #: Too old to send: what the card says instead.
-TOO_OLD = "That message is too old to send; send it again."
+TOO_OLD = Msg("held.too_old", "That message is too old to send; send it again.",
+              note="On a \"Which session?\" card tapped after ten minutes: the message it "
+                   "asked about was not sent")
+
+#: The first line of an answer delivered after a Telegram rate limit held
+#: it (``held.LATE_MARKER``, in the chat's language). The English of both
+#: forms is ``held.LATE_MARKER`` as it is ("1 min" too), and every
+#: language's form stays free of Markdown and HTML characters: the same
+#: line opens the rich and the plain delivery, and must break neither.
+LATE_MARKER = Plural(
+    "held.late_marker",
+    one="⏳ delivered late (held {n} min during a Telegram rate limit)",
+    other="⏳ delivered late (held {n} min during a Telegram rate limit)",
+    note="Opens an answer that was held back while Telegram rate-limited the chat; "
+         "{n} is minutes. Use no * _ ` [ ] < > & characters")
+
+
+def late_marker_text(tr, held_seconds) -> str:
+    """The late marker in *tr*'s language for an answer held
+    *held_seconds*: the minutes counted exactly as ``held.late_marker``
+    counts them (never 0, a bad value is 1)."""
+    try:
+        seconds = max(float(held_seconds), 0.0)
+    except (TypeError, ValueError):
+        seconds = 0.0
+    return tr.n(LATE_MARKER, max(1, round(seconds / 60)), kind="text")
 
 Resend = Callable[["TrackedSession"], Awaitable[bool]]
 
@@ -106,4 +133,5 @@ def drop(bot: TelegramBot, chat_id, msg_id) -> None:
         store.pop((chat_id, msg_id), None)
 
 
-__all__ = ["MAX_AGE", "MAX_RECORDS", "TOO_OLD", "Held", "drop", "hold", "is_fresh", "take"]
+__all__ = ["LATE_MARKER", "MAX_AGE", "MAX_RECORDS", "TOO_OLD", "Held", "drop", "hold",
+           "is_fresh", "late_marker_text", "take"]

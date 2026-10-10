@@ -2137,13 +2137,16 @@ def _miniapp_payload_texts(env):
 def render_all(mk_bot, run_async, monkeypatch, code: str = "en",
                names=None) -> dict[str, list[str]]:
     """Every surface (or those in *names*) rendered with *code* stored for
-    its chats."""
+    its chats. Each surface patches through its own context, so what one
+    surface pins (a queue depth, a restart delay) never leaks into the
+    next; the fixture's own patches (the home redirects) stay."""
     out: dict[str, list[str]] = {}
     for name, fn in SURFACES:
         if names is not None and name not in names:
             continue
-        env = Env(mk_bot, run_async, monkeypatch, code)
-        out[name] = [str(t) for t in fn(env)]
+        with monkeypatch.context() as mp:
+            env = Env(mk_bot, run_async, mp, code)
+            out[name] = [str(t) for t in fn(env)]
     return out
 
 
@@ -2218,3 +2221,14 @@ def unmarked_words(text: str, known=KNOWN) -> list[str]:
     for word in sorted(set(known) | set(core.NEVER_TRANSLATE), key=len, reverse=True):
         rest = re.sub(rf"(?<![\w-]){re.escape(word)}(?![\w-])", " ", rest)
     return re.findall(r"[A-Za-z]{2,}", rest)
+
+
+# ---- phase 3a ----------------------------------------------------------------------------------
+
+#: Registered surfaces whose migration has not landed yet (rendered for
+#: the English snapshot only), and names a surface shows that the pseudo
+#: sweep must not count as English, by surface. Both are filled by the
+#: phase 3a registry imported below.
+PENDING: set[str] = set()
+KNOWN_EXTRA: dict[str, tuple[str, ...]] = {}
+from tests import i18n_surfaces_p3a  # noqa: E402,F401
