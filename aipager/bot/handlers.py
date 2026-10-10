@@ -1074,7 +1074,7 @@ class CommandHandlersMixin:
         if not url:
             return []
         chat_tr = i18n.for_chat(getattr(chat, "id", None))
-        return [[InlineKeyboardButton(chat_tr.text(kbwords.KB_APP), web_app=WebAppInfo(
+        return [[InlineKeyboardButton(kbwords.KB_APP, web_app=WebAppInfo(
             url=miniapp_link.with_lang(url, chat_tr.code)))]]
 
     async def _handle_settings_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

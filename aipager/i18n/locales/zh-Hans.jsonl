@@ -255,7 +255,6 @@
 {"k": "home.start_one", "src": "ef9f6ba9", "v": "用 /new 启动一个会话。"}
 {"k": "home.tap_session", "src": "f14797d7", "v": "点按键盘上的会话，即可与它对话。"}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - 在 Telegram 中使用 Claude Code"}
-{"k": "kb.app", "src": "59b36d46", "v": "📱 应用"}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« 返回"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "命令"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "结束"}

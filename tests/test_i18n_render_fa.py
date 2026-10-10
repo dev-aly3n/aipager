@@ -46,7 +46,7 @@ def test_every_surface_reads_in_persian(mk_bot, run_async, monkeypatch):
     renders = _all(mk_bot, run_async, monkeypatch)
     assert set(renders) == _names()
     for name, texts in renders.items():
-        assert any(PERSIAN.search(t) for t in texts), name
+        assert name in i18n_surfaces.NAMES_ONLY or any(PERSIAN.search(t) for t in texts), name
         for text in texts:
             assert "—" not in text, (name, text)
 

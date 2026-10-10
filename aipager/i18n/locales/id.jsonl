@@ -255,7 +255,6 @@
 {"k": "home.start_one", "src": "ef9f6ba9", "v": "Mulai satu dengan /new."}
 {"k": "home.tap_session", "src": "f14797d7", "v": "Ketuk sebuah sesi di papan ketik untuk bicara dengannya."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code dari Telegram"}
-{"k": "kb.app", "src": "59b36d46", "v": "📱 Aplikasi"}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« Kembali"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "Perintah ›"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "kill"}

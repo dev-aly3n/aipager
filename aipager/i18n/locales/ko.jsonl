@@ -255,7 +255,6 @@
 {"k": "home.start_one", "src": "ef9f6ba9", "v": "/new로 하나 시작하세요."}
 {"k": "home.tap_session", "src": "f14797d7", "v": "키보드에서 세션을 탭하면 대화할 수 있어요."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Telegram에서 쓰는 Claude Code"}
-{"k": "kb.app", "src": "59b36d46", "v": "📱 앱"}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« 뒤로"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "명령어"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "종료"}

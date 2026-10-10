@@ -1281,7 +1281,7 @@ class LifecycleMixin:
 
         from aipager.bot import kbwords, miniapp_link
         tr = cls._menu_tr(chat_id)
-        return MenuButtonWebApp(text=tr.text(kbwords.KB_APP),
+        return MenuButtonWebApp(text=kbwords.KB_APP,
                                 web_app=WebAppInfo(url=miniapp_link.with_lang(url, tr.code)))
 
     @staticmethod

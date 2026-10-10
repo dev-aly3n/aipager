@@ -186,10 +186,12 @@ def test_picking_russian_sets_the_menu_button_once(bot, run_async):
     assert bot._app.bot.set_chat_menu_button.await_count == 1
 
 
-def test_the_menu_button_text_follows_the_language(bot, run_async):
+def test_the_menu_button_reads_app_in_every_language(bot, run_async):
+    # "📱 App" is never translated (operator, 2026-10-10); the button is
+    # still set again on a switch, so its link carries the new language.
     _tap(bot, run_async, "_:set:lang:ru")
     button = bot._app.bot.set_chat_menu_button.await_args.kwargs["menu_button"]
-    assert button.text == catalog("ru")["kb.app"]["v"]
+    assert button.text == "📱 App"
 
 
 def test_the_persian_confirmation_reads_right_to_left(bot, run_async):

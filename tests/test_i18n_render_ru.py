@@ -24,7 +24,7 @@ def test_every_surface_reads_in_russian(mk_bot, run_async, monkeypatch):
     renders = i18n_surfaces.render_all(mk_bot, run_async, monkeypatch, "ru", names=names)
     assert set(renders) == names
     for name, texts in renders.items():
-        assert any(CYRILLIC.search(t) for t in texts), name
+        assert name in i18n_surfaces.NAMES_ONLY or any(CYRILLIC.search(t) for t in texts), name
         for text in texts:
             assert not any(m in text for m in MARKS), (name, text)
             assert not re.search("[\u06f0-\u06f9\u0660-\u0669]", text), (name, text)

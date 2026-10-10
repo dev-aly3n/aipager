@@ -247,7 +247,7 @@ class KeyboardMixin:
             nav = [button(tr.text(kbwords.KB_TEMPLATES)), button(tr.text(kbwords.KB_COMMANDS))]
             if self._miniapp_url and is_private:
                 nav.append(KeyboardButton(
-                    tr.text(kbwords.KB_APP),
+                    kbwords.KB_APP,
                     web_app=WebAppInfo(url=miniapp_link.with_lang(self._miniapp_url, tr.code)),
                 ))
             rows.append(nav)

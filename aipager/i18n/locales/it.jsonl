@@ -255,7 +255,6 @@
 {"k": "home.start_one", "src": "ef9f6ba9", "v": "Avviane una con /new."}
 {"k": "home.tap_session", "src": "f14797d7", "v": "Tocca una sessione sulla tastiera per parlarci."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code da Telegram"}
-{"k": "kb.app", "src": "59b36d46", "v": "📱 App"}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« Indietro"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "Comandi ›"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "kill"}

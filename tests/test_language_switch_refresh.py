@@ -45,7 +45,7 @@ def test_menu_and_button_follow_the_language(single, run_async):
     assert commands and all(c.description.startswith(MARK) for c in commands)
     assert [c.command for c in commands][:2] == ["new", "status"]
     button = single._app.bot.set_chat_menu_button.await_args.kwargs["menu_button"]
-    assert button.text.startswith(MARK)
+    assert button.text == "📱 App"     # never translated (operator, 2026-10-10)
     # And back to English: today's words.
     tap(single, run_async, "_:set:lang:en", chat=CHAT, user=CHAT)
     commands = single._app.bot.set_my_commands.await_args.args[0]

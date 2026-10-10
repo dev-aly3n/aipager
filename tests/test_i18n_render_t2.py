@@ -185,7 +185,8 @@ def test_every_surface_reads_in_the_language(code, mk_bot, run_async, monkeypatc
     own = vocab - _ENGLISH
     leaks, untranslated = {}, []
     for name, texts in renders.items():
-        if not any(_words(t) & own for t in texts) and (code, name) not in _SAME_AS_ENGLISH:
+        if (not any(_words(t) & own for t in texts) and (code, name) not in _SAME_AS_ENGLISH
+                and name not in i18n_surfaces.NAMES_ONLY):
             untranslated.append(name)
         for text in texts:
             left = english_left(text, code, name, vocab)
@@ -201,7 +202,8 @@ def test_every_surface_reads_in_the_language(code, mk_bot, run_async, monkeypatc
     assert not untranslated, untranslated
     if code in ("uk", "ar"):
         script = CYRILLIC if code == "uk" else ARABIC
-        missing = [n for n, texts in renders.items() if not any(script.search(t) for t in texts)]
+        missing = [n for n, texts in renders.items() if n not in i18n_surfaces.NAMES_ONLY
+                   and not any(script.search(t) for t in texts)]
         assert not missing, missing
 
 

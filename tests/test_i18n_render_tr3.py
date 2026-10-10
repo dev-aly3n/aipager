@@ -257,7 +257,7 @@ def test_wide_buttons_are_measured_in_cells(code):
     """A CJK character takes two cells: the keyboard words fit the 14-cell
     budget counted that way, not by characters."""
     for key in ("kb.status", "kb.stop", "kb.new", "kb.kill", "kb.templates", "kb.commands",
-                "kb.models", "kb.back", "kb.app"):
+                "kb.models", "kb.back"):
         label = core._catalog(code)[key]
         assert tool.cells(label) <= 14, (key, label)
         assert tool.cells(label) > len(label) or label.isascii(), (key, label)

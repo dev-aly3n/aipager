@@ -255,7 +255,6 @@
 {"k": "home.start_one", "src": "ef9f6ba9", "v": "/new ile bir tane başlat."}
 {"k": "home.tap_session", "src": "f14797d7", "v": "Konuşmak için klavyede bir oturuma dokun."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Telegram'dan Claude Code"}
-{"k": "kb.app", "src": "59b36d46", "v": "📱 Uygulama"}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« Geri"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "Komutlar ›"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "Sonlandır"}

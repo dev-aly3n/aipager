@@ -8,7 +8,8 @@ import re
 import subprocess
 import sys
 
-from aipager.i18n import core
+from aipager.i18n import Msg, core
+from aipager.i18n.locales import LOCALES
 from tests import i18n_tool
 
 tool = i18n_tool.load()
@@ -43,7 +44,10 @@ def test_the_pseudo_command(tmp_path):
     assert out.stdout.strip() == "\u200f" + core.pseudo("Hi")
 
 
-ENDONYMS = ("English", "Pseudo", "Pseudo RTL")
+#: Language names are names: the list shows each in its own name, with no
+#: translated "(beta)" around it since 2026-10-10 (operator).
+ENDONYMS = ("English", "Pseudo", "Pseudo RTL") + tuple(
+    loc.endonym for loc in LOCALES.values())
 
 
 def _texts(kb):
@@ -64,7 +68,9 @@ def migrated_renders(monkeypatch) -> list[str]:
         out += [text, *_texts(kb)]
     out.append(language_menu.confirmation(tr, "qps"))
     out.append(language_menu.row_text(tr, "qps"))
-    out += [tr.text(m) for m in (*kbwords.NAV.values(), *kbwords.WORDS.values())]
+    # Every keyboard label that is a key (the App button is a fixed name).
+    out += [tr.text(m) for m in (*kbwords.NAV.values(), *kbwords.WORDS.values())
+            if isinstance(m, Msg)]
     out += [tr.text(m) for m in (mode_labels.MODE_AUTO, mode_labels.MODE_ASK,
                                  mode_labels.MODE_ASK_INSTEAD, mode_labels.MODE_AUTO_INSTEAD,
                                  mode_labels.MODE_ASK_FOR_YOU)]

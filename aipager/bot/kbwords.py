@@ -42,6 +42,7 @@ import logging
 import re
 import unicodedata
 
+from aipager.config import APP_BUTTON
 from aipager.i18n import Msg, get
 from aipager.i18n.locales import enabled_codes
 
@@ -54,7 +55,9 @@ KB_TEMPLATES = Msg("kb.templates", "Templates", note="Opens the templates keyboa
 KB_COMMANDS = Msg("kb.commands", "Commands", note="Opens the commands keyboard")
 KB_MODELS = Msg("kb.models", "Model ›", note="Opens the model list")
 KB_BACK = Msg("kb.back", "« Back", note="Back to the previous keyboard")
-KB_APP = Msg("kb.app", "📱 App", note="Opens the Mini App")
+#: The Mini App button reads "📱 App" in every language (operator,
+#: 2026-10-10: "don't translate the app"): a fixed label like a name, not a key.
+KB_APP = APP_BUTTON
 KB_STATUS = Msg("kb.status", "status", note="A main-keyboard word: shows the sessions")
 KB_STOP = Msg("kb.stop", "stop", note="A main-keyboard word: stops the current turn")
 KB_NEW = Msg("kb.new", "new", note="A main-keyboard word: starts a new session")
@@ -152,9 +155,12 @@ def norm(text: str) -> str:
     return _INVISIBLE.sub("", unicodedata.normalize("NFKC", text)).translate(_FOLD)
 
 
-def _labels(msg: Msg, codes=None) -> list[str]:
-    """*msg* in every enabled language (English first)."""
+def _labels(msg: Msg | str, codes=None) -> list[str]:
+    """*msg* in every enabled language (English first). A plain string (the
+    App button) is the same in every language."""
     out = [str(msg)]
+    if not isinstance(msg, Msg):
+        return out
     for code in codes if codes is not None else enabled_codes():
         label = get(code).text(msg)
         if label not in out:

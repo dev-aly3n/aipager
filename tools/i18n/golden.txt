@@ -161,7 +161,6 @@ kb.status
 kb.stop
 kb.new
 kb.kill
-kb.app
 kb.back
 kb.commands
 kb.models

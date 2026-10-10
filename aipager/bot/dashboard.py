@@ -741,7 +741,7 @@ class DashboardMixin:
         url = getattr(self, "_miniapp_url", "")
         if url and chat in self._miniapp_button_chats():
             rows.append([InlineKeyboardButton(
-                tr.text(kbwords.KB_APP),
+                kbwords.KB_APP,
                 web_app=WebAppInfo(url=miniapp_link.for_chat(url, chat)))])
         return "\n".join(lines), (InlineKeyboardMarkup(rows) if rows else None)
 

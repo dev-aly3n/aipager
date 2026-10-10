@@ -39,13 +39,14 @@ def test_picking_persian_sends_one_persian_keyboard(ml2_bot, run_async):
     assert "x1" in words
     fa = i18n.get("fa")
     for msg in (kbwords.KB_STATUS, kbwords.KB_STOP, kbwords.KB_NEW,
-                kbwords.KB_TEMPLATES, kbwords.KB_COMMANDS, kbwords.KB_APP):
+                kbwords.KB_TEMPLATES, kbwords.KB_COMMANDS):
         assert fa.text(msg) in words
+    assert "📱 App" in words          # the App button is never translated
     menus = [c.kwargs for c in ml2_bot._app.bot.set_my_commands.await_args_list
              if c.kwargs.get("scope") is not None and c.kwargs["scope"].chat_id == DM]
     assert len(menus) == 1
     button = ml2_bot._app.bot.set_chat_menu_button.await_args.kwargs["menu_button"]
-    assert PERSIAN.search(button.text)
+    assert button.text == "📱 App"
     edited = query.edit_message_text.await_args
     assert PERSIAN.search(edited.args[0] if edited.args else edited.kwargs["text"])
 

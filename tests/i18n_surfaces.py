@@ -27,6 +27,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+from aipager.i18n.locales import LOCALES
+
 #: The pinned single chat of the test config (``_pin_single_chat_config``).
 CHAT = 256113222
 #: The group of ``tests/test_separate_permission_prompt._World``.
@@ -2288,7 +2290,15 @@ KNOWN = (
     "claude not found", "downloading", "npm failed", "still resolving", "resolver error",
     "ImportError", "KeyError", "disk full", "no systemd-run", "read_only", "developer",
     "ap1-x", "zzz", "Sentry", "Fixed the tests.", "aipager start", "x9",
-)
+    # The Mini App button reads "📱 App" in every language (operator,
+    # 2026-10-10), and the language list names each language in its own
+    # name: names, not text.
+    "App",
+) + tuple(loc.endonym for loc in LOCALES.values())
+
+#: Surfaces whose whole text is names that are never translated (the menu
+#: button is "📱 App" in every language): no language's script to find there.
+NAMES_ONLY = {"menu.button"}
 
 _MARKED = re.compile(r"⟦.*?⟧", re.S)
 _NOT_TEXT = re.compile(
