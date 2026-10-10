@@ -125,6 +125,11 @@ def _isolate_wizard_config(tmp_path, monkeypatch):
                         tmp_path / "policy.yaml")
 
 
+#: Modules holding an import-time copy of ``aipager.config.CHAT_ID``.
+CHAT_ID_COPIES = ("aipager.bot.dashboard", "aipager.bot.keyboards",
+                  "aipager.bot.lifecycle", "aipager.status")
+
+
 @pytest.fixture(autouse=True)
 def _pin_single_chat_config(monkeypatch):
     """Every machine sees the same configured single chat.
@@ -142,6 +147,13 @@ def _pin_single_chat_config(monkeypatch):
     own later ``monkeypatch`` (a later patch wins).
     """
     monkeypatch.setattr("aipager.config.CHAT_ID", "256113222")
+    # Modules that copied it at their own import (``from aipager.config
+    # import CHAT_ID`` at module level) keep the import-time value, which on
+    # this box happens to equal the pin and on CI is ``""``: pin the copies
+    # too. tests/test_conftest_chat_id_copies.py fails when a module gains a
+    # copy that is missing here.
+    for module in CHAT_ID_COPIES:
+        monkeypatch.setattr(f"{module}.CHAT_ID", "256113222")
     # The home chat of an unstamped session (roadmap 8.82) reads the
     # import-time scopes when no bot is live: on the developer's box that
     # is the real aipager.yaml, on CI nothing. Pin both to "no scopes" so
