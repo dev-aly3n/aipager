@@ -397,6 +397,25 @@ def _forms(value) -> list[str]:
     return [value] if isinstance(value, str) else []
 
 
+def _counts_n(src: dict) -> bool:
+    """True when the English 'other' form shows the count."""
+    return "n" in _holders_or_empty(src["other"])
+
+
+def _holders_or_empty(form: str) -> list[str]:
+    try:
+        return core.placeholders(form)
+    except ValueError:
+        return []
+
+
+def _single_number(code: str, cat: str) -> bool:
+    """True when plural category *cat* of *code* covers exactly one whole
+    number (Arabic zero/one/two, English-style one), so its form may name
+    the count in words instead of showing {n}."""
+    return sum(1 for n in range(1001) if plurals.category(code, n) == cat) == 1
+
+
 def check_translation(code: str, src: dict, value, *, glossary: dict | None = None
                       ) -> list[str]:
     """Checks 3-7 and 9 for one translated value of *src* (a source.jsonl
@@ -417,6 +436,13 @@ def check_translation(code: str, src: dict, value, *, glossary: dict | None = No
         return [f"{code} {key}: must be a string"]
     want_holders = set(src.get("placeholders", []))
     english_tags = tags_of(english_forms(src)[0])
+    if plural and isinstance(value, dict) and _counts_n(src):
+        for cat in plurals.categories(code):
+            form = value.get(cat)
+            if (isinstance(form, str) and not _single_number(code, cat)
+                    and "n" not in _holders_or_empty(form)):
+                problems.append(f"{code} {key}: the {cat!r} form must show {{n}}: "
+                                "it covers more than one count")
     for form in _forms(value):
         try:
             got = set(core.placeholders(form))

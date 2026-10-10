@@ -7,6 +7,7 @@ only when the effective language really changed."""
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -91,9 +92,17 @@ def writes(monkeypatch):
     return calls
 
 
+def _disable_german(monkeypatch):
+    """German is enabled (beta) since translation run 2; it stands here for
+    a known language that is switched off."""
+    monkeypatch.setitem(locales.LOCALES, "de", dataclasses.replace(
+        locales.LOCALES["de"], enabled=False))
+
+
 BETA_ROWS = [[(f"{name} (beta)", f"_:set:lang:{code}")] for code, name in (
     ("es", "Español"), ("ru", "Русский"), ("pt-BR", "Português (Brasil)"),
-    ("fr", "Français"), ("it", "Italiano"), ("fa", "فارسی"))]
+    ("fr", "Français"), ("de", "Deutsch"), ("ar", "العربية"), ("uk", "Українська"),
+    ("it", "Italiano"), ("tr", "Türkçe"), ("fa", "فارسی"))]
 
 
 def test_the_language_row_opens_the_list(bot, run_async):
@@ -101,7 +110,8 @@ def test_the_language_row_opens_the_list(bot, run_async):
     text, rows = edited(q)
     assert text == LIST_PRIVATE
     # Phase 2: Russian and Persian join the list, marked beta; phase 5
-    # run 1: Spanish, Portuguese (Brazil), French and Italian.
+    # run 1: Spanish, Portuguese (Brazil), French and Italian; run 2:
+    # German, Arabic, Ukrainian and Turkish.
     assert rows == [[("Automatic (your Telegram language) ✅", "_:set:lang:auto")],
                     [("English", "_:set:lang:en")], *BETA_ROWS,
                     [("« Back", "_:set:back")]]
@@ -144,8 +154,9 @@ def test_auto_is_refused_in_a_group(bot, run_async, monkeypatch):
     assert calls == [] and q.edit_message_text.await_count == 0
 
 
-@pytest.mark.parametrize("code", ["de", "qps", "qps-rtl", "xx", "EN", ""])
+@pytest.mark.parametrize("code", ["de", "ja", "pl", "qps", "qps-rtl", "xx", "EN", ""])
 def test_a_disabled_or_pseudo_code_is_refused(bot, run_async, monkeypatch, code):
+    _disable_german(monkeypatch)
     calls = writes(monkeypatch)
     # Refused by the callback itself, before the store's own check.
     asked = []

@@ -70,7 +70,7 @@ def test_a_stranger_is_refused_in_their_telegram_language(bot, run_async, code, 
     assert check(_refusal(bot, run_async, language_code=code)) == []
 
 
-@pytest.mark.parametrize("code", ["de", "zh-hans", "ar", None, ""])
+@pytest.mark.parametrize("code", ["ja", "pl", "ja-JP", None, ""])
 def test_a_stranger_with_another_language_gets_the_english_refusal(bot, run_async, code):
     english = _refusal(bot, run_async, language_code="en")
     team_mod.reset_unauthorized_seen()
@@ -273,7 +273,7 @@ def test_a_regional_or_capitalised_code_refuses_like_its_language(bot, run_async
     assert _refusal(bot, run_async, language_code=variant) == plain
 
 
-@pytest.mark.parametrize("code", ["uk", "be", "gl", "ca", "tg"])
+@pytest.mark.parametrize("code", ["be", "gl", "ca", "tg"])
 def test_a_stranger_with_a_language_close_to_an_enabled_one_gets_english(bot, run_async, code):
     english = _refusal(bot, run_async, language_code="en")
     team_mod.reset_unauthorized_seen()

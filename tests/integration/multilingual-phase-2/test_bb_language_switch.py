@@ -18,6 +18,7 @@ import pytest
 
 from aipager import i18n, preferences
 from aipager.bot import kbwords, language_menu
+from aipager.i18n import locales
 from tests.i18n_ml2_bb import (
     BOB,
     CYRILLIC,
@@ -36,10 +37,14 @@ from tests.i18n_ml2_bb import (
     toast_texts,
 )
 
-# Phase 5 run 1 enabled es, pt-BR, fr and it, as beta.
-DISABLED = ("zh-Hans", "de", "ko", "ar", "id", "uk", "tr", "vi")
+# Phase 5 run 1 enabled es, pt-BR, fr and it, run 2 de, ar, uk and tr, as beta.
+#: Known languages still switched off (none once every catalog lands),
+#: plus Japanese and Polish, which aipager does not offer at all.
+OFF = tuple(c for c, loc in locales.LOCALES.items() if not loc.enabled)
+DISABLED = OFF + ("ja", "pl")
 BETA = (("es", "Español"), ("ru", "Русский"), ("pt-BR", "Português (Brasil)"),
-        ("fr", "Français"), ("it", "Italiano"), ("fa", "فارسی"))
+        ("fr", "Français"), ("de", "Deutsch"), ("ar", "العربية"), ("uk", "Українська"),
+        ("it", "Italiano"), ("tr", "Türkçe"), ("fa", "فارسی"))
 
 
 def _rows(tr, private, current):
@@ -244,13 +249,13 @@ def test_a_disabled_code_is_refused_with_invalid_value(bot, run_async, code):
     assert "Invalid value" in toast_texts(query)
 
 
-@pytest.mark.parametrize("code", ("de", "ko", "qps"))
+@pytest.mark.parametrize("code", ("ja", "pl", "qps"))
 def test_a_disabled_code_writes_nothing(bot, run_async, code):
     _tap(bot, run_async, f"_:set:lang:{code}")
     assert preferences.get_ui_language(DM_A) in (None, "")
 
 
-@pytest.mark.parametrize("code", ("de", "qps"))
+@pytest.mark.parametrize("code", ("ja", "qps"))
 def test_a_disabled_code_sends_no_keyboard(bot, run_async, code):
     _tap(bot, run_async, f"_:set:lang:{code}")
     assert reply_keyboards(bot) == []

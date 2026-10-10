@@ -67,7 +67,7 @@ def test_the_offer_callback_never_carries_the_endonym(ml):
     assert all("简体中文" not in d for _t, d in ml.buttons(kb))
 
 
-@pytest.mark.parametrize("code", ["ko", "de", "qps", "xx"])
+@pytest.mark.parametrize("code", ["ja", "pl", "qps", "xx"])
 def test_a_forged_offer_tap_cannot_select_a_disabled_language(tg_bot, tap, code):
     """Error guessing: the card is never sent, but its callback is routed.
     A tap must not store a language users cannot select."""
@@ -84,13 +84,13 @@ def test_keep_english_on_the_offer_stores_english(tg_bot, tap):
 # entrypoints.md Amendment: "keep stores en. A disabled or pseudo code gets
 # the Invalid value toast and stores nothing."
 
-@pytest.mark.parametrize("code", ["ko", "ar", "qps", "qps-rtl"])
+@pytest.mark.parametrize("code", ["ja", "pl", "qps", "qps-rtl"])
 def test_a_disabled_or_pseudo_offer_code_gets_invalid_value(tg_bot, tap, ml, code):
     q = tap(tg_bot, f"_:set:lang_offer:{code}", chat_id=DM, user_id=OWNER)
     assert "Invalid value" in [t for t, _alert in ml.toasts(q)]
 
 
-@pytest.mark.parametrize("code", ["ko", "ar", "qps", "qps-rtl", "xx", ""])
+@pytest.mark.parametrize("code", ["ja", "pl", "qps", "qps-rtl", "xx", ""])
 def test_a_refused_offer_code_writes_nothing(tg_bot, tap, ml, code):
     before = ml.prefs_bytes()
     tap(tg_bot, f"_:set:lang_offer:{code}", chat_id=DM, user_id=OWNER)
@@ -99,7 +99,7 @@ def test_a_refused_offer_code_writes_nothing(tg_bot, tap, ml, code):
 
 def test_a_refused_offer_code_keeps_the_previous_choice(tg_bot, tap):
     prefs.set_ui_language(DM, "en")
-    tap(tg_bot, "_:set:lang_offer:ko", chat_id=DM, user_id=OWNER)
+    tap(tg_bot, "_:set:lang_offer:ja", chat_id=DM, user_id=OWNER)
     assert prefs.get_ui_language(DM) == "en"
 
 

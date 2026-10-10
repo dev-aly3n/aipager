@@ -21,6 +21,7 @@ import sys
 import pytest
 
 from aipager import preferences
+from aipager.i18n import locales
 from tests.i18n_ml2_bb import (
     BIDI_CONTROLS,
     BOB,
@@ -34,8 +35,11 @@ from tests.i18n_ml2_bb import (
     source_rows,
 )
 
-# Phase 5 run 1 enabled es, pt-BR, fr and it (beta, complete catalogs).
-DISABLED = ("zh-Hans", "de", "ko", "ar", "id", "uk", "tr", "vi")
+# Phase 5 runs 1 and 2 enabled es, pt-BR, fr, it, de, ar, uk and tr (beta).
+#: Known languages still switched off (none once every catalog lands),
+#: plus Japanese and Polish, which aipager does not offer at all.
+OFF = tuple(c for c, loc in locales.LOCALES.items() if not loc.enabled)
+DISABLED = OFF + ("ja", "pl")
 PLACEHOLDER = re.compile(r"\{([a-z_][a-z0-9_]*)\}")
 FORMS = {"fa": {"one", "other"}, "ru": {"one", "few", "many", "other"}}
 
@@ -117,7 +121,7 @@ def test_html_tags_are_kept(code):
     assert bad == []
 
 
-@pytest.mark.parametrize("code", DISABLED)
+@pytest.mark.parametrize("code", OFF)
 def test_the_other_catalogs_stay_empty(code):
     assert (CATALOGS / f"{code}.jsonl").read_text(encoding="utf-8").strip() == ""
 
@@ -167,14 +171,16 @@ def test_check_passes_with_persian_and_russian_enabled(cli):
     assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
 
 
-@pytest.mark.parametrize("code", ["fa", "ru", "es", "pt-BR", "fr", "it"])
+@pytest.mark.parametrize("code", ["fa", "ru", "es", "pt-BR", "fr", "it", "de", "tr", "uk",
+                                  "ar"])
 def test_todo_is_empty_for_a_complete_language(cli, code):
     r = cli("todo", "--lang", code)
     assert r.returncode == 0 and json.loads(r.stdout)["entries"] == []
 
 
-def test_todo_lists_every_key_for_german(cli):
-    r = cli("todo", "--lang", "de")
+@pytest.mark.parametrize("code", OFF[:1])
+def test_todo_lists_every_key_for_an_untranslated_language(cli, code):
+    r = cli("todo", "--lang", code)
     entries = json.loads(r.stdout)["entries"]
     assert len(entries) == len(source_rows())
 
@@ -229,7 +235,7 @@ def _options(body):
 def test_the_options_are_auto_english_and_the_beta_languages(http):
     _s, body = http("GET", "/api/preferences")
     assert [o["value"] for o in _options(body)] == ["auto", "en", "es", "ru", "pt-BR", "fr",
-                                                    "it", "fa"]
+                                                    "de", "ar", "uk", "it", "tr", "fa"]
 
 
 def test_the_option_labels_are_endonyms_without_beta(http):
@@ -283,7 +289,7 @@ def test_a_disabled_or_unknown_code_is_400(http, value):
     assert status == 400
 
 
-@pytest.mark.parametrize("value", ["de", "qps"])
+@pytest.mark.parametrize("value", ["ja", "qps"])
 def test_a_refused_code_writes_nothing(http, value):
     http("PUT", "/api/app-language", json={"value": value})
     assert preferences.get_ui_language(BOB) in (None, "")

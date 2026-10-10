@@ -38,7 +38,7 @@ def _writes(monkeypatch):
 
 def test_an_unknown_code_writes_nothing(monkeypatch):
     calls = _writes(monkeypatch)
-    for bad in ("de", "qps", "qps-rtl", "xx", "EN", None, 5):
+    for bad in ("ja", "qps", "qps-rtl", "xx", "EN", None, 5):
         with pytest.raises(ValueError):
             preferences.set_ui_language(DM, bad)
     assert calls == []
@@ -62,8 +62,8 @@ def test_a_stored_value_of_the_wrong_shape_reads_as_unset(qps):
 
 
 def test_a_stored_language_that_is_no_longer_enabled_reads_as_english(monkeypatch):
-    monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"de"}))
-    preferences.set_ui_language(GROUP, "de")
+    monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"ko"}))
+    preferences.set_ui_language(GROUP, "ko")
     monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset())
     assert i18n.for_chat(GROUP).code == "en"
 

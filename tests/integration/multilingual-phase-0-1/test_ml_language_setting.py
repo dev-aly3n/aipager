@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from aipager import preferences as prefs
+from aipager.i18n import locales
 
 DM = 555
 GROUP = -1001
@@ -21,10 +22,11 @@ RO = 3
 
 
 #: The beta languages, in the list's order (phase 2: ru, fa; phase 5 run 1:
-#: es, pt-BR, fr, it).
-BETA_CODES = ("es", "ru", "pt-BR", "fr", "it", "fa")
+#: es, pt-BR, fr, it; run 2: de, ar, uk, tr).
+BETA_CODES = ("es", "ru", "pt-BR", "fr", "de", "ar", "uk", "it", "tr", "fa")
 BETA = ["Español (beta)", "Русский (beta)", "Português (Brasil) (beta)", "Français (beta)",
-        "Italiano (beta)", "فارسی (beta)"]
+        "Deutsch (beta)", "العربية (beta)", "Українська (beta)", "Italiano (beta)",
+        "Türkçe (beta)", "فارسی (beta)"]
 BETA_DATA = [f"_:set:lang:{c}" for c in BETA_CODES]
 
 
@@ -39,7 +41,8 @@ def test_language_in_a_dm_shows_the_private_text(tg_bot, command, ml):
 def test_language_in_a_dm_offers_automatic_then_english_then_back(tg_bot, command, ml):
     _text, kb = command(tg_bot, "_handle_language_cmd", "/language",
                         chat_id=DM, user_id=OWNER)
-    # Phase 2: Russian and Persian follow English.
+    # Phase 2: Russian and Persian follow English; phase 5 run 2 adds
+    # German, Arabic, Ukrainian and Turkish (in LOCALES order).
     assert [d for _t, d in ml.buttons(kb)] == [
         "_:set:lang:auto", "_:set:lang:en", *BETA_DATA, "_:set:back"]
 
@@ -90,13 +93,15 @@ def test_a_read_only_member_may_open_language(tg_bot, command, ml):
 
 
 def test_no_disabled_language_is_listed(tg_bot, command, ml):
-    """English and the beta languages are selectable; the other 8 are
+    """English and the beta languages are selectable; the others are
     hidden (ruling; phase 2 enabled ru and fa, phase 5 run 1 es, pt-BR,
-    fr and it)."""
+    fr and it, run 2 de, ar, uk and tr). Japanese and Polish are not
+    offered at all."""
     _text, kb = command(tg_bot, "_handle_language_cmd", "/language",
                         chat_id=DM, user_id=OWNER)
     shown = {d for _t, d in ml.buttons(kb)}
-    for code in ("zh-Hans", "de", "ko", "ar", "id", "uk", "tr", "vi", "qps", "qps-rtl"):
+    off = [c for c, loc in locales.LOCALES.items() if not loc.enabled]
+    for code in ("ja", "pl", *off, "qps", "qps-rtl"):
         assert f"_:set:lang:{code}" not in shown
 
 
@@ -249,7 +254,7 @@ def test_auto_in_a_group_writes_nothing(tg_bot, tap, ml):
     assert ml.prefs_bytes() == before
 
 
-@pytest.mark.parametrize("code", ["de", "ar", "qps", "qps-rtl", "xx", "EN",
+@pytest.mark.parametrize("code", ["ja", "pl", "qps", "qps-rtl", "xx", "EN",
                                   "en-US", "", "english"])
 @pytest.mark.parametrize("chat", [DM, GROUP])
 def test_a_disabled_pseudo_or_unknown_code_is_refused(tg_bot, tap, ml, code, chat):
@@ -257,7 +262,7 @@ def test_a_disabled_pseudo_or_unknown_code_is_refused(tg_bot, tap, ml, code, cha
     assert "Invalid value" in [t for t, _a in ml.toasts(q)]
 
 
-@pytest.mark.parametrize("code", ["de", "qps", "qps-rtl", "xx"])
+@pytest.mark.parametrize("code", ["ja", "qps", "qps-rtl", "xx"])
 @pytest.mark.parametrize("chat", [DM, GROUP])
 def test_a_refused_code_writes_nothing(tg_bot, tap, ml, code, chat):
     before = ml.prefs_bytes()
@@ -267,7 +272,7 @@ def test_a_refused_code_writes_nothing(tg_bot, tap, ml, code, chat):
 
 def test_a_refused_code_keeps_the_previous_choice(tg_bot, tap):
     prefs.set_ui_language(DM, "en")
-    tap(tg_bot, "_:set:lang:de", chat_id=DM, user_id=OWNER)
+    tap(tg_bot, "_:set:lang:ja", chat_id=DM, user_id=OWNER)
     assert prefs.get_ui_language(DM) == "en"
 
 
@@ -358,13 +363,13 @@ def test_set_ui_language_empty_clears():
     assert prefs.get_ui_language(424242) == ""
 
 
-@pytest.mark.parametrize("code", ["de", "qps", "qps-rtl", "xx", "EN", "auto"])
+@pytest.mark.parametrize("code", ["ja", "qps", "qps-rtl", "xx", "EN", "auto"])
 def test_set_ui_language_refuses_a_code_that_is_not_selectable(code):
     with pytest.raises(ValueError):
         prefs.set_ui_language(424242, code)
 
 
-@pytest.mark.parametrize("code", ["de", "qps", "xx"])
+@pytest.mark.parametrize("code", ["ja", "qps", "xx"])
 def test_a_refused_code_is_refused_before_any_write(ml, code):
     before = ml.prefs_bytes()
     with pytest.raises(ValueError):

@@ -5,6 +5,7 @@ speaks (not English), at the lowest priority, never while muted."""
 
 from __future__ import annotations
 
+import dataclasses
 from unittest.mock import MagicMock
 
 import pytest
@@ -89,9 +90,14 @@ def test_keep_english_sets_the_dm_and_confirms(bot, run_async):
 
 
 @pytest.mark.parametrize("chat, data", [
-    (DM, "_:set:lang_offer:de"), (DM, "_:set:lang_offer:qps"), (GROUP, "_:set:lang_offer:en"),
+    (DM, "_:set:lang_offer:de"), (DM, "_:set:lang_offer:ja"), (DM, "_:set:lang_offer:qps"), (GROUP, "_:set:lang_offer:en"),
     (DM, "_:set:lang_offer:en:x")])
-def test_an_offer_tap_that_does_not_fit_writes_nothing(bot, run_async, chat, data):
+def test_an_offer_tap_that_does_not_fit_writes_nothing(bot, run_async, chat, data,
+                                                       monkeypatch):
+    # German is enabled (beta) since translation run 2; it stands here for a
+    # known language that is switched off.
+    monkeypatch.setitem(locales.LOCALES, "de", dataclasses.replace(
+        locales.LOCALES["de"], enabled=False))
     q = tap(bot, run_async, data, chat=chat, user=ALY)
     assert toast(q)[0] in ("Invalid value", "Invalid callback")
     assert q.edit_message_text.await_count == 0

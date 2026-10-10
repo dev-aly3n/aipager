@@ -21,3 +21,15 @@ Product names (Claude, Claude Code, Anthropic, aipager, Telegram, Mini App, GitH
 
 ## Placeholders and tags
 Keep every {placeholder} and every HTML tag of the English, exactly once each. Never translate inside <code> or <pre>.
+
+## Markers, keyboard words and modes
+- Keep `**`, `_`, every HTML tag and every {placeholder} exactly as in the English: the same number of `**` and `_`, never a backtick.
+- A keyboard word (status, stop, new, kill) is ONE word with no space: it is typed as a word (الحالة، إيقاف، جديدة، إنهاء).
+- A mode word (Auto, Ask) is ONE word after its emoji: 🤖 تلقائي، 💬 اسأل.
+- A default button label (Continue, Run tests...) stays short: it is a button.
+
+## Words (the glossary's terms in context)
+جلسة (session), جولة (turn: one prompt and Claude's work on it; دور means role here), بطاقة (card), إذن (permission; a permission prompt is طلب إذن), طلب (prompt: what you send to Claude), سؤال (question), اسمح / مسموح (allow), ارفض / مرفوض (deny), إيقاف / أوقف / متوقف (stop), استئناف / استأنف (resume), قائمة الانتظار (queue), وكيل / وكلاء (agent), في الخلفية (background), المالك (owner), مشرف (admin, as Telegram's Arabic says), عضو (member), محادثة (chat), مجموعة (group), الإعدادات (settings), تحديث (update), مجلد (folder), نموذج (model).
+
+## Plurals
+All six CLDR forms: zero (٠: "لا ..." without the number is fine), one (the singular, the number may be left out), two (the dual, the number may be left out), few (3-10: plural noun), many (11-99: singular accusative noun, e.g. ١١ جلسةً or ١١ جلسة), other (100, 101, 102...: singular noun). {n} may be left out of zero, one and two only.

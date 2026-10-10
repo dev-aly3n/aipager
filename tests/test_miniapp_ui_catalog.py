@@ -100,7 +100,7 @@ def test_a_stranger_gets_the_fixed_forbidden_body(server):
     assert _json(server, "GET", "/api/i18n/fa.json", OUTSIDER) == (403, {"error": "forbidden"})
 
 
-@pytest.mark.parametrize("name", ["xx.json", "fa", "fa.js", "de.json", "qps.json",
+@pytest.mark.parametrize("name", ["xx.json", "fa", "fa.js", "ja.json", "pl.json", "qps.json",
                                   "fa.json.json", "FA.json", "fa-.json"])
 def test_a_disabled_or_unknown_code_is_not_found(server, name):
     assert _json(server, "GET", "/api/i18n/" + name) == (404, {"error": "not_found"})
@@ -177,7 +177,7 @@ def test_the_version_is_stable_and_names_the_bytes():
     assert ui_text.catalog_version("fa") == ui_text.catalog_version("fa")
     assert len(ui_text.catalog_version("fa")) == 16
     assert ui_text.catalog_version("fa") != ui_text.catalog_version("ru")
-    assert ui_text.catalog_version("de") is None
+    assert ui_text.catalog_version("ja") is None
 
 
 def test_the_current_version_is_cached_for_a_year(server):

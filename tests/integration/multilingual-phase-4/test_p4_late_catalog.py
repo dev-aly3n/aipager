@@ -98,9 +98,11 @@ def _fa_catalog(snap):
 
 
 def _persian_leaves(snap, p4):
-    """Visible text in Persian script other than the language row's own endonym."""
+    """Visible text in Persian script other than the language rows' own
+    endonyms (Persian's, and Arabic's since phase 5 run 2)."""
+    endonyms = {FARSI, "\u0627\u0644\u0639\u0631\u0628\u064a\u0629"}
     return [x["text"] for x in PR.visible_leaves(snap)
-            if p4.has_arabic_script(x["text"]) and x["text"].strip() != FARSI]
+            if p4.has_arabic_script(x["text"]) and x["text"].strip() not in endonyms]
 
 
 def _changed_statics(snap):

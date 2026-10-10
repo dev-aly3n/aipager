@@ -371,8 +371,24 @@
       "value": "fr"
      },
      {
+      "label": "Deutsch",
+      "value": "de"
+     },
+     {
+      "label": "\u0627\u0644\u0639\u0631\u0628\u064a\u0629",
+      "value": "ar"
+     },
+     {
+      "label": "\u0423\u043a\u0440\u0430\u0457\u043d\u0441\u044c\u043a\u0430",
+      "value": "uk"
+     },
+     {
       "label": "Italiano",
       "value": "it"
+     },
+     {
+      "label": "T\u00fcrk\u00e7e",
+      "value": "tr"
      },
      {
       "label": "\u0641\u0627\u0631\u0633\u06cc",

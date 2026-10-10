@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 from aipager import i18n
 from aipager.i18n import locales
 
@@ -23,9 +25,10 @@ def test_the_fifteen_languages_in_order_with_their_own_names():
 
 def test_only_english_and_the_beta_languages_are_offered():
     """Phase 2: Persian and Russian join English, both marked beta; phase
-    5 (run 1) adds Spanish, Portuguese (Brazil), French and Italian, beta
-    too. The rest stay off until their translation lands (G80)."""
-    beta = ("es", "ru", "pt-BR", "fr", "it", "fa")
+    5 run 1 adds Spanish, Portuguese (Brazil), French and Italian, run 2
+    German, Arabic, Ukrainian and Turkish, beta too. The rest stay off
+    until their translation lands (G80)."""
+    beta = ("es", "ru", "pt-BR", "fr", "de", "ar", "uk", "it", "tr", "fa")
     assert locales.enabled_codes() == ("en",) + beta
     assert [c for c, loc in locales.LOCALES.items() if loc.enabled] == ["en", *beta]
     assert locales.LOCALES["en"].quality == "stable"
@@ -34,11 +37,15 @@ def test_only_english_and_the_beta_languages_are_offered():
 
 
 def test_normalize_ignores_disabled_languages(monkeypatch):
-    # German and Chinese are the disabled examples since phase 5 run 1.
+    # Japanese and Polish stand for a language aipager does not offer (no
+    # catalog, after phase 5 run 3 too); German, switched off here, for a
+    # known one that is off.
+    monkeypatch.setitem(locales.LOCALES, "de", dataclasses.replace(
+        locales.LOCALES["de"], enabled=False))
     assert locales.normalize("en") == "en"
     assert locales.normalize("en-US") == "en"
     assert locales.normalize("EN_gb") == "en"
-    for code in ("de", "zh-hans", "de-AT", "ko"):
+    for code in ("ja", "pl", "ja-JP", "pl-PL", "de", "de-AT"):
         assert locales.normalize(code) is None, code
     assert locales.normalize("es-MX") == "es"
     assert locales.normalize("pt-br") == "pt-BR"
@@ -48,7 +55,7 @@ def test_normalize_ignores_disabled_languages(monkeypatch):
     assert locales.normalize("zh-cn") == "zh-Hans"
     assert locales.normalize("zh-Hans-CN") == "zh-Hans"
     assert locales.normalize("in") == "id"
-    assert locales.normalize("de") is None
+    assert locales.normalize("ja") is None
 
 
 def test_traditional_chinese_never_becomes_simplified(monkeypatch):
@@ -74,7 +81,8 @@ def test_pseudo_codes_are_never_offered():
 
 def test_a_test_may_enable_a_pseudo_code(monkeypatch):
     monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"qps"}))
-    assert locales.enabled_codes() == ("en", "es", "ru", "pt-BR", "fr", "it", "fa", "qps")
+    assert locales.enabled_codes() == ("en", "es", "ru", "pt-BR", "fr", "de", "ar", "uk", "it",
+                                       "tr", "fa", "qps")
     assert locales.is_selectable("qps")
     assert locales.normalize("qps") is None
 

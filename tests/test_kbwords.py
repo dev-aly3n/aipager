@@ -83,7 +83,8 @@ def test_group_words_are_exact(bot):
     for label in ("status", "stop", "new", "Templates", "Commands", "Model ›", "« Back",
                   "📱 App", "Run tests", "Clear", "Opus", "x1"):
         assert label in labels, label
-    for label in ("kill", "Status", "STOP", "templates"):
+    # "Status" is German's own label (enabled since translation run 2).
+    for label in ("kill", "sTatus", "STOP", "templates"):
         assert label not in labels, label
 
 

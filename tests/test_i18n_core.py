@@ -283,7 +283,7 @@ def test_num_converts_separators_in_fa_only():
     fa, ar, en, ru = (i18n.get(c) for c in ("fa", "ar", "en", "ru"))
     assert fa.num("$1,234.50") == "$۱٬۲۳۴٫۵۰"
     assert fa.num("45%") == "۴۵٪"
-    assert ar.num("45%") == "٤٥٪"
+    assert ar.num("45%") == "٤٥٪\u061c"
     assert en.num("$1,234.50") == "$1,234.50"
     assert ru.num("45%") == "45%"
     assert en.num("45%") == "45%"

@@ -9,6 +9,7 @@ a chat; 400 for anything but Automatic or a language a person may pick,
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import hashlib
 import hmac
 import json
@@ -95,12 +96,15 @@ def test_get_carries_the_app_language(server):
     assert al == {
         "title": "App language", "hint": HINT, "value": "auto", "effective": "en",
         # Phase 2: Russian and Persian are offered (no beta mark here);
-        # phase 5 run 1: Spanish, Portuguese (Brazil), French and Italian.
+        # phase 5 run 1: Spanish, Portuguese (Brazil), French and Italian;
+        # run 2: German, Arabic, Ukrainian and Turkish.
         "options": [{"value": "auto", "label": "Automatic (your Telegram language)"},
                     {"value": "en", "label": "English"}, {"value": "es", "label": "Español"},
                     {"value": "ru", "label": "Русский"},
                     {"value": "pt-BR", "label": "Português (Brasil)"},
-                    {"value": "fr", "label": "Français"}, {"value": "it", "label": "Italiano"},
+                    {"value": "fr", "label": "Français"}, {"value": "de", "label": "Deutsch"},
+                    {"value": "ar", "label": "العربية"}, {"value": "uk", "label": "Українська"},
+                    {"value": "it", "label": "Italiano"}, {"value": "tr", "label": "Türkçe"},
                     {"value": "fa", "label": "فارسی"}]}
 
 
@@ -123,9 +127,13 @@ def test_a_member_who_is_not_an_admin_may_set_it(server):
 
 
 @pytest.mark.parametrize("body", [
-    {"value": "de"}, {"value": "qps"}, {"value": "qps-rtl"}, {"value": "xx"},
+    {"value": "de"}, {"value": "ja"}, {"value": "pl"}, {"value": "qps"}, {"value": "qps-rtl"}, {"value": "xx"},
     {"value": ""}, {"value": 5}, {}, ["en"], "not json"])
 def test_anything_else_is_a_bad_request(server, body, monkeypatch):
+    # German is enabled (beta) since translation run 2; it stands here for a
+    # known language that is switched off.
+    monkeypatch.setitem(locales.LOCALES, "de", dataclasses.replace(
+        locales.LOCALES["de"], enabled=False))
     # Refused by the route itself, before the store's own check.
     asked = []
     monkeypatch.setattr(preferences, "set_ui_language", lambda *a: asked.append(a))

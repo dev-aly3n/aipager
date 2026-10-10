@@ -4,31 +4,94 @@
   "commit",
   "token",
   "diff",
-  "log"
+  "log",
+  "ctx"
  ],
  "language": "Turkish",
  "terms": {
-  "admin": "",
-  "agent": "",
-  "allow": "",
-  "background": "",
-  "card": "",
-  "chat": "",
-  "deny": "",
-  "folder": "",
-  "group": "",
-  "member": "",
-  "model": "",
-  "owner": "",
-  "permission": "",
-  "prompt": "",
-  "question": "",
-  "queue": "",
-  "resume": "",
-  "session": "",
-  "settings": "",
-  "stop": "",
-  "turn": "",
-  "update": ""
+  "admin": [
+   "yönetici"
+  ],
+  "agent": [
+   "ajan"
+  ],
+  "allow": [
+   "izin",
+   "İzin",
+   "izn"
+  ],
+  "background": [
+   "arka plan"
+  ],
+  "card": [
+   "kart"
+  ],
+  "chat": [
+   "sohbet"
+  ],
+  "deny": [
+   "reddet",
+   "reddedil",
+   "ret"
+  ],
+  "folder": [
+   "klasör"
+  ],
+  "group": [
+   "grup",
+   "grub"
+  ],
+  "member": [
+   "üye"
+  ],
+  "model": [
+   "model"
+  ],
+  "owner": [
+   "sahip",
+   "sahib"
+  ],
+  "permission": [
+   "izin",
+   "İzin",
+   "izn"
+  ],
+  "prompt": [
+   "istem",
+   "İstem"
+  ],
+  "question": [
+   "soru"
+  ],
+  "queue": [
+   "kuyruk",
+   "kuyruğ"
+  ],
+  "resume": [
+   "devam",
+   "/resume"
+  ],
+  "session": [
+   "oturum"
+  ],
+  "settings": [
+   "ayar",
+   "/settings"
+  ],
+  "stop": [
+   "durdur",
+   "durdu",
+   "durma",
+   "duruş",
+   "stop",
+   "/stop"
+  ],
+  "turn": [
+   "tur"
+  ],
+  "update": [
+   "güncelle",
+   "/update"
+  ]
  }
 }

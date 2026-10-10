@@ -81,9 +81,11 @@ def test_each_language_has_a_catalog_file(code):
 
 
 # Phase 2 translated Persian and Russian, phase 5 run 1 Spanish, Portuguese
-# (Brazil), French and Italian; the other eight stay empty.
+# (Brazil), French and Italian, run 2 German, Arabic, Ukrainian and
+# Turkish; the others stay empty.
 @pytest.mark.parametrize("code", [c for c in CODES
-                                  if c not in ("fa", "ru", "es", "pt-BR", "fr", "it")])
+                                  if c not in ("fa", "ru", "es", "pt-BR", "fr", "it",
+                                               "de", "ar", "uk", "tr")])
 def test_no_translation_is_written_in_this_run(code):
     assert (CATALOGS / f"{code}.jsonl").read_text(encoding="utf-8").strip() == ""
 
@@ -243,8 +245,13 @@ def test_todo_prints_a_json_batch(tmp_path):
 
 
 def test_todo_lists_the_missing_language_keys(tmp_path):
-    # German: Persian is complete since phase 2, Spanish since phase 5.
-    proc = _run(tmp_path, "todo", "--lang", "de")
+    # A language whose catalog is still empty (none once every translation
+    # run has landed).
+    empty = [c for c in CODES
+             if not (CATALOGS / f"{c}.jsonl").read_text(encoding="utf-8").strip()]
+    if not empty:
+        pytest.skip("every catalog is translated")
+    proc = _run(tmp_path, "todo", "--lang", empty[0])
     assert "lang.row" in proc.stdout
 
 

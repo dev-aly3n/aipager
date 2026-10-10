@@ -21,3 +21,15 @@ Product names (Claude, Claude Code, Anthropic, aipager, Telegram, Mini App, GitH
 
 ## Placeholders and tags
 Keep every {placeholder} and every HTML tag of the English, exactly once each. Never translate inside <code> or <pre>.
+
+## Markers, keyboard words and modes
+- Keep `**`, `_`, every HTML tag and every {placeholder} exactly as in the English: the same number of `**` and `_`, never a backtick.
+- A keyboard word (status, stop, new, kill) is ONE word with no space: it is typed as a word. A Latin keyboard label must not be a valid session name (check 10: only a-z, 0-9, _ and - would be one), so it is either a reserved command word or carries a character outside that set: Status, Stop, Neu…, Beenden… (not Schließen, which the close buttons use); the sub-keyboards are Vorlagen › and Befehle ›.
+- A mode word (Auto, Ask) is ONE word after its emoji: 🤖 Auto, 💬 Fragen.
+- A default button label (Continue, Run tests...) stays short: it is a button.
+
+## Words (the glossary's terms in context)
+Sitzung (session), Durchlauf (turn: one prompt and Claude's work on it), Karte (card), Berechtigung (permission; a permission prompt is a Berechtigungsanfrage), Prompt (what you send to Claude), Frage (question), Erlauben / erlaubt (allow), Ablehnen / abgelehnt (deny), Stopp / stoppen / angehalten (stop), Fortsetzen / fortgesetzt (resume), Warteschlange (queue), Agent (agent), im Hintergrund (background), Besitzer (owner), Admin (admin), Mitglied (member), Chat, Gruppe, Einstellungen (settings), Update / aktualisieren (update), Ordner (folder), Modell (model). Buttons are infinitives (Erlauben, Ablehnen, Stoppen); a status line is short and has no verb where the English has none.
+
+## Plurals
+one and other. The count goes first as in the English ({n} Sitzungen).

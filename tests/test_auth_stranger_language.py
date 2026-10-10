@@ -79,7 +79,7 @@ def test_the_user_id_keeps_latin_digits(bot, run_async):
 
 
 def test_a_disabled_language_gets_english(bot, run_async):
-    for code in ("ar", "de"):
+    for code in ("ja", "pl"):
         team_mod.reset_unauthorized_seen()
         text = _refuse(bot, run_async, language_code=code)
         assert text == ("🚫 This bot isn't configured to talk to you. Ask the operator to add "

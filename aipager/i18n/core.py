@@ -421,7 +421,12 @@ class Tr:
             form = (forms.get(_plurals.category(self.code, count))
                     if isinstance(forms, dict) else None)
             pattern = form if isinstance(form, str) else english
-        text = self._fill(pattern, {**params, "n": count}, kind)
+        # A form may leave the count out where the language names it in a
+        # word (Arabic's "one" and "two": وكيل واحد, وكيلان), as check 3
+        # allows; the count is then not a parameter of that form.
+        if "n" in placeholders(pattern):
+            params = {**params, "n": count}
+        text = self._fill(pattern, params, kind)
         return text if kind == "text" else Safe(text)
 
 

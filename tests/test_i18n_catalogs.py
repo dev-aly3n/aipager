@@ -169,6 +169,30 @@ def test_a_plural_form_may_drop_the_count():
                                               "other": "{n} Agenten auf {s}"}) == []
 
 
+
+def test_a_form_covering_many_counts_must_show_the_count():
+    src = SRC[0]
+    # uk "many" covers 0, 5-20, 25...: a form without {n} would hide the count.
+    uk = {"one": "{n} агент на {s}", "few": "{n} агенти на {s}",
+          "many": "агентів на {s}", "other": "{n} агента на {s}"}
+    problems = tool.check_translation("uk", src, uk)
+    assert any("'many' form must show {n}" in p for p in problems)
+    assert tool.check_translation("uk", src, dict(uk, many="{n} агентів на {s}")) == []
+    # uk "one" covers 1, 21, 31...: it must show the count too.
+    problems = tool.check_translation("uk", src, dict(uk, one="один агент на {s}",
+                                                      many="{n} агентів на {s}"))
+    assert any("'one' form must show {n}" in p for p in problems)
+
+
+def test_arabic_single_number_forms_may_name_the_count():
+    src = SRC[0]
+    words = {"zero": "لا وكلاء على {s}", "one": "وكيل واحد على {s}",
+             "two": "وكيلان على {s}", "few": "{n} وكلاء على {s}",
+             "many": "{n} وكيلًا على {s}", "other": "{n} وكيل على {s}"}
+    assert tool.check_translation("ar", src, words) == []
+    problems = tool.check_translation("ar", src, dict(words, few="وكلاء على {s}"))
+    assert any("'few' form must show {n}" in p for p in problems)
+
 # ---- check 4: tags -----------------------------------------------------------------
 
 def test_wrong_tags_fail(tmp_path):

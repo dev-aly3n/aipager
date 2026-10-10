@@ -64,8 +64,8 @@ def test_every_enabled_code_is_served(env, code):
 
 
 @pytest.mark.parametrize("name", [
-    "de.json",          # known, not enabled
-    "ar.json",          # known, RTL, not enabled
+    "ko.json",          # known, not enabled
+    "vi.json",          # known, not enabled
     "zz.json",          # unknown
     "qps.json",         # pseudo, not switched on
     "qps-rtl.json",
@@ -84,7 +84,7 @@ def test_an_unknown_disabled_or_malformed_name_is_404(env, name):
 
 
 def test_the_404_body_carries_no_detail_sentence(env):
-    assert "detail" not in (_get(env, "de.json").body or {})
+    assert "detail" not in (_get(env, "ko.json").body or {})
 
 
 def test_a_pseudo_code_is_served_once_a_test_switches_it_on(env, monkeypatch):
@@ -225,12 +225,12 @@ def test_fa_and_ru_have_different_versions():
     assert ui_text.catalog_version("fa") != ui_text.catalog_version("ru")
 
 
-@pytest.mark.parametrize("code", ["de", "zz", "qps"])
+@pytest.mark.parametrize("code", ["ja", "zz", "qps"])
 def test_no_version_for_a_name_that_is_not_served(code):
     assert ui_text.catalog_version(code) is None
 
 
-@pytest.mark.parametrize("code", ["de", "zz", "qps", "", "FA"])
+@pytest.mark.parametrize("code", ["ja", "zz", "qps", "", "FA"])
 def test_no_catalog_for_a_name_that_is_not_served(code):
     assert ui_text.catalog(code) is None
 

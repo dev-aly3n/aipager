@@ -107,7 +107,7 @@ def test_put_persian_is_confirmed_in_persian(env, p4):
     assert p4.has_arabic_script(r.body["confirmation"])
 
 
-@pytest.mark.parametrize("value", ["de", "qps", "zz", 5, None])
+@pytest.mark.parametrize("value", ["ja", "qps", "zz", 5, None])
 def test_a_refused_put_carries_no_ui(env, value):
     r = env.call("PUT", "/api/app-language", json={"value": value})
     assert r.status == 400 and "ui" not in (r.body or {})

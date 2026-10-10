@@ -4,31 +4,101 @@
   "commit",
   "token",
   "diff",
-  "log"
+  "log",
+  "ctx"
  ],
  "language": "Arabic",
  "terms": {
-  "admin": "",
-  "agent": "",
-  "allow": "",
-  "background": "",
-  "card": "",
-  "chat": "",
-  "deny": "",
-  "folder": "",
-  "group": "",
-  "member": "",
-  "model": "",
-  "owner": "",
-  "permission": "",
-  "prompt": "",
-  "question": "",
-  "queue": "",
-  "resume": "",
-  "session": "",
-  "settings": "",
-  "stop": "",
-  "turn": "",
-  "update": ""
+  "admin": [
+   "مشرف"
+  ],
+  "agent": [
+   "وكيل",
+   "وكلاء"
+  ],
+  "allow": [
+   "سمح",
+   "سماح",
+   "مسموح"
+  ],
+  "background": [
+   "خلفي"
+  ],
+  "card": [
+   "بطاق"
+  ],
+  "chat": [
+   "محادث"
+  ],
+  "deny": [
+   "رفض",
+   "مرفوض"
+  ],
+  "folder": [
+   "مجلد"
+  ],
+  "group": [
+   "مجموع"
+  ],
+  "member": [
+   "عضو",
+   "أعضاء"
+  ],
+  "model": [
+   "نموذج",
+   "نماذج"
+  ],
+  "owner": [
+   "مالك"
+  ],
+  "permission": [
+   "إذن",
+   "أذون",
+   "صلاحي"
+  ],
+  "prompt": [
+   "طلب",
+   "موجه",
+   "موجّه"
+  ],
+  "question": [
+   "سؤال",
+   "أسئلة"
+  ],
+  "queue": [
+   "انتظار"
+  ],
+  "resume": [
+   "استئناف",
+   "استأنف",
+   "استئنف",
+   "متابعة",
+   "تابع",
+   "/resume"
+  ],
+  "session": [
+   "جلس"
+  ],
+  "settings": [
+   "إعدادات",
+   "/settings"
+  ],
+  "stop": [
+   "إيقاف",
+   "أوقف",
+   "يوقف",
+   "توقف",
+   "متوقف",
+   "/stop"
+  ],
+  "turn": [
+   "جول"
+  ],
+  "update": [
+   "تحديث",
+   "حدّث",
+   "حدث",
+   "/update"
+  ]
  }
 }

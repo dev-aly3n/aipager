@@ -21,3 +21,15 @@ Product names (Claude, Claude Code, Anthropic, aipager, Telegram, Mini App, GitH
 
 ## Placeholders and tags
 Keep every {placeholder} and every HTML tag of the English, exactly once each. Never translate inside <code> or <pre>.
+
+## Markers, keyboard words and modes
+- Keep `**`, `_`, every HTML tag and every {placeholder} exactly as in the English: the same number of `**` and `_`, never a backtick.
+- A keyboard word (status, stop, new, kill) is ONE word with no space: it is typed as a word (статус, стоп, нова, завершити).
+- A mode word (Auto, Ask) is ONE word after its emoji: 🤖 Авто, 💬 Питати.
+- A default button label (Continue, Run tests...) stays short: it is a button.
+
+## Words (the glossary's terms in context)
+сесія (session), хід (turn: one prompt and Claude's work on it), картка (card), дозвіл (permission; a permission prompt is a запит на дозвіл), запит (prompt), питання (question), Дозволити / дозволено (allow), Відхилити / відхилено (deny), Зупинити / зупинено (stop), Відновити / продовжити (resume), черга (queue), агент (agent), у фоні / фонові (background), власник (owner), адмін (admin), учасник (member), чат (chat), група (group), налаштування (settings), оновлення / оновити (update), папка (folder), модель (model). Ukrainian words, never Russian ones (the glossary and spelling are Ukrainian: і, ї, є, ґ).
+
+## Plurals
+one, few, many, other, like Russian: 1 сесія, 2 сесії, 5 сесій, 21 сесія; other is for fractions only and reads like many.
