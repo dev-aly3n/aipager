@@ -236,6 +236,7 @@ def test_queue_pickup_sets_trigger_and_last_prompt_from_the_last_consumed(
     sess = registry.get("claude-jim")
     assert sess.trigger_msg_id == 11  # the LAST consumed, not the first
     assert sess.last_prompt == "second"
+    assert sess.turn_prompt == "second"   # the card's direction fallback
 
 
 def test_queue_pickup_records_who_sent_the_prompt(receiver, run_async):

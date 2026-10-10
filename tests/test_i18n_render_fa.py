@@ -65,6 +65,9 @@ def _first_strong(line: str):
 
 def test_every_persian_line_reads_right_to_left(mk_bot, run_async, monkeypatch):
     for name, text in _texts(_all(mk_bot, run_async, monkeypatch)):
+        if name in i18n_surfaces.FOLLOWS_CLAUDE:
+            i18n_surfaces.assert_follows_claude(name, text)
+            continue
         for line in text.split("\n"):
             if PERSIAN.search(_ISOLATED.sub("", _CODE.sub("", line))):
                 assert _first_strong(line) == "R", (name, line)

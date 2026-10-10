@@ -72,7 +72,9 @@ def test_a_persian_chat_gets_a_persian_marker(mk_bot, run_async, monkeypatch):
     run_async(bot.flush_held_answers(sess))
     marker = _first_line(sent[0])
     assert PERSIAN.search(marker) and "Telegram" in marker
-    assert marker == held_message.late_marker_text(i18n.get("fa"), 300)
+    # Over an English answer it reads left to right with it, in Persian
+    # (multilingual design 5.7, rule 5).
+    assert marker == held_message.late_marker_text(i18n.get("fa").directed(False), 300)
     assert "۵" in marker and "delivered late" not in marker
     assert sent[0].endswith("\n\n**done**")
 
@@ -105,3 +107,11 @@ def test_every_enabled_language_has_the_marker():
     for code in locales.enabled_codes():
         if code != "en":
             assert held_message.LATE_MARKER.key in core._catalog(code), code
+
+
+def test_a_persian_answer_keeps_a_right_to_left_marker(mk_bot, run_async, monkeypatch):
+    bot, sess, sent = _bot(mk_bot, monkeypatch, "fa")
+    (entry,) = held_mod.HELD.pending(CHAT)
+    entry.rich_text = "\u067e\u0627\u0633\u062e"
+    run_async(bot.flush_held_answers(sess))
+    assert _first_line(sent[0]) == held_message.late_marker_text(i18n.get("fa"), 300)

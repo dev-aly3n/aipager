@@ -199,6 +199,18 @@
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Остановлено в терминале"}
 {"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · Думает…"}
 {"k": "card.verb.done", "src": "e9b450d1", "v": "Готово"}
+{"k": "card.verb.spin_analyzing", "src": "696002c4", "v": "Анализирует"}
+{"k": "card.verb.spin_calculating", "src": "d7652ff1", "v": "Вычисляет"}
+{"k": "card.verb.spin_considering", "src": "974edc62", "v": "Взвешивает"}
+{"k": "card.verb.spin_crafting", "src": "ea78b34d", "v": "Создаёт"}
+{"k": "card.verb.spin_evaluating", "src": "e0b446df", "v": "Оценивает"}
+{"k": "card.verb.spin_examining", "src": "3ed47c3e", "v": "Изучает"}
+{"k": "card.verb.spin_formulating", "src": "8432f803", "v": "Формулирует"}
+{"k": "card.verb.spin_investigating", "src": "ce0ee523", "v": "Исследует"}
+{"k": "card.verb.spin_pondering", "src": "bcaa61e0", "v": "Размышляет"}
+{"k": "card.verb.spin_processing", "src": "e63451d3", "v": "Обрабатывает"}
+{"k": "card.verb.spin_reasoning", "src": "e272c597", "v": "Рассуждает"}
+{"k": "card.verb.spin_thinking", "src": "d08d8da0", "v": "Думает"}
 {"k": "card.verb.waiting", "src": "33d30632", "v": "Ждёт"}
 {"k": "card.verb.working", "src": "3b4dfc97", "v": "Работает"}
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}

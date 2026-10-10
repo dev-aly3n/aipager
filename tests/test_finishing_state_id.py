@@ -25,7 +25,7 @@ def _status(sess):
 
 def test_finishing_state_survives_a_reworded_phrase(monkeypatch):
     monkeypatch.setattr(animation, "_agent_phrase",
-                        lambda sess: (animation._FINISHING, "wrapping up"))
+                        lambda sess, tr=None: (animation._FINISHING, "wrapping up"))
     status = _status(_sess())
     assert status.startswith("🔄 **hiva** · wrapping up · ")
     assert "still working" not in status
@@ -33,7 +33,7 @@ def test_finishing_state_survives_a_reworded_phrase(monkeypatch):
 
 def test_a_working_phrase_that_reads_like_the_old_sentinel_still_works(monkeypatch):
     monkeypatch.setattr(animation, "_agent_phrase",
-                        lambda sess: (animation._WORKING, "finishing up"))
+                        lambda sess, tr=None: (animation._WORKING, "finishing up"))
     assert "finishing up still working" in _status(_sess())
 
 

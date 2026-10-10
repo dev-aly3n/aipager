@@ -532,6 +532,13 @@ class TrackedSession:
     pre_compact_pct: int = 0
     # Last injected prompt text — enables retry on API errors
     last_prompt: str = ""
+    # The person's own text of the prompt that started the running turn
+    # (a Telegram message without aipager's marker, or what was typed in
+    # the terminal). Only its direction is read: before Claude has written
+    # anything, a message carrying Claude's text takes the direction of the
+    # prompt it answers (multilingual design 5.7, rule 5). Kept by a
+    # self-woken turn (the job's own prompt still stands).
+    turn_prompt: str = ""
     # Who sent ``last_prompt`` (Telegram user id), when aipager knows.
     # Retry runs as the tapper only when the tapper IS this person —
     # otherwise the prompt is someone else's text and Retry must not lend

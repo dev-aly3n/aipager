@@ -57,6 +57,8 @@ def test_apply_consumption_moves_trigger_to_the_last_consumed(mk_bot, run_async)
 
     assert sess.trigger_msg_id == 3
     assert sess.last_prompt == "part two"
+    # The turn's prompt, for the direction of its card (design 5.7 rule 5).
+    assert sess.turn_prompt == "part two"
 
 
 def test_apply_consumption_moves_the_target_before_waiting_for_the_thumbs_up(
@@ -116,6 +118,7 @@ def test_start_queued_turn_records_who_sent_the_prompt(mk_bot, run_async):
                             "driver_user_id": 42}]
     run_async(bot._start_queued_turn(sess))
     assert sess.last_prompt == "q"
+    assert sess.turn_prompt == "q"
     assert sess.last_prompt_driver_user_id == 42
 
 

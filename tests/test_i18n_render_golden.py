@@ -81,6 +81,9 @@ def test_right_to_left_lines_start_right_to_left(code, mk_bot, run_async, monkey
         for text in texts:
             if name == "menu.commands":
                 text = text.split(" ", 1)[1]      # the command word is the menu's own
+            if name in i18n_surfaces.FOLLOWS_CLAUDE:
+                i18n_surfaces.assert_follows_claude(name, text)
+                continue
             for line in text.split("\n"):
                 plain = _CODE.sub("", line)
                 if _RTL_LETTER.search(plain):

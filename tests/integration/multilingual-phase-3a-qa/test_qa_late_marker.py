@@ -134,7 +134,9 @@ def held_out(scenario_out):
 @pytest.mark.parametrize("k", range(len(S.HELD_SECONDS)))
 def test_a_rich_late_answer_opens_with_the_chats_marker(held_out, lang, k):
     out = [t for t in held_out(lang) if t.startswith("[rich] ")]
-    marker = held_message.late_marker_text(i18n.get(lang), S.HELD_SECONDS[k])
+    # The answer is English: its marker reads left to right with it, in
+    # the chat's language (multilingual design 5.7, rule 5).
+    marker = held_message.late_marker_text(i18n.get(lang).directed(False), S.HELD_SECONDS[k])
     assert out[k] == f"[rich] {marker}\n\nThe answer."
 
 
@@ -149,6 +151,6 @@ def test_a_rich_late_answer_marker_is_in_the_chats_script(held_out, lang, k):
 @pytest.mark.parametrize("k,seconds", [(0, 60), (1, 660)])
 def test_a_plain_late_answer_opens_with_the_chats_marker(held_out, lang, k, seconds):
     out = [t for t in held_out(lang) if not t.startswith("[rich] ")]
-    marker = held_message.late_marker_text(i18n.get(lang), seconds)
+    marker = held_message.late_marker_text(i18n.get(lang).directed(False), seconds)
     assert out[k].startswith(marker + "\n")
 

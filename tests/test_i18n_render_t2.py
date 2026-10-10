@@ -212,7 +212,11 @@ def test_arabic_reads_right_to_left_with_its_own_digits(mk_bot, run_async, monke
     renders = i18n_surfaces.render_all(mk_bot, run_async, monkeypatch, "ar", names=names)
     seen_left = False
     for name, text in _texts(renders):
+        if name in i18n_surfaces.FOLLOWS_CLAUDE:
+            i18n_surfaces.assert_follows_claude(name, text)
         for line in text.split("\n"):
+            if name in i18n_surfaces.FOLLOWS_CLAUDE:
+                continue
             if ARABIC.search(_ISOLATED.sub("", _CODE.sub("", line))):
                 assert _first_strong(line) == "R", (name, line)
         for span in _CODE.findall(text):

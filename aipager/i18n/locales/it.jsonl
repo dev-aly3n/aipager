@@ -199,6 +199,18 @@
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Fermata nel terminale"}
 {"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · Sta pensando…"}
 {"k": "card.verb.done", "src": "e9b450d1", "v": "Completato"}
+{"k": "card.verb.spin_analyzing", "src": "696002c4", "v": "Sta analizzando"}
+{"k": "card.verb.spin_calculating", "src": "d7652ff1", "v": "Sta calcolando"}
+{"k": "card.verb.spin_considering", "src": "974edc62", "v": "Sta considerando"}
+{"k": "card.verb.spin_crafting", "src": "ea78b34d", "v": "Sta creando"}
+{"k": "card.verb.spin_evaluating", "src": "e0b446df", "v": "Sta valutando"}
+{"k": "card.verb.spin_examining", "src": "3ed47c3e", "v": "Sta esaminando"}
+{"k": "card.verb.spin_formulating", "src": "8432f803", "v": "Sta formulando"}
+{"k": "card.verb.spin_investigating", "src": "ce0ee523", "v": "Sta indagando"}
+{"k": "card.verb.spin_pondering", "src": "bcaa61e0", "v": "Sta riflettendo"}
+{"k": "card.verb.spin_processing", "src": "e63451d3", "v": "Sta elaborando"}
+{"k": "card.verb.spin_reasoning", "src": "e272c597", "v": "Sta ragionando"}
+{"k": "card.verb.spin_thinking", "src": "d08d8da0", "v": "Sta pensando"}
 {"k": "card.verb.waiting", "src": "33d30632", "v": "In attesa"}
 {"k": "card.verb.working", "src": "3b4dfc97", "v": "Al lavoro"}
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}

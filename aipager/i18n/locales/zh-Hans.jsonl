@@ -199,6 +199,18 @@
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · 已在终端中停止"}
 {"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · 正在思考…"}
 {"k": "card.verb.done", "src": "e9b450d1", "v": "完成"}
+{"k": "card.verb.spin_analyzing", "src": "696002c4", "v": "正在分析"}
+{"k": "card.verb.spin_calculating", "src": "d7652ff1", "v": "正在计算"}
+{"k": "card.verb.spin_considering", "src": "974edc62", "v": "正在斟酌"}
+{"k": "card.verb.spin_crafting", "src": "ea78b34d", "v": "正在打磨"}
+{"k": "card.verb.spin_evaluating", "src": "e0b446df", "v": "正在评估"}
+{"k": "card.verb.spin_examining", "src": "3ed47c3e", "v": "正在检查"}
+{"k": "card.verb.spin_formulating", "src": "8432f803", "v": "正在构思"}
+{"k": "card.verb.spin_investigating", "src": "ce0ee523", "v": "正在调查"}
+{"k": "card.verb.spin_pondering", "src": "bcaa61e0", "v": "正在琢磨"}
+{"k": "card.verb.spin_processing", "src": "e63451d3", "v": "正在处理"}
+{"k": "card.verb.spin_reasoning", "src": "e272c597", "v": "正在推理"}
+{"k": "card.verb.spin_thinking", "src": "d08d8da0", "v": "正在思考"}
 {"k": "card.verb.waiting", "src": "33d30632", "v": "等待中"}
 {"k": "card.verb.working", "src": "3b4dfc97", "v": "工作中"}
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}

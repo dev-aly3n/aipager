@@ -667,6 +667,7 @@ class SessionOpsMixin:
         sess.trigger_msg_id = msg_id
         if text is not None:
             sess.last_prompt = text
+            sess.turn_prompt = text
             sess.last_prompt_driver_user_id = driver_user_id
 
     def _typed_name_foreign(self, session_name: str, chat_id: int | None) -> bool:

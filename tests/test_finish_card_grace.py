@@ -111,9 +111,9 @@ def _sess(chat_id: int, clock: _Clock, *, busy_msg_id: int = 42,
 def finish(mk_bot, monkeypatch):
     """Wire a bot whose finish path is fully recorded.
 
-    ``build_cost`` is charged on the fake clock inside ``detect_rtl``,
-    which notify.py calls in the answer-text stretch BETWEEN the final
-    card render and the answer send — i.e. exactly the time the grace is
+    ``build_cost`` is charged on the fake clock inside ``message_rtl``
+    (the answer's direction), which notify.py calls in the answer-text
+    stretch BETWEEN the final card render and the answer send — i.e. exactly the time the grace is
     supposed to absorb rather than add to.
     """
     def _wire(*, chat_id: int, layout: str = "card", busy_msg_id: int = 42,
@@ -161,7 +161,7 @@ def finish(mk_bot, monkeypatch):
             h.order.append("sleep")
             h.sleeps.append(seconds)
 
-        def _detect(text):
+        def _detect(chat_rtl, *texts):
             h.clock.advance(build_cost)
             return False
 
@@ -169,7 +169,7 @@ def finish(mk_bot, monkeypatch):
         bot._reanchor_busy_card = _reanchor
         monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send)
         monkeypatch.setattr("aipager.bot.notify._finish_sleep", _sleep)
-        monkeypatch.setattr("aipager.bot.notify.detect_rtl", _detect)
+        monkeypatch.setattr("aipager.bot.notify.message_rtl", _detect)
         # Always pinned, never read from the live config: this patch is
         # also what overrides conftest's autouse 0.0 for this file (a
         # later monkeypatch wins). `notify` is the binding that matters —

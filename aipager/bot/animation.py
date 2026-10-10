@@ -48,7 +48,7 @@ from aipager.bot.flood_budget import (
     small_429_wait,
 )
 from aipager.bot.rich_message import (
-    detect_rtl,
+    message_rtl,
     edit_message_text_rich,
     get_rate_limiter,
     RichMessageBlocked,
@@ -183,6 +183,61 @@ _VERB_MSGS = {
     "Waiting": Msg("card.verb.waiting", "Waiting",
                    note="Busy card: Claude waits for an answer to a prompt"),
 }
+#: The busy card's rotating verb in a chat that is not English: a short
+#: list of its own in each language (the operator, 2026-10-10: the English
+#: words showed in every language). An English chat keeps the whole
+#: SPINNER_VERBS list, byte for byte (:func:`spinner_verbs`).
+SPINNER_MSGS: tuple[Msg, ...] = (
+    Msg("card.verb.spin_thinking", "Thinking",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_reasoning", "Reasoning",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_pondering", "Pondering",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_considering", "Considering",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_analyzing", "Analyzing",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_processing", "Processing",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_evaluating", "Evaluating",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_calculating", "Calculating",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_examining", "Examining",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_investigating", "Investigating",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_formulating", "Formulating",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_crafting", "Crafting",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+)
+_SPIN_BY_ENGLISH = {str(m): m for m in SPINNER_MSGS}
+_SPIN_INDEX = {verb: i for i, verb in enumerate(SPINNER_VERBS)}
+
+
+def spinner_verbs(tr) -> list[str]:
+    """The verb ids a card in *tr*'s language rotates through: every one
+    of SPINNER_VERBS in English, the short translated list
+    (:data:`SPINNER_MSGS`) in any other language."""
+    if tr.code == "en":
+        return list(SPINNER_VERBS)
+    return [str(m) for m in SPINNER_MSGS]
+
+
 CARD_STATUS = Msg("card.status", "{mark} **{session}** · {verb}",
                   note="The busy card's last line: a mark, the session's name (bold), what "
                        "it is doing; the clock and counts follow",
@@ -229,10 +284,16 @@ LEGACY_EARLIER = Plural("card.legacy.earlier", one="✅ <i>{n} earlier tool</i>"
 
 
 def _verb(tr, verb: str, kind: str = "md") -> str:
-    """The shown form of a card verb id."""
+    """The shown form of a card verb id. A spinner verb is the chat's
+    language's own (:data:`SPINNER_MSGS`), and in English exactly the
+    word passed."""
     msg = _VERB_MSGS.get(verb)
+    if msg is None and verb in _SPIN_INDEX and tr.code != "en":
+        msg = (_SPIN_BY_ENGLISH.get(verb)
+               or SPINNER_MSGS[_SPIN_INDEX[verb] % len(SPINNER_MSGS)])
     if msg is None:
-        log.debug("card verb %r has no key; shown as passed", verb)
+        if verb not in _SPIN_INDEX:
+            log.debug("card verb %r has no key; shown as passed", verb)
         return {"md": _md_escape, "html": html_mod.escape}.get(kind, str)(verb)
     return getattr(tr, kind)(msg)
 # Delay before the animate task's first tick: short so a fresh card gets
@@ -1227,12 +1288,22 @@ def _agent_phrase(sess: TrackedSession, tr=None) -> tuple[str, str]:
 
 
 def _card_rtl(sess: TrackedSession, tr=None) -> bool:
-    """The card's direction (multilingual design 5.7, rule 5): Claude's own
-    words decide once it has written some, else the chat's language."""
+    """The card's ONE direction (multilingual design 5.7, rule 5): Claude's
+    own words decide once it has written some, before that the prompt the
+    turn answers (Claude answers in the language it is written to), and
+    only when neither has a letter the chat's language."""
     commentary = " ".join(t for _a, t in sess.stream_commentary)
-    if commentary:
-        return detect_rtl(commentary)
-    return (tr or i18n.for_sess(sess)).rtl
+    tr = tr or i18n.for_sess(sess)
+    return message_rtl(tr.language_rtl, commentary, sess.turn_prompt)
+
+
+def card_tr(sess: TrackedSession, tr=None):
+    """*tr* (the session's chat's when None) in the card's direction
+    (:func:`_card_rtl`): what draws aipager's own lines on the card, so a
+    Persian chat talking with Claude in English gets a card that reads
+    left to right."""
+    tr = tr or i18n.for_sess(sess)
+    return tr.directed(_card_rtl(sess, tr))
 
 
 def _card_unit(sess: TrackedSession, final: bool) -> str:
@@ -1274,7 +1345,7 @@ def _status_line(
         return tr.clock(time.monotonic() - started, unit)
 
     if waiting and not final:
-        state, phrase = _agent_phrase(sess)
+        state, phrase = _agent_phrase(sess, tr)
         line = (tr.md(WAITING_STATE, session=label, phrase=Safe(phrase))
                 if state == _FINISHING
                 else tr.md(WAITING_WORKING, session=label, agents=Safe(phrase)))
@@ -1333,7 +1404,7 @@ def _status_line(
 
 def build_stream_card_ex(
     sess: TrackedSession, verb: str, *, final: bool = False,
-    waiting: bool = False, tr=None,
+    waiting: bool = False, tr=None, rtl: bool | None = None,
 ) -> tuple[str, bool]:
     """Build the streaming busy-card markdown. Pure: no I/O, no mutation.
 
@@ -1361,9 +1432,14 @@ def build_stream_card_ex(
     tap is presentation, not loss, and never sets this). The plain
     :func:`build_stream_card` wrapper keeps the historical str-only
     signature for every existing call site and test.
+
+    Drawn in the card's direction (:func:`card_tr`), or in *rtl* when the
+    caller decided the message's direction itself (the merged answer,
+    whose direction is the answer's).
     """
     if tr is None:
         tr = i18n.for_sess(sess)
+    tr = tr.directed(_card_rtl(sess, tr) if rtl is None else rtl)
     status = _status_line(sess, verb, final=final, waiting=waiting, tr=tr)
 
     # Reserve: the status line plus the "\n\n" join above it, so the
@@ -1963,7 +2039,7 @@ class AnimationMixin:
         if not self._app:
             return None
         target = reply_to if reply_to is not None else sess.trigger_msg_id
-        text = i18n.for_sess(sess).html(THINKING, session=sess.label)
+        text = card_tr(sess).html(THINKING, session=sess.label)
         try:
             msg = await self._app.bot.send_message(
                 resolve_chat_id(sess), text, parse_mode="HTML",
@@ -2042,9 +2118,13 @@ class AnimationMixin:
         """Build the animated busy message text with tool history (the
         plain HTML card, and the text of an inline prompt). In *tr*'s
         language (the session's chat's when None); stored rows and tool
-        summaries are shown as they are."""
+        summaries are shown as they are. In the card's direction
+        (:func:`card_tr`) when *tr* is None: an inline permission or
+        question prompt drawn into the card follows it too, since one
+        message has one direction (a prompt sent as its own message keeps
+        the chat's)."""
         if tr is None:
-            tr = i18n.for_sess(sess)
+            tr = card_tr(sess)
         elapsed = ""
         if sess.busy_started_at:
             now = time.monotonic()
@@ -2517,8 +2597,9 @@ class AnimationMixin:
         paused = not final and sess.stream_last_rendered == _PAUSED_CARD_TEXT
         sess.card_elapsed_unit = "s" if final else self._card_elapsed_unit(sess)
         tr = i18n.for_sess(sess)
+        is_rtl = _card_rtl(sess, tr)
         if paused:
-            markdown, hid = tr.md(PAUSED_MD, session=sess.label), False
+            markdown, hid = tr.directed(is_rtl).md(PAUSED_MD, session=sess.label), False
         else:
             markdown, hid = build_stream_card_ex(
                 sess, verb, final=final, waiting=waiting, tr=tr,
@@ -2527,7 +2608,7 @@ class AnimationMixin:
         try:
             sent = await send_rich_message(
                 chat_id, markdown,
-                is_rtl=_card_rtl(sess, tr),
+                is_rtl=is_rtl,
                 reply_to_message_id=target_msg_id,
                 reply_markup=markup,
                 disable_notification=True,
@@ -2870,7 +2951,7 @@ class AnimationMixin:
         isn't generating anything right now, so there is no new prose to
         stream and no "typing" to signal.
         """
-        verbs = list(SPINNER_VERBS)
+        verbs = spinner_verbs(i18n.for_sess(sess))
         random.shuffle(verbs)
         idx = 0
         first_tick = True
@@ -2997,7 +3078,7 @@ class AnimationMixin:
         try:
             sent = await self._edit_busy_raw(
                 sess.busy_msg_id,
-                i18n.for_sess(sess).html(PAUSED_HTML, session=sess.label),
+                card_tr(sess).html(PAUSED_HTML, session=sess.label),
                 chat_id=resolve_chat_id(sess),
                 priority=PRIORITY_ESSENTIAL,
             )

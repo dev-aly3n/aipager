@@ -83,8 +83,10 @@ def test_the_block_is_rendered_in_the_chats_language(bot, sess, wire, run_async)
     preferences.set_ui_language(bb.CHAT, "fa")
     _t0, _t1, text = _deliver(run_async, bot, sess,
                               ("a1", "pipeline-runner", time.monotonic()))
+    # In Persian, read left to right with the English answer it ends
+    # (multilingual design 5.7, rule 5).
     expected = render_block(BlockView(agents=(AgentRow("pipeline-runner", False),)),
-                            i18n.get("fa"))
+                            i18n.get("fa").directed(False))
     assert text.endswith(SEP + expected)
 
 
@@ -96,7 +98,7 @@ def test_a_persian_edit_stays_persian(bot, sess, wire, run_async):
     bb.tick(run_async, bot, sess, t1 + 31)
     expected = render_block(
         BlockView(agents=(AgentRow("pipeline-runner", False, tool="Read",
-                                   tool_arg="state.py"),)), i18n.get("fa"))
+                                   tool_arg="state.py"),)), i18n.get("fa").directed(False))
     assert bb.md(_edits(wire)[-1]).endswith(SEP + expected)
 
 

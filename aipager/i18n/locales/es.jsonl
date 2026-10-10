@@ -199,6 +199,18 @@
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Detenida en la terminal"}
 {"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · Pensando…"}
 {"k": "card.verb.done", "src": "e9b450d1", "v": "Listo"}
+{"k": "card.verb.spin_analyzing", "src": "696002c4", "v": "Analizando"}
+{"k": "card.verb.spin_calculating", "src": "d7652ff1", "v": "Calculando"}
+{"k": "card.verb.spin_considering", "src": "974edc62", "v": "Considerando"}
+{"k": "card.verb.spin_crafting", "src": "ea78b34d", "v": "Creando"}
+{"k": "card.verb.spin_evaluating", "src": "e0b446df", "v": "Evaluando"}
+{"k": "card.verb.spin_examining", "src": "3ed47c3e", "v": "Examinando"}
+{"k": "card.verb.spin_formulating", "src": "8432f803", "v": "Formulando"}
+{"k": "card.verb.spin_investigating", "src": "ce0ee523", "v": "Investigando"}
+{"k": "card.verb.spin_pondering", "src": "bcaa61e0", "v": "Reflexionando"}
+{"k": "card.verb.spin_processing", "src": "e63451d3", "v": "Procesando"}
+{"k": "card.verb.spin_reasoning", "src": "e272c597", "v": "Razonando"}
+{"k": "card.verb.spin_thinking", "src": "d08d8da0", "v": "Pensando"}
 {"k": "card.verb.waiting", "src": "33d30632", "v": "Esperando"}
 {"k": "card.verb.working", "src": "3b4dfc97", "v": "Trabajando"}
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}

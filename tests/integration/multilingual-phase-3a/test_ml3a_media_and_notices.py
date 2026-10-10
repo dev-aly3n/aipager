@@ -100,5 +100,7 @@ def test_an_answer_delivered_late_after_a_rate_limit(world, code):
     world.bot._confirm_held = MagicMock()
     world.run(world.bot.flush_held_answers(x1))
     marker = sent[0].split("\n", 1)[0]
-    assert marker == held_message.late_marker_text(i18n.get(code), 600)
+    # The marker heads an English answer: it reads left to right with it
+    # (multilingual design 5.7, rule 5), in the chat's language.
+    assert marker == held_message.late_marker_text(i18n.get(code).directed(False), 600)
     assert SCRIPT[code].search(marker) and sent[0].endswith("**done**")

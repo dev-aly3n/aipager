@@ -199,6 +199,18 @@
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Im Terminal gestoppt"}
 {"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · Denkt nach…"}
 {"k": "card.verb.done", "src": "e9b450d1", "v": "Fertig"}
+{"k": "card.verb.spin_analyzing", "src": "696002c4", "v": "Analysiert"}
+{"k": "card.verb.spin_calculating", "src": "d7652ff1", "v": "Rechnet"}
+{"k": "card.verb.spin_considering", "src": "974edc62", "v": "Wägt ab"}
+{"k": "card.verb.spin_crafting", "src": "ea78b34d", "v": "Gestaltet"}
+{"k": "card.verb.spin_evaluating", "src": "e0b446df", "v": "Bewertet"}
+{"k": "card.verb.spin_examining", "src": "3ed47c3e", "v": "Prüft"}
+{"k": "card.verb.spin_formulating", "src": "8432f803", "v": "Formuliert"}
+{"k": "card.verb.spin_investigating", "src": "ce0ee523", "v": "Untersucht"}
+{"k": "card.verb.spin_pondering", "src": "bcaa61e0", "v": "Grübelt"}
+{"k": "card.verb.spin_processing", "src": "e63451d3", "v": "Verarbeitet"}
+{"k": "card.verb.spin_reasoning", "src": "e272c597", "v": "Folgert"}
+{"k": "card.verb.spin_thinking", "src": "d08d8da0", "v": "Denkt nach"}
 {"k": "card.verb.waiting", "src": "33d30632", "v": "Wartet"}
 {"k": "card.verb.working", "src": "3b4dfc97", "v": "Arbeitet"}
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}

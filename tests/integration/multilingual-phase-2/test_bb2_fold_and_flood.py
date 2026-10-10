@@ -41,7 +41,7 @@ FORM_OF = {3: "few", 4: "few", 22: "few", 24: "few", 21: "one",
 SUMMARY = re.compile(r"<summary>(.*?)</summary>")
 
 
-def _card(n, code):
+def _card(n, code, commentary=("First.", "Second.")):
     reg = SessionRegistry()
     s = reg.get_or_create("claude-x12__d4242")
     s.label = "x12"
@@ -49,7 +49,7 @@ def _card(n, code):
     s.status = Status.BUSY
     s.busy_started_at = time.monotonic() - 30
     s.tool_history = [(f"Read: /tmp/a{i}.py", True) for i in range(n + 2)]
-    s.stream_commentary = [(0, "First."), (n, "Second.")]
+    s.stream_commentary = [(0, commentary[0]), (n, commentary[1])]
     return animation.build_stream_card(s, "Working", tr=i18n.get(code))
 
 
@@ -82,13 +82,24 @@ def test_a_persian_fold_has_no_latin_digit(n):
     assert not LATIN_DIGITS.search(summary)
 
 
+#: Claude's commentary in Persian: the card reads right to left.
+PERSIAN = ("\u0627\u0648\u0644.", "\u062f\u0648\u0645.")
+
+
 def test_a_persian_fold_summary_starts_right_to_left_inside_the_element():
-    (summary,) = _summaries(_card(5, "fa"))
+    (summary,) = _summaries(_card(5, "fa", PERSIAN))
     assert summary.startswith(RLM)
 
 
-def test_a_persian_fold_reads_the_catalog():
+def test_a_persian_fold_under_english_commentary_starts_left_to_right():
+    # Claude writes English: the whole card reads left to right, the
+    # Persian words kept whole (multilingual design 5.7, rule 5).
     (summary,) = _summaries(_card(5, "fa"))
+    assert summary.startswith("\u200e") and RLM not in summary
+
+
+def test_a_persian_fold_reads_the_catalog():
+    (summary,) = _summaries(_card(5, "fa", PERSIAN))
     want = catalog("fa")["card.fold"]["v"]["other"].replace("{n}", "۵")
     assert strip_marks(summary) == want
 

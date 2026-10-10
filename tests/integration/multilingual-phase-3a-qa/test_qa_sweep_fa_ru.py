@@ -16,7 +16,13 @@ import pytest
 import qa_p3a_scenarios as S
 
 RLM, FSI, PDI = "\u200f", "\u2068", "\u2069"
-OWN = re.compile("[\u200f\u2068\u2069]")
+#: aipager's own marks: U+200F and the isolates, and in a message that
+#: reads left to right because Claude writes English, U+200E and U+2067
+#: (multilingual design 5.7, rule 5).
+OWN = re.compile("[\u200e\u200f\u2067\u2068\u2069]")
+#: Scenarios whose message carries Claude's (English) text: they read
+#: left to right.
+FOLLOWS_CLAUDE = {"held_answers"}
 #: Every bidi control: LRM, RLM, ALM, embeddings, overrides, isolates.
 BIDI = re.compile("[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]")
 PERSIAN = re.compile("[؀-ۿ]")
@@ -107,7 +113,10 @@ def test_every_persian_line_opens_right_to_left(run_both, name):
     bad = []
     for t in _shown(other):
         for line in _body(t).split("\n"):
-            if PERSIAN.search(line) and not line.startswith(RLM):
+            if name in FOLLOWS_CLAUDE:
+                if line.startswith(RLM):
+                    bad.append(line)
+            elif PERSIAN.search(line) and not line.startswith(RLM):
                 bad.append(line)
     assert bad == []
 

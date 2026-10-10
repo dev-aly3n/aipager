@@ -35,6 +35,7 @@ def test_b10_drain_at_an_idle_moment_starts_the_turn(mk_bot, run_async):
 
     assert sess.trigger_msg_id == 2
     assert sess.last_prompt == "no it was a test"
+    assert sess.turn_prompt == "no it was a test"
     assert sess.last_prompt_driver_user_id is None  # queued with no sender
     assert sess.pending_queue == []
     assert sess.status == Status.BUSY
@@ -55,6 +56,7 @@ def test_b10_drain_while_a_turn_runs_is_a_mid_turn_send(mk_bot, run_async):
     bot._inject_prompt.assert_awaited_once()
     assert sess.trigger_msg_id == 1, "a running turn keeps its own target"
     assert sess.last_prompt == "first"
+    assert sess.turn_prompt == ""
     assert sess.pending_queue == []
     bot._send_busy_and_animate.assert_not_awaited()
 

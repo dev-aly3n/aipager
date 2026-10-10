@@ -356,7 +356,7 @@ def render_block(view: BlockView, tr=None) -> str:
 _WORST_COUNTS = tuple(range(0, 121)) + (999,)
 _WORST_CLOCK = 999 * 3600 + 59 * 60 + 59
 _WIDE = "\U0001f600"  # one character, four UTF-8 bytes
-_RESERVE: dict[str, int] = {}
+_RESERVE: dict[tuple[str, bool], int] = {}
 
 
 def _size(text) -> int:
@@ -397,12 +397,16 @@ def reserve_bytes(tr=None) -> int:
     can render: what an answer leaves free for its block, so no later edit
     of the block can push the message past the ceiling."""
     tr = _tr(tr)
-    cached = _RESERVE.get(tr.code)
+    # Per language AND direction: a block drawn left to right in a
+    # right-to-left language (multilingual design 5.7, rule 5) carries
+    # other marks, so its own size.
+    key = (tr.code, tr.rtl)
+    cached = _RESERVE.get(key)
     if cached is not None:
         return cached
     sep = _size(LINE_SEP)
     more = max(_size(tr.n(MORE, n, kind="md")) for n in _WORST_COUNTS)
     total = (sep + _worst_header(tr) + ROWS_MAX * (sep + _worst_rows(tr))
              + sep + more + sep + _size(tr.md(PROMISE)))
-    _RESERVE[tr.code] = total
+    _RESERVE[key] = total
     return total

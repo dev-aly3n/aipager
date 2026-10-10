@@ -28,6 +28,7 @@ from aipager.config import (
 )
 from aipager.md_to_tg import markdown_to_telegram_html
 from aipager.policy_snapshot import (
+    _TELEGRAM_MARKER,
     expire_notes_after_turn_end,
     list_outstanding_notes,
     note_driver_id,
@@ -550,6 +551,17 @@ _TURN_ACTIVITY_EVENTS = frozenset({
 _TURN_ENDING_EVENTS = ("idle_prompt", "idle", "stop", "notification")
 
 
+def _person_text(prompt: str, telegram_text: str) -> str:
+    """The person's own words in the *prompt* Claude Code reports: a
+    Telegram prompt without aipager's marker line (its raw text, the last
+    one injected, when the prompt carries it), a terminal prompt whole."""
+    if not prompt.startswith(_TELEGRAM_MARKER):
+        return prompt
+    if telegram_text and telegram_text in prompt:
+        return telegram_text
+    return prompt.split("\n", 1)[1] if "\n" in prompt else ""
+
+
 def _is_turn_activity(event: str, msg: dict | None = None) -> bool:
     """Whether *event* is held while the running turn waits for its card
     state (roadmap 8.62)."""
@@ -1002,6 +1014,9 @@ class HookReceiver:
                     tag_sess.turn_mixed_authors = turn_authors_from_report(
                         turn)
             if transitioned:
+                if prompt:
+                    transitioned.turn_prompt = _person_text(
+                        prompt, transitioned.last_prompt)
                 await self.notify_fn(transitioned, "user_prompt_submit", {})
 
         elif event == "queue_pickup":
@@ -1033,6 +1048,7 @@ class HookReceiver:
                 last_text = last.get("raw_text")
                 if last_text:
                     sess.last_prompt = last_text
+                    sess.turn_prompt = last_text
                     sess.last_prompt_driver_user_id = note_driver_id(last)
                 self.registry.mark_dirty()
             await self.notify_fn(sess, "queue_pickup", {

@@ -2325,6 +2325,32 @@ def unmarked_words(text: str, known=KNOWN) -> list[str]:
 #: sweep must not count as English, by surface. Both are filled by the
 #: phase 3a registry imported below.
 PENDING: set[str] = set()
+
+#: The surfaces that carry Claude's text, which is English in every
+#: scenario here: their direction is that text's, not the chat's
+#: (multilingual design 5.7, rule 5), so in fa and ar they read left to
+#: right. The right-to-left sweeps check them with
+#: :func:`assert_follows_claude`; tests/test_message_direction.py covers
+#: both directions.
+FOLLOWS_CLAUDE = frozenset({"answer.headers", "card.busy", "card.final", "card.legacy",
+                            "card.waiting", "held.late_marker"})
+
+
+def assert_follows_claude(name: str, text: str) -> None:
+    """*text* (a surface of :data:`FOLLOWS_CLAUDE`) reads left to right:
+    on every line the first character that decides a direction (a mark,
+    or a letter even inside an isolate; tags are not text) is U+200E or a
+    left-to-right letter."""
+    import re
+    import unicodedata
+    for line in text.split("\n"):
+        for ch in re.sub(r"<[^>]+>", "", line):
+            if ch == "\u200e":
+                break
+            bidi = unicodedata.bidirectional(ch)
+            assert ch != "\u200f" and bidi not in ("R", "AL"), (name, line)
+            if bidi == "L":
+                break
 KNOWN_EXTRA: dict[str, tuple[str, ...]] = {
     # Claude's own text (an agent's prose, its Agent call's description),
     # agent types, tool names and a tool's file, pattern, query or site:

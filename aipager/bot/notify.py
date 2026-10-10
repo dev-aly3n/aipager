@@ -39,6 +39,7 @@ from aipager.bot.rich_message import (
     RichMessageFloodBanned,
     RichMessageGone,
     detect_rtl,
+    message_rtl,
     edit_message_text_rich,
     send_rich_message,
 )
@@ -382,7 +383,7 @@ class NotifyMixin:
     async def _send_merged_final(
         self, sess: TrackedSession, answer: str, *,
         send_as_new: bool = False, reply_to: int | None = None,
-        agents: dict | None = None,
+        agents: dict | None = None, rtl: bool | None = None,
     ) -> bool:
         """Try to deliver a finished turn as ONE message: the finished
         timeline (exactly what ``card`` mode renders) with the answer
@@ -409,9 +410,15 @@ class NotifyMixin:
         The caller holds the card-edit lock (``_card_edit_lock``) across
         this and its clean-up, so nothing in here may call
         ``_edit_busy_rich``.
+
+        One direction for the whole message (multilingual design 5.7,
+        rule 5): *rtl*, the turn's (:meth:`_answer_rtl`), worked out from
+        *answer* when the caller does not pass it.
         """
+        if rtl is None:
+            rtl = self._answer_rtl(sess, answer)
         try:
-            card_md, hid = build_stream_card_ex(sess, FINAL_VERB, final=True)
+            card_md, hid = build_stream_card_ex(sess, FINAL_VERB, final=True, rtl=rtl)
             # This IS the merged layout's final render — the attach_log
             # decision must see ITS truncation state, not a stale interim
             # tick's (review rev-iter1-002).
@@ -460,11 +467,9 @@ class NotifyMixin:
             log.info("[%s] merged: no numeric chat id — falling back to replace",
                      sess.label)
             return False
-        # Combined-text RTL detection (not the answer alone): an RTL answer
-        # following an LTR toolchain timeline must still be judged
-        # majority-RTL by sample, matching how the plain single-message
-        # body-send already treats detect_rtl(body_content) above.
-        is_rtl = detect_rtl(combined)
+        # The message's one direction, the turn's: Claude's words decide,
+        # never aipager's own lines in the timeline (rule 5).
+        is_rtl = rtl
         if send_as_new:
             try:
                 sent = await send_rich_message(
@@ -480,7 +485,7 @@ class NotifyMixin:
                 # both refused — but the answer is still worth reading once
                 # the ban lifts. `return False` is unchanged, so the
                 # caller's control flow is exactly as before.
-                self._hold_answer(sess, held, held, reply_to)
+                self._hold_answer(sess, held, held, reply_to, is_rtl=rtl)
                 return False
             except (RichMessageFallbackRequired, Exception):
                 log.debug("[%s] merged: send-as-new failed", sess.label,
@@ -512,7 +517,7 @@ class NotifyMixin:
             return False
         except RichMessageFloodBanned:
             # HELD, not dropped (8.29 R6) — see the send-as-new arm above.
-            self._hold_answer(sess, held, held, reply_to)
+            self._hold_answer(sess, held, held, reply_to, is_rtl=rtl)
             return False
         if result is not None and agents:
             self._remember_agents_line(
@@ -522,7 +527,18 @@ class NotifyMixin:
 
     # ── roadmap 8.41: background agents still running ─────────────────────
 
-    def _agents_snapshot(self, sess: TrackedSession) -> dict | None:
+    def _answer_rtl(self, sess: TrackedSession, answer: str,
+                    commentary: str = "") -> bool:
+        """The ONE direction of a message carrying Claude's answer
+        (multilingual design 5.7, rule 5): the answer's, else what Claude
+        said during the turn, else the prompt the turn answers, else the
+        chat's language. Its header, its Finished line and its agents
+        block are drawn in it (``Tr.directed``)."""
+        return message_rtl(i18n.for_sess(sess).language_rtl, answer, commentary,
+                           sess.turn_prompt)
+
+    def _agents_snapshot(self, sess: TrackedSession,
+                         rtl: bool | None = None) -> dict | None:
         """The background work running as an answer goes out (roadmap
         8.41) — ONE snapshot, taken once, so the block shown and the items
         it keeps current describe the same agents and shells — or ``None``
@@ -540,7 +556,8 @@ class NotifyMixin:
                   for task_id in sess.job_shell_ids()]
         if not items:
             return None
-        tr = i18n.for_sess(sess)
+        # In the direction of the answer it ends (`_answer_rtl`).
+        tr = i18n.for_sess(sess).directed(rtl)
         rec = {"items": items, "ids": [item["id"] for item in items],
                "ends": {}, "sent_at": now}
         return {"line": _agents_line.render_block(
@@ -648,8 +665,10 @@ class NotifyMixin:
             # The message is the live card again: an edit here would
             # replace the card with the old answer. Never; wait.
             return False
+        # The answer's direction, kept with it (`_remember_agents_line`).
         block = _agents_line.render_block(
-            self._agents_view(sess, rec, now), i18n.for_sess(sess))
+            self._agents_view(sess, rec, now),
+            i18n.for_sess(sess).directed(rec.get("is_rtl")))
         if block == rec["shown"]:
             return final
         if not final and block == rec.get("refused"):
@@ -797,6 +816,7 @@ class NotifyMixin:
         if last_msg_id is not None and move_target:
             sess.trigger_msg_id = last_msg_id
             sess.last_prompt = last.get("raw_text", "") or ""
+            sess.turn_prompt = sess.last_prompt
             sess.last_prompt_driver_user_id = note_driver_id(last)
             self.registry.mark_dirty()
 
@@ -891,6 +911,7 @@ class NotifyMixin:
                            and not sess.job_work_running()))
         sess.trigger_msg_id = nxt.get("msg_id")
         sess.last_prompt = nxt.get("raw_text") or ""
+        sess.turn_prompt = sess.last_prompt
         sess.last_prompt_driver_user_id = nxt.get("driver_user_id")
         self.registry.mark_dirty()
         self.registry.transition(sess.name, Status.BUSY,
@@ -1020,8 +1041,12 @@ class NotifyMixin:
     def _hold_answer(self, sess: TrackedSession, rich_text: str,
                      plain_text: str, reply_to: int | None, *,
                      digests: list[str] | None = None,
-                     selected_wall: float = 0.0) -> None:
+                     selected_wall: float = 0.0,
+                     is_rtl: bool | None = None) -> None:
         """Keep an answer a flood mute refused (8.29 R6). Never raises.
+
+        ``is_rtl`` is the message's direction (`_answer_rtl`), kept with it
+        so the late send reads as the answer was built.
 
         ``digests`` / ``selected_wall`` are the finish path's pending
         delivery record (roadmap 8.39): ``flush_held_answers`` confirms
@@ -1043,7 +1068,7 @@ class NotifyMixin:
                 session=sess.name, label=sess.label,
                 rich_text=rich_text, plain_text=plain_text,
                 reply_to=reply_to, digests=tuple(digests or ()),
-                selected_wall=selected_wall,
+                selected_wall=selected_wall, is_rtl=is_rtl,
             )
             log.info(
                 "[%s] answer held — the chat is flood-muted; it will be "
@@ -1134,11 +1159,18 @@ class NotifyMixin:
         tr = i18n.for_sess(sess)
         delivered = 0
         for entry in entries:
-            marker = held_message.late_marker_text(tr, entry.held_seconds())
+            # The marker heads the answer, so it takes the answer's
+            # direction (multilingual design 5.7, rule 5), the one it was
+            # built in; judged from the text only when that is not known.
+            is_rtl = getattr(entry, "is_rtl", None)
+            if is_rtl is None:
+                is_rtl = detect_rtl(entry.rich_text)
+            marker = held_message.late_marker_text(tr.directed(is_rtl),
+                                                   entry.held_seconds())
             try:
                 sent = await send_rich_message(
                     int(chat_id), f"{marker}\n\n{entry.rich_text}",
-                    is_rtl=detect_rtl(entry.rich_text),
+                    is_rtl=is_rtl,
                     reply_to_message_id=entry.reply_to,
                 )
             except RichMessageFloodBanned:
@@ -1236,7 +1268,8 @@ class NotifyMixin:
                      "re-sending", label)
             return
         sess.remember_delivered(digest, pending=True)
-        agents = self._agents_snapshot(sess)
+        is_rtl = self._answer_rtl(sess, content)
+        agents = self._agents_snapshot(sess, is_rtl)
         lead_md = _result_line_md(label)
         lead_plain = _result_line_plain(label)
         # The same byte budget as the finish path: an answer over the
@@ -1259,7 +1292,6 @@ class NotifyMixin:
         if agents:
             rich_text = f"{rich_text}\n\n{agents['line']}"
         plain_text = f"{lead_plain}\n\n{content}"
-        is_rtl = detect_rtl(content)
         chat_id = resolve_chat_id_int(sess)
         # The interim turn's own message: the queued pick-up at this Stop
         # has already moved `sess.trigger_msg_id` to the next one.
@@ -1285,7 +1317,8 @@ class NotifyMixin:
         except RichMessageFloodBanned:
             # HELD (8.29 R6); confirmed by flush_held_answers once it lands.
             self._hold_answer(sess, held_rich, plain_text, reply_to,
-                              digests=[digest], selected_wall=turn_end_wall)
+                              digests=[digest], selected_wall=turn_end_wall,
+                              is_rtl=is_rtl)
             return
         except (RichMessageFallbackRequired, Exception):
             log.warning("[%s] job interim sendRichMessage failed — falling "
@@ -1451,6 +1484,7 @@ class NotifyMixin:
         if starts_turn:
             sess.trigger_msg_id = queued_trigger
             sess.last_prompt = queued_text
+            sess.turn_prompt = queued_text
             sess.last_prompt_driver_user_id = queued_driver_user_id
         if queued_trigger is not None:
             # Queued messages are never tracked at queue time
@@ -1751,6 +1785,8 @@ class NotifyMixin:
             # state), while a standalone notice, sent because no card is
             # left to settle, is the turn's result message and opens with
             # the result glyph like the idle path's standalone header.
+            # aipager's own line, carrying no text of Claude's (it replaces
+            # the card whole): the chat's direction.
             name = html_mod.escape(label)
             tr = i18n.for_sess(sess)
             text = finished_line(tr, f"✅ <b>{name}</b>", "html", seconds=elapsed_s)
@@ -1796,6 +1832,7 @@ class NotifyMixin:
             elapsed_s = 0
             if sess.busy_started_at:
                 elapsed_s = int(time.monotonic() - sess.busy_started_at)
+            # aipager's own notice, no text of Claude's: the chat's direction.
             tr = i18n.for_sess(sess)
             shell = context.get("what", "agent") == "shell"
             if elapsed_s > 0:
@@ -3008,7 +3045,15 @@ class NotifyMixin:
                 # HTML for the standalone header message, the rich-message
                 # dialect (bold = **) for a composed send, bare for the
                 # plain-text fallback.
-                header_tr = i18n.for_sess(sess)
+                # The answer message's one direction (rule 5): the answer's,
+                # else the turn's commentary, else the prompt, else the
+                # chat's language. Decided before the dedup above could
+                # empty `content`, so a header-only message still follows
+                # the turn.
+                turn_rtl = self._answer_rtl(
+                    sess, raw_md or summary,
+                    " ".join(t for _a, t in log_commentary))
+                header_tr = i18n.for_sess(sess).directed(turn_rtl)
                 stats = {"seconds": elapsed_s, "added": sess.last_lines_added,
                          "removed": sess.last_lines_removed}
                 header_text = finished_line(
@@ -3028,7 +3073,7 @@ class NotifyMixin:
                 # ordinary send below — the exact same path "replace" uses.
                 # Roadmap 8.41: agents this turn launched in the background are
                 # still running — the answer ends by saying so, in every layout.
-                agents = self._agents_snapshot(sess)
+                agents = self._agents_snapshot(sess, turn_rtl)
                 merged_delivered = False
                 if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
                     pre_merge_busy_msg_id = sess.busy_msg_id
@@ -3073,6 +3118,7 @@ class NotifyMixin:
                             merged_delivered = await self._send_merged_final(
                                 sess, content, send_as_new=True,
                                 reply_to=finish_trigger, agents=agents,
+                                rtl=turn_rtl,
                             )
                             if merged_delivered and pre_merge_busy_msg_id and pre_merge_busy_msg_id > 0:
                                 try:
@@ -3085,7 +3131,7 @@ class NotifyMixin:
                                               sess.label, exc_info=True)
                         else:
                             merged_delivered = await self._send_merged_final(
-                                sess, content, agents=agents)
+                                sess, content, agents=agents, rtl=turn_rtl)
                         if not merged_delivered:
                             # Losing the timeline is acceptable; losing the answer is
                             # never acceptable — fall back to the replace-style send
@@ -3227,7 +3273,7 @@ class NotifyMixin:
                     held_rich = rich_text
                     if agents:
                         rich_text = f"{rich_text}\n\n{agents['line']}"
-                    is_rtl = detect_rtl(body_content)
+                    is_rtl = turn_rtl
                     log.info("[%s] sendRichMessage: %d chars, rtl=%s, overflow=%s, "
                              "lead=%s",
                              label, len(rich_text), is_rtl, send_file,
@@ -3313,7 +3359,8 @@ class NotifyMixin:
                         # the mute lifts, with an honest late marker.
                         self._hold_answer(sess, held_rich, plain_text, reply_to,
                                           digests=_answer_digests,
-                                          selected_wall=turn_end_wall)
+                                          selected_wall=turn_end_wall,
+                                          is_rtl=turn_rtl)
                     except (RichMessageFallbackRequired, Exception):
                         # Plain-text fallback — split into ≤4096-char chunks at
                         # markdown-safe boundaries so the send cannot fail to parse.
