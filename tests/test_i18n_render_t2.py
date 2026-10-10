@@ -235,9 +235,7 @@ def test_arabic_reads_right_to_left_with_its_own_digits(mk_bot, run_async, monke
 @pytest.mark.parametrize("code", CODES)
 def test_the_first_contact_line(code, monkeypatch):
     from aipager.bot import language_menu
-    monkeypatch.setattr(locales, "AUTO_DETECT", True)
-    monkeypatch.setattr(language_menu, "_FIRST_CONTACT_SHOWN", set())
-    line = language_menu.first_contact_line(i18n.get(code), 555)
+    line = language_menu.first_contact_text(i18n.get(code))
     endonym = locales.LOCALES[code].endonym
     assert endonym in line and "/language" in line and "aipager" in line
     assert english_left(line, code) == []
@@ -375,7 +373,7 @@ def test_the_catalogs_are_complete_and_check_clean():
     for code in CODES:
         assert locales.LOCALES[code].enabled and locales.LOCALES[code].quality == "beta"
         assert len(core._catalog(code)) == len(rows), code
-    assert locales.AUTO_DETECT is False
+    assert locales.AUTO_DETECT is True    # phase 5: detection on
     problems = tool.check_catalogs(rows, tool.all_catalogs(), CODES,
                                    glossaries=tool.all_glossaries())
     assert problems == [], problems[:10]

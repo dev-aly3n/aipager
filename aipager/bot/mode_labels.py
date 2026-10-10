@@ -28,8 +28,9 @@ def mode_from_word(word: str) -> str | None:
     """``"ask"`` or ``"auto"`` for a word typed after ``/mode``: the ids
     themselves (any case), or the mode's shown word in any enabled
     language with its emoji and invisible marks dropped (``خودکار``,
-    ``авто``); None for anything else, a session name included (session
-    names are ASCII, and no mode word may be one, check 10)."""
+    ``авто``, ``demander``); None for anything else. A translated word in
+    a Latin script can also be a session name (``demander``): which one a
+    word means is :func:`parse_mode_args`'s call, not this one's."""
     if not isinstance(word, str):
         return None
     if word.lower() in ("ask", "auto"):
@@ -42,6 +43,35 @@ def mode_from_word(word: str) -> str | None:
         if any(typed == kbwords.mode_word(label) for label in kbwords._labels(msg)):
             return mode
     return None
+
+
+def parse_mode_args(words, session_exists) -> tuple[str | None, str | None, bool]:
+    """``(mode, label, ok)`` for the words typed after ``/mode``.
+
+    - ``ask`` / ``auto`` (any case) are the mode, exactly as always, even
+      when a session has that name;
+    - a translated mode word is the mode once a session name was given,
+      or when no live session in the chat has exactly that name
+      (*session_exists*); with one, it names that session (``/mode
+      demander`` with a session ``demander``);
+    - anything else is the session name;
+    - a word left over (a third, or a second name) is not ok: the caller
+      shows the usage.
+    """
+    mode = label = None
+    for word in words:
+        if mode is None and word.lower() in ("ask", "auto"):
+            mode = word.lower()
+            continue
+        translated = mode_from_word(word) if mode is None else None
+        if translated is not None and (
+                label is not None or not session_exists(word.lstrip("/"))):
+            mode = translated
+        elif label is None:
+            label = word.lstrip("/")
+        else:
+            return mode, label, False
+    return mode, label, True
 
 
 def mode_label(auto: bool) -> Msg:

@@ -29,9 +29,9 @@ and on every session change.
 | `/delete [label]` | optional | Drop an ended session from the list, after a confirm. |
 | `/diff [label]` | optional | Show the session's working-directory git diff. Bare, it shows the session your messages go to. |
 | `/clearqueue` | - | Drop every not-yet-picked-up message for the active session - both messages aipager is holding and messages already queued inside Claude - without interrupting the running turn. Replies with the count cleared. |
-| `/mode [label] [ask\|auto]` | optional | Show a session's permission mode with a button to switch to the other one: `✍️ x1 is 🤖 Auto.` `[💬 Switch to Ask]`. `/mode ask`, `/mode auto` or `/mode x1 ask` switch straight away; the mode's name in the chat's language works too (`/mode x1 خودکار`, `/mode авто`). Going to Auto needs an admin and a confirm; going to Ask happens at once. Tapping the switch changes the card itself instead of sending a second message: it becomes the confirm, then shows the new mode with the opposite switch. On a busy session, offers `Stop task & switch` / `Not now`. `/perms` is the old name and still works the same. |
+| `/mode [label] [ask\|auto]` | optional | Show a session's permission mode with a button to switch to the other one: `✍️ x1 is 🤖 Auto.` `[💬 Switch to Ask]`. `/mode ask`, `/mode auto` or `/mode x1 ask` switch straight away; the mode's name in the chat's language works too (`/mode x1 خودکار`, `/mode авто`). When a live session in this chat has exactly that name (a session called `demander`, say), the word names the session: `/mode demander` shows that session's mode, and `/mode x1 demander` still switches x1. `ask` and `auto` always mean the mode. Going to Auto needs an admin and a confirm; going to Ask happens at once. Tapping the switch changes the card itself instead of sending a second message: it becomes the confirm, then shows the new mode with the opposite switch. On a busy session, offers `Stop task & switch` / `Not now`. `/perms` is the old name and still works the same. |
 | `/settings` | - | How this chat's sessions look and reply: the language aipager uses, message layout, diff previews, long-turn card updates, formatting, answer length, vocabulary level; what `/new` starts a session with; per-session overrides; and, in the owner's private chat, problem report offers. See [Settings](#settings). In a group anyone can look, and changing a setting needs an admin. |
-| `/language` | - | The language aipager uses for its own messages and buttons in this chat (the same list as the first row of `/settings`). Each language is listed in its own name: English, then Español, Русский (Russian), Português (Brasil), 简体中文 (Chinese, Simplified), Français, Deutsch (German), 한국어 (Korean), العربية (Arabic), Bahasa Indonesia, Українська (Ukrainian), Italiano, Türkçe (Turkish), فارسی (Persian) and Tiếng Việt (Vietnamese), all but English marked beta. aipager does not switch a chat by itself yet: Automatic follows your Telegram app's language only when it is English, so pick your language in the list. In Spanish, Portuguese, French, Italian and Indonesian the reply keyboard's words stay `status`, `stop`, `new` and `kill`, the same as their commands. German and Turkish use `Status`, `Stop`, `Neu…` and `Beenden…`, and `Özet`, `Stop`, `Oluştur` and `Sonlandır`; the English words keep working when typed. In Persian and Arabic, aipager's text reads right to left with Persian or Arabic digits; session names, commands, model names and code stay as they are. The list says what it changes: only aipager's own text, here and in the Mini App; your Claude sessions don't change, and Claude answers in the language you write to it. In a group anyone can look, and changing it needs an admin. `language` is a reserved session name. |
+| `/language` | - | The language aipager uses for its own messages and buttons in this chat (the same list as the first row of `/settings`). Each language is listed in its own name: English, then Español, Русский (Russian), Português (Brasil), 简体中文 (Chinese, Simplified), Français, Deutsch (German), 한국어 (Korean), العربية (Arabic), Bahasa Indonesia, Українська (Ukrainian), Italiano, Türkçe (Turkish), فارسی (Persian) and Tiếng Việt (Vietnamese), all but English marked beta. A private chat that starts after this release follows your Telegram app's language; one that existed before stays English until you choose (see [Languages](#languages)). In Spanish, Portuguese, French, Italian and Indonesian the reply keyboard's words stay `status`, `stop`, `new` and `kill`, the same as their commands. German and Turkish use `Status`, `Stop`, `Neu…` and `Beenden…`, and `Özet`, `Stop`, `Oluştur` and `Sonlandır`; the English words keep working when typed. In Persian and Arabic, aipager's text reads right to left with Persian or Arabic digits; session names, commands, model names and code stay as they are. The list says what it changes: only aipager's own text, here and in the Mini App; your Claude sessions don't change, and Claude answers in the language you write to it. In a group anyone can look, and changing it needs an admin. `language` is a reserved session name. |
 | `/whoami` | - | Show who you are here: in team mode your label, your role in this chat and the rules it gives you. |
 | `/update` | - | Admin only (the `owner` and `admin` roles, or a role with `can_manage`). Check aipager and Claude Code for newer versions, then update whatever has one with a single button. See [Update](#update). |
 
@@ -72,7 +72,7 @@ layout always shows its choice).
 
 | Setting | Choices (default first) | What it does |
 |---|---|---|
-| 🌐 Language | Automatic (your Telegram language), in a private chat; English | The language of aipager's own messages and buttons in this chat and in the Mini App, shown in its own name (the same list as `/language`). It does not change your Claude sessions: Claude answers in the language you write to it. English, Español, Русский (Russian), Português (Brasil), 简体中文 (Chinese, Simplified), Français, Deutsch (German), 한국어 (Korean), العربية (Arabic), Bahasa Indonesia, Українська (Ukrainian), Italiano, Türkçe (Turkish), فارسی (Persian) and Tiếng Việt (Vietnamese) are offered, all but English marked beta; Automatic follows your Telegram language only when it is English for now, so pick your language in the list. |
+| 🌐 Language | Automatic (your Telegram language), in a private chat; English | The language of aipager's own messages and buttons in this chat and in the Mini App, shown in its own name (the same list as `/language`). It does not change your Claude sessions: Claude answers in the language you write to it. English, Español, Русский (Russian), Português (Brasil), 简体中文 (Chinese, Simplified), Français, Deutsch (German), 한국어 (Korean), العربية (Arabic), Bahasa Indonesia, Українська (Ukrainian), Italiano, Türkçe (Turkish), فارسی (Persian) and Tiếng Việt (Vietnamese) are offered, all but English marked beta; Automatic follows your Telegram app's language (see [Languages](#languages)). |
 | 🖼 Message layout | Busy card + result; Merged into busy message; Replace with result | How a finished turn appears. Busy card + result keeps the card above the answer as the record of how it was reached; Merged puts the answer into the card; Replace removes the card and leaves the answer alone. The default is Busy card + result (`KEEP_FINISHED_CARD=0` makes it Replace for chats that never chose). See [idle responses](#idle-responses). |
 | 📝 Diff previews | Off; On | On posts each `Write`/`Edit` as its own diff message under the busy card. Off keeps one card and one answer; the card still lists every edit, and the Mini App has a diff viewer. |
 | ⏱ Long-turn card updates | On; Off | On, a busy card refreshes every 10 s after 2 minutes of a turn and every 30 s after 10 (never slower, however long the turn), and its clock then moves in 30 s steps; Off keeps the first-minutes pace for the whole turn (see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)). |
@@ -119,6 +119,55 @@ deploy`) or `GONE`. With `--json`, each session also has `waiting_kind`
 (`permission` or `question`) and `waiting_summary`, both `null` unless it
 is waiting.
 
+## Languages
+
+aipager speaks English, Español, Русский, Português (Brasil), 简体中文, Français,
+Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی and
+Tiếng Việt. Every language but English is marked "(beta)" in the list until a
+native speaker has reviewed it.
+
+- **Only aipager's own text changes.** The language is for aipager's messages,
+  buttons, cards and the Mini App. Your Claude sessions do not change, and Claude
+  answers in the language you write to it. Session names, commands, model names
+  and code stay as they are.
+- **`/language`** (or the first row of `/settings`) picks the language for the chat
+  you are in. In a private chat it is also your own language: the pop-ups you see
+  in a group and your Mini App use it.
+- **Automatic** (private chats only) follows your Telegram app's language, and
+  follows it again if you change it. A language aipager does not have reads as
+  English.
+- **New and existing chats.** A private chat that starts after this release
+  follows your Telegram app's language until you pick one, and its first message
+  in another language than English is followed by one short line saying so and
+  how to change it. A chat that existed before stays English. If your Telegram
+  app is in a language aipager speaks, you get one card offering it, with a
+  `Keep English` button; it comes once, whatever you answer.
+- **Groups** have one language, set by an admin in `/language`; until then they
+  are English. The pop-up after a tap is in the tapper's own language: their
+  choice from their private chat with the bot, else their Telegram app's
+  language for someone who joined after this release, else the group's
+  language. See [groups](groups.md).
+- **Right to left.** In Persian and Arabic, aipager's text reads right to left
+  with Persian or Arabic digits.
+- **Mode words.** `/mode` takes the mode's word in your language (`/mode demander`),
+  and `ask` and `auto` always work. If a live session has exactly that name, the
+  word names the session instead (see `/mode` above).
+- **Bot description.** At start, aipager writes the bot's description (the text on
+  its empty chat screen) and short description in each of these languages, for
+  people whose Telegram is in that language. Telegram shows such a text instead
+  of the one you wrote in BotFather, so aipager sets none while you have your
+  own (description and short description are checked apart). It never
+  overwrites a text of yours and never changes the English or default one.
+  When its current text is already set in every language, a start asks
+  Telegram nothing. Otherwise it first reads your BotFather text (one read
+  each for the description and the short description): if you have one, it
+  stops there, so with your own text every start costs those reads and no
+  more. If you have none, it reads each language that does not have its
+  current text yet, so a language where you wrote your own text is read again
+  at every start. If you write a description in BotFather after aipager has
+  set its own, readers of these languages keep aipager's (see
+  [troubleshooting](troubleshooting.md#the-bot-description-is-not-the-one-i-wrote)).
+
 ## The Mini App
 
 `/app` (and the Telegram menu button) opens a dashboard served by the daemon itself. It is on by default; manage it with `aipager miniapp enable|disable|status`. Every request is verified against Telegram's `initData` signature (see [security → Mini App tunnel](security.md#mini-app-tunnel)). The page loads nothing from anywhere else: no fonts, images or scripts from other sites.
@@ -128,7 +177,7 @@ is waiting.
 - **Needs you.** A session waiting on a permission prompt or a question sits in an amber tray at the top, showing what it is asking. **Answer in chat** re-sends that prompt, with its buttons, to the bottom of the chat, the same as the pinned bar's **Answer** button, and you answer it there. If it was the only session waiting, the app closes so the prompt is right in front of you; otherwise it stays open and says "Sent to the chat". It needs the right to prompt the session, and a copy tapped after the prompt was answered or replaced says "already answered".
 - **A session's page.** The header shows the context ring, the state ("Working for 3:12", "Needs you (permission)", "Resting, last active 5m ago", "Finished") and a one-tap **Stop** (while working or waiting) or **Resume** (once finished). Below it: the waiting prompt with **Answer in chat**, the last few tool calls as a strip (tap it for the full timeline), the latest reply, the facts, the model control, the session's own settings, and the changed files and timeline. The ⋮ menu carries every action, with the same confirmations as before.
 - **New session.** A guided card: name, then where (with **Recent** chips for the folders your sessions use, newest first), then model (with **Suggested** chips), then **More options** for the permission mode and reply style. Telegram's own button at the bottom reads **Start session**.
-- **Settings.** **App language** first: your own language for aipager's text in the app and your private chat (English, Spanish, Russian, Portuguese (Brazil), Chinese (Simplified), French, German, Korean, Arabic, Indonesian, Ukrainian, Italian, Turkish, Persian or Vietnamese; Automatic follows your Telegram app only when it is English for now). Anyone can change their own, it is never posted in a chat, and it does not change your Claude sessions. Then the chat's preferences and, for an admin, **Updates**, which mirrors [`/update`](#update). For the owner in their private chat, **Report a problem** opens its own page: write a note, check the report, send it and see its reference without leaving the app (see [problem reports](problem-reports.md#how-to-send-one)).
+- **Settings.** **App language** first: your own language for aipager's text in the app and your private chat (English, Spanish, Russian, Portuguese (Brazil), Chinese (Simplified), French, German, Korean, Arabic, Indonesian, Ukrainian, Italian, Turkish, Persian or Vietnamese; Automatic follows your Telegram app's language, see [Languages](#languages)). Anyone can change their own, it is never posted in a chat, and it does not change your Claude sessions. Then the chat's preferences and, for an admin, **Updates**, which mirrors [`/update`](#update). For the owner in their private chat, **Report a problem** opens its own page: write a note, check the report, send it and see its reference without leaving the app (see [problem reports](problem-reports.md#how-to-send-one)).
 
 The app follows Telegram's light or dark theme as you switch it, and stops its gentle animations when your phone asks for reduced motion. Everything in the Mini App is also reachable from chat: the ⋮ menu on a session's dashboard carries the same actions.
 
@@ -1132,7 +1181,7 @@ markup), and anything shaped like a bot token is replaced by
 
 `aipager uninstall` stops the daemon and removes its service, removes the config folder (`~/.config/aipager`: the bot token, chats and settings) and the session list (`~/.claude/aipager-sessions.json`), cleans up aipager's files in `/tmp`, and uninstalls aipager itself. It asks first (`-y` skips the question).
 
-It keeps aipager's data, so a reinstall picks up where it left off: `~/.local/share/aipager` (session folders, downloaded helpers, lock and marker files), `~/.local/state/aipager` (problem report records), `~/.claude/aipager-audit.jsonl` (the log of permission answers), `~/.claude/aipager-flood-state.json` (Telegram rate-limit history) and `~/.claude/aipager-pending-users.json` (people who tried the bot without access). Before asking, it lists the ones that exist on your machine, and at the end it prints the `rm -rf` command that removes them too.
+It keeps aipager's data, so a reinstall picks up where it left off: `~/.local/share/aipager` (session folders, downloaded helpers, lock and marker files), `~/.local/state/aipager` (problem report records and the language state), `~/.claude/aipager-audit.jsonl` (the log of permission answers), `~/.claude/aipager-flood-state.json` (Telegram rate-limit history) and `~/.claude/aipager-pending-users.json` (people who tried the bot without access). Before asking, it lists the ones that exist on your machine, and at the end it prints the `rm -rf` command that removes them too.
 
 It also takes aipager's own entries out of Claude Code's `~/.claude/settings.json`: the hooks that run `aipager-hook` and the status line that runs `aipager-statusline` (a status line of your own stays). Everything else in that file stays as it was, and the file as it was is kept beside it as `settings.json.bak.<time>`. If the file is a link to another file, cannot be read, is not valid JSON, or is not in the shape Claude Code reads, it is left exactly as it is and uninstall says which entries to remove by hand. A hook of your own that still mentions `aipager-hook` or `aipager-statusline` (for example an `aipager-hook-capped.sh` wrapper) stays too, and uninstall names it. Claude Code sessions already open keep running the hooks they loaded until you restart them. `aipager config` adds the entries again after a reinstall. Your Telegram bot and any older `settings.json.bak.*` backups are not touched, and neither is `skipDangerousModePermissionPrompt` (the setting that skips Claude Code's warning before it runs with permission checks off), which aipager sets but you may have set yourself.
 

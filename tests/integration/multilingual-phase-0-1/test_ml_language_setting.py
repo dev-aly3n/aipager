@@ -168,16 +168,17 @@ def test_picking_english_moves_the_tick(tg_bot, tap, ml):
         ml.AUTO_LABEL, "English ✅", *BETA, "« Back"]
 
 
-def test_picking_automatic_in_a_dm_clears_the_choice(tg_bot, tap):
+def test_picking_automatic_in_a_dm_stores_automatic(tg_bot, tap):
+    # Phase 5: "Automatic" is its own stored choice (design section 4).
     prefs.set_ui_language(DM, "en")
     tap(tg_bot, "_:set:lang:auto", chat_id=DM, user_id=OWNER)
-    assert prefs.get_ui_language(DM) == ""
+    assert prefs.get_ui_language(DM) == "auto"
 
 
-def test_picking_automatic_removes_the_key_from_the_file(tg_bot, tap, ml):
+def test_picking_automatic_writes_auto_to_the_file(tg_bot, tap, ml):
     prefs.set_ui_language(DM, "en")
     tap(tg_bot, "_:set:lang:auto", chat_id=DM, user_id=OWNER)
-    assert b"ui_language" not in (ml.prefs_bytes() or b"")
+    assert b'"ui_language": "auto"' in (ml.prefs_bytes() or b"")
 
 
 def test_picking_automatic_confirms(tg_bot, tap, ml):
@@ -297,7 +298,8 @@ def test_viewing_writes_nothing(tg_bot, tap, command, ml):
     assert ml.prefs_bytes() == before
 
 
-def test_automatic_with_nothing_stored_writes_nothing(tg_bot, tap, ml):
+def test_repicking_automatic_writes_nothing(tg_bot, tap, ml):
+    tap(tg_bot, "_:set:lang:auto", chat_id=DM, user_id=OWNER)
     before = ml.prefs_bytes()
     tap(tg_bot, "_:set:lang:auto", chat_id=DM, user_id=OWNER)
     assert ml.prefs_bytes() == before
@@ -365,10 +367,16 @@ def test_set_ui_language_empty_clears():
     assert prefs.get_ui_language(424242) == ""
 
 
-@pytest.mark.parametrize("code", ["ja", "qps", "qps-rtl", "xx", "EN", "auto"])
+@pytest.mark.parametrize("code", ["ja", "qps", "qps-rtl", "xx", "EN", "AUTO"])
 def test_set_ui_language_refuses_a_code_that_is_not_selectable(code):
     with pytest.raises(ValueError):
         prefs.set_ui_language(424242, code)
+
+
+@pytest.mark.parametrize("chat", [-100123, 0])
+def test_set_ui_language_refuses_automatic_outside_a_private_chat(chat):
+    with pytest.raises(ValueError):
+        prefs.set_ui_language(chat, "auto")
 
 
 @pytest.mark.parametrize("code", ["ja", "qps", "xx"])

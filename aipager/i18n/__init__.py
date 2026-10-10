@@ -23,6 +23,7 @@ from aipager.i18n.core import (
     get,
 )
 from aipager.i18n.resolve import (
+    automatic_code,
     default_code,
     for_chat,
     for_person,
@@ -33,5 +34,5 @@ from aipager.i18n.resolve import (
 )
 
 __all__ = ["ISOLATE_COMMANDS", "NEVER_TRANSLATE", "Command", "Msg", "Plural", "Safe", "Span",
-           "Tr", "default_code", "for_chat", "for_person", "for_sess", "for_stranger",
-           "for_update", "for_viewer", "get"]
+           "Tr", "automatic_code", "default_code", "for_chat", "for_person", "for_sess",
+           "for_stranger", "for_update", "for_viewer", "get"]

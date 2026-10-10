@@ -144,18 +144,32 @@ def _unreleased():
     return text[start:end if end != -1 else None]
 
 
-def test_one_persian_and_russian_entry():
-    assert _unreleased().count("**Persian and Russian.**") == 1
+#: Phase 5 folded the per-language entries (Persian and Russian first)
+#: into one story for users.
+TITLE = "**aipager speaks 15 languages.**"
+
+
+def _entry():
+    return [b for b in _unreleased().split("\n- ") if TITLE in b][0]
+
+
+def test_one_languages_entry():
+    assert _unreleased().count(TITLE) == 1
+    assert "**Persian and Russian.**" not in _unreleased()
 
 
 def test_the_entry_names_safety_blocks():
-    entry = [b for b in _unreleased().split("\n- ") if "**Persian and Russian.**" in b][0]
-    assert "safety blocks" in entry
+    assert "safety blocks" in _entry()
 
 
 def test_the_entry_has_no_em_dash():
-    entry = [b for b in _unreleased().split("\n- ") if "**Persian and Russian.**" in b][0]
-    assert "\u2014" not in entry
+    assert "\u2014" not in _entry()
+
+
+def test_the_entry_has_no_stale_sentence():
+    for stale in ("does not switch a chat by itself", "every chat stays English until someone",
+                  "could hide a session"):
+        assert stale not in _unreleased(), stale
 
 
 def test_the_entry_no_longer_says_other_messages_stay_english():

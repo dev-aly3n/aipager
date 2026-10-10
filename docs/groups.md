@@ -694,9 +694,14 @@ reconstruct later what each person did. It is always written in
 English, whatever language the chat uses.
 
 **Language.** A group has one language for aipager's own messages,
-cards and keyboards, set by an admin with `/language`. What only one
-person sees, the pop-up after a tap, is in that person's own choice
-from their private chat with the bot (else the group's language).
+cards and keyboards, set by an admin with `/language`; until an admin
+picks one it is English. It never follows anyone's Telegram app. What
+only one person sees, the pop-up after a tap, is in that person's own
+language: their choice from their private chat with the bot, else their
+Telegram app's language for someone who joined after this release,
+else the group's language. Only aipager's text changes; Claude answers
+in the language each person writes to it. See
+[Languages](commands.md#languages).
 
 ## Where messages go
 

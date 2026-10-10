@@ -1,4 +1,4 @@
-"""The upgrade offer card is off; "Vocabulary level"; /language in the menu
+"""The upgrade offer card goes only where it fits; "Vocabulary level"; /language in the menu
 and as a reserved name; the Auto/Ask labels (entrypoints.md).
 """
 
@@ -16,21 +16,25 @@ BOB = 2
 
 # ---- the offer card ----------------------------------------------------------------
 
-def test_the_offer_is_switched_off():
+def test_the_offer_has_no_off_switch_any_more():
+    # Phase 5: gated by the launch marker and its once-only record instead.
     from aipager.bot import language_offer
-    assert language_offer.OFFER_ENABLED is False
+    assert not hasattr(language_offer, "OFFER_ENABLED")
 
 
-@pytest.mark.parametrize("code", ["fa", "de", "en", None, ""])
-@pytest.mark.parametrize("chat", [DM, GROUP])
-def test_maybe_offer_returns_false(tg_bot, run_async, code, chat):
+@pytest.mark.parametrize("chat, code", [
+    (DM, "en"), (DM, None), (DM, ""), (DM, "ja"),
+    (GROUP, "fa"), (GROUP, "de"), (GROUP, "en")])
+def test_maybe_offer_returns_false_where_it_does_not_fit(tg_bot, run_async, chat, code):
     from aipager.bot.language_offer import maybe_offer
     assert run_async(maybe_offer(tg_bot, chat, code)) is False
+    assert tg_bot._app.bot.send_message.await_count == 0
 
 
 @pytest.mark.parametrize("code", ["fa", "de", "ru"])
-def test_maybe_offer_sends_nothing(tg_bot, run_async, code):
+def test_maybe_offer_sends_nothing_after_a_choice(tg_bot, run_async, code):
     from aipager.bot.language_offer import maybe_offer
+    prefs.set_ui_language(DM, "en")
     run_async(maybe_offer(tg_bot, DM, code))
     assert tg_bot._app.bot.send_message.await_count == 0
 

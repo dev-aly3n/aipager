@@ -1103,16 +1103,17 @@ class MiniAppServer:
         language in force, and the choices in their own names."""
         from aipager import i18n
         from aipager.bot import language_menu
-        from aipager.i18n.locales import enabled_codes, is_selectable
-        from aipager.preferences import get_ui_language
-        tr = i18n.for_viewer(user_id, self._viewer_language_code(request))
-        stored = get_ui_language(user_id) if isinstance(user_id, int) else ""
+        from aipager.i18n.locales import enabled_codes
+        language_code = self._viewer_language_code(request)
+        tr = i18n.for_viewer(user_id, language_code)
         options = [{"value": language_menu.AUTO_TOKEN, "label": tr.text(language_menu.AUTO)}]
         options += [{"value": c, "label": language_menu.endonym(c)} for c in enabled_codes()]
         return {
             "title": tr.text(_APP_LANGUAGE_TITLE),
             "hint": tr.text(_APP_LANGUAGE_HINT),
-            "value": stored if is_selectable(stored) else language_menu.AUTO_TOKEN,
+            "value": language_menu.current_choice(
+                user_id if isinstance(user_id, int) and not isinstance(user_id, bool) else None,
+                private=True, telegram_code=language_code),
             "effective": tr.code,
             "options": options,
         }
@@ -1127,7 +1128,7 @@ class MiniAppServer:
         from aipager import i18n
         from aipager.bot import language_menu
         from aipager.i18n.locales import is_selectable
-        from aipager.preferences import set_ui_language
+        from aipager.preferences import UI_LANGUAGE_AUTO, set_ui_language
 
         result = await self._authenticate_user(request, "/api/app-language")
         if isinstance(result, web.Response):
@@ -1142,7 +1143,7 @@ class MiniAppServer:
             return web.json_response({"error": "bad_request"}, status=400)
         value = body.get("value") if isinstance(body, dict) else None
         if value == language_menu.AUTO_TOKEN:
-            code = ""
+            code = UI_LANGUAGE_AUTO
         elif isinstance(value, str) and is_selectable(value):
             code = value
         else:

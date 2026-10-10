@@ -129,6 +129,8 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 Bu alanın izin listesinde değilsin. Operatörden Telegram kullanıcı kimliğini ({user_id}) {command} ile eklemesini iste."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Bu botun izin listesinde değilsin. Operatörden Telegram kullanıcı kimliğini ({user_id}) {command} ile eklemesini iste."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Bu bot seninle konuşacak şekilde ayarlanmamış. Operatörden Telegram kullanıcı kimliğini ({user_id}) {command} ile eklemesini iste."}
+{"k": "botdesc.description", "src": "8ea2e350", "v": "aipager bu botu, sahibinin bilgisayarındaki Claude Code oturumlarına bağlar. Buradan Claude'un ne yaptığını takip edebilir, sorularını ve izin isteklerini yanıtlayabilir, ona yeni istemler gönderebilirsin. Yalnızca sahibinin eklediği kişiler kullanabilir."}
+{"k": "botdesc.short", "src": "483b3675", "v": "Claude Code oturumlarını Telegram'dan yönet."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Geri"}
 {"k": "btn.rep.cancel", "src": "196a9f45", "v": "✖️ İptal"}
 {"k": "btn.rep.dont_ask", "src": "7a05a2c0", "v": "Bunu bir daha sorma"}

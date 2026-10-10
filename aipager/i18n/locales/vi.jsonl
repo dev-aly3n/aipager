@@ -129,6 +129,8 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 Bạn không có trong danh sách cho phép của phạm vi này. Hãy nhờ người vận hành thêm ID người dùng Telegram của bạn ({user_id}) qua {command}."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Bạn không có trong danh sách cho phép của bot này. Hãy nhờ người vận hành thêm ID người dùng Telegram của bạn ({user_id}) bằng {command}."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Bot này chưa được cấu hình để trò chuyện với bạn. Hãy nhờ người vận hành thêm ID người dùng Telegram của bạn ({user_id}) qua {command}."}
+{"k": "botdesc.description", "src": "8ea2e350", "v": "aipager kết nối bot này với các phiên Claude Code trên máy tính của chủ sở hữu. Từ đây bạn có thể theo dõi Claude đang làm gì, trả lời câu hỏi và yêu cầu cấp quyền của nó, và gửi prompt mới cho nó. Chỉ những người được chủ sở hữu thêm vào mới dùng được bot."}
+{"k": "botdesc.short", "src": "483b3675", "v": "Điều khiển các phiên Claude Code từ Telegram."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Quay lại"}
 {"k": "btn.rep.cancel", "src": "196a9f45", "v": "✖️ Hủy"}
 {"k": "btn.rep.dont_ask", "src": "7a05a2c0", "v": "Đừng hỏi lại việc này"}

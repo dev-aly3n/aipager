@@ -173,6 +173,7 @@ behaviour.
 | `~/.local/share/aipager/install.json`, `running.json` | When aipager first started here; whether it is running now (to tell a crash from a clean stop) | aipager daemon |
 | `~/.local/state/aipager/reports.json` | Problem reports: recorded error fingerprints, counts and the offer state (mode 600); see [problem reports](problem-reports.md#what-is-kept-on-your-machine) | aipager daemon |
 | `~/.local/state/aipager/report-sends.json` | Problem reports sent today (the daily limit) | aipager daemon, `aipager report` |
+| `~/.local/state/aipager/languages.json` | The language state (mode 600): who already used aipager before languages were added, the last Telegram language seen from each person, whether the one-time language offer and first-contact line went out, and a hash of each bot description aipager set; see [Languages](commands.md#languages) | aipager daemon |
 | `~/.config/systemd/user/aipager.service` (Linux), `~/Library/LaunchAgents/com.aipager.daemon.plist` (macOS), and a `.bak.<time>` copy of the one an install replaces (on Linux only when it differs) | The background service | `aipager service install` |
 | `~/Library/Logs/aipager.log` (macOS) | The launchd service's log, read by `aipager logs` | launchd, for the service |
 

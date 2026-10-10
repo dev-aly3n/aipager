@@ -172,13 +172,16 @@ def test_put_auto_clears_the_choice(http):
     assert (status, body["value"], body["effective"]) == (200, "auto", "en")
 
 
-def test_put_auto_removes_the_stored_choice(http):
+def test_put_auto_stores_automatic_as_its_own_choice(http):
+    # Phase 5: "Automatic" is stored, so an existing chat that picks it
+    # follows Telegram while one that never chose stays English.
     prefs.set_ui_language(BOB, "en")
     http("PUT", "/api/app-language", json={"value": "auto"})
-    assert prefs.get_ui_language(BOB) == ""
+    assert prefs.get_ui_language(BOB) == "auto"
 
 
-def test_put_auto_with_nothing_stored_writes_nothing(http, ml):
+def test_put_auto_twice_writes_once(http, ml):
+    http("PUT", "/api/app-language", json={"value": "auto"})
     before = ml.prefs_bytes()
     http("PUT", "/api/app-language", json={"value": "auto"})
     assert ml.prefs_bytes() == before

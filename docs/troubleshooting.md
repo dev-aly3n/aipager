@@ -658,6 +658,65 @@ reinstall command from the message (for example
 `systemctl --user restart aipager.service`; for Claude Code, run
 `claude update` again.
 
+## A chat is in the wrong language
+
+aipager's language comes from what was picked for the chat, not from the
+messages in it. Open `/language` in that chat and pick the language you want:
+the choice wins over everything else. In a private chat, **Automatic** follows
+your Telegram app's language (Settings → Language in Telegram); a language
+aipager does not have reads as English. A private chat that existed before
+languages were added stays English until you pick one. A group is English until
+an admin picks its language. The language only changes aipager's own text:
+Claude answers in the language you write to it, whatever aipager shows. See
+[Languages](commands.md#languages).
+
+## The bot description is not the one I wrote
+
+aipager sets the bot's description and short description in each language it
+speaks, for people whose Telegram app is in that language, and Telegram shows
+that text to them instead of the one you wrote in BotFather. aipager does this
+only while you have no description of your own, so a description you write
+before installing this release reaches everyone. If you wrote it after aipager
+had set its own, people in those languages still see aipager's. To show them
+yours, clear aipager's text for each language through the Bot API
+(`setMyDescription` and `setMyShortDescription` with an empty text and that
+`language_code`); aipager never sets it again while yours is there.
+
+## aipager says languages.json could not be used
+
+aipager keeps what it learned about languages (who was here before languages
+were added, the last Telegram language it saw from each person, and whether the
+one-time offer and first-contact line went out) in
+`~/.local/state/aipager/languages.json`. If that file cannot be read, aipager
+moves it aside to `languages.json.bad-<time>` in the same folder, logs a
+warning (again at every start until you decide), and keeps every chat on English with no language offer until you decide: put the
+old file back if you can repair it, or delete `languages.json` and restart, and
+aipager counts every person it knows as existing again (English until they
+choose). A language anyone picked is not in this file and is never lost.
+
+## Right-to-left text looks wrong
+
+In Persian and Arabic, aipager puts invisible direction marks in its own text so
+each line reads right to left, and keeps session names, commands and code left
+to right. If a line still looks jumbled, it is most often a Telegram client that
+draws mixed-direction text differently: check it in another client (phone versus
+Desktop or Web) before reporting it. Claude's own answers are shown as Claude
+wrote them, with no marks added.
+
+## A translated keyboard word does nothing in another chat
+
+Each chat's reply keyboard is in that chat's language. The main keyboard's words
+(status, stop, new, kill and the rest) are understood in every chat, in every
+language, and the English words always work. A template or command button's
+word is different: typed in a chat set to another language, it is a message for
+Claude, not a button, so a Russian "Clear" never runs `/clear` in a Persian or
+English chat. Use the button itself, or the English command (`/clear`). If a
+keyboard looks out of date after the chat's language changed, send `/start` to
+get the current one. A word that is also the name of one of your sessions talks
+to that session. `/mode` reads `ask` and `auto` as the mode always, and a
+translated mode word as a session only when a live session has exactly that
+name.
+
 ## Still stuck?
 
 Send a problem report: tap **Report a problem** under `/help` in your private chat with the bot, or run `aipager report` in a terminal. You see the whole report before anything is sent, and it holds no chats, prompts, names, paths or tokens (see [Problem reports](problem-reports.md)). After sending, you get a reference such as `ap1-7c41d09e2b3a`.

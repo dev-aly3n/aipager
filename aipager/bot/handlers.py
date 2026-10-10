@@ -40,13 +40,13 @@ from aipager.dtach import inject
 from aipager import statusline_file
 from aipager import i18n
 from aipager.i18n import Command, Msg, Plural, Safe, Span
-from aipager.bot.mode_labels import mode_from_word
 from aipager.bot import (
     card_owner,
     group_intake,
     held_message,
     kbwords,
     language_menu,
+    mode_labels,
     new_flow,
     reactions,
     report_flow,
@@ -1015,11 +1015,6 @@ class CommandHandlersMixin:
             next_line = tr.html(HOME_START_ONE)
         text = (f"{tr.html(HOME_TITLE)}\n\n{listing}\n\n{next_line}\n\n"
                 f"{tr.html(HOME_HELP_HINT)}")
-        # The first-contact line (multilingual design 7.1): off while
-        # Telegram-language detection is (locales.AUTO_DETECT), so empty.
-        first = language_menu.first_contact_line(tr, chat_id)
-        if first:
-            text = f"{first}\n\n{text}"
         # No inline App row: the keyboard sent right after carries 📱 App
         # (see _app_button_row). Resume only with something to resume, or
         # the tap would swap this screen for one line and no buttons.
@@ -1518,23 +1513,19 @@ class CommandHandlersMixin:
             return
         chat_id = calling_chat_id(update)
         tr = i18n.for_update(update)
-        want = label = None
-        for word in update.message.text.split()[1:]:
-            # `ask` / `auto`, or the mode's word in any enabled language
-            # (never a session name: those are ASCII). Stored and sent:
-            # the id.
-            mode = mode_from_word(word) if want is None else None
-            if mode is not None:
-                want = mode
-            elif label is None:
-                label = word.lstrip("/")
-            else:
-                # A word it would otherwise drop: say what it takes rather
-                # than act on half of what was typed.
-                await reply_text(update.message, tr.text(
-                    MODE_USAGE, example=Command("/mode x1"),
-                    example_ask=Command("/mode x1 ask")))
-                return
+        # `ask` / `auto`, or the mode's word in any enabled language; a
+        # translated word that is also the exact name of a live session
+        # here names that session (7b). Stored and sent: the id.
+        want, label, ok = mode_labels.parse_mode_args(
+            update.message.text.split()[1:],
+            lambda name: self.registry.find_by_label(name, chat_id) is not None)
+        if not ok:
+            # A word it would otherwise drop: say what it takes rather
+            # than act on half of what was typed.
+            await reply_text(update.message, tr.text(
+                MODE_USAGE, example=Command("/mode x1"),
+                example_ask=Command("/mode x1 ask")))
+            return
         if label is not None:
             sess = self.registry.find_by_label(label, chat_id)
             if sess is None:

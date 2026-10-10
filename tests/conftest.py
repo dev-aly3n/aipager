@@ -244,6 +244,10 @@ def _isolate_home_paths(tmp_path, monkeypatch):
             home / ".local" / "share" / "aipager" / "install.json",
         "aipager.config.REPORT_RUNNING_FILE":
             home / ".local" / "share" / "aipager" / "running.json",
+        # The language state (multilingual phase 5): read LATE by
+        # aipager.i18n.persist, so one entry covers every reader.
+        "aipager.config.LANGUAGE_STATE_FILE":
+            home / ".local" / "state" / "aipager" / "languages.json",
         "aipager.config._KEYBOARD_CONFIG_PATH": cfg / "keyboard.json",
         # migrate.upgrade_to_v3() reads this (and its .retired.* siblings)
         # to recover Mini App settings — without a redirect it would read
@@ -379,15 +383,17 @@ def _reset_preferences_cache(_isolate_home_paths):
 @pytest.fixture(autouse=True)
 def _reset_i18n_state(monkeypatch):
     """The i18n package's module state starts empty for every test: the
-    last-seen Telegram languages (``resolve._seen``, memory only), the
-    loaded catalogs, and the languages a test switched on
-    (``locales._TEST_ENABLED``, restored by monkeypatch)."""
-    from aipager.i18n import core, locales, resolve
-    resolve._seen.clear()
+    in-memory copy of the language state file (``persist``: the launch
+    marker and the last-seen Telegram languages; the file itself is
+    redirected under tmp by ``_isolate_home_paths``), the loaded catalogs,
+    and the languages a test switched on (``locales._TEST_ENABLED``,
+    restored by monkeypatch)."""
+    from aipager.i18n import core, locales, persist
+    persist.reset()
     core.reset_caches()
     monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset())
     yield
-    resolve._seen.clear()
+    persist.reset()
     core.reset_caches()
 
 

@@ -34,7 +34,7 @@ def test_only_english_and_the_beta_languages_are_offered():
     assert [c for c, loc in locales.LOCALES.items() if loc.enabled] == ["en", *beta]
     assert locales.LOCALES["en"].quality == "stable"
     assert [locales.LOCALES[c].quality for c in beta] == ["beta"] * len(beta)
-    assert locales.AUTO_DETECT is False
+    assert locales.AUTO_DETECT is True    # phase 5: on, for people new since the marker
 
 
 def test_normalize_ignores_disabled_languages(monkeypatch):

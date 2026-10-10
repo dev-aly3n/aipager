@@ -37,6 +37,21 @@ NOW = 1_000_000.0
 WALL = 1_800_000_000.0
 LABEL = "x1"
 GOLDEN = Path(__file__).resolve().parent / "golden" / "english_surfaces.json"
+#: Chats and people no surface renders for (check 12's decoys).
+DECOY_CHATS = (77, -77)
+DECOY_PEOPLE = (77, 78)
+
+#: The golden surfaces (design 8.5): the three render tests' golden
+#: tuples, the language list and the phase 5 launch surfaces, one list for
+#: the render test of every language (tests/test_i18n_render_golden.py).
+GOLDEN_SURFACES = (
+    "card.busy", "card.final", "card.thinking", "prompt.separate", "prompt.inline",
+    "answer.headers", "settings.root", "language.list", "status.list", "auth.refusals",
+    "transport.texts", "group.texts", "keyboard.main", "menu.commands",
+    "route.no_session", "route.send_failures", "route.stop", "taps.gate",
+    "sess.end_confirm", "notice.not_taken", "modecard.cmd_replies",
+    "language.offer", "language.first_contact", "bot.descriptions",
+)
 
 _FROZEN_MODULES = ("aipager.bot.animation", "aipager.bot.dashboard",
                    "aipager.bot.notify", "aipager.bot.callbacks")
@@ -46,12 +61,27 @@ class Env:
     """What every surface needs: the bot factory, a loop runner, the
     monkeypatch, and the language stored for the chats it renders in."""
 
-    def __init__(self, mk_bot, run_async, monkeypatch, code: str = "en"):
+    def __init__(self, mk_bot, run_async, monkeypatch, code: str = "en",
+                 decoy: str | None = None):
         self.mk_bot = mk_bot
         self.run = run_async
         self.mp = monkeypatch
         self.code = code
         self._freeze()
+        if decoy is not None:
+            self.decoys(decoy)
+
+    def decoys(self, code: str) -> None:
+        """Store *code* for chats no surface renders in (a private chat and
+        a group), and remember it as their person's Telegram language, so
+        a surface that took another chat's language would show it (check
+        12)."""
+        from aipager import preferences
+        from aipager.i18n import persist
+        for chat in DECOY_CHATS:
+            preferences.set_ui_language(chat, code)
+        for person in DECOY_PEOPLE:
+            persist.set_seen(person, code)
 
     def _freeze(self) -> None:
         import importlib
@@ -1031,6 +1061,39 @@ def _language_list(env):
         out.append(language_menu.confirmation(tr, tr.code))
         out.append(language_menu.row_text(tr, tr.code))
     return out
+
+
+# ---- phase 5: the launch -----------------------------------------------------------------
+
+@surface("language.offer")
+def _language_offer(env):
+    """The one-time offer card (7.4), in the language it offers (the
+    person's Telegram language; Persian stands in for English, which is
+    never offered)."""
+    from aipager import i18n
+    from aipager.bot import language_offer
+    code = "fa" if env.code == "en" else env.code
+    text, kb = language_offer.render_offer(i18n.get(env.code), code)
+    return [text, *_inline(kb)]
+
+
+@surface("language.first_contact")
+def _language_first_contact(env):
+    """The one-time first-contact line (7.1), in the chat's language."""
+    from aipager import i18n
+    from aipager.bot import language_menu
+    env.store(CHAT)
+    return [language_menu.first_contact_text(i18n.for_chat(CHAT))]
+
+
+@surface("bot.descriptions")
+def _bot_descriptions(env):
+    """The bot's description and short description (5.8), as
+    ``sync_descriptions`` sets them for a language."""
+    from aipager import i18n
+    from aipager.bot import bot_descriptions
+    tr = i18n.get(env.code)
+    return [tr.text(bot_descriptions.DESCRIPTION), tr.text(bot_descriptions.SHORT)]
 
 
 # ---- phase 3b: /update ---------------------------------------------------------------------
@@ -2135,17 +2198,18 @@ def _miniapp_payload_texts(env):
 # ---- running them ---------------------------------------------------------------------------
 
 def render_all(mk_bot, run_async, monkeypatch, code: str = "en",
-               names=None) -> dict[str, list[str]]:
+               names=None, decoy: str | None = None) -> dict[str, list[str]]:
     """Every surface (or those in *names*) rendered with *code* stored for
-    its chats. Each surface patches through its own context, so what one
-    surface pins (a queue depth, a restart delay) never leaks into the
-    next; the fixture's own patches (the home redirects) stay."""
+    its chats (and *decoy* for chats it does not render in). Each surface
+    patches through its own context, so what one surface pins (a queue
+    depth, a restart delay) never leaks into the next; the fixture's own
+    patches (the home redirects) stay."""
     out: dict[str, list[str]] = {}
     for name, fn in SURFACES:
         if names is not None and name not in names:
             continue
         with monkeypatch.context() as mp:
-            env = Env(mk_bot, run_async, mp, code)
+            env = Env(mk_bot, run_async, mp, code, decoy=decoy)
             out[name] = [str(t) for t in fn(env)]
     return out
 
@@ -2183,6 +2247,8 @@ MIGRATED: set[str] = {
     "transport.texts", "lifecycle.recovered", "dashboard.loading", "dashboard.diff_footer",
     "resume.dashboard", "resume.picker",
     "miniapp.mirrors", "miniapp.details", "miniapp.payload_texts",
+    # Phase 5.
+    "language.offer", "language.first_contact", "bot.descriptions",
 }
 
 #: Words that are names, not text: session labels, models, tool rows'

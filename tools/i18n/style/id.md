@@ -26,7 +26,7 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - Keep `**`, `_`, every HTML tag and every {placeholder} exactly as in the English: the same number of `**` and `_`, never a backtick.
 - The four main-keyboard words (status, stop, new, kill) stay as the English words, exactly like the commands /status, /stop, /new and /kill they stand for. A translated Indonesian word (for example "baru") is also a valid session name, and check 10 forbids a keyboard word that could hide a session called that.
 - A navigation button that opens another keyboard ends with " ›" ("Templat ›", "Perintah ›"; the model list is "Model ›"), like "Model ›": the arrow keeps the label from ever being a session name.
-- A mode word (Auto, Ask) is ONE word after its emoji: people type it after /mode. 🤖 Auto and 💬 Ask stay as they are, and every text names the modes Auto and Ask ("mode Ask"): an Indonesian word such as "Otomatis" or "Tanya" is plain ASCII, and /mode reads a mode word before a session name, so it would hide a session called that. The problem-report option "Ask me" is not the mode: it is "Tanya aku".
+- A mode word (Auto, Tanya) is ONE word after its emoji: people type it after /mode. 🤖 Auto stays as it is and Ask is 💬 Tanya, and every text names the modes Auto and Tanya ("mode Tanya"). "Tanya" is plain ASCII and could also be a session name: /mode treats it as the session when a live session has exactly that name, else as the mode (phase 5, 7b), so it no longer hides a session. The problem-report option "Ask me" is not the mode: it is "Tanya aku".
 - A default button label (Continue, Run tests...) stays short: it is a button. Its payload stays English (Claude receives the English).
 
 ## Terms

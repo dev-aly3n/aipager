@@ -44,7 +44,7 @@
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} masih sedang berhenti - mode tidak diubah. Coba lagi sebentar lagi."}
 {"k": "app.err.pick_model", "src": "773e24c4", "v": "Pilih model."}
 {"k": "app.err.restart_still_stopping", "src": "701b0bd8", "v": "{session} masih sedang berhenti. Coba lagi sebentar lagi."}
-{"k": "app.err.resumed_in_ask", "src": "7024b7b8", "v": "{session} dilanjutkan dalam mode Ask: {reason}"}
+{"k": "app.err.resumed_in_ask", "src": "7024b7b8", "v": "{session} dilanjutkan dalam mode Tanya: {reason}"}
 {"k": "app.err.resuming", "src": "2a557399", "v": "Sesi ini sedang dilanjutkan. Coba lagi sebentar lagi."}
 {"k": "app.err.send_failed", "src": "e4349ad3", "v": "Tidak bisa mengirim {command}."}
 {"k": "app.fact.context", "src": "cc11b3a2", "v": "Konteks"}
@@ -93,13 +93,13 @@
 {"k": "app.mirror.renamed", "src": "22ad8a4c", "v": "✏️ [{old}] diganti nama menjadi [{new}] dari Mini App"}
 {"k": "app.mirror.restarted", "src": "9aa8323d", "v": "🔁 [{session}] dimulai ulang dari Mini App"}
 {"k": "app.mirror.resumed", "src": "fafeafa6", "v": "♻️ [{session}] dilanjutkan dari Mini App"}
-{"k": "app.mirror.resumed_in_ask", "src": "429a5b47", "v": "♻️ [{session}] dilanjutkan dari Mini App dalam mode Ask: {reason}"}
+{"k": "app.mirror.resumed_in_ask", "src": "429a5b47", "v": "♻️ [{session}] dilanjutkan dari Mini App dalam mode Tanya: {reason}"}
 {"k": "app.mirror.session_setting", "src": "3256d908", "v": "⚙️ {setting} → {value} untuk sesi {session} (diubah dari Mini App)"}
 {"k": "app.mirror.session_setting_reset", "src": "4502514a", "v": "⚙️ {setting} dikembalikan ke bawaan ({value}) untuk sesi {session} (diubah dari Mini App)"}
 {"k": "app.mirror.setting", "src": "6820a9f7", "v": "⚙️ {setting} → {value} (diubah dari Mini App)"}
 {"k": "app.mirror.stopped", "src": "70cd9e81", "v": "⏹️ [{session}] dihentikan dari Mini App"}
 {"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"other": "⏹️ [{session}] dihentikan dari Mini App ({n} pesan antrean dibuang)"}}
-{"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} dialihkan ke mode Ask dari Mini App"}
+{"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} dialihkan ke mode Tanya dari Mini App"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} dialihkan ke mode Auto dari Mini App"}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude sedang bekerja - ganti model setelah giliran ini selesai."}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "Sesi tidak berjalan."}
@@ -129,6 +129,8 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 Kamu tidak ada di daftar yang diizinkan untuk cakupan ini. Minta operator menambahkan ID pengguna Telegram-mu ({user_id}) lewat {command}."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Kamu tidak ada di daftar yang diizinkan untuk bot ini. Minta operator menambahkan ID pengguna Telegram-mu ({user_id}) dengan {command}."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Bot ini belum diatur untuk berbicara denganmu. Minta operator menambahkan ID pengguna Telegram-mu ({user_id}) lewat {command}."}
+{"k": "botdesc.description", "src": "8ea2e350", "v": "aipager menghubungkan bot ini ke sesi Claude Code di komputer pemiliknya. Dari sini kamu bisa mengikuti apa yang sedang dikerjakan Claude, menjawab pertanyaan dan permintaan izinnya, dan mengirim prompt baru kepadanya. Hanya orang yang ditambahkan pemilik yang bisa memakainya."}
+{"k": "botdesc.short", "src": "483b3675", "v": "Kendalikan sesi Claude Code dari Telegram."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Kembali"}
 {"k": "btn.rep.cancel", "src": "196a9f45", "v": "✖️ Batal"}
 {"k": "btn.rep.dont_ask", "src": "7a05a2c0", "v": "Jangan tanya lagi"}
@@ -190,7 +192,7 @@
 {"k": "cmd.app", "src": "486dfc4e", "v": "Buka dasbor Mini App"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "Apa yang bisa kamu lakukan"}
 {"k": "cmd.language", "src": "9dc3a234", "v": "Bahasa pesan aipager"}
-{"k": "cmd.mode", "src": "b677b7d9", "v": "Auto atau Ask"}
+{"k": "cmd.mode", "src": "b677b7d9", "v": "Auto atau Tanya"}
 {"k": "cmd.new", "src": "959b093b", "v": "Mulai sesi"}
 {"k": "cmd.now", "src": "3673f6f7", "v": "Kirim pesan antrean ke Claude sekarang"}
 {"k": "cmd.resume", "src": "88f33259", "v": "Lanjutkan sesi yang sudah berakhir"}
@@ -225,7 +227,7 @@
 {"k": "help.admin", "src": "29ac6154", "v": "<b>Admin:</b> /update (aipager dan Claude Code)"}
 {"k": "help.control", "src": "8bb13acf", "v": "<b>Kontrol:</b> /stop · /now (kirim antrean) · /clearqueue"}
 {"k": "help.manage", "src": "75144040", "v": "<b>Kelola:</b> /status, lalu ⋮ (mulai ulang, ganti nama, diff, akhiri, hapus)"}
-{"k": "help.settings", "src": "d51d2171", "v": "<b>Pengaturan:</b> /settings · /mode (Auto atau Ask)"}
+{"k": "help.settings", "src": "d51d2171", "v": "<b>Pengaturan:</b> /settings · /mode (Auto atau Tanya)"}
 {"k": "help.start", "src": "276a9c1b", "v": "<b>Mulai:</b> /new nama · /resume"}
 {"k": "help.talk_dm", "src": "c3ef5195", "v": "<b>Bicara:</b> ketik saja (masuk ke sesi ✍️) · balas sebuah pesan · /&lt;nama&gt; pesan"}
 {"k": "help.tip", "src": "67a93e6b", "v": "<i>Tips: mengetuk perintah langsung mengirimnya. Tekan lama (ponsel) atau tekan Tab (desktop) untuk menambah teks dulu.</i>"}
@@ -316,15 +318,15 @@
 {"k": "media.transcribing", "src": "56629b0b", "v": "🎙️ <i>Mentranskripsi…</i>"}
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ Oke, suara tidak dipasang."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ Ukuran pesan suara {size} MB; bot Telegram dibatasi {limit} MB."}
-{"k": "mode.ask", "src": "8f9266a6", "v": "💬 Ask"}
-{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 Ask untukmu (🤖 Auto untuk admin)"}
-{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 Pakai Ask saja"}
+{"k": "mode.ask", "src": "8f9266a6", "v": "💬 Tanya"}
+{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 Tanya untukmu (🤖 Auto untuk admin)"}
+{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 Pakai Tanya saja"}
 {"k": "mode.auto", "src": "a9e88621", "v": "🤖 Auto"}
 {"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 Pakai Auto saja"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> sudah dalam mode {mode}."}
-{"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 Beralih ke Ask"}
+{"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 Beralih ke Tanya"}
 {"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 Beralih ke Auto"}
-{"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> sedang sibuk.\nBeralih ke mode Ask?"}
+{"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> sedang sibuk.\nBeralih ke mode Tanya?"}
 {"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> sedang sibuk.\nBeralih ke mode Auto?"}
 {"k": "modecard.confirm_auto", "src": "7ab3092b", "v": "⚙️ Alihkan <b>{session}</b> ke mode {mode}?\n<i>Claude akan menjalankan alat tanpa bertanya ({flag}).</i>"}
 {"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ Status <b>{session}</b> masih diinisialisasi. Coba /mode lagi sebentar lagi."}
@@ -669,7 +671,7 @@
 {"k": "sess.resume_not_found", "src": "4c1d68d2", "v": "⚠️ Tidak ada sesi bernama <b>{session}</b> di riwayat.\nKirim {command} tanpa nama untuk melihat yang tersedia."}
 {"k": "sess.resume_running", "src": "c090af67", "v": "⚠️ <b>{session}</b> sudah berjalan.\nKetuk {command} di papan ketik untuk beralih ke sesi itu."}
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> dilanjutkan"}
-{"k": "sess.resumed_in_ask", "src": "8151879e", "v": "♻️ <b>{session}</b> dilanjutkan dalam mode Ask: Auto memerlukan admin."}
+{"k": "sess.resumed_in_ask", "src": "8151879e", "v": "♻️ <b>{session}</b> dilanjutkan dalam mode Tanya: Auto memerlukan admin."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "Dikirim ke {session}."}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Tutup"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Sesi baru"}
@@ -939,7 +941,7 @@
 {"k": "ui.btn.start_session", "src": "76684eaf", "v": "Mulai sesi"}
 {"k": "ui.btn.stop_and_switch", "src": "21c1d7af", "v": "Hentikan & alihkan"}
 {"k": "ui.btn.switch", "src": "3e44c920", "v": "Alihkan"}
-{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "Beralih ke Ask"}
+{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "Beralih ke Tanya"}
 {"k": "ui.btn.switch_to_auto", "src": "13a0f246", "v": "Beralih ke Auto"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Coba lagi"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Tunggu 10 menit lagi"}
@@ -947,11 +949,11 @@
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Ini menghapus sesi dari daftarmu. Transkripnya tetap ada di disk."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "Akhiri {session}?"}
 {"k": "ui.confirm.kill_body", "src": "beff52e4", "v": "Ini menghentikan sesi dan menghapusnya. Apa pun yang sedang dijalankannya akan terputus."}
-{"k": "ui.confirm.perms_ask", "src": "c0710578", "v": "Alihkan {session} ke mode Ask?"}
+{"k": "ui.confirm.perms_ask", "src": "c0710578", "v": "Alihkan {session} ke mode Tanya?"}
 {"k": "ui.confirm.perms_ask_body", "src": "701538b8", "v": "Claude bertanya sebelum menjalankan alat."}
 {"k": "ui.confirm.perms_auto", "src": "b6a1ddde", "v": "Alihkan {session} ke mode Auto?"}
 {"k": "ui.confirm.perms_auto_body", "src": "7d8bf9c6", "v": "Claude menjalankan alat tanpa bertanya."}
-{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "Hentikan tugas saat ini dan alihkan {session} ke Ask?"}
+{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "Hentikan tugas saat ini dan alihkan {session} ke Tanya?"}
 {"k": "ui.confirm.perms_busy_auto", "src": "d4090a8b", "v": "Hentikan tugas saat ini dan alihkan {session} ke Auto?"}
 {"k": "ui.confirm.rename", "src": "92656d63", "v": "Ganti nama {session}?"}
 {"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "Sesi tetap menyimpan riwayat dan direktori kerjanya. Hanya namanya yang berubah."}
@@ -1041,7 +1043,7 @@
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "Kamu tidak boleh membuat folder di sini."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Nama folder baru"}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "Tidak bisa menjangkau server. Tidak ada folder yang dibuat."}
-{"k": "ui.new.mode_ask", "src": "3562777b", "v": "Ask"}
+{"k": "ui.new.mode_ask", "src": "3562777b", "v": "Tanya"}
 {"k": "ui.new.mode_ask_help", "src": "eca1be33", "v": "Claude bertanya sebelum menjalankan alat"}
 {"k": "ui.new.mode_auto", "src": "c614ba7c", "v": "Auto"}
 {"k": "ui.new.mode_auto_help", "src": "306e8992", "v": "Menjalankan alat tanpa bertanya"}
@@ -1059,9 +1061,9 @@
 {"k": "ui.new.pick_dir_first", "src": "969b0a9b", "v": "Pilih direktori kerja di atas dulu."}
 {"k": "ui.new.requires_admin", "src": "e18e02eb", "v": "Memerlukan admin"}
 {"k": "ui.new.sub", "src": "23b19317", "v": "Beri nama, pilih folder, dan Claude mulai di sana."}
-{"k": "ui.new.summary_ask", "src": "3e987f2e", "v": "Memulai Claude di {where}, dalam mode Ask, memakai {model}."}
+{"k": "ui.new.summary_ask", "src": "3e987f2e", "v": "Memulai Claude di {where}, dalam mode Tanya, memakai {model}."}
 {"k": "ui.new.summary_auto", "src": "d0968e63", "v": "Memulai Claude di {where}, dalam mode Auto, memakai {model}."}
-{"k": "ui.new.summary_named_ask", "src": "ccbc6d09", "v": "Memulai Claude sebagai {name} di {where}, dalam mode Ask, memakai {model}."}
+{"k": "ui.new.summary_named_ask", "src": "ccbc6d09", "v": "Memulai Claude sebagai {name} di {where}, dalam mode Tanya, memakai {model}."}
 {"k": "ui.new.summary_named_auto", "src": "4b48c549", "v": "Memulai Claude sebagai {name} di {where}, dalam mode Auto, memakai {model}."}
 {"k": "ui.new.title", "src": "5c881d23", "v": "Sesi baru"}
 {"k": "ui.new.where", "src": "525f61b6", "v": "Lokasi"}

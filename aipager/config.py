@@ -317,6 +317,17 @@ REPORT_SENDS_FILE = Path.home() / ".local" / "state" / "aipager" / "report-sends
 REPORT_INSTALL_FILE = Path.home() / ".local" / "share" / "aipager" / "install.json"
 REPORT_RUNNING_FILE = Path.home() / ".local" / "share" / "aipager" / "running.json"
 
+# The language state (multilingual phase 5, ``aipager.i18n.persist``): the
+# existing-install marker, the last Telegram language seen from each
+# person, the once-only offer and first-contact records and the hashes of
+# the bot descriptions aipager set. Read LATE by that module, so
+# tests/conftest.py::_isolate_home_paths redirects it with one entry, and
+# that redirect is NOT optional. It lives in the XDG state dir, beside the
+# problem report store, because the live daemon rewrites it on its own
+# (a person's Telegram language changed) and ~/.config/aipager is
+# snapshotted for the whole test run.
+LANGUAGE_STATE_FILE = Path.home() / ".local" / "state" / "aipager" / "languages.json"
+
 # While calls flow, the file is ALSO rewritten this often even when
 # nothing material changed (roadmap 8.30). It carries each chat's rolling
 # HOUR now — the volume that got vm3 banned — and `aipager status`, a

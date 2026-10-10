@@ -114,15 +114,15 @@ def test_a_stored_english_choice_wins_over_a_persian_app(bot, run_async):
     assert _refusal(bot, run_async, language_code="fa") == english
 
 
-def test_the_switch_off_gives_english(bot, run_async, monkeypatch):
-    english = _refusal(bot, run_async, language_code="en")
-    team_mod.reset_unauthorized_seen()
-    monkeypatch.setattr(auth, "STRANGER_LANGUAGE", False)
-    assert _refusal(bot, run_async, language_code="fa") == english
+def test_the_detection_kill_switch_never_reaches_a_stranger(bot, run_async, monkeypatch):
+    # Phase 5: the narrow switch is folded into the one rule; a stranger
+    # always gets their Telegram language, even with detection off.
+    monkeypatch.setattr(locales, "AUTO_DETECT", False)
+    assert L.fa_problems(_refusal(bot, run_async, language_code="fa")) == []
 
 
-def test_the_switch_is_on_by_default():
-    assert auth.STRANGER_LANGUAGE is True
+def test_the_narrow_switch_is_gone():
+    assert not hasattr(auth, "STRANGER_LANGUAGE")
 
 
 def test_a_stranger_is_answered_once_per_run_in_any_language(bot, run_async):
@@ -143,14 +143,16 @@ def test_a_group_non_member_with_a_german_app_is_refused_in_english(bot, run_asy
         (None, None, True)
 
 
-def test_general_detection_is_still_off():
-    """for_stranger and AUTO_DETECT are untouched by the narrow path."""
+def test_for_stranger_is_the_refusal_language():
+    """Phase 5: one rule; for_stranger gives the Telegram language and
+    detection is on."""
     update = message("hi", chat=STRANGER, user=STRANGER, language_code="fa")
-    assert (i18n.for_stranger(update).code, locales.AUTO_DETECT) == ("en", False)
+    assert (i18n.for_stranger(update).code, locales.AUTO_DETECT) == ("fa", True)
 
 
-def test_the_language_offer_stays_off():
-    assert language_offer.OFFER_ENABLED is False
+def test_the_language_offer_has_no_off_switch():
+    # Phase 5: gated by the launch marker and its once-only record.
+    assert not hasattr(language_offer, "OFFER_ENABLED")
 
 
 # ---- a non-member's tap -------------------------------------------------------------

@@ -61,6 +61,10 @@
   "\ud83d\udc40 @rob - your role is <i>read_only</i>; you can use <code>/status</code> but can't drive sessions.",
   "Not on the allow-list"
  ],
+ "bot.descriptions": [
+  "aipager connects this bot to Claude Code sessions on its owner's computer. From here you can follow what Claude is doing, answer its questions and permission prompts, and send it new prompts. Only people the owner has added can use it.",
+  "Control Claude Code sessions from Telegram."
+ ],
  "card.busy": [
   "<details><summary>\u25b8 3 tool calls</summary>\n\n\u2705 `Read: /src/app.py`\n\n\u2705 `Grep: TODO in src`\n\n\u2705 `Edit: /src/app.py`\n\n</details>\n\n> Now the agent.\n\n\u2705 `\ud83e\udd16 Explore \u00b7 3 tool calls \u00b7 1:05`\n\n<details><summary>\u25b8 3 tool calls</summary>\n\n\u2705 `Read: /a`\n\n\u2705 `Grep: b`\n\n\u2705 `Glob: *.py`\n\n</details>\n\n<details><summary>\u25b8 10 tool calls</summary>\n\n\u2705 `shell: npm test - done (1:30)`\n\n\u274c `shell: make all - failed (exit 2)`\n\n\u274c `shell: make lint - failed (1:05)`\n\n\u23f9 `shell: sleep 900 - no end seen (15:00)`\n\n\u23f9 `shell: tail -f log - stopped (0:30)`\n\n\u2705 `\ud83d\udd11 Bash: rm -rf build/ \u2192 Allowed`\n\n\u2705 `\ud83d\udd11 Bash: git push \u2192 Denied`\n\n\u2705 `\u2753 Which database? \u2192 Selected option 2`\n\n\u2705 `\u2753 Pick some \u2192 Selected: A, B`\n\n\u274c `Bash: npm run build`\n\n</details>\n\n\u23f3 `\ud83e\udd16 general-purpose \u00b7 Read: /x \u00b7 1:05`\n\n\u2705 `Read: /x`\n\n\u23f3 `shell: npm run dev (0:30)`\n\n\u23f3 `Bash: ls`\n\n\u23f3 **x1** \u00b7 Working \u00b7 4:10 \u00b7 $1.24 \u00b7 Read \u00d71 \u00b7 Grep \u00d71 \u00b7 Edit \u00d71 \u00b7 Bash \u00d78 \u00b7 \ud83d\udd11 \u00d72 \u00b7 \u2753 \u00d72"
  ],
@@ -218,6 +222,9 @@
   "Update memory",
   "\u00ab Back"
  ],
+ "language.first_contact": [
+  "\ud83c\udf10 aipager speaks English here (only its own messages; Claude answers in the language you write). Change with /language"
+ ],
  "language.list": [
   "\ud83c\udf10 The language aipager uses for its own messages and buttons, here and in the Mini App. Your Claude sessions don't change: Claude answers in the language you write to it.",
   "Automatic (your Telegram language) \u2705",
@@ -258,6 +265,11 @@
   "\u00ab Back",
   "\u2705 aipager now speaks English here. Your sessions and Claude's answers are unchanged.",
   "\ud83c\udf10 Language: English"
+ ],
+ "language.offer": [
+  "\ud83c\udf10 aipager now speaks \u0641\u0627\u0631\u0633\u06cc. This changes only aipager's own messages and buttons here and in the Mini App, not your Claude sessions: Claude still answers in the language you write to it.",
+  "\u0641\u0627\u0631\u0633\u06cc",
+  "Keep English"
  ],
  "lifecycle.recovered": [
   "\ud83d\udd04 <b>x1</b> \u00b7 Daemon restarted",

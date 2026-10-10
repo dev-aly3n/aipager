@@ -24,7 +24,7 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from aipager.i18n import Msg, Tr
-from aipager.i18n.locales import LOCALES, enabled_codes, is_selectable, lookup
+from aipager.i18n.locales import LOCALES, enabled_codes, is_beta, is_selectable, lookup
 
 LANG_ROW = Msg("lang.row", "🌐 Language: {language}",
                note="The first row of /settings; {language} is the language's own name",
@@ -71,10 +71,6 @@ FIRST_CONTACT = Msg(
 
 AUTO_TOKEN = "auto"
 
-#: Private chats that got the first-contact line in this run (memory only:
-#: at most once per chat per daemon run).
-_FIRST_CONTACT_SHOWN: set[int] = set()
-
 
 def endonym(code: str) -> str:
     loc = lookup(code)
@@ -105,7 +101,7 @@ def render_language_menu(tr: Tr, *, private: bool, current: str
     for token in tokens:
         if token == AUTO_TOKEN:
             label = tr.text(AUTO)
-        elif (lookup(token) or LOCALES["en"]).quality == "beta":
+        elif is_beta(token):
             # Not reviewed yet: said in the list, in the viewer's language.
             label = tr.text(BETA, language=endonym(token))
         else:
@@ -122,31 +118,30 @@ def confirmation(tr: Tr, code: str) -> str:
     return tr.html(CHANGED, language=endonym(code))
 
 
-def current_choice(chat_id, *, private: bool) -> str:
-    """What the list marks ✅: in a private chat the stored choice, else
-    ``"auto"``; in a group the language in force (English until an admin
-    chose)."""
+def current_choice(chat_id, *, private: bool, telegram_code: str | None = None) -> str:
+    """What the list marks ✅. In a group: the language in force (English
+    until an admin chose). In a private chat: the stored code, or
+    ``"auto"`` for a stored Automatic; with nothing stored, ``"auto"``
+    when the person follows Telegram, else (someone who existed before
+    languages were switched on, still on English) ``"auto"`` when
+    Automatic would read English and ``"en"`` when it would not, which is
+    the truth either way. *telegram_code* is the person's Telegram
+    language when the caller has it (the Mini App's initData); else the
+    last one aipager saw."""
     from aipager import i18n, preferences
-    if private:
-        stored = preferences.get_ui_language(chat_id) if chat_id else ""
-        return stored if stored and is_selectable(stored) else AUTO_TOKEN
-    return i18n.for_chat(chat_id).code
+    from aipager.i18n import resolve
+    if not private:
+        return i18n.for_chat(chat_id).code
+    stored = preferences.get_ui_language(chat_id) if chat_id else ""
+    if stored == AUTO_TOKEN or (stored and is_selectable(stored)):
+        return stored
+    if not chat_id or resolve.follows(chat_id):
+        return AUTO_TOKEN
+    return AUTO_TOKEN if i18n.automatic_code(chat_id, telegram_code) == "en" else "en"
 
 
-def first_contact_line(tr: Tr, chat_id) -> str:
-    """The 7.1 line (HTML) for a private chat that follows its person's
-    Telegram language, once per chat per daemon run; ``""`` while
-    ``locales.AUTO_DETECT`` is off, in a group, once a language is stored
-    for the chat, or when the language is English."""
-    from aipager import preferences
-    from aipager.i18n import locales
-    if not locales.AUTO_DETECT:
-        return ""
-    if not isinstance(chat_id, int) or chat_id <= 0:
-        return ""
-    if preferences.get_ui_language(chat_id):
-        return ""
-    if tr.code == "en" or chat_id in _FIRST_CONTACT_SHOWN:
-        return ""
-    _FIRST_CONTACT_SHOWN.add(chat_id)
+def first_contact_text(tr: Tr) -> str:
+    """The 7.1 line (HTML) in *tr*'s language, naming that language: sent
+    once, as its own message, to a private chat new since the launch that
+    follows its person's Telegram language (``language_launch``)."""
     return tr.html(FIRST_CONTACT, language=endonym(tr.code))

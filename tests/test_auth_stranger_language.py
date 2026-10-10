@@ -2,9 +2,8 @@
 
 Someone not on the allow-list, or writing privately to a bot not set up
 for them, is refused in their stored DM choice, else their Telegram app's
-language when aipager has it (en, fa, ru), else English: a narrow path
-(``auth.STRANGER_LANGUAGE``) that leaves ``i18n.for_stranger`` and the one
-detection switch alone. Read-only notices are the chat's; the auto-deny
+language when aipager has it (en, fa, ru), else English: the one rule's
+stranger path (``i18n.for_stranger``, phase 5). Read-only notices are the chat's; the auto-deny
 notice is the session chat's while its audit stays English."""
 
 from __future__ import annotations
@@ -100,18 +99,23 @@ def test_a_stored_choice_wins(bot, run_async):
     assert text.startswith("🚫 Этот бот не настроен")
 
 
-def test_the_switch_turns_it_off(bot, run_async, monkeypatch):
-    monkeypatch.setattr(auth, "STRANGER_LANGUAGE", False)
+def test_the_refusal_language_is_the_one_rules_stranger_path():
+    """Phase 5: ``auth.STRANGER_LANGUAGE`` is folded into the one rule;
+    ``i18n.for_stranger`` takes a user or an update, and detection's kill
+    switch never reaches a stranger."""
+    assert not hasattr(auth, "STRANGER_LANGUAGE")
+    user = SimpleNamespace(id=9, language_code="fa")
+    update = SimpleNamespace(effective_user=user, effective_chat=SimpleNamespace(id=9))
+    assert i18n.for_stranger(update).code == "fa"
+    assert i18n.for_stranger(user).code == "fa"
+    assert auth._stranger_tr(user).code == "fa"
+
+
+def test_the_kill_switch_never_reaches_a_stranger(bot, run_async, monkeypatch):
+    from aipager.i18n import locales
+    monkeypatch.setattr(locales, "AUTO_DETECT", False)
     text = _refuse(bot, run_async, language_code="fa")
-    assert text.startswith("🚫 This bot isn't configured to talk to you.")
-
-
-def test_general_detection_stays_off():
-    """G45 is untouched: ``for_stranger`` still reads English for a Persian
-    app."""
-    update = SimpleNamespace(effective_user=SimpleNamespace(id=9, language_code="fa"),
-                             effective_chat=SimpleNamespace(id=9))
-    assert i18n.for_stranger(update).code == "en"
+    assert text.startswith(RLM + "🚫 این ربات")
 
 
 def test_the_legacy_team_refusal(mk_bot, run_async):

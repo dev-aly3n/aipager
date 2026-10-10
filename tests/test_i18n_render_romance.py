@@ -228,9 +228,7 @@ def test_status_and_the_pinned_bar_count_in_the_language(mk_bot, monkeypatch, co
 
 @pytest.mark.parametrize("code", CODES)
 def test_the_first_contact_line(monkeypatch, code):
-    monkeypatch.setattr(language_menu, "_FIRST_CONTACT_SHOWN", set())
-    monkeypatch.setattr(locales, "AUTO_DETECT", True)
-    line = language_menu.first_contact_line(i18n.get(code), 555)
+    line = language_menu.first_contact_text(i18n.get(code))
     want = core._catalog(code)["lang.first_contact"].replace("{language}", ENDONYM[code])
     assert line == want
     assert "/language" in line and "aipager" in line and "Claude" in line
@@ -243,7 +241,7 @@ def test_the_language_list_offers_the_four_as_beta():
     for code, name in ENDONYM.items():
         assert f"{name} (beta)" in labels
         assert locales.LOCALES[code].enabled and locales.LOCALES[code].quality == "beta"
-    assert locales.AUTO_DETECT is False
+    assert locales.AUTO_DETECT is True    # phase 5: detection on
 
 
 @pytest.mark.parametrize("code", CODES)

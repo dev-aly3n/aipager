@@ -80,16 +80,33 @@ def test_each_language_has_a_catalog_file(code):
     assert (CATALOGS / f"{code}.jsonl").is_file()
 
 
-# Phase 2 translated Persian and Russian, phase 5 run 1 Spanish, Portuguese
-# (Brazil), French and Italian, run 2 German, Arabic, Ukrainian and
-# Turkish, run 3 Chinese (Simplified), Korean, Indonesian and Vietnamese;
-# any other stays empty (none once every catalog lands).
-@pytest.mark.parametrize("code", [c for c in CODES
-                                  if c not in ("fa", "ru", "es", "pt-BR", "fr", "it",
-                                               "de", "ar", "uk", "tr", "zh-Hans", "ko",
-                                               "id", "vi")])
-def test_no_translation_is_written_in_this_run(code):
-    assert (CATALOGS / f"{code}.jsonl").read_text(encoding="utf-8").strip() == ""
+#: Languages an apply in a tree copy writes to (every other catalog must
+#: stay byte-identical). All 14 are translated, so a list of "languages
+#: still empty" would be empty and test nothing (7c).
+APPLY_TO = ("fa", "zh-Hans", "ar")
+#: A catalog emptied in a tree copy, for todo to list in full.
+EMPTIED = "vi"
+
+
+def test_the_parameter_sets_are_not_empty():
+    assert APPLY_TO and EMPTIED and CODES
+
+
+@pytest.mark.parametrize("code", APPLY_TO)
+def test_apply_writes_only_the_named_catalog(tmp_path, copy_root, code):
+    cats = copy_root / "aipager" / "i18n" / "locales"
+    path = cats / f"{code}.jsonl"
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    entry = json.loads(lines[0])
+    path.write_text("".join(lines[1:]), encoding="utf-8")          # one entry missing
+    before = {c: (cats / f"{c}.jsonl").read_bytes() for c in CODES if c != code}
+    batch = tmp_path / "batch.json"
+    batch.write_text(json.dumps([{"k": entry["k"], "v": entry["v"]}], ensure_ascii=False),
+                     encoding="utf-8")
+    proc = _run(tmp_path, "apply", "--lang", code, str(batch), root=copy_root)
+    assert proc.returncode == 0, proc.stderr
+    assert path.read_bytes() == (CATALOGS / f"{code}.jsonl").read_bytes()
+    assert {c: (cats / f"{c}.jsonl").read_bytes() for c in before} == before
 
 
 def test_there_is_no_english_catalog():
@@ -246,15 +263,17 @@ def test_todo_prints_a_json_batch(tmp_path):
     json.loads(proc.stdout)
 
 
-def test_todo_lists_the_missing_language_keys(tmp_path):
-    # A language whose catalog is still empty (none once every translation
-    # run has landed).
-    empty = [c for c in CODES
-             if not (CATALOGS / f"{c}.jsonl").read_text(encoding="utf-8").strip()]
-    if not empty:
-        pytest.skip("every catalog is translated")
-    proc = _run(tmp_path, "todo", "--lang", empty[0])
-    assert "lang.row" in proc.stdout
+def test_todo_lists_the_missing_language_keys(tmp_path, copy_root):
+    # Every catalog is translated: empty one in a copy of the tree.
+    (copy_root / "aipager" / "i18n" / "locales" / f"{EMPTIED}.jsonl").write_text(
+        "", encoding="utf-8")
+    proc = _run(tmp_path, "todo", "--lang", EMPTIED, root=copy_root)
+    assert proc.returncode == 0, proc.stderr
+    keys = {e["k"] for e in json.loads(proc.stdout)["entries"]}
+    assert "lang.row" in keys and "botdesc.short" in keys
+    source = {json.loads(line)["k"] for line in
+              (REPO / "tools" / "i18n" / "source.jsonl").read_text(encoding="utf-8").splitlines()}
+    assert keys == source
 
 
 def test_todo_writes_nothing(tmp_path):

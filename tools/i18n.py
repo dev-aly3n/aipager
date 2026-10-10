@@ -5,7 +5,7 @@
     python tools/i18n.py check [--write-baseline]
     python tools/i18n.py todo --lang CODE [--changed]
     python tools/i18n.py apply --lang CODE FILE
-    python tools/i18n.py review-pack [--lang CODE] [--changed] [--answers FILE]
+    python tools/i18n.py review-pack [--lang CODE] [--changed] [--golden] [--answers FILE]
     python tools/i18n.py pseudo [--rtl] TEXT
 
 ``extract`` reads every ``Msg(...)``, ``Plural(...)`` and inline
@@ -24,6 +24,10 @@ direction control, 9 native digits for fa/ar (9b: ``←`` there, never
 ``→``), 10 reply-keyboard labels, 16 catalog format, plus the literal
 ratchet of check 11. The test suite imports these same functions,
 so CI and this command can never disagree.
+
+``review-pack --golden`` gives a native reviewer the golden strings
+(``tools/i18n/golden.txt``, the keys people see most) with their English;
+``check`` keeps that list valid.
 
 Agents never edit a catalog by hand: ``todo`` hands them a batch with
 everything a translator needs, ``apply`` validates it and writes the
@@ -55,6 +59,11 @@ GLOSSARY_DIR = TOOL_DIR / "glossary"
 STYLE_DIR = TOOL_DIR / "style"
 LOCALES_DIR = core.LOCALES_DIR
 BASELINE = ROOT / "tests" / "i18n_literal_baseline.json"
+GOLDEN = TOOL_DIR / "golden.txt"
+#: The sections of the golden list, in order (design 8.5).
+GOLDEN_SECTIONS = ("first_contact", "busy_card", "permission", "settings", "language",
+                   "errors", "keyboard")
+GOLDEN_MIN, GOLDEN_MAX = 120, 180
 
 KEY_RE = core.KEY_RE
 TRANSLATED = tuple(c for c in locales.LOCALES if c != "en")
@@ -103,6 +112,9 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"status\.[a-z0-9_.]+", "message", "chars", 200, ""),
     (r"lang\.beta", "button", "cells", 40, "endonym"),
     (r"lang\.first_contact", "message", "chars", 240, "endonym"),
+    # The bot's descriptions (5.8): Telegram's own limits.
+    (r"botdesc\.description", "message", "chars", 512, ""),
+    (r"botdesc\.short", "message", "chars", 120, ""),
     # phase 3b: admin, lifecycle, groups
     (r"upd\.[a-z0-9_.]+", "message", "chars", 500, ""),
     (r"rep\.area\.[a-z0-9_]+", "label", "chars", 60, ""),
@@ -835,6 +847,7 @@ def run_checks() -> list[str]:
     problems += scan_files(scanned_files())
     problems += check_keyboard_labels(locales.enabled_codes() + ("qps",))
     problems += check_ratchet(literal_counts(), load_baseline())
+    problems += check_golden(rows)
     return problems
 
 
@@ -912,24 +925,98 @@ def apply(code: str, batch, *, catalog_path: Path | None = None) -> list[str]:
     return []
 
 
-def review_pack(code: str | None = None, *, changed: bool = False) -> tuple[dict, dict]:
+def _english(src: dict):
+    return src.get("en") if "en" in src else {"one": src["one"], "other": src["other"]}
+
+
+def review_pack(code: str | None = None, *, changed: bool = False,
+                golden: bool = False) -> tuple[dict, dict]:
     """``(pack, answers)``: the translations without their English (for a
-    back-translation pass), and the English they should mean."""
+    back-translation pass), and the English they should mean. With
+    *golden*, only the golden strings, in the list's order, each with its
+    section, English and note: a native reviewer judges them against the
+    English."""
     rows = {r["k"]: r for r in load_jsonl(SOURCE)}
+    order = load_golden() if golden else None
     pack: dict[str, list] = {}
     answers: dict[str, dict] = {}
     for lang in ([code] if code else TRANSLATED):
         catalog = load_catalog(LOCALES_DIR / f"{lang}.jsonl")
+        keyed = ([(section, key) for section, key in order] if golden
+                 else [(None, key) for key in sorted(catalog)])
         items = []
-        for key, entry in sorted(catalog.items()):
-            src = rows.get(key)
-            if src is None or (changed and entry.get("src") == src_hash(src)):
+        for section, key in keyed:
+            entry, src = catalog.get(key), rows.get(key)
+            if src is None or entry is None or (
+                    changed and entry.get("src") == src_hash(src)):
                 continue
-            items.append({"k": key, "v": entry.get("v")})
-            answers.setdefault(lang, {})[key] = (
-                src.get("en") if "en" in src else {"one": src["one"], "other": src["other"]})
+            if golden:
+                item = {"k": key, "section": section}
+                if "en" in src:
+                    item["en"] = src["en"]
+                else:
+                    item["one"], item["other"] = src["one"], src["other"]
+                item["note"] = src.get("note", "")
+                item["v"] = entry.get("v")
+            else:
+                item = {"k": key, "v": entry.get("v")}
+            items.append(item)
+            answers.setdefault(lang, {})[key] = _english(src)
         pack[lang] = items
     return pack, answers
+
+
+# ---- the golden strings ---------------------------------------------------------------------
+
+_HEADING = re.compile(r"^#\s*([a-z_]+)\s*$")
+
+
+def load_golden(path: Path | None = None) -> list[tuple[str, str]]:
+    """``[(section, key)]`` in file order. A line ``# <word>`` opens a
+    section; other ``#`` lines are comments; a key before any section has
+    the section ``""``."""
+    path = GOLDEN if path is None else path
+    out: list[tuple[str, str]] = []
+    section = ""
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            m = _HEADING.match(line)
+            if m:
+                section = m.group(1)
+            continue
+        out.append((section, line))
+    return out
+
+
+def check_golden(rows: list[dict], golden: list[tuple[str, str]] | None = None) -> list[str]:
+    """The golden list: every key real and listed once, under a known
+    section, no section empty, GOLDEN_MIN to GOLDEN_MAX keys."""
+    if golden is None:
+        try:
+            golden = load_golden()
+        except OSError as e:
+            return [f"golden list: {e}"]
+    keys = {r["k"] for r in rows}
+    problems: list[str] = []
+    seen: set[str] = set()
+    for section, key in golden:
+        if section not in GOLDEN_SECTIONS:
+            problems.append(f"golden list: {key} is under an unknown section {section!r}")
+        if key not in keys:
+            problems.append(f"golden list: {key} is not a key")
+        if key in seen:
+            problems.append(f"golden list: {key} is listed twice")
+        seen.add(key)
+    used = {section for section, _key in golden}
+    for section in GOLDEN_SECTIONS:
+        if section not in used:
+            problems.append(f"golden list: the section {section} is empty")
+    if not GOLDEN_MIN <= len(golden) <= GOLDEN_MAX:
+        problems.append(f"golden list: {len(golden)} keys, want {GOLDEN_MIN} to {GOLDEN_MAX}")
+    return problems
 
 
 # ---- command line --------------------------------------------------------------------------
@@ -950,6 +1037,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("review-pack")
     p.add_argument("--lang")
     p.add_argument("--changed", action="store_true")
+    p.add_argument("--golden", action="store_true")
     p.add_argument("--answers")
     p = sub.add_parser("pseudo")
     p.add_argument("--rtl", action="store_true")
@@ -999,7 +1087,7 @@ def main(argv=None) -> int:
         if args.lang and args.lang not in TRANSLATED:
             print(f"{args.lang}: not a translated language", file=sys.stderr)
             return 2
-        pack, answers = review_pack(args.lang, changed=args.changed)
+        pack, answers = review_pack(args.lang, changed=args.changed, golden=args.golden)
         print(json.dumps(pack, ensure_ascii=False, indent=1))
         if args.answers:
             Path(args.answers).write_text(

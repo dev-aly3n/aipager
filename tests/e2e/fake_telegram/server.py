@@ -42,6 +42,8 @@ SUPPORTED_METHODS = (
     "deleteMessage", "deleteMessages", "setMessageReaction", "pinChatMessage",
     "sendDocument", "sendChatAction", "answerCallbackQuery", "setMyCommands",
     "deleteMyCommands", "getMyCommands", "setChatMenuButton", "getFile",
+    "getMyDescription", "setMyDescription", "getMyShortDescription",
+    "setMyShortDescription",
 )
 
 _INT_KEYS = {"chat_id", "message_id", "reply_to_message_id", "message_thread_id",
@@ -245,6 +247,8 @@ class FakeBotApi:
         self._file_paths: dict[str, str] = {}
         self._commands: dict[str, list] = {}
         self._menu_buttons: dict[str, Any] = {}
+        # (kind, language_code) -> text; kind "description" | "short".
+        self._descriptions: dict[tuple[str, str], str] = {}
         self._injected: list[_Injected] = []
         self.unknown_methods: list[str] = []
         self.bad_token_calls: list[str] = []
@@ -505,6 +509,38 @@ class FakeBotApi:
 
     def _m_getMyCommands(self, p, f):
         return list(self._commands.get(self._scope_key(p), []))
+
+    # The bot's descriptions, per language_code ("" is the default), with
+    # Telegram's semantics: empty until set; setting "" (or nothing) clears.
+
+    def _set_description(self, kind: str, field: str, p) -> bool:
+        key = (kind, str(p.get("language_code") or ""))
+        text = p.get(field) or ""
+        if text:
+            self._descriptions[key] = str(text)
+        else:
+            self._descriptions.pop(key, None)
+        return True
+
+    def _m_getMyDescription(self, p, f):
+        return {"description": self._descriptions.get(
+            ("description", str(p.get("language_code") or "")), "")}
+
+    def _m_setMyDescription(self, p, f):
+        return self._set_description("description", "description", p)
+
+    def _m_getMyShortDescription(self, p, f):
+        return {"short_description": self._descriptions.get(
+            ("short", str(p.get("language_code") or "")), "")}
+
+    def _m_setMyShortDescription(self, p, f):
+        return self._set_description("short", "short_description", p)
+
+    def description(self, language_code: str = "", *, short: bool = False) -> str:
+        """What the bot's (short) description reads in *language_code*."""
+        with self._lock:
+            return self._descriptions.get(("short" if short else "description",
+                                           language_code), "")
 
     def _m_setChatMenuButton(self, p, f):
         self._menu_buttons[str(p.get("chat_id"))] = p.get("menu_button")
@@ -804,7 +840,8 @@ class FakeBotApi:
             with self._lock:
                 if method not in ("getMe", "deleteWebhook", "answerCallbackQuery",
                                   "setMyCommands", "deleteMyCommands", "getMyCommands",
-                                  "getFile"):
+                                  "getFile", "getMyDescription", "setMyDescription",
+                                  "getMyShortDescription", "setMyShortDescription"):
                     self._check_migrated(params)
                 result = handler(params, files)
             body = {"ok": True, "result": result}

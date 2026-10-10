@@ -57,7 +57,7 @@ from aipager.i18n import plurals as _plurals
 log = logging.getLogger(__name__)
 
 __all__ = ["Command", "ISOLATE_COMMANDS", "Msg", "NEVER_TRANSLATE", "Plural", "Safe",
-           "Span", "Tr", "get", "pseudo"]
+           "Span", "Tr", "get", "has_translation", "pseudo"]
 
 KEY_RE = re.compile(r"^[a-z0-9_]+(\.[a-z0-9_]+)+$")
 
@@ -462,6 +462,14 @@ def _catalog(code: str) -> dict:
         cat[key] = value
     _CATALOGS[code] = cat
     return cat
+
+
+def has_translation(code: str, key: str) -> bool:
+    """Whether *code*'s catalog has an entry for *key* (English always
+    has its own text)."""
+    if code == "en":
+        return True
+    return isinstance(code, str) and key in _catalog(code)
 
 
 _TRS: dict[str, Tr] = {}

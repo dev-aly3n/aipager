@@ -130,7 +130,7 @@ def test_every_seven_zero_line_says_it_in_persian_and_russian(code, monkeypatch)
     the language: the whole catalog sentence, the 7.0 half included (G83)."""
     from aipager import i18n
     from aipager.bot import language_menu
-    from aipager.i18n import core, locales
+    from aipager.i18n import core
     tr = i18n.get(code)
     catalog = core._catalog(code)
     mark = "\u200f" if tr.rtl else ""
@@ -140,9 +140,7 @@ def test_every_seven_zero_line_says_it_in_persian_and_russian(code, monkeypatch)
     first, rest = catalog["lang.changed"].split("{language}", 1)
     assert confirmation.startswith(mark + first) and confirmation.endswith(rest)
     assert len(rest.strip()) > 20          # the 7.0 sentence is there
-    monkeypatch.setattr(locales, "AUTO_DETECT", True)
-    monkeypatch.setattr(language_menu, "_FIRST_CONTACT_SHOWN", set())
-    line = language_menu.first_contact_line(tr, 9999)
+    line = language_menu.first_contact_text(tr)
     before, after = catalog["lang.first_contact"].split("{language}", 1)
     assert line.startswith(mark + before) and line.endswith(after)
     assert "/language" in line

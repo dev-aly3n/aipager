@@ -85,6 +85,8 @@ _REDIRECTED = [
     ("aipager.state.SESSION_STATE_FILE", _CLAUDE / "aipager-sessions.json"),
     ("aipager.status.SESSION_STATE_FILE", _CLAUDE / "aipager-sessions.json"),
     ("aipager.config._KEYBOARD_CONFIG_PATH", _CFG / "keyboard.json"),
+    ("aipager.config.LANGUAGE_STATE_FILE",
+     Path.home() / ".local" / "state" / "aipager" / "languages.json"),
     ("aipager.session_store.SESSIONS_ROOT",
      Path.home() / ".local" / "share" / "aipager" / "sessions"),
     ("aipager.service.LINUX_UNIT_PATH",

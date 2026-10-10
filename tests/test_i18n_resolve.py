@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from aipager import i18n, preferences
-from aipager.i18n import locales, resolve
+from aipager.i18n import locales, persist
 
 GROUP, DM, ALY, BOB = -1001, 555, 555, 777
 
@@ -84,9 +84,12 @@ def test_move_chat_carries_the_language(qps):
 # ---- resolution ------------------------------------------------------------
 
 def test_a_private_chat_follows_telegram_until_it_chooses(qps, monkeypatch):
+    # A person new since the launch marker (phase 5).
+    persist.ensure_launch_marker(people=(), prior_run=False)
     calls = _writes(monkeypatch)
     assert i18n.for_update(_update(DM, ALY, "fa-IR")).code == "fa"
-    # Remembered for background messages to that chat, in memory only.
+    # Remembered for background messages to that chat (in the language
+    # state, never as a choice in preferences).
     assert i18n.for_chat(DM).code == "fa"
     assert calls == []
     preferences.set_ui_language(DM, "en")
@@ -116,8 +119,9 @@ def test_a_dm_never_gets_the_group_language(qps):
 
 
 def test_the_group_seen_language_is_never_recorded(qps):
+    persist.ensure_launch_marker(people=(), prior_run=False)
     i18n.for_update(_update(GROUP, BOB, "fa"))
-    assert resolve._seen == {}
+    assert persist.seen(BOB) is None
     assert i18n.for_chat(BOB).code == "en"
 
 

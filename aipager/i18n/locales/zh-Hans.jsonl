@@ -129,6 +129,8 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 你不在这个范围的允许名单中。请让运维人员通过 {command} 添加你的 Telegram 用户 ID（{user_id}）。"}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 你不在这个机器人的允许名单中。请让运维人员通过 {command} 添加你的 Telegram 用户 ID（{user_id}）。"}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 这个机器人没有设置为与你对话。请让运维人员通过 {command} 添加你的 Telegram 用户 ID（{user_id}）。"}
+{"k": "botdesc.description", "src": "8ea2e350", "v": "aipager 将这个机器人连接到其所有者电脑上的 Claude Code 会话。你可以在这里查看 Claude 正在做什么，回答它的问题和权限请求，并向它发送新的提示。只有所有者添加的人才能使用它。"}
+{"k": "botdesc.short", "src": "483b3675", "v": "通过 Telegram 控制 Claude Code 会话。"}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ 返回"}
 {"k": "btn.rep.cancel", "src": "196a9f45", "v": "✖️ 取消"}
 {"k": "btn.rep.dont_ask", "src": "7a05a2c0", "v": "不再询问"}

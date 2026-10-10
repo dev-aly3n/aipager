@@ -122,9 +122,24 @@ def test_html_tags_are_kept(code):
     assert bad == []
 
 
-@pytest.mark.parametrize("code", OFF)
-def test_the_other_catalogs_stay_empty(code):
-    assert (CATALOGS / f"{code}.jsonl").read_text(encoding="utf-8").strip() == ""
+#: Languages aipager does not offer at all (every known one is enabled
+#: since phase 5 run 3, so ``OFF`` is empty and tests nothing on its own).
+NOT_OFFERED = ("ja", "pl")
+#: A catalog emptied in a copy of the tree, standing for a language whose
+#: translation has not landed.
+EMPTIED = ("vi",)
+
+
+def test_the_parameter_sets_are_not_empty():
+    """A parametrize over an empty tuple runs nothing and passes (7c)."""
+    assert NOT_OFFERED and EMPTIED and DISABLED
+
+
+@pytest.mark.parametrize("code", NOT_OFFERED)
+def test_a_language_aipager_does_not_offer_has_no_catalog(cli, code):
+    assert not (CATALOGS / f"{code}.jsonl").exists()
+    r = cli("todo", "--lang", code)
+    assert r.returncode == 2 and "not a translated language" in r.stderr
 
 
 # ---- the CLI ----------------------------------------------------------------------
@@ -179,11 +194,31 @@ def test_todo_is_empty_for_a_complete_language(cli, code):
     assert r.returncode == 0 and json.loads(r.stdout)["entries"] == []
 
 
-@pytest.mark.parametrize("code", OFF[:1])
-def test_todo_lists_every_key_for_an_untranslated_language(cli, code):
-    r = cli("todo", "--lang", code)
+@pytest.fixture
+def emptied_tree(tmp_path):
+    """A copy of aipager/ and tools/ with the EMPTIED catalogs cleared."""
+    import shutil
+    root = tmp_path / "repo"
+    ignore = shutil.ignore_patterns("__pycache__", "*.pyc")
+    shutil.copytree(REPO / "aipager", root / "aipager", ignore=ignore)
+    shutil.copytree(REPO / "tools", root / "tools", ignore=ignore)
+    for code in EMPTIED:
+        (root / "aipager" / "i18n" / "locales" / f"{code}.jsonl").write_text("",
+                                                                          encoding="utf-8")
+    return root
+
+
+@pytest.mark.parametrize("code", EMPTIED)
+def test_todo_lists_every_key_for_an_untranslated_language(tmp_path, emptied_tree, code):
+    env = _env(tmp_path)
+    env["PYTHONPATH"] = str(emptied_tree)
+    r = subprocess.run([sys.executable, str(emptied_tree / "tools" / "i18n.py"), "todo",
+                        "--lang", code], capture_output=True, text=True, env=env,
+                       cwd=str(emptied_tree), timeout=300)
+    assert r.returncode == 0, r.stderr
     entries = json.loads(r.stdout)["entries"]
     assert len(entries) == len(source_rows())
+    assert {e["k"] for e in entries} == {row["k"] for row in source_rows()}
 
 
 # ---- the hook's import closure ------------------------------------------------------

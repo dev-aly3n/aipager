@@ -5,7 +5,9 @@ its own name (the endonym, never translated), its direction and its
 digits. English is enabled; the other 14 (Russian, Persian, Spanish,
 Portuguese (Brazil), French, Italian, German, Turkish, Ukrainian, Arabic,
 Chinese (Simplified), Korean, Indonesian and Vietnamese) are enabled as
-beta until a native speaker has reviewed them.
+beta until a native speaker has reviewed them: :func:`is_beta` until a
+review is recorded in ``Locale.reviewed``. A person's Telegram language is
+followed by :func:`detect` (on since phase 5, :data:`AUTO_DETECT`).
 
 ``PSEUDO`` holds two fake languages for tests and tooling (``qps`` and
 its right-to-left twin ``qps-rtl``). They are reachable through
@@ -20,8 +22,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-__all__ = ["AUTO_DETECT", "LOCALES", "Locale", "detect", "enabled_codes", "is_selectable",
-           "normalize"]
+__all__ = ["AUTO_DETECT", "LOCALES", "Locale", "detect", "enabled_codes", "is_beta",
+           "is_selectable", "normalize"]
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,11 @@ class Locale:
     quality: str = ""
     #: The code Telegram's /-menu and bot descriptions take (two letters).
     telegram_code: str = ""
+    #: The native review that made the language stable, as a free-text
+    #: record ("native review of the golden strings, <name>, 2026-11-02");
+    #: empty until one is done. A language shows "(beta)" until it has
+    #: both ``quality="stable"`` and this record (:func:`is_beta`).
+    reviewed: str = ""
 
 
 LOCALES: dict[str, Locale] = {loc.code: loc for loc in (
@@ -81,13 +88,13 @@ PSEUDO: dict[str, Locale] = {loc.code: loc for loc in (
 #: writes it.
 _TEST_ENABLED: frozenset[str] = frozenset()
 
-#: Whether aipager follows a person's Telegram language for a chat that
-#: did not choose one (the DM default, background messages, the Mini App
-#: viewer). Off while every chat that already exists stays English until
-#: its people choose (decision 1.2): a language can be picked in
-#: /language without anyone being switched to it. The one switch phase 5
-#: flips, with the upgrade offer.
-AUTO_DETECT: bool = False
+#: Whether aipager follows a person's Telegram language when they did not
+#: choose one (phase 5): on, for people new since the launch marker
+#: (``aipager.i18n.persist``) and for those who picked "Automatic"; people
+#: who existed before stay English until they choose. The kill switch:
+#: False brings back the pre-launch behaviour for everyone but strangers
+#: (who always get their Telegram language).
+AUTO_DETECT: bool = True
 
 # Telegram's language_code spellings that are not our codes.
 _ALIASES = {
@@ -118,6 +125,18 @@ def enabled_codes() -> tuple[str, ...]:
     on = [c for c, loc in LOCALES.items() if loc.enabled or c in _TEST_ENABLED]
     on += [c for c in PSEUDO if c in _TEST_ENABLED]
     return tuple(on)
+
+
+def is_beta(code: object) -> bool:
+    """Whether *code* is listed with "(beta)": every language but English
+    until a native review is recorded (``quality == "stable"`` and a
+    ``reviewed`` record). Persian stays beta until the operator's review."""
+    if code == "en" or (isinstance(code, str) and code in PSEUDO):
+        return False
+    loc = LOCALES.get(code) if isinstance(code, str) else None
+    if loc is None:
+        return True
+    return not (loc.quality == "stable" and loc.reviewed.strip())
 
 
 def is_selectable(code: object) -> bool:
@@ -153,14 +172,15 @@ def normalize(language_code: object) -> str | None:
     return None
 
 
-def detect(language_code: object) -> str | None:
+def detect(language_code: object, *, follow: bool = True) -> str | None:
     """The language to follow for a Telegram ``language_code`` when the
     chat did not choose: English for an English app; any enabled language
-    only while :data:`AUTO_DETECT` is on (or a test switched that code on
-    through ``_TEST_ENABLED``); else None, which reads as English."""
+    when *follow* is true (the person follows Telegram) and
+    :data:`AUTO_DETECT` is on, or when a test switched that code on
+    through ``_TEST_ENABLED``; else None, which reads as English."""
     code = normalize(language_code)
     if code is None:
         return None
-    if code == "en" or AUTO_DETECT or code in _TEST_ENABLED:
+    if code == "en" or code in _TEST_ENABLED or (follow and AUTO_DETECT):
         return code
     return None

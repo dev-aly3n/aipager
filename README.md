@@ -265,6 +265,7 @@ and bootstraps it. Subcommands: `start`, `stop`, `status`, `logs`,
   multi-user team mode with roles and per-tool rules
   ([docs/groups.md](docs/groups.md))
 - Optional read-only observer bots
+- Speaks English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی and Tiếng Việt (all but English in beta): only aipager's own text, never your sessions or Claude's answers ([docs/commands.md](docs/commands.md#languages))
 
 ### Mini App
 

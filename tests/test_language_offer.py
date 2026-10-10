@@ -1,12 +1,12 @@
-"""The upgrade offer card (the multilingual design, 7.4): built, tested,
-and switched off until the other languages ship. When on, it goes only
-to a private chat with nothing stored whose Telegram language aipager
-speaks (not English), at the lowest priority, never while muted."""
+"""The upgrade offer card (the multilingual design, 7.4). It goes only to
+a private chat with nothing stored whose Telegram language aipager speaks
+(not English), at the lowest priority, never while muted. Its caller and
+its once-only record: tests/test_language_launch.py."""
 
 from __future__ import annotations
 
 import dataclasses
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -37,15 +37,7 @@ def sends(monkeypatch):
     return calls
 
 
-def test_the_offer_sends_nothing_while_disabled(bot, run_async, sends):
-    assert language_offer.OFFER_ENABLED is False
-    assert run_async(language_offer.maybe_offer(bot, DM, "fa")) is False
-    assert sends == []
-    bot._app.bot.send_message.assert_not_awaited()
-
-
-def test_enabled_offer_is_ornament_and_mute_aware(bot, run_async, sends, monkeypatch):
-    monkeypatch.setattr(language_offer, "OFFER_ENABLED", True)
+def test_the_offer_is_ornament_and_mute_aware(bot, run_async, sends, monkeypatch):
     assert run_async(language_offer.maybe_offer(bot, DM, "fa-IR")) is True
     (chat, text, kwargs), = sends
     assert chat == DM and "⟦" not in text
@@ -62,7 +54,6 @@ def test_enabled_offer_is_ornament_and_mute_aware(bot, run_async, sends, monkeyp
     (DM, "en", ""), (DM, "ja", ""), (DM, None, ""), (GROUP, "fa", ""), (DM, "fa", "en")])
 def test_the_offer_goes_only_where_it_fits(bot, run_async, sends, monkeypatch, chat, code,
                                            stored):
-    monkeypatch.setattr(language_offer, "OFFER_ENABLED", True)
     if stored:
         preferences.set_ui_language(chat, stored)
     assert run_async(language_offer.maybe_offer(bot, chat, code)) is False
@@ -104,12 +95,38 @@ def test_an_offer_tap_that_does_not_fit_writes_nothing(bot, run_async, chat, dat
     assert preferences._ensure_loaded() == {}
 
 
-def test_the_offer_has_no_caller_yet():
-    """Phase 5 wires it in; until then nothing in aipager sends it."""
+def test_the_offer_has_exactly_one_caller():
+    """Phase 5 wires it in: the language launch (after an update and at
+    start) is the only sender."""
     from pathlib import Path
     root = Path(language_offer.__file__).resolve().parents[1]
-    callers = [p.name for p in root.rglob("*.py")
-               if p.name != "language_offer.py"
-               and "maybe_offer" in p.read_text(encoding="utf-8")
-               and "language_offer" in p.read_text(encoding="utf-8")]
-    assert callers == [], callers
+    callers = sorted(p.name for p in root.rglob("*.py")
+                     if p.name != "language_offer.py"
+                     and "language_offer.maybe_offer(" in p.read_text(encoding="utf-8"))
+    assert callers == ["language_launch.py"], callers
+
+
+# ---- a tap is an explicit choice (review rev-iter1-002) --------------------------------
+
+def test_a_language_tap_refreshes_menu_keyboard_and_button(bot, run_async):
+    """Like a choice in /language: the `/` menu, ONE reply keyboard and the
+    menu button follow at once, so the chat is never half English."""
+    q = tap(bot, run_async, "_:set:lang_offer:fa", chat=DM, user=ALY)
+    assert preferences.get_ui_language(DM) == "fa"
+    assert "✅" in edited(q)[0]
+    bot._send_keyboard.assert_awaited_once_with(level="main", chat_id=DM)
+    assert bot._app.bot.set_my_commands.await_count >= 1
+
+
+def test_the_tap_calls_the_language_change_once_with_the_keyboard(bot, run_async):
+    bot._on_language_changed = AsyncMock()
+    tap(bot, run_async, "_:set:lang_offer:fa", chat=DM, user=ALY)
+    bot._on_language_changed.assert_awaited_once_with(DM)
+
+
+def test_keep_english_on_an_english_chat_sends_no_keyboard(bot, run_async):
+    bot._on_language_changed = AsyncMock()
+    tap(bot, run_async, "_:set:lang_offer:keep", chat=DM, user=ALY)
+    assert preferences.get_ui_language(DM) == "en"
+    bot._on_language_changed.assert_not_awaited()
+    bot._send_keyboard.assert_not_awaited()

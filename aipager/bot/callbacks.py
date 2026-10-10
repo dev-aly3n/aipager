@@ -564,8 +564,8 @@ class CallbackDispatchMixin:
         if parts and parts[0] == "lang":
             await self._dispatch_language_action(update, query, chat_id, parts[1:])
             return
-        # The upgrade offer card's buttons (language_offer, off until the
-        # other languages ship).
+        # The upgrade offer card's buttons (language_offer, sent once to
+        # each existing private chat by language_launch).
         if parts and parts[0] == language_offer.SECTION:
             if len(parts) != 2:
                 await self._safe_answer(
@@ -703,7 +703,7 @@ class CallbackDispatchMixin:
             return
         token = parts[0]
         if token == language_menu.AUTO_TOKEN and private:
-            code = ""
+            code = preferences.UI_LANGUAGE_AUTO
         elif token != language_menu.AUTO_TOKEN and is_selectable(token):
             code = token
         else:

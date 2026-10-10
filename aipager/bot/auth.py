@@ -72,15 +72,6 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-#: Someone not on the allow-list, or writing from a private chat this
-#: install does not serve, is refused in their own language: their DM's
-#: stored choice, else their Telegram app's language when it is one aipager
-#: has enabled (``locales.normalize``), else English (multilingual design 04
-#: section 6). A narrow path for these refusals only; general detection
-#: (``locales.AUTO_DETECT``, ``i18n.for_stranger``) stays off. False makes
-#: every such refusal English again.
-STRANGER_LANGUAGE = True
-
 _ID_COMMAND = "`aipager config`"
 _REFUSE_TEAM = Msg("auth.refuse.team",
                    "🚫 You're not on this bot's allow-list. Ask the operator to add your "
@@ -129,20 +120,13 @@ _BLOCKED_FOR_ROLE = Msg("auth.blocked_for_role",
 
 
 def _stranger_tr(user):
-    """The language of a refusal to *user* (see :data:`STRANGER_LANGUAGE`)."""
+    """The language of a refusal to *user*, someone not on the allow-list
+    or writing from a private chat this install does not serve: the one
+    rule's stranger path (``i18n.for_stranger``: their DM's stored
+    choice, else their Telegram language, else English)."""
     from aipager import i18n
-    from aipager.i18n import locales
-    from aipager.preferences import get_ui_language
-    uid = getattr(user, "id", None)
-    if isinstance(uid, int) and not isinstance(uid, bool) and uid > 0:
-        stored = get_ui_language(uid)
-        if locales.is_selectable(stored):
-            return i18n.get(stored)
-    if STRANGER_LANGUAGE:
-        code = locales.normalize(getattr(user, "language_code", None))
-        if code:
-            return i18n.get(code)
-    return i18n.get("en")
+    return i18n.for_stranger(user)
+
 
 # Seam: tests replace THIS, never ``asyncio.sleep`` (``aipager.bot.auth.
 # asyncio`` IS the global module; CLAUDE.md). Defaults to the real function.

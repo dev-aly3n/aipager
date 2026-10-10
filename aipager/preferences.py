@@ -382,11 +382,18 @@ def set_new_session_default(chat_id: int, field: str, value: str) -> NewSessionD
 # it with the rest of the entry.
 
 _UI_LANGUAGE_KEY = "ui_language"
+#: An explicit "Automatic" (follow the person's Telegram language), private
+#: chats only. Stored, unlike "nothing chosen", so an existing chat that
+#: picks it follows Telegram while one that never chose stays English
+#: (multilingual phase 5). Never a selectable code: every resolver filters
+#: through ``locales.is_selectable``.
+UI_LANGUAGE_AUTO = "auto"
 
 
 def get_ui_language(chat_id: int) -> str:
-    """The stored code, or ``""`` when nothing was chosen (or the stored
-    value has the wrong shape). Never raises."""
+    """The stored code, ``"auto"`` for an explicit Automatic, or ``""``
+    when nothing was chosen (or the stored value has the wrong shape).
+    Never raises."""
     store = _ensure_loaded()
     raw = store.get(str(chat_id))
     value = raw.get(_UI_LANGUAGE_KEY, "") if isinstance(raw, dict) else ""
@@ -394,16 +401,19 @@ def get_ui_language(chat_id: int) -> str:
 
 
 def set_ui_language(chat_id: int, code: str) -> str:
-    """Store *code* as *chat_id*'s language; ``""`` clears it (back to
-    automatic). Raises ``ValueError`` for a code a person may not pick,
-    before anything is written. Writes nothing when the stored value
-    would not change, so viewing, re-picking the language in force or
-    choosing "Automatic" with nothing stored never creates an entry.
-    Returns the stored value."""
+    """Store *code* as *chat_id*'s language: a code a person may pick, or
+    ``"auto"`` (an explicit Automatic, private chats only); ``""`` clears
+    it (nothing chosen). Raises ``ValueError`` for anything else, and for
+    ``"auto"`` in a group, before anything is written. Writes nothing when
+    the stored value would not change, so viewing or re-picking the choice
+    in force never creates an entry. Returns the stored value."""
     # Function-level: aipager.i18n must stay out of every module that a
     # lighter process imports at load time.
     from aipager.i18n.locales import is_selectable
-    if code != "" and not is_selectable(code):
+    if code == UI_LANGUAGE_AUTO:
+        if not isinstance(chat_id, int) or isinstance(chat_id, bool) or chat_id <= 0:
+            raise ValueError(chat_id)  # automatic is for a private chat only
+    elif code != "" and not is_selectable(code):
         raise ValueError(f"not a selectable language: {code!r}")
     if get_ui_language(chat_id) == code:
         return code
@@ -418,7 +428,7 @@ def set_ui_language(chat_id: int, code: str) -> str:
     if scope_raw:
         store[key] = scope_raw
     else:
-        # Back to Automatic, and the language was all this chat stored:
+        # Back to nothing chosen, and the language was all this chat stored:
         # leave no empty entry behind. (A stored language was there, or
         # the early return above would have fired, so the entry was ours.)
         store.pop(key, None)

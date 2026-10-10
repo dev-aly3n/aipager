@@ -50,3 +50,37 @@ def test_the_mark_is_in_the_viewers_language(fa_ru, monkeypatch):
     assert any(label.startswith("⟦Русский") or "Русский" in label and "⟦" in label
                for label in labels)
     assert "Pseudo" in labels and not any("Pseudo (" in x for x in labels)
+
+
+# ---- the review record (phase 5, design 8.5) ----------------------------------------
+
+def test_every_language_but_english_is_beta_persian_included():
+    assert not locales.is_beta("en")
+    for code in locales.enabled_codes():
+        if code != "en":
+            assert locales.is_beta(code), code
+            assert locales.LOCALES[code].quality == "beta" and locales.LOCALES[code].reviewed == ""
+    assert locales.is_beta("fa")
+
+
+def test_stable_without_a_review_record_still_shows_beta(monkeypatch):
+    monkeypatch.setitem(locales.LOCALES, "fa", dataclasses.replace(
+        locales.LOCALES["fa"], quality="stable", reviewed=""))
+    assert locales.is_beta("fa")
+    assert "فارسی (beta)" in _labels(i18n.get("en"))
+    monkeypatch.setitem(locales.LOCALES, "fa", dataclasses.replace(
+        locales.LOCALES["fa"], quality="stable", reviewed="   "))
+    assert "فارسی (beta)" in _labels(i18n.get("en"))
+
+
+def test_a_recorded_review_drops_the_mark(monkeypatch):
+    monkeypatch.setitem(locales.LOCALES, "ru", dataclasses.replace(
+        locales.LOCALES["ru"], quality="stable",
+        reviewed="native review of the golden strings, a reviewer, 2026-11-02"))
+    assert not locales.is_beta("ru")
+    labels = _labels(i18n.get("en"))
+    assert "Русский" in labels and "Русский (beta)" not in labels
+    # A review record alone, still "beta" in quality: beta.
+    monkeypatch.setitem(locales.LOCALES, "ru", dataclasses.replace(
+        locales.LOCALES["ru"], quality="beta", reviewed="a review"))
+    assert locales.is_beta("ru")

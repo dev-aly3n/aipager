@@ -92,7 +92,7 @@ To turn automatic offers off, use `/settings` in your private chat: **Problem re
 - `~/.local/share/aipager/install.json`: when aipager first started on this machine (for the 48 hours above).
 - `~/.local/share/aipager/running.json`: written while aipager runs (its process number, start time, whether it runs as a service, and this boot's id), to tell a crash from a clean stop.
 
-None of them holds a chat, a prompt, a name, a path or a token. `aipager uninstall` keeps them, with the rest of aipager's data, so a reinstall picks up where it left off; it lists what it keeps and prints the command that removes it (see [`aipager uninstall`](commands.md#command-line-aipager-uninstall)). To remove only these, delete those four files: deleting the whole `~/.local/state/aipager` folder removes the first two, but `install.json` and `running.json` must be deleted by name (do not delete `~/.local/share/aipager`, which also holds aipager's session folders).
+None of them holds a chat, a prompt, a name, a path or a token. `aipager uninstall` keeps them, with the rest of aipager's data, so a reinstall picks up where it left off; it lists what it keeps and prints the command that removes it (see [`aipager uninstall`](commands.md#command-line-aipager-uninstall)). To remove only these, delete those four files: deleting the whole `~/.local/state/aipager` folder removes the first two (and the language state, `languages.json`, with them), but `install.json` and `running.json` must be deleted by name (do not delete `~/.local/share/aipager`, which also holds aipager's session folders).
 
 ## See also
 

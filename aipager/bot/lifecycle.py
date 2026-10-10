@@ -40,7 +40,7 @@ from aipager.bot import (
     card_owner, chat_migration, group_intake, new_flow, session_parity, update_flow,
 )
 from aipager.bot.flood import MUTE, FloodMuted, _key as _chat_key
-from aipager.bot import flood_state
+from aipager.bot import flood_state, language_launch
 from aipager.bot.flood_budget import BudgetRateLimiter, clear_backoff_signal
 from aipager.bot.rich_message import set_rate_limiter
 from aipager.config import (
@@ -521,6 +521,9 @@ class LifecycleMixin:
         # act. Never raises: a corrupt state file must leave the daemon
         # running.
         flood_state.load()
+        # Multilingual launch (phase 5): who existed before languages were
+        # switched on, recorded once, before any update is handled.
+        language_launch.ensure_marker(self)
 
         # Register handlers
         # First of all (group -3, never stops the update): a group Telegram
@@ -607,6 +610,13 @@ class LifecycleMixin:
             filters.TEXT & chat_gate,
             self._handle_message,
         ))
+        # After the reply (group 1, never for an update the intake gate
+        # stopped): note the person's Telegram language and, in a private
+        # chat this install serves, send the one-time language offer or
+        # first-contact line in the background (multilingual phase 5).
+        self._app.add_handler(
+            TypeHandler(Update, functools.partial(language_launch.after_update, self)),
+            group=1)
         # Last: a message for this bot in a group it does not serve (the
         # handlers above drop it at the chat gate). Its sender is noted
         # for `aipager config`, never answered (roadmap 8.88). `~chat_gate`
@@ -628,12 +638,22 @@ class LifecycleMixin:
             drop_pending_updates=True, # ignore old updates on restart
         )
         log.info("Telegram bot polling started")
+        language_launch.note_started(self)
         await self._update_bot_commands()
+        # The bot's description in each language (5.8): in the background,
+        # never awaited here, lowest priority.
+        from aipager.bot import bot_descriptions
+        self._descriptions_task = asyncio.get_running_loop().create_task(
+            bot_descriptions.run_at_start(self._app.bot))
         # In the background: start() must never wait on a group's budget
         # (the hook receiver, recovery and the monitor start after it).
         if self.scopes and any(s.kind == "group" for s in self.scopes):
             self._group_probe_task = asyncio.get_running_loop().create_task(
                 self._probe_group_chats())
+        # The language offer to existing private chats whose person's
+        # Telegram language is known from an earlier run (phase 5).
+        self._language_offer_task = asyncio.get_running_loop().create_task(
+            language_launch.offer_sweep(self))
 
     async def _probe_group_chats(self) -> None:
         """Ask Telegram about each group scope once at start (roadmap
@@ -667,6 +687,11 @@ class LifecycleMixin:
         probe = getattr(self, "_group_probe_task", None)
         if probe is not None and not probe.done():
             probe.cancel()
+        for name in ("_language_offer_task", "_descriptions_task"):
+            task = getattr(self, name, None)
+            if task is not None and not task.done():
+                task.cancel()
+        language_launch.cancel_tasks(self)
         # Cancel every running per-session animation task FIRST and wait
         # for them to settle. Otherwise asyncio.run() at the outer layer
         # force-kills them mid-edit, which can leave orphan tasks logging
@@ -1264,12 +1289,14 @@ class LifecycleMixin:
         except (TypeError, ValueError):
             return i18n.get(i18n.default_code())
 
-    async def _on_language_changed(self, chat_id: int) -> None:
+    async def _on_language_changed(self, chat_id: int, *, keyboard: bool = True) -> None:
         """A chat's language in force changed (multilingual design, 7.2):
         its `/` menu (the cache key includes the language, so this
         re-registers it), its main reply keyboard and its menu button are
         sent again, all through the limiter-bound bot, ONCE each. Never
-        called when the language did not change.
+        called when the language did not change. *keyboard* False (a
+        change nobody chose: the person's Telegram language moved) leaves
+        the keyboard to its next normal send, so no message is posted.
 
         The menu alone, not :meth:`_update_bot_commands`: in single-scope
         mode that also sends the main keyboard, which this sends below,
@@ -1282,11 +1309,12 @@ class LifecycleMixin:
         except Exception:
             log.warning("Language change: menu refresh failed for %s", chat_id,
                         exc_info=True)
-        try:
-            await self._send_keyboard(level="main", chat_id=chat_id)
-        except Exception:
-            log.warning("Language change: keyboard re-send failed for %s", chat_id,
-                        exc_info=True)
+        if keyboard:
+            try:
+                await self._send_keyboard(level="main", chat_id=chat_id)
+            except Exception:
+                log.warning("Language change: keyboard re-send failed for %s", chat_id,
+                            exc_info=True)
         await self._set_menu_button_for(chat_id)
 
     async def _set_menu_button_for(self, chat_id: int) -> None:
@@ -1347,6 +1375,12 @@ class LifecycleMixin:
         Mini App launch surface is private-chat-only in the Bot API, and
         a group ``chat_id`` has no menu button to set.
         """
+        return self._served_private_chats()
+
+    def _served_private_chats(self) -> list[int]:
+        """The private chats this install serves: every DM scope, else a
+        positive ``CHAT_ID`` (personal mode). The Mini App button and the
+        multilingual launch (offer, first-contact line) use exactly these."""
         if self.scopes is not None:
             return [s.chat_id for s in self.scopes
                     if s.kind == "dm" and s.chat_id > 0]

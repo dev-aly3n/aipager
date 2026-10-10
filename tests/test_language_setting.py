@@ -129,7 +129,7 @@ def test_picking_english_confirms(bot, run_async):
     assert rows[1] == [("English ✅", "_:set:lang:en")]
     assert preferences.get_ui_language(DM) == "en"
     q = tap(bot, run_async, "_:set:lang:auto", chat=DM, user=ALY)
-    assert preferences.get_ui_language(DM) == ""
+    assert preferences.get_ui_language(DM) == "auto"
     assert edited(q)[1][0] == [("Automatic (your Telegram language) ✅", "_:set:lang:auto")]
 
 
@@ -175,7 +175,6 @@ def test_nothing_is_written_for_a_chat_that_did_not_choose(bot, run_async, monke
     calls = writes(monkeypatch)
     tap(bot, run_async, "_:set:lang", chat=DM, user=ALY, language_code="fa")
     tap(bot, run_async, "_:set", chat=GROUP, user=BOB)
-    tap(bot, run_async, "_:set:lang:auto", chat=DM, user=ALY)      # Automatic, nothing stored
     assert calls == []
     tap(bot, run_async, "_:set:lang:en", chat=DM, user=ALY)
     tap(bot, run_async, "_:set:lang:en", chat=DM, user=ALY)        # the same again

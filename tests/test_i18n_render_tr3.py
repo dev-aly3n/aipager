@@ -78,7 +78,7 @@ PAGE_NAMES = {
     "zh-Hans": {"Mini App"},
     "ko": {"Mini App"},
     "vi": {"Mini App", "Auto"},
-    "id": {"Mini App", "Auto", "Ask", "Model", "Normal", "Chat"},
+    "id": {"Mini App", "Auto", "Model", "Normal", "Chat"},
 }
 
 _NOT_TEXT = re.compile(r"<code\b[^>]*>.*?</code>|<pre\b[^>]*>.*?</pre>|<[^>]+>|&\w+;"
@@ -135,7 +135,7 @@ def test_the_language_is_offered_as_beta(code):
     assert locales.LOCALES[code].quality == "beta"
     assert locales.LOCALES[code].digits == "latn" and not locales.LOCALES[code].rtl
     assert plurals.categories(code) == ("other",)
-    assert locales.AUTO_DETECT is False
+    assert locales.AUTO_DETECT is True    # phase 5: detection on
 
 
 @pytest.mark.parametrize("code", CODES)
@@ -171,15 +171,12 @@ def test_the_golden_surfaces_read_in_the_language(mk_bot, run_async, monkeypatch
 
 @pytest.mark.parametrize("code", CODES)
 def test_the_first_contact_line(monkeypatch, code):
-    monkeypatch.setattr(language_menu, "_FIRST_CONTACT_SHOWN", set())
-    monkeypatch.setattr(locales, "AUTO_DETECT", True)
     tr = i18n.get(code)
-    line = language_menu.first_contact_line(tr, 555)
+    line = language_menu.first_contact_text(tr)
     assert line.startswith("🌐 ")
     assert locales.LOCALES[code].endonym in line and "/language" in line
     assert SCRIPT[code].search(line)
     assert not _HOLE.search(line) and "\u2014" not in line
-    assert language_menu.first_contact_line(tr, 555) == ""          # once
 
 
 #: Every count the design names; these languages have no zero form.

@@ -1,6 +1,6 @@
 """Black-box: which languages are offered and that a Persian or Russian
 Telegram app never switches a chat by itself (entrypoints.md
-``aipager.i18n.locales``, resolvers, ``first_contact_line``; design.md
+``aipager.i18n.locales``, resolvers, ``first_contact_text``; design.md
 success criterion "A Persian or Russian Telegram app never switches a chat
 by itself. The first-contact line never appears while the switch is off").
 
@@ -54,12 +54,19 @@ def test_the_others_are_not_selectable(code):
     assert not locales.is_selectable(code)
 
 
-def test_detection_is_off():
-    assert locales.AUTO_DETECT is False
+def test_detection_is_on():
+    # Phase 5: on, for people new since the launch marker.
+    assert locales.AUTO_DETECT is True
 
 
 @pytest.mark.parametrize("tag", ["fa", "fa-IR", "ru", "ru-RU", "de", "", None])
-def test_detect_ignores_non_english_while_off(tag):
+def test_detect_ignores_non_english_for_someone_who_does_not_follow(tag):
+    assert locales.detect(tag, follow=False) is None
+
+
+@pytest.mark.parametrize("tag", ["fa", "fa-IR", "ru", "ru-RU", "de", "", None])
+def test_detect_ignores_non_english_while_off(tag, monkeypatch):
+    monkeypatch.setattr(locales, "AUTO_DETECT", False)
     assert locales.detect(tag) is None
 
 
@@ -130,41 +137,24 @@ def test_for_person_uses_an_english_telegram_app():
 
 # ---- the first-contact line ------------------------------------------------------
 
-@pytest.mark.parametrize("code, chat", [("fa", 7001), ("ru", 7011)])
-def test_no_first_contact_line_while_detection_is_off(code, chat):
-    assert language_menu.first_contact_line(i18n.get(code), chat) == ""
+# Phase 5: the line is its own message, sent once by the language launch to
+# a chat new since the marker (tests/test_language_launch.py); here only its
+# words.
+
+@pytest.mark.parametrize("code, name", [("fa", "فارسی"), ("ru", "Русский")])
+def test_first_contact_text_names_the_language(code, name):
+    line = language_menu.first_contact_text(i18n.get(code))
+    assert name in line and "/language" in line
 
 
-def test_first_contact_line_when_detection_is_on(monkeypatch):
-    monkeypatch.setattr(locales, "AUTO_DETECT", True)
-    assert language_menu.first_contact_line(i18n.get("ru"), 7002) != ""
-
-
-def test_first_contact_line_only_once_per_chat(monkeypatch):
-    monkeypatch.setattr(locales, "AUTO_DETECT", True)
-    language_menu.first_contact_line(i18n.get("ru"), 7003)
-    assert language_menu.first_contact_line(i18n.get("ru"), 7003) == ""
-
-
-def test_first_contact_line_never_after_a_stored_choice(monkeypatch):
-    monkeypatch.setattr(locales, "AUTO_DETECT", True)
-    preferences.set_ui_language(7004, "ru")
-    assert language_menu.first_contact_line(i18n.get("ru"), 7004) == ""
-
-
-def test_first_contact_line_never_for_english(monkeypatch):
-    monkeypatch.setattr(locales, "AUTO_DETECT", True)
-    assert language_menu.first_contact_line(i18n.get("en"), 7005) == ""
-
-
-def test_first_contact_line_never_in_a_group(monkeypatch):
-    monkeypatch.setattr(locales, "AUTO_DETECT", True)
-    assert language_menu.first_contact_line(i18n.get("fa"), -7006) == ""
-
-
-def test_first_contact_line_names_the_language(monkeypatch):
-    monkeypatch.setattr(locales, "AUTO_DETECT", True)
-    assert "Русский" in language_menu.first_contact_line(i18n.get("ru"), 7007)
+def test_the_start_screen_never_carries_the_line(mk_bot, run_async):
+    from tests.i18n_ml2_bb import make_bot
+    from aipager.i18n import persist
+    persist.ensure_launch_marker(people=(), prior_run=False)
+    bot = make_bot(mk_bot)
+    update = message("/start", chat=DM_A, user=OWNER, language_code="ru")
+    run_async(bot._handle_start_cmd(update, None))
+    assert not any("/language" in t for t in _sent_texts(bot, update))
 
 
 def _sent_texts(bot, update):

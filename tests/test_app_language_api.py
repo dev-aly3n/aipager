@@ -127,7 +127,7 @@ def test_a_member_who_is_not_an_admin_may_set_it(server):
     status, data = _run(_call(server, "PUT", "/api/app-language", _hdr(MEMBER_ID),
                               {"value": "auto"}))
     assert status == 200 and data["value"] == "auto"
-    assert preferences.get_ui_language(MEMBER_ID) == ""
+    assert preferences.get_ui_language(MEMBER_ID) == "auto"
 
 
 @pytest.mark.parametrize("body", [

@@ -31,7 +31,6 @@
   ],
   "deny": [
    "nega",
-   "negue",
    "recus"
   ],
   "folder": [
@@ -47,9 +46,7 @@
    "modelo"
   ],
   "owner": [
-   "dono",
-   "dona",
-   "propriet"
+   "dono"
   ],
   "permission": [
    "permiss"
@@ -58,8 +55,7 @@
    "prompt",
    "mensagem",
    "mensagens",
-   "pedido",
-   "solicita"
+   "pedido"
   ],
   "question": [
    "pergunta"

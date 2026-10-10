@@ -129,6 +129,8 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 Vous n'êtes pas sur la liste des personnes autorisées de ce périmètre. Demandez à l'opérateur d'ajouter votre identifiant Telegram ({user_id}) via {command}."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Vous n'êtes pas sur la liste des personnes autorisées de ce bot. Demandez à l'opérateur d'ajouter votre identifiant Telegram ({user_id}) avec {command}."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Ce bot n'est pas configuré pour vous parler. Demandez à l'opérateur d'ajouter votre identifiant Telegram ({user_id}) via {command}."}
+{"k": "botdesc.description", "src": "8ea2e350", "v": "aipager relie ce bot aux sessions Claude Code de l'ordinateur de son propriétaire. D'ici, vous pouvez suivre ce que fait Claude, répondre à ses questions et à ses demandes d'autorisation, et lui envoyer de nouveaux prompts. Seules les personnes ajoutées par le propriétaire peuvent l'utiliser."}
+{"k": "botdesc.short", "src": "483b3675", "v": "Contrôlez des sessions Claude Code depuis Telegram."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Retour"}
 {"k": "btn.rep.cancel", "src": "196a9f45", "v": "✖️ Annuler"}
 {"k": "btn.rep.dont_ask", "src": "7a05a2c0", "v": "Ne plus demander"}
