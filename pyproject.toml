@@ -44,7 +44,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "ruff>=0.5", "build", "twine"]
+dev = ["pytest>=7", "pytest-xdist>=3", "ruff>=0.5", "build", "twine"]
 # Voice input support — install with `pip install 'aipager[voice]'` /
 # `uv tool install 'aipager[voice]'`. faster-whisper transitively pulls
 # ctranslate2 (~60 MB), onnxruntime (~55 MB), av, numpy and tokenizers,

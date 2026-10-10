@@ -22,11 +22,14 @@ prompts back. One asyncio process, no database, no worker pool.
 ## Running the tests
 
 ```
-systemd-run --user --scope -q -p MemoryMax=2G -p MemorySwapMax=0 \
-  .venv/bin/python -m pytest -q -p no:cacheprovider
+systemd-run --user --scope -q -p MemoryMax=4G -p MemorySwapMax=0 \
+  .venv/bin/python -m pytest -q -p no:cacheprovider -n 4
 ruff check aipager tests
 ```
 
+`-n 4` runs four pytest-xdist workers (about 13 minutes instead of 45 for
+one process); when two full suites run at once, give each `-n 3` and keep
+the 4G cap. A single file or a few targets need no `-n`.
 Always cap the memory: an unbounded mock loop has OOM-killed this machine.
 Never patch `asyncio.sleep` or `create_task` through a module path —
 `aipager.bot.notify.asyncio` IS the global module, and doing so has hung the
