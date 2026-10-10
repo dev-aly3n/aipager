@@ -80,6 +80,7 @@ from aipager.bot.mode_labels import (
 )
 from aipager import i18n, preferences
 from aipager.bot import group_intake, kbwords, language_menu, settings_menu
+from aipager.bot.sibling_text import shown
 from aipager.i18n import Command, Msg, Safe, Span
 from aipager.bot.transport import (
     MUTED,
@@ -587,9 +588,10 @@ def _owner_label(bot: TelegramBot, chat_id: int, user_id: int | None) -> str:
 
 
 def _error_text(tr, error) -> str:
-    """A refusal shown on a card: one of ours in *tr*'s language, anything
-    else (the Mini App's rules, a launch error) as it was said."""
-    return tr.text(error) if isinstance(error, Msg) else str(error)
+    """A refusal shown on a card, as plain text: a keyed one (ours, or the
+    Mini App's rules with their parameters) in *tr*'s language, anything
+    else (a launch error) as it was said."""
+    return str(shown(tr, error))
 
 
 def _render_name_card(pending: dict, *, error: str = "",
@@ -617,10 +619,10 @@ def _render_name_card(pending: dict, *, error: str = "",
         if pending.get("has_folders"):
             lines += ["", tr.html(NEW_HINT_FOLDER)]
         else:
-            # The Mini App's own wording (English), as it is.
+            # The Mini App's own wording, in the chat's language.
             hint = (launch.NO_PROJECT_FOLDER if pending.get("has_parents")
                     else launch.NO_FOLDER_AT_ALL)
-            lines += ["", f"📁 {html_mod.escape(hint)}"]
+            lines += ["", f"📁 {html_mod.escape(shown(tr, hint))}"]
     row = []
     if pending.get("can_auto"):
         if pending.get("skip_perms"):
@@ -966,7 +968,7 @@ async def create_from_text(
             store[key] = pending
             await _goto_name(bot, chat_id, pending, error=err)
         else:
-            await _show(tr.html(NEW_CREATE_FAILED, error=err))
+            await _show(tr.html(NEW_CREATE_FAILED, error=_error_text(tr, err)))
         return
 
     sess = bot.registry.get_or_create(session_name)
@@ -1584,7 +1586,7 @@ async def _handle_path_token(
 ) -> None:
     if token == "default":
         if pending.get("confined") and launch.default_folder_is_wide():
-            await bot._safe_answer(query, launch.WIDE_FOLDER_REFUSAL,
+            await bot._safe_answer(query, _tapper(query).text(launch.WIDE_FOLDER_REFUSAL),
                                    show_alert=True)
             return
         pending["cwd"] = None

@@ -15,7 +15,6 @@ import pytest
 
 from aipager import i18n, preferences
 from aipager.bot import group_intake, handlers, report_flow
-from aipager.i18n import Command
 from tests import i18n_ml2
 
 PERSIAN = re.compile("[؀-ۿ]")
@@ -36,14 +35,21 @@ def test_help_text_is_todays_english():
         "press Tab (desktop) to add text first.</i>")
 
 
-@pytest.mark.parametrize("username", ["aipager_bot", "a<b>&c", ""])
-def test_group_talk_line_matches_group_intake(mk_bot, username):
+@pytest.mark.parametrize("username,line", [
+    ("aipager_bot", "<b>Talk:</b> reply to a session's message, or mention @aipager_bot"
+                    " · /&lt;label&gt; message"),
+    ("a<b>&c", "<b>Talk:</b> reply to a session's message, or mention @a&lt;b&gt;&amp;c"
+               " · /&lt;label&gt; message"),
+    ("", "<b>Talk:</b> reply to a session's message, or mention the bot"
+         " · /&lt;label&gt; message"),
+])
+def test_group_talk_line_is_group_intakes(mk_bot, username, line):
+    """/help's group Talk line is ``group_intake.group_help_talk_line``
+    (one key per sentence), with the English it always had."""
     bot = mk_bot()
     bot._app.bot.username = username
-    en = i18n.get("en")
-    line = (en.html(handlers.HELP_TALK_GROUP, bot=Command(f"@{username}")) if username
-            else en.html(handlers.HELP_TALK_GROUP_UNNAMED))
-    assert line == group_intake.group_help_talk_line(bot)
+    assert group_intake.group_help_talk_line(bot) == line
+    assert group_intake.group_help_talk_line(bot, tr=i18n.get("en")) == line
 
 
 def _help(mk_bot, run_async, monkeypatch, chat, code, username="aipager_test_bot"):

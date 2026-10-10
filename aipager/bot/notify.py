@@ -1467,7 +1467,7 @@ class NotifyMixin:
                     else tr.html(MEMCAP_HEAD, session=label))
             text = f"{head}\n\n" + memory_cap_body(hook_name, has_owner, tr)
             extra = ({"reply_markup": report_flow.report_button_markup(
-                report_flow.REPORT_THIS_BUTTON)} if has_owner else {})
+                report_flow.REPORT_THIS_BUTTON, tr=tr)} if has_owner else {})
             try:
                 await bot.send_message(
                     resolve_chat_id(sess), text, parse_mode="HTML", **extra,
@@ -2844,7 +2844,8 @@ class NotifyMixin:
 
                 # ── API error detection → friendly message + retry button ──
                 error_source = raw_md or summary or ""
-                error_detection = _detect_api_error(error_source)
+                error_tr = i18n.for_sess(sess)
+                error_detection = _detect_api_error(error_source, tr=error_tr)
                 if error_detection:
                     if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
                         # This branch returns before the merged-delivery attempt
@@ -2859,7 +2860,10 @@ class NotifyMixin:
                             pass
                         sess.busy_msg_id = None
                     friendly_error, _retry_after = error_detection
-                    text = (f"⚠️ <b>{html_mod.escape(label)}</b> · {friendly_error}")
+                    # In the session chat's language; the line starts with a
+                    # name, so a right-to-left one gets its mark first.
+                    text = (f"{error_tr.mark}⚠️ <b>{html_mod.escape(label)}</b> · "
+                            f"{html_mod.escape(friendly_error, quote=False)}")
                     keyboard = (self._build_retry_keyboard(sess)
                                 if sess.last_prompt else None)
                     try:

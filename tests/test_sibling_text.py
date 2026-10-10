@@ -17,7 +17,7 @@ from aipager import i18n, preferences
 from aipager.bot import callbacks, notify, session_ops
 from aipager.bot.sibling_text import shown
 from aipager.bot.transport import PROMPT_REFUSED
-from aipager.i18n import Msg, Safe
+from aipager.i18n import Command, Msg, Safe
 from tests import i18n_surfaces_p3a as p3a
 from tests.i18n_surfaces import Env
 
@@ -105,7 +105,9 @@ def test_a_held_commands_needs_admin_reply_is_in_the_chats_language(env):
     assert tg.out == [today, fa.text(STANDIN)]
 
 
-def test_resumed_in_ask_gives_the_reason_in_the_chats_language(env):
+def test_resumed_in_ask_is_one_sentence_in_the_chats_language(env):
+    """The Ask reason is part of one whole key now (nothing glued in): a
+    Persian group reads all of it in Persian."""
     from types import SimpleNamespace
 
     from aipager.state import Status
@@ -119,16 +121,54 @@ def test_resumed_in_ask_gives_the_reason_in_the_chats_language(env):
     bot._do_resume_core = AsyncMock(return_value=SimpleNamespace(ok=True, reason="resumed",
                                                                  err=""))
     fa = i18n.get("fa")
-
-    def header(reason):
-        return fa.html(session_ops.RESUMED_IN_ASK, session="x1", reason=reason)
-    today = session_ops.RESUME_AUTO_NEEDS_ADMIN
-    if isinstance(today, Msg):
-        today = Safe(fa.html(today).removeprefix(RLM))
     p3a.cmd(env, bot, tg, "_handle_resume_cmd", "/resume x1", chat=GROUP, user=BOB)
-    assert tg.out[-1].startswith(header(today)), tg.out[-1]
-    env.mp.setattr(session_ops, "RESUME_AUTO_NEEDS_ADMIN", STANDIN)
-    p3a.cmd(env, bot, tg, "_handle_resume_cmd", "/resume x1", chat=GROUP, user=BOB)
-    assert tg.out[-1].startswith(header(Safe(fa.html(STANDIN).removeprefix(RLM)))), tg.out[-1]
+    header = fa.html(session_ops.RESUMED_IN_ASK, session="x1")
+    assert tg.out[-1].startswith(header), tg.out[-1]
+    assert "Auto needs an admin" not in tg.out[-1] and "Resumed" not in tg.out[-1]
     assert PERSIAN.search(tg.out[-1]) and not CYRILLIC.search(tg.out[-1])
     assert RLM * 2 not in tg.out[-1]
+
+
+def test_resumed_in_ask_keeps_the_english_it_had():
+    """The whole sentence's English is the old glued one, byte for byte."""
+    from aipager.bot.transport import RESUME_AUTO_NEEDS_ADMIN
+    en = i18n.get("en")
+    assert (en.html(session_ops.RESUMED_IN_ASK, session="a<b")
+            == f"♻️ Resumed <b>a&lt;b</b> in Ask: {RESUME_AUTO_NEEDS_ADMIN}")
+
+
+@pytest.mark.parametrize("code", ["fa", "ru"])
+def test_a_phrase_is_rendered_with_its_parameters(code):
+    """A Mini App rule with parameters (a Phrase) is shown in the reader's
+    language, plain or as an HTML parameter; its English is unchanged."""
+    from aipager.miniapp import launch
+    tr = i18n.get(code)
+    _clean, err = launch.validate_session_name("status")
+    want = tr.text(launch._NAME_RESERVED, name="status", command=Command("/status"))
+    assert shown(tr, err) == want != str(err)
+    html = shown(tr, err, "html")
+    assert isinstance(html, Safe)
+    assert tr.mark + html == tr.html(launch._NAME_RESERVED, name="status",
+                                     command=Command("/status"))
+    assert shown(i18n.get("en"), err) == str(err)
+    script = PERSIAN if code == "fa" else CYRILLIC
+    assert script.search(shown(tr, err))
+
+
+@pytest.mark.parametrize("code", ["en", "fa", "ru"])
+@pytest.mark.parametrize("n", [1, 2, 5, 21])
+def test_a_plural_phrase_is_rendered_for_its_count(code, n):
+    """A Phrase of a Plural keeps its count: the reader's plural form."""
+    from aipager.miniapp import chat_lines
+    from aipager.miniapp.phrase import Phrase
+    plural = chat_lines._CLEARED
+    value = Phrase(plural, n=n, session="x1")
+    tr = i18n.get(code)
+    assert shown(tr, value) == tr.n(plural, n, kind="text", session="x1")
+    html = shown(tr, value, "html")
+    assert isinstance(html, Safe)
+    assert tr.mark + html == tr.n(plural, n, kind="html", session="x1")
+    if code == "en":
+        assert shown(tr, value) == str(value)
+    else:
+        assert shown(tr, value) != str(value)

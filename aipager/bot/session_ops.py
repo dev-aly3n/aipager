@@ -30,6 +30,7 @@ from aipager.i18n import Command, Msg, Span
 from aipager.dtach import inject
 from aipager.bot import reactions
 from aipager.bot.sibling_text import shown
+from aipager.miniapp import sessions as _mini_sessions
 
 # Single source of truth for the poll timing (design.md ORCHESTRATOR
 # OVERRIDE) — callbacks.py does not import this module, so this is not
@@ -185,9 +186,13 @@ RESUME_FAILED = Msg("sess.resume_failed", "❌ Couldn't resume <b>{session}</b>:
                     eg={"session": "x1", "error": "dtach not installed"})
 RESUMED = Msg("sess.resumed", "♻️ Resumed <b>{session}</b>", note="The session is back",
               eg={"session": "x1"})
-RESUMED_IN_ASK = Msg("sess.resumed_in_ask", "♻️ Resumed <b>{session}</b> in Ask: {reason}",
-                     note="The session is back in Ask mode; {reason} is why (English)",
-                     eg={"session": "x1", "reason": "Auto needs an admin."})
+#: One whole sentence with its reason (the reason is
+#: ``transport.RESUME_AUTO_NEEDS_ADMIN``'s words, not glued in).
+RESUMED_IN_ASK = Msg("sess.resumed_in_ask",
+                     "♻️ Resumed <b>{session}</b> in Ask: Auto needs an admin.",
+                     note="The session came back in Ask mode, not Auto, because the person "
+                          "who resumed it is not an admin. Auto and Ask are the mode names",
+                     eg={"session": "x1"})
 RESUME_LAST_RESPONSE = Msg("sess.resume_last_response",
                            "<i>📜 Last response from this session</i>\n"
                            "<blockquote>{preview}</blockquote>",
@@ -332,36 +337,19 @@ MODEL_SWITCH_PENDING_SECONDS = 60.0
 _MODEL_SWITCH_POLL_SECONDS = 0.25
 
 
-#: The chat's words for each refusal code of :func:`model_switch_refusal`
-#: (the Mini App keeps its own English, ``miniapp.sessions``; a test keeps
-#: the two equal in English).
+#: The words for each refusal code of :func:`model_switch_refusal`: the
+#: Mini App's own keys (``miniapp.sessions``), one key per sentence for
+#: both surfaces.
 MODEL_REFUSAL_MSGS: dict[str, Msg] = {
-    "not_live": Msg("sess.model_refusal.not_live", "Session isn't running.",
-                    note="Why /model was refused: the session is not running"),
-    "busy": Msg("sess.model_refusal.busy",
-                "Claude is working - switch the model when this turn ends.",
-                note="Why /model was refused: a turn is running"),
-    "prompt_open": Msg("sess.model_refusal.prompt_open",
-                       "A prompt is open in the terminal - answer it before switching the "
-                       "model.",
-                       note="Why /model was refused: Claude Code is waiting on a question"),
-    "unknown": Msg("sess.model_refusal.unknown",
-                   "aipager hasn't seen this session's state yet - try again in a moment.",
-                   note="Why /model was refused: just after a restart, the state is not "
-                        "known yet"),
-    "switch_pending": Msg("sess.model_refusal.switch_pending",
-                          "The last model switch isn't confirmed yet - check the terminal for "
-                          "Claude Code's \"Switch model?\" question before switching again.",
-                          note="Why /model was refused: the previous switch may be waiting "
-                               "on Claude Code's own question"),
+    "not_live": _mini_sessions.MODEL_SWITCH_NOT_LIVE_REASON,
+    "busy": _mini_sessions.MODEL_SWITCH_BUSY_REASON,
+    "prompt_open": _mini_sessions.MODEL_SWITCH_PROMPT_OPEN_REASON,
+    "unknown": _mini_sessions.MODEL_SWITCH_UNKNOWN_REASON,
+    "switch_pending": _mini_sessions.MODEL_SWITCH_PENDING_REASON,
 }
 #: A /model whose switch the statusline never confirmed (the Mini App's
-#: ``MODEL_SWITCH_UNCONFIRMED``, equal in English).
-MODEL_UNCONFIRMED = Msg(
-    "sess.model_unconfirmed",
-    "not confirmed - check the session. Claude Code may be asking \"Switch model?\" in the "
-    "terminal, or it was already on that model.",
-    note="Under the /model reply when the switch was not confirmed in time")
+#: key too).
+MODEL_UNCONFIRMED = _mini_sessions.MODEL_SWITCH_UNCONFIRMED
 
 
 def model_refusal_text(tr, code: str, detail: str) -> str:
@@ -2008,10 +1996,7 @@ class SessionOpsMixin:
         preview = snapshot or _read_preview(
             sess.transcript_path, max_chars=500,
         )
-        # The Ask reason is the sibling's constant: in the chat's language
-        # once it is a key there, else its English as it is.
-        header = (tr.html(RESUMED_IN_ASK, session=label,
-                          reason=shown(tr, RESUME_AUTO_NEEDS_ADMIN, "html"))
+        header = (tr.html(RESUMED_IN_ASK, session=label)
                   if auto_refused else tr.html(RESUMED, session=label))
         if preview:
             body = (

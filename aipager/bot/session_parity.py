@@ -51,6 +51,7 @@ from telegram.ext import ContextTypes
 from aipager.bot.mode_labels import mode_label
 from aipager import i18n
 from aipager.bot import card_owner, group_intake, held_message, language_menu, settings_menu
+from aipager.bot.sibling_text import shown
 from aipager.i18n import Command, Msg, Plural, Safe
 from aipager.bot.transport import (
     MUTED,
@@ -803,8 +804,9 @@ async def _apply_rename(
     tr = i18n.for_chat(chat_id)
     clean, err = validate_session_name(new_label)
     if err:
-        # The Mini App's own rule (English), as it is.
-        await reply_text(reply_target, tr.html(WARNING_LINE, text=err), parse_mode="HTML")
+        # The Mini App's own rule, in the chat's language.
+        await reply_text(reply_target, tr.html(WARNING_LINE, text=shown(tr, err)),
+                         parse_mode="HTML")
         return
 
     if clean != sess.label:

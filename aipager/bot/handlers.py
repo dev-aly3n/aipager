@@ -132,18 +132,8 @@ HELP_TALK_DM = Msg("help.talk_dm",
                    " · /&lt;label&gt; message",
                    note="/help in a private chat: three ways to send to a session; "
                         "/&lt;label&gt; message is typed as a session's name after /")
-#: In a group a plain message does not reach the bot: reply or mention. The
-#: same line as ``group_intake.group_help_talk_line`` (a test keeps them
-#: equal).
-HELP_TALK_GROUP = Msg("help.talk_group",
-                      "<b>Talk:</b> reply to a session's message, or mention {bot}"
-                      " · /&lt;label&gt; message",
-                      note="/help in a group; {bot} is the bot's @username",
-                      eg={"bot": "@aipager_bot"})
-HELP_TALK_GROUP_UNNAMED = Msg("help.talk_group_unnamed",
-                              "<b>Talk:</b> reply to a session's message, or mention the bot"
-                              " · /&lt;label&gt; message",
-                              note="As help.talk_group when the bot's username is unknown")
+#: In a group a plain message does not reach the bot: reply or mention.
+#: That line is ``group_intake.group_help_talk_line``'s (one key each).
 HELP_CONTROL = Msg("help.control", "<b>Control:</b> /stop · /now (send queued) · /clearqueue",
                    note="/help: stop a turn, send what is queued now, clear the queue")
 HELP_MANAGE = Msg("help.manage",
@@ -1056,13 +1046,12 @@ class CommandHandlersMixin:
         tr = i18n.for_update(update)
         talk = None
         if group_intake.is_group_chat(calling_chat_id(update)):
-            me = group_intake.own_username(self)
-            talk = (tr.html(HELP_TALK_GROUP, bot=Command(f"@{me}")) if me
-                    else tr.html(HELP_TALK_GROUP_UNNAMED))
+            talk = group_intake.group_help_talk_line(self, tr=tr)
         text = help_text(tr, talk_line=talk)
         # Problem reports (8.112): the owner's button only, in a DM or a
-        # group (the preview itself always opens in the owner's DM).
-        extra = ({"reply_markup": report_flow.report_button_markup()}
+        # group (the preview itself always opens in the owner's DM), in
+        # the chat's language like the /help it sits under.
+        extra = ({"reply_markup": report_flow.report_button_markup(tr=tr)}
                  if report_flow.is_owner(self, calling_user_id(update)) else {})
         await reply_text(update.message, text, parse_mode="HTML", **extra)
 

@@ -351,9 +351,9 @@ def test_the_model_and_commands_stay_clean_in_persian(server, monkeypatch):
     assert not re.search("[A-Za-z0-9_][" + RLM + FSI + PDI + "][A-Za-z0-9_]", line)
 
 
-@pytest.mark.parametrize("line", ["stopped", "resumed"])
+@pytest.mark.parametrize("line", ["stopped", "resumed", "session_setting_changed"])
 def test_a_line_that_cannot_be_written_never_fails_the_action(server, monkeypatch, line):
-    """The stop or resume already happened: a chat line that fails to
+    """The stop, resume or session setting already happened: a chat line that fails to
     render (a broken catalog form, say) is dropped like a failed send,
     and the route still answers that it worked."""
     from aipager.miniapp import chat_lines
@@ -367,6 +367,12 @@ def test_a_line_that_cannot_be_written_never_fails_the_action(server, monkeypatc
         server.bot._stop_session_core = _ok(ok=True, label="x1", dropped=0)
         status, data = _call(server, "POST", "/api/sessions/x1/stop")
         assert (status, data["status"]) == (200, "stopped")
+    elif line == "session_setting_changed":
+        sess = _sess(server)
+        status, data = _call(server, "PUT", "/api/sessions/x1/preferences/answer_length",
+                             {"value": "short"})
+        assert (status, data["changed"]) == (200, True)
+        assert sess.preference_overrides().get("answer_length") == "short"
     else:
         _sess(server, status=Status.GONE)
         server.bot._resume_auto_gate = lambda sess, override, actor, chat: (True, False)

@@ -1604,7 +1604,7 @@ class CallbackDispatchMixin:
                     self._is_confined_user(prompt_author,
                                            sess.scope_chat_id or None))
                 if refusal:
-                    await self._safe_answer(query, refusal, show_alert=True)
+                    await self._safe_answer(query, shown(person, refusal), show_alert=True)
                     return
                 self._new_conflict_pending.pop(session_name, None)
                 # Kill alive socket first, then launch fresh (no resume_id).
@@ -1658,7 +1658,8 @@ class CallbackDispatchMixin:
                 )
                 if not new_name:
                     try:
-                        await edit_text(query, shared.html(NEW_CREATE_FAILED, error=err),
+                        await edit_text(query, shared.html(NEW_CREATE_FAILED,
+                                                           error=shown(shared, err)),
                                         parse_mode="HTML")
                     except Exception:
                         pass

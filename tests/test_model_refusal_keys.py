@@ -3,7 +3,7 @@
 
 ``session_ops.model_switch_refusal`` keeps returning the Mini App's
 English (``miniapp.sessions.MODEL_SWITCH_*``); the chat renders the code
-through its own keys, whose English is pinned equal here."""
+through the same keys (one key per sentence for both surfaces)."""
 
 from __future__ import annotations
 
@@ -35,7 +35,10 @@ def test_english_matches_the_mini_app():
     en = i18n.get("en")
     for code, english in MINI_APP.items():
         assert en.text(session_ops.MODEL_REFUSAL_MSGS[code]) == english, code
+        # One key per sentence: the chat's refusal is the Mini App's key.
+        assert session_ops.MODEL_REFUSAL_MSGS[code] is english, code
     assert en.text(session_ops.MODEL_UNCONFIRMED) == mini.MODEL_SWITCH_UNCONFIRMED
+    assert session_ops.MODEL_UNCONFIRMED is mini.MODEL_SWITCH_UNCONFIRMED
 
 
 def test_every_refusal_the_core_returns_has_a_key():

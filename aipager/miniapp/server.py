@@ -1718,9 +1718,9 @@ class MiniAppServer:
         unchanged"). Best-effort: a failed mirror must never fail a write
         that already happened.
         """
-        text = chat_lines.session_setting_changed(
-            _chat_tr(scope_chat_id), session_label, field, value, reset)
         try:
+            text = chat_lines.session_setting_changed(
+                _chat_tr(scope_chat_id), session_label, field, value, reset)
             await self.bot._app.bot.send_message(chat_id=scope_chat_id, text=text)
         except Exception:
             log.debug("miniapp: session preference mirror to chat failed", exc_info=True)

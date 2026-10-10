@@ -81,7 +81,7 @@ def _bot(username):
 def test_the_help_talk_line_both_ways():
     ru = i18n.get("ru")
     assert group_intake.group_help_talk_line(_bot("aipager_bot"), tr=ru) == (
-        "<b>Общение:</b> ответь на сообщение сессии или упомяни @aipager_bot · "
+        "<b>Говорить:</b> ответь на сообщение сессии или упомяни @aipager_bot · "
         "/&lt;имя&gt; сообщение")
     assert group_intake.group_help_talk_line(_bot(None)) == (
         "<b>Talk:</b> reply to a session's message, or mention the bot · "

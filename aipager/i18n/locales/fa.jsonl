@@ -217,8 +217,8 @@
 {"k": "grp.dropped_anon", "src": "c67a8cca", "v": {"one": "{n} پیام کنار گذاشته شد: این فرستنده دیگر اجازهٔ فرستادن در اینجا را ندارد.", "other": "{n} پیام کنار گذاشته شد: این فرستنده دیگر اجازهٔ فرستادن در اینجا را ندارد."}}
 {"k": "grp.dropped_anon_one", "src": "8946b17f", "v": "کنار گذاشته شد: این فرستنده دیگر اجازهٔ فرستادن در اینجا را ندارد."}
 {"k": "grp.dropped_one", "src": "4ab273e1", "v": "کنار گذاشته شد: {who} دیگر اجازهٔ فرستادن در اینجا را ندارد."}
-{"k": "grp.help_talk", "src": "07beac8e", "v": "<b>گفتگو:</b> به پیام یک نشست پاسخ دهید یا {mention} را نام ببرید · /&lt;نام&gt; پیام"}
-{"k": "grp.help_talk_no_username", "src": "4c1fc9fd", "v": "<b>گفتگو:</b> به پیام یک نشست پاسخ دهید یا ربات را نام ببرید · /&lt;نام&gt; پیام"}
+{"k": "grp.help_talk", "src": "07beac8e", "v": "<b>گفتگو:</b> به پیامِ یک نشست پاسخ دهید یا {mention} را صدا بزنید · /&lt;نام&gt; پیام"}
+{"k": "grp.help_talk_no_username", "src": "4c1fc9fd", "v": "<b>گفتگو:</b> به پیامِ یک نشست پاسخ دهید یا ربات را صدا بزنید · /&lt;نام&gt; پیام"}
 {"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "برای استفاده از ربات، با نام خودتان پیام بفرستید."}
 {"k": "held.late_marker", "src": "e38c307b", "v": {"one": "⏳ با تأخیر رسید ({n} دقیقه در طول محدودیت سرعت Telegram نگه داشته شد)", "other": "⏳ با تأخیر رسید ({n} دقیقه در طول محدودیت سرعت Telegram نگه داشته شد)"}}
 {"k": "held.too_old", "src": "7391de5a", "v": "این پیام برای فرستادن خیلی قدیمی است؛ دوباره بفرستیدش."}
@@ -228,8 +228,6 @@
 {"k": "help.settings", "src": "d51d2171", "v": "<b>تنظیمات:</b> /settings · /mode (خودکار یا پرسش)"}
 {"k": "help.start", "src": "276a9c1b", "v": "<b>شروع:</b> /new نام · /resume"}
 {"k": "help.talk_dm", "src": "c3ef5195", "v": "<b>گفتگو:</b> فقط بنویسید (به نشستِ ✍️ می‌رود) · به یک پیام پاسخ دهید · /&lt;نام&gt; پیام"}
-{"k": "help.talk_group", "src": "d8843feb", "v": "<b>گفتگو:</b> به پیامِ یک نشست پاسخ دهید یا {bot} را صدا بزنید · /&lt;نام&gt; پیام"}
-{"k": "help.talk_group_unnamed", "src": "4c1fc9fd", "v": "<b>گفتگو:</b> به پیامِ یک نشست پاسخ دهید یا ربات را صدا بزنید · /&lt;نام&gt; پیام"}
 {"k": "help.tip", "src": "67a93e6b", "v": "<i>نکته: زدن روی یک فرمان آن را فوراً می‌فرستد. برای افزودن متن پیش از فرستادن، آن را نگه دارید (تلفن) یا Tab را بزنید (دسکتاپ).</i>"}
 {"k": "help.title", "src": "8fffe930", "v": "<b>راهنمای aipager</b>"}
 {"k": "home.btn.new", "src": "19b62fc4", "v": "🆕 نشست جدید"}
@@ -639,12 +637,6 @@
 {"k": "sess.menu_closed", "src": "e2a2c077", "v": "منوی [<b>{session}</b>] بسته شد."}
 {"k": "sess.menu_no_transcript", "src": "72c75098", "v": "<i>هیچ رونوشت ذخیره‌شده‌ای برای ادامه دادن نیست.</i>"}
 {"k": "sess.menu_title", "src": "2a8eb73c", "v": "⋮ <b>{session}</b> - یک کار را انتخاب کنید:"}
-{"k": "sess.model_refusal.busy", "src": "9dd1a5eb", "v": "Claude در حال کار است - وقتی این نوبت تمام شد مدل را عوض کنید."}
-{"k": "sess.model_refusal.not_live", "src": "af9ca5bc", "v": "نشست در حال اجرا نیست."}
-{"k": "sess.model_refusal.prompt_open", "src": "c3641605", "v": "یک درخواست در ترمینال باز است - پیش از عوض کردن مدل به آن پاسخ دهید."}
-{"k": "sess.model_refusal.switch_pending", "src": "a3384cf1", "v": "آخرین تغییر مدل هنوز تأیید نشده است - پیش از تغییر دوباره، سؤال «Switch model?» از Claude Code را در ترمینال بررسی کنید."}
-{"k": "sess.model_refusal.unknown", "src": "4e5022f6", "v": "aipager هنوز وضعیت این نشست را ندیده است - کمی بعد دوباره امتحان کنید."}
-{"k": "sess.model_unconfirmed", "src": "316e6e23", "v": "تأیید نشد - نشست را بررسی کنید. شاید Claude Code در ترمینال «Switch model?» می‌پرسد، یا از قبل همان مدل بوده است."}
 {"k": "sess.not_sent_to", "src": "0d040f9f", "v": "به {session} فرستاده نشد."}
 {"k": "sess.pick_cancelled", "src": "d3e4142f", "v": "لغو شد."}
 {"k": "sess.rename_cancelled", "src": "abe2ee6d", "v": "تغییر نام لغو شد."}
@@ -677,7 +669,7 @@
 {"k": "sess.resume_not_found", "src": "4c1d68d2", "v": "⚠️ هیچ نشستی به نام <b>{session}</b> در تاریخچه نیست.\nبرای دیدن نشست‌های موجود، {command} را بدون نام بفرستید."}
 {"k": "sess.resume_running", "src": "c090af67", "v": "⚠️ <b>{session}</b> همین حالا در حال اجراست.\nبرای رفتن به آن، روی {command} در صفحه‌کلید بزنید."}
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> ادامه یافت"}
-{"k": "sess.resumed_in_ask", "src": "ff0be86d", "v": "♻️ <b>{session}</b> در حالت پرسش ادامه یافت: {reason}"}
+{"k": "sess.resumed_in_ask", "src": "8151879e", "v": "♻️ <b>{session}</b> در حالت پرسش ادامه یافت: حالت خودکار به مدیر نیاز دارد."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "به {session} فرستاده شد."}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ بستن"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 نشست‌های تازه"}
