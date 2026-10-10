@@ -173,7 +173,7 @@ def test_the_answer_bodies_keep_their_names_and_english(server):
     assert data["detail"] == core._catalog("ru")["app.err.answer_not_waiting"]
 
 
-def test_resumed_in_ask_keeps_the_reason_from_its_owner(server):
+def test_resumed_in_ask_gives_its_owners_reason_in_the_viewers_language(server):
     preferences.set_ui_language(VIEWER, "ru")
     _sess(server, status=Status.GONE)
     server.bot._resume_auto_gate = lambda sess, override, actor, chat: (False, True)
@@ -181,9 +181,14 @@ def test_resumed_in_ask_keeps_the_reason_from_its_owner(server):
     status, data = _call(server, "POST", "/api/sessions/x1/resume")
     assert status == 200 and data["mode"] == "ask"
     from aipager.bot.transport import RESUME_AUTO_NEEDS_ADMIN
-    assert data["detail"] == i18n.get("ru").text(
+    # The reason is transport's key since phase 3b, so it arrives in the
+    # viewer's language too (phase 4 decision 5).
+    ru = i18n.get("ru")
+    reason = ru.text(RESUME_AUTO_NEEDS_ADMIN)
+    assert reason != str(RESUME_AUTO_NEEDS_ADMIN)
+    assert data["detail"] == ru.text(
         "app.err.resumed_in_ask", "Resumed {session} in Ask: {reason}",
-        session="x1", reason=str(RESUME_AUTO_NEEDS_ADMIN))
+        session="x1", reason=reason)
     preferences.set_ui_language(VIEWER, "")
     status, data = _call(server, "POST", "/api/sessions/x1/resume")
     assert data["detail"] == f"Resumed x1 in Ask: {RESUME_AUTO_NEEDS_ADMIN}"

@@ -1847,6 +1847,9 @@ def _resume_picker(env):
     for seconds in (0, 1, 59, 61, 3600, 172800):
         out.append(env.with_tr(bot._fmt_gone_ago, WALL - seconds))
     out.append(env.with_tr(bot._fmt_gone_ago, None))
+    return out
+
+
 # ---- the Mini App (phase 4) -------------------------------------------------------------
 # Driven through its HTTP routes with an aiohttp TestClient, as the viewer
 # CHAT (personal mode's operator, so the language stored for CHAT is both
