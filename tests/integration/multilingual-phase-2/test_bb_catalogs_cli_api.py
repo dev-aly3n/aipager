@@ -35,7 +35,8 @@ from tests.i18n_ml2_bb import (
     source_rows,
 )
 
-# Phase 5 runs 1 and 2 enabled es, pt-BR, fr, it, de, ar, uk and tr (beta).
+# Phase 5 runs 1, 2 and 3 enabled es, pt-BR, fr, it, de, ar, uk, tr, zh-Hans, ko,
+# id and vi (beta).
 #: Known languages still switched off (none once every catalog lands),
 #: plus Japanese and Polish, which aipager does not offer at all.
 OFF = tuple(c for c, loc in locales.LOCALES.items() if not loc.enabled)
@@ -172,7 +173,7 @@ def test_check_passes_with_persian_and_russian_enabled(cli):
 
 
 @pytest.mark.parametrize("code", ["fa", "ru", "es", "pt-BR", "fr", "it", "de", "tr", "uk",
-                                  "ar"])
+                                  "ar", "zh-Hans", "ko", "vi", "id"])
 def test_todo_is_empty_for_a_complete_language(cli, code):
     r = cli("todo", "--lang", code)
     assert r.returncode == 0 and json.loads(r.stdout)["entries"] == []
@@ -234,8 +235,9 @@ def _options(body):
 
 def test_the_options_are_auto_english_and_the_beta_languages(http):
     _s, body = http("GET", "/api/preferences")
-    assert [o["value"] for o in _options(body)] == ["auto", "en", "es", "ru", "pt-BR", "fr",
-                                                    "de", "ar", "uk", "it", "tr", "fa"]
+    assert [o["value"] for o in _options(body)] == [
+        "auto", "en", "es", "ru", "pt-BR", "zh-Hans", "fr", "de", "ko", "ar", "id", "uk", "it",
+        "tr", "fa", "vi"]
 
 
 def test_the_option_labels_are_endonyms_without_beta(http):

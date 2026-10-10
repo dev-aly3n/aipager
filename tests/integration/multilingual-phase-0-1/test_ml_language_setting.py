@@ -22,11 +22,13 @@ RO = 3
 
 
 #: The beta languages, in the list's order (phase 2: ru, fa; phase 5 run 1:
-#: es, pt-BR, fr, it; run 2: de, ar, uk, tr).
-BETA_CODES = ("es", "ru", "pt-BR", "fr", "de", "ar", "uk", "it", "tr", "fa")
-BETA = ["Español (beta)", "Русский (beta)", "Português (Brasil) (beta)", "Français (beta)",
-        "Deutsch (beta)", "العربية (beta)", "Українська (beta)", "Italiano (beta)",
-        "Türkçe (beta)", "فارسی (beta)"]
+#: es, pt-BR, fr, it; run 2: de, ar, uk, tr; run 3: zh-Hans, ko, id, vi).
+BETA_CODES = ("es", "ru", "pt-BR", "zh-Hans", "fr", "de", "ko", "ar", "id", "uk", "it", "tr",
+              "fa", "vi")
+BETA = ["Español (beta)", "Русский (beta)", "Português (Brasil) (beta)", "简体中文 (beta)",
+        "Français (beta)", "Deutsch (beta)", "한국어 (beta)", "العربية (beta)",
+        "Bahasa Indonesia (beta)", "Українська (beta)", "Italiano (beta)", "Türkçe (beta)",
+        "فارسی (beta)", "Tiếng Việt (beta)"]
 BETA_DATA = [f"_:set:lang:{c}" for c in BETA_CODES]
 
 
@@ -95,7 +97,7 @@ def test_a_read_only_member_may_open_language(tg_bot, command, ml):
 def test_no_disabled_language_is_listed(tg_bot, command, ml):
     """English and the beta languages are selectable; the others are
     hidden (ruling; phase 2 enabled ru and fa, phase 5 run 1 es, pt-BR,
-    fr and it, run 2 de, ar, uk and tr). Japanese and Polish are not
+    fr and it, run 2 de, ar, uk and tr, run 3 zh-Hans, ko, vi and id). Japanese and Polish are not
     offered at all."""
     _text, kb = command(tg_bot, "_handle_language_cmd", "/language",
                         chat_id=DM, user_id=OWNER)

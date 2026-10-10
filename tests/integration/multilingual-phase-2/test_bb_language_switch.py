@@ -37,14 +37,16 @@ from tests.i18n_ml2_bb import (
     toast_texts,
 )
 
-# Phase 5 run 1 enabled es, pt-BR, fr and it, run 2 de, ar, uk and tr, as beta.
+# Phase 5 run 1 enabled es, pt-BR, fr and it, run 2 de, ar, uk and tr, run 3
+# zh-Hans, ko, id and vi, as beta.
 #: Known languages still switched off (none once every catalog lands),
 #: plus Japanese and Polish, which aipager does not offer at all.
 OFF = tuple(c for c, loc in locales.LOCALES.items() if not loc.enabled)
 DISABLED = OFF + ("ja", "pl")
 BETA = (("es", "Español"), ("ru", "Русский"), ("pt-BR", "Português (Brasil)"),
-        ("fr", "Français"), ("de", "Deutsch"), ("ar", "العربية"), ("uk", "Українська"),
-        ("it", "Italiano"), ("tr", "Türkçe"), ("fa", "فارسی"))
+        ("zh-Hans", "简体中文"), ("fr", "Français"), ("de", "Deutsch"), ("ko", "한국어"),
+        ("ar", "العربية"), ("id", "Bahasa Indonesia"), ("uk", "Українська"),
+        ("it", "Italiano"), ("tr", "Türkçe"), ("fa", "فارسی"), ("vi", "Tiếng Việt"))
 
 
 def _rows(tr, private, current):

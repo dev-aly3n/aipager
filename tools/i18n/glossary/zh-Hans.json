@@ -4,31 +4,89 @@
   "commit",
   "token",
   "diff",
-  "log"
+  "log",
+  "ctx",
+  "shell"
  ],
  "language": "Chinese (Simplified)",
  "terms": {
-  "admin": "",
-  "agent": "",
-  "allow": "",
-  "background": "",
-  "card": "",
-  "chat": "",
-  "deny": "",
-  "folder": "",
-  "group": "",
-  "member": "",
-  "model": "",
-  "owner": "",
-  "permission": "",
-  "prompt": "",
-  "question": "",
-  "queue": "",
-  "resume": "",
-  "session": "",
-  "settings": "",
-  "stop": "",
-  "turn": "",
-  "update": ""
+  "admin": [
+   "管理员"
+  ],
+  "agent": [
+   "代理"
+  ],
+  "allow": [
+   "允许"
+  ],
+  "background": [
+   "后台"
+  ],
+  "card": [
+   "卡片"
+  ],
+  "chat": [
+   "聊天",
+   "对话",
+   "私聊"
+  ],
+  "deny": [
+   "拒绝"
+  ],
+  "folder": [
+   "文件夹",
+   "目录"
+  ],
+  "group": [
+   "群组"
+  ],
+  "member": [
+   "成员"
+  ],
+  "model": [
+   "模型"
+  ],
+  "owner": [
+   "所有者"
+  ],
+  "permission": [
+   "权限"
+  ],
+  "prompt": [
+   "提示",
+   "消息",
+   "请求"
+  ],
+  "question": [
+   "问题",
+   "提问"
+  ],
+  "queue": [
+   "队列",
+   "排队"
+  ],
+  "resume": [
+   "恢复",
+   "/resume"
+  ],
+  "session": [
+   "会话"
+  ],
+  "settings": [
+   "设置",
+   "/settings"
+  ],
+  "stop": [
+   "停止",
+   "停下",
+   "/stop"
+  ],
+  "turn": [
+   "轮"
+  ],
+  "update": [
+   "更新",
+   "/update"
+  ]
  }
 }

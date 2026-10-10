@@ -26,9 +26,10 @@ def test_the_fifteen_languages_in_order_with_their_own_names():
 def test_only_english_and_the_beta_languages_are_offered():
     """Phase 2: Persian and Russian join English, both marked beta; phase
     5 run 1 adds Spanish, Portuguese (Brazil), French and Italian, run 2
-    German, Arabic, Ukrainian and Turkish, beta too. The rest stay off
-    until their translation lands (G80)."""
-    beta = ("es", "ru", "pt-BR", "fr", "de", "ar", "uk", "it", "tr", "fa")
+    German, Arabic, Ukrainian and Turkish, run 3 Chinese (Simplified),
+    Korean, Indonesian and Vietnamese, beta too (G80)."""
+    beta = ("es", "ru", "pt-BR", "zh-Hans", "fr", "de", "ko", "ar", "id", "uk", "it", "tr",
+            "fa", "vi")
     assert locales.enabled_codes() == ("en",) + beta
     assert [c for c, loc in locales.LOCALES.items() if loc.enabled] == ["en", *beta]
     assert locales.LOCALES["en"].quality == "stable"
@@ -81,8 +82,8 @@ def test_pseudo_codes_are_never_offered():
 
 def test_a_test_may_enable_a_pseudo_code(monkeypatch):
     monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"qps"}))
-    assert locales.enabled_codes() == ("en", "es", "ru", "pt-BR", "fr", "de", "ar", "uk", "it",
-                                       "tr", "fa", "qps")
+    assert locales.enabled_codes() == ("en", "es", "ru", "pt-BR", "zh-Hans", "fr", "de", "ko",
+                                       "ar", "id", "uk", "it", "tr", "fa", "vi", "qps")
     assert locales.is_selectable("qps")
     assert locales.normalize("qps") is None
 

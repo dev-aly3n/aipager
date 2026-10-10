@@ -75,7 +75,7 @@ log = logging.getLogger(__name__)
 #: Someone not on the allow-list, or writing from a private chat this
 #: install does not serve, is refused in their own language: their DM's
 #: stored choice, else their Telegram app's language when it is one aipager
-#: has (English, Persian, Russian), else English (multilingual design 04
+#: has enabled (``locales.normalize``), else English (multilingual design 04
 #: section 6). A narrow path for these refusals only; general detection
 #: (``locales.AUTO_DETECT``, ``i18n.for_stranger``) stays off. False makes
 #: every such refusal English again.

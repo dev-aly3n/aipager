@@ -21,3 +21,15 @@ Product names (Claude, Claude Code, Anthropic, aipager, Telegram, Mini App, GitH
 
 ## Placeholders and tags
 Keep every {placeholder} and every HTML tag of the English, exactly once each. Never translate inside <code> or <pre>.
+
+## Markers, keyboard words and modes
+- Keep `**`, `_`, every HTML tag and every {placeholder} exactly as in the English: the same number of `**` and `_`, never a backtick.
+- A keyboard word (status, stop, new, kill) is ONE word with no space, because the text router reads only a text with no space: phiên (shows the sessions), dừng, mới, tắt. Each carries a diacritic, so none can be a session name (check 10).
+- A navigation button that opens another keyboard reads as a short label (Mẫu ›, Lệnh ›, Mô hình ›).
+- A mode word (Auto, Ask) is ONE word after its emoji, because people type it after /mode and Vietnamese words are syllables with spaces between them: 🤖 Auto stays Auto ("Tự động" is two words, and Auto is understood), 💬 Ask is 💬 Hỏi. Never pick an ASCII-only mode word other than Auto: /mode reads it before a session name, so it could hide a session called that.
+- A default button label (Continue, Run tests...) stays short: it is a button. Its payload stays English (Claude receives the English).
+
+## Terms
+- session phiên; turn lượt; card thẻ; permission quyền; prompt prompt (a message to Claude: tin nhắn; a request waiting for an answer: yêu cầu); question câu hỏi; allow cho phép; deny từ chối; stop dừng; resume tiếp tục; queue hàng đợi; agent tác tử (a subagent: tác tử con); background nền (chạy nền); owner chủ sở hữu; admin quản trị viên; member thành viên; chat cuộc trò chuyện; group nhóm; settings cài đặt; update cập nhật; folder thư mục; model mô hình.
+- Kill (end a session's process) tắt; Restart khởi động lại; Delete xóa; Rename đổi tên; Compact thu gọn; Retry thử lại; Cancel hủy; Back quay lại; role vai trò; transcript bản ghi hội thoại; daemon daemon (dịch vụ nền); install cài đặt.
+- Kept in English: commit, token, diff, log, ctx, prompt, shell (a background shell command).

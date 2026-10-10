@@ -27,9 +27,10 @@ def _labels(tr, private=True, current="auto"):
 
 def test_beta_languages_carry_the_mark(fa_ru):
     labels = _labels(i18n.get("en"))
-    beta = ["Español (beta)", "Русский (beta)", "Português (Brasil) (beta)",
-            "Français (beta)", "Deutsch (beta)", "العربية (beta)", "Українська (beta)",
-            "Italiano (beta)", "Türkçe (beta)", "فارسی (beta)"]
+    beta = ["Español (beta)", "Русский (beta)", "Português (Brasil) (beta)", "简体中文 (beta)",
+            "Français (beta)", "Deutsch (beta)", "한국어 (beta)", "العربية (beta)",
+            "Bahasa Indonesia (beta)", "Українська (beta)", "Italiano (beta)", "Türkçe (beta)",
+            "فارسی (beta)", "Tiếng Việt (beta)"]
     assert labels == ["Automatic (your Telegram language) ✅", "English", *beta, "« Back"]
     assert _labels(i18n.get("en"), private=False, current="en") == [
         "English ✅", *beta, "« Back"]

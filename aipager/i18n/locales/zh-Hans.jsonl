@@ -1,0 +1,1340 @@
+{"k": "agents.count_agents", "src": "263711d4", "v": {"other": "{n} 个代理"}}
+{"k": "agents.count_shells", "src": "9b747b65", "v": {"other": "{n} 个 shell"}}
+{"k": "agents.done_many", "src": "192b7df2", "v": "✅ {count} 已完成（{clock}）"}
+{"k": "agents.done_one", "src": "6caebe28", "v": "✅ {name} 已完成（{clock}）"}
+{"k": "agents.done_shell", "src": "e3681276", "v": "✅ shell：{name} 已完成（{clock}）"}
+{"k": "agents.names_more", "src": "8150de86", "v": {"other": "{names} 及另外 {n} 个"}}
+{"k": "agents.running", "src": "398a4343", "v": "⏳ {count} 仍在运行（{names}），结果稍后会发到这里"}
+{"k": "ago.days", "src": "3650e46d", "v": {"other": "{n} 天前"}}
+{"k": "ago.earlier", "src": "f12e996a", "v": "更早"}
+{"k": "ago.hours", "src": "72292bb6", "v": {"other": "{n} 小时前"}}
+{"k": "ago.hours_minutes", "src": "5be9939e", "v": "{h} 小时 {m} 分钟前"}
+{"k": "ago.minutes", "src": "6efbe16f", "v": {"other": "{n} 分钟前"}}
+{"k": "ago.seconds", "src": "8a8492dd", "v": {"other": "{n} 秒前"}}
+{"k": "ans.answered", "src": "7b370125", "v": "✓ <b>{session}</b> · 已回答 · {person} · {question} → {option}"}
+{"k": "ans.answered_anon", "src": "602dabe0", "v": "✓ <b>{session}</b> · 已回答 · {question} → {option}"}
+{"k": "ans.arrow_verb", "src": "d2539150", "v": "→ {verb}"}
+{"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
+{"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
+{"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ 已停止 {session}"}
+{"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {person} 已停止 {session}"}
+{"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"other": "⏹ {person} 已停止 {session}（丢弃了 {n} 条排队消息）"}}
+{"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"other": "⏹ 已停止 {session}（丢弃了 {n} 条排队消息）"}}
+{"k": "ans.verb.allow", "src": "77c7b490", "v": "已允许"}
+{"k": "ans.verb.allow_always", "src": "141216b0", "v": "已始终允许"}
+{"k": "ans.verb.continue", "src": "0e4aa789", "v": "已继续"}
+{"k": "ans.verb.deny", "src": "63b16bd4", "v": "已拒绝"}
+{"k": "ans.verb.option", "src": "7a8b9272", "v": "已选择选项 {n}"}
+{"k": "ans.verb.selected", "src": "5462eaaf", "v": "已选择：{options}"}
+{"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "已提交（未选择）"}
+{"k": "app.chat.dm", "src": "05a3b9fa", "v": "私聊"}
+{"k": "app.chat.group", "src": "171a0606", "v": "群组"}
+{"k": "app.err.already_restarting", "src": "9234890e", "v": "这个会话已在重启，请稍等。"}
+{"k": "app.err.already_running", "src": "41e94cd2", "v": "这个会话已在运行。"}
+{"k": "app.err.answer_chat_busy", "src": "e0f91f04", "v": "Telegram 繁忙，请稍后再试。"}
+{"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "这个会话已不再等你回复。"}
+{"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "无法把请求发到聊天中。"}
+{"k": "app.err.auto_needs_admin", "src": "ad1f0c2f", "v": "自动模式需要管理员。"}
+{"k": "app.err.delete_running", "src": "71f25b50", "v": "会话仍在运行。请先用“结束”停止它。"}
+{"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "无法结束：进程仍在运行。请重试。"}
+{"k": "app.err.name_taken", "src": "9ab9e08f", "v": "这个聊天中已有名为 {session} 的会话。"}
+{"k": "app.err.not_busy", "src": "bbafa529", "v": "这个会话现在不忙，没有可停止的内容。"}
+{"k": "app.err.not_resendable", "src": "82303f6c", "v": "这个请求无法重新发送。请在终端中回答。"}
+{"k": "app.err.not_running", "src": "af9ca5bc", "v": "会话未在运行。"}
+{"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} 仍在停止中，模式未更改。请稍后再试。"}
+{"k": "app.err.pick_model", "src": "773e24c4", "v": "请选择一个模型。"}
+{"k": "app.err.restart_still_stopping", "src": "701b0bd8", "v": "{session} 仍在停止中。请稍后再试。"}
+{"k": "app.err.resumed_in_ask", "src": "7024b7b8", "v": "已以询问模式恢复 {session}：{reason}"}
+{"k": "app.err.resuming", "src": "2a557399", "v": "这个会话正在恢复。请稍后再试。"}
+{"k": "app.err.send_failed", "src": "e4349ad3", "v": "无法发送 {command}。"}
+{"k": "app.fact.context", "src": "cc11b3a2", "v": "上下文"}
+{"k": "app.fact.cost", "src": "64ae43e8", "v": "费用"}
+{"k": "app.fact.cwd", "src": "4b892fe0", "v": "目录"}
+{"k": "app.fact.last_active", "src": "b5665ec6", "v": "上次活动"}
+{"k": "app.fact.model", "src": "68c2cc7f", "v": "模型"}
+{"k": "app.fact.working", "src": "e7df8df6", "v": "已工作"}
+{"k": "app.language.hint", "src": "90e01e41", "v": "只影响 aipager 自己的文字。Claude 的回答不变。"}
+{"k": "app.language.title", "src": "01e1787a", "v": "应用语言"}
+{"k": "app.launch.cwd_bad_char", "src": "0dcfc308", "v": "工作目录包含无效字符。"}
+{"k": "app.launch.cwd_no_roots", "src": "45693d90", "v": "还没有可用的目录：请先在聊天中启动一个会话，之后这里会提供它的项目。"}
+{"k": "app.launch.cwd_not_allowed", "src": "8e0b71f9", "v": "这个目录不是这个聊天已在使用的目录。"}
+{"k": "app.launch.cwd_not_dir", "src": "9b0be449", "v": "该路径不是目录。"}
+{"k": "app.launch.cwd_not_text", "src": "9497b469", "v": "工作目录必须是文本。"}
+{"k": "app.launch.cwd_unresolvable", "src": "e87ce055", "v": "无法解析该目录。"}
+{"k": "app.launch.folder_bad_char", "src": "9052a17d", "v": "文件夹名称包含无效字符。"}
+{"k": "app.launch.folder_empty", "src": "aa11b815", "v": "文件夹名称不能为空。"}
+{"k": "app.launch.folder_exists", "src": "8dec41ad", "v": "那里已有同名文件夹。请换一个名称。"}
+{"k": "app.launch.folder_failed", "src": "4d757c2b", "v": "无法创建该文件夹。"}
+{"k": "app.launch.folder_loads_code", "src": "78ba6bd6", "v": "“{name}”不能作为这里的项目文件夹：其他程序会从中加载代码。请换一个名称。"}
+{"k": "app.launch.folder_not_text", "src": "3988a95d", "v": "文件夹名称必须是文本。"}
+{"k": "app.launch.folder_parent", "src": "0a28b1e0", "v": "请选择要在其中创建文件夹的工作目录。"}
+{"k": "app.launch.folder_pattern", "src": "c3b51490", "v": "请使用字母、数字、点、连字符和下划线，并以字母或数字开头。"}
+{"k": "app.launch.folder_too_long", "src": "ae5dc64d", "v": "文件夹名称不能超过 {max} 个字符。"}
+{"k": "app.launch.model_not_text", "src": "55a7cf25", "v": "模型必须是文本。"}
+{"k": "app.launch.model_pattern", "src": "44cdf715", "v": "请使用列出的某个模型，或像 {example} 这样的完整模型名称。"}
+{"k": "app.launch.model_too_long", "src": "47dfc21f", "v": "模型名称不能超过 {max} 个字符。"}
+{"k": "app.launch.name_bad_char", "src": "1b9271b6", "v": "会话名称包含无效字符。"}
+{"k": "app.launch.name_empty", "src": "e00fbfca", "v": "会话名称不能为空。"}
+{"k": "app.launch.name_not_text", "src": "f6218198", "v": "会话名称必须是文本。"}
+{"k": "app.launch.name_pattern", "src": "b916e083", "v": "请使用英文字母、数字、连字符和下划线，并以英文字母或数字开头。"}
+{"k": "app.launch.name_reserved", "src": "2efe289d", "v": "“{name}”是保留的命令名（{command}）。请换一个名称。"}
+{"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "会话名称不能超过 {max} 个字符。"}
+{"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "还没有可以启动的项目文件夹：请让管理员启动会话。"}
+{"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "请选择一个项目文件夹：用“新建文件夹”创建一个，或请管理员启动会话。"}
+{"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "你的角色不能在主文件夹或其上级文件夹中启动会话。请选择一个项目文件夹：用“新建文件夹”创建一个，或请管理员启动会话。"}
+{"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"other": "🧹 已从 Mini App 清除 [{session}] 的 {n} 条排队消息"}}
+{"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 已从 Mini App 为 [{session}] 触发压缩"}
+{"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 已从 Mini App 创建 {session} · {mode}"}
+{"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 已从 Mini App 创建 {session} · {mode}\n📁 {folder}"}
+{"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ 已从 Mini App 删除 [{session}]"}
+{"k": "app.mirror.folder", "src": "603d7ae2", "v": "📁 已从 Mini App 新建文件夹：\n{path}"}
+{"k": "app.mirror.killed", "src": "63565832", "v": "💀 已从 Mini App 结束 [{session}]"}
+{"k": "app.mirror.model", "src": "6df57f60", "v": "🔄 [{session}] → {model}（来自 Mini App）"}
+{"k": "app.mirror.renamed", "src": "22ad8a4c", "v": "✏️ 已从 Mini App 将 [{old}] 重命名为 [{new}]"}
+{"k": "app.mirror.restarted", "src": "9aa8323d", "v": "🔁 已从 Mini App 重启 [{session}]"}
+{"k": "app.mirror.resumed", "src": "fafeafa6", "v": "♻️ 已从 Mini App 恢复 [{session}]"}
+{"k": "app.mirror.resumed_in_ask", "src": "429a5b47", "v": "♻️ 已从 Mini App 以询问模式恢复 [{session}]：{reason}"}
+{"k": "app.mirror.session_setting", "src": "3256d908", "v": "⚙️ 会话 {session} 的 {setting} → {value}（在 Mini App 中更改）"}
+{"k": "app.mirror.session_setting_reset", "src": "4502514a", "v": "⚙️ 会话 {session} 的 {setting} 已重置为默认值（{value}）（在 Mini App 中更改）"}
+{"k": "app.mirror.setting", "src": "6820a9f7", "v": "⚙️ {setting} → {value}（在 Mini App 中更改）"}
+{"k": "app.mirror.stopped", "src": "70cd9e81", "v": "⏹️ 已从 Mini App 停止 [{session}]"}
+{"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"other": "⏹️ 已从 Mini App 停止 [{session}]（丢弃了 {n} 条排队消息）"}}
+{"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 已从 Mini App 将 {session} 切换为询问模式"}
+{"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 已从 Mini App 将 {session} 切换为自动模式"}
+{"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude 正在工作，请在这一轮结束后再切换模型。"}
+{"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "会话未在运行。"}
+{"k": "app.reason.model_pending", "src": "a3384cf1", "v": "上一次模型切换还未确认：再次切换前，请先在终端中查看 Claude Code 的“Switch model?”问题。"}
+{"k": "app.reason.model_prompt_open", "src": "c3641605", "v": "终端中有一个未回答的提示，请先回答它再切换模型。"}
+{"k": "app.reason.model_unconfirmed", "src": "316e6e23", "v": "未确认：请检查会话。Claude Code 可能正在终端中询问“Switch model?”，或者它本来就在用这个模型。"}
+{"k": "app.reason.model_unknown", "src": "4e5022f6", "v": "aipager 还没有看到这个会话的状态，请稍后再试。"}
+{"k": "app.reason.no_context", "src": "8f590315", "v": "没有可压缩的内容：上下文已经是空的。"}
+{"k": "app.reason.no_permission", "src": "e1081627", "v": "你没有控制这个会话的权限。"}
+{"k": "app.reason.no_transcript", "src": "3426f123", "v": "没有可恢复的对话记录，请改为启动一个新会话。"}
+{"k": "app.reason.perms_admin", "src": "7202c2fd", "v": "切换到自动模式需要管理员。"}
+{"k": "app.reason.queue_empty", "src": "35da34dc", "v": "没有可清除的排队消息。"}
+{"k": "app.reason.queue_full", "src": "2bf9f868", "v": "队列已满（{cap} 条待处理），请清空队列或等待它处理完。"}
+{"k": "appcmd.btn.open", "src": "0bfb9312", "v": "📱 打开 Mini App"}
+{"k": "appcmd.cant_start", "src": "24d56baf", "v": "📱 Mini App 无法在这台机器上启动：它的安装似乎不完整。\n\n其他功能照常工作；请让安装它的人重新安装 aipager。"}
+{"k": "appcmd.in_group", "src": "edb98eb2", "v": "📱 Mini App 只能在私聊中使用：请私聊机器人，并在那里发送 /app。"}
+{"k": "appcmd.no_dm", "src": "96dd0730", "v": "Mini App 需要从你和机器人的私聊中打开。请让运维人员添加你。"}
+{"k": "appcmd.not_enabled", "src": "31154296", "v": "这台机器上没有启用 Mini App 服务器。\n请让运维人员运行 {command} 并重启守护进程。"}
+{"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 Mini App 链接仍在设置中，请几秒后再试一次 /app。"}
+{"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 这个机器人没有设置为与你对话。请让运维人员通过 {command} 添加你的 Telegram 用户 ID（{user_id}）。"}
+{"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "点按打开 aipager 控制面板："}
+{"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} 已被阻止"}
+{"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {tool} 已对 {person} 阻止"}
+{"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {tool} 已对 {person} 阻止（角色 {role}）"}
+{"k": "auth.read_only.scope", "src": "88683fbb", "v": "👀 {who}：你的角色是 <i>{role}</i>；你可以使用 <code>/status</code>，但不能操作会话。"}
+{"k": "auth.read_only.team", "src": "87e66c02", "v": "👀 {who}：你的角色是 <i>read_only</i>；你可以使用 <code>/status</code>，但不能操作会话。"}
+{"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 你不在这个范围的允许名单中。请让运维人员通过 {command} 添加你的 Telegram 用户 ID（{user_id}）。"}
+{"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 你不在这个机器人的允许名单中。请让运维人员通过 {command} 添加你的 Telegram 用户 ID（{user_id}）。"}
+{"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 这个机器人没有设置为与你对话。请让运维人员通过 {command} 添加你的 Telegram 用户 ID（{user_id}）。"}
+{"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ 返回"}
+{"k": "btn.rep.cancel", "src": "196a9f45", "v": "✖️ 取消"}
+{"k": "btn.rep.dont_ask", "src": "7a05a2c0", "v": "不再询问"}
+{"k": "btn.rep.not_now", "src": "e4571490", "v": "暂不"}
+{"k": "btn.rep.note", "src": "c4e7efca", "v": "✏️ 添加备注"}
+{"k": "btn.rep.preview", "src": "2632041f", "v": "预览报告"}
+{"k": "btn.rep.report", "src": "e4e182b3", "v": "🐞 报告问题"}
+{"k": "btn.rep.report_this", "src": "4a993c9d", "v": "🐞 报告此问题"}
+{"k": "btn.rep.send", "src": "22abdd99", "v": "📤 发送"}
+{"k": "btn.resume.next", "src": "315a382a", "v": "下一页 »"}
+{"k": "btn.resume.page", "src": "378cafa4", "v": "第 {pages} 页"}
+{"k": "btn.resume.prev", "src": "ac05dfe9", "v": "« 上一页"}
+{"k": "btn.resume.session", "src": "1d8ba7fd", "v": "{session}（{ago}）"}
+{"k": "btn.settings_back", "src": "a4b7fcb6", "v": "« 返回"}
+{"k": "btn.upd.aipager", "src": "54631d4b", "v": "更新 aipager"}
+{"k": "btn.upd.both", "src": "e219575e", "v": "全部更新"}
+{"k": "btn.upd.cancel", "src": "77dfd213", "v": "取消"}
+{"k": "btn.upd.check", "src": "cb743a2a", "v": "🔄 检查更新"}
+{"k": "btn.upd.check_again", "src": "e185048c", "v": "再次检查"}
+{"k": "btn.upd.claude", "src": "8b854ad6", "v": "更新 Claude Code"}
+{"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "立即重启"}
+{"k": "btn.upd.wait", "src": "060c561a", "v": "再等 {mins} 分钟"}
+{"k": "card.agents", "src": "263711d4", "v": {"other": "{n} 个代理"}}
+{"k": "card.agents_typed", "src": "af56f555", "v": {"other": "{n} 个代理（{types}）"}}
+{"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · 正在压缩{dots}"}
+{"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · 已拒绝"}
+{"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · {person} 已拒绝"}
+{"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · 已在终端中拒绝"}
+{"k": "card.finishing", "src": "1bfd382d", "v": "正在收尾"}
+{"k": "card.fold", "src": "2061ab43", "v": {"other": "▸ {n} 次工具调用"}}
+{"k": "card.legacy.agents", "src": "51aa5e62", "v": {"other": "（{n} 个代理）"}}
+{"k": "card.legacy.earlier", "src": "7062cc28", "v": {"other": "✅ <i>之前的 {n} 个工具</i>"}}
+{"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.row.agent_done", "src": "d7362ffc", "v": {"other": "🤖 {agent} · {n} 次工具调用 · {clock}"}}
+{"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
+{"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent}（仍在运行）"}
+{"k": "card.row.agent_word", "src": "0608c405", "v": "代理"}
+{"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.shell_done", "src": "3b615634", "v": "shell：{label}，已完成（{clock}）"}
+{"k": "card.row.shell_failed", "src": "3e240f07", "v": "shell：{label}，失败（{clock}）"}
+{"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "shell：{label}，失败（退出码 {code}）"}
+{"k": "card.row.shell_live", "src": "6cebf6e9", "v": "shell：{label}（{clock}）"}
+{"k": "card.row.shell_lost", "src": "83289e16", "v": "shell：{label}，未看到结束（{clock}）"}
+{"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "shell：{label}（仍在运行）"}
+{"k": "card.row.shell_stopped", "src": "315cab29", "v": "shell：{label}，已停止（{clock}）"}
+{"k": "card.row.starting", "src": "9493af05", "v": "正在启动"}
+{"k": "card.shells", "src": "9b747b65", "v": {"other": "{n} 个 shell"}}
+{"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
+{"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · 已停止"}
+{"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} 已停止"}
+{"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · 已在终端中停止"}
+{"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · 正在思考…"}
+{"k": "card.verb.done", "src": "e9b450d1", "v": "完成"}
+{"k": "card.verb.waiting", "src": "33d30632", "v": "等待中"}
+{"k": "card.verb.working", "src": "3b4dfc97", "v": "工作中"}
+{"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
+{"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} 仍在工作"}
+{"k": "chatmove.notice", "src": "01364acb", "v": "Telegram 已升级这个群组。aipager 已随之迁移，你无需任何操作。"}
+{"k": "cmd.app", "src": "486dfc4e", "v": "打开 Mini App 控制面板"}
+{"k": "cmd.help", "src": "fb2dbad1", "v": "你可以做什么"}
+{"k": "cmd.language", "src": "9dc3a234", "v": "aipager 消息的语言"}
+{"k": "cmd.mode", "src": "b677b7d9", "v": "自动或询问"}
+{"k": "cmd.new", "src": "959b093b", "v": "启动会话"}
+{"k": "cmd.now", "src": "3673f6f7", "v": "立即把排队消息发给 Claude"}
+{"k": "cmd.resume", "src": "88f33259", "v": "恢复已结束的会话"}
+{"k": "cmd.settings", "src": "5fdf8e23", "v": "消息布局、格式、新会话"}
+{"k": "cmd.status", "src": "b3ddc08d", "v": "你的会话"}
+{"k": "cmd.stop", "src": "7c4cbc32", "v": "停止 Claude 正在做的事"}
+{"k": "cmd.talk", "src": "a0173425", "v": "与 {session} 对话"}
+{"k": "diff.more_lines", "src": "816da678", "v": {"other": "<i>……还有 {n} 行</i>"}}
+{"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · 已结束（后台代理丢失）"}
+{"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · 已结束（{clock} 后后台代理丢失）"}
+{"k": "fin.finished", "src": "6f65069e", "v": "{lead} · 已完成（{stats}）"}
+{"k": "fin.finished_bare", "src": "53b60c70", "v": "{lead} · 已完成"}
+{"k": "fin.full_attached", "src": "bcfddfdb", "v": "📎 <i>完整回复见下方附件 ↓</i>"}
+{"k": "fin.lines", "src": "a6f39b46", "v": "+{added} -{removed}"}
+{"k": "fin.shell_lost", "src": "c6c919fb", "v": "⚠️ <b>{session}</b> · 已结束（未看到后台 shell 结束）"}
+{"k": "fin.shell_lost_after", "src": "4692a050", "v": "⚠️ <b>{session}</b> · 已结束（{clock} 后仍未看到后台 shell 结束）"}
+{"k": "fin.stats", "src": "9160a66c", "v": "{clock}，+{added} -{removed}"}
+{"k": "flood.card_paused", "src": "61a88de1", "v": "⏳ **{session}** · 工作中（更新已暂停）"}
+{"k": "flood.card_paused_html", "src": "3815781e", "v": "⏳ <b>{session}</b> · 工作中（更新已暂停）"}
+{"k": "flood.paused_hourly", "src": "1be79366", "v": "⏸ 卡片更新已暂停（每小时上限）"}
+{"k": "flood.paused_rate", "src": "57af71ab", "v": "⏸ 卡片更新已暂停（频率限制）"}
+{"k": "flood.slow", "src": "fd8f3fd7", "v": "🐢 收到 Telegram 警告后进入慢速模式"}
+{"k": "grp.dropped", "src": "96346149", "v": {"other": "已丢弃 {n} 条消息：{who} 已不能再在这里发送消息。"}}
+{"k": "grp.dropped_anon", "src": "c67a8cca", "v": {"other": "已丢弃 {n} 条消息：这位发送者已不能再在这里发送消息。"}}
+{"k": "grp.dropped_anon_one", "src": "8946b17f", "v": "已丢弃：这位发送者已不能再在这里发送消息。"}
+{"k": "grp.dropped_one", "src": "4ab273e1", "v": "已丢弃：{who} 已不能再在这里发送消息。"}
+{"k": "grp.help_talk", "src": "07beac8e", "v": "<b>对话：</b>回复某个会话的消息，或提及 {mention} · /&lt;名称&gt; 消息"}
+{"k": "grp.help_talk_no_username", "src": "4c1fc9fd", "v": "<b>对话：</b>回复某个会话的消息，或提及机器人 · /&lt;名称&gt; 消息"}
+{"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "请以你自己的身份发言，才能使用机器人。"}
+{"k": "held.late_marker", "src": "e38c307b", "v": {"other": "⏳ 延迟送达（Telegram 频率限制期间暂缓了 {n} 分钟）"}}
+{"k": "held.too_old", "src": "7391de5a", "v": "这条消息太旧，无法发送；请重新发送。"}
+{"k": "help.admin", "src": "29ac6154", "v": "<b>管理员：</b>/update（aipager 和 Claude Code）"}
+{"k": "help.control", "src": "8bb13acf", "v": "<b>控制：</b>/stop · /now（发送排队消息）· /clearqueue"}
+{"k": "help.manage", "src": "75144040", "v": "<b>管理：</b>/status，然后点 ⋮（重启、重命名、diff、结束、删除）"}
+{"k": "help.settings", "src": "d51d2171", "v": "<b>设置：</b>/settings · /mode（自动或询问）"}
+{"k": "help.start", "src": "276a9c1b", "v": "<b>开始：</b>/new 名称 · /resume"}
+{"k": "help.talk_dm", "src": "c3ef5195", "v": "<b>对话：</b>直接输入（发到 ✍️ 会话）· 回复某条消息 · /&lt;名称&gt; 消息"}
+{"k": "help.tip", "src": "67a93e6b", "v": "<i>提示：点按命令会立即发送。长按（手机）或按 Tab（电脑）可先添加文字。</i>"}
+{"k": "help.title", "src": "8fffe930", "v": "<b>aipager 使用方法</b>"}
+{"k": "home.btn.new", "src": "19b62fc4", "v": "🆕 新建会话"}
+{"k": "home.btn.resume", "src": "12a3163c", "v": "↩️ 恢复"}
+{"k": "home.btn.settings", "src": "b1f2d607", "v": "⚙️ 设置"}
+{"k": "home.dm_target", "src": "099ec348", "v": "✍️ 消息会发到 <b>{session}</b>。"}
+{"k": "home.help_hint", "src": "d62b118c", "v": "<i>/help 会列出你能做的所有事。</i>"}
+{"k": "home.start_one", "src": "ef9f6ba9", "v": "用 /new 启动一个会话。"}
+{"k": "home.tap_session", "src": "f14797d7", "v": "点按键盘上的会话，即可与它对话。"}
+{"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - 在 Telegram 中使用 Claude Code"}
+{"k": "kb.app", "src": "59b36d46", "v": "📱 应用"}
+{"k": "kb.back", "src": "a4b7fcb6", "v": "« 返回"}
+{"k": "kb.commands", "src": "45e5f3f7", "v": "命令"}
+{"k": "kb.kill", "src": "c80f5bc1", "v": "结束"}
+{"k": "kb.models", "src": "d068cea1", "v": "模型 ›"}
+{"k": "kb.new", "src": "c2a6b03f", "v": "新建"}
+{"k": "kb.status", "src": "48a3661d", "v": "状态"}
+{"k": "kb.stop", "src": "1b480158", "v": "停止"}
+{"k": "kb.templates", "src": "f25b700e", "v": "模板"}
+{"k": "kbl.cmd.clear", "src": "719ea396", "v": "清空对话"}
+{"k": "kbl.cmd.compact", "src": "1df39aa5", "v": "压缩"}
+{"k": "kbl.cmd.init", "src": "19682bdb", "v": "初始化"}
+{"k": "kbl.cmd.plan", "src": "bc0b2aff", "v": "计划模式"}
+{"k": "kbl.cmd.security_review", "src": "52fab0c7", "v": "安全审查"}
+{"k": "kbl.tpl.commit", "src": "1a1873ab", "v": "提交"}
+{"k": "kbl.tpl.continue", "src": "2e026239", "v": "继续"}
+{"k": "kbl.tpl.explain_plan", "src": "8197049c", "v": "解释计划"}
+{"k": "kbl.tpl.lgtm", "src": "fddf8bc1", "v": "没问题，发布吧"}
+{"k": "kbl.tpl.run_tests", "src": "fcab481b", "v": "运行测试"}
+{"k": "kbl.tpl.show_diff", "src": "78016e77", "v": "显示 diff"}
+{"k": "kbl.tpl.update_memory", "src": "cfa5cef7", "v": "更新记忆"}
+{"k": "kbl.tpl.write_tests", "src": "391b1a96", "v": "编写测试"}
+{"k": "kbmsg.commands", "src": "52b6fd5f", "v": "🎛 命令"}
+{"k": "kbmsg.models", "src": "78548025", "v": "🤖 模型"}
+{"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 模板"}
+{"k": "lang.auto", "src": "a66c2e1b", "v": "自动（你的 Telegram 语言）"}
+{"k": "lang.beta", "src": "07f92a33", "v": "{language}（测试版）"}
+{"k": "lang.changed", "src": "4e8c6791", "v": "✅ aipager 现在在这里使用 {language}。你的会话和 Claude 的回答不变。"}
+{"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager 在这里使用 {language}（只限它自己的消息；Claude 会用你写的语言回答）。可用 /language 更改"}
+{"k": "lang.list.group", "src": "9462a94a", "v": "🌐 aipager 在这个群组的卡片和按钮中使用的语言。Claude 的会话不会改变：Claude 会用你写给它的语言回答。"}
+{"k": "lang.list.private", "src": "5d92850b", "v": "🌐 aipager 自己的消息和按钮所用的语言，适用于这里和 Mini App。你的 Claude 会话不会改变：Claude 会用你写给它的语言回答。"}
+{"k": "lang.offer.keep", "src": "c383d509", "v": "保留英文"}
+{"k": "lang.offer.text", "src": "788b2767", "v": "🌐 aipager 现在支持 {language}。这只会改变 aipager 自己在这里和 Mini App 中的消息和按钮，不会改变你的 Claude 会话：Claude 仍会用你写给它的语言回答。"}
+{"k": "lang.row", "src": "69fc399f", "v": "🌐 语言：{language}"}
+{"k": "life.daemon_restarted", "src": "7253e5d2", "v": "🔄 <b>{session}</b> · 守护进程已重启"}
+{"k": "life.session_ended", "src": "84bf802a", "v": "🔴 <b>{session}</b> · 会话已结束"}
+{"k": "log.agent", "src": "ff163576", "v": {"other": "- 🤖 {agent}（{clock}，{n} 次工具调用）"}}
+{"k": "log.agents", "src": "5db5246b", "v": "## 代理"}
+{"k": "log.final_answer", "src": "f0ea5fc3", "v": "## 最终回答"}
+{"k": "log.memory", "src": "df926a90", "v": {"other": "_内存中只保留最近 {n} 行工具记录；很长的轮次中较早的行可能已经丢失。_"}}
+{"k": "log.title", "src": "2d9e96f5", "v": "# {session} - 完整日志"}
+{"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ 下载文件失败：{names}"}
+{"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ 下载文件失败：{names}"}
+{"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ 下载文件失败：{names}（已从相册中略去）"}
+{"k": "media.album_left_out_one", "src": "c91cd106", "v": "❌ 下载文件失败：{names}（已从相册中略去）"}
+{"k": "media.brew_footer", "src": "accb7c5a", "v": "<i>注意：以后的 {command} 可能会重建 formula 的 venv 并移除 faster-whisper。如果语音停止工作，请再次点按“安装”。</i>"}
+{"k": "media.btn.cancel", "src": "77dfd213", "v": "取消"}
+{"k": "media.btn.install", "src": "75e85c25", "v": "📦 安装语音"}
+{"k": "media.btn.restart", "src": "ec740c6a", "v": "🔄 立即重启守护进程"}
+{"k": "media.download_failed", "src": "cd9ea0b9", "v": "❌ 语音消息下载失败。"}
+{"k": "media.file_download_failed", "src": "fd5ed5a0", "v": "❌ 文件下载失败：{name}"}
+{"k": "media.file_too_big", "src": "85d942ae", "v": "⚠️ 文件大小为 {size} MB。Telegram 机器人 API 的文件下载上限是 {limit} MB。请尝试拆分文件，或把内容作为文本粘贴。"}
+{"k": "media.heard", "src": "3164d86a", "v": "🎙️ <i>听到：</i>{text}"}
+{"k": "media.install_cant_start", "src": "8f8e8cec", "v": "❌ 无法启动安装程序：{error}"}
+{"k": "media.install_failed", "src": "31267ed7", "v": "❌ 安装失败（退出码 {code}）：\n<pre>{output}</pre>"}
+{"k": "media.install_no_recipe", "src": "065dd801", "v": "⚠️ 这个 aipager 版本没有语音扩展的\n安装方案。请更新 aipager 后重试。"}
+{"k": "media.install_working", "src": "7ef2a045", "v": "📦 正在安装语音扩展，仍在进行中…（{seconds} 秒）"}
+{"k": "media.installed", "src": "6e9fbf9b", "v": "✅ 已安装。语音功能需要重启守护进程才能加载新模块。"}
+{"k": "media.installing", "src": "1978f3ef", "v": "📦 正在安装语音扩展…"}
+{"k": "media.needs_extra", "src": "153956ee", "v": "⚠️ 语音消息需要可选的语音扩展（安装约 {install} MB · 首次使用时模型约 {model} MB）。"}
+{"k": "media.no_speech", "src": "8d84c0b6", "v": "⚠️ 没能从中听出任何语音。"}
+{"k": "media.not_installed", "src": "911c9456", "v": "faster-whisper 尚未安装。请运行：\n    {uv}\n或：\n    {pip}"}
+{"k": "media.restart_busy_update", "src": "a6e0a620", "v": "⏳ 不重启：aipager 正在更新，或即将重启守护进程。请等它完成后再试。"}
+{"k": "media.restart_cant_open", "src": "d591e073", "v": "⚠️ 无法打开 {path}：{error}\n请手动重启。"}
+{"k": "media.restart_cant_schedule", "src": "aa7ee7e7", "v": "⚠️ 无法安排重启：{detail}\n请手动重启。"}
+{"k": "media.restart_cant_spawn", "src": "30877338", "v": "⚠️ 无法启动替代进程：{error}\n请手动重启。"}
+{"k": "media.restart_failed_start", "src": "0aad8df0", "v": "⚠️ 替代的守护进程未能启动。请手动重启。"}
+{"k": "media.restart_killmode", "src": "08a54162", "v": "⚠️ 不重启：服务的 KillMode 会停止你的会话。"}
+{"k": "media.restart_launchctl", "src": "1c55d98b", "v": "🔄 正在通过 {command} 重启…"}
+{"k": "media.restart_locked", "src": "3f061ea2", "v": "⏳ 不重启：aipager 正在更新（更新锁已被占用）。请等它完成后再试。"}
+{"k": "media.restart_refused", "src": "41b49bd1", "v": "⚠️ 不重启：{reason}。"}
+{"k": "media.restart_resend_voice", "src": "f5ed81e2", "v": "🔄 正在重启，请几秒后重新发送你的语音消息。"}
+{"k": "media.restart_would_kill", "src": "d49632de", "v": "重启会结束的会话：{sessions}"}
+{"k": "media.restarting_in", "src": "f8016b1a", "v": "🔄 {seconds} 秒后重启，请几秒后重新发送你的语音消息。"}
+{"k": "media.transcribe_failed", "src": "930964f7", "v": "❌ 转写失败：{error}"}
+{"k": "media.transcribing", "src": "56629b0b", "v": "🎙️ <i>正在转写…</i>"}
+{"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ 好的，未安装语音功能。"}
+{"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ 语音消息大小为 {size} MB；Telegram 机器人的上限是 {limit} MB。"}
+{"k": "mode.ask", "src": "8f9266a6", "v": "💬 询问"}
+{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 你的模式：询问（🤖 自动仅限管理员）"}
+{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 改用询问"}
+{"k": "mode.auto", "src": "a9e88621", "v": "🤖 自动"}
+{"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 改用自动"}
+{"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> 已经是 {mode}。"}
+{"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 切换到询问"}
+{"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 切换到自动"}
+{"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> 正忙。\n要切换到询问模式吗？"}
+{"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> 正忙。\n要切换到自动模式吗？"}
+{"k": "modecard.confirm_auto", "src": "7ab3092b", "v": "⚙️ 要把 <b>{session}</b> 切换到 {mode} 模式吗？\n<i>Claude 将不经询问直接运行工具（{flag}）。</i>"}
+{"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ <b>{session}</b> 的状态仍在初始化。请稍后再试一次 /mode。"}
+{"k": "modecard.is", "src": "43da1dce", "v": "<b>{session}</b> 当前为 {mode}。"}
+{"k": "modecard.is_target", "src": "bb92330e", "v": "✍️ <b>{session}</b> 当前为 {mode}。"}
+{"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ <b>{session}</b> 已开始新的工作，所以没有任何更改。"}
+{"k": "modecard.needs_admin", "src": "fe68d230", "v": "自动模式需要管理员。"}
+{"k": "modecard.none_live", "src": "ae432c8c", "v": "这里没有运行中的会话。用 /new 启动一个。"}
+{"k": "modecard.refused_not_running", "src": "d62cf188", "v": "⚠️ <b>{session}</b> 未在运行，模式未更改。"}
+{"k": "modecard.refused_restarting", "src": "06433ed3", "v": "⚠️ <b>{session}</b> 正在重启，模式未更改。请稍后再试。"}
+{"k": "modecard.session_missing", "src": "adf0d420", "v": "⚠️ 找不到会话。"}
+{"k": "modecard.stale", "src": "9f0f5572", "v": "⚠️ 那张卡片已过期，所以没有任何更改。"}
+{"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> 仍在停止中，模式未更改。"}
+{"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ 无法切换模式：{error}"}
+{"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ {person} 已切换到 {mode}。"}
+{"k": "modecard.switching", "src": "93eaa8f4", "v": "⚙️ 正在把 <b>{session}</b> 切换到 {mode} 模式…"}
+{"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ /mode 接受一个会话名称和 ask 或 auto，例如 {example} 或 {example_ask}。"}
+{"k": "modecard.which", "src": "107abca0", "v": "哪个会话？"}
+{"k": "modecard.which_to", "src": "4694464a", "v": "要把哪个会话切换到 {mode}？"}
+{"k": "newflow.auto_needs_admin_note", "src": "6bb45da7", "v": "自动模式需要管理员，所以这个会话会先询问。"}
+{"k": "newflow.btn.cancel", "src": "196a9f45", "v": "✖️ 取消"}
+{"k": "newflow.btn.folder", "src": "2fb30e02", "v": "📁 文件夹"}
+{"k": "newflow.btn.model", "src": "e252b8c8", "v": "🧠 模型"}
+{"k": "newflow.btn.new_folder", "src": "27a1f4a2", "v": "➕ 新建文件夹"}
+{"k": "newflow.btn.other_model", "src": "48915641", "v": "✏️ 其他模型…"}
+{"k": "newflow.btn.replace", "src": "caede00c", "v": "🆕 替换（全新）"}
+{"k": "newflow.btn.resume", "src": "cad6f900", "v": "♻️ 恢复"}
+{"k": "newflow.btn.switch_to", "src": "8f04f92d", "v": "↩️ 切换到它"}
+{"k": "newflow.cancelled_nothing", "src": "4c346842", "v": "↩️ 已取消，没有更改任何会话。"}
+{"k": "newflow.changed_mode", "src": "a1779ae6", "v": "{person} 已切换到 {mode}。"}
+{"k": "newflow.changed_model", "src": "1f771c06", "v": "{person} 已将模型切换为 {model}。"}
+{"k": "newflow.closed", "src": "87aee987", "v": "✖️ 已关闭，你已转去做别的事。发送 /new 启动会话。"}
+{"k": "newflow.conflict_replaced", "src": "0ab47818", "v": "↩️ 针对 <b>{session}</b> 的新 /new 已替换这张卡片。"}
+{"k": "newflow.conflict_running", "src": "b36a4e23", "v": "⚠️ <b>{session}</b> 已在运行。\n你想怎么做？"}
+{"k": "newflow.conflict_used", "src": "5d97ff8c", "v": "♻️ <b>{session}</b> 以前用过。\n你想怎么做？"}
+{"k": "newflow.conflict_used_preview", "src": "b46e358d", "v": "♻️ <b>{session}</b> 以前用过。\n<i>上一次回复：</i>\n<blockquote>{preview}</blockquote>\n你想怎么做？"}
+{"k": "newflow.create_failed", "src": "3beecd9f", "v": "❌ {error}"}
+{"k": "newflow.example_line", "src": "ab8b1839", "v": "<code>{session} 修复失败的测试</code>"}
+{"k": "newflow.expired", "src": "6f9c9ea0", "v": "⏱ 这张新会话卡片已过期。请重新发送 /new。"}
+{"k": "newflow.folder_page", "src": "f6e221a1", "v": "📁 <b>文件夹</b>\n\n选择这个会话的工作位置。"}
+{"k": "newflow.group_name_ask", "src": "eb31141c", "v": "回复这条消息，写上名称；如果愿意，也可以写上第一步要做什么："}
+{"k": "newflow.hint_folder", "src": "f27c8294", "v": "📁 请先用 📁 文件夹 选择一个项目文件夹。"}
+{"k": "newflow.just_send", "src": "0b7a9b82", "v": "✍️ 直接发送消息，它会发到 {session}。"}
+{"k": "newflow.model_page", "src": "580279ec", "v": "🧠 <b>模型</b>\n\n为这个会话选择一个模型。"}
+{"k": "newflow.name_empty", "src": "e00fbfca", "v": "会话名称不能为空。"}
+{"k": "newflow.new_folder_title", "src": "64007145", "v": "📁 <b>新建文件夹</b>"}
+{"k": "newflow.note_mode_failed", "src": "12f5a535", "v": "无法切换模式。"}
+{"k": "newflow.note_mode_failed_err", "src": "8e216733", "v": "无法切换模式：{error}"}
+{"k": "newflow.note_mode_not_switched", "src": "43b54091", "v": "{session} 已开始工作，所以没有切换模式。"}
+{"k": "newflow.other_model_title", "src": "3c30c486", "v": "🧠 <b>其他模型</b>"}
+{"k": "newflow.others_card_named", "src": "6ad64798", "v": "这张卡片是 {owner} 的。发送 /new 获取你自己的卡片。"}
+{"k": "newflow.others_card_someone", "src": "e2435dc7", "v": "这张卡片属于别人。发送 /new 获取你自己的卡片。"}
+{"k": "newflow.prompt_folder_reply", "src": "21f1cb23", "v": "回复这条消息，写上新文件夹的名称。"}
+{"k": "newflow.prompt_folder_type", "src": "e8783fd7", "v": "输入新文件夹的名称。"}
+{"k": "newflow.prompt_model_reply", "src": "7d73f8ac", "v": "回复这条消息，写上模型名称。"}
+{"k": "newflow.prompt_model_reply_eg", "src": "b8f4f722", "v": "回复这条消息，写上模型名称（例如 {example}）。"}
+{"k": "newflow.prompt_model_type", "src": "9d5677e2", "v": "输入模型名称。"}
+{"k": "newflow.prompt_model_type_eg", "src": "8bac428b", "v": "输入模型名称（例如 {example}）。"}
+{"k": "newflow.prompt_queued", "src": "85768278", "v": "📝 提示词已排队"}
+{"k": "newflow.ready", "src": "4edcea75", "v": "✅ <b>{session}</b> 已就绪"}
+{"k": "newflow.ready_changed", "src": "39a18ac6", "v": "🔁 {changed}"}
+{"k": "newflow.ready_later", "src": "4d69ea9f", "v": "之后：点按键盘上的 {session}，或回复任意一条 {session} 消息。"}
+{"k": "newflow.ready_models", "src": "1bccc9f4", "v": "🧠 <b>{session}</b>：选择一个模型。\n\n它会原地切换，对话会保留。"}
+{"k": "newflow.ready_settings", "src": "d40af8c6", "v": "{mode} · 🧠 {model} · 📁 <code>{folder}</code>"}
+{"k": "newflow.send_name", "src": "9b892a4c", "v": "发送一个名称；如果愿意，也可以写上第一步要做什么："}
+{"k": "newflow.settings_line", "src": "a770b6d4", "v": "{mode} · 🧠 {model} · 📁 {folder}"}
+{"k": "newflow.settings_no_folder", "src": "810727a6", "v": "{mode} · 🧠 {model} · 📁 还没有项目文件夹"}
+{"k": "newflow.started_over", "src": "3a2633bc", "v": "↩️ 已取消，已重新开始。"}
+{"k": "newflow.starting", "src": "ff87493a", "v": "🚀 正在启动 <b>{session}</b> {mode}…"}
+{"k": "newflow.starting_fresh", "src": "fff58191", "v": "🚀 正在启动 <b>{session}</b>（全新）…"}
+{"k": "newflow.switched_to", "src": "03553586", "v": "↩️ 已切换到 <b>{session}</b>"}
+{"k": "newflow.title", "src": "79dee51b", "v": "🆕 <b>新建会话</b>"}
+{"k": "newflow.title_owner", "src": "b8803b0f", "v": "🆕 <b>新建会话</b>（{owner}）"}
+{"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ 正在处理你的第一条消息。"}
+{"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"other": "⏱️ <b>{session}</b> · 压缩在 {n} 分钟后仍未确认完成"}}
+{"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · 已压缩：{before} → {after}"}
+{"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · 上下文已达 {percent}，即将自动压缩"}
+{"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · 达到内存上限"}
+{"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · 处理 <code>{tool}</code> 时达到内存上限"}
+{"k": "notice.memcap_hook", "src": "657f02c3", "v": "<code>{hook}</code> 用尽了 {limit} GB 的内存上限并已停止。如果它当时正在检查某个工具调用，Claude Code 很可能拒绝了该调用，Claude 可以再试一次；否则只是跳过了那一个事件。会话会继续运行。"}
+{"k": "notice.memcap_nudge_cli", "src": "726ab6ea", "v": "<i>如果这种情况反复出现，请在终端中运行 {command}，把报告发给维护者。</i>"}
+{"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>如果这种情况反复出现，所有者可以点按“报告此问题”，把报告发给维护者。</i>"}
+{"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> 用尽了 {limit} GB 的内存上限，因此跳过了一次状态行更新。会话会继续运行。"}
+{"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Claude Code 没有接收\n\n发送后 {grace} 秒内没有收到 hook。以“/”开头的消息会被当作斜杠命令读取，请检查终端。"}
+{"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · 一条排队消息未能及时确认被接收，Claude 可能仍会处理它。"}
+{"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · 一条排队消息未能及时确认被接收：“{preview}”，Claude 可能仍会处理它。"}
+{"k": "notice.quiet_turn", "src": "baa52794", "v": {"other": "⏳ <b>{session}</b> · 仍在工作（已安静 {n} 分钟）\n\n还没有状态更新。这通常是正常的。\n\n<blockquote expandable>可能的原因\n  • 长时间运行的工具调用（Bash、WebSearch、大量抓取）\n  • 在非常大的上下文上进行大量生成\n  • 正在压缩\n  • 速率限制退避或订阅额度限制\n  • 网络卡住或 claude 崩溃</blockquote>"}}
+{"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · 会话已清空"}
+{"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · 会话崩溃或被结束"}
+{"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · 会话已退出"}
+{"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · 会话已登出"}
+{"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · 会话权限错误"}
+{"k": "notice.session_end.resume", "src": "86761a3d", "v": "🔴 <b>{session}</b> · 会话已切换到另一个对话"}
+{"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · 仍在等待你回答上面的内容"}
+{"k": "notice.waiting_permission", "src": "e39388ee", "v": "权限：{summary}"}
+{"k": "notice.waiting_question", "src": "2348fa66", "v": "问题：{summary}"}
+{"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ 这里包含隐藏的方向字符，显示为 ⟨U+...⟩。它实际运行的内容可能和看起来不一样。"}
+{"k": "perm.btn.allow", "src": "cf869136", "v": "✅ 允许"}
+{"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 始终允许"}
+{"k": "perm.btn.cancel", "src": "d20b1713", "v": "↩️ 取消"}
+{"k": "perm.btn.compact_now", "src": "73357c1f", "v": "📦 立即压缩"}
+{"k": "perm.btn.default_suffix", "src": "613e7977", "v": "{mode}（默认）"}
+{"k": "perm.btn.deny", "src": "8b9d9edb", "v": "❌ 拒绝"}
+{"k": "perm.btn.not_now", "src": "f677ca32", "v": "⏳ 暂不"}
+{"k": "perm.btn.option", "src": "881fbd74", "v": "选项 {n}"}
+{"k": "perm.btn.retry", "src": "fabc7541", "v": "🔄 重试"}
+{"k": "perm.btn.stop", "src": "e3f8b9ee", "v": "⏹ 停止"}
+{"k": "perm.btn.stop_plain", "src": "9e253470", "v": "停止"}
+{"k": "perm.btn.stop_switch", "src": "bc469329", "v": "🛑 停止并切换"}
+{"k": "perm.btn.submit", "src": "c685950d", "v": "✅ 提交"}
+{"k": "perm.btn.yes_switch", "src": "9f6e4eb9", "v": "✅ 是，切换"}
+{"k": "perm.loading", "src": "253222ec", "v": "{tool}（加载中…）"}
+{"k": "perm.needed", "src": "7c7a8e5c", "v": "需要权限"}
+{"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · 需要输入"}
+{"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · 没有问题"}
+{"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · 需要权限"}
+{"k": "pin.btn.answer", "src": "24c3485a", "v": "回答 {session}"}
+{"k": "pin.count.idle", "src": "6abeefbf", "v": {"other": "{n} 个空闲"}}
+{"k": "pin.count.starting", "src": "836f5c27", "v": {"other": "{n} 个启动中"}}
+{"k": "pin.count.working", "src": "c3aee490", "v": {"other": "{n} 个工作中"}}
+{"k": "pin.first.all_idle", "src": "195ea8a9", "v": "💤 全部空闲"}
+{"k": "pin.first.counts", "src": "b5d804ae", "v": "{glyph} {counts}"}
+{"k": "pin.first.single", "src": "5674b34c", "v": "{glyph} {session} {state}"}
+{"k": "pin.first.waiting", "src": "7fa7cc46", "v": "⏳ {session} 需要你"}
+{"k": "pin.line", "src": "de9ddb7a", "v": "• <b>{session}</b> {state}"}
+{"k": "pin.more", "src": "66adc298", "v": {"other": "（另有 {n} 个）"}}
+{"k": "pin.needs_input", "src": "9a9d6640", "v": "需要输入"}
+{"k": "pin.paren", "src": "d52abc3c", "v": "（{running}）"}
+{"k": "pin.running_agents", "src": "712d4c75", "v": {"other": "{n} 个代理运行中"}}
+{"k": "pin.running_both", "src": "48ac24f8", "v": "{agents}、{shells} 运行中"}
+{"k": "pin.running_shells", "src": "af023360", "v": {"other": "{n} 个 shell 运行中"}}
+{"k": "pin.state", "src": "845c40c2", "v": "（{state}）"}
+{"k": "pin.state.idle", "src": "1adbcc34", "v": "空闲"}
+{"k": "pin.state.needs_you", "src": "19622ace", "v": "需要你"}
+{"k": "pin.state.starting", "src": "9493af05", "v": "启动中"}
+{"k": "pin.state.working", "src": "8178ea20", "v": "工作中"}
+{"k": "pin.state_running", "src": "a390d47b", "v": "（{state}，{running}）"}
+{"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
+{"k": "pin.target", "src": "c9c5350f", "v": "✍️ 消息会发到 <b>{session}</b>"}
+{"k": "rep.area.animation", "src": "6a3a8292", "v": "工作卡片"}
+{"k": "rep.area.callbacks", "src": "397d02b3", "v": "按钮点按"}
+{"k": "rep.area.daemon", "src": "dbcc03a0", "v": "守护进程"}
+{"k": "rep.area.dashboard", "src": "319e1d71", "v": "置顶栏"}
+{"k": "rep.area.flood_budget", "src": "75f9bcb6", "v": "发送额度"}
+{"k": "rep.area.handlers", "src": "0ff1035f", "v": "消息处理"}
+{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "hook 接收器"}
+{"k": "rep.area.inject", "src": "d784f7db", "v": "提示词投递"}
+{"k": "rep.area.notify", "src": "c522bd84", "v": "消息投递"}
+{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "hook 程序"}
+{"k": "rep.area.server", "src": "8000cc31", "v": "Mini App"}
+{"k": "rep.area.session_monitor", "src": "1fff1160", "v": "会话监视器"}
+{"k": "rep.area.session_ops", "src": "6b7d9e30", "v": "会话控制"}
+{"k": "rep.area.state", "src": "e0e05b06", "v": "会话状态"}
+{"k": "rep.cancelled", "src": "ca0ed5b3", "v": "已取消。没有发送任何内容。"}
+{"k": "rep.doc_failed", "src": "321fac57", "v": "report.json 文件无法发送，因此没有发送任何内容。请稍后再次打开“报告问题”。"}
+{"k": "rep.document_line", "src": "f2943506", "v": "完整报告在回复这张卡片的 report.json 文件中。"}
+{"k": "rep.explanation", "src": "d470a7df", "v": "这就是报告包含的全部内容。目前还没有发送任何内容。\n其中没有聊天、提示词、会话名称、文件夹、token、聊天 ID 或用户名。\n它会以匿名方式发送到 aipager 维护者的错误收件箱（Sentry）。"}
+{"k": "rep.heading", "src": "ad1633d0", "v": "🐞 <b>报告问题</b>"}
+{"k": "rep.lost", "src": "6b4837a4", "v": "这个预览已不再打开，因此没有发送任何内容。请再次打开“报告问题”查看新的预览。"}
+{"k": "rep.note.prompt", "src": "dc71be87", "v": {"other": "✏️ 请用一条消息输入你的备注（最多 {n} 个字符）。发送前，它会按显示的样子原样放进报告。你做任何其他操作都会关闭这里。"}}
+{"k": "rep.offer.also_other", "src": "2b336900", "v": {"other": "另外还有 {n} 个其他错误。"}}
+{"k": "rep.offer.declined", "src": "5d912282", "v": "好的。在这个版本上，aipager 不会再询问这件事。"}
+{"k": "rep.offer.internal", "src": "4df624aa", "v": {"other": "aipager 遇到了 {n} 次内部错误（{area} 中的 {error}）。"}}
+{"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "aipager 遇到了一次内部错误（{area} 中的 {error}）。"}
+{"k": "rep.offer.memcap", "src": "698bc999", "v": {"other": "aipager 的 hook 已 {n} 次达到内存上限。"}}
+{"k": "rep.offer.memcap_once", "src": "63461898", "v": "aipager 的 hook 达到过一次内存上限。"}
+{"k": "rep.offer.not_opened", "src": "1df3fb0a", "v": "无法打开报告预览。/help 中的“报告问题”会打开一个新的预览。"}
+{"k": "rep.offer.off", "src": "3706223b", "v": "自动报告提议现已关闭。要重新开启：先 /settings，再进入“问题报告”。"}
+{"k": "rep.offer.preview", "src": "0835e626", "v": "已在下方打开报告预览。"}
+{"k": "rep.offer.stopped", "src": "1f8a50a5", "v": {"other": "aipager 意外停止了 {n} 次。"}}
+{"k": "rep.offer.stopped_once", "src": "98a8d806", "v": "aipager 意外停止了一次。"}
+{"k": "rep.offer.tail", "src": "e58f2a0c", "v": "报告有助于修复问题。它只包含版本和代码位置，绝不包含你的聊天、提示词、名称或路径。"}
+{"k": "rep.outcome.daily_cap", "src": "2095768c", "v": {"other": "每台机器每天最多发送 {n} 份报告。请明天再试。"}}
+{"k": "rep.outcome.disabled", "src": "23061011", "v": "维护者目前关闭了问题报告。没有发送任何内容。"}
+{"k": "rep.outcome.invalid", "src": "55ae1194", "v": "这份报告没有通过自身的检查，因此没有发送。"}
+{"k": "rep.outcome.sent", "src": "3456aede", "v": "已发送。参考编号 {reference}（如果你在 GitHub 上提 issue，请附上它）。"}
+{"k": "rep.outcome.too_old", "src": "3e8e0bff", "v": "这个 aipager 版本已无法发送报告。请更新它（{command}）后重试。"}
+{"k": "rep.outcome.try_later", "src": "ab0f2d7c", "v": "现在无法发送。没有丢失任何内容；请稍后再试。"}
+{"k": "rep.status.note_added", "src": "96d23c70", "v": "已添加备注。"}
+{"k": "rep.status.note_closed", "src": "8187cfb3", "v": "未添加备注：你做了其他操作。点按“添加备注”再试一次。"}
+{"k": "rep.status.note_cut", "src": "e9ab8458", "v": {"other": "已添加备注，并截断为 {n} 个字符。"}}
+{"k": "rep.status.note_empty", "src": "1f872085", "v": "这条备注是空的，所以没有添加任何内容。"}
+{"k": "rep.status.note_refused", "src": "c92adef7", "v": "无法添加这条备注。请试试更短、更简单的。"}
+{"k": "rep.status.send_failed", "src": "ff84d63e", "v": "由于 aipager 内部的问题，这份报告无法发送。没有发送任何内容。"}
+{"k": "rep.status.sending", "src": "c338c191", "v": "正在发送…"}
+{"k": "resume.header", "src": "74554c53", "v": "{icon} <b>[{session}]</b> · {state}"}
+{"k": "resume.header_clock", "src": "b1522d3c", "v": "{icon} <b>[{session}]</b> · {state} {clock}"}
+{"k": "resume.more_no_transcript", "src": "d8f1f6e8", "v": {"other": "<i>另有 {n} 个会话没有可用于恢复的已保存对话记录。</i>"}}
+{"k": "resume.no_preview", "src": "34384805", "v": "<i>（无预览）</i>"}
+{"k": "resume.no_transcript", "src": "65416f58", "v": {"other": "<i>{n} 个会话没有可用于恢复的已保存对话记录。</i>"}}
+{"k": "resume.none", "src": "f0e1dc3c", "v": "📭 没有可恢复的以前会话。"}
+{"k": "resume.recent", "src": "c14c1ce4", "v": "最近："}
+{"k": "resume.row", "src": "c75d6298", "v": "🔘 <b>{session}</b>（<i>{when}</i>）"}
+{"k": "resume.row.active", "src": "ebbe643f", "v": "活动：{ago}"}
+{"k": "resume.row.active_now", "src": "95e3adc9", "v": "活动：刚刚"}
+{"k": "resume.row.active_unknown", "src": "15d90554", "v": "活动：未知"}
+{"k": "resume.row.agents", "src": "1344dd37", "v": {"other": "代理：{n}（{types}）"}}
+{"k": "resume.row.agents_count", "src": "abe9706b", "v": {"other": "代理：{n}"}}
+{"k": "resume.row.cost", "src": "68433bc8", "v": "费用：{cost}"}
+{"k": "resume.row.ctx", "src": "edcc7a6b", "v": "上下文：{percent} {bar}"}
+{"k": "resume.row.lines", "src": "439ccc8a", "v": "行数：{changes}"}
+{"k": "resume.row.model", "src": "e60d2adb", "v": "模型：{model}"}
+{"k": "resume.row.output", "src": "2a39ea71", "v": "输出 token：{tokens}"}
+{"k": "resume.row.queue", "src": "865b83a5", "v": "队列：{pending} 条待处理（{queued} 条排队，{notes} 条备注）"}
+{"k": "resume.state.busy", "src": "e18a89f9", "v": "忙碌"}
+{"k": "resume.state.gone", "src": "a6dfdeaa", "v": "已结束"}
+{"k": "resume.state.idle", "src": "1adbcc34", "v": "空闲"}
+{"k": "resume.state.interactive", "src": "00753189", "v": "等待交互"}
+{"k": "resume.state.unknown", "src": "50d8b4a9", "v": "未知"}
+{"k": "resume.tap", "src": "c118e3b9", "v": "点按下方按钮即可恢复。"}
+{"k": "resume.title", "src": "d5cecda8", "v": {"other": "📚 <b>以前的会话</b>（共 {n} 个）"}}
+{"k": "route.btn.resume", "src": "2db3fd81", "v": "🔁 恢复"}
+{"k": "route.btn.resume_label", "src": "5a3f876a", "v": "▶️ 恢复 {session}"}
+{"k": "route.cant_clear_busy", "src": "cf8384cd", "v": "⚠️ 会话正忙，无法清空"}
+{"k": "route.clear_no_active", "src": "1ada2799", "v": "没有活动的会话，请先用 {command} 切换到一个会话。"}
+{"k": "route.clear_nothing", "src": "75578929", "v": "[{session}] 中没有可清除的内容。"}
+{"k": "route.cleared", "src": "fd716ebc", "v": {"other": "🗑️ 已清除 [<b>{session}</b>] 的 {n} 条排队消息。"}}
+{"k": "route.ended_which", "src": "eb950d37", "v": "{session} 已结束。要用哪个会话？"}
+{"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ 不确定这个文件要发给哪个会话。请用 {command} 或键盘选择一个。"}
+{"k": "route.inject_failed", "src": "4793e79c", "v": "❌ 无法把转写文本输入到 [{session}]"}
+{"k": "route.kill_none", "src": "1c62fda9", "v": "没有可结束的会话。"}
+{"k": "route.kill_which", "src": "65bf98de", "v": "要结束哪个会话？"}
+{"k": "route.mention_alone", "src": "c8588bc4", "v": "请单独发送 {command}，不要同时提及机器人。"}
+{"k": "route.model_now", "src": "721a5dbc", "v": "🧠 现在是 {model}"}
+{"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "另一位成员的消息仍在等待被接收，请在它之后再切换模型。"}
+{"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
+{"k": "route.no_active", "src": "96477f98", "v": "⚠️ 没有活动的会话"}
+{"k": "route.no_live_here", "src": "2a22b699", "v": "⚠️ 这里没有名为 <b>{session}</b> 的运行中会话。"}
+{"k": "route.no_session", "src": "f3bc5d54", "v": "⚠️ 不确定这条消息要发给哪个会话。请用 {command} 或键盘选择一个。"}
+{"k": "route.no_session_here", "src": "d6bac23e", "v": "⚠️ 这里没有名为 <b>{session}</b> 的会话。"}
+{"k": "route.not_alive", "src": "248cf0d5", "v": "⚠️ [{session}] 会话已不在运行"}
+{"k": "route.not_working", "src": "40bb3d05", "v": "<b>{session}</b> 没有在工作。"}
+{"k": "route.nothing_running", "src": "3c49e2a3", "v": "没有正在运行的内容。"}
+{"k": "route.queue_full", "src": "f6582eab", "v": {"other": "⚠️ [{session}] 的队列已满（{n} 条待处理）。请回答提示，或清空队列。"}}
+{"k": "route.refusal_frame", "src": "e19d24e3", "v": "⚠️ [{session}] {reason}"}
+{"k": "route.resume_then_resend", "src": "df2cce7e", "v": "点按 ▶️ 恢复 后，请重新发送你的消息。"}
+{"k": "route.retry_note_others", "src": "f54d6bb2", "v": "⏸ 未重试：另一个人的这一轮正在运行。等它结束后再点按“重试”。"}
+{"k": "route.retry_note_prompt", "src": "a9f6356e", "v": "⏸ 未重试：有一个打开的提示。请先回答它，再点按“重试”。"}
+{"k": "route.send_failed", "src": "3c65fe20", "v": "❌ 无法发送到 [{session}]"}
+{"k": "route.sent_to", "src": "72283da2", "v": "{glyph} 已把 {what} 发送到 {session}"}
+{"k": "route.session_missing", "src": "e8086da8", "v": "⚠️ 找不到会话“{name}”"}
+{"k": "route.unknown_session", "src": "2823272e", "v": "⚠️ 未知会话：{session}"}
+{"k": "route.voice_no_session", "src": "6c2d2821", "v": "⚠️ 语音已转写，但没有可发送的活动会话。请先用 {command} 选择一个。"}
+{"k": "route.warning", "src": "4329faf5", "v": "⚠️ {text}"}
+{"k": "route.which_reply", "src": "6771e2f8", "v": "哪个会话？请回复它的某条消息，或发送 {command} 加上你的消息。"}
+{"k": "route.which_stop", "src": "aba80827", "v": "要停止哪一个？"}
+{"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · 被安全策略阻止：{reason}（已停止）"}
+{"k": "safety.reason.bash", "src": "f380389e", "v": "Bash 命令被安全策略阻止"}
+{"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Bash 命令被安全策略阻止：不允许递归搜索或列出整个主文件夹或 /；请改为在项目文件夹内搜索"}
+{"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} 使用了用 .. 跳出目录的 glob"}
+{"k": "safety.reason.glob_escaped", "src": "bf605149", "v": "{tool} 使用了含转义的 glob"}
+{"k": "safety.reason.glob_not_plain", "src": "6db7d611", "v": "{tool} 使用的 glob 不是普通的相对模式"}
+{"k": "safety.reason.glob_unreadable", "src": "da95c3b5", "v": "{tool} 使用了无法读取的 glob"}
+{"k": "safety.reason.halted", "src": "343e090e", "v": "会话已中止：这一轮中之前的某个工具调用被安全策略阻止；请发起新的请求"}
+{"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool} 超出了会话的文件夹：受限的一轮只在其项目和 scratchpad 中搜索"}
+{"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool} 超出了会话的文件夹：受限的一轮只在其项目和 scratchpad 中写入"}
+{"k": "safety.reason.path_protected", "src": "feff9877", "v": "{tool} 涉及受保护的路径 {glob}"}
+{"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool} 写入受保护的路径 {glob}"}
+{"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool} 使用了无法读取的路径"}
+{"k": "safety.reason.pattern_unreadable", "src": "88053cf7", "v": "{tool} 使用了无法读取的模式"}
+{"k": "safety.reason.runs_commands", "src": "e180a703", "v": "{tool} 写入会运行命令的文件（.claude/、.git/、.mcp.json）"}
+{"k": "safety.reason.search_anywhere", "src": "c1ad4431", "v": "{tool} 已拒绝：受保护的路径 {glob} 可能位于任何文件夹中，因此这个角色不能用 Grep 或 Glob 搜索"}
+{"k": "safety.reason.search_could_reach", "src": "a95243b1", "v": "{tool} 搜索可能触及受保护的路径 {glob}"}
+{"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool} 使用了无法读取的搜索文件夹"}
+{"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "{tool} 已拒绝：这次搜索会触及受保护的文件（{shown}）；请改为在项目文件夹内搜索"}
+{"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "{tool} 搜索触及受保护的路径 {glob}"}
+{"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} 在这个角色的 deny_tools 中"}
+{"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} 不在这个角色的 allow_tools 中"}
+{"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "这个工具调用无法检查，因此被拒绝"}
+{"k": "safety.reason.wide_cwd_search", "src": "5112bac1", "v": "{tool} 已拒绝：这个会话在主文件夹（或其上级文件夹）中运行，而这个角色只能在项目文件夹内搜索"}
+{"k": "safety.reason.wide_cwd_write", "src": "90769493", "v": "{tool} 已拒绝：这个会话在主文件夹（或其上级文件夹）中运行，而这个角色只能在项目文件夹内写入"}
+{"k": "sendnow.btn.send", "src": "edac6f66", "v": "⚡ 立即发送"}
+{"k": "sendnow.line", "src": "41e9ef1b", "v": "⏳ 已排队：Claude 会在当前步骤后读取"}
+{"k": "sendnow.line_unreached", "src": "d8eeb821", "v": "⏳ 已排队：无法联系到 Claude，点按“立即发送”重试"}
+{"k": "sendnow.reply_no_session", "src": "cfa31918", "v": "没有活动的会话。"}
+{"k": "sendnow.reply_nothing", "src": "7f03c384", "v": "队列中没有等待的内容"}
+{"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ 已立即发送给 Claude"}
+{"k": "sess.btn.cancel", "src": "77dfd213", "v": "取消"}
+{"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ 取消"}
+{"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ 关闭"}
+{"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ 删除"}
+{"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 Diff"}
+{"k": "sess.btn.end", "src": "58096fa3", "v": "⏹ 结束"}
+{"k": "sess.btn.end_session", "src": "cad78af6", "v": "⏹ 结束会话"}
+{"k": "sess.btn.prefs", "src": "28784f50", "v": "👤 偏好设置"}
+{"k": "sess.btn.rename", "src": "7decc377", "v": "✏️ 重命名"}
+{"k": "sess.btn.restart", "src": "06188389", "v": "🔄 重启"}
+{"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ 恢复"}
+{"k": "sess.cancelled", "src": "3678513b", "v": "↩️ 已取消。"}
+{"k": "sess.delete_cancelled", "src": "7105554d", "v": "已取消删除 [<b>{session}</b>]。"}
+{"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ 要从会话列表中移除 [<b>{session}</b>] 吗？此操作无法撤销。"}
+{"k": "sess.delete_none", "src": "58e4ba7f", "v": "没有可删除的已结束会话。"}
+{"k": "sess.delete_still_running", "src": "ff86cceb", "v": "⚠️ [<b>{session}</b>] 仍在运行。请先用 /kill 结束它。"}
+{"k": "sess.delete_which", "src": "b568401d", "v": "要移除哪个已结束的会话？"}
+{"k": "sess.deleted", "src": "5af8d1c8", "v": "🗑️ 已删除 [<b>{session}</b>]。"}
+{"k": "sess.deleted_by", "src": "38b3ffbc", "v": "🗑️ {person} 已删除 [<b>{session}</b>]。"}
+{"k": "sess.diff_files", "src": "84597d92", "v": {"other": "📝 [<b>{session}</b>] {n} 个文件有改动，+{added}/-{removed}"}}
+{"k": "sess.diff_none", "src": "3b2e4538", "v": "[<b>{session}</b>] 的工作目录中没有改动。"}
+{"k": "sess.diff_none_live", "src": "3f72a95c", "v": "没有可查看 diff 的运行中会话。"}
+{"k": "sess.diff_reason.cwd_missing", "src": "e6e5befa", "v": "[{label}] 的工作目录已不存在。"}
+{"k": "sess.diff_reason.git_error", "src": "18d7631e", "v": "现在无法读取 diff，请重试。"}
+{"k": "sess.diff_reason.git_not_installed", "src": "171dd6a9", "v": "这台机器上没有 git。"}
+{"k": "sess.diff_reason.no_commits_yet", "src": "94fb37e6", "v": "[{label}] 的仓库还没有任何 commit。"}
+{"k": "sess.diff_reason.not_a_git_repo", "src": "c639ff9f", "v": "[{label}] 的目录不是 git 仓库。"}
+{"k": "sess.diff_which", "src": "2485be52", "v": "查看哪个会话的 diff？"}
+{"k": "sess.end_confirm", "src": "dffc4f34", "v": "⏹ 要结束 <b>{session}</b> 吗？Claude 会停止，会话会关闭。"}
+{"k": "sess.ended", "src": "6659a4fd", "v": "⏹ 已结束 <b>{session}</b>"}
+{"k": "sess.ended_by", "src": "9e9bdbd1", "v": "⏹ {person} 已结束 <b>{session}</b>"}
+{"k": "sess.kill_cancelled", "src": "cf4e32bb", "v": "↩️ 已取消。没有结束任何会话。"}
+{"k": "sess.menu_closed", "src": "e2a2c077", "v": "已关闭 [<b>{session}</b>] 的菜单。"}
+{"k": "sess.menu_no_transcript", "src": "72c75098", "v": "<i>没有可用于恢复的已保存对话记录。</i>"}
+{"k": "sess.menu_title", "src": "2a8eb73c", "v": "⋮ <b>{session}</b> - 选择一个操作："}
+{"k": "sess.not_sent_to", "src": "0d040f9f", "v": "未发送到 {session}。"}
+{"k": "sess.pick_cancelled", "src": "d3e4142f", "v": "已取消。"}
+{"k": "sess.rename_cancelled", "src": "abe2ee6d", "v": "已取消重命名。"}
+{"k": "sess.rename_closed", "src": "d06e8a83", "v": "✖️ 重命名已关闭，你已转去做别的事。发送 /rename 再试一次。"}
+{"k": "sess.rename_exists", "src": "3367e703", "v": "⚠️ 这个聊天中已有名为 {session} 的会话。"}
+{"k": "sess.rename_expired", "src": "0235f755", "v": "⏱ 这次重命名已过期。请重新发送 /rename。"}
+{"k": "sess.rename_gone", "src": "86c694ee", "v": "⚠️ 那个会话已不可用，请再次运行 /rename。"}
+{"k": "sess.rename_none", "src": "2d24aff4", "v": "没有可重命名的会话。"}
+{"k": "sess.rename_not_allowed", "src": "97c2b455", "v": "🚫 你不能重命名这个会话。"}
+{"k": "sess.rename_prompt_reply", "src": "eaadafac", "v": "✏️ [<b>{session}</b>] 的新名称是什么？请回复这条消息，写上新名称。"}
+{"k": "sess.rename_prompt_type", "src": "fdf5e253", "v": "✏️ [<b>{session}</b>] 的新名称是什么？请作为一条消息发送。"}
+{"k": "sess.rename_unchanged", "src": "f41d7d6e", "v": "[<b>{session}</b>] 名称未改变。"}
+{"k": "sess.rename_which", "src": "d74e26c1", "v": "要重命名哪个会话？"}
+{"k": "sess.renamed", "src": "53a36720", "v": "✏️ 已将 [<b>{old}</b>] 重命名为 [<b>{new}</b>]。"}
+{"k": "sess.restart_cancelled", "src": "e2123246", "v": "已取消重启 [<b>{session}</b>]。"}
+{"k": "sess.restart_confirm", "src": "eea1e9db", "v": "🔄 要重启会话 [<b>{session}</b>] 吗？Claude 会停止并重新启动，对话会保留。"}
+{"k": "sess.restart_failed", "src": "be8ef8e6", "v": "[{label}] 重启失败。"}
+{"k": "sess.restart_none", "src": "fefd4861", "v": "没有可重启的运行中会话。"}
+{"k": "sess.restart_reason.already_restarting", "src": "119c20da", "v": "[{label}] 已在重启。"}
+{"k": "sess.restart_reason.launch_failed", "src": "fc0525be", "v": "[{label}] 重启失败：{err}"}
+{"k": "sess.restart_reason.not_live", "src": "d841d7b0", "v": "[{label}] 未在运行。"}
+{"k": "sess.restart_reason.still_stopping", "src": "635882f7", "v": "[{label}] 没能及时停止，请稍后再试。"}
+{"k": "sess.restart_which", "src": "0eada720", "v": "要重启哪个会话？"}
+{"k": "sess.restarted", "src": "dc0ed3cb", "v": "🔄 [<b>{session}</b>] 已重启。"}
+{"k": "sess.restarted_by", "src": "f2ddb551", "v": "🔄 {person} 已重启 [<b>{session}</b>]。"}
+{"k": "sess.resume_as", "src": "95516616", "v": "以什么模式恢复 <b>{session}</b>："}
+{"k": "sess.resume_failed", "src": "f19c1968", "v": "❌ 无法恢复 <b>{session}</b>：{error}"}
+{"k": "sess.resume_last_response", "src": "9e8e3733", "v": "<i>📜 这个会话的上一次回复</i>\n<blockquote>{preview}</blockquote>"}
+{"k": "sess.resume_no_transcript", "src": "6b8a4001", "v": "⚠️ 会话 <b>{session}</b> 在磁盘上没有可恢复的对话记录。\n请用 {command} 启动一个新会话。"}
+{"k": "sess.resume_not_found", "src": "4c1d68d2", "v": "⚠️ 历史记录中没有名为 <b>{session}</b> 的会话。\n发送不带名称的 {command}，查看有哪些会话。"}
+{"k": "sess.resume_running", "src": "c090af67", "v": "⚠️ <b>{session}</b> 已在运行。\n点按键盘上的 {command} 切换到它。"}
+{"k": "sess.resumed", "src": "57e147d3", "v": "♻️ 已恢复 <b>{session}</b>"}
+{"k": "sess.resumed_in_ask", "src": "8151879e", "v": "♻️ 已以询问模式恢复 <b>{session}</b>：自动模式需要管理员。"}
+{"k": "sess.sent_to", "src": "d856101f", "v": "已发送到 {session}。"}
+{"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ 关闭"}
+{"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 新会话"}
+{"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 文件夹：{folder} ›"}
+{"k": "set.btn.ns_model", "src": "6fb2e9a4", "v": "🧠 模型：{model} ›"}
+{"k": "set.btn.per_session", "src": "9748363d", "v": "👤 每个会话的偏好"}
+{"k": "set.btn.problem_reports", "src": "2478212a", "v": "🐞 问题报告：{value}"}
+{"k": "set.btn.reports_turn_on", "src": "8b383496", "v": "重新开启报告提议"}
+{"k": "set.btn.use_chat_default", "src": "55c966bc", "v": "↩️ 使用聊天默认值"}
+{"k": "set.cadence.title", "src": "ed8a634b", "v": "⏱ 长轮次的卡片更新"}
+{"k": "set.diffs.title", "src": "9f74873f", "v": "📝 Diff 预览"}
+{"k": "set.formatting.title", "src": "6b0a66a0", "v": "✏️ 简单格式"}
+{"k": "set.help.cadence.off", "src": "71965ae1", "v": "无论这一轮多长，卡片都以相同的频率刷新。"}
+{"k": "set.help.cadence.on", "src": "cb462e4f", "v": "随着这一轮持续，卡片刷新得越来越少（2 分钟后每 10 秒一次，10 分钟后每 30 秒一次），计时也改为每 30 秒跳一次，所以它看起来不会卡住。状态变化仍会立即显示。"}
+{"k": "set.help.diffs.off", "src": "e9b93bde", "v": "文件编辑只会作为工作卡片上的行显示。"}
+{"k": "set.help.diffs.on", "src": "1ad75bf3", "v": "每次 Write/Edit 还会在工作卡片下方单独发一条 diff 消息。"}
+{"k": "set.help.formatting.off", "src": "14016cc5", "v": "Claude 可以随意设置回复格式。"}
+{"k": "set.help.formatting.on", "src": "13c31447", "v": "只用普通段落和短横线列表，不用表格或代码块。"}
+{"k": "set.help.layout.card", "src": "75971a73", "v": "工作卡片保留，回答作为单独的消息发出。"}
+{"k": "set.help.layout.merged", "src": "cb79a1a7", "v": "回答会原地替换工作卡片的正文。"}
+{"k": "set.help.layout.replace", "src": "7802aaf9", "v": "工作卡片会被替换，只留下回答。"}
+{"k": "set.help.length.long", "src": "6d4be59e", "v": "回答需要时给出完整细节。"}
+{"k": "set.help.length.medium", "src": "1f258598", "v": "两段左右。"}
+{"k": "set.help.length.none", "src": "c889d841", "v": "不提供任何长度指引。"}
+{"k": "set.help.length.short", "src": "c4b9b1e2", "v": "几句话。"}
+{"k": "set.help.length.xshort", "src": "b3629257", "v": "一两句话。不要开场白，不要总结。"}
+{"k": "set.help.level.advanced", "src": "820e1448", "v": "默认你是行家，不做手把手讲解。"}
+{"k": "set.help.level.none", "src": "643f8019", "v": "不提供任何用词指引。"}
+{"k": "set.help.level.normal", "src": "530e152e", "v": "普通的技术写作。"}
+{"k": "set.help.level.simple", "src": "748c89ff", "v": "日常用词，句子简短。"}
+{"k": "set.layout.title", "src": "415df682", "v": "🖼 消息布局"}
+{"k": "set.length.title", "src": "0b4f4428", "v": "📏 回答长度"}
+{"k": "set.level.title", "src": "4e19b762", "v": "🎓 词汇水平"}
+{"k": "set.opt.cadence.off", "src": "b44b98a6", "v": "关 - 整轮保持相同频率"}
+{"k": "set.opt.cadence.on", "src": "3843eb22", "v": "开 - 轮次变长时放慢"}
+{"k": "set.opt.chat_default", "src": "58286063", "v": "{option}（聊天默认）"}
+{"k": "set.opt.diffs.off", "src": "64a190d9", "v": "关 - 仅工作卡片"}
+{"k": "set.opt.diffs.on", "src": "3c616425", "v": "开 - 每次编辑一条 diff 消息"}
+{"k": "set.opt.formatting.off", "src": "a779e619", "v": "关 - 默认格式"}
+{"k": "set.opt.formatting.on", "src": "4321e58a", "v": "开 - 仅普通段落"}
+{"k": "set.opt.layout.card", "src": "cb54ae30", "v": "工作卡片 + 结果"}
+{"k": "set.opt.layout.merged", "src": "732da229", "v": "合并到工作消息中"}
+{"k": "set.opt.layout.replace", "src": "1f8e1a41", "v": "用结果替换"}
+{"k": "set.opt.length.long", "src": "11eda67f", "v": "长"}
+{"k": "set.opt.length.medium", "src": "d404968e", "v": "中等"}
+{"k": "set.opt.length.none", "src": "e6752500", "v": "不应用任何规则"}
+{"k": "set.opt.length.short", "src": "0fe7d82f", "v": "短"}
+{"k": "set.opt.length.xshort", "src": "e937255b", "v": "特短"}
+{"k": "set.opt.level.advanced", "src": "4d064726", "v": "进阶"}
+{"k": "set.opt.level.none", "src": "e6752500", "v": "不应用任何规则"}
+{"k": "set.opt.level.normal", "src": "45e118d0", "v": "普通"}
+{"k": "set.opt.level.simple", "src": "0406a446", "v": "简单用词"}
+{"k": "set.opt.ns_default_folder", "src": "56d18a09", "v": "默认文件夹"}
+{"k": "set.opt.ns_default_model", "src": "5fbae11e", "v": "默认模型"}
+{"k": "set.opt.ns_older_model", "src": "3e0492cf", "v": "{model}（旧模型）"}
+{"k": "set.opt.reports.ask", "src": "10a8fd63", "v": "问我"}
+{"k": "set.opt.reports.auto_off", "src": "7e82eed6", "v": "提议已关闭"}
+{"k": "set.opt.reports.off", "src": "e3de5ab0", "v": "关"}
+{"k": "set.text.changed_by", "src": "63c7cabd", "v": "<i>由 {person} 更改。</i>"}
+{"k": "set.text.closed", "src": "731152a0", "v": "已关闭。"}
+{"k": "set.text.intro.cadence", "src": "c2f74acd", "v": "在很长的一轮中，工作卡片多久刷新一次。开启时，随着这一轮变长，刷新会放慢，计时以 30 秒为一步，让长时间运行的聊天稳稳地处在 Telegram 的限制之内。关闭时，整轮都保持最初几分钟的频率。"}
+{"k": "set.text.intro.diffs", "src": "7a426bb1", "v": "是否把每次文件编辑作为单独的 diff 消息发在工作卡片下方。关闭时只保留一张工作卡片和一条回答：卡片仍会列出每次编辑，Mini App 也有 diff 查看器。"}
+{"k": "set.text.intro.formatting", "src": "71988826", "v": "开启时，回复只用普通段落和简单的短横线列表：不用表格、代码块、标题或粗体/斜体。"}
+{"k": "set.text.intro.layout", "src": "891af1fd", "v": "一轮结束后，内容在聊天中如何显示。"}
+{"k": "set.text.intro.length", "src": "e64e4857", "v": "Claude 的回复应该多长。"}
+{"k": "set.text.intro.level", "src": "5ca0f466", "v": "Claude 回复的词汇水平。"}
+{"k": "set.text.ns_folder_title", "src": "f4eab7d6", "v": "📁 <b>新会话的文件夹</b>"}
+{"k": "set.text.ns_model_title", "src": "386d1055", "v": "🧠 <b>新会话的模型</b>"}
+{"k": "set.text.ns_root", "src": "04b79bd3", "v": "🆕 <b>新会话</b>\n\n/new 启动会话时使用的设置。你仍可以在卡片上为单个会话更改它们。\n\n模式：{mode}\n模型：{model}\n文件夹：{folder}"}
+{"k": "set.text.reports_auto_off", "src": "52adfc5a", "v": "自动提议：关闭（你连续拒绝了两次提议）。"}
+{"k": "set.text.reports_env_off", "src": "408411eb", "v": "这台机器上也通过 AIPAGER_REPORT_PROMPTS=0 关闭了提议。"}
+{"k": "set.text.reports_intro", "src": "4fe65258", "v": "当 aipager 多次遇到同一个内部错误时，它可以提议发送报告。你总会先看到报告，除非你点按“发送”，否则不会发送任何内容。\n\n问我：偶尔提议（每 3 天最多一次）。\n关：从不提议。/help 中的“报告问题”始终可用。"}
+{"k": "set.text.reports_title", "src": "036f0be5", "v": "🐞 <b>问题报告</b>"}
+{"k": "set.text.root", "src": "25c10fde", "v": "⚙️ <b>设置</b>\n\n这个聊天中 Claude 回复方式的偏好。点按一个部分即可更改。"}
+{"k": "set.text.row", "src": "b98927cc", "v": "{title}：{value}"}
+{"k": "set.text.spref_field", "src": "53c8e84c", "v": "{title} - 用于 [<b>{session}</b>]\n\n这个会话使用的 {title}，仅对这个会话覆盖本聊天自己的 /settings。"}
+{"k": "set.text.spref_none", "src": "3856fe99", "v": "👤 <b>每个会话的偏好</b>\n\n还没有会话。"}
+{"k": "set.text.spref_pick", "src": "fb84677e", "v": "👤 <b>每个会话的偏好</b>\n\n选择一个会话来覆盖它的回复风格。"}
+{"k": "set.text.spref_root", "src": "b29b833e", "v": "👤 <b>每个会话的偏好 - [{session}]</b>\n\n覆盖这个会话的回复风格。未设置的项目沿用这个聊天的 /settings。⭐ 表示这个会话已覆盖的项目。"}
+{"k": "status.btn.answer", "src": "a16a4eda", "v": "回答"}
+{"k": "status.btn.clear_all", "src": "4944581b", "v": "🧹 全部清除"}
+{"k": "status.btn.ended", "src": "ae183190", "v": {"other": "⚫ 已结束（{n}）"}}
+{"k": "status.btn.more", "src": "a6bc69aa", "v": "⋮ 更多"}
+{"k": "status.btn.new", "src": "fb873221", "v": "🆕 新建"}
+{"k": "status.btn.new_session", "src": "19b62fc4", "v": "🆕 新建会话"}
+{"k": "status.ctx", "src": "daeecae8", "v": "ctx {percent}"}
+{"k": "status.ended", "src": "63dbdb7e", "v": {"other": "⚫ <b>已结束的会话（{n}）</b>\n\n恢复一个、删除一个，或把它们全部从 /status 中清除（它们仍保留在 /resume 中）。"}}
+{"k": "status.ended_shown", "src": "cdde3b66", "v": "这里显示最新的 {max} 个；/resume 会列出全部。"}
+{"k": "status.head", "src": "570c54fe", "v": "{mark}<b>{session}</b> · {glyph} {state}"}
+{"k": "status.no_ended", "src": "a33a986b", "v": "没有已结束的会话。"}
+{"k": "status.no_live", "src": "8f779eb2", "v": "没有运行中的会话。"}
+{"k": "status.none", "src": "a44ee05c", "v": "还没有会话。"}
+{"k": "status.notes", "src": "2e411b05", "v": {"other": "{n} 条备注"}}
+{"k": "status.queue", "src": "20f40005", "v": "队列 {total}（{queued}，{notes}）"}
+{"k": "status.queued", "src": "45c54388", "v": {"other": "{n} 条排队"}}
+{"k": "status.sessions", "src": "65748ab3", "v": {"other": "📊 <b>会话（{n}）</b>"}}
+{"k": "status.switch", "src": "52424cce", "v": "✍️ 现在与 <b>{session}</b> 对话 · {glyph} {state} · {mode}"}
+{"k": "status.talk_dm", "src": "777be8ce", "v": "发送消息，它会发到 {session}。"}
+{"k": "status.talk_group", "src": "bdc24dfd", "v": "回复 {session} 的消息（或提及 {bot}），即可与它对话。"}
+{"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "回复 {session} 的消息（或提及机器人），即可与它对话。"}
+{"k": "status.waiting_answer", "src": "e5832740", "v": "{session} 正在等你回答。"}
+{"k": "toast.already_answered", "src": "3d131a46", "v": "已经回答过了"}
+{"k": "toast.always_degraded", "src": "038f4355", "v": "这个命令没有可保存的“始终允许”规则，已允许一次 [{session}]"}
+{"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}
+{"k": "toast.auth.not_listed", "src": "0baa8bbd", "v": "不在允许名单中"}
+{"k": "toast.busy_retry", "src": "cfc92c41", "v": "忙碌中，请稍后再试"}
+{"k": "toast.cant_resend", "src": "3aa4d727", "v": "这个请求无法重新发送，请在终端中回答"}
+{"k": "toast.cant_stop", "src": "2bf57e30", "v": "你不能停止这个会话。"}
+{"k": "toast.choice_gone", "src": "54298c73", "v": "这个选项已不可用。"}
+{"k": "toast.clear_done", "src": "0e4a4845", "v": {"other": "已从 /status 中清除 {n} 个（仍在 /resume 中）"}}
+{"k": "toast.clear_nothing", "src": "ec219a9c", "v": "没有可清除的内容"}
+{"k": "toast.compact_failed", "src": "84398886", "v": "无法发送 /compact"}
+{"k": "toast.compact_sending", "src": "afcbfe26", "v": "正在压缩 [{session}]"}
+{"k": "toast.gate_other_chat", "src": "fcc9d88a", "v": "这个按钮属于另一个聊天。"}
+{"k": "toast.gate_refused", "src": "c6436f0e", "v": "你的角色不能在这里这样做。"}
+{"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "无效的回调"}
+{"k": "toast.invalid_value", "src": "7e5ba817", "v": "无效的值"}
+{"k": "toast.kill_stale", "src": "90e64cd6", "v": "这个按钮已过期，请重新发送 /kill"}
+{"k": "toast.moved_on_status", "src": "be925157", "v": "{session} 已开始新的工作，再点一次 ⏹ 停止 来停止它"}
+{"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} 已开始新的工作，请重新发送 /stop"}
+{"k": "toast.new_cant_change", "src": "279d4392", "v": "你不能更改这个会话。"}
+{"k": "toast.new_cant_start_here", "src": "9f749720", "v": "你不能在这里启动会话。"}
+{"k": "toast.new_cant_start_resume", "src": "25c7e34f", "v": "你不能在这里启动或恢复会话。"}
+{"k": "toast.new_card_expired", "src": "c7d3826b", "v": "这张卡片已过期。"}
+{"k": "toast.new_card_replaced", "src": "8e108c47", "v": "那张卡片已被替换。请使用新的。"}
+{"k": "toast.new_expired", "src": "85077001", "v": "这张卡片已过期。请重新发送 /new。"}
+{"k": "toast.new_folder_gone", "src": "4b183fca", "v": "那个文件夹已不可用。"}
+{"k": "toast.new_invalid_model", "src": "ae01cc11", "v": "无效的模型"}
+{"k": "toast.new_model_gone", "src": "0f464c34", "v": "那个模型已不再提供。"}
+{"k": "toast.new_no_folder_yet", "src": "87860358", "v": "还没有可用的文件夹：请先从真实的项目文件夹启动一个会话。"}
+{"k": "toast.new_not_yours", "src": "393f95a6", "v": "这不是你的新会话。"}
+{"k": "toast.new_only_sender", "src": "9e109f78", "v": "只有发送 /new 的人可以使用这张卡片。"}
+{"k": "toast.new_started_since", "src": "e8602889", "v": "{session} 在那之后已开始工作。请重新发送 /new 来替换它。"}
+{"k": "toast.new_switch_failed", "src": "a8ef2ee3", "v": "无法切换模型。"}
+{"k": "toast.new_switching", "src": "8c8980ce", "v": "正在切换…"}
+{"k": "toast.new_switching_to", "src": "09c7272f", "v": "正在切换到 {model}"}
+{"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} 正在工作。请在它完成后再切换，或使用 /mode。"}
+{"k": "toast.not_working", "src": "1ec204d3", "v": "{session} 没有在工作"}
+{"k": "toast.open_chat", "src": "202c3e06", "v": "打开聊天来回答"}
+{"k": "toast.owner_card", "src": "80b06bcd", "v": "这是 {owner} 的卡片。"}
+{"k": "toast.owner_card_send", "src": "7b051dc9", "v": "这是 {owner} 的卡片。发送 {command} 获取你自己的。"}
+{"k": "toast.perms_needs_admin", "src": "fe68d230", "v": "自动模式需要管理员。"}
+{"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} 正在重启，请稍后再点"}
+{"k": "toast.perms_stale", "src": "4e34769b", "v": "这张卡片已过期，没有任何更改"}
+{"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} 仍在启动，请稍后再试"}
+{"k": "toast.prompt_expired", "src": "260f4c88", "v": "这个请求已过期"}
+{"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram 正在限制这个聊天的频率，请在 {time} 之后再试"}
+{"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "正在发送中。"}
+{"k": "toast.rep.already_sent", "src": "99493916", "v": "已经发送过了。"}
+{"k": "toast.rep.in_dm", "src": "88740c30", "v": "报告预览在你和机器人的私聊中。"}
+{"k": "toast.rep.no_owner", "src": "b43a6c7c", "v": "无法打开报告预览：这个安装没有唯一的所有者聊天。"}
+{"k": "toast.rep.not_opened", "src": "8841123f", "v": "现在无法打开报告预览。请稍后再试。"}
+{"k": "toast.rep.not_owner", "src": "ed142ea6", "v": "只有这个 aipager 的所有者才能报告问题。"}
+{"k": "toast.rep.offer_stale", "src": "f5aa4d59", "v": "这个提议已不再有效。"}
+{"k": "toast.retry_failed", "src": "8954b4b9", "v": "重试失败"}
+{"k": "toast.retry_not_alive", "src": "807834ac", "v": "会话“{session}”已不在运行"}
+{"k": "toast.retry_nothing", "src": "def91a40", "v": "没有可重试的内容"}
+{"k": "toast.retry_others_turn", "src": "b243bab8", "v": "另一个人的这一轮正在运行，请等它结束后再重试"}
+{"k": "toast.retry_prompt_open", "src": "2554567b", "v": "请先回答打开的请求，再重试"}
+{"k": "toast.retry_retrying", "src": "b5a61b76", "v": "正在重试 [{session}]"}
+{"k": "toast.send_failed", "src": "0fbea382", "v": "无法发送到 {session}"}
+{"k": "toast.send_keys_failed", "src": "32458da9", "v": "无法发送按键"}
+{"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "正忙，请稍后再试"}
+{"k": "toast.sendnow_cant_prompt", "src": "bf90455f", "v": "你不能向这个会话发送消息"}
+{"k": "toast.sendnow_failed", "src": "57a26c8a", "v": "无法联系到 Claude，请重试"}
+{"k": "toast.sendnow_interactive", "src": "1b518935", "v": "请先回答打开的问题"}
+{"k": "toast.sendnow_sending", "src": "d05719f1", "v": "正在立即发送给 Claude"}
+{"k": "toast.sendnow_sent", "src": "9ab32ed2", "v": "已立即发送给 Claude"}
+{"k": "toast.sendnow_taken", "src": "00735887", "v": "已被接收"}
+{"k": "toast.sendnow_typing", "src": "84af1903", "v": "正在输入一条提示，请稍后再试"}
+{"k": "toast.sess_already_ended", "src": "26dff17c", "v": "那个会话已经结束了。"}
+{"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} 已经是 {mode}。"}
+{"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "你不能删除这个会话。"}
+{"k": "toast.sess_cant_end", "src": "ab082660", "v": "你不能结束这个会话。"}
+{"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "你不能重命名这个会话。"}
+{"k": "toast.sess_cant_restart", "src": "5e8c842b", "v": "你不能重启这个会话。"}
+{"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "你不能恢复这个会话。"}
+{"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "那个会话现在无法恢复。"}
+{"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "你不能向这个会话发送消息。"}
+{"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "{session} 没有停止，请重试"}
+{"k": "toast.sess_ended", "src": "394de850", "v": "⏹ 已结束 {session}"}
+{"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {person} 已结束 {session}"}
+{"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} 已开始新的工作，再点一次 ⏹ 结束会话 来结束它"}
+{"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} 已开始新的工作，再点一次 🔄 重启 来重启它"}
+{"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} 已开始新的工作，如果仍要切换，请再点一次切换"}
+{"k": "toast.sess_not_found_named", "src": "a71f5ae2", "v": "找不到 {session}"}
+{"k": "toast.sess_not_your_rename", "src": "ed45ef6a", "v": "这不是你的重命名。"}
+{"k": "toast.sess_restart_stale", "src": "753fe0fb", "v": "这个按钮已过期，请重新发送 /restart"}
+{"k": "toast.sess_restarting", "src": "5f69a1ca", "v": "正在重启 {session}…"}
+{"k": "toast.sess_resuming", "src": "2a557399", "v": "这个会话正在恢复。请稍后再试。"}
+{"k": "toast.sess_resuming_kill", "src": "227bdae1", "v": "{session} 正在恢复，请稍后再发送 /kill"}
+{"k": "toast.sess_resuming_retry", "src": "2845ff55", "v": "{session} 正在恢复，请稍后再试"}
+{"k": "toast.sess_still_running", "src": "1ab407e3", "v": "那个会话仍在运行。请先结束它。"}
+{"k": "toast.sess_target", "src": "d28d6d9c", "v": "✍️ 消息会发到 {session}"}
+{"k": "toast.session_ended", "src": "3a3a8392", "v": "那个会话已结束。"}
+{"k": "toast.session_gone", "src": "9360b8a3", "v": "找不到会话“{session}”"}
+{"k": "toast.session_gone_settings", "src": "8af767e3", "v": "这个会话已不可用，请重新打开 /settings。"}
+{"k": "toast.session_not_found", "src": "4c2e72c7", "v": "找不到会话"}
+{"k": "toast.session_not_here", "src": "54eb8580", "v": "那个会话不在这里运行。"}
+{"k": "toast.session_unavailable", "src": "773d1a0f", "v": "那个会话已不可用"}
+{"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "只有管理员可以更改这个群组的设置。"}
+{"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "你不能更改这个会话的偏好设置。"}
+{"k": "toast.stop_stale", "src": "51073518", "v": "那个任务已经完成，请使用当前的卡片"}
+{"k": "toast.unknown_action", "src": "967e7e51", "v": "未知：{action}"}
+{"k": "toast.upd.checking", "src": "820d6004", "v": "正在检查…"}
+{"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 只有管理员可以更新 aipager。"}
+{"k": "toast.upd.menu_old", "src": "6c988fa7", "v": "这个菜单已过期，请重新发送 /update"}
+{"k": "toast.upd.stale", "src": "d9ed1389", "v": "那次更新已经完成"}
+{"k": "toast.verb", "src": "985eb765", "v": "{verb} [{session}]"}
+{"k": "tx.api.billing", "src": "031e8f3d", "v": "Anthropic 订阅或额度余额有问题。请在 {url} 查看你的控制台"}
+{"k": "tx.api.connection", "src": "3a0ef982", "v": "与 Anthropic 的连接已断开。请检查网络后重试。"}
+{"k": "tx.api.generic", "src": "429166c0", "v": "发生了 API 错误。"}
+{"k": "tx.api.internal", "src": "030afe43", "v": "Anthropic 的服务器出现内部错误。通常几秒内就会恢复。"}
+{"k": "tx.api.overloaded", "src": "6f545f5b", "v": "Anthropic 的服务器负载过高。请稍后再试。"}
+{"k": "tx.api.rate_limit", "src": "234c6146", "v": "达到速率限制。请稍等片刻再重试。"}
+{"k": "tx.api.rate_limit_wait", "src": "a2053ce3", "v": "达到速率限制。请等待 {seconds} 秒再重试。"}
+{"k": "tx.auto_needs_admin", "src": "bd96281e", "v": "自动模式需要管理员。"}
+{"k": "tx.needs_admin", "src": "a2f55b85", "v": "这个命令需要管理员。"}
+{"k": "tx.retry_others", "src": "4ad540c7", "v": "只有发送者本人才能重试那个命令。"}
+{"k": "tx.truncated", "src": "27710457", "v": "…［已截断］"}
+{"k": "ui.action.failed", "src": "1bd1baa4", "v": "无法完成该操作。"}
+{"k": "ui.action.unreachable", "src": "209155a8", "v": "无法连接到服务器。没有任何更改。"}
+{"k": "ui.activity.aria", "src": "649780e8", "v": {"other": "最近活动：{n} 次工具调用。打开时间线。"}}
+{"k": "ui.activity.failed", "src": "6c746778", "v": "{tool}（失败）"}
+{"k": "ui.activity.queued", "src": "45c54388", "v": {"other": "{n} 条排队"}}
+{"k": "ui.activity.recent", "src": "72d5617f", "v": "最近活动"}
+{"k": "ui.activity.running", "src": "21ceddba", "v": "{tool}（运行中）"}
+{"k": "ui.activity.running_for", "src": "181f56b1", "v": "{tool}（运行中 {clock}）"}
+{"k": "ui.activity.title", "src": "81c0d915", "v": "活动"}
+{"k": "ui.age.days", "src": "e827dc07", "v": "{n} 天前"}
+{"k": "ui.age.hours", "src": "1235f668", "v": "{n} 小时前"}
+{"k": "ui.age.minutes", "src": "83f8dc33", "v": "{n} 分钟前"}
+{"k": "ui.age.seconds", "src": "b4e09dd8", "v": "{n} 秒前"}
+{"k": "ui.answer.cannot", "src": "40c455f0", "v": "你不能在这个聊天中回答提示。"}
+{"k": "ui.answer.send_failed", "src": "9a2e8fac", "v": "无法把请求发到聊天中。"}
+{"k": "ui.answer.sent", "src": "ba35b7cb", "v": "已发到聊天中。请在那里回答。"}
+{"k": "ui.answer.unreachable", "src": "f159beba", "v": "无法连接到服务器。没有发送任何内容。"}
+{"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude 在问你一个问题。"}
+{"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "打开 {session}"}
+{"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude 想使用一个工具。"}
+{"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "清空队列"}
+{"k": "ui.btn.action.compact", "src": "10c986db", "v": "立即压缩"}
+{"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "删除"}
+{"k": "ui.btn.action.kill", "src": "7b932e77", "v": "结束"}
+{"k": "ui.btn.action.rename", "src": "d3f4cb89", "v": "重命名"}
+{"k": "ui.btn.action.restart", "src": "b134bd55", "v": "重启"}
+{"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "恢复"}
+{"k": "ui.btn.action.stop", "src": "9e253470", "v": "停止"}
+{"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "在聊天中回答"}
+{"k": "ui.btn.cancel", "src": "77dfd213", "v": "取消"}
+{"k": "ui.btn.check_again", "src": "e185048c", "v": "再次检查"}
+{"k": "ui.btn.check_updates", "src": "736b9062", "v": "检查更新"}
+{"k": "ui.btn.checking", "src": "820d6004", "v": "正在检查…"}
+{"k": "ui.btn.close_app", "src": "73743dc4", "v": "关闭应用"}
+{"k": "ui.btn.copied", "src": "8e3df45a", "v": "已复制"}
+{"k": "ui.btn.copy", "src": "af74f7c5", "v": "复制"}
+{"k": "ui.btn.done", "src": "e9b450d1", "v": "完成"}
+{"k": "ui.btn.new_session", "src": "5c881d23", "v": "新建会话"}
+{"k": "ui.btn.not_now", "src": "e4571490", "v": "暂不"}
+{"k": "ui.btn.report", "src": "24f3f52d", "v": "报告问题"}
+{"k": "ui.btn.reset", "src": "44c57abd", "v": "重置"}
+{"k": "ui.btn.reset_defaults", "src": "ddefe47d", "v": "恢复默认设置"}
+{"k": "ui.btn.restart_now", "src": "af2c3d8e", "v": "立即重启"}
+{"k": "ui.btn.save", "src": "efc007a3", "v": "保存"}
+{"k": "ui.btn.send_report", "src": "a5b32af9", "v": "发送报告"}
+{"k": "ui.btn.sending", "src": "c338c191", "v": "正在发送…"}
+{"k": "ui.btn.start_session", "src": "76684eaf", "v": "启动会话"}
+{"k": "ui.btn.stop_and_switch", "src": "21c1d7af", "v": "停止任务并切换"}
+{"k": "ui.btn.switch", "src": "3e44c920", "v": "切换"}
+{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "切换到询问"}
+{"k": "ui.btn.switch_to_auto", "src": "13a0f246", "v": "切换到自动"}
+{"k": "ui.btn.try_again", "src": "042c862e", "v": "重试"}
+{"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "再等 10 分钟"}
+{"k": "ui.confirm.delete", "src": "734db731", "v": "要删除 {session} 吗？"}
+{"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "这会把会话从你的列表中移除。它的对话记录仍保留在磁盘上。"}
+{"k": "ui.confirm.kill", "src": "804fbc7f", "v": "要结束 {session} 吗？"}
+{"k": "ui.confirm.kill_body", "src": "beff52e4", "v": "这会停止并移除这个会话。它正在运行的任何内容都会被中断。"}
+{"k": "ui.confirm.perms_ask", "src": "c0710578", "v": "要把 {session} 切换到询问模式吗？"}
+{"k": "ui.confirm.perms_ask_body", "src": "701538b8", "v": "Claude 会在运行工具前询问。"}
+{"k": "ui.confirm.perms_auto", "src": "b6a1ddde", "v": "要把 {session} 切换到自动模式吗？"}
+{"k": "ui.confirm.perms_auto_body", "src": "7d8bf9c6", "v": "Claude 会不经询问直接运行工具。"}
+{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "要停止当前任务，并把 {session} 切换到询问吗？"}
+{"k": "ui.confirm.perms_busy_auto", "src": "d4090a8b", "v": "要停止当前任务，并把 {session} 切换到自动吗？"}
+{"k": "ui.confirm.rename", "src": "92656d63", "v": "要重命名 {session} 吗？"}
+{"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "会话会保留它的历史记录和工作目录。只有名称会改变。"}
+{"k": "ui.confirm.reset", "src": "e13d0ebf", "v": "要把设置恢复为默认值吗？"}
+{"k": "ui.confirm.reset_body", "src": "f2fd45cf", "v": "这个会话自己的设置会被清除，并重新沿用这个聊天的默认值。"}
+{"k": "ui.confirm.restart", "src": "47a0c787", "v": "要重启 {session} 吗？"}
+{"k": "ui.confirm.restart_body", "src": "5ec9d004", "v": "会话会停止，并带着相同的历史记录重新启动。正在进行的任何一轮都会被中断。"}
+{"k": "ui.conn.expired", "src": "45a6f9ad", "v": "已过期"}
+{"k": "ui.conn.live", "src": "98aadb37", "v": "在线"}
+{"k": "ui.conn.no_init", "src": "e2ebd902", "v": "请从 Telegram 应用中打开此页面以登录。"}
+{"k": "ui.conn.offline", "src": "d1ffda5d", "v": "离线"}
+{"k": "ui.conn.reconnecting", "src": "6b160044", "v": "正在重新连接…"}
+{"k": "ui.conn.session_expired", "src": "c1c71ef8", "v": "登录会话已过期。请在 Telegram 中通过 {command} 重新打开。"}
+{"k": "ui.conn.unreachable", "src": "eb8937f2", "v": "无法连接到服务器。请检查隧道。"}
+{"k": "ui.daemon.uptime", "src": "18bb02cb", "v": "已运行 {n} 分钟"}
+{"k": "ui.detail.latest_reply", "src": "455aaef0", "v": "最新回复"}
+{"k": "ui.detail.session_settings", "src": "ed40d944", "v": "会话设置"}
+{"k": "ui.detail.settings_readonly", "src": "aebade5f", "v": "只有可以向这个会话发送提示的人才能更改这些。"}
+{"k": "ui.diff.binary", "src": "810945bb", "v": "二进制文件（无预览）。"}
+{"k": "ui.diff.change.added", "src": "172415f0", "v": "新增"}
+{"k": "ui.diff.change.deleted", "src": "b639f5cc", "v": "已删除"}
+{"k": "ui.diff.change.modified", "src": "99db3247", "v": "已修改"}
+{"k": "ui.diff.change.renamed", "src": "87620709", "v": "已重命名"}
+{"k": "ui.diff.change.untracked", "src": "d7390aa3", "v": "未跟踪"}
+{"k": "ui.diff.clean", "src": "6eb6e7bf", "v": "没有未提交的改动。"}
+{"k": "ui.diff.clean_in", "src": "0bde87e2", "v": "{repo} 中没有未提交的改动。"}
+{"k": "ui.diff.failed", "src": "5d47ec55", "v": "无法加载 diff。"}
+{"k": "ui.diff.gone", "src": "38a63905", "v": "会话已不可用。"}
+{"k": "ui.diff.loading", "src": "c569ad51", "v": "正在加载 diff…"}
+{"k": "ui.diff.no_changes", "src": "9b1fcbda", "v": "没有改动。"}
+{"k": "ui.diff.partial", "src": "4aa4772f", "v": "只显示了部分改动的文件。完整的 diff 超出了这个查看器能显示的范围。"}
+{"k": "ui.diff.reason.cwd_missing", "src": "4140481e", "v": "这个会话的工作目录已不存在。"}
+{"k": "ui.diff.reason.git_error", "src": "c6f57086", "v": "git 无法为这个会话生成 diff。"}
+{"k": "ui.diff.reason.git_not_installed", "src": "171dd6a9", "v": "这台机器上没有 git。"}
+{"k": "ui.diff.reason.no_commits_yet", "src": "cc383c84", "v": "这个仓库还没有任何 commit。"}
+{"k": "ui.diff.reason.not_a_git_repo", "src": "287b446f", "v": "这个会话的工作目录不是 git 仓库。"}
+{"k": "ui.diff.title", "src": "fe25abc0", "v": "改动的文件"}
+{"k": "ui.diff.title_n", "src": "6222be44", "v": {"other": "改动的文件（{n}）"}}
+{"k": "ui.diff.title_none", "src": "447a466c", "v": "改动的文件（无）"}
+{"k": "ui.diff.too_large", "src": "7aafaa23", "v": "diff 太大，无法显示。"}
+{"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "diff 不可用。"}
+{"k": "ui.done.already_gone", "src": "9f734fbb", "v": "已经不在了。"}
+{"k": "ui.done.clearqueue", "src": "c97917b3", "v": "已清空。"}
+{"k": "ui.done.compact", "src": "399fec37", "v": "正在压缩…"}
+{"k": "ui.done.delete", "src": "48ea780f", "v": "已删除。"}
+{"k": "ui.done.generic", "src": "e2bcda84", "v": "完成。"}
+{"k": "ui.done.kill", "src": "eb388bd9", "v": "已结束。"}
+{"k": "ui.done.perms", "src": "144199df", "v": "已切换。"}
+{"k": "ui.done.rename", "src": "b930ba4a", "v": "已重命名。"}
+{"k": "ui.done.rename_same", "src": "ea00acbd", "v": "没有变化。"}
+{"k": "ui.done.restart", "src": "519ed942", "v": "已重启。"}
+{"k": "ui.done.resume", "src": "ac66e08b", "v": "已恢复。"}
+{"k": "ui.done.stop", "src": "8fcc7be3", "v": "已停止。"}
+{"k": "ui.empty.text", "src": "8ff2cab6", "v": "在这里启动一个，或在聊天中发送 {command}。"}
+{"k": "ui.empty.title", "src": "a44ee05c", "v": "还没有会话。"}
+{"k": "ui.grid.finished_n", "src": "8e06a605", "v": {"other": "已结束（{n}）"}}
+{"k": "ui.grid.needs_you", "src": "0d9d0df1", "v": "需要你"}
+{"k": "ui.kind.permission", "src": "17857134", "v": "权限"}
+{"k": "ui.kind.question", "src": "002ff598", "v": "问题"}
+{"k": "ui.kind_word.permission", "src": "6d244f58", "v": "权限"}
+{"k": "ui.kind_word.question", "src": "3b2be2e2", "v": "问题"}
+{"k": "ui.menu.changed", "src": "512ec84b", "v": "这个会话已变化。请重新打开菜单。"}
+{"k": "ui.model.failed", "src": "a8ef2ee3", "v": "无法切换模型。"}
+{"k": "ui.model.now", "src": "3dd35778", "v": "模型现在是 {model}。"}
+{"k": "ui.model.switching", "src": "4a9961a0", "v": "正在切换…"}
+{"k": "ui.model.title", "src": "68c2cc7f", "v": "模型"}
+{"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "未确认（请检查会话）"}
+{"k": "ui.model.unreachable", "src": "82a93142", "v": "无法连接到服务器。请检查会话的模型。"}
+{"k": "ui.new.auto_needs_admin", "src": "ad1f0c2f", "v": "自动模式需要管理员。"}
+{"k": "ui.new.chips_recent", "src": "76eec760", "v": "最近"}
+{"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "推荐"}
+{"k": "ui.new.cli_model", "src": "80e3c49d", "v": "CLI 自己的默认模型"}
+{"k": "ui.new.create_failed", "src": "c55f566f", "v": "无法创建该会话。"}
+{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "创建这个文件夹"}
+{"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "你不能在这里创建会话。"}
+{"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "无法连接到服务器。会话没有创建。"}
+{"k": "ui.new.created", "src": "77ea75b5", "v": "会话已创建。"}
+{"k": "ui.new.creating", "src": "94d7d8ee", "v": "正在创建…"}
+{"k": "ui.new.cwd_title", "src": "e8c598ee", "v": "工作目录"}
+{"k": "ui.new.daemon_dir", "src": "2503c8cf", "v": "守护进程自己的目录"}
+{"k": "ui.new.default", "src": "808d7dca", "v": "默认"}
+{"k": "ui.new.default_dir_help", "src": "6d7d5fbc", "v": "守护进程自己的目录"}
+{"k": "ui.new.default_model_help", "src": "17ab4082", "v": "CLI 配置使用的任何模型"}
+{"k": "ui.new.folder_created", "src": "6b6ea299", "v": "文件夹已创建。"}
+{"k": "ui.new.folder_existed", "src": "bfe299bc", "v": "那个文件夹已经存在，所以已选中它。"}
+{"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "无法创建该文件夹。"}
+{"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "你不能在这里创建文件夹。"}
+{"k": "ui.new.folder_name", "src": "85f87fa3", "v": "新文件夹名称"}
+{"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "无法连接到服务器。没有创建文件夹。"}
+{"k": "ui.new.mode_ask", "src": "3562777b", "v": "询问"}
+{"k": "ui.new.mode_ask_help", "src": "eca1be33", "v": "Claude 会在运行工具前询问"}
+{"k": "ui.new.mode_auto", "src": "c614ba7c", "v": "自动"}
+{"k": "ui.new.mode_auto_help", "src": "306e8992", "v": "不经询问直接运行工具"}
+{"k": "ui.new.mode_title", "src": "9c8c621a", "v": "权限模式"}
+{"k": "ui.new.model_name", "src": "5ebb9765", "v": "模型名称"}
+{"k": "ui.new.model_needed", "src": "c585e482", "v": "输入模型名称以继续。"}
+{"k": "ui.new.model_pattern", "src": "7222f368", "v": "请使用英文字母、数字、点和连字符，并以英文字母或数字开头。"}
+{"k": "ui.new.more", "src": "86c0a35e", "v": "更多选项"}
+{"k": "ui.new.name", "src": "709a2322", "v": "名称"}
+{"k": "ui.new.new_folder", "src": "a711999b", "v": "新建文件夹"}
+{"k": "ui.new.new_folder_help", "src": "29aa13d5", "v": "位于上面所选的目录中"}
+{"k": "ui.new.not_set", "src": "770e48ee", "v": "尚未设置"}
+{"k": "ui.new.other_model", "src": "cc3190e7", "v": "其他模型"}
+{"k": "ui.new.other_model_help", "src": "561f7c9e", "v": "输入完整名称，例如 {example}"}
+{"k": "ui.new.pick_dir_first", "src": "969b0a9b", "v": "请先在上面选择一个工作目录。"}
+{"k": "ui.new.requires_admin", "src": "e18e02eb", "v": "需要管理员"}
+{"k": "ui.new.sub", "src": "23b19317", "v": "给它起个名字，选一个文件夹，Claude 就会在那里启动。"}
+{"k": "ui.new.summary_ask", "src": "3e987f2e", "v": "将在 {where} 以询问模式启动 Claude，使用 {model}。"}
+{"k": "ui.new.summary_auto", "src": "d0968e63", "v": "将在 {where} 以自动模式启动 Claude，使用 {model}。"}
+{"k": "ui.new.summary_named_ask", "src": "ccbc6d09", "v": "将以 {name} 的名称在 {where} 以询问模式启动 Claude，使用 {model}。"}
+{"k": "ui.new.summary_named_auto", "src": "4b48c549", "v": "将以 {name} 的名称在 {where} 以自动模式启动 Claude，使用 {model}。"}
+{"k": "ui.new.title", "src": "5c881d23", "v": "新建会话"}
+{"k": "ui.new.where", "src": "525f61b6", "v": "位置"}
+{"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "这个会话结束前没有捕获到任何内容。"}
+{"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "还没有捕获到内容。Claude 回复后就会出现。"}
+{"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "一切安静"}
+{"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"other": "{n} 个已结束"}}
+{"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"other": "{n} 个需要你"}}
+{"k": "ui.pulse.resting", "src": "644f3b40", "v": {"other": "{n} 个空闲"}}
+{"k": "ui.pulse.spent", "src": "908f77ef", "v": "已花费 {cost}"}
+{"k": "ui.pulse.unknown", "src": "23ca6f83", "v": {"other": "{n} 个未知"}}
+{"k": "ui.pulse.working", "src": "c3aee490", "v": {"other": "{n} 个工作中"}}
+{"k": "ui.rename.empty", "src": "e00fbfca", "v": "会话名称不能为空。"}
+{"k": "ui.rename.failed", "src": "07c216e4", "v": "无法重命名。"}
+{"k": "ui.rename.pattern", "src": "b916e083", "v": "请使用英文字母、数字、连字符和下划线，并以英文字母或数字开头。"}
+{"k": "ui.rename.reserved", "src": "9440c7ea", "v": "“{name}”是保留的命令名。"}
+{"k": "ui.rename.too_long", "src": "9b31bc40", "v": "会话名称不能超过 {max} 个字符。"}
+{"k": "ui.report.also_through", "src": "1d1b7026", "v": "还经过了：{names}"}
+{"k": "ui.report.as_written", "src": "21532af3", "v": "按你写的原样发送。"}
+{"k": "ui.report.bad_note", "src": "c92adef7", "v": "无法添加这条备注。请试试更短、更简单的。"}
+{"k": "ui.report.card_text", "src": "45e21208", "v": "告诉维护者哪里出了问题。发送任何内容之前，你都会看到完整的报告。"}
+{"k": "ui.report.copied", "src": "dd2ce2e2", "v": "已复制。"}
+{"k": "ui.report.copy_hint", "src": "7d76506f", "v": "长按参考编号即可复制。"}
+{"k": "ui.report.daily_cap_title", "src": "9bdf248a", "v": "已达每日上限"}
+{"k": "ui.report.err.crash", "src": "78d1bcc4", "v": "aipager 意外停止"}
+{"k": "ui.report.err.error", "src": "7f2f6a15", "v": "错误"}
+{"k": "ui.report.err.hook_cap", "src": "f4162559", "v": "hook 达到了内存上限"}
+{"k": "ui.report.err.logged_in", "src": "ad58db0c", "v": "{area} 中记录的错误"}
+{"k": "ui.report.err.type_in", "src": "15f9e48c", "v": "{area} 中的 {type}"}
+{"k": "ui.report.err_detail", "src": "97fb369f", "v": "{fingerprint}，首次出现于 {day}，版本 {versions}"}
+{"k": "ui.report.err_sub", "src": "917846a1", "v": "{times}，最后一次出现于 {day}"}
+{"k": "ui.report.errors", "src": "805e86a8", "v": "错误"}
+{"k": "ui.report.errors_n", "src": "07ba7666", "v": {"other": "错误（{n}）"}}
+{"k": "ui.report.exact", "src": "ea8e4b11", "v": "显示完整报告原文"}
+{"k": "ui.report.exact_note", "src": "991b0c14", "v": "这就是会被发送的原文，包括你的备注。"}
+{"k": "ui.report.exit.clean", "src": "6a1cec45", "v": "正常"}
+{"k": "ui.report.exit.crash", "src": "dd472460", "v": "一次崩溃"}
+{"k": "ui.report.exit.reboot", "src": "118341f6", "v": "一次机器重启"}
+{"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "未知"}
+{"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "改动预览"}
+{"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
+{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "观察者机器人"}
+{"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "丰富摘要"}
+{"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "托管隧道"}
+{"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "自定义隧道地址"}
+{"k": "ui.report.feature.voice", "src": "704617a7", "v": "语音消息"}
+{"k": "ui.report.foot", "src": "09700e47", "v": "在你点按“发送报告”之前，不会发送任何内容。报告会发送到维护者的错误收件箱，不带你的名字。"}
+{"k": "ui.report.label.counts", "src": "a7e0a1c5", "v": "次数（过去 24 小时）"}
+{"k": "ui.report.label.features", "src": "fc338f87", "v": "功能"}
+{"k": "ui.report.label.libraries", "src": "27c968e6", "v": "库"}
+{"k": "ui.report.label.limits", "src": "ca1be69e", "v": "Telegram 限制"}
+{"k": "ui.report.label.log", "src": "499fd95d", "v": "日志（过去 24 小时）"}
+{"k": "ui.report.label.setup", "src": "cdd7bb28", "v": "部署方式"}
+{"k": "ui.report.label.stops", "src": "0e648419", "v": "停止情况"}
+{"k": "ui.report.label.system", "src": "bc0792d8", "v": "系统"}
+{"k": "ui.report.later", "src": "685cd810", "v": "aipager 没有及时回应。请再次点按“发送报告”：如果它已经发出，你会看到它的参考编号，不会重复发送。"}
+{"k": "ui.report.limits", "src": "22297d2d", "v": {"other": "7 天内 {n} 次封禁，最繁忙时段负载 {load}"}}
+{"k": "ui.report.log_line", "src": "5069aaa9", "v": {"other": "{n} 处代码记录了警告或错误（{times}）"}}
+{"k": "ui.report.missing", "src": "995357dd", "v": "（缺失）"}
+{"k": "ui.report.more", "src": "473710d3", "v": "更多详情"}
+{"k": "ui.report.n_groups", "src": "1a2fac9e", "v": {"other": "{n} 个群组"}}
+{"k": "ui.report.n_private_chats", "src": "5922fc21", "v": {"other": "{n} 个私聊"}}
+{"k": "ui.report.no_errors", "src": "a5697d50", "v": "最近没有记录到错误。上面的信息和你的备注仍然有帮助。"}
+{"k": "ui.report.none", "src": "6eef6648", "v": "无"}
+{"k": "ui.report.not_found", "src": "475c8486", "v": "未找到"}
+{"k": "ui.report.not_sent", "src": "587c501e", "v": "未发送"}
+{"k": "ui.report.note_label", "src": "24a9a8bc", "v": "你的备注（可选）"}
+{"k": "ui.report.note_placeholder", "src": "e2bf7584", "v": "出问题时你在做什么？"}
+{"k": "ui.report.nothing_logged", "src": "7bb93154", "v": "没有日志记录"}
+{"k": "ui.report.once", "src": "18638356", "v": "一次"}
+{"k": "ui.report.panel.build", "src": "288edef3", "v": "请稍后再试。"}
+{"k": "ui.report.panel.build_title", "src": "76b58923", "v": "无法准备报告"}
+{"k": "ui.report.panel.group", "src": "a2c9e40d", "v": "报告要从你和机器人的私聊中打开的 Mini App 发送。"}
+{"k": "ui.report.panel.group_title", "src": "73925937", "v": "打开你的私聊"}
+{"k": "ui.report.panel.noowner", "src": "9ee5b766", "v": "这个 aipager 没有唯一的所有者聊天。在终端中，{command} 仍然可用。"}
+{"k": "ui.report.panel.noowner_title", "src": "40631445", "v": "无法从这里发送"}
+{"k": "ui.report.panel.owner", "src": "e83d9212", "v": "只有这个 aipager 的所有者才能发送问题报告。"}
+{"k": "ui.report.panel.owner_title", "src": "e91f02d9", "v": "仅限所有者"}
+{"k": "ui.report.preparing", "src": "aaf61214", "v": "正在准备报告…"}
+{"k": "ui.report.privacy", "src": "48fa34f1", "v": "它包含版本、次数和 aipager 代码中的位置。绝不包含你的聊天、提示词、名称或路径。"}
+{"k": "ui.report.sending_wait", "src": "176ed846", "v": "正在发送，请稍候。"}
+{"k": "ui.report.sent_title", "src": "a7615ceb", "v": "报告已发送"}
+{"k": "ui.report.setup.personal", "src": "2ca0506b", "v": "个人部署"}
+{"k": "ui.report.setup.scope", "src": "d662e796", "v": "多聊天部署"}
+{"k": "ui.report.setup.team", "src": "a857214e", "v": "团队部署"}
+{"k": "ui.report.setup_line", "src": "c52e3d20", "v": "{mode}，{dms}，{groups}，已运行 {uptime}"}
+{"k": "ui.report.setup_line_bare", "src": "60b4d8c7", "v": "{dms}，已运行 {uptime}"}
+{"k": "ui.report.setup_line_no_groups", "src": "f0f3ef45", "v": "{mode}，{dms}，已运行 {uptime}"}
+{"k": "ui.report.setup_line_no_mode", "src": "f94812f3", "v": "{dms}，{groups}，已运行 {uptime}"}
+{"k": "ui.report.show_more", "src": "fdeb42f8", "v": {"other": "再显示 {n} 个"}}
+{"k": "ui.report.stale", "src": "25e3d152", "v": "那份报告已不在这里。这是一份新的：检查后再点按“发送报告”。"}
+{"k": "ui.report.still_sending", "src": "5b89eba6", "v": "仍在发送。请稍等，然后再点按“发送报告”。"}
+{"k": "ui.report.stops", "src": "8f971d67", "v": "上次停止：{last}。7 天内意外停止：{n} 次。"}
+{"k": "ui.report.system_in", "src": "7011d75d", "v": "{system}，运行于 {container}"}
+{"k": "ui.report.thanks", "src": "04d9993f", "v": "谢谢。如果你在 GitHub 上提 issue，请附上这个参考编号："}
+{"k": "ui.report.tidied", "src": "35efa495", "v": "你的备注已整理（去掉了不可见字符、多余空格，或超过 500 个字符的部分）。检查后再点按“发送报告”。"}
+{"k": "ui.report.times", "src": "766020c6", "v": {"other": "{n} 次"}}
+{"k": "ui.report.title", "src": "24f3f52d", "v": "报告问题"}
+{"k": "ui.report.too_long", "src": "f600d1b3", "v": {"other": "超出 {n} 个字符。"}}
+{"k": "ui.report.too_many", "src": "392589ae", "v": "点按太频繁了。请一分钟后再试。"}
+{"k": "ui.report.too_old_title", "src": "2a4d2b45", "v": "需要更新"}
+{"k": "ui.report.try_later", "src": "ab0f2d7c", "v": "现在无法发送。没有丢失任何内容；请稍后再试。"}
+{"k": "ui.report.uptime.10m_1h", "src": "4db7ea05", "v": "10 分钟到 1 小时"}
+{"k": "ui.report.uptime.1d_7d", "src": "ba95c4e1", "v": "1 到 7 天"}
+{"k": "ui.report.uptime.1h_24h", "src": "f23cc5e9", "v": "1 到 24 小时"}
+{"k": "ui.report.uptime.over_week", "src": "7df7e421", "v": "超过一周"}
+{"k": "ui.report.uptime.under_10m", "src": "35d29633", "v": "不到 10 分钟"}
+{"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "时长未知"}
+{"k": "ui.report.what_sent", "src": "6b776c8f", "v": "会发送什么"}
+{"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "聊天偏好"}
+{"k": "ui.settings.default_tag", "src": "7505d64a", "v": "默认"}
+{"k": "ui.settings.intro", "src": "f1ea8e24", "v": "这些设置适用于这个聊天中的每个会话。"}
+{"k": "ui.settings.readonly", "src": "57fedd89", "v": "只有管理员可以更改这些。"}
+{"k": "ui.settings.reset_done", "src": "5b3b5541", "v": "已恢复默认。"}
+{"k": "ui.settings.reset_failed", "src": "38256d55", "v": "部分设置无法重置。请重新打开后重试。"}
+{"k": "ui.settings.save_failed", "src": "cdb1d51d", "v": "无法保存。屏幕上的值就是已存储的值。"}
+{"k": "ui.settings.saved", "src": "9d4af690", "v": "已保存。"}
+{"k": "ui.shell.actions_aria", "src": "b086cae4", "v": "会话操作"}
+{"k": "ui.shell.chat_aria", "src": "2ced57f1", "v": "聊天"}
+{"k": "ui.shell.loading", "src": "33ce4174", "v": "正在加载…"}
+{"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "新名称"}
+{"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "新建会话"}
+{"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "分区"}
+{"k": "ui.state.busy", "src": "8178ea20", "v": "工作中"}
+{"k": "ui.state.gone", "src": "f957097d", "v": "已结束"}
+{"k": "ui.state.idle", "src": "e24cc7a4", "v": "空闲"}
+{"k": "ui.state.unknown", "src": "50d8b4a9", "v": "未知"}
+{"k": "ui.state.waiting", "src": "19622ace", "v": "需要你"}
+{"k": "ui.state_line.finished", "src": "355bcc57", "v": "已结束"}
+{"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "需要你"}
+{"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "需要你（{kind}）"}
+{"k": "ui.state_line.resting", "src": "296d1007", "v": "空闲"}
+{"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "空闲，上次活动 {age}"}
+{"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "尚未报告"}
+{"k": "ui.state_line.working", "src": "3b4dfc97", "v": "工作中"}
+{"k": "ui.state_line.working_for", "src": "f555f372", "v": "已工作 {clock}"}
+{"k": "ui.tab.sessions", "src": "e11e37a9", "v": "会话"}
+{"k": "ui.tab.settings", "src": "c7f73bb5", "v": "设置"}
+{"k": "ui.tile.aria", "src": "eaa1d742", "v": "{session}，{state}，上下文 {pct}%，{model}，{cost}"}
+{"k": "ui.tile.aria_no_model", "src": "667d58b3", "v": "{session}，{state}，上下文 {pct}%，{cost}"}
+{"k": "ui.tile.no_folder", "src": "25fe67b1", "v": "无文件夹"}
+{"k": "ui.timeline.empty", "src": "8bdea321", "v": "还没有活动。"}
+{"k": "ui.timeline.note", "src": "306606d2", "v": "时间线只涵盖守护进程本次运行期间的内容。它不会在重启后保留，所以较早的会话在这里不显示任何内容。"}
+{"k": "ui.timeline.title_empty", "src": "44748119", "v": "时间线（空）"}
+{"k": "ui.timeline.title_n", "src": "a7f6a618", "v": {"other": "时间线（{n}）"}}
+{"k": "ui.update.check_failed", "src": "a15f1db5", "v": "无法检查更新。请重试。"}
+{"k": "ui.update.finished", "src": "80fa9b82", "v": "那次更新已经完成。"}
+{"k": "ui.update.job.claude_updating", "src": "c587f1e1", "v": "工作中…（正在更新 claude）"}
+{"k": "ui.update.job.gate_timeout", "src": "1499ee18", "v": "会话仍在忙。要再等等、立即重启，还是取消？"}
+{"k": "ui.update.job.starting", "src": "06080d40", "v": "工作中…（正在启动）"}
+{"k": "ui.update.job.upgrading", "src": "c6e6577f", "v": "工作中…（正在升级）"}
+{"k": "ui.update.job.waiting_idle", "src": "2d4b64cc", "v": "等待所有会话空闲后再重启。"}
+{"k": "ui.update.job.working_phase", "src": "3a93346a", "v": "工作中…（{phase}）"}
+{"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "未重新接管：{names}"}
+{"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}？没有正在运行的轮次时，aipager 会重启。"}
+{"k": "ui.update.other", "src": "7ae4a531", "v": "aipager 已重启，但运行的是 {version}。"}
+{"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager 已重启，但运行的是 {version}，而不是 {expected}。"}
+{"k": "ui.update.refused", "src": "651df229", "v": "重新打开应用以查看更新结果。"}
+{"k": "ui.update.reopen", "src": "3bf2409f", "v": "aipager 已重启，等聊天中提示更新完成后再重新打开应用。先关闭它，再从聊天中重新打开（菜单按钮或 {command}）。"}
+{"k": "ui.update.restart_now_confirm", "src": "3f76f590", "v": "立即重启会中断这里列出的正在运行的轮次。"}
+{"k": "ui.update.restarting", "src": "0cfedf00", "v": "正在重启 aipager…"}
+{"k": "ui.update.running", "src": "5c38d794", "v": "已有一个更新在进行中。"}
+{"k": "ui.update.shutting_down", "src": "190aec5c", "v": "aipager 正在关闭。等它恢复后再试。"}
+{"k": "ui.update.slow", "src": "43a0f87b", "v": "仍在重启，请稍后重新打开应用。"}
+{"k": "ui.update.stale", "src": "fa8fd334", "v": "那次检查已过期。请再次检查。"}
+{"k": "ui.update.start_failed", "src": "2f57d419", "v": "无法开始。请重试。"}
+{"k": "ui.update.title", "src": "c76d1807", "v": "更新"}
+{"k": "ui.update.too_many", "src": "9a3f5b9e", "v": "请求太多。请一分钟后再试。"}
+{"k": "ui.update.unknown_version", "src": "90246157", "v": "未知版本"}
+{"k": "ui.update.unreachable", "src": "fc17f70c", "v": "无法连接到 aipager。请重试。"}
+{"k": "ui.update.up_to_date", "src": "2772acac", "v": "一切都是最新的。"}
+{"k": "ui.update.updated", "src": "a56afb67", "v": "已更新到 {version}。"}
+{"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"other": "已更新到 {version}，重新接管了 {n} 个会话。"}}
+{"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude 在问你"}
+{"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude 需要你的权限"}
+{"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "聊天中有一个打开的权限请求。"}
+{"k": "ui.waiting.question_open", "src": "3165c4fc", "v": "聊天中有一个打开的问题。"}
+{"k": "upd.ap.blocked", "src": "2b9633f6", "v": "🚫 <b>aipager</b> 无法从这里更新：{reason}"}
+{"k": "upd.ap.blocked_here", "src": "cefc4c9b", "v": "🚫 aipager 无法从这里更新：{reason}"}
+{"k": "upd.ap.cancelled", "src": "6eb974a3", "v": "↩️ <b>aipager</b> 更新已取消，没有安装任何内容。"}
+{"k": "upd.ap.current", "src": "fbd921a8", "v": "✅ <b>aipager</b> 已是最新版本（{version}）。"}
+{"k": "upd.ap.current_git", "src": "d645d1e5", "v": "✅ <b>aipager</b> 已是 {running}：这个 {kind} 安装从它的 git 源升级，那里没有更新的版本。"}
+{"k": "upd.ap.current_index", "src": "86cb566d", "v": "✅ <b>aipager</b> 已是 {running}：软件包索引中没有更新的版本。"}
+{"k": "upd.ap.current_local", "src": "dfdf1e49", "v": "✅ <b>aipager</b> 已是 {running}：这个 {kind} 安装从本地路径升级，而那里仍是同一版本。请先更新那个代码目录。"}
+{"k": "upd.ap.current_local_at", "src": "126cee31", "v": "✅ <b>aipager</b> 已是 {running}：这个 {kind} 安装从本地路径 {where} 升级，而那里仍是同一版本。请先更新那个代码目录。"}
+{"k": "upd.ap.current_plain", "src": "598c28b0", "v": "✅ <b>aipager</b> 已是 {running}。"}
+{"k": "upd.ap.failed", "src": "8979f696", "v": "❌ <b>aipager</b> 升级失败（退出码 {code}），没有重启任何内容。"}
+{"k": "upd.ap.finished_shutdown", "src": "622303bd", "v": "✅ <b>aipager</b> 升级完成；守护进程正在关闭，所以没有重启任何内容，下次启动会运行已安装的版本。"}
+{"k": "upd.ap.import_failed", "src": "cba04fe9", "v": "❌ 新版本导入失败，仍在运行 {running}，没有重启任何内容。请用 <code>{hint}</code> 重新安装"}
+{"k": "upd.ap.installed", "src": "01a08996", "v": "✅ <b>aipager</b> {frm} → {to} 已安装。"}
+{"k": "upd.ap.installed_shutdown", "src": "d2a325d6", "v": "✅ <b>aipager</b> {frm} → {to} 已安装；守护进程正在关闭，所以没有重启任何内容，下次启动会运行 {to}。"}
+{"k": "upd.ap.not_found", "src": "f74b4ba7", "v": "❌ <b>aipager</b>：找不到 <code>{kind}</code>（已搜索 {path}）"}
+{"k": "upd.ap.prepare_failed", "src": "65e6b15f", "v": "✅ <b>aipager</b> {frm} → {to} 已安装，但无法准备重启（{error}）。请自己重启：<code>{cmd}</code>"}
+{"k": "upd.ap.restart_cancelled", "src": "23b8320e", "v": "✅ <b>aipager</b> {frm} → {to} 已安装，但重启已取消。请自己重启：<code>{cmd}</code>"}
+{"k": "upd.ap.restarting", "src": "e68754da", "v": "⏳ <b>aipager</b> {frm} → {to} 已安装，正在重启…"}
+{"k": "upd.ap.schedule_failed", "src": "8ded320b", "v": "✅ <b>aipager</b> {frm} → {to} 已安装，但安排重启失败：{detail}。请自己重启：<code>{cmd}</code>"}
+{"k": "upd.ap.timeout", "src": "f834e535", "v": "⏱ <b>aipager</b> 升级在 {seconds} 秒后超时并已停止，没有重启任何内容，仍在运行 {running}。磁盘上的安装可能不完整：请在下次重启前用 <code>{hint}</code> 重新安装。"}
+{"k": "upd.ap.waiting", "src": "dc25cdd1", "v": "⏳ <b>aipager</b> {frm} → {to} 已安装，当前这一轮结束后重启"}
+{"k": "upd.busy.restarting", "src": "6d1c5479", "v": "⏳ aipager 即将为更新而重启。等它恢复后再试一次 /update。"}
+{"k": "upd.busy.running", "src": "e0aa9bc2", "v": "⏳ 已有一个更新在进行中（{phase}）。它的状态消息会显示进度。"}
+{"k": "upd.busy.running_short", "src": "07e3480f", "v": "⏳ 已有一个更新在进行中（{phase}）。"}
+{"k": "upd.cancelled", "src": "a85d8e48", "v": "↩️ 更新已取消，没有任何更改。"}
+{"k": "upd.cc.current", "src": "57516cde", "v": "✅ <b>Claude Code</b> 已是最新版本（{version}）"}
+{"k": "upd.cc.done", "src": "cd97aa9e", "v": "✅ <b>Claude Code</b> {before} → {after}"}
+{"k": "upd.cc.done_shutdown", "src": "71cb416d", "v": "✅ <b>Claude Code</b> 更新完成；aipager 正在关闭，等它恢复后 /update 会显示新版本"}
+{"k": "upd.cc.error", "src": "fcf1f441", "v": "❌ <b>Claude Code</b>：{error}"}
+{"k": "upd.cc.failed", "src": "ef865b9a", "v": "❌ <b>Claude Code</b> 更新失败（退出码 {code}）"}
+{"k": "upd.cc.timeout", "src": "c6c8c9ce", "v": "⏱ <b>Claude Code</b> 更新在 {seconds} 秒后超时"}
+{"k": "upd.check_failed_now", "src": "4ba67b54", "v": "⚠️ 现在无法检查更新。请重试。"}
+{"k": "upd.elapsed.m", "src": "a47d8efb", "v": "{m} 分钟"}
+{"k": "upd.elapsed.ms", "src": "c017b27a", "v": "{m} 分 {s} 秒"}
+{"k": "upd.elapsed.s", "src": "2b434962", "v": "{s} 秒"}
+{"k": "upd.fix.claude", "src": "94c58cdc", "v": "再次运行 {command}"}
+{"k": "upd.fix.reinstall", "src": "ae353907", "v": "用 {command} 重新安装"}
+{"k": "upd.gate.busy", "src": "a8f53f0e", "v": {"other": "⏰ {n} 分钟后会话仍在忙。要再等 {wait} 分钟、立即重启，还是取消？立即重启会中断下面列出的所有内容。"}}
+{"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"other": "⏰ {n} 分钟后会话仍在忙。要再等 {wait} 分钟、立即重启，还是取消？立即重启会中断下面列出的所有内容，包括尚未送达的暂缓回答。"}}
+{"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>：等待所有会话空闲后再重启。"}
+{"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>更新</b>"}
+{"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running}（最新）"}
+{"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}
+{"k": "upd.line.ap_newer_blocked", "src": "6c0b194f", "v": "aipager {running} → {latest}（无法从这里更新：{reason}）"}
+{"k": "upd.line.ap_unchecked", "src": "6e9c88e2", "v": "aipager {running}（无法检查）"}
+{"k": "upd.line.cc_current", "src": "f360deb9", "v": "Claude Code {current}（最新）"}
+{"k": "upd.line.cc_newer", "src": "f40a4485", "v": "Claude Code {current} → {latest}"}
+{"k": "upd.line.cc_newer_blocked", "src": "aa86c9e2", "v": "Claude Code {current} → {latest}（无法从这里更新：{reason}）"}
+{"k": "upd.line.cc_unchecked", "src": "634412f0", "v": "Claude Code {current}（无法检查）"}
+{"k": "upd.line.cc_unknown", "src": "302340a8", "v": "Claude Code（无法检查）"}
+{"k": "upd.manual.needed", "src": "9abdaf5e", "v": "需要重启：{reason}"}
+{"k": "upd.manual.would_kill", "src": "df06a1e3", "v": "重启会结束的会话：{labels}"}
+{"k": "upd.marker.done", "src": "5a3ca85c", "v": {"other": "✅ aipager 已更新 {frm} → {to}，重新接管了 {n} 个会话"}}
+{"k": "upd.marker.interrupted", "src": "66f4f0b7", "v": "⚠️ aipager 关闭时中断了一次更新；安装可能不完整。现在运行的是 {running}。如果有任何异常，请{fix}。"}
+{"k": "upd.marker.not_back", "src": "d253a83a", "v": "⚠️ 未重新接管：{labels}"}
+{"k": "upd.marker.wrong_version", "src": "17ebf14f", "v": "⚠️ aipager 已重启，但运行的是 {running}，而不是 {to}。"}
+{"k": "upd.note.ap_installed", "src": "5616e4b4", "v": "aipager {installed} 已安装，但尚未运行。"}
+{"k": "upd.offer_stale", "src": "a72655cc", "v": "⚠️ 这次检查已过期。更新前请再次检查。"}
+{"k": "upd.output_in_log", "src": "3c62a9b7", "v": "（输出在守护进程日志中）"}
+{"k": "upd.prompt", "src": "8a30cb51", "v": "⬆️ <b>更新</b>\n\n检查 aipager 或 Claude Code 是否有新版本。"}
+{"k": "upd.reason.unknown_install", "src": "0ab6e3a7", "v": "未知的安装方式"}
+{"k": "upd.reason.yourself", "src": "8ebd1480", "v": "请自己重启"}
+{"k": "upd.restart.auto", "src": "47924d9e", "v": "重启：自动，在没有正在运行的轮次时进行。"}
+{"k": "upd.restart.manual", "src": "8e3998af", "v": "重启：手动（{reason}）"}
+{"k": "upd.sessions.new_version", "src": "a9ee48dc", "v": "新会话将使用 {version}。"}
+{"k": "upd.sessions.none", "src": "1fe42f86", "v": "现在没有正在运行的会话。"}
+{"k": "upd.sessions.none_restarted", "src": "5807bbd1", "v": "正在运行的会话会保持旧版本，直到它们被重启；没有重启任何会话。"}
+{"k": "upd.sessions.old", "src": "2e875cd3", "v": "仍在旧版本上：{labels}"}
+{"k": "upd.sessions.other_chats", "src": "7b515e23", "v": {"other": "以及其他聊天中的 {n} 个"}}
+{"k": "upd.shutdown.early", "src": "6b7541f0", "v": "⚠️ 更新完成前守护进程就关闭了。"}
+{"k": "upd.shutdown.partial", "src": "140c77c5", "v": "⚠️ 守护进程在安装更新时关闭了；安装程序已被停止，所以安装可能不完整。如果有任何异常，请{fix}。"}
+{"k": "upd.shutting_down", "src": "4dabffa5", "v": "⏳ aipager 正在关闭。等它恢复后再试。"}
+{"k": "upd.starting", "src": "0e316323", "v": "⏳ 正在开始更新…"}
+{"k": "upd.step.aipager", "src": "4baaa0e2", "v": "正在通过 {kind} 升级 aipager"}
+{"k": "upd.step.claude", "src": "417c042d", "v": "正在更新 Claude Code"}
+{"k": "upd.step.started", "src": "cd17f00f", "v": "⏳ {step}…"}
+{"k": "upd.step.still_working", "src": "37b863ed", "v": "⏳ {step}，仍在进行{elapsed}"}
+{"k": "upd.still_running", "src": "c57fe950", "v": "仍在运行："}
+{"k": "upd.summary.cant_here", "src": "8abb0e4e", "v": "有新的更新，但无法从这里安装。"}
+{"k": "upd.summary.check_failed", "src": "b8579281", "v": "没有找到更新的版本，但有一项检查失败了。请稍后再试。"}
+{"k": "upd.summary.up_to_date", "src": "2772acac", "v": "一切都是最新的。"}
+{"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ 更新因意外错误而停止（见守护进程日志）。"}
+{"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ 计划的重启没有发生：新版本已安装，但旧版本仍在运行。请自己重启：{command}"}
+{"k": "whoami.any", "src": "195d97a4", "v": "（任意）"}
+{"k": "whoami.bypass_role_denies", "src": "9ed1452d", "v": "  bypass_role_denies: {value}"}
+{"k": "whoami.bypass_safety", "src": "a09645db", "v": "  bypass_safety: {value}"}
+{"k": "whoami.can_manage", "src": "e889ca71", "v": "  can_manage: {value}"}
+{"k": "whoami.effective_allow", "src": "50a8e776", "v": "  最终 allow_tools: {tools}"}
+{"k": "whoami.effective_deny", "src": "3b0b5420", "v": "  最终 deny_tools: {tools}"}
+{"k": "whoami.head", "src": "ac5935f7", "v": "🪪 <b>{member}</b>，在 <b>{scope}</b> 中"}
+{"k": "whoami.no", "src": "fd128635", "v": "否"}
+{"k": "whoami.none", "src": "3c6b183d", "v": "（无）"}
+{"k": "whoami.not_allowed", "src": "c9bfc640", "v": "🪪 你不在这个机器人的允许名单中。"}
+{"k": "whoami.not_member", "src": "d86fddf7", "v": "🪪 你不是这个范围的成员。"}
+{"k": "whoami.personal", "src": "10ab5a55", "v": "🪪 个人模式：在这个私聊中完全控制这台机器。"}
+{"k": "whoami.role", "src": "8ffb44b5", "v": "  角色：<b>{role}</b>"}
+{"k": "whoami.team_deny", "src": "e88735e1", "v": "  deny_tools: {tools}"}
+{"k": "whoami.team_head", "src": "c413798c", "v": "🪪 <b>{member}</b>"}
+{"k": "whoami.yes", "src": "fb360f9c", "v": "是"}

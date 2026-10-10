@@ -87,13 +87,17 @@ def test_preferences_carry_the_app_language(http):
             {"value": "es", "label": "Español"},
             {"value": "ru", "label": "Русский"},
             {"value": "pt-BR", "label": "Português (Brasil)"},
+            {"value": "zh-Hans", "label": "简体中文"},
             {"value": "fr", "label": "Français"},
             {"value": "de", "label": "Deutsch"},
+            {"value": "ko", "label": "한국어"},
             {"value": "ar", "label": "العربية"},
+            {"value": "id", "label": "Bahasa Indonesia"},
             {"value": "uk", "label": "Українська"},
             {"value": "it", "label": "Italiano"},
             {"value": "tr", "label": "Türkçe"},
             {"value": "fa", "label": "فارسی"},
+            {"value": "vi", "label": "Tiếng Việt"},
         ],
     }
 

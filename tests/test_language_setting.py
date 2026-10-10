@@ -101,8 +101,9 @@ def _disable_german(monkeypatch):
 
 BETA_ROWS = [[(f"{name} (beta)", f"_:set:lang:{code}")] for code, name in (
     ("es", "Español"), ("ru", "Русский"), ("pt-BR", "Português (Brasil)"),
-    ("fr", "Français"), ("de", "Deutsch"), ("ar", "العربية"), ("uk", "Українська"),
-    ("it", "Italiano"), ("tr", "Türkçe"), ("fa", "فارسی"))]
+    ("zh-Hans", "简体中文"), ("fr", "Français"), ("de", "Deutsch"), ("ko", "한국어"),
+    ("ar", "العربية"), ("id", "Bahasa Indonesia"), ("uk", "Українська"),
+    ("it", "Italiano"), ("tr", "Türkçe"), ("fa", "فارسی"), ("vi", "Tiếng Việt"))]
 
 
 def test_the_language_row_opens_the_list(bot, run_async):

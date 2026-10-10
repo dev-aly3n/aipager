@@ -4,31 +4,88 @@
   "commit",
   "token",
   "diff",
-  "log"
+  "log",
+  "ctx",
+  "prompt",
+  "shell"
  ],
  "language": "Indonesian",
  "terms": {
-  "admin": "",
-  "agent": "",
-  "allow": "",
-  "background": "",
-  "card": "",
-  "chat": "",
-  "deny": "",
-  "folder": "",
-  "group": "",
-  "member": "",
-  "model": "",
-  "owner": "",
-  "permission": "",
-  "prompt": "",
-  "question": "",
-  "queue": "",
-  "resume": "",
-  "session": "",
-  "settings": "",
-  "stop": "",
-  "turn": "",
-  "update": ""
+  "admin": [
+   "admin"
+  ],
+  "agent": [
+   "agen"
+  ],
+  "allow": [
+   "izinkan",
+   "diizinkan"
+  ],
+  "background": [
+   "latar belakang"
+  ],
+  "card": [
+   "kartu"
+  ],
+  "chat": [
+   "chat",
+   "obrolan"
+  ],
+  "deny": [
+   "tolak"
+  ],
+  "folder": [
+   "folder"
+  ],
+  "group": [
+   "grup"
+  ],
+  "member": [
+   "anggota"
+  ],
+  "model": [
+   "model"
+  ],
+  "owner": [
+   "pemilik"
+  ],
+  "permission": [
+   "izin"
+  ],
+  "prompt": [
+   "prompt",
+   "pesan",
+   "permintaan"
+  ],
+  "question": [
+   "pertanyaan"
+  ],
+  "queue": [
+   "antrean"
+  ],
+  "resume": [
+   "lanjutkan",
+   "melanjutkan",
+   "/resume"
+  ],
+  "session": [
+   "sesi"
+  ],
+  "settings": [
+   "pengaturan",
+   "/settings"
+  ],
+  "stop": [
+   "henti",
+   "stop"
+  ],
+  "turn": [
+   "giliran"
+  ],
+  "update": [
+   "perbarui",
+   "pembaruan",
+   "/update"
+  ]
  }
 }

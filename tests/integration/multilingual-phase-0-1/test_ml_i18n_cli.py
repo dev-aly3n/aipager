@@ -82,10 +82,12 @@ def test_each_language_has_a_catalog_file(code):
 
 # Phase 2 translated Persian and Russian, phase 5 run 1 Spanish, Portuguese
 # (Brazil), French and Italian, run 2 German, Arabic, Ukrainian and
-# Turkish; the others stay empty.
+# Turkish, run 3 Chinese (Simplified), Korean, Indonesian and Vietnamese;
+# any other stays empty (none once every catalog lands).
 @pytest.mark.parametrize("code", [c for c in CODES
                                   if c not in ("fa", "ru", "es", "pt-BR", "fr", "it",
-                                               "de", "ar", "uk", "tr")])
+                                               "de", "ar", "uk", "tr", "zh-Hans", "ko",
+                                               "id", "vi")])
 def test_no_translation_is_written_in_this_run(code):
     assert (CATALOGS / f"{code}.jsonl").read_text(encoding="utf-8").strip() == ""
 

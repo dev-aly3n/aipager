@@ -2,10 +2,10 @@
 
 ``LOCALES`` holds the 15 languages of the multilingual design, each with
 its own name (the endonym, never translated), its direction and its
-digits. English is enabled; Russian, Persian, Spanish, Portuguese
-(Brazil), French, Italian, German, Turkish, Ukrainian and Arabic are
-enabled as beta; the others exist so the machinery can be built and
-checked before their translation ships.
+digits. English is enabled; the other 14 (Russian, Persian, Spanish,
+Portuguese (Brazil), French, Italian, German, Turkish, Ukrainian, Arabic,
+Chinese (Simplified), Korean, Indonesian and Vietnamese) are enabled as
+beta until a native speaker has reviewed them.
 
 ``PSEUDO`` holds two fake languages for tests and tooling (``qps`` and
 its right-to-left twin ``qps-rtl``). They are reachable through
@@ -52,22 +52,24 @@ LOCALES: dict[str, Locale] = {loc.code: loc for loc in (
     Locale("ru", "Русский", "Russian", enabled=True, quality="beta", telegram_code="ru"),
     Locale("pt-BR", "Português (Brasil)", "Portuguese (Brazil)", enabled=True, quality="beta",
            telegram_code="pt"),
-    Locale("zh-Hans", "简体中文", "Chinese (Simplified)", telegram_code="zh"),
+    Locale("zh-Hans", "简体中文", "Chinese (Simplified)", enabled=True, quality="beta",
+           telegram_code="zh"),
     Locale("fr", "Français", "French", enabled=True, quality="beta", telegram_code="fr"),
     Locale("de", "Deutsch", "German", enabled=True, quality="beta", telegram_code="de"),
-    Locale("ko", "한국어", "Korean", telegram_code="ko"),
+    Locale("ko", "한국어", "Korean", enabled=True, quality="beta", telegram_code="ko"),
     # CLDR's Arabic percent sign is U+066A followed by the Arabic letter
     # mark (U+061C, written as an escape: no raw direction control in
     # source), which keeps the sign on the number's side in a sentence.
     Locale("ar", "العربية", "Arabic", rtl=True, digits="arab", decimal="٫",
            group="٬", percent="٪\u061c", enabled=True, quality="beta", telegram_code="ar"),
-    Locale("id", "Bahasa Indonesia", "Indonesian", telegram_code="id"),
+    Locale("id", "Bahasa Indonesia", "Indonesian", enabled=True, quality="beta",
+           telegram_code="id"),
     Locale("uk", "Українська", "Ukrainian", enabled=True, quality="beta", telegram_code="uk"),
     Locale("it", "Italiano", "Italian", enabled=True, quality="beta", telegram_code="it"),
     Locale("tr", "Türkçe", "Turkish", enabled=True, quality="beta", telegram_code="tr"),
     Locale("fa", "فارسی", "Persian", rtl=True, digits="arabext", decimal="٫",
            group="٬", percent="٪", enabled=True, quality="beta", telegram_code="fa"),
-    Locale("vi", "Tiếng Việt", "Vietnamese", telegram_code="vi"),
+    Locale("vi", "Tiếng Việt", "Vietnamese", enabled=True, quality="beta", telegram_code="vi"),
 )}
 
 PSEUDO: dict[str, Locale] = {loc.code: loc for loc in (

@@ -97,15 +97,19 @@ def test_get_carries_the_app_language(server):
         "title": "App language", "hint": HINT, "value": "auto", "effective": "en",
         # Phase 2: Russian and Persian are offered (no beta mark here);
         # phase 5 run 1: Spanish, Portuguese (Brazil), French and Italian;
-        # run 2: German, Arabic, Ukrainian and Turkish.
+        # run 2: German, Arabic, Ukrainian and Turkish; run 3: Chinese
+        # (Simplified), Korean, Indonesian and Vietnamese.
         "options": [{"value": "auto", "label": "Automatic (your Telegram language)"},
                     {"value": "en", "label": "English"}, {"value": "es", "label": "Español"},
                     {"value": "ru", "label": "Русский"},
                     {"value": "pt-BR", "label": "Português (Brasil)"},
+                    {"value": "zh-Hans", "label": "简体中文"},
                     {"value": "fr", "label": "Français"}, {"value": "de", "label": "Deutsch"},
-                    {"value": "ar", "label": "العربية"}, {"value": "uk", "label": "Українська"},
+                    {"value": "ko", "label": "한국어"},
+                    {"value": "ar", "label": "العربية"}, {"value": "id", "label": "Bahasa Indonesia"},
+                    {"value": "uk", "label": "Українська"},
                     {"value": "it", "label": "Italiano"}, {"value": "tr", "label": "Türkçe"},
-                    {"value": "fa", "label": "فارسی"}]}
+                    {"value": "fa", "label": "فارسی"}, {"value": "vi", "label": "Tiếng Việt"}]}
 
 
 def test_a_member_who_is_not_an_admin_may_set_it(server):

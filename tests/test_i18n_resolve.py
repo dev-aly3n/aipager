@@ -62,9 +62,11 @@ def test_a_stored_value_of_the_wrong_shape_reads_as_unset(qps):
 
 
 def test_a_stored_language_that_is_no_longer_enabled_reads_as_english(monkeypatch):
-    monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"ko"}))
+    import dataclasses
     preferences.set_ui_language(GROUP, "ko")
-    monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset())
+    # Every language is enabled since phase 5 run 3: switch Korean off.
+    monkeypatch.setitem(locales.LOCALES, "ko",
+                        dataclasses.replace(locales.LOCALES["ko"], enabled=False))
     assert i18n.for_chat(GROUP).code == "en"
 
 

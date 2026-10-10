@@ -64,8 +64,8 @@ def test_every_enabled_code_is_served(env, code):
 
 
 @pytest.mark.parametrize("name", [
-    "ko.json",          # known, not enabled
-    "vi.json",          # known, not enabled
+    "ja.json",          # not one of aipager's languages
+    "pl.json",          # not one of aipager's languages
     "zz.json",          # unknown
     "qps.json",         # pseudo, not switched on
     "qps-rtl.json",
@@ -84,7 +84,7 @@ def test_an_unknown_disabled_or_malformed_name_is_404(env, name):
 
 
 def test_the_404_body_carries_no_detail_sentence(env):
-    assert "detail" not in (_get(env, "ko.json").body or {})
+    assert "detail" not in (_get(env, "ja.json").body or {})
 
 
 def test_a_pseudo_code_is_served_once_a_test_switches_it_on(env, monkeypatch):
@@ -299,3 +299,15 @@ def test_an_identity_body_is_the_catalog(env, p4):
     r = _get(env, "fa.json", headers={**p4.hdr(p4.BOB), "Accept-Encoding": "identity"},
              auto_decompress=False)
     assert json.loads(r.raw.decode("utf-8")) == ui_text.catalog("fa")
+
+
+def test_a_known_language_switched_off_is_404(env, monkeypatch):
+    """A language aipager knows but has switched off is not served (every
+    language is enabled since phase 5 run 3, so the test switches one off)."""
+    import dataclasses
+
+    from aipager.i18n import locales
+    monkeypatch.setitem(locales.LOCALES, "ko",
+                        dataclasses.replace(locales.LOCALES["ko"], enabled=False))
+    r = _get(env, "ko.json")
+    assert (r.status, r.body) == (404, {"error": "not_found"})
