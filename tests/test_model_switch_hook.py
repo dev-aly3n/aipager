@@ -145,7 +145,8 @@ def test_malformed_payloads_never_raise(payload):
                 "expires_at": time.time() + 30}).encode(),
     json.dumps({"model": "claude-opus-5-5", "claude_session_id": 7,
                 "expires_at": time.time() + 30}).encode(),
-])
+], ids=["empty", "not-json", "list", "string", "no-expiry", "expiry-bool", "expiry-text",
+        "empty-model", "model-number", "session-number"])
 def test_a_malformed_marker_gets_no_decision(content):
     path = msm.marker_path(BASE, SESSION)
     path.write_bytes(content)
