@@ -272,7 +272,7 @@ TOAST_CANT_CHANGE = Msg("toast.new_cant_change", "You can't change this session.
                         note="Pop-up: the person may not change this session")
 TOAST_ALREADY_IN = Msg("toast.sess_already_in", "{session} is already in {mode}.",
                        note="Pop-up: the mode tapped is the session's mode",
-                       eg={"session": "x1", "mode": "Auto"})
+                       eg={"session": "x1", "mode": "Auto mode"})
 TOAST_MOVED_ON_SWITCH = Msg("toast.sess_moved_on_switch",
                             "{session} moved on to new work - tap the switch again if you "
                             "still want it", note="Pop-up: the mode card was for an earlier "

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from aipager import i18n
 from aipager.bot import kbwords
-from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO
+from aipager.bot.mode_labels import WORD_ASK, WORD_AUTO
 from tests.i18n_ml2 import DM, add_session, message
 
 
@@ -19,9 +19,9 @@ def test_mode_words_switch(ml2_bot, run_async):
     sess = add_session(ml2_bot)
     ml2_bot.registry.last_active_session = sess.name
     ml2_bot._perms_flow = AsyncMock()
-    fa_auto = kbwords.mode_word(i18n.get("fa").text(MODE_AUTO))
-    ru_auto = kbwords.mode_word(i18n.get("ru").text(MODE_AUTO))
-    ru_ask = kbwords.mode_word(i18n.get("ru").text(MODE_ASK))
+    fa_auto = kbwords.mode_word(i18n.get("fa").text(WORD_AUTO))
+    ru_auto = kbwords.mode_word(i18n.get("ru").text(WORD_AUTO))
+    ru_ask = kbwords.mode_word(i18n.get("ru").text(WORD_ASK))
     for text, want in ((f"/mode x1 {fa_auto}", True), (f"/mode {ru_auto.upper()}", True),
                        ("/mode x1 auto", True), (f"/mode x1 {ru_ask}", False)):
         sess.skip_perms = not want

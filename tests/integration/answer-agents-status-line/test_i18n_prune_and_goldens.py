@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.i18n_surfaces import MODE_LABEL_SURFACES, without_mode_labels
+
 REPO = Path(__file__).resolve().parents[3]
 LOCALES = REPO / "aipager" / "i18n" / "locales"
 SOURCE = REPO / "tools" / "i18n" / "source.jsonl"
@@ -201,8 +203,12 @@ def test_english_surfaces_change_only_under_agents_line():
     new = json.loads((REPO / path).read_text(encoding="utf-8"))
     changed = sorted(k for k in set(old) | set(new) if old.get(k) != new.get(k))
     # agents_line is this feature's; language.list lost its "(beta)" marks
-    # later on purpose (operator, 2026-10-10).
-    assert changed == ["agents_line", "language.list"]
+    # later on purpose (operator, 2026-10-10), and the mode labels became
+    # "💬 Ask mode" / "🤖 Auto mode" the same day, changing nothing else.
+    assert [k for k in changed if k not in MODE_LABEL_SURFACES] == ["agents_line", "language.list"]
+    assert set(changed) >= MODE_LABEL_SURFACES
+    for k in MODE_LABEL_SURFACES:
+        assert without_mode_labels(new[k]) == without_mode_labels(old[k]), k
 
 
 def test_the_hook_process_never_loads_i18n(tmp_path):

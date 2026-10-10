@@ -15,7 +15,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from aipager.bot import kbwords
-from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO, mode_from_word, parse_mode_args
+from aipager.bot.mode_labels import (
+    MODE_ASK,
+    WORD_ASK,
+    WORD_AUTO,
+    mode_from_word,
+    parse_mode_args,
+)
 from aipager.dtach.inject import _VALID_NAME
 from aipager.i18n import get
 from aipager.state import Status, TrackedSession
@@ -25,12 +31,12 @@ LANGS = ("de", "es", "fr", "it", "pt-BR", "tr", "id", "vi")
 
 
 def _colliding_words():
-    """``(code, mode, word)`` for every translated mode word that fits the
-    session-name pattern once lowered."""
+    """``(code, mode, word)`` for every translated typed mode word that
+    fits the session-name pattern once lowered."""
     out = []
     for code in LANGS:
         tr = get(code)
-        for mode, msg in (("ask", MODE_ASK), ("auto", MODE_AUTO)):
+        for mode, msg in (("ask", WORD_ASK), ("auto", WORD_AUTO)):
             word = kbwords.mode_word(tr.text(msg))
             if word in ("ask", "auto") or not _VALID_NAME.match(word):
                 continue
@@ -50,7 +56,8 @@ def test_the_languages_that_collide_are_the_ones_the_translation_runs_named():
 
 
 def test_indonesian_ask_is_tanya_again():
-    assert get("id").text(MODE_ASK) == "💬 Tanya"
+    assert get("id").text(WORD_ASK) == "Tanya"
+    assert get("id").text(MODE_ASK) == "💬 Mode Tanya"
     assert mode_from_word("tanya") == "ask" and mode_from_word("Tanya") == "ask"
 
 

@@ -269,5 +269,8 @@ def test_language_is_a_registered_command(mk_bot, run_async):
 # ---- mode labels keep their English ------------------------------------------------
 
 def test_mode_labels_are_unchanged_english():
-    from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO
-    assert (MODE_AUTO, MODE_ASK) == ("🤖 Auto", "💬 Ask")
+    """English labels, named as modes since 2026-10-10 (operator); the
+    typed words are the old single words."""
+    from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO, WORD_ASK, WORD_AUTO
+    assert (MODE_AUTO, MODE_ASK) == ("🤖 Auto mode", "💬 Ask mode")
+    assert (WORD_AUTO, WORD_ASK) == ("Auto", "Ask")

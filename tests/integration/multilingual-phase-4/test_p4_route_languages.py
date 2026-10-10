@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.i18n_surfaces import without_mode_labels
+
 
 def _load_scenarios():
     import importlib.util
@@ -150,7 +152,10 @@ def test_a_chat_line_is_in_the_chats_language(env, p4, name, code):
 def test_the_viewers_language_never_changes_a_chat_line(env, p4, name):
     out = _run(env, p4, name, viewer="fa")
     project = str(env.project)
-    assert [m.replace(project, "<proj>") for m in out["mirrors"]] == GOLDEN[name]["mirrors"]
+    # English chat lines, as recorded on the base but for the mode label,
+    # which names the mode as a mode since 2026-10-10 (operator).
+    got = [m.replace(project, "<proj>") for m in out["mirrors"]]
+    assert without_mode_labels(got) == without_mode_labels(GOLDEN[name]["mirrors"])
 
 
 @pytest.mark.parametrize("name", MIRRORS)

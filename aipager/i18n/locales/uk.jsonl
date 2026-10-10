@@ -334,20 +334,22 @@
 {"k": "media.transcribing", "src": "56629b0b", "v": "🎙️ <i>Розшифровую…</i>"}
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ Добре, голосовий модуль не встановлено."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ Голосове повідомлення важить {size} МБ; боти Telegram обмежені {limit} МБ."}
-{"k": "mode.ask", "src": "8f9266a6", "v": "💬 Питати"}
+{"k": "mode.ask", "src": "07910591", "v": "💬 Режим «Питати»"}
 {"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 Питати для тебе (🤖 Авто: адміни)"}
 {"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 Краще Питати"}
-{"k": "mode.auto", "src": "a9e88621", "v": "🤖 Авто"}
+{"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 Режим Авто"}
 {"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 Краще Авто"}
-{"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> вже в режимі {mode}."}
+{"k": "mode.word.ask", "src": "3562777b", "v": "Питати"}
+{"k": "mode.word.auto", "src": "c614ba7c", "v": "Авто"}
+{"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b>: вже {mode}."}
 {"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 Увімкнути Питати"}
 {"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 Увімкнути Авто"}
 {"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> зайнята.\nПереключити в режим Питати?"}
 {"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> зайнята.\nПереключити в режим Авто?"}
-{"k": "modecard.confirm_auto", "src": "7ab3092b", "v": "⚙️ Переключити <b>{session}</b> в режим {mode}?\n<i>Claude запускатиме інструменти без запитань ({flag}).</i>"}
+{"k": "modecard.confirm_auto", "src": "ff1562a9", "v": "⚙️ Переключити <b>{session}</b> на {mode}?\n<i>Claude запускатиме інструменти без запитань ({flag}).</i>"}
 {"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ Стан <b>{session}</b> ще не визначено. Спробуй /mode трохи згодом."}
-{"k": "modecard.is", "src": "43da1dce", "v": "<b>{session}</b> у режимі {mode}."}
-{"k": "modecard.is_target", "src": "bb92330e", "v": "✍️ <b>{session}</b> у режимі {mode}."}
+{"k": "modecard.is", "src": "c057ad13", "v": "<b>{session}</b>: {mode}."}
+{"k": "modecard.is_target", "src": "92bc67e3", "v": "✍️ <b>{session}</b>: {mode}."}
 {"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ <b>{session}</b> вже зайнята новою роботою, тому нічого не змінилося."}
 {"k": "modecard.needs_admin", "src": "fe68d230", "v": "Режим Авто доступний лише адміну."}
 {"k": "modecard.none_live", "src": "ae432c8c", "v": "Тут немає запущених сесій. Почни нову командою /new."}
@@ -358,7 +360,7 @@
 {"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> ще зупиняється - режим не змінено."}
 {"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ Не вдалося переключити режим: {error}"}
 {"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ Переключено на {mode} · {person}."}
-{"k": "modecard.switching", "src": "93eaa8f4", "v": "⚙️ Переключаю <b>{session}</b> в режим {mode}…"}
+{"k": "modecard.switching", "src": "30fa9003", "v": "⚙️ Переключаю <b>{session}</b> на {mode}…"}
 {"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ /mode приймає назву сесії та ask або auto, наприклад {example} або {example_ask}."}
 {"k": "modecard.which", "src": "107abca0", "v": "Яка сесія?"}
 {"k": "modecard.which_to", "src": "4694464a", "v": "Яку сесію переключити на {mode}?"}
@@ -411,7 +413,7 @@
 {"k": "newflow.settings_line", "src": "a770b6d4", "v": "{mode} · 🧠 {model} · 📁 {folder}"}
 {"k": "newflow.settings_no_folder", "src": "810727a6", "v": "{mode} · 🧠 {model} · 📁 папку проєкту ще не вибрано"}
 {"k": "newflow.started_over", "src": "3a2633bc", "v": "↩️ Скасовано - почато заново."}
-{"k": "newflow.starting", "src": "ff87493a", "v": "🚀 Запускаю <b>{session}</b> у режимі {mode}…"}
+{"k": "newflow.starting", "src": "c0338362", "v": "🚀 Запускаю <b>{session}</b> · {mode}…"}
 {"k": "newflow.starting_fresh", "src": "fff58191", "v": "🚀 Запускаю <b>{session}</b> заново…"}
 {"k": "newflow.switched_to", "src": "03553586", "v": "↩️ Переключено на <b>{session}</b>"}
 {"k": "newflow.title", "src": "79dee51b", "v": "🆕 <b>Нова сесія</b>"}
@@ -680,7 +682,7 @@
 {"k": "sess.restart_which", "src": "0eada720", "v": "Яку сесію перезапустити?"}
 {"k": "sess.restarted", "src": "dc0ed3cb", "v": "🔄 [<b>{session}</b>] перезапущено."}
 {"k": "sess.restarted_by", "src": "f2ddb551", "v": "🔄 [<b>{session}</b>] перезапущено · {person}."}
-{"k": "sess.resume_as", "src": "95516616", "v": "Відновити <b>{session}</b> у режимі:"}
+{"k": "sess.resume_as", "src": "95516616", "v": "Відновити <b>{session}</b> як:"}
 {"k": "sess.resume_failed", "src": "f19c1968", "v": "❌ Не вдалося відновити <b>{session}</b>: {error}"}
 {"k": "sess.resume_last_response", "src": "9e8e3733", "v": "<i>📜 Остання відповідь цієї сесії</i>\n<blockquote>{preview}</blockquote>"}
 {"k": "sess.resume_no_transcript", "src": "6b8a4001", "v": "⚠️ У сесії <b>{session}</b> немає збереженої історії на диску, її не можна відновити.\nПочни нову командою {command}."}
@@ -756,7 +758,7 @@
 {"k": "set.text.intro.level", "src": "5ca0f466", "v": "Рівень словника у відповідях Claude."}
 {"k": "set.text.ns_folder_title", "src": "f4eab7d6", "v": "📁 <b>Папка для нових сесій</b>"}
 {"k": "set.text.ns_model_title", "src": "386d1055", "v": "🧠 <b>Модель для нових сесій</b>"}
-{"k": "set.text.ns_root", "src": "04b79bd3", "v": "🆕 <b>Нові сесії</b>\n\nЗ чим /new починає сесію. Для однієї сесії це можна змінити на її картці.\n\nРежим: {mode}\nМодель: {model}\nПапка: {folder}"}
+{"k": "set.text.ns_root", "src": "af342243", "v": "🆕 <b>Нові сесії</b>\n\nЗ чим /new починає сесію. Для однієї сесії це можна змінити на її картці.\n\nДозволи: {mode}\nМодель: {model}\nПапка: {folder}"}
 {"k": "set.text.reports_auto_off", "src": "52adfc5a", "v": "Автоматичні пропозиції: вимк (дві пропозиції поспіль відхилено)."}
 {"k": "set.text.reports_env_off", "src": "408411eb", "v": "На цьому комп'ютері пропозиції також вимкнено через AIPAGER_REPORT_PROMPTS=0."}
 {"k": "set.text.reports_intro", "src": "4fe65258", "v": "Якщо aipager більше одного разу натрапляє на ту саму внутрішню помилку, він може запропонувати надіслати звіт. Ти завжди спершу бачиш звіт, і нічого не надсилається, поки ти не натиснеш Надіслати.\n\nПитати мене: пропонувати іноді (не частіше ніж раз на 3 дні).\nВимк: ніколи не пропонувати. Повідомити про проблему в /help працює завжди."}
@@ -859,7 +861,7 @@
 {"k": "toast.sendnow_taken", "src": "00735887", "v": "Уже забрано"}
 {"k": "toast.sendnow_typing", "src": "84af1903", "v": "Саме друкується запит, спробуй трохи згодом"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "Ця сесія вже завершена."}
-{"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} уже в режимі {mode}."}
+{"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session}: вже {mode}."}
 {"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "Ти не можеш видалити цю сесію."}
 {"k": "toast.sess_cant_end", "src": "ab082660", "v": "Ти не можеш завершити цю сесію."}
 {"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "Ти не можеш перейменувати цю сесію."}

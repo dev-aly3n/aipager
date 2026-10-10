@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.i18n_surfaces import without_mode_labels
+
 
 def _load_scenarios():
     """The shared scenario module, loaded by path (the directory name has
@@ -75,4 +77,8 @@ def test_english_body_is_todays(env, golden, name):
 def test_english_chat_lines_are_todays(env, golden, name):
     if RECORD:
         return
-    assert _run(env, name)["mirrors"] == golden[name]["mirrors"]
+    # The Mini App's chat lines show the mode label, which names the mode
+    # as a mode since 2026-10-10 (operator); nothing else may differ.
+    got, want = _run(env, name)["mirrors"], golden[name]["mirrors"]
+    assert without_mode_labels(got) == without_mode_labels(want)
+    assert (got != want) == any("🤖 Auto" in m or "💬 Ask" in m for m in want)

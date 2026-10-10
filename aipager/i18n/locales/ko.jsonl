@@ -334,20 +334,22 @@
 {"k": "media.transcribing", "src": "56629b0b", "v": "🎙️ <i>받아쓰는 중…</i>"}
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ 알겠어요. 음성 기능은 설치하지 않았어요."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ 음성 메시지가 {size}MB예요. Telegram 봇은 {limit}MB까지만 받을 수 있어요."}
-{"k": "mode.ask", "src": "8f9266a6", "v": "💬 확인"}
+{"k": "mode.ask", "src": "07910591", "v": "💬 확인 모드"}
 {"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 내 모드: 확인 (🤖 자동은 관리자용)"}
 {"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 대신 확인 모드로"}
-{"k": "mode.auto", "src": "a9e88621", "v": "🤖 자동"}
+{"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 자동 모드"}
 {"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 대신 자동 모드로"}
-{"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> 세션은 이미 {mode} 모드예요."}
+{"k": "mode.word.ask", "src": "3562777b", "v": "확인"}
+{"k": "mode.word.auto", "src": "c614ba7c", "v": "자동"}
+{"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> 세션은 이미 {mode}예요."}
 {"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 확인 모드로 전환"}
 {"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 자동 모드로 전환"}
 {"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> 세션이 작업 중이에요.\n확인 모드로 바꿀까요?"}
 {"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> 세션이 작업 중이에요.\n자동 모드로 바꿀까요?"}
-{"k": "modecard.confirm_auto", "src": "7ab3092b", "v": "⚙️ <b>{session}</b> 세션을 {mode} 모드로 바꿀까요?\n<i>Claude가 묻지 않고 도구를 실행해요({flag}).</i>"}
+{"k": "modecard.confirm_auto", "src": "ff1562a9", "v": "⚙️ <b>{session}</b> 세션을 {mode}로 바꿀까요?\n<i>Claude가 묻지 않고 도구를 실행해요({flag}).</i>"}
 {"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ <b>{session}</b> 세션의 상태를 아직 초기화하는 중이에요. 잠시 후 /mode를 다시 보내 보세요."}
-{"k": "modecard.is", "src": "43da1dce", "v": "<b>{session}</b> 세션은 {mode} 모드예요."}
-{"k": "modecard.is_target", "src": "bb92330e", "v": "✍️ <b>{session}</b> 세션은 {mode} 모드예요."}
+{"k": "modecard.is", "src": "c057ad13", "v": "<b>{session}</b> 세션은 {mode}예요."}
+{"k": "modecard.is_target", "src": "92bc67e3", "v": "✍️ <b>{session}</b> 세션은 {mode}예요."}
 {"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ <b>{session}</b> 세션이 새 작업을 시작해서 아무것도 바꾸지 않았어요."}
 {"k": "modecard.needs_admin", "src": "fe68d230", "v": "자동 모드는 관리자만 쓸 수 있어요."}
 {"k": "modecard.none_live", "src": "ae432c8c", "v": "여기에는 실행 중인 세션이 없어요. /new로 하나 시작하세요."}
@@ -358,10 +360,10 @@
 {"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> 세션이 아직 멈추는 중이라 모드를 바꾸지 않았어요."}
 {"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ 모드를 바꾸지 못했어요: {error}"}
 {"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ 전환됨: {mode} · {person}"}
-{"k": "modecard.switching", "src": "93eaa8f4", "v": "⚙️ <b>{session}</b> 세션을 {mode} 모드로 바꾸는 중…"}
+{"k": "modecard.switching", "src": "30fa9003", "v": "⚙️ <b>{session}</b> 세션을 {mode}로 바꾸는 중…"}
 {"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ /mode에는 세션 이름과 ask 또는 auto를 붙여요. 예: {example} 또는 {example_ask}"}
 {"k": "modecard.which", "src": "107abca0", "v": "어느 세션인가요?"}
-{"k": "modecard.which_to", "src": "4694464a", "v": "어느 세션을 {mode} 모드로 바꿀까요?"}
+{"k": "modecard.which_to", "src": "4694464a", "v": "어느 세션을 {mode}로 바꿀까요?"}
 {"k": "newflow.auto_needs_admin_note", "src": "6bb45da7", "v": "자동 모드는 관리자만 쓸 수 있어서 이 세션은 확인 모드예요."}
 {"k": "newflow.btn.cancel", "src": "196a9f45", "v": "✖️ 취소"}
 {"k": "newflow.btn.folder", "src": "2fb30e02", "v": "📁 폴더"}
@@ -411,7 +413,7 @@
 {"k": "newflow.settings_line", "src": "a770b6d4", "v": "{mode} · 🧠 {model} · 📁 {folder}"}
 {"k": "newflow.settings_no_folder", "src": "810727a6", "v": "{mode} · 🧠 {model} · 📁 아직 프로젝트 폴더 없음"}
 {"k": "newflow.started_over", "src": "3a2633bc", "v": "↩️ 취소하고 처음부터 다시 시작했어요."}
-{"k": "newflow.starting", "src": "ff87493a", "v": "🚀 <b>{session}</b> 시작하는 중 {mode}…"}
+{"k": "newflow.starting", "src": "c0338362", "v": "🚀 <b>{session}</b> 세션을 {mode}로 시작하는 중…"}
 {"k": "newflow.starting_fresh", "src": "fff58191", "v": "🚀 <b>{session}</b> 새로 시작하는 중…"}
 {"k": "newflow.switched_to", "src": "03553586", "v": "↩️ <b>{session}</b> 세션으로 전환했어요"}
 {"k": "newflow.title", "src": "79dee51b", "v": "🆕 <b>새 세션</b>"}
@@ -680,7 +682,7 @@
 {"k": "sess.restart_which", "src": "0eada720", "v": "어느 세션을 다시 시작할까요?"}
 {"k": "sess.restarted", "src": "dc0ed3cb", "v": "🔄 [<b>{session}</b>] 다시 시작됨."}
 {"k": "sess.restarted_by", "src": "f2ddb551", "v": "🔄 [<b>{session}</b>] 다시 시작됨 · {person}"}
-{"k": "sess.resume_as", "src": "95516616", "v": "<b>{session}</b> 세션을 어떤 모드로 재개할까요:"}
+{"k": "sess.resume_as", "src": "95516616", "v": "<b>{session}</b> 세션을 어떻게 재개할까요:"}
 {"k": "sess.resume_failed", "src": "f19c1968", "v": "❌ <b>{session}</b> 세션을 재개하지 못했어요: {error}"}
 {"k": "sess.resume_last_response", "src": "9e8e3733", "v": "<i>📜 이 세션의 마지막 응답</i>\n<blockquote>{preview}</blockquote>"}
 {"k": "sess.resume_no_transcript", "src": "6b8a4001", "v": "⚠️ <b>{session}</b> 세션은 디스크에 재개할 대화 기록이 없어요.\n{command} 명령으로 새로 시작하세요."}
@@ -756,7 +758,7 @@
 {"k": "set.text.intro.level", "src": "5ca0f466", "v": "Claude 답변의 어휘 수준이에요."}
 {"k": "set.text.ns_folder_title", "src": "f4eab7d6", "v": "📁 <b>새 세션 폴더</b>"}
 {"k": "set.text.ns_model_title", "src": "386d1055", "v": "🧠 <b>새 세션 모델</b>"}
-{"k": "set.text.ns_root", "src": "04b79bd3", "v": "🆕 <b>새 세션</b>\n\n/new로 세션을 시작할 때 쓰는 값이에요. 세션 하나만 카드에서 바꿀 수도 있어요.\n\n모드: {mode}\n모델: {model}\n폴더: {folder}"}
+{"k": "set.text.ns_root", "src": "af342243", "v": "🆕 <b>새 세션</b>\n\n/new로 세션을 시작할 때 쓰는 값이에요. 세션 하나만 카드에서 바꿀 수도 있어요.\n\n권한: {mode}\n모델: {model}\n폴더: {folder}"}
 {"k": "set.text.reports_auto_off", "src": "52adfc5a", "v": "자동 제안: 꺼짐 (제안을 연속 두 번 거절했어요)."}
 {"k": "set.text.reports_env_off", "src": "408411eb", "v": "이 기기에서는 AIPAGER_REPORT_PROMPTS=0으로도 제안이 꺼져 있어요."}
 {"k": "set.text.reports_intro", "src": "4fe65258", "v": "aipager에서 같은 내부 오류가 여러 번 생기면 보고서를 보내자고 제안할 수 있어요. 보고서는 항상 먼저 보여 주고, “보내기”를 탭하지 않으면 아무것도 보내지 않아요.\n\n물어보기: 가끔 제안해요 (3일에 최대 한 번).\n끄기: 제안하지 않아요. /help의 “문제 신고”는 언제든 쓸 수 있어요."}
@@ -859,7 +861,7 @@
 {"k": "toast.sendnow_taken", "src": "00735887", "v": "이미 가져갔어요"}
 {"k": "toast.sendnow_typing", "src": "84af1903", "v": "프롬프트를 입력하는 중이라 바빠요. 잠시 후 다시 시도해 주세요"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "그 세션은 이미 종료됐어요."}
-{"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} 세션은 이미 {mode} 모드예요."}
+{"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} 세션은 이미 {mode}예요."}
 {"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "이 세션은 삭제할 수 없어요."}
 {"k": "toast.sess_cant_end", "src": "ab082660", "v": "이 세션은 종료할 수 없어요."}
 {"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "이 세션의 이름은 바꿀 수 없어요."}

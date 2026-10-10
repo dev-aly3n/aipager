@@ -334,20 +334,22 @@
 {"k": "media.transcribing", "src": "56629b0b", "v": "🎙️ <i>Yazıya dökülüyor…</i>"}
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ Tamam, ses yüklenmedi."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ Sesli mesaj {size} MB; Telegram botları en fazla {limit} MB indirebilir."}
-{"k": "mode.ask", "src": "8f9266a6", "v": "💬 Sor"}
+{"k": "mode.ask", "src": "07910591", "v": "💬 Sor modu"}
 {"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 Sor (🤖 Otomatik: yöneticiler)"}
 {"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 Bunun yerine Sor"}
-{"k": "mode.auto", "src": "a9e88621", "v": "🤖 Otomatik"}
+{"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 Otomatik mod"}
 {"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 Bunun yerine Otomatik"}
-{"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> zaten {mode} modunda."}
+{"k": "mode.word.ask", "src": "3562777b", "v": "Sor"}
+{"k": "mode.word.auto", "src": "c614ba7c", "v": "Otomatik"}
+{"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b>: zaten {mode}."}
 {"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 Sor moduna geç"}
 {"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 Otomatik moda geç"}
 {"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> meşgul.\nSor moduna geçilsin mi?"}
 {"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> meşgul.\nOtomatik moda geçilsin mi?"}
-{"k": "modecard.confirm_auto", "src": "7ab3092b", "v": "⚙️ <b>{session}</b> {mode} moduna geçirilsin mi?\n<i>Claude araçları sormadan çalıştıracak ({flag}).</i>"}
+{"k": "modecard.confirm_auto", "src": "ff1562a9", "v": "⚙️ <b>{session}</b> için {mode} açılsın mı?\n<i>Claude araçları sormadan çalıştıracak ({flag}).</i>"}
 {"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ <b>{session}</b> oturumunun durumu henüz belirleniyor. Birazdan /mode komutunu tekrar dene."}
-{"k": "modecard.is", "src": "43da1dce", "v": "<b>{session}</b> {mode} modunda."}
-{"k": "modecard.is_target", "src": "bb92330e", "v": "✍️ <b>{session}</b> {mode} modunda."}
+{"k": "modecard.is", "src": "c057ad13", "v": "<b>{session}</b>: {mode}."}
+{"k": "modecard.is_target", "src": "92bc67e3", "v": "✍️ <b>{session}</b>: {mode}."}
 {"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ <b>{session}</b> yeni bir işe geçti, bu yüzden hiçbir şey değişmedi."}
 {"k": "modecard.needs_admin", "src": "fe68d230", "v": "Otomatik mod için yönetici gerekir."}
 {"k": "modecard.none_live", "src": "ae432c8c", "v": "Burada çalışan oturum yok. /new ile bir tane başlat."}
@@ -357,11 +359,11 @@
 {"k": "modecard.stale", "src": "9f0f5572", "v": "⚠️ Bu kart eskimişti, bu yüzden hiçbir şey değişmedi."}
 {"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> hâlâ durduruluyor - mod değişmedi."}
 {"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ Mod değiştirilemedi: {error}"}
-{"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ {mode} moduna geçiren: {person}."}
-{"k": "modecard.switching", "src": "93eaa8f4", "v": "⚙️ <b>{session}</b> {mode} moduna geçiriliyor…"}
+{"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ {person} geçiş yaptı: {mode}."}
+{"k": "modecard.switching", "src": "30fa9003", "v": "⚙️ <b>{session}</b> için {mode} açılıyor…"}
 {"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ /mode bir oturum adı ve ask ya da auto alır, örneğin {example} ya da {example_ask}."}
 {"k": "modecard.which", "src": "107abca0", "v": "Hangi oturum?"}
-{"k": "modecard.which_to", "src": "4694464a", "v": "Hangi oturum {mode} moduna geçsin?"}
+{"k": "modecard.which_to", "src": "4694464a", "v": "Hangi oturumda {mode} açılsın?"}
 {"k": "newflow.auto_needs_admin_note", "src": "6bb45da7", "v": "Otomatik mod için yönetici gerekir, bu yüzden bu oturum soracak."}
 {"k": "newflow.btn.cancel", "src": "196a9f45", "v": "✖️ İptal"}
 {"k": "newflow.btn.folder", "src": "2fb30e02", "v": "📁 Klasör"}
@@ -372,7 +374,7 @@
 {"k": "newflow.btn.resume", "src": "cad6f900", "v": "♻️ Devam ettir"}
 {"k": "newflow.btn.switch_to", "src": "8f04f92d", "v": "↩️ Ona geç"}
 {"k": "newflow.cancelled_nothing", "src": "4c346842", "v": "↩️ İptal edildi - hiçbir oturum değişmedi."}
-{"k": "newflow.changed_mode", "src": "a1779ae6", "v": "{mode} moduna geçiren: {person}."}
+{"k": "newflow.changed_mode", "src": "a1779ae6", "v": "{person} geçiş yaptı: {mode}."}
 {"k": "newflow.changed_model", "src": "1f771c06", "v": "Modeli {model} yapan: {person}."}
 {"k": "newflow.closed", "src": "87aee987", "v": "✖️ Kapatıldı, başka bir şeye geçtin. Oturum başlatmak için /new gönder."}
 {"k": "newflow.conflict_replaced", "src": "0ab47818", "v": "↩️ <b>{session}</b> için daha yeni bir /new bu kartın yerini aldı."}
@@ -411,7 +413,7 @@
 {"k": "newflow.settings_line", "src": "a770b6d4", "v": "{mode} · 🧠 {model} · 📁 {folder}"}
 {"k": "newflow.settings_no_folder", "src": "810727a6", "v": "{mode} · 🧠 {model} · 📁 henüz proje klasörü yok"}
 {"k": "newflow.started_over", "src": "3a2633bc", "v": "↩️ İptal edildi - baştan başlandı."}
-{"k": "newflow.starting", "src": "ff87493a", "v": "🚀 <b>{session}</b> {mode} modunda başlatılıyor…"}
+{"k": "newflow.starting", "src": "c0338362", "v": "🚀 <b>{session}</b> başlatılıyor · {mode}…"}
 {"k": "newflow.starting_fresh", "src": "fff58191", "v": "🚀 <b>{session}</b> sıfırdan başlatılıyor…"}
 {"k": "newflow.switched_to", "src": "03553586", "v": "↩️ <b>{session}</b> oturumuna geçildi"}
 {"k": "newflow.title", "src": "79dee51b", "v": "🆕 <b>Yeni oturum</b>"}
@@ -680,7 +682,7 @@
 {"k": "sess.restart_which", "src": "0eada720", "v": "Hangi oturum yeniden başlatılsın?"}
 {"k": "sess.restarted", "src": "dc0ed3cb", "v": "🔄 [<b>{session}</b>] yeniden başlatıldı."}
 {"k": "sess.restarted_by", "src": "f2ddb551", "v": "🔄 [<b>{session}</b>] yeniden başlatıldı · {person}."}
-{"k": "sess.resume_as", "src": "95516616", "v": "<b>{session}</b> şu modda devam ettirilsin:"}
+{"k": "sess.resume_as", "src": "95516616", "v": "<b>{session}</b> nasıl devam ettirilsin:"}
 {"k": "sess.resume_failed", "src": "f19c1968", "v": "❌ <b>{session}</b> devam ettirilemedi: {error}"}
 {"k": "sess.resume_last_response", "src": "9e8e3733", "v": "<i>📜 Bu oturumun son yanıtı</i>\n<blockquote>{preview}</blockquote>"}
 {"k": "sess.resume_no_transcript", "src": "6b8a4001", "v": "⚠️ <b>{session}</b> oturumunun diskte devam ettirilebilir dökümü yok.\n{command} ile sıfırdan bir tane başlat."}
@@ -756,7 +758,7 @@
 {"k": "set.text.intro.level", "src": "5ca0f466", "v": "Claude'un yanıtlarındaki kelime düzeyi."}
 {"k": "set.text.ns_folder_title", "src": "f4eab7d6", "v": "📁 <b>Yeni oturumlar için klasör</b>"}
 {"k": "set.text.ns_model_title", "src": "386d1055", "v": "🧠 <b>Yeni oturumlar için model</b>"}
-{"k": "set.text.ns_root", "src": "04b79bd3", "v": "🆕 <b>Yeni oturumlar</b>\n\n/new komutunun bir oturumu neyle başlattığı. Tek bir oturum için kartında yine değiştirebilirsin.\n\nMod: {mode}\nModel: {model}\nKlasör: {folder}"}
+{"k": "set.text.ns_root", "src": "af342243", "v": "🆕 <b>Yeni oturumlar</b>\n\n/new komutunun bir oturumu neyle başlattığı. Tek bir oturum için kartında yine değiştirebilirsin.\n\nİzinler: {mode}\nModel: {model}\nKlasör: {folder}"}
 {"k": "set.text.reports_auto_off", "src": "52adfc5a", "v": "Otomatik teklifler: kapalı (art arda iki teklife hayır dedin)."}
 {"k": "set.text.reports_env_off", "src": "408411eb", "v": "Bu makinede teklifler ayrıca AIPAGER_REPORT_PROMPTS=0 ile kapalı."}
 {"k": "set.text.reports_intro", "src": "4fe65258", "v": "aipager aynı iç hatayla birden fazla kez karşılaşırsa rapor göndermeyi teklif edebilir. Raporu her zaman önce sen görürsün ve Gönder'e dokunmadıkça hiçbir şey gönderilmez.\n\nBana sor: arada bir teklif et (en fazla 3 günde bir).\nKapalı: hiç teklif etme. /help içindeki Sorun bildir her zaman çalışır."}
@@ -859,7 +861,7 @@
 {"k": "toast.sendnow_taken", "src": "00735887", "v": "Zaten alındı"}
 {"k": "toast.sendnow_typing", "src": "84af1903", "v": "Şu an bir istem yazılıyor, birazdan tekrar dene"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "Bu oturum zaten sona erdi."}
-{"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} zaten {mode} modunda."}
+{"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session}: zaten {mode}."}
 {"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "Bu oturumu silemezsin."}
 {"k": "toast.sess_cant_end", "src": "ab082660", "v": "Bu oturumu sonlandıramazsın."}
 {"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "Bu oturumu yeniden adlandıramazsın."}

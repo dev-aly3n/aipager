@@ -214,10 +214,36 @@ def test_a_default_label_clash_fails(german):
 
 
 def test_a_mode_word_clash_fails(german):
-    german({"mode.ask": "💬 Modus", "mode.auto": "🤖 modus"})
+    """Check 10 reads the typed mode words (mode.word.*), not the shown
+    two-word labels."""
+    german({"mode.word.ask": "Modus", "mode.word.auto": "modus"})
     problems = kbwords.label_problems(("en", "de"))
     assert any("means both mode:ask and mode:auto" in p for p in problems)
-    german({"mode.ask": "💬 Frag mich", "mode.auto": "🤖 Auto"})
+    german({"mode.word.ask": "Frag mich", "mode.word.auto": "Auto",
+            "mode.ask": "💬 Frag mich-Modus", "mode.auto": "🤖 Auto-Modus"})
     assert any("(mode:ask) must be one word" in p
                for p in kbwords.label_problems(("en", "de")))
     assert kbwords.mode_word("🤖️ Auto ") == "auto"
+
+
+def test_two_word_mode_labels_pass_check_10(german):
+    """A label is the emoji, the word and the word for mode: its space is
+    no problem, since nobody types the label."""
+    german({"mode.word.ask": "Fragen", "mode.word.auto": "Auto",
+            "mode.ask": "💬 Fragen-Modus", "mode.auto": "🤖 Auto-Modus"})
+    assert kbwords.label_problems(("en", "de")) == []
+
+
+def test_a_mode_label_must_show_its_typed_word(german):
+    """What people read on the label is what /mode accepts: a label that
+    drops or bends its typed word fails check 10."""
+    german({"mode.word.ask": "Fragen", "mode.word.auto": "Auto",
+            "mode.ask": "💬 Frage-Modus", "mode.auto": "🤖 Auto-Modus"})
+    problems = kbwords.label_problems(("en", "de"))
+    assert problems == ["de '💬 Frage-Modus' ∌ 'Fragen'"]
+    german({"mode.word.ask": "Fragen", "mode.word.auto": "Auto",
+            "mode.ask": "💬 Fragen-Modus", "mode.auto": "🤖 Automatik-Modus"})
+    assert kbwords.label_problems(("en", "de")) == []
+    german({"mode.word.ask": "Fragen", "mode.word.auto": "Automatik",
+            "mode.ask": "💬 Fragen-Modus", "mode.auto": "🤖 Auto-Modus"})
+    assert kbwords.label_problems(("en", "de")) == ["de '🤖 Auto-Modus' ∌ 'Automatik'"]

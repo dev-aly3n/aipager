@@ -334,20 +334,22 @@
 {"k": "media.transcribing", "src": "56629b0b", "v": "🎙️ <i>Transcrevendo…</i>"}
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ Certo, a voz não foi instalada."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ A mensagem de voz tem {size} MB; bots do Telegram têm limite de {limit} MB."}
-{"k": "mode.ask", "src": "8f9266a6", "v": "💬 Perguntar"}
+{"k": "mode.ask", "src": "07910591", "v": "💬 Modo Perguntar"}
 {"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 Perguntar (🤖 Automático: admins)"}
 {"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 Melhor Perguntar"}
-{"k": "mode.auto", "src": "a9e88621", "v": "🤖 Automático"}
+{"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 Modo Automático"}
 {"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 Melhor Automático"}
-{"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> já está em {mode}."}
+{"k": "mode.word.ask", "src": "3562777b", "v": "Perguntar"}
+{"k": "mode.word.auto", "src": "c614ba7c", "v": "Automático"}
+{"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> já está no {mode}."}
 {"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 Mudar para Perguntar"}
 {"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 Mudar para Automático"}
 {"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> está ocupada.\nMudar para o modo Perguntar?"}
 {"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> está ocupada.\nMudar para o modo Automático?"}
-{"k": "modecard.confirm_auto", "src": "7ab3092b", "v": "⚙️ Mudar <b>{session}</b> para o modo {mode}?\n<i>O Claude vai executar ferramentas sem perguntar ({flag}).</i>"}
+{"k": "modecard.confirm_auto", "src": "ff1562a9", "v": "⚙️ Mudar <b>{session}</b> para o {mode}?\n<i>O Claude vai executar ferramentas sem perguntar ({flag}).</i>"}
 {"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ O estado de <b>{session}</b> ainda está sendo inicializado. Tente /mode de novo em instantes."}
-{"k": "modecard.is", "src": "43da1dce", "v": "<b>{session}</b> está em {mode}."}
-{"k": "modecard.is_target", "src": "bb92330e", "v": "✍️ <b>{session}</b> está em {mode}."}
+{"k": "modecard.is", "src": "c057ad13", "v": "<b>{session}</b> está no {mode}."}
+{"k": "modecard.is_target", "src": "92bc67e3", "v": "✍️ <b>{session}</b> está no {mode}."}
 {"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ <b>{session}</b> começou um trabalho novo, então nada mudou."}
 {"k": "modecard.needs_admin", "src": "fe68d230", "v": "O modo Automático exige um administrador."}
 {"k": "modecard.none_live", "src": "ae432c8c", "v": "Não há sessões ativas aqui. Inicie uma com /new."}
@@ -357,11 +359,11 @@
 {"k": "modecard.stale", "src": "9f0f5572", "v": "⚠️ Esse cartão estava desatualizado, então nada mudou."}
 {"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> ainda está parando - o modo não mudou."}
 {"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ Não foi possível mudar o modo: {error}"}
-{"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ Alterado para {mode} por {person}."}
-{"k": "modecard.switching", "src": "93eaa8f4", "v": "⚙️ Mudando <b>{session}</b> para o modo {mode}…"}
+{"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ Alterado para o {mode} por {person}."}
+{"k": "modecard.switching", "src": "30fa9003", "v": "⚙️ Mudando <b>{session}</b> para o {mode}…"}
 {"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ /mode recebe um nome de sessão e ask ou auto, por exemplo {example} ou {example_ask}."}
 {"k": "modecard.which", "src": "107abca0", "v": "Qual sessão?"}
-{"k": "modecard.which_to", "src": "4694464a", "v": "Qual sessão mudar para {mode}?"}
+{"k": "modecard.which_to", "src": "4694464a", "v": "Qual sessão mudar para o {mode}?"}
 {"k": "newflow.auto_needs_admin_note", "src": "6bb45da7", "v": "O modo Automático exige um administrador, então esta sessão usa Perguntar."}
 {"k": "newflow.btn.cancel", "src": "196a9f45", "v": "✖️ Cancelar"}
 {"k": "newflow.btn.folder", "src": "2fb30e02", "v": "📁 Pasta"}
@@ -372,7 +374,7 @@
 {"k": "newflow.btn.resume", "src": "cad6f900", "v": "♻️ Retomar"}
 {"k": "newflow.btn.switch_to", "src": "8f04f92d", "v": "↩️ Ir para ela"}
 {"k": "newflow.cancelled_nothing", "src": "4c346842", "v": "↩️ Cancelado - nenhuma sessão mudou."}
-{"k": "newflow.changed_mode", "src": "a1779ae6", "v": "Alterado para {mode} por {person}."}
+{"k": "newflow.changed_mode", "src": "a1779ae6", "v": "Alterado para o {mode} por {person}."}
 {"k": "newflow.changed_model", "src": "1f771c06", "v": "Modelo alterado para {model} por {person}."}
 {"k": "newflow.closed", "src": "87aee987", "v": "✖️ Fechado, você passou para outra coisa. Envie /new para iniciar uma sessão."}
 {"k": "newflow.conflict_replaced", "src": "0ab47818", "v": "↩️ Um /new mais recente para <b>{session}</b> substituiu este cartão."}
@@ -411,7 +413,7 @@
 {"k": "newflow.settings_line", "src": "a770b6d4", "v": "{mode} · 🧠 {model} · 📁 {folder}"}
 {"k": "newflow.settings_no_folder", "src": "810727a6", "v": "{mode} · 🧠 {model} · 📁 ainda sem pasta de projeto"}
 {"k": "newflow.started_over", "src": "3a2633bc", "v": "↩️ Cancelado - recomeçado do zero."}
-{"k": "newflow.starting", "src": "ff87493a", "v": "🚀 Iniciando <b>{session}</b> {mode}…"}
+{"k": "newflow.starting", "src": "c0338362", "v": "🚀 Iniciando <b>{session}</b> no {mode}…"}
 {"k": "newflow.starting_fresh", "src": "fff58191", "v": "🚀 Iniciando <b>{session}</b> (nova)…"}
 {"k": "newflow.switched_to", "src": "03553586", "v": "↩️ Mudado para <b>{session}</b>"}
 {"k": "newflow.title", "src": "79dee51b", "v": "🆕 <b>Nova sessão</b>"}
@@ -756,7 +758,7 @@
 {"k": "set.text.intro.level", "src": "5ca0f466", "v": "Nível de vocabulário das respostas do Claude."}
 {"k": "set.text.ns_folder_title", "src": "f4eab7d6", "v": "📁 <b>Pasta para novas sessões</b>"}
 {"k": "set.text.ns_model_title", "src": "386d1055", "v": "🧠 <b>Modelo para novas sessões</b>"}
-{"k": "set.text.ns_root", "src": "04b79bd3", "v": "🆕 <b>Novas sessões</b>\n\nCom o que o /new inicia uma sessão. Você ainda pode mudar isso no cartão para uma sessão só.\n\nModo: {mode}\nModelo: {model}\nPasta: {folder}"}
+{"k": "set.text.ns_root", "src": "af342243", "v": "🆕 <b>Novas sessões</b>\n\nCom o que o /new inicia uma sessão. Você ainda pode mudar isso no cartão para uma sessão só.\n\nPermissões: {mode}\nModelo: {model}\nPasta: {folder}"}
 {"k": "set.text.reports_auto_off", "src": "52adfc5a", "v": "Sugestões automáticas: desligadas (você recusou duas sugestões seguidas)."}
 {"k": "set.text.reports_env_off", "src": "408411eb", "v": "As sugestões também estão desligadas nesta máquina por AIPAGER_REPORT_PROMPTS=0."}
 {"k": "set.text.reports_intro", "src": "4fe65258", "v": "Quando o aipager tem o mesmo erro interno mais de uma vez, ele pode oferecer o envio de um relatório. Você sempre vê o relatório antes, e nada é enviado a menos que você toque em Enviar.\n\nMe perguntar: oferece de vez em quando (no máximo uma vez a cada 3 dias).\nDesligado: nunca oferece. Relatar um problema em /help sempre funciona."}
@@ -859,7 +861,7 @@
 {"k": "toast.sendnow_taken", "src": "00735887", "v": "Já foi recebido"}
 {"k": "toast.sendnow_typing", "src": "84af1903", "v": "Ocupado digitando um prompt, tente de novo em instantes"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "Essa sessão já foi encerrada."}
-{"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} já está em {mode}."}
+{"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} já está no {mode}."}
 {"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "Você não pode excluir esta sessão."}
 {"k": "toast.sess_cant_end", "src": "ab082660", "v": "Você não pode encerrar esta sessão."}
 {"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "Você não pode renomear esta sessão."}

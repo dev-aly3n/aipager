@@ -163,5 +163,5 @@ def test_bare_perms_shows_the_mode_and_switches_nothing(mk_bot, mk_update, run_a
     bot._do_perms_switch_via_fn.assert_not_awaited()
     text = update.message.reply_text.await_args[0][0]
     kb = update.message.reply_text.await_args[1]["reply_markup"]
-    assert text == "✍️ <b>dev</b> is 🤖 Auto."
+    assert text == "✍️ <b>dev</b> is in 🤖 Auto mode."
     assert [b.text for row in kb.inline_keyboard for b in row] == ["💬 Switch to Ask"]

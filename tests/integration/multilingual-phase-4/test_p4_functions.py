@@ -351,7 +351,7 @@ def test_session_created_without_a_folder_is_one_line():
 
 def test_session_created_english_is_todays():
     assert chat_lines.session_created(EN, "made", True, "/srv/p") == (
-        "\U0001f680 made created from the Mini App \u00b7 \U0001f916 Auto\n\U0001f4c1 /srv/p")
+        "\U0001f680 made created from the Mini App \u00b7 \U0001f916 Auto mode\n\U0001f4c1 /srv/p")
 
 
 def test_an_unknown_setting_passes_its_raw_id():

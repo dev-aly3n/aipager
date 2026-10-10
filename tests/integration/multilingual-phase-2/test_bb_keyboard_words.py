@@ -292,23 +292,24 @@ def test_mode_accepts_the_english_ids(word, want):
 
 
 @pytest.mark.parametrize("code", LANGS)
-@pytest.mark.parametrize("key, want", [("mode.ask", "ask"), ("mode.auto", "auto")])
+@pytest.mark.parametrize("key, want", [("mode.word.ask", "ask"), ("mode.word.auto", "auto")])
 def test_mode_accepts_the_translated_word(code, key, want):
     assert mode_from_word(_mode_word(code, key)) == want
 
 
-@pytest.mark.parametrize("key, want", [("mode.ask", "ask"), ("mode.auto", "auto")])
+@pytest.mark.parametrize("key, want", [("mode.word.ask", "ask"), ("mode.word.auto", "auto")])
 def test_mode_accepts_the_russian_word_in_any_case(key, want):
     assert mode_from_word(_mode_word("ru", key).upper()) == want
 
 
-@pytest.mark.parametrize("key, want", [("mode.ask", "ask"), ("mode.auto", "auto")])
+@pytest.mark.parametrize("key, want", [("mode.word.ask", "ask"), ("mode.word.auto", "auto")])
 def test_mode_accepts_the_persian_word_with_its_emoji(key, want):
-    assert mode_from_word(catalog("fa")[key]["v"]) == want
+    emoji = "💬" if want == "ask" else "🤖"
+    assert mode_from_word(emoji + catalog("fa")[key]["v"]) == want
 
 
 def test_mode_accepts_the_persian_word_with_a_mark():
-    assert mode_from_word(RLM + _mode_word("fa", "mode.auto")) == "auto"
+    assert mode_from_word(RLM + _mode_word("fa", "mode.word.auto")) == "auto"
 
 
 @pytest.mark.parametrize("word", ["x1", "ask1", "automatic", "", "status",
@@ -318,5 +319,5 @@ def test_mode_rejects_anything_else(word):
 
 
 def test_the_two_mode_words_differ_in_each_language():
-    assert all(_mode_word(c, "mode.ask").lower() != _mode_word(c, "mode.auto").lower()
+    assert all(_mode_word(c, "mode.word.ask").lower() != _mode_word(c, "mode.word.auto").lower()
                for c in LANGS)

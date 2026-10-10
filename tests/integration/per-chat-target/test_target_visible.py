@@ -4,7 +4,7 @@
 - The pinned bar says "✍️ Messages go to x1" once a chat has more than one
   live session. Its first line is unchanged; with one session the line is
   implied and left out.
-- A bare /<label> replies "✍️ Now talking to x1 · 💤 idle · 🤖 Auto", then
+- A bare /<label> replies "✍️ Now talking to x1 · 💤 idle · 🤖 Auto mode", then
   what happens next, instead of a stats table. A session waiting on its
   person offers Answer; ⋮ More is the session's own menu.
 """
@@ -119,10 +119,10 @@ def switch(mk_bot, mk_update, run_async, monkeypatch):
 
 
 @pytest.mark.parametrize("status, auto, first", [
-    (Status.IDLE, False, "✍️ Now talking to <b>jim</b> · 💤 idle · 💬 Ask"),
-    (Status.IDLE, True, "✍️ Now talking to <b>jim</b> · 💤 idle · 🤖 Auto"),
-    (Status.BUSY, True, "✍️ Now talking to <b>jim</b> · ⚙️ working · 🤖 Auto"),
-    (Status.UNKNOWN, False, "✍️ Now talking to <b>jim</b> · 🔄 starting · 💬 Ask"),
+    (Status.IDLE, False, "✍️ Now talking to <b>jim</b> · 💤 idle · 💬 Ask mode"),
+    (Status.IDLE, True, "✍️ Now talking to <b>jim</b> · 💤 idle · 🤖 Auto mode"),
+    (Status.BUSY, True, "✍️ Now talking to <b>jim</b> · ⚙️ working · 🤖 Auto mode"),
+    (Status.UNKNOWN, False, "✍️ Now talking to <b>jim</b> · 🔄 starting · 💬 Ask mode"),
 ])
 def test_the_switch_reply_says_state_mode_and_what_next(switch, status, auto, first):
     _sess(switch, "claude-jim", "jim", status, auto=auto)
@@ -140,7 +140,7 @@ def test_a_waiting_session_offers_answer(switch):
     text, buttons = switch.switch("jim")
 
     assert text.split("\n") == [
-        "✍️ Now talking to <b>jim</b> · ⏳ needs you · 💬 Ask",
+        "✍️ Now talking to <b>jim</b> · ⏳ needs you · 💬 Ask mode",
         "jim is waiting for your answer."]
     assert [b.text for b in buttons] == ["Answer jim", "⋮ More"]
     resolved = [session_parity.resolve_short_cb(

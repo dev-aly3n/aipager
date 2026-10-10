@@ -25,7 +25,7 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 ## Markers, keyboard words and modes
 - Keep `**`, `_`, every HTML tag and every {placeholder} exactly as in the English: the same number of `**` and `_`, never a backtick.
 - A keyboard word (status, stop, new, kill) is ONE word with no space: it is typed as a word. A Latin keyboard label must not be a valid session name (check 10: only a-z, 0-9, _ and - would be one), so it is either a reserved command word or carries a character outside that set: Status, Stop, Neu…, Beenden… (not Schließen, which the close buttons use); the sub-keyboards are Vorlagen › and Befehle ›.
-- A mode word (Auto, Ask) is ONE word after its emoji: 🤖 Auto, 💬 Fragen.
+- A mode word (mode.word.auto, mode.word.ask: Auto, Fragen) is ONE word with no emoji: people type it after /mode, so it never changes once chosen. A mode label (mode.auto, mode.ask) is what people see: the emoji, that same word and the word for mode (🤖 Auto-Modus, 💬 Fragen-Modus); a sentence around {mode} must not add its own word for mode.
 - A default button label (Continue, Run tests...) stays short: it is a button.
 
 ## Words (the glossary's terms in context)

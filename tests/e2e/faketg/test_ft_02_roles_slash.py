@@ -69,7 +69,7 @@ def test_roles_and_buttons(fresh):
     starts = [e for e in inst.standin_log(name) if e.get("event") == "start"]
     since = fake.mark()
     _tap_once_the_turn_is_over(fake, fti.user(fti.DAVE), ready, auto, "ft3")
-    flows.wait_text(fake, G, "Switched to 🤖 Auto by @dave", since=since, timeout=90)
+    flows.wait_text(fake, G, "Switched to 🤖 Auto mode by @dave", since=since, timeout=90)
     if inst.claude_mode == "standin":
         fti.wait_until(lambda: len([e for e in inst.standin_log(name)
                                     if e.get("event") == "start"]) > len(starts),

@@ -10,8 +10,10 @@ from __future__ import annotations
 import pytest
 
 import qa_p3a_scenarios as S
+from tests.i18n_surfaces import without_mode_labels
 
 NAMES = sorted(S.SCENARIOS)
+MODE_LABEL_SCENARIOS = {"mode_replies", "new_flow_cards"}
 
 
 def test_the_golden_has_every_scenario(golden):
@@ -21,7 +23,14 @@ def test_the_golden_has_every_scenario(golden):
 
 @pytest.mark.parametrize("name", NAMES)
 def test_an_english_chat_reads_what_it_read_before(golden, scenario_out, name):
-    assert scenario_out(name, "en") == golden["scenarios"][name]
+    """Byte for byte, but for the mode labels, which name the mode as a
+    mode since 2026-10-10 (operator): ``mode_replies`` and
+    ``new_flow_cards`` show them."""
+    got, want = scenario_out(name, "en"), golden["scenarios"][name]
+    if name in MODE_LABEL_SCENARIOS:
+        assert got != want
+        got, want = without_mode_labels(got), without_mode_labels(want)
+    assert got == want
 
 
 def test_the_exported_constants_are_the_same_set(golden):

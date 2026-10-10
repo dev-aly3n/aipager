@@ -240,8 +240,8 @@ def diffs(monkeypatch):
 # What each command's card for x1 starts with, when it acts on x1.
 ACTED = {
     "kill": "⏹ End <b>x1</b>?",
-    "mode": "<b>x1</b> is 💬 Ask.",
-    "perms": "<b>x1</b> is 💬 Ask.",
+    "mode": "<b>x1</b> is in 💬 Ask mode.",
+    "perms": "<b>x1</b> is in 💬 Ask mode.",
     "restart": "🔄 Restart session [<b>x1</b>]?",
     "rename": "✏️ New name for [<b>x1</b>]?",
     "delete": "🗑️ Remove [<b>x1</b>] from the session list?",
@@ -543,7 +543,7 @@ def test_dm_several_is_a_picker_with_the_target_first(dbot, run_async, mk_update
         if command == "diff":
             assert diffs == [D2]
         else:
-            assert _replies(u)[-1].startswith("✍️ <b>d2</b> is 💬 Ask.")
+            assert _replies(u)[-1].startswith("✍️ <b>d2</b> is in 💬 Ask mode.")
         return
     assert _replies(u) == [QUESTION[command]]
     rows = _rows(dbot, DM, _markup(u))

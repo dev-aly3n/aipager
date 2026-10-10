@@ -25,6 +25,7 @@ from pathlib import Path
 import pytest
 
 from aipager.i18n import locales
+from tests.i18n_surfaces import MODE_LABEL_SURFACES, without_mode_labels
 
 REPO = Path(__file__).resolve().parents[3]
 BASE = "6a11b78"
@@ -79,10 +80,15 @@ CHANGED_SINCE = {"agents_line", "language.list"}
 def test_every_english_surface_of_the_base_is_unchanged():
     rel = "tests/golden/english_surfaces.json"
     base, cur = _surfaces(at_base(rel)), _surfaces(now(rel))
-    kept = {k: v for k, v in base.items() if k not in CHANGED_SINCE}
+    kept = {k: v for k, v in base.items() if k not in CHANGED_SINCE | MODE_LABEL_SURFACES}
     assert {k: cur.get(k) for k in kept} == kept
     # Each exemption is real: the surface did change, and still exists.
     assert all(k in base and k in cur and cur[k] != base[k] for k in CHANGED_SINCE)
+    # The mode label surfaces changed by the mode labels (2026-10-10) and
+    # by nothing else.
+    for k in MODE_LABEL_SURFACES:
+        assert cur[k] != base[k], k
+        assert without_mode_labels(cur[k]) == without_mode_labels(base[k]), k
 
 
 def test_the_english_surfaces_only_gain_the_three_new_ones():

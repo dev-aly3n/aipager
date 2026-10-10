@@ -1,10 +1,13 @@
 """The display labels of a session's permission mode.
 
-What is SHOWN (buttons, cards, /settings, the Mini App's chat lines) goes
-through these keys so a later phase can translate it. What is TYPED and
-STORED stays English and never passes through here: ``/mode auto|ask``,
-callback data, ``new_session_mode`` values, ``skip_perms``. No code reads a
-shown label back.
+What is SHOWN (buttons, cards, /settings, the Mini App's chat lines) is
+the mode's label, ``MODE_AUTO`` / ``MODE_ASK``: its emoji, its word and the
+language's word for mode ("🤖 Auto mode"). What people TYPE after
+``/mode`` is the mode's id (``auto``, ``ask``) or its one-word typed word,
+``WORD_AUTO`` / ``WORD_ASK`` ("Auto", "خودکار"), never the two-word label.
+What is STORED stays English and never passes through here: callback
+data, ``new_session_mode`` values, ``skip_perms``. No code reads a shown
+label back.
 
 Sentences around a label stay literals with the label interpolated until
 they are migrated themselves.
@@ -14,8 +17,20 @@ from __future__ import annotations
 
 from aipager.i18n import Msg
 
-MODE_AUTO = Msg("mode.auto", "🤖 Auto", note="Permission mode: Claude runs tools without asking")
-MODE_ASK = Msg("mode.ask", "💬 Ask", note="Permission mode: Claude asks before each tool")
+MODE_AUTO = Msg("mode.auto", "🤖 Auto mode",
+                note="Permission mode's shown label: Claude runs tools without asking. The "
+                     "emoji, the mode.word.auto word, and the word for mode")
+MODE_ASK = Msg("mode.ask", "💬 Ask mode",
+               note="Permission mode's shown label: Claude asks before each tool. The "
+                    "emoji, the mode.word.ask word, and the word for mode")
+#: The words typed after /mode: ONE word each, no emoji, the same word the
+#: label above uses. Never shown on their own.
+WORD_AUTO = Msg("mode.word.auto", "Auto",
+                note="The word people type after /mode for Auto mode: ONE word, no emoji, "
+                     "the same word as in mode.auto")
+WORD_ASK = Msg("mode.word.ask", "Ask",
+               note="The word people type after /mode for Ask mode: ONE word, no emoji, "
+                    "the same word as in mode.ask")
 MODE_ASK_INSTEAD = Msg("mode.ask_instead", "💬 Ask instead",
                        note="Button on the /new card: start the session in Ask mode")
 MODE_AUTO_INSTEAD = Msg("mode.auto_instead", "🤖 Auto instead",
@@ -26,9 +41,10 @@ MODE_ASK_FOR_YOU = Msg("mode.ask_for_you", "💬 Ask for you (🤖 Auto is for a
 
 def mode_from_word(word: str) -> str | None:
     """``"ask"`` or ``"auto"`` for a word typed after ``/mode``: the ids
-    themselves (any case), or the mode's shown word in any enabled
-    language with its emoji and invisible marks dropped (``خودکار``,
-    ``авто``, ``demander``); None for anything else. A translated word in
+    themselves (any case), or the mode's typed word (``WORD_ASK`` /
+    ``WORD_AUTO``) in any enabled language, compared with its emoji and
+    invisible marks dropped (``خودکار``, ``авто``, ``demander``); None for
+    anything else. A translated word in
     a Latin script can also be a session name (``demander``): which one a
     word means is :func:`parse_mode_args`'s call, not this one's."""
     if not isinstance(word, str):
@@ -39,7 +55,7 @@ def mode_from_word(word: str) -> str | None:
     typed = kbwords.mode_word(word)
     if not typed:
         return None
-    for mode, msg in (("ask", MODE_ASK), ("auto", MODE_AUTO)):
+    for mode, msg in (("ask", WORD_ASK), ("auto", WORD_AUTO)):
         if any(typed == kbwords.mode_word(label) for label in kbwords._labels(msg)):
             return mode
     return None

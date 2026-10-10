@@ -100,6 +100,10 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"card\.[a-z0-9_.]+", "card", "chars", 160, ""),
     (r"log\.[a-z0-9_.]+", "message", "chars", 200, ""),
     (r"agents\.[a-z0-9_.]+", "message", "chars", 200, ""),
+    # The resume card's default mode button wraps a whole mode label
+    # (whose own budget is 40 cells) and has a row of its own: it gets the
+    # label's budget.
+    (r"perm\.btn\.default_suffix", "button", "cells", 40, ""),
     (r"perm\.btn\.[a-z0-9_]+", "button", "cells", 24, ""),
     (r"perm\.[a-z0-9_.]+", "message", "chars", 300, ""),
     (r"ans\.[a-z0-9_.]+", "message", "chars", 200, ""),

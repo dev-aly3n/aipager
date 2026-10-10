@@ -19,13 +19,16 @@ CHAT = 4242
 
 @pytest.fixture
 def fa_ru(tmp_path, monkeypatch):
-    """Persian and Russian enabled, with their mode words in a catalog."""
+    """Persian and Russian enabled, with their mode labels and typed mode
+    words in a catalog."""
     monkeypatch.setattr(core, "LOCALES_DIR", tmp_path)
-    for code, ask, auto in (("fa", "💬 پرسش", "🤖 خودکار"), ("ru", "💬 Спрашивать", "🤖 Авто")):
+    for code, ask, auto in (("fa", "پرسش", "خودکار"), ("ru", "Спрашивать", "Авто")):
         monkeypatch.setitem(locales.LOCALES, code,
                             dataclasses.replace(locales.LOCALES[code], enabled=True))
+        mode = "مود" if code == "fa" else "Режим"
         lines = [json.dumps({"k": k, "v": v, "src": "0"}, ensure_ascii=False)
-                 for k, v in (("mode.ask", ask), ("mode.auto", auto))]
+                 for k, v in (("mode.ask", f"💬 {mode} {ask}"), ("mode.auto", f"🤖 {mode} {auto}"),
+                              ("mode.word.ask", ask), ("mode.word.auto", auto))]
         (tmp_path / f"{code}.jsonl").write_text("".join(x + "\n" for x in lines),
                                                encoding="utf-8")
     core.reset_caches()
@@ -39,6 +42,9 @@ def test_the_word_resolves_in_every_enabled_language(fa_ru):
     assert mode_from_word("Спрашивать") == "ask"
     assert mode_from_word("AUTO") == "auto" and mode_from_word("Ask") == "ask"
     for word in ("x1", "auto2", "", "خود", "💬"):
+        assert mode_from_word(word) is None, word
+    # The word for mode in a label is not a mode word of its own.
+    for word in ("مود", "режим", "mode"):
         assert mode_from_word(word) is None, word
 
 

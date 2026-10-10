@@ -26,7 +26,7 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - Keep `**`, `_`, every HTML tag and every {placeholder} exactly as in the English: the same number of `**` and `_`, never a backtick.
 - The four main-keyboard words (status, stop, new, kill) stay as the English words, exactly like the commands /status, /stop, /new and /kill they stand for. In a Latin-script language a translated word (for example "estado") is also a valid session name, and check 10 forbids a keyboard word that could hide a session called that.
 - A navigation button that opens another keyboard ends with " ›" ("Plantillas ›", "Comandos ›"; the model list is "Modelo ›"), like "Model ›": the arrow keeps the label from ever being a session name.
-- A mode word (Auto, Ask) is translated and is ONE word after its emoji (🤖 Automático, 💬 Preguntar): people type it after /mode.
+- A mode word (mode.word.auto, mode.word.ask: Automático, Preguntar) is ONE word with no emoji: people type it after /mode, so it never changes once chosen. A mode label (mode.auto, mode.ask) is what people see: the emoji, that same word and the word for mode (🤖 Modo Automático, 💬 Modo Preguntar); a sentence around {mode} must not add its own word for mode.
 - A default button label (Continue, Run tests...) stays short: it is a button. Its payload stays English (Claude receives the English).
 
 ## Terms

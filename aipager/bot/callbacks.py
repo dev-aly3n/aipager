@@ -133,12 +133,13 @@ MODE_REFUSED_NOT_RUNNING = Msg(
 MODE_MOVED_ON = Msg("modecard.moved_on",
                     "⚠️ <b>{session}</b> moved on to new work, so nothing changed.",
                     note="HTML. A mode card tapped after a new turn began", eg={"session": "x1"})
-MODE_SWITCHING = Msg("modecard.switching", "⚙️ Switching <b>{session}</b> to {mode} mode…",
-                     note="HTML. A mode switch is under way",
-                     eg={"session": "x1", "mode": "Ask"})
+MODE_SWITCHING = Msg("modecard.switching", "⚙️ Switching <b>{session}</b> to {mode}…",
+                     note="HTML. A mode switch is under way; {mode} is the mode's label, "
+                          "which already says mode",
+                     eg={"session": "x1", "mode": "Ask mode"})
 MODE_SWITCHED_BY = Msg("modecard.switched_by", "⚙️ Switched to {mode} by {person}.",
                        note="HTML. Above the mode card in a group: who switched it",
-                       eg={"mode": "Ask", "person": "@bob"})
+                       eg={"mode": "Ask mode", "person": "@bob"})
 MODE_STILL_STOPPING = Msg("modecard.still_stopping",
                           "⚠️ <b>{session}</b> is still stopping - mode not changed.",
                           note="HTML. The session did not stop in time for the switch",

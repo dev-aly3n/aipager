@@ -102,6 +102,8 @@ set.opt.reports.off
 set.opt.reports.auto_off
 mode.ask
 mode.auto
+mode.word.ask
+mode.word.auto
 mode.ask_instead
 mode.auto_instead
 mode.ask_for_you

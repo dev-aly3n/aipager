@@ -486,18 +486,20 @@ MODE_USAGE = Msg("modecard.usage",
 MODE_WHICH = Msg("modecard.which", "Which session?", note="/mode: above the list of sessions")
 MODE_WHICH_TO = Msg("modecard.which_to", "Which session to switch to {mode}?",
                     note="/mode ask or /mode auto: above the list; {mode} is the mode's name "
-                         "with its emoji", eg={"mode": "Auto"})
+                         "with its emoji", eg={"mode": "Auto mode"})
 MODE_NONE_LIVE = Msg("modecard.none_live", "No live sessions here. Start one with /new.",
                      note="/mode with no session running")
 MODE_ALREADY = Msg("modecard.already", "<b>{session}</b> is already in {mode}.",
                    note="HTML. /mode asked for the mode the session is in; {mode} is its name",
-                   eg={"session": "x1", "mode": "Auto"})
-MODE_IS = Msg("modecard.is", "<b>{session}</b> is {mode}.",
-              note="HTML. The mode card: the session's mode",
-              eg={"session": "x1", "mode": "Auto"})
-MODE_IS_TARGET = Msg("modecard.is_target", "✍️ <b>{session}</b> is {mode}.",
-                     note="HTML. The mode card for the session messages go to",
-                     eg={"session": "x1", "mode": "Auto"})
+                   eg={"session": "x1", "mode": "Auto mode"})
+MODE_IS = Msg("modecard.is", "<b>{session}</b> is in {mode}.",
+              note="HTML. The mode card: the session's mode; {mode} is the mode's "
+                   "label, which already says mode",
+              eg={"session": "x1", "mode": "Auto mode"})
+MODE_IS_TARGET = Msg("modecard.is_target", "✍️ <b>{session}</b> is in {mode}.",
+                     note="HTML. The mode card for the session messages go to; {mode} is "
+                          "the mode's label, which already says mode",
+                     eg={"session": "x1", "mode": "Auto mode"})
 MODE_BTN_TO_ASK = Msg("modecard.btn.to_ask", "💬 Switch to Ask",
                       note="Button: switch to Ask mode (Claude asks before each tool)")
 MODE_BTN_TO_AUTO = Msg("modecard.btn.to_auto", "🤖 Switch to Auto",
@@ -521,15 +523,16 @@ MODE_BUSY_TO_AUTO = Msg("modecard.busy_to_auto", "⚙️ <b>{session}</b> is bus
                         "Auto mode?", note="HTML. Above Stop & switch / Not now",
                         eg={"session": "x1"})
 MODE_CONFIRM_AUTO = Msg("modecard.confirm_auto",
-                        "⚙️ Switch <b>{session}</b> to {mode} mode?\n<i>Claude will run tools "
+                        "⚙️ Switch <b>{session}</b> to {mode}?\n<i>Claude will run tools "
                         "without prompting ({flag}).</i>",
-                        note="HTML. The Auto confirm; {mode} is Auto with its emoji, {flag} "
-                             "Claude Code's own option name",
-                        eg={"session": "x1", "mode": "Auto",
+                        note="HTML. The Auto confirm; {mode} is the Auto mode label (it "
+                             "already says mode), {flag} Claude Code's own option name",
+                        eg={"session": "x1", "mode": "Auto mode",
                             "flag": "--dangerously-skip-permissions"})
-MODE_SWITCHING = Msg("modecard.switching", "⚙️ Switching <b>{session}</b> to {mode} mode…",
-                     note="HTML. A mode switch is under way",
-                     eg={"session": "x1", "mode": "Ask"})
+MODE_SWITCHING = Msg("modecard.switching", "⚙️ Switching <b>{session}</b> to {mode}…",
+                     note="HTML. A mode switch is under way; {mode} is the mode's label, "
+                          "which already says mode",
+                     eg={"session": "x1", "mode": "Ask mode"})
 
 # /whoami: config keys and role names are names, written as they are.
 WHOAMI_NOT_MEMBER = Msg("whoami.not_member", "🪪 You're not a member of this scope.",
@@ -1589,7 +1592,7 @@ class CommandHandlersMixin:
     _handle_perms_cmd = _handle_mode_cmd
 
     def _render_mode_card(self, chat_id, sess: TrackedSession, tr=None):
-        """`x1 is 🤖 Auto.` and the one switch that makes sense. ✍️ marks
+        """`x1 is in 🤖 Auto mode.` and the one switch that makes sense. ✍️ marks
         the chat's target, never in a group: there each member has their
         own (roadmap 8.90), and the card is everyone's (so it is in the
         chat's language when *tr* is None)."""

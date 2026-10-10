@@ -14,14 +14,17 @@ LITERALS = ("\U0001f916 Auto", "\U0001f4ac Ask")
 
 
 def test_labels_are_today_s_english():
-    assert mode_labels.MODE_AUTO == "🤖 Auto"
-    assert mode_labels.MODE_ASK == "💬 Ask"
+    # The shown labels name the mode as a mode (operator, 2026-10-10); the
+    # words typed after /mode stay the single words they were.
+    assert mode_labels.MODE_AUTO == "🤖 Auto mode"
+    assert mode_labels.MODE_ASK == "💬 Ask mode"
+    assert mode_labels.WORD_AUTO == "Auto"
+    assert mode_labels.WORD_ASK == "Ask"
     assert mode_labels.MODE_ASK_INSTEAD == "💬 Ask instead"
     assert mode_labels.MODE_AUTO_INSTEAD == "🤖 Auto instead"
     assert mode_labels.MODE_ASK_FOR_YOU == "💬 Ask for you (🤖 Auto is for admins)"
     assert mode_labels.mode_label(True) is mode_labels.MODE_AUTO
     assert mode_labels.mode_label(False) is mode_labels.MODE_ASK
-    assert f"{mode_labels.MODE_AUTO} mode" == "🤖 Auto mode"
 
 
 def _docstrings(tree) -> set[int]:

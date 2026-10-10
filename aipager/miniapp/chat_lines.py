@@ -22,14 +22,15 @@ __all__ = ["compacted", "deleted", "folder_created", "killed", "model_switched",
            "session_created", "session_setting_changed", "setting_changed", "stopped"]
 
 _CREATED = Msg("app.mirror.created", "🚀 {session} created from the Mini App · {mode}",
-               eg={"session": "x1", "mode": "Ask"},
-               note="Posted in the chat after a Mini App action. {mode} is the permission mode "
-                    "with its emoji")
+               eg={"session": "x1", "mode": "Ask mode"},
+               note="Posted in the chat after a Mini App action. {mode} is the permission mode's "
+                    "label: its emoji, its word and the word for mode")
 _CREATED_IN = Msg("app.mirror.created_in",
                   "🚀 {session} created from the Mini App · {mode}\n📁 {folder}",
-                  eg={"session": "x1", "mode": "Ask", "folder": "/home/op/web"},
+                  eg={"session": "x1", "mode": "Ask mode", "folder": "/home/op/web"},
                   note="Posted in the chat after a Mini App action. {mode} is the permission "
-                       "mode with its emoji; the second line is the folder it runs in")
+                       "mode's label (emoji, word, the word for mode); the second line is the "
+                       "folder it runs in")
 _FOLDER = Msg("app.mirror.folder", "📁 New folder created from the Mini App:\n{path}",
               eg={"path": "/home/op/web"}, note="Posted in the chat after a Mini App action")
 _SETTING = Msg("app.mirror.setting", "⚙️ {setting} → {value} (changed from the Mini App)",

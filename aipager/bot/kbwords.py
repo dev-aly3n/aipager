@@ -295,8 +295,8 @@ _EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\ufe0f\u200d]")
 
 
 def mode_word(label: str) -> str:
-    """A mode label as a typed word: emoji and variation selectors
-    dropped, normalized, stripped, lower case (the Auto label -> ``auto``)."""
+    """A mode word as typed: emoji and variation selectors dropped,
+    normalized, stripped, lower case (``🤖 Auto`` -> ``auto``)."""
     return norm(_EMOJI.sub("", label)).strip().lower()
 
 
@@ -304,9 +304,10 @@ def label_problems(codes) -> list[str]:
     """Check 10: across *codes*, no two keyboard actions, default template
     or command labels, or mode words share a label; a translated bare
     word or mode word is one token (the text router reads only a text
-    with no space); and no Latin keyboard label could be a session name
-    unless it is reserved or grandfathered."""
-    from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO
+    with no space); each mode label shows its typed mode word; and no
+    Latin keyboard label could be a session name unless it is reserved or
+    grandfathered."""
+    from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO, WORD_ASK, WORD_AUTO
     from aipager.dtach.inject import _RESERVED, _VALID_NAME
     problems: list[str] = []
     owner: dict[str, str] = {}
@@ -340,9 +341,19 @@ def label_problems(codes) -> list[str]:
         kind = "cmd" if msg.key.startswith("kbl.cmd.") else "tpl"
         for label in _labels(msg, codes):
             claim(norm(label).lower(), label, f"{kind}:{english}")
-    for action, msg in (("mode:ask", MODE_ASK), ("mode:auto", MODE_AUTO)):
+    for action, msg in (("mode:ask", WORD_ASK), ("mode:auto", WORD_AUTO)):
         for label in _labels(msg, codes):
             claim(mode_word(label), label, action)
         for label in _labels(msg, real):
             one_word(mode_word(label), label, action)
+    # The word people type is the one the label shows them ("💬 مود پرسش"
+    # shows پرسش), so what they read after /mode is what /mode accepts.
+    for word_msg, shown_msg in ((WORD_ASK, MODE_ASK), (WORD_AUTO, MODE_AUTO)):
+        for code in dict.fromkeys(["en", *real]):
+            tr = get(code)
+            word, shown = tr.text(word_msg), tr.text(shown_msg)
+            if mode_word(word) not in mode_word(shown):
+                # "∌": the label does not contain the word (no new English
+                # literal for check 11's ratchet).
+                problems.append(f"{code} {shown!r} ∌ {word!r}")
     return problems

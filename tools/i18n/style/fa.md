@@ -25,5 +25,5 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 ## Markers, keyboard words and modes
 - Keep `**`, `_`, every HTML tag and every {placeholder} exactly as in the English: the same number of `**` and `_`, never a backtick.
 - A keyboard word (status, stop, new, kill) is ONE word with no space: it is typed as a word.
-- A mode word (Auto, Ask) is ONE word after its emoji: people type it after /mode.
+- A mode word (mode.word.auto, mode.word.ask: خودکار, پرسش) is ONE word with no emoji: people type it after /mode, so it never changes once chosen. A mode label (mode.auto, mode.ask) is what people see: the emoji, that same word and the word for mode (🤖 مود خودکار, 💬 مود پرسش); a sentence around {mode} must not add its own word for mode.
 - A default button label (Continue, Run tests...) stays short: it is a button.

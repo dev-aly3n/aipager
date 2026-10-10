@@ -86,7 +86,7 @@ OPTION = Msg("perm.btn.option", "Option {n}",
              note="A question's option that has no label of its own", eg={"n": 2})
 DEFAULT_MODE = Msg("perm.btn.default_suffix", "{mode} (default)",
                    note="A mode button marked as the session's saved default; {mode} is "
-                        "Auto or Ask", eg={"mode": "Auto"})
+                        "the Auto or Ask mode label", eg={"mode": "Auto mode"})
 YES_SWITCH = Msg("perm.btn.yes_switch", "✅ Yes, switch",
                  note="Confirms switching a session from Ask to Auto")
 CANCEL = Msg("perm.btn.cancel", "↩️ Cancel", note="Cancels the switch or the resume")
@@ -580,11 +580,14 @@ class KeyboardMixin:
         ask_label = label(MODE_ASK, not persisted_skip_perms)
         auto_label = label(MODE_AUTO, persisted_skip_perms)
 
+        # One mode per row: a label names the mode as a mode ("💬 Ask mode
+        # (default)", "💬 Режим «Спрашивать» (по умолчанию)"), too wide for
+        # half a row, and the end Telegram would cut is "(default)".
         return InlineKeyboardMarkup([
             [InlineKeyboardButton(
                 ask_label,
-                callback_data=session_parity.session_cb(self, chat_id, sess, "resume-ask")),
-             InlineKeyboardButton(
+                callback_data=session_parity.session_cb(self, chat_id, sess, "resume-ask"))],
+            [InlineKeyboardButton(
                 auto_label,
                 callback_data=session_parity.session_cb(self, chat_id, sess, "resume-auto"))],
             [InlineKeyboardButton(

@@ -124,7 +124,7 @@ def test_the_operators_sequence_switches_to_auto(bot, sess, cmd, tap):
     # One message, changed in place: switching, then the card for the new
     # mode with the opposite switch (operator, 2026-10-01).
     assert _edits(query) == ["⚙️ Switching <b>jim</b> to 🤖 Auto mode…",
-                             "✍️ <b>jim</b> is 🤖 Auto."]
+                             "✍️ <b>jim</b> is in 🤖 Auto mode."]
     kb = query.edit_message_text.await_args.kwargs["reply_markup"]
     assert [b.text for row in kb.inline_keyboard for b in row] == ["💬 Switch to Ask"]
 
@@ -142,7 +142,7 @@ def test_a_second_yes_on_a_used_card_never_switches_to_ask(bot, sess, cmd, tap):
     assert sess.skip_perms is True
     assert _toasts(query) == ["This card is out of date - nothing changed"]
     assert _edits(query) == [
-        "⚠️ That card was out of date, so nothing changed.\n\n✍️ <b>jim</b> is 🤖 Auto."]
+        "⚠️ That card was out of date, so nothing changed.\n\n✍️ <b>jim</b> is in 🤖 Auto mode."]
 
 
 def test_a_card_with_no_record_does_nothing(bot, sess, cmd, tap):
@@ -206,7 +206,7 @@ def test_a_tap_without_a_message_id_is_not_this_cards(bot, sess, cmd, run_async)
     bot.launches.assert_not_awaited()
     assert "out of date" in _toasts(query)[0]
     assert _edits(query) == [
-        "⚠️ That card was out of date, so nothing changed.\n\n✍️ <b>jim</b> is 💬 Ask."]
+        "⚠️ That card was out of date, so nothing changed.\n\n✍️ <b>jim</b> is in 💬 Ask mode."]
 
 
 @pytest.mark.parametrize("failure", ["still_stopping", "launch_failed"])
@@ -259,7 +259,7 @@ def test_a_switch_refused_by_the_core_says_why(bot, sess, cmd, tap):
     assert _edits(query) == [
         "⚙️ Switching <b>jim</b> to 🤖 Auto mode…",
         "⚠️ <b>jim</b> is restarting right now - mode not changed. Try again in a moment."
-        "\n\n✍️ <b>jim</b> is 💬 Ask."]
+        "\n\n✍️ <b>jim</b> is in 💬 Ask mode."]
 
 
 def test_switching_to_ask_while_a_relaunch_runs_says_so(bot, sess, cmd):
@@ -272,7 +272,7 @@ def test_switching_to_ask_while_a_relaunch_runs_says_so(bot, sess, cmd):
     bot.launches.assert_not_awaited()
     assert status.edit_text.await_args.args[0] == (
         "⚠️ <b>jim</b> is restarting right now - mode not changed. Try again in a moment."
-        "\n\n✍️ <b>jim</b> is 🤖 Auto.")
+        "\n\n✍️ <b>jim</b> is in 🤖 Auto mode.")
 
 
 def test_a_switch_on_a_session_that_is_not_running_says_so(bot, sess, cmd, tap):
@@ -285,7 +285,7 @@ def test_a_switch_on_a_session_that_is_not_running_says_so(bot, sess, cmd, tap):
 
     assert _edits(query) == ["⚙️ Switching <b>jim</b> to 🤖 Auto mode…",
                              "⚠️ <b>jim</b> is not running - mode not changed."
-                             "\n\n✍️ <b>jim</b> is 💬 Ask."]
+                             "\n\n✍️ <b>jim</b> is in 💬 Ask mode."]
 
 
 def test_the_in_flight_flag_clears_even_when_the_relaunch_fails(bot, sess, monkeypatch, run_async):
@@ -309,7 +309,7 @@ def test_stop_and_switch_on_a_busy_session_says_why_it_did_not(bot, sess, cmd, t
 
     assert _edits(query) == ["⚙️ Switching <b>jim</b> to 💬 Ask mode…",
                              "⚠️ <b>jim</b> is not running - mode not changed."
-                             "\n\n✍️ <b>jim</b> is 🤖 Auto."]
+                             "\n\n✍️ <b>jim</b> is in 🤖 Auto mode."]
     assert NAME not in bot._perms_pending      # a switch was attempted: spent
 
 
@@ -328,7 +328,7 @@ def test_the_mode_cards_switch_then_yes_switches_to_auto(bot, sess, cmd, tap, ru
     assert confirm.args[0].startswith("⚙️ Switch <b>jim</b> to 🤖 Auto mode?")
     query = tap(card, confirm.kwargs, "✅ Yes, switch")
     assert sess.skip_perms is True
-    assert _edits(query)[-1] == "✍️ <b>jim</b> is 🤖 Auto."
+    assert _edits(query)[-1] == "✍️ <b>jim</b> is in 🤖 Auto mode."
     query.message.reply_text.assert_not_awaited()
 
 
@@ -352,7 +352,7 @@ def test_the_cards_switch_ends_as_the_card_for_the_new_mode(bot, sess, cmd, tap)
     query.message.reply_text.assert_not_awaited()
     calls = query.edit_message_text.await_args_list
     assert [c.args[0] for c in calls] == ["⚙️ Switching <b>jim</b> to 💬 Ask mode…",
-                                         "✍️ <b>jim</b> is 💬 Ask."]
+                                         "✍️ <b>jim</b> is in 💬 Ask mode."]
     assert calls[0].kwargs.get("reply_markup") is None
     [(text, data)] = _buttons(calls[1].kwargs["reply_markup"])
     assert text == "🤖 Switch to Auto"
@@ -369,7 +369,7 @@ def test_cancel_returns_the_card_for_the_current_mode(bot, sess, cmd, tap):
     query = tap(card, {"reply_markup": bot._build_perms_confirm_keyboard(sess)}, "↩️ Cancel")
 
     bot.launches.assert_not_awaited()
-    assert _edits(query) == ["✍️ <b>jim</b> is 💬 Ask."]
+    assert _edits(query) == ["✍️ <b>jim</b> is in 💬 Ask mode."]
     assert _buttons(query.edit_message_text.await_args.kwargs["reply_markup"])[0][0] == (
         "🤖 Switch to Auto")
     assert NAME not in bot._perms_pending
@@ -389,7 +389,7 @@ def test_stop_and_switch_works_on_a_card_older_than_the_busy_card(bot, sess, cmd
                 "🛑 Stop task & switch")
 
     assert [c.kwargs["skip_perms"] for c in bot.launches.await_args_list] == [False]
-    assert _edits(query)[-1] == "✍️ <b>jim</b> is 💬 Ask."
+    assert _edits(query)[-1] == "✍️ <b>jim</b> is in 💬 Ask mode."
 
 
 def test_stop_and_switch_after_a_new_turn_changes_nothing(bot, sess, cmd, tap):
@@ -405,7 +405,7 @@ def test_stop_and_switch_after_a_new_turn_changes_nothing(bot, sess, cmd, tap):
     bot.launches.assert_not_awaited()
     assert sess.skip_perms is True
     assert _edits(query) == [
-        "⚠️ <b>jim</b> moved on to new work, so nothing changed.\n\n✍️ <b>jim</b> is 🤖 Auto."]
+        "⚠️ <b>jim</b> moved on to new work, so nothing changed.\n\n✍️ <b>jim</b> is in 🤖 Auto mode."]
 
 
 def test_yes_after_a_new_turn_changes_nothing(bot, sess, cmd, tap):
@@ -428,7 +428,7 @@ def test_not_now_returns_the_card(bot, sess, cmd, tap):
     query = tap(card, {"reply_markup": bot._build_perms_busy_keyboard(sess)}, "⏳ Not now")
 
     bot.launches.assert_not_awaited()
-    assert _edits(query) == ["✍️ <b>jim</b> is 🤖 Auto."]
+    assert _edits(query) == ["✍️ <b>jim</b> is in 🤖 Auto mode."]
 
 
 def test_the_typed_command_replies_once_and_ends_in_the_card(bot, sess, cmd):
@@ -437,7 +437,7 @@ def test_the_typed_command_replies_once_and_ends_in_the_card(bot, sess, cmd):
     assert len(replies) == 1
     status = replies[0][2]
     last = status.edit_text.await_args
-    assert last.args[0] == "✍️ <b>jim</b> is 💬 Ask."
+    assert last.args[0] == "✍️ <b>jim</b> is in 💬 Ask mode."
     assert _buttons(last.kwargs["reply_markup"])[0][0] == "🤖 Switch to Auto"
 
 
@@ -453,7 +453,7 @@ def test_the_pickers_switch_changes_the_picker_in_place(bot, sess, cmd, tap):
     query = tap(picker, kwargs, "jim")
 
     query.message.reply_text.assert_not_awaited()
-    assert _edits(query)[-1] == "<b>jim</b> is 💬 Ask."
+    assert _edits(query)[-1] == "<b>jim</b> is in 💬 Ask mode."
     assert sess.skip_perms is False
 
 
@@ -512,7 +512,7 @@ def test_when_the_card_cannot_be_edited_one_reply_carries_every_step(
     assert len(replies) == 1
     (a, _k, status) = replies[0]
     assert a[0] == "⚙️ Switching <b>jim</b> to 💬 Ask mode…"
-    assert status.edit_text.await_args.args[0] == "✍️ <b>jim</b> is 💬 Ask."
+    assert status.edit_text.await_args.args[0] == "✍️ <b>jim</b> is in 💬 Ask mode."
     assert sess.skip_perms is False
 
 
@@ -579,7 +579,7 @@ def test_when_yes_cannot_edit_the_card_one_message_in_this_chat_carries_the_rest
     assert query.edit_message_text.await_count == 1
     assert bot._app.bot.send_message.await_count == 1
     assert bot._app.bot.send_message.await_args.kwargs["chat_id"] == CHAT
-    assert posted.edit_text.await_args.args[0] == "✍️ <b>jim</b> is 🤖 Auto."
+    assert posted.edit_text.await_args.args[0] == "✍️ <b>jim</b> is in 🤖 Auto mode."
     assert sess.skip_perms is True
 
 
@@ -614,7 +614,7 @@ def test_a_second_yes_during_the_switch_leaves_the_card_alone(bot, sess, cmd, ru
 
     assert seen == {"toasts": ["jim is restarting right now - tap again in a moment"],
                     "edits": 0, "replies": 0}
-    assert _edits(query)[-1] == "✍️ <b>jim</b> is 🤖 Auto."
+    assert _edits(query)[-1] == "✍️ <b>jim</b> is in 🤖 Auto mode."
 
 
 def test_yes_on_a_card_that_already_shows_the_step_sends_nothing(bot, sess, cmd, run_async):

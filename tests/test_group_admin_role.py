@@ -497,9 +497,9 @@ def test_picker_shows_the_default_this_person_gets(gbot, run_async, uid):
     kb = q.edit_message_text.await_args.kwargs["reply_markup"]
     labels = [b.text for row in kb.inline_keyboard for b in row]
     if uid in MANAGERS:
-        assert "🤖 Auto (default)" in labels
+        assert "🤖 Auto mode (default)" in labels
     else:
-        assert "💬 Ask (default)" in labels
+        assert "💬 Ask mode (default)" in labels
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])

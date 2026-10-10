@@ -26,7 +26,7 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - Keep `**`, `_`, every HTML tag and every {placeholder} exactly as in the English: the same number of `**` and `_`, never a backtick.
 - A keyboard word (status, stop, new, kill) is ONE word with no space, because the text router reads only a text with no space: phiên (shows the sessions), dừng, mới, tắt. Each carries a diacritic, so none can be a session name (check 10).
 - A navigation button that opens another keyboard reads as a short label (Mẫu ›, Lệnh ›, Mô hình ›).
-- A mode word (Auto, Ask) is ONE word after its emoji, because people type it after /mode and Vietnamese words are syllables with spaces between them: 🤖 Auto stays Auto ("Tự động" is two words, and Auto is understood), 💬 Ask is 💬 Hỏi. Never pick an ASCII-only mode word other than Auto: /mode reads it before a session name, so it could hide a session called that.
+- A mode word (mode.word.auto, mode.word.ask: Auto, Hỏi) is ONE word with no emoji: people type it after /mode, so it never changes once chosen. A mode label (mode.auto, mode.ask) is what people see: the emoji, that same word and the word for mode (🤖 Chế độ Auto, 💬 Chế độ Hỏi); a sentence around {mode} must not add its own word for mode. Auto stays Auto ("Tự động" is two words, and Auto is understood). Never pick an ASCII-only mode word other than Auto: /mode reads it before a session name, so it could hide a session called that.
 - A default button label (Continue, Run tests...) stays short: it is a button. Its payload stays English (Claude receives the English).
 
 ## Terms

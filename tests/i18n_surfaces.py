@@ -43,6 +43,45 @@ GOLDEN = Path(__file__).resolve().parent / "golden" / "english_surfaces.json"
 DECOY_CHATS = (77, -77)
 DECOY_PEOPLE = (77, 78)
 
+#: The English surfaces that show a permission mode's label. Since
+#: 2026-10-10 (operator) the label names the mode as a mode ("💬 Ask" ->
+#: "💬 Ask mode"), so these differ from goldens recorded on older bases,
+#: and only by that: see :func:`without_mode_labels`.
+MODE_LABEL_SURFACES = frozenset({
+    "miniapp.mirrors", "modecard.card", "modecard.cmd_replies", "modecard.perms_flow",
+    "modecard.switch_taps", "newflow.closed", "newflow.conflict_taps", "newflow.name_card",
+    "newflow.ready", "newflow.ready_models", "newflow.ready_taps", "newflow.starting",
+    "newflow.taps", "prompt.keyboards", "sess.taps", "settings.new_sessions",
+    "settings.taps", "status.switch",
+})
+
+_MODE_LABEL_UNDO = (
+    (re.compile(r"(🤖 Auto|💬 Ask) mode"), r"\1"),
+    # The sentences around the label that said "mode" themselves or read
+    # wrong with it: "x1 is in 🤖 Auto mode.", "Starting x1 in 🤖 Auto
+    # mode…", "Permissions: 🤖 Auto mode".
+    (re.compile(r"\bis in (🤖 Auto|💬 Ask)"), r"is \1"),
+    (re.compile(r"(Starting <b>[^<]*</b>) in (🤖 Auto|💬 Ask)"), r"\1 \2"),
+    (re.compile(r"\bPermissions: (🤖 Auto|💬 Ask)"), r"Mode: \1"),
+)
+
+
+def without_mode_labels(value):
+    """*value* (a string, or lists and dicts of them) with the English mode
+    labels and the sentences around them read as before 2026-10-10, on
+    both sides of a comparison with an older golden: what is left equal
+    proves nothing else in the English changed."""
+    if isinstance(value, str):
+        for pattern, repl in _MODE_LABEL_UNDO:
+            value = pattern.sub(repl, value)
+        return value
+    if isinstance(value, list):
+        return [without_mode_labels(v) for v in value]
+    if isinstance(value, dict):
+        return {k: without_mode_labels(v) for k, v in value.items()}
+    return value
+
+
 #: The golden surfaces (design 8.5): the three render tests' golden
 #: tuples, the language list and the phase 5 launch surfaces, one list for
 #: the render test of every language (tests/test_i18n_render_golden.py).

@@ -146,11 +146,11 @@ NEW_HINT_FOLDER = Msg("newflow.hint_folder", "📁 Pick a project folder with �
                            "is the button")
 NEW_SETTINGS_LINE = Msg("newflow.settings_line", "{mode} · 🧠 {model} · 📁 {folder}",
                         note="The /new card: the mode, the model and the folder it would use",
-                        eg={"mode": "Auto", "model": "Opus", "folder": "/work/app"})
+                        eg={"mode": "Auto mode", "model": "Opus", "folder": "/work/app"})
 NEW_SETTINGS_NO_FOLDER = Msg("newflow.settings_no_folder",
                              "{mode} · 🧠 {model} · 📁 no project folder yet",
                              note="As newflow.settings_line, with no folder picked yet",
-                             eg={"mode": "Ask", "model": "Opus"})
+                             eg={"mode": "Ask mode", "model": "Opus"})
 WARNING_LINE = Msg("route.warning", "⚠️ {text}",
                    note="A warning line; {text} is the warning",
                    eg={"text": "not confirmed - check the session."})
@@ -197,9 +197,9 @@ NAME_EMPTY = Msg("newflow.name_empty", "Session name can't be empty.",
 NOTE_AUTO_NEEDS_ADMIN = Msg("newflow.auto_needs_admin_note",
                             "Auto mode needs an admin, so this one asks.",
                             note="On the Ready card: someone not an admin asked for Auto")
-NEW_STARTING = Msg("newflow.starting", "🚀 Starting <b>{session}</b> {mode}…",
-                   note="A session is starting, in that mode", eg={"session": "x1",
-                                                                     "mode": "Auto"})
+NEW_STARTING = Msg("newflow.starting", "🚀 Starting <b>{session}</b> in {mode}…",
+                   note="A session is starting, in that mode; {mode} is the mode's label, "
+                        "which already says mode", eg={"session": "x1", "mode": "Auto mode"})
 NEW_CREATE_FAILED = Msg("newflow.create_failed", "❌ {error}",
                         note="Starting the session failed; {error} is why (English)",
                         eg={"error": "a session named x1 already exists"})
@@ -207,7 +207,7 @@ READY = Msg("newflow.ready", "✅ <b>{session}</b> is ready", note="The Ready ca
             eg={"session": "x1"})
 READY_SETTINGS = Msg("newflow.ready_settings", "{mode} · 🧠 {model} · 📁 <code>{folder}</code>",
                      note="The Ready card: the session's mode, model and folder",
-                     eg={"mode": "Auto", "model": "Opus", "folder": "/work/app"})
+                     eg={"mode": "Auto mode", "model": "Opus", "folder": "/work/app"})
 READY_CHANGED = Msg("newflow.ready_changed", "🔁 {changed}",
                     note="The Ready card: what a tap changed and who", eg={"changed": "x"})
 READY_WORKING_FIRST = Msg("newflow.working_first", "▶️ Working on your first message.",
@@ -246,7 +246,7 @@ NOTE_MODE_FAILED_ERR = Msg("newflow.note_mode_failed_err", "Couldn't switch mode
                            eg={"error": "dtach not installed"})
 CHANGED_MODE = Msg("newflow.changed_mode", "Switched to {mode} by {person}.",
                    note="On the Ready card in a group: who switched the mode",
-                   eg={"mode": "Ask", "person": "@bob"})
+                   eg={"mode": "Ask mode", "person": "@bob"})
 CHANGED_MODEL = Msg("newflow.changed_model", "Model switched to {model} by {person}.",
                     note="On the Ready card in a group: who switched the model",
                     eg={"model": "Opus", "person": "@bob"})
@@ -1173,10 +1173,11 @@ def _defaults_folders_shown(bot: TelegramBot) -> dict[int, list[str]]:
 NS_TITLE = Msg(
     "set.text.ns_root",
     "🆕 <b>New sessions</b>\n\nWhat /new starts a session with. You can still change it "
-    "on the card for one session.\n\nMode: {mode}\nModel: {model}\nFolder: {folder}",
-    note="/settings > New sessions: the defaults /new uses. {mode} is Auto or Ask, "
-         "{model} a model name or Default model, {folder} a path",
-    eg={"mode": "Auto", "model": "Opus 5.5", "folder": "~/work/app"})
+    "on the card for one session.\n\nPermissions: {mode}\nModel: {model}\nFolder: {folder}",
+    note="/settings > New sessions: the defaults /new uses. {mode} is the Auto or Ask mode "
+         "label (it already says mode) or mode.ask_for_you, {model} a model name or Default "
+         "model, {folder} a path",
+    eg={"mode": "Auto mode", "model": "Opus 5.5", "folder": "~/work/app"})
 NS_MODEL_TITLE = Msg("set.text.ns_model_title", "🧠 <b>Model for new sessions</b>",
                      note="Above the model list of /settings > New sessions")
 NS_FOLDER_TITLE = Msg("set.text.ns_folder_title", "📁 <b>Folder for new sessions</b>",

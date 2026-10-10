@@ -121,16 +121,17 @@ def test_perms_busy_keyboard_buttons(bot):
 
 # ---- _build_resume_mode_keyboard -------------------------------------------
 
-def test_resume_mode_keyboard_has_two_rows(bot):
+def test_resume_mode_keyboard_has_a_row_per_mode_then_cancel(bot):
+    """Each mode has a row of its own: its label names the mode as a mode
+    and, with "(default)", is too wide for half a row (2026-10-10)."""
     kb = bot._build_resume_mode_keyboard(_sess(bot), False)
-    assert len(kb.inline_keyboard) == 2
+    assert [len(row) for row in kb.inline_keyboard] == [1, 1, 1]
 
 
 def test_resume_mode_keyboard_default_label_ask(bot):
     """When persisted_skip_perms=False, Ask button should have (default) suffix."""
     kb = bot._build_resume_mode_keyboard(_sess(bot), persisted_skip_perms=False)
-    row0 = kb.inline_keyboard[0]
-    labels = [btn.text for btn in row0]
+    labels = [btn.text for row in kb.inline_keyboard[:2] for btn in row]
     ask_label = next(lbl for lbl in labels if "Ask" in lbl)
     auto_label = next(lbl for lbl in labels if "Auto" in lbl)
     assert "(default)" in ask_label
@@ -140,8 +141,7 @@ def test_resume_mode_keyboard_default_label_ask(bot):
 def test_resume_mode_keyboard_default_label_auto(bot):
     """When persisted_skip_perms=True, Auto button should have (default) suffix."""
     kb = bot._build_resume_mode_keyboard(_sess(bot), persisted_skip_perms=True)
-    row0 = kb.inline_keyboard[0]
-    labels = [btn.text for btn in row0]
+    labels = [btn.text for row in kb.inline_keyboard[:2] for btn in row]
     ask_label = next(lbl for lbl in labels if "Ask" in lbl)
     auto_label = next(lbl for lbl in labels if "Auto" in lbl)
     assert "(default)" not in ask_label
@@ -165,10 +165,10 @@ def test_resume_mode_keyboard_callbacks_for_a_known_session(bot):
         assert len(c.encode()) <= 64, c
 
 
-def test_resume_mode_keyboard_cancel_in_row1(bot):
+def test_resume_mode_keyboard_cancel_in_the_last_row(bot):
     sess = _sess(bot)
     kb = bot._build_resume_mode_keyboard(sess, False)  # chat_id defaults to 0
-    row1 = kb.inline_keyboard[1]
+    row1 = kb.inline_keyboard[-1]
     dests = [_destination(bot, btn.callback_data, chat_id=0) for btn in row1]
     assert (sess.name, "resume-cancel") in dests
 

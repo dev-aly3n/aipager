@@ -334,20 +334,22 @@
 {"k": "media.transcribing", "src": "56629b0b", "v": "🎙️ <i>正在转写…</i>"}
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ 好的，未安装语音功能。"}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ 语音消息大小为 {size} MB；Telegram 机器人的上限是 {limit} MB。"}
-{"k": "mode.ask", "src": "8f9266a6", "v": "💬 询问"}
+{"k": "mode.ask", "src": "07910591", "v": "💬 询问模式"}
 {"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 你的模式：询问（🤖 自动仅限管理员）"}
 {"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 改用询问"}
-{"k": "mode.auto", "src": "a9e88621", "v": "🤖 自动"}
+{"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 自动模式"}
 {"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 改用自动"}
+{"k": "mode.word.ask", "src": "3562777b", "v": "询问"}
+{"k": "mode.word.auto", "src": "c614ba7c", "v": "自动"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> 已经是 {mode}。"}
 {"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 切换到询问"}
 {"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 切换到自动"}
 {"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> 正忙。\n要切换到询问模式吗？"}
 {"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> 正忙。\n要切换到自动模式吗？"}
-{"k": "modecard.confirm_auto", "src": "7ab3092b", "v": "⚙️ 要把 <b>{session}</b> 切换到 {mode} 模式吗？\n<i>Claude 将不经询问直接运行工具（{flag}）。</i>"}
+{"k": "modecard.confirm_auto", "src": "ff1562a9", "v": "⚙️ 要把 <b>{session}</b> 切换到 {mode}吗？\n<i>Claude 将不经询问直接运行工具（{flag}）。</i>"}
 {"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ <b>{session}</b> 的状态仍在初始化。请稍后再试一次 /mode。"}
-{"k": "modecard.is", "src": "43da1dce", "v": "<b>{session}</b> 当前为 {mode}。"}
-{"k": "modecard.is_target", "src": "bb92330e", "v": "✍️ <b>{session}</b> 当前为 {mode}。"}
+{"k": "modecard.is", "src": "c057ad13", "v": "<b>{session}</b> 当前为 {mode}。"}
+{"k": "modecard.is_target", "src": "92bc67e3", "v": "✍️ <b>{session}</b> 当前为 {mode}。"}
 {"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ <b>{session}</b> 已开始新的工作，所以没有任何更改。"}
 {"k": "modecard.needs_admin", "src": "fe68d230", "v": "自动模式需要管理员。"}
 {"k": "modecard.none_live", "src": "ae432c8c", "v": "这里没有运行中的会话。用 /new 启动一个。"}
@@ -358,7 +360,7 @@
 {"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> 仍在停止中，模式未更改。"}
 {"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ 无法切换模式：{error}"}
 {"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ {person} 已切换到 {mode}。"}
-{"k": "modecard.switching", "src": "93eaa8f4", "v": "⚙️ 正在把 <b>{session}</b> 切换到 {mode} 模式…"}
+{"k": "modecard.switching", "src": "30fa9003", "v": "⚙️ 正在把 <b>{session}</b> 切换到 {mode}…"}
 {"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ /mode 接受一个会话名称和 ask 或 auto，例如 {example} 或 {example_ask}。"}
 {"k": "modecard.which", "src": "107abca0", "v": "哪个会话？"}
 {"k": "modecard.which_to", "src": "4694464a", "v": "要把哪个会话切换到 {mode}？"}
@@ -411,7 +413,7 @@
 {"k": "newflow.settings_line", "src": "a770b6d4", "v": "{mode} · 🧠 {model} · 📁 {folder}"}
 {"k": "newflow.settings_no_folder", "src": "810727a6", "v": "{mode} · 🧠 {model} · 📁 还没有项目文件夹"}
 {"k": "newflow.started_over", "src": "3a2633bc", "v": "↩️ 已取消，已重新开始。"}
-{"k": "newflow.starting", "src": "ff87493a", "v": "🚀 正在启动 <b>{session}</b> {mode}…"}
+{"k": "newflow.starting", "src": "c0338362", "v": "🚀 正在以 {mode}启动 <b>{session}</b>…"}
 {"k": "newflow.starting_fresh", "src": "fff58191", "v": "🚀 正在启动 <b>{session}</b>（全新）…"}
 {"k": "newflow.switched_to", "src": "03553586", "v": "↩️ 已切换到 <b>{session}</b>"}
 {"k": "newflow.title", "src": "79dee51b", "v": "🆕 <b>新建会话</b>"}
@@ -680,7 +682,7 @@
 {"k": "sess.restart_which", "src": "0eada720", "v": "要重启哪个会话？"}
 {"k": "sess.restarted", "src": "dc0ed3cb", "v": "🔄 [<b>{session}</b>] 已重启。"}
 {"k": "sess.restarted_by", "src": "f2ddb551", "v": "🔄 {person} 已重启 [<b>{session}</b>]。"}
-{"k": "sess.resume_as", "src": "95516616", "v": "以什么模式恢复 <b>{session}</b>："}
+{"k": "sess.resume_as", "src": "95516616", "v": "如何恢复 <b>{session}</b>："}
 {"k": "sess.resume_failed", "src": "f19c1968", "v": "❌ 无法恢复 <b>{session}</b>：{error}"}
 {"k": "sess.resume_last_response", "src": "9e8e3733", "v": "<i>📜 这个会话的上一次回复</i>\n<blockquote>{preview}</blockquote>"}
 {"k": "sess.resume_no_transcript", "src": "6b8a4001", "v": "⚠️ 会话 <b>{session}</b> 在磁盘上没有可恢复的对话记录。\n请用 {command} 启动一个新会话。"}
@@ -756,7 +758,7 @@
 {"k": "set.text.intro.level", "src": "5ca0f466", "v": "Claude 回复的词汇水平。"}
 {"k": "set.text.ns_folder_title", "src": "f4eab7d6", "v": "📁 <b>新会话的文件夹</b>"}
 {"k": "set.text.ns_model_title", "src": "386d1055", "v": "🧠 <b>新会话的模型</b>"}
-{"k": "set.text.ns_root", "src": "04b79bd3", "v": "🆕 <b>新会话</b>\n\n/new 启动会话时使用的设置。你仍可以在卡片上为单个会话更改它们。\n\n模式：{mode}\n模型：{model}\n文件夹：{folder}"}
+{"k": "set.text.ns_root", "src": "af342243", "v": "🆕 <b>新会话</b>\n\n/new 启动会话时使用的设置。你仍可以在卡片上为单个会话更改它们。\n\n权限：{mode}\n模型：{model}\n文件夹：{folder}"}
 {"k": "set.text.reports_auto_off", "src": "52adfc5a", "v": "自动提议：关闭（你连续拒绝了两次提议）。"}
 {"k": "set.text.reports_env_off", "src": "408411eb", "v": "这台机器上也通过 AIPAGER_REPORT_PROMPTS=0 关闭了提议。"}
 {"k": "set.text.reports_intro", "src": "4fe65258", "v": "当 aipager 多次遇到同一个内部错误时，它可以提议发送报告。你总会先看到报告，除非你点按“发送”，否则不会发送任何内容。\n\n问我：偶尔提议（每 3 天最多一次）。\n关：从不提议。/help 中的“报告问题”始终可用。"}

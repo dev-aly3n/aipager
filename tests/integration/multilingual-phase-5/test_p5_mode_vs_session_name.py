@@ -20,7 +20,13 @@ import pytest
 
 from aipager import i18n
 from aipager.bot import kbwords
-from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO, mode_from_word, parse_mode_args
+from aipager.bot.mode_labels import (
+    MODE_ASK,
+    WORD_ASK,
+    WORD_AUTO,
+    mode_from_word,
+    parse_mode_args,
+)
 from aipager.state import Status
 from tests import i18n_ml2_bb as bb
 
@@ -49,7 +55,7 @@ def _always(_label):
 
 @pytest.mark.parametrize("code, word, mode", WORDS, ids=IDS)
 def test_the_word_is_the_catalogs_mode_word(code, word, mode):
-    key = MODE_ASK if mode == "ask" else MODE_AUTO
+    key = WORD_ASK if mode == "ask" else WORD_AUTO
     assert kbwords.mode_word(i18n.get(code).text(key)).lower() == word
 
 
@@ -150,7 +156,7 @@ def test_an_unknown_word_without_a_session_is_still_a_label():
 
 @pytest.mark.parametrize("code", ["de", "vi"])
 def test_a_language_whose_auto_word_is_auto_keeps_it_a_mode(code):
-    word = kbwords.mode_word(i18n.get(code).text(MODE_AUTO)).lower()
+    word = kbwords.mode_word(i18n.get(code).text(WORD_AUTO)).lower()
     assert parse_mode_args([word], _always)[0] == "auto"
 
 
