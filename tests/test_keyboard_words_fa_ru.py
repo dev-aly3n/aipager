@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from aipager import config, i18n
+from aipager.i18n import Msg
 from aipager.bot import kbwords
 
 RLM = "\u200f"
@@ -26,7 +27,8 @@ def bot():
 
 
 def _label(code, msg):
-    return i18n.get(code).text(msg)
+    # The App button is a fixed name, the same in every language.
+    return i18n.get(code).text(msg) if isinstance(msg, Msg) else str(msg)
 
 
 def test_persian_and_russian_words_resolve():

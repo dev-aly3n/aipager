@@ -198,7 +198,9 @@ def test_english_surfaces_change_only_under_agents_line():
     old = json.loads(_git_show(path))
     new = json.loads((REPO / path).read_text(encoding="utf-8"))
     changed = sorted(k for k in set(old) | set(new) if old.get(k) != new.get(k))
-    assert changed == ["agents_line"]
+    # agents_line is this feature's; language.list lost its "(beta)" marks
+    # later on purpose (operator, 2026-10-10).
+    assert changed == ["agents_line", "language.list"]
 
 
 def test_the_hook_process_never_loads_i18n(tmp_path):
