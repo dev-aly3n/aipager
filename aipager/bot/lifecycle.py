@@ -344,7 +344,7 @@ class LifecycleMixin:
         button), a removed one loses both."""
         if not self._app:
             return
-        from telegram import MenuButtonCommands, MenuButtonWebApp, WebAppInfo
+        from telegram import MenuButtonCommands
 
         new_ids = {s.chat_id for s in self.scopes}
         gone = [s for s in (old_scopes or ()) if s.chat_id not in new_ids]
@@ -378,9 +378,7 @@ class LifecycleMixin:
                 try:
                     await self._app.bot.set_chat_menu_button(
                         chat_id=chat_id,
-                        menu_button=MenuButtonWebApp(
-                            text=self._menu_button_text(chat_id),
-                            web_app=WebAppInfo(url=self._miniapp_url)))
+                        menu_button=self._menu_button_webapp(chat_id, self._miniapp_url))
                 except Exception:
                     log.info("Could not set the Mini App button for new "
                              "chat %s", chat_id, exc_info=True)
@@ -1275,10 +1273,16 @@ class LifecycleMixin:
         return commands
 
     @classmethod
-    def _menu_button_text(cls, chat_id) -> str:
-        """The Mini App menu button's text in *chat_id*'s language."""
-        from aipager.bot import kbwords
-        return cls._menu_tr(chat_id).text(kbwords.KB_APP)
+    def _menu_button_webapp(cls, chat_id, url: str):
+        """*chat_id*'s Mini App menu button: its text in the chat's
+        language, and the link carrying that language (``?lang=``, none
+        for English) so the page's first frame is already in it."""
+        from telegram import MenuButtonWebApp, WebAppInfo
+
+        from aipager.bot import kbwords, miniapp_link
+        tr = cls._menu_tr(chat_id)
+        return MenuButtonWebApp(text=tr.text(kbwords.KB_APP),
+                                web_app=WebAppInfo(url=miniapp_link.with_lang(url, tr.code)))
 
     @staticmethod
     def _menu_tr(chat_id):
@@ -1324,12 +1328,9 @@ class LifecycleMixin:
         url = getattr(self, "_miniapp_url", "") or ""
         if not self._app or not url or chat_id not in self._miniapp_button_chats():
             return
-        from telegram import MenuButtonWebApp, WebAppInfo
         try:
             await self._app.bot.set_chat_menu_button(
-                chat_id=chat_id,
-                menu_button=MenuButtonWebApp(text=self._menu_button_text(chat_id),
-                                             web_app=WebAppInfo(url=url)))
+                chat_id=chat_id, menu_button=self._menu_button_webapp(chat_id, url))
         except Exception:
             log.warning("Language change: menu button failed for %s", chat_id,
                         exc_info=True)
@@ -1517,7 +1518,7 @@ class LifecycleMixin:
         startup, and one blocked or unknown chat must not cost the other
         scopes their button, let alone take the daemon down.
         """
-        from telegram import MenuButtonCommands, MenuButtonWebApp, WebAppInfo
+        from telegram import MenuButtonCommands
 
         # Verify before advertising. The daemon used to publish whatever
         # URL config held, unchecked — so when an ephemeral tunnel died the
@@ -1544,10 +1545,9 @@ class LifecycleMixin:
 
         try:
             chats = self._miniapp_button_chats()
-            # Each chat's button in that chat's language.
+            # Each chat's button in that chat's language, its link too.
             buttons = {
-                chat_id: (MenuButtonWebApp(text=self._menu_button_text(chat_id),
-                                           web_app=WebAppInfo(url=url))
+                chat_id: (self._menu_button_webapp(chat_id, url)
                           if url else MenuButtonCommands())
                 for chat_id in chats
             }

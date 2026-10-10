@@ -356,7 +356,10 @@ class MiniAppServer:
         self._sdk = WebAppSdk()
         # The page's bytes, as is and gzipped, per variant (roadmap
         # 8.117): built once, the first time each variant is asked for.
-        self._page_cache: dict[bool, tuple[bytes, bytes]] = {}
+        self._page_cache: dict[tuple[bool, str], tuple[bytes, bytes]] = {}
+        # A viewer's chat refresh after they changed App language here,
+        # held so a running one is never garbage-collected.
+        self._language_tasks: set = set()
 
     def _build_app(self) -> "web.Application":
         """Construct the aiohttp Application. Split out from start() so
@@ -533,7 +536,7 @@ class MiniAppServer:
     async def _handle_index(self, request):
         from aiohttp import web
 
-        from aipager.miniapp.static import index_html
+        from aipager.miniapp.static import index_html, page_language
 
         # Which host the page loads Telegram's SDK from is decided here,
         # per request, by whether we actually have the script: from this
@@ -542,11 +545,20 @@ class MiniAppServer:
         # never waits on a fetch, so this cannot slow a page load down.
         body = await self._sdk.get()
         sdk_from_self = body is not None
-        cached = self._page_cache.get(sdk_from_self)
+        # The link's language (``?lang=``, set by the bot from the chat's):
+        # the first frame is already in it, so the page never flashes
+        # English. Display only, and only a language a person may pick
+        # (anything else is the English page): the viewer's language still
+        # comes from initData and preferences once the page asks the API.
+        # Normalised BEFORE it keys the cache, which therefore holds at
+        # most one page per enabled language.
+        lang = page_language(request.query.get("lang"))
+        key = (sdk_from_self, lang)
+        cached = self._page_cache.get(key)
         if cached is None:
-            raw = index_html(sdk_from_self=sdk_from_self).encode("utf-8")
+            raw = index_html(sdk_from_self=sdk_from_self, lang=lang).encode("utf-8")
             cached = (raw, gzip.compress(raw, compresslevel=9, mtime=0))
-            self._page_cache[sdk_from_self] = cached
+            self._page_cache[key] = cached
         raw, packed = cached
         # Roadmap 8.117: about a quarter of the bytes for a client that
         # takes gzip (Telegram's in-app browsers all do); the exact same
@@ -1150,10 +1162,13 @@ class MiniAppServer:
             return web.json_response({"error": "bad_request"}, status=400)
         if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
             return web.json_response({"error": "bad_request"}, status=400)
+        before = i18n.for_chat(user_id).code
         try:
             set_ui_language(user_id, code)
         except ValueError:
             return web.json_response({"error": "bad_request"}, status=400)
+        if i18n.for_chat(user_id).code != before:
+            self._refresh_private_chat(user_id)
         tr = i18n.for_viewer(user_id, self._viewer_language_code(request))
         return web.json_response(self._with_ui({
             "value": value,
@@ -1161,6 +1176,27 @@ class MiniAppServer:
             "confirmation": tr.text(language_menu.CHANGED,
                                     language=language_menu.endonym(tr.code)),
         }, tr))
+
+    def _refresh_private_chat(self, user_id: int) -> None:
+        """The viewer's private chat after their language changed here, the
+        same refresh /language does (its `/` menu and its Mini App menu
+        button, whose link carries the language), through the bot's
+        limiter-bound path. Nothing is posted into the chat (no keyboard
+        message: the change was made in the app). In the background, so
+        the answer never waits on Telegram; never raises."""
+        import asyncio
+
+        changed = getattr(self.bot, "_on_language_changed", None)
+        if changed is None:
+            return
+        try:
+            task = asyncio.get_running_loop().create_task(changed(user_id, keyboard=False))
+        except Exception:
+            log.warning("miniapp: could not refresh the chat after a language change",
+                        exc_info=True)
+            return
+        self._language_tasks.add(task)
+        task.add_done_callback(self._language_tasks.discard)
 
     # ---- problem reports ---------------------------------------------------
 

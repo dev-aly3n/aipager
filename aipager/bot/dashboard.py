@@ -29,7 +29,7 @@ from telegram.error import (
 
 
 from aipager import i18n
-from aipager.bot import kbwords
+from aipager.bot import kbwords, miniapp_link
 from aipager.bot.mode_labels import mode_label
 from aipager.i18n import Msg, Plural, Safe, Span
 from aipager.clockfmt import elapsed as clock
@@ -741,7 +741,8 @@ class DashboardMixin:
         url = getattr(self, "_miniapp_url", "")
         if url and chat in self._miniapp_button_chats():
             rows.append([InlineKeyboardButton(
-                tr.text(kbwords.KB_APP), web_app=WebAppInfo(url=url))])
+                tr.text(kbwords.KB_APP),
+                web_app=WebAppInfo(url=miniapp_link.for_chat(url, chat)))])
         return "\n".join(lines), (InlineKeyboardMarkup(rows) if rows else None)
 
     async def _maybe_update_bot_name(self, session_name: str) -> None:

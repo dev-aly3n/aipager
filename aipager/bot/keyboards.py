@@ -24,7 +24,7 @@ from telegram.error import BadRequest, Forbidden
 
 
 from aipager import i18n
-from aipager.bot import kbwords
+from aipager.bot import kbwords, miniapp_link
 from aipager.i18n import Msg, Safe
 from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO
 from aipager.config import (
@@ -247,7 +247,8 @@ class KeyboardMixin:
             nav = [button(tr.text(kbwords.KB_TEMPLATES)), button(tr.text(kbwords.KB_COMMANDS))]
             if self._miniapp_url and is_private:
                 nav.append(KeyboardButton(
-                    tr.text(kbwords.KB_APP), web_app=WebAppInfo(url=self._miniapp_url),
+                    tr.text(kbwords.KB_APP),
+                    web_app=WebAppInfo(url=miniapp_link.with_lang(self._miniapp_url, tr.code)),
                 ))
             rows.append(nav)
             msg_text = "\u2328\ufe0f"

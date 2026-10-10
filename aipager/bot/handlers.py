@@ -46,6 +46,7 @@ from aipager.bot import (
     held_message,
     kbwords,
     language_menu,
+    miniapp_link,
     mode_labels,
     new_flow,
     reactions,
@@ -1072,8 +1073,9 @@ class CommandHandlersMixin:
         url = getattr(self, "_miniapp_url", "")
         if not url:
             return []
-        label = i18n.for_chat(getattr(chat, "id", None)).text(kbwords.KB_APP)
-        return [[InlineKeyboardButton(label, web_app=WebAppInfo(url=url))]]
+        chat_tr = i18n.for_chat(getattr(chat, "id", None))
+        return [[InlineKeyboardButton(chat_tr.text(kbwords.KB_APP), web_app=WebAppInfo(
+            url=miniapp_link.with_lang(url, chat_tr.code)))]]
 
     async def _handle_settings_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /settings — open the root preferences menu.
@@ -1174,7 +1176,8 @@ class CommandHandlersMixin:
                 return
 
         keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton(tr.text(APP_BTN_OPEN), web_app=WebAppInfo(url=url)),
+            InlineKeyboardButton(tr.text(APP_BTN_OPEN), web_app=WebAppInfo(
+                url=miniapp_link.with_lang(url, tr.code))),
         ]])
         await reply_text(update.message, tr.text(APP_TAP_TO_OPEN), reply_markup=keyboard)
 

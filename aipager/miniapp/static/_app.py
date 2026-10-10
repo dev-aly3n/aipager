@@ -116,7 +116,27 @@ APP_JS = r"""
     return { code: "en", v: "", rtl: false, digits: null, decimal: ".", group: ",",
              percent: "%", list: ", ", strings: null };
   }
+  // A language's catalog (the /api/i18n/<code>.json body) as the page
+  // holds it.
+  function langFrom(cat, version) {
+    var digits = typeof cat.digits === "string" && cat.digits.length === 10 &&
+      cat.digits !== "0123456789" ? cat.digits : null;
+    return { code: cat.code, v: version, rtl: !!cat.rtl, digits: digits,
+             decimal: String(cat.decimal || "."), group: String(cat.group || ","),
+             percent: String(cat.percent || "%"),
+             list: typeof cat.list === "string" ? cat.list : ", ",
+             strings: cat.strings && typeof cat.strings === "object" ? cat.strings : {} };
+  }
   var L = englishLang();
+  // The link's language (?lang=): the server inlined its catalog as
+  // AIPAGER_UI_FIRST and wrote the markup in it, so the first frame is
+  // already in it, with no request. Display only: the API still names the
+  // viewer's language once the page talks to it, and the page follows.
+  var UI_FIRST = (typeof AIPAGER_UI_FIRST === "object" && AIPAGER_UI_FIRST) || null;
+  if (UI_FIRST && UI_FIRST.cat && typeof UI_FIRST.cat.code === "string" &&
+      UI_FIRST.cat.code !== "en") {
+    L = langFrom(UI_FIRST.cat, String(UI_FIRST.v || ""));
+  }
 
   // A number in the page's digits ("1.5" -> "۱٫۵", "45%" -> "۴۵٪" in
   // Persian), in the order aipager/i18n/core.py's Tr._digits uses. Never
@@ -4108,13 +4128,7 @@ APP_JS = r"""
         if (seq !== langSeq) { return; }
         langLoading = "";
         if (!cat || cat.code !== ui.code) { return; }
-        var digits = typeof cat.digits === "string" && cat.digits.length === 10 &&
-          cat.digits !== "0123456789" ? cat.digits : null;
-        L = { code: cat.code, v: version, rtl: !!cat.rtl, digits: digits,
-              decimal: String(cat.decimal || "."), group: String(cat.group || ","),
-              percent: String(cat.percent || "%"),
-              list: typeof cat.list === "string" ? cat.list : ", ",
-              strings: cat.strings && typeof cat.strings === "object" ? cat.strings : {} };
+        L = langFrom(cat, version);
         rememberLang(cat.code);
         applyLang();
       }, function () {
@@ -4124,13 +4138,18 @@ APP_JS = r"""
   }
 
   function applyLang() {
+    paintLang();
+    rerender();
+  }
+
+  // <html lang dir> and the marked strings in the page's language.
+  function paintLang() {
     var root = document.documentElement;
     if (root && root.setAttribute) {
       root.setAttribute("lang", L.code);
       root.setAttribute("dir", L.rtl ? "rtl" : "ltr");
     }
     applyStatic();
-    rerender();
   }
 
   // What is on screen, again in the page's language. Only Settings asks
@@ -4221,6 +4240,14 @@ APP_JS = r"""
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "visible") { pollTick(); }
   });
+
+  // The link's language: the markup is already in it; this keeps the
+  // page's own state the same as after any switch, and this phone
+  // remembers it too.
+  if (L.code !== "en") {
+    paintLang();
+    rememberLang(L.code);
+  }
 
   if (!initData) {
     document.getElementById("daemon-line").textContent = "";

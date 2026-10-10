@@ -118,6 +118,16 @@ def test_a_language_tap_refreshes_menu_keyboard_and_button(bot, run_async):
     assert bot._app.bot.set_my_commands.await_count >= 1
 
 
+def test_a_language_tap_gives_the_menu_button_a_link_in_that_language(bot, run_async):
+    """The menu button's link carries the language (``?lang=``), so the
+    Mini App's first frame is already in it (2026-10-10 flash fix)."""
+    bot._miniapp_url = "https://tunnel.example/"
+    tap(bot, run_async, "_:set:lang_offer:fa", chat=DM, user=ALY)
+    [call] = bot._app.bot.set_chat_menu_button.await_args_list
+    assert call.kwargs["chat_id"] == DM
+    assert call.kwargs["menu_button"].web_app.url == "https://tunnel.example/?lang=fa"
+
+
 def test_the_tap_calls_the_language_change_once_with_the_keyboard(bot, run_async):
     bot._on_language_changed = AsyncMock()
     tap(bot, run_async, "_:set:lang_offer:fa", chat=DM, user=ALY)

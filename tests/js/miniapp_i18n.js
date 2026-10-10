@@ -39,7 +39,11 @@ class TextNode {
 const VOID = new Set(["input", "meta", "br", "img", "hr", "link", "source", "wbr"]);
 const ENTITY = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", "#x27": "'", nbsp: "\u00a0" };
 function decode(s) {
-  return s.replace(/&(amp|lt|gt|quot|#39|#x27|nbsp);/g, (m, e) => ENTITY[e]);
+  return s.replace(/&(amp|lt|gt|quot|#39|#x27|nbsp|#x[0-9a-fA-F]+|#[0-9]+);/g, (m, e) => {
+    if (ENTITY[e] !== undefined) { return ENTITY[e]; }
+    return String.fromCodePoint(e[1] === "x" || e[1] === "X"
+      ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10));
+  });
 }
 
 // Every element the page or the markup created, for innerHTML parsing and
@@ -554,6 +558,12 @@ let script = PAGE.match(/<script>([\s\S]*?)<\/script>/g)
 script = script.replace(/\}\)\(\);\s*$/,
   "\n  global.__api = { openDetail: openDetail, pollTick: pollTick, showGrid: showGrid," +
   " openNewSession: openNewSession, checkUpdates: checkUpdates };\n})();");
+// The first frame: the markup as served, before the page's script ran.
+const PRE = { lang: htmlEl.getAttribute("lang"), dir: htmlEl.getAttribute("dir"),
+              texts: null, statics: null,
+              daemonDir: byId("daemon-line") && byId("daemon-line").getAttribute("dir") };
+PRE.texts = visible(bodyEl, []);
+PRE.statics = staticTexts();
 try {
   eval(script);
 } catch (e) {
@@ -563,6 +573,9 @@ const api = global.__api || {};
 // What the page shows before any answer arrived (the fetches resolve on
 // later ticks).
 const BOOT = { name: "boot", texts: visible(bodyEl, []) };
+const BOOT_STATE = { lang: htmlEl.getAttribute("lang"), dir: htmlEl.getAttribute("dir"),
+                     calls: calls.map((c) => c.method + " " + c.url), statics: staticTexts(),
+                     daemonDir: byId("daemon-line").getAttribute("dir") };
 
 // ---- what a person sees --------------------------------------------------------------
 
@@ -1313,6 +1326,16 @@ SCENARIOS.loading = async () => {
   while (held.length) { held.shift()(); await wait(); }
   await wait();
   result({ loading: { before, waiting, after: line() } });
+};
+
+// The first frame of a page served for a link's language (?lang=): the
+// markup before the script ran, the page right after it ran (no answer
+// yet) and once the grid and the server's language arrived.
+SCENARIOS.first_paint = async () => {
+  await wait(); await wait(); await wait();
+  snap("grid");
+  result({ first: { pre: PRE, boot: Object.assign({ texts: BOOT.texts }, BOOT_STATE),
+                    statics: staticTexts() } });
 };
 
 // Counted strings at every count OPTS.counts names.

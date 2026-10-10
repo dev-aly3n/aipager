@@ -91,9 +91,9 @@ def test_the_page_is_built_once_per_variant(server, run_async, monkeypatch):
     built = []
     real = index_html
 
-    def _counting(*, sdk_from_self=True):
+    def _counting(*, sdk_from_self=True, lang=None):
         built.append(sdk_from_self)
-        return real(sdk_from_self=sdk_from_self)
+        return real(sdk_from_self=sdk_from_self, lang=lang)
 
     monkeypatch.setattr("aipager.miniapp.static.index_html", _counting)
     for accept in ("gzip", "identity", "gzip"):
