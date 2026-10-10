@@ -762,7 +762,8 @@ class CallbackDispatchMixin:
         # the voice extra or updating both need the update admin.
         await self._safe_answer(
             query,
-            update_flow.DENIED_TEXT if cap is tap_gate.UPDATE else tap_gate.REFUSED_TEXT,
+            update_flow.tapper_tr(query).text(update_flow.DENIED_TEXT)
+            if cap is tap_gate.UPDATE else tap_gate.REFUSED_TEXT,
             show_alert=True)
         return False
 

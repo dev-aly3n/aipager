@@ -103,6 +103,17 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"status\.[a-z0-9_.]+", "message", "chars", 200, ""),
     (r"lang\.beta", "button", "cells", 40, "endonym"),
     (r"lang\.first_contact", "message", "chars", 240, "endonym"),
+    # phase 3b: admin, lifecycle, groups
+    (r"upd\.[a-z0-9_.]+", "message", "chars", 500, ""),
+    (r"rep\.area\.[a-z0-9_]+", "label", "chars", 60, ""),
+    (r"rep\.[a-z0-9_.]+", "message", "chars", 500, ""),
+    (r"auth\.[a-z0-9_.]+", "message", "chars", 300, ""),
+    (r"grp\.[a-z0-9_.]+", "message", "chars", 300, ""),
+    (r"life\.[a-z0-9_.]+", "card", "chars", 160, ""),
+    (r"tx\.[a-z0-9_.]+", "message", "chars", 300, ""),
+    (r"resume\.[a-z0-9_.]+", "message", "chars", 300, ""),
+    (r"ago\.[a-z0-9_.]+", "label", "chars", 40, ""),
+    (r"diff\.[a-z0-9_.]+", "message", "chars", 120, ""),
 )
 
 
@@ -504,6 +515,7 @@ _SLASH = re.compile(r"(?<![\w/])/[A-Za-z0-9_]+")
 GLOSSARY_EXEMPT: dict[str, dict[str, str]] = {
     "kbl.tpl.write_tests": {"Write": "the ordinary verb (write tests), not the Write tool"},
     "set.btn.reports_turn_on": {"turn": "the verb (turn offers on), not a turn of Claude's"},
+    "rep.offer.off": {"turn": "the verb (turn them back on), not a turn of Claude's"},
 }
 
 

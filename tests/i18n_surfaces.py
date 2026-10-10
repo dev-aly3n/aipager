@@ -1,4 +1,5 @@
-"""Every phase 2 surface of the multilingual design, in one list.
+"""Every migrated surface of the multilingual design (phases 2 and 3b),
+in one list.
 
 Each entry drives one surface through its public entry point (the
 keyboard send, the /settings renderers, the menu registration, the busy
@@ -10,7 +11,8 @@ a surface that forgets to resolve its chat's language shows English and
 fails the per-language tests.
 
 One list, four uses: the English snapshot (``tests/golden/
-english_surfaces.json``, recorded before any phase 2 change), the pseudo
+english_surfaces.json``, each surface recorded before its phase changed
+anything), the pseudo
 sweep (``qps``), the Persian and Russian render tests, and check 12.
 
 Clocks are frozen (``NOW``), so every render is deterministic.
@@ -74,6 +76,15 @@ class Env:
             from aipager import i18n
             kwargs["tr"] = i18n.for_chat(chat)
         return fn(*args, **kwargs)
+
+    def msg(self, value, chat=CHAT, **params):
+        """A module constant as *chat* reads it: rendered through the
+        chat's language once it is a key (``Msg``), as it is before."""
+        from aipager import i18n
+        from aipager.i18n import Msg
+        if isinstance(value, Msg):
+            return i18n.for_chat(chat).text(value, **params)
+        return value.format(**params) if params else value
 
 
 SURFACES: list[tuple[str, object]] = []
@@ -1022,6 +1033,823 @@ def _language_list(env):
     return out
 
 
+# ---- phase 3b: /update ---------------------------------------------------------------------
+
+#: A stranger's and a read-only member's ids (phase 3b's auth surfaces).
+STRANGER, LURKER, VIEWER = 9, 8, 3
+
+
+def _sent_texts(mock) -> list[str]:
+    out = []
+    for call in mock.await_args_list:
+        text = call.kwargs.get("text")
+        if text is None and len(call.args) > 1:
+            text = call.args[1]
+        if text is not None:
+            out.append(text)
+        out += _inline(call.kwargs.get("reply_markup"))
+    return out
+
+
+def _reply_texts(mock) -> list[str]:
+    out = []
+    for call in mock.await_args_list:
+        text = call.args[0] if call.args else call.kwargs.get("text")
+        out.append(text)
+        out += _inline(call.kwargs.get("reply_markup"))
+    return out
+
+
+def update_status(*, running="1.0.1", latest="1.0.2", ap_newer=True, upgradable=True,
+                  reason=None, installed=None, cc="2.1.300", cc_latest="2.1.310",
+                  cc_newer=True, blocked=None, automatic=True, restart_reason=None):
+    """A check's raw result, as ``UpdateManager._collect_status`` builds it."""
+    return {
+        "aipager": {"running": running, "installed": installed or running,
+                    "latest": latest, "update_available": ap_newer,
+                    "source": {"kind": "pipx", "origin": "index", "detail": None,
+                               "upgradable": upgradable, "reason": reason,
+                               "describe": "pipx (PyPI)", "describe_short": "pipx"}},
+        "claude": {"current": cc, "latest": cc_latest, "update_available": cc_newer,
+                   "method": "native", "channel": "latest", "blocked": blocked},
+        "restart": {"mode": "systemd", "automatic": automatic, "reason": restart_reason,
+                    "manual_command": None},
+    }
+
+
+UPDATE_STATUSES = (
+    update_status(),
+    update_status(cc_newer=False, cc_latest="2.1.300", upgradable=False,
+                  reason="editable install"),
+    update_status(ap_newer=False, latest="1.0.1", blocked="npm prefix not writable"),
+    update_status(ap_newer=False, latest="1.0.1", cc_newer=False, cc_latest="2.1.300"),
+    update_status(latest=None, cc_newer=False, cc_latest="2.1.300"),
+    update_status(ap_newer=False, latest="1.0.1", cc=None, installed="1.0.2"),
+    update_status(cc_latest=None, automatic=False, restart_reason="no service unit"),
+    update_status(cc_newer=False, cc_latest="2.1.300", automatic=False),
+)
+
+
+def _update_bot(env, chat=CHAT):
+    env.store(chat)
+    return env.mk_bot()
+
+
+def _job(kind="aipager", chat=CHAT, phase="starting"):
+    from aipager.bot import update_flow
+    return update_flow._Job(id=7, kind=kind, chat_id=chat, user_id=CHAT, origin="chat",
+                            started_at=WALL, phase=phase)
+
+
+def _cmd_update(user, chat=CHAT):
+    update = MagicMock()
+    update.effective_user = MagicMock(id=user, language_code=None)
+    update.effective_chat = MagicMock(id=chat, type="private" if chat > 0 else "supergroup")
+    update.message = MagicMock()
+    update.message.chat_id = chat
+    update.message.chat = update.effective_chat
+    update.message.reply_text = AsyncMock(return_value=MagicMock(message_id=5))
+    update.effective_message = update.message
+    return update
+
+
+@surface("update.prompt")
+def _update_prompt(env):
+    from aipager.bot import update_flow
+    bot = _update_bot(env)
+    out = []
+    for user, phase in ((CHAT, None), (7, None), (CHAT, "waiting_for_idle"),
+                        (CHAT, "restart_scheduled")):
+        if phase:
+            bot.updates._job = _job(phase=phase)
+        update = _cmd_update(user)
+        env.run(update_flow.handle_update_cmd(bot, update, MagicMock()))
+        out += _reply_texts(update.message.reply_text)
+    return out
+
+
+@surface("update.check")
+def _update_check(env):
+    from aipager.bot import update_flow
+    env.store(CHAT, GROUP)
+    out = []
+    for status in UPDATE_STATUSES:
+        text, kb = env.with_tr(update_flow.render_check, status, show_paths=True)
+        out += [text, *_inline(kb)]
+        payload = env.with_tr(update_flow.check_payload, status, show_paths=False)
+        out += payload["lines"] + payload["notes"]
+        out += [t for t in (payload["summary"], payload["restart"]) if t]
+        if payload["offer"]:
+            out.append(payload["offer"]["label"])
+    text, kb = env.with_tr(update_flow.render_check, UPDATE_STATUSES[0], show_paths=False,
+                           chat=GROUP)
+    out += [text, *_inline(kb)]
+    out += _inline(env.with_tr(update_flow.check_prompt_markup))
+    return out
+
+
+@surface("update.job")
+def _update_job(env):
+    from aipager import self_update
+    from aipager.bot import update_flow
+    from aipager.state import Status
+    bot = _update_bot(env)
+    mgr = bot.updates
+    out = []
+    job = _job()
+    out.append(env.with_tr(update_flow._job_text, job))
+    for phase in ("waiting_for_idle", "gate_timeout"):
+        job.phase = phase
+        job.blockers = ["x1: running a turn", "x2: waiting on a question"]
+        out.append(env.with_tr(update_flow._job_text, job))
+        out += _inline(env.with_tr(update_flow._job_markup, job))
+        out.append(mgr._gate_live(job))
+    job.blockers.append("held answer not yet delivered")
+    out.append(mgr._gate_live(job))
+    # Sessions: two in this chat, one elsewhere; then none at all.
+    _registered(bot, _sess(status=Status.IDLE),
+                _sess(name="claude-x2", label="x2", status=Status.BUSY),
+                _sess(name="claude-x3", label="x3", chat=GROUP, status=Status.IDLE))
+    out.append(mgr._session_note(job, "2.1.310"))
+    out.append(mgr._session_note(_job(chat=GROUP), None))
+    empty = env.mk_bot()
+    out.append(empty.updates._session_note(job, "2.1.310"))
+    for plan in (self_update.RestartPlan("foreground", False, "no service unit",
+                                         "aipager start", ["x1", "x2"]),
+                 self_update.RestartPlan("foreground", False, None, None, [])):
+        out.append(env.with_tr(mgr._manual_restart_text, plan))
+    env.mp.setattr(self_update, "HEARTBEAT_GRANULARITY_SECONDS", 30)
+    for seconds in (0, 30, 60, 150):
+        out.append(env.with_tr(update_flow._elapsed_label, seconds))
+    out.append(env.with_tr(update_flow._pre_tail, "pip output", GROUP))
+    # The watchdog: still alive after the scheduled restart.
+    env.mp.setattr(self_update, "RESTART_DELAY_SECONDS", 0)
+    env.mp.setattr(update_flow, "RESTART_WATCHDOG_SECONDS", 0)
+    env.mp.setattr(self_update, "cancel_scheduled_restart", lambda *a, **k: None)
+    env.mp.setattr(self_update, "clear_marker", lambda: None)
+    watched = _job(phase="restart_scheduled")
+    mgr._job, mgr._lock_owner = watched, watched.id
+    mgr._release_lock = lambda j: None
+    env.run(mgr._restart_watchdog(watched))
+    out.append(watched.sections[-1])
+    return out
+
+
+def _steps_mgr(env, chat=CHAT):
+    from aipager.state import Status
+    bot = _update_bot(env, chat)
+    _registered(bot, _sess(status=Status.IDLE),
+                _sess(name="claude-x3", label="x3", chat=GROUP, status=Status.IDLE))
+    mgr = bot.updates
+
+    async def _report(job, *, ornament=False):
+        return None
+    mgr._report = _report
+    return mgr
+
+
+def _beating(mgr, result, labels):
+    async def _beat(job, label, fn, *args):
+        labels.append(str(label))
+        return result
+    mgr._await_with_heartbeat = _beat
+
+
+@surface("update.steps")
+def _update_steps(env):
+    """Every section the Claude Code and aipager steps write, through
+    the steps themselves (the installer, the network and systemd faked)."""
+    from aipager import install_source, self_update
+    out: list[str] = []
+    labels: list[str] = []
+    CU = self_update.ClaudeUpdateResult
+    for chat, result, shutting in (
+            (CHAT, CU(None, None, None, False, "", error="claude not found"), False),
+            (CHAT, CU("2.1.300", None, None, True, "downloading"), False),
+            (CHAT, CU("2.1.300", "2.1.300", 1, False, "npm failed"), False),
+            (GROUP, CU("2.1.300", "2.1.300", None, False, "npm failed", error="boom"), False),
+            (CHAT, CU("2.1.300", "2.1.310", 0, False, ""), False),
+            (CHAT, CU("2.1.300", None, 0, False, ""), True),
+            (CHAT, CU("2.1.310", "2.1.310", 0, False, ""), False)):
+        mgr = _steps_mgr(env, chat)
+        mgr._shutting_down = shutting
+        _beating(mgr, result, labels)
+        job = _job(kind="claude", chat=chat)
+        env.run(mgr._claude_step(job))
+        out.append(job.sections[-1])
+
+    src = install_source.InstallSource(kind="pipx", prefix="/opt/pipx",
+                                       python="/opt/pipx/bin/python", origin="index",
+                                       upgradable=True)
+    state = {"source": src, "argv": ["pipx", "upgrade", "aipager"], "latest": "1.0.2",
+             "probe": ("1.0.2", True, None), "plan": None, "marker_error": None,
+             "schedule": (True, "aipager-restart"), "gates": []}
+    auto = self_update.RestartPlan("systemd", True, None, "systemctl --user restart aipager")
+    manual = self_update.RestartPlan("foreground", False, "no service unit",
+                                     "aipager start", ["x1"])
+    mp = env.mp
+    mp.setattr(install_source, "detect_install_source", lambda **k: state["source"])
+    mp.setattr(install_source, "upgrade_argv", lambda s: state["argv"])
+    mp.setattr(install_source, "upgrade_env", lambda s: None)
+    mp.setattr(install_source, "augmented_path", lambda: "/usr/bin")
+    mp.setattr(install_source, "reinstall_hint", lambda kind: "pipx install --force aipager")
+    mp.setattr(self_update, "running_version", lambda: "1.0.1")
+    mp.setattr(self_update, "installed_version", lambda: "1.0.2")
+    mp.setattr(self_update, "latest_aipager_version", lambda: state["latest"])
+    mp.setattr(self_update, "restart_plan", lambda registry: state["plan"])
+    mp.setattr(self_update, "probe_installed_version", lambda python: state["probe"])
+
+    def _write_marker(marker):
+        if state["marker_error"]:
+            raise OSError(state["marker_error"])
+    mp.setattr(self_update, "write_marker", _write_marker)
+    mp.setattr(self_update, "schedule_restart", lambda plan: state["schedule"])
+    mp.setattr(self_update, "clear_marker", lambda: None)
+    mp.setattr(self_update, "cancel_scheduled_restart", lambda *a, **k: None)
+
+    CR = self_update.CommandResult
+    ok = CR(0, "Successfully installed aipager", False, None)
+
+    def _src(**fields):
+        base = dict(kind="pipx", prefix="/opt/pipx", python="/opt/pipx/bin/python",
+                    origin="index", upgradable=True)
+        base.update(fields)
+        return install_source.InstallSource(**base)
+
+    cases = (
+        (CHAT, dict(source=_src(upgradable=False, reason="editable install")), ok),
+        (CHAT, dict(argv=None), ok),
+        (CHAT, dict(latest="1.0.1", plan=manual), ok),
+        (CHAT, dict(plan=auto, gates=["cancel"]), ok),
+        (CHAT, dict(plan=manual), CR(None, "still resolving", True, "timed out")),
+        (CHAT, dict(plan=manual), CR(2, "resolver error", False, None)),
+        (CHAT, dict(plan=manual, probe=(None, False, "ImportError")), ok),
+        (CHAT, dict(plan=manual, probe=("1.0.1", True, None),
+                    source=_src(origin="local", origin_detail="/src/aipager")), ok),
+        (GROUP, dict(plan=manual, probe=("1.0.1", True, None),
+                     source=_src(origin="local", origin_detail="/src/aipager")), ok),
+        (CHAT, dict(plan=manual, probe=("1.0.1", True, None), source=_src(origin="vcs")), ok),
+        (CHAT, dict(plan=manual, probe=("1.0.1", True, None)), ok),
+        (CHAT, dict(plan=manual, probe=("1.0.1", True, None),
+                    source=_src(origin="unknown")), ok),
+        (CHAT, dict(plan=manual), ok),
+        (CHAT, dict(plan=auto, gates=["open", "cancel"]), ok),
+        (CHAT, dict(plan=auto, gates=["open", "open"], marker_error="disk full"), ok),
+        (CHAT, dict(plan=auto, gates=["open", "open"], schedule=(False, "no systemd-run")),
+         ok),
+        (CHAT, dict(plan=auto, gates=["open", "open"]), ok),
+    )
+    for chat, changes, result in cases:
+        state.update(source=src, argv=["pipx", "upgrade", "aipager"], latest="1.0.2",
+                     probe=("1.0.2", True, None), plan=auto, marker_error=None,
+                     schedule=(True, "aipager-restart"), gates=[])
+        state.update(changes)
+        mgr = _steps_mgr(env, chat)
+        _beating(mgr, result, labels)
+        seen: list[str] = []
+
+        async def _gate(job, _state=state, _seen=seen):
+            if job.sections:
+                _seen.append(job.sections[-1])
+            return _state["gates"].pop(0) if _state["gates"] else "open"
+        mgr._wait_gate = _gate
+        job = _job(chat=chat)
+        env.run(mgr._aipager_step(job))
+        out += seen + ["\n\n".join(job.sections)]
+    # A shutdown during or after the install.
+    mgr = _steps_mgr(env)
+    for installed in ("1.0.1", "1.0.2"):
+        mp.setattr(self_update, "installed_version", lambda v=installed: v)
+        job = _job()
+        mgr._installed_unprobed_at_shutdown(job, "1.0.1")
+        out.append(job.sections[-1])
+    for phase, interrupted in (("claude_updating", True), ("upgrading", True),
+                               ("upgrading", False)):
+        job = _job(phase=phase)
+        job.interrupted = interrupted
+        out.append(mgr._shutdown_section(job))
+    out += sorted(set(labels))
+    return out
+
+
+def _marker_bot(env, marker, *, running="1.0.2"):
+    from aipager import install_source, self_update
+    from aipager.state import SessionRegistry, Status
+    env.store(CHAT)
+    registry = SessionRegistry()
+    bot = env.mk_bot(registry)
+    _registered(bot, _sess(status=Status.IDLE),
+                _sess(name="claude-x2", label="x2", status=Status.BUSY))
+    env.mp.setattr(self_update, "MARKER_SETTLE_SECONDS", 0)
+    env.mp.setattr(self_update, "read_and_clear_marker", lambda: dict(marker))
+    env.mp.setattr(self_update, "running_version", lambda: running)
+    env.mp.setattr(install_source, "reinstall_hint", lambda kind: "pipx install --force aipager")
+    bot._app.bot.edit_message_text = AsyncMock(return_value=MagicMock(message_id=5))
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=6))
+    return bot
+
+
+@surface("update.marker")
+def _update_marker(env):
+    import time as _time
+
+    from aipager.bot import update_flow
+    out = []
+    one = [{"name": "claude-x1", "label": "x1"}, {"name": "claude-x9", "label": "x9"}]
+    two = [{"name": "claude-x1", "label": "x1"}, {"name": "claude-x2", "label": "x2"}]
+    for marker, running in (
+            ({"from": "1.0.1", "to": "1.0.2", "sessions": one}, "1.0.2"),
+            ({"from": "1.0.1", "to": "1.0.2", "sessions": two}, "1.0.2"),
+            ({"from": "1.0.1", "to": "1.0.2", "sessions": []}, "1.0.1"),
+            ({"interrupted": "claude_updating", "from": "1.0.1"}, "1.0.1"),
+            ({"interrupted": "upgrading", "from": "1.0.1", "source_kind": "pipx"}, "1.0.1")):
+        for edit in (False, True):
+            marker = dict(marker, chat_id=CHAT, scheduled_at=_time.time())
+            if edit:
+                marker["message"] = {"chat_id": CHAT, "message_id": 5, "prefix": ""}
+            bot = _marker_bot(env, marker, running=running)
+            env.run(update_flow.deliver_update_marker(bot, bot.registry))
+            out += [c.kwargs["text"] for c in bot._app.bot.edit_message_text.await_args_list]
+            out += _sent_texts(bot._app.bot.send_message)
+    return out
+
+
+def _cb_query(chat=CHAT, user=CHAT, message_id=42):
+    query = MagicMock()
+    query.answer = AsyncMock()
+    query.edit_message_text = AsyncMock()
+    query.edit_message_reply_markup = AsyncMock()
+    query.message = MagicMock(message_id=message_id, chat_id=chat)
+    query.message.chat = MagicMock(id=chat, type="private" if chat > 0 else "supergroup")
+    query.message.edit_text = AsyncMock()
+    query.from_user = MagicMock(id=user, language_code=None)
+    update = MagicMock()
+    update.callback_query = query
+    update.message = None
+    update.effective_user = query.from_user
+    update.effective_chat = query.message.chat
+    return update, query
+
+
+def _tapped(query) -> list[str]:
+    out = [c.args[0] for c in query.answer.await_args_list if c.args and c.args[0]]
+    for call in query.edit_message_text.await_args_list:
+        text = call.args[0] if call.args else call.kwargs.get("text")
+        out.append(text)
+        out += _inline(call.kwargs.get("reply_markup"))
+    return out
+
+
+@surface("update.taps")
+def _update_taps(env):
+    from aipager import install_source
+    from aipager.bot import update_flow
+    bot = _update_bot(env)
+    mgr = bot.updates
+    mgr._spawn = lambda coro: coro.close()
+    env.mp.setattr(install_source, "detect_install_source", lambda **k: install_source.InstallSource(
+        kind="pipx", prefix="/opt/pipx", python="/opt/pipx/bin/python",
+        upgradable=False, reason="editable install"))
+    out = []
+
+    def tap(action, user=CHAT):
+        update, query = _cb_query(user=user)
+        env.run(update_flow.handle_callback(bot, update, query, "_", action))
+        return _tapped(query)
+
+    out += tap("up:x")
+    out += tap("up:x", user=7)
+    out += tap("up:cc")
+    out += tap("up:chk")
+    out += tap("up:now:abc")
+    out += tap("up:now:123")
+    out += tap("up:zzz")
+    for error, job in (("check_expired", None), ("not_upgradable", None),
+                       ("shutting_down", None), ("update_in_progress", {"phase": "upgrading"})):
+        async def _start(kind, _e=error, _j=job, **k):
+            return update_flow.StartResult(False, _e, _j)
+        mgr.start_offer = _start
+        out += tap("up:go:ap")
+    mgr._shutting_down = True
+    out += tap("up:chk")
+    mgr._shutting_down = False
+    mgr._job = _job(phase="upgrading")
+    out += tap("up:chk")
+    mgr._job = None
+
+    async def _broken():
+        raise RuntimeError("offline")
+    mgr.check = _broken
+    message = MagicMock(chat_id=CHAT)
+    message.chat = MagicMock(id=CHAT)
+    message.edit_text = AsyncMock()
+    env.run(update_flow._show_check(bot, message, CHAT))
+    out += _reply_texts(message.edit_text)
+    return out
+
+
+# ---- phase 3b: problem reports ---------------------------------------------------------------
+
+def _tr(chat=CHAT):
+    from aipager import i18n
+    return i18n.for_chat(chat)
+
+
+def _kept(mode="inline", chat=CHAT, msg_id=42, state="open"):
+    from aipager.bot import report_flow
+    return report_flow.KeptReport(report={"v": 1}, preview=b'{\n "errors": []\n}',
+                                  chat_id=chat, msg_id=msg_id, mode=mode, state=state,
+                                  created=report_flow._mono())
+
+
+@surface("report.card")
+def _report_card(env):
+    from aipager.bot import report_flow as rf
+    env.store(CHAT)
+    out = []
+    for mode in ("inline", "document"):
+        out.append(env.with_tr(rf.card_text, _kept(mode)))
+    for status in (rf.SENDING_TEXT, rf.NOTE_ADDED, rf.NOTE_CUT, rf.NOTE_EMPTY,
+                   rf.NOTE_REFUSED, rf.NOTE_CLOSED, rf.SEND_FAILED_TEXT):
+        out.append(env.with_tr(rf.card_text, _kept(), rf.shown(_tr(), status)))
+    out.append(env.with_tr(rf._capture_text))
+    for line in (rf.CANCELLED_TEXT, rf.LOST_TEXT, rf.DOC_FAILED_TEXT):
+        out.append(env.with_tr(rf._final_text, env.msg(line)))
+    out += _inline(env.with_tr(rf.preview_keyboard))
+    out += _inline(env.with_tr(rf._capture_keyboard))
+    out += _inline(env.with_tr(rf.report_button_markup))
+    out += _inline(env.with_tr(rf.report_button_markup, rf.REPORT_THIS_BUTTON))
+    return out
+
+
+@surface("report.taps")
+def _report_taps(env):
+    from aipager.bot import report_flow as rf
+    from aipager.report import policy, store
+    env.store(CHAT, GROUP)
+    bot = env.mk_bot()
+    out = []
+
+    def tap(action, *, user=CHAT, chat=CHAT, msg_id=42):
+        update, query = _cb_query(chat=chat, user=user, message_id=msg_id)
+        env.run(rf.handle_callback(bot, update, query, "_", action))
+        return _tapped(query)
+
+    out += tap("rp:send", user=7)
+    out += tap("rp:send", chat=GROUP)
+    for result in (rf.OpenResult.OPENED, rf.OpenResult.NO_OWNER, rf.OpenResult.NOT_SENT):
+        async def _open(bot, *, trigger, errors=None, _r=result):
+            return _r
+        env.mp.setattr(rf, "open_preview", _open)
+        out += tap("rp:open", chat=GROUP)
+    out += tap("rp:zzz")
+    rf._cards(bot)[(CHAT, 42)] = _kept(state="sending")
+    out += tap("rp:send")
+    out += tap("rp:cancel")
+    rf._cards(bot)[(CHAT, 42)] = _kept(state="done")
+    out += tap("rp:send")
+    rf._cards(bot).clear()
+    out += tap("rp:send")
+    out += tap("rp:cancel")
+    env.mp.setattr("aipager.config.CHAT_ID", "-5")
+    out += tap("rp:send")
+    env.mp.setattr("aipager.config.CHAT_ID", str(CHAT))
+    # The offer's answers.
+    pending = SimpleNamespace(pending=["fp1"], last_offer_ts=123, auto_off=False)
+    env.mp.setattr(store, "policy_state", lambda: pending)
+    env.mp.setattr(store, "save_policy", lambda state: None)
+    env.mp.setattr(store, "records", lambda: [])
+    env.mp.setattr(policy, "settle", lambda state, now: state)
+    out += tap("rp:op:999")
+    for verb, result, auto_off in (("op", rf.OpenResult.OPENED, False),
+                                   ("op", rf.OpenResult.NOT_SENT, False),
+                                   ("on", None, False), ("od", None, True)):
+        async def _open(bot, *, trigger, errors=None, _r=result):
+            return _r
+        env.mp.setattr(rf, "open_preview", _open)
+        env.mp.setattr(policy, "note_answer",
+                       lambda state, answer, _a=auto_off: SimpleNamespace(auto_off=_a))
+        out += tap(f"rp:{verb}:123")
+    # A note typed after its card was lost.
+    bot._report_note_pending = {"chat_id": CHAT, "user_id": CHAT, "msg_id": 42,
+                                "last_active": rf._mono()}
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=7))
+    update = _cmd_update(CHAT)
+    update.callback_query = None
+    update.message.text = "it broke"
+    update.message.reply_to_message = None
+    update.message.forward_origin = None
+    update.message.via_bot = None
+    update.message.external_reply = None
+    env.run(rf.maybe_handle_text(bot, update, MagicMock(), "it broke"))
+    out += _sent_texts(bot._app.bot.send_message)
+    return out
+
+
+def _offer_entry(trigger, count=1, file="aipager/bot/notify.py"):
+    return {"trigger": trigger, "count": count, "type": "builtins.KeyError",
+            "frames": [{"file": file}]}
+
+
+@surface("report.offer")
+def _report_offer(env):
+    from aipager.bot import report_offer
+    env.store(CHAT)
+    out = []
+    for entries in ([_offer_entry("crash")], [_offer_entry("crash", 3)],
+                    [_offer_entry("hook_cap", 2)],
+                    [_offer_entry("error"), _offer_entry("crash")],
+                    [_offer_entry("error", 3, "aipager/bot/zzz.py"), _offer_entry("crash"),
+                     _offer_entry("crash"), _offer_entry("crash")]):
+        out.append(env.with_tr(report_offer.notice_text, entries))
+    out += _inline(env.with_tr(report_offer.notice_keyboard, 123))
+    return out
+
+
+@surface("report.outcomes")
+def _report_outcomes(env):
+    from aipager.bot import report_drafts, report_flow
+    from aipager.report import send
+    env.store(CHAT)
+    out = []
+    for outcome in (*sorted(send.OUTCOMES), "bogus"):
+        out.append(env.with_tr(report_flow.outcome_line, outcome, "ap1-x"))
+    out.append(env.with_tr(report_drafts.reply_for, report_drafts.FAILED, None).line)
+    out.append(env.with_tr(report_drafts.reply_for, "sent", "ap1-x").line)
+    report = {"errors": [{"frames": [{"file": f}]} for f in (
+        "aipager/bot/notify.py", "aipager/bot/animation.py", "aipager/dtach/notify_hook.py",
+        "aipager/bot/zzz.py")] + [{}]}
+    out += env.with_tr(report_drafts.areas, report)
+    return out
+
+
+# ---- phase 3b: refusals and notices ----------------------------------------------------------
+
+def _person_update(user, chat, *, language_code=None, username="who"):
+    update = _cmd_update(user, chat)
+    update.effective_user.language_code = language_code
+    update.effective_user.username = username
+    update.effective_user.first_name = "Who"
+    update.effective_user.last_name = None
+    update.effective_user.is_bot = False
+    update.message.sender_chat = None
+    update.message.from_user = update.effective_user
+    return update
+
+
+@surface("auth.refusals")
+def _auth_refusals(env):
+    from pathlib import Path as _P
+
+    from aipager import team as team_mod
+    from aipager.policy import load_policy
+    from aipager.scope import Member, Scope
+    team_mod.reset_unauthorized_seen()
+    env.store(CHAT, GROUP, STRANGER, LURKER)
+    out = []
+    # Legacy team mode: a stranger, a read-only member, a stranger's tap.
+    team = team_mod.Team(group_id=CHAT, users={
+        CHAT: team_mod.User(CHAT, "aly", team_mod.Role.ADMIN),
+        VIEWER: team_mod.User(VIEWER, "rob", team_mod.Role.READ_ONLY)})
+    bot = env.mk_bot(team=team)
+    for user in (STRANGER, VIEWER):
+        update = _person_update(user, CHAT)
+        env.run(bot._authorize(update))
+        out += _reply_texts(update.message.reply_text)
+    _update, query = _cb_query(user=STRANGER)
+    env.run(bot._authorize_callback(query))
+    out += _tapped(query)
+    team_mod.reset_unauthorized_seen()
+    # Scope mode: an unknown private chat, a non-member, a read-only member.
+    bot = env.mk_bot(scopes=[Scope(chat_id=GROUP, kind="group", label="team", members=(
+        Member(id=555, label="aly", role="owner"),
+        Member(id=VIEWER, label="rob", role="read_only")))])
+    bot.policy = load_policy(_P("/nonexistent/policy.yaml"), _P("/nonexistent/policy.d"))
+    for user, chat in ((STRANGER, STRANGER), (LURKER, GROUP), (VIEWER, GROUP)):
+        update = _person_update(user, chat)
+        env.run(bot._authorize(update))
+        out += _reply_texts(update.message.reply_text)
+    _update, query = _cb_query(chat=GROUP, user=LURKER)
+    env.run(bot._authorize_callback(query))
+    out += _tapped(query)
+    team_mod.reset_unauthorized_seen()
+    return out
+
+
+@surface("auth.auto_deny")
+def _auth_auto_deny(env):
+    from aipager import team as team_mod
+    from aipager.dtach import inject
+
+    async def _nap(_s):
+        return None
+    env.store(CHAT)
+    env.mp.setattr(inject, "send_keys", AsyncMock(return_value=True))
+    env.mp.setattr("aipager.bot.auth._sleep", _nap)
+    out = []
+    for triggerer in (None, SimpleNamespace(id=2, label="bob", role=None),
+                      team_mod.User(2, "bob", team_mod.Role.DEVELOPER)):
+        bot = env.mk_bot()
+        sess = _registered(bot, _sess())
+        bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=8))
+        env.run(bot._auto_deny(sess, {"name": "Bash", "summary": "Bash: rm -rf build/"},
+                               triggerer))
+        out += _sent_texts(bot._app.bot.send_message)
+    return out
+
+
+# ---- phase 3b: groups --------------------------------------------------------------------------
+
+@surface("group.texts")
+def _group_texts(env):
+    from aipager.bot import group_intake
+    from aipager.scope import Member, Scope
+    env.store(GROUP)
+    out = []
+    for username in ("aipager_test_bot", None):
+        bot = env.mk_bot()
+        bot._app.bot.username = username
+        out.append(env.with_tr(group_intake.group_help_talk_line, bot, chat=GROUP))
+        out.append(env.with_tr(group_intake.talk_hint, bot, GROUP, "x1", dm="",
+                               raw_label="x1", chat=GROUP))
+    bot = env.mk_bot(scopes=[Scope(chat_id=GROUP, kind="group", label="team", members=(
+        Member(id=555, label="aly", role="owner"),))])
+    msg = MagicMock(chat_id=GROUP)
+    msg.chat = MagicMock(id=GROUP)
+    msg.reply_text = AsyncMock(return_value=MagicMock(message_id=3))
+    env.run(group_intake._answer_anonymous_sender(bot, msg))
+    out += _reply_texts(msg.reply_text)
+    return out
+
+
+@surface("group.dropped")
+def _group_dropped(env):
+    from aipager.bot import live_reload
+    from aipager.scope import Member, Scope
+    env.store(GROUP)
+    env.mp.setattr(live_reload, "can_prompt", lambda *a, **k: False)
+    scopes = [Scope(chat_id=GROUP, kind="group", label="team", members=(
+        Member(id=2, label="bob", role="user"),))]
+    out = []
+    for uid in (2, 77):
+        for n in (1, 3):
+            bot = env.mk_bot()
+            bot._mark_not_delivered = AsyncMock()
+            bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9))
+            sess = _registered(bot, _sess(chat=GROUP))
+            sess.pending_queue = [(f"hello {i}", 100 + i, None, None, uid) for i in range(n)]
+            env.run(live_reload._drop_held(bot, sess, GROUP, scopes, scopes, None))
+            out += _sent_texts(bot._app.bot.send_message)
+    return out
+
+
+# ---- phase 3b: shared transport texts ------------------------------------------------------------
+
+API_ERRORS = (
+    "API Error: 402 credit balance too low",
+    "API Error: 500 internal server error",
+    "API Error: 529 overloaded_error",
+    "API Error: 429 rate_limit_error",
+    "API Error: 429 rate_limit_error, retry after 30 seconds",
+    "connection reset by peer",
+    "API Error: 418",
+)
+
+
+@surface("transport.texts")
+def _transport_texts(env):
+    from telegram.error import BadRequest
+
+    from aipager.bot import transport
+    env.store(CHAT)
+    out = [env.msg(transport.NEEDS_ADMIN_REPLY), env.msg(transport.RESUME_AUTO_NEEDS_ADMIN),
+           env.msg(transport.RETRY_OTHERS_COMMAND_REPLY)]
+    for text in API_ERRORS:
+        out.append(env.with_tr(transport._detect_api_error, text)[0])
+    tg = MagicMock()
+    tg.send_message = AsyncMock(side_effect=[BadRequest("Message is too long"),
+                                             MagicMock(message_id=1)])
+    env.run(transport._send_with_retry(tg, chat_id=CHAT, text="a" * 5000))
+    out.append(tg.send_message.await_args.args[1].lstrip("a"))
+    return out
+
+
+# ---- phase 3b: lifecycle and the leftover dashboard text --------------------------------------------
+
+@surface("lifecycle.recovered")
+def _lifecycle_recovered(env):
+    env.store(CHAT)
+    bot = env.mk_bot()
+    out = []
+    for live in ({"claude-x1"}, set()):
+        sess = _registered(bot, _sess())
+        sess.busy_msg_id = 11
+        tg = MagicMock()
+        tg.edit_message_text = AsyncMock()
+        env.run(bot._recover_busy_message(tg, "claude-x1", sess, live))
+        out.append(tg.edit_message_text.await_args.args[0])
+    return out
+
+
+@surface("dashboard.loading")
+def _dashboard_loading(env):
+    from aipager.state import Status
+    out = []
+    sess = _sess(status=Status.INTERACTIVE)
+    sess.pending_permission = {"tool_summary": "AskUserQuestion (loading…)"}
+    out += _pinned(env, [sess])
+    bot = _status_bot(env)
+    sess = _registered(bot, _sess(status=Status.INTERACTIVE))
+    sess.pending_permission = {"tool_summary": "AskUserQuestion (loading…)"}
+    text, _kb = bot._render_status_list(CHAT)
+    out.append(text)
+    return out
+
+
+@surface("dashboard.diff_footer")
+def _dashboard_diff_footer(env):
+    env.store(CHAT)
+    out = []
+    for lines in (28, 34):
+        bot = env.mk_bot()
+        sess = _registered(bot, _sess())
+        bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=3))
+        content = "\n".join(f"line {i}" for i in range(lines))
+        env.run(bot._send_diff_preview(sess, "Write", {"file_path": "/src/a.py",
+                                                       "content": content}))
+        out += _sent_texts(bot._app.bot.send_message)
+    return out
+
+
+@surface("resume.dashboard")
+def _resume_dashboard(env):
+    from aipager.state import Status
+    env.store(CHAT)
+    env.mp.setattr("aipager.bot.dashboard.queue_depth_parts", lambda sess: (2, 1))
+    out = []
+    bot = env.mk_bot()
+    bot._read_status_file = lambda name: {"model": "Opus 4.7", "ctx_pct": 45, "cost": 1.5,
+                                          "total_output": 12345}
+    sess = _registered(bot, _sess())
+    sess.busy_started_at = NOW - 250
+    sess.last_hook_at = NOW - 30
+    sess.last_lines_added, sess.last_lines_removed = 10, 5
+    sess.active_subagents = {"a": {"type": "Explore"}, "b": {"type": "Explore"},
+                             "c": {"type": "Plan"}}
+    sess.tool_history = [("Read: /src/app.py", True), ("Bash: npm run build", "failed"),
+                         ("Edit: /src/app.py", False)]
+    out.append(bot._build_session_dashboard(sess))
+    sess.active_subagents = {f"a{i}": {"type": f"t{i}"} for i in range(4)}
+    for ago, status in ((2, Status.IDLE), (300, Status.IDLE), (3900, Status.IDLE),
+                        (None, Status.IDLE), (None, Status.GONE)):
+        plain = env.mk_bot()
+        plain._read_status_file = lambda name: None
+        other = _registered(plain, _sess(status=status))
+        other.last_hook_at = NOW - ago if ago else 0.0
+        other.last_lines_added = 3
+        out.append(plain._build_session_dashboard(other))
+    return out
+
+
+def _gone(bot, name, label, *, gone_at, resumable=True, preview=""):
+    from aipager.state import Status
+    sess = _sess(name=name, label=label, status=Status.GONE)
+    sess.gone_at = gone_at
+    sess.claude_session_id = "abc" if resumable else None
+    sess.last_assistant_preview = preview
+    sess.transcript_path = None
+    return _registered(bot, sess)
+
+
+@surface("resume.picker")
+def _resume_picker(env):
+    env.store(CHAT)
+    out = []
+    bot = env.mk_bot()
+    text, kb = bot._render_resume_picker(0, CHAT)
+    out += [text, *_inline(kb)]
+    _gone(bot, "claude-h1", "h1", gone_at=WALL - 10, resumable=False)
+    _gone(bot, "claude-h2", "h2", gone_at=WALL - 20, resumable=False)
+    text, kb = bot._render_resume_picker(0, CHAT)
+    out += [text, *_inline(kb)]
+    _gone(bot, "claude-x4", "x4", gone_at=WALL - 30, preview="Fixed the tests.")
+    _gone(bot, "claude-x5", "x5", gone_at=WALL - 600)
+    _gone(bot, "claude-x6", "x6", gone_at=WALL - 7200)
+    _gone(bot, "claude-x7", "x7", gone_at=WALL - 200000)
+    _gone(bot, "claude-x8", "x8", gone_at=0.0)
+    text, kb = bot._render_resume_picker(0, CHAT)
+    out += [text, *_inline(kb)]
+    many = env.mk_bot()
+    for i in range(23):
+        _gone(many, f"claude-p{i}", f"p{i}", gone_at=WALL - 60 * (i + 1))
+    text, kb = many._render_resume_picker(1, CHAT)
+    out += [text, *_inline(kb)]
+    for seconds in (0, 1, 59, 61, 3600, 172800):
+        out.append(env.with_tr(bot._fmt_gone_ago, WALL - seconds))
+    out.append(env.with_tr(bot._fmt_gone_ago, None))
+    return out
+
+
 # ---- running them ---------------------------------------------------------------------------
 
 def render_all(mk_bot, run_async, monkeypatch, code: str = "en",
@@ -1063,6 +1891,12 @@ MIGRATED: set[str] = {
     "answer.headers", "answer.job_ends",
     "pinned", "pinned.target", "pinned.answer_taps",
     "status.list", "status.switch",
+    # Phase 3b.
+    "update.prompt", "update.check", "update.job", "update.steps", "update.marker",
+    "update.taps", "report.card", "report.taps", "report.offer", "report.outcomes",
+    "auth.refusals", "auth.auto_deny", "group.texts", "group.dropped",
+    "transport.texts", "lifecycle.recovered", "dashboard.loading", "dashboard.diff_footer",
+    "resume.dashboard", "resume.picker",
 }
 
 #: Words that are names, not text: session labels, models, tool rows'
@@ -1075,6 +1909,14 @@ KNOWN = (
     "Yes", "No", "Continue?", "Which database?", "Which one?", "Which?", "Pick some", "Free text?",
     "first", "evil", "ok", "the usual", "English", "Pseudo", "Pseudo RTL", "done",
     "The answer.", "Now the agent.", "example.invalid", "https", "ctx",
+    # Phase 3b: data from modules that are not text (install kinds and
+    # reasons, restart blockers and reasons, installer output, error types,
+    # roles, a report reference, Claude's preview).
+    "pipx", "editable install", "npm prefix not writable", "no service unit",
+    "running a turn", "waiting on a question", "held answer not yet delivered",
+    "claude not found", "downloading", "npm failed", "still resolving", "resolver error",
+    "ImportError", "KeyError", "disk full", "no systemd-run", "read_only", "developer",
+    "ap1-x", "zzz", "Sentry", "Fixed the tests.", "aipager start", "x9",
 )
 
 _MARKED = re.compile(r"⟦.*?⟧", re.S)

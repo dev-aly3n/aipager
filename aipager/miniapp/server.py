@@ -1056,6 +1056,8 @@ class MiniAppServer:
         if isinstance(result, web.Response):
             return result
         _scope_chat_id, user_id = result
+        from aipager import i18n
+        viewer = i18n.for_viewer(user_id, self._viewer_language_code(request))
         draft = await report_drafts.open_draft(self.bot, user_id)
         if draft is None:
             log.info("miniapp: report draft refused (503) - not built")
@@ -1066,7 +1068,7 @@ class MiniAppServer:
             # The exact text sent with no note: the page shows it, and
             # renders the same text with the note added as the last key.
             "preview": draft.preview.decode("utf-8"),
-            "areas": report_drafts.areas(draft.report),
+            "areas": report_drafts.areas(draft.report, tr=viewer),
             "note_max": sc.NOTE_MAX,
             "expires_in": report_drafts.DRAFT_TTL,
         })
@@ -1081,6 +1083,8 @@ class MiniAppServer:
         if isinstance(result, web.Response):
             return result
         _scope_chat_id, user_id = result
+        from aipager import i18n
+        viewer = i18n.for_viewer(user_id, self._viewer_language_code(request))
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001 - any unreadable body is a bad request
@@ -1102,7 +1106,7 @@ class MiniAppServer:
             return web.json_response({"error": "sending"}, status=409)
         if draft.state == "done" or draft.report is None:
             outcome, reference = draft.result or (report_drafts.FAILED, None)
-            reply = report_drafts.reply_for(outcome, reference)
+            reply = report_drafts.reply_for(outcome, reference, tr=viewer)
             return web.json_response({"outcome": reply.outcome, "reference": reply.reference,
                                       "line": reply.line, "retry": False, "repeat": True})
         status, expected, candidate = report_drafts.check_note(draft, note)
@@ -1113,8 +1117,10 @@ class MiniAppServer:
             log.info("miniapp: report send refused (422) - note refused")
             return web.json_response({"error": "note_refused"}, status=422)
         reply = await report_drafts.send_draft(self.bot, draft, candidate)
+        # The line in the viewer's language, from the outcome's id.
+        line = report_drafts.reply_for(reply.outcome, reply.reference, tr=viewer).line
         return web.json_response({"outcome": reply.outcome, "reference": reply.reference,
-                                  "line": reply.line, "retry": reply.retry, "repeat": False})
+                                  "line": line, "retry": reply.retry, "repeat": False})
 
     # ---- self-update -----------------------------------------------------
 
@@ -1190,9 +1196,12 @@ class MiniAppServer:
                 src["detail"] = None
                 ap["source"] = src
                 payload["aipager"] = ap
-            # `check` is what the page shows (the shared offer); the raw
-            # versions stay alongside it for diagnostics.
-            payload["check"] = check_payload(status, show_paths=private)
+            # `check` is what the page shows (the shared offer), in the
+            # viewer's own language; the raw versions stay alongside it for
+            # diagnostics.
+            from aipager import i18n
+            viewer = i18n.for_viewer(user_id, self._viewer_language_code(request))
+            payload["check"] = check_payload(status, show_paths=private, tr=viewer)
             payload["job"] = manager.snapshot()
             return web.json_response(payload)
         try:

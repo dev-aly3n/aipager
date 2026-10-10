@@ -34,9 +34,11 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest, Forbidden, RetryAfter
 
+from aipager import i18n
 from aipager.bot.flood import MUTE
 from aipager.bot.flood_budget import PRIORITY_ORNAMENT, rate_limit_args
 from aipager.bot.transport import MUTED, SKIPPED, send_text
+from aipager.i18n import Msg, Plural, Safe
 
 if TYPE_CHECKING:
     from aipager.bot.core import TelegramBot
@@ -48,29 +50,63 @@ OFFER_CHECK_INTERVAL = 60
 
 #: The innermost aipager file of an error, in plain words for the notice.
 #: Anything else is named by its file's stem.
+_DELIVERY = Msg("rep.area.notify", "message delivery", note="Where an internal error happened, in plain words")
 _AREAS = {
-    "aipager/bot/animation.py": "the busy card",
-    "aipager/bot/notify.py": "message delivery",
-    "aipager/bot/handlers.py": "message handling",
-    "aipager/bot/callbacks.py": "button taps",
-    "aipager/bot/dashboard.py": "the pinned bar",
-    "aipager/bot/session_ops.py": "session control",
-    "aipager/bot/flood_budget.py": "the send budget",
-    "aipager/bot/rich_message.py": "message delivery",
-    "aipager/session_monitor.py": "the session monitor",
-    "aipager/state.py": "session state",
-    "aipager/dtach/hook_receiver.py": "the hook receiver",
-    "aipager/dtach/notify_hook.py": "the hook",
-    "aipager/dtach/inject.py": "prompt delivery",
-    "aipager/miniapp/server.py": "the Mini App",
-    "aipager/cli/daemon.py": "the daemon",
+    "aipager/bot/animation.py": Msg("rep.area.animation", "the busy card", note="Where an internal error happened, in plain words"),
+    "aipager/bot/notify.py": _DELIVERY,
+    "aipager/bot/handlers.py": Msg("rep.area.handlers", "message handling", note="Where an internal error happened, in plain words"),
+    "aipager/bot/callbacks.py": Msg("rep.area.callbacks", "button taps", note="Where an internal error happened, in plain words"),
+    "aipager/bot/dashboard.py": Msg("rep.area.dashboard", "the pinned bar", note="Where an internal error happened, in plain words"),
+    "aipager/bot/session_ops.py": Msg("rep.area.session_ops", "session control",
+                                      note="Where an internal error happened, in plain words"),
+    "aipager/bot/flood_budget.py": Msg("rep.area.flood_budget", "the send budget",
+                                       note="Where an internal error happened, in plain words"),
+    "aipager/bot/rich_message.py": _DELIVERY,
+    "aipager/session_monitor.py": Msg("rep.area.session_monitor", "the session monitor",
+                                      note="Where an internal error happened, in plain words"),
+    "aipager/state.py": Msg("rep.area.state", "session state", note="Where an internal error happened, in plain words"),
+    "aipager/dtach/hook_receiver.py": Msg("rep.area.hook_receiver", "the hook receiver",
+                                          note="Where an internal error happened, in plain words"),
+    "aipager/dtach/notify_hook.py": Msg("rep.area.notify_hook", "the hook", note="Where an internal error happened, in plain words"),
+    "aipager/dtach/inject.py": Msg("rep.area.inject", "prompt delivery", note="Where an internal error happened, in plain words"),
+    "aipager/miniapp/server.py": Msg("rep.area.server", "the Mini App", note="Where an internal error happened, in plain words"),
+    "aipager/cli/daemon.py": Msg("rep.area.daemon", "the daemon", note="Where an internal error happened, in plain words"),
 }
 
-NOTICE_TAIL = ("A report helps get it fixed. It holds only versions and code "
-               "locations, never your chats, prompts, names or paths.")
-PREVIEW_BUTTON = "Preview report"
-NOT_NOW_BUTTON = "Not now"
-DONT_ASK_BUTTON = "Don't ask for this"
+NOTICE_TAIL = Msg("rep.offer.tail",
+                  "A report helps get it fixed. It holds only versions and code "
+                  "locations, never your chats, prompts, names or paths.",
+                  note="Ends the report offer. Keep the exact meaning: only versions and "
+                       "code locations, none of the listed things")
+PREVIEW_BUTTON = Msg("btn.rep.preview", "Preview report", note="Report offer button")
+NOT_NOW_BUTTON = Msg("btn.rep.not_now", "Not now", note="Report offer button")
+DONT_ASK_BUTTON = Msg("btn.rep.dont_ask", "Don't ask for this",
+                      note="Report offer button: never offer for these errors again")
+
+# What went wrong, one whole sentence per trigger: "once" is its own
+# sentence; a count of 2 or more goes through the Plural.
+_STOPPED_ONCE = Msg("rep.offer.stopped_once", "aipager stopped unexpectedly once.",
+                    note="Report offer: aipager crashed one time")
+_STOPPED = Plural("rep.offer.stopped", one="aipager stopped unexpectedly {n} time.",
+                  other="aipager stopped unexpectedly {n} times.",
+                  note="Report offer: aipager crashed {n} times (2 or more)")
+_MEMCAP_ONCE = Msg("rep.offer.memcap_once", "The aipager hook hit its memory cap once.",
+                   note="Report offer")
+_MEMCAP = Plural("rep.offer.memcap", one="The aipager hook hit its memory cap {n} time.",
+                 other="The aipager hook hit its memory cap {n} times.",
+                 note="Report offer ({n} is 2 or more)")
+_INTERNAL_ONCE = Msg("rep.offer.internal_once",
+                     "aipager hit an internal error once ({error} in {area}).",
+                     note="Report offer; {error} is the error's type (KeyError), {area} "
+                          "where (rep.area.*)",
+                     eg={"error": "KeyError", "area": "message delivery"})
+_INTERNAL = Plural("rep.offer.internal",
+                   one="aipager hit an internal error {n} time ({error} in {area}).",
+                   other="aipager hit an internal error {n} times ({error} in {area}).",
+                   note="Report offer ({n} is 2 or more)",
+                   eg={"error": "KeyError", "area": "message delivery"})
+_ALSO = Plural("rep.offer.also_other", one="Also {n} other error.",
+               other="Also {n} other errors.", note="Report offer: more errors offered")
 
 #: Errors that mean Telegram refused the notice: it was never shown. (The
 #: outbound gate's skip and mute come back from ``send_text`` as SKIPPED
@@ -152,49 +188,75 @@ def _developer_install() -> bool:
 
 # ---- the notice ----------------------------------------------------------------
 
-def area(entry: dict) -> str:
+def area(entry: dict, tr=None) -> str:
     """The readable place of one error entry: its innermost aipager file in
-    plain words (:data:`_AREAS`), else that file's stem, else "aipager".
-    Shared by the offer notice and the Mini App's report page."""
+    plain words (:data:`_AREAS`, in *tr*'s language, English when None),
+    else that file's stem, else "aipager". Shared by the offer notice and
+    the Mini App's report page."""
+    file = _innermost_file(entry)
+    if file is None:
+        return "aipager"
+    words = _AREAS.get(file)
+    if words is not None:
+        return (tr or i18n.get("en")).text(words)
+    return PurePosixPath(file).stem or "aipager"
+
+
+def _innermost_file(entry: dict) -> str | None:
     frames = entry.get("frames") or []
     file = frames[0].get("file") if frames and isinstance(frames[0], dict) else None
-    if not isinstance(file, str) or not file:
-        return "aipager"
-    return _AREAS.get(file, PurePosixPath(file).stem or "aipager")
+    return file if isinstance(file, str) and file else None
 
 
-def _times(n) -> str:
-    n = n if type(n) is int and n > 0 else 1
-    return "once" if n == 1 else f"{n} times"
+#: The right-to-left mark a translated text starts with (escaped: no raw
+#: direction control in source).
+_RLM = "\u200f"
 
 
-def notice_text(entries: list[dict]) -> str:
+def _area_in_sentence(entry: dict, tr) -> str:
+    """:func:`area` for use inside the notice's sentence: a keyed area is
+    the translation itself (``Safe``: not isolated like a name, and
+    without its line-start mark, which mid-sentence is noise); a file
+    stem stays a plain value, isolated like any name."""
+    file = _innermost_file(entry)
+    words = _AREAS.get(file) if file is not None else None
+    if words is None:
+        return area(entry, tr)
+    return Safe(tr.text(words).removeprefix(_RLM))
+
+
+def notice_text(entries: list[dict], tr=None) -> str:
     """The offer's text, from typed record fields only: the first
     offered error in a sentence, how many others, then what a report
-    holds."""
+    holds. In *tr*'s language (English when None)."""
+    tr = tr or i18n.get("en")
     first = entries[0]
-    count = _times(first.get("count"))
+    n = first.get("count")
+    n = n if type(n) is int and n > 0 else 1
     trigger = first.get("trigger")
     if trigger == "crash":
-        head = f"aipager stopped unexpectedly {count}."
+        head = tr.text(_STOPPED_ONCE) if n == 1 else tr.n(_STOPPED, n, kind="text")
     elif trigger == "hook_cap":
-        head = f"The aipager hook hit its memory cap {count}."
+        head = tr.text(_MEMCAP_ONCE) if n == 1 else tr.n(_MEMCAP, n, kind="text")
     else:
         kind = str(first.get("type") or "error").rpartition(".")[2] or "error"
-        head = f"aipager hit an internal error {count} ({kind} in {area(first)})."
+        where = _area_in_sentence(first, tr)
+        head = (tr.text(_INTERNAL_ONCE, error=kind, area=where) if n == 1
+                else tr.n(_INTERNAL, n, kind="text", error=kind, area=where))
+    sentences = [head]
     others = len(entries) - 1
-    if others == 1:
-        head += " Also 1 other error."
-    elif others > 1:
-        head += f" Also {others} other errors."
-    return f"{head} {NOTICE_TAIL}"
+    if others > 0:
+        sentences.append(tr.n(_ALSO, others, kind="text"))
+    sentences.append(tr.text(NOTICE_TAIL))
+    return " ".join(sentences)
 
 
-def notice_keyboard(offer_ts: int) -> InlineKeyboardMarkup:
+def notice_keyboard(offer_ts: int, tr=None) -> InlineKeyboardMarkup:
+    tr = tr or i18n.get("en")
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(PREVIEW_BUTTON, callback_data=f"_:rp:op:{offer_ts}")],
-        [InlineKeyboardButton(NOT_NOW_BUTTON, callback_data=f"_:rp:on:{offer_ts}"),
-         InlineKeyboardButton(DONT_ASK_BUTTON, callback_data=f"_:rp:od:{offer_ts}")],
+        [InlineKeyboardButton(tr.text(PREVIEW_BUTTON), callback_data=f"_:rp:op:{offer_ts}")],
+        [InlineKeyboardButton(tr.text(NOT_NOW_BUTTON), callback_data=f"_:rp:on:{offer_ts}"),
+         InlineKeyboardButton(tr.text(DONT_ASK_BUTTON), callback_data=f"_:rp:od:{offer_ts}")],
     ])
 
 
@@ -250,10 +312,12 @@ async def maybe_offer(bot: "TelegramBot", *, now: float | None = None,
     # Recorded BEFORE the notice goes out (the 1c contract): a crash in
     # between must not offer the same bugs again inside the gap.
     store.save_policy(offered)
+    # The owner's private chat, in its language.
+    tr = i18n.for_chat(owner)
     try:
         sent = await send_text(
-            bot._app.bot, owner, notice_text(offered_entries),
-            reply_markup=notice_keyboard(offered.last_offer_ts),
+            bot._app.bot, owner, notice_text(offered_entries, tr),
+            reply_markup=notice_keyboard(offered.last_offer_ts, tr),
             disable_notification=True,
             rate_limit_args=rate_limit_args(kind="skip", priority=PRIORITY_ORNAMENT))
     except _NOT_DELIVERED as e:

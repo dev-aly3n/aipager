@@ -31,7 +31,7 @@ from telegram.error import (
 from aipager import i18n
 from aipager.bot import kbwords
 from aipager.bot.mode_labels import mode_label
-from aipager.i18n import Msg, Plural, Safe
+from aipager.i18n import Msg, Plural, Safe, Span
 from aipager.clockfmt import elapsed as clock
 from aipager.config import (
     # Only the pinned bar reads CHAT_ID (`_pinned_chats`, `_pinned_chat_of`):
@@ -211,16 +211,130 @@ PIN_NEEDS_INPUT = Msg("pin.needs_input", "Needs input",
 
 
 def _stored_summary_text(tr, summary: str) -> str:
-    """*summary* as shown in *tr*'s language: the two English summaries
-    aipager stores for a prompt with no details ("Permission needed",
-    "Needs input") are drawn from their keys at render time (display
-    only; the stored value stays English). Anything else, and English,
-    as it is."""
+    """*summary* as shown in *tr*'s language: the English summaries aipager
+    stores for a prompt with no details ("Permission needed", "Needs
+    input", "AskUserQuestion (loading…)") are drawn from their keys at
+    render time (display only; the stored value stays English). Anything
+    else, and English, as it is."""
     if tr is None or tr.code == "en":
         return summary
-    from aipager.bot.keyboards import PERM_NEEDED
+    from aipager.bot.keyboards import LOADING, PERM_NEEDED
     msg = {str(m): m for m in (PERM_NEEDED, PIN_NEEDS_INPUT)}.get(summary)
-    return tr.text(msg) if msg is not None else summary
+    if msg is not None:
+        return tr.text(msg)
+    if summary == LOADING.replace("{tool}", _LOADING_TOOL):
+        return tr.text(LOADING, tool=_LOADING_TOOL)
+    return summary
+
+
+#: The resume card's status icons (the English table draws the same).
+_DASH_ICONS = {
+    Status.IDLE: "🟢",
+    Status.BUSY: "⚙️",
+    Status.INTERACTIVE: "❓",
+    Status.GONE: "🔴",
+    Status.UNKNOWN: "🔴",
+}
+
+#: The one tool notify stores a "(loading…)" summary for.
+_LOADING_TOOL = "AskUserQuestion"
+
+DIFF_MORE = Plural("diff.more_lines", one="<i>…and {n} more line</i>",
+                   other="<i>…and {n} more lines</i>",
+                   note="Under a file diff preview: how many lines were left out")
+
+# ---- /resume: the picker and the session dashboard it opens ----------------
+
+AGO_EARLIER = Msg("ago.earlier", "earlier", note="/resume: when a session ended, if unknown")
+AGO_SECONDS = Plural("ago.seconds", one="{n}s ago", other="{n}s ago",
+                     note="How long ago, short; s is seconds")
+AGO_MINUTES = Plural("ago.minutes", one="{n}m ago", other="{n}m ago",
+                     note="How long ago, short; m is minutes")
+AGO_HOURS = Plural("ago.hours", one="{n}h ago", other="{n}h ago",
+                   note="How long ago, short; h is hours")
+AGO_DAYS = Plural("ago.days", one="{n}d ago", other="{n}d ago",
+                  note="How long ago, short; d is days")
+AGO_HOURS_MINUTES = Msg("ago.hours_minutes", "{h}h{m}m ago",
+                        note="How long ago in hours and minutes, short", eg={"h": 1, "m": 5})
+RESUME_NONE = Msg("resume.none", "📭 No previous sessions to resume.",
+                  note="/resume with nothing to bring back")
+RESUME_NO_TRANSCRIPT = Plural("resume.no_transcript",
+                              one="<i>{n} with no saved transcript to resume from.</i>",
+                              other="<i>{n} with no saved transcript to resume from.</i>",
+                              note="/resume: ended sessions that cannot come back")
+RESUME_MORE_NO_TRANSCRIPT = Plural(
+    "resume.more_no_transcript",
+    one="<i>{n} more with no saved transcript to resume from.</i>",
+    other="<i>{n} more with no saved transcript to resume from.</i>",
+    note="/resume: more ended sessions, not listed, that cannot come back")
+RESUME_BUTTON = Msg("btn.resume.session", "{session} ({ago})",
+                    note="/resume button: a session and when it ended",
+                    eg={"session": "x1", "ago": "2h ago"})
+RESUME_PREV = Msg("btn.resume.prev", "« Prev", note="/resume: previous page")
+RESUME_PAGE = Msg("btn.resume.page", "Page {pages}", note="/resume: page 2 of 3",
+                  eg={"pages": "2/3"})
+RESUME_NEXT = Msg("btn.resume.next", "Next »", note="/resume: next page")
+RESUME_TITLE = Plural("resume.title", one="📚 <b>Previous sessions</b> ({n} total)",
+                      other="📚 <b>Previous sessions</b> ({n} total)",
+                      note="/resume: the list's title")
+RESUME_ROW = Msg("resume.row", "🔘 <b>{session}</b> (<i>{when}</i>)",
+                 note="/resume: one ended session and when", eg={"session": "x1",
+                                                                  "when": "2h ago"})
+RESUME_NO_PREVIEW = Msg("resume.no_preview", "<i>(no preview)</i>",
+                        note="/resume: nothing to show from the session's last answer")
+RESUME_TAP = Msg("resume.tap", "Tap a button below to resume.", note="/resume")
+DASH_STATES = {
+    "idle": Msg("resume.state.idle", "idle", note="Session state on the resume card"),
+    "busy": Msg("resume.state.busy", "busy", note="Session state on the resume card"),
+    "interactive": Msg("resume.state.interactive", "interactive",
+                       note="Session state on the resume card: it waits for your answer"),
+    "gone": Msg("resume.state.gone", "gone",
+                note="Session state on the resume card: the session has ended"),
+    "unknown": Msg("resume.state.unknown", "unknown", note="Session state on the resume card"),
+}
+DASH_HEADER = Msg("resume.header", "{icon} <b>[{session}]</b> · {state}",
+                  note="The resumed session's card: its name and state",
+                  eg={"icon": "⚙️", "session": "x1", "state": "busy"})
+DASH_HEADER_CLOCK = Msg("resume.header_clock", "{icon} <b>[{session}]</b> · {state} {clock}",
+                        note="As resume.header, with how long the turn runs",
+                        eg={"icon": "⚙️", "session": "x1", "state": "busy", "clock": "4:10"})
+DASH_MODEL = Msg("resume.row.model", "Model: {model}", note="Resume card row",
+                 eg={"model": "Opus 4.7"})
+DASH_CTX = Msg("resume.row.ctx", "Context: {percent} {bar}",
+               note="Resume card row: how full the context window is",
+               eg={"percent": "45%", "bar": "████░░░░░░"})
+DASH_COST = Msg("resume.row.cost", "Cost: {cost}", note="Resume card row", eg={"cost": "$1.50"})
+DASH_OUTPUT = Msg("resume.row.output", "Output tokens: {tokens}",
+                  note="Resume card row: tokens Claude wrote", eg={"tokens": "12.3k"})
+DASH_LINES = Msg("resume.row.lines", "Lines: {changes}",
+                 note="Resume card row: lines added and removed", eg={"changes": "+10 -5"})
+DASH_AGENTS = Plural("resume.row.agents", one="Agents: {n} ({types})",
+                     other="Agents: {n} ({types})",
+                     note="Resume card row: background agents running and their types",
+                     eg={"types": "Explore ×2, Plan"})
+DASH_AGENTS_COUNT = Plural("resume.row.agents_count", one="Agents: {n}", other="Agents: {n}",
+                           note="Resume card row: background agents running")
+DASH_QUEUE = Msg("resume.row.queue", "Queue: {pending} pending ({queued} queued, {notes} notes)",
+                 note="Resume card row: messages waiting, split into held messages and "
+                      "notes", eg={"pending": 3, "queued": 2, "notes": 1})
+DASH_ACTIVE = Msg("resume.row.active", "Active: {ago}", note="Resume card row: last activity",
+                  eg={"ago": "30s ago"})
+DASH_ACTIVE_NOW = Msg("resume.row.active_now", "Active: just now", note="Resume card row")
+DASH_ACTIVE_UNKNOWN = Msg("resume.row.active_unknown", "Active: unknown",
+                          note="Resume card row: no activity seen")
+DASH_RECENT = Msg("resume.recent", "Recent:",
+                  note="Resume card: the last tool calls follow, as they are")
+
+
+def _ago_text(tr, seconds: int) -> str:
+    """"30s ago", "5m ago", "2h ago", "3d ago" in *tr*'s language."""
+    if seconds < 60:
+        return tr.n(AGO_SECONDS, seconds, kind="text")
+    if seconds < 3600:
+        return tr.n(AGO_MINUTES, seconds // 60, kind="text")
+    if seconds < 86400:
+        return tr.n(AGO_HOURS, seconds // 3600, kind="text")
+    return tr.n(AGO_DAYS, seconds // 86400, kind="text")
 
 
 def _close_isolates(text: str) -> str:
@@ -430,8 +544,7 @@ class DashboardMixin:
                 # send to avoid an empty preview message.
                 return
             body, dropped = _truncate_diff(diff.splitlines())
-            footer = (f"\n<i>…and {dropped} more line{'s' if dropped != 1 else ''}</i>"
-                      if dropped else "")
+            footer = ("\n" + i18n.for_sess(sess).n(DIFF_MORE, dropped)) if dropped else ""
             # ``<code class="language-diff">`` triggers Telegram's
             # syntax highlighting: `+` lines render green, `-` lines red,
             # `@@` hunks in cyan. Supported on desktop and recent mobile
@@ -1197,8 +1310,14 @@ class DashboardMixin:
             rows += self._app_button_row(update)
         return "\n".join(lines), InlineKeyboardMarkup(rows)
 
-    def _build_session_dashboard(self, sess: TrackedSession) -> str:
-        """Build a rich HTML dashboard for a session (shown on resume)."""
+    def _build_session_dashboard(self, sess: TrackedSession, tr=None) -> str:
+        """Build a rich HTML dashboard for a session (shown on resume), in
+        *tr*'s language (the session chat's when None). English keeps its
+        aligned table in one code block; another language draws labelled
+        rows outside it, names and code inside (ruling 5)."""
+        tr = tr or i18n.for_sess(sess)
+        if tr.code != "en":
+            return self._session_dashboard_rows(sess, tr)
         # Status icon
         status_icons = {
             Status.IDLE: "\U0001f7e2",       # green circle
@@ -1325,6 +1444,87 @@ class DashboardMixin:
 
         return "\n\n".join(parts_out)
 
+    def _session_dashboard_rows(self, sess: TrackedSession, tr) -> str:
+        """:meth:`_build_session_dashboard` in a language other than
+        English: the same facts, one translated row each, with nothing
+        invisible inside a code element."""
+        icon = _DASH_ICONS.get(sess.status, "\U0001f534")
+        state = Safe(tr.html(DASH_STATES.get(sess.status.name.lower(),
+                                             DASH_STATES["unknown"])))
+        names = {"icon": Safe(icon), "session": sess.label, "state": state}
+        secs = 0
+        if sess.status == Status.BUSY and sess.busy_started_at:
+            secs = int(time.monotonic() - sess.busy_started_at)
+        header = (tr.html(DASH_HEADER_CLOCK, **names, clock=Safe(tr.clock(secs)))
+                  if secs >= 2 else tr.html(DASH_HEADER, **names))
+        sl = self._read_status_file(sess.name)
+        rows: list[str] = []
+        model = (sl.get("model") if sl else None) or sess.model_name
+        if model:
+            rows.append(tr.html(DASH_MODEL, model=Span(
+                f"<code>{html_mod.escape(model)}</code>")))
+        ctx_pct = sl["ctx_pct"] if sl else (sess.last_token_pct or 0)
+        if ctx_pct:
+            filled = round(ctx_pct / 10)
+            bar = "\u2588" * filled + "\u2591" * (10 - filled)
+            rows.append(tr.html(DASH_CTX, percent=Safe(tr.num(f"{ctx_pct}%")), bar=Span(bar)))
+        cost = sl["cost"] if sl else 0
+        if cost and cost >= 0.01:
+            rows.append(tr.html(DASH_COST, cost=Safe(tr.num(f"${cost:.2f}"))))
+        output_tokens = (sl.get("total_output") if sl else 0) or sess.last_output_tokens
+        if output_tokens:
+            rows.append(tr.html(DASH_OUTPUT, tokens=Safe(tr.num(
+                self._fmt_tokens(output_tokens)))))
+        if sess.last_lines_added or sess.last_lines_removed:
+            parts = []
+            if sess.last_lines_added:
+                parts.append(tr.num(f"+{sess.last_lines_added}"))
+            if sess.last_lines_removed:
+                parts.append(tr.num(f"-{sess.last_lines_removed}"))
+            # One isolated run, so the signs stay with their numbers in RTL.
+            rows.append(tr.html(DASH_LINES, changes=Span(" ".join(parts))))
+        if sess.active_subagents:
+            types: dict[str, int] = {}
+            for info in sess.active_subagents.values():
+                t = str(info.get("type") or "unknown")
+                types[t] = types.get(t, 0) + 1
+            count = len(sess.active_subagents)
+            if len(types) <= 3:
+                breakdown = ", ".join(
+                    f"{html_mod.escape(t)} ×{n}" if n > 1 else html_mod.escape(t)
+                    for t, n in sorted(types.items()))
+                rows.append(tr.n(DASH_AGENTS, count, types=Span(
+                    f"<code>{breakdown}</code>")))
+            else:
+                rows.append(tr.n(DASH_AGENTS_COUNT, count))
+        queued, notes = queue_depth_parts(sess)
+        depth = queued + notes
+        if depth:
+            rows.append(tr.html(DASH_QUEUE, pending=depth, queued=queued, notes=notes))
+        if sess.last_hook_at > 0:
+            ago_s = int(time.monotonic() - sess.last_hook_at)
+            if ago_s < 5:
+                rows.append(tr.html(DASH_ACTIVE_NOW))
+            else:
+                ago = (_ago_text(tr, ago_s) if ago_s < 3600 else tr.text(
+                    AGO_HOURS_MINUTES, h=ago_s // 3600, m=(ago_s % 3600) // 60))
+                rows.append(tr.html(DASH_ACTIVE, ago=Safe(html_mod.escape(ago))))
+        elif sess.status != Status.UNKNOWN:
+            rows.append(tr.html(DASH_ACTIVE_UNKNOWN))
+        parts_out = [header]
+        if rows:
+            parts_out.append("\n".join(rows))
+        tool_hist = sess.tool_history[-5:] if sess.tool_history else []
+        if tool_hist:
+            tool_lines = []
+            for summary, done in tool_hist:
+                t_icon = ("\u274c" if done == "failed" else "\u2705" if done
+                          else "\u23f3")
+                tool_lines.append(f"  {t_icon} {html_mod.escape(summary[:60])}")
+            parts_out.append(tr.html(DASH_RECENT) + "\n<code>"
+                             + "\n".join(tool_lines) + "</code>")
+        return "\n\n".join(parts_out)
+
     # ---- /resume — bring back a previously-gone session by name ----------
 
     _RESUME_PAGE_SIZE = 10
@@ -1345,26 +1545,30 @@ class DashboardMixin:
         return gone
 
     @staticmethod
-    def _fmt_gone_ago(gone_at: float | None) -> str:
-        """Short relative timestamp for picker rows ('2h ago', 'just now')."""
+    def _fmt_gone_ago(gone_at: float | None, tr=None) -> str:
+        """Short relative timestamp for picker rows ('2h ago', 'earlier'),
+        in *tr*'s language (English when None)."""
+        tr = tr or i18n.get("en")
         if not gone_at:
-            return "earlier"
-        delta = max(0, int(time.time() - gone_at))
-        if delta < 60:
-            return f"{delta}s ago"
-        if delta < 3600:
-            return f"{delta // 60}m ago"
-        if delta < 86400:
-            return f"{delta // 3600}h ago"
-        return f"{delta // 86400}d ago"
+            return tr.text(AGO_EARLIER)
+        return _ago_text(tr, max(0, int(time.time() - gone_at)))
 
     def _render_resume_picker(
-        self, page: int = 0, scope_chat_id: int | None = None,
+        self, page: int = 0, scope_chat_id: int | None = None, *, tr=None,
     ) -> tuple[str, InlineKeyboardMarkup | None]:
         """Render the paginated /resume picker. Returns (text, keyboard or None).
 
-        ``scope_chat_id`` scopes the listing to the calling chat.
+        ``scope_chat_id`` scopes the listing to the calling chat. In *tr*'s
+        language; when None, that chat's, or with no scope the one chat
+        `_pinned_chats` names when it names exactly one, else the default
+        language. Never reads CHAT_ID itself (the chat-routing guard).
         """
+        if tr is None:
+            chat = scope_chat_id
+            if chat is None:
+                pinned = self._pinned_chats()
+                chat = pinned[0] if len(pinned) == 1 else None
+            tr = i18n.for_chat(chat)
         all_gone = self._gone_sessions_sorted(scope_chat_id)
         # A session with no `claude_session_id` has nothing to resume FROM —
         # `_do_resume_core` refuses it with `no_transcript` — so listing it
@@ -1374,10 +1578,9 @@ class DashboardMixin:
         gone = [s for s in all_gone if s.claude_session_id]
         hidden = len(all_gone) - len(gone)
         if not gone:
-            text = "📭 No previous sessions to resume."
+            text = tr.html(RESUME_NONE)
             if hidden:
-                text += (f"\n\n<i>{hidden} with no saved transcript to "
-                         "resume from.</i>")
+                text += "\n\n" + tr.n(RESUME_NO_TRANSCRIPT, hidden)
             return text, None
 
         page_size = self._RESUME_PAGE_SIZE
@@ -1388,7 +1591,8 @@ class DashboardMixin:
 
         rows: list[list[InlineKeyboardButton]] = []
         for s in chunk:
-            label = f"{s.label} ({self._fmt_gone_ago(s.gone_at)})"
+            label = tr.text(RESUME_BUTTON, session=s.label,
+                            ago=Safe(self._fmt_gone_ago(s.gone_at, tr)))
             rows.append([InlineKeyboardButton(
                 label, callback_data=session_parity.session_cb(
                     self, scope_chat_id or 0, s, "resume"),
@@ -1399,15 +1603,15 @@ class DashboardMixin:
             nav: list[InlineKeyboardButton] = []
             if page > 0:
                 nav.append(InlineKeyboardButton(
-                    "« Prev", callback_data=f"_:resume_page:{page - 1}",
+                    tr.text(RESUME_PREV), callback_data=f"_:resume_page:{page - 1}",
                 ))
             nav.append(InlineKeyboardButton(
-                f"Page {page + 1}/{total_pages}",
+                tr.text(RESUME_PAGE, pages=Safe(tr.num(f"{page + 1}/{total_pages}"))),
                 callback_data="_:resume_noop",
             ))
             if page < total_pages - 1:
                 nav.append(InlineKeyboardButton(
-                    "Next »", callback_data=f"_:resume_page:{page + 1}",
+                    tr.text(RESUME_NEXT), callback_data=f"_:resume_page:{page + 1}",
                 ))
             rows.append(nav)
 
@@ -1417,32 +1621,24 @@ class DashboardMixin:
         # transcript on disk for sessions whose SessionEnd hook
         # was dropped. Per-row snippet capped at ~140 chars so the
         # 10-entry page stays well under Telegram's 4096-char limit.
-        lines = [f"📚 <b>Previous sessions</b> ({len(gone)} total)"]
+        lines = [tr.n(RESUME_TITLE, len(gone))]
         for s in chunk:
-            when = self._fmt_gone_ago(s.gone_at)
+            when = self._fmt_gone_ago(s.gone_at, tr)
             snippet = (s.last_assistant_preview or _read_preview(
                 s.transcript_path, max_chars=140,
             )).strip()
+            row = tr.html(RESUME_ROW, session=s.label, when=Safe(html_mod.escape(when)))
             if snippet:
-                lines.append(
-                    f"🔘 <b>{html_mod.escape(s.label)}</b> ("
-                    f"<i>{html_mod.escape(when)}</i>)\n"
-                    f"<blockquote>{html_mod.escape(snippet)}</blockquote>"
-                )
+                # Claude's own words, as they are.
+                lines.append(f"{row}\n<blockquote>{html_mod.escape(snippet)}</blockquote>")
             else:
-                lines.append(
-                    f"🔘 <b>{html_mod.escape(s.label)}</b> ("
-                    f"<i>{html_mod.escape(when)}</i>)\n"
-                    f"<i>(no preview)</i>"
-                )
-        lines.append("Tap a button below to resume.")
+                lines.append(f"{row}\n{tr.html(RESUME_NO_PREVIEW)}")
+        lines.append(tr.html(RESUME_TAP))
         if hidden:
             # The empty-list branch above says this too. It has to be said
             # HERE as well — the common case is a mix of resumable and
             # not, and dropping a session from the list without a word is
             # its own small mystery.
-            lines.append(
-                f"<i>{hidden} more with no saved transcript to "
-                "resume from.</i>")
+            lines.append(tr.n(RESUME_MORE_NO_TRANSCRIPT, hidden))
         text = "\n\n".join(lines)
         return text, InlineKeyboardMarkup(rows)

@@ -5,10 +5,11 @@ Every elapsed surface (the busy card, agent and shell rows, Finished,
 for the shape a hand-rolled formatter always has: an f-string that puts a
 ``// 60`` (or ``% 60``, ``// 3600``...) value right before a unit letter,
 ``f"{secs // 60}m {secs % 60}s"``. Relative ages ("5m ago"), countdowns
-("2h 5m left"), prose ("in the last 10 minutes") and the /update heartbeat
-("(2 min 15s)") are not elapsed clocks: an f-string that says "ago",
-"left" or "minutes" is skipped, and the helpers that build an age or the
-heartbeat without saying so are listed.
+("2h 5m left") and prose ("in the last 10 minutes") are not elapsed
+clocks: an f-string that says "ago", "left" or "minutes" is skipped, and
+the helpers that build an age without saying so are listed. The /update
+heartbeat ("(2 min 15s)") is built from translation keys, not an
+f-string, so the scan never meets it.
 """
 
 from __future__ import annotations
@@ -22,7 +23,8 @@ PACKAGE = Path(__file__).resolve().parent.parent / "aipager"
 #: heartbeat, whose "ago" is added by their caller. Not elapsed clocks.
 ALLOWED = {
     ("aipager/miniapp/sessions.py", "_short_duration"),  # "Last active 2m ago"
-    ("aipager/bot/update_flow.py", "_elapsed_label"),   # "(2 min 15s)", by ruling
+    # update_flow._elapsed_label ("(2 min 15s)", by ruling) builds its units
+    # through keys since multilingual phase 3b: no f-string left to allow.
 }
 _NOT_A_CLOCK = (" ago", " left", "minutes")
 

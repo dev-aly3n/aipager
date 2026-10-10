@@ -28,8 +28,9 @@ from typing import TYPE_CHECKING
 from telegram.constants import ChatType, MessageEntityType
 from telegram.ext import ApplicationHandlerStop
 
+from aipager import i18n
 from aipager.bot import kbwords
-from aipager.i18n import Command, Msg
+from aipager.i18n import Command, Msg, Safe
 
 if TYPE_CHECKING:
     from telegram import Message, Update
@@ -212,25 +213,46 @@ def talk_hint(bot: TelegramBot, chat_id, label: str, *, dm: str, tr=None,
         if me:
             return tr.html(TALK_GROUP, session=session, bot=Command(f"@{me}"))
         return tr.html(TALK_GROUP_UNNAMED, session=session)
-    return f"Reply to a message from {label} (or mention {_mention(bot)}) to talk to it."
-
-
-def group_help_talk_line(bot: TelegramBot) -> str:
-    """/help's Talk line in a group (HTML)."""
-    return (f"<b>Talk:</b> reply to a session's message, or mention {_mention(bot)}"
-            " · /&lt;label&gt; message")
-
-
-def _mention(bot: TelegramBot) -> str:
+    # English, with *label* used as given (callers that pass no tr hand it
+    # in already escaped): the same keys, the values inserted as they are.
+    en = i18n.get("en")
     me = own_username(bot)
-    return f"@{html_mod.escape(me)}" if me else "the bot"
+    if me:
+        return en.html(TALK_GROUP, session=Safe(label),
+                       bot=Safe("@" + html_mod.escape(me)))
+    return en.html(TALK_GROUP_UNNAMED, session=Safe(label))
+
+
+HELP_TALK = Msg("grp.help_talk",
+                "<b>Talk:</b> reply to a session's message, or mention {mention} · "
+                "/&lt;label&gt; message",
+                note="/help in a group: how to talk to a session; {mention} is the bot's "
+                     "@username; '/<label> message' means a session's name as a command, "
+                     "then the message",
+                eg={"mention": "@aipager_bot"})
+HELP_TALK_UNNAMED = Msg("grp.help_talk_no_username",
+                        "<b>Talk:</b> reply to a session's message, or mention the bot · "
+                        "/&lt;label&gt; message",
+                        note="As grp.help_talk when the bot's username is unknown")
+
+
+def group_help_talk_line(bot: TelegramBot, *, tr=None) -> str:
+    """/help's Talk line in a group (HTML), in *tr*'s language (English
+    when None)."""
+    tr = tr or i18n.get("en")
+    me = own_username(bot)
+    if me:
+        return tr.html(HELP_TALK, mention=Command(f"@{me}"))
+    return tr.html(HELP_TALK_UNNAMED)
 
 
 # ---- anonymous senders (roadmap 8.91e) -------------------------------------
 
 #: The one reply a message from an anonymous admin, a channel, or a linked
 #: channel's forward gets, once per chat per daemon run.
-POST_AS_YOURSELF_TEXT = "Post as yourself to use the bot."
+POST_AS_YOURSELF_TEXT = Msg("grp.post_as_yourself", "Post as yourself to use the bot.",
+                            note="To an anonymous group admin or a post as a channel: "
+                                 "aipager needs to know who writes")
 
 
 def is_anonymous_sender(msg) -> bool:
@@ -283,7 +305,8 @@ async def _answer_anonymous_sender(bot: TelegramBot, msg) -> None:
     log.info("group intake: an anonymous or channel message in chat %s; "
              "asked to post as yourself (once per chat)", chat_id)
     from aipager.bot.transport import reply_text
-    await reply_text(msg, POST_AS_YOURSELF_TEXT)
+    # No person to ask: the chat's language.
+    await reply_text(msg, i18n.for_chat(chat_id).text(POST_AS_YOURSELF_TEXT))
 
 
 # ---- the gate --------------------------------------------------------------

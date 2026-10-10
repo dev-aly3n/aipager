@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import html as html_mod
 import logging
 import os
 import re
@@ -98,6 +97,14 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+# The edit an orphaned busy card gets when the daemon starts again.
+_DAEMON_RESTARTED = Msg("life.daemon_restarted", "🔄 <b>{session}</b> · Daemon restarted",
+                        note="A busy card left by the old daemon; the session still runs",
+                        eg={"session": "x1"})
+_SESSION_ENDED = Msg("life.session_ended", "🔴 <b>{session}</b> · Session ended",
+                     note="A busy card left by the old daemon; the session is gone",
+                     eg={"session": "x1"})
 
 
 def _warn_held_answers_lost() -> None:
@@ -712,9 +719,9 @@ class LifecycleMixin:
         orphaned_id = sess.busy_msg_id
         sess.busy_msg_id = None  # clear before any await
         is_alive = name in live_names
-        label = html_mod.escape(sess.label)
-        text = (f"🔄 <b>{label}</b> · Daemon restarted" if is_alive
-                else f"🔴 <b>{label}</b> · Session ended")
+        from aipager import i18n
+        tr = i18n.for_sess(sess)
+        text = tr.html(_DAEMON_RESTARTED if is_alive else _SESSION_ENDED, session=sess.label)
         try:
             await bot.edit_message_text(
                 # The session's own chat: a group-scoped session's card

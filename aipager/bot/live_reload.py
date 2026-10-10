@@ -20,6 +20,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from aipager import i18n
+from aipager.i18n import Command, Msg, Plural
 from aipager.state import (
     TURN_SENDER_MIXED, TURN_SENDER_TERMINAL, Status, TrackedSession,
 )
@@ -30,11 +32,29 @@ if TYPE_CHECKING:  # pragma: no cover
 
 log = logging.getLogger(__name__)
 
-#: The reply under a held message a reload dropped. Plain words, no
-#: dashes (UI text rule).
-DROPPED_REPLY = "Dropped: {who} is no longer allowed to send here."
-DROPPED_REPLY_MANY = ("Dropped {n} messages: {who} is no longer allowed "
-                      "to send here.")
+# The reply under a held message a reload dropped, as the chat reads it
+# (plain words, no dashes): a single message is its own sentence, two or
+# more go through a Plural.
+_DROPPED_ONE = Msg("grp.dropped_one", "Dropped: {who} is no longer allowed to send here.",
+                   note="Reply under a held message a config reload dropped; {who} is "
+                        "@name", eg={"who": "@bob"})
+_DROPPED = Plural("grp.dropped",
+                  one="Dropped {n} message: {who} is no longer allowed to send here.",
+                  other="Dropped {n} messages: {who} is no longer allowed to send here.",
+                  note="As grp.dropped_one, for {n} held messages (2 or more)",
+                  eg={"who": "@bob"})
+_DROPPED_ANON_ONE = Msg("grp.dropped_anon_one",
+                        "Dropped: this sender is no longer allowed to send here.",
+                        note="As grp.dropped_one when the sender's name is unknown")
+_DROPPED_ANON = Plural("grp.dropped_anon",
+                       one="Dropped {n} message: this sender is no longer allowed to send "
+                           "here.",
+                       other="Dropped {n} messages: this sender is no longer allowed to "
+                             "send here.",
+                       note="As grp.dropped when the sender's name is unknown")
+#: The same two replies in English, as ``str.format`` patterns.
+DROPPED_REPLY = str(_DROPPED_ONE)
+DROPPED_REPLY_MANY = _DROPPED.other
 
 
 # ---- pure helpers -----------------------------------------------------------
@@ -201,17 +221,34 @@ def _terminal_joiners(old_scopes, old_policy, chat_id) -> set[int]:
 
 def _who(old_scopes, new_scopes, chat_id, user_id) -> str:
     """``@label`` for a sender, from the chat as it was, else as it is,
-    else any scope; a plain phrase when nobody knows them."""
+    else any scope; a plain phrase when nobody knows them (for the log)."""
+    shown = _who_shown(old_scopes, new_scopes, chat_id, user_id)
+    return str(shown) if shown is not None else "this sender"
+
+
+def _who_shown(old_scopes, new_scopes, chat_id, user_id) -> Command | None:
+    """The sender as the reply names them (``@label``), or None when
+    nobody knows them."""
     for scopes in (old_scopes, new_scopes):
         member = _member_in(_scope_for(scopes, chat_id), user_id)
         if member is not None:
-            return f"@{member.label}"
+            return Command(f"@{member.label}")
     for scopes in (old_scopes, new_scopes):
         for scope in scopes or ():
             member = _member_in(scope, user_id)
             if member is not None:
-                return f"@{member.label}"
-    return "this sender"
+                return Command(f"@{member.label}")
+    return None
+
+
+def dropped_reply(tr, n: int, person: Command | None) -> str:
+    """The reply under *n* dropped held messages of *person* (None: an
+    unknown sender), in *tr*'s language."""
+    if person is None:
+        return tr.text(_DROPPED_ANON_ONE) if n == 1 else tr.n(_DROPPED_ANON, n, kind="text")
+    if n == 1:
+        return tr.text(_DROPPED_ONE, who=person)
+    return tr.n(_DROPPED, n, kind="text", who=person)
 
 
 # ---- the reload's reach -----------------------------------------------------
@@ -299,8 +336,9 @@ async def _drop_held(bot, sess, chat_id, old_scopes, new_scopes,
         await bot._mark_not_delivered(sess, reactions.held_entries(items))
         if bot._app is None:
             continue
-        text = (DROPPED_REPLY.format(who=who) if len(items) == 1 else
-                DROPPED_REPLY_MANY.format(n=len(items), who=who))
+        # The chat's language, whoever was dropped.
+        text = dropped_reply(i18n.for_chat(chat_id), len(items),
+                             _who_shown(old_scopes, new_scopes, chat_id, uid))
         last_msg = items[-1][1]
         kwargs = {"chat_id": chat_id, "text": text}
         if last_msg:
