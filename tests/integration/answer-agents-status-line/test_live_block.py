@@ -244,7 +244,7 @@ def test_a_tick_with_nothing_due_sends_nothing(bot, sess, wire, run_async):
 # ---- criterion 5: per-agent settle order -------------------------------------------------
 
 def _two(run_async, bot, sess):
-    base = time.monotonic()
+    base = float(int(time.monotonic()))  # whole seconds: see test_then_the_shell_finishes
     t0, t1, _ = _deliver(run_async, bot, sess,
                          ("a1", "pipeline-runner", base - 300),
                          ("a2", "Explore", base - 300))
@@ -452,7 +452,7 @@ def test_the_pinned_bar_still_counts_every_shell(bot, sess, wire, run_async, mon
 
 def _shell_answer(run_async, bot, sess, ran):
     """A job shell that started ``ran`` seconds before ``end``; returns end."""
-    base = time.monotonic()
+    base = float(int(time.monotonic()))  # whole seconds: see test_then_the_shell_finishes
     _shell(sess, "s1", base - ran + 100)
     _t0, t1, _ = _deliver(run_async, bot, sess)
     return base + 100, t1
@@ -483,7 +483,7 @@ def test_a_lost_shell_leaves_the_block_as_sent(bot, sess, wire, run_async):
 
 
 def test_agents_done_while_the_shell_runs(bot, sess, wire, run_async):
-    base = time.monotonic()
+    base = float(int(time.monotonic()))  # whole seconds: see test_then_the_shell_finishes
     _shell(sess, "s1", base - 5)
     t0, t1, _ = _deliver(run_async, bot, sess, ("a1", "Explore", base - 10))
     assert t1 - t0 < 0.3
@@ -494,7 +494,10 @@ def test_agents_done_while_the_shell_runs(bot, sess, wire, run_async):
 
 
 def test_then_the_shell_finishes(bot, sess, wire, run_async):
-    base = time.monotonic()
+    # A whole-second base: on a freshly booted machine (a CI runner) the
+    # monotonic clock is small, and (base - 5 + 7985) - (base - 5) comes out
+    # as 7984.999..., one second short of the clock this test expects.
+    base = float(int(time.monotonic()))
     _shell(sess, "s1", base - 5)
     t0, t1, _ = _deliver(run_async, bot, sess, ("a1", "Explore", base - 10))
     assert t1 - t0 < 0.3

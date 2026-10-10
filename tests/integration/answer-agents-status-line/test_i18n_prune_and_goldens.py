@@ -175,8 +175,17 @@ def test_no_new_value_has_an_em_dash(code):
 # ---- goldens: everything else byte-identical ------------------------------------------
 
 def _git_show(path: str) -> bytes:
-    return subprocess.run(["git", "-C", str(REPO), "show", f"{BASE}:{path}"],
-                          capture_output=True, check=True, timeout=60).stdout
+    """*path* at the feature's base commit. A checkout without that commit
+    (CI's shallow clone, a squash-merged main, a tree copy) skips the
+    comparison, as phase 5's base pins do."""
+    try:
+        res = subprocess.run(["git", "-C", str(REPO), "show", f"{BASE}:{path}"],
+                             capture_output=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        pytest.skip("git is not available")
+    if res.returncode != 0:
+        pytest.skip(f"the feature base {BASE} is not in this checkout")
+    return res.stdout
 
 
 def test_claude_facing_golden_is_byte_identical():
