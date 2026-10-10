@@ -20,6 +20,14 @@ BOB = 2
 RO = 3
 
 
+#: The beta languages, in the list's order (phase 2: ru, fa; phase 5 run 1:
+#: es, pt-BR, fr, it).
+BETA_CODES = ("es", "ru", "pt-BR", "fr", "it", "fa")
+BETA = ["Español (beta)", "Русский (beta)", "Português (Brasil) (beta)", "Français (beta)",
+        "Italiano (beta)", "فارسی (beta)"]
+BETA_DATA = [f"_:set:lang:{c}" for c in BETA_CODES]
+
+
 # ---- /language replies ------------------------------------------------------------
 
 def test_language_in_a_dm_shows_the_private_text(tg_bot, command, ml):
@@ -33,28 +41,27 @@ def test_language_in_a_dm_offers_automatic_then_english_then_back(tg_bot, comman
                         chat_id=DM, user_id=OWNER)
     # Phase 2: Russian and Persian follow English.
     assert [d for _t, d in ml.buttons(kb)] == [
-        "_:set:lang:auto", "_:set:lang:en", "_:set:lang:ru", "_:set:lang:fa", "_:set:back"]
+        "_:set:lang:auto", "_:set:lang:en", *BETA_DATA, "_:set:back"]
 
 
 def test_language_in_a_dm_marks_automatic_when_nothing_is_stored(tg_bot, command, ml):
     _text, kb = command(tg_bot, "_handle_language_cmd", "/language",
                         chat_id=DM, user_id=OWNER)
     assert [t for t, _d in ml.buttons(kb)] == [
-        ml.AUTO_LABEL + " ✅", "English", "Русский (beta)", "فارسی (beta)", "« Back"]
+        ml.AUTO_LABEL + " ✅", "English", *BETA, "« Back"]
 
 
 def test_language_buttons_are_one_per_row(tg_bot, command):
     _text, kb = command(tg_bot, "_handle_language_cmd", "/language",
                         chat_id=DM, user_id=OWNER)
-    assert [len(row) for row in kb.inline_keyboard] == [1, 1, 1, 1, 1]
+    assert [len(row) for row in kb.inline_keyboard] == [1] * (3 + len(BETA))
 
 
 def test_language_in_a_dm_marks_english_once_chosen(tg_bot, command, ml):
     prefs.set_ui_language(DM, "en")
     _text, kb = command(tg_bot, "_handle_language_cmd", "/language",
                         chat_id=DM, user_id=OWNER)
-    assert [t for t, _d in ml.buttons(kb)] == [ml.AUTO_LABEL, "English ✅", "Русский (beta)",
-                                               "فارسی (beta)", "« Back"]
+    assert [t for t, _d in ml.buttons(kb)] == [ml.AUTO_LABEL, "English ✅", *BETA, "« Back"]
 
 
 def test_language_in_a_group_shows_the_group_text(tg_bot, command, ml):
@@ -67,7 +74,7 @@ def test_language_in_a_group_has_no_automatic(tg_bot, command, ml):
     _text, kb = command(tg_bot, "_handle_language_cmd", "/language",
                         chat_id=GROUP, user_id=BOB)
     assert [d for _t, d in ml.buttons(kb)] == [
-        "_:set:lang:en", "_:set:lang:ru", "_:set:lang:fa", "_:set:back"]
+        "_:set:lang:en", *BETA_DATA, "_:set:back"]
 
 
 def test_language_in_a_group_lists_english_by_its_name(tg_bot, command, ml):
@@ -83,13 +90,13 @@ def test_a_read_only_member_may_open_language(tg_bot, command, ml):
 
 
 def test_no_disabled_language_is_listed(tg_bot, command, ml):
-    """English, Russian and Persian are selectable; the other 12 are hidden
-    (ruling; phase 2 enabled ru and fa)."""
+    """English and the beta languages are selectable; the other 8 are
+    hidden (ruling; phase 2 enabled ru and fa, phase 5 run 1 es, pt-BR,
+    fr and it)."""
     _text, kb = command(tg_bot, "_handle_language_cmd", "/language",
                         chat_id=DM, user_id=OWNER)
     shown = {d for _t, d in ml.buttons(kb)}
-    for code in ("es", "pt-BR", "zh-Hans", "fr", "de", "ko", "ar", "id",
-                 "uk", "it", "tr", "vi", "qps", "qps-rtl"):
+    for code in ("zh-Hans", "de", "ko", "ar", "id", "uk", "tr", "vi", "qps", "qps-rtl"):
         assert f"_:set:lang:{code}" not in shown
 
 
@@ -151,7 +158,7 @@ def test_picking_english_in_a_dm_confirms(tg_bot, tap, ml):
 def test_picking_english_moves_the_tick(tg_bot, tap, ml):
     q = tap(tg_bot, "_:set:lang:en", chat_id=DM, user_id=OWNER)
     assert [t for t, _d in ml.buttons(ml.edited(q)[1])] == [
-        ml.AUTO_LABEL, "English ✅", "Русский (beta)", "فارسی (beta)", "« Back"]
+        ml.AUTO_LABEL, "English ✅", *BETA, "« Back"]
 
 
 def test_picking_automatic_in_a_dm_clears_the_choice(tg_bot, tap):
@@ -242,7 +249,7 @@ def test_auto_in_a_group_writes_nothing(tg_bot, tap, ml):
     assert ml.prefs_bytes() == before
 
 
-@pytest.mark.parametrize("code", ["de", "ar", "es", "qps", "qps-rtl", "xx", "EN",
+@pytest.mark.parametrize("code", ["de", "ar", "qps", "qps-rtl", "xx", "EN",
                                   "en-US", "", "english"])
 @pytest.mark.parametrize("chat", [DM, GROUP])
 def test_a_disabled_pseudo_or_unknown_code_is_refused(tg_bot, tap, ml, code, chat):

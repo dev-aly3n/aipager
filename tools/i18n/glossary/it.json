@@ -4,31 +4,95 @@
   "commit",
   "token",
   "diff",
-  "log"
+  "log",
+  "ctx",
+  "prompt",
+  "background"
  ],
  "language": "Italian",
  "terms": {
-  "admin": "",
-  "agent": "",
-  "allow": "",
-  "background": "",
-  "card": "",
-  "chat": "",
-  "deny": "",
-  "folder": "",
-  "group": "",
-  "member": "",
-  "model": "",
-  "owner": "",
-  "permission": "",
-  "prompt": "",
-  "question": "",
-  "queue": "",
-  "resume": "",
-  "session": "",
-  "settings": "",
-  "stop": "",
-  "turn": "",
-  "update": ""
+  "admin": [
+   "admin",
+   "amministra"
+  ],
+  "agent": [
+   "agent"
+  ],
+  "allow": [
+   "consent"
+  ],
+  "background": [
+   "secondo piano",
+   "background"
+  ],
+  "card": [
+   "scheda",
+   "schede"
+  ],
+  "chat": [
+   "chat"
+  ],
+  "deny": [
+   "nega",
+   "negat",
+   "neghi",
+   "rifiut"
+  ],
+  "folder": [
+   "cartell"
+  ],
+  "group": [
+   "grupp"
+  ],
+  "member": [
+   "membr"
+  ],
+  "model": [
+   "modell"
+  ],
+  "owner": [
+   "proprietari"
+  ],
+  "permission": [
+   "permess"
+  ],
+  "prompt": [
+   "prompt",
+   "messaggi",
+   "richiest"
+  ],
+  "question": [
+   "domand"
+  ],
+  "queue": [
+   "coda",
+   "code"
+  ],
+  "resume": [
+   "riprend",
+   "ripres",
+   "/resume"
+  ],
+  "session": [
+   "session"
+  ],
+  "settings": [
+   "impostazioni",
+   "/settings"
+  ],
+  "stop": [
+   "ferm",
+   "/stop",
+   "stop",
+   "arrest"
+  ],
+  "turn": [
+   "turno",
+   "turni"
+  ],
+  "update": [
+   "aggiorn",
+   "/update"
+  ]
  }
 }

@@ -355,8 +355,24 @@
       "value": "en"
      },
      {
+      "label": "Espa\u00f1ol",
+      "value": "es"
+     },
+     {
       "label": "\u0420\u0443\u0441\u0441\u043a\u0438\u0439",
       "value": "ru"
+     },
+     {
+      "label": "Portugu\u00eas (Brasil)",
+      "value": "pt-BR"
+     },
+     {
+      "label": "Fran\u00e7ais",
+      "value": "fr"
+     },
+     {
+      "label": "Italiano",
+      "value": "it"
      },
      {
       "label": "\u0641\u0627\u0631\u0633\u06cc",

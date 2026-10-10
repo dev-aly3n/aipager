@@ -27,8 +27,9 @@ def test_every_language_has_a_glossary_and_a_style_guide():
         g = json.loads((tool.GLOSSARY_DIR / f"{code}.json").read_text(encoding="utf-8"))
         assert g["address"] == ADDRESS[code], code
         assert set(g["terms"]) == TERMS, code
-        if code in ("fa", "ru"):
-            # Phase 2: filled, as lists of accepted forms (stems for Russian).
+        if code in ("fa", "ru", "es", "pt-BR", "fr", "it"):
+            # Filled (phase 2: fa, ru; phase 5 run 1: es, pt-BR, fr, it), as
+            # lists of accepted forms (stems for Russian and the Romance four).
             assert all(isinstance(v, list) and v and all(v) for v in g["terms"].values()), code
         else:
             assert all(v == "" for v in g["terms"].values()), "not translated yet"

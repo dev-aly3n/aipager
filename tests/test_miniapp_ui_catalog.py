@@ -100,7 +100,7 @@ def test_a_stranger_gets_the_fixed_forbidden_body(server):
     assert _json(server, "GET", "/api/i18n/fa.json", OUTSIDER) == (403, {"error": "forbidden"})
 
 
-@pytest.mark.parametrize("name", ["xx.json", "fa", "fa.js", "es.json", "qps.json",
+@pytest.mark.parametrize("name", ["xx.json", "fa", "fa.js", "de.json", "qps.json",
                                   "fa.json.json", "FA.json", "fa-.json"])
 def test_a_disabled_or_unknown_code_is_not_found(server, name):
     assert _json(server, "GET", "/api/i18n/" + name) == (404, {"error": "not_found"})
@@ -117,7 +117,7 @@ def test_a_test_enabled_pseudo_code_is_served_marked(server, monkeypatch):
     assert status == 200 and body["rtl"] is True
 
 
-@pytest.mark.parametrize("code", ["en", "fa", "ru"])
+@pytest.mark.parametrize("code", ["en", "fa", "ru", "es", "pt-BR", "fr", "it"])
 def test_every_enabled_code_is_served(server, code):
     status, body = _json(server, "GET", f"/api/i18n/{code}.json")
     assert status == 200
@@ -139,6 +139,11 @@ def test_the_persian_catalog_reads_right_to_left_in_persian_digits():
     ru = ui_text.catalog("ru")
     assert (ru["rtl"], ru["digits"], ru["list"]) == (False, "0123456789", ", ")
     assert set(ru["strings"]) == {m.key for m in ui_text.PAGE_STRINGS}
+    # Phase 5 run 1: es, pt-BR, fr and it are complete too, left to right.
+    for code in ("es", "pt-BR", "fr", "it"):
+        body = ui_text.catalog(code)
+        assert (body["rtl"], body["digits"], body["list"]) == (False, "0123456789", ", ")
+        assert set(body["strings"]) == {m.key for m in ui_text.PAGE_STRINGS}, code
 
 
 def test_a_missing_key_is_left_out(monkeypatch):
@@ -172,7 +177,7 @@ def test_the_version_is_stable_and_names_the_bytes():
     assert ui_text.catalog_version("fa") == ui_text.catalog_version("fa")
     assert len(ui_text.catalog_version("fa")) == 16
     assert ui_text.catalog_version("fa") != ui_text.catalog_version("ru")
-    assert ui_text.catalog_version("es") is None
+    assert ui_text.catalog_version("de") is None
 
 
 def test_the_current_version_is_cached_for_a_year(server):

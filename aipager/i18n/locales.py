@@ -2,9 +2,9 @@
 
 ``LOCALES`` holds the 15 languages of the multilingual design, each with
 its own name (the endonym, never translated), its direction and its
-digits. English, Russian and Persian are enabled (the last two as beta);
-the others exist so the machinery can be built and checked before their
-translation ships.
+digits. English is enabled; Russian, Persian, Spanish, Portuguese
+(Brazil), French and Italian are enabled as beta; the others exist so
+the machinery can be built and checked before their translation ships.
 
 ``PSEUDO`` holds two fake languages for tests and tooling (``qps`` and
 its right-to-left twin ``qps-rtl``). They are reachable through
@@ -46,19 +46,20 @@ class Locale:
 LOCALES: dict[str, Locale] = {loc.code: loc for loc in (
     Locale("en", "English", "English", enabled=True, quality="stable",
            telegram_code="en"),
-    Locale("es", "Español", "Spanish", telegram_code="es"),
+    Locale("es", "Español", "Spanish", enabled=True, quality="beta", telegram_code="es"),
     # Phase 2: offered as beta (translated, not reviewed yet).
     Locale("ru", "Русский", "Russian", enabled=True, quality="beta", telegram_code="ru"),
-    Locale("pt-BR", "Português (Brasil)", "Portuguese (Brazil)", telegram_code="pt"),
+    Locale("pt-BR", "Português (Brasil)", "Portuguese (Brazil)", enabled=True, quality="beta",
+           telegram_code="pt"),
     Locale("zh-Hans", "简体中文", "Chinese (Simplified)", telegram_code="zh"),
-    Locale("fr", "Français", "French", telegram_code="fr"),
+    Locale("fr", "Français", "French", enabled=True, quality="beta", telegram_code="fr"),
     Locale("de", "Deutsch", "German", telegram_code="de"),
     Locale("ko", "한국어", "Korean", telegram_code="ko"),
     Locale("ar", "العربية", "Arabic", rtl=True, digits="arab", decimal="٫",
            group="٬", percent="٪", telegram_code="ar"),
     Locale("id", "Bahasa Indonesia", "Indonesian", telegram_code="id"),
     Locale("uk", "Українська", "Ukrainian", telegram_code="uk"),
-    Locale("it", "Italiano", "Italian", telegram_code="it"),
+    Locale("it", "Italiano", "Italian", enabled=True, quality="beta", telegram_code="it"),
     Locale("tr", "Türkçe", "Turkish", telegram_code="tr"),
     Locale("fa", "فارسی", "Persian", rtl=True, digits="arabext", decimal="٫",
            group="٬", percent="٪", enabled=True, quality="beta", telegram_code="fa"),

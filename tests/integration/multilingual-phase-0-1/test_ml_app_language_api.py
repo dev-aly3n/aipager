@@ -84,7 +84,11 @@ def test_preferences_carry_the_app_language(http):
         "options": [
             {"value": "auto", "label": "Automatic (your Telegram language)"},
             {"value": "en", "label": "English"},
+            {"value": "es", "label": "Español"},
             {"value": "ru", "label": "Русский"},
+            {"value": "pt-BR", "label": "Português (Brasil)"},
+            {"value": "fr", "label": "Français"},
+            {"value": "it", "label": "Italiano"},
             {"value": "fa", "label": "فارسی"},
         ],
     }
@@ -193,7 +197,7 @@ def test_the_choice_reads_back_through_get(http):
 
 # ---- PUT /api/app-language: errors ------------------------------------------------
 
-@pytest.mark.parametrize("value", ["de", "ar", "es", "qps", "qps-rtl", "xx", "",
+@pytest.mark.parametrize("value", ["de", "ar", "qps", "qps-rtl", "xx", "",
                                    "EN", "english", "en ", 5, None, True, ["en"],
                                    {"v": "en"}])
 def test_put_refuses_a_bad_value_with_400(http, value):

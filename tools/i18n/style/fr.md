@@ -9,7 +9,7 @@ Plain, direct and friendly. Address the reader as vous (decided: French develope
 vous
 
 ## Punctuation and quotation marks
-Use « » with a narrow no-break space inside; a narrow no-break space before : ; and ?.
+Use « » with a no-break space (U+00A0) inside; a no-break space (U+00A0) before : ; and ?. (The ordinary no-break space, not the narrow U+202F: every Telegram client and font draws it, and the keyboard resolver folds it like a space.)
 - No long dashes (U+2014): use "-" or parentheses, as the English does.
 - No exclamation marks.
 
@@ -21,3 +21,18 @@ Product names (Claude, Claude Code, Anthropic, aipager, Telegram, Mini App, GitH
 
 ## Placeholders and tags
 Keep every {placeholder} and every HTML tag of the English, exactly once each. Never translate inside <code> or <pre>.
+
+## Markers, keyboard words and modes
+- Keep `**`, `_`, every HTML tag and every {placeholder} exactly as in the English: the same number of `**` and `_`, never a backtick.
+- The four main-keyboard words (status, stop, new, kill) stay as the English words, exactly like the commands /status, /stop, /new and /kill they stand for. In a Latin-script language a translated word (for example "nouvelle") is also a valid session name, and check 10 forbids a keyboard word that could hide a session called that.
+- A navigation button that opens another keyboard ends with " ›" ("Modèles ›", "Commandes ›"; the model list is "Modèle IA ›", so the two never read alike), like "Model ›": the arrow keeps the label from ever being a session name.
+- A mode word (Auto, Ask) is translated and is ONE word after its emoji (🤖 Automatique, 💬 Demander): people type it after /mode.
+- A default button label (Continue, Run tests...) stays short: it is a button. Its payload stays English (Claude receives the English).
+
+## Terms
+- session: session; turn: tour; card: carte; permission: autorisation; prompt: prompt (the text sent to Claude; "message" where it is just a message; "demande" for a permission prompt or a question waiting for an answer); question: question.
+- allow: autoriser; deny: refuser; stop: arrêter; resume: reprendre; queue: file d'attente; agent: agent; background: arrière-plan ("en arrière-plan").
+- owner: propriétaire; admin: administrateur; member: membre; chat: discussion (Telegram's own French word); group: groupe; settings: paramètres; update: mise à jour / mettre à jour; folder: dossier; model: modèle.
+- Kept in English: commit, token, diff, log, ctx, prompt.
+- Other recurring words: Kill (end a session's process) = Terminer; Restart = Redémarrer; Delete = Supprimer; Rename = Renommer; Compact = Compacter; role = rôle; "la Mini App"; a session name stands for a session (feminine: "x1 arrêtée").
+- In French the "one" plural form also covers 0: always write {n}, never the word "un".

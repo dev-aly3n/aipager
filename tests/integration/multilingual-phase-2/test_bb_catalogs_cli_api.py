@@ -34,8 +34,8 @@ from tests.i18n_ml2_bb import (
     source_rows,
 )
 
-DISABLED = ("es", "pt-BR", "zh-Hans", "fr", "de", "ko", "ar", "id", "uk", "it",
-            "tr", "vi")
+# Phase 5 run 1 enabled es, pt-BR, fr and it (beta, complete catalogs).
+DISABLED = ("zh-Hans", "de", "ko", "ar", "id", "uk", "tr", "vi")
 PLACEHOLDER = re.compile(r"\{([a-z_][a-z0-9_]*)\}")
 FORMS = {"fa": {"one", "other"}, "ru": {"one", "few", "many", "other"}}
 
@@ -52,7 +52,7 @@ def _values(v):
 
 # ---- the catalog files ---------------------------------------------------------------
 
-@pytest.mark.parametrize("code", ["fa", "ru"])
+@pytest.mark.parametrize("code", ["fa", "ru", "es", "pt-BR", "fr", "it"])
 def test_the_catalog_holds_exactly_the_source_keys(code):
     assert set(catalog(code)) == {r["k"] for r in source_rows()}
 
@@ -167,14 +167,14 @@ def test_check_passes_with_persian_and_russian_enabled(cli):
     assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
 
 
-@pytest.mark.parametrize("code", ["fa", "ru"])
+@pytest.mark.parametrize("code", ["fa", "ru", "es", "pt-BR", "fr", "it"])
 def test_todo_is_empty_for_a_complete_language(cli, code):
     r = cli("todo", "--lang", code)
     assert r.returncode == 0 and json.loads(r.stdout)["entries"] == []
 
 
-def test_todo_lists_every_key_for_spanish(cli):
-    r = cli("todo", "--lang", "es")
+def test_todo_lists_every_key_for_german(cli):
+    r = cli("todo", "--lang", "de")
     entries = json.loads(r.stdout)["entries"]
     assert len(entries) == len(source_rows())
 
@@ -226,9 +226,10 @@ def _options(body):
     return body["app_language"]["options"]
 
 
-def test_the_options_are_auto_english_russian_persian(http):
+def test_the_options_are_auto_english_and_the_beta_languages(http):
     _s, body = http("GET", "/api/preferences")
-    assert [o["value"] for o in _options(body)] == ["auto", "en", "ru", "fa"]
+    assert [o["value"] for o in _options(body)] == ["auto", "en", "es", "ru", "pt-BR", "fr",
+                                                    "it", "fa"]
 
 
 def test_the_option_labels_are_endonyms_without_beta(http):

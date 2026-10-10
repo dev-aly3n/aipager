@@ -91,21 +91,24 @@ def writes(monkeypatch):
     return calls
 
 
+BETA_ROWS = [[(f"{name} (beta)", f"_:set:lang:{code}")] for code, name in (
+    ("es", "Español"), ("ru", "Русский"), ("pt-BR", "Português (Brasil)"),
+    ("fr", "Français"), ("it", "Italiano"), ("fa", "فارسی"))]
+
+
 def test_the_language_row_opens_the_list(bot, run_async):
     q = tap(bot, run_async, "_:set:lang", chat=DM, user=ALY)
     text, rows = edited(q)
     assert text == LIST_PRIVATE
-    # Phase 2: Russian and Persian join the list, marked beta.
+    # Phase 2: Russian and Persian join the list, marked beta; phase 5
+    # run 1: Spanish, Portuguese (Brazil), French and Italian.
     assert rows == [[("Automatic (your Telegram language) ✅", "_:set:lang:auto")],
-                    [("English", "_:set:lang:en")],
-                    [("Русский (beta)", "_:set:lang:ru")],
-                    [("فارسی (beta)", "_:set:lang:fa")],
+                    [("English", "_:set:lang:en")], *BETA_ROWS,
                     [("« Back", "_:set:back")]]
     q = tap(bot, run_async, "_:set:lang", chat=GROUP, user=BOB)
     text, rows = edited(q)
     assert text == LIST_GROUP
-    assert rows == [[("English ✅", "_:set:lang:en")], [("Русский (beta)", "_:set:lang:ru")],
-                    [("فارسی (beta)", "_:set:lang:fa")], [("« Back", "_:set:back")]]
+    assert rows == [[("English ✅", "_:set:lang:en")], *BETA_ROWS, [("« Back", "_:set:back")]]
 
 
 def test_picking_english_confirms(bot, run_async):

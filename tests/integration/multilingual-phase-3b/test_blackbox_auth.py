@@ -273,7 +273,7 @@ def test_a_regional_or_capitalised_code_refuses_like_its_language(bot, run_async
     assert _refusal(bot, run_async, language_code=variant) == plain
 
 
-@pytest.mark.parametrize("code", ["uk", "pt-br", "fr", "tg"])
+@pytest.mark.parametrize("code", ["uk", "be", "gl", "ca", "tg"])
 def test_a_stranger_with_a_language_close_to_an_enabled_one_gets_english(bot, run_async, code):
     english = _refusal(bot, run_async, language_code="en")
     team_mod.reset_unauthorized_seen()
@@ -284,3 +284,22 @@ def test_a_cleared_stored_choice_falls_back_to_the_telegram_language(bot, run_as
     preferences.set_ui_language(STRANGER, "ru")
     preferences.set_ui_language(STRANGER, "")
     assert L.fa_problems(_refusal(bot, run_async, language_code="fa")) == []
+
+
+@pytest.mark.parametrize("tag,code", [("es", "es"), ("es-MX", "es"), ("pt-br", "pt-BR"),
+                                      ("pt", "pt-BR"), ("fr", "fr"), ("fr-CA", "fr"),
+                                      ("it", "it")])
+def test_a_stranger_is_refused_in_a_phase_5_language(bot, run_async, tag, code):
+    """Phase 5 run 1: Spanish, Portuguese (Brazil), French and Italian are
+    enabled, so a stranger whose Telegram app speaks one of them (a
+    regional tag included; Portugal's "pt" reads Brazilian) is refused in
+    it, through the same normalize() as Persian and Russian."""
+    from aipager.i18n import core
+    english = _refusal(bot, run_async, language_code="en")
+    team_mod.reset_unauthorized_seen()
+    text = _refusal(bot, run_async, language_code=tag)
+    assert text != english
+    cat = core._catalog(code)
+    heads = [cat[k].split("{", 1)[0] for k in
+             ("auth.refuse.unknown_dm", "auth.refuse.team", "auth.refuse.scope")]
+    assert any(head and head in text for head in heads), (tag, text)

@@ -36,8 +36,10 @@ from tests.i18n_ml2_bb import (
     toast_texts,
 )
 
-DISABLED = ("es", "pt-BR", "zh-Hans", "fr", "de", "ko", "ar", "id", "uk", "it",
-            "tr", "vi")
+# Phase 5 run 1 enabled es, pt-BR, fr and it, as beta.
+DISABLED = ("zh-Hans", "de", "ko", "ar", "id", "uk", "tr", "vi")
+BETA = (("es", "Español"), ("ru", "Русский"), ("pt-BR", "Português (Brasil)"),
+        ("fr", "Français"), ("it", "Italiano"), ("fa", "فارسی"))
 
 
 def _rows(tr, private, current):
@@ -51,15 +53,14 @@ def test_the_private_list_in_english():
     assert _rows(i18n.get("en"), True, "en") == [
         ("Automatic (your Telegram language)", "_:set:lang:auto"),
         ("English ✅", "_:set:lang:en"),
-        ("Русский (beta)", "_:set:lang:ru"),
-        ("فارسی (beta)", "_:set:lang:fa"),
+        *[(f"{name} (beta)", f"_:set:lang:{code}") for code, name in BETA],
         ("« Back", "_:set:back"),
     ]
 
 
 def test_the_group_list_has_no_automatic_row():
     data = [d for _t, d in _rows(i18n.get("en"), False, "en")]
-    assert data == ["_:set:lang:en", "_:set:lang:ru", "_:set:lang:fa", "_:set:back"]
+    assert data == ["_:set:lang:en", *[f"_:set:lang:{c}" for c, _n in BETA], "_:set:back"]
 
 
 def test_the_current_language_gets_the_check():
@@ -243,7 +244,7 @@ def test_a_disabled_code_is_refused_with_invalid_value(bot, run_async, code):
     assert "Invalid value" in toast_texts(query)
 
 
-@pytest.mark.parametrize("code", ("de", "es", "qps"))
+@pytest.mark.parametrize("code", ("de", "ko", "qps"))
 def test_a_disabled_code_writes_nothing(bot, run_async, code):
     _tap(bot, run_async, f"_:set:lang:{code}")
     assert preferences.get_ui_language(DM_A) in (None, "")

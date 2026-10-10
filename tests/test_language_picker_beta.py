@@ -27,10 +27,11 @@ def _labels(tr, private=True, current="auto"):
 
 def test_beta_languages_carry_the_mark(fa_ru):
     labels = _labels(i18n.get("en"))
-    assert labels == ["Automatic (your Telegram language) ✅", "English", "Русский (beta)",
-                      "فارسی (beta)", "« Back"]
+    beta = ["Español (beta)", "Русский (beta)", "Português (Brasil) (beta)",
+            "Français (beta)", "Italiano (beta)", "فارسی (beta)"]
+    assert labels == ["Automatic (your Telegram language) ✅", "English", *beta, "« Back"]
     assert _labels(i18n.get("en"), private=False, current="en") == [
-        "English ✅", "Русский (beta)", "فارسی (beta)", "« Back"]
+        "English ✅", *beta, "« Back"]
 
 
 def test_english_and_other_surfaces_show_the_bare_name(fa_ru):

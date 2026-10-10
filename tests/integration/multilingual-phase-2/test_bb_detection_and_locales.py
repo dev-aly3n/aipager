@@ -17,16 +17,17 @@ from aipager.bot import language_menu
 from aipager.i18n import locales
 from tests.i18n_ml2_bb import BOB, DM_A, DM_B, GROUP, OWNER, callback, message
 
-DISABLED = ("es", "pt-BR", "zh-Hans", "fr", "de", "ko", "ar", "id", "uk", "it",
-            "tr", "vi")
+# Phase 5 run 1 enabled es, pt-BR, fr and it, as beta.
+BETA = ("es", "ru", "pt-BR", "fr", "it", "fa")
+DISABLED = ("zh-Hans", "de", "ko", "ar", "id", "uk", "tr", "vi")
 
 
-def test_exactly_english_russian_and_persian_are_enabled():
-    assert locales.enabled_codes() == ("en", "ru", "fa")
+def test_exactly_english_and_the_beta_languages_are_enabled():
+    assert locales.enabled_codes() == ("en",) + BETA
 
 
-@pytest.mark.parametrize("code", ["fa", "ru"])
-def test_persian_and_russian_are_beta(code):
+@pytest.mark.parametrize("code", BETA)
+def test_the_enabled_translations_are_beta(code):
     assert locales.LOCALES[code].quality == "beta"
 
 
@@ -38,13 +39,13 @@ def test_russian_is_left_to_right():
     assert not locales.LOCALES["ru"].rtl
 
 
-@pytest.mark.parametrize("code", ["en", "ru", "fa"])
+@pytest.mark.parametrize("code", ("en",) + BETA)
 def test_the_enabled_codes_are_selectable(code):
     assert locales.is_selectable(code)
 
 
 @pytest.mark.parametrize("code", DISABLED)
-def test_the_other_twelve_are_not_selectable(code):
+def test_the_other_eight_are_not_selectable(code):
     assert not locales.is_selectable(code)
 
 

@@ -94,9 +94,13 @@ def test_get_carries_the_app_language(server):
     al = data["app_language"]
     assert al == {
         "title": "App language", "hint": HINT, "value": "auto", "effective": "en",
-        # Phase 2: Russian and Persian are offered (no beta mark here).
+        # Phase 2: Russian and Persian are offered (no beta mark here);
+        # phase 5 run 1: Spanish, Portuguese (Brazil), French and Italian.
         "options": [{"value": "auto", "label": "Automatic (your Telegram language)"},
-                    {"value": "en", "label": "English"}, {"value": "ru", "label": "Русский"},
+                    {"value": "en", "label": "English"}, {"value": "es", "label": "Español"},
+                    {"value": "ru", "label": "Русский"},
+                    {"value": "pt-BR", "label": "Português (Brasil)"},
+                    {"value": "fr", "label": "Français"}, {"value": "it", "label": "Italiano"},
                     {"value": "fa", "label": "فارسی"}]}
 
 

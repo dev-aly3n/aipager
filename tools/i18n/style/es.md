@@ -21,3 +21,17 @@ Product names (Claude, Claude Code, Anthropic, aipager, Telegram, Mini App, GitH
 
 ## Placeholders and tags
 Keep every {placeholder} and every HTML tag of the English, exactly once each. Never translate inside <code> or <pre>.
+
+## Markers, keyboard words and modes
+- Keep `**`, `_`, every HTML tag and every {placeholder} exactly as in the English: the same number of `**` and `_`, never a backtick.
+- The four main-keyboard words (status, stop, new, kill) stay as the English words, exactly like the commands /status, /stop, /new and /kill they stand for. In a Latin-script language a translated word (for example "estado") is also a valid session name, and check 10 forbids a keyboard word that could hide a session called that.
+- A navigation button that opens another keyboard ends with " ›" ("Plantillas ›", "Comandos ›"; the model list is "Modelo ›"), like "Model ›": the arrow keeps the label from ever being a session name.
+- A mode word (Auto, Ask) is translated and is ONE word after its emoji (🤖 Automático, 💬 Preguntar): people type it after /mode.
+- A default button label (Continue, Run tests...) stays short: it is a button. Its payload stays English (Claude receives the English).
+
+## Terms
+- session: sesión; turn: turno; card: tarjeta; permission: permiso; prompt: prompt (the text sent to Claude; "mensaje" where it is just a message; "solicitud" for a permission prompt or a question waiting for an answer); question: pregunta.
+- allow: permitir; deny: denegar (a refused request: rechazar); stop: detener; resume: reanudar; queue: cola; agent: agente; background: segundo plano ("en segundo plano").
+- owner: propietario; admin: administrador; member: miembro; chat: chat; group: grupo; settings: ajustes; update: actualizar / actualización; folder: carpeta; model: modelo.
+- Kept in English: commit, token, diff, log, ctx, prompt.
+- Other recurring words: Kill (end a session's process) = Terminar; Restart = Reiniciar; Delete = Eliminar; Rename = Renombrar; Compact = Compactar; role = rol; the Mini App is feminine ("la Mini App"); a session name stands for a sesión (feminine: "x1 detenida").
