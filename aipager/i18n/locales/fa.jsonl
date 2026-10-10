@@ -281,7 +281,6 @@
 {"k": "kbmsg.models", "src": "78548025", "v": "🤖 مدل"}
 {"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 قالب‌ها"}
 {"k": "lang.auto", "src": "a66c2e1b", "v": "خودکار (زبان Telegram شما)"}
-{"k": "lang.beta", "src": "07f92a33", "v": "{language} (آزمایشی)"}
 {"k": "lang.changed", "src": "4e8c6791", "v": "✅ aipager از این پس اینجا {language} حرف می‌زند. نشست‌های شما و پاسخ‌های Claude تغییری نمی‌کنند."}
 {"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager اینجا {language} حرف می‌زند (فقط پیام‌های خودش؛ Claude به همان زبانی پاسخ می‌دهد که شما می‌نویسید). تغییر با /language"}
 {"k": "lang.list.group", "src": "9462a94a", "v": "🌐 زبانی که aipager برای کارت‌ها و دکمه‌های این گروه به کار می‌برد. نشست‌های Claude تغییر نمی‌کنند: Claude به همان زبانی پاسخ می‌دهد که برایش می‌نویسید."}

@@ -99,7 +99,7 @@ def _disable_german(monkeypatch):
         locales.LOCALES["de"], enabled=False))
 
 
-BETA_ROWS = [[(f"{name} (beta)", f"_:set:lang:{code}")] for code, name in (
+BETA_ROWS = [[(name, f"_:set:lang:{code}")] for code, name in (
     ("es", "Español"), ("ru", "Русский"), ("pt-BR", "Português (Brasil)"),
     ("zh-Hans", "简体中文"), ("fr", "Français"), ("de", "Deutsch"), ("ko", "한국어"),
     ("ar", "العربية"), ("id", "Bahasa Indonesia"), ("uk", "Українська"),

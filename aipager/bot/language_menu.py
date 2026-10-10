@@ -24,7 +24,7 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from aipager.i18n import Msg, Tr
-from aipager.i18n.locales import LOCALES, enabled_codes, is_beta, is_selectable, lookup
+from aipager.i18n.locales import LOCALES, enabled_codes, is_selectable, lookup
 
 LANG_ROW = Msg("lang.row", "🌐 Language: {language}",
                note="The first row of /settings; {language} is the language's own name",
@@ -58,9 +58,6 @@ INVALID_CALLBACK = Msg("toast.invalid_callback", "Invalid callback",
 ADMIN_ONLY = Msg("toast.settings_admin_only", "Only an admin can change settings in this group.",
                  note="Alert: a member who is not an admin tapped a group setting")
 
-BETA = Msg("lang.beta", "{language} (beta)",
-           note="A language in the list whose translation is new and not reviewed yet; "
-                "{language} is its own name", eg={"language": "English"})
 FIRST_CONTACT = Msg(
     "lang.first_contact",
     "🌐 aipager speaks {language} here (only its own messages; Claude answers in the "
@@ -101,10 +98,9 @@ def render_language_menu(tr: Tr, *, private: bool, current: str
     for token in tokens:
         if token == AUTO_TOKEN:
             label = tr.text(AUTO)
-        elif is_beta(token):
-            # Not reviewed yet: said in the list, in the viewer's language.
-            label = tr.text(BETA, language=endonym(token))
         else:
+            # Each language by its own name only (operator, 2026-10-10: no
+            # "(beta)" in the list; the review record stays for the tooling).
             label = endonym(token)
         mark = " ✅" if current == token else ""
         rows.append([InlineKeyboardButton(f"{label}{mark}",

@@ -60,7 +60,7 @@ def test_the_private_list_in_english():
     assert _rows(i18n.get("en"), True, "en") == [
         ("Automatic (your Telegram language)", "_:set:lang:auto"),
         ("English ✅", "_:set:lang:en"),
-        *[(f"{name} (beta)", f"_:set:lang:{code}") for code, name in BETA],
+        *[(name, f"_:set:lang:{code}") for code, name in BETA],
         ("« Back", "_:set:back"),
     ]
 
@@ -81,16 +81,14 @@ def test_english_never_gets_a_beta_mark_in_any_language():
         assert rows["_:set:lang:en"].replace(RLM, "") == "English", code
 
 
-def test_the_beta_mark_is_in_the_viewers_language_ru():
+def test_the_russian_list_shows_its_own_name_with_no_mark():
     rows = dict((d, t) for t, d in _rows(i18n.get("ru"), True, "ru"))
-    want = catalog("ru")["lang.beta"]["v"].replace("{language}", "Русский")
-    assert rows["_:set:lang:ru"] == want + " ✅"
+    assert rows["_:set:lang:ru"] == "Русский ✅"
 
 
-def test_the_beta_mark_is_in_the_viewers_language_fa():
+def test_the_persian_list_shows_its_own_name_with_no_mark():
     rows = dict((d, t) for t, d in _rows(i18n.get("fa"), True, "en"))
-    suffix = catalog("fa")["lang.beta"]["v"].replace("{language}", "")
-    assert suffix.strip() in rows["_:set:lang:fa"]
+    assert rows["_:set:lang:fa"] == "فارسی"
 
 
 def test_the_persian_list_text_reads_right_to_left():

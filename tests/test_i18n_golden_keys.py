@@ -41,7 +41,7 @@ def test_the_shipped_list_is_clean():
 
 def test_the_list_keeps_what_the_design_names():
     keys = {k for _s, k in tool.load_golden()}
-    for key in ("lang.first_contact", "lang.offer.text", "lang.row", "lang.auto", "lang.beta",
+    for key in ("lang.first_contact", "lang.offer.text", "lang.row", "lang.auto",
                 "lang.changed", "lang.list.private", "lang.list.group", "mode.ask", "mode.auto",
                 "perm.btn.allow", "perm.btn.deny", "card.verb.working", "kb.status",
                 "botdesc.short"):

@@ -281,7 +281,6 @@
 {"k": "kbmsg.models", "src": "78548025", "v": "🤖 Model"}
 {"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 Şablonlar"}
 {"k": "lang.auto", "src": "a66c2e1b", "v": "Otomatik (Telegram dilin)"}
-{"k": "lang.beta", "src": "07f92a33", "v": "{language} (beta)"}
 {"k": "lang.changed", "src": "4e8c6791", "v": "✅ aipager artık burada {language} konuşuyor. Oturumların ve Claude'un yanıtları değişmedi."}
 {"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager burada {language} konuşuyor (yalnızca kendi mesajları; Claude senin yazdığın dilde yanıt verir). Değiştirmek için /language"}
 {"k": "lang.list.group", "src": "9462a94a", "v": "🌐 aipager'ın bu grubun kartları ve düğmeleri için kullandığı dil. Claude oturumları değişmez: Claude ona yazdığın dilde yanıt verir."}

@@ -281,7 +281,6 @@
 {"k": "kbmsg.models", "src": "78548025", "v": "🤖 모델"}
 {"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 템플릿"}
 {"k": "lang.auto", "src": "a66c2e1b", "v": "자동 (내 Telegram 언어)"}
-{"k": "lang.beta", "src": "07f92a33", "v": "{language} (베타)"}
 {"k": "lang.changed", "src": "4e8c6791", "v": "✅ 이제 aipager가 여기서 {language} 언어를 써요. 세션과 Claude의 답변은 바뀌지 않아요."}
 {"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager는 여기서 {language} 언어를 써요 (aipager 자체 메시지만 해당하고, Claude는 메시지에 쓴 언어로 답해요). /language로 바꿀 수 있어요"}
 {"k": "lang.list.group", "src": "9462a94a", "v": "🌐 aipager가 이 그룹의 카드와 버튼에 쓰는 언어예요. Claude 세션은 바뀌지 않아요. Claude는 메시지에 쓴 언어로 답해요."}

@@ -240,22 +240,21 @@ def test_the_first_contact_line(monkeypatch, code):
     assert leaked(line, english_only(code)) == []
 
 
-def test_the_language_list_offers_the_four_as_beta():
+def test_the_language_list_offers_the_four_by_their_own_names():
     text, kb = language_menu.render_language_menu(i18n.get("en"), private=True, current="auto")
     labels = [b.text for row in kb.inline_keyboard for b in row]
     for code, name in ENDONYM.items():
-        assert f"{name} (beta)" in labels
+        assert name in labels and f"{name} (beta)" not in labels
         assert locales.LOCALES[code].enabled and locales.LOCALES[code].quality == "beta"
     assert locales.AUTO_DETECT is True    # phase 5: detection on
 
 
 @pytest.mark.parametrize("code", CODES)
-def test_the_list_marks_beta_in_the_viewers_language(code):
+def test_the_list_shows_the_current_language_by_its_own_name(code):
     _text, kb = language_menu.render_language_menu(i18n.get(code), private=True,
                                                    current=code)
     labels = [b.text for row in kb.inline_keyboard for b in row]
-    own = core._catalog(code)["lang.beta"].replace("{language}", ENDONYM[code])
-    assert own + " ✅" in labels
+    assert ENDONYM[code] + " ✅" in labels
 
 
 def test_the_keyboard_labels_pass_check_10():

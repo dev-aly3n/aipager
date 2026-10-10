@@ -258,9 +258,9 @@ def test_the_golden_surfaces(code, mk_bot, run_async, monkeypatch):
     # The permission prompt's buttons and the answered line's verb.
     for key in ("perm.btn.allow", "perm.btn.deny", "ans.verb.allow"):
         assert cat[key] in plain, key
-    # /language lists the language as beta in its own name.
+    # /language lists the language by its own name, with no "(beta)" mark.
     lang = _strip("\n".join(renders["language.list"]))
-    assert cat["lang.beta"].replace("{language}", locales.LOCALES[code].endonym) in lang
+    assert locales.LOCALES[code].endonym in lang and "(beta)" not in lang
     # /settings opens on the language row and the catalog's title.
     assert cat["lang.row"].split("{")[0].strip() in "\n".join(renders["settings.root"])
     for name in golden:

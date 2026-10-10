@@ -281,7 +281,6 @@
 {"k": "kbmsg.models", "src": "78548025", "v": "🤖 Model"}
 {"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 Templat"}
 {"k": "lang.auto", "src": "a66c2e1b", "v": "Otomatis (bahasa Telegram-mu)"}
-{"k": "lang.beta", "src": "07f92a33", "v": "{language} (beta)"}
 {"k": "lang.changed", "src": "4e8c6791", "v": "✅ aipager sekarang memakai {language} di sini. Sesimu dan jawaban Claude tidak berubah."}
 {"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager memakai {language} di sini (hanya pesannya sendiri; Claude menjawab dalam bahasa yang kamu tulis). Ubah dengan /language"}
 {"k": "lang.list.group", "src": "9462a94a", "v": "🌐 Bahasa yang dipakai aipager untuk kartu dan tombol grup ini. Sesi Claude tidak berubah: Claude menjawab dalam bahasa yang kamu pakai saat menulis kepadanya."}

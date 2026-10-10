@@ -281,7 +281,6 @@
 {"k": "kbmsg.models", "src": "78548025", "v": "🤖 Mô hình"}
 {"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 Mẫu"}
 {"k": "lang.auto", "src": "a66c2e1b", "v": "Tự động (ngôn ngữ Telegram của bạn)"}
-{"k": "lang.beta", "src": "07f92a33", "v": "{language} (thử nghiệm)"}
 {"k": "lang.changed", "src": "4e8c6791", "v": "✅ Giờ aipager dùng {language} ở đây. Các phiên của bạn và câu trả lời của Claude không đổi."}
 {"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager dùng {language} ở đây (chỉ tin nhắn của chính nó; Claude trả lời bằng ngôn ngữ bạn viết). Đổi bằng /language"}
 {"k": "lang.list.group", "src": "9462a94a", "v": "🌐 Ngôn ngữ aipager dùng cho thẻ và nút của nhóm này. Các phiên Claude không đổi: Claude trả lời bằng ngôn ngữ bạn viết cho nó."}

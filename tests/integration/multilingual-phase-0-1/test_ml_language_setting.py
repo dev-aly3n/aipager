@@ -25,10 +25,12 @@ RO = 3
 #: es, pt-BR, fr, it; run 2: de, ar, uk, tr; run 3: zh-Hans, ko, id, vi).
 BETA_CODES = ("es", "ru", "pt-BR", "zh-Hans", "fr", "de", "ko", "ar", "id", "uk", "it", "tr",
               "fa", "vi")
-BETA = ["Español (beta)", "Русский (beta)", "Português (Brasil) (beta)", "简体中文 (beta)",
-        "Français (beta)", "Deutsch (beta)", "한국어 (beta)", "العربية (beta)",
-        "Bahasa Indonesia (beta)", "Українська (beta)", "Italiano (beta)", "Türkçe (beta)",
-        "فارسی (beta)", "Tiếng Việt (beta)"]
+# Each language by its own name only: no "(beta)" in the list since
+# 2026-10-10 (operator).
+BETA = ["Español", "Русский", "Português (Brasil)", "简体中文",
+        "Français", "Deutsch", "한국어", "العربية",
+        "Bahasa Indonesia", "Українська", "Italiano", "Türkçe",
+        "فارسی", "Tiếng Việt"]
 BETA_DATA = [f"_:set:lang:{c}" for c in BETA_CODES]
 
 

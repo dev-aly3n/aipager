@@ -115,20 +115,22 @@ def _menu_labels(current="en", private=True):
 
 
 @pytest.mark.parametrize("code", LAUNCHED)
-def test_the_picker_labels_every_launched_language_beta(code):
+def test_the_picker_shows_every_launched_language_by_its_own_name(code):
+    # No "(beta)" in the list since 2026-10-10 (operator); the record stays.
     (endonym,) = [t for t in _menu_labels()
                   if t.lstrip("✅ ").startswith(locales.LOCALES[code].endonym)]
-    assert "(beta)" in endonym
+    assert "(beta)" not in endonym
+    assert locales.is_beta(code)
 
 
 def test_the_picker_does_not_label_english_beta():
     assert not any("English" in t and "(beta)" in t for t in _menu_labels())
 
 
-def test_the_picker_keeps_beta_for_stable_without_a_review(monkeypatch):
+def test_the_picker_shows_no_mark_for_stable_without_a_review(monkeypatch):
     _set_locale(monkeypatch, "fa", quality="stable", reviewed="")
     (fa,) = [t for t in _menu_labels() if locales.LOCALES["fa"].endonym in t]
-    assert "(beta)" in fa
+    assert "(beta)" not in fa and locales.is_beta("fa")
 
 
 def test_the_picker_drops_beta_after_a_recorded_review(monkeypatch):

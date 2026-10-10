@@ -71,8 +71,9 @@ def _surfaces(raw):
 
 
 #: Surfaces a later feature changed on purpose: the line under an answer
-#: became a live status block (Claude Code style), so its English moved on.
-CHANGED_SINCE = {"agents_line"}
+#: became a live status block (Claude Code style), and the language list
+#: dropped its "(beta)" marks (operator, 2026-10-10).
+CHANGED_SINCE = {"agents_line", "language.list"}
 
 
 def test_every_english_surface_of_the_base_is_unchanged():
@@ -137,7 +138,7 @@ def test_the_changelog_has_no_stale_sentence(stale):
     assert stale.lower() not in unreleased().lower()
 
 
-@pytest.mark.parametrize("phrase", ["safety blocks", "(beta)", "Keep English", "/language",
+@pytest.mark.parametrize("phrase", ["safety blocks", "Keep English", "/language",
                                     "Automatic"])
 def test_the_multilingual_bullet_keeps_the_pinned_facts(phrase):
     assert phrase in multilingual_bullets()[0]
@@ -172,7 +173,7 @@ def test_commands_has_a_languages_section():
     assert re.search(r"^## Languages\s*$", doc("docs/commands.md"), re.M)
 
 
-@pytest.mark.parametrize("needle", ["/language", "Automatic", "admin", "(beta)", "Claude",
+@pytest.mark.parametrize("needle", ["/language", "Automatic", "admin", "Claude",
                                     "/mode"])
 def test_the_languages_section_covers(needle):
     assert needle in section(doc("docs/commands.md"), "## Languages")
@@ -202,10 +203,16 @@ def test_the_readme_lists_all_languages_on_one_line():
     assert len(lines) == 1
 
 
-def test_the_readme_languages_line_says_beta():
+def test_the_readme_languages_line_says_no_beta():
+    # No "(beta)" anywhere a user reads the language list (operator, 2026-10-10).
     (line,) = [ln for ln in doc("README.md").splitlines()
                if all(locales.LOCALES[c].endonym in ln for c in LAUNCHED)]
-    assert "beta" in line
+    assert "beta" not in line.lower()
+
+
+@pytest.mark.parametrize("rel", ["README.md", "docs/commands.md", "CHANGELOG.md"])
+def test_no_doc_promises_a_beta_mark(rel):
+    assert "(beta)" not in doc(rel)
 
 
 def test_every_doc_listing_the_state_files_lists_languages_json():

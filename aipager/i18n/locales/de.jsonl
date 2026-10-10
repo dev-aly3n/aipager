@@ -281,7 +281,6 @@
 {"k": "kbmsg.models", "src": "78548025", "v": "🤖 Modell"}
 {"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 Vorlagen"}
 {"k": "lang.auto", "src": "a66c2e1b", "v": "Automatisch (deine Telegram-Sprache)"}
-{"k": "lang.beta", "src": "07f92a33", "v": "{language} (Beta)"}
 {"k": "lang.changed", "src": "4e8c6791", "v": "✅ aipager spricht hier jetzt {language}. Deine Sitzungen und Claudes Antworten bleiben gleich."}
 {"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager spricht hier {language} (nur seine eigenen Nachrichten; Claude antwortet in der Sprache, in der du schreibst). Ändern mit /language"}
 {"k": "lang.list.group", "src": "9462a94a", "v": "🌐 Die Sprache, die aipager für die Karten und Buttons dieser Gruppe verwendet. Claudes Sitzungen ändern sich nicht: Claude antwortet in der Sprache, in der du schreibst."}

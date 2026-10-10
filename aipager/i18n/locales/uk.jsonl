@@ -281,7 +281,6 @@
 {"k": "kbmsg.models", "src": "78548025", "v": "🤖 Модель"}
 {"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 Шаблони"}
 {"k": "lang.auto", "src": "a66c2e1b", "v": "Автоматично (мова Telegram)"}
-{"k": "lang.beta", "src": "07f92a33", "v": "{language} (бета)"}
 {"k": "lang.changed", "src": "4e8c6791", "v": "✅ Тепер aipager говорить тут мовою {language}. Твої сесії та відповіді Claude не змінюються."}
 {"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager говорить тут мовою {language} (лише власні повідомлення; Claude відповідає мовою, якою ти пишеш). Змінити: /language"}
 {"k": "lang.list.group", "src": "9462a94a", "v": "🌐 Мова, якою aipager показує картки й кнопки цієї групи. Сесії Claude не змінюються: Claude відповідає мовою, якою йому пишуть."}

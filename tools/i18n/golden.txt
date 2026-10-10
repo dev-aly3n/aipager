@@ -114,7 +114,6 @@ modecard.usage
 # language
 lang.row
 lang.auto
-lang.beta
 lang.changed
 lang.list.private
 lang.list.group

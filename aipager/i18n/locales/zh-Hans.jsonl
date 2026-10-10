@@ -281,7 +281,6 @@
 {"k": "kbmsg.models", "src": "78548025", "v": "🤖 模型"}
 {"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 模板"}
 {"k": "lang.auto", "src": "a66c2e1b", "v": "自动（你的 Telegram 语言）"}
-{"k": "lang.beta", "src": "07f92a33", "v": "{language}（测试版）"}
 {"k": "lang.changed", "src": "4e8c6791", "v": "✅ aipager 现在在这里使用 {language}。你的会话和 Claude 的回答不变。"}
 {"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager 在这里使用 {language}（只限它自己的消息；Claude 会用你写的语言回答）。可用 /language 更改"}
 {"k": "lang.list.group", "src": "9462a94a", "v": "🌐 aipager 在这个群组的卡片和按钮中使用的语言。Claude 的会话不会改变：Claude 会用你写给它的语言回答。"}
