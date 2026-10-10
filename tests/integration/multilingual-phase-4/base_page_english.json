@@ -1,0 +1,120 @@
+{
+ "grid": {
+  "texts": [
+   "1 working",
+   ", ",
+   "1 resting",
+   "$1.50 spent \u00b7 2 finished",
+   "45",
+   "working",
+   "web2",
+   "web2",
+   "claude-opus-5 \u00b7 $1.50",
+   "0",
+   "resting",
+   "echo",
+   "proj",
+   "claude-opus-5 \u00b7 $0.00",
+   "old1",
+   "proj \u00b7 Sonnet 5",
+   "seed",
+   "proj"
+  ],
+  "calls": [
+   [
+    "GET",
+    "/api/chats"
+   ],
+   [
+    "GET",
+    "/api/sessions"
+   ]
+  ],
+  "arias": [
+   "Chat",
+   "Create this folder",
+   "New name",
+   "New session",
+   "Sections",
+   "Session actions",
+   "echo, resting, context 0%, claude-opus-5, $0.00",
+   "web2, working, context 45%, claude-opus-5, $1.50"
+  ]
+ },
+ "detail": {
+  "texts": [
+   "1 working",
+   ", ",
+   "1 resting",
+   "$1.50 spent \u00b7 2 finished",
+   "45",
+   "working",
+   "web2",
+   "web2",
+   "claude-opus-5 \u00b7 $1.50",
+   "0",
+   "resting",
+   "echo",
+   "proj",
+   "claude-opus-5 \u00b7 $0.00",
+   "old1",
+   "proj \u00b7 Sonnet 5",
+   "seed",
+   "proj",
+   "Stop",
+   "Activity",
+   "2 queued",
+   "3:12",
+   "Model",
+   "claude-opus-5",
+   "Directory",
+   "/srv/web2",
+   "Model",
+   "claude-opus-5",
+   "Message layout",
+   "Busy card + result",
+   "Diff previews",
+   "Off",
+   "Long-turn card updates",
+   "On",
+   "Simple formatting",
+   "Off",
+   "Answer length",
+   "Don't apply any rule",
+   "Vocabulary level",
+   "Don't apply any rule"
+  ],
+  "calls": [
+   [
+    "GET",
+    "/api/chats"
+   ],
+   [
+    "GET",
+    "/api/sessions"
+   ],
+   [
+    "GET",
+    "/api/sessions/web2/preferences"
+   ],
+   [
+    "GET",
+    "/api/sessions/web2"
+   ],
+   [
+    "GET",
+    "/api/session-options"
+   ]
+  ],
+  "arias": [
+   "Chat",
+   "Create this folder",
+   "New name",
+   "New session",
+   "Sections",
+   "Session actions",
+   "echo, resting, context 0%, claude-opus-5, $0.00",
+   "web2, working, context 45%, claude-opus-5, $1.50"
+  ]
+ }
+}

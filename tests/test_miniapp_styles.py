@@ -412,7 +412,7 @@ def test_the_loading_caption_goes_once_the_report_shows():
     assert "display: none" in _block("#rp-body:not([hidden]) + .rp-wait")
     # Right after #rp-body, so the sibling rule above can see it.
     assert re.search(r'without your name\.</p>\s*</div>\s*'
-                     r'<p class="sect-note rp-wait">Preparing the report\.\.\.</p>', INDEX_HTML)
+                     r'<p class="sect-note rp-wait"[^>]*>Preparing the report\.\.\.</p>', INDEX_HTML)
 
 
 # ===========================================================================

@@ -87,17 +87,17 @@ HTML_BODY = """\
     <svg class="ic brand-mark" aria-hidden="true"><use href="#i-lantern"></use></svg>
     <div class="brand-text">
       <h1>aipager</h1>
-      <div id="daemon-line" class="daemon-line">Loading…</div>
+      <div id="daemon-line" class="daemon-line" dir="ltr" data-i18n="ui.shell.loading">Loading…</div>
     </div>
   </div>
   <span id="conn-badge" class="conn conn-live" hidden></span>
 </header>
 
-<div id="chat-switch" class="chat-switch" role="group" aria-label="Chat" hidden></div>
+<div id="chat-switch" class="chat-switch" role="group" aria-label="Chat" data-i18n-label="ui.shell.chat_aria" hidden></div>
 
-<nav class="tabbar" id="tabbar" aria-label="Sections">
-  <button type="button" class="tabbar-btn is-active" id="maintab-sessions">Sessions<span id="waiting-badge" class="badge" hidden></span></button>
-  <button type="button" class="tabbar-btn" id="maintab-settings">Settings</button>
+<nav class="tabbar" id="tabbar" aria-label="Sections" data-i18n-label="ui.shell.sections_aria">
+  <button type="button" class="tabbar-btn is-active" id="maintab-sessions"><span data-i18n="ui.tab.sessions">Sessions</span><span id="waiting-badge" class="badge" hidden></span></button>
+  <button type="button" class="tabbar-btn" id="maintab-settings"><span data-i18n="ui.tab.settings">Settings</span></button>
 </nav>
 
 <div id="error" role="alert"></div>
@@ -106,18 +106,18 @@ HTML_BODY = """\
 <section id="view-grid">
   <div class="pulse-row">
     <div id="grid-totals" class="pulse" aria-live="polite"></div>
-    <button type="button" id="new-session-btn" class="fab" aria-label="New session"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button>
+    <button type="button" id="new-session-btn" class="fab" aria-label="New session" data-i18n-label="ui.shell.new_session_aria"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button>
   </div>
   <div id="needs-you" class="needs-you" hidden>
-    <h2 class="sect-title sect-need"><span class="beacon-dot" aria-hidden="true"></span>Needs you</h2>
+    <h2 class="sect-title sect-need"><span class="beacon-dot" aria-hidden="true"></span><span data-i18n="ui.grid.needs_you">Needs you</span></h2>
     <div id="needs-you-list" class="beacon-list"></div>
   </div>
   <div id="sessions" class="lanterns"></div>
   <div id="empty-state" class="empty" hidden>
     <div class="empty-lamp" aria-hidden="true"><svg class="ic"><use href="#i-lantern"></use></svg></div>
-    <p class="empty-title">No sessions yet.</p>
-    <p class="empty-text">Start one here or send /new in the chat.</p>
-    <button type="button" id="empty-new" class="primary"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>New session</button>
+    <p class="empty-title" data-i18n="ui.empty.title">No sessions yet.</p>
+    <p class="empty-text" data-i18n="ui.empty.text">Start one here or send /new in the chat.</p>
+    <button type="button" id="empty-new" class="primary"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg><span data-i18n="ui.btn.new_session">New session</span></button>
   </div>
   <div id="gone-wrap" class="shelf" hidden>
     <button type="button" class="gone-toggle" id="gone-toggle" aria-expanded="false"></button>
@@ -128,87 +128,87 @@ HTML_BODY = """\
 <section id="view-new" hidden>
   <div class="view-hero">
     <div>
-      <h2 class="view-title">New session</h2>
-      <p class="view-sub">Name it, pick a folder, and Claude starts there.</p>
+      <h2 class="view-title" data-i18n="ui.new.title">New session</h2>
+      <p class="view-sub" data-i18n="ui.new.sub">Name it, pick a folder, and Claude starts there.</p>
     </div>
   </div>
   <ol class="steps">
     <li class="step">
-      <span class="step-num" aria-hidden="true">1</span>
-      <div class="step-head"><label class="step-title" for="new-name">Name</label></div>
-      <input id="new-name" class="field-input" type="text" autocomplete="off"
+      <span class="step-num" aria-hidden="true" data-i18n-num="1">1</span>
+      <div class="step-head"><label class="step-title" for="new-name" data-i18n="ui.new.name">Name</label></div>
+      <input id="new-name" class="field-input" type="text" autocomplete="off" dir="ltr"
              autocapitalize="none" spellcheck="false" placeholder="frontend" maxlength="64">
       <div id="new-name-error" class="field-error" hidden></div>
     </li>
     <li class="step">
-      <span class="step-num" aria-hidden="true">2</span>
-      <div class="step-head"><span class="step-title">Where</span></div>
+      <span class="step-num" aria-hidden="true" data-i18n-num="2">2</span>
+      <div class="step-head"><span class="step-title" data-i18n="ui.new.where">Where</span></div>
       <div id="new-cwd-chips" class="chips" hidden></div>
       <div id="new-cwd" class="groups"></div>
     </li>
     <li class="step">
-      <span class="step-num" aria-hidden="true">3</span>
-      <div class="step-head"><span class="step-title">Model</span></div>
+      <span class="step-num" aria-hidden="true" data-i18n-num="3">3</span>
+      <div class="step-head"><span class="step-title" data-i18n="ui.model.title">Model</span></div>
       <div id="new-model-chips" class="chips" hidden></div>
       <div id="new-model" class="groups"></div>
     </li>
     <li class="step step-more">
       <span class="step-num" aria-hidden="true">+</span>
-      <button type="button" class="disclosure" id="new-advanced-toggle" aria-expanded="false"><span>More options</span><svg class="ic chev" aria-hidden="true"><use href="#i-chevron"></use></svg></button>
+      <button type="button" class="disclosure" id="new-advanced-toggle" aria-expanded="false"><span data-i18n="ui.new.more">More options</span><svg class="ic chev" aria-hidden="true"><use href="#i-chevron"></use></svg></button>
       <div id="new-advanced" hidden>
         <div id="new-mode" class="groups"></div>
-        <div id="new-mode-note" class="note" hidden>Auto mode requires admin.</div>
+        <div id="new-mode-note" class="note" data-i18n="ui.new.auto_needs_admin" hidden>Auto mode requires admin.</div>
         <div id="new-prefs" class="groups"></div>
       </div>
     </li>
   </ol>
   <div id="new-summary" class="new-summary"></div>
-  <button type="button" class="primary block" id="new-create">Start session</button>
+  <button type="button" class="primary block" id="new-create" data-i18n="ui.btn.start_session">Start session</button>
 </section>
 
 <section id="view-report" hidden>
   <div class="view-hero" id="rp-hero">
     <div>
-      <h2 class="view-title">Report a problem</h2>
-      <p class="view-sub">It holds versions, counts and places in aipager's code. Never your chats, prompts, names or paths.</p>
+      <h2 class="view-title" data-i18n="ui.report.title">Report a problem</h2>
+      <p class="view-sub" data-i18n="ui.report.privacy">It holds versions, counts and places in aipager's code. Never your chats, prompts, names or paths.</p>
     </div>
   </div>
   <div id="rp-form">
-    <label class="reveal-label" for="rp-note">Your note (optional)</label>
+    <label class="reveal-label" for="rp-note" data-i18n="ui.report.note_label">Your note (optional)</label>
     <textarea id="rp-note" class="field-input rp-text" rows="3" autocapitalize="sentences"
-              placeholder="What were you doing when it went wrong?"></textarea>
-    <div class="rp-meta"><span id="rp-hint">Sent exactly as written.</span><span id="rp-count" class="rp-count">0 / 500</span></div>
+              placeholder="What were you doing when it went wrong?" data-i18n-placeholder="ui.report.note_placeholder" dir="auto"></textarea>
+    <div class="rp-meta"><span id="rp-hint" data-i18n="ui.report.as_written">Sent exactly as written.</span><span id="rp-count" class="rp-count" data-i18n-num="0 / 500">0 / 500</span></div>
     <div id="rp-status" class="rp-status" role="status" hidden></div>
-    <h3 class="sect-title">What gets sent</h3>
+    <h3 class="sect-title" data-i18n="ui.report.what_sent">What gets sent</h3>
     <dl id="rp-facts" class="facts"></dl>
     <div id="rp-body" hidden>
-      <h3 class="sect-title" id="rp-err-title">Errors</h3>
+      <h3 class="sect-title" id="rp-err-title" data-i18n="ui.report.errors">Errors</h3>
       <div id="rp-errors" class="groups disclosures rp-list"></div>
-      <p id="rp-noerr" class="sect-note" hidden>No errors recorded lately. The facts above and your note still help.</p>
+      <p id="rp-noerr" class="sect-note" data-i18n="ui.report.no_errors" hidden>No errors recorded lately. The facts above and your note still help.</p>
       <div class="groups disclosures">
         <button type="button" class="sect-toggle" id="rp-more-btn"></button>
         <dl id="rp-more-facts" class="facts rp-more" hidden></dl>
         <button type="button" class="sect-toggle" id="rp-exact-btn"></button>
         <div id="rp-exact-wrap" hidden>
-          <p class="sect-note">This is the exact text that is sent, your note included.</p>
-          <pre id="rp-exact" class="diff-body rp-mono"></pre>
+          <p class="sect-note" data-i18n="ui.report.exact_note">This is the exact text that is sent, your note included.</p>
+          <pre id="rp-exact" class="diff-body rp-mono" dir="ltr"></pre>
         </div>
       </div>
-      <button type="button" class="primary block mb-mirror rp-send" id="rp-send">Send report</button>
-      <p class="rp-foot">Nothing is sent until you tap Send report. It goes to the maintainer's error inbox, without your name.</p>
+      <button type="button" class="primary block mb-mirror rp-send" id="rp-send" data-i18n="ui.btn.send_report">Send report</button>
+      <p class="rp-foot" data-i18n="ui.report.foot">Nothing is sent until you tap Send report. It goes to the maintainer's error inbox, without your name.</p>
     </div>
-    <p class="sect-note rp-wait">Preparing the report...</p>
+    <p class="sect-note rp-wait" data-i18n="ui.report.preparing">Preparing the report...</p>
   </div>
   <div id="rp-result" class="rp-result" hidden>
     <span id="rp-badge" class="rp-badge" aria-hidden="true"></span>
     <h3 class="view-title" id="rp-result-title"></h3>
     <p class="view-sub" id="rp-result-line"></p>
     <div id="rp-ref-row" class="rp-ref-row" hidden>
-      <code id="rp-ref" class="rp-ref"></code>
-      <button type="button" class="updates-again" id="rp-copy">Copy</button>
+      <code id="rp-ref" class="rp-ref" dir="ltr"></code>
+      <button type="button" class="updates-again" id="rp-copy" data-i18n="ui.btn.copy">Copy</button>
     </div>
-    <p id="rp-copy-hint" class="rp-foot" hidden>Long-press the reference to copy it.</p>
-    <button type="button" class="primary block mb-mirror" id="rp-done">Done</button>
+    <p id="rp-copy-hint" class="rp-foot" data-i18n="ui.report.copy_hint" hidden>Long-press the reference to copy it.</p>
+    <button type="button" class="primary block mb-mirror" id="rp-done" data-i18n="ui.btn.done">Done</button>
   </div>
 </section>
 
@@ -224,10 +224,10 @@ HTML_BODY = """\
     <p id="confirm-body" class="modal-body"></p>
     <input id="confirm-rename-input" class="field-input" type="text"
            autocomplete="off" autocapitalize="none" spellcheck="false"
-           maxlength="64" aria-label="New name" hidden>
+           maxlength="64" aria-label="New name" data-i18n-label="ui.shell.new_name_aria" dir="ltr" hidden>
     <div id="confirm-rename-error" class="field-error" hidden></div>
     <div class="modal-actions">
-      <button type="button" id="confirm-cancel" class="modal-btn">Cancel</button>
+      <button type="button" id="confirm-cancel" class="modal-btn" data-i18n="ui.btn.cancel">Cancel</button>
       <button type="button" id="confirm-ok" class="modal-btn is-danger"></button>
     </div>
   </div>
@@ -241,22 +241,22 @@ HTML_BODY = """\
 -->
 <div id="node-stash" hidden>
   <div id="new-model-reveal" class="reveal">
-    <label class="reveal-label" for="new-model-name">Model name</label>
-    <input id="new-model-name" class="field-input" type="text" autocomplete="off"
+    <label class="reveal-label" for="new-model-name" data-i18n="ui.new.model_name">Model name</label>
+    <input id="new-model-name" class="field-input" type="text" autocomplete="off" dir="ltr"
            autocapitalize="none" spellcheck="false" placeholder="claude-opus-5"
            maxlength="64">
     <div id="new-model-note" class="reveal-note"></div>
   </div>
 
   <div id="new-folder-reveal" class="reveal">
-    <label class="reveal-label" for="new-folder-name">New folder name</label>
+    <label class="reveal-label" for="new-folder-name" data-i18n="ui.new.folder_name">New folder name</label>
     <div class="prefix-field">
-      <span id="new-folder-prefix" class="prefix-text"></span>
-      <input id="new-folder-name" class="prefix-input" type="text" autocomplete="off"
+      <span id="new-folder-prefix" class="prefix-text" dir="ltr"></span>
+      <input id="new-folder-name" class="prefix-input" type="text" autocomplete="off" dir="ltr"
              autocapitalize="none" spellcheck="false" placeholder="my-project"
              maxlength="64" enterkeyhint="done">
       <button type="button" class="prefix-go" id="new-folder-create"
-              aria-label="Create this folder"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button>
+              aria-label="Create this folder" data-i18n-label="ui.new.create_folder_aria"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button>
     </div>
     <div id="new-folder-note" class="reveal-note"></div>
   </div>
@@ -265,14 +265,14 @@ HTML_BODY = """\
 <section id="view-settings" hidden>
   <div id="settings-app-language" class="groups"></div>
   <p class="sect-note" id="settings-app-language-hint" hidden></p>
-  <h2 class="sect-title">Chat preferences</h2>
-  <p class="sect-note" id="settings-intro">These apply to every session in this chat.</p>
+  <h2 class="sect-title" data-i18n="ui.settings.chat_prefs">Chat preferences</h2>
+  <p class="sect-note" id="settings-intro" data-i18n="ui.settings.intro">These apply to every session in this chat.</p>
   <div id="settings-groups" class="groups"></div>
-  <div id="settings-readonly" class="note" hidden>Only an admin can change these.</div>
+  <div id="settings-readonly" class="note" data-i18n="ui.settings.readonly" hidden>Only an admin can change these.</div>
   <div id="updates-block" class="card updates" hidden>
     <div class="card-head">
       <span class="card-icon" aria-hidden="true"><svg class="ic"><use href="#i-refresh"></use></svg></span>
-      <h3 class="card-title">Updates</h3>
+      <h3 class="card-title" data-i18n="ui.update.title">Updates</h3>
     </div>
     <div id="updates-lines" class="updates-lines"></div>
     <div id="updates-source" class="updates-small" hidden></div>
@@ -284,11 +284,11 @@ HTML_BODY = """\
   <div id="report-block" class="card updates" hidden>
     <div class="card-head">
       <span class="card-icon" aria-hidden="true"><svg class="ic"><use href="#i-question"></use></svg></span>
-      <h3 class="card-title">Report a problem</h3>
+      <h3 class="card-title" data-i18n="ui.report.title">Report a problem</h3>
     </div>
-    <div class="updates-small">Tell the maintainer what went wrong. You see the whole report before anything is sent.</div>
+    <div class="updates-small" data-i18n="ui.report.card_text">Tell the maintainer what went wrong. You see the whole report before anything is sent.</div>
     <div class="updates-actions">
-      <button type="button" class="primary" id="report-open">Report a problem</button>
+      <button type="button" class="primary" id="report-open" data-i18n="ui.btn.report">Report a problem</button>
     </div>
   </div>
 </section>
@@ -297,7 +297,7 @@ HTML_BODY = """\
   <div id="detail-header" class="d-head">
     <div id="detail-ring" class="lamp lamp-lg" aria-hidden="true"></div>
     <div class="d-title">
-      <div id="detail-label" class="detail-label"></div>
+      <div id="detail-label" class="detail-label" dir="ltr"></div>
       <div class="d-state-row">
         <span id="detail-status" class="status"></span>
         <span id="detail-state" class="d-state"></span>
@@ -307,7 +307,7 @@ HTML_BODY = """\
     <span class="kebab-wrap">
       <button type="button" id="detail-menu-btn" class="kebab"
               aria-haspopup="menu" aria-expanded="false"
-              aria-label="Session actions" hidden><svg class="ic" aria-hidden="true"><use href="#i-dots"></use></svg></button>
+              aria-label="Session actions" data-i18n-label="ui.shell.actions_aria" hidden><svg class="ic" aria-hidden="true"><use href="#i-dots"></use></svg></button>
       <div id="action-menu" class="menu" role="menu" hidden></div>
     </span>
   </div>
@@ -316,34 +316,34 @@ HTML_BODY = """\
       <span id="detail-waiting-lamp" class="lamp lamp-need lamp-sm" aria-hidden="true"></span>
       <div class="beacon-text">
         <span id="detail-waiting-kind" class="beacon-kicker"></span>
-        <p id="detail-waiting-text" class="beacon-summary"></p>
+        <p id="detail-waiting-text" class="beacon-summary" dir="auto"></p>
       </div>
     </div>
     <div class="beacon-actions">
-      <button type="button" id="detail-answer" class="primary btn-need" hidden><svg class="ic" aria-hidden="true"><use href="#i-chat"></use></svg><span>Answer in chat</span></button>
+      <button type="button" id="detail-answer" class="primary btn-need" hidden><svg class="ic" aria-hidden="true"><use href="#i-chat"></use></svg><span data-i18n="ui.btn.answer_in_chat">Answer in chat</span></button>
     </div>
     <div id="detail-answer-note" class="note" hidden></div>
   </div>
   <button type="button" id="detail-activity" class="activity" hidden></button>
 
-  <h2 class="sect-title">Latest reply</h2>
-  <div id="detail-preview" class="preview"></div>
+  <h2 class="sect-title" data-i18n="ui.detail.latest_reply">Latest reply</h2>
+  <div id="detail-preview" class="preview" dir="auto"></div>
   <dl id="detail-facts" class="facts"></dl>
   <!-- Switch the RUNNING session's model (roadmap 8.35). Drawn only for a
        live session; the note says why the picker is greyed out. -->
   <div id="detail-model" class="groups" hidden></div>
   <div id="detail-model-note" class="note" hidden></div>
 
-  <h2 class="sect-title">Session settings</h2>
+  <h2 class="sect-title" data-i18n="ui.detail.session_settings">Session settings</h2>
   <div id="session-settings-groups" class="groups"></div>
-  <div id="session-settings-readonly" class="note" hidden>Only someone who can prompt this session can change these.</div>
-  <button type="button" class="link-btn" id="session-settings-reset" hidden>Reset to defaults</button>
+  <div id="session-settings-readonly" class="note" data-i18n="ui.detail.settings_readonly" hidden>Only someone who can prompt this session can change these.</div>
+  <button type="button" class="link-btn" id="session-settings-reset" data-i18n="ui.btn.reset_defaults" hidden>Reset to defaults</button>
 
   <div class="groups disclosures">
     <button type="button" class="sect-toggle" id="tab-diff"></button>
     <div id="panel-diff" class="panel" hidden></div>
     <button type="button" class="sect-toggle" id="tab-timeline"></button>
-    <div id="timeline-note" class="sect-note" hidden>The timeline only covers the current daemon run. It isn't saved across restarts, so an older session shows nothing here.</div>
+    <div id="timeline-note" class="sect-note" data-i18n="ui.timeline.note" hidden>The timeline only covers the current daemon run. It isn't saved across restarts, so an older session shows nothing here.</div>
     <div id="panel-timeline" class="panel" hidden></div>
   </div>
 </section>

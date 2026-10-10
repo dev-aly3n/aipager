@@ -114,6 +114,11 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"resume\.[a-z0-9_.]+", "message", "chars", 300, ""),
     (r"ago\.[a-z0-9_.]+", "label", "chars", 40, ""),
     (r"diff\.[a-z0-9_.]+", "message", "chars", 120, ""),
+    # The Mini App (phase 4): the page's buttons, its other text, and the
+    # server's details, facts, reasons and chat lines.
+    (r"ui\.btn\.[a-z0-9_.]+", "button", "cells", 40, ""),
+    (r"ui\.[a-z0-9_.]+", "message", "chars", 300, ""),
+    (r"app\.[a-z0-9_.]+", "message", "chars", 300, ""),
 )
 
 

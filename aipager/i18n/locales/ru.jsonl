@@ -27,8 +27,92 @@
 {"k": "ans.verb.option", "src": "7a8b9272", "v": "Выбран вариант {n}"}
 {"k": "ans.verb.selected", "src": "5462eaaf", "v": "Выбрано: {options}"}
 {"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "Отправлено (ничего)"}
+{"k": "app.chat.dm", "src": "05a3b9fa", "v": "Личный чат"}
+{"k": "app.chat.group", "src": "171a0606", "v": "Группа"}
+{"k": "app.err.already_restarting", "src": "9234890e", "v": "Эта сессия уже перезапускается - подожди немного."}
+{"k": "app.err.already_running", "src": "41e94cd2", "v": "Эта сессия уже работает."}
+{"k": "app.err.answer_chat_busy", "src": "e0f91f04", "v": "Telegram занят. Попробуй чуть позже."}
+{"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "Эта сессия больше тебя не ждёт."}
+{"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "Не удалось отправить запрос в чат."}
+{"k": "app.err.auto_needs_admin", "src": "ad1f0c2f", "v": "Режим Авто доступен только админу."}
+{"k": "app.err.delete_running", "src": "71f25b50", "v": "Сессия ещё работает. Сначала останови её через «Завершить»."}
+{"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "Не удалось завершить - процесс ещё работает. Попробуй ещё раз."}
+{"k": "app.err.name_taken", "src": "9ab9e08f", "v": "Сессия с именем {session} уже есть в этом чате."}
+{"k": "app.err.not_busy", "src": "bbafa529", "v": "Эта сессия сейчас не занята - для остановки ничего нет."}
+{"k": "app.err.not_resendable", "src": "82303f6c", "v": "Этот запрос нельзя отправить заново. Ответь на него в терминале."}
+{"k": "app.err.not_running", "src": "af9ca5bc", "v": "Сессия не запущена."}
+{"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} ещё останавливается - режим не изменён. Попробуй чуть позже."}
+{"k": "app.err.pick_model", "src": "773e24c4", "v": "Выбери модель."}
+{"k": "app.err.restart_still_stopping", "src": "701b0bd8", "v": "{session} ещё останавливается. Попробуй чуть позже."}
+{"k": "app.err.resumed_in_ask", "src": "7024b7b8", "v": "Сессия {session} возобновлена в режиме Спрашивать: {reason}"}
+{"k": "app.err.resuming", "src": "2a557399", "v": "Эта сессия как раз возобновляется. Попробуй чуть позже."}
+{"k": "app.err.send_failed", "src": "e4349ad3", "v": "Не удалось отправить {command}."}
+{"k": "app.fact.context", "src": "cc11b3a2", "v": "Контекст"}
+{"k": "app.fact.cost", "src": "64ae43e8", "v": "Стоимость"}
+{"k": "app.fact.cwd", "src": "4b892fe0", "v": "Папка"}
+{"k": "app.fact.last_active", "src": "b5665ec6", "v": "Последняя активность"}
+{"k": "app.fact.model", "src": "68c2cc7f", "v": "Модель"}
+{"k": "app.fact.working", "src": "e7df8df6", "v": "Работает"}
 {"k": "app.language.hint", "src": "90e01e41", "v": "Только собственный текст aipager. Ответы Claude не меняются."}
 {"k": "app.language.title", "src": "01e1787a", "v": "Язык приложения"}
+{"k": "app.launch.cwd_bad_char", "src": "0dcfc308", "v": "В рабочей папке есть недопустимый символ."}
+{"k": "app.launch.cwd_no_roots", "src": "45693d90", "v": "Пока нет ни одной папки - сначала запусти сессию из чата, потом здесь появится её проект."}
+{"k": "app.launch.cwd_not_allowed", "src": "8e0b71f9", "v": "Этот чат не работает в этой папке."}
+{"k": "app.launch.cwd_not_dir", "src": "9b0be449", "v": "Этот путь не папка."}
+{"k": "app.launch.cwd_not_text", "src": "9497b469", "v": "Рабочая папка должна быть текстом."}
+{"k": "app.launch.cwd_unresolvable", "src": "e87ce055", "v": "Не удалось определить эту папку."}
+{"k": "app.launch.folder_bad_char", "src": "9052a17d", "v": "В имени папки есть недопустимый символ."}
+{"k": "app.launch.folder_empty", "src": "aa11b815", "v": "Имя папки не может быть пустым."}
+{"k": "app.launch.folder_exists", "src": "8dec41ad", "v": "Папка с таким именем там уже есть. Выбери другое имя."}
+{"k": "app.launch.folder_failed", "src": "4d757c2b", "v": "Не удалось создать эту папку."}
+{"k": "app.launch.folder_loads_code", "src": "78ba6bd6", "v": "«{name}» здесь не может быть папкой проекта: другие программы загружают из неё код. Выбери другое имя."}
+{"k": "app.launch.folder_not_text", "src": "3988a95d", "v": "Имя папки должно быть текстом."}
+{"k": "app.launch.folder_parent", "src": "0a28b1e0", "v": "Выбери рабочую папку, в которой создать новую."}
+{"k": "app.launch.folder_pattern", "src": "c3b51490", "v": "Используй латинские буквы, цифры, точки, дефисы и подчёркивания; начинай с буквы или цифры."}
+{"k": "app.launch.folder_too_long", "src": "ae5dc64d", "v": "Имя папки должно быть не длиннее {max} символов."}
+{"k": "app.launch.model_not_text", "src": "55a7cf25", "v": "Модель должна быть текстом."}
+{"k": "app.launch.model_pattern", "src": "44cdf715", "v": "Выбери модель из списка или укажи полное имя модели, например {example}."}
+{"k": "app.launch.model_too_long", "src": "47dfc21f", "v": "Имя модели должно быть не длиннее {max} символов."}
+{"k": "app.launch.name_bad_char", "src": "1b9271b6", "v": "В имени сессии есть недопустимый символ."}
+{"k": "app.launch.name_empty", "src": "e00fbfca", "v": "Имя сессии не может быть пустым."}
+{"k": "app.launch.name_not_text", "src": "f6218198", "v": "Имя сессии должно быть текстом."}
+{"k": "app.launch.name_pattern", "src": "b916e083", "v": "Используй латинские буквы, цифры, дефисы и подчёркивания; начинай с буквы или цифры."}
+{"k": "app.launch.name_reserved", "src": "2efe289d", "v": "«{name}» - зарезервированное имя команды ({command}). Выбери другое имя."}
+{"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "Имя сессии должно быть не длиннее {max} символов."}
+{"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "Пока нет папки проекта, где можно начать: попроси админа запустить сессию."}
+{"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "Выбери папку проекта: создай её через «Новая папка» или попроси админа запустить сессию."}
+{"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Твоя роль не может запускать сессию в домашней папке или выше. Выбери папку проекта: создай её через «Новая папка» или попроси админа запустить сессию."}
+{"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"few": "🧹 Из очереди [{session}] убрано {n} сообщения через Mini App", "many": "🧹 Из очереди [{session}] убрано {n} сообщений через Mini App", "one": "🧹 Из очереди [{session}] убрано {n} сообщение через Mini App", "other": "🧹 Из очереди [{session}] убрано {n} сообщения через Mini App"}}
+{"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Сжатие [{session}] запущено через Mini App"}
+{"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 Сессия {session} создана через Mini App · {mode}"}
+{"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 Сессия {session} создана через Mini App · {mode}\n📁 {folder}"}
+{"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] удалена через Mini App"}
+{"k": "app.mirror.folder", "src": "603d7ae2", "v": "📁 Через Mini App создана новая папка:\n{path}"}
+{"k": "app.mirror.killed", "src": "63565832", "v": "💀 [{session}] завершена через Mini App"}
+{"k": "app.mirror.model", "src": "6df57f60", "v": "🔄 [{session}] → {model} через Mini App"}
+{"k": "app.mirror.renamed", "src": "22ad8a4c", "v": "✏️ [{old}] переименована в [{new}] через Mini App"}
+{"k": "app.mirror.restarted", "src": "9aa8323d", "v": "🔁 [{session}] перезапущена через Mini App"}
+{"k": "app.mirror.resumed", "src": "fafeafa6", "v": "♻️ [{session}] возобновлена через Mini App"}
+{"k": "app.mirror.resumed_in_ask", "src": "429a5b47", "v": "♻️ [{session}] возобновлена через Mini App в режиме Спрашивать: {reason}"}
+{"k": "app.mirror.session_setting", "src": "3256d908", "v": "⚙️ {setting} → {value} для сессии {session} (изменено через Mini App)"}
+{"k": "app.mirror.session_setting_reset", "src": "4502514a", "v": "⚙️ {setting} для сессии {session} снова по умолчанию ({value}) (изменено через Mini App)"}
+{"k": "app.mirror.setting", "src": "6820a9f7", "v": "⚙️ {setting} → {value} (изменено через Mini App)"}
+{"k": "app.mirror.stopped", "src": "70cd9e81", "v": "⏹️ [{session}] остановлена через Mini App"}
+{"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"few": "⏹️ [{session}] остановлена через Mini App ({n} сообщения из очереди отброшено)", "many": "⏹️ [{session}] остановлена через Mini App ({n} сообщений из очереди отброшено)", "one": "⏹️ [{session}] остановлена через Mini App ({n} сообщение из очереди отброшено)", "other": "⏹️ [{session}] остановлена через Mini App ({n} сообщения из очереди отброшено)"}}
+{"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 Сессия {session} переключена в режим Спрашивать через Mini App"}
+{"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 Сессия {session} переключена в режим Авто через Mini App"}
+{"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude работает - смени модель, когда этот ход закончится."}
+{"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "Сессия не запущена."}
+{"k": "app.reason.model_pending", "src": "a3384cf1", "v": "Прошлая смена модели ещё не подтверждена - прежде чем менять снова, проверь в терминале вопрос Claude Code «Switch model?»."}
+{"k": "app.reason.model_prompt_open", "src": "c3641605", "v": "В терминале открыт запрос - ответь на него, прежде чем менять модель."}
+{"k": "app.reason.model_unconfirmed", "src": "316e6e23", "v": "не подтверждено - проверь сессию. Возможно, Claude Code спрашивает в терминале «Switch model?», или модель уже была такой."}
+{"k": "app.reason.model_unknown", "src": "4e5022f6", "v": "aipager ещё не видел состояние этой сессии - попробуй чуть позже."}
+{"k": "app.reason.no_context", "src": "8f590315", "v": "Нечего сжимать - контекст уже пуст."}
+{"k": "app.reason.no_permission", "src": "e1081627", "v": "У тебя нет разрешения управлять этой сессией."}
+{"k": "app.reason.no_transcript", "src": "3426f123", "v": "Нет транскрипта, который можно возобновить - начни новую сессию."}
+{"k": "app.reason.perms_admin", "src": "7202c2fd", "v": "Переключиться в режим Авто может только админ."}
+{"k": "app.reason.queue_empty", "src": "35da34dc", "v": "В очереди нечего очищать."}
+{"k": "app.reason.queue_full", "src": "2bf9f868", "v": "Очередь заполнена ({cap} в ожидании) - очисти её или дождись, пока она разойдётся."}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} заблокирован"}
 {"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {tool} заблокирован для {person}"}
 {"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {tool} заблокирован для {person} (роль {role})"}
@@ -437,6 +521,355 @@
 {"k": "tx.needs_admin", "src": "a2f55b85", "v": "Для этой команды нужен админ."}
 {"k": "tx.retry_others", "src": "4ad540c7", "v": "Повторить эту команду может только её отправитель."}
 {"k": "tx.truncated", "src": "27710457", "v": "…[обрезано]"}
+{"k": "ui.action.failed", "src": "1bd1baa4", "v": "Не получилось."}
+{"k": "ui.action.unreachable", "src": "209155a8", "v": "Нет связи с сервером. Ничего не изменилось."}
+{"k": "ui.activity.aria", "src": "649780e8", "v": {"few": "Недавняя активность: {n} вызова инструментов. Открой хронологию.", "many": "Недавняя активность: {n} вызовов инструментов. Открой хронологию.", "one": "Недавняя активность: {n} вызов инструментов. Открой хронологию.", "other": "Недавняя активность: {n} вызова инструментов. Открой хронологию."}}
+{"k": "ui.activity.failed", "src": "6c746778", "v": "{tool} (ошибка)"}
+{"k": "ui.activity.queued", "src": "45c54388", "v": {"few": "{n} в очереди", "many": "{n} в очереди", "one": "{n} в очереди", "other": "{n} в очереди"}}
+{"k": "ui.activity.recent", "src": "72d5617f", "v": "Недавняя активность"}
+{"k": "ui.activity.running", "src": "21ceddba", "v": "{tool} (выполняется)"}
+{"k": "ui.activity.running_for", "src": "181f56b1", "v": "{tool} (выполняется {clock})"}
+{"k": "ui.activity.title", "src": "81c0d915", "v": "Активность"}
+{"k": "ui.age.days", "src": "e827dc07", "v": "{n} дн. назад"}
+{"k": "ui.age.hours", "src": "1235f668", "v": "{n} ч назад"}
+{"k": "ui.age.minutes", "src": "83f8dc33", "v": "{n} мин назад"}
+{"k": "ui.age.seconds", "src": "b4e09dd8", "v": "{n} с назад"}
+{"k": "ui.answer.cannot", "src": "40c455f0", "v": "Ты не можешь отвечать на запросы в этом чате."}
+{"k": "ui.answer.send_failed", "src": "9a2e8fac", "v": "Не удалось отправить запрос в чат."}
+{"k": "ui.answer.sent", "src": "ba35b7cb", "v": "Отправлено в чат. Ответь там."}
+{"k": "ui.answer.unreachable", "src": "f159beba", "v": "Нет связи с сервером. Ничего не отправлено."}
+{"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude тебя о чём-то спрашивает."}
+{"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Открыть {session}"}
+{"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude хочет использовать инструмент."}
+{"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Очистить очередь"}
+{"k": "ui.btn.action.compact", "src": "10c986db", "v": "Сжать сейчас"}
+{"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Удалить"}
+{"k": "ui.btn.action.kill", "src": "7b932e77", "v": "Завершить"}
+{"k": "ui.btn.action.rename", "src": "d3f4cb89", "v": "Переименовать"}
+{"k": "ui.btn.action.restart", "src": "b134bd55", "v": "Перезапустить"}
+{"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "Возобновить"}
+{"k": "ui.btn.action.stop", "src": "9e253470", "v": "Стоп"}
+{"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "Ответить в чате"}
+{"k": "ui.btn.cancel", "src": "77dfd213", "v": "Отмена"}
+{"k": "ui.btn.check_again", "src": "e185048c", "v": "Проверить снова"}
+{"k": "ui.btn.check_updates", "src": "736b9062", "v": "Проверить обновления"}
+{"k": "ui.btn.checking", "src": "820d6004", "v": "Проверяю…"}
+{"k": "ui.btn.close_app", "src": "73743dc4", "v": "Закрыть приложение"}
+{"k": "ui.btn.copied", "src": "8e3df45a", "v": "Скопировано"}
+{"k": "ui.btn.copy", "src": "af74f7c5", "v": "Копировать"}
+{"k": "ui.btn.done", "src": "e9b450d1", "v": "Готово"}
+{"k": "ui.btn.new_session", "src": "5c881d23", "v": "Новая сессия"}
+{"k": "ui.btn.not_now", "src": "e4571490", "v": "Не сейчас"}
+{"k": "ui.btn.report", "src": "24f3f52d", "v": "Сообщить о проблеме"}
+{"k": "ui.btn.reset", "src": "44c57abd", "v": "Сбросить"}
+{"k": "ui.btn.reset_defaults", "src": "ddefe47d", "v": "Сбросить по умолчанию"}
+{"k": "ui.btn.restart_now", "src": "af2c3d8e", "v": "Перезапустить сейчас"}
+{"k": "ui.btn.save", "src": "efc007a3", "v": "Сохранить"}
+{"k": "ui.btn.send_report", "src": "a5b32af9", "v": "Отправить отчёт"}
+{"k": "ui.btn.sending", "src": "c338c191", "v": "Отправляю..."}
+{"k": "ui.btn.start_session", "src": "76684eaf", "v": "Запустить сессию"}
+{"k": "ui.btn.stop_and_switch", "src": "21c1d7af", "v": "Стоп и переключить"}
+{"k": "ui.btn.switch", "src": "3e44c920", "v": "Переключить"}
+{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "В режим Спрашивать"}
+{"k": "ui.btn.switch_to_auto", "src": "13a0f246", "v": "В режим Авто"}
+{"k": "ui.btn.try_again", "src": "042c862e", "v": "Попробовать снова"}
+{"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Ждать ещё 10 мин"}
+{"k": "ui.confirm.delete", "src": "734db731", "v": "Удалить {session}?"}
+{"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Сессия пропадёт из твоего списка. Её транскрипт останется на диске."}
+{"k": "ui.confirm.kill", "src": "804fbc7f", "v": "Завершить {session}?"}
+{"k": "ui.confirm.kill_body", "src": "beff52e4", "v": "Сессия будет остановлена и удалена. Всё, что она выполняла, прервётся."}
+{"k": "ui.confirm.perms_ask", "src": "c0710578", "v": "Переключить {session} в режим Спрашивать?"}
+{"k": "ui.confirm.perms_ask_body", "src": "701538b8", "v": "Claude спрашивает, прежде чем запускать инструменты."}
+{"k": "ui.confirm.perms_auto", "src": "b6a1ddde", "v": "Переключить {session} в режим Авто?"}
+{"k": "ui.confirm.perms_auto_body", "src": "7d8bf9c6", "v": "Claude запускает инструменты без вопросов."}
+{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "Остановить текущую задачу и переключить {session} в Спрашивать?"}
+{"k": "ui.confirm.perms_busy_auto", "src": "d4090a8b", "v": "Остановить текущую задачу и переключить {session} в Авто?"}
+{"k": "ui.confirm.rename", "src": "92656d63", "v": "Переименовать {session}?"}
+{"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "Сессия сохранит историю и рабочую папку. Изменится только имя."}
+{"k": "ui.confirm.reset", "src": "e13d0ebf", "v": "Сбросить настройки по умолчанию?"}
+{"k": "ui.confirm.reset_body", "src": "f2fd45cf", "v": "Собственные настройки этой сессии будут удалены, и она снова будет следовать настройкам чата."}
+{"k": "ui.confirm.restart", "src": "47a0c787", "v": "Перезапустить {session}?"}
+{"k": "ui.confirm.restart_body", "src": "5ec9d004", "v": "Сессия остановится и запустится снова с той же историей. Текущий ход будет прерван."}
+{"k": "ui.conn.expired", "src": "45a6f9ad", "v": "истекло"}
+{"k": "ui.conn.live", "src": "98aadb37", "v": "в сети"}
+{"k": "ui.conn.no_init", "src": "e2ebd902", "v": "Открой эту страницу из приложения Telegram, чтобы войти."}
+{"k": "ui.conn.offline", "src": "d1ffda5d", "v": "нет сети"}
+{"k": "ui.conn.reconnecting", "src": "6b160044", "v": "переподключение…"}
+{"k": "ui.conn.session_expired", "src": "c1c71ef8", "v": "Сессия входа истекла. Открой страницу снова через {command} в Telegram."}
+{"k": "ui.conn.unreachable", "src": "eb8937f2", "v": "Нет связи с сервером. Проверь туннель."}
+{"k": "ui.daemon.uptime", "src": "18bb02cb", "v": "работает {n} мин"}
+{"k": "ui.detail.latest_reply", "src": "455aaef0", "v": "Последний ответ"}
+{"k": "ui.detail.session_settings", "src": "ed40d944", "v": "Настройки сессии"}
+{"k": "ui.detail.settings_readonly", "src": "aebade5f", "v": "Менять их может только тот, кто может отправлять запросы этой сессии."}
+{"k": "ui.diff.binary", "src": "810945bb", "v": "Двоичный файл (без просмотра)."}
+{"k": "ui.diff.change.added", "src": "172415f0", "v": "добавлен"}
+{"k": "ui.diff.change.deleted", "src": "b639f5cc", "v": "удалён"}
+{"k": "ui.diff.change.modified", "src": "99db3247", "v": "изменён"}
+{"k": "ui.diff.change.renamed", "src": "87620709", "v": "переименован"}
+{"k": "ui.diff.change.untracked", "src": "d7390aa3", "v": "не отслеживается"}
+{"k": "ui.diff.clean", "src": "6eb6e7bf", "v": "Незафиксированных изменений нет."}
+{"k": "ui.diff.clean_in", "src": "0bde87e2", "v": "В {repo} нет незафиксированных изменений."}
+{"k": "ui.diff.failed", "src": "5d47ec55", "v": "Не удалось загрузить diff."}
+{"k": "ui.diff.gone", "src": "38a63905", "v": "Сессия больше недоступна."}
+{"k": "ui.diff.loading", "src": "c569ad51", "v": "Загружаю diff…"}
+{"k": "ui.diff.no_changes", "src": "9b1fcbda", "v": "Изменений нет."}
+{"k": "ui.diff.partial", "src": "4aa4772f", "v": "Показана только часть изменённых файлов. Полный diff больше, чем может показать этот просмотр."}
+{"k": "ui.diff.reason.cwd_missing", "src": "4140481e", "v": "Рабочей папки этой сессии больше нет."}
+{"k": "ui.diff.reason.git_error", "src": "c6f57086", "v": "git не смог построить diff для этой сессии."}
+{"k": "ui.diff.reason.git_not_installed", "src": "171dd6a9", "v": "На этой машине нет git."}
+{"k": "ui.diff.reason.no_commits_yet", "src": "cc383c84", "v": "В этом репозитории ещё нет коммитов."}
+{"k": "ui.diff.reason.not_a_git_repo", "src": "287b446f", "v": "Рабочая папка этой сессии не является репозиторием git."}
+{"k": "ui.diff.title", "src": "fe25abc0", "v": "Изменённые файлы"}
+{"k": "ui.diff.title_n", "src": "6222be44", "v": {"few": "Изменённые файлы ({n})", "many": "Изменённые файлы ({n})", "one": "Изменённые файлы ({n})", "other": "Изменённые файлы ({n})"}}
+{"k": "ui.diff.title_none", "src": "447a466c", "v": "Изменённые файлы (нет)"}
+{"k": "ui.diff.too_large", "src": "7aafaa23", "v": "Diff слишком большой, чтобы показать."}
+{"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Diff недоступен."}
+{"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Уже завершена."}
+{"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Очищено."}
+{"k": "ui.done.compact", "src": "399fec37", "v": "Сжимаю…"}
+{"k": "ui.done.delete", "src": "48ea780f", "v": "Удалено."}
+{"k": "ui.done.generic", "src": "e2bcda84", "v": "Готово."}
+{"k": "ui.done.kill", "src": "eb388bd9", "v": "Завершено."}
+{"k": "ui.done.perms", "src": "144199df", "v": "Переключено."}
+{"k": "ui.done.rename", "src": "b930ba4a", "v": "Переименовано."}
+{"k": "ui.done.rename_same", "src": "ea00acbd", "v": "Без изменений."}
+{"k": "ui.done.restart", "src": "519ed942", "v": "Перезапущено."}
+{"k": "ui.done.resume", "src": "ac66e08b", "v": "Возобновлено."}
+{"k": "ui.done.stop", "src": "8fcc7be3", "v": "Остановлено."}
+{"k": "ui.empty.text", "src": "8ff2cab6", "v": "Начни здесь или отправь {command} в чат."}
+{"k": "ui.empty.title", "src": "a44ee05c", "v": "Сессий пока нет."}
+{"k": "ui.grid.finished_n", "src": "8e06a605", "v": {"few": "Завершённые ({n})", "many": "Завершённые ({n})", "one": "Завершённые ({n})", "other": "Завершённые ({n})"}}
+{"k": "ui.grid.needs_you", "src": "0d9d0df1", "v": "Ждут тебя"}
+{"k": "ui.kind.permission", "src": "17857134", "v": "Разрешение"}
+{"k": "ui.kind.question", "src": "002ff598", "v": "Вопрос"}
+{"k": "ui.kind_word.permission", "src": "6d244f58", "v": "разрешение"}
+{"k": "ui.kind_word.question", "src": "3b2be2e2", "v": "вопрос"}
+{"k": "ui.menu.changed", "src": "512ec84b", "v": "Эта сессия изменилась. Открой меню снова."}
+{"k": "ui.model.failed", "src": "a8ef2ee3", "v": "Не удалось сменить модель."}
+{"k": "ui.model.now", "src": "3dd35778", "v": "Теперь модель {model}."}
+{"k": "ui.model.switching", "src": "4a9961a0", "v": "переключаю…"}
+{"k": "ui.model.title", "src": "68c2cc7f", "v": "Модель"}
+{"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "не подтверждено (проверь сессию)"}
+{"k": "ui.model.unreachable", "src": "82a93142", "v": "Нет связи с сервером. Проверь модель сессии."}
+{"k": "ui.new.auto_needs_admin", "src": "ad1f0c2f", "v": "Режим Авто доступен только админу."}
+{"k": "ui.new.chips_recent", "src": "76eec760", "v": "Недавние"}
+{"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "Советуем"}
+{"k": "ui.new.cli_model", "src": "80e3c49d", "v": "модель по умолчанию из CLI"}
+{"k": "ui.new.create_failed", "src": "c55f566f", "v": "Не удалось создать эту сессию."}
+{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "Создать эту папку"}
+{"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "Тебе нельзя создавать здесь сессии."}
+{"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "Нет связи с сервером. Сессия не создана."}
+{"k": "ui.new.created", "src": "77ea75b5", "v": "Сессия создана."}
+{"k": "ui.new.creating", "src": "94d7d8ee", "v": "Создаю…"}
+{"k": "ui.new.cwd_title", "src": "e8c598ee", "v": "Рабочая папка"}
+{"k": "ui.new.daemon_dir", "src": "2503c8cf", "v": "собственной папке aipager"}
+{"k": "ui.new.default", "src": "808d7dca", "v": "По умолчанию"}
+{"k": "ui.new.default_dir_help", "src": "6d7d5fbc", "v": "Собственная папка aipager"}
+{"k": "ui.new.default_model_help", "src": "17ab4082", "v": "Та, что настроена в CLI"}
+{"k": "ui.new.folder_created", "src": "6b6ea299", "v": "Папка создана."}
+{"k": "ui.new.folder_existed", "src": "bfe299bc", "v": "Такая папка уже была, она выбрана."}
+{"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "Не удалось создать эту папку."}
+{"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "Тебе нельзя создавать здесь папки."}
+{"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Имя новой папки"}
+{"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "Нет связи с сервером. Папка не создана."}
+{"k": "ui.new.mode_ask", "src": "3562777b", "v": "Спрашивать"}
+{"k": "ui.new.mode_ask_help", "src": "eca1be33", "v": "Claude спрашивает, прежде чем запускать инструменты"}
+{"k": "ui.new.mode_auto", "src": "c614ba7c", "v": "Авто"}
+{"k": "ui.new.mode_auto_help", "src": "306e8992", "v": "Запускает инструменты без вопросов"}
+{"k": "ui.new.mode_title", "src": "9c8c621a", "v": "Режим разрешений"}
+{"k": "ui.new.model_name", "src": "5ebb9765", "v": "Имя модели"}
+{"k": "ui.new.model_needed", "src": "c585e482", "v": "Введи имя модели, чтобы продолжить."}
+{"k": "ui.new.model_pattern", "src": "7222f368", "v": "Используй латинские буквы, цифры, точки и дефисы; начинай с буквы или цифры."}
+{"k": "ui.new.more", "src": "86c0a35e", "v": "Ещё параметры"}
+{"k": "ui.new.name", "src": "709a2322", "v": "Имя"}
+{"k": "ui.new.new_folder", "src": "a711999b", "v": "Новая папка"}
+{"k": "ui.new.new_folder_help", "src": "29aa13d5", "v": "Внутри папки, выбранной выше"}
+{"k": "ui.new.not_set", "src": "770e48ee", "v": "Пока не задано"}
+{"k": "ui.new.other_model", "src": "cc3190e7", "v": "Другая модель"}
+{"k": "ui.new.other_model_help", "src": "561f7c9e", "v": "Введи полное имя, например {example}"}
+{"k": "ui.new.pick_dir_first", "src": "969b0a9b", "v": "Сначала выбери рабочую папку выше."}
+{"k": "ui.new.requires_admin", "src": "e18e02eb", "v": "Только для админа"}
+{"k": "ui.new.sub", "src": "23b19317", "v": "Дай имя, выбери папку, и Claude начнёт там."}
+{"k": "ui.new.summary_ask", "src": "3e987f2e", "v": "Запустит Claude в {where} в режиме Спрашивать, модель: {model}."}
+{"k": "ui.new.summary_auto", "src": "d0968e63", "v": "Запустит Claude в {where} в режиме Авто, модель: {model}."}
+{"k": "ui.new.summary_named_ask", "src": "ccbc6d09", "v": "Запустит Claude с именем {name} в {where} в режиме Спрашивать, модель: {model}."}
+{"k": "ui.new.summary_named_auto", "src": "4b48c549", "v": "Запустит Claude с именем {name} в {where} в режиме Авто, модель: {model}."}
+{"k": "ui.new.title", "src": "5c881d23", "v": "Новая сессия"}
+{"k": "ui.new.where", "src": "525f61b6", "v": "Где"}
+{"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "До завершения этой сессии ничего не было сохранено."}
+{"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "Пока ничего нет. Появится, когда Claude ответит."}
+{"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "Всё спокойно"}
+{"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"few": "{n} завершены", "many": "{n} завершено", "one": "{n} завершена", "other": "{n} завершены"}}
+{"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"few": "{n} ждут тебя", "many": "{n} ждут тебя", "one": "{n} ждёт тебя", "other": "{n} ждут тебя"}}
+{"k": "ui.pulse.resting", "src": "644f3b40", "v": {"few": "{n} отдыхают", "many": "{n} отдыхают", "one": "{n} отдыхает", "other": "{n} отдыхают"}}
+{"k": "ui.pulse.spent", "src": "908f77ef", "v": "потрачено {cost}"}
+{"k": "ui.pulse.unknown", "src": "23ca6f83", "v": {"few": "{n} неизвестны", "many": "{n} неизвестно", "one": "{n} неизвестна", "other": "{n} неизвестны"}}
+{"k": "ui.pulse.working", "src": "c3aee490", "v": {"few": "{n} работают", "many": "{n} работают", "one": "{n} работает", "other": "{n} работают"}}
+{"k": "ui.rename.empty", "src": "e00fbfca", "v": "Имя сессии не может быть пустым."}
+{"k": "ui.rename.failed", "src": "07c216e4", "v": "Не удалось переименовать."}
+{"k": "ui.rename.pattern", "src": "b916e083", "v": "Используй латинские буквы, цифры, дефисы и подчёркивания; начинай с буквы или цифры."}
+{"k": "ui.rename.reserved", "src": "9440c7ea", "v": "«{name}» - зарезервированное имя команды."}
+{"k": "ui.rename.too_long", "src": "9b31bc40", "v": "Имя сессии должно быть не длиннее {max} символов."}
+{"k": "ui.report.also_through", "src": "1d1b7026", "v": "Также прошла через: {names}"}
+{"k": "ui.report.as_written", "src": "21532af3", "v": "Отправится ровно так, как написано."}
+{"k": "ui.report.bad_note", "src": "c92adef7", "v": "Эту заметку не удалось добавить. Попробуй короче и проще."}
+{"k": "ui.report.card_text", "src": "45e21208", "v": "Расскажи разработчику, что пошло не так. Перед отправкой ты увидишь весь отчёт."}
+{"k": "ui.report.copied", "src": "dd2ce2e2", "v": "Скопировано."}
+{"k": "ui.report.copy_hint", "src": "7d76506f", "v": "Чтобы скопировать номер, нажми на него и удерживай."}
+{"k": "ui.report.daily_cap_title", "src": "9bdf248a", "v": "Дневной лимит исчерпан"}
+{"k": "ui.report.err.crash", "src": "78d1bcc4", "v": "aipager неожиданно остановился"}
+{"k": "ui.report.err.error", "src": "7f2f6a15", "v": "Ошибка"}
+{"k": "ui.report.err.hook_cap", "src": "f4162559", "v": "Hook упёрся в предел памяти"}
+{"k": "ui.report.err.logged_in", "src": "ad58db0c", "v": "Ошибка в журнале: {area}"}
+{"k": "ui.report.err.type_in", "src": "15f9e48c", "v": "{type} в {area}"}
+{"k": "ui.report.err_detail", "src": "97fb369f", "v": "{fingerprint}, впервые {day}, в версиях {versions}"}
+{"k": "ui.report.err_sub", "src": "917846a1", "v": "{times}, последний раз {day}"}
+{"k": "ui.report.errors", "src": "805e86a8", "v": "Ошибки"}
+{"k": "ui.report.errors_n", "src": "07ba7666", "v": {"few": "Ошибки ({n})", "many": "Ошибки ({n})", "one": "Ошибки ({n})", "other": "Ошибки ({n})"}}
+{"k": "ui.report.exact", "src": "ea8e4b11", "v": "Показать точный текст отчёта"}
+{"k": "ui.report.exact_note", "src": "991b0c14", "v": "Это ровно тот текст, который будет отправлен, вместе с твоей заметкой."}
+{"k": "ui.report.exit.clean", "src": "6a1cec45", "v": "штатная"}
+{"k": "ui.report.exit.crash", "src": "dd472460", "v": "сбой"}
+{"k": "ui.report.exit.reboot", "src": "118341f6", "v": "перезагрузка машины"}
+{"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "неизвестно"}
+{"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "просмотр изменений"}
+{"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
+{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "боты-наблюдатели"}
+{"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "развёрнутые сводки"}
+{"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "управляемый туннель"}
+{"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "свой адрес туннеля"}
+{"k": "ui.report.feature.voice", "src": "704617a7", "v": "голосовые сообщения"}
+{"k": "ui.report.foot", "src": "09700e47", "v": "Ничего не отправится, пока ты не нажмёшь «Отправить отчёт». Отчёт уйдёт в почту ошибок разработчика без твоего имени."}
+{"k": "ui.report.label.counts", "src": "a7e0a1c5", "v": "Счётчики за 24 часа"}
+{"k": "ui.report.label.features", "src": "fc338f87", "v": "Возможности"}
+{"k": "ui.report.label.libraries", "src": "27c968e6", "v": "Библиотеки"}
+{"k": "ui.report.label.limits", "src": "ca1be69e", "v": "Лимиты Telegram"}
+{"k": "ui.report.label.log", "src": "499fd95d", "v": "Журнал за 24 часа"}
+{"k": "ui.report.label.setup", "src": "cdd7bb28", "v": "Настройка"}
+{"k": "ui.report.label.stops", "src": "0e648419", "v": "Остановки"}
+{"k": "ui.report.label.system", "src": "bc0792d8", "v": "Система"}
+{"k": "ui.report.later", "src": "685cd810", "v": "aipager не ответил вовремя. Нажми «Отправить отчёт» ещё раз: если отчёт уже ушёл, ты увидишь его номер, и дважды он не отправится."}
+{"k": "ui.report.limits", "src": "22297d2d", "v": {"few": "{n} бана за 7 дней, нагрузка в самый занятый час {load}", "many": "{n} банов за 7 дней, нагрузка в самый занятый час {load}", "one": "{n} бан за 7 дней, нагрузка в самый занятый час {load}", "other": "{n} бана за 7 дней, нагрузка в самый занятый час {load}"}}
+{"k": "ui.report.log_line", "src": "5069aaa9", "v": {"few": "{n} места записали предупреждение или ошибку ({times})", "many": "{n} мест записали предупреждение или ошибку ({times})", "one": "{n} место записало предупреждение или ошибку ({times})", "other": "{n} места записали предупреждение или ошибку ({times})"}}
+{"k": "ui.report.missing", "src": "995357dd", "v": "(нет)"}
+{"k": "ui.report.more", "src": "473710d3", "v": "Подробнее"}
+{"k": "ui.report.n_groups", "src": "1a2fac9e", "v": {"few": "{n} группы", "many": "{n} групп", "one": "{n} группа", "other": "{n} группы"}}
+{"k": "ui.report.n_private_chats", "src": "5922fc21", "v": {"few": "{n} личных чата", "many": "{n} личных чатов", "one": "{n} личный чат", "other": "{n} личных чата"}}
+{"k": "ui.report.no_errors", "src": "a5697d50", "v": "В последнее время ошибок не было. Сведения выше и твоя заметка всё равно помогут."}
+{"k": "ui.report.none", "src": "6eef6648", "v": "Нет"}
+{"k": "ui.report.not_found", "src": "475c8486", "v": "Не найден"}
+{"k": "ui.report.not_sent", "src": "587c501e", "v": "Не отправлено"}
+{"k": "ui.report.note_label", "src": "24a9a8bc", "v": "Твоя заметка (необязательно)"}
+{"k": "ui.report.note_placeholder", "src": "e2bf7584", "v": "Что ты делал, когда всё сломалось?"}
+{"k": "ui.report.nothing_logged", "src": "7bb93154", "v": "Ничего не записано"}
+{"k": "ui.report.once", "src": "18638356", "v": "один раз"}
+{"k": "ui.report.panel.build", "src": "288edef3", "v": "Попробуй чуть позже."}
+{"k": "ui.report.panel.build_title", "src": "76b58923", "v": "Не удалось подготовить отчёт"}
+{"k": "ui.report.panel.group", "src": "a2c9e40d", "v": "Отчёты отправляются из Mini App, открытого в твоём личном чате с ботом."}
+{"k": "ui.report.panel.group_title", "src": "73925937", "v": "Открой свой личный чат"}
+{"k": "ui.report.panel.noowner", "src": "9ee5b766", "v": "У этого aipager нет единственного чата владельца. В терминале {command} по-прежнему работает."}
+{"k": "ui.report.panel.noowner_title", "src": "40631445", "v": "Отсюда отправить нельзя"}
+{"k": "ui.report.panel.owner", "src": "e83d9212", "v": "Отправить отчёт о проблеме может только владелец этого aipager."}
+{"k": "ui.report.panel.owner_title", "src": "e91f02d9", "v": "Только для владельца"}
+{"k": "ui.report.preparing", "src": "aaf61214", "v": "Готовлю отчёт..."}
+{"k": "ui.report.privacy", "src": "48fa34f1", "v": "Здесь версии, счётчики и места в коде aipager. Никогда твои чаты, запросы, имена или пути."}
+{"k": "ui.report.sending_wait", "src": "176ed846", "v": "Отправляю. Минутку."}
+{"k": "ui.report.sent_title", "src": "a7615ceb", "v": "Отчёт отправлен"}
+{"k": "ui.report.setup.personal", "src": "2ca0506b", "v": "Личная настройка"}
+{"k": "ui.report.setup.scope", "src": "d662e796", "v": "Настройка на несколько чатов"}
+{"k": "ui.report.setup.team", "src": "a857214e", "v": "Командная настройка"}
+{"k": "ui.report.setup_line", "src": "c52e3d20", "v": "{mode}, {dms}, {groups}, работает {uptime}"}
+{"k": "ui.report.setup_line_bare", "src": "60b4d8c7", "v": "{dms}, работает {uptime}"}
+{"k": "ui.report.setup_line_no_groups", "src": "f0f3ef45", "v": "{mode}, {dms}, работает {uptime}"}
+{"k": "ui.report.setup_line_no_mode", "src": "f94812f3", "v": "{dms}, {groups}, работает {uptime}"}
+{"k": "ui.report.show_more", "src": "fdeb42f8", "v": {"few": "Показать ещё {n}", "many": "Показать ещё {n}", "one": "Показать ещё {n}", "other": "Показать ещё {n}"}}
+{"k": "ui.report.stale", "src": "25e3d152", "v": "Этого отчёта здесь больше нет. Вот новый: проверь его и снова нажми «Отправить отчёт»."}
+{"k": "ui.report.still_sending", "src": "5b89eba6", "v": "Ещё отправляется. Подожди немного и снова нажми «Отправить отчёт»."}
+{"k": "ui.report.stops", "src": "8f971d67", "v": "Последняя остановка: {last}. Неожиданных остановок за 7 дней: {n}."}
+{"k": "ui.report.system_in", "src": "7011d75d", "v": "{system}, в {container}"}
+{"k": "ui.report.thanks", "src": "04d9993f", "v": "Спасибо. Если откроешь issue на GitHub, укажи этот номер:"}
+{"k": "ui.report.tidied", "src": "35efa495", "v": "Заметку подчистили (убраны невидимые символы, лишние пробелы и всё, что дальше 500 символов). Проверь её и снова нажми «Отправить отчёт»."}
+{"k": "ui.report.times", "src": "766020c6", "v": {"few": "{n} раза", "many": "{n} раз", "one": "{n} раз", "other": "{n} раза"}}
+{"k": "ui.report.title", "src": "24f3f52d", "v": "Сообщить о проблеме"}
+{"k": "ui.report.too_long", "src": "f600d1b3", "v": {"few": "Длиннее на {n} символа.", "many": "Длиннее на {n} символов.", "one": "Длиннее на {n} символ.", "other": "Длиннее на {n} символа."}}
+{"k": "ui.report.too_many", "src": "392589ae", "v": "Слишком много нажатий. Попробуй через минуту."}
+{"k": "ui.report.too_old_title", "src": "2a4d2b45", "v": "Нужно обновление"}
+{"k": "ui.report.try_later", "src": "ab0f2d7c", "v": "Сейчас не удалось отправить. Ничего не потеряно, попробуй позже."}
+{"k": "ui.report.uptime.10m_1h", "src": "4db7ea05", "v": "от 10 минут до часа"}
+{"k": "ui.report.uptime.1d_7d", "src": "ba95c4e1", "v": "от 1 до 7 дней"}
+{"k": "ui.report.uptime.1h_24h", "src": "f23cc5e9", "v": "от 1 до 24 часов"}
+{"k": "ui.report.uptime.over_week", "src": "7df7e421", "v": "больше недели"}
+{"k": "ui.report.uptime.under_10m", "src": "35d29633", "v": "меньше 10 минут"}
+{"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "неизвестно сколько"}
+{"k": "ui.report.what_sent", "src": "6b776c8f", "v": "Что отправится"}
+{"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "Настройки чата"}
+{"k": "ui.settings.default_tag", "src": "7505d64a", "v": "по умолчанию"}
+{"k": "ui.settings.intro", "src": "f1ea8e24", "v": "Они действуют для каждой сессии в этом чате."}
+{"k": "ui.settings.readonly", "src": "57fedd89", "v": "Менять их может только админ."}
+{"k": "ui.settings.reset_done", "src": "5b3b5541", "v": "Сброшено по умолчанию."}
+{"k": "ui.settings.reset_failed", "src": "38256d55", "v": "Некоторые настройки не удалось сбросить. Открой снова, чтобы повторить."}
+{"k": "ui.settings.save_failed", "src": "cdb1d51d", "v": "Не удалось сохранить. На экране то, что сохранено."}
+{"k": "ui.settings.saved", "src": "9d4af690", "v": "Сохранено."}
+{"k": "ui.shell.actions_aria", "src": "b086cae4", "v": "Действия с сессией"}
+{"k": "ui.shell.chat_aria", "src": "2ced57f1", "v": "Чат"}
+{"k": "ui.shell.loading", "src": "33ce4174", "v": "Загрузка…"}
+{"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "Новое имя"}
+{"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "Новая сессия"}
+{"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "Разделы"}
+{"k": "ui.state.busy", "src": "8178ea20", "v": "работает"}
+{"k": "ui.state.gone", "src": "f957097d", "v": "завершена"}
+{"k": "ui.state.idle", "src": "e24cc7a4", "v": "отдыхает"}
+{"k": "ui.state.unknown", "src": "50d8b4a9", "v": "неизвестно"}
+{"k": "ui.state.waiting", "src": "19622ace", "v": "ждёт тебя"}
+{"k": "ui.state_line.finished", "src": "355bcc57", "v": "Завершена"}
+{"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "Ждёт тебя"}
+{"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "Ждёт тебя ({kind})"}
+{"k": "ui.state_line.resting", "src": "296d1007", "v": "Отдыхает"}
+{"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "Отдыхает, последняя активность {age}"}
+{"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "Пока нет данных"}
+{"k": "ui.state_line.working", "src": "3b4dfc97", "v": "Работает"}
+{"k": "ui.state_line.working_for", "src": "f555f372", "v": "Работает {clock}"}
+{"k": "ui.tab.sessions", "src": "e11e37a9", "v": "Сессии"}
+{"k": "ui.tab.settings", "src": "c7f73bb5", "v": "Настройки"}
+{"k": "ui.tile.aria", "src": "eaa1d742", "v": "{session}, {state}, контекст {pct}%, {model}, {cost}"}
+{"k": "ui.tile.aria_no_model", "src": "667d58b3", "v": "{session}, {state}, контекст {pct}%, {cost}"}
+{"k": "ui.tile.no_folder", "src": "25fe67b1", "v": "без папки"}
+{"k": "ui.timeline.empty", "src": "8bdea321", "v": "Пока никакой активности."}
+{"k": "ui.timeline.note", "src": "306606d2", "v": "Хронология охватывает только текущий запуск aipager. Между перезапусками она не сохраняется, поэтому у старой сессии здесь пусто."}
+{"k": "ui.timeline.title_empty", "src": "44748119", "v": "Хронология (пусто)"}
+{"k": "ui.timeline.title_n", "src": "a7f6a618", "v": {"few": "Хронология ({n})", "many": "Хронология ({n})", "one": "Хронология ({n})", "other": "Хронология ({n})"}}
+{"k": "ui.update.check_failed", "src": "a15f1db5", "v": "Не удалось проверить обновления. Попробуй ещё раз."}
+{"k": "ui.update.finished", "src": "80fa9b82", "v": "Это обновление уже завершено."}
+{"k": "ui.update.job.claude_updating", "src": "c587f1e1", "v": "Работаю… (обновляется claude)"}
+{"k": "ui.update.job.gate_timeout", "src": "1499ee18", "v": "Сессии всё ещё заняты. Подождать ещё, перезапустить сейчас или отменить?"}
+{"k": "ui.update.job.starting", "src": "06080d40", "v": "Работаю… (запуск)"}
+{"k": "ui.update.job.upgrading", "src": "c6e6577f", "v": "Работаю… (обновление)"}
+{"k": "ui.update.job.waiting_idle", "src": "2d4b64cc", "v": "Жду, пока все сессии освободятся, перед перезапуском."}
+{"k": "ui.update.job.working_phase", "src": "3a93346a", "v": "Работаю… ({phase})"}
+{"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "Не вернулись: {names}"}
+{"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}? aipager перезапустится, когда не останется идущих ходов."}
+{"k": "ui.update.other", "src": "7ae4a531", "v": "aipager перезапустился, но сейчас работает {version}."}
+{"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager перезапустился, но сейчас работает {version}, а не {expected}."}
+{"k": "ui.update.refused", "src": "651df229", "v": "Открой приложение снова, чтобы увидеть результат обновления."}
+{"k": "ui.update.reopen", "src": "3bf2409f", "v": "aipager перезапустился. Открой приложение снова, когда чат сообщит об обновлении: закрой его и открой из чата (кнопкой меню или {command})."}
+{"k": "ui.update.restart_now_confirm", "src": "3f76f590", "v": "Перезапуск сейчас прервёт идущие ходы из этого списка."}
+{"k": "ui.update.restarting", "src": "0cfedf00", "v": "Перезапускаю aipager…"}
+{"k": "ui.update.running", "src": "5c38d794", "v": "Обновление уже идёт."}
+{"k": "ui.update.shutting_down", "src": "190aec5c", "v": "aipager выключается. Попробуй, когда он вернётся."}
+{"k": "ui.update.slow", "src": "43a0f87b", "v": "Всё ещё перезапускается, открой приложение чуть позже."}
+{"k": "ui.update.stale", "src": "fa8fd334", "v": "Эта проверка устарела. Проверь снова."}
+{"k": "ui.update.start_failed", "src": "2f57d419", "v": "Не удалось запустить. Попробуй ещё раз."}
+{"k": "ui.update.title", "src": "c76d1807", "v": "Обновления"}
+{"k": "ui.update.too_many", "src": "9a3f5b9e", "v": "Слишком много запросов. Попробуй через минуту."}
+{"k": "ui.update.unknown_version", "src": "90246157", "v": "неизвестная версия"}
+{"k": "ui.update.unreachable", "src": "fc17f70c", "v": "Нет связи с aipager. Попробуй ещё раз."}
+{"k": "ui.update.up_to_date", "src": "2772acac", "v": "Всё обновлено."}
+{"k": "ui.update.updated", "src": "a56afb67", "v": "Обновлено до {version}."}
+{"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"few": "Обновлено до {version}, {n} сессии подхвачены снова.", "many": "Обновлено до {version}, {n} сессий подхвачено снова.", "one": "Обновлено до {version}, {n} сессия подхвачена снова.", "other": "Обновлено до {version}, {n} сессии подхвачены снова."}}
+{"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude тебя спрашивает"}
+{"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude нужно твоё разрешение"}
+{"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "В чате открыт запрос разрешения."}
+{"k": "ui.waiting.question_open", "src": "3165c4fc", "v": "В чате открыт вопрос."}
 {"k": "upd.ap.blocked", "src": "2b9633f6", "v": "🚫 <b>aipager</b> нельзя обновить отсюда: {reason}"}
 {"k": "upd.ap.blocked_here", "src": "cefc4c9b", "v": "🚫 aipager нельзя обновить отсюда: {reason}"}
 {"k": "upd.ap.cancelled", "src": "6eb974a3", "v": "↩️ Обновление <b>aipager</b> отменено - ничего не установлено."}

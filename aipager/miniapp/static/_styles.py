@@ -271,7 +271,8 @@ CSS = """
     display: none;
     position: relative;
     margin: 0 0 var(--s4);
-    padding: var(--s3) var(--s4) var(--s3) 22px;
+    padding-block: var(--s3);
+    padding-inline: 22px var(--s4);
     border-radius: var(--r-ctl);
     font-size: var(--fs-sm);
     line-height: var(--lh-sm);
@@ -284,7 +285,7 @@ CSS = """
   #error::before {
     content: "";
     position: absolute;
-    left: 8px;
+    inset-inline-start: 8px;
     top: 10px;
     bottom: 10px;
     width: 4px;
@@ -305,7 +306,8 @@ CSS = """
     gap: 10px;
     width: max-content;
     max-width: min(92vw, 26rem);
-    padding: 8px 16px 8px 8px;
+    padding-block: 8px;
+    padding-inline: 8px 16px;
     border-radius: var(--r-pill);
     font-size: var(--fs-sm);
     line-height: var(--lh-sm);
@@ -455,7 +457,9 @@ CSS = """
     font-weight: 700;
     letter-spacing: -0.02em;
   }
-  .lamp-num::after { content: "%"; font-size: 0.72em; font-weight: 600; opacity: 0.75; }
+  /* The ring's percent sign is text (the page writes it in its language's
+     sign: ٪ in Persian), drawn as the old CSS "%" was. */
+  .lamp-pct { font-size: 0.72em; font-weight: 600; opacity: 0.75; }
   .lamp-work { --lamp-c: var(--lamp-work); background: var(--lamp-work-soft); }
   .lamp-work::after {
     content: "";
@@ -516,7 +520,8 @@ CSS = """
   .beacon {
     position: relative;
     isolation: isolate;
-    padding: var(--s3) var(--s3) var(--s3) var(--s4);
+    padding-block: var(--s3);
+    padding-inline: var(--s4) var(--s3);
     border-radius: var(--r-card);
     background: var(--need-soft);
     border: 1px solid color-mix(in srgb, var(--lamp-need) 45%, var(--surface));
@@ -541,7 +546,7 @@ CSS = """
     min-height: 44px;
     padding: var(--s1) 0;
     border-radius: var(--r-ctl);
-    text-align: left;
+    text-align: start;
   }
   .beacon-text { display: flex; flex-direction: column; gap: 3px; flex: 1 1 auto; min-width: 0; }
   .beacon-top { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
@@ -566,7 +571,7 @@ CSS = """
   }
   .beacon-age {
     flex: 0 0 auto;
-    margin-left: auto;
+    margin-inline-start: auto;
     font-size: var(--fs-cap);
     line-height: var(--lh-cap);
     color: var(--ink-2);
@@ -596,7 +601,7 @@ CSS = """
     min-height: 44px;
     padding: var(--s3) 14px;
     border-radius: var(--r-card);
-    text-align: left;
+    text-align: start;
     overflow: hidden;
     background: var(--surface);
     border: 1px solid var(--line);
@@ -660,7 +665,7 @@ CSS = """
     font-weight: 600;
     color: var(--ink-2);
   }
-  .gone-toggle .chev { margin-left: auto; }
+  .gone-toggle .chev { margin-inline-start: auto; }
   .shelf-list {
     display: flex;
     flex-direction: column;
@@ -677,7 +682,7 @@ CSS = """
     width: 100%;
     min-height: 56px;
     padding: var(--s2) 14px;
-    text-align: left;
+    text-align: start;
   }
   .shelf-row + .shelf-row { border-top: 1px solid var(--line); }
   .shelf-text { flex: 1 1 auto; min-width: 0; }
@@ -734,7 +739,7 @@ CSS = """
 
   /* ---- session page ---------------------------------------------------- */
   .d-head { display: flex; align-items: flex-start; gap: var(--s4); padding: var(--s2) 0 var(--s4); }
-  .d-head .kebab-wrap { margin-left: auto; }
+  .d-head .kebab-wrap { margin-inline-start: auto; }
   .d-title { flex: 1 1 auto; min-width: 0; }
   .d-title-row { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
   .detail-label {
@@ -782,7 +787,8 @@ CSS = """
     align-items: center;
     gap: 6px;
     min-height: 44px;
-    padding: 0 14px 0 12px;
+    padding-block: 0;
+    padding-inline: 12px 14px;
     border-radius: var(--r-pill);
     font-size: var(--fs-sm);
     font-weight: 600;
@@ -810,7 +816,7 @@ CSS = """
   .menu {
     position: absolute;
     top: calc(100% + 8px);
-    right: 0;
+    inset-inline-end: 0;
     z-index: 60;
     min-width: 228px;
     max-width: min(300px, calc(100vw - 32px));
@@ -830,14 +836,14 @@ CSS = """
     padding: 10px 12px;
     border-radius: 12px;
     font-weight: 500;
-    text-align: left;
+    text-align: start;
     color: var(--ink);
   }
   .menu-item .ic { color: var(--ink-2); }
   .menu-item:active { background: var(--fill); }
   .menu-item.is-danger, .menu-item.is-danger .ic { color: var(--danger-ink); }
   .menu-item[disabled] { opacity: 0.45; }
-  .menu-note { padding: 0 12px 8px 44px; font-size: var(--fs-cap); line-height: var(--lh-cap); color: var(--ink-3); }
+  .menu-note { padding-block: 0 8px; padding-inline: 44px 12px; font-size: var(--fs-cap); line-height: var(--lh-cap); color: var(--ink-3); }
   .menu-divider { height: 1px; margin: 6px 10px; background: var(--line); }
 
   /* The session is waiting: the same beacon, on its own page. */
@@ -854,7 +860,7 @@ CSS = """
     margin: 0 0 var(--s4);
     padding: 14px var(--s4);
     border-radius: var(--r-card);
-    text-align: left;
+    text-align: start;
     background: var(--surface);
     border: 1px solid var(--line);
   }
@@ -870,7 +876,7 @@ CSS = """
     color: var(--ink-2);
     background: var(--fill);
   }
-  .beads { display: flex; align-items: center; gap: 18px; min-height: 16px; padding-left: 1px; }
+  .beads { display: flex; align-items: center; gap: 18px; min-height: 16px; padding-inline-start: 1px; }
   .bead {
     position: relative;
     flex: 0 0 auto;
@@ -884,7 +890,7 @@ CSS = """
     content: "";
     position: absolute;
     top: 50%;
-    right: calc(100% + 2px);
+    inset-inline-end: calc(100% + 2px);
     width: 18px;
     height: 2px;
     margin-top: -1px;
@@ -907,7 +913,8 @@ CSS = """
 
   .preview {
     position: relative;
-    padding: 14px var(--s4) 14px 20px;
+    padding-block: 14px;
+    padding-inline: 20px var(--s4);
     border-radius: var(--r-card);
     font-size: 15px;
     line-height: 22px;
@@ -919,7 +926,7 @@ CSS = """
   .preview::before {
     content: "";
     position: absolute;
-    left: 8px;
+    inset-inline-start: 8px;
     top: 14px;
     bottom: 14px;
     width: 3px;
@@ -977,13 +984,13 @@ CSS = """
     width: 100%;
     min-height: 52px;
     padding: 0 var(--s4);
-    text-align: left;
+    text-align: start;
   }
   .grp-title { flex: 0 0 auto; font-weight: 500; }
   .grp-value {
     flex: 1 1 auto;
     min-width: 0;
-    text-align: right;
+    text-align: end;
     padding: 4px 0;
     font-size: 15px;
     line-height: 20px;
@@ -1001,8 +1008,8 @@ CSS = """
     content: "";
     width: 7px;
     height: 7px;
-    margin-left: -3px;
-    border-right: 2px solid var(--ink-3);
+    margin-inline-start: -3px;
+    border-inline-end: 2px solid var(--ink-3);
     border-bottom: 2px solid var(--ink-3);
     transform: rotate(-45deg);
     transition: transform var(--t-base) var(--ease);
@@ -1017,7 +1024,7 @@ CSS = """
     width: 100%;
     min-height: 48px;
     padding: 10px var(--s4);
-    text-align: left;
+    text-align: start;
   }
   .choice::before {
     content: "";
@@ -1067,7 +1074,7 @@ CSS = """
     color: var(--ink-3);
     overflow-wrap: anywhere;
   }
-  .reveal { padding: 2px var(--s4) var(--s3) 50px; }
+  .reveal { padding-block: 2px var(--s3); padding-inline: 50px var(--s4); }
   .reveal-label { display: block; margin: 0 0 6px; font-size: var(--fs-cap); line-height: var(--lh-cap); font-weight: 600; color: var(--ink-3); }
   .reveal-note { margin-top: 6px; font-size: 13px; line-height: 18px; color: var(--ink-3); }
   .reveal-note:empty { display: none; }
@@ -1102,7 +1109,7 @@ CSS = """
     background: var(--fill);
     border: 1px solid var(--line);
   }
-  .prefix-text { padding-left: 12px; font-family: var(--mono); font-size: 13px; color: var(--ink-3); white-space: nowrap; }
+  .prefix-text { padding-inline-start: 12px; font-family: var(--mono); font-size: 13px; color: var(--ink-3); white-space: nowrap; }
   .prefix-input {
     flex: 1 1 auto;
     min-width: 0;
@@ -1136,7 +1143,7 @@ CSS = """
     min-height: 52px;
     padding: 0 var(--s4);
     font-weight: 500;
-    text-align: left;
+    text-align: start;
   }
   .disclosures > * + .sect-toggle { border-top: 1px solid var(--line); }
   .dis-title { flex: 1 1 auto; }
@@ -1144,13 +1151,13 @@ CSS = """
   .chev.is-open, .is-open > .chev { transform: rotate(90deg); }
   .panel { max-height: 380px; overflow: auto; padding: var(--s1) 0; border-top: 1px solid var(--line); }
   .disclosures .sect-note { margin: 0; padding: var(--s3) var(--s4) 0; border-top: 1px solid var(--line); }
-  .timeline-row { position: relative; padding: 7px var(--s4) 7px 40px; font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
-  .timeline-row::after { content: ""; position: absolute; left: 21px; top: 0; bottom: 0; width: 2px; background: var(--line); }
+  .timeline-row { position: relative; padding-block: 7px; padding-inline: 40px var(--s4); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+  .timeline-row::after { content: ""; position: absolute; inset-inline-start: 21px; top: 0; bottom: 0; width: 2px; background: var(--line); }
   .timeline-row::before {
     content: "";
     position: absolute;
     z-index: 1;
-    left: 17px;
+    inset-inline-start: 17px;
     top: 12px;
     width: 10px;
     height: 10px;
@@ -1189,11 +1196,11 @@ CSS = """
   .view-title { margin: 0; font-size: var(--fs-title); line-height: var(--lh-title); font-weight: 700; }
   .view-sub { margin: 2px 0 0; font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--ink-2); }
   .steps { display: flex; flex-direction: column; gap: var(--s5); margin: 0; padding: 0; list-style: none; }
-  .step { position: relative; padding-left: 38px; }
+  .step { position: relative; padding-inline-start: 38px; }
   .step::after {
     content: "";
     position: absolute;
-    left: 12px;
+    inset-inline-start: 12px;
     top: 34px;
     bottom: -16px;
     width: 2px;
@@ -1203,7 +1210,7 @@ CSS = """
   .step:last-child::after { display: none; }
   .step-num {
     position: absolute;
-    left: 0;
+    inset-inline-start: 0;
     top: 0;
     display: grid;
     place-items: center;
@@ -1225,7 +1232,7 @@ CSS = """
     gap: var(--s2);
     margin: 0 0 10px;
   }
-  .chips-cap { flex: 0 0 auto; margin-right: 2px; font-size: var(--fs-cap); font-weight: 600; color: var(--ink-3); }
+  .chips-cap { flex: 0 0 auto; margin-inline-end: 2px; font-size: var(--fs-cap); font-weight: 600; color: var(--ink-3); }
   .chip {
     flex: 0 0 auto;
     display: inline-flex;
@@ -1233,7 +1240,8 @@ CSS = """
     gap: 6px;
     min-height: 44px;
     max-width: 240px;
-    padding: 0 14px 0 12px;
+    padding-block: 0;
+    padding-inline: 12px 14px;
     border-radius: 12px;
     font-size: var(--fs-sm);
     font-weight: 600;
@@ -1312,8 +1320,8 @@ CSS = """
   .rp-count { font-variant-numeric: tabular-nums; }
   .rp-count.is-near { color: var(--ink-2); }
   /* A notice, not a card: tinted, with the inset bar #error uses. */
-  .rp-status { position: relative; margin-top: var(--s4); padding: var(--s3) 14px var(--s3) 24px; border-radius: var(--r-ctl); font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--ink); background: var(--lamp-work-soft); }
-  .rp-status::before { content: ""; position: absolute; left: 8px; top: 10px; bottom: 10px; width: 4px; border-radius: 2px; background: var(--accent); }
+  .rp-status { position: relative; margin-top: var(--s4); padding-block: var(--s3); padding-inline: 24px 14px; border-radius: var(--r-ctl); font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--ink); background: var(--lamp-work-soft); }
+  .rp-status::before { content: ""; position: absolute; inset-inline-start: 8px; top: 10px; bottom: 10px; width: 4px; border-radius: 2px; background: var(--accent); }
   .rp-status.is-err { color: var(--danger-ink); background: var(--danger-soft); }
   .rp-status.is-err::before { background: var(--danger-ink); }
   #rp-noerr { margin-bottom: var(--s4); }
@@ -1366,8 +1374,8 @@ CSS = """
   }
   .modal-title { margin: 0 0 var(--s2); font-size: 18px; line-height: 24px; font-weight: 700; }
   .modal-body { margin: 0 0 var(--s5); font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--ink-2); }
-  #confirm-rename-input { margin: 0 0 6px; text-align: left; }
-  #confirm-rename-error { margin: 0 0 var(--s4); text-align: left; }
+  #confirm-rename-input { margin: 0 0 6px; text-align: start; }
+  #confirm-rename-error { margin: 0 0 var(--s4); text-align: start; }
   .modal-actions { display: flex; gap: 10px; }
   .modal-btn {
     flex: 1 1 0;
@@ -1382,6 +1390,19 @@ CSS = """
   .modal-btn.is-danger { color: var(--danger-ink); background: var(--danger-soft); }
   #confirm-ok:not(.is-danger) { color: var(--on-accent); background: var(--accent); }
   .modal-btn:disabled { opacity: 0.45; }
+
+  /* ---- right to left (Persian) -----------------------------------------
+     Layout is logical (inline-start/end), so it mirrors on its own. These
+     are what logical properties cannot say: which way an icon points, where
+     the menu grows from, and tracking, which breaks joined letters. */
+  html[dir="rtl"] .chev { transform: scaleX(-1); }
+  html[dir="rtl"] .chev.is-open, html[dir="rtl"] .is-open > .chev { transform: rotate(90deg); }
+  html[dir="rtl"] .grp-caret::before { transform: rotate(45deg); }
+  html[dir="rtl"] .grp.is-open .grp-caret::before { transform: rotate(-45deg); }
+  html[dir="rtl"] .icon-btn .ic { transform: scaleX(-1); }
+  html[dir="rtl"] .menu { transform-origin: top left; }
+  html[dir="rtl"] h1, html[dir="rtl"] .sect-title, html[dir="rtl"] .lamp-num,
+  html[dir="rtl"] .pulse-main, html[dir="rtl"] .detail-label { letter-spacing: 0; }
 
   /* ---- motion: only state moves ---------------------------------------- */
   @keyframes breathe { from { opacity: 0.35; transform: scale(0.94); } to { opacity: 0.8; transform: scale(1.04); } }

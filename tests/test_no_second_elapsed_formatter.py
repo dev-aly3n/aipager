@@ -21,11 +21,10 @@ PACKAGE = Path(__file__).resolve().parent.parent / "aipager"
 
 #: (file, enclosing function): helpers that build a relative age or the
 #: heartbeat, whose "ago" is added by their caller. Not elapsed clocks.
-ALLOWED = {
-    ("aipager/miniapp/sessions.py", "_short_duration"),  # "Last active 2m ago"
-    # update_flow._elapsed_label ("(2 min 15s)", by ruling) builds its units
-    # through keys since multilingual phase 3b: no f-string left to allow.
-}
+# Both former entries are gone: update_flow._elapsed_label builds its units
+# through keys since multilingual phase 3b, and the Mini App's
+# sessions._short_duration since phase 4.
+ALLOWED: set[tuple[str, str]] = set()
 _NOT_A_CLOCK = (" ago", " left", "minutes")
 
 _UNIT_AFTER = ("m", "s", "h", "d", " min")

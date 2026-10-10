@@ -30,12 +30,28 @@ from aipager.miniapp.static._shell import (
 )
 from aipager.miniapp.static._styles import CSS
 
+
+def _english_catalog_js() -> str:
+    """The page's English strings, one JS statement (multilingual phase
+    4): the page holds keys only, and this is what ``t()`` reads for an
+    English viewer and falls back to for a string another language lacks.
+    ASCII only (no control, direction or line-separator character can
+    reach the script) and never ``</`` (it cannot close the element)."""
+    import json
+
+    from aipager.miniapp.ui_text import english_catalog
+    data = json.dumps(english_catalog(), sort_keys=True, ensure_ascii=True,
+                      separators=(",", ":"))
+    # Code, not prose: counted once by the English-literal ratchet.
+    return "var AIPAGER_UI_EN=" + data.replace("</", "<\\/") + ";\n"
+
+
 # Everything below the head is identical in both variants, so build it
 # once and only vary the head.
 _PAGE_TAIL = (
     "<style>\n" + CSS + "</style>\n"
     + HTML_BODY
-    + "<script>\n" + APP_JS + "\n</script>\n"
+    + "<script>\n" + _english_catalog_js() + APP_JS + "\n</script>\n"
     + HTML_TAIL
 )
 

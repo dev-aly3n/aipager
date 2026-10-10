@@ -27,8 +27,92 @@
 {"k": "ans.verb.option", "src": "7a8b9272", "v": "گزینهٔ {n} انتخاب شد"}
 {"k": "ans.verb.selected", "src": "5462eaaf", "v": "انتخاب شد: {options}"}
 {"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "ارسال شد (هیچ)"}
+{"k": "app.chat.dm", "src": "05a3b9fa", "v": "چت خصوصی"}
+{"k": "app.chat.group", "src": "171a0606", "v": "گروه"}
+{"k": "app.err.already_restarting", "src": "9234890e", "v": "این نشست همین الان در حال راه‌اندازی دوباره است - کمی صبر کنید."}
+{"k": "app.err.already_running", "src": "41e94cd2", "v": "این نشست همین حالا در حال اجراست."}
+{"k": "app.err.answer_chat_busy", "src": "e0f91f04", "v": "Telegram مشغول است. کمی بعد دوباره امتحان کنید."}
+{"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "این نشست دیگر منتظر شما نیست."}
+{"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "فرستادن درخواست به چت انجام نشد."}
+{"k": "app.err.auto_needs_admin", "src": "ad1f0c2f", "v": "حالت خودکار فقط برای مدیر است."}
+{"k": "app.err.delete_running", "src": "71f25b50", "v": "نشست هنوز در حال اجراست. اول با «پایان» متوقفش کنید."}
+{"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "پایان دادن نشد - فرایند هنوز در حال اجراست. دوباره امتحان کنید."}
+{"k": "app.err.name_taken", "src": "9ab9e08f", "v": "نشستی به نام {session} از قبل در این چت هست."}
+{"k": "app.err.not_busy", "src": "bbafa529", "v": "این نشست الان مشغول نیست - چیزی برای توقف نیست."}
+{"k": "app.err.not_resendable", "src": "82303f6c", "v": "این درخواست را نمی‌شود دوباره فرستاد. در ترمینال به آن پاسخ دهید."}
+{"k": "app.err.not_running", "src": "af9ca5bc", "v": "نشست در حال اجرا نیست."}
+{"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} هنوز در حال توقف است - حالت عوض نشد. کمی بعد دوباره امتحان کنید."}
+{"k": "app.err.pick_model", "src": "773e24c4", "v": "یک مدل انتخاب کنید."}
+{"k": "app.err.restart_still_stopping", "src": "701b0bd8", "v": "{session} هنوز در حال توقف است. کمی بعد دوباره امتحان کنید."}
+{"k": "app.err.resumed_in_ask", "src": "7024b7b8", "v": "{session} در حالت پرسش ادامه یافت: {reason}"}
+{"k": "app.err.resuming", "src": "2a557399", "v": "این نشست همین الان در حال ادامه یافتن است. کمی بعد دوباره امتحان کنید."}
+{"k": "app.err.send_failed", "src": "e4349ad3", "v": "فرستادن {command} انجام نشد."}
+{"k": "app.fact.context", "src": "cc11b3a2", "v": "زمینه"}
+{"k": "app.fact.cost", "src": "64ae43e8", "v": "هزینه"}
+{"k": "app.fact.cwd", "src": "4b892fe0", "v": "پوشه"}
+{"k": "app.fact.last_active", "src": "b5665ec6", "v": "آخرین فعالیت"}
+{"k": "app.fact.model", "src": "68c2cc7f", "v": "مدل"}
+{"k": "app.fact.working", "src": "e7df8df6", "v": "مدت کار"}
 {"k": "app.language.hint", "src": "90e01e41", "v": "فقط متن خود aipager. پاسخ‌های Claude تغییر نمی‌کنند."}
 {"k": "app.language.title", "src": "01e1787a", "v": "زبان برنامه"}
+{"k": "app.launch.cwd_bad_char", "src": "0dcfc308", "v": "پوشهٔ کاری یک نویسهٔ نامعتبر دارد."}
+{"k": "app.launch.cwd_no_roots", "src": "45693d90", "v": "هنوز هیچ پوشه‌ای در دسترس نیست - اول از چت یک نشست شروع کنید، بعد این فهرست پروژهٔ آن را پیشنهاد می‌دهد."}
+{"k": "app.launch.cwd_not_allowed", "src": "8e0b71f9", "v": "این پوشه از پوشه‌هایی نیست که این چت در آن‌ها کار می‌کند."}
+{"k": "app.launch.cwd_not_dir", "src": "9b0be449", "v": "این مسیر یک پوشه نیست."}
+{"k": "app.launch.cwd_not_text", "src": "9497b469", "v": "پوشهٔ کاری باید متن باشد."}
+{"k": "app.launch.cwd_unresolvable", "src": "e87ce055", "v": "مسیر این پوشه مشخص نمی‌شود."}
+{"k": "app.launch.folder_bad_char", "src": "9052a17d", "v": "نام پوشه یک نویسهٔ نامعتبر دارد."}
+{"k": "app.launch.folder_empty", "src": "aa11b815", "v": "نام پوشه نمی‌تواند خالی باشد."}
+{"k": "app.launch.folder_exists", "src": "8dec41ad", "v": "پوشه‌ای با این نام آنجا هست. نام تازه‌ای انتخاب کنید."}
+{"k": "app.launch.folder_failed", "src": "4d757c2b", "v": "ساختن آن پوشه انجام نشد."}
+{"k": "app.launch.folder_loads_code", "src": "78ba6bd6", "v": "«{name}» اینجا نمی‌تواند پوشهٔ پروژه باشد: برنامه‌های دیگر از آن کد بارگذاری می‌کنند. نام دیگری انتخاب کنید."}
+{"k": "app.launch.folder_not_text", "src": "3988a95d", "v": "نام پوشه باید متن باشد."}
+{"k": "app.launch.folder_parent", "src": "0a28b1e0", "v": "یک پوشهٔ کاری انتخاب کنید تا پوشهٔ تازه در آن ساخته شود."}
+{"k": "app.launch.folder_pattern", "src": "c3b51490", "v": "از حروف لاتین، عدد، نقطه، خط تیره و زیرخط استفاده کنید؛ با یک حرف یا عدد شروع کنید."}
+{"k": "app.launch.folder_too_long", "src": "ae5dc64d", "v": "نام پوشه باید {max} نویسه یا کمتر باشد."}
+{"k": "app.launch.model_not_text", "src": "55a7cf25", "v": "مدل باید متن باشد."}
+{"k": "app.launch.model_pattern", "src": "44cdf715", "v": "یکی از مدل‌های فهرست را بزنید، یا نام کامل یک مدل مثل {example} را بنویسید."}
+{"k": "app.launch.model_too_long", "src": "47dfc21f", "v": "نام مدل باید {max} نویسه یا کمتر باشد."}
+{"k": "app.launch.name_bad_char", "src": "1b9271b6", "v": "نام نشست یک نویسهٔ نامعتبر دارد."}
+{"k": "app.launch.name_empty", "src": "e00fbfca", "v": "نام نشست نمی‌تواند خالی باشد."}
+{"k": "app.launch.name_not_text", "src": "f6218198", "v": "نام نشست باید متن باشد."}
+{"k": "app.launch.name_pattern", "src": "b916e083", "v": "از حروف لاتین، عدد، خط تیره و زیرخط استفاده کنید؛ با یک حرف یا عدد شروع کنید."}
+{"k": "app.launch.name_reserved", "src": "2efe289d", "v": "«{name}» نام یک فرمان رزروشده است ({command}). نام دیگری انتخاب کنید."}
+{"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "نام نشست باید {max} نویسه یا کمتر باشد."}
+{"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "هنوز هیچ پوشهٔ پروژه‌ای برای شروع نیست: از یک مدیر بخواهید نشست را شروع کند."}
+{"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "یک پوشهٔ پروژه انتخاب کنید: با «پوشهٔ جدید» یکی بسازید، یا از یک مدیر بخواهید نشست را شروع کند."}
+{"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "نقش شما اجازه نمی‌دهد در پوشهٔ خانه یا پوشه‌ای بالاتر از آن نشست شروع کنید. یک پوشهٔ پروژه انتخاب کنید: با «پوشهٔ جدید» یکی بسازید، یا از یک مدیر بخواهید نشست را شروع کند."}
+{"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"one": "🧹 {n} پیام در صف [{session}] از Mini App پاک شد", "other": "🧹 {n} پیام در صف [{session}] از Mini App پاک شد"}}
+{"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 فشرده‌سازی [{session}] از Mini App آغاز شد"}
+{"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 {session} از Mini App ساخته شد · {mode}"}
+{"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 {session} از Mini App ساخته شد · {mode}\n📁 {folder}"}
+{"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] از Mini App حذف شد"}
+{"k": "app.mirror.folder", "src": "603d7ae2", "v": "📁 یک پوشهٔ جدید از Mini App ساخته شد:\n{path}"}
+{"k": "app.mirror.killed", "src": "63565832", "v": "💀 به [{session}] از Mini App پایان داده شد"}
+{"k": "app.mirror.model", "src": "6df57f60", "v": "🔄 [{session}] ← {model} از Mini App"}
+{"k": "app.mirror.renamed", "src": "22ad8a4c", "v": "✏️ نام [{old}] از Mini App به [{new}] تغییر کرد"}
+{"k": "app.mirror.restarted", "src": "9aa8323d", "v": "🔁 [{session}] از Mini App دوباره راه‌اندازی شد"}
+{"k": "app.mirror.resumed", "src": "fafeafa6", "v": "♻️ [{session}] از Mini App ادامه یافت"}
+{"k": "app.mirror.resumed_in_ask", "src": "429a5b47", "v": "♻️ [{session}] از Mini App در حالت پرسش ادامه یافت: {reason}"}
+{"k": "app.mirror.session_setting", "src": "3256d908", "v": "⚙️ {setting} ← {value} برای نشست {session} (تغییر از Mini App)"}
+{"k": "app.mirror.session_setting_reset", "src": "4502514a", "v": "⚙️ {setting} برای نشست {session} به پیش‌فرض ({value}) برگشت (تغییر از Mini App)"}
+{"k": "app.mirror.setting", "src": "6820a9f7", "v": "⚙️ {setting} ← {value} (تغییر از Mini App)"}
+{"k": "app.mirror.stopped", "src": "70cd9e81", "v": "⏹️ [{session}] از Mini App متوقف شد"}
+{"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"one": "⏹️ [{session}] از Mini App متوقف شد ({n} پیام در صف دور ریخته شد)", "other": "⏹️ [{session}] از Mini App متوقف شد ({n} پیام در صف دور ریخته شد)"}}
+{"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} از Mini App به حالت پرسش رفت"}
+{"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} از Mini App به حالت خودکار رفت"}
+{"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude در حال کار است - وقتی این نوبت تمام شد مدل را عوض کنید."}
+{"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "نشست در حال اجرا نیست."}
+{"k": "app.reason.model_pending", "src": "a3384cf1", "v": "تغییر مدل قبلی هنوز تأیید نشده - پیش از تغییر دوباره، در ترمینال سؤال «Switch model?» از Claude Code را ببینید."}
+{"k": "app.reason.model_prompt_open", "src": "c3641605", "v": "یک درخواست در ترمینال باز است - پیش از تغییر مدل به آن پاسخ دهید."}
+{"k": "app.reason.model_unconfirmed", "src": "316e6e23", "v": "تأیید نشد - نشست را بررسی کنید. شاید Claude Code در ترمینال «Switch model?» می‌پرسد، یا از قبل روی همان مدل بود."}
+{"k": "app.reason.model_unknown", "src": "4e5022f6", "v": "aipager هنوز وضعیت این نشست را ندیده است - کمی بعد دوباره امتحان کنید."}
+{"k": "app.reason.no_context", "src": "8f590315", "v": "چیزی برای فشرده‌سازی نیست - زمینه از قبل خالی است."}
+{"k": "app.reason.no_permission", "src": "e1081627", "v": "شما اجازهٔ کنترل این نشست را ندارید."}
+{"k": "app.reason.no_transcript", "src": "3426f123", "v": "رونوشتی برای ادامه نیست - به جایش یک نشست تازه شروع کنید."}
+{"k": "app.reason.perms_admin", "src": "7202c2fd", "v": "رفتن به حالت خودکار فقط برای مدیر است."}
+{"k": "app.reason.queue_empty", "src": "35da34dc", "v": "چیزی در صف نیست که پاک شود."}
+{"k": "app.reason.queue_full", "src": "2bf9f868", "v": "صف پر است ({cap} در انتظار) - آن را پاک کنید یا صبر کنید تا خالی شود."}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} مسدود شد"}
 {"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {tool} برای {person} مسدود شد"}
 {"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {tool} برای {person} (نقش {role}) مسدود شد"}
@@ -437,6 +521,355 @@
 {"k": "tx.needs_admin", "src": "a2f55b85", "v": "این فرمان به مدیر نیاز دارد."}
 {"k": "tx.retry_others", "src": "4ad540c7", "v": "فقط فرستندهٔ این فرمان می‌تواند آن را دوباره اجرا کند."}
 {"k": "tx.truncated", "src": "27710457", "v": "…[کوتاه شد]"}
+{"k": "ui.action.failed", "src": "1bd1baa4", "v": "انجام نشد."}
+{"k": "ui.action.unreachable", "src": "209155a8", "v": "به سرور دسترسی نیست. چیزی تغییر نکرد."}
+{"k": "ui.activity.aria", "src": "649780e8", "v": {"one": "فعالیت اخیر: {n} فراخوانی ابزار. خط زمانی را باز کنید.", "other": "فعالیت اخیر: {n} فراخوانی ابزار. خط زمانی را باز کنید."}}
+{"k": "ui.activity.failed", "src": "6c746778", "v": "{tool} (ناموفق)"}
+{"k": "ui.activity.queued", "src": "45c54388", "v": {"one": "{n} در صف", "other": "{n} در صف"}}
+{"k": "ui.activity.recent", "src": "72d5617f", "v": "فعالیت اخیر"}
+{"k": "ui.activity.running", "src": "21ceddba", "v": "{tool} (در حال اجرا)"}
+{"k": "ui.activity.running_for", "src": "181f56b1", "v": "{tool} (در حال اجرا {clock})"}
+{"k": "ui.activity.title", "src": "81c0d915", "v": "فعالیت"}
+{"k": "ui.age.days", "src": "e827dc07", "v": "{n} روز پیش"}
+{"k": "ui.age.hours", "src": "1235f668", "v": "{n} ساعت پیش"}
+{"k": "ui.age.minutes", "src": "83f8dc33", "v": "{n} دقیقه پیش"}
+{"k": "ui.age.seconds", "src": "b4e09dd8", "v": "{n} ثانیه پیش"}
+{"k": "ui.answer.cannot", "src": "40c455f0", "v": "شما نمی‌توانید در این چت به درخواست‌ها پاسخ دهید."}
+{"k": "ui.answer.send_failed", "src": "9a2e8fac", "v": "فرستادن درخواست به چت انجام نشد."}
+{"k": "ui.answer.sent", "src": "ba35b7cb", "v": "به چت فرستاده شد. آنجا پاسخ دهید."}
+{"k": "ui.answer.unreachable", "src": "f159beba", "v": "به سرور دسترسی نیست. چیزی فرستاده نشد."}
+{"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude از شما چیزی می‌پرسد."}
+{"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "باز کردن {session}"}
+{"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude می‌خواهد از یک ابزار استفاده کند."}
+{"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "پاک کردن صف"}
+{"k": "ui.btn.action.compact", "src": "10c986db", "v": "الان فشرده کن"}
+{"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "حذف"}
+{"k": "ui.btn.action.kill", "src": "7b932e77", "v": "پایان"}
+{"k": "ui.btn.action.rename", "src": "d3f4cb89", "v": "تغییر نام"}
+{"k": "ui.btn.action.restart", "src": "b134bd55", "v": "راه‌اندازی دوباره"}
+{"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "ادامه"}
+{"k": "ui.btn.action.stop", "src": "9e253470", "v": "توقف"}
+{"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "پاسخ در چت"}
+{"k": "ui.btn.cancel", "src": "77dfd213", "v": "لغو"}
+{"k": "ui.btn.check_again", "src": "e185048c", "v": "بررسی دوباره"}
+{"k": "ui.btn.check_updates", "src": "736b9062", "v": "بررسی به‌روزرسانی"}
+{"k": "ui.btn.checking", "src": "820d6004", "v": "در حال بررسی…"}
+{"k": "ui.btn.close_app", "src": "73743dc4", "v": "بستن برنامه"}
+{"k": "ui.btn.copied", "src": "8e3df45a", "v": "کپی شد"}
+{"k": "ui.btn.copy", "src": "af74f7c5", "v": "کپی"}
+{"k": "ui.btn.done", "src": "e9b450d1", "v": "تمام"}
+{"k": "ui.btn.new_session", "src": "5c881d23", "v": "نشست جدید"}
+{"k": "ui.btn.not_now", "src": "e4571490", "v": "الان نه"}
+{"k": "ui.btn.report", "src": "24f3f52d", "v": "گزارش یک مشکل"}
+{"k": "ui.btn.reset", "src": "44c57abd", "v": "بازنشانی"}
+{"k": "ui.btn.reset_defaults", "src": "ddefe47d", "v": "بازگشت به پیش‌فرض‌ها"}
+{"k": "ui.btn.restart_now", "src": "af2c3d8e", "v": "الان راه‌اندازی دوباره"}
+{"k": "ui.btn.save", "src": "efc007a3", "v": "ذخیره"}
+{"k": "ui.btn.send_report", "src": "a5b32af9", "v": "فرستادن گزارش"}
+{"k": "ui.btn.sending", "src": "c338c191", "v": "در حال فرستادن..."}
+{"k": "ui.btn.start_session", "src": "76684eaf", "v": "شروع نشست"}
+{"k": "ui.btn.stop_and_switch", "src": "21c1d7af", "v": "توقف کار و تغییر"}
+{"k": "ui.btn.switch", "src": "3e44c920", "v": "تغییر"}
+{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "رفتن به پرسش"}
+{"k": "ui.btn.switch_to_auto", "src": "13a0f246", "v": "رفتن به خودکار"}
+{"k": "ui.btn.try_again", "src": "042c862e", "v": "تلاش دوباره"}
+{"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "۱۰ دقیقهٔ دیگر صبر کن"}
+{"k": "ui.confirm.delete", "src": "734db731", "v": "{session} حذف شود؟"}
+{"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "این کار نشست را از فهرست شما برمی‌دارد. رونوشت آن روی دیسک می‌ماند."}
+{"k": "ui.confirm.kill", "src": "804fbc7f", "v": "به {session} پایان داده شود؟"}
+{"k": "ui.confirm.kill_body", "src": "beff52e4", "v": "این کار نشست را متوقف می‌کند و برمی‌دارد. هر کاری که در حال اجرا بود قطع می‌شود."}
+{"k": "ui.confirm.perms_ask", "src": "c0710578", "v": "{session} به حالت پرسش برود؟"}
+{"k": "ui.confirm.perms_ask_body", "src": "701538b8", "v": "Claude پیش از اجرای ابزارها می‌پرسد."}
+{"k": "ui.confirm.perms_auto", "src": "b6a1ddde", "v": "{session} به حالت خودکار برود؟"}
+{"k": "ui.confirm.perms_auto_body", "src": "7d8bf9c6", "v": "Claude ابزارها را بدون پرسیدن اجرا می‌کند."}
+{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "کار فعلی متوقف شود و {session} به پرسش برود؟"}
+{"k": "ui.confirm.perms_busy_auto", "src": "d4090a8b", "v": "کار فعلی متوقف شود و {session} به خودکار برود؟"}
+{"k": "ui.confirm.rename", "src": "92656d63", "v": "نام {session} عوض شود؟"}
+{"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "نشست تاریخچه و پوشهٔ کاری‌اش را نگه می‌دارد. فقط نامش عوض می‌شود."}
+{"k": "ui.confirm.reset", "src": "e13d0ebf", "v": "تنظیمات به پیش‌فرض برگردد؟"}
+{"k": "ui.confirm.reset_body", "src": "f2fd45cf", "v": "تنظیمات خود این نشست پاک می‌شود و دوباره از پیش‌فرض‌های چت پیروی می‌کند."}
+{"k": "ui.confirm.restart", "src": "47a0c787", "v": "{session} دوباره راه‌اندازی شود؟"}
+{"k": "ui.confirm.restart_body", "src": "5ec9d004", "v": "نشست متوقف می‌شود و با همان تاریخچه دوباره اجرا می‌شود. هر نوبتی که در جریان باشد قطع می‌شود."}
+{"k": "ui.conn.expired", "src": "45a6f9ad", "v": "منقضی"}
+{"k": "ui.conn.live", "src": "98aadb37", "v": "وصل"}
+{"k": "ui.conn.no_init", "src": "e2ebd902", "v": "برای ورود، این صفحه را از برنامهٔ Telegram باز کنید."}
+{"k": "ui.conn.offline", "src": "d1ffda5d", "v": "آفلاین"}
+{"k": "ui.conn.reconnecting", "src": "6b160044", "v": "اتصال دوباره…"}
+{"k": "ui.conn.session_expired", "src": "c1c71ef8", "v": "نشست ورود منقضی شد. آن را دوباره از {command} در Telegram باز کنید."}
+{"k": "ui.conn.unreachable", "src": "eb8937f2", "v": "به سرور دسترسی نیست. تونل را بررسی کنید."}
+{"k": "ui.daemon.uptime", "src": "18bb02cb", "v": "روشن {n} دقیقه"}
+{"k": "ui.detail.latest_reply", "src": "455aaef0", "v": "آخرین پاسخ"}
+{"k": "ui.detail.session_settings", "src": "ed40d944", "v": "تنظیمات نشست"}
+{"k": "ui.detail.settings_readonly", "src": "aebade5f", "v": "فقط کسی که می‌تواند به این نشست درخواست بدهد این‌ها را تغییر می‌دهد."}
+{"k": "ui.diff.binary", "src": "810945bb", "v": "فایل دودویی (بدون پیش‌نمایش)."}
+{"k": "ui.diff.change.added", "src": "172415f0", "v": "افزوده"}
+{"k": "ui.diff.change.deleted", "src": "b639f5cc", "v": "حذف‌شده"}
+{"k": "ui.diff.change.modified", "src": "99db3247", "v": "تغییریافته"}
+{"k": "ui.diff.change.renamed", "src": "87620709", "v": "تغییرنام‌یافته"}
+{"k": "ui.diff.change.untracked", "src": "d7390aa3", "v": "ردیابی‌نشده"}
+{"k": "ui.diff.clean", "src": "6eb6e7bf", "v": "تغییر ثبت‌نشده‌ای نیست."}
+{"k": "ui.diff.clean_in", "src": "0bde87e2", "v": "در {repo} تغییر ثبت‌نشده‌ای نیست."}
+{"k": "ui.diff.failed", "src": "5d47ec55", "v": "diff بارگذاری نشد."}
+{"k": "ui.diff.gone", "src": "38a63905", "v": "این نشست دیگر در دسترس نیست."}
+{"k": "ui.diff.loading", "src": "c569ad51", "v": "در حال بارگذاری diff…"}
+{"k": "ui.diff.no_changes", "src": "9b1fcbda", "v": "تغییری نیست."}
+{"k": "ui.diff.partial", "src": "4aa4772f", "v": "بخشی از فایل‌های تغییریافته نشان داده می‌شود. diff کامل بزرگ‌تر از آن است که این نما نشان دهد."}
+{"k": "ui.diff.reason.cwd_missing", "src": "4140481e", "v": "پوشهٔ کاری این نشست دیگر وجود ندارد."}
+{"k": "ui.diff.reason.git_error", "src": "c6f57086", "v": "git برای این نشست diff نساخت."}
+{"k": "ui.diff.reason.git_not_installed", "src": "171dd6a9", "v": "git روی این دستگاه در دسترس نیست."}
+{"k": "ui.diff.reason.no_commits_yet", "src": "cc383c84", "v": "این مخزن هنوز commit ندارد."}
+{"k": "ui.diff.reason.not_a_git_repo", "src": "287b446f", "v": "پوشهٔ کاری این نشست مخزن git نیست."}
+{"k": "ui.diff.title", "src": "fe25abc0", "v": "فایل‌های تغییریافته"}
+{"k": "ui.diff.title_n", "src": "6222be44", "v": {"one": "فایل‌های تغییریافته ({n})", "other": "فایل‌های تغییریافته ({n})"}}
+{"k": "ui.diff.title_none", "src": "447a466c", "v": "فایل‌های تغییریافته (هیچ)"}
+{"k": "ui.diff.too_large", "src": "7aafaa23", "v": "diff بزرگ‌تر از آن است که نشان داده شود."}
+{"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "diff در دسترس نیست."}
+{"k": "ui.done.already_gone", "src": "9f734fbb", "v": "از قبل تمام شده بود."}
+{"k": "ui.done.clearqueue", "src": "c97917b3", "v": "پاک شد."}
+{"k": "ui.done.compact", "src": "399fec37", "v": "در حال فشرده‌سازی…"}
+{"k": "ui.done.delete", "src": "48ea780f", "v": "حذف شد."}
+{"k": "ui.done.generic", "src": "e2bcda84", "v": "انجام شد."}
+{"k": "ui.done.kill", "src": "eb388bd9", "v": "پایان داده شد."}
+{"k": "ui.done.perms", "src": "144199df", "v": "عوض شد."}
+{"k": "ui.done.rename", "src": "b930ba4a", "v": "نام عوض شد."}
+{"k": "ui.done.rename_same", "src": "ea00acbd", "v": "تغییری نکرد."}
+{"k": "ui.done.restart", "src": "519ed942", "v": "دوباره راه‌اندازی شد."}
+{"k": "ui.done.resume", "src": "ac66e08b", "v": "ادامه یافت."}
+{"k": "ui.done.stop", "src": "8fcc7be3", "v": "متوقف شد."}
+{"k": "ui.empty.text", "src": "8ff2cab6", "v": "یکی را همین‌جا شروع کنید یا در چت {command} بفرستید."}
+{"k": "ui.empty.title", "src": "a44ee05c", "v": "هنوز نشستی نیست."}
+{"k": "ui.grid.finished_n", "src": "8e06a605", "v": {"one": "پایان‌یافته ({n})", "other": "پایان‌یافته ({n})"}}
+{"k": "ui.grid.needs_you", "src": "0d9d0df1", "v": "منتظر شما"}
+{"k": "ui.kind.permission", "src": "17857134", "v": "مجوز"}
+{"k": "ui.kind.question", "src": "002ff598", "v": "پرسش"}
+{"k": "ui.kind_word.permission", "src": "6d244f58", "v": "مجوز"}
+{"k": "ui.kind_word.question", "src": "3b2be2e2", "v": "پرسش"}
+{"k": "ui.menu.changed", "src": "512ec84b", "v": "این نشست تغییر کرد. منو را دوباره باز کنید."}
+{"k": "ui.model.failed", "src": "a8ef2ee3", "v": "عوض کردن مدل انجام نشد."}
+{"k": "ui.model.now", "src": "3dd35778", "v": "مدل حالا {model} است."}
+{"k": "ui.model.switching", "src": "4a9961a0", "v": "در حال تغییر…"}
+{"k": "ui.model.title", "src": "68c2cc7f", "v": "مدل"}
+{"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "تأیید نشد (نشست را بررسی کنید)"}
+{"k": "ui.model.unreachable", "src": "82a93142", "v": "به سرور دسترسی نیست. مدل نشست را بررسی کنید."}
+{"k": "ui.new.auto_needs_admin", "src": "ad1f0c2f", "v": "حالت خودکار فقط برای مدیر است."}
+{"k": "ui.new.chips_recent", "src": "76eec760", "v": "اخیر"}
+{"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "پیشنهادی"}
+{"k": "ui.new.cli_model", "src": "80e3c49d", "v": "مدل پیش‌فرض خود CLI"}
+{"k": "ui.new.create_failed", "src": "c55f566f", "v": "ساختن آن نشست انجام نشد."}
+{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "ساختن این پوشه"}
+{"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "شما اجازه ندارید اینجا نشست بسازید."}
+{"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "به سرور دسترسی نیست. نشست ساخته نشد."}
+{"k": "ui.new.created", "src": "77ea75b5", "v": "نشست ساخته شد."}
+{"k": "ui.new.creating", "src": "94d7d8ee", "v": "در حال ساختن…"}
+{"k": "ui.new.cwd_title", "src": "e8c598ee", "v": "پوشهٔ کاری"}
+{"k": "ui.new.daemon_dir", "src": "2503c8cf", "v": "پوشهٔ خود سرویس aipager"}
+{"k": "ui.new.default", "src": "808d7dca", "v": "پیش‌فرض"}
+{"k": "ui.new.default_dir_help", "src": "6d7d5fbc", "v": "پوشهٔ خود سرویس aipager"}
+{"k": "ui.new.default_model_help", "src": "17ab4082", "v": "هر مدلی که CLI برایش تنظیم شده است"}
+{"k": "ui.new.folder_created", "src": "6b6ea299", "v": "پوشه ساخته شد."}
+{"k": "ui.new.folder_existed", "src": "bfe299bc", "v": "آن پوشه از قبل بود، پس انتخاب شد."}
+{"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "ساختن آن پوشه انجام نشد."}
+{"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "شما اجازه ندارید اینجا پوشه بسازید."}
+{"k": "ui.new.folder_name", "src": "85f87fa3", "v": "نام پوشهٔ جدید"}
+{"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "به سرور دسترسی نیست. پوشه‌ای ساخته نشد."}
+{"k": "ui.new.mode_ask", "src": "3562777b", "v": "پرسش"}
+{"k": "ui.new.mode_ask_help", "src": "eca1be33", "v": "Claude پیش از اجرای ابزارها می‌پرسد"}
+{"k": "ui.new.mode_auto", "src": "c614ba7c", "v": "خودکار"}
+{"k": "ui.new.mode_auto_help", "src": "306e8992", "v": "ابزارها را بدون پرسیدن اجرا می‌کند"}
+{"k": "ui.new.mode_title", "src": "9c8c621a", "v": "حالت مجوز"}
+{"k": "ui.new.model_name", "src": "5ebb9765", "v": "نام مدل"}
+{"k": "ui.new.model_needed", "src": "c585e482", "v": "برای ادامه نام یک مدل را بنویسید."}
+{"k": "ui.new.model_pattern", "src": "7222f368", "v": "از حروف لاتین، عدد، نقطه و خط تیره استفاده کنید؛ با یک حرف یا عدد شروع کنید."}
+{"k": "ui.new.more", "src": "86c0a35e", "v": "گزینه‌های بیشتر"}
+{"k": "ui.new.name", "src": "709a2322", "v": "نام"}
+{"k": "ui.new.new_folder", "src": "a711999b", "v": "پوشهٔ جدید"}
+{"k": "ui.new.new_folder_help", "src": "29aa13d5", "v": "درون پوشهٔ انتخاب‌شده در بالا"}
+{"k": "ui.new.not_set", "src": "770e48ee", "v": "هنوز تعیین نشده"}
+{"k": "ui.new.other_model", "src": "cc3190e7", "v": "مدل دیگر"}
+{"k": "ui.new.other_model_help", "src": "561f7c9e", "v": "نام کامل را بنویسید، مثلاً {example}"}
+{"k": "ui.new.pick_dir_first", "src": "969b0a9b", "v": "اول یک پوشهٔ کاری در بالا انتخاب کنید."}
+{"k": "ui.new.requires_admin", "src": "e18e02eb", "v": "فقط برای مدیر"}
+{"k": "ui.new.sub", "src": "23b19317", "v": "نامی بدهید، پوشه‌ای انتخاب کنید، و Claude همان‌جا شروع می‌کند."}
+{"k": "ui.new.summary_ask", "src": "3e987f2e", "v": "Claude را در {where}، در حالت پرسش، با {model} شروع می‌کند."}
+{"k": "ui.new.summary_auto", "src": "d0968e63", "v": "Claude را در {where}، در حالت خودکار، با {model} شروع می‌کند."}
+{"k": "ui.new.summary_named_ask", "src": "ccbc6d09", "v": "Claude را با نام {name} در {where}، در حالت پرسش، با {model} شروع می‌کند."}
+{"k": "ui.new.summary_named_auto", "src": "4b48c549", "v": "Claude را با نام {name} در {where}، در حالت خودکار، با {model} شروع می‌کند."}
+{"k": "ui.new.title", "src": "5c881d23", "v": "نشست جدید"}
+{"k": "ui.new.where", "src": "525f61b6", "v": "کجا"}
+{"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "پیش از پایان این نشست چیزی ثبت نشد."}
+{"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "هنوز چیزی ثبت نشده. وقتی Claude پاسخ دهد می‌آید."}
+{"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "همه آرام"}
+{"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"one": "{n} پایان‌یافته", "other": "{n} پایان‌یافته"}}
+{"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"one": "{n} منتظر شما", "other": "{n} منتظر شما"}}
+{"k": "ui.pulse.resting", "src": "644f3b40", "v": {"one": "{n} در استراحت", "other": "{n} در استراحت"}}
+{"k": "ui.pulse.spent", "src": "908f77ef", "v": "{cost} هزینه شد"}
+{"k": "ui.pulse.unknown", "src": "23ca6f83", "v": {"one": "{n} نامعلوم", "other": "{n} نامعلوم"}}
+{"k": "ui.pulse.working", "src": "c3aee490", "v": {"one": "{n} در حال کار", "other": "{n} در حال کار"}}
+{"k": "ui.rename.empty", "src": "e00fbfca", "v": "نام نشست نمی‌تواند خالی باشد."}
+{"k": "ui.rename.failed", "src": "07c216e4", "v": "تغییر نام انجام نشد."}
+{"k": "ui.rename.pattern", "src": "b916e083", "v": "از حروف لاتین، عدد، خط تیره و زیرخط استفاده کنید؛ با یک حرف یا عدد شروع کنید."}
+{"k": "ui.rename.reserved", "src": "9440c7ea", "v": "«{name}» نام یک فرمان رزروشده است."}
+{"k": "ui.rename.too_long", "src": "9b31bc40", "v": "نام نشست باید {max} نویسه یا کمتر باشد."}
+{"k": "ui.report.also_through", "src": "1d1b7026", "v": "از این‌ها هم گذشت: {names}"}
+{"k": "ui.report.as_written", "src": "21532af3", "v": "دقیقاً همان‌طور که نوشته شده فرستاده می‌شود."}
+{"k": "ui.report.bad_note", "src": "c92adef7", "v": "آن یادداشت افزوده نشد. یادداشتی کوتاه‌تر و ساده‌تر امتحان کنید."}
+{"k": "ui.report.card_text", "src": "45e21208", "v": "به نگه‌دارنده بگویید چه چیزی خراب شد. پیش از فرستادن، کل گزارش را می‌بینید."}
+{"k": "ui.report.copied", "src": "dd2ce2e2", "v": "کپی شد."}
+{"k": "ui.report.copy_hint", "src": "7d76506f", "v": "برای کپی، شناسه را لمس کنید و نگه دارید."}
+{"k": "ui.report.daily_cap_title", "src": "9bdf248a", "v": "سقف روزانه پر شد"}
+{"k": "ui.report.err.crash", "src": "78d1bcc4", "v": "aipager ناگهان متوقف شد"}
+{"k": "ui.report.err.error", "src": "7f2f6a15", "v": "خطا"}
+{"k": "ui.report.err.hook_cap", "src": "f4162559", "v": "hook به سقف حافظه‌اش رسید"}
+{"k": "ui.report.err.logged_in", "src": "ad58db0c", "v": "خطای ثبت‌شده در {area}"}
+{"k": "ui.report.err.type_in", "src": "15f9e48c", "v": "{type} در {area}"}
+{"k": "ui.report.err_detail", "src": "97fb369f", "v": "{fingerprint}، اولین بار {day}، در {versions}"}
+{"k": "ui.report.err_sub", "src": "917846a1", "v": "{times}، آخرین بار {day}"}
+{"k": "ui.report.errors", "src": "805e86a8", "v": "خطاها"}
+{"k": "ui.report.errors_n", "src": "07ba7666", "v": {"one": "خطاها ({n})", "other": "خطاها ({n})"}}
+{"k": "ui.report.exact", "src": "ea8e4b11", "v": "نمایش متن دقیق گزارش"}
+{"k": "ui.report.exact_note", "src": "991b0c14", "v": "این دقیقاً همان متنی است که فرستاده می‌شود، با یادداشت شما."}
+{"k": "ui.report.exit.clean", "src": "6a1cec45", "v": "عادی"}
+{"k": "ui.report.exit.crash", "src": "dd472460", "v": "یک خرابی"}
+{"k": "ui.report.exit.reboot", "src": "118341f6", "v": "یک راه‌اندازی دوبارهٔ دستگاه"}
+{"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "نامعلوم"}
+{"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "پیش‌نمایش تغییرات"}
+{"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
+{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "ربات‌های ناظر"}
+{"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "خلاصه‌های غنی"}
+{"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "تونل مدیریت‌شده"}
+{"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "نشانی تونل شخصی"}
+{"k": "ui.report.feature.voice", "src": "704617a7", "v": "پیام‌های صوتی"}
+{"k": "ui.report.foot", "src": "09700e47", "v": "تا «فرستادن گزارش» را نزنید چیزی فرستاده نمی‌شود. گزارش بدون نام شما به صندوق خطاهای نگه‌دارنده می‌رود."}
+{"k": "ui.report.label.counts", "src": "a7e0a1c5", "v": "شمارش‌ها، ۲۴ ساعت گذشته"}
+{"k": "ui.report.label.features", "src": "fc338f87", "v": "قابلیت‌ها"}
+{"k": "ui.report.label.libraries", "src": "27c968e6", "v": "کتابخانه‌ها"}
+{"k": "ui.report.label.limits", "src": "ca1be69e", "v": "محدودیت‌های Telegram"}
+{"k": "ui.report.label.log", "src": "499fd95d", "v": "گزارش رویدادها، ۲۴ ساعت گذشته"}
+{"k": "ui.report.label.setup", "src": "cdd7bb28", "v": "پیکربندی"}
+{"k": "ui.report.label.stops", "src": "0e648419", "v": "توقف‌ها"}
+{"k": "ui.report.label.system", "src": "bc0792d8", "v": "سیستم"}
+{"k": "ui.report.later", "src": "685cd810", "v": "پاسخی از aipager به موقع نرسید. دوباره «فرستادن گزارش» را بزنید: اگر قبلاً رفته باشد، شناسه‌اش را می‌بینید و دو بار فرستاده نمی‌شود."}
+{"k": "ui.report.limits", "src": "22297d2d", "v": {"one": "{n} محرومیت در ۷ روز، بار شلوغ‌ترین ساعت {load}", "other": "{n} محرومیت در ۷ روز، بار شلوغ‌ترین ساعت {load}"}}
+{"k": "ui.report.log_line", "src": "5069aaa9", "v": {"one": "{n} جا هشدار یا خطا ثبت کرد ({times})", "other": "{n} جا هشدار یا خطا ثبت کرد ({times})"}}
+{"k": "ui.report.missing", "src": "995357dd", "v": "(نصب نیست)"}
+{"k": "ui.report.more", "src": "473710d3", "v": "جزئیات بیشتر"}
+{"k": "ui.report.n_groups", "src": "1a2fac9e", "v": {"one": "{n} گروه", "other": "{n} گروه"}}
+{"k": "ui.report.n_private_chats", "src": "5922fc21", "v": {"one": "{n} چت خصوصی", "other": "{n} چت خصوصی"}}
+{"k": "ui.report.no_errors", "src": "a5697d50", "v": "اخیراً خطایی ثبت نشده. اطلاعات بالا و یادداشت شما باز هم کمک می‌کنند."}
+{"k": "ui.report.none", "src": "6eef6648", "v": "هیچ"}
+{"k": "ui.report.not_found", "src": "475c8486", "v": "پیدا نشد"}
+{"k": "ui.report.not_sent", "src": "587c501e", "v": "فرستاده نشد"}
+{"k": "ui.report.note_label", "src": "24a9a8bc", "v": "یادداشت شما (اختیاری)"}
+{"k": "ui.report.note_placeholder", "src": "e2bf7584", "v": "وقتی مشکل پیش آمد مشغول چه کاری بودید؟"}
+{"k": "ui.report.nothing_logged", "src": "7bb93154", "v": "چیزی ثبت نشده"}
+{"k": "ui.report.once", "src": "18638356", "v": "یک بار"}
+{"k": "ui.report.panel.build", "src": "288edef3", "v": "کمی بعد دوباره امتحان کنید."}
+{"k": "ui.report.panel.build_title", "src": "76b58923", "v": "آماده کردن گزارش انجام نشد"}
+{"k": "ui.report.panel.group", "src": "a2c9e40d", "v": "گزارش‌ها از Mini App که در چت خصوصی شما با ربات باز شده فرستاده می‌شوند."}
+{"k": "ui.report.panel.group_title", "src": "73925937", "v": "چت خصوصی خود را باز کنید"}
+{"k": "ui.report.panel.noowner", "src": "9ee5b766", "v": "این aipager چت مالک واحدی ندارد. در ترمینال، {command} همچنان کار می‌کند."}
+{"k": "ui.report.panel.noowner_title", "src": "40631445", "v": "از اینجا نمی‌شود فرستاد"}
+{"k": "ui.report.panel.owner", "src": "e83d9212", "v": "فقط مالک این aipager می‌تواند گزارش مشکل بفرستد."}
+{"k": "ui.report.panel.owner_title", "src": "e91f02d9", "v": "فقط مالک"}
+{"k": "ui.report.preparing", "src": "aaf61214", "v": "در حال آماده کردن گزارش..."}
+{"k": "ui.report.privacy", "src": "48fa34f1", "v": "این گزارش نسخه‌ها، شمارش‌ها و جاهایی از کد aipager را دارد. هرگز چت‌ها، درخواست‌ها، نام‌ها یا مسیرهای شما را ندارد."}
+{"k": "ui.report.sending_wait", "src": "176ed846", "v": "در حال فرستادن. یک لحظه."}
+{"k": "ui.report.sent_title", "src": "a7615ceb", "v": "گزارش فرستاده شد"}
+{"k": "ui.report.setup.personal", "src": "2ca0506b", "v": "پیکربندی شخصی"}
+{"k": "ui.report.setup.scope", "src": "d662e796", "v": "پیکربندی چندچتی"}
+{"k": "ui.report.setup.team", "src": "a857214e", "v": "پیکربندی تیمی"}
+{"k": "ui.report.setup_line", "src": "c52e3d20", "v": "{mode}، {dms}، {groups}، در حال اجرا {uptime}"}
+{"k": "ui.report.setup_line_bare", "src": "60b4d8c7", "v": "{dms}، در حال اجرا {uptime}"}
+{"k": "ui.report.setup_line_no_groups", "src": "f0f3ef45", "v": "{mode}، {dms}، در حال اجرا {uptime}"}
+{"k": "ui.report.setup_line_no_mode", "src": "f94812f3", "v": "{dms}، {groups}، در حال اجرا {uptime}"}
+{"k": "ui.report.show_more", "src": "fdeb42f8", "v": {"one": "نمایش {n} مورد دیگر", "other": "نمایش {n} مورد دیگر"}}
+{"k": "ui.report.stale", "src": "25e3d152", "v": "آن گزارش دیگر اینجا نیست. این یکی تازه است: بررسی‌اش کنید، بعد دوباره «فرستادن گزارش» را بزنید."}
+{"k": "ui.report.still_sending", "src": "5b89eba6", "v": "هنوز در حال فرستادن است. کمی صبر کنید، بعد دوباره «فرستادن گزارش» را بزنید."}
+{"k": "ui.report.stops", "src": "8f971d67", "v": "آخرین توقف: {last}. توقف‌های ناگهانی در ۷ روز: {n}."}
+{"k": "ui.report.system_in", "src": "7011d75d", "v": "{system}، در {container}"}
+{"k": "ui.report.thanks", "src": "04d9993f", "v": "سپاس. اگر در GitHub یک issue باز می‌کنید، این شناسه را بنویسید:"}
+{"k": "ui.report.tidied", "src": "35efa495", "v": "یادداشت شما مرتب شد (نویسه‌های نامرئی، فاصله‌های اضافه یا هر چه بعد از ۵۰۰ نویسه بود حذف شد). بررسی‌اش کنید، بعد دوباره «فرستادن گزارش» را بزنید."}
+{"k": "ui.report.times", "src": "766020c6", "v": {"one": "{n} بار", "other": "{n} بار"}}
+{"k": "ui.report.title", "src": "24f3f52d", "v": "گزارش یک مشکل"}
+{"k": "ui.report.too_long", "src": "f600d1b3", "v": {"one": "{n} نویسه بیش از حد مجاز.", "other": "{n} نویسه بیش از حد مجاز."}}
+{"k": "ui.report.too_many", "src": "392589ae", "v": "لمس‌ها زیاد بود. یک دقیقهٔ دیگر دوباره امتحان کنید."}
+{"k": "ui.report.too_old_title", "src": "2a4d2b45", "v": "به‌روزرسانی لازم است"}
+{"k": "ui.report.try_later", "src": "ab0f2d7c", "v": "الان ارسال نشد. چیزی از دست نرفت؛ بعداً دوباره امتحان کنید."}
+{"k": "ui.report.uptime.10m_1h", "src": "4db7ea05", "v": "۱۰ دقیقه تا یک ساعت"}
+{"k": "ui.report.uptime.1d_7d", "src": "ba95c4e1", "v": "۱ تا ۷ روز"}
+{"k": "ui.report.uptime.1h_24h", "src": "f23cc5e9", "v": "۱ تا ۲۴ ساعت"}
+{"k": "ui.report.uptime.over_week", "src": "7df7e421", "v": "بیش از یک هفته"}
+{"k": "ui.report.uptime.under_10m", "src": "35d29633", "v": "کمتر از ۱۰ دقیقه"}
+{"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "به مدتی نامعلوم"}
+{"k": "ui.report.what_sent", "src": "6b776c8f", "v": "چه چیزی فرستاده می‌شود"}
+{"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "ترجیحات چت"}
+{"k": "ui.settings.default_tag", "src": "7505d64a", "v": "پیش‌فرض"}
+{"k": "ui.settings.intro", "src": "f1ea8e24", "v": "این‌ها برای همهٔ نشست‌های این چت اعمال می‌شوند."}
+{"k": "ui.settings.readonly", "src": "57fedd89", "v": "فقط مدیر می‌تواند این‌ها را تغییر دهد."}
+{"k": "ui.settings.reset_done", "src": "5b3b5541", "v": "به پیش‌فرض برگشت."}
+{"k": "ui.settings.reset_failed", "src": "38256d55", "v": "بعضی از تنظیمات بازنشانی نشدند. برای تلاش دوباره، دوباره باز کنید."}
+{"k": "ui.settings.save_failed", "src": "cdb1d51d", "v": "ذخیره نشد. مقداری که روی صفحه است همان است که ذخیره شده."}
+{"k": "ui.settings.saved", "src": "9d4af690", "v": "ذخیره شد."}
+{"k": "ui.shell.actions_aria", "src": "b086cae4", "v": "کارهای نشست"}
+{"k": "ui.shell.chat_aria", "src": "2ced57f1", "v": "چت"}
+{"k": "ui.shell.loading", "src": "33ce4174", "v": "در حال بارگذاری…"}
+{"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "نام تازه"}
+{"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "نشست جدید"}
+{"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "بخش‌ها"}
+{"k": "ui.state.busy", "src": "8178ea20", "v": "در حال کار"}
+{"k": "ui.state.gone", "src": "f957097d", "v": "پایان‌یافته"}
+{"k": "ui.state.idle", "src": "e24cc7a4", "v": "در استراحت"}
+{"k": "ui.state.unknown", "src": "50d8b4a9", "v": "نامعلوم"}
+{"k": "ui.state.waiting", "src": "19622ace", "v": "منتظر شما"}
+{"k": "ui.state_line.finished", "src": "355bcc57", "v": "پایان‌یافته"}
+{"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "منتظر شما"}
+{"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "منتظر شما ({kind})"}
+{"k": "ui.state_line.resting", "src": "296d1007", "v": "در استراحت"}
+{"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "در استراحت، آخرین فعالیت {age}"}
+{"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "هنوز گزارش نشده"}
+{"k": "ui.state_line.working", "src": "3b4dfc97", "v": "در حال کار"}
+{"k": "ui.state_line.working_for", "src": "f555f372", "v": "در حال کار {clock}"}
+{"k": "ui.tab.sessions", "src": "e11e37a9", "v": "نشست‌ها"}
+{"k": "ui.tab.settings", "src": "c7f73bb5", "v": "تنظیمات"}
+{"k": "ui.tile.aria", "src": "eaa1d742", "v": "{session}، {state}، زمینه {pct}٪، {model}، {cost}"}
+{"k": "ui.tile.aria_no_model", "src": "667d58b3", "v": "{session}، {state}، زمینه {pct}٪، {cost}"}
+{"k": "ui.tile.no_folder", "src": "25fe67b1", "v": "بدون پوشه"}
+{"k": "ui.timeline.empty", "src": "8bdea321", "v": "هنوز فعالیتی نیست."}
+{"k": "ui.timeline.note", "src": "306606d2", "v": "خط زمانی فقط اجرای فعلی سرویس را پوشش می‌دهد. بعد از راه‌اندازی دوباره نگه داشته نمی‌شود، پس یک نشست قدیمی‌تر اینجا چیزی نشان نمی‌دهد."}
+{"k": "ui.timeline.title_empty", "src": "44748119", "v": "خط زمانی (خالی)"}
+{"k": "ui.timeline.title_n", "src": "a7f6a618", "v": {"one": "خط زمانی ({n})", "other": "خط زمانی ({n})"}}
+{"k": "ui.update.check_failed", "src": "a15f1db5", "v": "بررسی به‌روزرسانی‌ها انجام نشد. دوباره امتحان کنید."}
+{"k": "ui.update.finished", "src": "80fa9b82", "v": "آن به‌روزرسانی قبلاً تمام شده است."}
+{"k": "ui.update.job.claude_updating", "src": "c587f1e1", "v": "در حال کار… (به‌روزرسانی claude)"}
+{"k": "ui.update.job.gate_timeout", "src": "1499ee18", "v": "نشست‌ها هنوز مشغول‌اند. بیشتر صبر شود، الان راه‌اندازی دوباره شود، یا لغو شود؟"}
+{"k": "ui.update.job.starting", "src": "06080d40", "v": "در حال کار… (شروع)"}
+{"k": "ui.update.job.upgrading", "src": "c6e6577f", "v": "در حال کار… (ارتقا)"}
+{"k": "ui.update.job.waiting_idle", "src": "2d4b64cc", "v": "در انتظار آزاد شدن همهٔ نشست‌ها پیش از راه‌اندازی دوباره."}
+{"k": "ui.update.job.working_phase", "src": "3a93346a", "v": "در حال کار… ({phase})"}
+{"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "برنگشته‌ها: {names}"}
+{"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}؟ aipager وقتی هیچ نوبتی در جریان نباشد دوباره راه‌اندازی می‌شود."}
+{"k": "ui.update.other", "src": "7ae4a531", "v": "aipager دوباره راه‌اندازی شد اما {version} را اجرا می‌کند."}
+{"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager دوباره راه‌اندازی شد اما {version} را اجرا می‌کند، نه {expected}."}
+{"k": "ui.update.refused", "src": "651df229", "v": "برای دیدن نتیجهٔ به‌روزرسانی، برنامه را دوباره باز کنید."}
+{"k": "ui.update.reopen", "src": "3bf2409f", "v": "aipager دوباره راه‌اندازی شد. وقتی چت گفت به‌روز شده، برنامه را دوباره باز کنید: آن را ببندید و دوباره از چت باز کنید (دکمهٔ منو یا {command})."}
+{"k": "ui.update.restart_now_confirm", "src": "3f76f590", "v": "راه‌اندازی دوبارهٔ همین الان، نوبت‌های در جریانِ فهرست‌شده در اینجا را قطع می‌کند."}
+{"k": "ui.update.restarting", "src": "0cfedf00", "v": "در حال راه‌اندازی دوبارهٔ aipager…"}
+{"k": "ui.update.running", "src": "5c38d794", "v": "یک به‌روزرسانی همین حالا در جریان است."}
+{"k": "ui.update.shutting_down", "src": "190aec5c", "v": "aipager در حال خاموش شدن است. وقتی برگشت دوباره امتحان کنید."}
+{"k": "ui.update.slow", "src": "43a0f87b", "v": "هنوز در حال راه‌اندازی دوباره است، کمی بعد برنامه را دوباره باز کنید."}
+{"k": "ui.update.stale", "src": "fa8fd334", "v": "آن بررسی قدیمی شده. دوباره بررسی کنید."}
+{"k": "ui.update.start_failed", "src": "2f57d419", "v": "شروع آن انجام نشد. دوباره امتحان کنید."}
+{"k": "ui.update.title", "src": "c76d1807", "v": "به‌روزرسانی‌ها"}
+{"k": "ui.update.too_many", "src": "9a3f5b9e", "v": "درخواست‌ها زیاد بود. یک دقیقهٔ دیگر دوباره امتحان کنید."}
+{"k": "ui.update.unknown_version", "src": "90246157", "v": "نسخه‌ای نامعلوم"}
+{"k": "ui.update.unreachable", "src": "fc17f70c", "v": "به aipager دسترسی نیست. دوباره امتحان کنید."}
+{"k": "ui.update.up_to_date", "src": "2772acac", "v": "همه چیز به‌روز است."}
+{"k": "ui.update.updated", "src": "a56afb67", "v": "به {version} به‌روز شد."}
+{"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"one": "به {version} به‌روز شد و {n} نشست دوباره در دست گرفته شد.", "other": "به {version} به‌روز شد و {n} نشست دوباره در دست گرفته شد."}}
+{"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude از شما می‌پرسد"}
+{"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude به مجوز شما نیاز دارد"}
+{"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "یک درخواست مجوز در چت باز است."}
+{"k": "ui.waiting.question_open", "src": "3165c4fc", "v": "یک پرسش در چت باز است."}
 {"k": "upd.ap.blocked", "src": "2b9633f6", "v": "🚫 <b>aipager</b> را نمی‌توان از اینجا به‌روز کرد: {reason}"}
 {"k": "upd.ap.blocked_here", "src": "cefc4c9b", "v": "🚫 aipager را نمی‌توان از اینجا به‌روز کرد: {reason}"}
 {"k": "upd.ap.cancelled", "src": "6eb974a3", "v": "↩️ به‌روزرسانی <b>aipager</b> لغو شد - چیزی نصب نشد."}

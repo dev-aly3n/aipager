@@ -569,8 +569,8 @@ def test_the_switcher_markup_starts_hidden_and_is_a_real_tap_target():
     from aipager.miniapp.static import INDEX_HTML
     from aipager.miniapp.static._styles import CSS
 
-    assert '<div id="chat-switch" class="chat-switch" role="group" aria-label="Chat" hidden>' \
-        in INDEX_HTML
+    assert ('<div id="chat-switch" class="chat-switch" role="group" aria-label="Chat"'
+            ' data-i18n-label="ui.shell.chat_aria" hidden>') in INDEX_HTML
     block = CSS[CSS.index(".chat-chip {"):]
     block = block[:block.index("}")]
     assert "min-height: 44px" in block

@@ -1847,6 +1847,285 @@ def _resume_picker(env):
     for seconds in (0, 1, 59, 61, 3600, 172800):
         out.append(env.with_tr(bot._fmt_gone_ago, WALL - seconds))
     out.append(env.with_tr(bot._fmt_gone_ago, None))
+# ---- the Mini App (phase 4) -------------------------------------------------------------
+# Driven through its HTTP routes with an aiohttp TestClient, as the viewer
+# CHAT (personal mode's operator, so the language stored for CHAT is both
+# the viewer's and the chat's). The bot's session cores are stubbed: what is
+# rendered here is the server's own text (details, chat lines, facts,
+# reasons, the schema), never the session operations behind it. Text that
+# arrives from code outside the Mini App (a launch failure, "Auto needs an
+# admin.") is left out: it is not the Mini App's to translate.
+
+_MINIAPP_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+
+
+def _real(module: str, name: str):
+    """The unpatched *name* of *module*, read once at import: a surface
+    that needs the real one sets it back explicitly (the monkeypatch is
+    shared by every surface of one run, and is never undone)."""
+    import importlib
+    return getattr(importlib.import_module(module), name)
+
+
+_REAL_CREATE_DIRECTORY = _real("aipager.miniapp.launch", "create_directory")
+_REAL_ALLOWED_ROOTS = _real("aipager.miniapp.launch", "allowed_roots")
+
+
+def _miniapp_hdr(user_id=CHAT):
+    import hashlib
+    import hmac
+    from urllib.parse import urlencode
+    fields = {"auth_date": str(int(WALL)), "user": json.dumps({"id": user_id, "first_name": "T"})}
+    check = "\n".join(f"{k}={v}" for k, v in sorted(fields.items()))
+    secret = hmac.new(b"WebAppData", _MINIAPP_TOKEN.encode(), hashlib.sha256).digest()
+    fields["hash"] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+    return {"X-Telegram-Init-Data": urlencode(fields)}
+
+
+def _miniapp(env, *, admin=True, project_dir="/tmp"):
+    """A Mini App server for CHAT with frozen clocks and stubbed cores."""
+    import importlib
+    from aipager.miniapp import server as server_mod
+    from aipager.miniapp.server import MiniAppServer
+    env.mp.setattr("aipager.config.BOT_TOKEN", _MINIAPP_TOKEN)
+    env.mp.setattr("aipager.dtach.inject._PROJECT_DIR", project_dir)
+    env.mp.setattr("aipager.miniapp.launch.create_directory", _REAL_CREATE_DIRECTORY)
+    env.mp.setattr("aipager.miniapp.launch.allowed_roots", _REAL_ALLOWED_ROOTS)
+    env.mp.setattr("aipager.miniapp.auth.time", SimpleNamespace(time=lambda: WALL),
+                   raising=False)
+    fake = SimpleNamespace(monotonic=lambda: NOW, time=lambda: WALL)
+    env.mp.setattr(server_mod, "time", fake)
+    sessions_mod = importlib.import_module("aipager.miniapp.sessions")
+    env.mp.setattr(sessions_mod, "latest_stats",
+                   lambda sess: {"model": "Opus 4.6", "context_pct": 45, "cost_usd": 1.5})
+    env.mp.setattr(sessions_mod, "combined_queue_depth", lambda sess: 2)
+    env.mp.setattr(sessions_mod, "cached_last_assistant_preview", lambda path: "")
+    env.store(CHAT)
+    bot = env.mk_bot()
+    bot._app.bot.send_message = AsyncMock()
+    bot._app.bot.username = "aipager_test_bot"
+    bot._is_admin_user = lambda user_id, chat_id: admin
+    bot._is_update_admin = lambda user_id, chat_id: admin
+    bot._can_prompt_user = lambda user_id, chat_id: True
+    bot._update_bot_commands = AsyncMock()
+    bot._maybe_update_bot_name = AsyncMock()
+    srv = MiniAppServer(bot, bot.registry, port=8799)
+    srv._allow_write = lambda user_id: True
+    return srv
+
+
+def _ma_call(env, srv, method, path, body=None):
+    from aiohttp.test_utils import TestClient, TestServer
+
+    async def go():
+        client = TestClient(TestServer(srv._build_app()))
+        await client.start_server()
+        try:
+            kwargs = {"headers": _miniapp_hdr()}
+            if body is not None:
+                kwargs["data"] = json.dumps(body)
+            resp = await client.request(method, path, **kwargs)
+            return resp.status, await resp.json()
+        finally:
+            await client.close()
+    return env.run(go())
+
+
+def _ma_sess(srv, label=LABEL, **fields):
+    from aipager.state import Status
+    sess = srv.registry.get_or_create(f"claude-{label}")
+    sess.label = label
+    sess.scope_chat_id = CHAT
+    sess.scope_kind = "dm"
+    sess.status = fields.pop("status", Status.IDLE)
+    for key, value in fields.items():
+        setattr(sess, key, value)
+    return sess
+
+
+def _sent(srv) -> list[str]:
+    return [c.kwargs["text"] for c in srv.bot._app.bot.send_message.await_args_list]
+
+
+def _ok(**fields):
+    return AsyncMock(return_value=SimpleNamespace(**fields))
+
+
+@surface("miniapp.mirrors")
+def _miniapp_mirrors(env):
+    from aipager.state import Status
+    srv = _miniapp(env)
+    bot = srv.bot
+    _ma_sess(srv, cwd="/tmp")
+    bot.create_session = AsyncMock(return_value=("claude-n1", ""))
+    _ma_call(env, srv, "POST", "/api/sessions", {"name": "n1"})
+    _ma_call(env, srv, "POST", "/api/sessions", {"name": "n2", "cwd": "/tmp"})
+    _ma_call(env, srv, "POST", "/api/sessions", {"name": "n3", "skip_perms": True})
+    env.mp.setattr("aipager.miniapp.launch.create_directory",
+                   lambda parent, name, roots, confined=False: ("/home/op/proj/web", False, ""))
+    _ma_call(env, srv, "POST", "/api/directories", {"parent": "/tmp", "name": "web"})
+    # From the defaults, whatever an earlier surface set: a change mirrors.
+    from aipager import preferences
+    preferences.set_preference(CHAT, "layout", "card")
+    preferences.set_preference(CHAT, "answer_length", "none")
+    _ma_call(env, srv, "PUT", "/api/preferences/layout", {"value": "merged"})
+    _ma_call(env, srv, "PUT", "/api/preferences/answer_length", {"value": "short"})
+    _ma_call(env, srv, "PUT", f"/api/sessions/{LABEL}/preferences/answer_length",
+             {"value": "short"})
+    _ma_call(env, srv, "DELETE", f"/api/sessions/{LABEL}/preferences/answer_length")
+    bot._perms_switch_core = _ok(ok=True, reason=None, label=LABEL, err="")
+    _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/perms")
+    srv.registry.find_by_label(LABEL, scope_chat_id=CHAT).skip_perms = True
+    _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/perms")
+    for dropped in (1, 2, 5, 11, 21, 22, 25):
+        bot._clear_queue_core = _ok(ok=True, label=LABEL, dropped=dropped)
+        _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/clearqueue")
+    for dropped in (0, 1, 2, 5, 21):
+        bot._stop_session_core = _ok(ok=True, label=LABEL, dropped=dropped)
+        _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/stop")
+    bot._compact_session_core = _ok(reason="sent", label=LABEL)
+    _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/compact")
+    bot._switch_model_core = _ok(ok=True, label=LABEL, previous_model="Sonnet 5")
+    env.mp.setattr("aipager.bot.session_ops.await_model_change",
+                   AsyncMock(return_value="claude-opus-5"))
+    _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/model", {"model": "claude-opus-5"})
+    bot._restart_session_core = _ok(ok=True, reason=None, label=LABEL, err="")
+    _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/restart")
+    bot._rename_session_core = _ok(changed=True, previous_label=LABEL, new_label="x2")
+    _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/rename", {"label": "x2"})
+    bot._kill_session_core = _ok(result="killed", label=LABEL)
+    _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/kill")
+    bot._resume_auto_gate = lambda sess, override, actor, chat: (None, False)
+    bot._do_resume_core = _ok(reason=None, err="")
+    _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/resume")
+    _ma_sess(srv, "x3", status=Status.GONE)
+    _ma_call(env, srv, "DELETE", "/api/sessions/x3")
+    return _sent(srv)
+
+
+def _detail_of(env, srv, method, path, body=None) -> str:
+    status, data = _ma_call(env, srv, method, path, body)
+    assert "detail" in data, (method, path, status, data)
+    return data["detail"]
+
+
+@surface("miniapp.details")
+def _miniapp_details(env):
+    from aipager.bot.dashboard import RESEND_BUSY, RESEND_NOT_RESENDABLE, RESEND_NOT_WAITING
+    from aipager.miniapp import sessions as ma_sessions
+    from aipager.state import Status
+    out = []
+    srv = _miniapp(env)
+    bot = srv.bot
+    _ma_sess(srv, cwd="/tmp")
+    d = lambda *a: out.append(_detail_of(env, srv, *a))  # noqa: E731
+    for name in (5, " ", "a" * 70, "-x", "status"):
+        d("POST", "/api/sessions", {"name": name})
+    for cwd in (5, "/tmp/\x00", "/nonexistent-aipager-dir", "/usr"):
+        d("POST", "/api/sessions", {"name": "n1", "cwd": cwd})
+    for model in (5, "m" * 70, "-x"):
+        d("POST", "/api/sessions", {"name": "n1", "model": model})
+    d("POST", "/api/sessions", {"name": LABEL})
+    for parent, name in (("", "web"), ("/tmp", 5), ("/tmp", " "), ("/tmp", "a" * 70),
+                         ("/tmp", "a/b"), ("/tmp", "a\x00")):
+        d("POST", "/api/directories", {"parent": parent, "name": name})
+    # The answer route.
+    d("POST", f"/api/sessions/{LABEL}/answer")
+    srv.registry.find_by_label(LABEL, scope_chat_id=CHAT).status = Status.INTERACTIVE
+    for outcome in (RESEND_NOT_WAITING, RESEND_NOT_RESENDABLE, RESEND_BUSY, "dropped"):
+        bot._resend_pending_prompt = AsyncMock(return_value=outcome)
+        d("POST", f"/api/sessions/{LABEL}/answer")
+    srv.registry.find_by_label(LABEL, scope_chat_id=CHAT).status = Status.IDLE
+    bot._stop_session_core = _ok(ok=False, label=LABEL, dropped=0)
+    d("POST", f"/api/sessions/{LABEL}/stop")
+    for result in ("still_running", "resuming"):
+        bot._kill_session_core = _ok(result=result, label=LABEL)
+        d("POST", f"/api/sessions/{LABEL}/kill")
+    bot._resume_auto_gate = lambda sess, override, actor, chat: (None, False)
+    for reason in ("not_gone", "no_transcript"):
+        bot._do_resume_core = _ok(reason=reason, err="")
+        d("POST", f"/api/sessions/{LABEL}/resume")
+    d("DELETE", f"/api/sessions/{LABEL}")
+    gone = _ma_sess(srv, "x4", status=Status.GONE)
+    gone.is_resuming = lambda: True
+    d("DELETE", "/api/sessions/x4")
+    for reason in ("not_live", "already_restarting", "still_stopping"):
+        bot._perms_switch_core = _ok(ok=False, reason=reason, label=LABEL, err="")
+        d("POST", f"/api/sessions/{LABEL}/perms")
+        bot._restart_session_core = _ok(ok=False, reason=reason, label=LABEL, err="")
+        d("POST", f"/api/sessions/{LABEL}/restart")
+    bot._clear_queue_core = _ok(ok=False, label=LABEL, dropped=0)
+    d("POST", f"/api/sessions/{LABEL}/clearqueue")
+    for reason in ("not_live", "queue_full", "send_failed"):
+        bot._compact_session_core = _ok(reason=reason, label=LABEL)
+        d("POST", f"/api/sessions/{LABEL}/compact")
+    for model in ("", "-x"):
+        d("POST", f"/api/sessions/{LABEL}/model", {"model": model})
+    bot._switch_model_core = _ok(ok=False, reason="send_failed", detail="", label=LABEL)
+    d("POST", f"/api/sessions/{LABEL}/model", {"model": "opus"})
+    for code, text in (("not_live", ma_sessions.MODEL_SWITCH_NOT_LIVE_REASON),
+                       ("busy", ma_sessions.MODEL_SWITCH_BUSY_REASON),
+                       ("prompt_open", ma_sessions.MODEL_SWITCH_PROMPT_OPEN_REASON),
+                       ("unknown", ma_sessions.MODEL_SWITCH_UNKNOWN_REASON),
+                       ("switch_pending", ma_sessions.MODEL_SWITCH_PENDING_REASON)):
+        bot._switch_model_core = _ok(ok=False, reason=code, detail=text, label=LABEL)
+        d("POST", f"/api/sessions/{LABEL}/model", {"model": "opus"})
+    bot._switch_model_core = _ok(ok=True, label=LABEL, previous_model="Sonnet 5")
+    env.mp.setattr("aipager.bot.session_ops.await_model_change", AsyncMock(return_value=None))
+    d("POST", f"/api/sessions/{LABEL}/model", {"model": "opus"})
+    for label in ("a b", "x5"):
+        if label == "x5":
+            _ma_sess(srv, "x5")
+        d("POST", f"/api/sessions/{LABEL}/rename", {"label": label})
+    # Auto mode needs an admin: creating in Auto, switching to Auto.
+    srv2 = _miniapp(env, admin=False)
+    _ma_sess(srv2)
+    out.append(_detail_of(env, srv2, "POST", "/api/sessions", {"name": "n1", "skip_perms": True}))
+    out.append(_detail_of(env, srv2, "POST", f"/api/sessions/{LABEL}/perms"))
+    # No folder yet: nothing in this chat has run anywhere.
+    srv3 = _miniapp(env, project_dir="")
+    out.append(_detail_of(env, srv3, "POST", "/api/sessions", {"name": "n1", "cwd": "/tmp"}))
+    return out
+
+
+@surface("miniapp.payload_texts")
+def _miniapp_payload_texts(env):
+    from aipager.state import Status
+    out = []
+    srv = _miniapp(env, admin=False)
+    _ma_sess(srv, status=Status.BUSY, cwd="/home/op/proj", last_hook_at=NOW - 125,
+             busy_started_at=NOW - 192, model_name="Opus 4.6")
+    _ma_sess(srv, "x2", status=Status.IDLE, last_hook_at=NOW - 7300)
+    _ma_sess(srv, "x3", status=Status.GONE, last_hook_at=NOW - 90000)
+    _ma_sess(srv, "x4", status=Status.INTERACTIVE, last_hook_at=NOW - 30)
+
+    def reasons(data):
+        texts = []
+        for fact in data.get("facts") or []:
+            texts += [fact["label"], fact["value"]]
+        for spec in (data.get("actions") or {}).values():
+            if spec.get("reason"):
+                texts.append(spec["reason"])
+        for key in ("model_switch", "answer"):
+            if data.get(key) and data[key].get("reason"):
+                texts.append(data[key]["reason"])
+        return texts
+    for label in (LABEL, "x2", "x3", "x4"):
+        _status, data = _ma_call(env, srv, "GET", f"/api/sessions/{label}")
+        out += reasons(data)
+    srv.bot._can_prompt_user = lambda user_id, chat_id: False
+    for label in (LABEL, "x4"):
+        _status, data = _ma_call(env, srv, "GET", f"/api/sessions/{label}")
+        out += reasons(data)
+    _status, data = _ma_call(env, srv, "GET", "/api/chats")
+    out += [c["label"] for c in data["chats"]]
+    for path in ("/api/preferences", "/api/session-options",
+                 f"/api/sessions/{LABEL}/preferences"):
+        _status, data = _ma_call(env, srv, "GET", path)
+        for entry in data["schema"]:
+            out.append(entry["title"])
+            for option in entry["options"]:
+                out += [option["label"], option["help"]]
     return out
 
 
@@ -1897,6 +2176,7 @@ MIGRATED: set[str] = {
     "auth.refusals", "auth.auto_deny", "group.texts", "group.dropped",
     "transport.texts", "lifecycle.recovered", "dashboard.loading", "dashboard.diff_footer",
     "resume.dashboard", "resume.picker",
+    "miniapp.mirrors", "miniapp.details", "miniapp.payload_texts",
 }
 
 #: Words that are names, not text: session labels, models, tool rows'
