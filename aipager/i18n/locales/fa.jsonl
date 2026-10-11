@@ -210,7 +210,7 @@
 {"k": "cmd.app", "src": "486dfc4e", "v": "باز کردن داشبورد Mini App"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "چه کارهایی از دستتان برمی‌آید"}
 {"k": "cmd.language", "src": "9dc3a234", "v": "زبان پیام‌های aipager"}
-{"k": "cmd.mode", "src": "b677b7d9", "v": "خودکار یا پرسش"}
+{"k": "cmd.mode", "src": "b677b7d9", "v": "مود خودکار یا مود پرسش"}
 {"k": "cmd.new", "src": "959b093b", "v": "شروع نشست تازه"}
 {"k": "cmd.now", "src": "3673f6f7", "v": "پیام‌های صف را الان به Claude بده"}
 {"k": "cmd.resume", "src": "88f33259", "v": "ادامهٔ نشستی که بسته شده"}
@@ -245,7 +245,7 @@
 {"k": "help.admin", "src": "29ac6154", "v": "<b>ادمین:</b> /update (به‌روزرسانی aipager و Claude Code)"}
 {"k": "help.control", "src": "8bb13acf", "v": "<b>کنترل:</b> /stop · /now (فرستادن پیام‌های صف) · /clearqueue"}
 {"k": "help.manage", "src": "75144040", "v": "<b>مدیریت:</b> /status، بعد ⋮ (راه‌اندازی دوباره، تغییر نام، diff، بستن، حذف)"}
-{"k": "help.settings", "src": "d51d2171", "v": "<b>تنظیمات:</b> /settings · /mode (خودکار یا پرسش)"}
+{"k": "help.settings", "src": "d51d2171", "v": "<b>تنظیمات:</b> /settings · /mode (مود خودکار یا مود پرسش)"}
 {"k": "help.start", "src": "276a9c1b", "v": "<b>شروع:</b> /new نام · /resume"}
 {"k": "help.talk_dm", "src": "c3ef5195", "v": "<b>گفتگو:</b> فقط بنویسید (به نشست ✍️ می‌رود) · به یک پیام جواب بدهید · /&lt;نام&gt; پیام"}
 {"k": "help.tip", "src": "67a93e6b", "v": "<i>نکته: با زدن روی یک فرمان، همان لحظه فرستاده می‌شود. برای افزودن متن، آن را نگه دارید (گوشی) یا Tab بزنید (دسکتاپ).</i>"}
@@ -335,15 +335,15 @@
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ باشد، نصب نشد."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ حجم پیام صوتی {size} مگابایت است؛ ربات‌های Telegram فقط تا {limit} مگابایت را می‌گیرند."}
 {"k": "mode.ask", "src": "07910591", "v": "💬 مود پرسش"}
-{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 پرسش برای شما (🤖 خودکار: ادمین‌ها)"}
-{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 به جایش پرسش"}
+{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 مود پرسش (🤖 مود خودکار: ادمین‌ها)"}
+{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 به‌جایش مود پرسش"}
 {"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 مود خودکار"}
-{"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 به جایش خودکار"}
+{"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 به‌جایش مود خودکار"}
 {"k": "mode.word.ask", "src": "3562777b", "v": "پرسش"}
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "خودکار"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> همین حالا در {mode} است."}
-{"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 تغییر به پرسش"}
-{"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 تغییر به خودکار"}
+{"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 تغییر به مود پرسش"}
+{"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 تغییر به مود خودکار"}
 {"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> مشغول است.\nبه مود پرسش برود؟"}
 {"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> مشغول است.\nبه مود خودکار برود؟"}
 {"k": "modecard.confirm_auto", "src": "ff1562a9", "v": "⚙️ <b>{session}</b> به {mode} برود؟\n<i>Claude ابزارها را بدون پرسیدن اجرا خواهد کرد ({flag}).</i>"}
@@ -959,8 +959,8 @@
 {"k": "ui.btn.start_session", "src": "76684eaf", "v": "شروع نشست"}
 {"k": "ui.btn.stop_and_switch", "src": "21c1d7af", "v": "توقف کار و تغییر"}
 {"k": "ui.btn.switch", "src": "3e44c920", "v": "تغییر"}
-{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "رفتن به پرسش"}
-{"k": "ui.btn.switch_to_auto", "src": "13a0f246", "v": "رفتن به خودکار"}
+{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "تغییر به مود پرسش"}
+{"k": "ui.btn.switch_to_auto", "src": "13a0f246", "v": "تغییر به مود خودکار"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "دوباره امتحان کن"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "۱۰ دقیقهٔ دیگر صبر کن"}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "{session} حذف شود؟"}
@@ -971,8 +971,8 @@
 {"k": "ui.confirm.perms_ask_body", "src": "701538b8", "v": "Claude پیش از اجرای ابزارها می‌پرسد."}
 {"k": "ui.confirm.perms_auto", "src": "b6a1ddde", "v": "{session} به مود خودکار برود؟"}
 {"k": "ui.confirm.perms_auto_body", "src": "7d8bf9c6", "v": "Claude ابزارها را بدون پرسیدن اجرا می‌کند."}
-{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "کار فعلی متوقف شود و {session} به پرسش برود؟"}
-{"k": "ui.confirm.perms_busy_auto", "src": "d4090a8b", "v": "کار فعلی متوقف شود و {session} به خودکار برود؟"}
+{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "کار فعلی متوقف شود و {session} به مود پرسش برود؟"}
+{"k": "ui.confirm.perms_busy_auto", "src": "d4090a8b", "v": "کار فعلی متوقف شود و {session} به مود خودکار برود؟"}
 {"k": "ui.confirm.rename", "src": "92656d63", "v": "اسم {session} عوض شود؟"}
 {"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "نشست تاریخچه و پوشه‌اش را نگه می‌دارد. فقط اسمش عوض می‌شود."}
 {"k": "ui.confirm.reset", "src": "e13d0ebf", "v": "تنظیمات به پیش‌فرض برگردد؟"}
@@ -1065,7 +1065,7 @@
 {"k": "ui.new.mode_ask_help", "src": "eca1be33", "v": "Claude پیش از اجرای ابزارها می‌پرسد"}
 {"k": "ui.new.mode_auto", "src": "c614ba7c", "v": "خودکار"}
 {"k": "ui.new.mode_auto_help", "src": "306e8992", "v": "ابزارها را بدون پرسیدن اجرا می‌کند"}
-{"k": "ui.new.mode_title", "src": "9c8c621a", "v": "حالت مجوز"}
+{"k": "ui.new.mode_title", "src": "9c8c621a", "v": "مود اجازه‌ها"}
 {"k": "ui.new.model_name", "src": "5ebb9765", "v": "اسم مدل"}
 {"k": "ui.new.model_needed", "src": "c585e482", "v": "برای ادامه، اسم یک مدل را بنویسید."}
 {"k": "ui.new.model_pattern", "src": "7222f368", "v": "فقط حروف انگلیسی، عدد، نقطه و خط تیره؛ اولش حرف یا عدد باشد."}
