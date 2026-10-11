@@ -41,6 +41,7 @@ from aipager.bot import group_intake
 from aipager.bot.flood import _key as _chat_key
 from aipager.bot.transport import (  # noqa: F401
     MUTED,
+    SKIPPED,
     calling_user_id,
     reply_text,
     send_text,
@@ -296,6 +297,21 @@ class KeyboardMixin:
             # the one that pays it — or re-owes it, just below.
             self._keyboard_owed.pop(_chat_key(target), None)
 
+        # The chat's shared main keyboard carries this chat's session
+        # labels: noted as on its way (before the first await, so a
+        # multi-scope refresh overlapping this send does not send the same
+        # one again), and recorded as what the chat shows once it went out.
+        record_chat = None
+        if level == "main" and not personal:
+            try:
+                record_chat = int(target)
+            except (TypeError, ValueError):
+                record_chat = None
+        inflight = getattr(self, "_keyboard_inflight", None)
+        shown_labels = set(labels) if record_chat is not None else None
+        if record_chat is not None and inflight is not None:
+            inflight[record_chat] = shown_labels
+
         try:
             if personal:
                 sent = await reply_text(tap_msg, msg_text, reply_markup=keyboard,
@@ -305,6 +321,11 @@ class KeyboardMixin:
                     target, msg_text,
                     reply_markup=keyboard,
                 )
+            if (record_chat is not None
+                    and sent is not MUTED and sent is not SKIPPED):
+                self.registry.set_keyboard_labels(record_chat, shown_labels)
+                # The chat is up to date: a failed refresh's mark is void.
+                getattr(self, "_keyboard_sync_failed", {}).pop(record_chat, None)
             if sent is MUTED:
                 # Flood-muted (roadmap 8.17b): nothing was attempted, so
                 # the hold must survive. Clearing before the send is
@@ -356,6 +377,10 @@ class KeyboardMixin:
                 _log_blocked_once(e)
             else:
                 log.warning("Failed to send keyboard", exc_info=True)
+        finally:
+            if (record_chat is not None and inflight is not None
+                    and inflight.get(record_chat) is shown_labels):
+                del inflight[record_chat]
 
     def _build_ask_keyboard(self, sess: TrackedSession, label: str,
                             tool_input: dict) -> tuple[str, InlineKeyboardMarkup | None]:

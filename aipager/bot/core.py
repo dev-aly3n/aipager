@@ -14,6 +14,7 @@ composition only.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -106,6 +107,17 @@ class TelegramBot(
         # ALSO owed, paying it clears the URL hold too — correctly: that
         # keyboard was already sent (into the mute) after the hold ended.
         self._keyboard_owed: dict[int | str, int | None] = {}
+        # Multi-scope keyboard refresh (`_sync_scope_keyboards`): the
+        # labels of a shared main keyboard on its way to each chat (set
+        # synchronously before the send's first await, so an overlapping
+        # refresh sees it), and one lock per chat so overlapping refreshes
+        # compare and send one at a time.
+        self._keyboard_inflight: dict[int, set[str]] = {}
+        self._keyboard_sync_locks: dict[int, asyncio.Lock] = {}
+        # The labels a refresh last tried and failed to send to each chat
+        # (a blocked DM, a group it cannot post in): not tried again for
+        # the same labels, only when they change.
+        self._keyboard_sync_failed: dict[int, set[str]] = {}
         self._template_map: dict[str, str] = {label: prompt for label, prompt in QUICK_TEMPLATES}
         self._command_map: dict[str, str] = {label: cmd for label, cmd in QUICK_COMMANDS}
         self._model_map: dict[str, str] = {label: cmd for label, cmd in MODEL_CHOICES}

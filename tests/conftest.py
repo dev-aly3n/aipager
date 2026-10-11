@@ -1330,6 +1330,20 @@ def _never_spawn_real_dtach(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_live_dtach_sockets_at_load(monkeypatch):
+    """``SessionRegistry.load`` asks which sessions have a live dtach
+    socket (``inject.live_session_names``), and the real answer is the
+    operator's own sessions under ``/tmp``. Every test sees none unless it
+    says otherwise (``monkeypatch.setattr(inject, "live_session_names",
+    lambda: {...})``, a later patch wins), so a fixture session sharing a
+    name with a running one never loads differently on this machine than
+    on CI. ``inject.list_sessions`` (the monitor's scan) reads the
+    sockets through its own helper and is not touched."""
+    monkeypatch.setattr("aipager.dtach.inject.live_session_names",
+                        lambda: set())
+
+
+@pytest.fixture(autouse=True)
 def _fresh_terminal_write_stamps(monkeypatch):
     """Start every test with no record of aipager's terminal writes
     (``inject.last_write_at``). Most fixtures reuse a few session names,

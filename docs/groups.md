@@ -505,7 +505,9 @@ change only the keyboard of the person who taps them: the bot answers
 as a reply to that person's tap, and nobody else's keyboard moves.
 « Back goes up from where you are, whatever other members are browsing.
 The main keyboard sent by `/start` is the whole group's, and puts
-everyone back on the main keyboard. After upgrading from a version
+everyone back on the main keyboard. When a session of the group starts
+or ends, aipager sends the group that main keyboard again, once, so its
+session buttons stay current. After upgrading from a version
 without the marked buttons, a tap on a button of the old keyboard may
 be ignored: send `/start` once to give the group the new keyboard. A
 private chat's keyboard has no marker and works as before.

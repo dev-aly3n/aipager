@@ -147,6 +147,9 @@ def _dropped(gbot, run_async, n, *, sender=BOB):
     sess.pending_queue.clear()
     for i in range(n):
         sess.queue_prompt("rm the deploy keys", 600 + i, "", sender)
+    # The group's keyboard already lists the session (its start refreshed
+    # it), so the reload below sends only the notice under test.
+    gbot.registry.set_keyboard_labels(GROUP, gbot.registry.live_labels(GROUP))
     scope_mod.dump_scopes(_scopes(bob=False), "123456:FAKE", path=scope_mod.CONFIG_PATH)
     run_async(gbot.reload_team())
     return [c.kwargs.get("text") for c in gbot._app.bot.send_message.await_args_list]

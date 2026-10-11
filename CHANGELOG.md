@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **A background agent's own words no longer show up as Claude's.** When a background agent kept working after a new turn started, after `/stop`, or after it had been quiet for a while, what it wrote was added to the current turn's commentary: on the busy card, in the Mini App and in the turn's log, as if Claude had said it. It now only ever describes that agent, in the status under an answer.
+- **With more than one chat set up, the session buttons on the keyboard now update when a session starts or ends.** They changed only after /start or a menu tap, so a new session could be missing from a chat's keyboard. A chat gets a new keyboard only when its own sessions changed, once per change.
+- **After a restart, the / menu lists every running session straight away.** Sessions that kept running while aipager restarted were counted as ended for a moment, and the menu showed only some of them for a few minutes.
 
 ## [1.0.1] - 2026-10-09
 

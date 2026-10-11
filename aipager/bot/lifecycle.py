@@ -1220,6 +1220,8 @@ class LifecycleMixin:
         """
         if not self._app:
             return
+        # What this refresh renders, for the session monitor's comparison.
+        self.registry.refreshed_live = self.registry.live_names()
 
         if self.scopes is None:
             await self._update_bot_commands_global()
@@ -1227,15 +1229,79 @@ class LifecycleMixin:
             await self._update_bot_commands_per_scope()
 
         # Send/update persistent keyboard (always main — first run or
-        # session list changed). In multi-scope there's no single chat to
-        # target here, so the keyboard renders per-chat on interaction
-        # (handlers pass chat_id); a global broadcast would leak labels.
+        # session list changed). In multi-scope each chat gets its own
+        # keyboard, and only when its sessions differ from what its
+        # keyboard shows; a global broadcast would leak labels.
         if self.scopes is None:
             if self._keyboard_deferred:
                 # Held until the Mini App URL lands, so the first
                 # keyboard the user sees already carries the App button.
                 return
             await self._send_keyboard(level="main")
+        else:
+            await self._sync_scope_keyboards()
+
+    async def _sync_scope_keyboards(self) -> None:
+        """Multi-scope: re-send a chat's main reply keyboard when the
+        sessions it would list differ from the ones the chat's keyboard
+        shows (``registry.keyboard_labels``, which every shared main
+        keyboard send records). Without this a chat kept the keyboard of
+        its last /start or menu tap: a new session had no button.
+
+        Never a keyboard for nothing: none when the labels match (most
+        calls: /status, a scan, the first call after a restart with
+        nothing changed), none to a chat with no record yet (a fresh
+        install, or the first start of a version that keeps the record:
+        the current labels are recorded instead, so every chat is not
+        sent a keyboard at once), none while one is owed to a flood mute
+        (the lift's flush sends the current one), and none again for
+        labels whose send just failed (a blocked DM, or a transient
+        error): the next change of labels, a /start or a menu tap brings
+        the chat up to date, as before this refresh existed.
+
+        Overlapping calls (several triggers spawn this) take the chat's
+        lock in turn: the second compares against what the first sent
+        and sends nothing for the same labels. A shared main keyboard
+        another path has on its way with these labels counts as sent.
+        """
+        for scope in list(self.scopes or ()):
+            chat_id = scope.chat_id
+            try:
+                await self._sync_scope_keyboard(chat_id)
+            except Exception:
+                log.warning("Keyboard refresh failed for chat %s", chat_id,
+                            exc_info=True)
+
+    async def _sync_scope_keyboard(self, chat_id: int) -> None:
+        """One chat's part of :meth:`_sync_scope_keyboards`."""
+        locks = self._keyboard_sync_locks
+        lock = locks.get(chat_id)
+        if lock is None:
+            lock = locks[chat_id] = asyncio.Lock()
+        async with lock:
+            current = self.registry.live_labels(chat_id)
+            shown = self.registry.keyboard_labels_for(chat_id)
+            if shown is None:
+                self.registry.set_keyboard_labels(chat_id, current)
+                return
+            if shown == current:
+                return
+            if self._keyboard_inflight.get(chat_id) == current:
+                return
+            if _chat_key(chat_id) in self._keyboard_owed:
+                return
+            if chat_id in self.__dict__.get("_unreachable_warned", ()):
+                return  # a group the bot cannot reach this run (8.94g)
+            failed = self._keyboard_sync_failed
+            if failed.get(chat_id) == current:
+                return  # this very keyboard failed: wait for a change
+            log.info("Chat %s's sessions changed - sending its keyboard "
+                     "again (%s)", chat_id, ", ".join(sorted(current)) or "none")
+            await self._send_keyboard(level="main", chat_id=chat_id)
+            if self.registry.keyboard_labels_for(chat_id) != current:
+                # Not sent. Any shared main keyboard that goes out later
+                # (/start, « Back, a mute's owed flush) clears the mark.
+                failed[chat_id] = current
 
     @staticmethod
     def _command_list(labels: set[str], *, group: bool = False,

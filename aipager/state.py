@@ -2370,6 +2370,26 @@ def _load_pinned_msg_ids(data: dict) -> dict[int, int]:
     return out
 
 
+def _load_keyboard_labels(raw: object) -> dict[int, list[str]]:
+    """The persisted per-chat keyboard labels
+    (``SessionRegistry.keyboard_labels``). A file from before they were
+    kept has none; a chat entry that is not an int-like key with a list of
+    strings is dropped (that chat then counts as never recorded)."""
+    out: dict[int, list[str]] = {}
+    if not isinstance(raw, dict):
+        return out
+    for chat, labels in raw.items():
+        try:
+            chat_i = int(chat)
+        except (TypeError, ValueError):
+            continue
+        if (not isinstance(labels, list)
+                or not all(isinstance(lbl, str) and lbl for lbl in labels)):
+            continue
+        out[chat_i] = sorted(set(labels))
+    return out
+
+
 #: Whose card each group message is (``bot.card_owner``): the kinds of
 #: card a record may name, and the newest records kept (also on disk).
 CARD_OWNER_KINDS = frozenset({
@@ -2489,6 +2509,20 @@ class SessionRegistry:
         # ``pinned_msg_id`` of the legacy one-chat dashboard, which
         # ``load()`` migrates into this map.
         self.pinned_msg_ids: dict[int, int] = {}
+        # The session labels the latest shared main reply keyboard in each
+        # chat carried (chat_id → sorted labels): what that chat's keyboard
+        # shows now. Written only by `_send_keyboard` once such a keyboard
+        # went out (in single-scope mode too, where nothing reads it), and
+        # read by `_update_bot_commands` in multi-scope mode,
+        # which re-sends a chat's keyboard when its sessions no longer
+        # match. Persisted, so a restart sends nothing when nothing changed.
+        self.keyboard_labels: dict[int, list[str]] = {}
+        # The live (non-GONE) session names the latest `/` menu and
+        # keyboard refresh (`_update_bot_commands`) rendered: the session
+        # monitor refreshes when the live set differs from it, so a
+        # command that refreshed by itself is not refreshed twice. None
+        # until the first refresh. Transient.
+        self.refreshed_live: set[str] | None = None
         self._dirty: bool = False
         # Claude Code session id -> monotonic time aipager's own /kill
         # ended that process (bot.session_ops._kill_session_core). Its
@@ -3077,6 +3111,11 @@ class SessionRegistry:
             return sess
         return gone_match
 
+    def live_names(self) -> set[str]:
+        """Internal names of the non-GONE sessions."""
+        return {name for name, sess in self._sessions.items()
+                if sess.status != Status.GONE}
+
     def live_labels(self, scope_chat_id: int | None = None) -> set[str]:
         """Labels of non-GONE sessions, optionally filtered to a scope."""
         out: set[str] = set()
@@ -3165,6 +3204,10 @@ class SessionRegistry:
                 changed = True
         if self.pinned_msg_ids.pop(old, None) is not None:
             changed = True
+        # The keyboard the chat showed follows it, like its target.
+        if old in self.keyboard_labels:
+            self.keyboard_labels.setdefault(new, self.keyboard_labels.pop(old))
+            changed = True
         kept = [p for p in self.queued_line_deletes if p[0] != old]
         if len(kept) != len(self.queued_line_deletes):
             self.queued_line_deletes[:] = kept
@@ -3177,6 +3220,20 @@ class SessionRegistry:
         if changed:
             self._dirty = True
         return moved
+
+    def keyboard_labels_for(self, chat_id: int) -> set[str] | None:
+        """The labels *chat_id*'s shared main keyboard shows, or None when
+        no such keyboard was recorded (a fresh install, or the first run
+        after this record existed)."""
+        labels = self.keyboard_labels.get(chat_id)
+        return None if labels is None else set(labels)
+
+    def set_keyboard_labels(self, chat_id: int, labels) -> None:
+        """Record that *chat_id*'s shared main keyboard now shows *labels*."""
+        new = sorted(labels)
+        if self.keyboard_labels.get(chat_id) != new:
+            self.keyboard_labels[chat_id] = new
+            self._dirty = True
 
     def mark_dirty(self) -> None:
         """Flag that state has changed and needs saving."""
@@ -3323,6 +3380,8 @@ class SessionRegistry:
             "user_targets": {f"{c}:{u}": [n, o]
                              for (c, u), (n, o) in self._user_targets.items()},
             "pinned_msg_ids": {str(c): m for c, m in self.pinned_msg_ids.items()},
+            "keyboard_labels": {str(c): list(labels)
+                                for c, labels in self.keyboard_labels.items()},
             "msg_map": {f"{cid}:{mid}": v for (cid, mid), v in msg_map.items()},
             "sessions": sessions,
             "queued_line_deletes": _clean_line_deletes(self.queued_line_deletes),
@@ -3377,12 +3436,24 @@ class SessionRegistry:
         # key on each session's own chat.
         saved_last_active = data.get("last_active_session", "") or ""
         self.pinned_msg_ids = _load_pinned_msg_ids(data)
+        self.keyboard_labels = _load_keyboard_labels(data.get("keyboard_labels"))
         self.queued_line_deletes = _clean_line_deletes(
             data.get("queued_line_deletes"))
         self.card_owners = _load_card_owners(data.get("card_owners"))
 
         # Resolve the default scope once (for backfilling legacy sessions).
         _default = _default_scope()
+        # The sessions whose dtach socket exists: running, not orphans.
+        # Read the way the monitor's scan reads them, so a session it is
+        # about to find alive is not loaded as ended. Unreadable → none
+        # (every entry then loads as it did before this check existed).
+        from aipager.dtach import inject
+        try:
+            live_sockets = inject.live_session_names()
+        except OSError:
+            log.warning("Cannot list the dtach sockets - every saved "
+                        "session without an end stamp loads as ended")
+            live_sockets = set()
 
         # Reconstruct sessions with only persistable fields; transient fields
         # stay at dataclass defaults. Status → IDLE, last_idle_at → 0.0 so
@@ -3400,8 +3471,14 @@ class SessionRegistry:
             # the most accurate fallback available. Without this they
             # would render as "long ago" in /resume; with it they
             # show a real relative timestamp.
+            #
+            # Only an entry whose socket is gone: a running session is
+            # also saved without gone_at, and stamping it made every
+            # session running across a restart load as ended (its / menu
+            # entry missing until the first scan revived it).
             backfilled = False
-            if gone_at is None and sd.get("claude_session_id"):
+            if (gone_at is None and sd.get("claude_session_id")
+                    and name not in live_sockets):
                 tp = sd.get("transcript_path", "")
                 if tp:
                     try:
@@ -3413,6 +3490,8 @@ class SessionRegistry:
             # the dtach socket is gone too, so session_monitor would
             # mark them GONE again on its first scan anyway. Preserving
             # the state up-front keeps `gone_at` meaningful for /resume.
+            # A running one (live socket, no gone_at) loads UNKNOWN: the
+            # first scan and the startup recovery settle it.
             initial_status = Status.GONE if gone_at is not None else Status.UNKNOWN
             sess = TrackedSession(
                 name=sd.get("name", name),

@@ -580,6 +580,10 @@ class SessionMonitor:
         self.notify_fn = notify_fn
         self._task: asyncio.Task | None = None
         self.on_sessions_changed = None  # optional async callback
+        # The live (non-GONE) session names the previous scan ended with:
+        # what a change is measured from until the first refresh stamps
+        # `registry.refreshed_live`. None before the first scan.
+        self._last_live: set[str] | None = None
         # Optional async callback run at the end of every scan: the pinned
         # "needs you" bar's refresh (8.31). It re-renders from state and
         # sends nothing unless what the bar shows changed, so this tick is
@@ -673,6 +677,8 @@ class SessionMonitor:
         _sweep_flood_backoff()
         sessions = await dtach_inject.list_sessions()
         old_names = set(self.registry.all_sessions().keys())
+        old_live = (self._last_live if self._last_live is not None
+                    else self.registry.live_names())
 
         # Mark disappeared sessions as GONE and notify
         for name, sess in list(self.registry.all_sessions().items()):
@@ -723,9 +729,24 @@ class SessionMonitor:
                     sess.gone_at = None
                 self.registry.transition(name, Status.IDLE)
 
-        # Notify if session list changed (for bot command/keyboard updates)
+        # Notify if the session list changed (for bot command/keyboard
+        # updates): a name added or removed in this scan, or live sessions
+        # (the / menu and the keyboard list those only) other than the
+        # ones the latest refresh rendered: one that came back or ended
+        # under the same name, here or by a hook since (a SessionEnd marks
+        # it GONE before its socket goes). Measured from the refresh, not
+        # the previous scan: a /new, /kill or /resume refreshed by itself
+        # and is not refreshed again (single-scope sends a keyboard each
+        # time), a `/clear` (SessionEnd, then the process goes on) is no
+        # change, and a refresh run inside that window is corrected here.
+        # Not when nothing changed: this runs every scan.
         new_names = set(self.registry.all_sessions().keys())
-        if new_names != old_names and self.on_sessions_changed:
+        new_live = self.registry.live_names()
+        self._last_live = new_live
+        rendered = self.registry.refreshed_live
+        changed = (new_names != old_names
+                   or new_live != (rendered if rendered is not None else old_live))
+        if changed and self.on_sessions_changed:
             try:
                 await self.on_sessions_changed()
             except Exception:
