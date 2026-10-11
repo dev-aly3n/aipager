@@ -472,10 +472,9 @@ def dump_scopes(
     ``/settings → New sessions``. A file that still has it loads as before
     and loses it on this rewrite.
     """
-    # This function rebuilds the document from scratch, so anything not
-    # re-emitted here is silently dropped. The Mini App block: this function rebuilds the
-    # document from scratch, so anything not re-emitted here is silently
-    # dropped. Without this, `aipager config` adding a scope would wipe the
+    # The Mini App block: this function rebuilds the document from
+    # scratch, so anything not re-emitted here is silently dropped.
+    # Without this, `aipager config` adding a scope would wipe the
     # Mini App settings — the exact silent-loss bug that moving them out of
     # config.env exists to fix.
     existing_miniapp = _raw_yaml(path).get(_MINIAPP_KEY)
