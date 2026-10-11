@@ -1128,6 +1128,10 @@ def _new_world(env, *, launch_error=""):
     env.mp.setattr(new_flow, "_project_dir", lambda: "/work/app")
     env.mp.setattr(launch, "allowed_roots", lambda *a, **k: ["/work/app", "/work/lib"])
     env.mp.setattr(launch, "default_folder_is_wide", lambda: False)
+    # These surfaces predate members' root folders and pin the folders
+    # above: nobody here is held to a root (member_root has tests of its own).
+    from aipager import member_root
+    env.mp.setattr(member_root, "restricted_root", lambda *a, **k: None)
 
     async def _create(label, *, scope_chat_id, skip_perms=False, cwd=None,
                       driver_user_id=None, model=None, keep_card=False, reuse_name=None):
@@ -1161,10 +1165,7 @@ def _newflow_name_card(env):
     env.run(new_flow.create_from_text(bot, msg(tg, "/new", chat=DM), "   "))
     env.mp.setattr(launch, "default_folder_is_wide", lambda: True)
     bot._is_confined_user = lambda *a, **k: True
-    # The 8.79 hint: a confined role that is not held to a members' root
-    # folder (a custom role with can_manage and no bypass).
-    from aipager import member_root
-    env.mp.setattr(member_root, "restricted_root", lambda *a, **k: None)
+    # The 8.79 hint (nobody is held to a root folder in _new_world).
     _open_name_card(env, bot, tg, chat=GROUP, user=BOB)
     return tg.out
 
