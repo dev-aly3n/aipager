@@ -94,6 +94,6 @@ Spell a loanword the common Persian way, with a zero-width non-joiner where it s
 | restart | ری‌استارت |
 | update (a new version) | آپدیت / نسخهٔ جدید |
 | background agent | ایجنت پس‌زمینه |
-| background shell command | دستور پس‌زمینه |
+| background shell command | دستور پس‌زمینه (never bare دستور; the first line under an answer says دستور پس‌زمینه (shell)) |
 | template (ready-made message) | قالب |
 | pinned message | پیام سنجاق‌شده |

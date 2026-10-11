@@ -1,10 +1,10 @@
 {"k": "agents.count_agents", "src": "263711d4", "v": {"one": "{n} ایجنت", "other": "{n} ایجنت"}}
-{"k": "agents.count_shells", "src": "9b747b65", "v": {"one": "{n} دستور", "other": "{n} دستور"}}
+{"k": "agents.count_shells", "src": "9b747b65", "v": {"one": "{n} دستور پس‌زمینه", "other": "{n} دستور پس‌زمینه"}}
 {"k": "agents.head.done", "src": "e20b4f9e", "v": {"one": "✅ کار {n} ایجنت تمام شد ({clock})", "other": "✅ کار {n} ایجنت تمام شد ({clock})"}}
 {"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
-{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"one": "{n} دستور تمام شد ({clock})", "other": "{n} دستور تمام شد ({clock})"}}
-{"k": "agents.head.shells_running", "src": "96153f47", "v": {"one": "🖥 {n} دستور در حال اجرا", "other": "🖥 {n} دستور در حال اجرا"}}
-{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"one": "{n} دستور متوقف شد ({clock})", "other": "{n} دستور متوقف شد ({clock})"}}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"one": "{n} دستور پس‌زمینه (shell) تمام شد ({clock})", "other": "{n} دستور پس‌زمینه (shell) تمام شد ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"one": "🖥 {n} دستور پس‌زمینه (shell) در حال اجرا", "other": "🖥 {n} دستور پس‌زمینه (shell) در حال اجرا"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"one": "{n} دستور پس‌زمینه (shell) متوقف شد ({clock})", "other": "{n} دستور پس‌زمینه (shell) متوقف شد ({clock})"}}
 {"k": "agents.head.working", "src": "6d8170f5", "v": {"one": "⏳ {n} ایجنت در حال کار", "other": "⏳ {n} ایجنت در حال کار"}}
 {"k": "agents.more", "src": "0d58b5f8", "v": {"one": "+{n} ایجنت دیگر", "other": "+{n} ایجنت دیگر"}}
 {"k": "agents.promise", "src": "29723a21", "v": "وقتی کار ایجنت‌ها تمام شود، نتیجه همین‌جا ارسال می‌شود."}
@@ -183,15 +183,15 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (هنوز کار می‌کند)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "ایجنت"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} ← {verb}"}
-{"k": "card.row.shell_done", "src": "3b615634", "v": "دستور: {label} - تمام شد ({clock})"}
-{"k": "card.row.shell_failed", "src": "3e240f07", "v": "دستور: {label} - با خطا تمام شد ({clock})"}
-{"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "دستور: {label} - با خطا تمام شد (کد خروج {code})"}
-{"k": "card.row.shell_live", "src": "6cebf6e9", "v": "دستور: {label} ({clock})"}
-{"k": "card.row.shell_lost", "src": "83289e16", "v": "دستور: {label} - پایانش دیده نشد ({clock})"}
-{"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "دستور: {label} (هنوز کار می‌کند)"}
-{"k": "card.row.shell_stopped", "src": "315cab29", "v": "دستور: {label} - متوقف شد ({clock})"}
+{"k": "card.row.shell_done", "src": "3b615634", "v": "دستور پس‌زمینه: {label} - تمام شد ({clock})"}
+{"k": "card.row.shell_failed", "src": "3e240f07", "v": "دستور پس‌زمینه: {label} - با خطا تمام شد ({clock})"}
+{"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "دستور پس‌زمینه: {label} - با خطا تمام شد (کد خروج {code})"}
+{"k": "card.row.shell_live", "src": "6cebf6e9", "v": "دستور پس‌زمینه: {label} ({clock})"}
+{"k": "card.row.shell_lost", "src": "83289e16", "v": "دستور پس‌زمینه: {label} - پایانش دیده نشد ({clock})"}
+{"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "دستور پس‌زمینه: {label} (هنوز کار می‌کند)"}
+{"k": "card.row.shell_stopped", "src": "315cab29", "v": "دستور پس‌زمینه: {label} - متوقف شد ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "در حال شروع"}
-{"k": "card.shells", "src": "9b747b65", "v": {"one": "{n} دستور", "other": "{n} دستور"}}
+{"k": "card.shells", "src": "9b747b65", "v": {"one": "{n} دستور پس‌زمینه", "other": "{n} دستور پس‌زمینه"}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · متوقف شد"}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} متوقف کرد"}
@@ -487,7 +487,7 @@
 {"k": "pin.paren", "src": "d52abc3c", "v": "({running})"}
 {"k": "pin.running_agents", "src": "712d4c75", "v": {"one": "{n} ایجنت در حال کار", "other": "{n} ایجنت در حال کار"}}
 {"k": "pin.running_both", "src": "48ac24f8", "v": "{agents} و {shells} در حال اجرا"}
-{"k": "pin.running_shells", "src": "af023360", "v": {"one": "{n} دستور در حال اجرا", "other": "{n} دستور در حال اجرا"}}
+{"k": "pin.running_shells", "src": "af023360", "v": {"one": "{n} دستور پس‌زمینه در حال اجرا", "other": "{n} دستور پس‌زمینه در حال اجرا"}}
 {"k": "pin.state", "src": "845c40c2", "v": "({state})"}
 {"k": "pin.state.idle", "src": "1adbcc34", "v": "آماده"}
 {"k": "pin.state.needs_you", "src": "19622ace", "v": "منتظر شما"}
