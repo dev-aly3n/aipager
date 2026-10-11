@@ -86,7 +86,9 @@ offers:
    with a warning: an owner has full control of this machine, including
    aipager's config, the bot token and Claude's credentials. Give it
    only to yourself. Give `admin` to people who should use Auto,
-   `/settings` and `/update` in the group.
+   `/settings` and `/update` in the group. (In their own private chat
+   with the bot, anyone who can send prompts and answer Claude may use
+   Auto for their own sessions, whatever their role.)
 6. **One optional rule:** "Block file edits (Write, Edit) for `user`
    members in this group? Admins and the owner are not affected." The
    default is No: a `user` already writes only inside the session's
@@ -282,7 +284,7 @@ on the machine does that, which keeps it the owner's.
 |---|---|---|---|---|
 | Send prompts (`can_prompt`) | ✅ | ✅ | ✅ | ❌ |
 | Answer Claude: Allow, Deny, questions (`can_approve`) | ✅ | ✅ | ✅ | ❌ |
-| Manage: Auto, a group's `/settings`, `/update`, voice install (`can_manage`) | ✅ | ✅ | ❌ | ❌ |
+| Manage: Auto, a group's `/settings`, `/update`, voice install (`can_manage`) | ✅ | ✅ | ❌ (Auto: ✅ in their own private chat) | ❌ |
 | Change members and roles from Telegram or the Mini App | ❌ | ❌ | ❌ | ❌ |
 | Bypass role deny rules (`bypass_role_denies`) | ✅ | ✅ | ❌ | ❌ |
 | Bypass the safety floor (`bypass_safety`) | ✅ | ❌ | ❌ | ❌ |
@@ -606,6 +608,22 @@ asked for them: confirm cards and the `/new` cards, below.)
   picker, Resume on the `/new` name card, or the Mini App) brings it
   back in Ask for anyone else, and the reply says so: "Resumed x1 in
   Ask: Auto needs an admin."
+- **In their own private chat, a person may use Auto whatever their
+  role** (a `user` included; not `read_only`, which sends no prompts;
+  a custom role needs `can_prompt` and `can_approve`, since Auto answers
+  every one of Claude Code's permission prompts).
+  Every way into Auto above works there for them: `/mode auto`, the
+  mode card, `/new !x1`, the `/new` cards, `/resume` and the Mini App.
+  Their own chat is the only one where this applies: in a group, and
+  in anyone else's private chat, Auto still needs an admin. Their new
+  sessions start in Ask until they choose Auto under `/settings` → New
+  sessions. Nothing else an admin does opens up for them (`/update`,
+  the voice extra's Install, and a group's `/settings` stay admin-only).
+  Auto is safe to hand out this way: it starts Claude Code with
+  `--dangerously-skip-permissions`, which only skips Claude Code's own
+  permission prompts. aipager's PreToolUse hook still runs on every
+  tool call and enforces the member's role rules (the safety floor,
+  folder confinement, deny rules, credential files) exactly as in Ask.
 - **Installing needs an admin** (UPDATE): the voice extra's Install
   and Restart buttons, like `/update`'s.
 - **Changing a group's `/settings` needs an admin.** Anyone can look.

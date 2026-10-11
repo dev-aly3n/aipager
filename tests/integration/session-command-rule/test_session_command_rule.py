@@ -422,7 +422,7 @@ def test_mode_already_in_the_mode_named(bot, cmd):
 def test_only_going_to_auto_needs_an_admin(bot, cmd):
     x1 = _sess(bot, "x1")
     x2 = _sess(bot, "x2", skip_perms=True)
-    bot._is_admin = MagicMock(return_value=False)
+    bot._may_use_auto = MagicMock(return_value=False)
     bot._do_perms_switch_via_fn = AsyncMock()
 
     assert cmd("/mode x1 auto")[0] == "Auto mode needs an admin."

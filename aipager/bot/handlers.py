@@ -1585,7 +1585,8 @@ class CommandHandlersMixin:
                 parse_mode="HTML")
             return
         await self._perms_flow(sess, target, update.message,
-                               may_auto=self._is_admin(update), chat_id=chat_id,
+                               may_auto=self._may_use_auto(calling_user_id(update), chat_id),
+                               chat_id=chat_id,
                                requester=calling_user_id(update))
 
     # The old name: the same command since 2026-09-30.

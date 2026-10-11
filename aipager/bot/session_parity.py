@@ -1650,7 +1650,7 @@ async def handle_callback(
         # The card itself becomes the confirm, the switch and the result
         # (operator, 2026-10-01): no second message to leave it stale.
         await bot._perms_flow(sess, target, query.message,
-                              may_auto=bot._is_admin_user(user_id, chat_id),
+                              may_auto=bot._may_use_auto(user_id, chat_id),
                               chat_id=chat_id, query=query, requester=user_id)
         return True
 
@@ -1681,7 +1681,7 @@ async def handle_callback(
             # session saved in Auto comes back in Ask for a non-admin
             # (roadmap 8.83).
             bot._build_resume_mode_keyboard(
-                sess, sess.skip_perms and bot._is_admin_user(user_id, chat_id),
+                sess, sess.skip_perms and bot._may_use_auto(user_id, chat_id),
                 chat_id=chat_id),
         )
         # In a group, its mode buttons are the resumer's alone (8.94j).
