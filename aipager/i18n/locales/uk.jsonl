@@ -351,8 +351,8 @@
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Авто"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Повний"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b>: вже {mode}."}
-{"k": "modecard.ask_no_auto", "src": "f879e923", "v": "💬 Режим «Питати» (режим Авто тут недоступний)"}
-{"k": "modecard.auto_for_you", "src": "ccd328fa", "v": "🤖 Режим Авто (🔓 режим «Повний доступ» лише для адмінів)"}
+{"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 Режим «Питати» (Авто тут недоступний)"}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 Для тебе Авто (🔓 «Повний доступ» лише для адмінів)"}
 {"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "Режим Авто недоступний для сесії {session} (модель або тариф), тому вона лишається в режимі «Питати»."}
 {"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 Увімкнути режим «Питати»"}
 {"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 Увімкнути режим Авто"}

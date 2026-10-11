@@ -351,8 +351,8 @@
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Авто"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Полный"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b>: уже {mode}."}
-{"k": "modecard.ask_no_auto", "src": "f879e923", "v": "💬 Режим «Спрашивать» (режим Авто здесь недоступен)"}
-{"k": "modecard.auto_for_you", "src": "ccd328fa", "v": "🤖 Режим Авто (🔓 режим «Полный доступ» только для админов)"}
+{"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 Режим «Спрашивать» (Авто здесь недоступен)"}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 Для тебя Авто (🔓 «Полный доступ» только для админов)"}
 {"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "Режим Авто недоступен для сессии {session} (модель или тариф), поэтому она остаётся в режиме «Спрашивать»."}
 {"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 Включить режим «Спрашивать»"}
 {"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 Включить режим Авто"}

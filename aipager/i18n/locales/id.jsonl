@@ -351,8 +351,8 @@
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Auto"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Penuh"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> sudah dalam {mode}."}
-{"k": "modecard.ask_no_auto", "src": "f879e923", "v": "💬 Mode Tanya (Mode Auto tidak tersedia di sini)"}
-{"k": "modecard.auto_for_you", "src": "ccd328fa", "v": "🤖 Mode Auto (🔓 Mode Akses penuh khusus admin)"}
+{"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 Mode Tanya (Auto tidak tersedia di sini)"}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 Auto untukmu (🔓 Akses penuh khusus admin)"}
 {"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "Mode Auto tidak tersedia untuk {session} (model atau paket), jadi tetap dalam mode Tanya."}
 {"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 Beralih ke Mode Tanya"}
 {"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 Beralih ke Mode Auto"}

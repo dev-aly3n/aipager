@@ -1059,7 +1059,7 @@ def test_the_defaults_screen_tells_a_non_admin_they_get_auto(wbot, mk_cb, run_as
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns"))
 
-    assert "Permissions: 🤖 Auto mode (🔓 Full access mode is for admins)" in _last_edit(bot)["text"]
+    assert "Permissions: 🤖 Auto for you (🔓 Full access is for admins)" in _last_edit(bot)["text"]
 
 
 def test_only_an_admin_may_make_full_access_the_default(wbot, mk_cb, run_async):

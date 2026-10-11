@@ -351,8 +351,8 @@
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Otomatik"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Tam"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b>: zaten {mode}."}
-{"k": "modecard.ask_no_auto", "src": "f879e923", "v": "💬 Sor modu (Otomatik mod burada kullanılamaz)"}
-{"k": "modecard.auto_for_you", "src": "ccd328fa", "v": "🤖 Otomatik mod (🔓 Tam erişim modu yöneticiler için)"}
+{"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 Sor modu (Otomatik burada kullanılamaz)"}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 Senin için Otomatik (🔓 Tam erişim yöneticiler için)"}
 {"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "Otomatik mod {session} için kullanılamıyor (model ya da plan), bu yüzden Sor modunda kalıyor."}
 {"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 Sor moduna geç"}
 {"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 Otomatik moda geç"}

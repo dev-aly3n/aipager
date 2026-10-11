@@ -351,8 +351,8 @@
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Automatico"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Completo"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> è già in {mode}."}
-{"k": "modecard.ask_no_auto", "src": "f879e923", "v": "💬 Modalità «Chiedi» (la modalità «Automatico» non è disponibile qui)"}
-{"k": "modecard.auto_for_you", "src": "ccd328fa", "v": "🤖 Modalità «Automatico» (🔓 la modalità «Completo» è solo per gli admin)"}
+{"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 Modalità «Chiedi» («Automatico» non è disponibile qui)"}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 «Automatico» per te (🔓 «Completo» è solo per gli admin)"}
 {"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "La modalità Automatico non è disponibile per {session} (modello o piano), quindi resta in modalità Chiedi."}
 {"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 Passa alla modalità «Chiedi»"}
 {"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 Passa alla modalità «Automatico»"}

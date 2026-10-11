@@ -27,8 +27,8 @@ def test_labels_are_today_s_english():
     assert mode_labels.MODE_FULL == "🔓 Full access mode"
     assert mode_labels.WORD_FULL == "Full"
     assert mode_labels.MODE_FULL_INSTEAD == "🔓 Full access mode instead"
-    assert mode_labels.MODE_AUTO_FOR_YOU == "🤖 Auto mode (🔓 Full access mode is for admins)"
-    assert mode_labels.MODE_ASK_NO_AUTO == "💬 Ask mode (Auto mode isn't available here)"
+    assert mode_labels.MODE_AUTO_FOR_YOU == "🤖 Auto for you (🔓 Full access is for admins)"
+    assert mode_labels.MODE_ASK_NO_AUTO == "💬 Ask mode (Auto isn't available here)"
     assert mode_labels.MODE_OTHER == "⚙️ Claude Code's {name} mode"
     assert mode_labels.mode_label("auto") is mode_labels.MODE_AUTO
     assert mode_labels.mode_label("ask") is mode_labels.MODE_ASK

@@ -49,12 +49,13 @@ MODE_AUTO_INSTEAD = Msg("mode.auto_instead", "🤖 Auto mode instead",
 MODE_FULL_INSTEAD = Msg("mode.full_instead", "🔓 Full access mode instead",
                         note="Button on the /new card: start the session in Full access mode")
 MODE_AUTO_FOR_YOU = Msg("modecard.auto_for_you",
-                        "🤖 Auto mode (🔓 Full access mode is for admins)",
+                        "🤖 Auto for you (🔓 Full access is for admins)",
                         note="The mode a member who is not an admin gets on /new when the "
-                             "chat's default is Full access")
+                             "chat's default is Full access: they get Auto mode, because "
+                             "Full access mode is only for admins. Short, like the English")
 #: Shown in text only (the /mode card, status lines, the Mini App's facts),
 #: never on a button: message keys, with a message's length budget.
-MODE_ASK_NO_AUTO = Msg("modecard.ask_no_auto", "💬 Ask mode (Auto mode isn't available here)",
+MODE_ASK_NO_AUTO = Msg("modecard.ask_no_auto", "💬 Ask mode (Auto isn't available here)",
                        note="The session's mode, shown in a sentence: Ask mode, because Claude "
                             "Code's Auto mode is not available for its model or plan. Starts "
                             "with the mode.ask label")

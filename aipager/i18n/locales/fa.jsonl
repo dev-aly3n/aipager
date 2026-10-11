@@ -351,8 +351,8 @@
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "خودکار"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "کامل"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> همین حالا در {mode} است."}
-{"k": "modecard.ask_no_auto", "src": "f879e923", "v": "💬 مود پرسش (مود خودکار اینجا در دسترس نیست)"}
-{"k": "modecard.auto_for_you", "src": "ccd328fa", "v": "🤖 مود خودکار (🔓 مود دسترسی کامل فقط برای ادمین است)"}
+{"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 مود پرسش (خودکار اینجا در دسترس نیست)"}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 خودکار برای شما (🔓 دسترسی کامل فقط برای ادمین است)"}
 {"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "مود خودکار برای {session} در دسترس نیست (مدل یا اشتراک)، پس در مود پرسش می‌ماند."}
 {"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 تغییر به مود پرسش"}
 {"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 تغییر به مود خودکار"}

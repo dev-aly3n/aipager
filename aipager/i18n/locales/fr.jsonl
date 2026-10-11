@@ -351,8 +351,8 @@
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Automatique"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Complet"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> est déjà en {mode}."}
-{"k": "modecard.ask_no_auto", "src": "f879e923", "v": "💬 Mode Demander (Mode Automatique indisponible ici)"}
-{"k": "modecard.auto_for_you", "src": "ccd328fa", "v": "🤖 Mode Automatique (🔓 Mode Accès complet réservé aux admins)"}
+{"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 Mode Demander (Automatique indisponible ici)"}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 Automatique pour vous (🔓 Accès complet réservé aux admins)"}
 {"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "Le mode Automatique n'est pas disponible pour {session} (modèle ou forfait) : elle reste en mode Demander."}
 {"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 Passer en Mode Demander"}
 {"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 Passer en Mode Automatique"}

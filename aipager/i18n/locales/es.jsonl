@@ -351,8 +351,8 @@
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Automático"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Total"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> ya está en {mode}."}
-{"k": "modecard.ask_no_auto", "src": "f879e923", "v": "💬 Modo Preguntar (el Modo Automático no está disponible aquí)"}
-{"k": "modecard.auto_for_you", "src": "ccd328fa", "v": "🤖 Modo Automático (🔓 el Modo Acceso total es para admins)"}
+{"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 Modo Preguntar (Automático no está disponible aquí)"}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 Automático para ti (🔓 el Acceso total es para admins)"}
 {"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "El modo Automático no está disponible para {session} (modelo o plan), así que sigue en modo Preguntar."}
 {"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 Cambiar a Modo Preguntar"}
 {"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 Cambiar a Modo Automático"}

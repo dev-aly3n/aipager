@@ -351,8 +351,8 @@
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Auto"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Vollzugriff"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> ist schon im {mode}."}
-{"k": "modecard.ask_no_auto", "src": "f879e923", "v": "💬 Fragen-Modus (Auto-Modus ist hier nicht verfügbar)"}
-{"k": "modecard.auto_for_you", "src": "ccd328fa", "v": "🤖 Auto-Modus (🔓 Vollzugriff-Modus nur für Admins)"}
+{"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 Fragen-Modus (Auto ist hier nicht verfügbar)"}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 Auto für dich (🔓 Vollzugriff nur für Admins)"}
 {"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "Der Auto-Modus ist für {session} nicht verfügbar (Modell oder Tarif), daher bleibt sie im Fragen-Modus."}
 {"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 Zum Fragen-Modus wechseln"}
 {"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 Zum Auto-Modus wechseln"}

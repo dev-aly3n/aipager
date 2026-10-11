@@ -351,8 +351,8 @@
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "تلقائي"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "كامل"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> في {mode} بالفعل."}
-{"k": "modecard.ask_no_auto", "src": "f879e923", "v": "💬 وضع «اسأل» (الوضع التلقائي غير متاح هنا)"}
-{"k": "modecard.auto_for_you", "src": "ccd328fa", "v": "🤖 الوضع التلقائي (🔓 وضع الوصول الكامل للمشرفين فقط)"}
+{"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 وضع «اسأل» (التلقائي غير متاح هنا)"}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 التلقائي لك (🔓 الوصول الكامل للمشرفين فقط)"}
 {"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "الوضع التلقائي غير متاح لـ {session} (النموذج أو الخطة)، لذا تبقى في وضع «اسأل»."}
 {"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 التبديل إلى وضع «اسأل»"}
 {"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 التبديل إلى الوضع التلقائي"}
