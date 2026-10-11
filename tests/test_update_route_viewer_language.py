@@ -79,7 +79,7 @@ def test_check_lines_follow_the_viewer(bot, run_async):
     assert status == 200
     check = body["check"]
     assert check["lines"][0] == "\u200faipager \u20681.0.1\u2069 ← \u20681.0.2\u2069"
-    assert check["offer"] == {"kind": "both", "label": "\u200fبه‌روزرسانی هر دو"}
+    assert check["offer"] == {"kind": "both", "label": "\u200fآپدیت هر دو"}
     assert any("؀" <= ch <= "ۿ" for ch in check["restart"])
 
 

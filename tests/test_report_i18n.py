@@ -140,7 +140,7 @@ def test_the_offer_notice_in_russian_and_persian():
     fa = report_offer.notice_text([{"trigger": "error", "type": "builtins.KeyError",
                                     "frames": [{"file": "aipager/bot/notify.py"}]}],
                                   i18n.get("fa"))
-    assert _persian(fa) and "KeyError" in fa and "فرستادن پیام‌ها به Telegram" in fa
+    assert _persian(fa) and "KeyError" in fa and "ارسال پیام‌ها به Telegram" in fa
     en = report_offer.notice_text(entries)
     assert en.startswith("aipager stopped unexpectedly 3 times. Also 1 other error. A report")
 
@@ -157,7 +157,7 @@ def test_a_keyed_area_reads_as_part_of_the_persian_sentence():
     fa = i18n.get("fa")
     head = report_offer.notice_text(_internal("aipager/bot/notify.py"), fa).split(". ")[0]
     inside = head[head.index("(") + 1:head.index(")")]
-    assert inside.endswith(" در فرستادن پیام‌ها به Telegram")
+    assert inside.endswith(" در ارسال پیام‌ها به Telegram")
     assert "\u200f" not in inside
     stem = report_offer.notice_text(_internal("aipager/bot/zzz_mod.py"), fa)
     assert "\u2068zzz_mod\u2069" in stem
