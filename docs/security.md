@@ -180,7 +180,12 @@ person's tap. Three things let calls run with no prompt to a person:
   session in Auto when Ask was asked for (the next real hook shows the
   real mode again). It never changes the flag a restart or resume
   passes, and it can never reach Full access: only the launch flag sets
-  that.
+  that. aipager never presses Shift+Tab in a session whose process can
+  cycle into Full access (one started in Full access, even after it was
+  switched to Ask or Auto in the terminal, or one that has reported Full
+  access since it started): every mode switch there is a restart, which
+  launches the new mode's flag and drops the Full access one. A forged
+  report of Full access can only turn a switch into a restart.
   So that Full access works from Telegram, the daemon sets
   `skipDangerousModePermissionPrompt` in `~/.claude/settings.json` at
   every start (Claude Code's warning before it runs in this mode would
