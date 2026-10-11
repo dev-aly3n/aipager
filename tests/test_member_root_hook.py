@@ -212,3 +212,56 @@ def test_root_bounds_helper(home, root):
     write, _reads, root_cwd = enforce._root_bounds(
         str(home), SID, str(root), True, True)
     assert root_cwd is False and write == (enforce._scratch_root(str(home), SID),)
+
+
+# ---- a custom role with bypass_safety but no can_manage (rev-iter1-001) --------------
+
+_BYPASS_NO_MANAGE = "roles:\n  boss:\n    bypass_safety: true\n"
+
+
+def test_bypass_safety_role_without_manage_held_to_root(tmp_path, home, root):
+    """Only owner and admin are unrestricted: a role you define with the
+    owner's bypass but without can_manage still writes, searches and
+    reads in the home folder only inside its root (and the scratchpad)."""
+    role = _pol(tmp_path, _BYPASS_NO_MANAGE).get_role("boss")
+    assert role.bypass_safety is True and role.can_manage is not True
+    (home / "aipager").mkdir()
+    (home / "aipager" / "x.py").write_text("x")
+    _use(role, root)
+    assert ps.read_snapshot(SESSION)["root"] == str(root)
+    # Outside the root: denied.
+    assert _decide(tmp_path, "Write", {"file_path": str(home / "aipager" / "b"),
+                                       "content": "x"}, root / "proj")
+    assert _read(tmp_path, home / "aipager" / "x.py", root / "proj") == (
+        "Read denied - this role reads in the home folder only inside its own folder")
+    assert _decide(tmp_path, "Grep", {"pattern": "x", "path": str(home / "aipager")},
+                   root / "proj")
+    # Inside the root: anywhere, as for bypass_role_denies.
+    assert _decide(tmp_path, "Write", {"file_path": str(root / "other" / "b"),
+                                       "content": "x"}, root / "proj") is None
+    assert _read(tmp_path, root / "other" / "notes.md", root / "proj") is None
+    # Outside the home folder, still readable; its bypass keeps its tools.
+    assert _read(tmp_path, "/etc/hostname", root / "proj") is None
+    assert _decide(tmp_path, "Bash", {"command": "ls"}, root / "proj") is None
+
+
+def test_bypass_safety_role_without_manage_held_when_the_check_fails(tmp_path, home,
+                                                                     root):
+    """A decision that fails is allowed for the owner's bypass, but not
+    for a bypass held to a root folder: that fails closed."""
+    _use(_pol(tmp_path, _BYPASS_NO_MANAGE).get_role("boss"), root)
+    data = {"session": SESSION, "tool_name": "Read",
+            "tool_input": {"file_path": str(home / "x")}}
+    assert enforce.fail_closed(data)["reason"]
+    _use(_pol().get_role("owner"), root)
+    assert enforce.fail_closed(data) is None
+
+
+def test_bypass_safety_with_manage_is_the_owner(tmp_path, home, root):
+    role = _pol(tmp_path, "roles:\n  boss:\n    bypass_safety: true\n"
+                          "    can_manage: true\n").get_role("boss")
+    (home / "aipager").mkdir()
+    _use(role, root)
+    assert "root" not in ps.read_snapshot(SESSION)
+    assert _decide(tmp_path, "Write", {"file_path": str(home / "aipager" / "b"),
+                                       "content": "x"}, root / "proj") is None

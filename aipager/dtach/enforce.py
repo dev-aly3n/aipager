@@ -1034,6 +1034,29 @@ def _root_bounds(cwd: str | None, session_id, root: str, confined: bool,
     return write_roots, home_read_roots, root_cwd
 
 
+def _bypass_root_violation(rules: dict, data: dict, session) -> str | None:
+    """A ``bypass_safety`` turn held to a members' root folder (``root``
+    in *rules*: a custom role with ``bypass_safety`` but no
+    ``can_manage``): its file tools write and search only in the root and
+    the scratchpad, read in the home folder only there (and the session's
+    own reply file), and never touch a no-access path of its snapshot
+    (the floor and every other scope's root). ``None`` with no root: the
+    owner's bypass, unchanged."""
+    root = rules.get("root")
+    if root is None:
+        return None
+    cwd = data.get("cwd") if isinstance(data.get("cwd"), str) else None
+    readable = (str(reply_context_path(session)),) if session else ()
+    write_roots, home_read_roots, _ = _root_bounds(
+        cwd, data.get("session_id"), root, False, False, readable)
+    return safety.path_violation(
+        data.get("tool_name", ""), data.get("tool_input", {}) or {},
+        tuple(rules.get("deny_paths_no_access", ())),
+        tuple(rules.get("deny_paths_no_write", ())),
+        cwd=cwd, write_roots=write_roots, readable=readable,
+        home_read_roots=home_read_roots)
+
+
 _FAIL_CLOSED_REASON = "this tool call could not be checked, so it was denied"
 
 
@@ -1054,6 +1077,7 @@ def fail_closed(data: dict) -> dict | None:
     except Exception:
         snap = None
     if (isinstance(snap, dict) and snap.get("bypass_safety") is True
+            and snap.get("root") is None   # a root-bound bypass fails closed
             and not marked_for_verification(snap)
             and not verify_origin_flagged(str(data.get("session") or ""))):
         pin = None
@@ -1538,7 +1562,11 @@ def _decide(data: dict):
     # into this turn or run as the next one with no UserPromptSubmit, which
     # would otherwise ride the owner's rights): those take the full path,
     # which accounts for each such message exactly.
+    # Never for a role held to a members' root folder (a custom role with
+    # bypass_safety but no can_manage): its turn takes the full path,
+    # which holds its file tools to the root.
     if (early is not None and early.get("bypass_safety")
+            and early.get("root") is None
             and not marked and _pin_keeps_owner(pin)
             and not _foreign_input_near_end(path)):
         info["origin"] = "telegram"
@@ -1642,8 +1670,15 @@ def _decide(data: dict):
         if current.get("bypass_safety") is not True:
             current = _with_floor(current)
     if current.get("bypass_safety") is True:
+        # Owner (or the terminal): no checks, unless the role also lacks
+        # can_manage. Only owner and admin are unrestricted, so such a
+        # role keeps its bypass for tools and Bash patterns but its file
+        # tools stay inside its members' root folder.
+        reason = _bypass_root_violation(current, data, session)
+        if reason:
+            return {"tool": tool_name, "reason": reason}
         _cur["rules"] = current
-        return None  # owner (or the terminal)
+        return None
     snap = current
 
     # Sticky turn-block: if any tool was already blocked this turn, deny
