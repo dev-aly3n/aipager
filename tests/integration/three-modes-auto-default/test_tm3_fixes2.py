@@ -208,3 +208,12 @@ def test_legacy_resume_ask_needs_someone_who_may_prompt(world, run_async, pty):
     q = _tap(bot, run_async, f"{S}:resume_mode_ask", RO)
     assert pty.launched == []
     assert any(a for a in answers(q))
+
+
+def test_legacy_auto_button_is_auto_even_for_an_admin(world, run_async, pty):
+    # The old Auto meant bypass; on an old card it is now the new Auto,
+    # also for an admin, who would be allowed Full access (so the admin
+    # gate further down cannot be what keeps it narrow).
+    bot, _s = _gone(world)
+    _tap(bot, run_async, f"{S}:resume_mode_auto", OWNER)
+    assert pty.launched_modes == ["auto"]
