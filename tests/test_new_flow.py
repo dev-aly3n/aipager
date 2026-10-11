@@ -12,7 +12,7 @@ tests/integration/new-session-flow/.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -40,17 +40,17 @@ def wbot(mk_bot):
         bot._is_admin_user = MagicMock(return_value=admin)
         bot.created = []
 
-        async def _create(label, *, scope_chat_id, skip_perms=False, cwd=None,
+        async def _create(label, *, scope_chat_id, mode, cwd=None,
                           driver_user_id=None, model=None, keep_card=False):
             bot.created.append({"label": label, "scope": scope_chat_id,
-                                "skip_perms": skip_perms, "cwd": cwd,
+                                "mode": mode, "cwd": cwd,
                                 "model": model, "driver": driver_user_id})
             if launch_error:
                 return "", launch_error
             name = f"claude-{label}"
             sess = bot.registry.get_or_create(name)
             sess.label = label
-            sess.skip_perms = skip_perms
+            sess.perm_mode = mode
             sess.scope_chat_id = scope_chat_id
             if cwd:
                 sess.cwd = cwd
@@ -120,20 +120,37 @@ def test_bare_new_sends_the_name_card_with_auto_by_default(wbot, mk_update, run_
     kb = update.message.reply_text.await_args.kwargs["reply_markup"]
     assert "Send a name" in text and "x1 fix the failing tests" in text
     assert "🤖 Auto mode" in text
-    assert _buttons(kb) == ["💬 Ask instead", "🧠 Model", "📁 Folder", "✖️ Cancel"]
+    assert _buttons(kb) == ["💬 Ask mode instead", "🔓 Full access mode instead",
+                            "🧠 Model", "📁 Folder", "✖️ Cancel"]
+    # The mode buttons have a row of their own.
+    assert [b.text for b in kb.inline_keyboard[0]] == ["💬 Ask mode instead",
+                                                       "🔓 Full access mode instead"]
     pending = bot._new_wizard_pending[(CHAT, OWNER)]
     assert (pending["step"], pending["msg_id"], pending["user_id"],
-            pending["skip_perms"]) == ("name", 900, OWNER, True)
+            pending["mode"]) == ("name", 900, OWNER, "auto")
 
 
-def test_a_non_admin_gets_ask_and_no_mode_toggle(wbot, mk_update, run_async):
+def test_a_non_admin_gets_auto_and_no_full_access_button(wbot, mk_update, run_async):
     bot = wbot(admin=False)
     update = _open_card(bot, mk_update, run_async)
 
     text = update.message.reply_text.await_args.args[0]
     kb = update.message.reply_text.await_args.kwargs["reply_markup"]
-    assert "💬 Ask mode" in text and "🤖 Auto" not in text
-    assert _buttons(kb) == ["🧠 Model", "📁 Folder", "✖️ Cancel"]
+    assert "🤖 Auto mode" in text and "Full access" not in text
+    assert _buttons(kb) == ["💬 Ask mode instead", "🧠 Model", "📁 Folder", "✖️ Cancel"]
+
+
+def test_a_chat_default_of_full_access_gives_a_non_admin_auto(wbot, mk_update, run_async):
+    preferences.set_new_session_default(CHAT, "mode", "full")
+    bot = wbot(admin=False)
+    _open_card(bot, mk_update, run_async)
+    pending = bot._new_wizard_pending[(CHAT, OWNER)]
+    assert (pending["mode"], pending["full_refused"]) == ("auto", True)
+
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"), MagicMock(), "dev"))
+
+    assert bot.created[0]["mode"] == "auto"
+    assert "Full access mode needs an admin" in _last_edit(bot)["text"]
 
 
 def test_the_chats_default_ask_is_honoured(wbot, mk_update, run_async):
@@ -141,9 +158,9 @@ def test_the_chats_default_ask_is_honoured(wbot, mk_update, run_async):
     bot = wbot()
     update = _open_card(bot, mk_update, run_async)
 
-    assert bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] is False
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["mode"] == "ask"
     kb = update.message.reply_text.await_args.kwargs["reply_markup"]
-    assert "🤖 Auto instead" in _buttons(kb)
+    assert "🤖 Auto mode instead" in _buttons(kb)
 
 
 def test_second_new_replaces_first_cleanly(wbot, mk_update, run_async):
@@ -192,7 +209,7 @@ def test_a_valid_name_creates_the_session_at_once(wbot, mk_update, run_async):
     handled = run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "dev"))
 
     assert handled is True
-    assert bot.created == [{"label": "dev", "scope": CHAT, "skip_perms": True,
+    assert bot.created == [{"label": "dev", "scope": CHAT, "mode": "auto",
                             "cwd": None, "model": None, "driver": OWNER}]
     assert CHAT not in {c for c, _u in bot._new_wizard_pending}
     ready = _last_edit(bot)
@@ -252,8 +269,8 @@ def test_a_live_name_gets_the_conflict_card(wbot, mk_update, run_async):
 
     assert bot.created == []
     kw = bot._send_new_conflict_prompt.await_args.kwargs
-    assert (kw["existing"].name, kw["prompt"], kw["skip_perms"]) == (
-        "claude-jim", "do it", True)
+    assert (kw["existing"].name, kw["prompt"], kw["mode"]) == (
+        "claude-jim", "do it", "auto")
     assert CHAT not in {c for c, _u in bot._new_wizard_pending}
     # The Name card itself becomes the conflict card: one message.
     assert kw["edit_msg_id"] == 900
@@ -320,14 +337,14 @@ def test_a_name_typed_while_a_picker_is_open_still_creates(wbot, mk_update, run_
 def test_a_failed_launch_brings_the_card_back_with_its_choices(wbot, mk_update, run_async):
     bot = wbot(launch_error="dtach unavailable")
     _open_card(bot, mk_update, run_async)
-    bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] = False
+    bot._new_wizard_pending[(CHAT, OWNER)]["mode"] = "ask"
 
     run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"), MagicMock(), "dev"))
 
     pending = bot._new_wizard_pending.get((CHAT, OWNER))
     assert pending is not None, "the Name card must come back"
-    assert (pending["step"], pending["skip_perms"], pending["msg_id"]) == (
-        "name", False, 900)
+    assert (pending["step"], pending["mode"], pending["msg_id"]) == (
+        "name", "ask", 900)
     assert "dtach unavailable" in _last_edit(bot)["text"]
 
 
@@ -349,17 +366,25 @@ def test_a_failed_launch_leaves_a_newer_card_alone(wbot, mk_update, run_async):
     assert bot._new_wizard_pending[(CHAT, OWNER)] is newer
 
 
-def test_auto_is_refused_at_creation_for_a_non_admin(wbot, mk_update, run_async):
-    """The card's state says Auto (a stale card, a demotion): creation
-    re-checks the person creating and gives Ask, saying why."""
+def test_full_access_is_refused_at_creation_for_a_non_admin(wbot, mk_update, run_async):
+    """The card's state says Full access (a stale card, a demotion):
+    creation re-checks the person creating and gives Auto, saying why."""
     bot = wbot(admin=False)
     _open_card(bot, mk_update, run_async)
-    bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] = True
+    bot._new_wizard_pending[(CHAT, OWNER)]["mode"] = "full"
 
     run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"), MagicMock(), "dev"))
 
-    assert bot.created[0]["skip_perms"] is False
-    assert "Auto mode needs an admin" in _last_edit(bot)["text"]
+    assert bot.created[0]["mode"] == "auto"
+    assert "Full access mode needs an admin" in _last_edit(bot)["text"]
+
+
+@pytest.mark.parametrize("admin, want", [(True, "full"), (False, "auto")],
+                         ids=["admin", "member"])
+def test_a_bang_name_asks_for_full_access(wbot, mk_update, run_async, admin, want):
+    bot = wbot(admin=admin)
+    run_async(new_flow.create_from_text(bot, _msg(mk_update, "/new !dev"), "!dev"))
+    assert bot.created[0]["mode"] == want
 
 
 # ---- the Name card's buttons --------------------------------------------
@@ -370,22 +395,38 @@ def test_the_mode_toggle_switches_to_ask_and_back(wbot, mk_update, run_async, mk
     update, query = mk_cb()
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:ask"))
-    assert bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] is False
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["mode"] == "ask"
     assert "💬 Ask mode" in _last_edit(bot)["text"]
 
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:full"))
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["mode"] == "full"
+    assert "🔓 Full access mode" in _last_edit(bot)["text"]
+
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:auto"))
-    assert bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] is True
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["mode"] == "auto"
 
 
-def test_the_mode_toggle_refuses_auto_for_a_non_admin(wbot, mk_update, run_async, mk_cb):
+def test_the_mode_toggle_refuses_full_access_for_a_non_admin(wbot, mk_update, run_async,
+                                                             mk_cb):
     bot = wbot(admin=False)
     _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
 
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:auto"))
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:full"))
 
-    assert bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] is False
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["mode"] == "auto"
     assert query.answer.await_args.kwargs.get("show_alert") is True
+
+
+def test_a_non_admin_may_pick_ask_and_auto(wbot, mk_update, run_async, mk_cb):
+    bot = wbot(admin=False)
+    _open_card(bot, mk_update, run_async)
+    update, query = mk_cb()
+
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:ask"))
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["mode"] == "ask"
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:auto"))
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["mode"] == "auto"
 
 
 def test_picking_a_model_returns_to_the_name_card(wbot, mk_update, run_async, mk_cb):
@@ -574,7 +615,7 @@ def test_a_strangers_tap_is_refused(wbot, mk_update, run_async, mk_cb):
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:ask"))
 
-    assert bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] is True
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["mode"] == "auto"
     assert query.answer.await_args.kwargs.get("show_alert") is True
 
 
@@ -638,10 +679,10 @@ def test_direct_argument_with_a_bad_name_opens_the_card_with_the_reason(
 
 # ---- the Ready card and its buttons ----------------------------------------
 
-def _ready_session(bot, *, skip_perms=True, status=Status.IDLE):
+def _ready_session(bot, *, mode="full", status=Status.IDLE):
     sess = bot.registry.get_or_create("claude-dev")
     sess.label = "dev"
-    sess.skip_perms = skip_perms
+    sess.perm_mode = mode
     sess.scope_chat_id = CHAT
     bot.registry.transition("claude-dev", status)
     return sess
@@ -649,32 +690,39 @@ def _ready_session(bot, *, skip_perms=True, status=Status.IDLE):
 
 def test_the_ready_card_says_where_messages_go(wbot, mk_update):
     bot = wbot()
-    sess = _ready_session(bot)
+    sess = _ready_session(bot, mode="auto")
     text, kb = new_flow.render_ready(bot, _msg(mk_update, "x"), sess)
 
     assert text.startswith("✅ <b>dev</b> is ready\n🤖 Auto mode · 🧠 Default model · 📁 ")
     assert "✍️ Just send a message, it goes to dev." in text
     assert "Later: tap dev on the keyboard, or reply to any dev message." in text
-    assert _buttons(kb) == ["💬 Switch to Ask", "🧠 Model"]
+    assert _buttons(kb) == ["💬 Switch to Ask mode", "🔓 Switch to Full access mode", "🧠 Model"]
     assert "—" not in text
 
 
-def test_the_ready_card_offers_auto_when_asking(wbot, mk_update):
+def test_the_ready_card_offers_the_other_modes(wbot, mk_update):
     bot = wbot()
-    sess = _ready_session(bot, skip_perms=False)
+    sess = _ready_session(bot, mode="ask")
     _text, kb = new_flow.render_ready(bot, _msg(mk_update, "x"), sess)
-    assert _buttons(kb)[0] == "🤖 Switch to Auto"
+    assert _buttons(kb)[:2] == ["🤖 Switch to Auto mode", "🔓 Switch to Full access mode"]
+
+
+def test_the_ready_card_offers_full_access_only_when_its_starter_is_an_admin(wbot,
+                                                                            mk_update):
+    bot = wbot(admin=False)
+    sess = _ready_session(bot, mode="auto")
+    _text, kb = new_flow.render_ready(bot, _msg(mk_update, "x"), sess)
+    assert _buttons(kb) == ["💬 Switch to Ask mode", "🧠 Model"]
 
 
 def _switch_core(bot):
     async def _core(sess, target):
-        sess.skip_perms = target
-        return RestartOutcome(ok=True, reason="done", label=sess.label,
-                              skip_perms=target)
-    bot._perms_switch_core = AsyncMock(side_effect=_core)
+        sess.perm_mode = target
+        return RestartOutcome(ok=True, reason="done", label=sess.label, mode=target)
+    bot._mode_switch_core = AsyncMock(side_effect=_core)
 
 
-def test_switch_to_ask_relaunches_and_re_renders(wbot, mk_cb, run_async):
+def test_switch_out_of_full_access_relaunches_and_re_renders(wbot, mk_cb, run_async):
     bot = wbot()
     sess = _ready_session(bot)
     _switch_core(bot)
@@ -682,21 +730,50 @@ def test_switch_to_ask_relaunches_and_re_renders(wbot, mk_cb, run_async):
 
     assert run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_ask"))
 
-    bot._perms_switch_core.assert_awaited_once_with(sess, False)
+    bot._mode_switch_core.assert_awaited_once_with(sess, "ask")
     assert "💬 Ask mode" in _last_edit(bot)["text"]
-    assert _buttons(_last_edit(bot)["reply_markup"])[0] == "🤖 Switch to Auto"
+    assert _buttons(_last_edit(bot)["reply_markup"])[0] == "🤖 Switch to Auto mode"
 
 
-def test_switch_to_auto_needs_an_admin(wbot, mk_cb, run_async):
+def test_switch_to_full_access_needs_an_admin(wbot, mk_cb, run_async):
     bot = wbot(admin=False)
-    sess = _ready_session(bot, skip_perms=False)
+    sess = _ready_session(bot, mode="ask")
     _switch_core(bot)
     update, query = mk_cb()
 
-    run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_auto"))
+    run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_full"))
 
-    bot._perms_switch_core.assert_not_awaited()
+    bot._mode_switch_core.assert_not_awaited()
     assert query.answer.await_args.kwargs.get("show_alert") is True
+    assert "Full access mode needs an admin" in query.answer.await_args.args[0]
+
+
+def test_switch_to_auto_needs_no_admin_and_no_restart(wbot, mk_cb, run_async):
+    """Ask -> Auto is in place: anyone who may prompt, while a turn runs
+    too; the card shows the target and the switch waits on a hook."""
+    bot = wbot(admin=False)
+    sess = _ready_session(bot, mode="ask", status=Status.BUSY)
+    update, query = mk_cb()
+    with patch("aipager.dtach.inject.press_mode_cycle", AsyncMock(return_value=True)) as press:
+        run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_auto"))
+
+    press.assert_awaited_once_with("claude-dev", 3)
+    assert sess.perm_mode == "auto" and sess.mode_switch is not None
+    assert sess.mode_switch.reply == (CHAT, 900, "ready")
+    assert "🤖 Auto mode" in _last_edit(bot)["text"]
+
+
+def test_an_in_place_switch_is_refused_while_a_prompt_is_open(wbot, mk_cb, run_async):
+    bot = wbot()
+    sess = _ready_session(bot, mode="ask", status=Status.INTERACTIVE)
+    update, query = mk_cb()
+    with patch("aipager.dtach.inject.press_mode_cycle", AsyncMock(return_value=True)) as press:
+        run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_auto"))
+
+    press.assert_not_awaited()
+    assert sess.perm_mode == "ask" and sess.mode_switch is None
+    assert query.answer.await_args.kwargs.get("show_alert") is True
+    assert "waiting on a prompt" in query.answer.await_args.args[0]
 
 
 def test_switching_mode_is_refused_while_the_session_works(wbot, mk_cb, run_async):
@@ -707,7 +784,7 @@ def test_switching_mode_is_refused_while_the_session_works(wbot, mk_cb, run_asyn
 
     run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_ask"))
 
-    bot._perms_switch_core.assert_not_awaited()
+    bot._mode_switch_core.assert_not_awaited()
     assert "working" in query.answer.await_args.args[0]
 
 
@@ -722,7 +799,7 @@ def test_a_tap_from_before_the_running_turn_is_refused(wbot, mk_cb, run_async):
 
     run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_ask"))
 
-    bot._perms_switch_core.assert_not_awaited()
+    bot._mode_switch_core.assert_not_awaited()
     assert "working" in query.answer.await_args.args[0]
 
 
@@ -740,7 +817,7 @@ def test_a_turn_that_starts_during_the_toast_is_left_alone(wbot, mk_cb, run_asyn
 
     run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_ask"))
 
-    bot._perms_switch_core.assert_not_awaited()
+    bot._mode_switch_core.assert_not_awaited()
     assert "started working" in _last_edit(bot)["text"]
 
 
@@ -821,16 +898,27 @@ def test_the_ready_card_refuses_an_ended_session(wbot, mk_cb, run_async):
 
     run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_ask"))
 
-    bot._perms_switch_core.assert_not_awaited()
+    bot._mode_switch_core.assert_not_awaited()
     assert "ended" in query.answer.await_args.args[0]
 
 
 # ---- the chat's defaults ------------------------------------------------------
 
-def test_defaults_are_auto_for_an_admin_and_ask_otherwise(wbot):
-    assert new_flow.resolve_new_session_settings(wbot(), CHAT, OWNER)["skip_perms"] is True
+def test_defaults_are_auto_for_everyone(wbot):
+    assert new_flow.resolve_new_session_settings(wbot(), CHAT, OWNER)["mode"] == "auto"
     assert new_flow.resolve_new_session_settings(
-        wbot(admin=False), CHAT, OWNER)["skip_perms"] is False
+        wbot(admin=False), CHAT, OWNER)["mode"] == "auto"
+
+
+@pytest.mark.parametrize("stored, admin, want", [
+    ("ask", True, "ask"), ("ask", False, "ask"), ("full", True, "full"),
+    ("full", False, "auto"),
+], ids=["ask-admin", "ask-member", "full-admin", "full-member"])
+def test_a_stored_default_is_narrowed_for_a_non_admin(wbot, stored, admin, want):
+    preferences.set_new_session_default(CHAT, "mode", stored)
+    got = new_flow.resolve_new_session_settings(wbot(admin=admin), CHAT, OWNER)
+    assert (got["mode"], got["full_refused"], got["can_full"]) == (
+        want, stored == "full" and not admin, admin)
 
 
 def test_a_stored_model_is_used_and_a_withdrawn_one_ignored(wbot):
@@ -893,7 +981,7 @@ def test_new_session_defaults_validate_and_clear():
     preferences.set_new_session_default(CHAT, "mode", "ask")
     assert preferences.get_new_session_defaults(CHAT).mode == "ask"
     preferences.set_new_session_default(CHAT, "mode", "")
-    assert preferences.get_new_session_defaults(CHAT).mode == ""
+    assert preferences.get_new_session_defaults(CHAT).mode == "auto"
 
 
 def test_settings_new_sessions_screen_sets_each_default(wbot, mk_cb, run_async, tmp_path, monkeypatch):
@@ -912,8 +1000,10 @@ def test_settings_new_sessions_screen_sets_each_default(wbot, mk_cb, run_async, 
     stored = preferences.get_new_session_defaults(CHAT)
     assert (stored.mode, stored.model, stored.cwd) == (
         "ask", MODEL_CHOICES[0][0], str(tmp_path))
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:mode:full"))
+    assert preferences.get_new_session_defaults(CHAT).mode == "full"
     run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:mode:auto"))
-    assert preferences.get_new_session_defaults(CHAT).mode == ""
+    assert preferences.get_new_session_defaults(CHAT).mode == "auto"
 
 
 def test_a_default_folder_tap_saves_the_folder_that_was_shown(
@@ -948,13 +1038,38 @@ def test_a_default_folder_that_is_no_longer_allowed_is_refused(
     assert "no longer available" in query.answer.await_args.args[0]
 
 
-def test_the_defaults_screen_tells_a_non_admin_they_get_ask(wbot, mk_cb, run_async):
+def test_the_defaults_screen_shows_three_modes(wbot, mk_cb, run_async):
+    bot = wbot()
+    update, query = mk_cb()
+
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns"))
+
+    edit = _last_edit(bot)
+    assert "Permissions: 🤖 Auto mode" in edit["text"]
+    assert [row[0].text for row in edit["reply_markup"].inline_keyboard[:3]] == [
+        "🤖 Auto mode ✅", "💬 Ask mode", "🔓 Full access mode"]
+    assert _cbs(edit["reply_markup"])[:3] == [
+        "_:set:ns:mode:auto", "_:set:ns:mode:ask", "_:set:ns:mode:full"]
+
+
+def test_the_defaults_screen_tells_a_non_admin_they_get_auto(wbot, mk_cb, run_async):
+    preferences.set_new_session_default(CHAT, "mode", "full")
     bot = wbot(admin=False)
     update, query = mk_cb()
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns"))
 
-    assert "Permissions: 💬 Ask for you" in _last_edit(bot)["text"]
+    assert "Permissions: 🤖 Auto mode (🔓 Full access mode is for admins)" in _last_edit(bot)["text"]
+
+
+def test_only_an_admin_may_make_full_access_the_default(wbot, mk_cb, run_async):
+    bot = wbot(admin=False)
+    update, query = mk_cb()
+
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:mode:full"))
+
+    assert preferences.get_new_session_defaults(CHAT).mode == "auto"
+    assert query.answer.await_args.kwargs.get("show_alert") is True
 
 
 def test_a_group_member_who_is_not_admin_cannot_change_defaults(wbot, mk_cb, run_async):
@@ -964,7 +1079,7 @@ def test_a_group_member_who_is_not_admin_cannot_change_defaults(wbot, mk_cb, run
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:mode:ask"))
 
-    assert preferences.get_new_session_defaults(-100).mode == ""
+    assert preferences.get_new_session_defaults(-100).mode == "auto"
     assert query.answer.await_args.kwargs.get("show_alert") is True
 
 
@@ -987,5 +1102,5 @@ def test_the_ready_card_refuses_someone_who_may_not_prompt(wbot, mk_cb, run_asyn
 
     run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_ask"))
 
-    bot._perms_switch_core.assert_not_awaited()
+    bot._mode_switch_core.assert_not_awaited()
     assert query.answer.await_args.kwargs.get("show_alert") is True

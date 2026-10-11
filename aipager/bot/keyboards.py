@@ -26,7 +26,8 @@ from telegram.error import BadRequest, Forbidden
 from aipager import i18n
 from aipager.bot import kbwords, miniapp_link
 from aipager.i18n import Msg, Safe
-from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO
+from aipager import perm_modes
+from aipager.bot.mode_labels import mode_label
 from aipager.config import (
     CHAT_ID,
     MODEL_CHOICES,
@@ -86,9 +87,9 @@ OPTION = Msg("perm.btn.option", "Option {n}",
              note="A question's option that has no label of its own", eg={"n": 2})
 DEFAULT_MODE = Msg("perm.btn.default_suffix", "{mode} (default)",
                    note="A mode button marked as the session's saved default; {mode} is "
-                        "the Auto or Ask mode label", eg={"mode": "Auto mode"})
+                        "the Ask, Auto or Full access mode label", eg={"mode": "Auto mode"})
 YES_SWITCH = Msg("perm.btn.yes_switch", "✅ Yes, switch",
-                 note="Confirms switching a session from Ask to Auto")
+                 note="Confirms switching a session to Full access mode")
 CANCEL = Msg("perm.btn.cancel", "↩️ Cancel", note="Cancels the switch or the resume")
 STOP_SWITCH = Msg("perm.btn.stop_switch", "🛑 Stop task & switch",
                   note="Stops the running turn, then switches the mode")
@@ -510,7 +511,7 @@ class KeyboardMixin:
     def _build_perms_confirm_keyboard(
         self, sess: TrackedSession,
     ) -> InlineKeyboardMarkup:
-        """Confirmation keyboard for /perms IDLE Ask→Auto switch."""
+        """Confirmation keyboard for an IDLE switch into Full access."""
         # Local import — see the precedent + rationale at
         # _build_resume_mode_keyboard below; do not hoist to module top.
         from aipager.bot import session_parity
@@ -546,10 +547,15 @@ class KeyboardMixin:
         ])
 
     def _build_resume_mode_keyboard(
-        self, sess: TrackedSession, persisted_skip_perms: bool,
-        *, chat_id: int = 0,
+        self, sess: TrackedSession, saved_mode: str,
+        *, chat_id: int = 0, may_full: bool = False,
     ) -> InlineKeyboardMarkup:
         """Mode-picker keyboard shown after a session is chosen to resume.
+
+        Ask and Auto for everyone; Full access only when *may_full* (the
+        resumer is an admin). "(default)" marks what a plain resume gives
+        this person: *saved_mode*, or Auto in place of Full access for
+        someone who may not use it.
 
         Callbacks carry the short per-chat index, not the session name:
         ``{name}:resume_mode_cancel`` measured 83 bytes for a
@@ -577,23 +583,27 @@ class KeyboardMixin:
             shown = tr.text(mode)
             return tr.text(DEFAULT_MODE, mode=Safe(shown)) if default else shown
 
-        ask_label = label(MODE_ASK, not persisted_skip_perms)
-        auto_label = label(MODE_AUTO, persisted_skip_perms)
+        default = perm_modes.narrowest_allowed(saved_mode, may_full)
 
         # One mode per row: a label names the mode as a mode ("💬 Ask mode
         # (default)", "💬 Режим «Спрашивать» (по умолчанию)"), too wide for
         # half a row, and the end Telegram would cut is "(default)".
-        return InlineKeyboardMarkup([
+        rows = [
             [InlineKeyboardButton(
-                ask_label,
+                label(mode_label(perm_modes.ASK), default == perm_modes.ASK),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "resume-ask"))],
             [InlineKeyboardButton(
-                auto_label,
+                label(mode_label(perm_modes.AUTO), default == perm_modes.AUTO),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "resume-auto"))],
-            [InlineKeyboardButton(
-                tr.text(CANCEL),
-                callback_data=session_parity.session_cb(self, chat_id, sess, "resume-cancel"))],
-        ])
+        ]
+        if may_full:
+            rows.append([InlineKeyboardButton(
+                label(mode_label(perm_modes.FULL), default == perm_modes.FULL),
+                callback_data=session_parity.session_cb(self, chat_id, sess, "resume-full"))])
+        rows.append([InlineKeyboardButton(
+            tr.text(CANCEL),
+            callback_data=session_parity.session_cb(self, chat_id, sess, "resume-cancel"))])
+        return InlineKeyboardMarkup(rows)
 
     def _build_inline_ask_keyboard(self, sess: TrackedSession, options: list,
                                     multi_select: bool = False,

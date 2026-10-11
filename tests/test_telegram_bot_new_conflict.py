@@ -62,10 +62,10 @@ def test_new_alive_collision_prompts_buttons(mk_bot, mk_update, run_async):
     assert (sess.name, "new_replace") in dests
     assert (sess.name, "new_cancel") in dests
 
-    # Prompt + skip_perms stashed for the callback to consume (Auto: the
-    # default for an admin since 2026-09-30)
+    # Prompt + mode stashed for the callback to consume (Auto: the default
+    # for everyone since 2026-10-11)
     assert bot._new_conflict_pending["claude-jim"]["prompt"] == "do something"
-    assert bot._new_conflict_pending["claude-jim"]["skip_perms"] is True
+    assert bot._new_conflict_pending["claude-jim"]["mode"] == "auto"
 
 
 def test_new_gone_with_resumable_id_prompts_buttons(mk_bot, mk_update, run_async):
@@ -104,7 +104,7 @@ def test_new_gone_without_resumable_id_falls_through(monkeypatch, mk_bot, mk_upd
     assert "claude-jim" not in bot._new_conflict_pending
 
 
-def test_new_skip_perms_flag_carried_through(mk_bot, mk_update, run_async):
+def test_new_bang_full_access_carried_through(mk_bot, mk_update, run_async):
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     registry._sessions["claude-jim"] = sess
@@ -112,4 +112,4 @@ def test_new_skip_perms_flag_carried_through(mk_bot, mk_update, run_async):
     update = mk_update("/new !jim")
     run_async(bot._handle_new_cmd(update, MagicMock()))
 
-    assert bot._new_conflict_pending["claude-jim"]["skip_perms"] is True
+    assert bot._new_conflict_pending["claude-jim"]["mode"] == "full"

@@ -243,7 +243,7 @@ def live_session(monkeypatch, run_async) -> LiveSession:
     label = f"e2elive-{uuid.uuid4().hex[:6]}"
     name = f"{label}__d{CHAT_ID}"
     since = now_stamp()
-    ok, err = run_async(inject.launch_session(name, True, cwd=str(REPO_ROOT)))
+    ok, err = run_async(inject.launch_session(name, mode="full", cwd=str(REPO_ROOT)))
     if not ok:
         pytest.skip(f"could not launch the throwaway session: {err}")
     wait_for(label, since, "→ IDLE", timeout=90)

@@ -21,8 +21,9 @@ def _cmd_resume(args: argparse.Namespace) -> int:
     via dtach. Without an arg: render a paginated list of GONE sessions
     and accept ``<number>`` / ``n`` (next) / ``p`` (prev) / ``q`` (quit).
 
-    Prefix the name with ``!`` to force Auto mode (--dangerously-skip-permissions)
-    regardless of the persisted value (e.g. ``aipager resume !dev``).
+    Prefix the name with ``!`` to force Full access mode
+    (--dangerously-skip-permissions) regardless of the persisted value
+    (e.g. ``aipager resume !dev``).
 
     The daemon's session_monitor auto-discovers the new socket within ~2s
     and recovers the registry entry to IDLE; we don't write to the state
@@ -30,10 +31,10 @@ def _cmd_resume(args: argparse.Namespace) -> int:
     """
     raw_name = (args.name or "").strip().lstrip("@/") if args.name else ""
     if raw_name:
-        # Support ! prefix to force Auto mode
-        force_auto = raw_name.startswith("!")
+        # Support ! prefix to force Full access mode
+        force_full = raw_name.startswith("!")
         name = raw_name.lstrip("!").lower()
-        return _resume_one(name, force_auto=force_auto)
+        return _resume_one(name, force_full=force_full)
     return _resume_picker_loop()
 
 
@@ -89,12 +90,20 @@ def _resolve_record(label: str,
     return None, []
 
 
-def _resume_one(label: str, *, force_auto: bool = False) -> int:
+#: How the resumed mode is named when printed (with the flag it launched with).
+_MODE_NAMES = {"ask": "Ask", "auto": "Auto", "full": "Full access"}
+
+
+def _resume_one(label: str, *, force_full: bool = False) -> int:
     """Resume a single session by label. Returns shell exit code.
 
-    ``force_auto`` overrides the persisted ``skip_perms`` and launches
-    with ``--dangerously-skip-permissions`` (Auto mode).
+    The session comes back in its saved mode (``perm_mode``; an older file's
+    ``skip_perms`` True is Full access, anything else Ask). ``force_full``
+    overrides it and launches with ``--dangerously-skip-permissions``
+    (Full access mode). The person at the terminal runs the daemon's own
+    account, so no admin rule applies here.
     """
+    from aipager import perm_modes
     import asyncio as _asyncio
     from pathlib import Path
 
@@ -160,16 +169,16 @@ def _resume_one(label: str, *, force_auto: bool = False) -> int:
             f"  Start a fresh one with: aipager session {label}",
         )
         return 1
-    # Use persisted skip_perms unless force_auto overrides.
-    skip_perms = force_auto or bool(sd.get("skip_perms", False))
+    # The persisted mode unless `!` forces Full access.
+    mode = perm_modes.FULL if force_full else perm_modes.mode_from_saved(sd)
     ok, err = _asyncio.run(dtach_inject.launch_session(
         full_label, resume_id=resume_id, cwd=cwd or None,
-        skip_perms=skip_perms, is_relaunch=True,
+        mode=mode, is_relaunch=True,
     ))
     if not ok:
         friendly_error(f"couldn't resume {full_label!r}: {err}")
         return 1
-    mode_str = "Auto (--dangerously-skip-permissions)" if skip_perms else "Ask"
+    mode_str = f"{_MODE_NAMES[mode]} ({perm_modes.launch_flag(mode)})"
     ui_ok(f"resumed [path]{full_label}[/path] "
           f"(session-id {resume_id[:8]}…, mode={mode_str})")
     preview = sd.get("last_assistant_preview") or ""

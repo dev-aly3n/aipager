@@ -5,17 +5,15 @@ model and folder the session got, where the next message goes, and a
 one-tap switch to the other mode (it replaced the "/perms" nudge).
 
 SC10: an Ask session (the chat's default set to Ask) shows 💬 Ask mode, the real
-      folder, "Default model" when none was chosen, and a Switch to Auto
+      folder, "Default model" when none was chosen, and a Switch to Auto mode
       button.
-SC11: /new !ben shows 🤖 Auto mode and a Switch to Ask button.
+SC11: /new !ben shows 🤖 Auto mode and a Switch to Ask mode button.
 """
 
 from __future__ import annotations
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from aipager import preferences
 from aipager.state import SessionRegistry
@@ -81,7 +79,7 @@ def test_sc10_new_ask_reply_says_ask():
 
 def test_sc10_new_ask_reply_offers_auto_instead_of_a_perms_nudge():
     text, buttons = _ready("/new ben", ask_default=True)
-    assert "🤖 Switch to Auto" in buttons, buttons
+    assert "🤖 Switch to Auto mode" in buttons, buttons
     assert "/perms" not in text
 
 
@@ -105,9 +103,14 @@ def test_sc10_the_reply_says_where_the_next_message_goes():
 # SC11 - an Auto session                                                      #
 # --------------------------------------------------------------------------- #
 
-@pytest.mark.parametrize("cmd", ["/new !ben", "/new ben"])
-def test_sc11_new_auto_reply_says_auto(cmd):
-    text, buttons = _ready(cmd)
+def test_sc11_new_auto_reply_says_auto():
+    text, buttons = _ready("/new ben")
     assert "🤖 Auto mode" in text, text
     assert "💬" not in text, text
-    assert "💬 Switch to Ask" in buttons, buttons
+    assert "💬 Switch to Ask mode" in buttons and "🔓 Switch to Full access mode" in buttons, buttons
+
+
+def test_sc11_new_bang_reply_says_full_access():
+    text, buttons = _ready("/new !ben")
+    assert "🔓 Full access mode" in text, text
+    assert "💬 Switch to Ask mode" in buttons and "🤖 Switch to Auto mode" in buttons, buttons

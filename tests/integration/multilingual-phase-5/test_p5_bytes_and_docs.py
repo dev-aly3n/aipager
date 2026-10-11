@@ -25,7 +25,13 @@ from pathlib import Path
 import pytest
 
 from aipager.i18n import locales
-from tests.i18n_surfaces import MODE_LABEL_SURFACES, without_mode_labels
+from tests.i18n_surfaces import (
+    MODE_LABEL_SURFACES,
+    THREE_MODES_NEW_SURFACES,
+    THREE_MODES_PAGE_SCREENS,
+    THREE_MODES_SURFACES,
+    without_mode_labels,
+)
 
 REPO = Path(__file__).resolve().parents[3]
 BASE = "6a11b78"
@@ -59,12 +65,24 @@ def test_what_claude_reads_is_byte_identical(rel):
     assert now(rel) == at_base(rel)
 
 
-@pytest.mark.parametrize("rel", ["tests/golden/miniapp_page_english.json",
-                                 "tests/golden/miniapp_css_ltr.json",
+@pytest.mark.parametrize("rel", ["tests/golden/miniapp_css_ltr.json",
                                  "tests/integration/multilingual-phase-4/base_english.json",
                                  "tests/integration/multilingual-phase-4/base_page_english.json"])
 def test_the_english_mini_app_goldens_are_byte_identical(rel):
     assert now(rel) == at_base(rel)
+
+
+def test_the_english_page_changed_only_where_three_modes_did():
+    """The page golden: the three permission modes (2026-10-11) changed
+    the screens with a mode on them, and nothing else."""
+    rel = "tests/golden/miniapp_page_english.json"
+    base, cur = json.loads(at_base(rel)), json.loads(now(rel))
+    old = {s[0]: s for s in base["screens"]}
+    new = {s[0]: s for s in cur["screens"]}
+    changed = {k for k in set(old) | set(new) if old.get(k) != new.get(k)}
+    assert changed <= THREE_MODES_PAGE_SCREENS, sorted(changed - THREE_MODES_PAGE_SCREENS)
+    assert {k: v for k, v in base.items() if k not in ("screens", "calls")} == \
+        {k: v for k, v in cur.items() if k not in ("screens", "calls")}
 
 
 def _surfaces(raw):
@@ -80,13 +98,14 @@ CHANGED_SINCE = {"agents_line", "language.list"}
 def test_every_english_surface_of_the_base_is_unchanged():
     rel = "tests/golden/english_surfaces.json"
     base, cur = _surfaces(at_base(rel)), _surfaces(now(rel))
-    kept = {k: v for k, v in base.items() if k not in CHANGED_SINCE | MODE_LABEL_SURFACES}
+    kept = {k: v for k, v in base.items()
+            if k not in CHANGED_SINCE | MODE_LABEL_SURFACES | THREE_MODES_SURFACES}
     assert {k: cur.get(k) for k in kept} == kept
     # Each exemption is real: the surface did change, and still exists.
     assert all(k in base and k in cur and cur[k] != base[k] for k in CHANGED_SINCE)
     # The mode label surfaces changed by the mode labels (2026-10-10) and
     # by nothing else.
-    for k in MODE_LABEL_SURFACES:
+    for k in MODE_LABEL_SURFACES - THREE_MODES_SURFACES:
         assert cur[k] != base[k], k
         assert without_mode_labels(cur[k]) == without_mode_labels(base[k]), k
 
@@ -94,7 +113,7 @@ def test_every_english_surface_of_the_base_is_unchanged():
 def test_the_english_surfaces_only_gain_the_three_new_ones():
     rel = "tests/golden/english_surfaces.json"
     base, cur = _surfaces(at_base(rel)), _surfaces(now(rel))
-    assert set(cur) - set(base) == NEW_SURFACES
+    assert set(cur) - set(base) == NEW_SURFACES | THREE_MODES_NEW_SURFACES
 
 
 def test_no_english_surface_was_removed():

@@ -288,22 +288,32 @@ const SESSION_DETAIL_FIXTURES = {
 // Mirrors aipager.miniapp.sessions.{PERMS_ADMIN_REQUIRED_REASON,
 // QUEUE_EMPTY_REASON,QUEUE_FULL_REASON} verbatim, same rationale as
 // NO_TRANSCRIPT_REASON above.
-const PERMS_ADMIN_REQUIRED_REASON = "Switching to Auto mode requires admin.";
+const PERMS_ADMIN_REQUIRED_REASON = "Switching to Full access mode requires admin.";
 const QUEUE_EMPTY_REASON = "Nothing queued to clear.";
 const QUEUE_FULL_REASON =
   "Queue is full (50 pending) — clear it or wait for it to drain.";
 const QUEUE_CAP = 50;
 
+// The perms slot is the mode menu: its own entry is always on offer, and
+// which modes it offers is `modes` (Full access mode needs an admin), as
+// aipager.miniapp.sessions.mode_options builds it.
+const MODE_LABELS = { ask: "💬 Ask mode", auto: "🤖 Auto mode", full: "🔓 Full access mode" };
+function modesFor(opts) {
+  const current = opts.mode || "ask";
+  return ["ask", "auto", "full"].map(function (id) {
+    const refused = id === "full" && !opts.isAdmin;
+    return { id: id, label: MODE_LABELS[id], current: id === current,
+             available: !refused, reason: refused ? PERMS_ADMIN_REQUIRED_REASON : null,
+             restarts: id === "full" || current === "full" };
+  });
+}
+
 function fullActionsFor(status, opts) {
   opts = opts || {};
-  const isAdmin = !!opts.isAdmin;
-  const skipPerms = !!opts.skipPerms;
   const queueDepth = opts.queueDepth || 0;
   const resumable = !!opts.resumable;
 
-  const permsEntry = (!skipPerms && !isAdmin)
-    ? { available: false, reason: PERMS_ADMIN_REQUIRED_REASON }
-    : { available: true, reason: null };
+  const permsEntry = { available: true, reason: null };
 
   if (status === "busy" || status === "waiting") {
     const out = {
@@ -349,16 +359,19 @@ function fullDetailFor(status, opts) {
     label: "dev", status: status, waiting_kind: null, waiting_summary: null,
     model: "", context_pct: 0, cost_usd: 0, cwd: "",
     last_active_seconds_ago: null, busy_elapsed_seconds: null,
-    skip_perms: !!opts.skipPerms, queue_depth: opts.queueDepth || 0,
+    mode: opts.mode || "ask", mode_pending: false, modes: modesFor(opts),
+    queue_depth: opts.queueDepth || 0,
     last_message: "", timeline: [], facts: [],
     actions: fullActionsFor(status, opts),
   };
 }
 
 Object.assign(SESSION_DETAIL_FIXTURES, {
-  perms_idle: fullDetailFor("idle", { isAdmin: true, skipPerms: false }),
-  perms_busy: fullDetailFor("busy", { isAdmin: true, skipPerms: false }),
-  perms_auto_requires_admin: fullDetailFor("idle", { isAdmin: false, skipPerms: false }),
+  perms_idle: fullDetailFor("idle", { isAdmin: true, mode: "ask" }),
+  perms_busy: fullDetailFor("busy", { isAdmin: true, mode: "ask" }),
+  perms_full_requires_admin: fullDetailFor("idle", { isAdmin: false, mode: "ask" }),
+  perms_in_place: fullDetailFor("busy", { isAdmin: false, mode: "ask" }),
+  perms_leave_full: fullDetailFor("idle", { isAdmin: false, mode: "full" }),
   restart_idle: fullDetailFor("idle", { isAdmin: true }),
   restart_busy: fullDetailFor("busy", { isAdmin: true }),
   clearqueue_busy: fullDetailFor("busy", { isAdmin: true, queueDepth: 3 }),
@@ -449,7 +462,9 @@ const FIXTURES = {
   "/api/sessions/dev/stop": { status: "stopped", label: "dev", dropped: 0 },
   "/api/sessions/dev/kill": { status: "killed", label: "dev" },
   "/api/sessions/dev/resume": { status: "resumed", label: "dev" },
-  "/api/sessions/dev/perms": { status: "switched", label: "dev", skip_perms: true },
+  "/api/sessions/dev/perms": SCENARIO === "perms_in_place"
+    ? { status: "sent", label: "dev", mode: "auto", pending: true }
+    : { status: "switched", label: "dev", mode: "full" },
   "/api/sessions/dev/clearqueue": { status: "cleared", label: "dev", dropped: 3 },
   "/api/sessions/dev/compact": { status: "queued", label: "dev" },
   "/api/sessions/dev/restart": { status: "restarted", label: "dev" },
@@ -1154,22 +1169,36 @@ function driveBackdropCancels() {
 // ===== Mini App session MENU actions (perms/clearqueue/compact/restart/
 //       rename) =========================================================
 
-// ---- scenario: perms, IDLE, admin targeting Auto -----------------------
+// ---- scenario: perms, IDLE, admin targeting Full access ----------------
+function postedMode(sent) {
+  const post = sent.find(f => f.method === "POST" && /\/dev\/perms$/.test(f.url));
+  if (!post) fail("no POST /api/sessions/dev/perms was sent");
+  return JSON.parse(post.body || "{}").mode;
+}
+
 function drivePermsIdle() {
   api.openDetail("dev");
   setTimeoutReal(() => {
     const menu = openMenu();
-    const item = itemNamed(menu, "Switch to Auto");
-    if (item.disabled) fail("perms must be available for an admin targeting Auto");
+    // The two modes the session is not in, each its own item.
+    const names = menuItems(menu).map(i => i.textContent);
+    if (names.indexOf("Switch to Auto mode") === -1 || names.indexOf("Switch to Full access mode") === -1
+        || names.indexOf("Switch to Ask mode") !== -1)
+      fail("the mode items should be the two other modes: " + JSON.stringify(names));
+    const item = itemNamed(menu, "Switch to Full access mode");
+    if (item.disabled) fail("perms must be available for an admin targeting Full access");
 
     const before = fetchCalls.length;
     item.click();
     if (fetchCalls.length !== before)
-      fail("choosing perms from the menu issued a request before confirming");
-    if (!modalIsOpen()) fail("choosing perms did not open the confirm modal");
-    if (byId["confirm-title"].textContent.indexOf("Auto") === -1)
+      fail("choosing Full access from the menu issued a request before confirming");
+    if (!modalIsOpen()) fail("choosing Full access did not open the confirm modal");
+    if (byId["confirm-title"].textContent.indexOf("Full access") === -1)
       fail("confirm title does not name the target mode: " +
            JSON.stringify(byId["confirm-title"].textContent));
+    if (byId["confirm-body"].textContent.indexOf("restarts") === -1)
+      fail("the confirm must say the session restarts: " +
+           JSON.stringify(byId["confirm-body"].textContent));
     if (byId["confirm-ok"].textContent !== "Switch")
       fail("idle perms confirm label should be 'Switch', got " +
            JSON.stringify(byId["confirm-ok"].textContent));
@@ -1178,8 +1207,8 @@ function drivePermsIdle() {
     const sent = fetchCalls.slice(before);
     if (sent.length !== 1)
       fail("confirming perms sent " + sent.length + " requests, expected one");
-    if (!sent.find(f => f.method === "POST" && /\/dev\/perms$/.test(f.url)))
-      fail("confirming perms sent no POST /api/sessions/dev/perms");
+    if (postedMode(sent) !== "full")
+      fail("the switch did not send the target mode: " + JSON.stringify(sent[0].body));
 
     console.log("ok: perms idle -> menu -> modal -> POST /api/sessions/dev/perms");
     process.exit(0);
@@ -1191,7 +1220,7 @@ function drivePermsBusy() {
   api.openDetail("dev");
   setTimeoutReal(() => {
     const menu = openMenu();
-    const item = itemNamed(menu, "Switch to Auto");
+    const item = itemNamed(menu, "Switch to Full access mode");
 
     item.click();
     if (!modalIsOpen())
@@ -1209,21 +1238,22 @@ function drivePermsBusy() {
     const before = fetchCalls.length;
     byId["confirm-ok"].click();
     const sent = fetchCalls.slice(before);
-    if (!sent.find(f => f.method === "POST" && /\/dev\/perms$/.test(f.url)))
-      fail("confirming busy perms sent no POST /api/sessions/dev/perms");
+    if (postedMode(sent) !== "full") fail("busy switch sent the wrong mode");
 
     console.log("ok: perms busy -> Stop task & switch wording -> POST /api/sessions/dev/perms");
     process.exit(0);
   }, 10);
 }
 
-// ---- scenario: perms, non-admin targeting Auto -- inert with reason ----
-function drivePermsAutoRequiresAdmin() {
+// ---- scenario: perms, non-admin targeting Full access -- inert with reason
+function drivePermsFullRequiresAdmin() {
   api.openDetail("dev");
   setTimeoutReal(() => {
     const menu = openMenu();
-    const item = itemNamed(menu, "Switch to Auto");
-    if (!item.disabled) fail("a non-admin targeting Auto must see perms disabled");
+    const item = itemNamed(menu, "Switch to Full access mode");
+    if (!item.disabled) fail("a non-admin targeting Full access must see it disabled");
+    if (itemNamed(menu, "Switch to Auto mode").disabled)
+      fail("Auto is everyone's: it must stay on offer to a non-admin");
 
     const note = menu.children.find(c => c.className === "menu-note");
     if (!note || note.textContent.indexOf("admin") === -1)
@@ -1234,7 +1264,47 @@ function drivePermsAutoRequiresAdmin() {
     item.click();   // a disabled control in this shim has no listener attached
     if (fetchCalls.length !== before) fail("an inert perms row still sent a request");
 
-    console.log("ok: perms auto requires admin -> disabled with reason, no fetch");
+    console.log("ok: perms full access requires admin -> disabled with reason, no fetch");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- scenario: Ask -> Auto, in place: no confirm, one POST, a pending toast
+function drivePermsInPlace() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    const before = fetchCalls.length;
+    itemNamed(menu, "Switch to Auto mode").click();
+    if (modalIsOpen()) fail("an Ask/Auto switch must not ask to confirm (nothing restarts)");
+    const sent = fetchCalls.slice(before);
+    if (postedMode(sent) !== "auto") fail("the in-place switch sent the wrong mode");
+    setTimeoutReal(() => {
+      const notice = byId["notice"].textContent;
+      if (notice.indexOf("Switch sent") === -1)
+        fail("the toast must say the switch was sent, got " + JSON.stringify(notice));
+      console.log("ok: perms ask -> auto in place -> one POST, no modal, sent toast");
+      process.exit(0);
+    }, 20);
+  }, 10);
+}
+
+// ---- scenario: leaving Full access: confirm (it restarts), no admin -----
+function drivePermsLeaveFull() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    const item = itemNamed(menu, "Switch to Ask mode");
+    if (item.disabled) fail("leaving Full access needs no admin");
+    item.click();
+    if (!modalIsOpen()) fail("leaving Full access restarts the session: it must confirm");
+    if (byId["confirm-body"].textContent !== "The session restarts; the conversation is kept.")
+      fail("leaving Full access body wrong: " +
+           JSON.stringify(byId["confirm-body"].textContent));
+    const before = fetchCalls.length;
+    byId["confirm-ok"].click();
+    if (postedMode(fetchCalls.slice(before)) !== "ask") fail("leave-full sent the wrong mode");
+    console.log("ok: perms leave full access -> confirm -> POST mode ask");
     process.exit(0);
   }, 10);
 }
@@ -2170,7 +2240,9 @@ const DRIVERS = {
   confirm_isolation: driveConfirmIsolation,
   perms_idle: drivePermsIdle,
   perms_busy: drivePermsBusy,
-  perms_auto_requires_admin: drivePermsAutoRequiresAdmin,
+  perms_full_requires_admin: drivePermsFullRequiresAdmin,
+  perms_in_place: drivePermsInPlace,
+  perms_leave_full: drivePermsLeaveFull,
   restart_idle: driveRestartIdle,
   restart_busy: driveRestartBusy,
   clearqueue_busy: driveClearqueueBusy,

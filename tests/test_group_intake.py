@@ -488,7 +488,7 @@ def test_a_mentioned_name_answers_the_name_card(hbot, mk_update, run_async, monk
     new_flow._pending_store(hbot)[(G, ALICE)] = {
         "step": "name", "user_id": ALICE, "msg_id": 7000, "path_options": [],
         "new_folder_parent": None, "last_active": new_flow._now(),
-        "skip_perms": True, "can_auto": True, "model": None, "model_label": None,
+        "mode": "auto", "can_full": True, "model": None, "model_label": None,
         "cwd": None}
     created = AsyncMock()
     monkeypatch.setattr(new_flow, "create_from_text", created)
@@ -697,7 +697,7 @@ def test_switch_reply_wording(mk_bot):
 
 
 def test_name_card_wording():
-    pending = {"skip_perms": True, "can_auto": True, "model_label": None, "cwd": "/w"}
+    pending = {"mode": "auto", "can_full": True, "model_label": None, "cwd": "/w"}
     dm_text, _ = new_flow._render_name_card(dict(pending), chat_id=DM)
     assert "\nSend a name, and what to do first if you like:\n" in dm_text
     assert dm_text == new_flow._render_name_card(dict(pending))[0]
@@ -779,7 +779,7 @@ def test_name_card_back_from_an_option_keeps_the_group_wording(hbot, run_async):
     it must keep saying "Reply to this message" in a group."""
     hbot._app.bot.edit_message_text = AsyncMock()
     pending = {"step": "opt_model", "user_id": ALICE, "msg_id": 7000,
-               "skip_perms": True, "can_auto": True, "model_label": None, "cwd": "/w"}
+               "mode": "auto", "can_full": True, "model_label": None, "cwd": "/w"}
     run_async(new_flow._goto_name(hbot, G, pending))
     edited = hbot._app.bot.edit_message_text.await_args
     text = edited.kwargs.get("text") or edited.args[0]
@@ -806,7 +806,7 @@ def test_other_model_and_new_folder_steps_say_reply_in_a_group():
 def _open_card(bot, step, chat_id=G, **extra):
     pending = {"step": step, "user_id": ALICE, "msg_id": 7000, "path_options": [],
                "new_folder_parent": "/w", "last_active": new_flow._now(),
-               "skip_perms": True, "can_auto": True, "model": None, "model_label": None,
+               "mode": "auto", "can_full": True, "model": None, "model_label": None,
                "cwd": None, **extra}
     new_flow._pending_store(bot)[(chat_id, ALICE)] = pending
     return pending

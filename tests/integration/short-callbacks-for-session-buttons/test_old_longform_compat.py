@@ -153,7 +153,7 @@ def test_old_longform_new_replace_on_missing_session_must_not_launch_a_session(
     `<name>:new_replace` button, tapped after the session it referred
     to is long gone (no pending /new conflict, no tracked session),
     does not answer 'Session not found' -- it calls
-    ``inject.launch_session(...)`` and actually starts a brand-new
+    ``inject.launch_session(..., mode="ask")`` and actually starts a brand-new
     Claude session under the tapped (attacker/typo/history-controlled)
     name. This is strictly worse than "silence": design.md's own "Old
     buttons" section promises a stale tap answers 'Session not found',

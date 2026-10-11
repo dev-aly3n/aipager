@@ -188,8 +188,8 @@ def _step_chat_id(
 #: The last line of the first run (roadmap 8.89): the wizard no longer
 #: asks for a default mode (its answer was never read); this is where
 #: new sessions really get theirs (``new_flow.resolve_new_session_settings``).
-NEW_SESSIONS_LINE = ("New sessions start in Auto for owners and admins; "
-                     "change it in Telegram under /settings → New sessions.")
+NEW_SESSIONS_LINE = ("New sessions start in Auto mode; owners and admins can "
+                     "choose Full access in Telegram under /settings → New sessions.")
 
 
 def _completion_screen() -> None:

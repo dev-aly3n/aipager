@@ -50,7 +50,7 @@ from aipager.bot import (
 from aipager.dtach import hook_reply, inject
 from aipager.report import store as report_store
 
-from aipager import i18n, preferences
+from aipager import i18n, perm_modes, preferences
 from aipager.i18n import Command, Msg, Plural, Safe, Span
 from aipager.i18n.locales import is_selectable
 from aipager.bot.settings_menu import (
@@ -133,9 +133,10 @@ MODE_REFUSED_NOT_RUNNING = Msg(
 MODE_MOVED_ON = Msg("modecard.moved_on",
                     "⚠️ <b>{session}</b> moved on to new work, so nothing changed.",
                     note="HTML. A mode card tapped after a new turn began", eg={"session": "x1"})
-MODE_SWITCHING = Msg("modecard.switching", "⚙️ Switching <b>{session}</b> to {mode}…",
-                     note="HTML. A mode switch is under way; {mode} is the mode's label, "
-                          "which already says mode",
+MODE_SWITCHING = Msg("modecard.switching",
+                     "⚙️ Switching <b>{session}</b> to {mode} (the session restarts)…",
+                     note="HTML. A mode switch that restarts the session is under way; {mode} "
+                          "is the mode's label, which already says mode",
                      eg={"session": "x1", "mode": "Ask mode"})
 MODE_SWITCHED_BY = Msg("modecard.switched_by", "⚙️ Switched to {mode} by {person}.",
                        note="HTML. Above the mode card in a group: who switched it",
@@ -476,20 +477,22 @@ class CallbackDispatchMixin:
         except Exception:
             log.debug("answerCallbackQuery failed", exc_info=True)
 
-    async def _do_perms_switch_via_fn(self, sess, target_skip_perms: bool,
+    async def _do_perms_switch_via_fn(self, sess, target_mode: str,
                                       edit_fn, *,
                                       tapped_msg_id: int | None = None,
                                       turn: int | None = None,
                                       chat_id=None, announce: bool = True,
                                       by: str = ""):
-        """Kill + poll + relaunch with toggled skip_perms, showing each step
+        """Switch *sess* to *target_mode* (a restart, into or out of Full
+        access), showing each step
         through ``edit_fn`` (an async ``(text, **kw)``: the card being
         edited in place) and ending in the /mode card: the new mode and the
         opposite switch, or what went wrong above the current one.
 
-        Thin wrapper around :meth:`SessionOpsMixin._perms_switch_core` —
-        the single kill/poll/relaunch seam chat and the Mini App now
-        both go through (design.md ORCHESTRATOR OVERRIDE).
+        Thin wrapper around :meth:`SessionOpsMixin._mode_switch_core` —
+        the one switch dispatcher chat and the Mini App both go through;
+        its restarts take the single kill/poll/relaunch seam (design.md
+        ORCHESTRATOR OVERRIDE).
 
         ``turn``: the turn the card was shown for (its pending record's);
         it decides whether the tap is current. Without one, the tapped
@@ -502,7 +505,7 @@ class CallbackDispatchMixin:
         # The mode card is the chat's (a stand-in may take this exact call:
         # the language is resolved here).
         tr = i18n.for_chat(chat_id)
-        mode = Safe(tr.html(mode_label(target_skip_perms)))
+        mode = Safe(tr.html(mode_label(target_mode)))
         if not (sess.tap_is_for_this_turn(None, turn=turn) if turn is not None
                 else sess.tap_is_for_this_turn(tapped_msg_id)):
             # A card offered while the session was idle can be tapped much
@@ -516,11 +519,18 @@ class CallbackDispatchMixin:
             # nothing left to press.
             await edit_fn(tr.html(MODE_SWITCHING, session=sess.label, mode=mode),
                           parse_mode="HTML")
-        outcome = await self._perms_switch_core(sess, target_skip_perms)
+        outcome = await self._mode_switch_core(sess, target_mode)
 
-        if outcome.ok:
+        if outcome.reason == "already":
+            note = ""
+        elif outcome.reason == "sent":
+            # The session's mode moved under the card: the switch went in
+            # place after all; the next hook confirms it.
+            from aipager.bot import mode_switch  # local: import cycle
+            note = tr.html(mode_switch.SWITCH_SENT, session=sess.label, mode=mode)
+        elif outcome.ok:
             note = (tr.html(MODE_SWITCHED_BY, mode=mode, person=Command(by)) if by else "")
-            log.info("[%s] perms switched to skip_perms=%s", sess.label, target_skip_perms)
+            log.info("[%s] mode switched to %s", sess.label, target_mode)
         elif outcome.reason == "still_stopping":
             note = tr.html(MODE_STILL_STOPPING, session=sess.label)
         elif outcome.reason == "launch_failed":
@@ -855,18 +865,19 @@ class CallbackDispatchMixin:
                 await self._safe_answer(query, i18n.for_person(
                     SimpleNamespace(callback_query=query)).text(tap_gate.OTHER_CHAT_TEXT))
                 return False
-        perms_target_auto = False
+        perms_target_full = False
         if action in ("perms_confirm", "perms_stop_switch"):
             # The card's own record, matched exactly as the perms branch
-            # matches it below; a switch to Auto needs an admin TAPPING it.
+            # matches it below; a switch to Full access needs an admin
+            # TAPPING it.
             pending = self._perms_pending.get(session_name)
             tapped = getattr(getattr(query, "message", None), "message_id", None)
-            perms_target_auto = bool(
+            perms_target_full = bool(
                 pending is not None
                 and pending.get("msg_id") in (None, tapped)
-                and pending.get("target_skip_perms"))
+                and pending.get("target_mode") == perm_modes.FULL)
         cap = tap_gate.required_capability(
-            session_name, action, perms_target_auto=perms_target_auto)
+            session_name, action, perms_target_full=perms_target_full)
         user_id = getattr(getattr(query, "from_user", None), "id", None)
         if self._member_can(member, cap, user_id, chat_id):
             return True
@@ -1329,7 +1340,7 @@ class CallbackDispatchMixin:
                 await self._safe_answer(query, person.text(TOAST_PERMS_STALE))
                 await _show_card(shared.html(MODE_STALE))
                 return
-            target_skip_perms = pending["target_skip_perms"]
+            target_mode = pending["target_mode"]
 
             if sess is None:
                 _consume()
@@ -1363,14 +1374,15 @@ class CallbackDispatchMixin:
                     chat_id=chat or resolve_chat_id(sess), text=text, **kw,
                 )]
 
-            # Confirmed (Ask→Auto on an idle session) or Stop & switch (a
+            # Confirmed (into Full access on an idle session) or Stop &
+            # switch (a
             # busy one; the core interrupts first). Whatever happens next
             # edits this card, its buttons going first, so its record is
             # spent. The record's turn decides whether the tap is current.
             _consume()
             tapper = getattr(query, "from_user", None)
             await self._do_perms_switch_via_fn(
-                sess, target_skip_perms, _edit, tapped_msg_id=tapped,
+                sess, target_mode, _edit, tapped_msg_id=tapped,
                 turn=pending.get("turn"), chat_id=chat,
                 by=self._actor_label(getattr(tapper, "id", None), chat, tapper))
             # After the switch: until the card shows its result, any button
@@ -1394,7 +1406,10 @@ class CallbackDispatchMixin:
                     pass
                 return
 
-            skip_perms_override = (action == "resume_mode_auto")
+            # Cards from before Full access existed: their Auto is now
+            # Auto (a safety check), never wider.
+            mode_override = (perm_modes.AUTO if action == "resume_mode_auto"
+                             else perm_modes.ASK)
 
             async def _reply(text, **kw):
                 try:
@@ -1413,12 +1428,12 @@ class CallbackDispatchMixin:
             # The session this button names, never a label lookup that
             # could land on another chat's session (roadmap 8.78); with no
             # such session left, the label resolves in THIS chat only.
-            # Auto needs an admin: the tap gate requires MANAGE for
-            # `resume_mode_auto` before this branch runs.
+            # Only Full access needs an admin, and these old buttons never
+            # offer it.
             await self._do_resume(
                 label=label, reply_fn=_reply,
                 update=update, query=query, sess=sess,
-                skip_perms_override=skip_perms_override,
+                mode_override=mode_override,
             )
             return
 
@@ -1468,9 +1483,9 @@ class CallbackDispatchMixin:
             # need the right to prompt here.
             # A card whose author is unknown (0) has nobody to check
             # against: anyone who may prompt uses it. A new session from
-            # it is then refused Auto below (no author is an admin); a
-            # Resume needs the tapper to be an admin for Auto
-            # (`_resume_auto_gate`, roadmap 8.83).
+            # it is then refused Full access below (no author is an
+            # admin); a Resume needs the tapper to be an admin for Full
+            # access (`_resume_full_gate`, roadmap 8.83).
             tapper = getattr(getattr(query, "from_user", None), "id", None)
             author = (pending or {}).get("user_id")
             shared = i18n.for_update(update)
@@ -1509,12 +1524,12 @@ class CallbackDispatchMixin:
                 return
 
             prompt = (pending or {}).get("prompt", "")
-            skip_perms = (pending or {}).get("skip_perms", False)
-            if skip_perms and not self._is_admin_user(
-                    (pending or {}).get("user_id"), calling_chat_id(update)):
-                # Auto is re-checked at creation, like every other start:
-                # the card may be old, and its author since demoted.
-                skip_perms = False
+            # Full access is re-checked at creation, like every other
+            # start: the card may be old, and its author since demoted.
+            new_mode = perm_modes.narrowest_allowed(
+                (pending or {}).get("mode") or perm_modes.AUTO,
+                bool(self._is_admin_user(
+                    (pending or {}).get("user_id"), calling_chat_id(update))))
             # The queued prompt is the text the /new AUTHOR typed, so it
             # runs as the author, never as whoever tapped the button: a
             # tapper's rights must not be lent to someone else's prompt
@@ -1652,7 +1667,7 @@ class CallbackDispatchMixin:
                 scope = sess.scope_chat_id or None
                 new_name, err = await self.create_session(
                     label, scope_chat_id=scope, reuse_name=session_name,
-                    skip_perms=skip_perms,
+                    mode=new_mode,
                     cwd=(pending or {}).get("cwd") or None,
                     driver_user_id=prompt_author,
                     model=(pending or {}).get("model") or None,

@@ -7,10 +7,12 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
 from aipager.bot import mode_labels
 
 PACKAGE = Path(__file__).resolve().parent.parent / "aipager"
-LITERALS = ("\U0001f916 Auto", "\U0001f4ac Ask")
+LITERALS = ("\U0001f916 Auto", "\U0001f4ac Ask", "\U0001f513 Full")
 
 
 def test_labels_are_today_s_english():
@@ -20,11 +22,25 @@ def test_labels_are_today_s_english():
     assert mode_labels.MODE_ASK == "💬 Ask mode"
     assert mode_labels.WORD_AUTO == "Auto"
     assert mode_labels.WORD_ASK == "Ask"
-    assert mode_labels.MODE_ASK_INSTEAD == "💬 Ask instead"
-    assert mode_labels.MODE_AUTO_INSTEAD == "🤖 Auto instead"
-    assert mode_labels.MODE_ASK_FOR_YOU == "💬 Ask for you (🤖 Auto is for admins)"
-    assert mode_labels.mode_label(True) is mode_labels.MODE_AUTO
-    assert mode_labels.mode_label(False) is mode_labels.MODE_ASK
+    assert mode_labels.MODE_ASK_INSTEAD == "💬 Ask mode instead"
+    assert mode_labels.MODE_AUTO_INSTEAD == "🤖 Auto mode instead"
+    assert mode_labels.MODE_FULL == "🔓 Full access mode"
+    assert mode_labels.WORD_FULL == "Full"
+    assert mode_labels.MODE_FULL_INSTEAD == "🔓 Full access mode instead"
+    assert mode_labels.MODE_AUTO_FOR_YOU == "🤖 Auto mode (🔓 Full access mode is for admins)"
+    assert mode_labels.MODE_ASK_NO_AUTO == "💬 Ask mode (Auto mode isn't available here)"
+    assert mode_labels.MODE_OTHER == "⚙️ Claude Code's {name} mode"
+    assert mode_labels.mode_label("auto") is mode_labels.MODE_AUTO
+    assert mode_labels.mode_label("ask") is mode_labels.MODE_ASK
+    assert mode_labels.mode_label("full") is mode_labels.MODE_FULL
+    assert mode_labels.mode_label("ask_no_auto") is mode_labels.MODE_ASK_NO_AUTO
+
+
+@pytest.mark.parametrize("stale", [True, False], ids=["true", "false"])
+def test_a_caller_still_passing_skip_perms_fails_loudly(stale):
+    """The old boolean is not a mode: never guessed into a label."""
+    with pytest.raises(TypeError):
+        mode_labels.mode_label(stale)
 
 
 def _docstrings(tree) -> set[int]:

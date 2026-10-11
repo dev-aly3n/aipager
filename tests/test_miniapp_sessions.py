@@ -13,6 +13,7 @@ from aipager.miniapp.sessions import (
     GRID_WAITING_SUMMARY_MAX,
     NO_PERMISSION_REASON,
     NO_TRANSCRIPT_REASON,
+    MODE_PROMPT_OPEN_REASON,
     PERMS_ADMIN_REQUIRED_REASON,
     QUEUE_EMPTY_REASON,
     QUEUE_FULL_REASON,
@@ -22,6 +23,7 @@ from aipager.miniapp.sessions import (
     session_actions,
     session_detail,
     session_summary,
+    mode_options,
 )
 from aipager.state import QUEUE_CAP
 from aipager.state import Status, TrackedSession
@@ -333,16 +335,20 @@ def test_session_detail_includes_actions_key():
     sess.last_token_pct = 40
     detail = session_detail(sess, time.monotonic())
     assert "actions" in detail
-    # Not admin, no queue -> perms unavailable, clearqueue unavailable,
-    # everything else on offer for a BUSY session available.
+    # No queue -> clearqueue unavailable, everything else on offer for a
+    # BUSY session available; which modes the perms slot offers is
+    # `modes` (Full access mode needs an admin).
     assert detail["actions"] == {
         "stop": {"available": True, "reason": None},
         "clearqueue": {"available": False, "reason": QUEUE_EMPTY_REASON},
         "compact": {"available": True, "reason": None},
         "rename": {"available": True, "reason": None},
-        "perms": {"available": False, "reason": PERMS_ADMIN_REQUIRED_REASON},
+        "perms": {"available": True, "reason": None},
         "restart": {"available": True, "reason": None},
     }
+    assert [(m["id"], m["available"], m["reason"]) for m in detail["modes"]] == [
+        ("ask", True, None), ("auto", True, None),
+        ("full", False, PERMS_ADMIN_REQUIRED_REASON)]
 
 
 def test_session_detail_default_can_act_is_permissive():
@@ -364,11 +370,11 @@ def test_session_detail_can_act_false_disables_actions():
 
 def test_session_detail_includes_skip_perms_and_queue_depth():
     sess = _sess(status=Status.BUSY)
-    sess.skip_perms = True
+    sess.perm_mode = "full"
     sess.queue_prompt("a", 1)
     sess.queue_prompt("b", 2)
     detail = session_detail(sess, time.monotonic())
-    assert detail["skip_perms"] is True
+    assert detail["mode"] == "full"
     assert detail["queue_depth"] == 2
 
 
@@ -392,7 +398,7 @@ def test_session_detail_queue_depth_includes_outstanding_notes(monkeypatch, tmp_
 
 def test_session_detail_passes_is_admin_into_perms_action():
     sess = _sess(status=Status.IDLE)
-    sess.skip_perms = False  # target is Auto -> needs admin
+    sess.perm_mode = "ask"  # target is Auto -> needs admin
     detail = session_detail(sess, time.monotonic(), is_admin=True)
     assert detail["actions"]["perms"] == {"available": True, "reason": None}
 
@@ -486,7 +492,7 @@ def test_session_actions_permission_reason_wins_over_admin_reason():
     """can_act=False must win over the perms admin gate too — the same
     "one reason, not two" rule generalised to the new key."""
     actions = session_actions(
-        "busy", resumable=False, can_act=False, is_admin=False, skip_perms=False,
+        "busy", resumable=False, can_act=False, is_admin=False,
     )
     assert actions["perms"] == {"available": False, "reason": NO_PERMISSION_REASON}
 
@@ -543,30 +549,58 @@ def test_session_actions_compact_absent_when_waiting():
 
 # ---- perms --------------------------------------------------------------
 
-def test_session_actions_perms_target_auto_requires_admin():
-    """skip_perms=False -> target is Auto -> needs admin."""
+@pytest.mark.parametrize("is_admin", [True, False], ids=["admin", "member"])
+def test_session_actions_perms_slot_has_no_admin_rule_of_its_own(is_admin):
+    """The slot is the mode menu; Full access's admin rule is on its entry
+    in `mode_options`, so Ask and Auto stay offered to everyone."""
     actions = session_actions(
-        "idle", resumable=False, can_act=True, is_admin=False, skip_perms=False,
-    )
-    assert actions["perms"] == {
-        "available": False, "reason": PERMS_ADMIN_REQUIRED_REASON,
-    }
-
-
-def test_session_actions_perms_target_auto_admin_allowed():
-    actions = session_actions(
-        "idle", resumable=False, can_act=True, is_admin=True, skip_perms=False,
+        "idle", resumable=False, can_act=True, is_admin=is_admin,
     )
     assert actions["perms"] == {"available": True, "reason": None}
 
 
-def test_session_actions_perms_target_ask_never_needs_admin():
-    """skip_perms=True -> target is Ask -> allowed for a non-admin too,
-    matching chat's own /perms rule."""
-    actions = session_actions(
-        "idle", resumable=False, can_act=True, is_admin=False, skip_perms=True,
-    )
-    assert actions["perms"] == {"available": True, "reason": None}
+@pytest.mark.parametrize("is_admin", [True, False], ids=["admin", "member"])
+def test_mode_options_full_access_needs_an_admin(is_admin):
+    sess = _sess(status=Status.IDLE)
+    opts = {m["id"]: m for m in mode_options(sess, can_act=True, is_admin=is_admin)}
+    assert opts["full"]["available"] is is_admin
+    assert opts["full"]["reason"] == (None if is_admin else PERMS_ADMIN_REQUIRED_REASON)
+    assert opts["ask"]["available"] and opts["auto"]["available"]
+    assert [m["restarts"] for m in opts.values()] == [False, False, True]
+    assert [m["label"] for m in opts.values()] == [
+        "💬 Ask mode", "🤖 Auto mode", "🔓 Full access mode"]
+    assert opts["ask"]["current"] and not opts["auto"]["current"]
+
+
+def test_mode_options_an_in_place_switch_waits_for_an_open_prompt():
+    sess = _sess(status=Status.INTERACTIVE)
+    opts = {m["id"]: m for m in mode_options(sess, can_act=True, is_admin=True)}
+    assert opts["auto"]["available"] is False
+    assert opts["auto"]["reason"] == MODE_PROMPT_OPEN_REASON
+    # Into Full access restarts the session: no keys go to the prompt.
+    assert opts["full"]["available"] is True
+
+
+def test_mode_options_nothing_for_someone_who_cannot_act():
+    sess = _sess(status=Status.IDLE)
+    opts = mode_options(sess, can_act=False, is_admin=True)
+    assert {(m["available"], m["reason"]) for m in opts} == {(False, NO_PERMISSION_REASON)}
+
+
+def test_session_detail_shows_the_mode_and_a_pending_switch():
+    from aipager.state import ModeSwitch
+    sess = _sess(status=Status.IDLE)
+    sess.perm_mode = "auto"
+    detail = session_detail(sess, time.monotonic())
+    assert (detail["mode"], detail["mode_pending"]) == ("auto", False)
+    facts = {f["id"]: f["value"] for f in detail["facts"]}
+    assert facts["mode"] == "🤖 Auto mode"
+    sess.mode_switch = ModeSwitch(target="ask", presses=1, sent_at=time.monotonic())
+    detail = session_detail(sess, time.monotonic())
+    assert detail["mode_pending"] is True
+    assert {f["id"]: f["value"] for f in detail["facts"]}["mode"] == (
+        "💬 Ask mode (waiting for Claude Code)")
+    assert "skip_perms" not in detail
 
 
 def test_session_actions_perms_present_for_busy_waiting_and_idle():

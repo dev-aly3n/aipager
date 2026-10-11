@@ -988,7 +988,7 @@ def test_the_auto_deny_notice_without_a_known_driver(mk_bot, run_async,
 
 
 # =============================================================================
-# 8.89: no default-mode question; the leftover key still round-trips
+# 8.89: no default-mode question; 2026-10-11: the leftover key is dropped
 # =============================================================================
 
 def test_the_default_mode_step_is_gone():
@@ -1032,36 +1032,42 @@ def test_first_run_asks_no_mode_and_ends_with_the_new_sessions_line(
     assert first_run._first_run_flow() == 0
     assert steps == ["[4/4]", "[4/4]"]
     assert "default_mode" not in yaml.safe_load(_cfg().read_text())
-    line = ("New sessions start in Auto for owners and admins; change it in "
-            "Telegram under /settings → New sessions.")
+    line = ("New sessions start in Auto mode; owners and admins can choose Full "
+            "access in Telegram under /settings → New sessions.")
     assert first_run.NEW_SESSIONS_LINE == line
     assert printed[-1].strip() == line
 
 
 def test_the_new_sessions_line_tells_the_truth(mk_bot):
-    """Auto for owners and admins, Ask for the others, whatever an old
-    aipager.yaml's default_mode says."""
-    _write_config([_dm()], default_mode="ask")
+    """Auto for everyone, Full access only for owners and admins who
+    choose it, whatever an old aipager.yaml's default_mode says."""
+    _write_config([_dm()])
+    raw = yaml.safe_load(_cfg().read_text())
+    raw["default_mode"] = "ask"
+    _cfg().write_text(yaml.safe_dump(raw))
     group = Scope(chat_id=GROUP, kind="group", label="team", members=(
         Member(id=ALY, label="aly", role="owner"),
         Member(id=BOB, label="bob", role="user"),
         Member(id=EVE, label="eve", role="admin")))
     bot = _gbot(mk_bot, scopes=[group, _dm()])
-    for uid, chat, auto in [(ALY, DM, True), (ALY, GROUP, True),
-                            (EVE, GROUP, True), (BOB, GROUP, False)]:
+    for uid, chat, may_full in [(ALY, DM, True), (ALY, GROUP, True),
+                                (EVE, GROUP, True), (BOB, GROUP, False)]:
         st = new_flow.resolve_new_session_settings(bot, chat, uid)
-        assert st["skip_perms"] is auto, (uid, chat)
+        assert (st["mode"], st["can_full"]) == ("auto", may_full), (uid, chat)
 
 
 @pytest.mark.parametrize("mode", ["ask", "auto"])
-def test_an_old_default_mode_key_loads_and_round_trips(mode):
-    _write_config([_dm(), _group()], default_mode=mode)
+def test_an_old_default_mode_key_loads_and_is_dropped_on_rewrite(mode):
+    _write_config([_dm(), _group()])
+    raw = yaml.safe_load(_cfg().read_text())
+    raw["default_mode"] = mode
+    _cfg().write_text(yaml.safe_dump(raw))
     loaded = scope_mod.load_scopes(_cfg())
     assert loaded is not None and len(loaded[0]) == 2
     assert scope_io.append_member(
         GROUP, Member(id=EVE, label="eve", role="user"), TOKEN) is None
     scope_io.commit_scope(_dm(), TOKEN)
-    assert yaml.safe_load(_cfg().read_text()).get("default_mode") == mode
+    assert "default_mode" not in yaml.safe_load(_cfg().read_text())
 
 
 def test_a_file_without_the_key_stays_without_it():

@@ -139,6 +139,12 @@ const SCENARIOS = {
   chips:    { directories: ["/home/aly/proj", "/home/aly/daemon-dir", "/home/aly/other"],
               default_directory: "/home/aly/daemon-dir" },  // Schema from pytest (AIPAGER_TEST_SCHEMA): the real settings_schema().
   schema_plain: { directories: ["/home/aly/proj"], default_directory: "/home/aly/proj" },
+  // The permission mode (2026-10-11): three options, Auto by default.
+  modes: { directories: ["/home/aly/proj"], default_directory: "/home/aly/proj" },
+  modes_member: { directories: ["/home/aly/proj"], default_directory: "/home/aly/proj",
+                  can_use_full: false },
+  modes_default_ask: { directories: ["/home/aly/proj"], default_directory: "/home/aly/proj",
+                       default_mode: "ask" },
 };
 function fatal(msg) { console.error("FAIL: " + msg); process.exit(1); }
 
@@ -159,7 +165,8 @@ const FIXTURES = {
     schema: OPTION_SCHEMA,
     scope_defaults: { answer_length: "none" },
     can_create: true,
-    can_use_auto: true,
+    can_use_full: true,
+    default_mode: "auto",
   }, SCENARIOS[SCENARIO] || fatal("unknown scenario: " + SCENARIO)),
   "/api/sessions": { label: "made", session_name: "claude-made__d1" },
   // GET /api/sessions (the grid behind the form): the recency the
@@ -569,6 +576,46 @@ function driveSchemaPlain() {
   }, 10);
 }
 
+// ---- scenario: the permission mode: three options, the default first --
+function driveModes() {
+  const opts = FIXTURES["/api/session-options"];
+  api.openNewSession();
+  setTimeoutReal(() => {
+    const body = expand("new-mode");
+    const labels = rows(body).map(labelOf);
+    if (JSON.stringify(labels) !== JSON.stringify(["Ask", "Auto", "Full access"]))
+      fail("mode options: " + JSON.stringify(labels));
+    const want = { auto: "Auto", ask: "Ask", full: "Full access" }[opts.default_mode];
+    if (headValue("new-mode") !== want)
+      fail("the form should start on " + want + ", shows " + headValue("new-mode"));
+    const note = byId["new-mode-note"];
+    if (note.hidden !== opts.can_use_full)
+      fail("the admin note should show exactly when Full access is refused");
+    rows(expand("new-mode"))[2].click();              // Full access
+    const picked = opts.can_use_full ? "Full access" : want;
+    if (headValue("new-mode") !== picked)
+      fail("picking Full access: " + headValue("new-mode") + ", want " + picked);
+    byId["new-name"].value = "made";
+    fireInput(byId["new-name"]);
+    const summary = byId["new-summary"].textContent;
+    if (summary.indexOf(picked === "Full access" ? "Full access mode" : want + " mode") === -1)
+      fail("summary does not name the mode: " + JSON.stringify(summary));
+    const before = fetchCalls.length;
+    byId["new-create"].click();
+    setTimeoutReal(() => {
+      const post = fetchCalls.slice(before).find(
+        f => f.method === "POST" && /\/api\/sessions$/.test(f.url));
+      if (!post) fail("Create sent no POST /api/sessions");
+      const sent = { "Ask": "ask", "Auto": "auto", "Full access": "full" }[picked];
+      if (post.body.mode !== sent || "skip_perms" in post.body)
+        fail("create body mode: " + JSON.stringify(post.body));
+      console.log("ok: modes " + SCENARIO + " -> " + sent);
+      process.exit(0);
+    }, 30);
+  }, 10);
+}
+
 const DRIVERS = { full: driveFull, empty: driveEmpty, noparent: driveNoParent, chips: driveChips,
-                  mainbutton: driveMainButton, schema_plain: driveSchemaPlain };
+                  mainbutton: driveMainButton, schema_plain: driveSchemaPlain,
+                  modes: driveModes, modes_member: driveModes, modes_default_ask: driveModes };
 (DRIVERS[SCENARIO] || (() => fail("unknown scenario: " + SCENARIO)))();

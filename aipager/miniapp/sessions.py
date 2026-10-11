@@ -71,9 +71,16 @@ NO_PERMISSION_REASON = Msg("app.reason.no_permission",
 # corresponding write route's refusal body (entrypoints.md), same rationale
 # as the two constants above — one string, not two that could drift apart.
 PERMS_ADMIN_REQUIRED_REASON = Msg("app.reason.perms_admin",
-                                  "Switching to Auto mode requires admin.",
-                                  note="Auto is the permission mode (as in /mode); only an "
-                                       "admin may switch a session to it")
+                                  "Switching to Full access mode requires admin.",
+                                  note="Full access is the permission mode (as in /mode); "
+                                       "only an admin may switch a session to it")
+# An Ask/Auto switch presses keys in the terminal: refused while it shows a
+# question or permission prompt, which the keys would answer. Shared by the
+# detail payload's mode entries and the perms route's 409.
+MODE_PROMPT_OPEN_REASON = Msg("app.reason.mode_prompt_open",
+                              "Answer the open prompt first, then switch the mode.",
+                              note="An Ask/Auto mode switch is refused while the session shows "
+                                   "a question or permission prompt")
 QUEUE_EMPTY_REASON = Msg("app.reason.queue_empty", "Nothing queued to clear.",
                          note="Clear queue: no queued messages")
 # Switching a running session's model (roadmap 8.35). Shared verbatim by
@@ -144,7 +151,13 @@ _FACT_LABELS = {
                        note="Mini App session page: followed by 5m ago"),
     "cwd": Msg("app.fact.cwd", "Directory",
                note="Mini App session page: the session's working directory"),
+    "mode": Msg("app.fact.mode", "Mode",
+                note="Mini App session page: the session's permission mode (as in /mode)"),
 }
+#: The mode fact while a switch waits for Claude Code to confirm it.
+_MODE_PENDING = Msg("app.fact.mode_pending", "{mode} (waiting for Claude Code)",
+                    note="Mini App session page: the mode a switch was sent for, not yet "
+                         "confirmed; {mode} is the mode's label", eg={"mode": "Auto mode"})
 
 
 def _derive_status(sess: "TrackedSession") -> tuple[str, str | None, str | None]:
@@ -289,7 +302,7 @@ _STATUS_ACTION_KEYS: dict[str, frozenset[str]] = {
 
 def session_actions(
     status: str, *, resumable: bool, can_act: bool,
-    is_admin: bool = False, skip_perms: bool = False, queue_depth: int = 0,
+    is_admin: bool = False, queue_depth: int = 0,
     context_pct: int = 0, tr=None,
 ) -> dict[str, dict[str, Any]]:
     """The status→button matrix (design.md), computed server-side so
@@ -320,11 +333,10 @@ def session_actions(
       only, when ``queue_depth >= QUEUE_CAP`` (:data:`QUEUE_FULL_REASON`).
       An IDLE compact sends immediately rather than queueing, so it has no
       queue-depth rule at all.
-    - ``perms``: the switch's target is derived, never stored —
-      ``target_is_auto = not skip_perms``. Unavailable only when the
-      target is Auto and the caller is not admin
-      (:data:`PERMS_ADMIN_REQUIRED_REASON`); switching *to* Ask never
-      needs admin, matching chat's own ``/perms`` rule.
+    - ``perms``: the menu's mode slot. Which modes it offers, and which
+      of them this caller may pick, is :func:`mode_options` (Full access
+      needs an admin; Ask and Auto do not), so the slot itself has no
+      extra rule. ``is_admin`` is kept for callers that pass it.
 
     ``tr``: the reasons in that reader's language (the Mini App passes the
     viewer's); None leaves them as the English constants.
@@ -347,9 +359,6 @@ def session_actions(
             actions[key] = {"available": False, "reason": say(tr, NO_CONTEXT_REASON)}
         elif key == "compact" and status == "busy" and queue_depth >= QUEUE_CAP:
             actions[key] = {"available": False, "reason": say(tr, QUEUE_FULL_REASON)}
-        elif key == "perms" and not skip_perms and not is_admin:
-            actions[key] = {"available": False,
-                            "reason": say(tr, PERMS_ADMIN_REQUIRED_REASON)}
         else:
             actions[key] = {"available": True, "reason": None}
     return actions
@@ -444,7 +453,8 @@ def session_detail(
         # word the perms confirm dialog and to decide whether Clear
         # queue/Compact would just bounce off a 409, and both fed into
         # session_actions() below so the SAME numbers gate the buttons.
-        "skip_perms": bool(sess.skip_perms),
+        "mode": sess.current_mode(),
+        "mode_pending": sess.mode_switch is not None,
         "queue_depth": queue_depth,
         # The page's headline content. Unlike `timeline`, this survives a
         # daemon restart, so it is the one thing that reliably has content
@@ -452,6 +462,9 @@ def session_detail(
         "last_message": preview_lines(last_message(sess)),
         "timeline": build_timeline(sess),
     }
+    detail["modes"] = mode_options(sess, can_act=can_act, is_admin=is_admin, tr=tr)
+    if status != "gone":
+        detail["mode_label"] = _shown_mode(sess, tr)
     detail["facts"] = display_facts(detail, tr=tr)
     detail["model_switch"] = model_switch_state(
         detail["status"], can_act=can_act,
@@ -460,10 +473,56 @@ def session_detail(
     detail["answer"] = answer_state(detail["status"], can_act=can_act, tr=tr)
     detail["actions"] = session_actions(
         detail["status"], resumable=bool(sess.claude_session_id), can_act=can_act,
-        is_admin=is_admin, skip_perms=bool(sess.skip_perms), queue_depth=queue_depth,
+        is_admin=is_admin, queue_depth=queue_depth,
         context_pct=detail["context_pct"], tr=tr,
     )
     return detail
+
+
+def mode_options(sess: "TrackedSession", *, can_act: bool, is_admin: bool,
+                 tr=None) -> list[dict[str, Any]]:
+    """The three modes for the session page's menu, in the viewer's
+    language: ``{id, label, current, available, reason, restarts}``.
+
+    Full access needs an admin (:data:`PERMS_ADMIN_REQUIRED_REASON`); an
+    in-place Ask/Auto switch is not offered while the session shows a
+    prompt the key presses would answer (:data:`MODE_PROMPT_OPEN_REASON`);
+    nothing is for someone who cannot prompt it. ``restarts``: switching
+    to it restarts the session (into or out of Full access)."""
+    from aipager import perm_modes
+    from aipager.bot.mode_labels import mode_label
+    tr = tr or _english()
+    current = sess.current_mode()
+    options = []
+    for mode in perm_modes.MODES:
+        restarts = sess.mode_switch_restarts(mode)
+        reason = None
+        if not can_act:
+            reason = NO_PERMISSION_REASON
+        elif mode == perm_modes.FULL and not is_admin:
+            reason = PERMS_ADMIN_REQUIRED_REASON
+        elif not restarts and sess.dialog_is_open():
+            reason = MODE_PROMPT_OPEN_REASON
+        options.append({
+            "id": mode,
+            "label": tr.text(mode_label(mode)),
+            "current": mode == current,
+            "available": reason is None,
+            "reason": say(tr, reason) if reason is not None else None,
+            "restarts": restarts,
+        })
+    return options
+
+
+def _shown_mode(sess: "TrackedSession", tr=None) -> str:
+    """The session's mode as the page shows it (plain text)."""
+    from aipager.bot.mode_labels import shown_label
+    tr = tr or _english()
+    label = shown_label(tr, sess, html=False)
+    if sess.mode_switch is not None:
+        from aipager.i18n import Safe
+        return tr.text(_MODE_PENDING, mode=Safe(label))
+    return label
 
 
 def last_message(sess: "TrackedSession") -> str:
@@ -557,6 +616,8 @@ def display_facts(detail: dict[str, Any], tr=None) -> list[dict[str, str]]:
     age = detail.get("last_active_seconds_ago")
     if age is not None:
         add("last_active", _ago(age, tr))
+    if detail.get("mode_label"):
+        add("mode", str(detail["mode_label"]))
     if detail.get("cwd"):
         add("cwd", str(detail["cwd"]))
     return facts

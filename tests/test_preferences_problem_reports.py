@@ -55,7 +55,8 @@ def test_other_chats_preferences_untouched():
     assert preferences.get_preferences(555).answer_length == "short"
     assert preferences.get_new_session_defaults(555).mode == "ask"
     stored = _file()
-    assert stored["555"] == {"answer_length": "short", "new_session_mode": "ask"}
+    assert stored["555"] == {"answer_length": "short", "new_session_perm_mode": "ask",
+                             "new_session_mode": "ask"}
     assert "problem_reports" not in json.dumps(stored["555"])
     preferences.set_preference(555, "answer_length", "long")
     assert preferences.get_problem_reports() == "off"

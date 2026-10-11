@@ -471,14 +471,14 @@ def test_api_error_no_match_is_none_in_every_language():
         [transport._detect_api_error("all good")] * 3
 
 
-@pytest.mark.parametrize("name", ["NEEDS_ADMIN_REPLY", "RESUME_AUTO_NEEDS_ADMIN",
+@pytest.mark.parametrize("name", ["NEEDS_ADMIN_REPLY", "RESUME_FULL_NEEDS_ADMIN",
                                   "RETRY_OTHERS_COMMAND_REPLY", "_TRUNC_SUFFIX"])
 def test_transport_constants_are_still_english_strings(name):
     value = getattr(transport, name)
     assert isinstance(value, str) and not L.is_fa(value) and not L.is_ru(value)
 
 
-@pytest.mark.parametrize("name", ["NEEDS_ADMIN_REPLY", "RESUME_AUTO_NEEDS_ADMIN",
+@pytest.mark.parametrize("name", ["NEEDS_ADMIN_REPLY", "RESUME_FULL_NEEDS_ADMIN",
                                   "RETRY_OTHERS_COMMAND_REPLY"])
 @pytest.mark.parametrize("tr,check", [(FA, L.fa_problems), (RU, L.ru_problems)],
                          ids=["fa", "ru"])

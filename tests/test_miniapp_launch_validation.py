@@ -485,7 +485,7 @@ def test_launch_session_puts_the_model_on_the_command_line(monkeypatch, run_asyn
     monkeypatch.setattr(inject, "_socket_exists", lambda name: False, raising=False)
 
     with pytest.raises(RuntimeError):
-        run_async(inject.launch_session("dev", model="opus"))
+        run_async(inject.launch_session("dev", mode="ask", model="opus"))
     argv = " ".join(str(a) for a in captured.get("argv", ()))
     assert "--model opus" in argv, argv
 
@@ -503,7 +503,7 @@ def test_launch_session_omits_the_flag_when_no_model_is_given(monkeypatch, run_a
     monkeypatch.setattr(inject, "_socket_exists", lambda name: False, raising=False)
 
     with pytest.raises(RuntimeError):
-        run_async(inject.launch_session("dev"))
+        run_async(inject.launch_session("dev", mode="ask"))
     argv = " ".join(str(a) for a in captured.get("argv", ()))
     assert "--model" not in argv, argv
 
@@ -524,7 +524,7 @@ def test_a_model_with_shell_metacharacters_is_quoted(monkeypatch, run_async):
     monkeypatch.setattr(inject, "_socket_exists", lambda name: False, raising=False)
 
     with pytest.raises(RuntimeError):
-        run_async(inject.launch_session("dev", model="opus; touch /tmp/pwned"))
+        run_async(inject.launch_session("dev", mode="ask", model="opus; touch /tmp/pwned"))
     argv = " ".join(str(a) for a in captured.get("argv", ()))
     # shlex.quote wraps the whole value, so the `;` is inert. Asserting the
     # QUOTED form is the check; an earlier version stripped the quotes and
@@ -558,7 +558,7 @@ def test_launch_session_refuses_a_model_that_would_read_as_a_flag(
 
     monkeypatch.setattr(inject, "_create_subprocess_exec", fake_exec)
 
-    ok, err = run_async(inject.launch_session("dev", model=model))
+    ok, err = run_async(inject.launch_session("dev", mode="ask", model=model))
     assert ok is False
     assert err
     assert not spawned, "a flag-shaped model reached the command line"

@@ -157,7 +157,7 @@ HTML_BODY = """\
       <button type="button" class="disclosure" id="new-advanced-toggle" aria-expanded="false"><span data-i18n="ui.new.more">More options</span><svg class="ic chev" aria-hidden="true"><use href="#i-chevron"></use></svg></button>
       <div id="new-advanced" hidden>
         <div id="new-mode" class="groups"></div>
-        <div id="new-mode-note" class="note" data-i18n="ui.new.auto_needs_admin" hidden>Auto mode requires admin.</div>
+        <div id="new-mode-note" class="note" data-i18n="ui.new.full_needs_admin" hidden>Full access mode requires admin.</div>
         <div id="new-prefs" class="groups"></div>
       </div>
     </li>

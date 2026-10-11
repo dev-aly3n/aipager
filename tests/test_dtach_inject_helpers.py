@@ -528,7 +528,7 @@ def test_launch_drops_resume_when_the_conversation_is_missing(
     monkeypatch.setattr(inject, "_conversation_exists", lambda sid: False)
     monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
     monkeypatch.setattr(inject, "_PROJECT_DIR", str(tmp_path))
-    run_async(inject.launch_session("jim", resume_id="ghost-id",
+    run_async(inject.launch_session("jim", mode="ask", resume_id="ghost-id",
                                     cwd=str(tmp_path)))
     joined = " ".join(str(a) for a in captured.get("argv", ()))
     assert "--resume" not in joined, "resumed a conversation that does not exist"
@@ -550,7 +550,7 @@ def test_launch_keeps_resume_when_the_conversation_exists(
     monkeypatch.setattr(inject, "_conversation_exists", lambda sid: True)
     monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
     monkeypatch.setattr(inject, "_PROJECT_DIR", str(tmp_path))
-    run_async(inject.launch_session("jim", resume_id="real-id",
+    run_async(inject.launch_session("jim", mode="ask", resume_id="real-id",
                                     cwd=str(tmp_path)))
     joined = " ".join(str(a) for a in captured.get("argv", ()))
     assert "--resume" in joined and "real-id" in joined

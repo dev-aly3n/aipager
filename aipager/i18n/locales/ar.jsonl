@@ -40,9 +40,11 @@
 {"k": "app.err.answer_chat_busy", "src": "e0f91f04", "v": "Telegram مشغول. حاول مرة أخرى بعد قليل."}
 {"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "هذه الجلسة لم تعد تنتظرك."}
 {"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "تعذر نشر الطلب في المحادثة."}
-{"k": "app.err.auto_needs_admin", "src": "ad1f0c2f", "v": "الوضع التلقائي يتطلب مشرفًا."}
+{"k": "app.err.bad_mode", "src": "b0920696", "v": "اختر وضع «اسأل» أو التلقائي أو الوصول الكامل."}
 {"k": "app.err.delete_running", "src": "71f25b50", "v": "الجلسة لا تزال تعمل. أوقفها أولًا عبر «إنهاء»."}
+{"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "وضع الوصول الكامل يتطلب مشرفًا."}
 {"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "تعذر الإنهاء - العملية لا تزال تعمل. حاول مرة أخرى."}
+{"k": "app.err.mode_send_failed", "src": "887b8615", "v": "تعذر الوصول إلى طرفية الجلسة - لم يتغير الوضع."}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "توجد بالفعل جلسة باسم {session} في هذه المحادثة."}
 {"k": "app.err.not_busy", "src": "bbafa529", "v": "هذه الجلسة ليست مشغولة الآن - لا شيء لإيقافه."}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "لا يمكن إعادة إرسال هذا الطلب. أجب عنه في الطرفية."}
@@ -50,13 +52,15 @@
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} لا تزال تتوقف - لم يتغير الوضع. حاول مرة أخرى بعد قليل."}
 {"k": "app.err.pick_model", "src": "773e24c4", "v": "اختر نموذجًا."}
 {"k": "app.err.restart_still_stopping", "src": "701b0bd8", "v": "{session} لا تزال تتوقف. حاول مرة أخرى بعد قليل."}
-{"k": "app.err.resumed_in_ask", "src": "7024b7b8", "v": "استؤنفت {session} في وضع اسأل: {reason}"}
+{"k": "app.err.resumed_in_auto", "src": "b26ccb3b", "v": "استؤنفت {session} في الوضع التلقائي: {reason}"}
 {"k": "app.err.resuming", "src": "2a557399", "v": "يجري استئناف هذه الجلسة الآن. حاول مرة أخرى بعد قليل."}
 {"k": "app.err.send_failed", "src": "e4349ad3", "v": "تعذر إرسال {command}."}
 {"k": "app.fact.context", "src": "cc11b3a2", "v": "السياق"}
 {"k": "app.fact.cost", "src": "64ae43e8", "v": "التكلفة"}
 {"k": "app.fact.cwd", "src": "4b892fe0", "v": "المجلد"}
 {"k": "app.fact.last_active", "src": "b5665ec6", "v": "آخر نشاط"}
+{"k": "app.fact.mode", "src": "a7b93d21", "v": "الوضع"}
+{"k": "app.fact.mode_pending", "src": "d8a50365", "v": "{mode} (بانتظار تأكيد Claude Code)"}
 {"k": "app.fact.model", "src": "68c2cc7f", "v": "النموذج"}
 {"k": "app.fact.working", "src": "e7df8df6", "v": "يعمل منذ"}
 {"k": "app.language.hint", "src": "90e01e41", "v": "نص aipager فقط. إجابات Claude لا تتغير."}
@@ -95,11 +99,12 @@
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ حذفت [{session}] عبر Mini App"}
 {"k": "app.mirror.folder", "src": "603d7ae2", "v": "📁 أنشئ مجلد جديد عبر Mini App:\n{path}"}
 {"k": "app.mirror.killed", "src": "63565832", "v": "💀 أنهيت [{session}] عبر Mini App"}
+{"k": "app.mirror.mode_sent", "src": "c1718968", "v": "⚙️ يجري تحويل {session} إلى {mode} عبر Mini App دون إعادة تشغيل."}
 {"k": "app.mirror.model", "src": "6df57f60", "v": "🔄 [{session}] ← {model} عبر Mini App"}
 {"k": "app.mirror.renamed", "src": "22ad8a4c", "v": "✏️ أعيدت تسمية [{old}] إلى [{new}] عبر Mini App"}
 {"k": "app.mirror.restarted", "src": "9aa8323d", "v": "🔁 أعيد تشغيل [{session}] عبر Mini App"}
 {"k": "app.mirror.resumed", "src": "fafeafa6", "v": "♻️ استؤنفت [{session}] عبر Mini App"}
-{"k": "app.mirror.resumed_in_ask", "src": "429a5b47", "v": "♻️ استؤنفت [{session}] عبر Mini App في وضع اسأل: {reason}"}
+{"k": "app.mirror.resumed_in_auto", "src": "85b6c017", "v": "♻️ استؤنفت [{session}] عبر Mini App في الوضع التلقائي: {reason}"}
 {"k": "app.mirror.session_setting", "src": "3256d908", "v": "⚙️ {setting} ← {value} للجلسة {session} (غير عبر Mini App)"}
 {"k": "app.mirror.session_setting_reset", "src": "4502514a", "v": "⚙️ أعيد {setting} إلى الافتراضي ({value}) للجلسة {session} (غير عبر Mini App)"}
 {"k": "app.mirror.setting", "src": "6820a9f7", "v": "⚙️ {setting} ← {value} (غير عبر Mini App)"}
@@ -107,6 +112,8 @@
 {"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"few": "⏹️ أوقفت [{session}] عبر Mini App (حذفت {n} رسائل من قائمة الانتظار)", "many": "⏹️ أوقفت [{session}] عبر Mini App (حذفت {n} رسالة من قائمة الانتظار)", "one": "⏹️ أوقفت [{session}] عبر Mini App (حذفت رسالة واحدة من قائمة الانتظار)", "other": "⏹️ أوقفت [{session}] عبر Mini App (حذفت {n} رسالة من قائمة الانتظار)", "two": "⏹️ أوقفت [{session}] عبر Mini App (حذفت رسالتان من قائمة الانتظار)", "zero": "⏹️ أوقفت [{session}] عبر Mini App (لم تحذف أي رسالة من قائمة الانتظار)"}}
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 حولت {session} إلى وضع اسأل عبر Mini App"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 حولت {session} إلى الوضع التلقائي عبر Mini App"}
+{"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 حولت {session} إلى وضع الوصول الكامل عبر Mini App"}
+{"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "أجب عن الطلب المفتوح أولًا، ثم بدّل الوضع."}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude يعمل - بدل النموذج عندما تنتهي هذه الجولة."}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "الجلسة لا تعمل."}
 {"k": "app.reason.model_pending", "src": "a3384cf1", "v": "لم يؤكد تبديل النموذج الأخير بعد - تحقق في الطرفية من سؤال Claude Code \"Switch model?\" قبل التبديل مرة أخرى."}
@@ -116,7 +123,7 @@
 {"k": "app.reason.no_context", "src": "8f590315", "v": "لا شيء لضغطه - السياق فارغ بالفعل."}
 {"k": "app.reason.no_permission", "src": "e1081627", "v": "ليس لديك إذن للتحكم في هذه الجلسة."}
 {"k": "app.reason.no_transcript", "src": "3426f123", "v": "لا يوجد سجل قابل للاستئناف - ابدأ جلسة جديدة بدلًا من ذلك."}
-{"k": "app.reason.perms_admin", "src": "7202c2fd", "v": "التبديل إلى الوضع التلقائي يتطلب مشرفًا."}
+{"k": "app.reason.perms_admin", "src": "c9f440cf", "v": "التحويل إلى وضع الوصول الكامل يتطلب مشرفًا."}
 {"k": "app.reason.queue_empty", "src": "35da34dc", "v": "لا شيء في قائمة الانتظار لمسحه."}
 {"k": "app.reason.queue_full", "src": "2bf9f868", "v": "قائمة الانتظار ممتلئة ({cap} معلقة) - امسحها أو انتظر حتى تفرغ."}
 {"k": "appcmd.btn.open", "src": "0bfb9312", "v": "📱 افتح Mini App"}
@@ -210,7 +217,7 @@
 {"k": "cmd.app", "src": "486dfc4e", "v": "افتح لوحة Mini App"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "ما يمكنك فعله"}
 {"k": "cmd.language", "src": "9dc3a234", "v": "لغة رسائل aipager"}
-{"k": "cmd.mode", "src": "b677b7d9", "v": "تلقائي أو اسأل"}
+{"k": "cmd.mode", "src": "908f74fc", "v": "وضع اسأل أو التلقائي أو الوصول الكامل"}
 {"k": "cmd.new", "src": "959b093b", "v": "ابدأ جلسة"}
 {"k": "cmd.now", "src": "3673f6f7", "v": "أرسل الرسائل المنتظرة إلى Claude الآن"}
 {"k": "cmd.resume", "src": "88f33259", "v": "استأنف جلسة منتهية"}
@@ -335,36 +342,49 @@
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ حسنًا، لم يثبت الصوت."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ حجم الرسالة الصوتية {size} ميغابايت؛ حد بوتات Telegram هو {limit} ميغابايت."}
 {"k": "mode.ask", "src": "07910591", "v": "💬 وضع «اسأل»"}
-{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 اسأل لك (🤖 تلقائي: للمشرفين)"}
-{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 اسأل بدلًا من ذلك"}
+{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 وضع «اسأل» بدلًا من ذلك"}
 {"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 الوضع التلقائي"}
-{"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 تلقائي بدلًا من ذلك"}
+{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 الوضع التلقائي بدلًا من ذلك"}
+{"k": "mode.full", "src": "2b63c484", "v": "🔓 وضع الوصول الكامل"}
+{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 وضع الوصول الكامل بدلًا منه"}
 {"k": "mode.word.ask", "src": "3562777b", "v": "اسأل"}
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "تلقائي"}
+{"k": "mode.word.full", "src": "10b28a8c", "v": "كامل"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> في {mode} بالفعل."}
-{"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 التبديل إلى اسأل"}
-{"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 التبديل إلى تلقائي"}
+{"k": "modecard.ask_no_auto", "src": "f879e923", "v": "💬 وضع «اسأل» (الوضع التلقائي غير متاح هنا)"}
+{"k": "modecard.auto_for_you", "src": "ccd328fa", "v": "🤖 الوضع التلقائي (🔓 وضع الوصول الكامل للمشرفين فقط)"}
+{"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "الوضع التلقائي غير متاح لـ {session} (النموذج أو الخطة)، لذا تبقى في وضع «اسأل»."}
+{"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 التبديل إلى وضع «اسأل»"}
+{"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 التبديل إلى الوضع التلقائي"}
+{"k": "modecard.btn.to_full", "src": "365ba002", "v": "🔓 التبديل إلى وضع الوصول الكامل"}
 {"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> مشغولة.\nالتبديل إلى وضع اسأل؟"}
 {"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> مشغولة.\nالتبديل إلى الوضع التلقائي؟"}
-{"k": "modecard.confirm_auto", "src": "ff1562a9", "v": "⚙️ تبديل <b>{session}</b> إلى {mode}؟\n<i>سيشغل Claude الأدوات دون أن يسأل ({flag}).</i>"}
+{"k": "modecard.busy_to_full", "src": "13160dd5", "v": "⚙️ <b>{session}</b> مشغولة.\nالتبديل إلى وضع الوصول الكامل؟ ستُعاد تشغيل الجلسة."}
+{"k": "modecard.confirm_full", "src": "30bc1073", "v": "⚙️ تبديل <b>{session}</b> إلى {mode}؟\n<i>يعمل كل شيء دون أي فحص ({flag}). يعيد التبديل تشغيل الجلسة، وتبقى المحادثة.</i>"}
+{"k": "modecard.dialog_open", "src": "dbd6e8b6", "v": "⚠️ <b>{session}</b> تنتظر الرد على سؤال أو طلب إذن. أجب أولًا، ثم بدّل الوضع."}
 {"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ حالة <b>{session}</b> لا تزال قيد التهيئة. جرب /mode مرة أخرى بعد قليل."}
 {"k": "modecard.is", "src": "c057ad13", "v": "<b>{session}</b> في {mode}."}
 {"k": "modecard.is_target", "src": "92bc67e3", "v": "✍️ <b>{session}</b> في {mode}."}
 {"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ انتقلت <b>{session}</b> إلى عمل جديد، لذا لم يتغير شيء."}
-{"k": "modecard.needs_admin", "src": "fe68d230", "v": "الوضع التلقائي يحتاج إلى مشرف."}
+{"k": "modecard.needs_admin", "src": "20f8f3e6", "v": "وضع الوصول الكامل يتطلب مشرفًا."}
 {"k": "modecard.none_live", "src": "ae432c8c", "v": "لا توجد جلسات تعمل هنا. ابدأ واحدة عبر /new."}
+{"k": "modecard.other_mode", "src": "c8beff6c", "v": "⚙️ وضع {name} في Claude Code"}
+{"k": "modecard.press_failed", "src": "b3c8a233", "v": "❌ تعذر الوصول إلى طرفية <b>{session}</b> - لم يتغير الوضع."}
 {"k": "modecard.refused_not_running", "src": "d62cf188", "v": "⚠️ <b>{session}</b> لا تعمل - لم يتغير الوضع."}
 {"k": "modecard.refused_restarting", "src": "06433ed3", "v": "⚠️ <b>{session}</b> تعيد التشغيل الآن - لم يتغير الوضع. حاول مرة أخرى بعد قليل."}
 {"k": "modecard.session_missing", "src": "adf0d420", "v": "⚠️ لم يعثر على الجلسة."}
 {"k": "modecard.stale", "src": "9f0f5572", "v": "⚠️ كانت تلك البطاقة قديمة، لذا لم يتغير شيء."}
 {"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> لا تزال تتوقف - لم يتغير الوضع."}
+{"k": "modecard.switch_confirmed", "src": "85dadf29", "v": "✅ أصبحت {session} في {mode}."}
 {"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ تعذر تبديل الوضع: {error}"}
+{"k": "modecard.switch_pending_line", "src": "661317d0", "v": "⏳ بانتظار أن يؤكد Claude Code التبديل."}
+{"k": "modecard.switch_sent", "src": "dc418d95", "v": "⚙️ يجري تحويل {session} إلى {mode} دون إعادة تشغيل."}
+{"k": "modecard.switch_unconfirmed", "src": "367038cc", "v": "لم تتبدل {session}: هي الآن في {mode}."}
 {"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ بدل {person} إلى {mode}."}
-{"k": "modecard.switching", "src": "30fa9003", "v": "⚙️ يجري تبديل <b>{session}</b> إلى {mode}…"}
-{"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ يأخذ /mode اسم جلسة وask أو auto، مثل {example} أو {example_ask}."}
+{"k": "modecard.switching", "src": "60043e5a", "v": "⚙️ يجري تحويل <b>{session}</b> إلى {mode} (ستُعاد تشغيل الجلسة)…"}
+{"k": "modecard.usage", "src": "b9b6e4b8", "v": "⚠️ يأخذ /mode اسم جلسة وask أو auto أو full، مثل {example} أو {example_ask}."}
 {"k": "modecard.which", "src": "107abca0", "v": "أي جلسة؟"}
 {"k": "modecard.which_to", "src": "4694464a", "v": "أي جلسة تبدل إلى {mode}؟"}
-{"k": "newflow.auto_needs_admin_note", "src": "6bb45da7", "v": "الوضع التلقائي يحتاج إلى مشرف، لذا ستسأل هذه الجلسة."}
 {"k": "newflow.btn.cancel", "src": "196a9f45", "v": "✖️ إلغاء"}
 {"k": "newflow.btn.folder", "src": "2fb30e02", "v": "📁 المجلد"}
 {"k": "newflow.btn.model", "src": "e252b8c8", "v": "🧠 النموذج"}
@@ -385,6 +405,7 @@
 {"k": "newflow.example_line", "src": "ab8b1839", "v": "<code>{session} أصلح الاختبارات الفاشلة</code>"}
 {"k": "newflow.expired", "src": "6f9c9ea0", "v": "⏱ انتهت صلاحية بطاقة الجلسة الجديدة هذه. أرسل /new مرة أخرى."}
 {"k": "newflow.folder_page", "src": "f6e221a1", "v": "📁 <b>المجلد</b>\n\nاختر أين تعمل هذه الجلسة."}
+{"k": "newflow.full_needs_admin_note", "src": "3d60c811", "v": "وضع الوصول الكامل يتطلب مشرفًا، لذا تبدأ هذه الجلسة في الوضع التلقائي."}
 {"k": "newflow.group_name_ask", "src": "eb31141c", "v": "رد على هذه الرسالة باسم، وبما تريد فعله أولًا إن شئت:"}
 {"k": "newflow.hint_folder", "src": "f27c8294", "v": "📁 اختر مجلد مشروع أولًا عبر 📁 المجلد."}
 {"k": "newflow.just_send", "src": "0b7a9b82", "v": "✍️ أرسل رسالة فقط، ستذهب إلى {session}."}
@@ -689,7 +710,7 @@
 {"k": "sess.resume_not_found", "src": "4c1d68d2", "v": "⚠️ لا توجد جلسة باسم <b>{session}</b> في السجل.\nأرسل {command} دون اسم لترى ما هو متاح."}
 {"k": "sess.resume_running", "src": "c090af67", "v": "⚠️ <b>{session}</b> تعمل بالفعل.\nاضغط {command} في لوحة المفاتيح للانتقال إليها."}
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ استؤنفت <b>{session}</b>"}
-{"k": "sess.resumed_in_ask", "src": "8151879e", "v": "♻️ استؤنفت <b>{session}</b> في وضع اسأل: التلقائي يحتاج إلى مشرف."}
+{"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ استؤنفت <b>{session}</b> في الوضع التلقائي: وضع الوصول الكامل يتطلب مشرفًا."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "تم الإرسال إلى {session}."}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ إغلاق"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 الجلسات الجديدة"}
@@ -808,6 +829,7 @@
 {"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "زر غير معروف"}
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "قيمة غير صالحة"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "هذا الزر قديم - أرسل /kill مرة أخرى"}
+{"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} تنتظر الرد على طلب. أجب أولًا، ثم بدّل الوضع."}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "انتقلت {session} إلى عمل جديد - اضغط ⏹ إيقاف مرة أخرى لإيقافها"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "انتقلت {session} إلى عمل جديد - أرسل /stop مرة أخرى"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "لا يمكنك تغيير هذه الجلسة."}
@@ -831,7 +853,7 @@
 {"k": "toast.open_chat", "src": "202c3e06", "v": "افتح المحادثة لتجيب"}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "هذه بطاقة {owner}."}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "هذه بطاقة {owner}. أرسل {command} لتحصل على بطاقتك."}
-{"k": "toast.perms_needs_admin", "src": "fe68d230", "v": "الوضع التلقائي يحتاج إلى مشرف."}
+{"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "وضع الوصول الكامل يتطلب مشرفًا."}
 {"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} تعيد التشغيل الآن - اضغط مرة أخرى بعد قليل"}
 {"k": "toast.perms_stale", "src": "4e34769b", "v": "هذه البطاقة قديمة - لم يتغير شيء"}
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} لا تزال تبدأ - حاول مرة أخرى بعد قليل"}
@@ -906,7 +928,7 @@
 {"k": "tx.api.overloaded", "src": "6f545f5b", "v": "خوادم Anthropic مثقلة. حاول مرة أخرى بعد قليل."}
 {"k": "tx.api.rate_limit", "src": "234c6146", "v": "بلغ حد السرعة. انتظر قليلًا قبل إعادة المحاولة."}
 {"k": "tx.api.rate_limit_wait", "src": "a2053ce3", "v": "بلغ حد السرعة. انتظر {seconds} ث قبل إعادة المحاولة."}
-{"k": "tx.auto_needs_admin", "src": "bd96281e", "v": "التلقائي يحتاج إلى مشرف."}
+{"k": "tx.full_needs_admin", "src": "20f8f3e6", "v": "وضع الوصول الكامل يتطلب مشرفًا."}
 {"k": "tx.needs_admin", "src": "a2f55b85", "v": "ذلك الأمر يحتاج إلى مشرف."}
 {"k": "tx.retry_others", "src": "4ad540c7", "v": "فقط مرسل ذلك الأمر يمكنه إعادة محاولته."}
 {"k": "tx.truncated", "src": "27710457", "v": "…[مقتطع]"}
@@ -959,8 +981,9 @@
 {"k": "ui.btn.start_session", "src": "76684eaf", "v": "ابدأ الجلسة"}
 {"k": "ui.btn.stop_and_switch", "src": "21c1d7af", "v": "أوقف وبدل"}
 {"k": "ui.btn.switch", "src": "3e44c920", "v": "بدل"}
-{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "التبديل إلى اسأل"}
-{"k": "ui.btn.switch_to_auto", "src": "13a0f246", "v": "التبديل إلى تلقائي"}
+{"k": "ui.btn.switch_to_ask", "src": "adc38b97", "v": "التبديل إلى وضع «اسأل»"}
+{"k": "ui.btn.switch_to_auto", "src": "6f248734", "v": "التبديل إلى الوضع التلقائي"}
+{"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "التبديل إلى وضع الوصول الكامل"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "حاول مرة أخرى"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "انتظر ١٠ د أخرى"}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "حذف {session}؟"}
@@ -968,11 +991,13 @@
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "إنهاء {session}؟"}
 {"k": "ui.confirm.kill_body", "src": "beff52e4", "v": "يوقف هذا الجلسة ويزيلها. يقطع أي شيء كانت تشغله."}
 {"k": "ui.confirm.perms_ask", "src": "c0710578", "v": "تبديل {session} إلى وضع اسأل؟"}
-{"k": "ui.confirm.perms_ask_body", "src": "701538b8", "v": "يسأل Claude قبل تشغيل الأدوات."}
 {"k": "ui.confirm.perms_auto", "src": "b6a1ddde", "v": "تبديل {session} إلى الوضع التلقائي؟"}
-{"k": "ui.confirm.perms_auto_body", "src": "7d8bf9c6", "v": "يشغل Claude الأدوات دون أن يسأل."}
-{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "إيقاف المهمة الحالية وتبديل {session} إلى اسأل؟"}
-{"k": "ui.confirm.perms_busy_auto", "src": "d4090a8b", "v": "إيقاف المهمة الحالية وتبديل {session} إلى تلقائي؟"}
+{"k": "ui.confirm.perms_busy_ask", "src": "666af671", "v": "إيقاف المهمة الحالية وتبديل {session} إلى وضع «اسأل»؟"}
+{"k": "ui.confirm.perms_busy_auto", "src": "1b03b9b8", "v": "إيقاف المهمة الحالية وتبديل {session} إلى الوضع التلقائي؟"}
+{"k": "ui.confirm.perms_busy_full", "src": "066f6071", "v": "إيقاف المهمة الحالية وتبديل {session} إلى وضع الوصول الكامل؟"}
+{"k": "ui.confirm.perms_full", "src": "401fe494", "v": "تبديل {session} إلى وضع الوصول الكامل؟"}
+{"k": "ui.confirm.perms_full_body", "src": "36f1fb1e", "v": "يعمل كل شيء دون أي فحص. ستُعاد تشغيل الجلسة، وتبقى المحادثة."}
+{"k": "ui.confirm.perms_leave_full_body", "src": "1159bfd9", "v": "ستُعاد تشغيل الجلسة، وتبقى المحادثة."}
 {"k": "ui.confirm.rename", "src": "92656d63", "v": "إعادة تسمية {session}؟"}
 {"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "تحتفظ الجلسة بسجلها ومجلد عملها. يتغير الاسم فقط."}
 {"k": "ui.confirm.reset", "src": "e13d0ebf", "v": "إعادة الإعدادات إلى الافتراضي؟"}
@@ -1019,6 +1044,7 @@
 {"k": "ui.done.delete", "src": "48ea780f", "v": "حذفت."}
 {"k": "ui.done.generic", "src": "e2bcda84", "v": "تم."}
 {"k": "ui.done.kill", "src": "eb388bd9", "v": "أنهيت."}
+{"k": "ui.done.mode_sent", "src": "e240134b", "v": "أُرسل التبديل. سيؤكده Claude Code مع خطوته التالية."}
 {"k": "ui.done.perms", "src": "144199df", "v": "بدلت."}
 {"k": "ui.done.rename", "src": "b930ba4a", "v": "أعيدت التسمية."}
 {"k": "ui.done.rename_same", "src": "ea00acbd", "v": "لا تغيير."}
@@ -1040,7 +1066,6 @@
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "النموذج"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "لم يؤكد (تحقق من الجلسة)"}
 {"k": "ui.model.unreachable", "src": "82a93142", "v": "تعذر الوصول إلى الخادم. تحقق من نموذج الجلسة."}
-{"k": "ui.new.auto_needs_admin", "src": "ad1f0c2f", "v": "الوضع التلقائي يتطلب مشرفًا."}
 {"k": "ui.new.chips_recent", "src": "76eec760", "v": "الأخيرة"}
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "مقترحة"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "النموذج الافتراضي الخاص بـ CLI"}
@@ -1061,10 +1086,13 @@
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "غير مسموح لك بإنشاء مجلدات هنا."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "اسم المجلد الجديد"}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "تعذر الوصول إلى الخادم. لم ينشأ أي مجلد."}
+{"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "وضع الوصول الكامل يتطلب مشرفًا."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "اسأل"}
 {"k": "ui.new.mode_ask_help", "src": "eca1be33", "v": "يسأل Claude قبل تشغيل الأدوات"}
 {"k": "ui.new.mode_auto", "src": "c614ba7c", "v": "تلقائي"}
-{"k": "ui.new.mode_auto_help", "src": "306e8992", "v": "يشغل الأدوات دون أن يسأل"}
+{"k": "ui.new.mode_auto_help", "src": "9dcf2566", "v": "فحص أمان يشغّل الإجراءات الآمنة ويوقف الخطرة"}
+{"k": "ui.new.mode_full", "src": "5e4017a2", "v": "وصول كامل"}
+{"k": "ui.new.mode_full_help", "src": "26c97cd3", "v": "يعمل كل شيء دون أي فحص"}
 {"k": "ui.new.mode_title", "src": "9c8c621a", "v": "وضع الأذونات"}
 {"k": "ui.new.model_name", "src": "5ebb9765", "v": "اسم النموذج"}
 {"k": "ui.new.model_needed", "src": "c585e482", "v": "اكتب اسم نموذج للمتابعة."}
@@ -1081,8 +1109,10 @@
 {"k": "ui.new.sub", "src": "23b19317", "v": "سمها، واختر مجلدًا، وسيبدأ Claude هناك."}
 {"k": "ui.new.summary_ask", "src": "3e987f2e", "v": "يشغل Claude في {where}، في وضع اسأل، باستخدام {model}."}
 {"k": "ui.new.summary_auto", "src": "d0968e63", "v": "يشغل Claude في {where}، في الوضع التلقائي، باستخدام {model}."}
+{"k": "ui.new.summary_full", "src": "08065163", "v": "يبدأ Claude في {where}، في وضع الوصول الكامل، باستخدام {model}."}
 {"k": "ui.new.summary_named_ask", "src": "ccbc6d09", "v": "يشغل Claude باسم {name} في {where}، في وضع اسأل، باستخدام {model}."}
 {"k": "ui.new.summary_named_auto", "src": "4b48c549", "v": "يشغل Claude باسم {name} في {where}، في الوضع التلقائي، باستخدام {model}."}
+{"k": "ui.new.summary_named_full", "src": "91a24e52", "v": "يبدأ Claude باسم {name} في {where}، في وضع الوصول الكامل، باستخدام {model}."}
 {"k": "ui.new.title", "src": "5c881d23", "v": "جلسة جديدة"}
 {"k": "ui.new.where", "src": "525f61b6", "v": "أين"}
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "لم يلتقط شيء قبل أن تنتهي هذه الجلسة."}

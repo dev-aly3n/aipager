@@ -7,13 +7,20 @@ recorded, so one golden stands for both."""
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 import qa_p3a_scenarios as S
-from tests.i18n_surfaces import without_mode_labels
 
 NAMES = sorted(S.SCENARIOS)
 MODE_LABEL_SCENARIOS = {"mode_replies", "new_flow_cards"}
+#: What those two show since the three permission modes (2026-10-11): a
+#: third mode on every card, Auto the default, every mode named as a mode
+#: (recorded on this branch and reviewed; the base golden stays as it was).
+THREE_MODES = json.loads(Path(__file__).with_name("three_modes_scenarios.json")
+                         .read_text(encoding="utf-8"))
 
 
 def test_the_golden_has_every_scenario(golden):
@@ -29,7 +36,8 @@ def test_an_english_chat_reads_what_it_read_before(golden, scenario_out, name):
     got, want = scenario_out(name, "en"), golden["scenarios"][name]
     if name in MODE_LABEL_SCENARIOS:
         assert got != want
-        got, want = without_mode_labels(got), without_mode_labels(want)
+        assert sorted(THREE_MODES) == sorted(MODE_LABEL_SCENARIOS)
+        want = THREE_MODES[name]
     assert got == want
 
 

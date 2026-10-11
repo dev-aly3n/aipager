@@ -35,7 +35,7 @@ def _ready(bot, update, launch):
 
 def test_new_ask_mode_reply_offers_auto(mk_bot, mk_update, mk_launch_ok):
     """An Ask session (the chat's default set to Ask): 💬 Ask mode on the card,
-    and a Switch to Auto button instead of a /perms nudge."""
+    and a Switch to Auto mode button instead of a /perms nudge."""
     update = mk_update("/new dev")
     preferences.set_new_session_default(update.effective_chat.id, "mode", "ask")
     text, buttons = _ready(mk_bot(), update, mk_launch_ok)
@@ -43,15 +43,22 @@ def test_new_ask_mode_reply_offers_auto(mk_bot, mk_update, mk_launch_ok):
     assert "💬 Ask mode" in text, text
     assert "🤖" not in text, text
     assert "/perms" not in text, text
-    assert "🤖 Switch to Auto" in buttons, buttons
+    assert "🤖 Switch to Auto mode" in buttons, buttons
 
 
-def test_new_auto_mode_reply_offers_ask(mk_bot, mk_update, mk_launch_ok):
-    text, buttons = _ready(mk_bot(), mk_update("/new !dev"), mk_launch_ok)
+def test_new_auto_mode_reply_offers_the_other_modes(mk_bot, mk_update, mk_launch_ok):
+    text, buttons = _ready(mk_bot(), mk_update("/new dev"), mk_launch_ok)
 
     assert "🤖 Auto mode" in text, text
     assert "/perms" not in text, text
-    assert "💬 Switch to Ask" in buttons, buttons
+    assert "💬 Switch to Ask mode" in buttons and "🔓 Switch to Full access mode" in buttons, buttons
+
+
+def test_new_bang_starts_in_full_access(mk_bot, mk_update, mk_launch_ok):
+    text, buttons = _ready(mk_bot(), mk_update("/new !dev"), mk_launch_ok)
+
+    assert "🔓 Full access mode" in text, text
+    assert "💬 Switch to Ask mode" in buttons and "🤖 Switch to Auto mode" in buttons, buttons
 
 
 def test_new_reply_reads_default_model_when_unknown(mk_bot, mk_update, mk_launch_ok):
@@ -75,15 +82,16 @@ def test_new_reply_includes_model_when_known(mk_bot, mk_update, mk_launch_ok):
     assert "Sonnet 4.5" in text, text
 
 
-def test_new_auto_needs_an_admin(mk_bot, mk_update, mk_launch_ok):
-    """A non-admin's /new !dev gets Ask, and the card says why."""
+def test_new_full_access_needs_an_admin(mk_bot, mk_update, mk_launch_ok):
+    """A non-admin's /new !dev gets Auto, and the card says why."""
     bot = mk_bot()
     bot._is_admin = MagicMock(return_value=False)
     bot._is_admin_user = MagicMock(return_value=False)
     text, _ = _ready(bot, mk_update("/new !dev"), mk_launch_ok)
 
-    assert "Auto mode needs an admin" in text, text
-    assert "💬 Ask mode" in text, text
+    assert "Full access mode needs an admin, so this one starts in Auto mode." in text, text
+    assert "🤖 Auto mode" in text, text
+    assert _find_dev_session(bot).perm_mode == "auto"
 
 
 def _find_dev_session(bot):
@@ -94,12 +102,14 @@ def _find_dev_session(bot):
     return None
 
 
-def test_new_is_auto_by_default_for_an_admin(mk_bot, mk_update, mk_launch_ok):
+@pytest.mark.parametrize("admin", [True, False], ids=["admin", "member"])
+def test_new_is_auto_by_default_for_everyone(mk_bot, mk_update, mk_launch_ok, admin):
     bot = mk_bot()
+    bot._is_admin_user = MagicMock(return_value=admin)
     _ready(bot, mk_update("/new dev"), mk_launch_ok)
 
     sess = _find_dev_session(bot)
-    assert sess is not None and sess.skip_perms is True
+    assert sess is not None and sess.perm_mode == "auto"
 
 
 def test_new_honours_the_chats_ask_default(mk_bot, mk_update, mk_launch_ok):
@@ -109,12 +119,12 @@ def test_new_honours_the_chats_ask_default(mk_bot, mk_update, mk_launch_ok):
     _ready(bot, update, mk_launch_ok)
 
     sess = _find_dev_session(bot)
-    assert sess is not None and sess.skip_perms is False
+    assert sess is not None and sess.perm_mode == "ask"
 
 
-def test_new_auto_sets_skip_perms_true(mk_bot, mk_update, mk_launch_ok):
+def test_new_bang_sets_full_access(mk_bot, mk_update, mk_launch_ok):
     bot = mk_bot()
     _ready(bot, mk_update("/new !dev"), mk_launch_ok)
 
     sess = _find_dev_session(bot)
-    assert sess is not None and sess.skip_perms is True
+    assert sess is not None and sess.perm_mode == "full"

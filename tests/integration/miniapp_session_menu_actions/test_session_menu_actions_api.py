@@ -52,13 +52,12 @@ FOREIGN_MEMBER_ID = 321  # a real member, but of the OTHER scope
 
 QUEUE_FULL_DETAIL = "Queue is full (50 pending) - clear it or wait for it to drain."
 # The POST route's 403 `detail` and the GET actions dict's `reason` for
-# the SAME refusal are two distinct strings per entrypoints.md — the
-# route table says "Auto mode requires admin." while the actions-object
-# section says "Switching to Auto mode requires admin.". Not a typo:
-# tested separately below so a future accidental unification (or
-# divergence) is caught either way.
-PERMS_ADMIN_ROUTE_DETAIL = "Auto mode requires admin."
-PERMS_ADMIN_ACTIONS_REASON = "Switching to Auto mode requires admin."
+# the SAME refusal were two distinct strings; both are tested separately
+# below so a future change to either is caught.
+# Since 2026-10-11 the gate is on Full access, and the perms route answers
+# with the same sentence the actions object uses.
+PERMS_ADMIN_ROUTE_DETAIL = "Switching to Full access mode requires admin."
+PERMS_ADMIN_ACTIONS_REASON = "Switching to Full access mode requires admin."
 NO_PERMISSION_REASON = "You don't have permission to control this session."
 
 
@@ -113,7 +112,7 @@ def server(mk_bot):
 
 def _mk_session(
     server, label, *, scope_chat_id=SCOPE_CHAT_ID, status=Status.IDLE,
-    claude_session_id="", skip_perms=False, pending_queue=None,
+    claude_session_id="", mode="ask", pending_queue=None,
     cwd="/home/dev/proj",
 ):
     sess = server.registry.get_or_create(f"claude-{label}")
@@ -121,7 +120,7 @@ def _mk_session(
     sess.scope_chat_id = scope_chat_id
     sess.status = status
     sess.claude_session_id = claude_session_id
-    sess.skip_perms = skip_perms
+    sess.perm_mode = mode
     sess.cwd = cwd
     if pending_queue is not None:
         sess.pending_queue = list(pending_queue)
@@ -282,14 +281,14 @@ def test_new_top_level_fields_skip_perms_and_queue_depth_present(
 ):
     async def _run():
         _mk_session(
-            server, "dev", status=Status.BUSY, skip_perms=True,
+            server, "dev", status=Status.BUSY, mode="full",
             pending_queue=_queue(3),
         )
         client = await _client_for(server)
         try:
             resp = await client.get("/api/sessions/dev", headers=_hdr(ADMIN_ID))
             body = await resp.json()
-            assert body["skip_perms"] is True
+            assert body["mode"] == "full"
             assert body["queue_depth"] == 3
         finally:
             await client.close()
@@ -302,12 +301,12 @@ def test_perms_nonadmin_targeting_auto_gets_403_with_exact_detail(
     server, run_async,
 ):
     async def _run():
-        _mk_session(server, "dev", status=Status.IDLE, skip_perms=False)
+        _mk_session(server, "dev", status=Status.IDLE, mode="ask")
         client = await _client_for(server)
         send = server.bot._app.bot.send_message
         try:
             resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(DEVELOPER_ID),
+                "/api/sessions/dev/perms", headers=_hdr(DEVELOPER_ID), json={"mode": "full"},
             )
             assert resp.status == 403
             body = await resp.json()
@@ -336,37 +335,37 @@ def test_perms_full_asymmetric_round_trip_admin_auto_then_nonadmin_ask(
     _mock_inject_happy(monkeypatch)
 
     async def _run():
-        sess = _mk_session(server, "dev", status=Status.IDLE, skip_perms=False)
+        sess = _mk_session(server, "dev", status=Status.IDLE, mode="ask")
         client = await _client_for(server)
         try:
             refused = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(DEVELOPER_ID),
+                "/api/sessions/dev/perms", headers=_hdr(DEVELOPER_ID), json={"mode": "full"},
             )
             assert refused.status == 403
 
             as_admin = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID),
+                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID), json={"mode": "full"},
             )
             assert as_admin.status == 200
-            assert (await as_admin.json())["skip_perms"] is True
+            assert (await as_admin.json())["mode"] == "full"
 
             check = await client.get("/api/sessions/dev", headers=_hdr(ADMIN_ID))
-            assert (await check.json())["skip_perms"] is True
+            assert (await check.json())["mode"] == "full"
 
             sess.restarting_until = 0.0  # simulate time passing
 
             # Same non-admin, now switching Auto -> Ask: must be ALLOWED.
             back = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(DEVELOPER_ID),
+                "/api/sessions/dev/perms", headers=_hdr(DEVELOPER_ID), json={"mode": "ask"},
             )
             assert back.status == 200, (
                 "non-admin was refused Auto->Ask — the asymmetry only "
                 "permits the reverse direction"
             )
-            assert (await back.json())["skip_perms"] is False
+            assert (await back.json())["mode"] == "ask"
 
             check2 = await client.get("/api/sessions/dev", headers=_hdr(ADMIN_ID))
-            assert (await check2.json())["skip_perms"] is False
+            assert (await check2.json())["mode"] == "ask"
         finally:
             await client.close()
     run_async(_run())
@@ -376,16 +375,18 @@ def test_perms_reason_string_in_get_actions_matches_documented_string(
     server, run_async,
 ):
     async def _run():
-        _mk_session(server, "dev", status=Status.IDLE, skip_perms=False)
+        _mk_session(server, "dev", status=Status.IDLE, mode="ask")
         client = await _client_for(server)
         try:
             detail = await client.get(
                 "/api/sessions/dev", headers=_hdr(DEVELOPER_ID),
             )
             body = await detail.json()
-            assert body["actions"]["perms"] == {
-                "available": False, "reason": PERMS_ADMIN_ACTIONS_REASON,
-            }
+            # The menu slot is on offer (Ask and Auto are everyone's); its
+            # Full access entry carries the admin reason.
+            assert body["actions"]["perms"] == {"available": True, "reason": None}
+            full = {m["id"]: m for m in body["modes"]}["full"]
+            assert (full["available"], full["reason"]) == (False, PERMS_ADMIN_ACTIONS_REASON)
         finally:
             await client.close()
     run_async(_run())
@@ -398,7 +399,7 @@ def test_perms_readonly_caller_sees_no_permission_reason_not_admin_reason(
     read-only caller is told they can't control the session at all,
     not that Auto needs admin (entrypoints.md's generalised rule)."""
     async def _run():
-        _mk_session(server, "dev", status=Status.IDLE, skip_perms=False)
+        _mk_session(server, "dev", status=Status.IDLE, mode="ask")
         client = await _client_for(server)
         try:
             detail = await client.get(
@@ -417,11 +418,11 @@ def test_perms_readonly_caller_gets_403_forbidden_not_admin_detail(
     server, run_async,
 ):
     async def _run():
-        _mk_session(server, "dev", status=Status.IDLE, skip_perms=False)
+        _mk_session(server, "dev", status=Status.IDLE, mode="ask")
         client = await _client_for(server)
         try:
             resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(READONLY_ID),
+                "/api/sessions/dev/perms", headers=_hdr(READONLY_ID), json={"mode": "full"},
             )
             assert resp.status == 403
             body = await resp.json()
@@ -435,15 +436,15 @@ def test_perms_refused_403_leaves_skip_perms_unchanged_and_no_mirror(
     server, run_async,
 ):
     async def _run():
-        sess = _mk_session(server, "dev", status=Status.IDLE, skip_perms=False)
+        sess = _mk_session(server, "dev", status=Status.IDLE, mode="ask")
         client = await _client_for(server)
         send = server.bot._app.bot.send_message
         try:
             resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(DEVELOPER_ID),
+                "/api/sessions/dev/perms", headers=_hdr(DEVELOPER_ID), json={"mode": "full"},
             )
             assert resp.status == 403
-            assert sess.skip_perms is False
+            assert sess.perm_mode == "ask"
             assert send.await_count == 0
         finally:
             await client.close()
@@ -460,12 +461,12 @@ def test_perms_busy_session_success_mirrors_and_leaves_status_non_gone(
     _mock_inject_happy(monkeypatch)
 
     async def _run():
-        _mk_session(server, "dev", status=Status.BUSY, skip_perms=False)
+        _mk_session(server, "dev", status=Status.BUSY, mode="ask")
         client = await _client_for(server)
         send = server.bot._app.bot.send_message
         try:
             resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID),
+                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID), json={"mode": "full"},
             )
             assert resp.status == 200
             check = await client.get("/api/sessions/dev", headers=_hdr(ADMIN_ID))
@@ -484,7 +485,7 @@ def test_perms_already_restarting_returns_409(server, run_async):
         client = await _client_for(server)
         try:
             resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID),
+                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID), json={"mode": "full"},
             )
             assert resp.status == 409
             assert (await resp.json())["error"] == "already_restarting"
@@ -510,11 +511,11 @@ def test_perms_launch_failed_returns_400(server, run_async, monkeypatch):
     monkeypatch.setattr("aipager.bot.session_ops._sleep", AsyncMock())
 
     async def _run():
-        _mk_session(server, "dev", status=Status.IDLE, skip_perms=False)
+        _mk_session(server, "dev", status=Status.IDLE, mode="ask")
         client = await _client_for(server)
         try:
             resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID),
+                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID), json={"mode": "full"},
             )
             assert resp.status == 400
             body = await resp.json()
@@ -530,7 +531,7 @@ def test_perms_not_live_status_gone_returns_409(server, run_async):
         client = await _client_for(server)
         try:
             resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID),
+                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID), json={"mode": "full"},
             )
             assert resp.status == 409
             assert (await resp.json())["error"] == "not_live"
@@ -887,7 +888,7 @@ def test_restart_preserves_history_and_permission_mode(server, run_async, monkey
     async def _run():
         _mk_session(
             server, "dev", status=Status.BUSY, claude_session_id="uuid-keep-me",
-            skip_perms=True,
+            mode="full",
         )
         client = await _client_for(server)
         try:
@@ -897,7 +898,7 @@ def test_restart_preserves_history_and_permission_mode(server, run_async, monkey
             assert resp.status == 200
             check = await client.get("/api/sessions/dev", headers=_hdr(ADMIN_ID))
             body = await check.json()
-            assert body["skip_perms"] is True
+            assert body["mode"] == "full"
         finally:
             await client.close()
     run_async(_run())
@@ -1300,7 +1301,7 @@ def test_rename_then_get_by_new_label_succeeds_and_by_old_label_404s(
 # ===== Authorization matrix across all five routes ==========================
 
 _ALL_FIVE = [
-    ("post", "/perms", None),
+    ("post", "/perms", {"mode": "full"}),
     ("post", "/clearqueue", None),
     ("post", "/compact", None),
     ("post", "/restart", None),
@@ -1427,7 +1428,7 @@ def test_rate_limited_returns_429_on_every_route(
                     pending_queue=_queue(1),
                 )
                 this_body = (
-                    {"label": f"renamed{i}"} if body is not None else None
+                    {"label": f"renamed{i}"} if suffix == "/rename" else body
                 )
                 kwargs = {"json": this_body} if this_body is not None else {}
                 resp = await getattr(client, method)(

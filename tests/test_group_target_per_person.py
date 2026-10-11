@@ -511,7 +511,7 @@ def test_a_new_session_is_its_creators_target(gbot, run_async, monkeypatch):
     monkeypatch.setattr(inject, "launch_session", AsyncMock(return_value=(True, "")))
     gbot.registry.set_target(X1, G, BOB)
     name, err = run_async(gbot.create_session(
-        "x3", scope_chat_id=G, driver_user_id=ALICE))
+        "x3", scope_chat_id=G, driver_user_id=ALICE, mode="ask"))
     assert name, err
     assert _name(gbot.registry.target_for(G, ALICE)) == name
     assert _label(gbot.registry.target_for(G, BOB)) == "x1"
@@ -648,7 +648,7 @@ def test_resuming_a_session_makes_it_the_resumers_target(gbot, run_async, monkey
 
 
 def test_switching_from_the_new_conflict_card_sets_the_tappers_target(gbot, run_async):
-    gbot._new_conflict_pending[X2] = {"prompt": "", "skip_perms": False,
+    gbot._new_conflict_pending[X2] = {"prompt": "", "mode": "ask",
                                       "user_id": ALICE, "msg_id": 5}
     query = MagicMock()
     query.data = f"{X2}:new_resume"

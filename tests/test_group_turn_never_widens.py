@@ -1318,7 +1318,7 @@ def test_a_relaunch_closes_the_turn(mk_bot, run_async, monkeypatch,
     ps.mark_turn_open(S)
 
     outcome = run_async(bot._kill_and_relaunch_core(
-        sess, target_skip_perms=False, interrupt_first=interrupt_first))
+        sess, target_mode="ask", interrupt_first=interrupt_first))
 
     assert outcome.ok
     assert open_at_launch == [False]
@@ -1337,7 +1337,7 @@ def test_a_new_session_starts_with_no_turn(mk_bot, run_async, monkeypatch):
     monkeypatch.setattr(inject, "launch_session", _launch)
     ps.mark_turn_open("claude-api")
 
-    name, err = run_async(bot.create_session("api", scope_chat_id=None))
+    name, err = run_async(bot.create_session("api", scope_chat_id=None, mode="ask"))
 
     assert (name, err) == ("claude-api", "")
     assert open_at_launch == [False]

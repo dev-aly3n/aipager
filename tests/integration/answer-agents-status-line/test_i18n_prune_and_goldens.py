@@ -19,7 +19,12 @@ from pathlib import Path
 
 import pytest
 
-from tests.i18n_surfaces import MODE_LABEL_SURFACES, without_mode_labels
+from tests.i18n_surfaces import (
+    MODE_LABEL_SURFACES,
+    THREE_MODES_NEW_SURFACES,
+    THREE_MODES_SURFACES,
+    without_mode_labels,
+)
 
 REPO = Path(__file__).resolve().parents[3]
 LOCALES = REPO / "aipager" / "i18n" / "locales"
@@ -205,9 +210,13 @@ def test_english_surfaces_change_only_under_agents_line():
     # agents_line is this feature's; language.list lost its "(beta)" marks
     # later on purpose (operator, 2026-10-10), and the mode labels became
     # "💬 Ask mode" / "🤖 Auto mode" the same day, changing nothing else.
-    assert [k for k in changed if k not in MODE_LABEL_SURFACES] == ["agents_line", "language.list"]
+    # The three permission modes (2026-10-11) changed their own surfaces
+    # further, and added one.
+    three = THREE_MODES_SURFACES | THREE_MODES_NEW_SURFACES
+    assert [k for k in changed if k not in MODE_LABEL_SURFACES | three] == [
+        "agents_line", "language.list"]
     assert set(changed) >= MODE_LABEL_SURFACES
-    for k in MODE_LABEL_SURFACES:
+    for k in MODE_LABEL_SURFACES - three:
         assert without_mode_labels(new[k]) == without_mode_labels(old[k]), k
 
 

@@ -29,6 +29,9 @@ OWNED = {
     "aipager/bot/notify.py", "aipager/bot/voice.py", "aipager/bot/card_owner.py",
     "aipager/bot/tap_gate.py", "aipager/bot/chat_migration.py", "aipager/bot/callbacks.py",
     "aipager/bot/safety_notice.py",
+    # The three permission modes (2026-10-11): the mode card's own keys
+    # that live with the labels and with the in-place switch.
+    "aipager/bot/mode_labels.py", "aipager/bot/mode_switch.py",
 }
 
 

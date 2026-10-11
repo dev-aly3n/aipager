@@ -240,7 +240,7 @@ def test_bobs_tap_on_alices_card_is_refused_even_with_his_own_open(
     _open_card(gbot, run_async, mk_update, BOB, 7001)
     store = new_flow._pending_store(gbot)
     before = {key: dict(card) for key, card in store.items()}
-    assert store[(G, ALICE)]["skip_perms"] is True
+    assert store[(G, ALICE)]["mode"] == "auto"
     update, query = _tap("_:nw:mode:ask", BOB, message_id=7000)
 
     run_async(new_flow.handle_callback(gbot, update, query, "_", "nw:mode:ask"))
@@ -641,7 +641,7 @@ def test_a_card_whose_owner_is_unknown_names_no_one(gbot, run_async, mk_update):
 
 
 def test_the_owner_is_named_only_in_a_group():
-    pending = {"owner_label": "@alice", "skip_perms": True, "can_auto": True}
+    pending = {"owner_label": "@alice", "mode": "auto", "can_full": True}
     group_text, _kb = new_flow._render_name_card(pending, chat_id=G)
     dm_text, _kb = new_flow._render_name_card(pending, chat_id=DM)
     assert group_text.startswith("🆕 <b>New session</b> (@alice)\n\n")
@@ -697,4 +697,4 @@ def test_a_tap_with_no_message_id_on_someone_elses_card_is_refused(gbot, run_asy
     run_async(new_flow.handle_callback(gbot, update, query, "_", "nw:mode:ask"))
 
     assert query.answer.await_args.args[0] == "This isn't your new session."
-    assert new_flow._pending_store(gbot)[(G, ALICE)]["skip_perms"] is True
+    assert new_flow._pending_store(gbot)[(G, ALICE)]["mode"] == "auto"

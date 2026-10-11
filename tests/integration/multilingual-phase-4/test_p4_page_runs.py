@@ -517,8 +517,12 @@ def test_en_script_built_text_equals_the_base_page(en):
     """The base branch's page, run in this harness on the same English
     payloads, built exactly this text (recorded in base_page_english.json)."""
     base = json.loads(BASE_PAGE.read_text(encoding="utf-8"))
-    assert {v: _dynamic(en[v])["texts"] for v in ("grid", "detail")} == \
-        {v: base[v]["texts"] for v in ("grid", "detail")}
+    want = {v: list(base[v]["texts"]) for v in ("grid", "detail")}
+    # The three permission modes (2026-10-11) added one fact, the session's
+    # mode, before the folder; nothing else the script builds changed.
+    at = want["detail"].index("Directory")
+    want["detail"][at:at] = ["Mode", "💬 Ask mode"]
+    assert {v: _dynamic(en[v])["texts"] for v in ("grid", "detail")} == want
 
 
 def test_en_requests_equal_the_base_page(en):

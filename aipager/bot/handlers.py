@@ -34,11 +34,11 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO, mode_label
+from aipager.bot.mode_labels import mode_label
 from aipager.dtach import inject
 
 from aipager import statusline_file
-from aipager import i18n
+from aipager import i18n, perm_modes
 from aipager.i18n import Command, Msg, Plural, Safe, Span
 from aipager.bot import (
     card_owner,
@@ -48,6 +48,7 @@ from aipager.bot import (
     language_menu,
     miniapp_link,
     mode_labels,
+    mode_switch,
     new_flow,
     reactions,
     report_flow,
@@ -60,6 +61,14 @@ from aipager.bot.session_ops import (
     mark_model_switch_sent,
     model_refusal_text,
     model_switch_refusal,
+)
+from aipager.bot import callbacks as callbacks_mod
+from aipager.bot.mode_switch import (
+    MODE_BTN_TO_ASK,
+    MODE_BTN_TO_AUTO,
+    MODE_BTN_TO_FULL,
+    TOAST_MODE_DIALOG_OPEN,
+    TOAST_NEEDS_ADMIN_FULL,
 )
 from aipager.bot.settings_menu import render_settings_root
 from aipager.config import (
@@ -478,15 +487,15 @@ APP_TAP_TO_OPEN = Msg("appcmd.tap_to_open", "Tap to open the aipager dashboard:"
 
 # /mode and its card (4.4).
 MODE_USAGE = Msg("modecard.usage",
-                 "⚠️ /mode takes a session name and ask or auto, for example {example} or "
-                 "{example_ask}.",
-                 note="/mode typed with a word it does not take; ask and auto are typed as "
-                      "they are; {example} and {example_ask} are commands to copy",
+                 "⚠️ /mode takes a session name and ask, auto or full, for example {example} "
+                 "or {example_ask}.",
+                 note="/mode typed with a word it does not take; ask, auto and full are typed "
+                      "as they are; {example} and {example_ask} are commands to copy",
                  eg={"example": "/mode x1", "example_ask": "/mode x1 ask"})
 MODE_WHICH = Msg("modecard.which", "Which session?", note="/mode: above the list of sessions")
 MODE_WHICH_TO = Msg("modecard.which_to", "Which session to switch to {mode}?",
-                    note="/mode ask or /mode auto: above the list; {mode} is the mode's name "
-                         "with its emoji", eg={"mode": "Auto mode"})
+                    note="/mode ask, /mode auto or /mode full: above the list; {mode} is the "
+                         "mode's name with its emoji", eg={"mode": "Auto mode"})
 MODE_NONE_LIVE = Msg("modecard.none_live", "No live sessions here. Start one with /new.",
                      note="/mode with no session running")
 MODE_ALREADY = Msg("modecard.already", "<b>{session}</b> is already in {mode}.",
@@ -500,14 +509,8 @@ MODE_IS_TARGET = Msg("modecard.is_target", "✍️ <b>{session}</b> is in {mode}
                      note="HTML. The mode card for the session messages go to; {mode} is "
                           "the mode's label, which already says mode",
                      eg={"session": "x1", "mode": "Auto mode"})
-MODE_BTN_TO_ASK = Msg("modecard.btn.to_ask", "💬 Switch to Ask",
-                      note="Button: switch to Ask mode (Claude asks before each tool)")
-MODE_BTN_TO_AUTO = Msg("modecard.btn.to_auto", "🤖 Switch to Auto",
-                       note="Button: switch to Auto mode (Claude runs tools without asking)")
-NEEDS_ADMIN_AUTO = Msg("modecard.needs_admin", "Auto mode needs an admin.",
-                       note="Switching to Auto mode is for admins")
-TOAST_NEEDS_ADMIN_AUTO = Msg("toast.perms_needs_admin", "Auto mode needs an admin.",
-                             note="Pop-up: switching to Auto mode is for admins")
+NEEDS_ADMIN_FULL = Msg("modecard.needs_admin", "Full access mode needs an admin.",
+                       note="Switching to Full access mode is for admins")
 TOAST_PERMS_STARTING = Msg("toast.perms_starting",
                            "{session} is still starting - try again in a moment",
                            note="Pop-up: the session's state is not known yet",
@@ -522,17 +525,33 @@ MODE_BUSY_TO_ASK = Msg("modecard.busy_to_ask", "⚙️ <b>{session}</b> is busy.
 MODE_BUSY_TO_AUTO = Msg("modecard.busy_to_auto", "⚙️ <b>{session}</b> is busy.\nSwitch to "
                         "Auto mode?", note="HTML. Above Stop & switch / Not now",
                         eg={"session": "x1"})
-MODE_CONFIRM_AUTO = Msg("modecard.confirm_auto",
-                        "⚙️ Switch <b>{session}</b> to {mode}?\n<i>Claude will run tools "
-                        "without prompting ({flag}).</i>",
-                        note="HTML. The Auto confirm; {mode} is the Auto mode label (it "
-                             "already says mode), {flag} Claude Code's own option name",
-                        eg={"session": "x1", "mode": "Auto mode",
+MODE_BUSY_TO_FULL = Msg("modecard.busy_to_full", "⚙️ <b>{session}</b> is busy.\nSwitch to "
+                        "Full access mode? The session restarts.",
+                        note="HTML. Above Stop & switch / Not now: switching to Full access "
+                             "mode restarts the session", eg={"session": "x1"})
+MODE_CONFIRM_FULL = Msg("modecard.confirm_full",
+                        "⚙️ Switch <b>{session}</b> to {mode}?\n<i>Everything runs with no "
+                        "checks ({flag}). Switching restarts the session; the conversation "
+                        "is kept.</i>",
+                        note="HTML. The Full access confirm; {mode} is the Full access mode "
+                             "label (it already says mode), {flag} Claude Code's own option "
+                             "name",
+                        eg={"session": "x1", "mode": "Full access mode",
                             "flag": "--dangerously-skip-permissions"})
-MODE_SWITCHING = Msg("modecard.switching", "⚙️ Switching <b>{session}</b> to {mode}…",
-                     note="HTML. A mode switch is under way; {mode} is the mode's label, "
-                          "which already says mode",
+MODE_SWITCHING = Msg("modecard.switching",
+                     "⚙️ Switching <b>{session}</b> to {mode} (the session restarts)…",
+                     note="HTML. A mode switch that restarts the session is under way; {mode} "
+                          "is the mode's label, which already says mode",
                      eg={"session": "x1", "mode": "Ask mode"})
+MODE_DIALOG_OPEN = Msg("modecard.dialog_open",
+                       "⚠️ <b>{session}</b> is waiting on a question or permission prompt. "
+                       "Answer it first, then switch the mode.",
+                       note="HTML. An Ask/Auto switch refused: the session shows a prompt the "
+                            "key presses would answer", eg={"session": "x1"})
+MODE_PRESS_FAILED = Msg("modecard.press_failed",
+                        "❌ Couldn't reach <b>{session}</b>'s terminal - mode not changed.",
+                        note="HTML. The key presses for an Ask/Auto switch could not be sent",
+                        eg={"session": "x1"})
 
 # /whoami: config keys and role names are names, written as they are.
 WHOAMI_NOT_MEMBER = Msg("whoami.not_member", "🪪 You're not a member of this scope.",
@@ -1381,7 +1400,7 @@ class CommandHandlersMixin:
     async def _send_new_conflict_prompt(self, *, update: Update,
                                           existing: TrackedSession,
                                           prompt: str,
-                                          skip_perms: bool,
+                                          mode: str,
                                           model: str | None = None,
                                           cwd: str | None = None,
                                           edit_msg_id: int | None = None) -> None:
@@ -1404,7 +1423,7 @@ class CommandHandlersMixin:
         older = self._new_conflict_pending.get(existing.name)
         entry = self._new_conflict_pending[existing.name] = {
             "prompt": prompt,
-            "skip_perms": skip_perms,
+            "mode": mode,
             # What a Replace starts the fresh session with: the same
             # choices the Name card or the chat's defaults gave /new.
             "model": model,
@@ -1510,16 +1529,17 @@ class CommandHandlersMixin:
 
     async def _handle_mode_cmd(self, update: Update,
                                ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """/mode [name] [ask|auto] (4.4); /perms is the same command.
+        """/mode [name] [ask|auto|full] (4.4); /perms is the same command.
 
-        Shows the session's mode with a one-tap switch to the other one
+        Shows the session's mode with a one-tap switch to each other one
         (it used to flip it blind), or switches straight to the mode named:
-        `/mode ask`, `/mode x1 auto`. Only going to Auto needs an admin."""
+        `/mode ask`, `/mode x1 auto`. Only going to Full access needs an
+        admin."""
         if not await self._authorize(update):
             return
         chat_id = calling_chat_id(update)
         tr = i18n.for_update(update)
-        # `ask` / `auto`, or the mode's word in any enabled language; a
+        # `ask` / `auto` / `full`, or the mode's word in any enabled language; a
         # translated word that is also the exact name of a live session
         # here names that session (7b). Stored and sent: the id.
         want, label, ok = mode_labels.parse_mode_args(
@@ -1556,15 +1576,21 @@ class CommandHandlersMixin:
                         question = tr.text(MODE_WHICH)
                         kb = session_parity.session_picker(
                             self, chat_id, live, "mode_show", user_id=picker_for)
-                    elif want == "ask":
-                        question = tr.text(MODE_WHICH_TO, mode=Safe(tr.text(MODE_ASK)))
-                        kb = session_parity.session_picker(
-                            self, chat_id, live, "modeask", keyed=True, user_id=picker_for)
                     else:
-                        question = tr.text(MODE_WHICH_TO, mode=Safe(tr.text(MODE_AUTO)))
-                        kb = session_parity.session_picker(
-                            self, chat_id, live, "modeauto", keyed=True,
-                            user_id=picker_for)
+                        question = tr.text(MODE_WHICH_TO,
+                                           mode=Safe(tr.text(mode_label(want))))
+                        if want == perm_modes.ASK:
+                            kb = session_parity.session_picker(
+                                self, chat_id, live, "modeask", keyed=True,
+                                user_id=picker_for)
+                        elif want == perm_modes.AUTO:
+                            kb = session_parity.session_picker(
+                                self, chat_id, live, "modeauto", keyed=True,
+                                user_id=picker_for)
+                        else:
+                            kb = session_parity.session_picker(
+                                self, chat_id, live, "modefull", keyed=True,
+                                user_id=picker_for)
                     sent = await reply_text(update.message, question, reply_markup=kb)
                     card_owner.claim_sent(self, chat_id, sent, calling_user_id(update),
                                           kind="mode", command="/mode", picker=True,
@@ -1578,41 +1604,49 @@ class CommandHandlersMixin:
             text, kb = self._render_mode_card(chat_id, sess)
             await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
             return
-        target = want == "auto"
-        if sess.skip_perms == target:
+        if sess.mode_switch is None and sess.current_mode() == want:
             await reply_text(update.message, tr.html(
-                MODE_ALREADY, session=sess.label, mode=Safe(tr.html(mode_label(target)))),
+                MODE_ALREADY, session=sess.label, mode=Safe(mode_labels.shown_label(tr, sess))),
                 parse_mode="HTML")
             return
-        await self._perms_flow(sess, target, update.message,
-                               may_auto=self._is_admin(update), chat_id=chat_id,
-                               requester=calling_user_id(update))
+        await self._mode_flow(sess, want, update.message,
+                              may_full=self._is_admin(update), chat_id=chat_id,
+                              requester=calling_user_id(update))
 
     # The old name: the same command since 2026-09-30.
     _handle_perms_cmd = _handle_mode_cmd
 
     def _render_mode_card(self, chat_id, sess: TrackedSession, tr=None):
-        """`x1 is in 🤖 Auto mode.` and the one switch that makes sense. ✍️ marks
+        """`x1 is in 🤖 Auto mode.` and a switch to each other mode. ✍️ marks
         the chat's target, never in a group: there each member has their
         own (roadmap 8.90), and the card is everyone's (so it is in the
-        chat's language when *tr* is None)."""
+        chat's language when *tr* is None). The Full access button shows
+        for everyone; the tap is refused for someone not an admin."""
         tr = tr or i18n.for_chat(chat_id)
         target = (None if group_intake.is_group_chat(chat_id)
                   else self.registry.target_for(chat_id))
-        auto = sess.skip_perms
         text = tr.html(MODE_IS_TARGET if sess is target else MODE_IS, session=sess.label,
-                       mode=Safe(tr.html(mode_label(auto))))
-        # The switch relaunches the session, so the button carries the turn
-        # it was shown for (a new turn since refuses it, as Stop and End do).
-        if auto:
-            button = InlineKeyboardButton(tr.text(MODE_BTN_TO_ASK),
-                                          callback_data=session_parity.session_cb(
-                self, chat_id or 0, sess, f"modeask{sess.turn_key}"))
-        else:
-            button = InlineKeyboardButton(tr.text(MODE_BTN_TO_AUTO),
-                                          callback_data=session_parity.session_cb(
-                self, chat_id or 0, sess, f"modeauto{sess.turn_key}"))
-        return text, InlineKeyboardMarkup([[button]])
+                       mode=Safe(mode_labels.shown_label(tr, sess)))
+        if sess.mode_switch is not None:
+            text += "\n" + tr.html(mode_switch.SWITCH_PENDING_LINE)
+        # A switch to or from Full access relaunches the session, so each
+        # button carries the turn it was shown for (a new turn since
+        # refuses a restart, as Stop and End do).
+        current = sess.current_mode()
+        rows = []
+        if current != perm_modes.ASK:
+            rows.append([InlineKeyboardButton(
+                tr.text(MODE_BTN_TO_ASK), callback_data=session_parity.session_cb(
+                    self, chat_id or 0, sess, f"modeask{sess.turn_key}"))])
+        if current != perm_modes.AUTO:
+            rows.append([InlineKeyboardButton(
+                tr.text(MODE_BTN_TO_AUTO), callback_data=session_parity.session_cb(
+                    self, chat_id or 0, sess, f"modeauto{sess.turn_key}"))])
+        if current != perm_modes.FULL:
+            rows.append([InlineKeyboardButton(
+                tr.text(MODE_BTN_TO_FULL), callback_data=session_parity.session_cb(
+                    self, chat_id or 0, sess, f"modefull{sess.turn_key}"))])
+        return text, InlineKeyboardMarkup(rows)
 
     def _mode_card(self, chat_id, sess: TrackedSession, note: str = ""):
         """The /mode card, under *note* (HTML) when there is one: where every
@@ -1620,12 +1654,18 @@ class CommandHandlersMixin:
         text, kb = self._render_mode_card(chat_id, sess)
         return (f"{note}\n\n{text}" if note else text), kb
 
-    async def _perms_flow(self, sess: TrackedSession, target_skip_perms: bool,
-                          message, *, may_auto: bool, chat_id=None,
-                          query=None, requester: int | None = None) -> None:
-        """Switch *sess* to Auto (``target_skip_perms``) or Ask: Ask→Auto
-        asks to confirm; Auto→Ask switches at once; a working session
-        offers Stop & switch. Every way ends in the /mode card.
+    async def _mode_flow(self, sess: TrackedSession, target_mode: str,
+                         message, *, may_full: bool, chat_id=None,
+                         query=None, requester: int | None = None) -> None:
+        """Switch *sess* to *target_mode* (``ask``, ``auto``, ``full``).
+
+        Ask <-> Auto is in place (Shift+Tab, no restart): fine while a turn
+        runs, refused while a question or permission prompt is open, and
+        the card says the switch was sent until Claude Code confirms it
+        (aipager/bot/mode_switch.py). Into Full access asks to confirm;
+        out of it switches at once; both restart the session, and a working
+        session offers Stop & switch first. Every way ends in the /mode
+        card.
 
         ``query``: the tap on a /mode card or picker. That message is edited
         through every step, one message that changes in place (operator,
@@ -1637,8 +1677,9 @@ class CommandHandlersMixin:
         group the confirm is theirs alone and the result names them
         (roadmap 8.91c)."""
         # The card and the reply are the chat's; a pop-up is the tapper's.
-        tr = i18n.for_chat(chat_id if chat_id is not None
-                           else getattr(getattr(message, "chat", None), "id", None))
+        card_chat = (chat_id if chat_id is not None
+                     else getattr(getattr(message, "chat", None), "id", None))
+        tr = i18n.for_chat(card_chat)
         person = (i18n.for_person(SimpleNamespace(callback_query=query))
                   if query is not None else tr)
         shown: list = []        # the typed path's one reply, once sent
@@ -1681,14 +1722,22 @@ class CommandHandlersMixin:
             else:
                 await reply_text(message, reply, parse_mode="HTML")
 
-        # Admin gate: only switching TO Auto needs one.
-        if target_skip_perms and not may_auto:
-            await refuse(person.text(TOAST_NEEDS_ADMIN_AUTO), tr.html(NEEDS_ADMIN_AUTO))
+        # Admin gate: only switching TO Full access needs one (leaving it
+        # narrows, like Ask and Auto, which are everyone's).
+        if target_mode == perm_modes.FULL and not may_full:
+            await refuse(person.text(TOAST_NEEDS_ADMIN_FULL), tr.html(NEEDS_ADMIN_FULL))
             return
 
         if sess.status == Status.UNKNOWN:
             await refuse(person.text(TOAST_PERMS_STARTING, session=sess.label),
                          tr.html(MODE_INITIALIZING, session=sess.label))
+            return
+
+        in_place = not sess.mode_switch_restarts(target_mode)
+        if in_place and sess.dialog_is_open():
+            # A Shift+Tab now would be read by the prompt on screen.
+            await refuse(person.text(TOAST_MODE_DIALOG_OPEN, session=sess.label),
+                         tr.html(MODE_DIALOG_OPEN, session=sess.label))
             return
 
         if query is not None:
@@ -1699,25 +1748,55 @@ class CommandHandlersMixin:
                                getattr(getattr(query, "message", None), "message_id", None))
         tg_user = (getattr(query, "from_user", None) if query is not None
                    else getattr(message, "from_user", None))
+        by = self._actor_label(requester, chat_id, tg_user)
+
+        if in_place:
+            outcome = await self._mode_switch_core(sess, target_mode)
+            mode = Safe(tr.html(mode_label(target_mode)))
+            if outcome.reason == "sent":
+                note = tr.html(mode_switch.SWITCH_SENT, session=sess.label, mode=mode)
+            elif outcome.reason == "already":
+                note = tr.html(MODE_ALREADY, session=sess.label,
+                               mode=Safe(mode_labels.shown_label(tr, sess)))
+            elif outcome.reason == "dialog_open":
+                note = tr.html(MODE_DIALOG_OPEN, session=sess.label)
+            elif outcome.reason == "send_failed":
+                note = tr.html(MODE_PRESS_FAILED, session=sess.label)
+            elif outcome.ok:
+                note = (tr.html(callbacks_mod.MODE_SWITCHED_BY, mode=mode, person=Command(by))
+                        if by else "")
+            elif outcome.reason == "still_stopping":
+                note = tr.html(callbacks_mod.MODE_STILL_STOPPING, session=sess.label)
+            elif outcome.reason == "launch_failed":
+                note = tr.html(callbacks_mod.MODE_SWITCH_FAILED, error=outcome.err)
+            elif outcome.reason == "starting":
+                note = tr.html(MODE_INITIALIZING, session=sess.label)
+            else:
+                note = callbacks_mod._switch_refused(outcome, tr)
+            text, kb = self._mode_card(chat_id, sess, note)
+            card_id = await show(text, kb)
+            if outcome.reason == "sent":
+                mode_switch.attach_reply(sess, card_chat, card_id, "mode_card", by)
+            return
 
         def own(card_id) -> None:
             """The confirm on *card_id* is the requester's (8.91c)."""
             card_owner.claim(self, chat_id, card_id, requester,
                              kind="mode", command=f"/mode {sess.label}", who=tg_user)
 
+        busy_text = {perm_modes.ASK: MODE_BUSY_TO_ASK, perm_modes.AUTO: MODE_BUSY_TO_AUTO,
+                     perm_modes.FULL: MODE_BUSY_TO_FULL}[target_mode]
         if sess.status == Status.BUSY:
             # BUSY flow: show Stop & switch / Not now keyboard.
             # The whole sentence for each mode: never a shown word sliced.
-            card_id = await show(
-                tr.html(MODE_BUSY_TO_AUTO if target_skip_perms else MODE_BUSY_TO_ASK,
-                        session=sess.label),
-                self._build_perms_busy_keyboard(sess))
+            card_id = await show(tr.html(busy_text, session=sess.label),
+                                 self._build_perms_busy_keyboard(sess))
             if card_id is None:
                 # Muted: no keyboard reached the user, so there is nothing
                 # pending for a tap to confirm.
                 return
             self._perms_pending[sess.name] = {
-                "target_skip_perms": target_skip_perms,
+                "target_mode": target_mode,
                 "msg_id": card_id,
                 "label": sess.label,
                 # The card may be an older message edited in place, so its
@@ -1729,32 +1808,32 @@ class CommandHandlersMixin:
             return
 
         # IDLE flow.
-        if target_skip_perms:
-            # Ask→Auto: require confirmation.
+        if target_mode == perm_modes.FULL:
+            # Into Full access: require confirmation.
             card_id = await show(
-                tr.html(MODE_CONFIRM_AUTO, session=sess.label,
-                        mode=Safe(tr.html(MODE_AUTO)),
-                        flag=Span("<code>--dangerously-skip-permissions</code>")),
+                tr.html(MODE_CONFIRM_FULL, session=sess.label,
+                        mode=Safe(tr.html(mode_label(perm_modes.FULL))),
+                        flag=Span(f"<code>{perm_modes.launch_flag(perm_modes.FULL)}</code>")),
                 self._build_perms_confirm_keyboard(sess))
             if card_id is None:
                 return  # as above: no prompt went out, nothing to confirm
             self._perms_pending[sess.name] = {
-                "target_skip_perms": True,
+                "target_mode": target_mode,
                 "msg_id": card_id,
                 "label": sess.label,
                 "turn": sess.turn_key,
             }
             own(card_id)
         else:
-            # Auto→Ask: execute immediately, no confirmation needed.
-            await show(tr.html(MODE_SWITCHING, session=sess.label, mode=Safe(tr.html(MODE_ASK))))
+            # Out of Full access (it narrows): at once, no confirmation.
+            await show(tr.html(MODE_SWITCHING, session=sess.label,
+                               mode=Safe(tr.html(mode_label(target_mode)))))
 
             async def _edit(text, **kw):
                 await show(text, kw.get("reply_markup"))
 
             await self._do_perms_switch_via_fn(
-                sess, False, _edit, chat_id=chat_id, announce=False,
-                by=self._actor_label(requester, chat_id, tg_user))
+                sess, target_mode, _edit, chat_id=chat_id, announce=False, by=by)
 
     async def _handle_whoami(self, update: Update,
                              ctx: ContextTypes.DEFAULT_TYPE) -> None:

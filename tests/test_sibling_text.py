@@ -105,9 +105,9 @@ def test_a_held_commands_needs_admin_reply_is_in_the_chats_language(env):
     assert tg.out == [today, fa.text(STANDIN)]
 
 
-def test_resumed_in_ask_is_one_sentence_in_the_chats_language(env):
-    """The Ask reason is part of one whole key now (nothing glued in): a
-    Persian group reads all of it in Persian."""
+def test_resumed_in_auto_is_one_sentence_in_the_chats_language(env):
+    """The Full access reason is part of one whole key (nothing glued in):
+    a Persian group reads all of it in Persian."""
     from types import SimpleNamespace
 
     from aipager.state import Status
@@ -116,25 +116,25 @@ def test_resumed_in_ask_is_one_sentence_in_the_chats_language(env):
     bot._is_admin_user = lambda *a, **k: False
     x1 = p3a.session(bot, "x1", chat=GROUP, status=Status.GONE)
     x1.claude_session_id = "abc"
-    x1.skip_perms = True
+    x1.perm_mode = "full"
     x1.transcript_path = ""
     bot._do_resume_core = AsyncMock(return_value=SimpleNamespace(ok=True, reason="resumed",
                                                                  err=""))
     fa = i18n.get("fa")
     p3a.cmd(env, bot, tg, "_handle_resume_cmd", "/resume x1", chat=GROUP, user=BOB)
-    header = fa.html(session_ops.RESUMED_IN_ASK, session="x1")
+    header = fa.html(session_ops.RESUMED_IN_AUTO, session="x1")
     assert tg.out[-1].startswith(header), tg.out[-1]
-    assert "Auto needs an admin" not in tg.out[-1] and "Resumed" not in tg.out[-1]
+    assert "needs an admin" not in tg.out[-1] and "Resumed" not in tg.out[-1]
     assert PERSIAN.search(tg.out[-1]) and not CYRILLIC.search(tg.out[-1])
     assert RLM * 2 not in tg.out[-1]
 
 
-def test_resumed_in_ask_keeps_the_english_it_had():
-    """The whole sentence's English is the old glued one, byte for byte."""
-    from aipager.bot.transport import RESUME_AUTO_NEEDS_ADMIN
+def test_resumed_in_auto_reads_as_one_english_sentence():
+    """The whole sentence carries the reason transport's line gives."""
+    from aipager.bot.transport import RESUME_FULL_NEEDS_ADMIN
     en = i18n.get("en")
-    assert (en.html(session_ops.RESUMED_IN_ASK, session="a<b")
-            == f"♻️ Resumed <b>a&lt;b</b> in Ask: {RESUME_AUTO_NEEDS_ADMIN}")
+    assert (en.html(session_ops.RESUMED_IN_AUTO, session="a<b")
+            == f"♻️ Resumed <b>a&lt;b</b> in Auto mode: {RESUME_FULL_NEEDS_ADMIN}")
 
 
 @pytest.mark.parametrize("code", ["fa", "ru"])

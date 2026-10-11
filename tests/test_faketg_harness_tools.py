@@ -56,7 +56,6 @@ def test_config_ids_roles_and_loads(tmp_path):
     assert roles == {fti.ALICE: "owner", fti.BOB: "user", fti.CAROL: "read_only",
                      fti.DAVE: "admin"}
     assert scope.load_miniapp(p)["enabled"] is False
-    assert scope.load_default_mode(p) == "ask"
     assert scope.load_claude_path(p) == "/x/claude"
     every_id = [fti.DM_ID, fti.GROUP_ID, fti.SUPERGROUP_ID, *fti.MEMBERS]
     assert fti.REAL_CHAT_ID not in every_id and -fti.REAL_CHAT_ID not in every_id

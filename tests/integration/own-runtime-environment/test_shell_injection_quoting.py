@@ -77,7 +77,7 @@ def test_shell_metacharacters_in_resolved_path_do_not_execute(
         "aipager.dtach.inject._create_subprocess_exec", _fake_create_subprocess_exec,
     )
 
-    ok, err = run_async(launch_session("injsession"))
+    ok, err = run_async(launch_session("injsession", mode="ask"))
 
     assert ok is False  # the fake dtach process always "fails"
     assert "args" in captured, "launch_session never reached create_subprocess_exec"

@@ -16,7 +16,7 @@ rename — which added five more keys to the same matrix):
   - available:false always comes with a non-null reason.
 
 ADMIN_ID is admin (bypass_safety=True) and every session here defaults
-to an empty queue and skip_perms=False, so for ADMIN_ID: clearqueue is
+to an empty queue and mode="ask", so for ADMIN_ID: clearqueue is
 present-but-unavailable (nothing queued), perms is available (admin can
 target Auto), everything else new is available.
 """

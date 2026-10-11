@@ -28,6 +28,7 @@ import re
 import time
 from typing import TYPE_CHECKING
 
+from aipager import perm_modes
 from aipager.i18n import Command, Msg
 from aipager.miniapp import chat_lines
 from aipager.miniapp.phrase import say
@@ -188,8 +189,13 @@ def _model_refusals() -> dict:
 
 # The sentences the write routes answer with, in the viewer's language.
 # Their ``error`` codes are ids and never change.
-_AUTO_NEEDS_ADMIN = Msg("app.err.auto_needs_admin", "Auto mode requires admin.",
-                        note="Auto is the permission mode (as in /mode)")
+_FULL_NEEDS_ADMIN = Msg("app.err.full_needs_admin", "Full access mode requires admin.",
+                        note="Full access is the permission mode (as in /mode)")
+_MODE_SEND_FAILED = Msg("app.err.mode_send_failed",
+                        "Couldn't reach the session's terminal - mode not changed.",
+                        note="The key presses for an Ask/Auto mode switch could not be sent")
+_BAD_MODE = Msg("app.err.bad_mode", "Pick Ask, Auto or Full access mode.",
+                note="The permission mode sent was not one of the three (as in /mode)")
 _NAME_TAKEN = Msg("app.err.name_taken", "A session named {session} already exists in this chat.",
                   eg={"session": "x1"})
 _NOT_BUSY = Msg("app.err.not_busy", "This session isn't busy right now - nothing to stop.")
@@ -221,10 +227,10 @@ _SEND_FAILED = Msg("app.err.send_failed", "Couldn't send {command}.",
                    eg={"command": "/compact"},
                    note="Typing a command into the session failed")
 _PICK_MODEL = Msg("app.err.pick_model", "Pick a model.")
-_RESUMED_IN_ASK = Msg("app.err.resumed_in_ask", "Resumed {session} in Ask: {reason}",
-                      eg={"session": "x1", "reason": "Auto needs an admin."},
-                      note="Resumed, but in Ask (the permission mode, as in /mode); the "
-                           "reason is a whole sentence of its own")
+_RESUMED_IN_AUTO = Msg("app.err.resumed_in_auto", "Resumed {session} in Auto mode: {reason}",
+                       eg={"session": "x1", "reason": "Full access mode needs an admin."},
+                       note="Resumed, but in Auto (the permission mode, as in /mode), not Full "
+                            "access; the reason is a whole sentence of its own")
 _CHAT_DM = Msg("app.chat.dm", "DM", note="Mini App chat switcher: a private chat with no "
                                           "name (short)")
 _CHAT_GROUP = Msg("app.chat.group", "Group",
@@ -819,13 +825,25 @@ class MiniAppServer:
             return web.json_response({"error": "bad_request", "detail": say(tr, err)},
                                      status=400)
 
-        skip_perms = body.get("skip_perms") is True
-        # Auto mode is admin-gated in chat (`/new !name`, handlers.py).
+        # The mode: "ask", "auto" or "full". An older page sends
+        # `skip_perms: true` for what was then bypass (Full access now);
+        # neither means the chat's New sessions default for this viewer.
+        is_admin = bool(self.bot._is_admin_user(user_id, scope_chat_id))
+        if "mode" in body:
+            mode = body.get("mode")
+            if not perm_modes.is_mode(mode):
+                return web.json_response({"error": "bad_request",
+                                          "detail": tr.text(_BAD_MODE)}, status=400)
+        elif body.get("skip_perms") is True:
+            mode = perm_modes.FULL
+        else:
+            mode = self._default_new_mode(scope_chat_id, is_admin)
+        # Full access is admin-gated in chat (`/new !name`, handlers.py).
         # Without the same gate here, the Mini App would be a way to get
         # --dangerously-skip-permissions that chat deliberately denies.
-        if skip_perms and not self.bot._is_admin_user(user_id, scope_chat_id):
+        if mode == perm_modes.FULL and not is_admin:
             return web.json_response(
-                {"error": "forbidden", "detail": tr.text(_AUTO_NEEDS_ADMIN)},
+                {"error": "forbidden", "detail": tr.text(_FULL_NEEDS_ADMIN)},
                 status=403,
             )
 
@@ -868,7 +886,7 @@ class MiniAppServer:
             }, status=409)
 
         session_name, err = await self.bot.create_session(
-            name, scope_chat_id=scope_chat_id, skip_perms=skip_perms,
+            name, scope_chat_id=scope_chat_id, mode=mode,
             cwd=cwd or None, driver_user_id=user_id,
             model=chosen_model or None,
         )
@@ -879,10 +897,20 @@ class MiniAppServer:
             return web.json_response({"error": "launch_failed", "detail": say(tr, err)},
                                      status=400)
 
-        await self._mirror_session_created(scope_chat_id, name, skip_perms, cwd)
+        await self._mirror_session_created(scope_chat_id, name, mode, cwd)
         return web.json_response({"label": name, "session_name": session_name})
 
-    async def _mirror_session_created(self, scope_chat_id, label, skip_perms, cwd) -> None:
+    @staticmethod
+    def _default_new_mode(scope_chat_id, is_admin: bool) -> str:
+        """What a new session started by this viewer gets when they do not
+        choose: the chat's New sessions mode (Auto unless it says
+        otherwise), Auto in place of Full access for someone not an admin
+        (``new_flow.resolve_new_session_settings``'s rule)."""
+        from aipager import preferences
+        stored = preferences.get_new_session_defaults(scope_chat_id or 0).mode
+        return perm_modes.narrowest_allowed(stored, is_admin)
+
+    async def _mirror_session_created(self, scope_chat_id, label, mode, cwd) -> None:
         """Announce the new session in chat. Best-effort — the process is
         already running by now, so a failed notification must not turn a
         successful launch into an error the operator might retry. In the
@@ -891,7 +919,7 @@ class MiniAppServer:
             await self.bot._app.bot.send_message(
                 chat_id=scope_chat_id,
                 text=chat_lines.session_created(_chat_tr(scope_chat_id), label,
-                                                skip_perms, cwd),
+                                                mode, cwd),
             )
         except Exception:
             log.debug("miniapp: session-created mirror failed", exc_info=True)
@@ -1032,7 +1060,11 @@ class MiniAppServer:
                 "card_age_decay": prefs.card_age_decay,
             },
             "can_create": bool(self.bot._can_prompt_user(user_id, scope_chat_id)),
-            "can_use_auto": bool(self.bot._is_admin_user(user_id, scope_chat_id)),
+            # Ask and Auto are everyone's; Full access is for admins. The
+            # form starts on what /new would give this viewer.
+            "can_use_full": bool(self.bot._is_admin_user(user_id, scope_chat_id)),
+            "default_mode": self._default_new_mode(
+                scope_chat_id, bool(self.bot._is_admin_user(user_id, scope_chat_id))),
         })
 
     async def _handle_preferences_get(self, request):
@@ -2013,14 +2045,14 @@ class MiniAppServer:
             return web.json_response({"error": "too_many_requests"}, status=429)
 
         label = sess.label
-        # No Ask/Auto choice here: the Mini App resumes in the session's
-        # own saved mode, like chat's bare `/resume <name>`, and like it
-        # brings a session saved in Auto back in Ask for anyone who is
+        # No mode choice here: the Mini App resumes in the session's own
+        # saved mode, like chat's bare `/resume <name>`, and like it brings
+        # a session saved in Full access back in Auto for anyone who is
         # not an admin (roadmap 8.83).
-        override, auto_refused = self.bot._resume_auto_gate(
+        override, full_refused = self.bot._resume_full_gate(
             sess, None, user_id, scope_chat_id)
         outcome = await self.bot._do_resume_core(
-            sess, skip_perms_override=override, driver_user_id=user_id)
+            sess, mode_override=override, driver_user_id=user_id)
         tr = self._viewer_tr(request, user_id)
         if outcome.reason == "not_gone":
             return web.json_response({
@@ -2038,13 +2070,13 @@ class MiniAppServer:
             }, status=400)
 
         await self._mirror_session_resumed(
-            scope_chat_id, label, in_ask=auto_refused)
-        if auto_refused:
-            from aipager.bot.transport import RESUME_AUTO_NEEDS_ADMIN
+            scope_chat_id, label, in_auto=full_refused)
+        if full_refused:
+            from aipager.bot.transport import RESUME_FULL_NEEDS_ADMIN
             return web.json_response({
-                "status": "resumed", "label": label, "mode": "ask",
-                "detail": tr.text(_RESUMED_IN_ASK, session=label,
-                                  reason=say(tr, RESUME_AUTO_NEEDS_ADMIN)),
+                "status": "resumed", "label": label, "mode": perm_modes.AUTO,
+                "detail": tr.text(_RESUMED_IN_AUTO, session=label,
+                                  reason=say(tr, RESUME_FULL_NEEDS_ADMIN)),
             })
         return web.json_response({"status": "resumed", "label": label})
 
@@ -2157,17 +2189,25 @@ class MiniAppServer:
             )
             return web.json_response({"error": "forbidden"}, status=403)
 
-        # The client never sends a target — the server derives it by
-        # toggling the session's own current mode, closing off a
-        # body-tampering surface (design.md).
-        target_skip_perms = not sess.skip_perms
-        # Auto mode requires admin — the same gate chat's own /perms and
-        # session creation apply. Switching TO Ask never needs admin.
+        # The target is the client's: three modes leave nothing to toggle.
+        # It is validated here, and the admin rule applied to it, exactly
+        # as chat's /mode does: Full access needs an admin; Ask and Auto,
+        # and leaving Full access, do not.
         tr = self._viewer_tr(request, user_id)
-        if target_skip_perms and not self.bot._is_admin_user(user_id, scope_chat_id):
-            log.info("miniapp: session perms rejected (403) — Auto requires admin")
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        target = body.get("mode") if isinstance(body, dict) else None
+        if not perm_modes.is_mode(target):
+            return web.json_response({"error": "bad_request",
+                                      "detail": tr.text(_BAD_MODE)}, status=400)
+        if (target == perm_modes.FULL
+                and not self.bot._is_admin_user(user_id, scope_chat_id)):
+            log.info("miniapp: session perms rejected (403) — Full access requires admin")
+            from aipager.miniapp.sessions import PERMS_ADMIN_REQUIRED_REASON
             return web.json_response(
-                {"error": "forbidden", "detail": tr.text(_AUTO_NEEDS_ADMIN)},
+                {"error": "forbidden", "detail": say(tr, PERMS_ADMIN_REQUIRED_REASON)},
                 status=403,
             )
 
@@ -2175,7 +2215,25 @@ class MiniAppServer:
             log.info("miniapp: session perms rejected (429) — rate limited")
             return web.json_response({"error": "too_many_requests"}, status=429)
 
-        outcome = await self.bot._perms_switch_core(sess, target_skip_perms)
+        outcome = await self.bot._mode_switch_core(sess, target)
+        if outcome.reason == "already":
+            return web.json_response({"status": "already", "label": outcome.label,
+                                      "mode": target})
+        if outcome.reason == "dialog_open":
+            from aipager.miniapp.sessions import MODE_PROMPT_OPEN_REASON
+            return web.json_response({"error": "prompt_open",
+                                      "detail": say(tr, MODE_PROMPT_OPEN_REASON)},
+                                     status=409)
+        if outcome.reason == "starting":
+            return web.json_response({"error": "not_live",
+                                      "detail": tr.text(_NOT_RUNNING)}, status=409)
+        if outcome.reason == "send_failed":
+            return web.json_response({"error": "send_failed",
+                                      "detail": tr.text(_MODE_SEND_FAILED)}, status=502)
+        if outcome.reason == "sent":
+            await self._mirror_session_mode_sent(sess, scope_chat_id, outcome.label, target)
+            return web.json_response({"status": "sent", "label": outcome.label,
+                                      "mode": target, "pending": True})
         resp = self._restart_outcome_response(
             outcome,
             still_stopping_detail=tr.text(_PERMS_STILL_STOPPING, session=outcome.label),
@@ -2185,11 +2243,10 @@ class MiniAppServer:
             return resp
 
         await self._mirror_session_perms_switched(
-            scope_chat_id, outcome.label, target_skip_perms,
+            scope_chat_id, outcome.label, target,
         )
         return web.json_response({
-            "status": "switched", "label": outcome.label,
-            "skip_perms": target_skip_perms,
+            "status": "switched", "label": outcome.label, "mode": target,
         })
 
     async def _handle_session_clearqueue(self, request):
@@ -2449,15 +2506,31 @@ class MiniAppServer:
         })
 
     async def _mirror_session_perms_switched(
-        self, scope_chat_id, label, skip_perms,
+        self, scope_chat_id, label, mode,
     ) -> None:
         try:
             await self.bot._app.bot.send_message(
                 chat_id=scope_chat_id,
-                text=chat_lines.perms_switched(_chat_tr(scope_chat_id), label, skip_perms),
+                text=chat_lines.perms_switched(_chat_tr(scope_chat_id), label, mode),
             )
         except Exception:
             log.debug("miniapp: session-perms-switched mirror failed", exc_info=True)
+
+    async def _mirror_session_mode_sent(self, sess, scope_chat_id, label, mode) -> None:
+        """Say in chat that an Ask/Auto switch was sent; that line is what
+        Claude Code's confirmation (or its refusal) edits later
+        (aipager/bot/mode_switch.py)."""
+        from aipager.bot import mode_switch
+        try:
+            sent = await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id,
+                text=chat_lines.mode_sent(_chat_tr(scope_chat_id), label, mode),
+            )
+        except Exception:
+            log.debug("miniapp: session-mode-sent mirror failed", exc_info=True)
+            return
+        mode_switch.attach_reply(sess, scope_chat_id,
+                                 getattr(sent, "message_id", None), "mirror")
 
     async def _mirror_session_queue_cleared(self, scope_chat_id, label, dropped) -> None:
         try:
@@ -2525,9 +2598,9 @@ class MiniAppServer:
             log.debug("miniapp: session-killed mirror failed", exc_info=True)
 
     async def _mirror_session_resumed(self, scope_chat_id, label,
-                                      in_ask: bool = False) -> None:
+                                      in_auto: bool = False) -> None:
         try:
-            text = chat_lines.resumed(_chat_tr(scope_chat_id), label, in_ask)
+            text = chat_lines.resumed(_chat_tr(scope_chat_id), label, in_auto)
             await self.bot._app.bot.send_message(
                 chat_id=scope_chat_id, text=text,
             )

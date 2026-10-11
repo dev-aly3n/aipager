@@ -24,7 +24,7 @@ from telegram import (
     Update,
 )
 
-from aipager import i18n
+from aipager import i18n, perm_modes
 from aipager.config import RESUME_GUARD_SECONDS
 from aipager.i18n import Command, Msg, Span
 from aipager.dtach import inject
@@ -51,7 +51,7 @@ from aipager.transcript import read_still_queued
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
-    RESUME_AUTO_NEEDS_ADMIN,
+    RESUME_FULL_NEEDS_ADMIN,
     reply_text,
     edit_text,
     send_text,
@@ -187,12 +187,13 @@ RESUME_FAILED = Msg("sess.resume_failed", "❌ Couldn't resume <b>{session}</b>:
 RESUMED = Msg("sess.resumed", "♻️ Resumed <b>{session}</b>", note="The session is back",
               eg={"session": "x1"})
 #: One whole sentence with its reason (the reason is
-#: ``transport.RESUME_AUTO_NEEDS_ADMIN``'s words, not glued in).
-RESUMED_IN_ASK = Msg("sess.resumed_in_ask",
-                     "♻️ Resumed <b>{session}</b> in Ask: Auto needs an admin.",
-                     note="The session came back in Ask mode, not Auto, because the person "
-                          "who resumed it is not an admin. Auto and Ask are the mode names",
-                     eg={"session": "x1"})
+#: ``transport.RESUME_FULL_NEEDS_ADMIN``'s words, not glued in).
+RESUMED_IN_AUTO = Msg("sess.resumed_in_auto",
+                      "♻️ Resumed <b>{session}</b> in Auto mode: Full access mode needs an admin.",
+                      note="The session came back in Auto mode, not Full access, because the "
+                           "person who resumed it is not an admin. Auto and Full access are "
+                           "the mode names",
+                      eg={"session": "x1"})
 RESUME_LAST_RESPONSE = Msg("sess.resume_last_response",
                            "<i>📜 Last response from this session</i>\n"
                            "<blockquote>{preview}</blockquote>",
@@ -278,8 +279,10 @@ class RestartOutcome:
     ok: bool
     reason: str
     label: str
-    skip_perms: bool = False
+    mode: str = "ask"
     err: str = ""
+    #: True for an in-place Ask<->Auto switch (Shift+Tab, no restart).
+    in_place: bool = False
 
 
 @dataclass
@@ -1177,12 +1180,15 @@ class SessionOpsMixin:
         )
 
     async def create_session(
-        self, label: str, *, scope_chat_id, skip_perms: bool = False,
+        self, label: str, *, scope_chat_id, mode: str,
         cwd: str | None = None, driver_user_id: int | None = None,
         model: str | None = None, reuse_name: str | None = None,
     ) -> tuple[str, str]:
         """Launch a session and register it. Returns ``(session_name, "")``
         or ``("", error)``.
+
+        ``mode`` (required): ``"ask"``, ``"auto"`` or ``"full"``; the
+        caller has already applied the admin rule for Full access.
 
         ``reuse_name``: start the process under this exact internal name
         (Replace). A renamed session, or one named before chats had their
@@ -1233,7 +1239,7 @@ class SessionOpsMixin:
         # first prompt join that turn's rules.
         _clear_turn_open(session_name)
         ok, err = await inject.launch_session(
-            short_name, skip_perms=skip_perms, cwd=cwd or None,
+            short_name, mode=mode, cwd=cwd or None,
             system_prompt_extra=sys_extra, model=model or None,
         )
         if not ok:
@@ -1244,7 +1250,9 @@ class SessionOpsMixin:
         # queued target the old process left behind (review rev-iter2-001).
         self._discard_queued_targets(sess)
         sess.label = label
-        sess.skip_perms = skip_perms
+        sess.perm_mode = mode
+        sess.reset_mode_tracking()
+        sess.mode_launch_unchecked = True
         sess.launch_model = model or ""
         if cwd:
             # The hook receiver stamps cwd on the first statusLine event,
@@ -1807,7 +1815,7 @@ class SessionOpsMixin:
 
     async def _do_resume_core(
         self, sess: TrackedSession, *,
-        skip_perms_override: bool | None = None,
+        mode_override: str | None = None,
         driver_user_id: int | None = None,
     ) -> ResumeOutcome:
         """Resume an already-resolved GONE session.
@@ -1842,11 +1850,12 @@ class SessionOpsMixin:
         # Use the session's actual (possibly scope-disambiguated) name so
         # resume reattaches the right socket, not a flat claude-<label>.
         short_name = session_name.removeprefix("claude-")
-        # Determine the effective skip_perms: explicit override wins,
-        # then the persisted value (already recovered from the state file).
-        effective_skip_perms = (
-            skip_perms_override if skip_perms_override is not None
-            else sess.skip_perms
+        # The effective mode: an explicit override wins, then the
+        # persisted value (already recovered from the state file). Passed
+        # explicitly: a resumed bypass session would otherwise drop back
+        # to Claude Code's own starting mode.
+        effective_mode = (
+            mode_override if mode_override is not None else sess.perm_mode
         )
         sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
         # Hold off the ageing sweep for the launch AND the restore that
@@ -1860,7 +1869,7 @@ class SessionOpsMixin:
         try:
             ok, err = await inject.launch_session(
                 short_name, resume_id=resume_id, cwd=cwd,
-                skip_perms=effective_skip_perms, is_relaunch=True,
+                mode=effective_mode, is_relaunch=True,
                 system_prompt_extra=sys_extra, model=sess.launch_model or None,
             )
             if not ok:
@@ -1876,7 +1885,9 @@ class SessionOpsMixin:
             # old process had queued but never absorbed must not start a
             # phantom turn later (review rev-iter2-001).
             self._discard_queued_targets(sess)
-            sess.skip_perms = effective_skip_perms
+            sess.perm_mode = effective_mode
+            sess.reset_mode_tracking()
+            sess.mode_launch_unchecked = True
             self.registry.transition(session_name, Status.IDLE)
             if driver_user_id is not None:
                 sess.last_driver_user_id = driver_user_id
@@ -1895,30 +1906,29 @@ class SessionOpsMixin:
                  label, resume_id, cwd or "<daemon>")
         return ResumeOutcome(ok=True, reason="resumed")
 
-    def _resume_auto_gate(
-        self, sess: TrackedSession, skip_perms_override: bool | None,
+    def _resume_full_gate(
+        self, sess: TrackedSession, mode_override: str | None,
         actor: int | None, chat_id: int | None,
-    ) -> tuple[bool | None, bool]:
+    ) -> tuple[str | None, bool]:
         """The mode a resume may bring *sess* back in (roadmap 8.83).
 
-        Returns ``(skip_perms_override, auto_refused)``: when the resume
-        would land in Auto (the override, else the session's saved mode)
+        Returns ``(mode_override, full_refused)``: when the resume would
+        land in Full access (the override, else the session's saved mode)
         and *actor* is not an admin in *chat_id*, the override becomes
-        ``False`` (Ask) and ``auto_refused`` is True. Otherwise the
-        override passes through unchanged. Every resume surface (typed
-        ``/resume``, the picker, the ``/new`` conflict card, the Mini App)
-        asks this, so none brings Auto back for someone who could not
-        switch to it."""
-        wants_auto = (skip_perms_override if skip_perms_override is not None
-                      else sess.skip_perms) is True
-        if wants_auto and not self._is_admin_user(actor, chat_id):
-            return False, True
-        return skip_perms_override, False
+        Auto (``perm_modes.narrowest_allowed``) and ``full_refused`` is
+        True. Otherwise the override passes through unchanged. Every
+        resume surface (typed ``/resume``, the picker, the ``/new``
+        conflict card, the Mini App) asks this, so none brings Full access
+        back for someone who could not switch to it."""
+        wants = mode_override if mode_override is not None else sess.perm_mode
+        if wants == perm_modes.FULL and not self._is_admin_user(actor, chat_id):
+            return perm_modes.narrowest_allowed(wants, False), True
+        return mode_override, False
 
     async def _do_resume(self, *, label: str, reply_fn,
                           update: Update | None = None,
                           query=None,
-                          skip_perms_override: bool | None = None,
+                          mode_override: str | None = None,
                           sess: TrackedSession | None = None) -> None:
         """Shared resume logic for /resume <name> and picker callbacks.
 
@@ -1953,22 +1963,23 @@ class SessionOpsMixin:
             if update is not None and update.effective_user is not None
             else None
         )
-        # Auto needs an admin, like every other way into it (roadmap
-        # 8.83): a session saved in Auto, or the Auto button, comes back
-        # in Ask for anyone else, and the reply says so.
+        # Full access needs an admin, like every other way into it
+        # (roadmap 8.83): a session saved in Full access, or the Full
+        # access button, comes back in Auto for anyone else, and the reply
+        # says so.
         actor = driver_user_id
         if actor is None and query is not None:
             from_user = getattr(query, "from_user", None)
             actor = getattr(from_user, "id", None)
-        skip_perms_override, auto_refused = self._resume_auto_gate(
-            sess, skip_perms_override, actor,
+        mode_override, full_refused = self._resume_full_gate(
+            sess, mode_override, actor,
             calling_chat_id(update or query))
         # The GONE snapshot, read before the core resumes the session:
         # leaving GONE clears it (state.transition, roadmap 8.34), and it
         # is still the right "where you left off" for the recap below.
         snapshot = sess.last_assistant_preview
         outcome = await self._do_resume_core(
-            sess, skip_perms_override=skip_perms_override,
+            sess, mode_override=mode_override,
             driver_user_id=driver_user_id,
         )
 
@@ -1997,8 +2008,8 @@ class SessionOpsMixin:
         preview = snapshot or _read_preview(
             sess.transcript_path, max_chars=500,
         )
-        header = (tr.html(RESUMED_IN_ASK, session=label)
-                  if auto_refused else tr.html(RESUMED, session=label))
+        header = (tr.html(RESUMED_IN_AUTO, session=label)
+                  if full_refused else tr.html(RESUMED, session=label))
         if preview:
             body = (
                 f"{header}\n\n"
@@ -2133,12 +2144,12 @@ class SessionOpsMixin:
     #    restart / rename) — see design.md's ORCHESTRATOR OVERRIDE ──
 
     async def _kill_and_relaunch_core(
-        self, sess: TrackedSession, *, target_skip_perms: bool,
+        self, sess: TrackedSession, *, target_mode: str,
         interrupt_first: bool,
     ) -> RestartOutcome:
         """Kill (or interrupt) a live session, poll for its dtach socket
         to disappear, then relaunch it in place with a possibly-different
-        ``skip_perms`` — preserving ``claude_session_id``/``cwd`` so the
+        permission mode — preserving ``claude_session_id``/``cwd`` so the
         transcript resume continuity is maintained.
 
         THE single seam every kill-then-relaunch sequence in this
@@ -2165,13 +2176,13 @@ class SessionOpsMixin:
         sess.relaunch_in_flight = True
         try:
             return await self._kill_and_relaunch_in_flight(
-                sess, target_skip_perms=target_skip_perms,
+                sess, target_mode=target_mode,
                 interrupt_first=interrupt_first)
         finally:
             sess.relaunch_in_flight = False
 
     async def _kill_and_relaunch_in_flight(
-        self, sess: TrackedSession, *, target_skip_perms: bool,
+        self, sess: TrackedSession, *, target_mode: str,
         interrupt_first: bool,
     ) -> RestartOutcome:
         """The body of :meth:`_kill_and_relaunch_core`, run while its
@@ -2225,7 +2236,7 @@ class SessionOpsMixin:
         # Stop), and the relaunched process starts with none (roadmap 8.77).
         _clear_turn_open(session_name)
         ok, err = await inject.launch_session(
-            short_name, skip_perms=target_skip_perms,
+            short_name, mode=target_mode,
             resume_id=resume_id or None, cwd=cwd, is_relaunch=True,
             system_prompt_extra=sys_extra, model=sess.launch_model or None,
         )
@@ -2238,7 +2249,9 @@ class SessionOpsMixin:
             )
 
         # Relaunch succeeded — restore state.
-        sess.skip_perms = target_skip_perms
+        sess.perm_mode = target_mode
+        sess.reset_mode_tracking()
+        sess.mode_launch_unchecked = True
         sess.claude_session_id = resume_id  # restore — launch_session may clear
         sess.cwd = cwd or sess.cwd
         sess.gone_at = None
@@ -2253,16 +2266,18 @@ class SessionOpsMixin:
         sess.turn_sender_id = None
         self.registry.mark_dirty()
 
-        log.info("[%s] kill+relaunch done (skip_perms=%s, interrupt_first=%s)",
-                 label, target_skip_perms, interrupt_first)
+        log.info("[%s] kill+relaunch done (mode=%s, interrupt_first=%s)",
+                 label, target_mode, interrupt_first)
         return RestartOutcome(
-            ok=True, reason="done", label=label, skip_perms=target_skip_perms,
+            ok=True, reason="done", label=label, mode=target_mode,
         )
 
     async def _perms_switch_core(
-        self, sess: TrackedSession, target_skip_perms: bool,
+        self, sess: TrackedSession, target_mode: str,
     ) -> RestartOutcome:
-        """Toggle permission mode on an already-resolved, live session.
+        """Switch an already-resolved, live session to *target_mode* by a
+        restart (into or out of Full access; see :meth:`_mode_switch_core`,
+        the dispatcher every surface calls).
 
         ``interrupt_first`` mirrors chat's own ``/mode`` branching
         exactly (``handlers._perms_flow`` /
@@ -2276,13 +2291,13 @@ class SessionOpsMixin:
         """
         interrupt_first = sess.status == Status.BUSY
         return await self._kill_and_relaunch_core(
-            sess, target_skip_perms=target_skip_perms,
+            sess, target_mode=target_mode,
             interrupt_first=interrupt_first,
         )
 
     async def _restart_session_core(self, sess: TrackedSession) -> RestartOutcome:
         """Kill and relaunch a live session with its OWN current
-        ``skip_perms`` unchanged — a restart is not a mode switch.
+        ``perm_mode`` unchanged — a restart is not a mode switch.
 
         Always a hard kill, regardless of status: deliberately does
         NOT reuse perms' busy-only Ctrl-C-first courtesy, which exists
@@ -2291,8 +2306,61 @@ class SessionOpsMixin:
         semantics Kill already applies.
         """
         return await self._kill_and_relaunch_core(
-            sess, target_skip_perms=sess.skip_perms, interrupt_first=False,
+            sess, target_mode=sess.perm_mode, interrupt_first=False,
         )
+
+    async def _mode_switch_core(self, sess: TrackedSession, target: str) -> RestartOutcome:
+        """Switch an already-resolved session to *target* (``ask``,
+        ``auto`` or ``full``): the one dispatcher chat and the Mini App
+        call. The caller has applied the admin rule for Full access.
+
+        Into or out of Full access (or from a mode Shift+Tab cannot cycle
+        from) is a restart through :meth:`_perms_switch_core`. Ask <->
+        Auto is in place: Shift+Tab pressed in the terminal, counted from
+        the session's current mode, refused while a dialog or question is
+        open (the presses would answer it), fine while a turn runs. Its
+        outcome is ``"sent"``: the next main-agent hook confirms it
+        (aipager/bot/mode_switch.py).
+
+        Reasons besides the restart ones: ``"not_live"``, ``"starting"``,
+        ``"already_restarting"``, ``"already"``, ``"dialog_open"``,
+        ``"send_failed"``, ``"sent"``."""
+        label = sess.label
+        if not perm_modes.is_mode(target):
+            raise ValueError(target)
+        if sess.status == Status.GONE:
+            return RestartOutcome(ok=False, reason="not_live", label=label)
+        if sess.status == Status.UNKNOWN:
+            return RestartOutcome(ok=False, reason="starting", label=label)
+        if sess.relaunch_in_flight:
+            return RestartOutcome(ok=False, reason="already_restarting", label=label)
+        if sess.mode_switch is None and sess.current_mode() == target:
+            return RestartOutcome(ok=True, reason="already", label=label, mode=target)
+        if sess.mode_switch_restarts(target):
+            return await self._perms_switch_core(sess, target)
+        if sess.dialog_is_open():
+            return RestartOutcome(ok=False, reason="dialog_open", label=label,
+                                  mode=target, in_place=True)
+        from aipager.state import ModeSwitch
+        count = perm_modes.presses(sess.mode_raw(), target,
+                                   auto_in_cycle=not sess.auto_unavailable)
+        previous = (sess.perm_mode, sess.reported_mode, sess.mode_switch)
+        # Recorded BEFORE the write: a hook racing the presses is
+        # "settling", never read as their result.
+        sess.mode_switch = ModeSwitch(target=target, presses=count or 0,
+                                      sent_at=time.monotonic())
+        sess.reported_mode = ""
+        sess.perm_mode = target
+        self.registry.mark_dirty()
+        if not await inject.press_mode_cycle(sess.name, count or 0):
+            sess.perm_mode, sess.reported_mode, sess.mode_switch = previous
+            self.registry.mark_dirty()
+            return RestartOutcome(ok=False, reason="send_failed", label=label,
+                                  mode=target, in_place=True)
+        log.info("[%s] mode switch to %s: %d Shift+Tab press(es) sent",
+                 label, target, count or 0)
+        return RestartOutcome(ok=True, reason="sent", label=label, mode=target,
+                              in_place=True)
 
     @staticmethod
     def _queued_candidates(sess: TrackedSession) -> list[dict]:

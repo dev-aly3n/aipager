@@ -726,7 +726,7 @@ def test_create_session_refuses_a_user_in_a_wide_folder(
     folder = {None: None, "home": str(daemon_in_home), "/": "/"}[cwd]
     bot = gbot()
     name, err = run_async(bot.create_session(
-        "x", scope_chat_id=GROUP, cwd=folder, driver_user_id=USER))
+        "x", scope_chat_id=GROUP, cwd=folder, driver_user_id=USER, mode="ask"))
     assert (name, err) == ("", launch.WIDE_FOLDER_REFUSAL)
     no_launch.assert_not_awaited()
 
@@ -735,7 +735,7 @@ def test_create_session_lets_a_user_start_in_a_project(
         gbot, run_async, daemon_in_home, project, no_launch):
     bot = gbot()
     run_async(bot.create_session("x", scope_chat_id=GROUP, cwd=str(project),
-                                 driver_user_id=USER))
+                                 driver_user_id=USER, mode="ask"))
     no_launch.assert_awaited_once()
 
 
@@ -744,7 +744,7 @@ def test_create_session_is_unchanged_for_owner_and_admin(
         gbot, run_async, daemon_in_home, no_launch, uid, chat):
     bot = gbot()
     run_async(bot.create_session("x", scope_chat_id=chat, cwd=None,
-                                 driver_user_id=uid))
+                                 driver_user_id=uid, mode="ask"))
     no_launch.assert_awaited_once()
 
 
@@ -752,7 +752,7 @@ def test_create_session_is_unchanged_in_personal_mode(
         mk_bot, run_async, daemon_in_home, no_launch):
     bot = mk_bot(SessionRegistry())
     run_async(bot.create_session("x", scope_chat_id=DM, cwd=None,
-                                 driver_user_id=None))
+                                 driver_user_id=None, mode="ask"))
     no_launch.assert_awaited_once()
 
 
@@ -873,7 +873,7 @@ def test_replace_is_refused_before_the_old_session_is_killed(
     sess.status = Status.IDLE
     bot._new_conflict_pending["claude-x__g100"] = {
         "user_id": USER, "msg_id": 0, "prompt": "", "cwd": None,
-        "skip_perms": False, "model": None, "was_working": False}
+        "mode": "ask", "model": None, "was_working": False}
     sess.tap_is_for_this_turn = lambda _m: True
     query = MagicMock()
     query.answer = AsyncMock()

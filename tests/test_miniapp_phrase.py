@@ -86,7 +86,7 @@ def test_say_uses_the_catalog(monkeypatch):
 TODAYS_ENGLISH = {
     "sessions.NO_TRANSCRIPT_REASON": "No resumable transcript - start a fresh session instead.",
     "sessions.NO_PERMISSION_REASON": "You don't have permission to control this session.",
-    "sessions.PERMS_ADMIN_REQUIRED_REASON": "Switching to Auto mode requires admin.",
+    "sessions.PERMS_ADMIN_REQUIRED_REASON": "Switching to Full access mode requires admin.",
     "sessions.QUEUE_EMPTY_REASON": "Nothing queued to clear.",
     "sessions.MODEL_SWITCH_BUSY_REASON":
         "Claude is working - switch the model when this turn ends.",

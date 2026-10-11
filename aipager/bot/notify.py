@@ -1559,6 +1559,14 @@ class NotifyMixin:
         self, sess: TrackedSession, event: str, context: dict,
     ) -> None:
         """:meth:`notify`'s body."""
+        # ── the mode a hook reported, while a mode switch waits on it ──
+        # Before the app check: the switch's state is decided whatever
+        # can be shown (aipager/bot/mode_switch.py).
+        if event == "mode_reported":
+            from aipager.bot import mode_switch  # local: import cycle
+            await mode_switch.on_reported(self, sess, context)
+            return
+
         if not self._app:
             return
 

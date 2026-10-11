@@ -275,10 +275,12 @@ BTN_COMPACT = Msg("ui.btn.action.compact", "Compact now",
                   note="Mini App session menu: shrink Claude's context (/compact)")
 BTN_RESTART = Msg("ui.btn.action.restart", "Restart", note="Mini App session menu")
 BTN_RENAME = Msg("ui.btn.action.rename", "Rename", note="Mini App session menu")
-BTN_TO_ASK = Msg("ui.btn.switch_to_ask", "Switch to Ask",
+BTN_TO_ASK = Msg("ui.btn.switch_to_ask", "Switch to Ask mode",
                  note="Mini App session menu: Ask is the permission mode (as in /mode)")
-BTN_TO_AUTO = Msg("ui.btn.switch_to_auto", "Switch to Auto",
+BTN_TO_AUTO = Msg("ui.btn.switch_to_auto", "Switch to Auto mode",
                   note="Mini App session menu: Auto is the permission mode (as in /mode)")
+BTN_TO_FULL = Msg("ui.btn.switch_to_full", "Switch to Full access mode",
+                  note="Mini App session menu: Full access is the permission mode (as in /mode)")
 DONE_STOP = Msg("ui.done.stop", "Stopped.", note="Mini App: a short confirmation")
 DONE_RESUME = Msg("ui.done.resume", "Resumed.", note="Mini App: a short confirmation")
 DONE_CLEARQUEUE = Msg("ui.done.clearqueue", "Cleared.",
@@ -286,6 +288,9 @@ DONE_CLEARQUEUE = Msg("ui.done.clearqueue", "Cleared.",
 DONE_COMPACT = Msg("ui.done.compact", "Compacting…", note="Mini App: a short confirmation")
 DONE_PERMS = Msg("ui.done.perms", "Switched.",
                  note="Mini App: the permission mode was switched (short)")
+DONE_MODE_SENT = Msg("ui.done.mode_sent", "Switch sent. Claude Code confirms it with its next step.",
+                     note="Mini App: an Ask/Auto switch was sent to the session (no restart); "
+                          "Claude Code confirms it with its next step")
 DONE_RESTART = Msg("ui.done.restart", "Restarted.", note="Mini App: a short confirmation")
 DONE_ALREADY_GONE = Msg("ui.done.already_gone", "Already gone.",
                         note="Mini App: the session had ended already (short)")
@@ -299,21 +304,33 @@ ACTION_FAILED = Msg("ui.action.failed", "Couldn't complete that.")
 ACTION_UNREACHABLE = Msg("ui.action.unreachable", "Couldn't reach the server. Nothing changed.")
 MENU_CHANGED = Msg("ui.menu.changed", "This session changed. Reopen the menu.")
 
-# Confirms.
+# Confirms (a switch into or out of Full access restarts the session).
 CONFIRM_PERMS_BUSY_AUTO = Msg("ui.confirm.perms_busy_auto",
-                              "Stop the current task and switch {session} to Auto?",
+                              "Stop the current task and switch {session} to Auto mode?",
                               eg={"session": "x1"},
                               note="Auto is the permission mode (as in /mode)")
 CONFIRM_PERMS_BUSY_ASK = Msg("ui.confirm.perms_busy_ask",
-                             "Stop the current task and switch {session} to Ask?",
+                             "Stop the current task and switch {session} to Ask mode?",
                              eg={"session": "x1"},
                              note="Ask is the permission mode (as in /mode)")
+CONFIRM_PERMS_BUSY_FULL = Msg("ui.confirm.perms_busy_full",
+                              "Stop the current task and switch {session} to Full access mode?",
+                              eg={"session": "x1"},
+                              note="Full access is the permission mode (as in /mode)")
 CONFIRM_PERMS_AUTO = Msg("ui.confirm.perms_auto", "Switch {session} to Auto mode?",
                          eg={"session": "x1"}, note="Auto is the permission mode (as in /mode)")
 CONFIRM_PERMS_ASK = Msg("ui.confirm.perms_ask", "Switch {session} to Ask mode?",
                         eg={"session": "x1"}, note="Ask is the permission mode (as in /mode)")
-CONFIRM_PERMS_AUTO_BODY = Msg("ui.confirm.perms_auto_body", "Claude runs tools without prompting.")
-CONFIRM_PERMS_ASK_BODY = Msg("ui.confirm.perms_ask_body", "Claude asks before running tools.")
+CONFIRM_PERMS_FULL = Msg("ui.confirm.perms_full", "Switch {session} to Full access mode?",
+                         eg={"session": "x1"},
+                         note="Full access is the permission mode (as in /mode)")
+CONFIRM_PERMS_FULL_BODY = Msg("ui.confirm.perms_full_body",
+                              "Everything runs with no checks. The session restarts; the "
+                              "conversation is kept.",
+                              note="Under the Full access confirm")
+CONFIRM_PERMS_LEAVE_FULL_BODY = Msg("ui.confirm.perms_leave_full_body",
+                                    "The session restarts; the conversation is kept.",
+                                    note="Under the confirm for leaving Full access mode")
 BTN_STOP_AND_SWITCH = Msg("ui.btn.stop_and_switch", "Stop task & switch",
                           note="Mini App button: stop the running task, then switch the mode")
 BTN_SWITCH = Msg("ui.btn.switch", "Switch", note="Mini App button")
@@ -656,8 +673,8 @@ NEW_SUB = Msg("ui.new.sub", "Name it, pick a folder, and Claude starts there.")
 NEW_NAME = Msg("ui.new.name", "Name", note="Mini App new session: a step's heading")
 NEW_WHERE = Msg("ui.new.where", "Where", note="Mini App new session: a step's heading")
 NEW_MORE = Msg("ui.new.more", "More options", note="Mini App new session: a toggle")
-NEW_AUTO_NEEDS_ADMIN = Msg("ui.new.auto_needs_admin", "Auto mode requires admin.",
-                           note="Auto is the permission mode (as in /mode)")
+NEW_FULL_NEEDS_ADMIN = Msg("ui.new.full_needs_admin", "Full access mode requires admin.",
+                           note="Full access is the permission mode (as in /mode)")
 NEW_MODEL_NAME = Msg("ui.new.model_name", "Model name", note="Mini App: a field's label")
 NEW_FOLDER_NAME = Msg("ui.new.folder_name", "New folder name", note="Mini App: a field's label")
 NEW_CREATE_FOLDER_ARIA = Msg("ui.new.create_folder_aria", "Create this folder",
@@ -685,8 +702,12 @@ NEW_MODE_ASK = Msg("ui.new.mode_ask", "Ask",
                    note="Mini App: the permission mode, as in /mode (one word)")
 NEW_MODE_AUTO = Msg("ui.new.mode_auto", "Auto",
                     note="Mini App: the permission mode, as in /mode (one word)")
+NEW_MODE_FULL = Msg("ui.new.mode_full", "Full access",
+                    note="Mini App: the permission mode, as in /mode (short)")
 NEW_MODE_ASK_HELP = Msg("ui.new.mode_ask_help", "Claude asks before running tools")
-NEW_MODE_AUTO_HELP = Msg("ui.new.mode_auto_help", "Runs tools without asking")
+NEW_MODE_AUTO_HELP = Msg("ui.new.mode_auto_help",
+                         "A safety check runs safe actions and stops risky ones")
+NEW_MODE_FULL_HELP = Msg("ui.new.mode_full_help", "Everything runs with no checks")
 NEW_REQUIRES_ADMIN = Msg("ui.new.requires_admin", "Requires admin")
 NEW_MODEL_PATTERN = Msg("ui.new.model_pattern",
                         "Use letters, numbers, dots and hyphens; start with a letter or number.",
@@ -704,6 +725,11 @@ NEW_SUMMARY_NAMED_AUTO = Msg("ui.new.summary_named_auto",
                              "Starts Claude as {name} in {where}, in Auto mode, using {model}.",
                              eg={"name": "x1", "where": "/home/op/web", "model": "opus"},
                              note="Mini App: as above, in Auto (the permission mode)")
+NEW_SUMMARY_NAMED_FULL = Msg("ui.new.summary_named_full",
+                             "Starts Claude as {name} in {where}, in Full access mode, using "
+                             "{model}.",
+                             eg={"name": "x1", "where": "/home/op/web", "model": "opus"},
+                             note="Mini App: as above, in Full access (the permission mode)")
 NEW_SUMMARY_ASK = Msg("ui.new.summary_ask",
                       "Starts Claude in {where}, in Ask mode, using {model}.",
                       eg={"where": "/home/op/web", "model": "opus"},
@@ -712,6 +738,10 @@ NEW_SUMMARY_AUTO = Msg("ui.new.summary_auto",
                        "Starts Claude in {where}, in Auto mode, using {model}.",
                        eg={"where": "/home/op/web", "model": "opus"},
                        note="Mini App: as above, no name typed yet, in Auto")
+NEW_SUMMARY_FULL = Msg("ui.new.summary_full",
+                       "Starts Claude in {where}, in Full access mode, using {model}.",
+                       eg={"where": "/home/op/web", "model": "opus"},
+                       note="Mini App: as above, no name typed yet, in Full access")
 NEW_DAEMON_DIR = Msg("ui.new.daemon_dir", "the daemon's own directory",
                      note="Fills {where} in the summary above (a place, lower case)")
 NEW_CLI_MODEL = Msg("ui.new.cli_model", "the CLI's own default model",

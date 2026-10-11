@@ -110,7 +110,8 @@ def test_create_launches_and_returns_the_label(server, run_async):
             server.bot.create_session.assert_awaited_once()
             kwargs = server.bot.create_session.await_args.kwargs
             assert kwargs["scope_chat_id"] == -100
-            assert kwargs["skip_perms"] is False
+            # No mode sent: the chat's New sessions mode, Auto by default.
+            assert kwargs["mode"] == "auto"
         finally:
             await client.close()
     run_async(_run())
@@ -191,42 +192,98 @@ def test_ordinary_member_can_create_without_admin(server, run_async):
     run_async(_run())
 
 
-def test_auto_mode_requires_admin(server, run_async):
+@pytest.mark.parametrize("body", [{"mode": "full"}, {"skip_perms": True}],
+                         ids=["mode-full", "legacy-skip-perms"])
+def test_full_access_requires_admin(server, run_async, body):
     """`/new !name` is admin-gated in chat. Without the same gate here the
-    Mini App would hand a non-admin --dangerously-skip-permissions."""
+    Mini App would hand a non-admin --dangerously-skip-permissions. An
+    older page's `skip_perms: true` (what was then bypass) is Full access."""
     async def _run():
         client = await _client_for(server)
         try:
-            resp = await _post(client, {"name": "dev", "skip_perms": True}, MEMBER_ID)
+            resp = await _post(client, {"name": "dev", **body}, MEMBER_ID)
             assert resp.status == 403
+            assert (await resp.json())["detail"] == "Full access mode requires admin."
             server.bot.create_session.assert_not_awaited()
         finally:
             await client.close()
     run_async(_run())
 
 
-def test_admin_may_use_auto_mode(server, run_async):
+@pytest.mark.parametrize("body", [{"mode": "full"}, {"skip_perms": True}],
+                         ids=["mode-full", "legacy-skip-perms"])
+def test_admin_may_use_full_access(server, run_async, body):
     async def _run():
         client = await _client_for(server)
         try:
-            resp = await _post(client, {"name": "dev", "skip_perms": True}, ADMIN_ID)
+            resp = await _post(client, {"name": "dev", **body}, ADMIN_ID)
             assert resp.status == 200
-            assert server.bot.create_session.await_args.kwargs["skip_perms"] is True
+            assert server.bot.create_session.await_args.kwargs["mode"] == "full"
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("mode", ["ask", "auto"])
+def test_a_member_may_pick_ask_or_auto(server, run_async, mode):
+    async def _run():
+        client = await _client_for(server)
+        try:
+            resp = await _post(client, {"name": "dev", "mode": mode}, MEMBER_ID)
+            assert resp.status == 200
+            assert server.bot.create_session.await_args.kwargs["mode"] == mode
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("mode", ["bypass", "", "FULL", True, None],
+                         ids=["unknown", "empty", "upper", "bool", "null"])
+def test_an_invalid_mode_is_refused(server, run_async, mode):
+    async def _run():
+        client = await _client_for(server)
+        try:
+            resp = await _post(client, {"name": "dev", "mode": mode}, ADMIN_ID)
+            assert resp.status == 400
+            server.bot.create_session.assert_not_awaited()
         finally:
             await client.close()
     run_async(_run())
 
 
 @pytest.mark.parametrize("truthy", ["true", 1, "yes", ["x"]])
-def test_only_a_real_bool_enables_auto_mode(server, run_async, truthy):
-    """A truthy-but-not-True value must not smuggle Auto mode past the
-    admin gate for a non-admin."""
+def test_only_a_real_bool_enables_full_access(server, run_async, truthy):
+    """A truthy-but-not-True legacy value must not smuggle Full access past
+    the admin gate for a non-admin: it is ignored (the default applies)."""
     async def _run():
         client = await _client_for(server)
         try:
             resp = await _post(client, {"name": "dev", "skip_perms": truthy}, MEMBER_ID)
             assert resp.status == 200, "non-bool truthy should be ignored, not gated"
-            assert server.bot.create_session.await_args.kwargs["skip_perms"] is False
+            assert server.bot.create_session.await_args.kwargs["mode"] == "auto"
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("stored, user, want", [
+    ("ask", "member", "ask"), ("full", "admin", "full"), ("full", "member", "auto"),
+], ids=["ask-member", "full-admin", "full-member"])
+def test_no_mode_sent_follows_the_chats_new_sessions_default(server, run_async, stored,
+                                                             user, want):
+    from aipager import preferences
+    preferences.set_new_session_default(-100, "mode", stored)
+
+    async def _run():
+        client = await _client_for(server)
+        try:
+            uid = ADMIN_ID if user == "admin" else MEMBER_ID
+            resp = await _post(client, {"name": "dev"}, uid)
+            assert resp.status == 200
+            assert server.bot.create_session.await_args.kwargs["mode"] == want
+            opts = await (await client.get("/api/session-options",
+                                           headers=_hdr(uid))).json()
+            assert opts["default_mode"] == want
         finally:
             await client.close()
     run_async(_run())
@@ -362,7 +419,9 @@ def test_options_lists_only_directories_this_scope_uses(server, run_async):
             import os
             assert body["directories"] == [os.path.realpath(server._project_dir)]
             assert body["can_create"] is True
-            assert body["can_use_auto"] is True
+            assert body["can_use_full"] is True
+            assert body["default_mode"] == "auto"
+            assert "can_use_auto" not in body
         finally:
             await client.close()
     run_async(_run())
@@ -375,20 +434,21 @@ def test_options_tells_a_readonly_member_they_cannot_create(server, run_async):
             body = await (await client.get(
                 "/api/session-options", headers=_hdr(READONLY_ID))).json()
             assert body["can_create"] is False
-            assert body["can_use_auto"] is False
+            assert body["can_use_full"] is False
         finally:
             await client.close()
     run_async(_run())
 
 
-def test_options_tells_a_member_they_cannot_use_auto(server, run_async):
+def test_options_tells_a_member_they_cannot_use_full_access(server, run_async):
     async def _run():
         client = await _client_for(server)
         try:
             body = await (await client.get(
                 "/api/session-options", headers=_hdr(MEMBER_ID))).json()
             assert body["can_create"] is True
-            assert body["can_use_auto"] is False
+            assert body["can_use_full"] is False
+            assert body["default_mode"] == "auto"
         finally:
             await client.close()
     run_async(_run())

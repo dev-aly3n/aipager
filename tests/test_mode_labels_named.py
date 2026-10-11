@@ -1,7 +1,9 @@
 """The permission modes are named as modes in every language (operator,
 2026-10-10: "instead of پرسش its better to say مود پرسش and مود خودکار ...
 do it in all language including english"), while the words typed after
-/mode stay the single words they were (mode.word.ask, mode.word.auto)."""
+/mode stay the single words they were (mode.word.ask, mode.word.auto).
+Full access (2026-10-11) is named the same way, with its own typed word
+(mode.full, mode.word.full)."""
 
 from __future__ import annotations
 
@@ -16,8 +18,10 @@ from aipager.bot.keyboards import DEFAULT_MODE
 from aipager.bot.mode_labels import (
     MODE_ASK,
     MODE_AUTO,
+    MODE_FULL,
     WORD_ASK,
     WORD_AUTO,
+    WORD_FULL,
     mode_from_word,
     parse_mode_args,
 )
@@ -26,6 +30,24 @@ from tests import i18n_ml2, i18n_tool
 
 tool = i18n_tool.load()
 
+#: code -> (Full access label, its typed word).
+FULL = {
+    "en": ("🔓 Full access mode", "Full"),
+    "ar": ("🔓 وضع الوصول الكامل", "كامل"),
+    "de": ("🔓 Vollzugriff-Modus", "Vollzugriff"),
+    "es": ("🔓 Modo Acceso total", "Total"),
+    "fa": ("🔓 مود دسترسی کامل", "کامل"),
+    "fr": ("🔓 Mode Accès complet", "Complet"),
+    "id": ("🔓 Mode Akses penuh", "Penuh"),
+    "it": ("🔓 Modalità «Completo»", "Completo"),
+    "ko": ("🔓 전체 권한 모드", "전체"),
+    "pt-BR": ("🔓 Modo Acesso total", "Total"),
+    "ru": ("🔓 Режим «Полный доступ»", "Полный"),
+    "tr": ("🔓 Tam erişim modu", "Tam"),
+    "uk": ("🔓 Режим «Повний доступ»", "Повний"),
+    "vi": ("🔓 Chế độ Toàn quyền", "Toàn"),
+    "zh-Hans": ("🔓 完全访问模式", "完全"),
+}
 #: code -> (Auto label, Ask label, typed Auto word, typed Ask word). The
 #: typed words are the catalogs' mode words before 2026-10-10 without
 #: their emoji, so /mode reads exactly what it read then.
@@ -47,9 +69,10 @@ NAMED = {
     "zh-Hans": ("🤖 自动模式", "💬 询问模式", "自动", "询问"),
 }
 CODES = sorted(NAMED)
-#: (code, mode, typed word) for both modes of every language.
-TYPED = [(c, m, NAMED[c][2] if m == "auto" else NAMED[c][3]) for c in CODES
-         for m in ("auto", "ask")]
+#: (code, mode, typed word) for the three modes of every language.
+TYPED = [(c, m, {"auto": NAMED[c][2], "ask": NAMED[c][3], "full": FULL[c][1]}[m])
+         for c in CODES for m in ("auto", "ask", "full")]
+EMOJI = {"auto": "🤖", "ask": "💬", "full": "🔓"}
 TYPED_IDS = [f"{c}-{m}" for c, m, _w in TYPED]
 RLM = "\u200f"
 
@@ -59,12 +82,14 @@ def _shown(code, msg):
 
 
 def test_every_enabled_language_is_covered():
-    assert set(CODES) == set(locales.enabled_codes())
+    assert set(CODES) == set(locales.enabled_codes()) == set(FULL)
 
 
 def test_persian_reads_the_operators_words():
     assert _shown("fa", MODE_ASK) == "💬 مود پرسش"
     assert _shown("fa", MODE_AUTO) == "🤖 مود خودکار"
+    assert _shown("fa", MODE_FULL) == "🔓 مود دسترسی کامل"
+    assert _shown("fa", WORD_FULL) == "کامل"
 
 
 @pytest.mark.parametrize("code", CODES)
@@ -72,12 +97,12 @@ def test_the_labels_and_the_typed_words(code):
     auto, ask, word_auto, word_ask = NAMED[code]
     assert (_shown(code, MODE_AUTO), _shown(code, MODE_ASK)) == (auto, ask)
     assert (_shown(code, WORD_AUTO), _shown(code, WORD_ASK)) == (word_auto, word_ask)
+    assert (_shown(code, MODE_FULL), _shown(code, WORD_FULL)) == FULL[code]
 
 
 @pytest.mark.parametrize("code, mode, word", TYPED, ids=TYPED_IDS)
 def test_the_typed_word_still_switches(code, mode, word):
-    for typed in (word, word.lower(), word.upper(), ("🤖" if mode == "auto" else "💬") + word,
-                  RLM + word):
+    for typed in (word, word.lower(), word.upper(), EMOJI[mode] + word, RLM + word):
         assert mode_from_word(typed) == mode, typed
     assert parse_mode_args(["x1", word], lambda _n: True) == (mode, "x1", True)
 
@@ -86,7 +111,8 @@ def test_the_typed_word_still_switches(code, mode, word):
 def test_the_word_for_mode_in_a_label_is_no_mode_word(code):
     """The extra word the label gained ("mode", "مود", "Modo", "Режим",
     "모드") is read as a session name, never as a mode."""
-    for msg, word in ((MODE_AUTO, NAMED[code][2]), (MODE_ASK, NAMED[code][3])):
+    for msg, word in ((MODE_AUTO, NAMED[code][2]), (MODE_ASK, NAMED[code][3]),
+                      (MODE_FULL, FULL[code][1])):
         for token in re.split(r"[\s«»]+", kbwords.mode_word(_shown(code, msg))):
             if token and kbwords.mode_word(word) not in token:
                 assert mode_from_word(token) is None, (code, token)
@@ -103,7 +129,7 @@ def test_the_mode_buttons_fit_their_cells(code):
     default ("💬 Ask mode (default)") hold a whole label: 40 cells, wide
     characters counting 2."""
     tr = i18n.get(code)
-    for msg in (MODE_AUTO, MODE_ASK):
+    for msg in (MODE_AUTO, MODE_ASK, MODE_FULL):
         label = tr.text(msg)
         for shown in (label, f"{label} ✅", tr.text(DEFAULT_MODE, mode=Safe(label))):
             assert tool.cells(shown) <= 40, (code, shown)
@@ -125,21 +151,21 @@ def mode_chat(mk_bot):
 @pytest.mark.parametrize("code, mode, word", TYPED, ids=TYPED_IDS)
 def test_typing_the_word_in_that_chat_switches(mode_chat, run_async, code, mode, word):
     bot, sess = mode_chat(code)
-    sess.skip_perms = mode != "auto"
-    bot._perms_flow = AsyncMock()
+    sess.perm_mode = "ask" if mode != "ask" else "auto"
+    bot._mode_flow = AsyncMock()
     run_async(bot._handle_mode_cmd(i18n_ml2.message(f"/mode x1 {word}"), MagicMock()))
-    assert bot._perms_flow.await_args.args[1] is (mode == "auto")
+    assert bot._mode_flow.await_args.args[1] == mode
 
 
 @pytest.mark.parametrize("code", CODES)
 def test_the_mode_card_shows_the_label(mode_chat, run_async, code):
     bot, sess = mode_chat(code)
-    for auto in (True, False):
-        sess.skip_perms = auto
+    for mode, label in (("auto", NAMED[code][0]), ("ask", NAMED[code][1]),
+                        ("full", FULL[code][0])):
+        sess.perm_mode = mode
         update = i18n_ml2.message("/mode x1")
         run_async(bot._handle_mode_cmd(update, MagicMock()))
         text = str(update.message.reply_text.await_args.args[0])
-        label = NAMED[code][0 if auto else 1]
         assert label in text.replace("\u2068", "").replace("\u2069", ""), (code, text)
 
 

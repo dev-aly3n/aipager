@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from aipager import bg_shells, bidi_guard, statusline_file
+from aipager import bg_shells, bidi_guard, perm_modes, statusline_file
 from aipager.config import (
     HOOK_DEDUP_WINDOW_SECONDS,
     RICH_SUMMARIES,
@@ -745,6 +745,28 @@ class HookReceiver:
         if cwd and cwd != sess_ref.cwd:
             sess_ref.cwd = cwd
             self.registry.mark_dirty()
+
+        # The permission mode Claude Code is in, from every event that
+        # carries it (aipager/perm_modes.py). The parent's own events only:
+        # a subagent's or the prompt-suggestion helper's mode is not the
+        # session's, and aipager's own datagrams carry none. Display only:
+        # `perm_mode` (the flag a restart passes) is never widened from
+        # here, since any local process can write to this socket.
+        raw_mode = msg.get("permission_mode")
+        if (isinstance(raw_mode, str) and raw_mode and not hook_agent_id
+                and event not in _INTERNAL_HOOK_EVENTS):
+            verdict = sess_ref.note_reported_mode(raw_mode, now_mono)
+            if verdict == "recorded":
+                if (perm_modes.from_claude(raw_mode) == perm_modes.FULL
+                        and sess_ref.perm_mode != perm_modes.FULL):
+                    log.warning("[%s] Claude Code reports %s; aipager launched it in %s",
+                                sess_ref.label, raw_mode, sess_ref.perm_mode)
+                if sess_ref.mode_switch is not None:
+                    dialog = (event == "PermissionRequest" or event in _DIALOG_EVENTS
+                              or event == "Elicitation"
+                              or (event == "PreToolUse"
+                                  and msg.get("tool_name") == "AskUserQuestion"))
+                    await self.notify_fn(sess_ref, "mode_reported", {"dialog": dialog})
 
         log.debug("Hook event: %s from %s", event, session_name)
 

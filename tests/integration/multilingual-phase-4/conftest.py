@@ -148,14 +148,14 @@ class Env:
         return self.run_async(_go())
 
     # ---- sessions ---------------------------------------------------------
-    def session(self, label, *, status="idle", skip_perms=False, model="Sonnet 5",
+    def session(self, label, *, status="idle", mode="ask", model="Sonnet 5",
                 cwd=None, claude_session_id="", queued=0):
         from aipager.state import Status
         sess = self.registry.get_or_create(f"claude-{label}")
         sess.label = label
         sess.scope_chat_id = GROUP
         sess.status = getattr(Status, status.upper())
-        sess.skip_perms = skip_perms
+        sess.perm_mode = mode
         sess.model_name = model
         sess.cwd = cwd if cwd is not None else str(self.project)
         sess.claude_session_id = claude_session_id

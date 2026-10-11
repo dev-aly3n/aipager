@@ -107,14 +107,14 @@ def server(mk_bot):
 
 def _mk_session(
     server, label, *, scope_chat_id=SCOPE_CHAT_ID, status=Status.IDLE,
-    claude_session_id="", skip_perms=False, cwd="/tmp/proj",
+    claude_session_id="", mode="ask", cwd="/tmp/proj",
 ):
     sess = server.registry.get_or_create(f"claude-{label}")
     sess.label = label
     sess.scope_chat_id = scope_chat_id
     sess.status = status
     sess.claude_session_id = claude_session_id
-    sess.skip_perms = skip_perms
+    sess.perm_mode = mode
     sess.cwd = cwd
     if status == Status.GONE:
         sess.gone_at = time.monotonic()
@@ -145,80 +145,162 @@ def _neuter_kill_relaunch(monkeypatch, *, socket_gone=True):
 
 # ===== Perms =================================================================
 
-def test_perms_admin_switches_ask_to_auto_and_get_reflects_it(
+def _perms(client, user, mode="full", label="dev"):
+    body = {} if mode is None else {"mode": mode}
+    return client.post(f"/api/sessions/{label}/perms", headers=_hdr(user), json=body)
+
+
+def test_perms_admin_switches_ask_to_full_access_and_get_reflects_it(
     server, run_async, monkeypatch,
 ):
     async def _run():
-        _mk_session(server, "dev", status=Status.IDLE, skip_perms=False)
+        _mk_session(server, "dev", status=Status.IDLE, mode="ask")
         _neuter_kill_relaunch(monkeypatch)
-        monkeypatch.setattr(
-            "aipager.dtach.inject.launch_session",
-            AsyncMock(return_value=(True, "")),
-        )
+        launch = AsyncMock(return_value=(True, ""))
+        monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
         client = await _client_for(server)
         send = server.bot._app.bot.send_message
         try:
-            resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID),
-            )
+            resp = await _perms(client, ADMIN_ID, "full")
             assert resp.status == 200
             assert await resp.json() == {
-                "status": "switched", "label": "dev", "skip_perms": True,
+                "status": "switched", "label": "dev", "mode": "full",
             }
+            assert launch.await_args.kwargs["mode"] == "full"
             check = await client.get("/api/sessions/dev", headers=_hdr(ADMIN_ID))
-            assert (await check.json())["skip_perms"] is True
+            assert (await check.json())["mode"] == "full"
 
             assert send.await_count == 1
             assert send.await_args.kwargs["chat_id"] == SCOPE_CHAT_ID
-            assert "Auto" in send.await_args.kwargs["text"]
+            assert "Full access mode" in send.await_args.kwargs["text"]
         finally:
             await client.close()
     run_async(_run())
 
 
-def test_perms_non_admin_switching_back_auto_to_ask_succeeds(
-    server, run_async, monkeypatch,
+@pytest.mark.parametrize("target", ["ask", "auto"])
+def test_perms_non_admin_leaving_full_access_succeeds(
+    server, run_async, monkeypatch, target,
 ):
-    """Switching TO Ask never needs admin — a developer (can_prompt,
-    not admin) can switch an Auto session back to Ask."""
+    """Leaving Full access never needs admin: a developer (can_prompt,
+    not admin) can switch a Full access session to Ask or Auto."""
     async def _run():
-        _mk_session(server, "dev", status=Status.IDLE, skip_perms=True)
+        _mk_session(server, "dev", status=Status.IDLE, mode="full")
         _neuter_kill_relaunch(monkeypatch)
-        monkeypatch.setattr(
-            "aipager.dtach.inject.launch_session",
-            AsyncMock(return_value=(True, "")),
-        )
+        launch = AsyncMock(return_value=(True, ""))
+        monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
         client = await _client_for(server)
         try:
-            resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(DEVELOPER_ID),
-            )
+            resp = await _perms(client, DEVELOPER_ID, target)
             assert resp.status == 200
             assert await resp.json() == {
-                "status": "switched", "label": "dev", "skip_perms": False,
+                "status": "switched", "label": "dev", "mode": target,
             }
+            assert launch.await_args.kwargs["mode"] == target
         finally:
             await client.close()
     run_async(_run())
 
 
-def test_perms_non_admin_targeting_auto_gets_403_with_detail(server, run_async):
-    """The route's 403 detail (entrypoints.md: "Auto mode requires
-    admin.") is deliberately SHORTER than session_actions()'s own
-    PERMS_ADMIN_REQUIRED_REASON ("Switching to Auto mode requires
-    admin.") — two independently-worded strings by design, not a typo
-    to reconcile."""
+def test_perms_non_admin_targeting_full_access_gets_403_with_detail(server, run_async):
     async def _run():
-        _mk_session(server, "dev", status=Status.IDLE, skip_perms=False)
+        sess = _mk_session(server, "dev", status=Status.IDLE, mode="ask")
         client = await _client_for(server)
         try:
-            resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(DEVELOPER_ID),
-            )
+            resp = await _perms(client, DEVELOPER_ID, "full")
             assert resp.status == 403
             assert await resp.json() == {
-                "error": "forbidden", "detail": "Auto mode requires admin.",
+                "error": "forbidden",
+                "detail": "Switching to Full access mode requires admin.",
             }
+            assert sess.perm_mode == "ask"
+            server.bot._app.bot.send_message.assert_not_awaited()
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("body", [None, "bypass", "", True, "FULL"],
+                         ids=["missing", "unknown", "empty", "bool", "upper"])
+def test_perms_needs_a_valid_target(server, run_async, body):
+    """Three modes leave nothing to toggle: a request without a valid
+    target (an older page's empty body included) changes nothing."""
+    async def _run():
+        sess = _mk_session(server, "dev", status=Status.IDLE, mode="ask")
+        client = await _client_for(server)
+        try:
+            resp = await _perms(client, ADMIN_ID, body)
+            assert resp.status == 400
+            assert (await resp.json())["error"] == "bad_request"
+            assert sess.perm_mode == "ask" and sess.mode_switch is None
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("user", ["admin", "developer"])
+def test_perms_ask_to_auto_is_sent_in_place_for_anyone(server, run_async, monkeypatch,
+                                                       user):
+    """No restart: Shift+Tab three times, a chat line that the confirming
+    hook will edit, and the answer says it is pending."""
+    async def _run():
+        sess = _mk_session(server, "dev", status=Status.BUSY, mode="ask")
+        press = AsyncMock(return_value=True)
+        monkeypatch.setattr("aipager.dtach.inject.press_mode_cycle", press)
+        launch = AsyncMock(side_effect=AssertionError("no relaunch"))
+        monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+        server.bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=321))
+        client = await _client_for(server)
+        try:
+            resp = await _perms(client, ADMIN_ID if user == "admin" else DEVELOPER_ID,
+                                "auto")
+            assert resp.status == 200
+            assert await resp.json() == {"status": "sent", "label": "dev", "mode": "auto",
+                                         "pending": True}
+            press.assert_awaited_once_with("claude-dev", 3)
+            assert sess.perm_mode == "auto"
+            assert sess.mode_switch.reply == (SCOPE_CHAT_ID, 321, "mirror")
+            text = server.bot._app.bot.send_message.await_args.kwargs["text"]
+            assert "without a restart" in text and "🤖 Auto mode" in text
+            check = await client.get("/api/sessions/dev", headers=_hdr(ADMIN_ID))
+            body = await check.json()
+            assert body["mode"] == "auto" and body["mode_pending"] is True
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_perms_in_place_refused_while_a_prompt_is_open(server, run_async, monkeypatch):
+    async def _run():
+        sess = _mk_session(server, "dev", status=Status.INTERACTIVE, mode="ask")
+        press = AsyncMock(return_value=True)
+        monkeypatch.setattr("aipager.dtach.inject.press_mode_cycle", press)
+        client = await _client_for(server)
+        try:
+            resp = await _perms(client, ADMIN_ID, "auto")
+            assert resp.status == 409
+            assert await resp.json() == {
+                "error": "prompt_open",
+                "detail": "Answer the open prompt first, then switch the mode."}
+            press.assert_not_awaited()
+            assert sess.perm_mode == "ask" and sess.mode_switch is None
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_perms_already_in_that_mode(server, run_async, monkeypatch):
+    async def _run():
+        _mk_session(server, "dev", status=Status.IDLE, mode="auto")
+        press = AsyncMock(return_value=True)
+        monkeypatch.setattr("aipager.dtach.inject.press_mode_cycle", press)
+        client = await _client_for(server)
+        try:
+            resp = await _perms(client, DEVELOPER_ID, "auto")
+            assert resp.status == 200
+            assert await resp.json() == {"status": "already", "label": "dev",
+                                         "mode": "auto"}
+            press.assert_not_awaited()
         finally:
             await client.close()
     run_async(_run())
@@ -226,7 +308,7 @@ def test_perms_non_admin_targeting_auto_gets_403_with_detail(server, run_async):
 
 def test_perms_busy_session_sends_ctrl_c_not_kill(server, run_async, monkeypatch):
     async def _run():
-        _mk_session(server, "dev", status=Status.BUSY, skip_perms=False)
+        _mk_session(server, "dev", status=Status.BUSY, mode="ask")
         _neuter_kill_relaunch(monkeypatch)
         monkeypatch.setattr(
             "aipager.dtach.inject.launch_session",
@@ -234,9 +316,7 @@ def test_perms_busy_session_sends_ctrl_c_not_kill(server, run_async, monkeypatch
         )
         client = await _client_for(server)
         try:
-            resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID),
-            )
+            resp = await _perms(client, ADMIN_ID, "full")
             assert resp.status == 200
         finally:
             await client.close()
@@ -251,9 +331,7 @@ def test_perms_not_live_returns_409(server, run_async):
         _mk_session(server, "dev", status=Status.GONE)
         client = await _client_for(server)
         try:
-            resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID),
-            )
+            resp = await _perms(client, ADMIN_ID, "full")
             assert resp.status == 409
             assert (await resp.json())["error"] == "not_live"
         finally:
@@ -267,9 +345,7 @@ def test_perms_already_restarting_returns_409(server, run_async):
         sess.relaunch_in_flight = True
         client = await _client_for(server)
         try:
-            resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID),
-            )
+            resp = await _perms(client, ADMIN_ID, "full")
             assert resp.status == 409
             assert (await resp.json())["error"] == "already_restarting"
         finally:
@@ -281,7 +357,7 @@ def test_perms_still_stopping_returns_409_and_leaves_mode_unchanged(
     server, run_async, monkeypatch,
 ):
     async def _run():
-        _mk_session(server, "dev", status=Status.IDLE, skip_perms=False)
+        _mk_session(server, "dev", status=Status.IDLE, mode="ask")
         _neuter_kill_relaunch(monkeypatch, socket_gone=False)
 
         async def _boom(*a, **k):
@@ -289,12 +365,10 @@ def test_perms_still_stopping_returns_409_and_leaves_mode_unchanged(
         monkeypatch.setattr("aipager.dtach.inject.launch_session", _boom)
         client = await _client_for(server)
         try:
-            resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID),
-            )
+            resp = await _perms(client, ADMIN_ID, "full")
             assert resp.status == 409
             assert (await resp.json())["error"] == "still_stopping"
-            assert server.registry.get("claude-dev").skip_perms is False
+            assert server.registry.get("claude-dev").perm_mode == "ask"
         finally:
             await client.close()
     run_async(_run())
@@ -302,7 +376,7 @@ def test_perms_still_stopping_returns_409_and_leaves_mode_unchanged(
 
 def test_perms_launch_failed_returns_400(server, run_async, monkeypatch):
     async def _run():
-        _mk_session(server, "dev", status=Status.IDLE, skip_perms=False)
+        _mk_session(server, "dev", status=Status.IDLE, mode="ask")
         _neuter_kill_relaunch(monkeypatch)
         monkeypatch.setattr(
             "aipager.dtach.inject.launch_session",
@@ -310,9 +384,7 @@ def test_perms_launch_failed_returns_400(server, run_async, monkeypatch):
         )
         client = await _client_for(server)
         try:
-            resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(ADMIN_ID),
-            )
+            resp = await _perms(client, ADMIN_ID, "full")
             assert resp.status == 400
             assert await resp.json() == {
                 "error": "launch_failed", "detail": "dtach broken",
@@ -324,14 +396,12 @@ def test_perms_launch_failed_returns_400(server, run_async, monkeypatch):
 
 def test_perms_readonly_member_gets_403_and_nothing_changes(server, run_async):
     async def _run():
-        sess = _mk_session(server, "dev", status=Status.IDLE, skip_perms=False)
+        sess = _mk_session(server, "dev", status=Status.IDLE, mode="ask")
         client = await _client_for(server)
         try:
-            resp = await client.post(
-                "/api/sessions/dev/perms", headers=_hdr(READONLY_ID),
-            )
+            resp = await _perms(client, READONLY_ID, "auto")
             assert resp.status == 403
-            assert sess.skip_perms is False
+            assert sess.perm_mode == "ask"
             server.bot._app.bot.send_message.assert_not_awaited()
         finally:
             await client.close()
@@ -349,10 +419,8 @@ def test_perms_rate_limited(server, run_async, monkeypatch):
         try:
             seen_429 = False
             for i in range(35):
-                _mk_session(server, f"dev{i}", status=Status.IDLE, skip_perms=True)
-                resp = await client.post(
-                    f"/api/sessions/dev{i}/perms", headers=_hdr(ADMIN_ID),
-                )
+                _mk_session(server, f"dev{i}", status=Status.IDLE, mode="full")
+                resp = await _perms(client, ADMIN_ID, "ask", label=f"dev{i}")
                 if resp.status == 429:
                     seen_429 = True
                     break
@@ -587,7 +655,7 @@ def test_compact_rate_limited(server, run_async):
 
 def test_restart_busy_session_hard_kills_never_ctrl_c(server, run_async, monkeypatch):
     async def _run():
-        _mk_session(server, "dev", status=Status.BUSY, skip_perms=True)
+        _mk_session(server, "dev", status=Status.BUSY, mode="full")
         _neuter_kill_relaunch(monkeypatch)
         launch = AsyncMock(return_value=(True, ""))
         monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
@@ -609,8 +677,8 @@ def test_restart_busy_session_hard_kills_never_ctrl_c(server, run_async, monkeyp
         from aipager.dtach import inject
         inject.kill_session.assert_awaited_once_with("claude-dev")
         inject.send_keys.assert_not_awaited()
-        # Restart never changes the mode — same skip_perms it started with.
-        assert launch.await_args.kwargs["skip_perms"] is True
+        # Restart never changes the mode — the same mode it started with.
+        assert launch.await_args.kwargs["mode"] == "full"
     run_async(_run())
 
 

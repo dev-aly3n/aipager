@@ -302,15 +302,15 @@ def test_delete_in_a_dm_is_unchanged(gbot, run_async):
 
 
 def _mode_confirm(gbot, run_async, chat, name, user, *, card=503):
-    """Ask -> Auto from the confirm card, tapped by *user* (an admin)."""
+    """Ask -> Full access from the confirm card, tapped by *user* (an admin)."""
     sess = _sess(gbot, name)
-    gbot._perms_pending[name] = {"target_skip_perms": True, "msg_id": card,
+    gbot._perms_pending[name] = {"target_mode": "full", "msg_id": card,
                                  "label": sess.label, "turn": sess.turn_key}
 
     async def _switch(s, target):
-        s.skip_perms = target
-        return SimpleNamespace(ok=True, reason="", err="", label=s.label)
-    gbot._perms_switch_core = AsyncMock(side_effect=_switch)
+        s.perm_mode = target
+        return SimpleNamespace(ok=True, reason="done", err="", label=s.label)
+    gbot._mode_switch_core = AsyncMock(side_effect=_switch)
     return _run_tap(gbot, run_async, _cb(gbot, chat, name, "perms_confirm"),
                     user, chat=chat, message_id=card)
 
@@ -318,8 +318,8 @@ def _mode_confirm(gbot, run_async, chat, name, user, *, card=503):
 def test_mode_switch_in_a_group_names_who_switched_it(gbot, run_async):
     query = _mode_confirm(gbot, run_async, G, X1, ALICE)
     final = _edit_texts(query)[-1]
-    assert final.startswith("⚙️ Switched to 🤖 Auto mode by @alice.\n\n")
-    assert final.endswith("<b>x1</b> is in 🤖 Auto mode.")
+    assert final.startswith("⚙️ Switched to 🔓 Full access mode by @alice.\n\n")
+    assert final.endswith("<b>x1</b> is in 🔓 Full access mode.")
 
 
 def test_mode_switch_in_a_dm_is_unchanged(gbot, run_async):
@@ -334,12 +334,12 @@ def test_mode_switch_in_a_dm_is_unchanged(gbot, run_async):
 def test_typed_switch_to_ask_names_the_sender(gbot, run_async, mk_update, chat, name, user,
                                               note):
     sess = _sess(gbot, name)
-    sess.skip_perms = True
+    sess.perm_mode = "full"
 
     async def _switch(s, target):
-        s.skip_perms = target
-        return SimpleNamespace(ok=True, reason="", err="", label=s.label)
-    gbot._perms_switch_core = AsyncMock(side_effect=_switch)
+        s.perm_mode = target
+        return SimpleNamespace(ok=True, reason="done", err="", label=s.label)
+    gbot._mode_switch_core = AsyncMock(side_effect=_switch)
     u = _msg(mk_update, f"/mode {sess.label} ask", user, chat=chat)
     reply = MagicMock(message_id=777)
     reply.chat = MagicMock(id=chat)
@@ -347,7 +347,7 @@ def test_typed_switch_to_ask_names_the_sender(gbot, run_async, mk_update, chat, 
     u.message.reply_text = AsyncMock(return_value=reply)
     run_async(gbot._handle_mode_cmd(u, MagicMock()))
     assert u.message.reply_text.await_args.args[0] == (
-        f"⚙️ Switching <b>{sess.label}</b> to 💬 Ask mode…")
+        f"⚙️ Switching <b>{sess.label}</b> to 💬 Ask mode (the session restarts)…")
     card, _kb = gbot._render_mode_card(chat, sess)
     assert reply.edit_text.await_args.args[0] == note + card
 
@@ -357,9 +357,9 @@ def _ready_tap(gbot, run_async, chat, name, user, verb):
     gbot._switch_model_core = AsyncMock(return_value=SimpleNamespace(ok=True, detail=""))
 
     async def _switch(s, target):
-        s.skip_perms = target
-        return SimpleNamespace(ok=True, reason="", err="", label=s.label)
-    gbot._perms_switch_core = AsyncMock(side_effect=_switch)
+        s.perm_mode = target
+        return SimpleNamespace(ok=True, reason="done", err="", label=s.label)
+    gbot._mode_switch_core = AsyncMock(side_effect=_switch)
     gbot._app.bot.edit_message_text = AsyncMock()
     _run_tap(gbot, run_async, _cb(gbot, chat, name, verb), user, chat=chat,
              message_id=sess.busy_msg_id or 600)
@@ -378,10 +378,10 @@ def test_ready_card_model_switch_in_a_dm_is_unchanged(gbot, run_async):
 
 
 def test_ready_card_mode_switch_names_the_tapper_in_a_group(gbot, run_async):
-    _sess(gbot, X1).skip_perms = True
+    _sess(gbot, X1).perm_mode = "full"
     text = _ready_tap(gbot, run_async, G, X1, BOB, "rdy_ask")
     assert "🔁 Switched to 💬 Ask mode by @bob." in text
-    _sess(gbot, D1).skip_perms = True
+    _sess(gbot, D1).perm_mode = "full"
     text = _ready_tap(gbot, run_async, DM, D1, ALICE, "rdy_ask")
     assert "🔁" not in text
 
@@ -570,8 +570,8 @@ def test_delete_picker_and_menu_delete_answer_only_their_requester(gbot, run_asy
 
 
 def _mode_auto_card(gbot, run_async, mk_update, user=ALICE):
-    """alice sends /mode x1 auto: the confirm card is hers."""
-    u = _msg(mk_update, "/mode x1 auto", user)
+    """alice sends /mode x1 full: the confirm card is hers."""
+    u = _msg(mk_update, "/mode x1 full", user)
     ids = _track_sent(u)
     run_async(gbot._handle_mode_cmd(u, MagicMock()))
     assert gbot._perms_pending[X1]["msg_id"] == ids[-1]
@@ -580,7 +580,7 @@ def _mode_auto_card(gbot, run_async, mk_update, user=ALICE):
 
 def test_mode_confirm_answers_only_the_sender(gbot, run_async, mk_update):
     card = _mode_auto_card(gbot, run_async, mk_update)
-    gbot._perms_switch_core = AsyncMock()
+    gbot._mode_switch_core = AsyncMock()
     record = dict(gbot._perms_pending[X1])
     # dave is an admin: without the card's owner on record he could switch it.
     for verb in ("perms_confirm", "perms_cancel"):
@@ -588,7 +588,7 @@ def test_mode_confirm_answers_only_the_sender(gbot, run_async, mk_update):
         assert _toasts(q) == ["This is @alice's card. Send /mode x1 for your own."]
         q.edit_message_text.assert_not_awaited()
     assert gbot._perms_pending[X1] == record
-    gbot._perms_switch_core.assert_not_awaited()
+    gbot._mode_switch_core.assert_not_awaited()
     # alice cancels: the mode card again, and the card is nobody's now.
     _run_tap(gbot, run_async, _cb(gbot, G, X1, "perms_cancel"), ALICE, message_id=card)
     assert X1 not in gbot._perms_pending
@@ -614,7 +614,7 @@ def test_mode_picker_answers_only_the_sender_and_the_mode_card_is_everyones(
     _run_tap(gbot, run_async, _cb(gbot, G, X1, "mode_show"), ALICE, message_id=ids[-1])
     # The mode card it became is everyone's: dave's switch draws HIS confirm.
     turn = _sess(gbot, X1).turn_key
-    q = _run_tap(gbot, run_async, _cb(gbot, G, X1, f"modeauto{turn}"), DAVE,
+    q = _run_tap(gbot, run_async, _cb(gbot, G, X1, f"modefull{turn}"), DAVE,
                  message_id=ids[-1])
     assert gbot._perms_pending.get(X1, {}).get("msg_id") == ids[-1]
     assert card_owner.refusal(gbot, G, ids[-1], ALICE, X1, "perms_confirm") == (
@@ -623,7 +623,7 @@ def test_mode_picker_answers_only_the_sender_and_the_mode_card_is_everyones(
 
 def test_a_mode_card_switch_draws_a_confirm_owned_by_the_tapper(gbot, run_async):
     turn = _sess(gbot, X1).turn_key
-    _run_tap(gbot, run_async, _cb(gbot, G, X1, f"modeauto{turn}"), ALICE, message_id=900)
+    _run_tap(gbot, run_async, _cb(gbot, G, X1, f"modefull{turn}"), ALICE, message_id=900)
     assert gbot._perms_pending[X1]["msg_id"] == 900
     q = _run_tap(gbot, run_async, _cb(gbot, G, X1, "perms_confirm"), DAVE, message_id=900)
     assert _toasts(q) == ["This is @alice's card. Send /mode x1 for your own."]
@@ -1157,18 +1157,18 @@ def test_an_instant_switch_from_a_mode_picker_leaves_the_card_open(gbot, run_asy
     """/mode ask with two sessions: alice's picker row switches x1 to Ask
     at once, and the mode card it becomes is everyone's again."""
     for name in (X1, X2):
-        _sess(gbot, name).skip_perms = True
+        _sess(gbot, name).perm_mode = "full"
 
     async def _switch(s, target):
-        s.skip_perms = target
-        return SimpleNamespace(ok=True, reason="", err="", label=s.label)
-    gbot._perms_switch_core = AsyncMock(side_effect=_switch)
+        s.perm_mode = target
+        return SimpleNamespace(ok=True, reason="done", err="", label=s.label)
+    gbot._mode_switch_core = AsyncMock(side_effect=_switch)
     u = _msg(mk_update, "/mode ask", ALICE)
     ids = _track_sent(u)
     run_async(gbot._handle_mode_cmd(u, MagicMock()))
     turn = _sess(gbot, X1).turn_key
     _run_tap(gbot, run_async, _cb(gbot, G, X1, f"modeask{turn}"), ALICE, message_id=ids[-1])
-    assert _sess(gbot, X1).skip_perms is False
+    assert _sess(gbot, X1).perm_mode == "ask"
     turn = _sess(gbot, X1).turn_key
     assert card_owner.refusal(gbot, G, ids[-1], DAVE, X1, f"modeauto{turn}") is None
 

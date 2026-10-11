@@ -18,8 +18,8 @@ Pinned here:
 - refused taps change nothing (no hook decision, no keys, no relaunch, no
   install), the p1 and p2 scenarios;
 - a button of another chat's session is refused, in both callback forms;
-- resume acts on exactly the tapped session, and Auto via resume needs
-  an admin;
+- resume acts on exactly the tapped session, and Full access via resume
+  needs an admin (Auto, since 2026-10-11 a safety check, is everyone's);
 - DM parity: the operator's own install (one DM scope, an owner) and
   personal mode pass every tap exactly as before.
 """
@@ -246,7 +246,10 @@ def test_an_unknown_verb_needs_prompt(ns, verb):
     ("claude-x", "compact", PROMPT), ("claude-x", "now:12", PROMPT),
     ("claude-x", "ststop7", PROMPT), ("claude-x", "pstop7", PROMPT),
     ("claude-x", "perms_confirm", PROMPT), ("claude-x", "resume-ask", PROMPT),
-    ("claude-x", "resume-auto", MANAGE), ("claude-x", "resume_mode_auto", MANAGE),
+    ("claude-x", "resume-auto", PROMPT), ("claude-x", "resume_mode_auto", PROMPT),
+    ("claude-x", "resume-full", MANAGE), ("claude-x", "rdy_full", MANAGE),
+    ("claude-x", "modefull7", MANAGE), ("claude-x", "modeauto7", PROMPT),
+    ("claude-x", "modeask7", PROMPT), ("claude-x", "rdy_ask", PROMPT),
     ("claude-x", "resume_mode_ask", PROMPT), ("_", "clear_gone", PROMPT),
     ("_", "resume_page:2", VIEW), ("_", "resume_noop", VIEW),
     ("_", "st:list", VIEW), ("_", "st:ended", VIEW), ("_", "pick:cancel", VIEW),
@@ -265,15 +268,15 @@ def test_table_entries(ns, verb, cap):
     assert tap_gate.required_capability(ns, verb) is cap
 
 
-def test_a_mode_card_switching_to_auto_needs_manage():
+def test_a_mode_card_switching_to_full_access_needs_manage():
     for verb in ("perms_confirm", "perms_stop_switch"):
         assert tap_gate.required_capability(
-            "claude-x", verb, perms_target_auto=True) is MANAGE
+            "claude-x", verb, perms_target_full=True) is MANAGE
         assert tap_gate.required_capability(
-            "claude-x", verb, perms_target_auto=False) is PROMPT
+            "claude-x", verb, perms_target_full=False) is PROMPT
     # Only those two verbs read the flag.
     assert tap_gate.required_capability(
-        "claude-x", "perms_cancel", perms_target_auto=True) is PROMPT
+        "claude-x", "perms_cancel", perms_target_full=True) is PROMPT
 
 
 # ---------------------------------------------------------------------------
@@ -444,36 +447,38 @@ def test_group_matrix(gbot, reached, run_async, ns, verb, uid):
 
 @pytest.mark.parametrize("verb", ["perms_confirm", "perms_stop_switch"])
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB, RO], ids=lambda u: ROLE_OF[u])
-def test_a_switch_to_auto_card_needs_an_admin_tapping_it(
+def test_a_switch_to_full_access_card_needs_an_admin_tapping_it(
         gbot, reached, run_async, verb, uid):
     bot = gbot()
     _session(bot)
-    bot._perms_pending[S] = {"target_skip_perms": True, "msg_id": 90,
+    bot._perms_pending[S] = {"target_mode": "full", "msg_id": 90,
                              "label": "api", "turn": 1}
     u, q = _tap(GROUP, uid, f"{S}:{verb}", msg_id=90)
     run_async(bot._handle_callback(u, MagicMock()))
     assert (reached != []) is (uid in (ALY, ADA))
 
 
+@pytest.mark.parametrize("target", ["ask", "auto"])
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
-def test_a_switch_to_ask_card_needs_prompt_only(gbot, reached, run_async, uid):
+def test_a_switch_out_of_full_access_card_needs_prompt_only(gbot, reached, run_async, uid,
+                                                            target):
     bot = gbot()
     _session(bot)
-    bot._perms_pending[S] = {"target_skip_perms": False, "msg_id": 90,
+    bot._perms_pending[S] = {"target_mode": target, "msg_id": 90,
                              "label": "api", "turn": 1}
     u, q = _tap(GROUP, uid, f"{S}:perms_confirm", msg_id=90)
     run_async(bot._handle_callback(u, MagicMock()))
     assert reached == [(S, "perms_confirm")]
 
 
-def test_an_auto_record_for_another_card_does_not_raise_the_bar(
+def test_a_full_access_record_for_another_card_does_not_raise_the_bar(
         gbot, reached, run_async):
     """The record belongs to card 90; a tap on an older card (89) is not
     for it (the perms branch answers "out of date"), so the gate does not
-    hold it to the Auto bar either."""
+    hold it to the Full access bar either."""
     bot = gbot()
     _session(bot)
-    bot._perms_pending[S] = {"target_skip_perms": True, "msg_id": 90,
+    bot._perms_pending[S] = {"target_mode": "full", "msg_id": 90,
                              "label": "api", "turn": 1}
     u, q = _tap(GROUP, BOB, f"{S}:perms_confirm", msg_id=89)
     run_async(bot._handle_callback(u, MagicMock()))
@@ -573,11 +578,12 @@ def test_p1_read_only_stop_was_reachable_before(gbot, run_async, monkeypatch):
 
 
 @pytest.mark.parametrize("uid", [RO, BOB], ids=lambda u: ROLE_OF[u])
-def test_p1_stop_and_switch_to_auto_needs_an_admin(gbot, run_async, monkeypatch, uid):
+def test_p1_stop_and_switch_to_full_access_needs_an_admin(gbot, run_async, monkeypatch,
+                                                         uid):
     bot = gbot()
     fx = _Effects(monkeypatch, bot)
     sess = _session(bot, status=Status.BUSY)
-    record = {"target_skip_perms": True, "msg_id": 90, "label": "api",
+    record = {"target_mode": "full", "msg_id": 90, "label": "api",
               "turn": sess.turn_key}
     bot._perms_pending[S] = record
     bot._perms_switch_core = AsyncMock()
@@ -589,22 +595,23 @@ def test_p1_stop_and_switch_to_auto_needs_an_admin(gbot, run_async, monkeypatch,
     bot._do_perms_switch_via_fn.assert_not_called()
     bot._perms_switch_core.assert_not_called()
     assert bot._perms_pending[S] is record          # the card still works
-    assert sess.skip_perms is False
+    assert sess.perm_mode == "ask"
     assert fx.nothing()
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA], ids=lambda u: ROLE_OF[u])
-def test_p1_owner_stop_and_switch_to_auto_goes_ahead(gbot, run_async, monkeypatch, uid):
+def test_p1_owner_stop_and_switch_to_full_access_goes_ahead(gbot, run_async, monkeypatch,
+                                                           uid):
     bot = gbot()
     _Effects(monkeypatch, bot)
     sess = _session(bot, status=Status.BUSY)
-    bot._perms_pending[S] = {"target_skip_perms": True, "msg_id": 90,
+    bot._perms_pending[S] = {"target_mode": "full", "msg_id": 90,
                              "label": "api", "turn": sess.turn_key}
     bot._do_perms_switch_via_fn = AsyncMock()
     u, q = _tap(GROUP, uid, f"{S}:perms_stop_switch", msg_id=90)
     run_async(bot._handle_callback(u, MagicMock()))
     bot._do_perms_switch_via_fn.assert_awaited_once()
-    assert bot._do_perms_switch_via_fn.await_args.args[1] is True
+    assert bot._do_perms_switch_via_fn.await_args.args[1] == "full"
 
 
 @pytest.mark.parametrize("uid", [RO, BOB], ids=lambda u: ROLE_OF[u])
@@ -684,27 +691,54 @@ def _edited_texts(q):
 
 @pytest.mark.parametrize("uid", [BOB, RO], ids=lambda u: ROLE_OF[u])
 @pytest.mark.parametrize("form", ["long", "short"])
-def test_p2_resume_auto_needs_an_admin(gbot, run_async, monkeypatch, uid, form):
+def test_p2_resume_full_needs_an_admin(gbot, run_async, monkeypatch, uid, form):
     bot = gbot()
     fx = _Effects(monkeypatch, bot)
     dm, grp = _p2_world(bot)
-    data = (f"{S}:resume-auto" if form == "long"
-            else session_parity.session_cb(bot, GROUP, grp, "resume-auto"))
+    data = (f"{S}:resume-full" if form == "long"
+            else session_parity.session_cb(bot, GROUP, grp, "resume-full"))
     u, q = _tap(GROUP, uid, data, msg_id=60)
     run_async(bot._handle_callback(u, MagicMock()))
     assert _answers(q) == [REFUSED]
     assert fx.launched == []
     assert dm.status is Status.GONE and grp.status is Status.GONE
-    assert dm.skip_perms is False and grp.skip_perms is False
+    assert dm.perm_mode == "ask" and grp.perm_mode == "ask"
     assert not any("PRIVATE" in t for t in _edited_texts(q))
 
 
-@pytest.mark.parametrize("uid", [BOB, RO], ids=lambda u: ROLE_OF[u])
-def test_legacy_resume_mode_auto_needs_an_admin(gbot, run_async, monkeypatch, uid):
+def test_p2_user_resume_auto_resumes_the_groups_session_in_auto(
+        gbot, run_async, monkeypatch):
+    """Auto is everyone's now (a safety check): a user resumes in it, and
+    still only the session the button names."""
     bot = gbot()
     fx = _Effects(monkeypatch, bot)
     dm, grp = _p2_world(bot)
-    u, q = _tap(GROUP, uid, f"{S}:resume_mode_auto", msg_id=60)
+    data = session_parity.session_cb(bot, GROUP, grp, "resume-auto")
+    u, q = _tap(GROUP, BOB, data, msg_id=60)
+    run_async(bot._handle_callback(u, MagicMock()))
+    assert [n for n, _ in fx.launched] == ["api__g1001"]
+    assert fx.launched[0][1].get("mode") == "auto"
+    assert dm.status is Status.GONE
+    assert not any("PRIVATE" in t for t in _edited_texts(q))
+
+
+def test_legacy_resume_mode_auto_is_auto_for_a_member(gbot, run_async, monkeypatch):
+    """A picker from before Full access existed: its Auto now resumes in
+    Auto (narrower than the bypass it meant), so a user may tap it."""
+    bot = gbot()
+    fx = _Effects(monkeypatch, bot)
+    dm, grp = _p2_world(bot)
+    u, q = _tap(GROUP, BOB, f"{S}:resume_mode_auto", msg_id=60)
+    run_async(bot._handle_callback(u, MagicMock()))
+    assert [n for n, _ in fx.launched] == ["api__g1001"]
+    assert fx.launched[0][1].get("mode") == "auto"
+
+
+def test_legacy_resume_mode_auto_is_refused_to_read_only(gbot, run_async, monkeypatch):
+    bot = gbot()
+    fx = _Effects(monkeypatch, bot)
+    _p2_world(bot)
+    u, q = _tap(GROUP, RO, f"{S}:resume_mode_auto", msg_id=60)
     run_async(bot._handle_callback(u, MagicMock()))
     assert _answers(q) == [REFUSED]
     assert fx.launched == []
@@ -720,23 +754,23 @@ def test_p2_user_resume_ask_resumes_the_groups_session_not_the_dm_twin(
     run_async(bot._handle_callback(u, MagicMock()))
     assert [n for n, _ in fx.launched] == ["api__g1001"]
     assert fx.launched[0][1].get("resume_id") == "group-session-id"
-    assert fx.launched[0][1].get("skip_perms") is False
+    assert fx.launched[0][1].get("mode") == "ask"
     assert dm.status is Status.GONE
     assert not any("PRIVATE" in t for t in _edited_texts(q))
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA], ids=lambda u: ROLE_OF[u])
-def test_p2_owner_resume_auto_resumes_exactly_the_tapped_session(
+def test_p2_owner_resume_full_resumes_exactly_the_tapped_session(
         gbot, run_async, monkeypatch, uid):
     bot = gbot()
     fx = _Effects(monkeypatch, bot)
     dm, grp = _p2_world(bot)
-    data = session_parity.session_cb(bot, GROUP, grp, "resume-auto")
+    data = session_parity.session_cb(bot, GROUP, grp, "resume-full")
     u, q = _tap(GROUP, uid, data, msg_id=60)
     run_async(bot._handle_callback(u, MagicMock()))
     assert [n for n, _ in fx.launched] == ["api__g1001"]
-    assert fx.launched[0][1].get("skip_perms") is True
-    assert dm.status is Status.GONE and dm.skip_perms is False
+    assert fx.launched[0][1].get("mode") == "full"
+    assert dm.status is Status.GONE and dm.perm_mode == "ask"
 
 
 def _unstamped_twin_world(bot):
@@ -784,7 +818,7 @@ def test_legacy_resume_mode_owner_auto_resumes_the_named_session(
     u, q = _tap(GROUP, ALY, f"{S}:resume_mode_auto", msg_id=60)
     run_async(bot._handle_callback(u, MagicMock()))
     assert [n for n, _ in fx.launched] == ["api__g1001"]
-    assert fx.launched[0][1].get("skip_perms") is True
+    assert fx.launched[0][1].get("mode") == "auto"
     assert dm.status is Status.GONE
 
 
@@ -861,7 +895,7 @@ def test_dm_owner_passes_every_tap(gbot, reached, run_async, ns, verb):
     """The operator's own install: one DM scope, an owner."""
     bot = gbot("dm")
     _session(bot, DM_S, DM, "dm")
-    bot._perms_pending[DM_S] = {"target_skip_perms": True, "msg_id": 50,
+    bot._perms_pending[DM_S] = {"target_mode": "full", "msg_id": 50,
                                 "label": "api", "turn": 1}
     u, q = _tap(DM, ALY, f"{ns}:{verb}")
     run_async(bot._handle_callback(u, MagicMock()))

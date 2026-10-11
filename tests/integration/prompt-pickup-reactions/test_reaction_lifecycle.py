@@ -888,7 +888,7 @@ def test_a_same_name_session_launched_after_a_kill_gets_its_notice(
     run_async(bot._kill_session_core(sess.name, sess.label))
     monkeypatch.setattr("aipager.dtach.inject.launch_session",
                         AsyncMock(return_value=(True, "")))
-    name, err = run_async(bot.create_session("x", scope_chat_id=None))
+    name, err = run_async(bot.create_session("x", scope_chat_id=None, mode="ask"))
     assert name == sess.name and not err
     _feed(bot, run_async, _session_end_payload(
         bot.registry.get(name), "prompt_input_exit", session_id=SID2))
