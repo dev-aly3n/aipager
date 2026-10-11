@@ -170,6 +170,10 @@
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"one": "({n} Agent)", "other": "({n} Agenten)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"one": "✅ <i>{n} früheres Tool</i>", "other": "✅ <i>{n} frühere Tools</i>"}}
 {"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 von **{session}** ({who})"}
+{"k": "card.peer.from_plain", "src": "42467343", "v": "📨 von **{session}**"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 von **{session}** (in ihrem Terminal getippt)"}
+{"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 von einer anderen Sitzung (nicht geprüft: keine Dateiänderungen, kein Web)"}
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"one": "🤖 {agent} · {n} Tool-Aufruf · {clock}", "other": "🤖 {agent} · {n} Tool-Aufrufe · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (läuft noch)"}
@@ -429,6 +433,10 @@
 {"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>Wenn das öfter passiert, kann der Besitzer auf „Das melden“ tippen, um dem Maintainer einen Bericht zu senden.</i>"}
 {"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> hat sein Speicherlimit von {limit} GB ausgeschöpft, daher wurde ein Update der Statuszeile übersprungen. Die Sitzung läuft weiter."}
 {"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Von Claude Code nicht angenommen\n\nInnerhalb von {grace} s nach dem Senden kam kein Hook. Eine Nachricht, die mit „/“ beginnt, wird als Slash-Befehl gelesen - prüfe das Terminal."}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "Diese Aufgabe kam von <b>{session}</b>."}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "Eine Nachricht aus einer anderen Sitzung kam in diesen Durchlauf und hat seine Rechte eingeschränkt."}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "Diese Aufgabe kam von einer anderen Sitzung, die aipager nicht prüfen konnte."}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b> hat die Nachricht von <b>{sender}</b> nicht ausgeführt: {reason}"}
 {"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · für eine Nachricht aus der Warteschlange kam keine rechtzeitige Bestätigung - Claude verarbeitet sie vielleicht noch."}
 {"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · für eine Nachricht aus der Warteschlange kam keine rechtzeitige Bestätigung: „{preview}“ - Claude verarbeitet sie vielleicht noch."}
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"one": "⏳ <b>{session}</b> · arbeitet noch (seit {n} Min. still)\n\nNoch keine Status-Updates. Das ist meist normal.\n\n<blockquote expandable>Was gerade passieren könnte\n  • Lange laufender Tool-Aufruf (Bash, WebSearch, großer Abruf)\n  • Aufwendige Generierung mit sehr großem Kontext\n  • Komprimieren läuft\n  • Warten wegen Ratenlimit oder Abo-Limit\n  • Netzwerk hängt oder Claude ist abgestürzt</blockquote>", "other": "⏳ <b>{session}</b> · arbeitet noch (seit {n} Min. still)\n\nNoch keine Status-Updates. Das ist meist normal.\n\n<blockquote expandable>Was gerade passieren könnte\n  • Lange laufender Tool-Aufruf (Bash, WebSearch, großer Abruf)\n  • Aufwendige Generierung mit sehr großem Kontext\n  • Komprimieren läuft\n  • Warten wegen Ratenlimit oder Abo-Limit\n  • Netzwerk hängt oder Claude ist abgestürzt</blockquote>"}}
@@ -611,6 +619,7 @@
 {"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool} mit einem unlesbaren Suchordner"}
 {"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "{tool} abgelehnt - diese Suche würde geschützte Dateien erreichen ({shown}); suche stattdessen in einem Projektordner"}
 {"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "Die Suche mit {tool} erreicht den geschützten Pfad {glob}"}
+{"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "SendMessage an eine Claude-Sitzung, die aipager nicht verwaltet"}
 {"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} steht in den deny_tools dieser Rolle"}
 {"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} steht nicht in den allow_tools dieser Rolle"}
 {"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "dieser Tool-Aufruf konnte nicht geprüft werden und wurde daher abgelehnt"}

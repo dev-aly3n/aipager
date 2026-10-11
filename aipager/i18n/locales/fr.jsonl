@@ -170,6 +170,10 @@
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"many": "({n} agents)", "one": "({n} agent)", "other": "({n} agents)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"many": "✅ <i>{n} outils précédents</i>", "one": "✅ <i>{n} outil précédent</i>", "other": "✅ <i>{n} outils précédents</i>"}}
 {"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 de **{session}** ({who})"}
+{"k": "card.peer.from_plain", "src": "42467343", "v": "📨 de **{session}**"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 de **{session}** (tapé dans son terminal)"}
+{"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 d'une autre session (non vérifiée : pas de modification de fichiers, pas de web)"}
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"many": "🤖 {agent} · {n} appels d'outils · {clock}", "one": "🤖 {agent} · {n} appel d'outil · {clock}", "other": "🤖 {agent} · {n} appels d'outils · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (toujours en cours)"}
@@ -429,6 +433,10 @@
 {"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>Si cela se reproduit, le propriétaire peut toucher Signaler ceci pour envoyer un rapport au mainteneur.</i>"}
 {"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> a dépassé sa limite de mémoire de {limit} Go, une mise à jour de la ligne d'état a donc été ignorée. La session continue."}
 {"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Non pris en compte par Claude Code\n\nAucun hook reçu dans les {grace} s après l'envoi. Un message qui commence par \"/\" est lu comme une commande slash - vérifiez le terminal."}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "Cette tâche venait de <b>{session}</b>."}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "Un message d'une autre session a rejoint ce tour et a réduit ses droits."}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "Cette tâche venait d'une autre session qu'aipager n'a pas pu vérifier."}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b> n'a pas exécuté le message que <b>{sender}</b> lui a envoyé : {reason}"}
 {"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · la prise en charge d'un message en attente n'a pas été confirmée à temps - Claude peut encore le traiter."}
 {"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · la prise en charge d'un message en attente n'a pas été confirmée à temps : \"{preview}\" - Claude peut encore le traiter."}
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"many": "⏳ <b>{session}</b> · toujours en cours (silencieuse depuis {n} min)\n\nPas encore de mise à jour d'état. C'est généralement normal.\n\n<blockquote expandable>Ce qui peut se passer\n  • Appel d'outil long (Bash, WebSearch, gros téléchargement)\n  • Génération lourde sur un très grand contexte\n  • Compactage en cours\n  • Attente due à une limite de débit ou d'abonnement\n  • Réseau bloqué ou plantage de claude</blockquote>", "one": "⏳ <b>{session}</b> · toujours en cours (silencieuse depuis {n} min)\n\nPas encore de mise à jour d'état. C'est généralement normal.\n\n<blockquote expandable>Ce qui peut se passer\n  • Appel d'outil long (Bash, WebSearch, gros téléchargement)\n  • Génération lourde sur un très grand contexte\n  • Compactage en cours\n  • Attente due à une limite de débit ou d'abonnement\n  • Réseau bloqué ou plantage de claude</blockquote>", "other": "⏳ <b>{session}</b> · toujours en cours (silencieuse depuis {n} min)\n\nPas encore de mise à jour d'état. C'est généralement normal.\n\n<blockquote expandable>Ce qui peut se passer\n  • Appel d'outil long (Bash, WebSearch, gros téléchargement)\n  • Génération lourde sur un très grand contexte\n  • Compactage en cours\n  • Attente due à une limite de débit ou d'abonnement\n  • Réseau bloqué ou plantage de claude</blockquote>"}}
@@ -611,6 +619,7 @@
 {"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool} avec un dossier de recherche illisible"}
 {"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "{tool} refusé - cette recherche atteindrait des fichiers protégés ({shown}) ; cherchez plutôt dans un dossier de projet"}
 {"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "La recherche {tool} atteint le chemin protégé {glob}"}
+{"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "SendMessage vers une session Claude qu'aipager ne gère pas"}
 {"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} figure dans deny_tools de ce rôle"}
 {"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} ne figure pas dans allow_tools de ce rôle"}
 {"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "cet appel d'outil n'a pas pu être vérifié, il a donc été refusé"}

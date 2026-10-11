@@ -1073,6 +1073,14 @@ _SHAPE_HALTED = reason_shape("session", "halted", tail=".*")
 _SHAPE_UNCHECKED = reason_shape("this", "tool", "call", "could", "not", "be", "checked,", "so",
                                 "it", "was", "denied")
 
+#: A confined role a policy gave SendMessage wrote to a Claude session aipager
+#: does not run ("peer message authority"): enforce's reason.
+REASON_SEND_UNMANAGED = "send_unmanaged"
+_SEND_UNMANAGED_WORDS = ("SendMessage", "to", "a", "Claude", "session",
+                         "aipager", "does", "not", "manage")
+SEND_UNMANAGED_REASON = " ".join(_SEND_UNMANAGED_WORDS)
+_SHAPE_SEND_UNMANAGED = reason_shape(*_SEND_UNMANAGED_WORDS)
+
 #: ``(code, shape)`` for every reason a block can carry, in the order the
 #: daemon tries them (enforce's two first, then exact sentences; every
 #: shape is anchored, so no two match the same reason). Compile with
@@ -1102,4 +1110,5 @@ REASON_SHAPES: tuple[tuple[str, str], ...] = (
     (REASON_SEARCH_REACHES, _SHAPE_SEARCH_REACHES),
     (REASON_SEARCH_ANYWHERE, _SHAPE_SEARCH_ANYWHERE),
     (REASON_SEARCH_PROTECTED_FILES, _SHAPE_SEARCH_PROTECTED_FILES),
+    (REASON_SEND_UNMANAGED, _SHAPE_SEND_UNMANAGED),
 )

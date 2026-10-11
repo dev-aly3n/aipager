@@ -164,8 +164,12 @@ def test_empty_directory_merges_to_the_floor():
     assert consumed == []
     assert expired == []
     snap = ps.read_snapshot(SESSION)
-    # The floor, and the turn's origin (roadmap 8.77): no note, no marker.
+    # The floor, and the turn's origin (roadmap 8.77): no note, no marker;
+    # marked for an origin check, with the chat's (here empty) style
+    # ("peer message authority", I3).
     assert snap.pop("turn_origin") == "terminal"
+    assert snap.pop("verify_origin") is True
+    assert snap.pop("style_text") == "" and snap.pop("reply_context") == ""
     assert snap == ps.FLOOR_SNAPSHOT
 
 

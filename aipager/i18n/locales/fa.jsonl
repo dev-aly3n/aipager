@@ -170,6 +170,10 @@
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"one": "({n} ایجنت)", "other": "({n} ایجنت)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"one": "✅ <i>{n} ابزار قبلی اجرا شد</i>", "other": "✅ <i>{n} ابزار قبلی اجرا شد</i>"}}
 {"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 از **{session}** ({who})"}
+{"k": "card.peer.from_plain", "src": "42467343", "v": "📨 از **{session}**"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 از **{session}** (تایپ‌شده در ترمینال خودش)"}
+{"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 از یک نشست دیگر (تأیید نشده: بدون تغییر فایل و بدون وب)"}
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"one": "🤖 {agent} · {n} ابزار اجرا کرد · {clock}", "other": "🤖 {agent} · {n} ابزار اجرا کرد · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (هنوز کار می‌کند)"}
@@ -429,6 +433,10 @@
 {"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>اگر این تکرار شد، مالک می‌تواند روی «گزارشش کن» بزند تا گزارشی برای سازندهٔ aipager برود.</i>"}
 {"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> از سقف {limit} گیگابایتی حافظه‌اش جلوتر رفت، پس یک بار به‌روزرسانی خط وضعیت جا افتاد. نشست به کارش ادامه می‌دهد."}
 {"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Claude Code پیام را تحویل نگرفت\n\nتا {grace} ثانیه بعد از فرستادن، هیچ hookی نرسید. پیامی که با «/» شروع شود فرمان حساب می‌شود؛ ترمینال را نگاه کنید."}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "این کار از طرف <b>{session}</b> آمده بود."}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "پیامی از یک نشست دیگر به این نوبت اضافه شد و اختیاراتش را کمتر کرد."}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "این کار از یک نشست دیگر آمده بود که aipager نتوانست تأییدش کند."}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b> پیامی را که <b>{sender}</b> برایش فرستاده بود انجام نداد: {reason}"}
 {"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · معلوم نشد پیام صف به‌موقع برداشته شد یا نه؛ شاید Claude هنوز سراغش برود."}
 {"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · معلوم نشد پیام صف («{preview}») به‌موقع برداشته شد یا نه؛ شاید Claude هنوز سراغش برود."}
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"one": "⏳ <b>{session}</b> · هنوز کار می‌کند ({n} دقیقه بی‌خبر)\n\nهنوز به‌روزرسانی تازه‌ای نیامده. این معمولاً طبیعی است.\n\n<blockquote expandable>چه چیزهایی ممکن است در جریان باشد\n  • یک ابزار طولانی (Bash، WebSearch، دانلود بزرگ)\n  • نوشتن جوابی سنگین با حافظهٔ گفتگوی خیلی بزرگ\n  • خلاصه‌سازی گفتگو\n  • انتظار به خاطر محدودیت سرعت یا سقف اشتراک\n  • قطعی شبکه یا مشکل در Claude</blockquote>", "other": "⏳ <b>{session}</b> · هنوز کار می‌کند ({n} دقیقه بی‌خبر)\n\nهنوز به‌روزرسانی تازه‌ای نیامده. این معمولاً طبیعی است.\n\n<blockquote expandable>چه چیزهایی ممکن است در جریان باشد\n  • یک ابزار طولانی (Bash، WebSearch، دانلود بزرگ)\n  • نوشتن جوابی سنگین با حافظهٔ گفتگوی خیلی بزرگ\n  • خلاصه‌سازی گفتگو\n  • انتظار به خاطر محدودیت سرعت یا سقف اشتراک\n  • قطعی شبکه یا مشکل در Claude</blockquote>"}}
@@ -611,6 +619,7 @@
 {"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool} با پوشهٔ جست‌وجویی که خوانده نشد"}
 {"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "{tool} رد شد - این جست‌وجو به فایل‌های محافظت‌شده ({shown}) می‌رسد؛ به‌جایش داخل پوشهٔ یک پروژه جست‌وجو کنید"}
 {"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "جست‌وجوی {tool} به مسیر محافظت‌شدهٔ {glob} می‌رسد"}
+{"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "SendMessage به نشستی از Claude که aipager آن را اداره نمی‌کند"}
 {"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} در deny_tools این نقش است"}
 {"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} در allow_tools این نقش نیست"}
 {"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "نشد این فراخوانی ابزار را بررسی کرد، برای همین رد شد"}

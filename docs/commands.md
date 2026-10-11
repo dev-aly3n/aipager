@@ -1207,7 +1207,7 @@ The checks of `aipager doctor` as one JSON object on stdout. Like plain
 
 `checks` are in this order, with these keys: `config_parses`,
 `config`, `token_valid`, `chat_reachable`, `team`, `role_shell_access`,
-`claude`, `claude_auth`, `dtach`, `hook_scripts`, `settings_json`,
+`peer_messages`, `claude`, `claude_auth`, `dtach`, `hook_scripts`, `settings_json`,
 `daemon`, `service_installed`, `service_unit_path`, `miniapp`. A check
 that crashes keeps its key with status `warn`. Texts are plain (no
 markup), and anything shaped like a bot token is replaced by

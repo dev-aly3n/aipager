@@ -99,7 +99,11 @@ def turn_sender_from_report(turn: dict) -> int | str | None:
     None when no author is known (nothing is held then)."""
     if not isinstance(turn, dict):
         return None
-    if turn.get("origin") == "terminal":
+    if turn.get("origin") in ("terminal", "peer", "scheduled"):
+        # A turn started by a message from another session holds every
+        # other sender's message like a terminal turn ("peer message
+        # authority", C2): until the job ends, nobody's message joins it.
+        # So does a turn this session's own scheduled prompt started.
         return TURN_SENDER_TERMINAL
     known = set(turn_authors_from_report(turn))
     if not known:
@@ -561,6 +565,12 @@ class TrackedSession:
     # says MIXED, so a live reload can narrow the turn for a removed or
     # demoted one of them. Transient, never persisted.
     turn_mixed_authors: tuple[int, ...] = ()
+    # "Peer message authority" (display only, never persisted): who sent
+    # the message that started the running turn, as the hook verified it
+    # (``peer_resolved``), and whether a message from another session
+    # joined and narrowed it.
+    peer_from: dict | None = None
+    peer_narrowed: bool = False
     # Inline permission context (tool_info, question, etc.) — set when permission
     # is displayed inside the busy message instead of as a separate message
     pending_permission: dict | None = None
@@ -3002,7 +3012,9 @@ class SessionRegistry:
             # removal must never block the transition — never raise.
             try:
                 from aipager.policy_snapshot import clear_session_files
-                clear_session_files(sess.name)
+                # Its scheduled prompts stay recorded: a resume brings them
+                # back ("peer message authority").
+                clear_session_files(sess.name, keep_triggers=True)
             except Exception:
                 pass
 

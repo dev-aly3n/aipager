@@ -63,7 +63,7 @@ def test_every_code_has_a_key_and_a_shape():
     codes = {code for code, _shape in safety.REASON_SHAPES}
     assert codes == set(safety_notice.REASON_MSGS)
     assert {safety_notice.HALTED, safety_notice.UNCHECKED} <= codes
-    assert len(codes) == len(safety.REASON_SHAPES) == 24
+    assert len(codes) == len(safety.REASON_SHAPES) == 25
 
 
 def test_enforces_two_shapes_match_its_sentences(tmp_path):

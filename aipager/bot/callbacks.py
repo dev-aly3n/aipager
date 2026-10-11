@@ -1189,7 +1189,16 @@ class CallbackDispatchMixin:
             if not await inject.is_alive(session_name):
                 await self._safe_answer(query, person.text(SESSION_GONE, session=session_name))
                 return
-            ok = await self._inject_prompt(sess, "/compact")
+            # The tapper is the sender: a sender-less note carried an
+            # unknown sender's rights and, lingering (a local command no
+            # prompt consumes), dropped the next owner turn to them
+            # ("peer message authority", C13).
+            was_idle = sess.status is Status.IDLE
+            ok = await self._inject_prompt(
+                sess, "/compact", driver_user_id=calling_user_id(update),
+                chat_id=calling_chat_id(update))
+            if ok and was_idle:
+                self._mark_injected_command_ran(sess, "/compact")
             if ok:
                 await self._safe_answer(query, person.text(TOAST_COMPACT_SENDING,
                                                            session=sess.label))

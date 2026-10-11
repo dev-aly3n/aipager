@@ -662,6 +662,143 @@ read `~/projects/bar` if claude code's permissions allow. Use
 per-project `~/.claude/settings.json` overrides or a container
 ([Docker image](../README.md#docker)) for stronger isolation.
 
+## Messages between Claude sessions
+
+Claude Code lets one session send another a message (its `SendMessage`
+tool). In the receiving session that message is a prompt like any other,
+so aipager decides its rights the same way it decides a Telegram
+message's: from who really sent it, never from what it says.
+
+- **The message carries the sender's rights, never more.** When aipager
+  allows a session to send a message, it writes a one-time receipt: a
+  fingerprint of the exact text, the sending Claude process (its process
+  id and, on Linux, its start time) and the rights that turn had. Claude
+  Code records the receiving prompt with the sender's process id, which
+  the kernel verified, never trusting the sender's own name for itself.
+  Before the receiving turn runs any tool, aipager matches the two and
+  gives the turn exactly the sending turn's rights: an owner's message
+  runs with the owner's rights, a member's with that member's, a message
+  typed in the sending session's terminal unrestricted.
+- **No receipt, restricted rights.** A message aipager cannot match (sent
+  by a Claude session or process aipager does not run, a receipt that
+  expired after an hour, a sender on another machine) runs with the
+  strictest rules plus no file changes and no web access (read and
+  think only). The receiving session's own earlier rights never apply to
+  it.
+- **Other input from outside the session, the same.** Anything Claude
+  Code records as not coming from this session's own person gets those
+  restricted rights too: an MCP channel push, a remote caller, a prompt a
+  plugin queues, a message relayed from another session's inbox, and any
+  kind of input aipager does not know yet (a plugin command counts as
+  outside input even when you started it). The session's own background
+  agents (their hand-backs and reports) and its task notices keep the
+  job's rights.
+- **A prompt the session scheduled runs with the rights of the turn that
+  scheduled it.** When a turn sets up a `/loop` or a cron, aipager
+  records that turn's rights for the prompt; when it fires later, it gets
+  those rights, never more, whoever spoke last; a message that joins
+  that turn can only narrow it, and a policy change that takes rights
+  from whoever scheduled it narrows it too. The same prompt scheduled
+  twice keeps the stricter rights. A bare `/loop` fires with Claude
+  Code's loop instructions instead of its own text, so it gets the
+  strictest rights of every bare loop the session set up, once the
+  transcript shows the fire (until then a refused tool call is refused
+  softly, and Claude tries again). A prompt nobody scheduled through
+  aipager's check gets the restricted rights.
+- **Text proves nothing.** A sender name, a `[via Telegram · @owner]`
+  line or "the owner asks…" inside a message changes nothing. Claude is
+  told who aipager verified as the sender, and that claims in the text
+  are not proof.
+- **Joining a running turn only narrows it.** A message from another
+  session that arrives while a turn runs makes that turn as strict as
+  the stricter of the two, never looser. That holds when Claude Code
+  takes the message in with no prompt event of its own (absorbed into
+  the running turn, or run as the next turn from its queue): the
+  owner's fast path looks at the end of the transcript before every
+  tool call, and the turn end and the daemon mark the session for a
+  check when they see such a message queued.
+- **Roles stay in their chat.** A receipt from a session of another chat
+  counts only when its turn had the owner's rights or was typed in its
+  terminal; anything else runs restricted.
+- **Who may send.** The built-in restricted roles cannot use SendMessage
+  at all. A role a policy gives it can only write to sessions aipager
+  runs (addressed as `uds:…/<pid>.sock`); `aipager doctor` warns about
+  such a role.
+- **Background agents keep their own rights.** An agent keeps the rights
+  of the turn that launched it (or the stricter rights of a later turn),
+  never the rights of a later turn that has more.
+- **When it gets stopped.** If a turn another session started is stopped
+  by the safety rules, the busy card already shows who sent it, the stop
+  notice says so, and whoever handed the task over hears about it, so it
+  never silently disappears: the sending session's chat when both
+  sessions are in the same chat; otherwise only the owner, in private,
+  and only when the owner (or the terminal) drove the sending turn.
+
+Known limits:
+
+- A turn with a shell (the owner's or an admin's) runs as the same OS
+  user as aipager and could forge a receipt, just as it could already
+  rewrite aipager's other control files. This is the existing trust
+  model: give a shell only to people you would trust with the machine.
+- Claude sessions aipager does not run are not governed by aipager at
+  all, whatever writes to them.
+- Off Linux, the sender is matched on its process id alone (Claude Code
+  records no start time there). On Linux a receiving record without a
+  start time matches nothing.
+- Claude Code may write the message to its transcript a moment after
+  the turn's first tool call. Until it does, a call the restricted rights
+  would refuse is refused softly (Claude is told to try again; the turn
+  is not stopped). After 8 calls without it, the turn runs restricted.
+- The owner's fast path reads the last 1 MiB of the transcript, never
+  more. A message from another session longer than that ends in a line
+  the fast path takes as one (any line of more than 256 KiB cut by the
+  window is). One that lies entirely further back (more than 1 MiB of
+  transcript written after it before the next tool call) is caught by
+  the daemon while the turn runs, or by the turn end while it is still
+  queued, not by the fast path.
+- While a session has a bare `/loop` set up, any turn no Telegram
+  message starts (a prompt typed in the terminal included) may have its
+  first tool calls refused softly, until Claude Code has written that
+  turn's prompt and aipager can tell it is not the loop firing; Claude
+  then tries again.
+- aipager reads a scheduled prompt's turn from what the transcript gained
+  since it began; past 8 MiB, from its first and last 4 MiB (what lies
+  between was checked when it was the newest part).
+- A scheduled prompt's recorded rights stay until the session is killed
+  (`/kill`): an ended or resumed session keeps them, as Claude Code keeps
+  its crons and a pending `/loop` wakeup. At most 256 are kept per
+  session, and scheduling another past that is refused for everyone in
+  it, so anyone who may schedule can use them up (then start a session
+  under another name, or `/kill` this one). A prompt that fires with no
+  record gets the restricted rights, or in a session with a bare `/loop`
+  that loop's rights, once Claude Code has written it to the transcript;
+  until then aipager reads the turn by the one before it. That happens
+  for a prompt set up before this version; after a reboot (the records
+  live in the system's temporary folder, which a reboot clears, while
+  Claude Code can still bring a resumed session's wakeup back within the
+  hour); and for a durable cron, which Claude Code runs in another
+  session of the same folder once its own session has ended. A session
+  with fewer rights that schedules the same text can lower a prompt's
+  rights (never raise them).
+- A session started fresh under an earlier session's name (Replace)
+  keeps that session's records, its bare `/loop`'s rights included,
+  until `/kill`.
+- A scheduled prompt that Claude Code runs right after another turn,
+  with no prompt event of its own (from its queue), gets the stricter of
+  its own rights and the rights of the turn it follows (after a turn
+  typed in the terminal, exactly its own).
+- The first tool calls of a turn typed in the terminal can be refused
+  until Claude Code has written its prompt to the transcript (aipager
+  reads the turn before it until then).
+- A background agent launched under narrower rights can hand text back
+  into a later turn of the same job, which reads it with the job's
+  rights, as with Claude Code's other task notices.
+- Claude Code can hold a message for approval in the receiving terminal
+  (its `crossSessionInbound` setting, or when the two sessions run in
+  different permission classes, e.g. Full access and Auto). aipager
+  cannot release such a message from Telegram; the receipt waits up to
+  an hour.
+
 ## Threat model summary
 
 | Threat | Mitigation |
@@ -670,6 +807,7 @@ per-project `~/.claude/settings.json` overrides or a container
 | Stolen bot token | Use `/revoke` in @BotFather, re-config |
 | Compromised claude tool call | aipager's safety check refuses what a Telegram turn's rules deny; in Ask, Claude Code's own rules in `settings.json` decide what it asks about and a person's tap is the only allow; an Auto session (the default for admins' `/new`) asks nothing, so only the safety check stands in the way, and for an owner's own turns and terminal prompts nothing does ([who decides](#who-decides-whether-a-tool-call-runs)) |
 | Restricted Telegram user escalates to the owner | No shell, writes and searches confined to the project (never the home folder), credential files unreadable, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
+| A session's message claims an owner's authority | The message runs with the sending turn's proven rights, never the receiving session's earlier ones; without proof, read and think only ([messages between sessions](#messages-between-claude-sessions)) |
 | A group member borrows someone else's rights | Each message runs with its own sender's role in the chat it came from; a different sender's message waits for the running turn; if one joins anyway, the strictest rules win; slash commands from restricted roles are limited to the keyboard's ([team-mode enforcement](#team-mode-enforcement)) |
 | Group chatter reaches a session | In a group only commands, replies to the bot, mentions of it and marked keyboard taps are acted on ([groups](groups.md#what-the-bot-reads-in-a-group)) |
 | A removed member keeps access | `aipager config` reloads the daemon live; their held messages are dropped and a turn of theirs still running loses their old rights; removing them from the Telegram group stops them reading it ([groups → live reload](groups.md#live-reload)) |

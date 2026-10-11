@@ -170,6 +170,10 @@
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"other": "({n} agen)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"other": "✅ <i>{n} alat sebelumnya</i>"}}
 {"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 dari **{session}** ({who})"}
+{"k": "card.peer.from_plain", "src": "42467343", "v": "📨 dari **{session}**"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 dari **{session}** (diketik di terminalnya)"}
+{"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 dari sesi lain (belum diverifikasi: tanpa mengubah file, tanpa web)"}
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"other": "🤖 {agent} · {n} panggilan alat · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (masih berjalan)"}
@@ -429,6 +433,10 @@
 {"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>Jika ini terus terjadi, pemilik bisa mengetuk “Laporkan ini” untuk mengirim laporan ke pengelola.</i>"}
 {"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> kehabisan batas memori {limit} GB, jadi satu pembaruan baris status dilewati. Sesi tetap berjalan."}
 {"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Tidak diterima Claude Code\n\nTidak ada hook yang datang dalam {grace} dtk setelah pengiriman. Pesan yang diawali “/” dibaca sebagai perintah garis miring - periksa terminal."}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "Tugas ini datang dari <b>{session}</b>."}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "Pesan dari sesi lain bergabung ke giliran ini dan mempersempit haknya."}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "Tugas ini datang dari sesi lain yang tidak bisa diverifikasi aipager."}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b> tidak menjalankan pesan yang dikirim <b>{sender}</b>: {reason}"}
 {"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · pesan antrean belum terkonfirmasi diambil tepat waktu - Claude mungkin masih memprosesnya."}
 {"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · pesan antrean belum terkonfirmasi diambil tepat waktu: “{preview}” - Claude mungkin masih memprosesnya."}
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"other": "⏳ <b>{session}</b> · masih bekerja (sepi selama {n} menit)\n\nBelum ada pembaruan status. Ini biasanya normal.\n\n<blockquote expandable>Yang mungkin sedang terjadi\n  • Panggilan alat yang lama (Bash, WebSearch, pengambilan data besar)\n  • Pembuatan teks berat pada konteks yang sangat besar\n  • Peringkasan sedang berjalan\n  • Jeda karena batas laju atau batas langganan\n  • Jaringan macet atau claude mogok</blockquote>"}}
@@ -611,6 +619,7 @@
 {"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool} dengan folder pencarian yang tidak terbaca"}
 {"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "{tool} ditolak - pencarian ini akan menjangkau file terlindungi ({shown}); cari di dalam folder proyek saja"}
 {"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "Pencarian {tool} menjangkau path terlindungi {glob}"}
+{"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "SendMessage ke sesi Claude yang tidak dikelola aipager"}
 {"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} ada di deny_tools peran ini"}
 {"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} tidak ada di allow_tools peran ini"}
 {"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "panggilan alat ini tidak bisa diperiksa, jadi ditolak"}

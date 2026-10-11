@@ -29,6 +29,9 @@ OWNED = {
     "aipager/bot/notify.py", "aipager/bot/voice.py", "aipager/bot/card_owner.py",
     "aipager/bot/tap_gate.py", "aipager/bot/chat_migration.py", "aipager/bot/callbacks.py",
     "aipager/bot/safety_notice.py",
+    # "peer message authority": the card and halt lines about a message
+    # from another session.
+    "aipager/bot/peer_notice.py",
 }
 
 

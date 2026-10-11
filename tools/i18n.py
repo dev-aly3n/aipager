@@ -761,7 +761,10 @@ def _skipped_constants(tree: ast.AST) -> set[int]:
             skip.update(id(n) for n in ast.walk(node.value))
         elif isinstance(node, ast.Call):
             name = _call_name(node)
-            is_log = (isinstance(node.func, ast.Attribute) and name in _LOG_METHODS)
+            # ``log.debug(…)`` and friends, and the hook's own debug log
+            # (``notify_hook._debug``): never shown to anyone.
+            is_log = ((isinstance(node.func, ast.Attribute) and name in _LOG_METHODS)
+                      or (isinstance(node.func, ast.Name) and node.func.id == "_debug"))
             if is_log or name in _I18N_CALLS:
                 for arg in list(node.args) + [k.value for k in node.keywords]:
                     skip.update(id(n) for n in ast.walk(arg))

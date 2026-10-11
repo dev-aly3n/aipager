@@ -144,6 +144,12 @@ REASON_MSGS: dict[str, Msg] = {
     UNCHECKED: Msg(
         "safety.reason.unchecked", "this tool call could not be checked, so it was denied",
         note="The safety check itself failed, so the call was refused"),
+    safety.REASON_SEND_UNMANAGED: Msg(
+        "safety.reason.send_unmanaged",
+        "SendMessage to a Claude session aipager does not manage",
+        note="A role that may message other Claude sessions tried to write to one "
+             "aipager does not run (its text would run with no rules there); "
+             "SendMessage is a tool's name and stays as it is"),
 }
 
 NOTICE = Msg("safety.notice",

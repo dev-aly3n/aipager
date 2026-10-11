@@ -170,6 +170,10 @@
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"other": "（{n} 个代理）"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"other": "✅ <i>之前的 {n} 个工具</i>"}}
 {"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 来自 **{session}**（{who}）"}
+{"k": "card.peer.from_plain", "src": "42467343", "v": "📨 来自 **{session}**"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 来自 **{session}**（在它的终端中输入）"}
+{"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 来自另一个会话（未验证：不能改文件，不能上网）"}
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"other": "🤖 {agent} · {n} 次工具调用 · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent}（仍在运行）"}
@@ -429,6 +433,10 @@
 {"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>如果这种情况反复出现，所有者可以点按“报告此问题”，把报告发给维护者。</i>"}
 {"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> 用尽了 {limit} GB 的内存上限，因此跳过了一次状态行更新。会话会继续运行。"}
 {"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Claude Code 没有接收\n\n发送后 {grace} 秒内没有收到 hook。以“/”开头的消息会被当作斜杠命令读取，请检查终端。"}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "这项任务来自 <b>{session}</b>。"}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "另一个会话的消息加入了这一轮，并缩小了它的权限。"}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "这项任务来自另一个会话，aipager 无法验证它。"}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b> 没有执行 <b>{sender}</b> 发给它的消息：{reason}"}
 {"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · 一条排队消息未能及时确认被接收，Claude 可能仍会处理它。"}
 {"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · 一条排队消息未能及时确认被接收：“{preview}”，Claude 可能仍会处理它。"}
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"other": "⏳ <b>{session}</b> · 仍在工作（已安静 {n} 分钟）\n\n还没有状态更新。这通常是正常的。\n\n<blockquote expandable>可能的原因\n  • 长时间运行的工具调用（Bash、WebSearch、大量抓取）\n  • 在非常大的上下文上进行大量生成\n  • 正在压缩\n  • 速率限制退避或订阅额度限制\n  • 网络卡住或 claude 崩溃</blockquote>"}}
@@ -611,6 +619,7 @@
 {"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool} 使用了无法读取的搜索文件夹"}
 {"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "{tool} 已拒绝：这次搜索会触及受保护的文件（{shown}）；请改为在项目文件夹内搜索"}
 {"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "{tool} 搜索触及受保护的路径 {glob}"}
+{"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "SendMessage 发往不由 aipager 管理的 Claude 会话"}
 {"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} 在这个角色的 deny_tools 中"}
 {"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} 不在这个角色的 allow_tools 中"}
 {"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "这个工具调用无法检查，因此被拒绝"}

@@ -26,7 +26,7 @@ from telegram import (
 
 from aipager import i18n
 from aipager.config import RESUME_GUARD_SECONDS
-from aipager.i18n import Command, Msg, Span
+from aipager.i18n import Command, Msg, Safe, Span
 from aipager.dtach import inject
 from aipager.bot import reactions
 from aipager.bot.sibling_text import shown
@@ -1653,6 +1653,39 @@ class SessionOpsMixin:
 
         return outcome
 
+    async def _tell_peer_sender(self, sess: TrackedSession, peer_from,
+                                reason: str) -> None:
+        """A turn a verified message from another session started was
+        stopped by the safety rules: tell whoever handed the task over, so
+        it is not silently lost. The sending session's chat when both
+        sessions share a chat; otherwise only the owner's private chat, and
+        only when the sending turn was the owner's or typed in its
+        terminal: roles and session names never reach another chat
+        (roadmap 8.73/8.76, C6)."""
+        if not isinstance(peer_from, dict) or peer_from.get("status") != "verified":
+            return
+        sender = self.registry.get(peer_from.get("sender_session") or "")
+        if sender is None or not self._app:
+            return
+        from aipager.bot import peer_notice, report_flow, safety_notice
+        from aipager.bot.transport import resolve_chat_id
+        to_chat, my_chat = resolve_chat_id(sender), resolve_chat_id(sess)
+        driver = peer_from.get("driver") if isinstance(peer_from.get("driver"), dict) else {}
+        if to_chat == my_chat:
+            tr = i18n.for_sess(sender)
+        else:
+            if driver.get("class") not in ("owner", "terminal"):
+                return
+            owner = report_flow.resolve_owner(self)
+            if owner is None:
+                return
+            to_chat = owner
+            tr = i18n.for_chat(owner)
+        text = tr.html(peer_notice.SENDER_NOTICE, receiver=sess.label,
+                       sender=sender.label,
+                       reason=Safe(safety_notice.reason_text(tr, reason)))
+        await send_text(self._app.bot, to_chat, text, parse_mode="HTML")
+
     async def _halt_for_safety(self, sess: TrackedSession, reason: str) -> None:
         """Cleanly halt a session after a safety block.
 
@@ -1680,8 +1713,16 @@ class SessionOpsMixin:
         self._stop_animation(sess)
         # 3. Replace the busy message with the block notice (or send fresh),
         # in the chat's language; the reason Claude got stays English.
-        from aipager.bot import safety_notice
-        notice = safety_notice.notice_html(i18n.for_sess(sess), sess.label, reason)
+        from aipager.bot import peer_notice, safety_notice
+        tr = i18n.for_sess(sess)
+        notice = safety_notice.notice_html(tr, sess.label, reason)
+        # A turn another Claude session started or narrowed: say so here,
+        # and tell the sending session's chat ("peer message authority").
+        peer_from = getattr(sess, "peer_from", None)
+        suffix = peer_notice.halt_suffix(tr, peer_from,
+                                         getattr(sess, "peer_narrowed", False))
+        if suffix:
+            notice = f"{notice}\n{suffix}"
         try:
             # Written and retired under the card-edit lock, as in
             # `_stop_session_core`.
@@ -1691,6 +1732,11 @@ class SessionOpsMixin:
                     resolve_chat_id(sess), notice, parse_mode="HTML")
         except Exception:
             log.debug("[%s] safety halt notice failed", sess.label,
+                      exc_info=True)
+        try:
+            await self._tell_peer_sender(sess, peer_from, reason)
+        except Exception:
+            log.debug("[%s] peer sender notice failed", sess.label,
                       exc_info=True)
         # 4. Return to IDLE. Held messages are dropped (R3); what Claude
         # had queued is only pulled back into its input box by the
@@ -2352,7 +2398,24 @@ class SessionOpsMixin:
         log.info("[%s] queue cleared (dropped %d)", sess.label, dropped)
         return ClearQueueOutcome(ok=True, label=sess.label, dropped=dropped)
 
-    async def _compact_session_core(self, sess: TrackedSession) -> CompactOutcome:
+    def _mark_injected_command_ran(self, sess: TrackedSession, command: str) -> None:
+        """A local command aipager typed into an idle session ran at once:
+        its note is no queued message, so let it expire (roadmap 8.37), as
+        the typed-command path does."""
+        try:
+            from aipager.policy_snapshot import (
+                list_outstanding_notes,
+                mark_command_notes_ran,
+            )
+            mark_command_notes_ran(sess.name, [
+                n for n in list_outstanding_notes(sess.name)
+                if str(n.get("raw_text") or "").strip() == command])
+        except Exception:
+            log.debug("[%s] could not mark %s ran", sess.label, command,
+                      exc_info=True)
+
+    async def _compact_session_core(self, sess: TrackedSession,
+                                    driver_user_id: int | None = None) -> CompactOutcome:
         """Trigger ``/compact``, treated exactly like a normal queued
         user prompt — NOT the unconditional inject chat's reactive
         "Compact Now" button uses.
@@ -2368,13 +2431,17 @@ class SessionOpsMixin:
         if sess.status not in (Status.BUSY, Status.IDLE):
             return CompactOutcome(ok=False, reason="not_live", label=label)
         if sess.status == Status.BUSY:
-            if not sess.queue_prompt("/compact", None):
+            if not sess.queue_prompt("/compact", None,
+                                     driver_user_id=driver_user_id):
                 return CompactOutcome(ok=False, reason="queue_full", label=label)
             self.registry.mark_dirty()
             return CompactOutcome(ok=True, reason="queued", label=label)
-        ok = await self._inject_prompt(sess, "/compact")
+        # The caller is the sender (C13), as for every other message.
+        ok = await self._inject_prompt(sess, "/compact",
+                                       driver_user_id=driver_user_id)
         if not ok:
             return CompactOutcome(ok=False, reason="send_failed", label=label)
+        self._mark_injected_command_ran(sess, "/compact")
         return CompactOutcome(ok=True, reason="sent", label=label)
 
     async def _switch_model_core(

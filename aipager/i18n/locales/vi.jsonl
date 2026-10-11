@@ -170,6 +170,10 @@
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"other": "({n} tác tử)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"other": "✅ <i>{n} công cụ trước đó</i>"}}
 {"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 từ **{session}** ({who})"}
+{"k": "card.peer.from_plain", "src": "42467343", "v": "📨 từ **{session}**"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 từ **{session}** (gõ trong terminal của nó)"}
+{"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 từ một phiên khác (chưa xác minh: không sửa file, không dùng web)"}
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"other": "🤖 {agent} · {n} lệnh gọi công cụ · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (vẫn đang chạy)"}
@@ -429,6 +433,10 @@
 {"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>Nếu việc này cứ lặp lại, chủ sở hữu có thể chạm “Báo cáo lỗi này” để gửi báo cáo cho người duy trì.</i>"}
 {"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> đã dùng hết giới hạn bộ nhớ {limit} GB, nên một lần cập nhật dòng trạng thái bị bỏ qua. Phiên vẫn tiếp tục chạy."}
 {"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Claude Code chưa nhận\n\nKhông có hook nào đến trong {grace} giây sau khi gửi. Tin nhắn bắt đầu bằng “/” được đọc như một lệnh gạch chéo - hãy kiểm tra terminal."}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "Việc này đến từ <b>{session}</b>."}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "Một tin nhắn từ phiên khác đã nhập vào lượt này và thu hẹp quyền của nó."}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "Việc này đến từ một phiên khác mà aipager không xác minh được."}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b> không thực hiện tin nhắn mà <b>{sender}</b> gửi: {reason}"}
 {"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · một tin nhắn đang chờ chưa được xác nhận là đã nhận kịp lúc - Claude có thể vẫn sẽ xử lý nó."}
 {"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · một tin nhắn đang chờ chưa được xác nhận là đã nhận kịp lúc: “{preview}” - Claude có thể vẫn sẽ xử lý nó."}
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"other": "⏳ <b>{session}</b> · vẫn đang làm việc (im lặng {n} phút)\n\nChưa có cập nhật trạng thái. Việc này thường là bình thường.\n\n<blockquote expandable>Điều có thể đang xảy ra\n  • Lệnh gọi công cụ chạy lâu (Bash, WebSearch, tải dữ liệu lớn)\n  • Sinh nội dung nặng trên ngữ cảnh rất lớn\n  • Đang thu gọn\n  • Chờ do giới hạn tốc độ hoặc giới hạn gói đăng ký\n  • Mạng bị kẹt hoặc claude bị sập</blockquote>"}}
@@ -611,6 +619,7 @@
 {"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool} với thư mục tìm kiếm không đọc được"}
 {"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "{tool} bị từ chối - lần tìm này sẽ chạm tới các tệp được bảo vệ ({shown}); hãy tìm trong một thư mục dự án"}
 {"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "Tìm kiếm {tool} chạm tới đường dẫn được bảo vệ {glob}"}
+{"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "SendMessage tới một phiên Claude mà aipager không quản lý"}
 {"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} nằm trong deny_tools của vai trò này"}
 {"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} không có trong allow_tools của vai trò này"}
 {"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "không thể kiểm tra lệnh gọi công cụ này, nên nó bị từ chối"}

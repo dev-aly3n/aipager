@@ -590,6 +590,14 @@ def _scan_queue_operations(sess: TrackedSession) -> None:
         sess.stream_transcript_path, sess.queue_scan_offset,
     )
     for operation, reason, content, _ts in events:
+        if (operation == "enqueue" and content
+                and "<cross-session-message" in content):
+            # A message from another session queued into this turn
+            # ("peer message authority"): narrow the turn to its proven
+            # rights at once, in case no UserPromptSubmit does it first.
+            if policy_snapshot.narrow_for_peer_join(sess.name, content):
+                log.info("[%s] turn narrowed: a message from another "
+                         "session joined it", sess.label)
         if content and "<task-notification>" in content:
             # A background shell that ended while this turn ran: Claude
             # Code queues its notification (`enqueue`, then an
@@ -1441,18 +1449,29 @@ def build_stream_card_ex(
         tr = i18n.for_sess(sess)
     tr = tr.directed(_card_rtl(sess, tr) if rtl is None else rtl)
     status = _status_line(sess, verb, final=final, waiting=waiting, tr=tr)
+    # A turn another Claude session started: who sent it, on top
+    # ("peer message authority", display only).
+    from aipager.bot import peer_notice
+    peer_line = peer_notice.card_line(tr, getattr(sess, "peer_from", None))
 
     # Reserve: the status line plus the "\n\n" join above it, so the
     # fitter's budget is exactly what the BODY may use — both units,
     # since _fit_sections enforces the char and byte ceilings in the
-    # same pass (no separate outer byte pass here).
+    # same pass (no separate outer byte pass here). The peer line and
+    # its join are reserved the same way.
     reserve_chars = len(status) + len(_ROW_SEP)
     reserve_bytes = len(status.encode("utf-8")) + len(_ROW_SEP.encode("utf-8"))
+    if peer_line:
+        reserve_chars += len(peer_line) + len(_ROW_SEP)
+        reserve_bytes += (len(peer_line.encode("utf-8"))
+                          + len(_ROW_SEP.encode("utf-8")))
 
     sections = _build_sections(sess, final=final, tr=tr)
     body, dropped = _fit_sections(sections, reserve_chars, reserve_bytes, tr=tr)
 
     raw = _assemble_card(body, status)
+    if peer_line:
+        raw = f"{peer_line}{_ROW_SEP}{raw}"
     return raw, dropped
 
 

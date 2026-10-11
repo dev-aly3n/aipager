@@ -1,6 +1,8 @@
 """The owner short-circuit and the snapshot paths around it (design.md
 success criteria: "With a bypass snapshot, a PreToolUse reads 0
-transcript bytes and is allowed"; "With a missing, corrupt, undecodable,
+transcript bytes and is allowed", since "peer message authority" at
+most one bounded tail of ``enforce.OWNER_TAIL_BYTES``, raw, never a line
+scan, to see input from outside the session; "With a missing, corrupt, undecodable,
 non-dict or no-bypass snapshot, or a failing snapshot read, the verdicts
 equal the old path's"; "merge_snapshots always yields a bool
 bypass_safety"; entrypoints.md ``_readable_snapshot`` and documented
@@ -133,14 +135,28 @@ def test_bypass_snapshot_allows(tmp_path, monkeypatch, kind, bypass):
 
 @pytest.mark.parametrize("bypass", BYPASS_VALUES, ids=repr)
 @pytest.mark.parametrize("kind", TX_KINDS)
-def test_bypass_snapshot_reads_zero_transcript_bytes(tmp_path, monkeypatch,
-                                                     kind, bypass):
+def test_bypass_snapshot_reads_only_a_bounded_tail(tmp_path, monkeypatch,
+                                                   kind, bypass):
     tx = _transcripts(tmp_path)[kind]
     monkeypatch.setattr(enforce, "read_snapshot",
                         lambda s: {"bypass_safety": bypass})
     stats = _open_spy(monkeypatch, [tx])
     enforce.decide(kit.pretool(tx, "Read", {"file_path": "~/.claude/x"}))
-    assert stats == {"opens": 0, "bytes": 0}
+    assert stats["opens"] <= 1 and stats["bytes"] <= enforce.OWNER_TAIL_BYTES
+
+
+def test_a_long_transcript_costs_the_owner_only_its_tail(tmp_path, monkeypatch):
+    """The bound itself: a transcript four times the tail is read for
+    exactly the tail, once."""
+    big = tmp_path / "big.jsonl"
+    line = cc(kit.tool_result("x" * 4000)) + b"\n"
+    with open(big, "wb") as fh:
+        while fh.tell() < 4 * enforce.OWNER_TAIL_BYTES:
+            fh.write(line)
+    monkeypatch.setattr(enforce, "read_snapshot", lambda s: {"bypass_safety": True})
+    stats = _open_spy(monkeypatch, [big])
+    assert enforce.decide(kit.pretool(str(big), "Bash", {"command": "ls"})) is None
+    assert stats == {"opens": 1, "bytes": enforce.OWNER_TAIL_BYTES}
 
 
 @pytest.mark.parametrize("kind", TX_KINDS)
@@ -152,7 +168,7 @@ def test_bypass_snapshot_never_calls_an_iterator(tmp_path, monkeypatch, kind):
     assert enforce.decide(kit.pretool(tx, "Bash", {"command": "ls"})) is None
 
 
-def test_real_owner_snapshot_file_reads_zero_transcript_bytes(tmp_path,
+def test_real_owner_snapshot_file_reads_only_a_bounded_tail(tmp_path,
                                                               monkeypatch,
                                                               snap_file):
     """No read_snapshot patch: the owner role written through the real
@@ -161,10 +177,10 @@ def test_real_owner_snapshot_file_reads_zero_transcript_bytes(tmp_path,
     tx = _transcripts(tmp_path)["telegram_halted"]
     stats = _open_spy(monkeypatch, [tx])
     verdict = enforce.decide(kit.pretool(tx, "Bash", {"command": "ls"}))
-    assert (verdict, stats["bytes"]) == (None, 0)
+    assert verdict is None and stats["bytes"] <= enforce.OWNER_TAIL_BYTES
 
 
-def test_bypass_on_a_huge_transcript_reads_nothing(tmp_path, monkeypatch):
+def test_bypass_on_a_huge_transcript_reads_only_the_tail(tmp_path, monkeypatch):
     p = tmp_path / "huge.jsonl"
     with open(p, "wb") as f:
         f.write(TG + b"\n")
@@ -173,7 +189,7 @@ def test_bypass_on_a_huge_transcript_reads_nothing(tmp_path, monkeypatch):
                         lambda s: {"bypass_safety": True})
     stats = _open_spy(monkeypatch, [p])
     enforce.decide(kit.pretool(p))
-    assert stats["bytes"] == 0
+    assert stats["bytes"] <= enforce.OWNER_TAIL_BYTES
 
 
 def test_bypass_with_nul_in_transcript_path_allows(tmp_path, monkeypatch):
@@ -192,7 +208,7 @@ def test_monkeypatched_read_snapshot_is_honoured_over_the_file(
                         lambda s: {"bypass_safety": True})
     stats = _open_spy(monkeypatch, [tx])
     verdict = enforce.decide(kit.pretool(tx, "Bash", {"command": "ls"}))
-    assert (verdict, stats["opens"]) == (None, 0)
+    assert verdict is None and stats["opens"] <= 1
 
 
 def test_patched_read_snapshot_returning_none_disables_the_owner_file(

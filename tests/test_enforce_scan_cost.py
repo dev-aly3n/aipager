@@ -862,7 +862,10 @@ def _spy_open(monkeypatch, target):
 
 @pytest.mark.parametrize("bypass", [True, 1])
 @pytest.mark.parametrize("transcript", ["telegram", "missing"])
-def test_an_owner_turn_reads_no_transcript(tmp_path, monkeypatch, bypass, transcript):
+def test_an_owner_turn_never_scans_the_transcript(tmp_path, monkeypatch, bypass, transcript):
+    """No line is iterated; since "peer message authority" the short-circuit
+    reads at most one bounded tail (``enforce.OWNER_TAIL_BYTES``) to see
+    input from outside the session."""
     path = tmp_path / "t.jsonl"
     if transcript == "telegram":
         path.write_text(TG_LINE + "\n" + json.dumps(_tres(MARK)) + "\n")
@@ -880,7 +883,7 @@ def test_an_owner_turn_reads_no_transcript(tmp_path, monkeypatch, bypass, transc
                       ("Read", {"file_path": "~/.claude/x"})):
         assert enforce.decide(_payload(path, tool, inp)) is None
     assert iterated == []
-    assert opened == [] and read[0] == 0
+    assert len(opened) <= 2 and read[0] <= 2 * enforce.OWNER_TAIL_BYTES  # one per call
 
 
 def _snap_dict(**over):

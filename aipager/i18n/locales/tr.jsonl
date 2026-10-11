@@ -170,6 +170,10 @@
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"one": "({n} ajan)", "other": "({n} ajan)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"one": "✅ <i>önceki {n} araç</i>", "other": "✅ <i>önceki {n} araç</i>"}}
 {"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 **{session}** oturumundan ({who})"}
+{"k": "card.peer.from_plain", "src": "42467343", "v": "📨 **{session}** oturumundan"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 **{session}** oturumundan (kendi terminalinde yazıldı)"}
+{"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 başka bir oturumdan (doğrulanmadı: dosya değişikliği yok, web yok)"}
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"one": "🤖 {agent} · {n} araç çağrısı · {clock}", "other": "🤖 {agent} · {n} araç çağrısı · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (hâlâ çalışıyor)"}
@@ -429,6 +433,10 @@
 {"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>Bu tekrarlanırsa sahip, geliştiriciye rapor göndermek için Bunu bildir düğmesine dokunabilir.</i>"}
 {"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> {limit} GB bellek sınırını aştı, bu yüzden bir durum satırı güncellemesi atlandı. Oturum çalışmaya devam ediyor."}
 {"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Claude Code mesajı almadı\n\nGönderimden sonraki {grace} sn içinde hiçbir hook gelmedi. \"/\" ile başlayan bir mesaj eğik çizgi komutu olarak okunur - terminali kontrol et."}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "Bu görev <b>{session}</b> oturumundan geldi."}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "Başka bir oturumdan gelen bir mesaj bu tura katıldı ve yetkilerini daralttı."}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "Bu görev, aipager'ın doğrulayamadığı başka bir oturumdan geldi."}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b>, <b>{sender}</b> oturumunun gönderdiği mesajı yerine getirmedi: {reason}"}
 {"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · kuyruktaki bir mesajın alındığı zamanında doğrulanamadı - Claude onu hâlâ işleyebilir."}
 {"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · kuyruktaki bir mesajın alındığı zamanında doğrulanamadı: \"{preview}\" - Claude onu hâlâ işleyebilir."}
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"one": "⏳ <b>{session}</b> · hâlâ çalışıyor ({n} dk sessiz)\n\nHenüz durum güncellemesi yok. Bu genelde normaldir.\n\n<blockquote expandable>Neler oluyor olabilir\n  • Uzun süren bir araç çağrısı (Bash, WebSearch, büyük bir indirme)\n  • Çok büyük bir bağlamda ağır üretim\n  • Sıkıştırma sürüyor\n  • Hız sınırı beklemesi ya da abonelik sınırı\n  • Ağ takılması ya da Claude çökmesi</blockquote>", "other": "⏳ <b>{session}</b> · hâlâ çalışıyor ({n} dk sessiz)\n\nHenüz durum güncellemesi yok. Bu genelde normaldir.\n\n<blockquote expandable>Neler oluyor olabilir\n  • Uzun süren bir araç çağrısı (Bash, WebSearch, büyük bir indirme)\n  • Çok büyük bir bağlamda ağır üretim\n  • Sıkıştırma sürüyor\n  • Hız sınırı beklemesi ya da abonelik sınırı\n  • Ağ takılması ya da Claude çökmesi</blockquote>"}}
@@ -611,6 +619,7 @@
 {"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool}, okunamayan bir arama klasörü ile"}
 {"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "{tool} reddedildi - bu arama korunan dosyalara ulaşırdı ({shown}); bunun yerine bir proje klasörünün içinde ara"}
 {"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "{tool} araması korunan yol {glob} konumuna ulaşıyor"}
+{"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "aipager'ın yönetmediği bir Claude oturumuna SendMessage"}
 {"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} bu rolün deny_tools listesinde"}
 {"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} bu rolün allow_tools listesinde değil"}
 {"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "bu araç çağrısı denetlenemedi, bu yüzden reddedildi"}

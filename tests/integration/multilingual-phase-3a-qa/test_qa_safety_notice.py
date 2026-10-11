@@ -28,7 +28,10 @@ LISTED_CODES = {
     "wide_cwd_search", "outside_write", "outside_search", "search_folder_unreadable",
     "pattern_unreadable", "glob_unreadable", "glob_escaped", "glob_not_plain", "glob_climbs",
     "search_could_reach", "search_reaches", "search_anywhere", "search_protected_files",
-    "halted", "unchecked"}
+    "halted", "unchecked",
+    # enforce's refusal of SendMessage to a session aipager does not run
+    # ("peer message authority").
+    "send_unmanaged"}
 
 #: The code each writer's sentence (S.safety_reasons(), in order) is, per
 #: design.md section B's table.

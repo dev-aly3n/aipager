@@ -170,6 +170,10 @@
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"few": "({n} وكلاء)", "many": "({n} وكيلًا)", "one": "(وكيل واحد)", "other": "({n} وكيل)", "two": "(وكيلان)", "zero": "(لا وكلاء)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"few": "✅ <i>{n} أدوات سابقة</i>", "many": "✅ <i>{n} أداة سابقة</i>", "one": "✅ <i>أداة سابقة واحدة</i>", "other": "✅ <i>{n} أداة سابقة</i>", "two": "✅ <i>أداتان سابقتان</i>", "zero": "✅ <i>لا أدوات سابقة</i>"}}
 {"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 من **{session}** ({who})"}
+{"k": "card.peer.from_plain", "src": "42467343", "v": "📨 من **{session}**"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 من **{session}** (مكتوبة في طرفيتها)"}
+{"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 من جلسة أخرى (لم يُتحقق منها: لا تعديل للملفات ولا وصول إلى الويب)"}
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"few": "🤖 {agent} · {n} استدعاءات أدوات · {clock}", "many": "🤖 {agent} · {n} استدعاء أدوات · {clock}", "one": "🤖 {agent} · استدعاء أداة واحد · {clock}", "other": "🤖 {agent} · {n} استدعاء أدوات · {clock}", "two": "🤖 {agent} · استدعاءا أداتين · {clock}", "zero": "🤖 {agent} · لا استدعاءات أدوات · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (لا يزال يعمل)"}
@@ -429,6 +433,10 @@
 {"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>إذا تكرر هذا، يمكن للمالك الضغط على «أبلغ عن هذا» ليرسل تقريرًا إلى المطور.</i>"}
 {"k": "notice.memcap_statusline", "src": "e223e66d", "v": "استنفد <code>{hook}</code> حد ذاكرته البالغ {limit} غيغابايت، لذا فات تحديث واحد لسطر الحالة. الجلسة تواصل العمل."}
 {"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · لم يستلمها Claude Code\n\nلم يصل أي hook خلال {grace} ث من الإرسال. الرسالة التي تبدأ بـ \"/\" تقرأ كأمر شرطة مائلة - تحقق من الطرفية."}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "جاءت هذه المهمة من <b>{session}</b>."}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "انضمت إلى هذه الجولة رسالة من جلسة أخرى فضيّقت صلاحياتها."}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "جاءت هذه المهمة من جلسة أخرى لم يستطع aipager التحقق منها."}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ لم تنفّذ <b>{receiver}</b> الرسالة التي أرسلتها إليها <b>{sender}</b>: {reason}"}
 {"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · لم يؤكد التقاط رسالة من قائمة الانتظار في الوقت المحدد - قد يعالجها Claude لاحقًا."}
 {"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · لم يؤكد التقاط رسالة من قائمة الانتظار في الوقت المحدد: «{preview}» - قد يعالجها Claude لاحقًا."}
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"few": "⏳ <b>{session}</b> · لا تزال تعمل (هادئة منذ {n} دقائق)\n\nلا تحديثات للحالة بعد. هذا طبيعي عادة.\n\n<blockquote expandable>ما الذي قد يحدث\n  • استدعاء أداة طويل (Bash، WebSearch، جلب كبير)\n  • توليد ثقيل على سياق كبير جدًا\n  • الضغط قيد التنفيذ\n  • انتظار بسبب حد السرعة أو حد الاشتراك\n  • تعطل الشبكة أو انهيار Claude</blockquote>", "many": "⏳ <b>{session}</b> · لا تزال تعمل (هادئة منذ {n} دقيقة)\n\nلا تحديثات للحالة بعد. هذا طبيعي عادة.\n\n<blockquote expandable>ما الذي قد يحدث\n  • استدعاء أداة طويل (Bash، WebSearch، جلب كبير)\n  • توليد ثقيل على سياق كبير جدًا\n  • الضغط قيد التنفيذ\n  • انتظار بسبب حد السرعة أو حد الاشتراك\n  • تعطل الشبكة أو انهيار Claude</blockquote>", "one": "⏳ <b>{session}</b> · لا تزال تعمل (هادئة منذ دقيقة)\n\nلا تحديثات للحالة بعد. هذا طبيعي عادة.\n\n<blockquote expandable>ما الذي قد يحدث\n  • استدعاء أداة طويل (Bash، WebSearch، جلب كبير)\n  • توليد ثقيل على سياق كبير جدًا\n  • الضغط قيد التنفيذ\n  • انتظار بسبب حد السرعة أو حد الاشتراك\n  • تعطل الشبكة أو انهيار Claude</blockquote>", "other": "⏳ <b>{session}</b> · لا تزال تعمل (هادئة منذ {n} دقيقة)\n\nلا تحديثات للحالة بعد. هذا طبيعي عادة.\n\n<blockquote expandable>ما الذي قد يحدث\n  • استدعاء أداة طويل (Bash، WebSearch، جلب كبير)\n  • توليد ثقيل على سياق كبير جدًا\n  • الضغط قيد التنفيذ\n  • انتظار بسبب حد السرعة أو حد الاشتراك\n  • تعطل الشبكة أو انهيار Claude</blockquote>", "two": "⏳ <b>{session}</b> · لا تزال تعمل (هادئة منذ دقيقتين)\n\nلا تحديثات للحالة بعد. هذا طبيعي عادة.\n\n<blockquote expandable>ما الذي قد يحدث\n  • استدعاء أداة طويل (Bash، WebSearch، جلب كبير)\n  • توليد ثقيل على سياق كبير جدًا\n  • الضغط قيد التنفيذ\n  • انتظار بسبب حد السرعة أو حد الاشتراك\n  • تعطل الشبكة أو انهيار Claude</blockquote>", "zero": "⏳ <b>{session}</b> · لا تزال تعمل (هادئة منذ أقل من دقيقة)\n\nلا تحديثات للحالة بعد. هذا طبيعي عادة.\n\n<blockquote expandable>ما الذي قد يحدث\n  • استدعاء أداة طويل (Bash، WebSearch، جلب كبير)\n  • توليد ثقيل على سياق كبير جدًا\n  • الضغط قيد التنفيذ\n  • انتظار بسبب حد السرعة أو حد الاشتراك\n  • تعطل الشبكة أو انهيار Claude</blockquote>"}}
@@ -611,6 +619,7 @@
 {"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool} بمجلد بحث غير مقروء"}
 {"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "رفض {tool} - هذا البحث سيصل إلى ملفات محمية ({shown})؛ ابحث داخل مجلد مشروع بدلًا من ذلك"}
 {"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "بحث {tool} يصل إلى المسار المحمي {glob}"}
+{"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "SendMessage إلى جلسة Claude لا يديرها aipager"}
 {"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} موجود في deny_tools لهذا الدور"}
 {"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} غير موجود في allow_tools لهذا الدور"}
 {"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "تعذر فحص استدعاء الأداة هذا، لذا رفض"}

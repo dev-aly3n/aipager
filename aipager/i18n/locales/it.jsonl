@@ -170,6 +170,10 @@
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"many": "({n} agenti)", "one": "({n} agente)", "other": "({n} agenti)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"many": "✅ <i>{n} strumenti precedenti</i>", "one": "✅ <i>{n} strumento precedente</i>", "other": "✅ <i>{n} strumenti precedenti</i>"}}
 {"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 da **{session}** ({who})"}
+{"k": "card.peer.from_plain", "src": "42467343", "v": "📨 da **{session}**"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 da **{session}** (scritto nel suo terminale)"}
+{"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 da un'altra sessione (non verificata: niente modifiche ai file, niente web)"}
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"many": "🤖 {agent} · {n} chiamate a strumenti · {clock}", "one": "🤖 {agent} · {n} chiamata a strumento · {clock}", "other": "🤖 {agent} · {n} chiamate a strumenti · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (ancora in esecuzione)"}
@@ -429,6 +433,10 @@
 {"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>Se continua a succedere, il proprietario può toccare Segnala questo per inviare una segnalazione al manutentore.</i>"}
 {"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> ha esaurito il suo limite di memoria di {limit} GB, quindi un aggiornamento della riga di stato è stato saltato. La sessione continua."}
 {"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Non ricevuto da Claude Code\n\nNessun hook arrivato entro {grace} s dall'invio. Un messaggio che inizia con \"/\" viene letto come un comando slash - controlla il terminale."}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "Questo compito veniva da <b>{session}</b>."}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "Un messaggio da un'altra sessione si è aggiunto a questo turno e ne ha ridotto i permessi."}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "Questo compito veniva da un'altra sessione che aipager non ha potuto verificare."}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b> non ha eseguito il messaggio che gli ha inviato <b>{sender}</b>: {reason}"}
 {"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · non è stata confermata in tempo la presa in carico di un messaggio in coda - Claude potrebbe ancora elaborarlo."}
 {"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · non è stata confermata in tempo la presa in carico di un messaggio in coda: \"{preview}\" - Claude potrebbe ancora elaborarlo."}
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"many": "⏳ <b>{session}</b> · ancora al lavoro (nessuna novità da {n} min)\n\nAncora nessun aggiornamento di stato. Di solito è normale.\n\n<blockquote expandable>Cosa potrebbe succedere\n  • Chiamata a strumento lunga (Bash, WebSearch, download pesante)\n  • Generazione pesante su un contesto molto grande\n  • Compattazione in corso\n  • Attesa per limite di frequenza o dell'abbonamento\n  • Rete bloccata o crash di claude</blockquote>", "one": "⏳ <b>{session}</b> · ancora al lavoro (nessuna novità da {n} min)\n\nAncora nessun aggiornamento di stato. Di solito è normale.\n\n<blockquote expandable>Cosa potrebbe succedere\n  • Chiamata a strumento lunga (Bash, WebSearch, download pesante)\n  • Generazione pesante su un contesto molto grande\n  • Compattazione in corso\n  • Attesa per limite di frequenza o dell'abbonamento\n  • Rete bloccata o crash di claude</blockquote>", "other": "⏳ <b>{session}</b> · ancora al lavoro (nessuna novità da {n} min)\n\nAncora nessun aggiornamento di stato. Di solito è normale.\n\n<blockquote expandable>Cosa potrebbe succedere\n  • Chiamata a strumento lunga (Bash, WebSearch, download pesante)\n  • Generazione pesante su un contesto molto grande\n  • Compattazione in corso\n  • Attesa per limite di frequenza o dell'abbonamento\n  • Rete bloccata o crash di claude</blockquote>"}}
@@ -611,6 +619,7 @@
 {"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool} con una cartella di ricerca illeggibile"}
 {"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "{tool} negato - questa ricerca raggiungerebbe file protetti ({shown}); cerca invece dentro una cartella di progetto"}
 {"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "La ricerca di {tool} raggiunge il percorso protetto {glob}"}
+{"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "SendMessage a una sessione Claude che aipager non gestisce"}
 {"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} è in deny_tools di questo ruolo"}
 {"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} non è in allow_tools di questo ruolo"}
 {"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "non è stato possibile verificare questa chiamata a strumento, quindi è stata negata"}

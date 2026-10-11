@@ -1106,6 +1106,16 @@ def _guard_live_session_files():
 
 
 @pytest.fixture(autouse=True)
+def _isolate_peer_receipts(tmp_path, monkeypatch):
+    """Redirect the receipt store of messages between Claude sessions
+    (``peer_auth.store_dir``, under ``~/.local/state/aipager``) to tmp for
+    every test: a test that lets a SendMessage through must never write a
+    receipt into the operator's real state folder."""
+    store = tmp_path / "home" / ".local" / "state" / "aipager" / "peer"
+    monkeypatch.setattr("aipager.peer_auth.store_dir", lambda: store)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_notes_dir(tmp_path, monkeypatch):
     """Redirect ``policy_snapshot.notes_dir`` to ``tmp_path`` for every test.
 

@@ -56,7 +56,8 @@ log = logging.getLogger(__name__)
 
 #: The ``hook_event_name`` values aipager's own hook sends for its own
 #: datagrams (not Claude Code events); kept equal to the hook's by a test.
-_INTERNAL_HOOK_EVENTS = frozenset({"queue_pickup", "safety_blocked", "permission_reply_timeout"})
+_INTERNAL_HOOK_EVENTS = frozenset({"queue_pickup", "safety_blocked", "permission_reply_timeout",
+                                   "peer_resolved"})
 
 #: Where a hook's memory-cap hit is recorded (problem reports, 8.112): the
 #: hook's own main, by the hook name its cap datagram carries.
@@ -1006,6 +1007,8 @@ class HookReceiver:
                 first = prompt.split("\n", 1)[0] if prompt else ""
                 if first.startswith("[via Telegram"):
                     tag_sess.last_prompt_origin = "telegram"
+                elif prompt.lstrip().startswith("<cross-session-message"):
+                    tag_sess.last_prompt_origin = "peer"
                 elif prompt:
                     tag_sess.last_prompt_origin = "terminal"
                 turn = msg.get("aipager_turn")
@@ -1016,6 +1019,11 @@ class HookReceiver:
                     tag_sess.turn_sender_id = turn_sender_from_report(turn)
                     tag_sess.turn_mixed_authors = turn_authors_from_report(
                         turn)
+                    tag_sess.peer_from = ({"status": "pending"}
+                                          if turn.get("origin") == "peer" else None)
+                    tag_sess.peer_narrowed = False
+                if isinstance(turn, dict) and turn.get("peer_join") is True:
+                    tag_sess.peer_narrowed = True
             if transitioned:
                 if prompt:
                     transitioned.turn_prompt = _person_text(
@@ -1412,6 +1420,19 @@ class HookReceiver:
                     "tool": msg.get("tool", "?"),
                     "reason": msg.get("reason", ""),
                 })
+
+        elif event == "peer_resolved":
+            # The hook verified (or could not verify) who sent the message
+            # that started this turn: show it on the card. Display only.
+            sess = self.registry.get(session_name)
+            if sess is not None:
+                driver = msg.get("driver")
+                sess.peer_from = {
+                    "status": "verified" if msg.get("status") == "verified" else "unverified",
+                    "sender_session": str(msg.get("sender_session") or "")[:200],
+                    "driver": driver if isinstance(driver, dict) else {},
+                }
+                await self.notify_fn(sess, "peer_resolved", dict(sess.peer_from))
 
         elif event == "hook_memory_cap_hit":
             # A hook subprocess tripped its RLIMIT_AS cap and died with

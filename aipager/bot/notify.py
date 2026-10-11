@@ -1686,6 +1686,14 @@ class NotifyMixin:
                               exc_info=True)
             return
 
+        if event == "peer_resolved":
+            # Who sent the message that started this turn: the card's top
+            # line shows it at its next render.
+            sess.stream_dirty = True
+            log.info("[%s] message from another session: %s (%s)", label,
+                     context.get("status"), context.get("sender_session") or "-")
+            return
+
         if event == "safety_blocked":
             tool = context.get("tool", "?")
             reason = context.get("reason", "")

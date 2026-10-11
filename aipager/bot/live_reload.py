@@ -359,7 +359,7 @@ def _narrow_turn(sess, chat_id, old_scopes, old_policy, new_scopes,
                  new_policy) -> None:
     from aipager.policy_snapshot import (
         delete_notes, list_outstanding_notes, narrow_snapshot,
-        note_driver_id, read_snapshot,
+        narrow_triggers, note_driver_id, read_snapshot,
     )
 
     def _rules(uid):
@@ -420,3 +420,9 @@ def _narrow_turn(sess, chat_id, old_scopes, old_policy, new_scopes,
         log.info("[%s] Live reload deleted %d waiting policy note(s) of "
                  "%s", sess.label, len(stale), ", ".join(sorted(
                      {str(note_driver_id(n)) for n in stale})))
+    # Prompts this session scheduled (a /loop, a cron) fire later with the
+    # rights of the turn that scheduled them: never more than their author
+    # may still have ("peer message authority").
+    if narrow_triggers(sess.name, _rules):
+        log.info("[%s] Live reload narrowed this session's scheduled "
+                 "prompts", sess.label)

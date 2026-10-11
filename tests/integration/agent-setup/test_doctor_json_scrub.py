@@ -14,7 +14,7 @@ from agent_setup_support import OTHER_TOKEN, TOKEN
 
 SHAPE = re.compile(r"\d{6,12}:[A-Za-z0-9_-]{20,80}")
 ORDER = ["config_parses", "config", "token_valid", "chat_reachable", "team",
-         "role_shell_access", "claude", "claude_auth", "dtach",
+         "role_shell_access", "peer_messages", "claude", "claude_auth", "dtach",
          "hook_scripts", "settings_json", "daemon", "service_installed",
          "service_unit_path", "miniapp"]
 

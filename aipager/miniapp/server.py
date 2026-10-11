@@ -2250,7 +2250,7 @@ class MiniAppServer:
             log.info("miniapp: session compact rejected (429) — rate limited")
             return web.json_response({"error": "too_many_requests"}, status=429)
 
-        outcome = await self.bot._compact_session_core(sess)
+        outcome = await self.bot._compact_session_core(sess, driver_user_id=user_id)
         tr = self._viewer_tr(request, user_id)
         if outcome.reason == "not_live":
             return web.json_response({

@@ -170,6 +170,10 @@
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"many": "({n} agentes)", "one": "({n} agente)", "other": "({n} agentes)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"many": "✅ <i>{n} ferramentas anteriores</i>", "one": "✅ <i>{n} ferramenta anterior</i>", "other": "✅ <i>{n} ferramentas anteriores</i>"}}
 {"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 de **{session}** ({who})"}
+{"k": "card.peer.from_plain", "src": "42467343", "v": "📨 de **{session}**"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 de **{session}** (digitado no terminal dela)"}
+{"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 de outra sessão (não verificada: sem alterar arquivos, sem web)"}
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"many": "🤖 {agent} · {n} chamadas de ferramenta · {clock}", "one": "🤖 {agent} · {n} chamada de ferramenta · {clock}", "other": "🤖 {agent} · {n} chamadas de ferramenta · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (ainda em execução)"}
@@ -429,6 +433,10 @@
 {"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>Se isso continuar acontecendo, o dono pode tocar em Relatar isto para enviar um relatório ao mantenedor.</i>"}
 {"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> esgotou o limite de memória de {limit} GB, então uma atualização da linha de status foi ignorada. A sessão continua rodando."}
 {"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Não recebido pelo Claude Code\n\nNenhum hook chegou em até {grace} s após o envio. Uma mensagem que começa com \"/\" é lida como um comando de barra - verifique o terminal."}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "Esta tarefa veio de <b>{session}</b>."}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "Uma mensagem de outra sessão entrou neste turno e reduziu as permissões dele."}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "Esta tarefa veio de outra sessão que o aipager não conseguiu verificar."}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b> não executou a mensagem que <b>{sender}</b> enviou: {reason}"}
 {"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · não foi confirmado a tempo que uma mensagem na fila foi recebida - o Claude ainda pode processá-la."}
 {"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · não foi confirmado a tempo que uma mensagem na fila foi recebida: \"{preview}\" - o Claude ainda pode processá-la."}
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"many": "⏳ <b>{session}</b> · ainda trabalhando (sem novidades há {n} min)\n\nAinda sem atualizações de status. Isso costuma ser normal.\n\n<blockquote expandable>O que pode estar acontecendo\n  • Chamada de ferramenta demorada (Bash, WebSearch, download grande)\n  • Geração pesada com um contexto muito grande\n  • Compactação em andamento\n  • Espera por limite de taxa ou limite da assinatura\n  • Rede travada ou falha do claude</blockquote>", "one": "⏳ <b>{session}</b> · ainda trabalhando (sem novidades há {n} min)\n\nAinda sem atualizações de status. Isso costuma ser normal.\n\n<blockquote expandable>O que pode estar acontecendo\n  • Chamada de ferramenta demorada (Bash, WebSearch, download grande)\n  • Geração pesada com um contexto muito grande\n  • Compactação em andamento\n  • Espera por limite de taxa ou limite da assinatura\n  • Rede travada ou falha do claude</blockquote>", "other": "⏳ <b>{session}</b> · ainda trabalhando (sem novidades há {n} min)\n\nAinda sem atualizações de status. Isso costuma ser normal.\n\n<blockquote expandable>O que pode estar acontecendo\n  • Chamada de ferramenta demorada (Bash, WebSearch, download grande)\n  • Geração pesada com um contexto muito grande\n  • Compactação em andamento\n  • Espera por limite de taxa ou limite da assinatura\n  • Rede travada ou falha do claude</blockquote>"}}
@@ -611,6 +619,7 @@
 {"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool} com uma pasta de pesquisa ilegível"}
 {"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "{tool} negado - esta pesquisa alcançaria arquivos protegidos ({shown}); pesquise dentro de uma pasta de projeto"}
 {"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "A pesquisa de {tool} alcança o caminho protegido {glob}"}
+{"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "SendMessage para uma sessão do Claude que o aipager não gerencia"}
 {"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} está em deny_tools desta função"}
 {"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} não está em allow_tools desta função"}
 {"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "não foi possível verificar esta chamada de ferramenta, então ela foi negada"}
