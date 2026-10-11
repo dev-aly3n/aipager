@@ -699,6 +699,25 @@ def test_ready_card_switch_to_auto_is_a_users(bot, run_async, uid, chat, name):
     bot._mode_switch_core.assert_awaited_once_with(sess, "auto")
 
 
+def _ready_buttons(bot, chat, name, author):
+    sess = _session(bot, name, chat, mode="auto")
+    sess.created_by_user_id = author
+    _text, kb = new_flow.render_ready(bot, None, sess)
+    return [b.text for row in kb.inline_keyboard for b in row]
+
+
+def test_ready_card_offers_full_access_to_a_user_in_own_dm(bot):
+    assert "🔓 Switch to Full access mode" in _ready_buttons(bot, BOB_DM, BOB_S, BOB)
+
+
+@pytest.mark.parametrize("chat,name,author", [(GROUP, G_S, BOB), (RO_DM, "claude-ro1__d3", RO)],
+                         ids=["user-group", "read_only-own-dm"])
+def test_ready_card_offers_no_full_access_to_others(bot, chat, name, author):
+    buttons = _ready_buttons(bot, chat, name, author)
+    assert "🔓 Switch to Full access mode" not in buttons
+    assert "💬 Switch to Ask mode" in buttons
+
+
 # ===========================================================================
 # /resume of a session that was in Full access
 # ===========================================================================
