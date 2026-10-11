@@ -2316,8 +2316,16 @@ class SessionOpsMixin:
         recorded, so a later restart or resume launches what was asked
         for and never the wider mode: someone in the terminal may have
         switched Auto to Manual, and "already in Ask mode" must hold
-        after a restart too. Never widens ``perm_mode``."""
+        after a restart too. Never widens ``perm_mode``.
+
+        Never for a narrower target in a session launched in Full access:
+        that process keeps bypass in its Shift+Tab cycle, so it is
+        restarted into the target instead (the relaunch drops the bypass
+        flag); recording the narrower mode in place would let a later
+        in-place switch cycle it back into bypass."""
         if sess.mode_switch is not None or sess.current_mode() != target:
+            return False
+        if sess.perm_mode == perm_modes.FULL and target != perm_modes.FULL:
             return False
         if perm_modes.wider(sess.perm_mode, target):
             sess.perm_mode = target
