@@ -163,7 +163,9 @@ def restricted_root(bot, user_id, chat_id) -> str | None:
     path; :data:`NOWHERE` when they are held to a root but have none here
     (no scope, not a member, an unknown role); ``None`` when they are not
     held to one (personal or legacy team mode, or a role with
-    ``can_manage``)."""
+    ``can_manage``). With no chat at all (*chat_id* ``None`` or ``0``),
+    someone whose role has ``can_manage`` in any scope is not held to a
+    root; everyone else gets :data:`NOWHERE`."""
     scopes = getattr(bot, "scopes", None)
     if scopes is None:
         return None
@@ -173,9 +175,26 @@ def restricted_root(bot, user_id, chat_id) -> str | None:
     role = bot.policy.get_role(member.role) if member is not None else None
     if not is_restricted(role):
         return None
+    if scope is None and not chat_id and _manages_somewhere(bot, scopes, user_id):
+        # No chat to act in (a caller that has none): an owner or admin
+        # keeps the rule they had before root folders. Anyone else is
+        # held to a root they do not have here: nowhere.
+        return None
     if scope is None or member is None or role is None:
         return NOWHERE
     return os.path.realpath(effective_root(scope, scopes))
+
+
+def _manages_somewhere(bot, scopes, user_id) -> bool:
+    """*user_id* has a role with ``can_manage`` in some scope."""
+    if user_id is None:
+        return False
+    for scope in scopes:
+        member = bot._member_in_scope(scope, user_id)
+        role = bot.policy.get_role(member.role) if member is not None else None
+        if role is not None and not is_restricted(role):
+            return True
+    return False
 
 
 def inside(path, root) -> bool:

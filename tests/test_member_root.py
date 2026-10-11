@@ -344,3 +344,24 @@ def test_ensure_root_keeps_an_existing_parents_mode(home):
     assert stat.S_IMODE(os.stat(home / "aipager-users").st_mode) == 0o755
 
 
+@pytest.mark.parametrize("chat", [None, 0])
+def test_no_chat_keeps_owner_and_admin_unrestricted(home, chat):
+    """rev-iter1-005: a caller with no chat id. An owner or admin keeps the
+    rule they had before root folders; a restricted member gets nowhere."""
+    bot = _bot([_group(), _dm(DM_SARA, "sara")])
+    for uid in (DM_OWNER, 7):
+        assert member_root.restricted_root(bot, uid, chat) is None
+        assert member_root.relaunch_refusal(bot, uid, chat, "/srv/anything") == ""
+        assert member_root.launch_refusal(bot, uid, chat, "/srv/anything") == ""
+    for uid in (DM_SARA, 9, 555, None):
+        assert member_root.restricted_root(bot, uid, chat) == member_root.NOWHERE
+        assert member_root.relaunch_refusal(bot, uid, chat, "/srv/x") == \
+            member_root.NO_ROOT
+
+
+def test_an_unknown_chat_is_still_nowhere_for_the_owner(home):
+    # Only "no chat" falls back: a chat that has no scope stays closed.
+    bot = _bot([_group()])
+    assert member_root.restricted_root(bot, DM_OWNER, -999) == member_root.NOWHERE
+
+
