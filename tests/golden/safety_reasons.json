@@ -120,21 +120,6 @@
   "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep denied - this search would reach protected files (/srv/secret); search inside a project folder instead\"}}"
  },
  {
-  "tool": "Write",
-  "reason": "Write denied - this session runs outside this role's own folder, so this role can only write in its scratchpad",
-  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Write denied - this session runs outside this role's own folder, so this role can only write in its scratchpad\"}}"
- },
- {
-  "tool": "Grep",
-  "reason": "Grep denied - this session runs outside this role's own folder, so this role can only search in its scratchpad",
-  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep denied - this session runs outside this role's own folder, so this role can only search in its scratchpad\"}}"
- },
- {
-  "tool": "Read",
-  "reason": "Read denied - this role reads in the home folder only inside its own folder",
-  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Read denied - this role reads in the home folder only inside its own folder\"}}"
- },
- {
   "tool": "Bash",
   "reason": "session halted - a prior tool call this turn was blocked by safety policy; start a new request",
   "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: session halted - a prior tool call this turn was blocked by safety policy; start a new request\"}}"

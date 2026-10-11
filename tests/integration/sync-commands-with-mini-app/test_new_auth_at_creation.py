@@ -77,8 +77,12 @@ def test_an_owner_demoted_before_naming_does_not_get_auto(mk_bot, helpers):
     caller lost Auto before sending the name. No Auto session."""
     bot = _scoped_bot_with_role(mk_bot, helpers, "owner")
     _open_card(helpers, bot)
+    # The owner's card starts in the daemon's folder: bob's root folder
+    # here, or root folders would refuse the start for that reason.
+    from aipager.dtach import inject
     bot.scopes = helpers.make_scopes(
-        chat_id=CHAT, kind="group", members=[(USER, "bob", "user")])
+        chat_id=CHAT, kind="group", members=[(USER, "bob", "user")],
+        root=inject._PROJECT_DIR)
 
     _send_name(helpers, bot)
 

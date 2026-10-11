@@ -68,9 +68,9 @@ def has_native_digit(s):
     return any(c in FA_DIGITS or c in AR_DIGITS for c in str(s))
 
 
-def scopes(group_label="team"):
+def scopes(group_label="team", root=None):
     return [
-        Scope(chat_id=GROUP, kind="group", label=group_label, members=(
+        Scope(chat_id=GROUP, kind="group", label=group_label, root=root, members=(
             Member(id=ADA, label="ada", role="owner"),
             Member(id=BOB, label="bob", role="admin"),
             Member(id=CY, label="cy", role="read_only"),
@@ -207,7 +207,9 @@ def env(mk_bot, run_async, monkeypatch, tmp_path):
                         AsyncMock(return_value=True))
 
     registry = SessionRegistry()
-    bot = mk_bot(registry, scopes=scopes())
+    # The project is the group's members' root folder, so a member's
+    # session there may be resumed (root folders, user-root-folders).
+    bot = mk_bot(registry, scopes=scopes(root=str(project)))
     bot.policy = load_policy(Path("/nonexistent/policy.yaml"),
                              Path("/nonexistent/policy.d"))
     tg = bot._app.bot

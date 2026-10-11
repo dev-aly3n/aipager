@@ -85,6 +85,7 @@ def server(mk_bot):
             Member(id=DEVELOPER_ID, label="bob", role="user"),
             Member(id=READONLY_ID, label="cleo", role="read_only"),
         ),
+        root="/tmp/proj",   # the members' root: the sessions below work there
     )
     foreign_scope = Scope(
         chat_id=FOREIGN_SCOPE_CHAT_ID, kind="group", label="other-team",

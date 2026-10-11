@@ -30,6 +30,7 @@ from __future__ import annotations
 import os
 import re
 from collections import Counter
+from pathlib import Path
 from typing import NamedTuple
 
 from aipager import root_rule, safety
@@ -40,9 +41,6 @@ from aipager.miniapp.phrase import Phrase
 #: A restricted person with no root to work in here (no scope for the
 #: chat, not a member, or an unknown role): nowhere is inside it.
 NOWHERE = "\x00nowhere"
-
-#: The folder every default root lives in, under the home folder.
-USERS_DIR = "aipager-users"
 
 #: How many subfolders of the root the folder list shows.
 FOLDER_CAP = 24
@@ -108,7 +106,7 @@ def _base_name(scope) -> str:
 def users_dir() -> str:
     """``~/aipager-users``: where every default root lives. The home
     folder is read at call time, never at import."""
-    return os.path.join(os.path.expanduser("~"), USERS_DIR)
+    return str(Path.home() / "aipager-users")
 
 
 def default_roots(scopes) -> dict[int, str]:
@@ -191,7 +189,7 @@ def inside(path, root) -> bool:
 
 def short(path: str) -> str:
     """*path* with the home folder written ``~``."""
-    home = os.path.expanduser("~").rstrip("/")
+    home = safety._expand_tool_home("~").rstrip("/")
     if home and (path == home or path.startswith(home + "/")):
         return "~" + path[len(home):]
     return path

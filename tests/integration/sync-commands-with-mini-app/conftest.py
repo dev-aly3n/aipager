@@ -35,11 +35,11 @@ from aipager.state import SessionRegistry, Status, TrackedSession
 # Scope / bot builders
 # --------------------------------------------------------------------------- #
 
-def make_scopes(*, chat_id=-100, kind="group", members=()):
+def make_scopes(*, chat_id=-100, kind="group", members=(), root=None):
     """One scope with the given members. ``members`` is a list of
-    ``(id, label, role)`` tuples."""
+    ``(id, label, role)`` tuples; ``root`` the members' root folder."""
     return [Scope(
-        chat_id=chat_id, kind=kind, label="scope",
+        chat_id=chat_id, kind=kind, label="scope", root=root,
         members=tuple(
             Member(id=mid, label=label, role=role)
             for mid, label, role in members
@@ -82,9 +82,9 @@ def _upgrade_bot_api_mocks(bot):
 
 
 def make_scoped_bot(mk_bot, *, chat_id=-100, kind="group", members=(),
-                     miniapp_url=""):
+                     miniapp_url="", root=None):
     """A TelegramBot in scope mode with the given membership."""
-    scopes = make_scopes(chat_id=chat_id, kind=kind, members=members)
+    scopes = make_scopes(chat_id=chat_id, kind=kind, members=members, root=root)
     bot = mk_bot(scopes=scopes)
     bot.policy = load_policy()
     bot._miniapp_url = miniapp_url

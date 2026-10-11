@@ -89,9 +89,13 @@ def test_restart_confirm_tap_demoted_between_command_and_tap_is_refused(mk_bot, 
 def test_restart_confirm_tap_not_demoted_actually_restarts(mk_bot, helpers):
     """Control case: the SAME confirm tap, from a caller who was NOT
     demoted, must still succeed — proves the refusal above is the
-    re-check firing, not some unrelated breakage."""
+    re-check firing, not some unrelated breakage. (The session, with no
+    folder of its own, runs in the daemon's folder: bob's root folder
+    here, or root folders would refuse the restart.)"""
+    from aipager.dtach import inject
     bot = helpers.make_scoped_bot(
-        mk_bot, chat_id=CHAT, members=[(USER, "bob", "user")])
+        mk_bot, chat_id=CHAT, members=[(USER, "bob", "user")],
+        root=inject._PROJECT_DIR)
     sess = _live_session()
     bot.registry._sessions[sess.name] = sess
 

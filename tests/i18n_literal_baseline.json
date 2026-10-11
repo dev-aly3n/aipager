@@ -74,7 +74,7 @@
  "aipager/report/schema.py": 4,
  "aipager/report/send.py": 4,
  "aipager/report/wording.py": 11,
- "aipager/root_rule.py": 8,
+ "aipager/root_rule.py": 9,
  "aipager/safety.py": 27,
  "aipager/scope.py": 48,
  "aipager/self_update.py": 34,

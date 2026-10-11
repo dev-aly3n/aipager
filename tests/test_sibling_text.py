@@ -118,6 +118,8 @@ def test_resumed_in_ask_is_one_sentence_in_the_chats_language(env):
     x1.claude_session_id = "abc"
     x1.skip_perms = True
     x1.transcript_path = ""
+    from aipager import member_root
+    x1.cwd = member_root.restricted_root(bot, BOB, GROUP)   # inside bob's root
     bot._do_resume_core = AsyncMock(return_value=SimpleNamespace(ok=True, reason="resumed",
                                                                  err=""))
     fa = i18n.get("fa")

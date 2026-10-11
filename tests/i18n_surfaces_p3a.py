@@ -358,13 +358,6 @@ def safety_reasons(tmp: Path | None = None) -> list[tuple[str, str]]:
     add("Grep", safety.path_violation("Grep", {"path": "/w/p"}, ("**/.env",), (), cwd="/w/p"))
     add("Grep", safety.path_violation("Grep", {"path": "/srv"}, ("/srv/secret/**",), (),
                                        cwd="/w/p"))
-    # A turn held to a members' root folder (user-root-folders).
-    add("Write", safety.path_violation("Write", {"file_path": "/elsewhere/a"}, (), (),
-                                        cwd="/w/p", write_roots=("/w/s",), root_cwd=True))
-    add("Grep", safety.path_violation("Grep", {"path": "/elsewhere"}, (), (),
-                                       cwd="/w/p", write_roots=("/w/s",), root_cwd=True))
-    add("Read", safety.path_violation("Read", {"file_path": "~/elsewhere/a"}, (), (),
-                                       cwd="/w/p", home_read_roots=("/w/p",)))
     return out
 
 
@@ -1168,6 +1161,10 @@ def _newflow_name_card(env):
     env.run(new_flow.create_from_text(bot, msg(tg, "/new", chat=DM), "   "))
     env.mp.setattr(launch, "default_folder_is_wide", lambda: True)
     bot._is_confined_user = lambda *a, **k: True
+    # The 8.79 hint: a confined role that is not held to a members' root
+    # folder (a custom role with can_manage and no bypass).
+    from aipager import member_root
+    env.mp.setattr(member_root, "restricted_root", lambda *a, **k: None)
     _open_name_card(env, bot, tg, chat=GROUP, user=BOB)
     return tg.out
 

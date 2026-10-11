@@ -1074,8 +1074,7 @@ def _outside_home_read_roots(targets: set[str],
     """True when any of *targets* (a path as spelled and as it really
     leads) is under the home folder and inside none of *roots*: a link
     inside the root to a file elsewhere in the home folder is outside."""
-    homes = {_realpath(os.path.expanduser("~")),
-             os.path.abspath(os.path.expanduser("~"))}
+    homes = {home_folder(), os.path.abspath(_expand_tool_home("~"))}
     allowed: set[str] = set()
     for r in roots:
         if isinstance(r, str) and r and "\x00" not in r:

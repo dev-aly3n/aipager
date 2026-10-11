@@ -130,8 +130,16 @@ def _confined_card(env, *, parents: bool):
                    lambda *a, confined=False, **k: [] if confined else roots)
     env.mp.setattr(launch, "default_folder_is_wide", lambda: True)
     bot._is_confined_user = lambda *a, **k: True
+    _not_held_to_a_root(env)
     p3a.cmd(env, bot, tg, "_handle_new_cmd", "/new", chat=GROUP, user=BOB)
     return bot, tg
+
+
+def _not_held_to_a_root(env):
+    """The 8.79 home folder rule alone: a confined role not held to a
+    members' root folder (a custom role with can_manage and no bypass)."""
+    from aipager import member_root
+    env.mp.setattr(member_root, "restricted_root", lambda *a, **k: None)
 
 
 @pytest.mark.parametrize("code", ["en", "fa", "ru"])
@@ -170,6 +178,7 @@ def test_a_replace_refused_for_its_folder_pops_up_in_the_tappers_language(
     bot, tg = p3a._new_world(env)
     x1 = p3a.session(bot, "x1", chat=GROUP)
     p3a.cmd(env, bot, tg, "_handle_new_cmd", "/new x1", chat=GROUP, user=BOB)
+    _not_held_to_a_root(env)
     monkeypatch.setattr(launch, "launch_folder_refusal",
                         lambda cwd, confined: launch.WIDE_FOLDER_REFUSAL)
     start = len(tg.out)
@@ -185,6 +194,7 @@ def test_a_replace_whose_start_is_refused_tells_the_group_in_its_language(
     bot, tg = p3a._new_world(env)
     x1 = p3a.session(bot, "x1", chat=GROUP)
     p3a.cmd(env, bot, tg, "_handle_new_cmd", "/new x1", chat=GROUP, user=BOB)
+    _not_held_to_a_root(env)
     bot.create_session = AsyncMock(return_value=("", launch.WIDE_FOLDER_REFUSAL))
     start = len(tg.out)
     p3a.tap(env, bot, tg, p3a._sess_cb(x1, "new_replace"), chat=GROUP, user=BOB)
@@ -289,6 +299,8 @@ def test_resumed_in_ask_is_whole_in_the_chats_language(mk_bot, run_async, monkey
     x1.claude_session_id = "abc"
     x1.skip_perms = True
     x1.transcript_path = ""
+    from aipager import member_root
+    x1.cwd = member_root.restricted_root(bot, BOB, GROUP)   # inside bob's root
     bot._do_resume_core = AsyncMock(return_value=SimpleNamespace(ok=True, reason="resumed",
                                                                  err=""))
     p3a.cmd(env, bot, tg, "_handle_resume_cmd", "/resume x1", chat=GROUP, user=BOB)

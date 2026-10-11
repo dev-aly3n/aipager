@@ -16,6 +16,10 @@ from aipager import safety
 
 _MAGIC = set("*?[]{}")
 
+#: What ``aipager uninstall`` says ``~/aipager-users`` holds when it lists
+#: the folders it keeps (English, like the rest of the command line).
+USERS_KEPT = "members' root folders, with their work"
+
 
 def root_problem(path) -> str | None:
     """Why *path* cannot be a members' root folder, or ``None``. A folder

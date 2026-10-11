@@ -38,8 +38,6 @@ EXPECTED_CODES = [
     safety.REASON_GLOB_NOT_PLAIN, safety.REASON_GLOB_CLIMBS,
     safety.REASON_SEARCH_FOLDER_UNREADABLE, safety.REASON_PATTERN_UNREADABLE,
     safety.REASON_SEARCH_ANYWHERE, safety.REASON_SEARCH_PROTECTED_FILES,
-    safety.REASON_ROOT_CWD_WRITE, safety.REASON_ROOT_CWD_SEARCH,
-    safety.REASON_OUTSIDE_ROOT_READ,
 ]
 
 
@@ -221,3 +219,35 @@ def test_safety_imports_nothing_from_the_daemon():
         elif isinstance(node, ast.ImportFrom):
             names.add(node.module or "")
     assert names == {"__future__", "fnmatch", "logging", "os", "re", "sys", "aipager"}
+
+
+def _root_reasons():
+    """The members' root folder's three writers (kept out of the phase 3a
+    corpus, whose golden is pinned to that phase's base)."""
+    return [
+        (safety.REASON_ROOT_CWD_WRITE, "Write", safety.path_violation(
+            "Write", {"file_path": "/elsewhere/a"}, (), (), cwd="/w/p",
+            write_roots=("/w/s",), root_cwd=True)),
+        (safety.REASON_ROOT_CWD_SEARCH, "Grep", safety.path_violation(
+            "Grep", {"path": "/elsewhere"}, (), (), cwd="/w/p",
+            write_roots=("/w/s",), root_cwd=True)),
+        (safety.REASON_OUTSIDE_ROOT_READ, "Read", safety.path_violation(
+            "Read", {"file_path": "~/elsewhere/a"}, (), (), cwd="/w/p",
+            home_read_roots=("/w/p",))),
+    ]
+
+
+@pytest.mark.parametrize("code,tool,reason", _root_reasons(),
+                         ids=lambda v: v if isinstance(v, str) and "_" in v else "")
+def test_the_root_folder_reasons_parse_and_render(code, tool, reason):
+    """Each root folder writer's real sentence reads back as its own code,
+    its English key renders that sentence again, and Persian and Russian
+    show it in their own words with the tool name kept."""
+    assert reason
+    parsed = safety_notice.parse_reason(reason)
+    assert parsed.code == code and parsed.params == {"tool": tool}
+    assert i18n.get("en").text(safety_notice.REASON_MSGS[code], tool=tool) == reason
+    fa = safety_notice.reason_text(i18n.get("fa"), reason)
+    ru = safety_notice.reason_text(i18n.get("ru"), reason)
+    assert PERSIAN.search(fa) and tool in fa
+    assert CYRILLIC.search(ru) and tool in ru
