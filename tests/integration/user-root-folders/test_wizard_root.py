@@ -10,6 +10,7 @@ conftest) and HOME is a throwaway folder."""
 
 from __future__ import annotations
 
+import os
 import sys
 from types import SimpleNamespace
 
@@ -54,13 +55,14 @@ class Prompts:
         if q.kind == "checkbox":
             return []
         if q.kind == "confirm":
-            return q.kwargs.get("default", False)
+            return confirm_default(q)
         return q.kwargs.get("default", "")
 
     def factory(self, kind):
         def _make(message="", *a, **kw):
-            q = SimpleNamespace(kind=kind, message=message, kwargs=kw,
-                                choices=list(kw.get("choices") or (a[0] if a else []) or []))
+            q = SimpleNamespace(kind=kind, message=message, kwargs=kw, args=a,
+                                choices=list(kw.get("choices") or (a[0] if a else []) or [])
+                                if kind != "confirm" else [])
             q.ask = lambda *x, **y: self._record(q)
             q.unsafe_ask = q.ask
             return q
@@ -72,6 +74,13 @@ class Prompts:
 
     def of(self, substring):
         return [q for q in self.asked if substring.lower() in (q.message or "").lower()]
+
+
+def confirm_default(q):
+    """What pressing Enter answers: questionary.confirm defaults to True."""
+    if "default" in q.kwargs:
+        return q.kwargs["default"]
+    return q.args[0] if q.args else True
 
 
 def pick_title(substring):
@@ -439,4 +448,278 @@ def test_added_dm_default_differs_from_an_existing_colliding_one(cfg, prompts, i
         member_root.effective_root(_get(3), _scopes())
 
 
-__all__ = ["kit"]
+
+# ---- iteration 2: a root the system runs programs from asks first (default No) ----------
+
+CODE_FOLDERS = {
+    "bin": "~/bin",
+    "bin-inside": "~/bin/tools",
+    "local-bin": "~/.local/bin",
+    "local-bin-inside": "~/.local/bin/x",
+    "systemd": "~/.config/systemd",
+    "systemd-user": "~/.config/systemd/user",
+    "autostart": "~/.config/autostart",
+    "autostart-inside": "~/.config/autostart/a",
+    "bin-trailing-slash": "~/bin/",
+}
+
+
+def _confirms(prompts):
+    return [q for q in prompts.asked if q.kind == "confirm"]
+
+
+@pytest.mark.parametrize("case", list(CODE_FOLDERS))
+def test_code_loading_root_asks_to_confirm(cfg, prompts, home, case):
+    _edit(prompts, 3, [CODE_FOLDERS[case], "~/fine"])
+    assert len(_confirms(prompts)) >= 1
+
+
+@pytest.mark.parametrize("case", ["bin", "local-bin", "systemd", "autostart"])
+def test_code_loading_root_confirm_defaults_to_no(cfg, prompts, home, case):
+    _edit(prompts, 3, [CODE_FOLDERS[case], "~/fine"])
+    assert confirm_default(_confirms(prompts)[0]) is False
+
+
+@pytest.mark.parametrize("case", list(CODE_FOLDERS))
+def test_code_loading_root_not_written_when_enter_is_pressed(cfg, prompts, home, case):
+    """Enter (the default) declines; the folder is asked again."""
+    _edit(prompts, 3, [CODE_FOLDERS[case], "~/fine"])
+    assert _get(3).root == str(home / "fine")
+
+
+@pytest.mark.parametrize("case", ["bin", "systemd-user"])
+def test_code_loading_root_declined_asks_again(cfg, prompts, home, case):
+    _edit(prompts, 3, [CODE_FOLDERS[case], "~/fine"])
+    assert len([q for q in prompts.of(ROOT_Q) if q.kind == "text"]) == 2
+
+
+@pytest.mark.parametrize("case", ["bin", "local-bin", "systemd", "autostart"])
+def test_code_loading_root_written_when_confirmed(cfg, prompts, home, case):
+    prompts.on("confirm", "", True)
+    _edit(prompts, 3, [CODE_FOLDERS[case]])
+    want = os.path.normpath(os.path.expanduser(CODE_FOLDERS[case]))
+    assert _get(3).root == want
+
+
+LOOKALIKES = {
+    "binx": "~/binx",
+    "bins": "~/bins/x",
+    "local-binx": "~/.local/binx",
+    "systemdx": "~/.config/systemdx",
+    "autostart2": "~/.config/autostart2",
+    "projects-bin": "~/projects/bin",
+    "config-other": "~/.config/myapp",
+}
+
+
+@pytest.mark.parametrize("case", list(LOOKALIKES))
+def test_lookalike_of_a_code_folder_does_not_ask(cfg, prompts, home, case):
+    _edit(prompts, 3, [LOOKALIKES[case], "~/fine"])
+    assert _confirms(prompts) == []
+
+
+@pytest.mark.parametrize("case", ["binx", "projects-bin"])
+def test_lookalike_of_a_code_folder_is_written(cfg, prompts, home, case):
+    _edit(prompts, 3, [LOOKALIKES[case]])
+    assert _get(3).root == os.path.expanduser(LOOKALIKES[case])
+
+
+def test_absolute_spelling_of_bin_also_asks(cfg, prompts, home):
+    _edit(prompts, 3, [str(home / "bin"), "~/fine"])
+    assert len(_confirms(prompts)) >= 1
+
+
+def test_symlink_into_bin_also_asks(cfg, prompts, home):
+    (home / "bin").mkdir()
+    os.symlink(home / "bin", home / "tools")
+    _edit(prompts, 3, ["~/tools", "~/fine"])
+    assert len(_confirms(prompts)) >= 1
+
+
+def test_adding_a_dm_with_a_code_folder_root_asks(cfg, prompts, identity, home):
+    from aipager.wizard import scope_flows
+    identity.append({"id": 77, "label": "nina"})
+    prompts.on("select", "role for", "user")
+    prompts.on("text", ROOT_Q, ["~/.local/bin", "~/people/nina"])
+    scope_flows.add_dm_scope("TOK", "bot")
+    assert _get(77).root == str(home / "people" / "nina")
+
+
+def test_adding_a_group_with_a_code_folder_root_asks(cfg, prompts, identity, home):
+    from aipager.wizard import scope_flows
+    identity.append({"id": 90, "label": "quin"})
+    prompts.on("text", "label for this group", "Crew")
+    prompts.on("confirm", "add yourself", False)
+    prompts.on("confirm", "add another", False)
+    prompts.on("select", "role for", "user")
+    prompts.on("text", ROOT_Q, ["~/.config/autostart", "~/crew"])
+    scope_flows.add_group_scope("TOK", "bot")
+    assert _get(-300).root == str(home / "crew")
+
+
+def test_parser_still_loads_a_confirmed_code_folder_root(tmp_path, home):
+    """The question is the wizard's; the file loads (the parser's refusal
+    list in entrypoints.md does not name these folders)."""
+    p = tmp_path / "a.yaml"
+    _scope.dump_scopes([Scope(chat_id=3, kind="dm", label="Sara DM",
+                              members=(Member(id=3, label="Sara", role="user"),),
+                              root=str(home / "bin"))], "TOK", p)
+    assert _scope.load_scopes(p)[0][0].root == str(home / "bin")
+
+
+# ---- iteration 2: no wizard write ever moves a default root ------------------------------
+
+@pytest.fixture
+def cfg_collide(tmp_path, home):
+    """Sara (3) and sara! (4) sanitise to the same name; a group; the owner."""
+    p = _scope.CONFIG_PATH
+    scopes = [
+        Scope(chat_id=1, kind="dm", label="aly DM",
+              members=(Member(id=1, label="aly", role="owner"),)),
+        Scope(chat_id=3, kind="dm", label="Sara DM",
+              members=(Member(id=3, label="Sara", role="user"),)),
+        Scope(chat_id=4, kind="dm", label="sara! DM",
+              members=(Member(id=4, label="sara!", role="user"),)),
+        Scope(chat_id=-100, kind="group", label="team",
+              members=(Member(id=5, label="bob", role="user"),)),
+    ]
+    _scope.dump_scopes(scopes, "TOK", p)
+    return p
+
+
+def _roots():
+    sl = _scopes()
+    return {s.chat_id: member_root.effective_root(s, sl) for s in sl}
+
+
+def test_collision_precondition(cfg_collide):
+    r = _roots()
+    assert r[3] != r[4]
+
+
+def test_removing_the_colliding_scope_keeps_saras_root(cfg_collide, prompts):
+    from aipager.wizard import edit_menu
+    before = _roots()[3]
+    prompts.on("select", "", "remove")
+    prompts.on("confirm", "", True)
+    edit_menu._edit_scope(_get(4), "TOK")
+    assert _roots()[3] == before
+
+
+def test_removing_the_colliding_scope_really_removed_it(cfg_collide, prompts):
+    from aipager.wizard import edit_menu
+    prompts.on("select", "", "remove")
+    prompts.on("confirm", "", True)
+    edit_menu._edit_scope(_get(4), "TOK")
+    assert 4 not in _roots()
+
+
+def test_removing_the_first_colliding_scope_keeps_the_others_root(cfg_collide, prompts):
+    from aipager.wizard import edit_menu
+    before = _roots()[4]
+    prompts.on("select", "", "remove")
+    prompts.on("confirm", "", True)
+    edit_menu._edit_scope(_get(3), "TOK")
+    assert _roots()[4] == before
+
+
+def test_setting_the_colliding_scopes_root_keeps_saras_root(cfg_collide, prompts, home):
+    before = _roots()[3]
+    _edit(prompts, 4, ["~/own"])
+    assert _roots()[3] == before
+
+
+def test_setting_a_root_onto_saras_default_path_keeps_saras_root(cfg_collide, prompts, home):
+    """The group takes Sara's current default path as its root (confirmed
+    share): Sara's root does not move away from it."""
+    before = _roots()[3]
+    prompts.on("confirm", "", True)
+    _edit(prompts, -100, [before])
+    assert _roots()[3] == before
+
+
+@pytest.mark.parametrize("chat", [3, 4, -100])
+def test_setting_an_unrelated_root_moves_no_default(cfg_collide, prompts, home, chat):
+    before = _roots()
+    _edit(prompts, 1, ["~/owner-members"])
+    assert _roots()[chat] == before[chat]
+
+
+@pytest.mark.parametrize("chat", [3, 4])
+def test_adding_a_third_colliding_dm_moves_neither(cfg_collide, prompts, identity, chat):
+    from aipager.wizard import scope_flows
+    before = _roots()
+    identity.append({"id": 77, "label": "SARA"})
+    prompts.on("select", "role for", "user")
+    scope_flows.add_dm_scope("TOK", "bot")
+    assert _roots()[chat] == before[chat]
+
+
+def test_adding_a_third_colliding_dm_gets_its_own_root(cfg_collide, prompts, identity):
+    from aipager.wizard import scope_flows
+    identity.append({"id": 77, "label": "SARA"})
+    prompts.on("select", "role for", "user")
+    scope_flows.add_dm_scope("TOK", "bot")
+    r = _roots()
+    assert r[77] not in (r[3], r[4])
+
+
+def test_adding_a_group_moves_no_dm_default(cfg_collide, prompts, identity):
+    from aipager.wizard import scope_flows
+    before = _roots()
+    identity.append({"id": 90, "label": "quin"})
+    prompts.on("text", "label for this group", "sara")
+    prompts.on("confirm", "add yourself", False)
+    prompts.on("confirm", "add another", False)
+    prompts.on("select", "role for", "user")
+    scope_flows.add_group_scope("TOK", "bot")
+    assert {c: _roots()[c] for c in (3, 4, -100)} == {c: before[c] for c in (3, 4, -100)}
+
+
+@pytest.mark.parametrize("role", ["admin", "read_only"])
+def test_a_role_change_of_the_colliding_member_keeps_saras_root(cfg_collide, prompts,
+                                                                monkeypatch, role):
+    from aipager.wizard import edit_menu
+    before = _roots()[3]
+    monkeypatch.setattr(edit_menu, "_pick_role", lambda *a, **k: role)
+    prompts.on("select", "", [4, "role"])
+    edit_menu._edit_member(_get(4), "TOK")
+    assert _roots()[3] == before
+
+
+def test_renaming_the_colliding_scope_keeps_saras_root(cfg_collide, prompts):
+    from aipager.wizard import edit_menu
+    before = _roots()[3]
+    prompts.on("select", "", "rename")
+    prompts.on("text", "", "renamed DM")
+    edit_menu._edit_scope(_get(4), "TOK")
+    assert _roots()[3] == before
+
+
+def test_removing_a_group_member_moves_no_default(cfg_collide, prompts):
+    from aipager.wizard import edit_menu
+    before = _roots()
+    prompts.on("select", "", [5, "remove"])
+    prompts.on("confirm", "", True)
+    edit_menu._edit_member(_get(-100), "TOK")
+    after = _roots()
+    assert {c: after.get(c) for c in (3, 4)} == {c: before[c] for c in (3, 4)}
+
+
+def test_a_chain_of_writes_moves_no_default(cfg_collide, prompts, identity, home):
+    """Set, add, remove, one after the other: Sara's folder never moves."""
+    from aipager.wizard import edit_menu, scope_flows
+    before = _roots()[3]
+    _edit(prompts, -100, ["~/team"])
+    prompts.rules.clear()
+    identity.append({"id": 77, "label": "Sara"})
+    prompts.on("select", "role for", "user")
+    scope_flows.add_dm_scope("TOK", "bot")
+    prompts.rules.clear()
+    prompts.on("select", "", "remove")
+    prompts.on("confirm", "", True)
+    edit_menu._edit_scope(_get(4), "TOK")
+    assert _roots()[3] == before
+
+
+__all__ = ["kit", "confirm_default"]
