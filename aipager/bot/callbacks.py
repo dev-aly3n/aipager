@@ -1527,7 +1527,7 @@ class CallbackDispatchMixin:
 
             prompt = (pending or {}).get("prompt", "")
             skip_perms = (pending or {}).get("skip_perms", False)
-            if skip_perms and not self._is_admin_user(
+            if skip_perms and not self._may_use_auto(
                     (pending or {}).get("user_id"), calling_chat_id(update)):
                 # Auto is re-checked at creation, like every other start:
                 # the card may be old, and its author since demoted.

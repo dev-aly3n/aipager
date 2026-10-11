@@ -159,9 +159,17 @@ person's tap. Two things let calls run with no prompt at all:
   under `/settings` → New sessions; the Mini App's new-session form
   starts on Ask, and an admin can pick Auto there. Everyone else's
   sessions start in Ask, and only an admin can switch one to Auto
-  (`/mode`). aipager's safety check still runs on every call in Auto,
-  but it denies nothing in an owner's own turns or in a prompt typed in
-  the terminal.
+  (`/mode`), with one exception: in their own private chat with the bot,
+  a person whose role may send prompts and answer Claude (`can_prompt`
+  and `can_approve`, so a `user` but not `read_only`) may switch their
+  own sessions to Auto, start them in Auto (`/new !x1`, or New sessions
+  set to Auto in that chat) and resume them in Auto, in Telegram and in
+  the Mini App. Never in a group or in another person's private chat.
+  Auto only skips Claude Code's own prompts: aipager's PreToolUse hook
+  still applies that person's role rules (the safety floor, folder
+  confinement, deny rules, credential files) to every call. aipager's
+  safety check still runs on every call in Auto, but it denies nothing
+  in an owner's own turns or in a prompt typed in the terminal.
   So that Auto works from Telegram, the daemon sets
   `skipDangerousModePermissionPrompt` in `~/.claude/settings.json` at
   every start (Claude Code's warning before it runs in this mode would

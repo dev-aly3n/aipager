@@ -505,7 +505,7 @@ def resolve_new_session_settings(
     than a retired pinned row, which keeps its model), or a folder no
     longer allowed, falls back to the built-in default."""
     stored = preferences.get_new_session_defaults(chat_id)
-    can_auto = bool(bot._is_admin_user(user_id, chat_id))
+    can_auto = bool(bot._may_use_auto(user_id, chat_id))
     # Confined to the session's folder (roadmap 8.79): a stored default
     # that is the home folder, `/` or above the home folder is not theirs.
     confined = bool(bot._is_confined_user(user_id, chat_id))
@@ -530,7 +530,7 @@ def resolve_new_session_settings(
     if cwd is None and root is not None and root != member_root.NOWHERE:
         cwd = root
     return {
-        "skip_perms": can_auto and stored.mode != "ask",
+        "skip_perms": _defaults_start_in_auto(bot, stored.mode, user_id, chat_id),
         "can_auto": can_auto,
         "model": model,
         "model_label": model_label,
@@ -538,6 +538,18 @@ def resolve_new_session_settings(
         "confined": confined,
         "root": root,
     }
+
+
+def _defaults_start_in_auto(bot: TelegramBot, mode: str, user_id: int | None,
+                            chat_id: int | None) -> bool:
+    """Whether the chat's New sessions mode (*mode*: the stored value,
+    "" when none) starts *user_id*'s /new in Auto. An admin: unless it
+    says Ask (Auto is the built-in default). Someone else who may use
+    Auto (the member in their own DM): only when it says Auto, so their
+    default stays Ask until they choose Auto. Anyone else: never."""
+    if bot._is_admin_user(user_id, chat_id):
+        return mode != "ask"
+    return mode == "auto" and bool(bot._may_use_auto(user_id, chat_id))
 
 
 def _needs_folder(pending: dict) -> bool:
@@ -917,7 +929,7 @@ async def create_from_text(
     # Auto is re-checked here, at the moment of creation, against the
     # person creating: a stale card or a `!` from someone who may not use
     # Auto gets Ask, and the Ready card says why.
-    may_auto = bool(bot._is_admin_user(actor, chat_id))
+    may_auto = bool(bot._may_use_auto(actor, chat_id))
     wants_auto = bool(settings.get("skip_perms")) or force_auto
     skip_perms = wants_auto and may_auto
     # The cards are the chat's.
@@ -1090,7 +1102,7 @@ async def _handle_ready_callback(
 
     if action in ("rdy_ask", "rdy_auto"):
         target = action == "rdy_auto"
-        if target and not bot._is_admin_user(actor, chat_id):
+        if target and not bot._may_use_auto(actor, chat_id):
             await bot._safe_answer(query, person.text(TOAST_AUTO_NEEDS_ADMIN), show_alert=True)
             return
         if sess.skip_perms == target:
@@ -1266,6 +1278,11 @@ def render_new_session_defaults(
         return (tr.html(NS_FOLDER_TITLE), InlineKeyboardMarkup(rows))
 
     auto = stored.mode != "ask"
+    if (viewer is not None and not bot._is_admin_user(viewer, chat_id)
+            and bot._may_use_auto(viewer, chat_id)):
+        # The member in their own DM: what /new gives them (Auto only when
+        # chosen), so the ticks and the line say the same.
+        auto = _defaults_start_in_auto(bot, stored.mode, viewer, chat_id)
     # A model's name as written; "Default model" is words.
     model_html = (stored.model if stored.model
                   else Safe(tr.html(NS_DEFAULT_MODEL)))
@@ -1274,7 +1291,7 @@ def render_new_session_defaults(
     folder = stored.cwd if stored.cwd in roots else (
         roots[0] if root is not None and roots else _project_dir())
     mode = mode_label(auto)
-    if auto and viewer is not None and not bot._is_admin_user(viewer, chat_id):
+    if auto and viewer is not None and not bot._may_use_auto(viewer, chat_id):
         mode = MODE_ASK_FOR_YOU
     text = tr.html(NS_TITLE, mode=Safe(tr.html(mode)), model=model_html,
                    folder=_short_path(folder))
@@ -1330,7 +1347,12 @@ async def handle_defaults_callback(
     value = None
     if field == "mode" and token in ("auto", "ask"):
         # Auto is the built-in default: store only a departure from it.
+        # Except for the member in their own DM who is not an admin: their
+        # default is Ask, so their Auto is the departure, stored as such.
         value = "" if token == "auto" else "ask"
+        if (token == "auto" and not bot._is_admin_user(viewer, chat_id)
+                and bot._may_use_auto(viewer, chat_id)):
+            value = "auto"
     elif field == "model":
         if token == "default":
             value = ""
@@ -1530,7 +1552,7 @@ async def handle_callback(
         return True
 
     if sub in (["mode", "auto"], ["mode", "ask"]):
-        if sub[1] == "auto" and not bot._is_admin_user(actor, chat_id):
+        if sub[1] == "auto" and not bot._may_use_auto(actor, chat_id):
             await bot._safe_answer(query, person.text(TOAST_AUTO_NEEDS_ADMIN), show_alert=True)
             return True
         pending["skip_perms"] = sub[1] == "auto"

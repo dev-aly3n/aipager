@@ -62,8 +62,8 @@ def test_perms_idle_ask_to_auto_non_admin_denied(mk_bot, mk_update, run_async):
     sess.skip_perms = False  # currently Ask
     bot.registry._sessions["claude-dev"] = sess
     bot.registry.last_active_session = "claude-dev"
-    # Make _is_admin return False
-    bot._is_admin = MagicMock(return_value=False)
+    # May not use Auto here
+    bot._may_use_auto = MagicMock(return_value=False)
     update = mk_update("/perms auto")
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()

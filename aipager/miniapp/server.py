@@ -432,7 +432,7 @@ class MiniAppServer:
         app.router.add_delete("/api/sessions/{label}", self._handle_session_delete)
         # Five more session-menu actions (design.md: perms switch, clear
         # queue, compact, restart, rename). Same five-step shape as the
-        # four routes above; perms additionally requires _is_admin_user
+        # four routes above; perms additionally requires _may_use_auto
         # when the switch targets Auto mode.
         app.router.add_post("/api/sessions/{label}/perms", self._handle_session_perms)
         app.router.add_post(
@@ -820,10 +820,11 @@ class MiniAppServer:
                                      status=400)
 
         skip_perms = body.get("skip_perms") is True
-        # Auto mode is admin-gated in chat (`/new !name`, handlers.py).
+        # Auto mode is gated in chat (`/new !name`: an admin, or the member
+        # in their own DM, AuthMixin._may_use_auto).
         # Without the same gate here, the Mini App would be a way to get
         # --dangerously-skip-permissions that chat deliberately denies.
-        if skip_perms and not self.bot._is_admin_user(user_id, scope_chat_id):
+        if skip_perms and not self.bot._may_use_auto(user_id, scope_chat_id):
             return web.json_response(
                 {"error": "forbidden", "detail": tr.text(_AUTO_NEEDS_ADMIN)},
                 status=403,
@@ -1066,7 +1067,7 @@ class MiniAppServer:
                 "card_age_decay": prefs.card_age_decay,
             },
             "can_create": bool(self.bot._can_prompt_user(user_id, scope_chat_id)),
-            "can_use_auto": bool(self.bot._is_admin_user(user_id, scope_chat_id)),
+            "can_use_auto": bool(self.bot._may_use_auto(user_id, scope_chat_id)),
         })
 
     async def _handle_preferences_get(self, request):
@@ -1098,7 +1099,7 @@ class MiniAppServer:
             # Lets the UI disable controls it knows will be refused rather
             # than offering a button that always 403s. The server still
             # enforces it — this is a hint, not the gate.
-            "can_edit": bool(self.bot._is_admin_user(user_id, scope_chat_id)),
+            "can_edit": bool(self.bot._may_change_chat_settings(user_id, scope_chat_id)),
             # Whether to show the Updates block. A hint only: /api/update
             # enforces the same rule itself.
             "can_update": bool(self.bot._is_update_admin(user_id, scope_chat_id)),
@@ -1462,11 +1463,11 @@ class MiniAppServer:
         scope_chat_id, user_id = result
 
         # Authentication proves *a* scope member; changing a setting that
-        # affects everyone in the scope is admin-gated, exactly as the
-        # `_:set:<section>:<value>` callback is in chat. Same helper, so
-        # the two surfaces cannot drift apart.
-        if not self.bot._is_admin_user(user_id, scope_chat_id):
-            log.info("miniapp: preferences write rejected (403) — not an admin")
+        # affects everyone in a group is admin-gated, exactly as the
+        # `_:set:<section>:<value>` callback is in chat, and a person's own
+        # private chat is theirs to change (the same rule as /settings there).
+        if not self.bot._may_change_chat_settings(user_id, scope_chat_id):
+            log.info("miniapp: preferences write rejected (403) - may not change this chat's settings")
             return web.json_response({"error": "forbidden"}, status=403)
 
         if not self._allow_write(user_id):
@@ -1816,9 +1817,10 @@ class MiniAppServer:
         sess, scope_chat_id, user_id = result
 
         can_act = self.bot._can_prompt_user(user_id, scope_chat_id)
-        is_admin = self.bot._is_admin_user(user_id, scope_chat_id)
+        # Only the mode switch's availability reads it (sessions.py).
+        may_auto = self.bot._may_use_auto(user_id, scope_chat_id)
         return web.json_response(
-            session_detail(sess, time.monotonic(), can_act=can_act, is_admin=is_admin,
+            session_detail(sess, time.monotonic(), can_act=can_act, is_admin=may_auto,
                            tr=self._viewer_tr(request, user_id)),
         )
 
@@ -2215,11 +2217,12 @@ class MiniAppServer:
         # toggling the session's own current mode, closing off a
         # body-tampering surface (design.md).
         target_skip_perms = not sess.skip_perms
-        # Auto mode requires admin — the same gate chat's own /perms and
-        # session creation apply. Switching TO Ask never needs admin.
+        # Auto mode needs an admin, or the member in their own DM
+        # (_may_use_auto): the same gate chat's own /perms and session
+        # creation apply. Switching TO Ask never needs one.
         tr = self._viewer_tr(request, user_id)
-        if target_skip_perms and not self.bot._is_admin_user(user_id, scope_chat_id):
-            log.info("miniapp: session perms rejected (403) — Auto requires admin")
+        if target_skip_perms and not self.bot._may_use_auto(user_id, scope_chat_id):
+            log.info("miniapp: session perms rejected (403) - may not use Auto here")
             return web.json_response(
                 {"error": "forbidden", "detail": tr.text(_AUTO_NEEDS_ADMIN)},
                 status=403,

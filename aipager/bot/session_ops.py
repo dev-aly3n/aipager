@@ -1966,7 +1966,7 @@ class SessionOpsMixin:
         switch to it."""
         wants_auto = (skip_perms_override if skip_perms_override is not None
                       else sess.skip_perms) is True
-        if wants_auto and not self._is_admin_user(actor, chat_id):
+        if wants_auto and not self._may_use_auto(actor, chat_id):
             return False, True
         return skip_perms_override, False
 

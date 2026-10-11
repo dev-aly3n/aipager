@@ -8,7 +8,8 @@ mode the tapper's role in the TAPPED MESSAGE'S chat must grant it:
 - ``APPROVE``: ``role.can_approve`` (answering a prompt Claude is waiting on).
 - ``PROMPT``: ``role.can_prompt`` (anything that acts on a session or a
   card other members share).
-- ``MANAGE``: an admin (``_is_admin_user``), like every other way into Auto.
+- ``MANAGE``: may use Auto (``_may_use_auto``: an admin, or the member in
+  their own DM), like every other way into Auto.
 - ``UPDATE``: ``_is_update_admin`` (installs software, restarts the daemon).
 
 A verb the table does not know needs ``PROMPT`` (fail closed), and
