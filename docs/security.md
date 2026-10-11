@@ -151,18 +151,27 @@ So aipager can refuse a call Claude Code would allow, and when Claude
 Code asks, aipager never answers yes on its own: an allow is always a
 person's tap. Two things let calls run with no prompt at all:
 
-- **Auto mode, the default for admins.** A session in Auto is started
-  with `--dangerously-skip-permissions`: Claude Code asks for nothing,
-  so every call aipager's safety check does not deny runs without a tap.
-  A session an admin (the `owner` and `admin` roles, or a role with
-  `can_manage`) starts with `/new` is in Auto unless the chat chose Ask
-  under `/settings` → New sessions; the Mini App's new-session form
-  starts on Ask, and an admin can pick Auto there. Everyone else's
-  sessions start in Ask, and only an admin can switch one to Auto
-  (`/mode`). aipager's safety check still runs on every call in Auto,
-  but it denies nothing in an owner's own turns or in a prompt typed in
-  the terminal.
-  So that Auto works from Telegram, the daemon sets
+- **Full access mode, for admins only.** A session in Full access is
+  started with `--dangerously-skip-permissions`: Claude Code asks for
+  nothing, so every call aipager's safety check does not deny runs
+  without a tap. Only an admin (the `owner` and `admin` roles, or a role
+  with `can_manage`) can start a session in Full access, switch one to
+  it (`/mode full`, after a confirm) or resume one in it; anyone else
+  gets Auto mode instead, and the reply says so. aipager's safety check
+  still runs on every call in Full access, but it denies nothing in an
+  owner's own turns or in a prompt typed in the terminal.
+- **Auto mode, the default.** A session in Auto is started with
+  `--permission-mode auto`: Claude Code's own safety check reviews each
+  call, runs the safe ones and stops the risky ones, which then reach
+  Telegram as a prompt like in Ask mode. Every session starts in Auto
+  unless the chat chose otherwise under `/settings` → New sessions.
+  Anyone who can act on a session can switch it between Ask and Auto
+  (`/mode`); aipager does that in place by pressing Shift+Tab in the
+  session, never with a flag that would put Full access in Claude
+  Code's Shift+Tab cycle. If Claude Code ever reports Full access for a
+  session aipager did not start in it, the daemon logs a warning and
+  never treats the session as Full access because of it.
+  So that Full access works from Telegram, the daemon sets
   `skipDangerousModePermissionPrompt` in `~/.claude/settings.json` at
   every start (Claude Code's warning before it runs in this mode would
   otherwise stop the session); that also turns the warning off for the

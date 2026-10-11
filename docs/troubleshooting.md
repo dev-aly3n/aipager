@@ -713,7 +713,7 @@ Claude, not a button, so a Russian "Clear" never runs `/clear` in a Persian or
 English chat. Use the button itself, or the English command (`/clear`). If a
 keyboard looks out of date after the chat's language changed, send `/start` to
 get the current one. A word that is also the name of one of your sessions talks
-to that session. `/mode` reads `ask` and `auto` as the mode always, and a
+to that session. `/mode` reads `ask`, `auto` and `full` as the mode always, and a
 translated mode word as a session only when a live session has exactly that
 name.
 

@@ -224,7 +224,8 @@ to a terminal that has to stay open. The daemon starts a session with
 that answer a dialog); it never reads the screen, since the hooks and
 the transcript say what happens. You can attach interactively from any
 shell via `aipager session <name>` for direct access. That attach
-follows the session through a restart from Telegram (`/mode`,
+follows the session through a restart from Telegram (`/mode` to or
+from Full access,
 `/restart`, Restart): when the session's socket goes away it waits up
 to 15 s for the same socket to come back and reattaches on its own.
 A session that really ended returns to the shell after the wait

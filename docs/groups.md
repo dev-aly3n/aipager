@@ -39,8 +39,9 @@ hand.
 4. it checks the dependencies and installs Claude Code's hooks.
 
 It writes your DM as the first chat. It does not ask for a default
-mode: its summary says "New sessions start in Auto for owners and
-admins; change it in Telegram under /settings → New sessions." Then it
+mode: its summary says "New sessions start in Auto mode; owners and
+admins can choose Full access in Telegram under /settings → New
+sessions." Then it
 asks "Connected. Add a team group or other people now?" with Add a
 group, Add a person (DM) and I'm done.
 
@@ -295,8 +296,8 @@ on the machine does that, which keeps it the owner's.
 - **owner**: full control, including the built-in safety floor. There
   should be exactly one: the person who runs the machine.
 - **admin**: everything an owner can do in Telegram and the Mini App:
-  switch sessions to Auto (new sessions start in Auto for them), resume
-  a session in Auto, change a group's `/settings`, run `/update`,
+  switch sessions to Full access mode (and start them in it), resume
+  a session in Full access, change a group's `/settings`, run `/update`,
   install the voice extra, send any slash command. An admin also
   bypasses role deny rules (scope and member `deny_tools` do not apply
   to them). Two things stay with the owner:
@@ -597,13 +598,15 @@ asked for them: confirm cards and the `/new` cards, below.)
   Compact, Send now, End, Restart, Rename, Delete, Resume, the mode
   switch, ✍️ talk, Clear all, a session's own preferences and the
   `/new` cards. A button aipager does not know needs this too.
-- **Switching to Auto needs an admin** (MANAGE: `owner`, `admin`, or a
-  role with `can_manage`, the same rule as `/mode auto`): Yes, switch
-  and Stop task & switch on a card that switches to Auto, and Resume as
-  Auto. Resuming a session that was in Auto (typed `/resume x1`, the
-  picker, Resume on the `/new` name card, or the Mini App) brings it
-  back in Ask for anyone else, and the reply says so: "Resumed x1 in
-  Ask: Auto needs an admin."
+- **Switching to Full access needs an admin** (MANAGE: `owner`,
+  `admin`, or a role with `can_manage`, the same rule as `/mode full`):
+  Yes, switch and Stop task & switch on a card that switches to Full
+  access, and Resume in Full access. Switching between Ask and Auto is
+  anyone's who can act on the session. Resuming a session that was in
+  Full access (typed `/resume x1`, the picker, Resume on the `/new` name
+  card, or the Mini App) brings it back in Auto mode for anyone else,
+  and the reply says so: "Resumed x1 in Auto mode: Full access mode
+  needs an admin."
 - **Installing needs an admin** (UPDATE): the voice extra's Install
   and Restart buttons, like `/update`'s.
 - **Changing a group's `/settings` needs an admin.** Anyone can look.
@@ -611,7 +614,7 @@ asked for them: confirm cards and the `/new` cards, below.)
   End (`/kill`, ⋮ End session), Restart, Delete and mode-switch confirm
   cards, the session pickers `/kill`, `/restart`, `/delete`, `/mode`,
   `/stop`, `/rename` and `/diff` show, and the "Resume x1 as:" card a
-  Resume tap draws (its Ask and Auto buttons) answer only the person who
+  Resume tap draws (its mode buttons) answer only the person who
   sent the command or tapped the button that drew them. Anyone else's
   tap, Cancel included, gets "This is @alice's card. Send /kill x2 for
   your own." (with that card's command) and changes nothing. The `/mode`
