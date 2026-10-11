@@ -303,3 +303,23 @@ def test_safety_root_helpers():
         assert safety.normalise_root(bad) == safety.ROOT_SENTINEL
     assert member_root.inside("/a/b", "/a") and not member_root.inside("/ab", "/a")
     assert not member_root.inside("/a", member_root.NOWHERE)
+
+
+# ---- review iter 1 fixes ---------------------------------------------------------------
+
+@pytest.mark.parametrize("path", ["/tmp/claude-1000", "/tmp/claude-1000/x",
+                                  "/tmp/claude-1000/-home-op/abc/scratchpad"])
+def test_claude_code_temp_folder_is_no_root(home, path):
+    assert "Claude Code's temp folder" in member_root.root_problem(path)
+
+
+def test_claude_code_temp_folder_under_its_env_tmpdir_is_no_root(home, monkeypatch):
+    monkeypatch.setenv("CLAUDE_CODE_TMPDIR", str(home / "ctmp"))
+    monkeypatch.setenv("TMPDIR", "/var/tmp/x")
+    assert member_root.root_problem(str(home / "ctmp" / "claude-1000" / "a"))
+    assert member_root.root_problem("/var/tmp/x/claude-1000")
+    # Beside them, a plain folder is fine.
+    assert member_root.root_problem(str(home / "ctmp" / "work")) is None
+    assert member_root.root_problem("/tmp/claudex") is None
+
+

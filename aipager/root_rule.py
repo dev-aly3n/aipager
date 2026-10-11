@@ -21,6 +21,21 @@ _MAGIC = set("*?[]{}")
 USERS_KEPT = "members' root folders, with their work"
 
 
+def _claude_temp_globs() -> tuple[str, ...]:
+    """Claude Code's per-user temp folders (``<temp dir>/claude-<uid>``,
+    every session's scratchpad inside): ``/tmp/claude-*``, and the same
+    under ``$CLAUDE_CODE_TMPDIR`` and ``$TMPDIR`` when they are set. A
+    root there would put a member's work beside every session's scratch
+    files, and the hook lets a turn write in its scratchpad."""
+    out = ["/tmp/claude-*"]
+    for var in ("CLAUDE_CODE_TMPDIR", "TMPDIR"):
+        base = (os.environ.get(var) or "").rstrip("/")
+        if base and os.path.isabs(base) and "\x00" not in base \
+                and not (_MAGIC & set(base)):
+            out.append(f"{base}/claude-*")
+    return tuple(dict.fromkeys(out))
+
+
 def root_problem(path) -> str | None:
     """Why *path* cannot be a members' root folder, or ``None``. A folder
     that does not exist yet is fine.
@@ -29,7 +44,9 @@ def root_problem(path) -> str | None:
     wildcard characters, ``/``, the home folder or a folder above it, and
     a folder that is, lies inside or holds one of aipager's protected
     paths or the credential files (``~/.claude``, ``~/.config/aipager``,
-    ``~/.ssh``...): a member's turn may write in its root."""
+    ``~/.ssh``...): a member's turn may write in its root. Claude Code's
+    temp folder (``/tmp/claude-*``) too: it holds every session's
+    scratchpad."""
     if not isinstance(path, str) or not path.strip():
         return "it is empty"
     if "\x00" in path:
@@ -42,7 +59,8 @@ def root_problem(path) -> str | None:
     spelled = os.path.abspath(expanded)
     if safety.is_wide_folder(spelled):
         return "it is /, the home folder or a folder above the home folder"
-    for form in {spelled, safety._realpath(spelled)}:
+    forms = {spelled, safety._realpath(spelled)}
+    for form in forms:
         for glob in (*safety.DENY_PATHS_NO_ACCESS, *safety.CREDENTIAL_PATHS):
             spots = safety._protected_spots(glob)
             if spots is None:
@@ -50,6 +68,12 @@ def root_problem(path) -> str | None:
             if any(safety._reaches(form, folder, name) for folder, name in spots):
                 shown = glob[:-3] if glob.endswith("/**") else glob
                 return f"it is, holds or lies inside the protected path {shown}"
+    for form in forms:
+        for glob in _claude_temp_globs():
+            spots = safety._protected_spots(glob) or ()
+            if any(safety._reaches(form, folder, name) for folder, name in spots):
+                return ("it is, holds or lies inside Claude Code's temp "
+                        f"folder {glob}, which holds every session's scratchpad")
     return None
 
 
