@@ -1034,6 +1034,35 @@ def _root_bounds(cwd: str | None, session_id, root: str, confined: bool,
     return write_roots, home_read_roots, root_cwd
 
 
+def _sticky_halt(data: dict, scan: dict, info: dict,
+                 tool_name: str) -> dict | None:
+    """Sticky turn-block: if any tool was already blocked this turn, deny
+    everything else until the next user prompt — no pattern-dodging
+    workarounds (the agent will otherwise reword the command to evade
+    the specific matcher). ``None`` when the turn was not blocked."""
+    own = info.get("snapshot")
+    own_peer = own.get("peer") if isinstance(own, dict) else None
+    own_sha = (own_peer.get("body_sha256")
+               if isinstance(own_peer, dict) else None)
+    # One argument unless this turn is another session's message: the
+    # scan's seam keeps its one-argument form (tests swap in an oracle).
+    if (scan["blocked"] if "blocked" in scan
+            else _turn_already_blocked(data.get("transcript_path"), own_sha)
+            if isinstance(own_sha, str)
+            else _turn_already_blocked(data.get("transcript_path"))):
+        if info.get("peer_waiting") or info.get("loop_waiting"):
+            # The message that started this turn is not in the transcript
+            # yet, so the scan may be reading the previous turn's block.
+            return {"tool": tool_name, "reason": peer_auth.SOFT_DENY_REASON,
+                    "soft": True}
+        return {
+            "tool": tool_name,
+            "reason": ("session halted - a prior tool call this turn was "
+                       "blocked by safety policy; start a new request"),
+        }
+    return None
+
+
 def _bypass_root_violation(rules: dict, data: dict, session) -> str | None:
     """A ``bypass_safety`` turn held to a members' root folder (``root``
     in *rules*: a custom role with ``bypass_safety`` but no
@@ -1047,14 +1076,20 @@ def _bypass_root_violation(rules: dict, data: dict, session) -> str | None:
         return None
     cwd = data.get("cwd") if isinstance(data.get("cwd"), str) else None
     readable = (str(reply_context_path(session)),) if session else ()
-    write_roots, home_read_roots, _ = _root_bounds(
-        cwd, data.get("session_id"), root, False, False, readable)
+    # A session whose folder is outside the root is not this role's: as
+    # for a built-in ``user``, it writes and searches only in the
+    # scratchpad there, and its deny reasons say so.
+    elsewhere = (bool(cwd) and os.path.isabs(cwd) and not _cwd_is_wide(cwd)
+                 and root != safety.ROOT_SENTINEL
+                 and not safety.under_root(cwd, root))
+    write_roots, home_read_roots, root_cwd = _root_bounds(
+        cwd, data.get("session_id"), root, elsewhere, False, readable)
     return safety.path_violation(
         data.get("tool_name", ""), data.get("tool_input", {}) or {},
         tuple(rules.get("deny_paths_no_access", ())),
         tuple(rules.get("deny_paths_no_write", ())),
         cwd=cwd, write_roots=write_roots, readable=readable,
-        home_read_roots=home_read_roots)
+        home_read_roots=home_read_roots, root_cwd=root_cwd)
 
 
 _FAIL_CLOSED_REASON = "this tool call could not be checked, so it was denied"
@@ -1088,7 +1123,9 @@ def fail_closed(data: dict) -> dict | None:
             except Exception:
                 pin = {"rules": {}}
         if pin is None or (isinstance(pin.get("rules"), dict)
-                           and pin["rules"].get("bypass_safety") is True):
+                           and pin["rules"].get("bypass_safety") is True
+                           # a root-bound pin fails closed too
+                           and pin["rules"].get("root") is None):
             return None
     return {"tool": str(data.get("tool_name") or ""),
             "reason": _FAIL_CLOSED_REASON}
@@ -1437,7 +1474,9 @@ def _pin_keeps_owner(pin) -> bool:
         return True
     rules = pin.get("rules") if isinstance(pin, dict) else None
     return (peer_auth.well_formed_rules(rules)
-            and rules.get("bypass_safety") is True)
+            and rules.get("bypass_safety") is True
+            # a pin of a role held to its root is no owner's bypass
+            and safety.normalise_root(rules.get("root")) is None)
 
 
 def _pin_rules(pin) -> dict | None:
@@ -1673,7 +1712,12 @@ def _decide(data: dict):
         # Owner (or the terminal): no checks, unless the role also lacks
         # can_manage. Only owner and admin are unrestricted, so such a
         # role keeps its bypass for tools and Bash patterns but its file
-        # tools stay inside its members' root folder.
+        # tools stay inside its members' root folder, and a turn of it
+        # that was already blocked stays halted like any held turn.
+        if current.get("root") is not None:
+            halted = _sticky_halt(data, scan, info, tool_name)
+            if halted is not None:
+                return halted
         reason = _bypass_root_violation(current, data, session)
         if reason:
             return {"tool": tool_name, "reason": reason}
@@ -1681,30 +1725,9 @@ def _decide(data: dict):
         return None
     snap = current
 
-    # Sticky turn-block: if any tool was already blocked this turn, deny
-    # everything else until the next user prompt — no pattern-dodging
-    # workarounds (the agent will otherwise reword the command to evade
-    # the specific matcher).
-    own = info.get("snapshot")
-    own_peer = own.get("peer") if isinstance(own, dict) else None
-    own_sha = (own_peer.get("body_sha256")
-               if isinstance(own_peer, dict) else None)
-    # One argument unless this turn is another session's message: the
-    # scan's seam keeps its one-argument form (tests swap in an oracle).
-    if (scan["blocked"] if "blocked" in scan
-            else _turn_already_blocked(data.get("transcript_path"), own_sha)
-            if isinstance(own_sha, str)
-            else _turn_already_blocked(data.get("transcript_path"))):
-        if info.get("peer_waiting") or info.get("loop_waiting"):
-            # The message that started this turn is not in the transcript
-            # yet, so the scan may be reading the previous turn's block.
-            return {"tool": tool_name, "reason": peer_auth.SOFT_DENY_REASON,
-                    "soft": True}
-        return {
-            "tool": tool_name,
-            "reason": ("session halted - a prior tool call this turn was "
-                       "blocked by safety policy; start a new request"),
-        }
+    halted = _sticky_halt(data, scan, info, tool_name)
+    if halted is not None:
+        return halted
 
     no_access = tuple(snap.get("deny_paths_no_access", ()))
     no_write = tuple(snap.get("deny_paths_no_write", ()))

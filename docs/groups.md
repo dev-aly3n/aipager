@@ -385,7 +385,9 @@ applies to every role without `can_manage`, whatever its bypasses: a
 role you define with `bypass_role_denies` or `bypass_safety` but not
 `can_manage` writes and searches anywhere inside its root folder (and
 its scratchpad), reads nothing in your home folder outside it, and
-nowhere else. Only owners and admins are unrestricted.
+nowhere else (with `bypass_safety`, in a session that runs outside its
+root folder, it writes only in its scratchpad). Only owners and admins
+are unrestricted.
 
 ### Root folders
 

@@ -322,7 +322,10 @@ cover):
   readable. A custom role with `bypass_role_denies` or `bypass_safety`
   but without `can_manage` writes and searches anywhere inside its root
   folder, and its reads in your home folder stay inside it too: only
-  owners and admins are unrestricted.
+  owners and admins are unrestricted. With `bypass_safety`, in a
+  session whose folder is outside its root folder it writes and searches
+  only in the scratchpad, as a `user` does, and once one of its tool
+  calls is denied the rest of the turn is halted.
 - **Searches stay in the project.** A `Grep` or `Glob` is allowed
   only when all of this holds: the folder it searches (its `path`, or
   the session's folder when it has none, symlinks followed) is inside

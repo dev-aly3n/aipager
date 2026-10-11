@@ -54,14 +54,24 @@ def _use(role, root=None, deny=()):
                                                           root_bound=bound))
 
 
-def _decide(tmp_path, tool, tool_input, cwd):
+def _decide(tmp_path, tool, tool_input, cwd, agent_id=None, blocked=False,
+            terminal=False):
     t = tmp_path / "t.jsonl"
-    t.write_text(json.dumps({"type": "user", "message": {
-        "content": "[via Telegram · @sara · role:user]\ndo it"}}) + "\n")
-    out = enforce.decide({
+    lines = [{"type": "user", "message": {
+        "content": "do it" if terminal
+        else "[via Telegram · @sara · role:user]\ndo it"}}]
+    if blocked:  # a tool call earlier in this turn was denied
+        lines.append({"type": "user", "message": {"content": [{
+            "type": "tool_result",
+            "content": "aipager safety policy: Write outside the root"}]}})
+    t.write_text("".join(json.dumps(x) + "\n" for x in lines))
+    data = {
         "hook_event_name": "PreToolUse", "session": SESSION, "session_id": SID,
         "cwd": str(cwd), "tool_name": tool, "tool_input": tool_input,
-        "transcript_path": str(t)})
+        "transcript_path": str(t)}
+    if agent_id:
+        data["agent_id"] = agent_id
+    out = enforce.decide(data)
     return (out or {}).get("reason")
 
 
@@ -265,3 +275,71 @@ def test_bypass_safety_with_manage_is_the_owner(tmp_path, home, root):
     assert "root" not in ps.read_snapshot(SESSION)
     assert _decide(tmp_path, "Write", {"file_path": str(home / "aipager" / "b"),
                                        "content": "x"}, root / "proj") is None
+
+
+AGENT = "a1b2c3d4e5f60708"
+
+
+def test_bypass_role_pinned_agent_held_after_an_owner_snapshot(tmp_path, home, root):
+    """A background agent launched by a bypass_safety role without
+    can_manage is pinned to that role's rooted rights. When the owner's
+    message later replaces the session snapshot, the agent is still held
+    to the root: its pin is no owner's bypass (rev-iter2-001)."""
+    (home / "aipager").mkdir()
+    (home / "aipager" / "x.py").write_text("x")
+    _use(_pol(tmp_path, _BYPASS_NO_MANAGE).get_role("boss"), root)
+    assert ps.write_pin(SESSION, AGENT, {
+        "rules": ps.safety_rules(ps.read_snapshot(SESSION)), "terminal": False})
+    _use(_pol().get_role("owner"))
+    assert "root" not in ps.read_snapshot(SESSION)
+    read = {"file_path": str(home / "aipager" / "x.py")}
+    write = {"file_path": str(home / "aipager" / "y"), "content": "x"}
+    # The owner's own calls are unrestricted ...
+    assert _decide(tmp_path, "Read", read, root / "proj") is None
+    # ... the pinned agent's are not.
+    assert _decide(tmp_path, "Read", read, root / "proj", agent_id=AGENT) == (
+        "Read denied - this role reads in the home folder only inside its own folder")
+    assert _decide(tmp_path, "Write", write, root / "proj", agent_id=AGENT)
+    # A failed check: allowed for the owner, refused for the agent.
+    data = {"session": SESSION, "tool_name": "Read", "tool_input": read}
+    assert enforce.fail_closed(data) is None
+    assert enforce.fail_closed({**data, "agent_id": AGENT})["reason"]
+
+
+def test_bypass_role_in_a_session_outside_its_root(tmp_path, home, root):
+    """A session whose folder is outside the root is not this role's: as
+    for a built-in user, it writes and searches only in its scratchpad
+    there, and the deny reasons say so."""
+    old = home / "aipager"
+    old.mkdir()
+    _use(_pol(tmp_path, _BYPASS_NO_MANAGE).get_role("boss"), root)
+    assert _decide(tmp_path, "Write", {"file_path": str(old / "y"), "content": "x"},
+                   old) == ("Write denied - this session runs outside this role's own "
+                            "folder, so this role can only write in its scratchpad")
+    assert _decide(tmp_path, "Write", {"file_path": str(root / "other" / "y"),
+                                       "content": "x"}, old)
+    assert _decide(tmp_path, "Glob", {"pattern": "*", "path": str(old)}, old) == (
+        "Glob denied - this session runs outside this role's own folder, so this "
+        "role can only search in its scratchpad")
+    # In a session inside the root it still writes anywhere in the root.
+    assert _decide(tmp_path, "Write", {"file_path": str(root / "other" / "y"),
+                                       "content": "x"}, root / "proj") is None
+
+
+def test_bypass_role_turn_halts_after_a_block(tmp_path, home, root):
+    """A root-bound bypass turn that was already denied once stays halted,
+    like any held turn: no rewording around the root (rev-iter2-002). The
+    owner's bypass is not halted."""
+    _use(_pol(tmp_path, _BYPASS_NO_MANAGE).get_role("boss"), root)
+    inside = {"file_path": str(root / "other" / "y"), "content": "x"}
+    assert _decide(tmp_path, "Write", inside, root / "proj") is None
+    assert "session halted" in _decide(tmp_path, "Write", inside, root / "proj",
+                                       blocked=True)
+    assert "session halted" in _decide(tmp_path, "Bash", {"command": "ls"},
+                                       root / "proj", blocked=True)
+    # A turn typed in the terminal is unrestricted and never halted, even
+    # with the member's rooted snapshot still on file.
+    assert _decide(tmp_path, "Write", inside, root / "proj", blocked=True,
+                   terminal=True) is None
+    _use(_pol().get_role("owner"))
+    assert _decide(tmp_path, "Write", inside, root / "proj", blocked=True) is None
