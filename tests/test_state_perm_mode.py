@@ -58,10 +58,14 @@ def test_the_transient_mode_state_is_never_saved(tmp_state_file):
     s = r1.get("claude-dev")
     s.reported_mode, s.auto_unavailable = "default", True
     s.mode_switch = ModeSwitch(target="auto", presses=3, sent_at=1.0)
+    s.bypass_seen = True
     r1.save()
     raw = json.loads(tmp_state_file.read_text())["sessions"]["claude-dev"]
     assert not {"reported_mode", "auto_unavailable", "mode_switch",
-                "mode_launch_unchecked"} & set(raw)
+                "mode_launch_unchecked", "bypass_seen"} & set(raw)
+    r2 = SessionRegistry()
+    r2.load()
+    assert r2.get("claude-dev").bypass_seen is False
 
 
 def _old_file(tmp_state_file, **mode_keys):
@@ -196,15 +200,55 @@ def test_auto_unavailable_makes_auto_a_restart():
     assert s.mode_switch_restarts("ask") is False
 
 
+# ---- bypass reported since the launch (review rev-iter2-002) -----------------
+
+def test_a_cli_session_that_reported_bypass_restarts_after_leaving_it():
+    """A CLI session started with the bypass flag keeps perm_mode "ask".
+    Once it reported bypassPermissions, bypass is in its Shift+Tab cycle:
+    after the terminal cycles it to Manual, Auto by presses would pass
+    through bypass again, so every switch restarts."""
+    s = _sess("ask")
+    s.note_reported_mode("bypassPermissions", 0.0)
+    s.note_reported_mode("default", 0.0)
+    assert s.bypass_seen is True
+    assert s.mode_switch_restarts("auto") is True
+    assert s.mode_switch_restarts("ask") is True
+    assert s.perm_mode == "ask"     # a forged report never widens
+
+
+def test_a_bypass_report_while_settling_still_counts():
+    s = _sess("ask")
+    s.mode_switch = ModeSwitch(target="auto", presses=3, sent_at=100.0)
+    assert s.note_reported_mode("bypassPermissions", 100.0) == "settling"
+    assert s.bypass_seen is True
+
+
+@pytest.mark.parametrize("raw", ["default", "auto", "plan", "acceptEdits", "nonsense"],
+                         ids=["default", "auto", "plan", "accept-edits", "unknown"])
+def test_other_reports_do_not_set_bypass_seen(raw):
+    s = _sess("ask")
+    s.note_reported_mode(raw, 0.0)
+    assert s.bypass_seen is False
+
+
+def test_a_relaunch_forgets_the_bypass_report():
+    s = _sess("ask")
+    s.note_reported_mode("bypassPermissions", 0.0)
+    s.reset_mode_tracking()
+    assert s.bypass_seen is False
+    assert s.mode_switch_restarts("auto") is False
+
+
 # ---- starting over -----------------------------------------------------------
 
 def test_reset_mode_tracking_clears_every_transient_field():
     s = _sess("auto")
     s.reported_mode, s.auto_unavailable, s.mode_launch_unchecked = "default", True, True
     s.mode_switch = ModeSwitch(target="ask", presses=1, sent_at=1.0)
+    s.bypass_seen = True
     s.reset_mode_tracking()
-    assert (s.reported_mode, s.auto_unavailable, s.mode_launch_unchecked, s.mode_switch) == (
-        "", False, False, None)
+    assert (s.reported_mode, s.auto_unavailable, s.mode_launch_unchecked, s.mode_switch,
+            s.bypass_seen) == ("", False, False, None, False)
     assert s.perm_mode == "auto"
 
 

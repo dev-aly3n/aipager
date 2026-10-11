@@ -295,7 +295,10 @@ def test_full_session_reported_narrower_restarts_narrower(mk_bot, run_async, pty
     w = World(mk_bot, run_async, argv, launched="full", via_new=False)
     w.report(raw)
     u = w.say(f"/mode {word}")
-    assert "already" in "\n".join(reply_texts(u)).lower()
+    # Fix iteration 3 (rev-iter2-001): not "already" but a restart into the
+    # narrower mode, so the bypass flag is dropped from the live process.
+    assert "already" not in "\n".join(reply_texts(u)).lower()
+    assert argv.mode_flags() == [flag], argv.cmds
     w.restart()
     assert argv.mode_flags() == [flag], argv.cmds
 

@@ -112,22 +112,69 @@ def test_a_bad_target_raises(world, run_async, bad):
 
 # ---- "already" to a narrower request is recorded (review rev-iter1-001) ----
 
-@pytest.mark.parametrize("launched, reported, target", [
-    ("auto", "default", "ask"), ("full", "default", "ask"), ("full", "auto", "auto"),
-], ids=["auto-launch-now-manual", "full-launch-now-manual", "full-launch-now-auto"])
-def test_already_in_a_narrower_mode_records_it(world, run_async, launched, reported, target):
+def test_already_in_a_narrower_mode_records_it(world, run_async):
     # Someone in the terminal pressed Shift+Tab: the session already is in
     # the mode asked for, but a restart would launch the wider perm_mode.
     bot, sess, press = world
-    sess.perm_mode = launched
-    sess.reported_mode = reported
+    sess.perm_mode = "auto"
+    sess.reported_mode = "default"
     bot.registry.mark_dirty = dirty = MagicMock()
-    out = run_async(bot._mode_switch_core(sess, target))
+    out = run_async(bot._mode_switch_core(sess, "ask"))
     assert (out.ok, out.reason) == (True, "already")
-    assert sess.perm_mode == target
+    assert sess.perm_mode == "ask"
     dirty.assert_called()
     press.assert_not_awaited()
     bot._perms_switch_core.assert_not_awaited()
+
+
+# ---- a Full access launch narrowed in the terminal restarts (rev-iter2-001) ----
+
+@pytest.mark.parametrize("reported, target", [("default", "ask"), ("auto", "auto")],
+                         ids=["full-launch-now-manual", "full-launch-now-auto"])
+def test_full_launch_in_a_narrower_mode_restarts_into_it(world, run_async, reported, target):
+    # The live process was started with the bypass flag: bypass is in its
+    # Shift+Tab cycle. "Already" would leave it running; the relaunch into
+    # the target drops the flag.
+    bot, sess, press = world
+    sess.perm_mode = "full"
+    sess.reported_mode = reported
+    out = run_async(bot._mode_switch_core(sess, target))
+    assert out.reason == "restarted"
+    bot._perms_switch_core.assert_awaited_once_with(sess, target)
+    press.assert_not_awaited()
+
+
+def test_full_launch_reported_manual_ask_then_auto_never_presses(world, run_async):
+    # The reviewer's sequence: /mode ask, then /mode auto, on a session
+    # launched in Full access that reports Manual. While that process is
+    # the live one, neither may press Shift+Tab (three presses from
+    # Manual land in bypassPermissions); each is a restart into its target.
+    bot, sess, press = world
+    sess.perm_mode = "full"
+    sess.reported_mode = "default"
+    first = run_async(bot._mode_switch_core(sess, "ask"))
+    second = run_async(bot._mode_switch_core(sess, "auto"))
+    assert (first.reason, second.reason) == ("restarted", "restarted")
+    press.assert_not_awaited()
+    assert [c.args[1] for c in bot._perms_switch_core.await_args_list] == ["ask", "auto"]
+    assert sess.perm_mode == "full" and sess.mode_switch is None
+
+
+# ---- a process that reported bypass since its launch (rev-iter2-002) ----------
+
+def test_a_bypass_report_makes_every_switch_restart(world, run_async):
+    # A CLI session started with the bypass flag: perm_mode stays "ask".
+    # The terminal user cycled it to Manual; Auto by presses would pass
+    # through bypassPermissions again, so it restarts instead.
+    bot, sess, press = world
+    sess.perm_mode = "ask"
+    assert sess.note_reported_mode("bypassPermissions", 0.0) == "recorded"
+    assert sess.note_reported_mode("default", 0.0) == "recorded"
+    out = run_async(bot._mode_switch_core(sess, "auto"))
+    assert out.reason == "restarted"
+    bot._perms_switch_core.assert_awaited_once_with(sess, "auto")
+    press.assert_not_awaited()
+    assert sess.perm_mode == "ask"
 
 
 def test_already_never_widens(world, run_async):

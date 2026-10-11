@@ -69,11 +69,11 @@ def _tap(bot, run_async, data, user, msg_id=50):
 
 # ---- "already" to a narrower request is recorded ---------------------------
 
-@pytest.mark.parametrize("launched", ["auto", "full"], ids=["auto-launch", "full-launch"])
-def test_typed_mode_ask_already_in_ask_records_it(world, run_async, pty, launched):
-    # Launched wider, switched to Manual in the terminal: "already in Ask
-    # mode", and a restart now launches Ask, never the wider mode.
-    bot, s = world(launched, reported="default")
+def test_typed_mode_ask_already_in_ask_records_it(world, run_async, pty):
+    # Launched in Auto, switched to Manual in the terminal: "already in Ask
+    # mode", and a restart now launches Ask, never the wider mode. (A Full
+    # access launch restarts instead: test_tm3_fixes3.py.)
+    bot, s = world("auto", reported="default")
     u = _say(bot, run_async, f"/mode {LABEL} ask", BOB)
     assert "already" in "\n".join(reply_texts(u)).lower()
     assert s.perm_mode == "ask"
