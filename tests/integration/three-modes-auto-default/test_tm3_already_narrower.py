@@ -5,8 +5,9 @@ the ended session, `aipager resume` from the shell) uses the narrower flag.
 The scenario the ruling names: a session launched in Auto whose first
 main-agent hook reports Claude Code's ``default`` (Manual) mode. `/mode
 ask` answers "already", presses nothing, and the next launch is
-``--permission-mode default``. The same holds for a Full access session
-switched down in the terminal.
+``--permission-mode default``. A session launched in Full access and
+switched down in the terminal is restarted for the switch instead (fix
+iteration 3: every switch of a Full-launched session is a restart).
 
 Black-box: driven through /new, the hook receiver, /mode, /restart,
 /resume, the Mini App perms route and the `aipager resume` CLI. The launch
