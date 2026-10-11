@@ -36,6 +36,7 @@ from aipager.bot.transport import (
 )
 from aipager.dtach import inject
 from aipager.i18n import Command, Msg, Safe
+from aipager.state import Status
 
 if TYPE_CHECKING:
     from aipager.state import ModeSwitch, TrackedSession
@@ -150,9 +151,31 @@ async def on_reported(bot, sess: TrackedSession, context: dict) -> None:
     _spawn(settle(bot, sess, pending, "unconfirmed"))
 
 
+def _retry_may_press(sess: TrackedSession, pending: ModeSwitch) -> bool:
+    """May the retry's presses go to the terminal now? Only while its
+    switch is still the current one and the session is live, not being
+    relaunched and not showing a dialog: a restart or End begun after the
+    hook must not get stray Shift+Tabs in the new process, and a dialog
+    would read them as an answer."""
+    return (sess.mode_switch is pending and not sess.relaunch_in_flight
+            and sess.status != Status.GONE and not sess.dialog_is_open())
+
+
 async def _retry(bot, sess: TrackedSession, pending: ModeSwitch, count: int,
                  reported: str) -> None:
+    if not _retry_may_press(sess, pending):
+        if sess.mode_switch is pending:
+            # The retry is not spent: the next hook decides (a relaunch
+            # or the session's end clears the switch anyway).
+            pending.retried = False
+            if not sess.reported_mode:
+                sess.reported_mode = reported
+        return
     if await inject.press_mode_cycle(sess.name, count):
+        if sess.mode_switch is pending:
+            # The settle window runs from the last key, not from when the
+            # retry was decided (the presses may have waited for the lock).
+            pending.sent_at = time.monotonic()
         return
     if sess.mode_switch is pending:
         sess.mode_switch = None

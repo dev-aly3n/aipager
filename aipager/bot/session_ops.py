@@ -2362,16 +2362,23 @@ class SessionOpsMixin:
         previous = (sess.perm_mode, sess.reported_mode, sess.mode_switch)
         # Recorded BEFORE the write: a hook racing the presses is
         # "settling", never read as their result.
-        sess.mode_switch = ModeSwitch(target=target, presses=count or 0,
-                                      sent_at=time.monotonic())
+        record = ModeSwitch(target=target, presses=count or 0, sent_at=time.monotonic())
+        sess.mode_switch = record
         sess.reported_mode = ""
         sess.perm_mode = target
         self.registry.mark_dirty()
         if not await inject.press_mode_cycle(sess.name, count or 0):
-            sess.perm_mode, sess.reported_mode, sess.mode_switch = previous
-            self.registry.mark_dirty()
+            # Only this call's own switch: a relaunch or another switch
+            # that started while the presses waited for the write lock
+            # has set state that is newer than *previous*.
+            if sess.mode_switch is record:
+                sess.perm_mode, sess.reported_mode, sess.mode_switch = previous
+                self.registry.mark_dirty()
             return RestartOutcome(ok=False, reason="send_failed", label=label,
                                   mode=target, in_place=True)
+        # The presses may have waited for the send-now chord or a prompt
+        # write: the settle window runs from the last key, not the stamp.
+        record.sent_at = time.monotonic()
         log.info("[%s] mode switch to %s: %d Shift+Tab press(es) sent",
                  label, target, count or 0)
         return RestartOutcome(ok=True, reason="sent", label=label, mode=target,

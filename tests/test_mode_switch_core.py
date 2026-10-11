@@ -138,3 +138,37 @@ def test_already_never_widens(world, run_async):
     assert out.reason == "already"
     assert sess.perm_mode == "ask"
 
+
+# ---- the settle window runs from the last key (review rev-iter1-006) ----
+
+def test_the_switch_is_stamped_after_the_presses(world, run_async):
+    bot, sess, press = world
+
+    async def _slow_press(name, count):
+        # The presses waited for the write lock: the stamp taken before
+        # them is old by now.
+        sess.mode_switch.sent_at = -100.0
+        return True
+
+    press.side_effect = _slow_press
+    out = run_async(bot._mode_switch_core(sess, "auto"))
+    assert out.reason == "sent"
+    assert sess.mode_switch.sent_at > 0
+
+
+# ---- a failed write rolls back only its own switch (review rev-iter1-007) ----
+
+def test_a_failed_write_leaves_a_newer_state_alone(world, run_async):
+    bot, sess, press = world
+    sess.perm_mode = "ask"
+
+    async def _relaunched_meanwhile(name, count):
+        # A Full access restart ran while the presses waited for the lock.
+        sess.perm_mode = "full"
+        sess.reset_mode_tracking()
+        return False
+
+    press.side_effect = _relaunched_meanwhile
+    out = run_async(bot._mode_switch_core(sess, "auto"))
+    assert (out.ok, out.reason) == (False, "send_failed")
+    assert (sess.perm_mode, sess.mode_switch) == ("full", None)

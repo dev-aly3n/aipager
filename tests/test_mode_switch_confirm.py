@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from aipager.bot import mode_switch
-from aipager.state import ModeSwitch, SessionRegistry
+from aipager.state import ModeSwitch, SessionRegistry, Status
 
 
 class _Bot:
@@ -189,3 +189,62 @@ def test_attach_reply_only_while_a_switch_waits(world):
     assert pending.reply is None
     mode_switch.attach_reply(sess, "7", "11", "ready", "@bob")
     assert pending.reply == (7, 11, "ready") and pending.by == "@bob"
+
+
+# ---- the retry presses only into its own, live switch (review rev-iter1-007) ----
+
+def _run_retry(sess, pending, run_async):
+    run_async(mode_switch._retry(_Bot(), sess, pending, 2, "acceptEdits"))
+
+
+def test_retry_presses_while_its_switch_is_current(world, run_async):
+    sess = world.sess
+    sess.status = Status.BUSY
+    sess.mode_switch = pending = _pending(retried=True)
+    _run_retry(sess, pending, run_async)
+    assert world.presses == [("claude-jim", 2)]
+
+
+def test_retry_presses_nothing_for_a_superseded_switch(world, run_async):
+    sess = world.sess
+    sess.status = Status.IDLE
+    pending = _pending(retried=True)
+    sess.mode_switch = newer = _pending(target="ask")
+    _run_retry(sess, pending, run_async)
+    assert world.presses == []
+    assert sess.mode_switch is newer and not newer.retried
+
+
+@pytest.mark.parametrize("state", ["relaunching", "gone"])
+def test_retry_presses_nothing_into_a_relaunch_or_an_ended_session(world, run_async, state):
+    sess = world.sess
+    sess.status = Status.GONE if state == "gone" else Status.IDLE
+    sess.relaunch_in_flight = state == "relaunching"
+    sess.mode_switch = pending = _pending(retried=True)
+    _run_retry(sess, pending, run_async)
+    assert world.presses == []
+
+
+def test_retry_waits_when_a_dialog_opened_meanwhile(world, run_async):
+    sess = world.sess
+    sess.status = Status.INTERACTIVE
+    sess.mode_switch = pending = _pending(retried=True)
+    _run_retry(sess, pending, run_async)
+    assert world.presses == []
+    # Not spent: the next hook may still retry, from the mode reported.
+    assert sess.mode_switch is pending and not pending.retried
+    assert sess.reported_mode == "acceptEdits"
+
+
+def test_retry_is_stamped_after_its_presses(world, run_async, monkeypatch):
+    sess = world.sess
+    sess.status = Status.IDLE
+    sess.mode_switch = pending = _pending(retried=True)
+
+    async def _slow_press(name, count):
+        pending.sent_at = -100.0  # the presses waited for the write lock
+        return True
+
+    monkeypatch.setattr(mode_switch.inject, "press_mode_cycle", _slow_press)
+    _run_retry(sess, pending, run_async)
+    assert pending.sent_at > 0
