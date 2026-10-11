@@ -5,7 +5,7 @@ restart."""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -108,3 +108,33 @@ def test_a_bad_target_raises(world, run_async, bad):
     bot, sess, _press = world
     with pytest.raises(ValueError):
         run_async(bot._mode_switch_core(sess, bad))
+
+
+# ---- "already" to a narrower request is recorded (review rev-iter1-001) ----
+
+@pytest.mark.parametrize("launched, reported, target", [
+    ("auto", "default", "ask"), ("full", "default", "ask"), ("full", "auto", "auto"),
+], ids=["auto-launch-now-manual", "full-launch-now-manual", "full-launch-now-auto"])
+def test_already_in_a_narrower_mode_records_it(world, run_async, launched, reported, target):
+    # Someone in the terminal pressed Shift+Tab: the session already is in
+    # the mode asked for, but a restart would launch the wider perm_mode.
+    bot, sess, press = world
+    sess.perm_mode = launched
+    sess.reported_mode = reported
+    bot.registry.mark_dirty = dirty = MagicMock()
+    out = run_async(bot._mode_switch_core(sess, target))
+    assert (out.ok, out.reason) == (True, "already")
+    assert sess.perm_mode == target
+    dirty.assert_called()
+    press.assert_not_awaited()
+    bot._perms_switch_core.assert_not_awaited()
+
+
+def test_already_never_widens(world, run_async):
+    bot, sess, press = world
+    sess.perm_mode = "ask"
+    sess.reported_mode = "auto"
+    out = run_async(bot._mode_switch_core(sess, "auto"))
+    assert out.reason == "already"
+    assert sess.perm_mode == "ask"
+

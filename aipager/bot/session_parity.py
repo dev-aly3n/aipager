@@ -1636,7 +1636,7 @@ async def handle_callback(
         if sess.status == Status.GONE:
             await bot._safe_answer(query, person.text(TOAST_ENDED_SESSION))
             return True
-        if sess.mode_switch is None and sess.current_mode() == target:
+        if bot._already_in_mode(sess, target):
             # Before the turn check: a switch made elsewhere relaunched the
             # session (a new turn), and "already in" is what happened. It
             # changes nothing, so it is right on any turn.

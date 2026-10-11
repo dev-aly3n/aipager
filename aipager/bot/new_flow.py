@@ -1106,7 +1106,7 @@ async def _handle_ready_callback(
         if target == perm_modes.FULL and not bot._is_admin_user(actor, chat_id):
             await bot._safe_answer(query, person.text(TOAST_NEEDS_ADMIN_FULL), show_alert=True)
             return
-        if sess.mode_switch is None and sess.current_mode() == target:
+        if bot._already_in_mode(sess, target):
             await _rerender()
             return
         tapped = getattr(getattr(query, "message", None), "message_id", None)

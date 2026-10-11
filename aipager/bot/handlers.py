@@ -1604,7 +1604,7 @@ class CommandHandlersMixin:
             text, kb = self._render_mode_card(chat_id, sess)
             await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
             return
-        if sess.mode_switch is None and sess.current_mode() == want:
+        if self._already_in_mode(sess, want):
             await reply_text(update.message, tr.html(
                 MODE_ALREADY, session=sess.label, mode=Safe(mode_labels.shown_label(tr, sess))),
                 parse_mode="HTML")

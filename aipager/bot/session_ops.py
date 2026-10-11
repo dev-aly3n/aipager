@@ -2309,6 +2309,21 @@ class SessionOpsMixin:
             sess, target_mode=sess.perm_mode, interrupt_first=False,
         )
 
+    def _already_in_mode(self, sess: TrackedSession, target: str) -> bool:
+        """True when *sess* is already in *target* with no switch waiting:
+        the "already in" answer every surface gives. A target narrower
+        than the mode aipager would launch it in (``perm_mode``) is then
+        recorded, so a later restart or resume launches what was asked
+        for and never the wider mode: someone in the terminal may have
+        switched Auto to Manual, and "already in Ask mode" must hold
+        after a restart too. Never widens ``perm_mode``."""
+        if sess.mode_switch is not None or sess.current_mode() != target:
+            return False
+        if perm_modes.wider(sess.perm_mode, target):
+            sess.perm_mode = target
+            self.registry.mark_dirty()
+        return True
+
     async def _mode_switch_core(self, sess: TrackedSession, target: str) -> RestartOutcome:
         """Switch an already-resolved session to *target* (``ask``,
         ``auto`` or ``full``): the one dispatcher chat and the Mini App
@@ -2334,7 +2349,7 @@ class SessionOpsMixin:
             return RestartOutcome(ok=False, reason="starting", label=label)
         if sess.relaunch_in_flight:
             return RestartOutcome(ok=False, reason="already_restarting", label=label)
-        if sess.mode_switch is None and sess.current_mode() == target:
+        if self._already_in_mode(sess, target):
             return RestartOutcome(ok=True, reason="already", label=label, mode=target)
         if sess.mode_switch_restarts(target):
             return await self._perms_switch_core(sess, target)
