@@ -149,7 +149,7 @@ this order:
 
 So aipager can refuse a call Claude Code would allow, and when Claude
 Code asks, aipager never answers yes on its own: an allow is always a
-person's tap. Two things let calls run with no prompt at all:
+person's tap. Three things let calls run with no prompt to a person:
 
 - **Full access mode, for admins only.** A session in Full access is
   started with `--dangerously-skip-permissions`: Claude Code asks for
@@ -169,8 +169,18 @@ person's tap. Two things let calls run with no prompt at all:
   (`/mode`); aipager does that in place by pressing Shift+Tab in the
   session, never with a flag that would put Full access in Claude
   Code's Shift+Tab cycle. If Claude Code ever reports Full access for a
-  session aipager did not start in it, the daemon logs a warning and
-  never treats the session as Full access because of it.
+  session aipager did not start in it, the daemon shows what was
+  reported, logs a warning and never starts or restarts the session in
+  Full access because of it.
+  Known limit: the mode Claude Code reports comes in through the hook
+  socket, which any local process can write to (see
+  [network surface](#network-surface)). A forged report can change the mode a session is
+  shown in, and while an Ask/Auto switch waits for its confirmation it
+  can make aipager press Shift+Tab once more, which can leave the live
+  session in Auto when Ask was asked for (the next real hook shows the
+  real mode again). It never changes the flag a restart or resume
+  passes, and it can never reach Full access: only the launch flag sets
+  that.
   So that Full access works from Telegram, the daemon sets
   `skipDangerousModePermissionPrompt` in `~/.claude/settings.json` at
   every start (Claude Code's warning before it runs in this mode would
@@ -677,7 +687,7 @@ per-project `~/.claude/settings.json` overrides or a container
 |---|---|
 | Stranger sends bot a command | Chat ID filter rejects |
 | Stolen bot token | Use `/revoke` in @BotFather, re-config |
-| Compromised claude tool call | aipager's safety check refuses what a Telegram turn's rules deny; in Ask, Claude Code's own rules in `settings.json` decide what it asks about and a person's tap is the only allow; an Auto session (the default for admins' `/new`) asks nothing, so only the safety check stands in the way, and for an owner's own turns and terminal prompts nothing does ([who decides](#who-decides-whether-a-tool-call-runs)) |
+| Compromised claude tool call | aipager's safety check refuses what a Telegram turn's rules deny; in Ask, Claude Code's own rules in `settings.json` decide what it asks about and a person's tap is the only allow; in Auto (the default for every new session) Claude Code's own safety check runs the calls it judges safe without a prompt and stops the risky ones for a person; a Full access session (admins only) asks nothing, so only aipager's safety check stands in the way, and for an owner's own turns and terminal prompts nothing does ([who decides](#who-decides-whether-a-tool-call-runs)) |
 | Restricted Telegram user escalates to the owner | No shell, writes and searches confined to the project (never the home folder), credential files unreadable, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
 | A group member borrows someone else's rights | Each message runs with its own sender's role in the chat it came from; a different sender's message waits for the running turn; if one joins anyway, the strictest rules win; slash commands from restricted roles are limited to the keyboard's ([team-mode enforcement](#team-mode-enforcement)) |
 | Group chatter reaches a session | In a group only commands, replies to the bot, mentions of it and marked keyboard taps are acted on ([groups](groups.md#what-the-bot-reads-in-a-group)) |
