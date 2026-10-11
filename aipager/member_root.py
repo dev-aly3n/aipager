@@ -198,8 +198,8 @@ def short(path: str) -> str:
 # ---- the folder itself -------------------------------------------------
 
 def ensure_root(root) -> bool:
-    """Create *root* (and the folders above it) if missing: mode 0700.
-    True when it is a directory afterwards."""
+    """Create *root* (and the folders above it) if missing: every folder
+    created here gets mode 0700. True when it is a directory afterwards."""
     if not isinstance(root, str) or not root or root == NOWHERE or "\x00" in root:
         return False
     if root_problem(root):
@@ -207,15 +207,27 @@ def ensure_root(root) -> bool:
     if os.path.isdir(root):
         return True
     check_write(root)   # never the operator's real home under pytest
-    try:
-        os.makedirs(root, mode=0o700)
-    except FileExistsError:
-        pass
-    except OSError:
-        return False
-    else:
+    missing = []
+    path = os.path.abspath(root)
+    while not os.path.lexists(path):
+        missing.append(path)
+        parent = os.path.dirname(path)
+        if parent == path:
+            break
+        path = parent
+    # Top down, each folder this call creates 0700 (``~/aipager-users``
+    # included, so no one else can list the members' folder names):
+    # ``os.makedirs`` would give the folders above the leaf the umask's
+    # mode. A folder that was already there keeps its mode.
+    for folder in reversed(missing):
         try:
-            os.chmod(root, 0o700)   # the leaf, whatever the umask did
+            os.mkdir(folder, 0o700)
+        except FileExistsError:
+            continue
+        except OSError:
+            return False
+        try:
+            os.chmod(folder, 0o700)   # whatever the umask did
         except OSError:
             pass
     return os.path.isdir(root)

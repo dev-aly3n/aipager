@@ -323,3 +323,24 @@ def test_claude_code_temp_folder_under_its_env_tmpdir_is_no_root(home, monkeypat
     assert member_root.root_problem("/tmp/claudex") is None
 
 
+def test_aipager_users_created_0700_too(home):
+    root = home / "aipager-users" / "sara"
+    assert member_root.ensure_root(str(root)) is True
+    assert stat.S_IMODE(os.stat(home / "aipager-users").st_mode) == 0o700
+    assert stat.S_IMODE(os.stat(root).st_mode) == 0o700
+
+
+def test_every_folder_ensure_root_creates_is_0700(home):
+    root = home / "srv" / "teams" / "dev"
+    assert member_root.ensure_root(str(root)) is True
+    for p in (home / "srv", home / "srv" / "teams", root):
+        assert stat.S_IMODE(os.stat(p).st_mode) == 0o700
+
+
+def test_ensure_root_keeps_an_existing_parents_mode(home):
+    (home / "aipager-users").mkdir()
+    os.chmod(home / "aipager-users", 0o755)
+    assert member_root.ensure_root(str(home / "aipager-users" / "sara")) is True
+    assert stat.S_IMODE(os.stat(home / "aipager-users").st_mode) == 0o755
+
+
