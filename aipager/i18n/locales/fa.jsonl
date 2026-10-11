@@ -618,7 +618,7 @@
 {"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool}: نوشتن در مسیر محافظت‌شدهٔ {glob}"}
 {"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool} با مسیری که خوانده نشد"}
 {"k": "safety.reason.pattern_unreadable", "src": "88053cf7", "v": "{tool} با الگویی که خوانده نشد"}
-{"k": "safety.reason.root_cwd_search", "src": "086246f6", "v": "{tool} رد شد - این سشن بیرون از پوشهٔ خود این نقش اجرا می‌شود، پس این نقش فقط در scratchpad خودش می‌تواند جستجو کند"}
+{"k": "safety.reason.root_cwd_search", "src": "086246f6", "v": "{tool} رد شد - این سشن بیرون از پوشهٔ خود این نقش اجرا می‌شود، پس این نقش فقط در scratchpad خودش می‌تواند جست‌وجو کند"}
 {"k": "safety.reason.root_cwd_write", "src": "bc6e509f", "v": "{tool} رد شد - این سشن بیرون از پوشهٔ خود این نقش اجرا می‌شود، پس این نقش فقط در scratchpad خودش می‌تواند بنویسد"}
 {"k": "safety.reason.runs_commands", "src": "e180a703", "v": "{tool} در فایلی که دستور اجرا می‌کند (.claude/, .git/, .mcp.json)"}
 {"k": "safety.reason.search_anywhere", "src": "c1ad4431", "v": "{tool} رد شد - مسیر محافظت‌شدهٔ {glob} ممکن است در هر پوشه‌ای باشد، پس این نقش نمی‌تواند با Grep یا Glob جست‌وجو کند"}
