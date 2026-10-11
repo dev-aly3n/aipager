@@ -32,7 +32,7 @@ import re
 from collections import Counter
 from typing import NamedTuple
 
-from aipager import safety
+from aipager import root_rule, safety
 from aipager._test_guard import check_write
 from aipager.i18n import Msg
 from aipager.miniapp.phrase import Phrase
@@ -148,9 +148,9 @@ def effective_root(scope, scopes) -> str:
 
 def root_problem(path) -> str | None:
     """Why *path* cannot be a root (plain English), or ``None``. The rule
-    lives in :func:`aipager.safety.root_problem`, which the aipager.yaml
-    parser shares."""
-    return safety.root_problem(path)
+    lives in :func:`aipager.root_rule.root_problem`, which the
+    aipager.yaml parser shares."""
+    return root_rule.root_problem(path)
 
 
 # ---- who is held to a root ---------------------------------------------

@@ -88,13 +88,9 @@ def _show_current_config() -> None:
     elif not scopes:
         lines.append("[muted]No scopes configured yet.[/muted]")
     else:
-        from rich.markup import escape
-
-        from aipager import member_root
+        from aipager.wizard.root_flow import root_label
         for s in scopes:
-            root = member_root.short(member_root.effective_root(s, scopes))
-            root_txt = (f" · root: [path]{escape(root)}[/path]"
-                        + ("" if s.root else " (default)"))
+            root_txt = root_label(s, scopes)
             n = len(s.members)
             deny = len(s.deny_tools)
             deny_txt = (f" · {deny} deny rule{'s' if deny != 1 else ''}"

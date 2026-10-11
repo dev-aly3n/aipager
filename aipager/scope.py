@@ -19,7 +19,7 @@ from pathlib import Path
 
 import yaml
 
-from aipager import safety
+from aipager import root_rule
 from aipager._test_guard import check_write
 
 log = logging.getLogger(__name__)
@@ -281,18 +281,10 @@ def _parse_scope(entry, i: int) -> Scope:
             )
         seen.add(m.id)
 
-    root = None
-    if entry.get("root") is not None:
-        raw_root = entry["root"]
-        if not isinstance(raw_root, str):
-            raise ScopeConfigError(f"aipager.yaml: scopes[{i}].root must be text")
-        # The same rule the wizard applies (safety.root_problem): a bad
-        # root would hold a member to /, the home folder or a protected
-        # folder, so the file is refused rather than guessed at.
-        problem = safety.root_problem(raw_root)
-        if problem:
-            raise ScopeConfigError(f"aipager.yaml: scopes[{i}].root: {problem}")
-        root = os.path.abspath(os.path.expanduser(raw_root.strip()))
+    # The members' root folder, refused by the same rule the wizard
+    # applies: a bad root would hold a member to /, the home folder or a
+    # protected folder, so the file is refused rather than guessed at.
+    root = root_rule.parse_scope_root(entry.get("root"), i, ScopeConfigError)
 
     return Scope(
         chat_id=chat_id,

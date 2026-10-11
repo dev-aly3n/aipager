@@ -566,8 +566,6 @@ def is_wide_folder(path: str) -> bool:
 #: scratchpad. It can never be a real path (a NUL byte).
 ROOT_SENTINEL = "\x00none"
 
-_ROOT_MAGIC = set("*?[]{}")
-
 
 def normalise_root(value) -> str | None:
     """A snapshot's ``root`` as the checks use it: ``None`` (no bound),
@@ -605,39 +603,6 @@ def under_root(path: str, root: str) -> bool:
     compared by whole path components."""
     return _under(_realpath(os.path.abspath(path)),
                   _realpath(os.path.abspath(root)))
-
-
-def root_problem(path) -> str | None:
-    """Why *path* cannot be a members' root folder, or ``None``. Plain
-    English for the wizard and the aipager.yaml parser (neither is
-    translated). A folder that does not exist yet is fine.
-
-    Refused: not text, empty, a NUL byte, not absolute after ``~``,
-    wildcard characters, ``/``, the home folder or a folder above it, and
-    a folder that is, lies inside or holds one of aipager's protected
-    paths or the credential files (``~/.claude``, ``~/.config/aipager``,
-    ``~/.ssh``...): a member's turn may write in its root."""
-    if not isinstance(path, str) or not path.strip():
-        return "it is empty"
-    if "\x00" in path:
-        return "it holds a NUL byte"
-    expanded = os.path.expanduser(path.strip())
-    if not os.path.isabs(expanded):
-        return "it is not an absolute path (start it with / or ~/)"
-    if _ROOT_MAGIC & set(expanded):
-        return "it holds a wildcard character (* ? [ ] { })"
-    spelled = os.path.abspath(expanded)
-    if is_wide_folder(spelled):
-        return "it is /, the home folder or a folder above the home folder"
-    for form in {spelled, _realpath(spelled)}:
-        for glob in (*DENY_PATHS_NO_ACCESS, *CREDENTIAL_PATHS):
-            spots = _protected_spots(glob)
-            if spots is None:
-                continue
-            if any(_reaches(form, folder, name) for folder, name in spots):
-                shown = glob[:-3] if glob.endswith("/**") else glob
-                return f"it is, holds or lies inside the protected path {shown}"
-    return None
 
 
 def _matches_one(target: str, g: str) -> bool:
@@ -757,36 +722,34 @@ _SHAPE_WIDE_CWD_SEARCH = _wide_cwd_shape("search")
 # The deny reason when a turn held to a members' root runs in a session
 # whose folder is outside that root (a session started before the root
 # rule, or by someone else): its folder is then no write or search root.
+# Written from the same words as its shape, so the two cannot drift.
+def _root_cwd_words(verb: str) -> tuple[str, ...]:
+    return ("denied", "-", "this", "session", "runs", "outside", "this", "role's",
+            "own", "folder,", "so", "this", "role", "can", "only", verb, "in", "its",
+            "scratchpad")
+
+
 def _root_cwd_reason(tool_name: str, verb: str) -> str:
-    return (f"{tool_name} denied - this session runs outside this role's "
-            f"own folder, so this role can only {verb} in its scratchpad")
+    return " ".join((tool_name, *_root_cwd_words(verb)))
 
 
 REASON_ROOT_CWD_WRITE = "root_cwd_write"
 REASON_ROOT_CWD_SEARCH = "root_cwd_search"
-
-
-def _root_cwd_shape(verb: str) -> str:
-    return reason_shape("{tool}", "denied", "-", "this", "session", "runs", "outside",
-                        "this", "role's", "own", "folder,", "so", "this", "role", "can",
-                        "only", verb, "in", "its", "scratchpad")
-
-
-_SHAPE_ROOT_CWD_WRITE = _root_cwd_shape("write")
-_SHAPE_ROOT_CWD_SEARCH = _root_cwd_shape("search")
-
+_SHAPE_ROOT_CWD_WRITE = reason_shape("{tool}", *_root_cwd_words("write"))
+_SHAPE_ROOT_CWD_SEARCH = reason_shape("{tool}", *_root_cwd_words("search"))
 
 # The deny reason when a turn held to a members' root reads a file in the
 # home folder outside that root.
+_OUTSIDE_ROOT_READ_WORDS = ("denied", "-", "this", "role", "reads", "in", "the", "home",
+                            "folder", "only", "inside", "its", "own", "folder")
+
+
 def _outside_root_read_reason(tool_name: str) -> str:
-    return (f"{tool_name} denied - this role reads in the home folder only "
-            "inside its own folder")
+    return " ".join((tool_name, *_OUTSIDE_ROOT_READ_WORDS))
 
 
 REASON_OUTSIDE_ROOT_READ = "outside_root_read"
-_SHAPE_OUTSIDE_ROOT_READ = reason_shape("{tool}", "denied", "-", "this", "role", "reads",
-                                        "in", "the", "home", "folder", "only", "inside",
-                                        "its", "own", "folder")
+_SHAPE_OUTSIDE_ROOT_READ = reason_shape("{tool}", *_OUTSIDE_ROOT_READ_WORDS)
 
 
 def _search_violation(

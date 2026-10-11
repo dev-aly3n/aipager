@@ -15,7 +15,7 @@ import yaml
 
 from aipager import scope as _scope
 from aipager.scope import Member, Scope, ScopeConfigError
-from aipager.wizard import display, edit_menu, scope_flows, team_setup
+from aipager.wizard import display, edit_menu, root_flow, scope_flows, team_setup
 
 
 @pytest.fixture
@@ -126,7 +126,7 @@ def test_edit_scope_sets_root_and_reloads(cfg, monkeypatch, home):
 @pytest.mark.parametrize("bad", ["~", "/", "~/.claude/x", "rel", "~/a*"])
 def test_wizard_asks_again_after_a_refused_root(cfg, monkeypatch, home, bad):
     warned = []
-    monkeypatch.setattr(scope_flows, "friendly_warn", lambda m: warned.append(m))
+    monkeypatch.setattr(root_flow, "friendly_warn", lambda m: warned.append(m))
     _stub(monkeypatch, edit_menu, ["root", bad, "/srv/team"])
     assert edit_menu._edit_scope(_group(), "TOK") is True
     assert _group().root == "/srv/team"

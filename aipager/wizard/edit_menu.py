@@ -18,7 +18,8 @@ from aipager.ui import console, ok, rule, step
 from aipager.wizard._constants import _PROMPT_STYLE
 from aipager.wizard.daemon_io import _apply_team_change_hint, _restart_hint
 from aipager.wizard.display import _ask, _show_current_config
-from aipager.wizard.scope_flows import _pick_role, add_dm_scope, add_group_scope, ask_root
+from aipager.wizard.root_flow import ROOT_MENU_LABEL, effective_root, set_root
+from aipager.wizard.scope_flows import _pick_role, add_dm_scope, add_group_scope
 from aipager.wizard.scope_io import (
     append_member, commit_scope, read_config, remove_scope, replace_scopes,
 )
@@ -84,7 +85,7 @@ def _edit_scope(scope, token: str) -> bool:
     choices += [
         questionary.Choice("Rename", value="rename"),
         questionary.Choice("Edit scope deny_tools", value="deny"),
-        questionary.Choice("Set the members' root folder", value="root"),
+        questionary.Choice(ROOT_MENU_LABEL, value="root"),
         questionary.Choice("Remove this scope", value="remove"),
         questionary.Choice("Cancel", value="cancel"),
     ]
@@ -106,12 +107,12 @@ def _edit_scope(scope, token: str) -> bool:
             return False
         # A default root follows the label: keep the folder the members
         # already work in by writing it down.
-        root = scope.root or _effective_root(scope)
+        root = scope.root or effective_root(scope)
         commit_scope(replace(scope, label=new, root=root), token)
         ok(f"Renamed → {new}")
         return True
     if action == "root":
-        return _set_root(scope, token)
+        return set_root(scope, token, _ask)
     if action == "deny":
         new_tools = _toggle_tools(scope.deny_tools)
         if new_tools == scope.deny_tools:
@@ -134,28 +135,6 @@ def _edit_scope(scope, token: str) -> bool:
         )
         return False
     ok(f"Removed {scope.label}.")
-    return True
-
-
-def _effective_root(scope) -> str:
-    from aipager import member_root
-    return member_root.effective_root(scope, read_config()[0])
-
-
-def _set_root(scope, token: str) -> bool:
-    """Edit a scope → Set the members' root folder. Returns True iff
-    written (the caller then reloads the daemon live)."""
-    from aipager import member_root
-    scopes = read_config()[0]
-    current = member_root.effective_root(scope, scopes)
-    console.print(f"  Current root: {member_root.short(current)}"
-                  + ("" if scope.root else " (default)"))
-    new = ask_root(scope, scopes, ask=_ask)
-    if scope.root and new == scope.root:
-        friendly_warn("No change.")
-        return False
-    commit_scope(replace(scope, root=new), token)
-    ok(f"Members' root folder = {member_root.short(new)}")
     return True
 
 
