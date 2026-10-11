@@ -18,6 +18,7 @@ import re
 import socket
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from aipager import bg_shells, bidi_guard, statusline_file
 from aipager.config import (
@@ -27,6 +28,7 @@ from aipager.config import (
 )
 from aipager.md_to_tg import markdown_to_telegram_html
 from aipager.policy_snapshot import (
+    _TELEGRAM_MARKER,
     expire_notes_after_turn_end,
     list_outstanding_notes,
     note_driver_id,
@@ -54,7 +56,8 @@ log = logging.getLogger(__name__)
 
 #: The ``hook_event_name`` values aipager's own hook sends for its own
 #: datagrams (not Claude Code events); kept equal to the hook's by a test.
-_INTERNAL_HOOK_EVENTS = frozenset({"queue_pickup", "safety_blocked", "permission_reply_timeout"})
+_INTERNAL_HOOK_EVENTS = frozenset({"queue_pickup", "safety_blocked", "permission_reply_timeout",
+                                   "peer_resolved"})
 
 #: Where a hook's memory-cap hit is recorded (problem reports, 8.112): the
 #: hook's own main, by the hook name its cap datagram carries.
@@ -371,6 +374,46 @@ def _summary_text(name: str, inp: dict) -> str:
     return name
 
 
+def _clean_text(value, limit: int) -> str:
+    """*value* as one short line: a string only, direction controls shown
+    as visible markers, whitespace collapsed, at most *limit* characters."""
+    if not isinstance(value, str):
+        return ""
+    return " ".join(bidi_guard.reveal(value).split())[:limit]
+
+
+def _activity_arg(name: str, inp) -> str:
+    """The short argument of a subagent's tool call that the status block
+    under an answer names: a file's base name, a search pattern, a web
+    query, a site's host, or a Bash, Agent or Task call's own description
+    (Claude's words for it). Never a command. "" for anything else."""
+    if not isinstance(inp, dict):
+        return ""
+    if name in ("Bash", "Agent", "Task"):
+        return _clean_text(inp.get("description", ""), 120)
+    value = ""
+    if name in ("Read", "Write", "Edit", "MultiEdit"):
+        value = inp.get("file_path", "")
+    elif name == "NotebookEdit":
+        value = inp.get("notebook_path", "")
+    elif name in ("Grep", "Glob"):
+        return _clean_text(inp.get("pattern", ""), 80)
+    elif name == "WebSearch":
+        return _clean_text(inp.get("query", ""), 80)
+    elif name == "WebFetch":
+        url = inp.get("url", "")
+        if not isinstance(url, str):
+            return ""
+        try:
+            host = urlsplit(url.strip()).hostname or ""
+        except ValueError:
+            host = ""
+        return _clean_text(host, 80)
+    if not isinstance(value, str):
+        return ""
+    return _clean_text(value.rstrip("/").rsplit("/", 1)[-1], 80)
+
+
 # Tools that can draw Claude Code 2.1.259's one-time "block reads outside
 # the working directories?" dialog → the input field carrying the path.
 # Verified in the binary (reviews rev-iter3-001 / rev-iter4-001): the
@@ -510,6 +553,17 @@ _TURN_ACTIVITY_EVENTS = frozenset({
     "SessionStart", "StopFailure",
 })
 _TURN_ENDING_EVENTS = ("idle_prompt", "idle", "stop", "notification")
+
+
+def _person_text(prompt: str, telegram_text: str) -> str:
+    """The person's own words in the *prompt* Claude Code reports: a
+    Telegram prompt without aipager's marker line (its raw text, the last
+    one injected, when the prompt carries it), a terminal prompt whole."""
+    if not prompt.startswith(_TELEGRAM_MARKER):
+        return prompt
+    if telegram_text and telegram_text in prompt:
+        return telegram_text
+    return prompt.split("\n", 1)[1] if "\n" in prompt else ""
 
 
 def _is_turn_activity(event: str, msg: dict | None = None) -> bool:
@@ -953,6 +1007,8 @@ class HookReceiver:
                 first = prompt.split("\n", 1)[0] if prompt else ""
                 if first.startswith("[via Telegram"):
                     tag_sess.last_prompt_origin = "telegram"
+                elif prompt.lstrip().startswith("<cross-session-message"):
+                    tag_sess.last_prompt_origin = "peer"
                 elif prompt:
                     tag_sess.last_prompt_origin = "terminal"
                 turn = msg.get("aipager_turn")
@@ -963,7 +1019,15 @@ class HookReceiver:
                     tag_sess.turn_sender_id = turn_sender_from_report(turn)
                     tag_sess.turn_mixed_authors = turn_authors_from_report(
                         turn)
+                    tag_sess.peer_from = ({"status": "pending"}
+                                          if turn.get("origin") == "peer" else None)
+                    tag_sess.peer_narrowed = False
+                if isinstance(turn, dict) and turn.get("peer_join") is True:
+                    tag_sess.peer_narrowed = True
             if transitioned:
+                if prompt:
+                    transitioned.turn_prompt = _person_text(
+                        prompt, transitioned.last_prompt)
                 await self.notify_fn(transitioned, "user_prompt_submit", {})
 
         elif event == "queue_pickup":
@@ -995,6 +1059,7 @@ class HookReceiver:
                 last_text = last.get("raw_text")
                 if last_text:
                     sess.last_prompt = last_text
+                    sess.turn_prompt = last_text
                     sess.last_prompt_driver_user_id = note_driver_id(last)
                 self.registry.mark_dirty()
             await self.notify_fn(sess, "queue_pickup", {
@@ -1084,6 +1149,11 @@ class HookReceiver:
                             session_name, Status.BUSY,
                             preserve_job_state=bool(sess.active_subagents),
                         )
+                    # Its latest tool, for the status block under an
+                    # answer (any agent, attached to a card or not).
+                    sess.bg_agent_tool(agent_id, tool_name,
+                                       _activity_arg(tool_name, tool_input),
+                                       now_mono)
                     await self.notify_fn(sess, "tool_use", {
                         "tool_name": tool_name,
                         "tool_summary": summary,
@@ -1093,6 +1163,13 @@ class HookReceiver:
                         "agent_id": agent_id,
                     })
                     return
+                if tool_name in ("Agent", "Task") and isinstance(tool_input, dict):
+                    # The parent launching an agent: its type and
+                    # description, for the SubagentStart that follows.
+                    sess.agent_call_launched(
+                        _clean_text(tool_input.get("subagent_type"), 80),
+                        _clean_text(tool_input.get("description"), 200),
+                        now_mono)
                 # Mark tool-in-flight so session_monitor's stale-busy
                 # warning stands down for the duration — no hooks fire
                 # between PreToolUse and PostToolUse, so a long tool
@@ -1236,12 +1313,17 @@ class HookReceiver:
             delta = msg.get("delta", "")
             if delta:
                 sess = self.registry.get_or_create(session_name)
-                agent_id = msg.get("agent_id", "")
-                if agent_id and agent_id in sess.active_subagents:
-                    # A subagent's own prose — folded under its row like
-                    # its tool calls are, not forwarded into the parent's
-                    # commentary/card ("agent activity rows on the busy
-                    # card"; mirrors the tool-attribution guard above).
+                agent_id = msg.get("agent_id", "") or ""
+                if agent_id:
+                    # A subagent's own prose, whichever agent and whatever
+                    # the card knows of it: the parent's own hook events
+                    # carry no agent_id. Never the parent's commentary (a
+                    # background agent a new card, /stop or the silence
+                    # sweep took off `active_subagents` used to land
+                    # there); it is that agent's latest activity, for the
+                    # status block under an answer.
+                    sess.bg_agent_prose(agent_id, msg.get("message_id", ""),
+                                        delta, now_mono)
                     return
                 await self.notify_fn(sess, "assistant_text", {
                     "delta": delta,
@@ -1255,9 +1337,12 @@ class HookReceiver:
             agent_type = msg.get("agent_type", "unknown")
             if agent_id:
                 sess = self.registry.get_or_create(session_name)
-                # Roadmap 8.41's running set; the raw type, so a start
-                # with none (the phantom shape) adds nothing there.
-                sess.bg_agent_started(agent_id, msg.get("agent_type") or "",
+                # Roadmap 8.41's running set. The type is normalised the
+                # way the Agent call's is (PreToolUse above), so the two
+                # always match; a start with none (the phantom shape)
+                # adds nothing there.
+                sess.bg_agent_started(agent_id,
+                                      _clean_text(msg.get("agent_type"), 80),
                                       now_mono)
                 # The cap lives inside add_subagent (state.py), enforced
                 # by the data structure itself so a future second caller
@@ -1335,6 +1420,19 @@ class HookReceiver:
                     "tool": msg.get("tool", "?"),
                     "reason": msg.get("reason", ""),
                 })
+
+        elif event == "peer_resolved":
+            # The hook verified (or could not verify) who sent the message
+            # that started this turn: show it on the card. Display only.
+            sess = self.registry.get(session_name)
+            if sess is not None:
+                driver = msg.get("driver")
+                sess.peer_from = {
+                    "status": "verified" if msg.get("status") == "verified" else "unverified",
+                    "sender_session": str(msg.get("sender_session") or "")[:200],
+                    "driver": driver if isinstance(driver, dict) else {},
+                }
+                await self.notify_fn(sess, "peer_resolved", dict(sess.peer_from))
 
         elif event == "hook_memory_cap_hit":
             # A hook subprocess tripped its RLIMIT_AS cap and died with

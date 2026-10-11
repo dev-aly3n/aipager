@@ -214,8 +214,12 @@ def test_a_user_turn_is_held_to_the_safety_section(
 
 
 def test_without_the_section_the_same_user_calls_are_not_blocked_by_it(
-        gbot, typed, run_async, tmp_path, home, without_safety):
-    """The control: what the tests above see denied is the section's."""
+        gbot, typed, run_async, tmp_path, home, without_safety, monkeypatch):
+    """The control: what the tests above see denied is the section's.
+    Without the members' root folder too (bob's ~/notes is outside his
+    root, which has tests of its own: test_member_root_hook.py)."""
+    from aipager import member_root
+    monkeypatch.setattr(member_root, "snapshot_bound", lambda *a: None)
     bot = gbot(without_safety)
     t = _turn(bot, run_async, typed, tmp_path, BOB)
     notes = home / "notes"
@@ -845,7 +849,8 @@ def test_the_owners_install_writes_the_same_notes_as_before(
     old = _old_resolve_snapshot(without_safety.get_role("owner"),
                                 _group(), _group().members[0])
     for k in ps.SAFETY_FIELDS:
-        assert note[k] == old[k], k
+        # (An owner's note has no members' root: "root" is absent in both.)
+        assert note.get(k) == old.get(k), k
 
 
 # ---- (6) doctor --safety-check ---------------------------------------------

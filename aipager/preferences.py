@@ -81,8 +81,8 @@ class Preferences:
     diff_preview: bool = False
     # Slow the busy card as a turn gets long (roadmap 8.30): from 2 / 10
     # minutes the card is refreshed at most every 10 / 30 s (never slower
-    # than 30 s, however long the turn) and counts in minutes, then hours
-    # from an hour. ON by default — it is what keeps a
+    # than 30 s, however long the turn) and its clock moves in 30 s steps
+    # from 10 minutes. ON by default — it is what keeps a
     # four-hour turn from editing one message thousands of times. Off is
     # 0.7.13's cadence for the whole turn.
     card_age_decay: bool = True
@@ -368,6 +368,72 @@ def set_new_session_default(chat_id: int, field: str, value: str) -> NewSessionD
     store[key] = scope_raw
     _save_raw(store)
     return get_new_session_defaults(chat_id)
+
+
+# ---- the language aipager speaks in a chat (multilingual design) --------
+#
+# ``ui_language`` inside a chat's entry: the language of aipager's own
+# text there, set only by an explicit choice (/language, the /settings
+# Language row, the Mini App's App language). For a private chat the entry
+# is the person's user id, so the same key is also their personal
+# language (what only they see in a group, their Mini App). Not part of
+# :class:`Preferences`, ``settings_schema()`` or per-session overrides:
+# it is not a reply style and Claude never sees it. ``move_chat`` carries
+# it with the rest of the entry.
+
+_UI_LANGUAGE_KEY = "ui_language"
+#: An explicit "Automatic" (follow the person's Telegram language), private
+#: chats only. Stored, unlike "nothing chosen", so an existing chat that
+#: picks it follows Telegram while one that never chose stays English
+#: (multilingual phase 5). Never a selectable code: every resolver filters
+#: through ``locales.is_selectable``.
+UI_LANGUAGE_AUTO = "auto"
+
+
+def get_ui_language(chat_id: int) -> str:
+    """The stored code, ``"auto"`` for an explicit Automatic, or ``""``
+    when nothing was chosen (or the stored value has the wrong shape).
+    Never raises."""
+    store = _ensure_loaded()
+    raw = store.get(str(chat_id))
+    value = raw.get(_UI_LANGUAGE_KEY, "") if isinstance(raw, dict) else ""
+    return value if isinstance(value, str) else ""
+
+
+def set_ui_language(chat_id: int, code: str) -> str:
+    """Store *code* as *chat_id*'s language: a code a person may pick, or
+    ``"auto"`` (an explicit Automatic, private chats only); ``""`` clears
+    it (nothing chosen). Raises ``ValueError`` for anything else, and for
+    ``"auto"`` in a group, before anything is written. Writes nothing when
+    the stored value would not change, so viewing or re-picking the choice
+    in force never creates an entry. Returns the stored value."""
+    # Function-level: aipager.i18n must stay out of every module that a
+    # lighter process imports at load time.
+    from aipager.i18n.locales import is_selectable
+    if code == UI_LANGUAGE_AUTO:
+        if not isinstance(chat_id, int) or isinstance(chat_id, bool) or chat_id <= 0:
+            raise ValueError(chat_id)  # automatic is for a private chat only
+    elif code != "" and not is_selectable(code):
+        raise ValueError(f"not a selectable language: {code!r}")
+    if get_ui_language(chat_id) == code:
+        return code
+    store = _ensure_loaded()
+    key = str(chat_id)
+    existing = store.get(key)
+    scope_raw = dict(existing) if isinstance(existing, dict) else {}
+    if code == "":
+        scope_raw.pop(_UI_LANGUAGE_KEY, None)
+    else:
+        scope_raw[_UI_LANGUAGE_KEY] = code
+    if scope_raw:
+        store[key] = scope_raw
+    else:
+        # Back to nothing chosen, and the language was all this chat stored:
+        # leave no empty entry behind. (A stored language was there, or
+        # the early return above would have fired, so the entry was ours.)
+        store.pop(key, None)
+    _save_raw(store)
+    return get_ui_language(chat_id)
 
 
 # ---- problem reports (/settings in the owner's DM, roadmap 8.112) ------

@@ -34,13 +34,13 @@ def _ready(bot, update, launch):
 
 
 def test_new_ask_mode_reply_offers_auto(mk_bot, mk_update, mk_launch_ok):
-    """An Ask session (the chat's default set to Ask): 💬 Ask on the card,
+    """An Ask session (the chat's default set to Ask): 💬 Ask mode on the card,
     and a Switch to Auto button instead of a /perms nudge."""
     update = mk_update("/new dev")
     preferences.set_new_session_default(update.effective_chat.id, "mode", "ask")
     text, buttons = _ready(mk_bot(), update, mk_launch_ok)
 
-    assert "💬 Ask" in text, text
+    assert "💬 Ask mode" in text, text
     assert "🤖" not in text, text
     assert "/perms" not in text, text
     assert "🤖 Switch to Auto" in buttons, buttons
@@ -49,7 +49,7 @@ def test_new_ask_mode_reply_offers_auto(mk_bot, mk_update, mk_launch_ok):
 def test_new_auto_mode_reply_offers_ask(mk_bot, mk_update, mk_launch_ok):
     text, buttons = _ready(mk_bot(), mk_update("/new !dev"), mk_launch_ok)
 
-    assert "🤖 Auto" in text, text
+    assert "🤖 Auto mode" in text, text
     assert "/perms" not in text, text
     assert "💬 Switch to Ask" in buttons, buttons
 
@@ -83,7 +83,7 @@ def test_new_auto_needs_an_admin(mk_bot, mk_update, mk_launch_ok):
     text, _ = _ready(bot, mk_update("/new !dev"), mk_launch_ok)
 
     assert "Auto mode needs an admin" in text, text
-    assert "💬 Ask" in text, text
+    assert "💬 Ask mode" in text, text
 
 
 def _find_dev_session(bot):

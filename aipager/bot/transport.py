@@ -39,6 +39,7 @@ from telegram import InputFile
 from telegram.error import BadRequest, ChatMigrated, Forbidden, RetryAfter
 
 from aipager import bidi_guard
+from aipager.i18n import Msg
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import FloodSkipped
 from aipager.config import TELEGRAM_MAX_RETRY_AFTER
@@ -158,13 +159,28 @@ def resolve_chat_id_int(sess) -> int | None:
 
 # Roadmap 8.74 (D-G): the reply to a slash command a restricted sender may
 # not send. Plain words, no em dash (UI text).
-NEEDS_ADMIN_REPLY = "That command needs an admin."
+NEEDS_ADMIN_REPLY = Msg("tx.needs_admin", "That command needs an admin.",
+                        note="Reply or pop-up: a command only an admin may send")
 # Roadmap 8.83: a resume that would bring a session back in Auto for
 # someone who is not an admin brings it back in Ask and says why.
-RESUME_AUTO_NEEDS_ADMIN = "Auto needs an admin."
+RESUME_AUTO_NEEDS_ADMIN = Msg("tx.auto_needs_admin", "Auto needs an admin.",
+                              note="Why a resumed session came back in Ask, not Auto; "
+                                   "Auto and Ask are the mode names")
 # Retry of another member's slash command, tapped by someone who could
 # send it themselves: it would run with no sender, which may send none.
-RETRY_OTHERS_COMMAND_REPLY = "Only its sender can retry that command."
+RETRY_OTHERS_COMMAND_REPLY = Msg("tx.retry_others", "Only its sender can retry that command.",
+                                 note="Pop-up: Retry on someone else's command")
+
+
+def tapper_tr(query):
+    """The language of a pop-up after a tap (an alert, a toast): the
+    tapper's own (their DM's stored choice, else their Telegram language
+    while detection allows it, else the tapped chat's). For code that has
+    the ``CallbackQuery`` but not its ``Update``."""
+    from types import SimpleNamespace
+
+    from aipager import i18n
+    return i18n.for_person(SimpleNamespace(callback_query=query))
 
 
 class _PromptRefused:
@@ -301,6 +317,8 @@ TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES = 20 * 1024 * 1024
 # Single-message text limit Telegram enforces.
 TELEGRAM_MAX_TEXT_LEN = 4000
 _TRUNC_SUFFIX = "\n\n…[truncated]"
+_TRUNCATED = Msg("tx.truncated", "…[truncated]",
+                 note="Ends a message Telegram refused as too long, after cutting it")
 
 # Throttle for "bot was blocked" log spam — daemon would otherwise emit
 # one line per send attempt while the user has the bot blocked.
@@ -356,7 +374,17 @@ _PERM_DETAIL_CHARS = 300
 _PERM_DETAIL_HTML_MAX = 900
 
 
-def _format_perm_detail(tool_summary: str, detail: str) -> str:
+#: The line under a prompt whose command holds a direction control. Its
+#: English equals ``bidi_guard.WARNING`` (tested); ``bidi_guard`` stays a
+#: plain module.
+BIDI_WARNING = Msg("perm.bidi_warning",
+                   "⚠️ This contains hidden direction characters, shown as ⟨U+...⟩. It may "
+                   "not run what it looks like.",
+                   note="Under a permission prompt whose command hides direction-changing "
+                        "characters; keep ⟨U+...⟩ as it is")
+
+
+def _format_perm_detail(tool_summary: str, detail: str, *, tr=None) -> str:
     """HTML fragment (``"\n<pre>…</pre>"``) showing ``detail`` under a
     permission prompt, or ``""`` when there is nothing to add: no detail,
     or the summary already spells it out (a short command with no
@@ -367,7 +395,10 @@ def _format_perm_detail(tool_summary: str, detail: str) -> str:
     # The summary and the detail come with any direction control already
     # shown as a marker (hook_receiver, aipager.bidi_guard): say so, under
     # whatever this prompt shows.
-    warning = (f"\n{html_mod.escape(bidi_guard.WARNING)}"
+    if tr is None:
+        from aipager import i18n
+        tr = i18n.get("en")
+    warning = (f"\n{tr.html(BIDI_WARNING)}"
                if bidi_guard.revealed(tool_summary, detail) else "")
     if not detail or detail in tool_summary:
         return warning
@@ -559,7 +590,8 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
                 # (e.g. HTML entity expansion). Halve the budget each time
                 # but never below a sensible floor.
                 new_limit = max(TELEGRAM_MAX_TEXT_LEN // (2 ** (truncations - 1)), 500)
-                text = text[: new_limit - len(_TRUNC_SUFFIX)] + _TRUNC_SUFFIX
+                suffix = _trunc_suffix(chat_id)
+                text = text[: new_limit - len(suffix)] + suffix
                 last_err = e
                 continue
             raise
@@ -573,6 +605,18 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
             raise
     if last_err:
         raise last_err
+
+
+def _trunc_suffix(chat_id) -> str:
+    """:data:`_TRUNC_SUFFIX` in *chat_id*'s language (English when the id
+    is not a number)."""
+    from aipager import i18n
+    try:
+        chat = int(chat_id) if not isinstance(chat_id, bool) else None
+    except (TypeError, ValueError):
+        chat = None
+    return "\n\n" + (i18n.for_chat(chat) if chat is not None
+                      else i18n.get("en")).text(_TRUNCATED)
 
 
 def _note_migrated(chat_id, exc: ChatMigrated) -> None:
@@ -922,14 +966,19 @@ _ERROR_PATTERNS: list[tuple[re.Pattern, str, str]] = [
         r"|subscription.?(expired|inactive|required)",
         re.I,
      ),
-     "Anthropic subscription / credit balance issue. "
-     "Check your dashboard at https://console.anthropic.com",
+     Msg("tx.api.billing", "Anthropic subscription / credit balance issue. "
+         "Check your dashboard at {url}",
+         note="Claude Code reported a billing problem; {url} is Anthropic's console",
+         eg={"url": "https://console.anthropic.com"}),
      "subscription"),
     (re.compile(r"API Error:\s*500|api_error|internal server error", re.I),
-     "Anthropic's servers hit an internal error. Usually resolves in seconds.",
+     Msg("tx.api.internal",
+         "Anthropic's servers hit an internal error. Usually resolves in seconds.",
+         note="Claude Code reported an API error 500"),
      "server"),
     (re.compile(r"API Error:\s*529|overloaded_error|overloaded", re.I),
-     "Anthropic's servers are overloaded. Try again in a moment.",
+     Msg("tx.api.overloaded", "Anthropic's servers are overloaded. Try again in a moment.",
+         note="Claude Code reported an API error 529"),
      "overload"),
     # NOTE: do NOT add a bare ``rate.?limit`` alternation — claude often
     # discusses third-party APIs hitting rate limits in its prose (e.g.
@@ -944,15 +993,21 @@ _ERROR_PATTERNS: list[tuple[re.Pattern, str, str]] = [
         r"|This request would exceed your account's rate limit",
         re.I,
      ),
-     "Rate limit hit. Wait a moment before retrying.",
+     Msg("tx.api.rate_limit", "Rate limit hit. Wait a moment before retrying.",
+         note="Claude Code reported an API rate limit"),
      "rate_limit"),
     (re.compile(r"connection.?(error|reset|refused|timeout)|ECONNR|network.?error", re.I),
-     "Lost connection to Anthropic. Check network and retry.",
+     Msg("tx.api.connection", "Lost connection to Anthropic. Check network and retry.",
+         note="Claude Code lost its connection"),
      "network"),
     (re.compile(r"API Error:\s*\d{3}", re.I),
-     "API error occurred.",
+     Msg("tx.api.generic", "API error occurred.", note="Claude Code reported an API error"),
      "api"),
 ]
+_CONSOLE_URL = "https://console.anthropic.com"
+_RATE_LIMIT_WAIT = Msg("tx.api.rate_limit_wait", "Rate limit hit. Wait {seconds}s before retrying.",
+                       note="As tx.api.rate_limit, with the wait Anthropic asked for",
+                       eg={"seconds": 30})
 
 # Capture an explicit retry-after hint from the error body in any of the
 # common shapes Anthropic / proxies use. Returns the integer seconds in
@@ -978,25 +1033,29 @@ def _extract_retry_after(text: str) -> int | None:
     return None
 
 
-def _detect_api_error(text: str) -> tuple[str, int | None] | None:
+def _detect_api_error(text: str, *, tr=None) -> tuple[str, int | None] | None:
     """Check if text contains a known API error pattern.
 
     Returns ``(friendly_message, retry_after_seconds_or_None)`` if a
     pattern matches; for rate-limit errors we additionally try to pull
     a "retry-after" hint out of the error body and substitute it into
     the message ("Wait 60s before retrying" instead of "Wait a
-    moment"). Otherwise returns ``None``.
+    moment"). Otherwise returns ``None``. The message is in *tr*'s
+    language (English when None); the patterns read Claude Code's
+    English output.
     """
     if not text:
         return None
+    from aipager import i18n
+    tr = tr or i18n.get("en")
     for pattern, friendly_msg, kind in _ERROR_PATTERNS:
         if pattern.search(text):
             retry_after = (
                 _extract_retry_after(text) if kind == "rate_limit" else None
             )
             if retry_after is not None:
-                friendly_msg = (
-                    f"Rate limit hit. Wait {retry_after}s before retrying."
-                )
-            return friendly_msg, retry_after
+                return tr.text(_RATE_LIMIT_WAIT, seconds=retry_after), retry_after
+            if friendly_msg.key == "tx.api.billing":
+                return tr.text(friendly_msg, url=_CONSOLE_URL), retry_after
+            return tr.text(friendly_msg), retry_after
     return None

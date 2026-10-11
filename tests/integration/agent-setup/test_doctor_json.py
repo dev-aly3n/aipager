@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 ORDER = ["config_parses", "config", "token_valid", "chat_reachable", "team",
-         "role_shell_access", "claude", "claude_auth", "dtach",
+         "role_shell_access", "peer_messages", "claude", "claude_auth", "dtach",
          "hook_scripts", "settings_json", "daemon", "service_installed",
          "service_unit_path", "miniapp"]
 TOP = ["command", "version", "ok", "summary", "checks"]

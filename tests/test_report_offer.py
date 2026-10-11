@@ -89,6 +89,32 @@ def test_notice_is_ornament_skip(ready, run_async):
     assert tg.sent[0].kw["rate_limit_args"] == {"kind": "skip", "class": "ornament"}
 
 
+@pytest.mark.parametrize("code, head", [
+    ("fa", "\u200faipager یک بار ناگهان کرش کرد."),
+    ("ru", "aipager неожиданно остановился 1 раз."),
+])
+def test_offer_notice_is_in_the_owner_chats_language(ready, run_async, code, head):
+    """The notice and its buttons go out in the language stored for the
+    owner's private chat, at the real send site."""
+    from aipager import i18n
+    bot, tg = ready
+    preferences.set_ui_language(OWNER, code)
+    assert _offer(run_async, bot) is True
+    (notice,) = tg.sent
+    tr = i18n.get(code)
+    assert notice.text.startswith(head)
+    assert tr.text(report_offer.NOTICE_TAIL) in notice.text
+    buttons = [b.text for row in notice.kw["reply_markup"].inline_keyboard for b in row]
+    assert buttons == [tr.text(report_offer.PREVIEW_BUTTON), tr.text(report_offer.NOT_NOW_BUTTON),
+                       tr.text(report_offer.DONT_ASK_BUTTON)]
+    english = i18n.get("en")
+    assert not set(buttons) & {english.text(report_offer.PREVIEW_BUTTON),
+                               english.text(report_offer.NOT_NOW_BUTTON),
+                               english.text(report_offer.DONT_ASK_BUTTON)}
+    data = [b.callback_data for row in notice.kw["reply_markup"].inline_keyboard for b in row]
+    assert data == [f"_:rp:op:{NOW}", f"_:rp:on:{NOW}", f"_:rp:od:{NOW}"]
+
+
 def _busy_session(bot):
     sess = TrackedSession(name="claude-x1", label="x1", status=Status.BUSY)
     bot.registry._sessions[sess.name] = sess

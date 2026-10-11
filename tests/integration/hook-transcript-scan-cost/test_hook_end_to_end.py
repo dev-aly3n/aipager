@@ -229,8 +229,10 @@ def test_hook_allow_prints_nothing(tmp_path, monkeypatch, capsys, snap_file,
     assert out == ""
 
 
-def test_hook_owner_turn_reads_no_transcript(tmp_path, monkeypatch, capsys,
-                                             snap_file, project):
+def test_hook_owner_turn_reads_at_most_its_tail(tmp_path, monkeypatch, capsys,
+                                               snap_file, project):
+    """One open for the bounded tail ("peer message authority"), never a
+    scan: ``test_owner_short_circuit`` pins the byte bound."""
     import builtins
     _role(snap_file, "owner")
     tx = _transcript(tmp_path, "halted")
@@ -244,7 +246,7 @@ def test_hook_owner_turn_reads_no_transcript(tmp_path, monkeypatch, capsys,
     monkeypatch.setattr(builtins, "open", spy)
     _run_hook(monkeypatch, capsys, tmp_path,
               _payload(tx, project, "Bash", {"command": "ls"}))
-    assert opened == []
+    assert len(opened) <= 1
 
 
 def test_hook_allows_an_in_project_read_behind_an_escaped_key(

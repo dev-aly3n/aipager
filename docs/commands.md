@@ -18,25 +18,26 @@ and on every session change.
 | `/start` | - | The home screen: this chat's sessions, where a plain message goes (`✍️ Messages go to x1.`), and `🆕 New session`, `⚙️ Settings` and, when this chat has an ended session to bring back, `↩️ Resume`. Also shows the persistent keyboard. |
 | `/help` | - | A short guide by task (start, talk, control, manage, settings, and for admins `/update`), with the tip that tapping a command sends it at once: long-press it (phone) or press Tab (desktop) to add text first. For the owner of the install (the person in its own private chat with the bot) it also has a `🐞 Report a problem` button: it opens a preview of the exact problem report in that private chat, with Send, Add a note and Cancel. Nothing is sent until you tap Send ([what a report contains](problem-reports.md)). |
 | `/app` | - | Open the Mini App dashboard (sessions, diff viewer, settings). |
-| `/status` | - | This chat's sessions as a list you can act on. Each says its state in words (`⚙️ working 3m · Bash: run tests`, `⏳ needs you · Bash: make deploy`, `💤 idle`), with `✍️` on the one a plain message goes to, and a second line with the model, context, cost, what is queued (`queue 3 (1 queued, 2 notes)`), and running agents and shells. Each has a row of buttons: `✍️ x1` sends your next messages there, `⏹ Stop` while it works, `Answer` while it waits for you, and `⋮` for the rest. Below: `🆕 New`, and `⚫ Ended (n)` for the sessions that ended (resume, delete, or clear them all from the list; they stay in `/resume`). |
+| `/status` | - | This chat's sessions as a list you can act on. Each says its state in words (`⚙️ working 3:12 · Bash: run tests`, `⏳ needs you · Bash: make deploy`, `💤 idle`), with `✍️` on the one a plain message goes to, and a second line with the model, context, cost, what is queued (`queue 3 (1 queued, 2 notes)`), and running agents and shells. Each has a row of buttons: `✍️ x1` sends your next messages there, `⏹ Stop` while it works, `Answer` while it waits for you, and `⋮` for the rest. Below: `🆕 New`, and `⚫ Ended (n)` for the sessions that ended (resume, delete, or clear them all from the list; they stay in `/resume`). |
 | `/stop [label]` | optional | Interrupt a session's current turn. Bare, it stops the one session of this chat that is working (even if your messages go to another one; a session whose background agent or shell is still running counts as working), asks which with a picker when several are, and says `Nothing is running.` when none is. `/stop x1` (or `/x1 stop`) stops x1 (or replies `x1 is not working.` when it is not). Also discards queued messages and replies with how many were discarded. |
 | `/now` | - | Send the messages Claude is holding in the active session's queue right now, instead of after the current step (Claude Code's own send-now keys, Ctrl+X Ctrl+S). Works any time, including while the chat is muted or in minimal mode; replies `Nothing is waiting in the queue` when Claude holds nothing. See [Send a queued message now](#send-a-queued-message-now). |
-| `/new [name] [first message]` | all optional | Start a session. `/new x1` starts it at once, and `/new x1 fix the tests` also sends "fix the tests" as its first message. Sent bare (for example tapped from the menu), `/new` asks for the name, and the next message you send is used exactly like the argument, so `/new` then `x1 fix the tests` gives the same result. In a group, reply to the card with the name (or mention the bot: `@aipagerbot x1`), since a plain message there does not reach the bot. Only that next message: if you do anything else first (a photo, another command, a reply to another message, a keyboard template, another button), it is handled as usual and the card closes; `/status`, `/settings` and the keyboard's menus leave it open. The card that asks also shows the mode, model and folder the session will get, with buttons to change them first. Every way ends in the same Ready card: what the session got, that your next message goes to it, and one-tap buttons to switch to the other mode or change the model. New sessions start in Auto for an admin (the `owner` and `admin` roles; Ask for everyone else); change what /new uses in `/settings` → New sessions. A `!` before the name still means Auto. A name that is in use offers `↩️ Switch to it` (when that session runs) or `♻️ Resume` (when it ended), `🆕 Replace (fresh)` and `↩️ Cancel`, for the person who sent `/new` only. The card that asks for a name expires after 10 minutes unused (`⏱ This new-session card expired. Send /new again.`). |
-| `/resume [label]` | optional | Resume a previously-gone session by name, or open a picker. A session that was in Auto comes back in Auto only for an admin; for anyone else it comes back in Ask and the reply says so (`Resumed x1 in Ask: Auto needs an admin.`). A session that ended stays listed for `GONE_SESSION_MAX_AGE_DAYS` (default 14) and then leaves the registry; its Claude transcript is untouched. |
+| `/new [name] [first message]` | all optional | Start a session. `/new x1` starts it at once, and `/new x1 fix the tests` also sends "fix the tests" as its first message. Sent bare (for example tapped from the menu), `/new` asks for the name, and the next message you send is used exactly like the argument, so `/new` then `x1 fix the tests` gives the same result. In a group, reply to the card with the name (or mention the bot: `@aipagerbot x1`), since a plain message there does not reach the bot. Only that next message: if you do anything else first (a photo, another command, a reply to another message, a keyboard template, another button), it is handled as usual and the card closes; `/status`, `/settings` and the keyboard's menus leave it open. The card that asks also shows the mode, model and folder the session will get, with buttons to change them first. Every way ends in the same Ready card: what the session got, that your next message goes to it, and one-tap buttons to switch to the other mode or change the model. New sessions start in Auto for an admin (the `owner` and `admin` roles; Ask for everyone else); change what /new uses in `/settings` → New sessions. A person in their own private chat may use Auto too, whatever their role: their new sessions start in Ask until they choose Auto there. A `!` before the name still means Auto (for an admin, or a person in their own private chat). A name that is in use offers `↩️ Switch to it` (when that session runs) or `♻️ Resume` (when it ended), `🆕 Replace (fresh)` and `↩️ Cancel`, for the person who sent `/new` only. The card that asks for a name expires after 10 minutes unused (`⏱ This new-session card expired. Send /new again.`). A member whose role lacks `can_manage` (`user`, `read_only`) starts only inside the chat's [root folder](groups.md#root-folders): the card's folder is the root folder, the Folder page lists it and the folders directly inside it (no "Default folder" row), New folder creates inside the one picked, and Switch to it, Resume and Replace on a session working outside the root folder are refused ("This session works outside your folder ~/..., so your role can't resume, restart or switch it. Ask an admin."). |
+| `/resume [label]` | optional | Resume a previously-gone session by name, or open a picker. A session that was in Auto comes back in Auto only for an admin or a person in their own private chat; for anyone else it comes back in Ask and the reply says so (`Resumed x1 in Ask: Auto needs an admin.`). A session that ended stays listed for `GONE_SESSION_MAX_AGE_DAYS` (default 14) and then leaves the registry; its Claude transcript is untouched. A member whose role lacks `can_manage` cannot resume a session whose folder is outside the chat's [root folder](groups.md#root-folders) (owners and admins can); the same holds for Restart and the mode switch. |
 | `/kill [label]` | optional | End a session, always after a confirm: `⏹ End x1? Claude stops and the session closes.` with `[⏹ End] [Cancel]`. Bare, it goes to the confirm when this chat has one live session, else a picker of this chat's live sessions. Also in `/status` → `⋮` → `⏹ End session`. |
 | `/restart [label]` | optional | Restart a session after a confirm: Claude stops and starts again, keeping its conversation. |
 | `/rename [label] [new]` | optional | Give a session a new name (ended sessions too). `/rename x1 newname` renames at once. With fewer words it asks: straight for the new name when the command can only mean one session, else a picker (a single word after `/rename` does not pick the session, since it could be the old name or the new one). In a group, reply to the question with the name. |
 | `/delete [label]` | optional | Drop an ended session from the list, after a confirm. |
 | `/diff [label]` | optional | Show the session's working-directory git diff. Bare, it shows the session your messages go to. |
 | `/clearqueue` | - | Drop every not-yet-picked-up message for the active session - both messages aipager is holding and messages already queued inside Claude - without interrupting the running turn. Replies with the count cleared. |
-| `/mode [label] [ask\|auto]` | optional | Show a session's permission mode with a button to switch to the other one: `✍️ x1 is 🤖 Auto.` `[💬 Switch to Ask]`. `/mode ask`, `/mode auto` or `/mode x1 ask` switch straight away. Going to Auto needs an admin and a confirm; going to Ask happens at once. Tapping the switch changes the card itself instead of sending a second message: it becomes the confirm, then shows the new mode with the opposite switch. On a busy session, offers `Stop task & switch` / `Not now`. `/perms` is the old name and still works the same. |
-| `/settings` | - | How this chat's sessions look and reply: message layout, diff previews, long-turn card updates, formatting, answer length, language level; what `/new` starts a session with; per-session overrides; and, in the owner's private chat, problem report offers. See [Settings](#settings). In a group anyone can look, and changing a setting needs an admin. |
+| `/mode [label] [ask\|auto]` | optional | Show a session's permission mode with a button to switch to the other one: `✍️ x1 is in 🤖 Auto mode.` `[💬 Switch to Ask]`. `/mode ask`, `/mode auto` or `/mode x1 ask` switch straight away; the mode's own word in the chat's language works too, without the word for mode (`/mode x1 خودکار` for 🤖 مود خودکار, `/mode авто` for 🤖 Режим Авто). When a live session in this chat has exactly that name (a session called `demander`, say), the word names the session: `/mode demander` shows that session's mode, and `/mode x1 demander` still switches x1. `ask` and `auto` always mean the mode. Going to Auto needs an admin (or a person in their own private chat, whatever their role) and a confirm; going to Ask happens at once. Auto only skips Claude Code's own permission prompts: aipager's hook still applies the member's role rules. Tapping the switch changes the card itself instead of sending a second message: it becomes the confirm, then shows the new mode with the opposite switch. On a busy session, offers `Stop task & switch` / `Not now`. `/perms` is the old name and still works the same. |
+| `/settings` | - | How this chat's sessions look and reply: the language aipager uses, message layout, diff previews, long-turn card updates, formatting, answer length, vocabulary level; what `/new` starts a session with; per-session overrides; and, in the owner's private chat, problem report offers. See [Settings](#settings). In a group anyone can look, and changing a setting needs an admin. |
+| `/language` | - | The language aipager uses for its own messages and buttons in this chat (the same list as the first row of `/settings`). Each language is listed in its own name: English, then Español, Русский (Russian), Português (Brasil), 简体中文 (Chinese, Simplified), Français, Deutsch (German), 한국어 (Korean), العربية (Arabic), Bahasa Indonesia, Українська (Ukrainian), Italiano, Türkçe (Turkish), فارسی (Persian) and Tiếng Việt (Vietnamese). A private chat that starts after this release follows your Telegram app's language; one that existed before stays English until you choose (see [Languages](#languages)). In Spanish, Portuguese, French, Italian and Indonesian the reply keyboard's words stay `status`, `stop`, `new` and `kill`, the same as their commands. German and Turkish use `Status`, `Stop`, `Neu…` and `Beenden…`, and `Özet`, `Stop`, `Oluştur` and `Sonlandır`; the English words keep working when typed. In Persian and Arabic, aipager's text reads right to left with Persian or Arabic digits; session names, commands, model names and code stay as they are. The list says what it changes: only aipager's own text, here and in the Mini App; your Claude sessions don't change, and Claude answers in the language you write to it. In a group anyone can look, and changing it needs an admin. `language` is a reserved session name. |
 | `/whoami` | - | Show who you are here: in team mode your label, your role in this chat and the rules it gives you. |
 | `/update` | - | Admin only (the `owner` and `admin` roles, or a role with `can_manage`). Check aipager and Claude Code for newer versions, then update whatever has one with a single button. See [Update](#update). |
 
 The `/` menu shows your sessions first (`/x1 · Talk to x1`), then the
 frequent commands: `new`, `status`, `stop`, `now`, `resume`, `mode`,
-`settings`, `help` (and `app` with the Mini App on, in a private chat only). `kill`, `restart`,
+`settings`, `language`, `help` (and `app` with the Mini App on, in a private chat only). `kill`, `restart`,
 `rename`, `delete`, `diff`, `clearqueue`, `perms`, `whoami` and `update`
 are not in the menu but work when typed; the session actions are also in
 `/status` → `⋮`.
@@ -66,22 +67,25 @@ are not in the menu but work when typed; the session actions are also in
 `/settings` (and the Mini App's Settings tab, which shows the same
 choices) sets how this chat's sessions look and reply. Each chat has its
 own; in a group anyone can look, and changing a setting needs an admin.
+In your own private chat you change them yourself, whatever your role,
+in Telegram and in the Mini App.
 A row marked ✅ is set to something other than its default (Message
 layout always shows its choice).
 
 | Setting | Choices (default first) | What it does |
 |---|---|---|
+| 🌐 Language | Automatic (your Telegram language), in a private chat; English | The language of aipager's own messages and buttons in this chat and in the Mini App, shown in its own name (the same list as `/language`). It does not change your Claude sessions: Claude answers in the language you write to it. English, Español, Русский (Russian), Português (Brasil), 简体中文 (Chinese, Simplified), Français, Deutsch (German), 한국어 (Korean), العربية (Arabic), Bahasa Indonesia, Українська (Ukrainian), Italiano, Türkçe (Turkish), فارسی (Persian) and Tiếng Việt (Vietnamese) are offered; Automatic follows your Telegram app's language (see [Languages](#languages)). |
 | 🖼 Message layout | Busy card + result; Merged into busy message; Replace with result | How a finished turn appears. Busy card + result keeps the card above the answer as the record of how it was reached; Merged puts the answer into the card; Replace removes the card and leaves the answer alone. The default is Busy card + result (`KEEP_FINISHED_CARD=0` makes it Replace for chats that never chose). See [idle responses](#idle-responses). |
 | 📝 Diff previews | Off; On | On posts each `Write`/`Edit` as its own diff message under the busy card. Off keeps one card and one answer; the card still lists every edit, and the Mini App has a diff viewer. |
-| ⏱ Long-turn card updates | On; Off | On, a busy card refreshes every 10 s after 2 minutes of a turn and every 30 s after 10 (never slower, however long the turn), and counts in minutes then hours; Off keeps the first-minutes pace for the whole turn (see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)). |
+| ⏱ Long-turn card updates | On; Off | On, a busy card refreshes every 10 s after 2 minutes of a turn and every 30 s after 10 (never slower, however long the turn), and its clock then moves in 30 s steps; Off keeps the first-minutes pace for the whole turn (see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)). |
 | ✏️ Simple formatting | Off; On | On asks Claude for plain prose and dashed lists only: no tables, code blocks, headings or bold. |
 | 📏 Answer length | Don't apply any rule; Extra short; Short; Medium; Long | Asks Claude for answers of that length. |
-| 🎓 Language level | Don't apply any rule; Simple words; Normal; Advanced | Asks Claude for that vocabulary. |
-| 🆕 New sessions | Mode, Model, Folder | What `/new` starts a session with when you do not choose: Auto (the default for admins) or Ask, a model from the Models list or Claude Code's default, and a folder. Auto never applies to someone who may not use it. |
+| 🎓 Vocabulary level | Don't apply any rule; Simple words; Normal; Advanced | Asks Claude for that vocabulary. |
+| 🆕 New sessions | Permissions (the mode), Model, Folder | What `/new` starts a session with when you do not choose: Auto (the default for admins) or Ask, a model from the Models list or Claude Code's default, and a folder. Auto never applies to someone who may not use it. |
 | 👤 Per-session preferences | a session, then any setting above except New sessions | Overrides for one session (also in `/status` → `⋮` → `👤 Preferences`); ⭐ marks a setting it overrides, and "Use chat default" removes the override. The Mini App's session page sets the same overrides. |
 | 🐞 Problem reports | Ask me; Off | Only in the install owner's private chat. Ask me lets aipager now and then offer to send a report of an internal error it hit more than once (at most once in 3 days); Off never offers (the Report a problem button in `/help` still works). Two offers turned down in a row switch the offers off, and this row then says so, with a button to turn them back on. See [problem reports](problem-reports.md#when-aipager-offers-a-report). |
 
-Answer length, language level and simple formatting reach Claude as a
+Answer length, vocabulary level and simple formatting reach Claude as a
 short instruction added to each prompt sent from Telegram (by the hook,
 see [hooks](hooks.md#userpromptsubmit)), using the session's own
 overrides where it has them.
@@ -103,7 +107,7 @@ One command per live session, registered from its label:
 
 | Form | What it does |
 |---|---|
-| `/<label>` | Make `<label>` the session your messages go to. The reply says so with its state and mode (`✍️ Now talking to x1 · 💤 idle · 🤖 Auto`, then "Send a message and it goes to x1."), offers **Answer** when it is waiting for you, and **⋮ More** for its menu. The full stats are in `/status`. In a group it says "Reply to a message from x1 (or mention @aipagerbot) to talk to it." instead, since a plain message there does not reach the bot (see [groups](groups.md#talking-to-a-session-in-a-group)). `/x1@aipagerbot`, which Telegram sends when you pick `/x1` from a group's menu, works the same. |
+| `/<label>` | Make `<label>` the session your messages go to. The reply says so with its state and mode (`✍️ Now talking to x1 · 💤 idle · 🤖 Auto mode`, then "Send a message and it goes to x1."), offers **Answer** when it is waiting for you, and **⋮ More** for its menu. The full stats are in `/status`. In a group it says "Reply to a message from x1 (or mention @aipagerbot) to talk to it." instead, since a plain message there does not reach the bot (see [groups](groups.md#talking-to-a-session-in-a-group)). `/x1@aipagerbot`, which Telegram sends when you pick `/x1` from a group's menu, works the same. |
 | `/<label> <prompt>` | Send `<prompt>` straight to that session. It also becomes the session your next plain messages go to. |
 | `/<label> stop` | Interrupt that session's current turn. |
 
@@ -117,6 +121,54 @@ deploy`) or `GONE`. With `--json`, each session also has `waiting_kind`
 (`permission` or `question`) and `waiting_summary`, both `null` unless it
 is waiting.
 
+## Languages
+
+aipager speaks English, Español, Русский, Português (Brasil), 简体中文, Français,
+Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی and
+Tiếng Việt, each listed in its own name.
+
+- **Only aipager's own text changes.** The language is for aipager's messages,
+  buttons, cards and the Mini App. Your Claude sessions do not change, and Claude
+  answers in the language you write to it. Session names, commands, model names
+  and code stay as they are.
+- **`/language`** (or the first row of `/settings`) picks the language for the chat
+  you are in. In a private chat it is also your own language: the pop-ups you see
+  in a group and your Mini App use it.
+- **Automatic** (private chats only) follows your Telegram app's language, and
+  follows it again if you change it. A language aipager does not have reads as
+  English.
+- **New and existing chats.** A private chat that starts after this release
+  follows your Telegram app's language until you pick one, and its first message
+  in another language than English is followed by one short line saying so and
+  how to change it. A chat that existed before stays English. If your Telegram
+  app is in a language aipager speaks, you get one card offering it, with a
+  `Keep English` button; it comes once, whatever you answer.
+- **Groups** have one language, set by an admin in `/language`; until then they
+  are English. The pop-up after a tap is in the tapper's own language: their
+  choice from their private chat with the bot, else their Telegram app's
+  language for someone who joined after this release, else the group's
+  language. See [groups](groups.md).
+- **Right to left.** In Persian and Arabic, aipager's text reads right to left
+  with Persian or Arabic digits.
+- **Mode words.** `/mode` takes the mode's word in your language (`/mode demander`),
+  and `ask` and `auto` always work. If a live session has exactly that name, the
+  word names the session instead (see `/mode` above).
+- **Bot description.** At start, aipager writes the bot's description (the text on
+  its empty chat screen) and short description in each of these languages, for
+  people whose Telegram is in that language. Telegram shows such a text instead
+  of the one you wrote in BotFather, so aipager sets none while you have your
+  own (description and short description are checked apart). It never
+  overwrites a text of yours and never changes the English or default one.
+  When its current text is already set in every language, a start asks
+  Telegram nothing. Otherwise it first reads your BotFather text (one read
+  each for the description and the short description): if you have one, it
+  stops there, so with your own text every start costs those reads and no
+  more. If you have none, it reads each language that does not have its
+  current text yet, so a language where you wrote your own text is read again
+  at every start. If you write a description in BotFather after aipager has
+  set its own, readers of these languages keep aipager's (see
+  [troubleshooting](troubleshooting.md#the-bot-description-is-not-the-one-i-wrote)).
+
 ## The Mini App
 
 `/app` (and the Telegram menu button) opens a dashboard served by the daemon itself. It is on by default; manage it with `aipager miniapp enable|disable|status`. Every request is verified against Telegram's `initData` signature (see [security → Mini App tunnel](security.md#mini-app-tunnel)). The page loads nothing from anywhere else: no fonts, images or scripts from other sites.
@@ -124,9 +176,9 @@ is waiting.
 - **Chats.** The app shows one chat at a time. If you belong to more than one chat (your DM and a group, say), a row of chat names at the top switches between them; the app opens on your own DM and remembers your last choice on that phone. Everything below is for the chosen chat, with your role in it. With one chat the row is not shown. See [groups](groups.md).
 - **Sessions.** One sentence sums up the chat, for example "1 needs you, 2 working, 3 resting", with what has been spent beneath it. Each live session is a tile with a context ring, its folder, model and cost; working ones glow in the accent colour. Finished sessions rest on a collapsible **Finished** shelf. The **+** button starts a new session.
 - **Needs you.** A session waiting on a permission prompt or a question sits in an amber tray at the top, showing what it is asking. **Answer in chat** re-sends that prompt, with its buttons, to the bottom of the chat, the same as the pinned bar's **Answer** button, and you answer it there. If it was the only session waiting, the app closes so the prompt is right in front of you; otherwise it stays open and says "Sent to the chat". It needs the right to prompt the session, and a copy tapped after the prompt was answered or replaced says "already answered".
-- **A session's page.** The header shows the context ring, the state ("Working for 3m 12s", "Needs you (permission)", "Resting, last active 5m ago", "Finished") and a one-tap **Stop** (while working or waiting) or **Resume** (once finished). Below it: the waiting prompt with **Answer in chat**, the last few tool calls as a strip (tap it for the full timeline), the latest reply, the facts, the model control, the session's own settings, and the changed files and timeline. The ⋮ menu carries every action, with the same confirmations as before.
-- **New session.** A guided card: name, then where (with **Recent** chips for the folders your sessions use, newest first), then model (with **Suggested** chips), then **More options** for the permission mode and reply style. Telegram's own button at the bottom reads **Start session**.
-- **Settings.** The chat's preferences and, for an admin, **Updates**, which mirrors [`/update`](#update). For the owner in their private chat, **Report a problem** opens its own page: write a note, check the report, send it and see its reference without leaving the app (see [problem reports](problem-reports.md#how-to-send-one)).
+- **A session's page.** The header shows the context ring, the state ("Working for 3:12", "Needs you (permission)", "Resting, last active 5m ago", "Finished") and a one-tap **Stop** (while working or waiting) or **Resume** (once finished). Below it: the waiting prompt with **Answer in chat**, the last few tool calls as a strip (tap it for the full timeline), the latest reply, the facts, the model control, the session's own settings, and the changed files and timeline. The ⋮ menu carries every action, with the same confirmations as before.
+- **New session.** A guided card: name, then where (with **Recent** chips for the folders your sessions use, newest first), then model (with **Suggested** chips), then **More options** for the permission mode and reply style. Telegram's own button at the bottom reads **Start session**. For a member whose role lacks `can_manage`, "where" offers only the chat's [root folder](groups.md#root-folders) and the folders directly inside it (the root folder is the default, and New folder creates inside the one picked); a folder outside it is refused with the reason, and Resume, Restart and the mode switch of a session working outside it answer "This session works outside your folder ~/..., so your role can't resume, restart or switch it. Ask an admin."
+- **Settings.** **App language** first: your own language for aipager's text in the app and your private chat (English, Spanish, Russian, Portuguese (Brazil), Chinese (Simplified), French, German, Korean, Arabic, Indonesian, Ukrainian, Italian, Turkish, Persian or Vietnamese; Automatic follows your Telegram app's language, see [Languages](#languages)). Anyone can change their own, it is never posted in a chat, and it does not change your Claude sessions. Then the chat's preferences (in a group only an admin can change them; in your own private chat you can, whatever your role, the same as `/settings` there) and, for an admin, **Updates**, which mirrors [`/update`](#update). For the owner in their private chat, **Report a problem** opens its own page: write a note, check the report, send it and see its reference without leaving the app (see [problem reports](problem-reports.md#how-to-send-one)).
 
 The app follows Telegram's light or dark theme as you switch it, and stops its gentle animations when your phone asks for reduced motion. Everything in the Mini App is also reachable from chat: the ⋮ menu on a session's dashboard carries the same actions.
 
@@ -324,7 +376,7 @@ the card says `🚫 jim · Denied`.
 
 Every tap is recorded in `~/.claude/aipager-audit.jsonl` and mirrored
 as a one-line reply threaded under the busy message:
-`✅ jim · Allowed by @alice · Bash: List the temp directory` (the call's
+`✅ jim · Allowed · @alice · Bash: List the temp directory` (the call's
 description, or its command when it has none; with a chat set up by `aipager config`; `Allowed` alone in personal mode).
 
 While a prompt - or an AskUserQuestion - waits for you, the session
@@ -436,21 +488,21 @@ make aipager think a new turn started.
 
 A command Claude runs in the background (`run_in_background`, Ctrl+B,
 or one Claude Code moves there when it times out) gets a row of its own
-while it runs: `⏳ shell: <description> (3m)`, named by the call's
+while it runs: `⏳ shell: <description> (3:12)`, named by the call's
 description or else the first line of the command. When it ends the row
-settles to `✅ shell: <description> - done (6m)`, `❌ ... - failed (exit
-1)`, or `⏹ ... - stopped (6m)` (Claude stopped it with TaskStop, or
+settles to `✅ shell: <description> - done (6:12)`, `❌ ... - failed (exit
+1)`, or `⏹ ... - stopped (6:12)` (Claude stopped it with TaskStop, or
 Claude Code stopped it under memory pressure); failed and stopped rows
 keep that mark on the finished card. A turn that ends while such a
 command still runs is not finished: the card waits as the job's status
-(`🔄 name · 1 shell still working · 4m`, or `1 agent (ship-reviewer), 1
+(`🔄 name · 1 shell still working · 4:10`, or `1 agent (ship-reviewer), 1
 shell still working` with an agent too), and when the command ends
 Claude's follow-up continues on that same card. Commands started inside
 an agent are that agent's and are not shown. A command whose end
 aipager never sees (a restart, a lost event) stops counting after two
 hours (`AIPAGER_BG_SHELL_MAX_TRACK`, in seconds): its row reads
 `⏹ ... - no end seen`, and a job that was waiting only on it closes with
-`⚠️ name · Finished (no end seen for a background shell after 120m 4s)`.
+`⚠️ name · Finished (no end seen for a background shell after 2:00:04)`.
 
 Once a turn's timeline grows long, each older run of tool calls (three
 or more in a row, and not the run currently in progress) folds into its
@@ -468,50 +520,87 @@ attachment above carries the complete record.
 #### Agents still running when the answer goes out
 
 Claude Code can run agents in the background, and the turn that launched
-them can end while they work. The answer then ends with one line saying
-so:
+them can end while they work. The answer then ends with a short status of
+that background work, in the style of Claude Code's own agent panel, kept
+up to date while it runs:
 
 ```
-⏳ 1 agent still running (pipeline-runner) - results will follow here
-⏳ 2 agents still running (pipeline-runner, ship-reviewer) - results will follow here
-⏳ 1 shell still running (run the tests) - results will follow here
-⏳ 1 agent, 1 shell still running (ship-reviewer, run the tests) - results will follow here
+⏳ 2 agents working · 🖥 1 shell running
+
+○ pipeline-runner · Writing final.md for the pipeline
+
+○ Explore · Reading state.py
+
+Results from the agents will follow here.
 ```
 
-Background commands (shells) count in this line the same way agents do.
-`/stop` ends the job, but Escape does not end a background command, so
-one that is still running stays counted here and in the pinned bar
-until it ends; its later follow-up then starts a turn of its own.
+- **The first line counts.** Agents working (or done), and the background
+  commands (shells) of this job running, finished or stopped. A shell is
+  only ever a count, never its command.
+- **One row per agent,** its type in bold, then what it is doing now:
+  its own latest line of text (Claude's words, shown as written, never
+  translated), else its latest tool as a short phrase (`Reading
+  state.py`, `Writing final.md`, `Running a command`, `Searching for
+  …`), else the description Claude gave the agent when it launched it,
+  else just the type. At most four rows, then `+N more`.
+- **The promise** "Results from the agents will follow here." stays only
+  while an agent is still working. Shells never carry it: a dev server
+  may never end.
+
+Each agent's row settles on its own when that agent stops, to `✓
+Explore · done (0:42)` (how long that agent ran), and the first line
+counts down. Once every agent is done, the rows give way to one line,
+with the time from the answer to the last agent's end:
+
+```
+✅ 2 agents done (6:12) · 🖥 1 shell running
+```
+
+and when that shell ends, `✅ 2 agents done (6:12) · 1 shell finished
+(2:13:05)` (how long the shell ran; `stopped` when it was killed or
+stopped by Claude, `finished` when it ended on its own, failing or not;
+its card row says how). An answer with only a shell of its job shows
+`🖥 1 shell running`, which settles to `1 shell finished (…)` or `1 shell
+stopped (…)`.
+
+Only the shells of the answer's own job are counted: a dev server an
+earlier task left running is not repeated under every answer (the
+pinned bar still counts every shell). `/stop` ends the job, but Escape
+does not end a background command: one that is still running stays in
+the pinned bar until it ends, and is no longer counted under later
+answers; its later follow-up then starts a turn of its own.
 
 That answer goes out the moment the turn ends, as a normal (notifying)
 message threaded to your prompt - the same text the terminal shows. The
 busy card stays above it as the job's live status, in every layout:
-`🔄 name · 1 agent (general-purpose) still working · 1m 18s`, with its
+`🔄 name · 1 agent (general-purpose) still working · 1:18`, with its
 **Stop** button. When the agents report back, Claude's answer to that
 arrives as a new message of its own; the earlier answer is never sent
 again, a daemon restart included. A job whose agents report back more
 than once produces one answer per report, each sent as it is written.
 
-Labels are the agents' types, cut at 32 characters, three at most
-(`+N more` for the rest). An agent that stopped while background work of
-its own is still running counts as running, since it resumes later -
-aipager learns this from Claude's `<task-notification>` for it, when that
-notification starts a turn. The line is added in every layout.
+An agent that stopped while background work of its own is still running
+counts as working, since it resumes later - aipager learns this from
+Claude's `<task-notification>` for it, when that notification starts a
+turn. A row waits a few seconds before it shows done, so that note can
+take it back first. The status is added in every layout, in the chat's
+language.
 
-Once every agent a line named has finished, aipager edits that line
-once, silently, to `✅ pipeline-runner done (6m)` (or `✅ 2 agents done
-(6m)`, `✅ shell: run the tests - done (6m)`, `✅ 1 agent, 1 shell done
-(6m)`, with the time since the answer went out; a failed command is
-also "done" here, its card row says how it ended); the results themselves
-arrive as their own message. Each answer that carried the line is edited
-this way (up to five pending per session). The edit is a low-priority
-one: it is never made while the chat is flood-muted, is tried once more
-after the mute lifts or the budget refuses it, and is then dropped. It
-is never made into a deleted answer or for a session that has ended or
-been killed.
+**How it is kept up to date.** aipager edits the answer silently, only
+when what the status shows has changed, and at most once every 30
+seconds per answer (the answer itself counts as the first). Each answer
+with a status is kept up to date this way (up to five pending per
+session). The edits are low priority: one the flood budget refuses, or
+that would come while the chat is flood-muted, is not made, and the
+status waits for its next change. The final edit, once everything has
+ended, is tried once more after the mute lifts or the budget refuses
+it, and is then dropped. No edit is made into a deleted answer, for a
+session that has ended or been killed, or when it would make the answer
+too long for Telegram (room for the status is kept when a long answer
+is cut).
 
-The line is left as sent, never turned into ✅, when aipager cannot know
-the agents finished:
+The status is left as last shown, never turned into done, when aipager
+cannot know the work finished:
 
 - an agent aipager hears nothing from for 30 minutes
   (`AIPAGER_SUBAGENT_SILENCE`) is no longer counted as running, but
@@ -521,7 +610,7 @@ the agents finished:
 - a daemon restart forgets which answers are pending.
 
 An answer held back by a flood mute, or delivered as plain text after
-the formatted send failed, goes out without the line, as does a turn
+the formatted send failed, goes out without the status, as does a turn
 that ends with no answer text (only a header). If Claude takes
 an agent's notification in the middle of a running turn, aipager does
 not see it; an agent that stopped with work still running can then be
@@ -1120,7 +1209,7 @@ The checks of `aipager doctor` as one JSON object on stdout. Like plain
 
 `checks` are in this order, with these keys: `config_parses`,
 `config`, `token_valid`, `chat_reachable`, `team`, `role_shell_access`,
-`claude`, `claude_auth`, `dtach`, `hook_scripts`, `settings_json`,
+`peer_messages`, `claude`, `claude_auth`, `dtach`, `hook_scripts`, `settings_json`,
 `daemon`, `service_installed`, `service_unit_path`, `miniapp`. A check
 that crashes keeps its key with status `warn`. Texts are plain (no
 markup), and anything shaped like a bot token is replaced by
@@ -1130,7 +1219,7 @@ markup), and anything shaped like a bot token is replaced by
 
 `aipager uninstall` stops the daemon and removes its service, removes the config folder (`~/.config/aipager`: the bot token, chats and settings) and the session list (`~/.claude/aipager-sessions.json`), cleans up aipager's files in `/tmp`, and uninstalls aipager itself. It asks first (`-y` skips the question).
 
-It keeps aipager's data, so a reinstall picks up where it left off: `~/.local/share/aipager` (session folders, downloaded helpers, lock and marker files), `~/.local/state/aipager` (problem report records), `~/.claude/aipager-audit.jsonl` (the log of permission answers), `~/.claude/aipager-flood-state.json` (Telegram rate-limit history) and `~/.claude/aipager-pending-users.json` (people who tried the bot without access). Before asking, it lists the ones that exist on your machine, and at the end it prints the `rm -rf` command that removes them too.
+It keeps aipager's data, so a reinstall picks up where it left off: `~/.local/share/aipager` (session folders, downloaded helpers, lock and marker files), `~/.local/state/aipager` (problem report records and the language state), `~/.claude/aipager-audit.jsonl` (the log of permission answers), `~/.claude/aipager-flood-state.json` (Telegram rate-limit history), `~/.claude/aipager-pending-users.json` (people who tried the bot without access) and `~/aipager-users` (members' [root folders](groups.md#root-folders), with their work). Before asking, it lists the ones that exist on your machine, and at the end it prints the `rm -rf` command that removes them too.
 
 It also takes aipager's own entries out of Claude Code's `~/.claude/settings.json`: the hooks that run `aipager-hook` and the status line that runs `aipager-statusline` (a status line of your own stays). Everything else in that file stays as it was, and the file as it was is kept beside it as `settings.json.bak.<time>`. If the file is a link to another file, cannot be read, is not valid JSON, or is not in the shape Claude Code reads, it is left exactly as it is and uninstall says which entries to remove by hand. A hook of your own that still mentions `aipager-hook` or `aipager-statusline` (for example an `aipager-hook-capped.sh` wrapper) stays too, and uninstall names it. Claude Code sessions already open keep running the hooks they loaded until you restart them. `aipager config` adds the entries again after a reinstall. Your Telegram bot and any older `settings.json.bak.*` backups are not touched, and neither is `skipDangerousModePermissionPrompt` (the setting that skips Claude Code's warning before it runs with permission checks off), which aipager sets but you may have set yourself.
 

@@ -80,7 +80,7 @@ def test_each_state_reads_in_words_with_the_target_marked(bot, mk_update, run_as
         "<b>boot1</b> · 🔄 starting",
         "<b>idle1</b> · 💤 idle",
         "<b>wait1</b> · ⏳ needs you · Bash: make deploy",
-        "✍️ <b>work1</b> · ⚙️ working 3m · Bash: run the tests",
+        "✍️ <b>work1</b> · ⚙️ working 3:05 · Bash: run the tests",
     ]
     assert "—" not in text
 
@@ -401,7 +401,7 @@ def test_the_menu_puts_sessions_then_the_frequent_commands_first(mk_bot, monkeyp
     assert [(c.command, c.description) for c in commands[:2]] == [
         ("dev", "Talk to dev"), ("x1", "Talk to x1")]
     assert [c.command for c in commands[2:]] == [
-        "new", "status", "stop", "now", "resume", "mode", "settings", "help"]
+        "new", "status", "stop", "now", "resume", "mode", "settings", "language", "help"]
 
 
 def test_the_rare_commands_leave_the_menu_but_still_answer(mk_bot, run_async):

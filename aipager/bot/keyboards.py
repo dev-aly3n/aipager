@@ -23,10 +23,14 @@ from telegram import (
 from telegram.error import BadRequest, Forbidden
 
 
+from aipager import i18n
+from aipager.bot import kbwords, miniapp_link
+from aipager.i18n import Msg, Safe
+from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO
 from aipager.config import (
-    APP_BUTTON, BACK_BUTTON, CHAT_ID, COMMANDS_BUTTON,
-    MODEL_CHOICES, MODELS_BUTTON,
-    QUICK_COMMANDS, QUICK_TEMPLATES, TEMPLATES_BUTTON,
+    CHAT_ID,
+    MODEL_CHOICES,
+    QUICK_COMMANDS, QUICK_TEMPLATES,
 )
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -37,6 +41,7 @@ from aipager.bot import group_intake
 from aipager.bot.flood import _key as _chat_key
 from aipager.bot.transport import (  # noqa: F401
     MUTED,
+    SKIPPED,
     calling_user_id,
     reply_text,
     send_text,
@@ -68,6 +73,44 @@ if TYPE_CHECKING:
     from aipager.state import TrackedSession
 
 log = logging.getLogger(__name__)
+
+STOP_PLAIN = Msg("perm.btn.stop_plain", "Stop",
+                 note="The busy card's button: stop what Claude is doing")
+ALLOW = Msg("perm.btn.allow", "✅ Allow", note="Permission prompt button: let the tool run once")
+DENY = Msg("perm.btn.deny", "❌ Deny", note="Permission prompt button: refuse the tool call")
+ALLOW_ALWAYS = Msg("perm.btn.allow_always", "🟢 Allow always",
+                   note="Permission prompt button: allow, and save a rule for next time")
+STOP = Msg("perm.btn.stop", "⏹ Stop", note="Prompt button: stop what Claude is doing")
+SUBMIT = Msg("perm.btn.submit", "✅ Submit",
+             note="Multiple-choice question: send the ticked options")
+OPTION = Msg("perm.btn.option", "Option {n}",
+             note="A question's option that has no label of its own", eg={"n": 2})
+DEFAULT_MODE = Msg("perm.btn.default_suffix", "{mode} (default)",
+                   note="A mode button marked as the session's saved default; {mode} is "
+                        "the Auto or Ask mode label", eg={"mode": "Auto mode"})
+YES_SWITCH = Msg("perm.btn.yes_switch", "✅ Yes, switch",
+                 note="Confirms switching a session from Ask to Auto")
+CANCEL = Msg("perm.btn.cancel", "↩️ Cancel", note="Cancels the switch or the resume")
+STOP_SWITCH = Msg("perm.btn.stop_switch", "🛑 Stop task & switch",
+                  note="Stops the running turn, then switches the mode")
+NOT_NOW = Msg("perm.btn.not_now", "⏳ Not now", note="Leaves the mode as it is for now")
+RETRY = Msg("perm.btn.retry", "🔄 Retry", note="Sends the last prompt again after an error")
+COMPACT_NOW = Msg("perm.btn.compact_now", "📦 Compact Now",
+                  note="Asks Claude Code to compact the conversation now")
+NO_QUESTIONS = Msg("perm.no_questions", "❓ <b>{session}</b> · No questions",
+                   note="A question prompt that came without its questions",
+                   eg={"session": "x1"})
+NEEDS_INPUT = Msg("perm.needs_input", "🔐 <b>{session}</b> · Needs input",
+                  note="A prompt in Claude Code's terminal with options to pick",
+                  eg={"session": "x1"})
+PERM_NEEDED = Msg("perm.needed", "Permission needed",
+                  note="A permission prompt with no tool details")
+SEPARATE_PERM = Msg("perm.separate", "🔐 <b>{session}</b> · Permission needed",
+                    note="A permission prompt sent as its own message; the tool call follows",
+                    eg={"session": "x1"})
+LOADING = Msg("perm.loading", "{tool} (loading…)",
+              note="A question prompt whose question has not arrived yet; {tool} is "
+                   "the tool's name", eg={"tool": "AskUserQuestion"})
 
 
 
@@ -157,21 +200,29 @@ class KeyboardMixin:
         if level is None:
             level = self._keyboard_levels.get(level_key, "main")
 
+        # The chat's language, for a group member's own keyboard too: a
+        # keyboard is the chat's, whoever asked for it.
+        tr = i18n.for_chat(target)
+
         def button(label: str) -> KeyboardButton:
             return KeyboardButton(group_intake.mark_label(label, target))
 
+        def shown(pairs) -> list[str]:
+            return [kbwords.shown_label(tr, lbl, payload) for lbl, payload in pairs]
+
         if level == "templates":
-            rows = self._build_button_rows([lbl for lbl, _ in QUICK_TEMPLATES], chat_id=target)
-            rows.append([button(BACK_BUTTON)])
-            msg_text = "\U0001f4cb Templates"
+            rows = self._build_button_rows(shown(QUICK_TEMPLATES), chat_id=target)
+            rows.append([button(tr.text(kbwords.KB_BACK))])
+            msg_text = tr.text(kbwords.KBMSG_TEMPLATES)
         elif level == "commands":
-            rows = self._build_button_rows([lbl for lbl, _ in QUICK_COMMANDS], chat_id=target)
-            rows.append([button(MODELS_BUTTON), button(BACK_BUTTON)])
-            msg_text = "\U0001f39b Commands"
+            rows = self._build_button_rows(shown(QUICK_COMMANDS), chat_id=target)
+            rows.append([button(tr.text(kbwords.KB_MODELS)), button(tr.text(kbwords.KB_BACK))])
+            msg_text = tr.text(kbwords.KBMSG_COMMANDS)
         elif level == "models":
+            # Model labels are names: never translated.
             rows = self._build_button_rows([lbl for lbl, _ in MODEL_CHOICES], chat_id=target)
-            rows.append([button(BACK_BUTTON)])
-            msg_text = "\U0001f916 Model"
+            rows.append([button(tr.text(kbwords.KB_BACK))])
+            msg_text = tr.text(kbwords.KBMSG_MODELS)
         else:
             # Main keyboard: session labels + command/nav rows.
             # Multi-scope: only this chat's labels (and never leak others'
@@ -188,15 +239,17 @@ class KeyboardMixin:
             # `new` where `kill` was (4.7, 2026-09-30): the common action
             # up front, not a destructive one beside Stop. Ending a session
             # is in /status → ⋮, and `kill` still works when typed.
-            rows.append([button("status"), button("stop"), button("new")])
+            rows.append([button(tr.text(kbwords.KB_STATUS)), button(tr.text(kbwords.KB_STOP)),
+                         button(tr.text(kbwords.KB_NEW))])
             # Rides along on the existing nav row rather than claiming one
             # of its own: three across matches the status/stop/new row
             # above it, and the keyboard is already the busiest surface in
             # the chat.
-            nav = [button(TEMPLATES_BUTTON), button(COMMANDS_BUTTON)]
+            nav = [button(tr.text(kbwords.KB_TEMPLATES)), button(tr.text(kbwords.KB_COMMANDS))]
             if self._miniapp_url and is_private:
                 nav.append(KeyboardButton(
-                    APP_BUTTON, web_app=WebAppInfo(url=self._miniapp_url),
+                    kbwords.KB_APP,
+                    web_app=WebAppInfo(url=miniapp_link.with_lang(self._miniapp_url, tr.code)),
                 ))
             rows.append(nav)
             msg_text = "\u2328\ufe0f"
@@ -244,6 +297,21 @@ class KeyboardMixin:
             # the one that pays it — or re-owes it, just below.
             self._keyboard_owed.pop(_chat_key(target), None)
 
+        # The chat's shared main keyboard carries this chat's session
+        # labels: noted as on its way (before the first await, so a
+        # multi-scope refresh overlapping this send does not send the same
+        # one again), and recorded as what the chat shows once it went out.
+        record_chat = None
+        if level == "main" and not personal:
+            try:
+                record_chat = int(target)
+            except (TypeError, ValueError):
+                record_chat = None
+        inflight = getattr(self, "_keyboard_inflight", None)
+        shown_labels = set(labels) if record_chat is not None else None
+        if record_chat is not None and inflight is not None:
+            inflight[record_chat] = shown_labels
+
         try:
             if personal:
                 sent = await reply_text(tap_msg, msg_text, reply_markup=keyboard,
@@ -253,6 +321,11 @@ class KeyboardMixin:
                     target, msg_text,
                     reply_markup=keyboard,
                 )
+            if (record_chat is not None
+                    and sent is not MUTED and sent is not SKIPPED):
+                self.registry.set_keyboard_labels(record_chat, shown_labels)
+                # The chat is up to date: a failed refresh's mark is void.
+                getattr(self, "_keyboard_sync_failed", {}).pop(record_chat, None)
             if sent is MUTED:
                 # Flood-muted (roadmap 8.17b): nothing was attempted, so
                 # the hold must survive. Clearing before the send is
@@ -304,26 +377,32 @@ class KeyboardMixin:
                 _log_blocked_once(e)
             else:
                 log.warning("Failed to send keyboard", exc_info=True)
+        finally:
+            if (record_chat is not None and inflight is not None
+                    and inflight.get(record_chat) is shown_labels):
+                del inflight[record_chat]
 
     def _build_ask_keyboard(self, sess: TrackedSession, label: str,
                             tool_input: dict) -> tuple[str, InlineKeyboardMarkup | None]:
         """Build message and buttons for AskUserQuestion."""
+        tr = i18n.for_sess(sess)
         questions = tool_input.get("questions", [])
         if not questions:
-            return f"❓ <b>{html_mod.escape(label)}</b> · No questions", None
+            return tr.html(NO_QUESTIONS, session=label), None
 
         q = questions[0]
         question = q.get("question", "?")
         options = q.get("options", [])
 
+        # The session's name and Claude's question: no words of ours.
         text = f"❓ <b>{html_mod.escape(label)}</b> · {html_mod.escape(question)}"
         if not options:
             return text, None
 
         for i, opt in enumerate(options):
-            opt_label = opt.get("label", f"Option {i+1}")
+            opt_label = opt["label"] if "label" in opt else tr.text(OPTION, n=i + 1)
             desc = opt.get("description", "")
-            text += f"\n  {i+1}. {html_mod.escape(opt_label)}"
+            text += f"\n  {tr.num(i + 1)}. {html_mod.escape(opt_label)}"
             if desc:
                 text += f" - {html_mod.escape(desc[:60])}"
 
@@ -336,7 +415,7 @@ class KeyboardMixin:
         chat_id = resolve_chat_id_int(sess) or 0
         buttons = []
         for i, opt in enumerate(options[:4]):
-            opt_label = opt.get("label", f"Option {i+1}")
+            opt_label = opt["label"] if "label" in opt else tr.text(OPTION, n=i + 1)
             buttons.append(InlineKeyboardButton(
                 opt_label,
                 callback_data=session_parity.session_cb(self, chat_id, sess, f"opt{i}"),
@@ -348,13 +427,14 @@ class KeyboardMixin:
                                   question: str,
                                   options: list[tuple[int, str]]) -> tuple[str, InlineKeyboardMarkup | None]:
         """Build message and buttons from pane-scraped selector."""
+        tr = i18n.for_sess(sess)
         if question:
             text = f"❓ <b>{html_mod.escape(label)}</b> · {html_mod.escape(question)}"
         else:
-            text = f"🔐 <b>{html_mod.escape(label)}</b> · Needs input"
+            text = tr.html(NEEDS_INPUT, session=label)
 
         for num, opt_label in options:
-            text += f"\n  {num}. {html_mod.escape(opt_label)}"
+            text += f"\n  {tr.num(num)}. {html_mod.escape(opt_label)}"
 
         # Local import — see the precedent + rationale at
         # _build_resume_mode_keyboard below; do not hoist to module top.
@@ -379,7 +459,8 @@ class KeyboardMixin:
         chat_id = resolve_chat_id_int(sess) or 0
         return InlineKeyboardMarkup([[
             InlineKeyboardButton(
-                "Stop", callback_data=session_parity.session_cb(self, chat_id, sess, "stop")),
+                i18n.for_sess(sess).text(STOP_PLAIN),
+                callback_data=session_parity.session_cb(self, chat_id, sess, "stop")),
         ]])
 
     def _build_retry_keyboard(self, sess: TrackedSession) -> InlineKeyboardMarkup:
@@ -390,7 +471,8 @@ class KeyboardMixin:
         chat_id = resolve_chat_id_int(sess) or 0
         return InlineKeyboardMarkup([[
             InlineKeyboardButton(
-                "🔄 Retry", callback_data=session_parity.session_cb(self, chat_id, sess, "retry")),
+                i18n.for_sess(sess).text(RETRY),
+                callback_data=session_parity.session_cb(self, chat_id, sess, "retry")),
         ]])
 
     def _build_compact_keyboard(self, sess: TrackedSession) -> InlineKeyboardMarkup:
@@ -401,7 +483,7 @@ class KeyboardMixin:
         chat_id = resolve_chat_id_int(sess) or 0
         return InlineKeyboardMarkup([[
             InlineKeyboardButton(
-                "📦 Compact Now",
+                i18n.for_sess(sess).text(COMPACT_NOW),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "compact")),
         ]])
 
@@ -428,18 +510,21 @@ class KeyboardMixin:
                 (sess.pending_permission or {}).get("tool_info") or {}
             ).get("always_available")
         chat_id = resolve_chat_id_int(sess) or 0
+        tr = i18n.for_sess(sess)
         stop = InlineKeyboardButton(
-            "⏹ Stop", callback_data=session_parity.session_cb(self, chat_id, sess, "stop"))
+            tr.text(STOP), callback_data=session_parity.session_cb(self, chat_id, sess, "stop"))
         rows = [
             [InlineKeyboardButton(
-                "✅ Allow", callback_data=session_parity.session_cb(self, chat_id, sess, "allow")),
+                tr.text(ALLOW),
+                callback_data=session_parity.session_cb(self, chat_id, sess, "allow")),
              InlineKeyboardButton(
-                "❌ Deny", callback_data=session_parity.session_cb(self, chat_id, sess, "deny"))],
+                tr.text(DENY),
+                callback_data=session_parity.session_cb(self, chat_id, sess, "deny"))],
         ]
         if always_available is True:
             rows.append([
                 InlineKeyboardButton(
-                    "🟢 Allow always",
+                    tr.text(ALLOW_ALWAYS),
                     callback_data=session_parity.session_cb(self, chat_id, sess, "allow_always")),
                 stop,
             ])
@@ -456,12 +541,13 @@ class KeyboardMixin:
         from aipager.bot import session_parity
 
         chat_id = resolve_chat_id_int(sess) or 0
+        tr = i18n.for_sess(sess)
         return InlineKeyboardMarkup([
             [InlineKeyboardButton(
-                "✅ Yes, switch",
+                tr.text(YES_SWITCH),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "perms_confirm")),
              InlineKeyboardButton(
-                "↩️ Cancel",
+                tr.text(CANCEL),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "perms_cancel"))],
         ])
 
@@ -474,12 +560,13 @@ class KeyboardMixin:
         from aipager.bot import session_parity
 
         chat_id = resolve_chat_id_int(sess) or 0
+        tr = i18n.for_sess(sess)
         return InlineKeyboardMarkup([
             [InlineKeyboardButton(
-                "🛑 Stop task & switch",
+                tr.text(STOP_SWITCH),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "perms_stop_switch")),
              InlineKeyboardButton(
-                "⏳ Not now",
+                tr.text(NOT_NOW),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "perms_wait"))],
         ])
 
@@ -509,18 +596,27 @@ class KeyboardMixin:
         """
         from aipager.bot import session_parity
 
-        ask_label = "💬 Ask" + (" (default)" if not persisted_skip_perms else "")
-        auto_label = "🤖 Auto" + (" (default)" if persisted_skip_perms else "")
+        tr = i18n.for_chat(chat_id) if chat_id else i18n.for_sess(sess)
 
+        def label(mode, default: bool) -> str:
+            shown = tr.text(mode)
+            return tr.text(DEFAULT_MODE, mode=Safe(shown)) if default else shown
+
+        ask_label = label(MODE_ASK, not persisted_skip_perms)
+        auto_label = label(MODE_AUTO, persisted_skip_perms)
+
+        # One mode per row: a label names the mode as a mode ("💬 Ask mode
+        # (default)", "💬 Режим «Спрашивать» (по умолчанию)"), too wide for
+        # half a row, and the end Telegram would cut is "(default)".
         return InlineKeyboardMarkup([
             [InlineKeyboardButton(
                 ask_label,
-                callback_data=session_parity.session_cb(self, chat_id, sess, "resume-ask")),
-             InlineKeyboardButton(
+                callback_data=session_parity.session_cb(self, chat_id, sess, "resume-ask"))],
+            [InlineKeyboardButton(
                 auto_label,
                 callback_data=session_parity.session_cb(self, chat_id, sess, "resume-auto"))],
             [InlineKeyboardButton(
-                "↩️ Cancel",
+                tr.text(CANCEL),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "resume-cancel"))],
         ])
 
@@ -537,22 +633,23 @@ class KeyboardMixin:
         from aipager.bot import session_parity
 
         chat_id = resolve_chat_id_int(sess) or 0
+        tr = i18n.for_sess(sess)
         sel = selected or set()
         rows = []
         if multi_select:
             for i, opt in enumerate(options[:4]):
-                label = opt.get("label", f"Option {i+1}")
+                label = opt["label"] if "label" in opt else tr.text(OPTION, n=i + 1)
                 prefix = "☑" if i in sel else "⬜"
                 rows.append([InlineKeyboardButton(
                     f"{prefix} {label}",
                     callback_data=session_parity.session_cb(self, chat_id, sess, f"opt{i}"))])
             rows.append([InlineKeyboardButton(
-                "✅ Submit",
+                tr.text(SUBMIT),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "submit"))])
         else:
             buttons = []
             for i, opt in enumerate(options[:4]):
-                opt_label = opt.get("label", f"Option {i+1}")
+                opt_label = opt["label"] if "label" in opt else tr.text(OPTION, n=i + 1)
                 buttons.append(InlineKeyboardButton(
                     opt_label,
                     callback_data=session_parity.session_cb(self, chat_id, sess, f"opt{i}"),
@@ -560,5 +657,5 @@ class KeyboardMixin:
             if buttons:
                 rows.append(buttons)
         rows.append([InlineKeyboardButton(
-            "⏹ Stop", callback_data=session_parity.session_cb(self, chat_id, sess, "stop"))])
+            tr.text(STOP), callback_data=session_parity.session_cb(self, chat_id, sess, "stop"))])
         return InlineKeyboardMarkup(rows)

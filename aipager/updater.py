@@ -26,6 +26,7 @@ from pathlib import Path
 
 from rich.markup import escape as rich_escape
 
+from aipager import root_rule as _root_rule
 from aipager._test_guard import check_write
 from aipager.errors import friendly_error, friendly_warn
 from aipager.install_source import _EXTRA_PACKAGES  # noqa: F401  (re-export)
@@ -163,6 +164,7 @@ _USER_PATHS_KEPT = [
      "Telegram rate-limit history"),
     (Path.home() / ".claude" / "aipager-pending-users.json",
      "people who tried the bot without access"),
+    (Path.home() / "aipager-users", _root_rule.USERS_KEPT),
 ]
 
 

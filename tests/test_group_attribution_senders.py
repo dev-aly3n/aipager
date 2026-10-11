@@ -59,7 +59,7 @@ def _scopes(dm_deny=()):
             Member(id=BOB, label="bob", role="user"),
             Member(id=CAROL, label="carol", role="user"),
             Member(id=DAVE, label="dave", role="admin"),
-        )),
+        ), root="/srv/team"),   # the members' root: the group's sessions work there
         Scope(chat_id=DM, kind="dm", label="alice-dm", members=(
             Member(id=ALICE, label="alice", role="owner"),
         ), deny_tools=tuple(dm_deny)),
@@ -72,6 +72,8 @@ def _registry() -> SessionRegistry:
         s = TrackedSession(name=name, label=label, status=Status.IDLE)
         s.scope_chat_id = chat
         s.scope_kind = "group" if chat < 0 else "dm"
+        if chat < 0:
+            s.cwd = f"/srv/team/{label}"   # inside the group's root
         r._sessions[name] = s
     return r
 
@@ -318,8 +320,8 @@ def _mode_confirm(gbot, run_async, chat, name, user, *, card=503):
 def test_mode_switch_in_a_group_names_who_switched_it(gbot, run_async):
     query = _mode_confirm(gbot, run_async, G, X1, ALICE)
     final = _edit_texts(query)[-1]
-    assert final.startswith("⚙️ Switched to 🤖 Auto by @alice.\n\n")
-    assert final.endswith("<b>x1</b> is 🤖 Auto.")
+    assert final.startswith("⚙️ Switched to 🤖 Auto mode by @alice.\n\n")
+    assert final.endswith("<b>x1</b> is in 🤖 Auto mode.")
 
 
 def test_mode_switch_in_a_dm_is_unchanged(gbot, run_async):
@@ -330,7 +332,7 @@ def test_mode_switch_in_a_dm_is_unchanged(gbot, run_async):
 
 
 @pytest.mark.parametrize("chat,name,user,note", [
-    (G, X1, BOB, "⚙️ Switched to 💬 Ask by @bob.\n\n"), (DM, D1, ALICE, "")])
+    (G, X1, BOB, "⚙️ Switched to 💬 Ask mode by @bob.\n\n"), (DM, D1, ALICE, "")])
 def test_typed_switch_to_ask_names_the_sender(gbot, run_async, mk_update, chat, name, user,
                                               note):
     sess = _sess(gbot, name)
@@ -380,7 +382,7 @@ def test_ready_card_model_switch_in_a_dm_is_unchanged(gbot, run_async):
 def test_ready_card_mode_switch_names_the_tapper_in_a_group(gbot, run_async):
     _sess(gbot, X1).skip_perms = True
     text = _ready_tap(gbot, run_async, G, X1, BOB, "rdy_ask")
-    assert "🔁 Switched to 💬 Ask by @bob." in text
+    assert "🔁 Switched to 💬 Ask mode by @bob." in text
     _sess(gbot, D1).skip_perms = True
     text = _ready_tap(gbot, run_async, DM, D1, ALICE, "rdy_ask")
     assert "🔁" not in text

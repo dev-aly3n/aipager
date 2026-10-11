@@ -119,7 +119,7 @@ def test_bare_new_sends_the_name_card_with_auto_by_default(wbot, mk_update, run_
     text = update.message.reply_text.await_args.args[0]
     kb = update.message.reply_text.await_args.kwargs["reply_markup"]
     assert "Send a name" in text and "x1 fix the failing tests" in text
-    assert "🤖 Auto" in text
+    assert "🤖 Auto mode" in text
     assert _buttons(kb) == ["💬 Ask instead", "🧠 Model", "📁 Folder", "✖️ Cancel"]
     pending = bot._new_wizard_pending[(CHAT, OWNER)]
     assert (pending["step"], pending["msg_id"], pending["user_id"],
@@ -132,7 +132,7 @@ def test_a_non_admin_gets_ask_and_no_mode_toggle(wbot, mk_update, run_async):
 
     text = update.message.reply_text.await_args.args[0]
     kb = update.message.reply_text.await_args.kwargs["reply_markup"]
-    assert "💬 Ask" in text and "🤖 Auto" not in text
+    assert "💬 Ask mode" in text and "🤖 Auto" not in text
     assert _buttons(kb) == ["🧠 Model", "📁 Folder", "✖️ Cancel"]
 
 
@@ -371,7 +371,7 @@ def test_the_mode_toggle_switches_to_ask_and_back(wbot, mk_update, run_async, mk
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:ask"))
     assert bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] is False
-    assert "💬 Ask" in _last_edit(bot)["text"]
+    assert "💬 Ask mode" in _last_edit(bot)["text"]
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:auto"))
     assert bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] is True
@@ -652,7 +652,7 @@ def test_the_ready_card_says_where_messages_go(wbot, mk_update):
     sess = _ready_session(bot)
     text, kb = new_flow.render_ready(bot, _msg(mk_update, "x"), sess)
 
-    assert text.startswith("✅ <b>dev</b> is ready\n🤖 Auto · 🧠 Default model · 📁 ")
+    assert text.startswith("✅ <b>dev</b> is ready\n🤖 Auto mode · 🧠 Default model · 📁 ")
     assert "✍️ Just send a message, it goes to dev." in text
     assert "Later: tap dev on the keyboard, or reply to any dev message." in text
     assert _buttons(kb) == ["💬 Switch to Ask", "🧠 Model"]
@@ -683,7 +683,7 @@ def test_switch_to_ask_relaunches_and_re_renders(wbot, mk_cb, run_async):
     assert run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_ask"))
 
     bot._perms_switch_core.assert_awaited_once_with(sess, False)
-    assert "💬 Ask" in _last_edit(bot)["text"]
+    assert "💬 Ask mode" in _last_edit(bot)["text"]
     assert _buttons(_last_edit(bot)["reply_markup"])[0] == "🤖 Switch to Auto"
 
 
@@ -954,7 +954,7 @@ def test_the_defaults_screen_tells_a_non_admin_they_get_ask(wbot, mk_cb, run_asy
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns"))
 
-    assert "Mode: 💬 Ask for you" in _last_edit(bot)["text"]
+    assert "Permissions: 💬 Ask for you" in _last_edit(bot)["text"]
 
 
 def test_a_group_member_who_is_not_admin_cannot_change_defaults(wbot, mk_cb, run_async):

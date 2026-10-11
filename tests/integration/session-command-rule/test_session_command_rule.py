@@ -313,8 +313,8 @@ def test_a_picker_cancel_says_so(bot, cmd, tap):
 # ---- /mode (and /perms) --------------------------------------------------------
 
 @pytest.mark.parametrize("auto, text, button, verb", [
-    (True, "✍️ <b>x1</b> is 🤖 Auto.", "💬 Switch to Ask", "modeask"),
-    (False, "✍️ <b>x1</b> is 💬 Ask.", "🤖 Switch to Auto", "modeauto"),
+    (True, "✍️ <b>x1</b> is in 🤖 Auto mode.", "💬 Switch to Ask", "modeask"),
+    (False, "✍️ <b>x1</b> is in 💬 Ask mode.", "🤖 Switch to Auto", "modeauto"),
 ])
 def test_mode_shows_the_mode_and_the_one_switch(bot, cmd, auto, text, button, verb):
     sess = _sess(bot, "x1", skip_perms=auto)
@@ -349,14 +349,14 @@ def test_mode_by_name_and_from_the_picker_show_the_same_card(bot, cmd, tap):
 
     picked_text, picked_kb = _edited(tap(_cb(bot, kb, "x2")))
     typed_text, typed_kb = cmd("/mode x2")
-    assert picked_text == typed_text == "<b>x2</b> is 💬 Ask."
+    assert picked_text == typed_text == "<b>x2</b> is in 💬 Ask mode."
     assert _buttons(bot, picked_kb) == _buttons(bot, typed_kb) == [
         ("🤖 Switch to Auto", (x2.name, f"modeauto{x2.turn_key}"))]
 
 
 @pytest.mark.parametrize("text, question, verb, target", [
-    ("/mode ask", "Which session to switch to 💬 Ask?", "modeask", False),
-    ("/mode auto", "Which session to switch to 🤖 Auto?", "modeauto", True),
+    ("/mode ask", "Which session to switch to 💬 Ask mode?", "modeask", False),
+    ("/mode auto", "Which session to switch to 🤖 Auto mode?", "modeauto", True),
 ])
 def test_mode_named_with_no_target_picks_then_switches_in_one_tap(
         bot, cmd, tap, text, question, verb, target):
@@ -380,7 +380,7 @@ def test_mode_with_one_live_session_and_no_target_shows_it(bot, cmd):
     _sess(bot, "x1")
     _sess(bot, "gone1", Status.GONE)
 
-    assert cmd("/mode")[0] == "<b>x1</b> is 💬 Ask."
+    assert cmd("/mode")[0] == "<b>x1</b> is in 💬 Ask mode."
 
 
 def test_mode_with_no_live_session(bot, cmd):
@@ -415,14 +415,14 @@ def test_mode_already_in_the_mode_named(bot, cmd):
     bot.registry.last_active_session = x1.name
     bot._perms_flow = AsyncMock()
 
-    assert cmd("/mode ask")[0] == "<b>x1</b> is already in 💬 Ask."
+    assert cmd("/mode ask")[0] == "<b>x1</b> is already in 💬 Ask mode."
     bot._perms_flow.assert_not_awaited()
 
 
 def test_only_going_to_auto_needs_an_admin(bot, cmd):
     x1 = _sess(bot, "x1")
     x2 = _sess(bot, "x2", skip_perms=True)
-    bot._is_admin = MagicMock(return_value=False)
+    bot._may_use_auto = MagicMock(return_value=False)
     bot._do_perms_switch_via_fn = AsyncMock()
 
     assert cmd("/mode x1 auto")[0] == "Auto mode needs an admin."
@@ -468,7 +468,7 @@ def test_the_mode_card_refuses_a_turn_that_moved_on(bot, cmd, tap):
     assert _toast(query) == "x1 moved on to new work - tap the switch again if you still want it"
     # A fresh card, for this turn, to tap if they do.
     text, fresh = _edited(query)
-    assert text == "✍️ <b>x1</b> is 🤖 Auto."
+    assert text == "✍️ <b>x1</b> is in 🤖 Auto mode."
     assert _buttons(bot, fresh) == [("💬 Switch to Ask", (x1.name, f"modeask{x1.turn_key}"))]
 
 
@@ -498,8 +498,8 @@ def test_the_mode_card_says_already_in_after_a_switch_elsewhere(bot, cmd, tap):
     query = tap(_cb(bot, kb, "💬 Switch to Ask"))
 
     bot._perms_flow.assert_not_awaited()
-    assert _toast(query) == "x1 is already in 💬 Ask."
-    assert _edited(query)[0] == "✍️ <b>x1</b> is 💬 Ask."
+    assert _toast(query) == "x1 is already in 💬 Ask mode."
+    assert _edited(query)[0] == "✍️ <b>x1</b> is in 💬 Ask mode."
 
 
 @pytest.mark.parametrize("setup, toast", [
@@ -954,7 +954,7 @@ def test_a_leading_slash_on_the_name_works_for_every_session_command(bot, cmd, m
     assert cmd("/restart /x1")[0] == cmd("/restart x1")[0]
     assert cmd("/delete /g1")[0] == cmd("/delete g1")[0]
     assert cmd("/kill /x1")[0] == END_X1
-    assert cmd("/mode /x1")[0] == "<b>x1</b> is 💬 Ask."
+    assert cmd("/mode /x1")[0] == "<b>x1</b> is in 💬 Ask mode."
     cmd("/diff /g1")
     assert [c.args[1] for c in run_diff.await_args_list] == [g1]
     bot._rename_session_core = AsyncMock(return_value=MagicMock(

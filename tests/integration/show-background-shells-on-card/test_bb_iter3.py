@@ -186,7 +186,7 @@ def test_bb_end_read_first_finished_card_keeps_the_outcome(replay, vloop,
 def test_bb_end_read_first_answer_has_no_running_line(replay, vloop,
                                                       monkeypatch, status):
     _end_read_first(replay, vloop, monkeypatch, status)
-    assert "still running" not in _answer(replay, "started it")
+    assert "🖥" not in _answer(replay, "started it")
 
 
 @pytest.mark.parametrize("status", OUTCOMES)
@@ -285,7 +285,7 @@ def test_bb_wakeup_before_held_launch_leaves_no_live_card(replay, vloop,
 def test_bb_wakeup_before_held_launch_answer_has_no_running_line(
         replay, vloop, monkeypatch, status):
     _wakeup_before_held_launch(replay, vloop, monkeypatch, status)
-    assert "still running" not in _answer(replay, "the tests ended")
+    assert "🖥" not in _answer(replay, "the tests ended")
 
 
 @pytest.mark.parametrize("status", OUTCOMES)
@@ -351,7 +351,7 @@ def test_bb_ghost_end_does_not_hold_the_card(replay, vloop, monkeypatch):
 
 def test_bb_ghost_end_answer_has_no_running_line(replay, vloop, monkeypatch):
     _ghost_end(replay, vloop, monkeypatch, then_launch=None)
-    assert "still running" not in _answer(replay, "all good")
+    assert "🖥" not in _answer(replay, "all good")
 
 
 def test_bb_ghost_end_pin_stays_idle(replay, vloop, monkeypatch):
@@ -484,8 +484,7 @@ def test_bb_relaunch_long_after_keeps_the_stop_button(replay, vloop,
 def test_bb_relaunch_long_after_answer_names_it_running(replay, vloop,
                                                         monkeypatch, source):
     _relaunch_long_after(replay, vloop, monkeypatch, source=source)
-    assert _answer(replay, "started it").rstrip().endswith(
-        f"⏳ 1 shell still running ({DESC}) - results will follow here")
+    assert _answer(replay, "started it").rstrip().endswith("🖥 1 shell running")
 
 
 # ── 4. human prompts are never held behind a held turn ────────────────────

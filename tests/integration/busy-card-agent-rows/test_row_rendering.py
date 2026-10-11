@@ -39,7 +39,7 @@ def test_live_agent_row_shows_starting_with_no_activity_yet():
 def test_live_agent_row_starting_shows_zero_seconds_immediately():
     sess = _sess_with_live_agent(started_at=time.monotonic())
     card, _ = build_stream_card_ex(sess, "Working")
-    assert f"{MARK} data-miner · starting · 0s" in card
+    assert f"{MARK} data-miner · starting · 0:00" in card
 
 
 # ---- active with activity --------------------------------------------------
@@ -49,7 +49,7 @@ def test_live_agent_row_shows_current_activity_and_elapsed():
         started_at=time.monotonic() - 45, activity="Grep: def handler",
     )
     card, _ = build_stream_card_ex(sess, "Working")
-    assert f"{MARK} data-miner · Grep: def handler · 45s" in card
+    assert f"{MARK} data-miner · Grep: def handler · 0:45" in card
 
 
 def test_live_agent_row_elapsed_uses_minutes_past_sixty_seconds():
@@ -57,8 +57,7 @@ def test_live_agent_row_elapsed_uses_minutes_past_sixty_seconds():
         started_at=time.monotonic() - 130, activity="Bash: build",
     )
     card, _ = build_stream_card_ex(sess, "Working")
-    assert "· 2m " in card
-    assert "10s" in card
+    assert "· Bash: build · 2:10`" in card
 
 
 def test_live_agent_row_is_wrapped_in_hourglass_and_code_span():
@@ -66,7 +65,7 @@ def test_live_agent_row_is_wrapped_in_hourglass_and_code_span():
         started_at=time.monotonic() - 3, activity="Read: /README.md",
     )
     card, _ = build_stream_card_ex(sess, "Working")
-    assert f"⏳ `{MARK} data-miner · Read: /README.md · 3s`" in card
+    assert f"⏳ `{MARK} data-miner · Read: /README.md · 0:03`" in card
 
 
 # ---- settled on SubagentStop ----------------------------------------------
@@ -81,7 +80,7 @@ def test_settled_agent_row_shows_plural_tool_call_count(mk_bot, run_async):
         "elapsed": 61.0, "history_idx": 0, "tool_count": 8,
     }))
     card, _ = build_stream_card_ex(sess, "Working")
-    assert f"✅ `{MARK} data-miner · 8 tool calls · 1m 1s`" in card
+    assert f"✅ `{MARK} data-miner · 8 tool calls · 1:01`" in card
 
 
 def test_settled_agent_row_shows_singular_tool_call_count(mk_bot, run_async):
@@ -125,4 +124,4 @@ def test_build_stream_card_non_ex_variant_shows_same_live_row_shape():
         started_at=time.monotonic() - 7, activity="Write: /out.txt",
     )
     card = build_stream_card(sess, "Working")
-    assert f"{MARK} data-miner · Write: /out.txt · 7s" in card
+    assert f"{MARK} data-miner · Write: /out.txt · 0:07" in card

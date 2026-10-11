@@ -1,0 +1,85 @@
+{
+ "address": "ты",
+ "keep_english": [
+  "commit",
+  "token",
+  "diff",
+  "log",
+  "ctx"
+ ],
+ "language": "Russian",
+ "terms": {
+  "admin": [
+   "админ"
+  ],
+  "agent": [
+   "агент"
+  ],
+  "allow": [
+   "разреш"
+  ],
+  "background": [
+   "фон"
+  ],
+  "card": [
+   "карточ"
+  ],
+  "chat": [
+   "чат"
+  ],
+  "deny": [
+   "отклон"
+  ],
+  "folder": [
+   "папк"
+  ],
+  "group": [
+   "групп"
+  ],
+  "member": [
+   "участ"
+  ],
+  "model": [
+   "модел"
+  ],
+  "owner": [
+   "владел"
+  ],
+  "permission": [
+   "разрешени"
+  ],
+  "prompt": [
+   "запрос"
+  ],
+  "question": [
+   "вопрос"
+  ],
+  "queue": [
+   "очеред"
+  ],
+  "resume": [
+   "возобнов",
+   "продолж",
+   "/resume"
+  ],
+  "session": [
+   "сесси"
+  ],
+  "settings": [
+   "настрой",
+   "/settings"
+  ],
+  "stop": [
+   "стоп",
+   "останов",
+   "/stop"
+  ],
+  "turn": [
+   "ход"
+  ],
+  "update": [
+   "обнов",
+   "/update"
+  ]
+ }
+}

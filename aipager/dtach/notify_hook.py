@@ -16,6 +16,7 @@ import re
 import resource
 import socket
 import sys
+import time
 from pathlib import Path
 
 # Same precedence as aipager.instance.control_socket_path() (kept
@@ -163,8 +164,22 @@ def _note_wire(note: dict) -> dict:
     }
 
 
+def _schedules_a_prompt(tool_name) -> bool:
+    """Claude Code's tools that schedule a prompt of this session to fire
+    later (a cron, a /loop wakeup)."""
+    from aipager.policy_snapshot import SCHEDULING_TOOLS
+    return tool_name in SCHEDULING_TOOLS
+
+
+#: How long the pick-up waits for the session's snapshot lock (another
+#: hook's peer check, the daemon's narrowing) before it gives up and
+#: writes the answer for a failed pick-up.
+PICKUP_LOCK_SECONDS = 5.0
+
+
 def _match_and_promote(
     session: str, prompt_text: str, *, report: dict | None = None,
+    transcript_path: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Consume the longest PREFIX run of outstanding notes matching
     ``prompt_text``, always leaving the canonical policy snapshot
@@ -220,18 +235,31 @@ def _match_and_promote(
     open), ``origin`` (the turn's origin as written) and ``authors`` (the
     consumed notes' authors, ``None`` where unknown).
     """
+    from aipager.peer_auth import parse_envelope
     from aipager.policy_snapshot import (
         delete_notes,
         list_outstanding_notes,
         mark_turn_open,
         match_notes_for_prompt,
         note_driver_id,
+        snapshot_after_failure,
         snapshot_for_prompt,
+        clear_verify_origin,
+        mark_verify_origin,
+        snapshot_lock,
         turn_is_open,
+        verify_origin_flagged,
         write_merged_snapshot,
     )
 
     turn_open = turn_is_open(session)
+    envelope = None
+    # Before anything can fail or be killed ("peer message authority",
+    # C1): until this pick-up has written its answer, the session's origin
+    # is checked at every tool call, so a hook that dies here never leaves
+    # the previous turn's (owner's) snapshot trusted for this prompt.
+    was_flagged = verify_origin_flagged(session)
+    mark_verify_origin(session)
     if report is not None:
         # Known before anything can fail: the caller's failure path needs
         # it (``snapshot_after_failure``).
@@ -252,17 +280,73 @@ def _match_and_promote(
         # own docstring). The prefix run, plus the note that sent a slash
         # command when a lingering note ahead of it stopped the run
         # (roadmap 8.74).
-        consumed = match_notes_for_prompt(outstanding, prompt_text)
+        # A message from another session ("peer message authority", C4):
+        # recognised FIRST, and Telegram notes are matched only in the text
+        # outside its envelope, so a body that quotes an owner's waiting
+        # message cannot consume that owner's note.
+        envelope = parse_envelope(prompt_text)
+        # The tag with no envelope parsed (Claude Code changed its wrapper):
+        # notes are matched only before it, and the turn stays marked.
+        drift = envelope is None and "<cross-session-message" in prompt_text
+        if envelope is not None:
+            match_text = envelope["outside"]
+        elif drift:
+            match_text = prompt_text[:prompt_text.find("<cross-session-message")]
+        else:
+            match_text = prompt_text
+        consumed = match_notes_for_prompt(outstanding, match_text)
 
         if consumed:
             delete_notes(session, consumed)
         # Matched → the consumed notes' merge; unmatched → keep the running
         # turn's snapshot unless the prompt carries unattributed Telegram
         # text (roadmap 8.49); else the all-outstanding fallback, or the
-        # floor. A turn already running is never widened (8.77).
-        merged = snapshot_for_prompt(session, prompt_text, outstanding,
-                                     consumed, turn_open=turn_open)
-        write_merged_snapshot(session, merged)
+        # floor. A turn already running is never widened (8.77). Under the
+        # session's snapshot lock: the peer check and the daemon's
+        # narrowing write the same file.
+        with snapshot_lock(session, timeout=PICKUP_LOCK_SECONDS) as held:
+            if held:
+                # With drift, the text inside the tag is another session's:
+                # it never counts as Telegram text (a marker it quotes).
+                merged = snapshot_for_prompt(session,
+                                             match_text if drift else prompt_text,
+                                             outstanding, consumed,
+                                             turn_open=turn_open,
+                                             envelope=envelope)
+            else:
+                # Another writer kept the lock past the limit: a write now
+                # could be lost under its own, so the stricter answer of a
+                # failed pick-up, and the mark set above stays.
+                merged = snapshot_after_failure(session, prompt_text,
+                                                turn_open=turn_open)
+            if not turn_open:
+                # Where this turn starts in the transcript: what was written
+                # before it belongs to earlier turns ("peer message
+                # authority": a scheduled prompt's turn, a fire found in
+                # it). Only when it starts: a message joining keeps the
+                # turn's own start.
+                try:
+                    merged["turn_start_size"] = os.stat(transcript_path).st_size
+                except (OSError, TypeError, ValueError):
+                    pass
+            write_merged_snapshot(session, merged)
+            if not held or drift:
+                pass  # stays marked
+            elif not turn_open:
+                # A fresh turn: its snapshot carries its own marks; a
+                # previous job's continuation flag no longer applies.
+                clear_verify_origin(session)
+            elif not consumed and envelope is None:
+                # Something no Telegram message accounts for joined the
+                # running turn (typed in the terminal, a channel push,
+                # another session's text in a form not recognised): the
+                # turn keeps its rules (8.49), but its origin is checked
+                # before every later tool call ("peer message authority").
+                pass  # stays marked
+            elif not was_flagged:
+                # A join accounted for (a Telegram message, a message from
+                # another session, with its own marks): as it was before.
+                clear_verify_origin(session)
     finally:
         # After the snapshot: this prompt's own pick-up must see the turn
         # as it was before it. Marked even when the pick-up failed (the
@@ -274,6 +358,9 @@ def _match_and_promote(
             "origin": merged.get("turn_origin"),
             "authors": [note_driver_id(n) for n in consumed],
         })
+        if envelope is not None and turn_open:
+            # A message from another session joined the running turn.
+            report["peer_join"] = True
     return consumed, expired
 
 
@@ -312,7 +399,15 @@ def _end_turn(session: str, data: dict) -> None:
             path = data.get("transcript_path")
             if isinstance(path, str) and path:
                 from aipager.transcript import read_still_queued
-                if read_still_queued(path):
+                still = read_still_queued(path)
+                if any(isinstance(c, str) and "<cross-session-message" in c
+                       for c in still):
+                    # A message from another session runs as the next turn
+                    # with no UserPromptSubmit ("peer message authority"):
+                    # its origin is checked at that turn's tool calls.
+                    from aipager.policy_snapshot import mark_verify_origin
+                    mark_verify_origin(session)
+                if still:
                     return
         clear_turn_open(session)
     except MemoryError:
@@ -405,6 +500,95 @@ def _prepare_cap_notifier(session: str) -> tuple[socket.socket | None, bytes]:
         return None, b""
 
 
+def _mark_verify_origin(session: str) -> None:
+    """Mark *session*'s running job for an origin check (a continuation):
+    a flag file beside the snapshot, which itself stays untouched (a
+    continuation never rewrites the job's rules)."""
+    from aipager.policy_snapshot import mark_verify_origin
+    mark_verify_origin(session)
+
+
+def _driver_for_receipt(snap: dict, origin: str, rules: dict) -> dict:
+    """Who drove the sending turn, for the receiver's display and its
+    Claude: never read for a decision."""
+    drivers = snap.get("drivers") if isinstance(snap.get("drivers"), list) else []
+    labels = [d.get("label") for d in drivers
+              if isinstance(d, dict) and isinstance(d.get("label"), str) and d.get("label")]
+    if origin == "terminal":
+        return {"class": "terminal", "labels": []}
+    peer = snap.get("peer")
+    if snap.get("turn_origin") == "peer" and isinstance(peer, dict):
+        return {"class": "peer", "labels": [],
+                "via": peer.get("sender_session")}
+    if rules.get("bypass_safety") is True:
+        cls = "owner"
+    elif rules.get("confine_writes") is False:
+        cls = "admin"
+    else:
+        cls = "member"
+    return {"class": cls, "labels": labels[:4]}
+
+
+def _write_send_receipt(data: dict, rules: dict, info: dict) -> None:
+    """The sender's half of "peer message authority": record that this
+    Claude process may send this exact message with the rights this call
+    was allowed under."""
+    from aipager import peer_auth
+    from aipager.policy_snapshot import session_chat
+    session = data.get("session", "") or ""
+    message = (data.get("tool_input") or {}).get("message")
+    if not session or not isinstance(message, str):
+        return
+    chain = peer_auth.sender_chain(session)
+    if not chain:
+        _debug("send receipt: sender process chain not found")
+        return
+    snap = info.get("snapshot") if isinstance(info.get("snapshot"), dict) else {}
+    origin = info.get("origin") or "telegram"
+    if rules.get("bypass_safety") is True and origin == "terminal":
+        turn_origin = "terminal"
+    else:
+        turn_origin = "peer" if snap.get("turn_origin") == "peer" else origin
+    peer = snap.get("peer") if isinstance(snap.get("peer"), dict) else {}
+    peer_auth.write_receipt(
+        sender_session=session, chain=chain, message=message,
+        rules=peer_auth.rules_of(rules), turn_origin=turn_origin,
+        driver=_driver_for_receipt(snap, turn_origin, rules),
+        via=peer.get("sender_session") if turn_origin == "peer" else None,
+        sender_chat=session_chat(session),
+        to=(data.get("tool_input") or {}).get("to") or "")
+
+
+def _drop_send_receipt(data: dict) -> None:
+    """The send failed: its receipt must not be left for a later
+    message with the same text."""
+    from aipager import peer_auth
+    session = data.get("session", "") or ""
+    message = (data.get("tool_input") or {}).get("message")
+    if not session or not isinstance(message, str):
+        return
+    chain = peer_auth.sender_chain(session)
+    if chain:
+        peer_auth.drop_receipts(peer_auth.body_sha256(message), chain)
+
+
+def _pin_agent(data: dict) -> None:
+    """Pin the launching turn's rights to a starting agent; unpin a
+    stopping one."""
+    from aipager.policy_snapshot import drop_pin, write_pin
+    session = data.get("session", "") or ""
+    agent_id = data.get("agent_id")
+    if not session or not agent_id:
+        return
+    if data.get("hook_event_name") == "SubagentStop":
+        drop_pin(session, agent_id)
+        return
+    from aipager.dtach import enforce
+    main_turn = {k: v for k, v in data.items() if k != "agent_id"}
+    write_pin(session, agent_id, {"rules": enforce.turn_rules(main_turn),
+                                  "at": time.time()})
+
+
 def main():
     # Read the session env var first — the cap-hit notifier needs it in
     # its pre-serialized payload.
@@ -431,7 +615,13 @@ def main():
     # Slot 1 flips to True once ``_run`` knows this is a PreToolUse
     # event: a cap hit while deciding one must deny the tool, not let it
     # through unchecked.
-    cap_slot = [cap_payload, False]
+    # Slot 2 flips to True for a UserPromptSubmit: a cap hit while its
+    # snapshot is being rewritten must not leave the previous turn's rights
+    # in place ("peer message authority", C1). The snapshot's path is
+    # encoded now, while allocating is still possible; removing the file
+    # leaves the floor (``enforce`` reads a missing snapshot as the floor).
+    cap_slot = [cap_payload, False, False]
+    snap_path = _encoded_snapshot_path(session)
 
     try:
         _run(session, cap_slot)
@@ -439,6 +629,11 @@ def main():
         # Cap tripped mid-work. Fire the pre-baked datagram (best-effort,
         # never raises), then exit non-zero so Claude sees the failure —
         # 2 for a PreToolUse event, which Claude Code reads as "deny".
+        if cap_slot[2] and snap_path:
+            try:
+                os.unlink(snap_path)
+            except OSError:
+                pass
         if cap_sock is not None:
             try:
                 cap_sock.sendto(cap_slot[0], SOCKET_PATH)
@@ -471,6 +666,18 @@ def main():
             _report_error(e, denied=denied)
         except BaseException:
             pass  # the answer is out and stands: exit 0
+
+
+def _encoded_snapshot_path(session: str) -> bytes:
+    """The session's policy snapshot path, encoded before the memory cap
+    is set (see ``main``); empty when unknown."""
+    if not session:
+        return b""
+    try:
+        from aipager.policy_snapshot import snapshot_path
+        return os.fsencode(str(snapshot_path(session)))
+    except Exception:
+        return b""
 
 
 def _deny_unhandled_pre_tool_use(session: str, error: Exception) -> bool:
@@ -542,6 +749,8 @@ def _run(session: str, cap_slot: list) -> None:
         # match missed, or a nested "PreToolUse" text the raw match took
         # for it): only a PreToolUse may ever answer with a deny.
         cap_slot[1] = data.get("hook_event_name") == "PreToolUse"
+    if len(cap_slot) > 2:
+        cap_slot[2] = data.get("hook_event_name") == "UserPromptSubmit"
     _ERROR_CONTEXT["event"] = data.get("hook_event_name")
     _ERROR_CONTEXT["tool"] = data.get("tool_name")
 
@@ -681,7 +890,8 @@ def _run(session: str, cap_slot: list) -> None:
             turn: dict = {}
             try:
                 consumed, expired = _match_and_promote(
-                    submit_session, prompt_text, report=turn)
+                    submit_session, prompt_text, report=turn,
+                    transcript_path=data.get("transcript_path"))
                 if turn:
                     # Who runs the turn this prompt started, for the
                     # daemon's hold of a different sender's message
@@ -717,9 +927,13 @@ def _run(session: str, cap_slot: list) -> None:
                     pass
         elif submit_session:
             # A continuation wakes the job's turn back up (roadmap 8.77):
-            # it is open again, and its snapshot stays as it is.
+            # it is open again, and its rules stay as they are, marked for
+            # an origin check ("peer message authority", C1): Claude Code
+            # also delivers another session's text as a task notification
+            # (``peer-send-message``), which must not ride the job's rights.
             try:
                 from aipager.policy_snapshot import mark_turn_open
+                _mark_verify_origin(submit_session)
                 mark_turn_open(submit_session)
             except MemoryError:
                 raise
@@ -730,6 +944,25 @@ def _run(session: str, cap_slot: list) -> None:
         # Before the event reaches the daemon: its turn end may send the
         # next message at once, and that one starts a turn of its own.
         _end_turn(data.get("session", ""), data)
+        _udp(data)
+    elif hook_event_name in ("SubagentStart", "SubagentStop"):
+        # Phase C ("peer message authority"): an agent keeps the rights of
+        # the turn that launched it, never a later turn's.
+        try:
+            _pin_agent(data)
+        except MemoryError:
+            raise
+        except Exception as e:
+            _debug(f"agent pin error: {e}")
+        _udp(data)
+    elif hook_event_name == "PostToolUseFailure":
+        if data.get("tool_name") == "SendMessage":
+            try:
+                _drop_send_receipt(data)
+            except MemoryError:
+                raise
+            except Exception as e:
+                _debug(f"receipt drop error: {e}")
         _udp(data)
     else:
         _udp(data)
@@ -746,9 +979,13 @@ def _run(session: str, cap_slot: list) -> None:
         try:
             from aipager.dtach import enforce
             decide_error = None
+            rules = None
+            info: dict = {}
             try:
+                enforce.take_decide_extra()  # nothing stale from before
                 block = enforce.decide(data)
                 decide_error = enforce.take_decide_error()
+                rules, info = enforce.take_decide_extra()
             except MemoryError:
                 raise
             except Exception as e:
@@ -757,7 +994,13 @@ def _run(session: str, cap_slot: list) -> None:
                 _debug(f"enforcement error (denying unless owner): {e}")
                 block = enforce.fail_closed(data)
                 decide_error = e
-            if block:
+            if block and block.get("soft"):
+                # A parallel tool call found the peer check still running:
+                # deny this one call WITHOUT the sticky marker, so the turn
+                # is not halted ("peer message authority", C8).
+                print(enforce.soft_deny_json(block["reason"]))
+                sys.stdout.flush()
+            elif block:
                 # Deny first: a failure reporting it must not undo it.
                 print(enforce.deny_decision_json(block["reason"]))
                 sys.stdout.flush()
@@ -770,6 +1013,46 @@ def _run(session: str, cap_slot: list) -> None:
                     })
                 except Exception as e:
                     _debug(f"safety_blocked notify failed: {e}")
+            else:
+                # Allowed. Only additionalContext, never an "allow"
+                # decision: that would skip Claude Code's own prompts in
+                # its Ask and Auto modes (C12).
+                if info.get("context"):
+                    print(json.dumps({"hookSpecificOutput": {
+                        "hookEventName": "PreToolUse",
+                        "additionalContext": info["context"],
+                    }}))
+                    sys.stdout.flush()
+                if data.get("tool_name") == "SendMessage" and rules is not None:
+                    try:
+                        _write_send_receipt(data, rules, info)
+                    except MemoryError:
+                        raise
+                    except Exception as e:
+                        _debug(f"send receipt failed: {e}")
+                elif rules is not None and _schedules_a_prompt(data.get("tool_name")):
+                    # The prompt fires later as a turn of its own: it gets
+                    # the rights this call was allowed under, never more.
+                    try:
+                        from aipager import peer_auth
+                        from aipager.policy_snapshot import write_trigger
+                        snap = info.get("snapshot") if isinstance(info.get("snapshot"), dict) else {}
+                        authors = [d.get("user_id") for d in snap.get("drivers") or ()
+                                   if isinstance(d, dict)]
+                        write_trigger(data.get("session", "") or "",
+                                      (data.get("tool_input") or {}).get("prompt"),
+                                      peer_auth.rules_of(rules), authors=authors)
+                    except MemoryError:
+                        raise
+                    except Exception as e:
+                        _debug(f"scheduled prompt record failed: {e}")
+            if info.get("peer_resolved"):
+                try:
+                    _udp({"hook_event_name": "peer_resolved",
+                          "session": data.get("session", ""),
+                          **info["peer_resolved"]})
+                except Exception as e:
+                    _debug(f"peer_resolved notify failed: {e}")
             if decide_error is not None:
                 # After the answer: the report can neither delay nor undo it.
                 try:
@@ -823,11 +1106,15 @@ def _run(session: str, cap_slot: list) -> None:
             snap = read_snapshot(data.get("session", "")) or {}
             style = snap.get("style_text", "")
             reply_context = snap.get("reply_context", "")
+            # A message from another session: tell Claude its rights come
+            # from the sender aipager verifies, not from what it says.
+            peer_notice = snap.get("peer_notice", "")
             # A missing, corrupt, or old-shape snapshot must not crash
             # the hook — filter out anything that isn't actually a
             # string (e.g. a stray int from manual editing) rather than
             # letting a non-string slip into the join below.
-            parts = [p for p in (style, reply_context) if isinstance(p, str) and p]
+            parts = [p for p in (peer_notice, style, reply_context)
+                     if isinstance(p, str) and p]
             combined = "\n\n".join(parts)
             if combined:
                 print(json.dumps({

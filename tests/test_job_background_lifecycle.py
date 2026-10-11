@@ -183,9 +183,9 @@ def test_hiva_sequence_replayed_end_to_end(mk_bot, run_async, tmp_path, monkeypa
     assert sess.job_background_open() is True
     # Roadmap 8.42 (operator decision 2026-09-24) reversed "one response
     # per background job": the interim answer goes out NOW, on its own,
-    # ending with the "⏳ 1 agent still running" line.
+    # ending with the status block ("⏳ 1 agent working" first).
     assert len(rich_sends) == 1
-    assert rich_sends[0].startswith(INTERIM_ANSWER + "\n\n⏳ 1 agent still")
+    assert rich_sends[0].startswith(INTERIM_ANSWER + "\n\n⏳ 1 agent working\n\n")
 
     # ---- step 4: five phantom SubagentStops ----
     tool_history_len_before = len(sess.tool_history)

@@ -8,7 +8,8 @@ mode the tapper's role in the TAPPED MESSAGE'S chat must grant it:
 - ``APPROVE``: ``role.can_approve`` (answering a prompt Claude is waiting on).
 - ``PROMPT``: ``role.can_prompt`` (anything that acts on a session or a
   card other members share).
-- ``MANAGE``: an admin (``_is_admin_user``), like every other way into Auto.
+- ``MANAGE``: may use Auto (``_may_use_auto``: an admin, or the member in
+  their own DM), like every other way into Auto.
 - ``UPDATE``: ``_is_update_admin`` (installs software, restarts the daemon).
 
 A verb the table does not know needs ``PROMPT`` (fail closed), and
@@ -26,6 +27,8 @@ the caller-supplied ``perms_target_auto`` and by the verb's own shape.
 from __future__ import annotations
 
 from enum import Enum
+
+from aipager.i18n import Msg
 
 
 class Cap(str, Enum):
@@ -176,8 +179,10 @@ def required_capability(session_name: str, action: str, *,
     return PROMPT
 
 
-REFUSED_TEXT = "Your role can't do that here."
-OTHER_CHAT_TEXT = "This button belongs to another chat."
+REFUSED_TEXT = Msg("toast.gate_refused", "Your role can't do that here.",
+                   note="Pop-up: the tapper's role in this chat may not use this button")
+OTHER_CHAT_TEXT = Msg("toast.gate_other_chat", "This button belongs to another chat.",
+                      note="Pop-up: a button tapped in a chat that is not its own")
 
 
 __all__ = [

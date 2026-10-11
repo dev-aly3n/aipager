@@ -397,6 +397,29 @@ def test_commands_and_menu_button(fake, run_async):
     assert api.unknown_methods == []
 
 
+def test_descriptions_per_language(fake, run_async):
+    """getMyDescription / setMyDescription and the short pair, per
+    language_code, with Telegram's semantics: empty until set, "" clears."""
+    api, base = fake
+
+    async def go():
+        async with _bot(base) as bot:
+            empty = await bot.get_my_description(language_code="fa")
+            await bot.set_my_description("سلام", language_code="fa")
+            await bot.set_my_short_description("short", language_code="zh")
+            fa = await bot.get_my_description(language_code="fa")
+            default = await bot.get_my_description()
+            zh = await bot.get_my_short_description(language_code="zh")
+            await bot.set_my_description("", language_code="fa")
+            cleared = await bot.get_my_description(language_code="fa")
+            return empty, fa, default, zh, cleared
+
+    empty, fa, default, zh, cleared = run_async(go())
+    assert (empty.description, fa.description, default.description) == ("", "سلام", "")
+    assert zh.short_description == "short" and cleared.description == ""
+    assert api.unknown_methods == []
+
+
 def test_wait_for_times_out_with_the_last_calls_and_no_token(fake, run_async):
     api, base = fake
     run_async(_bot(base).initialize())

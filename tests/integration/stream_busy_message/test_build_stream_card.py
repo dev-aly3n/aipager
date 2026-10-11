@@ -139,20 +139,19 @@ def test_card_tally_three_read_one_grep():
 # ── SC-CARD-7: elapsed ≥ 60 s → Xm Ys format ────────────────────────────────
 
 def test_card_elapsed_format_minutes_and_seconds():
-    """entrypoints.md: elapsed ≥ 60 s → footer shows Xm Ys."""
-    sess = _sess(elapsed_s=75)  # 1m 15s
+    """elapsed ≥ 60 s → the footer shows the clock, m:ss."""
+    sess = _sess(elapsed_s=75)  # 1:15
     card = build_stream_card(sess, "Working")
-    assert "1m" in card, f"'1m' not found for 75s elapsed: {card}"
-    assert "15s" in card, f"'15s' not found for 75s elapsed: {card}"
+    assert " · 1:15" in card, f"'1:15' not found for 75s elapsed: {card}"
 
 
 # ── SC-CARD-8: elapsed < 2 s → elapsed segment omitted ──────────────────────
 
 def test_card_elapsed_shown_from_the_first_second():
-    """The clock counts from the start: a blank that jumps to "5s" reads broken."""
+    """The clock counts from the start: a blank that jumps to "0:05" reads broken."""
     sess = _sess(elapsed_s=1)  # 1 second
     header = build_stream_card(sess, "Working").partition("\n\n")[0]
-    assert "1s" in header, f"Elapsed hidden on a 1s turn: {header!r}"
+    assert " · 0:01" in header, f"Elapsed hidden on a 1s turn: {header!r}"
 
 
 # ── SC-CARD-9: verb present in header ────────────────────────────────────────

@@ -110,7 +110,7 @@ def test_allow_on_the_restored_card_answers_by_keystrokes(replay, vloop,
     assert (record["via"], record["action"], record["user_id"]) == (
         "keystroke_fallback", "Allowed", OWNER)
     assert record["denied"] is False
-    line = [m for m in r.chat.messages.values() if "Allowed by" in m["text"]]
+    line = [m for m in r.chat.messages.values() if "Allowed · " in m["text"]]
     assert line and line[0]["reply_to"] == card
     assert sess.status is Status.BUSY
     assert sess.pending_permission is None

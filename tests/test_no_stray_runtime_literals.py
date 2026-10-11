@@ -31,6 +31,10 @@ ALLOWED = {
     ("safety.py", "/tmp/claude-dtach-*"),
     # Claude Code's own scratchpad root, not an aipager file.
     ("safety.py", "(?<![\\w.~/-])/tmp/claude-\\d+(?=/|[\\s;&|()<>'\\\"`]|$)"),
+    # Claude Code's per-user temp folders (every session's scratchpad), which
+    # a members' root folder may not be in; not an aipager file, and not
+    # moved by AIPAGER_INSTANCE_DIR.
+    ("root_rule.py", "/tmp/claude-*"),
     # Uninstall removes a pre-XDG leftover socket (normal install only).
     ("updater.py", "/tmp/aipager.sock"),
     # User-facing uninstall summary text (describes a normal install).

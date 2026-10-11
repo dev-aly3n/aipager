@@ -317,6 +317,17 @@ REPORT_SENDS_FILE = Path.home() / ".local" / "state" / "aipager" / "report-sends
 REPORT_INSTALL_FILE = Path.home() / ".local" / "share" / "aipager" / "install.json"
 REPORT_RUNNING_FILE = Path.home() / ".local" / "share" / "aipager" / "running.json"
 
+# The language state (multilingual phase 5, ``aipager.i18n.persist``): the
+# existing-install marker, the last Telegram language seen from each
+# person, the once-only offer and first-contact records and the hashes of
+# the bot descriptions aipager set. Read LATE by that module, so
+# tests/conftest.py::_isolate_home_paths redirects it with one entry, and
+# that redirect is NOT optional. It lives in the XDG state dir, beside the
+# problem report store, because the live daemon rewrites it on its own
+# (a person's Telegram language changed) and ~/.config/aipager is
+# snapshotted for the whole test run.
+LANGUAGE_STATE_FILE = Path.home() / ".local" / "state" / "aipager" / "languages.json"
+
 # While calls flow, the file is ALSO rewritten this often even when
 # nothing material changed (roadmap 8.30). It carries each chat's rolling
 # HOUR now — the volume that got vm3 banned — and `aipager status`, a
@@ -685,10 +696,10 @@ CARD_CADENCE_FLOOR_GROUP: float = 3.0
 # Busy-card cadence DECAYS WITH TURN AGE (roadmap 8.30). The cadence above
 # is constant for the life of a turn, so on vm3 one card was edited every
 # few seconds for four hours. From these turn ages on, the card is edited
-# no more often than the paired interval, and its elapsed counter switches
-# to a matching unit — minutes from 10 min, hours and minutes from 1 h —
-# so a slow card never looks frozen: it shows a counter that moves at its
-# own granularity. Below the first age the cadence is exactly as before.
+# no more often than the paired interval, and from 10 min its elapsed
+# clock moves in 30 s steps (``23:30``, ``1:23:00``) so a slow card never
+# looks frozen: it shows a clock that moves at its own granularity. Below
+# the first age the cadence is exactly as before.
 # A STATE change (busy -> waiting, a permission prompt) is shown at once,
 # at most once per CARD_STATE_BYPASS_MIN_GAP; new tool rows and prose wait
 # for the next due edit. Per-session opt-out: the `card_age_decay`
@@ -701,7 +712,8 @@ CARD_AGE_TIER2_INTERVAL: float = 30.0
 # once half a minute"): a card is never refreshed slower than every 30 s,
 # however long the turn (it was 60 s from an hour, so a turn's second
 # hour now costs up to 120 card edits rather than 60). It stays its own
-# constant because the elapsed unit still switches to hours there.
+# constant because the card's elapsed unit still changes there (``"h"``),
+# though the clock reads the same in both: 30 s steps.
 CARD_AGE_TIER3_AT: float = 3600.0
 CARD_AGE_TIER3_INTERVAL: float = 30.0
 CARD_STATE_BYPASS_MIN_GAP: float = 10.0

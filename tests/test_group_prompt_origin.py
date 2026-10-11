@@ -744,7 +744,10 @@ def _outstanding(body, ran=False):
 def test_the_command_note_is_consumed_past_a_lingering_note_ahead_of_it():
     model = _outstanding("/model sonnet")
     init = _outstanding("/init")
-    assert ps.match_notes_prefix_run([model, init], "/init") == []
+    # A local command's lingering note is passed over by the prefix run
+    # itself since "peer message authority" (C13); 8.74's rescue gives the
+    # same answer.
+    assert ps.match_notes_prefix_run([model, init], "/init") == [init]
     assert ps.match_notes_for_prompt([model, init], "/init") == [init]
 
 

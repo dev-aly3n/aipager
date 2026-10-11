@@ -631,3 +631,28 @@ def detect_rtl(text: str) -> bool:
     rtl = len(_RTL_RE.findall(sample))
     ltr = len(_LTR_RE.findall(sample))
     return rtl > 0 and rtl > ltr
+
+
+def text_direction(text: str) -> bool | None:
+    """The direction of *text* for the message rule (multilingual design
+    5.7, rule 5): ``True`` right to left, ``False`` left to right (as
+    :func:`detect_rtl` judges it), ``None`` when the text has no letter
+    at all (empty, digits, punctuation), so the next source decides."""
+    if not text:
+        return None
+    sample = text[:2000]
+    if not _RTL_RE.search(sample) and not any(ch.isalpha() for ch in sample):
+        return None
+    return detect_rtl(sample)
+
+
+def message_rtl(chat_rtl: bool, *texts: str) -> bool:
+    """The ONE direction of a message that carries Claude's text: the
+    first of *texts* (Claude's own words, then the person's prompt the
+    turn answers) that has a letter decides, else the chat's language
+    (*chat_rtl*)."""
+    for text in texts:
+        found = text_direction(text)
+        if found is not None:
+            return found
+    return chat_rtl

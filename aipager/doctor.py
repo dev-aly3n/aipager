@@ -676,6 +676,27 @@ def check_role_shell_access() -> CheckResult:
                        detail=["no restricted role has Bash"])
 
 
+def check_peer_messages() -> CheckResult:
+    """Messages between Claude sessions ("peer message authority"): where
+    their receipts are kept and whether that folder is private, what this
+    system can verify, and a warning for every role in use that a policy
+    lets use SendMessage (:func:`aipager.peer_auth.doctor_lines`)."""
+    from aipager import peer_auth
+    from aipager.config import POLICY, SCOPES
+
+    roles = []
+    if SCOPES:
+        for name in sorted({m.role for s in SCOPES for m in s.members}):
+            role = POLICY.get_role(name)
+            if role is not None:
+                roles.append(role)
+    detail, warn = peer_auth.doctor_lines(roles)
+    if warn:
+        return CheckResult(WARN, peer_auth.DOCTOR_TITLE, detail=detail + warn,
+                           fix=peer_auth.DOCTOR_FIX)
+    return CheckResult(OK, peer_auth.DOCTOR_TITLE, detail=detail)
+
+
 def check_miniapp() -> CheckResult:
     """Can the Mini App actually start, if it is switched on?
 
@@ -714,6 +735,7 @@ CHECKS: list[Callable[[], CheckResult]] = [
     check_chat_reachable,
     check_team,
     check_role_shell_access,
+    check_peer_messages,
     check_claude,
     check_claude_auth,
     check_dtach,
@@ -1160,7 +1182,7 @@ __all__ = [
     "OK", "WARN", "FAIL", "CheckResult", "run_all", "cmd_doctor",
     "cmd_doctor_fix",
     "check_config", "check_token_valid", "check_chat_reachable",
-    "check_team", "check_role_shell_access",
+    "check_team", "check_role_shell_access", "check_peer_messages",
     "check_dtach", "check_claude", "check_claude_auth",
     "check_settings_json",
     "check_hook_scripts", "check_daemon", "check_service_installed",

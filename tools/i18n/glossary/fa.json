@@ -1,0 +1,90 @@
+{
+ "address": "شما",
+ "keep_english": [
+  "commit",
+  "token",
+  "diff",
+  "log",
+  "ctx"
+ ],
+ "language": "Persian",
+ "terms": {
+  "admin": [
+   "ادمین"
+  ],
+  "agent": [
+   "ایجنت"
+  ],
+  "allow": [
+   "اجازه"
+  ],
+  "background": [
+   "پس‌زمینه"
+  ],
+  "card": [
+   "کارت"
+  ],
+  "chat": [
+   "چت",
+   "گفتگو"
+  ],
+  "deny": [
+   "رد"
+  ],
+  "folder": [
+   "پوشه"
+  ],
+  "group": [
+   "گروه"
+  ],
+  "member": [
+   "عضو"
+  ],
+  "model": [
+   "مدل"
+  ],
+  "owner": [
+   "مالک"
+  ],
+  "permission": [
+   "اجازه",
+   "مجوز"
+  ],
+  "prompt": [
+   "پیام",
+   "درخواست",
+   "پرسش"
+  ],
+  "question": [
+   "سؤال",
+   "پرسش"
+  ],
+  "queue": [
+   "صف"
+  ],
+  "resume": [
+   "ادامه",
+   "/resume"
+  ],
+  "session": [
+   "سشن"
+  ],
+  "settings": [
+   "تنظیمات",
+   "/settings"
+  ],
+  "stop": [
+   "توقف",
+   "/stop"
+  ],
+  "turn": [
+   "نوبت",
+   "کار"
+  ],
+  "update": [
+   "آپدیت",
+   "نسخهٔ جدید",
+   "/update"
+  ]
+ }
+}

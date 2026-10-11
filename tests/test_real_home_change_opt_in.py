@@ -80,7 +80,7 @@ def test_the_registrar_records_the_state_the_test_left(monkeypatch, tmp_path):
 #: Files the operator's running daemon rewrites on its own, whenever it
 #: saves sessions, flood state or a problem-report count.
 DAEMON_REWRITES = ("aipager.config.REPORTS_FILE", "aipager.config.SESSION_STATE_FILE",
-                   "aipager.config.FLOOD_STATE_FILE")
+                   "aipager.config.FLOOD_STATE_FILE", "aipager.config.LANGUAGE_STATE_FILE")
 
 
 @pytest.mark.parametrize("name", DAEMON_REWRITES)

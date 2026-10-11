@@ -1,0 +1,132 @@
+[
+ {
+  "tool": "Bash",
+  "reason": "Bash command blocked by safety policy",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Bash command blocked by safety policy\"}}"
+ },
+ {
+  "tool": "Bash",
+  "reason": "Bash command blocked by safety policy: a recursive search or listing of the whole home folder or / is not allowed; search inside a project folder instead",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Bash command blocked by safety policy: a recursive search or listing of the whole home folder or / is not allowed; search inside a project folder instead\"}}"
+ },
+ {
+  "tool": "WebSearch",
+  "reason": "WebSearch not in this role's allow_tools",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: WebSearch not in this role's allow_tools\"}}"
+ },
+ {
+  "tool": "Bash",
+  "reason": "Bash is in this role's deny_tools",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Bash is in this role's deny_tools\"}}"
+ },
+ {
+  "tool": "Read",
+  "reason": "Read with an unreadable path",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Read with an unreadable path\"}}"
+ },
+ {
+  "tool": "Read",
+  "reason": "Read on protected path /srv/secret/**",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Read on protected path /srv/secret/**\"}}"
+ },
+ {
+  "tool": "Write",
+  "reason": "Write write to protected path /srv/keep/**",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Write write to protected path /srv/keep/**\"}}"
+ },
+ {
+  "tool": "Write",
+  "reason": "Write to a file that runs commands (.claude/, .git/, .mcp.json)",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Write to a file that runs commands (.claude/, .git/, .mcp.json)\"}}"
+ },
+ {
+  "tool": "Write",
+  "reason": "Write outside the session's folder - a restricted turn writes only in its project and scratchpad",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Write outside the session's folder - a restricted turn writes only in its project and scratchpad\"}}"
+ },
+ {
+  "tool": "Write",
+  "reason": "Write denied - this session runs in the home folder (or a folder above it), and this role can only write inside a project folder",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Write denied - this session runs in the home folder (or a folder above it), and this role can only write inside a project folder\"}}"
+ },
+ {
+  "tool": "Grep",
+  "reason": "Grep outside the session's folder - a restricted turn searches only its project and scratchpad",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep outside the session's folder - a restricted turn searches only its project and scratchpad\"}}"
+ },
+ {
+  "tool": "Grep",
+  "reason": "Grep denied - this session runs in the home folder (or a folder above it), and this role can only search inside a project folder",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep denied - this session runs in the home folder (or a folder above it), and this role can only search inside a project folder\"}}"
+ },
+ {
+  "tool": "Grep",
+  "reason": "Grep with an unreadable search folder",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep with an unreadable search folder\"}}"
+ },
+ {
+  "tool": "Grep",
+  "reason": "Grep on protected path /w/p/sub/**",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep on protected path /w/p/sub/**\"}}"
+ },
+ {
+  "tool": "Grep",
+  "reason": "Grep search could reach protected path **/.env",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep search could reach protected path **/.env\"}}"
+ },
+ {
+  "tool": "Grep",
+  "reason": "Grep search reaches protected path /w/p/sub/**",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep search reaches protected path /w/p/sub/**\"}}"
+ },
+ {
+  "tool": "Grep",
+  "reason": "Grep with an unreadable glob",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep with an unreadable glob\"}}"
+ },
+ {
+  "tool": "Grep",
+  "reason": "Grep with an escaped glob",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep with an escaped glob\"}}"
+ },
+ {
+  "tool": "Grep",
+  "reason": "Grep with a glob that is not a plain relative pattern",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep with a glob that is not a plain relative pattern\"}}"
+ },
+ {
+  "tool": "Grep",
+  "reason": "Grep with a glob that climbs out with ..",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep with a glob that climbs out with ..\"}}"
+ },
+ {
+  "tool": "Grep",
+  "reason": "Grep with an unreadable search folder",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep with an unreadable search folder\"}}"
+ },
+ {
+  "tool": "Glob",
+  "reason": "Glob with an unreadable pattern",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Glob with an unreadable pattern\"}}"
+ },
+ {
+  "tool": "Grep",
+  "reason": "Grep denied - the protected path **/.env can be in any folder, so this role cannot search with Grep or Glob",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep denied - the protected path **/.env can be in any folder, so this role cannot search with Grep or Glob\"}}"
+ },
+ {
+  "tool": "Grep",
+  "reason": "Grep denied - this search would reach protected files (/srv/secret); search inside a project folder instead",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Grep denied - this search would reach protected files (/srv/secret); search inside a project folder instead\"}}"
+ },
+ {
+  "tool": "Bash",
+  "reason": "session halted - a prior tool call this turn was blocked by safety policy; start a new request",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: session halted - a prior tool call this turn was blocked by safety policy; start a new request\"}}"
+ },
+ {
+  "tool": "Bash",
+  "reason": "this tool call could not be checked, so it was denied",
+  "deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: this tool call could not be checked, so it was denied\"}}"
+ }
+]

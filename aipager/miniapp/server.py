@@ -21,12 +21,16 @@ from __future__ import annotations
 
 import functools
 import gzip
+import hashlib
 import logging
 import os
 import re
 import time
 from typing import TYPE_CHECKING
 
+from aipager.i18n import Command, Msg
+from aipager.miniapp import chat_lines
+from aipager.miniapp.phrase import say
 from aipager.miniapp.webapp_sdk import WebAppSdk
 
 if TYPE_CHECKING:
@@ -138,19 +142,93 @@ _DIFF_QUEUE_WAIT_SECONDS = 10.0
 
 # The answer route's refusal when the session is not on a prompt. One
 # body for both places it can be detected (the route's own status guard
-# and the shared resend core racing an answer).
+# and the shared resend core racing an answer). Its ``detail`` is a Msg
+# (equal to the English); the route answers it in the viewer's language
+# (``_body``).
 _ANSWER_NOT_WAITING_BODY = {
     "error": "not_waiting",
-    "detail": "This session isn't waiting on you any more.",
+    "detail": Msg("app.err.answer_not_waiting", "This session isn't waiting on you any more.",
+                  note="Answer in chat: the prompt was answered or went away meanwhile"),
 }
 _ANSWER_SEND_FAILED_BODY = {
     "error": "send_failed",
-    "detail": "Couldn't post the prompt to the chat.",
+    "detail": Msg("app.err.answer_send_failed", "Couldn't post the prompt to the chat.",
+                  note="Answer in chat: Telegram refused the message"),
 }
 _ANSWER_CHAT_BUSY_BODY = {
     "error": "chat_busy",
-    "detail": "Telegram is busy. Try again in a moment.",
+    "detail": Msg("app.err.answer_chat_busy", "Telegram is busy. Try again in a moment.",
+                  note="Answer in chat: Telegram asked aipager to slow down"),
 }
+
+
+def _body(base: dict, tr) -> dict:
+    """*base* with its ``detail`` in *tr*'s language."""
+    return {**base, "detail": tr.text(base["detail"])}
+
+
+def _chat_tr(chat_id):
+    """The language of what everyone in *chat_id* sees: a line the Mini
+    App posts there, whoever acted."""
+    from aipager import i18n
+    return i18n.for_chat(chat_id)
+
+
+def _model_refusals() -> dict:
+    """A model switch's refusal code -> its sentence (sessions.py's)."""
+    from aipager.miniapp import sessions
+    return {
+        "not_live": sessions.MODEL_SWITCH_NOT_LIVE_REASON,
+        "busy": sessions.MODEL_SWITCH_BUSY_REASON,
+        "prompt_open": sessions.MODEL_SWITCH_PROMPT_OPEN_REASON,
+        "unknown": sessions.MODEL_SWITCH_UNKNOWN_REASON,
+        "switch_pending": sessions.MODEL_SWITCH_PENDING_REASON,
+    }
+
+
+# The sentences the write routes answer with, in the viewer's language.
+# Their ``error`` codes are ids and never change.
+_AUTO_NEEDS_ADMIN = Msg("app.err.auto_needs_admin", "Auto mode requires admin.",
+                        note="Auto is the permission mode (as in /mode)")
+_NAME_TAKEN = Msg("app.err.name_taken", "A session named {session} already exists in this chat.",
+                  eg={"session": "x1"})
+_NOT_BUSY = Msg("app.err.not_busy", "This session isn't busy right now - nothing to stop.")
+_NOT_RESENDABLE = Msg("app.err.not_resendable",
+                      "This prompt can't be re-sent. Answer it in the terminal.",
+                      note="Answer in chat: this prompt can only be answered where it runs")
+_KILL_STILL_RUNNING = Msg("app.err.kill_still_running",
+                          "Could not kill - the process is still running. Try again.",
+                          note="Kill (end a session's process) did not take")
+_RESUMING = Msg("app.err.resuming",
+                "This session is being resumed right now. Try again in a moment.")
+_ALREADY_RUNNING = Msg("app.err.already_running", "This session is already running.",
+                       note="Resume: the session is not finished")
+_DELETE_RUNNING = Msg("app.err.delete_running",
+                      "Session is still running. Use Kill to stop it first.",
+                      note="Delete needs a finished session; Kill is the menu item")
+_NOT_RUNNING = Msg("app.err.not_running", "Session isn't running.")
+_ALREADY_RESTARTING = Msg("app.err.already_restarting",
+                          "This session is already restarting - wait a moment.")
+_PERMS_STILL_STOPPING = Msg("app.err.perms_still_stopping",
+                            "{session} is still stopping - mode not changed. "
+                            "Try again in a moment.", eg={"session": "x1"},
+                            note="Switching the permission mode restarts the session; "
+                                 "the old one has not stopped yet")
+_RESTART_STILL_STOPPING = Msg("app.err.restart_still_stopping",
+                              "{session} is still stopping. Try again in a moment.",
+                              eg={"session": "x1"})
+_SEND_FAILED = Msg("app.err.send_failed", "Couldn't send {command}.",
+                   eg={"command": "/compact"},
+                   note="Typing a command into the session failed")
+_PICK_MODEL = Msg("app.err.pick_model", "Pick a model.")
+_RESUMED_IN_ASK = Msg("app.err.resumed_in_ask", "Resumed {session} in Ask: {reason}",
+                      eg={"session": "x1", "reason": "Auto needs an admin."},
+                      note="Resumed, but in Ask (the permission mode, as in /mode); the "
+                           "reason is a whole sentence of its own")
+_CHAT_DM = Msg("app.chat.dm", "DM", note="Mini App chat switcher: a private chat with no "
+                                          "name (short)")
+_CHAT_GROUP = Msg("app.chat.group", "Group",
+                  note="Mini App chat switcher: a group with no name (short)")
 
 
 # The header the page names the chosen chat in, on every API call (roadmap
@@ -161,6 +239,13 @@ SCOPE_HEADER = "X-Aipager-Scope"
 # A Telegram chat id as the page sends it: an optional minus and up to 19
 # digits, no leading zero, nothing else (no spaces, no "+", no exponent).
 _CHAT_ID_RE = re.compile(r"-?[1-9][0-9]{0,18}")
+
+
+# A catalog named by its current version never changes: kept a year.
+_CACHE_IMMUTABLE = "private, max-age=31536000, immutable"
+
+# The catalog route's one path segment: a language code and ".json".
+_CATALOG_NAME_RE = re.compile(r"([A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,2})\.json")
 
 
 def _parse_chat_id(raw: str) -> int | None:
@@ -190,6 +275,23 @@ def _auth_user_key():
     make = getattr(web, "RequestKey", None)
     return make("aipager_auth_user", int) if make else "aipager_auth_user"
 
+
+@functools.cache
+def _telegram_user_key():
+    """The request key holding the verified initData ``user`` dict (its
+    ``language_code`` picks the viewer's Mini App language). Cached: a
+    ``RequestKey`` matches only itself."""
+    from aiohttp import web
+    make = getattr(web, "RequestKey", None)
+    return make("aipager_user", dict) if make else "aipager_user"
+
+
+#: The Mini App's App language group (the multilingual design, 7.0/7.2).
+_APP_LANGUAGE_TITLE = Msg("app.language.title", "App language",
+                          note="Mini App Settings: the viewer's own language for aipager")
+_APP_LANGUAGE_HINT = Msg("app.language.hint",
+                         "Only aipager's own text. Claude's answers don't change.",
+                         note="Mini App: the line under App language (what it changes)")
 
 #: Methods that only read: everything else the Mini App sends is an action.
 _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -254,7 +356,10 @@ class MiniAppServer:
         self._sdk = WebAppSdk()
         # The page's bytes, as is and gzipped, per variant (roadmap
         # 8.117): built once, the first time each variant is asked for.
-        self._page_cache: dict[bool, tuple[bytes, bytes]] = {}
+        self._page_cache: dict[tuple[bool, str], tuple[bytes, bytes]] = {}
+        # A viewer's chat refresh after they changed App language here,
+        # held so a running one is never garbage-collected.
+        self._language_tasks: set = set()
 
     def _build_app(self) -> "web.Application":
         """Construct the aiohttp Application. Split out from start() so
@@ -295,6 +400,10 @@ class MiniAppServer:
         app.router.add_get("/api/status", self._handle_status)
         # The chats the caller may switch between (roadmap 8.73, D-A).
         app.router.add_get("/api/chats", self._handle_chats)
+        # The page's own text in the viewer's language (multilingual
+        # phase 4). Under /api/ and behind the same gate as every route:
+        # the page only ever talks to its own API.
+        app.router.add_get("/api/i18n/{name}", self._handle_i18n)
         app.router.add_get("/api/sessions", self._handle_sessions)
         # The only route in aipager that can spawn a process. Gated
         # like chat's /new: can_prompt to create at all, plus admin
@@ -323,7 +432,7 @@ class MiniAppServer:
         app.router.add_delete("/api/sessions/{label}", self._handle_session_delete)
         # Five more session-menu actions (design.md: perms switch, clear
         # queue, compact, restart, rename). Same five-step shape as the
-        # four routes above; perms additionally requires _is_admin_user
+        # four routes above; perms additionally requires _may_use_auto
         # when the switch targets Auto mode.
         app.router.add_post("/api/sessions/{label}/perms", self._handle_session_perms)
         app.router.add_post(
@@ -369,6 +478,11 @@ class MiniAppServer:
         # path so batch 4's per-session variant can slot in beside it as
         # /api/sessions/{label}/preferences/{field} without reshaping this.
         app.router.add_put("/api/preferences/{field}", self._handle_preferences_put)
+        # The viewer's own App language (the multilingual design, 7.2):
+        # personal, so any member may set it, never admin-gated, and it is
+        # written to the viewer's own private-chat entry, never to the chat
+        # being looked at, and never posted into a chat.
+        app.router.add_put("/api/app-language", self._handle_app_language_put)
         # Per-session preference overrides (batch 4) — same shape as the
         # scope-wide route above, one path segment deeper. GET is any
         # scope member (matches _handle_session_detail); PUT/DELETE are
@@ -422,7 +536,7 @@ class MiniAppServer:
     async def _handle_index(self, request):
         from aiohttp import web
 
-        from aipager.miniapp.static import index_html
+        from aipager.miniapp.static import index_html, page_language
 
         # Which host the page loads Telegram's SDK from is decided here,
         # per request, by whether we actually have the script: from this
@@ -431,11 +545,20 @@ class MiniAppServer:
         # never waits on a fetch, so this cannot slow a page load down.
         body = await self._sdk.get()
         sdk_from_self = body is not None
-        cached = self._page_cache.get(sdk_from_self)
+        # The link's language (``?lang=``, set by the bot from the chat's):
+        # the first frame is already in it, so the page never flashes
+        # English. Display only, and only a language a person may pick
+        # (anything else is the English page): the viewer's language still
+        # comes from initData and preferences once the page asks the API.
+        # Normalised BEFORE it keys the cache, which therefore holds at
+        # most one page per enabled language.
+        lang = page_language(request.query.get("lang"))
+        key = (sdk_from_self, lang)
+        cached = self._page_cache.get(key)
         if cached is None:
-            raw = index_html(sdk_from_self=sdk_from_self).encode("utf-8")
+            raw = index_html(sdk_from_self=sdk_from_self, lang=lang).encode("utf-8")
             cached = (raw, gzip.compress(raw, compresslevel=9, mtime=0))
-            self._page_cache[sdk_from_self] = cached
+            self._page_cache[key] = cached
         raw, packed = cached
         # Roadmap 8.117: about a quarter of the bytes for a client that
         # takes gzip (Telegram's in-app browsers all do); the exact same
@@ -576,6 +699,7 @@ class MiniAppServer:
         log.debug("miniapp: %s authorized (scope_chat_id=%s)", route_name, scope_chat_id)
         try:
             request[_auth_user_key()] = user_id
+            request[_telegram_user_key()] = user
         except TypeError:  # a bare stand-in request (tests): nothing to close
             pass
         return scope_chat_id, user_id
@@ -599,13 +723,44 @@ class MiniAppServer:
         if isinstance(result, web.Response):
             return result
         scope_chat_id, user_id = result
-        return web.json_response({
+        tr = self._viewer_tr(request, user_id)
+        body = {
             "chats": [
-                {"scope": str(chat_id), "label": self._chat_label(chat_id)}
+                {"scope": str(chat_id), "label": self._chat_label(chat_id, tr)}
                 for chat_id in self._member_chats(user_id)
             ],
             "current": str(scope_chat_id),
-        })
+        }
+        return web.json_response(self._with_ui(body, tr))
+
+    async def _handle_i18n(self, request):
+        """``GET /api/i18n/<code>.json``: the page's own strings in one
+        language (only those it has; the page falls back to its English).
+        Cached for a year when the URL names the current version
+        (``?v=``, from the ``ui`` entry), never cached otherwise."""
+        from aiohttp import web
+
+        from aipager.miniapp import ui_text
+
+        result = await self._authenticate_user(request, "/api/i18n")
+        if isinstance(result, web.Response):
+            return result
+        m = _CATALOG_NAME_RE.fullmatch(request.match_info.get("name", ""))
+        body = ui_text.catalog(m.group(1)) if m else None
+        if body is None:
+            return web.json_response({"error": "not_found"}, status=404)
+        raw = ui_text.canonical(body)
+        version = hashlib.sha256(raw).hexdigest()[:16]
+        headers = {
+            "Vary": "Accept-Encoding",
+            "Cache-Control": (_CACHE_IMMUTABLE if request.query.get("v") == version
+                              else "no-cache"),
+        }
+        if accepts_gzip(request.headers.get("Accept-Encoding", "")):
+            headers["Content-Encoding"] = "gzip"
+            raw = gzip.compress(raw, compresslevel=9, mtime=0)
+        return web.Response(body=raw, content_type="application/json", charset="utf-8",
+                            headers=headers)
 
     async def _handle_sessions(self, request):
         from aiohttp import web
@@ -658,30 +813,48 @@ class MiniAppServer:
         if not isinstance(body, dict):
             return web.json_response({"error": "bad_request"}, status=400)
 
+        tr = self._viewer_tr(request, user_id)
         name, err = validate_session_name(body.get("name"))
         if err:
-            return web.json_response({"error": "bad_request", "detail": err}, status=400)
+            return web.json_response({"error": "bad_request", "detail": say(tr, err)},
+                                     status=400)
 
         skip_perms = body.get("skip_perms") is True
-        # Auto mode is admin-gated in chat (`/new !name`, handlers.py).
+        # Auto mode is gated in chat (`/new !name`: an admin, or the member
+        # in their own DM, AuthMixin._may_use_auto).
         # Without the same gate here, the Mini App would be a way to get
         # --dangerously-skip-permissions that chat deliberately denies.
-        if skip_perms and not self.bot._is_admin_user(user_id, scope_chat_id):
+        if skip_perms and not self.bot._may_use_auto(user_id, scope_chat_id):
             return web.json_response(
-                {"error": "forbidden", "detail": "Auto mode requires admin."},
+                {"error": "forbidden", "detail": tr.text(_AUTO_NEEDS_ADMIN)},
                 status=403,
             )
 
         # Someone whose turns are confined to the session's folder may not
         # start in `/`, the home folder or a folder above it (roadmap 8.79).
         confined = bool(self.bot._is_confined_user(user_id, scope_chat_id))
+        # A role without can_manage starts only inside its members' root
+        # folder (no folder chosen: the root itself).
+        from aipager import member_root
+        root = member_root.restricted_root(self.bot, user_id, scope_chat_id)
+        candidate = body.get("cwd")
+        if root is not None:
+            if not candidate and root != member_root.NOWHERE:
+                candidate = root
+            refusal = (member_root.launch_refusal(self.bot, user_id, scope_chat_id,
+                                                  candidate)
+                       if candidate is None or isinstance(candidate, str) else "")
+            if refusal:
+                return web.json_response(
+                    {"error": "bad_request", "detail": say(tr, refusal)}, status=400)
         cwd, err = validate_cwd(
-            body.get("cwd"),
-            allowed_roots(self.registry, scope_chat_id, confined=confined),
+            candidate,
+            allowed_roots(self.registry, scope_chat_id, confined=confined, root=root),
             confined=confined,
         )
         if err:
-            return web.json_response({"error": "bad_request", "detail": err}, status=400)
+            return web.json_response({"error": "bad_request", "detail": say(tr, err)},
+                                     status=400)
 
         # The model may be one of the chat keyboard's aliases or a full
         # name the CLI accepts ("claude-opus-5"), so it is pattern-checked
@@ -692,7 +865,8 @@ class MiniAppServer:
         # to the launch as `--model`.
         chosen_model, err = validate_model(body.get("model"), MODEL_CHOICES)
         if err:
-            return web.json_response({"error": "bad_request", "detail": err}, status=400)
+            return web.json_response({"error": "bad_request", "detail": say(tr, err)},
+                                     status=400)
 
         # Answer a name collision before spawning anything. Chat offers
         # Resume/Replace/Cancel buttons here; the Mini App says so inline
@@ -705,7 +879,7 @@ class MiniAppServer:
         ):
             return web.json_response({
                 "error": "conflict",
-                "detail": f"A session named {name} already exists in this chat.",
+                "detail": tr.text(_NAME_TAKEN, session=name),
             }, status=409)
 
         session_name, err = await self.bot.create_session(
@@ -715,7 +889,10 @@ class MiniAppServer:
         )
         if not session_name:
             log.info("miniapp: session create failed — launch refused")
-            return web.json_response({"error": "launch_failed", "detail": err}, status=400)
+            # The launch's own words, as they come (English until their
+            # owner renders them in a language).
+            return web.json_response({"error": "launch_failed", "detail": say(tr, err)},
+                                     status=400)
 
         await self._mirror_session_created(scope_chat_id, name, skip_perms, cwd)
         return web.json_response({"label": name, "session_name": session_name})
@@ -723,13 +900,13 @@ class MiniAppServer:
     async def _mirror_session_created(self, scope_chat_id, label, skip_perms, cwd) -> None:
         """Announce the new session in chat. Best-effort — the process is
         already running by now, so a failed notification must not turn a
-        successful launch into an error the operator might retry."""
-        mode = "🤖 Auto" if skip_perms else "💬 Ask"
-        where = f"\n📁 {cwd}" if cwd else ""
+        successful launch into an error the operator might retry. In the
+        chat's language, as every line below."""
         try:
             await self.bot._app.bot.send_message(
                 chat_id=scope_chat_id,
-                text=f"🚀 {label} created from the Mini App · {mode}{where}",
+                text=chat_lines.session_created(_chat_tr(scope_chat_id), label,
+                                                skip_perms, cwd),
             )
         except Exception:
             log.debug("miniapp: session-created mirror failed", exc_info=True)
@@ -775,13 +952,29 @@ class MiniAppServer:
         # Any folder this chat works in may be the parent, the home folder
         # included; a confined caller's new folder must still be a project
         # folder, and is remembered so they can start in it (roadmap 8.79).
+        # A role without can_manage creates folders only inside its
+        # members' root folder.
+        from aipager import member_root
+        root = member_root.restricted_root(self.bot, user_id, scope_chat_id)
+        parent = body.get("parent")
+        if root is not None:
+            if not parent and root != member_root.NOWHERE:
+                parent = root
+            refusal = member_root.folder_refusal(root, parent)
+            if refusal:
+                return web.json_response({
+                    "error": "bad_request",
+                    "detail": say(self._viewer_tr(request, user_id), refusal),
+                }, status=400)
         path, existed, err = create_directory(
-            body.get("parent"), body.get("name"),
-            allowed_roots(self.registry, scope_chat_id),
+            parent, body.get("name"),
+            allowed_roots(self.registry, scope_chat_id, root=root),
             confined=bool(self.bot._is_confined_user(user_id, scope_chat_id)),
         )
         if err:
-            return web.json_response({"error": "bad_request", "detail": err}, status=400)
+            return web.json_response({
+                "error": "bad_request", "detail": say(self._viewer_tr(request, user_id), err),
+            }, status=400)
         if not existed:
             remember_created(scope_chat_id, path)
 
@@ -801,7 +994,7 @@ class MiniAppServer:
         try:
             await self.bot._app.bot.send_message(
                 chat_id=scope_chat_id,
-                text=f"📁 New folder created from the Mini App:\n{path}",
+                text=chat_lines.folder_created(_chat_tr(scope_chat_id), path),
             )
         except Exception:
             log.debug("miniapp: directory-created mirror failed", exc_info=True)
@@ -828,7 +1021,11 @@ class MiniAppServer:
         prefs = get_preferences(scope_chat_id)
         from aipager.config import MODEL_CHOICES, model_hint
 
-        roots = allowed_roots(self.registry, scope_chat_id)
+        # A role without can_manage: its members' root folder (created
+        # now) and the folders inside it, the root being the default.
+        from aipager import member_root
+        root = member_root.restricted_root(self.bot, user_id, scope_chat_id)
+        roots = allowed_roots(self.registry, scope_chat_id, root=root)
         # Which entry is the one a session lands in when nobody picks. The
         # client tags it `default` instead of offering a second "Default"
         # choice beside it — since _PROJECT_DIR became a root, the two were
@@ -841,6 +1038,8 @@ class MiniAppServer:
         except OSError:
             project_dir = ""
         default_directory = project_dir if project_dir in roots else ""
+        if root is not None:
+            default_directory = roots[0] if roots else ""
 
         return web.json_response({
             "directories": roots,
@@ -858,7 +1057,7 @@ class MiniAppServer:
                 {"label": label, "hint": model_hint(label)}
                 for label, _send in MODEL_CHOICES
             ],
-            "schema": settings_schema(),
+            "schema": settings_schema(tr=self._viewer_tr(request, user_id)),
             "scope_defaults": {
                 "layout": prefs.layout,
                 "simple_formatting": prefs.simple_formatting,
@@ -868,7 +1067,7 @@ class MiniAppServer:
                 "card_age_decay": prefs.card_age_decay,
             },
             "can_create": bool(self.bot._can_prompt_user(user_id, scope_chat_id)),
-            "can_use_auto": bool(self.bot._is_admin_user(user_id, scope_chat_id)),
+            "can_use_auto": bool(self.bot._may_use_auto(user_id, scope_chat_id)),
         })
 
     async def _handle_preferences_get(self, request):
@@ -884,11 +1083,11 @@ class MiniAppServer:
         scope_chat_id, user_id = result
 
         prefs = get_preferences(scope_chat_id)
-        return web.json_response({
+        return web.json_response(self._with_ui({
             # Schema and values travel together so the client never keeps
             # its own copy of the option list — one source of truth, shared
-            # with the /settings inline keyboard.
-            "schema": settings_schema(),
+            # with the /settings inline keyboard. In the viewer's language.
+            "schema": settings_schema(tr=self._viewer_tr(request, user_id)),
             "values": {
                 "layout": prefs.layout,
                 "simple_formatting": prefs.simple_formatting,
@@ -900,7 +1099,7 @@ class MiniAppServer:
             # Lets the UI disable controls it knows will be refused rather
             # than offering a button that always 403s. The server still
             # enforces it — this is a hint, not the gate.
-            "can_edit": bool(self.bot._is_admin_user(user_id, scope_chat_id)),
+            "can_edit": bool(self.bot._may_change_chat_settings(user_id, scope_chat_id)),
             # Whether to show the Updates block. A hint only: /api/update
             # enforces the same rule itself.
             "can_update": bool(self.bot._is_update_admin(user_id, scope_chat_id)),
@@ -909,7 +1108,130 @@ class MiniAppServer:
             # /api/report/send check it themselves.
             "can_report": bool(isinstance(scope_chat_id, int) and scope_chat_id > 0
                                and report_flow.is_owner(self.bot, user_id)),
-        })
+            # The viewer's own App language: personal, never admin-gated.
+            "app_language": self._app_language_payload(request, user_id),
+        }, self._viewer_tr(request, user_id)))
+
+    @staticmethod
+    def _viewer_language_code(request):
+        try:
+            user = request.get(_telegram_user_key())
+        except (AttributeError, TypeError):
+            user = None
+        code = user.get("language_code") if isinstance(user, dict) else None
+        return code if isinstance(code, str) else None
+
+    def _viewer_tr(self, request, user_id=None):
+        """The viewer's language (their private chat's choice, else
+        English while detection is off): what the Mini App shows them,
+        whichever chat they are looking at. Never the language of a line
+        posted into a chat (that is the chat's, ``i18n.for_chat``)."""
+        from aipager import i18n
+        if user_id is None:
+            try:
+                user_id = request.get(_auth_user_key())
+            except (AttributeError, TypeError):
+                user_id = None
+        return i18n.for_viewer(user_id, self._viewer_language_code(request))
+
+    @staticmethod
+    def _with_ui(body: dict, tr) -> dict:
+        """*body* plus ``ui`` (the code, its direction and the catalog
+        version) when *tr* is not English; an English body is unchanged."""
+        from aipager.miniapp import ui_text
+        ui = ui_text.ui_payload(tr)
+        if ui is not None:
+            body["ui"] = ui
+        return body
+
+    def _app_language_payload(self, request, user_id) -> dict:
+        """The App language group: its title and the 7.0 hint in the
+        viewer's language, the stored choice (``auto`` when none), the
+        language in force, and the choices in their own names."""
+        from aipager import i18n
+        from aipager.bot import language_menu
+        from aipager.i18n.locales import enabled_codes
+        language_code = self._viewer_language_code(request)
+        tr = i18n.for_viewer(user_id, language_code)
+        options = [{"value": language_menu.AUTO_TOKEN, "label": tr.text(language_menu.AUTO)}]
+        options += [{"value": c, "label": language_menu.endonym(c)} for c in enabled_codes()]
+        return {
+            "title": tr.text(_APP_LANGUAGE_TITLE),
+            "hint": tr.text(_APP_LANGUAGE_HINT),
+            "value": language_menu.current_choice(
+                user_id if isinstance(user_id, int) and not isinstance(user_id, bool) else None,
+                private=True, telegram_code=language_code),
+            "effective": tr.code,
+            "options": options,
+        }
+
+    async def _handle_app_language_put(self, request):
+        """``PUT /api/app-language`` ``{"value": "auto" | <code>}``: the
+        viewer's own language for aipager's text (their DM's entry). Any
+        member, rate limited; 400 for anything but Automatic or a language
+        a person may pick."""
+        from aiohttp import web
+
+        from aipager import i18n
+        from aipager.bot import language_menu
+        from aipager.i18n.locales import is_selectable
+        from aipager.preferences import UI_LANGUAGE_AUTO, set_ui_language
+
+        result = await self._authenticate_user(request, "/api/app-language")
+        if isinstance(result, web.Response):
+            return result
+        _scope_chat_id, user_id = result
+        if not self._allow_write(user_id):
+            log.info("miniapp: app language write rejected (429) - rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad_request"}, status=400)
+        value = body.get("value") if isinstance(body, dict) else None
+        if value == language_menu.AUTO_TOKEN:
+            code = UI_LANGUAGE_AUTO
+        elif isinstance(value, str) and is_selectable(value):
+            code = value
+        else:
+            return web.json_response({"error": "bad_request"}, status=400)
+        if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
+            return web.json_response({"error": "bad_request"}, status=400)
+        before = i18n.for_chat(user_id).code
+        try:
+            set_ui_language(user_id, code)
+        except ValueError:
+            return web.json_response({"error": "bad_request"}, status=400)
+        if i18n.for_chat(user_id).code != before:
+            self._refresh_private_chat(user_id)
+        tr = i18n.for_viewer(user_id, self._viewer_language_code(request))
+        return web.json_response(self._with_ui({
+            "value": value,
+            "effective": tr.code,
+            "confirmation": tr.text(language_menu.CHANGED,
+                                    language=language_menu.endonym(tr.code)),
+        }, tr))
+
+    def _refresh_private_chat(self, user_id: int) -> None:
+        """The viewer's private chat after their language changed here, the
+        same refresh /language does (its `/` menu and its Mini App menu
+        button, whose link carries the language), through the bot's
+        limiter-bound path. Nothing is posted into the chat (no keyboard
+        message: the change was made in the app). In the background, so
+        the answer never waits on Telegram; never raises."""
+        import asyncio
+
+        changed = getattr(self.bot, "_on_language_changed", None)
+        if changed is None:
+            return
+        try:
+            task = asyncio.get_running_loop().create_task(changed(user_id, keyboard=False))
+        except Exception:
+            log.warning("miniapp: could not refresh the chat after a language change",
+                        exc_info=True)
+            return
+        self._language_tasks.add(task)
+        task.add_done_callback(self._language_tasks.discard)
 
     # ---- problem reports ---------------------------------------------------
 
@@ -956,6 +1278,8 @@ class MiniAppServer:
         if isinstance(result, web.Response):
             return result
         _scope_chat_id, user_id = result
+        from aipager import i18n
+        viewer = i18n.for_viewer(user_id, self._viewer_language_code(request))
         draft = await report_drafts.open_draft(self.bot, user_id)
         if draft is None:
             log.info("miniapp: report draft refused (503) - not built")
@@ -966,7 +1290,7 @@ class MiniAppServer:
             # The exact text sent with no note: the page shows it, and
             # renders the same text with the note added as the last key.
             "preview": draft.preview.decode("utf-8"),
-            "areas": report_drafts.areas(draft.report),
+            "areas": report_drafts.areas(draft.report, tr=viewer),
             "note_max": sc.NOTE_MAX,
             "expires_in": report_drafts.DRAFT_TTL,
         })
@@ -981,6 +1305,8 @@ class MiniAppServer:
         if isinstance(result, web.Response):
             return result
         _scope_chat_id, user_id = result
+        from aipager import i18n
+        viewer = i18n.for_viewer(user_id, self._viewer_language_code(request))
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001 - any unreadable body is a bad request
@@ -1002,7 +1328,7 @@ class MiniAppServer:
             return web.json_response({"error": "sending"}, status=409)
         if draft.state == "done" or draft.report is None:
             outcome, reference = draft.result or (report_drafts.FAILED, None)
-            reply = report_drafts.reply_for(outcome, reference)
+            reply = report_drafts.reply_for(outcome, reference, tr=viewer)
             return web.json_response({"outcome": reply.outcome, "reference": reply.reference,
                                       "line": reply.line, "retry": False, "repeat": True})
         status, expected, candidate = report_drafts.check_note(draft, note)
@@ -1013,8 +1339,10 @@ class MiniAppServer:
             log.info("miniapp: report send refused (422) - note refused")
             return web.json_response({"error": "note_refused"}, status=422)
         reply = await report_drafts.send_draft(self.bot, draft, candidate)
+        # The line in the viewer's language, from the outcome's id.
+        line = report_drafts.reply_for(reply.outcome, reply.reference, tr=viewer).line
         return web.json_response({"outcome": reply.outcome, "reference": reply.reference,
-                                  "line": reply.line, "retry": reply.retry, "repeat": False})
+                                  "line": line, "retry": reply.retry, "repeat": False})
 
     # ---- self-update -----------------------------------------------------
 
@@ -1090,9 +1418,12 @@ class MiniAppServer:
                 src["detail"] = None
                 ap["source"] = src
                 payload["aipager"] = ap
-            # `check` is what the page shows (the shared offer); the raw
-            # versions stay alongside it for diagnostics.
-            payload["check"] = check_payload(status, show_paths=private)
+            # `check` is what the page shows (the shared offer), in the
+            # viewer's own language; the raw versions stay alongside it for
+            # diagnostics.
+            from aipager import i18n
+            viewer = i18n.for_viewer(user_id, self._viewer_language_code(request))
+            payload["check"] = check_payload(status, show_paths=private, tr=viewer)
             payload["job"] = manager.snapshot()
             return web.json_response(payload)
         try:
@@ -1132,11 +1463,11 @@ class MiniAppServer:
         scope_chat_id, user_id = result
 
         # Authentication proves *a* scope member; changing a setting that
-        # affects everyone in the scope is admin-gated, exactly as the
-        # `_:set:<section>:<value>` callback is in chat. Same helper, so
-        # the two surfaces cannot drift apart.
-        if not self.bot._is_admin_user(user_id, scope_chat_id):
-            log.info("miniapp: preferences write rejected (403) — not an admin")
+        # affects everyone in a group is admin-gated, exactly as the
+        # `_:set:<section>:<value>` callback is in chat, and a person's own
+        # private chat is theirs to change (the same rule as /settings there).
+        if not self.bot._may_change_chat_settings(user_id, scope_chat_id):
+            log.info("miniapp: preferences write rejected (403) - may not change this chat's settings")
             return web.json_response({"error": "forbidden"}, status=403)
 
         if not self._allow_write(user_id):
@@ -1227,23 +1558,10 @@ class MiniAppServer:
     async def _mirror_preference_change(self, scope_chat_id, user_id, field, value) -> None:
         """Post a one-line note to the originating chat. Best-effort: a
         failed mirror must never fail the write that already happened."""
-        from aipager.bot.settings_menu import settings_schema
-
-        label = field
-        shown = value
-        for section in settings_schema():
-            if section["field"] != field:
-                continue
-            label = section["title"]
-            for option in section["options"]:
-                if option["value"] == value:
-                    shown = option["label"]
-                    break
-            break
         try:
             await self.bot._app.bot.send_message(
                 chat_id=scope_chat_id,
-                text=f"⚙️ {label} → {shown} (changed from the Mini App)",
+                text=chat_lines.setting_changed(_chat_tr(scope_chat_id), field, value),
             )
         except Exception:
             log.debug("miniapp: preference mirror to chat failed", exc_info=True)
@@ -1341,7 +1659,7 @@ class MiniAppServer:
         sess, scope_chat_id, user_id = result
 
         return web.json_response({
-            "schema": settings_schema(),
+            "schema": settings_schema(tr=self._viewer_tr(request, user_id)),
             "values": self._session_preferences_values(sess),
             # can_edit here is _can_prompt_user, NOT _is_admin_user — see
             # design.md Authorization. A READ_ONLY member reads fine
@@ -1472,31 +1790,9 @@ class MiniAppServer:
         unchanged"). Best-effort: a failed mirror must never fail a write
         that already happened.
         """
-        from aipager.bot.settings_menu import settings_schema
-
-        field_label = field
-        shown = value
-        for section in settings_schema():
-            if section["field"] != field:
-                continue
-            field_label = section["title"]
-            for option in section["options"]:
-                if option["value"] == value:
-                    shown = option["label"]
-                    break
-            break
-
-        if reset:
-            text = (
-                f"⚙️ {field_label} reset to default ({shown}) for session "
-                f"{session_label} (changed from the Mini App)"
-            )
-        else:
-            text = (
-                f"⚙️ {field_label} → {shown} for session {session_label} "
-                f"(changed from the Mini App)"
-            )
         try:
+            text = chat_lines.session_setting_changed(
+                _chat_tr(scope_chat_id), session_label, field, value, reset)
             await self.bot._app.bot.send_message(chat_id=scope_chat_id, text=text)
         except Exception:
             log.debug("miniapp: session preference mirror to chat failed", exc_info=True)
@@ -1521,9 +1817,11 @@ class MiniAppServer:
         sess, scope_chat_id, user_id = result
 
         can_act = self.bot._can_prompt_user(user_id, scope_chat_id)
-        is_admin = self.bot._is_admin_user(user_id, scope_chat_id)
+        # Only the mode switch's availability reads it (sessions.py).
+        may_auto = self.bot._may_use_auto(user_id, scope_chat_id)
         return web.json_response(
-            session_detail(sess, time.monotonic(), can_act=can_act, is_admin=is_admin),
+            session_detail(sess, time.monotonic(), can_act=can_act, is_admin=may_auto,
+                           tr=self._viewer_tr(request, user_id)),
         )
 
     async def _handle_session_diff(self, request):
@@ -1604,7 +1902,7 @@ class MiniAppServer:
         if not outcome.ok:
             return web.json_response({
                 "error": "not_busy",
-                "detail": "This session isn't busy right now - nothing to stop.",
+                "detail": self._viewer_tr(request, user_id).text(_NOT_BUSY),
             }, status=409)
 
         await self._mirror_session_stopped(
@@ -1648,8 +1946,9 @@ class MiniAppServer:
         if not self._allow_write(user_id):
             log.info("miniapp: session answer rejected (429) — rate limited")
             return web.json_response({"error": "too_many_requests"}, status=429)
+        tr = self._viewer_tr(request, user_id)
         if sess.status != Status.INTERACTIVE:
-            return web.json_response(_ANSWER_NOT_WAITING_BODY, status=409)
+            return web.json_response(_body(_ANSWER_NOT_WAITING_BODY, tr), status=409)
 
         # Every failure of the send answers JSON, never aiohttp's bare 500
         # or empty 504. Caught here, not in the shared helper, so the
@@ -1658,12 +1957,12 @@ class MiniAppServer:
             outcome = await self.bot._resend_pending_prompt(scope_chat_id, sess)
         except RESEND_THROTTLE_ERRORS:
             log.info("miniapp: session answer throttled by Telegram (503)")
-            return web.json_response(_ANSWER_CHAT_BUSY_BODY, status=503)
+            return web.json_response(_body(_ANSWER_CHAT_BUSY_BODY, tr), status=503)
         except RESEND_SEND_ERRORS as e:
             # Telegram refused the send (network, timeout, bad request).
             log.info("miniapp: session answer send failed (502): %s",
                      type(e).__name__)
-            return web.json_response(_ANSWER_SEND_FAILED_BODY, status=502)
+            return web.json_response(_body(_ANSWER_SEND_FAILED_BODY, tr), status=502)
         except Exception:
             # Anything else: a transport OSError, a bug, or an
             # asyncio.TimeoutError (the builtin TimeoutError, which aiohttp
@@ -1671,19 +1970,18 @@ class MiniAppServer:
             # answered with the same fixed sentence. CancelledError is a
             # BaseException and still propagates.
             log.exception("miniapp: session answer send failed (502)")
-            return web.json_response(_ANSWER_SEND_FAILED_BODY, status=502)
+            return web.json_response(_body(_ANSWER_SEND_FAILED_BODY, tr), status=502)
         if outcome == RESEND_SENT:
             return web.json_response({"status": "sent", "label": sess.label})
         if outcome == RESEND_NOT_WAITING:
-            return web.json_response(_ANSWER_NOT_WAITING_BODY, status=409)
+            return web.json_response(_body(_ANSWER_NOT_WAITING_BODY, tr), status=409)
         if outcome == RESEND_NOT_RESENDABLE:
             return web.json_response({
-                "error": "not_resendable",
-                "detail": "This prompt can't be re-sent. Answer it in the terminal.",
+                "error": "not_resendable", "detail": tr.text(_NOT_RESENDABLE),
             }, status=409)
         if outcome == RESEND_BUSY:
-            return web.json_response(_ANSWER_CHAT_BUSY_BODY, status=503)
-        return web.json_response(_ANSWER_SEND_FAILED_BODY, status=502)
+            return web.json_response(_body(_ANSWER_CHAT_BUSY_BODY, tr), status=503)
+        return web.json_response(_body(_ANSWER_SEND_FAILED_BODY, tr), status=502)
 
     async def _handle_session_kill(self, request):
         from aiohttp import web
@@ -1712,15 +2010,14 @@ class MiniAppServer:
         if outcome.result == "still_running":
             return web.json_response({
                 "error": "still_running",
-                "detail": "Could not kill - the process is still running. Try again.",
+                "detail": self._viewer_tr(request, user_id).text(_KILL_STILL_RUNNING),
             }, status=409)
         if outcome.result == "resuming":
             # NOT the 404 fallthrough below: the session very much exists,
             # its resume is simply mid-launch (roadmap 8.16).
             return web.json_response({
                 "error": "resuming",
-                "detail": "This session is being resumed right now. "
-                          "Try again in a moment.",
+                "detail": self._viewer_tr(request, user_id).text(_RESUMING),
             }, status=409)
         # "not_found": the dtach socket was already gone by the time we
         # looked (a post-lookup race). Deliberately the SAME minimal body
@@ -1758,21 +2055,25 @@ class MiniAppServer:
         # not an admin (roadmap 8.83).
         override, auto_refused = self.bot._resume_auto_gate(
             sess, None, user_id, scope_chat_id)
+        refused = self._outside_root_response(request, sess, scope_chat_id, user_id)
+        if refused is not None:
+            return refused
         outcome = await self.bot._do_resume_core(
             sess, skip_perms_override=override, driver_user_id=user_id)
+        tr = self._viewer_tr(request, user_id)
         if outcome.reason == "not_gone":
             return web.json_response({
-                "error": "not_gone", "detail": "This session is already running.",
+                "error": "not_gone", "detail": tr.text(_ALREADY_RUNNING),
             }, status=409)
         if outcome.reason == "no_transcript":
             return web.json_response({
-                "error": "no_transcript", "detail": NO_TRANSCRIPT_REASON,
+                "error": "no_transcript", "detail": say(tr, NO_TRANSCRIPT_REASON),
             }, status=409)
         if outcome.reason == "launch_failed":
             # Matches the existing _handle_session_create precedent of
             # mapping a launch failure to 400.
             return web.json_response({
-                "error": "launch_failed", "detail": outcome.err,
+                "error": "launch_failed", "detail": say(tr, outcome.err),
             }, status=400)
 
         await self._mirror_session_resumed(
@@ -1781,7 +2082,8 @@ class MiniAppServer:
             from aipager.bot.transport import RESUME_AUTO_NEEDS_ADMIN
             return web.json_response({
                 "status": "resumed", "label": label, "mode": "ask",
-                "detail": f"Resumed {label} in Ask: {RESUME_AUTO_NEEDS_ADMIN}",
+                "detail": tr.text(_RESUMED_IN_ASK, session=label,
+                                  reason=say(tr, RESUME_AUTO_NEEDS_ADMIN)),
             })
         return web.json_response({"status": "resumed", "label": label})
 
@@ -1810,7 +2112,7 @@ class MiniAppServer:
         if sess.status != Status.GONE:
             return web.json_response({
                 "error": "conflict",
-                "detail": "Session is still running. Use Kill to stop it first.",
+                "detail": self._viewer_tr(request, user_id).text(_DELETE_RUNNING),
             }, status=409)
         # GONE stays true for the whole of a resume's launch, so the check
         # above passes while the session is coming back; removing it here
@@ -1818,8 +2120,7 @@ class MiniAppServer:
         if sess.is_resuming():
             return web.json_response({
                 "error": "resuming",
-                "detail": "This session is being resumed right now. "
-                          "Try again in a moment.",
+                "detail": self._viewer_tr(request, user_id).text(_RESUMING),
             }, status=409)
 
         label = sess.label
@@ -1843,7 +2144,7 @@ class MiniAppServer:
     # guard (409/400) -> the shared session_ops core -> mirror to chat on
     # success only.
 
-    def _restart_outcome_response(self, outcome, *, still_stopping_detail: str):
+    def _restart_outcome_response(self, outcome, *, still_stopping_detail: str, tr=None):
         """Map a :class:`~aipager.bot.session_ops.RestartOutcome`'s
         failure reasons to the JSON response the route should return.
         Returns ``None`` when ``outcome.ok`` — the caller then builds
@@ -1853,17 +2154,20 @@ class MiniAppServer:
         through to :meth:`~aipager.bot.session_ops.SessionOpsMixin.
         _kill_and_relaunch_core`, so both refuse with the identical set
         of reasons — only the still-stopping wording differs per route.
+        ``tr``: the viewer's language (None: English).
         """
         from aiohttp import web
 
+        if tr is None:
+            from aipager import i18n
+            tr = i18n.get("en")
         if outcome.reason == "not_live":
             return web.json_response({
-                "error": "not_live", "detail": "Session isn't running.",
+                "error": "not_live", "detail": tr.text(_NOT_RUNNING),
             }, status=409)
         if outcome.reason == "already_restarting":
             return web.json_response({
-                "error": "already_restarting",
-                "detail": "This session is already restarting - wait a moment.",
+                "error": "already_restarting", "detail": tr.text(_ALREADY_RESTARTING),
             }, status=409)
         if outcome.reason == "still_stopping":
             return web.json_response({
@@ -1871,9 +2175,26 @@ class MiniAppServer:
             }, status=409)
         if outcome.reason == "launch_failed":
             return web.json_response({
-                "error": "launch_failed", "detail": outcome.err,
+                "error": "launch_failed", "detail": say(tr, outcome.err),
             }, status=400)
         return None
+
+    def _outside_root_response(self, request, sess, scope_chat_id, user_id):
+        """403 when a role without can_manage asks to resume, restart or
+        switch a session working outside its members' root folder, else
+        None (``member_root.relaunch_refusal``)."""
+        from aiohttp import web
+
+        from aipager import member_root
+        refusal = member_root.relaunch_refusal(self.bot, user_id, scope_chat_id,
+                                               sess.cwd)
+        if not refusal:
+            return None
+        log.info("miniapp: relaunch rejected (403) — session outside the caller's root")
+        return web.json_response({
+            "error": "forbidden",
+            "detail": say(self._viewer_tr(request, user_id), refusal),
+        }, status=403)
 
     async def _handle_session_perms(self, request):
         from aiohttp import web
@@ -1896,26 +2217,29 @@ class MiniAppServer:
         # toggling the session's own current mode, closing off a
         # body-tampering surface (design.md).
         target_skip_perms = not sess.skip_perms
-        # Auto mode requires admin — the same gate chat's own /perms and
-        # session creation apply. Switching TO Ask never needs admin.
-        if target_skip_perms and not self.bot._is_admin_user(user_id, scope_chat_id):
-            log.info("miniapp: session perms rejected (403) — Auto requires admin")
+        # Auto mode needs an admin, or the member in their own DM
+        # (_may_use_auto): the same gate chat's own /perms and session
+        # creation apply. Switching TO Ask never needs one.
+        tr = self._viewer_tr(request, user_id)
+        if target_skip_perms and not self.bot._may_use_auto(user_id, scope_chat_id):
+            log.info("miniapp: session perms rejected (403) - may not use Auto here")
             return web.json_response(
-                {"error": "forbidden", "detail": "Auto mode requires admin."},
+                {"error": "forbidden", "detail": tr.text(_AUTO_NEEDS_ADMIN)},
                 status=403,
             )
 
         if not self._allow_write(user_id):
             log.info("miniapp: session perms rejected (429) — rate limited")
             return web.json_response({"error": "too_many_requests"}, status=429)
+        refused = self._outside_root_response(request, sess, scope_chat_id, user_id)
+        if refused is not None:
+            return refused
 
         outcome = await self.bot._perms_switch_core(sess, target_skip_perms)
         resp = self._restart_outcome_response(
             outcome,
-            still_stopping_detail=(
-                f"{outcome.label} is still stopping - mode not changed. "
-                f"Try again in a moment."
-            ),
+            still_stopping_detail=tr.text(_PERMS_STILL_STOPPING, session=outcome.label),
+            tr=tr,
         )
         if resp is not None:
             return resp
@@ -1953,7 +2277,8 @@ class MiniAppServer:
         outcome = await self.bot._clear_queue_core(sess)
         if not outcome.ok:
             return web.json_response({
-                "error": "queue_empty", "detail": QUEUE_EMPTY_REASON,
+                "error": "queue_empty",
+                "detail": say(self._viewer_tr(request, user_id), QUEUE_EMPTY_REASON),
             }, status=409)
 
         await self._mirror_session_queue_cleared(
@@ -1985,18 +2310,20 @@ class MiniAppServer:
             log.info("miniapp: session compact rejected (429) — rate limited")
             return web.json_response({"error": "too_many_requests"}, status=429)
 
-        outcome = await self.bot._compact_session_core(sess)
+        outcome = await self.bot._compact_session_core(sess, driver_user_id=user_id)
+        tr = self._viewer_tr(request, user_id)
         if outcome.reason == "not_live":
             return web.json_response({
-                "error": "not_live", "detail": "Session isn't running.",
+                "error": "not_live", "detail": tr.text(_NOT_RUNNING),
             }, status=409)
         if outcome.reason == "queue_full":
             return web.json_response({
-                "error": "queue_full", "detail": QUEUE_FULL_REASON,
+                "error": "queue_full", "detail": say(tr, QUEUE_FULL_REASON),
             }, status=409)
         if outcome.reason == "send_failed":
             return web.json_response({
-                "error": "send_failed", "detail": "Couldn't send /compact.",
+                "error": "send_failed",
+                "detail": tr.text(_SEND_FAILED, command=Command("/compact")),
             }, status=400)
 
         await self._mirror_session_compacted(scope_chat_id, outcome.label)
@@ -2024,13 +2351,16 @@ class MiniAppServer:
         if not self._allow_write(user_id):
             log.info("miniapp: session restart rejected (429) — rate limited")
             return web.json_response({"error": "too_many_requests"}, status=429)
+        refused = self._outside_root_response(request, sess, scope_chat_id, user_id)
+        if refused is not None:
+            return refused
 
         outcome = await self.bot._restart_session_core(sess)
+        tr = self._viewer_tr(request, user_id)
         resp = self._restart_outcome_response(
             outcome,
-            still_stopping_detail=(
-                f"{outcome.label} is still stopping. Try again in a moment."
-            ),
+            still_stopping_detail=tr.text(_RESTART_STILL_STOPPING, session=outcome.label),
+            tr=tr,
         )
         if resp is not None:
             return resp
@@ -2079,10 +2409,11 @@ class MiniAppServer:
             return web.json_response({"error": "bad_request"}, status=400)
         if not isinstance(body, dict):
             return web.json_response({"error": "bad_request"}, status=400)
+        tr = self._viewer_tr(request, user_id)
         model, err = validate_model(body.get("model"), MODEL_CHOICES)
         if err or not model:
             return web.json_response({
-                "error": "bad_request", "detail": err or "Pick a model.",
+                "error": "bad_request", "detail": say(tr, err or _PICK_MODEL),
             }, status=400)
 
         outcome = await self.bot._switch_model_core(
@@ -2091,10 +2422,13 @@ class MiniAppServer:
         if not outcome.ok:
             if outcome.reason == "send_failed":
                 return web.json_response({
-                    "error": "send_failed", "detail": "Couldn't send /model.",
+                    "error": "send_failed",
+                    "detail": tr.text(_SEND_FAILED, command=Command("/model")),
                 }, status=400)
+            # Chosen by the refusal's code, never by its words.
+            refusal = _model_refusals().get(outcome.reason, outcome.detail)
             return web.json_response(
-                {"error": outcome.reason, "detail": outcome.detail}, status=409,
+                {"error": outcome.reason, "detail": say(tr, refusal)}, status=409,
             )
 
         await self._mirror_session_model(scope_chat_id, outcome.label, model)
@@ -2109,7 +2443,7 @@ class MiniAppServer:
         return web.json_response({
             "status": "unconfirmed", "label": outcome.label,
             "model": sess.model_name or "", "requested": model,
-            "detail": MODEL_SWITCH_UNCONFIRMED,
+            "detail": say(tr, MODEL_SWITCH_UNCONFIRMED),
         })
 
     async def _handle_session_rename(self, request):
@@ -2142,9 +2476,11 @@ class MiniAppServer:
         if not isinstance(body, dict):
             return web.json_response({"error": "bad_request"}, status=400)
 
+        tr = self._viewer_tr(request, user_id)
         new_label, err = validate_session_name(body.get("label"))
         if err:
-            return web.json_response({"error": "bad_request", "detail": err}, status=400)
+            return web.json_response({"error": "bad_request", "detail": say(tr, err)},
+                                     status=400)
 
         previous_label = sess.label
         if new_label != previous_label:
@@ -2162,7 +2498,7 @@ class MiniAppServer:
             ):
                 return web.json_response({
                     "error": "conflict",
-                    "detail": f"A session named {new_label} already exists in this chat.",
+                    "detail": tr.text(_NAME_TAKEN, session=new_label),
                 }, status=409)
 
         outcome = await self.bot._rename_session_core(sess, new_label)
@@ -2178,25 +2514,19 @@ class MiniAppServer:
     async def _mirror_session_perms_switched(
         self, scope_chat_id, label, skip_perms,
     ) -> None:
-        icon = "🤖" if skip_perms else "💬"
-        mode_label = "Auto" if skip_perms else "Ask"
         try:
             await self.bot._app.bot.send_message(
                 chat_id=scope_chat_id,
-                text=f"{icon} {label} switched to {mode_label} mode from the Mini App",
+                text=chat_lines.perms_switched(_chat_tr(scope_chat_id), label, skip_perms),
             )
         except Exception:
             log.debug("miniapp: session-perms-switched mirror failed", exc_info=True)
 
     async def _mirror_session_queue_cleared(self, scope_chat_id, label, dropped) -> None:
-        plural = "" if dropped == 1 else "s"
         try:
             await self.bot._app.bot.send_message(
                 chat_id=scope_chat_id,
-                text=(
-                    f"🧹 Cleared {dropped} queued message{plural} for "
-                    f"[{label}] from the Mini App"
-                ),
+                text=chat_lines.queue_cleared(_chat_tr(scope_chat_id), label, dropped),
             )
         except Exception:
             log.debug("miniapp: session-queue-cleared mirror failed", exc_info=True)
@@ -2205,7 +2535,7 @@ class MiniAppServer:
         try:
             await self.bot._app.bot.send_message(
                 chat_id=scope_chat_id,
-                text=f"📦 Compact triggered for [{label}] from the Mini App",
+                text=chat_lines.compacted(_chat_tr(scope_chat_id), label),
             )
         except Exception:
             log.debug("miniapp: session-compacted mirror failed", exc_info=True)
@@ -2214,7 +2544,7 @@ class MiniAppServer:
         try:
             await self.bot._app.bot.send_message(
                 chat_id=scope_chat_id,
-                text=f"🔄 [{label}] → {model} from the Mini App",
+                text=chat_lines.model_switched(_chat_tr(scope_chat_id), label, model),
             )
         except Exception:
             log.debug("miniapp: session-model mirror failed", exc_info=True)
@@ -2222,7 +2552,8 @@ class MiniAppServer:
     async def _mirror_session_restarted(self, scope_chat_id, label) -> None:
         try:
             await self.bot._app.bot.send_message(
-                chat_id=scope_chat_id, text=f"🔁 Restarted [{label}] from the Mini App",
+                chat_id=scope_chat_id,
+                text=chat_lines.restarted(_chat_tr(scope_chat_id), label),
             )
         except Exception:
             log.debug("miniapp: session-restarted mirror failed", exc_info=True)
@@ -2233,7 +2564,7 @@ class MiniAppServer:
         try:
             await self.bot._app.bot.send_message(
                 chat_id=scope_chat_id,
-                text=f"✏️ [{previous_label}] renamed to [{new_label}] from the Mini App",
+                text=chat_lines.renamed(_chat_tr(scope_chat_id), previous_label, new_label),
             )
         except Exception:
             log.debug("miniapp: session-renamed mirror failed", exc_info=True)
@@ -2241,10 +2572,8 @@ class MiniAppServer:
     async def _mirror_session_stopped(self, scope_chat_id, label, dropped) -> None:
         """Best-effort — the stop already happened; a failed mirror must
         never fail (or appear to undo) a write that already landed."""
-        text = f"⏹️ Stopped [{label}] from the Mini App"
-        if dropped:
-            text += f" ({dropped} queued message{'s' if dropped > 1 else ''} discarded)"
         try:
+            text = chat_lines.stopped(_chat_tr(scope_chat_id), label, dropped)
             await self.bot._app.bot.send_message(chat_id=scope_chat_id, text=text)
         except Exception:
             log.debug("miniapp: session-stopped mirror failed", exc_info=True)
@@ -2252,18 +2581,16 @@ class MiniAppServer:
     async def _mirror_session_killed(self, scope_chat_id, label) -> None:
         try:
             await self.bot._app.bot.send_message(
-                chat_id=scope_chat_id, text=f"💀 Killed [{label}] from the Mini App",
+                chat_id=scope_chat_id,
+                text=chat_lines.killed(_chat_tr(scope_chat_id), label),
             )
         except Exception:
             log.debug("miniapp: session-killed mirror failed", exc_info=True)
 
     async def _mirror_session_resumed(self, scope_chat_id, label,
                                       in_ask: bool = False) -> None:
-        text = f"♻️ Resumed [{label}] from the Mini App"
-        if in_ask:
-            from aipager.bot.transport import RESUME_AUTO_NEEDS_ADMIN
-            text += f" in Ask: {RESUME_AUTO_NEEDS_ADMIN}"
         try:
+            text = chat_lines.resumed(_chat_tr(scope_chat_id), label, in_ask)
             await self.bot._app.bot.send_message(
                 chat_id=scope_chat_id, text=text,
             )
@@ -2273,7 +2600,8 @@ class MiniAppServer:
     async def _mirror_session_deleted(self, scope_chat_id, label) -> None:
         try:
             await self.bot._app.bot.send_message(
-                chat_id=scope_chat_id, text=f"🗑️ Deleted [{label}] from the Mini App",
+                chat_id=scope_chat_id,
+                text=chat_lines.deleted(_chat_tr(scope_chat_id), label),
             )
         except Exception:
             log.debug("miniapp: session-deleted mirror failed", exc_info=True)
@@ -2356,13 +2684,14 @@ class MiniAppServer:
             return user_id
         return chats[0]
 
-    def _chat_label(self, chat_id) -> str:
+    def _chat_label(self, chat_id, tr=None) -> str:
         """A chat's name for the switcher: its aipager.yaml label (the
-        wizard names a DM "<person> DM"), never its id."""
+        wizard names a DM "<person> DM"), never its id. A chat without
+        one is "DM" or "Group" in *tr*'s language (None: English)."""
         scope = self.bot._scope_for(chat_id) if self.bot.scopes is not None else None
         if scope is not None and scope.label:
             return scope.label
-        return "DM" if chat_id > 0 else "Group"
+        return say(tr, _CHAT_DM if chat_id > 0 else _CHAT_GROUP)
 
     def _build_status_payload(self, scope_chat_id: int) -> dict:
         from aipager import __version__

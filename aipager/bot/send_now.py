@@ -41,7 +41,10 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import RetryAfter
 
+from aipager import i18n
 from aipager.bot import reactions
+from aipager.bot.language_menu import INVALID_CALLBACK
+from aipager.i18n import Msg
 from aipager.bot.animation import _scan_queue_operations
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import (
@@ -73,23 +76,40 @@ log = logging.getLogger(__name__)
 
 
 # The line, its button, and what a tap or /now answers (no em dashes: see
-# tests/test_no_em_dash_in_ui_text.py).
-LINE_TEXT = "⏳ Queued - Claude will read it after the current step"
-BUTTON_TEXT = "⚡ Send now"
-TOAST_SENT = "Sent to Claude now"
-TOAST_TAKEN = "Already taken"
-TOAST_INTERACTIVE = "Answer the open question first"
-TOAST_TYPING = "Busy typing a prompt, try again in a moment"
-TOAST_BUSY = "Busy, try again in a moment"
-TOAST_FAILED = "Could not reach Claude, try again"
-TOAST_SENDING = "Sending to Claude now"
-LINE_TEXT_UNREACHED = ("⏳ Queued - could not reach Claude, tap Send now to "
-                       "try again")
-TOAST_CANNOT_PROMPT = "You can't send to this session"
-TOAST_UNAVAILABLE = "That session is no longer available"
-REPLY_SENT = "⚡ Sent to Claude now"
-REPLY_NOTHING = "Nothing is waiting in the queue"
-REPLY_NO_SESSION = "No active session."
+# tests/test_no_em_dash_in_ui_text.py). The line is the session's chat's,
+# a pop-up the tapper's, a /now reply the calling chat's.
+LINE_TEXT = Msg("sendnow.line", "⏳ Queued - Claude will read it after the current step",
+                note="Under a message Claude Code holds while it works")
+BUTTON_TEXT = Msg("sendnow.btn.send", "⚡ Send now",
+                  note="Button: hand the held message to Claude now")
+TOAST_SENT = Msg("toast.sendnow_sent", "Sent to Claude now", note="Pop-up: Send now worked")
+TOAST_TAKEN = Msg("toast.sendnow_taken", "Already taken",
+                  note="Pop-up: Claude already took the message")
+TOAST_INTERACTIVE = Msg("toast.sendnow_interactive", "Answer the open question first",
+                        note="Send now refused: Claude Code is waiting on a question")
+TOAST_TYPING = Msg("toast.sendnow_typing", "Busy typing a prompt, try again in a moment",
+                   note="Send now refused: aipager is typing a message into the session")
+TOAST_BUSY = Msg("toast.sendnow_busy", "Busy, try again in a moment",
+                 note="Send now refused: not known yet whether a question is open")
+TOAST_FAILED = Msg("toast.sendnow_failed", "Could not reach Claude, try again",
+                   note="Send now failed")
+TOAST_SENDING = Msg("toast.sendnow_sending", "Sending to Claude now",
+                    note="Pop-up: Send now is under way")
+LINE_TEXT_UNREACHED = Msg("sendnow.line_unreached",
+                          "⏳ Queued - could not reach Claude, tap Send now to try again",
+                          note="The queued line after Send now failed")
+TOAST_CANNOT_PROMPT = Msg("toast.sendnow_cant_prompt", "You can't send to this session",
+                          note="Pop-up: the person may not send to this session")
+TOAST_UNAVAILABLE = Msg("toast.session_unavailable", "That session is no longer available",
+                        note="Pop-up: a button whose session has ended or is no longer known "
+                             "in this chat")
+REPLY_SENT = Msg("sendnow.reply_sent", "⚡ Sent to Claude now", note="/now: it was sent")
+REPLY_NOTHING = Msg("sendnow.reply_nothing", "Nothing is waiting in the queue",
+                    note="/now with nothing held")
+NOT_FOUND = Msg("toast.session_not_found", "Session not found",
+                note="Pop-up: the button's session no longer exists")
+REPLY_NO_SESSION = Msg("sendnow.reply_no_session", "No active session.",
+                       note="/now with no session")
 
 # The line timer's and the queue watcher's waits. Module attributes so tests
 # replace THESE and never patch asyncio.sleep, which is the global module:
@@ -287,7 +307,7 @@ class SendNowMixin:
         # messages"). Only a Telegram mute refuses it: `send_text` returns
         # MUTED then, and no line goes into an active ban.
         sent = await send_text(
-            self._app.bot, chat_id, LINE_TEXT,
+            self._app.bot, chat_id, i18n.for_chat(chat_id).text(LINE_TEXT),
             reply_to_message_id=msg_id,
             reply_markup=self._build_send_now_keyboard(sess, msg_id),
             rate_limit_args=_rl_args(priority=PRIORITY_INSTANT),
@@ -331,7 +351,7 @@ class SendNowMixin:
 
         chat_id = resolve_chat_id_int(sess) or 0
         return InlineKeyboardMarkup([[InlineKeyboardButton(
-            BUTTON_TEXT,
+            i18n.for_chat(chat_id).text(BUTTON_TEXT),
             callback_data=session_parity.session_cb(
                 self, chat_id, sess, f"now:{msg_id}"),
         )]])
@@ -646,26 +666,28 @@ class SendNowMixin:
                                    session_name: str, raw_msg_id: str) -> None:
         """The line's "⚡ Send now" button (callback verb ``now:<msg_id>``,
         already resolved from its chat's short-form index)."""
+        # Pop-ups are the tapper's.
+        person = i18n.for_person(update)
         try:
             msg_id = int(raw_msg_id)
         except (TypeError, ValueError):
-            await self._safe_answer(query, "Invalid callback")
+            await self._safe_answer(query, person.text(INVALID_CALLBACK))
             return
         chat_id = calling_chat_id(update)
         tapped_id = getattr(getattr(query, "message", None), "message_id", None)
         sess = self.registry.get(session_name)
         if sess is None:
-            await self._safe_answer(query, "Session not found")
+            await self._safe_answer(query, person.text(NOT_FOUND))
             if chat_id and type(tapped_id) is int:
                 self._delete_queued_line_later(chat_id, tapped_id)
             return
         user_id = getattr(getattr(query, "from_user", None), "id", None)
         if not self._can_prompt_user(user_id, chat_id):
             # The line stays: someone else in the chat may tap it (D6).
-            await self._safe_answer(query, TOAST_CANNOT_PROMPT)
+            await self._safe_answer(query, person.text(TOAST_CANNOT_PROMPT))
             return
         if session_foreign_to(sess, chat_id):
-            await self._safe_answer(query, TOAST_UNAVAILABLE)
+            await self._safe_answer(query, person.text(TOAST_UNAVAILABLE))
             return
         # The core in its own task (its checks and the chord's start still
         # run in one step, in that task): the toast cannot wait past the
@@ -675,7 +697,7 @@ class SendNowMixin:
         core.add_done_callback(_BACKGROUND_TASKS.discard)
         await asyncio.wait({core}, timeout=SEND_NOW_TOAST_WAIT)
         if not core.done():
-            await self._safe_answer(query, TOAST_SENDING)
+            await self._safe_answer(query, person.text(TOAST_SENDING))
             await asyncio.wait({core})
             outcome = core.result()
             if outcome.result in ("sent", "taken"):
@@ -693,7 +715,7 @@ class SendNowMixin:
             "held": TOAST_BUSY,
             "typing": TOAST_TYPING,
         }.get(outcome.result, TOAST_FAILED)
-        await self._safe_answer(query, toast)
+        await self._safe_answer(query, person.text(toast))
         if outcome.result not in ("sent", "taken"):
             return
         self._drop_tapped_line(sess, msg_id, chat_id, tapped_id,
@@ -750,7 +772,8 @@ class SendNowMixin:
         line_chat, line_id = rec
         try:
             await edit_text_at(
-                self._app.bot, text=LINE_TEXT_UNREACHED, chat_id=line_chat,
+                self._app.bot, text=i18n.for_chat(line_chat).text(LINE_TEXT_UNREACHED),
+                chat_id=line_chat,
                 message_id=line_id,
                 reply_markup=self._build_send_now_keyboard(sess, msg_id),
                 rate_limit_args=_rl_args(priority=PRIORITY_INSTANT),
@@ -776,15 +799,15 @@ class SendNowMixin:
             # the sender's own target (8.90), or ask which.
             if await self._ask_which_session(update):
                 return
-            await reply_text(update.message, REPLY_NO_SESSION)
+            await reply_text(update.message, i18n.for_update(update).text(REPLY_NO_SESSION))
             return
         outcome = await self._send_now_core(sess, None)
         if outcome.result == "sent":
             self._drop_all_queued_lines(sess)
-        await reply_text(update.message, {
+        await reply_text(update.message, i18n.for_update(update).text({
             "sent": REPLY_SENT,
             "nothing": REPLY_NOTHING,
             "interactive": TOAST_INTERACTIVE,
             "held": TOAST_BUSY,
             "typing": TOAST_TYPING,
-        }.get(outcome.result, TOAST_FAILED))
+        }.get(outcome.result, TOAST_FAILED)))

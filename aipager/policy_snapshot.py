@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import secrets
+import stat
 import time
 from pathlib import Path
 
@@ -337,7 +338,8 @@ def floor_snapshot(policy=None) -> dict:
 
 
 def resolve_snapshot(role, scope, member, style_text: str = "",
-                     reply_context: str = "", *, policy=None) -> dict:
+                     reply_context: str = "", *, policy=None,
+                     root_bound=None) -> dict:
     """Compute the effective rule sets for a driver (pure).
 
     ``role`` is a policy.Role (or None), ``scope`` a scope.Scope (or
@@ -362,6 +364,13 @@ def resolve_snapshot(role, scope, member, style_text: str = "",
     The safety floor is the built-in one plus policy.yaml's ``safety:``
     section (roadmap 8.96): *policy*'s when given, else the daemon's
     live policy (:func:`safety_floor_lists`).
+
+    ``root_bound`` (``member_root.RootBound``: ``root`` and ``deny``,
+    computed by the daemon for the scope the sender's role comes from)
+    holds a role without ``can_manage`` to its members' root folder: the
+    result gains ``root``, and every other scope's root goes into
+    ``deny_paths_no_access``. Ignored for a role with ``can_manage`` and
+    for no role, so an owner's or admin's snapshot has no ``root``.
     """
     floor_lists = safety_floor_lists(policy)
     bypass_safety = bool(role and role.bypass_safety)
@@ -392,7 +401,17 @@ def resolve_snapshot(role, scope, member, style_text: str = "",
             deny_tools |= set(getattr(member, "deny_tools", ()))
             allow_tools |= set(getattr(member, "allow_tools", ()))
 
-    return {
+    root = None
+    if (root_bound is not None and role is not None
+            and getattr(role, "can_manage", False) is not True):
+        # Applied whatever the bypasses, like the floor lists: the root
+        # follows can_manage, not bypass_role_denies.
+        root = safety.normalise_root(getattr(root_bound, "root", None))
+        for p in getattr(root_bound, "deny", ()) or ():
+            if isinstance(p, str) and p and "\x00" not in p:
+                no_access.add(p.rstrip("/") + "/**")
+
+    out = {
         "origin": "telegram",
         "bypass_safety": bypass_safety,
         # Writes confined to the session's folder + scratchpad (roadmap
@@ -407,11 +426,14 @@ def resolve_snapshot(role, scope, member, style_text: str = "",
         "style_text": style_text,
         "reply_context": reply_context,
     }
+    if root is not None:
+        out["root"] = root
+    return out
 
 
 def write_snapshot(session_name: str, role, scope, member,
                    style_text: str = "", reply_context: str = "", *,
-                   policy=None) -> None:
+                   policy=None, root_bound=None) -> None:
     """Atomic-write the resolved snapshot for a session (best-effort).
 
     ``reply_context`` defaults to ``""`` — every one of the (12+)
@@ -420,7 +442,7 @@ def write_snapshot(session_name: str, role, scope, member,
     every turn rather than silently keeping a prior turn's value.
     """
     data = resolve_snapshot(role, scope, member, style_text, reply_context,
-                            policy=policy)
+                            policy=policy, root_bound=root_bound)
     path = snapshot_path(session_name)
     try:
         tmp = path.with_suffix(path.suffix + ".tmp")
@@ -484,6 +506,7 @@ def write_note(
     author_user_id=_FROM_SENDER_KEY,
     scope_mode: bool = False,
     policy=None,
+    root_bound=None,
 ) -> Path | None:
     """Write one per-message policy note (design.md "queue handoff").
 
@@ -512,7 +535,7 @@ def write_note(
     daemon's live policy when ``None``, :func:`resolve_snapshot`).
     """
     note = resolve_snapshot(role, scope, member, style_text, reply_context,
-                            policy=policy)
+                            policy=policy, root_bound=root_bound)
     note["msg_id"] = msg_id
     note["chat_id"] = chat_id
     note["sender_key"] = list(sender_key) if sender_key is not None else None
@@ -521,6 +544,12 @@ def write_note(
     if author_user_id is _FROM_SENDER_KEY:
         author_user_id = sender_key[1] if sender_key else None
     note["author_user_id"] = author_user_id if author_user_id else None
+    # Who wrote it, for display only (a receipt names the turn's driver;
+    # roadmap "peer message authority"). Never read for a decision.
+    note["author_label"] = (str(getattr(member, "label", "") or "")[:64]
+                            if member is not None else "")
+    note["author_role"] = (str(getattr(member, "role", "") or "")[:32]
+                           if member is not None else "")
     note["body"] = body
     note["raw_text"] = raw_text
     note["queued_at"] = time.time()
@@ -718,6 +747,17 @@ def delete_notes(session_name: str, notes: list[dict]) -> None:
         _unlink_note(Path(path))
 
 
+#: Claude Code's local slash commands: they run in the terminal with no
+#: prompt (no UserPromptSubmit), so nothing ever consumes their note.
+LOCAL_COMMANDS = frozenset({
+    "/compact", "/model", "/clear", "/cost", "/context", "/status",
+    "/config", "/help", "/memory", "/permissions", "/usage", "/exit",
+    "/quit", "/mcp", "/agents", "/hooks", "/doctor", "/export", "/rewind",
+    "/resume", "/add-dir", "/theme", "/statusline", "/fast", "/output-style",
+    "/release-notes", "/upgrade", "/login", "/logout", "/ide", "/vim",
+})
+
+
 def match_notes_prefix_run(outstanding: list[dict], content: str) -> list[dict]:
     """The longest PREFIX run of *outstanding* (oldest-first) whose
     ``body`` appears, in order, as a substring of *content*.
@@ -731,12 +771,39 @@ def match_notes_prefix_run(outstanding: list[dict], content: str) -> list[dict]:
     previous match left off; the first note whose body can't be found
     stops the run — everything before it is "matched", everything from
     it onward is not.
+
+    Slash-command notes follow two extra rules ("peer message authority",
+    C13):
+
+    - A command is never batched with other text, so its note matches only
+      a prompt that STARTS with that command (its first token), never one
+      that merely contains it.
+    - A LOCAL command's note (:data:`LOCAL_COMMANDS`: ``/compact``,
+      ``/model``…) that does not match is passed over, not a stop. A local
+      command runs with no prompt of its own and no hook that consumes its
+      note, so its note lingers until a turn end marks it ran. Stopping
+      there left the next real message unmatched, and its turn fell back
+      to the strictest merge of everything waiting: the owner's own
+      message ran with the lingering note's rights (Mohamad's VM,
+      2026-10-09). Passed over, it stays outstanding: it can still only
+      make a fallback merge stricter.
     """
     matched: list[dict] = []
     cursor = 0
     for note in outstanding:
         body = note.get("body") or ""
         if not body:
+            break
+        if body.lstrip().startswith("/"):
+            name = _first_token(body)
+            if cursor == 0 and _first_token(content) == name \
+                    and body.strip() in content:
+                idx = content.find(body.strip())
+                matched.append(note)
+                cursor = idx + len(body.strip())
+                continue
+            if name in LOCAL_COMMANDS:
+                continue
             break
         idx = content.find(body, cursor)
         if idx == -1:
@@ -1035,6 +1102,10 @@ def merge_snapshots(notes: list[dict]) -> dict:
       substitutes :data:`_ALLOW_TOOLS_SENTINEL` — a value that can never
       equal a real tool name — so ``tool_violation`` denies every tool
       rather than reading the empty result as "unrestricted".
+    - ``root`` (a members' root folder) is :func:`safety.merge_roots`: a
+      note without one imposes nothing on this axis, a narrower nested
+      root wins, and roots that do not nest (or a malformed one) give
+      :data:`safety.ROOT_SENTINEL`, never "no root".
     """
     if not notes:
         return floor_snapshot()
@@ -1072,7 +1143,7 @@ def merge_snapshots(notes: list[dict]) -> dict:
             _ALLOW_TOOLS_SENTINEL)
 
     last = ordered[-1]
-    return {
+    merged = {
         "origin": "telegram",
         "bypass_safety": bypass_safety,
         "confine_writes": confine_writes,
@@ -1084,6 +1155,10 @@ def merge_snapshots(notes: list[dict]) -> dict:
         "style_text": last.get("style_text") or "",
         "reply_context": last.get("reply_context") or "",
     }
+    root = safety.merge_roots(n.get("root") for n in ordered)
+    if root is not None:
+        merged["root"] = root
+    return merged
 
 
 # The line ``session_ops._inject_prompt`` prepends to every Telegram
@@ -1180,6 +1255,9 @@ def carried_snapshot(current) -> dict | None:
     carried = {f: list(current.get(f) or []) for f in _LIST_FIELDS}
     carried["bypass_safety"] = current.get("bypass_safety") is True
     carried["confine_writes"] = current.get("confine_writes") is not False
+    root = safety.normalise_root(current.get("root"))
+    if root is not None:
+        carried["root"] = root
     # A confined turn gets the whole floor back, credential files included;
     # an owner's or admin's only the part every snapshot carries.
     floor = (floor_snapshot() if carried["confine_writes"]
@@ -1230,6 +1308,7 @@ def snapshot_for_prompt(
     session_name: str, prompt_text: str,
     outstanding: list[dict], consumed: list[dict], *,
     turn_open: bool = False,
+    envelope: dict | None = None,
 ) -> dict:
     """The canonical snapshot a ``UserPromptSubmit`` writes
     (``notify_hook._match_and_promote``).
@@ -1239,10 +1318,18 @@ def snapshot_for_prompt(
     - Notes matched (``consumed``): their merge, exactly as before — this
       is how a different, less-privileged sender's message lowers the turn.
       The merged bodies are recorded as ``note_bodies``.
-    - No note matched: :func:`snapshot_for_unattributed_prompt` keeps the
-      current snapshot when the prompt adds no unattributed Telegram text.
-    - Otherwise: the old answer — every outstanding note's merge, or
-      :func:`floor_snapshot` when none is waiting.
+    - No note matched and the prompt is only the bodies the current
+      snapshot already ran (Claude Code delivering a Telegram message a
+      second time after a compact, 8.49): the current snapshot is kept.
+    - Any other prompt no note matched never keeps the previous turn's
+      rights ("peer message authority", I3): with no Telegram marker the
+      floor (a terminal prompt is still unrestricted: ``enforce`` reads
+      its origin), with one the old answer (every outstanding note's
+      merge, or the floor). Both are marked ``verify_origin`` so
+      ``enforce`` checks what Claude Code recorded as the prompt's origin.
+    - A message from another session (*envelope*, parsed by the caller
+      with :func:`aipager.peer_auth.parse_envelope`) gets the peer floor
+      until ``enforce`` verifies its sender (:func:`_fresh_peer_snapshot`).
 
     It also records the turn's origin (``turn_origin``, see
     :func:`_fresh_turn_origin`).
@@ -1255,10 +1342,31 @@ def snapshot_for_prompt(
     more rights never widens it.
     """
     current = read_snapshot(session_name)
-    answer = _fresh_turn_snapshot(current, prompt_text, outstanding, consumed)
+    if envelope is not None:
+        # A message from another session ("peer message authority"): its
+        # rights come from its sender, never from this session's previous
+        # turn (I3) nor from the text.
+        if turn_open:
+            return _join_peer(session_name, current, envelope, consumed,
+                              prompt_text)
+        return _fresh_peer_snapshot(current, envelope, consumed)
+    scheduled = None if turn_open else read_trigger(session_name, prompt_text)
+    answer = _fresh_turn_snapshot(
+        current, prompt_text, outstanding, consumed, fresh=not turn_open,
+        scheduled=scheduled)
+    if (not turn_open and scheduled is None and answer.get("verify_origin") is True
+            and not consumed and not _has_telegram_marker(prompt_text or "")):
+        # Unattributed: if it turns out to be a bare /loop firing (its
+        # transcript entry says so), ``enforce`` applies the loop's rights.
+        loop = read_trigger(session_name, LOOP_SENTINELS[0])
+        if loop is not None:
+            answer["loop_rules"] = loop
     if turn_open:
         return _join_running_turn(current, answer, consumed, prompt_text)
     answer["turn_origin"] = _fresh_turn_origin(prompt_text, consumed, answer)
+    if answer.get("scheduled") is True:
+        # Never a pure terminal turn: a message joining it keeps its rules.
+        answer["turn_origin"] = "scheduled"
     return answer
 
 
@@ -1288,9 +1396,14 @@ def snapshot_after_failure(
 
 def _fresh_turn_snapshot(
     current, prompt_text: str, outstanding: list[dict], consumed: list[dict],
+    *, fresh: bool = False, scheduled: dict | None = None,
 ) -> dict:
     """:func:`snapshot_for_prompt`'s answer for a prompt that starts a turn
-    (the behaviour before roadmap 8.77, unchanged)."""
+    (*fresh*), or what a message joining a running turn would write alone
+    (the behaviour before roadmap 8.77). Only a fresh turn applies the
+    "no previous rights" rule (I3): a message joining a running turn is
+    merged with it, strictest wins, and must not demote it for nothing
+    (roadmap 8.49)."""
     if consumed:
         merged = merge_snapshots(consumed)
         bodies = [
@@ -1302,6 +1415,50 @@ def _fresh_turn_snapshot(
         # Any scope-mode contributor makes the bodies count at the hook
         # (roadmap 8.74): stricter, never looser.
         merged["scope_mode"] = any(n.get("scope_mode") is True for n in consumed)
+        drivers = _drivers_of(consumed)
+        if drivers:
+            merged["drivers"] = drivers
+        return merged
+    if fresh and not _only_note_bodies(current, prompt_text):
+        # A fresh turn no Telegram message accounts for ("peer message
+        # authority", I3): never the previous turn's rights. Typed in the
+        # terminal it is still unrestricted (``enforce`` reads its origin
+        # from the transcript); a message from another session, a channel
+        # push or anything else Claude Code delivers gets the floor. The
+        # all-outstanding fallback below stays for marked Telegram text
+        # no note matched (it is the strictest of what waits).
+        if not _has_telegram_marker(prompt_text or ""):
+            # The floor, and never less than any message still waiting
+            # (strictest of them all); the newest waiting message's style,
+            # else the chat's current one. A prompt this session scheduled
+            # (a /loop, a cron: :func:`read_trigger`) gets the rights of
+            # the turn that scheduled it instead of the floor.
+            base = floor_snapshot()
+            if scheduled is not None:
+                base.update(safety_rules({**base, **scheduled}))
+            base["queued_at"] = float("-inf")
+            base["style_text"] = (current.get("style_text") or ""
+                                  if isinstance(current, dict) else "")
+            base["reply_context"] = ""
+            if outstanding:
+                snap = merge_snapshots([base, *outstanding])
+            elif scheduled is not None:
+                snap = dict(base)
+                del snap["queued_at"]
+            else:
+                snap = floor_snapshot()
+                snap["style_text"] = base["style_text"]
+                snap["reply_context"] = ""
+            if scheduled is not None:
+                snap["scheduled"] = True
+            snap["verify_origin"] = True
+            return snap
+        merged = merge_snapshots(outstanding)
+        carried = _carried_command_bodies(current, [])
+        if carried:
+            merged["note_bodies"] = carried
+            merged["scope_mode"] = current.get("scope_mode") is True
+        merged["verify_origin"] = True
         return merged
     kept = snapshot_for_unattributed_prompt(current, outstanding, prompt_text)
     if kept is not None:
@@ -1380,7 +1537,8 @@ def _join_running_turn(
     """
     cur = current if isinstance(current, dict) else {}
     pure_terminal = (cur.get("turn_origin") == "terminal"
-                     and cur.get("joined_from_telegram") is not True)
+                     and cur.get("joined_from_telegram") is not True
+                     and "loop_rules" not in cur)  # maybe a bare /loop firing
     if pure_terminal:
         merged = dict(answer)
     else:
@@ -1401,25 +1559,771 @@ def _join_running_turn(
     merged["scope_mode"] = (answer.get("scope_mode") is True
                             or cur.get("scope_mode") is True)
     origin = cur.get("turn_origin")
-    merged["turn_origin"] = origin if origin in ("terminal", "telegram") \
-        else "telegram"
+    merged["turn_origin"] = origin if origin in (
+        "terminal", "telegram", "peer", "scheduled") else "telegram"
     merged["joined_from_telegram"] = (
         cur.get("joined_from_telegram") is True
         or any(n.get("scope_mode") is True for n in consumed)
         or _has_telegram_marker(prompt_text or ""))
+    # A turn started by a message from another session keeps its peer
+    # state through every join ("peer message authority", C2/C3). While
+    # its sender is still being checked, each joining message's rules are
+    # kept apart too, so the check's result is merged with them: a member
+    # whose message joined a pending turn never rides an owner's receipt.
+    _carry_peer_state(cur, merged)
+    peer = cur.get("peer")
+    if isinstance(peer, dict) and peer.get("status") == "pending":
+        merged["pending_joins"] = [
+            *_rule_list(cur.get("pending_joins")), safety_rules(answer)]
+    # A scheduled prompt's turn stays one ("peer message authority").
+    for k in SCHEDULED_STATE_FIELDS:
+        if k in cur:
+            v = cur[k]
+            merged[k] = (json.loads(json.dumps(v))
+                         if isinstance(v, (dict, list)) else v)
+    if "loop_rules" in cur and (consumed or _has_telegram_marker(prompt_text or "")):
+        # Telegram text joined before the loop's rights were adopted: they
+        # will be merged with its rules. (Text typed in the terminal adds
+        # none: its answer is only the running turn's own snapshot.)
+        merged["loop_joins"] = [*_rule_list(cur.get("loop_joins")),
+                                safety_rules(answer)]
+    drivers = _merge_drivers(cur.get("drivers"), answer.get("drivers"))
+    if drivers:
+        merged["drivers"] = drivers
     return merged
+
+
+# ---- Messages between sessions ("peer message authority") -----------------
+#
+# A message one Claude session sends another (Claude Code's SendMessage)
+# runs with exactly the rights the sending turn had, proven by a receipt
+# (:mod:`aipager.peer_auth`), and with the peer floor until then or when
+# that cannot be proven. These helpers write the receiver's side of it at
+# UserPromptSubmit; ``enforce`` verifies the sender before any tool runs.
+
+#: Snapshot fields that describe a turn's peer state. Carried through
+#: every join and narrowing: losing one would let ``enforce`` read the
+#: turn as an ordinary one again.
+PEER_STATE_FIELDS = ("peer", "pending_joins", "joined_peers",
+                     "joined_from_peer", "verify_origin", "peer_notice")
+
+#: A scheduled prompt's turn ("peer message authority", review 5): kept
+#: through every join and narrowing, so the turn is still read from its
+#: own bytes and a bare /loop's rights, once adopted, are merged with
+#: every message that joined it meanwhile (``loop_joins``).
+SCHEDULED_STATE_FIELDS = ("scheduled", "turn_start_size", "loop_rules",
+                          "loop_joins", "loop_waited")
+
+
+def peer_floor_snapshot() -> dict:
+    """The floor plus no file changes and no web: the rights of a message
+    from another session whose sender could not be proven."""
+    from aipager.peer_auth import PEER_EXTRA_DENY_TOOLS
+    snap = floor_snapshot()
+    snap["deny_tools"] = sorted(set(snap["deny_tools"]) | set(PEER_EXTRA_DENY_TOOLS))
+    return snap
+
+
+def verify_flag_path(session_name: str) -> Path:
+    return snapshot_path(session_name).with_suffix(".verify")
+
+
+def mark_verify_origin(session_name: str) -> None:
+    """Flag the running job for an origin check (a continuation woke it:
+    Claude Code also delivers another session's text as a task
+    notification). Best-effort."""
+    if not session_name:
+        return
+    try:
+        fd = os.open(verify_flag_path(session_name),
+                     os.O_WRONLY | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        os.close(fd)
+    except (OSError, ValueError):
+        log.debug("could not flag %s for an origin check", session_name,
+                  exc_info=True)
+
+
+def clear_verify_origin(session_name: str) -> None:
+    try:
+        verify_flag_path(session_name).unlink(missing_ok=True)
+    except (OSError, ValueError):
+        pass
+
+
+def verify_origin_flagged(session_name: str) -> bool:
+    """True when the flag is set; an error other than "not there" reads as
+    set (the stricter answer)."""
+    if not session_name:
+        return False
+    try:
+        os.stat(verify_flag_path(session_name))
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except (OSError, ValueError):
+        return True
+    return True
+
+
+def marked_for_verification(snap) -> bool:
+    """True when ``enforce`` must check the turn's origin before trusting
+    *snap*'s rights, the owner's bypass included."""
+    if not isinstance(snap, dict):
+        return False
+    if snap.get("turn_origin") == "peer":
+        return True
+    return any(snap.get(k) for k in ("peer", "pending_joins", "joined_peers",
+                                     "joined_from_peer", "verify_origin"))
+
+
+def _only_note_bodies(current, prompt_text: str) -> bool:
+    """True when *prompt_text* is nothing but bodies the current snapshot
+    already ran (a Telegram message delivered a second time after a
+    compact, roadmap 8.49)."""
+    if not isinstance(current, dict):
+        return False
+    bodies = current.get("note_bodies")
+    if not isinstance(bodies, list):
+        return False
+    bodies = [b for b in bodies if isinstance(b, str) and b]
+    if not bodies:
+        return False
+    rest = prompt_text or ""
+    for body in bodies:
+        rest = rest.replace(body, "")
+    return not rest.strip()
+
+
+def _rule_list(v) -> list[dict]:
+    return [safety_rules(r) for r in v if isinstance(r, dict)] \
+        if isinstance(v, list) else []
+
+
+def _drivers_of(notes) -> list[dict]:
+    """Who wrote *notes* (display only): ``[{user_id, label, role}]``."""
+    out: list[dict] = []
+    for n in notes or ():
+        if not isinstance(n, dict):
+            continue
+        d = {"user_id": note_driver_id(n),
+             "label": str(n.get("author_label") or "")[:64],
+             "role": str(n.get("author_role") or "")[:32]}
+        if d not in out:
+            out.append(d)
+    return out[:8]
+
+
+def _merge_drivers(a, b) -> list[dict]:
+    out: list[dict] = []
+    for d in [*(a if isinstance(a, list) else []),
+              *(b if isinstance(b, list) else [])]:
+        if isinstance(d, dict) and d not in out:
+            out.append(d)
+    return out[:8]
+
+
+def _carry_peer_state(cur: dict, merged: dict) -> None:
+    for k in PEER_STATE_FIELDS:
+        if k in cur:
+            v = cur[k]
+            merged[k] = (json.loads(json.dumps(v))
+                         if isinstance(v, (dict, list)) else v)
+
+
+def _fresh_peer_snapshot(current, envelope: dict, consumed: list[dict]) -> dict:
+    """A fresh turn started by a message from another session: the peer
+    floor, marked pending, until ``enforce`` verifies its sender before
+    the first tool call. Any Telegram note matched OUTSIDE the envelope
+    (the caller matched only there, C4) is kept apart as a join, so the
+    verified result is merged with it."""
+    from aipager.peer_auth import NOTICE_PENDING, NOTICE_UNVERIFIED, body_sha256
+    body = envelope.get("body")
+    sha = body_sha256(body) if isinstance(body, str) else None
+    snap = peer_floor_snapshot()
+    joins = [safety_rules(merge_snapshots(consumed))] if consumed else []
+    if sha is None and joins:
+        snap = merge_snapshots([snap, *joins])
+    snap["turn_origin"] = "peer"
+    snap["verify_origin"] = True
+    snap["peer"] = {
+        "status": "pending" if sha else "unverified",
+        "body_sha256": sha,
+        "name": str(envelope.get("name") or "")[:64],
+        "claimed_pid": envelope.get("claimed_pid"),
+    }
+    snap["pending_joins"] = joins if sha else []
+    snap["joined_peers"] = []
+    snap["peer_notice"] = NOTICE_PENDING if sha else NOTICE_UNVERIFIED
+    snap["note_bodies"] = [n["body"] for n in consumed
+                           if isinstance(n.get("body"), str) and n["body"]]
+    snap["scope_mode"] = (any(n.get("scope_mode") is True for n in consumed)
+                          or (isinstance(current, dict)
+                              and current.get("scope_mode") is True))
+    snap["style_text"] = (current.get("style_text") or ""
+                          if isinstance(current, dict) else "")
+    snap["reply_context"] = ""
+    return snap
+
+
+def session_chat(session_name: str):
+    """The chat a session name's suffix names, as ``[id, kind]``, or None
+    for a name without one (a single-chat install)."""
+    try:
+        from aipager.scope import chat_from_suffix
+        chat = chat_from_suffix(session_name or "")
+    except Exception:
+        return None
+    return list(chat) if chat else None
+
+
+def receipt_rules(session_name: str, receipts: list[dict]) -> tuple[dict, str]:
+    """The rules a set of claimed receipts gives *session_name*: their
+    strictest merge, with the peer floor added when any one of them may not
+    cross into this session's chat (roles are per chat, 8.73), or when
+    there are none. Returns ``(rules, status)``, status ``verified`` or
+    ``unverified``."""
+    from aipager.peer_auth import receipt_honoured_across_chats
+    if not receipts:
+        return safety_rules(peer_floor_snapshot()), "unverified"
+    mine = session_chat(session_name)
+    parts: list[dict] = []
+    status = "verified"
+    for r in receipts:
+        if r.get("sender_chat") != mine and not receipt_honoured_across_chats(r):
+            parts.append(peer_floor_snapshot())
+            status = "unverified"
+            continue
+        parts.append(dict(r["rules"]))
+    return safety_rules(merge_snapshots(parts)), status
+
+
+def _join_peer(session_name: str, current, envelope: dict,
+               consumed: list[dict], prompt_text: str) -> dict:
+    """A message from another session joining a running turn: the turn
+    narrows to the strictest of itself and the message's rights. Those
+    come from receipts for this body (claimed by body hash: joining can
+    only narrow, so no sender process check is needed), else the peer
+    floor. The same message delivered again (after a compact, C9) changes
+    nothing."""
+    from aipager.peer_auth import body_sha256, claim_receipts
+    cur = current if isinstance(current, dict) else {}
+    body = envelope.get("body")
+    sha = body_sha256(body) if isinstance(body, str) else None
+    peer = cur.get("peer")
+    if sha and isinstance(peer, dict) and peer.get("body_sha256") == sha:
+        return dict(cur)
+    joined = cur.get("joined_peers") if isinstance(cur.get("joined_peers"), list) else []
+    if sha and any(isinstance(j, dict) and j.get("body_sha256") == sha
+                   for j in joined):
+        return dict(cur)
+    receipts = (claim_receipts(sha, exclude_session=session_name)
+                if sha else [])
+    rules, status = receipt_rules(session_name, receipts)
+    answer = dict(rules)
+    answer["style_text"] = cur.get("style_text") or ""
+    answer["reply_context"] = ""
+    if consumed:
+        answer = merge_snapshots([answer, *consumed])
+    merged = _join_running_turn(current, answer, consumed, prompt_text)
+    merged["joined_from_peer"] = True
+    merged["joined_peers"] = [*joined, {
+        "body_sha256": sha, "status": status,
+        "sender_session": receipts[0].get("sender_session") if receipts else None,
+    }][-16:]
+    return merged
+
+
+def narrow_for_peer_join(session_name: str, content) -> bool:
+    """The daemon's backstop for a message from another session queued
+    into a running turn (a transcript ``enqueue`` line whose content is a
+    peer envelope): narrow the turn to the message's proven rights, or the
+    peer floor, unless a UserPromptSubmit already accounted for it. Returns
+    True when it narrowed. Never raises, and never blocks the daemon's
+    loop: it takes the snapshot lock only if it is free at once.
+
+    When it cannot narrow (no turn running, so the message will start the
+    next one with no UserPromptSubmit; the lock is held by a hook) it
+    marks the session for an origin check instead (:func:`mark_verify_origin`),
+    so the hook's own check accounts for the message at the next tool call.
+    It never writes the snapshot without the lock.
+    """
+    try:
+        from aipager.peer_auth import body_sha256, claim_receipts, parse_envelope
+        env = parse_envelope(content)
+        if env is None:
+            return False
+        body = env.get("body")
+        sha = body_sha256(body) if isinstance(body, str) else None
+        if not turn_is_open(session_name):
+            # No turn is running: the message starts a turn of its own,
+            # whose UserPromptSubmit (or ``enforce``) checks its sender.
+            # Claiming its receipt here would leave that check nothing; the
+            # mark ends the owner short-circuit until a fresh prompt.
+            mark_verify_origin(session_name)
+            return False
+        with snapshot_lock(session_name, timeout=0) as held:
+            if not held:
+                mark_verify_origin(session_name)
+                return False
+            cur = read_snapshot(session_name)
+            if not isinstance(cur, dict):
+                return False  # no turn to narrow; enforce holds it to the floor
+            peer = cur.get("peer")
+            seen = {j.get("body_sha256") for j in cur.get("joined_peers") or ()
+                    if isinstance(j, dict)}
+            if isinstance(peer, dict):
+                seen.add(peer.get("body_sha256"))
+            if sha is not None and sha in seen:
+                return False
+            receipts = (claim_receipts(sha, exclude_session=session_name)
+                        if sha else [])
+            rules, status = receipt_rules(session_name, receipts)
+            new = narrowed_snapshot(cur, [rules])
+            new["verify_origin"] = True
+            new["joined_from_peer"] = True
+            prev = new.get("joined_peers") if isinstance(new.get("joined_peers"), list) else []
+            new["joined_peers"] = [*prev, {
+                "body_sha256": sha, "status": status, "missed": True,
+                "sender_session": receipts[0].get("sender_session") if receipts else None,
+            }][-16:]
+            write_merged_snapshot(session_name, new)
+            return True
+    except Exception:
+        log.debug("peer join narrowing failed for %s", session_name, exc_info=True)
+        return False
+
+
+# ---- Serialising snapshot writes --------------------------------------------
+
+def lock_path(session_name: str) -> Path:
+    """Beside the snapshot (``claude-policy-<session>.lock``), under the
+    same protected name and wherever the snapshot itself lives."""
+    return snapshot_path(session_name).with_suffix(".lock")
+
+
+class snapshot_lock:
+    """``with snapshot_lock(name, timeout) as held:``: an exclusive
+    ``flock`` on the session's lock file around a read-modify-write of its
+    snapshot (the hook's pick-up and peer check, the daemon's narrowing),
+    so no writer works from a snapshot another one is replacing. *held* is
+    False when the lock could not be taken in *timeout* seconds; the
+    caller decides (the hook falls back to the stricter answer)."""
+
+    def __init__(self, session_name: str, timeout: float = 5.0):
+        self.session_name = session_name
+        self.timeout = timeout
+        self.fd: int | None = None
+        self.held = False
+
+    def __enter__(self) -> bool:
+        import fcntl
+        try:
+            self.fd = os.open(lock_path(self.session_name),
+                              os.O_RDWR | os.O_CREAT
+                              | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        except (OSError, ValueError):
+            return False
+        deadline = time.monotonic() + max(0.0, self.timeout)
+        while True:
+            try:
+                fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self.held = True
+                return True
+            except OSError:
+                if time.monotonic() >= deadline:
+                    return False
+                time.sleep(0.01)
+
+    def __exit__(self, *exc) -> None:
+        if self.fd is None:
+            return
+        try:
+            if self.held:
+                import fcntl
+                fcntl.flock(self.fd, fcntl.LOCK_UN)
+        finally:
+            os.close(self.fd)
+            self.fd = None
+
+
+# ---- Per-agent pins (phase C) -------------------------------------------------
+#
+# A background agent can outlive the turn that launched it, and there is one
+# snapshot per session: the next turn's rights would apply to it. At
+# SubagentStart the hook pins the launching turn's rights for that agent;
+# ``enforce`` holds the agent's tool calls to the strictest of its pin and
+# the session's current rights, so an agent never gains rights from a later
+# turn (and a later, stricter turn still restricts it).
+
+PIN_TTL_SECONDS = 24 * 3600.0
+_AGENT_ID_OK = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+
+
+def pins_dir(session_name: str) -> Path:
+    return snapshot_path(session_name).with_suffix(".pins")
+
+
+def _pins_dir_state(d: Path) -> str:
+    """``"missing"``, ``"ours"`` (a real directory of this user that no one
+    else can write) or ``"foreign"`` (anything else: a symlink, another
+    user's directory, a shared one). The pins sit in a shared temp folder."""
+    try:
+        st = os.lstat(d)
+    except FileNotFoundError:
+        return "missing"
+    except (OSError, ValueError):
+        return "foreign"
+    if (stat.S_ISDIR(st.st_mode) and st.st_uid == os.getuid()
+            and not st.st_mode & 0o077):
+        return "ours"
+    return "foreign"
+
+
+def _pin_name(agent_id) -> str | None:
+    if not isinstance(agent_id, str) or not 0 < len(agent_id) <= 64:
+        return None
+    if not set(agent_id) <= _AGENT_ID_OK:
+        return None
+    return f"{agent_id}.json"
+
+
+def write_pin(session_name: str, agent_id, pin: dict) -> bool:
+    """Pin *pin* (``{"rules": …, "terminal": bool}``) for *agent_id*."""
+    name = _pin_name(agent_id)
+    if name is None or not session_name:
+        return False
+    d = pins_dir(session_name)
+    try:
+        try:
+            d.mkdir(mode=0o700)
+        except FileExistsError:
+            pass
+        if _pins_dir_state(d) != "ours":
+            return False
+        now = time.time()
+        for p in d.iterdir():
+            try:
+                if now - p.stat().st_mtime > PIN_TTL_SECONDS:
+                    p.unlink()
+            except OSError:
+                pass
+        path = d / name
+        tmp = path.with_suffix(f".{os.getpid()}.tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+                     | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(pin))
+        os.replace(tmp, path)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def read_pin(session_name: str, agent_id) -> dict | None:
+    name = _pin_name(agent_id)
+    if name is None or not session_name:
+        return None
+    d = pins_dir(session_name)
+    state = _pins_dir_state(d)
+    if state == "missing":
+        return None
+    if state == "foreign":
+        return {}  # pins no one can trust: the caller fails closed
+    try:
+        fd = os.open(d / name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                     | getattr(os, "O_NONBLOCK", 0))
+        with os.fdopen(fd, "rb") as fh:
+            data = json.loads(fh.read(64 * 1024 + 1))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
+        return {}  # pinned but unreadable: no rules, so the caller fails closed
+    return data if isinstance(data, dict) else {}
+
+
+def drop_pin(session_name: str, agent_id) -> None:
+    name = _pin_name(agent_id)
+    if name is None or not session_name:
+        return
+    try:
+        (pins_dir(session_name) / name).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def clear_pins(session_name: str) -> None:
+    d = pins_dir(session_name)
+    try:
+        for p in d.iterdir():
+            try:
+                p.unlink()
+            except OSError:
+                pass
+        d.rmdir()
+    except OSError:
+        pass
+
+
+# ---- Scheduled prompts ("peer message authority", review 2) -----------------
+#
+# A prompt the session scheduled itself (Claude Code's CronCreate, the
+# /loop wakeups of ScheduleWakeup) fires later as a fresh prompt no
+# Telegram message accounts for. It carries the rights of the turn that
+# scheduled it: the hook records them when it allows the scheduling call,
+# keyed by the prompt's text, and the pick-up reads them back. Never more:
+# the same text scheduled twice keeps the stricter rights.
+
+#: Scheduled prompts recorded per session. A record lasts as long as the
+#: session (none expires or is pushed out: a fire that lost its record
+#: would fall back to a bare /loop's rights); past this many, scheduling
+#: another prompt is refused (``trigger_slot_free``).
+TRIGGER_MAX_COUNT = 256
+
+#: Claude Code's tools that schedule a prompt of this session to fire
+#: later (a cron, a /loop wakeup).
+SCHEDULING_TOOLS = ("CronCreate", "ScheduleWakeup")
+
+
+def triggers_dir(session_name: str) -> Path:
+    return snapshot_path(session_name).with_suffix(".triggers")
+
+
+#: What a bare /loop (or a loop.md loop) schedules: Claude Code swaps the
+#: loop's instructions in when it fires, so its text never matches. One
+#: record per session holds the strictest rights of every such loop.
+LOOP_SENTINELS = ("<<autonomous-loop-dynamic>>", "<<autonomous-loop>>")
+LOOP_RECORD = "loop.json"
+
+
+def _trigger_name(prompt) -> str | None:
+    if not isinstance(prompt, str) or not prompt.strip():
+        return None
+    if prompt.strip() in LOOP_SENTINELS:
+        return LOOP_RECORD
+    import hashlib
+    return hashlib.sha256(prompt.strip().encode("utf-8", "surrogatepass")).hexdigest() + ".json"
+
+
+def write_trigger(session_name: str, prompt, rules: dict, authors=()) -> bool:
+    """Record that *prompt*, when it fires, runs with *rules* (strictest
+    of these and any record already there), scheduled by *authors* (the
+    Telegram users whose turn it was: a live reload that takes rights from
+    one of them narrows the record too). Never raises."""
+    name = _trigger_name(prompt)
+    if name is None or not session_name:
+        return False
+    d = triggers_dir(session_name)
+    try:
+        try:
+            d.mkdir(mode=0o700)
+        except FileExistsError:
+            pass
+        if _pins_dir_state(d) != "ours":
+            return False
+        old_record = _read_trigger_record(d, name)
+        if old_record is None and _trigger_count(d) >= 2 * TRIGGER_MAX_COUNT:
+            # Full: never push another record out. The hard limit sits above
+            # the one ``enforce`` checks before allowing the call, so two
+            # calls allowed at the same moment are both still recorded.
+            return False
+        old = old_record.get("rules") if old_record else None
+        merged = safety_rules(merge_snapshots(
+            [rules, old] if isinstance(old, dict) else [rules]))
+        who = sorted({a for a in (*(old_record or {}).get("authors", ()), *authors)
+                      if isinstance(a, int) and not isinstance(a, bool)})
+        _write_trigger_record(d, name, {"rules": merged, "authors": who})
+        return True
+    except Exception:
+        log.debug("could not record a scheduled prompt for %s", session_name,
+                  exc_info=True)
+        return False
+
+
+def _trigger_count(d: Path) -> int:
+    try:
+        return sum(1 for f in d.iterdir() if f.name.endswith(".json"))
+    except OSError:
+        return 0
+
+
+def trigger_slot_free(session_name: str, prompt) -> bool:
+    """Whether *prompt* can be recorded: already recorded, or room for one
+    more. ``enforce`` refuses scheduling a prompt that could not be."""
+    name = _trigger_name(prompt)
+    if name is None or not session_name:
+        return True  # nothing to record (no text): Claude Code refuses it
+    d = triggers_dir(session_name)
+    state = _pins_dir_state(d)
+    if state == "missing":
+        return True
+    if state != "ours":
+        return False
+    return (_read_trigger_record(d, name) is not None
+            or _trigger_count(d) < TRIGGER_MAX_COUNT)
+
+
+def _write_trigger_record(d: Path, name: str, record: dict) -> None:
+    path = d / name
+    tmp = path.with_suffix(f".{os.getpid()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+                 | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(json.dumps(record))
+    os.replace(tmp, path)
+
+
+def _read_trigger_record(d: Path, name: str) -> dict | None:
+    """A record as stored (``rules``, ``authors``), None when missing,
+    unreadable or not well formed."""
+    try:
+        fd = os.open(d / name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                     | getattr(os, "O_NONBLOCK", 0))
+        with os.fdopen(fd, "rb") as fh:
+            data = json.loads(fh.read(64 * 1024 + 1))
+    except (OSError, ValueError):
+        return None
+    from aipager.peer_auth import well_formed_rules
+    if not isinstance(data, dict) or not well_formed_rules(data.get("rules")):
+        return None
+    authors = data.get("authors")
+    return {"rules": data["rules"],
+            "authors": [a for a in authors if isinstance(a, int) and not isinstance(a, bool)]
+            if isinstance(authors, list) else []}
+
+
+def narrow_triggers(session_name: str, rules_for) -> int:
+    """Live reload: hold every scheduled prompt of *session_name* to what
+    its authors may still do. *rules_for(user_id)* gives the rules a user's
+    work in flight must now be held to, or None when nothing was taken.
+    Returns how many records were narrowed. Never raises."""
+    d = triggers_dir(session_name)
+    if _pins_dir_state(d) != "ours":
+        return 0
+    n = 0
+    try:
+        names = [f.name for f in d.iterdir() if f.name.endswith(".json")]
+    except OSError:
+        return 0
+    for name in names:
+        try:
+            rec = _read_trigger_record(d, name)
+            if rec is None:
+                continue
+            extra: list[dict] = []
+            for uid in rec["authors"]:
+                r = rules_for(uid)
+                if r:
+                    extra += list(r)
+            if not extra:
+                continue
+            merged = safety_rules(merge_snapshots(
+                [{**rec["rules"], "queued_at": float("-inf")},
+                 *({**r, "queued_at": float("-inf")} for r in extra)]))
+            if merged != safety_rules(rec["rules"]):
+                _write_trigger_record(d, name, {"rules": merged,
+                                                "authors": rec["authors"]})
+                n += 1
+        except Exception:
+            log.debug("could not narrow a scheduled prompt of %s", session_name,
+                      exc_info=True)
+    return n
+
+
+def read_trigger(session_name: str, prompt) -> dict | None:
+    """The rules recorded for *prompt* (:func:`write_trigger`), or None:
+    none recorded, unreadable, or a folder no one can trust."""
+    name = _trigger_name(prompt)
+    if name is None or not session_name:
+        return None
+    d = triggers_dir(session_name)
+    if _pins_dir_state(d) != "ours":
+        return None
+    rec = _read_trigger_record(d, name)
+    return safety_rules(rec["rules"]) if rec else None
+
+
+def loop_rights(snap: dict) -> dict | None:
+    """A bare /loop's rights for *snap*: the recorded loop rules, never
+    wider than anything that joined or narrowed the turn before they were
+    adopted (``loop_joins``). None when there are none."""
+    loop = snap.get("loop_rules") if isinstance(snap, dict) else None
+    from aipager.peer_auth import well_formed_rules
+    if not well_formed_rules(loop):
+        return None
+    joins = _rule_list(snap.get("loop_joins"))
+    return safety_rules(merge_snapshots(
+        [{**loop, "queued_at": float("-inf")},
+         *({**j, "queued_at": float("-inf")} for j in joins)]))
+
+
+def adopt_loop_rules(session_name: str) -> dict | None:
+    """The turn a bare /loop fire started is confirmed (``enforce`` saw its
+    scheduled entry): give its snapshot the loop's recorded rights, under
+    the lock. Returns the snapshot, or None (no lock, nothing to adopt)."""
+    with snapshot_lock(session_name, timeout=5.0) as held:
+        if not held:
+            return None
+        cur = read_snapshot(session_name)
+        if not isinstance(cur, dict):
+            return None
+        rights = loop_rights(cur)
+        if rights is None:
+            return None
+        new = {k: v for k, v in cur.items()
+               if k not in ("loop_rules", "loop_joins", "loop_waited")}
+        new.update(rights)
+        new["scheduled"] = True
+        new["turn_origin"] = "scheduled"
+        write_merged_snapshot(session_name, new)
+        return new
+
+
+def wait_for_loop(session_name: str, limit: int) -> bool:
+    """One more tool call of a possible /loop fire whose entry is not
+    written yet: True while it may still wait (a refusal is soft), False
+    once it has waited *limit* calls (refusals are real then; the loop's
+    rights stay recorded, so a fire written later is still adopted)."""
+    with snapshot_lock(session_name, timeout=5.0) as held:
+        if not held:
+            return True
+        cur = read_snapshot(session_name)
+        if not isinstance(cur, dict) or "loop_rules" not in cur:
+            return False
+        waited = cur.get("loop_waited") if isinstance(cur.get("loop_waited"), int) else 0
+        if waited >= limit:
+            return False
+        new = dict(cur)
+        new["loop_waited"] = waited + 1
+        if waited + 1 >= limit:
+            write_merged_snapshot(session_name, new)
+            return False
+        write_merged_snapshot(session_name, new)
+        return True
+
+
+def clear_triggers(session_name: str) -> None:
+    d = triggers_dir(session_name)
+    try:
+        for f in d.iterdir():
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        d.rmdir()
+    except OSError:
+        pass
 
 
 # ---- Live reload (roadmap 8.80) --------------------------------------------
 
 #: The fields a snapshot's rules are made of: what :func:`merge_snapshots`
 #: reasons about and the hook enforces. Everything else is provenance.
-SAFETY_FIELDS = ("bypass_safety", "confine_writes", *_LIST_FIELDS)
+SAFETY_FIELDS = ("bypass_safety", "confine_writes", *_LIST_FIELDS, "root")
 
 #: What a narrowed snapshot keeps of the one it replaces: everything that
 #: is not a rule (the turn's origin and bodies, the style and reply text).
 _KEPT_ON_NARROW = ("origin", "style_text", "reply_context", "note_bodies",
-                   "scope_mode", "turn_origin", "joined_from_telegram")
+                   "scope_mode", "turn_origin", "joined_from_telegram",
+                   "drivers", *PEER_STATE_FIELDS, *SCHEDULED_STATE_FIELDS)
 
 
 def safety_rules(snap) -> dict:
@@ -1435,6 +2339,10 @@ def safety_rules(snap) -> dict:
         v = snap.get(f)
         out[f] = sorted(x for x in v if isinstance(x, str)) \
             if isinstance(v, list) else []
+    # A members' root folder: only when there is one (absent = no bound).
+    root = safety.normalise_root(snap.get("root"))
+    if root is not None:
+        out["root"] = root
     return out
 
 
@@ -1460,6 +2368,19 @@ def narrowed_snapshot(current, rules: list[dict]) -> dict:
         for k in _KEPT_ON_NARROW:
             if k in current:
                 merged[k] = current[k]
+        peer = current.get("peer")
+        if isinstance(peer, dict) and peer.get("status") == "pending":
+            # Still being checked: the narrowing must outlive the check's
+            # result too ("peer message authority", C2).
+            merged["pending_joins"] = [
+                *_rule_list(current.get("pending_joins")),
+                *(safety_rules(r) for r in rules)]
+        if "loop_rules" in current:
+            # A bare /loop's rights not adopted yet: this narrowing must
+            # outlive the adoption too.
+            merged["loop_joins"] = [
+                *_rule_list(current.get("loop_joins")),
+                *(safety_rules(r) for r in rules)]
     return merged
 
 
@@ -1474,8 +2395,16 @@ def narrow_snapshot(session_name: str, rules: list[dict]) -> bool:
     joining the turn): whichever write lands last wins. The hook's join
     reads the snapshot first, so it keeps this narrowing unless it read
     before this write. The read-back makes such a loss visible: one more
-    try, then a WARNING. A window of a few milliseconds remains between
-    the hook's read and its write."""
+    try, then a WARNING. The read-modify-write runs under the session's
+    snapshot lock (:class:`snapshot_lock`), shared with the hook, for at
+    most 50 ms (it runs on the daemon's loop; the hook holds the lock for
+    milliseconds): past that it goes ahead anyway (a narrowing must not
+    wait on a stuck lock), the read-back still checking it."""
+    with snapshot_lock(session_name, timeout=0.05):
+        return _narrow_snapshot_locked(session_name, rules)
+
+
+def _narrow_snapshot_locked(session_name: str, rules: list[dict]) -> bool:
     for attempt in range(2):
         current = read_snapshot(session_name)
         if not isinstance(current, dict):
@@ -1537,7 +2466,7 @@ def clear_reply_context_file(session_name: str) -> None:
         pass
 
 
-def clear_session_files(session_name: str) -> None:
+def clear_session_files(session_name: str, *, keep_triggers: bool = False) -> None:
     """Best-effort removal of every /tmp file or dir this feature writes.
 
     Called on session GONE (crash / socket-vanish / SessionEnd hook, via
@@ -1551,11 +2480,20 @@ def clear_session_files(session_name: str) -> None:
     resumed session's first turn genuinely starts from a clean/absent
     snapshot until that hook fires, same as any other never-yet-prompted
     session.
+
+    *keep_triggers* (session GONE): the session's scheduled prompts stay
+    recorded. Claude Code brings them back when the session is resumed
+    (session crons, a pending /loop wakeup) and keeps durable ones, so a
+    record must outlive the process; only ``/kill`` drops them.
     """
     clear_snapshot(session_name)
     clear_reply_context_file(session_name)
     clear_notes_dir(session_name)
     clear_turn_open(session_name)
+    clear_pins(session_name)
+    if not keep_triggers:
+        clear_triggers(session_name)
+    clear_verify_origin(session_name)
     try:
         notes_dir(session_name).rmdir()
     except OSError:

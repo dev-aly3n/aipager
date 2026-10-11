@@ -33,7 +33,7 @@ trust with all of it.
 
 | Event | Example |
 |-------|---------|
-| Turn finished | `💬 x1 · Finished (2m 5s, +12 -3)`: the result line only, not the answer; plus the full log as an `.md` file when the answer or the card was cut |
+| Turn finished | `💬 x1 · Finished (2:05, +12 -3)`: the result line only, not the answer; plus the full log as an `.md` file when the answer or the card was cut |
 | A background job finished | `✅ x1 · Finished (...)`, or `⚠️ x1 · Finished (...)` when an agent was lost or a background command's end was never seen |
 | API error | `⚠️ x1 · Anthropic's servers are overloaded. Try again in a moment.` (no retry button) |
 | Context warning | `⚠️ x1 · Context at 82% - auto-compact soon` |

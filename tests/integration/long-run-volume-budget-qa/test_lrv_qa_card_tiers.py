@@ -107,7 +107,7 @@ def test_the_ten_second_tier_still_counts_seconds(
 ):
     bot, sess = card(mk_bot, vbot, vloop, rich_http, age=125.0)
     animate(vloop, bot, sess, 15.0)
-    assert re.search(r"· 2m \d+s$", status_line(rich_http.edits()[0][1]))
+    assert re.search(r"· 2:\d\d$", status_line(rich_http.edits()[0][1]))
 
 
 # ── the 600 s breakpoint ─────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ def test_just_under_ten_minutes_the_counter_reads_seconds(
 ):
     bot, sess = card(mk_bot, vbot, vloop, rich_http, age=585.0)
     animate(vloop, bot, sess, 8.0)
-    assert re.search(r"· 9m \d+s$", status_line(rich_http.edits()[0][1]))
+    assert re.search(r"· 9:\d\d$", status_line(rich_http.edits()[0][1]))
 
 
 def test_past_ten_minutes_the_counter_reads_minutes(
@@ -127,7 +127,7 @@ def test_past_ten_minutes_the_counter_reads_minutes(
     animate(vloop, bot, sess, 80.0)
     late = [m for t, m in rich_http.edits()
             if t - sess.busy_started_at >= 600.0 + EPS]
-    assert late and all(re.search(r"· 1\dm$", status_line(m)) for m in late), \
+    assert late and all(re.search(r"· 1\d:(?:00|30)$", status_line(m)) for m in late), \
         [status_line(m) for m in late]
 
 
@@ -147,7 +147,7 @@ def test_just_under_an_hour_the_counter_reads_59m(
 ):
     bot, sess = card(mk_bot, vbot, vloop, rich_http, age=3570.0)
     animate(vloop, bot, sess, 8.0)
-    assert re.search(r"· 59m$", status_line(rich_http.edits()[0][1]))
+    assert re.search(r"· 59:30$", status_line(rich_http.edits()[0][1]))
 
 
 def test_past_an_hour_the_counter_reads_hours(
@@ -157,7 +157,7 @@ def test_past_an_hour_the_counter_reads_hours(
     animate(vloop, bot, sess, 150.0)
     late = [m for t, m in rich_http.edits()
             if t - sess.busy_started_at >= 3600.0 + EPS]
-    assert late and all(re.search(r"· 1h \d+m$", status_line(m)) for m in late), \
+    assert late and all(re.search(r"· 1:\d\d:(?:00|30)$", status_line(m)) for m in late), \
         [status_line(m) for m in late]
 
 
@@ -214,7 +214,7 @@ def test_off_at_thirty_minutes_the_counter_is_todays(
     prefs.set_preference(CHAT, "card_age_decay", False)
     bot, sess = card(mk_bot, vbot, vloop, rich_http, age=30 * MIN)
     animate(vloop, bot, sess, 10.0)
-    assert re.search(r"· 30m \d+s$", status_line(rich_http.edits()[0][1]))
+    assert re.search(r"· 30:\d\d$", status_line(rich_http.edits()[0][1]))
 
 
 def test_off_at_five_hours_the_counter_is_todays(
@@ -223,7 +223,7 @@ def test_off_at_five_hours_the_counter_is_todays(
     bot, sess = card(mk_bot, vbot, vloop, rich_http, age=5 * HOUR,
                      override=False)
     animate(vloop, bot, sess, 10.0)
-    assert re.search(r"· 300m \d+s$", status_line(rich_http.edits()[0][1]))
+    assert re.search(r"· 5:00:\d\d$", status_line(rich_http.edits()[0][1]))
 
 
 def test_a_session_override_off_at_five_minutes_is_todays_cadence(

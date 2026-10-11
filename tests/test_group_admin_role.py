@@ -69,7 +69,7 @@ def _group_scope():
         Member(id=BOB, label="bob", role="user"),
         Member(id=RO, label="ro", role="read_only"),
         Member(id=ADA, label="ada", role="admin"),
-    ))
+    ), root="/srv/team")   # the members' root: the sessions below work there
 
 
 def _dm_scope():
@@ -497,9 +497,9 @@ def test_picker_shows_the_default_this_person_gets(gbot, run_async, uid):
     kb = q.edit_message_text.await_args.kwargs["reply_markup"]
     labels = [b.text for row in kb.inline_keyboard for b in row]
     if uid in MANAGERS:
-        assert "🤖 Auto (default)" in labels
+        assert "🤖 Auto mode (default)" in labels
     else:
-        assert "💬 Ask (default)" in labels
+        assert "💬 Ask mode (default)" in labels
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
@@ -762,8 +762,9 @@ def test_wizard_add_group_member_picker_is_asked_with_owner(
         calls.append(kw)
         return "owner"
     monkeypatch.setattr(scope_flows, "_pick_role", _pick)
-    # no owner DM yet: no suggestion; label, then "add another?" False
-    _wizard_stubs(monkeypatch, ["dev-team", False], [{"id": 11, "label": "ann"}])
+    # no owner DM yet: no suggestion; label, then "add another?" False,
+    # then the members' root folder ("": the default)
+    _wizard_stubs(monkeypatch, ["dev-team", False, ""], [{"id": 11, "label": "ann"}])
     assert scope_flows.add_group_scope("TOK", "bot") is True
     assert calls[0].get("include_owner", True) is True
     assert calls[0].get("warn_owner") is True
@@ -784,7 +785,7 @@ def test_wizard_suggests_the_operator_first_as_owner(wizard_env, monkeypatch):
     monkeypatch.setattr(scope_flows, "_pick_role", lambda *a, **k: "user")
     # label, "add yourself?" yes, "add another?" yes, then ann,
     # "add another?" no
-    _wizard_stubs(monkeypatch, ["dev-team", True, True, False],
+    _wizard_stubs(monkeypatch, ["dev-team", True, True, False, ""],
                   [{"id": 11, "label": "ann"}])
     assert scope_flows.add_group_scope("TOK", "bot") is True
     scopes, _ = _scope.load_scopes(_scope.CONFIG_PATH)
@@ -798,7 +799,7 @@ def test_wizard_operator_suggestion_is_skippable(wizard_env, monkeypatch):
     from aipager.wizard import scope_flows
     _seed_owner_dm()
     monkeypatch.setattr(scope_flows, "_pick_role", lambda *a, **k: "user")
-    _wizard_stubs(monkeypatch, ["dev-team", False, False],
+    _wizard_stubs(monkeypatch, ["dev-team", False, False, ""],
                   [{"id": 11, "label": "ann"}])
     assert scope_flows.add_group_scope("TOK", "bot") is True
     scopes, _ = _scope.load_scopes(_scope.CONFIG_PATH)
@@ -810,7 +811,7 @@ def test_wizard_operator_alone_is_enough(wizard_env, monkeypatch):
     from aipager import scope as _scope
     from aipager.wizard import scope_flows
     _seed_owner_dm()
-    _wizard_stubs(monkeypatch, ["dev-team", True, False], [])
+    _wizard_stubs(monkeypatch, ["dev-team", True, False, ""], [])
     assert scope_flows.add_group_scope("TOK", "bot") is True
     scopes, _ = _scope.load_scopes(_scope.CONFIG_PATH)
     grp = next(s for s in scopes if s.chat_id == -100)
@@ -838,9 +839,9 @@ def test_wizard_resume_does_not_suggest_again(wizard_env, monkeypatch):
     draft_mod.save_draft({"kind": "group", "chat_id": -100, "label": "dev",
                           "members": [{"id": 11, "label": "ann",
                                        "role": "user"}]})
-    asked = _wizard_stubs(monkeypatch, ["resume"], [None])
+    asked = _wizard_stubs(monkeypatch, ["resume", ""], [None])
     scope_flows.resume_or_discard_draft("TOK", "bot")
-    assert len(asked) == 1
+    assert len(asked) == 2      # resume?, then the members' root folder
     scopes, _ = _scope.load_scopes(_scope.CONFIG_PATH)
     grp = next(s for s in scopes if s.chat_id == -100)
     assert [m.label for m in grp.members] == ["ann"]

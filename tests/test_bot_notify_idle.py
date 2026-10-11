@@ -338,12 +338,12 @@ def test_idle_shows_elapsed_time(mk_bot, run_async, rich_mock):
     bot = mk_bot()
     sess = _sess(status=Status.IDLE)
     sess.scope_chat_id = 4242
-    sess.busy_started_at = time.monotonic() - 75  # 1m 15s
+    sess.busy_started_at = time.monotonic() - 75  # 1:15
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
     run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
     # Elapsed time is on the header line — the first line of the one message.
-    assert "1m 15s" in _first_line(rich_mock)
+    assert "Finished (1:15" in _first_line(rich_mock)
 
 
 def test_idle_shows_lines_changed(mk_bot, run_async, rich_mock):

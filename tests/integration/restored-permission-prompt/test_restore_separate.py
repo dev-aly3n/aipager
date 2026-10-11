@@ -73,7 +73,7 @@ def test_allow_on_restored_separate_prompt(replay, vloop, tmp_path, caplog):
     assert (record["via"], record["action"], record["user_id"]) == (
         "keystroke_fallback", "Allowed", OWNER)
     # The attributed line, threaded under the prompt itself (no card).
-    line = [m for m in r.chat.messages.values() if "Allowed by" in m["text"]]
+    line = [m for m in r.chat.messages.values() if "Allowed · " in m["text"]]
     assert line and line[0]["reply_to"] == msg
     edited = r.last_query.edit_message_text.await_args
     assert edited is not None and "→ Allowed" in edited.args[0]

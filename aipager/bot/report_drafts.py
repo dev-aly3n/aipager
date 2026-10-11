@@ -131,12 +131,12 @@ async def open_draft(bot: "TelegramBot", user_id: int) -> Draft | None:
     return draft
 
 
-def areas(report: dict) -> list[str]:
+def areas(report: dict, *, tr=None) -> list[str]:
     """The readable place of each of *report*'s errors, in order (the
-    offer notice's own words)."""
+    offer notice's own words), in *tr*'s language (English when None)."""
     from aipager.bot import report_offer
 
-    return [report_offer.area(e) if isinstance(e, dict) else "aipager"
+    return [report_offer.area(e, tr) if isinstance(e, dict) else "aipager"
             for e in report.get("errors") or []]
 
 
@@ -169,14 +169,18 @@ def check_note(draft: Draft, note: str) -> tuple[str, str, dict | None]:
 
 # ---- sending ---------------------------------------------------------------------
 
-def reply_for(outcome: str, reference: str | None) -> SendOutcome:
-    """The page's answer for one outcome: the shared wording, and whether
-    the same draft may be sent again."""
+def reply_for(outcome: str, reference: str | None, *, tr=None) -> SendOutcome:
+    """The page's answer for one outcome: the shared wording (in *tr*'s
+    language, English when None), and whether the same draft may be sent
+    again."""
+    from aipager import i18n
     from aipager.bot import report_flow
 
     if outcome == FAILED:
-        return SendOutcome(FAILED, None, report_flow.SEND_FAILED_TEXT, False)
-    return SendOutcome(outcome, reference, report_flow.outcome_line(outcome, reference),
+        return SendOutcome(FAILED, None, (tr or i18n.get("en")).text(
+            report_flow.SEND_FAILED_TEXT), False)
+    return SendOutcome(outcome, reference,
+                       report_flow.outcome_line(outcome, reference, tr=tr),
                        outcome in wording.RETRYABLE)
 
 

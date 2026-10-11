@@ -60,6 +60,28 @@ enforces the first two and must not be weakened.
   a fresh `UserPromptSubmit`, so anything keyed to prompt submission must not
   assume it will fire.
 
+## User-facing text
+
+aipager's own text is being made translatable (`aipager/i18n`, design in
+the multilingual roadmap). Text a person reads in Telegram or the Mini App
+goes through `Msg`, `Plural` or `tr.html/text/md/n(...)` with the English
+inline next to its key: one whole sentence per key, placeholders as
+`{name}`, no `"s"` suffix plurals, no sentences glued from fragments, and
+no `html.escape` of a parameter (the `tr` call escapes for its output).
+- Never compare shown text in logic: compare ids, codes and states.
+- Never translate what Claude reads (prompts, the `[via Telegram ...]`
+  marker, style lines, reply context, deny reasons), logs, audit
+  records, `callback_data`, stored values, commands, model ids, tool
+  names or paths. `tests/test_claude_facing_golden.py` pins Claude's text.
+- After adding or changing a key run `python tools/i18n.py extract`
+  (CI fails when `tools/i18n/source.jsonl` is stale) and, when a module
+  has fewer hard-coded English strings, `python tools/i18n.py check
+  --write-baseline`.
+- Nothing in the hook's import closure (`config`, `state`, `bg_shells`,
+  `policy_snapshot` and the modules they load) may import `aipager.i18n`,
+  not even inside a function; use `aipager/clockfmt.py` for the clock
+  there. `tests/test_i18n_hook_isolation.py` enforces it.
+
 ## Conventions
 
 - Commits: one-line lowercase imperative subject, no body, no co-author

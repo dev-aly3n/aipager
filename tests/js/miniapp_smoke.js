@@ -542,6 +542,33 @@ if (SCENARIO.indexOf("scope_save") === 0) {
   }
 }
 
+// ---- Settings tab: the viewer's own App language (multilingual) -------
+// Personal, so it renders and saves even where the chat's settings are
+// read-only; every word on it comes from the server.
+const APP_LANGUAGE = {
+  title: "App language",
+  hint: "Only aipager's own text. Claude's answers don't change.",
+  value: "auto", effective: "en",
+  options: [{ value: "auto", label: "Automatic (your Telegram language)" },
+            { value: "en", label: "English" }],
+};
+if (SCENARIO.indexOf("app_language") === 0) {
+  FIXTURES["/api/preferences"] = {
+    schema: SCHEMA, values: { answer_length: "none" }, can_edit: false,
+  };
+  if (SCENARIO !== "app_language_absent") {
+    FIXTURES["/api/preferences"].app_language = JSON.parse(JSON.stringify(APP_LANGUAGE));
+  }
+  FIXTURES["/api/app-language"] = {
+    value: "en", effective: "en",
+    confirmation: "✅ aipager now speaks English here. Your sessions and Claude's answers are unchanged.",
+  };
+  if (SCENARIO === "app_language_fails") {
+    POST_STATUS_OVERRIDE = { path: "/api/app-language", method: "PUT", status: 500,
+                             body: { error: "boom" } };
+  }
+}
+
 // ---- server schema text shown plain (roadmap 8.44) --------------------
 // The schema comes from pytest (AIPAGER_TEST_SCHEMA): the real
 // settings_schema() output, emoji titles and " - " labels as /settings
@@ -1961,6 +1988,62 @@ function scopeActiveLabels() {
   return body.children.filter(c => c.classList.contains("is-active"))
     .map(c => c.children[0].textContent);
 }
+function appGroup() { return byId["settings-app-language"].children[0]; }
+function appHeaderValue() { return appGroup().children[0].children[1].textContent; }
+function driveAppLanguage() {
+  const failing = SCENARIO === "app_language_fails";
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    const host = byId["settings-app-language"];
+    const hint = byId["settings-app-language-hint"];
+    if (SCENARIO === "app_language_absent") {
+      if (host.children.length !== 0) fail("an App language group with no app_language");
+      if (!hint.hidden) fail("the hint shows with no app_language");
+      if (byId["settings-groups"].children.length !== 1)
+        fail("the chat's settings did not render with no app_language");
+      console.log("ok: no app_language -> nothing rendered");
+      process.exit(0);
+    }
+    if (host.children.length !== 1) fail("App language group did not render");
+    if (hint.hidden || hint.textContent !== APP_LANGUAGE.hint)
+      fail("hint: " + JSON.stringify(hint.textContent));
+    if (appGroup().children[0].children[0].textContent !== "App language")
+      fail("title: " + appGroup().children[0].children[0].textContent);
+    if (appHeaderValue() !== "Automatic (your Telegram language)")
+      fail("initial value: " + JSON.stringify(appHeaderValue()));
+    appGroup().children[0].click();                     // expand
+    const body = appGroup().children[1];
+    if (!body || body.children.length !== 2) fail("App language did not expand to 2 choices");
+    const english = body.children[1];
+    if (english.disabled || !english.listeners.click)
+      fail("App language is not tappable where the chat's settings are read-only");
+    const before = fetchCalls.length;
+    try { english.click(); } catch (e) { fail("tapping App language threw: " + e); }
+    const put = fetchCalls.slice(before).find(f => f.method === "PUT");
+    if (!put) fail("tapping App language sent no PUT");
+    if (put.url !== "/api/app-language") fail("wrong PUT url: " + put.url);
+    if (JSON.stringify(JSON.parse(put.body)) !== JSON.stringify({ value: "en" }))
+      fail("wrong PUT body: " + put.body);
+    if (appHeaderValue() !== "English") fail("no optimistic render: " + appHeaderValue());
+    setTimeoutReal(() => {
+      const notice = byId["notice"].textContent || "";
+      if (failing) {
+        if (appHeaderValue() !== "Automatic (your Telegram language)")
+          fail("failed PUT left the optimistic value: " + appHeaderValue());
+        if (notice.indexOf("Couldn't save") === -1) fail("failed PUT said nothing: " + notice);
+        console.log("ok: app language tap -> PUT /api/app-language -> restored on failure");
+      } else {
+        if (appHeaderValue() !== "English") fail("saved value not kept: " + appHeaderValue());
+        if (notice.indexOf("aipager now speaks English here.") === -1)
+          fail("no confirmation notice: " + notice);
+        console.log("ok: app language tap -> PUT /api/app-language -> confirmed");
+      }
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
 function driveScopeSave() {
   const failing = SCENARIO === "scope_save_fails";
   api.showView("settings");
@@ -2048,6 +2131,9 @@ function driveSchemaPlain() {
 
 const DRIVERS = {
   scope_save: driveScopeSave,
+  app_language: driveAppLanguage,
+  app_language_fails: driveAppLanguage,
+  app_language_absent: driveAppLanguage,
   schema_plain: driveSchemaPlain,
   scope_save_fails: driveScopeSave,
   updates_shutting_down: driveUpdatesShuttingDown,
@@ -2371,7 +2457,7 @@ Object.assign(DRIVERS, {
 function driveDetailActivity() {
   api.openDetail("dev");
   setTimeoutReal(() => {
-    if (byId["detail-state"].textContent !== "Working for 3m 12s")
+    if (byId["detail-state"].textContent !== "Working for 3:12")
       fail("state line: " + JSON.stringify(byId["detail-state"].textContent));
     if (byId["detail-status"].textContent !== "working") fail("status chip: " + byId["detail-status"].textContent);
     if (byId["detail-ring"].attrs.style !== "--pct:57") fail("header ring: " + byId["detail-ring"].attrs.style);
@@ -2383,7 +2469,7 @@ function driveDetailActivity() {
     if (classes.join(",") !== "bead bead-done,bead bead-failed,bead bead-done,bead bead-running")
       fail("bead states: " + JSON.stringify(classes));
     if (strip.textContent.indexOf("2 queued") === -1) fail("no queue chip: " + strip.textContent);
-    if (strip.textContent.indexOf("Bash: pytest -q (running 14s)") === -1)
+    if (strip.textContent.indexOf("Bash: pytest -q (running 0:14)") === -1)
       fail("no latest-tool line: " + strip.textContent);
     const html = byId["detail-preview"].innerHTML;
     if (html.indexOf("<code>pytest</code>") === -1 || html.indexOf("<b>") !== -1)

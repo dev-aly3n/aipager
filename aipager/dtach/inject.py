@@ -646,7 +646,7 @@ _VALID_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
 # drifting a third time; adding a command means adding it here too.
 _RESERVED = {
     # Telegram bot commands (see bot/lifecycle.py::_command_list)
-    "status", "stop", "kill", "new", "help", "start", "settings",
+    "status", "stop", "kill", "new", "help", "start", "settings", "language",
     "restart", "rename", "delete", "diff",
     "app", "clearqueue", "perms", "mode", "resume", "whoami", "update", "now",
     # `aipager session` subcommand verbs (see cli/session.py) — these are
@@ -926,13 +926,11 @@ async def launch_session(
     return False, "Socket never appeared after launch"
 
 
-async def list_sessions() -> list[str]:
-    """Return names of all active claude-dtach sessions.
-
-    Scans the runtime folder (``/tmp``, or the instance folder; see
-    :func:`aipager.instance.runtime_tmp_dir`) for claude-dtach-*.sock
-    files that are Unix sockets.
-    """
+def _scan_session_sockets() -> list[str]:
+    """Names of the claude-dtach sessions whose socket exists: every
+    ``claude-dtach-*.sock`` in the runtime folder (``/tmp``, or the
+    instance folder; see :func:`aipager.instance.runtime_tmp_dir`) that is
+    a Unix socket."""
     results = []
     for sock_file in Path(instance.runtime_tmp_dir()).glob("claude-dtach-*.sock"):
         if not sock_file.is_socket():
@@ -940,3 +938,17 @@ async def list_sessions() -> list[str]:
         name = "claude-" + sock_file.stem.removeprefix("claude-dtach-")
         results.append(name)
     return results
+
+
+def live_session_names() -> set[str]:
+    """The sessions alive right now, synchronously: what
+    :func:`list_sessions` returns, as a set. For ``SessionRegistry.load``,
+    which runs before the event loop's first scan and must tell a running
+    session from an orphan the same way the scan will."""
+    return set(_scan_session_sockets())
+
+
+async def list_sessions() -> list[str]:
+    """Return names of all active claude-dtach sessions (see
+    :func:`_scan_session_sockets`)."""
+    return _scan_session_sockets()

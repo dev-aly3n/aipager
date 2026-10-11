@@ -111,7 +111,7 @@ def test_new_bang_name_ends_in_the_ready_card():
         _run(bot._handle_new_cmd(update, MagicMock()))
     text = _ready_text(bot)
     assert "✅ <b>henlo</b> is ready" in text, text
-    assert "🤖 Auto" in text, text
+    assert "🤖 Auto mode" in text, text
 
 
 def test_new_bang_name_only_edits_the_launch_message_once():
@@ -143,7 +143,7 @@ def test_new_named_no_bang_is_auto_for_an_admin():
     update = _make_update("/new henlo")
     with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
         _run(bot._handle_new_cmd(update, MagicMock()))
-    assert "🤖 Auto" in _ready_text(bot)
+    assert "🤖 Auto mode" in _ready_text(bot)
     sess = bot.registry.find_by_label("henlo", 0)
     assert sess is not None and sess.skip_perms is True
 

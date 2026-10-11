@@ -1,0 +1,1376 @@
+{"k": "agents.count_agents", "src": "263711d4", "v": {"one": "{n} ajan", "other": "{n} ajan"}}
+{"k": "agents.count_shells", "src": "9b747b65", "v": {"one": "{n} kabuk komutu", "other": "{n} kabuk komutu"}}
+{"k": "agents.head.done", "src": "e20b4f9e", "v": {"one": "✅ {n} ajan tamamlandı ({clock})", "other": "✅ {n} ajan tamamlandı ({clock})"}}
+{"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"one": "{n} kabuk komutu bitti ({clock})", "other": "{n} kabuk komutu bitti ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"one": "🖥 {n} kabuk komutu çalışıyor", "other": "🖥 {n} kabuk komutu çalışıyor"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"one": "{n} kabuk komutu durduruldu ({clock})", "other": "{n} kabuk komutu durduruldu ({clock})"}}
+{"k": "agents.head.working", "src": "6d8170f5", "v": {"one": "⏳ {n} ajan çalışıyor", "other": "⏳ {n} ajan çalışıyor"}}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"one": "+{n} tane daha", "other": "+{n} tane daha"}}
+{"k": "agents.promise", "src": "29723a21", "v": "Ajanların sonuçları buraya gelecek."}
+{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · tamamlandı ({clock})"}
+{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
+{"k": "ago.days", "src": "3650e46d", "v": {"one": "{n} g önce", "other": "{n} g önce"}}
+{"k": "ago.earlier", "src": "f12e996a", "v": "daha önce"}
+{"k": "ago.hours", "src": "72292bb6", "v": {"one": "{n} sa önce", "other": "{n} sa önce"}}
+{"k": "ago.hours_minutes", "src": "5be9939e", "v": "{h} sa {m} dk önce"}
+{"k": "ago.minutes", "src": "6efbe16f", "v": {"one": "{n} dk önce", "other": "{n} dk önce"}}
+{"k": "ago.seconds", "src": "8a8492dd", "v": {"one": "{n} sn önce", "other": "{n} sn önce"}}
+{"k": "ans.answered", "src": "7b370125", "v": "✓ <b>{session}</b> · Yanıtlandı · {person} · {question} → {option}"}
+{"k": "ans.answered_anon", "src": "602dabe0", "v": "✓ <b>{session}</b> · Yanıtlandı · {question} → {option}"}
+{"k": "ans.arrow_verb", "src": "d2539150", "v": "→ {verb}"}
+{"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
+{"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
+{"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ {session} durduruldu"}
+{"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {session} durduruldu · {person}"}
+{"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"one": "⏹ {session} durduruldu · {person} (kuyruktaki {n} mesaj silindi)", "other": "⏹ {session} durduruldu · {person} (kuyruktaki {n} mesaj silindi)"}}
+{"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"one": "⏹ {session} durduruldu (kuyruktaki {n} mesaj silindi)", "other": "⏹ {session} durduruldu (kuyruktaki {n} mesaj silindi)"}}
+{"k": "ans.verb.allow", "src": "77c7b490", "v": "İzin verildi"}
+{"k": "ans.verb.allow_always", "src": "141216b0", "v": "Her zaman izin verildi"}
+{"k": "ans.verb.continue", "src": "0e4aa789", "v": "Devam edildi"}
+{"k": "ans.verb.deny", "src": "63b16bd4", "v": "Reddedildi"}
+{"k": "ans.verb.option", "src": "7a8b9272", "v": "{n}. seçenek seçildi"}
+{"k": "ans.verb.selected", "src": "5462eaaf", "v": "Seçilen: {options}"}
+{"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "Gönderildi (hiçbiri)"}
+{"k": "app.chat.dm", "src": "05a3b9fa", "v": "Özel sohbet"}
+{"k": "app.chat.group", "src": "171a0606", "v": "Grup"}
+{"k": "app.err.already_restarting", "src": "9234890e", "v": "Bu oturum zaten yeniden başlatılıyor - biraz bekle."}
+{"k": "app.err.already_running", "src": "41e94cd2", "v": "Bu oturum zaten çalışıyor."}
+{"k": "app.err.answer_chat_busy", "src": "e0f91f04", "v": "Telegram şu an meşgul. Birazdan tekrar dene."}
+{"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "Bu oturum artık seni beklemiyor."}
+{"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "İstem sohbete gönderilemedi."}
+{"k": "app.err.auto_needs_admin", "src": "ad1f0c2f", "v": "Otomatik mod için yönetici gerekir."}
+{"k": "app.err.delete_running", "src": "71f25b50", "v": "Oturum hâlâ çalışıyor. Önce Sonlandır ile durdur."}
+{"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "Sonlandırılamadı - süreç hâlâ çalışıyor. Tekrar dene."}
+{"k": "app.err.name_taken", "src": "9ab9e08f", "v": "Bu sohbette {session} adında bir oturum zaten var."}
+{"k": "app.err.not_busy", "src": "bbafa529", "v": "Bu oturum şu an meşgul değil - durdurulacak bir şey yok."}
+{"k": "app.err.not_resendable", "src": "82303f6c", "v": "Bu istem yeniden gönderilemez. Terminalde yanıtla."}
+{"k": "app.err.not_running", "src": "af9ca5bc", "v": "Oturum çalışmıyor."}
+{"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} hâlâ durduruluyor - mod değişmedi. Birazdan tekrar dene."}
+{"k": "app.err.pick_model", "src": "773e24c4", "v": "Bir model seç."}
+{"k": "app.err.restart_still_stopping", "src": "701b0bd8", "v": "{session} hâlâ durduruluyor. Birazdan tekrar dene."}
+{"k": "app.err.resumed_in_ask", "src": "7024b7b8", "v": "{session} Sor modunda devam ettirildi: {reason}"}
+{"k": "app.err.resuming", "src": "2a557399", "v": "Bu oturum şu anda devam ettiriliyor. Birazdan tekrar dene."}
+{"k": "app.err.send_failed", "src": "e4349ad3", "v": "{command} gönderilemedi."}
+{"k": "app.fact.context", "src": "cc11b3a2", "v": "Bağlam"}
+{"k": "app.fact.cost", "src": "64ae43e8", "v": "Maliyet"}
+{"k": "app.fact.cwd", "src": "4b892fe0", "v": "Klasör"}
+{"k": "app.fact.last_active", "src": "b5665ec6", "v": "Son etkinlik"}
+{"k": "app.fact.model", "src": "68c2cc7f", "v": "Model"}
+{"k": "app.fact.working", "src": "e7df8df6", "v": "Çalışma süresi"}
+{"k": "app.language.hint", "src": "90e01e41", "v": "Yalnızca aipager'ın kendi metni. Claude'un yanıtları değişmez."}
+{"k": "app.language.title", "src": "01e1787a", "v": "Uygulama dili"}
+{"k": "app.launch.cwd_bad_char", "src": "0dcfc308", "v": "Çalışma klasörü geçersiz bir karakter içeriyor."}
+{"k": "app.launch.cwd_no_roots", "src": "45693d90", "v": "Henüz kullanılabilir klasör yok - önce sohbetten bir oturum başlat, sonra bu seçici onun projesini sunar."}
+{"k": "app.launch.cwd_not_allowed", "src": "8e0b71f9", "v": "Bu sohbet o klasörde çalışmıyor."}
+{"k": "app.launch.cwd_not_dir", "src": "9b0be449", "v": "Bu yol bir klasör değil."}
+{"k": "app.launch.cwd_not_text", "src": "9497b469", "v": "Çalışma klasörü metin olmalı."}
+{"k": "app.launch.cwd_unresolvable", "src": "e87ce055", "v": "Bu klasör çözümlenemiyor."}
+{"k": "app.launch.folder_bad_char", "src": "9052a17d", "v": "Klasör adı geçersiz bir karakter içeriyor."}
+{"k": "app.launch.folder_empty", "src": "aa11b815", "v": "Klasör adı boş olamaz."}
+{"k": "app.launch.folder_exists", "src": "8dec41ad", "v": "Orada bu adda bir klasör zaten var. Yeni bir ad seç."}
+{"k": "app.launch.folder_failed", "src": "4d757c2b", "v": "Klasör oluşturulamadı."}
+{"k": "app.launch.folder_loads_code", "src": "78ba6bd6", "v": "“{name}” burada proje klasörü olamaz: başka programlar oradan kod yükler. Başka bir ad seç."}
+{"k": "app.launch.folder_not_text", "src": "3988a95d", "v": "Klasör adı metin olmalı."}
+{"k": "app.launch.folder_parent", "src": "0a28b1e0", "v": "Klasörün oluşturulacağı çalışma klasörünü seç."}
+{"k": "app.launch.folder_pattern", "src": "c3b51490", "v": "Harf, rakam, nokta, tire ve alt çizgi kullan; bir harf ya da rakamla başla."}
+{"k": "app.launch.folder_too_long", "src": "ae5dc64d", "v": "Klasör adı en fazla {max} karakter olabilir."}
+{"k": "app.launch.model_not_text", "src": "55a7cf25", "v": "Model metin olmalı."}
+{"k": "app.launch.model_pattern", "src": "44cdf715", "v": "Listedeki modellerden birini ya da {example} gibi tam bir model adı kullan."}
+{"k": "app.launch.model_too_long", "src": "47dfc21f", "v": "Model adı en fazla {max} karakter olabilir."}
+{"k": "app.launch.name_bad_char", "src": "1b9271b6", "v": "Oturum adı geçersiz bir karakter içeriyor."}
+{"k": "app.launch.name_empty", "src": "e00fbfca", "v": "Oturum adı boş olamaz."}
+{"k": "app.launch.name_not_text", "src": "f6218198", "v": "Oturum adı metin olmalı."}
+{"k": "app.launch.name_pattern", "src": "b916e083", "v": "Latin harfleri, rakam, tire ve alt çizgi kullan; bir harf ya da rakamla başla."}
+{"k": "app.launch.name_reserved", "src": "2efe289d", "v": "“{name}” ayrılmış bir komut adı ({command}). Başka bir ad seç."}
+{"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "Oturum adı en fazla {max} karakter olabilir."}
+{"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "Başlanacak bir proje klasörü henüz yok: oturumu başlatması için bir yöneticiye sor."}
+{"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "Bir proje klasörü seç: Yeni klasör ile bir tane oluştur ya da oturumu başlatması için bir yöneticiye sor."}
+{"k": "app.launch.no_root", "src": "19345855", "v": "Burada çalışabileceğin bir klasörün yok. Sahibinden seni aipager config içinde eklemesini iste."}
+{"k": "app.launch.outside_root", "src": "f8761328", "v": "Rolün yalnızca kendi klasörün {folder} ya da onun içindeki bir klasörde oturum başlatabilir."}
+{"k": "app.launch.root_unavailable", "src": "6d332ade", "v": "Klasörün {folder} hazırlanamadı. Sahibinden onu aipager config içinde kontrol etmesini iste."}
+{"k": "app.launch.session_outside_root", "src": "c501e96d", "v": "Bu oturum klasörün {folder} dışında çalışıyor, bu yüzden rolün ona devam edemez, onu yeniden başlatamaz ya da modunu değiştiremez. Bir yöneticiye sor."}
+{"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Rolün ev klasöründe ya da onun üstündeki bir klasörde oturum başlatamaz. Bir proje klasörü seç: Yeni klasör ile bir tane oluştur ya da oturumu başlatması için bir yöneticiye sor."}
+{"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"one": "🧹 [{session}] kuyruğundaki {n} mesaj Mini App'ten silindi", "other": "🧹 [{session}] kuyruğundaki {n} mesaj Mini App'ten silindi"}}
+{"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 [{session}] için sıkıştırma Mini App'ten başlatıldı"}
+{"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 {session} Mini App'ten oluşturuldu · {mode}"}
+{"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 {session} Mini App'ten oluşturuldu · {mode}\n📁 {folder}"}
+{"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] Mini App'ten silindi"}
+{"k": "app.mirror.folder", "src": "603d7ae2", "v": "📁 Mini App'ten yeni klasör oluşturuldu:\n{path}"}
+{"k": "app.mirror.killed", "src": "63565832", "v": "💀 [{session}] Mini App'ten sonlandırıldı"}
+{"k": "app.mirror.model", "src": "6df57f60", "v": "🔄 [{session}] → {model} (Mini App'ten)"}
+{"k": "app.mirror.renamed", "src": "22ad8a4c", "v": "✏️ [{old}] Mini App'ten [{new}] olarak yeniden adlandırıldı"}
+{"k": "app.mirror.restarted", "src": "9aa8323d", "v": "🔁 [{session}] Mini App'ten yeniden başlatıldı"}
+{"k": "app.mirror.resumed", "src": "fafeafa6", "v": "♻️ [{session}] Mini App'ten devam ettirildi"}
+{"k": "app.mirror.resumed_in_ask", "src": "429a5b47", "v": "♻️ [{session}] Mini App'ten Sor modunda devam ettirildi: {reason}"}
+{"k": "app.mirror.session_setting", "src": "3256d908", "v": "⚙️ {setting} → {value}, oturum: {session} (Mini App'ten değiştirildi)"}
+{"k": "app.mirror.session_setting_reset", "src": "4502514a", "v": "⚙️ {setting} varsayılana döndü ({value}), oturum: {session} (Mini App'ten değiştirildi)"}
+{"k": "app.mirror.setting", "src": "6820a9f7", "v": "⚙️ {setting} → {value} (Mini App'ten değiştirildi)"}
+{"k": "app.mirror.stopped", "src": "70cd9e81", "v": "⏹️ [{session}] Mini App'ten durduruldu"}
+{"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"one": "⏹️ [{session}] Mini App'ten durduruldu (kuyruktaki {n} mesaj silindi)", "other": "⏹️ [{session}] Mini App'ten durduruldu (kuyruktaki {n} mesaj silindi)"}}
+{"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} Mini App'ten Sor moduna geçirildi"}
+{"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} Mini App'ten Otomatik moda geçirildi"}
+{"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude çalışıyor - bu tur bitince modeli değiştir."}
+{"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "Oturum çalışmıyor."}
+{"k": "app.reason.model_pending", "src": "a3384cf1", "v": "Son model değişikliği henüz onaylanmadı - tekrar değiştirmeden önce terminalde Claude Code'un \"Switch model?\" sorusuna bak."}
+{"k": "app.reason.model_prompt_open", "src": "c3641605", "v": "Terminalde açık bir istem var - modeli değiştirmeden önce onu yanıtla."}
+{"k": "app.reason.model_unconfirmed", "src": "316e6e23", "v": "onaylanmadı - oturumu kontrol et. Claude Code terminalde \"Switch model?\" diye soruyor olabilir ya da zaten o modeldeydi."}
+{"k": "app.reason.model_unknown", "src": "4e5022f6", "v": "aipager bu oturumun durumunu henüz görmedi - birazdan tekrar dene."}
+{"k": "app.reason.no_context", "src": "8f590315", "v": "Sıkıştırılacak bir şey yok - bağlam zaten boş."}
+{"k": "app.reason.no_permission", "src": "e1081627", "v": "Bu oturumu yönetme iznin yok."}
+{"k": "app.reason.no_transcript", "src": "3426f123", "v": "Devam ettirilebilecek bir döküm yok - bunun yerine yeni bir oturum başlat."}
+{"k": "app.reason.perms_admin", "src": "7202c2fd", "v": "Otomatik moda geçmek için yönetici gerekir."}
+{"k": "app.reason.queue_empty", "src": "35da34dc", "v": "Kuyrukta temizlenecek bir şey yok."}
+{"k": "app.reason.queue_full", "src": "2bf9f868", "v": "Kuyruk dolu ({cap} bekliyor) - temizle ya da boşalmasını bekle."}
+{"k": "appcmd.btn.open", "src": "0bfb9312", "v": "📱 Mini App'i aç"}
+{"k": "appcmd.cant_start", "src": "24d56baf", "v": "📱 Mini App bu makinede başlayamıyor - kurulumu eksik görünüyor.\n\nGeri kalan her şey çalışmaya devam ediyor; bunu kuran kişiden aipager'ı yeniden kurmasını iste."}
+{"k": "appcmd.in_group", "src": "edb98eb2", "v": "📱 Mini App yalnızca özel sohbette çalışır - bota özelden yaz ve orada /app gönder."}
+{"k": "appcmd.no_dm", "src": "96dd0730", "v": "Mini App, botla kendi özel sohbetinden açılır. Seni eklemesi için operatöre sor."}
+{"k": "appcmd.not_enabled", "src": "31154296", "v": "Mini App sunucusu bu makinede etkin değil.\nOperatörden {command} komutunu çalıştırıp hizmeti yeniden başlatmasını iste."}
+{"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 Mini App bağlantısı hâlâ hazırlanıyor - birkaç saniye sonra /app komutunu tekrar dene."}
+{"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 Bu bot seninle konuşacak şekilde ayarlanmamış. Operatörden Telegram kullanıcı kimliğini ({user_id}) {command} ile eklemesini iste."}
+{"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "aipager panelini açmak için dokun:"}
+{"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} engellendi"}
+{"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {tool} engellendi: {person}"}
+{"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {tool} engellendi: {person} (rol {role})"}
+{"k": "auth.read_only.scope", "src": "88683fbb", "v": "👀 {who} - rolün <i>{role}</i>; <code>/status</code> kullanabilirsin ama oturumları yönetemezsin."}
+{"k": "auth.read_only.team", "src": "87e66c02", "v": "👀 {who} - rolün <i>read_only</i>; <code>/status</code> kullanabilirsin ama oturumları yönetemezsin."}
+{"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 Bu alanın izin listesinde değilsin. Operatörden Telegram kullanıcı kimliğini ({user_id}) {command} ile eklemesini iste."}
+{"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Bu botun izin listesinde değilsin. Operatörden Telegram kullanıcı kimliğini ({user_id}) {command} ile eklemesini iste."}
+{"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Bu bot seninle konuşacak şekilde ayarlanmamış. Operatörden Telegram kullanıcı kimliğini ({user_id}) {command} ile eklemesini iste."}
+{"k": "botdesc.description", "src": "8ea2e350", "v": "aipager bu botu, sahibinin bilgisayarındaki Claude Code oturumlarına bağlar. Buradan Claude'un ne yaptığını takip edebilir, sorularını ve izin isteklerini yanıtlayabilir, ona yeni istemler gönderebilirsin. Yalnızca sahibinin eklediği kişiler kullanabilir."}
+{"k": "botdesc.short", "src": "483b3675", "v": "Claude Code oturumlarını Telegram'dan yönet."}
+{"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Geri"}
+{"k": "btn.rep.cancel", "src": "196a9f45", "v": "✖️ İptal"}
+{"k": "btn.rep.dont_ask", "src": "7a05a2c0", "v": "Bunu bir daha sorma"}
+{"k": "btn.rep.not_now", "src": "e4571490", "v": "Şimdi değil"}
+{"k": "btn.rep.note", "src": "c4e7efca", "v": "✏️ Not ekle"}
+{"k": "btn.rep.preview", "src": "2632041f", "v": "Raporu önizle"}
+{"k": "btn.rep.report", "src": "e4e182b3", "v": "🐞 Sorun bildir"}
+{"k": "btn.rep.report_this", "src": "4a993c9d", "v": "🐞 Bunu bildir"}
+{"k": "btn.rep.send", "src": "22abdd99", "v": "📤 Gönder"}
+{"k": "btn.resume.next", "src": "315a382a", "v": "Sonraki »"}
+{"k": "btn.resume.page", "src": "378cafa4", "v": "Sayfa {pages}"}
+{"k": "btn.resume.prev", "src": "ac05dfe9", "v": "« Önceki"}
+{"k": "btn.resume.session", "src": "1d8ba7fd", "v": "{session} ({ago})"}
+{"k": "btn.settings_back", "src": "a4b7fcb6", "v": "« Geri"}
+{"k": "btn.upd.aipager", "src": "54631d4b", "v": "aipager'ı güncelle"}
+{"k": "btn.upd.both", "src": "e219575e", "v": "İkisini de güncelle"}
+{"k": "btn.upd.cancel", "src": "77dfd213", "v": "İptal"}
+{"k": "btn.upd.check", "src": "cb743a2a", "v": "🔄 Güncellemeleri denetle"}
+{"k": "btn.upd.check_again", "src": "e185048c", "v": "Tekrar denetle"}
+{"k": "btn.upd.claude", "src": "8b854ad6", "v": "Claude Code'u güncelle"}
+{"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "Şimdi yeniden başlat"}
+{"k": "btn.upd.wait", "src": "060c561a", "v": "{mins} dk daha bekle"}
+{"k": "card.agents", "src": "263711d4", "v": {"one": "{n} ajan", "other": "{n} ajan"}}
+{"k": "card.agents_typed", "src": "af56f555", "v": {"one": "{n} ajan ({types})", "other": "{n} ajan ({types})"}}
+{"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · Sıkıştırılıyor{dots}"}
+{"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · Reddedildi"}
+{"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · Reddeden: {person}"}
+{"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · Terminalde reddedildi"}
+{"k": "card.finishing", "src": "1bfd382d", "v": "tamamlanıyor"}
+{"k": "card.fold", "src": "2061ab43", "v": {"one": "▸ {n} araç çağrısı", "other": "▸ {n} araç çağrısı"}}
+{"k": "card.legacy.agents", "src": "51aa5e62", "v": {"one": "({n} ajan)", "other": "({n} ajan)"}}
+{"k": "card.legacy.earlier", "src": "7062cc28", "v": {"one": "✅ <i>önceki {n} araç</i>", "other": "✅ <i>önceki {n} araç</i>"}}
+{"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 **{session}** oturumundan ({who})"}
+{"k": "card.peer.from_plain", "src": "42467343", "v": "📨 **{session}** oturumundan"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 **{session}** oturumundan (kendi terminalinde yazıldı)"}
+{"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 başka bir oturumdan (doğrulanmadı: dosya değişikliği yok, web yok)"}
+{"k": "card.row.agent_done", "src": "d7362ffc", "v": {"one": "🤖 {agent} · {n} araç çağrısı · {clock}", "other": "🤖 {agent} · {n} araç çağrısı · {clock}"}}
+{"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
+{"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (hâlâ çalışıyor)"}
+{"k": "card.row.agent_word", "src": "0608c405", "v": "ajan"}
+{"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.shell_done", "src": "3b615634", "v": "kabuk: {label} - bitti ({clock})"}
+{"k": "card.row.shell_failed", "src": "3e240f07", "v": "kabuk: {label} - başarısız ({clock})"}
+{"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "kabuk: {label} - başarısız (çıkış kodu {code})"}
+{"k": "card.row.shell_live", "src": "6cebf6e9", "v": "kabuk: {label} ({clock})"}
+{"k": "card.row.shell_lost", "src": "83289e16", "v": "kabuk: {label} - bitişi görülmedi ({clock})"}
+{"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "kabuk: {label} (hâlâ çalışıyor)"}
+{"k": "card.row.shell_stopped", "src": "315cab29", "v": "kabuk: {label} - durduruldu ({clock})"}
+{"k": "card.row.starting", "src": "9493af05", "v": "başlıyor"}
+{"k": "card.shells", "src": "9b747b65", "v": {"one": "{n} kabuk komutu", "other": "{n} kabuk komutu"}}
+{"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
+{"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Durduruldu"}
+{"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · Durduran: {person}"}
+{"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Terminalde durduruldu"}
+{"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · Düşünüyor…"}
+{"k": "card.verb.done", "src": "e9b450d1", "v": "Bitti"}
+{"k": "card.verb.spin_analyzing", "src": "696002c4", "v": "Analiz ediyor"}
+{"k": "card.verb.spin_calculating", "src": "d7652ff1", "v": "Hesaplıyor"}
+{"k": "card.verb.spin_considering", "src": "974edc62", "v": "Tartıyor"}
+{"k": "card.verb.spin_crafting", "src": "ea78b34d", "v": "Oluşturuyor"}
+{"k": "card.verb.spin_evaluating", "src": "e0b446df", "v": "Değerlendiriyor"}
+{"k": "card.verb.spin_examining", "src": "3ed47c3e", "v": "İnceliyor"}
+{"k": "card.verb.spin_formulating", "src": "8432f803", "v": "Formüle ediyor"}
+{"k": "card.verb.spin_investigating", "src": "ce0ee523", "v": "Araştırıyor"}
+{"k": "card.verb.spin_pondering", "src": "bcaa61e0", "v": "Kafa yoruyor"}
+{"k": "card.verb.spin_processing", "src": "e63451d3", "v": "İşliyor"}
+{"k": "card.verb.spin_reasoning", "src": "e272c597", "v": "Akıl yürütüyor"}
+{"k": "card.verb.spin_thinking", "src": "d08d8da0", "v": "Düşünüyor"}
+{"k": "card.verb.waiting", "src": "33d30632", "v": "Bekliyor"}
+{"k": "card.verb.working", "src": "3b4dfc97", "v": "Çalışıyor"}
+{"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
+{"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} hâlâ çalışıyor"}
+{"k": "chatmove.notice", "src": "01364acb", "v": "Bu grup Telegram tarafından yükseltildi. aipager da onunla taşındı, yapman gereken bir şey yok."}
+{"k": "cmd.app", "src": "486dfc4e", "v": "Mini App panelini aç"}
+{"k": "cmd.help", "src": "fb2dbad1", "v": "Neler yapabilirsin"}
+{"k": "cmd.language", "src": "9dc3a234", "v": "aipager mesajlarının dili"}
+{"k": "cmd.mode", "src": "b677b7d9", "v": "Otomatik ya da Sor"}
+{"k": "cmd.new", "src": "959b093b", "v": "Bir oturum başlat"}
+{"k": "cmd.now", "src": "3673f6f7", "v": "Kuyruktakileri şimdi Claude'a gönder"}
+{"k": "cmd.resume", "src": "88f33259", "v": "Bitmiş bir oturuma devam et"}
+{"k": "cmd.settings", "src": "5fdf8e23", "v": "Mesaj düzeni, biçim, yeni oturumlar"}
+{"k": "cmd.status", "src": "b3ddc08d", "v": "Oturumların"}
+{"k": "cmd.stop", "src": "7c4cbc32", "v": "Claude'un yaptığını durdur"}
+{"k": "cmd.talk", "src": "a0173425", "v": "{session} ile konuş"}
+{"k": "diff.more_lines", "src": "816da678", "v": {"one": "<i>…ve {n} satır daha</i>", "other": "<i>…ve {n} satır daha</i>"}}
+{"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · Bitti (arka plan ajanı kayboldu)"}
+{"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · Bitti (arka plan ajanı {clock} sonra kayboldu)"}
+{"k": "fin.finished", "src": "6f65069e", "v": "{lead} · Bitti ({stats})"}
+{"k": "fin.finished_bare", "src": "53b60c70", "v": "{lead} · Bitti"}
+{"k": "fin.full_attached", "src": "bcfddfdb", "v": "📎 <i>Yanıtın tamamı aşağıda ekte ↓</i>"}
+{"k": "fin.lines", "src": "a6f39b46", "v": "+{added} -{removed}"}
+{"k": "fin.shell_lost", "src": "c6c919fb", "v": "⚠️ <b>{session}</b> · Bitti (arka plandaki bir kabuk komutunun bitişi görülmedi)"}
+{"k": "fin.shell_lost_after", "src": "4692a050", "v": "⚠️ <b>{session}</b> · Bitti (arka plandaki bir kabuk komutunun bitişi {clock} içinde görülmedi)"}
+{"k": "fin.stats", "src": "9160a66c", "v": "{clock}, +{added} -{removed}"}
+{"k": "flood.card_paused", "src": "61a88de1", "v": "⏳ **{session}** · çalışıyor (güncellemeler duraklatıldı)"}
+{"k": "flood.card_paused_html", "src": "3815781e", "v": "⏳ <b>{session}</b> · çalışıyor (güncellemeler duraklatıldı)"}
+{"k": "flood.paused_hourly", "src": "1be79366", "v": "⏸ kart güncellemeleri duraklatıldı (saatlik sınır)"}
+{"k": "flood.paused_rate", "src": "57af71ab", "v": "⏸ kart güncellemeleri duraklatıldı (hız sınırı)"}
+{"k": "flood.slow", "src": "fd8f3fd7", "v": "🐢 Telegram uyarısından sonra yavaş mod"}
+{"k": "grp.dropped", "src": "96346149", "v": {"one": "{n} mesaj atıldı: {who} artık burada mesaj gönderemez.", "other": "{n} mesaj atıldı: {who} artık burada mesaj gönderemez."}}
+{"k": "grp.dropped_anon", "src": "c67a8cca", "v": {"one": "{n} mesaj atıldı: bu gönderen artık burada mesaj gönderemez.", "other": "{n} mesaj atıldı: bu gönderen artık burada mesaj gönderemez."}}
+{"k": "grp.dropped_anon_one", "src": "8946b17f", "v": "Atıldı: bu gönderen artık burada mesaj gönderemez."}
+{"k": "grp.dropped_one", "src": "4ab273e1", "v": "Atıldı: {who} artık burada mesaj gönderemez."}
+{"k": "grp.help_talk", "src": "07beac8e", "v": "<b>Konuş:</b> bir oturumun mesajını yanıtla ya da {mention} adını an · /&lt;ad&gt; mesaj"}
+{"k": "grp.help_talk_no_username", "src": "4c1fc9fd", "v": "<b>Konuş:</b> bir oturumun mesajını yanıtla ya da botu an · /&lt;ad&gt; mesaj"}
+{"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "Botu kullanmak için kendi adınla yaz."}
+{"k": "held.late_marker", "src": "e38c307b", "v": {"one": "⏳ geç teslim edildi (Telegram hız sınırı yüzünden {n} dk bekletildi)", "other": "⏳ geç teslim edildi (Telegram hız sınırı yüzünden {n} dk bekletildi)"}}
+{"k": "held.too_old", "src": "7391de5a", "v": "Bu mesaj göndermek için çok eski; tekrar gönder."}
+{"k": "help.admin", "src": "29ac6154", "v": "<b>Yönetici:</b> /update (aipager ve Claude Code)"}
+{"k": "help.control", "src": "8bb13acf", "v": "<b>Denetim:</b> /stop · /now (bekleyenleri gönder) · /clearqueue"}
+{"k": "help.manage", "src": "75144040", "v": "<b>Yönet:</b> /status, sonra ⋮ (yeniden başlat, yeniden adlandır, diff, sonlandır, sil)"}
+{"k": "help.settings", "src": "d51d2171", "v": "<b>Ayarlar:</b> /settings · /mode (Otomatik ya da Sor)"}
+{"k": "help.start", "src": "276a9c1b", "v": "<b>Başla:</b> /new ad · /resume"}
+{"k": "help.talk_dm", "src": "c3ef5195", "v": "<b>Konuş:</b> yazman yeterli (✍️ oturumuna gider) · bir mesajı yanıtla · /&lt;ad&gt; mesaj"}
+{"k": "help.tip", "src": "67a93e6b", "v": "<i>İpucu: bir komuta dokunmak onu hemen gönderir. Önce metin eklemek için üzerine uzun bas (telefon) ya da Tab'a bas (masaüstü).</i>"}
+{"k": "help.title", "src": "8fffe930", "v": "<b>aipager nasıl kullanılır</b>"}
+{"k": "home.btn.new", "src": "19b62fc4", "v": "🆕 Yeni oturum"}
+{"k": "home.btn.resume", "src": "12a3163c", "v": "↩️ Devam ettir"}
+{"k": "home.btn.settings", "src": "b1f2d607", "v": "⚙️ Ayarlar"}
+{"k": "home.dm_target", "src": "099ec348", "v": "✍️ Mesajlar <b>{session}</b> oturumuna gider."}
+{"k": "home.help_hint", "src": "d62b118c", "v": "<i>/help yapabileceğin her şeyi gösterir.</i>"}
+{"k": "home.start_one", "src": "ef9f6ba9", "v": "/new ile bir tane başlat."}
+{"k": "home.tap_session", "src": "f14797d7", "v": "Konuşmak için klavyede bir oturuma dokun."}
+{"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Telegram'dan Claude Code"}
+{"k": "kb.back", "src": "a4b7fcb6", "v": "« Geri"}
+{"k": "kb.commands", "src": "45e5f3f7", "v": "Komutlar ›"}
+{"k": "kb.kill", "src": "c80f5bc1", "v": "Sonlandır"}
+{"k": "kb.models", "src": "d068cea1", "v": "Model ›"}
+{"k": "kb.new", "src": "c2a6b03f", "v": "Oluştur"}
+{"k": "kb.status", "src": "48a3661d", "v": "Özet"}
+{"k": "kb.stop", "src": "1b480158", "v": "Stop"}
+{"k": "kb.templates", "src": "f25b700e", "v": "Şablonlar ›"}
+{"k": "kbl.cmd.clear", "src": "719ea396", "v": "Temizle"}
+{"k": "kbl.cmd.compact", "src": "1df39aa5", "v": "Sıkıştır"}
+{"k": "kbl.cmd.init", "src": "19682bdb", "v": "Başlangıç kurulumu"}
+{"k": "kbl.cmd.plan", "src": "bc0b2aff", "v": "Plan modu"}
+{"k": "kbl.cmd.security_review", "src": "52fab0c7", "v": "Güvenlik incelemesi"}
+{"k": "kbl.tpl.commit", "src": "1a1873ab", "v": "Commit"}
+{"k": "kbl.tpl.continue", "src": "2e026239", "v": "Devam et"}
+{"k": "kbl.tpl.explain_plan", "src": "8197049c", "v": "Planı açıkla"}
+{"k": "kbl.tpl.lgtm", "src": "fddf8bc1", "v": "Tamam, yayınla"}
+{"k": "kbl.tpl.run_tests", "src": "fcab481b", "v": "Testleri çalıştır"}
+{"k": "kbl.tpl.show_diff", "src": "78016e77", "v": "Diff'i göster"}
+{"k": "kbl.tpl.update_memory", "src": "cfa5cef7", "v": "Belleği güncelle"}
+{"k": "kbl.tpl.write_tests", "src": "391b1a96", "v": "Test yaz"}
+{"k": "kbmsg.commands", "src": "52b6fd5f", "v": "🎛 Komutlar"}
+{"k": "kbmsg.models", "src": "78548025", "v": "🤖 Model"}
+{"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 Şablonlar"}
+{"k": "lang.auto", "src": "a66c2e1b", "v": "Otomatik (Telegram dilin)"}
+{"k": "lang.changed", "src": "4e8c6791", "v": "✅ aipager artık burada {language} konuşuyor. Oturumların ve Claude'un yanıtları değişmedi."}
+{"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager burada {language} konuşuyor (yalnızca kendi mesajları; Claude senin yazdığın dilde yanıt verir). Değiştirmek için /language"}
+{"k": "lang.list.group", "src": "9462a94a", "v": "🌐 aipager'ın bu grubun kartları ve düğmeleri için kullandığı dil. Claude oturumları değişmez: Claude ona yazdığın dilde yanıt verir."}
+{"k": "lang.list.private", "src": "5d92850b", "v": "🌐 aipager'ın kendi mesajları ve düğmeleri için burada ve Mini App'te kullandığı dil. Claude oturumların değişmez: Claude ona yazdığın dilde yanıt verir."}
+{"k": "lang.offer.keep", "src": "c383d509", "v": "İngilizce kalsın"}
+{"k": "lang.offer.text", "src": "788b2767", "v": "🌐 aipager artık {language} konuşuyor. Bu yalnızca aipager'ın burada ve Mini App'teki kendi mesajlarını ve düğmelerini değiştirir, Claude oturumlarını değil: Claude yine ona yazdığın dilde yanıt verir."}
+{"k": "lang.row", "src": "69fc399f", "v": "🌐 Dil: {language}"}
+{"k": "life.daemon_restarted", "src": "7253e5d2", "v": "🔄 <b>{session}</b> · Hizmet yeniden başlatıldı"}
+{"k": "life.session_ended", "src": "84bf802a", "v": "🔴 <b>{session}</b> · Oturum sona erdi"}
+{"k": "log.agent", "src": "ff163576", "v": {"one": "- 🤖 {agent} ({clock}, {n} araç çağrısı)", "other": "- 🤖 {agent} ({clock}, {n} araç çağrısı)"}}
+{"k": "log.agents", "src": "5db5246b", "v": "## Ajanlar"}
+{"k": "log.final_answer", "src": "f0ea5fc3", "v": "## Son yanıt"}
+{"k": "log.memory", "src": "df926a90", "v": {"one": "_Bellek en son {n} araç satırını tutar; çok uzun turların eski satırları silinmiş olabilir._", "other": "_Bellek en son {n} araç satırını tutar; çok uzun turların eski satırları silinmiş olabilir._"}}
+{"k": "log.title", "src": "2d9e96f5", "v": "# {session} - tam günlük"}
+{"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ Dosyalar indirilemedi: {names}"}
+{"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ Dosya indirilemedi: {names}"}
+{"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ Dosyalar indirilemedi: {names} (albüme eklenmedi)"}
+{"k": "media.album_left_out_one", "src": "c91cd106", "v": "❌ Dosya indirilemedi: {names} (albüme eklenmedi)"}
+{"k": "media.brew_footer", "src": "accb7c5a", "v": "<i>Not: ileride bir {command} formülün venv'ini yeniden kurup faster-whisper'ı kaldırabilir. Ses çalışmayı durdurursa Yükle'ye yeniden dokun.</i>"}
+{"k": "media.btn.cancel", "src": "77dfd213", "v": "İptal"}
+{"k": "media.btn.install", "src": "75e85c25", "v": "📦 Sesi yükle"}
+{"k": "media.btn.restart", "src": "ec740c6a", "v": "🔄 Hizmeti şimdi yeniden başlat"}
+{"k": "media.download_failed", "src": "cd9ea0b9", "v": "❌ Sesli mesaj indirilemedi."}
+{"k": "media.file_download_failed", "src": "fd5ed5a0", "v": "❌ Dosya indirilemedi: {name}"}
+{"k": "media.file_too_big", "src": "85d942ae", "v": "⚠️ Dosya {size} MB. Telegram bot API'si en fazla {limit} MB indirmeye izin verir. Bölmeyi dene ya da içeriği metin olarak yapıştır."}
+{"k": "media.heard", "src": "3164d86a", "v": "🎙️ <i>Duyulan:</i> {text}"}
+{"k": "media.install_cant_start", "src": "8f8e8cec", "v": "❌ Yükleyici başlatılamadı: {error}"}
+{"k": "media.install_failed", "src": "31267ed7", "v": "❌ Yükleme başarısız (çıkış kodu {code}):\n<pre>{output}</pre>"}
+{"k": "media.install_no_recipe", "src": "065dd801", "v": "⚠️ Bu aipager sürümünde ses eklentisi için\nyükleme tarifi yok. aipager'ı güncelle ve tekrar dene."}
+{"k": "media.install_working", "src": "7ef2a045", "v": "📦 Ses eklentisi yükleniyor - hâlâ çalışıyor… ({seconds} sn)"}
+{"k": "media.installed", "src": "6e9fbf9b", "v": "✅ Yüklendi. Ses özelliklerinin yeni modülü yüklemesi için hizmetin yeniden başlatılması gerekir."}
+{"k": "media.installing", "src": "1978f3ef", "v": "📦 Ses eklentisi yükleniyor…"}
+{"k": "media.needs_extra", "src": "153956ee", "v": "⚠️ Sesli mesajlar için isteğe bağlı ses eklentisi gerekir (~{install} MB kurulum · ilk kullanımda ~{model} MB model)."}
+{"k": "media.no_speech", "src": "8d84c0b6", "v": "⚠️ Bunda anlaşılır bir konuşma bulunamadı."}
+{"k": "media.not_installed", "src": "911c9456", "v": "faster-whisper yüklü değil. Şunu çalıştır:\n    {uv}\nya da:\n    {pip}"}
+{"k": "media.restart_busy_update", "src": "a6e0a620", "v": "⏳ Yeniden başlatılmıyor: bir aipager güncellemesi çalışıyor ya da hizmeti birazdan yeniden başlatacak. Bittiğinde tekrar dene."}
+{"k": "media.restart_cant_open", "src": "d591e073", "v": "⚠️ {path} açılamadı: {error}\nLütfen elle yeniden başlat."}
+{"k": "media.restart_cant_schedule", "src": "aa7ee7e7", "v": "⚠️ Yeniden başlatma planlanamadı: {detail}\nLütfen elle yeniden başlat."}
+{"k": "media.restart_cant_spawn", "src": "30877338", "v": "⚠️ Yerine geçecek süreç başlatılamadı: {error}\nLütfen elle yeniden başlat."}
+{"k": "media.restart_failed_start", "src": "0aad8df0", "v": "⚠️ Yeni hizmet başlatılamadı. Lütfen elle yeniden başlat."}
+{"k": "media.restart_killmode", "src": "08a54162", "v": "⚠️ Yeniden başlatılmıyor: hizmetin KillMode ayarı oturumlarını durdurur."}
+{"k": "media.restart_launchctl", "src": "1c55d98b", "v": "🔄 {command} ile yeniden başlatılıyor…"}
+{"k": "media.restart_locked", "src": "3f061ea2", "v": "⏳ Yeniden başlatılmıyor: bir aipager güncellemesi çalışıyor (güncelleme kilidi tutuluyor). Bittiğinde tekrar dene."}
+{"k": "media.restart_refused", "src": "41b49bd1", "v": "⚠️ Yeniden başlatılmıyor: {reason}."}
+{"k": "media.restart_resend_voice", "src": "f5ed81e2", "v": "🔄 Yeniden başlatılıyor - sesli mesajını birkaç saniye sonra tekrar gönder."}
+{"k": "media.restart_would_kill", "src": "d49632de", "v": "Yeniden başlatmanın sonlandıracağı oturumlar: {sessions}"}
+{"k": "media.restarting_in", "src": "f8016b1a", "v": "🔄 {seconds} sn içinde yeniden başlatılıyor - sesli mesajını birkaç saniye sonra tekrar gönder."}
+{"k": "media.transcribe_failed", "src": "930964f7", "v": "❌ Yazıya dökme başarısız: {error}"}
+{"k": "media.transcribing", "src": "56629b0b", "v": "🎙️ <i>Yazıya dökülüyor…</i>"}
+{"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ Tamam, ses yüklenmedi."}
+{"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ Sesli mesaj {size} MB; Telegram botları en fazla {limit} MB indirebilir."}
+{"k": "mode.ask", "src": "07910591", "v": "💬 Sor modu"}
+{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 Sor (🤖 Otomatik: yöneticiler)"}
+{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 Bunun yerine Sor"}
+{"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 Otomatik mod"}
+{"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 Bunun yerine Otomatik"}
+{"k": "mode.word.ask", "src": "3562777b", "v": "Sor"}
+{"k": "mode.word.auto", "src": "c614ba7c", "v": "Otomatik"}
+{"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b>: zaten {mode}."}
+{"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 Sor moduna geç"}
+{"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 Otomatik moda geç"}
+{"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> meşgul.\nSor moduna geçilsin mi?"}
+{"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> meşgul.\nOtomatik moda geçilsin mi?"}
+{"k": "modecard.confirm_auto", "src": "ff1562a9", "v": "⚙️ <b>{session}</b> için {mode} açılsın mı?\n<i>Claude araçları sormadan çalıştıracak ({flag}).</i>"}
+{"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ <b>{session}</b> oturumunun durumu henüz belirleniyor. Birazdan /mode komutunu tekrar dene."}
+{"k": "modecard.is", "src": "c057ad13", "v": "<b>{session}</b>: {mode}."}
+{"k": "modecard.is_target", "src": "92bc67e3", "v": "✍️ <b>{session}</b>: {mode}."}
+{"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ <b>{session}</b> yeni bir işe geçti, bu yüzden hiçbir şey değişmedi."}
+{"k": "modecard.needs_admin", "src": "fe68d230", "v": "Otomatik mod için yönetici gerekir."}
+{"k": "modecard.none_live", "src": "ae432c8c", "v": "Burada çalışan oturum yok. /new ile bir tane başlat."}
+{"k": "modecard.refused_not_running", "src": "d62cf188", "v": "⚠️ <b>{session}</b> çalışmıyor - mod değişmedi."}
+{"k": "modecard.refused_restarting", "src": "06433ed3", "v": "⚠️ <b>{session}</b> şu anda yeniden başlıyor - mod değişmedi. Birazdan tekrar dene."}
+{"k": "modecard.session_missing", "src": "adf0d420", "v": "⚠️ Oturum bulunamadı."}
+{"k": "modecard.stale", "src": "9f0f5572", "v": "⚠️ Bu kart eskimişti, bu yüzden hiçbir şey değişmedi."}
+{"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> hâlâ durduruluyor - mod değişmedi."}
+{"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ Mod değiştirilemedi: {error}"}
+{"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ {person} geçiş yaptı: {mode}."}
+{"k": "modecard.switching", "src": "30fa9003", "v": "⚙️ <b>{session}</b> için {mode} açılıyor…"}
+{"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ /mode bir oturum adı ve ask ya da auto alır, örneğin {example} ya da {example_ask}."}
+{"k": "modecard.which", "src": "107abca0", "v": "Hangi oturum?"}
+{"k": "modecard.which_to", "src": "4694464a", "v": "Hangi oturumda {mode} açılsın?"}
+{"k": "newflow.auto_needs_admin_note", "src": "6bb45da7", "v": "Otomatik mod için yönetici gerekir, bu yüzden bu oturum soracak."}
+{"k": "newflow.btn.cancel", "src": "196a9f45", "v": "✖️ İptal"}
+{"k": "newflow.btn.folder", "src": "2fb30e02", "v": "📁 Klasör"}
+{"k": "newflow.btn.model", "src": "e252b8c8", "v": "🧠 Model"}
+{"k": "newflow.btn.new_folder", "src": "27a1f4a2", "v": "➕ Yeni klasör"}
+{"k": "newflow.btn.other_model", "src": "48915641", "v": "✏️ Başka model..."}
+{"k": "newflow.btn.replace", "src": "caede00c", "v": "🆕 Değiştir (sıfırdan)"}
+{"k": "newflow.btn.resume", "src": "cad6f900", "v": "♻️ Devam ettir"}
+{"k": "newflow.btn.switch_to", "src": "8f04f92d", "v": "↩️ Ona geç"}
+{"k": "newflow.cancelled_nothing", "src": "4c346842", "v": "↩️ İptal edildi - hiçbir oturum değişmedi."}
+{"k": "newflow.changed_mode", "src": "a1779ae6", "v": "{person} geçiş yaptı: {mode}."}
+{"k": "newflow.changed_model", "src": "1f771c06", "v": "Modeli {model} yapan: {person}."}
+{"k": "newflow.closed", "src": "87aee987", "v": "✖️ Kapatıldı, başka bir şeye geçtin. Oturum başlatmak için /new gönder."}
+{"k": "newflow.conflict_replaced", "src": "0ab47818", "v": "↩️ <b>{session}</b> için daha yeni bir /new bu kartın yerini aldı."}
+{"k": "newflow.conflict_running", "src": "b36a4e23", "v": "⚠️ <b>{session}</b> zaten çalışıyor.\nNe yapmak istersin?"}
+{"k": "newflow.conflict_used", "src": "5d97ff8c", "v": "♻️ <b>{session}</b> daha önce kullanıldı.\nNe yapmak istersin?"}
+{"k": "newflow.conflict_used_preview", "src": "b46e358d", "v": "♻️ <b>{session}</b> daha önce kullanıldı.\n<i>Son yanıt:</i>\n<blockquote>{preview}</blockquote>\nNe yapmak istersin?"}
+{"k": "newflow.create_failed", "src": "3beecd9f", "v": "❌ {error}"}
+{"k": "newflow.example_line", "src": "ab8b1839", "v": "<code>{session} başarısız testleri düzelt</code>"}
+{"k": "newflow.expired", "src": "6f9c9ea0", "v": "⏱ Bu yeni oturum kartının süresi doldu. /new komutunu tekrar gönder."}
+{"k": "newflow.folder_page", "src": "f6e221a1", "v": "📁 <b>Klasör</b>\n\nBu oturumun nerede çalışacağını seç."}
+{"k": "newflow.group_name_ask", "src": "eb31141c", "v": "Bu mesajı bir adla yanıtla, istersen önce ne yapılacağını da ekle:"}
+{"k": "newflow.hint_folder", "src": "f27c8294", "v": "📁 Önce 📁 Klasör ile bir proje klasörü seç."}
+{"k": "newflow.just_send", "src": "0b7a9b82", "v": "✍️ Bir mesaj göndermen yeterli, {session} oturumuna gider."}
+{"k": "newflow.model_page", "src": "580279ec", "v": "🧠 <b>Model</b>\n\nBu oturum için bir model seç."}
+{"k": "newflow.name_empty", "src": "e00fbfca", "v": "Oturum adı boş olamaz."}
+{"k": "newflow.new_folder_title", "src": "64007145", "v": "📁 <b>Yeni klasör</b>"}
+{"k": "newflow.note_mode_failed", "src": "12f5a535", "v": "Mod değiştirilemedi."}
+{"k": "newflow.note_mode_failed_err", "src": "8e216733", "v": "Mod değiştirilemedi: {error}"}
+{"k": "newflow.note_mode_not_switched", "src": "43b54091", "v": "{session} çalışmaya başladı, bu yüzden mod değiştirilmedi."}
+{"k": "newflow.other_model_title", "src": "3c30c486", "v": "🧠 <b>Başka model</b>"}
+{"k": "newflow.others_card_named", "src": "6ad64798", "v": "Bu kart {owner} kullanıcısına ait. Kendi kartın için /new gönder."}
+{"k": "newflow.others_card_someone", "src": "e2435dc7", "v": "Bu kart başka birine ait. Kendi kartın için /new gönder."}
+{"k": "newflow.prompt_folder_reply", "src": "21f1cb23", "v": "Bu mesajı yeni klasörün adıyla yanıtla."}
+{"k": "newflow.prompt_folder_type", "src": "e8783fd7", "v": "Yeni klasörün adını yaz."}
+{"k": "newflow.prompt_model_reply", "src": "7d73f8ac", "v": "Bu mesajı model adıyla yanıtla."}
+{"k": "newflow.prompt_model_reply_eg", "src": "b8f4f722", "v": "Bu mesajı model adıyla yanıtla (örn. {example})."}
+{"k": "newflow.prompt_model_type", "src": "9d5677e2", "v": "Model adını yaz."}
+{"k": "newflow.prompt_model_type_eg", "src": "8bac428b", "v": "Model adını yaz (örn. {example})."}
+{"k": "newflow.prompt_queued", "src": "85768278", "v": "📝 İstem kuyrukta"}
+{"k": "newflow.ready", "src": "4edcea75", "v": "✅ <b>{session}</b> hazır"}
+{"k": "newflow.ready_changed", "src": "39a18ac6", "v": "🔁 {changed}"}
+{"k": "newflow.ready_later", "src": "4d69ea9f", "v": "Sonra: klavyede {session} düğmesine dokun ya da herhangi bir {session} mesajını yanıtla."}
+{"k": "newflow.ready_models", "src": "1bccc9f4", "v": "🧠 <b>{session}</b>: bir model seç.\n\nYerinde değişir, konuşma korunur."}
+{"k": "newflow.ready_settings", "src": "d40af8c6", "v": "{mode} · 🧠 {model} · 📁 <code>{folder}</code>"}
+{"k": "newflow.send_name", "src": "9b892a4c", "v": "Bir ad gönder, istersen önce ne yapılacağını da ekle:"}
+{"k": "newflow.settings_line", "src": "a770b6d4", "v": "{mode} · 🧠 {model} · 📁 {folder}"}
+{"k": "newflow.settings_no_folder", "src": "810727a6", "v": "{mode} · 🧠 {model} · 📁 henüz proje klasörü yok"}
+{"k": "newflow.started_over", "src": "3a2633bc", "v": "↩️ İptal edildi - baştan başlandı."}
+{"k": "newflow.starting", "src": "c0338362", "v": "🚀 <b>{session}</b> başlatılıyor · {mode}…"}
+{"k": "newflow.starting_fresh", "src": "fff58191", "v": "🚀 <b>{session}</b> sıfırdan başlatılıyor…"}
+{"k": "newflow.switched_to", "src": "03553586", "v": "↩️ <b>{session}</b> oturumuna geçildi"}
+{"k": "newflow.title", "src": "79dee51b", "v": "🆕 <b>Yeni oturum</b>"}
+{"k": "newflow.title_owner", "src": "b8803b0f", "v": "🆕 <b>Yeni oturum</b> ({owner})"}
+{"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ İlk mesajın üzerinde çalışıyorum."}
+{"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"one": "⏱️ <b>{session}</b> · Sıkıştırma {n} dk sonra bittiğini doğrulamadı", "other": "⏱️ <b>{session}</b> · Sıkıştırma {n} dk sonra bittiğini doğrulamadı"}}
+{"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · Sıkıştırıldı: {before} → {after}"}
+{"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · Bağlam {percent} dolu - yakında otomatik sıkıştırma"}
+{"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · bellek sınırına ulaşıldı"}
+{"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · <code>{tool}</code> sırasında bellek sınırına ulaşıldı"}
+{"k": "notice.memcap_hook", "src": "657f02c3", "v": "<code>{hook}</code> {limit} GB bellek sınırını aştı ve durdu. Bir araç çağrısını denetliyorsa Claude Code büyük olasılıkla o çağrıyı reddetti ve Claude yeniden deneyebilir; aksi halde yalnızca o tek olay atlandı. Oturum çalışmaya devam ediyor."}
+{"k": "notice.memcap_nudge_cli", "src": "726ab6ea", "v": "<i>Bu tekrarlanırsa geliştiriciye rapor göndermek için bir terminalde {command} çalıştır.</i>"}
+{"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>Bu tekrarlanırsa sahip, geliştiriciye rapor göndermek için Bunu bildir düğmesine dokunabilir.</i>"}
+{"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> {limit} GB bellek sınırını aştı, bu yüzden bir durum satırı güncellemesi atlandı. Oturum çalışmaya devam ediyor."}
+{"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Claude Code mesajı almadı\n\nGönderimden sonraki {grace} sn içinde hiçbir hook gelmedi. \"/\" ile başlayan bir mesaj eğik çizgi komutu olarak okunur - terminali kontrol et."}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "Bu görev <b>{session}</b> oturumundan geldi."}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "Başka bir oturumdan gelen bir mesaj bu tura katıldı ve yetkilerini daralttı."}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "Bu görev, aipager'ın doğrulayamadığı başka bir oturumdan geldi."}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b>, <b>{sender}</b> oturumunun gönderdiği mesajı yerine getirmedi: {reason}"}
+{"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · kuyruktaki bir mesajın alındığı zamanında doğrulanamadı - Claude onu hâlâ işleyebilir."}
+{"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · kuyruktaki bir mesajın alındığı zamanında doğrulanamadı: \"{preview}\" - Claude onu hâlâ işleyebilir."}
+{"k": "notice.quiet_turn", "src": "baa52794", "v": {"one": "⏳ <b>{session}</b> · hâlâ çalışıyor ({n} dk sessiz)\n\nHenüz durum güncellemesi yok. Bu genelde normaldir.\n\n<blockquote expandable>Neler oluyor olabilir\n  • Uzun süren bir araç çağrısı (Bash, WebSearch, büyük bir indirme)\n  • Çok büyük bir bağlamda ağır üretim\n  • Sıkıştırma sürüyor\n  • Hız sınırı beklemesi ya da abonelik sınırı\n  • Ağ takılması ya da Claude çökmesi</blockquote>", "other": "⏳ <b>{session}</b> · hâlâ çalışıyor ({n} dk sessiz)\n\nHenüz durum güncellemesi yok. Bu genelde normaldir.\n\n<blockquote expandable>Neler oluyor olabilir\n  • Uzun süren bir araç çağrısı (Bash, WebSearch, büyük bir indirme)\n  • Çok büyük bir bağlamda ağır üretim\n  • Sıkıştırma sürüyor\n  • Hız sınırı beklemesi ya da abonelik sınırı\n  • Ağ takılması ya da Claude çökmesi</blockquote>"}}
+{"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · Oturum temizlendi"}
+{"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · Oturum çöktü ya da sonlandırıldı"}
+{"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · Oturum kapandı"}
+{"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · Oturumda hesaptan çıkış yapıldı"}
+{"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · Oturum izin hatası"}
+{"k": "notice.session_end.resume", "src": "86761a3d", "v": "🔴 <b>{session}</b> · Oturum başka bir konuşmaya geçti"}
+{"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · hâlâ yukarıdaki yanıtını bekliyor"}
+{"k": "notice.waiting_permission", "src": "e39388ee", "v": "İzin: {summary}"}
+{"k": "notice.waiting_question", "src": "2348fa66", "v": "Soru: {summary}"}
+{"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Bu, ⟨U+...⟩ olarak gösterilen gizli yön karakterleri içeriyor. Göründüğünden farklı bir şey çalıştırabilir."}
+{"k": "perm.btn.allow", "src": "cf869136", "v": "✅ İzin ver"}
+{"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Hep izin ver"}
+{"k": "perm.btn.cancel", "src": "d20b1713", "v": "↩️ İptal"}
+{"k": "perm.btn.compact_now", "src": "73357c1f", "v": "📦 Şimdi sıkıştır"}
+{"k": "perm.btn.default_suffix", "src": "613e7977", "v": "{mode} (varsayılan)"}
+{"k": "perm.btn.deny", "src": "8b9d9edb", "v": "❌ Reddet"}
+{"k": "perm.btn.not_now", "src": "f677ca32", "v": "⏳ Şimdi değil"}
+{"k": "perm.btn.option", "src": "881fbd74", "v": "Seçenek {n}"}
+{"k": "perm.btn.retry", "src": "fabc7541", "v": "🔄 Yeniden dene"}
+{"k": "perm.btn.stop", "src": "e3f8b9ee", "v": "⏹ Durdur"}
+{"k": "perm.btn.stop_plain", "src": "9e253470", "v": "Durdur"}
+{"k": "perm.btn.stop_switch", "src": "bc469329", "v": "🛑 Durdur ve geç"}
+{"k": "perm.btn.submit", "src": "c685950d", "v": "✅ Gönder"}
+{"k": "perm.btn.yes_switch", "src": "9f6e4eb9", "v": "✅ Evet, geç"}
+{"k": "perm.loading", "src": "253222ec", "v": "{tool} (yükleniyor…)"}
+{"k": "perm.needed", "src": "7c7a8e5c", "v": "İzin gerekiyor"}
+{"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · Seçim gerekiyor"}
+{"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · Soru yok"}
+{"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · İzin gerekiyor"}
+{"k": "pin.btn.answer", "src": "24c3485a", "v": "Yanıtla: {session}"}
+{"k": "pin.count.idle", "src": "6abeefbf", "v": {"one": "{n} boşta", "other": "{n} boşta"}}
+{"k": "pin.count.starting", "src": "836f5c27", "v": {"one": "{n} başlıyor", "other": "{n} başlıyor"}}
+{"k": "pin.count.working", "src": "c3aee490", "v": {"one": "{n} çalışıyor", "other": "{n} çalışıyor"}}
+{"k": "pin.first.all_idle", "src": "195ea8a9", "v": "💤 hepsi boşta"}
+{"k": "pin.first.counts", "src": "b5d804ae", "v": "{glyph} {counts}"}
+{"k": "pin.first.single", "src": "5674b34c", "v": "{glyph} {session} {state}"}
+{"k": "pin.first.waiting", "src": "7fa7cc46", "v": "⏳ {session} seni bekliyor"}
+{"k": "pin.line", "src": "de9ddb7a", "v": "• <b>{session}</b> {state}"}
+{"k": "pin.more", "src": "66adc298", "v": {"one": "(+{n} tane daha)", "other": "(+{n} tane daha)"}}
+{"k": "pin.needs_input", "src": "9a9d6640", "v": "Seçim gerekiyor"}
+{"k": "pin.paren", "src": "d52abc3c", "v": "({running})"}
+{"k": "pin.running_agents", "src": "712d4c75", "v": {"one": "{n} ajan çalışıyor", "other": "{n} ajan çalışıyor"}}
+{"k": "pin.running_both", "src": "48ac24f8", "v": "{agents}, {shells} çalışıyor"}
+{"k": "pin.running_shells", "src": "af023360", "v": {"one": "{n} kabuk komutu çalışıyor", "other": "{n} kabuk komutu çalışıyor"}}
+{"k": "pin.state", "src": "845c40c2", "v": "({state})"}
+{"k": "pin.state.idle", "src": "1adbcc34", "v": "boşta"}
+{"k": "pin.state.needs_you", "src": "19622ace", "v": "seni bekliyor"}
+{"k": "pin.state.starting", "src": "9493af05", "v": "başlıyor"}
+{"k": "pin.state.working", "src": "8178ea20", "v": "çalışıyor"}
+{"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
+{"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
+{"k": "pin.target", "src": "c9c5350f", "v": "✍️ Mesajlar <b>{session}</b> oturumuna gider"}
+{"k": "rep.area.animation", "src": "6a3a8292", "v": "çalışma kartı"}
+{"k": "rep.area.callbacks", "src": "397d02b3", "v": "düğme dokunuşları"}
+{"k": "rep.area.daemon", "src": "dbcc03a0", "v": "hizmet"}
+{"k": "rep.area.dashboard", "src": "319e1d71", "v": "sabitlenmiş çubuk"}
+{"k": "rep.area.flood_budget", "src": "75f9bcb6", "v": "gönderim bütçesi"}
+{"k": "rep.area.handlers", "src": "0ff1035f", "v": "mesaj işleme"}
+{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "hook alıcısı"}
+{"k": "rep.area.inject", "src": "d784f7db", "v": "istem iletimi"}
+{"k": "rep.area.notify", "src": "c522bd84", "v": "mesaj iletimi"}
+{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "hook"}
+{"k": "rep.area.server", "src": "8000cc31", "v": "Mini App"}
+{"k": "rep.area.session_monitor", "src": "1fff1160", "v": "oturum izleyici"}
+{"k": "rep.area.session_ops", "src": "6b7d9e30", "v": "oturum denetimi"}
+{"k": "rep.area.state", "src": "e0e05b06", "v": "oturum durumu"}
+{"k": "rep.cancelled", "src": "ca0ed5b3", "v": "İptal edildi. Hiçbir şey gönderilmedi."}
+{"k": "rep.doc_failed", "src": "321fac57", "v": "report.json dosyası gönderilemedi, bu yüzden hiçbir şey gönderilmedi. Sorun bildir'i daha sonra yeniden aç."}
+{"k": "rep.document_line", "src": "f2943506", "v": "Raporun tam hali, bu karta yanıt olarak gelen report.json dosyasında."}
+{"k": "rep.explanation", "src": "d470a7df", "v": "Raporun içerdiği her şey bu. Henüz hiçbir şey gönderilmedi.\nİçinde sohbetler, istemler, oturum adları, klasörler, token'lar, sohbet kimlikleri ya da kullanıcı adları yok.\naipager geliştiricisinin hata kutusuna (Sentry) anonim olarak gider."}
+{"k": "rep.heading", "src": "ad1633d0", "v": "🐞 <b>Sorun bildir</b>"}
+{"k": "rep.lost", "src": "6b4837a4", "v": "Bu önizleme artık açık değil, bu yüzden hiçbir şey gönderilmedi. Yenisini görmek için Sorun bildir'i yeniden aç."}
+{"k": "rep.note.prompt", "src": "dc71be87", "v": {"one": "✏️ Notunu tek bir mesaj olarak yaz (en fazla {n} karakter). Rapora, göndermeden önce gördüğün haliyle girer. Yaptığın başka herhangi bir şey bunu kapatır.", "other": "✏️ Notunu tek bir mesaj olarak yaz (en fazla {n} karakter). Rapora, göndermeden önce gördüğün haliyle girer. Yaptığın başka herhangi bir şey bunu kapatır."}}
+{"k": "rep.offer.also_other", "src": "2b336900", "v": {"one": "Ayrıca {n} hata daha.", "other": "Ayrıca {n} hata daha."}}
+{"k": "rep.offer.declined", "src": "5d912282", "v": "Tamam. aipager bu sürümde bunu bir daha sormayacak."}
+{"k": "rep.offer.internal", "src": "4df624aa", "v": {"one": "aipager {n} kez iç hatayla karşılaştı ({error}, {area}).", "other": "aipager {n} kez iç hatayla karşılaştı ({error}, {area})."}}
+{"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "aipager bir kez iç hatayla karşılaştı ({error}, {area})."}
+{"k": "rep.offer.memcap", "src": "698bc999", "v": {"one": "aipager hook'u {n} kez bellek sınırına ulaştı.", "other": "aipager hook'u {n} kez bellek sınırına ulaştı."}}
+{"k": "rep.offer.memcap_once", "src": "63461898", "v": "aipager hook'u bir kez bellek sınırına ulaştı."}
+{"k": "rep.offer.not_opened", "src": "1df3fb0a", "v": "Rapor önizlemesi açılamadı. /help içindeki Sorun bildir yenisini açar."}
+{"k": "rep.offer.off", "src": "3706223b", "v": "Otomatik teklifler artık kapalı. Yeniden açmak için: /settings, sonra Sorun raporları."}
+{"k": "rep.offer.preview", "src": "0835e626", "v": "Rapor önizlemesi aşağıda açıldı."}
+{"k": "rep.offer.stopped", "src": "1f8a50a5", "v": {"one": "aipager {n} kez beklenmedik şekilde durdu.", "other": "aipager {n} kez beklenmedik şekilde durdu."}}
+{"k": "rep.offer.stopped_once", "src": "98a8d806", "v": "aipager bir kez beklenmedik şekilde durdu."}
+{"k": "rep.offer.tail", "src": "e58f2a0c", "v": "Bir rapor bunun düzeltilmesine yardımcı olur. Yalnızca sürümleri ve koddaki yerleri içerir; sohbetlerini, istemlerini, adları ya da yolları asla içermez."}
+{"k": "rep.outcome.daily_cap", "src": "2095768c", "v": {"one": "Bir makineden günde en fazla {n} rapor gönderilebilir. Yarın tekrar dene.", "other": "Bir makineden günde en fazla {n} rapor gönderilebilir. Yarın tekrar dene."}}
+{"k": "rep.outcome.disabled", "src": "23061011", "v": "Sorun raporları şu an geliştirici tarafından kapatılmış. Hiçbir şey gönderilmedi."}
+{"k": "rep.outcome.invalid", "src": "55ae1194", "v": "Bu rapor kendi denetimlerinden geçemedi, bu yüzden gönderilmedi."}
+{"k": "rep.outcome.sent", "src": "3456aede", "v": "Gönderildi. Referans {reference} (GitHub'da bir issue açarsan bunu belirt)."}
+{"k": "rep.outcome.too_old", "src": "3e8e0bff", "v": "Bu aipager sürümü artık rapor gönderemiyor. Güncelle ({command}) ve tekrar dene."}
+{"k": "rep.outcome.try_later", "src": "ab0f2d7c", "v": "Şu an gönderilemedi. Hiçbir şey kaybolmadı; daha sonra tekrar dene."}
+{"k": "rep.status.note_added", "src": "96d23c70", "v": "Not eklendi."}
+{"k": "rep.status.note_closed", "src": "8187cfb3", "v": "Not eklenmedi: başka bir şey yaptın. Tekrar denemek için Not ekle'ye dokun."}
+{"k": "rep.status.note_cut", "src": "e9ab8458", "v": {"one": "Not eklendi, {n} karaktere kısaltıldı.", "other": "Not eklendi, {n} karaktere kısaltıldı."}}
+{"k": "rep.status.note_empty", "src": "1f872085", "v": "Not boştu, bu yüzden hiçbir şey eklenmedi."}
+{"k": "rep.status.note_refused", "src": "c92adef7", "v": "Bu not eklenemedi. Daha kısa ve sade bir not dene."}
+{"k": "rep.status.send_failed", "src": "ff84d63e", "v": "Bu rapor aipager içindeki bir sorun yüzünden gönderilemedi. Hiçbir şey gönderilmedi."}
+{"k": "rep.status.sending", "src": "c338c191", "v": "Gönderiliyor..."}
+{"k": "resume.header", "src": "74554c53", "v": "{icon} <b>[{session}]</b> · {state}"}
+{"k": "resume.header_clock", "src": "b1522d3c", "v": "{icon} <b>[{session}]</b> · {state} {clock}"}
+{"k": "resume.more_no_transcript", "src": "d8f1f6e8", "v": {"one": "<i>{n} tane daha var, devam ettirilecek kayıtlı dökümü yok.</i>", "other": "<i>{n} tane daha var, devam ettirilecek kayıtlı dökümü yok.</i>"}}
+{"k": "resume.no_preview", "src": "34384805", "v": "<i>(önizleme yok)</i>"}
+{"k": "resume.no_transcript", "src": "65416f58", "v": {"one": "<i>{n} oturumun devam ettirilecek kayıtlı dökümü yok.</i>", "other": "<i>{n} oturumun devam ettirilecek kayıtlı dökümü yok.</i>"}}
+{"k": "resume.none", "src": "f0e1dc3c", "v": "📭 Devam ettirilecek önceki oturum yok."}
+{"k": "resume.recent", "src": "c14c1ce4", "v": "Son işlemler:"}
+{"k": "resume.row", "src": "c75d6298", "v": "🔘 <b>{session}</b> (<i>{when}</i>)"}
+{"k": "resume.row.active", "src": "ebbe643f", "v": "Etkin: {ago}"}
+{"k": "resume.row.active_now", "src": "95e3adc9", "v": "Etkin: az önce"}
+{"k": "resume.row.active_unknown", "src": "15d90554", "v": "Etkin: bilinmiyor"}
+{"k": "resume.row.agents", "src": "1344dd37", "v": {"one": "Ajanlar: {n} ({types})", "other": "Ajanlar: {n} ({types})"}}
+{"k": "resume.row.agents_count", "src": "abe9706b", "v": {"one": "Ajanlar: {n}", "other": "Ajanlar: {n}"}}
+{"k": "resume.row.cost", "src": "68433bc8", "v": "Maliyet: {cost}"}
+{"k": "resume.row.ctx", "src": "edcc7a6b", "v": "Bağlam: {percent} {bar}"}
+{"k": "resume.row.lines", "src": "439ccc8a", "v": "Satırlar: {changes}"}
+{"k": "resume.row.model", "src": "e60d2adb", "v": "Model: {model}"}
+{"k": "resume.row.output", "src": "2a39ea71", "v": "Çıktı token'ları: {tokens}"}
+{"k": "resume.row.queue", "src": "865b83a5", "v": "Kuyruk: {pending} bekliyor ({queued} mesaj, {notes} not)"}
+{"k": "resume.state.busy", "src": "e18a89f9", "v": "meşgul"}
+{"k": "resume.state.gone", "src": "a6dfdeaa", "v": "bitti"}
+{"k": "resume.state.idle", "src": "1adbcc34", "v": "boşta"}
+{"k": "resume.state.interactive", "src": "00753189", "v": "yanıt bekliyor"}
+{"k": "resume.state.unknown", "src": "50d8b4a9", "v": "bilinmiyor"}
+{"k": "resume.tap", "src": "c118e3b9", "v": "Devam ettirmek için aşağıdaki bir düğmeye dokun."}
+{"k": "resume.title", "src": "d5cecda8", "v": {"one": "📚 <b>Önceki oturumlar</b> (toplam {n})", "other": "📚 <b>Önceki oturumlar</b> (toplam {n})"}}
+{"k": "route.btn.resume", "src": "2db3fd81", "v": "🔁 Devam ettir"}
+{"k": "route.btn.resume_label", "src": "5a3f876a", "v": "▶️ Devam ettir: {session}"}
+{"k": "route.cant_clear_busy", "src": "cf8384cd", "v": "⚠️ Oturum meşgulken temizlenemez"}
+{"k": "route.clear_no_active", "src": "1ada2799", "v": "Etkin oturum yok - önce {command} ile bir oturuma geç."}
+{"k": "route.clear_nothing", "src": "75578929", "v": "[{session}] içinde temizlenecek bir şey yok."}
+{"k": "route.cleared", "src": "fd716ebc", "v": {"one": "🗑️ [<b>{session}</b>] kuyruğundan {n} mesaj silindi.", "other": "🗑️ [<b>{session}</b>] kuyruğundan {n} mesaj silindi."}}
+{"k": "route.ended_which", "src": "eb950d37", "v": "{session} sona erdi. Hangi oturum?"}
+{"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Bu dosyanın hangi oturum için olduğunu bilmiyorum. {command} ile ya da klavyeden bir tane seç."}
+{"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Döküm [{session}] oturumuna aktarılamadı"}
+{"k": "route.kill_none", "src": "1c62fda9", "v": "Sonlandırılacak oturum yok."}
+{"k": "route.kill_which", "src": "65bf98de", "v": "Hangi oturum sonlandırılsın?"}
+{"k": "route.mention_alone", "src": "c8588bc4", "v": "{command} komutunu botu anmadan, tek başına gönder."}
+{"k": "route.model_now", "src": "721a5dbc", "v": "🧠 artık {model}"}
+{"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "başka bir üyenin mesajı hâlâ alınmayı bekliyor - modeli ondan sonra değiştir."}
+{"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
+{"k": "route.no_active", "src": "96477f98", "v": "⚠️ Etkin oturum yok"}
+{"k": "route.no_live_here", "src": "2a22b699", "v": "⚠️ Burada <b>{session}</b> adında çalışan bir oturum yok."}
+{"k": "route.no_session", "src": "f3bc5d54", "v": "⚠️ Bunun hangi oturum için olduğunu bilmiyorum. {command} ile ya da klavyeden bir tane seç."}
+{"k": "route.no_session_here", "src": "d6bac23e", "v": "⚠️ Burada <b>{session}</b> adında bir oturum yok."}
+{"k": "route.not_alive", "src": "248cf0d5", "v": "⚠️ [{session}] oturumu çalışmıyor"}
+{"k": "route.not_working", "src": "40bb3d05", "v": "<b>{session}</b> şu an çalışmıyor."}
+{"k": "route.nothing_running", "src": "3c49e2a3", "v": "Çalışan bir şey yok."}
+{"k": "route.queue_full", "src": "f6582eab", "v": {"one": "⚠️ [{session}] kuyruğu dolu ({n} bekliyor). İsteme yanıt ver ya da kuyruğu temizle.", "other": "⚠️ [{session}] kuyruğu dolu ({n} bekliyor). İsteme yanıt ver ya da kuyruğu temizle."}}
+{"k": "route.refusal_frame", "src": "e19d24e3", "v": "⚠️ [{session}] {reason}"}
+{"k": "route.resume_then_resend", "src": "df2cce7e", "v": "▶️ Devam ettir'den sonra mesajını tekrar gönder."}
+{"k": "route.retry_note_others", "src": "f54d6bb2", "v": "⏸ Yeniden denenmedi - şu an başka birinin turu çalışıyor. Bittiğinde Yeniden dene'ye tekrar dokun."}
+{"k": "route.retry_note_prompt", "src": "a9f6356e", "v": "⏸ Yeniden denenmedi - açık bir istem var. Onu yanıtla, sonra Yeniden dene'ye tekrar dokun."}
+{"k": "route.send_failed", "src": "3c65fe20", "v": "❌ [{session}] oturumuna gönderilemedi"}
+{"k": "route.sent_to", "src": "72283da2", "v": "{glyph} {what} gönderildi: {session}"}
+{"k": "route.session_missing", "src": "e8086da8", "v": "⚠️ “{name}” oturumu bulunamadı"}
+{"k": "route.unknown_session", "src": "2823272e", "v": "⚠️ Bilinmeyen oturum: {session}"}
+{"k": "route.voice_no_session", "src": "6c2d2821", "v": "⚠️ Ses yazıya döküldü ama gönderilecek etkin oturum yok. Önce {command} ile bir tane seç."}
+{"k": "route.warning", "src": "4329faf5", "v": "⚠️ {text}"}
+{"k": "route.which_reply", "src": "6771e2f8", "v": "Hangi oturum? Mesajlarından birini yanıtla ya da {command} ile mesajını gönder."}
+{"k": "route.which_stop", "src": "aba80827", "v": "Hangisi durdurulsun?"}
+{"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · Güvenlik politikası engelledi: {reason} (durduruldu)"}
+{"k": "safety.reason.bash", "src": "f380389e", "v": "Bash komutu güvenlik politikası tarafından engellendi"}
+{"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Bash komutu güvenlik politikası tarafından engellendi: tüm ev klasöründe ya da / içinde özyinelemeli arama veya listeleme yapılamaz; bunun yerine bir proje klasörünün içinde ara"}
+{"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool}, .. ile dışarı çıkan bir glob ile"}
+{"k": "safety.reason.glob_escaped", "src": "bf605149", "v": "{tool}, kaçış karakterli bir glob ile"}
+{"k": "safety.reason.glob_not_plain", "src": "6db7d611", "v": "{tool}, basit bir göreli desen olmayan bir glob ile"}
+{"k": "safety.reason.glob_unreadable", "src": "da95c3b5", "v": "{tool}, okunamayan bir glob ile"}
+{"k": "safety.reason.halted", "src": "343e090e", "v": "oturum durduruldu - bu turdaki önceki bir araç çağrısı güvenlik politikası tarafından engellendi; yeni bir istek başlat"}
+{"k": "safety.reason.outside_root_read", "src": "377378fa", "v": "{tool} reddedildi - bu rol ev klasöründe yalnızca kendi klasörünün içini okur"}
+{"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool} oturum klasörünün dışında - kısıtlı bir tur yalnızca kendi projesinde ve scratchpad'inde arar"}
+{"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool} oturum klasörünün dışında - kısıtlı bir tur yalnızca kendi projesine ve scratchpad'ine yazar"}
+{"k": "safety.reason.path_protected", "src": "feff9877", "v": "{tool}, korunan yol {glob} üzerinde"}
+{"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool}, korunan yol {glob} içine yazma"}
+{"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool}, okunamayan bir yol ile"}
+{"k": "safety.reason.pattern_unreadable", "src": "88053cf7", "v": "{tool}, okunamayan bir desen ile"}
+{"k": "safety.reason.root_cwd_search", "src": "086246f6", "v": "{tool} reddedildi - bu oturum bu rolün kendi klasörünün dışında çalışıyor, bu yüzden bu rol yalnızca kendi scratchpad'inde arama yapabilir"}
+{"k": "safety.reason.root_cwd_write", "src": "bc6e509f", "v": "{tool} reddedildi - bu oturum bu rolün kendi klasörünün dışında çalışıyor, bu yüzden bu rol yalnızca kendi scratchpad'ine yazabilir"}
+{"k": "safety.reason.runs_commands", "src": "e180a703", "v": "{tool}, komut çalıştıran bir dosyaya (.claude/, .git/, .mcp.json)"}
+{"k": "safety.reason.search_anywhere", "src": "c1ad4431", "v": "{tool} reddedildi - korunan yol {glob} herhangi bir klasörde olabilir, bu yüzden bu rol Grep ya da Glob ile arama yapamaz"}
+{"k": "safety.reason.search_could_reach", "src": "a95243b1", "v": "{tool} araması korunan yol {glob} konumuna ulaşabilir"}
+{"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool}, okunamayan bir arama klasörü ile"}
+{"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "{tool} reddedildi - bu arama korunan dosyalara ulaşırdı ({shown}); bunun yerine bir proje klasörünün içinde ara"}
+{"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "{tool} araması korunan yol {glob} konumuna ulaşıyor"}
+{"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "aipager'ın yönetmediği bir Claude oturumuna SendMessage"}
+{"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} bu rolün deny_tools listesinde"}
+{"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} bu rolün allow_tools listesinde değil"}
+{"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "bu araç çağrısı denetlenemedi, bu yüzden reddedildi"}
+{"k": "safety.reason.wide_cwd_search", "src": "5112bac1", "v": "{tool} reddedildi - bu oturum ev klasöründe (ya da onun üstündeki bir klasörde) çalışıyor ve bu rol yalnızca bir proje klasörünün içinde arama yapabilir"}
+{"k": "safety.reason.wide_cwd_write", "src": "90769493", "v": "{tool} reddedildi - bu oturum ev klasöründe (ya da onun üstündeki bir klasörde) çalışıyor ve bu rol yalnızca bir proje klasörünün içine yazabilir"}
+{"k": "sendnow.btn.send", "src": "edac6f66", "v": "⚡ Şimdi gönder"}
+{"k": "sendnow.line", "src": "41e9ef1b", "v": "⏳ Sırada - Claude bunu mevcut adımdan sonra okuyacak"}
+{"k": "sendnow.line_unreached", "src": "d8eeb821", "v": "⏳ Sırada - Claude'a ulaşılamadı, tekrar denemek için Şimdi gönder'e dokun"}
+{"k": "sendnow.reply_no_session", "src": "cfa31918", "v": "Etkin oturum yok."}
+{"k": "sendnow.reply_nothing", "src": "7f03c384", "v": "Kuyrukta bekleyen bir şey yok"}
+{"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ Şimdi Claude'a gönderildi"}
+{"k": "sess.btn.cancel", "src": "77dfd213", "v": "İptal"}
+{"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ İptal"}
+{"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ Kapat"}
+{"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ Sil"}
+{"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 Diff"}
+{"k": "sess.btn.end", "src": "58096fa3", "v": "⏹ Sonlandır"}
+{"k": "sess.btn.end_session", "src": "cad78af6", "v": "⏹ Oturumu sonlandır"}
+{"k": "sess.btn.prefs", "src": "28784f50", "v": "👤 Tercihler"}
+{"k": "sess.btn.rename", "src": "7decc377", "v": "✏️ Yeniden adlandır"}
+{"k": "sess.btn.restart", "src": "06188389", "v": "🔄 Yeniden başlat"}
+{"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ Devam ettir"}
+{"k": "sess.cancelled", "src": "3678513b", "v": "↩️ İptal edildi."}
+{"k": "sess.delete_cancelled", "src": "7105554d", "v": "[<b>{session}</b>] silme işlemi iptal edildi."}
+{"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ [<b>{session}</b>] oturum listesinden kaldırılsın mı? Bu geri alınamaz."}
+{"k": "sess.delete_none", "src": "58e4ba7f", "v": "Silinecek bitmiş oturum yok."}
+{"k": "sess.delete_still_running", "src": "ff86cceb", "v": "⚠️ [<b>{session}</b>] hâlâ çalışıyor. Önce /kill ile sonlandır."}
+{"k": "sess.delete_which", "src": "b568401d", "v": "Hangi bitmiş oturum kaldırılsın?"}
+{"k": "sess.deleted", "src": "5af8d1c8", "v": "🗑️ [<b>{session}</b>] silindi."}
+{"k": "sess.deleted_by", "src": "38b3ffbc", "v": "🗑️ [<b>{session}</b>] silindi · {person}."}
+{"k": "sess.diff_files", "src": "84597d92", "v": {"one": "📝 [<b>{session}</b>] {n} dosya değişti, +{added}/-{removed}", "other": "📝 [<b>{session}</b>] {n} dosya değişti, +{added}/-{removed}"}}
+{"k": "sess.diff_none", "src": "3b2e4538", "v": "[<b>{session}</b>] çalışma klasöründe değişiklik yok."}
+{"k": "sess.diff_none_live", "src": "3f72a95c", "v": "Diff alınacak çalışan oturum yok."}
+{"k": "sess.diff_reason.cwd_missing", "src": "e6e5befa", "v": "[{label}] çalışma klasörü artık yok."}
+{"k": "sess.diff_reason.git_error", "src": "18d7631e", "v": "Diff şu an okunamadı - tekrar dene."}
+{"k": "sess.diff_reason.git_not_installed", "src": "171dd6a9", "v": "Bu makinede git yok."}
+{"k": "sess.diff_reason.no_commits_yet", "src": "94fb37e6", "v": "[{label}] deposunda henüz commit yok."}
+{"k": "sess.diff_reason.not_a_git_repo", "src": "c639ff9f", "v": "[{label}] klasörü bir git deposu değil."}
+{"k": "sess.diff_which", "src": "2485be52", "v": "Hangi oturumun diff'i?"}
+{"k": "sess.end_confirm", "src": "dffc4f34", "v": "⏹ <b>{session}</b> sonlandırılsın mı? Claude durdurulur ve oturum kapanır."}
+{"k": "sess.ended", "src": "6659a4fd", "v": "⏹ <b>{session}</b> sonlandırıldı"}
+{"k": "sess.ended_by", "src": "9e9bdbd1", "v": "⏹ <b>{session}</b> sonlandırıldı · {person}"}
+{"k": "sess.kill_cancelled", "src": "cf4e32bb", "v": "↩️ İptal edildi. Hiçbir şey sonlandırılmadı."}
+{"k": "sess.menu_closed", "src": "e2a2c077", "v": "[<b>{session}</b>] menüsü kapatıldı."}
+{"k": "sess.menu_no_transcript", "src": "72c75098", "v": "<i>Devam ettirilecek kayıtlı döküm yok.</i>"}
+{"k": "sess.menu_title", "src": "2a8eb73c", "v": "⋮ <b>{session}</b> - bir işlem seç:"}
+{"k": "sess.not_sent_to", "src": "0d040f9f", "v": "{session} oturumuna gönderilmedi."}
+{"k": "sess.pick_cancelled", "src": "d3e4142f", "v": "İptal edildi."}
+{"k": "sess.rename_cancelled", "src": "abe2ee6d", "v": "Yeniden adlandırma iptal edildi."}
+{"k": "sess.rename_closed", "src": "d06e8a83", "v": "✖️ Yeniden adlandırma kapatıldı, başka bir şeye geçtin. Tekrar denemek için /rename gönder."}
+{"k": "sess.rename_exists", "src": "3367e703", "v": "⚠️ Bu sohbette {session} adında bir oturum zaten var."}
+{"k": "sess.rename_expired", "src": "0235f755", "v": "⏱ Bu yeniden adlandırmanın süresi doldu. /rename komutunu tekrar gönder."}
+{"k": "sess.rename_gone", "src": "86c694ee", "v": "⚠️ Bu oturum artık yok - /rename komutunu tekrar çalıştır."}
+{"k": "sess.rename_none", "src": "2d24aff4", "v": "Yeniden adlandırılacak oturum yok."}
+{"k": "sess.rename_not_allowed", "src": "97c2b455", "v": "🚫 Bu oturumu yeniden adlandıramazsın."}
+{"k": "sess.rename_prompt_reply", "src": "eaadafac", "v": "✏️ [<b>{session}</b>] için yeni ad? Bu mesajı yeni adla yanıtla."}
+{"k": "sess.rename_prompt_type", "src": "fdf5e253", "v": "✏️ [<b>{session}</b>] için yeni ad? Bir mesaj olarak gönder."}
+{"k": "sess.rename_unchanged", "src": "f41d7d6e", "v": "[<b>{session}</b>] adı değişmedi."}
+{"k": "sess.rename_which", "src": "d74e26c1", "v": "Hangi oturum yeniden adlandırılsın?"}
+{"k": "sess.renamed", "src": "53a36720", "v": "✏️ [<b>{old}</b>] artık [<b>{new}</b>]."}
+{"k": "sess.restart_cancelled", "src": "e2123246", "v": "[<b>{session}</b>] için yeniden başlatma iptal edildi."}
+{"k": "sess.restart_confirm", "src": "eea1e9db", "v": "🔄 [<b>{session}</b>] oturumu yeniden başlatılsın mı? Claude durdurulur ve konuşmasını koruyarak yeniden başlar."}
+{"k": "sess.restart_failed", "src": "be8ef8e6", "v": "[{label}] yeniden başlatılamadı."}
+{"k": "sess.restart_none", "src": "fefd4861", "v": "Yeniden başlatılacak çalışan oturum yok."}
+{"k": "sess.restart_reason.already_restarting", "src": "119c20da", "v": "[{label}] zaten yeniden başlıyor."}
+{"k": "sess.restart_reason.launch_failed", "src": "fc0525be", "v": "[{label}] yeniden başlatılamadı: {err}"}
+{"k": "sess.restart_reason.not_live", "src": "d841d7b0", "v": "[{label}] çalışmıyor."}
+{"k": "sess.restart_reason.still_stopping", "src": "635882f7", "v": "[{label}] zamanında durdurulamadı - birazdan tekrar dene."}
+{"k": "sess.restart_which", "src": "0eada720", "v": "Hangi oturum yeniden başlatılsın?"}
+{"k": "sess.restarted", "src": "dc0ed3cb", "v": "🔄 [<b>{session}</b>] yeniden başlatıldı."}
+{"k": "sess.restarted_by", "src": "f2ddb551", "v": "🔄 [<b>{session}</b>] yeniden başlatıldı · {person}."}
+{"k": "sess.resume_as", "src": "95516616", "v": "<b>{session}</b> nasıl devam ettirilsin:"}
+{"k": "sess.resume_failed", "src": "f19c1968", "v": "❌ <b>{session}</b> devam ettirilemedi: {error}"}
+{"k": "sess.resume_last_response", "src": "9e8e3733", "v": "<i>📜 Bu oturumun son yanıtı</i>\n<blockquote>{preview}</blockquote>"}
+{"k": "sess.resume_no_transcript", "src": "6b8a4001", "v": "⚠️ <b>{session}</b> oturumunun diskte devam ettirilebilir dökümü yok.\n{command} ile sıfırdan bir tane başlat."}
+{"k": "sess.resume_not_found", "src": "4c1d68d2", "v": "⚠️ Geçmişte <b>{session}</b> adında bir oturum yok.\nNeler olduğunu görmek için {command} komutunu ad olmadan gönder."}
+{"k": "sess.resume_running", "src": "c090af67", "v": "⚠️ <b>{session}</b> zaten çalışıyor.\nOna geçmek için klavyede {command} düğmesine dokun."}
+{"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> devam ettirildi"}
+{"k": "sess.resumed_in_ask", "src": "8151879e", "v": "♻️ <b>{session}</b> Sor modunda devam ettirildi: Otomatik için yönetici gerekir."}
+{"k": "sess.sent_to", "src": "d856101f", "v": "{session} oturumuna gönderildi."}
+{"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Kapat"}
+{"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Yeni oturumlar"}
+{"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 Klasör: {folder} ›"}
+{"k": "set.btn.ns_model", "src": "6fb2e9a4", "v": "🧠 Model: {model} ›"}
+{"k": "set.btn.per_session", "src": "9748363d", "v": "👤 Oturum başına tercihler"}
+{"k": "set.btn.problem_reports", "src": "2478212a", "v": "🐞 Sorun raporları: {value}"}
+{"k": "set.btn.reports_turn_on", "src": "8b383496", "v": "Teklifleri yeniden aç"}
+{"k": "set.btn.use_chat_default", "src": "55c966bc", "v": "↩️ Sohbet varsayılanını kullan"}
+{"k": "set.cadence.title", "src": "ed8a634b", "v": "⏱ Uzun turlarda kart güncellemeleri"}
+{"k": "set.diffs.title", "src": "9f74873f", "v": "📝 Diff önizlemeleri"}
+{"k": "set.formatting.title", "src": "6b0a66a0", "v": "✏️ Sade biçimlendirme"}
+{"k": "set.help.cadence.off", "src": "71965ae1", "v": "Kart, tur ne kadar uzun sürerse sürsün aynı hızda yenilenir."}
+{"k": "set.help.cadence.on", "src": "cb462e4f", "v": "Tur uzadıkça kart daha seyrek yenilenir (2 dk sonra 10 sn'de bir, 10 dk sonra 30 sn'de bir) ve saati 30 sn'lik adımlarla ilerler, böylece donmuş görünmez. Durum değişikliği yine hemen görünür."}
+{"k": "set.help.diffs.off", "src": "e9b93bde", "v": "Dosya düzenlemeleri yalnızca çalışma kartında satır olarak görünür."}
+{"k": "set.help.diffs.on", "src": "1ad75bf3", "v": "Her Write/Edit ayrıca çalışma kartının altında kendi diff mesajı olarak gönderilir."}
+{"k": "set.help.formatting.off", "src": "14016cc5", "v": "Claude yanıtları istediği gibi biçimlendirir."}
+{"k": "set.help.formatting.on", "src": "13c31447", "v": "Yalnızca düz metin ve tireli listeler - tablo ya da kod bloğu yok."}
+{"k": "set.help.layout.card", "src": "75971a73", "v": "Çalışma kartı kalır, yanıt ayrı bir mesaj olarak gelir."}
+{"k": "set.help.layout.merged", "src": "cb79a1a7", "v": "Yanıt, çalışma kartının metninin yerini alır."}
+{"k": "set.help.layout.replace", "src": "7802aaf9", "v": "Çalışma kartının yerini yalnızca yanıt alır."}
+{"k": "set.help.length.long", "src": "6d4be59e", "v": "Yanıt gerektiriyorsa tüm ayrıntılar."}
+{"k": "set.help.length.medium", "src": "1f258598", "v": "Birkaç paragraf."}
+{"k": "set.help.length.none", "src": "c889d841", "v": "Uzunluk için hiçbir yönlendirme yok."}
+{"k": "set.help.length.short", "src": "c4b9b1e2", "v": "Birkaç cümle."}
+{"k": "set.help.length.xshort", "src": "b3629257", "v": "Bir ya da iki cümle. Giriş yok, özet yok."}
+{"k": "set.help.level.advanced", "src": "820e1448", "v": "Uzmanlık varsayar; adım adım açıklama yok."}
+{"k": "set.help.level.none", "src": "643f8019", "v": "Kelime seçimi için hiçbir yönlendirme yok."}
+{"k": "set.help.level.normal", "src": "530e152e", "v": "Olağan teknik yazım."}
+{"k": "set.help.level.simple", "src": "748c89ff", "v": "Gündelik kelimeler, kısa cümleler."}
+{"k": "set.layout.title", "src": "415df682", "v": "🖼 Mesaj düzeni"}
+{"k": "set.length.title", "src": "0b4f4428", "v": "📏 Yanıt uzunluğu"}
+{"k": "set.level.title", "src": "4e19b762", "v": "🎓 Kelime düzeyi"}
+{"k": "set.opt.cadence.off", "src": "b44b98a6", "v": "Kapalı - tur boyunca aynı hız"}
+{"k": "set.opt.cadence.on", "src": "3843eb22", "v": "Açık - tur uzadıkça yavaşla"}
+{"k": "set.opt.chat_default", "src": "58286063", "v": "{option} (sohbet varsayılanı)"}
+{"k": "set.opt.diffs.off", "src": "64a190d9", "v": "Kapalı - yalnızca çalışma kartı"}
+{"k": "set.opt.diffs.on", "src": "3c616425", "v": "Açık - her düzenleme için diff mesajı"}
+{"k": "set.opt.formatting.off", "src": "a779e619", "v": "Kapalı - varsayılan biçim"}
+{"k": "set.opt.formatting.on", "src": "4321e58a", "v": "Açık - yalnızca düz metin"}
+{"k": "set.opt.layout.card", "src": "cb54ae30", "v": "Çalışma kartı + sonuç"}
+{"k": "set.opt.layout.merged", "src": "732da229", "v": "Çalışma mesajıyla birleşik"}
+{"k": "set.opt.layout.replace", "src": "1f8e1a41", "v": "Sonuçla değiştir"}
+{"k": "set.opt.length.long", "src": "11eda67f", "v": "Uzun"}
+{"k": "set.opt.length.medium", "src": "d404968e", "v": "Orta"}
+{"k": "set.opt.length.none", "src": "e6752500", "v": "Hiçbir kural uygulama"}
+{"k": "set.opt.length.short", "src": "0fe7d82f", "v": "Kısa"}
+{"k": "set.opt.length.xshort", "src": "e937255b", "v": "Çok kısa"}
+{"k": "set.opt.level.advanced", "src": "4d064726", "v": "İleri"}
+{"k": "set.opt.level.none", "src": "e6752500", "v": "Hiçbir kural uygulama"}
+{"k": "set.opt.level.normal", "src": "45e118d0", "v": "Normal"}
+{"k": "set.opt.level.simple", "src": "0406a446", "v": "Basit kelimeler"}
+{"k": "set.opt.ns_default_folder", "src": "56d18a09", "v": "Varsayılan klasör"}
+{"k": "set.opt.ns_default_model", "src": "5fbae11e", "v": "Varsayılan model"}
+{"k": "set.opt.ns_older_model", "src": "3e0492cf", "v": "{model} (eski model)"}
+{"k": "set.opt.reports.ask", "src": "10a8fd63", "v": "Bana sor"}
+{"k": "set.opt.reports.auto_off", "src": "7e82eed6", "v": "teklifler kapalı"}
+{"k": "set.opt.reports.off", "src": "e3de5ab0", "v": "Kapalı"}
+{"k": "set.text.changed_by", "src": "63c7cabd", "v": "<i>Değiştiren: {person}.</i>"}
+{"k": "set.text.closed", "src": "731152a0", "v": "Kapatıldı."}
+{"k": "set.text.intro.cadence", "src": "c2f74acd", "v": "UZUN bir tur sırasında çalışma kartının ne sıklıkla yenilendiği. Açık: tur uzadıkça yavaşlar ve saati 30 sn'lik adımlarla ilerler; böylece uzun süren bir sohbet Telegram sınırlarının rahatça içinde kalır. Kapalı: ilk dakikaların hızı tur boyunca sürer."}
+{"k": "set.text.intro.diffs", "src": "7a426bb1", "v": "Her dosya düzenlemesinin çalışma kartının altında ayrı bir diff mesajı olarak gönderilip gönderilmeyeceği. Kapalı: tek çalışma kartı ve tek yanıt - kart yine her düzenlemeyi listeler ve Mini App'te bir diff görüntüleyici vardır."}
+{"k": "set.text.intro.formatting", "src": "71988826", "v": "AÇIK olduğunda yanıtlar yalnızca düz metin ve basit tireli listeler kullanır - tablo, kod bloğu, başlık, kalın ya da italik yok."}
+{"k": "set.text.intro.layout", "src": "891af1fd", "v": "Biten bir turun sohbette nasıl göründüğü."}
+{"k": "set.text.intro.length", "src": "e64e4857", "v": "Claude'un yanıtlarının ne kadar uzun olacağı."}
+{"k": "set.text.intro.level", "src": "5ca0f466", "v": "Claude'un yanıtlarındaki kelime düzeyi."}
+{"k": "set.text.ns_folder_title", "src": "f4eab7d6", "v": "📁 <b>Yeni oturumlar için klasör</b>"}
+{"k": "set.text.ns_model_title", "src": "386d1055", "v": "🧠 <b>Yeni oturumlar için model</b>"}
+{"k": "set.text.ns_root", "src": "af342243", "v": "🆕 <b>Yeni oturumlar</b>\n\n/new komutunun bir oturumu neyle başlattığı. Tek bir oturum için kartında yine değiştirebilirsin.\n\nİzinler: {mode}\nModel: {model}\nKlasör: {folder}"}
+{"k": "set.text.reports_auto_off", "src": "52adfc5a", "v": "Otomatik teklifler: kapalı (art arda iki teklife hayır dedin)."}
+{"k": "set.text.reports_env_off", "src": "408411eb", "v": "Bu makinede teklifler ayrıca AIPAGER_REPORT_PROMPTS=0 ile kapalı."}
+{"k": "set.text.reports_intro", "src": "4fe65258", "v": "aipager aynı iç hatayla birden fazla kez karşılaşırsa rapor göndermeyi teklif edebilir. Raporu her zaman önce sen görürsün ve Gönder'e dokunmadıkça hiçbir şey gönderilmez.\n\nBana sor: arada bir teklif et (en fazla 3 günde bir).\nKapalı: hiç teklif etme. /help içindeki Sorun bildir her zaman çalışır."}
+{"k": "set.text.reports_title", "src": "036f0be5", "v": "🐞 <b>Sorun raporları</b>"}
+{"k": "set.text.root", "src": "25c10fde", "v": "⚙️ <b>Ayarlar</b>\n\nClaude'un burada nasıl yanıt vereceğine dair sohbete özel tercihler. Değiştirmek için bir bölüme dokun."}
+{"k": "set.text.row", "src": "b98927cc", "v": "{title}: {value}"}
+{"k": "set.text.spref_field", "src": "53c8e84c", "v": "{title} - [<b>{session}</b>] için\n\nBu oturumun kullandığı {title}; yalnızca bu oturum için bu sohbetin /settings ayarını geçersiz kılar."}
+{"k": "set.text.spref_none", "src": "3856fe99", "v": "👤 <b>Oturum başına tercihler</b>\n\nHenüz oturum yok."}
+{"k": "set.text.spref_pick", "src": "fb84677e", "v": "👤 <b>Oturum başına tercihler</b>\n\nYanıt stilini değiştirmek için bir oturum seç."}
+{"k": "set.text.spref_root", "src": "b29b833e", "v": "👤 <b>Oturum başına tercihler - [{session}]</b>\n\nBu oturumun yanıt stilini geçersiz kılar. Boş alanlar bu sohbetin /settings ayarını kullanır. ⭐ bu oturumun kendisi için ayarladığı bir alanı gösterir."}
+{"k": "status.btn.answer", "src": "a16a4eda", "v": "Yanıtla"}
+{"k": "status.btn.clear_all", "src": "4944581b", "v": "🧹 Hepsini kaldır"}
+{"k": "status.btn.ended", "src": "ae183190", "v": {"one": "⚫ Bitenler ({n})", "other": "⚫ Bitenler ({n})"}}
+{"k": "status.btn.more", "src": "a6bc69aa", "v": "⋮ Daha fazla"}
+{"k": "status.btn.new", "src": "fb873221", "v": "🆕 Yeni"}
+{"k": "status.btn.new_session", "src": "19b62fc4", "v": "🆕 Yeni oturum"}
+{"k": "status.ctx", "src": "daeecae8", "v": "ctx {percent}"}
+{"k": "status.ended", "src": "63dbdb7e", "v": {"one": "⚫ <b>Biten oturumlar ({n})</b>\n\nBirine devam et, birini sil ya da hepsini /status içinden kaldır (/resume içinde kalırlar).", "other": "⚫ <b>Biten oturumlar ({n})</b>\n\nBirine devam et, birini sil ya da hepsini /status içinden kaldır (/resume içinde kalırlar)."}}
+{"k": "status.ended_shown", "src": "cdde3b66", "v": "En yeni {max} tanesi burada; /resume hepsini listeler."}
+{"k": "status.head", "src": "570c54fe", "v": "{mark}<b>{session}</b> · {glyph} {state}"}
+{"k": "status.no_ended", "src": "a33a986b", "v": "Biten oturum yok."}
+{"k": "status.no_live", "src": "8f779eb2", "v": "Çalışan oturum yok."}
+{"k": "status.none", "src": "a44ee05c", "v": "Henüz oturum yok."}
+{"k": "status.notes", "src": "2e411b05", "v": {"one": "{n} not", "other": "{n} not"}}
+{"k": "status.queue", "src": "20f40005", "v": "kuyruk {total} ({queued}, {notes})"}
+{"k": "status.queued", "src": "45c54388", "v": {"one": "{n} sırada", "other": "{n} sırada"}}
+{"k": "status.sessions", "src": "65748ab3", "v": {"one": "📊 <b>Oturumlar ({n})</b>", "other": "📊 <b>Oturumlar ({n})</b>"}}
+{"k": "status.switch", "src": "52424cce", "v": "✍️ Artık <b>{session}</b> ile konuşuyorsun · {glyph} {state} · {mode}"}
+{"k": "status.talk_dm", "src": "777be8ce", "v": "Bir mesaj gönder, {session} oturumuna gider."}
+{"k": "status.talk_group", "src": "bdc24dfd", "v": "Onunla konuşmak için {session} oturumundan gelen bir mesajı yanıtla (ya da {bot} adını an)."}
+{"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "Onunla konuşmak için {session} oturumundan gelen bir mesajı yanıtla (ya da botu an)."}
+{"k": "status.waiting_answer", "src": "e5832740", "v": "{session} yanıtını bekliyor."}
+{"k": "toast.already_answered", "src": "3d131a46", "v": "zaten yanıtlandı"}
+{"k": "toast.always_degraded", "src": "038f4355", "v": "Bu komut için kalıcı kural yok - bir kez izin verildi [{session}]"}
+{"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}
+{"k": "toast.auth.not_listed", "src": "0baa8bbd", "v": "İzin listesinde değilsin"}
+{"k": "toast.busy_retry", "src": "cfc92c41", "v": "Meşgul - birazdan tekrar dene"}
+{"k": "toast.cant_resend", "src": "3aa4d727", "v": "İstem yeniden gönderilemez - terminalde yanıtla"}
+{"k": "toast.cant_stop", "src": "2bf57e30", "v": "Bu oturumu durduramazsın."}
+{"k": "toast.choice_gone", "src": "54298c73", "v": "Bu seçenek artık yok."}
+{"k": "toast.clear_done", "src": "0e4a4845", "v": {"one": "/status içinden {n} oturum kaldırıldı (/resume içinde duruyor)", "other": "/status içinden {n} oturum kaldırıldı (/resume içinde duruyor)"}}
+{"k": "toast.clear_nothing", "src": "ec219a9c", "v": "Kaldırılacak bir şey yok"}
+{"k": "toast.compact_failed", "src": "84398886", "v": "/compact gönderilemedi"}
+{"k": "toast.compact_sending", "src": "afcbfe26", "v": "[{session}] sıkıştırılıyor"}
+{"k": "toast.gate_other_chat", "src": "fcc9d88a", "v": "Bu düğme başka bir sohbete ait."}
+{"k": "toast.gate_refused", "src": "c6436f0e", "v": "Rolün burada bunu yapamaz."}
+{"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "Bilinmeyen düğme"}
+{"k": "toast.invalid_value", "src": "7e5ba817", "v": "Geçersiz değer"}
+{"k": "toast.kill_stale", "src": "90e64cd6", "v": "Bu düğme eskimiş - /kill komutunu tekrar gönder"}
+{"k": "toast.moved_on_status", "src": "be925157", "v": "{session} yeni bir işe geçti - durdurmak için ⏹ Durdur'a tekrar dokun"}
+{"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} yeni bir işe geçti - /stop komutunu tekrar gönder"}
+{"k": "toast.new_cant_change", "src": "279d4392", "v": "Bu oturumu değiştiremezsin."}
+{"k": "toast.new_cant_start_here", "src": "9f749720", "v": "Burada oturum başlatamazsın."}
+{"k": "toast.new_cant_start_resume", "src": "25c7e34f", "v": "Burada oturum başlatamaz ya da devam ettiremezsin."}
+{"k": "toast.new_card_expired", "src": "c7d3826b", "v": "Bu kartın süresi doldu."}
+{"k": "toast.new_card_replaced", "src": "8e108c47", "v": "Bu kartın yerine yenisi geldi. Yenisini kullan."}
+{"k": "toast.new_expired", "src": "85077001", "v": "Bu kartın süresi doldu. /new komutunu tekrar gönder."}
+{"k": "toast.new_folder_gone", "src": "4b183fca", "v": "Bu klasör artık yok."}
+{"k": "toast.new_invalid_model", "src": "ae01cc11", "v": "Geçersiz model"}
+{"k": "toast.new_model_gone", "src": "0f464c34", "v": "Bu model artık sunulmuyor."}
+{"k": "toast.new_no_folder_yet", "src": "87860358", "v": "Henüz klasör yok - önce gerçek bir proje klasöründen bir oturum başlat."}
+{"k": "toast.new_not_yours", "src": "393f95a6", "v": "Bu senin yeni oturumun değil."}
+{"k": "toast.new_only_sender", "src": "9e109f78", "v": "Bu kartı yalnızca /new gönderen kişi kullanabilir."}
+{"k": "toast.new_started_since", "src": "e8602889", "v": "{session} o zamandan beri çalışmaya başladı. Yerine yenisini koymak için /new komutunu tekrar gönder."}
+{"k": "toast.new_switch_failed", "src": "a8ef2ee3", "v": "Model değiştirilemedi."}
+{"k": "toast.new_switching", "src": "8c8980ce", "v": "Değiştiriliyor..."}
+{"k": "toast.new_switching_to", "src": "09c7272f", "v": "{model} modeline geçiliyor"}
+{"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} çalışıyor. Bitince değiştir ya da /mode kullan."}
+{"k": "toast.not_working", "src": "1ec204d3", "v": "{session} çalışmıyor"}
+{"k": "toast.open_chat", "src": "202c3e06", "v": "Yanıtlamak için sohbeti aç"}
+{"k": "toast.owner_card", "src": "80b06bcd", "v": "Bu kart {owner} kullanıcısına ait."}
+{"k": "toast.owner_card_send", "src": "7b051dc9", "v": "Bu kart {owner} kullanıcısına ait. Kendi kartın için {command} gönder."}
+{"k": "toast.perms_needs_admin", "src": "fe68d230", "v": "Otomatik mod için yönetici gerekir."}
+{"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} şu anda yeniden başlıyor - birazdan tekrar dokun"}
+{"k": "toast.perms_stale", "src": "4e34769b", "v": "Bu kart eskimiş - hiçbir şey değişmedi"}
+{"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} hâlâ başlıyor - birazdan tekrar dene"}
+{"k": "toast.prompt_expired", "src": "260f4c88", "v": "bu istemin süresi doldu"}
+{"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram bu sohbete hız sınırı uyguluyor - {time} sonrasında tekrar dene"}
+{"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "Zaten gönderiliyor."}
+{"k": "toast.rep.already_sent", "src": "99493916", "v": "Zaten gönderildi."}
+{"k": "toast.rep.in_dm", "src": "88740c30", "v": "Rapor önizlemesi botla olan özel sohbetinde."}
+{"k": "toast.rep.no_owner", "src": "b43a6c7c", "v": "Rapor önizlemesini açamıyorum: bu kurulumun tek bir sahip sohbeti yok."}
+{"k": "toast.rep.not_opened", "src": "8841123f", "v": "Rapor önizlemesi şu an açılamadı. Daha sonra tekrar dene."}
+{"k": "toast.rep.not_owner", "src": "ed142ea6", "v": "Sorun bildirmeyi yalnızca bu aipager'ın sahibi yapabilir."}
+{"k": "toast.rep.offer_stale", "src": "f5aa4d59", "v": "Bu teklif artık geçerli değil."}
+{"k": "toast.retry_failed", "src": "8954b4b9", "v": "Yeniden denenemedi"}
+{"k": "toast.retry_not_alive", "src": "807834ac", "v": "“{session}” oturumu çalışmıyor"}
+{"k": "toast.retry_nothing", "src": "def91a40", "v": "Yeniden denenecek bir şey yok"}
+{"k": "toast.retry_others_turn", "src": "b243bab8", "v": "Başka birinin turu çalışıyor - bitince yeniden dene"}
+{"k": "toast.retry_prompt_open", "src": "2554567b", "v": "Önce açık istemi yanıtla, sonra yeniden dene"}
+{"k": "toast.retry_retrying", "src": "b5a61b76", "v": "[{session}] yeniden deneniyor"}
+{"k": "toast.send_failed", "src": "0fbea382", "v": "{session} oturumuna gönderilemedi"}
+{"k": "toast.send_keys_failed", "src": "32458da9", "v": "Tuşlar gönderilemedi"}
+{"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "Meşgul, birazdan tekrar dene"}
+{"k": "toast.sendnow_cant_prompt", "src": "bf90455f", "v": "Bu oturuma gönderemezsin"}
+{"k": "toast.sendnow_failed", "src": "57a26c8a", "v": "Claude'a ulaşılamadı, tekrar dene"}
+{"k": "toast.sendnow_interactive", "src": "1b518935", "v": "Önce açık soruyu yanıtla"}
+{"k": "toast.sendnow_sending", "src": "d05719f1", "v": "Şimdi Claude'a gönderiliyor"}
+{"k": "toast.sendnow_sent", "src": "9ab32ed2", "v": "Şimdi Claude'a gönderildi"}
+{"k": "toast.sendnow_taken", "src": "00735887", "v": "Zaten alındı"}
+{"k": "toast.sendnow_typing", "src": "84af1903", "v": "Şu an bir istem yazılıyor, birazdan tekrar dene"}
+{"k": "toast.sess_already_ended", "src": "26dff17c", "v": "Bu oturum zaten sona erdi."}
+{"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session}: zaten {mode}."}
+{"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "Bu oturumu silemezsin."}
+{"k": "toast.sess_cant_end", "src": "ab082660", "v": "Bu oturumu sonlandıramazsın."}
+{"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "Bu oturumu yeniden adlandıramazsın."}
+{"k": "toast.sess_cant_restart", "src": "5e8c842b", "v": "Bu oturumu yeniden başlatamazsın."}
+{"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "Bu oturumu devam ettiremezsin."}
+{"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "Bu oturum şu an devam ettirilemez."}
+{"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "Bu oturuma gönderemezsin."}
+{"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "{session} durdurulamadı - tekrar dene"}
+{"k": "toast.sess_ended", "src": "394de850", "v": "⏹ {session} sonlandırıldı"}
+{"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {session} sonlandırıldı · {person}"}
+{"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} yeni bir işe geçti - sonlandırmak için ⏹ Oturumu sonlandır'a tekrar dokun"}
+{"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} yeni bir işe geçti - yeniden başlatmak için 🔄 Yeniden başlat'a tekrar dokun"}
+{"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} yeni bir işe geçti - hâlâ istiyorsan geçiş düğmesine tekrar dokun"}
+{"k": "toast.sess_not_found_named", "src": "a71f5ae2", "v": "{session} bulunamadı"}
+{"k": "toast.sess_not_your_rename", "src": "ed45ef6a", "v": "Bu senin yeniden adlandırman değil."}
+{"k": "toast.sess_restart_stale", "src": "753fe0fb", "v": "Bu düğme eskimiş - /restart komutunu tekrar gönder"}
+{"k": "toast.sess_restarting", "src": "5f69a1ca", "v": "{session} yeniden başlatılıyor..."}
+{"k": "toast.sess_resuming", "src": "2a557399", "v": "Bu oturum şu anda devam ettiriliyor. Birazdan tekrar dene."}
+{"k": "toast.sess_resuming_kill", "src": "227bdae1", "v": "{session} devam ettiriliyor - birazdan /kill komutunu tekrar gönder"}
+{"k": "toast.sess_resuming_retry", "src": "2845ff55", "v": "{session} devam ettiriliyor - birazdan tekrar dene"}
+{"k": "toast.sess_still_running", "src": "1ab407e3", "v": "Bu oturum hâlâ çalışıyor. Önce sonlandır."}
+{"k": "toast.sess_target", "src": "d28d6d9c", "v": "✍️ Mesajlar {session} oturumuna gider"}
+{"k": "toast.session_ended", "src": "3a3a8392", "v": "Bu oturum sona erdi."}
+{"k": "toast.session_gone", "src": "9360b8a3", "v": "“{session}” oturumu bulunamadı"}
+{"k": "toast.session_gone_settings", "src": "8af767e3", "v": "Bu oturum artık yok - /settings menüsünü yeniden aç."}
+{"k": "toast.session_not_found", "src": "4c2e72c7", "v": "Oturum bulunamadı"}
+{"k": "toast.session_not_here", "src": "54eb8580", "v": "Bu oturum burada çalışmıyor."}
+{"k": "toast.session_unavailable", "src": "773d1a0f", "v": "Bu oturum artık yok"}
+{"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "Bu grupta ayarları yalnızca bir yönetici değiştirebilir."}
+{"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "Bu oturumun tercihlerini değiştiremezsin."}
+{"k": "toast.stop_stale", "src": "51073518", "v": "Bu görev zaten bitti - güncel kartı kullan"}
+{"k": "toast.unknown_action", "src": "967e7e51", "v": "Bilinmeyen: {action}"}
+{"k": "toast.upd.checking", "src": "820d6004", "v": "Denetleniyor…"}
+{"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 aipager'ı yalnızca bir yönetici güncelleyebilir."}
+{"k": "toast.upd.menu_old", "src": "6c988fa7", "v": "Bu menü eskimiş, /update komutunu tekrar gönder"}
+{"k": "toast.upd.stale", "src": "d9ed1389", "v": "Bu güncelleme zaten bitti"}
+{"k": "toast.verb", "src": "985eb765", "v": "{verb} [{session}]"}
+{"k": "tx.api.billing", "src": "031e8f3d", "v": "Anthropic aboneliği ya da kredi bakiyesi sorunu. Panelini kontrol et: {url}"}
+{"k": "tx.api.connection", "src": "3a0ef982", "v": "Anthropic ile bağlantı koptu. Ağı kontrol et ve tekrar dene."}
+{"k": "tx.api.generic", "src": "429166c0", "v": "Bir API hatası oluştu."}
+{"k": "tx.api.internal", "src": "030afe43", "v": "Anthropic sunucularında iç hata oluştu. Genelde saniyeler içinde düzelir."}
+{"k": "tx.api.overloaded", "src": "6f545f5b", "v": "Anthropic sunucuları aşırı yüklü. Birazdan tekrar dene."}
+{"k": "tx.api.rate_limit", "src": "234c6146", "v": "Hız sınırına ulaşıldı. Tekrar denemeden önce biraz bekle."}
+{"k": "tx.api.rate_limit_wait", "src": "a2053ce3", "v": "Hız sınırına ulaşıldı. Tekrar denemeden önce {seconds} sn bekle."}
+{"k": "tx.auto_needs_admin", "src": "bd96281e", "v": "Otomatik için yönetici gerekir."}
+{"k": "tx.needs_admin", "src": "a2f55b85", "v": "Bu komut için yönetici gerekir."}
+{"k": "tx.retry_others", "src": "4ad540c7", "v": "Bu komutu yalnızca gönderen kişi yeniden deneyebilir."}
+{"k": "tx.truncated", "src": "27710457", "v": "…[kısaltıldı]"}
+{"k": "ui.action.failed", "src": "1bd1baa4", "v": "Bu tamamlanamadı."}
+{"k": "ui.action.unreachable", "src": "209155a8", "v": "Sunucuya ulaşılamadı. Hiçbir şey değişmedi."}
+{"k": "ui.activity.aria", "src": "649780e8", "v": {"one": "Son etkinlik: {n} araç çağrısı. Zaman çizelgesini aç.", "other": "Son etkinlik: {n} araç çağrısı. Zaman çizelgesini aç."}}
+{"k": "ui.activity.failed", "src": "6c746778", "v": "{tool} (başarısız)"}
+{"k": "ui.activity.queued", "src": "45c54388", "v": {"one": "{n} sırada", "other": "{n} sırada"}}
+{"k": "ui.activity.recent", "src": "72d5617f", "v": "Son etkinlik"}
+{"k": "ui.activity.running", "src": "21ceddba", "v": "{tool} (çalışıyor)"}
+{"k": "ui.activity.running_for", "src": "181f56b1", "v": "{tool} ({clock} süredir çalışıyor)"}
+{"k": "ui.activity.title", "src": "81c0d915", "v": "Etkinlik"}
+{"k": "ui.age.days", "src": "e827dc07", "v": "{n} g önce"}
+{"k": "ui.age.hours", "src": "1235f668", "v": "{n} sa önce"}
+{"k": "ui.age.minutes", "src": "83f8dc33", "v": "{n} dk önce"}
+{"k": "ui.age.seconds", "src": "b4e09dd8", "v": "{n} sn önce"}
+{"k": "ui.answer.cannot", "src": "40c455f0", "v": "Bu sohbette istemleri yanıtlayamazsın."}
+{"k": "ui.answer.send_failed", "src": "9a2e8fac", "v": "İstem sohbete gönderilemedi."}
+{"k": "ui.answer.sent", "src": "ba35b7cb", "v": "Sohbete gönderildi. Orada yanıtla."}
+{"k": "ui.answer.unreachable", "src": "f159beba", "v": "Sunucuya ulaşılamadı. Hiçbir şey gönderilmedi."}
+{"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude sana bir şey soruyor."}
+{"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "{session} oturumunu aç"}
+{"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude bir araç kullanmak istiyor."}
+{"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Kuyruğu temizle"}
+{"k": "ui.btn.action.compact", "src": "10c986db", "v": "Şimdi sıkıştır"}
+{"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Sil"}
+{"k": "ui.btn.action.kill", "src": "7b932e77", "v": "Sonlandır"}
+{"k": "ui.btn.action.rename", "src": "d3f4cb89", "v": "Yeniden adlandır"}
+{"k": "ui.btn.action.restart", "src": "b134bd55", "v": "Yeniden başlat"}
+{"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "Devam ettir"}
+{"k": "ui.btn.action.stop", "src": "9e253470", "v": "Durdur"}
+{"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "Sohbette yanıtla"}
+{"k": "ui.btn.cancel", "src": "77dfd213", "v": "İptal"}
+{"k": "ui.btn.check_again", "src": "e185048c", "v": "Tekrar denetle"}
+{"k": "ui.btn.check_updates", "src": "736b9062", "v": "Güncellemeleri denetle"}
+{"k": "ui.btn.checking", "src": "820d6004", "v": "Denetleniyor…"}
+{"k": "ui.btn.close_app", "src": "73743dc4", "v": "Uygulamayı kapat"}
+{"k": "ui.btn.copied", "src": "8e3df45a", "v": "Kopyalandı"}
+{"k": "ui.btn.copy", "src": "af74f7c5", "v": "Kopyala"}
+{"k": "ui.btn.done", "src": "e9b450d1", "v": "Tamam"}
+{"k": "ui.btn.new_session", "src": "5c881d23", "v": "Yeni oturum"}
+{"k": "ui.btn.not_now", "src": "e4571490", "v": "Şimdi değil"}
+{"k": "ui.btn.report", "src": "24f3f52d", "v": "Sorun bildir"}
+{"k": "ui.btn.reset", "src": "44c57abd", "v": "Sıfırla"}
+{"k": "ui.btn.reset_defaults", "src": "ddefe47d", "v": "Varsayılanlara sıfırla"}
+{"k": "ui.btn.restart_now", "src": "af2c3d8e", "v": "Şimdi yeniden başlat"}
+{"k": "ui.btn.save", "src": "efc007a3", "v": "Kaydet"}
+{"k": "ui.btn.send_report", "src": "a5b32af9", "v": "Raporu gönder"}
+{"k": "ui.btn.sending", "src": "c338c191", "v": "Gönderiliyor..."}
+{"k": "ui.btn.start_session", "src": "76684eaf", "v": "Oturumu başlat"}
+{"k": "ui.btn.stop_and_switch", "src": "21c1d7af", "v": "Durdur ve geç"}
+{"k": "ui.btn.switch", "src": "3e44c920", "v": "Geç"}
+{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "Sor moduna geç"}
+{"k": "ui.btn.switch_to_auto", "src": "13a0f246", "v": "Otomatik moda geç"}
+{"k": "ui.btn.try_again", "src": "042c862e", "v": "Tekrar dene"}
+{"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "10 dk daha bekle"}
+{"k": "ui.confirm.delete", "src": "734db731", "v": "{session} silinsin mi?"}
+{"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Bu, oturumu listenden kaldırır. Dökümü diskte kalır."}
+{"k": "ui.confirm.kill", "src": "804fbc7f", "v": "{session} sonlandırılsın mı?"}
+{"k": "ui.confirm.kill_body", "src": "beff52e4", "v": "Bu, oturumu durdurur ve kaldırır. Çalıştırdığı her şey yarıda kesilir."}
+{"k": "ui.confirm.perms_ask", "src": "c0710578", "v": "{session} Sor moduna geçirilsin mi?"}
+{"k": "ui.confirm.perms_ask_body", "src": "701538b8", "v": "Claude araçları çalıştırmadan önce sorar."}
+{"k": "ui.confirm.perms_auto", "src": "b6a1ddde", "v": "{session} Otomatik moda geçirilsin mi?"}
+{"k": "ui.confirm.perms_auto_body", "src": "7d8bf9c6", "v": "Claude araçları sormadan çalıştırır."}
+{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "Mevcut görev durdurulup {session} Sor moduna geçirilsin mi?"}
+{"k": "ui.confirm.perms_busy_auto", "src": "d4090a8b", "v": "Mevcut görev durdurulup {session} Otomatik moda geçirilsin mi?"}
+{"k": "ui.confirm.rename", "src": "92656d63", "v": "{session} yeniden adlandırılsın mı?"}
+{"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "Oturum geçmişini ve çalışma klasörünü korur. Yalnızca adı değişir."}
+{"k": "ui.confirm.reset", "src": "e13d0ebf", "v": "Ayarlar varsayılanlara sıfırlansın mı?"}
+{"k": "ui.confirm.reset_body", "src": "f2fd45cf", "v": "Bu oturumun kendi ayarları silinir ve yeniden sohbetin varsayılanlarını izler."}
+{"k": "ui.confirm.restart", "src": "47a0c787", "v": "{session} yeniden başlatılsın mı?"}
+{"k": "ui.confirm.restart_body", "src": "5ec9d004", "v": "Oturum durdurulur ve aynı geçmişle yeniden başlar. Süren bir tur yarıda kesilir."}
+{"k": "ui.conn.expired", "src": "45a6f9ad", "v": "süresi doldu"}
+{"k": "ui.conn.live", "src": "98aadb37", "v": "bağlı"}
+{"k": "ui.conn.no_init", "src": "e2ebd902", "v": "Giriş yapmak için bu sayfayı Telegram uygulamasından aç."}
+{"k": "ui.conn.offline", "src": "d1ffda5d", "v": "çevrimdışı"}
+{"k": "ui.conn.reconnecting", "src": "6b160044", "v": "yeniden bağlanıyor…"}
+{"k": "ui.conn.session_expired", "src": "c1c71ef8", "v": "Giriş oturumunun süresi doldu. Telegram'da {command} ile yeniden aç."}
+{"k": "ui.conn.unreachable", "src": "eb8937f2", "v": "Sunucuya ulaşılamıyor. Tüneli kontrol et."}
+{"k": "ui.daemon.uptime", "src": "18bb02cb", "v": "{n} dk'dır açık"}
+{"k": "ui.detail.latest_reply", "src": "455aaef0", "v": "Son yanıt"}
+{"k": "ui.detail.session_settings", "src": "ed40d944", "v": "Oturum ayarları"}
+{"k": "ui.detail.settings_readonly", "src": "aebade5f", "v": "Bunları yalnızca bu oturuma istem gönderebilen biri değiştirebilir."}
+{"k": "ui.diff.binary", "src": "810945bb", "v": "İkili dosya (önizleme yok)."}
+{"k": "ui.diff.change.added", "src": "172415f0", "v": "eklendi"}
+{"k": "ui.diff.change.deleted", "src": "b639f5cc", "v": "silindi"}
+{"k": "ui.diff.change.modified", "src": "99db3247", "v": "değişti"}
+{"k": "ui.diff.change.renamed", "src": "87620709", "v": "yeniden adlandırıldı"}
+{"k": "ui.diff.change.untracked", "src": "d7390aa3", "v": "izlenmiyor"}
+{"k": "ui.diff.clean", "src": "6eb6e7bf", "v": "Commit edilmemiş değişiklik yok."}
+{"k": "ui.diff.clean_in", "src": "0bde87e2", "v": "{repo} içinde commit edilmemiş değişiklik yok."}
+{"k": "ui.diff.failed", "src": "5d47ec55", "v": "Diff yüklenemedi."}
+{"k": "ui.diff.gone", "src": "38a63905", "v": "Oturum artık yok."}
+{"k": "ui.diff.loading", "src": "c569ad51", "v": "Diff yükleniyor…"}
+{"k": "ui.diff.no_changes", "src": "9b1fcbda", "v": "Değişiklik yok."}
+{"k": "ui.diff.partial", "src": "4aa4772f", "v": "Değişen dosyaların yalnızca bir kısmı gösteriliyor. Tam diff bu görüntüleyicinin gösterebileceğinden büyük."}
+{"k": "ui.diff.reason.cwd_missing", "src": "4140481e", "v": "Bu oturumun çalışma klasörü artık yok."}
+{"k": "ui.diff.reason.git_error", "src": "c6f57086", "v": "git bu oturum için bir diff üretemedi."}
+{"k": "ui.diff.reason.git_not_installed", "src": "171dd6a9", "v": "Bu makinede git yok."}
+{"k": "ui.diff.reason.no_commits_yet", "src": "cc383c84", "v": "Bu depoda henüz commit yok."}
+{"k": "ui.diff.reason.not_a_git_repo", "src": "287b446f", "v": "Bu oturumun çalışma klasörü bir git deposu değil."}
+{"k": "ui.diff.title", "src": "fe25abc0", "v": "Değişen dosyalar"}
+{"k": "ui.diff.title_n", "src": "6222be44", "v": {"one": "Değişen dosyalar ({n})", "other": "Değişen dosyalar ({n})"}}
+{"k": "ui.diff.title_none", "src": "447a466c", "v": "Değişen dosyalar (yok)"}
+{"k": "ui.diff.too_large", "src": "7aafaa23", "v": "Diff gösterilemeyecek kadar büyük."}
+{"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Diff yok."}
+{"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Zaten bitmiş."}
+{"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Temizlendi."}
+{"k": "ui.done.compact", "src": "399fec37", "v": "Sıkıştırılıyor…"}
+{"k": "ui.done.delete", "src": "48ea780f", "v": "Silindi."}
+{"k": "ui.done.generic", "src": "e2bcda84", "v": "Tamam."}
+{"k": "ui.done.kill", "src": "eb388bd9", "v": "Sonlandırıldı."}
+{"k": "ui.done.perms", "src": "144199df", "v": "Geçildi."}
+{"k": "ui.done.rename", "src": "b930ba4a", "v": "Yeniden adlandırıldı."}
+{"k": "ui.done.rename_same", "src": "ea00acbd", "v": "Değişiklik yok."}
+{"k": "ui.done.restart", "src": "519ed942", "v": "Yeniden başlatıldı."}
+{"k": "ui.done.resume", "src": "ac66e08b", "v": "Devam ettirildi."}
+{"k": "ui.done.stop", "src": "8fcc7be3", "v": "Durduruldu."}
+{"k": "ui.empty.text", "src": "8ff2cab6", "v": "Burada bir tane başlat ya da sohbette {command} gönder."}
+{"k": "ui.empty.title", "src": "a44ee05c", "v": "Henüz oturum yok."}
+{"k": "ui.grid.finished_n", "src": "8e06a605", "v": {"one": "Bitenler ({n})", "other": "Bitenler ({n})"}}
+{"k": "ui.grid.needs_you", "src": "0d9d0df1", "v": "Seni bekleyenler"}
+{"k": "ui.kind.permission", "src": "17857134", "v": "İzin"}
+{"k": "ui.kind.question", "src": "002ff598", "v": "Soru"}
+{"k": "ui.kind_word.permission", "src": "6d244f58", "v": "izin"}
+{"k": "ui.kind_word.question", "src": "3b2be2e2", "v": "soru"}
+{"k": "ui.menu.changed", "src": "512ec84b", "v": "Bu oturum değişti. Menüyü yeniden aç."}
+{"k": "ui.model.failed", "src": "a8ef2ee3", "v": "Model değiştirilemedi."}
+{"k": "ui.model.now", "src": "3dd35778", "v": "Model artık {model}."}
+{"k": "ui.model.switching", "src": "4a9961a0", "v": "değiştiriliyor…"}
+{"k": "ui.model.title", "src": "68c2cc7f", "v": "Model"}
+{"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "onaylanmadı (oturumu kontrol et)"}
+{"k": "ui.model.unreachable", "src": "82a93142", "v": "Sunucuya ulaşılamadı. Oturumun modelini kontrol et."}
+{"k": "ui.new.auto_needs_admin", "src": "ad1f0c2f", "v": "Otomatik mod için yönetici gerekir."}
+{"k": "ui.new.chips_recent", "src": "76eec760", "v": "Son kullanılanlar"}
+{"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "Önerilen"}
+{"k": "ui.new.cli_model", "src": "80e3c49d", "v": "CLI'ın kendi varsayılan modeli"}
+{"k": "ui.new.create_failed", "src": "c55f566f", "v": "Bu oturum oluşturulamadı."}
+{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "Bu klasörü oluştur"}
+{"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "Burada oturum oluşturma iznin yok."}
+{"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "Sunucuya ulaşılamadı. Oturum oluşturulmadı."}
+{"k": "ui.new.created", "src": "77ea75b5", "v": "Oturum oluşturuldu."}
+{"k": "ui.new.creating", "src": "94d7d8ee", "v": "Oluşturuluyor…"}
+{"k": "ui.new.cwd_title", "src": "e8c598ee", "v": "Çalışma klasörü"}
+{"k": "ui.new.daemon_dir", "src": "2503c8cf", "v": "hizmetin kendi klasörü"}
+{"k": "ui.new.default", "src": "808d7dca", "v": "Varsayılan"}
+{"k": "ui.new.default_dir_help", "src": "6d7d5fbc", "v": "Hizmetin kendi klasörü"}
+{"k": "ui.new.default_model_help", "src": "17ab4082", "v": "CLI neyi kullanacak şekilde ayarlıysa"}
+{"k": "ui.new.folder_created", "src": "6b6ea299", "v": "Klasör oluşturuldu."}
+{"k": "ui.new.folder_existed", "src": "bfe299bc", "v": "Bu klasör zaten vardı, bu yüzden seçildi."}
+{"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "Bu klasör oluşturulamadı."}
+{"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "Burada klasör oluşturma iznin yok."}
+{"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Yeni klasör adı"}
+{"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "Sunucuya ulaşılamadı. Klasör oluşturulmadı."}
+{"k": "ui.new.mode_ask", "src": "3562777b", "v": "Sor"}
+{"k": "ui.new.mode_ask_help", "src": "eca1be33", "v": "Claude araçları çalıştırmadan önce sorar"}
+{"k": "ui.new.mode_auto", "src": "c614ba7c", "v": "Otomatik"}
+{"k": "ui.new.mode_auto_help", "src": "306e8992", "v": "Araçları sormadan çalıştırır"}
+{"k": "ui.new.mode_title", "src": "9c8c621a", "v": "İzin modu"}
+{"k": "ui.new.model_name", "src": "5ebb9765", "v": "Model adı"}
+{"k": "ui.new.model_needed", "src": "c585e482", "v": "Devam etmek için bir model adı yaz."}
+{"k": "ui.new.model_pattern", "src": "7222f368", "v": "Harf, rakam, nokta ve tire kullan; bir harf ya da rakamla başla."}
+{"k": "ui.new.more", "src": "86c0a35e", "v": "Daha fazla seçenek"}
+{"k": "ui.new.name", "src": "709a2322", "v": "Ad"}
+{"k": "ui.new.new_folder", "src": "a711999b", "v": "Yeni klasör"}
+{"k": "ui.new.new_folder_help", "src": "29aa13d5", "v": "Yukarıda seçilen klasörün içinde"}
+{"k": "ui.new.not_set", "src": "770e48ee", "v": "Henüz ayarlanmadı"}
+{"k": "ui.new.other_model", "src": "cc3190e7", "v": "Başka model"}
+{"k": "ui.new.other_model_help", "src": "561f7c9e", "v": "Tam bir ad yaz, örn. {example}"}
+{"k": "ui.new.pick_dir_first", "src": "969b0a9b", "v": "Önce yukarıdan bir çalışma klasörü seç."}
+{"k": "ui.new.requires_admin", "src": "e18e02eb", "v": "Yönetici gerekir"}
+{"k": "ui.new.sub", "src": "23b19317", "v": "Bir ad ver, bir klasör seç, Claude orada başlasın."}
+{"k": "ui.new.summary_ask", "src": "3e987f2e", "v": "Claude'u {where} içinde, Sor modunda, {model} ile başlatır."}
+{"k": "ui.new.summary_auto", "src": "d0968e63", "v": "Claude'u {where} içinde, Otomatik modda, {model} ile başlatır."}
+{"k": "ui.new.summary_named_ask", "src": "ccbc6d09", "v": "Claude'u {name} adıyla {where} içinde, Sor modunda, {model} ile başlatır."}
+{"k": "ui.new.summary_named_auto", "src": "4b48c549", "v": "Claude'u {name} adıyla {where} içinde, Otomatik modda, {model} ile başlatır."}
+{"k": "ui.new.title", "src": "5c881d23", "v": "Yeni oturum"}
+{"k": "ui.new.where", "src": "525f61b6", "v": "Nerede"}
+{"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "Bu oturum bitmeden önce hiçbir şey kaydedilmedi."}
+{"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "Henüz bir şey yok. Claude yanıt verince gelir."}
+{"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "Her şey sakin"}
+{"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"one": "{n} bitti", "other": "{n} bitti"}}
+{"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"one": "{n} seni bekliyor", "other": "{n} seni bekliyor"}}
+{"k": "ui.pulse.resting", "src": "644f3b40", "v": {"one": "{n} dinleniyor", "other": "{n} dinleniyor"}}
+{"k": "ui.pulse.spent", "src": "908f77ef", "v": "{cost} harcandı"}
+{"k": "ui.pulse.unknown", "src": "23ca6f83", "v": {"one": "{n} bilinmiyor", "other": "{n} bilinmiyor"}}
+{"k": "ui.pulse.working", "src": "c3aee490", "v": {"one": "{n} çalışıyor", "other": "{n} çalışıyor"}}
+{"k": "ui.rename.empty", "src": "e00fbfca", "v": "Oturum adı boş olamaz."}
+{"k": "ui.rename.failed", "src": "07c216e4", "v": "Yeniden adlandırılamadı."}
+{"k": "ui.rename.pattern", "src": "b916e083", "v": "Latin harfleri, rakam, tire ve alt çizgi kullan; bir harf ya da rakamla başla."}
+{"k": "ui.rename.reserved", "src": "9440c7ea", "v": "“{name}” ayrılmış bir komut adı."}
+{"k": "ui.rename.too_long", "src": "9b31bc40", "v": "Oturum adı en fazla {max} karakter olabilir."}
+{"k": "ui.report.also_through", "src": "1d1b7026", "v": "Şunlardan da geçti: {names}"}
+{"k": "ui.report.as_written", "src": "21532af3", "v": "Yazıldığı gibi gönderilir."}
+{"k": "ui.report.bad_note", "src": "c92adef7", "v": "Bu not eklenemedi. Daha kısa ve sade bir not dene."}
+{"k": "ui.report.card_text", "src": "45e21208", "v": "Geliştiriciye neyin ters gittiğini anlat. Bir şey gönderilmeden önce raporun tamamını görürsün."}
+{"k": "ui.report.copied", "src": "dd2ce2e2", "v": "Kopyalandı."}
+{"k": "ui.report.copy_hint", "src": "7d76506f", "v": "Kopyalamak için referansa uzun bas."}
+{"k": "ui.report.daily_cap_title", "src": "9bdf248a", "v": "Günlük sınıra ulaşıldı"}
+{"k": "ui.report.err.crash", "src": "78d1bcc4", "v": "aipager beklenmedik şekilde durdu"}
+{"k": "ui.report.err.error", "src": "7f2f6a15", "v": "Hata"}
+{"k": "ui.report.err.hook_cap", "src": "f4162559", "v": "Hook bellek sınırına ulaştı"}
+{"k": "ui.report.err.logged_in", "src": "ad58db0c", "v": "{area} içinde günlüğe yazılan hata"}
+{"k": "ui.report.err.type_in", "src": "15f9e48c", "v": "{type}, {area} içinde"}
+{"k": "ui.report.err_detail", "src": "97fb369f", "v": "{fingerprint}, ilk görülme {day}, sürüm {versions}"}
+{"k": "ui.report.err_sub", "src": "917846a1", "v": "{times}, son görülme {day}"}
+{"k": "ui.report.errors", "src": "805e86a8", "v": "Hatalar"}
+{"k": "ui.report.errors_n", "src": "07ba7666", "v": {"one": "Hatalar ({n})", "other": "Hatalar ({n})"}}
+{"k": "ui.report.exact", "src": "ea8e4b11", "v": "Raporun tam metnini göster"}
+{"k": "ui.report.exact_note", "src": "991b0c14", "v": "Notun dahil, gönderilecek metnin tam hali bu."}
+{"k": "ui.report.exit.clean", "src": "6a1cec45", "v": "düzgün"}
+{"k": "ui.report.exit.crash", "src": "dd472460", "v": "bir çökme"}
+{"k": "ui.report.exit.reboot", "src": "118341f6", "v": "makine yeniden başlatıldı"}
+{"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "bilinmiyor"}
+{"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "değişiklik önizlemeleri"}
+{"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
+{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "gözlemci botlar"}
+{"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "zengin özetler"}
+{"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "yönetilen tünel"}
+{"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "kendi tünel adresi"}
+{"k": "ui.report.feature.voice", "src": "704617a7", "v": "sesli mesajlar"}
+{"k": "ui.report.foot", "src": "09700e47", "v": "Raporu gönder'e dokunana kadar hiçbir şey gönderilmez. Rapor, adın olmadan geliştiricinin hata kutusuna gider."}
+{"k": "ui.report.label.counts", "src": "a7e0a1c5", "v": "Sayaçlar, son 24 saat"}
+{"k": "ui.report.label.features", "src": "fc338f87", "v": "Özellikler"}
+{"k": "ui.report.label.libraries", "src": "27c968e6", "v": "Kütüphaneler"}
+{"k": "ui.report.label.limits", "src": "ca1be69e", "v": "Telegram sınırları"}
+{"k": "ui.report.label.log", "src": "499fd95d", "v": "Günlük, son 24 saat"}
+{"k": "ui.report.label.setup", "src": "cdd7bb28", "v": "Kurulum"}
+{"k": "ui.report.label.stops", "src": "0e648419", "v": "Duruşlar"}
+{"k": "ui.report.label.system", "src": "bc0792d8", "v": "Sistem"}
+{"k": "ui.report.later", "src": "685cd810", "v": "aipager zamanında yanıt vermedi. Raporu gönder'e tekrar dokun: zaten gittiyse referansını görürsün ve iki kez gönderilmez."}
+{"k": "ui.report.limits", "src": "22297d2d", "v": {"one": "7 günde {n} yasaklama, en yoğun saatteki yük {load}", "other": "7 günde {n} yasaklama, en yoğun saatteki yük {load}"}}
+{"k": "ui.report.log_line", "src": "5069aaa9", "v": {"one": "{n} yer bir uyarı ya da hata kaydetti ({times})", "other": "{n} yer bir uyarı ya da hata kaydetti ({times})"}}
+{"k": "ui.report.missing", "src": "995357dd", "v": "(yok)"}
+{"k": "ui.report.more", "src": "473710d3", "v": "Daha fazla ayrıntı"}
+{"k": "ui.report.n_groups", "src": "1a2fac9e", "v": {"one": "{n} grup", "other": "{n} grup"}}
+{"k": "ui.report.n_private_chats", "src": "5922fc21", "v": {"one": "{n} özel sohbet", "other": "{n} özel sohbet"}}
+{"k": "ui.report.no_errors", "src": "a5697d50", "v": "Son zamanlarda kaydedilen hata yok. Yukarıdaki bilgiler ve notun yine de yardımcı olur."}
+{"k": "ui.report.none", "src": "6eef6648", "v": "Yok"}
+{"k": "ui.report.not_found", "src": "475c8486", "v": "Bulunamadı"}
+{"k": "ui.report.not_sent", "src": "587c501e", "v": "Gönderilmedi"}
+{"k": "ui.report.note_label", "src": "24a9a8bc", "v": "Notun (isteğe bağlı)"}
+{"k": "ui.report.note_placeholder", "src": "e2bf7584", "v": "Sorun çıktığında ne yapıyordun?"}
+{"k": "ui.report.nothing_logged", "src": "7bb93154", "v": "Kayıt yok"}
+{"k": "ui.report.once", "src": "18638356", "v": "bir kez"}
+{"k": "ui.report.panel.build", "src": "288edef3", "v": "Birazdan tekrar dene."}
+{"k": "ui.report.panel.build_title", "src": "76b58923", "v": "Rapor hazırlanamadı"}
+{"k": "ui.report.panel.group", "src": "a2c9e40d", "v": "Raporlar, botla olan özel sohbetinde açılan Mini App'ten gönderilir."}
+{"k": "ui.report.panel.group_title", "src": "73925937", "v": "Özel sohbetini aç"}
+{"k": "ui.report.panel.noowner", "src": "9ee5b766", "v": "Bu aipager'ın tek bir sahip sohbeti yok. Bir terminalde {command} yine çalışır."}
+{"k": "ui.report.panel.noowner_title", "src": "40631445", "v": "Buradan gönderilemez"}
+{"k": "ui.report.panel.owner", "src": "e83d9212", "v": "Sorun raporunu yalnızca bu aipager'ın sahibi gönderebilir."}
+{"k": "ui.report.panel.owner_title", "src": "e91f02d9", "v": "Yalnızca sahip"}
+{"k": "ui.report.preparing", "src": "aaf61214", "v": "Rapor hazırlanıyor..."}
+{"k": "ui.report.privacy", "src": "48fa34f1", "v": "Sürümleri, sayaçları ve aipager kodundaki yerleri içerir. Sohbetlerini, istemlerini, adları ya da yolları asla içermez."}
+{"k": "ui.report.sending_wait", "src": "176ed846", "v": "Gönderiliyor. Bir saniye."}
+{"k": "ui.report.sent_title", "src": "a7615ceb", "v": "Rapor gönderildi"}
+{"k": "ui.report.setup.personal", "src": "2ca0506b", "v": "Kişisel kurulum"}
+{"k": "ui.report.setup.scope", "src": "d662e796", "v": "Çok sohbetli kurulum"}
+{"k": "ui.report.setup.team", "src": "a857214e", "v": "Ekip kurulumu"}
+{"k": "ui.report.setup_line", "src": "c52e3d20", "v": "{mode}, {dms}, {groups}, çalışma süresi: {uptime}"}
+{"k": "ui.report.setup_line_bare", "src": "60b4d8c7", "v": "{dms}, çalışma süresi: {uptime}"}
+{"k": "ui.report.setup_line_no_groups", "src": "f0f3ef45", "v": "{mode}, {dms}, çalışma süresi: {uptime}"}
+{"k": "ui.report.setup_line_no_mode", "src": "f94812f3", "v": "{dms}, {groups}, çalışma süresi: {uptime}"}
+{"k": "ui.report.show_more", "src": "fdeb42f8", "v": {"one": "{n} tane daha göster", "other": "{n} tane daha göster"}}
+{"k": "ui.report.stale", "src": "25e3d152", "v": "Bu rapor artık burada değil. İşte yenisi: kontrol et, sonra Raporu gönder'e tekrar dokun."}
+{"k": "ui.report.still_sending", "src": "5b89eba6", "v": "Hâlâ gönderiliyor. Biraz bekle, sonra Raporu gönder'e tekrar dokun."}
+{"k": "ui.report.stops", "src": "8f971d67", "v": "Son duruş: {last}. 7 günde beklenmedik duruş: {n}."}
+{"k": "ui.report.system_in", "src": "7011d75d", "v": "{system}, {container} içinde"}
+{"k": "ui.report.thanks", "src": "04d9993f", "v": "Teşekkürler. GitHub'da bir issue açarsan bu referansı belirt:"}
+{"k": "ui.report.tidied", "src": "35efa495", "v": "Notun düzeltildi (görünmez karakterler, fazla boşluklar ya da 500 karakterden sonrası kaldırıldı). Kontrol et, sonra Raporu gönder'e tekrar dokun."}
+{"k": "ui.report.times", "src": "766020c6", "v": {"one": "{n} kez", "other": "{n} kez"}}
+{"k": "ui.report.title", "src": "24f3f52d", "v": "Sorun bildir"}
+{"k": "ui.report.too_long", "src": "f600d1b3", "v": {"one": "{n} karakter fazla uzun.", "other": "{n} karakter fazla uzun."}}
+{"k": "ui.report.too_many", "src": "392589ae", "v": "Çok fazla dokunma. Bir dakika sonra tekrar dene."}
+{"k": "ui.report.too_old_title", "src": "2a4d2b45", "v": "Güncelleme gerekli"}
+{"k": "ui.report.try_later", "src": "ab0f2d7c", "v": "Şu an gönderilemedi. Hiçbir şey kaybolmadı; daha sonra tekrar dene."}
+{"k": "ui.report.uptime.10m_1h", "src": "4db7ea05", "v": "10 dakika ile 1 saat arası"}
+{"k": "ui.report.uptime.1d_7d", "src": "ba95c4e1", "v": "1 ile 7 gün arası"}
+{"k": "ui.report.uptime.1h_24h", "src": "f23cc5e9", "v": "1 ile 24 saat arası"}
+{"k": "ui.report.uptime.over_week", "src": "7df7e421", "v": "bir haftadan fazla"}
+{"k": "ui.report.uptime.under_10m", "src": "35d29633", "v": "10 dakikadan az"}
+{"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "bilinmiyor"}
+{"k": "ui.report.what_sent", "src": "6b776c8f", "v": "Ne gönderilecek"}
+{"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "Sohbet tercihleri"}
+{"k": "ui.settings.default_tag", "src": "7505d64a", "v": "varsayılan"}
+{"k": "ui.settings.intro", "src": "f1ea8e24", "v": "Bunlar bu sohbetteki her oturum için geçerlidir."}
+{"k": "ui.settings.readonly", "src": "57fedd89", "v": "Bunları yalnızca bir yönetici değiştirebilir."}
+{"k": "ui.settings.reset_done", "src": "5b3b5541", "v": "Varsayılanlara sıfırlandı."}
+{"k": "ui.settings.reset_failed", "src": "38256d55", "v": "Bazı ayarlar sıfırlanamadı. Yeniden denemek için tekrar aç."}
+{"k": "ui.settings.save_failed", "src": "cdb1d51d", "v": "Kaydedilemedi. Ekrandaki değer kayıtlı olandır."}
+{"k": "ui.settings.saved", "src": "9d4af690", "v": "Kaydedildi."}
+{"k": "ui.shell.actions_aria", "src": "b086cae4", "v": "Oturum işlemleri"}
+{"k": "ui.shell.chat_aria", "src": "2ced57f1", "v": "Sohbet"}
+{"k": "ui.shell.loading", "src": "33ce4174", "v": "Yükleniyor…"}
+{"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "Yeni ad"}
+{"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "Yeni oturum"}
+{"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "Bölümler"}
+{"k": "ui.state.busy", "src": "8178ea20", "v": "çalışıyor"}
+{"k": "ui.state.gone", "src": "f957097d", "v": "bitti"}
+{"k": "ui.state.idle", "src": "e24cc7a4", "v": "dinleniyor"}
+{"k": "ui.state.unknown", "src": "50d8b4a9", "v": "bilinmiyor"}
+{"k": "ui.state.waiting", "src": "19622ace", "v": "seni bekliyor"}
+{"k": "ui.state_line.finished", "src": "355bcc57", "v": "Bitti"}
+{"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "Seni bekliyor"}
+{"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "Seni bekliyor ({kind})"}
+{"k": "ui.state_line.resting", "src": "296d1007", "v": "Dinleniyor"}
+{"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "Dinleniyor, son etkinlik {age}"}
+{"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "Henüz bildirilmedi"}
+{"k": "ui.state_line.working", "src": "3b4dfc97", "v": "Çalışıyor"}
+{"k": "ui.state_line.working_for", "src": "f555f372", "v": "{clock} süredir çalışıyor"}
+{"k": "ui.tab.sessions", "src": "e11e37a9", "v": "Oturumlar"}
+{"k": "ui.tab.settings", "src": "c7f73bb5", "v": "Ayarlar"}
+{"k": "ui.tile.aria", "src": "eaa1d742", "v": "{session}, {state}, bağlam %{pct}, {model}, {cost}"}
+{"k": "ui.tile.aria_no_model", "src": "667d58b3", "v": "{session}, {state}, bağlam %{pct}, {cost}"}
+{"k": "ui.tile.no_folder", "src": "25fe67b1", "v": "klasör yok"}
+{"k": "ui.timeline.empty", "src": "8bdea321", "v": "Henüz etkinlik yok."}
+{"k": "ui.timeline.note", "src": "306606d2", "v": "Zaman çizelgesi yalnızca hizmetin şu anki çalışmasını kapsar. Yeniden başlatmalar arasında kaydedilmez, bu yüzden eski bir oturum burada bir şey göstermez."}
+{"k": "ui.timeline.title_empty", "src": "44748119", "v": "Zaman çizelgesi (boş)"}
+{"k": "ui.timeline.title_n", "src": "a7f6a618", "v": {"one": "Zaman çizelgesi ({n})", "other": "Zaman çizelgesi ({n})"}}
+{"k": "ui.update.check_failed", "src": "a15f1db5", "v": "Güncellemeler denetlenemedi. Tekrar dene."}
+{"k": "ui.update.finished", "src": "80fa9b82", "v": "Bu güncelleme zaten bitti."}
+{"k": "ui.update.job.claude_updating", "src": "c587f1e1", "v": "Çalışıyor… (claude güncelleniyor)"}
+{"k": "ui.update.job.gate_timeout", "src": "1499ee18", "v": "Oturumlar hâlâ meşgul. Daha fazla bekle, şimdi yeniden başlat ya da iptal et?"}
+{"k": "ui.update.job.starting", "src": "06080d40", "v": "Çalışıyor… (başlıyor)"}
+{"k": "ui.update.job.upgrading", "src": "c6e6577f", "v": "Çalışıyor… (yükseltiliyor)"}
+{"k": "ui.update.job.waiting_idle", "src": "2d4b64cc", "v": "Yeniden başlatmadan önce her oturumun boşa çıkması bekleniyor."}
+{"k": "ui.update.job.working_phase", "src": "3a93346a", "v": "Çalışıyor… ({phase})"}
+{"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "Geri dönmeyenler: {names}"}
+{"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}? aipager çalışan bir tur kalmadığında yeniden başlar."}
+{"k": "ui.update.other", "src": "7ae4a531", "v": "aipager yeniden başladı ama şu an çalışan sürüm: {version}."}
+{"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager yeniden başladı ama çalışan sürüm {expected} değil, {version}."}
+{"k": "ui.update.refused", "src": "651df229", "v": "Güncellemenin sonucunu görmek için uygulamayı yeniden aç."}
+{"k": "ui.update.reopen", "src": "3bf2409f", "v": "aipager yeniden başladı. Sohbet güncellendiğini söyleyince uygulamayı yeniden aç: kapat, sonra sohbetten tekrar aç (menü düğmesi ya da {command})."}
+{"k": "ui.update.restart_now_confirm", "src": "3f76f590", "v": "Şimdi yeniden başlatmak, burada listelenen çalışan turları yarıda keser."}
+{"k": "ui.update.restarting", "src": "0cfedf00", "v": "aipager yeniden başlatılıyor…"}
+{"k": "ui.update.running", "src": "5c38d794", "v": "Bir güncelleme zaten çalışıyor."}
+{"k": "ui.update.shutting_down", "src": "190aec5c", "v": "aipager kapanıyor. Geri gelince tekrar dene."}
+{"k": "ui.update.slow", "src": "43a0f87b", "v": "Hâlâ yeniden başlıyor, birazdan uygulamayı yeniden aç."}
+{"k": "ui.update.stale", "src": "fa8fd334", "v": "Bu denetim eskimiş. Tekrar denetle."}
+{"k": "ui.update.start_failed", "src": "2f57d419", "v": "Bu başlatılamadı. Tekrar dene."}
+{"k": "ui.update.title", "src": "c76d1807", "v": "Güncellemeler"}
+{"k": "ui.update.too_many", "src": "9a3f5b9e", "v": "Çok fazla istek. Bir dakika sonra tekrar dene."}
+{"k": "ui.update.unknown_version", "src": "90246157", "v": "bilinmeyen bir sürüm"}
+{"k": "ui.update.unreachable", "src": "fc17f70c", "v": "aipager'a ulaşılamadı. Tekrar dene."}
+{"k": "ui.update.up_to_date", "src": "2772acac", "v": "Her şey güncel."}
+{"k": "ui.update.updated", "src": "a56afb67", "v": "{version} sürümüne güncellendi."}
+{"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"one": "{version} sürümüne güncellendi, {n} oturum yeniden devralındı.", "other": "{version} sürümüne güncellendi, {n} oturum yeniden devralındı."}}
+{"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude sana soruyor"}
+{"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude'un iznine ihtiyacı var"}
+{"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "Sohbette açık bir izin istemi var."}
+{"k": "ui.waiting.question_open", "src": "3165c4fc", "v": "Sohbette açık bir soru var."}
+{"k": "upd.ap.blocked", "src": "2b9633f6", "v": "🚫 <b>aipager</b> buradan güncellenemez: {reason}"}
+{"k": "upd.ap.blocked_here", "src": "cefc4c9b", "v": "🚫 aipager buradan güncellenemez: {reason}"}
+{"k": "upd.ap.cancelled", "src": "6eb974a3", "v": "↩️ <b>aipager</b> güncellemesi iptal edildi - hiçbir şey kurulmadı."}
+{"k": "upd.ap.current", "src": "fbd921a8", "v": "✅ <b>aipager</b> zaten güncel ({version})."}
+{"k": "upd.ap.current_git", "src": "d645d1e5", "v": "✅ <b>aipager</b> zaten {running} sürümünde - bu {kind} kurulumu kendi git kaynağından yükseltilir ve orada daha yenisi yok."}
+{"k": "upd.ap.current_index", "src": "86cb566d", "v": "✅ <b>aipager</b> zaten {running} sürümünde - paket dizininde daha yenisi yok."}
+{"k": "upd.ap.current_local", "src": "dfdf1e49", "v": "✅ <b>aipager</b> zaten {running} sürümünde - bu {kind} kurulumu yerel yoldan yükseltilir ve orada hâlâ aynı sürüm var. Önce o kopyayı güncelle."}
+{"k": "upd.ap.current_local_at", "src": "126cee31", "v": "✅ <b>aipager</b> zaten {running} sürümünde - bu {kind} kurulumu {where} yerel yolundan yükseltilir ve orada hâlâ aynı sürüm var. Önce o kopyayı güncelle."}
+{"k": "upd.ap.current_plain", "src": "598c28b0", "v": "✅ <b>aipager</b> zaten {running} sürümünde."}
+{"k": "upd.ap.failed", "src": "8979f696", "v": "❌ <b>aipager</b> yükseltmesi başarısız (çıkış kodu {code}), hiçbir şey yeniden başlatılmadı."}
+{"k": "upd.ap.finished_shutdown", "src": "622303bd", "v": "✅ <b>aipager</b> yükseltmesi bitti; hizmet kapanıyor, bu yüzden hiçbir şey yeniden başlatılmadı - sonraki başlangıçta kurulu olan çalışır."}
+{"k": "upd.ap.import_failed", "src": "cba04fe9", "v": "❌ Yeni sürüm içe aktarılamadı, hâlâ {running} çalışıyor, hiçbir şey yeniden başlatılmadı. <code>{hint}</code> ile yeniden kur"}
+{"k": "upd.ap.installed", "src": "01a08996", "v": "✅ <b>aipager</b> {frm} → {to} kuruldu."}
+{"k": "upd.ap.installed_shutdown", "src": "d2a325d6", "v": "✅ <b>aipager</b> {frm} → {to} kuruldu; hizmet kapanıyor, bu yüzden hiçbir şey yeniden başlatılmadı - sonraki başlangıçta {to} çalışır."}
+{"k": "upd.ap.not_found", "src": "f74b4ba7", "v": "❌ <b>aipager</b>: <code>{kind}</code> bulunamadı ({path} içinde arandı)"}
+{"k": "upd.ap.prepare_failed", "src": "65e6b15f", "v": "✅ <b>aipager</b> {frm} → {to} kuruldu ama yeniden başlatma hazırlanamadı ({error}). Kendin yeniden başlat: <code>{cmd}</code>"}
+{"k": "upd.ap.restart_cancelled", "src": "23b8320e", "v": "✅ <b>aipager</b> {frm} → {to} kuruldu ama yeniden başlatma iptal edildi. Kendin yeniden başlat: <code>{cmd}</code>"}
+{"k": "upd.ap.restarting", "src": "e68754da", "v": "⏳ <b>aipager</b> {frm} → {to} kuruldu, yeniden başlatılıyor…"}
+{"k": "upd.ap.schedule_failed", "src": "8ded320b", "v": "✅ <b>aipager</b> {frm} → {to} kuruldu ama yeniden başlatma planlanamadı: {detail}. Kendin yeniden başlat: <code>{cmd}</code>"}
+{"k": "upd.ap.timeout", "src": "f834e535", "v": "⏱ <b>aipager</b> yükseltmesi {seconds} sn sonra zaman aşımına uğrayıp durduruldu, hiçbir şey yeniden başlatılmadı, hâlâ {running} çalışıyor. Diskteki kurulum eksik olabilir: sonraki yeniden başlatmadan önce <code>{hint}</code> ile yeniden kur."}
+{"k": "upd.ap.waiting", "src": "dc25cdd1", "v": "⏳ <b>aipager</b> {frm} → {to} kuruldu, mevcut tur bitince yeniden başlayacak"}
+{"k": "upd.busy.restarting", "src": "6d1c5479", "v": "⏳ aipager bir güncelleme için yeniden başlamak üzere. Geri gelince /update komutunu tekrar dene."}
+{"k": "upd.busy.running", "src": "e0aa9bc2", "v": "⏳ Bir güncelleme zaten çalışıyor ({phase}). Durum mesajı ilerlemeyi gösteriyor."}
+{"k": "upd.busy.running_short", "src": "07e3480f", "v": "⏳ Bir güncelleme zaten çalışıyor ({phase})."}
+{"k": "upd.cancelled", "src": "a85d8e48", "v": "↩️ Güncelleme iptal edildi - hiçbir şey değişmedi."}
+{"k": "upd.cc.current", "src": "57516cde", "v": "✅ <b>Claude Code</b> zaten güncel ({version})"}
+{"k": "upd.cc.done", "src": "cd97aa9e", "v": "✅ <b>Claude Code</b> {before} → {after}"}
+{"k": "upd.cc.done_shutdown", "src": "71cb416d", "v": "✅ <b>Claude Code</b> güncellemesi bitti; aipager kapanıyor, bu yüzden /update yeni sürümü aipager geri gelince gösterir"}
+{"k": "upd.cc.error", "src": "fcf1f441", "v": "❌ <b>Claude Code</b>: {error}"}
+{"k": "upd.cc.failed", "src": "ef865b9a", "v": "❌ <b>Claude Code</b> güncellemesi başarısız (çıkış kodu {code})"}
+{"k": "upd.cc.timeout", "src": "c6c8c9ce", "v": "⏱ <b>Claude Code</b> güncellemesi {seconds} sn sonra zaman aşımına uğradı"}
+{"k": "upd.check_failed_now", "src": "4ba67b54", "v": "⚠️ Güncellemeler şu an denetlenemedi. Tekrar dene."}
+{"k": "upd.elapsed.m", "src": "a47d8efb", "v": "{m} dk"}
+{"k": "upd.elapsed.ms", "src": "c017b27a", "v": "{m} dk {s} sn"}
+{"k": "upd.elapsed.s", "src": "2b434962", "v": "{s} sn"}
+{"k": "upd.fix.claude", "src": "94c58cdc", "v": "{command} komutunu tekrar çalıştır"}
+{"k": "upd.fix.reinstall", "src": "ae353907", "v": "{command} ile yeniden kur"}
+{"k": "upd.gate.busy", "src": "a8f53f0e", "v": {"one": "⏰ Oturumlar {n} dk sonra hâlâ meşgul. {wait} dk daha bekle, şimdi yeniden başlat ya da iptal et? Şimdi yeniden başlatmak aşağıda listelenen her şeyi yarıda keser.", "other": "⏰ Oturumlar {n} dk sonra hâlâ meşgul. {wait} dk daha bekle, şimdi yeniden başlat ya da iptal et? Şimdi yeniden başlatmak aşağıda listelenen her şeyi yarıda keser."}}
+{"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"one": "⏰ Oturumlar {n} dk sonra hâlâ meşgul. {wait} dk daha bekle, şimdi yeniden başlat ya da iptal et? Şimdi yeniden başlatmak, bekletilen ve henüz teslim edilmemiş yanıtlar dahil, aşağıda listelenen her şeyi yarıda keser.", "other": "⏰ Oturumlar {n} dk sonra hâlâ meşgul. {wait} dk daha bekle, şimdi yeniden başlat ya da iptal et? Şimdi yeniden başlatmak, bekletilen ve henüz teslim edilmemiş yanıtlar dahil, aşağıda listelenen her şeyi yarıda keser."}}
+{"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: yeniden başlatmadan önce her oturumun boşa çıkması bekleniyor."}
+{"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>Güncellemeler</b>"}
+{"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (güncel)"}
+{"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}
+{"k": "upd.line.ap_newer_blocked", "src": "6c0b194f", "v": "aipager {running} → {latest} (buradan güncellenemez: {reason})"}
+{"k": "upd.line.ap_unchecked", "src": "6e9c88e2", "v": "aipager {running} (denetlenemedi)"}
+{"k": "upd.line.cc_current", "src": "f360deb9", "v": "Claude Code {current} (güncel)"}
+{"k": "upd.line.cc_newer", "src": "f40a4485", "v": "Claude Code {current} → {latest}"}
+{"k": "upd.line.cc_newer_blocked", "src": "aa86c9e2", "v": "Claude Code {current} → {latest} (buradan güncellenemez: {reason})"}
+{"k": "upd.line.cc_unchecked", "src": "634412f0", "v": "Claude Code {current} (denetlenemedi)"}
+{"k": "upd.line.cc_unknown", "src": "302340a8", "v": "Claude Code (denetlenemedi)"}
+{"k": "upd.manual.needed", "src": "9abdaf5e", "v": "Yeniden başlatma gerekli: {reason}"}
+{"k": "upd.manual.would_kill", "src": "df06a1e3", "v": "Yeniden başlatmanın sonlandıracağı oturumlar: {labels}"}
+{"k": "upd.marker.done", "src": "5a3ca85c", "v": {"one": "✅ aipager güncellendi {frm} → {to}, {n} oturum yeniden devralındı", "other": "✅ aipager güncellendi {frm} → {to}, {n} oturum yeniden devralındı"}}
+{"k": "upd.marker.interrupted", "src": "66f4f0b7", "v": "⚠️ aipager kapanırken bir güncelleme yarıda kaldı; kurulum eksik olabilir. Şu an {running} çalışıyor. Bir şey ters giderse {fix}."}
+{"k": "upd.marker.not_back", "src": "d253a83a", "v": "⚠️ Geri dönmeyenler: {labels}"}
+{"k": "upd.marker.wrong_version", "src": "17ebf14f", "v": "⚠️ aipager yeniden başladı ama çalışan sürüm {to} değil, {running}."}
+{"k": "upd.note.ap_installed", "src": "5616e4b4", "v": "aipager {installed} kurulu ama henüz çalışmıyor."}
+{"k": "upd.offer_stale", "src": "a72655cc", "v": "⚠️ Bu denetim eskimiş. Güncellemeden önce tekrar denetle."}
+{"k": "upd.output_in_log", "src": "3c62a9b7", "v": "(çıktı hizmet günlüğünde)"}
+{"k": "upd.prompt", "src": "8a30cb51", "v": "⬆️ <b>Güncellemeler</b>\n\naipager ya da Claude Code için daha yeni bir sürüm olup olmadığını denetle."}
+{"k": "upd.reason.unknown_install", "src": "0ab6e3a7", "v": "bilinmeyen kurulum"}
+{"k": "upd.reason.yourself", "src": "8ebd1480", "v": "kendin yeniden başlat"}
+{"k": "upd.restart.auto", "src": "47924d9e", "v": "Yeniden başlatma: otomatik, çalışan bir tur kalmayınca."}
+{"k": "upd.restart.manual", "src": "8e3998af", "v": "Yeniden başlatma: elle ({reason})"}
+{"k": "upd.sessions.new_version", "src": "a9ee48dc", "v": "Yeni oturumlar {version} kullanır."}
+{"k": "upd.sessions.none", "src": "1fe42f86", "v": "Şu an çalışan oturum yok."}
+{"k": "upd.sessions.none_restarted", "src": "5807bbd1", "v": "Çalışan oturumlar yeniden başlatılana kadar eski sürümde kalır - hiçbiri yeniden başlatılmadı."}
+{"k": "upd.sessions.old", "src": "2e875cd3", "v": "Hâlâ eski sürümde: {labels}"}
+{"k": "upd.sessions.other_chats", "src": "7b515e23", "v": {"one": "ve başka sohbetlerde {n} tane", "other": "ve başka sohbetlerde {n} tane"}}
+{"k": "upd.shutdown.early", "src": "6b7541f0", "v": "⚠️ Hizmet, güncelleme bitmeden kapandı."}
+{"k": "upd.shutdown.partial", "src": "140c77c5", "v": "⚠️ Hizmet, güncelleme kurulurken kapandı; yükleyici durduruldu, bu yüzden kurulum eksik olabilir. Bir şey ters giderse {fix}."}
+{"k": "upd.shutting_down", "src": "4dabffa5", "v": "⏳ aipager kapanıyor. Geri gelince tekrar dene."}
+{"k": "upd.starting", "src": "0e316323", "v": "⏳ Güncelleme başlıyor…"}
+{"k": "upd.step.aipager", "src": "4baaa0e2", "v": "aipager {kind} ile yükseltiliyor"}
+{"k": "upd.step.claude", "src": "417c042d", "v": "Claude Code güncelleniyor"}
+{"k": "upd.step.started", "src": "cd17f00f", "v": "⏳ {step}…"}
+{"k": "upd.step.still_working", "src": "37b863ed", "v": "⏳ {step} - hâlâ sürüyor{elapsed}"}
+{"k": "upd.still_running", "src": "c57fe950", "v": "Hâlâ çalışanlar:"}
+{"k": "upd.summary.cant_here", "src": "8abb0e4e", "v": "Bir güncelleme çıktı ama buradan kurulamıyor."}
+{"k": "upd.summary.check_failed", "src": "b8579281", "v": "Daha yenisi bulunamadı ama bir denetim başarısız oldu. Daha sonra tekrar dene."}
+{"k": "upd.summary.up_to_date", "src": "2772acac", "v": "Her şey güncel."}
+{"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ Güncelleme beklenmedik bir hatayla durdu (hizmet günlüğüne bak)."}
+{"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ Planlanan yeniden başlatma olmadı - yeni sürüm kurulu ama eskisi hâlâ çalışıyor. Kendin yeniden başlat: {command}"}
+{"k": "whoami.any", "src": "195d97a4", "v": "(hepsi)"}
+{"k": "whoami.bypass_role_denies", "src": "9ed1452d", "v": "  bypass_role_denies: {value}"}
+{"k": "whoami.bypass_safety", "src": "a09645db", "v": "  bypass_safety: {value}"}
+{"k": "whoami.can_manage", "src": "e889ca71", "v": "  can_manage: {value}"}
+{"k": "whoami.effective_allow", "src": "50a8e776", "v": "  geçerli allow_tools: {tools}"}
+{"k": "whoami.effective_deny", "src": "3b0b5420", "v": "  geçerli deny_tools: {tools}"}
+{"k": "whoami.head", "src": "ac5935f7", "v": "🪪 <b>{member}</b>, <b>{scope}</b> içinde"}
+{"k": "whoami.no", "src": "fd128635", "v": "hayır"}
+{"k": "whoami.none", "src": "3c6b183d", "v": "(yok)"}
+{"k": "whoami.not_allowed", "src": "c9bfc640", "v": "🪪 Bu botun izin listesinde değilsin."}
+{"k": "whoami.not_member", "src": "d86fddf7", "v": "🪪 Bu alanın üyesi değilsin."}
+{"k": "whoami.personal", "src": "10ab5a55", "v": "🪪 Kişisel mod - bu özel sohbetten bu makinenin tam denetimi."}
+{"k": "whoami.role", "src": "8ffb44b5", "v": "  rol: <b>{role}</b>"}
+{"k": "whoami.team_deny", "src": "e88735e1", "v": "  deny_tools: {tools}"}
+{"k": "whoami.team_head", "src": "c413798c", "v": "🪪 <b>{member}</b>"}
+{"k": "whoami.yes", "src": "fb360f9c", "v": "evet"}

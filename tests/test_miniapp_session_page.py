@@ -90,7 +90,7 @@ def test_live_session_shows_every_populated_fact():
     by_label = {f["label"]: f["value"] for f in facts}
     assert by_label["Context"] == "34%"
     assert by_label["Cost"] == "$1.50"
-    assert by_label["Working for"] == "1m"
+    assert by_label["Working for"] == "1:30"
     assert by_label["Last active"] == "2m ago"
     assert by_label["Directory"] == "/home/aly/aipager"
 

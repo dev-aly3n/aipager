@@ -28,7 +28,7 @@ def test_agents_section_lists_each_agents_type_elapsed_and_count():
     agents = [_agent("crawler", 12.0, 3, ["Grep: a", "Grep: b", "Read: c"])]
     log = build_full_log("jim", [], [], "done", agents=agents)
     assert "\n## Agents\n" in log
-    assert f"- {MARK} `crawler` (12s, 3 tool calls)" in log
+    assert f"- {MARK} `crawler` (0:12, 3 tool calls)" in log
 
 
 def test_agents_section_lists_every_tool_summary_as_a_bullet():
@@ -48,7 +48,7 @@ def test_agents_section_uses_singular_for_one_tool_call():
 def test_agents_section_formats_elapsed_over_a_minute_as_minutes_and_seconds():
     agents = [_agent("crawler", 75.0, 4, ["a", "b", "c", "d"])]
     log = build_full_log("jim", [], [], "done", agents=agents)
-    assert "1m 15s" in log
+    assert "(1:15, 4 tool calls)" in log
 
 
 def test_agents_section_lists_multiple_agents_each_with_their_own_tools():

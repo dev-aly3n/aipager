@@ -211,8 +211,14 @@ def _named(argv0: str, *args: str, env=None):
     """A sleeping python whose /proc cmdline is ``argv0 -c <sleep> args``
     (``argv0`` may be ``dtach``: nothing real is run). Waits for the exec
     so the cmdline checked is the new one."""
+    # The child only needs the standard library. Naming it `dtach` makes a
+    # relocatable interpreter (python-build-standalone) look its prefix up
+    # from that name on PATH, and on a machine with a real /usr/bin/dtach it
+    # then cannot find its own library and dies before the exec is seen.
+    child_env = dict(os.environ if env is None else env,
+                     PYTHONHOME=f"{sys.base_prefix}:{sys.base_exec_prefix}")
     p = subprocess.Popen([argv0, "-c", _SLEEP, *args], executable=sys.executable,
-                         env=env, stdin=subprocess.DEVNULL)
+                         env=child_env, stdin=subprocess.DEVNULL)
     want = os.fsencode(argv0) + b"\0-c\0"
     fti.wait_until(lambda: fti._read(f"/proc/{p.pid}/cmdline").startswith(want), 10,
                    f"the {argv0} test process to exec")

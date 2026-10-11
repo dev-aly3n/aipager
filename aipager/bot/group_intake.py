@@ -28,13 +28,9 @@ from typing import TYPE_CHECKING
 from telegram.constants import ChatType, MessageEntityType
 from telegram.ext import ApplicationHandlerStop
 
-from aipager.config import (
-    APP_BUTTON,
-    BACK_BUTTON,
-    COMMANDS_BUTTON,
-    MODELS_BUTTON,
-    TEMPLATES_BUTTON,
-)
+from aipager import i18n
+from aipager.bot import kbwords
+from aipager.i18n import Command, Msg, Safe
 
 if TYPE_CHECKING:
     from telegram import Message, Update
@@ -46,21 +42,13 @@ log = logging.getLogger(__name__)
 
 _GROUP_TYPES = frozenset({ChatType.GROUP, ChatType.SUPERGROUP})
 
-#: The main keyboard's own words (keyboards._send_keyboard) and its
-#: navigation buttons. Template, command and model labels and the chat's
-#: session labels are added per message from the same sources.
-_KEYBOARD_WORDS = frozenset({
-    "status", "stop", "new",
-    TEMPLATES_BUTTON, COMMANDS_BUTTON, MODELS_BUTTON, BACK_BUTTON, APP_BUTTON,
-})
-
 #: aipager's own slash commands (the ``CommandHandler`` names
 #: ``lifecycle.start`` registers; a test keeps the two equal). After the
 #: bot's mention is removed, "@bot /stop" reads "/stop", which no command
 #: handler saw: the text router must not type it into a session.
 OWN_COMMANDS = frozenset({
     "start", "help", "status", "stop", "now", "kill", "new", "resume",
-    "clearqueue", "whoami", "mode", "perms", "settings", "app", "update",
+    "clearqueue", "whoami", "mode", "perms", "settings", "language", "app", "update",
     "restart", "rename", "delete", "diff",
 })
 
@@ -199,32 +187,72 @@ def text_without_own_mentions(bot: TelegramBot, message: Message | None,
 
 # ---- wording ---------------------------------------------------------------
 
-def talk_hint(bot: TelegramBot, chat_id, label: str, *, dm: str) -> str:
+TALK_GROUP = Msg("status.talk_group",
+                 "Reply to a message from {session} (or mention {bot}) to talk to it.",
+                 note="How to talk to a session in a group; {bot} is the bot's @username",
+                 eg={"session": "x1", "bot": "@aipager_bot"})
+TALK_GROUP_UNNAMED = Msg("status.talk_group_unnamed",
+                         "Reply to a message from {session} (or mention the bot) to talk to it.",
+                         note="As status.talk_group when the bot's username is unknown",
+                         eg={"session": "x1"})
+
+
+def talk_hint(bot: TelegramBot, chat_id, label: str, *, dm: str, tr=None,
+              raw_label: str | None = None) -> str:
     """The "how do I talk to <label>" line. ``dm`` is returned unchanged in
     a private chat. In a group a plain message never reaches a bot in
     privacy mode, so the line says to reply or mention. ``label`` is used
-    as given (callers pass it HTML-escaped where the text is HTML)."""
+    as given (callers pass it HTML-escaped where the text is HTML). With
+    *tr* (and the unescaped *raw_label*), the group line is rendered in
+    that language as HTML."""
     if not is_group_chat(chat_id):
         return dm
-    return f"Reply to a message from {label} (or mention {_mention(bot)}) to talk to it."
-
-
-def group_help_talk_line(bot: TelegramBot) -> str:
-    """/help's Talk line in a group (HTML)."""
-    return (f"<b>Talk:</b> reply to a session's message, or mention {_mention(bot)}"
-            " · /&lt;label&gt; message")
-
-
-def _mention(bot: TelegramBot) -> str:
+    if tr is not None:
+        me = own_username(bot)
+        session = raw_label if raw_label is not None else label
+        if me:
+            return tr.html(TALK_GROUP, session=session, bot=Command(f"@{me}"))
+        return tr.html(TALK_GROUP_UNNAMED, session=session)
+    # English, with *label* used as given (callers that pass no tr hand it
+    # in already escaped): the same keys, the values inserted as they are.
+    en = i18n.get("en")
     me = own_username(bot)
-    return f"@{html_mod.escape(me)}" if me else "the bot"
+    if me:
+        return en.html(TALK_GROUP, session=Safe(label),
+                       bot=Safe("@" + html_mod.escape(me)))
+    return en.html(TALK_GROUP_UNNAMED, session=Safe(label))
+
+
+HELP_TALK = Msg("grp.help_talk",
+                "<b>Talk:</b> reply to a session's message, or mention {mention} · "
+                "/&lt;label&gt; message",
+                note="/help in a group: how to talk to a session; {mention} is the bot's "
+                     "@username; '/<label> message' means a session's name as a command, "
+                     "then the message",
+                eg={"mention": "@aipager_bot"})
+HELP_TALK_UNNAMED = Msg("grp.help_talk_no_username",
+                        "<b>Talk:</b> reply to a session's message, or mention the bot · "
+                        "/&lt;label&gt; message",
+                        note="As grp.help_talk when the bot's username is unknown")
+
+
+def group_help_talk_line(bot: TelegramBot, *, tr=None) -> str:
+    """/help's Talk line in a group (HTML), in *tr*'s language (English
+    when None)."""
+    tr = tr or i18n.get("en")
+    me = own_username(bot)
+    if me:
+        return tr.html(HELP_TALK, mention=Command(f"@{me}"))
+    return tr.html(HELP_TALK_UNNAMED)
 
 
 # ---- anonymous senders (roadmap 8.91e) -------------------------------------
 
 #: The one reply a message from an anonymous admin, a channel, or a linked
 #: channel's forward gets, once per chat per daemon run.
-POST_AS_YOURSELF_TEXT = "Post as yourself to use the bot."
+POST_AS_YOURSELF_TEXT = Msg("grp.post_as_yourself", "Post as yourself to use the bot.",
+                            note="To an anonymous group admin or a post as a channel: "
+                                 "aipager needs to know who writes")
 
 
 def is_anonymous_sender(msg) -> bool:
@@ -277,7 +305,8 @@ async def _answer_anonymous_sender(bot: TelegramBot, msg) -> None:
     log.info("group intake: an anonymous or channel message in chat %s; "
              "asked to post as yourself (once per chat)", chat_id)
     from aipager.bot.transport import reply_text
-    await reply_text(msg, POST_AS_YOURSELF_TEXT)
+    # No person to ask: the chat's language.
+    await reply_text(msg, i18n.for_chat(chat_id).text(POST_AS_YOURSELF_TEXT))
 
 
 # ---- the gate --------------------------------------------------------------
@@ -349,7 +378,7 @@ def _addressed_to_bot(bot: TelegramBot, msg, *, taps: bool = True) -> bool:
     # only the marked form (8.91f). The same word typed is chatter.
     if taps and isinstance(getattr(msg, "text", None), str):
         label, marked = keyboard_tap(msg.text)
-        if marked and label in _keyboard_labels(bot, msg.chat_id):
+        if marked and kbwords.is_group_label(bot, msg.chat_id, label):
             return True
     return False
 
@@ -360,17 +389,6 @@ def explicitly_addressed(bot: TelegramBot, msg) -> bool:
     keyboard tap. Its words are read as before, including keyboard words
     ("@bot stop" stops)."""
     return _addressed_to_bot(bot, msg, taps=False)
-
-
-def _keyboard_labels(bot: TelegramBot, chat_id) -> set[str]:
-    labels = set(_KEYBOARD_WORDS)
-    for attr in ("_template_map", "_command_map", "_model_map"):
-        labels.update(getattr(bot, attr, None) or {})
-    try:
-        labels.update(bot.registry.live_labels(chat_id))
-    except Exception:
-        log.debug("group intake: live labels unavailable", exc_info=True)
-    return labels
 
 
 async def intake_gate(

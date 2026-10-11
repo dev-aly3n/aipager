@@ -24,8 +24,10 @@ from telegram.error import Forbidden
 
 from aipager.bot import agents_line as _agents_line
 from aipager.bot import reactions
-from aipager.bot.dashboard import new_prompt_token
+from aipager.bot.sibling_text import shown
+from aipager.bot.dashboard import PIN_NEEDS_INPUT, new_prompt_token
 from aipager.bot.flood import MUTE, FloodMuted
+from aipager.bot.keyboards import PERM_NEEDED
 from aipager.bot.flood_budget import (
     PRIORITY_ORNAMENT,
     FloodSkipped,
@@ -37,6 +39,7 @@ from aipager.bot.rich_message import (
     RichMessageFloodBanned,
     RichMessageGone,
     detect_rtl,
+    message_rtl,
     edit_message_text_rich,
     send_rich_message,
 )
@@ -44,7 +47,9 @@ from aipager.bot.rich_message import (
 
 from aipager import bg_shells as _bg_shells
 from aipager import bidi_guard
-from aipager import preferences
+from aipager import i18n, preferences
+from aipager.i18n import Msg, Plural, Safe, Span
+from aipager.clockfmt import elapsed as clock
 from aipager.config import (
     COMPACT_CARD_TIMEOUT_SECONDS,
     COMPACT_DONE_PAUSE_SECONDS,
@@ -52,10 +57,15 @@ from aipager.config import (
     STALE_BUSY_TIMEOUT,
     STREAM_EDIT_INTERVAL,
 )
-from aipager.state import BG_AGENTS_RETRY_SECONDS, Status, TrackedSession
+from aipager.state import (
+    BG_AGENTS_RETRY_SECONDS,
+    BG_AGENTS_SETTLE_SECONDS,
+    Status,
+    TrackedSession,
+)
 from aipager.policy_snapshot import clear_turn_open, mark_turn_open, note_driver_id
 from aipager.bot.animation import (
-    FINAL_VERB, _RICH_LIMIT, _card_edit_lock, _exact_anchors_available,
+    COMPACTING, FINAL_VERB, _CARD_CHAR_BUDGET, _RICH_LIMIT, _card_edit_lock, _exact_anchors_available,
     _expire_tool_batch,
     _md_escape, _read_stream_text, _sync_anchors_from_transcript,
     build_full_log,
@@ -137,6 +147,66 @@ def _result_line_md(label: str) -> str:
 
 def _result_line_plain(label: str) -> str:
     return f"{_RESULT_GLYPH} {label}"
+
+
+FINISHED = Msg("fin.finished", "{lead} · Finished ({stats})",
+               note="The answer's first line: the session's name, then how long the turn "
+                    "ran and the lines it changed",
+               eg={"lead": "💬 x1", "stats": "4:10, +10 -5"})
+FINISHED_BARE = Msg("fin.finished_bare", "{lead} · Finished",
+                    note="The answer's first line when there is nothing to count",
+                    eg={"lead": "💬 x1"})
+STATS = Msg("fin.stats", "{clock}, +{added} -{removed}",
+            note="How long the turn ran, then the lines added and removed",
+            eg={"clock": "4:10", "added": 10, "removed": 5})
+LINES = Msg("fin.lines", "+{added} -{removed}", note="The lines added and removed in a turn",
+            eg={"added": 10, "removed": 5})
+AGENT_LOST = Msg("fin.agent_lost", "⚠️ <b>{session}</b> · Finished (background agent lost)",
+                 note="A turn closed because its background agent disappeared",
+                 eg={"session": "x1"})
+AGENT_LOST_AFTER = Msg("fin.agent_lost_after",
+                       "⚠️ <b>{session}</b> · Finished (background agent lost after {clock})",
+                       note="A turn closed because its background agent disappeared, after "
+                            "how long", eg={"session": "x1", "clock": "4:10"})
+SHELL_LOST = Msg("fin.shell_lost",
+                 "⚠️ <b>{session}</b> · Finished (no end seen for a background shell)",
+                 note="A turn closed though aipager never saw its background shell end",
+                 eg={"session": "x1"})
+SHELL_LOST_AFTER = Msg("fin.shell_lost_after",
+                       "⚠️ <b>{session}</b> · Finished (no end seen for a background shell "
+                       "after {clock})",
+                       note="As fin.shell_lost, after how long",
+                       eg={"session": "x1", "clock": "4:10"})
+FULL_ATTACHED = Msg("fin.full_attached", "📎 <i>Full response attached below ↓</i>",
+                    note="Under the answer's first line: the whole answer is in the file "
+                         "that follows")
+
+
+def finished_line(tr, lead: str, kind: str, *, seconds: int = 0, added: int = 0,
+                  removed: int = 0) -> str:
+    """``<lead> · Finished (4:10, +10 -5)`` in *tr*'s language: *lead* is
+    the result line already written for *kind* (``💬 **x1**``), the clock
+    only when *seconds* > 0, the counts only when either is set."""
+    render = getattr(tr, kind)
+    clock_text = Safe(tr.clock(seconds)) if seconds > 0 else None
+    counted = bool(added or removed)
+    if clock_text is not None and counted:
+        stats = render(STATS, clock=clock_text, added=added, removed=removed)
+    elif clock_text is not None:
+        stats = clock_text
+    elif counted:
+        stats = render(LINES, added=added, removed=removed)
+    else:
+        return render(FINISHED_BARE, lead=Span(lead))
+    return render(FINISHED, lead=Span(lead), stats=Safe(stats))
+
+
+def settled_agent_row(agent_type: str, tool_count: int, elapsed: float) -> str:
+    """A finished agent's row as STORED in ``tool_history`` (English; the
+    card draws it in the chat's language, ``card_rows``)."""
+    plural = "" if tool_count == 1 else "s"
+    return (f"\U0001f916 {agent_type} · {tool_count} tool call{plural}"
+            f" · {clock(elapsed)}")
 
 
 def _drop_answer_tail(sess: TrackedSession, answer: str) -> None:
@@ -233,7 +303,7 @@ def _separate_prompt_perm(tool_info: dict | None, summary: str,
     The hook's reply channel rides only on a plain tool permission, as on
     the inline path: never on an AskUserQuestion, whose answer is a
     choice of option rows, not an allow/deny."""
-    perm: dict = {"tool_summary": summary or "Permission needed",
+    perm: dict = {"tool_summary": summary or str(PERM_NEEDED),
                   "tool_info": tool_info, "wait_started_at": time.monotonic(),
                   # When it was shown, on the clock a restart can read
                   # (roadmap 8.102).
@@ -279,13 +349,15 @@ class NotifyMixin:
         # (see keyboards.py:_build_resume_mode_keyboard).
         from aipager.bot import session_parity
 
+        from aipager.bot import keyboards
         chat_id = resolve_chat_id_int(sess) or 0
+        tr = i18n.for_sess(sess)
         return InlineKeyboardMarkup([[
             InlineKeyboardButton(
-                "✅ Allow",
+                tr.text(keyboards.ALLOW),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "allow")),
             InlineKeyboardButton(
-                "❌ Deny",
+                tr.text(keyboards.DENY),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "deny")),
         ]])
 
@@ -311,7 +383,7 @@ class NotifyMixin:
     async def _send_merged_final(
         self, sess: TrackedSession, answer: str, *,
         send_as_new: bool = False, reply_to: int | None = None,
-        agents: dict | None = None,
+        agents: dict | None = None, rtl: bool | None = None,
     ) -> bool:
         """Try to deliver a finished turn as ONE message: the finished
         timeline (exactly what ``card`` mode renders) with the answer
@@ -338,9 +410,15 @@ class NotifyMixin:
         The caller holds the card-edit lock (``_card_edit_lock``) across
         this and its clean-up, so nothing in here may call
         ``_edit_busy_rich``.
+
+        One direction for the whole message (multilingual design 5.7,
+        rule 5): *rtl*, the turn's (:meth:`_answer_rtl`), worked out from
+        *answer* when the caller does not pass it.
         """
+        if rtl is None:
+            rtl = self._answer_rtl(sess, answer)
         try:
-            card_md, hid = build_stream_card_ex(sess, FINAL_VERB, final=True)
+            card_md, hid = build_stream_card_ex(sess, FINAL_VERB, final=True, rtl=rtl)
             # This IS the merged layout's final render — the attach_log
             # decision must see ITS truncation state, not a stale interim
             # tick's (review rev-iter1-002).
@@ -367,6 +445,13 @@ class NotifyMixin:
         # out late, and a line frozen into it could not be settled.
         held = combined
         if agents:
+            # Room for the block's largest form, so no later edit of it can
+            # push this message past the ceiling.
+            if len(combined.encode("utf-8")) + agents["reserve"] > _RICH_LIMIT:
+                log.info("[%s] merged: combined card+answer plus the agents "
+                         "block over the byte ceiling — falling back to "
+                         "replace", sess.label)
+                return False
             combined = f"{combined}\n\n{agents['line']}"
         if len(combined.encode("utf-8")) > _RICH_LIMIT:
             log.info("[%s] merged: combined card+answer over the byte ceiling "
@@ -382,11 +467,9 @@ class NotifyMixin:
             log.info("[%s] merged: no numeric chat id — falling back to replace",
                      sess.label)
             return False
-        # Combined-text RTL detection (not the answer alone): an RTL answer
-        # following an LTR toolchain timeline must still be judged
-        # majority-RTL by sample, matching how the plain single-message
-        # body-send already treats detect_rtl(body_content) above.
-        is_rtl = detect_rtl(combined)
+        # The message's one direction, the turn's: Claude's words decide,
+        # never aipager's own lines in the timeline (rule 5).
+        is_rtl = rtl
         if send_as_new:
             try:
                 sent = await send_rich_message(
@@ -402,7 +485,7 @@ class NotifyMixin:
                 # both refused — but the answer is still worth reading once
                 # the ban lifts. `return False` is unchanged, so the
                 # caller's control flow is exactly as before.
-                self._hold_answer(sess, held, held, reply_to)
+                self._hold_answer(sess, held, held, reply_to, is_rtl=rtl)
                 return False
             except (RichMessageFallbackRequired, Exception):
                 log.debug("[%s] merged: send-as-new failed", sess.label,
@@ -434,7 +517,7 @@ class NotifyMixin:
             return False
         except RichMessageFloodBanned:
             # HELD, not dropped (8.29 R6) — see the send-as-new arm above.
-            self._hold_answer(sess, held, held, reply_to)
+            self._hold_answer(sess, held, held, reply_to, is_rtl=rtl)
             return False
         if result is not None and agents:
             self._remember_agents_line(
@@ -444,84 +527,195 @@ class NotifyMixin:
 
     # ── roadmap 8.41: background agents still running ─────────────────────
 
-    def _agents_snapshot(self, sess: TrackedSession) -> dict | None:
-        """The agents running as an answer goes out — ONE snapshot, taken
-        once, so the line shown, the ids it waits for and the labels the ✅
-        repeats all describe the same agents — or ``None`` with none."""
-        agents = sess.bg_agent_labels()
-        shells = sess.bg_shell_labels()
-        labels = agents + shells
-        if not labels:
+    def _answer_rtl(self, sess: TrackedSession, answer: str,
+                    commentary: str = "") -> bool:
+        """The ONE direction of a message carrying Claude's answer
+        (multilingual design 5.7, rule 5): the answer's, else what Claude
+        said during the turn, else the prompt the turn answers, else the
+        chat's language. Its header, its Finished line and its agents
+        block are drawn in it (``Tr.directed``)."""
+        return message_rtl(i18n.for_sess(sess).language_rtl, answer, commentary,
+                           sess.turn_prompt)
+
+    def _agents_snapshot(self, sess: TrackedSession,
+                         rtl: bool | None = None) -> dict | None:
+        """The background work running as an answer goes out (roadmap
+        8.41) — ONE snapshot, taken once, so the block shown and the items
+        it keeps current describe the same agents and shells — or ``None``
+        with none. The agents are all this session's running background
+        agents; the shells only this job's own (``in_job``): a dev server
+        an earlier task left up is not repeated under every answer (the
+        pinned bar still counts it)."""
+        now = time.monotonic()
+        items = [{"id": agent_id, "kind": "agent", "label": info["label"],
+                  "started": info.get("started")}
+                 for agent_id, info in sess.bg_agents.items()]
+        items += [{"id": task_id, "kind": "shell",
+                   "label": sess.bg_shells[task_id]["label"],
+                   "started": sess.bg_shells[task_id].get("started")}
+                  for task_id in sess.job_shell_ids()]
+        if not items:
             return None
-        kinds = ["agent"] * len(agents) + ["shell"] * len(shells)
-        return {"line": _agents_line.running_line(labels, kinds=kinds,
-                                                  markdown=True),
-                "ids": list(sess.bg_agents) + list(sess.bg_shells),
-                "labels": labels, "kinds": kinds}
+        # In the direction of the answer it ends (`_answer_rtl`).
+        tr = i18n.for_sess(sess).directed(rtl)
+        rec = {"items": items, "ids": [item["id"] for item in items],
+               "ends": {}, "sent_at": now}
+        return {"line": _agents_line.render_block(
+                    self._agents_view(sess, rec, now), tr),
+                "items": items, "ids": rec["ids"], "sent_at": now,
+                "reserve": _agents_line.reserve_bytes(tr)}
+
+    def _agents_view(self, sess: TrackedSession, rec: dict,
+                     now: float) -> _agents_line.BlockView:
+        """What an answer's block shows at *now*: its own items, each
+        ended only once its end is BG_AGENTS_SETTLE_SECONDS old (an agent
+        the still-running note brings back stays working), the activity
+        of the agents still working read live from ``bg_agents``."""
+        ends = rec.get("ends") or {}
+        sent_at = rec["sent_at"]
+
+        def settled(item_id: str) -> dict | None:
+            end = ends.get(item_id)
+            if end is not None and now - end["at"] >= BG_AGENTS_SETTLE_SECONDS:
+                return end
+            return None
+
+        rows = []
+        agent_ends = []
+        shells = {"running": 0, "finished": [], "stopped": []}
+        for item in rec["items"]:
+            end = settled(item["id"])
+            started = item.get("started")
+            if item["kind"] == "shell":
+                if end is None:
+                    shells["running"] += 1
+                else:
+                    ran = end["at"] - started if started is not None else end["at"] - sent_at
+                    shells["stopped" if end["outcome"] == "stopped"
+                           else "finished"].append(ran)
+                continue
+            if end is not None:
+                agent_ends.append(end["at"])
+                ran = end["at"] - (started if started is not None else sent_at)
+                rows.append(_agents_line.AgentRow(item["label"], True, ran))
+                continue
+            info = sess.bg_agents.get(item["id"]) or {}
+            rows.append(_agents_line.AgentRow(
+                item["label"], False, prose=info.get("prose", ""),
+                tool=info.get("tool", ""), tool_arg=info.get("tool_arg", ""),
+                description=info.get("desc", "")))
+        all_done = bool(rows) and len(agent_ends) == len(rows)
+        return _agents_line.BlockView(
+            agents=tuple(rows),
+            agents_done_seconds=(max(agent_ends) - sent_at) if all_done else None,
+            shells_running=shells["running"],
+            shells_finished=len(shells["finished"]),
+            shells_finished_seconds=max(shells["finished"], default=0.0),
+            shells_stopped=len(shells["stopped"]),
+            shells_stopped_seconds=max(shells["stopped"], default=0.0))
 
     def _remember_agents_line(
         self, sess: TrackedSession, chat_id: int, msg_id: int, text: str,
         agents: dict, is_rtl: bool,
     ) -> None:
-        """An answer carrying the ⏳ line landed as *msg_id*: keep exactly
-        what went out, so the ✅ edit rebuilds it rather than re-rendering."""
+        """An answer carrying the status block landed as *msg_id*: keep
+        exactly what went out before the block, so every later edit is
+        that text plus the block, never a re-render of the answer."""
+        tail = f"\n\n{agents['line']}"
+        if not text.endswith(tail):
+            log.warning("[%s] agents block: the sent text does not end with "
+                        "it - not kept current", sess.label)
+            return
+        sent_at = agents.get("sent_at") or time.monotonic()
         sess.add_agents_line({
-            "chat_id": chat_id, "msg_id": msg_id, "text": text,
-            "line": agents["line"], "ids": list(agents["ids"]),
-            "labels": list(agents["labels"]),
-            "kinds": list(agents.get("kinds") or []) or None,
-            "is_rtl": is_rtl,
-            "sent_wall": time.time(), "attempts": 0, "next_try": 0.0,
-            "gone_at": 0.0,
+            "chat_id": chat_id, "msg_id": msg_id,
+            "body": text[:-len(tail)], "shown": agents["line"],
+            "items": [dict(item) for item in agents["items"]],
+            "ids": list(agents["ids"]), "ends": {}, "is_rtl": is_rtl,
+            "sent_at": sent_at, "last_try": sent_at, "refused": "",
+            "final": False, "attempts": 0, "next_try": 0.0, "gone_at": 0.0,
         })
 
-    async def _settle_agents_lines(self, sess: TrackedSession,
-                                   now: float) -> None:
-        """Edit each due answer's ⏳ line to ✅, once (roadmap 8.41 R3).
+    async def _tick_agents_lines(self, sess: TrackedSession,
+                                 now: float) -> None:
+        """Keep each due answer's status block current (roadmap 8.41).
 
-        An ORNAMENT, skip-class edit: the flood gate may refuse it, never
-        queue an answer behind it. Each answer gets two attempts at most:
-        a refused or muted one (a muted try makes no call) is followed by
-        ONE more — after the mute lifts when there is one — and then the
-        line is left as sent: a courtesy, never worth more pressure. A
-        deleted message (or a blocked bot) ends it at once. A gone session
-        has none to settle: the GONE transition clears them
-        (SessionRegistry.transition), and /kill drops the whole entry.
-        """
+        An ORNAMENT, skip-class edit, and only when the block's visible
+        text changed: the flood gate may refuse it, never queue an answer,
+        a prompt or a card behind it. A live edit that is refused (budget
+        short, muted, minimal mode) is not tried again for the same text;
+        the next change tries. The final one (everything ended and
+        settled) gets two attempts at most: a refused or muted one is
+        followed by ONE more, after the mute lifts when there is one, and
+        then the block is left as last shown. A deleted message (or a
+        blocked bot) ends it at once. A gone session has none: the GONE
+        transition clears them (SessionRegistry.transition), and /kill
+        drops the whole entry."""
         for rec in sess.agents_lines_due(now):
-            if await self._settle_agents_line(sess, rec, now):
+            if await self._tick_agents_line(sess, rec, now):
                 sess.agents_lines = [
                     r for r in sess.agents_lines if r is not rec]
 
-    async def _settle_agents_line(self, sess: TrackedSession, rec: dict,
-                                  now: float) -> bool:
-        """One attempt at one answer's ✅ edit. True when that answer is
-        finished with (settled, gone, or given up)."""
-        done = _agents_line.done_line(
-            rec["labels"], time.time() - rec["sent_wall"],
-            kinds=rec.get("kinds"), markdown=True)
-        text = rec["text"][: -len(rec["line"])] + done
-        rec["attempts"] += 1
+    async def _tick_agents_line(self, sess: TrackedSession, rec: dict,
+                                now: float) -> bool:
+        """One look at one answer's block, and at most one edit. True when
+        that answer is finished with (settled, gone, or given up)."""
+        final = bool(rec.get("final"))
+        if sess.busy_msg_id and rec["msg_id"] == sess.busy_msg_id:
+            # The message is the live card again: an edit here would
+            # replace the card with the old answer. Never; wait.
+            return False
+        # The answer's direction, kept with it (`_remember_agents_line`).
+        block = _agents_line.render_block(
+            self._agents_view(sess, rec, now),
+            i18n.for_sess(sess).directed(rec.get("is_rtl")))
+        if block == rec["shown"]:
+            return final
+        if not final and block == rec.get("refused"):
+            return False
+        text = f"{rec['body']}\n\n{block}"
+        shown = f"{rec['body']}\n\n{rec['shown']}"
+        if (len(text.encode("utf-8")) > _RICH_LIMIT
+                or (len(text) > _CARD_CHAR_BUDGET and len(text) > len(shown))):
+            # Never past the ceiling, never longer past Telegram's fold:
+            # an ornament that does not fit is skipped.
+            log.info("[%s] agents block: the edit would not fit - skipped",
+                     sess.label)
+            if final:
+                return True
+            rec["refused"] = block
+            return False
         chat_id = rec["chat_id"]
+        rec["last_try"] = now
+        if final:
+            rec["attempts"] = rec.get("attempts", 0) + 1
         try:
             result = await edit_message_text_rich(
                 chat_id, rec["msg_id"], text, is_rtl=rec["is_rtl"],
                 kind="skip", priority=PRIORITY_ORNAMENT,
             )
         except (RichMessageGone, RichMessageBlocked):
-            log.info("[%s] agents line: the answer is gone — not edited",
+            log.info("[%s] agents block: the answer is gone — not edited",
                      sess.label)
             return True
         except (FloodSkipped, FloodMuted):
             # RichMessageFloodBanned is a FloodMuted: the chat is muted.
             result = None
         except Exception:
-            log.debug("[%s] agents line edit failed", sess.label,
+            log.debug("[%s] agents block edit failed", sess.label,
                       exc_info=True)
             result = None
         if result is not None:
-            log.info("[%s] agents line settled: %s", sess.label, done)
-            return True
+            rec["shown"] = block
+            rec["refused"] = ""
+            if final:
+                log.info("[%s] agents line settled", sess.label)
+            return final
+        if not final:
+            log.debug("[%s] agents block edit refused - waits for the next "
+                      "change", sess.label)
+            rec["refused"] = block
+            return False
         if rec["attempts"] >= 2:
             log.info("[%s] agents line left as sent — the edit was refused "
                      "twice", sess.label)
@@ -622,6 +816,7 @@ class NotifyMixin:
         if last_msg_id is not None and move_target:
             sess.trigger_msg_id = last_msg_id
             sess.last_prompt = last.get("raw_text", "") or ""
+            sess.turn_prompt = sess.last_prompt
             sess.last_prompt_driver_user_id = note_driver_id(last)
             self.registry.mark_dirty()
 
@@ -716,6 +911,7 @@ class NotifyMixin:
                            and not sess.job_work_running()))
         sess.trigger_msg_id = nxt.get("msg_id")
         sess.last_prompt = nxt.get("raw_text") or ""
+        sess.turn_prompt = sess.last_prompt
         sess.last_prompt_driver_user_id = nxt.get("driver_user_id")
         self.registry.mark_dirty()
         self.registry.transition(sess.name, Status.BUSY,
@@ -845,8 +1041,12 @@ class NotifyMixin:
     def _hold_answer(self, sess: TrackedSession, rich_text: str,
                      plain_text: str, reply_to: int | None, *,
                      digests: list[str] | None = None,
-                     selected_wall: float = 0.0) -> None:
+                     selected_wall: float = 0.0,
+                     is_rtl: bool | None = None) -> None:
         """Keep an answer a flood mute refused (8.29 R6). Never raises.
+
+        ``is_rtl`` is the message's direction (`_answer_rtl`), kept with it
+        so the late send reads as the answer was built.
 
         ``digests`` / ``selected_wall`` are the finish path's pending
         delivery record (roadmap 8.39): ``flush_held_answers`` confirms
@@ -868,7 +1068,7 @@ class NotifyMixin:
                 session=sess.name, label=sess.label,
                 rich_text=rich_text, plain_text=plain_text,
                 reply_to=reply_to, digests=tuple(digests or ()),
-                selected_wall=selected_wall,
+                selected_wall=selected_wall, is_rtl=is_rtl,
             )
             log.info(
                 "[%s] answer held — the chat is flood-muted; it will be "
@@ -945,7 +1145,8 @@ class NotifyMixin:
         the session and its size — not silently, which is the whole point
         of R6.
         """
-        from aipager.bot.held import HELD, HELD_ANSWER_MAX_ATTEMPTS, late_marker
+        from aipager.bot import held_message
+        from aipager.bot.held import HELD, HELD_ANSWER_MAX_ATTEMPTS
 
         chat_id = resolve_chat_id_int(sess) or resolve_chat_id(sess)
         if not chat_id or MUTE.is_muted(chat_id):
@@ -954,13 +1155,22 @@ class NotifyMixin:
         if not entries:
             return 0
 
+        # The marker in the chat's language (held.py stays import-free).
+        tr = i18n.for_sess(sess)
         delivered = 0
         for entry in entries:
-            marker = late_marker(entry.held_seconds())
+            # The marker heads the answer, so it takes the answer's
+            # direction (multilingual design 5.7, rule 5), the one it was
+            # built in; judged from the text only when that is not known.
+            is_rtl = getattr(entry, "is_rtl", None)
+            if is_rtl is None:
+                is_rtl = detect_rtl(entry.rich_text)
+            marker = held_message.late_marker_text(tr.directed(is_rtl),
+                                                   entry.held_seconds())
             try:
                 sent = await send_rich_message(
                     int(chat_id), f"{marker}\n\n{entry.rich_text}",
-                    is_rtl=detect_rtl(entry.rich_text),
+                    is_rtl=is_rtl,
                     reply_to_message_id=entry.reply_to,
                 )
             except RichMessageFloodBanned:
@@ -1058,7 +1268,8 @@ class NotifyMixin:
                      "re-sending", label)
             return
         sess.remember_delivered(digest, pending=True)
-        agents = self._agents_snapshot(sess)
+        is_rtl = self._answer_rtl(sess, content)
+        agents = self._agents_snapshot(sess, is_rtl)
         lead_md = _result_line_md(label)
         lead_plain = _result_line_plain(label)
         # The same byte budget as the finish path: an answer over the
@@ -1066,7 +1277,7 @@ class NotifyMixin:
         # still last, and the full text follows as an attachment.
         body_limit = _RICH_LIMIT - len(f"{lead_md}\n\n".encode("utf-8"))
         if agents:
-            body_limit -= len(f"\n\n{agents['line']}".encode("utf-8"))
+            body_limit -= agents["reserve"]
         body = content
         overflow = len(content.encode("utf-8")) > body_limit
         if overflow:
@@ -1081,7 +1292,6 @@ class NotifyMixin:
         if agents:
             rich_text = f"{rich_text}\n\n{agents['line']}"
         plain_text = f"{lead_plain}\n\n{content}"
-        is_rtl = detect_rtl(content)
         chat_id = resolve_chat_id_int(sess)
         # The interim turn's own message: the queued pick-up at this Stop
         # has already moved `sess.trigger_msg_id` to the next one.
@@ -1107,7 +1317,8 @@ class NotifyMixin:
         except RichMessageFloodBanned:
             # HELD (8.29 R6); confirmed by flush_held_answers once it lands.
             self._hold_answer(sess, held_rich, plain_text, reply_to,
-                              digests=[digest], selected_wall=turn_end_wall)
+                              digests=[digest], selected_wall=turn_end_wall,
+                              is_rtl=is_rtl)
             return
         except (RichMessageFallbackRequired, Exception):
             log.warning("[%s] job interim sendRichMessage failed — falling "
@@ -1273,6 +1484,7 @@ class NotifyMixin:
         if starts_turn:
             sess.trigger_msg_id = queued_trigger
             sess.last_prompt = queued_text
+            sess.turn_prompt = queued_text
             sess.last_prompt_driver_user_id = queued_driver_user_id
         if queued_trigger is not None:
             # Queued messages are never tracked at queue time
@@ -1312,7 +1524,8 @@ class NotifyMixin:
         chat_id = resolve_chat_id_int(sess)
         if not chat_id or self._app is None:
             return
-        kwargs = {"chat_id": chat_id, "text": NEEDS_ADMIN_REPLY}
+        kwargs = {"chat_id": chat_id,
+                  "text": shown(i18n.for_chat(chat_id), NEEDS_ADMIN_REPLY)}
         if msg_id:
             kwargs["reply_to_message_id"] = msg_id
         try:
@@ -1376,34 +1589,28 @@ class NotifyMixin:
             await self._send_owed_card(sess, reason="mute lifted")
             return
 
-        # ── the answer's ⏳ line is owed its ✅ (roadmap 8.41) ──
-        # Dispatched by `SessionMonitor._scan` once every agent the line
-        # named has been gone for the settle window.
+        # ── the answer's status block, kept current (roadmap 8.41) ──
+        # Dispatched by `SessionMonitor._scan` whenever a block's edit
+        # interval has passed; it is edited only when what it shows changed.
         if event == "agents_line_done":
-            await self._settle_agents_lines(
+            await self._tick_agents_lines(
                 sess, context.get("now") or time.monotonic())
             return
 
         if event == "hook_memory_cap_hit":
             hook_name = context.get("hook", "aipager-hook")
             tool_name = context.get("tool", "")
-            tool_suffix = (
-                f" during <code>{html_mod.escape(tool_name)}</code>"
-                if tool_name else ""
-            )
             # "Report this" (roadmap 8.112): opens the problem report
             # preview in the owner's DM; only the owner's tap does
             # anything (report_flow re-checks it).
             from aipager.bot import report_flow  # local: import cycle
             has_owner = report_flow.resolve_owner(self) is not None
-            text = (
-                f"⚠️ <b>{html_mod.escape(label)}</b> · memory cap hit"
-                f"{tool_suffix}\n"
-                "\n"
-                + memory_cap_body(hook_name, has_owner)
-            )
+            tr = i18n.for_sess(sess)
+            head = (tr.html(MEMCAP_HEAD_TOOL, session=label, tool=tool_name) if tool_name
+                    else tr.html(MEMCAP_HEAD, session=label))
+            text = f"{head}\n\n" + memory_cap_body(hook_name, has_owner, tr)
             extra = ({"reply_markup": report_flow.report_button_markup(
-                report_flow.REPORT_THIS_BUTTON)} if has_owner else {})
+                report_flow.REPORT_THIS_BUTTON, tr=tr)} if has_owner else {})
             try:
                 await bot.send_message(
                     resolve_chat_id(sess), text, parse_mode="HTML", **extra,
@@ -1467,17 +1674,24 @@ class NotifyMixin:
             if expired:
                 try:
                     preview = (expired[0].get("raw_text") or "")[:80]
-                    suffix = f': "{html_mod.escape(preview)}"' if preview else ""
+                    tr = i18n.for_sess(sess)
                     await bot.send_message(
                         default_chat_id,
-                        f"⏳ <b>{html_mod.escape(label)}</b> · a queued "
-                        f"message wasn't confirmed picked up in time"
-                        f"{suffix} - Claude may still process it.",
+                        tr.html(QUEUE_TIMEOUT_PREVIEW, session=label, preview=preview)
+                        if preview else tr.html(QUEUE_TIMEOUT, session=label),
                         parse_mode="HTML",
                     )
                 except Exception:
                     log.debug("queue_pickup expiry notice failed",
                               exc_info=True)
+            return
+
+        if event == "peer_resolved":
+            # Who sent the message that started this turn: the card's top
+            # line shows it at its next render.
+            sess.stream_dirty = True
+            log.info("[%s] message from another session: %s (%s)", label,
+                     context.get("status"), context.get("sender_session") or "-")
             return
 
         if event == "safety_blocked":
@@ -1488,7 +1702,8 @@ class NotifyMixin:
             # "thinking" stops automatically and doesn't hang. Sticky
             # repeats ("session halted …" — the hook denying every later
             # tool this turn) are audited only: no extra halt, no 🛑 spam.
-            sticky = reason.startswith("session halted")
+            from aipager.bot import safety_notice
+            sticky = safety_notice.is_sticky(reason)
             if not sticky:
                 await self._halt_for_safety(sess, reason)
             try:
@@ -1570,22 +1785,21 @@ class NotifyMixin:
             job_sender = self._end_job_turn(sess)
             sess.close_turn()  # no card for this turn from here (8.57)
             self._stop_animation(sess)
-            elapsed_str = ""
+            elapsed_s = 0
             if sess.busy_started_at:
                 elapsed_s = int(time.monotonic() - sess.busy_started_at)
-                if elapsed_s >= 60:
-                    elapsed_str = f"{elapsed_s // 60}m {elapsed_s % 60}s"
-                elif elapsed_s > 0:
-                    elapsed_str = f"{elapsed_s}s"
-            suffix = f" ({elapsed_str})" if elapsed_str else ""
             # Two forms of the same line ("session-name-on-every-message"):
             # the busy card settles to ITS glyph (✅ — the card's terminal
             # state), while a standalone notice, sent because no card is
             # left to settle, is the turn's result message and opens with
             # the result glyph like the idle path's standalone header.
+            # aipager's own line, carrying no text of Claude's (it replaces
+            # the card whole): the chat's direction.
             name = html_mod.escape(label)
-            text = f"✅ <b>{name}</b> · Finished{suffix}"
-            text_alone = f"{_RESULT_GLYPH} <b>{name}</b> · Finished{suffix}"
+            tr = i18n.for_sess(sess)
+            text = finished_line(tr, f"✅ <b>{name}</b>", "html", seconds=elapsed_s)
+            text_alone = finished_line(tr, f"{_RESULT_GLYPH} <b>{name}</b>", "html",
+                                       seconds=elapsed_s)
             # The card's last word, written and retired under the
             # card-edit lock (`_settle_card_text`).
             if not await self._settle_card_text(
@@ -1623,20 +1837,17 @@ class NotifyMixin:
             job_sender = self._end_job_turn(sess)
             sess.close_turn()  # no card for this turn from here (8.57)
             self._stop_animation(sess)
-            elapsed_str = ""
+            elapsed_s = 0
             if sess.busy_started_at:
                 elapsed_s = int(time.monotonic() - sess.busy_started_at)
-                if elapsed_s >= 60:
-                    elapsed_str = f"{elapsed_s // 60}m {elapsed_s % 60}s"
-                elif elapsed_s > 0:
-                    elapsed_str = f"{elapsed_s}s"
-            suffix = f" after {elapsed_str}" if elapsed_str else ""
-            if context.get("what", "agent") == "shell":
-                text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Finished "
-                        f"(no end seen for a background shell{suffix})")
+            # aipager's own notice, no text of Claude's: the chat's direction.
+            tr = i18n.for_sess(sess)
+            shell = context.get("what", "agent") == "shell"
+            if elapsed_s > 0:
+                text = tr.html(SHELL_LOST_AFTER if shell else AGENT_LOST_AFTER,
+                               session=label, clock=Safe(tr.clock(elapsed_s)))
             else:
-                text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Finished "
-                        f"(background agent lost{suffix})")
+                text = tr.html(SHELL_LOST if shell else AGENT_LOST, session=label)
             # Written and retired under the card-edit lock, as above.
             if not await self._settle_card_text(
                     sess, text):
@@ -1769,7 +1980,8 @@ class NotifyMixin:
             await self._end_turn_ended_at_dialog(
                 sess, refused=refused, by="", confirmed=True,
                 carried_on=carried_on,
-                card_text=_terminal_card_text(sess.label, refused=refused))
+                card_text=_terminal_card_text(sess.label, refused=refused,
+                                              tr=i18n.for_sess(sess)))
             return
 
         if event == "waiting_reminder":
@@ -1781,11 +1993,12 @@ class NotifyMixin:
             # prompt itself.
             kind = context.get("kind")
             summary = context.get("summary")
-            reminder = (f"⬆️ <b>{html_mod.escape(label)}</b> · still waiting "
-                        "for your answer above")
+            tr = i18n.for_sess(sess)
+            reminder = tr.html(WAITING, session=label)
             if summary:
-                head = "Question" if kind == "question" else "Permission"
-                reminder += f"\n{head}: {html_mod.escape(str(summary)[:120])}"
+                reminder += "\n" + tr.html(
+                    WAITING_QUESTION if kind == "question" else WAITING_PERMISSION,
+                    summary=str(summary)[:120])
             reply_to = (sess.busy_msg_id
                         if sess.busy_msg_id and sess.busy_msg_id > 0 else None)
             try:
@@ -1820,13 +2033,8 @@ class NotifyMixin:
             )
             sess.close_turn()  # no card for this turn from here (8.57)
             self._stop_animation(sess)
-            warn_text = (
-                f"⚠️ <b>{html_mod.escape(label)}</b> · Not taken by Claude Code\n"
-                "\n"
-                f"No hook arrived within {grace:.0f} s of the send. A message "
-                "that starts with \"/\" is read as a slash command - check "
-                "the terminal."
-            )
+            tr = i18n.for_sess(sess)
+            warn_text = tr.html(NOT_TAKEN, session=label, grace=tr.num(f"{grace:.0f}"))
             # Written and retired under the card-edit lock
             # (`_settle_card_text`): a merely late hook's card edit must
             # not land after the warning and put "Working" back.
@@ -2067,19 +2275,11 @@ class NotifyMixin:
             elapsed = context.get("elapsed", 0.0)
             history_idx = context.get("history_idx")
             tool_count = context.get("tool_count", 0)
-            # Format elapsed time — floored to "0s" rather than "" below
-            # 1s (was blank before this feature) so the settled row's
+            # The clock in true seconds, "0:00" rather than "" below 1s
+            # (was blank before this feature) so the settled row's
             # three-segment shape ("type · N tool calls · elapsed") is
             # always fixed ("agent activity rows on the busy card").
-            if elapsed >= 60:
-                elapsed_str = f"{int(elapsed) // 60}m {int(elapsed) % 60}s"
-            else:
-                elapsed_str = f"{int(elapsed)}s"
-            plural = "" if tool_count == 1 else "s"
-            done_summary = (
-                f"\U0001f916 {agent_type} · {tool_count} tool call{plural}"
-                f" · {elapsed_str}"
-            )
+            done_summary = settled_agent_row(agent_type, tool_count, elapsed)
             # Mark the matching tool_history entry as done SYNCHRONOUSLY
             if history_idx is not None and 0 <= history_idx < len(sess.tool_history):
                 sess.tool_history[history_idx] = (done_summary, True)
@@ -2114,14 +2314,15 @@ class NotifyMixin:
             # "no phantom entries" rule).
             existing_msg_id = sess.busy_msg_id
             pushed_msg_id: int | None = None
+            compacting = i18n.for_sess(sess).html(COMPACTING, session=label, dots="")
             if existing_msg_id and existing_msg_id > 0:
-                text = f"🔄 <b>{html_mod.escape(label)}</b> · Compacting"
+                text = compacting
                 await self._edit_busy_raw(existing_msg_id, text, chat_id=resolve_chat_id(sess))
                 pushed_msg_id = existing_msg_id
             else:
                 # No busy message — send a new one
                 try:
-                    text = f"🔄 <b>{html_mod.escape(label)}</b> · Compacting"
+                    text = compacting
                     msg = await bot.send_message(
                         resolve_chat_id(sess), text, parse_mode="HTML",
                         reply_to_message_id=sess.trigger_msg_id,
@@ -2145,14 +2346,13 @@ class NotifyMixin:
             sess.animate_task = asyncio.create_task(
                 self._animate_compact(sess))
             if self.observers:
-                obs_text = f"🔄 <b>{html_mod.escape(label)}</b> · Compacting"
-                asyncio.create_task(self.observers.broadcast(obs_text))
+                asyncio.create_task(self.observers.broadcast(compacting))
             return
 
         if event == "context_warning":
             ctx_pct = context.get("context_pct", 0)
-            warn_text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Context at "
-                         f"{ctx_pct}% - auto-compact soon")
+            tr = i18n.for_sess(sess)
+            warn_text = tr.html(CONTEXT_WARNING, session=label, percent=tr.num(f"{ctx_pct}%"))
             try:
                 keyboard = self._build_compact_keyboard(sess)
                 await bot.send_message(resolve_chat_id(sess), warn_text, parse_mode="HTML",
@@ -2178,19 +2378,7 @@ class NotifyMixin:
             # max(1, …) so a sub-60s STALE_BUSY_TIMEOUT override (ops
             # testing) never renders "quiet for 0 min".
             minutes = context.get("minutes", max(1, int(STALE_BUSY_TIMEOUT / 60)))
-            stale_text = (
-                f"⏳ <b>{html_mod.escape(label)}</b> · still working "
-                f"(quiet for {minutes} min)\n"
-                "\n"
-                "No status updates yet. This is usually normal.\n"
-                "\n"
-                "<blockquote expandable>What could be happening\n"
-                "  • Long-running tool call (Bash, WebSearch, large fetch)\n"
-                "  • Heavy generation on a very large context\n"
-                "  • Compaction in progress\n"
-                "  • Rate-limit backoff or subscription limit\n"
-                "  • Network wedge or claude crash</blockquote>"
-            )
+            stale_text = i18n.for_sess(sess).n(QUIET_TURN, int(minutes), session=label)
             try:
                 keyboard = self._build_stop_keyboard(sess)
                 await bot.send_message(resolve_chat_id(sess), stale_text, parse_mode="HTML",
@@ -2221,8 +2409,9 @@ class NotifyMixin:
             target_msg_id = sess.busy_msg_id
             if not target_msg_id and popped is not None:
                 target_msg_id = popped.msg_id
-            text = (f"📦 <b>{html_mod.escape(label)}</b> · "
-                    f"Compacted: {before_pct}% → {after_pct}%")
+            tr = i18n.for_sess(sess)
+            text = tr.html(COMPACTED, session=label, before=tr.num(f"{before_pct}%"),
+                           after=tr.num(f"{after_pct}%"))
             if target_msg_id and target_msg_id > 0:
                 result = await self._edit_busy_raw(target_msg_id, text, chat_id=resolve_chat_id(sess))
                 if result is None:
@@ -2284,8 +2473,7 @@ class NotifyMixin:
             # behind the text below would land after it and leave the card
             # on "Compacting." for good. A BUSY card is resumed below.
             self._stop_animation(sess)
-            text = (f"⏱️ <b>{html_mod.escape(label)}</b> · Compaction didn't "
-                    f"confirm completion after {minutes} min")
+            text = i18n.for_sess(sess).n(COMPACT_TIMEOUT, minutes, session=label)
             # Under the card-edit lock: when nothing is resumed, the text
             # below is this message's last word, and a busy-card edit that
             # took the lock while it was out would land after it (both are
@@ -2341,19 +2529,6 @@ class NotifyMixin:
                     pass
                 sess.busy_msg_id = None
             source = context.get("source", "unknown")
-            source_labels = {
-                "clear": "cleared",
-                "resume": "switched to another conversation",
-                "logout": "logged out",
-                "prompt_input_exit": "exited",
-                "bypass_permissions_disabled": "permissions error",
-                "disappeared": "crashed or killed",
-                # Claude Code's default reason — a signal among others —
-                # not evidence of a crash ("disappeared" is the one with
-                # evidence: the socket vanished).
-                "other": "exited",
-                "unknown": "exited",
-            }
             if sess.is_restarting():
                 # The user asked for this exit — `/perms` kills the session to
                 # relaunch it under the other permission mode. Reporting it as
@@ -2376,8 +2551,9 @@ class NotifyMixin:
                 log.info("[%s] session_end right after /kill (%s) — not "
                          "alerting", label, source)
                 return
-            reason = source_labels.get(source, "exited")
-            text = f"🔴 <b>{html_mod.escape(label)}</b> · Session {reason}"
+            # By the hook's source id, one whole line each.
+            text = i18n.for_sess(sess).html(
+                SESSION_END_MSGS[_SESSION_END_SOURCES.get(source, "exited")], session=label)
             try:
                 await bot.send_message(resolve_chat_id(sess), text, parse_mode="HTML")
             except Exception:
@@ -2822,7 +2998,8 @@ class NotifyMixin:
 
                 # ── API error detection → friendly message + retry button ──
                 error_source = raw_md or summary or ""
-                error_detection = _detect_api_error(error_source)
+                error_tr = i18n.for_sess(sess)
+                error_detection = _detect_api_error(error_source, tr=error_tr)
                 if error_detection:
                     if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
                         # This branch returns before the merged-delivery attempt
@@ -2837,7 +3014,10 @@ class NotifyMixin:
                             pass
                         sess.busy_msg_id = None
                     friendly_error, _retry_after = error_detection
-                    text = (f"⚠️ <b>{html_mod.escape(label)}</b> · {friendly_error}")
+                    # In the session chat's language; the line starts with a
+                    # name, so a right-to-left one gets its mark first.
+                    text = (f"{error_tr.mark}⚠️ <b>{html_mod.escape(label)}</b> · "
+                            f"{html_mod.escape(friendly_error, quote=False)}")
                     keyboard = (self._build_retry_keyboard(sess)
                                 if sess.last_prompt else None)
                     try:
@@ -2859,7 +3039,6 @@ class NotifyMixin:
                     return
 
                 # Compute elapsed time since BUSY started
-                elapsed_str = ""
                 elapsed_s = 0
                 if sess.busy_started_at:
                     elapsed_s = int(time.monotonic() - sess.busy_started_at)
@@ -2868,27 +3047,29 @@ class NotifyMixin:
                     # that never got a card still has the transition's own
                     # stamp, so the header can report how long it ran.
                     elapsed_s = int(time.time() - sess.busy_started_wall)
-                if elapsed_s >= 60:
-                    elapsed_str = f"{elapsed_s // 60}m {elapsed_s % 60}s"
-                elif elapsed_s > 0:
-                    elapsed_str = f"{elapsed_s}s"
-                # Lines changed this turn
-                lines_str = ""
-                if sess.last_lines_added or sess.last_lines_removed:
-                    lines_str = f"+{sess.last_lines_added} -{sess.last_lines_removed}"
-                # Build suffix: combine non-empty parts with comma
-                parts = [p for p in (elapsed_str, lines_str) if p]
-                suffix = f" ({', '.join(parts)})" if parts else ""
                 # The result line in its STATS form — a result that is the only
                 # message left for its turn says Finished and how long it took
-                # ("session-name-on-every-message"). HTML for the standalone
-                # header message, the rich-message dialect (bold = **) for a
-                # composed send, bare for the plain-text fallback.
-                header_text = (
-                    f"{_RESULT_GLYPH} <b>{html_mod.escape(label)}</b> · Finished{suffix}"
-                )
-                header_md = f"{_result_line_md(label)} · Finished{suffix}"
-                header_plain = f"{_result_line_plain(label)} · Finished{suffix}"
+                # and the lines it changed ("session-name-on-every-message").
+                # HTML for the standalone header message, the rich-message
+                # dialect (bold = **) for a composed send, bare for the
+                # plain-text fallback.
+                # The answer message's one direction (rule 5): the answer's,
+                # else the turn's commentary, else the prompt, else the
+                # chat's language. Decided before the dedup above could
+                # empty `content`, so a header-only message still follows
+                # the turn.
+                turn_rtl = self._answer_rtl(
+                    sess, raw_md or summary,
+                    " ".join(t for _a, t in log_commentary))
+                header_tr = i18n.for_sess(sess).directed(turn_rtl)
+                stats = {"seconds": elapsed_s, "added": sess.last_lines_added,
+                         "removed": sess.last_lines_removed}
+                header_text = finished_line(
+                    header_tr, f"{_RESULT_GLYPH} <b>{html_mod.escape(label)}</b>", "html",
+                    **stats)
+                header_md = finished_line(header_tr, _result_line_md(label), "md", **stats)
+                header_plain = finished_line(header_tr, _result_line_plain(label), "text",
+                                             **stats)
 
                 # ── merged layout: one combined edit, timeline + answer ────────
                 # Attempted here — after the header text exists (used only by the
@@ -2900,7 +3081,7 @@ class NotifyMixin:
                 # ordinary send below — the exact same path "replace" uses.
                 # Roadmap 8.41: agents this turn launched in the background are
                 # still running — the answer ends by saying so, in every layout.
-                agents = self._agents_snapshot(sess)
+                agents = self._agents_snapshot(sess, turn_rtl)
                 merged_delivered = False
                 if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
                     pre_merge_busy_msg_id = sess.busy_msg_id
@@ -2945,6 +3126,7 @@ class NotifyMixin:
                             merged_delivered = await self._send_merged_final(
                                 sess, content, send_as_new=True,
                                 reply_to=finish_trigger, agents=agents,
+                                rtl=turn_rtl,
                             )
                             if merged_delivered and pre_merge_busy_msg_id and pre_merge_busy_msg_id > 0:
                                 try:
@@ -2957,7 +3139,7 @@ class NotifyMixin:
                                               sess.label, exc_info=True)
                         else:
                             merged_delivered = await self._send_merged_final(
-                                sess, content, agents=agents)
+                                sess, content, agents=agents, rtl=turn_rtl)
                         if not merged_delivered:
                             # Losing the timeline is acceptable; losing the answer is
                             # never acceptable — fall back to the replace-style send
@@ -2998,7 +3180,7 @@ class NotifyMixin:
                 lead_plain = _result_line_plain(label) if card_kept else header_plain
                 body_limit = _RICH_LIMIT - len(f"{lead_md}\n\n".encode("utf-8"))
                 if agents:
-                    body_limit -= len(f"\n\n{agents['line']}".encode("utf-8"))
+                    body_limit -= agents["reserve"]
                 if not merged_delivered and content:
                     content_utf8 = content.encode("utf-8")
                     if len(content_utf8) > body_limit:
@@ -3064,7 +3246,7 @@ class NotifyMixin:
                     log.info("[%s] IDLE header skipped — chat flood-muted", label)
                 elif standalone_header:
                     if send_file:
-                        header_text += "\n\n📎 <i>Full response attached below ↓</i>"
+                        header_text += "\n\n" + header_tr.html(FULL_ATTACHED)
                     log.debug("[%s] Sending IDLE notification (%d chars header)",
                               label, len(header_text))
                     try:
@@ -3099,7 +3281,7 @@ class NotifyMixin:
                     held_rich = rich_text
                     if agents:
                         rich_text = f"{rich_text}\n\n{agents['line']}"
-                    is_rtl = detect_rtl(body_content)
+                    is_rtl = turn_rtl
                     log.info("[%s] sendRichMessage: %d chars, rtl=%s, overflow=%s, "
                              "lead=%s",
                              label, len(rich_text), is_rtl, send_file,
@@ -3185,7 +3367,8 @@ class NotifyMixin:
                         # the mute lifts, with an honest late marker.
                         self._hold_answer(sess, held_rich, plain_text, reply_to,
                                           digests=_answer_digests,
-                                          selected_wall=turn_end_wall)
+                                          selected_wall=turn_end_wall,
+                                          is_rtl=turn_rtl)
                     except (RichMessageFallbackRequired, Exception):
                         # Plain-text fallback — split into ≤4096-char chunks at
                         # markdown-safe boundaries so the send cannot fail to parse.
@@ -3252,7 +3435,7 @@ class NotifyMixin:
                 attach_log = send_file or sess.last_card_truncated
                 file_content = (
                     build_full_log(label, log_tools, log_commentary, content,
-                                    agents=log_agents)
+                                    agents=log_agents, tr=i18n.for_sess(sess))
                     if attach_log else ""
                 )
                 if attach_log and file_content:
@@ -3393,7 +3576,7 @@ class NotifyMixin:
                             "shown_wall": time.time(),
                         }
                 else:
-                    tool_summary = tool_info["summary"] if tool_info else "Permission needed"
+                    tool_summary = tool_info["summary"] if tool_info else str(PERM_NEEDED)
                     sess.pending_permission = {
                         "tool_summary": tool_summary,
                         "tool_info": tool_info,
@@ -3437,14 +3620,17 @@ class NotifyMixin:
                 elif selector_options:
                     text, keyboard = self._build_selector_keyboard(sess, label,
                                                                     selector_text, selector_options)
-                    prompt_summary = selector_text or "Needs input"
+                    prompt_summary = selector_text or str(PIN_NEEDS_INPUT)
                 else:
+                    from aipager.bot import keyboards
+                    prompt_tr = i18n.for_sess(sess)
                     tool_summary = tool_info["summary"] if tool_info else ""
-                    text = f"🔐 <b>{html_mod.escape(label)}</b> · Permission needed"
+                    text = prompt_tr.html(keyboards.SEPARATE_PERM, session=label)
                     if tool_summary:
                         text += f"\n<code>{html_mod.escape(tool_summary)}</code>"
                         text += _format_perm_detail(
-                            tool_summary, (tool_info or {}).get("detail") or "")
+                            tool_summary, (tool_info or {}).get("detail") or "",
+                            tr=prompt_tr)
                     # This separate-message prompt keeps its Allow/Deny-only
                     # keyboard on purpose (review rev-iter1-004): Allow-always
                     # was never offered here. Stop stays absent as before;
@@ -3453,7 +3639,7 @@ class NotifyMixin:
                     # answer through the hook like the inline prompt's
                     # (roadmap 8.99, ``pending_prompt_msg["perm"]`` below).
                     keyboard = self._separate_permission_keyboard(sess)
-                    prompt_summary = tool_summary or "Permission needed"
+                    prompt_summary = tool_summary or str(PERM_NEEDED)
 
                 # Kept as SENT, before the send: the pinned bar summarises
                 # it and its "Answer" button re-sends it (8.31) — also after
@@ -3512,8 +3698,11 @@ class NotifyMixin:
             # Session went back to working — edit the last idle/interactive message
             if sess.last_msg_id:
                 try:
+                    from aipager.bot.animation import LEGACY_HEAD, _verb
+                    working_tr = i18n.for_sess(sess)
                     await bot.edit_message_text(
-                        f"⚙️ <b>{html_mod.escape(label)}</b> · Working…",
+                        working_tr.html(LEGACY_HEAD, session=label,
+                                        verb=Safe(_verb(working_tr, "Working", "html"))),
                         chat_id=resolve_chat_id(sess),
                         message_id=sess.last_msg_id,
                         parse_mode="HTML",
@@ -3522,27 +3711,131 @@ class NotifyMixin:
                     pass  # message may be too old or already edited
 
 
-def memory_cap_body(hook_name: str, has_owner: bool) -> str:
+# The notices about a session (HTML; the session's chat's, sent to its
+# observers as rendered).
+MEMCAP_HEAD = Msg("notice.memcap_head", "⚠️ <b>{session}</b> · memory cap hit",
+                  note="A helper of aipager ran out of its memory limit", eg={"session": "x1"})
+MEMCAP_HEAD_TOOL = Msg("notice.memcap_head_tool",
+                       "⚠️ <b>{session}</b> · memory cap hit during <code>{tool}</code>",
+                       note="As notice.memcap_head, while checking that tool",
+                       eg={"session": "x1", "tool": "Bash"})
+MEMCAP_STATUSLINE = Msg("notice.memcap_statusline",
+                        "<code>{hook}</code> ran out of its {limit} GB memory limit, so one "
+                        "status line update was skipped. The session keeps running.",
+                        note="The status line helper hit its memory limit; {hook} is its name",
+                        eg={"hook": "aipager-statusline", "limit": 1})
+MEMCAP_HOOK = Msg("notice.memcap_hook",
+                  "<code>{hook}</code> ran out of its {limit} GB memory limit and stopped. If "
+                  "it was checking a tool call, Claude Code most likely refused that call and "
+                  "Claude can try it again; otherwise only that one event was skipped. The "
+                  "session keeps running.",
+                  note="The hook hit its memory limit; {hook} is its name",
+                  eg={"hook": "aipager-hook", "limit": 1})
+MEMCAP_NUDGE_OWNER = Msg("notice.memcap_nudge_owner",
+                         "<i>If this keeps happening, the owner can tap Report this to send "
+                         "the maintainer a report.</i>",
+                         note="Report this is the button under the notice (use its "
+                              "translation)")
+MEMCAP_NUDGE_CLI = Msg("notice.memcap_nudge_cli",
+                       "<i>If this keeps happening, run {command} in a terminal to send the "
+                       "maintainer a report.</i>",
+                       note="{command} is the command that sends a problem report",
+                       eg={"command": "aipager report"})
+QUEUE_TIMEOUT = Msg("notice.queue_timeout",
+                    "⏳ <b>{session}</b> · a queued message wasn't confirmed picked up in time - "
+                    "Claude may still process it.",
+                    note="A message Claude Code held was not seen taken", eg={"session": "x1"})
+QUEUE_TIMEOUT_PREVIEW = Msg("notice.queue_timeout_preview",
+                            "⏳ <b>{session}</b> · a queued message wasn't confirmed picked up "
+                            "in time: \"{preview}\" - Claude may still process it.",
+                            note="As notice.queue_timeout, with the start of the message",
+                            eg={"session": "x1", "preview": "fix the tests"})
+WAITING = Msg("notice.waiting", "⬆️ <b>{session}</b> · still waiting for your answer above",
+              note="A reminder: a question or permission prompt above waits",
+              eg={"session": "x1"})
+WAITING_QUESTION = Msg("notice.waiting_question", "Question: {summary}",
+                       note="Under notice.waiting: the question", eg={"summary": "Which one?"})
+WAITING_PERMISSION = Msg("notice.waiting_permission", "Permission: {summary}",
+                         note="Under notice.waiting: what wants permission",
+                         eg={"summary": "Bash: ls"})
+NOT_TAKEN = Msg("notice.not_taken",
+                "⚠️ <b>{session}</b> · Not taken by Claude Code\n\nNo hook arrived within "
+                "{grace} s of the send. A message that starts with \"/\" is read as a slash "
+                "command - check the terminal.",
+                note="A message sent to Claude Code that it never took; {grace} is seconds",
+                eg={"session": "x1", "grace": "45"})
+CONTEXT_WARNING = Msg("notice.context",
+                      "⚠️ <b>{session}</b> · Context at {percent} - auto-compact soon",
+                      note="The session's context is nearly full", eg={"session": "x1",
+                                                                         "percent": "92%"})
+QUIET_TURN = Plural(
+    "notice.quiet_turn",
+    one="⏳ <b>{session}</b> · still working (quiet for {n} min)\n\nNo status updates yet. "
+        "This is usually normal.\n\n<blockquote expandable>What could be happening\n"
+        "  • Long-running tool call (Bash, WebSearch, large fetch)\n"
+        "  • Heavy generation on a very large context\n"
+        "  • Compaction in progress\n"
+        "  • Rate-limit backoff or subscription limit\n"
+        "  • Network wedge or claude crash</blockquote>",
+    other="⏳ <b>{session}</b> · still working (quiet for {n} min)\n\nNo status updates yet. "
+          "This is usually normal.\n\n<blockquote expandable>What could be happening\n"
+          "  • Long-running tool call (Bash, WebSearch, large fetch)\n"
+          "  • Heavy generation on a very large context\n"
+          "  • Compaction in progress\n"
+          "  • Rate-limit backoff or subscription limit\n"
+          "  • Network wedge or claude crash</blockquote>",
+    note="A turn with no news for {n} minutes; the list opens on a tap",
+    eg={"session": "x1"})
+COMPACTED = Msg("notice.compacted", "📦 <b>{session}</b> · Compacted: {before} → {after}",
+                note="The context was compacted: how full before and after; RTL catalogs use ←",
+                eg={"session": "x1", "before": "88%", "after": "12%"})
+COMPACT_TIMEOUT = Plural(
+    "notice.compact_timeout",
+    one="⏱️ <b>{session}</b> · Compaction didn't confirm completion after {n} min",
+    other="⏱️ <b>{session}</b> · Compaction didn't confirm completion after {n} min",
+    note="Compaction gave no sign of finishing within {n} minutes", eg={"session": "x1"})
+#: The session ended, by the hook's ``source`` id (an unknown one: exited).
+SESSION_END_MSGS: dict[str, Msg] = {
+    "clear": Msg("notice.session_end.clear", "🔴 <b>{session}</b> · Session cleared",
+                 note="The session's conversation was cleared (/clear)", eg={"session": "x1"}),
+    "resume": Msg("notice.session_end.resume",
+                  "🔴 <b>{session}</b> · Session switched to another conversation",
+                  note="The session moved to another conversation (/resume in Claude Code)",
+                  eg={"session": "x1"}),
+    "logout": Msg("notice.session_end.logout", "🔴 <b>{session}</b> · Session logged out",
+                  note="Claude Code logged out", eg={"session": "x1"}),
+    "exited": Msg("notice.session_end.exited", "🔴 <b>{session}</b> · Session exited",
+                  note="Claude Code exited", eg={"session": "x1"}),
+    "permissions": Msg("notice.session_end.permissions",
+                       "🔴 <b>{session}</b> · Session permissions error",
+                       note="Claude Code stopped on a permissions error", eg={"session": "x1"}),
+    "crashed": Msg("notice.session_end.crashed", "🔴 <b>{session}</b> · Session crashed or killed",
+                   note="The session's process vanished", eg={"session": "x1"}),
+}
+_SESSION_END_SOURCES = {
+    "clear": "clear", "resume": "resume", "logout": "logout",
+    "prompt_input_exit": "exited", "bypass_permissions_disabled": "permissions",
+    "disappeared": "crashed",
+    # Claude Code's default reason — a signal among others — not evidence
+    # of a crash ("disappeared" is the one with evidence: the socket
+    # vanished).
+    "other": "exited", "unknown": "exited",
+}
+
+
+def memory_cap_body(hook_name: str, has_owner: bool, tr=None) -> str:
     """What a hook's memory-cap hit did (roadmap 8.109). The hook stops
     with exit 2 on a PreToolUse, which Claude Code reads as a refusal of
     that tool call, and with exit 1 on any other event, which skips only
     that event; the cap-hit message does not say which event it was, so
     the text says both ("most likely": a cap hit while the hook was still
     reading a very large request exits 1 even on a PreToolUse, and the
-    tool runs). The status line helper only skips an update."""
-    name = html_mod.escape(hook_name)
-    if hook_name == "aipager-statusline":
-        what = (f"<code>{name}</code> ran out of its 1 GB memory limit, so one "
-                "status line update was skipped. The session keeps running.")
-    else:
-        what = (f"<code>{name}</code> ran out of its 1 GB memory limit and stopped. "
-                "If it was checking a tool call, Claude Code most likely refused that "
-                "call and Claude can try it again; otherwise only that one event was "
-                "skipped. "
-                "The session keeps running.")
+    tool runs). The status line helper only skips an update. In *tr*'s
+    language (English when None)."""
+    tr = tr or i18n.get("en")
+    what = tr.html(MEMCAP_STATUSLINE if hook_name == "aipager-statusline" else MEMCAP_HOOK,
+                   hook=hook_name, limit=1)
     # The notice may go to a group: only the owner's tap does anything.
-    nudge = ("<i>If this keeps happening, the owner can tap Report this to send "
-             "the maintainer a report.</i>" if has_owner else
-             "<i>If this keeps happening, run <code>aipager report</code> in a "
-             "terminal to send the maintainer a report.</i>")
+    nudge = (tr.html(MEMCAP_NUDGE_OWNER) if has_owner else
+             tr.html(MEMCAP_NUDGE_CLI, command=Span("<code>aipager report</code>")))
     return what + "\n\n" + nudge

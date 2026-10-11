@@ -135,7 +135,7 @@ def test_sc6_perms_idle_ask_to_auto_confirm_updates_registry():
     # /mode card for the new mode with the opposite switch (2026-10-01).
     edits = query.edit_message_text.await_args_list
     assert [c.args[0] for c in edits] == [
-        "⚙️ Switching <b>ben</b> to 🤖 Auto mode…", "<b>ben</b> is 🤖 Auto."]
+        "⚙️ Switching <b>ben</b> to 🤖 Auto mode…", "<b>ben</b> is in 🤖 Auto mode."]
     kb = edits[-1].kwargs["reply_markup"]
     assert [b.text for row in kb.inline_keyboard for b in row] == ["💬 Switch to Ask"]
 
@@ -304,7 +304,7 @@ def test_sc8_perms_not_now_edits_to_cancellation():
     # Not now: back to the /mode card for the mode it is in (2026-10-01).
     query.edit_message_text.assert_awaited_once()
     msg = query.edit_message_text.await_args[0][0]
-    assert msg == "<b>ben</b> is 💬 Ask.", msg
+    assert msg == "<b>ben</b> is in 💬 Ask mode.", msg
     # skip_perms must be unchanged
     assert sess.skip_perms is False, (
         "Not now must not change skip_perms"

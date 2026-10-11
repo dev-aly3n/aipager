@@ -20,6 +20,7 @@ from telegram import (
 
 from aipager.bot import group_intake, tap_gate
 from aipager.dtach import inject
+from aipager.i18n import Command, Msg, Span
 
 from aipager.state import (
     TURN_SENDER_MIXED, TURN_SENDER_TERMINAL, Status, TrackedSession,
@@ -70,6 +71,62 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+_ID_COMMAND = "`aipager config`"
+_REFUSE_TEAM = Msg("auth.refuse.team",
+                   "🚫 You're not on this bot's allow-list. Ask the operator to add your "
+                   "Telegram user ID ({user_id}) with {command}.",
+                   note="To someone not on the allow-list; {user_id} is their number as "
+                        "it is, {command} is aipager config",
+                   eg={"user_id": "123456789", "command": "aipager config"})
+_REFUSE_UNKNOWN_DM = Msg("auth.refuse.unknown_dm",
+                         "🚫 This bot isn't configured to talk to you. Ask the operator to "
+                         "add your Telegram user ID ({user_id}) via {command}.",
+                         note="To someone writing privately to a bot not set up for them",
+                         eg={"user_id": "123456789", "command": "aipager config"})
+_REFUSE_SCOPE = Msg("auth.refuse.scope",
+                    "🚫 You're not on this scope's allow-list. Ask the operator to add your "
+                    "Telegram user ID ({user_id}) via {command}.",
+                    note="To a non-member writing in a group; a scope is a chat aipager "
+                         "serves with its people",
+                    eg={"user_id": "123456789", "command": "aipager config"})
+#: The read-only notices put the member's label in as it is (``Span``:
+#: never escaped, isolated as a whole in a right-to-left language), the
+#: same bytes as before keys: labels come from the operator's config.
+#: The auto-deny notice escapes its label and these do not, both as the base did: do not align them.
+_READ_ONLY_TEAM = Msg("auth.read_only.team",
+                      "👀 {who} - your role is <i>read_only</i>; you can use "
+                      "<code>/status</code> but can't drive sessions.",
+                      note="To a read-only member; keep read_only and /status as they are",
+                      eg={"who": "@bob"})
+_READ_ONLY_SCOPE = Msg("auth.read_only.scope",
+                       "👀 {who} - your role is <i>{role}</i>; you can use "
+                       "<code>/status</code> but can't drive sessions.",
+                       note="To a member whose role may not prompt; {role} is the role's name",
+                       eg={"who": "@bob", "role": "read_only"})
+_NOT_LISTED = Msg("toast.auth.not_listed", "Not on the allow-list",
+                  note="Pop-up: a tap by someone not on the allow-list")
+_BLOCKED = Msg("auth.blocked", "⛔ <b>{session}</b> · {tool} blocked",
+               note="A tool call a rule denied on its own; {tool} is Claude Code's tool name",
+               eg={"session": "x1", "tool": "Bash"})
+_BLOCKED_FOR = Msg("auth.blocked_for", "⛔ <b>{session}</b> · {tool} blocked for {person}",
+                   note="As auth.blocked, for whom the rule applied",
+                   eg={"session": "x1", "tool": "Bash", "person": "@bob"})
+_BLOCKED_FOR_ROLE = Msg("auth.blocked_for_role",
+                        "⛔ <b>{session}</b> · {tool} blocked for {person} (role {role})",
+                        note="As auth.blocked_for, with that person's role",
+                        eg={"session": "x1", "tool": "Bash", "person": "@bob",
+                            "role": "user"})
+
+
+def _stranger_tr(user):
+    """The language of a refusal to *user*, someone not on the allow-list
+    or writing from a private chat this install does not serve: the one
+    rule's stranger path (``i18n.for_stranger``: their DM's stored
+    choice, else their Telegram language, else English)."""
+    from aipager import i18n
+    return i18n.for_stranger(user)
+
 
 # Seam: tests replace THIS, never ``asyncio.sleep`` (``aipager.bot.auth.
 # asyncio`` IS the global module; CLAUDE.md). Defaults to the real function.
@@ -178,7 +235,7 @@ class AuthMixin:
         """Scope mode: may *member* (already resolved in *chat_id*, the
         tapped message's chat) do what *cap* (a ``tap_gate.Cap``) names
         there? MANAGE and UPDATE re-resolve by ids through the same rules
-        every other surface uses (``_is_admin_user``,
+        every other surface uses (``_may_use_auto``,
         ``_is_update_admin``), in the same chat."""
         if cap is tap_gate.VIEW:
             return member is not None
@@ -187,7 +244,7 @@ class AuthMixin:
         if cap is tap_gate.PROMPT:
             return self._role_can_prompt(member)
         if cap is tap_gate.MANAGE:
-            return member is not None and self._is_admin_user(user_id, chat_id)
+            return member is not None and self._may_use_auto(user_id, chat_id)
         if cap is tap_gate.UPDATE:
             return member is not None and self._is_update_admin(user_id, chat_id)
         return False
@@ -489,11 +546,10 @@ class AuthMixin:
                 msg = update.effective_message
                 if msg is not None:
                     try:
-                        await reply_text(msg,
-                            "🚫 You're not on this bot's allow-list. "
-                            "Ask the operator to add your Telegram user ID "
-                            f"({tg_user.id}) with `aipager config`.",
-                        )
+                        # The id goes in as text: typed into `aipager
+                        # config`, it keeps its own digits.
+                        await reply_text(msg, _stranger_tr(tg_user).text(
+                            _REFUSE_TEAM, user_id=str(tg_user.id), command=_ID_COMMAND))
                     except Exception:
                         log.debug("reply to unauthorized user failed", exc_info=True)
             return False
@@ -502,10 +558,10 @@ class AuthMixin:
             msg = update.effective_message
             if msg is not None and not self._read_only_was_told(update):
                 try:
+                    from aipager import i18n
                     sent = await reply_text(msg,
-                        f"👀 {attribution_label(member)} - your role is "
-                        "<i>read_only</i>; you can use <code>/status</code> "
-                        "but can't drive sessions.",
+                        i18n.for_update(update).html(
+                            _READ_ONLY_TEAM, who=Span(attribution_label(member))),
                         parse_mode="HTML",
                     )
                     self._read_only_told_if_sent(update, sent)
@@ -556,11 +612,9 @@ class AuthMixin:
                     msg = update.effective_message
                     if msg is not None:
                         try:
-                            await reply_text(msg,
-                                "🚫 This bot isn't configured to talk to you. "
-                                f"Ask the operator to add your Telegram user ID "
-                                f"({tg_user.id}) via `aipager config`.",
-                            )
+                            await reply_text(msg, _stranger_tr(tg_user).text(
+                                _REFUSE_UNKNOWN_DM, user_id=str(tg_user.id),
+                                command=_ID_COMMAND))
                         except Exception:
                             log.debug("reply to unknown-DM user failed", exc_info=True)
             else:
@@ -585,11 +639,8 @@ class AuthMixin:
                 msg = update.effective_message
                 if msg is not None:
                     try:
-                        await reply_text(msg,
-                            "🚫 You're not on this scope's allow-list. "
-                            f"Ask the operator to add your Telegram user ID "
-                            f"({tg_user.id}) via `aipager config`.",
-                        )
+                        await reply_text(msg, _stranger_tr(tg_user).text(
+                            _REFUSE_SCOPE, user_id=str(tg_user.id), command=_ID_COMMAND))
                     except Exception:
                         log.debug("reply to non-member failed", exc_info=True)
             self._audit_event(update, denied=True, reason="not-a-member")
@@ -599,10 +650,11 @@ class AuthMixin:
             msg = update.effective_message
             if msg is not None and not self._read_only_was_told(update):
                 try:
+                    from aipager import i18n
                     sent = await reply_text(msg,
-                        f"👀 {attribution_label(member)} - your role is "
-                        f"<i>{html_mod.escape(member.role)}</i>; you can use "
-                        "<code>/status</code> but can't drive sessions.",
+                        i18n.for_update(update).html(
+                            _READ_ONLY_SCOPE, who=Span(attribution_label(member)),
+                            role=str(member.role)),
                         parse_mode="HTML",
                     )
                     self._read_only_told_if_sent(update, sent)
@@ -692,18 +744,20 @@ class AuthMixin:
         # for, and under which role.
         role = getattr(triggerer, "role", None)
         role = getattr(role, "value", role)
-        for_whom = ""
-        if triggerer is not None:
-            for_whom = f" for {attribution_label(triggerer)}"
-            if role:
-                for_whom += f" (role {role})"
+        from aipager import i18n
+        tr = i18n.for_sess(sess)
+        names = {"session": str(sess.label), "tool": str(tool_name)}
+        if triggerer is None:
+            head = tr.html(_BLOCKED, **names)
+        elif role:
+            head = tr.html(_BLOCKED_FOR_ROLE, **names,
+                           person=Command(attribution_label(triggerer)), role=str(role))
+        else:
+            head = tr.html(_BLOCKED_FOR, **names, person=Command(attribution_label(triggerer)))
         try:
             await send_text(self._app.bot,
                 resolve_chat_id(sess),
-                f"⛔ <b>{html_mod.escape(sess.label)}</b> · "
-                f"{html_mod.escape(tool_name)} blocked"
-                f"{html_mod.escape(for_whom)}\n"
-                f"<i>{html_mod.escape(summary)}</i>",
+                f"{head}\n<i>{html_mod.escape(summary)}</i>",
                 parse_mode="HTML",
                 reply_to_message_id=(sess.busy_msg_id
                                      if sess.busy_msg_id and sess.busy_msg_id > 0
@@ -781,6 +835,61 @@ class AuthMixin:
 
         # Personal mode — the operator is always admin.
         return True
+
+    def _may_use_auto(self, user_id: int | None, chat_id: int | None) -> bool:
+        """Who may put a session in *chat_id* into Auto mode: the one rule
+        every way into Auto asks (/mode, the mode card, /new and its
+        cards, /resume, the Mini App).
+
+        An admin there (:meth:`_is_admin_user`), or, in scope mode, the
+        member of a DM scope in their own private chat with the bot
+        (operator, 2026-10-11: "in their dm, they should be able to do
+        it"), whatever their role, as long as it may send prompts and
+        answer Claude's permission prompts (``can_prompt`` and
+        ``can_approve``: Auto answers every one of them). Only the scope of the chat
+        the action came from counts: someone with a DM of their own has no
+        say over another person's DM or a group. Personal and legacy team
+        mode keep the admin rule. Auto stops Claude Code's own permission
+        prompts only; aipager's hook still applies the member's role rules
+        to every tool call."""
+        if self._is_admin_user(user_id, chat_id):
+            return True
+        scope = self._own_dm_scope(chat_id)
+        if scope is None:
+            return False
+        # Auto answers every prompt Claude Code would raise, so the role
+        # must be one that may answer them (and send prompts at all).
+        member = self._member_in_scope(scope, user_id)
+        return self._role_can_prompt(member) and self._role_can_approve(member)
+
+    def _may_change_chat_settings(self, user_id: int | None,
+                                  chat_id: int | None) -> bool:
+        """Who may change *chat_id*'s own settings (its /settings
+        preferences) from the Mini App: the rule Telegram's ``/settings``
+        applies (``_dispatch_settings_action``), where only a GROUP's
+        writes need an admin.
+
+        A group, or a chat that cannot be identified: an admin there
+        (:meth:`_is_admin_user`, fail closed). Scope mode, a private chat:
+        the member of that chat's DM scope, whatever their role (their own
+        chat); a chat with no scope, or someone who is not its member, is
+        refused. Personal mode: the operator (:meth:`_is_admin_user` is
+        True there). Legacy team mode keeps the admin rule: its Mini App
+        chat is not a person's own private chat."""
+        scope = self._own_dm_scope(chat_id)
+        if scope is None:
+            return self._is_admin_user(user_id, chat_id)
+        return self._member_in_scope(scope, user_id) is not None
+
+    def _own_dm_scope(self, chat_id: int | None):
+        """Scope mode: the DM scope whose chat is *chat_id*, a private chat
+        (a positive id: a scope hand-edited to ``kind: dm`` on a group's id
+        does not count), else ``None``. Personal and legacy mode: ``None``."""
+        if (not isinstance(chat_id, int) or isinstance(chat_id, bool)
+                or chat_id <= 0):
+            return None
+        scope = self._scope_for(chat_id)
+        return scope if scope is not None and scope.kind == "dm" else None
 
     def _is_update_admin(self, user_id: int | None, chat_id: int | None) -> bool:
         """Who may update aipager / Claude Code (``/update``, its buttons,
@@ -981,7 +1090,8 @@ class AuthMixin:
             member = self._member_in_scope(self._scope_for(chat_id), tg_user.id)
             if member is None:
                 try:
-                    await query.answer("Not on the allow-list", show_alert=True)
+                    await query.answer(_stranger_tr(tg_user).text(_NOT_LISTED),
+                                       show_alert=True)
                 except Exception:
                     log.debug("toast to unauthorized callback failed", exc_info=True)
                 return None
@@ -998,7 +1108,7 @@ class AuthMixin:
         if member is None:
             try:
                 await query.answer(
-                    "Not on the allow-list", show_alert=True,
+                    _stranger_tr(tg_user).text(_NOT_LISTED), show_alert=True,
                 )
             except Exception:
                 log.debug("toast to unauthorized callback failed", exc_info=True)

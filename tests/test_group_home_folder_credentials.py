@@ -13,7 +13,10 @@ credential files (roadmap 8.79, group audit A4, probe p6 part b).
   without ``bypass_role_denies``.
 - The launch side does not offer such a member the home folder (or
   ``/``, or above it) as a session folder; it stays the parent for a new
-  folder.
+  folder. Since the members' root folders, the built-in ``user`` and
+  ``read_only`` start only inside their root (``member_root``), so the
+  launch tests below use a custom role ``lead`` (``can_manage`` without
+  either bypass): confined, and not held to a root.
 
 Owners (and admins, which are not confined) see no change. Every test
 runs against a fake home under ``tmp_path``; nothing reads the real one.
@@ -45,6 +48,11 @@ OWNER = 1
 ADMIN = 2
 USER = 3
 READ_ONLY = 4
+LEAD = 5
+
+#: A custom role that may manage but has neither bypass: its turns are
+#: confined (8.79), and it is not held to a members' root folder.
+LEAD_POLICY = "roles:\n  lead:\n    can_manage: true\n"
 
 
 # ---- isolation -------------------------------------------------------------
@@ -430,7 +438,8 @@ def _scopes():
     members = (Member(id=OWNER, label="aly", role="owner"),
                Member(id=ADMIN, label="ada", role="admin"),
                Member(id=USER, label="bob", role="user"),
-               Member(id=READ_ONLY, label="cy", role="read_only"))
+               Member(id=READ_ONLY, label="cy", role="read_only"),
+               Member(id=LEAD, label="lee", role="lead"))
     return [Scope(chat_id=DM, kind="dm", label="aly",
                   members=(Member(id=OWNER, label="aly", role="owner"),)),
             Scope(chat_id=GROUP, kind="group", label="team", members=members)]
@@ -454,11 +463,11 @@ def _registry(*cwds, chat=GROUP):
 
 
 @pytest.fixture
-def gbot(mk_bot):
+def gbot(mk_bot, tmp_path):
     def _mk(registry=None, *, scopes=None):
         bot = mk_bot(registry or SessionRegistry(),
                      scopes=_scopes() if scopes is None else scopes)
-        bot.policy = _pol()
+        bot.policy = _pol(tmp_path, LEAD_POLICY)
         bot._app.bot.edit_message_text = AsyncMock()
         return bot
     return _mk
@@ -466,7 +475,7 @@ def gbot(mk_bot):
 
 @pytest.mark.parametrize("uid,confined", [(OWNER, False), (ADMIN, False),
                                           (USER, True), (READ_ONLY, True),
-                                          (999, True)])
+                                          (LEAD, True), (999, True)])
 def test_who_is_confined(gbot, uid, confined):
     assert gbot()._is_confined_user(uid, GROUP) is confined
 
@@ -597,7 +606,7 @@ def _last_edit(bot):
 
 def test_a_user_with_no_project_folder_is_told_what_to_do(gbot, run_async, daemon_in_home):
     bot = gbot()
-    text, _kb = _open(bot, run_async, USER)
+    text, _kb = _open(bot, run_async, LEAD)
     assert launch.NO_PROJECT_FOLDER in text
     assert "no project folder yet" in text
     assert str(daemon_in_home) not in text
@@ -605,7 +614,7 @@ def test_a_user_with_no_project_folder_is_told_what_to_do(gbot, run_async, daemo
 
 def test_a_user_with_a_project_folder_is_told_to_pick_it(gbot, run_async, daemon_in_home, project):
     bot = gbot(_registry(project))
-    text, _kb = _open(bot, run_async, USER)
+    text, _kb = _open(bot, run_async, LEAD)
     assert "Pick a project folder with 📁 Folder first." in text
     assert launch.NO_PROJECT_FOLDER not in text
 
@@ -614,7 +623,7 @@ def test_a_user_with_nowhere_to_make_a_folder_is_told_to_ask_an_admin(
         gbot, run_async, monkeypatch, home):
     # The daemon runs in `/` (launchd) and the chat has used no folder.
     monkeypatch.setattr(inject, "_PROJECT_DIR", "/")
-    text, _kb = _open(gbot(), run_async, USER)
+    text, _kb = _open(gbot(), run_async, LEAD)
     assert launch.NO_FOLDER_AT_ALL in text
     assert "New folder" not in text.split("📁 no project folder yet")[1]
 
@@ -629,7 +638,7 @@ def test_the_owner_card_is_unchanged(gbot, run_async, daemon_in_home):
 def test_the_folder_list_per_role(gbot, run_async, daemon_in_home, project):
     home = daemon_in_home
     reg = _registry(project, home)
-    for uid, offers_home in ((OWNER, True), (ADMIN, True), (USER, False)):
+    for uid, offers_home in ((OWNER, True), (ADMIN, True), (LEAD, False)):
         bot = gbot(reg)
         _open(bot, run_async, uid)
         _tap(bot, run_async, uid, "nw:opt:path")
@@ -645,8 +654,8 @@ def test_the_folder_list_per_role(gbot, run_async, daemon_in_home, project):
 
 def test_a_user_tap_on_the_default_folder_is_refused(gbot, run_async, daemon_in_home):
     bot = gbot()
-    _open(bot, run_async, USER)
-    query = _tap(bot, run_async, USER, "nw:path:default")
+    _open(bot, run_async, LEAD)
+    query = _tap(bot, run_async, LEAD, "nw:path:default")
     assert query.answer.await_count == 1
     assert query.answer.await_args.args[0] == launch.WIDE_FOLDER_REFUSAL
     assert query.answer.await_args.kwargs.get("show_alert") is True
@@ -656,13 +665,13 @@ def test_a_user_makes_a_project_folder_under_home_and_starts_there(
         gbot, run_async, mk_update, daemon_in_home):
     home = daemon_in_home
     bot = gbot()
-    _open(bot, run_async, USER)
-    _tap(bot, run_async, USER, "nw:path:new")
-    pending = bot._new_wizard_pending[(GROUP, USER)]
+    _open(bot, run_async, LEAD)
+    _tap(bot, run_async, LEAD, "nw:path:new")
+    pending = bot._new_wizard_pending[(GROUP, LEAD)]
     assert pending["step"] == "opt_path_newfolder"
     assert pending["new_folder_parent"] == str(home)
 
-    update = mk_update("myproj", chat_id=GROUP, user_id=USER)
+    update = mk_update("myproj", chat_id=GROUP, user_id=LEAD)
     run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "myproj"))
     assert (home / "myproj").is_dir()
     assert pending["cwd"] == str(home / "myproj")
@@ -677,11 +686,11 @@ def test_a_user_new_folder_on_the_card_is_never_an_existing_home_folder(
     home = daemon_in_home
     (home / "Documents").mkdir()
     bot = gbot()
-    _open(bot, run_async, USER)
-    _tap(bot, run_async, USER, "nw:path:new")
-    update = mk_update("Documents", chat_id=GROUP, user_id=USER)
+    _open(bot, run_async, LEAD)
+    _tap(bot, run_async, LEAD, "nw:path:new")
+    update = mk_update("Documents", chat_id=GROUP, user_id=LEAD)
     run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "Documents"))
-    pending = bot._new_wizard_pending[(GROUP, USER)]
+    pending = bot._new_wizard_pending[(GROUP, LEAD)]
     assert pending["cwd"] is None
     assert pending["step"] == "opt_path_newfolder"
     assert "already exists" in _last_edit(bot)[0]
@@ -691,11 +700,11 @@ def test_a_stored_default_of_home_is_ignored_for_a_user_only(gbot, daemon_in_hom
     home = daemon_in_home
     bot = gbot(_registry(project))
     preferences.set_new_session_default(GROUP, "cwd", str(home))
-    assert new_flow.resolve_new_session_settings(bot, GROUP, USER)["cwd"] is None
+    assert new_flow.resolve_new_session_settings(bot, GROUP, LEAD)["cwd"] is None
     assert new_flow.resolve_new_session_settings(bot, GROUP, OWNER)["cwd"] == str(home)
     assert new_flow.resolve_new_session_settings(bot, GROUP, ADMIN)["cwd"] == str(home)
     preferences.set_new_session_default(GROUP, "cwd", str(project))
-    assert new_flow.resolve_new_session_settings(bot, GROUP, USER)["cwd"] == str(project)
+    assert new_flow.resolve_new_session_settings(bot, GROUP, LEAD)["cwd"] == str(project)
 
 
 def test_a_user_defaults_screen_does_not_list_home(gbot, daemon_in_home, project):
@@ -707,7 +716,7 @@ def test_a_user_defaults_screen_does_not_list_home(gbot, daemon_in_home, project
         _text, kb = new_flow.render_new_session_defaults(
             bot, GROUP, view="cwd", viewer=viewer)
         return [b.removesuffix(" ✅") for b in _buttons(kb)]
-    assert home not in labels(USER) and proj in labels(USER)
+    assert home not in labels(LEAD) and proj in labels(LEAD)
     assert home in labels(OWNER) and proj in labels(OWNER)
 
 
@@ -726,7 +735,7 @@ def test_create_session_refuses_a_user_in_a_wide_folder(
     folder = {None: None, "home": str(daemon_in_home), "/": "/"}[cwd]
     bot = gbot()
     name, err = run_async(bot.create_session(
-        "x", scope_chat_id=GROUP, cwd=folder, driver_user_id=USER))
+        "x", scope_chat_id=GROUP, cwd=folder, driver_user_id=LEAD))
     assert (name, err) == ("", launch.WIDE_FOLDER_REFUSAL)
     no_launch.assert_not_awaited()
 
@@ -735,7 +744,7 @@ def test_create_session_lets_a_user_start_in_a_project(
         gbot, run_async, daemon_in_home, project, no_launch):
     bot = gbot()
     run_async(bot.create_session("x", scope_chat_id=GROUP, cwd=str(project),
-                                 driver_user_id=USER))
+                                 driver_user_id=LEAD))
     no_launch.assert_awaited_once()
 
 
@@ -808,7 +817,7 @@ def _call(srv, run_async, method, path, uid, body=None):
 @pytest.mark.parametrize("cwd", ["", "home"])
 def test_the_mini_app_refuses_a_user_session_in_home(app, run_async, daemon_in_home, cwd):
     folder = str(daemon_in_home) if cwd else ""
-    status, body = _call(app, run_async, "POST", "/api/sessions", USER,
+    status, body = _call(app, run_async, "POST", "/api/sessions", LEAD,
                          {"name": "dev", "cwd": folder})
     assert status == 400
     assert body["detail"] == launch.WIDE_FOLDER_REFUSAL
@@ -816,7 +825,7 @@ def test_the_mini_app_refuses_a_user_session_in_home(app, run_async, daemon_in_h
 
 
 def test_the_mini_app_lets_a_user_start_in_a_project(app, run_async, project):
-    _call(app, run_async, "POST", "/api/sessions", USER,
+    _call(app, run_async, "POST", "/api/sessions", LEAD,
           {"name": "dev", "cwd": str(project)})
     app.launched.assert_awaited_once()
     assert app.launched.await_args.kwargs["cwd"] == str(project)
@@ -833,10 +842,10 @@ def test_the_mini_app_is_unchanged_for_the_owner(app, run_async, daemon_in_home,
 def test_a_user_creates_a_folder_in_home_from_the_mini_app_and_starts_there(
         app, run_async, daemon_in_home):
     home = daemon_in_home
-    status, body = _call(app, run_async, "POST", "/api/directories", USER,
+    status, body = _call(app, run_async, "POST", "/api/directories", LEAD,
                          {"parent": str(home), "name": "myproj"})
     assert (status, body["path"]) == (200, str(home / "myproj"))
-    _call(app, run_async, "POST", "/api/sessions", USER,
+    _call(app, run_async, "POST", "/api/sessions", LEAD,
           {"name": "dev", "cwd": str(home / "myproj")})
     app.launched.assert_awaited_once()
     assert app.launched.await_args.kwargs["cwd"] == str(home / "myproj")
@@ -846,10 +855,10 @@ def test_the_mini_app_will_not_hand_a_user_an_existing_home_folder(
         app, run_async, daemon_in_home):
     home = daemon_in_home
     (home / "bin").mkdir()
-    status, _body = _call(app, run_async, "POST", "/api/directories", USER,
+    status, _body = _call(app, run_async, "POST", "/api/directories", LEAD,
                           {"parent": str(home), "name": "bin"})
     assert status == 400
-    status, _body = _call(app, run_async, "POST", "/api/sessions", USER,
+    status, _body = _call(app, run_async, "POST", "/api/sessions", LEAD,
                           {"name": "dev", "cwd": str(home / "bin")})
     assert status == 400
     app.launched.assert_not_awaited()
@@ -872,16 +881,16 @@ def test_replace_is_refused_before_the_old_session_is_killed(
     sess.scope_chat_id = GROUP
     sess.status = Status.IDLE
     bot._new_conflict_pending["claude-x__g100"] = {
-        "user_id": USER, "msg_id": 0, "prompt": "", "cwd": None,
+        "user_id": LEAD, "msg_id": 0, "prompt": "", "cwd": None,
         "skip_perms": False, "model": None, "was_working": False}
     sess.tap_is_for_this_turn = lambda _m: True
     query = MagicMock()
     query.answer = AsyncMock()
     query.data = "claude-x__g100:new_replace"
-    query.from_user = MagicMock(id=USER)
+    query.from_user = MagicMock(id=LEAD)
     query.message = MagicMock(message_id=900, chat=MagicMock(id=GROUP))
     update = MagicMock(callback_query=query)
-    update.effective_user = MagicMock(id=USER)
+    update.effective_user = MagicMock(id=LEAD)
     update.effective_chat = MagicMock(id=GROUP, type="supergroup")
     run_async(bot._handle_callback(update, None))
     killed.assert_not_awaited()
@@ -894,14 +903,14 @@ def test_a_user_cannot_store_home_as_the_default_through_a_stale_list(
     """The defaults screen's list was shown unfiltered (no viewer): a
     confined member's tap on the home folder in it is refused."""
     scopes = [Scope(chat_id=DM, kind="dm", label="bob",
-                    members=(Member(id=USER, label="bob", role="user"),))]
+                    members=(Member(id=LEAD, label="bob", role="lead"),))]
     bot = gbot(_registry(project, chat=DM), scopes=scopes)
     new_flow.render_new_session_defaults(bot, DM, view="cwd")
     shown = new_flow._defaults_folders_shown(bot)[DM]
     idx = shown.index(str(daemon_in_home))
-    query = _tap(bot, run_async, USER, f"set:ns:cwd:{idx}", chat=DM)
+    query = _tap(bot, run_async, LEAD, f"set:ns:cwd:{idx}", chat=DM)
     assert preferences.get_new_session_defaults(DM).cwd == ""
     assert "no longer available" in query.answer.await_args.args[0]
     # The project in the same list is fine.
-    _tap(bot, run_async, USER, f"set:ns:cwd:{shown.index(str(project))}", chat=DM)
+    _tap(bot, run_async, LEAD, f"set:ns:cwd:{shown.index(str(project))}", chat=DM)
     assert preferences.get_new_session_defaults(DM).cwd == str(project)

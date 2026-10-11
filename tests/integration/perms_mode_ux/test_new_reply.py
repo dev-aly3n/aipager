@@ -4,10 +4,10 @@ Since the 2026-09-30 redesign every /new ends in the Ready card: the mode,
 model and folder the session got, where the next message goes, and a
 one-tap switch to the other mode (it replaced the "/perms" nudge).
 
-SC10: an Ask session (the chat's default set to Ask) shows 💬 Ask, the real
+SC10: an Ask session (the chat's default set to Ask) shows 💬 Ask mode, the real
       folder, "Default model" when none was chosen, and a Switch to Auto
       button.
-SC11: /new !ben shows 🤖 Auto and a Switch to Ask button.
+SC11: /new !ben shows 🤖 Auto mode and a Switch to Ask button.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ def _ready(text_cmd, *, ask_default=False):
 
 def test_sc10_new_ask_reply_says_ask():
     text, _ = _ready("/new ben", ask_default=True)
-    assert "💬 Ask" in text, text
+    assert "💬 Ask mode" in text, text
 
 
 def test_sc10_new_ask_reply_offers_auto_instead_of_a_perms_nudge():
@@ -108,6 +108,6 @@ def test_sc10_the_reply_says_where_the_next_message_goes():
 @pytest.mark.parametrize("cmd", ["/new !ben", "/new ben"])
 def test_sc11_new_auto_reply_says_auto(cmd):
     text, buttons = _ready(cmd)
-    assert "🤖 Auto" in text, text
+    assert "🤖 Auto mode" in text, text
     assert "💬" not in text, text
     assert "💬 Switch to Ask" in buttons, buttons

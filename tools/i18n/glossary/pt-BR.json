@@ -1,0 +1,95 @@
+{
+ "address": "você",
+ "keep_english": [
+  "commit",
+  "token",
+  "diff",
+  "log",
+  "ctx",
+  "prompt"
+ ],
+ "language": "Portuguese (Brazil)",
+ "terms": {
+  "admin": [
+   "admin"
+  ],
+  "agent": [
+   "agent"
+  ],
+  "allow": [
+   "permit"
+  ],
+  "background": [
+   "segundo plano"
+  ],
+  "card": [
+   "cart"
+  ],
+  "chat": [
+   "chat",
+   "conversa"
+  ],
+  "deny": [
+   "nega",
+   "recus"
+  ],
+  "folder": [
+   "pasta"
+  ],
+  "group": [
+   "grupo"
+  ],
+  "member": [
+   "membro"
+  ],
+  "model": [
+   "modelo"
+  ],
+  "owner": [
+   "dono"
+  ],
+  "permission": [
+   "permiss"
+  ],
+  "prompt": [
+   "prompt",
+   "mensagem",
+   "mensagens",
+   "pedido"
+  ],
+  "question": [
+   "pergunta"
+  ],
+  "queue": [
+   "fila"
+  ],
+  "resume": [
+   "retom",
+   "/resume"
+  ],
+  "session": [
+   "sess"
+  ],
+  "settings": [
+   "configura",
+   "/settings"
+  ],
+  "stop": [
+   "parar",
+   "pare",
+   "parad",
+   "parou",
+   "/stop",
+   "interromp",
+   "parando",
+   "stop"
+  ],
+  "turn": [
+   "turno"
+  ],
+  "update": [
+   "atualiz",
+   "/update"
+  ]
+ }
+}

@@ -1,0 +1,1376 @@
+{"k": "agents.count_agents", "src": "263711d4", "v": {"one": "{n} Agent", "other": "{n} Agenten"}}
+{"k": "agents.count_shells", "src": "9b747b65", "v": {"one": "{n} Shell-Befehl", "other": "{n} Shell-Befehle"}}
+{"k": "agents.head.done", "src": "e20b4f9e", "v": {"one": "✅ {n} Agent fertig ({clock})", "other": "✅ {n} Agenten fertig ({clock})"}}
+{"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"one": "{n} Shell-Befehl beendet ({clock})", "other": "{n} Shell-Befehle beendet ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"one": "🖥 {n} Shell-Befehl läuft", "other": "🖥 {n} Shell-Befehle laufen"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"one": "{n} Shell-Befehl gestoppt ({clock})", "other": "{n} Shell-Befehle gestoppt ({clock})"}}
+{"k": "agents.head.working", "src": "6d8170f5", "v": {"one": "⏳ {n} Agent arbeitet", "other": "⏳ {n} Agenten arbeiten"}}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"one": "+{n} weiterer", "other": "+{n} weitere"}}
+{"k": "agents.promise", "src": "29723a21", "v": "Die Ergebnisse der Agenten erscheinen hier."}
+{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · fertig ({clock})"}
+{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
+{"k": "ago.days", "src": "3650e46d", "v": {"one": "vor {n} T.", "other": "vor {n} T."}}
+{"k": "ago.earlier", "src": "f12e996a", "v": "früher"}
+{"k": "ago.hours", "src": "72292bb6", "v": {"one": "vor {n} Std.", "other": "vor {n} Std."}}
+{"k": "ago.hours_minutes", "src": "5be9939e", "v": "vor {h} Std. {m} Min."}
+{"k": "ago.minutes", "src": "6efbe16f", "v": {"one": "vor {n} Min.", "other": "vor {n} Min."}}
+{"k": "ago.seconds", "src": "8a8492dd", "v": {"one": "vor {n} Sek.", "other": "vor {n} Sek."}}
+{"k": "ans.answered", "src": "7b370125", "v": "✓ <b>{session}</b> · Beantwortet · {person} · {question} → {option}"}
+{"k": "ans.answered_anon", "src": "602dabe0", "v": "✓ <b>{session}</b> · Beantwortet · {question} → {option}"}
+{"k": "ans.arrow_verb", "src": "d2539150", "v": "→ {verb}"}
+{"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
+{"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
+{"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ {session} gestoppt"}
+{"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {session} gestoppt von {person}"}
+{"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"one": "⏹ {session} gestoppt von {person} ({n} Nachricht aus der Warteschlange verworfen)", "other": "⏹ {session} gestoppt von {person} ({n} Nachrichten aus der Warteschlange verworfen)"}}
+{"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"one": "⏹ {session} gestoppt ({n} Nachricht aus der Warteschlange verworfen)", "other": "⏹ {session} gestoppt ({n} Nachrichten aus der Warteschlange verworfen)"}}
+{"k": "ans.verb.allow", "src": "77c7b490", "v": "Erlaubt"}
+{"k": "ans.verb.allow_always", "src": "141216b0", "v": "Immer erlaubt"}
+{"k": "ans.verb.continue", "src": "0e4aa789", "v": "Fortgesetzt"}
+{"k": "ans.verb.deny", "src": "63b16bd4", "v": "Abgelehnt"}
+{"k": "ans.verb.option", "src": "7a8b9272", "v": "Option {n} gewählt"}
+{"k": "ans.verb.selected", "src": "5462eaaf", "v": "Gewählt: {options}"}
+{"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "Gesendet (nichts gewählt)"}
+{"k": "app.chat.dm", "src": "05a3b9fa", "v": "Privatchat"}
+{"k": "app.chat.group", "src": "171a0606", "v": "Gruppe"}
+{"k": "app.err.already_restarting", "src": "9234890e", "v": "Diese Sitzung wird schon neu gestartet - warte einen Moment."}
+{"k": "app.err.already_running", "src": "41e94cd2", "v": "Diese Sitzung läuft schon."}
+{"k": "app.err.answer_chat_busy", "src": "e0f91f04", "v": "Telegram ist ausgelastet. Versuch es gleich noch einmal."}
+{"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "Diese Sitzung wartet nicht mehr auf dich."}
+{"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "Die Anfrage konnte nicht in den Chat gesendet werden."}
+{"k": "app.err.auto_needs_admin", "src": "ad1f0c2f", "v": "Der Modus Auto braucht einen Admin."}
+{"k": "app.err.delete_running", "src": "71f25b50", "v": "Die Sitzung läuft noch. Stoppe sie zuerst mit Beenden."}
+{"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "Beenden hat nicht geklappt - der Prozess läuft noch. Versuch es noch einmal."}
+{"k": "app.err.name_taken", "src": "9ab9e08f", "v": "In diesem Chat gibt es schon eine Sitzung namens {session}."}
+{"k": "app.err.not_busy", "src": "bbafa529", "v": "Diese Sitzung arbeitet gerade nicht - es gibt nichts zu stoppen."}
+{"k": "app.err.not_resendable", "src": "82303f6c", "v": "Diese Anfrage kann nicht erneut gesendet werden. Beantworte sie im Terminal."}
+{"k": "app.err.not_running", "src": "af9ca5bc", "v": "Die Sitzung läuft nicht."}
+{"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} wird noch angehalten - der Modus ist unverändert. Versuch es gleich noch einmal."}
+{"k": "app.err.pick_model", "src": "773e24c4", "v": "Wähle ein Modell."}
+{"k": "app.err.restart_still_stopping", "src": "701b0bd8", "v": "{session} wird noch angehalten. Versuch es gleich noch einmal."}
+{"k": "app.err.resumed_in_ask", "src": "7024b7b8", "v": "{session} im Modus Fragen fortgesetzt: {reason}"}
+{"k": "app.err.resuming", "src": "2a557399", "v": "Diese Sitzung wird gerade fortgesetzt. Versuch es gleich noch einmal."}
+{"k": "app.err.send_failed", "src": "e4349ad3", "v": "{command} konnte nicht gesendet werden."}
+{"k": "app.fact.context", "src": "cc11b3a2", "v": "Kontext"}
+{"k": "app.fact.cost", "src": "64ae43e8", "v": "Kosten"}
+{"k": "app.fact.cwd", "src": "4b892fe0", "v": "Ordner"}
+{"k": "app.fact.last_active", "src": "b5665ec6", "v": "Zuletzt aktiv"}
+{"k": "app.fact.model", "src": "68c2cc7f", "v": "Modell"}
+{"k": "app.fact.working", "src": "e7df8df6", "v": "Arbeitet seit"}
+{"k": "app.language.hint", "src": "90e01e41", "v": "Nur der eigene Text von aipager. Claudes Antworten bleiben gleich."}
+{"k": "app.language.title", "src": "01e1787a", "v": "App-Sprache"}
+{"k": "app.launch.cwd_bad_char", "src": "0dcfc308", "v": "Das Arbeitsverzeichnis enthält ein ungültiges Zeichen."}
+{"k": "app.launch.cwd_no_roots", "src": "45693d90", "v": "Noch kein Ordner verfügbar - starte zuerst eine Sitzung im Chat, dann bietet diese Auswahl ihr Projekt an."}
+{"k": "app.launch.cwd_not_allowed", "src": "8e0b71f9", "v": "Dieser Ordner gehört nicht zu denen, in denen dieser Chat schon arbeitet."}
+{"k": "app.launch.cwd_not_dir", "src": "9b0be449", "v": "Dieser Pfad ist kein Ordner."}
+{"k": "app.launch.cwd_not_text", "src": "9497b469", "v": "Das Arbeitsverzeichnis muss Text sein."}
+{"k": "app.launch.cwd_unresolvable", "src": "e87ce055", "v": "Dieser Ordner lässt sich nicht auflösen."}
+{"k": "app.launch.folder_bad_char", "src": "9052a17d", "v": "Der Ordnername enthält ein ungültiges Zeichen."}
+{"k": "app.launch.folder_empty", "src": "aa11b815", "v": "Der Ordnername darf nicht leer sein."}
+{"k": "app.launch.folder_exists", "src": "8dec41ad", "v": "Dort gibt es schon einen Ordner mit diesem Namen. Wähle einen neuen Namen."}
+{"k": "app.launch.folder_failed", "src": "4d757c2b", "v": "Der Ordner konnte nicht angelegt werden."}
+{"k": "app.launch.folder_loads_code", "src": "78ba6bd6", "v": "„{name}“ kann hier kein Projektordner sein: andere Programme laden Code daraus. Wähle einen anderen Namen."}
+{"k": "app.launch.folder_not_text", "src": "3988a95d", "v": "Der Ordnername muss Text sein."}
+{"k": "app.launch.folder_parent", "src": "0a28b1e0", "v": "Wähle ein Arbeitsverzeichnis, in dem der Ordner angelegt wird."}
+{"k": "app.launch.folder_pattern", "src": "c3b51490", "v": "Verwende Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche; beginne mit einem Buchstaben oder einer Ziffer."}
+{"k": "app.launch.folder_too_long", "src": "ae5dc64d", "v": "Der Ordnername darf höchstens {max} Zeichen lang sein."}
+{"k": "app.launch.model_not_text", "src": "55a7cf25", "v": "Das Modell muss Text sein."}
+{"k": "app.launch.model_pattern", "src": "44cdf715", "v": "Verwende eines der aufgeführten Modelle oder einen vollständigen Modellnamen wie {example}."}
+{"k": "app.launch.model_too_long", "src": "47dfc21f", "v": "Der Modellname darf höchstens {max} Zeichen lang sein."}
+{"k": "app.launch.name_bad_char", "src": "1b9271b6", "v": "Der Sitzungsname enthält ein ungültiges Zeichen."}
+{"k": "app.launch.name_empty", "src": "e00fbfca", "v": "Der Sitzungsname darf nicht leer sein."}
+{"k": "app.launch.name_not_text", "src": "f6218198", "v": "Der Sitzungsname muss Text sein."}
+{"k": "app.launch.name_pattern", "src": "b916e083", "v": "Verwende lateinische Buchstaben, Ziffern, Bindestriche und Unterstriche; beginne mit einem Buchstaben oder einer Ziffer."}
+{"k": "app.launch.name_reserved", "src": "2efe289d", "v": "„{name}“ ist ein reservierter Befehlsname ({command}). Wähle einen anderen Namen."}
+{"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "Der Sitzungsname darf höchstens {max} Zeichen lang sein."}
+{"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "Es gibt noch keinen Projektordner zum Starten: bitte einen Admin, die Sitzung zu starten."}
+{"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "Wähle einen Projektordner: lege einen mit „Neuer Ordner“ an oder bitte einen Admin, die Sitzung zu starten."}
+{"k": "app.launch.no_root", "src": "19345855", "v": "Du hast hier keinen Ordner zum Arbeiten. Bitte den Besitzer, dich in aipager config hinzuzufügen."}
+{"k": "app.launch.outside_root", "src": "f8761328", "v": "Deine Rolle kann Sitzungen nur in deinem Ordner {folder} oder einem Ordner darin starten."}
+{"k": "app.launch.root_unavailable", "src": "6d332ade", "v": "Dein Ordner {folder} konnte nicht vorbereitet werden. Bitte den Besitzer, ihn in aipager config zu prüfen."}
+{"k": "app.launch.session_outside_root", "src": "c501e96d", "v": "Diese Sitzung arbeitet außerhalb deines Ordners {folder}, daher kann deine Rolle sie nicht fortsetzen, neu starten oder umschalten. Frag einen Admin."}
+{"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Deine Rolle kann keine Sitzung im Home-Ordner oder einem Ordner darüber starten. Wähle einen Projektordner: lege einen mit „Neuer Ordner“ an oder bitte einen Admin, die Sitzung zu starten."}
+{"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"one": "🧹 {n} Nachricht aus der Warteschlange von [{session}] über die Mini App entfernt", "other": "🧹 {n} Nachrichten aus der Warteschlange von [{session}] über die Mini App entfernt"}}
+{"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Komprimieren für [{session}] über die Mini App gestartet"}
+{"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 {session} über die Mini App erstellt · {mode}"}
+{"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 {session} über die Mini App erstellt · {mode}\n📁 {folder}"}
+{"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] über die Mini App gelöscht"}
+{"k": "app.mirror.folder", "src": "603d7ae2", "v": "📁 Neuer Ordner über die Mini App angelegt:\n{path}"}
+{"k": "app.mirror.killed", "src": "63565832", "v": "💀 [{session}] über die Mini App beendet"}
+{"k": "app.mirror.model", "src": "6df57f60", "v": "🔄 [{session}] → {model} über die Mini App"}
+{"k": "app.mirror.renamed", "src": "22ad8a4c", "v": "✏️ [{old}] über die Mini App in [{new}] umbenannt"}
+{"k": "app.mirror.restarted", "src": "9aa8323d", "v": "🔁 [{session}] über die Mini App neu gestartet"}
+{"k": "app.mirror.resumed", "src": "fafeafa6", "v": "♻️ [{session}] über die Mini App fortgesetzt"}
+{"k": "app.mirror.resumed_in_ask", "src": "429a5b47", "v": "♻️ [{session}] über die Mini App im Modus Fragen fortgesetzt: {reason}"}
+{"k": "app.mirror.session_setting", "src": "3256d908", "v": "⚙️ {setting} → {value} für die Sitzung {session} (über die Mini App geändert)"}
+{"k": "app.mirror.session_setting_reset", "src": "4502514a", "v": "⚙️ {setting} für die Sitzung {session} auf Standard zurückgesetzt ({value}) (über die Mini App geändert)"}
+{"k": "app.mirror.setting", "src": "6820a9f7", "v": "⚙️ {setting} → {value} (über die Mini App geändert)"}
+{"k": "app.mirror.stopped", "src": "70cd9e81", "v": "⏹️ [{session}] über die Mini App gestoppt"}
+{"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"one": "⏹️ [{session}] über die Mini App gestoppt ({n} Nachricht aus der Warteschlange verworfen)", "other": "⏹️ [{session}] über die Mini App gestoppt ({n} Nachrichten aus der Warteschlange verworfen)"}}
+{"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} über die Mini App in den Modus Fragen geschaltet"}
+{"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} über die Mini App in den Modus Auto geschaltet"}
+{"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude arbeitet - wechsle das Modell, wenn dieser Durchlauf endet."}
+{"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "Die Sitzung läuft nicht."}
+{"k": "app.reason.model_pending", "src": "a3384cf1", "v": "Der letzte Modellwechsel ist noch nicht bestätigt - prüfe im Terminal die Frage „Switch model?“ von Claude Code, bevor du erneut wechselst."}
+{"k": "app.reason.model_prompt_open", "src": "c3641605", "v": "Im Terminal ist eine Anfrage offen - beantworte sie, bevor du das Modell wechselst."}
+{"k": "app.reason.model_unconfirmed", "src": "316e6e23", "v": "nicht bestätigt - prüfe die Sitzung. Vielleicht fragt Claude Code im Terminal „Switch model?“, oder das Modell war schon eingestellt."}
+{"k": "app.reason.model_unknown", "src": "4e5022f6", "v": "aipager kennt den Zustand dieser Sitzung noch nicht - versuch es gleich noch einmal."}
+{"k": "app.reason.no_context", "src": "8f590315", "v": "Nichts zu komprimieren - der Kontext ist schon leer."}
+{"k": "app.reason.no_permission", "src": "e1081627", "v": "Du hast keine Berechtigung, diese Sitzung zu steuern."}
+{"k": "app.reason.no_transcript", "src": "3426f123", "v": "Kein fortsetzbares Transkript - starte stattdessen eine neue Sitzung."}
+{"k": "app.reason.perms_admin", "src": "7202c2fd", "v": "Zum Modus Auto wechseln darf nur ein Admin."}
+{"k": "app.reason.queue_empty", "src": "35da34dc", "v": "In der Warteschlange ist nichts zu leeren."}
+{"k": "app.reason.queue_full", "src": "2bf9f868", "v": "Die Warteschlange ist voll ({cap} wartend) - leere sie oder warte, bis sie abgearbeitet ist."}
+{"k": "appcmd.btn.open", "src": "0bfb9312", "v": "📱 Mini App öffnen"}
+{"k": "appcmd.cant_start", "src": "24d56baf", "v": "📱 Die Mini App kann auf diesem Rechner nicht starten - die Installation scheint unvollständig.\n\nAlles andere funktioniert weiter; bitte die Person, die das eingerichtet hat, aipager neu zu installieren."}
+{"k": "appcmd.in_group", "src": "edb98eb2", "v": "📱 Die Mini App funktioniert nur im privaten Chat - schreib dem Bot direkt und sende dort /app."}
+{"k": "appcmd.no_dm", "src": "96dd0730", "v": "Die Mini App öffnet sich aus deinem eigenen Chat mit dem Bot. Bitte den Betreiber, dich hinzuzufügen."}
+{"k": "appcmd.not_enabled", "src": "31154296", "v": "Der Server der Mini App ist auf diesem Rechner nicht aktiviert.\nBitte den Betreiber, {command} auszuführen und den Dienst neu zu starten."}
+{"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 Der Link zur Mini App wird noch eingerichtet - versuch /app in ein paar Sekunden noch einmal."}
+{"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 Dieser Bot ist nicht für dich eingerichtet. Bitte den Betreiber, deine Telegram-Nutzer-ID ({user_id}) mit {command} hinzuzufügen."}
+{"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "Tippe, um das aipager-Dashboard zu öffnen:"}
+{"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} blockiert"}
+{"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {tool} blockiert für {person}"}
+{"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {tool} blockiert für {person} (Rolle {role})"}
+{"k": "auth.read_only.scope", "src": "88683fbb", "v": "👀 {who} - deine Rolle ist <i>{role}</i>; du kannst <code>/status</code> nutzen, aber keine Sitzungen steuern."}
+{"k": "auth.read_only.team", "src": "87e66c02", "v": "👀 {who} - deine Rolle ist <i>read_only</i>; du kannst <code>/status</code> nutzen, aber keine Sitzungen steuern."}
+{"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 Du stehst nicht auf der Liste der erlaubten Nutzer dieses Bereichs. Bitte den Betreiber, deine Telegram-Nutzer-ID ({user_id}) mit {command} hinzuzufügen."}
+{"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Du stehst nicht auf der Liste der erlaubten Nutzer dieses Bots. Bitte den Betreiber, deine Telegram-Nutzer-ID ({user_id}) mit {command} hinzuzufügen."}
+{"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Dieser Bot ist nicht für dich eingerichtet. Bitte den Betreiber, deine Telegram-Nutzer-ID ({user_id}) mit {command} hinzuzufügen."}
+{"k": "botdesc.description", "src": "8ea2e350", "v": "aipager verbindet diesen Bot mit Sitzungen von Claude Code auf dem Computer seines Besitzers. Hier kannst du verfolgen, was Claude gerade tut, seine Fragen und Berechtigungsanfragen beantworten und ihm neue Prompts schicken. Nur Personen, die der Besitzer hinzugefügt hat, können ihn nutzen."}
+{"k": "botdesc.short", "src": "483b3675", "v": "Steuere Sitzungen von Claude Code über Telegram."}
+{"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Zurück"}
+{"k": "btn.rep.cancel", "src": "196a9f45", "v": "✖️ Abbrechen"}
+{"k": "btn.rep.dont_ask", "src": "7a05a2c0", "v": "Nicht mehr fragen"}
+{"k": "btn.rep.not_now", "src": "e4571490", "v": "Nicht jetzt"}
+{"k": "btn.rep.note", "src": "c4e7efca", "v": "✏️ Notiz hinzufügen"}
+{"k": "btn.rep.preview", "src": "2632041f", "v": "Bericht ansehen"}
+{"k": "btn.rep.report", "src": "e4e182b3", "v": "🐞 Problem melden"}
+{"k": "btn.rep.report_this", "src": "4a993c9d", "v": "🐞 Das melden"}
+{"k": "btn.rep.send", "src": "22abdd99", "v": "📤 Senden"}
+{"k": "btn.resume.next", "src": "315a382a", "v": "Weiter »"}
+{"k": "btn.resume.page", "src": "378cafa4", "v": "Seite {pages}"}
+{"k": "btn.resume.prev", "src": "ac05dfe9", "v": "« Zurück"}
+{"k": "btn.resume.session", "src": "1d8ba7fd", "v": "{session} ({ago})"}
+{"k": "btn.settings_back", "src": "a4b7fcb6", "v": "« Zurück"}
+{"k": "btn.upd.aipager", "src": "54631d4b", "v": "aipager aktualisieren"}
+{"k": "btn.upd.both", "src": "e219575e", "v": "Beide aktualisieren"}
+{"k": "btn.upd.cancel", "src": "77dfd213", "v": "Abbrechen"}
+{"k": "btn.upd.check", "src": "cb743a2a", "v": "🔄 Nach Updates suchen"}
+{"k": "btn.upd.check_again", "src": "e185048c", "v": "Erneut prüfen"}
+{"k": "btn.upd.claude", "src": "8b854ad6", "v": "Claude Code aktualisieren"}
+{"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "Jetzt neu starten"}
+{"k": "btn.upd.wait", "src": "060c561a", "v": "Noch {mins} Min. warten"}
+{"k": "card.agents", "src": "263711d4", "v": {"one": "{n} Agent", "other": "{n} Agenten"}}
+{"k": "card.agents_typed", "src": "af56f555", "v": {"one": "{n} Agent ({types})", "other": "{n} Agenten ({types})"}}
+{"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · Komprimiert{dots}"}
+{"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · Abgelehnt"}
+{"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · Abgelehnt von {person}"}
+{"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · Im Terminal abgelehnt"}
+{"k": "card.finishing", "src": "1bfd382d", "v": "wird abgeschlossen"}
+{"k": "card.fold", "src": "2061ab43", "v": {"one": "▸ {n} Tool-Aufruf", "other": "▸ {n} Tool-Aufrufe"}}
+{"k": "card.legacy.agents", "src": "51aa5e62", "v": {"one": "({n} Agent)", "other": "({n} Agenten)"}}
+{"k": "card.legacy.earlier", "src": "7062cc28", "v": {"one": "✅ <i>{n} früheres Tool</i>", "other": "✅ <i>{n} frühere Tools</i>"}}
+{"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 von **{session}** ({who})"}
+{"k": "card.peer.from_plain", "src": "42467343", "v": "📨 von **{session}**"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 von **{session}** (in ihrem Terminal getippt)"}
+{"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 von einer anderen Sitzung (nicht geprüft: keine Dateiänderungen, kein Web)"}
+{"k": "card.row.agent_done", "src": "d7362ffc", "v": {"one": "🤖 {agent} · {n} Tool-Aufruf · {clock}", "other": "🤖 {agent} · {n} Tool-Aufrufe · {clock}"}}
+{"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
+{"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (läuft noch)"}
+{"k": "card.row.agent_word", "src": "0608c405", "v": "Agent"}
+{"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.shell_done", "src": "3b615634", "v": "Shell: {label} - fertig ({clock})"}
+{"k": "card.row.shell_failed", "src": "3e240f07", "v": "Shell: {label} - fehlgeschlagen ({clock})"}
+{"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "Shell: {label} - fehlgeschlagen (Exit-Code {code})"}
+{"k": "card.row.shell_live", "src": "6cebf6e9", "v": "Shell: {label} ({clock})"}
+{"k": "card.row.shell_lost", "src": "83289e16", "v": "Shell: {label} - kein Ende gesehen ({clock})"}
+{"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "Shell: {label} (läuft noch)"}
+{"k": "card.row.shell_stopped", "src": "315cab29", "v": "Shell: {label} - gestoppt ({clock})"}
+{"k": "card.row.starting", "src": "9493af05", "v": "startet"}
+{"k": "card.shells", "src": "9b747b65", "v": {"one": "{n} Shell-Befehl", "other": "{n} Shell-Befehle"}}
+{"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
+{"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Gestoppt"}
+{"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · Gestoppt von {person}"}
+{"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Im Terminal gestoppt"}
+{"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · Denkt nach…"}
+{"k": "card.verb.done", "src": "e9b450d1", "v": "Fertig"}
+{"k": "card.verb.spin_analyzing", "src": "696002c4", "v": "Analysiert"}
+{"k": "card.verb.spin_calculating", "src": "d7652ff1", "v": "Rechnet"}
+{"k": "card.verb.spin_considering", "src": "974edc62", "v": "Wägt ab"}
+{"k": "card.verb.spin_crafting", "src": "ea78b34d", "v": "Gestaltet"}
+{"k": "card.verb.spin_evaluating", "src": "e0b446df", "v": "Bewertet"}
+{"k": "card.verb.spin_examining", "src": "3ed47c3e", "v": "Prüft"}
+{"k": "card.verb.spin_formulating", "src": "8432f803", "v": "Formuliert"}
+{"k": "card.verb.spin_investigating", "src": "ce0ee523", "v": "Untersucht"}
+{"k": "card.verb.spin_pondering", "src": "bcaa61e0", "v": "Grübelt"}
+{"k": "card.verb.spin_processing", "src": "e63451d3", "v": "Verarbeitet"}
+{"k": "card.verb.spin_reasoning", "src": "e272c597", "v": "Folgert"}
+{"k": "card.verb.spin_thinking", "src": "d08d8da0", "v": "Denkt nach"}
+{"k": "card.verb.waiting", "src": "33d30632", "v": "Wartet"}
+{"k": "card.verb.working", "src": "3b4dfc97", "v": "Arbeitet"}
+{"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
+{"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents}: noch in Arbeit"}
+{"k": "chatmove.notice", "src": "01364acb", "v": "Telegram hat diese Gruppe umgestellt. aipager ist mit umgezogen, du musst nichts tun."}
+{"k": "cmd.app", "src": "486dfc4e", "v": "Das Dashboard der Mini App öffnen"}
+{"k": "cmd.help", "src": "fb2dbad1", "v": "Was du tun kannst"}
+{"k": "cmd.language", "src": "9dc3a234", "v": "Sprache der Nachrichten von aipager"}
+{"k": "cmd.mode", "src": "b677b7d9", "v": "Auto oder Fragen"}
+{"k": "cmd.new", "src": "959b093b", "v": "Eine Sitzung starten"}
+{"k": "cmd.now", "src": "3673f6f7", "v": "Wartendes jetzt an Claude senden"}
+{"k": "cmd.resume", "src": "88f33259", "v": "Eine beendete Sitzung fortsetzen"}
+{"k": "cmd.settings", "src": "5fdf8e23", "v": "Layout, Formatierung, neue Sitzungen"}
+{"k": "cmd.status", "src": "b3ddc08d", "v": "Deine Sitzungen"}
+{"k": "cmd.stop", "src": "7c4cbc32", "v": "Stoppen, was Claude gerade tut"}
+{"k": "cmd.talk", "src": "a0173425", "v": "Mit {session} sprechen"}
+{"k": "diff.more_lines", "src": "816da678", "v": {"one": "<i>…und {n} weitere Zeile</i>", "other": "<i>…und {n} weitere Zeilen</i>"}}
+{"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · Fertig (Hintergrund-Agent verloren)"}
+{"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · Fertig (Hintergrund-Agent nach {clock} verloren)"}
+{"k": "fin.finished", "src": "6f65069e", "v": "{lead} · Fertig ({stats})"}
+{"k": "fin.finished_bare", "src": "53b60c70", "v": "{lead} · Fertig"}
+{"k": "fin.full_attached", "src": "bcfddfdb", "v": "📎 <i>Die ganze Antwort hängt unten an ↓</i>"}
+{"k": "fin.lines", "src": "a6f39b46", "v": "+{added} -{removed}"}
+{"k": "fin.shell_lost", "src": "c6c919fb", "v": "⚠️ <b>{session}</b> · Fertig (kein Ende eines Shell-Befehls im Hintergrund gesehen)"}
+{"k": "fin.shell_lost_after", "src": "4692a050", "v": "⚠️ <b>{session}</b> · Fertig (kein Ende eines Shell-Befehls im Hintergrund nach {clock} gesehen)"}
+{"k": "fin.stats", "src": "9160a66c", "v": "{clock}, +{added} -{removed}"}
+{"k": "flood.card_paused", "src": "61a88de1", "v": "⏳ **{session}** · arbeitet (Updates pausiert)"}
+{"k": "flood.card_paused_html", "src": "3815781e", "v": "⏳ <b>{session}</b> · arbeitet (Updates pausiert)"}
+{"k": "flood.paused_hourly", "src": "1be79366", "v": "⏸ Karten-Updates pausiert (Stundenlimit)"}
+{"k": "flood.paused_rate", "src": "57af71ab", "v": "⏸ Karten-Updates pausiert (Ratenlimit)"}
+{"k": "flood.slow", "src": "fd8f3fd7", "v": "🐢 langsamer Modus nach einer Warnung von Telegram"}
+{"k": "grp.dropped", "src": "96346149", "v": {"one": "{n} Nachricht verworfen: {who} darf hier nicht mehr schreiben.", "other": "{n} Nachrichten verworfen: {who} darf hier nicht mehr schreiben."}}
+{"k": "grp.dropped_anon", "src": "c67a8cca", "v": {"one": "{n} Nachricht verworfen: dieser Absender darf hier nicht mehr schreiben.", "other": "{n} Nachrichten verworfen: dieser Absender darf hier nicht mehr schreiben."}}
+{"k": "grp.dropped_anon_one", "src": "8946b17f", "v": "Verworfen: dieser Absender darf hier nicht mehr schreiben."}
+{"k": "grp.dropped_one", "src": "4ab273e1", "v": "Verworfen: {who} darf hier nicht mehr schreiben."}
+{"k": "grp.help_talk", "src": "07beac8e", "v": "<b>Sprechen:</b> antworte auf eine Nachricht einer Sitzung oder erwähne {mention} · /&lt;Name&gt; Nachricht"}
+{"k": "grp.help_talk_no_username", "src": "4c1fc9fd", "v": "<b>Sprechen:</b> antworte auf eine Nachricht einer Sitzung oder erwähne den Bot · /&lt;Name&gt; Nachricht"}
+{"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "Schreib unter deinem eigenen Namen, um den Bot zu nutzen."}
+{"k": "held.late_marker", "src": "e38c307b", "v": {"one": "⏳ verspätet zugestellt ({n} Min. wegen eines Telegram-Ratenlimits zurückgehalten)", "other": "⏳ verspätet zugestellt ({n} Min. wegen eines Telegram-Ratenlimits zurückgehalten)"}}
+{"k": "held.too_old", "src": "7391de5a", "v": "Diese Nachricht ist zu alt zum Senden; sende sie noch einmal."}
+{"k": "help.admin", "src": "29ac6154", "v": "<b>Admin:</b> /update (aipager und Claude Code)"}
+{"k": "help.control", "src": "8bb13acf", "v": "<b>Steuern:</b> /stop · /now (Wartendes senden) · /clearqueue"}
+{"k": "help.manage", "src": "75144040", "v": "<b>Verwalten:</b> /status, dann ⋮ (neu starten, umbenennen, diff, beenden, löschen)"}
+{"k": "help.settings", "src": "d51d2171", "v": "<b>Einstellungen:</b> /settings · /mode (Auto oder Fragen)"}
+{"k": "help.start", "src": "276a9c1b", "v": "<b>Starten:</b> /new Name · /resume"}
+{"k": "help.talk_dm", "src": "c3ef5195", "v": "<b>Sprechen:</b> einfach schreiben (geht an die ✍️-Sitzung) · auf eine Nachricht antworten · /&lt;Name&gt; Nachricht"}
+{"k": "help.tip", "src": "67a93e6b", "v": "<i>Tipp: ein angetippter Befehl wird sofort gesendet. Halte ihn gedrückt (Handy) oder drück Tab (Desktop), um vorher Text hinzuzufügen.</i>"}
+{"k": "help.title", "src": "8fffe930", "v": "<b>So nutzt du aipager</b>"}
+{"k": "home.btn.new", "src": "19b62fc4", "v": "🆕 Neue Sitzung"}
+{"k": "home.btn.resume", "src": "12a3163c", "v": "↩️ Fortsetzen"}
+{"k": "home.btn.settings", "src": "b1f2d607", "v": "⚙️ Einstellungen"}
+{"k": "home.dm_target", "src": "099ec348", "v": "✍️ Nachrichten gehen an <b>{session}</b>."}
+{"k": "home.help_hint", "src": "d62b118c", "v": "<i>/help zeigt alles, was du tun kannst.</i>"}
+{"k": "home.start_one", "src": "ef9f6ba9", "v": "Starte eine mit /new."}
+{"k": "home.tap_session", "src": "f14797d7", "v": "Tippe auf der Tastatur auf eine Sitzung, um mit ihr zu sprechen."}
+{"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code aus Telegram"}
+{"k": "kb.back", "src": "a4b7fcb6", "v": "« Zurück"}
+{"k": "kb.commands", "src": "45e5f3f7", "v": "Befehle ›"}
+{"k": "kb.kill", "src": "c80f5bc1", "v": "Beenden…"}
+{"k": "kb.models", "src": "d068cea1", "v": "Modell ›"}
+{"k": "kb.new", "src": "c2a6b03f", "v": "Neu…"}
+{"k": "kb.status", "src": "48a3661d", "v": "Status"}
+{"k": "kb.stop", "src": "1b480158", "v": "Stop"}
+{"k": "kb.templates", "src": "f25b700e", "v": "Vorlagen ›"}
+{"k": "kbl.cmd.clear", "src": "719ea396", "v": "Leeren"}
+{"k": "kbl.cmd.compact", "src": "1df39aa5", "v": "Komprimieren"}
+{"k": "kbl.cmd.init", "src": "19682bdb", "v": "Initialisieren"}
+{"k": "kbl.cmd.plan", "src": "bc0b2aff", "v": "Planmodus"}
+{"k": "kbl.cmd.security_review", "src": "52fab0c7", "v": "Sicherheitsprüfung"}
+{"k": "kbl.tpl.commit", "src": "1a1873ab", "v": "Commit"}
+{"k": "kbl.tpl.continue", "src": "2e026239", "v": "Weiter"}
+{"k": "kbl.tpl.explain_plan", "src": "8197049c", "v": "Plan erklären"}
+{"k": "kbl.tpl.lgtm", "src": "fddf8bc1", "v": "Passt, ausliefern"}
+{"k": "kbl.tpl.run_tests", "src": "fcab481b", "v": "Tests ausführen"}
+{"k": "kbl.tpl.show_diff", "src": "78016e77", "v": "Diff zeigen"}
+{"k": "kbl.tpl.update_memory", "src": "cfa5cef7", "v": "Notizen aktualisieren"}
+{"k": "kbl.tpl.write_tests", "src": "391b1a96", "v": "Tests schreiben"}
+{"k": "kbmsg.commands", "src": "52b6fd5f", "v": "🎛 Befehle"}
+{"k": "kbmsg.models", "src": "78548025", "v": "🤖 Modell"}
+{"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 Vorlagen"}
+{"k": "lang.auto", "src": "a66c2e1b", "v": "Automatisch (deine Telegram-Sprache)"}
+{"k": "lang.changed", "src": "4e8c6791", "v": "✅ aipager spricht hier jetzt {language}. Deine Sitzungen und Claudes Antworten bleiben gleich."}
+{"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager spricht hier {language} (nur seine eigenen Nachrichten; Claude antwortet in der Sprache, in der du schreibst). Ändern mit /language"}
+{"k": "lang.list.group", "src": "9462a94a", "v": "🌐 Die Sprache, die aipager für die Karten und Buttons dieser Gruppe verwendet. Claudes Sitzungen ändern sich nicht: Claude antwortet in der Sprache, in der du schreibst."}
+{"k": "lang.list.private", "src": "5d92850b", "v": "🌐 Die Sprache, die aipager für seine eigenen Nachrichten und Buttons verwendet, hier und in der Mini App. Deine Claude-Sitzungen ändern sich nicht: Claude antwortet in der Sprache, in der du schreibst."}
+{"k": "lang.offer.keep", "src": "c383d509", "v": "Englisch behalten"}
+{"k": "lang.offer.text", "src": "788b2767", "v": "🌐 aipager spricht jetzt {language}. Das ändert nur die eigenen Nachrichten und Buttons von aipager hier und in der Mini App, nicht deine Claude-Sitzungen: Claude antwortet weiter in der Sprache, in der du schreibst."}
+{"k": "lang.row", "src": "69fc399f", "v": "🌐 Sprache: {language}"}
+{"k": "life.daemon_restarted", "src": "7253e5d2", "v": "🔄 <b>{session}</b> · Dienst neu gestartet"}
+{"k": "life.session_ended", "src": "84bf802a", "v": "🔴 <b>{session}</b> · Sitzung beendet"}
+{"k": "log.agent", "src": "ff163576", "v": {"one": "- 🤖 {agent} ({clock}, {n} Tool-Aufruf)", "other": "- 🤖 {agent} ({clock}, {n} Tool-Aufrufe)"}}
+{"k": "log.agents", "src": "5db5246b", "v": "## Agenten"}
+{"k": "log.final_answer", "src": "f0ea5fc3", "v": "## Endgültige Antwort"}
+{"k": "log.memory", "src": "df926a90", "v": {"one": "_Im Speicher sind die letzten {n} Tool-Zeilen; ältere Zeilen sehr langer Durchläufe können schon fehlen._", "other": "_Im Speicher sind die letzten {n} Tool-Zeilen; ältere Zeilen sehr langer Durchläufe können schon fehlen._"}}
+{"k": "log.title", "src": "2d9e96f5", "v": "# {session} - vollständiges Log"}
+{"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ Dateien konnten nicht heruntergeladen werden: {names}"}
+{"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ Datei konnte nicht heruntergeladen werden: {names}"}
+{"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ Dateien konnten nicht heruntergeladen werden: {names} (im Album weggelassen)"}
+{"k": "media.album_left_out_one", "src": "c91cd106", "v": "❌ Datei konnte nicht heruntergeladen werden: {names} (im Album weggelassen)"}
+{"k": "media.brew_footer", "src": "accb7c5a", "v": "<i>Hinweis: ein künftiges {command} kann die venv der Formel neu bauen und faster-whisper entfernen. Wenn die Spracherkennung stoppt, tippe noch einmal auf Installieren.</i>"}
+{"k": "media.btn.cancel", "src": "77dfd213", "v": "Abbrechen"}
+{"k": "media.btn.install", "src": "75e85c25", "v": "📦 Sprache installieren"}
+{"k": "media.btn.restart", "src": "ec740c6a", "v": "🔄 Dienst jetzt neu starten"}
+{"k": "media.download_failed", "src": "cd9ea0b9", "v": "❌ Die Sprachnachricht konnte nicht heruntergeladen werden."}
+{"k": "media.file_download_failed", "src": "fd5ed5a0", "v": "❌ Datei konnte nicht heruntergeladen werden: {name}"}
+{"k": "media.file_too_big", "src": "85d942ae", "v": "⚠️ Die Datei ist {size} MB groß. Die Bot-API von Telegram lädt höchstens {limit} MB herunter. Teile sie auf oder füge den Inhalt als Text ein."}
+{"k": "media.heard", "src": "3164d86a", "v": "🎙️ <i>Gehört:</i> {text}"}
+{"k": "media.install_cant_start", "src": "8f8e8cec", "v": "❌ Das Installationsprogramm konnte nicht starten: {error}"}
+{"k": "media.install_failed", "src": "31267ed7", "v": "❌ Installation fehlgeschlagen (Exit-Code {code}):\n<pre>{output}</pre>"}
+{"k": "media.install_no_recipe", "src": "065dd801", "v": "⚠️ Dieser aipager-Build hat kein Installationsrezept für die\nSpracherweiterung. Aktualisiere aipager und versuch es noch einmal."}
+{"k": "media.install_working", "src": "7ef2a045", "v": "📦 Spracherweiterung wird installiert - läuft noch… ({seconds} s)"}
+{"k": "media.installed", "src": "6e9fbf9b", "v": "✅ Installiert. Damit Sprache das neue Modul lädt, muss der Dienst neu gestartet werden."}
+{"k": "media.installing", "src": "1978f3ef", "v": "📦 Spracherweiterung wird installiert…"}
+{"k": "media.needs_extra", "src": "153956ee", "v": "⚠️ Sprachnachrichten brauchen die optionale Spracherweiterung (~{install} MB Installation · ~{model} MB Modell bei der ersten Nutzung)."}
+{"k": "media.no_speech", "src": "8d84c0b6", "v": "⚠️ Darin war keine Sprache zu erkennen."}
+{"k": "media.not_installed", "src": "911c9456", "v": "faster-whisper ist nicht installiert. Führe aus:\n    {uv}\noder:\n    {pip}"}
+{"k": "media.restart_busy_update", "src": "a6e0a620", "v": "⏳ Kein Neustart: ein aipager-Update läuft oder startet den Dienst gleich neu. Versuch es noch einmal, wenn es fertig ist."}
+{"k": "media.restart_cant_open", "src": "d591e073", "v": "⚠️ {path} konnte nicht geöffnet werden: {error}\nBitte starte manuell neu."}
+{"k": "media.restart_cant_schedule", "src": "aa7ee7e7", "v": "⚠️ Der Neustart konnte nicht geplant werden: {detail}\nBitte starte manuell neu."}
+{"k": "media.restart_cant_spawn", "src": "30877338", "v": "⚠️ Der Ersatzprozess konnte nicht gestartet werden: {error}\nBitte starte manuell neu."}
+{"k": "media.restart_failed_start", "src": "0aad8df0", "v": "⚠️ Der neue Dienst ist nicht gestartet. Bitte starte manuell neu."}
+{"k": "media.restart_killmode", "src": "08a54162", "v": "⚠️ Kein Neustart: der KillMode des Dienstes würde deine Sitzungen stoppen."}
+{"k": "media.restart_launchctl", "src": "1c55d98b", "v": "🔄 Neustart über {command}…"}
+{"k": "media.restart_locked", "src": "3f061ea2", "v": "⏳ Kein Neustart: ein aipager-Update läuft (die Update-Sperre ist belegt). Versuch es noch einmal, wenn es fertig ist."}
+{"k": "media.restart_refused", "src": "41b49bd1", "v": "⚠️ Kein Neustart: {reason}."}
+{"k": "media.restart_resend_voice", "src": "f5ed81e2", "v": "🔄 Neustart - sende deine Sprachnachricht in ein paar Sekunden noch einmal."}
+{"k": "media.restart_would_kill", "src": "d49632de", "v": "Sitzungen, die ein Neustart beenden würde: {sessions}"}
+{"k": "media.restarting_in", "src": "f8016b1a", "v": "🔄 Neustart in {seconds} s - sende deine Sprachnachricht in ein paar Sekunden noch einmal."}
+{"k": "media.transcribe_failed", "src": "930964f7", "v": "❌ Transkription fehlgeschlagen: {error}"}
+{"k": "media.transcribing", "src": "56629b0b", "v": "🎙️ <i>Wird transkribiert…</i>"}
+{"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ OK, Sprache wird nicht installiert."}
+{"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ Die Sprachnachricht ist {size} MB groß; Telegram-Bots dürfen höchstens {limit} MB laden."}
+{"k": "mode.ask", "src": "07910591", "v": "💬 Fragen-Modus"}
+{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 Fragen für dich (🤖 Auto: nur Admins)"}
+{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 Lieber Fragen"}
+{"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 Auto-Modus"}
+{"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 Lieber Auto"}
+{"k": "mode.word.ask", "src": "3562777b", "v": "Fragen"}
+{"k": "mode.word.auto", "src": "c614ba7c", "v": "Auto"}
+{"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> ist schon im {mode}."}
+{"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 Zu Fragen wechseln"}
+{"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 Zu Auto wechseln"}
+{"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> arbeitet gerade.\nZum Modus Fragen wechseln?"}
+{"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> arbeitet gerade.\nZum Modus Auto wechseln?"}
+{"k": "modecard.confirm_auto", "src": "ff1562a9", "v": "⚙️ <b>{session}</b> in den {mode} schalten?\n<i>Claude führt Tools dann ohne Nachfrage aus ({flag}).</i>"}
+{"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ Der Zustand von <b>{session}</b> wird noch ermittelt. Versuch /mode gleich noch einmal."}
+{"k": "modecard.is", "src": "c057ad13", "v": "<b>{session}</b> ist im {mode}."}
+{"k": "modecard.is_target", "src": "92bc67e3", "v": "✍️ <b>{session}</b> ist im {mode}."}
+{"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ <b>{session}</b> arbeitet schon an etwas Neuem, daher hat sich nichts geändert."}
+{"k": "modecard.needs_admin", "src": "fe68d230", "v": "Der Modus Auto braucht einen Admin."}
+{"k": "modecard.none_live", "src": "ae432c8c", "v": "Hier laufen keine Sitzungen. Starte eine mit /new."}
+{"k": "modecard.refused_not_running", "src": "d62cf188", "v": "⚠️ <b>{session}</b> läuft nicht - der Modus ist unverändert."}
+{"k": "modecard.refused_restarting", "src": "06433ed3", "v": "⚠️ <b>{session}</b> startet gerade neu - der Modus ist unverändert. Versuch es gleich noch einmal."}
+{"k": "modecard.session_missing", "src": "adf0d420", "v": "⚠️ Sitzung nicht gefunden."}
+{"k": "modecard.stale", "src": "9f0f5572", "v": "⚠️ Diese Karte war veraltet, daher hat sich nichts geändert."}
+{"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> wird noch angehalten - der Modus ist unverändert."}
+{"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ Der Modus konnte nicht gewechselt werden: {error}"}
+{"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ Von {person} auf den {mode} gewechselt."}
+{"k": "modecard.switching", "src": "30fa9003", "v": "⚙️ <b>{session}</b> wechselt in den {mode}…"}
+{"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ /mode braucht einen Sitzungsnamen und ask oder auto, zum Beispiel {example} oder {example_ask}."}
+{"k": "modecard.which", "src": "107abca0", "v": "Welche Sitzung?"}
+{"k": "modecard.which_to", "src": "4694464a", "v": "Welche Sitzung soll in den {mode} wechseln?"}
+{"k": "newflow.auto_needs_admin_note", "src": "6bb45da7", "v": "Der Modus Auto braucht einen Admin, daher läuft diese Sitzung im Modus Fragen."}
+{"k": "newflow.btn.cancel", "src": "196a9f45", "v": "✖️ Abbrechen"}
+{"k": "newflow.btn.folder", "src": "2fb30e02", "v": "📁 Ordner"}
+{"k": "newflow.btn.model", "src": "e252b8c8", "v": "🧠 Modell"}
+{"k": "newflow.btn.new_folder", "src": "27a1f4a2", "v": "➕ Neuer Ordner"}
+{"k": "newflow.btn.other_model", "src": "48915641", "v": "✏️ Anderes Modell..."}
+{"k": "newflow.btn.replace", "src": "caede00c", "v": "🆕 Ersetzen (neu)"}
+{"k": "newflow.btn.resume", "src": "cad6f900", "v": "♻️ Fortsetzen"}
+{"k": "newflow.btn.switch_to", "src": "8f04f92d", "v": "↩️ Zu ihr wechseln"}
+{"k": "newflow.cancelled_nothing", "src": "4c346842", "v": "↩️ Abgebrochen - keine Sitzung wurde geändert."}
+{"k": "newflow.changed_mode", "src": "a1779ae6", "v": "Von {person} auf den {mode} gewechselt."}
+{"k": "newflow.changed_model", "src": "1f771c06", "v": "Modell von {person} auf {model} gewechselt."}
+{"k": "newflow.closed", "src": "87aee987", "v": "✖️ Geschlossen, du hast etwas anderes gemacht. Sende /new, um eine Sitzung zu starten."}
+{"k": "newflow.conflict_replaced", "src": "0ab47818", "v": "↩️ Ein neueres /new für <b>{session}</b> hat diese Karte ersetzt."}
+{"k": "newflow.conflict_running", "src": "b36a4e23", "v": "⚠️ <b>{session}</b> läuft schon.\nWas möchtest du tun?"}
+{"k": "newflow.conflict_used", "src": "5d97ff8c", "v": "♻️ <b>{session}</b> wurde schon einmal verwendet.\nWas möchtest du tun?"}
+{"k": "newflow.conflict_used_preview", "src": "b46e358d", "v": "♻️ <b>{session}</b> wurde schon einmal verwendet.\n<i>Letzte Antwort:</i>\n<blockquote>{preview}</blockquote>\nWas möchtest du tun?"}
+{"k": "newflow.create_failed", "src": "3beecd9f", "v": "❌ {error}"}
+{"k": "newflow.example_line", "src": "ab8b1839", "v": "<code>{session} behebe die fehlschlagenden Tests</code>"}
+{"k": "newflow.expired", "src": "6f9c9ea0", "v": "⏱ Diese Karte für eine neue Sitzung ist abgelaufen. Sende /new noch einmal."}
+{"k": "newflow.folder_page", "src": "f6e221a1", "v": "📁 <b>Ordner</b>\n\nWähle, wo diese Sitzung arbeitet."}
+{"k": "newflow.group_name_ask", "src": "eb31141c", "v": "Antworte auf diese Nachricht mit einem Namen und, wenn du willst, womit es losgehen soll:"}
+{"k": "newflow.hint_folder", "src": "f27c8294", "v": "📁 Wähle zuerst mit 📁 Ordner einen Projektordner."}
+{"k": "newflow.just_send", "src": "0b7a9b82", "v": "✍️ Sende einfach eine Nachricht, sie geht an {session}."}
+{"k": "newflow.model_page", "src": "580279ec", "v": "🧠 <b>Modell</b>\n\nWähle ein Modell für diese Sitzung."}
+{"k": "newflow.name_empty", "src": "e00fbfca", "v": "Der Sitzungsname darf nicht leer sein."}
+{"k": "newflow.new_folder_title", "src": "64007145", "v": "📁 <b>Neuer Ordner</b>"}
+{"k": "newflow.note_mode_failed", "src": "12f5a535", "v": "Der Modus konnte nicht gewechselt werden."}
+{"k": "newflow.note_mode_failed_err", "src": "8e216733", "v": "Der Modus konnte nicht gewechselt werden: {error}"}
+{"k": "newflow.note_mode_not_switched", "src": "43b54091", "v": "{session} hat schon angefangen zu arbeiten, daher wurde der Modus nicht gewechselt."}
+{"k": "newflow.other_model_title", "src": "3c30c486", "v": "🧠 <b>Anderes Modell</b>"}
+{"k": "newflow.others_card_named", "src": "6ad64798", "v": "Diese Karte gehört {owner}. Sende /new für deine eigene."}
+{"k": "newflow.others_card_someone", "src": "e2435dc7", "v": "Diese Karte gehört jemand anderem. Sende /new für deine eigene."}
+{"k": "newflow.prompt_folder_reply", "src": "21f1cb23", "v": "Antworte auf diese Nachricht mit dem Namen des neuen Ordners."}
+{"k": "newflow.prompt_folder_type", "src": "e8783fd7", "v": "Schreib den Namen des neuen Ordners."}
+{"k": "newflow.prompt_model_reply", "src": "7d73f8ac", "v": "Antworte auf diese Nachricht mit dem Namen des Modells."}
+{"k": "newflow.prompt_model_reply_eg", "src": "b8f4f722", "v": "Antworte auf diese Nachricht mit dem Namen des Modells (z. B. {example})."}
+{"k": "newflow.prompt_model_type", "src": "9d5677e2", "v": "Schreib den Namen des Modells."}
+{"k": "newflow.prompt_model_type_eg", "src": "8bac428b", "v": "Schreib den Namen des Modells (z. B. {example})."}
+{"k": "newflow.prompt_queued", "src": "85768278", "v": "📝 Prompt in der Warteschlange"}
+{"k": "newflow.ready", "src": "4edcea75", "v": "✅ <b>{session}</b> ist bereit"}
+{"k": "newflow.ready_changed", "src": "39a18ac6", "v": "🔁 {changed}"}
+{"k": "newflow.ready_later", "src": "4d69ea9f", "v": "Später: tippe auf der Tastatur auf {session} oder antworte auf eine beliebige Nachricht von {session}."}
+{"k": "newflow.ready_models", "src": "1bccc9f4", "v": "🧠 <b>{session}</b>: wähle ein Modell.\n\nDer Wechsel passiert an Ort und Stelle, das Gespräch bleibt erhalten."}
+{"k": "newflow.ready_settings", "src": "d40af8c6", "v": "{mode} · 🧠 {model} · 📁 <code>{folder}</code>"}
+{"k": "newflow.send_name", "src": "9b892a4c", "v": "Sende einen Namen und, wenn du willst, womit es losgehen soll:"}
+{"k": "newflow.settings_line", "src": "a770b6d4", "v": "{mode} · 🧠 {model} · 📁 {folder}"}
+{"k": "newflow.settings_no_folder", "src": "810727a6", "v": "{mode} · 🧠 {model} · 📁 noch kein Projektordner"}
+{"k": "newflow.started_over", "src": "3a2633bc", "v": "↩️ Abgebrochen - neu angefangen."}
+{"k": "newflow.starting", "src": "c0338362", "v": "🚀 Starte <b>{session}</b> im {mode}…"}
+{"k": "newflow.starting_fresh", "src": "fff58191", "v": "🚀 Starte <b>{session}</b> neu…"}
+{"k": "newflow.switched_to", "src": "03553586", "v": "↩️ Zu <b>{session}</b> gewechselt"}
+{"k": "newflow.title", "src": "79dee51b", "v": "🆕 <b>Neue Sitzung</b>"}
+{"k": "newflow.title_owner", "src": "b8803b0f", "v": "🆕 <b>Neue Sitzung</b> ({owner})"}
+{"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ Arbeite an deiner ersten Nachricht."}
+{"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"one": "⏱️ <b>{session}</b> · Nach {n} Min. ist das Ende des Komprimierens noch nicht bestätigt", "other": "⏱️ <b>{session}</b> · Nach {n} Min. ist das Ende des Komprimierens noch nicht bestätigt"}}
+{"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · Komprimiert: {before} → {after}"}
+{"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · Kontext bei {percent} - bald automatisches Komprimieren"}
+{"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · Speicherlimit erreicht"}
+{"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · Speicherlimit erreicht während <code>{tool}</code>"}
+{"k": "notice.memcap_hook", "src": "657f02c3", "v": "<code>{hook}</code> hat sein Speicherlimit von {limit} GB ausgeschöpft und wurde beendet. Falls es gerade einen Tool-Aufruf geprüft hat, hat Claude Code diesen Aufruf höchstwahrscheinlich abgelehnt und Claude kann es erneut versuchen; sonst wurde nur dieses eine Ereignis übersprungen. Die Sitzung läuft weiter."}
+{"k": "notice.memcap_nudge_cli", "src": "726ab6ea", "v": "<i>Wenn das öfter passiert, führe {command} in einem Terminal aus, um dem Maintainer einen Bericht zu senden.</i>"}
+{"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>Wenn das öfter passiert, kann der Besitzer auf „Das melden“ tippen, um dem Maintainer einen Bericht zu senden.</i>"}
+{"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> hat sein Speicherlimit von {limit} GB ausgeschöpft, daher wurde ein Update der Statuszeile übersprungen. Die Sitzung läuft weiter."}
+{"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Von Claude Code nicht angenommen\n\nInnerhalb von {grace} s nach dem Senden kam kein Hook. Eine Nachricht, die mit „/“ beginnt, wird als Slash-Befehl gelesen - prüfe das Terminal."}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "Diese Aufgabe kam von <b>{session}</b>."}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "Eine Nachricht aus einer anderen Sitzung kam in diesen Durchlauf und hat seine Rechte eingeschränkt."}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "Diese Aufgabe kam von einer anderen Sitzung, die aipager nicht prüfen konnte."}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b> hat die Nachricht von <b>{sender}</b> nicht ausgeführt: {reason}"}
+{"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · für eine Nachricht aus der Warteschlange kam keine rechtzeitige Bestätigung - Claude verarbeitet sie vielleicht noch."}
+{"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · für eine Nachricht aus der Warteschlange kam keine rechtzeitige Bestätigung: „{preview}“ - Claude verarbeitet sie vielleicht noch."}
+{"k": "notice.quiet_turn", "src": "baa52794", "v": {"one": "⏳ <b>{session}</b> · arbeitet noch (seit {n} Min. still)\n\nNoch keine Status-Updates. Das ist meist normal.\n\n<blockquote expandable>Was gerade passieren könnte\n  • Lange laufender Tool-Aufruf (Bash, WebSearch, großer Abruf)\n  • Aufwendige Generierung mit sehr großem Kontext\n  • Komprimieren läuft\n  • Warten wegen Ratenlimit oder Abo-Limit\n  • Netzwerk hängt oder Claude ist abgestürzt</blockquote>", "other": "⏳ <b>{session}</b> · arbeitet noch (seit {n} Min. still)\n\nNoch keine Status-Updates. Das ist meist normal.\n\n<blockquote expandable>Was gerade passieren könnte\n  • Lange laufender Tool-Aufruf (Bash, WebSearch, großer Abruf)\n  • Aufwendige Generierung mit sehr großem Kontext\n  • Komprimieren läuft\n  • Warten wegen Ratenlimit oder Abo-Limit\n  • Netzwerk hängt oder Claude ist abgestürzt</blockquote>"}}
+{"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · Sitzung geleert"}
+{"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · Sitzung abgestürzt oder beendet"}
+{"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · Sitzung beendet"}
+{"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · Sitzung abgemeldet"}
+{"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · Sitzung: Berechtigungsfehler"}
+{"k": "notice.session_end.resume", "src": "86761a3d", "v": "🔴 <b>{session}</b> · Sitzung zu einem anderen Gespräch gewechselt"}
+{"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · wartet noch auf deine Antwort oben"}
+{"k": "notice.waiting_permission", "src": "e39388ee", "v": "Berechtigung: {summary}"}
+{"k": "notice.waiting_question", "src": "2348fa66", "v": "Frage: {summary}"}
+{"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Hier sind versteckte Richtungszeichen enthalten, angezeigt als ⟨U+...⟩. Ausgeführt wird vielleicht nicht das, was du siehst."}
+{"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Erlauben"}
+{"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Immer erlauben"}
+{"k": "perm.btn.cancel", "src": "d20b1713", "v": "↩️ Abbrechen"}
+{"k": "perm.btn.compact_now", "src": "73357c1f", "v": "📦 Jetzt komprimieren"}
+{"k": "perm.btn.default_suffix", "src": "613e7977", "v": "{mode} (Standard)"}
+{"k": "perm.btn.deny", "src": "8b9d9edb", "v": "❌ Ablehnen"}
+{"k": "perm.btn.not_now", "src": "f677ca32", "v": "⏳ Nicht jetzt"}
+{"k": "perm.btn.option", "src": "881fbd74", "v": "Option {n}"}
+{"k": "perm.btn.retry", "src": "fabc7541", "v": "🔄 Wiederholen"}
+{"k": "perm.btn.stop", "src": "e3f8b9ee", "v": "⏹ Stopp"}
+{"k": "perm.btn.stop_plain", "src": "9e253470", "v": "Stopp"}
+{"k": "perm.btn.stop_switch", "src": "bc469329", "v": "🛑 Stoppen & wechseln"}
+{"k": "perm.btn.submit", "src": "c685950d", "v": "✅ Senden"}
+{"k": "perm.btn.yes_switch", "src": "9f6e4eb9", "v": "✅ Ja, wechseln"}
+{"k": "perm.loading", "src": "253222ec", "v": "{tool} (lädt…)"}
+{"k": "perm.needed", "src": "7c7a8e5c", "v": "Berechtigung nötig"}
+{"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · Auswahl nötig"}
+{"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · Keine Fragen"}
+{"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · Berechtigung nötig"}
+{"k": "pin.btn.answer", "src": "24c3485a", "v": "{session} beantworten"}
+{"k": "pin.count.idle", "src": "6abeefbf", "v": {"one": "{n} im Leerlauf", "other": "{n} im Leerlauf"}}
+{"k": "pin.count.starting", "src": "836f5c27", "v": {"one": "{n} startet", "other": "{n} starten"}}
+{"k": "pin.count.working", "src": "c3aee490", "v": {"one": "{n} arbeitet", "other": "{n} arbeiten"}}
+{"k": "pin.first.all_idle", "src": "195ea8a9", "v": "💤 alle im Leerlauf"}
+{"k": "pin.first.counts", "src": "b5d804ae", "v": "{glyph} {counts}"}
+{"k": "pin.first.single", "src": "5674b34c", "v": "{glyph} {session} {state}"}
+{"k": "pin.first.waiting", "src": "7fa7cc46", "v": "⏳ {session} braucht dich"}
+{"k": "pin.line", "src": "de9ddb7a", "v": "• <b>{session}</b> {state}"}
+{"k": "pin.more", "src": "66adc298", "v": {"one": "(+{n} weitere)", "other": "(+{n} weitere)"}}
+{"k": "pin.needs_input", "src": "9a9d6640", "v": "Auswahl nötig"}
+{"k": "pin.paren", "src": "d52abc3c", "v": "({running})"}
+{"k": "pin.running_agents", "src": "712d4c75", "v": {"one": "{n} Agent läuft", "other": "{n} Agenten laufen"}}
+{"k": "pin.running_both", "src": "48ac24f8", "v": "{agents}, {shells} laufen"}
+{"k": "pin.running_shells", "src": "af023360", "v": {"one": "{n} Shell-Befehl läuft", "other": "{n} Shell-Befehle laufen"}}
+{"k": "pin.state", "src": "845c40c2", "v": "({state})"}
+{"k": "pin.state.idle", "src": "1adbcc34", "v": "Leerlauf"}
+{"k": "pin.state.needs_you", "src": "19622ace", "v": "braucht dich"}
+{"k": "pin.state.starting", "src": "9493af05", "v": "startet"}
+{"k": "pin.state.working", "src": "8178ea20", "v": "arbeitet"}
+{"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
+{"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
+{"k": "pin.target", "src": "c9c5350f", "v": "✍️ Nachrichten gehen an <b>{session}</b>"}
+{"k": "rep.area.animation", "src": "6a3a8292", "v": "die Arbeitskarte"}
+{"k": "rep.area.callbacks", "src": "397d02b3", "v": "Button-Taps"}
+{"k": "rep.area.daemon", "src": "dbcc03a0", "v": "der Dienst"}
+{"k": "rep.area.dashboard", "src": "319e1d71", "v": "die angeheftete Leiste"}
+{"k": "rep.area.flood_budget", "src": "75f9bcb6", "v": "das Sendebudget"}
+{"k": "rep.area.handlers", "src": "0ff1035f", "v": "Nachrichtenverarbeitung"}
+{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "der Hook-Empfänger"}
+{"k": "rep.area.inject", "src": "d784f7db", "v": "Zustellung der Prompts"}
+{"k": "rep.area.notify", "src": "c522bd84", "v": "Zustellung der Nachrichten"}
+{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "der Hook"}
+{"k": "rep.area.server", "src": "8000cc31", "v": "die Mini App"}
+{"k": "rep.area.session_monitor", "src": "1fff1160", "v": "die Sitzungsüberwachung"}
+{"k": "rep.area.session_ops", "src": "6b7d9e30", "v": "Sitzungssteuerung"}
+{"k": "rep.area.state", "src": "e0e05b06", "v": "Sitzungszustand"}
+{"k": "rep.cancelled", "src": "ca0ed5b3", "v": "Abgebrochen. Es wurde nichts gesendet."}
+{"k": "rep.doc_failed", "src": "321fac57", "v": "Die Datei report.json konnte nicht gesendet werden, daher wurde nichts gesendet. Öffne „Problem melden“ später noch einmal."}
+{"k": "rep.document_line", "src": "f2943506", "v": "Der genaue Bericht steht in der Datei report.json, die auf diese Karte antwortet."}
+{"k": "rep.explanation", "src": "d470a7df", "v": "Das ist alles, was der Bericht enthält. Es wurde noch nichts gesendet.\nEr enthält keine Chats, Prompts, Sitzungsnamen, Ordner, Tokens, Chat-IDs oder Benutzernamen.\nEr geht anonym an das Fehlerpostfach des aipager-Maintainers (Sentry)."}
+{"k": "rep.heading", "src": "ad1633d0", "v": "🐞 <b>Problem melden</b>"}
+{"k": "rep.lost", "src": "6b4837a4", "v": "Diese Vorschau ist nicht mehr offen, daher wurde nichts gesendet. Öffne „Problem melden“ noch einmal, um eine neue zu sehen."}
+{"k": "rep.note.prompt", "src": "dc71be87", "v": {"one": "✏️ Schreib deine Notiz als eine Nachricht (höchstens {n} Zeichen). Sie kommt genau so in den Bericht, wie du sie vor dem Senden siehst. Alles andere, was du tust, schließt das hier.", "other": "✏️ Schreib deine Notiz als eine Nachricht (höchstens {n} Zeichen). Sie kommt genau so in den Bericht, wie du sie vor dem Senden siehst. Alles andere, was du tust, schließt das hier."}}
+{"k": "rep.offer.also_other", "src": "2b336900", "v": {"one": "Außerdem {n} weiterer Fehler.", "other": "Außerdem {n} weitere Fehler."}}
+{"k": "rep.offer.declined", "src": "5d912282", "v": "OK. aipager fragt in dieser Version nicht mehr danach."}
+{"k": "rep.offer.internal", "src": "4df624aa", "v": {"one": "aipager hatte {n}-mal einen internen Fehler ({error} in {area}).", "other": "aipager hatte {n}-mal einen internen Fehler ({error} in {area})."}}
+{"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "aipager hatte einmal einen internen Fehler ({error} in {area})."}
+{"k": "rep.offer.memcap", "src": "698bc999", "v": {"one": "Der Hook von aipager hat {n}-mal sein Speicherlimit erreicht.", "other": "Der Hook von aipager hat {n}-mal sein Speicherlimit erreicht."}}
+{"k": "rep.offer.memcap_once", "src": "63461898", "v": "Der Hook von aipager hat einmal sein Speicherlimit erreicht."}
+{"k": "rep.offer.not_opened", "src": "1df3fb0a", "v": "Die Berichtsvorschau ließ sich nicht öffnen. „Problem melden“ in /help öffnet eine neue."}
+{"k": "rep.offer.off", "src": "3706223b", "v": "Automatische Angebote sind jetzt aus. Zum Wiedereinschalten: /settings, dann „Problemberichte“."}
+{"k": "rep.offer.preview", "src": "0835e626", "v": "Die Berichtsvorschau ist unten geöffnet."}
+{"k": "rep.offer.stopped", "src": "1f8a50a5", "v": {"one": "aipager hat sich {n}-mal unerwartet beendet.", "other": "aipager hat sich {n}-mal unerwartet beendet."}}
+{"k": "rep.offer.stopped_once", "src": "98a8d806", "v": "aipager hat sich einmal unerwartet beendet."}
+{"k": "rep.offer.tail", "src": "e58f2a0c", "v": "Ein Bericht hilft, das zu beheben. Er enthält nur Versionen und Stellen im Code, nie deine Chats, Prompts, Namen oder Pfade."}
+{"k": "rep.outcome.daily_cap", "src": "2095768c", "v": {"one": "Pro Rechner sind höchstens {n} Bericht am Tag möglich. Versuch es morgen noch einmal.", "other": "Pro Rechner sind höchstens {n} Berichte am Tag möglich. Versuch es morgen noch einmal."}}
+{"k": "rep.outcome.disabled", "src": "23061011", "v": "Problemberichte sind gerade vom Maintainer abgeschaltet. Es wurde nichts gesendet."}
+{"k": "rep.outcome.invalid", "src": "55ae1194", "v": "Dieser Bericht hat seine eigenen Prüfungen nicht bestanden und wurde daher nicht gesendet."}
+{"k": "rep.outcome.sent", "src": "3456aede", "v": "Gesendet. Referenz {reference} (gib sie an, wenn du ein Issue auf GitHub öffnest)."}
+{"k": "rep.outcome.too_old", "src": "3e8e0bff", "v": "Diese aipager-Version kann keine Berichte mehr senden. Mach ein Update ({command}) und versuch es noch einmal."}
+{"k": "rep.outcome.try_later", "src": "ab0f2d7c", "v": "Gerade konnte nichts gesendet werden. Es ging nichts verloren; versuch es später noch einmal."}
+{"k": "rep.status.note_added", "src": "96d23c70", "v": "Notiz hinzugefügt."}
+{"k": "rep.status.note_closed", "src": "8187cfb3", "v": "Notiz nicht hinzugefügt: du hast etwas anderes gemacht. Tippe auf „Notiz hinzufügen“, um es noch einmal zu versuchen."}
+{"k": "rep.status.note_cut", "src": "e9ab8458", "v": {"one": "Notiz hinzugefügt, gekürzt auf {n} Zeichen.", "other": "Notiz hinzugefügt, gekürzt auf {n} Zeichen."}}
+{"k": "rep.status.note_empty", "src": "1f872085", "v": "Die Notiz war leer, daher wurde nichts hinzugefügt."}
+{"k": "rep.status.note_refused", "src": "c92adef7", "v": "Diese Notiz konnte nicht hinzugefügt werden. Versuch es kürzer und einfacher."}
+{"k": "rep.status.send_failed", "src": "ff84d63e", "v": "Dieser Bericht konnte wegen eines Problems in aipager nicht gesendet werden. Es wurde nichts gesendet."}
+{"k": "rep.status.sending", "src": "c338c191", "v": "Wird gesendet..."}
+{"k": "resume.header", "src": "74554c53", "v": "{icon} <b>[{session}]</b> · {state}"}
+{"k": "resume.header_clock", "src": "b1522d3c", "v": "{icon} <b>[{session}]</b> · {state} {clock}"}
+{"k": "resume.more_no_transcript", "src": "d8f1f6e8", "v": {"one": "<i>{n} weitere ohne gespeichertes Transkript, nicht fortsetzbar.</i>", "other": "<i>{n} weitere ohne gespeichertes Transkript, nicht fortsetzbar.</i>"}}
+{"k": "resume.no_preview", "src": "34384805", "v": "<i>(keine Vorschau)</i>"}
+{"k": "resume.no_transcript", "src": "65416f58", "v": {"one": "<i>{n} ohne gespeichertes Transkript, nicht fortsetzbar.</i>", "other": "<i>{n} ohne gespeichertes Transkript, nicht fortsetzbar.</i>"}}
+{"k": "resume.none", "src": "f0e1dc3c", "v": "📭 Keine früheren Sitzungen zum Fortsetzen."}
+{"k": "resume.recent", "src": "c14c1ce4", "v": "Zuletzt:"}
+{"k": "resume.row", "src": "c75d6298", "v": "🔘 <b>{session}</b> (<i>{when}</i>)"}
+{"k": "resume.row.active", "src": "ebbe643f", "v": "Aktiv: {ago}"}
+{"k": "resume.row.active_now", "src": "95e3adc9", "v": "Aktiv: gerade eben"}
+{"k": "resume.row.active_unknown", "src": "15d90554", "v": "Aktiv: unbekannt"}
+{"k": "resume.row.agents", "src": "1344dd37", "v": {"one": "Agenten: {n} ({types})", "other": "Agenten: {n} ({types})"}}
+{"k": "resume.row.agents_count", "src": "abe9706b", "v": {"one": "Agenten: {n}", "other": "Agenten: {n}"}}
+{"k": "resume.row.cost", "src": "68433bc8", "v": "Kosten: {cost}"}
+{"k": "resume.row.ctx", "src": "edcc7a6b", "v": "Kontext: {percent} {bar}"}
+{"k": "resume.row.lines", "src": "439ccc8a", "v": "Zeilen: {changes}"}
+{"k": "resume.row.model", "src": "e60d2adb", "v": "Modell: {model}"}
+{"k": "resume.row.output", "src": "2a39ea71", "v": "Ausgabe-Tokens: {tokens}"}
+{"k": "resume.row.queue", "src": "865b83a5", "v": "Warteschlange: {pending} wartend ({queued} Nachrichten, {notes} Notizen)"}
+{"k": "resume.state.busy", "src": "e18a89f9", "v": "arbeitet"}
+{"k": "resume.state.gone", "src": "a6dfdeaa", "v": "beendet"}
+{"k": "resume.state.idle", "src": "1adbcc34", "v": "frei"}
+{"k": "resume.state.interactive", "src": "00753189", "v": "wartet auf Antwort"}
+{"k": "resume.state.unknown", "src": "50d8b4a9", "v": "unbekannt"}
+{"k": "resume.tap", "src": "c118e3b9", "v": "Tippe unten auf einen Button, um fortzusetzen."}
+{"k": "resume.title", "src": "d5cecda8", "v": {"one": "📚 <b>Frühere Sitzungen</b> ({n} insgesamt)", "other": "📚 <b>Frühere Sitzungen</b> ({n} insgesamt)"}}
+{"k": "route.btn.resume", "src": "2db3fd81", "v": "🔁 Fortsetzen"}
+{"k": "route.btn.resume_label", "src": "5a3f876a", "v": "▶️ {session} fortsetzen"}
+{"k": "route.cant_clear_busy", "src": "cf8384cd", "v": "⚠️ Leeren ist nicht möglich, solange die Sitzung arbeitet"}
+{"k": "route.clear_no_active", "src": "1ada2799", "v": "Keine aktive Sitzung - wechsle zuerst mit {command} zu einer."}
+{"k": "route.clear_nothing", "src": "75578929", "v": "In [{session}] gibt es nichts zu leeren."}
+{"k": "route.cleared", "src": "fd716ebc", "v": {"one": "🗑️ {n} Nachricht aus der Warteschlange von [<b>{session}</b>] entfernt.", "other": "🗑️ {n} Nachrichten aus der Warteschlange von [<b>{session}</b>] entfernt."}}
+{"k": "route.ended_which", "src": "eb950d37", "v": "{session} ist beendet. Welche Sitzung?"}
+{"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Ich weiß nicht, für welche Sitzung diese Datei ist. Wähle eine mit {command} oder über die Tastatur."}
+{"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Die Transkription konnte nicht an [{session}] übergeben werden"}
+{"k": "route.kill_none", "src": "1c62fda9", "v": "Keine Sitzungen zum Beenden."}
+{"k": "route.kill_which", "src": "65bf98de", "v": "Welche Sitzung beenden?"}
+{"k": "route.mention_alone", "src": "c8588bc4", "v": "Sende {command} allein, ohne den Bot zu erwähnen."}
+{"k": "route.model_now", "src": "721a5dbc", "v": "🧠 jetzt {model}"}
+{"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "die Nachricht eines anderen Mitglieds wartet noch darauf, abgeholt zu werden - wechsle das Modell danach."}
+{"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
+{"k": "route.no_active", "src": "96477f98", "v": "⚠️ Keine aktive Sitzung"}
+{"k": "route.no_live_here", "src": "2a22b699", "v": "⚠️ Hier läuft keine Sitzung namens <b>{session}</b>."}
+{"k": "route.no_session", "src": "f3bc5d54", "v": "⚠️ Ich weiß nicht, für welche Sitzung das ist. Wähle eine mit {command} oder über die Tastatur."}
+{"k": "route.no_session_here", "src": "d6bac23e", "v": "⚠️ Hier gibt es keine Sitzung namens <b>{session}</b>."}
+{"k": "route.not_alive", "src": "248cf0d5", "v": "⚠️ Sitzung [{session}] läuft nicht"}
+{"k": "route.not_working", "src": "40bb3d05", "v": "<b>{session}</b> arbeitet gerade nicht."}
+{"k": "route.nothing_running", "src": "3c49e2a3", "v": "Es läuft nichts."}
+{"k": "route.queue_full", "src": "f6582eab", "v": {"one": "⚠️ Die Warteschlange von [{session}] ist voll ({n} wartend). Beantworte die Anfrage oder leere die Warteschlange.", "other": "⚠️ Die Warteschlange von [{session}] ist voll ({n} wartend). Beantworte die Anfrage oder leere die Warteschlange."}}
+{"k": "route.refusal_frame", "src": "e19d24e3", "v": "⚠️ [{session}] {reason}"}
+{"k": "route.resume_then_resend", "src": "df2cce7e", "v": "Sende deine Nachricht nach ▶️ Fortsetzen noch einmal."}
+{"k": "route.retry_note_others", "src": "f54d6bb2", "v": "⏸ Nicht wiederholt - gerade läuft der Durchlauf einer anderen Person. Tippe noch einmal auf „Wiederholen“, wenn er endet."}
+{"k": "route.retry_note_prompt", "src": "a9f6356e", "v": "⏸ Nicht wiederholt - eine Anfrage ist offen. Beantworte sie und tippe dann noch einmal auf „Wiederholen“."}
+{"k": "route.send_failed", "src": "3c65fe20", "v": "❌ Senden an [{session}] fehlgeschlagen"}
+{"k": "route.sent_to", "src": "72283da2", "v": "{glyph} {what} an {session} gesendet"}
+{"k": "route.session_missing", "src": "e8086da8", "v": "⚠️ Sitzung „{name}“ nicht gefunden"}
+{"k": "route.unknown_session", "src": "2823272e", "v": "⚠️ Unbekannte Sitzung: {session}"}
+{"k": "route.voice_no_session", "src": "6c2d2821", "v": "⚠️ Sprachnachricht transkribiert, aber es gibt keine aktive Sitzung dafür. Wähle zuerst eine mit {command}."}
+{"k": "route.warning", "src": "4329faf5", "v": "⚠️ {text}"}
+{"k": "route.which_reply", "src": "6771e2f8", "v": "Welche Sitzung? Antworte auf eine ihrer Nachrichten oder sende {command} und deine Nachricht."}
+{"k": "route.which_stop", "src": "aba80827", "v": "Welche soll gestoppt werden?"}
+{"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · Von der Sicherheitsrichtlinie blockiert: {reason} (gestoppt)"}
+{"k": "safety.reason.bash", "src": "f380389e", "v": "Bash-Befehl von der Sicherheitsrichtlinie blockiert"}
+{"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Bash-Befehl von der Sicherheitsrichtlinie blockiert: eine rekursive Suche oder Auflistung des ganzen Home-Ordners oder von / ist nicht erlaubt; suche stattdessen in einem Projektordner"}
+{"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} mit einem Glob, das mit .. hinaussteigt"}
+{"k": "safety.reason.glob_escaped", "src": "bf605149", "v": "{tool} mit einem maskierten Glob"}
+{"k": "safety.reason.glob_not_plain", "src": "6db7d611", "v": "{tool} mit einem Glob, das kein einfaches relatives Muster ist"}
+{"k": "safety.reason.glob_unreadable", "src": "da95c3b5", "v": "{tool} mit einem unlesbaren Glob"}
+{"k": "safety.reason.halted", "src": "343e090e", "v": "Sitzung angehalten - ein früherer Tool-Aufruf in diesem Durchlauf wurde von der Sicherheitsrichtlinie blockiert; starte eine neue Anfrage"}
+{"k": "safety.reason.outside_root_read", "src": "377378fa", "v": "{tool} abgelehnt - diese Rolle liest im Home-Ordner nur in ihrem eigenen Ordner"}
+{"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool} außerhalb des Sitzungsordners - ein eingeschränkter Durchlauf sucht nur in seinem Projekt und Scratchpad"}
+{"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool} außerhalb des Sitzungsordners - ein eingeschränkter Durchlauf schreibt nur in sein Projekt und Scratchpad"}
+{"k": "safety.reason.path_protected", "src": "feff9877", "v": "{tool} auf dem geschützten Pfad {glob}"}
+{"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool}: Schreiben auf den geschützten Pfad {glob}"}
+{"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool} mit einem unlesbaren Pfad"}
+{"k": "safety.reason.pattern_unreadable", "src": "88053cf7", "v": "{tool} mit einem unlesbaren Muster"}
+{"k": "safety.reason.root_cwd_search", "src": "086246f6", "v": "{tool} abgelehnt - diese Sitzung läuft außerhalb des eigenen Ordners dieser Rolle, daher darf diese Rolle nur in ihrem Scratchpad suchen"}
+{"k": "safety.reason.root_cwd_write", "src": "bc6e509f", "v": "{tool} abgelehnt - diese Sitzung läuft außerhalb des eigenen Ordners dieser Rolle, daher darf diese Rolle nur in ihr Scratchpad schreiben"}
+{"k": "safety.reason.runs_commands", "src": "e180a703", "v": "{tool} in eine Datei, die Befehle ausführt (.claude/, .git/, .mcp.json)"}
+{"k": "safety.reason.search_anywhere", "src": "c1ad4431", "v": "{tool} abgelehnt - der geschützte Pfad {glob} kann in jedem Ordner liegen, daher kann diese Rolle nicht mit Grep oder Glob suchen"}
+{"k": "safety.reason.search_could_reach", "src": "a95243b1", "v": "Die Suche mit {tool} könnte den geschützten Pfad {glob} erreichen"}
+{"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool} mit einem unlesbaren Suchordner"}
+{"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "{tool} abgelehnt - diese Suche würde geschützte Dateien erreichen ({shown}); suche stattdessen in einem Projektordner"}
+{"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "Die Suche mit {tool} erreicht den geschützten Pfad {glob}"}
+{"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "SendMessage an eine Claude-Sitzung, die aipager nicht verwaltet"}
+{"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} steht in den deny_tools dieser Rolle"}
+{"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} steht nicht in den allow_tools dieser Rolle"}
+{"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "dieser Tool-Aufruf konnte nicht geprüft werden und wurde daher abgelehnt"}
+{"k": "safety.reason.wide_cwd_search", "src": "5112bac1", "v": "{tool} abgelehnt - diese Sitzung läuft im Home-Ordner (oder einem Ordner darüber), und diese Rolle darf nur in einem Projektordner suchen"}
+{"k": "safety.reason.wide_cwd_write", "src": "90769493", "v": "{tool} abgelehnt - diese Sitzung läuft im Home-Ordner (oder einem Ordner darüber), und diese Rolle darf nur in einem Projektordner schreiben"}
+{"k": "sendnow.btn.send", "src": "edac6f66", "v": "⚡ Jetzt senden"}
+{"k": "sendnow.line", "src": "41e9ef1b", "v": "⏳ Wartet - Claude liest es nach dem aktuellen Schritt"}
+{"k": "sendnow.line_unreached", "src": "d8eeb821", "v": "⏳ Wartet - Claude war nicht erreichbar, tippe auf „Jetzt senden“, um es noch einmal zu versuchen"}
+{"k": "sendnow.reply_no_session", "src": "cfa31918", "v": "Keine aktive Sitzung."}
+{"k": "sendnow.reply_nothing", "src": "7f03c384", "v": "In der Warteschlange wartet nichts"}
+{"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ Jetzt an Claude gesendet"}
+{"k": "sess.btn.cancel", "src": "77dfd213", "v": "Abbrechen"}
+{"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ Abbrechen"}
+{"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ Schließen"}
+{"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ Löschen"}
+{"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 Diff"}
+{"k": "sess.btn.end", "src": "58096fa3", "v": "⏹ Beenden"}
+{"k": "sess.btn.end_session", "src": "cad78af6", "v": "⏹ Sitzung beenden"}
+{"k": "sess.btn.prefs", "src": "28784f50", "v": "👤 Vorlieben"}
+{"k": "sess.btn.rename", "src": "7decc377", "v": "✏️ Umbenennen"}
+{"k": "sess.btn.restart", "src": "06188389", "v": "🔄 Neu starten"}
+{"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ Fortsetzen"}
+{"k": "sess.cancelled", "src": "3678513b", "v": "↩️ Abgebrochen."}
+{"k": "sess.delete_cancelled", "src": "7105554d", "v": "Löschen von [<b>{session}</b>] abgebrochen."}
+{"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ [<b>{session}</b>] aus der Sitzungsliste entfernen? Das lässt sich nicht rückgängig machen."}
+{"k": "sess.delete_none", "src": "58e4ba7f", "v": "Keine beendeten Sitzungen zum Löschen."}
+{"k": "sess.delete_still_running", "src": "ff86cceb", "v": "⚠️ [<b>{session}</b>] läuft noch. Beende sie zuerst mit /kill."}
+{"k": "sess.delete_which", "src": "b568401d", "v": "Welche beendete Sitzung entfernen?"}
+{"k": "sess.deleted", "src": "5af8d1c8", "v": "🗑️ [<b>{session}</b>] gelöscht."}
+{"k": "sess.deleted_by", "src": "38b3ffbc", "v": "🗑️ [<b>{session}</b>] gelöscht von {person}."}
+{"k": "sess.diff_files", "src": "84597d92", "v": {"one": "📝 [<b>{session}</b>] {n} Datei geändert, +{added}/-{removed}", "other": "📝 [<b>{session}</b>] {n} Dateien geändert, +{added}/-{removed}"}}
+{"k": "sess.diff_none", "src": "3b2e4538", "v": "Keine Änderungen im Arbeitsverzeichnis von [<b>{session}</b>]."}
+{"k": "sess.diff_none_live", "src": "3f72a95c", "v": "Keine laufenden Sitzungen für einen Diff."}
+{"k": "sess.diff_reason.cwd_missing", "src": "e6e5befa", "v": "Das Arbeitsverzeichnis von [{label}] gibt es nicht mehr."}
+{"k": "sess.diff_reason.git_error", "src": "18d7631e", "v": "Der Diff konnte gerade nicht gelesen werden - versuch es noch einmal."}
+{"k": "sess.diff_reason.git_not_installed", "src": "171dd6a9", "v": "git ist auf diesem Rechner nicht verfügbar."}
+{"k": "sess.diff_reason.no_commits_yet", "src": "94fb37e6", "v": "Das Repo von [{label}] hat noch keine Commits."}
+{"k": "sess.diff_reason.not_a_git_repo", "src": "c639ff9f", "v": "Der Ordner von [{label}] ist kein git-Repo."}
+{"k": "sess.diff_which", "src": "2485be52", "v": "Diff welcher Sitzung?"}
+{"k": "sess.end_confirm", "src": "dffc4f34", "v": "⏹ <b>{session}</b> beenden? Claude stoppt und die Sitzung wird geschlossen."}
+{"k": "sess.ended", "src": "6659a4fd", "v": "⏹ <b>{session}</b> beendet"}
+{"k": "sess.ended_by", "src": "9e9bdbd1", "v": "⏹ <b>{session}</b> beendet von {person}"}
+{"k": "sess.kill_cancelled", "src": "cf4e32bb", "v": "↩️ Abgebrochen. Nichts wurde beendet."}
+{"k": "sess.menu_closed", "src": "e2a2c077", "v": "Menü für [<b>{session}</b>] geschlossen."}
+{"k": "sess.menu_no_transcript", "src": "72c75098", "v": "<i>Kein gespeichertes Transkript zum Fortsetzen.</i>"}
+{"k": "sess.menu_title", "src": "2a8eb73c", "v": "⋮ <b>{session}</b> - wähle eine Aktion:"}
+{"k": "sess.not_sent_to", "src": "0d040f9f", "v": "Nicht an {session} gesendet."}
+{"k": "sess.pick_cancelled", "src": "d3e4142f", "v": "Abgebrochen."}
+{"k": "sess.rename_cancelled", "src": "abe2ee6d", "v": "Umbenennen abgebrochen."}
+{"k": "sess.rename_closed", "src": "d06e8a83", "v": "✖️ Umbenennen geschlossen, du hast etwas anderes gemacht. Sende /rename, um es noch einmal zu versuchen."}
+{"k": "sess.rename_exists", "src": "3367e703", "v": "⚠️ In diesem Chat gibt es schon eine Sitzung namens {session}."}
+{"k": "sess.rename_expired", "src": "0235f755", "v": "⏱ Dieses Umbenennen ist abgelaufen. Sende /rename noch einmal."}
+{"k": "sess.rename_gone", "src": "86c694ee", "v": "⚠️ Diese Sitzung ist nicht mehr verfügbar - führe /rename noch einmal aus."}
+{"k": "sess.rename_none", "src": "2d24aff4", "v": "Keine Sitzungen zum Umbenennen."}
+{"k": "sess.rename_not_allowed", "src": "97c2b455", "v": "🚫 Du darfst diese Sitzung nicht umbenennen."}
+{"k": "sess.rename_prompt_reply", "src": "eaadafac", "v": "✏️ Neuer Name für [<b>{session}</b>]? Antworte auf diese Nachricht mit dem neuen Namen."}
+{"k": "sess.rename_prompt_type", "src": "fdf5e253", "v": "✏️ Neuer Name für [<b>{session}</b>]? Sende ihn als Nachricht."}
+{"k": "sess.rename_unchanged", "src": "f41d7d6e", "v": "Name von [<b>{session}</b>] unverändert."}
+{"k": "sess.rename_which", "src": "d74e26c1", "v": "Welche Sitzung umbenennen?"}
+{"k": "sess.renamed", "src": "53a36720", "v": "✏️ [<b>{old}</b>] in [<b>{new}</b>] umbenannt."}
+{"k": "sess.restart_cancelled", "src": "e2123246", "v": "Neustart von [<b>{session}</b>] abgebrochen."}
+{"k": "sess.restart_confirm", "src": "eea1e9db", "v": "🔄 Sitzung [<b>{session}</b>] neu starten? Claude stoppt und startet wieder, das Gespräch bleibt erhalten."}
+{"k": "sess.restart_failed", "src": "be8ef8e6", "v": "Neustart von [{label}] fehlgeschlagen."}
+{"k": "sess.restart_none", "src": "fefd4861", "v": "Keine laufenden Sitzungen zum Neustarten."}
+{"k": "sess.restart_reason.already_restarting", "src": "119c20da", "v": "[{label}] startet schon neu."}
+{"k": "sess.restart_reason.launch_failed", "src": "fc0525be", "v": "Neustart von [{label}] fehlgeschlagen: {err}"}
+{"k": "sess.restart_reason.not_live", "src": "d841d7b0", "v": "[{label}] läuft nicht."}
+{"k": "sess.restart_reason.still_stopping", "src": "635882f7", "v": "[{label}] hat nicht rechtzeitig gestoppt - versuch es gleich noch einmal."}
+{"k": "sess.restart_which", "src": "0eada720", "v": "Welche Sitzung neu starten?"}
+{"k": "sess.restarted", "src": "dc0ed3cb", "v": "🔄 [<b>{session}</b>] neu gestartet."}
+{"k": "sess.restarted_by", "src": "f2ddb551", "v": "🔄 [<b>{session}</b>] neu gestartet von {person}."}
+{"k": "sess.resume_as", "src": "95516616", "v": "<b>{session}</b> fortsetzen als:"}
+{"k": "sess.resume_failed", "src": "f19c1968", "v": "❌ <b>{session}</b> konnte nicht fortgesetzt werden: {error}"}
+{"k": "sess.resume_last_response", "src": "9e8e3733", "v": "<i>📜 Letzte Antwort dieser Sitzung</i>\n<blockquote>{preview}</blockquote>"}
+{"k": "sess.resume_no_transcript", "src": "6b8a4001", "v": "⚠️ Die Sitzung <b>{session}</b> hat kein fortsetzbares Transkript auf der Festplatte.\nStarte eine neue mit {command}."}
+{"k": "sess.resume_not_found", "src": "4c1d68d2", "v": "⚠️ Keine Sitzung namens <b>{session}</b> im Verlauf.\nSende {command} ohne Namen, um zu sehen, was verfügbar ist."}
+{"k": "sess.resume_running", "src": "c090af67", "v": "⚠️ <b>{session}</b> läuft schon.\nTippe auf der Tastatur auf {command}, um zu ihr zu wechseln."}
+{"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> fortgesetzt"}
+{"k": "sess.resumed_in_ask", "src": "8151879e", "v": "♻️ <b>{session}</b> im Modus Fragen fortgesetzt: Auto braucht einen Admin."}
+{"k": "sess.sent_to", "src": "d856101f", "v": "An {session} gesendet."}
+{"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Schließen"}
+{"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Neue Sitzungen"}
+{"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 Ordner: {folder} ›"}
+{"k": "set.btn.ns_model", "src": "6fb2e9a4", "v": "🧠 Modell: {model} ›"}
+{"k": "set.btn.per_session", "src": "9748363d", "v": "👤 Einstellungen pro Sitzung"}
+{"k": "set.btn.problem_reports", "src": "2478212a", "v": "🐞 Problemberichte: {value}"}
+{"k": "set.btn.reports_turn_on", "src": "8b383496", "v": "Angebote wieder einschalten"}
+{"k": "set.btn.use_chat_default", "src": "55c966bc", "v": "↩️ Chat-Standard verwenden"}
+{"k": "set.cadence.title", "src": "ed8a634b", "v": "⏱ Karten-Updates bei langen Durchläufen"}
+{"k": "set.diffs.title", "src": "9f74873f", "v": "📝 Diff-Vorschauen"}
+{"k": "set.formatting.title", "src": "6b0a66a0", "v": "✏️ Einfache Formatierung"}
+{"k": "set.help.cadence.off", "src": "71965ae1", "v": "Die Karte aktualisiert sich den ganzen Durchlauf im gleichen Takt, egal wie lange er dauert."}
+{"k": "set.help.cadence.on", "src": "cb462e4f", "v": "Je länger der Durchlauf, desto seltener aktualisiert sich die Karte (ab 2 Min. alle 10 s, ab 10 Min. alle 30 s); ihre Uhr springt dann in 30-s-Schritten. Ein Statuswechsel erscheint sofort."}
+{"k": "set.help.diffs.off", "src": "e9b93bde", "v": "Dateiänderungen erscheinen nur als Zeilen auf der Arbeitskarte."}
+{"k": "set.help.diffs.on", "src": "1ad75bf3", "v": "Jedes Write/Edit kommt zusätzlich als eigene Diff-Nachricht unter der Arbeitskarte."}
+{"k": "set.help.formatting.off", "src": "14016cc5", "v": "Claude formatiert Antworten, wie es will."}
+{"k": "set.help.formatting.on", "src": "13c31447", "v": "Nur einfacher Text und Listen mit Bindestrichen - keine Tabellen oder Codeblöcke."}
+{"k": "set.help.layout.card", "src": "75971a73", "v": "Die Arbeitskarte bleibt, die Antwort kommt als eigene Nachricht."}
+{"k": "set.help.layout.merged", "src": "cb79a1a7", "v": "Die Antwort ersetzt den Text der Arbeitskarte an Ort und Stelle."}
+{"k": "set.help.layout.replace", "src": "7802aaf9", "v": "Die Arbeitskarte wird allein durch die Antwort ersetzt."}
+{"k": "set.help.length.long", "src": "6d4be59e", "v": "Alle Details, wenn die Antwort sie braucht."}
+{"k": "set.help.length.medium", "src": "1f258598", "v": "Ein paar Absätze."}
+{"k": "set.help.length.none", "src": "c889d841", "v": "Keine Vorgabe zur Länge."}
+{"k": "set.help.length.short", "src": "c4b9b1e2", "v": "Ein paar Sätze."}
+{"k": "set.help.length.xshort", "src": "b3629257", "v": "Ein oder zwei Sätze. Keine Einleitung, keine Zusammenfassung."}
+{"k": "set.help.level.advanced", "src": "820e1448", "v": "Setzt Fachwissen voraus; ohne Erklärungen für Einsteiger."}
+{"k": "set.help.level.none", "src": "643f8019", "v": "Keine Vorgabe zum Wortschatz."}
+{"k": "set.help.level.normal", "src": "530e152e", "v": "Übliche Fachsprache."}
+{"k": "set.help.level.simple", "src": "748c89ff", "v": "Alltagswörter, kurze Sätze."}
+{"k": "set.layout.title", "src": "415df682", "v": "🖼 Nachrichtenlayout"}
+{"k": "set.length.title", "src": "0b4f4428", "v": "📏 Antwortlänge"}
+{"k": "set.level.title", "src": "4e19b762", "v": "🎓 Wortschatz"}
+{"k": "set.opt.cadence.off", "src": "b44b98a6", "v": "Aus - gleiches Tempo im ganzen Durchlauf"}
+{"k": "set.opt.cadence.on", "src": "3843eb22", "v": "An - langsamer bei langem Durchlauf"}
+{"k": "set.opt.chat_default", "src": "58286063", "v": "{option} (Chat-Standard)"}
+{"k": "set.opt.diffs.off", "src": "64a190d9", "v": "Aus - nur die Arbeitskarte"}
+{"k": "set.opt.diffs.on", "src": "3c616425", "v": "An - eine Diff-Nachricht pro Änderung"}
+{"k": "set.opt.formatting.off", "src": "a779e619", "v": "Aus - normale Formatierung"}
+{"k": "set.opt.formatting.on", "src": "4321e58a", "v": "An - nur einfacher Text"}
+{"k": "set.opt.layout.card", "src": "cb54ae30", "v": "Arbeitskarte + Ergebnis"}
+{"k": "set.opt.layout.merged", "src": "732da229", "v": "In die Arbeitsnachricht eingefügt"}
+{"k": "set.opt.layout.replace", "src": "1f8e1a41", "v": "Durch Ergebnis ersetzen"}
+{"k": "set.opt.length.long", "src": "11eda67f", "v": "Lang"}
+{"k": "set.opt.length.medium", "src": "d404968e", "v": "Mittel"}
+{"k": "set.opt.length.none", "src": "e6752500", "v": "Keine Regel anwenden"}
+{"k": "set.opt.length.short", "src": "0fe7d82f", "v": "Kurz"}
+{"k": "set.opt.length.xshort", "src": "e937255b", "v": "Sehr kurz"}
+{"k": "set.opt.level.advanced", "src": "4d064726", "v": "Fortgeschritten"}
+{"k": "set.opt.level.none", "src": "e6752500", "v": "Keine Regel anwenden"}
+{"k": "set.opt.level.normal", "src": "45e118d0", "v": "Normal"}
+{"k": "set.opt.level.simple", "src": "0406a446", "v": "Einfache Wörter"}
+{"k": "set.opt.ns_default_folder", "src": "56d18a09", "v": "Standardordner"}
+{"k": "set.opt.ns_default_model", "src": "5fbae11e", "v": "Standardmodell"}
+{"k": "set.opt.ns_older_model", "src": "3e0492cf", "v": "{model} (älteres Modell)"}
+{"k": "set.opt.reports.ask", "src": "10a8fd63", "v": "Mich fragen"}
+{"k": "set.opt.reports.auto_off", "src": "7e82eed6", "v": "Angebote aus"}
+{"k": "set.opt.reports.off", "src": "e3de5ab0", "v": "Aus"}
+{"k": "set.text.changed_by", "src": "63c7cabd", "v": "<i>Geändert von {person}.</i>"}
+{"k": "set.text.closed", "src": "731152a0", "v": "Geschlossen."}
+{"k": "set.text.intro.cadence", "src": "c2f74acd", "v": "Wie oft sich eine Arbeitskarte während eines LANGEN Durchlaufs aktualisiert. An: sie wird langsamer, je länger der Durchlauf dauert, und ihre Uhr springt in 30-s-Schritten, damit ein lange laufender Chat gut innerhalb der Limits von Telegram bleibt. Aus: das Tempo der ersten Minuten bleibt den ganzen Durchlauf."}
+{"k": "set.text.intro.diffs", "src": "7a426bb1", "v": "Ob jede Dateiänderung als eigene Diff-Nachricht unter der Arbeitskarte kommt. Aus: eine Arbeitskarte und eine Antwort - die Karte listet trotzdem jede Änderung, und die Mini App hat eine Diff-Ansicht."}
+{"k": "set.text.intro.formatting", "src": "71988826", "v": "Wenn AN, nutzen Antworten nur einfachen Text und einfache Listen mit Bindestrichen - keine Tabellen, Codeblöcke, Überschriften, Fett- oder Kursivschrift."}
+{"k": "set.text.intro.layout", "src": "891af1fd", "v": "Wie ein beendeter Durchlauf im Chat erscheint."}
+{"k": "set.text.intro.length", "src": "e64e4857", "v": "Wie lang Claudes Antworten sein sollen."}
+{"k": "set.text.intro.level", "src": "5ca0f466", "v": "Wortschatz für Claudes Antworten."}
+{"k": "set.text.ns_folder_title", "src": "f4eab7d6", "v": "📁 <b>Ordner für neue Sitzungen</b>"}
+{"k": "set.text.ns_model_title", "src": "386d1055", "v": "🧠 <b>Modell für neue Sitzungen</b>"}
+{"k": "set.text.ns_root", "src": "af342243", "v": "🆕 <b>Neue Sitzungen</b>\n\nWomit /new eine Sitzung startet. Auf der Karte einer einzelnen Sitzung kannst du es trotzdem ändern.\n\nBerechtigungen: {mode}\nModell: {model}\nOrdner: {folder}"}
+{"k": "set.text.reports_auto_off", "src": "52adfc5a", "v": "Automatische Angebote: aus (du hast zwei Angebote hintereinander abgelehnt)."}
+{"k": "set.text.reports_env_off", "src": "408411eb", "v": "Auf diesem Rechner sind Angebote außerdem durch AIPAGER_REPORT_PROMPTS=0 ausgeschaltet."}
+{"k": "set.text.reports_intro", "src": "4fe65258", "v": "Wenn aipager mehr als einmal auf denselben internen Fehler stößt, kann es anbieten, einen Bericht zu senden. Du siehst den Bericht immer zuerst, und nichts wird gesendet, solange du nicht auf Senden tippst.\n\nMich fragen: ab und zu anbieten (höchstens einmal in 3 Tagen).\nAus: nie anbieten. „Problem melden“ in /help funktioniert immer."}
+{"k": "set.text.reports_title", "src": "036f0be5", "v": "🐞 <b>Problemberichte</b>"}
+{"k": "set.text.root", "src": "25c10fde", "v": "⚙️ <b>Einstellungen</b>\n\nEinstellungen pro Chat dafür, wie Claude hier antwortet. Tippe auf einen Bereich, um ihn zu ändern."}
+{"k": "set.text.row", "src": "b98927cc", "v": "{title}: {value}"}
+{"k": "set.text.spref_field", "src": "53c8e84c", "v": "{title} - für [<b>{session}</b>]\n\n{title}, das diese Sitzung nutzt; überschreibt nur für sie die /settings dieses Chats."}
+{"k": "set.text.spref_none", "src": "3856fe99", "v": "👤 <b>Einstellungen pro Sitzung</b>\n\nNoch keine Sitzungen."}
+{"k": "set.text.spref_pick", "src": "fb84677e", "v": "👤 <b>Einstellungen pro Sitzung</b>\n\nWähle eine Sitzung, um ihren Antwortstil festzulegen."}
+{"k": "set.text.spref_root", "src": "b29b833e", "v": "👤 <b>Einstellungen pro Sitzung - [{session}]</b>\n\nLegt den Antwortstil dieser Sitzung fest. Leere Felder übernehmen die /settings dieses Chats. ⭐ markiert ein Feld, das diese Sitzung selbst festlegt."}
+{"k": "status.btn.answer", "src": "a16a4eda", "v": "Antworten"}
+{"k": "status.btn.clear_all", "src": "4944581b", "v": "🧹 Alle entfernen"}
+{"k": "status.btn.ended", "src": "ae183190", "v": {"one": "⚫ Beendet ({n})", "other": "⚫ Beendet ({n})"}}
+{"k": "status.btn.more", "src": "a6bc69aa", "v": "⋮ Mehr"}
+{"k": "status.btn.new", "src": "fb873221", "v": "🆕 Neu"}
+{"k": "status.btn.new_session", "src": "19b62fc4", "v": "🆕 Neue Sitzung"}
+{"k": "status.ctx", "src": "daeecae8", "v": "ctx {percent}"}
+{"k": "status.ended", "src": "63dbdb7e", "v": {"one": "⚫ <b>Beendete Sitzungen ({n})</b>\n\nSetze eine fort, lösche eine oder entferne alle aus /status (in /resume bleiben sie).", "other": "⚫ <b>Beendete Sitzungen ({n})</b>\n\nSetze eine fort, lösche eine oder entferne alle aus /status (in /resume bleiben sie)."}}
+{"k": "status.ended_shown", "src": "cdde3b66", "v": "Hier sind die {max} neuesten; /resume listet alle."}
+{"k": "status.head", "src": "570c54fe", "v": "{mark}<b>{session}</b> · {glyph} {state}"}
+{"k": "status.no_ended", "src": "a33a986b", "v": "Keine beendeten Sitzungen."}
+{"k": "status.no_live", "src": "8f779eb2", "v": "Keine laufenden Sitzungen."}
+{"k": "status.none", "src": "a44ee05c", "v": "Noch keine Sitzungen."}
+{"k": "status.notes", "src": "2e411b05", "v": {"one": "{n} Notiz", "other": "{n} Notizen"}}
+{"k": "status.queue", "src": "20f40005", "v": "Warteschlange {total} ({queued}, {notes})"}
+{"k": "status.queued", "src": "45c54388", "v": {"one": "{n} wartend", "other": "{n} wartend"}}
+{"k": "status.sessions", "src": "65748ab3", "v": {"one": "📊 <b>Sitzungen ({n})</b>", "other": "📊 <b>Sitzungen ({n})</b>"}}
+{"k": "status.switch", "src": "52424cce", "v": "✍️ Du sprichst jetzt mit <b>{session}</b> · {glyph} {state} · {mode}"}
+{"k": "status.talk_dm", "src": "777be8ce", "v": "Schreib eine Nachricht, sie geht an {session}."}
+{"k": "status.talk_group", "src": "bdc24dfd", "v": "Antworte auf eine Nachricht von {session} (oder erwähne {bot}), um mit ihr zu sprechen."}
+{"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "Antworte auf eine Nachricht von {session} (oder erwähne den Bot), um mit ihr zu sprechen."}
+{"k": "status.waiting_answer", "src": "e5832740", "v": "{session} wartet auf deine Antwort."}
+{"k": "toast.already_answered", "src": "3d131a46", "v": "schon beantwortet"}
+{"k": "toast.always_degraded", "src": "038f4355", "v": "Keine Immer-Regel für diesen Befehl - einmal erlaubt [{session}]"}
+{"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}
+{"k": "toast.auth.not_listed", "src": "0baa8bbd", "v": "Nicht auf der Liste der erlaubten Nutzer"}
+{"k": "toast.busy_retry", "src": "cfc92c41", "v": "Ausgelastet - versuch es gleich noch einmal"}
+{"k": "toast.cant_resend", "src": "3aa4d727", "v": "Die Anfrage kann nicht erneut gesendet werden - beantworte sie im Terminal"}
+{"k": "toast.cant_stop", "src": "2bf57e30", "v": "Du darfst diese Sitzung nicht stoppen."}
+{"k": "toast.choice_gone", "src": "54298c73", "v": "Diese Auswahl ist nicht mehr verfügbar."}
+{"k": "toast.clear_done", "src": "0e4a4845", "v": {"one": "{n} aus /status entfernt (weiter in /resume)", "other": "{n} aus /status entfernt (weiter in /resume)"}}
+{"k": "toast.clear_nothing", "src": "ec219a9c", "v": "Nichts zu entfernen"}
+{"k": "toast.compact_failed", "src": "84398886", "v": "/compact konnte nicht gesendet werden"}
+{"k": "toast.compact_sending", "src": "afcbfe26", "v": "[{session}] wird komprimiert"}
+{"k": "toast.gate_other_chat", "src": "fcc9d88a", "v": "Dieser Button gehört zu einem anderen Chat."}
+{"k": "toast.gate_refused", "src": "c6436f0e", "v": "Deine Rolle darf das hier nicht."}
+{"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "Unbekannter Button"}
+{"k": "toast.invalid_value", "src": "7e5ba817", "v": "Ungültiger Wert"}
+{"k": "toast.kill_stale", "src": "90e64cd6", "v": "Dieser Button ist veraltet - sende /kill noch einmal"}
+{"k": "toast.moved_on_status", "src": "be925157", "v": "{session} arbeitet schon an etwas Neuem - tippe noch einmal auf ⏹ Stopp, um sie zu stoppen"}
+{"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} arbeitet schon an etwas Neuem - sende /stop noch einmal"}
+{"k": "toast.new_cant_change", "src": "279d4392", "v": "Du darfst diese Sitzung nicht ändern."}
+{"k": "toast.new_cant_start_here", "src": "9f749720", "v": "Du darfst hier keine Sitzungen starten."}
+{"k": "toast.new_cant_start_resume", "src": "25c7e34f", "v": "Du darfst hier keine Sitzungen starten oder fortsetzen."}
+{"k": "toast.new_card_expired", "src": "c7d3826b", "v": "Diese Karte ist abgelaufen."}
+{"k": "toast.new_card_replaced", "src": "8e108c47", "v": "Diese Karte wurde ersetzt. Nimm die neue."}
+{"k": "toast.new_expired", "src": "85077001", "v": "Diese Karte ist abgelaufen. Sende /new noch einmal."}
+{"k": "toast.new_folder_gone", "src": "4b183fca", "v": "Dieser Ordner ist nicht mehr verfügbar."}
+{"k": "toast.new_invalid_model", "src": "ae01cc11", "v": "Ungültiges Modell"}
+{"k": "toast.new_model_gone", "src": "0f464c34", "v": "Dieses Modell wird nicht mehr angeboten."}
+{"k": "toast.new_no_folder_yet", "src": "87860358", "v": "Noch kein Ordner verfügbar - starte zuerst eine Sitzung aus einem echten Projektordner."}
+{"k": "toast.new_not_yours", "src": "393f95a6", "v": "Das ist nicht deine neue Sitzung."}
+{"k": "toast.new_only_sender", "src": "9e109f78", "v": "Nur wer /new gesendet hat, kann diese Karte nutzen."}
+{"k": "toast.new_started_since", "src": "e8602889", "v": "{session} arbeitet inzwischen. Sende /new noch einmal, um sie zu ersetzen."}
+{"k": "toast.new_switch_failed", "src": "a8ef2ee3", "v": "Das Modell konnte nicht gewechselt werden."}
+{"k": "toast.new_switching", "src": "8c8980ce", "v": "Wird gewechselt..."}
+{"k": "toast.new_switching_to", "src": "09c7272f", "v": "Wechsel zu {model}"}
+{"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} arbeitet. Wechsle, wenn sie fertig ist, oder nutze /mode."}
+{"k": "toast.not_working", "src": "1ec204d3", "v": "{session} arbeitet gerade nicht"}
+{"k": "toast.open_chat", "src": "202c3e06", "v": "Öffne den Chat, um zu antworten"}
+{"k": "toast.owner_card", "src": "80b06bcd", "v": "Das ist die Karte von {owner}."}
+{"k": "toast.owner_card_send", "src": "7b051dc9", "v": "Das ist die Karte von {owner}. Sende {command} für deine eigene."}
+{"k": "toast.perms_needs_admin", "src": "fe68d230", "v": "Der Modus Auto braucht einen Admin."}
+{"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} startet gerade neu - tippe gleich noch einmal"}
+{"k": "toast.perms_stale", "src": "4e34769b", "v": "Diese Karte ist veraltet - nichts wurde geändert"}
+{"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} startet noch - versuch es gleich noch einmal"}
+{"k": "toast.prompt_expired", "src": "260f4c88", "v": "dieser Prompt ist abgelaufen"}
+{"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram bremst diesen Chat gerade - versuch es nach {time} noch einmal"}
+{"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "Wird schon gesendet."}
+{"k": "toast.rep.already_sent", "src": "99493916", "v": "Schon gesendet."}
+{"k": "toast.rep.in_dm", "src": "88740c30", "v": "Die Berichtsvorschau ist in deinem privaten Chat mit dem Bot."}
+{"k": "toast.rep.no_owner", "src": "b43a6c7c", "v": "Ich kann keine Berichtsvorschau öffnen: diese Installation hat keinen einzelnen Chat des Besitzers."}
+{"k": "toast.rep.not_opened", "src": "8841123f", "v": "Die Berichtsvorschau ließ sich gerade nicht öffnen. Versuch es später noch einmal."}
+{"k": "toast.rep.not_owner", "src": "ed142ea6", "v": "Nur der Besitzer dieses aipager kann ein Problem melden."}
+{"k": "toast.rep.offer_stale", "src": "f5aa4d59", "v": "Dieses Angebot gilt nicht mehr."}
+{"k": "toast.retry_failed", "src": "8954b4b9", "v": "Wiederholen fehlgeschlagen"}
+{"k": "toast.retry_not_alive", "src": "807834ac", "v": "Sitzung „{session}“ läuft nicht"}
+{"k": "toast.retry_nothing", "src": "def91a40", "v": "Nichts zu wiederholen"}
+{"k": "toast.retry_others_turn", "src": "b243bab8", "v": "Gerade läuft der Durchlauf einer anderen Person - wiederhole, wenn er endet"}
+{"k": "toast.retry_prompt_open", "src": "2554567b", "v": "Beantworte zuerst die offene Anfrage, dann wiederhole"}
+{"k": "toast.retry_retrying", "src": "b5a61b76", "v": "[{session}] wird wiederholt"}
+{"k": "toast.send_failed", "src": "0fbea382", "v": "Senden an {session} fehlgeschlagen"}
+{"k": "toast.send_keys_failed", "src": "32458da9", "v": "Tasten konnten nicht gesendet werden"}
+{"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "Beschäftigt, versuch es gleich noch einmal"}
+{"k": "toast.sendnow_cant_prompt", "src": "bf90455f", "v": "Du darfst nicht an diese Sitzung senden"}
+{"k": "toast.sendnow_failed", "src": "57a26c8a", "v": "Claude war nicht erreichbar, versuch es noch einmal"}
+{"k": "toast.sendnow_interactive", "src": "1b518935", "v": "Beantworte zuerst die offene Frage"}
+{"k": "toast.sendnow_sending", "src": "d05719f1", "v": "Wird jetzt an Claude gesendet"}
+{"k": "toast.sendnow_sent", "src": "9ab32ed2", "v": "Jetzt an Claude gesendet"}
+{"k": "toast.sendnow_taken", "src": "00735887", "v": "Schon abgeholt"}
+{"k": "toast.sendnow_typing", "src": "84af1903", "v": "Ein Prompt wird gerade eingetippt, versuch es gleich noch einmal"}
+{"k": "toast.sess_already_ended", "src": "26dff17c", "v": "Diese Sitzung ist schon beendet."}
+{"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} ist schon im {mode}."}
+{"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "Du darfst diese Sitzung nicht löschen."}
+{"k": "toast.sess_cant_end", "src": "ab082660", "v": "Du darfst diese Sitzung nicht beenden."}
+{"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "Du darfst diese Sitzung nicht umbenennen."}
+{"k": "toast.sess_cant_restart", "src": "5e8c842b", "v": "Du darfst diese Sitzung nicht neu starten."}
+{"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "Du darfst diese Sitzung nicht fortsetzen."}
+{"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "Diese Sitzung lässt sich gerade nicht fortsetzen."}
+{"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "Du darfst nicht an diese Sitzung senden."}
+{"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "{session} hat nicht gestoppt - versuch es noch einmal"}
+{"k": "toast.sess_ended", "src": "394de850", "v": "⏹ {session} beendet"}
+{"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {session} beendet von {person}"}
+{"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} arbeitet schon an etwas Neuem - tippe noch einmal auf ⏹ Sitzung beenden, um sie zu beenden"}
+{"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} arbeitet schon an etwas Neuem - tippe noch einmal auf 🔄 Neu starten, um sie neu zu starten"}
+{"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} arbeitet schon an etwas Neuem - tippe noch einmal auf den Wechsel, wenn du ihn noch willst"}
+{"k": "toast.sess_not_found_named", "src": "a71f5ae2", "v": "{session} wurde nicht gefunden"}
+{"k": "toast.sess_not_your_rename", "src": "ed45ef6a", "v": "Das ist nicht dein Umbenennen."}
+{"k": "toast.sess_restart_stale", "src": "753fe0fb", "v": "Dieser Button ist veraltet - sende /restart noch einmal"}
+{"k": "toast.sess_restarting", "src": "5f69a1ca", "v": "{session} wird neu gestartet..."}
+{"k": "toast.sess_resuming", "src": "2a557399", "v": "Diese Sitzung wird gerade fortgesetzt. Versuch es gleich noch einmal."}
+{"k": "toast.sess_resuming_kill", "src": "227bdae1", "v": "{session} wird gerade fortgesetzt - sende /kill gleich noch einmal"}
+{"k": "toast.sess_resuming_retry", "src": "2845ff55", "v": "{session} wird gerade fortgesetzt - versuch es gleich noch einmal"}
+{"k": "toast.sess_still_running", "src": "1ab407e3", "v": "Diese Sitzung läuft noch. Beende sie zuerst."}
+{"k": "toast.sess_target", "src": "d28d6d9c", "v": "✍️ Nachrichten gehen an {session}"}
+{"k": "toast.session_ended", "src": "3a3a8392", "v": "Diese Sitzung ist beendet."}
+{"k": "toast.session_gone", "src": "9360b8a3", "v": "Sitzung „{session}“ nicht gefunden"}
+{"k": "toast.session_gone_settings", "src": "8af767e3", "v": "Diese Sitzung ist nicht mehr verfügbar - öffne /settings neu."}
+{"k": "toast.session_not_found", "src": "4c2e72c7", "v": "Sitzung nicht gefunden"}
+{"k": "toast.session_not_here", "src": "54eb8580", "v": "Diese Sitzung läuft nicht hier."}
+{"k": "toast.session_unavailable", "src": "773d1a0f", "v": "Diese Sitzung ist nicht mehr verfügbar"}
+{"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "Nur ein Admin kann die Einstellungen in dieser Gruppe ändern."}
+{"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "Du darfst die Vorlieben dieser Sitzung nicht ändern."}
+{"k": "toast.stop_stale", "src": "51073518", "v": "Diese Aufgabe ist schon fertig - nimm die aktuelle Karte"}
+{"k": "toast.unknown_action", "src": "967e7e51", "v": "Unbekannt: {action}"}
+{"k": "toast.upd.checking", "src": "820d6004", "v": "Wird geprüft…"}
+{"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 Nur ein Admin kann ein Update von aipager machen."}
+{"k": "toast.upd.menu_old", "src": "6c988fa7", "v": "Dieses Menü ist veraltet, sende /update noch einmal"}
+{"k": "toast.upd.stale", "src": "d9ed1389", "v": "Dieses Update ist schon fertig"}
+{"k": "toast.verb", "src": "985eb765", "v": "{verb} [{session}]"}
+{"k": "tx.api.billing", "src": "031e8f3d", "v": "Problem mit dem Anthropic-Abo oder dem Guthaben. Sieh in deinem Dashboard nach: {url}"}
+{"k": "tx.api.connection", "src": "3a0ef982", "v": "Verbindung zu Anthropic verloren. Prüfe das Netzwerk und versuch es noch einmal."}
+{"k": "tx.api.generic", "src": "429166c0", "v": "Ein API-Fehler ist aufgetreten."}
+{"k": "tx.api.internal", "src": "030afe43", "v": "Die Server von Anthropic hatten einen internen Fehler. Das löst sich meist in Sekunden."}
+{"k": "tx.api.overloaded", "src": "6f545f5b", "v": "Die Server von Anthropic sind überlastet. Versuch es gleich noch einmal."}
+{"k": "tx.api.rate_limit", "src": "234c6146", "v": "Ratenlimit erreicht. Warte kurz, bevor du es noch einmal versuchst."}
+{"k": "tx.api.rate_limit_wait", "src": "a2053ce3", "v": "Ratenlimit erreicht. Warte {seconds} s, bevor du es noch einmal versuchst."}
+{"k": "tx.auto_needs_admin", "src": "bd96281e", "v": "Auto braucht einen Admin."}
+{"k": "tx.needs_admin", "src": "a2f55b85", "v": "Dieser Befehl braucht einen Admin."}
+{"k": "tx.retry_others", "src": "4ad540c7", "v": "Nur wer diesen Befehl gesendet hat, kann ihn wiederholen."}
+{"k": "tx.truncated", "src": "27710457", "v": "…[gekürzt]"}
+{"k": "ui.action.failed", "src": "1bd1baa4", "v": "Das hat nicht geklappt."}
+{"k": "ui.action.unreachable", "src": "209155a8", "v": "Der Server war nicht erreichbar. Nichts wurde geändert."}
+{"k": "ui.activity.aria", "src": "649780e8", "v": {"one": "Letzte Aktivität: {n} Tool-Aufruf. Öffne den Zeitverlauf.", "other": "Letzte Aktivität: {n} Tool-Aufrufe. Öffne den Zeitverlauf."}}
+{"k": "ui.activity.failed", "src": "6c746778", "v": "{tool} (fehlgeschlagen)"}
+{"k": "ui.activity.queued", "src": "45c54388", "v": {"one": "{n} wartend", "other": "{n} wartend"}}
+{"k": "ui.activity.recent", "src": "72d5617f", "v": "Letzte Aktivität"}
+{"k": "ui.activity.running", "src": "21ceddba", "v": "{tool} (läuft)"}
+{"k": "ui.activity.running_for", "src": "181f56b1", "v": "{tool} (läuft seit {clock})"}
+{"k": "ui.activity.title", "src": "81c0d915", "v": "Aktivität"}
+{"k": "ui.age.days", "src": "e827dc07", "v": "vor {n} T."}
+{"k": "ui.age.hours", "src": "1235f668", "v": "vor {n} Std."}
+{"k": "ui.age.minutes", "src": "83f8dc33", "v": "vor {n} Min."}
+{"k": "ui.age.seconds", "src": "b4e09dd8", "v": "vor {n} s"}
+{"k": "ui.answer.cannot", "src": "40c455f0", "v": "Du darfst in diesem Chat keine Prompts beantworten."}
+{"k": "ui.answer.send_failed", "src": "9a2e8fac", "v": "Der Prompt konnte nicht in den Chat gesendet werden."}
+{"k": "ui.answer.sent", "src": "ba35b7cb", "v": "In den Chat gesendet. Beantworte ihn dort."}
+{"k": "ui.answer.unreachable", "src": "f159beba", "v": "Der Server war nicht erreichbar. Nichts wurde gesendet."}
+{"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude fragt dich etwas."}
+{"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "{session} öffnen"}
+{"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude möchte ein Tool nutzen."}
+{"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Warteschlange leeren"}
+{"k": "ui.btn.action.compact", "src": "10c986db", "v": "Jetzt komprimieren"}
+{"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Löschen"}
+{"k": "ui.btn.action.kill", "src": "7b932e77", "v": "Beenden"}
+{"k": "ui.btn.action.rename", "src": "d3f4cb89", "v": "Umbenennen"}
+{"k": "ui.btn.action.restart", "src": "b134bd55", "v": "Neu starten"}
+{"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "Fortsetzen"}
+{"k": "ui.btn.action.stop", "src": "9e253470", "v": "Stoppen"}
+{"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "Im Chat antworten"}
+{"k": "ui.btn.cancel", "src": "77dfd213", "v": "Abbrechen"}
+{"k": "ui.btn.check_again", "src": "e185048c", "v": "Erneut prüfen"}
+{"k": "ui.btn.check_updates", "src": "736b9062", "v": "Nach Updates suchen"}
+{"k": "ui.btn.checking", "src": "820d6004", "v": "Wird geprüft…"}
+{"k": "ui.btn.close_app", "src": "73743dc4", "v": "App schließen"}
+{"k": "ui.btn.copied", "src": "8e3df45a", "v": "Kopiert"}
+{"k": "ui.btn.copy", "src": "af74f7c5", "v": "Kopieren"}
+{"k": "ui.btn.done", "src": "e9b450d1", "v": "Fertig"}
+{"k": "ui.btn.new_session", "src": "5c881d23", "v": "Neue Sitzung"}
+{"k": "ui.btn.not_now", "src": "e4571490", "v": "Nicht jetzt"}
+{"k": "ui.btn.report", "src": "24f3f52d", "v": "Problem melden"}
+{"k": "ui.btn.reset", "src": "44c57abd", "v": "Zurücksetzen"}
+{"k": "ui.btn.reset_defaults", "src": "ddefe47d", "v": "Auf Standard zurücksetzen"}
+{"k": "ui.btn.restart_now", "src": "af2c3d8e", "v": "Jetzt neu starten"}
+{"k": "ui.btn.save", "src": "efc007a3", "v": "Speichern"}
+{"k": "ui.btn.send_report", "src": "a5b32af9", "v": "Bericht senden"}
+{"k": "ui.btn.sending", "src": "c338c191", "v": "Wird gesendet..."}
+{"k": "ui.btn.start_session", "src": "76684eaf", "v": "Sitzung starten"}
+{"k": "ui.btn.stop_and_switch", "src": "21c1d7af", "v": "Stoppen & wechseln"}
+{"k": "ui.btn.switch", "src": "3e44c920", "v": "Wechseln"}
+{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "Zu Fragen wechseln"}
+{"k": "ui.btn.switch_to_auto", "src": "13a0f246", "v": "Zu Auto wechseln"}
+{"k": "ui.btn.try_again", "src": "042c862e", "v": "Noch einmal versuchen"}
+{"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Noch 10 Min. warten"}
+{"k": "ui.confirm.delete", "src": "734db731", "v": "{session} löschen?"}
+{"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Die Sitzung verschwindet aus deiner Liste. Ihr Transkript bleibt auf der Festplatte."}
+{"k": "ui.confirm.kill", "src": "804fbc7f", "v": "{session} beenden?"}
+{"k": "ui.confirm.kill_body", "src": "beff52e4", "v": "Das stoppt die Sitzung und entfernt sie. Alles, was sie gerade ausführt, wird unterbrochen."}
+{"k": "ui.confirm.perms_ask", "src": "c0710578", "v": "{session} in den Modus Fragen schalten?"}
+{"k": "ui.confirm.perms_ask_body", "src": "701538b8", "v": "Claude fragt, bevor es Tools ausführt."}
+{"k": "ui.confirm.perms_auto", "src": "b6a1ddde", "v": "{session} in den Modus Auto schalten?"}
+{"k": "ui.confirm.perms_auto_body", "src": "7d8bf9c6", "v": "Claude führt Tools ohne Nachfrage aus."}
+{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "Die aktuelle Aufgabe stoppen und {session} zu Fragen wechseln?"}
+{"k": "ui.confirm.perms_busy_auto", "src": "d4090a8b", "v": "Die aktuelle Aufgabe stoppen und {session} zu Auto wechseln?"}
+{"k": "ui.confirm.rename", "src": "92656d63", "v": "{session} umbenennen?"}
+{"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "Die Sitzung behält ihren Verlauf und ihr Arbeitsverzeichnis. Nur der Name ändert sich."}
+{"k": "ui.confirm.reset", "src": "e13d0ebf", "v": "Einstellungen auf Standard zurücksetzen?"}
+{"k": "ui.confirm.reset_body", "src": "f2fd45cf", "v": "Die eigenen Einstellungen dieser Sitzung werden gelöscht, und sie folgt wieder dem Standard des Chats."}
+{"k": "ui.confirm.restart", "src": "47a0c787", "v": "{session} neu starten?"}
+{"k": "ui.confirm.restart_body", "src": "5ec9d004", "v": "Die Sitzung stoppt und startet mit demselben Verlauf neu. Ein laufender Durchlauf wird unterbrochen."}
+{"k": "ui.conn.expired", "src": "45a6f9ad", "v": "abgelaufen"}
+{"k": "ui.conn.live", "src": "98aadb37", "v": "verbunden"}
+{"k": "ui.conn.no_init", "src": "e2ebd902", "v": "Öffne diese Seite aus der Telegram-App, um dich anzumelden."}
+{"k": "ui.conn.offline", "src": "d1ffda5d", "v": "offline"}
+{"k": "ui.conn.reconnecting", "src": "6b160044", "v": "verbindet neu…"}
+{"k": "ui.conn.session_expired", "src": "c1c71ef8", "v": "Anmeldesitzung abgelaufen. Öffne sie in Telegram neu über {command}."}
+{"k": "ui.conn.unreachable", "src": "eb8937f2", "v": "Der Server ist nicht erreichbar. Prüfe den Tunnel."}
+{"k": "ui.daemon.uptime", "src": "18bb02cb", "v": "läuft seit {n} Min."}
+{"k": "ui.detail.latest_reply", "src": "455aaef0", "v": "Letzte Antwort"}
+{"k": "ui.detail.session_settings", "src": "ed40d944", "v": "Sitzungseinstellungen"}
+{"k": "ui.detail.settings_readonly", "src": "aebade5f", "v": "Nur wer dieser Sitzung Prompts senden darf, kann das ändern."}
+{"k": "ui.diff.binary", "src": "810945bb", "v": "Binärdatei (keine Vorschau)."}
+{"k": "ui.diff.change.added", "src": "172415f0", "v": "hinzugefügt"}
+{"k": "ui.diff.change.deleted", "src": "b639f5cc", "v": "gelöscht"}
+{"k": "ui.diff.change.modified", "src": "99db3247", "v": "geändert"}
+{"k": "ui.diff.change.renamed", "src": "87620709", "v": "umbenannt"}
+{"k": "ui.diff.change.untracked", "src": "d7390aa3", "v": "nicht verfolgt"}
+{"k": "ui.diff.clean", "src": "6eb6e7bf", "v": "Keine nicht committeten Änderungen."}
+{"k": "ui.diff.clean_in", "src": "0bde87e2", "v": "Keine nicht committeten Änderungen in {repo}."}
+{"k": "ui.diff.failed", "src": "5d47ec55", "v": "Der Diff konnte nicht geladen werden."}
+{"k": "ui.diff.gone", "src": "38a63905", "v": "Sitzung nicht mehr verfügbar."}
+{"k": "ui.diff.loading", "src": "c569ad51", "v": "Diff wird geladen…"}
+{"k": "ui.diff.no_changes", "src": "9b1fcbda", "v": "Keine Änderungen."}
+{"k": "ui.diff.partial", "src": "4aa4772f", "v": "Nur ein Teil der geänderten Dateien wird gezeigt. Der ganze Diff ist größer, als diese Ansicht darstellen kann."}
+{"k": "ui.diff.reason.cwd_missing", "src": "4140481e", "v": "Das Arbeitsverzeichnis dieser Sitzung gibt es nicht mehr."}
+{"k": "ui.diff.reason.git_error", "src": "c6f57086", "v": "git konnte für diese Sitzung keinen Diff erzeugen."}
+{"k": "ui.diff.reason.git_not_installed", "src": "171dd6a9", "v": "git ist auf diesem Rechner nicht verfügbar."}
+{"k": "ui.diff.reason.no_commits_yet", "src": "cc383c84", "v": "Dieses Repository hat noch keine Commits."}
+{"k": "ui.diff.reason.not_a_git_repo", "src": "287b446f", "v": "Das Arbeitsverzeichnis dieser Sitzung ist kein git-Repository."}
+{"k": "ui.diff.title", "src": "fe25abc0", "v": "Geänderte Dateien"}
+{"k": "ui.diff.title_n", "src": "6222be44", "v": {"one": "Geänderte Dateien ({n})", "other": "Geänderte Dateien ({n})"}}
+{"k": "ui.diff.title_none", "src": "447a466c", "v": "Geänderte Dateien (keine)"}
+{"k": "ui.diff.too_large", "src": "7aafaa23", "v": "Der Diff ist zu groß zum Anzeigen."}
+{"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Diff nicht verfügbar."}
+{"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Schon beendet."}
+{"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Geleert."}
+{"k": "ui.done.compact", "src": "399fec37", "v": "Wird komprimiert…"}
+{"k": "ui.done.delete", "src": "48ea780f", "v": "Gelöscht."}
+{"k": "ui.done.generic", "src": "e2bcda84", "v": "Erledigt."}
+{"k": "ui.done.kill", "src": "eb388bd9", "v": "Beendet."}
+{"k": "ui.done.perms", "src": "144199df", "v": "Gewechselt."}
+{"k": "ui.done.rename", "src": "b930ba4a", "v": "Umbenannt."}
+{"k": "ui.done.rename_same", "src": "ea00acbd", "v": "Keine Änderung."}
+{"k": "ui.done.restart", "src": "519ed942", "v": "Neu gestartet."}
+{"k": "ui.done.resume", "src": "ac66e08b", "v": "Fortgesetzt."}
+{"k": "ui.done.stop", "src": "8fcc7be3", "v": "Gestoppt."}
+{"k": "ui.empty.text", "src": "8ff2cab6", "v": "Starte hier eine oder sende {command} im Chat."}
+{"k": "ui.empty.title", "src": "a44ee05c", "v": "Noch keine Sitzungen."}
+{"k": "ui.grid.finished_n", "src": "8e06a605", "v": {"one": "Beendet ({n})", "other": "Beendet ({n})"}}
+{"k": "ui.grid.needs_you", "src": "0d9d0df1", "v": "Brauchen dich"}
+{"k": "ui.kind.permission", "src": "17857134", "v": "Berechtigung"}
+{"k": "ui.kind.question", "src": "002ff598", "v": "Frage"}
+{"k": "ui.kind_word.permission", "src": "6d244f58", "v": "Berechtigung"}
+{"k": "ui.kind_word.question", "src": "3b2be2e2", "v": "Frage"}
+{"k": "ui.menu.changed", "src": "512ec84b", "v": "Diese Sitzung hat sich geändert. Öffne das Menü neu."}
+{"k": "ui.model.failed", "src": "a8ef2ee3", "v": "Das Modell konnte nicht gewechselt werden."}
+{"k": "ui.model.now", "src": "3dd35778", "v": "Das Modell ist jetzt {model}."}
+{"k": "ui.model.switching", "src": "4a9961a0", "v": "wird gewechselt…"}
+{"k": "ui.model.title", "src": "68c2cc7f", "v": "Modell"}
+{"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "nicht bestätigt (prüfe die Sitzung)"}
+{"k": "ui.model.unreachable", "src": "82a93142", "v": "Der Server war nicht erreichbar. Prüfe das Modell der Sitzung."}
+{"k": "ui.new.auto_needs_admin", "src": "ad1f0c2f", "v": "Der Modus Auto braucht einen Admin."}
+{"k": "ui.new.chips_recent", "src": "76eec760", "v": "Zuletzt"}
+{"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "Vorgeschlagen"}
+{"k": "ui.new.cli_model", "src": "80e3c49d", "v": "dem Standardmodell der CLI"}
+{"k": "ui.new.create_failed", "src": "c55f566f", "v": "Diese Sitzung konnte nicht erstellt werden."}
+{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "Diesen Ordner anlegen"}
+{"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "Du darfst hier keine Sitzungen erstellen."}
+{"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "Der Server war nicht erreichbar. Die Sitzung wurde nicht erstellt."}
+{"k": "ui.new.created", "src": "77ea75b5", "v": "Sitzung erstellt."}
+{"k": "ui.new.creating", "src": "94d7d8ee", "v": "Wird angelegt…"}
+{"k": "ui.new.cwd_title", "src": "e8c598ee", "v": "Arbeitsverzeichnis"}
+{"k": "ui.new.daemon_dir", "src": "2503c8cf", "v": "dem eigenen Ordner des Dienstes"}
+{"k": "ui.new.default", "src": "808d7dca", "v": "Standard"}
+{"k": "ui.new.default_dir_help", "src": "6d7d5fbc", "v": "Der eigene Ordner des Dienstes"}
+{"k": "ui.new.default_model_help", "src": "17ab4082", "v": "Was in der CLI eingestellt ist"}
+{"k": "ui.new.folder_created", "src": "6b6ea299", "v": "Ordner angelegt."}
+{"k": "ui.new.folder_existed", "src": "bfe299bc", "v": "Diesen Ordner gab es schon, daher ist er ausgewählt."}
+{"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "Dieser Ordner konnte nicht angelegt werden."}
+{"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "Du darfst hier keine Ordner anlegen."}
+{"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Name des neuen Ordners"}
+{"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "Der Server war nicht erreichbar. Es wurde kein Ordner angelegt."}
+{"k": "ui.new.mode_ask", "src": "3562777b", "v": "Fragen"}
+{"k": "ui.new.mode_ask_help", "src": "eca1be33", "v": "Claude fragt, bevor es Tools ausführt"}
+{"k": "ui.new.mode_auto", "src": "c614ba7c", "v": "Auto"}
+{"k": "ui.new.mode_auto_help", "src": "306e8992", "v": "Führt Tools ohne Nachfrage aus"}
+{"k": "ui.new.mode_title", "src": "9c8c621a", "v": "Berechtigungsmodus"}
+{"k": "ui.new.model_name", "src": "5ebb9765", "v": "Modellname"}
+{"k": "ui.new.model_needed", "src": "c585e482", "v": "Gib einen Modellnamen ein, um fortzufahren."}
+{"k": "ui.new.model_pattern", "src": "7222f368", "v": "Verwende Buchstaben, Ziffern, Punkte und Bindestriche; beginne mit einem Buchstaben oder einer Ziffer."}
+{"k": "ui.new.more", "src": "86c0a35e", "v": "Weitere Optionen"}
+{"k": "ui.new.name", "src": "709a2322", "v": "Name"}
+{"k": "ui.new.new_folder", "src": "a711999b", "v": "Neuer Ordner"}
+{"k": "ui.new.new_folder_help", "src": "29aa13d5", "v": "Im oben gewählten Ordner"}
+{"k": "ui.new.not_set", "src": "770e48ee", "v": "Noch nicht festgelegt"}
+{"k": "ui.new.other_model", "src": "cc3190e7", "v": "Anderes Modell"}
+{"k": "ui.new.other_model_help", "src": "561f7c9e", "v": "Gib einen vollständigen Namen ein, z. B. {example}"}
+{"k": "ui.new.pick_dir_first", "src": "969b0a9b", "v": "Wähle zuerst oben ein Arbeitsverzeichnis."}
+{"k": "ui.new.requires_admin", "src": "e18e02eb", "v": "Nur für Admins"}
+{"k": "ui.new.sub", "src": "23b19317", "v": "Gib ihr einen Namen, wähle einen Ordner, und Claude startet dort."}
+{"k": "ui.new.summary_ask", "src": "3e987f2e", "v": "Startet Claude in {where} im Modus Fragen mit {model}."}
+{"k": "ui.new.summary_auto", "src": "d0968e63", "v": "Startet Claude in {where} im Modus Auto mit {model}."}
+{"k": "ui.new.summary_named_ask", "src": "ccbc6d09", "v": "Startet Claude als {name} in {where} im Modus Fragen mit {model}."}
+{"k": "ui.new.summary_named_auto", "src": "4b48c549", "v": "Startet Claude als {name} in {where} im Modus Auto mit {model}."}
+{"k": "ui.new.title", "src": "5c881d23", "v": "Neue Sitzung"}
+{"k": "ui.new.where", "src": "525f61b6", "v": "Wo"}
+{"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "Bevor diese Sitzung endete, wurde nichts erfasst."}
+{"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "Noch nichts erfasst. Es erscheint, sobald Claude antwortet."}
+{"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "Alles ruhig"}
+{"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"one": "{n} beendet", "other": "{n} beendet"}}
+{"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"one": "{n} braucht dich", "other": "{n} brauchen dich"}}
+{"k": "ui.pulse.resting", "src": "644f3b40", "v": {"one": "{n} ruht", "other": "{n} ruhen"}}
+{"k": "ui.pulse.spent", "src": "908f77ef", "v": "{cost} ausgegeben"}
+{"k": "ui.pulse.unknown", "src": "23ca6f83", "v": {"one": "{n} unbekannt", "other": "{n} unbekannt"}}
+{"k": "ui.pulse.working", "src": "c3aee490", "v": {"one": "{n} arbeitet", "other": "{n} arbeiten"}}
+{"k": "ui.rename.empty", "src": "e00fbfca", "v": "Der Sitzungsname darf nicht leer sein."}
+{"k": "ui.rename.failed", "src": "07c216e4", "v": "Umbenennen fehlgeschlagen."}
+{"k": "ui.rename.pattern", "src": "b916e083", "v": "Verwende lateinische Buchstaben, Ziffern, Bindestriche und Unterstriche; beginne mit einem Buchstaben oder einer Ziffer."}
+{"k": "ui.rename.reserved", "src": "9440c7ea", "v": "„{name}“ ist ein reservierter Befehlsname."}
+{"k": "ui.rename.too_long", "src": "9b31bc40", "v": "Der Sitzungsname darf höchstens {max} Zeichen lang sein."}
+{"k": "ui.report.also_through", "src": "1d1b7026", "v": "Auch durchlaufen: {names}"}
+{"k": "ui.report.as_written", "src": "21532af3", "v": "Wird genau so gesendet, wie es dasteht."}
+{"k": "ui.report.bad_note", "src": "c92adef7", "v": "Diese Notiz konnte nicht hinzugefügt werden. Versuch es kürzer und einfacher."}
+{"k": "ui.report.card_text", "src": "45e21208", "v": "Sag dem Maintainer, was schiefgelaufen ist. Du siehst den ganzen Bericht, bevor etwas gesendet wird."}
+{"k": "ui.report.copied", "src": "dd2ce2e2", "v": "Kopiert."}
+{"k": "ui.report.copy_hint", "src": "7d76506f", "v": "Halte die Referenz gedrückt, um sie zu kopieren."}
+{"k": "ui.report.daily_cap_title", "src": "9bdf248a", "v": "Tageslimit erreicht"}
+{"k": "ui.report.err.crash", "src": "78d1bcc4", "v": "aipager hat sich unerwartet beendet"}
+{"k": "ui.report.err.error", "src": "7f2f6a15", "v": "Fehler"}
+{"k": "ui.report.err.hook_cap", "src": "f4162559", "v": "Der Hook hat sein Speicherlimit erreicht"}
+{"k": "ui.report.err.logged_in", "src": "ad58db0c", "v": "Protokollierter Fehler in {area}"}
+{"k": "ui.report.err.type_in", "src": "15f9e48c", "v": "{type} in {area}"}
+{"k": "ui.report.err_detail", "src": "97fb369f", "v": "{fingerprint}, zuerst gesehen am {day}, in {versions}"}
+{"k": "ui.report.err_sub", "src": "917846a1", "v": "{times}, zuletzt gesehen am {day}"}
+{"k": "ui.report.errors", "src": "805e86a8", "v": "Fehler"}
+{"k": "ui.report.errors_n", "src": "07ba7666", "v": {"one": "Fehler ({n})", "other": "Fehler ({n})"}}
+{"k": "ui.report.exact", "src": "ea8e4b11", "v": "Den genauen Bericht zeigen"}
+{"k": "ui.report.exact_note", "src": "991b0c14", "v": "Das ist genau der Text, der gesendet wird, mit deiner Notiz."}
+{"k": "ui.report.exit.clean", "src": "6a1cec45", "v": "sauber"}
+{"k": "ui.report.exit.crash", "src": "dd472460", "v": "ein Absturz"}
+{"k": "ui.report.exit.reboot", "src": "118341f6", "v": "ein Neustart des Rechners"}
+{"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "unbekannt"}
+{"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "Vorschau von Änderungen"}
+{"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
+{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "Beobachter-Bots"}
+{"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "ausführliche Zusammenfassungen"}
+{"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "verwalteter Tunnel"}
+{"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "eigene Tunneladresse"}
+{"k": "ui.report.feature.voice", "src": "704617a7", "v": "Sprachnachrichten"}
+{"k": "ui.report.foot", "src": "09700e47", "v": "Nichts wird gesendet, bis du auf „Bericht senden“ tippst. Er geht ohne deinen Namen an das Fehlerpostfach des Maintainers."}
+{"k": "ui.report.label.counts", "src": "a7e0a1c5", "v": "Zähler, letzte 24 Stunden"}
+{"k": "ui.report.label.features", "src": "fc338f87", "v": "Funktionen"}
+{"k": "ui.report.label.libraries", "src": "27c968e6", "v": "Bibliotheken"}
+{"k": "ui.report.label.limits", "src": "ca1be69e", "v": "Telegram-Limits"}
+{"k": "ui.report.label.log", "src": "499fd95d", "v": "Log, letzte 24 Stunden"}
+{"k": "ui.report.label.setup", "src": "cdd7bb28", "v": "Einrichtung"}
+{"k": "ui.report.label.stops", "src": "0e648419", "v": "Stopps"}
+{"k": "ui.report.label.system", "src": "bc0792d8", "v": "System"}
+{"k": "ui.report.later", "src": "685cd810", "v": "aipager hat nicht rechtzeitig geantwortet. Tippe noch einmal auf „Bericht senden“: Ist er schon raus, siehst du seine Referenz, und er wird nicht doppelt gesendet."}
+{"k": "ui.report.limits", "src": "22297d2d", "v": {"one": "{n} Sperre in 7 Tagen, Last in der vollsten Stunde {load}", "other": "{n} Sperren in 7 Tagen, Last in der vollsten Stunde {load}"}}
+{"k": "ui.report.log_line", "src": "5069aaa9", "v": {"one": "{n} Stelle hat eine Warnung oder einen Fehler protokolliert ({times})", "other": "{n} Stellen haben eine Warnung oder einen Fehler protokolliert ({times})"}}
+{"k": "ui.report.missing", "src": "995357dd", "v": "(fehlt)"}
+{"k": "ui.report.more", "src": "473710d3", "v": "Mehr Details"}
+{"k": "ui.report.n_groups", "src": "1a2fac9e", "v": {"one": "{n} Gruppe", "other": "{n} Gruppen"}}
+{"k": "ui.report.n_private_chats", "src": "5922fc21", "v": {"one": "{n} privater Chat", "other": "{n} private Chats"}}
+{"k": "ui.report.no_errors", "src": "a5697d50", "v": "In letzter Zeit keine Fehler aufgezeichnet. Die Angaben oben und deine Notiz helfen trotzdem."}
+{"k": "ui.report.none", "src": "6eef6648", "v": "Keine"}
+{"k": "ui.report.not_found", "src": "475c8486", "v": "Nicht gefunden"}
+{"k": "ui.report.not_sent", "src": "587c501e", "v": "Nicht gesendet"}
+{"k": "ui.report.note_label", "src": "24a9a8bc", "v": "Deine Notiz (optional)"}
+{"k": "ui.report.note_placeholder", "src": "e2bf7584", "v": "Was hast du gemacht, als es schiefging?"}
+{"k": "ui.report.nothing_logged", "src": "7bb93154", "v": "Nichts protokolliert"}
+{"k": "ui.report.once", "src": "18638356", "v": "einmal"}
+{"k": "ui.report.panel.build", "src": "288edef3", "v": "Versuch es gleich noch einmal."}
+{"k": "ui.report.panel.build_title", "src": "76b58923", "v": "Der Bericht konnte nicht vorbereitet werden"}
+{"k": "ui.report.panel.group", "src": "a2c9e40d", "v": "Berichte werden aus der Mini App gesendet, die in deinem privaten Chat mit dem Bot geöffnet ist."}
+{"k": "ui.report.panel.group_title", "src": "73925937", "v": "Öffne deinen privaten Chat"}
+{"k": "ui.report.panel.noowner", "src": "9ee5b766", "v": "Dieser aipager hat keinen einzelnen Chat des Besitzers. In einem Terminal funktioniert {command} weiterhin."}
+{"k": "ui.report.panel.noowner_title", "src": "40631445", "v": "Von hier aus nicht möglich"}
+{"k": "ui.report.panel.owner", "src": "e83d9212", "v": "Nur der Besitzer dieses aipager kann einen Problembericht senden."}
+{"k": "ui.report.panel.owner_title", "src": "e91f02d9", "v": "Nur für den Besitzer"}
+{"k": "ui.report.preparing", "src": "aaf61214", "v": "Bericht wird vorbereitet..."}
+{"k": "ui.report.privacy", "src": "48fa34f1", "v": "Er enthält Versionen, Zähler und Stellen im Code von aipager. Nie deine Chats, Prompts, Namen oder Pfade."}
+{"k": "ui.report.sending_wait", "src": "176ed846", "v": "Wird gesendet. Einen Moment."}
+{"k": "ui.report.sent_title", "src": "a7615ceb", "v": "Bericht gesendet"}
+{"k": "ui.report.setup.personal", "src": "2ca0506b", "v": "Persönliche Einrichtung"}
+{"k": "ui.report.setup.scope", "src": "d662e796", "v": "Einrichtung für mehrere Chats"}
+{"k": "ui.report.setup.team", "src": "a857214e", "v": "Team-Einrichtung"}
+{"k": "ui.report.setup_line", "src": "c52e3d20", "v": "{mode}, {dms}, {groups}, läuft seit {uptime}"}
+{"k": "ui.report.setup_line_bare", "src": "60b4d8c7", "v": "{dms}, läuft seit {uptime}"}
+{"k": "ui.report.setup_line_no_groups", "src": "f0f3ef45", "v": "{mode}, {dms}, läuft seit {uptime}"}
+{"k": "ui.report.setup_line_no_mode", "src": "f94812f3", "v": "{dms}, {groups}, läuft seit {uptime}"}
+{"k": "ui.report.show_more", "src": "fdeb42f8", "v": {"one": "{n} weiteren zeigen", "other": "{n} weitere zeigen"}}
+{"k": "ui.report.stale", "src": "25e3d152", "v": "Dieser Bericht ist nicht mehr da. Hier ist ein neuer: prüfe ihn und tippe dann noch einmal auf „Bericht senden“."}
+{"k": "ui.report.still_sending", "src": "5b89eba6", "v": "Wird noch gesendet. Warte kurz und tippe dann noch einmal auf „Bericht senden“."}
+{"k": "ui.report.stops", "src": "8f971d67", "v": "Letzter Stopp: {last}. Unerwartete Stopps in 7 Tagen: {n}."}
+{"k": "ui.report.system_in", "src": "7011d75d", "v": "{system}, in {container}"}
+{"k": "ui.report.thanks", "src": "04d9993f", "v": "Danke. Wenn du ein Issue auf GitHub öffnest, gib diese Referenz an:"}
+{"k": "ui.report.tidied", "src": "35efa495", "v": "Deine Notiz wurde bereinigt (unsichtbare Zeichen, überzählige Leerzeichen oder alles nach 500 Zeichen wurden entfernt). Prüfe sie und tippe dann noch einmal auf „Bericht senden“."}
+{"k": "ui.report.times", "src": "766020c6", "v": {"one": "{n}-mal", "other": "{n}-mal"}}
+{"k": "ui.report.title", "src": "24f3f52d", "v": "Problem melden"}
+{"k": "ui.report.too_long", "src": "f600d1b3", "v": {"one": "{n} Zeichen zu lang.", "other": "{n} Zeichen zu lang."}}
+{"k": "ui.report.too_many", "src": "392589ae", "v": "Zu viele Taps. Versuch es in einer Minute noch einmal."}
+{"k": "ui.report.too_old_title", "src": "2a4d2b45", "v": "Update nötig"}
+{"k": "ui.report.try_later", "src": "ab0f2d7c", "v": "Gerade konnte nichts gesendet werden. Es ging nichts verloren; versuch es später noch einmal."}
+{"k": "ui.report.uptime.10m_1h", "src": "4db7ea05", "v": "10 Minuten bis zu einer Stunde"}
+{"k": "ui.report.uptime.1d_7d", "src": "ba95c4e1", "v": "1 bis 7 Tagen"}
+{"k": "ui.report.uptime.1h_24h", "src": "f23cc5e9", "v": "1 bis 24 Stunden"}
+{"k": "ui.report.uptime.over_week", "src": "7df7e421", "v": "über einer Woche"}
+{"k": "ui.report.uptime.under_10m", "src": "35d29633", "v": "weniger als 10 Minuten"}
+{"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "unbekannter Zeit"}
+{"k": "ui.report.what_sent", "src": "6b776c8f", "v": "Was gesendet wird"}
+{"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "Chat-Einstellungen"}
+{"k": "ui.settings.default_tag", "src": "7505d64a", "v": "Standard"}
+{"k": "ui.settings.intro", "src": "f1ea8e24", "v": "Sie gelten für jede Sitzung in diesem Chat."}
+{"k": "ui.settings.readonly", "src": "57fedd89", "v": "Nur ein Admin kann das ändern."}
+{"k": "ui.settings.reset_done", "src": "5b3b5541", "v": "Auf Standard zurückgesetzt."}
+{"k": "ui.settings.reset_failed", "src": "38256d55", "v": "Einige Einstellungen ließen sich nicht zurücksetzen. Öffne neu, um es noch einmal zu versuchen."}
+{"k": "ui.settings.save_failed", "src": "cdb1d51d", "v": "Speichern fehlgeschlagen. Der Wert auf dem Bildschirm ist der gespeicherte."}
+{"k": "ui.settings.saved", "src": "9d4af690", "v": "Gespeichert."}
+{"k": "ui.shell.actions_aria", "src": "b086cae4", "v": "Aktionen für die Sitzung"}
+{"k": "ui.shell.chat_aria", "src": "2ced57f1", "v": "Chat"}
+{"k": "ui.shell.loading", "src": "33ce4174", "v": "Wird geladen…"}
+{"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "Neuer Name"}
+{"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "Neue Sitzung"}
+{"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "Bereiche"}
+{"k": "ui.state.busy", "src": "8178ea20", "v": "arbeitet"}
+{"k": "ui.state.gone", "src": "f957097d", "v": "beendet"}
+{"k": "ui.state.idle", "src": "e24cc7a4", "v": "ruht"}
+{"k": "ui.state.unknown", "src": "50d8b4a9", "v": "unbekannt"}
+{"k": "ui.state.waiting", "src": "19622ace", "v": "braucht dich"}
+{"k": "ui.state_line.finished", "src": "355bcc57", "v": "Beendet"}
+{"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "Braucht dich"}
+{"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "Braucht dich ({kind})"}
+{"k": "ui.state_line.resting", "src": "296d1007", "v": "Ruht"}
+{"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "Ruht, zuletzt aktiv {age}"}
+{"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "Noch nicht gemeldet"}
+{"k": "ui.state_line.working", "src": "3b4dfc97", "v": "Arbeitet"}
+{"k": "ui.state_line.working_for", "src": "f555f372", "v": "Arbeitet seit {clock}"}
+{"k": "ui.tab.sessions", "src": "e11e37a9", "v": "Sitzungen"}
+{"k": "ui.tab.settings", "src": "c7f73bb5", "v": "Einstellungen"}
+{"k": "ui.tile.aria", "src": "eaa1d742", "v": "{session}, {state}, Kontext {pct}%, {model}, {cost}"}
+{"k": "ui.tile.aria_no_model", "src": "667d58b3", "v": "{session}, {state}, Kontext {pct}%, {cost}"}
+{"k": "ui.tile.no_folder", "src": "25fe67b1", "v": "kein Ordner"}
+{"k": "ui.timeline.empty", "src": "8bdea321", "v": "Noch keine Aktivität."}
+{"k": "ui.timeline.note", "src": "306606d2", "v": "Der Zeitverlauf umfasst nur den aktuellen Lauf des Dienstes. Er wird über Neustarts hinweg nicht gespeichert, daher zeigt eine ältere Sitzung hier nichts."}
+{"k": "ui.timeline.title_empty", "src": "44748119", "v": "Zeitverlauf (leer)"}
+{"k": "ui.timeline.title_n", "src": "a7f6a618", "v": {"one": "Zeitverlauf ({n})", "other": "Zeitverlauf ({n})"}}
+{"k": "ui.update.check_failed", "src": "a15f1db5", "v": "Die Suche nach Updates hat nicht geklappt. Versuch es noch einmal."}
+{"k": "ui.update.finished", "src": "80fa9b82", "v": "Dieses Update ist schon fertig."}
+{"k": "ui.update.job.claude_updating", "src": "c587f1e1", "v": "Läuft… (claude wird aktualisiert)"}
+{"k": "ui.update.job.gate_timeout", "src": "1499ee18", "v": "Sitzungen arbeiten noch. Länger warten, jetzt neu starten oder abbrechen?"}
+{"k": "ui.update.job.starting", "src": "06080d40", "v": "Läuft… (Start)"}
+{"k": "ui.update.job.upgrading", "src": "c6e6577f", "v": "Läuft… (Aktualisierung)"}
+{"k": "ui.update.job.waiting_idle", "src": "2d4b64cc", "v": "Vor dem Neustart wird gewartet, bis jede Sitzung frei ist."}
+{"k": "ui.update.job.working_phase", "src": "3a93346a", "v": "Läuft… ({phase})"}
+{"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "Nicht zurück: {names}"}
+{"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}? aipager startet neu, wenn kein Durchlauf läuft."}
+{"k": "ui.update.other", "src": "7ae4a531", "v": "aipager wurde neu gestartet, läuft aber mit {version}."}
+{"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager wurde neu gestartet, läuft aber mit {version} statt {expected}."}
+{"k": "ui.update.refused", "src": "651df229", "v": "Öffne die App neu, um das Ergebnis des Updates zu sehen."}
+{"k": "ui.update.reopen", "src": "3bf2409f", "v": "aipager wurde neu gestartet. Öffne die App neu, sobald der Chat meldet, dass das Update fertig ist: schließe sie und öffne sie wieder aus dem Chat (Menü-Button oder {command})."}
+{"k": "ui.update.restart_now_confirm", "src": "3f76f590", "v": "Jetzt neu starten unterbricht die hier aufgeführten laufenden Durchläufe."}
+{"k": "ui.update.restarting", "src": "0cfedf00", "v": "aipager wird neu gestartet…"}
+{"k": "ui.update.running", "src": "5c38d794", "v": "Ein Update läuft schon."}
+{"k": "ui.update.shutting_down", "src": "190aec5c", "v": "aipager fährt herunter. Versuch es noch einmal, wenn es wieder da ist."}
+{"k": "ui.update.slow", "src": "43a0f87b", "v": "Startet noch neu, öffne die App gleich noch einmal."}
+{"k": "ui.update.stale", "src": "fa8fd334", "v": "Diese Prüfung ist veraltet. Prüfe erneut."}
+{"k": "ui.update.start_failed", "src": "2f57d419", "v": "Das konnte nicht gestartet werden. Versuch es noch einmal."}
+{"k": "ui.update.title", "src": "c76d1807", "v": "Updates"}
+{"k": "ui.update.too_many", "src": "9a3f5b9e", "v": "Zu viele Anfragen. Versuch es in einer Minute noch einmal."}
+{"k": "ui.update.unknown_version", "src": "90246157", "v": "einer unbekannten Version"}
+{"k": "ui.update.unreachable", "src": "fc17f70c", "v": "aipager war nicht erreichbar. Versuch es noch einmal."}
+{"k": "ui.update.up_to_date", "src": "2772acac", "v": "Alles ist aktuell."}
+{"k": "ui.update.updated", "src": "a56afb67", "v": "Aktualisiert auf {version}."}
+{"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"one": "Aktualisiert auf {version}, {n} Sitzung wieder übernommen.", "other": "Aktualisiert auf {version}, {n} Sitzungen wieder übernommen."}}
+{"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude fragt dich"}
+{"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude braucht deine Berechtigung"}
+{"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "Im Chat ist eine Berechtigungsanfrage offen."}
+{"k": "ui.waiting.question_open", "src": "3165c4fc", "v": "Im Chat ist eine Frage offen."}
+{"k": "upd.ap.blocked", "src": "2b9633f6", "v": "🚫 <b>aipager</b> kann von hier aus nicht aktualisiert werden: {reason}"}
+{"k": "upd.ap.blocked_here", "src": "cefc4c9b", "v": "🚫 aipager kann von hier aus nicht aktualisiert werden: {reason}"}
+{"k": "upd.ap.cancelled", "src": "6eb974a3", "v": "↩️ Update von <b>aipager</b> abgebrochen - nichts wurde installiert."}
+{"k": "upd.ap.current", "src": "fbd921a8", "v": "✅ <b>aipager</b> ist schon aktuell ({version})."}
+{"k": "upd.ap.current_git", "src": "d645d1e5", "v": "✅ <b>aipager</b> ist schon auf {running} - diese {kind}-Installation aktualisiert aus ihrer git-Quelle, und dort gibt es nichts Neueres."}
+{"k": "upd.ap.current_index", "src": "86cb566d", "v": "✅ <b>aipager</b> ist schon auf {running} - im Paketindex gibt es nichts Neueres."}
+{"k": "upd.ap.current_local", "src": "dfdf1e49", "v": "✅ <b>aipager</b> ist schon auf {running} - diese {kind}-Installation aktualisiert aus dem lokalen Pfad, der noch dieselbe Version hat. Mach zuerst ein Update dieses Checkouts."}
+{"k": "upd.ap.current_local_at", "src": "126cee31", "v": "✅ <b>aipager</b> ist schon auf {running} - diese {kind}-Installation aktualisiert aus dem lokalen Pfad {where}, der noch dieselbe Version hat. Mach zuerst ein Update dieses Checkouts."}
+{"k": "upd.ap.current_plain", "src": "598c28b0", "v": "✅ <b>aipager</b> ist schon auf {running}."}
+{"k": "upd.ap.failed", "src": "8979f696", "v": "❌ Aktualisierung von <b>aipager</b> fehlgeschlagen (Exit-Code {code}), nichts neu gestartet."}
+{"k": "upd.ap.finished_shutdown", "src": "622303bd", "v": "✅ Aktualisierung von <b>aipager</b> fertig; der Dienst fährt herunter, daher wurde nichts neu gestartet - beim nächsten Start läuft, was installiert ist."}
+{"k": "upd.ap.import_failed", "src": "cba04fe9", "v": "❌ Die neue Version ließ sich nicht importieren, es läuft weiter {running}, nichts neu gestartet. Installiere neu mit <code>{hint}</code>"}
+{"k": "upd.ap.installed", "src": "01a08996", "v": "✅ <b>aipager</b> {frm} → {to} installiert."}
+{"k": "upd.ap.installed_shutdown", "src": "d2a325d6", "v": "✅ <b>aipager</b> {frm} → {to} installiert; der Dienst fährt herunter, daher wurde nichts neu gestartet - beim nächsten Start läuft {to}."}
+{"k": "upd.ap.not_found", "src": "f74b4ba7", "v": "❌ <b>aipager</b>: <code>{kind}</code> nicht gefunden (gesucht in {path})"}
+{"k": "upd.ap.prepare_failed", "src": "65e6b15f", "v": "✅ <b>aipager</b> {frm} → {to} installiert, aber der Neustart konnte nicht vorbereitet werden ({error}). Starte selbst neu: <code>{cmd}</code>"}
+{"k": "upd.ap.restart_cancelled", "src": "23b8320e", "v": "✅ <b>aipager</b> {frm} → {to} installiert, aber der Neustart wurde abgebrochen. Starte selbst neu: <code>{cmd}</code>"}
+{"k": "upd.ap.restarting", "src": "e68754da", "v": "⏳ <b>aipager</b> {frm} → {to} installiert, Neustart…"}
+{"k": "upd.ap.schedule_failed", "src": "8ded320b", "v": "✅ <b>aipager</b> {frm} → {to} installiert, aber der Neustart konnte nicht geplant werden: {detail}. Starte selbst neu: <code>{cmd}</code>"}
+{"k": "upd.ap.timeout", "src": "f834e535", "v": "⏱ Aktualisierung von <b>aipager</b> nach {seconds} s abgebrochen, nichts neu gestartet, es läuft weiter {running}. Die Installation auf der Festplatte ist eventuell unvollständig: installiere vor dem nächsten Neustart neu mit <code>{hint}</code>."}
+{"k": "upd.ap.waiting", "src": "dc25cdd1", "v": "⏳ <b>aipager</b> {frm} → {to} installiert, Neustart, sobald der aktuelle Durchlauf endet"}
+{"k": "upd.busy.restarting", "src": "6d1c5479", "v": "⏳ aipager startet gleich für ein Update neu. Versuch /update noch einmal, wenn es wieder da ist."}
+{"k": "upd.busy.running", "src": "e0aa9bc2", "v": "⏳ Ein Update läuft schon ({phase}). Seine Statusnachricht zeigt den Fortschritt."}
+{"k": "upd.busy.running_short", "src": "07e3480f", "v": "⏳ Ein Update läuft schon ({phase})."}
+{"k": "upd.cancelled", "src": "a85d8e48", "v": "↩️ Update abgebrochen - nichts wurde geändert."}
+{"k": "upd.cc.current", "src": "57516cde", "v": "✅ <b>Claude Code</b> ist schon aktuell ({version})"}
+{"k": "upd.cc.done", "src": "cd97aa9e", "v": "✅ <b>Claude Code</b> {before} → {after}"}
+{"k": "upd.cc.done_shutdown", "src": "71cb416d", "v": "✅ Update von <b>Claude Code</b> fertig; aipager fährt herunter, daher zeigt /update die neue Version, wenn es wieder da ist"}
+{"k": "upd.cc.error", "src": "fcf1f441", "v": "❌ <b>Claude Code</b>: {error}"}
+{"k": "upd.cc.failed", "src": "ef865b9a", "v": "❌ Update von <b>Claude Code</b> fehlgeschlagen (Exit-Code {code})"}
+{"k": "upd.cc.timeout", "src": "c6c8c9ce", "v": "⏱ Update von <b>Claude Code</b> nach {seconds} s abgebrochen"}
+{"k": "upd.check_failed_now", "src": "4ba67b54", "v": "⚠️ Die Suche nach Updates hat gerade nicht geklappt. Versuch es noch einmal."}
+{"k": "upd.elapsed.m", "src": "a47d8efb", "v": "{m} Min."}
+{"k": "upd.elapsed.ms", "src": "c017b27a", "v": "{m} Min. {s} s"}
+{"k": "upd.elapsed.s", "src": "2b434962", "v": "{s} s"}
+{"k": "upd.fix.claude", "src": "94c58cdc", "v": "führe {command} noch einmal aus"}
+{"k": "upd.fix.reinstall", "src": "ae353907", "v": "installiere neu mit {command}"}
+{"k": "upd.gate.busy", "src": "a8f53f0e", "v": {"one": "⏰ Die Sitzungen arbeiten nach {n} Min. immer noch. Noch {wait} Min. warten, jetzt neu starten oder abbrechen? Jetzt neu starten unterbricht alles, was unten aufgeführt ist.", "other": "⏰ Die Sitzungen arbeiten nach {n} Min. immer noch. Noch {wait} Min. warten, jetzt neu starten oder abbrechen? Jetzt neu starten unterbricht alles, was unten aufgeführt ist."}}
+{"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"one": "⏰ Die Sitzungen arbeiten nach {n} Min. immer noch. Noch {wait} Min. warten, jetzt neu starten oder abbrechen? Jetzt neu starten unterbricht alles, was unten aufgeführt ist, auch die zurückgehaltenen, noch nicht zugestellten Antworten.", "other": "⏰ Die Sitzungen arbeiten nach {n} Min. immer noch. Noch {wait} Min. warten, jetzt neu starten oder abbrechen? Jetzt neu starten unterbricht alles, was unten aufgeführt ist, auch die zurückgehaltenen, noch nicht zugestellten Antworten."}}
+{"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: vor dem Neustart wird gewartet, bis jede Sitzung frei ist."}
+{"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>Updates</b>"}
+{"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (aktuell)"}
+{"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}
+{"k": "upd.line.ap_newer_blocked", "src": "6c0b194f", "v": "aipager {running} → {latest} (von hier aus nicht aktualisierbar: {reason})"}
+{"k": "upd.line.ap_unchecked", "src": "6e9c88e2", "v": "aipager {running} (Prüfung nicht möglich)"}
+{"k": "upd.line.cc_current", "src": "f360deb9", "v": "Claude Code {current} (aktuell)"}
+{"k": "upd.line.cc_newer", "src": "f40a4485", "v": "Claude Code {current} → {latest}"}
+{"k": "upd.line.cc_newer_blocked", "src": "aa86c9e2", "v": "Claude Code {current} → {latest} (von hier aus nicht aktualisierbar: {reason})"}
+{"k": "upd.line.cc_unchecked", "src": "634412f0", "v": "Claude Code {current} (Prüfung nicht möglich)"}
+{"k": "upd.line.cc_unknown", "src": "302340a8", "v": "Claude Code (Prüfung nicht möglich)"}
+{"k": "upd.manual.needed", "src": "9abdaf5e", "v": "Neustart nötig: {reason}"}
+{"k": "upd.manual.would_kill", "src": "df06a1e3", "v": "Sitzungen, die ein Neustart beenden würde: {labels}"}
+{"k": "upd.marker.done", "src": "5a3ca85c", "v": {"one": "✅ aipager aktualisiert {frm} → {to}, {n} Sitzung wieder übernommen", "other": "✅ aipager aktualisiert {frm} → {to}, {n} Sitzungen wieder übernommen"}}
+{"k": "upd.marker.interrupted", "src": "66f4f0b7", "v": "⚠️ Ein Update wurde unterbrochen, als aipager herunterfuhr; die Installation ist eventuell unvollständig. Jetzt läuft {running}. Wenn etwas nicht stimmt, {fix}."}
+{"k": "upd.marker.not_back", "src": "d253a83a", "v": "⚠️ Nicht zurück: {labels}"}
+{"k": "upd.marker.wrong_version", "src": "17ebf14f", "v": "⚠️ aipager wurde neu gestartet, läuft aber mit {running} statt {to}."}
+{"k": "upd.note.ap_installed", "src": "5616e4b4", "v": "aipager {installed} ist installiert, läuft aber noch nicht."}
+{"k": "upd.offer_stale", "src": "a72655cc", "v": "⚠️ Diese Prüfung ist veraltet. Prüfe erneut, bevor du aktualisierst."}
+{"k": "upd.output_in_log", "src": "3c62a9b7", "v": "(Ausgabe im Log des Dienstes)"}
+{"k": "upd.prompt", "src": "8a30cb51", "v": "⬆️ <b>Updates</b>\n\nPrüfe, ob es für aipager oder Claude Code eine neuere Version gibt."}
+{"k": "upd.reason.unknown_install", "src": "0ab6e3a7", "v": "unbekannte Installation"}
+{"k": "upd.reason.yourself", "src": "8ebd1480", "v": "starte es selbst neu"}
+{"k": "upd.restart.auto", "src": "47924d9e", "v": "Neustart: automatisch, sobald kein Durchlauf läuft."}
+{"k": "upd.restart.manual", "src": "8e3998af", "v": "Neustart: manuell ({reason})"}
+{"k": "upd.sessions.new_version", "src": "a9ee48dc", "v": "Neue Sitzungen nutzen {version}."}
+{"k": "upd.sessions.none", "src": "1fe42f86", "v": "Gerade laufen keine Sitzungen."}
+{"k": "upd.sessions.none_restarted", "src": "5807bbd1", "v": "Laufende Sitzungen behalten die alte Version, bis sie neu gestartet werden - keine wurde neu gestartet."}
+{"k": "upd.sessions.old", "src": "2e875cd3", "v": "Noch auf der alten Version: {labels}"}
+{"k": "upd.sessions.other_chats", "src": "7b515e23", "v": {"one": "und {n} in anderen Chats", "other": "und {n} in anderen Chats"}}
+{"k": "upd.shutdown.early", "src": "6b7541f0", "v": "⚠️ Der Dienst wurde beendet, bevor das Update fertig war."}
+{"k": "upd.shutdown.partial", "src": "140c77c5", "v": "⚠️ Der Dienst wurde beendet, während das Update installiert wurde; das Installationsprogramm wurde gestoppt, daher ist die Installation eventuell unvollständig. Wenn etwas nicht stimmt, {fix}."}
+{"k": "upd.shutting_down", "src": "4dabffa5", "v": "⏳ aipager fährt herunter. Versuch es noch einmal, wenn es wieder da ist."}
+{"k": "upd.starting", "src": "0e316323", "v": "⏳ Update wird gestartet…"}
+{"k": "upd.step.aipager", "src": "4baaa0e2", "v": "aipager wird über {kind} aktualisiert"}
+{"k": "upd.step.claude", "src": "417c042d", "v": "Claude Code wird aktualisiert"}
+{"k": "upd.step.started", "src": "cd17f00f", "v": "⏳ {step}…"}
+{"k": "upd.step.still_working", "src": "37b863ed", "v": "⏳ {step} - läuft noch{elapsed}"}
+{"k": "upd.still_running", "src": "c57fe950", "v": "Läuft noch:"}
+{"k": "upd.summary.cant_here", "src": "8abb0e4e", "v": "Ein Update ist erschienen, lässt sich aber von hier aus nicht installieren."}
+{"k": "upd.summary.check_failed", "src": "b8579281", "v": "Nichts Neueres gefunden, aber eine Prüfung ist fehlgeschlagen. Versuch es später noch einmal."}
+{"k": "upd.summary.up_to_date", "src": "2772acac", "v": "Alles ist aktuell."}
+{"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ Das Update wurde durch einen unerwarteten Fehler gestoppt (siehe Log des Dienstes)."}
+{"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ Der geplante Neustart hat nicht stattgefunden - die neue Version ist installiert, aber die alte läuft noch. Starte selbst neu: {command}"}
+{"k": "whoami.any", "src": "195d97a4", "v": "(alle)"}
+{"k": "whoami.bypass_role_denies", "src": "9ed1452d", "v": "  bypass_role_denies: {value}"}
+{"k": "whoami.bypass_safety", "src": "a09645db", "v": "  bypass_safety: {value}"}
+{"k": "whoami.can_manage", "src": "e889ca71", "v": "  can_manage: {value}"}
+{"k": "whoami.effective_allow", "src": "50a8e776", "v": "  wirksame allow_tools: {tools}"}
+{"k": "whoami.effective_deny", "src": "3b0b5420", "v": "  wirksame deny_tools: {tools}"}
+{"k": "whoami.head", "src": "ac5935f7", "v": "🪪 <b>{member}</b> in <b>{scope}</b>"}
+{"k": "whoami.no", "src": "fd128635", "v": "nein"}
+{"k": "whoami.none", "src": "3c6b183d", "v": "(keine)"}
+{"k": "whoami.not_allowed", "src": "c9bfc640", "v": "🪪 Du stehst nicht auf der Liste der erlaubten Nutzer dieses Bots."}
+{"k": "whoami.not_member", "src": "d86fddf7", "v": "🪪 Du bist kein Mitglied dieses Bereichs."}
+{"k": "whoami.personal", "src": "10ab5a55", "v": "🪪 Persönlicher Modus - volle Kontrolle über diesen Rechner aus diesem privaten Chat."}
+{"k": "whoami.role", "src": "8ffb44b5", "v": "  Rolle: <b>{role}</b>"}
+{"k": "whoami.team_deny", "src": "e88735e1", "v": "  deny_tools: {tools}"}
+{"k": "whoami.team_head", "src": "c413798c", "v": "🪪 <b>{member}</b>"}
+{"k": "whoami.yes", "src": "fb360f9c", "v": "ja"}

@@ -11,11 +11,14 @@ import asyncio
 
 from aipager import preferences as prefs
 from aipager.session_monitor import SessionMonitor
+from aipager.state import AGENTS_LINE_EDIT_INTERVAL
 
 CHAT = 256113222
 DESC = "run the tests"
 DONE = f'Background command "{DESC}" completed (exit code 0)'
-LINE = f"⏳ 1 shell still running ({DESC}) - results will follow here"
+#: The answer's status block for one shell of the job: a count, never
+#: the command.
+LINE = "🖥 1 shell running"
 
 
 def _run(vloop, coro):
@@ -125,17 +128,11 @@ def test_bb_pin_says_idle_with_one_shell_running(replay, vloop, monkeypatch):
     assert snap["pin"] == "💤 aipager_boss (idle, 1 shell running)"
 
 
-def test_bb_answer_line_label_is_cut_to_32(replay, vloop, monkeypatch):
-    long = "z" * 40
-    snap = _waiting(replay, vloop, monkeypatch, desc=long)
-    line = _last_line(snap["answers"][0])
-    assert line.startswith("⏳ 1 shell still running (zzz") and long not in line
-
-
-def test_bb_answer_line_label_of_32_is_whole(replay, vloop, monkeypatch):
+def test_bb_answer_block_never_names_the_shell(replay, vloop, monkeypatch):
     label = "q" * 32
     snap = _waiting(replay, vloop, monkeypatch, desc=label)
-    assert f"({label})" in _last_line(snap["answers"][0])
+    assert _last_line(snap["answers"][0]) == LINE
+    assert "qqq" not in snap["answers"][0]
 
 
 # ── mixed agents and shells ─────────────────────────────────────────────────
@@ -148,9 +145,11 @@ def test_bb_mixed_waiting_card_wording(replay, vloop, monkeypatch):
 
 def test_bb_mixed_answer_line_wording(replay, vloop, monkeypatch):
     snap = _waiting(replay, vloop, monkeypatch, agent=True)
-    assert _last_line(snap["answers"][0]) == (
-        f"⏳ 1 agent, 1 shell still running (pipeline-runner, {DESC}) - "
-        "results will follow here")
+    blocks = snap["answers"][0].rstrip().split("\n\n")
+    assert blocks[-3:] == ["⏳ 1 agent working · 🖥 1 shell running",
+                           "○ **pipeline-runner**",
+                           "Results from the agents will follow here."]
+    assert DESC not in snap["answers"][0]
 
 
 def test_bb_mixed_pin_wording(replay, vloop, monkeypatch):
@@ -181,6 +180,9 @@ def _full_job(r, vloop, monkeypatch, *, pre_read=False, scans=False):
             mon = SessionMonitor(r.bot.registry, r.bot.notify)
             await mon._scan()
             await asyncio.sleep(6)
+            await mon._scan()
+            # Past the block's edit interval (its send counts as an edit).
+            await asyncio.sleep(AGENTS_LINE_EDIT_INTERVAL)
             await mon._scan()
             await asyncio.sleep(10)
         w.cancel()
@@ -214,7 +216,7 @@ def test_bb_answer_line_settles_to_shell_done(replay, vloop, monkeypatch):
     _full_job(replay, vloop, monkeypatch, scans=True)
     first = min(replay.chat.answer_texts)
     assert _last_line(replay.chat.answer_texts[first][-1]).startswith(
-        f"✅ shell: {DESC} - done (")
+        "1 shell finished (")
 
 
 def test_bb_answer_line_settles_with_one_edit(replay, vloop, monkeypatch):

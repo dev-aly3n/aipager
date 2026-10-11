@@ -596,7 +596,11 @@ def _run_daemon_reporting_crashes(bot_username: str) -> None:
     """Run the daemon between the problem-report markers (8.112), and log a
     fatal error WITH its traceback before it propagates (8.110: the CLI's
     friendly excepthook prints one line and drops every frame)."""
+    from aipager.i18n import persist
     from aipager.report import capture, runtime
+    # Before daemon_starting, which writes the first-install marker: was
+    # this machine running aipager already (multilingual phase 5)?
+    persist.note_prior_run()
     runtime.daemon_starting(service=_running_as_service())
     try:
         asyncio.run(_run_daemon(bot_username))

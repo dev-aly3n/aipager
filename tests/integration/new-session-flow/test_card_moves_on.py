@@ -180,8 +180,12 @@ def test_the_close_runs_before_every_other_handler(mk_bot, run_async, monkeypatc
     # The group intake gate (group -2, tests/test_group_intake.py) runs
     # before it; it lets a DM's every message and a group's addressed ones
     # through, so the close still sees them.
+    # The language launch's TypeHandler (group 1, multilingual phase 5)
+    # runs after every reply, so it is not one of those before.
+    from aipager.bot import language_launch
     first = [(h, g) for h, g in registered if isinstance(h, TypeHandler)
-             and getattr(h.callback, "func", None) is not group_intake.intake_gate]
+             and getattr(h.callback, "func", None) not in (
+                 group_intake.intake_gate, language_launch.after_update)]
     assert len(first) == 1
     handler, group = first[0]
     assert group == -1 and handler.type is Update

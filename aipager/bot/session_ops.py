@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import time
+from types import SimpleNamespace
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -23,9 +24,13 @@ from telegram import (
     Update,
 )
 
+from aipager import i18n
 from aipager.config import RESUME_GUARD_SECONDS
+from aipager.i18n import Command, Msg, Safe, Span
 from aipager.dtach import inject
 from aipager.bot import reactions
+from aipager.bot.sibling_text import shown
+from aipager.miniapp import sessions as _mini_sessions
 
 # Single source of truth for the poll timing (design.md ORCHESTRATOR
 # OVERRIDE) — callbacks.py does not import this module, so this is not
@@ -113,32 +118,106 @@ class StopOutcome:
     by: str = ""         # who stopped it, in a group (roadmap 8.91c)
 
 
-def _stopped_card_text(label: str, by: str = "") -> str:
+CARD_STOPPED = Msg("card.stopped", "⚠️ <b>{session}</b> · Stopped",
+                   note="The busy card after a Stop", eg={"session": "x1"})
+CARD_STOPPED_BY = Msg("card.stopped_by", "⚠️ <b>{session}</b> · Stopped by {person}",
+                      note="The busy card after a Stop in a group: who stopped it",
+                      eg={"session": "x1", "person": "@bob"})
+CARD_DENIED = Msg("card.denied", "🚫 <b>{session}</b> · Denied",
+                  note="The busy card after a refused permission ended the turn",
+                  eg={"session": "x1"})
+CARD_DENIED_BY = Msg("card.denied_by", "🚫 <b>{session}</b> · Denied by {person}",
+                     note="The busy card after a refusal in a group: who refused",
+                     eg={"session": "x1", "person": "@bob"})
+
+
+def _stopped_card_text(label: str, by: str = "", tr=None) -> str:
     """The busy card after a Stop: `⚠️ x1 · Stopped`, and in a group who
-    stopped it, `⚠️ x1 · Stopped by @bob` (roadmap 8.91c)."""
-    text = f"⚠️ <b>{html_mod.escape(label)}</b> · Stopped"
-    return f"{text} by {html_mod.escape(by)}" if by else text
+    stopped it, `⚠️ x1 · Stopped by @bob` (roadmap 8.91c). In *tr*'s
+    language (English when None)."""
+    tr = tr or i18n.get("en")
+    if by:
+        return tr.html(CARD_STOPPED_BY, session=label, person=Command(by))
+    return tr.html(CARD_STOPPED, session=label)
 
 
-def _refused_card_text(label: str, by: str = "", *, refused: bool = True) -> str:
+def _refused_card_text(label: str, by: str = "", *, refused: bool = True,
+                       tr=None) -> str:
     """The busy card after an answer typed into Claude Code's dialog ended
     the turn (roadmap 8.99): `🚫 x1 · Denied`, in a group `🚫 x1 · Denied
     by @bob`. When the typed answer was not a refusal but the turn still
     ended like an interrupt, it reads as a Stop."""
     if not refused:
-        return _stopped_card_text(label, by)
-    text = f"🚫 <b>{html_mod.escape(label)}</b> · Denied"
-    return f"{text} by {html_mod.escape(by)}" if by else text
+        return _stopped_card_text(label, by, tr)
+    tr = tr or i18n.get("en")
+    if by:
+        return tr.html(CARD_DENIED_BY, session=label, person=Command(by))
+    return tr.html(CARD_DENIED, session=label)
 
 
-def _terminal_card_text(label: str, *, refused: bool) -> str:
+# Resume, stop and switch replies (HTML unless said; the calling chat's,
+# a pop-up the tapper's).
+TOAST_STOP_STALE = Msg("toast.stop_stale", "That task already finished - use the current card",
+                       note="Pop-up: Stop tapped on the card of a turn that ended")
+NOT_WORKING = Msg("route.not_working", "<b>{session}</b> is not working.",
+                  note="HTML. Stop asked of a session that is idle", eg={"session": "x1"})
+NO_SESSION_HERE = Msg("route.no_session_here", "⚠️ No session named <b>{session}</b> here.",
+                      note="HTML. A typed name matches no session in this chat",
+                      eg={"session": "x1"})
+UNKNOWN_SESSION = Msg("route.unknown_session", "⚠️ Unknown session: {session}",
+                      note="A typed /name that is no session here", eg={"session": "x1"})
+RESUME_NOT_FOUND = Msg("sess.resume_not_found",
+                       "⚠️ No session named <b>{session}</b> in history.\nSend {command} with no "
+                       "name to see what's available.",
+                       note="/resume of a name nobody had; {command} is /resume",
+                       eg={"session": "x1", "command": "/resume"})
+RESUME_RUNNING = Msg("sess.resume_running",
+                     "⚠️ <b>{session}</b> is already running.\nTap {command} in the keyboard to "
+                     "switch to it.", note="/resume of a running session; {command} is its "
+                                           "/name", eg={"session": "x1", "command": "/x1"})
+RESUME_NO_TRANSCRIPT = Msg("sess.resume_no_transcript",
+                           "⚠️ Session <b>{session}</b> has no resumable transcript on disk.\n"
+                           "Start a fresh one with {command}.",
+                           note="/resume of a session with nothing to resume from; {command} "
+                                "is /new with its name", eg={"session": "x1",
+                                                              "command": "/new x1"})
+RESUME_FAILED = Msg("sess.resume_failed", "❌ Couldn't resume <b>{session}</b>: {error}",
+                    note="The resume failed; {error} is why (English)",
+                    eg={"session": "x1", "error": "dtach not installed"})
+RESUMED = Msg("sess.resumed", "♻️ Resumed <b>{session}</b>", note="The session is back",
+              eg={"session": "x1"})
+#: One whole sentence with its reason (the reason is
+#: ``transport.RESUME_AUTO_NEEDS_ADMIN``'s words, not glued in).
+RESUMED_IN_ASK = Msg("sess.resumed_in_ask",
+                     "♻️ Resumed <b>{session}</b> in Ask: Auto needs an admin.",
+                     note="The session came back in Ask mode, not Auto, because the person "
+                          "who resumed it is not an admin. Auto and Ask are the mode names",
+                     eg={"session": "x1"})
+RESUME_LAST_RESPONSE = Msg("sess.resume_last_response",
+                           "<i>📜 Last response from this session</i>\n"
+                           "<blockquote>{preview}</blockquote>",
+                           note="Under a resumed session: the start of its last answer",
+                           eg={"preview": "All tests pass."})
+
+CARD_DENIED_TERMINAL = Msg(
+    "card.denied_terminal", "🚫 <b>{session}</b> · Denied in the terminal",
+    note="The busy card after a permission was refused at the computer's own terminal",
+    eg={"session": "x1"})
+CARD_STOPPED_TERMINAL = Msg(
+    "card.stopped_terminal", "⚠️ <b>{session}</b> · Stopped in the terminal",
+    note="The busy card after a question was dismissed at the computer's own terminal",
+    eg={"session": "x1"})
+
+
+def _terminal_card_text(label: str, *, refused: bool, tr=None) -> str:
     """The busy card after Claude Code's own dialog was answered at the
     terminal in a way that ended the turn (roadmap 8.113): `🚫 x1 · Denied
     in the terminal` for a permission, `⚠️ x1 · Stopped in the terminal`
-    for a question left with Escape."""
-    if refused:
-        return f"🚫 <b>{html_mod.escape(label)}</b> · Denied in the terminal"
-    return f"⚠️ <b>{html_mod.escape(label)}</b> · Stopped in the terminal"
+    for a question left with Escape. In *tr*'s language (English when
+    None)."""
+    tr = tr or i18n.get("en")
+    return tr.html(CARD_DENIED_TERMINAL if refused else CARD_STOPPED_TERMINAL,
+                   session=label)
 
 
 #: How long, after an answer was TYPED into Claude Code's permission dialog
@@ -256,6 +335,30 @@ MODEL_SWITCH_CONFIRM_SECONDS = 15.0
 # a marker must never outlive the refusal that stops a second /model.
 MODEL_SWITCH_PENDING_SECONDS = 60.0
 _MODEL_SWITCH_POLL_SECONDS = 0.25
+
+
+#: The words for each refusal code of :func:`model_switch_refusal`: the
+#: Mini App's own keys (``miniapp.sessions``), one key per sentence for
+#: both surfaces.
+MODEL_REFUSAL_MSGS: dict[str, Msg] = {
+    "not_live": _mini_sessions.MODEL_SWITCH_NOT_LIVE_REASON,
+    "busy": _mini_sessions.MODEL_SWITCH_BUSY_REASON,
+    "prompt_open": _mini_sessions.MODEL_SWITCH_PROMPT_OPEN_REASON,
+    "unknown": _mini_sessions.MODEL_SWITCH_UNKNOWN_REASON,
+    "switch_pending": _mini_sessions.MODEL_SWITCH_PENDING_REASON,
+}
+#: A /model whose switch the statusline never confirmed (the Mini App's
+#: key too).
+MODEL_UNCONFIRMED = _mini_sessions.MODEL_SWITCH_UNCONFIRMED
+
+
+def model_refusal_text(tr, code: str, detail: str) -> str:
+    """Why /model was refused, in *tr*'s language (plain text): the key of
+    *code*, or *detail* as received for a code without one. In English,
+    *detail* itself: the same words (a test keeps the keys equal to the
+    Mini App's)."""
+    msg = MODEL_REFUSAL_MSGS.get(code)
+    return tr.text(msg) if msg is not None and tr.code != "en" else detail
 
 
 def model_switch_refusal(sess) -> tuple[str, str] | None:
@@ -564,6 +667,7 @@ class SessionOpsMixin:
         sess.trigger_msg_id = msg_id
         if text is not None:
             sess.last_prompt = text
+            sess.turn_prompt = text
             sess.last_prompt_driver_user_id = driver_user_id
 
     def _typed_name_foreign(self, session_name: str, chat_id: int | None) -> bool:
@@ -787,7 +891,7 @@ class SessionOpsMixin:
 
     async def _reply_needs_admin(self, update) -> None:
         """The one answer to a refused slash command: a reply and a 🤷."""
-        await reply_text(update.message, NEEDS_ADMIN_REPLY)
+        await reply_text(update.message, shown(i18n.for_update(update), NEEDS_ADMIN_REPLY))
         await self._react(update, reactions.NOT_DELIVERED)
 
     async def _inject_prompt(self, sess, text: str, reply_context: str = "",
@@ -918,9 +1022,11 @@ class SessionOpsMixin:
         # it would make the per-session settings feature do nothing.
         # Best-effort.
         try:
+            from aipager import member_root
             from aipager import preferences as prefs_mod
             from aipager.policy_snapshot import write_note
             member = role = scope = None
+            root_bound = None
             if self.scopes is not None:
                 # See the docstring above: permission attribution uses
                 # ONLY the explicitly-passed id, never the fallback used
@@ -935,6 +1041,11 @@ class SessionOpsMixin:
                 # 8.72): an unstamped session's note carries that chat's
                 # deny_tools too.
                 scope = self._scope_for(resolve_chat_id_int(sess))
+                if member is not None:
+                    # The members' root folder of the chat the role came
+                    # from (role_chat_id), never the session's chat.
+                    root_bound = member_root.snapshot_bound(
+                        role, self._scope_for(role_chat_id), self.scopes)
             style = prefs_mod.style_text(
                 prefs_mod.resolve_preferences(
                     sess.scope_chat_id or 0, sess.preference_overrides(),
@@ -953,6 +1064,7 @@ class SessionOpsMixin:
                 # The safety floor's policy.yaml additions (roadmap
                 # 8.96), from the same policy the role came from.
                 policy=getattr(self, "policy", None),
+                root_bound=root_bound,
             )
         except Exception:
             log.debug("policy note write failed", exc_info=True)
@@ -1103,11 +1215,12 @@ class SessionOpsMixin:
 
         # A person whose turns are confined to the session's folder never
         # gets ``/``, the home folder or a folder above it as that folder
-        # (roadmap 8.79), whichever surface asked. The hook would still
-        # confine their writes; this says why up front instead.
-        from aipager.miniapp import launch as launch_rules
-        refusal = launch_rules.launch_folder_refusal(
-            cwd, self._is_confined_user(driver_user_id, scope_chat_id))
+        # (roadmap 8.79), and a role without can_manage starts only inside
+        # its members' root folder, whichever surface asked. The hook
+        # would still hold their turns; this says why up front instead.
+        from aipager import member_root
+        refusal = member_root.launch_refusal(
+            self, driver_user_id, scope_chat_id, cwd)
         if refusal:
             return "", refusal
 
@@ -1351,7 +1464,8 @@ class SessionOpsMixin:
                  "transcript marker" if confirmed else "grace")
         self._stop_animation(sess)
         await self._settle_card_text(
-            sess, card_text or _refused_card_text(sess.label, by, refused=refused))
+            sess, card_text or _refused_card_text(sess.label, by, refused=refused,
+                                                  tr=i18n.for_sess(sess)))
         sess.busy_msg_id = None
         sess.trigger_msg_id = None
         sess.busy_card_trigger = None
@@ -1442,7 +1556,8 @@ class SessionOpsMixin:
         # it, under the card-edit lock: the Escapes above make Claude fire
         # tool hooks right now, and a card edit of theirs landing after
         # this line would put "Working" and a live Stop button back.
-        await self._settle_card_text(sess, _stopped_card_text(sess.label, by))
+        await self._settle_card_text(sess, _stopped_card_text(sess.label, by,
+                                                              i18n.for_sess(sess)))
         sess.busy_msg_id = None  # also a -1 claim, which the helper skips
 
         # 4. Transition to IDLE directly (skip notify — we handle UI here)
@@ -1497,8 +1612,9 @@ class SessionOpsMixin:
             # Button taps are checked HERE rather than at the call site, so a
             # future caller cannot forget. `update`-driven callers (the /stop
             # command, `/<label> stop`) pass no query and are always current.
-            await self._safe_answer(
-                query, "That task already finished - use the current card")
+            await self._safe_answer(query, i18n.for_person(
+                update if update is not None else SimpleNamespace(callback_query=query)
+            ).text(TOAST_STOP_STALE))
             return StopOutcome(ok=False, label=sess.label, reason="stale")
         # Who stopped it, named in a group (roadmap 8.91c): the tapper or
         # the command's sender, in the chat the tap or command came from.
@@ -1513,10 +1629,13 @@ class SessionOpsMixin:
 
         # Acknowledge, in the words every Stop uses.
         if query:
-            await self._safe_answer(query, _stopped_line(outcome, html=False))
+            await self._safe_answer(query, _stopped_line(
+                outcome, html=False,
+                tr=i18n.for_person(update if update is not None
+                                   else SimpleNamespace(callback_query=query))))
             # Also edit the callback query's message if it's the busy message
             try:
-                await edit_text(query, _stopped_card_text(sess.label, by),
+                await edit_text(query, _stopped_card_text(sess.label, by, i18n.for_sess(sess)),
                                 parse_mode="HTML")
             except Exception:
                 pass
@@ -1534,13 +1653,47 @@ class SessionOpsMixin:
             await self._react(update, reactions.ACK)
             if getattr(update, "message", None) is not None:
                 try:
-                    await reply_text(update.message, _stopped_line(outcome),
+                    await reply_text(update.message,
+                                     _stopped_line(outcome, tr=i18n.for_update(update)),
                                      parse_mode="HTML")
                 except Exception:
                     log.debug("[%s] stop acknowledgement reply failed",
                               sess.label, exc_info=True)
 
         return outcome
+
+    async def _tell_peer_sender(self, sess: TrackedSession, peer_from,
+                                reason: str) -> None:
+        """A turn a verified message from another session started was
+        stopped by the safety rules: tell whoever handed the task over, so
+        it is not silently lost. The sending session's chat when both
+        sessions share a chat; otherwise only the owner's private chat, and
+        only when the sending turn was the owner's or typed in its
+        terminal: roles and session names never reach another chat
+        (roadmap 8.73/8.76, C6)."""
+        if not isinstance(peer_from, dict) or peer_from.get("status") != "verified":
+            return
+        sender = self.registry.get(peer_from.get("sender_session") or "")
+        if sender is None or not self._app:
+            return
+        from aipager.bot import peer_notice, report_flow, safety_notice
+        from aipager.bot.transport import resolve_chat_id
+        to_chat, my_chat = resolve_chat_id(sender), resolve_chat_id(sess)
+        driver = peer_from.get("driver") if isinstance(peer_from.get("driver"), dict) else {}
+        if to_chat == my_chat:
+            tr = i18n.for_sess(sender)
+        else:
+            if driver.get("class") not in ("owner", "terminal"):
+                return
+            owner = report_flow.resolve_owner(self)
+            if owner is None:
+                return
+            to_chat = owner
+            tr = i18n.for_chat(owner)
+        text = tr.html(peer_notice.SENDER_NOTICE, receiver=sess.label,
+                       sender=sender.label,
+                       reason=Safe(safety_notice.reason_text(tr, reason)))
+        await send_text(self._app.bot, to_chat, text, parse_mode="HTML")
 
     async def _halt_for_safety(self, sess: TrackedSession, reason: str) -> None:
         """Cleanly halt a session after a safety block.
@@ -1567,9 +1720,18 @@ class SessionOpsMixin:
             self._cancel_lazy_card(sess)
             sess.close_turn()  # no card for this turn from here (8.57)
         self._stop_animation(sess)
-        # 3. Replace the busy message with the block notice (or send fresh).
-        notice = (f"🛑 <b>{html_mod.escape(sess.label)}</b> · Blocked by "
-                  f"safety policy: {html_mod.escape(reason)} (stopped)")
+        # 3. Replace the busy message with the block notice (or send fresh),
+        # in the chat's language; the reason Claude got stays English.
+        from aipager.bot import peer_notice, safety_notice
+        tr = i18n.for_sess(sess)
+        notice = safety_notice.notice_html(tr, sess.label, reason)
+        # A turn another Claude session started or narrowed: say so here,
+        # and tell the sending session's chat ("peer message authority").
+        peer_from = getattr(sess, "peer_from", None)
+        suffix = peer_notice.halt_suffix(tr, peer_from,
+                                         getattr(sess, "peer_narrowed", False))
+        if suffix:
+            notice = f"{notice}\n{suffix}"
         try:
             # Written and retired under the card-edit lock, as in
             # `_stop_session_core`.
@@ -1579,6 +1741,11 @@ class SessionOpsMixin:
                     resolve_chat_id(sess), notice, parse_mode="HTML")
         except Exception:
             log.debug("[%s] safety halt notice failed", sess.label,
+                      exc_info=True)
+        try:
+            await self._tell_peer_sender(sess, peer_from, reason)
+        except Exception:
+            log.debug("[%s] peer sender notice failed", sess.label,
                       exc_info=True)
         # 4. Return to IDLE. Held messages are dropped (R3); what Claude
         # had queued is only pulled back into its input box by the
@@ -1799,7 +1966,7 @@ class SessionOpsMixin:
         switch to it."""
         wants_auto = (skip_perms_override if skip_perms_override is not None
                       else sess.skip_perms) is True
-        if wants_auto and not self._is_admin_user(actor, chat_id):
+        if wants_auto and not self._may_use_auto(actor, chat_id):
             return False, True
         return skip_perms_override, False
 
@@ -1819,6 +1986,10 @@ class SessionOpsMixin:
         place that resolves the label to a session and handles "no such
         session" — the core is never called with ``sess is None``.
         """
+        # The chat the command or tap came from (keyword signature kept:
+        # stand-ins take this exact call).
+        tr = i18n.for_update(update if update is not None
+                             else SimpleNamespace(callback_query=query))
         if sess is None:
             # ``sess``: a caller that already holds the exact session (the
             # /new conflict card) passes it; a label can name another
@@ -1827,11 +1998,9 @@ class SessionOpsMixin:
                 label, calling_chat_id(update or query), include_gone=True)
 
         if sess is None:
-            await reply_fn(
-                f"⚠️ No session named <b>{html_mod.escape(label)}</b> in history.\n"
-                f"Send <code>/resume</code> with no name to see what's available.",
-                parse_mode="HTML",
-            )
+            await reply_fn(tr.html(RESUME_NOT_FOUND, session=label,
+                                   command=Span("<code>/resume</code>")),
+                           parse_mode="HTML")
             return
 
         driver_user_id = (
@@ -1849,6 +2018,14 @@ class SessionOpsMixin:
         skip_perms_override, auto_refused = self._resume_auto_gate(
             sess, skip_perms_override, actor,
             calling_chat_id(update or query))
+        # A role without can_manage resumes only a session inside its
+        # members' root folder.
+        from aipager import member_root
+        refusal = member_root.relaunch_refusal(
+            self, actor, calling_chat_id(update or query), sess.cwd)
+        if refusal:
+            await reply_fn(member_root.as_html(tr, refusal), parse_mode="HTML")
+            return
         # The GONE snapshot, read before the core resumes the session:
         # leaving GONE clears it (state.transition, roadmap 8.34), and it
         # is still the right "where you left off" for the recap below.
@@ -1859,29 +2036,19 @@ class SessionOpsMixin:
         )
 
         if outcome.reason == "not_gone":
-            await reply_fn(
-                f"⚠️ <b>{html_mod.escape(label)}</b> is already running.\n"
-                f"Tap <code>/{html_mod.escape(label)}</code> in the keyboard "
-                f"to switch to it.",
-                parse_mode="HTML",
-            )
+            # The command is code, kept whole (nothing invisible inside it).
+            await reply_fn(tr.html(RESUME_RUNNING, session=label, command=Span(
+                f"<code>/{html_mod.escape(label)}</code>")), parse_mode="HTML")
             return
 
         if outcome.reason == "no_transcript":
-            await reply_fn(
-                f"⚠️ Session <b>{html_mod.escape(label)}</b> has no resumable "
-                f"transcript on disk.\n"
-                f"Start a fresh one with <code>/new {html_mod.escape(label)}</code>.",
-                parse_mode="HTML",
-            )
+            await reply_fn(tr.html(RESUME_NO_TRANSCRIPT, session=label, command=Span(
+                f"<code>/new {html_mod.escape(label)}</code>")), parse_mode="HTML")
             return
 
         if outcome.reason == "launch_failed":
-            await reply_fn(
-                f"❌ Couldn't resume <b>{html_mod.escape(label)}</b>: "
-                f"{html_mod.escape(outcome.err)}",
-                parse_mode="HTML",
-            )
+            await reply_fn(tr.html(RESUME_FAILED, session=label, error=outcome.err),
+                           parse_mode="HTML")
             return
 
         # Resumed — dashboard out the result.
@@ -1893,16 +2060,14 @@ class SessionOpsMixin:
         preview = snapshot or _read_preview(
             sess.transcript_path, max_chars=500,
         )
-        header = f"♻️ Resumed <b>{html_mod.escape(label)}</b>"
-        if auto_refused:
-            header += f" in Ask: {RESUME_AUTO_NEEDS_ADMIN}"
+        header = (tr.html(RESUMED_IN_ASK, session=label)
+                  if auto_refused else tr.html(RESUMED, session=label))
         if preview:
             body = (
                 f"{header}\n\n"
                 f"{dashboard}\n\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
-                f"<i>📜 Last response from this session</i>\n"
-                f"<blockquote>{html_mod.escape(preview)}</blockquote>"
+                f"{tr.html(RESUME_LAST_RESPONSE, preview=preview)}"
             )
         else:
             body = f"{header}\n\n{dashboard}"
@@ -1912,16 +2077,15 @@ class SessionOpsMixin:
     async def _stop_by_label(self, update: Update, target_label: str) -> None:
         """Stop a session by its label."""
         sess = self.registry.find_by_label(target_label, calling_chat_id(update))
+        tr = i18n.for_update(update)
         if sess is not None:
             outcome = await self._stop_session(sess, update=update)
             if not outcome.ok:
-                await reply_text(update.message,
-                    f"<b>{html_mod.escape(sess.label)}</b> is not working.",
-                    parse_mode="HTML")
+                await reply_text(update.message, tr.html(NOT_WORKING, session=sess.label),
+                                 parse_mode="HTML")
             return
-        await reply_text(update.message,
-            f"⚠️ No session named <b>{html_mod.escape(target_label)}</b> here.",
-            parse_mode="HTML")
+        await reply_text(update.message, tr.html(NO_SESSION_HERE, session=target_label),
+                         parse_mode="HTML")
 
     def _guess_session_from_text(
         self, text: str, scope_chat_id: int | None = None,
@@ -2025,7 +2189,8 @@ class SessionOpsMixin:
             await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
             return
 
-        await reply_text(update.message, f"⚠️ Unknown session: {target_label}")
+        await reply_text(update.message, i18n.for_update(update).text(
+            UNKNOWN_SESSION, session=target_label))
 
     # ── Mini App session menu actions (perms / clear-queue / compact /
     #    restart / rename) — see design.md's ORCHESTRATOR OVERRIDE ──
@@ -2250,7 +2415,24 @@ class SessionOpsMixin:
         log.info("[%s] queue cleared (dropped %d)", sess.label, dropped)
         return ClearQueueOutcome(ok=True, label=sess.label, dropped=dropped)
 
-    async def _compact_session_core(self, sess: TrackedSession) -> CompactOutcome:
+    def _mark_injected_command_ran(self, sess: TrackedSession, command: str) -> None:
+        """A local command aipager typed into an idle session ran at once:
+        its note is no queued message, so let it expire (roadmap 8.37), as
+        the typed-command path does."""
+        try:
+            from aipager.policy_snapshot import (
+                list_outstanding_notes,
+                mark_command_notes_ran,
+            )
+            mark_command_notes_ran(sess.name, [
+                n for n in list_outstanding_notes(sess.name)
+                if str(n.get("raw_text") or "").strip() == command])
+        except Exception:
+            log.debug("[%s] could not mark %s ran", sess.label, command,
+                      exc_info=True)
+
+    async def _compact_session_core(self, sess: TrackedSession,
+                                    driver_user_id: int | None = None) -> CompactOutcome:
         """Trigger ``/compact``, treated exactly like a normal queued
         user prompt — NOT the unconditional inject chat's reactive
         "Compact Now" button uses.
@@ -2266,13 +2448,17 @@ class SessionOpsMixin:
         if sess.status not in (Status.BUSY, Status.IDLE):
             return CompactOutcome(ok=False, reason="not_live", label=label)
         if sess.status == Status.BUSY:
-            if not sess.queue_prompt("/compact", None):
+            if not sess.queue_prompt("/compact", None,
+                                     driver_user_id=driver_user_id):
                 return CompactOutcome(ok=False, reason="queue_full", label=label)
             self.registry.mark_dirty()
             return CompactOutcome(ok=True, reason="queued", label=label)
-        ok = await self._inject_prompt(sess, "/compact")
+        # The caller is the sender (C13), as for every other message.
+        ok = await self._inject_prompt(sess, "/compact",
+                                       driver_user_id=driver_user_id)
         if not ok:
             return CompactOutcome(ok=False, reason="send_failed", label=label)
+        self._mark_injected_command_ran(sess, "/compact")
         return CompactOutcome(ok=True, reason="sent", label=label)
 
     async def _switch_model_core(

@@ -294,8 +294,14 @@ def _snap():
 
 def _fresh_floor(snap) -> bool:
     """The floor, written for a turn the hook started with no Telegram
-    message behind it: the floor plus the turn's origin (roadmap 8.77)."""
+    message behind it: the floor plus the turn's origin (roadmap 8.77),
+    marked for an origin check and carrying the chat's style text
+    ("peer message authority", I3: never the previous turn's rights)."""
     rest = dict(snap)
+    if rest.pop("verify_origin", None) is not True:
+        return False
+    rest.pop("style_text", None)
+    rest.pop("reply_context", None)
     return rest.pop("turn_origin") == "terminal" and rest == ps.FLOOR_SNAPSHOT
 
 
@@ -477,6 +483,10 @@ def test_kept_snapshot_always_carries_the_built_in_floor(tmp_path):
     thin = {**ps.resolve_snapshot(USER, None, None),
             "deny_paths_no_access": [], "deny_bash_patterns": []}
     ps.snapshot_path(SESSION).write_text(json.dumps(thin))
+    # Carried forward only into a RUNNING turn now: a fresh turn no
+    # Telegram message accounts for never keeps the previous one's rights
+    # ("peer message authority", I3).
+    ps.mark_turn_open(SESSION)
     notify_hook._match_and_promote(SESSION, "typed in the terminal")
     snap = _snap()
     assert set(ps.FLOOR_SNAPSHOT["deny_bash_patterns"]) <= set(snap["deny_bash_patterns"])

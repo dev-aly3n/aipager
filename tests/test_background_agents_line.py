@@ -14,13 +14,15 @@ R1  the session keeps a set of live background agents from exact signals:
     parent's "stopped with background work of its own still running" note
     keeps a just-stopped agent live, a silence window expires a lost one,
     GONE clears it. Phantoms (unknown id, empty type) change nothing.
-R2  an answer delivered while the set is non-empty ends with one line
-    "⏳ N agent(s) still running (<labels>) - results will follow here",
-    in every layout and on 8.32's tool-less one-message path.
-R3  once every agent that line named is gone (and stayed gone for the
-    settle window), the line is edited ONCE to "✅ … done (Nm)": an
-    ORNAMENT skip-class edit, one retry at most, never into a deleted
-    message or a gone session.
+R2  an answer delivered while the set is non-empty ends with the status
+    block ("⏳ N agent(s) working", a row per agent, "Results from the
+    agents will follow here."), in every layout and on 8.32's tool-less
+    one-message path.
+R3  once every agent the block lists is gone (and stayed gone for the
+    settle window), the block is edited to "✅ N agent(s) done (m:ss)":
+    an ORNAMENT skip-class edit, one retry at most, never into a deleted
+    message or a gone session. (The live edits before that are pinned in
+    tests/test_answer_status_live.py.)
 R4  the pinned bar says "· ⏳ N agent(s) running" on the session's line.
 
 Every outbound call is recorded in one list, in order (the rich transport's
@@ -31,6 +33,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from unittest.mock import MagicMock
 
@@ -50,8 +53,8 @@ CHAT = 555
 TRIGGER = 7
 CARD = 42
 ANSWER = "The settings fix is still running its final full test run."
-RUNNING_1 = ("⏳ 1 agent still running (pipeline-runner) - results will "
-             "follow here")
+BLOCK_1 = ("⏳ 1 agent working\n\n○ **pipeline-runner**\n\n"
+           "Results from the agents will follow here.")
 
 
 # ── harness (the 8.32 wire, one list for every call) ─────────────────────────
@@ -342,14 +345,14 @@ def test_session_end_clears_the_set_and_the_pending_line(mk_bot, run_async):
     assert sess.agents_lines == []
 
 
-# ── R2: the ⏳ line on the delivered answer ──────────────────────────────────
+# ── R2: the status block on the delivered answer ────────────────────────────
 
 @pytest.mark.parametrize("layout, tools, method", [
     ("card", (("Read: /a.py", True),), "sendRichMessage"),
     ("card", (), "sendRichMessage"),          # 8.32's tool-less one message
     ("replace", (("Read: /a.py", True),), "sendRichMessage"),
     ("merged", (("Read: /a.py", True),), "editMessageText"),
-])
+], ids=["card", "card-toolless", "replace", "merged"])
 def test_an_answer_delivered_while_an_agent_runs_says_so(
     mk_bot, run_async, wire, layout, tools, method,
 ):
@@ -361,10 +364,11 @@ def test_an_answer_delivered_while_an_agent_runs_says_so(
     answer = [p for p in wire.of(method) if ANSWER in _markdown(p)]
     assert len(answer) == 1
     text = _markdown(answer[0])
-    assert _last_line(text) == RUNNING_1
+    assert text.endswith("\n\n" + BLOCK_1)
     assert text.count("⏳") == 1
     (rec,) = sess.agents_lines
-    assert rec["text"] == text
+    assert f"{rec['body']}\n\n{rec['shown']}" == text
+    assert rec["shown"] == BLOCK_1
 
 
 def test_no_agent_no_line(mk_bot, run_async, wire):
@@ -376,15 +380,15 @@ def test_no_agent_no_line(mk_bot, run_async, wire):
     assert sess.agents_lines == []
 
 
-def test_two_agents_are_counted_and_named(mk_bot, run_async, wire):
+def test_two_agents_are_counted_and_each_has_a_row(mk_bot, run_async, wire):
     bot = _wire_bot(mk_bot, wire)
     sess = _sess(bot)
     _agents(sess, ("a1", "pipeline-runner"), ("a2", "ship-reviewer"))
     _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
     (answer,) = wire.of("sendRichMessage")
-    assert _last_line(_markdown(answer)) == (
-        "⏳ 2 agents still running (pipeline-runner, ship-reviewer) - "
-        "results will follow here")
+    assert _markdown(answer).endswith(
+        "⏳ 2 agents working\n\n○ **pipeline-runner**\n\n○ **ship-reviewer**"
+        "\n\nResults from the agents will follow here.")
 
 
 def test_a_long_label_is_truncated(mk_bot, run_async, wire):
@@ -392,10 +396,9 @@ def test_a_long_label_is_truncated(mk_bot, run_async, wire):
     sess = _sess(bot)
     _agents(sess, ("a1", "x" * 80))
     _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
-    line = _last_line(_markdown(wire.of("sendRichMessage")[0]))
-    assert "x" * 80 not in line
-    assert "…" in line
-    assert len(line) < 120
+    (rec,) = sess.agents_lines
+    assert "x" * 80 not in rec["shown"]
+    assert "**" + "x" * 31 + "…**" in rec["shown"]
 
 
 def test_the_fact_4_sequence_ends_with_the_line(mk_bot, run_async, wire):
@@ -414,14 +417,14 @@ def test_the_fact_4_sequence_ends_with_the_line(mk_bot, run_async, wire):
     _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
     (answer,) = [p for p in wire.of("sendRichMessage")
                  if ANSWER in _markdown(p)]
-    assert _last_line(_markdown(answer)) == RUNNING_1
+    assert _markdown(answer).endswith("\n\n" + BLOCK_1)
 
 
 def test_the_plain_text_fallback_does_not_carry_the_line(
     mk_bot, run_async, wire, monkeypatch,
 ):
-    """A chunked plain-text fallback cannot be rebuilt for the ✅ edit, so a
-    ⏳ line in it would stay for good: it goes out without one."""
+    """A chunked plain-text fallback cannot be rebuilt for a later edit,
+    so a block in it would stay for good: it goes out without one."""
     bot = _wire_bot(mk_bot, wire)
     sess = _sess(bot)
     _agents(sess, ("a1", "general_purpose"))
@@ -443,8 +446,10 @@ def test_the_plain_text_fallback_does_not_carry_the_line(
     "x" * 40_000,   # no safe boundary: cut at the byte budget itself
 ], ids=["paragraphs", "no-boundary"])
 def test_a_long_answer_keeps_the_line_last(mk_bot, run_async, wire, long):
-    """The line is budgeted for: the truncated body plus the line still
-    fit the rich-message ceiling."""
+    """The block is budgeted for at its LARGEST: the truncated body plus
+    the block's reserve still fit the rich-message ceiling, so no later
+    edit can push the message past it."""
+    from aipager.bot import agents_line
     from aipager.bot.animation import _RICH_LIMIT
 
     bot = _wire_bot(mk_bot, wire)
@@ -453,14 +458,16 @@ def test_a_long_answer_keeps_the_line_last(mk_bot, run_async, wire, long):
     _finish(run_async, bot, sess, summary=long, raw_md=long)
     (answer,) = wire.of("sendRichMessage")
     text = _markdown(answer)
-    assert _last_line(text) == RUNNING_1
-    assert len(text.encode()) <= _RICH_LIMIT
+    assert text.endswith("\n\n" + BLOCK_1)
+    (rec,) = sess.agents_lines
+    assert (len(rec["body"].encode()) + agents_line.reserve_bytes()
+            <= _RICH_LIMIT)
 
 
 def test_a_held_answer_does_not_carry_the_line(mk_bot, run_async, wire):
     """Muted at the turn's end: the answer is held and goes out later with
-    a late marker. A ⏳ line frozen into it could never be settled, so it is
-    not added, and no edit is owed."""
+    a late marker. A block frozen into it could never be kept current, so
+    it is not added, and no edit is owed."""
     from aipager.bot.flood import MUTE
     from aipager.bot.held import HELD
 
@@ -491,13 +498,20 @@ def test_a_merged_answer_held_by_a_mute_does_not_carry_the_line(
     assert sess.agents_lines == []
 
 
-# ── R3: one edit to ✅ once they are all gone ───────────────────────────────
+# ── R3: settled to done once they are all gone ──────────────────────────────
 
 def _delivered_with(run_async, bot, sess, *pairs):
+    """An answer carrying the block, sent six minutes ago (its first
+    attempt with it, too, so the edit interval has passed)."""
     _agents(sess, *pairs)
     _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
     assert sess.agents_lines
-    sess.agents_lines[-1]["sent_wall"] -= 6 * 60
+    _age(sess.agents_lines[-1], 6 * 60)
+
+
+def _age(rec, seconds):
+    rec["sent_at"] -= seconds
+    rec["last_try"] -= seconds
 
 
 def test_the_agents_stop_edits_the_line_once_to_done(mk_bot, run_async, wire):
@@ -510,9 +524,10 @@ def test_the_agents_stop_edits_the_line_once_to_done(mk_bot, run_async, wire):
 
     _hook(run_async, recv, sess, "SubagentStop", agent_id="a1",
           agent_type="pipeline-runner")
-    now = time.monotonic() + 1_000
-    assert bool(sess.agents_lines_due(now)) is False       # settle starts now
-    later = now + BG_AGENTS_SETTLE_SECONDS + 0.1
+    stopped = time.monotonic()
+    _settle(run_async, bot, sess, stopped + 1)     # inside the settle window
+    assert len(wire.calls) == before
+    later = stopped + BG_AGENTS_SETTLE_SECONDS + 0.1
     assert bool(sess.agents_lines_due(later)) is True
     _settle(run_async, bot, sess, later)
 
@@ -520,18 +535,20 @@ def test_the_agents_stop_edits_the_line_once_to_done(mk_bot, run_async, wire):
     assert [m for m, _p in new] == ["editMessageText"]
     edit = new[0][1]
     assert edit["message_id"] == rec["msg_id"]
-    assert _last_line(_markdown(edit)) == "✅ pipeline-runner done (6m)"
-    assert _markdown(edit)[: -len("✅ pipeline-runner done (6m)")] == \
-        rec["text"][: -len(RUNNING_1)]
+    # Six minutes after the answer, in true seconds (the clock).
+    block = _markdown(edit)[len(rec["body"]) + 2:]
+    assert re.fullmatch(r"✅ 1 agent done \(6:0\d\)", block)
+    assert _markdown(edit) == f"{rec['body']}\n\n{block}"
     # ORNAMENT, skip-class: the flood gate may refuse it, never queue it.
     assert edit["_kw"] == {"kind": "skip", "priority": "ornament"}
     assert sess.agents_lines == []
-    assert bool(sess.agents_lines_due(later + 100)) is False
     _settle(run_async, bot, sess, later + 100)
     assert len(wire.calls) == before + 1
 
 
-def test_one_of_two_finishing_is_no_edit_both_is_one(mk_bot, run_async, wire):
+def test_one_of_two_finishing_settles_its_row_and_both_settle_the_header(
+    mk_bot, run_async, wire,
+):
     bot = _wire_bot(mk_bot, wire)
     recv = _receiver(bot)
     sess = _sess(bot)
@@ -540,19 +557,26 @@ def test_one_of_two_finishing_is_no_edit_both_is_one(mk_bot, run_async, wire):
     before = len(wire.calls)
     _hook(run_async, recv, sess, "SubagentStop", agent_id="a1",
           agent_type="pipeline-runner")
-    now = time.monotonic() + 1_000
-    bool(sess.agents_lines_due(now))
-    assert bool(sess.agents_lines_due(now + 3600)) is False
-    assert len(wire.calls) == before
+    t1 = time.monotonic() + BG_AGENTS_SETTLE_SECONDS + 0.1
+    _settle(run_async, bot, sess, t1)
+    (edit,) = [p for m, p in wire.calls[before:]]
+    lines = _markdown(edit).split("\n\n")[-4:]
+    assert lines[0] == "⏳ 1 agent working"
+    assert re.fullmatch(r"✓ \*\*pipeline-runner\*\* · done \(\d+:\d\d\)", lines[1])
+    assert lines[2:] == ["○ **ship-reviewer**",
+                         "Results from the agents will follow here."]
+    assert sess.agents_lines
 
     _hook(run_async, recv, sess, "SubagentStop", agent_id="a2",
           agent_type="ship-reviewer")
-    bool(sess.agents_lines_due(now))
-    later = now + BG_AGENTS_SETTLE_SECONDS + 0.1
-    assert bool(sess.agents_lines_due(later)) is True
-    _settle(run_async, bot, sess, later)
-    (edit,) = [p for m, p in wire.calls[before:]]
-    assert _last_line(_markdown(edit)) == "✅ 2 agents done (6m)"
+    t2 = time.monotonic() + BG_AGENTS_SETTLE_SECONDS + 0.1
+    _settle(run_async, bot, sess, t2)            # inside the edit interval
+    assert len(wire.calls) == before + 1
+    _settle(run_async, bot, sess, t1 + 30)
+    edits = [p for m, p in wire.calls[before:]]
+    assert len(edits) == 2
+    assert re.fullmatch(r"✅ 2 agents done \(6:0\d\)", _last_line(_markdown(edits[-1])))
+    assert sess.agents_lines == []
 
 
 def test_a_phantom_stop_never_settles_the_line(mk_bot, run_async, wire):
@@ -560,26 +584,31 @@ def test_a_phantom_stop_never_settles_the_line(mk_bot, run_async, wire):
     recv = _receiver(bot)
     sess = _sess(bot)
     _delivered_with(run_async, bot, sess, ("a1", "pipeline-runner"))
+    before = len(wire.calls)
     _hook(run_async, recv, sess, "SubagentStop", agent_id="zzz", agent_type="")
-    now = time.monotonic() + 1_000
-    bool(sess.agents_lines_due(now))
-    assert bool(sess.agents_lines_due(now + 3600)) is False
+    _settle(run_async, bot, sess, time.monotonic() + 3600)
+    assert len(wire.calls) == before
+    assert sess.agents_lines[0]["final"] is False
 
 
 def test_a_note_right_after_the_stop_holds_the_edit(mk_bot, run_async, wire):
     """The agent stopped AGAIN with background work: the note lands within
-    the settle window and the line stays ⏳."""
+    the settle window and the block stays as it was."""
     bot = _wire_bot(mk_bot, wire)
     recv = _receiver(bot)
     sess = _sess(bot)
     _delivered_with(run_async, bot, sess, ("a2d0", "pipeline-runner"))
+    before = len(wire.calls)
     _hook(run_async, recv, sess, "SubagentStop", agent_id="a2d0",
           agent_type="pipeline-runner")
-    now = time.monotonic() + 1_000
-    assert bool(sess.agents_lines_due(now)) is False
     _hook(run_async, recv, sess, "UserPromptSubmit",
           prompt=_NOTE_STILL_RUNNING.format(tid="a2d0"))
-    assert bool(sess.agents_lines_due(now + BG_AGENTS_SETTLE_SECONDS + 1)) is False
+    # The note itself takes the end back, before any scan looks.
+    assert sess.agents_lines[0]["ends"] == {}
+    _settle(run_async, bot, sess,
+            time.monotonic() + BG_AGENTS_SETTLE_SECONDS + 1)
+    assert len(wire.calls) == before
+    assert sess.agents_lines[0]["ends"] == {}
 
 
 def test_an_agent_that_comes_back_and_stops_again_restarts_the_settle(
@@ -591,32 +620,32 @@ def test_an_agent_that_comes_back_and_stops_again_restarts_the_settle(
     _delivered_with(run_async, bot, sess, ("a2d0", "pipeline-runner"))
     _hook(run_async, recv, sess, "SubagentStop", agent_id="a2d0",
           agent_type="pipeline-runner")
-    t0 = time.monotonic() + 1_000
-    assert bool(sess.agents_lines_due(t0)) is False
     _hook(run_async, recv, sess, "UserPromptSubmit",
           prompt=_NOTE_STILL_RUNNING.format(tid="a2d0"))
-    assert bool(sess.agents_lines_due(t0 + 100)) is False
-    _hook(run_async, recv, sess, "SubagentStop", agent_id="a2d0",
-          agent_type="pipeline-runner")
+    t0 = time.monotonic()
+    sess.agents_lines_due(t0 + 100)
+    assert sess.agents_lines[0]["final"] is False
+    sess.bg_agent_stopped("a2d0", t0 + 200)
     t1 = t0 + 200
-    assert bool(sess.agents_lines_due(t1)) is False          # a fresh settle
-    assert bool(sess.agents_lines_due(t1 + BG_AGENTS_SETTLE_SECONDS - 1)) is False
-    assert bool(sess.agents_lines_due(t1 + BG_AGENTS_SETTLE_SECONDS + 0.1)) is True
+    sess.agents_lines_due(t1 + BG_AGENTS_SETTLE_SECONDS - 1)
+    assert sess.agents_lines[0]["final"] is False          # a fresh settle
+    sess.agents_lines_due(t1 + BG_AGENTS_SETTLE_SECONDS + 0.1)
+    assert sess.agents_lines[0]["final"] is True
 
 
 def test_an_agent_started_after_the_answer_does_not_hold_its_edit(
     mk_bot, run_async, wire,
 ):
-    """The line named the agents running when it went out; those are the
+    """The block lists the agents running when it went out; those are the
     ones it waits for."""
     bot = _wire_bot(mk_bot, wire)
     sess = _sess(bot)
     _delivered_with(run_async, bot, sess, ("a1", "pipeline-runner"))
     _agents(sess, ("a2", "ship-reviewer"))
-    sess.bg_agent_stopped("a1", time.monotonic())
-    now = time.monotonic() + 1_000
-    bool(sess.agents_lines_due(now))
-    assert bool(sess.agents_lines_due(now + BG_AGENTS_SETTLE_SECONDS + 0.1)) is True
+    now = time.monotonic()
+    sess.bg_agent_stopped("a1", now)
+    sess.agents_lines_due(now + BG_AGENTS_SETTLE_SECONDS + 0.1)
+    assert sess.agents_lines[0]["final"] is True
 
 
 def test_the_sets_are_bounded():
@@ -639,8 +668,7 @@ def test_the_monitor_scan_makes_the_edit(mk_bot, run_async, wire, monkeypatch):
     bot = _wire_bot(mk_bot, wire)
     sess = _sess(bot)
     _delivered_with(run_async, bot, sess, ("a1", "pipeline-runner"))
-    sess.bg_agent_stopped("a1", time.monotonic())
-    sess.agents_lines[0]["gone_at"] = 1.0  # long settled
+    sess.bg_agent_stopped("a1", time.monotonic() - 60)   # long settled
 
     async def _names():
         return [sess.name]
@@ -655,8 +683,8 @@ def test_the_monitor_scan_makes_the_edit(mk_bot, run_async, wire, monkeypatch):
 
     run_async(_bounded(SessionMonitor(bot.registry, _notify)._scan()))
     assert seen.count("agents_line_done") == 1
-    assert _last_line(_markdown(wire.of("editMessageText")[-1])) == \
-        "✅ pipeline-runner done (6m)"
+    assert re.fullmatch(r"✅ 1 agent done \(5:0\d\)",
+                        _last_line(_markdown(wire.of("editMessageText")[-1])))
 
 
 def test_a_deleted_answer_is_never_retried(mk_bot, run_async, wire, monkeypatch):
@@ -672,9 +700,7 @@ def test_a_deleted_answer_is_never_retried(mk_bot, run_async, wire, monkeypatch)
                 "description": "Bad Request: message to edit not found"}
 
     monkeypatch.setattr("aipager.bot.rich_message._post", _post)
-    now = time.monotonic() + 1_000
-    bool(sess.agents_lines_due(now))
-    _settle(run_async, bot, sess, now + 10)
+    _settle(run_async, bot, sess, time.monotonic() + 1_000)
     assert calls == ["editMessageText"]
     assert sess.agents_lines == []
 
@@ -693,9 +719,7 @@ def test_a_skipped_edit_is_retried_once_and_then_given_up(
         raise FloodSkipped(CHAT, method)
 
     monkeypatch.setattr("aipager.bot.rich_message._post", _post)
-    now = time.monotonic() + 1_000
-    bool(sess.agents_lines_due(now))
-    t1 = now + BG_AGENTS_SETTLE_SECONDS + 0.1
+    t1 = time.monotonic() + 1_000
     assert bool(sess.agents_lines_due(t1))
     _settle(run_async, bot, sess, t1)
     assert sess.agents_lines != []
@@ -716,9 +740,7 @@ def test_muted_no_edit_and_one_try_after_the_lift(mk_bot, run_async, wire):
     sess.bg_agent_stopped("a1", time.monotonic())
     before = len(wire.calls)
     MUTE.mute(CHAT, 600)
-    now = time.monotonic() + 1_000
-    bool(sess.agents_lines_due(now))
-    t1 = now + BG_AGENTS_SETTLE_SECONDS + 0.1
+    t1 = time.monotonic() + BG_AGENTS_SETTLE_SECONDS + 0.1
     _settle(run_async, bot, sess, t1)
     assert len(wire.calls) == before                 # nothing into the ban
     assert bool(sess.agents_lines_due(t1 + 300)) is False   # not before the lift
@@ -788,35 +810,13 @@ def test_the_bar_never_names_the_agents(mk_bot, monkeypatch):
     assert "pipeline-runner" not in first[0]
 
 
-# ── the rendering helpers ────────────────────────────────────────────────────
-
-def test_done_line_durations():
-    from aipager.bot.agents_line import done_line
-
-    assert done_line(["x"], 45) == "✅ x done (45s)"
-    assert done_line(["x"], 6 * 60 + 59) == "✅ x done (6m)"
-    assert done_line(["x", "y"], 3 * 3600 + 5 * 60) == "✅ 2 agents done (3h 5m)"
-
-
-def test_the_running_line_names_at_most_three_and_counts_the_rest():
-    from aipager.bot.agents_line import running_line
-
-    line = running_line(["a", "b", "c", "d", "e"])
-    assert line == ("⏳ 5 agents still running (a, b, c +2 more) - results "
-                    "will follow here")
-
-
-def test_markdown_metacharacters_in_a_label_are_escaped():
-    from aipager.bot.agents_line import running_line
-
-    assert "general\\_purpose" in running_line(["general_purpose"],
-                                               markdown=True)
-
+# ── the record ───────────────────────────────────────────────────────────────
 
 def test_the_set_is_never_persisted():
     from aipager.state import SessionRegistry
 
-    for name in ("bg_agents", "bg_agents_recent", "agents_lines"):
+    for name in ("bg_agents", "bg_agents_recent", "pending_agent_calls",
+                 "agents_lines"):
         assert name not in SessionRegistry._PERSIST_FIELDS
     assert TrackedSession(name="x", label="x").bg_agents == {}
 
@@ -827,8 +827,8 @@ def test_two_answers_carrying_the_line_are_each_settled_once(
     mk_bot, run_async, wire,
 ):
     """A job's agent reports back more than once, or the operator asks
-    something while it runs: every ⏳ answer gets its ✅, not just the
-    newest."""
+    something while it runs: every answer with a block gets its edit, not
+    just the newest."""
     bot = _wire_bot(mk_bot, wire)
     sess = _sess(bot)
     _delivered_with(run_async, bot, sess, ("a1", "pipeline-runner"))
@@ -837,16 +837,15 @@ def test_two_answers_carrying_the_line_are_each_settled_once(
     _finish(run_async, bot, sess, summary="second answer",
             raw_md="second answer")
     assert len(sess.agents_lines) == 2
+    _age(sess.agents_lines[1], 6 * 60)
     ids = [r["msg_id"] for r in sess.agents_lines]
     before = len(wire.calls)
     sess.bg_agent_stopped("a1", time.monotonic())
-    now = time.monotonic() + 1_000
-    sess.agents_lines_due(now)
-    later = now + BG_AGENTS_SETTLE_SECONDS + 0.1
+    later = time.monotonic() + BG_AGENTS_SETTLE_SECONDS + 0.1
     _settle(run_async, bot, sess, later)
     edits = [p for m, p in wire.calls[before:] if m == "editMessageText"]
     assert sorted(e["message_id"] for e in edits) == sorted(ids)
-    assert all(_last_line(_markdown(e)).startswith("✅ pipeline-runner done")
+    assert all(_last_line(_markdown(e)).startswith("✅ 1 agent done")
                for e in edits)
     assert sess.agents_lines == []
     _settle(run_async, bot, sess, later + 3600)
@@ -865,14 +864,14 @@ def test_the_pending_answers_are_bounded(mk_bot, run_async, wire):
         _finish(run_async, bot, sess, summary=f"answer {i}",
                 raw_md=f"answer {i}")
     assert len(sess.agents_lines) == AGENTS_LINES_CAP
-    assert "answer 0" not in sess.agents_lines[0]["text"]
+    assert "answer 0" not in sess.agents_lines[0]["body"]
 
 
 def test_an_expired_agent_leaves_its_line_as_sent(
     mk_bot, run_async, wire, monkeypatch,
 ):
     """Silence is not completion (an agent parked on long background work
-    emits nothing): the ⏳ is never turned into ✅ on no evidence."""
+    emits nothing): the block is never settled to done on no evidence."""
     from aipager.session_monitor import SUBAGENT_SILENCE_SECONDS, SessionMonitor
 
     bot = _wire_bot(mk_bot, wire)
@@ -920,9 +919,9 @@ def test_each_notification_in_one_prompt_is_read_on_its_own(
 def test_an_agent_starting_during_the_send_is_not_waited_for(
     mk_bot, run_async, wire, monkeypatch,
 ):
-    """The line, the ids it waits for and the labels its ✅ repeats are one
-    snapshot: an agent that starts while the answer is in flight was never
-    named, so it neither holds the ✅ nor changes its count."""
+    """The block and the items it keeps current are one snapshot: an
+    agent that starts while the answer is in flight was never listed, so
+    it neither holds the settle nor changes its count."""
     bot = _wire_bot(mk_bot, wire)
     sess = _sess(bot)
     _agents(sess, ("a1", "pipeline-runner"))
@@ -938,8 +937,8 @@ def test_an_agent_starting_during_the_send_is_not_waited_for(
     _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
     (rec,) = sess.agents_lines
     assert rec["ids"] == ["a1"]
-    assert rec["labels"] == ["pipeline-runner"]
-    sess.bg_agent_stopped("a1", time.monotonic())
-    now = time.monotonic() + 1_000
-    sess.agents_lines_due(now)
-    assert sess.agents_lines_due(now + BG_AGENTS_SETTLE_SECONDS + 0.1)
+    assert [i["label"] for i in rec["items"]] == ["pipeline-runner"]
+    now = time.monotonic()
+    sess.bg_agent_stopped("a1", now)
+    sess.agents_lines_due(now + BG_AGENTS_SETTLE_SECONDS + 0.1)
+    assert rec["final"] is True

@@ -28,20 +28,88 @@ import re
 from aipager import safety
 from aipager.dtach import inject
 from aipager.dtach.inject import _RESERVED, _VALID_NAME, normalize_session_name
+from aipager.i18n import Command, Msg
+from aipager.miniapp.phrase import Phrase
+
+# Every refusal below is a str equal to its English (a Msg, or a Phrase
+# with its parameters), so the chat's callers keep testing ``if err:``
+# and showing it as they always did, while the Mini App renders it in its
+# viewer's language (``phrase.say``).
 
 # Roadmap 8.79. A role whose writes are confined to the session's folder
 # (``user``, ``read_only``, anyone without the owner's or an admin's
 # bypass) may not start a session in ``/``, the home folder or a folder
 # above it: there the "project" would be the whole home folder. Those
 # folders stay usable as the place to create a new project folder in.
-NO_PROJECT_FOLDER = ("Pick a project folder: create one with New folder, "
-                     "or ask an admin to start the session.")
-WIDE_FOLDER_REFUSAL = ("Your role can't start a session in the home folder "
-                       "or a folder above it. " + NO_PROJECT_FOLDER)
+NO_PROJECT_FOLDER = Msg(
+    "app.launch.no_project_folder",
+    "Pick a project folder: create one with New folder, or ask an admin to start the session.",
+    note="A person whose role is confined may not start a session there. "
+         "New folder is the Mini App's button that creates a folder")
+WIDE_FOLDER_REFUSAL = Msg(
+    "app.launch.wide_folder",
+    "Your role can't start a session in the home folder or a folder above it. "
+    "Pick a project folder: create one with New folder, or ask an admin to start the session.",
+    note="New folder is the Mini App's button that creates a folder")
 # When there is no folder to create one in either (the daemon runs in `/`
 # and the chat has never used a folder).
-NO_FOLDER_AT_ALL = ("There is no project folder to start in yet: ask an "
-                    "admin to start the session.")
+NO_FOLDER_AT_ALL = Msg(
+    "app.launch.no_folder_at_all",
+    "There is no project folder to start in yet: ask an admin to start the session.",
+    note="Nowhere to start a session and nowhere to create a folder")
+
+_NAME_NOT_TEXT = Msg("app.launch.name_not_text", "Session name must be text.",
+                     note="The new session's name was not text")
+_NAME_EMPTY = Msg("app.launch.name_empty", "Session name can't be empty.")
+_NAME_TOO_LONG = Msg("app.launch.name_too_long",
+                     "Session name must be {max} characters or fewer.", eg={"max": 64})
+_NAME_BAD_CHAR = Msg("app.launch.name_bad_char", "Session name contains an invalid character.")
+_NAME_PATTERN = Msg("app.launch.name_pattern",
+                    "Use letters, numbers, hyphens and underscores; start with a letter or "
+                    "number.", note="What a session name may hold (Latin letters)")
+_NAME_RESERVED = Msg("app.launch.name_reserved",
+                     "'{name}' is a reserved command name ({command}). Pick another name.",
+                     eg={"name": "status", "command": "/status"},
+                     note="The name is a bot command, which a session name may not be")
+_CWD_NOT_TEXT = Msg("app.launch.cwd_not_text", "Working directory must be text.")
+_CWD_BAD_CHAR = Msg("app.launch.cwd_bad_char",
+                    "Working directory contains an invalid character.")
+_CWD_NO_ROOTS = Msg("app.launch.cwd_no_roots",
+                    "No directory is available yet - start a session from chat first, "
+                    "then this picker will offer its project.",
+                    note="The Mini App's folder picker has nothing to offer yet")
+_CWD_UNRESOLVABLE = Msg("app.launch.cwd_unresolvable", "That directory can't be resolved.")
+_CWD_NOT_DIR = Msg("app.launch.cwd_not_dir", "That path isn't a directory.")
+_CWD_NOT_ALLOWED = Msg("app.launch.cwd_not_allowed",
+                       "That directory isn't one this chat already works in.")
+_FOLDER_NOT_TEXT = Msg("app.launch.folder_not_text", "Folder name must be text.")
+_FOLDER_EMPTY = Msg("app.launch.folder_empty", "Folder name can't be empty.")
+_FOLDER_TOO_LONG = Msg("app.launch.folder_too_long",
+                       "Folder name must be {max} characters or fewer.", eg={"max": 64})
+_FOLDER_BAD_CHAR = Msg("app.launch.folder_bad_char",
+                       "Folder name contains an invalid character.")
+_FOLDER_PATTERN = Msg("app.launch.folder_pattern",
+                      "Use letters, numbers, dots, hyphens and underscores; start with a "
+                      "letter or number.", note="What a new folder's name may hold")
+_FOLDER_PARENT = Msg("app.launch.folder_parent",
+                     "Pick a working directory to create the folder in.")
+_FOLDER_LOADS_CODE = Msg("app.launch.folder_loads_code",
+                         "'{name}' can't be a project folder here: other programs load "
+                         "code from it. Pick another name.",
+                         eg={"name": "node_modules"},
+                         note="A folder name programs read code from (node_modules, bin)")
+_FOLDER_FAILED = Msg("app.launch.folder_failed", "Couldn't create that folder.")
+_FOLDER_EXISTS = Msg("app.launch.folder_exists",
+                     "A folder with that name already exists there. Pick a new name.")
+_MODEL_NOT_TEXT = Msg("app.launch.model_not_text", "Model must be text.")
+_MODEL_TOO_LONG = Msg("app.launch.model_too_long",
+                      "Model name must be {max} characters or fewer.", eg={"max": 64})
+_MODEL_PATTERN = Msg("app.launch.model_pattern",
+                     "Use one of the listed models, or a full model name like {example}.",
+                     eg={"example": "claude-opus-5"},
+                     note="example is a model's full name, written as it is")
+#: The model name the refusal shows as an example (a name: never translated).
+_MODEL_EXAMPLE = "claude-opus-5"
 
 # Names a confined person may not create directly inside a wide folder:
 # programs the operator runs load code from them without being asked.
@@ -145,28 +213,34 @@ def validate_session_name(name: object) -> tuple[str, str]:
     deeper in with a less useful message.
     """
     if not isinstance(name, str):
-        return "", "Session name must be text."
+        return "", _NAME_NOT_TEXT
     # Normalised BEFORE every check below, so the reserved-word and
     # duplicate rules see the name the session will really have — and so
     # the caller is handed that name rather than the one typed.
     clean = normalize_session_name(name)
     if not clean:
-        return "", "Session name can't be empty."
+        return "", _NAME_EMPTY
     if len(clean) > MAX_NAME_LENGTH:
-        return "", f"Session name must be {MAX_NAME_LENGTH} characters or fewer."
+        return "", Phrase(_NAME_TOO_LONG, max=MAX_NAME_LENGTH)
     if "\x00" in clean:
-        return "", "Session name contains an invalid character."
+        return "", _NAME_BAD_CHAR
     if not _VALID_NAME.match(clean):
-        return "", "Use letters, numbers, hyphens and underscores; start with a letter or number."
+        return "", _NAME_PATTERN
     if clean.lower() in _RESERVED:
-        return "", (f"'{clean}' is a reserved command name (/{clean.lower()}). "
-                    "Pick another name.")
+        return "", Phrase(_NAME_RESERVED, name=clean, command=Command("/" + clean.lower()))
     return clean, ""
 
 
 def allowed_roots(registry, scope_chat_id: int, *,
-                  confined: bool = False) -> list[str]:
+                  confined: bool = False, root: str | None = None) -> list[str]:
     """Directories a new session may be launched in, for this scope.
+
+    ``root`` (a restricted member's root folder,
+    ``member_root.restricted_root``): only that folder and its immediate
+    subfolders (``member_root.folder_choices``, which creates the root),
+    whatever this chat's sessions use; ``[]`` when there is none. The
+    containment checks in :func:`validate_cwd` and
+    :func:`create_directory` then hold the person to it.
 
     ``confined`` (the caller's turns are confined to the session's folder,
     roadmap 8.79): ``/``, the home folder and the folders above it are
@@ -205,6 +279,9 @@ def allowed_roots(registry, scope_chat_id: int, *,
     still bounded by the permission prompts every non-Auto session asks
     for in chat.
     """
+    if root is not None:
+        from aipager import member_root  # local: it imports this module lazily
+        return member_root.folder_choices(root)
     roots: list[str] = []
     seen: set[str] = set()
 
@@ -261,21 +338,18 @@ def validate_cwd(candidate: object, roots: list[str], *,
             return "", WIDE_FOLDER_REFUSAL
         return "", ""            # daemon default, same as chat's /new
     if not isinstance(candidate, str):
-        return "", "Working directory must be text."
+        return "", _CWD_NOT_TEXT
     if "\x00" in candidate:
-        return "", "Working directory contains an invalid character."
+        return "", _CWD_BAD_CHAR
     if not roots:
-        return "", (
-            "No directory is available yet - start a session from chat first, "
-            "then this picker will offer its project."
-        )
+        return "", _CWD_NO_ROOTS
 
     try:
         real = os.path.realpath(candidate)
     except OSError:
-        return "", "That directory can't be resolved."
+        return "", _CWD_UNRESOLVABLE
     if not os.path.isdir(real):
-        return "", "That path isn't a directory."
+        return "", _CWD_NOT_DIR
     if confined and is_wide_folder(real):
         return "", WIDE_FOLDER_REFUSAL
 
@@ -284,7 +358,7 @@ def validate_cwd(candidate: object, roots: list[str], *,
         root_parts = root.split(os.sep)
         if real_parts[: len(root_parts)] == root_parts:
             return real, ""
-    return "", "That directory isn't one this chat already works in."
+    return "", _CWD_NOT_ALLOWED
 
 
 def validate_new_dir_name(name: object) -> tuple[str, str]:
@@ -295,19 +369,16 @@ def validate_new_dir_name(name: object) -> tuple[str, str]:
     is making sure the join cannot walk anywhere.
     """
     if not isinstance(name, str):
-        return "", "Folder name must be text."
+        return "", _FOLDER_NOT_TEXT
     clean = name.strip()
     if not clean:
-        return "", "Folder name can't be empty."
+        return "", _FOLDER_EMPTY
     if len(clean) > MAX_DIR_NAME_LENGTH:
-        return "", f"Folder name must be {MAX_DIR_NAME_LENGTH} characters or fewer."
+        return "", Phrase(_FOLDER_TOO_LONG, max=MAX_DIR_NAME_LENGTH)
     if "\x00" in clean:
-        return "", "Folder name contains an invalid character."
+        return "", _FOLDER_BAD_CHAR
     if not _VALID_DIR_NAME.match(clean):
-        return "", (
-            "Use letters, numbers, dots, hyphens and underscores; "
-            "start with a letter or number."
-        )
+        return "", _FOLDER_PATTERN
     return clean, ""
 
 
@@ -348,7 +419,7 @@ def create_directory(
     if not real_parent:
         # validate_cwd's "" means "the daemon's default", which is a
         # launch behaviour, not a directory to create inside.
-        return "", False, "Pick a working directory to create the folder in."
+        return "", False, _FOLDER_PARENT
 
     clean, err = validate_new_dir_name(name)
     if err:
@@ -357,18 +428,16 @@ def create_directory(
     target = os.path.join(real_parent, clean)
     wide_parent = confined and is_wide_folder(real_parent)
     if wide_parent and clean.lower() in _NO_NEW_IN_WIDE:
-        return "", False, (f"'{clean}' can't be a project folder here: "
-                           "other programs load code from it. Pick another name.")
+        return "", False, Phrase(_FOLDER_LOADS_CODE, name=clean)
     existed = False
     try:
         os.mkdir(target)
     except FileExistsError:
         existed = True
     except OSError:
-        return "", False, "Couldn't create that folder."
+        return "", False, _FOLDER_FAILED
     if existed and wide_parent:
-        return "", False, ("A folder with that name already exists there. "
-                           "Pick a new name.")
+        return "", False, _FOLDER_EXISTS
 
     real, err = validate_cwd(target, roots, confined=confined)
     if err:
@@ -395,7 +464,7 @@ def validate_model(value: object, choices) -> tuple[str, str]:
     if value is None or value == "":
         return "", ""                      # leave the CLI on its own default
     if not isinstance(value, str):
-        return "", "Model must be text."
+        return "", _MODEL_NOT_TEXT
     clean = value.strip()
     if not clean:
         return "", ""
@@ -407,12 +476,9 @@ def validate_model(value: object, choices) -> tuple[str, str]:
             break
 
     if len(resolved) > MAX_MODEL_LENGTH:
-        return "", f"Model name must be {MAX_MODEL_LENGTH} characters or fewer."
+        return "", Phrase(_MODEL_TOO_LONG, max=MAX_MODEL_LENGTH)
     if not _VALID_MODEL.match(resolved):
-        return "", (
-            "Use one of the listed models, or a full model name like "
-            "claude-opus-5."
-        )
+        return "", Phrase(_MODEL_PATTERN, example=_MODEL_EXAMPLE)
     return resolved, ""
 
 

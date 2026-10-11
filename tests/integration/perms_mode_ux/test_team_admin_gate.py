@@ -156,7 +156,7 @@ def test_sc15_non_admin_new_auto_gets_ask_and_says_why():
 
     text = bot._app.bot.edit_message_text.await_args.kwargs["text"]
     assert "Auto mode needs an admin" in text, text
-    assert "💬 Ask" in text, text
+    assert "💬 Ask mode" in text, text
 
 
 def test_sc15_non_admin_new_auto_creates_no_auto_session():

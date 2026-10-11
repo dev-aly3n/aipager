@@ -125,6 +125,11 @@ def _isolate_wizard_config(tmp_path, monkeypatch):
                         tmp_path / "policy.yaml")
 
 
+#: Modules holding an import-time copy of ``aipager.config.CHAT_ID``.
+CHAT_ID_COPIES = ("aipager.bot.dashboard", "aipager.bot.keyboards",
+                  "aipager.bot.lifecycle", "aipager.status")
+
+
 @pytest.fixture(autouse=True)
 def _pin_single_chat_config(monkeypatch):
     """Every machine sees the same configured single chat.
@@ -142,6 +147,13 @@ def _pin_single_chat_config(monkeypatch):
     own later ``monkeypatch`` (a later patch wins).
     """
     monkeypatch.setattr("aipager.config.CHAT_ID", "256113222")
+    # Modules that copied it at their own import (``from aipager.config
+    # import CHAT_ID`` at module level) keep the import-time value, which on
+    # this box happens to equal the pin and on CI is ``""``: pin the copies
+    # too. tests/test_conftest_chat_id_copies.py fails when a module gains a
+    # copy that is missing here.
+    for module in CHAT_ID_COPIES:
+        monkeypatch.setattr(f"{module}.CHAT_ID", "256113222")
     # The home chat of an unstamped session (roadmap 8.82) reads the
     # import-time scopes when no bot is live: on the developer's box that
     # is the real aipager.yaml, on CI nothing. Pin both to "no scopes" so
@@ -182,6 +194,27 @@ def _pin_finish_card_grace(monkeypatch):
     """
     monkeypatch.setattr("aipager.config.FINISH_CARD_GRACE_SECONDS", 0.0)
     monkeypatch.setattr("aipager.bot.notify.FINISH_CARD_GRACE_SECONDS", 0.0)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_member_roots(tmp_path_factory, monkeypatch):
+    """A members' default root folder (``~/aipager-users/<label>``) is
+    created the first time a restricted member opens /new or the Mini
+    App. A test that has not pointed ``HOME`` at a throwaway folder gets
+    one under pytest's temp dir instead of the operator's real home; a
+    test that has keeps ``$HOME/aipager-users``, as the daemon would."""
+    from aipager import member_root
+    real = member_root.users_dir
+    made: list[str] = []
+
+    def _users_dir() -> str:
+        if os.path.realpath(os.path.expanduser("~")) != os.path.realpath(
+                str(_HOME_AT_IMPORT)):
+            return real()
+        if not made:
+            made.append(str(tmp_path_factory.mktemp("home") / "aipager-users"))
+        return made[0]
+    monkeypatch.setattr(member_root, "users_dir", _users_dir)
 
 
 @pytest.fixture(autouse=True)
@@ -244,6 +277,10 @@ def _isolate_home_paths(tmp_path, monkeypatch):
             home / ".local" / "share" / "aipager" / "install.json",
         "aipager.config.REPORT_RUNNING_FILE":
             home / ".local" / "share" / "aipager" / "running.json",
+        # The language state (multilingual phase 5): read LATE by
+        # aipager.i18n.persist, so one entry covers every reader.
+        "aipager.config.LANGUAGE_STATE_FILE":
+            home / ".local" / "state" / "aipager" / "languages.json",
         "aipager.config._KEYBOARD_CONFIG_PATH": cfg / "keyboard.json",
         # migrate.upgrade_to_v3() reads this (and its .retired.* siblings)
         # to recover Mini App settings — without a redirect it would read
@@ -374,6 +411,23 @@ def _reset_preferences_cache(_isolate_home_paths):
     _prefs._cache = None
     yield
     _prefs._cache = None
+
+
+@pytest.fixture(autouse=True)
+def _reset_i18n_state(monkeypatch):
+    """The i18n package's module state starts empty for every test: the
+    in-memory copy of the language state file (``persist``: the launch
+    marker and the last-seen Telegram languages; the file itself is
+    redirected under tmp by ``_isolate_home_paths``), the loaded catalogs,
+    and the languages a test switched on (``locales._TEST_ENABLED``,
+    restored by monkeypatch)."""
+    from aipager.i18n import core, locales, persist
+    persist.reset()
+    core.reset_caches()
+    monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset())
+    yield
+    persist.reset()
+    core.reset_caches()
 
 
 @pytest.fixture
@@ -1073,6 +1127,16 @@ def _guard_live_session_files():
 
 
 @pytest.fixture(autouse=True)
+def _isolate_peer_receipts(tmp_path, monkeypatch):
+    """Redirect the receipt store of messages between Claude sessions
+    (``peer_auth.store_dir``, under ``~/.local/state/aipager``) to tmp for
+    every test: a test that lets a SendMessage through must never write a
+    receipt into the operator's real state folder."""
+    store = tmp_path / "home" / ".local" / "state" / "aipager" / "peer"
+    monkeypatch.setattr("aipager.peer_auth.store_dir", lambda: store)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_notes_dir(tmp_path, monkeypatch):
     """Redirect ``policy_snapshot.notes_dir`` to ``tmp_path`` for every test.
 
@@ -1294,6 +1358,20 @@ def _never_spawn_real_dtach(monkeypatch):
     # real session regardless. The constant is what `launch_session` execs.
     monkeypatch.setattr("aipager.dtach.inject._DTACH",
                         "/nonexistent/dtach-blocked-in-tests", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_live_dtach_sockets_at_load(monkeypatch):
+    """``SessionRegistry.load`` asks which sessions have a live dtach
+    socket (``inject.live_session_names``), and the real answer is the
+    operator's own sessions under ``/tmp``. Every test sees none unless it
+    says otherwise (``monkeypatch.setattr(inject, "live_session_names",
+    lambda: {...})``, a later patch wins), so a fixture session sharing a
+    name with a running one never loads differently on this machine than
+    on CI. ``inject.list_sessions`` (the monitor's scan) reads the
+    sockets through its own helper and is not touched."""
+    monkeypatch.setattr("aipager.dtach.inject.live_session_names",
+                        lambda: set())
 
 
 @pytest.fixture(autouse=True)

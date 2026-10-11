@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import html as html_mod
 import logging
 import os
 import re
@@ -35,16 +34,17 @@ from telegram.error import BadRequest, ChatMigrated, Forbidden, RetryAfter
 
 from aipager import bidi_guard, telegram_endpoint
 from aipager.dtach import inject
+from aipager.i18n import Msg
 
 from aipager.bot import (
     card_owner, chat_migration, group_intake, new_flow, session_parity, update_flow,
 )
 from aipager.bot.flood import MUTE, FloodMuted, _key as _chat_key
-from aipager.bot import flood_state
+from aipager.bot import flood_state, language_launch
 from aipager.bot.flood_budget import BudgetRateLimiter, clear_backoff_signal
 from aipager.bot.rich_message import set_rate_limiter
 from aipager.config import (
-    APP_BUTTON, BOT_TOKEN, CHAT_ID,
+    BOT_TOKEN, CHAT_ID,
     FLOOD_MIN_RATE, FLOOD_MINIMAL_MODE_RATE_FLOOR,
     FLOOD_RATE_INCREASE, FLOOD_RATE_RECOVERY_HOURS,
     FLOOD_START_RATE, FLOOD_SUCCESS_WINDOW_SECONDS,
@@ -97,6 +97,14 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+# The edit an orphaned busy card gets when the daemon starts again.
+_DAEMON_RESTARTED = Msg("life.daemon_restarted", "🔄 <b>{session}</b> · Daemon restarted",
+                        note="A busy card left by the old daemon; the session still runs",
+                        eg={"session": "x1"})
+_SESSION_ENDED = Msg("life.session_ended", "🔴 <b>{session}</b> · Session ended",
+                     note="A busy card left by the old daemon; the session is gone",
+                     eg={"session": "x1"})
 
 
 def _warn_held_answers_lost() -> None:
@@ -153,6 +161,38 @@ def _label_command(label: str) -> str | None:
     autocomplete entry is missing, which is the cheapest thing to lose.
     """
     return label if _TELEGRAM_COMMAND.match(label) else None
+
+
+#: The /language command's description in the `/` menu.
+_CMD_LANGUAGE = Msg("cmd.language", "Language of aipager's messages",
+                    note="/ menu description of /language")
+#: The other descriptions of the `/` menu (the command words stay English).
+_CMD_TALK = Msg("cmd.talk", "Talk to {session}",
+                note="/ menu description of a session's own command; {session} is its name",
+                eg={"session": "x1"})
+_CMD_DESCRIPTIONS = (
+    ("new", Msg("cmd.new", "Start a session", note="/ menu description of /new")),
+    ("status", Msg("cmd.status", "Your sessions", note="/ menu description of /status")),
+    ("stop", Msg("cmd.stop", "Stop what Claude is doing",
+                 note="/ menu description of /stop")),
+    ("now", Msg("cmd.now", "Send queued messages to Claude now",
+                note="/ menu description of /now: messages waiting for the turn go in now")),
+    ("resume", Msg("cmd.resume", "Resume an ended session",
+                   note="/ menu description of /resume")),
+    ("mode", Msg("cmd.mode", "Auto or Ask",
+                 note="/ menu description of /mode: the two permission modes, named as "
+                      "the mode.auto and mode.ask keys name them")),
+    ("settings", Msg("cmd.settings", "Message layout, formatting, new sessions",
+                     note="/ menu description of /settings")),
+    ("language", _CMD_LANGUAGE),
+    ("help", Msg("cmd.help", "What you can do", note="/ menu description of /help")),
+)
+_CMD_APP = Msg("cmd.app", "Open the Mini App dashboard", note="/ menu description of /app")
+
+
+def _english():
+    from aipager import i18n
+    return i18n.get("en")
 
 
 class LifecycleMixin:
@@ -304,7 +344,7 @@ class LifecycleMixin:
         button), a removed one loses both."""
         if not self._app:
             return
-        from telegram import MenuButtonCommands, MenuButtonWebApp, WebAppInfo
+        from telegram import MenuButtonCommands
 
         new_ids = {s.chat_id for s in self.scopes}
         gone = [s for s in (old_scopes or ()) if s.chat_id not in new_ids]
@@ -314,6 +354,7 @@ class LifecycleMixin:
                      and s.chat_id > 0]
         for scope in gone:
             self._registered_scope_labels.pop(scope.chat_id, None)
+            self._registered_scope_lang.pop(scope.chat_id, None)
             try:
                 await self._app.bot.delete_my_commands(
                     scope=BotCommandScopeChat(chat_id=scope.chat_id))
@@ -337,9 +378,7 @@ class LifecycleMixin:
                 try:
                     await self._app.bot.set_chat_menu_button(
                         chat_id=chat_id,
-                        menu_button=MenuButtonWebApp(
-                            text=APP_BUTTON,
-                            web_app=WebAppInfo(url=self._miniapp_url)))
+                        menu_button=self._menu_button_webapp(chat_id, self._miniapp_url))
                 except Exception:
                     log.info("Could not set the Mini App button for new "
                              "chat %s", chat_id, exc_info=True)
@@ -480,6 +519,9 @@ class LifecycleMixin:
         # act. Never raises: a corrupt state file must leave the daemon
         # running.
         flood_state.load()
+        # Multilingual launch (phase 5): who existed before languages were
+        # switched on, recorded once, before any update is handled.
+        language_launch.ensure_marker(self)
 
         # Register handlers
         # First of all (group -3, never stops the update): a group Telegram
@@ -523,6 +565,7 @@ class LifecycleMixin:
         self._app.add_handler(CommandHandler("mode", self._handle_mode_cmd))
         self._app.add_handler(CommandHandler("perms", self._handle_mode_cmd))
         self._app.add_handler(CommandHandler("settings", self._handle_settings_cmd))
+        self._app.add_handler(CommandHandler("language", self._handle_language_cmd))
         self._app.add_handler(CommandHandler("app", self._handle_app_cmd))
         # Admin-only self-update (roadmap 8.36); the handler gates itself.
         self._app.add_handler(CommandHandler(
@@ -565,6 +608,13 @@ class LifecycleMixin:
             filters.TEXT & chat_gate,
             self._handle_message,
         ))
+        # After the reply (group 1, never for an update the intake gate
+        # stopped): note the person's Telegram language and, in a private
+        # chat this install serves, send the one-time language offer or
+        # first-contact line in the background (multilingual phase 5).
+        self._app.add_handler(
+            TypeHandler(Update, functools.partial(language_launch.after_update, self)),
+            group=1)
         # Last: a message for this bot in a group it does not serve (the
         # handlers above drop it at the chat gate). Its sender is noted
         # for `aipager config`, never answered (roadmap 8.88). `~chat_gate`
@@ -586,12 +636,22 @@ class LifecycleMixin:
             drop_pending_updates=True, # ignore old updates on restart
         )
         log.info("Telegram bot polling started")
+        language_launch.note_started(self)
         await self._update_bot_commands()
+        # The bot's description in each language (5.8): in the background,
+        # never awaited here, lowest priority.
+        from aipager.bot import bot_descriptions
+        self._descriptions_task = asyncio.get_running_loop().create_task(
+            bot_descriptions.run_at_start(self._app.bot))
         # In the background: start() must never wait on a group's budget
         # (the hook receiver, recovery and the monitor start after it).
         if self.scopes and any(s.kind == "group" for s in self.scopes):
             self._group_probe_task = asyncio.get_running_loop().create_task(
                 self._probe_group_chats())
+        # The language offer to existing private chats whose person's
+        # Telegram language is known from an earlier run (phase 5).
+        self._language_offer_task = asyncio.get_running_loop().create_task(
+            language_launch.offer_sweep(self))
 
     async def _probe_group_chats(self) -> None:
         """Ask Telegram about each group scope once at start (roadmap
@@ -625,6 +685,11 @@ class LifecycleMixin:
         probe = getattr(self, "_group_probe_task", None)
         if probe is not None and not probe.done():
             probe.cancel()
+        for name in ("_language_offer_task", "_descriptions_task"):
+            task = getattr(self, name, None)
+            if task is not None and not task.done():
+                task.cancel()
+        language_launch.cancel_tasks(self)
         # Cancel every running per-session animation task FIRST and wait
         # for them to settle. Otherwise asyncio.run() at the outer layer
         # force-kills them mid-edit, which can leave orphan tasks logging
@@ -677,9 +742,9 @@ class LifecycleMixin:
         orphaned_id = sess.busy_msg_id
         sess.busy_msg_id = None  # clear before any await
         is_alive = name in live_names
-        label = html_mod.escape(sess.label)
-        text = (f"🔄 <b>{label}</b> · Daemon restarted" if is_alive
-                else f"🔴 <b>{label}</b> · Session ended")
+        from aipager import i18n
+        tr = i18n.for_sess(sess)
+        text = tr.html(_DAEMON_RESTARTED if is_alive else _SESSION_ENDED, session=sess.label)
         try:
             await bot.edit_message_text(
                 # The session's own chat: a group-scoped session's card
@@ -997,8 +1062,12 @@ class LifecycleMixin:
         token = new_prompt_token()
         sess.pending_permission = None
         sess.pending_prompt_msg = {
-            "text": bidi_guard.reveal(rec["text"]), "keyboard": keyboard,
-            "summary": bidi_guard.reveal(rec["summary"]), "prompt_token": token,
+            # aipager's own right-to-left marks are dropped, not shown as
+            # markers; any other control is still revealed.
+            "text": bidi_guard.reveal(bidi_guard.strip_own_marks(rec["text"])),
+            "keyboard": keyboard,
+            "summary": bidi_guard.reveal(bidi_guard.strip_own_marks(rec["summary"])),
+            "prompt_token": token,
             "msg_id": rec["msg_id"], "chat_id": rec["chat_id"],
             "perm": sep_perm,
         }
@@ -1151,6 +1220,8 @@ class LifecycleMixin:
         """
         if not self._app:
             return
+        # What this refresh renders, for the session monitor's comparison.
+        self.registry.refreshed_live = self.registry.live_names()
 
         if self.scopes is None:
             await self._update_bot_commands_global()
@@ -1158,25 +1229,95 @@ class LifecycleMixin:
             await self._update_bot_commands_per_scope()
 
         # Send/update persistent keyboard (always main — first run or
-        # session list changed). In multi-scope there's no single chat to
-        # target here, so the keyboard renders per-chat on interaction
-        # (handlers pass chat_id); a global broadcast would leak labels.
+        # session list changed). In multi-scope each chat gets its own
+        # keyboard, and only when its sessions differ from what its
+        # keyboard shows; a global broadcast would leak labels.
         if self.scopes is None:
             if self._keyboard_deferred:
                 # Held until the Mini App URL lands, so the first
                 # keyboard the user sees already carries the App button.
                 return
             await self._send_keyboard(level="main")
+        else:
+            await self._sync_scope_keyboards()
+
+    async def _sync_scope_keyboards(self) -> None:
+        """Multi-scope: re-send a chat's main reply keyboard when the
+        sessions it would list differ from the ones the chat's keyboard
+        shows (``registry.keyboard_labels``, which every shared main
+        keyboard send records). Without this a chat kept the keyboard of
+        its last /start or menu tap: a new session had no button.
+
+        Never a keyboard for nothing: none when the labels match (most
+        calls: /status, a scan, the first call after a restart with
+        nothing changed), none to a chat with no record yet (a fresh
+        install, or the first start of a version that keeps the record:
+        the current labels are recorded instead, so every chat is not
+        sent a keyboard at once), none while one is owed to a flood mute
+        (the lift's flush sends the current one), and none again for
+        labels whose send just failed (a blocked DM, or a transient
+        error): the next change of labels, a /start or a menu tap brings
+        the chat up to date, as before this refresh existed.
+
+        Overlapping calls (several triggers spawn this) take the chat's
+        lock in turn: the second compares against what the first sent
+        and sends nothing for the same labels. A shared main keyboard
+        another path has on its way with these labels counts as sent.
+        """
+        for scope in list(self.scopes or ()):
+            chat_id = scope.chat_id
+            try:
+                await self._sync_scope_keyboard(chat_id)
+            except Exception:
+                log.warning("Keyboard refresh failed for chat %s", chat_id,
+                            exc_info=True)
+
+    async def _sync_scope_keyboard(self, chat_id: int) -> None:
+        """One chat's part of :meth:`_sync_scope_keyboards`."""
+        locks = self._keyboard_sync_locks
+        lock = locks.get(chat_id)
+        if lock is None:
+            lock = locks[chat_id] = asyncio.Lock()
+        async with lock:
+            current = self.registry.live_labels(chat_id)
+            shown = self.registry.keyboard_labels_for(chat_id)
+            if shown is None:
+                self.registry.set_keyboard_labels(chat_id, current)
+                return
+            if shown == current:
+                return
+            if self._keyboard_inflight.get(chat_id) == current:
+                return
+            if _chat_key(chat_id) in self._keyboard_owed:
+                return
+            if chat_id in self.__dict__.get("_unreachable_warned", ()):
+                return  # a group the bot cannot reach this run (8.94g)
+            failed = self._keyboard_sync_failed
+            if failed.get(chat_id) == current:
+                return  # this very keyboard failed: wait for a change
+            log.info("Chat %s's sessions changed - sending its keyboard "
+                     "again (%s)", chat_id, ", ".join(sorted(current)) or "none")
+            await self._send_keyboard(level="main", chat_id=chat_id)
+            if self.registry.keyboard_labels_for(chat_id) != current:
+                # Not sent. Any shared main keyboard that goes out later
+                # (/start, « Back, a mute's owed flush) clears the mark.
+                failed[chat_id] = current
 
     @staticmethod
-    def _command_list(labels: set[str], *, group: bool = False) -> list[BotCommand]:
+    def _command_list(labels: set[str], *, group: bool = False,
+                      tr=None) -> list[BotCommand]:
         """The / menu (4.6): one `/label` per live session first (what is
         tapped most), then the frequent commands. The rare ones (kill,
         restart, rename, delete, diff, clearqueue, whoami, update) still
         work when typed, and live in /status → ⋮ or /help.
 
         ``group``: a group's menu has no `/app` (roadmap 8.91d): the Mini
-        App opens only from a private chat."""
+        App opens only from a private chat.
+
+        ``tr``: the chat's language (English when None): every
+        description is rendered through it; the command words stay as
+        they are."""
+        tr = tr or _english()
         commands = []
         for label in sorted(labels):
             command = _label_command(label)
@@ -1188,41 +1329,100 @@ class LifecycleMixin:
                           "command; the session is still reachable by "
                           "keyboard button and by typing it in full", label)
                 continue
-            commands.append(BotCommand(command, f"Talk to {label}"))
-        commands += [
-            BotCommand("new", "Start a session"),
-            BotCommand("status", "Your sessions"),
-            BotCommand("stop", "Stop what Claude is doing"),
-            BotCommand("now", "Send queued messages to Claude now"),
-            BotCommand("resume", "Resume an ended session"),
-            BotCommand("mode", "Auto or Ask"),
-            BotCommand("settings", "Message layout, formatting, new sessions"),
-            BotCommand("help", "What you can do"),
-        ]
+            commands.append(BotCommand(command, tr.text(_CMD_TALK, session=label)))
+        commands += [BotCommand(name, tr.text(msg)) for name, msg in _CMD_DESCRIPTIONS]
         # Read late (not module-level) so a live `aipager miniapp enable`
         # + restart is reflected without re-importing this module.
         from aipager.config import MINIAPP_ENABLED
         if MINIAPP_ENABLED and not group:
-            commands.append(BotCommand("app", "Open the Mini App dashboard"))
+            commands.append(BotCommand("app", tr.text(_CMD_APP)))
         return commands
 
+    @classmethod
+    def _menu_button_webapp(cls, chat_id, url: str):
+        """*chat_id*'s Mini App menu button: its text in the chat's
+        language, and the link carrying that language (``?lang=``, none
+        for English) so the page's first frame is already in it."""
+        from telegram import MenuButtonWebApp, WebAppInfo
+
+        from aipager.bot import kbwords, miniapp_link
+        tr = cls._menu_tr(chat_id)
+        return MenuButtonWebApp(text=kbwords.KB_APP,
+                                web_app=WebAppInfo(url=miniapp_link.with_lang(url, tr.code)))
+
+    @staticmethod
+    def _menu_tr(chat_id):
+        """The language a chat's `/` menu is registered in."""
+        from aipager import i18n
+        try:
+            return i18n.for_chat(int(chat_id))
+        except (TypeError, ValueError):
+            return i18n.get(i18n.default_code())
+
+    async def _on_language_changed(self, chat_id: int, *, keyboard: bool = True) -> None:
+        """A chat's language in force changed (multilingual design, 7.2):
+        its `/` menu (the cache key includes the language, so this
+        re-registers it), its main reply keyboard and its menu button are
+        sent again, all through the limiter-bound bot, ONCE each. Never
+        called when the language did not change. *keyboard* False (a
+        change nobody chose: the person's Telegram language moved) leaves
+        the keyboard to its next normal send, so no message is posted.
+
+        The menu alone, not :meth:`_update_bot_commands`: in single-scope
+        mode that also sends the main keyboard, which this sends below,
+        and the chat would get two."""
+        try:
+            if self.scopes is None:
+                await self._update_bot_commands_global()
+            else:
+                await self._update_bot_commands_per_scope()
+        except Exception:
+            log.warning("Language change: menu refresh failed for %s", chat_id,
+                        exc_info=True)
+        if keyboard:
+            try:
+                await self._send_keyboard(level="main", chat_id=chat_id)
+            except Exception:
+                log.warning("Language change: keyboard re-send failed for %s", chat_id,
+                            exc_info=True)
+        await self._set_menu_button_for(chat_id)
+
+    async def _set_menu_button_for(self, chat_id: int) -> None:
+        """Set *chat_id*'s Mini App menu button again, as
+        :meth:`publish_miniapp_url` does for every chat that may have one.
+        Nothing for a chat with no button (a group, no Mini App)."""
+        url = getattr(self, "_miniapp_url", "") or ""
+        if not self._app or not url or chat_id not in self._miniapp_button_chats():
+            return
+        try:
+            await self._app.bot.set_chat_menu_button(
+                chat_id=chat_id, menu_button=self._menu_button_webapp(chat_id, url))
+        except Exception:
+            log.warning("Language change: menu button failed for %s", chat_id,
+                        exc_info=True)
+
     async def _update_bot_commands_global(self) -> None:
-        """Single global `/menu` (legacy / single-scope mode)."""
+        """Single global `/menu` (legacy / single-scope mode). Cached by
+        (language, labels): a language switch re-registers it."""
+        from aipager.config import CHAT_ID
         labels = self.registry.live_labels()
+        tr = self._menu_tr(CHAT_ID)
         first_run = self._registered_labels is None
-        if not first_run and labels == self._registered_labels:
+        if (not first_run and labels == self._registered_labels
+                and tr.code == self._registered_lang):
             return  # no change
         try:
-            from aipager.config import CHAT_ID
             await self._app.bot.set_my_commands(self._command_list(
-                labels, group=group_intake.is_group_chat(CHAT_ID)))
+                labels, group=group_intake.is_group_chat(CHAT_ID), tr=tr))
             self._registered_labels = labels
+            self._registered_lang = tr.code
             log.info("Bot commands updated: status, stop + %s",
                      ", ".join(sorted(labels)) or "(none)")
         except Exception:
             log.warning("Failed to set bot commands", exc_info=True)
             if first_run:
                 self._registered_labels = labels
+                self._registered_lang = tr.code
 
     # ---- Mini App launch button ----------------------------------------
 
@@ -1242,6 +1442,12 @@ class LifecycleMixin:
         Mini App launch surface is private-chat-only in the Bot API, and
         a group ``chat_id`` has no menu button to set.
         """
+        return self._served_private_chats()
+
+    def _served_private_chats(self) -> list[int]:
+        """The private chats this install serves: every DM scope, else a
+        positive ``CHAT_ID`` (personal mode). The Mini App button and the
+        multilingual launch (offer, first-contact line) use exactly these."""
         if self.scopes is not None:
             return [s.chat_id for s in self.scopes
                     if s.kind == "dm" and s.chat_id > 0]
@@ -1378,7 +1584,7 @@ class LifecycleMixin:
         startup, and one blocked or unknown chat must not cost the other
         scopes their button, let alone take the daemon down.
         """
-        from telegram import MenuButtonCommands, MenuButtonWebApp, WebAppInfo
+        from telegram import MenuButtonCommands
 
         # Verify before advertising. The daemon used to publish whatever
         # URL config held, unchecked — so when an ephemeral tunnel died the
@@ -1405,10 +1611,12 @@ class LifecycleMixin:
 
         try:
             chats = self._miniapp_button_chats()
-            button = (
-                MenuButtonWebApp(text=APP_BUTTON, web_app=WebAppInfo(url=url))
-                if url else MenuButtonCommands()
-            )
+            # Each chat's button in that chat's language, its link too.
+            buttons = {
+                chat_id: (self._menu_button_webapp(chat_id, url)
+                          if url else MenuButtonCommands())
+                for chat_id in chats
+            }
         except Exception:
             # The docstring promises this never raises, so the work
             # BEFORE the API call has to be covered too — otherwise the
@@ -1437,7 +1645,7 @@ class LifecycleMixin:
                 # _miniapp_button_chats for why the no-chat_id form is
                 # not an acceptable shortcut here.
                 await self._app.bot.set_chat_menu_button(
-                    chat_id=chat_id, menu_button=button,
+                    chat_id=chat_id, menu_button=buttons[chat_id],
                 )
             except Exception:
                 log.warning(
@@ -1506,16 +1714,20 @@ class LifecycleMixin:
         autocomplete lists only its own session labels (Phase G)."""
         for scope in self.scopes:
             labels = self.registry.live_labels(scope.chat_id)
+            tr = self._menu_tr(scope.chat_id)
             prev = self._registered_scope_labels.get(scope.chat_id)
-            if prev is not None and labels == prev:
+            # Keyed by (language, labels): a language switch re-registers.
+            if (prev is not None and labels == prev
+                    and self._registered_scope_lang.get(scope.chat_id) == tr.code):
                 continue
             try:
                 await self._app.bot.set_my_commands(
                     self._command_list(
-                        labels, group=group_intake.is_group_chat(scope.chat_id)),
+                        labels, group=group_intake.is_group_chat(scope.chat_id), tr=tr),
                     scope=BotCommandScopeChat(chat_id=scope.chat_id),
                 )
                 self._registered_scope_labels[scope.chat_id] = labels
+                self._registered_scope_lang[scope.chat_id] = tr.code
                 log.info("Bot commands for %s: status, stop + %s",
                          scope.chat_id, ", ".join(sorted(labels)) or "(none)")
             except ChatMigrated as e:
@@ -1524,6 +1736,7 @@ class LifecycleMixin:
                 chat_migration.note_chat_migrated(scope.chat_id, e.new_chat_id)
                 if prev is None:
                     self._registered_scope_labels[scope.chat_id] = labels
+                    self._registered_scope_lang[scope.chat_id] = tr.code
             except Exception as e:
                 # E.g. a group the bot isn't a member of: log + skip. A
                 # group it cannot reach at all gets ONE warning per run,
@@ -1537,3 +1750,4 @@ class LifecycleMixin:
                                 scope.chat_id, exc_info=True)
                 if prev is None:
                     self._registered_scope_labels[scope.chat_id] = labels
+                    self._registered_scope_lang[scope.chat_id] = tr.code

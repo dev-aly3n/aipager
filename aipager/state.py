@@ -99,7 +99,11 @@ def turn_sender_from_report(turn: dict) -> int | str | None:
     None when no author is known (nothing is held then)."""
     if not isinstance(turn, dict):
         return None
-    if turn.get("origin") == "terminal":
+    if turn.get("origin") in ("terminal", "peer", "scheduled"):
+        # A turn started by a message from another session holds every
+        # other sender's message like a terminal turn ("peer message
+        # authority", C2): until the job ends, nobody's message joins it.
+        # So does a turn this session's own scheduled prompt started.
         return TURN_SENDER_TERMINAL
     known = set(turn_authors_from_report(turn))
     if not known:
@@ -167,9 +171,9 @@ FINISHED_SUBAGENTS_CAP: int = 100
 # exactly as before.
 JOB_CONTINUATION_GRACE_SECONDS: float = 60.0
 # Roadmap 8.41 — the background agents a session has running, for the
-# "⏳ N agents still running" line on an answer and the pinned bar.
-# How long the agents an answer's ⏳ line named must have stayed gone before
-# the line is settled to ✅. An agent that stops with background work of its
+# status block under an answer and the pinned bar.
+# How long an agent or shell an answer's block lists must have stayed gone
+# before its row (or the block) shows it done. An agent that stops with background work of its
 # own still running is followed by the parent's <task-notification> saying
 # so within tens of milliseconds (live 2026-09-24 18:03:29.4); that note
 # puts the agent back, and this window is what lets it land first. Short
@@ -179,14 +183,25 @@ BG_AGENTS_SETTLE_SECONDS: float = 5.0
 # muted with no deadline known) waits before its one retry. A mute with a
 # known deadline waits for the lift instead, whichever is later.
 BG_AGENTS_RETRY_SECONDS: float = 60.0
-# Stopped agents remembered (id -> label) so the still-running note can
+# Stopped agents remembered (id -> entry) so the still-running note can
 # restore one. Same bound as the table the ids come from.
 BG_AGENTS_RECENT_CAP: int = 20
-# Answers whose ⏳ line is still owed its ✅, per session. Each is settled on
-# its own (at most one edit + one retry each). Several can be pending when a
+# Answers whose status block is still kept current, per session. Each is
+# edited on its own (its final edit gets one retry). Several can be pending when a
 # job's agent reports back more than once or the operator asks something
 # while agents run; five is well above that, and bounds a runaway.
 AGENTS_LINES_CAP: int = 5
+# An answer's status block is edited at most once per this many seconds
+# (its send counts as the first), and only when what it shows changed.
+AGENTS_LINE_EDIT_INTERVAL: float = 30.0
+# The parent's Agent calls waiting for their SubagentStart, to give each
+# started agent its call's description: at most this many, none older
+# than AGENT_CALL_MAX_AGE seconds.
+AGENT_CALLS_CAP: int = 20
+AGENT_CALL_MAX_AGE: float = 600.0
+# How much of a background agent's latest message is kept (its first
+# line is what the answer's block shows).
+BG_AGENT_PROSE_CAP: int = 1000
 # Background shells a session has running (`TrackedSession.bg_shells`) are
 # held to this many at insertion; the oldest (by launch) is evicted when a
 # new launch would exceed it. Shells send no hooks while they run, so
@@ -521,6 +536,13 @@ class TrackedSession:
     pre_compact_pct: int = 0
     # Last injected prompt text — enables retry on API errors
     last_prompt: str = ""
+    # The person's own text of the prompt that started the running turn
+    # (a Telegram message without aipager's marker, or what was typed in
+    # the terminal). Only its direction is read: before Claude has written
+    # anything, a message carrying Claude's text takes the direction of the
+    # prompt it answers (multilingual design 5.7, rule 5). Kept by a
+    # self-woken turn (the job's own prompt still stands).
+    turn_prompt: str = ""
     # Who sent ``last_prompt`` (Telegram user id), when aipager knows.
     # Retry runs as the tapper only when the tapper IS this person —
     # otherwise the prompt is someone else's text and Retry must not lend
@@ -543,6 +565,12 @@ class TrackedSession:
     # says MIXED, so a live reload can narrow the turn for a removed or
     # demoted one of them. Transient, never persisted.
     turn_mixed_authors: tuple[int, ...] = ()
+    # "Peer message authority" (display only, never persisted): who sent
+    # the message that started the running turn, as the hook verified it
+    # (``peer_resolved``), and whether a message from another session
+    # joined and narrowed it.
+    peer_from: dict | None = None
+    peer_narrowed: bool = False
     # Inline permission context (tool_info, question, etc.) — set when permission
     # is displayed inside the busy message instead of as a separate message
     pending_permission: dict | None = None
@@ -1113,16 +1141,27 @@ class TrackedSession:
     # clears it, /stop clears it, and job_background_open() reads it), while
     # this one follows the AGENT until its own SubagentStop, whatever the
     # turns in between do. Entry: {"label": str, "last_seen": float
-    # (monotonic)}. `bg_agents_recent` remembers stopped ones (id -> label,
-    # capped at BG_AGENTS_RECENT_CAP) for the still-running note.
-    # `agents_lines` holds what each answer that carried the ⏳ line needs
-    # to settle it, oldest first, capped at AGENTS_LINES_CAP: {"chat_id",
-    # "msg_id", "text" (the exact rich markdown sent), "line", "ids",
-    # "labels", "is_rtl", "sent_wall", "attempts", "next_try", "gone_at"}.
-    # All transient: monotonic stamps are meaningless across a restart
-    # (never in _PERSIST_FIELDS), so a restart leaves pending lines as sent.
+    # (monotonic), "started": float (monotonic), "prose": str (its latest
+    # own message, raw, capped at BG_AGENT_PROSE_CAP), "prose_msg": str
+    # (that message's id), "tool": str, "tool_arg": str (its latest tool
+    # call: the name and a short argument), "desc": str (its Agent call's
+    # description, or "")}. `bg_agents_recent` remembers stopped ones (id
+    # -> entry, capped at BG_AGENTS_RECENT_CAP) for the still-running note.
+    # `pending_agent_calls` holds the parent's Agent calls not yet matched
+    # to a SubagentStart: [{"type", "desc", "at"}], capped at
+    # AGENT_CALLS_CAP. `agents_lines` holds what each answer that carried
+    # the status block needs to keep it current, oldest first, capped at
+    # AGENTS_LINES_CAP: {"chat_id", "msg_id", "body" (the exact rich
+    # markdown before the block), "shown" (the block in the message),
+    # "items" ([{"id", "kind" agent|shell, "label", "started"}], one
+    # snapshot), "ids", "ends" (id -> {"outcome" done|finished|stopped|
+    # gone, "at"}), "is_rtl", "sent_at", "last_try", "refused", "final",
+    # "attempts", "next_try", "gone_at"}. All transient: monotonic stamps
+    # are meaningless across a restart (never in _PERSIST_FIELDS), so a
+    # restart leaves pending blocks as last shown.
     bg_agents: dict = field(default_factory=dict)
     bg_agents_recent: dict = field(default_factory=dict)
+    pending_agent_calls: list = field(default_factory=list)
     agents_lines: list = field(default_factory=list)
     # Background shells the main loop started (a `Bash` PostToolUse whose
     # `tool_response` carries a `backgroundTaskId`), from launch until
@@ -1538,11 +1577,26 @@ class TrackedSession:
                          now: float) -> bool:
         """SubagentStart: *agent_id* is running. An empty id or type is not
         an agent (the phantom shape) and adds nothing. A restart of a known
-        id (an agent resuming itself) refreshes it."""
+        id (an agent resuming itself) refreshes it and keeps what it was
+        doing.
+
+        A new agent takes the description of the parent's Agent call of
+        its type, when exactly one such call is waiting. Two or more of
+        that type cannot be told apart: they are all dropped and the agent
+        gets none, never a wrong one."""
         agent_type = (agent_type or "").strip()
         if not agent_id or not agent_type:
             return False
-        self.bg_agents[agent_id] = {"label": agent_type, "last_seen": now}
+        info = self.bg_agents.get(agent_id)
+        if info is not None:
+            info["label"] = agent_type
+            info["last_seen"] = now
+        else:
+            self.bg_agents[agent_id] = {
+                "label": agent_type, "last_seen": now, "started": now,
+                "prose": "", "prose_msg": "", "tool": "", "tool_arg": "",
+                "desc": self._match_agent_call(agent_type, now),
+            }
         self.bg_agents_recent.pop(agent_id, None)
         while len(self.bg_agents) > ACTIVE_SUBAGENTS_CAP:
             oldest = min(self.bg_agents,
@@ -1550,15 +1604,87 @@ class TrackedSession:
             self.bg_agents.pop(oldest)
         return True
 
+    def _expire_agent_calls(self, now: float) -> None:
+        self.pending_agent_calls = [
+            call for call in self.pending_agent_calls
+            if now - call["at"] <= AGENT_CALL_MAX_AGE]
+
+    def _match_agent_call(self, agent_type: str, now: float) -> str:
+        """The description of the one waiting Agent call of *agent_type*,
+        taken off the list; "" when there is none or more than one (then
+        all of that type go)."""
+        self._expire_agent_calls(now)
+        same = [c for c in self.pending_agent_calls if c["type"] == agent_type]
+        if not same:
+            return ""
+        self.pending_agent_calls = [
+            c for c in self.pending_agent_calls if c["type"] != agent_type]
+        return same[0]["desc"] if len(same) == 1 else ""
+
+    def agent_call_launched(self, subagent_type: str, description: str,
+                            now: float) -> None:
+        """The parent called the Agent tool: remember its type and
+        description until the agent it starts says SubagentStart. A call
+        with no type records nothing (it could match nothing)."""
+        subagent_type = (subagent_type or "").strip() if isinstance(
+            subagent_type, str) else ""
+        if not subagent_type:
+            return
+        self._expire_agent_calls(now)
+        self.pending_agent_calls.append({
+            "type": subagent_type,
+            "desc": description if isinstance(description, str) else "",
+            "at": now,
+        })
+        if len(self.pending_agent_calls) > AGENT_CALLS_CAP:
+            del self.pending_agent_calls[:len(self.pending_agent_calls)
+                                         - AGENT_CALLS_CAP]
+
+    def bg_agent_prose(self, agent_id: str, message_id: str, delta: str,
+                       now: float) -> None:
+        """A MessageDisplay of the agent's own: its latest message. A new
+        message replaces the kept one only once it says something visible;
+        more of the same message is added to it (up to
+        BG_AGENT_PROSE_CAP). An id that is not a running agent changes
+        nothing."""
+        info = self.bg_agents.get(agent_id)
+        if info is None or not isinstance(delta, str):
+            return
+        message_id = message_id if isinstance(message_id, str) else str(message_id or "")
+        if message_id and message_id == info.get("prose_msg"):
+            info["prose"] = (info.get("prose", "") + delta)[:BG_AGENT_PROSE_CAP]
+        elif delta.strip():
+            info["prose"] = delta[:BG_AGENT_PROSE_CAP]
+            info["prose_msg"] = message_id
+
+    def bg_agent_tool(self, agent_id: str, tool_name: str, arg: str,
+                      now: float) -> None:
+        """A PreToolUse of the agent's own: its latest tool call (the name
+        and a short argument). An id that is not a running agent changes
+        nothing."""
+        info = self.bg_agents.get(agent_id)
+        if info is None or not isinstance(tool_name, str):
+            return
+        info["tool"] = tool_name
+        info["tool_arg"] = arg if isinstance(arg, str) else ""
+
+    def _end_in_lines(self, item_id: str, outcome: str, now: float) -> None:
+        """Stamp *item_id*'s end on every pending answer that lists it."""
+        for rec in self.agents_lines:
+            if item_id in rec.get("ids", ()):
+                rec.setdefault("ends", {})[item_id] = {"outcome": outcome,
+                                                       "at": now}
+
     def bg_agent_stopped(self, agent_id: str, now: float) -> bool:
         """SubagentStop: the matching agent stopped. An id never started
         (the constant phantom SubagentStops) matches nothing."""
         info = self.bg_agents.pop(agent_id, None)
         if info is None:
             return False
-        self.bg_agents_recent[agent_id] = info["label"]
+        self.bg_agents_recent[agent_id] = info
         while len(self.bg_agents_recent) > BG_AGENTS_RECENT_CAP:
             self.bg_agents_recent.pop(next(iter(self.bg_agents_recent)))
+        self._end_in_lines(agent_id, "done", now)
         return True
 
     def bg_agent_touch(self, agent_id: str, now: float) -> None:
@@ -1576,10 +1702,13 @@ class TrackedSession:
         if agent_id in self.bg_agents:
             self.bg_agents[agent_id]["last_seen"] = now
             return True
-        label = self.bg_agents_recent.pop(agent_id, None)
-        if label is None:
+        info = self.bg_agents_recent.pop(agent_id, None)
+        if info is None:
             return False
-        self.bg_agents[agent_id] = {"label": label, "last_seen": now}
+        info["last_seen"] = now
+        self.bg_agents[agent_id] = info
+        for rec in self.agents_lines:
+            rec.get("ends", {}).pop(agent_id, None)
         return True
 
     def sweep_bg_agents(self, now: float, window: float) -> list[str]:
@@ -1587,9 +1716,9 @@ class TrackedSession:
         SubagentStop) and return their ids.
 
         Silence is not completion: an agent parked on long background work
-        of its own emits nothing. So an answer whose ⏳ line named an
-        expired agent is left exactly as sent — never settled to ✅ on no
-        evidence."""
+        of its own emits nothing. So an answer whose status block lists an
+        expired agent is left exactly as last shown — never settled to
+        done on no evidence."""
         silent = [a for a, info in self.bg_agents.items()
                   if now - info["last_seen"] > window]
         for agent_id in silent:
@@ -1606,12 +1735,13 @@ class TrackedSession:
         line of it is owed an edit."""
         self.bg_agents.clear()
         self.bg_agents_recent.clear()
+        self.pending_agent_calls = []
         self.bg_shells.clear()
         self.bg_shell_early_ends.clear()
         self.agents_lines = []
 
     def add_agents_line(self, rec: dict) -> None:
-        """Remember an answer that carried the ⏳ line, capped at
+        """Remember an answer that carried the status block, capped at
         AGENTS_LINES_CAP (the oldest is then left as sent)."""
         self.agents_lines.append(rec)
         if len(self.agents_lines) > AGENTS_LINES_CAP:
@@ -1729,8 +1859,14 @@ class TrackedSession:
         if outcome == "lost":
             self.agents_lines = [rec for rec in self.agents_lines
                                  if task_id not in rec["ids"]]
-        elif (info.get("in_job") and self.job_interim_seen
-              and not self.job_work_running()):
+            return info
+        # An answer's block: killed or stopped by Claude reads "stopped",
+        # an exit of its own (even a failing one) "finished".
+        self._end_in_lines(
+            task_id, "stopped" if outcome in ("killed", "stopped")
+            else "finished", now)
+        if (info.get("in_job") and self.job_interim_seen
+                and not self.job_work_running()):
             self.job_grace_until = now + JOB_CONTINUATION_GRACE_SECONDS
         return info
 
@@ -1745,21 +1881,33 @@ class TrackedSession:
         return old
 
     def agents_lines_due(self, now: float) -> list[dict]:
-        """The answers whose ⏳ line is owed its ✅ edit at *now*: every
-        agent the line named has been gone for BG_AGENTS_SETTLE_SECONDS,
-        and any retry's wait has passed. Called by the monitor's scan; it
-        stamps the moment the last of a line's agents left, and resets it
-        if one comes back."""
+        """The answers whose status block may be edited at *now*: the last
+        attempt (the send counts as one) is AGENTS_LINE_EDIT_INTERVAL old
+        and any retry's wait has passed. Called by the monitor's scan.
+
+        It keeps every answer's ends current first: an item that left
+        without an end of its own (evicted at a cap) is stamped ``gone``;
+        one that is running again (an agent back after the still-running
+        note) loses its stamp. ``final`` is set once every item has ended
+        at least BG_AGENTS_SETTLE_SECONDS ago, and ``gone_at`` is when the
+        last of them ended (0.0 while one runs)."""
         due = []
         for rec in self.agents_lines:
-            if any(task_id in self.bg_agents or task_id in self.bg_shells
-                   for task_id in rec["ids"]):
+            ends = rec.setdefault("ends", {})
+            for item_id in rec["ids"]:
+                if item_id in self.bg_agents or item_id in self.bg_shells:
+                    ends.pop(item_id, None)
+                elif item_id not in ends:
+                    ends[item_id] = {"outcome": "gone", "at": now}
+            if all(item_id in ends for item_id in rec["ids"]):
+                rec["gone_at"] = max((e["at"] for e in ends.values()),
+                                     default=now)
+            else:
                 rec["gone_at"] = 0.0
-                continue
-            if not rec["gone_at"]:
-                rec["gone_at"] = now
-            if (now - rec["gone_at"] >= BG_AGENTS_SETTLE_SECONDS
-                    and now >= rec["next_try"]):
+            rec["final"] = bool(rec["gone_at"]) and (
+                now - rec["gone_at"] >= BG_AGENTS_SETTLE_SECONDS)
+            if (now >= rec.get("last_try", 0.0) + AGENTS_LINE_EDIT_INTERVAL
+                    and now >= rec.get("next_try", 0.0)):
                 due.append(rec)
         return due
 
@@ -2232,6 +2380,26 @@ def _load_pinned_msg_ids(data: dict) -> dict[int, int]:
     return out
 
 
+def _load_keyboard_labels(raw: object) -> dict[int, list[str]]:
+    """The persisted per-chat keyboard labels
+    (``SessionRegistry.keyboard_labels``). A file from before they were
+    kept has none; a chat entry that is not an int-like key with a list of
+    strings is dropped (that chat then counts as never recorded)."""
+    out: dict[int, list[str]] = {}
+    if not isinstance(raw, dict):
+        return out
+    for chat, labels in raw.items():
+        try:
+            chat_i = int(chat)
+        except (TypeError, ValueError):
+            continue
+        if (not isinstance(labels, list)
+                or not all(isinstance(lbl, str) and lbl for lbl in labels)):
+            continue
+        out[chat_i] = sorted(set(labels))
+    return out
+
+
 #: Whose card each group message is (``bot.card_owner``): the kinds of
 #: card a record may name, and the newest records kept (also on disk).
 CARD_OWNER_KINDS = frozenset({
@@ -2351,6 +2519,20 @@ class SessionRegistry:
         # ``pinned_msg_id`` of the legacy one-chat dashboard, which
         # ``load()`` migrates into this map.
         self.pinned_msg_ids: dict[int, int] = {}
+        # The session labels the latest shared main reply keyboard in each
+        # chat carried (chat_id → sorted labels): what that chat's keyboard
+        # shows now. Written only by `_send_keyboard` once such a keyboard
+        # went out (in single-scope mode too, where nothing reads it), and
+        # read by `_update_bot_commands` in multi-scope mode,
+        # which re-sends a chat's keyboard when its sessions no longer
+        # match. Persisted, so a restart sends nothing when nothing changed.
+        self.keyboard_labels: dict[int, list[str]] = {}
+        # The live (non-GONE) session names the latest `/` menu and
+        # keyboard refresh (`_update_bot_commands`) rendered: the session
+        # monitor refreshes when the live set differs from it, so a
+        # command that refreshed by itself is not refreshed twice. None
+        # until the first refresh. Transient.
+        self.refreshed_live: set[str] | None = None
         self._dirty: bool = False
         # Claude Code session id -> monotonic time aipager's own /kill
         # ended that process (bot.session_ops._kill_session_core). Its
@@ -2830,7 +3012,9 @@ class SessionRegistry:
             # removal must never block the transition — never raise.
             try:
                 from aipager.policy_snapshot import clear_session_files
-                clear_session_files(sess.name)
+                # Its scheduled prompts stay recorded: a resume brings them
+                # back ("peer message authority").
+                clear_session_files(sess.name, keep_triggers=True)
             except Exception:
                 pass
 
@@ -2939,6 +3123,11 @@ class SessionRegistry:
             return sess
         return gone_match
 
+    def live_names(self) -> set[str]:
+        """Internal names of the non-GONE sessions."""
+        return {name for name, sess in self._sessions.items()
+                if sess.status != Status.GONE}
+
     def live_labels(self, scope_chat_id: int | None = None) -> set[str]:
         """Labels of non-GONE sessions, optionally filtered to a scope."""
         out: set[str] = set()
@@ -3027,6 +3216,10 @@ class SessionRegistry:
                 changed = True
         if self.pinned_msg_ids.pop(old, None) is not None:
             changed = True
+        # The keyboard the chat showed follows it, like its target.
+        if old in self.keyboard_labels:
+            self.keyboard_labels.setdefault(new, self.keyboard_labels.pop(old))
+            changed = True
         kept = [p for p in self.queued_line_deletes if p[0] != old]
         if len(kept) != len(self.queued_line_deletes):
             self.queued_line_deletes[:] = kept
@@ -3039,6 +3232,20 @@ class SessionRegistry:
         if changed:
             self._dirty = True
         return moved
+
+    def keyboard_labels_for(self, chat_id: int) -> set[str] | None:
+        """The labels *chat_id*'s shared main keyboard shows, or None when
+        no such keyboard was recorded (a fresh install, or the first run
+        after this record existed)."""
+        labels = self.keyboard_labels.get(chat_id)
+        return None if labels is None else set(labels)
+
+    def set_keyboard_labels(self, chat_id: int, labels) -> None:
+        """Record that *chat_id*'s shared main keyboard now shows *labels*."""
+        new = sorted(labels)
+        if self.keyboard_labels.get(chat_id) != new:
+            self.keyboard_labels[chat_id] = new
+            self._dirty = True
 
     def mark_dirty(self) -> None:
         """Flag that state has changed and needs saving."""
@@ -3185,6 +3392,8 @@ class SessionRegistry:
             "user_targets": {f"{c}:{u}": [n, o]
                              for (c, u), (n, o) in self._user_targets.items()},
             "pinned_msg_ids": {str(c): m for c, m in self.pinned_msg_ids.items()},
+            "keyboard_labels": {str(c): list(labels)
+                                for c, labels in self.keyboard_labels.items()},
             "msg_map": {f"{cid}:{mid}": v for (cid, mid), v in msg_map.items()},
             "sessions": sessions,
             "queued_line_deletes": _clean_line_deletes(self.queued_line_deletes),
@@ -3239,12 +3448,24 @@ class SessionRegistry:
         # key on each session's own chat.
         saved_last_active = data.get("last_active_session", "") or ""
         self.pinned_msg_ids = _load_pinned_msg_ids(data)
+        self.keyboard_labels = _load_keyboard_labels(data.get("keyboard_labels"))
         self.queued_line_deletes = _clean_line_deletes(
             data.get("queued_line_deletes"))
         self.card_owners = _load_card_owners(data.get("card_owners"))
 
         # Resolve the default scope once (for backfilling legacy sessions).
         _default = _default_scope()
+        # The sessions whose dtach socket exists: running, not orphans.
+        # Read the way the monitor's scan reads them, so a session it is
+        # about to find alive is not loaded as ended. Unreadable → none
+        # (every entry then loads as it did before this check existed).
+        from aipager.dtach import inject
+        try:
+            live_sockets = inject.live_session_names()
+        except OSError:
+            log.warning("Cannot list the dtach sockets - every saved "
+                        "session without an end stamp loads as ended")
+            live_sockets = set()
 
         # Reconstruct sessions with only persistable fields; transient fields
         # stay at dataclass defaults. Status → IDLE, last_idle_at → 0.0 so
@@ -3262,8 +3483,14 @@ class SessionRegistry:
             # the most accurate fallback available. Without this they
             # would render as "long ago" in /resume; with it they
             # show a real relative timestamp.
+            #
+            # Only an entry whose socket is gone: a running session is
+            # also saved without gone_at, and stamping it made every
+            # session running across a restart load as ended (its / menu
+            # entry missing until the first scan revived it).
             backfilled = False
-            if gone_at is None and sd.get("claude_session_id"):
+            if (gone_at is None and sd.get("claude_session_id")
+                    and name not in live_sockets):
                 tp = sd.get("transcript_path", "")
                 if tp:
                     try:
@@ -3275,6 +3502,8 @@ class SessionRegistry:
             # the dtach socket is gone too, so session_monitor would
             # mark them GONE again on its first scan anyway. Preserving
             # the state up-front keeps `gone_at` meaningful for /resume.
+            # A running one (live socket, no gone_at) loads UNKNOWN: the
+            # first scan and the startup recovery settle it.
             initial_status = Status.GONE if gone_at is not None else Status.UNKNOWN
             sess = TrackedSession(
                 name=sd.get("name", name),

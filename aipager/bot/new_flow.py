@@ -70,8 +70,18 @@ from typing import TYPE_CHECKING
 
 from telegram import ExternalReplyInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
-from aipager import preferences
-from aipager.bot import group_intake
+from aipager.bot.mode_labels import (
+    MODE_ASK,
+    MODE_ASK_FOR_YOU,
+    MODE_ASK_INSTEAD,
+    MODE_AUTO,
+    MODE_AUTO_INSTEAD,
+    mode_label,
+)
+from aipager import i18n, member_root, preferences
+from aipager.bot import group_intake, kbwords, language_menu, settings_menu
+from aipager.bot.sibling_text import shown
+from aipager.i18n import Command, Msg, Safe, Span
 from aipager.bot.transport import (
     MUTED,
     calling_chat_id,
@@ -82,13 +92,8 @@ from aipager.bot.transport import (
     send_text,
 )
 from aipager.config import (
-    APP_BUTTON,
-    BACK_BUTTON,
-    COMMANDS_BUTTON,
     MODEL_CHOICES,
-    MODELS_BUTTON,
     RETIRED_MODEL_LABELS,
-    TEMPLATES_BUTTON,
 )
 from aipager.miniapp import launch
 from aipager.state import Status
@@ -114,14 +119,165 @@ _WIZARD_TTL_SECONDS = 600
 _NAME_STEPS = frozenset({"name", "opt_model", "opt_path"})
 _TEXT_CAPTURE_STEPS = _NAME_STEPS | {"opt_model_custom", "opt_path_newfolder"}
 
-_EXPIRED_TEXT = "⏱ This new-session card expired. Send /new again."
-_CLOSED_TEXT = "✖️ Closed, you moved on. Send /new to start a session."
+_EXPIRED_TEXT = Msg("newflow.expired", "⏱ This new-session card expired. Send /new again.",
+                    note="HTML. The /new card, left unused too long")
+_CLOSED_TEXT = Msg("newflow.closed", "✖️ Closed, you moved on. Send /new to start a session.",
+                   note="HTML. The /new card, closed because its person did something else")
 
-#: Main-keyboard words that only look at things (or reopen the card):
-#: the card keeps waiting through them. `stop` and `kill` act on a
-#: session, so they close it.
-_LOOKING_WORDS = frozenset({"new", "status"})
-_ACTING_WORDS = frozenset({"stop", "kill"})
+# The /new cards (HTML unless said; a card is the chat's, a pop-up the
+# tapper's).
+NEW_TITLE = Msg("newflow.title", "🆕 <b>New session</b>", note="The /new card's title")
+NEW_TITLE_OWNER = Msg("newflow.title_owner", "🆕 <b>New session</b> ({owner})",
+                      note="The /new card's title in a group: whose card it is",
+                      eg={"owner": "@aly"})
+NEW_GROUP_NAME_ASK = Msg("newflow.group_name_ask",
+                         "Reply to this message with a name, and what to do first if you "
+                         "like:", note="The /new card in a group, above two examples")
+NEW_SEND_NAME = Msg("newflow.send_name", "Send a name, and what to do first if you like:",
+                    note="The /new card in a private chat, above two examples")
+NEW_EXAMPLE_LINE = Msg(
+    "newflow.example_line", "<code>{session} fix the failing tests</code>",
+    note="The second example under the /new card: a session name, then the first thing to "
+         "ask Claude. Tapping it copies the whole line, which the person may send as is; "
+         "{session} is the name and stays first. Keep the <code> tags around the whole line",
+    eg={"session": "x1"})
+NEW_HINT_FOLDER = Msg("newflow.hint_folder", "📁 Pick a project folder with 📁 Folder first.",
+                      note="The /new card for someone who must pick a folder first; 📁 Folder "
+                           "is the button")
+NEW_SETTINGS_LINE = Msg("newflow.settings_line", "{mode} · 🧠 {model} · 📁 {folder}",
+                        note="The /new card: the mode, the model and the folder it would use",
+                        eg={"mode": "Auto mode", "model": "Opus", "folder": "/work/app"})
+NEW_SETTINGS_NO_FOLDER = Msg("newflow.settings_no_folder",
+                             "{mode} · 🧠 {model} · 📁 no project folder yet",
+                             note="As newflow.settings_line, with no folder picked yet",
+                             eg={"mode": "Ask mode", "model": "Opus"})
+WARNING_LINE = Msg("route.warning", "⚠️ {text}",
+                   note="A warning line; {text} is the warning",
+                   eg={"text": "not confirmed - check the session."})
+NEW_BTN_MODEL = Msg("newflow.btn.model", "🧠 Model", note="Button: pick a model")
+NEW_BTN_FOLDER = Msg("newflow.btn.folder", "📁 Folder", note="Button: pick a folder")
+NEW_BTN_CANCEL = Msg("newflow.btn.cancel", "✖️ Cancel", note="Button: close the /new card")
+NEW_BTN_OTHER_MODEL = Msg("newflow.btn.other_model", "✏️ Other model...",
+                          note="Button: type a model's name")
+NEW_MODEL_PAGE = Msg("newflow.model_page", "🧠 <b>Model</b>\n\nPick a model for this session.",
+                     note="Above the list of models")
+NEW_BTN_NEW_FOLDER = Msg("newflow.btn.new_folder", "➕ New folder",
+                         note="Button: make a new folder")
+NEW_FOLDER_PAGE = Msg("newflow.folder_page", "📁 <b>Folder</b>\n\nPick where this session works.",
+                      note="Above the list of folders")
+NEW_OTHER_MODEL_TITLE = Msg("newflow.other_model_title", "🧠 <b>Other model</b>",
+                            note="Title of the question for a model's name")
+NEW_NEW_FOLDER_TITLE = Msg("newflow.new_folder_title", "📁 <b>New folder</b>",
+                           note="Title of the question for a new folder's name")
+NEW_PROMPT_MODEL_TYPE_EG = Msg("newflow.prompt_model_type_eg",
+                               "Type the model name (e.g. {example}).",
+                               note="Private chat: type a model's name; {example} is one",
+                               eg={"example": "claude-opus-5"})
+NEW_PROMPT_MODEL_REPLY_EG = Msg("newflow.prompt_model_reply_eg",
+                                "Reply to this message with the model name (e.g. {example}).",
+                                note="Group: reply with a model's name; {example} is one",
+                                eg={"example": "claude-opus-5"})
+NEW_PROMPT_MODEL_TYPE = Msg("newflow.prompt_model_type", "Type the model name.",
+                            note="Private chat, after a wrong model name")
+NEW_PROMPT_MODEL_REPLY = Msg("newflow.prompt_model_reply",
+                             "Reply to this message with the model name.",
+                             note="Group, after a wrong model name")
+NEW_PROMPT_FOLDER_TYPE = Msg("newflow.prompt_folder_type", "Type the new folder's name.",
+                             note="Private chat: type the new folder's name")
+NEW_PROMPT_FOLDER_REPLY = Msg("newflow.prompt_folder_reply",
+                              "Reply to this message with the new folder's name.",
+                              note="Group: reply with the new folder's name")
+NEW_STARTED_OVER = Msg("newflow.started_over", "↩️ Cancelled - started over.",
+                       note="An older /new card, replaced by the person's newer one")
+TOAST_CANT_START_HERE = Msg("toast.new_cant_start_here", "You can't start sessions here.",
+                            note="Pop-up: the person may not start sessions in this chat")
+#: Why a /new name was refused (more come from the Mini App's rules, English).
+NAME_EMPTY = Msg("newflow.name_empty", "Session name can't be empty.",
+                 note="/new with no name")
+NOTE_AUTO_NEEDS_ADMIN = Msg("newflow.auto_needs_admin_note",
+                            "Auto mode needs an admin, so this one asks.",
+                            note="On the Ready card: someone not an admin asked for Auto")
+NEW_STARTING = Msg("newflow.starting", "🚀 Starting <b>{session}</b> in {mode}…",
+                   note="A session is starting, in that mode; {mode} is the mode's label, "
+                        "which already says mode", eg={"session": "x1", "mode": "Auto mode"})
+NEW_CREATE_FAILED = Msg("newflow.create_failed", "❌ {error}",
+                        note="Starting the session failed; {error} is why (English)",
+                        eg={"error": "a session named x1 already exists"})
+READY = Msg("newflow.ready", "✅ <b>{session}</b> is ready", note="The Ready card's title",
+            eg={"session": "x1"})
+READY_SETTINGS = Msg("newflow.ready_settings", "{mode} · 🧠 {model} · 📁 <code>{folder}</code>",
+                     note="The Ready card: the session's mode, model and folder",
+                     eg={"mode": "Auto mode", "model": "Opus", "folder": "/work/app"})
+READY_CHANGED = Msg("newflow.ready_changed", "🔁 {changed}",
+                    note="The Ready card: what a tap changed and who", eg={"changed": "x"})
+READY_WORKING_FIRST = Msg("newflow.working_first", "▶️ Working on your first message.",
+                          note="The Ready card: the first message went with /new")
+READY_JUST_SEND = Msg("newflow.just_send", "✍️ Just send a message, it goes to {session}.",
+                      note="The Ready card in a private chat", eg={"session": "x1"})
+READY_LATER = Msg("newflow.ready_later",
+                  "Later: tap {session} on the keyboard, or reply to any {session} message.",
+                  note="The Ready card: how to talk to the session later",
+                  eg={"session": "x1"})
+MODE_BTN_TO_ASK = Msg("modecard.btn.to_ask", "💬 Switch to Ask",
+                      note="Button: switch to Ask mode (Claude asks before each tool)")
+MODE_BTN_TO_AUTO = Msg("modecard.btn.to_auto", "🤖 Switch to Auto",
+                       note="Button: switch to Auto mode (Claude runs tools without asking)")
+READY_MODELS = Msg("newflow.ready_models",
+                   "🧠 <b>{session}</b>: pick a model.\n\nIt switches in place, the "
+                   "conversation is kept.", note="Above the Ready card's model list",
+                   eg={"session": "x1"})
+TOAST_SESSION_ENDED = Msg("toast.session_ended", "That session has ended.", note="Pop-up")
+TOAST_CANT_CHANGE = Msg("toast.new_cant_change", "You can't change this session.",
+                        note="Pop-up: the person may not change this session")
+TOAST_AUTO_NEEDS_ADMIN = Msg("toast.perms_needs_admin", "Auto mode needs an admin.",
+                             note="Pop-up: switching to Auto mode is for admins")
+TOAST_WORKING_USE_MODE = Msg("toast.new_working_use_mode",
+                             "{session} is working. Switch after it finishes, or use /mode.",
+                             note="Pop-up: a mode switch would restart a working session",
+                             eg={"session": "x1"})
+TOAST_SWITCHING = Msg("toast.new_switching", "Switching...", note="Pop-up: a switch began")
+NOTE_MODE_NOT_SWITCHED = Msg("newflow.note_mode_not_switched",
+                             "{session} started working, so the mode was not switched.",
+                             note="On the Ready card", eg={"session": "x1"})
+NOTE_MODE_FAILED = Msg("newflow.note_mode_failed", "Couldn't switch mode.",
+                       note="On the Ready card")
+NOTE_MODE_FAILED_ERR = Msg("newflow.note_mode_failed_err", "Couldn't switch mode: {error}",
+                           note="On the Ready card; {error} is why (English)",
+                           eg={"error": "dtach not installed"})
+CHANGED_MODE = Msg("newflow.changed_mode", "Switched to {mode} by {person}.",
+                   note="On the Ready card in a group: who switched the mode",
+                   eg={"mode": "Ask mode", "person": "@bob"})
+CHANGED_MODEL = Msg("newflow.changed_model", "Model switched to {model} by {person}.",
+                    note="On the Ready card in a group: who switched the model",
+                    eg={"model": "Opus", "person": "@bob"})
+TOAST_MODEL_GONE = Msg("toast.new_model_gone", "That model is no longer offered.",
+                       note="Pop-up: the tapped model was taken off the list")
+TOAST_SWITCH_FAILED = Msg("toast.new_switch_failed", "Couldn't switch the model.",
+                          note="Pop-up: /model could not be sent")
+TOAST_SWITCHING_TO = Msg("toast.new_switching_to", "Switching to {model}",
+                         note="Pop-up: the model switch was sent", eg={"model": "Opus"})
+OTHERS_CARD_NAMED = Msg("newflow.others_card_named",
+                        "This card is {owner}'s. Send /new for your own.",
+                        note="A reply to someone else's /new card in a group",
+                        eg={"owner": "@aly"})
+OTHERS_CARD_SOMEONE = Msg("newflow.others_card_someone",
+                          "This card is someone else's. Send /new for your own.",
+                          note="As newflow.others_card_named, the owner unknown")
+TOAST_NOT_YOURS = Msg("toast.new_not_yours", "This isn't your new session.",
+                      note="Pop-up: a tap on someone else's /new card")
+TOAST_CARD_EXPIRED = Msg("toast.new_card_expired", "This card expired.",
+                         note="Pop-up: the /new card was left unused too long")
+TOAST_CARD_REPLACED = Msg("toast.new_card_replaced", "That card was replaced. Use the new one.",
+                          note="Pop-up: a tap on an older /new card")
+CANCELLED = Msg("sess.cancelled", "↩️ Cancelled.", note="A card cancelled")
+TOAST_INVALID_MODEL = Msg("toast.new_invalid_model", "Invalid model",
+                          note="Pop-up: the tapped model cannot be used")
+TOAST_NO_FOLDER_YET = Msg("toast.new_no_folder_yet",
+                          "No folder available yet - start a session from a real project "
+                          "folder first.", note="Pop-up: no folder to make a new one in")
+TOAST_FOLDER_GONE = Msg("toast.new_folder_gone", "That folder is no longer available.",
+                        note="Pop-up: the tapped folder is not on the list any more")
+
 
 
 # ---- pending-state plumbing ------------------------------------------
@@ -168,7 +324,8 @@ def close_open_card(bot: TelegramBot, chat_id: int | None,
     # The pop is what matters; the edit only tells them, so nothing
     # waits on it (held like every other background send).
     from aipager.bot.notify import _BACKGROUND_TASKS  # local: import cycle
-    task = asyncio.create_task(_edit_wizard(bot, chat_id, pending, _CLOSED_TEXT))
+    task = asyncio.create_task(_edit_wizard(bot, chat_id, pending,
+                                            i18n.for_chat(chat_id).html(_CLOSED_TEXT)))
     _BACKGROUND_TASKS.add(task)
     task.add_done_callback(_BACKGROUND_TASKS.discard)
 
@@ -299,13 +456,13 @@ def _not_for_the_card(bot: TelegramBot, update: Update, pending: dict,
         return "close"    # a quote from another chat: a reply, never a name
     if pending["step"] == "opt_model_custom":
         return ""         # a custom model may well be a model label
-    word = text.strip().lower()
-    if word in _LOOKING_WORDS or text in (
-            TEMPLATES_BUTTON, COMMANDS_BUTTON, MODELS_BUTTON, BACK_BUTTON, APP_BUTTON):
+    # Main-keyboard words that only look at things (new, status, the
+    # navigation buttons) keep the card waiting; stop, kill and a template,
+    # command or model button act on a session, so they close it.
+    kind = kbwords.classify(bot, text)
+    if kind == "looking":
         return "keep"
-    if word in _ACTING_WORDS or any(
-            text in (getattr(bot, attr, None) or {})
-            for attr in ("_template_map", "_command_map", "_model_map")):
+    if kind == "acting":
         return "close"
     return ""
 
@@ -348,10 +505,13 @@ def resolve_new_session_settings(
     than a retired pinned row, which keeps its model), or a folder no
     longer allowed, falls back to the built-in default."""
     stored = preferences.get_new_session_defaults(chat_id)
-    can_auto = bool(bot._is_admin_user(user_id, chat_id))
+    can_auto = bool(bot._may_use_auto(user_id, chat_id))
     # Confined to the session's folder (roadmap 8.79): a stored default
     # that is the home folder, `/` or above the home folder is not theirs.
     confined = bool(bot._is_confined_user(user_id, chat_id))
+    # A role without can_manage: only its members' root folder and the
+    # folders inside it (None for anyone else).
+    root = member_root.restricted_root(bot, user_id, chat_id)
     model = model_label = None
     # Only a label still offered, or a retired pinned row: the defaults
     # screen stores a MODEL_CHOICES label, and one withdrawn since must
@@ -365,16 +525,31 @@ def resolve_new_session_settings(
         model, model_label = RETIRED_MODEL_LABELS[stored.model], stored.model
     cwd = None
     if stored.cwd and stored.cwd in launch.allowed_roots(
-            bot.registry, chat_id, confined=confined):
+            bot.registry, chat_id, confined=confined, root=root):
         cwd = stored.cwd
+    if cwd is None and root is not None and root != member_root.NOWHERE:
+        cwd = root
     return {
-        "skip_perms": can_auto and stored.mode != "ask",
+        "skip_perms": _defaults_start_in_auto(bot, stored.mode, user_id, chat_id),
         "can_auto": can_auto,
         "model": model,
         "model_label": model_label,
         "cwd": cwd,
         "confined": confined,
+        "root": root,
     }
+
+
+def _defaults_start_in_auto(bot: TelegramBot, mode: str, user_id: int | None,
+                            chat_id: int | None) -> bool:
+    """Whether the chat's New sessions mode (*mode*: the stored value,
+    "" when none) starts *user_id*'s /new in Auto. An admin: unless it
+    says Ask (Auto is the built-in default). Someone else who may use
+    Auto (the member in their own DM): only when it says Auto, so their
+    default stays Ask until they choose Auto. Anyone else: never."""
+    if bot._is_admin_user(user_id, chat_id):
+        return mode != "ask"
+    return mode == "auto" and bool(bot._may_use_auto(user_id, chat_id))
 
 
 def _needs_folder(pending: dict) -> bool:
@@ -387,28 +562,33 @@ def _needs_folder(pending: dict) -> bool:
 def _note_folder_choices(bot: TelegramBot, chat_id: int, pending: dict) -> None:
     """Record whether a confined person has any launch folder to pick, so
     the Name card can say what to do when none is left (roadmap 8.79)."""
+    root = pending.get("root")
     pending["has_folders"] = bool(launch.allowed_roots(
-        bot.registry, chat_id, confined=bool(pending.get("confined"))))
+        bot.registry, chat_id, confined=bool(pending.get("confined")), root=root))
     # Somewhere New folder can create one (the home folder counts).
-    pending["has_parents"] = bool(launch.allowed_roots(bot.registry, chat_id))
+    pending["has_parents"] = bool(launch.allowed_roots(bot.registry, chat_id, root=root))
 
 
-def _settings_line(settings: dict) -> str:
-    mode = "🤖 Auto" if settings.get("skip_perms") else "💬 Ask"
-    model = settings.get("model_label") or "Default model"
+def _settings_line(settings: dict, tr=None) -> str:
+    """What a session started from this card would get (HTML), in *tr*'s
+    language (English when None). A model's name is shown as it is."""
+    tr = tr or i18n.get("en")
+    # Each piece without its own leading right-to-left mark: the line has
+    # one already, at its start.
+    mode = Safe(tr.html(mode_label(settings.get("skip_perms"))).removeprefix(tr.mark))
+    model = (settings.get("model_label")
+             or Safe(tr.html(NS_DEFAULT_MODEL).removeprefix(tr.mark)))
     if _needs_folder(settings):
-        return (f"{mode} · 🧠 {html_mod.escape(model)} · "
-                "📁 no project folder yet")
+        return tr.html(NEW_SETTINGS_NO_FOLDER, mode=mode, model=model)
     folder = settings.get("cwd") or _project_dir()
-    return (f"{mode} · 🧠 {html_mod.escape(model)} · "
-            f"📁 {html_mod.escape(_short_path(folder))}")
+    return tr.html(NEW_SETTINGS_LINE, mode=mode, model=model, folder=_short_path(folder))
 
 
 # ---- the Name card ------------------------------------------------------
 
 #: The Name card's ask in a group, where a plain message does not reach a
 #: bot in privacy mode but a reply to the card does (roadmap 8.84).
-_GROUP_NAME_ASK = "Reply to this message with a name, and what to do first if you like:"
+_GROUP_NAME_ASK = NEW_GROUP_NAME_ASK
 
 
 def _owner_label(bot: TelegramBot, chat_id: int, user_id: int | None) -> str:
@@ -426,54 +606,67 @@ def _owner_label(bot: TelegramBot, chat_id: int, user_id: int | None) -> str:
     return attribution_label(member) if member is not None else ""
 
 
+def _error_text(tr, error) -> str:
+    """A refusal shown on a card, as plain text: a keyed one (ours, or the
+    Mini App's rules with their parameters) in *tr*'s language, anything
+    else (a launch error) as it was said."""
+    return str(shown(tr, error))
+
+
 def _render_name_card(pending: dict, *, error: str = "",
-                      chat_id=None) -> tuple[str, InlineKeyboardMarkup]:
-    header = "🆕 <b>New session</b>"
+                      chat_id=None, tr=None) -> tuple[str, InlineKeyboardMarkup]:
+    """The Name card: the chat's (in a group it names its owner, and is
+    still in the group's language)."""
+    tr = tr or i18n.for_chat(chat_id)
     if group_intake.is_group_chat(chat_id) and pending.get("owner_label"):
         # Whose card it is: in a group several can be open (roadmap 8.86).
-        header += f" ({html_mod.escape(pending['owner_label'])})"
+        header = tr.html(NEW_TITLE_OWNER, owner=Command(pending["owner_label"]))
+    else:
+        header = tr.html(NEW_TITLE)
     lines = [header, ""]
     if error:
-        lines += [f"⚠️ {html_mod.escape(error)}", ""]
+        lines += [tr.html(WARNING_LINE, text=_error_text(tr, error)), ""]
     lines += [
-        (_GROUP_NAME_ASK if group_intake.is_group_chat(chat_id)
-         else "Send a name, and what to do first if you like:"),
+        tr.html(NEW_GROUP_NAME_ASK if group_intake.is_group_chat(chat_id)
+                else NEW_SEND_NAME),
         "<code>x1</code>",
-        "<code>x1 fix the failing tests</code>",
+        tr.html(NEW_EXAMPLE_LINE, session="x1"),
         "",
-        _settings_line(pending),
+        _settings_line(pending, tr),
     ]
     if _needs_folder(pending):
         if pending.get("has_folders"):
-            hint = "Pick a project folder with 📁 Folder first."
-        elif pending.get("has_parents"):
-            hint = launch.NO_PROJECT_FOLDER
+            lines += ["", tr.html(NEW_HINT_FOLDER)]
         else:
-            hint = launch.NO_FOLDER_AT_ALL
-        lines += ["", f"📁 {html_mod.escape(hint)}"]
+            # The Mini App's own wording, in the chat's language.
+            hint = (launch.NO_PROJECT_FOLDER if pending.get("has_parents")
+                    else launch.NO_FOLDER_AT_ALL)
+            lines += ["", f"📁 {html_mod.escape(shown(tr, hint))}"]
     row = []
     if pending.get("can_auto"):
         if pending.get("skip_perms"):
-            row.append(InlineKeyboardButton("💬 Ask instead",
+            row.append(InlineKeyboardButton(tr.text(MODE_ASK_INSTEAD),
                                             callback_data="_:nw:mode:ask"))
         else:
-            row.append(InlineKeyboardButton("🤖 Auto instead",
+            row.append(InlineKeyboardButton(tr.text(MODE_AUTO_INSTEAD),
                                             callback_data="_:nw:mode:auto"))
     row += [
-        InlineKeyboardButton("🧠 Model", callback_data="_:nw:opt:model"),
-        InlineKeyboardButton("📁 Folder", callback_data="_:nw:opt:path"),
+        InlineKeyboardButton(tr.text(NEW_BTN_MODEL), callback_data="_:nw:opt:model"),
+        InlineKeyboardButton(tr.text(NEW_BTN_FOLDER), callback_data="_:nw:opt:path"),
     ]
-    rows = [row, [InlineKeyboardButton("✖️ Cancel", callback_data="_:nw:cancel")]]
+    rows = [row, [InlineKeyboardButton(tr.text(NEW_BTN_CANCEL), callback_data="_:nw:cancel")]]
     return "\n".join(lines), InlineKeyboardMarkup(rows)
 
 
-def _back_cancel_row(back_action: str = "_:nw:back") -> list[InlineKeyboardButton]:
+def _back_cancel_row(back_action: str = "_:nw:back", tr=None) -> list[InlineKeyboardButton]:
     # Every caller passes a literal "_:nw:..." constant, never a session.
-    return [InlineKeyboardButton("« Back", callback_data=back_action),
-            InlineKeyboardButton("✖️ Cancel", callback_data="_:nw:cancel")]
+    tr = tr or i18n.get("en")
+    return [InlineKeyboardButton(tr.text(language_menu.BACK), callback_data=back_action),
+            InlineKeyboardButton(tr.text(NEW_BTN_CANCEL), callback_data="_:nw:cancel")]
 
 
-def _render_opt_model(pending: dict) -> tuple[str, InlineKeyboardMarkup]:
+def _render_opt_model(pending: dict, tr=None) -> tuple[str, InlineKeyboardMarkup]:
+    tr = tr or i18n.get("en")
     current = pending.get("model_label")
     rows = []
     for idx, (label, _cmd) in enumerate(MODEL_CHOICES):
@@ -482,63 +675,67 @@ def _render_opt_model(pending: dict) -> tuple[str, InlineKeyboardMarkup]:
             f"{label}{marker}", callback_data=f"_:nw:model:{idx}")])
     default_marker = " ✅" if not pending.get("model") else ""
     rows.append([InlineKeyboardButton(
-        f"Default model{default_marker}", callback_data="_:nw:model:default")])
+        f"{tr.text(NS_DEFAULT_MODEL)}{default_marker}", callback_data="_:nw:model:default")])
     rows.append([InlineKeyboardButton(
-        "✏️ Other model...", callback_data="_:nw:model:custom")])
-    rows.append(_back_cancel_row())
-    return "🧠 <b>Model</b>\n\nPick a model for this session.", InlineKeyboardMarkup(rows)
+        tr.text(NEW_BTN_OTHER_MODEL), callback_data="_:nw:model:custom")])
+    rows.append(_back_cancel_row(tr=tr))
+    return tr.html(NEW_MODEL_PAGE), InlineKeyboardMarkup(rows)
 
 
 def _render_opt_path(
-    bot: TelegramBot, pending: dict, chat_id: int,
+    bot: TelegramBot, pending: dict, chat_id: int, tr=None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     # Fresh every render: the snapshot backing `_:nw:path:<idx>` is taken
     # here, never reused from an earlier render.
+    tr = tr or i18n.for_chat(chat_id)
     confined = bool(pending.get("confined"))
-    roots = launch.allowed_roots(bot.registry, chat_id, confined=confined)
+    root = pending.get("root")
+    roots = launch.allowed_roots(bot.registry, chat_id, confined=confined, root=root)
     pending["path_options"] = roots
     current = pending.get("cwd")
     rows = []
-    for idx, root in enumerate(roots):
-        marker = " ✅" if current == root else ""
+    for idx, folder in enumerate(roots):
+        marker = " ✅" if current == folder else ""
         rows.append([InlineKeyboardButton(
-            f"{_short_path(root)}{marker}", callback_data=f"_:nw:path:{idx}")])
-    if not (confined and launch.default_folder_is_wide()):
+            f"{_short_path(folder)}{marker}", callback_data=f"_:nw:path:{idx}")])
+    if root is None and not (confined and launch.default_folder_is_wide()):
         # The daemon's own folder; for a confined person only when it is
-        # not the home folder or above it (roadmap 8.79).
+        # not the home folder or above it (roadmap 8.79), and never for
+        # someone held to a members' root folder.
         default_marker = " ✅" if not current else ""
         rows.append([InlineKeyboardButton(
-            f"Default folder{default_marker}", callback_data="_:nw:path:default")])
+            f"{tr.text(NS_DEFAULT_FOLDER)}{default_marker}", callback_data="_:nw:path:default")])
     rows.append([InlineKeyboardButton(
-        "➕ New folder", callback_data="_:nw:path:new")])
-    rows.append(_back_cancel_row())
-    return ("📁 <b>Folder</b>\n\nPick where this session works.",
-            InlineKeyboardMarkup(rows))
+        tr.text(NEW_BTN_NEW_FOLDER), callback_data="_:nw:path:new")])
+    rows.append(_back_cancel_row(tr=tr))
+    return (tr.html(NEW_FOLDER_PAGE), InlineKeyboardMarkup(rows))
 
 
-def _type_or_reply(chat_id, what: str) -> str:
-    """"Type <what>" in a private chat; in a group, where a plain message
-    does not reach a bot in privacy mode, "Reply to this message with
-    <what>" (roadmap 8.84)."""
-    if group_intake.is_group_chat(chat_id):
-        return f"Reply to this message with {what}"
-    return f"Type {what}"
-
-
-def _model_custom_prompt_text(error: str = "", chat_id=None) -> str:
-    header = "🧠 <b>Other model</b>\n\n"
+def _model_custom_prompt_text(error: str = "", chat_id=None, tr=None) -> str:
+    """The custom model's question: "Type …" in a private chat; in a group,
+    where a plain message does not reach a bot in privacy mode, "Reply to
+    this message with …" (roadmap 8.84). One whole sentence each."""
+    tr = tr or i18n.for_chat(chat_id)
+    group = group_intake.is_group_chat(chat_id)
+    header = tr.html(NEW_OTHER_MODEL_TITLE) + "\n\n"
     if error:
-        return (header + f"⚠️ {html_mod.escape(error)}\n\n"
-                + _type_or_reply(chat_id, "the model name."))
-    return header + _type_or_reply(chat_id, "the model name (e.g. claude-opus-5).")
+        ask = NEW_PROMPT_MODEL_REPLY if group else NEW_PROMPT_MODEL_TYPE
+        return (header + tr.html(WARNING_LINE, text=_error_text(tr, error)) + "\n\n"
+                + tr.html(ask))
+    return header + tr.html(NEW_PROMPT_MODEL_REPLY_EG if group else NEW_PROMPT_MODEL_TYPE_EG,
+                            example=Span("claude-opus-5"))
 
 
-def _path_newfolder_prompt_text(error: str = "", chat_id=None) -> str:
-    header = "📁 <b>New folder</b>\n\n"
+def _path_newfolder_prompt_text(error: str = "", chat_id=None, tr=None) -> str:
+    """The new folder's question (as :func:`_model_custom_prompt_text`)."""
+    tr = tr or i18n.for_chat(chat_id)
+    ask = (NEW_PROMPT_FOLDER_REPLY if group_intake.is_group_chat(chat_id)
+           else NEW_PROMPT_FOLDER_TYPE)
+    header = tr.html(NEW_NEW_FOLDER_TITLE) + "\n\n"
     if error:
-        return (header + f"⚠️ {html_mod.escape(error)}\n\n"
-                + _type_or_reply(chat_id, "the new folder's name."))
-    return header + _type_or_reply(chat_id, "the new folder's name.")
+        return (header + tr.html(WARNING_LINE, text=_error_text(tr, error)) + "\n\n"
+                + tr.html(ask))
+    return header + tr.html(ask)
 
 
 # ---- message editing ---------------------------------------------------
@@ -603,11 +800,12 @@ async def open_card_from_tap(bot: TelegramBot, update: Update, query: CallbackQu
     tapped, who must be allowed to prompt here."""
     chat_id = calling_chat_id(update)
     actor = _actor_id(update, query)
+    person = i18n.for_person(update)
     if chat_id is None:
-        await bot._safe_answer(query, "Invalid callback")
+        await bot._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))
         return
     if not bot._can_prompt_user(actor, chat_id):
-        await bot._safe_answer(query, "You can't start sessions here.", show_alert=True)
+        await bot._safe_answer(query, person.text(TOAST_CANT_START_HERE), show_alert=True)
         return
     await bot._safe_answer(query)
 
@@ -628,7 +826,7 @@ async def _open_card(bot: TelegramBot, chat_id: int, user_id: int | None, send,
         # Their second bare `/new` replaces their first: strip the old
         # card's keyboard so no tap can land on it.
         await _edit_at(bot, chat_id, old.get("msg_id"),
-                       "↩️ Cancelled - started over.")
+                       i18n.for_chat(chat_id).html(NEW_STARTED_OVER))
 
     pending = {
         "step": "name",
@@ -679,7 +877,7 @@ def parse_request(text: str) -> tuple[str, str, bool, str]:
     would press Enter early)."""
     parts = (text or "").strip().split(maxsplit=1)
     if not parts:
-        return "", "", False, "Session name can't be empty."
+        return "", "", False, NAME_EMPTY
     # "x1: fix it", "x1, fix it" and a transcript's "X1." name x1: the
     # punctuation can never be part of a valid name anyway.
     raw = parts[0].rstrip(".,:;!?")
@@ -712,7 +910,9 @@ async def create_from_text(
         elif chat_id is None:
             # No chat to hold a Name card for (an unscoped legacy update):
             # just say why.
-            await reply_text(update.message, f"⚠️ {html_mod.escape(err)}",
+            tr = i18n.for_update(update)
+            await reply_text(update.message,
+                             tr.html(WARNING_LINE, text=_error_text(tr, err)),
                              parse_mode="HTML")
         else:
             await start_wizard(bot, update, None, error=err)
@@ -729,10 +929,12 @@ async def create_from_text(
     # Auto is re-checked here, at the moment of creation, against the
     # person creating: a stale card or a `!` from someone who may not use
     # Auto gets Ask, and the Ready card says why.
-    may_auto = bool(bot._is_admin_user(actor, chat_id))
+    may_auto = bool(bot._may_use_auto(actor, chat_id))
     wants_auto = bool(settings.get("skip_perms")) or force_auto
     skip_perms = wants_auto and may_auto
-    note = "Auto mode needs an admin, so this one asks." if wants_auto and not may_auto else ""
+    # The cards are the chat's.
+    tr = i18n.for_chat(chat_id) if chat_id is not None else i18n.for_update(update)
+    note = tr.text(NOTE_AUTO_NEEDS_ADMIN) if wants_auto and not may_auto else ""
 
     if first and await bot._refuse_admin_command(update, first):
         # A slash command its sender may not send (roadmap 8.74): the
@@ -755,8 +957,7 @@ async def create_from_text(
             edit_msg_id=pending.get("msg_id") if pending is not None else None)
         return
 
-    launching = (f"🚀 Starting <b>{html_mod.escape(name)}</b> "
-                 f"{'🤖 Auto' if skip_perms else '💬 Ask'}…")
+    launching = tr.html(NEW_STARTING, session=name, mode=Safe(tr.html(mode_label(skip_perms))))
     sent = None
     if pending is not None:
         store.pop(key, None)
@@ -788,7 +989,7 @@ async def create_from_text(
             store[key] = pending
             await _goto_name(bot, chat_id, pending, error=err)
         else:
-            await _show(f"❌ {html_mod.escape(err)}")
+            await _show(tr.html(NEW_CREATE_FAILED, error=_error_text(tr, err)))
         return
 
     sess = bot.registry.get_or_create(session_name)
@@ -809,63 +1010,69 @@ async def create_from_text(
 def render_ready(
     bot: TelegramBot, update: Update | None, sess: TrackedSession, *,
     model_label: str | None = None, first_message: bool = False, note: str = "",
-    changed: str = "",
+    changed: str = "", tr=None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Where every way of starting a session ends: what it got, and what
-    to do next. ``changed`` (plain text): what a tap on the card just
-    changed and who did it, shown in a group (roadmap 8.91c)."""
+    to do next, in *tr*'s language (the chat's when None). ``changed``
+    (plain text): what a tap on the card just changed and who did it,
+    shown in a group (roadmap 8.91c); ``note`` (plain text) a warning."""
     from aipager.bot import session_parity  # local: avoids an import cycle
-    label = html_mod.escape(sess.label)
-    mode = "🤖 Auto" if sess.skip_perms else "💬 Ask"
+    chat_id = sess.scope_chat_id or (calling_chat_id(update) if update else 0) or 0
+    tr = tr or i18n.for_chat(chat_id)
+    # Without their own leading right-to-left mark (the line has one).
+    mode = Safe(tr.html(mode_label(sess.skip_perms)).removeprefix(tr.mark))
     # The model just picked wins; then, while a switch is not yet
     # confirmed, the one it was switched to; then what the statusline
-    # reports; then what it was started with.
+    # reports; then what it was started with. A model's name as it is.
     chosen = choice_label(sess.launch_model)
     model = (model_label
              or (chosen if sess.model_switch_pending() else "")
-             or sess.model_name or chosen or "Default model")
+             or sess.model_name or chosen
+             or Safe(tr.html(NS_DEFAULT_MODEL).removeprefix(tr.mark)))
     folder = sess.cwd or _project_dir()
-    chat_id = sess.scope_chat_id or (calling_chat_id(update) if update else 0) or 0
     lines = [
-        f"✅ <b>{label}</b> is ready",
-        f"{mode} · 🧠 {html_mod.escape(model)} · 📁 <code>"
-        f"{html_mod.escape(_short_path(folder))}</code>",
+        tr.html(READY, session=sess.label),
+        tr.html(READY_SETTINGS, mode=mode, model=model, folder=_short_path(folder)),
     ]
     if changed:
-        lines.append(f"🔁 {html_mod.escape(changed)}")
+        lines.append(tr.html(READY_CHANGED, changed=changed))
     if note:
-        lines.append(f"⚠️ {html_mod.escape(note)}")
+        lines.append(tr.html(WARNING_LINE, text=note))
     lines.append("")
     if first_message:
-        lines.append("▶️ Working on your first message.")
+        lines.append(tr.html(READY_WORKING_FIRST))
     else:
         lines.append(group_intake.talk_hint(
-            bot, chat_id, label, dm=f"✍️ Just send a message, it goes to {label}."))
-    lines.append(f"Later: tap {label} on the keyboard, or reply to any {label} message.")
-    switch = (InlineKeyboardButton("💬 Switch to Ask", callback_data=session_parity.session_cb(
+            bot, chat_id, html_mod.escape(sess.label),
+            dm=tr.html(READY_JUST_SEND, session=sess.label), tr=tr, raw_label=sess.label))
+    lines.append(tr.html(READY_LATER, session=sess.label))
+    switch = (InlineKeyboardButton(tr.text(MODE_BTN_TO_ASK),
+                                   callback_data=session_parity.session_cb(
                   bot, chat_id, sess, "rdy_ask"))
               if sess.skip_perms else
-              InlineKeyboardButton("🤖 Switch to Auto", callback_data=session_parity.session_cb(
+              InlineKeyboardButton(tr.text(MODE_BTN_TO_AUTO),
+                                   callback_data=session_parity.session_cb(
                   bot, chat_id, sess, "rdy_auto")))
     rows = [[switch, InlineKeyboardButton(
-        "🧠 Model", callback_data=session_parity.session_cb(bot, chat_id, sess, "rdy_model"))]]
+        tr.text(NEW_BTN_MODEL),
+        callback_data=session_parity.session_cb(bot, chat_id, sess, "rdy_model"))]]
     if update is not None:
         rows += bot._app_button_row(update)
     return "\n".join(lines), InlineKeyboardMarkup(rows)
 
 
 def _render_ready_models(
-    bot: TelegramBot, chat_id: int, sess: TrackedSession,
+    bot: TelegramBot, chat_id: int, sess: TrackedSession, tr=None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     from aipager.bot import session_parity  # local: avoids an import cycle
+    tr = tr or i18n.for_chat(chat_id)
     rows = [[InlineKeyboardButton(
         label, callback_data=session_parity.session_cb(bot, chat_id, sess, f"rdy_m{idx}"))]
         for idx, (label, _cmd) in enumerate(MODEL_CHOICES)]
     rows.append([InlineKeyboardButton(
-        "« Back", callback_data=session_parity.session_cb(bot, chat_id, sess, "rdy_back"))])
-    text = (f"🧠 <b>{html_mod.escape(sess.label)}</b>: pick a model.\n\n"
-            "It switches in place, the conversation is kept.")
-    return text, InlineKeyboardMarkup(rows)
+        tr.text(language_menu.BACK),
+        callback_data=session_parity.session_cb(bot, chat_id, sess, "rdy_back"))])
+    return tr.html(READY_MODELS, session=sess.label), InlineKeyboardMarkup(rows)
 
 
 async def _handle_ready_callback(
@@ -875,12 +1082,15 @@ async def _handle_ready_callback(
     sess = bot.registry.get(session_name)
     chat_id = calling_chat_id(update) or 0
     msg_id = getattr(getattr(query, "message", None), "message_id", None)
+    # The card is the chat's; a pop-up is the tapper's.
+    tr = i18n.for_chat(chat_id)
+    person = i18n.for_person(update)
     if sess is None or sess.status == Status.GONE:
-        await bot._safe_answer(query, "That session has ended.")
+        await bot._safe_answer(query, person.text(TOAST_SESSION_ENDED))
         return
     actor = _actor_id(update, query)
     if not bot._can_prompt_user(actor, chat_id):
-        await bot._safe_answer(query, "You can't change this session.", show_alert=True)
+        await bot._safe_answer(query, person.text(TOAST_CANT_CHANGE), show_alert=True)
         return
 
     async def _rerender(note: str = "", changed: str = "") -> None:
@@ -892,8 +1102,8 @@ async def _handle_ready_callback(
 
     if action in ("rdy_ask", "rdy_auto"):
         target = action == "rdy_auto"
-        if target and not bot._is_admin_user(actor, chat_id):
-            await bot._safe_answer(query, "Auto mode needs an admin.", show_alert=True)
+        if target and not bot._may_use_auto(actor, chat_id):
+            await bot._safe_answer(query, person.text(TOAST_AUTO_NEEDS_ADMIN), show_alert=True)
             return
         if sess.skip_perms == target:
             await _rerender()
@@ -904,23 +1114,30 @@ async def _handle_ready_callback(
             # A mode switch relaunches the session: never under a running
             # turn from a card that may be minutes old.
             await bot._safe_answer(
-                query, f"{sess.label} is working. Switch after it finishes, or use /mode.",
+                query, person.text(TOAST_WORKING_USE_MODE, session=sess.label),
                 show_alert=True)
             return
-        await bot._safe_answer(query, "Switching...")
+        # A mode switch relaunches the session: a role without can_manage
+        # only for one inside its members' root folder.
+        refusal = member_root.relaunch_refusal(bot, actor, chat_id, sess.cwd)
+        if refusal:
+            await bot._safe_answer(query, shown(person, refusal), show_alert=True)
+            return
+        await bot._safe_answer(query, person.text(TOAST_SWITCHING))
         if (sess.status in (Status.BUSY, Status.INTERACTIVE)
                 or not sess.tap_is_for_this_turn(tapped)):
             # A turn started while the toast went out (a queued message, a
             # background agent waking it): leave that turn alone.
-            await _rerender(note=f"{sess.label} started working, so the mode "
-                                 "was not switched.")
+            await _rerender(note=tr.text(NOTE_MODE_NOT_SWITCHED, session=sess.label))
             return
         outcome = await bot._perms_switch_core(sess, target)
         if not outcome.ok:
-            await _rerender(note="Couldn't switch mode"
-                            + (f": {outcome.err}" if getattr(outcome, "err", "") else "."))
+            err = getattr(outcome, "err", "")
+            await _rerender(note=(tr.text(NOTE_MODE_FAILED_ERR, error=err) if err
+                                  else tr.text(NOTE_MODE_FAILED)))
             return
-        await _rerender(changed=(f"Switched to {'🤖 Auto' if target else '💬 Ask'} by {by}."
+        await _rerender(changed=(tr.text(CHANGED_MODE, mode=Safe(tr.text(mode_label(target))),
+                                         person=Command(by))
                                  if by else ""))
         return
 
@@ -936,28 +1153,34 @@ async def _handle_ready_callback(
     if action.startswith("rdy_m") and action[5:].isdigit():
         idx = int(action[5:])
         if not 0 <= idx < len(MODEL_CHOICES):
-            await bot._safe_answer(query, "That model is no longer offered.")
+            await bot._safe_answer(query, person.text(TOAST_MODEL_GONE))
             await _rerender()
             return
         label = MODEL_CHOICES[idx][0]
         resolved, err = launch.validate_model(label, MODEL_CHOICES)
         if err or not resolved:
-            await bot._safe_answer(query, "That model is no longer offered.")
+            await bot._safe_answer(query, person.text(TOAST_MODEL_GONE))
             await _rerender()
             return
         outcome = await bot._switch_model_core(sess, resolved, driver_user_id=actor)
         if not outcome.ok:
-            await bot._safe_answer(query, outcome.detail or "Couldn't switch the model.",
-                                   show_alert=True)
+            # A refusal by its code, in the tapper's language (the Mini App
+            # keeps the English detail); any other detail as said.
+            from aipager.bot.session_ops import model_refusal_text  # local: import cycle
+            await bot._safe_answer(
+                query, (model_refusal_text(person, outcome.reason, outcome.detail)
+                        if outcome.detail else person.text(TOAST_SWITCH_FAILED)),
+                show_alert=True)
             await _rerender()
             return
-        await bot._safe_answer(query, f"Switching to {label}")
-        text, kb = render_ready(bot, update, sess, model_label=label,
-                                changed=f"Model switched to {label} by {by}." if by else "")
+        await bot._safe_answer(query, person.text(TOAST_SWITCHING_TO, model=label))
+        text, kb = render_ready(
+            bot, update, sess, model_label=label,
+            changed=(tr.text(CHANGED_MODEL, model=label, person=Command(by)) if by else ""))
         await _edit_at(bot, chat_id, msg_id, text, kb)
         return
 
-    await bot._safe_answer(query, "Invalid callback")
+    await bot._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))
 
 
 # ---- /settings → 🆕 New sessions --------------------------------------
@@ -974,16 +1197,56 @@ def _defaults_folders_shown(bot: TelegramBot) -> dict[int, list[str]]:
     return shown
 
 
+NS_TITLE = Msg(
+    "set.text.ns_root",
+    "🆕 <b>New sessions</b>\n\nWhat /new starts a session with. You can still change it "
+    "on the card for one session.\n\nPermissions: {mode}\nModel: {model}\nFolder: {folder}",
+    note="/settings > New sessions: the defaults /new uses. {mode} is the Auto or Ask mode "
+         "label (it already says mode) or mode.ask_for_you, {model} a model name or Default "
+         "model, {folder} a path",
+    eg={"mode": "Auto mode", "model": "Opus 5.5", "folder": "~/work/app"})
+NS_MODEL_TITLE = Msg("set.text.ns_model_title", "🧠 <b>Model for new sessions</b>",
+                     note="Above the model list of /settings > New sessions")
+NS_FOLDER_TITLE = Msg("set.text.ns_folder_title", "📁 <b>Folder for new sessions</b>",
+                      note="Above the folder list of /settings > New sessions")
+NS_OLDER_MODEL = Msg("set.opt.ns_older_model", "{model} (older model)",
+                     note="A model no longer on the list but still chosen; {model} is "
+                          "its name",
+                     eg={"model": "Opus 4.7"})
+NS_DEFAULT_MODEL = Msg("set.opt.ns_default_model", "Default model",
+                       note="The model Claude Code picks itself")
+NS_DEFAULT_FOLDER = Msg("set.opt.ns_default_folder", "Default folder",
+                        note="The folder aipager starts sessions in when none is chosen")
+NS_MODEL_BUTTON = Msg("set.btn.ns_model", "🧠 Model: {model} ›",
+                      note="Opens the model list; {model} is the current choice",
+                      eg={"model": "Default model"})
+NS_FOLDER_BUTTON = Msg("set.btn.ns_folder", "📁 Folder: {folder} ›",
+                       note="Opens the folder list; {folder} is a shortened path",
+                       eg={"folder": "~/work/app"})
+CHOICE_GONE = Msg("toast.choice_gone", "That choice is no longer available.",
+                  note="Pop-up: the tapped model or folder is not on the list any more")
+
+
 def render_new_session_defaults(
     bot: TelegramBot, chat_id: int, *, view: str = "", viewer: int | None = None,
+    tr=None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """The chat's defaults for new sessions; ``view`` "model" / "cwd"
     lists that field's choices. ``viewer`` (the person looking) is told
-    when Auto does not apply to them."""
+    when Auto does not apply to them. In *tr*'s language (the chat's when
+    None); model names and paths are shown as they are."""
+    if tr is None:
+        tr = i18n.for_chat(chat_id)
+    back = tr.text(language_menu.BACK)
     stored = preferences.get_new_session_defaults(chat_id)
+    # A viewer held to a members' root folder sees only it and the folders
+    # inside it.
+    root = (member_root.restricted_root(bot, viewer, chat_id)
+            if viewer is not None else None)
     roots = launch.allowed_roots(
         bot.registry, chat_id,
-        confined=viewer is not None and bool(bot._is_confined_user(viewer, chat_id)))
+        confined=viewer is not None and bool(bot._is_confined_user(viewer, chat_id)),
+        root=root)
     if view == "model":
         rows = [[InlineKeyboardButton(
             f"{label}{' ✅' if stored.model == label else ''}",
@@ -995,47 +1258,53 @@ def render_new_session_defaults(
             # /new starts with: shown as the choice, a tap only re-shows
             # the list (pick another row to change it).
             rows.append([InlineKeyboardButton(
-                f"{stored.model} (older model) ✅", callback_data="_:set:ns:model")])
+                f"{tr.text(NS_OLDER_MODEL, model=stored.model)} ✅",
+                callback_data="_:set:ns:model")])
         rows.append([InlineKeyboardButton(
-            f"Default model{' ✅' if not stored.model else ''}",
+            f"{tr.text(NS_DEFAULT_MODEL)}{' ✅' if not stored.model else ''}",
             callback_data="_:set:ns:model:default")])
-        rows.append([InlineKeyboardButton("« Back", callback_data="_:set:ns")])
-        return ("🧠 <b>Model for new sessions</b>", InlineKeyboardMarkup(rows))
+        rows.append([InlineKeyboardButton(back, callback_data="_:set:ns")])
+        return (tr.html(NS_MODEL_TITLE), InlineKeyboardMarkup(rows))
     if view == "cwd":
         _defaults_folders_shown(bot)[chat_id] = list(roots)
         rows = [[InlineKeyboardButton(
-            f"{_short_path(root)}{' ✅' if stored.cwd == root else ''}",
+            f"{_short_path(folder)}{' ✅' if stored.cwd == folder else ''}",
             callback_data=f"_:set:ns:cwd:{idx}")]
-            for idx, root in enumerate(roots)]
+            for idx, folder in enumerate(roots)]
         rows.append([InlineKeyboardButton(
-            f"Default folder{' ✅' if not stored.cwd else ''}",
+            f"{tr.text(NS_DEFAULT_FOLDER)}{' ✅' if not stored.cwd else ''}",
             callback_data="_:set:ns:cwd:default")])
-        rows.append([InlineKeyboardButton("« Back", callback_data="_:set:ns")])
-        return ("📁 <b>Folder for new sessions</b>", InlineKeyboardMarkup(rows))
+        rows.append([InlineKeyboardButton(back, callback_data="_:set:ns")])
+        return (tr.html(NS_FOLDER_TITLE), InlineKeyboardMarkup(rows))
 
     auto = stored.mode != "ask"
-    model = stored.model or "Default model"
-    folder = stored.cwd if stored.cwd in roots else _project_dir()
-    mode = "🤖 Auto" if auto else "💬 Ask"
-    if auto and viewer is not None and not bot._is_admin_user(viewer, chat_id):
-        mode = "💬 Ask for you (🤖 Auto is for admins)"
-    text = (
-        "🆕 <b>New sessions</b>\n\n"
-        "What /new starts a session with. You can still change it on the "
-        "card for one session.\n\n"
-        f"Mode: {mode}\n"
-        f"Model: {html_mod.escape(model)}\n"
-        f"Folder: {html_mod.escape(_short_path(folder))}"
-    )
+    if (viewer is not None and not bot._is_admin_user(viewer, chat_id)
+            and bot._may_use_auto(viewer, chat_id)):
+        # The member in their own DM: what /new gives them (Auto only when
+        # chosen), so the ticks and the line say the same.
+        auto = _defaults_start_in_auto(bot, stored.mode, viewer, chat_id)
+    # A model's name as written; "Default model" is words.
+    model_html = (stored.model if stored.model
+                  else Safe(tr.html(NS_DEFAULT_MODEL)))
+    model_text = (stored.model if stored.model
+                  else Safe(tr.text(NS_DEFAULT_MODEL)))
+    folder = stored.cwd if stored.cwd in roots else (
+        roots[0] if root is not None and roots else _project_dir())
+    mode = mode_label(auto)
+    if auto and viewer is not None and not bot._may_use_auto(viewer, chat_id):
+        mode = MODE_ASK_FOR_YOU
+    text = tr.html(NS_TITLE, mode=Safe(tr.html(mode)), model=model_html,
+                   folder=_short_path(folder))
     rows = [
-        [InlineKeyboardButton(f"🤖 Auto{' ✅' if auto else ''}",
+        [InlineKeyboardButton(f"{tr.text(MODE_AUTO)}{' ✅' if auto else ''}",
                               callback_data="_:set:ns:mode:auto"),
-         InlineKeyboardButton(f"💬 Ask{' ✅' if not auto else ''}",
+         InlineKeyboardButton(f"{tr.text(MODE_ASK)}{' ✅' if not auto else ''}",
                               callback_data="_:set:ns:mode:ask")],
-        [InlineKeyboardButton(f"🧠 Model: {model} ›", callback_data="_:set:ns:model")],
-        [InlineKeyboardButton(f"📁 Folder: {_short_path(folder, 24)} ›",
+        [InlineKeyboardButton(tr.text(NS_MODEL_BUTTON, model=model_text),
+                              callback_data="_:set:ns:model")],
+        [InlineKeyboardButton(tr.text(NS_FOLDER_BUTTON, folder=_short_path(folder, 24)),
                               callback_data="_:set:ns:cwd")],
-        [InlineKeyboardButton("« Back", callback_data="_:set:back")],
+        [InlineKeyboardButton(back, callback_data="_:set:back")],
     ]
     return text, InlineKeyboardMarkup(rows)
 
@@ -1050,10 +1319,14 @@ async def handle_defaults_callback(
     scope = chat_id or 0
     viewer = _actor_id(update, query)
 
+    # The page is the chat's; a pop-up is the tapper's.
+    tr = i18n.for_chat(scope)
+    person = i18n.for_person(update)
+
     async def _show(view: str = "", by: str = "") -> None:
-        text, kb = render_new_session_defaults(bot, scope, view=view, viewer=viewer)
+        text, kb = render_new_session_defaults(bot, scope, view=view, viewer=viewer, tr=tr)
         if by:
-            text += f"\n\n<i>Changed by {html_mod.escape(by)}.</i>"
+            text += "\n\n" + tr.html(settings_menu.CHANGED_BY, person=Command(by))
         await _edit_at(bot, scope, getattr(getattr(query, "message", None),
                                            "message_id", None), text, kb)
 
@@ -1064,17 +1337,22 @@ async def handle_defaults_callback(
         await _show(parts[0])
         return
     if len(parts) != 2:
-        await bot._safe_answer(query, "Invalid callback")
+        await bot._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))
         return
     if (chat_id is None or chat_id < 0) and not bot._is_admin(update):
         await bot._safe_answer(
-            query, "Only an admin can change settings in this group.", show_alert=True)
+            query, person.text(language_menu.ADMIN_ONLY), show_alert=True)
         return
     field, token = parts
     value = None
     if field == "mode" and token in ("auto", "ask"):
         # Auto is the built-in default: store only a departure from it.
+        # Except for the member in their own DM who is not an admin: their
+        # default is Ask, so their Auto is the departure, stored as such.
         value = "" if token == "auto" else "ask"
+        if (token == "auto" and not bot._is_admin_user(viewer, chat_id)
+                and bot._may_use_auto(viewer, chat_id)):
+            value = "auto"
     elif field == "model":
         if token == "default":
             value = ""
@@ -1087,16 +1365,17 @@ async def handle_defaults_callback(
         elif (token.isdigit() and int(token) < len(shown)
               and shown[int(token)] in launch.allowed_roots(
                   bot.registry, scope,
-                  confined=bool(bot._is_confined_user(viewer, scope)))):
+                  confined=bool(bot._is_confined_user(viewer, scope)),
+                  root=member_root.restricted_root(bot, viewer, scope))):
             value = shown[int(token)]
     if value is None:
-        await bot._safe_answer(query, "That choice is no longer available.")
+        await bot._safe_answer(query, person.text(CHOICE_GONE))
         await _show("cwd" if field == "cwd" else "")
         return
     try:
         preferences.set_new_session_default(scope, field, value)
     except ValueError:
-        await bot._safe_answer(query, "Invalid value")
+        await bot._safe_answer(query, person.text(language_menu.INVALID_VALUE))
         return
     # In a group, who changed it (roadmap 8.91c); a DM is as before.
     await _show(by=bot._actor_label(viewer, chat_id, getattr(query, "from_user", None)))
@@ -1120,12 +1399,13 @@ async def _refuse_reply_to_others_card(
     for card in _others_cards(store, chat_id, actor):
         if card.get("msg_id") == replied:
             owner = card.get("owner_label") or _owner_label(bot, chat_id, card.get("user_id"))
-            whose = f"{owner}'s" if owner else "someone else's"
             close_open_card(bot, chat_id, actor)
             from aipager.bot import session_parity  # local: import cycle
             session_parity.close_rename(bot, chat_id, actor)
+            tr = i18n.for_update(update)
             await reply_text(update.message,
-                             f"This card is {whose}. Send /new for your own.")
+                             tr.text(OTHERS_CARD_NAMED, owner=Command(owner)) if owner
+                             else tr.text(OTHERS_CARD_SOMEONE))
             return True
     return False
 
@@ -1153,7 +1433,7 @@ async def maybe_handle_text(
         return False
     if _is_expired(pending):
         store.pop((chat_id, actor), None)
-        await _edit_wizard(bot, chat_id, pending, _EXPIRED_TEXT)
+        await _edit_wizard(bot, chat_id, pending, i18n.for_chat(chat_id).html(_EXPIRED_TEXT))
         return True
     _touch(pending)
     step = pending["step"]
@@ -1166,8 +1446,10 @@ async def maybe_handle_text(
         resolved, err = launch.validate_model(text, MODEL_CHOICES)
         if err:
             pending["step"] = "opt_model_custom"
-            await _edit_wizard(bot, chat_id, pending, _model_custom_prompt_text(err, chat_id),
-                               InlineKeyboardMarkup([_back_cancel_row("_:nw:opt:model")]))
+            tr = i18n.for_chat(chat_id)
+            await _edit_wizard(bot, chat_id, pending,
+                               _model_custom_prompt_text(err, chat_id, tr),
+                               InlineKeyboardMarkup([_back_cancel_row("_:nw:opt:model", tr)]))
             return True
         pending["model"] = resolved or None
         pending["model_label"] = choice_label(resolved) or None
@@ -1178,13 +1460,15 @@ async def maybe_handle_text(
         # Every folder this chat works in may be the parent, the home
         # folder included; a confined person's result must still be a
         # project folder (roadmap 8.79).
-        roots = launch.allowed_roots(bot.registry, chat_id)
+        roots = launch.allowed_roots(bot.registry, chat_id, root=pending.get("root"))
         parent = pending.get("new_folder_parent") or (roots[0] if roots else "")
         path, existed, err = launch.create_directory(
             parent, text, roots, confined=bool(pending.get("confined")))
         if err:
-            await _edit_wizard(bot, chat_id, pending, _path_newfolder_prompt_text(err, chat_id),
-                               InlineKeyboardMarkup([_back_cancel_row("_:nw:opt:path")]))
+            tr = i18n.for_chat(chat_id)
+            await _edit_wizard(bot, chat_id, pending,
+                               _path_newfolder_prompt_text(err, chat_id, tr),
+                               InlineKeyboardMarkup([_back_cancel_row("_:nw:opt:path", tr)]))
             return True
         if not existed:
             launch.remember_created(chat_id, path)
@@ -1217,9 +1501,12 @@ async def handle_callback(
         return True
 
     chat_id = calling_chat_id(update)
+    person = i18n.for_person(update)
     if chat_id is None:
-        await bot._safe_answer(query, "Invalid callback")
+        await bot._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))
         return True
+    # The card is the chat's (in a group too: only pop-ups are the tapper's).
+    tr = i18n.for_chat(chat_id)
 
     store = _pending_store(bot)
     actor = _actor_id(update, query)
@@ -1236,37 +1523,37 @@ async def handle_callback(
         # Someone else's card (roadmap 8.86: one per person). Before the
         # expiry branch and before _touch(): a stranger's tap must not
         # keep someone else's card alive either.
-        await bot._safe_answer(query, "This isn't your new session.", show_alert=True)
+        await bot._safe_answer(query, person.text(TOAST_NOT_YOURS), show_alert=True)
         return True
 
     if pending is None:
-        await bot._safe_answer(query, "This card expired.")
-        await _edit_at(bot, chat_id, tapped, _EXPIRED_TEXT)
+        await bot._safe_answer(query, person.text(TOAST_CARD_EXPIRED))
+        await _edit_at(bot, chat_id, tapped, tr.html(_EXPIRED_TEXT))
         return True
 
     if _is_expired(pending):
         store.pop((chat_id, actor), None)
-        await bot._safe_answer(query, "This card expired.")
-        await _edit_wizard(bot, chat_id, pending, _EXPIRED_TEXT)
+        await bot._safe_answer(query, person.text(TOAST_CARD_EXPIRED))
+        await _edit_wizard(bot, chat_id, pending, tr.html(_EXPIRED_TEXT))
         return True
 
     if isinstance(tapped, int) and pending.get("msg_id") not in (None, tapped):
         # A tap from a card a second `/new` replaced (its keyboard is
         # stripped, but a tap can already be in flight): the chat's open
         # card is another message, whose choices this must not change.
-        await bot._safe_answer(query, "That card was replaced. Use the new one.")
+        await bot._safe_answer(query, person.text(TOAST_CARD_REPLACED))
         return True
 
     _touch(pending)
 
     if sub == ["cancel"]:
         store.pop((chat_id, actor), None)
-        await _edit_wizard(bot, chat_id, pending, "↩️ Cancelled.")
+        await _edit_wizard(bot, chat_id, pending, tr.html(CANCELLED))
         return True
 
     if sub in (["mode", "auto"], ["mode", "ask"]):
-        if sub[1] == "auto" and not bot._is_admin_user(actor, chat_id):
-            await bot._safe_answer(query, "Auto mode needs an admin.", show_alert=True)
+        if sub[1] == "auto" and not bot._may_use_auto(actor, chat_id):
+            await bot._safe_answer(query, person.text(TOAST_AUTO_NEEDS_ADMIN), show_alert=True)
             return True
         pending["skip_perms"] = sub[1] == "auto"
         await _goto_name(bot, chat_id, pending)
@@ -1278,13 +1565,13 @@ async def handle_callback(
 
     if sub == ["opt", "model"]:
         pending["step"] = "opt_model"
-        text, kb = _render_opt_model(pending)
+        text, kb = _render_opt_model(pending, tr)
         await _edit_wizard(bot, chat_id, pending, text, kb)
         return True
 
     if sub == ["opt", "path"]:
         pending["step"] = "opt_path"
-        text, kb = _render_opt_path(bot, pending, chat_id)
+        text, kb = _render_opt_path(bot, pending, chat_id, tr)
         await _edit_wizard(bot, chat_id, pending, text, kb)
         return True
 
@@ -1296,8 +1583,14 @@ async def handle_callback(
         await _handle_path_token(bot, query, chat_id, pending, sub[1])
         return True
 
-    await bot._safe_answer(query, "Invalid callback")
+    await bot._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))
     return True
+
+
+def _tapper(query):
+    """What only the tapper sees: their language."""
+    from types import SimpleNamespace
+    return i18n.for_person(SimpleNamespace(callback_query=query))
 
 
 async def _handle_model_token(
@@ -1308,10 +1601,12 @@ async def _handle_model_token(
         pending["model_label"] = None
         await _goto_name(bot, chat_id, pending)
         return
+    tr = i18n.for_chat(chat_id)
     if token == "custom":
         pending["step"] = "opt_model_custom"
-        await _edit_wizard(bot, chat_id, pending, _model_custom_prompt_text(chat_id=chat_id),
-                           InlineKeyboardMarkup([_back_cancel_row("_:nw:opt:model")]))
+        await _edit_wizard(bot, chat_id, pending,
+                           _model_custom_prompt_text(chat_id=chat_id, tr=tr),
+                           InlineKeyboardMarkup([_back_cancel_row("_:nw:opt:model", tr)]))
         return
     if token.isdigit():
         idx = int(token)
@@ -1319,24 +1614,34 @@ async def _handle_model_token(
             label, _cmd = MODEL_CHOICES[idx]
             resolved, err = launch.validate_model(label, MODEL_CHOICES)
             if err:
-                await bot._safe_answer(query, "Invalid model")
+                await bot._safe_answer(query, _tapper(query).text(TOAST_INVALID_MODEL))
                 return
             pending["model"] = resolved or None
             pending["model_label"] = label
             await _goto_name(bot, chat_id, pending)
             return
-    await bot._safe_answer(query, "That model is no longer offered.")
+    await bot._safe_answer(query, _tapper(query).text(TOAST_MODEL_GONE))
     pending["step"] = "opt_model"
-    text, kb = _render_opt_model(pending)
+    text, kb = _render_opt_model(pending, tr)
     await _edit_wizard(bot, chat_id, pending, text, kb)
 
 
 async def _handle_path_token(
     bot: TelegramBot, query: CallbackQuery, chat_id: int, pending: dict, token: str,
 ) -> None:
+    root = pending.get("root")
+    if token == "default" and root is not None:
+        # Held to a members' root folder: "default" is the root itself.
+        if root == member_root.NOWHERE:
+            await bot._safe_answer(query, _tapper(query).text(member_root.NO_ROOT),
+                                   show_alert=True)
+            return
+        pending["cwd"] = root
+        await _goto_name(bot, chat_id, pending)
+        return
     if token == "default":
         if pending.get("confined") and launch.default_folder_is_wide():
-            await bot._safe_answer(query, launch.WIDE_FOLDER_REFUSAL,
+            await bot._safe_answer(query, _tapper(query).text(launch.WIDE_FOLDER_REFUSAL),
                                    show_alert=True)
             return
         pending["cwd"] = None
@@ -1344,23 +1649,21 @@ async def _handle_path_token(
         return
     if token == "new":
         options = pending.get("path_options") or launch.allowed_roots(
-            bot.registry, chat_id, confined=bool(pending.get("confined")))
+            bot.registry, chat_id, confined=bool(pending.get("confined")), root=root)
         # A confined person with no project folder yet creates one in a
         # folder they may not start in themselves (the home folder).
-        parents = options or launch.allowed_roots(bot.registry, chat_id)
+        parents = options or launch.allowed_roots(bot.registry, chat_id, root=root)
         parent = pending.get("cwd") or (parents[0] if parents else "")
         if not parent:
-            await bot._safe_answer(
-                query,
-                "No folder available yet - start a session from a real "
-                "project folder first.",
-                show_alert=True,
-            )
+            await bot._safe_answer(query, _tapper(query).text(TOAST_NO_FOLDER_YET),
+                                   show_alert=True)
             return
         pending["new_folder_parent"] = parent
         pending["step"] = "opt_path_newfolder"
-        await _edit_wizard(bot, chat_id, pending, _path_newfolder_prompt_text(chat_id=chat_id),
-                           InlineKeyboardMarkup([_back_cancel_row("_:nw:opt:path")]))
+        tr = i18n.for_chat(chat_id)
+        await _edit_wizard(bot, chat_id, pending,
+                           _path_newfolder_prompt_text(chat_id=chat_id, tr=tr),
+                           InlineKeyboardMarkup([_back_cancel_row("_:nw:opt:path", tr)]))
         return
     if token.isdigit():
         idx = int(token)
@@ -1369,7 +1672,7 @@ async def _handle_path_token(
             pending["cwd"] = options[idx]
             await _goto_name(bot, chat_id, pending)
             return
-    await bot._safe_answer(query, "That folder is no longer available.")
+    await bot._safe_answer(query, _tapper(query).text(TOAST_FOLDER_GONE))
     pending["step"] = "opt_path"
     text, kb = _render_opt_path(bot, pending, chat_id)
     await _edit_wizard(bot, chat_id, pending, text, kb)

@@ -62,8 +62,8 @@ def test_perms_idle_ask_to_auto_non_admin_denied(mk_bot, mk_update, run_async):
     sess.skip_perms = False  # currently Ask
     bot.registry._sessions["claude-dev"] = sess
     bot.registry.last_active_session = "claude-dev"
-    # Make _is_admin return False
-    bot._is_admin = MagicMock(return_value=False)
+    # May not use Auto here
+    bot._may_use_auto = MagicMock(return_value=False)
     update = mk_update("/perms auto")
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
@@ -163,5 +163,5 @@ def test_bare_perms_shows_the_mode_and_switches_nothing(mk_bot, mk_update, run_a
     bot._do_perms_switch_via_fn.assert_not_awaited()
     text = update.message.reply_text.await_args[0][0]
     kb = update.message.reply_text.await_args[1]["reply_markup"]
-    assert text == "✍️ <b>dev</b> is 🤖 Auto."
+    assert text == "✍️ <b>dev</b> is in 🤖 Auto mode."
     assert [b.text for row in kb.inline_keyboard for b in row] == ["💬 Switch to Ask"]

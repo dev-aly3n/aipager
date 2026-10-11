@@ -58,19 +58,21 @@ def _long_card(mk_bot, vbot, vloop, rich_http, *, override=None):
 
 
 def _is_today(edits, gaps) -> bool:
-    """0.7.13 at 2 h: a quiet card every 4.4 s, counting ``120m 13s``."""
+    """0.7.13 at 2 h: a quiet card every 4.4 s, its clock in true seconds
+    (``2:00:13``)."""
+    lasts = [m.rsplit("\n", 1)[-1] for _t, m in edits]
     return (len(edits) >= 10
             and all(abs(g - 4.4) < EPS for g in gaps)
-            and all(re.search(r"· \d+m \d+s$", m.rsplit("\n", 1)[-1])
-                    for _t, m in edits))
+            and all(re.search(r"· 2:\d\d:\d\d$", line) for line in lasts)
+            and any(not line.endswith(("00", "30")) for line in lasts))
 
 
 def _is_decayed(edits, gaps) -> bool:
     """At 2 h with decay on: the 30 s hour tier, so two or three edits in
-    the minute, counting ``2h 0m``."""
+    the minute, its clock in 30 s steps (``2:00:30``)."""
     return (1 <= len(edits) <= 3
             and all(g >= 30.0 - EPS for g in gaps)
-            and all(re.search(r"· 2h \d+m$", m.rsplit("\n", 1)[-1])
+            and all(re.search(r"· 2:\d\d:(?:00|30)$", m.rsplit("\n", 1)[-1])
                     for _t, m in edits))
 
 

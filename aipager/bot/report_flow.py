@@ -35,6 +35,7 @@ import html
 import importlib.util
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -55,7 +56,10 @@ from aipager.bot.transport import (
     edit_text,
     edit_text_at,
     send_text,
+    tapper_tr,
 )
+from aipager import i18n
+from aipager.i18n import Msg, Plural
 from aipager.report import wording
 
 if TYPE_CHECKING:
@@ -79,67 +83,167 @@ REPORT_FILENAME = "report.json"
 
 # ---- what the card and its toasts say (no em dashes, plain words) ---------
 
-HEADING_HTML = "🐞 <b>Report a problem</b>"
-DOCUMENT_LINE = "The exact report is in the report.json file that replies to this card."
-SENDING_TEXT = "Sending..."
-LOST_TEXT = ("This preview is no longer open, so nothing was sent. "
-             "Open Report a problem again to see a fresh one.")
-CANCELLED_TEXT = "Cancelled. Nothing was sent."
-DOC_FAILED_TEXT = ("The report.json file could not be sent, so nothing was sent. "
-                   "Open Report a problem again later.")
+HEADING_HTML = Msg("rep.heading", "🐞 <b>Report a problem</b>",
+                   note="The problem report card's title (the /help button has the same "
+                        "words)")
+DOCUMENT_LINE = Msg("rep.document_line",
+                    "The exact report is in the report.json file that replies to this card.",
+                    note="Report card: the report is too long for the card; keep report.json")
+SENDING_TEXT = Msg("rep.status.sending", "Sending...", note="Report card status line")
+LOST_TEXT = Msg("rep.lost",
+                "This preview is no longer open, so nothing was sent. "
+                "Open Report a problem again to see a fresh one.",
+                note="Report card: aipager restarted or the card expired; 'Report a problem' "
+                     "is the /help button")
+CANCELLED_TEXT = Msg("rep.cancelled", "Cancelled. Nothing was sent.",
+                     note="Report card after Cancel")
+DOC_FAILED_TEXT = Msg("rep.doc_failed",
+                      "The report.json file could not be sent, so nothing was sent. "
+                      "Open Report a problem again later.",
+                      note="Report card; keep report.json")
+#: The note prompt and the cut note in English, as they read with
+#: ``schema.NOTE_MAX`` = 500 (shown through the Plurals below).
 NOTE_PROMPT = ("✏️ Type your note as one message (at most 500 characters). "
                "It goes into the report exactly as shown before you send. "
                "Anything else you do closes this.")
-NOTE_ADDED = "Note added."
+NOTE_ADDED = Msg("rep.status.note_added", "Note added.", note="Report card status line")
 NOTE_CUT = "Note added, cut to 500 characters."
-NOTE_EMPTY = "That note was empty, so nothing was added."
-NOTE_REFUSED = "That note could not be added. Try a shorter, plainer one."
-NOTE_CLOSED = "Note not added: you did something else. Tap Add a note to try again."
-NOT_OWNER_TEXT = "Only the owner of this aipager can report a problem."
-NO_OWNER_TEXT = "I can't open a report preview: this install has no single owner chat."
-IN_DM_TEXT = "The report preview is in your private chat with the bot."
-NOT_OPENED_TEXT = "Could not open the report preview right now. Try again later."
-SEND_FAILED_TEXT = ("This report could not be sent because of a problem inside aipager. "
-                    "Nothing was sent.")
-ALREADY_SENDING = "Already sending."
-ALREADY_SENT = "Already sent."
+NOTE_EMPTY = Msg("rep.status.note_empty", "That note was empty, so nothing was added.",
+                 note="Report card status line")
+NOTE_REFUSED = Msg("rep.status.note_refused",
+                   "That note could not be added. Try a shorter, plainer one.",
+                   note="Report card status line")
+NOTE_CLOSED = Msg("rep.status.note_closed",
+                  "Note not added: you did something else. Tap Add a note to try again.",
+                  note="Report card status line; 'Add a note' is the card's button")
+NOT_OWNER_TEXT = Msg("toast.rep.not_owner",
+                     "Only the owner of this aipager can report a problem.",
+                     note="Pop-up: someone other than the owner tapped a report button")
+NO_OWNER_TEXT = Msg("toast.rep.no_owner",
+                    "I can't open a report preview: this install has no single owner chat.",
+                    note="Pop-up")
+IN_DM_TEXT = Msg("toast.rep.in_dm", "The report preview is in your private chat with the bot.",
+                 note="Pop-up: the card opened in the owner's private chat")
+NOT_OPENED_TEXT = Msg("toast.rep.not_opened",
+                      "Could not open the report preview right now. Try again later.",
+                      note="Pop-up")
+SEND_FAILED_TEXT = Msg("rep.status.send_failed",
+                       "This report could not be sent because of a problem inside aipager. "
+                       "Nothing was sent.",
+                       note="Report card and Mini App: sending failed inside aipager")
+ALREADY_SENDING = Msg("toast.rep.already_sending", "Already sending.", note="Pop-up")
+ALREADY_SENT = Msg("toast.rep.already_sent", "Already sent.", note="Pop-up")
 INVALID_TEXT = "Invalid callback"
-OFFER_STALE_TEXT = "This offer is no longer open."
-OFFER_PREVIEW_TEXT = "Opened the report preview below."
-OFFER_NOT_OPENED_TEXT = ("Could not open the report preview. "
-                         "Report a problem in /help opens a fresh one.")
-OFFER_DECLINED_TEXT = "OK. aipager won't ask about this again on this version."
-OFFER_OFF_TEXT = ("Automatic offers are now off. To turn them back on: "
-                  "/settings, then Problem reports.")
+OFFER_STALE_TEXT = Msg("toast.rep.offer_stale", "This offer is no longer open.",
+                       note="Pop-up: an old report offer's button was tapped")
+OFFER_PREVIEW_TEXT = Msg("rep.offer.preview", "Opened the report preview below.",
+                         note="The report offer after Preview report")
+OFFER_NOT_OPENED_TEXT = Msg("rep.offer.not_opened",
+                            "Could not open the report preview. "
+                            "Report a problem in /help opens a fresh one.",
+                            note="The report offer; 'Report a problem' is the /help button")
+OFFER_DECLINED_TEXT = Msg("rep.offer.declined",
+                          "OK. aipager won't ask about this again on this version.",
+                          note="The report offer after Not now or Don't ask for this")
+OFFER_OFF_TEXT = Msg("rep.offer.off",
+                     "Automatic offers are now off. To turn them back on: "
+                     "/settings, then Problem reports.",
+                     note="Follows rep.offer.declined; 'Problem reports' is the /settings page")
 
-SEND_BUTTON = "📤 Send"
-NOTE_BUTTON = "✏️ Add a note"
-CANCEL_BUTTON = "✖️ Cancel"
-BACK_BUTTON_TEXT = "‹ Back"
-REPORT_BUTTON = "🐞 Report a problem"
-REPORT_THIS_BUTTON = "🐞 Report this"
+SEND_BUTTON = Msg("btn.rep.send", "📤 Send", note="Report card button: send the report")
+NOTE_BUTTON = Msg("btn.rep.note", "✏️ Add a note", note="Report card button")
+CANCEL_BUTTON = Msg("btn.rep.cancel", "✖️ Cancel", note="Report card button")
+BACK_BUTTON_TEXT = Msg("btn.rep.back", "‹ Back", note="Report card button: back to the report")
+REPORT_BUTTON = Msg("btn.rep.report", "🐞 Report a problem",
+                    note="/help button: open a problem report")
+REPORT_THIS_BUTTON = Msg("btn.rep.report_this", "🐞 Report this",
+                         note="Button under a notice about an internal problem")
+
+_NOTE_PROMPT = Plural("rep.note.prompt",
+                      one="✏️ Type your note as one message (at most {n} character). "
+                          "It goes into the report exactly as shown before you send. "
+                          "Anything else you do closes this.",
+                      other="✏️ Type your note as one message (at most {n} characters). "
+                            "It goes into the report exactly as shown before you send. "
+                            "Anything else you do closes this.",
+                      note="Report card: waiting for a note; {n} is 500")
+_NOTE_CUT = Plural("rep.status.note_cut", one="Note added, cut to {n} character.",
+                   other="Note added, cut to {n} characters.",
+                   note="Report card status line; {n} is 500")
+#: The bot's copy of the CLI's wording (``aipager.report.wording``), keyed:
+#: its English equals the CLI's table (a test pins it).
+EXPLANATION = Msg("rep.explanation",
+                  "This is everything the report contains. Nothing has been sent yet.\n"
+                  "It has no chats, prompts, session names, folders, tokens, chat ids or "
+                  "usernames.\n"
+                  "It goes to the aipager maintainer's error inbox (Sentry), anonymously.",
+                  note="Report card: what a report holds. Keep the exact meaning: nothing "
+                       "is sent yet; none of the listed things is in it; Sentry is a name")
+_TRY_LATER = Msg("rep.outcome.try_later",
+                 "Could not send right now. Nothing was lost; try again later.",
+                 note="Report send outcome")
+OUTCOME_MSGS: dict = {
+    "sent": Msg("rep.outcome.sent",
+                "Sent. Reference {reference} (quote it if you open a GitHub issue).",
+                note="Report sent; {reference} is its id", eg={"reference": "ap1-x7k2"}),
+    "rate_limited": _TRY_LATER,
+    "rejected": _TRY_LATER,
+    "offline": _TRY_LATER,
+    "disabled": Msg("rep.outcome.disabled",
+                    "Problem reports are switched off by the maintainer right now. "
+                    "Nothing was sent.", note="Report send outcome"),
+    "too_old": Msg("rep.outcome.too_old",
+                   "This aipager version can no longer send reports. Update it ({command}) "
+                   "and try again.", note="{command} is aipager update",
+                   eg={"command": "aipager update"}),
+    "daily_cap": Plural("rep.outcome.daily_cap",
+                        one="Reports are limited to {n} a day from one machine. "
+                            "Try again tomorrow.",
+                        other="Reports are limited to {n} a day from one machine. "
+                              "Try again tomorrow.",
+                        note="Report send outcome; {n} is 5"),
+    "invalid": Msg("rep.outcome.invalid",
+                   "This report did not pass its own checks, so it was not sent.",
+                   note="Report send outcome"),
+}
 
 # /settings (owner DM only)
-SETTINGS_TITLE = "🐞 <b>Problem reports</b>"
-SETTINGS_INTRO = (
+SETTINGS_TITLE = Msg("set.text.reports_title", "🐞 <b>Problem reports</b>",
+                     note="/settings > Problem reports: the page's title")
+SETTINGS_INTRO = Msg(
+    "set.text.reports_intro",
     "When aipager hits the same internal error more than once, it can offer "
     "to send a report. You always see the report first, and nothing is sent "
     "unless you tap Send.\n\n"
     "Ask me: offer it now and then (at most once in 3 days).\n"
-    "Off: never offer. Report a problem in /help always works."
-)
-SETTINGS_AUTO_OFF = "Automatic offers: off (you said no to two offers in a row)."
-SETTINGS_ENV_OFF = "Offers are also off on this machine through AIPAGER_REPORT_PROMPTS=0."
-SETTINGS_ROW_LABELS = {"ask": "Ask me", "off": "Off", "auto_off": "offers off"}
-TURN_ON_BUTTON = "Turn offers back on"
+    "Off: never offer. Report a problem in /help always works.",
+    note="/settings > Problem reports. 'Send' is the report card's button; 'Ask me' "
+         "and 'Off' are this page's two buttons; 'Report a problem' is a /help button: "
+         "use the same words as those keys")
+SETTINGS_AUTO_OFF = Msg("set.text.reports_auto_off",
+                        "Automatic offers: off (you said no to two offers in a row).",
+                        note="/settings > Problem reports, when offers stopped by themselves")
+SETTINGS_ENV_OFF = Msg("set.text.reports_env_off",
+                       "Offers are also off on this machine through AIPAGER_REPORT_PROMPTS=0.",
+                       note="/settings > Problem reports: an environment variable turned "
+                            "offers off; keep AIPAGER_REPORT_PROMPTS=0 as it is")
+SETTINGS_ROW_LABELS = {
+    "ask": Msg("set.opt.reports.ask", "Ask me",
+               note="Problem reports option: aipager may offer to send a report"),
+    "off": Msg("set.opt.reports.off", "Off", note="Problem reports option: never offer"),
+    "auto_off": Msg("set.opt.reports.auto_off", "offers off",
+                    note="Problem reports value: offers stopped after two refusals"),
+}
+TURN_ON_BUTTON = Msg("set.btn.reports_turn_on", "Turn offers back on",
+                     note="Problem reports button: offer reports again")
 
 #: Every status line a preview card can carry: the inline form keeps room
 #: for the longest, so a status never pushes a card over Telegram's limit.
-_STATUS_LINES = (
+_STATUS_MSGS = (
     SENDING_TEXT, NOTE_ADDED, NOTE_CUT, NOTE_EMPTY, NOTE_REFUSED, NOTE_CLOSED,
     SEND_FAILED_TEXT,
-    *wording.OUTCOME_LINES.values(),
 )
+_STATUS_LINES = (*_STATUS_MSGS, *wording.OUTCOME_LINES.values())
 _STATUS_RESERVE = max(len(line) for line in _STATUS_LINES) + 80
 
 _OFFER_ANSWERS = {"op": "send", "on": "not_now", "od": "dont_ask"}
@@ -339,59 +443,109 @@ def _utf16_len(text: str) -> int:
     return len(text.encode("utf-16-le")) // 2
 
 
-def _explanation_html() -> str:
-    return "\n".join(_esc(line) for line in wording.EXPLANATION)
+def _en():
+    return i18n.get("en")
 
 
-def _fits_inline(preview: bytes) -> bool:
+def _card_tr(kept: KeptReport):
+    """A card's language: its chat's (the owner's private chat)."""
+    return i18n.for_chat(kept.chat_id)
+
+
+def shown(tr, line) -> str:
+    """A status or final *line* (one of this module's constants) in *tr*'s
+    language, plain text: the Msgs through their keys, the two English
+    lines that hold the note's limit through their Plurals."""
+    from aipager.report import schema as sc
+    if line == NOTE_CUT:
+        return tr.n(_NOTE_CUT, sc.NOTE_MAX, kind="text")
+    if line == NOTE_PROMPT:
+        return tr.n(_NOTE_PROMPT, sc.NOTE_MAX, kind="text")
+    if isinstance(line, Msg):
+        return tr.text(line)
+    return line
+
+
+def _explanation_html(tr=None) -> str:
+    return _esc((tr or _en()).text(EXPLANATION))
+
+
+def _visible_heading(tr) -> str:
+    return html.unescape(re.sub(r"<[^>]+>", "", tr.html(HEADING_HTML)))
+
+
+def _status_reserve(tr=None) -> int:
+    """Room for the longest status or outcome line in *tr*'s language (the
+    outcome's reference as long as the English reserve counts it), plus
+    80: in English exactly :data:`_STATUS_RESERVE`."""
+    tr = tr or _en()
+    ref = "x" * len("{reference}")
+    lines = [shown(tr, line) for line in _STATUS_MSGS]
+    lines += [outcome_line(o, ref, tr=tr) for o in wording.OUTCOME_LINES]
+    return max(len(line) for line in lines) + 80
+
+
+def _fits_inline(preview: bytes, tr=None) -> bool:
     """Whether the card with the whole report (and the longest status
     line) stays inside one Telegram message, counted as Telegram counts
-    it: UTF-16 units of the text after the HTML is parsed."""
-    visible = "\n\n".join(["🐞 Report a problem", "\n".join(wording.EXPLANATION),
+    it: UTF-16 units of the text after the HTML is parsed. Measured in
+    *tr*'s language (the card's; English when None)."""
+    tr = tr or _en()
+    visible = "\n\n".join([_visible_heading(tr), tr.text(EXPLANATION),
                            preview.decode("utf-8")])
-    return _utf16_len(visible) + _STATUS_RESERVE <= TELEGRAM_MAX_TEXT_LEN
+    return _utf16_len(visible) + _status_reserve(tr) <= TELEGRAM_MAX_TEXT_LEN
 
 
-def card_text(kept: KeptReport, status: str | None = None) -> str:
-    """The card's HTML: heading, explanation, an optional status line,
-    then the exact report (inline) or the line naming its file."""
-    parts = [HEADING_HTML, _explanation_html()]
+def card_text(kept: KeptReport, status: str | None = None, *, tr=None) -> str:
+    """The card's HTML: heading, explanation, an optional status line (as
+    shown, already in the card's language), then the exact report
+    (inline) or the line naming its file. In *tr*'s language (English
+    when None); the report itself is the fixed English JSON."""
+    tr = tr or _en()
+    parts = [tr.html(HEADING_HTML), _explanation_html(tr)]
     if status:
         parts.append(f"<b>{_esc(status)}</b>")
     if kept.mode == "inline":
         body = _esc(kept.preview.decode("utf-8"))
         parts.append(f"<blockquote expandable><pre>{body}</pre></blockquote>")
     else:
-        parts.append(_esc(DOCUMENT_LINE))
+        parts.append(_esc(tr.text(DOCUMENT_LINE)))
     return "\n\n".join(parts)
 
 
-def _capture_text() -> str:
-    return f"{HEADING_HTML}\n\n{_esc(NOTE_PROMPT)}"
+def _capture_text(tr=None) -> str:
+    tr = tr or _en()
+    return f"{tr.html(HEADING_HTML)}\n\n{_esc(shown(tr, NOTE_PROMPT))}"
 
 
-def _final_text(line: str) -> str:
-    return f"{HEADING_HTML}\n\n{_esc(line)}"
+def _final_text(line: str, tr=None) -> str:
+    """The card's last word: *line* as shown (already in *tr*'s language)."""
+    return f"{(tr or _en()).html(HEADING_HTML)}\n\n{_esc(line)}"
 
 
-def preview_keyboard() -> InlineKeyboardMarkup:
+def preview_keyboard(tr=None) -> InlineKeyboardMarkup:
+    tr = tr or _en()
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(SEND_BUTTON, callback_data="_:rp:send"),
-         InlineKeyboardButton(NOTE_BUTTON, callback_data="_:rp:note")],
-        [InlineKeyboardButton(CANCEL_BUTTON, callback_data="_:rp:cancel")],
+        [InlineKeyboardButton(tr.text(SEND_BUTTON), callback_data="_:rp:send"),
+         InlineKeyboardButton(tr.text(NOTE_BUTTON), callback_data="_:rp:note")],
+        [InlineKeyboardButton(tr.text(CANCEL_BUTTON), callback_data="_:rp:cancel")],
     ])
 
 
-def _capture_keyboard() -> InlineKeyboardMarkup:
+def _capture_keyboard(tr=None) -> InlineKeyboardMarkup:
+    tr = tr or _en()
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton(BACK_BUTTON_TEXT, callback_data="_:rp:back"),
-        InlineKeyboardButton(CANCEL_BUTTON, callback_data="_:rp:cancel"),
+        InlineKeyboardButton(tr.text(BACK_BUTTON_TEXT), callback_data="_:rp:back"),
+        InlineKeyboardButton(tr.text(CANCEL_BUTTON), callback_data="_:rp:cancel"),
     ]])
 
 
-def report_button_markup(label: str = REPORT_BUTTON) -> InlineKeyboardMarkup:
+def report_button_markup(label: str = REPORT_BUTTON, *, tr=None) -> InlineKeyboardMarkup:
     """The one-button keyboard that opens a manual preview (/help, the
-    memory-cap notice)."""
+    memory-cap notice). A keyed *label* is drawn in *tr*'s language
+    (English when None); any other label as given."""
+    if isinstance(label, Msg):
+        label = (tr or _en()).text(label)
     return InlineKeyboardMarkup([[InlineKeyboardButton(label, callback_data="_:rp:open")]])
 
 
@@ -454,10 +608,12 @@ async def _post_card(bot: "TelegramBot", kept: KeptReport) -> bool:
     ``msg_id`` (and ``doc_msg_id``); whether the card and its report went
     out."""
     app = bot._app
+    tr = _card_tr(kept)
     if kept.mode == "inline":
         try:
-            sent = await send_text(app.bot, kept.chat_id, card_text(kept), parse_mode="HTML",
-                                   reply_markup=preview_keyboard(), rate_limit_args=_INSTANT)
+            sent = await send_text(app.bot, kept.chat_id, card_text(kept, tr=tr),
+                                   parse_mode="HTML", reply_markup=preview_keyboard(tr),
+                                   rate_limit_args=_INSTANT)
         except BadRequest as e:
             # The inline form was refused (a parse or length problem): the
             # document form never loses a byte.
@@ -474,8 +630,9 @@ async def _post_card(bot: "TelegramBot", kept: KeptReport) -> bool:
             kept.msg_id = msg_id
             return True
     try:
-        sent = await send_text(app.bot, kept.chat_id, card_text(kept), parse_mode="HTML",
-                               reply_markup=preview_keyboard(), rate_limit_args=_INSTANT)
+        sent = await send_text(app.bot, kept.chat_id, card_text(kept, tr=tr),
+                               parse_mode="HTML", reply_markup=preview_keyboard(tr),
+                               rate_limit_args=_INSTANT)
     except Exception as e:  # noqa: BLE001
         log.debug("report preview send failed (%s)", type(e).__name__)
         return False
@@ -486,7 +643,7 @@ async def _post_card(bot: "TelegramBot", kept: KeptReport) -> bool:
     kept.doc_msg_id = await _send_document(bot, kept)
     if kept.doc_msg_id is None:
         # Never offer to send what the owner could not see.
-        await _edit_card(bot, kept, _final_text(DOC_FAILED_TEXT), None)
+        await _edit_card(bot, kept, _final_text(tr.text(DOC_FAILED_TEXT), tr), None)
         return False
     return True
 
@@ -536,8 +693,11 @@ async def open_preview(bot: "TelegramBot", *, trigger: str,
     if built is None:
         return OpenResult.NOT_SENT
     report, preview = built
+    # Measured in the language the card is drawn in (ruling 7): a longer
+    # translation goes out as report.json where the English would fit.
     kept = KeptReport(report=report, preview=preview, chat_id=owner,
-                      mode="inline" if _fits_inline(preview) else "document",
+                      mode="inline" if _fits_inline(preview, i18n.for_chat(owner))
+                      else "document",
                       created=_mono())
     if not await _post_card(bot, kept):
         return OpenResult.NOT_SENT
@@ -554,22 +714,8 @@ def _note_pending(bot: "TelegramBot") -> dict | None:
 def _keyboard_word(bot: "TelegramBot", text: str) -> bool:
     """A main-keyboard word (the sets the /new Name card tells apart):
     a tap on the keyboard, never a note."""
-    from aipager.bot import new_flow
-    from aipager.config import (
-        APP_BUTTON,
-        BACK_BUTTON,
-        COMMANDS_BUTTON,
-        MODELS_BUTTON,
-        TEMPLATES_BUTTON,
-    )
-
-    word = text.strip().lower()
-    if word in new_flow._LOOKING_WORDS or word in new_flow._ACTING_WORDS:
-        return True
-    if text in (TEMPLATES_BUTTON, COMMANDS_BUTTON, MODELS_BUTTON, BACK_BUTTON, APP_BUTTON):
-        return True
-    return any(text in (getattr(bot, attr, None) or {})
-               for attr in ("_template_map", "_command_map", "_model_map"))
+    from aipager.bot import kbwords
+    return kbwords.classify(bot, text) is not None
 
 
 def _is_note_answer(bot: "TelegramBot", update, pending: dict) -> bool:
@@ -622,7 +768,9 @@ def close_note(bot: "TelegramBot", user_id=None) -> None:
         if kept is None or kept.state != "note":
             return
         kept.state = "open"
-        _spawn(_edit_card(bot, kept, card_text(kept, NOTE_CLOSED), preview_keyboard()))
+        tr = _card_tr(kept)
+        _spawn(_edit_card(bot, kept, card_text(kept, tr.text(NOTE_CLOSED), tr=tr),
+                          preview_keyboard(tr)))
     except Exception:  # noqa: BLE001
         log.debug("report note close failed", exc_info=True)
 
@@ -680,10 +828,11 @@ async def maybe_handle_text(bot: "TelegramBot", update, ctx, text: str) -> bool:
     if not pending or not _is_note_answer(bot, update, pending):
         return False
     bot._report_note_pending = None
+    tr = i18n.for_chat(pending["chat_id"])
     kept = _lookup(bot, pending["chat_id"], pending["msg_id"])
     if kept is None or kept.state != "note" or kept.report is None:
         try:
-            await send_text(bot._app.bot, pending["chat_id"], LOST_TEXT,
+            await send_text(bot._app.bot, pending["chat_id"], tr.text(LOST_TEXT),
                             rate_limit_args=_INSTANT)
         except Exception as e:  # noqa: BLE001
             log.debug("report lost-card reply failed (%s)", type(e).__name__)
@@ -691,19 +840,22 @@ async def maybe_handle_text(bot: "TelegramBot", update, ctx, text: str) -> bool:
     kept.state = "open"
     note = sc.normalize_note(text)
     if note is None:
-        await _edit_card(bot, kept, card_text(kept, NOTE_EMPTY), preview_keyboard())
+        await _edit_card(bot, kept, card_text(kept, tr.text(NOTE_EMPTY), tr=tr),
+                         preview_keyboard(tr))
         return True
     candidate = copy.deepcopy(kept.report)
     candidate["note"] = note
     clean, _problems = sc.validate(candidate)
     preview = send.checked_preview(clean) if clean == candidate else None
     if preview is None:
-        await _edit_card(bot, kept, card_text(kept, NOTE_REFUSED), preview_keyboard())
+        await _edit_card(bot, kept, card_text(kept, tr.text(NOTE_REFUSED), tr=tr),
+                         preview_keyboard(tr))
         return True
     kept.report, kept.preview = clean, preview
-    status = NOTE_CUT if len(sc.clean_note(text).strip()) > sc.NOTE_MAX else NOTE_ADDED
+    status = shown(tr, NOTE_CUT if len(sc.clean_note(text).strip()) > sc.NOTE_MAX
+                   else NOTE_ADDED)
     old_doc = None
-    if kept.mode == "inline" and not _fits_inline(preview):
+    if kept.mode == "inline" and not _fits_inline(preview, tr):
         kept.mode = "document"
     if kept.mode == "document":
         old_doc = kept.doc_msg_id
@@ -711,9 +863,9 @@ async def maybe_handle_text(bot: "TelegramBot", update, ctx, text: str) -> bool:
         if kept.doc_msg_id is None:
             kept.state = "done"
             kept.report = None
-            await _edit_card(bot, kept, _final_text(DOC_FAILED_TEXT), None)
+            await _edit_card(bot, kept, _final_text(tr.text(DOC_FAILED_TEXT), tr), None)
             return True
-    await _edit_card(bot, kept, card_text(kept, status), preview_keyboard())
+    await _edit_card(bot, kept, card_text(kept, status, tr=tr), preview_keyboard(tr))
     if old_doc is not None:
         await _delete_message(bot, kept.chat_id, old_doc)
     return True
@@ -721,27 +873,52 @@ async def maybe_handle_text(bot: "TelegramBot", update, ctx, text: str) -> bool:
 
 # ---- taps ---------------------------------------------------------------------
 
-def outcome_line(outcome: str, reference: str | None = None) -> str:
+def outcome_line(outcome: str, reference: str | None = None, *, tr=None) -> str:
     """The card's line for one send outcome (the CLI's wording); an
-    unknown one reads as try later."""
-    return wording.OUTCOME_LINES.get(outcome, wording.TRY_LATER).format(reference=reference)
+    unknown one reads as try later. In English it is the CLI's own table,
+    byte for byte; in any other language of *tr* the bot's keyed copy
+    (whose English a test keeps equal to the table)."""
+    if tr is None or tr.code == "en":
+        return wording.OUTCOME_LINES.get(outcome, wording.TRY_LATER).format(
+            reference=reference)
+    msg = OUTCOME_MSGS.get(outcome, _TRY_LATER)
+    if isinstance(msg, Plural):
+        from aipager.report import send
+        return tr.n(msg, send.SENDS_PER_DAY, kind="text")
+    if msg.key == "rep.outcome.sent":
+        return tr.text(msg, reference=str(reference))
+    if msg.key == "rep.outcome.too_old":
+        return tr.text(msg, command="`aipager update`")
+    return tr.text(msg)
 
 
-async def _tap_open(bot: "TelegramBot", query, chat_id) -> None:
+def _pop(query, pop):
+    """The pop-up language: *pop* when the dispatcher passed it, else the
+    tapper's."""
+    return pop if pop is not None else tapper_tr(query)
+
+
+def _query_chat_tr(query):
+    return i18n.for_chat(_message_chat_id(getattr(query, "message", None)))
+
+
+async def _tap_open(bot: "TelegramBot", query, chat_id, *, pop=None) -> None:
+    pop = _pop(query, pop)
     owner = resolve_owner(bot)
     result = await open_preview(bot, trigger="manual")
     if result is OpenResult.OPENED:
         if chat_id != owner:
-            await bot._safe_answer(query, IN_DM_TEXT, show_alert=True)
+            await bot._safe_answer(query, pop.text(IN_DM_TEXT), show_alert=True)
     elif result is OpenResult.NO_OWNER:
-        await bot._safe_answer(query, NO_OWNER_TEXT, show_alert=True)
+        await bot._safe_answer(query, pop.text(NO_OWNER_TEXT), show_alert=True)
     else:
-        await bot._safe_answer(query, NOT_OPENED_TEXT, show_alert=True)
+        await bot._safe_answer(query, pop.text(NOT_OPENED_TEXT), show_alert=True)
 
 
 async def _lost(query) -> None:
+    tr = _query_chat_tr(query)
     try:
-        await edit_text(query, _final_text(LOST_TEXT), parse_mode="HTML",
+        await edit_text(query, _final_text(tr.text(LOST_TEXT), tr), parse_mode="HTML",
                         reply_markup=None, rate_limit_args=_INSTANT)
     except Exception as e:  # noqa: BLE001
         log.debug("report lost-card edit failed (%s)", type(e).__name__)
@@ -753,12 +930,13 @@ def _drop_note_for(bot: "TelegramBot", kept: KeptReport) -> None:
         bot._report_note_pending = None
 
 
-async def _tap_send(bot: "TelegramBot", query, kept: KeptReport) -> None:
+async def _tap_send(bot: "TelegramBot", query, kept: KeptReport, *, pop=None) -> None:
+    pop = _pop(query, pop)
     if kept.state == "sending":
-        await bot._safe_answer(query, ALREADY_SENDING)
+        await bot._safe_answer(query, pop.text(ALREADY_SENDING))
         return
     if kept.state == "done" or kept.report is None:
-        await bot._safe_answer(query, ALREADY_SENT)
+        await bot._safe_answer(query, pop.text(ALREADY_SENT))
         return
     # Claimed before anything awaits: a second tap sees it.
     kept.state = "sending"
@@ -774,7 +952,8 @@ async def _run_send(bot: "TelegramBot", kept: KeptReport) -> None:
     on its card. Never raises."""
     from aipager.report import send
 
-    await _edit_card(bot, kept, card_text(kept, SENDING_TEXT), None)
+    tr = _card_tr(kept)
+    await _edit_card(bot, kept, card_text(kept, tr.text(SENDING_TEXT), tr=tr), None)
     try:
         result = await asyncio.to_thread(send.send, kept.report, transport=SEND_TRANSPORT)
     except Exception as e:  # noqa: BLE001 - send.send never raises; belt and braces
@@ -783,29 +962,32 @@ async def _run_send(bot: "TelegramBot", kept: KeptReport) -> None:
     if result is None:
         # Something inside aipager broke: the same report would break the
         # same way, so this is final (no Send button to tap again).
-        line = SEND_FAILED_TEXT
+        line = tr.text(SEND_FAILED_TEXT)
     else:
-        line = outcome_line(result.outcome, result.reference)
+        line = outcome_line(result.outcome, result.reference, tr=tr)
         log.info("problem report send: %s", result.outcome)
         if result.outcome in wording.RETRYABLE:
             kept.state = "open"
-            await _edit_card(bot, kept, card_text(kept, line), preview_keyboard())
+            await _edit_card(bot, kept, card_text(kept, line, tr=tr), preview_keyboard(tr))
             return
     # Final: the report is let go; the entry stays so a late second tap
     # says "Already sent." instead of overwriting the outcome.
     kept.state = "done"
     kept.report = None
-    await _edit_card(bot, kept, card_text(kept, line), None)
+    await _edit_card(bot, kept, card_text(kept, line, tr=tr), None)
 
 
-async def _tap_note(bot: "TelegramBot", query, kept: KeptReport, user_id: int) -> None:
+async def _tap_note(bot: "TelegramBot", query, kept: KeptReport, user_id: int,
+                    *, pop=None) -> None:
     from aipager.bot import new_flow, session_parity
 
     if kept.state in ("sending", "done") or kept.report is None:
-        await bot._safe_answer(query, ALREADY_SENDING if kept.state == "sending"
-                               else ALREADY_SENT)
+        pop = _pop(query, pop)
+        await bot._safe_answer(query, pop.text(ALREADY_SENDING if kept.state == "sending"
+                                               else ALREADY_SENT))
         return
-    if not await _edit_card(bot, kept, _capture_text(), _capture_keyboard()):
+    tr = _card_tr(kept)
+    if not await _edit_card(bot, kept, _capture_text(tr), _capture_keyboard(tr)):
         return  # never shown: nothing may take the next message as the note
     kept.state = "note"
     # Their newest question wins: their Name card and rename question close.
@@ -818,26 +1000,30 @@ async def _tap_note(bot: "TelegramBot", query, kept: KeptReport, user_id: int) -
                                 "msg_id": kept.msg_id, "last_active": _mono()}
 
 
-async def _tap_back(bot: "TelegramBot", query, kept: KeptReport) -> None:
+async def _tap_back(bot: "TelegramBot", query, kept: KeptReport, *, pop=None) -> None:
     _drop_note_for(bot, kept)
     if kept.state == "note":
         kept.state = "open"
     if kept.state != "open":
-        await bot._safe_answer(query, ALREADY_SENDING if kept.state == "sending"
-                               else ALREADY_SENT)
+        pop = _pop(query, pop)
+        await bot._safe_answer(query, pop.text(ALREADY_SENDING if kept.state == "sending"
+                                               else ALREADY_SENT))
         return
-    await _edit_card(bot, kept, card_text(kept), preview_keyboard())
+    tr = _card_tr(kept)
+    await _edit_card(bot, kept, card_text(kept, tr=tr), preview_keyboard(tr))
 
 
-async def _tap_cancel(bot: "TelegramBot", query, kept: KeptReport | None) -> None:
+async def _tap_cancel(bot: "TelegramBot", query, kept: KeptReport | None,
+                      *, pop=None) -> None:
     if kept is not None:
         if kept.state == "sending":
-            await bot._safe_answer(query, ALREADY_SENDING)
+            await bot._safe_answer(query, _pop(query, pop).text(ALREADY_SENDING))
             return
         _drop_note_for(bot, kept)
         _cards(bot).pop((kept.chat_id, kept.msg_id), None)
+    tr = _query_chat_tr(query)
     try:
-        await edit_text(query, _final_text(CANCELLED_TEXT), parse_mode="HTML",
+        await edit_text(query, _final_text(tr.text(CANCELLED_TEXT), tr), parse_mode="HTML",
                         reply_markup=None, rate_limit_args=_INSTANT)
     except Exception as e:  # noqa: BLE001
         log.debug("report cancel edit failed (%s)", type(e).__name__)
@@ -852,9 +1038,14 @@ async def _strip_keyboard(query) -> None:
         log.debug("offer keyboard strip failed (%s)", type(e).__name__)
 
 
-async def _answer_offer(bot: "TelegramBot", query, verb: str, ts_text: str) -> None:
+async def _answer_offer(bot: "TelegramBot", query, verb: str, ts_text: str,
+                        *, pop=None) -> None:
     from aipager.report import policy, store
 
+    pop = _pop(query, pop)
+    # The offer lives in the owner's private chat: its edits read that
+    # chat's language, the pop-ups the tapper's.
+    tr = _query_chat_tr(query)
     now = int(time.time())
     state = store.policy_state()
     settled = policy.settle(state, now)
@@ -863,7 +1054,7 @@ async def _answer_offer(bot: "TelegramBot", query, verb: str, ts_text: str) -> N
     offer_ts = (int(ts_text) if ts_text.isascii() and ts_text.isdigit() and len(ts_text) <= 12
                 else None)
     if offer_ts is None or not settled.pending or settled.last_offer_ts != offer_ts:
-        await bot._safe_answer(query, OFFER_STALE_TEXT)
+        await bot._safe_answer(query, pop.text(OFFER_STALE_TEXT))
         await _strip_keyboard(query)
         return
     offered = settled.pending
@@ -875,17 +1066,19 @@ async def _answer_offer(bot: "TelegramBot", query, verb: str, ts_text: str) -> N
         result = await open_preview(bot, trigger="auto", errors=errors)
         opened = result is OpenResult.OPENED
         if not opened:
-            await bot._safe_answer(query, NOT_OPENED_TEXT, show_alert=True)
+            await bot._safe_answer(query, pop.text(NOT_OPENED_TEXT), show_alert=True)
         # Said only once the outcome is known.
         try:
-            await edit_text(query, OFFER_PREVIEW_TEXT if opened else OFFER_NOT_OPENED_TEXT,
+            await edit_text(query, tr.text(OFFER_PREVIEW_TEXT if opened
+                                           else OFFER_NOT_OPENED_TEXT),
                             reply_markup=None, rate_limit_args=_INSTANT)
         except Exception as e:  # noqa: BLE001
             log.debug("offer notice edit failed (%s)", type(e).__name__)
         return
-    text = OFFER_DECLINED_TEXT
+    # Two whole sentences, side by side.
+    text = tr.text(OFFER_DECLINED_TEXT)
     if answered.auto_off and not settled.auto_off:
-        text += " " + OFFER_OFF_TEXT
+        text += " " + tr.text(OFFER_OFF_TEXT)
     try:
         await edit_text(query, text, reply_markup=None, rate_limit_args=_INSTANT)
     except Exception as e:  # noqa: BLE001
@@ -918,31 +1111,37 @@ def settings_row_state(bot: "TelegramBot", chat_id, user_id) -> str | None:
     return SETTINGS_ROW_LABELS["ask"]
 
 
-def render_settings_section() -> tuple[str, InlineKeyboardMarkup]:
-    """The Problem reports page of /settings."""
-    from aipager import preferences
+def render_settings_section(tr=None) -> tuple[str, InlineKeyboardMarkup]:
+    """The Problem reports page of /settings, in *tr*'s language (the
+    owner's private chat; English when None)."""
+    from aipager import i18n, preferences
+    from aipager.bot import language_menu
     from aipager.report import store
 
+    tr = tr or i18n.get("en")
     current = preferences.get_problem_reports()
     auto_off = store.policy_state().auto_off
-    lines = [SETTINGS_TITLE, _esc(SETTINGS_INTRO)]
+    lines = [tr.html(SETTINGS_TITLE), tr.html(SETTINGS_INTRO)]
     if auto_off:
-        lines.append(_esc(SETTINGS_AUTO_OFF))
+        lines.append(tr.html(SETTINGS_AUTO_OFF))
     if _env_off():
-        lines.append(_esc(SETTINGS_ENV_OFF))
+        lines.append(tr.html(SETTINGS_ENV_OFF))
     def _label(value: str) -> str:
-        return SETTINGS_ROW_LABELS[value] + (" ✅" if value == current else "")
+        return tr.text(SETTINGS_ROW_LABELS[value]) + (" ✅" if value == current else "")
 
     rows = [[InlineKeyboardButton(_label("ask"), callback_data="_:rp:set:ask")],
             [InlineKeyboardButton(_label("off"), callback_data="_:rp:set:off")]]
     if auto_off:
-        rows.append([InlineKeyboardButton(TURN_ON_BUTTON, callback_data="_:rp:set:on")])
-    rows.append([InlineKeyboardButton("« Back", callback_data="_:set:back")])
+        rows.append([InlineKeyboardButton(tr.text(TURN_ON_BUTTON),
+                                          callback_data="_:rp:set:on")])
+    rows.append([InlineKeyboardButton(tr.text(language_menu.BACK),
+                                      callback_data="_:set:back")])
     return "\n\n".join(lines), InlineKeyboardMarkup(rows)
 
 
-async def _tap_settings(bot: "TelegramBot", query, parts: list[str]) -> None:
+async def _tap_settings(bot: "TelegramBot", query, parts: list[str], *, pop=None) -> None:
     from aipager import preferences
+    from aipager.bot.language_menu import INVALID_CALLBACK
     from aipager.report import policy, store
 
     if len(parts) == 2:
@@ -952,9 +1151,10 @@ async def _tap_settings(bot: "TelegramBot", query, parts: list[str]) -> None:
         elif choice == "on":
             store.save_policy(policy.reenable(store.policy_state()))
         else:
-            await bot._safe_answer(query, INVALID_TEXT)
+            await bot._safe_answer(query, _pop(query, pop).text(INVALID_CALLBACK))
             return
-    text, kb = render_settings_section()
+    text, kb = render_settings_section(
+        i18n.for_chat(_message_chat_id(getattr(query, "message", None))))
     try:
         await edit_text(query, text, parse_mode="HTML", reply_markup=kb,
                         rate_limit_args=_INSTANT)
@@ -971,6 +1171,9 @@ async def handle_callback(bot: "TelegramBot", update, query, session_name: str,
     owner's private chat."""
     if session_name != "_" or not action.startswith("rp:"):
         return False
+    from aipager.bot.language_menu import INVALID_CALLBACK
+    # Every pop-up below is the tapper's; the card's edits its chat's.
+    pop = tapper_tr(query)
     parts = action.split(":")[1:]
     verb = parts[0] if parts else ""
     user_id = getattr(getattr(query, "from_user", None), "id", None)
@@ -980,39 +1183,39 @@ async def handle_callback(bot: "TelegramBot", update, query, session_name: str,
         chat_id = calling_chat_id(update)
     owner = resolve_owner(bot)
     if owner is None:
-        await bot._safe_answer(query, NO_OWNER_TEXT, show_alert=True)
+        await bot._safe_answer(query, pop.text(NO_OWNER_TEXT), show_alert=True)
         return True
     if not is_owner(bot, user_id):
         log.info("report tap refused: not the owner (action %s)", verb)
-        await bot._safe_answer(query, NOT_OWNER_TEXT, show_alert=True)
+        await bot._safe_answer(query, pop.text(NOT_OWNER_TEXT), show_alert=True)
         return True
     if verb == "open" and len(parts) == 1:
-        await _tap_open(bot, query, chat_id)
+        await _tap_open(bot, query, chat_id, pop=pop)
         return True
     if chat_id != owner:
         # Cards, offers and the settings page live in the owner's DM only.
-        await bot._safe_answer(query, NOT_OWNER_TEXT, show_alert=True)
+        await bot._safe_answer(query, pop.text(NOT_OWNER_TEXT), show_alert=True)
         return True
     if verb in _OFFER_ANSWERS and len(parts) == 2:
-        await _answer_offer(bot, query, verb, parts[1])
+        await _answer_offer(bot, query, verb, parts[1], pop=pop)
         return True
     if verb == "set" and len(parts) <= 2:
-        await _tap_settings(bot, query, parts)
+        await _tap_settings(bot, query, parts, pop=pop)
         return True
     if verb not in ("send", "note", "back", "cancel") or len(parts) != 1:
-        await bot._safe_answer(query, INVALID_TEXT)
+        await bot._safe_answer(query, pop.text(INVALID_CALLBACK))
         return True
     kept = _lookup(bot, chat_id, getattr(message, "message_id", None))
     if verb == "cancel":
-        await _tap_cancel(bot, query, kept)
+        await _tap_cancel(bot, query, kept, pop=pop)
         return True
     if kept is None:
         await _lost(query)
         return True
     if verb == "send":
-        await _tap_send(bot, query, kept)
+        await _tap_send(bot, query, kept, pop=pop)
     elif verb == "note":
-        await _tap_note(bot, query, kept, user_id)
+        await _tap_note(bot, query, kept, user_id, pop=pop)
     else:
-        await _tap_back(bot, query, kept)
+        await _tap_back(bot, query, kept, pop=pop)
     return True

@@ -37,6 +37,10 @@ import time
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
+from aipager.clockfmt import elapsed as clock
+from aipager.i18n import Msg
+from aipager.miniapp import ui_text
+from aipager.miniapp.phrase import Phrase, say
 from aipager.policy_snapshot import combined_queue_depth
 from aipager.state import QUEUE_CAP, Status
 from aipager.statusline_file import latest_stats
@@ -54,13 +58,24 @@ _WAITING_STATUS = "waiting"
 # server.py's Resume 409 body (design.md file-by-file plan), so the
 # pre-check reason and the enforced refusal always read identically —
 # one string, not two that could drift apart.
-NO_TRANSCRIPT_REASON = "No resumable transcript - start a fresh session instead."
-NO_PERMISSION_REASON = "You don't have permission to control this session."
+#
+# Each is a Msg, a str equal to its English: the chat (session_ops,
+# handlers) shows them as they are, the Mini App in its viewer's language
+# (``phrase.say``).
+NO_TRANSCRIPT_REASON = Msg("app.reason.no_transcript",
+                           "No resumable transcript - start a fresh session instead.",
+                           note="Why a finished session can't be resumed")
+NO_PERMISSION_REASON = Msg("app.reason.no_permission",
+                           "You don't have permission to control this session.")
 # Shared verbatim between session_actions()'s client-facing reason and the
 # corresponding write route's refusal body (entrypoints.md), same rationale
 # as the two constants above — one string, not two that could drift apart.
-PERMS_ADMIN_REQUIRED_REASON = "Switching to Auto mode requires admin."
-QUEUE_EMPTY_REASON = "Nothing queued to clear."
+PERMS_ADMIN_REQUIRED_REASON = Msg("app.reason.perms_admin",
+                                  "Switching to Auto mode requires admin.",
+                                  note="Auto is the permission mode (as in /mode); only an "
+                                       "admin may switch a session to it")
+QUEUE_EMPTY_REASON = Msg("app.reason.queue_empty", "Nothing queued to clear.",
+                         note="Clear queue: no queued messages")
 # Switching a running session's model (roadmap 8.35). Shared verbatim by
 # the detail payload's `model_switch` entry, the Mini App route's 409 body
 # and the chat's own refusal (bot/session_ops.model_switch_refusal), so
@@ -71,35 +86,41 @@ QUEUE_EMPTY_REASON = "Nothing queued to clear."
 # to end — so typing it into a running turn would swap the model under
 # that turn and can raise Claude Code's "Switch model?" confirmation on
 # top of it, where the daemon cannot see it.
-MODEL_SWITCH_BUSY_REASON = (
-    "Claude is working - switch the model when this turn ends."
-)
-MODEL_SWITCH_PROMPT_OPEN_REASON = (
-    "A prompt is open in the terminal - answer it before switching the model."
-)
-MODEL_SWITCH_NOT_LIVE_REASON = "Session isn't running."
+MODEL_SWITCH_BUSY_REASON = Msg(
+    "app.reason.model_busy", "Claude is working - switch the model when this turn ends.",
+    note="Why a session's model can't be switched now")
+MODEL_SWITCH_PROMPT_OPEN_REASON = Msg(
+    "app.reason.model_prompt_open",
+    "A prompt is open in the terminal - answer it before switching the model.")
+MODEL_SWITCH_NOT_LIVE_REASON = Msg("app.reason.model_not_live", "Session isn't running.")
 # UNKNOWN is the state right after a daemon restart, before the monitor
 # has looked: aipager does not yet know whether a turn is running.
-MODEL_SWITCH_UNKNOWN_REASON = (
-    "aipager hasn't seen this session's state yet - try again in a moment."
-)
-MODEL_SWITCH_PENDING_REASON = (
+MODEL_SWITCH_UNKNOWN_REASON = Msg(
+    "app.reason.model_unknown",
+    "aipager hasn't seen this session's state yet - try again in a moment.")
+MODEL_SWITCH_PENDING_REASON = Msg(
+    "app.reason.model_pending",
     "The last model switch isn't confirmed yet - check the terminal for "
-    "Claude Code's \"Switch model?\" question before switching again."
-)
+    "Claude Code's \"Switch model?\" question before switching again.",
+    note="\"Switch model?\" is Claude Code's own question in the terminal, in English: "
+         "keep it as it is")
 # What the page and the chat say when the statusline never reported a new
 # model within the wait. The likely cause is Claude Code's own "Switch
 # model?" confirmation still being up: aipager's PreModelSwitch hook
 # pre-approves the switches it types (dtach/model_switch_marker.py), but
 # a Claude Code older than 2.1.251, or an `opusplan` switch that asks the
 # hook twice, still shows it — and keystrokes are never guessed at it.
-MODEL_SWITCH_UNCONFIRMED = (
+MODEL_SWITCH_UNCONFIRMED = Msg(
+    "app.reason.model_unconfirmed",
     "not confirmed - check the session. Claude Code may be asking "
-    "\"Switch model?\" in the terminal, or it was already on that model."
-)
-QUEUE_FULL_REASON = (
-    f"Queue is full ({QUEUE_CAP} pending) - clear it or wait for it to drain."
-)
+    "\"Switch model?\" in the terminal, or it was already on that model.",
+    note="After a model switch the session never reported the new model. Starts lower "
+         "case: it follows the model's name. \"Switch model?\" is Claude Code's own "
+         "question, in English: keep it as it is")
+_QUEUE_FULL = Msg("app.reason.queue_full",
+                  "Queue is full ({cap} pending) - clear it or wait for it to drain.",
+                  eg={"cap": 50}, note="Too many messages wait behind the running turn")
+QUEUE_FULL_REASON = Phrase(_QUEUE_FULL, cap=QUEUE_CAP)
 # design.md Decision 6 — the Mini App's own unavailable-with-reason
 # mechanism, reused verbatim rather than adding new client code. Greys
 # out Compact when there is self-evidently nothing to compact, closing
@@ -107,7 +128,23 @@ QUEUE_FULL_REASON = (
 # (a human tapping a button whose tap does nothing). A UI affordance
 # only — the server-side POST route is unaffected (session_ops.py's
 # `_compact_session_core` still accepts it regardless of context_pct).
-NO_CONTEXT_REASON = "Nothing to compact - context is already empty."
+NO_CONTEXT_REASON = Msg("app.reason.no_context",
+                        "Nothing to compact - context is already empty.",
+                        note="Compact (as in /compact) has nothing to shrink")
+
+# The session page's facts: their labels, keyed by the fact's id.
+_FACT_LABELS = {
+    "model": Msg("app.fact.model", "Model", note="Mini App session page: a fact's label"),
+    "context": Msg("app.fact.context", "Context",
+                   note="Mini App session page: how full the context window is"),
+    "cost": Msg("app.fact.cost", "Cost", note="Mini App session page: the session's cost"),
+    "working": Msg("app.fact.working", "Working for",
+                   note="Mini App session page: followed by a clock (3:12)"),
+    "last_active": Msg("app.fact.last_active", "Last active",
+                       note="Mini App session page: followed by 5m ago"),
+    "cwd": Msg("app.fact.cwd", "Directory",
+               note="Mini App session page: the session's working directory"),
+}
 
 
 def _derive_status(sess: "TrackedSession") -> tuple[str, str | None, str | None]:
@@ -253,7 +290,7 @@ _STATUS_ACTION_KEYS: dict[str, frozenset[str]] = {
 def session_actions(
     status: str, *, resumable: bool, can_act: bool,
     is_admin: bool = False, skip_perms: bool = False, queue_depth: int = 0,
-    context_pct: int = 0,
+    context_pct: int = 0, tr=None,
 ) -> dict[str, dict[str, Any]]:
     """The status→button matrix (design.md), computed server-side so
     every refusal rule — status match, resumability, permission, admin,
@@ -288,6 +325,9 @@ def session_actions(
       target is Auto and the caller is not admin
       (:data:`PERMS_ADMIN_REQUIRED_REASON`); switching *to* Ask never
       needs admin, matching chat's own ``/perms`` rule.
+
+    ``tr``: the reasons in that reader's language (the Mini App passes the
+    viewer's); None leaves them as the English constants.
     """
     relevant = _STATUS_ACTION_KEYS.get(status)
     if relevant is None:
@@ -298,24 +338,25 @@ def session_actions(
         if key not in relevant:
             continue
         if not can_act:
-            actions[key] = {"available": False, "reason": NO_PERMISSION_REASON}
+            actions[key] = {"available": False, "reason": say(tr, NO_PERMISSION_REASON)}
         elif key == "resume" and not resumable:
-            actions[key] = {"available": False, "reason": NO_TRANSCRIPT_REASON}
+            actions[key] = {"available": False, "reason": say(tr, NO_TRANSCRIPT_REASON)}
         elif key == "clearqueue" and queue_depth <= 0:
-            actions[key] = {"available": False, "reason": QUEUE_EMPTY_REASON}
+            actions[key] = {"available": False, "reason": say(tr, QUEUE_EMPTY_REASON)}
         elif key == "compact" and context_pct <= 0:
-            actions[key] = {"available": False, "reason": NO_CONTEXT_REASON}
+            actions[key] = {"available": False, "reason": say(tr, NO_CONTEXT_REASON)}
         elif key == "compact" and status == "busy" and queue_depth >= QUEUE_CAP:
-            actions[key] = {"available": False, "reason": QUEUE_FULL_REASON}
+            actions[key] = {"available": False, "reason": say(tr, QUEUE_FULL_REASON)}
         elif key == "perms" and not skip_perms and not is_admin:
-            actions[key] = {"available": False, "reason": PERMS_ADMIN_REQUIRED_REASON}
+            actions[key] = {"available": False,
+                            "reason": say(tr, PERMS_ADMIN_REQUIRED_REASON)}
         else:
             actions[key] = {"available": True, "reason": None}
     return actions
 
 
 def model_switch_state(
-    status: str, *, can_act: bool, switch_pending: bool = False,
+    status: str, *, can_act: bool, switch_pending: bool = False, tr=None,
 ) -> dict[str, Any] | None:
     """Whether the session page's Model picker is live, and why not.
 
@@ -328,17 +369,17 @@ def model_switch_state(
     if status not in ("idle", "busy", _WAITING_STATUS):
         return None
     if not can_act:
-        return {"available": False, "reason": NO_PERMISSION_REASON}
+        return {"available": False, "reason": say(tr, NO_PERMISSION_REASON)}
     if status == "busy":
-        return {"available": False, "reason": MODEL_SWITCH_BUSY_REASON}
+        return {"available": False, "reason": say(tr, MODEL_SWITCH_BUSY_REASON)}
     if status == _WAITING_STATUS:
-        return {"available": False, "reason": MODEL_SWITCH_PROMPT_OPEN_REASON}
+        return {"available": False, "reason": say(tr, MODEL_SWITCH_PROMPT_OPEN_REASON)}
     if switch_pending:
-        return {"available": False, "reason": MODEL_SWITCH_PENDING_REASON}
+        return {"available": False, "reason": say(tr, MODEL_SWITCH_PENDING_REASON)}
     return {"available": True, "reason": None}
 
 
-def answer_state(status: str, *, can_act: bool) -> dict[str, Any] | None:
+def answer_state(status: str, *, can_act: bool, tr=None) -> dict[str, Any] | None:
     """Whether the page may offer "Answer in chat" (re-send the pending
     prompt into the chat), and why not.
 
@@ -349,13 +390,13 @@ def answer_state(status: str, *, can_act: bool) -> dict[str, Any] | None:
     if status != _WAITING_STATUS:
         return None
     if not can_act:
-        return {"available": False, "reason": NO_PERMISSION_REASON}
+        return {"available": False, "reason": say(tr, NO_PERMISSION_REASON)}
     return {"available": True, "reason": None}
 
 
 def session_detail(
     sess: "TrackedSession", now: float, *,
-    can_act: bool = True, is_admin: bool = False,
+    can_act: bool = True, is_admin: bool = False, tr=None,
 ) -> dict[str, Any]:
     """Shape the drill-down payload for ``GET /api/sessions/{label}``.
 
@@ -370,12 +411,20 @@ def session_detail(
     (``session_detail(sess, time.monotonic())``) need no changes — they
     get a permissive default and simply gain the new keys without
     asserting on them.
+
+    ``tr``: facts and reasons in that reader's language (the Mini App
+    passes its viewer's); None is today's English.
     """
     status, waiting_kind, waiting_summary = _derive_status(sess)
     last_active = round(now - sess.last_hook_at) if sess.last_hook_at else None
     busy_elapsed = None
     if sess.busy_started_at and sess.status in (Status.BUSY, Status.INTERACTIVE):
-        busy_elapsed = round(now - sess.busy_started_at)
+        # Floored, never rounded: the busy card truncates, and the app and
+        # the card show the same clock for the same moment.
+        busy_elapsed = int(max(0.0, now - sess.busy_started_at))
+    # The unit the busy card last rendered its clock in (true seconds, or
+    # 30 s steps on an old turn): the app shows the clock the card shows.
+    unit = getattr(sess, "card_elapsed_unit", "s")
     queue_depth = combined_queue_depth(sess)
     stats = latest_stats(sess)
     detail = {
@@ -389,6 +438,7 @@ def session_detail(
         "cwd": sess.cwd or "",
         "last_active_seconds_ago": last_active,
         "busy_elapsed_seconds": busy_elapsed,
+        "busy_elapsed_unit": unit if unit in ("s", "m", "h") else "s",
         # The session's current permission mode and how many prompts sit
         # behind its in-progress turn — both consulted client-side to
         # word the perms confirm dialog and to decide whether Clear
@@ -402,16 +452,16 @@ def session_detail(
         "last_message": preview_lines(last_message(sess)),
         "timeline": build_timeline(sess),
     }
-    detail["facts"] = display_facts(detail)
+    detail["facts"] = display_facts(detail, tr=tr)
     detail["model_switch"] = model_switch_state(
         detail["status"], can_act=can_act,
-        switch_pending=sess.model_switch_pending(),
+        switch_pending=sess.model_switch_pending(), tr=tr,
     )
-    detail["answer"] = answer_state(detail["status"], can_act=can_act)
+    detail["answer"] = answer_state(detail["status"], can_act=can_act, tr=tr)
     detail["actions"] = session_actions(
         detail["status"], resumable=bool(sess.claude_session_id), can_act=can_act,
         is_admin=is_admin, skip_perms=bool(sess.skip_perms), queue_depth=queue_depth,
-        context_pct=detail["context_pct"],
+        context_pct=detail["context_pct"], tr=tr,
     )
     return detail
 
@@ -470,48 +520,68 @@ def preview_lines(preview: str | None) -> str:
     return clipped.rstrip() + "…"
 
 
-def display_facts(detail: dict[str, Any]) -> list[dict[str, str]]:
-    """The info line as ordered ``{label, value}`` pairs, omitting what
-    would be noise.
+def display_facts(detail: dict[str, Any], tr=None) -> list[dict[str, str]]:
+    """The info line as ordered ``{id, label, value}`` entries, omitting
+    what would be noise.
 
     A finished session legitimately reports ``model: ""``, ``cost 0`` and
     ``context 0``; rendering those as "0% ctx · $0.00" tells the operator
     something false-looking about a session that simply never recorded
     them. Built here rather than in JavaScript so the omission rules are
     pinned by pytest.
+
+    ``id`` (``model``, ``context``, ``cost``, ``working``, ``last_active``,
+    ``cwd``) is what the page decides by, never the shown label. With
+    ``tr`` the labels and numbers are in that reader's language and
+    digits; the model and the folder are names and stay as they are.
     """
     facts: list[dict[str, str]] = []
+
+    def add(fid: str, value: str) -> None:
+        label = _FACT_LABELS[fid]
+        facts.append({"id": fid, "label": say(tr, label), "value": value})
+
+    def num(text: str) -> str:
+        return tr.num(text) if tr is not None else text
+
     if detail.get("model"):
-        facts.append({"label": "Model", "value": str(detail["model"])})
+        add("model", str(detail["model"]))
     if detail.get("context_pct"):
-        facts.append({"label": "Context", "value": f"{detail['context_pct']}%"})
+        add("context", num(f"{detail['context_pct']}%"))
     if detail.get("cost_usd"):
-        facts.append({"label": "Cost", "value": f"${detail['cost_usd']:.2f}"})
+        add("cost", num(f"${detail['cost_usd']:.2f}"))
     if detail.get("busy_elapsed_seconds"):
-        facts.append({
-            "label": "Working for",
-            "value": _short_duration(detail["busy_elapsed_seconds"]),
-        })
+        unit = detail.get("busy_elapsed_unit") or "s"
+        seconds = detail["busy_elapsed_seconds"]
+        add("working", tr.clock(seconds, unit) if tr is not None else clock(seconds, unit))
     age = detail.get("last_active_seconds_ago")
     if age is not None:
-        facts.append({"label": "Last active", "value": _short_duration(age) + " ago"})
+        add("last_active", _ago(age, tr))
     if detail.get("cwd"):
-        facts.append({"label": "Directory", "value": str(detail["cwd"])})
+        add("cwd", str(detail["cwd"]))
     return facts
 
 
-def _short_duration(seconds) -> str:
+def _ago(seconds, tr=None) -> str:
+    """"5m ago": the page's own short form (``ui_text.AGO_*``)."""
     try:
         seconds = int(seconds)
     except (TypeError, ValueError):
         return ""
     if seconds < 60:
-        return f"{max(0, seconds)}s"
-    if seconds < 3600:
-        return f"{seconds // 60}m"
-    if seconds < 86400:
-        return f"{seconds // 3600}h"
-    return f"{seconds // 86400}d"
+        msg, n = ui_text.AGO_S, max(0, seconds)
+    elif seconds < 3600:
+        msg, n = ui_text.AGO_M, seconds // 60
+    elif seconds < 86400:
+        msg, n = ui_text.AGO_H, seconds // 3600
+    else:
+        msg, n = ui_text.AGO_D, seconds // 86400
+    return (tr or _english()).text(msg, n=n)
+
+
+def _english():
+    from aipager import i18n
+    return i18n.get("en")
 
 
 def build_timeline(sess: "TrackedSession") -> list[dict[str, Any]]:
@@ -542,7 +612,7 @@ def build_timeline(sess: "TrackedSession") -> list[dict[str, Any]]:
         state = "failed" if done == "failed" else ("done" if done else "running")
         elapsed = None
         if state == "running" and idx in subagent_started:
-            elapsed = round(time.monotonic() - subagent_started[idx])
+            elapsed = int(max(0.0, time.monotonic() - subagent_started[idx]))
         rows.append({
             "kind": "tool", "text": summary, "state": state,
             "elapsed_seconds": elapsed,

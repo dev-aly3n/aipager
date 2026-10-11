@@ -168,7 +168,7 @@ def test_the_harness_detects_a_dead_create_folder_button(node_bin, tmp_path):
     from aipager.miniapp.static import INDEX_HTML
 
     broken = INDEX_HTML.replace(
-        'folderNote.textContent = "Pick a working directory above first.";',
+        'folderNote.textContent = t("ui.new.pick_dir_first");',
         'folderNote.textContent = "";', 1,
     )
     assert broken != INDEX_HTML, "folder-note code not found"
@@ -552,9 +552,9 @@ def test_the_harness_detects_a_reset_that_skips_its_confirmation(node_bin, tmp_p
     from aipager.miniapp.static import INDEX_HTML
 
     broken = INDEX_HTML.replace(
-        '    openConfirm({\n      title: "Reset settings to defaults?"',
+        '    openConfirm({\n      title: t("ui.confirm.reset"),',
         '    resetSessionSettings(); return; openConfirm({\n'
-        '      title: "Reset settings to defaults?"', 1,
+        '      title: t("ui.confirm.reset"),', 1,
     )
     assert broken != INDEX_HTML, "reset-confirm code not found — page changed shape"
 
@@ -618,7 +618,7 @@ def test_the_harness_detects_a_menu_that_ignores_a_changed_session(
         "    if (overlayCloser && menuSignature &&\n"
         "        actionsSignature(data) !== menuSignature) {\n"
         "      closeOverlay();\n"
-        '      showNotice("This session changed. Reopen the menu.");\n'
+        '      showNotice(t("ui.menu.changed"));\n'
         "    }", "", 1,
     )
     assert broken != INDEX_HTML, "drift-guard code not found — page changed shape"
@@ -737,10 +737,12 @@ def test_the_harness_detects_perms_busy_falling_back_to_idle_wording(node_bin, t
 
     old = (
         '        title: busy\n'
-        '          ? "Stop the current task and switch " + label + " to " + targetLabel + "?"\n'
-        '          : "Switch " + label + " to " + targetLabel + " mode?",\n'
+        '          ? t(targetAuto ? "ui.confirm.perms_busy_auto" : "ui.confirm.perms_busy_ask", '
+        'session)\n'
+        '          : t(targetAuto ? "ui.confirm.perms_auto" : "ui.confirm.perms_ask", session),\n'
     )
-    new = '        title: "Switch " + label + " to " + targetLabel + " mode?",\n'
+    new = ('        title: t(targetAuto ? "ui.confirm.perms_auto" : "ui.confirm.perms_ask", '
+           'session),\n')
     assert old in INDEX_HTML, "perms busy-wording branch not found — page changed shape"
     broken = INDEX_HTML.replace(old, new, 1)
     assert broken != INDEX_HTML, "mutation was a no-op"
@@ -937,9 +939,9 @@ def test_the_harness_detects_a_dropped_server_detail_on_rename_failure(node_bin,
 
     # The detail goes through plain() since roadmap 8.44 (em dashes in
     # server strings are shown as " - ").
-    old = ('      showNotice(plain((r.data && r.data.detail) || "Couldn\'t rename."), '
+    old = ('      showNotice(plain((r.data && r.data.detail) || t("ui.rename.failed")), '
            '"err");\n')
-    new = '      showNotice("Couldn\'t rename.", "err");\n'
+    new = '      showNotice(t("ui.rename.failed"), "err");\n'
     assert old in INDEX_HTML, "rename failure-notice line not found — page changed shape"
     broken = INDEX_HTML.replace(old, new, 1)
     assert broken != INDEX_HTML, "mutation was a no-op"
@@ -1066,11 +1068,13 @@ def test_every_notice_states_whether_it_worked():
     from aipager.miniapp.static import INDEX_HTML
 
     for phrase, kind in [
-        ('"Saved."', "ok"),
+        # The page holds keys (multilingual phase 4): each call site names
+        # the sentence by its key.
+        ('t("ui.settings.saved")', "ok"),
         # Was "... server — nothing changed.": the page carries no em
         # dash (operator text rule, roadmap 8.44).
-        ('"Couldn\'t reach the server. Nothing changed."', "err"),
-        ('"Couldn\'t rename."', "err"),
+        ('t("ui.action.unreachable")', "err"),
+        ('t("ui.rename.failed")', "err"),
     ]:
         idx = INDEX_HTML.index(phrase)
         tail = INDEX_HTML[idx:idx + 120]
@@ -1121,7 +1125,7 @@ def test_the_model_harness_detects_a_missing_switching_state(node_bin, tmp_path)
     """Guard the guard: a page that never shows "switching…" must fail."""
     from aipager.miniapp.static import INDEX_HTML
 
-    broken = INDEX_HTML.replace('var MODEL_SWITCHING_TEXT = "switching…";',
+    broken = INDEX_HTML.replace('var MODEL_SWITCHING_TEXT = "ui.model.switching";',
                                 'var MODEL_SWITCHING_TEXT = "";', 1)
     assert broken != INDEX_HTML, "switching text not found — page changed shape"
     proc = _drive_controls(node_bin, tmp_path, broken, "model_switch")
@@ -1365,6 +1369,39 @@ def test_the_harness_detects_a_failed_put_that_keeps_the_optimistic_value(
     assert proc.returncode != 0, (
         "harness passed a Settings tab that keeps an unsaved value after a failed PUT"
     )
+
+
+# ===== Settings tab: the viewer's App language (multilingual) =============
+
+@pytest.mark.parametrize("scenario, ok", [
+    ("app_language", "ok: app language tap -> PUT /api/app-language -> confirmed"),
+    ("app_language_fails",
+     "ok: app language tap -> PUT /api/app-language -> restored on failure"),
+    ("app_language_absent", "ok: no app_language -> nothing rendered"),
+])
+def test_app_language_row_saves_and_confirms(node_bin, tmp_path, scenario, ok):
+    """Above the chat's preferences, never disabled (personal, not an
+    admin's), saved with an optimistic PUT to /api/app-language, the
+    server's confirmation shown as a toast, the old value back on a
+    failure; a page fed an older payload shows nothing."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, scenario)
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert ok in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_a_broken_app_language_put(node_bin, tmp_path):
+    """Guard the guard: a wrong PUT URL fails the scenario, even one the
+    stub would answer exactly as the right one (its path ignores a query)."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace('fetch("/api/app-language"', 'fetch("/api/app-language?x=1"',
+                                1)
+    assert broken != INDEX_HTML, "the App language PUT not found - page changed shape"
+    proc = _drive_controls(node_bin, tmp_path, broken, "app_language",
+                           name="broken-app-language.html")
+    assert proc.returncode != 0
 
 
 # ===== em dashes in server strings (roadmap 8.44) ==========================
@@ -1886,11 +1923,18 @@ def test_report_other_status_reads_try_later_not_no_answer(node_bin, tmp_path):
 
 def test_report_page_try_later_is_the_shared_wording():
     """The page's own copy of the try-later line (used when an answer has
-    no line, or an unexpected status) is wording.TRY_LATER, byte for byte."""
+    no line, or an unexpected status) is wording.TRY_LATER, byte for byte.
+    The page holds keys since multilingual phase 4: the line lives in the
+    page catalog (ui_text.REPORT_TRY_LATER), which the page names."""
+    from aipager.miniapp import ui_text
     from aipager.miniapp.static import index_html
     from aipager.report import wording
 
-    assert f"var RP_TRY = {json.dumps(wording.TRY_LATER)};" in index_html(sdk_from_self=True)
+    assert str(ui_text.REPORT_TRY_LATER) == wording.TRY_LATER
+    page = index_html(sdk_from_self=True)
+    assert f'var RP_TRY = "{ui_text.REPORT_TRY_LATER.key}";' in page
+    assert json.dumps({ui_text.REPORT_TRY_LATER.key: wording.TRY_LATER},
+                      separators=(",", ":"))[1:-1] in page
 
 
 def test_report_exact_block_matches_preview(node_bin, tmp_path, monkeypatch):

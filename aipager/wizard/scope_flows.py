@@ -21,6 +21,7 @@ from aipager.wizard import daemon_io
 from aipager.wizard._constants import _PROMPT_STYLE
 from aipager.wizard.display import _ask
 from aipager.wizard.draft import clear_draft, load_draft, save_draft
+from aipager.wizard.root_flow import ask_root, role_can_manage
 from aipager.wizard.scope_io import add_new_scope, configured_scope_for
 
 _ROLE_GLOSS = {
@@ -130,6 +131,13 @@ def add_dm_scope(token: str, bot_username: str) -> bool:
         members=(Member(id=captured["id"], label=captured["label"],
                         role=role),),
     )
+    if not role_can_manage(role):
+        # Held to a root folder: chosen now and written, so adding another
+        # scope later never moves it.
+        from dataclasses import replace
+
+        from aipager.wizard.scope_io import read_config
+        scope = replace(scope, root=ask_root(scope, read_config()[0], ask=_ask))
     # Never commit_scope here: it replaces a scope with the same chat, and
     # that would wipe this person's role and deny lists (roadmap 8.94c).
     if not add_new_scope(scope, token):
@@ -257,6 +265,12 @@ def add_group_scope(token: str, bot_username: str,
                       for m in members),
         deny_tools=tuple(deny_tools),
     )
+    # The group's members' root folder: chosen now and written, so adding
+    # another scope later never moves it.
+    from dataclasses import replace
+
+    from aipager.wizard.scope_io import read_config
+    scope = replace(scope, root=ask_root(scope, read_config()[0], ask=_ask))
     # Never commit_scope here: it replaces a scope with the same chat,
     # and someone may have set this group up meanwhile (roadmap 8.88).
     if not add_new_scope(scope, token):

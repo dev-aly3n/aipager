@@ -1,0 +1,1376 @@
+{"k": "agents.count_agents", "src": "263711d4", "v": {"few": "{n} وكلاء", "many": "{n} وكيلًا", "one": "وكيل واحد", "other": "{n} وكيل", "two": "وكيلان", "zero": "لا وكلاء"}}
+{"k": "agents.count_shells", "src": "9b747b65", "v": {"few": "{n} أوامر", "many": "{n} أمرًا", "one": "أمر واحد", "other": "{n} أمر", "two": "أمران", "zero": "لا أوامر"}}
+{"k": "agents.head.done", "src": "e20b4f9e", "v": {"few": "✅ اكتمل عمل {n} وكلاء ({clock})", "many": "✅ اكتمل عمل {n} وكيلًا ({clock})", "one": "✅ اكتمل عمل وكيل واحد ({clock})", "other": "✅ اكتمل عمل {n} وكيل ({clock})", "two": "✅ اكتمل عمل وكيلين ({clock})", "zero": "✅ اكتمل عمل {n} وكيل ({clock})"}}
+{"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"few": "انتهت {n} أوامر ({clock})", "many": "انتهى {n} أمرًا ({clock})", "one": "انتهى أمر واحد ({clock})", "other": "انتهى {n} أمر ({clock})", "two": "انتهى أمران ({clock})", "zero": "انتهى {n} أمر ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"few": "🖥 {n} أوامر قيد التشغيل", "many": "🖥 {n} أمرًا قيد التشغيل", "one": "🖥 أمر واحد قيد التشغيل", "other": "🖥 {n} أمر قيد التشغيل", "two": "🖥 أمران قيد التشغيل", "zero": "🖥 {n} أمر قيد التشغيل"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"few": "أُوقفت {n} أوامر ({clock})", "many": "أُوقف {n} أمرًا ({clock})", "one": "أُوقف أمر واحد ({clock})", "other": "أُوقف {n} أمر ({clock})", "two": "أُوقف أمران ({clock})", "zero": "أُوقف {n} أمر ({clock})"}}
+{"k": "agents.head.working", "src": "6d8170f5", "v": {"few": "⏳ {n} وكلاء يعملون", "many": "⏳ {n} وكيلًا يعملون", "one": "⏳ وكيل واحد يعمل", "other": "⏳ {n} وكيل يعملون", "two": "⏳ وكيلان يعملان", "zero": "⏳ {n} وكيل يعمل"}}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"few": "+{n} آخرون", "many": "+{n} آخرون", "one": "+{n} آخر", "other": "+{n} آخرون", "two": "+{n} آخران", "zero": "+{n} آخرون"}}
+{"k": "agents.promise", "src": "29723a21", "v": "ستصل نتائج الوكلاء إلى هنا."}
+{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · اكتمل ({clock})"}
+{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
+{"k": "ago.days", "src": "3650e46d", "v": {"few": "منذ {n} أيام", "many": "منذ {n} يومًا", "one": "منذ يوم", "other": "منذ {n} يوم", "two": "منذ يومين", "zero": "اليوم"}}
+{"k": "ago.earlier", "src": "f12e996a", "v": "سابقًا"}
+{"k": "ago.hours", "src": "72292bb6", "v": {"few": "منذ {n} ساعات", "many": "منذ {n} ساعة", "one": "منذ ساعة", "other": "منذ {n} ساعة", "two": "منذ ساعتين", "zero": "منذ أقل من ساعة"}}
+{"k": "ago.hours_minutes", "src": "5be9939e", "v": "منذ {h} س و{m} د"}
+{"k": "ago.minutes", "src": "6efbe16f", "v": {"few": "منذ {n} دقائق", "many": "منذ {n} دقيقة", "one": "منذ دقيقة", "other": "منذ {n} دقيقة", "two": "منذ دقيقتين", "zero": "منذ أقل من دقيقة"}}
+{"k": "ago.seconds", "src": "8a8492dd", "v": {"few": "منذ {n} ثوانٍ", "many": "منذ {n} ثانية", "one": "منذ ثانية", "other": "منذ {n} ثانية", "two": "منذ ثانيتين", "zero": "الآن"}}
+{"k": "ans.answered", "src": "7b370125", "v": "✓ <b>{session}</b> · تمت الإجابة · {person} · {question} ← {option}"}
+{"k": "ans.answered_anon", "src": "602dabe0", "v": "✓ <b>{session}</b> · تمت الإجابة · {question} ← {option}"}
+{"k": "ans.arrow_verb", "src": "d2539150", "v": "← {verb}"}
+{"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
+{"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
+{"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ أوقفت {session}"}
+{"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ أوقف {person} الجلسة {session}"}
+{"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"few": "⏹ أوقف {person} الجلسة {session} (حذفت {n} رسائل من قائمة الانتظار)", "many": "⏹ أوقف {person} الجلسة {session} (حذفت {n} رسالة من قائمة الانتظار)", "one": "⏹ أوقف {person} الجلسة {session} (حذفت رسالة واحدة من قائمة الانتظار)", "other": "⏹ أوقف {person} الجلسة {session} (حذفت {n} رسالة من قائمة الانتظار)", "two": "⏹ أوقف {person} الجلسة {session} (حذفت رسالتان من قائمة الانتظار)", "zero": "⏹ أوقف {person} الجلسة {session} (لم تحذف أي رسالة من قائمة الانتظار)"}}
+{"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"few": "⏹ أوقفت {session} (حذفت {n} رسائل من قائمة الانتظار)", "many": "⏹ أوقفت {session} (حذفت {n} رسالة من قائمة الانتظار)", "one": "⏹ أوقفت {session} (حذفت رسالة واحدة من قائمة الانتظار)", "other": "⏹ أوقفت {session} (حذفت {n} رسالة من قائمة الانتظار)", "two": "⏹ أوقفت {session} (حذفت رسالتان من قائمة الانتظار)", "zero": "⏹ أوقفت {session} (لم تحذف أي رسالة من قائمة الانتظار)"}}
+{"k": "ans.verb.allow", "src": "77c7b490", "v": "مسموح"}
+{"k": "ans.verb.allow_always", "src": "141216b0", "v": "مسموح دائمًا"}
+{"k": "ans.verb.continue", "src": "0e4aa789", "v": "تمت المتابعة"}
+{"k": "ans.verb.deny", "src": "63b16bd4", "v": "مرفوض"}
+{"k": "ans.verb.option", "src": "7a8b9272", "v": "اختير الخيار {n}"}
+{"k": "ans.verb.selected", "src": "5462eaaf", "v": "المختار: {options}"}
+{"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "تم الإرسال (لا شيء)"}
+{"k": "app.chat.dm", "src": "05a3b9fa", "v": "محادثة خاصة"}
+{"k": "app.chat.group", "src": "171a0606", "v": "مجموعة"}
+{"k": "app.err.already_restarting", "src": "9234890e", "v": "هذه الجلسة تعيد التشغيل بالفعل - انتظر قليلًا."}
+{"k": "app.err.already_running", "src": "41e94cd2", "v": "هذه الجلسة تعمل بالفعل."}
+{"k": "app.err.answer_chat_busy", "src": "e0f91f04", "v": "Telegram مشغول. حاول مرة أخرى بعد قليل."}
+{"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "هذه الجلسة لم تعد تنتظرك."}
+{"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "تعذر نشر الطلب في المحادثة."}
+{"k": "app.err.auto_needs_admin", "src": "ad1f0c2f", "v": "الوضع التلقائي يتطلب مشرفًا."}
+{"k": "app.err.delete_running", "src": "71f25b50", "v": "الجلسة لا تزال تعمل. أوقفها أولًا عبر «إنهاء»."}
+{"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "تعذر الإنهاء - العملية لا تزال تعمل. حاول مرة أخرى."}
+{"k": "app.err.name_taken", "src": "9ab9e08f", "v": "توجد بالفعل جلسة باسم {session} في هذه المحادثة."}
+{"k": "app.err.not_busy", "src": "bbafa529", "v": "هذه الجلسة ليست مشغولة الآن - لا شيء لإيقافه."}
+{"k": "app.err.not_resendable", "src": "82303f6c", "v": "لا يمكن إعادة إرسال هذا الطلب. أجب عنه في الطرفية."}
+{"k": "app.err.not_running", "src": "af9ca5bc", "v": "الجلسة لا تعمل."}
+{"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} لا تزال تتوقف - لم يتغير الوضع. حاول مرة أخرى بعد قليل."}
+{"k": "app.err.pick_model", "src": "773e24c4", "v": "اختر نموذجًا."}
+{"k": "app.err.restart_still_stopping", "src": "701b0bd8", "v": "{session} لا تزال تتوقف. حاول مرة أخرى بعد قليل."}
+{"k": "app.err.resumed_in_ask", "src": "7024b7b8", "v": "استؤنفت {session} في وضع اسأل: {reason}"}
+{"k": "app.err.resuming", "src": "2a557399", "v": "يجري استئناف هذه الجلسة الآن. حاول مرة أخرى بعد قليل."}
+{"k": "app.err.send_failed", "src": "e4349ad3", "v": "تعذر إرسال {command}."}
+{"k": "app.fact.context", "src": "cc11b3a2", "v": "السياق"}
+{"k": "app.fact.cost", "src": "64ae43e8", "v": "التكلفة"}
+{"k": "app.fact.cwd", "src": "4b892fe0", "v": "المجلد"}
+{"k": "app.fact.last_active", "src": "b5665ec6", "v": "آخر نشاط"}
+{"k": "app.fact.model", "src": "68c2cc7f", "v": "النموذج"}
+{"k": "app.fact.working", "src": "e7df8df6", "v": "يعمل منذ"}
+{"k": "app.language.hint", "src": "90e01e41", "v": "نص aipager فقط. إجابات Claude لا تتغير."}
+{"k": "app.language.title", "src": "01e1787a", "v": "لغة التطبيق"}
+{"k": "app.launch.cwd_bad_char", "src": "0dcfc308", "v": "مجلد العمل يحتوي على حرف غير صالح."}
+{"k": "app.launch.cwd_no_roots", "src": "45693d90", "v": "لا يوجد مجلد متاح بعد - ابدأ جلسة من المحادثة أولًا، ثم سيعرض هذا المنتقي مشروعها."}
+{"k": "app.launch.cwd_not_allowed", "src": "8e0b71f9", "v": "هذه المحادثة لا تعمل في ذلك المجلد."}
+{"k": "app.launch.cwd_not_dir", "src": "9b0be449", "v": "هذا المسار ليس مجلدًا."}
+{"k": "app.launch.cwd_not_text", "src": "9497b469", "v": "يجب أن يكون مجلد العمل نصًا."}
+{"k": "app.launch.cwd_unresolvable", "src": "e87ce055", "v": "تعذر تحديد هذا المجلد."}
+{"k": "app.launch.folder_bad_char", "src": "9052a17d", "v": "اسم المجلد يحتوي على حرف غير صالح."}
+{"k": "app.launch.folder_empty", "src": "aa11b815", "v": "لا يمكن أن يكون اسم المجلد فارغًا."}
+{"k": "app.launch.folder_exists", "src": "8dec41ad", "v": "يوجد هناك مجلد بهذا الاسم بالفعل. اختر اسمًا جديدًا."}
+{"k": "app.launch.folder_failed", "src": "4d757c2b", "v": "تعذر إنشاء ذلك المجلد."}
+{"k": "app.launch.folder_loads_code", "src": "78ba6bd6", "v": "لا يمكن أن يكون «{name}» مجلد مشروع هنا: برامج أخرى تحمل منه الشيفرة. اختر اسمًا آخر."}
+{"k": "app.launch.folder_not_text", "src": "3988a95d", "v": "يجب أن يكون اسم المجلد نصًا."}
+{"k": "app.launch.folder_parent", "src": "0a28b1e0", "v": "اختر مجلد عمل لإنشاء المجلد فيه."}
+{"k": "app.launch.folder_pattern", "src": "c3b51490", "v": "استخدم الحروف والأرقام والنقاط والشرطات والشرطات السفلية؛ وابدأ بحرف أو رقم."}
+{"k": "app.launch.folder_too_long", "src": "ae5dc64d", "v": "يجب ألا يزيد اسم المجلد على {max} حرفًا."}
+{"k": "app.launch.model_not_text", "src": "55a7cf25", "v": "يجب أن يكون النموذج نصًا."}
+{"k": "app.launch.model_pattern", "src": "44cdf715", "v": "استخدم أحد النماذج المعروضة، أو اسم نموذج كاملًا مثل {example}."}
+{"k": "app.launch.model_too_long", "src": "47dfc21f", "v": "يجب ألا يزيد اسم النموذج على {max} حرفًا."}
+{"k": "app.launch.name_bad_char", "src": "1b9271b6", "v": "اسم الجلسة يحتوي على حرف غير صالح."}
+{"k": "app.launch.name_empty", "src": "e00fbfca", "v": "لا يمكن أن يكون اسم الجلسة فارغًا."}
+{"k": "app.launch.name_not_text", "src": "f6218198", "v": "يجب أن يكون اسم الجلسة نصًا."}
+{"k": "app.launch.name_pattern", "src": "b916e083", "v": "استخدم الحروف اللاتينية والأرقام والشرطات والشرطات السفلية؛ وابدأ بحرف أو رقم."}
+{"k": "app.launch.name_reserved", "src": "2efe289d", "v": "«{name}» اسم أمر محجوز ({command}). اختر اسمًا آخر."}
+{"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "يجب ألا يزيد اسم الجلسة على {max} حرفًا."}
+{"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "لا يوجد بعد مجلد مشروع للبدء فيه: اطلب من مشرف أن يبدأ الجلسة."}
+{"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "اختر مجلد مشروع: أنشئ واحدًا عبر «مجلد جديد»، أو اطلب من مشرف أن يبدأ الجلسة."}
+{"k": "app.launch.no_root", "src": "19345855", "v": "ليس لديك مجلد للعمل فيه هنا. اطلب من المالك أن يضيفك في aipager config."}
+{"k": "app.launch.outside_root", "src": "f8761328", "v": "يمكن لدورك بدء الجلسات فقط في مجلدك {folder} أو في مجلد داخله."}
+{"k": "app.launch.root_unavailable", "src": "6d332ade", "v": "تعذّر تجهيز مجلدك {folder}. اطلب من المالك أن يتحقق منه في aipager config."}
+{"k": "app.launch.session_outside_root", "src": "c501e96d", "v": "تعمل هذه الجلسة خارج مجلدك {folder}، لذلك لا يمكن لدورك استئنافها أو إعادة تشغيلها أو تبديل وضعها. اطلب ذلك من مشرف."}
+{"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "لا يمكن لدورك بدء جلسة في المجلد الرئيسي أو في مجلد فوقه. اختر مجلد مشروع: أنشئ واحدًا عبر «مجلد جديد»، أو اطلب من مشرف أن يبدأ الجلسة."}
+{"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"few": "🧹 حذفت {n} رسائل من قائمة انتظار [{session}] عبر Mini App", "many": "🧹 حذفت {n} رسالة من قائمة انتظار [{session}] عبر Mini App", "one": "🧹 حذفت رسالة واحدة من قائمة انتظار [{session}] عبر Mini App", "other": "🧹 حذفت {n} رسالة من قائمة انتظار [{session}] عبر Mini App", "two": "🧹 حذفت رسالتان من قائمة انتظار [{session}] عبر Mini App", "zero": "🧹 لم تحذف أي رسالة من قائمة انتظار [{session}] عبر Mini App"}}
+{"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 بدأ ضغط [{session}] عبر Mini App"}
+{"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 أنشئت {session} عبر Mini App · {mode}"}
+{"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 أنشئت {session} عبر Mini App · {mode}\n📁 {folder}"}
+{"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ حذفت [{session}] عبر Mini App"}
+{"k": "app.mirror.folder", "src": "603d7ae2", "v": "📁 أنشئ مجلد جديد عبر Mini App:\n{path}"}
+{"k": "app.mirror.killed", "src": "63565832", "v": "💀 أنهيت [{session}] عبر Mini App"}
+{"k": "app.mirror.model", "src": "6df57f60", "v": "🔄 [{session}] ← {model} عبر Mini App"}
+{"k": "app.mirror.renamed", "src": "22ad8a4c", "v": "✏️ أعيدت تسمية [{old}] إلى [{new}] عبر Mini App"}
+{"k": "app.mirror.restarted", "src": "9aa8323d", "v": "🔁 أعيد تشغيل [{session}] عبر Mini App"}
+{"k": "app.mirror.resumed", "src": "fafeafa6", "v": "♻️ استؤنفت [{session}] عبر Mini App"}
+{"k": "app.mirror.resumed_in_ask", "src": "429a5b47", "v": "♻️ استؤنفت [{session}] عبر Mini App في وضع اسأل: {reason}"}
+{"k": "app.mirror.session_setting", "src": "3256d908", "v": "⚙️ {setting} ← {value} للجلسة {session} (غير عبر Mini App)"}
+{"k": "app.mirror.session_setting_reset", "src": "4502514a", "v": "⚙️ أعيد {setting} إلى الافتراضي ({value}) للجلسة {session} (غير عبر Mini App)"}
+{"k": "app.mirror.setting", "src": "6820a9f7", "v": "⚙️ {setting} ← {value} (غير عبر Mini App)"}
+{"k": "app.mirror.stopped", "src": "70cd9e81", "v": "⏹️ أوقفت [{session}] عبر Mini App"}
+{"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"few": "⏹️ أوقفت [{session}] عبر Mini App (حذفت {n} رسائل من قائمة الانتظار)", "many": "⏹️ أوقفت [{session}] عبر Mini App (حذفت {n} رسالة من قائمة الانتظار)", "one": "⏹️ أوقفت [{session}] عبر Mini App (حذفت رسالة واحدة من قائمة الانتظار)", "other": "⏹️ أوقفت [{session}] عبر Mini App (حذفت {n} رسالة من قائمة الانتظار)", "two": "⏹️ أوقفت [{session}] عبر Mini App (حذفت رسالتان من قائمة الانتظار)", "zero": "⏹️ أوقفت [{session}] عبر Mini App (لم تحذف أي رسالة من قائمة الانتظار)"}}
+{"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 حولت {session} إلى وضع اسأل عبر Mini App"}
+{"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 حولت {session} إلى الوضع التلقائي عبر Mini App"}
+{"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude يعمل - بدل النموذج عندما تنتهي هذه الجولة."}
+{"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "الجلسة لا تعمل."}
+{"k": "app.reason.model_pending", "src": "a3384cf1", "v": "لم يؤكد تبديل النموذج الأخير بعد - تحقق في الطرفية من سؤال Claude Code \"Switch model?\" قبل التبديل مرة أخرى."}
+{"k": "app.reason.model_prompt_open", "src": "c3641605", "v": "يوجد طلب مفتوح في الطرفية - أجب عنه قبل تبديل النموذج."}
+{"k": "app.reason.model_unconfirmed", "src": "316e6e23", "v": "لم يؤكد - تحقق من الجلسة. قد يكون Claude Code يسأل \"Switch model?\" في الطرفية، أو كان على ذلك النموذج بالفعل."}
+{"k": "app.reason.model_unknown", "src": "4e5022f6", "v": "لم ير aipager حالة هذه الجلسة بعد - حاول مرة أخرى بعد قليل."}
+{"k": "app.reason.no_context", "src": "8f590315", "v": "لا شيء لضغطه - السياق فارغ بالفعل."}
+{"k": "app.reason.no_permission", "src": "e1081627", "v": "ليس لديك إذن للتحكم في هذه الجلسة."}
+{"k": "app.reason.no_transcript", "src": "3426f123", "v": "لا يوجد سجل قابل للاستئناف - ابدأ جلسة جديدة بدلًا من ذلك."}
+{"k": "app.reason.perms_admin", "src": "7202c2fd", "v": "التبديل إلى الوضع التلقائي يتطلب مشرفًا."}
+{"k": "app.reason.queue_empty", "src": "35da34dc", "v": "لا شيء في قائمة الانتظار لمسحه."}
+{"k": "app.reason.queue_full", "src": "2bf9f868", "v": "قائمة الانتظار ممتلئة ({cap} معلقة) - امسحها أو انتظر حتى تفرغ."}
+{"k": "appcmd.btn.open", "src": "0bfb9312", "v": "📱 افتح Mini App"}
+{"k": "appcmd.cant_start", "src": "24d56baf", "v": "📱 لا يمكن تشغيل Mini App على هذا الجهاز - يبدو أن تثبيته غير مكتمل.\n\nكل شيء آخر يواصل العمل؛ اطلب ممن أعد هذا أن يعيد تثبيت aipager."}
+{"k": "appcmd.in_group", "src": "edb98eb2", "v": "📱 يعمل Mini App في المحادثة الخاصة فقط - راسل البوت مباشرة وأرسل /app هناك."}
+{"k": "appcmd.no_dm", "src": "96dd0730", "v": "يفتح Mini App من محادثتك الخاصة مع البوت. اطلب من المشغل أن يضيفك."}
+{"k": "appcmd.not_enabled", "src": "31154296", "v": "خادم Mini App غير مفعل على هذا الجهاز.\nاطلب من المشغل تنفيذ {command} وإعادة تشغيل الخدمة."}
+{"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 لا يزال رابط Mini App قيد الإعداد - جرب /app مرة أخرى بعد بضع ثوانٍ."}
+{"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 هذا البوت غير مهيأ للتحدث معك. اطلب من المشغل إضافة معرف مستخدم Telegram الخاص بك ({user_id}) عبر {command}."}
+{"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "اضغط لفتح لوحة aipager:"}
+{"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · حظر {tool}"}
+{"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · حظر {tool} على {person}"}
+{"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · حظر {tool} على {person} (الدور {role})"}
+{"k": "auth.read_only.scope", "src": "88683fbb", "v": "👀 {who} - دورك <i>{role}</i>؛ يمكنك استخدام <code>/status</code> لكن لا يمكنك قيادة الجلسات."}
+{"k": "auth.read_only.team", "src": "87e66c02", "v": "👀 {who} - دورك <i>read_only</i>؛ يمكنك استخدام <code>/status</code> لكن لا يمكنك قيادة الجلسات."}
+{"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 أنت لست في قائمة المسموح لهم في هذا النطاق. اطلب من المشغل إضافة معرف مستخدم Telegram الخاص بك ({user_id}) عبر {command}."}
+{"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 أنت لست في قائمة المسموح لهم في هذا البوت. اطلب من المشغل إضافة معرف مستخدم Telegram الخاص بك ({user_id}) عبر {command}."}
+{"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 هذا البوت غير مهيأ للتحدث معك. اطلب من المشغل إضافة معرف مستخدم Telegram الخاص بك ({user_id}) عبر {command}."}
+{"k": "botdesc.description", "src": "8ea2e350", "v": "يربط aipager هذا البوت بجلسات Claude Code على حاسوب مالكه. من هنا يمكنك متابعة ما يفعله Claude، والإجابة عمّا يطرحه من أسئلة وطلبات إذن، وإرسال طلبات جديدة إليه. لا يستطيع استخدامه إلا الأشخاص الذين أضافهم المالك."}
+{"k": "botdesc.short", "src": "483b3675", "v": "تحكم في جلسات Claude Code من Telegram."}
+{"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ رجوع"}
+{"k": "btn.rep.cancel", "src": "196a9f45", "v": "✖️ إلغاء"}
+{"k": "btn.rep.dont_ask", "src": "7a05a2c0", "v": "لا تسأل عن هذا"}
+{"k": "btn.rep.not_now", "src": "e4571490", "v": "ليس الآن"}
+{"k": "btn.rep.note", "src": "c4e7efca", "v": "✏️ أضف ملاحظة"}
+{"k": "btn.rep.preview", "src": "2632041f", "v": "معاينة التقرير"}
+{"k": "btn.rep.report", "src": "e4e182b3", "v": "🐞 أبلغ عن مشكلة"}
+{"k": "btn.rep.report_this", "src": "4a993c9d", "v": "🐞 أبلغ عن هذا"}
+{"k": "btn.rep.send", "src": "22abdd99", "v": "📤 إرسال"}
+{"k": "btn.resume.next", "src": "315a382a", "v": "التالي »"}
+{"k": "btn.resume.page", "src": "378cafa4", "v": "صفحة {pages}"}
+{"k": "btn.resume.prev", "src": "ac05dfe9", "v": "« السابق"}
+{"k": "btn.resume.session", "src": "1d8ba7fd", "v": "{session} ({ago})"}
+{"k": "btn.settings_back", "src": "a4b7fcb6", "v": "« رجوع"}
+{"k": "btn.upd.aipager", "src": "54631d4b", "v": "حدث aipager"}
+{"k": "btn.upd.both", "src": "e219575e", "v": "حدث الاثنين"}
+{"k": "btn.upd.cancel", "src": "77dfd213", "v": "إلغاء"}
+{"k": "btn.upd.check", "src": "cb743a2a", "v": "🔄 تحقق من التحديثات"}
+{"k": "btn.upd.check_again", "src": "e185048c", "v": "تحقق مرة أخرى"}
+{"k": "btn.upd.claude", "src": "8b854ad6", "v": "حدث Claude Code"}
+{"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "أعد التشغيل الآن"}
+{"k": "btn.upd.wait", "src": "060c561a", "v": "انتظر {mins} د أخرى"}
+{"k": "card.agents", "src": "263711d4", "v": {"few": "{n} وكلاء", "many": "{n} وكيلًا", "one": "وكيل واحد", "other": "{n} وكيل", "two": "وكيلان", "zero": "لا وكلاء"}}
+{"k": "card.agents_typed", "src": "af56f555", "v": {"few": "{n} وكلاء ({types})", "many": "{n} وكيلًا ({types})", "one": "وكيل واحد ({types})", "other": "{n} وكيل ({types})", "two": "وكيلان ({types})", "zero": "لا وكلاء ({types})"}}
+{"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · يجري الضغط{dots}"}
+{"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · مرفوض"}
+{"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · رفضه {person}"}
+{"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · رفض في الطرفية"}
+{"k": "card.finishing", "src": "1bfd382d", "v": "يجري الإنهاء"}
+{"k": "card.fold", "src": "2061ab43", "v": {"few": "▸ {n} استدعاءات أدوات", "many": "▸ {n} استدعاء أدوات", "one": "▸ استدعاء أداة واحد", "other": "▸ {n} استدعاء أدوات", "two": "▸ استدعاءا أداتين", "zero": "▸ لا استدعاءات أدوات"}}
+{"k": "card.legacy.agents", "src": "51aa5e62", "v": {"few": "({n} وكلاء)", "many": "({n} وكيلًا)", "one": "(وكيل واحد)", "other": "({n} وكيل)", "two": "(وكيلان)", "zero": "(لا وكلاء)"}}
+{"k": "card.legacy.earlier", "src": "7062cc28", "v": {"few": "✅ <i>{n} أدوات سابقة</i>", "many": "✅ <i>{n} أداة سابقة</i>", "one": "✅ <i>أداة سابقة واحدة</i>", "other": "✅ <i>{n} أداة سابقة</i>", "two": "✅ <i>أداتان سابقتان</i>", "zero": "✅ <i>لا أدوات سابقة</i>"}}
+{"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
+{"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 من **{session}** ({who})"}
+{"k": "card.peer.from_plain", "src": "42467343", "v": "📨 من **{session}**"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 من **{session}** (مكتوبة في طرفيتها)"}
+{"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 من جلسة أخرى (لم يُتحقق منها: لا تعديل للملفات ولا وصول إلى الويب)"}
+{"k": "card.row.agent_done", "src": "d7362ffc", "v": {"few": "🤖 {agent} · {n} استدعاءات أدوات · {clock}", "many": "🤖 {agent} · {n} استدعاء أدوات · {clock}", "one": "🤖 {agent} · استدعاء أداة واحد · {clock}", "other": "🤖 {agent} · {n} استدعاء أدوات · {clock}", "two": "🤖 {agent} · استدعاءا أداتين · {clock}", "zero": "🤖 {agent} · لا استدعاءات أدوات · {clock}"}}
+{"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
+{"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (لا يزال يعمل)"}
+{"k": "card.row.agent_word", "src": "0608c405", "v": "وكيل"}
+{"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} ← {verb}"}
+{"k": "card.row.shell_done", "src": "3b615634", "v": "أمر: {label} - اكتمل ({clock})"}
+{"k": "card.row.shell_failed", "src": "3e240f07", "v": "أمر: {label} - فشل ({clock})"}
+{"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "أمر: {label} - فشل (رمز الخروج {code})"}
+{"k": "card.row.shell_live", "src": "6cebf6e9", "v": "أمر: {label} ({clock})"}
+{"k": "card.row.shell_lost", "src": "83289e16", "v": "أمر: {label} - لم تر نهايته ({clock})"}
+{"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "أمر: {label} (لا يزال يعمل)"}
+{"k": "card.row.shell_stopped", "src": "315cab29", "v": "أمر: {label} - أوقف ({clock})"}
+{"k": "card.row.starting", "src": "9493af05", "v": "يبدأ"}
+{"k": "card.shells", "src": "9b747b65", "v": {"few": "{n} أوامر", "many": "{n} أمرًا", "one": "أمر واحد", "other": "{n} أمر", "two": "أمران", "zero": "لا أوامر"}}
+{"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
+{"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · متوقف"}
+{"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · أوقفه {person}"}
+{"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · أوقف في الطرفية"}
+{"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · يفكر…"}
+{"k": "card.verb.done", "src": "e9b450d1", "v": "اكتمل"}
+{"k": "card.verb.spin_analyzing", "src": "696002c4", "v": "يحلل"}
+{"k": "card.verb.spin_calculating", "src": "d7652ff1", "v": "يحسب"}
+{"k": "card.verb.spin_considering", "src": "974edc62", "v": "يدرس"}
+{"k": "card.verb.spin_crafting", "src": "ea78b34d", "v": "يصنع"}
+{"k": "card.verb.spin_evaluating", "src": "e0b446df", "v": "يقيّم"}
+{"k": "card.verb.spin_examining", "src": "3ed47c3e", "v": "يفحص"}
+{"k": "card.verb.spin_formulating", "src": "8432f803", "v": "يصوغ"}
+{"k": "card.verb.spin_investigating", "src": "ce0ee523", "v": "يتحرى"}
+{"k": "card.verb.spin_pondering", "src": "bcaa61e0", "v": "يتأمل"}
+{"k": "card.verb.spin_processing", "src": "e63451d3", "v": "يعالج"}
+{"k": "card.verb.spin_reasoning", "src": "e272c597", "v": "يستنتج"}
+{"k": "card.verb.spin_thinking", "src": "d08d8da0", "v": "يفكر"}
+{"k": "card.verb.waiting", "src": "33d30632", "v": "ينتظر"}
+{"k": "card.verb.working", "src": "3b4dfc97", "v": "يعمل"}
+{"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
+{"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · لا يزال قيد العمل: {agents}"}
+{"k": "chatmove.notice", "src": "01364acb", "v": "رقى Telegram هذه المجموعة. انتقل aipager معها، ولا شيء عليك فعله."}
+{"k": "cmd.app", "src": "486dfc4e", "v": "افتح لوحة Mini App"}
+{"k": "cmd.help", "src": "fb2dbad1", "v": "ما يمكنك فعله"}
+{"k": "cmd.language", "src": "9dc3a234", "v": "لغة رسائل aipager"}
+{"k": "cmd.mode", "src": "b677b7d9", "v": "تلقائي أو اسأل"}
+{"k": "cmd.new", "src": "959b093b", "v": "ابدأ جلسة"}
+{"k": "cmd.now", "src": "3673f6f7", "v": "أرسل الرسائل المنتظرة إلى Claude الآن"}
+{"k": "cmd.resume", "src": "88f33259", "v": "استأنف جلسة منتهية"}
+{"k": "cmd.settings", "src": "5fdf8e23", "v": "شكل الرسائل والتنسيق والجلسات الجديدة"}
+{"k": "cmd.status", "src": "b3ddc08d", "v": "جلساتك"}
+{"k": "cmd.stop", "src": "7c4cbc32", "v": "أوقف ما يفعله Claude"}
+{"k": "cmd.talk", "src": "a0173425", "v": "تحدث إلى {session}"}
+{"k": "diff.more_lines", "src": "816da678", "v": {"few": "<i>…و{n} أسطر أخرى</i>", "many": "<i>…و{n} سطرًا آخر</i>", "one": "<i>…وسطر آخر</i>", "other": "<i>…و{n} سطر آخر</i>", "two": "<i>…وسطران آخران</i>", "zero": "<i>…ولا أسطر أخرى</i>"}}
+{"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · انتهت (فقد وكيل الخلفية)"}
+{"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · انتهت (فقد وكيل الخلفية بعد {clock})"}
+{"k": "fin.finished", "src": "6f65069e", "v": "{lead} · انتهت ({stats})"}
+{"k": "fin.finished_bare", "src": "53b60c70", "v": "{lead} · انتهت"}
+{"k": "fin.full_attached", "src": "bcfddfdb", "v": "📎 <i>الإجابة الكاملة مرفقة أدناه ↓</i>"}
+{"k": "fin.lines", "src": "a6f39b46", "v": "+{added} -{removed}"}
+{"k": "fin.shell_lost", "src": "c6c919fb", "v": "⚠️ <b>{session}</b> · انتهت (لم تر نهاية أمر في الخلفية)"}
+{"k": "fin.shell_lost_after", "src": "4692a050", "v": "⚠️ <b>{session}</b> · انتهت (لم تر نهاية أمر في الخلفية بعد {clock})"}
+{"k": "fin.stats", "src": "9160a66c", "v": "{clock}، +{added} -{removed}"}
+{"k": "flood.card_paused", "src": "61a88de1", "v": "⏳ **{session}** · تعمل (التحديثات متوقفة مؤقتًا)"}
+{"k": "flood.card_paused_html", "src": "3815781e", "v": "⏳ <b>{session}</b> · تعمل (التحديثات متوقفة مؤقتًا)"}
+{"k": "flood.paused_hourly", "src": "1be79366", "v": "⏸ تحديثات البطاقات متوقفة مؤقتًا (حد الساعة)"}
+{"k": "flood.paused_rate", "src": "57af71ab", "v": "⏸ تحديثات البطاقات متوقفة مؤقتًا (حد السرعة)"}
+{"k": "flood.slow", "src": "fd8f3fd7", "v": "🐢 وضع بطيء بعد تحذير من Telegram"}
+{"k": "grp.dropped", "src": "96346149", "v": {"few": "أسقطت {n} رسائل: لم يعد مسموحًا لـ {who} بالإرسال هنا.", "many": "أسقطت {n} رسالة: لم يعد مسموحًا لـ {who} بالإرسال هنا.", "one": "أسقطت رسالة واحدة: لم يعد مسموحًا لـ {who} بالإرسال هنا.", "other": "أسقطت {n} رسالة: لم يعد مسموحًا لـ {who} بالإرسال هنا.", "two": "أسقطت رسالتان: لم يعد مسموحًا لـ {who} بالإرسال هنا.", "zero": "لم تسقط أي رسالة: لم يعد مسموحًا لـ {who} بالإرسال هنا."}}
+{"k": "grp.dropped_anon", "src": "c67a8cca", "v": {"few": "أسقطت {n} رسائل: لم يعد مسموحًا لهذا المرسل بالإرسال هنا.", "many": "أسقطت {n} رسالة: لم يعد مسموحًا لهذا المرسل بالإرسال هنا.", "one": "أسقطت رسالة واحدة: لم يعد مسموحًا لهذا المرسل بالإرسال هنا.", "other": "أسقطت {n} رسالة: لم يعد مسموحًا لهذا المرسل بالإرسال هنا.", "two": "أسقطت رسالتان: لم يعد مسموحًا لهذا المرسل بالإرسال هنا.", "zero": "لم تسقط أي رسالة: لم يعد مسموحًا لهذا المرسل بالإرسال هنا."}}
+{"k": "grp.dropped_anon_one", "src": "8946b17f", "v": "أسقطت: لم يعد مسموحًا لهذا المرسل بالإرسال هنا."}
+{"k": "grp.dropped_one", "src": "4ab273e1", "v": "أسقطت: لم يعد مسموحًا لـ {who} بالإرسال هنا."}
+{"k": "grp.help_talk", "src": "07beac8e", "v": "<b>التحدث:</b> رد على رسالة جلسة، أو اذكر {mention} · /&lt;الاسم&gt; رسالة"}
+{"k": "grp.help_talk_no_username", "src": "4c1fc9fd", "v": "<b>التحدث:</b> رد على رسالة جلسة، أو اذكر البوت · /&lt;الاسم&gt; رسالة"}
+{"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "انشر باسمك لتستخدم البوت."}
+{"k": "held.late_marker", "src": "e38c307b", "v": {"few": "⏳ سلمت متأخرة (احتجزت {n} دقائق بسبب حد سرعة Telegram)", "many": "⏳ سلمت متأخرة (احتجزت {n} دقيقة بسبب حد سرعة Telegram)", "one": "⏳ سلمت متأخرة (احتجزت دقيقة واحدة بسبب حد سرعة Telegram)", "other": "⏳ سلمت متأخرة (احتجزت {n} دقيقة بسبب حد سرعة Telegram)", "two": "⏳ سلمت متأخرة (احتجزت دقيقتين بسبب حد سرعة Telegram)", "zero": "⏳ سلمت متأخرة (احتجزت أقل من دقيقة بسبب حد سرعة Telegram)"}}
+{"k": "held.too_old", "src": "7391de5a", "v": "هذه الرسالة أقدم من أن ترسل؛ أرسلها مرة أخرى."}
+{"k": "help.admin", "src": "29ac6154", "v": "<b>المشرف:</b> /update (aipager وClaude Code)"}
+{"k": "help.control", "src": "8bb13acf", "v": "<b>التحكم:</b> /stop · /now (أرسل المنتظر) · /clearqueue"}
+{"k": "help.manage", "src": "75144040", "v": "<b>الإدارة:</b> /status، ثم ⋮ (إعادة التشغيل، إعادة التسمية، diff، الإنهاء، الحذف)"}
+{"k": "help.settings", "src": "d51d2171", "v": "<b>الإعدادات:</b> /settings · /mode (تلقائي أو اسأل)"}
+{"k": "help.start", "src": "276a9c1b", "v": "<b>البدء:</b> /new الاسم · /resume"}
+{"k": "help.talk_dm", "src": "c3ef5195", "v": "<b>التحدث:</b> اكتب فقط (تذهب إلى جلسة ✍️) · رد على رسالة · /&lt;الاسم&gt; رسالة"}
+{"k": "help.tip", "src": "67a93e6b", "v": "<i>نصيحة: الضغط على أمر يرسله فورًا. اضغط عليه مطولًا (الهاتف) أو اضغط Tab (الحاسوب) لتضيف نصًا أولًا.</i>"}
+{"k": "help.title", "src": "8fffe930", "v": "<b>كيف تستخدم aipager</b>"}
+{"k": "home.btn.new", "src": "19b62fc4", "v": "🆕 جلسة جديدة"}
+{"k": "home.btn.resume", "src": "12a3163c", "v": "↩️ استئناف"}
+{"k": "home.btn.settings", "src": "b1f2d607", "v": "⚙️ الإعدادات"}
+{"k": "home.dm_target", "src": "099ec348", "v": "✍️ الرسائل تذهب إلى <b>{session}</b>."}
+{"k": "home.help_hint", "src": "d62b118c", "v": "<i>/help يعرض كل ما يمكنك فعله.</i>"}
+{"k": "home.start_one", "src": "ef9f6ba9", "v": "ابدأ واحدة عبر /new."}
+{"k": "home.tap_session", "src": "f14797d7", "v": "اضغط على جلسة في لوحة المفاتيح لتتحدث إليها."}
+{"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code من Telegram"}
+{"k": "kb.back", "src": "a4b7fcb6", "v": "« رجوع"}
+{"k": "kb.commands", "src": "45e5f3f7", "v": "الأوامر"}
+{"k": "kb.kill", "src": "c80f5bc1", "v": "إنهاء"}
+{"k": "kb.models", "src": "d068cea1", "v": "النموذج ›"}
+{"k": "kb.new", "src": "c2a6b03f", "v": "جديدة"}
+{"k": "kb.status", "src": "48a3661d", "v": "الحالة"}
+{"k": "kb.stop", "src": "1b480158", "v": "إيقاف"}
+{"k": "kb.templates", "src": "f25b700e", "v": "القوالب"}
+{"k": "kbl.cmd.clear", "src": "719ea396", "v": "مسح"}
+{"k": "kbl.cmd.compact", "src": "1df39aa5", "v": "ضغط"}
+{"k": "kbl.cmd.init", "src": "19682bdb", "v": "تهيئة"}
+{"k": "kbl.cmd.plan", "src": "bc0b2aff", "v": "وضع التخطيط"}
+{"k": "kbl.cmd.security_review", "src": "52fab0c7", "v": "مراجعة أمنية"}
+{"k": "kbl.tpl.commit", "src": "1a1873ab", "v": "Commit"}
+{"k": "kbl.tpl.continue", "src": "2e026239", "v": "تابع"}
+{"k": "kbl.tpl.explain_plan", "src": "8197049c", "v": "اشرح الخطة"}
+{"k": "kbl.tpl.lgtm", "src": "fddf8bc1", "v": "يبدو جيدًا، انشره"}
+{"k": "kbl.tpl.run_tests", "src": "fcab481b", "v": "شغل الاختبارات"}
+{"k": "kbl.tpl.show_diff", "src": "78016e77", "v": "اعرض diff"}
+{"k": "kbl.tpl.update_memory", "src": "cfa5cef7", "v": "حدث الذاكرة"}
+{"k": "kbl.tpl.write_tests", "src": "391b1a96", "v": "اكتب اختبارات"}
+{"k": "kbmsg.commands", "src": "52b6fd5f", "v": "🎛 الأوامر"}
+{"k": "kbmsg.models", "src": "78548025", "v": "🤖 النموذج"}
+{"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 القوالب"}
+{"k": "lang.auto", "src": "a66c2e1b", "v": "تلقائي (لغة Telegram لديك)"}
+{"k": "lang.changed", "src": "4e8c6791", "v": "✅ يتحدث aipager الآن {language} هنا. جلساتك وإجابات Claude لم تتغير."}
+{"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 يتحدث aipager هنا {language} (رسائله فقط؛ يجيب Claude باللغة التي تكتب بها). غيرها عبر /language"}
+{"k": "lang.list.group", "src": "9462a94a", "v": "🌐 اللغة التي يستخدمها aipager لبطاقات هذه المجموعة وأزرارها. جلسات Claude لا تتغير: يجيب Claude باللغة التي تكتب إليه بها."}
+{"k": "lang.list.private", "src": "5d92850b", "v": "🌐 اللغة التي يستخدمها aipager لرسائله وأزراره هنا وفي Mini App. جلسات Claude لديك لا تتغير: يجيب Claude باللغة التي تكتب إليه بها."}
+{"k": "lang.offer.keep", "src": "c383d509", "v": "أبق الإنجليزية"}
+{"k": "lang.offer.text", "src": "788b2767", "v": "🌐 يتحدث aipager الآن {language}. هذا يغير فقط رسائل aipager وأزراره هنا وفي Mini App، لا جلسات Claude لديك: يواصل Claude الإجابة باللغة التي تكتب إليه بها."}
+{"k": "lang.row", "src": "69fc399f", "v": "🌐 اللغة: {language}"}
+{"k": "life.daemon_restarted", "src": "7253e5d2", "v": "🔄 <b>{session}</b> · أعيد تشغيل الخدمة"}
+{"k": "life.session_ended", "src": "84bf802a", "v": "🔴 <b>{session}</b> · انتهت الجلسة"}
+{"k": "log.agent", "src": "ff163576", "v": {"few": "- 🤖 {agent} ({clock}، {n} استدعاءات أدوات)", "many": "- 🤖 {agent} ({clock}، {n} استدعاء أدوات)", "one": "- 🤖 {agent} ({clock}، استدعاء أداة واحد)", "other": "- 🤖 {agent} ({clock}، {n} استدعاء أدوات)", "two": "- 🤖 {agent} ({clock}، استدعاءا أداتين)", "zero": "- 🤖 {agent} ({clock}، لا استدعاءات أدوات)"}}
+{"k": "log.agents", "src": "5db5246b", "v": "## الوكلاء"}
+{"k": "log.final_answer", "src": "f0ea5fc3", "v": "## الإجابة النهائية"}
+{"k": "log.memory", "src": "df926a90", "v": {"few": "_تحفظ الذاكرة أحدث {n} صفوف أدوات؛ ربما زالت الصفوف الأقدم من الجولات الطويلة جدًا._", "many": "_تحفظ الذاكرة أحدث {n} صف أدوات؛ ربما زالت الصفوف الأقدم من الجولات الطويلة جدًا._", "one": "_تحفظ الذاكرة أحدث صف أداة؛ ربما زالت الصفوف الأقدم من الجولات الطويلة جدًا._", "other": "_تحفظ الذاكرة أحدث {n} صف أدوات؛ ربما زالت الصفوف الأقدم من الجولات الطويلة جدًا._", "two": "_تحفظ الذاكرة أحدث صفي أدوات؛ ربما زالت الصفوف الأقدم من الجولات الطويلة جدًا._", "zero": "_تحفظ الذاكرة أحدث صفوف الأدوات؛ ربما زالت الصفوف الأقدم من الجولات الطويلة جدًا._"}}
+{"k": "log.title", "src": "2d9e96f5", "v": "# {session} - السجل الكامل"}
+{"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ تعذر تنزيل الملفات: {names}"}
+{"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ تعذر تنزيل الملف: {names}"}
+{"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ تعذر تنزيل الملفات: {names} (استبعدت من الألبوم)"}
+{"k": "media.album_left_out_one", "src": "c91cd106", "v": "❌ تعذر تنزيل الملف: {names} (استبعد من الألبوم)"}
+{"k": "media.brew_footer", "src": "accb7c5a", "v": "<i>ملاحظة: قد يعيد {command} مستقبلًا بناء venv الخاصة بالصيغة ويحذف faster-whisper. إذا توقف الصوت عن العمل، فاضغط «تثبيت» مرة أخرى.</i>"}
+{"k": "media.btn.cancel", "src": "77dfd213", "v": "إلغاء"}
+{"k": "media.btn.install", "src": "75e85c25", "v": "📦 ثبت الصوت"}
+{"k": "media.btn.restart", "src": "ec740c6a", "v": "🔄 أعد تشغيل الخدمة الآن"}
+{"k": "media.download_failed", "src": "cd9ea0b9", "v": "❌ تعذر تنزيل الرسالة الصوتية."}
+{"k": "media.file_download_failed", "src": "fd5ed5a0", "v": "❌ تعذر تنزيل الملف: {name}"}
+{"k": "media.file_too_big", "src": "85d942ae", "v": "⚠️ حجم الملف {size} ميغابايت. واجهة Telegram للبوتات تحد التنزيل بـ {limit} ميغابايت. جرب تقسيمه، أو الصق المحتوى نصًا."}
+{"k": "media.heard", "src": "3164d86a", "v": "🎙️ <i>سمعت:</i> {text}"}
+{"k": "media.install_cant_start", "src": "8f8e8cec", "v": "❌ تعذر تشغيل المثبت: {error}"}
+{"k": "media.install_failed", "src": "31267ed7", "v": "❌ فشل التثبيت (رمز الخروج {code}):\n<pre>{output}</pre>"}
+{"k": "media.install_no_recipe", "src": "065dd801", "v": "⚠️ لا تحتوي نسخة aipager هذه على وصفة تثبيت\nلإضافة الصوت. حدث aipager وحاول مرة أخرى."}
+{"k": "media.install_working", "src": "7ef2a045", "v": "📦 يجري تثبيت إضافة الصوت - لا يزال يعمل… ({seconds} ث)"}
+{"k": "media.installed", "src": "6e9fbf9b", "v": "✅ تم التثبيت. تحتاج ميزات الصوت إلى إعادة تشغيل الخدمة لتحميل الوحدة الجديدة."}
+{"k": "media.installing", "src": "1978f3ef", "v": "📦 يجري تثبيت إضافة الصوت…"}
+{"k": "media.needs_extra", "src": "153956ee", "v": "⚠️ تحتاج الرسائل الصوتية إلى إضافة الصوت الاختيارية (~{install} ميغابايت للتثبيت · ~{model} ميغابايت للنموذج عند أول استخدام)."}
+{"k": "media.no_speech", "src": "8d84c0b6", "v": "⚠️ تعذر تمييز أي كلام في ذلك."}
+{"k": "media.not_installed", "src": "911c9456", "v": "faster-whisper غير مثبت. شغل:\n    {uv}\nأو:\n    {pip}"}
+{"k": "media.restart_busy_update", "src": "a6e0a620", "v": "⏳ لن تعاد التشغيل: يجري تحديث aipager أو أنه على وشك إعادة تشغيل الخدمة. حاول مرة أخرى بعد انتهائه."}
+{"k": "media.restart_cant_open", "src": "d591e073", "v": "⚠️ تعذر فتح {path}: {error}\nأعد التشغيل يدويًا."}
+{"k": "media.restart_cant_schedule", "src": "aa7ee7e7", "v": "⚠️ تعذرت جدولة إعادة التشغيل: {detail}\nأعد التشغيل يدويًا."}
+{"k": "media.restart_cant_spawn", "src": "30877338", "v": "⚠️ تعذر تشغيل البديل: {error}\nأعد التشغيل يدويًا."}
+{"k": "media.restart_failed_start", "src": "0aad8df0", "v": "⚠️ فشل تشغيل الخدمة البديلة. أعد التشغيل يدويًا."}
+{"k": "media.restart_killmode", "src": "08a54162", "v": "⚠️ لن تعاد التشغيل: إعداد KillMode للخدمة سيؤدي إلى إيقاف جلساتك."}
+{"k": "media.restart_launchctl", "src": "1c55d98b", "v": "🔄 تجري إعادة التشغيل عبر {command}…"}
+{"k": "media.restart_locked", "src": "3f061ea2", "v": "⏳ لن تعاد التشغيل: يجري تحديث aipager (قفل التحديث محجوز). حاول مرة أخرى بعد انتهائه."}
+{"k": "media.restart_refused", "src": "41b49bd1", "v": "⚠️ لن تعاد التشغيل: {reason}."}
+{"k": "media.restart_resend_voice", "src": "f5ed81e2", "v": "🔄 تجري إعادة التشغيل - أرسل رسالتك الصوتية مرة أخرى بعد بضع ثوانٍ."}
+{"k": "media.restart_would_kill", "src": "d49632de", "v": "جلسات ستنهيها إعادة التشغيل: {sessions}"}
+{"k": "media.restarting_in", "src": "f8016b1a", "v": "🔄 إعادة التشغيل بعد {seconds} ث - أرسل رسالتك الصوتية مرة أخرى بعد بضع ثوانٍ."}
+{"k": "media.transcribe_failed", "src": "930964f7", "v": "❌ فشل التفريغ النصي: {error}"}
+{"k": "media.transcribing", "src": "56629b0b", "v": "🎙️ <i>يجري التفريغ النصي…</i>"}
+{"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ حسنًا، لم يثبت الصوت."}
+{"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ حجم الرسالة الصوتية {size} ميغابايت؛ حد بوتات Telegram هو {limit} ميغابايت."}
+{"k": "mode.ask", "src": "07910591", "v": "💬 وضع «اسأل»"}
+{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 اسأل لك (🤖 تلقائي: للمشرفين)"}
+{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 اسأل بدلًا من ذلك"}
+{"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 الوضع التلقائي"}
+{"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 تلقائي بدلًا من ذلك"}
+{"k": "mode.word.ask", "src": "3562777b", "v": "اسأل"}
+{"k": "mode.word.auto", "src": "c614ba7c", "v": "تلقائي"}
+{"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> في {mode} بالفعل."}
+{"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 التبديل إلى اسأل"}
+{"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 التبديل إلى تلقائي"}
+{"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> مشغولة.\nالتبديل إلى وضع اسأل؟"}
+{"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> مشغولة.\nالتبديل إلى الوضع التلقائي؟"}
+{"k": "modecard.confirm_auto", "src": "ff1562a9", "v": "⚙️ تبديل <b>{session}</b> إلى {mode}؟\n<i>سيشغل Claude الأدوات دون أن يسأل ({flag}).</i>"}
+{"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ حالة <b>{session}</b> لا تزال قيد التهيئة. جرب /mode مرة أخرى بعد قليل."}
+{"k": "modecard.is", "src": "c057ad13", "v": "<b>{session}</b> في {mode}."}
+{"k": "modecard.is_target", "src": "92bc67e3", "v": "✍️ <b>{session}</b> في {mode}."}
+{"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ انتقلت <b>{session}</b> إلى عمل جديد، لذا لم يتغير شيء."}
+{"k": "modecard.needs_admin", "src": "fe68d230", "v": "الوضع التلقائي يحتاج إلى مشرف."}
+{"k": "modecard.none_live", "src": "ae432c8c", "v": "لا توجد جلسات تعمل هنا. ابدأ واحدة عبر /new."}
+{"k": "modecard.refused_not_running", "src": "d62cf188", "v": "⚠️ <b>{session}</b> لا تعمل - لم يتغير الوضع."}
+{"k": "modecard.refused_restarting", "src": "06433ed3", "v": "⚠️ <b>{session}</b> تعيد التشغيل الآن - لم يتغير الوضع. حاول مرة أخرى بعد قليل."}
+{"k": "modecard.session_missing", "src": "adf0d420", "v": "⚠️ لم يعثر على الجلسة."}
+{"k": "modecard.stale", "src": "9f0f5572", "v": "⚠️ كانت تلك البطاقة قديمة، لذا لم يتغير شيء."}
+{"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> لا تزال تتوقف - لم يتغير الوضع."}
+{"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ تعذر تبديل الوضع: {error}"}
+{"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ بدل {person} إلى {mode}."}
+{"k": "modecard.switching", "src": "30fa9003", "v": "⚙️ يجري تبديل <b>{session}</b> إلى {mode}…"}
+{"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ يأخذ /mode اسم جلسة وask أو auto، مثل {example} أو {example_ask}."}
+{"k": "modecard.which", "src": "107abca0", "v": "أي جلسة؟"}
+{"k": "modecard.which_to", "src": "4694464a", "v": "أي جلسة تبدل إلى {mode}؟"}
+{"k": "newflow.auto_needs_admin_note", "src": "6bb45da7", "v": "الوضع التلقائي يحتاج إلى مشرف، لذا ستسأل هذه الجلسة."}
+{"k": "newflow.btn.cancel", "src": "196a9f45", "v": "✖️ إلغاء"}
+{"k": "newflow.btn.folder", "src": "2fb30e02", "v": "📁 المجلد"}
+{"k": "newflow.btn.model", "src": "e252b8c8", "v": "🧠 النموذج"}
+{"k": "newflow.btn.new_folder", "src": "27a1f4a2", "v": "➕ مجلد جديد"}
+{"k": "newflow.btn.other_model", "src": "48915641", "v": "✏️ نموذج آخر..."}
+{"k": "newflow.btn.replace", "src": "caede00c", "v": "🆕 استبدال (من جديد)"}
+{"k": "newflow.btn.resume", "src": "cad6f900", "v": "♻️ استئناف"}
+{"k": "newflow.btn.switch_to", "src": "8f04f92d", "v": "↩️ انتقل إليها"}
+{"k": "newflow.cancelled_nothing", "src": "4c346842", "v": "↩️ ألغي - لم تتغير أي جلسة."}
+{"k": "newflow.changed_mode", "src": "a1779ae6", "v": "بدل {person} إلى {mode}."}
+{"k": "newflow.changed_model", "src": "1f771c06", "v": "بدل {person} النموذج إلى {model}."}
+{"k": "newflow.closed", "src": "87aee987", "v": "✖️ أغلقت، لقد انتقلت إلى شيء آخر. أرسل /new لتبدأ جلسة."}
+{"k": "newflow.conflict_replaced", "src": "0ab47818", "v": "↩️ حل محل هذه البطاقة أمر /new أحدث لـ <b>{session}</b>."}
+{"k": "newflow.conflict_running", "src": "b36a4e23", "v": "⚠️ <b>{session}</b> تعمل بالفعل.\nماذا تريد أن تفعل؟"}
+{"k": "newflow.conflict_used", "src": "5d97ff8c", "v": "♻️ <b>{session}</b> استخدمت من قبل.\nماذا تريد أن تفعل؟"}
+{"k": "newflow.conflict_used_preview", "src": "b46e358d", "v": "♻️ <b>{session}</b> استخدمت من قبل.\n<i>آخر إجابة:</i>\n<blockquote>{preview}</blockquote>\nماذا تريد أن تفعل؟"}
+{"k": "newflow.create_failed", "src": "3beecd9f", "v": "❌ {error}"}
+{"k": "newflow.example_line", "src": "ab8b1839", "v": "<code>{session} أصلح الاختبارات الفاشلة</code>"}
+{"k": "newflow.expired", "src": "6f9c9ea0", "v": "⏱ انتهت صلاحية بطاقة الجلسة الجديدة هذه. أرسل /new مرة أخرى."}
+{"k": "newflow.folder_page", "src": "f6e221a1", "v": "📁 <b>المجلد</b>\n\nاختر أين تعمل هذه الجلسة."}
+{"k": "newflow.group_name_ask", "src": "eb31141c", "v": "رد على هذه الرسالة باسم، وبما تريد فعله أولًا إن شئت:"}
+{"k": "newflow.hint_folder", "src": "f27c8294", "v": "📁 اختر مجلد مشروع أولًا عبر 📁 المجلد."}
+{"k": "newflow.just_send", "src": "0b7a9b82", "v": "✍️ أرسل رسالة فقط، ستذهب إلى {session}."}
+{"k": "newflow.model_page", "src": "580279ec", "v": "🧠 <b>النموذج</b>\n\nاختر نموذجًا لهذه الجلسة."}
+{"k": "newflow.name_empty", "src": "e00fbfca", "v": "لا يمكن أن يكون اسم الجلسة فارغًا."}
+{"k": "newflow.new_folder_title", "src": "64007145", "v": "📁 <b>مجلد جديد</b>"}
+{"k": "newflow.note_mode_failed", "src": "12f5a535", "v": "تعذر تبديل الوضع."}
+{"k": "newflow.note_mode_failed_err", "src": "8e216733", "v": "تعذر تبديل الوضع: {error}"}
+{"k": "newflow.note_mode_not_switched", "src": "43b54091", "v": "بدأت {session} العمل، لذا لم يبدل الوضع."}
+{"k": "newflow.other_model_title", "src": "3c30c486", "v": "🧠 <b>نموذج آخر</b>"}
+{"k": "newflow.others_card_named", "src": "6ad64798", "v": "هذه البطاقة تخص {owner}. أرسل /new لتحصل على بطاقتك."}
+{"k": "newflow.others_card_someone", "src": "e2435dc7", "v": "هذه البطاقة تخص شخصًا آخر. أرسل /new لتحصل على بطاقتك."}
+{"k": "newflow.prompt_folder_reply", "src": "21f1cb23", "v": "رد على هذه الرسالة باسم المجلد الجديد."}
+{"k": "newflow.prompt_folder_type", "src": "e8783fd7", "v": "اكتب اسم المجلد الجديد."}
+{"k": "newflow.prompt_model_reply", "src": "7d73f8ac", "v": "رد على هذه الرسالة باسم النموذج."}
+{"k": "newflow.prompt_model_reply_eg", "src": "b8f4f722", "v": "رد على هذه الرسالة باسم النموذج (مثل {example})."}
+{"k": "newflow.prompt_model_type", "src": "9d5677e2", "v": "اكتب اسم النموذج."}
+{"k": "newflow.prompt_model_type_eg", "src": "8bac428b", "v": "اكتب اسم النموذج (مثل {example})."}
+{"k": "newflow.prompt_queued", "src": "85768278", "v": "📝 الطلب في قائمة الانتظار"}
+{"k": "newflow.ready", "src": "4edcea75", "v": "✅ <b>{session}</b> جاهزة"}
+{"k": "newflow.ready_changed", "src": "39a18ac6", "v": "🔁 {changed}"}
+{"k": "newflow.ready_later", "src": "4d69ea9f", "v": "لاحقًا: اضغط {session} في لوحة المفاتيح، أو رد على أي رسالة من {session}."}
+{"k": "newflow.ready_models", "src": "1bccc9f4", "v": "🧠 <b>{session}</b>: اختر نموذجًا.\n\nيتبدل في مكانه، وتبقى المحادثة."}
+{"k": "newflow.ready_settings", "src": "d40af8c6", "v": "{mode} · 🧠 {model} · 📁 <code>{folder}</code>"}
+{"k": "newflow.send_name", "src": "9b892a4c", "v": "أرسل اسمًا، وما تريد فعله أولًا إن شئت:"}
+{"k": "newflow.settings_line", "src": "a770b6d4", "v": "{mode} · 🧠 {model} · 📁 {folder}"}
+{"k": "newflow.settings_no_folder", "src": "810727a6", "v": "{mode} · 🧠 {model} · 📁 لا مجلد مشروع بعد"}
+{"k": "newflow.started_over", "src": "3a2633bc", "v": "↩️ ألغي - بدء من جديد."}
+{"k": "newflow.starting", "src": "c0338362", "v": "🚀 يجري تشغيل <b>{session}</b> في {mode}…"}
+{"k": "newflow.starting_fresh", "src": "fff58191", "v": "🚀 يجري تشغيل <b>{session}</b> من جديد…"}
+{"k": "newflow.switched_to", "src": "03553586", "v": "↩️ تم الانتقال إلى <b>{session}</b>"}
+{"k": "newflow.title", "src": "79dee51b", "v": "🆕 <b>جلسة جديدة</b>"}
+{"k": "newflow.title_owner", "src": "b8803b0f", "v": "🆕 <b>جلسة جديدة</b> ({owner})"}
+{"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ أعمل على رسالتك الأولى."}
+{"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"few": "⏱️ <b>{session}</b> · لم يؤكد الضغط انتهاءه بعد {n} دقائق", "many": "⏱️ <b>{session}</b> · لم يؤكد الضغط انتهاءه بعد {n} دقيقة", "one": "⏱️ <b>{session}</b> · لم يؤكد الضغط انتهاءه بعد دقيقة واحدة", "other": "⏱️ <b>{session}</b> · لم يؤكد الضغط انتهاءه بعد {n} دقيقة", "two": "⏱️ <b>{session}</b> · لم يؤكد الضغط انتهاءه بعد دقيقتين", "zero": "⏱️ <b>{session}</b> · لم يؤكد الضغط انتهاءه بعد أقل من دقيقة"}}
+{"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · ضغطت: {before} ← {after}"}
+{"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · السياق عند {percent} - ضغط تلقائي قريبًا"}
+{"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · بلغ حد الذاكرة"}
+{"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · بلغ حد الذاكرة أثناء <code>{tool}</code>"}
+{"k": "notice.memcap_hook", "src": "657f02c3", "v": "استنفد <code>{hook}</code> حد ذاكرته البالغ {limit} غيغابايت وتوقف. إن كان يفحص استدعاء أداة، فالأرجح أن Claude Code رفض ذلك الاستدعاء ويمكن لـ Claude أن يحاول مجددًا؛ وإلا فلم يفته سوى ذلك الحدث وحده. الجلسة تواصل العمل."}
+{"k": "notice.memcap_nudge_cli", "src": "726ab6ea", "v": "<i>إذا تكرر هذا، شغل {command} في طرفية لترسل تقريرًا إلى المطور.</i>"}
+{"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>إذا تكرر هذا، يمكن للمالك الضغط على «أبلغ عن هذا» ليرسل تقريرًا إلى المطور.</i>"}
+{"k": "notice.memcap_statusline", "src": "e223e66d", "v": "استنفد <code>{hook}</code> حد ذاكرته البالغ {limit} غيغابايت، لذا فات تحديث واحد لسطر الحالة. الجلسة تواصل العمل."}
+{"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · لم يستلمها Claude Code\n\nلم يصل أي hook خلال {grace} ث من الإرسال. الرسالة التي تبدأ بـ \"/\" تقرأ كأمر شرطة مائلة - تحقق من الطرفية."}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "جاءت هذه المهمة من <b>{session}</b>."}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "انضمت إلى هذه الجولة رسالة من جلسة أخرى فضيّقت صلاحياتها."}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "جاءت هذه المهمة من جلسة أخرى لم يستطع aipager التحقق منها."}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ لم تنفّذ <b>{receiver}</b> الرسالة التي أرسلتها إليها <b>{sender}</b>: {reason}"}
+{"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · لم يؤكد التقاط رسالة من قائمة الانتظار في الوقت المحدد - قد يعالجها Claude لاحقًا."}
+{"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · لم يؤكد التقاط رسالة من قائمة الانتظار في الوقت المحدد: «{preview}» - قد يعالجها Claude لاحقًا."}
+{"k": "notice.quiet_turn", "src": "baa52794", "v": {"few": "⏳ <b>{session}</b> · لا تزال تعمل (هادئة منذ {n} دقائق)\n\nلا تحديثات للحالة بعد. هذا طبيعي عادة.\n\n<blockquote expandable>ما الذي قد يحدث\n  • استدعاء أداة طويل (Bash، WebSearch، جلب كبير)\n  • توليد ثقيل على سياق كبير جدًا\n  • الضغط قيد التنفيذ\n  • انتظار بسبب حد السرعة أو حد الاشتراك\n  • تعطل الشبكة أو انهيار Claude</blockquote>", "many": "⏳ <b>{session}</b> · لا تزال تعمل (هادئة منذ {n} دقيقة)\n\nلا تحديثات للحالة بعد. هذا طبيعي عادة.\n\n<blockquote expandable>ما الذي قد يحدث\n  • استدعاء أداة طويل (Bash، WebSearch، جلب كبير)\n  • توليد ثقيل على سياق كبير جدًا\n  • الضغط قيد التنفيذ\n  • انتظار بسبب حد السرعة أو حد الاشتراك\n  • تعطل الشبكة أو انهيار Claude</blockquote>", "one": "⏳ <b>{session}</b> · لا تزال تعمل (هادئة منذ دقيقة)\n\nلا تحديثات للحالة بعد. هذا طبيعي عادة.\n\n<blockquote expandable>ما الذي قد يحدث\n  • استدعاء أداة طويل (Bash، WebSearch، جلب كبير)\n  • توليد ثقيل على سياق كبير جدًا\n  • الضغط قيد التنفيذ\n  • انتظار بسبب حد السرعة أو حد الاشتراك\n  • تعطل الشبكة أو انهيار Claude</blockquote>", "other": "⏳ <b>{session}</b> · لا تزال تعمل (هادئة منذ {n} دقيقة)\n\nلا تحديثات للحالة بعد. هذا طبيعي عادة.\n\n<blockquote expandable>ما الذي قد يحدث\n  • استدعاء أداة طويل (Bash، WebSearch، جلب كبير)\n  • توليد ثقيل على سياق كبير جدًا\n  • الضغط قيد التنفيذ\n  • انتظار بسبب حد السرعة أو حد الاشتراك\n  • تعطل الشبكة أو انهيار Claude</blockquote>", "two": "⏳ <b>{session}</b> · لا تزال تعمل (هادئة منذ دقيقتين)\n\nلا تحديثات للحالة بعد. هذا طبيعي عادة.\n\n<blockquote expandable>ما الذي قد يحدث\n  • استدعاء أداة طويل (Bash، WebSearch، جلب كبير)\n  • توليد ثقيل على سياق كبير جدًا\n  • الضغط قيد التنفيذ\n  • انتظار بسبب حد السرعة أو حد الاشتراك\n  • تعطل الشبكة أو انهيار Claude</blockquote>", "zero": "⏳ <b>{session}</b> · لا تزال تعمل (هادئة منذ أقل من دقيقة)\n\nلا تحديثات للحالة بعد. هذا طبيعي عادة.\n\n<blockquote expandable>ما الذي قد يحدث\n  • استدعاء أداة طويل (Bash، WebSearch، جلب كبير)\n  • توليد ثقيل على سياق كبير جدًا\n  • الضغط قيد التنفيذ\n  • انتظار بسبب حد السرعة أو حد الاشتراك\n  • تعطل الشبكة أو انهيار Claude</blockquote>"}}
+{"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · مسحت الجلسة"}
+{"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · انهارت الجلسة أو أنهيت قسرًا"}
+{"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · خرجت الجلسة"}
+{"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · سجلت الجلسة الخروج"}
+{"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · خطأ في أذونات الجلسة"}
+{"k": "notice.session_end.resume", "src": "86761a3d", "v": "🔴 <b>{session}</b> · انتقلت الجلسة إلى محادثة أخرى"}
+{"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · لا تزال تنتظر إجابتك في الأعلى"}
+{"k": "notice.waiting_permission", "src": "e39388ee", "v": "إذن: {summary}"}
+{"k": "notice.waiting_question", "src": "2348fa66", "v": "سؤال: {summary}"}
+{"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ يحتوي هذا على حروف اتجاه مخفية، معروضة بالشكل ⟨U+...⟩. قد لا يشغل ما يبدو عليه."}
+{"k": "perm.btn.allow", "src": "cf869136", "v": "✅ اسمح"}
+{"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 اسمح دائمًا"}
+{"k": "perm.btn.cancel", "src": "d20b1713", "v": "↩️ إلغاء"}
+{"k": "perm.btn.compact_now", "src": "73357c1f", "v": "📦 اضغط الآن"}
+{"k": "perm.btn.default_suffix", "src": "613e7977", "v": "{mode} (افتراضي)"}
+{"k": "perm.btn.deny", "src": "8b9d9edb", "v": "❌ ارفض"}
+{"k": "perm.btn.not_now", "src": "f677ca32", "v": "⏳ ليس الآن"}
+{"k": "perm.btn.option", "src": "881fbd74", "v": "الخيار {n}"}
+{"k": "perm.btn.retry", "src": "fabc7541", "v": "🔄 أعد المحاولة"}
+{"k": "perm.btn.stop", "src": "e3f8b9ee", "v": "⏹ إيقاف"}
+{"k": "perm.btn.stop_plain", "src": "9e253470", "v": "إيقاف"}
+{"k": "perm.btn.stop_switch", "src": "bc469329", "v": "🛑 أوقف وبدل"}
+{"k": "perm.btn.submit", "src": "c685950d", "v": "✅ إرسال"}
+{"k": "perm.btn.yes_switch", "src": "9f6e4eb9", "v": "✅ نعم، بدل"}
+{"k": "perm.loading", "src": "253222ec", "v": "{tool} (يجري التحميل…)"}
+{"k": "perm.needed", "src": "7c7a8e5c", "v": "يلزم إذن"}
+{"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · يلزم اختيار"}
+{"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · لا أسئلة"}
+{"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · يلزم إذن"}
+{"k": "pin.btn.answer", "src": "24c3485a", "v": "أجب {session}"}
+{"k": "pin.count.idle", "src": "6abeefbf", "v": {"few": "خاملة: {n}", "many": "خاملة: {n}", "one": "خاملة: {n}", "other": "خاملة: {n}", "two": "خاملة: {n}", "zero": "خاملة: {n}"}}
+{"k": "pin.count.starting", "src": "836f5c27", "v": {"few": "تبدأ: {n}", "many": "تبدأ: {n}", "one": "تبدأ: {n}", "other": "تبدأ: {n}", "two": "تبدأ: {n}", "zero": "تبدأ: {n}"}}
+{"k": "pin.count.working", "src": "c3aee490", "v": {"few": "تعمل: {n}", "many": "تعمل: {n}", "one": "تعمل: {n}", "other": "تعمل: {n}", "two": "تعمل: {n}", "zero": "تعمل: {n}"}}
+{"k": "pin.first.all_idle", "src": "195ea8a9", "v": "💤 الكل خامل"}
+{"k": "pin.first.counts", "src": "b5d804ae", "v": "{glyph} {counts}"}
+{"k": "pin.first.single", "src": "5674b34c", "v": "{glyph} {session} {state}"}
+{"k": "pin.first.waiting", "src": "7fa7cc46", "v": "⏳ {session} تحتاجك"}
+{"k": "pin.line", "src": "de9ddb7a", "v": "• <b>{session}</b> {state}"}
+{"k": "pin.more", "src": "66adc298", "v": {"few": "(+{n} أخرى)", "many": "(+{n} أخرى)", "one": "(+{n} أخرى)", "other": "(+{n} أخرى)", "two": "(+{n} أخريان)", "zero": "(+{n} أخرى)"}}
+{"k": "pin.needs_input", "src": "9a9d6640", "v": "يلزم اختيار"}
+{"k": "pin.paren", "src": "d52abc3c", "v": "({running})"}
+{"k": "pin.running_agents", "src": "712d4c75", "v": {"few": "{n} وكلاء يعملون", "many": "{n} وكيلًا يعملون", "one": "وكيل واحد يعمل", "other": "{n} وكيل يعملون", "two": "وكيلان يعملان", "zero": "لا وكلاء يعملون"}}
+{"k": "pin.running_both", "src": "48ac24f8", "v": "قيد التشغيل: {agents}، {shells}"}
+{"k": "pin.running_shells", "src": "af023360", "v": {"few": "{n} أوامر تعمل", "many": "{n} أمرًا يعمل", "one": "أمر واحد يعمل", "other": "{n} أمر يعمل", "two": "أمران يعملان", "zero": "لا أوامر تعمل"}}
+{"k": "pin.state", "src": "845c40c2", "v": "({state})"}
+{"k": "pin.state.idle", "src": "1adbcc34", "v": "خاملة"}
+{"k": "pin.state.needs_you", "src": "19622ace", "v": "تحتاجك"}
+{"k": "pin.state.starting", "src": "9493af05", "v": "تبدأ"}
+{"k": "pin.state.working", "src": "8178ea20", "v": "تعمل"}
+{"k": "pin.state_running", "src": "a390d47b", "v": "({state}، {running})"}
+{"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
+{"k": "pin.target", "src": "c9c5350f", "v": "✍️ الرسائل تذهب إلى <b>{session}</b>"}
+{"k": "rep.area.animation", "src": "6a3a8292", "v": "بطاقة العمل"}
+{"k": "rep.area.callbacks", "src": "397d02b3", "v": "ضغطات الأزرار"}
+{"k": "rep.area.daemon", "src": "dbcc03a0", "v": "الخدمة"}
+{"k": "rep.area.dashboard", "src": "319e1d71", "v": "الشريط المثبت"}
+{"k": "rep.area.flood_budget", "src": "75f9bcb6", "v": "ميزانية الإرسال"}
+{"k": "rep.area.handlers", "src": "0ff1035f", "v": "معالجة الرسائل"}
+{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "مستقبل hook"}
+{"k": "rep.area.inject", "src": "d784f7db", "v": "تسليم الطلبات"}
+{"k": "rep.area.notify", "src": "c522bd84", "v": "تسليم الرسائل"}
+{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "hook"}
+{"k": "rep.area.server", "src": "8000cc31", "v": "Mini App"}
+{"k": "rep.area.session_monitor", "src": "1fff1160", "v": "مراقب الجلسات"}
+{"k": "rep.area.session_ops", "src": "6b7d9e30", "v": "التحكم في الجلسات"}
+{"k": "rep.area.state", "src": "e0e05b06", "v": "حالة الجلسات"}
+{"k": "rep.cancelled", "src": "ca0ed5b3", "v": "ألغي. لم يرسل شيء."}
+{"k": "rep.doc_failed", "src": "321fac57", "v": "تعذر إرسال ملف report.json، لذا لم يرسل شيء. افتح «أبلغ عن مشكلة» مرة أخرى لاحقًا."}
+{"k": "rep.document_line", "src": "f2943506", "v": "التقرير الدقيق في ملف report.json الذي يرد على هذه البطاقة."}
+{"k": "rep.explanation", "src": "d470a7df", "v": "هذا كل ما يحتويه التقرير. لم يرسل شيء بعد.\nلا يحتوي على محادثات أو طلبات أو أسماء جلسات أو مجلدات أو رموز token أو معرفات محادثات أو أسماء مستخدمين.\nيذهب إلى صندوق أخطاء مطور aipager (Sentry)، دون اسم."}
+{"k": "rep.heading", "src": "ad1633d0", "v": "🐞 <b>أبلغ عن مشكلة</b>"}
+{"k": "rep.lost", "src": "6b4837a4", "v": "هذه المعاينة لم تعد مفتوحة، لذا لم يرسل شيء. افتح «أبلغ عن مشكلة» مرة أخرى لترى معاينة جديدة."}
+{"k": "rep.note.prompt", "src": "dc71be87", "v": {"few": "✏️ اكتب ملاحظتك في رسالة واحدة (بحد أقصى {n} أحرف). تدخل التقرير كما تراها تمامًا قبل الإرسال. أي شيء آخر تفعله يغلق هذا.", "many": "✏️ اكتب ملاحظتك في رسالة واحدة (بحد أقصى {n} حرفًا). تدخل التقرير كما تراها تمامًا قبل الإرسال. أي شيء آخر تفعله يغلق هذا.", "one": "✏️ اكتب ملاحظتك في رسالة واحدة (بحد أقصى حرف واحد). تدخل التقرير كما تراها تمامًا قبل الإرسال. أي شيء آخر تفعله يغلق هذا.", "other": "✏️ اكتب ملاحظتك في رسالة واحدة (بحد أقصى {n} حرف). تدخل التقرير كما تراها تمامًا قبل الإرسال. أي شيء آخر تفعله يغلق هذا.", "two": "✏️ اكتب ملاحظتك في رسالة واحدة (بحد أقصى حرفان). تدخل التقرير كما تراها تمامًا قبل الإرسال. أي شيء آخر تفعله يغلق هذا.", "zero": "✏️ اكتب ملاحظتك في رسالة واحدة (بحد أقصى {n} حرف). تدخل التقرير كما تراها تمامًا قبل الإرسال. أي شيء آخر تفعله يغلق هذا."}}
+{"k": "rep.offer.also_other", "src": "2b336900", "v": {"few": "و{n} أخطاء أخرى.", "many": "و{n} خطأً آخر.", "one": "وخطأ آخر.", "other": "و{n} خطأ آخر.", "two": "وخطآن آخران.", "zero": "ولا أخطاء أخرى."}}
+{"k": "rep.offer.declined", "src": "5d912282", "v": "حسنًا. لن يسأل aipager عن هذا مجددًا في هذا الإصدار."}
+{"k": "rep.offer.internal", "src": "4df624aa", "v": {"few": "واجه aipager خطأً داخليًا {n} مرات ({error} في {area}).", "many": "واجه aipager خطأً داخليًا {n} مرة ({error} في {area}).", "one": "واجه aipager خطأً داخليًا مرة واحدة ({error} في {area}).", "other": "واجه aipager خطأً داخليًا {n} مرة ({error} في {area}).", "two": "واجه aipager خطأً داخليًا مرتين ({error} في {area}).", "zero": "واجه aipager خطأً داخليًا {n} مرة ({error} في {area})."}}
+{"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "واجه aipager خطأً داخليًا مرة واحدة ({error} في {area})."}
+{"k": "rep.offer.memcap", "src": "698bc999", "v": {"few": "بلغ hook الخاص بـ aipager حد ذاكرته {n} مرات.", "many": "بلغ hook الخاص بـ aipager حد ذاكرته {n} مرة.", "one": "بلغ hook الخاص بـ aipager حد ذاكرته مرة واحدة.", "other": "بلغ hook الخاص بـ aipager حد ذاكرته {n} مرة.", "two": "بلغ hook الخاص بـ aipager حد ذاكرته مرتين.", "zero": "بلغ hook الخاص بـ aipager حد ذاكرته {n} مرة."}}
+{"k": "rep.offer.memcap_once", "src": "63461898", "v": "بلغ hook الخاص بـ aipager حد ذاكرته مرة واحدة."}
+{"k": "rep.offer.not_opened", "src": "1df3fb0a", "v": "تعذر فتح معاينة التقرير. «أبلغ عن مشكلة» في /help يفتح معاينة جديدة."}
+{"k": "rep.offer.off", "src": "3706223b", "v": "العروض التلقائية متوقفة الآن. لإعادة تشغيلها: /settings، ثم «تقارير المشكلات»."}
+{"k": "rep.offer.preview", "src": "0835e626", "v": "فتحت معاينة التقرير أدناه."}
+{"k": "rep.offer.stopped", "src": "1f8a50a5", "v": {"few": "توقف aipager بشكل غير متوقع {n} مرات.", "many": "توقف aipager بشكل غير متوقع {n} مرة.", "one": "توقف aipager بشكل غير متوقع مرة واحدة.", "other": "توقف aipager بشكل غير متوقع {n} مرة.", "two": "توقف aipager بشكل غير متوقع مرتين.", "zero": "توقف aipager بشكل غير متوقع {n} مرة."}}
+{"k": "rep.offer.stopped_once", "src": "98a8d806", "v": "توقف aipager بشكل غير متوقع مرة واحدة."}
+{"k": "rep.offer.tail", "src": "e58f2a0c", "v": "يساعد التقرير على إصلاح ذلك. يحتوي فقط على الإصدارات ومواضع في الشيفرة، ولا يحتوي أبدًا على محادثاتك أو طلباتك أو الأسماء أو المسارات."}
+{"k": "rep.outcome.daily_cap", "src": "2095768c", "v": {"few": "التقارير محدودة بـ {n} تقارير يوميًا من جهاز واحد. حاول غدًا.", "many": "التقارير محدودة بـ {n} تقريرًا يوميًا من جهاز واحد. حاول غدًا.", "one": "التقارير محدودة بتقرير واحد يوميًا من جهاز واحد. حاول غدًا.", "other": "التقارير محدودة بـ {n} تقرير يوميًا من جهاز واحد. حاول غدًا.", "two": "التقارير محدودة بتقريرين يوميًا من جهاز واحد. حاول غدًا.", "zero": "التقارير محدودة بـ {n} يوميًا من جهاز واحد. حاول غدًا."}}
+{"k": "rep.outcome.disabled", "src": "23061011", "v": "أوقف المطور تقارير المشكلات حاليًا. لم يرسل شيء."}
+{"k": "rep.outcome.invalid", "src": "55ae1194", "v": "لم يجتز هذا التقرير فحوصه الخاصة، لذا لم يرسل."}
+{"k": "rep.outcome.sent", "src": "3456aede", "v": "تم الإرسال. المرجع {reference} (اذكره إذا فتحت issue على GitHub)."}
+{"k": "rep.outcome.too_old", "src": "3e8e0bff", "v": "لم يعد إصدار aipager هذا قادرًا على إرسال التقارير. حدثه ({command}) وحاول مرة أخرى."}
+{"k": "rep.outcome.try_later", "src": "ab0f2d7c", "v": "تعذر الإرسال الآن. لم يضع شيء؛ حاول لاحقًا."}
+{"k": "rep.status.note_added", "src": "96d23c70", "v": "أضيفت الملاحظة."}
+{"k": "rep.status.note_closed", "src": "8187cfb3", "v": "لم تضف الملاحظة: لقد فعلت شيئًا آخر. اضغط «أضف ملاحظة» لتحاول مجددًا."}
+{"k": "rep.status.note_cut", "src": "e9ab8458", "v": {"few": "أضيفت الملاحظة، واقتطعت إلى {n} أحرف.", "many": "أضيفت الملاحظة، واقتطعت إلى {n} حرفًا.", "one": "أضيفت الملاحظة، واقتطعت إلى حرف واحد.", "other": "أضيفت الملاحظة، واقتطعت إلى {n} حرف.", "two": "أضيفت الملاحظة، واقتطعت إلى حرفين.", "zero": "أضيفت الملاحظة، واقتطعت إلى {n} حرف."}}
+{"k": "rep.status.note_empty", "src": "1f872085", "v": "كانت تلك الملاحظة فارغة، لذا لم يضف شيء."}
+{"k": "rep.status.note_refused", "src": "c92adef7", "v": "تعذرت إضافة تلك الملاحظة. جرب ملاحظة أقصر وأبسط."}
+{"k": "rep.status.send_failed", "src": "ff84d63e", "v": "تعذر إرسال هذا التقرير بسبب مشكلة داخل aipager. لم يرسل شيء."}
+{"k": "rep.status.sending", "src": "c338c191", "v": "يجري الإرسال..."}
+{"k": "resume.header", "src": "74554c53", "v": "{icon} <b>[{session}]</b> · {state}"}
+{"k": "resume.header_clock", "src": "b1522d3c", "v": "{icon} <b>[{session}]</b> · {state} {clock}"}
+{"k": "resume.more_no_transcript", "src": "d8f1f6e8", "v": {"few": "<i>و{n} جلسات أخرى بلا سجل محفوظ للاستئناف منه.</i>", "many": "<i>و{n} جلسة أخرى بلا سجل محفوظ للاستئناف منه.</i>", "one": "<i>وجلسة أخرى بلا سجل محفوظ للاستئناف منه.</i>", "other": "<i>و{n} جلسة أخرى بلا سجل محفوظ للاستئناف منه.</i>", "two": "<i>وجلستان أخريان بلا سجل محفوظ للاستئناف منه.</i>", "zero": "<i>لا جلسات أخرى بلا سجل محفوظ للاستئناف منه.</i>"}}
+{"k": "resume.no_preview", "src": "34384805", "v": "<i>(لا معاينة)</i>"}
+{"k": "resume.no_transcript", "src": "65416f58", "v": {"few": "<i>{n} جلسات بلا سجل محفوظ للاستئناف منه.</i>", "many": "<i>{n} جلسة بلا سجل محفوظ للاستئناف منه.</i>", "one": "<i>جلسة واحدة بلا سجل محفوظ للاستئناف منه.</i>", "other": "<i>{n} جلسة بلا سجل محفوظ للاستئناف منه.</i>", "two": "<i>جلستان بلا سجل محفوظ للاستئناف منه.</i>", "zero": "<i>لا جلسات بلا سجل محفوظ للاستئناف منه.</i>"}}
+{"k": "resume.none", "src": "f0e1dc3c", "v": "📭 لا جلسات سابقة للاستئناف."}
+{"k": "resume.recent", "src": "c14c1ce4", "v": "الأخيرة:"}
+{"k": "resume.row", "src": "c75d6298", "v": "🔘 <b>{session}</b> (<i>{when}</i>)"}
+{"k": "resume.row.active", "src": "ebbe643f", "v": "النشاط: {ago}"}
+{"k": "resume.row.active_now", "src": "95e3adc9", "v": "النشاط: الآن"}
+{"k": "resume.row.active_unknown", "src": "15d90554", "v": "النشاط: غير معروف"}
+{"k": "resume.row.agents", "src": "1344dd37", "v": {"few": "الوكلاء: {n} ({types})", "many": "الوكلاء: {n} ({types})", "one": "الوكلاء: {n} ({types})", "other": "الوكلاء: {n} ({types})", "two": "الوكلاء: {n} ({types})", "zero": "الوكلاء: {n} ({types})"}}
+{"k": "resume.row.agents_count", "src": "abe9706b", "v": {"few": "الوكلاء: {n}", "many": "الوكلاء: {n}", "one": "الوكلاء: {n}", "other": "الوكلاء: {n}", "two": "الوكلاء: {n}", "zero": "الوكلاء: {n}"}}
+{"k": "resume.row.cost", "src": "68433bc8", "v": "التكلفة: {cost}"}
+{"k": "resume.row.ctx", "src": "edcc7a6b", "v": "السياق: {percent} {bar}"}
+{"k": "resume.row.lines", "src": "439ccc8a", "v": "الأسطر: {changes}"}
+{"k": "resume.row.model", "src": "e60d2adb", "v": "النموذج: {model}"}
+{"k": "resume.row.output", "src": "2a39ea71", "v": "رموز token الناتجة: {tokens}"}
+{"k": "resume.row.queue", "src": "865b83a5", "v": "قائمة الانتظار: {pending} معلقة ({queued} رسائل، {notes} ملاحظات)"}
+{"k": "resume.state.busy", "src": "e18a89f9", "v": "مشغولة"}
+{"k": "resume.state.gone", "src": "a6dfdeaa", "v": "انتهت"}
+{"k": "resume.state.idle", "src": "1adbcc34", "v": "خاملة"}
+{"k": "resume.state.interactive", "src": "00753189", "v": "تنتظر إجابة"}
+{"k": "resume.state.unknown", "src": "50d8b4a9", "v": "غير معروفة"}
+{"k": "resume.tap", "src": "c118e3b9", "v": "اضغط زرًا أدناه للاستئناف."}
+{"k": "resume.title", "src": "d5cecda8", "v": {"few": "📚 <b>الجلسات السابقة</b> (المجموع {n})", "many": "📚 <b>الجلسات السابقة</b> (المجموع {n})", "one": "📚 <b>الجلسات السابقة</b> (المجموع {n})", "other": "📚 <b>الجلسات السابقة</b> (المجموع {n})", "two": "📚 <b>الجلسات السابقة</b> (المجموع {n})", "zero": "📚 <b>الجلسات السابقة</b> (المجموع {n})"}}
+{"k": "route.btn.resume", "src": "2db3fd81", "v": "🔁 استئناف"}
+{"k": "route.btn.resume_label", "src": "5a3f876a", "v": "▶️ استأنف {session}"}
+{"k": "route.cant_clear_busy", "src": "cf8384cd", "v": "⚠️ لا يمكن المسح والجلسة مشغولة"}
+{"k": "route.clear_no_active", "src": "1ada2799", "v": "لا جلسة نشطة - انتقل إلى واحدة عبر {command} أولًا."}
+{"k": "route.clear_nothing", "src": "75578929", "v": "لا شيء لمسحه في [{session}]."}
+{"k": "route.cleared", "src": "fd716ebc", "v": {"few": "🗑️ مسحت {n} رسائل من قائمة انتظار [<b>{session}</b>].", "many": "🗑️ مسحت {n} رسالة من قائمة انتظار [<b>{session}</b>].", "one": "🗑️ مسحت رسالة واحدة من قائمة انتظار [<b>{session}</b>].", "other": "🗑️ مسحت {n} رسالة من قائمة انتظار [<b>{session}</b>].", "two": "🗑️ مسحت رسالتان من قائمة انتظار [<b>{session}</b>].", "zero": "🗑️ لم تمسح أي رسالة من قائمة انتظار [<b>{session}</b>]."}}
+{"k": "route.ended_which", "src": "eb950d37", "v": "انتهت {session}. أي جلسة؟"}
+{"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ لا أعرف لأي جلسة هذا الملف. اختر واحدة عبر {command} أو لوحة المفاتيح."}
+{"k": "route.inject_failed", "src": "4793e79c", "v": "❌ تعذر إدخال النص المفرغ في [{session}]"}
+{"k": "route.kill_none", "src": "1c62fda9", "v": "لا جلسات لإنهائها."}
+{"k": "route.kill_which", "src": "65bf98de", "v": "أي جلسة تنهي؟"}
+{"k": "route.mention_alone", "src": "c8588bc4", "v": "أرسل {command} وحده، دون ذكر البوت."}
+{"k": "route.model_now", "src": "721a5dbc", "v": "🧠 الآن {model}"}
+{"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "رسالة عضو آخر لا تزال تنتظر التقاطها - بدل النموذج بعدها."}
+{"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> ← {model}"}
+{"k": "route.no_active", "src": "96477f98", "v": "⚠️ لا جلسة نشطة"}
+{"k": "route.no_live_here", "src": "2a22b699", "v": "⚠️ لا توجد هنا جلسة تعمل باسم <b>{session}</b>."}
+{"k": "route.no_session", "src": "f3bc5d54", "v": "⚠️ لا أعرف لأي جلسة هذا. اختر واحدة عبر {command} أو لوحة المفاتيح."}
+{"k": "route.no_session_here", "src": "d6bac23e", "v": "⚠️ لا توجد هنا جلسة باسم <b>{session}</b>."}
+{"k": "route.not_alive", "src": "248cf0d5", "v": "⚠️ الجلسة [{session}] لا تعمل"}
+{"k": "route.not_working", "src": "40bb3d05", "v": "<b>{session}</b> لا تعمل الآن."}
+{"k": "route.nothing_running", "src": "3c49e2a3", "v": "لا شيء قيد التشغيل."}
+{"k": "route.queue_full", "src": "f6582eab", "v": {"few": "⚠️ قائمة انتظار [{session}] ممتلئة ({n} معلقة). أجب عن الطلب أو امسح قائمة الانتظار.", "many": "⚠️ قائمة انتظار [{session}] ممتلئة ({n} معلقة). أجب عن الطلب أو امسح قائمة الانتظار.", "one": "⚠️ قائمة انتظار [{session}] ممتلئة ({n} معلقة). أجب عن الطلب أو امسح قائمة الانتظار.", "other": "⚠️ قائمة انتظار [{session}] ممتلئة ({n} معلقة). أجب عن الطلب أو امسح قائمة الانتظار.", "two": "⚠️ قائمة انتظار [{session}] ممتلئة ({n} معلقة). أجب عن الطلب أو امسح قائمة الانتظار.", "zero": "⚠️ قائمة انتظار [{session}] ممتلئة ({n} معلقة). أجب عن الطلب أو امسح قائمة الانتظار."}}
+{"k": "route.refusal_frame", "src": "e19d24e3", "v": "⚠️ [{session}] {reason}"}
+{"k": "route.resume_then_resend", "src": "df2cce7e", "v": "بعد ▶️ استئناف، أرسل رسالتك مرة أخرى."}
+{"k": "route.retry_note_others", "src": "f54d6bb2", "v": "⏸ لم تعد المحاولة - تجري الآن جولة شخص آخر. اضغط «أعد المحاولة» مرة أخرى عندما تنتهي."}
+{"k": "route.retry_note_prompt", "src": "a9f6356e", "v": "⏸ لم تعد المحاولة - يوجد طلب مفتوح. أجب عنه، ثم اضغط «أعد المحاولة» مرة أخرى."}
+{"k": "route.send_failed", "src": "3c65fe20", "v": "❌ تعذر الإرسال إلى [{session}]"}
+{"k": "route.sent_to", "src": "72283da2", "v": "{glyph} تم إرسال {what} إلى {session}"}
+{"k": "route.session_missing", "src": "e8086da8", "v": "⚠️ لم يعثر على الجلسة «{name}»"}
+{"k": "route.unknown_session", "src": "2823272e", "v": "⚠️ جلسة غير معروفة: {session}"}
+{"k": "route.voice_no_session", "src": "6c2d2821", "v": "⚠️ فرغ الصوت نصيًا لكن لا توجد جلسة نشطة لإرساله إليها. اختر واحدة عبر {command} أولًا."}
+{"k": "route.warning", "src": "4329faf5", "v": "⚠️ {text}"}
+{"k": "route.which_reply", "src": "6771e2f8", "v": "أي جلسة؟ رد على إحدى رسائلها، أو أرسل {command} ثم رسالتك."}
+{"k": "route.which_stop", "src": "aba80827", "v": "أيها أوقف؟"}
+{"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · حظرتها سياسة الأمان: {reason} (أوقفت)"}
+{"k": "safety.reason.bash", "src": "f380389e", "v": "حظرت سياسة الأمان أمر Bash"}
+{"k": "safety.reason.bash_search", "src": "74dafe28", "v": "حظرت سياسة الأمان أمر Bash: البحث أو العرض المتكرر في المجلد الرئيسي كله أو في / غير مسموح؛ ابحث داخل مجلد مشروع بدلًا من ذلك"}
+{"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} بنمط glob يخرج إلى أعلى عبر .."}
+{"k": "safety.reason.glob_escaped", "src": "bf605149", "v": "{tool} بنمط glob فيه تهريب"}
+{"k": "safety.reason.glob_not_plain", "src": "6db7d611", "v": "{tool} بنمط glob ليس نمطًا نسبيًا بسيطًا"}
+{"k": "safety.reason.glob_unreadable", "src": "da95c3b5", "v": "{tool} بنمط glob غير مقروء"}
+{"k": "safety.reason.halted", "src": "343e090e", "v": "أوقفت الجلسة - حظرت سياسة الأمان استدعاء أداة سابقًا في هذه الجولة؛ ابدأ طلبًا جديدًا"}
+{"k": "safety.reason.outside_root_read", "src": "377378fa", "v": "رفض {tool} - هذا الدور يقرأ في المجلد الرئيسي فقط داخل مجلده الخاص"}
+{"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool} خارج مجلد الجلسة - الجولة المقيدة تبحث فقط في مشروعها وفي scratchpad"}
+{"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool} خارج مجلد الجلسة - الجولة المقيدة تكتب فقط في مشروعها وفي scratchpad"}
+{"k": "safety.reason.path_protected", "src": "feff9877", "v": "{tool} على المسار المحمي {glob}"}
+{"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool}: كتابة إلى المسار المحمي {glob}"}
+{"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool} بمسار غير مقروء"}
+{"k": "safety.reason.pattern_unreadable", "src": "88053cf7", "v": "{tool} بنمط غير مقروء"}
+{"k": "safety.reason.root_cwd_search", "src": "086246f6", "v": "رفض {tool} - تعمل هذه الجلسة خارج المجلد الخاص بهذا الدور، لذلك يمكنه البحث فقط في scratchpad الخاص به"}
+{"k": "safety.reason.root_cwd_write", "src": "bc6e509f", "v": "رفض {tool} - تعمل هذه الجلسة خارج المجلد الخاص بهذا الدور، لذلك يمكنه الكتابة فقط في scratchpad الخاص به"}
+{"k": "safety.reason.runs_commands", "src": "e180a703", "v": "{tool} إلى ملف يشغل أوامر (.claude/، .git/، .mcp.json)"}
+{"k": "safety.reason.search_anywhere", "src": "c1ad4431", "v": "رفض {tool} - المسار المحمي {glob} قد يكون في أي مجلد، لذا لا يمكن لهذا الدور البحث باستخدام Grep أو Glob"}
+{"k": "safety.reason.search_could_reach", "src": "a95243b1", "v": "قد يصل بحث {tool} إلى المسار المحمي {glob}"}
+{"k": "safety.reason.search_folder_unreadable", "src": "c14493b7", "v": "{tool} بمجلد بحث غير مقروء"}
+{"k": "safety.reason.search_protected_files", "src": "1133aa2e", "v": "رفض {tool} - هذا البحث سيصل إلى ملفات محمية ({shown})؛ ابحث داخل مجلد مشروع بدلًا من ذلك"}
+{"k": "safety.reason.search_reaches", "src": "3e342a42", "v": "بحث {tool} يصل إلى المسار المحمي {glob}"}
+{"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "SendMessage إلى جلسة Claude لا يديرها aipager"}
+{"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool} موجود في deny_tools لهذا الدور"}
+{"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool} غير موجود في allow_tools لهذا الدور"}
+{"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "تعذر فحص استدعاء الأداة هذا، لذا رفض"}
+{"k": "safety.reason.wide_cwd_search", "src": "5112bac1", "v": "رفض {tool} - تعمل هذه الجلسة في المجلد الرئيسي (أو في مجلد فوقه)، وهذا الدور يمكنه البحث فقط داخل مجلد مشروع"}
+{"k": "safety.reason.wide_cwd_write", "src": "90769493", "v": "رفض {tool} - تعمل هذه الجلسة في المجلد الرئيسي (أو في مجلد فوقه)، وهذا الدور يمكنه الكتابة فقط داخل مجلد مشروع"}
+{"k": "sendnow.btn.send", "src": "edac6f66", "v": "⚡ أرسل الآن"}
+{"k": "sendnow.line", "src": "41e9ef1b", "v": "⏳ في قائمة الانتظار - سيقرؤها Claude بعد الخطوة الحالية"}
+{"k": "sendnow.line_unreached", "src": "d8eeb821", "v": "⏳ في قائمة الانتظار - تعذر الوصول إلى Claude، اضغط «أرسل الآن» لتحاول مجددًا"}
+{"k": "sendnow.reply_no_session", "src": "cfa31918", "v": "لا جلسة نشطة."}
+{"k": "sendnow.reply_nothing", "src": "7f03c384", "v": "لا شيء ينتظر في قائمة الانتظار"}
+{"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ تم الإرسال إلى Claude الآن"}
+{"k": "sess.btn.cancel", "src": "77dfd213", "v": "إلغاء"}
+{"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ إلغاء"}
+{"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ إغلاق"}
+{"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ حذف"}
+{"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 Diff"}
+{"k": "sess.btn.end", "src": "58096fa3", "v": "⏹ إنهاء"}
+{"k": "sess.btn.end_session", "src": "cad78af6", "v": "⏹ إنهاء الجلسة"}
+{"k": "sess.btn.prefs", "src": "28784f50", "v": "👤 التفضيلات"}
+{"k": "sess.btn.rename", "src": "7decc377", "v": "✏️ إعادة التسمية"}
+{"k": "sess.btn.restart", "src": "06188389", "v": "🔄 إعادة التشغيل"}
+{"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ استئناف"}
+{"k": "sess.cancelled", "src": "3678513b", "v": "↩️ ألغي."}
+{"k": "sess.delete_cancelled", "src": "7105554d", "v": "ألغي حذف [<b>{session}</b>]."}
+{"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ إزالة [<b>{session}</b>] من قائمة الجلسات؟ لا يمكن التراجع عن هذا."}
+{"k": "sess.delete_none", "src": "58e4ba7f", "v": "لا جلسات منتهية لحذفها."}
+{"k": "sess.delete_still_running", "src": "ff86cceb", "v": "⚠️ [<b>{session}</b>] لا تزال تعمل. أنهها أولًا عبر /kill."}
+{"k": "sess.delete_which", "src": "b568401d", "v": "أي جلسة منتهية تزيل؟"}
+{"k": "sess.deleted", "src": "5af8d1c8", "v": "🗑️ حذفت [<b>{session}</b>]."}
+{"k": "sess.deleted_by", "src": "38b3ffbc", "v": "🗑️ حذف {person} الجلسة [<b>{session}</b>]."}
+{"k": "sess.diff_files", "src": "84597d92", "v": {"few": "📝 [<b>{session}</b>] تغيرت {n} ملفات، +{added}/-{removed}", "many": "📝 [<b>{session}</b>] تغير {n} ملفًا، +{added}/-{removed}", "one": "📝 [<b>{session}</b>] تغير ملف واحد، +{added}/-{removed}", "other": "📝 [<b>{session}</b>] تغير {n} ملف، +{added}/-{removed}", "two": "📝 [<b>{session}</b>] تغير ملفان، +{added}/-{removed}", "zero": "📝 [<b>{session}</b>] لم يتغير أي ملف، +{added}/-{removed}"}}
+{"k": "sess.diff_none", "src": "3b2e4538", "v": "لا تغييرات في مجلد عمل [<b>{session}</b>]."}
+{"k": "sess.diff_none_live", "src": "3f72a95c", "v": "لا جلسات تعمل لعرض diff لها."}
+{"k": "sess.diff_reason.cwd_missing", "src": "e6e5befa", "v": "مجلد عمل [{label}] لم يعد موجودًا."}
+{"k": "sess.diff_reason.git_error", "src": "18d7631e", "v": "تعذرت قراءة diff الآن - حاول مرة أخرى."}
+{"k": "sess.diff_reason.git_not_installed", "src": "171dd6a9", "v": "git غير متاح على هذا الجهاز."}
+{"k": "sess.diff_reason.no_commits_yet", "src": "94fb37e6", "v": "مستودع [{label}] ليس فيه commit بعد."}
+{"k": "sess.diff_reason.not_a_git_repo", "src": "c639ff9f", "v": "مجلد [{label}] ليس مستودع git."}
+{"k": "sess.diff_which", "src": "2485be52", "v": "diff أي جلسة؟"}
+{"k": "sess.end_confirm", "src": "dffc4f34", "v": "⏹ إنهاء <b>{session}</b>؟ يتوقف Claude وتغلق الجلسة."}
+{"k": "sess.ended", "src": "6659a4fd", "v": "⏹ أنهيت <b>{session}</b>"}
+{"k": "sess.ended_by", "src": "9e9bdbd1", "v": "⏹ أنهى {person} الجلسة <b>{session}</b>"}
+{"k": "sess.kill_cancelled", "src": "cf4e32bb", "v": "↩️ ألغي. لم ينته شيء."}
+{"k": "sess.menu_closed", "src": "e2a2c077", "v": "أغلقت قائمة [<b>{session}</b>]."}
+{"k": "sess.menu_no_transcript", "src": "72c75098", "v": "<i>لا سجل محفوظ للاستئناف منه.</i>"}
+{"k": "sess.menu_title", "src": "2a8eb73c", "v": "⋮ <b>{session}</b> - اختر إجراء:"}
+{"k": "sess.not_sent_to", "src": "0d040f9f", "v": "لم ترسل إلى {session}."}
+{"k": "sess.pick_cancelled", "src": "d3e4142f", "v": "ألغي."}
+{"k": "sess.rename_cancelled", "src": "abe2ee6d", "v": "ألغيت إعادة التسمية."}
+{"k": "sess.rename_closed", "src": "d06e8a83", "v": "✖️ أغلقت إعادة التسمية، لقد انتقلت إلى شيء آخر. أرسل /rename لتحاول مجددًا."}
+{"k": "sess.rename_exists", "src": "3367e703", "v": "⚠️ توجد بالفعل جلسة باسم {session} في هذه المحادثة."}
+{"k": "sess.rename_expired", "src": "0235f755", "v": "⏱ انتهت مهلة إعادة التسمية هذه. أرسل /rename مرة أخرى."}
+{"k": "sess.rename_gone", "src": "86c694ee", "v": "⚠️ تلك الجلسة لم تعد متاحة - شغل /rename مرة أخرى."}
+{"k": "sess.rename_none", "src": "2d24aff4", "v": "لا جلسات لإعادة تسميتها."}
+{"k": "sess.rename_not_allowed", "src": "97c2b455", "v": "🚫 لا يمكنك إعادة تسمية هذه الجلسة."}
+{"k": "sess.rename_prompt_reply", "src": "eaadafac", "v": "✏️ الاسم الجديد لـ [<b>{session}</b>]؟ رد على هذه الرسالة بالاسم الجديد."}
+{"k": "sess.rename_prompt_type", "src": "fdf5e253", "v": "✏️ الاسم الجديد لـ [<b>{session}</b>]؟ أرسله في رسالة."}
+{"k": "sess.rename_unchanged", "src": "f41d7d6e", "v": "اسم [<b>{session}</b>] لم يتغير."}
+{"k": "sess.rename_which", "src": "d74e26c1", "v": "أي جلسة تعيد تسميتها؟"}
+{"k": "sess.renamed", "src": "53a36720", "v": "✏️ أعيدت تسمية [<b>{old}</b>] إلى [<b>{new}</b>]."}
+{"k": "sess.restart_cancelled", "src": "e2123246", "v": "ألغيت إعادة تشغيل [<b>{session}</b>]."}
+{"k": "sess.restart_confirm", "src": "eea1e9db", "v": "🔄 إعادة تشغيل الجلسة [<b>{session}</b>]؟ يتوقف Claude ثم يبدأ من جديد محتفظًا بمحادثته."}
+{"k": "sess.restart_failed", "src": "be8ef8e6", "v": "فشلت إعادة تشغيل [{label}]."}
+{"k": "sess.restart_none", "src": "fefd4861", "v": "لا جلسات تعمل لإعادة تشغيلها."}
+{"k": "sess.restart_reason.already_restarting", "src": "119c20da", "v": "[{label}] تعيد التشغيل بالفعل."}
+{"k": "sess.restart_reason.launch_failed", "src": "fc0525be", "v": "فشلت إعادة تشغيل [{label}]: {err}"}
+{"k": "sess.restart_reason.not_live", "src": "d841d7b0", "v": "[{label}] لا تعمل."}
+{"k": "sess.restart_reason.still_stopping", "src": "635882f7", "v": "لم تتوقف [{label}] في الوقت المحدد - حاول مرة أخرى بعد قليل."}
+{"k": "sess.restart_which", "src": "0eada720", "v": "أي جلسة تعيد تشغيلها؟"}
+{"k": "sess.restarted", "src": "dc0ed3cb", "v": "🔄 أعيد تشغيل [<b>{session}</b>]."}
+{"k": "sess.restarted_by", "src": "f2ddb551", "v": "🔄 أعاد {person} تشغيل [<b>{session}</b>]."}
+{"k": "sess.resume_as", "src": "95516616", "v": "استئناف <b>{session}</b> في:"}
+{"k": "sess.resume_failed", "src": "f19c1968", "v": "❌ تعذر استئناف <b>{session}</b>: {error}"}
+{"k": "sess.resume_last_response", "src": "9e8e3733", "v": "<i>📜 آخر إجابة من هذه الجلسة</i>\n<blockquote>{preview}</blockquote>"}
+{"k": "sess.resume_no_transcript", "src": "6b8a4001", "v": "⚠️ ليس للجلسة <b>{session}</b> سجل قابل للاستئناف على القرص.\nابدأ واحدة جديدة عبر {command}."}
+{"k": "sess.resume_not_found", "src": "4c1d68d2", "v": "⚠️ لا توجد جلسة باسم <b>{session}</b> في السجل.\nأرسل {command} دون اسم لترى ما هو متاح."}
+{"k": "sess.resume_running", "src": "c090af67", "v": "⚠️ <b>{session}</b> تعمل بالفعل.\nاضغط {command} في لوحة المفاتيح للانتقال إليها."}
+{"k": "sess.resumed", "src": "57e147d3", "v": "♻️ استؤنفت <b>{session}</b>"}
+{"k": "sess.resumed_in_ask", "src": "8151879e", "v": "♻️ استؤنفت <b>{session}</b> في وضع اسأل: التلقائي يحتاج إلى مشرف."}
+{"k": "sess.sent_to", "src": "d856101f", "v": "تم الإرسال إلى {session}."}
+{"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ إغلاق"}
+{"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 الجلسات الجديدة"}
+{"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 المجلد: {folder} ›"}
+{"k": "set.btn.ns_model", "src": "6fb2e9a4", "v": "🧠 النموذج: {model} ›"}
+{"k": "set.btn.per_session", "src": "9748363d", "v": "👤 تفضيلات كل جلسة"}
+{"k": "set.btn.problem_reports", "src": "2478212a", "v": "🐞 تقارير المشكلات: {value}"}
+{"k": "set.btn.reports_turn_on", "src": "8b383496", "v": "أعد تشغيل العروض"}
+{"k": "set.btn.use_chat_default", "src": "55c966bc", "v": "↩️ استخدم إعداد المحادثة"}
+{"k": "set.cadence.title", "src": "ed8a634b", "v": "⏱ تحديثات البطاقة في الجولات الطويلة"}
+{"k": "set.diffs.title", "src": "9f74873f", "v": "📝 معاينات diff"}
+{"k": "set.formatting.title", "src": "6b0a66a0", "v": "✏️ تنسيق بسيط"}
+{"k": "set.help.cadence.off", "src": "71965ae1", "v": "تتحدث البطاقة بالوتيرة نفسها طوال الجولة مهما طالت."}
+{"k": "set.help.cadence.on", "src": "cb462e4f", "v": "تتحدث البطاقة بوتيرة أقل كلما طالت الجولة (كل ١٠ ث بعد دقيقتين، وكل ٣٠ ث بعد ١٠ د)، وتتقدم ساعتها بخطوات من ٣٠ ث فلا تبدو متجمدة. أي تغير في الحالة يظهر فورًا."}
+{"k": "set.help.diffs.off", "src": "e9b93bde", "v": "تظهر تعديلات الملفات صفوفًا على بطاقة العمل فقط."}
+{"k": "set.help.diffs.on", "src": "1ad75bf3", "v": "كل Write/Edit ينشر أيضًا في رسالة diff خاصة به تحت بطاقة العمل."}
+{"k": "set.help.formatting.off", "src": "14016cc5", "v": "Claude ينسق الإجابات كما يشاء."}
+{"k": "set.help.formatting.on", "src": "13c31447", "v": "نص عادي وقوائم بشرطات فقط - لا جداول ولا كتل شيفرة."}
+{"k": "set.help.layout.card", "src": "75971a73", "v": "تبقى بطاقة العمل، وتصل الإجابة في رسالة خاصة بها."}
+{"k": "set.help.layout.merged", "src": "cb79a1a7", "v": "تحل الإجابة محل نص بطاقة العمل في مكانه."}
+{"k": "set.help.layout.replace", "src": "7802aaf9", "v": "تحل الإجابة وحدها محل بطاقة العمل."}
+{"k": "set.help.length.long", "src": "6d4be59e", "v": "كل التفاصيل حين تحتاجها الإجابة."}
+{"k": "set.help.length.medium", "src": "1f258598", "v": "فقرتان تقريبًا."}
+{"k": "set.help.length.none", "src": "c889d841", "v": "لا توجيه للطول إطلاقًا."}
+{"k": "set.help.length.short", "src": "c4b9b1e2", "v": "بضع جمل."}
+{"k": "set.help.length.xshort", "src": "b3629257", "v": "جملة أو جملتان. بلا مقدمة ولا خلاصة."}
+{"k": "set.help.level.advanced", "src": "820e1448", "v": "يفترض الخبرة؛ بلا شرح مبسط."}
+{"k": "set.help.level.none", "src": "643f8019", "v": "لا توجيه للمفردات إطلاقًا."}
+{"k": "set.help.level.normal", "src": "530e152e", "v": "كتابة تقنية عادية."}
+{"k": "set.help.level.simple", "src": "748c89ff", "v": "كلمات يومية، وجمل قصيرة."}
+{"k": "set.layout.title", "src": "415df682", "v": "🖼 شكل الرسائل"}
+{"k": "set.length.title", "src": "0b4f4428", "v": "📏 طول الإجابة"}
+{"k": "set.level.title", "src": "4e19b762", "v": "🎓 مستوى المفردات"}
+{"k": "set.opt.cadence.off", "src": "b44b98a6", "v": "إيقاف - الوتيرة نفسها طوال الجولة"}
+{"k": "set.opt.cadence.on", "src": "3843eb22", "v": "تشغيل - أبطأ كلما طالت الجولة"}
+{"k": "set.opt.chat_default", "src": "58286063", "v": "{option} (افتراضي المحادثة)"}
+{"k": "set.opt.diffs.off", "src": "64a190d9", "v": "إيقاف - بطاقة العمل فقط"}
+{"k": "set.opt.diffs.on", "src": "3c616425", "v": "تشغيل - رسالة diff لكل تعديل"}
+{"k": "set.opt.formatting.off", "src": "a779e619", "v": "إيقاف - التنسيق الافتراضي"}
+{"k": "set.opt.formatting.on", "src": "4321e58a", "v": "تشغيل - نص عادي فقط"}
+{"k": "set.opt.layout.card", "src": "cb54ae30", "v": "بطاقة العمل + النتيجة"}
+{"k": "set.opt.layout.merged", "src": "732da229", "v": "مدمجة في رسالة العمل"}
+{"k": "set.opt.layout.replace", "src": "1f8e1a41", "v": "استبدال بالنتيجة"}
+{"k": "set.opt.length.long", "src": "11eda67f", "v": "طويلة"}
+{"k": "set.opt.length.medium", "src": "d404968e", "v": "متوسطة"}
+{"k": "set.opt.length.none", "src": "e6752500", "v": "لا تطبق أي قاعدة"}
+{"k": "set.opt.length.short", "src": "0fe7d82f", "v": "قصيرة"}
+{"k": "set.opt.length.xshort", "src": "e937255b", "v": "قصيرة جدًا"}
+{"k": "set.opt.level.advanced", "src": "4d064726", "v": "متقدم"}
+{"k": "set.opt.level.none", "src": "e6752500", "v": "لا تطبق أي قاعدة"}
+{"k": "set.opt.level.normal", "src": "45e118d0", "v": "عادي"}
+{"k": "set.opt.level.simple", "src": "0406a446", "v": "كلمات بسيطة"}
+{"k": "set.opt.ns_default_folder", "src": "56d18a09", "v": "المجلد الافتراضي"}
+{"k": "set.opt.ns_default_model", "src": "5fbae11e", "v": "النموذج الافتراضي"}
+{"k": "set.opt.ns_older_model", "src": "3e0492cf", "v": "{model} (نموذج أقدم)"}
+{"k": "set.opt.reports.ask", "src": "10a8fd63", "v": "اسألني"}
+{"k": "set.opt.reports.auto_off", "src": "7e82eed6", "v": "العروض متوقفة"}
+{"k": "set.opt.reports.off", "src": "e3de5ab0", "v": "إيقاف"}
+{"k": "set.text.changed_by", "src": "63c7cabd", "v": "<i>غيره {person}.</i>"}
+{"k": "set.text.closed", "src": "731152a0", "v": "أغلقت."}
+{"k": "set.text.intro.cadence", "src": "c2f74acd", "v": "كم مرة تتحدث بطاقة العمل أثناء جولة طويلة. تشغيل: تبطئ كلما طالت الجولة وتتقدم ساعتها بخطوات من ٣٠ ث، فتبقى المحادثة الطويلة ضمن حدود Telegram بأمان. إيقاف: تبقى وتيرة الدقائق الأولى طوال الجولة."}
+{"k": "set.text.intro.diffs", "src": "7a426bb1", "v": "هل ينشر كل تعديل ملف في رسالة diff منفصلة تحت بطاقة العمل. إيقاف: بطاقة عمل واحدة وإجابة واحدة - تظل البطاقة تسرد كل تعديل، وفي Mini App عارض diff."}
+{"k": "set.text.intro.formatting", "src": "71988826", "v": "عند التشغيل، تستخدم الإجابات نصًا عاديًا وقوائم بسيطة بشرطات فقط - بلا جداول ولا كتل شيفرة ولا عناوين ولا خط عريض أو مائل."}
+{"k": "set.text.intro.layout", "src": "891af1fd", "v": "كيف تظهر الجولة المنتهية في المحادثة."}
+{"k": "set.text.intro.length", "src": "e64e4857", "v": "كم يجب أن يكون طول إجابات Claude."}
+{"k": "set.text.intro.level", "src": "5ca0f466", "v": "مستوى المفردات في إجابات Claude."}
+{"k": "set.text.ns_folder_title", "src": "f4eab7d6", "v": "📁 <b>مجلد الجلسات الجديدة</b>"}
+{"k": "set.text.ns_model_title", "src": "386d1055", "v": "🧠 <b>نموذج الجلسات الجديدة</b>"}
+{"k": "set.text.ns_root", "src": "af342243", "v": "🆕 <b>الجلسات الجديدة</b>\n\nما يبدأ به /new الجلسة. لا يزال بإمكانك تغييره على بطاقة جلسة واحدة.\n\nالأذونات: {mode}\nالنموذج: {model}\nالمجلد: {folder}"}
+{"k": "set.text.reports_auto_off", "src": "52adfc5a", "v": "العروض التلقائية: متوقفة (رفضت عرضين متتاليين)."}
+{"k": "set.text.reports_env_off", "src": "408411eb", "v": "العروض متوقفة أيضًا على هذا الجهاز عبر AIPAGER_REPORT_PROMPTS=0."}
+{"k": "set.text.reports_intro", "src": "4fe65258", "v": "حين يواجه aipager الخطأ الداخلي نفسه أكثر من مرة، يمكنه أن يعرض إرسال تقرير. ترى التقرير دائمًا أولًا، ولا يرسل شيء ما لم تضغط «إرسال».\n\nاسألني: اعرض ذلك أحيانًا (مرة كل ٣ أيام على الأكثر).\nإيقاف: لا تعرض أبدًا. «أبلغ عن مشكلة» في /help يعمل دائمًا."}
+{"k": "set.text.reports_title", "src": "036f0be5", "v": "🐞 <b>تقارير المشكلات</b>"}
+{"k": "set.text.root", "src": "25c10fde", "v": "⚙️ <b>الإعدادات</b>\n\nتفضيلات هذه المحادثة لطريقة إجابة Claude هنا. اضغط قسمًا لتغييره."}
+{"k": "set.text.row", "src": "b98927cc", "v": "{title}: {value}"}
+{"k": "set.text.spref_field", "src": "53c8e84c", "v": "{title} - لـ [<b>{session}</b>]\n\n{title} الذي تستخدمه هذه الجلسة، بدلًا من /settings هذه المحادثة، لها وحدها."}
+{"k": "set.text.spref_none", "src": "3856fe99", "v": "👤 <b>تفضيلات كل جلسة</b>\n\nلا جلسات بعد."}
+{"k": "set.text.spref_pick", "src": "fb84677e", "v": "👤 <b>تفضيلات كل جلسة</b>\n\nاختر جلسة لتحدد لها أسلوب إجابة خاصًا."}
+{"k": "set.text.spref_root", "src": "b29b833e", "v": "👤 <b>تفضيلات الجلسة - [{session}]</b>\n\nيحدد أسلوب إجابة هذه الجلسة. الحقول غير المحددة تأخذ /settings هذه المحادثة. ⭐ تعلم حقلًا حددته هذه الجلسة لنفسها."}
+{"k": "status.btn.answer", "src": "a16a4eda", "v": "أجب"}
+{"k": "status.btn.clear_all", "src": "4944581b", "v": "🧹 أزل الكل"}
+{"k": "status.btn.ended", "src": "ae183190", "v": {"few": "⚫ المنتهية ({n})", "many": "⚫ المنتهية ({n})", "one": "⚫ المنتهية ({n})", "other": "⚫ المنتهية ({n})", "two": "⚫ المنتهية ({n})", "zero": "⚫ المنتهية ({n})"}}
+{"k": "status.btn.more", "src": "a6bc69aa", "v": "⋮ المزيد"}
+{"k": "status.btn.new", "src": "fb873221", "v": "🆕 جديدة"}
+{"k": "status.btn.new_session", "src": "19b62fc4", "v": "🆕 جلسة جديدة"}
+{"k": "status.ctx", "src": "daeecae8", "v": "ctx {percent}"}
+{"k": "status.ended", "src": "63dbdb7e", "v": {"few": "⚫ <b>الجلسات المنتهية ({n})</b>\n\nاستأنف واحدة، أو احذف واحدة، أو أزلها كلها من /status (تبقى في /resume).", "many": "⚫ <b>الجلسات المنتهية ({n})</b>\n\nاستأنف واحدة، أو احذف واحدة، أو أزلها كلها من /status (تبقى في /resume).", "one": "⚫ <b>الجلسات المنتهية ({n})</b>\n\nاستأنف واحدة، أو احذف واحدة، أو أزلها كلها من /status (تبقى في /resume).", "other": "⚫ <b>الجلسات المنتهية ({n})</b>\n\nاستأنف واحدة، أو احذف واحدة، أو أزلها كلها من /status (تبقى في /resume).", "two": "⚫ <b>الجلسات المنتهية ({n})</b>\n\nاستأنف واحدة، أو احذف واحدة، أو أزلها كلها من /status (تبقى في /resume).", "zero": "⚫ <b>الجلسات المنتهية ({n})</b>\n\nاستأنف واحدة، أو احذف واحدة، أو أزلها كلها من /status (تبقى في /resume)."}}
+{"k": "status.ended_shown", "src": "cdde3b66", "v": "أحدث {max} هنا؛ و/resume يسردها كلها."}
+{"k": "status.head", "src": "570c54fe", "v": "{mark}<b>{session}</b> · {glyph} {state}"}
+{"k": "status.no_ended", "src": "a33a986b", "v": "لا جلسات منتهية."}
+{"k": "status.no_live", "src": "8f779eb2", "v": "لا جلسات تعمل."}
+{"k": "status.none", "src": "a44ee05c", "v": "لا جلسات بعد."}
+{"k": "status.notes", "src": "2e411b05", "v": {"few": "{n} ملاحظات", "many": "{n} ملاحظة", "one": "ملاحظة واحدة", "other": "{n} ملاحظة", "two": "ملاحظتان", "zero": "لا ملاحظات"}}
+{"k": "status.queue", "src": "20f40005", "v": "قائمة الانتظار {total} ({queued}، {notes})"}
+{"k": "status.queued", "src": "45c54388", "v": {"few": "منتظرة: {n}", "many": "منتظرة: {n}", "one": "منتظرة: {n}", "other": "منتظرة: {n}", "two": "منتظرة: {n}", "zero": "منتظرة: {n}"}}
+{"k": "status.sessions", "src": "65748ab3", "v": {"few": "📊 <b>الجلسات ({n})</b>", "many": "📊 <b>الجلسات ({n})</b>", "one": "📊 <b>الجلسات ({n})</b>", "other": "📊 <b>الجلسات ({n})</b>", "two": "📊 <b>الجلسات ({n})</b>", "zero": "📊 <b>الجلسات ({n})</b>"}}
+{"k": "status.switch", "src": "52424cce", "v": "✍️ تتحدث الآن إلى <b>{session}</b> · {glyph} {state} · {mode}"}
+{"k": "status.talk_dm", "src": "777be8ce", "v": "أرسل رسالة وستذهب إلى {session}."}
+{"k": "status.talk_group", "src": "bdc24dfd", "v": "رد على رسالة من {session} (أو اذكر {bot}) لتتحدث إليها."}
+{"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "رد على رسالة من {session} (أو اذكر البوت) لتتحدث إليها."}
+{"k": "status.waiting_answer", "src": "e5832740", "v": "{session} تنتظر إجابتك."}
+{"k": "toast.already_answered", "src": "3d131a46", "v": "تمت الإجابة بالفعل"}
+{"k": "toast.always_degraded", "src": "038f4355", "v": "لا قاعدة دائمة لهذا الأمر - سمح به مرة واحدة [{session}]"}
+{"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}
+{"k": "toast.auth.not_listed", "src": "0baa8bbd", "v": "لست في قائمة المسموح لهم"}
+{"k": "toast.busy_retry", "src": "cfc92c41", "v": "مشغول - حاول مرة أخرى بعد قليل"}
+{"k": "toast.cant_resend", "src": "3aa4d727", "v": "لا يمكن إعادة إرسال الطلب - أجب عنه في الطرفية"}
+{"k": "toast.cant_stop", "src": "2bf57e30", "v": "لا يمكنك إيقاف هذه الجلسة."}
+{"k": "toast.choice_gone", "src": "54298c73", "v": "ذلك الخيار لم يعد متاحًا."}
+{"k": "toast.clear_done", "src": "0e4a4845", "v": {"few": "أزيلت {n} جلسات من /status (لا تزال في /resume)", "many": "أزيلت {n} جلسة من /status (لا تزال في /resume)", "one": "أزيلت جلسة واحدة من /status (لا تزال في /resume)", "other": "أزيلت {n} جلسة من /status (لا تزال في /resume)", "two": "أزيلت جلستان من /status (لا تزالان في /resume)", "zero": "لم يزل شيء من /status (لا يزال في /resume)"}}
+{"k": "toast.clear_nothing", "src": "ec219a9c", "v": "لا شيء لإزالته"}
+{"k": "toast.compact_failed", "src": "84398886", "v": "تعذر إرسال /compact"}
+{"k": "toast.compact_sending", "src": "afcbfe26", "v": "يجري ضغط [{session}]"}
+{"k": "toast.gate_other_chat", "src": "fcc9d88a", "v": "هذا الزر يخص محادثة أخرى."}
+{"k": "toast.gate_refused", "src": "c6436f0e", "v": "دورك لا يسمح بذلك هنا."}
+{"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "زر غير معروف"}
+{"k": "toast.invalid_value", "src": "7e5ba817", "v": "قيمة غير صالحة"}
+{"k": "toast.kill_stale", "src": "90e64cd6", "v": "هذا الزر قديم - أرسل /kill مرة أخرى"}
+{"k": "toast.moved_on_status", "src": "be925157", "v": "انتقلت {session} إلى عمل جديد - اضغط ⏹ إيقاف مرة أخرى لإيقافها"}
+{"k": "toast.moved_on_stop", "src": "219c63f0", "v": "انتقلت {session} إلى عمل جديد - أرسل /stop مرة أخرى"}
+{"k": "toast.new_cant_change", "src": "279d4392", "v": "لا يمكنك تغيير هذه الجلسة."}
+{"k": "toast.new_cant_start_here", "src": "9f749720", "v": "لا يمكنك بدء جلسات هنا."}
+{"k": "toast.new_cant_start_resume", "src": "25c7e34f", "v": "لا يمكنك بدء جلسات أو استئنافها هنا."}
+{"k": "toast.new_card_expired", "src": "c7d3826b", "v": "انتهت صلاحية هذه البطاقة."}
+{"k": "toast.new_card_replaced", "src": "8e108c47", "v": "استبدلت تلك البطاقة. استخدم الجديدة."}
+{"k": "toast.new_expired", "src": "85077001", "v": "انتهت صلاحية هذه البطاقة. أرسل /new مرة أخرى."}
+{"k": "toast.new_folder_gone", "src": "4b183fca", "v": "ذلك المجلد لم يعد متاحًا."}
+{"k": "toast.new_invalid_model", "src": "ae01cc11", "v": "نموذج غير صالح"}
+{"k": "toast.new_model_gone", "src": "0f464c34", "v": "ذلك النموذج لم يعد معروضًا."}
+{"k": "toast.new_no_folder_yet", "src": "87860358", "v": "لا مجلد متاح بعد - ابدأ جلسة من مجلد مشروع حقيقي أولًا."}
+{"k": "toast.new_not_yours", "src": "393f95a6", "v": "هذه ليست جلستك الجديدة."}
+{"k": "toast.new_only_sender", "src": "9e109f78", "v": "فقط من أرسل /new يمكنه استخدام هذه البطاقة."}
+{"k": "toast.new_started_since", "src": "e8602889", "v": "بدأت {session} العمل منذ ذلك الحين. أرسل /new مرة أخرى لاستبدالها."}
+{"k": "toast.new_switch_failed", "src": "a8ef2ee3", "v": "تعذر تبديل النموذج."}
+{"k": "toast.new_switching", "src": "8c8980ce", "v": "يجري التبديل..."}
+{"k": "toast.new_switching_to", "src": "09c7272f", "v": "يجري التبديل إلى {model}"}
+{"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} تعمل. بدل بعد أن تنتهي، أو استخدم /mode."}
+{"k": "toast.not_working", "src": "1ec204d3", "v": "{session} لا تعمل"}
+{"k": "toast.open_chat", "src": "202c3e06", "v": "افتح المحادثة لتجيب"}
+{"k": "toast.owner_card", "src": "80b06bcd", "v": "هذه بطاقة {owner}."}
+{"k": "toast.owner_card_send", "src": "7b051dc9", "v": "هذه بطاقة {owner}. أرسل {command} لتحصل على بطاقتك."}
+{"k": "toast.perms_needs_admin", "src": "fe68d230", "v": "الوضع التلقائي يحتاج إلى مشرف."}
+{"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} تعيد التشغيل الآن - اضغط مرة أخرى بعد قليل"}
+{"k": "toast.perms_stale", "src": "4e34769b", "v": "هذه البطاقة قديمة - لم يتغير شيء"}
+{"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} لا تزال تبدأ - حاول مرة أخرى بعد قليل"}
+{"k": "toast.prompt_expired", "src": "260f4c88", "v": "انتهت صلاحية هذا الطلب"}
+{"k": "toast.rate_limited", "src": "fc09f3d7", "v": "يحد Telegram من سرعة هذه المحادثة - حاول مرة أخرى بعد {time}"}
+{"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "يجري الإرسال بالفعل."}
+{"k": "toast.rep.already_sent", "src": "99493916", "v": "تم الإرسال بالفعل."}
+{"k": "toast.rep.in_dm", "src": "88740c30", "v": "معاينة التقرير في محادثتك الخاصة مع البوت."}
+{"k": "toast.rep.no_owner", "src": "b43a6c7c", "v": "لا يمكنني فتح معاينة تقرير: هذا التثبيت ليس له محادثة مالك واحدة."}
+{"k": "toast.rep.not_opened", "src": "8841123f", "v": "تعذر فتح معاينة التقرير الآن. حاول لاحقًا."}
+{"k": "toast.rep.not_owner", "src": "ed142ea6", "v": "فقط مالك aipager هذا يمكنه الإبلاغ عن مشكلة."}
+{"k": "toast.rep.offer_stale", "src": "f5aa4d59", "v": "هذا العرض لم يعد مفتوحًا."}
+{"k": "toast.retry_failed", "src": "8954b4b9", "v": "تعذرت إعادة المحاولة"}
+{"k": "toast.retry_not_alive", "src": "807834ac", "v": "الجلسة «{session}» لا تعمل"}
+{"k": "toast.retry_nothing", "src": "def91a40", "v": "لا شيء لإعادة المحاولة"}
+{"k": "toast.retry_others_turn", "src": "b243bab8", "v": "تجري جولة شخص آخر - أعد المحاولة عندما تنتهي"}
+{"k": "toast.retry_prompt_open", "src": "2554567b", "v": "أجب عن الطلب المفتوح أولًا، ثم أعد المحاولة"}
+{"k": "toast.retry_retrying", "src": "b5a61b76", "v": "تجري إعادة المحاولة [{session}]"}
+{"k": "toast.send_failed", "src": "0fbea382", "v": "تعذر الإرسال إلى {session}"}
+{"k": "toast.send_keys_failed", "src": "32458da9", "v": "تعذر إرسال المفاتيح"}
+{"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "مشغول، حاول مرة أخرى بعد قليل"}
+{"k": "toast.sendnow_cant_prompt", "src": "bf90455f", "v": "لا يمكنك الإرسال إلى هذه الجلسة"}
+{"k": "toast.sendnow_failed", "src": "57a26c8a", "v": "تعذر الوصول إلى Claude، حاول مرة أخرى"}
+{"k": "toast.sendnow_interactive", "src": "1b518935", "v": "أجب عن السؤال المفتوح أولًا"}
+{"k": "toast.sendnow_sending", "src": "d05719f1", "v": "يجري الإرسال إلى Claude الآن"}
+{"k": "toast.sendnow_sent", "src": "9ab32ed2", "v": "تم الإرسال إلى Claude الآن"}
+{"k": "toast.sendnow_taken", "src": "00735887", "v": "التقطت بالفعل"}
+{"k": "toast.sendnow_typing", "src": "84af1903", "v": "تجري كتابة طلب الآن، حاول مرة أخرى بعد قليل"}
+{"k": "toast.sess_already_ended", "src": "26dff17c", "v": "تلك الجلسة انتهت بالفعل."}
+{"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} في {mode} بالفعل."}
+{"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "لا يمكنك حذف هذه الجلسة."}
+{"k": "toast.sess_cant_end", "src": "ab082660", "v": "لا يمكنك إنهاء هذه الجلسة."}
+{"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "لا يمكنك إعادة تسمية هذه الجلسة."}
+{"k": "toast.sess_cant_restart", "src": "5e8c842b", "v": "لا يمكنك إعادة تشغيل هذه الجلسة."}
+{"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "لا يمكنك استئناف هذه الجلسة."}
+{"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "لا يمكن استئناف تلك الجلسة الآن."}
+{"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "لا يمكنك الإرسال إلى هذه الجلسة."}
+{"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "لم تتوقف {session} - حاول مرة أخرى"}
+{"k": "toast.sess_ended", "src": "394de850", "v": "⏹ أنهيت {session}"}
+{"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ أنهى {person} الجلسة {session}"}
+{"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "انتقلت {session} إلى عمل جديد - اضغط ⏹ إنهاء الجلسة مرة أخرى لإنهائها"}
+{"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "انتقلت {session} إلى عمل جديد - اضغط 🔄 إعادة التشغيل مرة أخرى لإعادة تشغيلها"}
+{"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "انتقلت {session} إلى عمل جديد - اضغط التبديل مرة أخرى إن كنت لا تزال تريده"}
+{"k": "toast.sess_not_found_named", "src": "a71f5ae2", "v": "لم يعثر على {session}"}
+{"k": "toast.sess_not_your_rename", "src": "ed45ef6a", "v": "إعادة التسمية هذه ليست لك."}
+{"k": "toast.sess_restart_stale", "src": "753fe0fb", "v": "هذا الزر قديم - أرسل /restart مرة أخرى"}
+{"k": "toast.sess_restarting", "src": "5f69a1ca", "v": "تجري إعادة تشغيل {session}..."}
+{"k": "toast.sess_resuming", "src": "2a557399", "v": "يجري استئناف هذه الجلسة الآن. حاول مرة أخرى بعد قليل."}
+{"k": "toast.sess_resuming_kill", "src": "227bdae1", "v": "يجري استئناف {session} - أرسل /kill مرة أخرى بعد قليل"}
+{"k": "toast.sess_resuming_retry", "src": "2845ff55", "v": "يجري استئناف {session} - حاول مرة أخرى بعد قليل"}
+{"k": "toast.sess_still_running", "src": "1ab407e3", "v": "تلك الجلسة لا تزال تعمل. أنهها أولًا."}
+{"k": "toast.sess_target", "src": "d28d6d9c", "v": "✍️ الرسائل تذهب إلى {session}"}
+{"k": "toast.session_ended", "src": "3a3a8392", "v": "تلك الجلسة انتهت."}
+{"k": "toast.session_gone", "src": "9360b8a3", "v": "لم يعثر على الجلسة «{session}»"}
+{"k": "toast.session_gone_settings", "src": "8af767e3", "v": "هذه الجلسة لم تعد متاحة - افتح /settings من جديد."}
+{"k": "toast.session_not_found", "src": "4c2e72c7", "v": "لم يعثر على الجلسة"}
+{"k": "toast.session_not_here", "src": "54eb8580", "v": "تلك الجلسة لا تعمل هنا."}
+{"k": "toast.session_unavailable", "src": "773d1a0f", "v": "تلك الجلسة لم تعد متاحة"}
+{"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "فقط المشرف يمكنه تغيير الإعدادات في هذه المجموعة."}
+{"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "لا يمكنك تغيير تفضيلات هذه الجلسة."}
+{"k": "toast.stop_stale", "src": "51073518", "v": "تلك المهمة انتهت بالفعل - استخدم البطاقة الحالية"}
+{"k": "toast.unknown_action", "src": "967e7e51", "v": "غير معروف: {action}"}
+{"k": "toast.upd.checking", "src": "820d6004", "v": "يجري التحقق…"}
+{"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 فقط المشرف يمكنه تحديث aipager."}
+{"k": "toast.upd.menu_old", "src": "6c988fa7", "v": "هذه القائمة قديمة، أرسل /update مرة أخرى"}
+{"k": "toast.upd.stale", "src": "d9ed1389", "v": "ذلك التحديث انتهى بالفعل"}
+{"k": "toast.verb", "src": "985eb765", "v": "{verb} [{session}]"}
+{"k": "tx.api.billing", "src": "031e8f3d", "v": "مشكلة في اشتراك Anthropic أو رصيد الائتمان. تحقق من لوحتك على {url}"}
+{"k": "tx.api.connection", "src": "3a0ef982", "v": "انقطع الاتصال بـ Anthropic. تحقق من الشبكة وأعد المحاولة."}
+{"k": "tx.api.generic", "src": "429166c0", "v": "حدث خطأ في API."}
+{"k": "tx.api.internal", "src": "030afe43", "v": "واجهت خوادم Anthropic خطأً داخليًا. يزول عادة خلال ثوانٍ."}
+{"k": "tx.api.overloaded", "src": "6f545f5b", "v": "خوادم Anthropic مثقلة. حاول مرة أخرى بعد قليل."}
+{"k": "tx.api.rate_limit", "src": "234c6146", "v": "بلغ حد السرعة. انتظر قليلًا قبل إعادة المحاولة."}
+{"k": "tx.api.rate_limit_wait", "src": "a2053ce3", "v": "بلغ حد السرعة. انتظر {seconds} ث قبل إعادة المحاولة."}
+{"k": "tx.auto_needs_admin", "src": "bd96281e", "v": "التلقائي يحتاج إلى مشرف."}
+{"k": "tx.needs_admin", "src": "a2f55b85", "v": "ذلك الأمر يحتاج إلى مشرف."}
+{"k": "tx.retry_others", "src": "4ad540c7", "v": "فقط مرسل ذلك الأمر يمكنه إعادة محاولته."}
+{"k": "tx.truncated", "src": "27710457", "v": "…[مقتطع]"}
+{"k": "ui.action.failed", "src": "1bd1baa4", "v": "تعذر إكمال ذلك."}
+{"k": "ui.action.unreachable", "src": "209155a8", "v": "تعذر الوصول إلى الخادم. لم يتغير شيء."}
+{"k": "ui.activity.aria", "src": "649780e8", "v": {"few": "النشاط الأخير: {n} استدعاءات أدوات. افتح الخط الزمني.", "many": "النشاط الأخير: {n} استدعاء أدوات. افتح الخط الزمني.", "one": "النشاط الأخير: استدعاء أداة واحد. افتح الخط الزمني.", "other": "النشاط الأخير: {n} استدعاء أدوات. افتح الخط الزمني.", "two": "النشاط الأخير: استدعاءا أداتين. افتح الخط الزمني.", "zero": "النشاط الأخير: لا استدعاءات أدوات. افتح الخط الزمني."}}
+{"k": "ui.activity.failed", "src": "6c746778", "v": "{tool} (فشل)"}
+{"k": "ui.activity.queued", "src": "45c54388", "v": {"few": "منتظرة: {n}", "many": "منتظرة: {n}", "one": "منتظرة: {n}", "other": "منتظرة: {n}", "two": "منتظرة: {n}", "zero": "منتظرة: {n}"}}
+{"k": "ui.activity.recent", "src": "72d5617f", "v": "النشاط الأخير"}
+{"k": "ui.activity.running", "src": "21ceddba", "v": "{tool} (قيد التشغيل)"}
+{"k": "ui.activity.running_for", "src": "181f56b1", "v": "{tool} (قيد التشغيل منذ {clock})"}
+{"k": "ui.activity.title", "src": "81c0d915", "v": "النشاط"}
+{"k": "ui.age.days", "src": "e827dc07", "v": "منذ {n} يوم"}
+{"k": "ui.age.hours", "src": "1235f668", "v": "منذ {n} س"}
+{"k": "ui.age.minutes", "src": "83f8dc33", "v": "منذ {n} د"}
+{"k": "ui.age.seconds", "src": "b4e09dd8", "v": "منذ {n} ث"}
+{"k": "ui.answer.cannot", "src": "40c455f0", "v": "لا يمكنك الإجابة عن الطلبات في هذه المحادثة."}
+{"k": "ui.answer.send_failed", "src": "9a2e8fac", "v": "تعذر إرسال الطلب إلى المحادثة."}
+{"k": "ui.answer.sent", "src": "ba35b7cb", "v": "أرسل إلى المحادثة. أجب عنه هناك."}
+{"k": "ui.answer.unreachable", "src": "f159beba", "v": "تعذر الوصول إلى الخادم. لم يرسل شيء."}
+{"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude يسألك عن شيء."}
+{"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "افتح {session}"}
+{"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude يريد استخدام أداة."}
+{"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "امسح قائمة الانتظار"}
+{"k": "ui.btn.action.compact", "src": "10c986db", "v": "اضغط الآن"}
+{"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "حذف"}
+{"k": "ui.btn.action.kill", "src": "7b932e77", "v": "إنهاء"}
+{"k": "ui.btn.action.rename", "src": "d3f4cb89", "v": "إعادة التسمية"}
+{"k": "ui.btn.action.restart", "src": "b134bd55", "v": "إعادة التشغيل"}
+{"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "استئناف"}
+{"k": "ui.btn.action.stop", "src": "9e253470", "v": "إيقاف"}
+{"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "أجب في المحادثة"}
+{"k": "ui.btn.cancel", "src": "77dfd213", "v": "إلغاء"}
+{"k": "ui.btn.check_again", "src": "e185048c", "v": "تحقق مرة أخرى"}
+{"k": "ui.btn.check_updates", "src": "736b9062", "v": "تحقق من التحديثات"}
+{"k": "ui.btn.checking", "src": "820d6004", "v": "يجري التحقق…"}
+{"k": "ui.btn.close_app", "src": "73743dc4", "v": "أغلق التطبيق"}
+{"k": "ui.btn.copied", "src": "8e3df45a", "v": "تم النسخ"}
+{"k": "ui.btn.copy", "src": "af74f7c5", "v": "انسخ"}
+{"k": "ui.btn.done", "src": "e9b450d1", "v": "تم"}
+{"k": "ui.btn.new_session", "src": "5c881d23", "v": "جلسة جديدة"}
+{"k": "ui.btn.not_now", "src": "e4571490", "v": "ليس الآن"}
+{"k": "ui.btn.report", "src": "24f3f52d", "v": "أبلغ عن مشكلة"}
+{"k": "ui.btn.reset", "src": "44c57abd", "v": "إعادة تعيين"}
+{"k": "ui.btn.reset_defaults", "src": "ddefe47d", "v": "استعادة الافتراضي"}
+{"k": "ui.btn.restart_now", "src": "af2c3d8e", "v": "أعد التشغيل الآن"}
+{"k": "ui.btn.save", "src": "efc007a3", "v": "حفظ"}
+{"k": "ui.btn.send_report", "src": "a5b32af9", "v": "أرسل التقرير"}
+{"k": "ui.btn.sending", "src": "c338c191", "v": "يجري الإرسال..."}
+{"k": "ui.btn.start_session", "src": "76684eaf", "v": "ابدأ الجلسة"}
+{"k": "ui.btn.stop_and_switch", "src": "21c1d7af", "v": "أوقف وبدل"}
+{"k": "ui.btn.switch", "src": "3e44c920", "v": "بدل"}
+{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "التبديل إلى اسأل"}
+{"k": "ui.btn.switch_to_auto", "src": "13a0f246", "v": "التبديل إلى تلقائي"}
+{"k": "ui.btn.try_again", "src": "042c862e", "v": "حاول مرة أخرى"}
+{"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "انتظر ١٠ د أخرى"}
+{"k": "ui.confirm.delete", "src": "734db731", "v": "حذف {session}؟"}
+{"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "يزيل هذا الجلسة من قائمتك. يبقى سجلها على القرص."}
+{"k": "ui.confirm.kill", "src": "804fbc7f", "v": "إنهاء {session}؟"}
+{"k": "ui.confirm.kill_body", "src": "beff52e4", "v": "يوقف هذا الجلسة ويزيلها. يقطع أي شيء كانت تشغله."}
+{"k": "ui.confirm.perms_ask", "src": "c0710578", "v": "تبديل {session} إلى وضع اسأل؟"}
+{"k": "ui.confirm.perms_ask_body", "src": "701538b8", "v": "يسأل Claude قبل تشغيل الأدوات."}
+{"k": "ui.confirm.perms_auto", "src": "b6a1ddde", "v": "تبديل {session} إلى الوضع التلقائي؟"}
+{"k": "ui.confirm.perms_auto_body", "src": "7d8bf9c6", "v": "يشغل Claude الأدوات دون أن يسأل."}
+{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "إيقاف المهمة الحالية وتبديل {session} إلى اسأل؟"}
+{"k": "ui.confirm.perms_busy_auto", "src": "d4090a8b", "v": "إيقاف المهمة الحالية وتبديل {session} إلى تلقائي؟"}
+{"k": "ui.confirm.rename", "src": "92656d63", "v": "إعادة تسمية {session}؟"}
+{"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "تحتفظ الجلسة بسجلها ومجلد عملها. يتغير الاسم فقط."}
+{"k": "ui.confirm.reset", "src": "e13d0ebf", "v": "إعادة الإعدادات إلى الافتراضي؟"}
+{"k": "ui.confirm.reset_body", "src": "f2fd45cf", "v": "تمسح إعدادات هذه الجلسة الخاصة وتعود لاتباع إعدادات المحادثة الافتراضية."}
+{"k": "ui.confirm.restart", "src": "47a0c787", "v": "إعادة تشغيل {session}؟"}
+{"k": "ui.confirm.restart_body", "src": "5ec9d004", "v": "تتوقف الجلسة وتعاد بالسجل نفسه. تقطع أي جولة جارية."}
+{"k": "ui.conn.expired", "src": "45a6f9ad", "v": "انتهت"}
+{"k": "ui.conn.live", "src": "98aadb37", "v": "متصل"}
+{"k": "ui.conn.no_init", "src": "e2ebd902", "v": "افتح هذه الصفحة من تطبيق Telegram لتسجل الدخول."}
+{"k": "ui.conn.offline", "src": "d1ffda5d", "v": "غير متصل"}
+{"k": "ui.conn.reconnecting", "src": "6b160044", "v": "يعيد الاتصال…"}
+{"k": "ui.conn.session_expired", "src": "c1c71ef8", "v": "انتهت جلسة الدخول. افتحها من جديد عبر {command} في Telegram."}
+{"k": "ui.conn.unreachable", "src": "eb8937f2", "v": "تعذر الوصول إلى الخادم. تحقق من النفق."}
+{"k": "ui.daemon.uptime", "src": "18bb02cb", "v": "يعمل منذ {n} د"}
+{"k": "ui.detail.latest_reply", "src": "455aaef0", "v": "آخر رد"}
+{"k": "ui.detail.session_settings", "src": "ed40d944", "v": "إعدادات الجلسة"}
+{"k": "ui.detail.settings_readonly", "src": "aebade5f", "v": "فقط من يمكنه إرسال طلبات إلى هذه الجلسة يمكنه تغيير هذه."}
+{"k": "ui.diff.binary", "src": "810945bb", "v": "ملف ثنائي (لا معاينة)."}
+{"k": "ui.diff.change.added", "src": "172415f0", "v": "مضاف"}
+{"k": "ui.diff.change.deleted", "src": "b639f5cc", "v": "محذوف"}
+{"k": "ui.diff.change.modified", "src": "99db3247", "v": "معدل"}
+{"k": "ui.diff.change.renamed", "src": "87620709", "v": "معاد تسميته"}
+{"k": "ui.diff.change.untracked", "src": "d7390aa3", "v": "غير متتبع"}
+{"k": "ui.diff.clean", "src": "6eb6e7bf", "v": "لا تغييرات غير مثبتة."}
+{"k": "ui.diff.clean_in", "src": "0bde87e2", "v": "لا تغييرات غير مثبتة في {repo}."}
+{"k": "ui.diff.failed", "src": "5d47ec55", "v": "تعذر تحميل diff."}
+{"k": "ui.diff.gone", "src": "38a63905", "v": "الجلسة لم تعد متاحة."}
+{"k": "ui.diff.loading", "src": "c569ad51", "v": "يجري تحميل diff…"}
+{"k": "ui.diff.no_changes", "src": "9b1fcbda", "v": "لا تغييرات."}
+{"k": "ui.diff.partial", "src": "4aa4772f", "v": "يعرض جزء من الملفات المتغيرة فقط. diff الكامل أكبر مما يعرضه هذا العارض."}
+{"k": "ui.diff.reason.cwd_missing", "src": "4140481e", "v": "مجلد عمل هذه الجلسة لم يعد موجودًا."}
+{"k": "ui.diff.reason.git_error", "src": "c6f57086", "v": "لم يتمكن git من إنتاج diff لهذه الجلسة."}
+{"k": "ui.diff.reason.git_not_installed", "src": "171dd6a9", "v": "git غير متاح على هذا الجهاز."}
+{"k": "ui.diff.reason.no_commits_yet", "src": "cc383c84", "v": "هذا المستودع ليس فيه commit بعد."}
+{"k": "ui.diff.reason.not_a_git_repo", "src": "287b446f", "v": "مجلد عمل هذه الجلسة ليس مستودع git."}
+{"k": "ui.diff.title", "src": "fe25abc0", "v": "الملفات المتغيرة"}
+{"k": "ui.diff.title_n", "src": "6222be44", "v": {"few": "الملفات المتغيرة ({n})", "many": "الملفات المتغيرة ({n})", "one": "الملفات المتغيرة ({n})", "other": "الملفات المتغيرة ({n})", "two": "الملفات المتغيرة ({n})", "zero": "الملفات المتغيرة ({n})"}}
+{"k": "ui.diff.title_none", "src": "447a466c", "v": "الملفات المتغيرة (لا شيء)"}
+{"k": "ui.diff.too_large", "src": "7aafaa23", "v": "diff أكبر من أن يعرض."}
+{"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "diff غير متاح."}
+{"k": "ui.done.already_gone", "src": "9f734fbb", "v": "انتهت بالفعل."}
+{"k": "ui.done.clearqueue", "src": "c97917b3", "v": "مسحت."}
+{"k": "ui.done.compact", "src": "399fec37", "v": "يجري الضغط…"}
+{"k": "ui.done.delete", "src": "48ea780f", "v": "حذفت."}
+{"k": "ui.done.generic", "src": "e2bcda84", "v": "تم."}
+{"k": "ui.done.kill", "src": "eb388bd9", "v": "أنهيت."}
+{"k": "ui.done.perms", "src": "144199df", "v": "بدلت."}
+{"k": "ui.done.rename", "src": "b930ba4a", "v": "أعيدت التسمية."}
+{"k": "ui.done.rename_same", "src": "ea00acbd", "v": "لا تغيير."}
+{"k": "ui.done.restart", "src": "519ed942", "v": "أعيد التشغيل."}
+{"k": "ui.done.resume", "src": "ac66e08b", "v": "استؤنفت."}
+{"k": "ui.done.stop", "src": "8fcc7be3", "v": "أوقفت."}
+{"k": "ui.empty.text", "src": "8ff2cab6", "v": "ابدأ واحدة هنا أو أرسل {command} في المحادثة."}
+{"k": "ui.empty.title", "src": "a44ee05c", "v": "لا جلسات بعد."}
+{"k": "ui.grid.finished_n", "src": "8e06a605", "v": {"few": "المنتهية ({n})", "many": "المنتهية ({n})", "one": "المنتهية ({n})", "other": "المنتهية ({n})", "two": "المنتهية ({n})", "zero": "المنتهية ({n})"}}
+{"k": "ui.grid.needs_you", "src": "0d9d0df1", "v": "تحتاجك"}
+{"k": "ui.kind.permission", "src": "17857134", "v": "إذن"}
+{"k": "ui.kind.question", "src": "002ff598", "v": "سؤال"}
+{"k": "ui.kind_word.permission", "src": "6d244f58", "v": "إذن"}
+{"k": "ui.kind_word.question", "src": "3b2be2e2", "v": "سؤال"}
+{"k": "ui.menu.changed", "src": "512ec84b", "v": "تغيرت هذه الجلسة. أعد فتح القائمة."}
+{"k": "ui.model.failed", "src": "a8ef2ee3", "v": "تعذر تبديل النموذج."}
+{"k": "ui.model.now", "src": "3dd35778", "v": "النموذج الآن {model}."}
+{"k": "ui.model.switching", "src": "4a9961a0", "v": "يجري التبديل…"}
+{"k": "ui.model.title", "src": "68c2cc7f", "v": "النموذج"}
+{"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "لم يؤكد (تحقق من الجلسة)"}
+{"k": "ui.model.unreachable", "src": "82a93142", "v": "تعذر الوصول إلى الخادم. تحقق من نموذج الجلسة."}
+{"k": "ui.new.auto_needs_admin", "src": "ad1f0c2f", "v": "الوضع التلقائي يتطلب مشرفًا."}
+{"k": "ui.new.chips_recent", "src": "76eec760", "v": "الأخيرة"}
+{"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "مقترحة"}
+{"k": "ui.new.cli_model", "src": "80e3c49d", "v": "النموذج الافتراضي الخاص بـ CLI"}
+{"k": "ui.new.create_failed", "src": "c55f566f", "v": "تعذر إنشاء تلك الجلسة."}
+{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "أنشئ هذا المجلد"}
+{"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "غير مسموح لك بإنشاء جلسات هنا."}
+{"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "تعذر الوصول إلى الخادم. لم تنشأ الجلسة."}
+{"k": "ui.new.created", "src": "77ea75b5", "v": "أنشئت الجلسة."}
+{"k": "ui.new.creating", "src": "94d7d8ee", "v": "يجري الإنشاء…"}
+{"k": "ui.new.cwd_title", "src": "e8c598ee", "v": "مجلد العمل"}
+{"k": "ui.new.daemon_dir", "src": "2503c8cf", "v": "المجلد الخاص بالخدمة"}
+{"k": "ui.new.default", "src": "808d7dca", "v": "الافتراضي"}
+{"k": "ui.new.default_dir_help", "src": "6d7d5fbc", "v": "المجلد الخاص بالخدمة"}
+{"k": "ui.new.default_model_help", "src": "17ab4082", "v": "أيًا كان ما هيئ CLI لاستخدامه"}
+{"k": "ui.new.folder_created", "src": "6b6ea299", "v": "أنشئ المجلد."}
+{"k": "ui.new.folder_existed", "src": "bfe299bc", "v": "كان ذلك المجلد موجودًا بالفعل، لذا اختير."}
+{"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "تعذر إنشاء ذلك المجلد."}
+{"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "غير مسموح لك بإنشاء مجلدات هنا."}
+{"k": "ui.new.folder_name", "src": "85f87fa3", "v": "اسم المجلد الجديد"}
+{"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "تعذر الوصول إلى الخادم. لم ينشأ أي مجلد."}
+{"k": "ui.new.mode_ask", "src": "3562777b", "v": "اسأل"}
+{"k": "ui.new.mode_ask_help", "src": "eca1be33", "v": "يسأل Claude قبل تشغيل الأدوات"}
+{"k": "ui.new.mode_auto", "src": "c614ba7c", "v": "تلقائي"}
+{"k": "ui.new.mode_auto_help", "src": "306e8992", "v": "يشغل الأدوات دون أن يسأل"}
+{"k": "ui.new.mode_title", "src": "9c8c621a", "v": "وضع الأذونات"}
+{"k": "ui.new.model_name", "src": "5ebb9765", "v": "اسم النموذج"}
+{"k": "ui.new.model_needed", "src": "c585e482", "v": "اكتب اسم نموذج للمتابعة."}
+{"k": "ui.new.model_pattern", "src": "7222f368", "v": "استخدم الحروف والأرقام والنقاط والشرطات؛ وابدأ بحرف أو رقم."}
+{"k": "ui.new.more", "src": "86c0a35e", "v": "خيارات أخرى"}
+{"k": "ui.new.name", "src": "709a2322", "v": "الاسم"}
+{"k": "ui.new.new_folder", "src": "a711999b", "v": "مجلد جديد"}
+{"k": "ui.new.new_folder_help", "src": "29aa13d5", "v": "داخل المجلد المختار أعلاه"}
+{"k": "ui.new.not_set", "src": "770e48ee", "v": "لم يحدد بعد"}
+{"k": "ui.new.other_model", "src": "cc3190e7", "v": "نموذج آخر"}
+{"k": "ui.new.other_model_help", "src": "561f7c9e", "v": "اكتب اسمًا كاملًا، مثل {example}"}
+{"k": "ui.new.pick_dir_first", "src": "969b0a9b", "v": "اختر مجلد عمل في الأعلى أولًا."}
+{"k": "ui.new.requires_admin", "src": "e18e02eb", "v": "يتطلب مشرفًا"}
+{"k": "ui.new.sub", "src": "23b19317", "v": "سمها، واختر مجلدًا، وسيبدأ Claude هناك."}
+{"k": "ui.new.summary_ask", "src": "3e987f2e", "v": "يشغل Claude في {where}، في وضع اسأل، باستخدام {model}."}
+{"k": "ui.new.summary_auto", "src": "d0968e63", "v": "يشغل Claude في {where}، في الوضع التلقائي، باستخدام {model}."}
+{"k": "ui.new.summary_named_ask", "src": "ccbc6d09", "v": "يشغل Claude باسم {name} في {where}، في وضع اسأل، باستخدام {model}."}
+{"k": "ui.new.summary_named_auto", "src": "4b48c549", "v": "يشغل Claude باسم {name} في {where}، في الوضع التلقائي، باستخدام {model}."}
+{"k": "ui.new.title", "src": "5c881d23", "v": "جلسة جديدة"}
+{"k": "ui.new.where", "src": "525f61b6", "v": "أين"}
+{"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "لم يلتقط شيء قبل أن تنتهي هذه الجلسة."}
+{"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "لم يلتقط شيء بعد. يظهر حين يرد Claude."}
+{"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "كل شيء هادئ"}
+{"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"few": "انتهت: {n}", "many": "انتهت: {n}", "one": "انتهت: {n}", "other": "انتهت: {n}", "two": "انتهت: {n}", "zero": "انتهت: {n}"}}
+{"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"few": "تحتاجك: {n}", "many": "تحتاجك: {n}", "one": "تحتاجك: {n}", "other": "تحتاجك: {n}", "two": "تحتاجك: {n}", "zero": "تحتاجك: {n}"}}
+{"k": "ui.pulse.resting", "src": "644f3b40", "v": {"few": "خاملة: {n}", "many": "خاملة: {n}", "one": "خاملة: {n}", "other": "خاملة: {n}", "two": "خاملة: {n}", "zero": "خاملة: {n}"}}
+{"k": "ui.pulse.spent", "src": "908f77ef", "v": "أنفق {cost}"}
+{"k": "ui.pulse.unknown", "src": "23ca6f83", "v": {"few": "غير معروفة: {n}", "many": "غير معروفة: {n}", "one": "غير معروفة: {n}", "other": "غير معروفة: {n}", "two": "غير معروفة: {n}", "zero": "غير معروفة: {n}"}}
+{"k": "ui.pulse.working", "src": "c3aee490", "v": {"few": "تعمل: {n}", "many": "تعمل: {n}", "one": "تعمل: {n}", "other": "تعمل: {n}", "two": "تعمل: {n}", "zero": "تعمل: {n}"}}
+{"k": "ui.rename.empty", "src": "e00fbfca", "v": "لا يمكن أن يكون اسم الجلسة فارغًا."}
+{"k": "ui.rename.failed", "src": "07c216e4", "v": "تعذرت إعادة التسمية."}
+{"k": "ui.rename.pattern", "src": "b916e083", "v": "استخدم الحروف اللاتينية والأرقام والشرطات والشرطات السفلية؛ وابدأ بحرف أو رقم."}
+{"k": "ui.rename.reserved", "src": "9440c7ea", "v": "«{name}» اسم أمر محجوز."}
+{"k": "ui.rename.too_long", "src": "9b31bc40", "v": "يجب ألا يزيد اسم الجلسة على {max} حرفًا."}
+{"k": "ui.report.also_through", "src": "1d1b7026", "v": "مر أيضًا عبر: {names}"}
+{"k": "ui.report.as_written", "src": "21532af3", "v": "يرسل كما كتب تمامًا."}
+{"k": "ui.report.bad_note", "src": "c92adef7", "v": "تعذرت إضافة تلك الملاحظة. جرب ملاحظة أقصر وأبسط."}
+{"k": "ui.report.card_text", "src": "45e21208", "v": "أخبر المطور بما حدث خطأ. ترى التقرير كاملًا قبل إرسال أي شيء."}
+{"k": "ui.report.copied", "src": "dd2ce2e2", "v": "تم النسخ."}
+{"k": "ui.report.copy_hint", "src": "7d76506f", "v": "اضغط مطولًا على المرجع لنسخه."}
+{"k": "ui.report.daily_cap_title", "src": "9bdf248a", "v": "بلغ الحد اليومي"}
+{"k": "ui.report.err.crash", "src": "78d1bcc4", "v": "توقف aipager بشكل غير متوقع"}
+{"k": "ui.report.err.error", "src": "7f2f6a15", "v": "خطأ"}
+{"k": "ui.report.err.hook_cap", "src": "f4162559", "v": "بلغ hook حد ذاكرته"}
+{"k": "ui.report.err.logged_in", "src": "ad58db0c", "v": "خطأ مسجل في {area}"}
+{"k": "ui.report.err.type_in", "src": "15f9e48c", "v": "{type} في {area}"}
+{"k": "ui.report.err_detail", "src": "97fb369f", "v": "{fingerprint}، ظهر أول مرة {day}، في {versions}"}
+{"k": "ui.report.err_sub", "src": "917846a1", "v": "{times}، آخر ظهور {day}"}
+{"k": "ui.report.errors", "src": "805e86a8", "v": "الأخطاء"}
+{"k": "ui.report.errors_n", "src": "07ba7666", "v": {"few": "الأخطاء ({n})", "many": "الأخطاء ({n})", "one": "الأخطاء ({n})", "other": "الأخطاء ({n})", "two": "الأخطاء ({n})", "zero": "الأخطاء ({n})"}}
+{"k": "ui.report.exact", "src": "ea8e4b11", "v": "اعرض التقرير الدقيق"}
+{"k": "ui.report.exact_note", "src": "991b0c14", "v": "هذا هو النص الدقيق الذي سيرسل، مع ملاحظتك."}
+{"k": "ui.report.exit.clean", "src": "6a1cec45", "v": "سليم"}
+{"k": "ui.report.exit.crash", "src": "dd472460", "v": "انهيار"}
+{"k": "ui.report.exit.reboot", "src": "118341f6", "v": "إعادة تشغيل الجهاز"}
+{"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "غير معروف"}
+{"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "معاينات التغييرات"}
+{"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
+{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "بوتات المراقبة"}
+{"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "ملخصات مفصلة"}
+{"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "نفق مدار"}
+{"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "عنوان نفق خاص"}
+{"k": "ui.report.feature.voice", "src": "704617a7", "v": "الرسائل الصوتية"}
+{"k": "ui.report.foot", "src": "09700e47", "v": "لا يرسل شيء حتى تضغط «أرسل التقرير». يذهب إلى صندوق أخطاء المطور، دون اسمك."}
+{"k": "ui.report.label.counts", "src": "a7e0a1c5", "v": "العدادات، آخر ٢٤ ساعة"}
+{"k": "ui.report.label.features", "src": "fc338f87", "v": "الميزات"}
+{"k": "ui.report.label.libraries", "src": "27c968e6", "v": "المكتبات"}
+{"k": "ui.report.label.limits", "src": "ca1be69e", "v": "حدود Telegram"}
+{"k": "ui.report.label.log", "src": "499fd95d", "v": "السجل، آخر ٢٤ ساعة"}
+{"k": "ui.report.label.setup", "src": "cdd7bb28", "v": "الإعداد"}
+{"k": "ui.report.label.stops", "src": "0e648419", "v": "مرات التوقف"}
+{"k": "ui.report.label.system", "src": "bc0792d8", "v": "النظام"}
+{"k": "ui.report.later", "src": "685cd810", "v": "لم يرد aipager في الوقت المحدد. اضغط «أرسل التقرير» مرة أخرى: إن كان قد أرسل، فسترى مرجعه، ولن يرسل مرتين."}
+{"k": "ui.report.limits", "src": "22297d2d", "v": {"few": "{n} حالات حظر في ٧ أيام، حمل أكثر الساعات ازدحامًا {load}", "many": "{n} حالة حظر في ٧ أيام، حمل أكثر الساعات ازدحامًا {load}", "one": "حظر واحد في ٧ أيام، حمل أكثر الساعات ازدحامًا {load}", "other": "{n} حالة حظر في ٧ أيام، حمل أكثر الساعات ازدحامًا {load}", "two": "حظران في ٧ أيام، حمل أكثر الساعات ازدحامًا {load}", "zero": "لا حظر في ٧ أيام، حمل أكثر الساعات ازدحامًا {load}"}}
+{"k": "ui.report.log_line", "src": "5069aaa9", "v": {"few": "{n} مواضع سجلت تحذيرًا أو خطأ ({times})", "many": "{n} موضعًا سجلت تحذيرًا أو خطأ ({times})", "one": "موضع واحد سجل تحذيرًا أو خطأ ({times})", "other": "{n} موضع سجلت تحذيرًا أو خطأ ({times})", "two": "موضعان سجلا تحذيرًا أو خطأ ({times})", "zero": "لم يسجل أي موضع تحذيرًا أو خطأ ({times})"}}
+{"k": "ui.report.missing", "src": "995357dd", "v": "(غير موجودة)"}
+{"k": "ui.report.more", "src": "473710d3", "v": "تفاصيل أكثر"}
+{"k": "ui.report.n_groups", "src": "1a2fac9e", "v": {"few": "{n} مجموعات", "many": "{n} مجموعة", "one": "مجموعة واحدة", "other": "{n} مجموعة", "two": "مجموعتان", "zero": "لا مجموعات"}}
+{"k": "ui.report.n_private_chats", "src": "5922fc21", "v": {"few": "{n} محادثات خاصة", "many": "{n} محادثة خاصة", "one": "محادثة خاصة واحدة", "other": "{n} محادثة خاصة", "two": "محادثتان خاصتان", "zero": "لا محادثات خاصة"}}
+{"k": "ui.report.no_errors", "src": "a5697d50", "v": "لم تسجل أخطاء مؤخرًا. المعلومات أعلاه وملاحظتك تساعد مع ذلك."}
+{"k": "ui.report.none", "src": "6eef6648", "v": "لا شيء"}
+{"k": "ui.report.not_found", "src": "475c8486", "v": "غير موجود"}
+{"k": "ui.report.not_sent", "src": "587c501e", "v": "لم يرسل"}
+{"k": "ui.report.note_label", "src": "24a9a8bc", "v": "ملاحظتك (اختيارية)"}
+{"k": "ui.report.note_placeholder", "src": "e2bf7584", "v": "ماذا كنت تفعل حين حدث الخطأ؟"}
+{"k": "ui.report.nothing_logged", "src": "7bb93154", "v": "لا شيء مسجل"}
+{"k": "ui.report.once", "src": "18638356", "v": "مرة واحدة"}
+{"k": "ui.report.panel.build", "src": "288edef3", "v": "حاول مرة أخرى بعد قليل."}
+{"k": "ui.report.panel.build_title", "src": "76b58923", "v": "تعذر تجهيز التقرير"}
+{"k": "ui.report.panel.group", "src": "a2c9e40d", "v": "ترسل التقارير من Mini App المفتوح في محادثتك الخاصة مع البوت."}
+{"k": "ui.report.panel.group_title", "src": "73925937", "v": "افتح محادثتك الخاصة"}
+{"k": "ui.report.panel.noowner", "src": "9ee5b766", "v": "ليس لـ aipager هذا محادثة مالك واحدة. في الطرفية، لا يزال {command} يعمل."}
+{"k": "ui.report.panel.noowner_title", "src": "40631445", "v": "لا يمكن الإرسال من هنا"}
+{"k": "ui.report.panel.owner", "src": "e83d9212", "v": "فقط مالك aipager هذا يمكنه إرسال تقرير مشكلة."}
+{"k": "ui.report.panel.owner_title", "src": "e91f02d9", "v": "للمالك فقط"}
+{"k": "ui.report.preparing", "src": "aaf61214", "v": "يجري تجهيز التقرير..."}
+{"k": "ui.report.privacy", "src": "48fa34f1", "v": "يحتوي على الإصدارات والعدادات ومواضع في شيفرة aipager. لا يحتوي أبدًا على محادثاتك أو طلباتك أو الأسماء أو المسارات."}
+{"k": "ui.report.sending_wait", "src": "176ed846", "v": "يجري الإرسال. لحظة."}
+{"k": "ui.report.sent_title", "src": "a7615ceb", "v": "تم إرسال التقرير"}
+{"k": "ui.report.setup.personal", "src": "2ca0506b", "v": "إعداد شخصي"}
+{"k": "ui.report.setup.scope", "src": "d662e796", "v": "إعداد لعدة محادثات"}
+{"k": "ui.report.setup.team", "src": "a857214e", "v": "إعداد فريق"}
+{"k": "ui.report.setup_line", "src": "c52e3d20", "v": "{mode}، {dms}، {groups}، يعمل منذ {uptime}"}
+{"k": "ui.report.setup_line_bare", "src": "60b4d8c7", "v": "{dms}، يعمل منذ {uptime}"}
+{"k": "ui.report.setup_line_no_groups", "src": "f0f3ef45", "v": "{mode}، {dms}، يعمل منذ {uptime}"}
+{"k": "ui.report.setup_line_no_mode", "src": "f94812f3", "v": "{dms}، {groups}، يعمل منذ {uptime}"}
+{"k": "ui.report.show_more", "src": "fdeb42f8", "v": {"few": "اعرض {n} أخرى", "many": "اعرض {n} أخرى", "one": "اعرض واحدًا آخر", "other": "اعرض {n} أخرى", "two": "اعرض اثنين آخرين", "zero": "اعرض {n} أخرى"}}
+{"k": "ui.report.stale", "src": "25e3d152", "v": "ذلك التقرير لم يعد هنا. هذا تقرير جديد: راجعه، ثم اضغط «أرسل التقرير» مرة أخرى."}
+{"k": "ui.report.still_sending", "src": "5b89eba6", "v": "لا يزال يرسل. انتظر قليلًا، ثم اضغط «أرسل التقرير» مرة أخرى."}
+{"k": "ui.report.stops", "src": "8f971d67", "v": "آخر توقف: {last}. مرات التوقف غير المتوقع في ٧ أيام: {n}."}
+{"k": "ui.report.system_in", "src": "7011d75d", "v": "{system}، في {container}"}
+{"k": "ui.report.thanks", "src": "04d9993f", "v": "شكرًا. إذا فتحت issue على GitHub، فاذكر هذا المرجع:"}
+{"k": "ui.report.tidied", "src": "35efa495", "v": "نظفت ملاحظتك (أزيلت الحروف غير المرئية أو المسافات الزائدة أو ما بعد ٥٠٠ حرف). راجعها، ثم اضغط «أرسل التقرير» مرة أخرى."}
+{"k": "ui.report.times", "src": "766020c6", "v": {"few": "{n} مرات", "many": "{n} مرة", "one": "مرة واحدة", "other": "{n} مرة", "two": "مرتان", "zero": "{n} مرة"}}
+{"k": "ui.report.title", "src": "24f3f52d", "v": "أبلغ عن مشكلة"}
+{"k": "ui.report.too_long", "src": "f600d1b3", "v": {"few": "أطول بـ {n} أحرف.", "many": "أطول بـ {n} حرفًا.", "one": "أطول بحرف واحد.", "other": "أطول بـ {n} حرف.", "two": "أطول بحرفين.", "zero": "أطول بـ {n} حرف."}}
+{"k": "ui.report.too_many", "src": "392589ae", "v": "ضغطات كثيرة جدًا. حاول مرة أخرى بعد دقيقة."}
+{"k": "ui.report.too_old_title", "src": "2a4d2b45", "v": "يلزم تحديث"}
+{"k": "ui.report.try_later", "src": "ab0f2d7c", "v": "تعذر الإرسال الآن. لم يضع شيء؛ حاول لاحقًا."}
+{"k": "ui.report.uptime.10m_1h", "src": "4db7ea05", "v": "من ١٠ دقائق إلى ساعة"}
+{"k": "ui.report.uptime.1d_7d", "src": "ba95c4e1", "v": "من يوم إلى ٧ أيام"}
+{"k": "ui.report.uptime.1h_24h", "src": "f23cc5e9", "v": "من ساعة إلى ٢٤ ساعة"}
+{"k": "ui.report.uptime.over_week", "src": "7df7e421", "v": "أكثر من أسبوع"}
+{"k": "ui.report.uptime.under_10m", "src": "35d29633", "v": "أقل من ١٠ دقائق"}
+{"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "مدة غير معروفة"}
+{"k": "ui.report.what_sent", "src": "6b776c8f", "v": "ما الذي سيرسل"}
+{"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "تفضيلات المحادثة"}
+{"k": "ui.settings.default_tag", "src": "7505d64a", "v": "الافتراضي"}
+{"k": "ui.settings.intro", "src": "f1ea8e24", "v": "تنطبق هذه على كل جلسة في هذه المحادثة."}
+{"k": "ui.settings.readonly", "src": "57fedd89", "v": "فقط المشرف يمكنه تغيير هذه."}
+{"k": "ui.settings.reset_done", "src": "5b3b5541", "v": "أعيدت إلى الافتراضي."}
+{"k": "ui.settings.reset_failed", "src": "38256d55", "v": "تعذرت إعادة تعيين بعض الإعدادات. أعد الفتح لتحاول مجددًا."}
+{"k": "ui.settings.save_failed", "src": "cdb1d51d", "v": "تعذر الحفظ. القيمة على الشاشة هي المحفوظة."}
+{"k": "ui.settings.saved", "src": "9d4af690", "v": "تم الحفظ."}
+{"k": "ui.shell.actions_aria", "src": "b086cae4", "v": "إجراءات الجلسة"}
+{"k": "ui.shell.chat_aria", "src": "2ced57f1", "v": "المحادثة"}
+{"k": "ui.shell.loading", "src": "33ce4174", "v": "يجري التحميل…"}
+{"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "الاسم الجديد"}
+{"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "جلسة جديدة"}
+{"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "الأقسام"}
+{"k": "ui.state.busy", "src": "8178ea20", "v": "تعمل"}
+{"k": "ui.state.gone", "src": "f957097d", "v": "انتهت"}
+{"k": "ui.state.idle", "src": "e24cc7a4", "v": "خاملة"}
+{"k": "ui.state.unknown", "src": "50d8b4a9", "v": "غير معروفة"}
+{"k": "ui.state.waiting", "src": "19622ace", "v": "تحتاجك"}
+{"k": "ui.state_line.finished", "src": "355bcc57", "v": "انتهت"}
+{"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "تحتاجك"}
+{"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "تحتاجك ({kind})"}
+{"k": "ui.state_line.resting", "src": "296d1007", "v": "خاملة"}
+{"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "خاملة، آخر نشاط {age}"}
+{"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "لم تبلغ بعد"}
+{"k": "ui.state_line.working", "src": "3b4dfc97", "v": "تعمل"}
+{"k": "ui.state_line.working_for", "src": "f555f372", "v": "تعمل منذ {clock}"}
+{"k": "ui.tab.sessions", "src": "e11e37a9", "v": "الجلسات"}
+{"k": "ui.tab.settings", "src": "c7f73bb5", "v": "الإعدادات"}
+{"k": "ui.tile.aria", "src": "eaa1d742", "v": "{session}، {state}، السياق {pct}٪، {model}، {cost}"}
+{"k": "ui.tile.aria_no_model", "src": "667d58b3", "v": "{session}، {state}، السياق {pct}٪، {cost}"}
+{"k": "ui.tile.no_folder", "src": "25fe67b1", "v": "بلا مجلد"}
+{"k": "ui.timeline.empty", "src": "8bdea321", "v": "لا نشاط بعد."}
+{"k": "ui.timeline.note", "src": "306606d2", "v": "يغطي الخط الزمني تشغيل الخدمة الحالي فقط. لا يحفظ عبر إعادات التشغيل، لذا لا تعرض الجلسة الأقدم شيئًا هنا."}
+{"k": "ui.timeline.title_empty", "src": "44748119", "v": "الخط الزمني (فارغ)"}
+{"k": "ui.timeline.title_n", "src": "a7f6a618", "v": {"few": "الخط الزمني ({n})", "many": "الخط الزمني ({n})", "one": "الخط الزمني ({n})", "other": "الخط الزمني ({n})", "two": "الخط الزمني ({n})", "zero": "الخط الزمني ({n})"}}
+{"k": "ui.update.check_failed", "src": "a15f1db5", "v": "تعذر التحقق من التحديثات. حاول مرة أخرى."}
+{"k": "ui.update.finished", "src": "80fa9b82", "v": "ذلك التحديث انتهى بالفعل."}
+{"k": "ui.update.job.claude_updating", "src": "c587f1e1", "v": "يجري العمل… (يجري تحديث claude)"}
+{"k": "ui.update.job.gate_timeout", "src": "1499ee18", "v": "لا تزال الجلسات مشغولة. أتنتظر أكثر، أم تعيد التشغيل الآن، أم تلغي؟"}
+{"k": "ui.update.job.starting", "src": "06080d40", "v": "يجري العمل… (البدء)"}
+{"k": "ui.update.job.upgrading", "src": "c6e6577f", "v": "يجري العمل… (الترقية)"}
+{"k": "ui.update.job.waiting_idle", "src": "2d4b64cc", "v": "في انتظار أن تصبح كل جلسة خاملة قبل إعادة التشغيل."}
+{"k": "ui.update.job.working_phase", "src": "3a93346a", "v": "يجري العمل… ({phase})"}
+{"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "لم تعد: {names}"}
+{"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}؟ يعيد aipager التشغيل حين لا تجري أي جولة."}
+{"k": "ui.update.other", "src": "7ae4a531", "v": "أعيد تشغيل aipager لكنه يعمل بالإصدار {version}."}
+{"k": "ui.update.other_not", "src": "20e6cd66", "v": "أعيد تشغيل aipager لكنه يعمل بالإصدار {version}، لا {expected}."}
+{"k": "ui.update.refused", "src": "651df229", "v": "أعد فتح التطبيق لترى نتيجة التحديث."}
+{"k": "ui.update.reopen", "src": "3bf2409f", "v": "أعيد تشغيل aipager، أعد فتح التطبيق حين تقول المحادثة إنه تم تحديثه. أغلقه، ثم افتحه مجددًا من المحادثة (زر القائمة أو {command})."}
+{"k": "ui.update.restart_now_confirm", "src": "3f76f590", "v": "إعادة التشغيل الآن تقطع الجولات الجارية المذكورة هنا."}
+{"k": "ui.update.restarting", "src": "0cfedf00", "v": "تجري إعادة تشغيل aipager…"}
+{"k": "ui.update.running", "src": "5c38d794", "v": "يجري تحديث بالفعل."}
+{"k": "ui.update.shutting_down", "src": "190aec5c", "v": "يتوقف aipager عن العمل. حاول مرة أخرى حين يعود."}
+{"k": "ui.update.slow", "src": "43a0f87b", "v": "لا تزال إعادة التشغيل جارية، أعد فتح التطبيق بعد قليل."}
+{"k": "ui.update.stale", "src": "fa8fd334", "v": "ذلك الفحص قديم. تحقق مرة أخرى."}
+{"k": "ui.update.start_failed", "src": "2f57d419", "v": "تعذر بدء ذلك. حاول مرة أخرى."}
+{"k": "ui.update.title", "src": "c76d1807", "v": "التحديثات"}
+{"k": "ui.update.too_many", "src": "9a3f5b9e", "v": "طلبات كثيرة جدًا. حاول مرة أخرى بعد دقيقة."}
+{"k": "ui.update.unknown_version", "src": "90246157", "v": "غير المعروف"}
+{"k": "ui.update.unreachable", "src": "fc17f70c", "v": "تعذر الوصول إلى aipager. حاول مرة أخرى."}
+{"k": "ui.update.up_to_date", "src": "2772acac", "v": "كل شيء محدث."}
+{"k": "ui.update.updated", "src": "a56afb67", "v": "تم التحديث إلى {version}."}
+{"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"few": "تم التحديث إلى {version}، واستعيدت {n} جلسات.", "many": "تم التحديث إلى {version}، واستعيدت {n} جلسة.", "one": "تم التحديث إلى {version}، واستعيدت جلسة واحدة.", "other": "تم التحديث إلى {version}، واستعيدت {n} جلسة.", "two": "تم التحديث إلى {version}، واستعيدت جلستان.", "zero": "تم التحديث إلى {version}، ولم تستعد أي جلسة."}}
+{"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude يسألك"}
+{"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude يحتاج إلى إذنك"}
+{"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "يوجد طلب إذن مفتوح في المحادثة."}
+{"k": "ui.waiting.question_open", "src": "3165c4fc", "v": "يوجد سؤال مفتوح في المحادثة."}
+{"k": "upd.ap.blocked", "src": "2b9633f6", "v": "🚫 لا يمكن تحديث <b>aipager</b> من هنا: {reason}"}
+{"k": "upd.ap.blocked_here", "src": "cefc4c9b", "v": "🚫 لا يمكن تحديث aipager من هنا: {reason}"}
+{"k": "upd.ap.cancelled", "src": "6eb974a3", "v": "↩️ ألغي تحديث <b>aipager</b> - لم يثبت شيء."}
+{"k": "upd.ap.current", "src": "fbd921a8", "v": "✅ <b>aipager</b> محدث بالفعل ({version})."}
+{"k": "upd.ap.current_git", "src": "d645d1e5", "v": "✅ <b>aipager</b> على {running} بالفعل - تثبيت {kind} هذا يترقى من مصدر git الخاص به، ولا جديد فيه."}
+{"k": "upd.ap.current_index", "src": "86cb566d", "v": "✅ <b>aipager</b> على {running} بالفعل - لا جديد في فهرس الحزم."}
+{"k": "upd.ap.current_local", "src": "dfdf1e49", "v": "✅ <b>aipager</b> على {running} بالفعل - تثبيت {kind} هذا يترقى من المسار المحلي، الذي لا يزال فيه الإصدار نفسه. حدث تلك النسخة المحلية أولًا."}
+{"k": "upd.ap.current_local_at", "src": "126cee31", "v": "✅ <b>aipager</b> على {running} بالفعل - تثبيت {kind} هذا يترقى من المسار المحلي {where}، الذي لا يزال فيه الإصدار نفسه. حدث تلك النسخة المحلية أولًا."}
+{"k": "upd.ap.current_plain", "src": "598c28b0", "v": "✅ <b>aipager</b> على {running} بالفعل."}
+{"k": "upd.ap.failed", "src": "8979f696", "v": "❌ فشلت ترقية <b>aipager</b> (رمز الخروج {code})، ولم يعد تشغيل شيء."}
+{"k": "upd.ap.finished_shutdown", "src": "622303bd", "v": "✅ انتهت ترقية <b>aipager</b>؛ الخدمة تتوقف، لذا لم يعد تشغيل شيء - التشغيل التالي يشغل ما هو مثبت."}
+{"k": "upd.ap.import_failed", "src": "cba04fe9", "v": "❌ تعذر استيراد الإصدار الجديد، لا يزال {running} يعمل، ولم يعد تشغيل شيء. أعد التثبيت عبر <code>{hint}</code>"}
+{"k": "upd.ap.installed", "src": "01a08996", "v": "✅ ثبت <b>aipager</b> {frm} ← {to}."}
+{"k": "upd.ap.installed_shutdown", "src": "d2a325d6", "v": "✅ ثبت <b>aipager</b> {frm} ← {to}؛ الخدمة تتوقف، لذا لم يعد تشغيل شيء - التشغيل التالي يشغل {to}."}
+{"k": "upd.ap.not_found", "src": "f74b4ba7", "v": "❌ <b>aipager</b>: لم يعثر على <code>{kind}</code> (بحث في {path})"}
+{"k": "upd.ap.prepare_failed", "src": "65e6b15f", "v": "✅ ثبت <b>aipager</b> {frm} ← {to}، لكن تعذر تجهيز إعادة التشغيل ({error}). أعد تشغيله بنفسك: <code>{cmd}</code>"}
+{"k": "upd.ap.restart_cancelled", "src": "23b8320e", "v": "✅ ثبت <b>aipager</b> {frm} ← {to}، لكن ألغيت إعادة التشغيل. أعد تشغيله بنفسك: <code>{cmd}</code>"}
+{"k": "upd.ap.restarting", "src": "e68754da", "v": "⏳ ثبت <b>aipager</b> {frm} ← {to}، تجري إعادة التشغيل…"}
+{"k": "upd.ap.schedule_failed", "src": "8ded320b", "v": "✅ ثبت <b>aipager</b> {frm} ← {to}، لكن فشلت جدولة إعادة التشغيل: {detail}. أعد تشغيله بنفسك: <code>{cmd}</code>"}
+{"k": "upd.ap.timeout", "src": "f834e535", "v": "⏱ انتهت مهلة ترقية <b>aipager</b> بعد {seconds} ث وأوقفت، ولم يعد تشغيل شيء، ولا يزال {running} يعمل. قد يكون التثبيت على القرص ناقصًا: أعد التثبيت عبر <code>{hint}</code> قبل إعادة التشغيل التالية."}
+{"k": "upd.ap.waiting", "src": "dc25cdd1", "v": "⏳ ثبت <b>aipager</b> {frm} ← {to}، وسيعاد التشغيل حين تنتهي الجولة الحالية"}
+{"k": "upd.busy.restarting", "src": "6d1c5479", "v": "⏳ aipager على وشك إعادة التشغيل لتحديث. جرب /update مرة أخرى حين يعود."}
+{"k": "upd.busy.running", "src": "e0aa9bc2", "v": "⏳ يجري تحديث بالفعل ({phase}). رسالة حالته تعرض التقدم."}
+{"k": "upd.busy.running_short", "src": "07e3480f", "v": "⏳ يجري تحديث بالفعل ({phase})."}
+{"k": "upd.cancelled", "src": "a85d8e48", "v": "↩️ ألغي التحديث - لم يتغير شيء."}
+{"k": "upd.cc.current", "src": "57516cde", "v": "✅ <b>Claude Code</b> محدث بالفعل ({version})"}
+{"k": "upd.cc.done", "src": "cd97aa9e", "v": "✅ <b>Claude Code</b> {before} ← {after}"}
+{"k": "upd.cc.done_shutdown", "src": "71cb416d", "v": "✅ انتهى تحديث <b>Claude Code</b>؛ aipager يتوقف عن العمل، لذا سيعرض /update الإصدار الجديد حين يعود"}
+{"k": "upd.cc.error", "src": "fcf1f441", "v": "❌ <b>Claude Code</b>: {error}"}
+{"k": "upd.cc.failed", "src": "ef865b9a", "v": "❌ فشل تحديث <b>Claude Code</b> (رمز الخروج {code})"}
+{"k": "upd.cc.timeout", "src": "c6c8c9ce", "v": "⏱ انتهت مهلة تحديث <b>Claude Code</b> بعد {seconds} ث"}
+{"k": "upd.check_failed_now", "src": "4ba67b54", "v": "⚠️ تعذر التحقق من التحديثات الآن. حاول مرة أخرى."}
+{"k": "upd.elapsed.m", "src": "a47d8efb", "v": "{m} د"}
+{"k": "upd.elapsed.ms", "src": "c017b27a", "v": "{m} د {s} ث"}
+{"k": "upd.elapsed.s", "src": "2b434962", "v": "{s} ث"}
+{"k": "upd.fix.claude", "src": "94c58cdc", "v": "شغل {command} مرة أخرى"}
+{"k": "upd.fix.reinstall", "src": "ae353907", "v": "أعد التثبيت عبر {command}"}
+{"k": "upd.gate.busy", "src": "a8f53f0e", "v": {"few": "⏰ لا تزال الجلسات مشغولة بعد {n} د. أتنتظر {wait} د أخرى، أم تعيد التشغيل الآن، أم تلغي؟ إعادة التشغيل الآن تقطع كل ما هو مذكور أدناه.", "many": "⏰ لا تزال الجلسات مشغولة بعد {n} د. أتنتظر {wait} د أخرى، أم تعيد التشغيل الآن، أم تلغي؟ إعادة التشغيل الآن تقطع كل ما هو مذكور أدناه.", "one": "⏰ لا تزال الجلسات مشغولة بعد {n} د. أتنتظر {wait} د أخرى، أم تعيد التشغيل الآن، أم تلغي؟ إعادة التشغيل الآن تقطع كل ما هو مذكور أدناه.", "other": "⏰ لا تزال الجلسات مشغولة بعد {n} د. أتنتظر {wait} د أخرى، أم تعيد التشغيل الآن، أم تلغي؟ إعادة التشغيل الآن تقطع كل ما هو مذكور أدناه.", "two": "⏰ لا تزال الجلسات مشغولة بعد {n} د. أتنتظر {wait} د أخرى، أم تعيد التشغيل الآن، أم تلغي؟ إعادة التشغيل الآن تقطع كل ما هو مذكور أدناه.", "zero": "⏰ لا تزال الجلسات مشغولة بعد {n} د. أتنتظر {wait} د أخرى، أم تعيد التشغيل الآن، أم تلغي؟ إعادة التشغيل الآن تقطع كل ما هو مذكور أدناه."}}
+{"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"few": "⏰ لا تزال الجلسات مشغولة بعد {n} د. أتنتظر {wait} د أخرى، أم تعيد التشغيل الآن، أم تلغي؟ إعادة التشغيل الآن تقطع كل ما هو مذكور أدناه، بما فيه الإجابات المحتجزة التي لم تسلم بعد.", "many": "⏰ لا تزال الجلسات مشغولة بعد {n} د. أتنتظر {wait} د أخرى، أم تعيد التشغيل الآن، أم تلغي؟ إعادة التشغيل الآن تقطع كل ما هو مذكور أدناه، بما فيه الإجابات المحتجزة التي لم تسلم بعد.", "one": "⏰ لا تزال الجلسات مشغولة بعد {n} د. أتنتظر {wait} د أخرى، أم تعيد التشغيل الآن، أم تلغي؟ إعادة التشغيل الآن تقطع كل ما هو مذكور أدناه، بما فيه الإجابات المحتجزة التي لم تسلم بعد.", "other": "⏰ لا تزال الجلسات مشغولة بعد {n} د. أتنتظر {wait} د أخرى، أم تعيد التشغيل الآن، أم تلغي؟ إعادة التشغيل الآن تقطع كل ما هو مذكور أدناه، بما فيه الإجابات المحتجزة التي لم تسلم بعد.", "two": "⏰ لا تزال الجلسات مشغولة بعد {n} د. أتنتظر {wait} د أخرى، أم تعيد التشغيل الآن، أم تلغي؟ إعادة التشغيل الآن تقطع كل ما هو مذكور أدناه، بما فيه الإجابات المحتجزة التي لم تسلم بعد.", "zero": "⏰ لا تزال الجلسات مشغولة بعد {n} د. أتنتظر {wait} د أخرى، أم تعيد التشغيل الآن، أم تلغي؟ إعادة التشغيل الآن تقطع كل ما هو مذكور أدناه، بما فيه الإجابات المحتجزة التي لم تسلم بعد."}}
+{"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: في انتظار أن تصبح كل جلسة خاملة قبل إعادة التشغيل."}
+{"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>التحديثات</b>"}
+{"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (محدث)"}
+{"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} ← {latest}"}
+{"k": "upd.line.ap_newer_blocked", "src": "6c0b194f", "v": "aipager {running} ← {latest} (لا يمكن التحديث من هنا: {reason})"}
+{"k": "upd.line.ap_unchecked", "src": "6e9c88e2", "v": "aipager {running} (تعذر التحقق)"}
+{"k": "upd.line.cc_current", "src": "f360deb9", "v": "Claude Code {current} (محدث)"}
+{"k": "upd.line.cc_newer", "src": "f40a4485", "v": "Claude Code {current} ← {latest}"}
+{"k": "upd.line.cc_newer_blocked", "src": "aa86c9e2", "v": "Claude Code {current} ← {latest} (لا يمكن التحديث من هنا: {reason})"}
+{"k": "upd.line.cc_unchecked", "src": "634412f0", "v": "Claude Code {current} (تعذر التحقق)"}
+{"k": "upd.line.cc_unknown", "src": "302340a8", "v": "Claude Code (تعذر التحقق)"}
+{"k": "upd.manual.needed", "src": "9abdaf5e", "v": "يلزم إعادة التشغيل: {reason}"}
+{"k": "upd.manual.would_kill", "src": "df06a1e3", "v": "جلسات ستنهيها إعادة التشغيل: {labels}"}
+{"k": "upd.marker.done", "src": "5a3ca85c", "v": {"few": "✅ تم تحديث aipager {frm} ← {to}، واستعيدت {n} جلسات", "many": "✅ تم تحديث aipager {frm} ← {to}، واستعيدت {n} جلسة", "one": "✅ تم تحديث aipager {frm} ← {to}، واستعيدت جلسة واحدة", "other": "✅ تم تحديث aipager {frm} ← {to}، واستعيدت {n} جلسة", "two": "✅ تم تحديث aipager {frm} ← {to}، واستعيدت جلستان", "zero": "✅ تم تحديث aipager {frm} ← {to}، ولم تستعد أي جلسة"}}
+{"k": "upd.marker.interrupted", "src": "66f4f0b7", "v": "⚠️ انقطع تحديث حين توقف aipager؛ قد يكون التثبيت ناقصًا. يعمل الآن {running}. إن ساء شيء، {fix}."}
+{"k": "upd.marker.not_back", "src": "d253a83a", "v": "⚠️ لم تعد: {labels}"}
+{"k": "upd.marker.wrong_version", "src": "17ebf14f", "v": "⚠️ أعيد تشغيل aipager لكنه يعمل بالإصدار {running}، لا {to}."}
+{"k": "upd.note.ap_installed", "src": "5616e4b4", "v": "aipager {installed} مثبت لكنه لا يعمل بعد."}
+{"k": "upd.offer_stale", "src": "a72655cc", "v": "⚠️ هذا الفحص قديم. تحقق مرة أخرى قبل التحديث."}
+{"k": "upd.output_in_log", "src": "3c62a9b7", "v": "(المخرجات في سجل الخدمة)"}
+{"k": "upd.prompt", "src": "8a30cb51", "v": "⬆️ <b>التحديثات</b>\n\nتحقق مما إذا كان لـ aipager أو Claude Code إصدار أحدث."}
+{"k": "upd.reason.unknown_install", "src": "0ab6e3a7", "v": "تثبيت غير معروف"}
+{"k": "upd.reason.yourself", "src": "8ebd1480", "v": "أعد تشغيله بنفسك"}
+{"k": "upd.restart.auto", "src": "47924d9e", "v": "إعادة التشغيل: تلقائية، حين لا تجري أي جولة."}
+{"k": "upd.restart.manual", "src": "8e3998af", "v": "إعادة التشغيل: يدوية ({reason})"}
+{"k": "upd.sessions.new_version", "src": "a9ee48dc", "v": "الجلسات الجديدة تستخدم {version}."}
+{"k": "upd.sessions.none", "src": "1fe42f86", "v": "لا جلسات تعمل الآن."}
+{"k": "upd.sessions.none_restarted", "src": "5807bbd1", "v": "تبقى الجلسات العاملة على الإصدار القديم حتى يعاد تشغيلها - لم يعد تشغيل أي منها."}
+{"k": "upd.sessions.old", "src": "2e875cd3", "v": "لا تزال على الإصدار القديم: {labels}"}
+{"k": "upd.sessions.other_chats", "src": "7b515e23", "v": {"few": "و{n} في محادثات أخرى", "many": "و{n} في محادثات أخرى", "one": "وواحدة في محادثات أخرى", "other": "و{n} في محادثات أخرى", "two": "واثنتان في محادثات أخرى", "zero": "و{n} في محادثات أخرى"}}
+{"k": "upd.shutdown.early", "src": "6b7541f0", "v": "⚠️ توقفت الخدمة قبل أن ينتهي التحديث."}
+{"k": "upd.shutdown.partial", "src": "140c77c5", "v": "⚠️ توقفت الخدمة أثناء تثبيت التحديث؛ أوقف المثبت، لذا قد يكون التثبيت ناقصًا. إن ساء شيء، {fix}."}
+{"k": "upd.shutting_down", "src": "4dabffa5", "v": "⏳ يتوقف aipager عن العمل. حاول مرة أخرى حين يعود."}
+{"k": "upd.starting", "src": "0e316323", "v": "⏳ يجري بدء التحديث…"}
+{"k": "upd.step.aipager", "src": "4baaa0e2", "v": "ترقية aipager عبر {kind}"}
+{"k": "upd.step.claude", "src": "417c042d", "v": "تحديث Claude Code"}
+{"k": "upd.step.started", "src": "cd17f00f", "v": "⏳ {step}…"}
+{"k": "upd.step.still_working", "src": "37b863ed", "v": "⏳ {step} - لا يزال جاريًا{elapsed}"}
+{"k": "upd.still_running", "src": "c57fe950", "v": "لا يزال يعمل:"}
+{"k": "upd.summary.cant_here", "src": "8abb0e4e", "v": "صدر تحديث، لكن لا يمكن تثبيته من هنا."}
+{"k": "upd.summary.check_failed", "src": "b8579281", "v": "لم يعثر على شيء أحدث، لكن فشل أحد الفحوص. حاول لاحقًا."}
+{"k": "upd.summary.up_to_date", "src": "2772acac", "v": "كل شيء محدث."}
+{"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ توقف التحديث بسبب خطأ غير متوقع (انظر سجل الخدمة)."}
+{"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ لم تحدث إعادة التشغيل المجدولة - الإصدار الجديد مثبت لكن القديم لا يزال يعمل. أعد تشغيله بنفسك: {command}"}
+{"k": "whoami.any", "src": "195d97a4", "v": "(أي أداة)"}
+{"k": "whoami.bypass_role_denies", "src": "9ed1452d", "v": "  bypass_role_denies: {value}"}
+{"k": "whoami.bypass_safety", "src": "a09645db", "v": "  bypass_safety: {value}"}
+{"k": "whoami.can_manage", "src": "e889ca71", "v": "  can_manage: {value}"}
+{"k": "whoami.effective_allow", "src": "50a8e776", "v": "  allow_tools الفعلية: {tools}"}
+{"k": "whoami.effective_deny", "src": "3b0b5420", "v": "  deny_tools الفعلية: {tools}"}
+{"k": "whoami.head", "src": "ac5935f7", "v": "🪪 <b>{member}</b> في <b>{scope}</b>"}
+{"k": "whoami.no", "src": "fd128635", "v": "لا"}
+{"k": "whoami.none", "src": "3c6b183d", "v": "(لا شيء)"}
+{"k": "whoami.not_allowed", "src": "c9bfc640", "v": "🪪 أنت لست في قائمة المسموح لهم في هذا البوت."}
+{"k": "whoami.not_member", "src": "d86fddf7", "v": "🪪 أنت لست عضوًا في هذا النطاق."}
+{"k": "whoami.personal", "src": "10ab5a55", "v": "🪪 الوضع الشخصي - تحكم كامل في هذا الجهاز من هذه المحادثة الخاصة."}
+{"k": "whoami.role", "src": "8ffb44b5", "v": "  الدور: <b>{role}</b>"}
+{"k": "whoami.team_deny", "src": "e88735e1", "v": "  deny_tools: {tools}"}
+{"k": "whoami.team_head", "src": "c413798c", "v": "🪪 <b>{member}</b>"}
+{"k": "whoami.yes", "src": "fb360f9c", "v": "نعم"}

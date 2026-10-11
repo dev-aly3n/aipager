@@ -44,6 +44,7 @@ import logging
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from aipager._test_guard import RealHomeWriteError
+from aipager.i18n import Msg
 from aipager.scope import _as_chat_id
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -52,8 +53,9 @@ if TYPE_CHECKING:  # pragma: no cover
 log = logging.getLogger(__name__)
 
 #: The one line posted in the new chat. Plain words, no dashes (UI rule).
-NOTICE = ("This group was upgraded by Telegram. aipager moved with it, "
-          "nothing to do.")
+NOTICE = Msg("chatmove.notice",
+             "This group was upgraded by Telegram. aipager moved with it, nothing to do.",
+             note="Posted in a group after Telegram upgraded it to a new chat")
 
 _handler: Callable[[int, int], Awaitable[Any]] | None = None
 # Strong references to the migrations scheduled from a sync context, so
@@ -322,9 +324,11 @@ def _drop_old_chat_state(bot, old_id: int) -> None:
 async def _post_notice(bot, new_id: int) -> None:
     if getattr(bot, "_app", None) is None:
         return
+    from aipager import i18n
     from aipager.bot.transport import send_text
     try:
-        await send_text(bot._app.bot, new_id, NOTICE)
+        # In the moved chat's language (its preferences moved first).
+        await send_text(bot._app.bot, new_id, i18n.for_chat(new_id).text(NOTICE))
     except Exception:
         log.info("Could not post the upgrade notice in chat %s", new_id,
                  exc_info=True)

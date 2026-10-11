@@ -1,5 +1,5 @@
 """The background-shell text helpers (``aipager.bg_shells``) and the answer
-line's shell wording (``aipager.bot.agents_line``). Pure functions."""
+block's shell wording (``aipager.bot.agents_line``). Pure functions."""
 
 from __future__ import annotations
 
@@ -88,53 +88,39 @@ def test_live_rows():
 
 
 @pytest.mark.parametrize("outcome, exit_code, row, mark", [
-    ("completed", 0, "shell: t - done (6m)", True),
+    ("completed", 0, "shell: t - done (6:20)", True),
     ("failed", 1, "shell: t - failed (exit 1)", "failed"),
-    ("failed", None, "shell: t - failed (6m)", "failed"),
-    ("killed", None, "shell: t - stopped (6m)", "stopped"),
-    ("stopped", None, "shell: t - stopped (6m)", "stopped"),
-    ("lost", None, "shell: t - no end seen (6m)", "stopped"),
+    ("failed", None, "shell: t - failed (6:20)", "failed"),
+    ("killed", None, "shell: t - stopped (6:20)", "stopped"),
+    ("stopped", None, "shell: t - stopped (6:20)", "stopped"),
+    ("lost", None, "shell: t - no end seen (6:20)", "stopped"),
 ])
 def test_settled_rows(outcome, exit_code, row, mark):
     assert bg_shells.settled_row("t", outcome, 380, exit_code) == (row, mark)
 
 
 @pytest.mark.parametrize("seconds, text", [
-    (-3, "0s"), (45, "45s"), (60, "1m"), (3599, "59m"), (3780, "1h 3m")])
+    (-3, "0:00"), (45, "0:45"), (60, "1:00"), (3599, "59:59"), (3780, "1:03:00")])
 def test_duration(seconds, text):
     assert bg_shells.duration(seconds) == text
     assert agents_line.duration(seconds) == text
 
 
-# ── the answer line ─────────────────────────────────────────────────────────
+# ── the answer's status block (shells) ─────────────────────────────────────
 
-def test_running_line_without_kinds_is_unchanged():
-    assert agents_line.running_line(["a", "b"]) == (
-        "⏳ 2 agents still running (a, b) - results will follow here")
-
-
-@pytest.mark.parametrize("kinds, count", [
-    (["shell"], "1 shell"),
-    (["shell", "shell"], "2 shells"),
-    (["agent", "shell"], "1 agent, 1 shell"),
-    (["agent", "agent", "shell"], "2 agents, 1 shell"),
-])
-def test_running_line_counts_shells(kinds, count):
-    labels = [f"l{i}" for i in range(len(kinds))]
-    line = agents_line.running_line(labels, kinds=kinds)
-    assert line.startswith(f"⏳ {count} still running (")
-    assert line.endswith(") - results will follow here")
-
-
-def test_done_line_for_shells():
-    assert agents_line.done_line(["sleep 90"], 120, kinds=["shell"]) == \
-        "✅ shell: sleep 90 - done (2m)"
-    assert agents_line.done_line(["x"], 120, kinds=["agent"]) == \
-        "✅ x done (2m)"
-    assert agents_line.done_line(["a", "b"], 120,
-                                 kinds=["agent", "shell"]) == \
-        "✅ 1 agent, 1 shell done (2m)"
-    assert agents_line.done_line(["a", "b"], 120) == "✅ 2 agents done (2m)"
-    assert agents_line.done_line(["my_job"], 5, kinds=["shell"],
-                                 markdown=True) == \
-        "✅ shell: my\\_job - done (5s)"
+@pytest.mark.parametrize("view, text", [
+    (agents_line.BlockView(shells_running=1), "🖥 1 shell running"),
+    (agents_line.BlockView(shells_running=2), "🖥 2 shells running"),
+    (agents_line.BlockView(shells_finished=1, shells_finished_seconds=120),
+     "1 shell finished (2:00)"),
+    (agents_line.BlockView(shells_stopped=1, shells_stopped_seconds=5),
+     "1 shell stopped (0:05)"),
+    (agents_line.BlockView(shells_finished=1, shells_finished_seconds=120,
+                           shells_stopped=2, shells_stopped_seconds=5),
+     "1 shell finished (2:00) · 2 shells stopped (0:05)"),
+    (agents_line.BlockView(shells_running=1, shells_finished=3),
+     "🖥 1 shell running"),
+], ids=["one-running", "two-running", "finished", "stopped",
+        "finished-and-stopped", "running-wins"])
+def test_the_block_counts_shells(view, text):
+    assert agents_line.render_block(view) == text

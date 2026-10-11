@@ -1,0 +1,90 @@
+{
+ "address": "kamu",
+ "keep_english": [
+  "commit",
+  "token",
+  "diff",
+  "log",
+  "ctx",
+  "prompt",
+  "shell"
+ ],
+ "language": "Indonesian",
+ "terms": {
+  "admin": [
+   "admin"
+  ],
+  "agent": [
+   "agen"
+  ],
+  "allow": [
+   "izinkan",
+   "diizinkan"
+  ],
+  "background": [
+   "latar belakang"
+  ],
+  "card": [
+   "kartu"
+  ],
+  "chat": [
+   "chat"
+  ],
+  "deny": [
+   "tolak"
+  ],
+  "folder": [
+   "folder"
+  ],
+  "group": [
+   "grup"
+  ],
+  "member": [
+   "anggota"
+  ],
+  "model": [
+   "model"
+  ],
+  "owner": [
+   "pemilik"
+  ],
+  "permission": [
+   "izin"
+  ],
+  "prompt": [
+   "prompt",
+   "pesan",
+   "permintaan"
+  ],
+  "question": [
+   "pertanyaan"
+  ],
+  "queue": [
+   "antrean"
+  ],
+  "resume": [
+   "lanjutkan",
+   "melanjutkan",
+   "/resume"
+  ],
+  "session": [
+   "sesi"
+  ],
+  "settings": [
+   "pengaturan",
+   "/settings"
+  ],
+  "stop": [
+   "henti",
+   "stop"
+  ],
+  "turn": [
+   "giliran"
+  ],
+  "update": [
+   "perbarui",
+   "pembaruan",
+   "/update"
+  ]
+ }
+}

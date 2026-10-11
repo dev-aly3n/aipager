@@ -73,7 +73,7 @@ def test_the_result_is_auto_ready_and_targeted(run_flow):
     text, buttons, state = run_flow("/new x1")
     assert state == {"label": "x1", "skip_perms": True, "queued": [],
                      "cwd": "", "target": True}
-    assert "✅ <b>x1</b> is ready" in text and "🤖 Auto" in text
+    assert "✅ <b>x1</b> is ready" in text and "🤖 Auto mode" in text
     assert "✍️ Just send a message, it goes to x1." in text
     assert buttons == ["💬 Switch to Ask", "🧠 Model"]
 

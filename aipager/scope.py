@@ -19,6 +19,7 @@ from pathlib import Path
 
 import yaml
 
+from aipager import root_rule
 from aipager._test_guard import check_write
 
 log = logging.getLogger(__name__)
@@ -181,6 +182,11 @@ class Scope:
     label: str
     members: tuple[Member, ...] = ()
     deny_tools: tuple[str, ...] = ()
+    #: The members' root folder: where members whose role lacks
+    #: ``can_manage`` may start sessions and work (``~`` expanded,
+    #: absolute). ``None``: the default under ``~/aipager-users``
+    #: (``aipager.member_root.effective_root``).
+    root: str | None = None
 
 
 # Canonical header — re-emitted on every write. Mirrors team.py's pattern.
@@ -275,12 +281,18 @@ def _parse_scope(entry, i: int) -> Scope:
             )
         seen.add(m.id)
 
+    # The members' root folder, refused by the same rule the wizard
+    # applies: a bad root would hold a member to /, the home folder or a
+    # protected folder, so the file is refused rather than guessed at.
+    root = root_rule.parse_scope_root(entry.get("root"), i, ScopeConfigError)
+
     return Scope(
         chat_id=chat_id,
         kind=kind,
         label=label,
         members=members,
         deny_tools=_str_list(entry.get("deny_tools"), f"scopes[{i}].deny_tools"),
+        root=root,
     )
 
 
@@ -546,6 +558,10 @@ def dump_scopes(
         }
         if s.deny_tools:
             sd["deny_tools"] = list(s.deny_tools)
+        # The members' root folder: rebuilt from Scope like everything
+        # here, so a scope's root survives every later wizard write.
+        if s.root:
+            sd["root"] = s.root
         data["scopes"].append(sd)
 
     # A leftover key, re-emitted so an older file round-trips; the

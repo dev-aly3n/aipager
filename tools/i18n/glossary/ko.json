@@ -1,0 +1,87 @@
+{
+ "address": "해요체",
+ "keep_english": [
+  "commit",
+  "token",
+  "diff",
+  "log",
+  "ctx"
+ ],
+ "language": "Korean",
+ "terms": {
+  "admin": [
+   "관리자"
+  ],
+  "agent": [
+   "에이전트"
+  ],
+  "allow": [
+   "허용"
+  ],
+  "background": [
+   "백그라운드"
+  ],
+  "card": [
+   "카드"
+  ],
+  "chat": [
+   "채팅",
+   "대화"
+  ],
+  "deny": [
+   "거부"
+  ],
+  "folder": [
+   "폴더"
+  ],
+  "group": [
+   "그룹"
+  ],
+  "member": [
+   "멤버"
+  ],
+  "model": [
+   "모델"
+  ],
+  "owner": [
+   "소유자"
+  ],
+  "permission": [
+   "권한"
+  ],
+  "prompt": [
+   "프롬프트",
+   "메시지",
+   "요청"
+  ],
+  "question": [
+   "질문"
+  ],
+  "queue": [
+   "대기열"
+  ],
+  "resume": [
+   "재개",
+   "/resume"
+  ],
+  "session": [
+   "세션"
+  ],
+  "settings": [
+   "설정",
+   "/settings"
+  ],
+  "stop": [
+   "중지",
+   "멈",
+   "/stop"
+  ],
+  "turn": [
+   "턴"
+  ],
+  "update": [
+   "업데이트",
+   "/update"
+  ]
+ }
+}

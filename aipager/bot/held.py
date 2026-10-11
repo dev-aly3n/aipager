@@ -117,6 +117,11 @@ class HeldAnswer:
     # are not a turn's answer.
     digests: tuple[str, ...] = ()
     selected_wall: float = 0.0
+    # The direction of the message the answer is (multilingual design 5.7,
+    # rule 5), decided when it was built: its late marker and its rich
+    # send take it, never a guess from the stored text, which holds
+    # aipager's own header too. None: not known (judged from the text).
+    is_rtl: bool | None = None
 
     def held_seconds(self, now: float | None = None) -> float:
         return max(0.0, (time.time() if now is None else now) - self.held_at)
@@ -135,7 +140,7 @@ class HeldAnswers:
     def hold(self, *, chat_id, session: str, label: str, rich_text: str,
              plain_text: str, reply_to: int | None = None,
              at: float | None = None, digests: tuple[str, ...] = (),
-             selected_wall: float = 0.0) -> HeldAnswer:
+             selected_wall: float = 0.0, is_rtl: bool | None = None) -> HeldAnswer:
         """Keep one answer. Every call is a NEW entry (8.29 T4).
 
         Nothing is replaced. A session can finish two turns inside one
@@ -157,7 +162,7 @@ class HeldAnswers:
             rich_text=rich_text, plain_text=plain_text, reply_to=reply_to,
             held_at=time.time() if at is None else at,
             key=f"{session}#{self._seq}",
-            digests=digests, selected_wall=selected_wall,
+            digests=digests, selected_wall=selected_wall, is_rtl=is_rtl,
         )
         per_chat[entry.key] = entry
         self.expire(at)

@@ -28,8 +28,12 @@ from telegram.error import (
 )
 
 
+from aipager import i18n
+from aipager.bot import kbwords, miniapp_link
+from aipager.bot.mode_labels import mode_label
+from aipager.i18n import Msg, Plural, Safe, Span
+from aipager.clockfmt import elapsed as clock
 from aipager.config import (
-    APP_BUTTON,
     # Only the pinned bar reads CHAT_ID (`_pinned_chats`, `_pinned_chat_of`):
     # a legacy personal install's one chat, where an unstamped session
     # belongs (resolve_chat_id's fallback outside scope mode). No session
@@ -111,22 +115,234 @@ RESEND_SEND_ERRORS = (TelegramError,)
 #: wait that escaped the outbound gate); the Mini App route answers it as
 #: 503 ``chat_busy``, like the gate's own skip.
 RESEND_THROTTLE_ERRORS = (RetryAfter,)
-PINNED_SLOW_LINE = "🐢 slow mode after a Telegram warning"
-PINNED_PAUSED_LINE = "⏸ card updates paused (hourly limit)"
-PINNED_PAUSED_RATE_LINE = "⏸ card updates paused (rate limit)"
+PINNED_SLOW_LINE = Msg("flood.slow", "🐢 slow mode after a Telegram warning",
+                       note="Pinned bar: Telegram warned aipager, so it sends less often")
+PINNED_PAUSED_LINE = Msg("flood.paused_hourly", "⏸ card updates paused (hourly limit)",
+                         note="Pinned bar: busy cards stop updating until the hourly "
+                              "Telegram limit resets")
+PINNED_PAUSED_RATE_LINE = Msg("flood.paused_rate", "⏸ card updates paused (rate limit)",
+                              note="Pinned bar: busy cards stop updating while Telegram "
+                                   "limits this chat")
 #: At most this many "Answer" buttons on a bar.
 PINNED_MAX_ANSWER_BUTTONS = 3
-#: A session's state word on the bar, and the order of the first line's
-#: counts when several sessions share the chat.
-_PINNED_WORDS = {Status.BUSY: "working", Status.INTERACTIVE: "needs you",
+#: A session's state id on the bar (its words are ``_STATE_MSGS``), and
+#: the order of the first line's counts when several sessions share the
+#: chat. Logic reads the ids, never the shown words.
+_PINNED_WORDS = {Status.BUSY: "working", Status.INTERACTIVE: "needs_you",
                  Status.IDLE: "idle"}
 _PINNED_COUNT_ORDER = ("working", "idle", "starting")
+#: id -> how the state reads.
+_STATE_MSGS = {
+    "working": Msg("pin.state.working", "working", note="A session's state: it is working"),
+    "needs_you": Msg("pin.state.needs_you", "needs you",
+                     note="A session's state: it waits for your answer"),
+    "idle": Msg("pin.state.idle", "idle", note="A session's state: nothing to do"),
+    "starting": Msg("pin.state.starting", "starting",
+                    note="A session's state: not known yet (it is starting)"),
+}
+#: id -> "N <state>" on the first line when several sessions share a chat.
+_COUNT_MSGS = {
+    "working": Plural("pin.count.working", one="{n} working", other="{n} working",
+                      note="Pinned bar: how many sessions are working"),
+    "idle": Plural("pin.count.idle", one="{n} idle", other="{n} idle",
+                   note="Pinned bar: how many sessions are idle"),
+    "starting": Plural("pin.count.starting", one="{n} starting", other="{n} starting",
+                       note="Pinned bar: how many sessions are starting"),
+}
+PIN_STATE = Msg("pin.state", "({state})", note="A session's state in parentheses",
+                eg={"state": "working"})
+PIN_STATE_RUNNING = Msg("pin.state_running", "({state}, {running})",
+                        note="A session's state, and its background work still running",
+                        eg={"state": "idle", "running": "1 agent running"})
+RUNNING_AGENTS = Plural("pin.running_agents", one="{n} agent running",
+                        other="{n} agents running",
+                        note="Background agents of a session still running")
+RUNNING_SHELLS = Plural("pin.running_shells", one="{n} shell running",
+                        other="{n} shells running",
+                        note="Background shell commands of a session still running")
+RUNNING_BOTH = Msg("pin.running_both", "{agents}, {shells} running",
+                   note="Background agents and shells still running",
+                   eg={"agents": "1 agent", "shells": "2 shells"})
+FIRST_WAITING = Msg("pin.first.waiting", "⏳ {session} needs you",
+                    note="Pinned bar's first line: a session waits for your answer",
+                    eg={"session": "x1"})
+FIRST_SINGLE = Msg("pin.first.single", "{glyph} {session} {state}",
+                   note="Pinned bar's first line with one session: its state in parentheses",
+                   eg={"glyph": "⚙️", "session": "x1", "state": "(working)"})
+FIRST_COUNTS = Msg("pin.first.counts", "{glyph} {counts}",
+                   note="Pinned bar's first line: how many sessions are in each state",
+                   eg={"glyph": "⚙️", "counts": "1 working · 2 idle"})
+FIRST_ALL_IDLE = Msg("pin.first.all_idle", "💤 all idle",
+                     note="Pinned bar's first line: no session in this chat")
+PIN_PAREN = Msg("pin.paren", "({running})", note="Background work after the waiting session",
+                eg={"running": "1 agent running"})
+PIN_SUMMARY = Msg("pin.summary", "- {summary}",
+                  note="What the waiting session asks (a tool call or a question)",
+                  eg={"summary": "Bash: rm -rf build/"})
+PIN_MORE = Plural("pin.more", one="(+{n} more)", other="(+{n} more)",
+                  note="How many more sessions wait for an answer")
+PIN_TARGET = Msg("pin.target", "✍️ Messages go to <b>{session}</b>",
+                 note="Pinned bar: where a plain message in this chat goes",
+                 eg={"session": "x1"})
+PIN_LINE = Msg("pin.line", "• <b>{session}</b> {state}",
+               note="Pinned bar: one session and its state in parentheses",
+               eg={"session": "x1", "state": "(idle)"})
+PIN_ANSWER = Msg("pin.btn.answer", "Answer {session}",
+                 note="Pinned bar button: show the waiting session's prompt again",
+                 eg={"session": "x1"})
+OPEN_CHAT = Msg("toast.open_chat", "Open the chat to answer",
+                note="Pop-up: the Answer button was tapped outside its chat")
+ALREADY_ANSWERED = Msg("toast.already_answered", "already answered",
+                       note="Pop-up: the prompt was answered already")
+CANT_RESEND = Msg("toast.cant_resend",
+                  "The prompt can't be re-sent - answer it in the terminal",
+                  note="Pop-up: aipager cannot show this prompt again")
+BUSY_RETRY = Msg("toast.busy_retry", "Busy - try again in a moment",
+                 note="Pop-up: Telegram limits this chat right now")
 #: The first line's glyph when no session is waiting: that of the first
 #: state in _PINNED_GLYPH_ORDER any session is in.
 _PINNED_GLYPHS = {"working": "⚙️", "starting": "🔄", "idle": "💤"}
 _PINNED_GLYPH_ORDER = ("working", "starting", "idle")
 #: The waiting prompt's summary on the first line is cut to this.
 PINNED_SUMMARY_MAX = 40
+PIN_NEEDS_INPUT = Msg("pin.needs_input", "Needs input",
+                      note="Pinned bar and /status: what a session waits on when Claude "
+                           "Code asks for a choice in its terminal and gave no details")
+
+
+def _stored_summary_text(tr, summary: str) -> str:
+    """*summary* as shown in *tr*'s language: the English summaries aipager
+    stores for a prompt with no details ("Permission needed", "Needs
+    input", "AskUserQuestion (loading…)") are drawn from their keys at
+    render time (display only; the stored value stays English). Anything
+    else, and English, as it is."""
+    if tr is None or tr.code == "en":
+        return summary
+    from aipager.bot.keyboards import LOADING, PERM_NEEDED
+    msg = {str(m): m for m in (PERM_NEEDED, PIN_NEEDS_INPUT)}.get(summary)
+    if msg is not None:
+        return tr.text(msg)
+    if summary == LOADING.replace("{tool}", _LOADING_TOOL):
+        return tr.text(LOADING, tool=_LOADING_TOOL)
+    return summary
+
+
+#: The resume card's status icons (the English table draws the same).
+_DASH_ICONS = {
+    Status.IDLE: "🟢",
+    Status.BUSY: "⚙️",
+    Status.INTERACTIVE: "❓",
+    Status.GONE: "🔴",
+    Status.UNKNOWN: "🔴",
+}
+
+#: The one tool notify stores a "(loading…)" summary for.
+_LOADING_TOOL = "AskUserQuestion"
+
+DIFF_MORE = Plural("diff.more_lines", one="<i>…and {n} more line</i>",
+                   other="<i>…and {n} more lines</i>",
+                   note="Under a file diff preview: how many lines were left out")
+
+# ---- /resume: the picker and the session dashboard it opens ----------------
+
+AGO_EARLIER = Msg("ago.earlier", "earlier", note="/resume: when a session ended, if unknown")
+AGO_SECONDS = Plural("ago.seconds", one="{n}s ago", other="{n}s ago",
+                     note="How long ago, short; s is seconds")
+AGO_MINUTES = Plural("ago.minutes", one="{n}m ago", other="{n}m ago",
+                     note="How long ago, short; m is minutes")
+AGO_HOURS = Plural("ago.hours", one="{n}h ago", other="{n}h ago",
+                   note="How long ago, short; h is hours")
+AGO_DAYS = Plural("ago.days", one="{n}d ago", other="{n}d ago",
+                  note="How long ago, short; d is days")
+AGO_HOURS_MINUTES = Msg("ago.hours_minutes", "{h}h{m}m ago",
+                        note="How long ago in hours and minutes, short", eg={"h": 1, "m": 5})
+RESUME_NONE = Msg("resume.none", "📭 No previous sessions to resume.",
+                  note="/resume with nothing to bring back")
+RESUME_NO_TRANSCRIPT = Plural("resume.no_transcript",
+                              one="<i>{n} with no saved transcript to resume from.</i>",
+                              other="<i>{n} with no saved transcript to resume from.</i>",
+                              note="/resume: ended sessions that cannot come back")
+RESUME_MORE_NO_TRANSCRIPT = Plural(
+    "resume.more_no_transcript",
+    one="<i>{n} more with no saved transcript to resume from.</i>",
+    other="<i>{n} more with no saved transcript to resume from.</i>",
+    note="/resume: more ended sessions, not listed, that cannot come back")
+RESUME_BUTTON = Msg("btn.resume.session", "{session} ({ago})",
+                    note="/resume button: a session and when it ended",
+                    eg={"session": "x1", "ago": "2h ago"})
+RESUME_PREV = Msg("btn.resume.prev", "« Prev", note="/resume: previous page")
+RESUME_PAGE = Msg("btn.resume.page", "Page {pages}", note="/resume: page 2 of 3",
+                  eg={"pages": "2/3"})
+RESUME_NEXT = Msg("btn.resume.next", "Next »", note="/resume: next page")
+RESUME_TITLE = Plural("resume.title", one="📚 <b>Previous sessions</b> ({n} total)",
+                      other="📚 <b>Previous sessions</b> ({n} total)",
+                      note="/resume: the list's title")
+RESUME_ROW = Msg("resume.row", "🔘 <b>{session}</b> (<i>{when}</i>)",
+                 note="/resume: one ended session and when", eg={"session": "x1",
+                                                                  "when": "2h ago"})
+RESUME_NO_PREVIEW = Msg("resume.no_preview", "<i>(no preview)</i>",
+                        note="/resume: nothing to show from the session's last answer")
+RESUME_TAP = Msg("resume.tap", "Tap a button below to resume.", note="/resume")
+DASH_STATES = {
+    "idle": Msg("resume.state.idle", "idle", note="Session state on the resume card"),
+    "busy": Msg("resume.state.busy", "busy", note="Session state on the resume card"),
+    "interactive": Msg("resume.state.interactive", "interactive",
+                       note="Session state on the resume card: it waits for your answer"),
+    "gone": Msg("resume.state.gone", "gone",
+                note="Session state on the resume card: the session has ended"),
+    "unknown": Msg("resume.state.unknown", "unknown", note="Session state on the resume card"),
+}
+DASH_HEADER = Msg("resume.header", "{icon} <b>[{session}]</b> · {state}",
+                  note="The resumed session's card: its name and state",
+                  eg={"icon": "⚙️", "session": "x1", "state": "busy"})
+DASH_HEADER_CLOCK = Msg("resume.header_clock", "{icon} <b>[{session}]</b> · {state} {clock}",
+                        note="As resume.header, with how long the turn runs",
+                        eg={"icon": "⚙️", "session": "x1", "state": "busy", "clock": "4:10"})
+DASH_MODEL = Msg("resume.row.model", "Model: {model}", note="Resume card row",
+                 eg={"model": "Opus 4.7"})
+DASH_CTX = Msg("resume.row.ctx", "Context: {percent} {bar}",
+               note="Resume card row: how full the context window is",
+               eg={"percent": "45%", "bar": "████░░░░░░"})
+DASH_COST = Msg("resume.row.cost", "Cost: {cost}", note="Resume card row", eg={"cost": "$1.50"})
+DASH_OUTPUT = Msg("resume.row.output", "Output tokens: {tokens}",
+                  note="Resume card row: tokens Claude wrote", eg={"tokens": "12.3k"})
+DASH_LINES = Msg("resume.row.lines", "Lines: {changes}",
+                 note="Resume card row: lines added and removed", eg={"changes": "+10 -5"})
+DASH_AGENTS = Plural("resume.row.agents", one="Agents: {n} ({types})",
+                     other="Agents: {n} ({types})",
+                     note="Resume card row: background agents running and their types",
+                     eg={"types": "Explore ×2, Plan"})
+DASH_AGENTS_COUNT = Plural("resume.row.agents_count", one="Agents: {n}", other="Agents: {n}",
+                           note="Resume card row: background agents running")
+DASH_QUEUE = Msg("resume.row.queue", "Queue: {pending} pending ({queued} queued, {notes} notes)",
+                 note="Resume card row: messages waiting, split into held messages and "
+                      "notes", eg={"pending": 3, "queued": 2, "notes": 1})
+DASH_ACTIVE = Msg("resume.row.active", "Active: {ago}", note="Resume card row: last activity",
+                  eg={"ago": "30s ago"})
+DASH_ACTIVE_NOW = Msg("resume.row.active_now", "Active: just now", note="Resume card row")
+DASH_ACTIVE_UNKNOWN = Msg("resume.row.active_unknown", "Active: unknown",
+                          note="Resume card row: no activity seen")
+DASH_RECENT = Msg("resume.recent", "Recent:",
+                  note="Resume card: the last tool calls follow, as they are")
+
+
+def _ago_text(tr, seconds: int) -> str:
+    """"30s ago", "5m ago", "2h ago", "3d ago" in *tr*'s language."""
+    if seconds < 60:
+        return tr.n(AGO_SECONDS, seconds, kind="text")
+    if seconds < 3600:
+        return tr.n(AGO_MINUTES, seconds // 60, kind="text")
+    if seconds < 86400:
+        return tr.n(AGO_HOURS, seconds // 3600, kind="text")
+    return tr.n(AGO_DAYS, seconds // 86400, kind="text")
+
+
+def _close_isolates(text: str) -> str:
+    """*text* with every direction isolate it opens closed: a cut can
+    leave an FSI (U+2068) without its PDI (U+2069)."""
+    return text + "\u2069" * max(0, text.count("\u2068") - text.count("\u2069"))
+
+
 #: A trailing refresh wakes this long after its deadline, so a timer that
 #: fires a hair early (asyncio allows up to the clock's resolution) never
 #: lands inside the gap it waited out.
@@ -143,38 +359,101 @@ _prompt_tokens = itertools.count(1)
 #: /status (4.2): a session's state glyph (the pinned bar's words), the
 #: current step cut to this, and how many ended sessions its Ended view
 #: lists (the rest are in /resume).
-_STATUS_GLYPHS = {"working": "⚙️", "needs you": "⏳", "idle": "💤"}
+_STATUS_GLYPHS = {"working": "⚙️", "needs_you": "⏳", "idle": "💤"}
 _STATUS_STEP_MAX = 40
 _ENDED_SHOWN_MAX = 10
 
+STATUS_HEAD = Msg("status.head", "{mark}<b>{session}</b> · {glyph} {state}",
+                  note="/status: one session, its state in words (a clock or what it does "
+                       "may follow)", eg={"mark": "✍️ ", "session": "x1", "glyph": "⚙️",
+                                          "state": "working"})
+STATUS_CTX = Msg("status.ctx", "ctx {percent}",
+                 note="/status: how full Claude's context is; keep ctx as it is",
+                 eg={"percent": "45%"})
+STATUS_QUEUE = Msg("status.queue", "queue {total} ({queued}, {notes})",
+                   note="/status: messages waiting for the session: the real ones and the "
+                        "notes", eg={"total": 3, "queued": "2 queued", "notes": "1 notes"})
+STATUS_QUEUED = Plural("status.queued", one="{n} queued", other="{n} queued",
+                       note="/status: messages waiting for the session")
+STATUS_NOTES = Plural("status.notes", one="{n} notes", other="{n} notes",
+                      note="/status: notes left for the session (the English says notes "
+                           "even for 1)")
+STATUS_SESSIONS = Plural("status.sessions", one="📊 <b>Sessions ({n})</b>",
+                         other="📊 <b>Sessions ({n})</b>",
+                         note="/status: the title, with how many live sessions")
+STATUS_NO_LIVE = Msg("status.no_live", "No live sessions.",
+                     note="/status when every session has ended")
+STATUS_NONE = Msg("status.none", "No sessions yet.", note="/status with no session at all")
+STATUS_ANSWER = Msg("status.btn.answer", "Answer",
+                    note="/status button: show the prompt the session waits on")
+STATUS_NEW = Msg("status.btn.new", "🆕 New", note="/status button: start a session")
+STATUS_NEW_SESSION = Msg("status.btn.new_session", "🆕 New session",
+                         note="/status button with no live session: start one")
+STATUS_ENDED_BTN = Plural("status.btn.ended", one="⚫ Ended ({n})", other="⚫ Ended ({n})",
+                          note="/status button: the ended sessions, and how many")
+STATUS_CLEAR_ALL = Msg("status.btn.clear_all", "🧹 Clear all",
+                       note="/status > Ended: take every ended session off /status")
+STATUS_MORE = Msg("status.btn.more", "⋮ More", note="A session's own menu")
+STATUS_ENDED = Plural(
+    "status.ended",
+    one="⚫ <b>Ended sessions ({n})</b>\n\nResume one, delete one, or clear them all from "
+        "/status (they stay in /resume).",
+    other="⚫ <b>Ended sessions ({n})</b>\n\nResume one, delete one, or clear them all from "
+          "/status (they stay in /resume).",
+    note="/status > Ended: the title, how many, and what the buttons do")
+STATUS_ENDED_SHOWN = Msg("status.ended_shown", "The {max} newest are here; /resume lists all.",
+                         note="/status > Ended when there are more than it lists",
+                         eg={"max": 10})
+STATUS_NO_ENDED = Msg("status.no_ended", "No ended sessions.",
+                      note="/status > Ended with none")
+STATUS_SWITCH = Msg("status.switch", "✍️ Now talking to <b>{session}</b> · {glyph} {state} · {mode}",
+                    note="After /x1: messages now go to that session; its state and mode",
+                    eg={"session": "x1", "glyph": "💤", "state": "idle", "mode": "Auto mode"})
+STATUS_WAITING = Msg("status.waiting_answer", "{session} is waiting for your answer.",
+                     note="After /x1 when the session waits on a prompt",
+                     eg={"session": "x1"})
+STATUS_TALK_DM = Msg("status.talk_dm", "Send a message and it goes to {session}.",
+                     note="After /x1 in a private chat", eg={"session": "x1"})
+
 
 def _pinned_word(sess: TrackedSession) -> str:
+    """The state id: ``working``, ``needs_you``, ``idle`` or ``starting``."""
     return _PINNED_WORDS.get(sess.status, "starting")
 
 
-def _pinned_agents(sess: TrackedSession) -> str:
-    """``, N agent(s) running`` while *sess* has background agents
-    running (roadmap 8.41), ``, M shell(s) running`` for background shells,
-    ``, N agents, M shells running`` for both, else ``""``: the tail of the
-    parenthesised state, as in ``catfish (working, 3 agents running)``. A
-    count, never their names: the bar then moves only when the count
-    does."""
+def _state_text(tr, state_id: str, kind: str = "html") -> str:
+    return getattr(tr, kind)(_STATE_MSGS[state_id])
+
+
+def _pinned_running(sess: TrackedSession, tr, kind: str = "html") -> str:
+    """``N agents running``, ``M shells running`` or ``N agents, M shells
+    running`` while *sess* has background work running (roadmap 8.41),
+    else ``""``: a count, never their names, so the bar moves only when
+    the count does. Whole, from keys: nothing is sliced."""
+    from aipager.bot.agents_line import COUNT_AGENTS, COUNT_SHELLS
     n = len(sess.bg_agents)
     m = len(sess.bg_shells)
-    parts = []
+    if n and m:
+        return getattr(tr, kind)(RUNNING_BOTH,
+                                 agents=Safe(tr.n(COUNT_AGENTS, n, kind=kind)),
+                                 shells=Safe(tr.n(COUNT_SHELLS, m, kind=kind)))
     if n:
-        parts.append(f"{n} agent{'' if n == 1 else 's'}")
+        return tr.n(RUNNING_AGENTS, n, kind=kind)
     if m:
-        parts.append(f"{m} shell{'' if m == 1 else 's'}")
-    if not parts:
-        return ""
-    return f", {', '.join(parts)} running"
+        return tr.n(RUNNING_SHELLS, m, kind=kind)
+    return ""
 
 
-def _pinned_state(sess: TrackedSession) -> str:
+def _pinned_state(sess: TrackedSession, tr=None) -> str:
     """``(working)`` / ``(idle, 1 agent running)``: a session's state as
-    the bar shows it. Parentheses, never a dash (operator, 2026-09-25)."""
-    return f"({_pinned_word(sess)}{_pinned_agents(sess)})"
+    the bar shows it (HTML). Parentheses, never a dash (operator,
+    2026-09-25)."""
+    tr = tr or i18n.for_sess(sess)
+    state = Safe(_state_text(tr, _pinned_word(sess)))
+    running = _pinned_running(sess, tr)
+    if running:
+        return tr.html(PIN_STATE_RUNNING, state=state, running=Safe(running))
+    return tr.html(PIN_STATE, state=state)
 
 
 def _pinned_glyph(words) -> str:
@@ -265,8 +544,7 @@ class DashboardMixin:
                 # send to avoid an empty preview message.
                 return
             body, dropped = _truncate_diff(diff.splitlines())
-            footer = (f"\n<i>…and {dropped} more line{'s' if dropped != 1 else ''}</i>"
-                      if dropped else "")
+            footer = ("\n" + i18n.for_sess(sess).n(DIFF_MORE, dropped)) if dropped else ""
             # ``<code class="language-diff">`` triggers Telegram's
             # syntax highlighting: `+` lines render green, `-` lines red,
             # `@@` hunks in cyan. Supported on desktop and recent mobile
@@ -351,34 +629,37 @@ class DashboardMixin:
         )
 
     @staticmethod
-    def _pinned_summary(sess: TrackedSession) -> str:
-        """A one-line, short summary of what *sess* is waiting on."""
+    def _pinned_summary(sess: TrackedSession, tr=None) -> str:
+        """A one-line, short summary of what *sess* is waiting on, the
+        stored no-details summaries in *tr*'s language."""
         _kind, summary = sess.waiting_on_human()
         if not summary and sess.pending_prompt_msg:
             summary = sess.pending_prompt_msg.get("summary") or ""
         summary = " ".join(str(summary or "").split())
         if len(summary) > PINNED_SUMMARY_MAX:
             summary = summary[:PINNED_SUMMARY_MAX - 1].rstrip() + "…"
-        return summary
+        return _stored_summary_text(tr, summary)
 
     @staticmethod
-    def _pinned_flood_lines(chat: int) -> list[str]:
+    def _pinned_flood_lines(chat: int, tr=None) -> list[str]:
         """The bar's flood lines for *chat*, only while they apply: the
-        8.30 warning regime, and hourly-minimal mode."""
+        8.30 warning regime, and hourly-minimal mode. In *tr*'s language
+        (the chat's when None)."""
         limiter = get_rate_limiter()
         if limiter is None:
             return []
+        tr = tr or i18n.for_chat(chat)
         lines = []
         if limiter.warning_remaining(chat) > 0:
-            lines.append(PINNED_SLOW_LINE)
+            lines.append(tr.html(PINNED_SLOW_LINE))
         if limiter.hourly_usage(chat).get("minimal"):
-            lines.append(PINNED_PAUSED_LINE)
+            lines.append(tr.html(PINNED_PAUSED_LINE))
         elif limiter.minimal_mode(chat):
             # Minimal mode's other way in: the earned rate under the floor
             # (after a ban, or a run of 429s). Same effect on the chat, so
             # the bar says so too — and its regime-edge edit is what gets
             # through while every ornament is refused.
-            lines.append(PINNED_PAUSED_RATE_LINE)
+            lines.append(tr.html(PINNED_PAUSED_RATE_LINE))
         return lines
 
     def _render_pinned(
@@ -390,7 +671,7 @@ class DashboardMixin:
         itself."""
         if sessions is None:
             sessions = self._pinned_sessions(chat)
-        esc = html_mod.escape
+        tr = i18n.for_chat(chat)
         waiting = [s for s in sessions if s.status == Status.INTERACTIVE]
         # Each fact once. Telegram's pinned preview runs the lines together,
         # so a first line that names sessions above a list that names them
@@ -402,31 +683,34 @@ class DashboardMixin:
         named = None
         if waiting:
             named = waiting[0]
-            first = f"⏳ {esc(named.label)} needs you"
-            agents = _pinned_agents(named)
-            if agents:
-                first += f" ({agents[2:]})"
-            summary = self._pinned_summary(named)
+            # Each part a key of its own, used whole.
+            first = tr.html(FIRST_WAITING, session=named.label)
+            running = _pinned_running(named, tr)
+            if running:
+                first += " " + tr.html(PIN_PAREN, running=Safe(running))
+            summary = self._pinned_summary(named, tr)
             if summary:
-                first += f" - {esc(summary)}"
+                first += " " + tr.html(PIN_SUMMARY, summary=summary)
             if len(waiting) > 1:
-                first += f" (+{len(waiting) - 1} more)"
+                first += " " + tr.n(PIN_MORE, len(waiting) - 1)
         elif len(sessions) == 1:
             only = sessions[0]
-            word = _pinned_word(only)
-            first = (f"{_pinned_glyph((word,))} {esc(only.label)} "
-                     f"{_pinned_state(only)}")
+            state_id = _pinned_word(only)
+            first = tr.html(FIRST_SINGLE, glyph=Safe(_pinned_glyph((state_id,))),
+                            session=only.label, state=Safe(_pinned_state(only, tr)))
             named = only
         elif sessions:
             counts: dict[str, int] = {}
             for s in sessions:
-                word = _pinned_word(s)
-                counts[word] = counts.get(word, 0) + 1
-            first = f"{_pinned_glyph(counts)} " + " · ".join(
-                f"{counts[w]} {w}" for w in _PINNED_COUNT_ORDER if w in counts)
+                state_id = _pinned_word(s)
+                counts[state_id] = counts.get(state_id, 0) + 1
+            shown = " · ".join(tr.n(_COUNT_MSGS[w], counts[w])
+                               for w in _PINNED_COUNT_ORDER if w in counts)
+            first = tr.html(FIRST_COUNTS, glyph=Safe(_pinned_glyph(counts)),
+                            counts=Safe(shown))
         else:
-            first = "💤 all idle"
-        lines = [first] + self._pinned_flood_lines(chat)
+            first = tr.html(FIRST_ALL_IDLE)
+        lines = [first] + self._pinned_flood_lines(chat, tr)
         # Where a plain message goes (4.9, 2026-09-30), once there is a
         # choice: with one session it can only go there. The target moves
         # with the conversation, so the bar says which one it is now.
@@ -436,15 +720,16 @@ class DashboardMixin:
                   if len(sessions) > 1 and not group_intake.is_group_chat(chat)
                   else None)
         if target is not None and any(target is s for s in sessions):
-            lines.append(f"✍️ Messages go to <b>{esc(target.label)}</b>")
+            lines.append(tr.html(PIN_TARGET, session=target.label))
         for s in sessions:
             if s is not named:
-                lines.append(f"• <b>{esc(s.label)}</b> {_pinned_state(s)}")
+                lines.append(tr.html(PIN_LINE, session=s.label,
+                                     state=Safe(_pinned_state(s, tr))))
 
         rows: list[list[InlineKeyboardButton]] = []
         for s in waiting[:PINNED_MAX_ANSWER_BUTTONS]:
             rows.append([InlineKeyboardButton(
-                f"Answer {s.label}",
+                tr.text(PIN_ANSWER, session=s.label),
                 # A literal verb (== PINNED_ANSWER_VERB): the 64-byte
                 # guard in test_callback_data_budget.py proves literals.
                 callback_data=session_parity.session_cb(
@@ -456,7 +741,8 @@ class DashboardMixin:
         url = getattr(self, "_miniapp_url", "")
         if url and chat in self._miniapp_button_chats():
             rows.append([InlineKeyboardButton(
-                APP_BUTTON, web_app=WebAppInfo(url=url))])
+                kbwords.KB_APP,
+                web_app=WebAppInfo(url=miniapp_link.for_chat(url, chat)))])
         return "\n".join(lines), (InlineKeyboardMarkup(rows) if rows else None)
 
     async def _maybe_update_bot_name(self, session_name: str) -> None:
@@ -774,19 +1060,23 @@ class DashboardMixin:
         of the chat the tap came from. "already answered" when it is not
         waiting any more. The work is :meth:`_resend_pending_prompt`; this
         maps its outcome to the tap's toast."""
+        from types import SimpleNamespace
         message = getattr(query, "message", None)
         chat = _message_chat_id(message)
+        # A pop-up: the tapper's language.
+        person = i18n.for_person(SimpleNamespace(
+            callback_query=query, effective_user=getattr(query, "from_user", None),
+            effective_chat=None, message=None))
         if message is None or chat is None:
-            await self._safe_answer(query, "Open the chat to answer")
+            await self._safe_answer(query, person.text(OPEN_CHAT))
             return
         outcome = await self._resend_pending_prompt(chat, sess)
         if outcome == RESEND_NOT_WAITING:
-            await self._safe_answer(query, "already answered")
+            await self._safe_answer(query, person.text(ALREADY_ANSWERED))
         elif outcome == RESEND_NOT_RESENDABLE:
-            await self._safe_answer(
-                query, "The prompt can't be re-sent - answer it in the terminal")
+            await self._safe_answer(query, person.text(CANT_RESEND))
         elif outcome == RESEND_BUSY:
-            await self._safe_answer(query, "Busy - try again in a moment")
+            await self._safe_answer(query, person.text(BUSY_RETRY))
 
     async def _resend_pending_prompt(self, chat: int,
                                      sess: TrackedSession) -> str:
@@ -837,26 +1127,31 @@ class DashboardMixin:
         guard off a message that still has live-looking buttons."""
         self._resent_prompts[(chat or 0, msg_id)] = (sess.name, token)
 
-    def _status_block(self, sess: TrackedSession, target) -> str:
+    def _status_block(self, sess: TrackedSession, target, tr=None) -> str:
         """One session in /status (4.2): its state in words, the step it is
-        on or what it asks, and one line of details."""
+        on or what it asks, and one line of details. In *tr*'s language
+        (the session's chat's when None); the step is drawn from the stored
+        row (``card_rows``), names and tool summaries as they are."""
+        from aipager.bot import card_rows
+        from aipager.bot.agents_line import COUNT_AGENTS, COUNT_SHELLS
+        tr = tr or i18n.for_sess(sess)
         esc = html_mod.escape
-        word = _pinned_word(sess)
-        glyph = _STATUS_GLYPHS.get(word, "🔄")
-        head = (f"{'✍️ ' if sess is target else ''}<b>{esc(sess.label)}</b>"
-                f" · {glyph} {word}")
+        state_id = _pinned_word(sess)
+        glyph = _STATUS_GLYPHS.get(state_id, "🔄")
+        head = tr.html(STATUS_HEAD, mark=Safe("✍️ " if sess is target else ""),
+                       session=sess.label, glyph=Safe(glyph),
+                       state=Safe(_state_text(tr, state_id)))
         if sess.status == Status.BUSY:
             if sess.busy_started_at:
-                secs = int(time.monotonic() - sess.busy_started_at)
-                head += f" {secs // 60}m" if secs >= 60 else f" {secs}s"
+                head += f" {tr.clock(time.monotonic() - sess.busy_started_at)}"
             if sess.tool_history:
-                step = " ".join(str(sess.tool_history[-1][0]).split())
+                step = " ".join(card_rows.render_text(tr, sess.tool_history[-1][0]).split())
                 if len(step) > _STATUS_STEP_MAX:
-                    step = step[:_STATUS_STEP_MAX - 1].rstrip() + "…"
+                    step = _close_isolates(step[:_STATUS_STEP_MAX - 1].rstrip() + "…")
                 if step:
                     head += f" · {esc(step)}"
         elif sess.status == Status.INTERACTIVE:
-            summary = self._pinned_summary(sess)
+            summary = self._pinned_summary(sess, tr)
             if summary:
                 head += f" · {esc(summary)}"
         sl = self._read_status_file(sess.name)
@@ -866,22 +1161,24 @@ class DashboardMixin:
             details.append(esc(model))
         ctx_pct = sl["ctx_pct"] if sl else (sess.last_token_pct or 0)
         if ctx_pct:
-            details.append(f"ctx {ctx_pct}%")
+            details.append(tr.html(STATUS_CTX, percent=tr.num(f"{ctx_pct}%")))
         cost = sl["cost"] if sl else 0
         if cost and cost >= 0.01:
-            details.append(f"${cost:,.2f}")
+            details.append(tr.num(f"${cost:,.2f}"))
         queued, notes = queue_depth_parts(sess)
         if queued + notes:
             # Split, so a pile of stale notes never reads as real messages
             # waiting (the incident the old Queue row's breakdown fixed).
-            details.append(f"queue {queued + notes} ({queued} queued, {notes} notes)")
+            details.append(tr.html(STATUS_QUEUE, total=queued + notes,
+                                   queued=Safe(tr.n(STATUS_QUEUED, queued)),
+                                   notes=Safe(tr.n(STATUS_NOTES, notes))))
         # Every subagent running now (as the old Agents row counted), and
         # the shells Claude runs in the background.
-        for count, noun in ((len(sess.active_subagents), "agent"),
-                            (len(sess.bg_shells), "shell")):
+        for count, plural in ((len(sess.active_subagents), COUNT_AGENTS),
+                              (len(sess.bg_shells), COUNT_SHELLS)):
             if count:
-                details.append(f"{count} {noun}{'' if count == 1 else 's'}")
-        return head + (f"\n   {' · '.join(details)}" if details else "")
+                details.append(tr.n(plural, count))
+        return head + (f"\n   {tr.mark}{' · '.join(details)}" if details else "")
 
     def _status_sessions(self, chat_id) -> tuple[list[TrackedSession], list[TrackedSession]]:
         """(live, ended) sessions of *chat_id*: live by label, ended (GONE,
@@ -899,13 +1196,15 @@ class DashboardMixin:
         return live, ended
 
     def _render_status_list(
-        self, chat_id, update=None, *, with_buttons: bool = True,
+        self, chat_id, update=None, *, with_buttons: bool = True, tr=None,
     ) -> tuple[str, InlineKeyboardMarkup | None]:
         """/status (4.2): a list you can act on. Each live session's
         state in words, ✍️ on the one a plain message here goes to, and a
         row of buttons: talk to it, Stop while it works, Answer while it
         waits, ⋮ for the rest. Ended sessions wait behind one button.
         ``with_buttons=False``: the list alone (/start's home screen)."""
+        from aipager.bot.keyboards import STOP
+        tr = tr or i18n.for_chat(chat_id)
         live, ended = self._status_sessions(chat_id)
         # No ✍️ in a group: each member has their own target (8.90), and
         # the list is everyone's (a tap re-renders it for the whole chat).
@@ -913,12 +1212,12 @@ class DashboardMixin:
                   else self.registry.target_for(chat_id))
         cb_chat = chat_id or 0
         if live:
-            text = f"📊 <b>Sessions ({len(live)})</b>\n\n" + "\n\n".join(
-                self._status_block(s, target) for s in live)
+            text = tr.n(STATUS_SESSIONS, len(live)) + "\n\n" + "\n\n".join(
+                self._status_block(s, target, tr) for s in live)
         elif ended:
-            text = "No live sessions."
+            text = tr.html(STATUS_NO_LIVE)
         else:
-            text = "No sessions yet."
+            text = tr.html(STATUS_NONE)
         if not with_buttons:
             return text, None
         rows: list[list[InlineKeyboardButton]] = []
@@ -932,28 +1231,30 @@ class DashboardMixin:
                 # is edited in place, so its message id says nothing about
                 # that.
                 row.append(InlineKeyboardButton(
-                    "⏹ Stop", callback_data=session_parity.session_cb(
+                    tr.text(STOP), callback_data=session_parity.session_cb(
                         self, cb_chat, sess, f"ststop{sess.turn_key}")))
             elif sess.status == Status.INTERACTIVE:
                 row.append(InlineKeyboardButton(
-                    "Answer", callback_data=session_parity.session_cb(
+                    tr.text(STATUS_ANSWER), callback_data=session_parity.session_cb(
                         self, cb_chat, sess, "pin_answer")))
             row.append(InlineKeyboardButton(
                 "⋮", callback_data=session_parity.session_cb(self, cb_chat, sess, "menu")))
             rows.append(row)
         footer = [InlineKeyboardButton(
-            "🆕 New" if live else "🆕 New session", callback_data="_:nw:open")]
+            tr.text(STATUS_NEW if live else STATUS_NEW_SESSION), callback_data="_:nw:open")]
         if ended:
             footer.append(InlineKeyboardButton(
-                f"⚫ Ended ({len(ended)})", callback_data="_:st:ended"))
+                tr.n(STATUS_ENDED_BTN, len(ended), kind="text"), callback_data="_:st:ended"))
         rows.append(footer)
         if update is not None:
             rows += self._app_button_row(update)
         return text, InlineKeyboardMarkup(rows)
 
-    def _render_ended_view(self, chat_id) -> tuple[str, InlineKeyboardMarkup]:
+    def _render_ended_view(self, chat_id, tr=None) -> tuple[str, InlineKeyboardMarkup]:
         """/status → ⚫ Ended: resume one, delete one, or clear them all
         from /status (they stay in /resume)."""
+        from aipager.bot import language_menu
+        tr = tr or i18n.for_chat(chat_id)
         _live, ended = self._status_sessions(chat_id)
         cb_chat = chat_id or 0
         rows: list[list[InlineKeyboardButton]] = []
@@ -968,49 +1269,56 @@ class DashboardMixin:
                 rows.append([InlineKeyboardButton(
                     f"🗑 {sess.label}", callback_data=session_parity.session_cb(
                         self, cb_chat, sess, "delete"))])
-        rows.append([InlineKeyboardButton("🧹 Clear all", callback_data="_:clear_gone"),
-                     InlineKeyboardButton("« Back", callback_data="_:st:list")])
+        rows.append([InlineKeyboardButton(tr.text(STATUS_CLEAR_ALL), callback_data="_:clear_gone"),
+                     InlineKeyboardButton(tr.text(language_menu.BACK),
+                                          callback_data="_:st:list")])
         if ended:
-            text = (f"⚫ <b>Ended sessions ({len(ended)})</b>\n\n"
-                    "Resume one, delete one, or clear them all from /status "
-                    "(they stay in /resume).")
+            text = tr.n(STATUS_ENDED, len(ended))
             if len(ended) > _ENDED_SHOWN_MAX:
-                text += f"\n\nThe {_ENDED_SHOWN_MAX} newest are here; /resume lists all."
+                text += "\n\n" + tr.html(STATUS_ENDED_SHOWN, max=_ENDED_SHOWN_MAX)
         else:
-            text = "No ended sessions."
+            text = tr.html(STATUS_NO_ENDED)
         return text, InlineKeyboardMarkup(rows)
 
     def _render_switch_reply(
-        self, chat_id: int, sess: TrackedSession, update=None,
+        self, chat_id: int, sess: TrackedSession, update=None, tr=None,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """The reply to a bare ``/<label>`` (4.5, 2026-09-30): the switch
         confirmed, the session's state and mode in words, and what happens
         next. It replaced a stats table with no call to action; the full
         stats are in /status. A session waiting on its person offers the
         pinned bar's Answer; ⋮ is the session's own menu."""
-        esc = html_mod.escape
-        word = _pinned_word(sess)
-        glyph = _STATUS_GLYPHS.get(word, "🔄")
-        label = esc(sess.label)
-        lines = [f"✍️ Now talking to <b>{label}</b> · {glyph} {word} · "
-                 f"{'🤖 Auto' if sess.skip_perms else '💬 Ask'}"]
+        tr = tr or i18n.for_chat(chat_id)
+        state_id = _pinned_word(sess)
+        glyph = _STATUS_GLYPHS.get(state_id, "🔄")
+        lines = [tr.html(STATUS_SWITCH, session=sess.label, glyph=Safe(glyph),
+                         state=Safe(_state_text(tr, state_id)),
+                         mode=Safe(tr.html(mode_label(sess.skip_perms))))]
         rows: list[list[InlineKeyboardButton]] = []
         if sess.status == Status.INTERACTIVE:
-            lines.append(f"{label} is waiting for your answer.")
+            lines.append(tr.html(STATUS_WAITING, session=sess.label))
             rows.append([InlineKeyboardButton(
-                f"Answer {sess.label}",
+                tr.text(PIN_ANSWER, session=sess.label),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "pin_answer"))])
         else:
             lines.append(group_intake.talk_hint(
-                self, chat_id, label, dm=f"Send a message and it goes to {label}."))
+                self, chat_id, html_mod.escape(sess.label),
+                dm=tr.html(STATUS_TALK_DM, session=sess.label), tr=tr, raw_label=sess.label))
         rows.append([InlineKeyboardButton(
-            "⋮ More", callback_data=session_parity.session_cb(self, chat_id, sess, "menu"))])
+            tr.text(STATUS_MORE),
+            callback_data=session_parity.session_cb(self, chat_id, sess, "menu"))])
         if update is not None:
             rows += self._app_button_row(update)
         return "\n".join(lines), InlineKeyboardMarkup(rows)
 
-    def _build_session_dashboard(self, sess: TrackedSession) -> str:
-        """Build a rich HTML dashboard for a session (shown on resume)."""
+    def _build_session_dashboard(self, sess: TrackedSession, tr=None) -> str:
+        """Build a rich HTML dashboard for a session (shown on resume), in
+        *tr*'s language (the session chat's when None). English keeps its
+        aligned table in one code block; another language draws labelled
+        rows outside it, names and code inside (ruling 5)."""
+        tr = tr or i18n.for_sess(sess)
+        if tr.code != "en":
+            return self._session_dashboard_rows(sess, tr)
         # Status icon
         status_icons = {
             Status.IDLE: "\U0001f7e2",       # green circle
@@ -1026,10 +1334,8 @@ class DashboardMixin:
         elapsed = ""
         if sess.status == Status.BUSY and sess.busy_started_at:
             secs = int(time.monotonic() - sess.busy_started_at)
-            if secs >= 60:
-                elapsed = f" {secs // 60}m{secs % 60}s"
-            elif secs >= 2:
-                elapsed = f" {secs}s"
+            if secs >= 2:
+                elapsed = f" {clock(secs)}"
 
         header = f"{icon} <b>[{html_mod.escape(sess.label)}]</b> \u00b7 {status_str}{elapsed}"
 
@@ -1139,6 +1445,87 @@ class DashboardMixin:
 
         return "\n\n".join(parts_out)
 
+    def _session_dashboard_rows(self, sess: TrackedSession, tr) -> str:
+        """:meth:`_build_session_dashboard` in a language other than
+        English: the same facts, one translated row each, with nothing
+        invisible inside a code element."""
+        icon = _DASH_ICONS.get(sess.status, "\U0001f534")
+        state = Safe(tr.html(DASH_STATES.get(sess.status.name.lower(),
+                                             DASH_STATES["unknown"])))
+        names = {"icon": Safe(icon), "session": sess.label, "state": state}
+        secs = 0
+        if sess.status == Status.BUSY and sess.busy_started_at:
+            secs = int(time.monotonic() - sess.busy_started_at)
+        header = (tr.html(DASH_HEADER_CLOCK, **names, clock=Safe(tr.clock(secs)))
+                  if secs >= 2 else tr.html(DASH_HEADER, **names))
+        sl = self._read_status_file(sess.name)
+        rows: list[str] = []
+        model = (sl.get("model") if sl else None) or sess.model_name
+        if model:
+            rows.append(tr.html(DASH_MODEL, model=Span(
+                f"<code>{html_mod.escape(model)}</code>")))
+        ctx_pct = sl["ctx_pct"] if sl else (sess.last_token_pct or 0)
+        if ctx_pct:
+            filled = round(ctx_pct / 10)
+            bar = "\u2588" * filled + "\u2591" * (10 - filled)
+            rows.append(tr.html(DASH_CTX, percent=Safe(tr.num(f"{ctx_pct}%")), bar=Span(bar)))
+        cost = sl["cost"] if sl else 0
+        if cost and cost >= 0.01:
+            rows.append(tr.html(DASH_COST, cost=Safe(tr.num(f"${cost:.2f}"))))
+        output_tokens = (sl.get("total_output") if sl else 0) or sess.last_output_tokens
+        if output_tokens:
+            rows.append(tr.html(DASH_OUTPUT, tokens=Safe(tr.num(
+                self._fmt_tokens(output_tokens)))))
+        if sess.last_lines_added or sess.last_lines_removed:
+            parts = []
+            if sess.last_lines_added:
+                parts.append(tr.num(f"+{sess.last_lines_added}"))
+            if sess.last_lines_removed:
+                parts.append(tr.num(f"-{sess.last_lines_removed}"))
+            # One isolated run, so the signs stay with their numbers in RTL.
+            rows.append(tr.html(DASH_LINES, changes=Span(" ".join(parts))))
+        if sess.active_subagents:
+            types: dict[str, int] = {}
+            for info in sess.active_subagents.values():
+                t = str(info.get("type") or "unknown")
+                types[t] = types.get(t, 0) + 1
+            count = len(sess.active_subagents)
+            if len(types) <= 3:
+                breakdown = ", ".join(
+                    f"{html_mod.escape(t)} ×{n}" if n > 1 else html_mod.escape(t)
+                    for t, n in sorted(types.items()))
+                rows.append(tr.n(DASH_AGENTS, count, types=Span(
+                    f"<code>{breakdown}</code>")))
+            else:
+                rows.append(tr.n(DASH_AGENTS_COUNT, count))
+        queued, notes = queue_depth_parts(sess)
+        depth = queued + notes
+        if depth:
+            rows.append(tr.html(DASH_QUEUE, pending=depth, queued=queued, notes=notes))
+        if sess.last_hook_at > 0:
+            ago_s = int(time.monotonic() - sess.last_hook_at)
+            if ago_s < 5:
+                rows.append(tr.html(DASH_ACTIVE_NOW))
+            else:
+                ago = (_ago_text(tr, ago_s) if ago_s < 3600 else tr.text(
+                    AGO_HOURS_MINUTES, h=ago_s // 3600, m=(ago_s % 3600) // 60))
+                rows.append(tr.html(DASH_ACTIVE, ago=Safe(html_mod.escape(ago))))
+        elif sess.status != Status.UNKNOWN:
+            rows.append(tr.html(DASH_ACTIVE_UNKNOWN))
+        parts_out = [header]
+        if rows:
+            parts_out.append("\n".join(rows))
+        tool_hist = sess.tool_history[-5:] if sess.tool_history else []
+        if tool_hist:
+            tool_lines = []
+            for summary, done in tool_hist:
+                t_icon = ("\u274c" if done == "failed" else "\u2705" if done
+                          else "\u23f3")
+                tool_lines.append(f"  {t_icon} {html_mod.escape(summary[:60])}")
+            parts_out.append(tr.html(DASH_RECENT) + "\n<code>"
+                             + "\n".join(tool_lines) + "</code>")
+        return "\n\n".join(parts_out)
+
     # ---- /resume — bring back a previously-gone session by name ----------
 
     _RESUME_PAGE_SIZE = 10
@@ -1159,26 +1546,30 @@ class DashboardMixin:
         return gone
 
     @staticmethod
-    def _fmt_gone_ago(gone_at: float | None) -> str:
-        """Short relative timestamp for picker rows ('2h ago', 'just now')."""
+    def _fmt_gone_ago(gone_at: float | None, tr=None) -> str:
+        """Short relative timestamp for picker rows ('2h ago', 'earlier'),
+        in *tr*'s language (English when None)."""
+        tr = tr or i18n.get("en")
         if not gone_at:
-            return "earlier"
-        delta = max(0, int(time.time() - gone_at))
-        if delta < 60:
-            return f"{delta}s ago"
-        if delta < 3600:
-            return f"{delta // 60}m ago"
-        if delta < 86400:
-            return f"{delta // 3600}h ago"
-        return f"{delta // 86400}d ago"
+            return tr.text(AGO_EARLIER)
+        return _ago_text(tr, max(0, int(time.time() - gone_at)))
 
     def _render_resume_picker(
-        self, page: int = 0, scope_chat_id: int | None = None,
+        self, page: int = 0, scope_chat_id: int | None = None, *, tr=None,
     ) -> tuple[str, InlineKeyboardMarkup | None]:
         """Render the paginated /resume picker. Returns (text, keyboard or None).
 
-        ``scope_chat_id`` scopes the listing to the calling chat.
+        ``scope_chat_id`` scopes the listing to the calling chat. In *tr*'s
+        language; when None, that chat's, or with no scope the one chat
+        `_pinned_chats` names when it names exactly one, else the default
+        language. Never reads CHAT_ID itself (the chat-routing guard).
         """
+        if tr is None:
+            chat = scope_chat_id
+            if chat is None:
+                pinned = self._pinned_chats()
+                chat = pinned[0] if len(pinned) == 1 else None
+            tr = i18n.for_chat(chat)
         all_gone = self._gone_sessions_sorted(scope_chat_id)
         # A session with no `claude_session_id` has nothing to resume FROM —
         # `_do_resume_core` refuses it with `no_transcript` — so listing it
@@ -1188,10 +1579,9 @@ class DashboardMixin:
         gone = [s for s in all_gone if s.claude_session_id]
         hidden = len(all_gone) - len(gone)
         if not gone:
-            text = "📭 No previous sessions to resume."
+            text = tr.html(RESUME_NONE)
             if hidden:
-                text += (f"\n\n<i>{hidden} with no saved transcript to "
-                         "resume from.</i>")
+                text += "\n\n" + tr.n(RESUME_NO_TRANSCRIPT, hidden)
             return text, None
 
         page_size = self._RESUME_PAGE_SIZE
@@ -1202,7 +1592,8 @@ class DashboardMixin:
 
         rows: list[list[InlineKeyboardButton]] = []
         for s in chunk:
-            label = f"{s.label} ({self._fmt_gone_ago(s.gone_at)})"
+            label = tr.text(RESUME_BUTTON, session=s.label,
+                            ago=Safe(self._fmt_gone_ago(s.gone_at, tr)))
             rows.append([InlineKeyboardButton(
                 label, callback_data=session_parity.session_cb(
                     self, scope_chat_id or 0, s, "resume"),
@@ -1213,15 +1604,15 @@ class DashboardMixin:
             nav: list[InlineKeyboardButton] = []
             if page > 0:
                 nav.append(InlineKeyboardButton(
-                    "« Prev", callback_data=f"_:resume_page:{page - 1}",
+                    tr.text(RESUME_PREV), callback_data=f"_:resume_page:{page - 1}",
                 ))
             nav.append(InlineKeyboardButton(
-                f"Page {page + 1}/{total_pages}",
+                tr.text(RESUME_PAGE, pages=Safe(tr.num(f"{page + 1}/{total_pages}"))),
                 callback_data="_:resume_noop",
             ))
             if page < total_pages - 1:
                 nav.append(InlineKeyboardButton(
-                    "Next »", callback_data=f"_:resume_page:{page + 1}",
+                    tr.text(RESUME_NEXT), callback_data=f"_:resume_page:{page + 1}",
                 ))
             rows.append(nav)
 
@@ -1231,32 +1622,24 @@ class DashboardMixin:
         # transcript on disk for sessions whose SessionEnd hook
         # was dropped. Per-row snippet capped at ~140 chars so the
         # 10-entry page stays well under Telegram's 4096-char limit.
-        lines = [f"📚 <b>Previous sessions</b> ({len(gone)} total)"]
+        lines = [tr.n(RESUME_TITLE, len(gone))]
         for s in chunk:
-            when = self._fmt_gone_ago(s.gone_at)
+            when = self._fmt_gone_ago(s.gone_at, tr)
             snippet = (s.last_assistant_preview or _read_preview(
                 s.transcript_path, max_chars=140,
             )).strip()
+            row = tr.html(RESUME_ROW, session=s.label, when=Safe(html_mod.escape(when)))
             if snippet:
-                lines.append(
-                    f"🔘 <b>{html_mod.escape(s.label)}</b> ("
-                    f"<i>{html_mod.escape(when)}</i>)\n"
-                    f"<blockquote>{html_mod.escape(snippet)}</blockquote>"
-                )
+                # Claude's own words, as they are.
+                lines.append(f"{row}\n<blockquote>{html_mod.escape(snippet)}</blockquote>")
             else:
-                lines.append(
-                    f"🔘 <b>{html_mod.escape(s.label)}</b> ("
-                    f"<i>{html_mod.escape(when)}</i>)\n"
-                    f"<i>(no preview)</i>"
-                )
-        lines.append("Tap a button below to resume.")
+                lines.append(f"{row}\n{tr.html(RESUME_NO_PREVIEW)}")
+        lines.append(tr.html(RESUME_TAP))
         if hidden:
             # The empty-list branch above says this too. It has to be said
             # HERE as well — the common case is a mix of resumable and
             # not, and dropping a session from the list without a word is
             # its own small mystery.
-            lines.append(
-                f"<i>{hidden} more with no saved transcript to "
-                "resume from.</i>")
+            lines.append(tr.n(RESUME_MORE_NO_TRANSCRIPT, hidden))
         text = "\n\n".join(lines)
         return text, InlineKeyboardMarkup(rows)

@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 
-from aipager import install_source, self_update
+from aipager import i18n, install_source, self_update
 from aipager.bot.flood import FloodMuted
 from aipager.bot.flood_budget import PRIORITY_ORNAMENT, rate_limit_args
 from aipager.bot.transport import (
@@ -51,7 +51,9 @@ from aipager.bot.transport import (
     edit_text_at,
     reply_text,
     send_text,
+    tapper_tr,
 )
+from aipager.i18n import Msg, Plural, Safe, Span
 
 if TYPE_CHECKING:
     from aipager.bot import TelegramBot
@@ -78,27 +80,311 @@ SHUTDOWN_GRACE_SECONDS = 3.0
 # own registry save and bot stop still run before systemd's SIGKILL.
 SHUTDOWN_DEADLINE_SECONDS = 8.0
 
-DENIED_TEXT = "🚫 Only an admin can update aipager."
-STALE_TEXT = "That update already finished"
+DENIED_TEXT = Msg("toast.upd.denied", "🚫 Only an admin can update aipager.",
+                  note="Reply and pop-up: someone who is not an admin tried /update or its "
+                       "buttons")
+STALE_TEXT = Msg("toast.upd.stale", "That update already finished",
+                 note="Pop-up: a button of an update that has already ended was tapped")
 # The pre-8.43 per-product buttons (``_:up:cc`` / ``ap`` / ``both``) and
 # Mini App routes: they start nothing any more.
-MENU_OUT_OF_DATE_TEXT = "This menu is out of date, send /update again"
-CHECK_PROMPT_TEXT = ("⬆️ <b>Updates</b>\n\nCheck whether aipager or Claude Code "
-                     "has a newer version.")
-CHECK_BUTTON_TEXT = "🔄 Check for updates"
-CHECKING_TEXT = "Checking…"
-UP_TO_DATE_TEXT = "Everything is up to date."
-CHECK_FAILED_TEXT = "Nothing newer found, but a check failed. Try again later."
+MENU_OUT_OF_DATE_TEXT = Msg("toast.upd.menu_old", "This menu is out of date, send /update again",
+                            note="Pop-up: a button from an old /update menu was tapped; keep "
+                                 "/update as it is")
+CHECK_PROMPT_TEXT = Msg("upd.prompt",
+                        "⬆️ <b>Updates</b>\n\nCheck whether aipager or Claude Code "
+                        "has a newer version.",
+                        note="/update: the reply above the Check for updates button")
+CHECK_BUTTON_TEXT = Msg("btn.upd.check", "🔄 Check for updates",
+                        note="/update button: look up the newest versions")
+CHECKING_TEXT = Msg("toast.upd.checking", "Checking…",
+                    note="Pop-up and message while /update looks up the newest versions")
+UP_TO_DATE_TEXT = Msg("upd.summary.up_to_date", "Everything is up to date.",
+                      note="/update check: nothing newer to install")
+CHECK_FAILED_TEXT = Msg("upd.summary.check_failed",
+                        "Nothing newer found, but a check failed. Try again later.",
+                        note="/update check: one of the lookups failed")
 # Something newer exists, but each such product can't be updated from here
 # (its line says why); never "Everything is up to date." under that line.
-CANT_UPDATE_HERE_TEXT = "An update is out, but it can't be installed from here."
-OFFER_STALE_TEXT = "⚠️ This check is out of date. Check again before updating."
+CANT_UPDATE_HERE_TEXT = Msg("upd.summary.cant_here",
+                            "An update is out, but it can't be installed from here.",
+                            note="/update check: a newer version exists that this install "
+                                 "cannot apply (the line above says why)")
+OFFER_STALE_TEXT = Msg("upd.offer_stale",
+                       "⚠️ This check is out of date. Check again before updating.",
+                       note="/update: the Update button is older than the last check")
 # How long an Update button (or the Mini App's) stays good after its check.
 # Past this, or once any job has run, the tap asks for a fresh check.
 OFFER_MAX_AGE_SECONDS = 600.0
 # Callback verb <-> job kind for the one Update button.
 _GO_CODES = {"cc": "claude", "ap": "aipager", "both": "both"}
 _GO_VERBS = {kind: code for code, kind in _GO_CODES.items()}
+
+# ---- what /update says (each line one whole sentence; versions, install
+# kinds, reasons from the install probe and phase ids go in as data) ------
+
+_AP_UNCHECKED = Msg("upd.line.ap_unchecked", "aipager {running} (couldn't check)",
+                    note="/update check line: the newest aipager version could not be "
+                         "looked up", eg={"running": "1.0.1"})
+_AP_NEWER = Msg("upd.line.ap_newer", "aipager {running} → {latest}",
+                note="/update check line: the running and the newer aipager version", eg={"running": "1.0.1", "latest": "1.0.2"})
+_AP_NEWER_BLOCKED = Msg("upd.line.ap_newer_blocked",
+                        "aipager {running} → {latest} (can't update from here: {reason})",
+                        note="/update check line: newer aipager, but this install cannot be "
+                             "upgraded; {reason} is the install's own explanation (English)",
+                        eg={"running": "1.0.1", "latest": "1.0.2", "reason": "editable install"})
+_AP_CURRENT = Msg("upd.line.ap_current", "aipager {running} (up to date)",
+                  note="/update check line", eg={"running": "1.0.1"})
+_AP_INSTALLED = Msg("upd.note.ap_installed",
+                    "aipager {installed} is installed but not running yet.",
+                    note="/update check: a newer aipager is on disk, the old one still runs",
+                    eg={"installed": "1.0.2"})
+_CC_UNKNOWN = Msg("upd.line.cc_unknown", "Claude Code (couldn't check)",
+                  note="/update check line: the installed Claude Code version is unknown")
+_CC_UNCHECKED = Msg("upd.line.cc_unchecked", "Claude Code {current} (couldn't check)",
+                    note="/update check line", eg={"current": "2.1.300"})
+_CC_NEWER = Msg("upd.line.cc_newer", "Claude Code {current} → {latest}",
+                note="/update check line", eg={"current": "2.1.300", "latest": "2.1.310"})
+_CC_NEWER_BLOCKED = Msg("upd.line.cc_newer_blocked",
+                        "Claude Code {current} → {latest} (can't update from here: {reason})",
+                        note="/update check line; {reason} is English text from the install",
+                        eg={"current": "2.1.300", "latest": "2.1.310",
+                            "reason": "npm prefix not writable"})
+_CC_CURRENT = Msg("upd.line.cc_current", "Claude Code {current} (up to date)",
+                  note="/update check line", eg={"current": "2.1.300"})
+_LABEL_BOTH = Msg("btn.upd.both", "Update both",
+                  note="/update button: update aipager and Claude Code")
+_LABEL_AP = Msg("btn.upd.aipager", "Update aipager", note="/update button")
+_LABEL_CC = Msg("btn.upd.claude", "Update Claude Code", note="/update button")
+_RESTART_AUTO = Msg("upd.restart.auto", "Restart: automatic, once no turn is running.",
+                    note="/update check: how aipager restarts after the update")
+_RESTART_MANUAL = Msg("upd.restart.manual", "Restart: manual ({reason})",
+                      note="/update check: aipager cannot restart itself; {reason} says why",
+                      eg={"reason": "no service unit"})
+_UNKNOWN_INSTALL = Msg("upd.reason.unknown_install", "unknown install",
+                       note="Stands in for {reason} when the install gave no reason")
+_YOURSELF = Msg("upd.reason.yourself", "restart it yourself",
+                note="Stands in for {reason} in 'Restart: manual ({reason})' and "
+                     "'Restart needed: {reason}'")
+_HEADING = Msg("upd.heading", "⬆️ <b>Updates</b>", note="/update check: the title")
+_CHECK_AGAIN = Msg("btn.upd.check_again", "Check again", note="/update button")
+_CANCEL = Msg("btn.upd.cancel", "Cancel", note="/update button: do not update")
+_RESTART_NOW = Msg("btn.upd.restart_now", "Restart now",
+                   note="/update button: restart aipager now, even if sessions are busy")
+_WAIT_MORE = Msg("btn.upd.wait", "Wait {mins} more min",
+                 note="/update button: wait longer for sessions to go idle", eg={"mins": 10})
+#: The "Wait N more min" button's N, as it has always read.
+_WAIT_MORE_MINUTES = 10
+_STILL_RUNNING = Msg("upd.still_running", "Still running:",
+                     note="/update: the list of what a restart would interrupt follows")
+_STARTING = Msg("upd.starting", "⏳ Starting the update…", note="/update job: first message")
+_OUTPUT_IN_LOG = Msg("upd.output_in_log", "(output in the daemon log)",
+                     note="/update in a group: the installer's output is not shown here")
+_EL_S = Msg("upd.elapsed.s", "{s}s", note="Update heartbeat: seconds so far", eg={"s": 30})
+_EL_M = Msg("upd.elapsed.m", "{m} min", note="Update heartbeat: minutes so far", eg={"m": 2})
+_EL_MS = Msg("upd.elapsed.ms", "{m} min {s}s", note="Update heartbeat: minutes and seconds",
+             eg={"m": 2, "s": 30})
+_STEP_STARTED = Msg("upd.step.started", "⏳ {step}…",
+                    note="/update job: a step started; {step} is upd.step.*",
+                    eg={"step": "Updating Claude Code"})
+_STEP_STILL = Msg("upd.step.still_working", "⏳ {step} - still working{elapsed}",
+                  note="/update job heartbeat; {elapsed} is ' (2 min 30s)' or empty",
+                  eg={"step": "Updating Claude Code", "elapsed": " (2 min 30s)"})
+_STEP_CLAUDE = Msg("upd.step.claude", "Updating Claude Code", note="/update job step name")
+_STEP_AIPAGER = Msg("upd.step.aipager", "Upgrading aipager via {kind}",
+                    note="/update job step name; {kind} is the installer (pipx, uv, pip...)",
+                    eg={"kind": "pipx"})
+_UNEXPECTED = Msg("upd.unexpected_error",
+                  "❌ The update stopped on an unexpected error (see the daemon log).",
+                  note="/update job: an internal error stopped it")
+_SN_NONE_RESTARTED = Msg("upd.sessions.none_restarted",
+                         "Running sessions keep the old version until they are restarted - "
+                         "none was restarted.",
+                         note="After a Claude Code update: running sessions were left alone")
+_SN_OLD = Msg("upd.sessions.old", "Still on the old version: {labels}",
+              note="After a Claude Code update: this chat's sessions (names)",
+              eg={"labels": "x1, x2"})
+_SN_OTHERS = Plural("upd.sessions.other_chats", one="and {n} in other chats",
+                    other="and {n} in other chats",
+                    note="Continues the line above it: sessions of other chats on the old "
+                         "version")
+_SN_NONE = Msg("upd.sessions.none", "No sessions are running right now.",
+               note="After a Claude Code update")
+_SN_NEW = Msg("upd.sessions.new_version", "New sessions use {version}.",
+              note="After a Claude Code update", eg={"version": "2.1.310"})
+_CC_ERROR = Msg("upd.cc.error", "❌ <b>Claude Code</b>: {error}",
+                note="Claude Code update failed before it started; {error} is English",
+                eg={"error": "claude not found"})
+_CC_TIMEOUT = Msg("upd.cc.timeout", "⏱ <b>Claude Code</b> update timed out after {seconds}s",
+                  note="Claude Code update", eg={"seconds": 300})
+_CC_FAILED = Msg("upd.cc.failed", "❌ <b>Claude Code</b> update failed (exit {code})",
+                 note="Claude Code update; {code} is the exit code or ?", eg={"code": "1"})
+_CC_DONE = Msg("upd.cc.done", "✅ <b>Claude Code</b> {before} → {after}",
+               note="Claude Code updated from one version to another",
+               eg={"before": "2.1.300", "after": "2.1.310"})
+_CC_DONE_SHUTDOWN = Msg("upd.cc.done_shutdown",
+                        "✅ <b>Claude Code</b> update finished; aipager is shutting down, so "
+                        "/update shows the new version once it is back",
+                        note="Claude Code updated while aipager stops; keep /update as it is")
+_CC_CURRENT_DONE = Msg("upd.cc.current", "✅ <b>Claude Code</b> is already up to date ({version})",
+                       note="Claude Code update: nothing newer", eg={"version": "2.1.310"})
+_MANUAL_NEEDED = Msg("upd.manual.needed", "Restart needed: {reason}",
+                     note="aipager was updated but cannot restart itself", 
+                     eg={"reason": "no service unit"})
+_WOULD_KILL = Msg("upd.manual.would_kill", "Sessions a restart would kill: {labels}",
+                  note="Session names", eg={"labels": "x1, x2"})
+_AP_BLOCKED = Msg("upd.ap.blocked", "🚫 <b>aipager</b> can't be updated from here: {reason}",
+                  note="{reason} is English text from the install",
+                  eg={"reason": "editable install"})
+_AP_NOT_FOUND = Msg("upd.ap.not_found",
+                    "❌ <b>aipager</b>: couldn't find <code>{kind}</code> (searched {path})",
+                    note="The installer program is missing", eg={"kind": "pipx", "path": "/usr/bin"})
+_AP_UP_TO_DATE = Msg("upd.ap.current", "✅ <b>aipager</b> is already up to date ({version}).",
+                     note="aipager update: nothing newer", eg={"version": "1.0.1"})
+_AP_CANCELLED = Msg("upd.ap.cancelled",
+                    "↩️ <b>aipager</b> update cancelled - nothing was installed.",
+                    note="aipager update cancelled while waiting for idle sessions")
+_AP_TIMEOUT = Msg("upd.ap.timeout",
+                  "⏱ <b>aipager</b> upgrade timed out after {seconds}s and was stopped, "
+                  "nothing restarted, still running {running}. The install on disk may be "
+                  "partial: reinstall with <code>{hint}</code> before the next restart.",
+                  note="{hint} is a command", eg={"seconds": 600, "running": "1.0.1",
+                                                  "hint": "pipx install --force aipager"})
+_AP_FAILED = Msg("upd.ap.failed",
+                 "❌ <b>aipager</b> upgrade failed (exit {code}), nothing restarted.",
+                 note="{code} is the installer's exit code or ?", eg={"code": "2"})
+_AP_IMPORT_FAILED = Msg("upd.ap.import_failed",
+                        "❌ The new version failed to import, still running {running}, "
+                        "nothing restarted. Reinstall with <code>{hint}</code>",
+                        note="{hint} is a command",
+                        eg={"running": "1.0.1", "hint": "pipx install --force aipager"})
+_AP_SAME_LOCAL_AT = Msg("upd.ap.current_local_at",
+                        "✅ <b>aipager</b> is already at {running} - this {kind} install "
+                        "upgrades from the local path {where}, which still has the same "
+                        "version. Update that checkout first.",
+                        note="{kind} is the installer, {where} a folder",
+                        eg={"running": "1.0.1", "kind": "pipx", "where": "/src/aipager"})
+_AP_SAME_LOCAL = Msg("upd.ap.current_local",
+                     "✅ <b>aipager</b> is already at {running} - this {kind} install "
+                     "upgrades from the local path, which still has the same version. "
+                     "Update that checkout first.",
+                     note="{kind} is the installer", eg={"running": "1.0.1", "kind": "pipx"})
+_AP_SAME_GIT = Msg("upd.ap.current_git",
+                   "✅ <b>aipager</b> is already at {running} - this {kind} install upgrades "
+                   "from its git source, which has nothing newer.",
+                   note="{kind} is the installer", eg={"running": "1.0.1", "kind": "pipx"})
+_AP_SAME_INDEX = Msg("upd.ap.current_index",
+                     "✅ <b>aipager</b> is already at {running} - the package index has "
+                     "nothing newer.", note="The package index is PyPI",
+                     eg={"running": "1.0.1"})
+_AP_SAME = Msg("upd.ap.current_plain", "✅ <b>aipager</b> is already at {running}.",
+               note="aipager update: nothing newer", eg={"running": "1.0.1"})
+_AP_INSTALLED_OK = Msg("upd.ap.installed", "✅ <b>aipager</b> {frm} → {to} installed.",
+                       note="aipager updated; how to restart follows", eg={"frm": "1.0.1", "to": "1.0.2"})
+_AP_WAITING = Msg("upd.ap.waiting",
+                  "⏳ <b>aipager</b> {frm} → {to} installed, restarting when the current "
+                  "turn ends", note="aipager updated, the restart waits", eg={"frm": "1.0.1", "to": "1.0.2"})
+_AP_RESTART_CANCELLED = Msg("upd.ap.restart_cancelled",
+                            "✅ <b>aipager</b> {frm} → {to} installed, but the restart was "
+                            "cancelled. Restart it yourself: <code>{cmd}</code>",
+                            note="{cmd} is a command",
+                            eg={"frm": "1.0.1", "to": "1.0.2",
+                                "cmd": "systemctl --user restart aipager"})
+_AP_PREPARE_FAILED = Msg("upd.ap.prepare_failed",
+                         "✅ <b>aipager</b> {frm} → {to} installed, but the restart could not "
+                         "be prepared ({error}). Restart it yourself: <code>{cmd}</code>",
+                         note="{error} is English", eg={"frm": "1.0.1", "to": "1.0.2", "error": "disk full",
+                             "cmd": "aipager start"})
+_AP_SCHEDULE_FAILED = Msg("upd.ap.schedule_failed",
+                          "✅ <b>aipager</b> {frm} → {to} installed, but scheduling the "
+                          "restart failed: {detail}. Restart it yourself: <code>{cmd}</code>",
+                          note="{detail} is English", eg={"frm": "1.0.1", "to": "1.0.2", "detail": "no systemd-run",
+                              "cmd": "aipager start"})
+_AP_RESTARTING = Msg("upd.ap.restarting", "⏳ <b>aipager</b> {frm} → {to} installed, restarting…",
+                     note="aipager updated and restarts now", eg={"frm": "1.0.1", "to": "1.0.2"})
+_AP_FINISHED_SHUTDOWN = Msg("upd.ap.finished_shutdown",
+                            "✅ <b>aipager</b> upgrade finished; the daemon is shutting down, so "
+                            "nothing was restarted - the next start runs what is installed.",
+                            note="aipager stopped right after the upgrade")
+_AP_INSTALLED_SHUTDOWN = Msg("upd.ap.installed_shutdown",
+                             "✅ <b>aipager</b> {frm} → {to} installed; the daemon is shutting "
+                             "down, so nothing was restarted - the next start runs {to}.",
+                             note="aipager stopped right after the upgrade", eg={"frm": "1.0.1", "to": "1.0.2"})
+_FIX_CLAUDE = Msg("upd.fix.claude", "run {command} again",
+                  note="Ends 'If anything misbehaves, ...'; {command} is claude update",
+                  eg={"command": "claude update"})
+_FIX_REINSTALL = Msg("upd.fix.reinstall", "reinstall with {command}",
+                     note="Ends 'If anything misbehaves, ...'; {command} is a command",
+                     eg={"command": "pipx install --force aipager"})
+_SHUTDOWN_PARTIAL = Msg("upd.shutdown.partial",
+                        "⚠️ The daemon shut down while the update was installing; the installer "
+                        "was stopped, so the install may be partial. If anything misbehaves, "
+                        "{fix}.", note="{fix} is upd.fix.claude or upd.fix.reinstall",
+                        eg={"fix": "run claude update again"})
+_SHUTDOWN_EARLY = Msg("upd.shutdown.early",
+                      "⚠️ The daemon shut down before the update finished.",
+                      note="/update job")
+_GATE_BUSY = Plural("upd.gate.busy",
+                    one="⏰ Sessions are still busy after {n} min. Wait {wait} more min, "
+                        "restart now, or cancel? Restart now interrupts everything listed "
+                        "below.",
+                    other="⏰ Sessions are still busy after {n} min. Wait {wait} more min, "
+                          "restart now, or cancel? Restart now interrupts everything listed "
+                          "below.",
+                    note="/update: the restart waited {n} minutes for idle sessions; the "
+                         "buttons are Wait {wait} more min, Restart now, Cancel",
+                    eg={"wait": 10})
+_GATE_BUSY_HELD = Plural("upd.gate.busy_held",
+                         one="⏰ Sessions are still busy after {n} min. Wait {wait} more min, "
+                             "restart now, or cancel? Restart now interrupts everything listed "
+                             "below, including the undelivered held answers.",
+                         other="⏰ Sessions are still busy after {n} min. Wait {wait} more "
+                               "min, restart now, or cancel? Restart now interrupts everything "
+                               "listed below, including the undelivered held answers.",
+                         note="As upd.gate.busy, when answers are held back for a chat",
+                         eg={"wait": 10})
+_GATE_WAITING = Msg("upd.gate.waiting",
+                    "⏳ <b>aipager</b>: waiting for every session to go idle before the "
+                    "restart.", note="/update job")
+_WATCHDOG = Msg("upd.watchdog",
+                "⚠️ The scheduled restart did not happen - the new version is installed but "
+                "the old one is still running. Restart it yourself: {command}",
+                note="{command} is a command",
+                eg={"command": "systemctl --user restart aipager.service"})
+_BUSY_RESTARTING = Msg("upd.busy.restarting",
+                       "⏳ aipager is about to restart for an update. Try /update again once "
+                       "it is back.", note="/update while a restart is pending")
+_BUSY_RUNNING = Msg("upd.busy.running",
+                    "⏳ An update is already running ({phase}). Its status message shows the "
+                    "progress.", note="{phase} is an internal step name, as it is",
+                    eg={"phase": "waiting_for_idle"})
+_BUSY_SHORT = Msg("upd.busy.running_short", "⏳ An update is already running ({phase}).",
+                  note="{phase} is an internal step name", eg={"phase": "upgrading"})
+_CHECK_FAILED_NOW = Msg("upd.check_failed_now",
+                        "⚠️ Couldn't check for updates right now. Try again.",
+                        note="/update: the lookup failed")
+_CANCELLED = Msg("upd.cancelled", "↩️ Update cancelled - nothing changed.",
+                 note="/update: Cancel was tapped")
+_SHUTTING_DOWN = Msg("upd.shutting_down", "⏳ aipager is shutting down. Try again once it is back.",
+                     note="/update while aipager stops")
+_AP_BLOCKED_HERE = Msg("upd.ap.blocked_here", "🚫 aipager can't be updated from here: {reason}",
+                       note="{reason} is English text from the install",
+                       eg={"reason": "editable install"})
+_MARKER_INTERRUPTED = Msg("upd.marker.interrupted",
+                          "⚠️ An update was interrupted when aipager shut down; the install "
+                          "may be partial. Now running {running}. If anything misbehaves, "
+                          "{fix}.", note="After a restart; {fix} is upd.fix.*",
+                          eg={"running": "1.0.1", "fix": "run claude update again"})
+_MARKER_WRONG = Msg("upd.marker.wrong_version",
+                    "⚠️ aipager restarted but is running {running}, not {to}.",
+                    note="After an update restart", eg={"running": "1.0.1", "to": "1.0.2"})
+_MARKER_DONE = Plural("upd.marker.done",
+                      one="✅ aipager updated {frm} → {to}, {n} session re-adopted",
+                      other="✅ aipager updated {frm} → {to}, {n} sessions re-adopted",
+                      note="After an update restart: the sessions aipager picked up again",
+                      eg={"frm": "1.0.1", "to": "1.0.2"})
+_NOT_BACK = Msg("upd.marker.not_back", "⚠️ Not back: {labels}",
+                note="Sessions that did not come back after the restart",
+                eg={"labels": "x9"})
 
 
 def _esc(value) -> str:
@@ -264,12 +550,14 @@ class UpdateOffer:
     notes: list[str]
 
 
-def update_offer(status: dict) -> UpdateOffer:
+def update_offer(status: dict, tr=None) -> UpdateOffer:
     """THE decision both surfaces show: which products have an update this
     install can apply. A product is offered only when its lookup succeeded
     and found a strictly newer version, and only when this install can apply
     it (an aipager install that can be upgraded from here; a Claude Code not
-    held back by ``claude.blocked``)."""
+    held back by ``claude.blocked``). The lines and the label in *tr*'s
+    language (English when None); ``kind`` is the id logic compares."""
+    tr = tr or i18n.get("en")
     ap = status["aipager"]
     cl = status["claude"]
     rs = status["restart"]
@@ -284,57 +572,59 @@ def update_offer(status: dict) -> UpdateOffer:
     held_back = False   # newer, but can't be updated from here
     if not latest:
         failed = True
-        lines.append(f"aipager {running} (couldn't check)")
+        lines.append(tr.text(_AP_UNCHECKED, running=str(running)))
     elif ap.get("update_available"):
-        line = f"aipager {running} → {latest}"
         if src["upgradable"]:
             offer_ap = True
+            lines.append(tr.text(_AP_NEWER, running=str(running), latest=str(latest)))
         else:
             held_back = True
-            line += f" (can't update from here: {src.get('reason') or 'unknown install'})"
-        lines.append(line)
+            reason = src.get("reason") or Safe(tr.text(_UNKNOWN_INSTALL))
+            lines.append(tr.text(_AP_NEWER_BLOCKED, running=str(running),
+                                 latest=str(latest), reason=reason))
     else:
-        lines.append(f"aipager {running} (up to date)")
+        lines.append(tr.text(_AP_CURRENT, running=str(running)))
     installed = ap.get("installed")
     if installed and installed != running:
-        notes.append(f"aipager {installed} is installed but not running yet.")
+        notes.append(tr.text(_AP_INSTALLED, installed=str(installed)))
 
     cur = cl.get("current")
     cl_latest = cl.get("latest")
     offer_cc = False
     if not cur:
         failed = True
-        lines.append("Claude Code (couldn't check)")
+        lines.append(tr.text(_CC_UNKNOWN))
     elif not cl_latest:
         failed = True
-        lines.append(f"Claude Code {cur} (couldn't check)")
+        lines.append(tr.text(_CC_UNCHECKED, current=str(cur)))
     elif cl.get("update_available"):
-        line = f"Claude Code {cur} → {cl_latest}"
         if cl.get("blocked"):
             held_back = True
-            line += f" (can't update from here: {cl['blocked']})"
+            lines.append(tr.text(_CC_NEWER_BLOCKED, current=str(cur), latest=str(cl_latest),
+                                 reason=str(cl["blocked"])))
         else:
             offer_cc = True
-        lines.append(line)
+            lines.append(tr.text(_CC_NEWER, current=str(cur), latest=str(cl_latest)))
     else:
-        lines.append(f"Claude Code {cur} (up to date)")
+        lines.append(tr.text(_CC_CURRENT, current=str(cur)))
 
     if offer_ap and offer_cc:
-        kind, label = "both", "Update both"
+        kind, label = "both", tr.text(_LABEL_BOTH)
     elif offer_ap:
-        kind, label = "aipager", "Update aipager"
+        kind, label = "aipager", tr.text(_LABEL_AP)
     elif offer_cc:
-        kind, label = "claude", "Update Claude Code"
+        kind, label = "claude", tr.text(_LABEL_CC)
     else:
         kind = label = None
     summary = None
     if kind is None:
-        summary = (CANT_UPDATE_HERE_TEXT if held_back
-                   else CHECK_FAILED_TEXT if failed else UP_TO_DATE_TEXT)
+        summary = tr.text(CANT_UPDATE_HERE_TEXT if held_back
+                          else CHECK_FAILED_TEXT if failed else UP_TO_DATE_TEXT)
     restart = None
     if offer_ap:
-        restart = ("Restart: automatic, once no turn is running." if rs["automatic"]
-                   else f"Restart: manual ({rs.get('reason') or 'restart it yourself'})")
+        restart = (tr.text(_RESTART_AUTO) if rs["automatic"]
+                   else tr.text(_RESTART_MANUAL,
+                                reason=rs.get("reason") or Safe(tr.text(_YOURSELF))))
     return UpdateOffer(kind=kind, label=label, lines=lines, summary=summary,
                        restart=restart, notes=notes)
 
@@ -344,9 +634,11 @@ def _source_text(status: dict, show_paths: bool) -> str:
     return str(src["describe"] if show_paths else src["describe_short"])
 
 
-def check_payload(status: dict, *, show_paths: bool) -> dict:
-    """The Mini App's view of a check: the same offer the chat shows."""
-    offer = update_offer(status)
+def check_payload(status: dict, *, show_paths: bool, tr=None) -> dict:
+    """The Mini App's view of a check: the same offer the chat shows, in
+    *tr*'s language (the viewer's; English when None). ``source`` is the
+    install's own English description."""
+    offer = update_offer(status, tr)
     return {
         "lines": list(offer.lines),
         "offer": ({"kind": offer.kind, "label": offer.label}
@@ -358,16 +650,20 @@ def check_payload(status: dict, *, show_paths: bool) -> dict:
     }
 
 
-def check_prompt_markup() -> InlineKeyboardMarkup:
+def check_prompt_markup(tr=None) -> InlineKeyboardMarkup:
+    tr = tr or i18n.get("en")
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton(CHECK_BUTTON_TEXT, callback_data="_:up:chk")]])
+        InlineKeyboardButton(tr.text(CHECK_BUTTON_TEXT), callback_data="_:up:chk")]])
 
 
-def render_check(status: dict, *, show_paths: bool) -> tuple[str, InlineKeyboardMarkup]:
+def render_check(status: dict, *, show_paths: bool,
+                 tr=None) -> tuple[str, InlineKeyboardMarkup]:
     """The chat's view of a check: the offer's lines, then ONE Update
-    button and Cancel, or "Everything is up to date." and Check again."""
-    offer = update_offer(status)
-    lines = ["⬆️ <b>Updates</b>", ""]
+    button and Cancel, or "Everything is up to date." and Check again.
+    In *tr*'s language (the chat's; English when None)."""
+    tr = tr or i18n.get("en")
+    offer = update_offer(status, tr)
+    lines = [tr.html(_HEADING), ""]
     lines += [_esc_text(line) for line in offer.lines]
     lines.append(f"<i>{_esc_text(_source_text(status, show_paths))}</i>")
     lines += [_esc_text(n) for n in offer.notes]
@@ -376,38 +672,44 @@ def render_check(status: dict, *, show_paths: bool) -> tuple[str, InlineKeyboard
     if offer.kind is None:
         lines += ["", _esc_text(offer.summary)]
         kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton("Check again", callback_data="_:up:chk")]])
+            InlineKeyboardButton(tr.text(_CHECK_AGAIN), callback_data="_:up:chk")]])
     else:
         kb = InlineKeyboardMarkup([[
             InlineKeyboardButton(offer.label,
                                  callback_data=f"_:up:go:{_GO_VERBS[offer.kind]}"),
-            InlineKeyboardButton("Cancel", callback_data="_:up:x"),
+            InlineKeyboardButton(tr.text(_CANCEL), callback_data="_:up:x"),
         ]])
     return "\n".join(lines), kb
 
 
-def _job_markup(job: _Job) -> InlineKeyboardMarkup | None:
+def _job_markup(job: _Job, tr=None) -> InlineKeyboardMarkup | None:
+    """The job's buttons, in *tr*'s language (the job chat's when None)."""
+    if job.phase not in ("waiting_for_idle", "gate_timeout"):
+        return None
+    tr = tr or i18n.for_chat(job.chat_id)
+    now = InlineKeyboardButton(tr.text(_RESTART_NOW), callback_data=f"_:up:now:{job.id}")
+    stop = InlineKeyboardButton(tr.text(_CANCEL), callback_data=f"_:up:stop:{job.id}")
     if job.phase == "waiting_for_idle":
-        return InlineKeyboardMarkup([[
-            InlineKeyboardButton("Restart now", callback_data=f"_:up:now:{job.id}"),
-            InlineKeyboardButton("Cancel", callback_data=f"_:up:stop:{job.id}"),
-        ]])
-    if job.phase == "gate_timeout":
-        return InlineKeyboardMarkup([
-            [InlineKeyboardButton("Wait 10 more min", callback_data=f"_:up:wait:{job.id}")],
-            [InlineKeyboardButton("Restart now", callback_data=f"_:up:now:{job.id}"),
-             InlineKeyboardButton("Cancel", callback_data=f"_:up:stop:{job.id}")],
-        ])
-    return None
+        return InlineKeyboardMarkup([[now, stop]])
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(tr.text(_WAIT_MORE, mins=_WAIT_MORE_MINUTES),
+                              callback_data=f"_:up:wait:{job.id}")],
+        [now, stop],
+    ])
 
 
-def _job_text(job: _Job) -> str:
+def _job_text(job: _Job, tr=None) -> str:
+    """The job's status message. Its sections stay in the language they
+    were written in; what is drawn now uses *tr* (the job chat's when
+    None). Blockers are English data."""
+    tr = tr or i18n.for_chat(job.chat_id)
     parts = list(job.sections)
     if job.live:
         parts.append(job.live)
     if job.phase in ("waiting_for_idle", "gate_timeout") and job.blockers:
-        parts.append("Still running:\n" + "\n".join(f"  • {_esc(b)}" for b in job.blockers))
-    return "\n\n".join(parts) or "⏳ Starting the update…"
+        parts.append(tr.html(_STILL_RUNNING) + "\n"
+                     + "\n".join(f"  • {_esc(b)}" for b in job.blockers))
+    return "\n\n".join(parts) or tr.html(_STARTING)
 
 
 def _show_detail(chat_id) -> bool:
@@ -422,14 +724,15 @@ def _safe_tail(text) -> str:
     return self_update.redacted_tail(text)
 
 
-def _pre_tail(text, chat_id) -> str:
+def _pre_tail(text, chat_id, tr=None) -> str:
     """``\n<pre>tail</pre>`` for a private chat; a pointer to the daemon log
-    in a group (installer output can carry home-directory paths)."""
+    in a group (installer output can carry home-directory paths), in *tr*'s
+    language (the chat's when None)."""
     tail = _safe_tail(text)
     if not tail:
         return ""
     if not _show_detail(chat_id):
-        return "\n(output in the daemon log)"
+        return "\n" + (tr or i18n.for_chat(chat_id)).html(_OUTPUT_IN_LOG)
     return f"\n<pre>{_esc(tail)}</pre>"
 
 
@@ -438,14 +741,19 @@ def _plain(text: str) -> str:
     return html_mod.unescape(re.sub(r"<[^>]+>", "", text))
 
 
-def _elapsed_label(seconds: float) -> str:
+def _elapsed_label(seconds: float, tr=None) -> str:
+    """The heartbeat's " (2 min 30s)", in *tr*'s language (English when
+    None): its own coarse shape, not the card's clock (ruling 6)."""
+    tr = tr or i18n.get("en")
     step = self_update.HEARTBEAT_GRANULARITY_SECONDS
     shown = int(seconds // step * step)
     if shown <= 0:
         return ""
     if shown < 60:
-        return f" ({shown}s)"
-    return f" ({shown // 60} min{' ' + str(shown % 60) + 's' if shown % 60 else ''})"
+        return " (" + tr.text(_EL_S, s=shown) + ")"
+    if shown % 60:
+        return " (" + tr.text(_EL_MS, m=shown // 60, s=shown % 60) + ")"
+    return " (" + tr.text(_EL_M, m=shown // 60) + ")"
 
 
 # ---------------------------------------------------------------------------
@@ -731,8 +1039,7 @@ class UpdateManager:
             raise
         except Exception:
             log.exception("update.failed job=%s", job.id)
-            self._finish(job, "failed", "❌ The update stopped on an unexpected error "
-                                        "(see the daemon log).")
+            self._finish(job, "failed", i18n.for_chat(job.chat_id).html(_UNEXPECTED))
         finally:
             if not restart_scheduled:
                 self._release_lock(job)
@@ -749,9 +1056,11 @@ class UpdateManager:
             self._spawn(self._restart_watchdog(job))
 
     async def _await_with_heartbeat(self, job: _Job, label: str, fn, *args):
-        """Run blocking ``fn`` in a thread, editing a heartbeat meanwhile."""
+        """Run blocking ``fn`` in a thread, editing a heartbeat meanwhile.
+        ``label`` is the step's name, HTML, in the job chat's language."""
+        tr = i18n.for_chat(job.chat_id)
         started = time.monotonic()
-        job.live = f"⏳ {label}…"
+        job.live = tr.html(_STEP_STARTED, step=Safe(label))
         await self._report(job)
         fut = asyncio.ensure_future(asyncio.to_thread(fn, *args))
         while True:
@@ -759,7 +1068,8 @@ class UpdateManager:
                 {fut}, timeout=max(0.01, float(self_update.PROGRESS_EDIT_MIN_SECONDS)))
             if done:
                 return fut.result()
-            job.live = f"⏳ {label} - still working{_elapsed_label(time.monotonic() - started)}"
+            job.live = tr.html(_STEP_STILL, step=Safe(label), elapsed=Safe(
+                _elapsed_label(time.monotonic() - started, tr)))
             await self._report(job, ornament=True)
 
     # ---- Claude Code -------------------------------------------------------
@@ -773,22 +1083,23 @@ class UpdateManager:
         mine = {n: s for n, s in registry.all_sessions(job.chat_id).items()
                 if s.status != Status.GONE}
         others = len(set(everyone) - set(mine))
-        lines = ["Running sessions keep the old version until they are "
-                 "restarted - none was restarted."]
+        tr = i18n.for_chat(job.chat_id)
+        lines = [tr.html(_SN_NONE_RESTARTED)]
         if mine:
-            lines.append("Still on the old version: " + ", ".join(
-                _esc(s.label or s.name) for _, s in sorted(mine.items())))
+            lines.append(tr.html(_SN_OLD, labels=tr.join(
+                s.label or s.name for _, s in sorted(mine.items()))))
         if others:
-            lines.append(f"and {others} in other chats")
+            lines.append(tr.n(_SN_OTHERS, others))
         if not mine and not others:
-            lines.append("No sessions are running right now.")
+            lines.append(tr.html(_SN_NONE))
         if new_version:
-            lines.append(f"New sessions use {_esc(new_version)}.")
+            lines.append(tr.html(_SN_NEW, version=str(new_version)))
         return "\n".join(lines)
 
     async def _claude_step(self, job: _Job) -> None:
         job.phase = "claude_updating"
-        res = await self._await_with_heartbeat(job, "Updating Claude Code",
+        tr = i18n.for_chat(job.chat_id)
+        res = await self._await_with_heartbeat(job, tr.html(_STEP_CLAUDE),
                                                self_update.run_claude_update)
         job.live = None
         if job.interrupted or (self._shutting_down
@@ -796,25 +1107,22 @@ class UpdateManager:
             self._finish(job, "cancelled", self._shutdown_section(job))
             return
         if res.error and res.before is None:
-            section = f"❌ <b>Claude Code</b>: {_esc(_safe_tail(res.error))}"
+            section = tr.html(_CC_ERROR, error=_safe_tail(res.error))
         else:
             if res.timed_out:
-                head = (f"⏱ <b>Claude Code</b> update timed out after "
-                        f"{self_update.CLAUDE_UPDATE_TIMEOUT_SECONDS}s")
+                head = tr.html(_CC_TIMEOUT, seconds=self_update.CLAUDE_UPDATE_TIMEOUT_SECONDS)
             elif res.returncode != 0 or res.error:
-                head = (f"❌ <b>Claude Code</b> update failed "
-                        f"(exit {res.returncode if res.returncode is not None else '?'})")
+                head = tr.html(_CC_FAILED, code=str(
+                    res.returncode if res.returncode is not None else "?"))
             elif res.after and res.before and res.after != res.before:
-                head = f"✅ <b>Claude Code</b> {_esc(res.before)} → {_esc(res.after)}"
+                head = tr.html(_CC_DONE, before=str(res.before), after=str(res.after))
             elif res.after is None and self._shutting_down:
                 # The version probe is not started during a shutdown.
-                head = ("✅ <b>Claude Code</b> update finished; aipager is shutting "
-                        "down, so /update shows the new version once it is back")
+                head = tr.html(_CC_DONE_SHUTDOWN)
             else:
-                head = (f"✅ <b>Claude Code</b> is already up to date "
-                        f"({_esc(res.after or res.before)})")
+                head = tr.html(_CC_CURRENT_DONE, version=str(res.after or res.before))
             if not res.ok:
-                head += _pre_tail(res.output_tail, job.chat_id)
+                head += _pre_tail(res.output_tail, job.chat_id, tr)
             section = head + "\n" + self._session_note(job, res.after or res.before)
         job.sections.append(section)
         job.summary = _plain(section)
@@ -824,29 +1132,32 @@ class UpdateManager:
 
     # ---- aipager -------------------------------------------------------------
 
-    def _manual_restart_text(self, plan) -> str:
-        lines = [f"Restart needed: {_esc(plan.reason or 'restart it yourself')}"]
+    def _manual_restart_text(self, plan, tr=None) -> str:
+        """How to restart by hand, in *tr*'s language (English when None);
+        the plan's reason is English data."""
+        tr = tr or i18n.get("en")
+        lines = [tr.html(_MANUAL_NEEDED, reason=plan.reason or Safe(tr.html(_YOURSELF)))]
         if plan.manual_command:
             lines.append(f"<code>{_esc(plan.manual_command)}</code>")
         if plan.at_risk:
-            lines.append("Sessions a restart would kill: "
-                         + ", ".join(_esc(s) for s in plan.at_risk))
+            lines.append(tr.html(_WOULD_KILL, labels=tr.join(plan.at_risk)))
         return "\n".join(lines)
 
     async def _aipager_step(self, job: _Job) -> bool:
         registry = self.bot.registry
+        tr = i18n.for_chat(job.chat_id)
         source = install_source.detect_install_source()
         running = self_update.running_version()
+        ver = {"frm": str(running)}
         if not source.upgradable:
             log.info("update.aipager.refused job=%s kind=%s", job.id, source.kind)
-            self._finish(job, "failed", f"🚫 <b>aipager</b> can't be updated from here: "
-                                        f"{_esc(source.reason)}")
+            self._finish(job, "failed", tr.html(_AP_BLOCKED, reason=str(source.reason)))
             return False
         argv = install_source.upgrade_argv(source)
         if argv is None:
             self._finish(job, "failed",
-                         f"❌ <b>aipager</b>: couldn't find <code>{_esc(source.kind)}</code> "
-                         f"(searched {_esc(install_source.augmented_path())})")
+                         tr.html(_AP_NOT_FOUND, kind=str(source.kind),
+                                 path=str(install_source.augmented_path())))
             return False
         plan = await asyncio.to_thread(self_update.restart_plan, registry)
 
@@ -855,20 +1166,18 @@ class UpdateManager:
             if latest and not self_update.is_newer(latest, running):
                 log.info("update.aipager.unchanged job=%s running=%s latest=%s",
                          job.id, running, latest)
-                self._finish(job, "done", f"✅ <b>aipager</b> is already up to date "
-                                          f"({_esc(running)}).")
+                self._finish(job, "done", tr.html(_AP_UP_TO_DATE, version=str(running)))
                 return False
 
         if plan.automatic:
             if await self._wait_gate(job) == "cancel":
-                self._finish(job, "cancelled",
-                             "↩️ <b>aipager</b> update cancelled - nothing was installed.")
+                self._finish(job, "cancelled", tr.html(_AP_CANCELLED))
                 return False
 
         job.phase = "upgrading"
         log.info("update.aipager.start job=%s argv=%s", job.id, argv)
         res = await self._await_with_heartbeat(
-            job, f"Upgrading aipager via {_esc(source.kind)}",
+            job, tr.html(_STEP_AIPAGER, kind=str(source.kind)),
             lambda: self_update.run_command(
                 argv, timeout=self_update.UPGRADE_TIMEOUT_SECONDS,
                 env=install_source.upgrade_env(source)))
@@ -881,20 +1190,16 @@ class UpdateManager:
             log.info("update.aipager.timeout job=%s", job.id)
             hint = install_source.reinstall_hint(source.kind)
             self._finish(job, "failed",
-                         f"⏱ <b>aipager</b> upgrade timed out after "
-                         f"{self_update.UPGRADE_TIMEOUT_SECONDS}s and was stopped, "
-                         f"nothing restarted, still running {_esc(running)}. The "
-                         f"install on disk may be partial: reinstall with "
-                         f"<code>{_esc(hint)}</code> before the next restart."
-                         + _pre_tail(res.output_tail, job.chat_id))
+                         tr.html(_AP_TIMEOUT, seconds=self_update.UPGRADE_TIMEOUT_SECONDS,
+                                 running=str(running), hint=str(hint))
+                         + _pre_tail(res.output_tail, job.chat_id, tr))
             return False
         if res.returncode != 0 or res.error:
             log.info("update.aipager.failed job=%s rc=%s", job.id, res.returncode)
             self._finish(job, "failed",
-                         f"❌ <b>aipager</b> upgrade failed (exit "
-                         f"{res.returncode if res.returncode is not None else '?'}), "
-                         f"nothing restarted."
-                         + _pre_tail(res.output_tail or res.error, job.chat_id))
+                         tr.html(_AP_FAILED, code=str(
+                             res.returncode if res.returncode is not None else "?"))
+                         + _pre_tail(res.output_tail or res.error, job.chat_id, tr))
             return False
 
         new, importable, err = await asyncio.to_thread(
@@ -912,17 +1217,15 @@ class UpdateManager:
             log.info("update.aipager.smoke_failed job=%s error=%s", job.id, err)
             hint = install_source.reinstall_hint(source.kind)
             self._finish(job, "failed",
-                         f"❌ The new version failed to import, still running "
-                         f"{_esc(running)}, nothing restarted. Reinstall with "
-                         f"<code>{_esc(hint)}</code>"
-                         + _pre_tail(err, job.chat_id))
+                         tr.html(_AP_IMPORT_FAILED, running=str(running), hint=str(hint))
+                         + _pre_tail(err, job.chat_id, tr))
             return False
         if new == running:
             log.info("update.aipager.unchanged job=%s version=%s origin=%s",
                      job.id, running, source.origin)
-            self._finish(job, "done", f"✅ <b>aipager</b> is already at {_esc(running)}"
-                                      f"{_origin_explanation(source, job.chat_id)}")
+            self._finish(job, "done", _already_at(tr, source, str(running), job.chat_id))
             return False
+        ver["to"] = str(new)
         log.info("update.aipager.done job=%s from=%s to=%s", job.id, running, new)
         job.installed = (running, new)
         if self._shutting_down:
@@ -931,21 +1234,17 @@ class UpdateManager:
 
         if not plan.automatic:
             log.info("update.restart.refused job=%s mode=%s", job.id, plan.mode)
-            self._finish(job, "done",
-                         f"✅ <b>aipager</b> {_esc(running)} → {_esc(new)} installed.\n"
-                         + self._manual_restart_text(plan))
+            self._finish(job, "done", tr.html(_AP_INSTALLED_OK, **ver) + "\n"
+                         + self._manual_restart_text(plan, tr))
             return False
 
         if not job.restart_now:
-            job.waiting_section = (f"⏳ <b>aipager</b> {_esc(running)} → {_esc(new)} "
-                                   "installed, restarting when the current turn ends")
+            job.waiting_section = tr.html(_AP_WAITING, **ver)
             job.sections.append(job.waiting_section)
             if await self._wait_gate(job) == "cancel":
                 self._drop_waiting_section(job)
-                self._finish(job, "cancelled",
-                             f"✅ <b>aipager</b> {_esc(running)} → {_esc(new)} installed, "
-                             "but the restart was cancelled. Restart it yourself: "
-                             f"<code>{_esc(plan.manual_command)}</code>")
+                self._finish(job, "cancelled", tr.html(
+                    _AP_RESTART_CANCELLED, **ver, cmd=str(plan.manual_command)))
                 return False
             self._drop_waiting_section(job)
 
@@ -956,19 +1255,16 @@ class UpdateManager:
             return False
         if not plan.automatic:
             log.info("update.restart.refused job=%s mode=%s (re-read)", job.id, plan.mode)
-            self._finish(job, "done",
-                         f"✅ <b>aipager</b> {_esc(running)} → {_esc(new)} installed.\n"
-                         + self._manual_restart_text(plan))
+            self._finish(job, "done", tr.html(_AP_INSTALLED_OK, **ver) + "\n"
+                         + self._manual_restart_text(plan, tr))
             return False
 
         try:
             self_update.write_marker(self._update_marker(job, running, new))
         except OSError as e:
             log.info("update.restart.failed job=%s marker: %s", job.id, e)
-            self._finish(job, "failed",
-                         f"✅ <b>aipager</b> {_esc(running)} → {_esc(new)} installed, but "
-                         f"the restart could not be prepared ({_esc(e)}). Restart it "
-                         f"yourself: <code>{_esc(plan.manual_command)}</code>")
+            self._finish(job, "failed", tr.html(
+                _AP_PREPARE_FAILED, **ver, error=str(e), cmd=str(plan.manual_command)))
             return False
         ok, detail = await asyncio.to_thread(self_update.schedule_restart, plan)
         if self._shutting_down:
@@ -981,17 +1277,13 @@ class UpdateManager:
             return False
         if not ok:
             self_update.clear_marker()
-            self._finish(job, "failed",
-                         f"✅ <b>aipager</b> {_esc(running)} → {_esc(new)} installed, but "
-                         f"scheduling the restart failed: {_esc(detail)}. Restart it "
-                         f"yourself: <code>{_esc(plan.manual_command)}</code>")
+            self._finish(job, "failed", tr.html(
+                _AP_SCHEDULE_FAILED, **ver, detail=str(detail), cmd=str(plan.manual_command)))
             return False
         job.restart_unit = detail
         # No countdown (roadmap 8.45): the new daemon edits this message
         # into "✅ aipager updated A → B, N sessions re-adopted".
-        self._finish(job, "restart_scheduled",
-                     f"⏳ <b>aipager</b> {_esc(running)} → {_esc(new)} installed, "
-                     "restarting…")
+        self._finish(job, "restart_scheduled", tr.html(_AP_RESTARTING, **ver))
         return True
 
     @staticmethod
@@ -1103,10 +1395,7 @@ class UpdateManager:
         if not new or new == running:
             log.info("update.restart.skipped job=%s reason=shutting-down to=%s",
                      job.id, new)
-            self._finish(job, "done",
-                         "✅ <b>aipager</b> upgrade finished; the daemon is shutting "
-                         "down, so nothing was restarted - the next start runs what "
-                         "is installed.")
+            self._finish(job, "done", i18n.for_chat(job.chat_id).html(_AP_FINISHED_SHUTDOWN))
             return
         self._installed_at_shutdown(job, running, new)
 
@@ -1121,23 +1410,20 @@ class UpdateManager:
             self_update.write_marker(self._update_marker(job, running, new))
         except OSError:
             log.warning("update.shutdown.marker_failed job=%s", job.id, exc_info=True)
-        self._finish(job, "done",
-                     f"✅ <b>aipager</b> {_esc(running)} → {_esc(new)} installed; the "
-                     f"daemon is shutting down, so nothing was restarted - the next "
-                     f"start runs {_esc(new)}.")
+        self._finish(job, "done", i18n.for_chat(job.chat_id).html(
+            _AP_INSTALLED_SHUTDOWN, frm=str(running), to=str(new)))
 
     def _shutdown_section(self, job: _Job) -> str:
+        tr = i18n.for_chat(job.chat_id)
         if job.interrupted:
             if job.phase == "claude_updating":
-                fix = "run <code>claude update</code> again"
+                fix = tr.html(_FIX_CLAUDE, command=Span("<code>claude update</code>"))
             else:
                 src = install_source.detect_install_source()
-                fix = (f"reinstall with <code>"
-                       f"{_esc(install_source.reinstall_hint(src.kind))}</code>")
-            return ("⚠️ The daemon shut down while the update was installing; the "
-                    "installer was stopped, so the install may be partial. If "
-                    f"anything misbehaves, {fix}.")
-        return "⚠️ The daemon shut down before the update finished."
+                fix = tr.html(_FIX_REINSTALL, command=Span(
+                    f"<code>{_esc(install_source.reinstall_hint(src.kind))}</code>"))
+            return tr.html(_SHUTDOWN_PARTIAL, fix=fix)
+        return tr.html(_SHUTDOWN_EARLY)
 
     async def shutdown(self) -> None:
         """Daemon shutdown: never leave an installer orphaned, never start
@@ -1218,15 +1504,14 @@ class UpdateManager:
 
     @staticmethod
     def _gate_live(job: _Job) -> str:
+        tr = i18n.for_chat(job.chat_id)
         if job.phase == "gate_timeout":
             mins = max(1, int(self_update.GATE_MAX_WAIT_SECONDS // 60))
-            warn = "Restart now interrupts everything listed below"
-            if any("held answer" in b for b in job.blockers):
-                warn += ", including the undelivered held answers"
-            return (f"⏰ Sessions are still busy after {mins} min. Wait {mins} more "
-                    f"min, restart now, or cancel? {warn}.")
-        return ("⏳ <b>aipager</b>: waiting for every session to go idle before "
-                "the restart.")
+            # The blockers are self_update's English: logic reads them, never
+            # their translation.
+            held = any("held answer" in b for b in job.blockers)
+            return tr.n(_GATE_BUSY_HELD if held else _GATE_BUSY, mins, wait=mins)
+        return tr.html(_GATE_WAITING)
 
     async def _restart_watchdog(self, job: _Job) -> None:
         await asyncio.sleep(self_update.RESTART_DELAY_SECONDS + RESTART_WATCHDOG_SECONDS)
@@ -1247,50 +1532,66 @@ class UpdateManager:
             log.warning("update.restart.timer_stop_failed job=%s", job.id, exc_info=True)
         self_update.clear_marker()
         self._release_lock(job)
-        job.sections.append("⚠️ The scheduled restart did not happen - the new version "
-                            "is installed but the old one is still running. Restart it "
-                            f"yourself: <code>systemctl --user restart "
-                            f"{self_update.UNIT_NAME}</code>")
+        job.sections.append(i18n.for_chat(job.chat_id).html(_WATCHDOG, command=Span(
+            f"<code>systemctl --user restart {self_update.UNIT_NAME}</code>")))
         job.summary = _plain(job.sections[-1])
         job.phase = "failed"
         await self._report(job)
 
 
 def _origin_explanation(source: install_source.InstallSource, chat_id) -> str:
+    """Why a finished upgrade left the same version, as an id: ``local_at``
+    (a local path, shown in a private chat), ``local``, ``git``, ``index``
+    or ``plain``."""
     show = isinstance(chat_id, int) and chat_id > 0
     if source.origin == "local":
-        where = f" {source.origin_detail}" if show and source.origin_detail else ""
-        return (f" - this {source.kind} install upgrades from the local path{_esc(where)}, "
-                "which still has the same version. Update that checkout first.")
+        return "local_at" if show and source.origin_detail else "local"
     if source.origin == "vcs":
-        return f" - this {source.kind} install upgrades from its git source, which has nothing newer."
+        return "git"
     if source.origin == "index":
-        return " - the package index has nothing newer."
-    return "."
+        return "index"
+    return "plain"
+
+
+def _already_at(tr, source: install_source.InstallSource, running: str, chat_id) -> str:
+    """"aipager is already at X" and why, as one sentence per origin."""
+    origin = _origin_explanation(source, chat_id)
+    kind = str(source.kind)
+    if origin == "local_at":
+        return tr.html(_AP_SAME_LOCAL_AT, running=running, kind=kind,
+                       where=str(source.origin_detail))
+    if origin == "local":
+        return tr.html(_AP_SAME_LOCAL, running=running, kind=kind)
+    if origin == "git":
+        return tr.html(_AP_SAME_GIT, running=running, kind=kind)
+    if origin == "index":
+        return tr.html(_AP_SAME_INDEX, running=running)
+    return tr.html(_AP_SAME, running=running)
 
 
 # ---------------------------------------------------------------------------
 # Telegram entry points
 # ---------------------------------------------------------------------------
 
-def _busy_text(mgr: "UpdateManager") -> str:
+def _busy_text(mgr: "UpdateManager", tr=None) -> str:
+    tr = tr or i18n.get("en")
     if mgr.restart_pending:
-        return ("⏳ aipager is about to restart for an update. Try /update again "
-                "once it is back.")
+        return tr.html(_BUSY_RESTARTING)
     snap = mgr.snapshot() or {}
-    return (f"⏳ An update is already running ({_esc(snap.get('phase', '…'))}). "
-            "Its status message shows the progress.")
+    return tr.html(_BUSY_RUNNING, phase=str(snap.get("phase", "…")))
 
 
 async def _show_check(bot: "TelegramBot", message, chat_id) -> None:
-    """Run the check and edit the tapped message into its result."""
+    """Run the check and edit the tapped message into its result, in that
+    chat's language."""
+    tr = i18n.for_chat(chat_id)
     try:
         status = await bot.updates.check()
-        text, kb = render_check(status, show_paths=_show_detail(chat_id))
+        text, kb = render_check(status, show_paths=_show_detail(chat_id), tr=tr)
     except Exception:
         log.warning("update check failed", exc_info=True)
-        text = "⚠️ Couldn't check for updates right now. Try again."
-        kb = check_prompt_markup()
+        text = tr.html(_CHECK_FAILED_NOW)
+        kb = check_prompt_markup(tr)
     try:
         await edit_message(message, text, parse_mode="HTML", reply_markup=kb)
     except Exception:
@@ -1304,70 +1605,75 @@ async def handle_update_cmd(bot: "TelegramBot", update, ctx) -> None:
     tg_user = update.effective_user
     user_id = tg_user.id if tg_user is not None else None
     chat_id = calling_chat_id(update)
+    tr = i18n.for_update(update)
     if not bot._is_update_admin(user_id, chat_id):
         log.info("update.denied user=%s chat=%s", user_id, chat_id)
         try:
-            await reply_text(update.message, DENIED_TEXT)
+            await reply_text(update.message, tr.text(DENIED_TEXT))
         except Exception:
             log.debug("update denial reply failed", exc_info=True)
         return
     mgr = bot.updates
     if mgr.busy:
         try:
-            await reply_text(update.message, _busy_text(mgr), parse_mode="HTML")
+            await reply_text(update.message, _busy_text(mgr, tr), parse_mode="HTML")
         except Exception:
             log.debug("update busy reply failed", exc_info=True)
         return
     # No lookup yet: the versions are checked only when the button is tapped.
     try:
-        await reply_text(update.message, CHECK_PROMPT_TEXT, parse_mode="HTML",
-                         reply_markup=check_prompt_markup())
+        await reply_text(update.message, tr.html(CHECK_PROMPT_TEXT), parse_mode="HTML",
+                         reply_markup=check_prompt_markup(tr))
     except Exception:
         log.debug("update reply failed", exc_info=True)
 
 
 async def handle_callback(bot: "TelegramBot", update, query, session_name: str,
                           action: str) -> bool:
-    """True iff this is an ``_:up:`` callback (handled here)."""
+    """True iff this is an ``_:up:`` callback (handled here). Pop-ups are
+    in the tapper's language, edits of the message in its chat's."""
     if session_name != "_" or not action.startswith("up:"):
         return False
+    from aipager.bot.language_menu import INVALID_CALLBACK
     tg_user = getattr(query, "from_user", None)
     user_id = tg_user.id if tg_user is not None else None
     message = getattr(query, "message", None)
     chat_id = _message_chat_id(message)
     if chat_id is None:
         chat_id = calling_chat_id(update)
+    pop = tapper_tr(query)
     if not bot._is_update_admin(user_id, chat_id):
         log.info("update.denied user=%s chat=%s action=%s", user_id, chat_id, action)
-        await bot._safe_answer(query, DENIED_TEXT, show_alert=True)
+        await bot._safe_answer(query, pop.text(DENIED_TEXT), show_alert=True)
         return True
 
+    edit_tr = i18n.for_chat(chat_id)
     parts = action.split(":")[1:]
     verb = parts[0] if parts else ""
     mgr = bot.updates
     if verb == "x" and len(parts) == 1:
         try:
-            await edit_text(query, "↩️ Update cancelled - nothing changed.")
+            await edit_text(query, edit_tr.text(_CANCELLED))
         except Exception:
             log.debug("update cancel edit failed", exc_info=True)
         return True
     if verb in ("cc", "ap", "both") and len(parts) == 1:
         # A pre-8.43 per-product button: never start from it.
         log.info("update.stale_menu user=%s chat=%s action=%s", user_id, chat_id, action)
-        await bot._safe_answer(query, MENU_OUT_OF_DATE_TEXT, show_alert=True)
+        await bot._safe_answer(query, pop.text(MENU_OUT_OF_DATE_TEXT), show_alert=True)
         return True
     if verb == "chk" and len(parts) == 1:
         if mgr.busy or mgr.shutting_down:
-            text = ("⏳ aipager is shutting down. Try again once it is back."
-                    if mgr.shutting_down and not mgr.busy else _busy_text(mgr))
+            text = (edit_tr.html(_SHUTTING_DOWN)
+                    if mgr.shutting_down and not mgr.busy else _busy_text(mgr, edit_tr))
             try:
                 await edit_text(query, text, parse_mode="HTML")
             except Exception:
                 log.debug("update check refusal edit failed", exc_info=True)
             return True
-        await bot._safe_answer(query, CHECKING_TEXT)
+        await bot._safe_answer(query, pop.text(CHECKING_TEXT))
         try:
-            await edit_text(query, f"🔎 {CHECKING_TEXT}")
+            await edit_text(query, "🔎 " + edit_tr.text(CHECKING_TEXT))
         except Exception:
             log.debug("update checking edit failed", exc_info=True)
         # PTB handles updates one at a time: never block it on the lookups.
@@ -1380,16 +1686,16 @@ async def handle_callback(bot: "TelegramBot", update, query, session_name: str,
         if not res.ok:
             markup = None
             if res.error in ("check_expired", "offer_changed"):
-                text, markup = OFFER_STALE_TEXT, check_prompt_markup()
+                text, markup = edit_tr.html(OFFER_STALE_TEXT), check_prompt_markup(edit_tr)
             elif res.error == "not_upgradable":
                 src = install_source.detect_install_source()
-                text = (f"🚫 aipager can't be updated from here: "
-                        f"{_esc(src.reason or 'unknown install')}")
+                text = edit_tr.html(_AP_BLOCKED_HERE, reason=src.reason or Safe(
+                    edit_tr.html(_UNKNOWN_INSTALL)))
             elif res.error == "shutting_down":
-                text = "⏳ aipager is shutting down. Try again once it is back."
+                text = edit_tr.html(_SHUTTING_DOWN)
             else:
                 phase = (res.job or {}).get("phase", "…")
-                text = f"⏳ An update is already running ({_esc(phase)})."
+                text = edit_tr.html(_BUSY_SHORT, phase=str(phase))
             try:
                 await edit_text(query, text, parse_mode="HTML", reply_markup=markup)
             except Exception:
@@ -1399,16 +1705,16 @@ async def handle_callback(bot: "TelegramBot", update, query, session_name: str,
         try:
             job_id = int(parts[1])
         except ValueError:
-            await bot._safe_answer(query, "Invalid callback")
+            await bot._safe_answer(query, pop.text(INVALID_CALLBACK))
             return True
         control = {"now": "restart-now", "wait": "wait-more", "stop": "cancel"}[verb]
         res = mgr.control(control, job_id)
         if not res.ok:
             log.info("update.control_refused user=%s action=%s job=%s", user_id, control,
                      job_id)
-            await bot._safe_answer(query, STALE_TEXT)
+            await bot._safe_answer(query, pop.text(STALE_TEXT))
         return True
-    await bot._safe_answer(query, "Invalid callback")
+    await bot._safe_answer(query, pop.text(INVALID_CALLBACK))
     return True
 
 
@@ -1439,17 +1745,17 @@ async def deliver_update_marker(bot: "TelegramBot", registry) -> None:
             return
         frm, to = str(marker.get("from", "?")), str(marker.get("to", "?"))
         running = self_update.running_version()
+        # The chat that asked for the update, in its language now.
+        tr = i18n.for_chat(chat_id)
         if marker.get("interrupted"):
             if marker.get("interrupted") == "claude_updating":
-                fix = "run `claude update` again"
+                fix = tr.text(_FIX_CLAUDE, command="`claude update`")
             else:
-                fix = ("reinstall with `" + install_source.reinstall_hint(
+                fix = tr.text(_FIX_REINSTALL, command="`" + install_source.reinstall_hint(
                     str(marker.get("source_kind") or "")) + "`")
-            text = (f"⚠️ An update was interrupted when aipager shut down; the "
-                    f"install may be partial. Now running {running}. If anything "
-                    f"misbehaves, {fix}.")
+            text = tr.text(_MARKER_INTERRUPTED, running=str(running), fix=Safe(fix))
         elif running != to:
-            text = f"⚠️ aipager restarted but is running {running}, not {to}."
+            text = tr.text(_MARKER_WRONG, running=str(running), to=to)
         else:
             back, missing = 0, []
             for entry in marker.get("sessions") or []:
@@ -1460,10 +1766,9 @@ async def deliver_update_marker(bot: "TelegramBot", registry) -> None:
                     back += 1
                 else:
                     missing.append(str(entry.get("label") or entry.get("name") or "?"))
-            text = (f"✅ aipager updated {frm} → {to}, {back} "
-                    f"session{'' if back == 1 else 's'} re-adopted")
+            text = tr.n(_MARKER_DONE, back, kind="text", frm=frm, to=to)
             if missing:
-                text += "\n⚠️ Not back: " + ", ".join(missing)
+                text += "\n" + tr.text(_NOT_BACK, labels=tr.join(missing))
             mgr = getattr(bot, "updates", None)
             if mgr is not None:
                 mgr.last_restart = {"from": frm, "to": to, "readopted": back,

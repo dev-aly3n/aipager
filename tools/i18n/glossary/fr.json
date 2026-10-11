@@ -1,0 +1,90 @@
+{
+ "address": "vous",
+ "keep_english": [
+  "commit",
+  "token",
+  "diff",
+  "log",
+  "ctx",
+  "prompt"
+ ],
+ "language": "French",
+ "terms": {
+  "admin": [
+   "admin"
+  ],
+  "agent": [
+   "agent"
+  ],
+  "allow": [
+   "autoris"
+  ],
+  "background": [
+   "arrière-plan"
+  ],
+  "card": [
+   "carte"
+  ],
+  "chat": [
+   "discussion"
+  ],
+  "deny": [
+   "refus"
+  ],
+  "folder": [
+   "dossier"
+  ],
+  "group": [
+   "groupe"
+  ],
+  "member": [
+   "membre"
+  ],
+  "model": [
+   "modèle"
+  ],
+  "owner": [
+   "propriétaire"
+  ],
+  "permission": [
+   "autorisation"
+  ],
+  "prompt": [
+   "prompt",
+   "message",
+   "demande"
+  ],
+  "question": [
+   "question"
+  ],
+  "queue": [
+   "file d'attente"
+  ],
+  "resume": [
+   "reprend",
+   "repris",
+   "reprise",
+   "/resume"
+  ],
+  "session": [
+   "session"
+  ],
+  "settings": [
+   "paramètres",
+   "/settings"
+  ],
+  "stop": [
+   "arrêt",
+   "arrête",
+   "/stop",
+   "stop"
+  ],
+  "turn": [
+   "tour"
+  ],
+  "update": [
+   "à jour",
+   "/update"
+  ]
+ }
+}

@@ -360,7 +360,7 @@ def test_subagent_stop_marks_history_done(mk_bot, run_async):
         "elapsed": 3.5, "history_idx": 0,
     }))
     assert sess.tool_history[0][1] is True
-    assert "3s" in sess.tool_history[0][0]
+    assert sess.tool_history[0][0].endswith(" · 0:03")
 
 
 def test_subagent_stop_long_elapsed_uses_minutes(mk_bot, run_async):
@@ -371,8 +371,7 @@ def test_subagent_stop_long_elapsed_uses_minutes(mk_bot, run_async):
         "agent_id": "agent-1", "agent_type": "explore",
         "elapsed": 125.0, "history_idx": 0,
     }))
-    assert "m" in sess.tool_history[0][0]
-    assert "5s" in sess.tool_history[0][0]
+    assert sess.tool_history[0][0].endswith(" · 2:05")
 
 
 def test_subagent_stop_with_no_match_appends_done(mk_bot, run_async):
@@ -403,7 +402,7 @@ def test_subagent_stop_settles_row_with_frozen_tool_count_and_elapsed(
     }))
     summary, done = sess.tool_history[0]
     assert done is True
-    assert summary == "🤖 explore · 5 tool calls · 42s"
+    assert summary == "🤖 explore · 5 tool calls · 0:42"
 
 
 def test_subagent_stop_settled_row_singular_tool_call(mk_bot, run_async):

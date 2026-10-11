@@ -43,6 +43,27 @@ def reveal(text):
     return text.translate(_TABLE) if isinstance(text, str) else text
 
 
+#: The three characters aipager itself adds to its own right-to-left text
+#: (multilingual design 5.7): the mark at a line start and the isolate
+#: pair around a value. Arabic numbers also carry U+061C after the
+#: percent sign (``Tr.num``), but that is deliberately not listed here: no
+#: saved prompt holds a formatted percentage, so a restored prompt that
+#: shows one revealed is Claude's, as the phase-2 contract tests pin.
+OWN_MARKS = "\u200f\u2068\u2069"
+_OWN_TABLE = {ord(c): None for c in OWN_MARKS}
+
+
+def strip_own_marks(text):
+    """*text* without U+200F, U+2068 and U+2069, the marks aipager adds to
+    its own text. For a saved prompt restored after a restart: in a record
+    this version wrote, those can only be aipager's own (Claude's text was
+    revealed when the prompt was first shown), and removing them can only
+    remove reordering, never add it. Every other control stays, for
+    :func:`reveal` to show. Anything that is not a string is returned as
+    it is."""
+    return text.translate(_OWN_TABLE) if isinstance(text, str) else text
+
+
 def has_controls(text) -> bool:
     """Whether *text* (a string) holds a direction control."""
     return isinstance(text, str) and any(c in BIDI_CONTROLS for c in text)

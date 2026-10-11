@@ -82,6 +82,7 @@ def server(mk_bot):
             Member(id=DEVELOPER_ID, label="bob", role="user"),
             Member(id=READONLY_ID, label="cleo", role="read_only"),
         ),
+        root="/srv/team",   # the members' root: the sessions below work there
     )
     foreign_scope = Scope(
         chat_id=FOREIGN_SCOPE_CHAT_ID, kind="group", label="other-team",
@@ -100,13 +101,14 @@ def server(mk_bot):
 
 def _mk_session(
     server, label, *, scope_chat_id=SCOPE_CHAT_ID, status=Status.IDLE,
-    claude_session_id="",
+    claude_session_id="", cwd="/srv/team/proj",
 ):
     sess = server.registry.get_or_create(f"claude-{label}")
     sess.label = label
     sess.scope_chat_id = scope_chat_id
     sess.status = status
     sess.claude_session_id = claude_session_id
+    sess.cwd = cwd
     if status == Status.GONE:
         sess.gone_at = time.monotonic()
     return sess

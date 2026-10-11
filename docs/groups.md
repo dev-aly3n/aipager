@@ -51,10 +51,14 @@ offers:
 - **Add a DM scope**: another person's own DM with the bot. A DM has
   one member; you pick their role (default `user`; pick `owner` only
   for a one-person install, such as a friend's own container). For a
+  role without `can_manage` (such as `user`) it then asks for their
+  [root folder](#root-folders), prefilled with the default
+  (`~/aipager-users/<label>`). For a
   person who already has a DM set up, the wizard says so and changes
   nothing: use Edit a member to change their role.
 - **Edit a scope**: for a group, **Add a member**; for any chat,
-  Rename, Edit scope deny_tools and Remove this scope (the last chat
+  Rename, Edit scope deny_tools, **Set the members' root folder** (see
+  [Root folders](#root-folders)) and Remove this scope (the last chat
   cannot be removed). End a chat's sessions before you remove it: its
   running sessions keep posting there, and no chat can reach them from
   Telegram any more (from the machine, `aipager session ls`
@@ -86,7 +90,9 @@ offers:
    with a warning: an owner has full control of this machine, including
    aipager's config, the bot token and Claude's credentials. Give it
    only to yourself. Give `admin` to people who should use Auto,
-   `/settings` and `/update` in the group.
+   `/settings` and `/update` in the group. (In their own private chat
+   with the bot, anyone who can send prompts and answer Claude may use
+   Auto for their own sessions, whatever their role.)
 6. **One optional rule:** "Block file edits (Write, Edit) for `user`
    members in this group? Admins and the owner are not affected." The
    default is No: a `user` already writes only inside the session's
@@ -95,6 +101,9 @@ offers:
    roles you define without `bypass_role_denies`) is denied without a
    prompt, and the turn stops. An admin or the owner has to send that
    work instead.
+7. **The members' root folder**, prefilled with
+   `~/aipager-users/group-<label>`: where the group's `user` and
+   `read_only` members start and work (see [Root folders](#root-folders)).
 
 To add someone to a group that is already set up, use Edit a scope →
 the group → Add a member. Everyone already in the group keeps their
@@ -282,13 +291,15 @@ on the machine does that, which keeps it the owner's.
 |---|---|---|---|---|
 | Send prompts (`can_prompt`) | ✅ | ✅ | ✅ | ❌ |
 | Answer Claude: Allow, Deny, questions (`can_approve`) | ✅ | ✅ | ✅ | ❌ |
-| Manage: Auto, a group's `/settings`, `/update`, voice install (`can_manage`) | ✅ | ✅ | ❌ | ❌ |
+| Manage: Auto, a group's `/settings`, `/update`, voice install (`can_manage`) | ✅ | ✅ | ❌ (Auto: ✅ in their own private chat) | ❌ |
 | Change members and roles from Telegram or the Mini App | ❌ | ❌ | ❌ | ❌ |
 | Bypass role deny rules (`bypass_role_denies`) | ✅ | ✅ | ❌ | ❌ |
 | Bypass the safety floor (`bypass_safety`) | ✅ | ❌ | ❌ | ❌ |
 | Bash and other code-running tools | ✅ | ✅ (best-effort rules) | ❌ | ❌ |
 | Any slash command | ✅ | ✅ | only the Commands keyboard's, `/compact` and model switches | same as `user` |
-| Where file writes land | anywhere | anywhere the safety floor allows | the session's project folder and its scratchpad, never the home folder | same as `user` |
+| Where sessions start (`/new`, Resume, Restart, the mode switch) | anywhere | anywhere | only inside the chat's [root folder](#root-folders) | same as `user` |
+| Where file writes land | anywhere | anywhere the safety floor allows | the session's project folder (when it is inside the root folder) and its scratchpad, never the home folder | same as `user` |
+| Reads in your home folder | anywhere the safety floor allows | anywhere the safety floor allows | only inside the root folder (other folders on the machine as before, other members' root folders never) | same as `user` |
 | Credential files (`~/.ssh`, `~/.git-credentials`, ...) | readable | readable | never (by default) | never (by default) |
 | `Grep`/`Glob` | anywhere | anywhere except aipager's protected folders (not a folder that is one, lies inside one or holds one) | the session's project folder and its scratchpad | same as `user` |
 
@@ -327,11 +338,13 @@ on the machine does that, which keeps it the owner's.
   folder and its Claude Code scratchpad, and never in the folder's
   `.claude/`, `.git/` or `.mcp.json` (each of those runs commands).
   `Grep` and `Glob` search only inside those folders, with plain
-  relative globs. A session folder that is your home folder, `/` or a
-  folder above your home folder does not count: there a `user` can
-  write and search only in the scratchpad, so `/new` and the Mini App
-  do not offer them those folders to start in (they can still make a
-  new folder inside your home folder with New folder and start there).
+  relative globs. A `user` starts, resumes, restarts and switches
+  sessions only inside the chat's [root folder](#root-folders), and
+  reads nothing in your home folder outside it. A session folder that
+  is your home folder, `/` or a folder above it, or that lies outside
+  the root folder (a session started before root folders, or by
+  someone else), does not count: there a `user` can write and search
+  only in the scratchpad.
   Reads follow the protected-path rules, and your credential files are
   never readable: `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`,
   `~/.git-credentials`, `~/.netrc`, `~/.docker/config.json`, `~/.kube`,
@@ -369,7 +382,73 @@ files in its `deny_paths_no_access`, and **no tools denied, so it has
 Bash** until you set `deny_tools` (`aipager doctor` warns once a
 member holds it).
 Write and search confinement applies to every role without
-`bypass_safety` or `bypass_role_denies`.
+`bypass_safety` or `bypass_role_denies`. The [root folder](#root-folders)
+applies to every role without `can_manage`, whatever its bypasses: a
+role you define with `bypass_role_denies` or `bypass_safety` but not
+`can_manage` writes and searches anywhere inside its root folder (and
+its scratchpad), reads nothing in your home folder outside it, and
+nowhere else (with `bypass_safety`, in a session that runs outside its
+root folder, it writes only in its scratchpad). Only owners and admins
+are unrestricted.
+
+### Root folders
+
+Each chat has a members' root folder: the folder where the members
+whose role there lacks `can_manage` (the built-in `user` and
+`read_only`, and roles you define without it) start and keep their
+sessions. Owners and admins are not held to it. A DM's root folder
+belongs to that person; a group's is shared by the group's restricted
+members. Two chats never share one unless you give them the same
+folder on purpose (the wizard asks you to confirm that).
+
+- **Setting it.** `aipager config` asks for it when you add a group, or
+  a DM for a role without `can_manage`, prefilled with the default, and
+  Edit a scope → **Set the members' root folder** changes it (applied
+  at once, by a live reload). The current config shows each chat's
+  root, with `(default)` when none is set.
+- **The default** is `~/aipager-users/<label>` for a DM (the person's
+  label) and `~/aipager-users/group-<label>` for a group. A label is
+  lowercased and anything other than letters, digits, `.`, `_` and `-`
+  becomes `-`; when two chats would get the same folder, each gets its
+  chat id added (`sara-123456`). The folder (and `~/aipager-users`,
+  when it is new) is created, mode 0700 so only you can open it, the
+  first time a member opens `/new` or the Mini App's New session form.
+  A default never moves: when an edit in `aipager config` (another
+  chat's root folder, a removed chat, a new label) would change a
+  chat's default folder, the wizard writes the folder it had as that
+  chat's root.
+- **What the wizard refuses**: a relative path, wildcard characters,
+  `/`, your home folder or a folder above it, and a folder that is,
+  lies inside or holds one of aipager's protected folders or the
+  credential files (`~/.claude`, `~/.config/aipager`, `~/.config`,
+  `~/.ssh`, ...), and Claude Code's temp folder (`/tmp/claude-*`,
+  where every session's scratchpad lives). A folder that does not exist
+  yet is fine. It asks you to confirm a folder your system runs
+  programs from (`~/bin`, `~/.local/bin`, `~/.config/systemd`,
+  `~/.config/autostart`, or one inside them).
+- **Starting sessions.** `/new`'s Folder page and the Mini App list the
+  root folder and the folders directly inside it (not hidden ones, and
+  no link that leads out of it), with no "Default folder" row; a new
+  session starts in the root folder unless you pick one of those. New
+  folder creates the folder inside the one you picked. Anything else
+  gets "Your role can only start sessions in your folder ~/... or a
+  folder inside it."
+- **Sessions outside it.** Resuming, restarting, Replace and switching
+  the mode of a session whose folder is outside the root folder get
+  "This session works outside your folder ~/..., so your role can't
+  resume, restart or switch it. Ask an admin." Messages to such a
+  running session are still sent, and the safety hook holds the turn:
+  it writes only in the scratchpad there.
+- **What the hook holds a turn to.** A restricted member's turn writes
+  only in the session folder (when it is inside the root folder) and
+  its scratchpad, reads, `Grep`s and `Glob`s nothing in your home
+  folder outside the root folder (its scratchpad and its own reply file
+  excepted), and never touches another chat's root folder, wherever it
+  is. Folders outside your home folder (`/usr`, `/etc`, ...) stay
+  readable, the protected folders stay denied, and `Bash` stays denied
+  to `user`. When a turn mixes two members with different root folders,
+  the narrower one wins; two that do not nest leave only the session's
+  own folder.
 
 To give `user` back Bash (only for people you would give a shell), name
 it in `allow_tools` (which then also becomes that role's allow-list) or
@@ -505,7 +584,9 @@ change only the keyboard of the person who taps them: the bot answers
 as a reply to that person's tap, and nobody else's keyboard moves.
 « Back goes up from where you are, whatever other members are browsing.
 The main keyboard sent by `/start` is the whole group's, and puts
-everyone back on the main keyboard. After upgrading from a version
+everyone back on the main keyboard. When a session of the group starts
+or ends, aipager sends the group that main keyboard again, once, so its
+session buttons stay current. After upgrading from a version
 without the marked buttons, a tap on a button of the old keyboard may
 be ignored: send `/start` once to give the group the new keyboard. A
 private chat's keyboard has no marker and works as before.
@@ -568,6 +649,11 @@ the chat they sent it from. Someone who is `user` in the group and
   folder that is your home folder, `/` or above it (only in its
   scratchpad), and never reads the credential files listed under
   [Roles](#roles).
+- **Restricted roles stay in their root folder.** A turn of a role
+  without `can_manage` reads nothing in your home folder outside the
+  chat's [root folder](#root-folders), and writes nothing in a session
+  folder outside it. The root folder is the one of the chat the
+  member's message came from, whichever session it goes to.
 - **A removed member loses their rights at once, not their running
   turn.** A sender aipager no longer knows (removed while their message
   waited) runs on the restricted floor. After a live reload their held
@@ -604,6 +690,22 @@ asked for them: confirm cards and the `/new` cards, below.)
   picker, Resume on the `/new` name card, or the Mini App) brings it
   back in Ask for anyone else, and the reply says so: "Resumed x1 in
   Ask: Auto needs an admin."
+- **In their own private chat, a person may use Auto whatever their
+  role** (a `user` included; not `read_only`, which sends no prompts;
+  a custom role needs `can_prompt` and `can_approve`, since Auto answers
+  every one of Claude Code's permission prompts).
+  Every way into Auto above works there for them: `/mode auto`, the
+  mode card, `/new !x1`, the `/new` cards, `/resume` and the Mini App.
+  Their own chat is the only one where this applies: in a group, and
+  in anyone else's private chat, Auto still needs an admin. Their new
+  sessions start in Ask until they choose Auto under `/settings` → New
+  sessions. Nothing else an admin does opens up for them (`/update`,
+  the voice extra's Install, and a group's `/settings` stay admin-only).
+  Auto is safe to hand out this way: it starts Claude Code with
+  `--dangerously-skip-permissions`, which only skips Claude Code's own
+  permission prompts. aipager's PreToolUse hook still runs on every
+  tool call and enforces the member's role rules (the safety floor,
+  folder confinement, deny rules, credential files) exactly as in Ask.
 - **Installing needs an admin** (UPDATE): the voice extra's Install
   and Restart buttons, like `/update`'s.
 - **Changing a group's `/settings` needs an admin.** Anyone can look.
@@ -637,9 +739,9 @@ asked for them: confirm cards and the `/new` cards, below.)
 chat, under the session's card, with who did it:
 
 ```
-✅ x1 · Allowed by @alice · Bash: ls -la /tmp
-🚫 x1 · Denied by @bob · WebFetch: https://example.com
-✓ x1 · Answered by @carol · Which database? → Postgres
+✅ x1 · Allowed · @alice · Bash: ls -la /tmp
+🚫 x1 · Denied · @bob · WebFetch: https://example.com
+✓ x1 · Answered · @carol · Which database? → Postgres
 ```
 
 **Who changed a session.** A tap on a button is seen only by the
@@ -690,7 +792,18 @@ is deleted rather than left unpinned in the history.
 
 **On-disk audit.** `~/.claude/aipager-audit.jsonl` records every
 decision with `user_id`, `username` and the chat, so you can
-reconstruct later what each person did.
+reconstruct later what each person did. It is always written in
+English, whatever language the chat uses.
+
+**Language.** A group has one language for aipager's own messages,
+cards and keyboards, set by an admin with `/language`; until an admin
+picks one it is English. It never follows anyone's Telegram app. What
+only one person sees, the pop-up after a tap, is in that person's own
+language: their choice from their private chat with the bot, else their
+Telegram app's language for someone who joined after this release,
+else the group's language. Only aipager's text changes; Claude answers
+in the language each person writes to it. See
+[Languages](commands.md#languages).
 
 ## Where messages go
 
@@ -728,6 +841,7 @@ scopes:
     chat_id: -100123456789
     label: team
     deny_tools: [Write, Edit]   # optional: the "Block file edits" answer
+    root: /home/alice/aipager-users/group-team   # the members' root folder
     members:
       - id: 12345        # Telegram user ID (NOT a label, NOT a chat ID)
         label: alice     # how the person is shown in chat (@alice)

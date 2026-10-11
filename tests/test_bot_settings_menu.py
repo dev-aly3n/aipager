@@ -30,8 +30,9 @@ def test_root_has_four_sections_then_per_session_then_close():
     data = _all_callback_data(kb)
     # 8.30 added "cadence" (Long-turn card updates) after "diffs";
     # 2026-09-30 added "🆕 New sessions" (the chat's /new defaults) above
-    # the per-session row.
+    # the per-session row; the multilingual design put "🌐 Language" first.
     assert data == [
+        "_:set:lang",
         "_:set:layout", "_:set:diffs", "_:set:cadence", "_:set:formatting",
         "_:set:length", "_:set:level", "_:set:ns", "_:spref", "_:set:close",
     ]
@@ -40,15 +41,16 @@ def test_root_has_four_sections_then_per_session_then_close():
 def test_root_layout_button_always_marked_at_defaults():
     _text, kb = sm.render_settings_root(1)
     texts = _all_texts(kb)
-    layout_text = texts[0]
+    assert "✅" not in texts[0]  # Language: the language in force, no marker
+    layout_text = texts[1]
     assert "✅" in layout_text
     # The other four, untouched, carry no marker at their default value.
-    assert "✅" not in texts[1]  # diffs
-    assert "✅" not in texts[2]
+    assert "✅" not in texts[2]  # diffs
     assert "✅" not in texts[3]
     assert "✅" not in texts[4]
-    assert "✅" not in texts[5]  # per-session
-    assert "✅" not in texts[6]  # Close
+    assert "✅" not in texts[5]
+    assert "✅" not in texts[6]  # per-session
+    assert "✅" not in texts[7]  # Close
 
 
 def test_root_marks_customized_sections():
@@ -56,11 +58,11 @@ def test_root_marks_customized_sections():
     prefs.set_preference(1, "answer_length", "short")
     _text, kb = sm.render_settings_root(1)
     texts = _all_texts(kb)
-    assert "✅" not in texts[1]  # diffs still default
-    assert "✅" not in texts[2]  # cadence still default (on) — 8.30
-    assert "✅" in texts[3]  # formatting
-    assert "✅" in texts[4]  # length
-    assert "✅" not in texts[5]  # level still default
+    assert "✅" not in texts[2]  # diffs still default
+    assert "✅" not in texts[3]  # cadence still default (on) — 8.30
+    assert "✅" in texts[4]  # formatting
+    assert "✅" in texts[5]  # length
+    assert "✅" not in texts[6]  # level still default
 
 
 def test_root_returns_markup_and_text():
@@ -152,11 +154,11 @@ def test_section_diffs_values_are_on_off():
 
 def test_root_marks_diffs_only_when_on():
     _text, kb = sm.render_settings_root(1)
-    assert "Diff previews" in _all_texts(kb)[1]
-    assert "✅" not in _all_texts(kb)[1]
+    assert "Diff previews" in _all_texts(kb)[2]
+    assert "✅" not in _all_texts(kb)[2]
     prefs.set_preference(1, "diff_preview", True)
     _text, kb = sm.render_settings_root(1)
-    assert "✅" in _all_texts(kb)[1]
+    assert "✅" in _all_texts(kb)[2]
 
 
 def test_schema_carries_diff_preview_as_a_boolean_section():

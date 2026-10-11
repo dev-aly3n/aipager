@@ -1,0 +1,92 @@
+{
+ "address": "du",
+ "keep_english": [
+  "commit",
+  "token",
+  "diff",
+  "log",
+  "ctx"
+ ],
+ "language": "German",
+ "terms": {
+  "admin": [
+   "Admin"
+  ],
+  "agent": [
+   "Agent"
+  ],
+  "allow": [
+   "erlaub"
+  ],
+  "background": [
+   "Hintergrund"
+  ],
+  "card": [
+   "Karte"
+  ],
+  "chat": [
+   "Chat"
+  ],
+  "deny": [
+   "ablehn",
+   "abgelehnt"
+  ],
+  "folder": [
+   "Ordner"
+  ],
+  "group": [
+   "Grupp"
+  ],
+  "member": [
+   "Mitglied"
+  ],
+  "model": [
+   "Modell"
+  ],
+  "owner": [
+   "Besitzer"
+  ],
+  "permission": [
+   "Berechtigung",
+   "erlaub"
+  ],
+  "prompt": [
+   "Prompt",
+   "Anfrage"
+  ],
+  "question": [
+   "Frage"
+  ],
+  "queue": [
+   "Warteschlange"
+  ],
+  "resume": [
+   "fortsetz",
+   "fortzusetz",
+   "fortgesetzt",
+   "/resume"
+  ],
+  "session": [
+   "Sitzung"
+  ],
+  "settings": [
+   "Einstellung",
+   "/settings"
+  ],
+  "stop": [
+   "stopp",
+   "stop",
+   "angehalten",
+   "/stop"
+  ],
+  "turn": [
+   "Durchlauf",
+   "Durchläuf"
+  ],
+  "update": [
+   "Update",
+   "aktualisier",
+   "/update"
+  ]
+ }
+}

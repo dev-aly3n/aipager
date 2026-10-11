@@ -1,0 +1,96 @@
+{
+ "address": "tu",
+ "keep_english": [
+  "commit",
+  "token",
+  "diff",
+  "log",
+  "ctx",
+  "prompt",
+  "background"
+ ],
+ "language": "Italian",
+ "terms": {
+  "admin": [
+   "admin",
+   "amministra"
+  ],
+  "agent": [
+   "agent"
+  ],
+  "allow": [
+   "consent"
+  ],
+  "background": [
+   "background"
+  ],
+  "card": [
+   "scheda",
+   "schede"
+  ],
+  "chat": [
+   "chat"
+  ],
+  "deny": [
+   "nega",
+   "negat",
+   "rifiut"
+  ],
+  "folder": [
+   "cartell"
+  ],
+  "group": [
+   "grupp"
+  ],
+  "member": [
+   "membr"
+  ],
+  "model": [
+   "modell"
+  ],
+  "owner": [
+   "proprietari"
+  ],
+  "permission": [
+   "permess"
+  ],
+  "prompt": [
+   "prompt",
+   "messaggi",
+   "richiest"
+  ],
+  "question": [
+   "domand"
+  ],
+  "queue": [
+   "coda",
+   "code"
+  ],
+  "resume": [
+   "riprend",
+   "ripres",
+   "/resume"
+  ],
+  "session": [
+   "session"
+  ],
+  "settings": [
+   "impostazioni",
+   "/settings"
+  ],
+  "stop": [
+   "ferm",
+   "/stop",
+   "stop",
+   "arrest"
+  ],
+  "turn": [
+   "turno",
+   "turni"
+  ],
+  "update": [
+   "aggiorn",
+   "/update"
+  ]
+ }
+}

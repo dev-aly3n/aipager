@@ -21,7 +21,11 @@ from typing import TYPE_CHECKING
 import httpx
 from telegram.error import RetryAfter
 
-from aipager import bg_shells, flood_policy, preferences
+from aipager import bg_shells, flood_policy, i18n, preferences
+from aipager.bot import card_rows
+from aipager.i18n import Msg, Plural, Safe, Span
+from aipager.bot.keyboards import LOADING, OPTION, PERM_NEEDED
+from aipager.clockfmt import elapsed as clock
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CARD_CADENCE_FLOOR_GROUP, CARD_CADENCE_FLOOR_PRIVATE,
     CARD_RETRY_WAKE, CARD_STATE_BYPASS_MIN_GAP,
@@ -44,7 +48,7 @@ from aipager.bot.flood_budget import (
     small_429_wait,
 )
 from aipager.bot.rich_message import (
-    detect_rtl,
+    message_rtl,
     edit_message_text_rich,
     get_rate_limiter,
     RichMessageBlocked,
@@ -169,6 +173,129 @@ _QUOTE_MARK = "> "
 _SUBAGENT_MARK = "\U0001f916 "
 # Header verb for the one last render after the turn ends.
 FINAL_VERB = "Done"
+
+#: The card's verbs: callers pass the English constants ("Working",
+#: "Done", "Waiting") as ids; the card shows each one's key. An unknown
+#: verb is shown as passed.
+_VERB_MSGS = {
+    "Working": Msg("card.verb.working", "Working", note="Busy card: Claude is working"),
+    FINAL_VERB: Msg("card.verb.done", "Done", note="Busy card: the turn is over"),
+    "Waiting": Msg("card.verb.waiting", "Waiting",
+                   note="Busy card: Claude waits for an answer to a prompt"),
+}
+#: The busy card's rotating verb in a chat that is not English: a short
+#: list of its own in each language (the operator, 2026-10-10: the English
+#: words showed in every language). An English chat keeps the whole
+#: SPINNER_VERBS list, byte for byte (:func:`spinner_verbs`).
+SPINNER_MSGS: tuple[Msg, ...] = (
+    Msg("card.verb.spin_thinking", "Thinking",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_reasoning", "Reasoning",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_pondering", "Pondering",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_considering", "Considering",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_analyzing", "Analyzing",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_processing", "Processing",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_evaluating", "Evaluating",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_calculating", "Calculating",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_examining", "Examining",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_investigating", "Investigating",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_formulating", "Formulating",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+    Msg("card.verb.spin_crafting", "Crafting",
+        note="The busy card's rotating word while Claude works: short, light, the "
+             "present-progressive or noun form"),
+)
+_SPIN_BY_ENGLISH = {str(m): m for m in SPINNER_MSGS}
+_SPIN_INDEX = {verb: i for i, verb in enumerate(SPINNER_VERBS)}
+
+
+def spinner_verbs(tr) -> list[str]:
+    """The verb ids a card in *tr*'s language rotates through: every one
+    of SPINNER_VERBS in English, the short translated list
+    (:data:`SPINNER_MSGS`) in any other language."""
+    if tr.code == "en":
+        return list(SPINNER_VERBS)
+    return [str(m) for m in SPINNER_MSGS]
+
+
+CARD_STATUS = Msg("card.status", "{mark} **{session}** · {verb}",
+                  note="The busy card's last line: a mark, the session's name (bold), what "
+                       "it is doing; the clock and counts follow",
+                  eg={"mark": "⏳", "session": "x1", "verb": "Working"})
+WAITING_STATE = Msg("card.waiting.state", "🔄 **{session}** · {phrase}",
+                    note="The busy card's last line while a background job finishes; "
+                         "{phrase} is the finishing words",
+                    eg={"session": "x1", "phrase": "finishing up"})
+WAITING_WORKING = Msg("card.waiting.working", "🔄 **{session}** · {agents} still working",
+                      note="The busy card's last line while background agents or shells run",
+                      eg={"session": "x1", "agents": "2 agents (Explore), 1 shell"})
+FINISHING = Msg("card.finishing", "finishing up",
+                note="A background job between its last agent and Claude's wake-up")
+AGENTS = Plural("card.agents", one="{n} agent", other="{n} agents",
+                note="How many background agents are running")
+AGENTS_TYPED = Plural("card.agents_typed", one="{n} agent ({types})",
+                      other="{n} agents ({types})",
+                      note="How many background agents run, and their types (names)",
+                      eg={"types": "Explore, Plan"})
+SHELLS = Plural("card.shells", one="{n} shell", other="{n} shells",
+                note="How many background shell commands are running")
+FOLD = Plural("card.fold", one="▸ {n} tool call", other="▸ {n} tool calls",
+              note="A folded group of tool calls on the busy card; a tap opens it")
+THINKING = Msg("card.thinking", "⚙️ <b>{session}</b> · Thinking…",
+               note="The busy card's first text, before anything happened",
+               eg={"session": "x1"})
+COMPACTING = Msg("card.compacting", "🔄 <b>{session}</b> · Compacting{dots}",
+                 note="While Claude Code compacts the conversation; {dots} are 1 to 3 dots",
+                 eg={"session": "x1", "dots": ".."})
+PAUSED_MD = Msg("flood.card_paused", "⏳ **{session}** · working (updates paused)",
+                note="The busy card while Telegram limits this chat: still working, the "
+                     "card is not updated", eg={"session": "x1"})
+PAUSED_HTML = Msg("flood.card_paused_html", "⏳ <b>{session}</b> · working (updates paused)",
+                  note="The busy card while Telegram limits this chat: still working, the "
+                       "card is not updated", eg={"session": "x1"})
+LEGACY_HEAD = Msg("card.legacy.head", "⚙️ <b>{session}</b> · {verb}…",
+                  note="The plain busy card's first line; the clock follows",
+                  eg={"session": "x1", "verb": "Working"})
+LEGACY_AGENTS = Plural("card.legacy.agents", one="({n} agent)", other="({n} agents)",
+                       note="After the turn's cost: how many agents it started")
+LEGACY_EARLIER = Plural("card.legacy.earlier", one="✅ <i>{n} earlier tool</i>",
+                        other="✅ <i>{n} earlier tools</i>",
+                        note="The plain busy card: finished tool calls not shown")
+
+
+def _verb(tr, verb: str, kind: str = "md") -> str:
+    """The shown form of a card verb id. A spinner verb is the chat's
+    language's own (:data:`SPINNER_MSGS`), and in English exactly the
+    word passed."""
+    msg = _VERB_MSGS.get(verb)
+    if msg is None and verb in _SPIN_INDEX and tr.code != "en":
+        msg = (_SPIN_BY_ENGLISH.get(verb)
+               or SPINNER_MSGS[_SPIN_INDEX[verb] % len(SPINNER_MSGS)])
+    if msg is None:
+        if verb not in _SPIN_INDEX:
+            log.debug("card verb %r has no key; shown as passed", verb)
+        return {"md": _md_escape, "html": html_mod.escape}.get(kind, str)(verb)
+    return getattr(tr, kind)(msg)
 # Delay before the animate task's first tick: short so a fresh card gets
 # its first real render quickly, before the regular stream cadence.
 FIRST_TICK_DELAY = 1.5
@@ -463,6 +590,14 @@ def _scan_queue_operations(sess: TrackedSession) -> None:
         sess.stream_transcript_path, sess.queue_scan_offset,
     )
     for operation, reason, content, _ts in events:
+        if (operation == "enqueue" and content
+                and "<cross-session-message" in content):
+            # A message from another session queued into this turn
+            # ("peer message authority"): narrow the turn to its proven
+            # rights at once, in case no UserPromptSubmit does it first.
+            if policy_snapshot.narrow_for_peer_join(sess.name, content):
+                log.info("[%s] turn narrowed: a message from another "
+                         "session joined it", sess.label)
         if content and "<task-notification>" in content:
             # A background shell that ended while this turn ran: Claude
             # Code queues its notification (`enqueue`, then an
@@ -648,7 +783,7 @@ def _read_stream_text(sess: TrackedSession) -> bool:
 
 
 def _build_sections(
-    sess: TrackedSession, *, final: bool = False,
+    sess: TrackedSession, *, final: bool = False, tr=None,
 ) -> list[tuple[str, list[str], list[str] | None]]:
     """The timeline as chronological SECTIONS: ``("prose", [quote rows],
     None)``, ``("run", [tool rows], None)``, ``("agent-run", [a single
@@ -673,7 +808,17 @@ def _build_sections(
     the answer message) exactly as before. The fixed visible-tools window
     and the commentary character budget are gone: what fits is decided by
     :func:`_fit_sections`'s dual char/byte budget.
+
+    Rows are drawn in *tr*'s language (the session's chat's when None) by
+    :mod:`aipager.bot.card_rows`: stored rows stay English, English
+    renders them byte for byte, and tool summaries are never translated.
     """
+    if tr is None:
+        tr = i18n.for_sess(sess)
+
+    def row(summary) -> str:
+        return card_rows.render_md(tr, summary)
+
     history = sess.tool_history
     if (not final and sess.stream_hook_live
             and sess.stream_batch_since is not None
@@ -732,9 +877,9 @@ def _build_sections(
         for text in by_anchor.pop(i, ()):
             _push("prose", _quote(text))
         if done == "failed":
-            _push("run", f"❌ {_mono(summary)}")
+            _push("run", f"❌ {row(summary)}")
         elif done == bg_shells.STOPPED:
-            _push("run", f"⏹ {_mono(summary)}")
+            _push("run", f"⏹ {row(summary)}")
         elif done:
             settled = finished_by_idx.get(i)
             if summary.startswith(_SUBAGENT_MARK) and settled is not None:
@@ -745,10 +890,10 @@ def _build_sections(
                 # FINISHED_SUBAGENTS_CAP, no match here) falls through to
                 # the plain "run" branch below — "same section rules as
                 # any other run" per design.
-                _push("agent-settled", f"✅ {_mono(summary)}",
+                _push("agent-settled", f"✅ {row(summary)}",
                       list(settled.get("tools", [])))
             else:
-                _push("run", f"✅ {_mono(summary)}")
+                _push("run", f"✅ {row(summary)}")
         else:
             info = subagent_live.get(i)
             if info is not None:
@@ -762,37 +907,35 @@ def _build_sections(
                     # turn's card carries the agent on): a snapshot, so no
                     # counter that would sit frozen under the settled
                     # status (review rev-iter2-002).
-                    row = (f"{_SUBAGENT_MARK}{info.get('type') or 'agent'}"
-                           " (still running)")
+                    live = card_rows.live_agent_final(tr, info)
                 else:
-                    row = _agent_live_row(info, _card_unit(sess, final))
-                _push("agent-run", f"⏳ {_mono(row)}",
+                    live = card_rows.live_agent(tr, info, _card_unit(sess, final))
+                _push("agent-run", f"⏳ {live}",
                       list(info.get("tools", [])))
             elif i in shell_live:
                 shell = shell_live[i]
                 if final:
                     # Settled while the shell still runs: no frozen counter.
-                    row = bg_shells.final_live_row(shell["label"])
+                    live = card_rows.live_shell_final(tr, shell["label"])
                 else:
-                    row = bg_shells.live_row(
-                        shell["label"],
-                        _elapsed_str(shell["started"], _card_unit(sess, final)))
-                _push("run", f"⏳ {_mono(row)}")
+                    live = card_rows.live_shell(tr, shell["label"], shell["started"],
+                                                _card_unit(sess, final))
+                _push("run", f"⏳ {live}")
             else:
-                _push("run", f"⏳ {_mono(summary)}")
+                _push("run", f"⏳ {row(summary)}")
     for slot in sorted(by_anchor):
         for text in by_anchor[slot]:
             _push("prose", _quote(text))
     return sections
 
 
-def _tool_fold_summary(n: int) -> str:
+def _tool_fold_summary(n: int, tr=None) -> str:
     """A `<details>` block's `<summary>` text — ``"▸ N tool call(s)"``.
     ONE number: commentary never folds, so there is nothing else to
     count. Used for both an older run's own fold and an agent's nested
-    fold — same shape either way. Pure."""
-    plural = "s" if n != 1 else ""
-    return f"▸ {n} tool call{plural}"
+    fold — same shape either way. Pure. In *tr*'s language (English when
+    None)."""
+    return (tr or i18n.get("en")).n(FOLD, n, kind="md")
 
 
 _DETAILS_PREFIX = "<details><summary>"
@@ -850,7 +993,7 @@ def _render_agent_tool_rows(tools: list[str]) -> list[str]:
 
 def _render_section(
     kind: str, rows: list[str], agent_tools: list[str] | None, *,
-    is_newest_run: bool,
+    is_newest_run: bool, tr=None,
 ) -> str:
     """Step A: a section's rendered form, decided once, independent of
     the card's budget (design.md's per-section fold rules):
@@ -875,7 +1018,7 @@ def _render_section(
     if kind == "run":
         if is_newest_run or len(rows) < _FOLD_MIN_ROWS:
             return _ROW_SEP.join(rows)
-        return _build_details_block(_tool_fold_summary(len(rows)), rows)
+        return _build_details_block(_tool_fold_summary(len(rows), tr), rows)
     # "agent-run" / "agent-settled"
     agent_row = rows[0]
     tools = agent_tools or []
@@ -883,7 +1026,7 @@ def _render_section(
         return agent_row
     tool_rows = _render_agent_tool_rows(tools)
     if len(tool_rows) >= _FOLD_MIN_ROWS:
-        nested = _build_details_block(_tool_fold_summary(len(tool_rows)), tool_rows)
+        nested = _build_details_block(_tool_fold_summary(len(tool_rows), tr), tool_rows)
     else:
         nested = _ROW_SEP.join(tool_rows)
     return f"{agent_row}{_ROW_SEP}{nested}"
@@ -927,7 +1070,7 @@ def _chop_to_fit(body: str, char_budget: int, byte_budget: int) -> str:
 
 def _fit_sections(
     sections: list[tuple[str, list[str], list[str] | None]],
-    reserve_chars: int, reserve_bytes: int,
+    reserve_chars: int, reserve_bytes: int, tr=None,
 ) -> tuple[str, bool]:
     """Fit the timeline under BOTH the character and byte budgets,
     per-section (design.md's "Algorithm"):
@@ -985,7 +1128,7 @@ def _fit_sections(
 
     # Step A — render each section's own form exactly once.
     texts: list[str] = [
-        _render_section(kind, rows, agent_tools, is_newest_run=(i == newest_run))
+        _render_section(kind, rows, agent_tools, is_newest_run=(i == newest_run), tr=tr)
         for i, (kind, rows, agent_tools) in enumerate(sections)
     ]
 
@@ -1092,11 +1235,11 @@ def _assemble_card(body: str, status: str) -> str:
 
 
 def _elapsed_str(started_at: float, unit: str = "s") -> str:
-    """``"45s"`` under a minute, else ``"2m 5s"`` — or, in a decayed
-    card's unit (8.30), ``"23m"`` / ``"1h 23m"``. One formatter
-    (``flood_policy.format_elapsed``) so every card surface agrees on how
-    elapsed time reads."""
-    return flood_policy.format_elapsed(time.monotonic() - started_at, unit)
+    """The clock since *started_at*: ``"0:45"``, ``"2:05"``, and in a
+    decayed card's unit (8.30) 30 s steps, ``"23:30"`` / ``"1:23:00"``.
+    One formatter (``aipager.clockfmt``) so every surface, the Mini App
+    included, reads elapsed time alike."""
+    return clock(time.monotonic() - started_at, unit)
 
 
 def _agent_live_row(info: dict, unit: str = "s") -> str:
@@ -1110,8 +1253,8 @@ def _agent_live_row(info: dict, unit: str = "s") -> str:
     it in ``html.escape``. Pure — no I/O, no mutation.
 
     ``unit`` is the card's elapsed unit (8.30 "other counters"): at the
-    30 s tiers an agent row counting seconds would look frozen for most
-    of every refresh, exactly like the status line would.
+    30 s tiers an agent row moves in 30 s steps like the status line,
+    rather than counting seconds that would sit frozen between refreshes.
     """
     agent_type = info.get("type") or "agent"
     activity = info.get("activity") or "starting"
@@ -1119,36 +1262,61 @@ def _agent_live_row(info: dict, unit: str = "s") -> str:
     return f"{_SUBAGENT_MARK}{agent_type} · {activity} · {elapsed}"
 
 
-def _agent_phrase(sess: TrackedSession) -> str:
-    """Shared "N agent(s) (types), M shell(s)" fragment of the waiting
-    status line. During the continuation-grace
+#: The waiting line's two states (:func:`_agent_phrase`).
+_FINISHING, _WORKING = "finishing", "working"
+
+
+def _agent_phrase(sess: TrackedSession, tr=None) -> tuple[str, str]:
+    """``(state, phrase)`` for the waiting status line: the state id
+    (:data:`_FINISHING` or :data:`_WORKING`) and the shown fragment, "N
+    agent(s) (types), M shell(s)". During the continuation-grace
     window the table is legitimately EMPTY (the agent finished, the
     wake-up hasn't arrived) — "0 agents still working" would read as
     broken (review rev-iter1-004), so that state says "finishing up"
-    instead."""
+    instead. The caller branches on the id, never on the words."""
+    if tr is None:
+        tr = i18n.for_sess(sess)
     n = len(sess.active_subagents)
     shells = len(sess.job_shell_ids())
     if n == 0 and shells == 0:
-        return "finishing up"
+        return _FINISHING, tr.md(FINISHING)
     parts = []
     if n:
-        plural = "" if n == 1 else "s"
-        phrase = f"{n} agent{plural}"
         types = sorted({info.get("type", "")
                         for info in sess.active_subagents.values()
                         if info.get("type")})
         if 1 <= len(types) <= 3:
-            phrase += f" ({', '.join(_md_escape(t) for t in types)})"
-        parts.append(phrase)
+            parts.append(tr.n(AGENTS_TYPED, n, kind="md",
+                              types=Safe(tr.join(_md_escape(t) for t in types))))
+        else:
+            parts.append(tr.n(AGENTS, n, kind="md"))
     if shells:
-        parts.append(f"{shells} shell{'' if shells == 1 else 's'}")
-    return ", ".join(parts)
+        parts.append(tr.n(SHELLS, shells, kind="md"))
+    return _WORKING, tr.join(parts)
+
+
+def _card_rtl(sess: TrackedSession, tr=None) -> bool:
+    """The card's ONE direction (multilingual design 5.7, rule 5): Claude's
+    own words decide once it has written some, before that the prompt the
+    turn answers (Claude answers in the language it is written to), and
+    only when neither has a letter the chat's language."""
+    commentary = " ".join(t for _a, t in sess.stream_commentary)
+    tr = tr or i18n.for_sess(sess)
+    return message_rtl(tr.language_rtl, commentary, sess.turn_prompt)
+
+
+def card_tr(sess: TrackedSession, tr=None):
+    """*tr* (the session's chat's when None) in the card's direction
+    (:func:`_card_rtl`): what draws aipager's own lines on the card, so a
+    Persian chat talking with Claude in English gets a card that reads
+    left to right."""
+    tr = tr or i18n.for_sess(sess)
+    return tr.directed(_card_rtl(sess, tr))
 
 
 def _card_unit(sess: TrackedSession, final: bool) -> str:
     """The unit this render's live counters use: the card's current tier
-    unit, or seconds for the settled final card, whose format is as it
-    always was."""
+    unit, or true seconds for the settled final card."""
     if final:
         return "s"
     unit = getattr(sess, "card_elapsed_unit", "s")
@@ -1157,7 +1325,7 @@ def _card_unit(sess: TrackedSession, final: bool) -> str:
 
 def _status_line(
     sess: TrackedSession, verb: str, *, final: bool = False,
-    waiting: bool = False,
+    waiting: bool = False, tr=None,
 ) -> str:
     """The card's LAST line — its only always-visible position.
 
@@ -1173,30 +1341,38 @@ def _status_line(
     string, and the byte backstop truncates the body's HEAD, keeping the
     tail this line sits at the end of.
     """
-    label = _md_escape(sess.label)
-    # The card's tier unit (8.30): seconds for the first ten minutes of a
-    # turn, then minutes, then hours — matching how often the card is now
+    if tr is None:
+        tr = i18n.for_sess(sess)
+    label = sess.label
+    # The card's tier unit (8.30): true seconds for the first ten minutes
+    # of a turn, then 30 s steps — matching how often the card is now
     # refreshed, so a slow card still shows a counter that MOVES.
     unit = _card_unit(sess, final)
+
+    def _clock(started: float) -> str:
+        return tr.clock(time.monotonic() - started, unit)
+
     if waiting and not final:
-        phrase = _agent_phrase(sess)
-        line = (f"🔄 **{label}** · {phrase}" if phrase == "finishing up"
-                else f"🔄 **{label}** · {phrase} still working")
+        state, phrase = _agent_phrase(sess, tr)
+        line = (tr.md(WAITING_STATE, session=label, phrase=Safe(phrase))
+                if state == _FINISHING
+                else tr.md(WAITING_WORKING, session=label, agents=Safe(phrase)))
         if sess.busy_started_at:
-            line += f" · {_elapsed_str(sess.busy_started_at, unit)}"
+            line += f" · {_clock(sess.busy_started_at)}"
         return line
 
     # ── Segments: state, label, verb, then the turn's live stats ──
+    # Joined with " · " in every language (punctuation between stats).
     parts: list[str] = []
     if sess.busy_started_at:
         # Shown from the first second. Hiding it below 2s left the card
         # reading "⏳" with no number, then jumping straight to "5s".
-        parts.append(_elapsed_str(sess.busy_started_at, unit))
+        parts.append(_clock(sess.busy_started_at))
 
     if sess.cost_baseline is not None and sess.last_cost_usd > 0:
         delta = sess.last_cost_usd - sess.cost_baseline
         if delta > 0.001:
-            parts.append(f"${delta:.2f}")
+            parts.append(tr.num(f"${delta:.2f}"))
 
     if sess.tool_history:
         tally: dict[str, int] = {}
@@ -1223,10 +1399,12 @@ def _status_line(
             if not name:
                 continue
             tally[name] = tally.get(name, 0) + 1
-        parts.extend(f"{n} ×{c}" for n, c in tally.items())
+        # Tool names as they are; the count in the language's digits.
+        parts.extend(f"{n} ×{tr.num(c)}" for n, c in tally.items())
 
     mark = "✅" if final else "⏳"
-    line = f"{mark} **{label}** · {verb}"
+    line = tr.md(CARD_STATUS, mark=Safe(mark), session=label,
+                 verb=Safe(_verb(tr, verb)))
     if parts:
         line += " · " + " · ".join(parts)
     return line
@@ -1234,7 +1412,7 @@ def _status_line(
 
 def build_stream_card_ex(
     sess: TrackedSession, verb: str, *, final: bool = False,
-    waiting: bool = False,
+    waiting: bool = False, tr=None, rtl: bool | None = None,
 ) -> tuple[str, bool]:
     """Build the streaming busy-card markdown. Pure: no I/O, no mutation.
 
@@ -1262,20 +1440,38 @@ def build_stream_card_ex(
     tap is presentation, not loss, and never sets this). The plain
     :func:`build_stream_card` wrapper keeps the historical str-only
     signature for every existing call site and test.
+
+    Drawn in the card's direction (:func:`card_tr`), or in *rtl* when the
+    caller decided the message's direction itself (the merged answer,
+    whose direction is the answer's).
     """
-    status = _status_line(sess, verb, final=final, waiting=waiting)
+    if tr is None:
+        tr = i18n.for_sess(sess)
+    tr = tr.directed(_card_rtl(sess, tr) if rtl is None else rtl)
+    status = _status_line(sess, verb, final=final, waiting=waiting, tr=tr)
+    # A turn another Claude session started: who sent it, on top
+    # ("peer message authority", display only).
+    from aipager.bot import peer_notice
+    peer_line = peer_notice.card_line(tr, getattr(sess, "peer_from", None))
 
     # Reserve: the status line plus the "\n\n" join above it, so the
     # fitter's budget is exactly what the BODY may use — both units,
     # since _fit_sections enforces the char and byte ceilings in the
-    # same pass (no separate outer byte pass here).
+    # same pass (no separate outer byte pass here). The peer line and
+    # its join are reserved the same way.
     reserve_chars = len(status) + len(_ROW_SEP)
     reserve_bytes = len(status.encode("utf-8")) + len(_ROW_SEP.encode("utf-8"))
+    if peer_line:
+        reserve_chars += len(peer_line) + len(_ROW_SEP)
+        reserve_bytes += (len(peer_line.encode("utf-8"))
+                          + len(_ROW_SEP.encode("utf-8")))
 
-    sections = _build_sections(sess, final=final)
-    body, dropped = _fit_sections(sections, reserve_chars, reserve_bytes)
+    sections = _build_sections(sess, final=final, tr=tr)
+    body, dropped = _fit_sections(sections, reserve_chars, reserve_bytes, tr=tr)
 
     raw = _assemble_card(body, status)
+    if peer_line:
+        raw = f"{peer_line}{_ROW_SEP}{raw}"
     return raw, dropped
 
 
@@ -1304,27 +1500,24 @@ def final_card_has_timeline(sess: TrackedSession) -> bool:
     first line can carry (roadmap 8.32). Pure; call it AFTER
     ``_drop_answer_tail`` so it sees what the final render would.
     """
-    return bool(_build_sections(sess, final=True))
+    return bool(_build_sections(sess, final=True, tr=i18n.get("en")))
 
 
 def build_stream_card(
     sess: TrackedSession, verb: str, *, final: bool = False,
-    waiting: bool = False,
+    waiting: bool = False, tr=None,
 ) -> str:
     """Historical str-returning wrapper over :func:`build_stream_card_ex`."""
-    card, _ = build_stream_card_ex(sess, verb, final=final, waiting=waiting)
+    card, _ = build_stream_card_ex(sess, verb, final=final, waiting=waiting, tr=tr)
     return card
 
 
 def _fmt_duration(seconds: float) -> str:
-    """``"0s"`` / ``"Xs"`` / ``"Xm Ys"`` — the same three-branch elapsed
-    rule as :func:`_elapsed_str`, but over an already-computed duration
-    (an agent's own frozen ``elapsed``, not "now minus started_at") for
+    """``"0:00"`` / ``"1:05"`` — the clock in true seconds, like
+    :func:`_elapsed_str`, but over an already-computed duration (an
+    agent's own frozen ``elapsed``, not "now minus started_at") for
     :func:`build_full_log`'s AGENTS section."""
-    secs = max(0, int(seconds))
-    if secs >= 60:
-        return f"{secs // 60}m {secs % 60}s"
-    return f"{secs}s"
+    return clock(seconds)
 
 
 def _log_code(text: str) -> str:
@@ -1337,6 +1530,27 @@ def _log_code(text: str) -> str:
     return _mono(text) if text else "` `"
 
 
+LOG_TITLE = Msg("log.title", "# {session} - full log",
+                note="The full-log file's heading (Markdown); {session} is the session's name",
+                eg={"session": "x1"})
+LOG_MEMORY = Plural(
+    "log.memory",
+    one="_Memory holds the most recent {n} tool rows; older rows of very long turns may "
+        "already be gone._",
+    other="_Memory holds the most recent {n} tool rows; older rows of very long turns may "
+          "already be gone._",
+    note="Under the full log's heading, in italics (keep the _ at both ends). The English "
+         "says rows even for 1")
+LOG_AGENTS = Msg("log.agents", "## Agents", note="A heading of the full-log file (Markdown)")
+LOG_AGENT = Plural("log.agent", one="- 🤖 {agent} ({clock}, {n} tool call)",
+                   other="- 🤖 {agent} ({clock}, {n} tool calls)",
+                   note="One agent in the full log: its type (code), how long it ran, how "
+                        "many tool calls (a Markdown list item: keep the - at the start)",
+                   eg={"agent": "Explore", "clock": "1:05"})
+LOG_FINAL = Msg("log.final_answer", "## Final answer",
+                note="A heading of the full-log file (Markdown)")
+
+
 def build_full_log(
     label: str,
     tool_history: list,
@@ -1344,6 +1558,7 @@ def build_full_log(
     answer: str,
     *,
     agents: list[dict] | None = None,
+    tr=None,
 ) -> str:
     """The complete play-by-play for the full-log attachment, as Markdown
     so Telegram can show the ``.md`` file itself ("layered-card-shedding"
@@ -1366,15 +1581,15 @@ def build_full_log(
     finished). Adds the ``## Agents`` section after the tool rows and
     before the final answer; omitted entirely when ``None``/empty.
     """
+    tr = tr or i18n.get("en")
     by_anchor: dict[int, list[str]] = {}
     for anchor, text in commentary:
         slot = min(max(anchor, 0), len(tool_history))
         by_anchor.setdefault(slot, []).append(text)
     lines: list[str] = [
-        f"# {label} - full log",
+        tr.md(LOG_TITLE, session=Safe(label)),
         "",
-        f"_Memory holds the most recent {len(tool_history)} tool rows; "
-        "older rows of very long turns may already be gone._",
+        tr.n(LOG_MEMORY, len(tool_history), kind="md"),
         "",
     ]
 
@@ -1392,29 +1607,26 @@ def build_full_log(
         for text in by_anchor.pop(i, ()):
             _add_quote(text)
         mark = "\u274c" if done == "failed" else ("\u2705" if done else "\u23f3")
-        lines.append(f"- {mark} {_log_code(str(summary))}")
+        lines.append(f"- {mark} {card_rows.render_md(tr, str(summary), code=_log_code)}")
     for slot in sorted(by_anchor):
         for text in by_anchor[slot]:
             _add_quote(text)
     if agents:
         if lines[-1] != "":
             lines.append("")
-        lines += ["## Agents", ""]
+        lines += [tr.md(LOG_AGENTS), ""]
         for agent in agents:
             agent_type = agent.get("type", "agent")
-            elapsed_str = _fmt_duration(agent.get("elapsed", 0.0))
-            tool_count = agent.get("tool_count", 0)
-            plural = "" if tool_count == 1 else "s"
-            lines.append(
-                f"- \U0001f916 {_log_code(str(agent_type))} ({elapsed_str}, "
-                f"{tool_count} tool call{plural})"
-            )
+            lines.append(tr.n(
+                LOG_AGENT, agent.get("tool_count", 0), kind="md",
+                agent=Span(_log_code(str(agent_type))),
+                clock=Safe(tr.clock(agent.get("elapsed", 0.0)))))
             for tool_summary in agent.get("tools", []):
                 lines.append(f"  - {_log_code(str(tool_summary))}")
     if answer:
         if lines[-1] != "":
             lines.append("")
-        lines += ["## Final answer", "", answer]
+        lines += [tr.md(LOG_FINAL), "", answer]
     return "\n".join(lines)
 
 
@@ -1846,7 +2058,7 @@ class AnimationMixin:
         if not self._app:
             return None
         target = reply_to if reply_to is not None else sess.trigger_msg_id
-        text = f"⚙️ <b>{html_mod.escape(sess.label)}</b> · Thinking…"
+        text = card_tr(sess).html(THINKING, session=sess.label)
         try:
             msg = await self._app.bot.send_message(
                 resolve_chat_id(sess), text, parse_mode="HTML",
@@ -1920,8 +2132,18 @@ class AnimationMixin:
             return f"{n / 1000:.1f}k"
         return str(n)
 
-    def _build_busy_text(self, label: str, verb: str, sess: TrackedSession) -> str:
-        """Build the animated busy message text with tool history."""
+    def _build_busy_text(self, label: str, verb: str, sess: TrackedSession,
+                         tr=None) -> str:
+        """Build the animated busy message text with tool history (the
+        plain HTML card, and the text of an inline prompt). In *tr*'s
+        language (the session's chat's when None); stored rows and tool
+        summaries are shown as they are. In the card's direction
+        (:func:`card_tr`) when *tr* is None: an inline permission or
+        question prompt drawn into the card follows it too, since one
+        message has one direction (a prompt sent as its own message keeps
+        the chat's)."""
+        if tr is None:
+            tr = card_tr(sess)
         elapsed = ""
         if sess.busy_started_at:
             now = time.monotonic()
@@ -1929,10 +2151,10 @@ class AnimationMixin:
             unit = self._card_elapsed_unit(sess, now)
             if unit != "s":
                 # A decayed card (8.30): the same tier unit as the rich card.
-                elapsed = f" {flood_policy.format_elapsed(secs, unit)}"
+                elapsed = f" {tr.clock(secs, unit)}"
             elif secs >= 2:
-                elapsed = f" {secs}s"
-        text = f"⚙️ <b>{html_mod.escape(label)}</b> · {html_mod.escape(verb)}…{elapsed}"
+                elapsed = f" {tr.clock(secs)}"
+        text = tr.html(LEGACY_HEAD, session=label, verb=Safe(_verb(tr, verb, "html"))) + elapsed
         # Live cost delta this turn (item 4.6) + subagent count (item 4.5).
         # Only shown when there's a positive delta — sessions that haven't
         # cost anything yet don't get a misleading "$0.00".
@@ -1940,9 +2162,8 @@ class AnimationMixin:
             cost_delta = sess.last_cost_usd - sess.cost_baseline
             if cost_delta > 0.001:
                 n_agents = sess.subagent_count_this_turn
-                plural = "" if n_agents == 1 else "s"
-                agent_note = (f" ({n_agents} agent{plural})" if n_agents > 0 else "")
-                text += f" · 💰 ${cost_delta:.2f}{agent_note}"
+                agent_note = (f" {tr.n(LEGACY_AGENTS, n_agents)}" if n_agents > 0 else "")
+                text += f" · 💰 {tr.num(f'${cost_delta:.2f}')}{agent_note}"
         # Show tool history — collapse old done tools if too many
         history = sess.tool_history
         max_visible = 15
@@ -1955,7 +2176,7 @@ class AnimationMixin:
             hidden_done = sum(1 for _, d in hidden if d)
             visible = history[-max_visible:]
         if hidden_done:
-            text += f"\n✅ <i>{hidden_done} earlier tool{'s' if hidden_done != 1 else ''}</i>"
+            text += f"\n{tr.n(LEGACY_EARLIER, hidden_done)}"
         # Build a map of history_idx → the full info dict for live agent
         # rows (same widening as _build_sections's subagent_live — "agent
         # activity rows on the busy card").
@@ -1983,21 +2204,32 @@ class AnimationMixin:
                 q = perm["question"]
                 text += f"\n\n❓ {html_mod.escape(q[:120])}"
                 for i, opt in enumerate(perm.get("options", [])):
-                    opt_label = opt.get("label", f"Option {i+1}")
+                    opt_label = opt["label"] if "label" in opt else tr.text(OPTION, n=i + 1)
                     desc = opt.get("description", "")
-                    text += f"\n  {i+1}. {html_mod.escape(opt_label)}"
+                    text += f"\n  {tr.num(i + 1)}. {html_mod.escape(opt_label)}"
                     if desc:
                         text += f" - {html_mod.escape(desc[:60])}"
             else:
-                tool_summary = perm.get("tool_summary", "Permission needed")
-                text += f"\n\n🔐 <code>{html_mod.escape(tool_summary)}</code>"
+                tool_info = perm.get("tool_info") or {}
+                tool_summary = perm.get("tool_summary", str(PERM_NEEDED))
+                if tr.code != "en" and ("tool_summary" not in perm
+                                        or perm.get("tool_info") is None):
+                    # No tool details: the words, not a stored summary.
+                    text += f"\n\n🔐 {tr.html(PERM_NEEDED)}"
+                elif (tr.code != "en" and tool_info.get("name") == "AskUserQuestion"
+                        and not perm.get("ask_question")):
+                    # The question has not arrived: the tool's name as it is.
+                    text += "\n\n🔐 " + tr.html(
+                        LOADING, tool=Span(f"<code>{tool_info['name']}</code>"))
+                else:
+                    text += f"\n\n🔐 <code>{html_mod.escape(tool_summary)}</code>"
                 # The real command / path (hook_receiver's ``detail``), not
                 # only Claude's own description of it: approving a shell
                 # command on the model's summary of itself is a weak check.
                 # Skipped when the summary already spells it out (a short
                 # command with no description, a bare file path).
                 text += _format_perm_detail(
-                    tool_summary, (perm.get("tool_info") or {}).get("detail") or "")
+                    tool_summary, tool_info.get("detail") or "", tr=tr)
         return text
 
     async def _edit_busy_raw(self, msg_id: int, text: str,
@@ -2145,7 +2377,7 @@ class AnimationMixin:
             # matches, or the Stop button would stay attached to a done turn.
             if not final and markdown == sess.stream_last_rendered:
                 return True
-            is_rtl = detect_rtl(" ".join(t for _a, t in sess.stream_commentary))
+            is_rtl = _card_rtl(sess)
             # Omitting reply_markup on editMessageText clears the keyboard,
             # which is how the Stop button comes off the finished card.
             reply_markup = (
@@ -2383,19 +2615,19 @@ class AnimationMixin:
             return None
         paused = not final and sess.stream_last_rendered == _PAUSED_CARD_TEXT
         sess.card_elapsed_unit = "s" if final else self._card_elapsed_unit(sess)
+        tr = i18n.for_sess(sess)
+        is_rtl = _card_rtl(sess, tr)
         if paused:
-            markdown, hid = (f"⏳ **{_md_escape(sess.label)}** · working "
-                             "(updates paused)"), False
+            markdown, hid = tr.directed(is_rtl).md(PAUSED_MD, session=sess.label), False
         else:
             markdown, hid = build_stream_card_ex(
-                sess, verb, final=final, waiting=waiting,
+                sess, verb, final=final, waiting=waiting, tr=tr,
             )
         markup = None if final else self._build_stop_keyboard(sess).to_dict()
         try:
             sent = await send_rich_message(
                 chat_id, markdown,
-                is_rtl=detect_rtl(
-                    " ".join(t for _a, t in sess.stream_commentary)),
+                is_rtl=is_rtl,
                 reply_to_message_id=target_msg_id,
                 reply_markup=markup,
                 disable_notification=True,
@@ -2738,7 +2970,7 @@ class AnimationMixin:
         isn't generating anything right now, so there is no new prose to
         stream and no "typing" to signal.
         """
-        verbs = list(SPINNER_VERBS)
+        verbs = spinner_verbs(i18n.for_sess(sess))
         random.shuffle(verbs)
         idx = 0
         first_tick = True
@@ -2865,8 +3097,7 @@ class AnimationMixin:
         try:
             sent = await self._edit_busy_raw(
                 sess.busy_msg_id,
-                f"⏳ <b>{html_mod.escape(sess.label)}</b> · working "
-                "(updates paused)",
+                card_tr(sess).html(PAUSED_HTML, session=sess.label),
                 chat_id=resolve_chat_id(sess),
                 priority=PRIORITY_ESSENTIAL,
             )
@@ -3184,7 +3415,8 @@ class AnimationMixin:
                     break
                 dot = dots[idx % len(dots)]
                 idx += 1
-                text = f"🔄 <b>{html_mod.escape(sess.label)}</b> · Compacting{dot}"
+                text = i18n.for_sess(sess).html(COMPACTING, session=sess.label,
+                                                 dots=Safe(dot))
                 result = await self._edit_busy_raw(sess.busy_msg_id, text, chat_id=resolve_chat_id(sess))
                 if result is None:
                     sess.busy_msg_id = None

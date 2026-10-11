@@ -96,7 +96,7 @@ def test_the_mode_toggle_keeps_the_card_waiting_for_a_name(mk_bot, helpers):
     _start_wizard(helpers, bot)
     _tap(helpers, bot, "_:nw:mode:ask")
     text, markup, *_ = helpers.latest_edit(bot)
-    assert "💬 Ask" in text and "Send a name" in text
+    assert "💬 Ask mode" in text and "Send a name" in text
     assert "_:nw:mode:auto" in helpers.callback_data_in(markup)
     _send_text(helpers, bot, "askmode1")
     sess = bot.registry.find_by_label("askmode1", CHAT)

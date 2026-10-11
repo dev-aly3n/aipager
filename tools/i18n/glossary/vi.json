@@ -1,0 +1,88 @@
+{
+ "address": "bạn",
+ "keep_english": [
+  "commit",
+  "token",
+  "diff",
+  "log",
+  "ctx",
+  "prompt",
+  "shell"
+ ],
+ "language": "Vietnamese",
+ "terms": {
+  "admin": [
+   "quản trị"
+  ],
+  "agent": [
+   "tác tử"
+  ],
+  "allow": [
+   "cho phép"
+  ],
+  "background": [
+   "nền"
+  ],
+  "card": [
+   "thẻ"
+  ],
+  "chat": [
+   "trò chuyện",
+   "chat"
+  ],
+  "deny": [
+   "từ chối"
+  ],
+  "folder": [
+   "thư mục"
+  ],
+  "group": [
+   "nhóm"
+  ],
+  "member": [
+   "thành viên"
+  ],
+  "model": [
+   "mô hình"
+  ],
+  "owner": [
+   "chủ sở hữu"
+  ],
+  "permission": [
+   "quyền"
+  ],
+  "prompt": [
+   "prompt",
+   "tin nhắn",
+   "yêu cầu"
+  ],
+  "question": [
+   "câu hỏi"
+  ],
+  "queue": [
+   "hàng đợi"
+  ],
+  "resume": [
+   "tiếp tục",
+   "/resume"
+  ],
+  "session": [
+   "phiên"
+  ],
+  "settings": [
+   "cài đặt",
+   "/settings"
+  ],
+  "stop": [
+   "dừng",
+   "/stop"
+  ],
+  "turn": [
+   "lượt"
+  ],
+  "update": [
+   "cập nhật",
+   "/update"
+  ]
+ }
+}

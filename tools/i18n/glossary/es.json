@@ -1,0 +1,91 @@
+{
+ "address": "tú",
+ "keep_english": [
+  "commit",
+  "token",
+  "diff",
+  "log",
+  "ctx",
+  "prompt"
+ ],
+ "language": "Spanish",
+ "terms": {
+  "admin": [
+   "admin"
+  ],
+  "agent": [
+   "agent"
+  ],
+  "allow": [
+   "permit"
+  ],
+  "background": [
+   "segundo plano"
+  ],
+  "card": [
+   "tarjeta"
+  ],
+  "chat": [
+   "chat"
+  ],
+  "deny": [
+   "deneg",
+   "rechaz"
+  ],
+  "folder": [
+   "carpeta"
+  ],
+  "group": [
+   "grupo"
+  ],
+  "member": [
+   "miembro"
+  ],
+  "model": [
+   "modelo"
+  ],
+  "owner": [
+   "propietari"
+  ],
+  "permission": [
+   "permiso"
+  ],
+  "prompt": [
+   "prompt",
+   "mensaje",
+   "solicitud"
+  ],
+  "question": [
+   "pregunta"
+  ],
+  "queue": [
+   "cola"
+  ],
+  "resume": [
+   "reanud",
+   "/resume"
+  ],
+  "session": [
+   "sesi"
+  ],
+  "settings": [
+   "ajustes",
+   "/settings"
+  ],
+  "stop": [
+   "deten",
+   "detien",
+   "/stop",
+   "detuv",
+   "stop"
+  ],
+  "turn": [
+   "turno"
+  ],
+  "update": [
+   "actualiz",
+   "actualíz",
+   "/update"
+  ]
+ }
+}

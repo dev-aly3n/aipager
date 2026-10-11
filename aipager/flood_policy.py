@@ -39,9 +39,10 @@ from aipager.config import (
     TYPING_INDICATOR_INTERVAL,
 )
 
-#: The elapsed-time units a busy card can render in: seconds (today's
-#: ``45s`` / ``4m 10s``), whole minutes (``<1m`` / ``23m``) and hours plus
-#: minutes (``23m`` / ``1h 23m``).
+#: The elapsed-time units a busy card can render in. The clock
+#: (``aipager.clockfmt.elapsed``) shows true seconds at ``"s"`` (``4:10``)
+#: and moves in 30 s steps at ``"m"`` and ``"h"`` (``23:30``,
+#: ``1:23:00``).
 UNIT_SECONDS = "s"
 UNIT_MINUTES = "m"
 UNIT_HOURS = "h"
@@ -225,8 +226,9 @@ def typing_interval(
 def elapsed_unit(age_seconds: float, enabled: bool) -> str:
     """The unit a card this old shows its elapsed counters in.
 
-    Seconds below 10 min (today's ``4m 10s``), minutes from 10 min, hours
-    and minutes from an hour. THE UNIT MATCHES THE REFRESH: a card edited
+    ``"s"`` (true seconds, ``4:10``) below 10 min, ``"m"`` from 10 min and
+    ``"h"`` from an hour, at which the clock moves in 30 s steps
+    (``23:30``, ``1:23:00``). THE UNIT MATCHES THE REFRESH: a card edited
     every 30 s that showed seconds would look frozen for 29 of them —
     and a counter that stops reads as a hung session, which the operator
     rejected outright on 2026-09-12. Always seconds when decay is off.
@@ -244,34 +246,6 @@ def elapsed_unit(age_seconds: float, enabled: bool) -> str:
     return UNIT_HOURS
 
 
-def format_elapsed(seconds: float, unit: str = UNIT_SECONDS) -> str:
-    """*seconds* rendered in *unit*.
-
-    * ``"s"`` — today's rule: ``45s`` under a minute, else ``4m 10s``.
-    * ``"m"`` — ``<1m`` under a minute, else whole minutes, ``23m``.
-    * ``"h"`` — whole minutes under an hour (``23m``), else ``1h 23m``.
-
-    Negative and non-finite input clamps to zero; an unknown unit falls
-    back to seconds, which is always a truthful rendering.
-    """
-    try:
-        value = float(seconds)
-    except (TypeError, ValueError):
-        value = 0.0
-    total = int(value) if math.isfinite(value) and value > 0 else 0
-    if unit == UNIT_MINUTES:
-        return "<1m" if total < 60 else f"{total // 60}m"
-    if unit == UNIT_HOURS:
-        if total < 60:
-            return "<1m"
-        if total < 3600:
-            return f"{total // 60}m"
-        return f"{total // 3600}h {(total % 3600) // 60}m"
-    if total >= 60:
-        return f"{total // 60}m {total % 60}s"
-    return f"{total}s"
-
-
 __all__ = [
     "UNIT_HOURS",
     "UNIT_MINUTES",
@@ -282,7 +256,6 @@ __all__ = [
     "clamp_warned_until",
     "effective_ceiling",
     "elapsed_unit",
-    "format_elapsed",
     "hourly_limits",
     "typing_interval",
 ]

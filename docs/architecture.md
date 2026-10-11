@@ -157,6 +157,7 @@ behaviour.
 | `~/.claude/aipager-audit.jsonl` | Allow / Deny / answer log | aipager daemon (append-only) |
 | `~/.claude/aipager-flood-state.json` | Each chat's Telegram rate-limit history, kept across restarts ([troubleshooting](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager daemon |
 | `~/.claude/aipager-pending-users.json` | People who addressed the bot in a group it does not serve, or who are not members of a group it serves, for `aipager config` to add (mode 0600, replaced whole on each write, the newest 200 seen in the last 30 days) | aipager daemon (written), `aipager config` (read) |
+| `~/aipager-users/<label>/` | Members' default [root folders](groups.md#root-folders) (mode 0700), where `user` and `read_only` members start their sessions; kept by `aipager uninstall` | aipager daemon (created on a member's first `/new` or Mini App New session) |
 | `~/.claude/settings.json` | Claude Code hook config | `aipager config` / `aipager setup`; at every start the daemon adds any missing aipager hook or status line and sets `skipDangerousModePermissionPrompt` ([security](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | Backups before each rewrite | `aipager config`, `aipager setup`, `aipager uninstall` |
 | `~/.claude.json` | Claude Code's own file: at start aipager marks its default session folder (the daemon's working directory, or `AIPAGER_WORK_DIR`) as trusted, so Claude Code's trust question does not block a session started from Telegram in that folder | aipager daemon |
@@ -173,6 +174,7 @@ behaviour.
 | `~/.local/share/aipager/install.json`, `running.json` | When aipager first started here; whether it is running now (to tell a crash from a clean stop) | aipager daemon |
 | `~/.local/state/aipager/reports.json` | Problem reports: recorded error fingerprints, counts and the offer state (mode 600); see [problem reports](problem-reports.md#what-is-kept-on-your-machine) | aipager daemon |
 | `~/.local/state/aipager/report-sends.json` | Problem reports sent today (the daily limit) | aipager daemon, `aipager report` |
+| `~/.local/state/aipager/languages.json` | The language state (mode 600): who already used aipager before languages were added, the last Telegram language seen from each person, whether the one-time language offer and first-contact line went out, and a hash of each bot description aipager set; see [Languages](commands.md#languages) | aipager daemon |
 | `~/.config/systemd/user/aipager.service` (Linux), `~/Library/LaunchAgents/com.aipager.daemon.plist` (macOS), and a `.bak.<time>` copy of the one an install replaces (on Linux only when it differs) | The background service | `aipager service install` |
 | `~/Library/Logs/aipager.log` (macOS) | The launchd service's log, read by `aipager logs` | launchd, for the service |
 

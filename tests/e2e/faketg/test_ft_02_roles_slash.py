@@ -54,7 +54,7 @@ def test_roles_and_buttons(fresh):
     since = fake.mark()
     cb = fake.inject_callback(fti.user(fti.BOB), card, allow)
     fake.wait_answer(cb)
-    flows.wait_text(fake, G, "Allowed by @bob", since=since, timeout=60)
+    flows.wait_text(fake, G, "Allowed · @bob", since=since, timeout=60)
     fti.wait_until(target.exists, 60, "the file bob allowed")
     if inst.claude_mode == "standin":
         assert [d["decision"] for d in _decisions(inst, name)] == ["allowed"]
@@ -69,7 +69,7 @@ def test_roles_and_buttons(fresh):
     starts = [e for e in inst.standin_log(name) if e.get("event") == "start"]
     since = fake.mark()
     _tap_once_the_turn_is_over(fake, fti.user(fti.DAVE), ready, auto, "ft3")
-    flows.wait_text(fake, G, "Switched to 🤖 Auto by @dave", since=since, timeout=90)
+    flows.wait_text(fake, G, "Switched to 🤖 Auto mode by @dave", since=since, timeout=90)
     if inst.claude_mode == "standin":
         fti.wait_until(lambda: len([e for e in inst.standin_log(name)
                                     if e.get("event") == "start"]) > len(starts),
@@ -158,7 +158,7 @@ def test_allow_by_a_user_is_attributed_when_the_prompt_beats_the_busy_card(fresh
     since = fake.mark()
     cb = fake.inject_callback(fti.user(fti.BOB), card, allow)
     fake.wait_answer(cb)
-    flows.wait_text(fake, G, "Allowed by @bob", since=since, timeout=30)
+    flows.wait_text(fake, G, "Allowed · @bob", since=since, timeout=30)
     fti.wait_until(inst.file_in_project("ft15.txt").exists, 60, "the file bob allowed")
     flows.wait_turn_end(inst, name, "ft15", since_log=log_since)
     # Answered by the hook's decision, not by keys typed into the dialog.

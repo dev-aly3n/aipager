@@ -96,3 +96,45 @@ def test_instance_module_reloads_without_aiohttp(monkeypatch):
     from aipager import instance
     _block_aiohttp(monkeypatch)
     importlib.reload(instance)
+
+
+# Boot-path modules that are never reloaded in process (``aipager.i18n``
+# holds the ``Msg`` class every label constant is an instance of; a reload
+# would make them strangers to it): checked in a fresh interpreter.
+_FRESH_BOOT_PATH = (
+    "aipager.i18n", "aipager.i18n.core", "aipager.i18n.locales",
+    "aipager.i18n.plurals", "aipager.i18n.resolve", "aipager.i18n.clock",
+    "aipager.clockfmt", "aipager.bot.kbwords",
+)
+
+
+@pytest.mark.parametrize("module", _FRESH_BOOT_PATH)
+def test_fresh_module_imports_cleanly_without_aiohttp(module, tmp_path):
+    import subprocess
+    import sys
+    from pathlib import Path
+    script = (
+        "import builtins\n"
+        "real = builtins.__import__\n"
+        "def fake(name, *a, **k):\n"
+        "    if name == 'aiohttp' or name.startswith('aiohttp.'):\n"
+        "        raise ImportError('simulated: aiohttp not installed')\n"
+        "    return real(name, *a, **k)\n"
+        "builtins.__import__ = fake\n"
+        f"import {module}\n"
+        "import sys\n"
+        "assert not any(m == 'aiohttp' or m.startswith('aiohttp.') for m in sys.modules)\n"
+        "from pathlib import Path\n"
+        f"assert str(Path.home()) == {str(tmp_path / 'home')!r}, Path.home()\n"
+    )
+    root = Path(__file__).resolve().parents[1]
+    # A throwaway home and instance dir: ``aipager.config`` (loaded by
+    # kbwords) reads ``~/.config/aipager`` at import, and the child must
+    # never see the operator's real one.
+    (tmp_path / "home").mkdir()
+    env = {"PYTHONPATH": str(root), "PATH": "/usr/bin:/bin",
+           "HOME": str(tmp_path / "home"), "AIPAGER_INSTANCE_DIR": str(tmp_path),
+           "TMPDIR": str(tmp_path)}
+    proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True,
+                          cwd=root, env=env, timeout=60)
+    assert proc.returncode == 0, proc.stderr[-800:]

@@ -37,8 +37,18 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from aipager import i18n
 from aipager.bot import group_intake
+from aipager.i18n import Command, Msg
 from aipager.state import MAX_CARD_OWNERS
+
+#: The pop-up for a tap on someone else's card (the tapper's language).
+OWNER_CARD = Msg("toast.owner_card", "This is {owner}'s card.",
+                 note="Pop-up: a tap on a card that is someone else's in a group",
+                 eg={"owner": "@aly"})
+OWNER_CARD_SEND = Msg("toast.owner_card_send", "This is {owner}'s card. Send {command} for your "
+                      "own.", note="As toast.owner_card, with the command that gives the tapper "
+                                   "their own", eg={"owner": "@aly", "command": "/kill x1"})
 
 if TYPE_CHECKING:
     from aipager.bot import TelegramBot
@@ -169,10 +179,11 @@ def prune(bot: TelegramBot) -> None:
 
 
 def refusal(bot: TelegramBot, chat_id, msg_id, user_id,
-            session_name: str, action: str) -> str | None:
-    """The toast for a tap on someone else's card, or ``None`` when the tap
-    may go ahead (a private chat, a card with no owner on record, the
-    owner's own tap, or a button the card's record does not cover)."""
+            session_name: str, action: str, tr=None) -> str | None:
+    """The toast for a tap on someone else's card (in *tr*'s language, the
+    tapper's; English when None), or ``None`` when the tap may go ahead (a
+    private chat, a card with no owner on record, the owner's own tap, or a
+    button the card's record does not cover)."""
     if not group_intake.is_group_chat(chat_id) or _personal(bot):
         return None
     record = _store(bot).get((chat_id, msg_id))
@@ -185,10 +196,11 @@ def refusal(bot: TelegramBot, chat_id, msg_id, user_id,
         covered = bool(_GUARDED[record["kind"]].fullmatch(action))
     if not covered:
         return None
+    tr = tr or i18n.get("en")
     if not record["command"]:
-        return f"This is {record['label']}'s card."
-    return (f"This is {record['label']}'s card. "
-            f"Send {record['command']} for your own.")
+        return tr.text(OWNER_CARD, owner=Command(record["label"]))
+    return tr.text(OWNER_CARD_SEND, owner=Command(record["label"]),
+                   command=Command(record["command"]))
 
 
 __all__ = ["MAX_RECORDS", "claim", "claim_sent", "prune", "refusal", "release"]

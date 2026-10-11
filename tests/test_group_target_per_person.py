@@ -479,7 +479,7 @@ def test_mode_reads_the_senders_target(gbot, run_async, mk_update):
     up = _msg(mk_update, "/mode", BOB)
     run_async(gbot._handle_mode_cmd(up, MagicMock()))
     # No ✍️ in a group: the card is everyone's, the target is per person.
-    assert _replies(up) == ["<b>x2</b> is 💬 Ask."]
+    assert _replies(up) == ["<b>x2</b> is in 💬 Ask mode."]
 
 
 def test_diff_reads_the_senders_target(gbot, run_async, mk_update, monkeypatch):

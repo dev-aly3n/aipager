@@ -79,21 +79,26 @@ limit whatever you set.
 ### A long turn's card refreshes less often
 
 The cadence above is for the first two minutes of a turn. After that the
-card **slows down as the turn gets older**, and its elapsed counter
-switches unit so it never looks frozen:
+card **slows down as the turn gets older**, and from 10 minutes its
+clock moves in 30 s steps, matching the refresh, so it never looks frozen:
 
-| turn age | card refreshes at most every | counter reads |
+| turn age | card refreshes at most every | clock reads |
 |---|---|---|
-| 0–2 min | as above (about 4.8 s for one card in a DM) | `45s` |
-| 2–10 min | 10 s | `4m 10s` |
-| 10–60 min | 30 s | `23m` |
-| over 60 min | 30 s | `1h 23m` |
+| 0–2 min | as above (about 4.8 s for one card in a DM) | `0:45` |
+| 2–10 min | 10 s | `4:10` |
+| 10–60 min | 30 s | `23:00`, `23:30` |
+| over 60 min | 30 s | `1:23:00`, `1:23:30` |
+
+The clock is rounded down to its 30 s step, and refreshes are at least
+30 s apart, sometimes a little more. So the card skips a step now and
+then: a refresh at 23 min 29 s shows `23:00`, and if the next one comes
+at 24 min 1 s it shows `24:00`, so `23:30` is skipped.
 
 A new tool row or a new sentence waits for the next refresh; a **state
 change** - the session going from working to waiting on a background
 agent, and back - is shown at once, at most once every 10 seconds. The
-live agent rows and the waiting line use the same unit. The finished card
-still shows its duration as it always has.
+live agent rows and the waiting line use the same steps. The finished
+card shows the turn's duration in true seconds (`23:17`).
 
 This is what keeps a four-hour turn from editing one message thousands of
 times: on 2026-09-23 one card did exactly that, and the chat was banned
@@ -459,6 +464,7 @@ A check that crashes on an unexpected environment shows as a single
 | `chat_reachable` | Telegram knows the configured chat (`getChat`; nothing is sent) | open bot, tap Start |
 | `team` | The chats and members (or a legacy `team.yaml`): says personal or team mode, and flags a malformed or mismatched old `team.yaml` | `aipager config` |
 | `role_shell_access` | Warns once for every role a member holds that can run Bash (its safety rules are best-effort, not a boundary; see [groups](groups.md#roles)) | give that role no Bash in `policy.yaml`, or accept it |
+| `peer_messages` | Messages between Claude sessions: where their receipts are kept and whether that folder is private, whether this system can check the sender's start time, and a warning for every role a policy lets use SendMessage (see [security](security.md#messages-between-claude-sessions)) | remove a shared receipt folder (aipager recreates it), or give that role no SendMessage |
 | `claude` | Resolves the `claude` binary the way every launch does (`claude_path` in `aipager.yaml` or `$AIPAGER_CLAUDE_BIN` win outright; otherwise the newest of `~/.local/bin`, PATH and Homebrew), and lists every OTHER distinct install found | install Claude Code, or set `claude_path` / `AIPAGER_CLAUDE_BIN` |
 | `claude_auth` | Probes `claude auth status` in the same environment a real session gets. **Never FAILs**: "not logged in" and "the probe itself failed" are reported distinctly, and neither stops a session from launching | `claude auth login`, or set an API key / `CLAUDE_CODE_OAUTH_TOKEN` |
 | `dtach` | `dtach` binary found (aipager's own `dtach-bin`, or one on PATH) | `uv tool install --reinstall aipager` |
@@ -652,6 +658,65 @@ reinstall command from the message (for example
 `pipx install --force aipager`) and then
 `systemctl --user restart aipager.service`; for Claude Code, run
 `claude update` again.
+
+## A chat is in the wrong language
+
+aipager's language comes from what was picked for the chat, not from the
+messages in it. Open `/language` in that chat and pick the language you want:
+the choice wins over everything else. In a private chat, **Automatic** follows
+your Telegram app's language (Settings → Language in Telegram); a language
+aipager does not have reads as English. A private chat that existed before
+languages were added stays English until you pick one. A group is English until
+an admin picks its language. The language only changes aipager's own text:
+Claude answers in the language you write to it, whatever aipager shows. See
+[Languages](commands.md#languages).
+
+## The bot description is not the one I wrote
+
+aipager sets the bot's description and short description in each language it
+speaks, for people whose Telegram app is in that language, and Telegram shows
+that text to them instead of the one you wrote in BotFather. aipager does this
+only while you have no description of your own, so a description you write
+before installing this release reaches everyone. If you wrote it after aipager
+had set its own, people in those languages still see aipager's. To show them
+yours, clear aipager's text for each language through the Bot API
+(`setMyDescription` and `setMyShortDescription` with an empty text and that
+`language_code`); aipager never sets it again while yours is there.
+
+## aipager says languages.json could not be used
+
+aipager keeps what it learned about languages (who was here before languages
+were added, the last Telegram language it saw from each person, and whether the
+one-time offer and first-contact line went out) in
+`~/.local/state/aipager/languages.json`. If that file cannot be read, aipager
+moves it aside to `languages.json.bad-<time>` in the same folder, logs a
+warning (again at every start until you decide), and keeps every chat on English with no language offer until you decide: put the
+old file back if you can repair it, or delete `languages.json` and restart, and
+aipager counts every person it knows as existing again (English until they
+choose). A language anyone picked is not in this file and is never lost.
+
+## Right-to-left text looks wrong
+
+In Persian and Arabic, aipager puts invisible direction marks in its own text so
+each line reads right to left, and keeps session names, commands and code left
+to right. If a line still looks jumbled, it is most often a Telegram client that
+draws mixed-direction text differently: check it in another client (phone versus
+Desktop or Web) before reporting it. Claude's own answers are shown as Claude
+wrote them, with no marks added.
+
+## A translated keyboard word does nothing in another chat
+
+Each chat's reply keyboard is in that chat's language. The main keyboard's words
+(status, stop, new, kill and the rest) are understood in every chat, in every
+language, and the English words always work. A template or command button's
+word is different: typed in a chat set to another language, it is a message for
+Claude, not a button, so a Russian "Clear" never runs `/clear` in a Persian or
+English chat. Use the button itself, or the English command (`/clear`). If a
+keyboard looks out of date after the chat's language changed, send `/start` to
+get the current one. A word that is also the name of one of your sessions talks
+to that session. `/mode` reads `ask` and `auto` as the mode always, and a
+translated mode word as a session only when a live session has exactly that
+name.
 
 ## Still stuck?
 
