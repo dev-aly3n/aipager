@@ -234,14 +234,14 @@
 {"k": "cmd.stop", "src": "7c4cbc32", "v": "متوقف کردن کار Claude"}
 {"k": "cmd.talk", "src": "a0173425", "v": "گفتگو با {session}"}
 {"k": "diff.more_lines", "src": "816da678", "v": {"one": "<i>…و {n} خط دیگر</i>", "other": "<i>…و {n} خط دیگر</i>"}}
-{"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · تمام شد (ایجنت پس‌زمینه گم شد)"}
-{"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · تمام شد (ایجنت پس‌زمینه بعد از {clock} گم شد)"}
+{"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · تمام شد (ایجنت پس‌زمینه از بین رفت)"}
+{"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · تمام شد ({clock}، ایجنت پس‌زمینه از بین رفت)"}
 {"k": "fin.finished", "src": "6f65069e", "v": "{lead} · تمام شد ({stats})"}
 {"k": "fin.finished_bare", "src": "53b60c70", "v": "{lead} · تمام شد"}
 {"k": "fin.full_attached", "src": "bcfddfdb", "v": "📎 <i>جواب کامل در فایل زیر ↓</i>"}
 {"k": "fin.lines", "src": "a6f39b46", "v": "+{added} -{removed}"}
-{"k": "fin.shell_lost", "src": "c6c919fb", "v": "⚠️ <b>{session}</b> · تمام شد (پایان دستور پس‌زمینه دیده نشد)"}
-{"k": "fin.shell_lost_after", "src": "4692a050", "v": "⚠️ <b>{session}</b> · تمام شد (پایان دستور پس‌زمینه بعد از {clock} دیده نشد)"}
+{"k": "fin.shell_lost", "src": "c6c919fb", "v": "⚠️ <b>{session}</b> · تمام شد (از دستور پس‌زمینه خبری نشد)"}
+{"k": "fin.shell_lost_after", "src": "4692a050", "v": "⚠️ <b>{session}</b> · تمام شد ({clock}، از دستور پس‌زمینه خبری نشد)"}
 {"k": "fin.stats", "src": "9160a66c", "v": "{clock}، +{added} -{removed}"}
 {"k": "flood.card_paused", "src": "61a88de1", "v": "⏳ **{session}** · در حال کار (کارت فعلاً آپدیت نمی‌شود)"}
 {"k": "flood.card_paused_html", "src": "3815781e", "v": "⏳ <b>{session}</b> · در حال کار (کارت فعلاً آپدیت نمی‌شود)"}
@@ -465,7 +465,7 @@
 {"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · معلوم نشد پیام صف به‌موقع برداشته شد یا نه؛ شاید Claude هنوز سراغش برود."}
 {"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · معلوم نشد پیام صف («{preview}») به‌موقع برداشته شد یا نه؛ شاید Claude هنوز سراغش برود."}
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"one": "⏳ <b>{session}</b> · هنوز کار می‌کند ({n} دقیقه بی‌خبر)\n\nهنوز آپدیت جدیدی نیامده. این معمولاً طبیعی است.\n\n<blockquote expandable>چه چیزهایی ممکن است در جریان باشد\n  • یک ابزار طولانی (Bash، WebSearch، دانلود بزرگ)\n  • نوشتن جوابی سنگین با کانتکست خیلی بزرگ\n  • کامپکت کردن گفتگو\n  • انتظار به خاطر محدودیت سرعت یا سقف اشتراک\n  • قطعی شبکه یا کرش کردن Claude</blockquote>", "other": "⏳ <b>{session}</b> · هنوز کار می‌کند ({n} دقیقه بی‌خبر)\n\nهنوز آپدیت جدیدی نیامده. این معمولاً طبیعی است.\n\n<blockquote expandable>چه چیزهایی ممکن است در جریان باشد\n  • یک ابزار طولانی (Bash، WebSearch، دانلود بزرگ)\n  • نوشتن جوابی سنگین با کانتکست خیلی بزرگ\n  • کامپکت کردن گفتگو\n  • انتظار به خاطر محدودیت سرعت یا سقف اشتراک\n  • قطعی شبکه یا کرش کردن Claude</blockquote>"}}
-{"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · گفتگوی سشن پاک شد"}
+{"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · سشن پاک شد"}
 {"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · سشن کرش کرد یا بسته شد"}
 {"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · سشن بسته شد"}
 {"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · سشن از حساب خارج شد"}
