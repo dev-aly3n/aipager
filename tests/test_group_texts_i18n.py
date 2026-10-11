@@ -34,7 +34,7 @@ def test_dropped_english_equals_the_constants():
 def test_dropped_in_persian_and_russian():
     fa = i18n.get("fa")
     assert live_reload.dropped_reply(fa, 3, BOB) == (
-        f"{RLM}۳ پیام کنار گذاشته شد: {FSI}@bob{PDI} دیگر اجازه ندارد اینجا پیام بفرستد.")
+        f"{RLM}۳ پیام به Claude ارسال نشد: {FSI}@bob{PDI} دیگر اجازه ندارد اینجا پیام بفرستد.")
     ru = i18n.get("ru")
     assert live_reload.dropped_reply(ru, 1, None) == \
         "Отброшено: этот отправитель больше не может писать здесь."

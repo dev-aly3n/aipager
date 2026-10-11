@@ -90,7 +90,7 @@ def test_notice_is_ornament_skip(ready, run_async):
 
 
 @pytest.mark.parametrize("code, head", [
-    ("fa", "\u200faipager یک بار ناگهان از کار افتاد."),
+    ("fa", "\u200faipager یک بار ناگهان کرش کرد."),
     ("ru", "aipager неожиданно остановился 1 раз."),
 ])
 def test_offer_notice_is_in_the_owner_chats_language(ready, run_async, code, head):
