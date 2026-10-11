@@ -258,6 +258,16 @@ JUSTIFIED = {
     "newflow.ready_taps", "newflow.taps", "newflow.conflict_taps", "newflow.closed",
     "settings.new_sessions", "prompt.keyboards", "sess.taps", "status.switch",
     "transport.texts", "miniapp.mirrors", "miniapp.payload_texts",
+    # Accepted by the orchestrator in fix iteration 2 (the reviewer checked
+    # that each changes only for a mode reason):
+    # the Mini App detail payload's mode, modes and mode label;
+    "miniapp.details",
+    # new: the confirm, retry and failure edits of an in-place switch;
+    "modecard.switch_results",
+    # the Ready card's mode buttons ("Switch to Auto mode", Full access);
+    "newflow.ready_models",
+    # /settings New sessions taps, with the Full access option and refusal.
+    "settings.taps",
 }
 
 
