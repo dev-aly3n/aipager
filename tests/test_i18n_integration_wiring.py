@@ -297,7 +297,7 @@ def test_resumed_in_ask_is_whole_in_the_chats_language(mk_bot, run_async, monkey
     bot._is_admin_user = lambda *a, **k: False
     x1 = p3a.session(bot, "x1", chat=GROUP, status=Status.GONE)
     x1.claude_session_id = "abc"
-    x1.skip_perms = True
+    x1.perm_mode = "full"
     x1.transcript_path = ""
     from aipager import member_root
     x1.cwd = member_root.restricted_root(bot, BOB, GROUP)   # inside bob's root
@@ -306,8 +306,8 @@ def test_resumed_in_ask_is_whole_in_the_chats_language(mk_bot, run_async, monkey
     p3a.cmd(env, bot, tg, "_handle_resume_cmd", "/resume x1", chat=GROUP, user=BOB)
     tr = i18n.get(code)
     head = tg.out[-1].split("\n")[0]
-    assert head == tr.html(session_ops.RESUMED_IN_ASK, session="x1")
-    assert SCRIPT[code].search(head) and "Auto needs" not in head
+    assert head == tr.html(session_ops.RESUMED_IN_AUTO, session="x1")
+    assert SCRIPT[code].search(head) and "needs an admin" not in head
 
 
 def test_an_api_errors_translation_is_escaped_in_the_notice(mk_bot, run_async, monkeypatch):

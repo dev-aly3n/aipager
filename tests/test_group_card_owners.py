@@ -554,7 +554,7 @@ def test_the_resume_mode_buttons_are_the_resumers(gbot, run_async):
     gbot._do_resume.assert_not_awaited()
     _run_tap(gbot, run_async, _cb(gbot, G, X1, "resume-ask"), ALICE, message_id=800)
     gbot._do_resume.assert_awaited_once()
-    assert gbot._do_resume.await_args.kwargs["skip_perms_override"] is False
+    assert gbot._do_resume.await_args.kwargs["mode_override"] == "ask"
     assert (G, 800) not in gbot.registry.card_owners
 
 

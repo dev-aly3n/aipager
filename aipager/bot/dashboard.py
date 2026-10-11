@@ -30,7 +30,7 @@ from telegram.error import (
 
 from aipager import i18n
 from aipager.bot import kbwords, miniapp_link
-from aipager.bot.mode_labels import mode_label
+from aipager.bot.mode_labels import shown_label
 from aipager.i18n import Msg, Plural, Safe, Span
 from aipager.clockfmt import elapsed as clock
 from aipager.config import (
@@ -1293,7 +1293,7 @@ class DashboardMixin:
         glyph = _STATUS_GLYPHS.get(state_id, "🔄")
         lines = [tr.html(STATUS_SWITCH, session=sess.label, glyph=Safe(glyph),
                          state=Safe(_state_text(tr, state_id)),
-                         mode=Safe(tr.html(mode_label(sess.skip_perms))))]
+                         mode=Safe(shown_label(tr, sess)))]
         rows: list[list[InlineKeyboardButton]] = []
         if sess.status == Status.INTERACTIVE:
             lines.append(tr.html(STATUS_WAITING, session=sess.label))

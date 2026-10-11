@@ -57,11 +57,11 @@ def test_a_tap_from_a_replaced_card_does_not_change_the_new_one(mk_bot, helpers)
     bot = helpers.make_personal_bot(mk_bot)
     _start_wizard(helpers, bot, message_id=9001)
     _start_wizard(helpers, bot, message_id=9002)
-    assert new_flow._pending_store(bot)[(CHAT, 12345)]["skip_perms"] is True
+    assert new_flow._pending_store(bot)[(CHAT, 12345)]["mode"] == "auto"
 
     _, q = _tap(helpers, bot, "_:nw:mode:ask", message_id=9001)
 
-    assert new_flow._pending_store(bot)[(CHAT, 12345)]["skip_perms"] is True
+    assert new_flow._pending_store(bot)[(CHAT, 12345)]["mode"] == "auto"
     assert "replaced" in q.answer.await_args.args[0]
 
 
@@ -86,4 +86,4 @@ def test_the_new_card_can_still_be_completed(mk_bot, helpers):
     _send_text(helpers, bot, "secondwizname")
 
     sess = bot.registry.find_by_label("secondwizname", CHAT)
-    assert sess is not None and sess.skip_perms is True
+    assert sess is not None and sess.perm_mode == "auto"

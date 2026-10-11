@@ -168,7 +168,8 @@ def test_the_word_check_sees_english():
 def test_an_untranslated_entry_cannot_vouch_for_its_own_words(monkeypatch):
     """An entry left exactly as the English adds none of its words to the
     language's vocabulary; a translated entry adds its own."""
-    key, english = "sess.resumed_in_ask", "♻️ Resumed <b>{session}</b> in Ask: Auto needs an admin."
+    key, english = ("sess.resumed_in_auto",
+                    "♻️ Resumed <b>{session}</b> in Auto mode: Full access mode needs an admin.")
     assert english in tool.english_forms(next(r for r in _source_rows() if r["k"] == key))
     monkeypatch.setattr(core, "_catalog", lambda code: {key: english})
     assert "resumed" not in _vocabulary("de")

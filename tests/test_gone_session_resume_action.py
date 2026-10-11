@@ -169,7 +169,7 @@ def test_tapping_resume_resumes_through_the_shared_core(mk_bot, run_async):
     kb = query.edit_message_text.await_args.kwargs["reply_markup"]
     verbs = [b.callback_data.rsplit(":", 1)[-1]
              for row in kb.inline_keyboard for b in row]
-    assert set(verbs) == {"resume-ask", "resume-auto", "resume-cancel"}
+    assert set(verbs) == {"resume-ask", "resume-auto", "resume-full", "resume-cancel"}
 
     # Step 2 goes through `_do_resume`, the wrapper /resume's own mode
     # buttons call — not a second resume implementation.
@@ -177,7 +177,7 @@ def test_tapping_resume_resumes_through_the_shared_core(mk_bot, run_async):
     run_async(sp.handle_callback(
         bot, MagicMock(), query, sess.name, "resume-auto"))
     bot._do_resume.assert_awaited_once()
-    assert bot._do_resume.await_args.kwargs["skip_perms_override"] is True
+    assert bot._do_resume.await_args.kwargs["mode_override"] == "auto"
     assert bot._do_resume.await_args.kwargs["label"] == "r1"
 
 

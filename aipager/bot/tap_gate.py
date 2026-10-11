@@ -8,20 +8,21 @@ mode the tapper's role in the TAPPED MESSAGE'S chat must grant it:
 - ``APPROVE``: ``role.can_approve`` (answering a prompt Claude is waiting on).
 - ``PROMPT``: ``role.can_prompt`` (anything that acts on a session or a
   card other members share).
-- ``MANAGE``: may use Auto (``_may_use_auto``: an admin, or the member in
-  their own DM), like every other way into Auto.
+- ``MANAGE``: may use Full access (``_may_use_full_access``: an admin, or
+  the member in their own DM), like every other way into Full access.
 - ``UPDATE``: ``_is_update_admin`` (installs software, restarts the daemon).
 
 A verb the table does not know needs ``PROMPT`` (fail closed), and
 ``tests/test_tap_gate.py`` fails when a dispatcher compares a verb literal
 the table does not list, so a new button cannot quietly fall to the
 default. Sub-handlers keep their own stricter checks (the /new cards'
-author binding, admin for a group's /settings writes, Auto on the mode
-switch), which the table notes but does not replace.
+author binding, admin for a group's /settings writes, Full access on the
+mode switch), which the table notes but does not replace.
 
 Pure: no bot state. The two context-dependent cases (a /mode card whose
-pending switch is to Auto; a ``_:spref`` tap that writes) are decided by
-the caller-supplied ``perms_target_auto`` and by the verb's own shape.
+pending switch is to Full access; a ``_:spref`` tap that writes) are
+decided by the caller-supplied ``perms_target_full`` and by the verb's own
+shape.
 """
 
 from __future__ import annotations
@@ -87,7 +88,11 @@ EXACT_CAPS: dict[str, Cap] = {
     "delete-cancel": PROMPT,     # closes someone's confirm, like kill-cancel
     "resume": PROMPT,
     "resume-ask": PROMPT,
-    "resume-auto": MANAGE,       # Auto, like every other way into it
+    # Ask and Auto are everyone's. A card from before Full access existed
+    # carries resume-auto for what was then bypass; it now means Auto (a
+    # safety check), which is narrower, never wider.
+    "resume-auto": PROMPT,
+    "resume-full": MANAGE,       # Full access, like every other way into it
     "resume-cancel": PROMPT,
     # ---- /mode's card (perms_confirm / perms_stop_switch: see below) --
     "perms_confirm": PROMPT,
@@ -96,7 +101,7 @@ EXACT_CAPS: dict[str, Cap] = {
     "perms_wait": PROMPT,
     # ---- legacy /resume mode picker ----------------------------------
     "resume_mode_ask": PROMPT,
-    "resume_mode_auto": MANAGE,
+    "resume_mode_auto": PROMPT,  # now Auto (a safety check), as resume-auto
     "resume_mode_cancel": PROMPT,
     # ---- /new name-conflict card (author-bound in its handler) -------
     "new_resume": PROMPT,
@@ -113,6 +118,9 @@ EXACT_CAPS: dict[str, Cap] = {
     "set": VIEW,
     # Per-session preferences picker (a write is a 3-part spref: below).
     "spref": VIEW,
+    # Ready card: switch to Full access (before the ``rdy_`` prefix below;
+    # the handler re-checks the admin rule too).
+    "rdy_full": MANAGE,
 }
 
 # Verbs whose suffix is a number (a turn key, an option index).
@@ -123,8 +131,9 @@ NUMBERED_CAPS: tuple[tuple[str, Cap], ...] = (
     ("endok", PROMPT),       # End confirm, keyed by turn
     ("restartok", PROMPT),   # Restart confirm, keyed by turn
     ("modeask", PROMPT),     # /mode switch to Ask, keyed by turn
-    ("modeauto", PROMPT),    # /mode switch to Auto: the handler requires an
-                             # admin for the switch itself (may_auto)
+    ("modeauto", PROMPT),    # /mode switch to Auto
+    ("modefull", MANAGE),    # /mode switch to Full access: the handler
+                             # re-checks the admin rule too (may_full)
     ("rdy_m", PROMPT),       # Ready card's model choice
 )
 
@@ -132,7 +141,7 @@ NUMBERED_CAPS: tuple[tuple[str, Cap], ...] = (
 PREFIX_CAPS: tuple[tuple[str, Cap], ...] = (
     ("now:", PROMPT),           # "Send now" under a queued message
     ("resume_page:", VIEW),     # /resume picker pages
-    ("rdy_", PROMPT),           # Ready card (Auto needs an admin inside)
+    ("rdy_", PROMPT),           # Ready card (rdy_full: MANAGE, above)
     ("nw:", PROMPT),            # /new Name card (author-bound inside)
     ("up:", UPDATE),            # /update (re-checked inside)
     ("set:", VIEW),             # /settings browsing; writes gated inside
@@ -153,16 +162,16 @@ def _spref_cap(action: str) -> Cap | None:
 
 
 def required_capability(session_name: str, action: str, *,
-                        perms_target_auto: bool = False) -> Cap:
+                        perms_target_full: bool = False) -> Cap:
     """The capability a tap on ``<session_name>:<action>`` needs.
 
-    ``perms_target_auto``: for ``perms_confirm`` / ``perms_stop_switch``,
-    whether the /mode card's pending record switches to Auto (looked up
-    by the caller at tap time). Unknown verbs need ``PROMPT``.
+    ``perms_target_full``: for ``perms_confirm`` / ``perms_stop_switch``,
+    whether the /mode card's pending record switches to Full access
+    (looked up by the caller at tap time). Unknown verbs need ``PROMPT``.
     """
     if session_name == "__voice__":
         return VOICE_CAPS.get(action, PROMPT)
-    if action in ("perms_confirm", "perms_stop_switch") and perms_target_auto:
+    if action in ("perms_confirm", "perms_stop_switch") and perms_target_full:
         return MANAGE
     spref = _spref_cap(action)
     if spref is not None:

@@ -1,7 +1,7 @@
-"""Integration tests: SC4, SC5 — resume passes persisted skip_perms.
+"""Integration tests: SC4, SC5 — resume passes the persisted mode.
 
-SC4: /resume ben (persisted skip_perms=True) → launch called with skip_perms=True.
-SC5: /resume !ben (persisted skip_perms=False) → launch called with skip_perms=True (forced).
+SC4: /resume ben (an older file's skip_perms=True) → launch with Full access.
+SC5: /resume !ben (persisted Ask) → launch with Full access (forced).
 Also covers the Telegram resume mode picker (session tap → mode keyboard step).
 """
 
@@ -51,12 +51,12 @@ def _make_query(callback_data, *, user_id=12345, message_id=42):
 
 
 # --------------------------------------------------------------------------- #
-# SC4 — /resume ben with persisted skip_perms=True → launch with True         #
+# SC4 — /resume ben with an older file's skip_perms=True → Full access      #
 # --------------------------------------------------------------------------- #
 
 def test_sc4_cli_resume_persisted_auto_passes_true(monkeypatch):
-    """SC4: CLI /resume ben where ben has skip_perms=True must pass
-    skip_perms=True to launch_session."""
+    """SC4: CLI /resume ben where ben's older record has skip_perms=True
+    (the old bypassing Auto) must launch in Full access."""
     from aipager.cli import resume as cli_resume
 
     history = [{
@@ -66,33 +66,33 @@ def test_sc4_cli_resume_persisted_auto_passes_true(monkeypatch):
         "cwd": "/home/aly",
         "gone_at": 1234567890.0,
         "last_assistant_preview": "Done.",
-        "skip_perms": True,  # persisted Auto mode
+        "skip_perms": True,  # the old Auto, which bypassed: Full access now
     }]
     monkeypatch.setattr(cli_resume, "_gone_history", lambda: history)
 
     launched = {}
 
-    async def mock_launch(label, *, resume_id=None, cwd=None, skip_perms=False, **kw):
-        launched.update({"label": label, "skip_perms": skip_perms})
+    async def mock_launch(label, *, mode, resume_id=None, cwd=None, **kw):
+        launched.update({"label": label, "mode": mode})
         return True, ""
 
     with patch("aipager.dtach.inject.launch_session", side_effect=mock_launch), \
          patch("pathlib.Path.is_socket", return_value=False):
-        rc = cli_resume._resume_one("ben", force_auto=False)
+        rc = cli_resume._resume_one("ben", force_full=False)
 
     assert rc == 0
-    assert launched.get("skip_perms") is True, (
-        f"SC4: persisted skip_perms=True must be passed to launch; got {launched}"
+    assert launched.get("mode") == "full", (
+        f"SC4: persisted skip_perms=True must launch in Full access; got {launched}"
     )
 
 
 # --------------------------------------------------------------------------- #
-# SC5 — /resume !ben forces Auto regardless of persisted value                #
+# SC5 — /resume !ben forces Full access regardless of persisted value        #
 # --------------------------------------------------------------------------- #
 
 def test_sc5_cli_resume_bang_forces_auto_over_persisted_false(monkeypatch):
-    """SC5: /resume !ben where ben has persisted skip_perms=False must still
-    launch with skip_perms=True."""
+    """SC5: /resume !ben where ben has persisted Ask must still launch in
+    Full access."""
     from aipager.cli import resume as cli_resume
 
     history = [{
@@ -102,23 +102,23 @@ def test_sc5_cli_resume_bang_forces_auto_over_persisted_false(monkeypatch):
         "cwd": "/home/aly",
         "gone_at": 1234567890.0,
         "last_assistant_preview": "Done.",
-        "skip_perms": False,  # persisted Ask mode — must be overridden
+        "perm_mode": "ask",  # persisted Ask mode — must be overridden
     }]
     monkeypatch.setattr(cli_resume, "_gone_history", lambda: history)
 
     launched = {}
 
-    async def mock_launch(label, *, resume_id=None, cwd=None, skip_perms=False, **kw):
-        launched.update({"label": label, "skip_perms": skip_perms})
+    async def mock_launch(label, *, mode, resume_id=None, cwd=None, **kw):
+        launched.update({"label": label, "mode": mode})
         return True, ""
 
     with patch("aipager.dtach.inject.launch_session", side_effect=mock_launch), \
          patch("pathlib.Path.is_socket", return_value=False):
-        rc = cli_resume._resume_one("ben", force_auto=True)
+        rc = cli_resume._resume_one("ben", force_full=True)
 
     assert rc == 0
-    assert launched.get("skip_perms") is True, (
-        f"SC5: ! prefix must force skip_perms=True; got {launched}"
+    assert launched.get("mode") == "full", (
+        f"SC5: ! prefix must force Full access; got {launched}"
     )
 
 
@@ -128,10 +128,11 @@ def test_sc5_cli_resume_bang_forces_auto_over_persisted_false(monkeypatch):
 
 def test_telegram_resume_picker_tap_shows_mode_picker():
     """After tapping a session in the /resume picker, the message must be
-    edited to show a mode picker (Ask / Auto buttons), not immediately resume."""
+    edited to show a mode picker (Ask / Auto / Full access buttons), not
+    immediately resume."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.GONE)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     # A GONE session with no `claude_session_id` has nothing to resume FROM,
     # and is now refused before the mode picker rather than after it. This
     # test is about the picker appearing, so give it a resumable session.
@@ -156,15 +157,19 @@ def test_telegram_resume_picker_tap_shows_mode_picker():
     assert any(cb.endswith("resume-auto") for cb in all_cbs), (
         f"Mode picker must offer Auto; got {all_cbs}"
     )
+    # Personal mode: the operator is an admin, so Full access is offered.
+    assert any(cb.endswith("resume-full") for cb in all_cbs), (
+        f"Mode picker must offer Full access to an admin; got {all_cbs}"
+    )
 
 
 def test_telegram_resume_mode_picker_shows_default_label():
     """The mode picker must show (default) suffix on the button matching
-    the session's persisted skip_perms."""
+    the session's persisted mode."""
     bot = _make_bot()
-    # Session with skip_perms=True (Auto is the default for this session)
+    # Session saved in Auto (Auto is the default for this session)
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.GONE)
-    sess.skip_perms = True
+    sess.perm_mode = "auto"
     sess.claude_session_id = "uuid-mode-2"
     bot.registry._sessions["claude-ben"] = sess
 
@@ -187,7 +192,7 @@ def test_telegram_resume_mode_picker_shows_default_label():
 
 
 def test_telegram_resume_mode_ask_calls_do_resume_with_false():
-    """resume_mode_ask callback must call _do_resume with skip_perms_override=False."""
+    """resume_mode_ask callback must call _do_resume with mode_override="ask"."""
     bot = _make_bot()
     bot._resume_mode_pending["claude-ben"] = "ben"
     bot._do_resume = AsyncMock()
@@ -197,13 +202,14 @@ def test_telegram_resume_mode_ask_calls_do_resume_with_false():
 
     bot._do_resume.assert_awaited_once()
     kw = bot._do_resume.await_args[1]
-    assert kw.get("skip_perms_override") is False, (
-        f"resume_mode_ask must use skip_perms_override=False; got {kw}"
+    assert kw.get("mode_override") == "ask", (
+        f"resume_mode_ask must use mode_override='ask'; got {kw}"
     )
 
 
 def test_telegram_resume_mode_auto_calls_do_resume_with_true():
-    """resume_mode_auto callback must call _do_resume with skip_perms_override=True."""
+    """resume_mode_auto (a picker from before Full access) must call
+    _do_resume with mode_override="auto": Auto now, never wider."""
     bot = _make_bot()
     bot._resume_mode_pending["claude-ben"] = "ben"
     bot._do_resume = AsyncMock()
@@ -213,8 +219,8 @@ def test_telegram_resume_mode_auto_calls_do_resume_with_true():
 
     bot._do_resume.assert_awaited_once()
     kw = bot._do_resume.await_args[1]
-    assert kw.get("skip_perms_override") is True, (
-        f"resume_mode_auto must use skip_perms_override=True; got {kw}"
+    assert kw.get("mode_override") == "auto", (
+        f"resume_mode_auto must use mode_override='auto'; got {kw}"
     )
 
 

@@ -57,8 +57,7 @@ def test_api_error_in_the_given_language():
 
 def test_the_constants_keep_their_english():
     assert transport.NEEDS_ADMIN_REPLY == "That command needs an admin."
-    assert transport.RESUME_AUTO_NEEDS_ADMIN == "Auto needs an admin."
-    assert f" in Ask: {transport.RESUME_AUTO_NEEDS_ADMIN}" == " in Ask: Auto needs an admin."
+    assert transport.RESUME_FULL_NEEDS_ADMIN == "Full access mode needs an admin."
     assert transport.RETRY_OTHERS_COMMAND_REPLY == "Only its sender can retry that command."
 
 

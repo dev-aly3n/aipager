@@ -137,13 +137,16 @@ class TelegramBot(
         # message's lifecycle monotonic and its calls to at most three.
         self._reaction_ledger = reactions.ReactionLedger()
         # `/new <name>` collision state. Keyed by session_name; value is
-        # {"prompt": str, "skip_perms": bool, "user_id": int, "msg_id": int}.
+        # {"prompt": str, "mode": "ask"|"auto"|"full", "model", "cwd",
+        #  "was_working": bool, "user_id": int, "msg_id": int}.
         # Populated when /new hits an existing name, drained when the user
         # taps Resume / Replace / Cancel. Multiple users colliding on the
         # same name race-overwrite — acceptable for a v1 single-admin tool.
         self._new_conflict_pending: dict[str, dict] = {}
-        # `/perms` pending state. Keyed by session_name; value is
-        # {"target_skip_perms": bool, "msg_id": int, "label": str}.
+        # `/mode` pending state for a switch that restarts (into or out of
+        # Full access). Keyed by session_name; value is
+        # {"target_mode": "ask"|"auto"|"full", "msg_id": int, "label": str,
+        #  "turn": int}.
         self._perms_pending: dict[str, dict] = {}
         # `/resume` mode-picker pending state. Keyed by session_name → label.
         self._resume_mode_pending: dict[str, str] = {}

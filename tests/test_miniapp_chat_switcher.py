@@ -264,8 +264,8 @@ def test_a_user_in_the_group_is_refused_admin_things_there_but_not_in_their_dm(
     server, run_async,
 ):
     """Bob is `user` in the group and `owner` of his DM: settings writes,
-    Auto at create, the admin hints and the update routes follow the
-    chosen chat, in both directions."""
+    Full access at create, the admin hints and the update routes follow
+    the chosen chat, in both directions."""
     server.bot.create_session = AsyncMock(return_value=("claude-auto__x", ""))
 
     async def _run():
@@ -279,15 +279,15 @@ def test_a_user_in_the_group_is_refused_admin_things_there_but_not_in_their_dm(
                                        headers=_hdr(BOB, BOB_DM), json=body)
             assert allowed.status == 200
 
-            auto = {"name": "auto", "skip_perms": True}
-            refused = await client.post("/api/sessions", headers=_hdr(BOB, GROUP), json=auto)
+            full = {"name": "auto", "mode": "full"}
+            refused = await client.post("/api/sessions", headers=_hdr(BOB, GROUP), json=full)
             assert refused.status == 403
-            assert (await refused.json())["detail"] == "Auto mode requires admin."
+            assert (await refused.json())["detail"] == "Full access mode requires admin."
             assert server.bot.create_session.await_count == 0
-            allowed = await client.post("/api/sessions", headers=_hdr(BOB, BOB_DM), json=auto)
+            allowed = await client.post("/api/sessions", headers=_hdr(BOB, BOB_DM), json=full)
             assert allowed.status == 200, await allowed.text()
             kwargs = server.bot.create_session.await_args.kwargs
-            assert kwargs["scope_chat_id"] == BOB_DM and kwargs["skip_perms"] is True
+            assert kwargs["scope_chat_id"] == BOB_DM and kwargs["mode"] == "full"
 
             hints = await (await client.get("/api/preferences",
                                             headers=_hdr(BOB, GROUP))).json()
@@ -302,19 +302,21 @@ def test_a_user_in_the_group_is_refused_admin_things_there_but_not_in_their_dm(
     run_async(_run())
 
 
-def test_a_user_in_the_group_cannot_switch_a_group_session_to_auto(server, run_async):
+def test_a_user_in_the_group_cannot_switch_a_group_session_to_full_access(server,
+                                                                          run_async):
     """The detail page's admin flag is the chosen chat's role."""
     async def _run():
         client = await _client_for(server)
         try:
             grp = await (await client.get("/api/sessions/grp",
                                           headers=_hdr(BOB, GROUP))).json()
-            assert grp["actions"]["perms"]["available"] is False
+            full = {m["id"]: m for m in grp["modes"]}["full"]
+            assert full["available"] is False
             bobs = await (await client.get("/api/sessions/bobs",
                                            headers=_hdr(BOB, BOB_DM))).json()
-            assert bobs["actions"]["perms"]["available"] is True
+            assert {m["id"]: m for m in bobs["modes"]}["full"]["available"] is True
             refused = await client.post("/api/sessions/grp/perms",
-                                        headers=_hdr(BOB, GROUP), json={"skip_perms": True})
+                                        headers=_hdr(BOB, GROUP), json={"mode": "full"})
             assert refused.status == 403
         finally:
             await client.close()

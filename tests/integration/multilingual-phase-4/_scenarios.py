@@ -52,10 +52,10 @@ def _directory(name):
     return run
 
 
-def _action(path_tail, *, method="POST", status="idle", queued=0, skip_perms=False,
+def _action(path_tail, *, method="POST", status="idle", queued=0, mode="ask",
             transcript="", json=None, extra=None):
     def run(env, actor):
-        env.session("dev", status=status, queued=queued, skip_perms=skip_perms,
+        env.session("dev", status=status, queued=queued, mode=mode,
                     claude_session_id=transcript)
         if extra:
             extra(env)
@@ -108,7 +108,7 @@ SCENARIOS = {
     "create_reserved_name": ("detail", BOB, _create({"name": "new"})),
     "create_name_taken": ("detail", BOB, _create({"name": "taken"})),
     "create_outside_folder": ("detail", BOB, _create({"name": "dev", "cwd": "/etc"})),
-    "create_auto_needs_admin": ("detail", DEV, _create({"name": "dev", "skip_perms": True})),
+    "create_full_needs_admin": ("detail", DEV, _create({"name": "dev", "mode": "full"})),
     "create_bad_model": ("detail", BOB, _create({"name": "dev", "model": "bad model!"})),
     # POST /api/directories refusals and creation
     "dir_empty_name": ("detail", BOB, _directory("")),
@@ -117,7 +117,7 @@ SCENARIOS = {
     # session routes: refusals
     "stop_not_busy": ("detail", BOB, _action("/stop")),
     "clearqueue_empty": ("detail", BOB, _action("/clearqueue", status="busy")),
-    "perms_auto_needs_admin": ("detail", DEV, _action("/perms")),
+    "perms_full_needs_admin": ("detail", DEV, _action("/perms", json={"mode": "full"})),
     "compact_not_running": ("detail", BOB, _action("/compact", status="gone")),
     "model_busy": ("detail", BOB, _action("/model", status="busy", json={"model": "opus"})),
     "model_prompt_open": ("detail", BOB, _action("/model", status="interactive",
@@ -135,9 +135,10 @@ SCENARIOS = {
                                               transcript="abc")),
     "delete_running": ("detail", BOB, _action("", method="DELETE", status="busy")),
     "model_unconfirmed": ("detail", BOB, _action("/model", json={"model": "claude-opus-5-5"})),
-    "perms_launch_failed": ("passthrough", BOB, _action("/perms", extra=_launch_fails)),
-    "resume_auto_by_member": ("detail", DEV, _action("/resume", status="gone",
-                                                     skip_perms=True, transcript="abc")),
+    "perms_launch_failed": ("passthrough", BOB, _action("/perms", json={"mode": "full"},
+                                                        extra=_launch_fails)),
+    "resume_full_by_member": ("detail", DEV, _action("/resume", status="gone",
+                                                     mode="full", transcript="abc")),
     "kill_gone": ("mirror", BOB, _action("/kill", status="gone")),
     # session routes: lines posted into the group
     "stop_busy_0": ("mirror", BOB, _action("/stop", status="busy")),
@@ -146,8 +147,8 @@ SCENARIOS = {
     "clearqueue_1": ("mirror", BOB, _action("/clearqueue", status="busy", queued=1)),
     "clearqueue_2": ("mirror", BOB, _action("/clearqueue", status="busy", queued=2)),
     "clearqueue_5": ("mirror", BOB, _action("/clearqueue", status="busy", queued=5)),
-    "perms_to_auto": ("mirror", BOB, _action("/perms")),
-    "perms_to_ask": ("mirror", BOB, _action("/perms", skip_perms=True)),
+    "perms_to_full": ("mirror", BOB, _action("/perms", json={"mode": "full"})),
+    "perms_to_ask": ("mirror", BOB, _action("/perms", mode="full", json={"mode": "ask"})),
     "compact_idle": ("mirror", BOB, _action("/compact")),
     "restart_idle": ("mirror", BOB, _action("/restart", transcript="abc")),
     "rename_ok": ("mirror", BOB, _action("/rename", json={"label": "web2"})),
@@ -158,7 +159,7 @@ SCENARIOS = {
     "sess_pref_set": ("mirror", BOB, _put_sess_pref("answer_length", "short")),
     "sess_pref_reset": ("mirror", BOB, _put_sess_pref("answer_length", "short", reset=True)),
     "create_ok": ("mirror", BOB, _create_in_project({})),
-    "create_ok_auto": ("mirror", BOB, _create_in_project({"skip_perms": True})),
+    "create_ok_full": ("mirror", BOB, _create_in_project({"mode": "full"})),
     # GETs with server text
     "get_detail_idle": ("payload", BOB, _get("/api/sessions/dev")),
     "get_detail_busy": ("payload", BOB, _get("/api/sessions/dev", status="busy")),

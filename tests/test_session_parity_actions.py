@@ -76,10 +76,10 @@ def test_new_command_names_are_reserved():
     assert {"restart", "rename", "delete", "diff"} <= inject._RESERVED
 
 
-def test_reserved_names_rejected_by_launch_session(run_async):
+def test_reserved_names_rejected_by_launch_session(run_async, mode="ask"):
     from aipager.dtach import inject
     for name in ("restart", "rename", "delete", "diff"):
-        ok, err = run_async(inject.launch_session(name))
+        ok, err = run_async(inject.launch_session(name, mode="ask"))
         assert ok is False
         assert "reserved" in err.lower()
 

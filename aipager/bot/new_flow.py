@@ -48,12 +48,12 @@ is told whose it is instead of being routed (roadmap 8.86).
 Callback data (sentinel ``_``, never free text):
 
     _:nw:cancel                  Cancel the Name card
-    _:nw:mode:auto|ask           Switch the Name card's mode
+    _:nw:mode:ask|auto|full      Switch the Name card's mode
     _:nw:back                    Back to the Name card from a picker
     _:nw:opt:model|path          Open the model / folder picker
     _:nw:model:<idx>|default|custom
     _:nw:path:<idx>|default|new
-    _:sx:<i>:rdy_ask|rdy_auto    Ready card: switch this session's mode
+    _:sx:<i>:rdy_ask|rdy_auto|rdy_full  Ready card: switch this session's mode
     _:sx:<i>:rdy_model           Ready card: open the model list
     _:sx:<i>:rdy_m<idx>          Ready card: switch to MODEL_CHOICES[idx]
     _:sx:<i>:rdy_back            Ready card: back from the model list
@@ -71,14 +71,21 @@ from typing import TYPE_CHECKING
 from telegram import ExternalReplyInfo, InlineKeyboardButton, InlineKeyboardMarkup
 
 from aipager.bot.mode_labels import (
-    MODE_ASK,
-    MODE_ASK_FOR_YOU,
     MODE_ASK_INSTEAD,
-    MODE_AUTO,
+    MODE_AUTO_FOR_YOU,
     MODE_AUTO_INSTEAD,
+    MODE_FULL_INSTEAD,
     mode_label,
+    shown_label,
 )
-from aipager import i18n, member_root, preferences
+from aipager.bot.mode_switch import (
+    MODE_BTN_TO_ASK,
+    MODE_BTN_TO_AUTO,
+    MODE_BTN_TO_FULL,
+    TOAST_MODE_DIALOG_OPEN,
+    TOAST_NEEDS_ADMIN_FULL,
+)
+from aipager import i18n, member_root, perm_modes, preferences
 from aipager.bot import group_intake, kbwords, language_menu, settings_menu
 from aipager.bot.sibling_text import shown
 from aipager.i18n import Command, Msg, Safe, Span
@@ -194,9 +201,10 @@ TOAST_CANT_START_HERE = Msg("toast.new_cant_start_here", "You can't start sessio
 #: Why a /new name was refused (more come from the Mini App's rules, English).
 NAME_EMPTY = Msg("newflow.name_empty", "Session name can't be empty.",
                  note="/new with no name")
-NOTE_AUTO_NEEDS_ADMIN = Msg("newflow.auto_needs_admin_note",
-                            "Auto mode needs an admin, so this one asks.",
-                            note="On the Ready card: someone not an admin asked for Auto")
+NOTE_FULL_NEEDS_ADMIN = Msg("newflow.full_needs_admin_note",
+                            "Full access mode needs an admin, so this one starts in Auto mode.",
+                            note="On the Ready card: someone not an admin asked for Full access "
+                                 "mode (or the chat's default is Full access)")
 NEW_STARTING = Msg("newflow.starting", "🚀 Starting <b>{session}</b> in {mode}…",
                    note="A session is starting, in that mode; {mode} is the mode's label, "
                         "which already says mode", eg={"session": "x1", "mode": "Auto mode"})
@@ -218,10 +226,6 @@ READY_LATER = Msg("newflow.ready_later",
                   "Later: tap {session} on the keyboard, or reply to any {session} message.",
                   note="The Ready card: how to talk to the session later",
                   eg={"session": "x1"})
-MODE_BTN_TO_ASK = Msg("modecard.btn.to_ask", "💬 Switch to Ask",
-                      note="Button: switch to Ask mode (Claude asks before each tool)")
-MODE_BTN_TO_AUTO = Msg("modecard.btn.to_auto", "🤖 Switch to Auto",
-                       note="Button: switch to Auto mode (Claude runs tools without asking)")
 READY_MODELS = Msg("newflow.ready_models",
                    "🧠 <b>{session}</b>: pick a model.\n\nIt switches in place, the "
                    "conversation is kept.", note="Above the Ready card's model list",
@@ -229,8 +233,6 @@ READY_MODELS = Msg("newflow.ready_models",
 TOAST_SESSION_ENDED = Msg("toast.session_ended", "That session has ended.", note="Pop-up")
 TOAST_CANT_CHANGE = Msg("toast.new_cant_change", "You can't change this session.",
                         note="Pop-up: the person may not change this session")
-TOAST_AUTO_NEEDS_ADMIN = Msg("toast.perms_needs_admin", "Auto mode needs an admin.",
-                             note="Pop-up: switching to Auto mode is for admins")
 TOAST_WORKING_USE_MODE = Msg("toast.new_working_use_mode",
                              "{session} is working. Switch after it finishes, or use /mode.",
                              note="Pop-up: a mode switch would restart a working session",
@@ -500,12 +502,13 @@ def resolve_new_session_settings(
 ) -> dict:
     """What a session started now by ``user_id`` in ``chat_id`` gets when
     nobody chooses: the chat's stored defaults, checked against what is
-    true NOW. Auto unless the chat's default says Ask, and never for
-    someone who may not use Auto. A stored model no longer offered (other
+    true NOW. Auto unless the chat's default says otherwise, and never
+    Full access for someone who may not use it (Auto instead, and
+    ``full_refused`` says so). A stored model no longer offered (other
     than a retired pinned row, which keeps its model), or a folder no
     longer allowed, falls back to the built-in default."""
     stored = preferences.get_new_session_defaults(chat_id)
-    can_auto = bool(bot._may_use_auto(user_id, chat_id))
+    can_full = bool(bot._may_use_full_access(user_id, chat_id))
     # Confined to the session's folder (roadmap 8.79): a stored default
     # that is the home folder, `/` or above the home folder is not theirs.
     confined = bool(bot._is_confined_user(user_id, chat_id))
@@ -530,26 +533,15 @@ def resolve_new_session_settings(
     if cwd is None and root is not None and root != member_root.NOWHERE:
         cwd = root
     return {
-        "skip_perms": _defaults_start_in_auto(bot, stored.mode, user_id, chat_id),
-        "can_auto": can_auto,
+        "mode": perm_modes.narrowest_allowed(stored.mode, can_full),
+        "full_refused": stored.mode == perm_modes.FULL and not can_full,
+        "can_full": can_full,
         "model": model,
         "model_label": model_label,
         "cwd": cwd,
         "confined": confined,
         "root": root,
     }
-
-
-def _defaults_start_in_auto(bot: TelegramBot, mode: str, user_id: int | None,
-                            chat_id: int | None) -> bool:
-    """Whether the chat's New sessions mode (*mode*: the stored value,
-    "" when none) starts *user_id*'s /new in Auto. An admin: unless it
-    says Ask (Auto is the built-in default). Someone else who may use
-    Auto (the member in their own DM): only when it says Auto, so their
-    default stays Ask until they choose Auto. Anyone else: never."""
-    if bot._is_admin_user(user_id, chat_id):
-        return mode != "ask"
-    return mode == "auto" and bool(bot._may_use_auto(user_id, chat_id))
 
 
 def _needs_folder(pending: dict) -> bool:
@@ -575,7 +567,8 @@ def _settings_line(settings: dict, tr=None) -> str:
     tr = tr or i18n.get("en")
     # Each piece without its own leading right-to-left mark: the line has
     # one already, at its start.
-    mode = Safe(tr.html(mode_label(settings.get("skip_perms"))).removeprefix(tr.mark))
+    mode = Safe(tr.html(mode_label(settings.get("mode") or perm_modes.AUTO))
+                .removeprefix(tr.mark))
     model = (settings.get("model_label")
              or Safe(tr.html(NS_DEFAULT_MODEL).removeprefix(tr.mark)))
     if _needs_folder(settings):
@@ -642,19 +635,25 @@ def _render_name_card(pending: dict, *, error: str = "",
             hint = (launch.NO_PROJECT_FOLDER if pending.get("has_parents")
                     else launch.NO_FOLDER_AT_ALL)
             lines += ["", f"📁 {html_mod.escape(shown(tr, hint))}"]
-    row = []
-    if pending.get("can_auto"):
-        if pending.get("skip_perms"):
-            row.append(InlineKeyboardButton(tr.text(MODE_ASK_INSTEAD),
-                                            callback_data="_:nw:mode:ask"))
-        else:
-            row.append(InlineKeyboardButton(tr.text(MODE_AUTO_INSTEAD),
-                                            callback_data="_:nw:mode:auto"))
-    row += [
+    # The modes this card does not start in, each on the mode row: Ask and
+    # Auto for everyone, Full access only for an admin.
+    current = pending.get("mode") or perm_modes.AUTO
+    mode_row = []
+    if current != perm_modes.ASK:
+        mode_row.append(InlineKeyboardButton(tr.text(MODE_ASK_INSTEAD),
+                                             callback_data="_:nw:mode:ask"))
+    if current != perm_modes.AUTO:
+        mode_row.append(InlineKeyboardButton(tr.text(MODE_AUTO_INSTEAD),
+                                             callback_data="_:nw:mode:auto"))
+    if current != perm_modes.FULL and pending.get("can_full"):
+        mode_row.append(InlineKeyboardButton(tr.text(MODE_FULL_INSTEAD),
+                                             callback_data="_:nw:mode:full"))
+    row = [
         InlineKeyboardButton(tr.text(NEW_BTN_MODEL), callback_data="_:nw:opt:model"),
         InlineKeyboardButton(tr.text(NEW_BTN_FOLDER), callback_data="_:nw:opt:path"),
     ]
-    rows = [row, [InlineKeyboardButton(tr.text(NEW_BTN_CANCEL), callback_data="_:nw:cancel")]]
+    rows = ([mode_row] if mode_row else []) + [
+        row, [InlineKeyboardButton(tr.text(NEW_BTN_CANCEL), callback_data="_:nw:cancel")]]
     return "\n".join(lines), InlineKeyboardMarkup(rows)
 
 
@@ -868,7 +867,7 @@ def _actor_id(update: Update, query: CallbackQuery | None = None) -> int | None:
 
 
 def parse_request(text: str) -> tuple[str, str, bool, str]:
-    """``name [first message...]`` → ``(name, first, force_auto, error)``.
+    """``name [first message...]`` → ``(name, first, force_full, error)``.
 
     The first word is the name, normalised and checked by
     ``launch.validate_session_name`` (the same rules everywhere); a
@@ -881,10 +880,10 @@ def parse_request(text: str) -> tuple[str, str, bool, str]:
     # "x1: fix it", "x1, fix it" and a transcript's "X1." name x1: the
     # punctuation can never be part of a valid name anyway.
     raw = parts[0].rstrip(".,:;!?")
-    force_auto = raw.startswith("!")
+    force_full = raw.startswith("!")
     clean, err = launch.validate_session_name(raw.lstrip("!"))
     first = parts[1].strip().replace("\n", " - ") if len(parts) > 1 else ""
-    return clean, first, force_auto, err
+    return clean, first, force_full, err
 
 
 async def create_from_text(
@@ -903,7 +902,7 @@ async def create_from_text(
     # maybe_handle_text only hands over their own).
     key = (chat_id, pending["user_id"] if pending is not None else actor)
 
-    name, first, force_auto, err = parse_request(text)
+    name, first, force_full, err = parse_request(text)
     if err:
         if pending is not None:
             await _goto_name(bot, chat_id, pending, error=err)
@@ -926,15 +925,17 @@ async def create_from_text(
         session_parity.close_rename(bot, chat_id, actor)
     settings = pending if pending is not None else resolve_new_session_settings(
         bot, chat_id or 0, actor)
-    # Auto is re-checked here, at the moment of creation, against the
-    # person creating: a stale card or a `!` from someone who may not use
-    # Auto gets Ask, and the Ready card says why.
-    may_auto = bool(bot._may_use_auto(actor, chat_id))
-    wants_auto = bool(settings.get("skip_perms")) or force_auto
-    skip_perms = wants_auto and may_auto
+    # Full access is re-checked here, at the moment of creation, against
+    # the person creating: a stale card, a chat default of Full access or
+    # a `!` from someone who may not use it gets Auto, and the Ready card
+    # says why.
+    may_full = bool(bot._may_use_full_access(actor, chat_id))
+    wanted = perm_modes.FULL if force_full else (settings.get("mode") or perm_modes.AUTO)
+    wants_full = wanted == perm_modes.FULL or bool(settings.get("full_refused"))
+    mode = perm_modes.narrowest_allowed(wanted, may_full)
     # The cards are the chat's.
     tr = i18n.for_chat(chat_id) if chat_id is not None else i18n.for_update(update)
-    note = tr.text(NOTE_AUTO_NEEDS_ADMIN) if wants_auto and not may_auto else ""
+    note = tr.text(NOTE_FULL_NEEDS_ADMIN) if wants_full and not may_full else ""
 
     if first and await bot._refuse_admin_command(update, first):
         # A slash command its sender may not send (roadmap 8.74): the
@@ -952,12 +953,12 @@ async def create_from_text(
         # flow); `/new x1` gets it as the reply.
         await bot._send_new_conflict_prompt(
             update=update, existing=existing, prompt=first,
-            skip_perms=skip_perms, model=settings.get("model"),
+            mode=mode, model=settings.get("model"),
             cwd=settings.get("cwd"),
             edit_msg_id=pending.get("msg_id") if pending is not None else None)
         return
 
-    launching = tr.html(NEW_STARTING, session=name, mode=Safe(tr.html(mode_label(skip_perms))))
+    launching = tr.html(NEW_STARTING, session=name, mode=Safe(tr.html(mode_label(mode))))
     sent = None
     if pending is not None:
         store.pop(key, None)
@@ -976,7 +977,7 @@ async def create_from_text(
             await _edit_at(bot, chat_id, msg_id, body, kb)
 
     session_name, err = await bot.create_session(
-        name, scope_chat_id=chat_id, skip_perms=skip_perms,
+        name, scope_chat_id=chat_id, mode=mode,
         cwd=settings.get("cwd") or None, driver_user_id=actor,
         model=settings.get("model") or None,
     )
@@ -1001,8 +1002,7 @@ async def create_from_text(
         bot, update, sess, model_label=settings.get("model_label"),
         first_message=bool(first), note=note)
     await _show(ready_text, ready_kb)
-    log.info("Launched session %s (%s, first message=%s)", name,
-             "auto" if skip_perms else "ask", bool(first))
+    log.info("Launched session %s (%s, first message=%s)", name, mode, bool(first))
 
 
 # ---- the Ready card ----------------------------------------------------
@@ -1020,7 +1020,7 @@ def render_ready(
     chat_id = sess.scope_chat_id or (calling_chat_id(update) if update else 0) or 0
     tr = tr or i18n.for_chat(chat_id)
     # Without their own leading right-to-left mark (the line has one).
-    mode = Safe(tr.html(mode_label(sess.skip_perms)).removeprefix(tr.mark))
+    mode = Safe(shown_label(tr, sess).removeprefix(tr.mark))
     # The model just picked wins; then, while a switch is not yet
     # confirmed, the one it was switched to; then what the statusline
     # reports; then what it was started with. A model's name as it is.
@@ -1046,14 +1046,24 @@ def render_ready(
             bot, chat_id, html_mod.escape(sess.label),
             dm=tr.html(READY_JUST_SEND, session=sess.label), tr=tr, raw_label=sess.label))
     lines.append(tr.html(READY_LATER, session=sess.label))
-    switch = (InlineKeyboardButton(tr.text(MODE_BTN_TO_ASK),
-                                   callback_data=session_parity.session_cb(
-                  bot, chat_id, sess, "rdy_ask"))
-              if sess.skip_perms else
-              InlineKeyboardButton(tr.text(MODE_BTN_TO_AUTO),
-                                   callback_data=session_parity.session_cb(
-                  bot, chat_id, sess, "rdy_auto")))
-    rows = [[switch, InlineKeyboardButton(
+    # A switch to each other mode; Full access only when the person who
+    # started the session may use it (the tap re-checks the tapper).
+    current = sess.current_mode()
+    may_full = bool(bot._may_use_full_access(sess.created_by_user_id, chat_id))
+    switches = []
+    if current != perm_modes.ASK:
+        switches.append(InlineKeyboardButton(
+            tr.text(MODE_BTN_TO_ASK),
+            callback_data=session_parity.session_cb(bot, chat_id, sess, "rdy_ask")))
+    if current != perm_modes.AUTO:
+        switches.append(InlineKeyboardButton(
+            tr.text(MODE_BTN_TO_AUTO),
+            callback_data=session_parity.session_cb(bot, chat_id, sess, "rdy_auto")))
+    if current != perm_modes.FULL and may_full:
+        switches.append(InlineKeyboardButton(
+            tr.text(MODE_BTN_TO_FULL),
+            callback_data=session_parity.session_cb(bot, chat_id, sess, "rdy_full")))
+    rows = [switches, [InlineKeyboardButton(
         tr.text(NEW_BTN_MODEL),
         callback_data=session_parity.session_cb(bot, chat_id, sess, "rdy_model"))]]
     if update is not None:
@@ -1100,28 +1110,52 @@ async def _handle_ready_callback(
     # Who tapped, named on what the tap changed in a group (8.91c).
     by = bot._actor_label(actor, chat_id, getattr(query, "from_user", None))
 
-    if action in ("rdy_ask", "rdy_auto"):
-        target = action == "rdy_auto"
-        if target and not bot._may_use_auto(actor, chat_id):
-            await bot._safe_answer(query, person.text(TOAST_AUTO_NEEDS_ADMIN), show_alert=True)
+    if action in ("rdy_ask", "rdy_auto", "rdy_full"):
+        target = action.removeprefix("rdy_")
+        if target == perm_modes.FULL and not bot._may_use_full_access(actor, chat_id):
+            await bot._safe_answer(query, person.text(TOAST_NEEDS_ADMIN_FULL), show_alert=True)
             return
-        if sess.skip_perms == target:
+        if bot._already_in_mode(sess, target):
             await _rerender()
             return
         tapped = getattr(getattr(query, "message", None), "message_id", None)
-        if (sess.status in (Status.BUSY, Status.INTERACTIVE)
-                or not sess.tap_is_for_this_turn(tapped)):
-            # A mode switch relaunches the session: never under a running
-            # turn from a card that may be minutes old.
-            await bot._safe_answer(
-                query, person.text(TOAST_WORKING_USE_MODE, session=sess.label),
-                show_alert=True)
-            return
-        # A mode switch relaunches the session: a role without can_manage
-        # only for one inside its members' root folder.
+        # Any mode switch (the in-place Ask <-> Auto one included): a role
+        # without can_manage only for a session inside its members' root
+        # folder.
         refusal = member_root.relaunch_refusal(bot, actor, chat_id, sess.cwd)
         if refusal:
             await bot._safe_answer(query, shown(person, refusal), show_alert=True)
+            return
+        if not sess.mode_switch_restarts(target):
+            # Ask <-> Auto: Shift+Tab in the terminal, no restart, so a
+            # running turn is fine; an open prompt would read the keys.
+            if sess.dialog_is_open():
+                await bot._safe_answer(
+                    query, person.text(TOAST_MODE_DIALOG_OPEN, session=sess.label),
+                    show_alert=True)
+                return
+            await bot._safe_answer(query, person.text(TOAST_SWITCHING))
+            outcome = await bot._mode_switch_core(sess, target)
+            if outcome.reason == "sent":
+                await _rerender()
+                from aipager.bot import mode_switch  # local: import cycle
+                mode_switch.attach_reply(sess, chat_id, msg_id, "ready", by)
+            elif outcome.reason == "dialog_open":
+                await _rerender(note=tr.text(TOAST_MODE_DIALOG_OPEN, session=sess.label))
+            elif outcome.ok:
+                await _rerender()
+            else:
+                err = getattr(outcome, "err", "")
+                await _rerender(note=(tr.text(NOTE_MODE_FAILED_ERR, error=err) if err
+                                      else tr.text(NOTE_MODE_FAILED)))
+            return
+        if (sess.status in (Status.BUSY, Status.INTERACTIVE)
+                or not sess.tap_is_for_this_turn(tapped)):
+            # Into or out of Full access relaunches the session: never
+            # under a running turn from a card that may be minutes old.
+            await bot._safe_answer(
+                query, person.text(TOAST_WORKING_USE_MODE, session=sess.label),
+                show_alert=True)
             return
         await bot._safe_answer(query, person.text(TOAST_SWITCHING))
         if (sess.status in (Status.BUSY, Status.INTERACTIVE)
@@ -1130,7 +1164,7 @@ async def _handle_ready_callback(
             # background agent waking it): leave that turn alone.
             await _rerender(note=tr.text(NOTE_MODE_NOT_SWITCHED, session=sess.label))
             return
-        outcome = await bot._perms_switch_core(sess, target)
+        outcome = await bot._mode_switch_core(sess, target)
         if not outcome.ok:
             err = getattr(outcome, "err", "")
             await _rerender(note=(tr.text(NOTE_MODE_FAILED_ERR, error=err) if err
@@ -1201,9 +1235,9 @@ NS_TITLE = Msg(
     "set.text.ns_root",
     "🆕 <b>New sessions</b>\n\nWhat /new starts a session with. You can still change it "
     "on the card for one session.\n\nPermissions: {mode}\nModel: {model}\nFolder: {folder}",
-    note="/settings > New sessions: the defaults /new uses. {mode} is the Auto or Ask mode "
-         "label (it already says mode) or mode.ask_for_you, {model} a model name or Default "
-         "model, {folder} a path",
+    note="/settings > New sessions: the defaults /new uses. {mode} is the Ask, Auto or Full "
+         "access mode label (it already says mode) or modecard.auto_for_you, {model} a model name "
+         "or Default model, {folder} a path",
     eg={"mode": "Auto mode", "model": "Opus 5.5", "folder": "~/work/app"})
 NS_MODEL_TITLE = Msg("set.text.ns_model_title", "🧠 <b>Model for new sessions</b>",
                      note="Above the model list of /settings > New sessions")
@@ -1233,7 +1267,7 @@ def render_new_session_defaults(
 ) -> tuple[str, InlineKeyboardMarkup]:
     """The chat's defaults for new sessions; ``view`` "model" / "cwd"
     lists that field's choices. ``viewer`` (the person looking) is told
-    when Auto does not apply to them. In *tr*'s language (the chat's when
+    when Full access does not apply to them. In *tr*'s language (the chat's when
     None); model names and paths are shown as they are."""
     if tr is None:
         tr = i18n.for_chat(chat_id)
@@ -1277,12 +1311,6 @@ def render_new_session_defaults(
         rows.append([InlineKeyboardButton(back, callback_data="_:set:ns")])
         return (tr.html(NS_FOLDER_TITLE), InlineKeyboardMarkup(rows))
 
-    auto = stored.mode != "ask"
-    if (viewer is not None and not bot._is_admin_user(viewer, chat_id)
-            and bot._may_use_auto(viewer, chat_id)):
-        # The member in their own DM: what /new gives them (Auto only when
-        # chosen), so the ticks and the line say the same.
-        auto = _defaults_start_in_auto(bot, stored.mode, viewer, chat_id)
     # A model's name as written; "Default model" is words.
     model_html = (stored.model if stored.model
                   else Safe(tr.html(NS_DEFAULT_MODEL)))
@@ -1290,16 +1318,33 @@ def render_new_session_defaults(
                   else Safe(tr.text(NS_DEFAULT_MODEL)))
     folder = stored.cwd if stored.cwd in roots else (
         roots[0] if root is not None and roots else _project_dir())
-    mode = mode_label(auto)
-    if auto and viewer is not None and not bot._may_use_auto(viewer, chat_id):
-        mode = MODE_ASK_FOR_YOU
+    mode = mode_label(stored.mode)
+    if (stored.mode == perm_modes.FULL and viewer is not None
+            and not bot._may_use_full_access(viewer, chat_id)):
+        mode = MODE_AUTO_FOR_YOU
     text = tr.html(NS_TITLE, mode=Safe(tr.html(mode)), model=model_html,
                    folder=_short_path(folder))
+    # One mode per row (a label is too wide for a third of a row); Auto,
+    # the default, first.
+    def _mark(choice: str) -> str:
+        return f"{tr.text(mode_label(choice))}{' ✅' if stored.mode == choice else ''}"
+
+    # Full access is offered to whoever may use it (_may_use_full_access).
+    # A private chat's screen is its one person's, so someone who may not
+    # is not shown the row (unless it is what the chat already stores); a
+    # group's screen is shared by its members, so the row stays and a tap
+    # by someone who may not is refused (handle_defaults_callback).
+    offer_full = (stored.mode == perm_modes.FULL or viewer is None
+                  or not isinstance(chat_id, int) or chat_id < 0
+                  or bool(bot._may_use_full_access(viewer, chat_id)))
     rows = [
-        [InlineKeyboardButton(f"{tr.text(MODE_AUTO)}{' ✅' if auto else ''}",
-                              callback_data="_:set:ns:mode:auto"),
-         InlineKeyboardButton(f"{tr.text(MODE_ASK)}{' ✅' if not auto else ''}",
-                              callback_data="_:set:ns:mode:ask")],
+        [InlineKeyboardButton(_mark(perm_modes.AUTO), callback_data="_:set:ns:mode:auto")],
+        [InlineKeyboardButton(_mark(perm_modes.ASK), callback_data="_:set:ns:mode:ask")],
+    ]
+    if offer_full:
+        rows.append([InlineKeyboardButton(_mark(perm_modes.FULL),
+                                          callback_data="_:set:ns:mode:full")])
+    rows += [
         [InlineKeyboardButton(tr.text(NS_MODEL_BUTTON, model=model_text),
                               callback_data="_:set:ns:model")],
         [InlineKeyboardButton(tr.text(NS_FOLDER_BUTTON, folder=_short_path(folder, 24)),
@@ -1345,14 +1390,13 @@ async def handle_defaults_callback(
         return
     field, token = parts
     value = None
-    if field == "mode" and token in ("auto", "ask"):
-        # Auto is the built-in default: store only a departure from it.
-        # Except for the member in their own DM who is not an admin: their
-        # default is Ask, so their Auto is the departure, stored as such.
-        value = "" if token == "auto" else "ask"
-        if (token == "auto" and not bot._is_admin_user(viewer, chat_id)
-                and bot._may_use_auto(viewer, chat_id)):
-            value = "auto"
+    if field == "mode" and token == perm_modes.FULL and not bot._may_use_full_access(viewer, chat_id):
+        # Only an admin may make Full access what /new starts with (it
+        # would only give them Auto anyway, but it says Full access).
+        await bot._safe_answer(query, person.text(TOAST_NEEDS_ADMIN_FULL), show_alert=True)
+        return
+    if field == "mode" and token in perm_modes.MODES:
+        value = token
     elif field == "model":
         if token == "default":
             value = ""
@@ -1551,11 +1595,13 @@ async def handle_callback(
         await _edit_wizard(bot, chat_id, pending, tr.html(CANCELLED))
         return True
 
-    if sub in (["mode", "auto"], ["mode", "ask"]):
-        if sub[1] == "auto" and not bot._may_use_auto(actor, chat_id):
-            await bot._safe_answer(query, person.text(TOAST_AUTO_NEEDS_ADMIN), show_alert=True)
+    if len(sub) == 2 and sub[0] == "mode" and sub[1] in perm_modes.MODES:
+        if sub[1] == perm_modes.FULL and not bot._may_use_full_access(actor, chat_id):
+            await bot._safe_answer(query, person.text(TOAST_NEEDS_ADMIN_FULL), show_alert=True)
             return True
-        pending["skip_perms"] = sub[1] == "auto"
+        pending["mode"] = sub[1]
+        # A choice made on the card: nothing was refused any more.
+        pending["full_refused"] = False
         await _goto_name(bot, chat_id, pending)
         return True
 

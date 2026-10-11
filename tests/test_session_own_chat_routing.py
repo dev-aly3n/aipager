@@ -330,7 +330,7 @@ def test_mode_switch_fallback_message_goes_to_the_tapped_chat(
         install, mk_bot, run_async):
     bot = _bot(mk_bot, install)
     s = _dm_session(bot, status=Status.IDLE)
-    bot._perms_pending[s.name] = {"msg_id": 900, "target_skip_perms": True,
+    bot._perms_pending[s.name] = {"msg_id": 900, "target_mode": "full",
                                   "label": "jim"}
 
     async def _switch(sess, target, edit, **_kw):
@@ -414,7 +414,7 @@ def test_fallback_with_no_tapped_chat_uses_the_sessions_chat(
     bot = _bot(mk_bot, None)   # personal mode: an unknown chat may tap
     s = _dm_session(bot, status=Status.GONE if verb != "perms_confirm" else Status.IDLE)
     _replying_resume(bot)
-    bot._perms_pending[s.name] = {"msg_id": 900, "target_skip_perms": True,
+    bot._perms_pending[s.name] = {"msg_id": 900, "target_mode": "full",
                                   "label": "jim"}
 
     async def _switch(sess, target, edit, **_kw):

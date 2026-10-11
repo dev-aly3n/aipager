@@ -53,106 +53,147 @@ def test_perms_gone_session_replies_error(mk_bot, mk_update, run_async):
     assert msg == "No live sessions here. Start one with /new."
 
 
-# ---- IDLE Ask→Auto: requires admin + shows confirm keyboard ----------------
+# ---- Into Full access: requires admin + shows confirm keyboard ------------
 
-def test_perms_idle_ask_to_auto_non_admin_denied(mk_bot, mk_update, run_async):
-    """Non-admin trying to switch to Auto mode gets an error."""
-    bot = mk_bot()
-    sess = TrackedSession(name="claude-dev", label="dev", status=Status.IDLE)
-    sess.skip_perms = False  # currently Ask
+def _dev(bot, mode, status=Status.IDLE):
+    sess = TrackedSession(name="claude-dev", label="dev", status=status)
+    sess.perm_mode = mode
     bot.registry._sessions["claude-dev"] = sess
     bot.registry.last_active_session = "claude-dev"
-    # May not use Auto here
-    bot._may_use_auto = MagicMock(return_value=False)
-    update = mk_update("/perms auto")
+    return sess
+
+
+@pytest.mark.parametrize("current", ["ask", "auto"])
+def test_perms_full_non_admin_denied(mk_bot, mk_update, run_async, current):
+    """Non-admin trying to switch to Full access gets an error."""
+    bot = mk_bot()
+    sess = _dev(bot, current)
+    # May not use Full access here
+    bot._may_use_full_access = MagicMock(return_value=False)
+    update = mk_update("/perms full")
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
     msg = update.message.reply_text.await_args[0][0]
-    assert "Auto mode needs an admin" in msg
+    assert msg == "Full access mode needs an admin."
+    assert sess.perm_mode == current and "claude-dev" not in bot._perms_pending
 
 
-def test_perms_idle_ask_to_auto_admin_shows_confirm_keyboard(mk_bot, mk_update, run_async):
-    """Admin switching Ask→Auto gets a confirmation keyboard."""
+def test_perms_full_admin_shows_confirm_keyboard(mk_bot, mk_update, run_async):
+    """Admin switching to Full access gets a confirmation that names the
+    restart and the flag."""
     bot = mk_bot()
-    sess = TrackedSession(name="claude-dev", label="dev", status=Status.IDLE)
-    sess.skip_perms = False  # currently Ask
-    bot.registry._sessions["claude-dev"] = sess
-    bot.registry.last_active_session = "claude-dev"
+    _dev(bot, "ask")
     bot._is_admin = MagicMock(return_value=True)
-    update = mk_update("/perms auto")
+    update = mk_update("/perms full")
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
-    # Keyboard must be present
+    text = update.message.reply_text.await_args[0][0]
+    assert "restarts the session" in text
+    assert "<code>--dangerously-skip-permissions</code>" in text
     call_kwargs = update.message.reply_text.await_args[1]
     assert "reply_markup" in call_kwargs
-    # Pending state should be stored
-    assert "claude-dev" in bot._perms_pending
-    assert bot._perms_pending["claude-dev"]["target_skip_perms"] is True
+    assert bot._perms_pending["claude-dev"]["target_mode"] == "full"
 
 
-# ---- IDLE Auto→Ask: executes directly (no confirmation) --------------------
+# ---- Out of Full access: executes directly (no confirmation) ---------------
 
-def test_perms_idle_auto_to_ask_executes_directly(mk_bot, mk_update, run_async):
-    """Auto→Ask switch doesn't require confirmation."""
+@pytest.mark.parametrize("target", ["ask", "auto"])
+def test_perms_out_of_full_access_executes_directly(mk_bot, mk_update, run_async, target):
+    """Leaving Full access doesn't require confirmation (nor an admin)."""
     bot = mk_bot()
-    sess = TrackedSession(name="claude-dev", label="dev", status=Status.IDLE)
-    sess.skip_perms = True  # currently Auto
-    bot.registry._sessions["claude-dev"] = sess
-    bot.registry.last_active_session = "claude-dev"
-    bot._is_admin = MagicMock(return_value=True)
+    _dev(bot, "full")
+    bot._is_admin = MagicMock(return_value=False)
     bot._do_perms_switch_via_fn = AsyncMock()
-    update = mk_update("/perms ask")
+    update = mk_update(f"/perms {target}")
     run_async(bot._handle_perms_cmd(update, MagicMock()))
-    # Should call _do_perms_switch_via_fn with target_skip_perms=False
     bot._do_perms_switch_via_fn.assert_awaited_once()
-    call_args = bot._do_perms_switch_via_fn.await_args
-    assert call_args[0][1] is False  # target_skip_perms=False
+    assert bot._do_perms_switch_via_fn.await_args[0][1] == target
+    assert "(the session restarts)" in update.message.reply_text.await_args[0][0]
 
 
-# ---- BUSY: shows Stop & switch / Not now keyboard --------------------------
+# ---- Ask <-> Auto: in place, for anyone, no card in between ---------------
 
-def test_perms_busy_shows_busy_keyboard(mk_bot, mk_update, run_async):
-    """BUSY session gets Stop task & switch / Not now keyboard."""
+@pytest.mark.parametrize("current, target, presses", [
+    ("ask", "auto", 3), ("auto", "ask", 1)], ids=["ask-to-auto", "auto-to-ask"])
+@pytest.mark.parametrize("status", [Status.IDLE, Status.BUSY], ids=["idle", "busy"])
+def test_perms_ask_auto_switches_in_place(mk_bot, mk_update, run_async, monkeypatch,
+                                          current, target, presses, status):
     bot = mk_bot()
-    sess = TrackedSession(name="claude-dev", label="dev", status=Status.BUSY)
-    sess.skip_perms = False  # Ask → switching to Auto
-    bot.registry._sessions["claude-dev"] = sess
-    bot.registry.last_active_session = "claude-dev"
-    bot._is_admin = MagicMock(return_value=True)
+    sess = _dev(bot, current, status)
+    bot._is_admin = MagicMock(return_value=False)
+    bot._kill_and_relaunch_core = AsyncMock(side_effect=AssertionError("no restart"))
+    press = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.press_mode_cycle", press)
+    reply = MagicMock(message_id=901)
+    update = mk_update(f"/perms {target}", chat_id=12345)
+    update.message.reply_text = AsyncMock(return_value=reply)
+    run_async(bot._handle_perms_cmd(update, MagicMock()))
+    press.assert_awaited_once_with("claude-dev", presses)
+    assert "claude-dev" not in bot._perms_pending          # no busy/confirm card
+    text = update.message.reply_text.await_args[0][0]
+    assert "without a restart" in text
+    assert "Waiting for Claude Code to confirm the switch." in text
+    assert sess.perm_mode == target
+    assert sess.mode_switch.reply == (12345, 901, "mode_card")
+
+
+def test_perms_ask_auto_refused_while_a_prompt_is_open(mk_bot, mk_update, run_async,
+                                                       monkeypatch):
+    bot = mk_bot()
+    sess = _dev(bot, "ask", Status.INTERACTIVE)
+    press = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.press_mode_cycle", press)
     update = mk_update("/perms auto")
     run_async(bot._handle_perms_cmd(update, MagicMock()))
+    press.assert_not_awaited()
+    assert sess.perm_mode == "ask" and sess.mode_switch is None
+    assert update.message.reply_text.await_args[0][0] == (
+        "⚠️ <b>dev</b> is waiting on a question or permission prompt. Answer it first, "
+        "then switch the mode.")
+
+
+# ---- BUSY: shows Stop & switch / Not now keyboard (restarts only) ----------
+
+def test_perms_busy_to_full_shows_busy_keyboard(mk_bot, mk_update, run_async):
+    """A switch into Full access on a BUSY session gets Stop task & switch
+    / Not now."""
+    bot = mk_bot()
+    _dev(bot, "auto", Status.BUSY)
+    bot._is_admin = MagicMock(return_value=True)
+    update = mk_update("/perms full")
+    run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
+    assert "The session restarts." in update.message.reply_text.await_args[0][0]
     call_kwargs = update.message.reply_text.await_args[1]
     assert "reply_markup" in call_kwargs
-    # Pending state stored
-    assert "claude-dev" in bot._perms_pending
+    assert bot._perms_pending["claude-dev"]["target_mode"] == "full"
 
 
-def test_perms_busy_to_ask_non_admin_ok(mk_bot, mk_update, run_async):
-    """Switching BUSY Auto→Ask should be allowed even for non-admins (going to safer mode)."""
+def test_perms_busy_out_of_full_access_non_admin_ok(mk_bot, mk_update, run_async):
+    """Leaving Full access on a BUSY session is allowed for non-admins."""
     bot = mk_bot()
-    sess = TrackedSession(name="claude-dev", label="dev", status=Status.BUSY)
-    sess.skip_perms = True  # Auto → switching to Ask
-    bot.registry._sessions["claude-dev"] = sess
-    bot.registry.last_active_session = "claude-dev"
+    _dev(bot, "full", Status.BUSY)
     bot._is_admin = MagicMock(return_value=False)
     update = mk_update("/perms ask")
     run_async(bot._handle_perms_cmd(update, MagicMock()))
-    # Should NOT be denied (target is Ask, not Auto)
     call_text = update.message.reply_text.await_args[0][0]
     assert "needs an admin" not in call_text
+    assert bot._perms_pending["claude-dev"]["target_mode"] == "ask"
 
 
-# ---- bare /perms (= /mode, 2026-09-30): the mode and one switch -------------
+# ---- bare /perms (= /mode, 2026-09-30): the mode and the other two ---------
 
-def test_bare_perms_shows_the_mode_and_switches_nothing(mk_bot, mk_update, run_async):
+@pytest.mark.parametrize("mode, label, buttons", [
+    ("ask", "💬 Ask mode", ["🤖 Switch to Auto mode", "🔓 Switch to Full access mode"]),
+    ("auto", "🤖 Auto mode", ["💬 Switch to Ask mode", "🔓 Switch to Full access mode"]),
+    ("full", "🔓 Full access mode", ["💬 Switch to Ask mode", "🤖 Switch to Auto mode"]),
+], ids=["ask", "auto", "full"])
+def test_bare_perms_shows_the_mode_and_switches_nothing(mk_bot, mk_update, run_async,
+                                                       mode, label, buttons):
     """It used to flip the mode blind; now it says what the mode is and
-    offers the other one."""
+    offers the other two."""
     bot = mk_bot()
-    sess = TrackedSession(name="claude-dev", label="dev", status=Status.IDLE)
-    sess.skip_perms = True
-    bot.registry._sessions["claude-dev"] = sess
-    bot.registry.last_active_session = "claude-dev"
+    _dev(bot, mode)
     bot._do_perms_switch_via_fn = AsyncMock()
     # A DM: in a group (mk_update's default -1001) the card marks no
     # target, since each member has their own (8.90).
@@ -163,5 +204,6 @@ def test_bare_perms_shows_the_mode_and_switches_nothing(mk_bot, mk_update, run_a
     bot._do_perms_switch_via_fn.assert_not_awaited()
     text = update.message.reply_text.await_args[0][0]
     kb = update.message.reply_text.await_args[1]["reply_markup"]
-    assert text == "✍️ <b>dev</b> is in 🤖 Auto mode."
-    assert [b.text for row in kb.inline_keyboard for b in row] == ["💬 Switch to Ask"]
+    assert text == f"✍️ <b>dev</b> is in {label}."
+    assert [b.text for row in kb.inline_keyboard for b in row] == buttons
+

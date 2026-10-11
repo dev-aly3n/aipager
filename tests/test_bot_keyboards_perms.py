@@ -121,31 +121,27 @@ def test_perms_busy_keyboard_buttons(bot):
 
 # ---- _build_resume_mode_keyboard -------------------------------------------
 
-def test_resume_mode_keyboard_has_a_row_per_mode_then_cancel(bot):
+@pytest.mark.parametrize("may_full, rows", [(False, [1, 1, 1]), (True, [1, 1, 1, 1])],
+                         ids=["member", "admin"])
+def test_resume_mode_keyboard_has_a_row_per_mode_then_cancel(bot, may_full, rows):
     """Each mode has a row of its own: its label names the mode as a mode
-    and, with "(default)", is too wide for half a row (2026-10-10)."""
-    kb = bot._build_resume_mode_keyboard(_sess(bot), False)
-    assert [len(row) for row in kb.inline_keyboard] == [1, 1, 1]
+    and, with "(default)", is too wide for half a row (2026-10-10). Full
+    access only for someone who may use it."""
+    kb = bot._build_resume_mode_keyboard(_sess(bot), "ask", may_full=may_full)
+    assert [len(row) for row in kb.inline_keyboard] == rows
 
 
-def test_resume_mode_keyboard_default_label_ask(bot):
-    """When persisted_skip_perms=False, Ask button should have (default) suffix."""
-    kb = bot._build_resume_mode_keyboard(_sess(bot), persisted_skip_perms=False)
-    labels = [btn.text for row in kb.inline_keyboard[:2] for btn in row]
-    ask_label = next(lbl for lbl in labels if "Ask" in lbl)
-    auto_label = next(lbl for lbl in labels if "Auto" in lbl)
-    assert "(default)" in ask_label
-    assert "(default)" not in auto_label
-
-
-def test_resume_mode_keyboard_default_label_auto(bot):
-    """When persisted_skip_perms=True, Auto button should have (default) suffix."""
-    kb = bot._build_resume_mode_keyboard(_sess(bot), persisted_skip_perms=True)
-    labels = [btn.text for row in kb.inline_keyboard[:2] for btn in row]
-    ask_label = next(lbl for lbl in labels if "Ask" in lbl)
-    auto_label = next(lbl for lbl in labels if "Auto" in lbl)
-    assert "(default)" not in ask_label
-    assert "(default)" in auto_label
+@pytest.mark.parametrize("saved, may_full, want", [
+    ("ask", True, ["💬 Ask mode (default)", "🤖 Auto mode", "🔓 Full access mode"]),
+    ("auto", True, ["💬 Ask mode", "🤖 Auto mode (default)", "🔓 Full access mode"]),
+    ("full", True, ["💬 Ask mode", "🤖 Auto mode", "🔓 Full access mode (default)"]),
+    ("ask", False, ["💬 Ask mode (default)", "🤖 Auto mode"]),
+    ("full", False, ["💬 Ask mode", "🤖 Auto mode (default)"]),
+], ids=["ask-admin", "auto-admin", "full-admin", "ask-member", "full-member"])
+def test_resume_mode_keyboard_marks_what_a_plain_resume_gives(bot, saved, may_full, want):
+    kb = bot._build_resume_mode_keyboard(_sess(bot), saved, may_full=may_full)
+    labels = [btn.text for row in kb.inline_keyboard[:-1] for btn in row]
+    assert labels == want
 
 
 def test_resume_mode_keyboard_callbacks_for_a_known_session(bot):
@@ -154,12 +150,12 @@ def test_resume_mode_keyboard_callbacks_for_a_known_session(bot):
     maximum-length name — well past Telegram's 64-byte cap."""
     sess = _sess(bot, status=Status.GONE)
 
-    kb = bot._build_resume_mode_keyboard(sess, False, chat_id=555)
+    kb = bot._build_resume_mode_keyboard(sess, "ask", chat_id=555, may_full=True)
     cbs = [btn.callback_data for row in kb.inline_keyboard for btn in row]
     dests = [_destination(bot, c, chat_id=555) for c in cbs]
 
     assert {v for _, v in dests} == {
-        "resume-ask", "resume-auto", "resume-cancel"}, dests
+        "resume-ask", "resume-auto", "resume-full", "resume-cancel"}, dests
     assert {n for n, _ in dests} == {sess.name}, dests
     for c in cbs:
         assert len(c.encode()) <= 64, c
@@ -167,7 +163,7 @@ def test_resume_mode_keyboard_callbacks_for_a_known_session(bot):
 
 def test_resume_mode_keyboard_cancel_in_the_last_row(bot):
     sess = _sess(bot)
-    kb = bot._build_resume_mode_keyboard(sess, False)  # chat_id defaults to 0
+    kb = bot._build_resume_mode_keyboard(sess, "ask")  # chat_id defaults to 0
     row1 = kb.inline_keyboard[-1]
     dests = [_destination(bot, btn.callback_data, chat_id=0) for btn in row1]
     assert (sess.name, "resume-cancel") in dests

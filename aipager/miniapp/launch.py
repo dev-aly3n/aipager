@@ -193,7 +193,7 @@ _VALID_DIR_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 # part: the value becomes claude's own argv, where a token starting with
 # `-` is parsed as another FLAG rather than as this flag's value.
 # `{"model": "--dangerously-skip-permissions"}` would then be a way past
-# the admin gate on Auto mode. `shlex.quote` does not help with that at
+# the admin gate on Full access mode. `shlex.quote` does not help with that at
 # all — it makes a value shell-safe, not argv-safe.
 #
 # `:` is allowed for Bedrock/Vertex-style ids (`...-v1:0`). One exact

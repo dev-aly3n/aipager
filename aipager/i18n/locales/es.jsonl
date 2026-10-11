@@ -40,9 +40,11 @@
 {"k": "app.err.answer_chat_busy", "src": "e0f91f04", "v": "Telegram está ocupado. Vuelve a intentarlo en un momento."}
 {"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "Esta sesión ya no está esperando tu respuesta."}
 {"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "No se pudo publicar la solicitud en el chat."}
-{"k": "app.err.auto_needs_admin", "src": "ad1f0c2f", "v": "El modo Automático requiere un administrador."}
+{"k": "app.err.bad_mode", "src": "b0920696", "v": "Elige el modo Preguntar, Automático o Acceso total."}
 {"k": "app.err.delete_running", "src": "71f25b50", "v": "La sesión sigue en marcha. Usa Terminar para detenerla primero."}
+{"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "El modo Acceso total requiere un admin."}
 {"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "No se pudo terminar - el proceso sigue en marcha. Vuelve a intentarlo."}
+{"k": "app.err.mode_send_failed", "src": "887b8615", "v": "No se pudo llegar a la terminal de la sesión - el modo no cambió."}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "Ya existe una sesión llamada {session} en este chat."}
 {"k": "app.err.not_busy", "src": "bbafa529", "v": "Esta sesión no está ocupada ahora - no hay nada que detener."}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "Esta solicitud no se puede reenviar. Respóndela en la terminal."}
@@ -50,13 +52,15 @@
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} todavía se está deteniendo - el modo no cambió. Vuelve a intentarlo en un momento."}
 {"k": "app.err.pick_model", "src": "773e24c4", "v": "Elige un modelo."}
 {"k": "app.err.restart_still_stopping", "src": "701b0bd8", "v": "{session} todavía se está deteniendo. Vuelve a intentarlo en un momento."}
-{"k": "app.err.resumed_in_ask", "src": "7024b7b8", "v": "{session} reanudada en modo Preguntar: {reason}"}
+{"k": "app.err.resumed_in_auto", "src": "b26ccb3b", "v": "{session} se reanudó en Modo Automático: {reason}"}
 {"k": "app.err.resuming", "src": "2a557399", "v": "Esta sesión se está reanudando ahora mismo. Vuelve a intentarlo en un momento."}
 {"k": "app.err.send_failed", "src": "e4349ad3", "v": "No se pudo enviar {command}."}
 {"k": "app.fact.context", "src": "cc11b3a2", "v": "Contexto"}
 {"k": "app.fact.cost", "src": "64ae43e8", "v": "Costo"}
 {"k": "app.fact.cwd", "src": "4b892fe0", "v": "Directorio"}
 {"k": "app.fact.last_active", "src": "b5665ec6", "v": "Última actividad"}
+{"k": "app.fact.mode", "src": "a7b93d21", "v": "Modo"}
+{"k": "app.fact.mode_pending", "src": "d8a50365", "v": "{mode} (esperando a Claude Code)"}
 {"k": "app.fact.model", "src": "68c2cc7f", "v": "Modelo"}
 {"k": "app.fact.working", "src": "e7df8df6", "v": "Trabajando desde hace"}
 {"k": "app.language.hint", "src": "90e01e41", "v": "Solo el texto propio de aipager. Las respuestas de Claude no cambian."}
@@ -99,11 +103,12 @@
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] eliminada desde la Mini App"}
 {"k": "app.mirror.folder", "src": "603d7ae2", "v": "📁 Nueva carpeta creada desde la Mini App:\n{path}"}
 {"k": "app.mirror.killed", "src": "63565832", "v": "💀 [{session}] terminada desde la Mini App"}
+{"k": "app.mirror.mode_sent", "src": "c1718968", "v": "⚙️ {session} pasa a {mode} desde la Mini App sin reiniciar."}
 {"k": "app.mirror.model", "src": "6df57f60", "v": "🔄 [{session}] → {model} desde la Mini App"}
 {"k": "app.mirror.renamed", "src": "22ad8a4c", "v": "✏️ [{old}] renombrada a [{new}] desde la Mini App"}
 {"k": "app.mirror.restarted", "src": "9aa8323d", "v": "🔁 [{session}] reiniciada desde la Mini App"}
 {"k": "app.mirror.resumed", "src": "fafeafa6", "v": "♻️ [{session}] reanudada desde la Mini App"}
-{"k": "app.mirror.resumed_in_ask", "src": "429a5b47", "v": "♻️ [{session}] reanudada desde la Mini App en modo Preguntar: {reason}"}
+{"k": "app.mirror.resumed_in_auto", "src": "85b6c017", "v": "♻️ [{session}] se reanudó desde la Mini App en Modo Automático: {reason}"}
 {"k": "app.mirror.session_setting", "src": "3256d908", "v": "⚙️ {setting} → {value} para la sesión {session} (cambiado desde la Mini App)"}
 {"k": "app.mirror.session_setting_reset", "src": "4502514a", "v": "⚙️ {setting} restablecido al valor predeterminado ({value}) para la sesión {session} (cambiado desde la Mini App)"}
 {"k": "app.mirror.setting", "src": "6820a9f7", "v": "⚙️ {setting} → {value} (cambiado desde la Mini App)"}
@@ -111,6 +116,8 @@
 {"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"many": "⏹️ [{session}] detenida desde la Mini App ({n} mensajes en cola descartados)", "one": "⏹️ [{session}] detenida desde la Mini App ({n} mensaje en cola descartado)", "other": "⏹️ [{session}] detenida desde la Mini App ({n} mensajes en cola descartados)"}}
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} pasó al modo Preguntar desde la Mini App"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} pasó al modo Automático desde la Mini App"}
+{"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 {session} pasó al modo Acceso total desde la Mini App"}
+{"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "Responde primero la solicitud abierta y luego cambia el modo."}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude está trabajando - cambia el modelo cuando termine este turno."}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "La sesión no está en marcha."}
 {"k": "app.reason.model_pending", "src": "a3384cf1", "v": "El último cambio de modelo aún no está confirmado - busca en la terminal la pregunta \"Switch model?\" de Claude Code antes de volver a cambiarlo."}
@@ -120,7 +127,7 @@
 {"k": "app.reason.no_context", "src": "8f590315", "v": "Nada que compactar - el contexto ya está vacío."}
 {"k": "app.reason.no_permission", "src": "e1081627", "v": "No tienes permiso para controlar esta sesión."}
 {"k": "app.reason.no_transcript", "src": "3426f123", "v": "No hay ninguna transcripción que reanudar - inicia una sesión nueva."}
-{"k": "app.reason.perms_admin", "src": "7202c2fd", "v": "Cambiar al modo Automático requiere un administrador."}
+{"k": "app.reason.perms_admin", "src": "c9f440cf", "v": "Cambiar al modo Acceso total requiere un admin."}
 {"k": "app.reason.queue_empty", "src": "35da34dc", "v": "No hay nada en cola que vaciar."}
 {"k": "app.reason.queue_full", "src": "2bf9f868", "v": "La cola está llena ({cap} pendientes) - vacíala o espera a que se vacíe."}
 {"k": "appcmd.btn.open", "src": "0bfb9312", "v": "📱 Abrir Mini App"}
@@ -218,7 +225,7 @@
 {"k": "cmd.app", "src": "486dfc4e", "v": "Abrir el panel de la Mini App"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "Lo que puedes hacer"}
 {"k": "cmd.language", "src": "9dc3a234", "v": "Idioma de los mensajes de aipager"}
-{"k": "cmd.mode", "src": "b677b7d9", "v": "Automático o Preguntar"}
+{"k": "cmd.mode", "src": "908f74fc", "v": "Modo Preguntar, Automático o Total"}
 {"k": "cmd.new", "src": "959b093b", "v": "Iniciar una sesión"}
 {"k": "cmd.now", "src": "3673f6f7", "v": "Enviar ya los mensajes en cola a Claude"}
 {"k": "cmd.resume", "src": "88f33259", "v": "Reanudar una sesión terminada"}
@@ -343,36 +350,49 @@
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ De acuerdo, la voz no se instaló."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ El mensaje de voz pesa {size} MB; los bots de Telegram tienen un límite de {limit} MB."}
 {"k": "mode.ask", "src": "07910591", "v": "💬 Modo Preguntar"}
-{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 Preguntar (🤖 Automático: admins)"}
-{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 Mejor Preguntar"}
+{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Mejor Modo Preguntar"}
 {"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 Modo Automático"}
-{"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 Mejor Automático"}
+{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Mejor Modo Automático"}
+{"k": "mode.full", "src": "2b63c484", "v": "🔓 Modo Acceso total"}
+{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Mejor Modo Acceso total"}
 {"k": "mode.word.ask", "src": "3562777b", "v": "Preguntar"}
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Automático"}
+{"k": "mode.word.full", "src": "10b28a8c", "v": "Total"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> ya está en {mode}."}
-{"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 Cambiar a Preguntar"}
-{"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 Cambiar a Automático"}
+{"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 Modo Preguntar (Automático no está disponible aquí)"}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 Automático para ti (🔓 el Acceso total es para admins)"}
+{"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "El modo Automático no está disponible para {session} (modelo o plan), así que sigue en modo Preguntar."}
+{"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 Cambiar a Modo Preguntar"}
+{"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 Cambiar a Modo Automático"}
+{"k": "modecard.btn.to_full", "src": "365ba002", "v": "🔓 Cambiar a Modo Acceso total"}
 {"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> está ocupada.\n¿Cambiar al modo Preguntar?"}
 {"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> está ocupada.\n¿Cambiar al modo Automático?"}
-{"k": "modecard.confirm_auto", "src": "ff1562a9", "v": "⚙️ ¿Cambiar <b>{session}</b> al {mode}?\n<i>Claude ejecutará herramientas sin preguntar ({flag}).</i>"}
+{"k": "modecard.busy_to_full", "src": "13160dd5", "v": "⚙️ <b>{session}</b> está ocupada.\n¿Cambiar al modo Acceso total? La sesión se reinicia."}
+{"k": "modecard.confirm_full", "src": "30bc1073", "v": "⚙️ ¿Cambiar <b>{session}</b> a {mode}?\n<i>Todo se ejecuta sin ninguna comprobación ({flag}). El cambio reinicia la sesión; la conversación se conserva.</i>"}
+{"k": "modecard.dialog_open", "src": "dbd6e8b6", "v": "⚠️ <b>{session}</b> espera la respuesta a una pregunta o una solicitud de permiso. Respóndela primero y luego cambia el modo."}
 {"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ El estado de <b>{session}</b> aún se está inicializando. Vuelve a probar /mode en un momento."}
 {"k": "modecard.is", "src": "c057ad13", "v": "<b>{session}</b> está en {mode}."}
 {"k": "modecard.is_target", "src": "92bc67e3", "v": "✍️ <b>{session}</b> está en {mode}."}
 {"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ <b>{session}</b> pasó a un trabajo nuevo, así que no cambió nada."}
-{"k": "modecard.needs_admin", "src": "fe68d230", "v": "El modo Automático necesita un administrador."}
+{"k": "modecard.needs_admin", "src": "20f8f3e6", "v": "El modo Acceso total requiere un admin."}
 {"k": "modecard.none_live", "src": "ae432c8c", "v": "No hay sesiones activas aquí. Inicia una con /new."}
+{"k": "modecard.other_mode", "src": "c8beff6c", "v": "⚙️ Modo {name} de Claude Code"}
+{"k": "modecard.press_failed", "src": "b3c8a233", "v": "❌ No se pudo llegar a la terminal de <b>{session}</b> - el modo no cambió."}
 {"k": "modecard.refused_not_running", "src": "d62cf188", "v": "⚠️ <b>{session}</b> no está en marcha - el modo no cambió."}
 {"k": "modecard.refused_restarting", "src": "06433ed3", "v": "⚠️ <b>{session}</b> se está reiniciando ahora mismo - el modo no cambió. Vuelve a intentarlo en un momento."}
 {"k": "modecard.session_missing", "src": "adf0d420", "v": "⚠️ Sesión no encontrada."}
 {"k": "modecard.stale", "src": "9f0f5572", "v": "⚠️ Esa tarjeta estaba desactualizada, así que no cambió nada."}
 {"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> todavía se está deteniendo - el modo no cambió."}
+{"k": "modecard.switch_confirmed", "src": "85dadf29", "v": "✅ {session} ya está en {mode}."}
 {"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ No se pudo cambiar el modo: {error}"}
+{"k": "modecard.switch_pending_line", "src": "661317d0", "v": "⏳ Esperando a que Claude Code confirme el cambio."}
+{"k": "modecard.switch_sent", "src": "dc418d95", "v": "⚙️ {session} pasa a {mode} sin reiniciar."}
+{"k": "modecard.switch_unconfirmed", "src": "367038cc", "v": "{session} no cambió: ahora está en {mode}."}
 {"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ Cambiado al {mode} por {person}."}
-{"k": "modecard.switching", "src": "30fa9003", "v": "⚙️ Cambiando <b>{session}</b> al {mode}…"}
-{"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ /mode recibe un nombre de sesión y ask o auto, por ejemplo {example} o {example_ask}."}
+{"k": "modecard.switching", "src": "60043e5a", "v": "⚙️ Cambiando <b>{session}</b> a {mode} (la sesión se reinicia)…"}
+{"k": "modecard.usage", "src": "b9b6e4b8", "v": "⚠️ /mode recibe un nombre de sesión y ask, auto o full, por ejemplo {example} o {example_ask}."}
 {"k": "modecard.which", "src": "107abca0", "v": "¿Qué sesión?"}
 {"k": "modecard.which_to", "src": "4694464a", "v": "¿Qué sesión cambiar al {mode}?"}
-{"k": "newflow.auto_needs_admin_note", "src": "6bb45da7", "v": "El modo Automático necesita un administrador, así que esta sesión usa Preguntar."}
 {"k": "newflow.btn.cancel", "src": "196a9f45", "v": "✖️ Cancelar"}
 {"k": "newflow.btn.folder", "src": "2fb30e02", "v": "📁 Carpeta"}
 {"k": "newflow.btn.model", "src": "e252b8c8", "v": "🧠 Modelo"}
@@ -393,6 +413,7 @@
 {"k": "newflow.example_line", "src": "ab8b1839", "v": "<code>{session} arregla los tests que fallan</code>"}
 {"k": "newflow.expired", "src": "6f9c9ea0", "v": "⏱ Esta tarjeta de nueva sesión caducó. Envía /new otra vez."}
 {"k": "newflow.folder_page", "src": "f6e221a1", "v": "📁 <b>Carpeta</b>\n\nElige dónde trabaja esta sesión."}
+{"k": "newflow.full_needs_admin_note", "src": "3d60c811", "v": "El modo Acceso total requiere un admin, así que esta sesión empieza en modo Automático."}
 {"k": "newflow.group_name_ask", "src": "eb31141c", "v": "Responde a este mensaje con un nombre y, si quieres, lo primero que hay que hacer:"}
 {"k": "newflow.hint_folder", "src": "f27c8294", "v": "📁 Primero elige una carpeta de proyecto con 📁 Carpeta."}
 {"k": "newflow.just_send", "src": "0b7a9b82", "v": "✍️ Solo envía un mensaje, va a {session}."}
@@ -705,7 +726,7 @@
 {"k": "sess.resume_not_found", "src": "4c1d68d2", "v": "⚠️ No hay ninguna sesión llamada <b>{session}</b> en el historial.\nEnvía {command} sin nombre para ver las disponibles."}
 {"k": "sess.resume_running", "src": "c090af67", "v": "⚠️ <b>{session}</b> ya está en marcha.\nToca {command} en el teclado para cambiar a ella."}
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> reanudada"}
-{"k": "sess.resumed_in_ask", "src": "8151879e", "v": "♻️ <b>{session}</b> reanudada en modo Preguntar: el modo Automático necesita un administrador."}
+{"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> se reanudó en Modo Automático: el Modo Acceso total requiere un admin."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "Enviado a {session}."}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Cerrar"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Sesiones nuevas"}
@@ -824,6 +845,7 @@
 {"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "Acción no válida"}
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "Valor no válido"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "Este botón está desactualizado - envía /kill otra vez"}
+{"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} espera la respuesta a una solicitud. Respóndela primero y luego cambia el modo."}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} pasó a un trabajo nuevo - toca ⏹ Detener otra vez para detenerla"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} pasó a un trabajo nuevo - envía /stop otra vez"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "No puedes cambiar esta sesión."}
@@ -847,7 +869,7 @@
 {"k": "toast.open_chat", "src": "202c3e06", "v": "Abre el chat para responder"}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "Esta tarjeta es de {owner}."}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "Esta tarjeta es de {owner}. Envía {command} para tener la tuya."}
-{"k": "toast.perms_needs_admin", "src": "fe68d230", "v": "El modo Automático necesita un administrador."}
+{"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "El modo Acceso total requiere un admin."}
 {"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} se está reiniciando ahora mismo - toca otra vez en un momento"}
 {"k": "toast.perms_stale", "src": "4e34769b", "v": "Esta tarjeta está desactualizada - no cambió nada"}
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} todavía se está iniciando - vuelve a intentarlo en un momento"}
@@ -922,7 +944,7 @@
 {"k": "tx.api.overloaded", "src": "6f545f5b", "v": "Los servidores de Anthropic están sobrecargados. Vuelve a intentarlo en un momento."}
 {"k": "tx.api.rate_limit", "src": "234c6146", "v": "Se alcanzó el límite de frecuencia. Espera un momento antes de reintentar."}
 {"k": "tx.api.rate_limit_wait", "src": "a2053ce3", "v": "Se alcanzó el límite de frecuencia. Espera {seconds} s antes de reintentar."}
-{"k": "tx.auto_needs_admin", "src": "bd96281e", "v": "El modo Automático necesita un administrador."}
+{"k": "tx.full_needs_admin", "src": "20f8f3e6", "v": "El Modo Acceso total requiere un admin."}
 {"k": "tx.needs_admin", "src": "a2f55b85", "v": "Ese comando necesita un administrador."}
 {"k": "tx.retry_others", "src": "4ad540c7", "v": "Solo quien envió ese comando puede reintentarlo."}
 {"k": "tx.truncated", "src": "27710457", "v": "…[truncado]"}
@@ -975,8 +997,9 @@
 {"k": "ui.btn.start_session", "src": "76684eaf", "v": "Crear sesión"}
 {"k": "ui.btn.stop_and_switch", "src": "21c1d7af", "v": "Detener tarea y cambiar"}
 {"k": "ui.btn.switch", "src": "3e44c920", "v": "Cambiar"}
-{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "Cambiar a Preguntar"}
-{"k": "ui.btn.switch_to_auto", "src": "13a0f246", "v": "Cambiar a Automático"}
+{"k": "ui.btn.switch_to_ask", "src": "adc38b97", "v": "Cambiar a Modo Preguntar"}
+{"k": "ui.btn.switch_to_auto", "src": "6f248734", "v": "Cambiar a Modo Automático"}
+{"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Cambiar a Modo Acceso total"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Reintentar"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Esperar 10 min más"}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "¿Eliminar {session}?"}
@@ -984,11 +1007,13 @@
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "¿Terminar {session}?"}
 {"k": "ui.confirm.kill_body", "src": "beff52e4", "v": "Esto detiene la sesión y la quita. Todo lo que estaba ejecutando se interrumpe."}
 {"k": "ui.confirm.perms_ask", "src": "c0710578", "v": "¿Cambiar {session} al modo Preguntar?"}
-{"k": "ui.confirm.perms_ask_body", "src": "701538b8", "v": "Claude pregunta antes de ejecutar herramientas."}
 {"k": "ui.confirm.perms_auto", "src": "b6a1ddde", "v": "¿Cambiar {session} al modo Automático?"}
-{"k": "ui.confirm.perms_auto_body", "src": "7d8bf9c6", "v": "Claude ejecuta herramientas sin preguntar."}
-{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "¿Detener la tarea actual y cambiar {session} a Preguntar?"}
-{"k": "ui.confirm.perms_busy_auto", "src": "d4090a8b", "v": "¿Detener la tarea actual y cambiar {session} a Automático?"}
+{"k": "ui.confirm.perms_busy_ask", "src": "666af671", "v": "¿Detener la tarea actual y cambiar {session} a Modo Preguntar?"}
+{"k": "ui.confirm.perms_busy_auto", "src": "1b03b9b8", "v": "¿Detener la tarea actual y cambiar {session} a Modo Automático?"}
+{"k": "ui.confirm.perms_busy_full", "src": "066f6071", "v": "¿Detener la tarea actual y cambiar {session} a Modo Acceso total?"}
+{"k": "ui.confirm.perms_full", "src": "401fe494", "v": "¿Cambiar {session} al modo Acceso total?"}
+{"k": "ui.confirm.perms_full_body", "src": "36f1fb1e", "v": "Todo se ejecuta sin ninguna comprobación. La sesión se reinicia; la conversación se conserva."}
+{"k": "ui.confirm.perms_leave_full_body", "src": "1159bfd9", "v": "La sesión se reinicia; la conversación se conserva."}
 {"k": "ui.confirm.rename", "src": "92656d63", "v": "¿Renombrar {session}?"}
 {"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "La sesión conserva su historial y su directorio de trabajo. Solo cambia el nombre."}
 {"k": "ui.confirm.reset", "src": "e13d0ebf", "v": "¿Restablecer los ajustes predeterminados?"}
@@ -1035,6 +1060,7 @@
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Eliminada."}
 {"k": "ui.done.generic", "src": "e2bcda84", "v": "Hecho."}
 {"k": "ui.done.kill", "src": "eb388bd9", "v": "Terminada."}
+{"k": "ui.done.mode_sent", "src": "e240134b", "v": "Cambio enviado. Claude Code lo confirma con su siguiente paso."}
 {"k": "ui.done.perms", "src": "144199df", "v": "Cambiado."}
 {"k": "ui.done.rename", "src": "b930ba4a", "v": "Renombrada."}
 {"k": "ui.done.rename_same", "src": "ea00acbd", "v": "Sin cambios."}
@@ -1056,7 +1082,6 @@
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "Modelo"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "no confirmado (revisa la sesión)"}
 {"k": "ui.model.unreachable", "src": "82a93142", "v": "No se pudo contactar con el servidor. Revisa el modelo de la sesión."}
-{"k": "ui.new.auto_needs_admin", "src": "ad1f0c2f", "v": "El modo Automático requiere un administrador."}
 {"k": "ui.new.chips_recent", "src": "76eec760", "v": "Recientes"}
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "Sugeridos"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "el modelo predeterminado de la CLI"}
@@ -1077,10 +1102,13 @@
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "No tienes permiso para crear carpetas aquí."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Nombre de la nueva carpeta"}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "No se pudo contactar con el servidor. No se creó ninguna carpeta."}
+{"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "El modo Acceso total requiere un admin."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "Preguntar"}
 {"k": "ui.new.mode_ask_help", "src": "eca1be33", "v": "Claude pregunta antes de ejecutar herramientas"}
 {"k": "ui.new.mode_auto", "src": "c614ba7c", "v": "Automático"}
-{"k": "ui.new.mode_auto_help", "src": "306e8992", "v": "Ejecuta herramientas sin preguntar"}
+{"k": "ui.new.mode_auto_help", "src": "9dcf2566", "v": "Una comprobación de seguridad ejecuta las acciones seguras y detiene las riesgosas"}
+{"k": "ui.new.mode_full", "src": "5e4017a2", "v": "Acceso total"}
+{"k": "ui.new.mode_full_help", "src": "26c97cd3", "v": "Todo se ejecuta sin ninguna comprobación"}
 {"k": "ui.new.mode_title", "src": "9c8c621a", "v": "Modo de permisos"}
 {"k": "ui.new.model_name", "src": "5ebb9765", "v": "Nombre del modelo"}
 {"k": "ui.new.model_needed", "src": "c585e482", "v": "Escribe un nombre de modelo para continuar."}
@@ -1097,8 +1125,10 @@
 {"k": "ui.new.sub", "src": "23b19317", "v": "Ponle un nombre, elige una carpeta y Claude empieza allí."}
 {"k": "ui.new.summary_ask", "src": "3e987f2e", "v": "Inicia Claude en {where}, en modo Preguntar, con {model}."}
 {"k": "ui.new.summary_auto", "src": "d0968e63", "v": "Inicia Claude en {where}, en modo Automático, con {model}."}
+{"k": "ui.new.summary_full", "src": "08065163", "v": "Inicia Claude en {where}, en modo Acceso total, con {model}."}
 {"k": "ui.new.summary_named_ask", "src": "ccbc6d09", "v": "Inicia Claude como {name} en {where}, en modo Preguntar, con {model}."}
 {"k": "ui.new.summary_named_auto", "src": "4b48c549", "v": "Inicia Claude como {name} en {where}, en modo Automático, con {model}."}
+{"k": "ui.new.summary_named_full", "src": "91a24e52", "v": "Inicia Claude como {name} en {where}, en modo Acceso total, con {model}."}
 {"k": "ui.new.title", "src": "5c881d23", "v": "Nueva sesión"}
 {"k": "ui.new.where", "src": "525f61b6", "v": "Dónde"}
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "No se capturó nada antes de que terminara esta sesión."}

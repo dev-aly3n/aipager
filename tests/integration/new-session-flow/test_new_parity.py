@@ -52,7 +52,7 @@ def run_flow(mk_bot, mk_update, run_async, monkeypatch):
         sessions = [s for s in bot.registry.all_sessions().values() if s.label]
         assert len(sessions) == 1, sessions
         sess = sessions[0]
-        state = {"label": sess.label, "skip_perms": sess.skip_perms,
+        state = {"label": sess.label, "mode": sess.perm_mode,
                  "queued": [q[0] for q in sess.pending_queue],
                  "cwd": sess.cwd, "target": bot.registry.last_active_session == sess.name}
         return kw["text"], buttons, state
@@ -71,28 +71,28 @@ def test_both_spellings_end_the_same(run_flow, direct, answered):
 
 def test_the_result_is_auto_ready_and_targeted(run_flow):
     text, buttons, state = run_flow("/new x1")
-    assert state == {"label": "x1", "skip_perms": True, "queued": [],
+    assert state == {"label": "x1", "mode": "auto", "queued": [],
                      "cwd": "", "target": True}
     assert "✅ <b>x1</b> is ready" in text and "🤖 Auto mode" in text
     assert "✍️ Just send a message, it goes to x1." in text
-    assert buttons == ["💬 Switch to Ask", "🧠 Model"]
+    assert buttons == ["💬 Switch to Ask mode", "🔓 Switch to Full access mode", "🧠 Model"]
 
 
 @pytest.mark.parametrize("name", ["x1", "!x1"])
-def test_a_non_admin_gets_ask_on_both_spellings(run_flow, name):
+def test_a_non_admin_gets_auto_on_both_spellings(run_flow, name):
     direct = run_flow(f"/new {name}", admin=False)
     answered = run_flow("/new", name, admin=False)
-    assert direct[2]["skip_perms"] is False
+    assert direct[2]["mode"] == "auto"
     assert direct == answered
-    # Asking for Auto (the `!`) is answered with why it asks instead.
-    assert ("Auto mode needs an admin" in direct[0]) is name.startswith("!")
+    # Asking for Full access (the `!`) is answered with why it is Auto.
+    assert ("Full access mode needs an admin" in direct[0]) is name.startswith("!")
 
 
 def test_the_chats_default_ask_applies_to_both_spellings(run_flow):
     preferences.set_new_session_default(CHAT, "mode", "ask")
     direct = run_flow("/new x1")
     answered = run_flow("/new", "x1")
-    assert direct[2]["skip_perms"] is False
+    assert direct[2]["mode"] == "ask"
     assert direct == answered
 
 
@@ -216,7 +216,7 @@ def test_replace_keeps_the_model_folder_and_first_message_picked_on_the_card(
 
     wanted, _err = launch.validate_model(MODEL_CHOICES[1][0], MODEL_CHOICES)
     kw = launched.await_args.kwargs
-    assert (kw["model"], kw["cwd"], kw["skip_perms"]) == (wanted, folder, True)
+    assert (kw["model"], kw["cwd"], kw["mode"]) == (wanted, folder, "auto")
     fresh = bot.registry.get("claude-jim")
     assert [q[0] for q in fresh.pending_queue] == ["do it"]
     # And its Ready card names the model by its label.

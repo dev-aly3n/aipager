@@ -23,7 +23,7 @@ def _sess(bot, label, status=Status.IDLE, *, chat=CHAT, **fields):
     s = TrackedSession(name=f"claude-{label}", label=label, status=status)
     s.scope_chat_id = chat
     for k, v in fields.items():
-        setattr(s, k, v)
+        setattr(s, "perm_mode" if k == "mode" else k, v)
     bot.registry._sessions[s.name] = s
     return s
 
@@ -312,31 +312,36 @@ def test_a_picker_cancel_says_so(bot, cmd, tap):
 
 # ---- /mode (and /perms) --------------------------------------------------------
 
-@pytest.mark.parametrize("auto, text, button, verb", [
-    (True, "✍️ <b>x1</b> is in 🤖 Auto mode.", "💬 Switch to Ask", "modeask"),
-    (False, "✍️ <b>x1</b> is in 💬 Ask mode.", "🤖 Switch to Auto", "modeauto"),
-])
-def test_mode_shows_the_mode_and_the_one_switch(bot, cmd, auto, text, button, verb):
-    sess = _sess(bot, "x1", skip_perms=auto)
+@pytest.mark.parametrize("mode, text, buttons", [
+    ("full", "✍️ <b>x1</b> is in 🔓 Full access mode.",
+     [("💬 Switch to Ask mode", "modeask"), ("🤖 Switch to Auto mode", "modeauto")]),
+    ("auto", "✍️ <b>x1</b> is in 🤖 Auto mode.",
+     [("💬 Switch to Ask mode", "modeask"), ("🔓 Switch to Full access mode", "modefull")]),
+    ("ask", "✍️ <b>x1</b> is in 💬 Ask mode.",
+     [("🤖 Switch to Auto mode", "modeauto"), ("🔓 Switch to Full access mode", "modefull")]),
+], ids=["full", "auto", "ask"])
+def test_mode_shows_the_mode_and_the_other_two(bot, cmd, mode, text, buttons):
+    sess = _sess(bot, "x1", mode=mode)
     bot.registry.last_active_session = sess.name
-    bot._perms_flow = AsyncMock()
+    bot._mode_flow = AsyncMock()
 
     got, kb = cmd("/mode")
 
     assert got == text
-    assert _buttons(bot, kb) == [(button, (sess.name, f"{verb}{sess.turn_key}"))]
-    bot._perms_flow.assert_not_awaited()          # it no longer flips blind
+    assert _buttons(bot, kb) == [(label, (sess.name, f"{verb}{sess.turn_key}"))
+                                 for label, verb in buttons]
+    bot._mode_flow.assert_not_awaited()          # it no longer flips blind
 
 
 def test_perms_is_the_same_command(bot, cmd):
-    sess = _sess(bot, "x1", skip_perms=True)
+    sess = _sess(bot, "x1", mode="full")
     bot.registry.last_active_session = sess.name
 
     assert cmd("/perms") == cmd("/mode")
 
 
 def test_mode_by_name_and_from_the_picker_show_the_same_card(bot, cmd, tap):
-    x1 = _sess(bot, "x1", skip_perms=True)
+    x1 = _sess(bot, "x1", mode="full")
     x2 = _sess(bot, "x2")
     _sess(bot, "gone1", Status.GONE)
     _sess(bot, "theirs", chat=OTHER_CHAT)
@@ -351,18 +356,20 @@ def test_mode_by_name_and_from_the_picker_show_the_same_card(bot, cmd, tap):
     typed_text, typed_kb = cmd("/mode x2")
     assert picked_text == typed_text == "<b>x2</b> is in 💬 Ask mode."
     assert _buttons(bot, picked_kb) == _buttons(bot, typed_kb) == [
-        ("🤖 Switch to Auto", (x2.name, f"modeauto{x2.turn_key}"))]
+        ("🤖 Switch to Auto mode", (x2.name, f"modeauto{x2.turn_key}")),
+        ("🔓 Switch to Full access mode", (x2.name, f"modefull{x2.turn_key}"))]
 
 
-@pytest.mark.parametrize("text, question, verb, target", [
-    ("/mode ask", "Which session to switch to 💬 Ask mode?", "modeask", False),
-    ("/mode auto", "Which session to switch to 🤖 Auto mode?", "modeauto", True),
-])
+@pytest.mark.parametrize("text, question, verb, target, pick", [
+    ("/mode ask", "Which session to switch to 💬 Ask mode?", "modeask", "ask", "x1"),
+    ("/mode auto", "Which session to switch to 🤖 Auto mode?", "modeauto", "auto", "x2"),
+    ("/mode full", "Which session to switch to 🔓 Full access mode?", "modefull", "full", "x2"),
+], ids=["ask", "auto", "full"])
 def test_mode_named_with_no_target_picks_then_switches_in_one_tap(
-        bot, cmd, tap, text, question, verb, target):
-    x1 = _sess(bot, "x1", skip_perms=True)
+        bot, cmd, tap, text, question, verb, target, pick):
+    x1 = _sess(bot, "x1", mode="full")
     x2 = _sess(bot, "x2")
-    bot._perms_flow = AsyncMock()
+    bot._mode_flow = AsyncMock()
 
     got, kb = cmd(text)
 
@@ -370,10 +377,10 @@ def test_mode_named_with_no_target_picks_then_switches_in_one_tap(
     assert _buttons(bot, kb) == [("x1", (x1.name, f"{verb}{x1.turn_key}")),
                                  ("x2", (x2.name, f"{verb}{x2.turn_key}")),
                                  ("✖️ Cancel", "_:pick:cancel")]
-    bot._perms_flow.assert_not_awaited()
-    tap(_cb(bot, kb, "x1" if not target else "x2"))
-    sess, want, _msg = bot._perms_flow.await_args.args
-    assert (sess, want) == ((x2 if target else x1), target)
+    bot._mode_flow.assert_not_awaited()
+    tap(_cb(bot, kb, pick))
+    sess, want, _msg = bot._mode_flow.await_args.args
+    assert (sess.label, want) == (pick, target)
 
 
 def test_mode_with_one_live_session_and_no_target_shows_it(bot, cmd):
@@ -393,48 +400,49 @@ def test_mode_with_no_live_session(bot, cmd):
 
 
 @pytest.mark.parametrize("text, who, target", [
-    ("/mode ask", "x1", False),
-    ("/mode x2 auto", "x2", True),
-    ("/mode auto x2", "x2", True),
-    ("/perms x2 auto", "x2", True),
-])
+    ("/mode ask", "x1", "ask"),
+    ("/mode x2 auto", "x2", "auto"),
+    ("/mode auto x2", "x2", "auto"),
+    ("/perms x2 auto", "x2", "auto"),
+    ("/mode x2 full", "x2", "full"),
+], ids=["ask", "name-then-auto", "auto-then-name", "perms-alias", "full"])
 def test_mode_switches_straight_to_the_mode_named(bot, cmd, text, who, target):
-    x1 = _sess(bot, "x1", skip_perms=True)
+    x1 = _sess(bot, "x1", mode="full")
     _sess(bot, "x2")
     bot.registry.last_active_session = x1.name
-    bot._perms_flow = AsyncMock()
+    bot._mode_flow = AsyncMock()
 
     cmd(text)
 
-    sess, want, _msg = bot._perms_flow.await_args.args
+    sess, want, _msg = bot._mode_flow.await_args.args
     assert (sess.label, want) == (who, target)
 
 
 def test_mode_already_in_the_mode_named(bot, cmd):
     x1 = _sess(bot, "x1")
     bot.registry.last_active_session = x1.name
-    bot._perms_flow = AsyncMock()
+    bot._mode_flow = AsyncMock()
 
     assert cmd("/mode ask")[0] == "<b>x1</b> is already in 💬 Ask mode."
-    bot._perms_flow.assert_not_awaited()
+    bot._mode_flow.assert_not_awaited()
 
 
-def test_only_going_to_auto_needs_an_admin(bot, cmd):
+def test_only_going_to_full_access_needs_an_admin(bot, cmd):
     x1 = _sess(bot, "x1")
-    x2 = _sess(bot, "x2", skip_perms=True)
-    bot._may_use_auto = MagicMock(return_value=False)
+    x2 = _sess(bot, "x2", mode="full")
+    bot._may_use_full_access = MagicMock(return_value=False)
     bot._do_perms_switch_via_fn = AsyncMock()
 
-    assert cmd("/mode x1 auto")[0] == "Auto mode needs an admin."
-    assert x1.skip_perms is False
+    assert cmd("/mode x1 full")[0] == "Full access mode needs an admin."
+    assert x1.perm_mode == "ask"
 
-    assert cmd("/mode x2 ask")[0] == "⚙️ Switching <b>x2</b> to 💬 Ask mode…"
+    assert cmd("/mode x2 ask")[0] == "⚙️ Switching <b>x2</b> to 💬 Ask mode (the session restarts)…"
     sess, target, _edit = bot._do_perms_switch_via_fn.await_args.args
-    assert (sess, target) == (x2, False)
+    assert (sess, target) == (x2, "ask")
 
 
 def test_mode_on_a_busy_session_offers_stop_and_switch(bot, cmd):
-    _sess(bot, "b1", Status.BUSY, skip_perms=True)
+    _sess(bot, "b1", Status.BUSY, mode="full")
 
     text, kb = cmd("/mode b1 ask")
 
@@ -443,61 +451,78 @@ def test_mode_on_a_busy_session_offers_stop_and_switch(bot, cmd):
 
 
 def test_the_mode_card_switch_runs_the_same_flow(bot, cmd, tap):
-    x1 = _sess(bot, "x1", skip_perms=True)
+    x1 = _sess(bot, "x1", mode="full")
     bot.registry.last_active_session = x1.name
     _text, kb = cmd("/mode")
-    bot._perms_flow = AsyncMock()
+    bot._mode_flow = AsyncMock()
 
-    tap(_cb(bot, kb, "💬 Switch to Ask"))
+    tap(_cb(bot, kb, "💬 Switch to Ask mode"))
 
-    sess, want, _msg = bot._perms_flow.await_args.args
-    assert (sess, want) == (x1, False)
+    sess, want, _msg = bot._mode_flow.await_args.args
+    assert (sess, want) == (x1, "ask")
 
 
-def test_the_mode_card_refuses_a_turn_that_moved_on(bot, cmd, tap):
-    x1 = _sess(bot, "x1", Status.BUSY, skip_perms=True)
+def test_the_mode_card_refuses_a_restart_for_a_turn_that_moved_on(bot, cmd, tap):
+    x1 = _sess(bot, "x1", Status.BUSY, mode="full")
     bot.registry.last_active_session = x1.name
     _text, kb = cmd("/mode")
     bot.registry.transition(x1.name, Status.IDLE)
     bot.registry.transition(x1.name, Status.BUSY)
-    bot._perms_flow = AsyncMock()
+    bot._mode_flow = AsyncMock()
 
-    query = tap(_cb(bot, kb, "💬 Switch to Ask"))
+    query = tap(_cb(bot, kb, "💬 Switch to Ask mode"))
 
-    bot._perms_flow.assert_not_awaited()
+    bot._mode_flow.assert_not_awaited()
     assert _toast(query) == "x1 moved on to new work - tap the switch again if you still want it"
     # A fresh card, for this turn, to tap if they do.
     text, fresh = _edited(query)
-    assert text == "✍️ <b>x1</b> is in 🤖 Auto mode."
-    assert _buttons(bot, fresh) == [("💬 Switch to Ask", (x1.name, f"modeask{x1.turn_key}"))]
+    assert text == "✍️ <b>x1</b> is in 🔓 Full access mode."
+    assert _buttons(bot, fresh) == [
+        ("💬 Switch to Ask mode", (x1.name, f"modeask{x1.turn_key}")),
+        ("🤖 Switch to Auto mode", (x1.name, f"modeauto{x1.turn_key}"))]
+
+
+def test_an_in_place_switch_from_an_older_turns_card_still_goes(bot, cmd, tap):
+    """Ask <-> Auto kills nothing, so the card's turn does not matter."""
+    x1 = _sess(bot, "x1", Status.BUSY, mode="ask")
+    bot.registry.last_active_session = x1.name
+    _text, kb = cmd("/mode")
+    bot.registry.transition(x1.name, Status.IDLE)
+    bot.registry.transition(x1.name, Status.BUSY)
+    bot._mode_flow = AsyncMock()
+
+    tap(_cb(bot, kb, "🤖 Switch to Auto mode"))
+
+    sess, want, _msg = bot._mode_flow.await_args.args
+    assert (sess, want) == (x1, "auto")
 
 
 def test_the_mode_card_survives_a_card_move_in_the_same_turn(bot, cmd, tap):
-    x1 = _sess(bot, "x1", Status.BUSY, skip_perms=True)
+    x1 = _sess(bot, "x1", Status.BUSY, mode="full")
     bot.registry.last_active_session = x1.name
     _text, kb = cmd("/mode")
     x1.busy_msg_id = 99999
-    bot._perms_flow = AsyncMock()
+    bot._mode_flow = AsyncMock()
 
-    tap(_cb(bot, kb, "💬 Switch to Ask"))
+    tap(_cb(bot, kb, "💬 Switch to Ask mode"))
 
-    bot._perms_flow.assert_awaited_once()
+    bot._mode_flow.assert_awaited_once()
 
 
 def test_the_mode_card_says_already_in_after_a_switch_elsewhere(bot, cmd, tap):
-    x1 = _sess(bot, "x1", skip_perms=True)
+    x1 = _sess(bot, "x1", mode="full")
     bot.registry.last_active_session = x1.name
     _text, kb = cmd("/mode")
     # Switched from another card: that relaunches the session, which ends
     # and comes back (two new turn keys) in the other mode.
     bot.registry.transition(x1.name, Status.GONE)
-    x1.skip_perms = False
+    x1.perm_mode = "ask"
     bot.registry.transition(x1.name, Status.IDLE)
-    bot._perms_flow = AsyncMock()
+    bot._mode_flow = AsyncMock()
 
-    query = tap(_cb(bot, kb, "💬 Switch to Ask"))
+    query = tap(_cb(bot, kb, "💬 Switch to Ask mode"))
 
-    bot._perms_flow.assert_not_awaited()
+    bot._mode_flow.assert_not_awaited()
     assert _toast(query) == "x1 is already in 💬 Ask mode."
     assert _edited(query)[0] == "✍️ <b>x1</b> is in 💬 Ask mode."
 
@@ -509,30 +534,30 @@ def test_the_mode_card_says_already_in_after_a_switch_elsewhere(bot, cmd, tap):
 ])
 def test_the_mode_card_refusals(bot, tap, setup, toast):
     x1 = _sess(bot, "x1", Status.GONE if setup == "gone" else Status.IDLE,
-               chat=OTHER_CHAT if setup == "other_chat" else CHAT, skip_perms=True)
+               chat=OTHER_CHAT if setup == "other_chat" else CHAT, mode="full")
     if setup == "no_prompt":
         bot._can_prompt_user = MagicMock(return_value=False)
-    bot._perms_flow = AsyncMock()
+    bot._mode_flow = AsyncMock()
 
     query = tap(f"{x1.name}:modeask{x1.turn_key}")
 
-    bot._perms_flow.assert_not_awaited()
+    bot._mode_flow.assert_not_awaited()
     assert _toast(query) == toast
 
 
-def test_a_non_admin_tapping_switch_to_auto_is_refused_in_words(bot, cmd, tap):
+def test_a_non_admin_tapping_switch_to_full_access_is_refused_in_words(bot, cmd, tap):
     x1 = _sess(bot, "x1")
     bot.registry.last_active_session = x1.name
     _text, kb = cmd("/mode")
     bot._is_admin_user = MagicMock(return_value=False)
 
-    query = tap(_cb(bot, kb, "🤖 Switch to Auto"))
+    query = tap(_cb(bot, kb, "🔓 Switch to Full access mode"))
 
     # A toast; the card stays as it is, and nothing new is sent.
-    assert _toast(query) == "Auto mode needs an admin."
+    assert _toast(query) == "Full access mode needs an admin."
     query.edit_message_text.assert_not_awaited()
     query.message.reply_text.assert_not_awaited()
-    assert x1.skip_perms is False
+    assert x1.perm_mode == "ask"
 
 
 # ---- /kill ---------------------------------------------------------------------
@@ -840,7 +865,7 @@ def test_diff_none_and_unknown(bot, cmd):
 
 
 def test_no_em_dashes_in_what_these_commands_say(bot, cmd):
-    _sess(bot, "x1", skip_perms=True)
+    _sess(bot, "x1", mode="full")
     _sess(bot, "x2", Status.BUSY)
     _sess(bot, "g1", Status.GONE)
     for text in ("/stop", "/stop x1", "/stop nope", "/mode", "/mode x1", "/kill",
@@ -892,7 +917,7 @@ def test_status_offers_stop_for_a_job_still_running_a_background_agent(bot, mk_u
 def test_a_button_from_before_an_end_and_resume_is_refused(bot, tap, verb):
     """rev-iter1-002: the same session, ended and resumed, kept its turn key,
     so an End from before it ended ended the resumed one."""
-    x1 = _sess(bot, "x1", Status.BUSY if "stop" in verb else Status.IDLE, skip_perms=True)
+    x1 = _sess(bot, "x1", Status.BUSY if "stop" in verb else Status.IDLE, mode="full")
     cb = session_parity.session_cb(bot, CHAT, x1, f"{verb}{x1.turn_key}")
     bot.registry.transition(x1.name, Status.GONE)
     bot.registry.transition(x1.name, Status.IDLE)          # resumed, same object
@@ -901,13 +926,13 @@ def test_a_button_from_before_an_end_and_resume_is_refused(bot, tap, verb):
     for core in ("_kill_session_core", "_restart_session_core", "_stop_session_core"):
         setattr(bot, core, AsyncMock(return_value=MagicMock(ok=True, label="x1",
                                                             result="killed", dropped=0)))
-    bot._perms_flow = AsyncMock()
+    bot._mode_flow = AsyncMock()
 
     query = tap(cb)
 
     for core in ("_kill_session_core", "_restart_session_core", "_stop_session_core"):
         getattr(bot, core).assert_not_awaited()
-    bot._perms_flow.assert_not_awaited()
+    bot._mode_flow.assert_not_awaited()
     assert "moved on" in _toast(query)
 
 
@@ -920,29 +945,29 @@ def test_the_turn_key_changes_when_a_session_ends_and_when_it_comes_back(bot):
     assert len({before, ended, x1.turn_key}) == 3
 
 
-def test_an_admin_switching_to_auto_by_button_gets_the_confirm(bot, cmd, tap):
+def test_an_admin_switching_to_full_access_by_button_gets_the_confirm(bot, cmd, tap):
     """rev-iter1-004: only the refusal was pinned."""
     x1 = _sess(bot, "x1")
     bot.registry.last_active_session = x1.name
     _text, kb = cmd("/mode")
     bot._is_admin_user = MagicMock(return_value=True)
 
-    query = tap(_cb(bot, kb, "🤖 Switch to Auto"))
+    query = tap(_cb(bot, kb, "🔓 Switch to Full access mode"))
 
     # The card itself becomes the confirm (2026-10-01).
-    assert _edited(query)[0].startswith("⚙️ Switch <b>x1</b> to 🤖 Auto mode?")
+    assert _edited(query)[0].startswith("⚙️ Switch <b>x1</b> to 🔓 Full access mode?")
     query.message.reply_text.assert_not_awaited()
 
 
 @pytest.mark.parametrize("text", ["/mode x1 x2", "/mode x1 ask more", "/mode ask auto x1"])
 def test_mode_says_what_it_takes_rather_than_drop_words(bot, cmd, text):
-    _sess(bot, "x1", skip_perms=True)
+    _sess(bot, "x1", mode="full")
     _sess(bot, "x2")
-    bot._perms_flow = AsyncMock()
+    bot._mode_flow = AsyncMock()
 
-    assert cmd(text)[0] == ("⚠️ /mode takes a session name and ask or auto, for example "
+    assert cmd(text)[0] == ("⚠️ /mode takes a session name and ask, auto or full, for example "
                             "/mode x1 or /mode x1 ask.")
-    bot._perms_flow.assert_not_awaited()
+    bot._mode_flow.assert_not_awaited()
 
 
 def test_a_leading_slash_on_the_name_works_for_every_session_command(bot, cmd, monkeypatch):

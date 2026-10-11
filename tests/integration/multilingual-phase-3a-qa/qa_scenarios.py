@@ -427,7 +427,7 @@ def mode_replies(h, lang):
     x1 = session(bot, "x1", chat=DM)
     bot.registry.set_target(x1.name, DM, OWNER)
     cmd(h, bot, tg, "_handle_mode_cmd", "/mode", chat=DM)
-    x1.skip_perms = True
+    x1.perm_mode = "full"
     cmd(h, bot, tg, "_handle_mode_cmd", "/mode x1", chat=DM)
     cmd(h, bot, tg, "_handle_mode_cmd", "/mode x1 auto", chat=DM)
     session(bot, "x2", chat=DM)
@@ -456,10 +456,10 @@ def _new_world(h, lang):
     h.mp.setattr(launch, "allowed_roots", lambda *a, **k: ["/work/app", "/work/lib"])
     h.mp.setattr(launch, "default_folder_is_wide", lambda: False)
 
-    async def _create(label, *, scope_chat_id, skip_perms=False, cwd=None,
+    async def _create(label, *, scope_chat_id, mode="ask", cwd=None,
                       driver_user_id=None, model=None, keep_card=False, reuse_name=None):
         sess = session(bot, label, chat=scope_chat_id)
-        sess.skip_perms = skip_perms
+        sess.perm_mode = mode
         sess.status = Status.IDLE
         return sess.name, ""
     bot.create_session = _create

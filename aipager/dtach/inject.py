@@ -18,7 +18,7 @@ import signal
 import time
 from pathlib import Path
 
-from aipager import claude_resolve, daemon_secrets, instance
+from aipager import claude_resolve, daemon_secrets, instance, perm_modes
 
 log = logging.getLogger(__name__)
 
@@ -222,6 +222,9 @@ KEYS = {
     # below to wipe text an Escape surfaced into the input box without
     # submitting it.
     "KillLine": "\x15",
+    # Shift+Tab: Claude Code cycles its permission mode on it
+    # (press_mode_cycle below).
+    "BackTab": "\x1b[Z",
 }
 
 
@@ -304,6 +307,9 @@ _LAST_WRITE_AT: dict[str, float] = {}
 #   from its "was anything written since my Ctrl+X?" check through the
 #   Ctrl+S write, so a foreign write falls before the check (and the
 #   Ctrl+S is skipped) or after the Ctrl+S, never between them.
+# - ``press_mode_cycle``: ONE hold across its Shift+Tab presses and the
+#   gaps between them (at most 3 writes + 2 x ``MODE_PRESS_GAP``, 0.3 s),
+#   so no prompt's text lands between two presses.
 # Waiting is FIFO. The bound on any writer's wait (Stop's Escape
 # included): at most ``_CHORD_WAIT_LIMIT`` (0.5 s) for a chord in flight,
 # then the lock hold in progress: one ``dtach -p`` write, or a prompt's
@@ -473,6 +479,35 @@ async def discard_queued_input(session: str) -> bool:
     await send_keys(session, "Escape")
     await _key_gap_sleep(0.15)
     return await send_keys(session, "KillLine")
+
+
+async def press_mode_cycle(session: str, presses: int) -> bool:
+    """Press Shift+Tab *presses* times in *session*: Claude Code moves one
+    step along its permission-mode cycle per press (an Ask<->Auto switch
+    without a restart, aipager/bot/session_ops.py ``_mode_switch_core``).
+
+    One ``dtach -p`` write per press, ``MODE_PRESS_GAP`` apart, never one
+    chunk: Ink reads a chunk of several escape sequences unpredictably (the
+    same reason ``send_text_and_enter`` splits text and Enter), and a
+    partly read chunk would land in a mode nobody can count. All presses
+    under one hold of the write lock, counted once. Stops at the first
+    failed write and returns False; ``presses <= 0`` writes nothing."""
+    if presses <= 0:
+        return True
+    await _await_chord(session)
+    sock = _sock_path(session)
+    seq = KEYS["BackTab"].encode()
+    async with _write_lock(session):
+        _note_write(session)
+        for i in range(presses):
+            if i:
+                await _key_gap_sleep(perm_modes.MODE_PRESS_GAP)
+            ok, _ = await _run([_DTACH, "-p", sock], stdin=seq)
+            if not ok:
+                log.warning("Shift+Tab %d/%d → %s failed", i + 1, presses, session)
+                return False
+    log.info("Pressed Shift+Tab x%d → %s", presses, session)
+    return True
 
 
 def _proc_socket_pids(sock: str) -> list[int]:
@@ -751,8 +786,8 @@ def _describe_dtach_failure(returncode: int, stderr: str) -> str:
 
 async def launch_session(
     name: str,
-    skip_perms: bool = False,
     *,
+    mode: str,
     resume_id: str | None = None,
     cwd: str | None = None,
     system_prompt_extra: str | None = None,
@@ -771,6 +806,10 @@ async def launch_session(
     specific directory — required for resume because Claude organizes
     transcripts by encoded cwd. Both default to None (fresh session,
     daemon's working dir).
+
+    ``mode`` (required, never defaulted) is ``"ask"``, ``"auto"`` or
+    ``"full"`` (aipager/perm_modes.py); its Claude Code flag is always
+    passed explicitly, so Claude Code's own starting mode never decides.
     """
     if not name or not _VALID_NAME.match(name):
         return False, "Invalid name (use letters, numbers, hyphens)"
@@ -799,6 +838,11 @@ async def launch_session(
     # future caller forgets to.
     if model and model.startswith("-"):
         return False, "Invalid model name"
+    # Exactly one of the three ids, never a bool or "": a caller still
+    # passing the old skip_perms boolean must fail closed, not launch in a
+    # mode nobody chose.
+    if not perm_modes.is_mode(mode):
+        return False, perm_modes.INVALID_MODE_ERROR
 
     sock = f"{SOCK_PREFIX}{name}.sock"
     if Path(sock).is_socket():
@@ -816,7 +860,7 @@ async def launch_session(
         return False, "original project dir is gone"
 
     # Build the bash -c command — wraps claude with env vars and prompt
-    perms = "--dangerously-skip-permissions" if skip_perms else ""
+    perms = perm_modes.launch_flag(mode)
     if resume_id and not _conversation_exists(resume_id):
         # Claude Code exits 1 with "No conversation found with session ID"
         # when asked to resume something it cannot find, and a session that

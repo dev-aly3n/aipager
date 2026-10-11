@@ -1637,7 +1637,7 @@ APP_JS = r"""
     delete: "ui.btn.action.delete", clearqueue: "ui.btn.action.clearqueue",
     compact: "ui.btn.action.compact", restart: "ui.btn.action.restart",
     rename: "ui.btn.action.rename"
-    // perms: title computed from data.skip_perms (permsMenuLabel).
+    // perms: one item per mode the session is not in (data.modes).
   };
   // Path segment per action; Delete is the DELETE verb on the resource.
   var ACTION_PATHS = {
@@ -1658,8 +1658,25 @@ APP_JS = r"""
     "kill", "perms", "restart", "delete"
   ];
 
-  function permsMenuLabel(skipPerms) {
-    return t(skipPerms ? "ui.btn.switch_to_ask" : "ui.btn.switch_to_auto");
+  // The perms slot's items: every mode the session is not in, in the
+  // server's order (Ask, Auto, Full access), each with its own rule.
+  var MODE_SWITCH_TITLES = {
+    ask: "ui.btn.switch_to_ask", auto: "ui.btn.switch_to_auto",
+    full: "ui.btn.switch_to_full"
+  };
+  // The confirm's title for a switch that restarts, by its target.
+  var PERMS_TITLES = {
+    ask: "ui.confirm.perms_ask", auto: "ui.confirm.perms_auto",
+    full: "ui.confirm.perms_full"
+  };
+  var PERMS_BUSY_TITLES = {
+    ask: "ui.confirm.perms_busy_ask", auto: "ui.confirm.perms_busy_auto",
+    full: "ui.confirm.perms_busy_full"
+  };
+  function otherModes(data) {
+    return ((data && data.modes) || []).filter(function (m) {
+      return !m.current && MODE_SWITCH_TITLES[m.id];
+    });
   }
 
   // One close for both layers: only one is ever open.
@@ -1688,15 +1705,19 @@ APP_JS = r"""
     return ACTION_ORDER.filter(function (k) { return data.actions[k]; })
       .map(function (k) {
         return k + ":" + (data.actions[k].available ? "1" : "0");
+      }).join(",") + "|" + otherModes(data).map(function (m) {
+        return m.id + ":" + (m.available ? "1" : "0");
       }).join(",") + "|" + (data.label || "");
   }
 
-  function postSessionAction(label, action, method) {
+  function postSessionAction(label, action, method, body) {
     var path = "/api/sessions/" + encodeURIComponent(label) +
       (action ? "/" + action : "");
     var headers = authHeaders();
     if (method === "POST") { headers["Content-Type"] = "application/json"; }
-    return fetch(path, { method: method, headers: headers })
+    var opts = { method: method, headers: headers };
+    if (body) { opts.body = JSON.stringify(body); }
+    return fetch(path, opts)
       .then(function (res) {
         return res.json().then(function (data) {
           return { status: res.status, data: data };
@@ -1711,9 +1732,10 @@ APP_JS = r"""
     compact: "ui.done.compact", perms: "ui.done.perms", restart: "ui.done.restart"
   };
 
-  function runDetailAction(label, action) {
+  function runDetailAction(label, action, mode) {
     var method = ACTION_METHODS[action];
-    postSessionAction(label, ACTION_PATHS[action], method).then(function (r) {
+    var body = action === "perms" ? { mode: mode } : null;
+    postSessionAction(label, ACTION_PATHS[action], method, body).then(function (r) {
       if (action === "kill" || action === "delete") {
         if (r.status === 200 || (r.status === 404 && action === "kill")) {
           // Kill's race (socket already gone) reads as gone either way.
@@ -1727,10 +1749,12 @@ APP_JS = r"""
       }
       // stop / resume / clearqueue / compact / perms / restart
       if (r.status === 200) {
-        // A resume that came back in Ask (Auto needs an admin) says so.
+        // A resume that came back in Auto (Full access needs an admin)
+        // says so; an Ask/Auto switch is sent, not yet confirmed.
+        var done = (action === "perms" && r.data && r.data.status === "sent")
+          ? "ui.done.mode_sent" : (ACTION_SUCCESS_NOTICE[action] || "ui.done.generic");
         showNotice((action === "resume" && r.data && r.data.detail)
-          ? plain(r.data.detail)
-          : t(ACTION_SUCCESS_NOTICE[action] || "ui.done.generic"), "ok");
+          ? plain(r.data.detail) : t(done), "ok");
         pollTick();
         return;
       }
@@ -1752,6 +1776,8 @@ APP_JS = r"""
     ACTION_ORDER.forEach(function (key) {
       var spec = data.actions[key];
       if (!spec) { return; }
+      var modes = key === "perms" ? otherModes(data) : null;
+      if (modes && !modes.length) { return; }
       rendered++;
 
       // One hairline before the first destructive item, only when a
@@ -1764,37 +1790,48 @@ APP_JS = r"""
       }
       if (!CONFIRM_ACTIONS[key]) { controlRendered++; }
 
-      var item = document.createElement("button");
-      item.type = "button";
-      item.className = "menu-item act-" + key +
-        (CONFIRM_ACTIONS[key] ? " is-danger" : "");
-      item.setAttribute("role", "menuitem");
-      // Icon node plus label node; textContent stays the action name.
-      var glyph = document.createElement("span");
-      glyph.className = "menu-icon";
-      glyph.innerHTML = icon(key);
-      var text = document.createElement("span");
-      text.className = "menu-label";
-      text.textContent = key === "perms"
-        ? permsMenuLabel(data.skip_perms) : t(ACTION_TITLES[key]);
-      item.appendChild(glyph);
-      item.appendChild(text);
-      if (!spec.available) {
-        item.disabled = true;
-      } else {
-        item.addEventListener("click", function () {
-          onMenuItemTap(data.label, key);
-        });
-      }
-      menu.appendChild(item);
+      var entries = modes ? modes.map(function (m) {
+        return {
+          title: t(MODE_SWITCH_TITLES[m.id]), mode: m.id, danger: !!m.restarts,
+          available: spec.available && m.available,
+          reason: spec.available ? m.reason : spec.reason
+        };
+      }) : [{
+        title: t(ACTION_TITLES[key]), mode: null, danger: !!CONFIRM_ACTIONS[key],
+        available: spec.available, reason: spec.reason
+      }];
+      entries.forEach(function (entry) {
+        var item = document.createElement("button");
+        item.type = "button";
+        item.className = "menu-item act-" + key +
+          (entry.mode ? " mode-" + entry.mode : "") + (entry.danger ? " is-danger" : "");
+        item.setAttribute("role", "menuitem");
+        // Icon node plus label node; textContent stays the action name.
+        var glyph = document.createElement("span");
+        glyph.className = "menu-icon";
+        glyph.innerHTML = icon(key);
+        var text = document.createElement("span");
+        text.className = "menu-label";
+        text.textContent = entry.title;
+        item.appendChild(glyph);
+        item.appendChild(text);
+        if (!entry.available) {
+          item.disabled = true;
+        } else {
+          item.addEventListener("click", function () {
+            onMenuItemTap(data.label, key, entry.mode);
+          });
+        }
+        menu.appendChild(item);
 
-      // An action that cannot run says why, under itself.
-      if (!spec.available && spec.reason) {
-        var note = document.createElement("div");
-        note.className = "menu-note";
-        note.textContent = plain(spec.reason);
-        menu.appendChild(note);
-      }
+        // An action that cannot run says why, under itself.
+        if (!entry.available && entry.reason) {
+          var note = document.createElement("div");
+          note.className = "menu-note";
+          note.textContent = plain(entry.reason);
+          menu.appendChild(note);
+        }
+      });
     });
     if (!rendered) { return; }
 
@@ -1807,7 +1844,7 @@ APP_JS = r"""
     syncChrome();
   }
 
-  function onMenuItemTap(label, action) {
+  function onMenuItemTap(label, action, mode) {
     if (action === "rename") {
       openRenameModal(label);
       return;
@@ -1820,16 +1857,23 @@ APP_JS = r"""
 
     var data = lastDetailData || {};
     if (action === "perms") {
-      var targetAuto = !data.skip_perms;
+      var entry = ((data.modes || []).filter(function (m) { return m.id === mode; }))[0];
+      if (!entry || !entry.restarts) {
+        // Ask <-> Auto: no restart, nothing to confirm.
+        closeOverlay();
+        runDetailAction(label, action, mode);
+        return;
+      }
+      // Into or out of Full access: the session restarts.
       var busy = data.status === "busy";
       var session = { session: label };
       openConfirm({
         label: label,
         action: action,
-        title: busy
-          ? t(targetAuto ? "ui.confirm.perms_busy_auto" : "ui.confirm.perms_busy_ask", session)
-          : t(targetAuto ? "ui.confirm.perms_auto" : "ui.confirm.perms_ask", session),
-        body: t(targetAuto ? "ui.confirm.perms_auto_body" : "ui.confirm.perms_ask_body"),
+        mode: mode,
+        title: t((busy ? PERMS_BUSY_TITLES : PERMS_TITLES)[mode], session),
+        body: t(mode === "full" ? "ui.confirm.perms_full_body"
+          : "ui.confirm.perms_leave_full_body"),
         confirmLabel: t(busy ? "ui.btn.stop_and_switch" : "ui.btn.switch"),
         cancelLabel: t(busy ? "ui.btn.not_now" : "ui.btn.cancel")
       });
@@ -1858,7 +1902,8 @@ APP_JS = r"""
   // The one confirm dialog: destructive session actions and "Reset to
   // defaults". Always hides the rename field (openRenameModal shows it).
   function openConfirm(opts) {
-    confirmAction = opts.label ? { label: opts.label, action: opts.action } : null;
+    confirmAction = opts.label
+      ? { label: opts.label, action: opts.action, mode: opts.mode || null } : null;
     confirmRun = opts.onConfirm || null;
     document.getElementById("confirm-title").textContent = opts.title;
     document.getElementById("confirm-body").textContent = opts.body;
@@ -1987,7 +2032,7 @@ APP_JS = r"""
     }
     closeOverlay();
     if (run) { run(); return; }
-    if (pending) { runDetailAction(pending.label, pending.action); }
+    if (pending) { runDetailAction(pending.label, pending.action, pending.mode); }
   }
 
   // The kebab shows only when there are actions.
@@ -3324,7 +3369,7 @@ APP_JS = r"""
   // directory. folderError/folderBusy keep the reveal's note a pure
   // function of state.
   var newState = {
-    model: "", cwd: "", skip_perms: false, prefs: {},
+    model: "", cwd: "", mode: "auto", modePicked: false, prefs: {},
     folderOpen: false, folderError: "", folderBusy: false
   };
   // Sentinel for a typed model; chosenModel() resolves it.
@@ -3553,26 +3598,29 @@ APP_JS = r"""
       }
     });
 
-    var canAuto = !!(newOptions && newOptions.can_use_auto);
+    // Ask and Auto are everyone's; Full access is for admins.
+    var canFull = !!(newOptions && newOptions.can_use_full);
     var modes = document.getElementById("new-mode");
     modes.innerHTML = "";
     renderOptionGroup(modes, {
       key: "new:mode",
       title: t("ui.new.mode_title"),
       options: [
-        { value: false, label: t("ui.new.mode_ask"), help: t("ui.new.mode_ask_help") },
-        { value: true, label: t("ui.new.mode_auto"),
-          help: t(canAuto ? "ui.new.mode_auto_help" : "ui.new.requires_admin") }
+        { value: "ask", label: t("ui.new.mode_ask"), help: t("ui.new.mode_ask_help") },
+        { value: "auto", label: t("ui.new.mode_auto"), help: t("ui.new.mode_auto_help") },
+        { value: "full", label: t("ui.new.mode_full"),
+          help: t(canFull ? "ui.new.mode_full_help" : "ui.new.requires_admin") }
       ],
-      current: newState.skip_perms,
+      current: newState.mode,
       rerender: renderNewForm,
       onPick: function (value) {
-        if (value === true && !canAuto) { return; }
-        newState.skip_perms = value;
+        if (value === "full" && !canFull) { return; }
+        newState.mode = value;
+        newState.modePicked = true;
         renderNewForm();
       }
     });
-    document.getElementById("new-mode-note").hidden = canAuto;
+    document.getElementById("new-mode-note").hidden = canFull;
 
     // Reply-style settings, each tagged with the chat default.
     var prefsEl = document.getElementById("new-prefs");
@@ -3665,10 +3713,13 @@ APP_JS = r"""
     // The summary must show a typed model: the one setting a keystroke
     // can get wrong unseen. One whole sentence per name and mode.
     var model = chosenModel();
-    var auto = newState.skip_perms;
-    document.getElementById("new-summary").textContent = t(name
-      ? (auto ? "ui.new.summary_named_auto" : "ui.new.summary_named_ask")
-      : (auto ? "ui.new.summary_auto" : "ui.new.summary_ask"),
+    var summaries = name
+      ? { ask: "ui.new.summary_named_ask", auto: "ui.new.summary_named_auto",
+          full: "ui.new.summary_named_full" }
+      : { ask: "ui.new.summary_ask", auto: "ui.new.summary_auto",
+          full: "ui.new.summary_full" };
+    document.getElementById("new-summary").textContent = t(
+      summaries[newState.mode] || summaries.auto,
       { name: name, where: where, model: model || t("ui.new.cli_model") });
 
     var create = document.getElementById("new-create");
@@ -3689,6 +3740,13 @@ APP_JS = r"""
       .then(function (data) {
         if (epoch !== chatEpoch) { return; }     // for the chat left behind
         newOptions = data;
+        // Start on the mode /new would give this person (the chat's New
+        // sessions setting, Auto unless it says otherwise), until they
+        // pick one themselves.
+        if (!newState.modePicked) {
+          newState.mode = data.default_mode || "auto";
+        }
+        if (newState.mode === "full" && !data.can_use_full) { newState.mode = "auto"; }
         // Select the directory a session would use anyway, so New folder
         // always has a parent.
         if (!newState.cwd && data.default_directory) {
@@ -3763,7 +3821,7 @@ APP_JS = r"""
         name: name,
         model: chosenModel(),
         cwd: newState.cwd,
-        skip_perms: newState.skip_perms
+        mode: newState.mode
       })
     }).then(function (res) {
       return res.json().then(function (data) { return { status: res.status, data: data }; });
@@ -4040,6 +4098,8 @@ APP_JS = r"""
     settingsData = null;
     newOptions = null;
     newState.cwd = "";
+    newState.mode = "auto";
+    newState.modePicked = false;
     hideUpdates();
     hideReport();
   }

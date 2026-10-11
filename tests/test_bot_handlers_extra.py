@@ -152,7 +152,7 @@ def test_send_new_conflict_prompt_alive_session(mk_bot, mk_update, run_async):
     bot.registry._sessions[sess.name] = sess
     update = mk_update("")  # default chat_id=-1001
     run_async(bot._send_new_conflict_prompt(
-        update=update, existing=sess, prompt="", skip_perms=False,
+        update=update, existing=sess, prompt="", mode="ask",
     ))
     text = update.message.reply_text.await_args.args[0]
     assert "already running" in text
@@ -175,7 +175,7 @@ def test_send_new_conflict_prompt_gone_with_preview(mk_bot, mk_update, run_async
     sess.last_assistant_preview = "what I did"
     update = mk_update("")
     run_async(bot._send_new_conflict_prompt(
-        update=update, existing=sess, prompt="go", skip_perms=False,
+        update=update, existing=sess, prompt="go", mode="ask",
     ))
     text = update.message.reply_text.await_args.args[0]
     assert "previously used" in text

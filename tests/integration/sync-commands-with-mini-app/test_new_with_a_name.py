@@ -111,7 +111,7 @@ def test_new_bang_name_ends_in_the_ready_card():
         _run(bot._handle_new_cmd(update, MagicMock()))
     text = _ready_text(bot)
     assert "✅ <b>henlo</b> is ready" in text, text
-    assert "🤖 Auto mode" in text, text
+    assert "🔓 Full access mode" in text, text
 
 
 def test_new_bang_name_only_edits_the_launch_message_once():
@@ -126,26 +126,26 @@ def test_new_bang_name_only_edits_the_launch_message_once():
     bot._app.bot.edit_message_text.assert_awaited_once()
 
 
-def test_new_bang_name_registers_session_with_skip_perms_true():
+def test_new_bang_name_registers_session_in_full_access():
     bot = _make_bot()
     bot._is_admin = MagicMock(return_value=True)
     update = _make_update("/new !henlo")
     with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
         _run(bot._handle_new_cmd(update, MagicMock()))
     sess = bot.registry.find_by_label("henlo", 0)
-    assert sess is not None and sess.skip_perms is True
+    assert sess is not None and sess.perm_mode == "full"
 
 
 def test_new_named_no_bang_is_auto_for_an_admin():
-    """Auto is the default now (operator, 2026-09-30); the `!` is only
-    the legacy spelling of it."""
+    """Auto is the default (operator, 2026-09-30 and 2026-10-11); the `!`
+    asks for Full access."""
     bot = _make_bot()
     update = _make_update("/new henlo")
     with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
         _run(bot._handle_new_cmd(update, MagicMock()))
     assert "🤖 Auto mode" in _ready_text(bot)
     sess = bot.registry.find_by_label("henlo", 0)
-    assert sess is not None and sess.skip_perms is True
+    assert sess is not None and sess.perm_mode == "auto"
 
 
 # --------------------------------------------------------------------------- #

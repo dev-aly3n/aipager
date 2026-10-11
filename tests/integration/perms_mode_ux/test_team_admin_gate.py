@@ -54,37 +54,37 @@ def _make_bot_non_admin(*, registry=None):
 # SC14 — Non-admin /perms → Auto: denied with admin-role message              #
 # --------------------------------------------------------------------------- #
 
-def test_sc14_non_admin_perms_to_auto_denied():
-    """SC14: Non-admin user sending /perms to switch to Auto must receive a
-    reply containing 'requires admin role'."""
+def test_sc14_non_admin_perms_to_full_access_denied():
+    """SC14: Non-admin user sending /perms to switch to Full access must be
+    told it needs an admin (Auto, a safety check, is everyone's)."""
     bot = _make_bot_non_admin()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
-    sess.skip_perms = False  # currently Ask → trying to switch to Auto
+    sess.perm_mode = "ask"  # currently Ask → trying to switch to Full access
     bot.registry._sessions["claude-ben"] = sess
     bot.registry.last_active_session = "claude-ben"
 
-    update = _make_update("/perms auto")
+    update = _make_update("/perms full")
     _run(bot._handle_perms_cmd(update, MagicMock()))
 
     update.message.reply_text.assert_awaited_once()
     msg = update.message.reply_text.await_args[0][0]
-    assert "Auto mode needs an admin" in msg, (
-        f"Non-admin must get 'Auto mode needs an admin'; got: {msg}"
+    assert "Full access mode needs an admin" in msg, (
+        f"Non-admin must get 'Full access mode needs an admin'; got: {msg}"
     )
 
 
 def test_sc14_non_admin_perms_to_auto_no_mode_change():
-    """SC14: After non-admin /perms denial, skip_perms must NOT be changed."""
+    """SC14: After non-admin /perms denial, the mode must NOT be changed."""
     bot = _make_bot_non_admin()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-ben"] = sess
     bot.registry.last_active_session = "claude-ben"
 
     update = _make_update("/perms")
     _run(bot._handle_perms_cmd(update, MagicMock()))
 
-    assert sess.skip_perms is False, (
+    assert sess.perm_mode == "ask", (
         "Non-admin denial must leave skip_perms unchanged"
     )
 
@@ -93,7 +93,7 @@ def test_sc14_non_admin_perms_to_auto_no_keyboard():
     """SC14: Non-admin /perms denial must not send a confirmation keyboard."""
     bot = _make_bot_non_admin()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-ben"] = sess
     bot.registry.last_active_session = "claude-ben"
 
@@ -122,7 +122,7 @@ def test_sc14_admin_perms_to_auto_not_denied():
     bot._is_admin = MagicMock(return_value=True)
 
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-ben"] = sess
     bot.registry.last_active_session = "claude-ben"
 
@@ -140,10 +140,10 @@ def test_sc14_admin_perms_to_auto_not_denied():
 # SC15 — Non-admin /new !ben: denied, no session launched                     #
 # --------------------------------------------------------------------------- #
 
-def test_sc15_non_admin_new_auto_gets_ask_and_says_why():
-    """SC15 (2026-09-30 redesign): a non-admin's /new !ben never gets
-    Auto. The session starts in Ask and the Ready card says why, instead
-    of refusing someone who may create Ask sessions."""
+def test_sc15_non_admin_new_full_access_gets_auto_and_says_why():
+    """SC15 (2026-10-11): a non-admin's /new !ben never gets Full access.
+    The session starts in Auto and the Ready card says why, instead of
+    refusing someone who may create sessions."""
     bot = _make_bot_non_admin()
     bot._app.bot.edit_message_text = AsyncMock()
     update = _make_update("/new !ben")
@@ -155,12 +155,12 @@ def test_sc15_non_admin_new_auto_gets_ask_and_says_why():
         _run(bot._handle_new_cmd(update, MagicMock()))
 
     text = bot._app.bot.edit_message_text.await_args.kwargs["text"]
-    assert "Auto mode needs an admin" in text, text
-    assert "💬 Ask mode" in text, text
+    assert "Full access mode needs an admin" in text, text
+    assert "🤖 Auto mode" in text, text
 
 
-def test_sc15_non_admin_new_auto_creates_no_auto_session():
-    """SC15: whatever a non-admin types, no session with skip_perms=True."""
+def test_sc15_non_admin_new_creates_no_full_access_session():
+    """SC15: whatever a non-admin types, no session in Full access."""
     bot = _make_bot_non_admin()
     bot._app.bot.edit_message_text = AsyncMock()
     update = _make_update("/new !ben")
@@ -171,7 +171,10 @@ def test_sc15_non_admin_new_auto_creates_no_auto_session():
     with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
         _run(bot._handle_new_cmd(update, MagicMock()))
 
-    assert not [s for s in bot.registry.all_sessions().values() if s.skip_perms]
+    assert not [s for s in bot.registry.all_sessions().values() if s.perm_mode == "full"]
+
+
+
 def test_sc15_admin_new_auto_not_denied():
     """SC15 negative: Admin /new !ben must not get the denial message."""
     from aipager.bot import TelegramBot
@@ -210,7 +213,7 @@ def test_non_admin_perms_auto_to_ask_allowed():
     spec says only /perms → Auto and /new ! require admin."""
     bot = _make_bot_non_admin()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
-    sess.skip_perms = True  # currently Auto → switching to Ask
+    sess.perm_mode = "full"  # currently Auto → switching to Ask
     bot.registry._sessions["claude-ben"] = sess
     bot.registry.last_active_session = "claude-ben"
     bot._do_perms_switch_via_fn = AsyncMock()

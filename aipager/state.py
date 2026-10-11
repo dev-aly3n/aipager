@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from aipager import bg_shells as _bg_shells
+from aipager import perm_modes as _perm_modes
 from aipager._test_guard import check_write
 from aipager.open_prompt import (
     snapshot as snapshot_open_prompt, validate as validate_open_prompt,
@@ -447,6 +448,23 @@ class LiveMessageEntry:
 
 
 @dataclass
+class ModeSwitch:
+    """An in-place Ask<->Auto switch aipager pressed Shift+Tab for and is
+    waiting on a main-agent hook to confirm (aipager/bot/mode_switch.py).
+
+    ``reply`` is where the person saw "switch sent" — ``(chat_id,
+    message_id, kind)`` with kind ``mode_card`` | ``ready`` | ``mirror`` —
+    or None; ``by`` is who switched in a group ("" in a DM)."""
+
+    target: str
+    presses: int
+    sent_at: float
+    retried: bool = False
+    reply: tuple[int, int, str] | None = None
+    by: str = ""
+
+
+@dataclass
 class TrackedSession:
     name: str           # session name, e.g. "claude-dev"
     label: str          # short label, e.g. "dev"
@@ -755,10 +773,35 @@ class TrackedSession:
     # status == GONE; ignored otherwise. /resume picker ignores this
     # flag entirely so previously-hidden sessions remain resumable.
     hidden_from_status: bool = False
-    # Permission mode for this session. When True, claude runs with
-    # --dangerously-skip-permissions (Auto mode, no per-tool prompts).
-    # When False (default), claude prompts before each tool call (Ask mode).
-    skip_perms: bool = False
+    # Permission mode aipager last launched this session in, or asked it
+    # to switch to: "ask" (--permission-mode default), "auto"
+    # (--permission-mode auto) or "full" (--dangerously-skip-permissions);
+    # see aipager/perm_modes.py. Persisted: it decides the flag on every
+    # restart and resume. A hook never changes it towards a wider mode
+    # (the hook socket is world-writable), so what Claude Code REPORTS
+    # lives apart, in `reported_mode` below. "ask" for a session aipager
+    # did not launch (a CLI session): its first hook shows the real mode.
+    perm_mode: str = "ask"
+    # Transient, never in _PERSIST_FIELDS: the raw `permission_mode` the
+    # last main-agent hook reported since the last launch or switch ("" =
+    # nothing reported yet).
+    reported_mode: str = ""
+    # Transient: Claude Code reported Manual for a session aipager asked
+    # for Auto (Auto is not available for its model, plan or org).
+    auto_unavailable: bool = False
+    # Transient: set at every launch, relaunch and resume; the first
+    # main-agent hook after it checks whether Auto was available.
+    mode_launch_unchecked: bool = False
+    # Transient: an in-place Ask<->Auto switch waiting for a hook to
+    # confirm it (aipager/bot/mode_switch.py).
+    mode_switch: ModeSwitch | None = None
+    # Transient, per launch: a main-agent hook reported bypassPermissions
+    # since the last launch, so the live process has bypass in its
+    # Shift+Tab cycle (a CLI session started with the bypass flag keeps
+    # `perm_mode` "ask"). Every switch then restarts: presses in place
+    # could cycle it back into bypass. A forged report can only make a
+    # switch restart (narrower), never widen.
+    bypass_seen: bool = False
     # Per-session preference overrides (batch 4's "Per session settings").
     # `None` means unset/inherit the scope's own /settings value — never a
     # legal value for any of these: layout/answer_length/
@@ -772,7 +815,7 @@ class TrackedSession:
     # with the scope's own preferences via
     # `aipager.preferences.resolve_preferences(scope_chat_id,
     # sess.preference_overrides())`, the same rule for chat and the Mini
-    # App. Persisted like `skip_perms` above (a per-session boolean that
+    # App. Persisted like `perm_mode` above (a per-session setting that
     # changes behaviour); intentionally NOT cleared by the `/new` replace
     # flow (callbacks.py) — see design.md Risks.
     override_layout: str | None = None
@@ -2195,6 +2238,80 @@ class TrackedSession:
         baseline = self.model_switch_pending_from
         return not (baseline and current and current != baseline)
 
+    # -- Permission mode (aipager/perm_modes.py) ---------------------------
+
+    def reset_mode_tracking(self) -> None:
+        """Forget what Claude Code reported and any pending switch: a
+        launch, relaunch, resume or the end of the session starts over."""
+        self.reported_mode = ""
+        self.auto_unavailable = False
+        self.mode_launch_unchecked = False
+        self.mode_switch = None
+        self.bypass_seen = False
+
+    def note_reported_mode(self, raw: object, now: float) -> str:
+        """Record the ``permission_mode`` a main-agent hook reported.
+
+        ``"ignored"`` for a value that is not a mode Claude Code has;
+        ``"settling"`` (nothing recorded) while a switch's presses are
+        younger than ``MODE_SETTLE_SECONDS`` (the hook was very likely
+        fired before Claude Code read them); else ``"recorded"``. Never
+        touches ``perm_mode``: a hook never widens a launch flag."""
+        mapped = _perm_modes.from_claude(raw)
+        if mapped is None:
+            return "ignored"
+        if mapped == _perm_modes.FULL:
+            # Even while settling: whenever it was fired, bypass is in
+            # this process's cycle.
+            self.bypass_seen = True
+        pending = self.mode_switch
+        if pending is not None and now - pending.sent_at < _perm_modes.MODE_SETTLE_SECONDS:
+            return "settling"
+        self.reported_mode = raw  # type: ignore[assignment]
+        if self.mode_launch_unchecked and pending is None:
+            if self.perm_mode == _perm_modes.AUTO and mapped == _perm_modes.ASK:
+                self.auto_unavailable = True
+            self.mode_launch_unchecked = False
+        if mapped == _perm_modes.AUTO:
+            self.auto_unavailable = False
+        return "recorded"
+
+    def current_mode(self) -> str:
+        """The mode the session is in: what a hook last reported (``ask``,
+        ``auto``, ``full`` or ``other``), else what aipager asked for."""
+        mapped = _perm_modes.from_claude(self.reported_mode)
+        return mapped if mapped is not None else self.perm_mode
+
+    def shown_mode(self) -> tuple[str, str]:
+        """``(id, raw)`` to show: id is ``ask``, ``auto``, ``full``,
+        ``ask_no_auto`` (Ask because Auto is not available here) or
+        ``other`` (raw names Claude Code's own mode). While a switch waits
+        for its hook, the target."""
+        if self.mode_switch is not None and not self.reported_mode:
+            return self.mode_switch.target, ""
+        mode = self.current_mode()
+        if mode == _perm_modes.ASK and self.auto_unavailable:
+            return "ask_no_auto", self.reported_mode
+        return mode, self.reported_mode
+
+    def mode_switch_restarts(self, target: str) -> bool:
+        """Does switching to *target* need a restart? Into or out of Full
+        access does (bypass is only ever set at launch), so does a process
+        that reported bypass since its launch (presses could cycle it back
+        into bypass), and so does any start Shift+Tab cannot cycle from."""
+        if (target == _perm_modes.FULL or self.perm_mode == _perm_modes.FULL
+                or self.bypass_seen):
+            return True
+        return _perm_modes.presses(self.mode_raw(), target,
+                                   auto_in_cycle=not self.auto_unavailable) is None
+
+    def mode_raw(self) -> str:
+        """Claude Code's raw mode to count presses from: the last reported
+        one, else the raw form of what aipager asked for."""
+        if self.reported_mode:
+            return self.reported_mode
+        return _perm_modes.to_claude(self.perm_mode)
+
     def dialog_is_open(self) -> bool:
         """True while the terminal is showing a permission/question prompt.
 
@@ -3003,6 +3120,9 @@ class SessionRegistry:
             # Roadmap 8.41: a gone session runs no agents and is owed no
             # ✅ edit into its chat.
             sess.clear_bg_agents()
+            # What its Claude Code reported, and a switch still waiting for
+            # a hook, end with it.
+            sess.reset_mode_tracking()
             # Best-effort cleanup of this session's /tmp policy + reply-
             # context files (design.md Part 5). Both GONE-inducing paths
             # (socket-vanish via session_monitor, Claude's SessionEnd hook
@@ -3264,8 +3384,9 @@ class SessionRegistry:
         # Resume support — see TrackedSession docstring.
         "claude_session_id", "cwd", "gone_at", "last_assistant_preview",
         "hidden_from_status",
-        # Permission mode — persisted so daemon restarts preserve Auto/Ask.
-        "skip_perms",
+        # Permission mode — persisted so daemon restarts preserve it.
+        # save() also writes the legacy `skip_perms` mirror beside it.
+        "perm_mode",
         # Multi-scope routing.
         "scope_chat_id", "scope_kind",
         # Per-session preference overrides — see TrackedSession docstring.
@@ -3340,6 +3461,10 @@ class SessionRegistry:
                     val = [m for m in val if type(m) is int and m > 0][
                         -MAX_CLOSED_PROMPT_SURFACES:]
                 d[f] = val
+            # The mode as an older daemon reads it (a rollback): Full
+            # access was its Auto; Ask and Auto read as its Ask, never
+            # wider than what was asked for.
+            d["skip_perms"] = sess.perm_mode == _perm_modes.FULL
             # Roadmap 8.118: the live status, and what a session waiting
             # on a person waits on, for `aipager status` (aipager/status.py)
             # only. load() never restores them: a restart finds each
@@ -3530,7 +3655,7 @@ class SessionRegistry:
                     if gone_at is not None and not backfilled else ""
                 ),
                 hidden_from_status=sd.get("hidden_from_status", False),
-                skip_perms=sd.get("skip_perms", False),
+                perm_mode=_perm_modes.mode_from_saved(sd),
                 launch_model=str(sd.get("launch_model") or ""),
                 scope_chat_id=int(sd.get("scope_chat_id", 0) or 0),
                 scope_kind=sd.get("scope_kind", ""),

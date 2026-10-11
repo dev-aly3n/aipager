@@ -65,6 +65,7 @@
  "aipager/miniapp/static/_styles.py": 1,
  "aipager/miniapp/tunnel_manager.py": 4,
  "aipager/peer_auth.py": 28,
+ "aipager/perm_modes.py": 1,
  "aipager/policy.py": 20,
  "aipager/policy_snapshot.py": 3,
  "aipager/preferences.py": 16,

@@ -1,114 +1,54 @@
-"""Tests for load_default_mode and dump_scopes' round trip of a leftover
-``default_mode`` key (the wizard no longer asks for it, roadmap 8.89)."""
+"""``default_mode`` in aipager.yaml (2026-10-11): the key nothing ever read
+(roadmap 8.89) is gone. Its values ("auto" meant bypass) would mean
+something else now that there are three modes, so an old file still loads,
+nothing acts on the key, and the next rewrite drops it."""
 
 from __future__ import annotations
 
+import pytest
+import yaml
+
+from aipager import scope as scope_mod
+from aipager.scope import Member, Scope, dump_scopes
 
 
-# ---- load_default_mode -----------------------------------------------------
-
-def test_load_default_mode_missing_file_returns_ask(tmp_path, monkeypatch):
-    """When aipager.yaml doesn't exist, default is 'ask'."""
-    import aipager.scope as scope_mod
-    monkeypatch.setattr(scope_mod, "CONFIG_PATH", tmp_path / "aipager.yaml")
-    from aipager.scope import load_default_mode
-    assert load_default_mode(tmp_path / "aipager.yaml") == "ask"
+def _scopes():
+    return [Scope(chat_id=123, kind="dm", label="owner DM",
+                  members=(Member(id=123, label="owner", role="owner"),))]
 
 
-def test_load_default_mode_no_key_returns_ask(tmp_path):
-    """When aipager.yaml exists but has no default_mode key, returns 'ask'."""
-    import yaml
-    cfg = tmp_path / "aipager.yaml"
-    cfg.write_text(yaml.safe_dump({
-        "schema_version": 2,
-        "bot_token": "tok",
-        "scopes": [],
+def _old_file(path, mode):
+    path.write_text(yaml.safe_dump({
+        "schema_version": 2, "bot_token": "tok", "default_mode": mode,
+        "scopes": [{"kind": "dm", "chat_id": 123, "label": "owner DM",
+                    "members": [{"id": 123, "label": "owner", "role": "owner"}]}],
     }))
-    from aipager.scope import load_default_mode
-    assert load_default_mode(cfg) == "ask"
 
 
-def test_load_default_mode_ask(tmp_path):
-    """When default_mode=ask is in the file, returns 'ask'."""
-    import yaml
+def test_the_reader_is_gone():
+    assert not hasattr(scope_mod, "load_default_mode")
+
+
+def test_dump_scopes_takes_no_default_mode():
+    with pytest.raises(TypeError):
+        dump_scopes(_scopes(), "tok", None, default_mode="auto")  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("mode", ["ask", "auto", "unsafe"])
+def test_an_old_file_loads_and_a_rewrite_drops_the_key(tmp_path, mode):
     cfg = tmp_path / "aipager.yaml"
-    cfg.write_text(yaml.safe_dump({
-        "schema_version": 2,
-        "bot_token": "tok",
-        "default_mode": "ask",
-        "scopes": [],
-    }))
-    from aipager.scope import load_default_mode
-    assert load_default_mode(cfg) == "ask"
+    _old_file(cfg, mode)
+    scopes, token = scope_mod.load_scopes(cfg)
+    assert token == "tok" and [s.chat_id for s in scopes] == [123]
+
+    dump_scopes(scopes, token, cfg)
+
+    assert "default_mode" not in yaml.safe_load(cfg.read_text())
+    assert scope_mod.load_scopes(cfg)[0][0].chat_id == 123
 
 
-def test_load_default_mode_auto(tmp_path):
-    """When default_mode=auto is in the file, returns 'auto'."""
-    import yaml
+def test_a_file_without_the_key_stays_without_it(tmp_path):
     cfg = tmp_path / "aipager.yaml"
-    cfg.write_text(yaml.safe_dump({
-        "schema_version": 2,
-        "bot_token": "tok",
-        "default_mode": "auto",
-        "scopes": [],
-    }))
-    from aipager.scope import load_default_mode
-    assert load_default_mode(cfg) == "auto"
-
-
-def test_load_default_mode_invalid_value_returns_ask(tmp_path):
-    """When default_mode has an unrecognized value, falls back to 'ask'."""
-    import yaml
-    cfg = tmp_path / "aipager.yaml"
-    cfg.write_text(yaml.safe_dump({
-        "schema_version": 2,
-        "bot_token": "tok",
-        "default_mode": "unsafe",  # invalid
-        "scopes": [],
-    }))
-    from aipager.scope import load_default_mode
-    assert load_default_mode(cfg) == "ask"
-
-
-def test_load_default_mode_corrupt_yaml_returns_ask(tmp_path):
-    """When aipager.yaml has invalid YAML, returns 'ask' without crashing."""
-    cfg = tmp_path / "aipager.yaml"
-    cfg.write_text("{ invalid: yaml: content: }")
-    from aipager.scope import load_default_mode
-    assert load_default_mode(cfg) == "ask"
-
-
-# ---- dump_scopes preserves default_mode ------------------------------------
-
-def test_dump_scopes_writes_default_mode_auto(tmp_path):
-    """dump_scopes with default_mode='auto' writes the key to yaml."""
-    from aipager.scope import Scope, dump_scopes, load_default_mode
-
-    cfg = tmp_path / "aipager.yaml"
-    # Write a minimal valid aipager.yaml first
-    from aipager.scope import Member
-    scopes = [Scope(
-        chat_id=123, kind="dm", label="owner DM",
-        members=(Member(id=123, label="owner", role="owner"),),
-    )]
-    dump_scopes(scopes, "tok", cfg, default_mode="auto")
-
-    assert load_default_mode(cfg) == "auto"
-
-
-def test_dump_scopes_preserves_existing_default_mode(tmp_path):
-    """dump_scopes without default_mode kwarg preserves the existing value."""
-    from aipager.scope import Member, Scope, dump_scopes, load_default_mode
-
-    cfg = tmp_path / "aipager.yaml"
-    scopes = [Scope(
-        chat_id=123, kind="dm", label="owner DM",
-        members=(Member(id=123, label="owner", role="owner"),),
-    )]
-    # First write: set to auto
-    dump_scopes(scopes, "tok", cfg, default_mode="auto")
-    assert load_default_mode(cfg) == "auto"
-
-    # Second write: no default_mode kwarg — should preserve "auto"
-    dump_scopes(scopes, "tok", cfg)
-    assert load_default_mode(cfg) == "auto"
+    dump_scopes(_scopes(), "tok", cfg)
+    dump_scopes(_scopes(), "tok", cfg)
+    assert "default_mode" not in yaml.safe_load(cfg.read_text())

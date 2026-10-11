@@ -100,7 +100,7 @@ def test_the_mode_toggle_keeps_the_card_waiting_for_a_name(mk_bot, helpers):
     assert "_:nw:mode:auto" in helpers.callback_data_in(markup)
     _send_text(helpers, bot, "askmode1")
     sess = bot.registry.find_by_label("askmode1", CHAT)
-    assert sess is not None and sess.skip_perms is False
+    assert sess is not None and sess.perm_mode == "ask"
 
 
 def test_the_model_picker_goes_back_to_the_name_card(mk_bot, helpers):

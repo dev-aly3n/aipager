@@ -683,7 +683,7 @@ def test_kill_and_relaunch_core_refuses_when_not_live(mk_bot, run_async, monkeyp
     monkeypatch.setattr("aipager.dtach.inject.send_keys", _boom)
 
     outcome = run_async(bot._kill_and_relaunch_core(
-        sess, target_skip_perms=True, interrupt_first=False,
+        sess, target_mode="full", interrupt_first=False,
     ))
     assert outcome.ok is False
     assert outcome.reason == "not_live"
@@ -705,7 +705,7 @@ def test_kill_and_relaunch_core_refuses_when_already_restarting(
     monkeypatch.setattr("aipager.dtach.inject.send_keys", _boom)
 
     outcome = run_async(bot._kill_and_relaunch_core(
-        sess, target_skip_perms=True, interrupt_first=False,
+        sess, target_mode="full", interrupt_first=False,
     ))
     assert outcome.ok is False
     assert outcome.reason == "already_restarting"
@@ -727,7 +727,7 @@ def test_kill_and_relaunch_core_interrupt_first_sends_ctrl_c_not_kill(
                         AsyncMock(return_value=(True, "")))
 
     outcome = run_async(bot._kill_and_relaunch_core(
-        sess, target_skip_perms=True, interrupt_first=True,
+        sess, target_mode="full", interrupt_first=True,
     ))
     assert outcome.ok is True
     send_keys.assert_awaited_once_with("claude-jim", "C-c")
@@ -748,7 +748,7 @@ def test_kill_and_relaunch_core_hard_kill_not_ctrl_c(mk_bot, run_async, monkeypa
                         AsyncMock(return_value=(True, "")))
 
     outcome = run_async(bot._kill_and_relaunch_core(
-        sess, target_skip_perms=False, interrupt_first=False,
+        sess, target_mode="ask", interrupt_first=False,
     ))
     assert outcome.ok is True
     kill_session.assert_awaited_once_with("claude-jim")
@@ -772,7 +772,7 @@ def test_kill_and_relaunch_core_still_stopping_clears_restarting_until(
     monkeypatch.setattr("aipager.dtach.inject.launch_session", _boom)
 
     outcome = run_async(bot._kill_and_relaunch_core(
-        sess, target_skip_perms=True, interrupt_first=False,
+        sess, target_mode="full", interrupt_first=False,
     ))
     assert outcome.ok is False
     assert outcome.reason == "still_stopping"
@@ -793,7 +793,7 @@ def test_kill_and_relaunch_core_launch_failed_clears_restarting_until(
                         AsyncMock(return_value=(False, "dtach broken")))
 
     outcome = run_async(bot._kill_and_relaunch_core(
-        sess, target_skip_perms=True, interrupt_first=False,
+        sess, target_mode="full", interrupt_first=False,
     ))
     assert outcome.ok is False
     assert outcome.reason == "launch_failed"
@@ -817,12 +817,15 @@ def test_kill_and_relaunch_core_success_restores_state_and_transitions_idle(
     monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
 
     outcome = run_async(bot._kill_and_relaunch_core(
-        sess, target_skip_perms=True, interrupt_first=False,
+        sess, target_mode="full", interrupt_first=False,
     ))
     assert outcome.ok is True
     assert outcome.reason == "done"
-    assert outcome.skip_perms is True
-    assert sess.skip_perms is True
+    assert outcome.mode == "full"
+    assert sess.perm_mode == "full"
+    assert launch.await_args.kwargs["mode"] == "full"
+    # A relaunch starts mode tracking over: the first hook checks it.
+    assert sess.mode_launch_unchecked is True and sess.reported_mode == ""
     assert sess.claude_session_id == "uuid-1"
     assert sess.cwd == "/home/user/project"
     assert sess.status == Status.IDLE
@@ -847,7 +850,7 @@ def test_kill_and_relaunch_core_keeps_the_launch_model(mk_bot, run_async, monkey
     monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
 
     run_async(bot._kill_and_relaunch_core(
-        sess, target_skip_perms=False, interrupt_first=False))
+        sess, target_mode="ask", interrupt_first=False))
 
     assert launch.await_args.kwargs.get("model") == "haiku"
 
@@ -859,7 +862,7 @@ def test_create_session_records_the_launch_model(mk_bot, run_async, monkeypatch)
     bot._maybe_update_bot_name = AsyncMock()
     bot._update_bot_commands = AsyncMock()
 
-    name, _err = run_async(bot.create_session("jim", scope_chat_id=0, model="opus"))
+    name, _err = run_async(bot.create_session("jim", scope_chat_id=0, model="opus", mode="ask"))
 
     assert bot.registry.get(name).launch_model == "opus"
 
@@ -959,7 +962,7 @@ def test_restart_session_core_hard_kills_even_when_busy(mk_bot, run_async, monke
     courtesy - a user-invoked restart is Kill's hard-kill semantics."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-jim"] = sess
     _neuter_sleep(monkeypatch)
     monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
@@ -974,8 +977,8 @@ def test_restart_session_core_hard_kills_even_when_busy(mk_bot, run_async, monke
     assert outcome.ok is True
     kill_session.assert_awaited_once_with("claude-jim")
     send_keys.assert_not_awaited()
-    # skip_perms is unchanged - a restart is not a mode switch.
-    assert launch.await_args.kwargs["skip_perms"] is False
+    # The mode is unchanged - a restart is not a mode switch.
+    assert launch.await_args.kwargs["mode"] == "ask"
 
 
 # ---- _clear_queue_core ----------------------------------------------------
@@ -1199,7 +1202,7 @@ def test_kill_and_relaunch_core_drops_queued_targets(mk_bot, run_async, monkeypa
     monkeypatch.setattr("aipager.dtach.inject.kill_session", AsyncMock(return_value=True))
     monkeypatch.setattr("aipager.dtach.inject.launch_session", AsyncMock(return_value=(True, "")))
     outcome = run_async(bot._kill_and_relaunch_core(
-        sess, target_skip_perms=True, interrupt_first=False,
+        sess, target_mode="full", interrupt_first=False,
     ))
     assert outcome.ok is True
     assert sess.queued_targets == []
@@ -1238,7 +1241,7 @@ def test_create_session_reusing_a_finished_name_drops_queued_targets(
                         AsyncMock(return_value=(True, "")))
     bot._maybe_update_bot_name = AsyncMock()
     bot._update_bot_commands = AsyncMock()
-    name, err = run_async(bot.create_session("jim", scope_chat_id=0, skip_perms=False))
+    name, err = run_async(bot.create_session("jim", scope_chat_id=0, mode="ask"))
     assert err == "" and name == "claude-jim__d0"
     assert bot.registry.get(name) is sess, "the finished entry is reused, not replaced"
     assert sess.queued_targets == []

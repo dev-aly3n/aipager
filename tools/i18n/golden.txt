@@ -102,11 +102,14 @@ set.opt.reports.off
 set.opt.reports.auto_off
 mode.ask
 mode.auto
+mode.full
 mode.word.ask
 mode.word.auto
+mode.word.full
 mode.ask_instead
 mode.auto_instead
-mode.ask_for_you
+mode.full_instead
+modecard.auto_for_you
 modecard.which
 modecard.which_to
 modecard.already
@@ -153,7 +156,7 @@ tx.api.generic
 tx.api.overloaded
 tx.api.rate_limit
 tx.api.rate_limit_wait
-tx.auto_needs_admin
+tx.full_needs_admin
 tx.needs_admin
 tx.retry_others
 tx.truncated

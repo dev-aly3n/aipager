@@ -40,9 +40,11 @@
 {"k": "app.err.answer_chat_busy", "src": "e0f91f04", "v": "Telegram 繁忙，请稍后再试。"}
 {"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "这个会话已不再等你回复。"}
 {"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "无法把请求发到聊天中。"}
-{"k": "app.err.auto_needs_admin", "src": "ad1f0c2f", "v": "自动模式需要管理员。"}
+{"k": "app.err.bad_mode", "src": "b0920696", "v": "请选择询问、自动或完全访问模式。"}
 {"k": "app.err.delete_running", "src": "71f25b50", "v": "会话仍在运行。请先用“结束”停止它。"}
+{"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "完全访问模式需要管理员。"}
 {"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "无法结束：进程仍在运行。请重试。"}
+{"k": "app.err.mode_send_failed", "src": "887b8615", "v": "无法连接到会话的终端 - 模式未更改。"}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "这个聊天中已有名为 {session} 的会话。"}
 {"k": "app.err.not_busy", "src": "bbafa529", "v": "这个会话现在不忙，没有可停止的内容。"}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "这个请求无法重新发送。请在终端中回答。"}
@@ -50,13 +52,15 @@
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} 仍在停止中，模式未更改。请稍后再试。"}
 {"k": "app.err.pick_model", "src": "773e24c4", "v": "请选择一个模型。"}
 {"k": "app.err.restart_still_stopping", "src": "701b0bd8", "v": "{session} 仍在停止中。请稍后再试。"}
-{"k": "app.err.resumed_in_ask", "src": "7024b7b8", "v": "已以询问模式恢复 {session}：{reason}"}
+{"k": "app.err.resumed_in_auto", "src": "b26ccb3b", "v": "已以自动模式恢复 {session}：{reason}"}
 {"k": "app.err.resuming", "src": "2a557399", "v": "这个会话正在恢复。请稍后再试。"}
 {"k": "app.err.send_failed", "src": "e4349ad3", "v": "无法发送 {command}。"}
 {"k": "app.fact.context", "src": "cc11b3a2", "v": "上下文"}
 {"k": "app.fact.cost", "src": "64ae43e8", "v": "费用"}
 {"k": "app.fact.cwd", "src": "4b892fe0", "v": "目录"}
 {"k": "app.fact.last_active", "src": "b5665ec6", "v": "上次活动"}
+{"k": "app.fact.mode", "src": "a7b93d21", "v": "模式"}
+{"k": "app.fact.mode_pending", "src": "d8a50365", "v": "{mode}（等待 Claude Code 确认）"}
 {"k": "app.fact.model", "src": "68c2cc7f", "v": "模型"}
 {"k": "app.fact.working", "src": "e7df8df6", "v": "已工作"}
 {"k": "app.language.hint", "src": "90e01e41", "v": "只影响 aipager 自己的文字。Claude 的回答不变。"}
@@ -99,11 +103,12 @@
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ 已从 Mini App 删除 [{session}]"}
 {"k": "app.mirror.folder", "src": "603d7ae2", "v": "📁 已从 Mini App 新建文件夹：\n{path}"}
 {"k": "app.mirror.killed", "src": "63565832", "v": "💀 已从 Mini App 结束 [{session}]"}
+{"k": "app.mirror.mode_sent", "src": "c1718968", "v": "⚙️ 正在从 Mini App 将 {session} 切换为{mode}，无需重启。"}
 {"k": "app.mirror.model", "src": "6df57f60", "v": "🔄 [{session}] → {model}（来自 Mini App）"}
 {"k": "app.mirror.renamed", "src": "22ad8a4c", "v": "✏️ 已从 Mini App 将 [{old}] 重命名为 [{new}]"}
 {"k": "app.mirror.restarted", "src": "9aa8323d", "v": "🔁 已从 Mini App 重启 [{session}]"}
 {"k": "app.mirror.resumed", "src": "fafeafa6", "v": "♻️ 已从 Mini App 恢复 [{session}]"}
-{"k": "app.mirror.resumed_in_ask", "src": "429a5b47", "v": "♻️ 已从 Mini App 以询问模式恢复 [{session}]：{reason}"}
+{"k": "app.mirror.resumed_in_auto", "src": "85b6c017", "v": "♻️ 已从 Mini App 以自动模式恢复 [{session}]：{reason}"}
 {"k": "app.mirror.session_setting", "src": "3256d908", "v": "⚙️ 会话 {session} 的 {setting} → {value}（在 Mini App 中更改）"}
 {"k": "app.mirror.session_setting_reset", "src": "4502514a", "v": "⚙️ 会话 {session} 的 {setting} 已重置为默认值（{value}）（在 Mini App 中更改）"}
 {"k": "app.mirror.setting", "src": "6820a9f7", "v": "⚙️ {setting} → {value}（在 Mini App 中更改）"}
@@ -111,6 +116,8 @@
 {"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"other": "⏹️ 已从 Mini App 停止 [{session}]（丢弃了 {n} 条排队消息）"}}
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 已从 Mini App 将 {session} 切换为询问模式"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 已从 Mini App 将 {session} 切换为自动模式"}
+{"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 已从 Mini App 将 {session} 切换为完全访问模式"}
+{"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "请先回答打开的请求，再切换模式。"}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude 正在工作，请在这一轮结束后再切换模型。"}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "会话未在运行。"}
 {"k": "app.reason.model_pending", "src": "a3384cf1", "v": "上一次模型切换还未确认：再次切换前，请先在终端中查看 Claude Code 的“Switch model?”问题。"}
@@ -120,7 +127,7 @@
 {"k": "app.reason.no_context", "src": "8f590315", "v": "没有可压缩的内容：上下文已经是空的。"}
 {"k": "app.reason.no_permission", "src": "e1081627", "v": "你没有控制这个会话的权限。"}
 {"k": "app.reason.no_transcript", "src": "3426f123", "v": "没有可恢复的对话记录，请改为启动一个新会话。"}
-{"k": "app.reason.perms_admin", "src": "7202c2fd", "v": "切换到自动模式需要管理员。"}
+{"k": "app.reason.perms_admin", "src": "c9f440cf", "v": "切换到完全访问模式需要管理员。"}
 {"k": "app.reason.queue_empty", "src": "35da34dc", "v": "没有可清除的排队消息。"}
 {"k": "app.reason.queue_full", "src": "2bf9f868", "v": "队列已满（{cap} 条待处理），请清空队列或等待它处理完。"}
 {"k": "appcmd.btn.open", "src": "0bfb9312", "v": "📱 打开 Mini App"}
@@ -218,7 +225,7 @@
 {"k": "cmd.app", "src": "486dfc4e", "v": "打开 Mini App 控制面板"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "你可以做什么"}
 {"k": "cmd.language", "src": "9dc3a234", "v": "aipager 消息的语言"}
-{"k": "cmd.mode", "src": "b677b7d9", "v": "自动或询问"}
+{"k": "cmd.mode", "src": "908f74fc", "v": "询问、自动或完全访问模式"}
 {"k": "cmd.new", "src": "959b093b", "v": "启动会话"}
 {"k": "cmd.now", "src": "3673f6f7", "v": "立即把排队消息发给 Claude"}
 {"k": "cmd.resume", "src": "88f33259", "v": "恢复已结束的会话"}
@@ -343,36 +350,49 @@
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ 好的，未安装语音功能。"}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ 语音消息大小为 {size} MB；Telegram 机器人的上限是 {limit} MB。"}
 {"k": "mode.ask", "src": "07910591", "v": "💬 询问模式"}
-{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 你的模式：询问（🤖 自动仅限管理员）"}
-{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 改用询问"}
+{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 改用询问模式"}
 {"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 自动模式"}
-{"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 改用自动"}
+{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 改用自动模式"}
+{"k": "mode.full", "src": "2b63c484", "v": "🔓 完全访问模式"}
+{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 改用完全访问模式"}
 {"k": "mode.word.ask", "src": "3562777b", "v": "询问"}
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "自动"}
+{"k": "mode.word.full", "src": "10b28a8c", "v": "完全"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> 已经是 {mode}。"}
-{"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 切换到询问"}
-{"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 切换到自动"}
+{"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 询问模式（此处无法使用自动）"}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 你使用自动（🔓 完全访问仅限管理员）"}
+{"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "{session} 无法使用自动模式（模型或套餐），因此保持询问模式。"}
+{"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 切换到询问模式"}
+{"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 切换到自动模式"}
+{"k": "modecard.btn.to_full", "src": "365ba002", "v": "🔓 切换到完全访问模式"}
 {"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> 正忙。\n要切换到询问模式吗？"}
 {"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> 正忙。\n要切换到自动模式吗？"}
-{"k": "modecard.confirm_auto", "src": "ff1562a9", "v": "⚙️ 要把 <b>{session}</b> 切换到 {mode}吗？\n<i>Claude 将不经询问直接运行工具（{flag}）。</i>"}
+{"k": "modecard.busy_to_full", "src": "13160dd5", "v": "⚙️ <b>{session}</b> 正忙。\n切换到完全访问模式？会话将重启。"}
+{"k": "modecard.confirm_full", "src": "30bc1073", "v": "⚙️ 将 <b>{session}</b> 切换为{mode}？\n<i>所有操作都不经任何检查直接运行（{flag}）。切换会重启会话；对话会保留。</i>"}
+{"k": "modecard.dialog_open", "src": "dbd6e8b6", "v": "⚠️ <b>{session}</b> 正在等待对一个问题或权限请求的回答。请先回答，再切换模式。"}
 {"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ <b>{session}</b> 的状态仍在初始化。请稍后再试一次 /mode。"}
 {"k": "modecard.is", "src": "c057ad13", "v": "<b>{session}</b> 当前为 {mode}。"}
 {"k": "modecard.is_target", "src": "92bc67e3", "v": "✍️ <b>{session}</b> 当前为 {mode}。"}
 {"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ <b>{session}</b> 已开始新的工作，所以没有任何更改。"}
-{"k": "modecard.needs_admin", "src": "fe68d230", "v": "自动模式需要管理员。"}
+{"k": "modecard.needs_admin", "src": "20f8f3e6", "v": "完全访问模式需要管理员。"}
 {"k": "modecard.none_live", "src": "ae432c8c", "v": "这里没有运行中的会话。用 /new 启动一个。"}
+{"k": "modecard.other_mode", "src": "c8beff6c", "v": "⚙️ Claude Code 的 {name} 模式"}
+{"k": "modecard.press_failed", "src": "b3c8a233", "v": "❌ 无法连接到 <b>{session}</b> 的终端 - 模式未更改。"}
 {"k": "modecard.refused_not_running", "src": "d62cf188", "v": "⚠️ <b>{session}</b> 未在运行，模式未更改。"}
 {"k": "modecard.refused_restarting", "src": "06433ed3", "v": "⚠️ <b>{session}</b> 正在重启，模式未更改。请稍后再试。"}
 {"k": "modecard.session_missing", "src": "adf0d420", "v": "⚠️ 找不到会话。"}
 {"k": "modecard.stale", "src": "9f0f5572", "v": "⚠️ 那张卡片已过期，所以没有任何更改。"}
 {"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> 仍在停止中，模式未更改。"}
+{"k": "modecard.switch_confirmed", "src": "85dadf29", "v": "✅ {session} 现在处于{mode}。"}
 {"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ 无法切换模式：{error}"}
+{"k": "modecard.switch_pending_line", "src": "661317d0", "v": "⏳ 正在等待 Claude Code 确认切换。"}
+{"k": "modecard.switch_sent", "src": "dc418d95", "v": "⚙️ 正在将 {session} 切换为{mode}，无需重启。"}
+{"k": "modecard.switch_unconfirmed", "src": "367038cc", "v": "{session} 没有切换：现在处于{mode}。"}
 {"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ {person} 已切换到 {mode}。"}
-{"k": "modecard.switching", "src": "30fa9003", "v": "⚙️ 正在把 <b>{session}</b> 切换到 {mode}…"}
-{"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ /mode 接受一个会话名称和 ask 或 auto，例如 {example} 或 {example_ask}。"}
+{"k": "modecard.switching", "src": "60043e5a", "v": "⚙️ 正在将 <b>{session}</b> 切换为{mode}（会话将重启）…"}
+{"k": "modecard.usage", "src": "b9b6e4b8", "v": "⚠️ /mode 需要一个会话名称和 ask、auto 或 full，例如 {example} 或 {example_ask}。"}
 {"k": "modecard.which", "src": "107abca0", "v": "哪个会话？"}
 {"k": "modecard.which_to", "src": "4694464a", "v": "要把哪个会话切换到 {mode}？"}
-{"k": "newflow.auto_needs_admin_note", "src": "6bb45da7", "v": "自动模式需要管理员，所以这个会话会先询问。"}
 {"k": "newflow.btn.cancel", "src": "196a9f45", "v": "✖️ 取消"}
 {"k": "newflow.btn.folder", "src": "2fb30e02", "v": "📁 文件夹"}
 {"k": "newflow.btn.model", "src": "e252b8c8", "v": "🧠 模型"}
@@ -393,6 +413,7 @@
 {"k": "newflow.example_line", "src": "ab8b1839", "v": "<code>{session} 修复失败的测试</code>"}
 {"k": "newflow.expired", "src": "6f9c9ea0", "v": "⏱ 这张新会话卡片已过期。请重新发送 /new。"}
 {"k": "newflow.folder_page", "src": "f6e221a1", "v": "📁 <b>文件夹</b>\n\n选择这个会话的工作位置。"}
+{"k": "newflow.full_needs_admin_note", "src": "3d60c811", "v": "完全访问模式需要管理员，因此此会话以自动模式启动。"}
 {"k": "newflow.group_name_ask", "src": "eb31141c", "v": "回复这条消息，写上名称；如果愿意，也可以写上第一步要做什么："}
 {"k": "newflow.hint_folder", "src": "f27c8294", "v": "📁 请先用 📁 文件夹 选择一个项目文件夹。"}
 {"k": "newflow.just_send", "src": "0b7a9b82", "v": "✍️ 直接发送消息，它会发到 {session}。"}
@@ -705,7 +726,7 @@
 {"k": "sess.resume_not_found", "src": "4c1d68d2", "v": "⚠️ 历史记录中没有名为 <b>{session}</b> 的会话。\n发送不带名称的 {command}，查看有哪些会话。"}
 {"k": "sess.resume_running", "src": "c090af67", "v": "⚠️ <b>{session}</b> 已在运行。\n点按键盘上的 {command} 切换到它。"}
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ 已恢复 <b>{session}</b>"}
-{"k": "sess.resumed_in_ask", "src": "8151879e", "v": "♻️ 已以询问模式恢复 <b>{session}</b>：自动模式需要管理员。"}
+{"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ 已以自动模式恢复 <b>{session}</b>：完全访问模式需要管理员。"}
 {"k": "sess.sent_to", "src": "d856101f", "v": "已发送到 {session}。"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ 关闭"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 新会话"}
@@ -824,6 +845,7 @@
 {"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "无效的回调"}
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "无效的值"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "这个按钮已过期，请重新发送 /kill"}
+{"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} 正在等待对一个请求的回答。请先回答，再切换模式。"}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} 已开始新的工作，再点一次 ⏹ 停止 来停止它"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} 已开始新的工作，请重新发送 /stop"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "你不能更改这个会话。"}
@@ -847,7 +869,7 @@
 {"k": "toast.open_chat", "src": "202c3e06", "v": "打开聊天来回答"}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "这是 {owner} 的卡片。"}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "这是 {owner} 的卡片。发送 {command} 获取你自己的。"}
-{"k": "toast.perms_needs_admin", "src": "fe68d230", "v": "自动模式需要管理员。"}
+{"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "完全访问模式需要管理员。"}
 {"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} 正在重启，请稍后再点"}
 {"k": "toast.perms_stale", "src": "4e34769b", "v": "这张卡片已过期，没有任何更改"}
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} 仍在启动，请稍后再试"}
@@ -922,7 +944,7 @@
 {"k": "tx.api.overloaded", "src": "6f545f5b", "v": "Anthropic 的服务器负载过高。请稍后再试。"}
 {"k": "tx.api.rate_limit", "src": "234c6146", "v": "达到速率限制。请稍等片刻再重试。"}
 {"k": "tx.api.rate_limit_wait", "src": "a2053ce3", "v": "达到速率限制。请等待 {seconds} 秒再重试。"}
-{"k": "tx.auto_needs_admin", "src": "bd96281e", "v": "自动模式需要管理员。"}
+{"k": "tx.full_needs_admin", "src": "20f8f3e6", "v": "完全访问模式需要管理员。"}
 {"k": "tx.needs_admin", "src": "a2f55b85", "v": "这个命令需要管理员。"}
 {"k": "tx.retry_others", "src": "4ad540c7", "v": "只有发送者本人才能重试那个命令。"}
 {"k": "tx.truncated", "src": "27710457", "v": "…［已截断］"}
@@ -975,8 +997,9 @@
 {"k": "ui.btn.start_session", "src": "76684eaf", "v": "启动会话"}
 {"k": "ui.btn.stop_and_switch", "src": "21c1d7af", "v": "停止任务并切换"}
 {"k": "ui.btn.switch", "src": "3e44c920", "v": "切换"}
-{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "切换到询问"}
-{"k": "ui.btn.switch_to_auto", "src": "13a0f246", "v": "切换到自动"}
+{"k": "ui.btn.switch_to_ask", "src": "adc38b97", "v": "切换到询问模式"}
+{"k": "ui.btn.switch_to_auto", "src": "6f248734", "v": "切换到自动模式"}
+{"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "切换到完全访问模式"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "重试"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "再等 10 分钟"}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "要删除 {session} 吗？"}
@@ -984,11 +1007,13 @@
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "要结束 {session} 吗？"}
 {"k": "ui.confirm.kill_body", "src": "beff52e4", "v": "这会停止并移除这个会话。它正在运行的任何内容都会被中断。"}
 {"k": "ui.confirm.perms_ask", "src": "c0710578", "v": "要把 {session} 切换到询问模式吗？"}
-{"k": "ui.confirm.perms_ask_body", "src": "701538b8", "v": "Claude 会在运行工具前询问。"}
 {"k": "ui.confirm.perms_auto", "src": "b6a1ddde", "v": "要把 {session} 切换到自动模式吗？"}
-{"k": "ui.confirm.perms_auto_body", "src": "7d8bf9c6", "v": "Claude 会不经询问直接运行工具。"}
-{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "要停止当前任务，并把 {session} 切换到询问吗？"}
-{"k": "ui.confirm.perms_busy_auto", "src": "d4090a8b", "v": "要停止当前任务，并把 {session} 切换到自动吗？"}
+{"k": "ui.confirm.perms_busy_ask", "src": "666af671", "v": "停止当前任务并将 {session} 切换到询问模式？"}
+{"k": "ui.confirm.perms_busy_auto", "src": "1b03b9b8", "v": "停止当前任务并将 {session} 切换到自动模式？"}
+{"k": "ui.confirm.perms_busy_full", "src": "066f6071", "v": "停止当前任务并将 {session} 切换到完全访问模式？"}
+{"k": "ui.confirm.perms_full", "src": "401fe494", "v": "将 {session} 切换到完全访问模式？"}
+{"k": "ui.confirm.perms_full_body", "src": "36f1fb1e", "v": "所有操作都不经任何检查直接运行。会话将重启；对话会保留。"}
+{"k": "ui.confirm.perms_leave_full_body", "src": "1159bfd9", "v": "会话将重启；对话会保留。"}
 {"k": "ui.confirm.rename", "src": "92656d63", "v": "要重命名 {session} 吗？"}
 {"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "会话会保留它的历史记录和工作目录。只有名称会改变。"}
 {"k": "ui.confirm.reset", "src": "e13d0ebf", "v": "要把设置恢复为默认值吗？"}
@@ -1035,6 +1060,7 @@
 {"k": "ui.done.delete", "src": "48ea780f", "v": "已删除。"}
 {"k": "ui.done.generic", "src": "e2bcda84", "v": "完成。"}
 {"k": "ui.done.kill", "src": "eb388bd9", "v": "已结束。"}
+{"k": "ui.done.mode_sent", "src": "e240134b", "v": "切换已发送。Claude Code 会在下一步确认。"}
 {"k": "ui.done.perms", "src": "144199df", "v": "已切换。"}
 {"k": "ui.done.rename", "src": "b930ba4a", "v": "已重命名。"}
 {"k": "ui.done.rename_same", "src": "ea00acbd", "v": "没有变化。"}
@@ -1056,7 +1082,6 @@
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "模型"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "未确认（请检查会话）"}
 {"k": "ui.model.unreachable", "src": "82a93142", "v": "无法连接到服务器。请检查会话的模型。"}
-{"k": "ui.new.auto_needs_admin", "src": "ad1f0c2f", "v": "自动模式需要管理员。"}
 {"k": "ui.new.chips_recent", "src": "76eec760", "v": "最近"}
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "推荐"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "CLI 自己的默认模型"}
@@ -1077,10 +1102,13 @@
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "你不能在这里创建文件夹。"}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "新文件夹名称"}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "无法连接到服务器。没有创建文件夹。"}
+{"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "完全访问模式需要管理员。"}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "询问"}
 {"k": "ui.new.mode_ask_help", "src": "eca1be33", "v": "Claude 会在运行工具前询问"}
 {"k": "ui.new.mode_auto", "src": "c614ba7c", "v": "自动"}
-{"k": "ui.new.mode_auto_help", "src": "306e8992", "v": "不经询问直接运行工具"}
+{"k": "ui.new.mode_auto_help", "src": "9dcf2566", "v": "安全检查会运行安全的操作并停止有风险的操作"}
+{"k": "ui.new.mode_full", "src": "5e4017a2", "v": "完全访问"}
+{"k": "ui.new.mode_full_help", "src": "26c97cd3", "v": "所有操作都不经任何检查直接运行"}
 {"k": "ui.new.mode_title", "src": "9c8c621a", "v": "权限模式"}
 {"k": "ui.new.model_name", "src": "5ebb9765", "v": "模型名称"}
 {"k": "ui.new.model_needed", "src": "c585e482", "v": "输入模型名称以继续。"}
@@ -1097,8 +1125,10 @@
 {"k": "ui.new.sub", "src": "23b19317", "v": "给它起个名字，选一个文件夹，Claude 就会在那里启动。"}
 {"k": "ui.new.summary_ask", "src": "3e987f2e", "v": "将在 {where} 以询问模式启动 Claude，使用 {model}。"}
 {"k": "ui.new.summary_auto", "src": "d0968e63", "v": "将在 {where} 以自动模式启动 Claude，使用 {model}。"}
+{"k": "ui.new.summary_full", "src": "08065163", "v": "将在 {where} 以完全访问模式启动 Claude，使用 {model}。"}
 {"k": "ui.new.summary_named_ask", "src": "ccbc6d09", "v": "将以 {name} 的名称在 {where} 以询问模式启动 Claude，使用 {model}。"}
 {"k": "ui.new.summary_named_auto", "src": "4b48c549", "v": "将以 {name} 的名称在 {where} 以自动模式启动 Claude，使用 {model}。"}
+{"k": "ui.new.summary_named_full", "src": "91a24e52", "v": "将以 {name} 的名称在 {where} 以完全访问模式启动 Claude，使用 {model}。"}
 {"k": "ui.new.title", "src": "5c881d23", "v": "新建会话"}
 {"k": "ui.new.where", "src": "525f61b6", "v": "位置"}
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "这个会话结束前没有捕获到任何内容。"}

@@ -1,4 +1,6 @@
-"""Integration tests: SC1, SC2, SC3 — skip_perms persists in state file.
+"""Integration tests: SC1, SC2, SC3 — the permission mode persists in the
+state file (``perm_mode``, with the older ``skip_perms`` mirrored beside it
+for a rollback: true only for Full access).
 
 Black-box: we exercise the public registry save/load cycle and check the JSON
 file content directly.  We do NOT read source except for the public
@@ -15,43 +17,45 @@ from aipager.state import SessionRegistry, Status
 
 
 # --------------------------------------------------------------------------- #
-# SC1 — /new ben (Ask mode) persists skip_perms: false in state file          #
+# SC1 — an Ask session persists perm_mode ask (skip_perms: false)            #
 # --------------------------------------------------------------------------- #
 
 def test_sc1_new_ask_session_persists_skip_perms_false(tmp_state_file):
-    """After creating a session with skip_perms=False (Ask mode), the state
-    file must contain skip_perms: false for that session entry."""
+    """An Ask session's entry holds perm_mode "ask" and the legacy
+    skip_perms false."""
     r = SessionRegistry()
     r.transition("claude-ben", Status.IDLE)
     sess = r.get("claude-ben")
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     r.save()
 
     raw = json.loads(tmp_state_file.read_text())
     assert "skip_perms" in raw["sessions"]["claude-ben"], (
         "skip_perms key must be present in persisted session"
     )
+    assert raw["sessions"]["claude-ben"]["perm_mode"] == "ask"
     assert raw["sessions"]["claude-ben"]["skip_perms"] is False, (
         "skip_perms must be false for Ask mode session"
     )
 
 
 # --------------------------------------------------------------------------- #
-# SC2 — /new !ben (Auto mode) persists skip_perms: true in state file         #
+# SC2 — a Full access session persists perm_mode full (skip_perms: true)     #
 # --------------------------------------------------------------------------- #
 
 def test_sc2_new_auto_session_persists_skip_perms_true(tmp_state_file):
-    """After creating a session with skip_perms=True (Auto mode), the state
-    file must contain skip_perms: true."""
+    """A Full access session's entry holds perm_mode "full" and the legacy
+    skip_perms true (what an older daemon called Auto)."""
     r = SessionRegistry()
     r.transition("claude-ben", Status.IDLE)
     sess = r.get("claude-ben")
-    sess.skip_perms = True
+    sess.perm_mode = "full"
     r.save()
 
     raw = json.loads(tmp_state_file.read_text())
+    assert raw["sessions"]["claude-ben"]["perm_mode"] == "full"
     assert raw["sessions"]["claude-ben"]["skip_perms"] is True, (
-        "skip_perms must be true for Auto mode session"
+        "skip_perms must be true for a Full access session"
     )
 
 
@@ -60,11 +64,11 @@ def test_sc2_new_auto_session_persists_skip_perms_true(tmp_state_file):
 # --------------------------------------------------------------------------- #
 
 def test_sc3_restart_preserves_skip_perms_true(tmp_state_file):
-    """On daemon restart (second load), skip_perms=True survives."""
+    """On daemon restart (second load), mode="full" survives."""
     # First daemon writes
     r1 = SessionRegistry()
     r1.transition("claude-ben", Status.IDLE)
-    r1.get("claude-ben").skip_perms = True
+    r1.get("claude-ben").perm_mode = "full"
     r1.save()
 
     # Second daemon loads
@@ -72,23 +76,23 @@ def test_sc3_restart_preserves_skip_perms_true(tmp_state_file):
     r2.load()
     s2 = r2.get("claude-ben")
     assert s2 is not None
-    assert s2.skip_perms is True, (
+    assert s2.perm_mode == "full", (
         "skip_perms must survive daemon restart (SessionRegistry.load)"
     )
 
 
 def test_sc3_restart_preserves_skip_perms_false(tmp_state_file):
-    """On daemon restart, skip_perms=False survives (not silently set True)."""
+    """On daemon restart, mode="ask" survives (not silently set True)."""
     r1 = SessionRegistry()
     r1.transition("claude-ben", Status.IDLE)
-    r1.get("claude-ben").skip_perms = False
+    r1.get("claude-ben").perm_mode = "ask"
     r1.save()
 
     r2 = SessionRegistry()
     r2.load()
     s2 = r2.get("claude-ben")
     assert s2 is not None
-    assert s2.skip_perms is False
+    assert s2.perm_mode == "ask"
 
 
 def test_sc3_old_state_file_without_skip_perms_defaults_to_false(tmp_state_file):
@@ -129,7 +133,7 @@ def test_sc3_old_state_file_without_skip_perms_defaults_to_false(tmp_state_file)
     r.load()
     s = r.get("claude-ben")
     assert s is not None
-    assert s.skip_perms is False, (
+    assert s.perm_mode == "ask", (
         "Migration: missing skip_perms key must default to False (Ask mode)"
     )
 
@@ -143,11 +147,11 @@ def test_two_sessions_different_modes_persist_independently(tmp_state_file):
     r = SessionRegistry()
     r.transition("claude-ask", Status.IDLE)
     r.transition("claude-auto", Status.IDLE)
-    r.get("claude-ask").skip_perms = False
-    r.get("claude-auto").skip_perms = True
+    r.get("claude-ask").perm_mode = "ask"
+    r.get("claude-auto").perm_mode = "full"
     r.save()
 
     r2 = SessionRegistry()
     r2.load()
-    assert r2.get("claude-ask").skip_perms is False
-    assert r2.get("claude-auto").skip_perms is True
+    assert r2.get("claude-ask").perm_mode == "ask"
+    assert r2.get("claude-auto").perm_mode == "full"

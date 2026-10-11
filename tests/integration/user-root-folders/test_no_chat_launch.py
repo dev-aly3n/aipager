@@ -42,7 +42,7 @@ def inside(team_root):
 def test_manager_without_chat_starts_outside_any_root(gbot, run_async, daemon_in_home,
                                                       seams, outside, who, chat):
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=chat, cwd=str(outside),
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=chat, cwd=str(outside),
                                  driver_user_id=who))
     seams.launch.assert_awaited_once()
 
@@ -52,7 +52,7 @@ def test_manager_without_chat_starts_outside_any_root(gbot, run_async, daemon_in
 def test_manager_without_chat_gets_no_error(gbot, run_async, daemon_in_home, seams,
                                             outside, who, chat):
     bot = gbot()
-    _name, err = run_async(bot.create_session("x", scope_chat_id=chat, cwd=str(outside),
+    _name, err = run_async(bot.create_session("x", mode="auto", scope_chat_id=chat, cwd=str(outside),
                                               driver_user_id=who))
     assert err == ""
 
@@ -62,7 +62,7 @@ def test_manager_without_chat_gets_no_error(gbot, run_async, daemon_in_home, sea
 def test_manager_without_chat_creates_no_member_folder(gbot, run_async, daemon_in_home,
                                                        seams, outside, home, who, chat):
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=chat, cwd=str(outside),
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=chat, cwd=str(outside),
                                  driver_user_id=who))
     assert not (home / "aipager-users").exists()
 
@@ -72,7 +72,7 @@ def test_manager_without_chat_creates_no_member_folder(gbot, run_async, daemon_i
 def test_restricted_without_chat_fails_closed_outside(gbot, run_async, daemon_in_home,
                                                       seams, outside, who, chat):
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=chat, cwd=str(outside),
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=chat, cwd=str(outside),
                                  driver_user_id=who))
     seams.launch.assert_not_awaited()
 
@@ -82,7 +82,7 @@ def test_restricted_without_chat_fails_closed_even_inside_its_group_root(
         gbot, run_async, daemon_in_home, seams, inside, chat):
     """With no chat, there is no root to be inside: nothing starts."""
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=chat, cwd=str(inside),
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=chat, cwd=str(inside),
                                  driver_user_id=BOB))
     seams.launch.assert_not_awaited()
 
@@ -91,7 +91,7 @@ def test_restricted_without_chat_fails_closed_even_inside_its_group_root(
 def test_restricted_without_chat_gets_an_error(gbot, run_async, daemon_in_home, seams,
                                                outside, chat):
     bot = gbot()
-    name, err = run_async(bot.create_session("x", scope_chat_id=chat, cwd=str(outside),
+    name, err = run_async(bot.create_session("x", mode="auto", scope_chat_id=chat, cwd=str(outside),
                                              driver_user_id=BOB))
     assert name == "" and err
 
@@ -100,7 +100,7 @@ def test_restricted_without_chat_gets_an_error(gbot, run_async, daemon_in_home, 
 def test_unknown_person_without_chat_fails_closed(gbot, run_async, daemon_in_home, seams,
                                                   outside, chat):
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=chat, cwd=str(outside),
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=chat, cwd=str(outside),
                                  driver_user_id=4242))
     seams.launch.assert_not_awaited()
 
@@ -110,7 +110,7 @@ def test_unknown_person_without_chat_fails_closed(gbot, run_async, daemon_in_hom
 def test_with_a_chat_the_user_is_still_held_to_the_root(gbot, run_async, daemon_in_home,
                                                         seams, outside, scopes):
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=kit.GROUP, cwd=str(outside),
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=kit.GROUP, cwd=str(outside),
                                  driver_user_id=BOB))
     seams.launch.assert_not_awaited()
 
@@ -118,6 +118,6 @@ def test_with_a_chat_the_user_is_still_held_to_the_root(gbot, run_async, daemon_
 def test_with_a_chat_the_user_starts_inside_the_root(gbot, run_async, daemon_in_home,
                                                      seams, inside):
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=kit.GROUP, cwd=str(inside),
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=kit.GROUP, cwd=str(inside),
                                  driver_user_id=BOB))
     seams.launch.assert_awaited_once()

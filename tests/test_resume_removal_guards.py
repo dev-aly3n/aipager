@@ -50,7 +50,7 @@ def _gone_session(registry: SessionRegistry, *, name: str = NAME,
     sess.claude_session_id = "uuid-1234"
     sess.cwd = "/home/aly/aipager"
     sess.scope_chat_id = CHAT
-    sess.skip_perms = True
+    sess.perm_mode = "full"
     registry._sessions[name] = sess
     return sess
 
@@ -123,7 +123,7 @@ def test_the_count_cap_cannot_evict_a_session_mid_resume(
     assert sess.status == Status.IDLE
     assert sess.cwd == "/home/aly/aipager"
     assert sess.scope_chat_id == CHAT
-    assert sess.skip_perms is True
+    assert sess.perm_mode == "full"
     assert registry.get_session_by_msg(MSG, CHAT) is sess
 
 

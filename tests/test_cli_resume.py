@@ -178,19 +178,19 @@ def test_cmd_resume_no_arg_calls_picker(monkeypatch):
 def test_cmd_resume_with_name_calls_resume_one(monkeypatch):
     called = {}
     monkeypatch.setattr(cli_resume, "_resume_one",
-                        lambda label, *, force_auto=False:
+                        lambda label, *, force_full=False:
                             (called.setdefault("label", label),
-                             called.setdefault("force_auto", force_auto), 0)[2])
+                             called.setdefault("force_full", force_full), 0)[2])
     args = argparse.Namespace(name="jim")
     cli_resume._cmd_resume(args)
     assert called["label"] == "jim"
-    assert called["force_auto"] is False
+    assert called["force_full"] is False
 
 
 def test_cmd_resume_strips_at_and_slash(monkeypatch):
     received = {}
     monkeypatch.setattr(cli_resume, "_resume_one",
-                        lambda label, *, force_auto=False:
+                        lambda label, *, force_full=False:
                             (received.setdefault("label", label), 0)[1])
     args = argparse.Namespace(name="@JIM")
     cli_resume._cmd_resume(args)
@@ -332,7 +332,7 @@ def test_resume_one_resolves_scope_suffixed_session_by_short_label(
 
     assert rc == 0
     assert launch.await_args.args[0] == "ddd__d447759837"
-    assert launch.await_args.kwargs["skip_perms"] is True
+    assert launch.await_args.kwargs["mode"] == "full"
     out = capsys.readouterr().out
     assert "ddd__d447759837" in out
     assert "/tmp/claude-dtach-ddd__d447759837.sock" in out
@@ -361,17 +361,17 @@ def test_resume_one_already_running_guard_uses_suffixed_socket(
     assert "/tmp/claude-dtach-ddd__d447759837.sock" in seen
 
 
-def test_resume_one_force_auto_works_with_suffixed_session(monkeypatch):
-    """`aipager resume !ddd` overrides a persisted skip_perms=False."""
+def test_resume_one_force_full_works_with_suffixed_session(monkeypatch):
+    """`aipager resume !ddd` overrides a persisted Ask mode."""
     monkeypatch.setattr("pathlib.Path.is_socket", lambda self: False)
     monkeypatch.setattr(cli_resume, "_gone_history",
-                        lambda: [dict(_DDD, skip_perms=False)])
+                        lambda: [dict(_DDD, perm_mode="ask")])
     launch = AsyncMock(return_value=(True, ""))
     monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
 
-    assert cli_resume._resume_one("ddd", force_auto=True) == 0
+    assert cli_resume._resume_one("ddd", force_full=True) == 0
     assert launch.await_args.args[0] == "ddd__d447759837"
-    assert launch.await_args.kwargs["skip_perms"] is True
+    assert launch.await_args.kwargs["mode"] == "full"
 
 
 def test_resume_one_ambiguous_label_refuses_to_guess(monkeypatch, capsys):

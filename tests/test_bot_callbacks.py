@@ -463,7 +463,7 @@ def test_resume_noop_does_nothing(mk_bot, mk_query, run_async):
 
 def test_new_cancel_edits_message(mk_bot, mk_query, run_async):
     bot = mk_bot()
-    bot._new_conflict_pending["claude-jim"] = {"prompt": "", "skip_perms": False,
+    bot._new_conflict_pending["claude-jim"] = {"prompt": "", "mode": "ask",
                                                   "user_id": 1, "msg_id": 5}
     update, query = mk_query("claude-jim:new_cancel", user_id=1)
     run_async(bot._handle_callback(update, MagicMock()))
@@ -478,7 +478,7 @@ def test_new_resume_alive_session_switches(mk_bot, mk_query, run_async):
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     bot.registry._sessions["claude-jim"] = sess
-    bot._new_conflict_pending["claude-jim"] = {"prompt": "go", "skip_perms": False,
+    bot._new_conflict_pending["claude-jim"] = {"prompt": "go", "mode": "ask",
                                                   "user_id": 1, "msg_id": 5}
     update, query = mk_query("claude-jim:new_resume", user_id=1)
     run_async(bot._handle_callback(update, MagicMock()))
@@ -501,7 +501,7 @@ def test_new_resume_queues_the_prompt_as_its_author_not_the_tapper(
         sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
         bot.registry._sessions["claude-jim"] = sess
         bot._new_conflict_pending["claude-jim"] = {
-            "prompt": "go", "skip_perms": False, "user_id": author, "msg_id": 5}
+            "prompt": "go", "mode": "ask", "user_id": author, "msg_id": 5}
         update, _query = mk_query("claude-jim:new_resume", user_id=tapper)
         run_async(bot._handle_callback(update, MagicMock()))
         (entry,) = [e for e in sess.pending_queue if e[0] == "go"]
@@ -514,7 +514,7 @@ def test_new_resume_gone_session_routes_to_do_resume(mk_bot, mk_query, run_async
     sess.claude_session_id = "UUID-1"
     bot.registry._sessions["claude-jim"] = sess
     bot._do_resume = AsyncMock()
-    bot._new_conflict_pending["claude-jim"] = {"prompt": "", "skip_perms": False,
+    bot._new_conflict_pending["claude-jim"] = {"prompt": "", "mode": "ask",
                                                   "user_id": 1, "msg_id": 5}
     update, query = mk_query("claude-jim:new_resume", user_id=1)
     run_async(bot._handle_callback(update, MagicMock()))
@@ -534,7 +534,7 @@ def test_new_resume_of_a_gone_session_queues_as_the_author(
         sess.status = Status.IDLE
     bot._do_resume = AsyncMock(side_effect=_resumed)
     bot._new_conflict_pending["claude-jim"] = {
-        "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
+        "prompt": "go", "mode": "ask", "user_id": 111, "msg_id": 5}
     update, _query = mk_query("claude-jim:new_resume", user_id=111)
     run_async(bot._handle_callback(update, MagicMock()))
     (entry,) = [e for e in sess.pending_queue if e[0] == "go"]
@@ -551,7 +551,7 @@ def test_new_replace_queues_the_prompt_as_its_author(
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
     bot.registry._sessions["claude-jim"] = sess
     bot._new_conflict_pending["claude-jim"] = {
-        "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
+        "prompt": "go", "mode": "ask", "user_id": 111, "msg_id": 5}
     monkeypatch.setattr("aipager.dtach.inject.launch_session",
                         AsyncMock(return_value=(True, "")))
     update, _query = mk_query("claude-jim:new_replace", user_id=111)
@@ -570,7 +570,7 @@ def test_new_replace_starts_fresh_with_the_chosen_folder_and_model_and_ends_read
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
     bot.registry._sessions["claude-jim"] = sess
     bot._new_conflict_pending["claude-jim"] = {
-        "prompt": "", "skip_perms": True, "user_id": 111, "msg_id": 5,
+        "prompt": "", "mode": "full", "user_id": 111, "msg_id": 5,
         "cwd": "/srv/proj", "model": "opus"}
     launch = AsyncMock(return_value=(True, ""))
     monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
@@ -584,7 +584,7 @@ def test_new_replace_starts_fresh_with_the_chosen_folder_and_model_and_ends_read
     # the tapping chat's suffix or scope.
     assert launch.await_args.args[0] == "jim"
     assert bot.registry.get("claude-jim").scope_chat_id == 0
-    assert (kw["skip_perms"], kw["cwd"], kw["model"]) == (True, "/srv/proj", "opus")
+    assert (kw["mode"], kw["cwd"], kw["model"]) == ("full", "/srv/proj", "opus")
     texts = [str(c.args[0]) if c.args else str(c.kwargs.get("text"))
              for c in query.edit_message_text.await_args_list]
     assert any("jim</b> is ready" in t for t in texts), texts
@@ -602,7 +602,7 @@ def test_new_replace_keeps_a_scoped_sessions_own_name(
     sess.scope_chat_id = -100
     bot.registry._sessions[name] = sess
     bot._new_conflict_pending[name] = {
-        "prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+        "prompt": "", "mode": "ask", "user_id": 111, "msg_id": 5}
     launch = AsyncMock(return_value=(True, ""))
     monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
 
@@ -627,7 +627,7 @@ def test_new_replace_keeps_a_renamed_sessions_internal_name(
     sess.scope_chat_id = -100
     bot.registry._sessions[name] = sess
     bot._new_conflict_pending[name] = {
-        "prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+        "prompt": "", "mode": "ask", "user_id": 111, "msg_id": 5}
     launch = AsyncMock(return_value=(True, ""))
     monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
 
@@ -657,7 +657,7 @@ def test_new_replace_by_someone_else_is_refused_and_kills_nothing(
         mk_bot, mk_query, run_async, monkeypatch):
     """Replace kills a session: only the person who sent /new may tap
     it, and a refused tap leaves the card for its author."""
-    pending = {"prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+    pending = {"prompt": "", "mode": "ask", "user_id": 111, "msg_id": 5}
     bot, kill, launch = _replace_refusal_setup(mk_bot, monkeypatch, pending)
 
     update, query = mk_query("claude-jim:new_replace", user_id=222)
@@ -672,7 +672,7 @@ def test_new_replace_by_someone_else_is_refused_and_kills_nothing(
 
 def test_new_replace_by_an_author_who_may_no_longer_prompt_is_refused(
         mk_bot, mk_query, run_async, monkeypatch):
-    pending = {"prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+    pending = {"prompt": "", "mode": "ask", "user_id": 111, "msg_id": 5}
     bot, kill, launch = _replace_refusal_setup(mk_bot, monkeypatch, pending)
     bot._can_prompt_user = MagicMock(return_value=False)
 
@@ -704,7 +704,7 @@ def test_new_replace_after_a_turn_started_since_the_card_is_refused_and_kept(
     """jim started a turn (busy card 50) after the name was sent (40):
     the card never showed that work, so Replace refuses, and the card's
     first message is kept for a retry."""
-    pending = {"prompt": "do it", "skip_perms": False, "user_id": 111, "msg_id": 40}
+    pending = {"prompt": "do it", "mode": "ask", "user_id": 111, "msg_id": 40}
     bot, kill, launch = _replace_refusal_setup(mk_bot, monkeypatch, pending)
     bot.registry.get("claude-jim").busy_msg_id = 50
 
@@ -726,7 +726,7 @@ def test_new_replace_from_an_edited_name_card_is_not_mistaken_for_stale(
     sess.busy_msg_id = 30
     bot.registry._sessions["claude-jim"] = sess
     bot._new_conflict_pending["claude-jim"] = {
-        "prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 40}
+        "prompt": "", "mode": "ask", "user_id": 111, "msg_id": 40}
     launch = AsyncMock(return_value=(True, ""))
     monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
 
@@ -745,7 +745,7 @@ def test_cancel_and_resume_take_the_cards_state(
     bot.registry._sessions["claude-jim"] = TrackedSession(
         name="claude-jim", label="jim", status=Status.IDLE)
     bot._new_conflict_pending["claude-jim"] = {
-        "prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+        "prompt": "", "mode": "ask", "user_id": 111, "msg_id": 5}
 
     update, _query = mk_query(f"claude-jim:{verb}", user_id=111)
     run_async(bot._handle_callback(update, MagicMock()))
@@ -757,7 +757,7 @@ def test_a_tap_for_a_session_no_longer_tracked_takes_the_cards_state(
         mk_bot, mk_query, run_async):
     bot = mk_bot()
     bot._new_conflict_pending["claude-jim"] = {
-        "prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+        "prompt": "", "mode": "ask", "user_id": 111, "msg_id": 5}
 
     update, query = mk_query("claude-jim:new_replace", user_id=111)
     run_async(bot._handle_callback(update, MagicMock()))
@@ -776,7 +776,7 @@ def test_cancel_and_resume_by_someone_else_are_refused_and_keep_the_card(
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     bot.registry._sessions["claude-jim"] = sess
     bot._new_conflict_pending["claude-jim"] = {
-        "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
+        "prompt": "go", "mode": "ask", "user_id": 111, "msg_id": 5}
 
     update, query = mk_query(f"claude-jim:{verb}", user_id=222)
     run_async(bot._handle_callback(update, MagicMock()))
@@ -793,7 +793,7 @@ def test_resume_by_an_author_who_may_no_longer_prompt_is_refused(
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     bot.registry._sessions["claude-jim"] = sess
     bot._new_conflict_pending["claude-jim"] = {
-        "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
+        "prompt": "go", "mode": "ask", "user_id": 111, "msg_id": 5}
     bot._can_prompt_user = MagicMock(return_value=False)
 
     update, _query = mk_query("claude-jim:new_resume", user_id=111)
@@ -821,7 +821,7 @@ def test_resume_brings_back_exactly_the_cards_session(
         names[chat] = name
     b = names[-200]
     bot._new_conflict_pending[b] = {
-        "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
+        "prompt": "go", "mode": "ask", "user_id": 111, "msg_id": 5}
     launch = AsyncMock(return_value=(True, ""))
     monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
     monkeypatch.setattr("aipager.bot.session_ops._read_preview", lambda *a, **k: "",
@@ -869,7 +869,7 @@ def test_resume_on_the_card_resumes_the_cards_own_session(
                           claude_session_id="abc")
     bot.registry._sessions["claude-jim"] = gone
     bot._new_conflict_pending["claude-jim"] = {
-        "prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+        "prompt": "", "mode": "ask", "user_id": 111, "msg_id": 5}
     decoy = TrackedSession(name="claude-jim__g999", label="jim",
                            status=Status.GONE, claude_session_id="zzz")
     monkeypatch.setattr(bot.registry, "find_by_label", lambda *a, **k: decoy)
@@ -888,7 +888,7 @@ def test_a_failed_resume_queues_nothing(mk_bot, mk_query, run_async, monkeypatch
                           claude_session_id="abc")
     bot.registry._sessions["claude-jim"] = gone
     bot._new_conflict_pending["claude-jim"] = {
-        "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
+        "prompt": "go", "mode": "ask", "user_id": 111, "msg_id": 5}
     monkeypatch.setattr("aipager.dtach.inject.launch_session",
                         AsyncMock(return_value=(False, "dtach broken")))
 
@@ -904,7 +904,7 @@ def test_new_replace_refuses_a_turn_that_started_after_an_idle_card(
     """Review-3: a self-woken turn holds its card back for seconds, so the
     busy card cannot tell. The card was shown on an idle session and the
     session now works: that is work the card never showed."""
-    pending = {"prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 40,
+    pending = {"prompt": "", "mode": "ask", "user_id": 111, "msg_id": 40,
                "was_working": False}
     bot, kill, launch = _replace_refusal_setup(mk_bot, monkeypatch, pending)
     bot.registry.get("claude-jim").status = Status.BUSY      # no busy card yet
@@ -921,7 +921,7 @@ def test_new_replace_of_a_session_shown_working_goes_ahead(
         mk_bot, mk_query, run_async, monkeypatch):
     """The card said it was already running: replacing it is what the
     author chose."""
-    pending = {"prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 40,
+    pending = {"prompt": "", "mode": "ask", "user_id": 111, "msg_id": 40,
                "was_working": True}
     bot, kill, launch = _replace_refusal_setup(mk_bot, monkeypatch, pending)
     bot.registry.get("claude-jim").status = Status.BUSY
@@ -941,7 +941,7 @@ def test_the_conflict_card_records_whether_the_session_was_working(
         sess = TrackedSession(name="claude-jim", label="jim", status=status)
         update = mk_update("/new jim", user_id=111)
         run_async(bot._send_new_conflict_prompt(
-            update=update, existing=sess, prompt="", skip_perms=False))
+            update=update, existing=sess, prompt="", mode="ask"))
         assert bot._new_conflict_pending["claude-jim"]["was_working"] is expected
 
 
@@ -956,11 +956,11 @@ def test_a_newer_conflict_card_for_the_same_name_retires_the_older_one(
     first = mk_update("/new jim", user_id=111, message_id=10)
     first.message.reply_text = AsyncMock(return_value=MagicMock(message_id=11))
     run_async(bot._send_new_conflict_prompt(
-        update=first, existing=sess, prompt="", skip_perms=False))
+        update=first, existing=sess, prompt="", mode="ask"))
     second = mk_update("/new jim", user_id=222, message_id=12)
     second.message.reply_text = AsyncMock(return_value=MagicMock(message_id=13))
     run_async(bot._send_new_conflict_prompt(
-        update=second, existing=sess, prompt="", skip_perms=False))
+        update=second, existing=sess, prompt="", mode="ask"))
 
     assert bot._new_conflict_pending["claude-jim"]["user_id"] == 222
     assert bot._app.bot.edit_message_text.await_count == 1, "older card not retired"
@@ -981,13 +981,13 @@ def test_two_conflict_cards_racing_retire_the_older_one(mk_bot, mk_update, run_a
 
     async def _first_goes_out(*a, **k):
         await bot._send_new_conflict_prompt(
-            update=second, existing=sess, prompt="", skip_perms=False)
+            update=second, existing=sess, prompt="", mode="ask")
         return MagicMock(message_id=11)
     first = mk_update("/new jim", user_id=111, message_id=10)
     first.message.reply_text = AsyncMock(side_effect=_first_goes_out)
 
     run_async(bot._send_new_conflict_prompt(
-        update=first, existing=sess, prompt="", skip_perms=False))
+        update=first, existing=sess, prompt="", mode="ask"))
 
     current = bot._new_conflict_pending["claude-jim"]
     assert (current["user_id"], current.get("card", (None, None))[1]) == (222, 13)
@@ -995,15 +995,15 @@ def test_two_conflict_cards_racing_retire_the_older_one(mk_bot, mk_update, run_a
     assert edited == [11]
 
 
-def test_new_replace_re_checks_auto_at_creation(
+def test_new_replace_re_checks_full_access_at_creation(
         mk_bot, mk_query, run_async, monkeypatch):
-    """The card stored Auto, but its author is no longer an admin: the
-    fresh session asks."""
+    """The card stored Full access, but its author is no longer an admin:
+    the fresh session starts in Auto."""
     bot = mk_bot()
     bot.registry._sessions["claude-jim"] = TrackedSession(
         name="claude-jim", label="jim", status=Status.GONE)
     bot._new_conflict_pending["claude-jim"] = {
-        "prompt": "", "skip_perms": True, "user_id": 111, "msg_id": 5}
+        "prompt": "", "mode": "full", "user_id": 111, "msg_id": 5}
     bot._is_admin_user = MagicMock(return_value=False)
     launch = AsyncMock(return_value=(True, ""))
     monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
@@ -1011,7 +1011,7 @@ def test_new_replace_re_checks_auto_at_creation(
     update, _query = mk_query("claude-jim:new_replace", user_id=111)
     run_async(bot._handle_callback(update, MagicMock()))
 
-    assert launch.await_args.kwargs["skip_perms"] is False
+    assert launch.await_args.kwargs["mode"] == "auto"
 
 
 def test_new_replace_kills_alive_then_launches(mk_bot, mk_query, run_async, monkeypatch):
@@ -1019,7 +1019,7 @@ def test_new_replace_kills_alive_then_launches(mk_bot, mk_query, run_async, monk
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     sess.claude_session_id = "old"  # state to be cleared
     bot.registry._sessions["claude-jim"] = sess
-    bot._new_conflict_pending["claude-jim"] = {"prompt": "", "skip_perms": False,
+    bot._new_conflict_pending["claude-jim"] = {"prompt": "", "mode": "ask",
                                                   "user_id": 1, "msg_id": 5}
 
     kill_called = AsyncMock()
@@ -1043,7 +1043,7 @@ def test_new_replace_launch_failure_messages_error(mk_bot, mk_query, run_async, 
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
     bot.registry._sessions["claude-jim"] = sess
-    bot._new_conflict_pending["claude-jim"] = {"prompt": "", "skip_perms": False,
+    bot._new_conflict_pending["claude-jim"] = {"prompt": "", "mode": "ask",
                                                   "user_id": 1, "msg_id": 5}
     monkeypatch.setattr("aipager.dtach.inject.launch_session",
                         AsyncMock(return_value=(False, "dtach broken")))

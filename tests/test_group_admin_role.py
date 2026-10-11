@@ -4,6 +4,8 @@ Group audit A9 / C8 (probe p6 part a): ``_is_admin_user`` returned
 ``role.bypass_safety``, which only ``owner`` has, so an ``admin`` was told
 "Auto mode needs an admin", got Ask for new sessions, and could not change
 a group's ``/settings`` or run ``/update``, while ``/whoami`` said admin.
+(Since 2026-10-11 that gate is on Full access: Auto, a safety check, is
+everyone's, and the old Auto, which bypassed every check, is Full access.)
 
 Operator decision 2026-10-04: an admin passes every gate an owner passes in
 Telegram and the Mini App, through ``Role.can_manage``. Two things stay the
@@ -16,12 +18,12 @@ Pinned here, all with the REAL built-in policy (``load_policy``):
   ``bypass_safety`` is still the owner's alone;
 - ``policy.yaml`` may set ``can_manage`` per role, and is validated;
 - the gate matrix in a group and in the owner's DM: ``_is_admin_user``,
-  ``_is_update_admin``, ``/new``'s Auto default, ``/mode auto``,
+  ``_is_update_admin``, ``/new``'s Full access, ``/mode full``,
   ``/update``, a group ``/settings`` write, ``/whoami``;
 - an admin's protected-path read and write are still denied by the hook;
-- resuming a session saved in Auto needs an admin (typed ``/resume``, the
-  picker's buttons, the ``/new`` conflict card, the Mini App); anyone else
-  gets Ask and is told so;
+- resuming a session saved in Full access mode needs an admin (typed
+  ``/resume``, the picker's buttons, the ``/new`` conflict card, the Mini
+  App); anyone else gets Auto and is told so;
 - no Telegram or Mini App code can write members or roles;
 - the wizard offers owner for group members with a warning, and suggests
   the operator first;
@@ -42,7 +44,7 @@ from aipager import policy as policy_mod
 from aipager import policy_snapshot as ps
 from aipager import safety
 from aipager.bot import new_flow, session_parity, update_flow
-from aipager.bot.transport import RESUME_AUTO_NEEDS_ADMIN
+from aipager.bot.transport import RESUME_FULL_NEEDS_ADMIN
 from aipager.dtach import enforce, inject
 from aipager.policy import PolicyError, load_policy
 from aipager.scope import Member, Scope
@@ -56,7 +58,7 @@ ALY, BOB, RO, ADA = 1, 2, 3, 4      # owner, user, read_only, admin
 ROLE_OF = {ALY: "owner", BOB: "user", RO: "read_only", ADA: "admin"}
 MANAGERS = {ALY, ADA}
 
-ASK_NOTE = f"in Ask: {RESUME_AUTO_NEEDS_ADMIN}"
+AUTO_NOTE = f"in Auto mode: {RESUME_FULL_NEEDS_ADMIN}"
 
 
 def _builtin_policy():
@@ -302,20 +304,20 @@ def test_p6a_admin_is_an_admin(gbot):
     assert bot._is_admin_user(ADA, GROUP) is True
     assert bot._is_update_admin(ADA, GROUP) is True
     st = new_flow.resolve_new_session_settings(bot, GROUP, ADA)
-    assert st["can_auto"] is True and st["skip_perms"] is True
+    assert st["can_full"] is True and st["mode"] == "auto"
 
 
 @pytest.mark.parametrize("uid", [BOB, RO], ids=lambda u: ROLE_OF[u])
-def test_new_defaults_ask_for_others(gbot, uid):
+def test_new_defaults_auto_without_full_access_for_others(gbot, uid):
     st = new_flow.resolve_new_session_settings(gbot(), GROUP, uid)
-    assert st["can_auto"] is False and st["skip_perms"] is False
+    assert st["can_full"] is False and st["mode"] == "auto"
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
-def test_mode_auto_typed(gbot, run_async, uid):
+def test_mode_full_typed(gbot, run_async, uid):
     bot = gbot()
     sess = _session(bot)
-    u = _cmd("/mode api auto", user_id=uid, chat_id=GROUP)
+    u = _cmd("/mode api full", user_id=uid, chat_id=GROUP)
     run_async(bot._handle_mode_cmd(u, MagicMock()))
     replies = _replies(u)
     assert replies, "no reply"
@@ -324,8 +326,8 @@ def test_mode_auto_typed(gbot, run_async, uid):
         # the confirm step, with its buttons
         assert u.message.reply_text.await_args_list[0].kwargs.get("reply_markup")
     else:
-        assert replies == ["Auto mode needs an admin."]
-    assert sess.skip_perms is False      # nothing switched without a confirm
+        assert replies == ["Full access mode needs an admin."]
+    assert sess.perm_mode == "ask"      # nothing switched without a confirm
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB, RO], ids=lambda u: ROLE_OF[u])
@@ -376,7 +378,7 @@ def test_dm_owner_is_unchanged(gbot):
     assert bot._is_admin_user(ALY, DM) is True
     assert bot._is_update_admin(ALY, DM) is True
     st = new_flow.resolve_new_session_settings(bot, DM, ALY)
-    assert st["can_auto"] is True
+    assert st["can_full"] is True
 
 
 def test_personal_mode_is_unchanged(mk_bot, monkeypatch):
@@ -432,30 +434,31 @@ def test_the_owner_still_bypasses_the_floor(floor):
 
 
 # ===========================================================================
-# Resume of a session saved in Auto needs an admin
+# Resume of a session saved in Full access mode needs an admin
 # ===========================================================================
 
 def _gone_auto(bot, name=S, chat=GROUP, kind="group"):
     s = _session(bot, name, chat, kind, status=Status.GONE)
     s.claude_session_id, s.cwd = "sid-1", "/srv/team"
-    s.skip_perms = True
+    s.perm_mode = "full"
     s.last_assistant_preview = "where we left off"
     return s
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
-def test_typed_resume_of_an_auto_session(gbot, run_async, launched, uid):
+def test_typed_resume_of_a_full_access_session(gbot, run_async, launched, uid):
     bot = gbot()
     sess = _gone_auto(bot)
     u = _cmd("/resume api", user_id=uid, chat_id=GROUP)
     run_async(bot._handle_resume_cmd(u, MagicMock()))
     assert len(launched) == 1
-    auto = uid in MANAGERS
-    assert launched[0][1]["skip_perms"] is auto
-    assert sess.skip_perms is auto
+    full = uid in MANAGERS
+    want = "full" if full else "auto"
+    assert launched[0][1]["mode"] == want
+    assert sess.perm_mode == want
     text = "\n".join(_replies(u))
     assert "Resumed <b>api</b>" in text
-    assert (ASK_NOTE in text) is (not auto)
+    assert (AUTO_NOTE in text) is (not full)
 
 
 def test_typed_resume_note_reads_plainly(gbot, run_async, launched):
@@ -464,18 +467,18 @@ def test_typed_resume_note_reads_plainly(gbot, run_async, launched):
     u = _cmd("/resume api", user_id=BOB, chat_id=GROUP)
     run_async(bot._handle_resume_cmd(u, MagicMock()))
     first = _replies(u)[0].split("\n", 1)[0]
-    assert first == "♻️ Resumed <b>api</b> in Ask: Auto needs an admin."
+    assert first == "♻️ Resumed <b>api</b> in Auto mode: Full access mode needs an admin."
 
 
 def test_typed_resume_of_an_ask_session_says_nothing_extra(
         gbot, run_async, launched):
     bot = gbot()
     sess = _gone_auto(bot)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     u = _cmd("/resume api", user_id=BOB, chat_id=GROUP)
     run_async(bot._handle_resume_cmd(u, MagicMock()))
-    assert launched[0][1]["skip_perms"] is False
-    assert ASK_NOTE not in "\n".join(_replies(u))
+    assert launched[0][1]["mode"] == "ask"
+    assert AUTO_NOTE not in "\n".join(_replies(u))
 
 
 def test_dm_owner_typed_resume_is_unchanged(gbot, run_async, launched):
@@ -483,8 +486,8 @@ def test_dm_owner_typed_resume_is_unchanged(gbot, run_async, launched):
     sess = _gone_auto(bot, "claude-api__d555", DM, "dm")
     u = _cmd("/resume api", user_id=ALY, chat_id=DM)
     run_async(bot._handle_resume_cmd(u, MagicMock()))
-    assert launched[0][1]["skip_perms"] is True and sess.skip_perms is True
-    assert ASK_NOTE not in "\n".join(_replies(u))
+    assert launched[0][1]["mode"] == "full" and sess.perm_mode == "full"
+    assert AUTO_NOTE not in "\n".join(_replies(u))
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
@@ -497,9 +500,11 @@ def test_picker_shows_the_default_this_person_gets(gbot, run_async, uid):
     kb = q.edit_message_text.await_args.kwargs["reply_markup"]
     labels = [b.text for row in kb.inline_keyboard for b in row]
     if uid in MANAGERS:
-        assert "🤖 Auto mode (default)" in labels
+        assert labels[:3] == ["💬 Ask mode", "🤖 Auto mode", "🔓 Full access mode (default)"]
     else:
-        assert "💬 Ask mode (default)" in labels
+        # No Full access row; what they get instead is the default.
+        assert labels[:2] == ["💬 Ask mode", "🤖 Auto mode (default)"]
+        assert not any("Full access" in label for label in labels)
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
@@ -509,52 +514,61 @@ def test_picker_ask_resumes_in_ask_for_anyone(gbot, run_async, launched, uid):
     data = session_parity.session_cb(bot, GROUP, sess, "resume-ask")
     u, q = _tap(GROUP, uid, data, msg_id=60)
     run_async(bot._handle_callback(u, MagicMock()))
-    assert launched[0][1]["skip_perms"] is False
-    assert not any(ASK_NOTE in t for t in _edited(q))
+    assert launched[0][1]["mode"] == "ask"
+    assert not any(AUTO_NOTE in t for t in _edited(q))
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
-def test_picker_auto(gbot, run_async, launched, uid):
+def test_picker_auto_resumes_in_auto_for_anyone(gbot, run_async, launched, uid):
     bot = gbot()
     sess = _gone_auto(bot)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     data = session_parity.session_cb(bot, GROUP, sess, "resume-auto")
     u, q = _tap(GROUP, uid, data, msg_id=60)
     run_async(bot._handle_callback(u, MagicMock()))
+    assert launched[0][1]["mode"] == "auto"
+
+
+@pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
+def test_picker_full(gbot, run_async, launched, uid):
+    bot = gbot()
+    sess = _gone_auto(bot)
+    sess.perm_mode = "ask"
+    data = session_parity.session_cb(bot, GROUP, sess, "resume-full")
+    u, q = _tap(GROUP, uid, data, msg_id=60)
+    run_async(bot._handle_callback(u, MagicMock()))
     if uid in MANAGERS:
-        assert launched[0][1]["skip_perms"] is True
+        assert launched[0][1]["mode"] == "full"
     else:
         assert launched == []           # refused at the tap gate
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
-def test_legacy_resume_mode_auto(gbot, run_async, launched, uid):
+def test_legacy_resume_mode_auto_is_auto(gbot, run_async, launched, uid):
+    """A picker from before Full access: its Auto is Auto now, for anyone."""
     bot = gbot()
     _gone_auto(bot)
     u, q = _tap(GROUP, uid, f"{S}:resume_mode_auto", msg_id=60)
     run_async(bot._handle_callback(u, MagicMock()))
-    if uid in MANAGERS:
-        assert launched[0][1]["skip_perms"] is True
-    else:
-        assert launched == []
+    assert launched[0][1]["mode"] == "auto"
 
 
-def test_resume_gate_itself_refuses_auto_past_the_tap_gate(gbot, run_async,
-                                                           launched):
-    """Defence in depth: a caller that asks ``_do_resume`` for Auto on
-    behalf of a non-admin (no tap gate in front) still gets Ask."""
+def test_resume_gate_itself_refuses_full_access_past_the_tap_gate(gbot, run_async,
+                                                                  launched):
+    """Defence in depth: a caller that asks ``_do_resume`` for Full access
+    on behalf of a non-admin (no tap gate in front) still gets Auto."""
     bot = gbot()
     sess = _gone_auto(bot)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     u = _cmd("/x", user_id=BOB, chat_id=GROUP)
     out: list = []
 
     async def _reply(text, **kw):
         out.append(text)
     run_async(bot._do_resume(label="api", reply_fn=_reply, update=u,
-                             sess=sess, skip_perms_override=True))
-    assert launched[0][1]["skip_perms"] is False
-    assert ASK_NOTE in out[0]
+                             sess=sess, mode_override="full"))
+    assert launched[0][1]["mode"] == "auto"
+    assert AUTO_NOTE in out[0]
 
 
 def test_resume_gate_reads_the_tapper_when_there_is_no_update(
@@ -571,32 +585,33 @@ def test_resume_gate_reads_the_tapper_when_there_is_no_update(
     async def _reply(text, **kw):
         pass
     run_async(bot._do_resume(label="api", reply_fn=_reply, query=q, sess=sess))
-    assert launched[0][1]["skip_perms"] is True
+    assert launched[0][1]["mode"] == "full"
 
 
-def _conflict(bot, author, skip_perms=False):
+def _conflict(bot, author, mode="ask"):
     bot._new_conflict_pending[S] = {"user_id": author, "prompt": "",
-                                    "skip_perms": skip_perms, "msg_id": 0}
+                                    "mode": mode, "msg_id": 0}
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
-def test_conflict_card_resume_of_an_auto_session(gbot, run_async, launched, uid):
+def test_conflict_card_resume_of_a_full_access_session(gbot, run_async, launched, uid):
     bot = gbot()
     sess = _gone_auto(bot)
     _conflict(bot, uid)
     u, q = _tap(GROUP, uid, f"{S}:new_resume", msg_id=70)
     run_async(bot._handle_callback(u, MagicMock()))
-    auto = uid in MANAGERS
+    full = uid in MANAGERS
+    want = "full" if full else "auto"
     assert len(launched) == 1
-    assert launched[0][1]["skip_perms"] is auto
-    assert sess.skip_perms is auto
-    assert any(ASK_NOTE in t for t in _edited(q)) is (not auto)
+    assert launched[0][1]["mode"] == want
+    assert sess.perm_mode == want
+    assert any(AUTO_NOTE in t for t in _edited(q)) is (not full)
 
 
 # ---- the Mini App's resume ----------------------------------------------
 
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
-def test_miniapp_resume_of_an_auto_session(gbot, run_async, launched, uid):
+def test_miniapp_resume_of_a_full_access_session(gbot, run_async, launched, uid):
     from aipager.miniapp.server import MiniAppServer
     bot = gbot()
     sess = _gone_auto(bot)
@@ -605,16 +620,16 @@ def test_miniapp_resume_of_an_auto_session(gbot, run_async, launched, uid):
     srv._allow_write = lambda _uid: True
     resp = run_async(srv._handle_session_resume(MagicMock()))
     body = json.loads(resp.body)
-    auto = uid in MANAGERS
-    assert launched[0][1]["skip_perms"] is auto
+    full = uid in MANAGERS
+    assert launched[0][1]["mode"] == ("full" if full else "auto")
     assert body["status"] == "resumed"
-    if auto:
+    if full:
         assert "detail" not in body
     else:
-        assert body["mode"] == "ask"
-        assert body["detail"] == f"Resumed api {ASK_NOTE}"
+        assert body["mode"] == "auto"
+        assert body["detail"] == f"Resumed api {AUTO_NOTE}"
     mirrored = bot._app.bot.send_message.await_args.kwargs["text"]
-    assert (ASK_NOTE in mirrored) is (not auto)
+    assert (AUTO_NOTE in mirrored) is (not full)
 
 
 # ===========================================================================

@@ -161,11 +161,11 @@ def resolve_chat_id_int(sess) -> int | None:
 # not send. Plain words, no em dash (UI text).
 NEEDS_ADMIN_REPLY = Msg("tx.needs_admin", "That command needs an admin.",
                         note="Reply or pop-up: a command only an admin may send")
-# Roadmap 8.83: a resume that would bring a session back in Auto for
-# someone who is not an admin brings it back in Ask and says why.
-RESUME_AUTO_NEEDS_ADMIN = Msg("tx.auto_needs_admin", "Auto needs an admin.",
-                              note="Why a resumed session came back in Ask, not Auto; "
-                                   "Auto and Ask are the mode names")
+# Roadmap 8.83: a resume that would bring a session back in Full access
+# for someone who is not an admin brings it back in Auto and says why.
+RESUME_FULL_NEEDS_ADMIN = Msg("tx.full_needs_admin", "Full access mode needs an admin.",
+                              note="Why a resumed session came back in Auto, not Full "
+                                   "access; Auto and Full access are the mode names")
 # Retry of another member's slash command, tapped by someone who could
 # send it themselves: it would run with no sender, which may send none.
 RETRY_OTHERS_COMMAND_REPLY = Msg("tx.retry_others", "Only its sender can retry that command.",

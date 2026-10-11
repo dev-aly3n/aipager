@@ -1,5 +1,5 @@
 """The permission-mode switch card (2026-09-30). The operator sent /perms,
-got "Switch to Auto?", tapped Yes, and nothing happened; a later Yes
+got "Switch to Auto mode?", tapped Yes, and nothing happened; a later Yes
 relaunched the session in Ask. Two causes:
 
 - the 10 s after a relaunch, meant only to hush the old process's late
@@ -48,7 +48,7 @@ def bot(mk_bot, monkeypatch):
 def sess(bot):
     s = TrackedSession(name=NAME, label="jim", status=Status.IDLE)
     s.scope_chat_id = CHAT
-    s.skip_perms = True
+    s.perm_mode = "full"
     bot.registry._sessions[s.name] = s
     bot.registry.last_active_session = s.name
     return s
@@ -95,9 +95,9 @@ def tap(bot, run_async):
 
 
 def _confirm(replies):
-    """The "Switch to Auto?" card among a command's replies."""
+    """The "Switch to Auto mode?" card among a command's replies."""
     a, k, sent = next(r for r in replies if "reply_markup" in r[1])
-    assert a[0].startswith("⚙️ Switch <b>jim</b> to 🤖 Auto mode?"), a[0]
+    assert a[0].startswith("⚙️ Switch <b>jim</b> to 🔓 Full access mode?"), a[0]
     return sent, k
 
 
@@ -113,55 +113,55 @@ def test_the_operators_sequence_switches_to_auto(bot, sess, cmd, tap):
     """Auto → Ask, then at once /mode auto and Yes: it used to do nothing
     (the post-relaunch window), and the next Yes relaunched in Ask."""
     cmd("/mode ask")
-    assert sess.skip_perms is False
+    assert sess.perm_mode == "ask"
     assert sess.is_restarting(), "the post-relaunch quiet window is still open"
 
-    sent, kwargs = _confirm(cmd("/mode auto"))
+    sent, kwargs = _confirm(cmd("/mode full"))
     query = tap(sent, kwargs, "✅ Yes, switch")
 
-    assert sess.skip_perms is True
-    assert [c.kwargs["skip_perms"] for c in bot.launches.await_args_list] == [False, True]
+    assert sess.perm_mode == "full"
+    assert [c.kwargs["mode"] for c in bot.launches.await_args_list] == ["ask", "full"]
     # One message, changed in place: switching, then the card for the new
     # mode with the opposite switch (operator, 2026-10-01).
-    assert _edits(query) == ["⚙️ Switching <b>jim</b> to 🤖 Auto mode…",
-                             "✍️ <b>jim</b> is in 🤖 Auto mode."]
+    assert _edits(query) == ["⚙️ Switching <b>jim</b> to 🔓 Full access mode (the session restarts)…",
+                             "✍️ <b>jim</b> is in 🔓 Full access mode."]
     kb = query.edit_message_text.await_args.kwargs["reply_markup"]
-    assert [b.text for row in kb.inline_keyboard for b in row] == ["💬 Switch to Ask"]
+    assert [b.text for row in kb.inline_keyboard for b in row] == ["💬 Switch to Ask mode", "🤖 Switch to Auto mode"]
 
 
 def test_a_second_yes_on_a_used_card_never_switches_to_ask(bot, sess, cmd, tap):
-    sess.skip_perms = False
-    sent, kwargs = _confirm(cmd("/mode auto"))
+    sess.perm_mode = "ask"
+    sent, kwargs = _confirm(cmd("/mode full"))
     tap(sent, kwargs, "✅ Yes, switch")
-    assert sess.skip_perms is True
+    assert sess.perm_mode == "full"
     bot.launches.reset_mock()
 
     query = tap(sent, kwargs, "✅ Yes, switch")      # the same card again
 
     bot.launches.assert_not_awaited()
-    assert sess.skip_perms is True
+    assert sess.perm_mode == "full"
     assert _toasts(query) == ["This card is out of date - nothing changed"]
     assert _edits(query) == [
-        "⚠️ That card was out of date, so nothing changed.\n\n✍️ <b>jim</b> is in 🤖 Auto mode."]
+        "⚠️ That card was out of date, so nothing changed.\n\n✍️ <b>jim</b> is in 🔓 Full access mode."]
 
 
 def test_a_card_with_no_record_does_nothing(bot, sess, cmd, tap):
     """A daemon restart forgets every card's record."""
-    sess.skip_perms = False
-    sent, kwargs = _confirm(cmd("/mode auto"))
+    sess.perm_mode = "ask"
+    sent, kwargs = _confirm(cmd("/mode full"))
     bot._perms_pending.clear()
 
     query = tap(sent, kwargs, "✅ Yes, switch")
 
     bot.launches.assert_not_awaited()
-    assert sess.skip_perms is False
+    assert sess.perm_mode == "ask"
     assert "out of date" in _toasts(query)[0]
 
 
 def test_an_older_card_neither_uses_nor_clears_the_newer_one(bot, sess, cmd, tap):
-    sess.skip_perms = False
-    old_sent, old_kw = _confirm(cmd("/mode auto"))
-    new_sent, new_kw = _confirm(cmd("/mode auto"))
+    sess.perm_mode = "ask"
+    old_sent, old_kw = _confirm(cmd("/mode full"))
+    new_sent, new_kw = _confirm(cmd("/mode full"))
 
     query = tap(old_sent, old_kw, "✅ Yes, switch")
     bot.launches.assert_not_awaited()
@@ -169,7 +169,7 @@ def test_an_older_card_neither_uses_nor_clears_the_newer_one(bot, sess, cmd, tap
     tap(old_sent, old_kw, "↩️ Cancel")
 
     tap(new_sent, new_kw, "✅ Yes, switch")
-    assert [c.kwargs["skip_perms"] for c in bot.launches.await_args_list] == [True]
+    assert [c.kwargs["mode"] for c in bot.launches.await_args_list] == ["full"]
 
 
 def test_not_now_on_an_older_busy_card_keeps_the_newer_one(bot, sess, cmd, tap):
@@ -185,12 +185,12 @@ def test_not_now_on_an_older_busy_card_keeps_the_newer_one(bot, sess, cmd, tap):
     tap(old_sent, old_kw, "⏳ Not now")
     tap(new_sent, new_kw, "🛑 Stop task & switch")
 
-    assert [c.kwargs["skip_perms"] for c in bot.launches.await_args_list] == [False]
+    assert [c.kwargs["mode"] for c in bot.launches.await_args_list] == ["ask"]
 
 
 def test_a_tap_without_a_message_id_is_not_this_cards(bot, sess, cmd, run_async):
-    sess.skip_perms = False
-    sent, kwargs = _confirm(cmd("/mode auto"))
+    sess.perm_mode = "ask"
+    sent, kwargs = _confirm(cmd("/mode full"))
     data = next(b.callback_data for row in kwargs["reply_markup"].inline_keyboard
                 for b in row if b.text == "✅ Yes, switch")
     query = MagicMock(data=data)
@@ -214,7 +214,7 @@ def test_a_failed_relaunch_keeps_an_earlier_relaunchs_quiet_window(
         bot, sess, run_async, monkeypatch, failure):
     """A relaunch inside another's 10 s window that then fails must not
     close that window: the first process's late SessionEnd is still due."""
-    run_async(bot._kill_and_relaunch_core(sess, target_skip_perms=False,
+    run_async(bot._kill_and_relaunch_core(sess, target_mode="ask",
                                           interrupt_first=False))
     window = sess.restarting_until
     assert sess.is_restarting()
@@ -224,7 +224,7 @@ def test_a_failed_relaunch_keeps_an_earlier_relaunchs_quiet_window(
         monkeypatch.setattr("aipager.dtach.inject.launch_session",
                             AsyncMock(return_value=(False, "boom")))
 
-    outcome = run_async(bot._kill_and_relaunch_core(sess, target_skip_perms=True,
+    outcome = run_async(bot._kill_and_relaunch_core(sess, target_mode="full",
                                                     interrupt_first=False))
 
     assert outcome.reason == failure
@@ -233,8 +233,8 @@ def test_a_failed_relaunch_keeps_an_earlier_relaunchs_quiet_window(
 
 
 def test_while_a_relaunch_runs_the_card_waits_and_then_works(bot, sess, cmd, tap):
-    sess.skip_perms = False
-    sent, kwargs = _confirm(cmd("/mode auto"))
+    sess.perm_mode = "ask"
+    sent, kwargs = _confirm(cmd("/mode full"))
     sess.relaunch_in_flight = True
 
     query = tap(sent, kwargs, "✅ Yes, switch")
@@ -245,19 +245,19 @@ def test_while_a_relaunch_runs_the_card_waits_and_then_works(bot, sess, cmd, tap
 
     sess.relaunch_in_flight = False
     tap(sent, kwargs, "✅ Yes, switch")
-    assert sess.skip_perms is True
+    assert sess.perm_mode == "full"
 
 
 def test_a_switch_refused_by_the_core_says_why(bot, sess, cmd, tap):
-    sess.skip_perms = False
-    sent, kwargs = _confirm(cmd("/mode auto"))
+    sess.perm_mode = "ask"
+    sent, kwargs = _confirm(cmd("/mode full"))
     bot._perms_switch_core = AsyncMock(return_value=RestartOutcome(
         ok=False, reason="already_restarting", label="jim"))
 
     query = tap(sent, kwargs, "✅ Yes, switch")
 
     assert _edits(query) == [
-        "⚙️ Switching <b>jim</b> to 🤖 Auto mode…",
+        "⚙️ Switching <b>jim</b> to 🔓 Full access mode (the session restarts)…",
         "⚠️ <b>jim</b> is restarting right now - mode not changed. Try again in a moment."
         "\n\n✍️ <b>jim</b> is in 💬 Ask mode."]
 
@@ -272,18 +272,18 @@ def test_switching_to_ask_while_a_relaunch_runs_says_so(bot, sess, cmd):
     bot.launches.assert_not_awaited()
     assert status.edit_text.await_args.args[0] == (
         "⚠️ <b>jim</b> is restarting right now - mode not changed. Try again in a moment."
-        "\n\n✍️ <b>jim</b> is in 🤖 Auto mode.")
+        "\n\n✍️ <b>jim</b> is in 🔓 Full access mode.")
 
 
 def test_a_switch_on_a_session_that_is_not_running_says_so(bot, sess, cmd, tap):
-    sess.skip_perms = False
-    sent, kwargs = _confirm(cmd("/mode auto"))
+    sess.perm_mode = "ask"
+    sent, kwargs = _confirm(cmd("/mode full"))
     bot._perms_switch_core = AsyncMock(return_value=RestartOutcome(
         ok=False, reason="not_live", label="jim"))
 
     query = tap(sent, kwargs, "✅ Yes, switch")
 
-    assert _edits(query) == ["⚙️ Switching <b>jim</b> to 🤖 Auto mode…",
+    assert _edits(query) == ["⚙️ Switching <b>jim</b> to 🔓 Full access mode (the session restarts)…",
                              "⚠️ <b>jim</b> is not running - mode not changed."
                              "\n\n✍️ <b>jim</b> is in 💬 Ask mode."]
 
@@ -292,7 +292,7 @@ def test_the_in_flight_flag_clears_even_when_the_relaunch_fails(bot, sess, monke
     monkeypatch.setattr("aipager.dtach.inject.launch_session",
                         AsyncMock(side_effect=RuntimeError("boom")))
     with pytest.raises(RuntimeError):
-        run_async(bot._kill_and_relaunch_core(sess, target_skip_perms=False,
+        run_async(bot._kill_and_relaunch_core(sess, target_mode="ask",
                                               interrupt_first=False))
     assert sess.relaunch_in_flight is False
 
@@ -307,28 +307,29 @@ def test_stop_and_switch_on_a_busy_session_says_why_it_did_not(bot, sess, cmd, t
 
     query = tap(sent, kwargs, "🛑 Stop task & switch")
 
-    assert _edits(query) == ["⚙️ Switching <b>jim</b> to 💬 Ask mode…",
+    assert _edits(query) == ["⚙️ Switching <b>jim</b> to 💬 Ask mode (the session restarts)…",
                              "⚠️ <b>jim</b> is not running - mode not changed."
-                             "\n\n✍️ <b>jim</b> is in 🤖 Auto mode."]
+                             "\n\n✍️ <b>jim</b> is in 🔓 Full access mode."]
     assert NAME not in bot._perms_pending      # a switch was attempted: spent
 
 
-def test_the_mode_cards_switch_then_yes_switches_to_auto(bot, sess, cmd, tap, run_async):
-    """P4's /mode card: 🤖 Switch to Auto turns the card itself into the
-    confirm, whose Yes switches, right after an earlier switch too; the
-    same message ends as the card for Auto (operator, 2026-10-01)."""
-    cmd("/mode ask")                               # Auto → Ask, window open
+def test_the_mode_cards_switch_then_yes_switches_to_full_access(bot, sess, cmd, tap, run_async):
+    """P4's /mode card: 🔓 Switch to Full access mode turns the card itself
+    into the confirm, whose Yes switches, right after an earlier switch
+    too; the same message ends as the card for Full access (operator,
+    2026-10-01)."""
+    cmd("/mode ask")                               # Full access → Ask, window open
     replies = cmd("/mode")
     _a, kwargs, card = replies[0]
 
-    query = tap(card, kwargs, "🤖 Switch to Auto")
+    query = tap(card, kwargs, "🔓 Switch to Full access mode")
 
     query.message.reply_text.assert_not_awaited()      # no second message
     confirm = query.edit_message_text.await_args
-    assert confirm.args[0].startswith("⚙️ Switch <b>jim</b> to 🤖 Auto mode?")
+    assert confirm.args[0].startswith("⚙️ Switch <b>jim</b> to 🔓 Full access mode?")
     query = tap(card, confirm.kwargs, "✅ Yes, switch")
-    assert sess.skip_perms is True
-    assert _edits(query)[-1] == "✍️ <b>jim</b> is in 🤖 Auto mode."
+    assert sess.perm_mode == "full"
+    assert _edits(query)[-1] == "✍️ <b>jim</b> is in 🔓 Full access mode."
     query.message.reply_text.assert_not_awaited()
 
 
@@ -343,35 +344,37 @@ def _buttons(markup):
 
 
 def test_the_cards_switch_ends_as_the_card_for_the_new_mode(bot, sess, cmd, tap):
-    """Auto → Ask from the card: the same message says switching (no
-    buttons left to press), then shows Ask with a fresh Switch to Auto."""
+    """Full access → Ask from the card: the same message says switching (no
+    buttons left to press), then shows Ask with fresh switches to the other
+    two modes."""
     _a, kwargs, card = cmd("/mode")[0]
 
-    query = tap(card, kwargs, "💬 Switch to Ask")
+    query = tap(card, kwargs, "💬 Switch to Ask mode")
 
     query.message.reply_text.assert_not_awaited()
     calls = query.edit_message_text.await_args_list
-    assert [c.args[0] for c in calls] == ["⚙️ Switching <b>jim</b> to 💬 Ask mode…",
+    assert [c.args[0] for c in calls] == ["⚙️ Switching <b>jim</b> to 💬 Ask mode (the session restarts)…",
                                          "✍️ <b>jim</b> is in 💬 Ask mode."]
     assert calls[0].kwargs.get("reply_markup") is None
-    [(text, data)] = _buttons(calls[1].kwargs["reply_markup"])
-    assert text == "🤖 Switch to Auto"
-    # The button carries the session's turn key as it is now.
+    [(text, data), (full_text, full_data)] = _buttons(calls[1].kwargs["reply_markup"])
+    assert (text, full_text) == ("🤖 Switch to Auto mode", "🔓 Switch to Full access mode")
+    # The buttons carry the session's turn key as it is now.
     assert _resolve(bot, data) == (sess.name, f"modeauto{sess.turn_key}")
-    assert sess.skip_perms is False
+    assert _resolve(bot, full_data) == (sess.name, f"modefull{sess.turn_key}")
+    assert sess.perm_mode == "ask"
 
 
 def test_cancel_returns_the_card_for_the_current_mode(bot, sess, cmd, tap):
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     _a, kwargs, card = cmd("/mode")[0]
-    tap(card, kwargs, "🤖 Switch to Auto")
+    tap(card, kwargs, "🔓 Switch to Full access mode")
 
     query = tap(card, {"reply_markup": bot._build_perms_confirm_keyboard(sess)}, "↩️ Cancel")
 
     bot.launches.assert_not_awaited()
     assert _edits(query) == ["✍️ <b>jim</b> is in 💬 Ask mode."]
     assert _buttons(query.edit_message_text.await_args.kwargs["reply_markup"])[0][0] == (
-        "🤖 Switch to Auto")
+        "🤖 Switch to Auto mode")
     assert NAME not in bot._perms_pending
 
 
@@ -382,20 +385,20 @@ def test_stop_and_switch_works_on_a_card_older_than_the_busy_card(bot, sess, cmd
     sess.status = Status.BUSY
     _a, kwargs, card = cmd("/mode")[0]
     sess.busy_msg_id = card.message_id + 1000           # the busy card moved below it
-    tap(card, kwargs, "💬 Switch to Ask")
+    tap(card, kwargs, "💬 Switch to Ask mode")
     assert bot._perms_pending[NAME].get("turn") == sess.turn_key
 
     query = tap(card, {"reply_markup": bot._build_perms_busy_keyboard(sess)},
                 "🛑 Stop task & switch")
 
-    assert [c.kwargs["skip_perms"] for c in bot.launches.await_args_list] == [False]
+    assert [c.kwargs["mode"] for c in bot.launches.await_args_list] == ["ask"]
     assert _edits(query)[-1] == "✍️ <b>jim</b> is in 💬 Ask mode."
 
 
 def test_stop_and_switch_after_a_new_turn_changes_nothing(bot, sess, cmd, tap):
     sess.status = Status.BUSY
     _a, kwargs, card = cmd("/mode")[0]
-    tap(card, kwargs, "💬 Switch to Ask")
+    tap(card, kwargs, "💬 Switch to Ask mode")
     bot.registry.transition(sess.name, Status.IDLE)
     bot.registry.transition(sess.name, Status.BUSY)      # a new turn since
 
@@ -403,14 +406,14 @@ def test_stop_and_switch_after_a_new_turn_changes_nothing(bot, sess, cmd, tap):
                 "🛑 Stop task & switch")
 
     bot.launches.assert_not_awaited()
-    assert sess.skip_perms is True
+    assert sess.perm_mode == "full"
     assert _edits(query) == [
-        "⚠️ <b>jim</b> moved on to new work, so nothing changed.\n\n✍️ <b>jim</b> is in 🤖 Auto mode."]
+        "⚠️ <b>jim</b> moved on to new work, so nothing changed.\n\n✍️ <b>jim</b> is in 🔓 Full access mode."]
 
 
 def test_yes_after_a_new_turn_changes_nothing(bot, sess, cmd, tap):
-    sess.skip_perms = False
-    sent, kwargs = _confirm(cmd("/mode auto"))
+    sess.perm_mode = "ask"
+    sent, kwargs = _confirm(cmd("/mode full"))
     bot.registry.transition(sess.name, Status.BUSY)      # a new turn since
     bot.registry.transition(sess.name, Status.IDLE)
 
@@ -423,12 +426,12 @@ def test_yes_after_a_new_turn_changes_nothing(bot, sess, cmd, tap):
 def test_not_now_returns_the_card(bot, sess, cmd, tap):
     sess.status = Status.BUSY
     _a, kwargs, card = cmd("/mode")[0]
-    tap(card, kwargs, "💬 Switch to Ask")
+    tap(card, kwargs, "💬 Switch to Ask mode")
 
     query = tap(card, {"reply_markup": bot._build_perms_busy_keyboard(sess)}, "⏳ Not now")
 
     bot.launches.assert_not_awaited()
-    assert _edits(query) == ["✍️ <b>jim</b> is in 🤖 Auto mode."]
+    assert _edits(query) == ["✍️ <b>jim</b> is in 🔓 Full access mode."]
 
 
 def test_the_typed_command_replies_once_and_ends_in_the_card(bot, sess, cmd):
@@ -438,7 +441,7 @@ def test_the_typed_command_replies_once_and_ends_in_the_card(bot, sess, cmd):
     status = replies[0][2]
     last = status.edit_text.await_args
     assert last.args[0] == "✍️ <b>jim</b> is in 💬 Ask mode."
-    assert _buttons(last.kwargs["reply_markup"])[0][0] == "🤖 Switch to Auto"
+    assert _buttons(last.kwargs["reply_markup"])[0][0] == "🤖 Switch to Auto mode"
 
 
 def test_the_pickers_switch_changes_the_picker_in_place(bot, sess, cmd, tap):
@@ -454,7 +457,7 @@ def test_the_pickers_switch_changes_the_picker_in_place(bot, sess, cmd, tap):
 
     query.message.reply_text.assert_not_awaited()
     assert _edits(query)[-1] == "<b>jim</b> is in 💬 Ask mode."
-    assert sess.skip_perms is False
+    assert sess.perm_mode == "ask"
 
 
 def _tap_with(bot, run_async, card, markup, text, *, edit_effect=None):
@@ -482,20 +485,20 @@ def _tap_with(bot, run_async, card, markup, text, *, edit_effect=None):
 def test_a_second_tap_on_the_same_switch_sends_nothing_new(bot, sess, cmd, tap, run_async):
     """Review-1 (001): the second tap re-renders the same confirm; Telegram
     answers "message is not modified", which is not a reason to reply."""
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     _a, kwargs, card = cmd("/mode")[0]
-    tap(card, kwargs, "🤖 Switch to Auto")
+    tap(card, kwargs, "🔓 Switch to Full access mode")
 
     from telegram.error import BadRequest
     query, replies = _tap_with(
-        bot, run_async, card, kwargs["reply_markup"], "🤖 Switch to Auto",
+        bot, run_async, card, kwargs["reply_markup"], "🔓 Switch to Full access mode",
         edit_effect=BadRequest("Message is not modified: specified new message "
                                "content and reply markup are exactly the same"))
 
     assert replies == []
     assert bot._perms_pending[NAME]["msg_id"] == card.message_id
     tap(card, {"reply_markup": bot._build_perms_confirm_keyboard(sess)}, "✅ Yes, switch")
-    assert sess.skip_perms is True
+    assert sess.perm_mode == "full"
 
 
 def test_when_the_card_cannot_be_edited_one_reply_carries_every_step(
@@ -505,15 +508,15 @@ def test_when_the_card_cannot_be_edited_one_reply_carries_every_step(
     _a, kwargs, card = cmd("/mode")[0]
 
     query, replies = _tap_with(
-        bot, run_async, card, kwargs["reply_markup"], "💬 Switch to Ask",
+        bot, run_async, card, kwargs["reply_markup"], "💬 Switch to Ask mode",
         edit_effect=RuntimeError("message to edit not found"))
 
     assert query.edit_message_text.await_count == 1          # tried once, then not again
     assert len(replies) == 1
     (a, _k, status) = replies[0]
-    assert a[0] == "⚙️ Switching <b>jim</b> to 💬 Ask mode…"
+    assert a[0] == "⚙️ Switching <b>jim</b> to 💬 Ask mode (the session restarts)…"
     assert status.edit_text.await_args.args[0] == "✍️ <b>jim</b> is in 💬 Ask mode."
-    assert sess.skip_perms is False
+    assert sess.perm_mode == "ask"
 
 
 def test_a_card_tap_on_a_starting_session_is_a_toast(bot, sess, cmd, tap):
@@ -521,7 +524,7 @@ def test_a_card_tap_on_a_starting_session_is_a_toast(bot, sess, cmd, tap):
     _a, kwargs, card = cmd("/mode")[0]
     sess.status = Status.UNKNOWN
 
-    query = tap(card, kwargs, "💬 Switch to Ask")
+    query = tap(card, kwargs, "💬 Switch to Ask mode")
 
     bot.launches.assert_not_awaited()
     assert _toasts(query) == ["jim is still starting - try again in a moment"]
@@ -533,12 +536,12 @@ def test_a_card_tap_in_a_muted_chat_leaves_no_record(bot, sess, cmd, run_async):
     """Review-2 (001): a card the user cannot see changing must not hold a
     record a later tap could act on. Control: the same tap unmuted does."""
     from aipager.bot.flood import MUTE
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     _a, kwargs, card = cmd("/mode")[0]
 
     def tap_in_chat():
         data = next(b.callback_data for row in kwargs["reply_markup"].inline_keyboard
-                    for b in row if b.text == "🤖 Switch to Auto")
+                    for b in row if b.text == "🔓 Switch to Full access mode")
         query = MagicMock(data=data)
         query.answer = AsyncMock()
         query.edit_message_text = AsyncMock()
@@ -566,8 +569,8 @@ def test_when_yes_cannot_edit_the_card_one_message_in_this_chat_carries_the_rest
         bot, sess, cmd, tap, run_async):
     """Review-2 (002): the fallback goes to the tapped chat, once, and the
     result edits it; it used to post each step to the main chat."""
-    sess.skip_perms = False
-    sent, kwargs = _confirm(cmd("/mode auto"))
+    sess.perm_mode = "ask"
+    sent, kwargs = _confirm(cmd("/mode full"))
     posted = MagicMock(message_id=next(_ids))
     posted.edit_text = AsyncMock()
     bot._app.bot.send_message = AsyncMock(return_value=posted)
@@ -579,16 +582,16 @@ def test_when_yes_cannot_edit_the_card_one_message_in_this_chat_carries_the_rest
     assert query.edit_message_text.await_count == 1
     assert bot._app.bot.send_message.await_count == 1
     assert bot._app.bot.send_message.await_args.kwargs["chat_id"] == CHAT
-    assert posted.edit_text.await_args.args[0] == "✍️ <b>jim</b> is in 🤖 Auto mode."
-    assert sess.skip_perms is True
+    assert posted.edit_text.await_args.args[0] == "✍️ <b>jim</b> is in 🔓 Full access mode."
+    assert sess.perm_mode == "full"
 
 
 def test_a_second_yes_during_the_switch_leaves_the_card_alone(bot, sess, cmd, run_async,
                                                                monkeypatch):
     """Review-3 (001): fired while the first Yes is relaunching, the second
     must not paint "out of date" over the card's "Switching…"."""
-    sess.skip_perms = False
-    sent, kwargs = _confirm(cmd("/mode auto"))
+    sess.perm_mode = "ask"
+    sent, kwargs = _confirm(cmd("/mode full"))
     seen = {}
 
     async def _launch(*a, **k):
@@ -614,19 +617,19 @@ def test_a_second_yes_during_the_switch_leaves_the_card_alone(bot, sess, cmd, ru
 
     assert seen == {"toasts": ["jim is restarting right now - tap again in a moment"],
                     "edits": 0, "replies": 0}
-    assert _edits(query)[-1] == "✍️ <b>jim</b> is in 🤖 Auto mode."
+    assert _edits(query)[-1] == "✍️ <b>jim</b> is in 🔓 Full access mode."
 
 
 def test_yes_on_a_card_that_already_shows_the_step_sends_nothing(bot, sess, cmd, run_async):
     """Review-3 nit: "message is not modified" on the Yes path is not a
     reason to post a new message."""
     from telegram.error import BadRequest
-    sess.skip_perms = False
-    sent, kwargs = _confirm(cmd("/mode auto"))
+    sess.perm_mode = "ask"
+    sent, kwargs = _confirm(cmd("/mode full"))
     bot._app.bot.send_message = AsyncMock()
 
     _tap_with(bot, run_async, sent, kwargs["reply_markup"], "✅ Yes, switch",
               edit_effect=BadRequest("Message is not modified"))
 
     bot._app.bot.send_message.assert_not_awaited()
-    assert sess.skip_perms is True
+    assert sess.perm_mode == "full"

@@ -70,7 +70,7 @@ LOANWORDS = {
 #: Names on these surfaces that are never translated: every language's own
 #: name (the /language list), and the words typed after /mode (stored and
 #: typed values stay English, decision 1.2).
-NAMES = tuple(loc.endonym for loc in locales.LOCALES.values()) + ("ask", "auto")
+NAMES = tuple(loc.endonym for loc in locales.LOCALES.values()) + ("ask", "auto", "full")
 
 #: Page strings whose English is also the language's text: names, and the
 #: words these languages keep (decided in their style guides).

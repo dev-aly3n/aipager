@@ -39,6 +39,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from aipager import perm_modes
 from aipager._test_guard import check_write
 from aipager.config import KEEP_FINISHED_CARD
 
@@ -315,13 +316,18 @@ def move_chat(old: int, new: int) -> bool:
 # the lists that are true then (MODEL_CHOICES, ``launch.allowed_roots``).
 
 _NEW_SESSION_KEYS = {
-    "mode": "new_session_mode",
+    "mode": "new_session_perm_mode",
     "model": "new_session_model",
     "cwd": "new_session_cwd",
 }
+#: The key the mode was stored under before there were three modes. Its
+#: "auto" meant bypass (now Full access), "" meant Auto for admins (now
+#: Auto, the classifier). Read through ``perm_modes.mode_from_new_session_prefs``;
+#: written only as the rollback mirror below.
+_LEGACY_MODE_KEY = "new_session_mode"
 
 _NEW_SESSION_VALIDATORS = {
-    "mode": lambda v: v in ("auto", "ask"),
+    "mode": perm_modes.is_mode,
     "model": lambda v: isinstance(v, str) and 0 < len(v) <= 100,
     "cwd": lambda v: isinstance(v, str) and v.startswith("/") and len(v) <= 4096,
 }
@@ -329,10 +335,12 @@ _NEW_SESSION_VALIDATORS = {
 
 @dataclass(frozen=True)
 class NewSessionDefaults:
-    """A chat's stored defaults for new sessions. Empty means "not chosen":
-    ``mode`` then falls to Auto for a caller who may use it, ``model`` to
-    Claude Code's own default, ``cwd`` to the project directory."""
-    mode: str = ""
+    """A chat's stored defaults for new sessions. ``mode`` is always one
+    of ``ask``, ``auto``, ``full`` (Auto when none was chosen; the caller
+    narrows Full access for someone who may not use it); an empty
+    ``model`` is Claude Code's own default, an empty ``cwd`` the project
+    directory."""
+    mode: str = perm_modes.AUTO
     model: str = ""
     cwd: str = ""
 
@@ -342,8 +350,10 @@ def get_new_session_defaults(chat_id: int) -> NewSessionDefaults:
     store = _ensure_loaded()
     raw = store.get(str(chat_id))
     scope_raw = raw if isinstance(raw, dict) else {}
-    values = {}
+    values = {"mode": perm_modes.mode_from_new_session_prefs(scope_raw)}
     for field, key in _NEW_SESSION_KEYS.items():
+        if field == "mode":
+            continue
         value = scope_raw.get(key, "")
         values[field] = value if _NEW_SESSION_VALIDATORS[field](value) else ""
     return NewSessionDefaults(**values)
@@ -351,8 +361,14 @@ def get_new_session_defaults(chat_id: int) -> NewSessionDefaults:
 
 def set_new_session_default(chat_id: int, field: str, value: str) -> NewSessionDefaults:
     """Store one default for ``chat_id``; an empty ``value`` clears it
-    (back to the built-in default). Raises ``ValueError`` for an unknown
-    field or a value of the wrong shape, before anything is written."""
+    (back to the built-in default: Auto for the mode). Raises
+    ``ValueError`` for an unknown field or a value of the wrong shape,
+    before anything is written.
+
+    The mode is written as its id under ``new_session_perm_mode``, with
+    the old key beside it for an older daemon (a rollback): "ask" for Ask
+    or Auto (its Ask, never wider), and absent for Full access (its
+    default, which bypassed for admins)."""
     if field not in _NEW_SESSION_KEYS:
         raise ValueError(f"unknown new-session default: {field!r}")
     if value != "" and not _NEW_SESSION_VALIDATORS[field](value):
@@ -361,7 +377,14 @@ def set_new_session_default(chat_id: int, field: str, value: str) -> NewSessionD
     key = str(chat_id)
     existing = store.get(key)
     scope_raw = dict(existing) if isinstance(existing, dict) else {}
-    if value == "":
+    if field == "mode":
+        mode = value or perm_modes.AUTO
+        scope_raw[_NEW_SESSION_KEYS["mode"]] = mode
+        if mode == perm_modes.FULL:
+            scope_raw.pop(_LEGACY_MODE_KEY, None)
+        else:
+            scope_raw[_LEGACY_MODE_KEY] = "ask"
+    elif value == "":
         scope_raw.pop(_NEW_SESSION_KEYS[field], None)
     else:
         scope_raw[_NEW_SESSION_KEYS[field]] = value

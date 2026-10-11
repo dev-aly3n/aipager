@@ -235,7 +235,7 @@ class AuthMixin:
         """Scope mode: may *member* (already resolved in *chat_id*, the
         tapped message's chat) do what *cap* (a ``tap_gate.Cap``) names
         there? MANAGE and UPDATE re-resolve by ids through the same rules
-        every other surface uses (``_may_use_auto``,
+        every other surface uses (``_may_use_full_access``,
         ``_is_update_admin``), in the same chat."""
         if cap is tap_gate.VIEW:
             return member is not None
@@ -244,7 +244,7 @@ class AuthMixin:
         if cap is tap_gate.PROMPT:
             return self._role_can_prompt(member)
         if cap is tap_gate.MANAGE:
-            return member is not None and self._may_use_auto(user_id, chat_id)
+            return member is not None and self._may_use_full_access(user_id, chat_id)
         if cap is tap_gate.UPDATE:
             return member is not None and self._is_update_admin(user_id, chat_id)
         return False
@@ -836,28 +836,31 @@ class AuthMixin:
         # Personal mode — the operator is always admin.
         return True
 
-    def _may_use_auto(self, user_id: int | None, chat_id: int | None) -> bool:
-        """Who may put a session in *chat_id* into Auto mode: the one rule
-        every way into Auto asks (/mode, the mode card, /new and its
-        cards, /resume, the Mini App).
+    def _may_use_full_access(self, user_id: int | None, chat_id: int | None) -> bool:
+        """Who may put a session in *chat_id* into Full access mode
+        (``--dangerously-skip-permissions``, what was called Auto before
+        the three modes): the one rule every way into Full access asks
+        (/mode, the mode card, /new and its cards, /resume, the Mini App,
+        the New sessions default). Ask and Auto (Claude Code's own safety
+        check) are everyone's and never ask this.
 
         An admin there (:meth:`_is_admin_user`), or, in scope mode, the
         member of a DM scope in their own private chat with the bot
         (operator, 2026-10-11: "in their dm, they should be able to do
         it"), whatever their role, as long as it may send prompts and
         answer Claude's permission prompts (``can_prompt`` and
-        ``can_approve``: Auto answers every one of them). Only the scope of the chat
-        the action came from counts: someone with a DM of their own has no
-        say over another person's DM or a group. Personal and legacy team
-        mode keep the admin rule. Auto stops Claude Code's own permission
-        prompts only; aipager's hook still applies the member's role rules
-        to every tool call."""
+        ``can_approve``: Full access answers every one of them). Only the
+        scope of the chat the action came from counts: someone with a DM of
+        their own has no say over another person's DM or a group. Personal
+        and legacy team mode keep the admin rule. Full access stops Claude
+        Code's own permission prompts only; aipager's hook still applies
+        the member's role rules to every tool call."""
         if self._is_admin_user(user_id, chat_id):
             return True
         scope = self._own_dm_scope(chat_id)
         if scope is None:
             return False
-        # Auto answers every prompt Claude Code would raise, so the role
+        # Full access answers every prompt Claude Code would raise, so the role
         # must be one that may answer them (and send prompts at all).
         member = self._member_in_scope(scope, user_id)
         return self._role_can_prompt(member) and self._role_can_approve(member)

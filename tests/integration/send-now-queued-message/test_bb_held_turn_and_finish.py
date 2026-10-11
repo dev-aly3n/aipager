@@ -245,7 +245,7 @@ def test_create_session_reusing_the_entry_deletes_the_line(
         w = r.worker()
         line = await _gone_with_its_line(r)
         name, err = await r.bot.create_session("sendnow_harness",
-                                               scope_chat_id=None)
+                                               scope_chat_id=None, mode="ask")
         assert (name, err) == (r.sess.name, ""), "precondition: same entry"
         ok = await r.wait_deleted(line["id"], DELETE_WINDOW)
         w.cancel()

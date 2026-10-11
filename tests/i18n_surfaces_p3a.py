@@ -748,17 +748,29 @@ def _route_model_feedback(env):
 
 @surface("modecard.card")
 def _modecard_card(env):
-    """The /mode card in a DM (the target marked) in Ask and in Auto, and
-    in a group (nobody's target)."""
+    """The /mode card in a DM (the target marked) in each of the three
+    modes, waiting for a switch to be confirmed, in Ask because Auto is not
+    available, and in a mode of Claude Code's own; and in a group
+    (nobody's target)."""
+    from aipager.state import ModeSwitch
     bot, tg = world(env)
     alive(env)
     x1 = session(bot, "x1", chat=DM)
     bot.registry.set_target(x1.name, DM, OWNER)
-    for auto in (False, True):
-        x1.skip_perms = auto
+    for mode in ("ask", "auto", "full"):
+        x1.perm_mode = mode
         cmd(env, bot, tg, "_handle_mode_cmd", "/mode", chat=DM)
+    x1.perm_mode = "auto"
+    x1.mode_switch = ModeSwitch(target="auto", presses=3, sent_at=0.0)
+    cmd(env, bot, tg, "_handle_mode_cmd", "/mode", chat=DM)
+    x1.reset_mode_tracking()
+    x1.reported_mode, x1.auto_unavailable = "default", True
+    cmd(env, bot, tg, "_handle_mode_cmd", "/mode", chat=DM)
+    x1.reset_mode_tracking()
+    x1.reported_mode = "plan"
+    cmd(env, bot, tg, "_handle_mode_cmd", "/mode", chat=DM)
     g1 = session(bot, "x2", chat=GROUP)
-    g1.skip_perms = True
+    g1.perm_mode = "full"
     cmd(env, bot, tg, "_handle_mode_cmd", "/mode x2", chat=GROUP)
     return tg.out
 
@@ -772,35 +784,50 @@ def _modecard_cmd_replies(env):
     cmd(env, bot, tg, "_handle_mode_cmd", "/mode zz", chat=DM)
     session(bot, "x1", chat=DM)
     session(bot, "x2", chat=DM)
-    for text in ("/mode", "/mode ask", "/mode auto", "/mode x1 ask"):
+    for text in ("/mode", "/mode ask", "/mode auto", "/mode full", "/mode x1 ask"):
         cmd(env, bot, tg, "_handle_mode_cmd", text, chat=DM)
     return tg.out
 
 
 def _perms_world(env):
+    """Switches go through the real dispatcher: an Ask <-> Auto one presses
+    keys (none written), one that restarts reaches a stand-in restart."""
+    from aipager.dtach import inject
     bot, tg = world(env)
     alive(env)
+    env.mp.setattr(inject, "press_mode_cycle", AsyncMock(return_value=True))
     bot._perms_switch_core = AsyncMock(return_value=SimpleNamespace(
-        ok=True, reason="", err="", label="x1"))
+        ok=True, reason="done", err="", label="x1"))
+    # These surfaces predate members' root folders: nobody here is held to
+    # a root (member_root and the user-root-folders suite test that rule).
+    from aipager import member_root
+    env.mp.setattr(member_root, "restricted_root", lambda *a, **k: None)
     return bot, tg
 
 
 @surface("modecard.perms_flow")
 def _modecard_perms_flow(env):
-    """/mode x1 auto|ask typed: Auto refused to a member, a session still
-    starting, a busy one (Stop & switch), the Auto confirm, and Ask at
-    once, ending in the card with who switched it."""
+    """/mode x1 typed: Full access refused to a member, a session still
+    starting, a busy one (Stop & switch into Full access), Auto from Ask
+    without a restart while it works, refused while a prompt is open, the
+    Full access confirm, and Ask at once out of Full access, ending in the
+    card with who switched it."""
     from aipager.state import Status
     bot, tg = _perms_world(env)
     x1 = session(bot, "x1", chat=GROUP)
-    cmd(env, bot, tg, "_handle_mode_cmd", "/mode x1 auto", chat=GROUP, user=BOB)
+    cmd(env, bot, tg, "_handle_mode_cmd", "/mode x1 full", chat=GROUP, user=BOB)
     x1.status = Status.UNKNOWN
-    cmd(env, bot, tg, "_handle_mode_cmd", "/mode x1 auto", chat=GROUP)
+    cmd(env, bot, tg, "_handle_mode_cmd", "/mode x1 full", chat=GROUP)
     x1.status = Status.BUSY
+    cmd(env, bot, tg, "_handle_mode_cmd", "/mode x1 full", chat=GROUP)
+    cmd(env, bot, tg, "_handle_mode_cmd", "/mode x1 auto", chat=GROUP, user=BOB)
+    x1.reset_mode_tracking()
+    x1.perm_mode = "ask"
+    x1.status = Status.INTERACTIVE
     cmd(env, bot, tg, "_handle_mode_cmd", "/mode x1 auto", chat=GROUP)
     x1.status = Status.IDLE
-    cmd(env, bot, tg, "_handle_mode_cmd", "/mode x1 auto", chat=GROUP)
-    x1.skip_perms = True
+    cmd(env, bot, tg, "_handle_mode_cmd", "/mode x1 full", chat=GROUP)
+    x1.perm_mode = "full"
     cmd(env, bot, tg, "_handle_mode_cmd", "/mode x1 ask", chat=GROUP)
     return tg.out
 
@@ -808,12 +835,15 @@ def _modecard_perms_flow(env):
 @surface("modecard.switch_taps")
 def _modecard_switch_taps(env):
     """The confirm's and the busy card's buttons: cancel, a card out of
-    date, a restart running, a session gone, and the switch's outcomes."""
+    date, a restart running, a session gone, and the switch's outcomes;
+    then the card's own switches: Ask <-> Auto in place, refused while a
+    prompt is open."""
+    from aipager.state import Status
     bot, tg = _perms_world(env)
     x1 = session(bot, "x1", chat=GROUP)
 
-    def pend(target=True, turn=None):
-        bot._perms_pending[x1.name] = {"target_skip_perms": target, "msg_id": 42,
+    def pend(target="full", turn=None):
+        bot._perms_pending[x1.name] = {"target_mode": target, "msg_id": 42,
                                        "label": "x1", "turn": x1.turn_key
                                        if turn is None else turn}
     pend()
@@ -825,19 +855,59 @@ def _modecard_switch_taps(env):
     x1.relaunch_in_flight = False
     pend(turn=x1.turn_key + 5)
     tap(env, bot, tg, _sess_cb(x1, "perms_confirm"), chat=GROUP)
-    for outcome in (SimpleNamespace(ok=True, reason="", err="", label="x1"),
+    x1.perm_mode = "full"
+    for outcome in (SimpleNamespace(ok=True, reason="done", err="", label="x1"),
                     SimpleNamespace(ok=False, reason="still_stopping", err="", label="x1"),
                     SimpleNamespace(ok=False, reason="launch_failed", err="13", label="x1"),
                     SimpleNamespace(ok=False, reason="already_restarting", err="", label="x1"),
                     SimpleNamespace(ok=False, reason="not_live", err="", label="x1")):
         bot._perms_switch_core = AsyncMock(return_value=outcome)
-        pend(target=False)
+        pend(target="ask")
         tap(env, bot, tg, _sess_cb(x1, "perms_stop_switch"), chat=GROUP)
-    bot._perms_pending["claude-zz"] = {"target_skip_perms": True, "msg_id": 42,
+    bot._perms_pending["claude-zz"] = {"target_mode": "full", "msg_id": 42,
                                        "label": "zz", "turn": 0}
     tap(env, bot, tg, "claude-zz:perms_confirm", chat=GROUP)
     tap(env, bot, tg, "claude-zz:perms_cancel", chat=GROUP)
+    x1.perm_mode = "ask"
+    tap(env, bot, tg, _sess_cb(x1, f"modeauto{x1.turn_key}"), chat=GROUP)
+    x1.reset_mode_tracking()
+    x1.status = Status.INTERACTIVE
+    tap(env, bot, tg, _sess_cb(x1, f"modeauto{x1.turn_key}"), chat=GROUP)
     return tg.out
+
+
+@surface("modecard.switch_results")
+def _modecard_switch_results(env):
+    """What the next hook makes of an Ask <-> Auto switch, on the card
+    that said it was sent: confirmed (in a group, who switched it), Auto
+    not available, and a mode it did not reach; with no card left, a
+    failure is a message of its own."""
+    from aipager.bot import mode_switch
+    from aipager.state import ModeSwitch
+    bot, tg = _perms_world(env)
+    x1 = session(bot, "x1", chat=GROUP)
+    cases = (("auto", "auto", "@bob", True, False), ("auto", "default", "", True, True),
+             ("ask", "plan", "", True, True), ("ask", "plan", "", False, True))
+    for target, reported, by, has_card, retried in cases:
+        x1.reset_mode_tracking()
+        x1.perm_mode = target
+        x1.mode_switch = ModeSwitch(target=target, presses=1, sent_at=0.0, retried=retried,
+                                    reply=(GROUP, 42, "mode_card") if has_card else None,
+                                    by=by)
+        x1.reported_mode = reported
+        env.run(_reported(mode_switch, bot, x1))
+    return tg.out
+
+
+async def _reported(module, bot, sess):
+    """``on_reported`` and the edits it spawns, in one loop (a task left on
+    another loop would never run)."""
+    import asyncio
+    await module.on_reported(bot, sess, {"dialog": False})
+    for _ in range(5):
+        if not module._TASKS:
+            break
+        await asyncio.gather(*list(module._TASKS), return_exceptions=True)
 
 
 @surface("appcmd.replies")
@@ -1133,12 +1203,12 @@ def _new_world(env, *, launch_error=""):
     from aipager import member_root
     env.mp.setattr(member_root, "restricted_root", lambda *a, **k: None)
 
-    async def _create(label, *, scope_chat_id, skip_perms=False, cwd=None,
+    async def _create(label, *, scope_chat_id, mode="ask", cwd=None,
                       driver_user_id=None, model=None, keep_card=False, reuse_name=None):
         if launch_error:
             return "", launch_error
         sess = session(bot, label, chat=scope_chat_id, name=reuse_name)
-        sess.skip_perms = skip_perms
+        sess.perm_mode = mode
         if cwd:
             sess.cwd = cwd
         if model:
@@ -1243,24 +1313,36 @@ def _newflow_ready_models(env):
 
 @surface("newflow.ready_taps")
 def _newflow_ready_taps(env):
-    """The Ready card's switches: refused, working, switched (who), failed,
-    a model switched or refused, an ended session."""
+    """The Ready card's switches: Full access refused, working, switched
+    (who), failed; Ask <-> Auto in place (while it works too) and refused
+    while a prompt is open; a model switched or refused, an ended
+    session."""
     from aipager.bot.session_ops import ModelSwitchOutcome
+    from aipager.dtach import inject
     from aipager.miniapp import sessions as mini
     from aipager.state import Status
     bot, tg, sess = _ready_session(env)
+    env.mp.setattr(inject, "press_mode_cycle", AsyncMock(return_value=True))
     start = len(tg.out)
     cb = _sess_cb
-    sess.skip_perms = False
-    tap(env, bot, tg, cb(sess, "rdy_auto"), chat=GROUP, user=BOB)
+    sess.perm_mode = "ask"
+    tap(env, bot, tg, cb(sess, "rdy_full"), chat=GROUP, user=BOB)
     sess.status = Status.BUSY
-    tap(env, bot, tg, cb(sess, "rdy_auto"), chat=GROUP)
+    tap(env, bot, tg, cb(sess, "rdy_full"), chat=GROUP)
     sess.status = Status.IDLE
-    for outcome in (SimpleNamespace(ok=True, err=""), SimpleNamespace(ok=False, err=""),
-                    SimpleNamespace(ok=False, err="13")):
-        sess.skip_perms = False
+    for outcome in (SimpleNamespace(ok=True, reason="done", err=""),
+                    SimpleNamespace(ok=False, reason="launch_failed", err=""),
+                    SimpleNamespace(ok=False, reason="launch_failed", err="13")):
+        sess.perm_mode = "ask"
         bot._perms_switch_core = AsyncMock(return_value=outcome)
-        tap(env, bot, tg, cb(sess, "rdy_auto"), chat=GROUP)
+        tap(env, bot, tg, cb(sess, "rdy_full"), chat=GROUP)
+    sess.perm_mode = "ask"
+    sess.status = Status.BUSY
+    tap(env, bot, tg, cb(sess, "rdy_auto"), chat=GROUP, user=BOB)
+    sess.reset_mode_tracking()
+    sess.status = Status.INTERACTIVE
+    tap(env, bot, tg, cb(sess, "rdy_ask"), chat=GROUP)
+    sess.status = Status.IDLE
     for outcome in (ModelSwitchOutcome(ok=True, reason="sent", label="x1"),
                     ModelSwitchOutcome(ok=False, reason="send_failed", label="x1"),
                     ModelSwitchOutcome(ok=False, reason="busy", label="x1",
@@ -1287,15 +1369,16 @@ def _newflow_ready_taps(env):
 @surface("newflow.taps")
 def _newflow_taps(env):
     """The Name card's buttons: someone else's card, an expired one, a
-    replaced one, Auto refused, a model or folder no longer offered, no
-    folder to create one in, cancel; and starting one where you may not."""
+    replaced one, Full access refused, a model or folder no longer offered,
+    no folder to create one in, cancel; and starting one where you may
+    not."""
     bot, tg = _new_world(env)
     _open_name_card(env, bot, tg, chat=GROUP)          # aly's card: 7001
     start = len(tg.out)
     tap(env, bot, tg, "_:nw:cancel", chat=GROUP, user=BOB, message_id=7001)
     _open_name_card(env, bot, tg, chat=GROUP, user=BOB)
     bob_card = bot._new_wizard_pending[(GROUP, BOB)]["msg_id"]
-    tap(env, bot, tg, "_:nw:mode:auto", chat=GROUP, user=BOB, message_id=bob_card)
+    tap(env, bot, tg, "_:nw:mode:full", chat=GROUP, user=BOB, message_id=bob_card)
     tap(env, bot, tg, "_:nw:model:99", chat=GROUP, user=BOB, message_id=bob_card)
     tap(env, bot, tg, "_:nw:path:99", chat=GROUP, user=BOB, message_id=bob_card)
     tap(env, bot, tg, "_:nw:bogus", chat=GROUP, user=BOB, message_id=bob_card)
@@ -1610,9 +1693,9 @@ def _sess_taps(env):
         tap(env, bot, tg, _sess_cb(x1, f"endok{x1.turn_key}"), chat=GROUP)
     tap(env, bot, tg, _sess_cb(gone, "mode_show"), chat=GROUP)
     tap(env, bot, tg, _sess_cb(gone, f"modeask{gone.turn_key}"), chat=GROUP)
-    x1.skip_perms = True
+    x1.perm_mode = "auto"
     tap(env, bot, tg, _sess_cb(x1, f"modeauto{x1.turn_key}"), chat=GROUP)
-    tap(env, bot, tg, _sess_cb(x1, f"modeask{x1.turn_key + 3}"), chat=GROUP)
+    tap(env, bot, tg, _sess_cb(x1, f"modefull{x1.turn_key + 3}"), chat=GROUP)
     tap(env, bot, tg, _sess_cb(x1, "resume"), chat=GROUP)
     gone.claude_session_id = "abc"
     tap(env, bot, tg, _sess_cb(gone, "resume"), chat=GROUP)
@@ -2026,6 +2109,7 @@ P3A_MIGRATED: frozenset[str] = frozenset({
     "route.ended_target", "route.no_session", "route.send_failures", "route.sent_to",
     "route.queue_full", "route.mention_alone", "route.model_refusals", "route.model_feedback",
     "modecard.card", "modecard.cmd_replies", "modecard.perms_flow", "modecard.switch_taps",
+    "modecard.switch_results",
     "appcmd.replies", "whoami.replies",
     "media.voice", "media.voice_install", "media.voice_restart", "media.file", "media.album",
     "taps.voice_cancel",

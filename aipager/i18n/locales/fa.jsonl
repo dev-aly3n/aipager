@@ -40,9 +40,11 @@
 {"k": "app.err.answer_chat_busy", "src": "e0f91f04", "v": "Telegram فعلاً شلوغ است. چند لحظه بعد دوباره امتحان کنید."}
 {"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "این سشن دیگر منتظر شما نیست."}
 {"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "این درخواست به چت فرستاده نشد."}
-{"k": "app.err.auto_needs_admin", "src": "ad1f0c2f", "v": "مود خودکار فقط برای ادمین است."}
+{"k": "app.err.bad_mode", "src": "b0920696", "v": "مود پرسش، خودکار یا دسترسی کامل را انتخاب کنید."}
 {"k": "app.err.delete_running", "src": "71f25b50", "v": "سشن هنوز باز است. اول با «بستن» متوقفش کنید."}
+{"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "مود دسترسی کامل فقط برای ادمین است."}
 {"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "بسته نشد - برنامه‌اش هنوز در حال اجراست. دوباره امتحان کنید."}
+{"k": "app.err.mode_send_failed", "src": "887b8615", "v": "به ترمینال سشن نرسید - مود عوض نشد."}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "در این چت از قبل سشنی به اسم {session} هست."}
 {"k": "app.err.not_busy", "src": "bbafa529", "v": "این سشن الان کاری انجام نمی‌دهد - چیزی برای توقف نیست."}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "این درخواست را نمی‌شود دوباره فرستاد. در ترمینال جوابش را بدهید."}
@@ -50,13 +52,15 @@
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} هنوز در حال توقف است - مود عوض نشد. چند لحظه بعد دوباره امتحان کنید."}
 {"k": "app.err.pick_model", "src": "773e24c4", "v": "یک مدل انتخاب کنید."}
 {"k": "app.err.restart_still_stopping", "src": "701b0bd8", "v": "{session} هنوز در حال توقف است. چند لحظه بعد دوباره امتحان کنید."}
-{"k": "app.err.resumed_in_ask", "src": "7024b7b8", "v": "{session} در مود پرسش دوباره باز شد: {reason}"}
+{"k": "app.err.resumed_in_auto", "src": "b26ccb3b", "v": "{session} در مود خودکار دوباره باز شد: {reason}"}
 {"k": "app.err.resuming", "src": "2a557399", "v": "این سشن همین الان دارد دوباره باز می‌شود. چند لحظه بعد دوباره امتحان کنید."}
 {"k": "app.err.send_failed", "src": "e4349ad3", "v": "{command} فرستاده نشد."}
 {"k": "app.fact.context", "src": "cc11b3a2", "v": "کانتکست"}
 {"k": "app.fact.cost", "src": "64ae43e8", "v": "هزینه"}
 {"k": "app.fact.cwd", "src": "4b892fe0", "v": "پوشه"}
 {"k": "app.fact.last_active", "src": "b5665ec6", "v": "آخرین فعالیت"}
+{"k": "app.fact.mode", "src": "a7b93d21", "v": "مود"}
+{"k": "app.fact.mode_pending", "src": "d8a50365", "v": "{mode} (منتظر تأیید Claude Code)"}
 {"k": "app.fact.model", "src": "68c2cc7f", "v": "مدل"}
 {"k": "app.fact.working", "src": "e7df8df6", "v": "مدت کار"}
 {"k": "app.language.hint", "src": "90e01e41", "v": "فقط متن‌های خود aipager. جواب‌های Claude عوض نمی‌شوند."}
@@ -99,11 +103,12 @@
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] از Mini App حذف شد"}
 {"k": "app.mirror.folder", "src": "603d7ae2", "v": "📁 یک پوشهٔ جدید از Mini App ساخته شد:\n{path}"}
 {"k": "app.mirror.killed", "src": "63565832", "v": "💀 [{session}] از Mini App بسته شد"}
+{"k": "app.mirror.mode_sent", "src": "c1718968", "v": "⚙️ {session} از Mini App بدون ری‌استارت به {mode} تغییر می‌کند."}
 {"k": "app.mirror.model", "src": "6df57f60", "v": "🔄 [{session}] ← {model} از Mini App"}
 {"k": "app.mirror.renamed", "src": "22ad8a4c", "v": "✏️ اسم [{old}] از Mini App شد [{new}]"}
 {"k": "app.mirror.restarted", "src": "9aa8323d", "v": "🔁 [{session}] از Mini App ری‌استارت شد"}
 {"k": "app.mirror.resumed", "src": "fafeafa6", "v": "♻️ [{session}] از Mini App دوباره باز شد"}
-{"k": "app.mirror.resumed_in_ask", "src": "429a5b47", "v": "♻️ [{session}] از Mini App در مود پرسش دوباره باز شد: {reason}"}
+{"k": "app.mirror.resumed_in_auto", "src": "85b6c017", "v": "♻️ [{session}] از Mini App در مود خودکار دوباره باز شد: {reason}"}
 {"k": "app.mirror.session_setting", "src": "3256d908", "v": "⚙️ {setting} ← {value} برای سشن {session} (از Mini App)"}
 {"k": "app.mirror.session_setting_reset", "src": "4502514a", "v": "⚙️ {setting} برای سشن {session} به پیش‌فرض ({value}) برگشت (از Mini App)"}
 {"k": "app.mirror.setting", "src": "6820a9f7", "v": "⚙️ {setting} ← {value} (از Mini App)"}
@@ -111,6 +116,8 @@
 {"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"one": "⏹️ [{session}] از Mini App متوقف شد ({n} پیام صف حذف شد)", "other": "⏹️ [{session}] از Mini App متوقف شد ({n} پیام صف حذف شد)"}}
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} از Mini App به مود پرسش رفت"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} از Mini App به مود خودکار رفت"}
+{"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 {session} از Mini App به مود دسترسی کامل تغییر کرد"}
+{"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "اول به درخواست باز جواب بدهید، بعد مود را عوض کنید."}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude در حال کار است - وقتی این نوبت تمام شد مدل را عوض کنید."}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "این سشن الان اجرا نمی‌شود."}
 {"k": "app.reason.model_pending", "src": "a3384cf1", "v": "تغییر مدل قبلی هنوز تأیید نشده - پیش از تغییر دوباره، در ترمینال ببینید Claude Code سؤال «Switch model?» را پرسیده یا نه."}
@@ -120,7 +127,7 @@
 {"k": "app.reason.no_context", "src": "8f590315", "v": "چیزی برای کامپکت نیست - کانتکست خالی است."}
 {"k": "app.reason.no_permission", "src": "e1081627", "v": "شما اجازهٔ کنترل این سشن را ندارید."}
 {"k": "app.reason.no_transcript", "src": "3426f123", "v": "گفتگوی ذخیره‌شده‌ای برای ادامه نیست - به‌جایش یک سشن جدید شروع کنید."}
-{"k": "app.reason.perms_admin", "src": "7202c2fd", "v": "رفتن به مود خودکار فقط برای ادمین است."}
+{"k": "app.reason.perms_admin", "src": "c9f440cf", "v": "رفتن به مود دسترسی کامل فقط برای ادمین است."}
 {"k": "app.reason.queue_empty", "src": "35da34dc", "v": "صف خالی است."}
 {"k": "app.reason.queue_full", "src": "2bf9f868", "v": "صف پر است ({cap} پیام منتظر) - خالی‌اش کنید یا صبر کنید تا پیام‌ها برداشته شوند."}
 {"k": "appcmd.btn.open", "src": "0bfb9312", "v": "📱 باز کردن Mini App"}
@@ -218,7 +225,7 @@
 {"k": "cmd.app", "src": "486dfc4e", "v": "باز کردن داشبورد Mini App"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "چه کارهایی از دستتان برمی‌آید"}
 {"k": "cmd.language", "src": "9dc3a234", "v": "زبان پیام‌های aipager"}
-{"k": "cmd.mode", "src": "b677b7d9", "v": "مود خودکار یا مود پرسش"}
+{"k": "cmd.mode", "src": "908f74fc", "v": "مود پرسش، خودکار یا دسترسی کامل"}
 {"k": "cmd.new", "src": "959b093b", "v": "شروع سشن جدید"}
 {"k": "cmd.now", "src": "3673f6f7", "v": "پیام‌های صف را الان به Claude بفرست"}
 {"k": "cmd.resume", "src": "88f33259", "v": "ادامهٔ سشنی که بسته شده"}
@@ -343,36 +350,49 @@
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ باشد، نصب نشد."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ حجم ویس {size} مگابایت است؛ ربات‌های Telegram فقط تا {limit} مگابایت را می‌گیرند."}
 {"k": "mode.ask", "src": "07910591", "v": "💬 مود پرسش"}
-{"k": "mode.ask_for_you", "src": "75e3a871", "v": "💬 مود پرسش (🤖 مود خودکار: ادمین‌ها)"}
-{"k": "mode.ask_instead", "src": "44bfa9ac", "v": "💬 به‌جایش مود پرسش"}
+{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 به‌جایش مود پرسش"}
 {"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 مود خودکار"}
-{"k": "mode.auto_instead", "src": "14529a3c", "v": "🤖 به‌جایش مود خودکار"}
+{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 به‌جایش مود خودکار"}
+{"k": "mode.full", "src": "2b63c484", "v": "🔓 مود دسترسی کامل"}
+{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 به‌جایش مود دسترسی کامل"}
 {"k": "mode.word.ask", "src": "3562777b", "v": "پرسش"}
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "خودکار"}
+{"k": "mode.word.full", "src": "10b28a8c", "v": "کامل"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> همین حالا در {mode} است."}
-{"k": "modecard.btn.to_ask", "src": "d5dc5d00", "v": "💬 تغییر به مود پرسش"}
-{"k": "modecard.btn.to_auto", "src": "5ffd3be6", "v": "🤖 تغییر به مود خودکار"}
+{"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 مود پرسش (خودکار اینجا در دسترس نیست)"}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 خودکار برای شما (🔓 دسترسی کامل فقط برای ادمین است)"}
+{"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "مود خودکار برای {session} در دسترس نیست (مدل یا اشتراک)، پس در مود پرسش می‌ماند."}
+{"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 تغییر به مود پرسش"}
+{"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 تغییر به مود خودکار"}
+{"k": "modecard.btn.to_full", "src": "365ba002", "v": "🔓 تغییر به مود دسترسی کامل"}
 {"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> مشغول است.\nبه مود پرسش تغییر کند؟"}
 {"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> مشغول است.\nبه مود خودکار تغییر کند؟"}
-{"k": "modecard.confirm_auto", "src": "ff1562a9", "v": "⚙️ <b>{session}</b> به {mode} تغییر کند؟\n<i>Claude ابزارها را بدون پرسیدن اجرا می‌کند ({flag}).</i>"}
+{"k": "modecard.busy_to_full", "src": "13160dd5", "v": "⚙️ <b>{session}</b> مشغول است.\nبه مود دسترسی کامل تغییر کند؟ سشن ری‌استارت می‌شود."}
+{"k": "modecard.confirm_full", "src": "30bc1073", "v": "⚙️ <b>{session}</b> به {mode} تغییر کند؟\n<i>همه چیز بدون هیچ بررسی اجرا می‌شود ({flag}). سشن ری‌استارت می‌شود و گفتگو می‌ماند.</i>"}
+{"k": "modecard.dialog_open", "src": "dbd6e8b6", "v": "⚠️ <b>{session}</b> منتظر جواب یک سؤال یا درخواست اجازه است. اول جواب بدهید، بعد مود را عوض کنید."}
 {"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ وضعیت <b>{session}</b> هنوز مشخص نشده است. کمی بعد دوباره /mode را امتحان کنید."}
 {"k": "modecard.is", "src": "c057ad13", "v": "<b>{session}</b> در {mode} است."}
 {"k": "modecard.is_target", "src": "92bc67e3", "v": "✍️ <b>{session}</b> در {mode} است."}
 {"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ <b>{session}</b> کار جدیدی را شروع کرد، پس چیزی تغییر نکرد."}
-{"k": "modecard.needs_admin", "src": "fe68d230", "v": "مود خودکار فقط برای ادمین است."}
+{"k": "modecard.needs_admin", "src": "20f8f3e6", "v": "مود دسترسی کامل فقط برای ادمین است."}
 {"k": "modecard.none_live", "src": "ae432c8c", "v": "اینجا هیچ سشن در حال اجرایی نیست. با /new یکی شروع کنید."}
+{"k": "modecard.other_mode", "src": "c8beff6c", "v": "⚙️ مود {name} در Claude Code"}
+{"k": "modecard.press_failed", "src": "b3c8a233", "v": "❌ به ترمینال <b>{session}</b> نرسید - مود عوض نشد."}
 {"k": "modecard.refused_not_running", "src": "d62cf188", "v": "⚠️ <b>{session}</b> در حال اجرا نیست - مود تغییر نکرد."}
 {"k": "modecard.refused_restarting", "src": "06433ed3", "v": "⚠️ <b>{session}</b> همین حالا در حال ری‌استارت است - مود تغییر نکرد. کمی بعد دوباره امتحان کنید."}
 {"k": "modecard.session_missing", "src": "adf0d420", "v": "⚠️ سشن پیدا نشد."}
 {"k": "modecard.stale", "src": "9f0f5572", "v": "⚠️ آن کارت قدیمی بود، پس چیزی تغییر نکرد."}
 {"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> هنوز در حال توقف است - مود تغییر نکرد."}
+{"k": "modecard.switch_confirmed", "src": "85dadf29", "v": "✅ {session} الان در {mode} است."}
 {"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ مود عوض نشد: {error}"}
+{"k": "modecard.switch_pending_line", "src": "661317d0", "v": "⏳ منتظر تأیید Claude Code."}
+{"k": "modecard.switch_sent", "src": "dc418d95", "v": "⚙️ {session} بدون ری‌استارت به {mode} تغییر می‌کند."}
+{"k": "modecard.switch_unconfirmed", "src": "367038cc", "v": "{session} عوض نشد: الان در {mode} است."}
 {"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ {person} سشن را به {mode} برد."}
-{"k": "modecard.switching", "src": "30fa9003", "v": "⚙️ <b>{session}</b> در حال تغییر به {mode}…"}
-{"k": "modecard.usage", "src": "7928f7b9", "v": "⚠️ /mode یک نام سشن و ask یا auto می‌گیرد، مثلاً {example} یا {example_ask}."}
+{"k": "modecard.switching", "src": "60043e5a", "v": "⚙️ <b>{session}</b> در حال تغییر به {mode} (سشن ری‌استارت می‌شود)…"}
+{"k": "modecard.usage", "src": "b9b6e4b8", "v": "⚠️ /mode یک نام سشن و ask، auto یا full می‌گیرد، مثلاً {example} یا {example_ask}."}
 {"k": "modecard.which", "src": "107abca0", "v": "کدام سشن؟"}
 {"k": "modecard.which_to", "src": "4694464a", "v": "کدام سشن به {mode} تغییر کند؟"}
-{"k": "newflow.auto_needs_admin_note", "src": "6bb45da7", "v": "مود خودکار به ادمین نیاز دارد، پس این سشن می‌پرسد."}
 {"k": "newflow.btn.cancel", "src": "196a9f45", "v": "✖️ لغو"}
 {"k": "newflow.btn.folder", "src": "2fb30e02", "v": "📁 پوشه"}
 {"k": "newflow.btn.model", "src": "e252b8c8", "v": "🧠 مدل"}
@@ -393,6 +413,7 @@
 {"k": "newflow.example_line", "src": "ab8b1839", "v": "<code>{session} تست‌های خراب را درست کن</code>"}
 {"k": "newflow.expired", "src": "6f9c9ea0", "v": "⏱ وقت این کارت سشن جدید تمام شد. دوباره /new بفرستید."}
 {"k": "newflow.folder_page", "src": "f6e221a1", "v": "📁 <b>پوشه</b>\n\nاین سشن در کدام پوشه کار کند؟"}
+{"k": "newflow.full_needs_admin_note", "src": "3d60c811", "v": "مود دسترسی کامل فقط برای ادمین است، پس این سشن در مود خودکار شروع می‌شود."}
 {"k": "newflow.group_name_ask", "src": "eb31141c", "v": "اسم سشن را در جواب همین پیام بفرستید؛ اگر خواستید، اولین کار را هم بنویسید:"}
 {"k": "newflow.hint_folder", "src": "f27c8294", "v": "📁 اول با دکمهٔ 📁 پوشه یک پوشهٔ پروژه انتخاب کنید."}
 {"k": "newflow.just_send", "src": "0b7a9b82", "v": "✍️ کافی است پیام بفرستید، به {session} ارسال می‌شود."}
@@ -705,7 +726,7 @@
 {"k": "sess.resume_not_found", "src": "4c1d68d2", "v": "⚠️ در تاریخچه سشنی به اسم <b>{session}</b> نیست.\nبرای دیدن سشن‌های موجود، {command} را بدون اسم بفرستید."}
 {"k": "sess.resume_running", "src": "c090af67", "v": "⚠️ <b>{session}</b> همین حالا باز است.\nبرای رفتن سراغش، {command} را در کیبورد بزنید."}
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> دوباره باز شد"}
-{"k": "sess.resumed_in_ask", "src": "8151879e", "v": "♻️ <b>{session}</b> در مود پرسش دوباره باز شد: مود خودکار به ادمین نیاز دارد."}
+{"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> در مود خودکار دوباره باز شد: مود دسترسی کامل فقط برای ادمین است."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "به {session} ارسال شد."}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ بستن"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 سشن‌های جدید"}
@@ -824,6 +845,7 @@
 {"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "این دکمه را نمی‌شناسم"}
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "این مقدار مجاز نیست"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "این دکمه قدیمی است - دوباره /kill بفرستید"}
+{"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} منتظر جواب یک درخواست است. اول جواب بدهید، بعد مود را عوض کنید."}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} سراغ کار جدیدی رفته - برای توقفش دوباره ⏹ توقف را بزنید"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} سراغ کار جدیدی رفته - دوباره /stop بفرستید"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "شما اجازهٔ تغییر این سشن را ندارید."}
@@ -847,7 +869,7 @@
 {"k": "toast.open_chat", "src": "202c3e06", "v": "برای جواب دادن، چت را باز کنید"}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "این کارت مال {owner} است."}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "این کارت مال {owner} است. برای کارت خودتان {command} بفرستید."}
-{"k": "toast.perms_needs_admin", "src": "fe68d230", "v": "مود خودکار فقط برای ادمین است."}
+{"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "مود دسترسی کامل فقط برای ادمین است."}
 {"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} همین الان در حال ری‌استارت است - چند لحظه بعد دوباره بزنید"}
 {"k": "toast.perms_stale", "src": "4e34769b", "v": "این کارت قدیمی است - چیزی عوض نشد"}
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} هنوز در حال بالا آمدن است - چند لحظه بعد دوباره امتحان کنید"}
@@ -922,7 +944,7 @@
 {"k": "tx.api.overloaded", "src": "6f545f5b", "v": "سرورهای Anthropic الان خیلی شلوغ‌اند. چند لحظه بعد دوباره امتحان کنید."}
 {"k": "tx.api.rate_limit", "src": "234c6146", "v": "به سقف تعداد درخواست رسیدید. کمی صبر کنید و دوباره امتحان کنید."}
 {"k": "tx.api.rate_limit_wait", "src": "a2053ce3", "v": "به سقف تعداد درخواست رسیدید. {seconds} ثانیه صبر کنید و دوباره امتحان کنید."}
-{"k": "tx.auto_needs_admin", "src": "bd96281e", "v": "مود خودکار به ادمین نیاز دارد."}
+{"k": "tx.full_needs_admin", "src": "20f8f3e6", "v": "مود دسترسی کامل فقط برای ادمین است."}
 {"k": "tx.needs_admin", "src": "a2f55b85", "v": "این فرمان فقط برای ادمین است."}
 {"k": "tx.retry_others", "src": "4ad540c7", "v": "فقط کسی که این فرمان را فرستاده می‌تواند دوباره امتحانش کند."}
 {"k": "tx.truncated", "src": "27710457", "v": "…[کوتاه شد]"}
@@ -975,8 +997,9 @@
 {"k": "ui.btn.start_session", "src": "76684eaf", "v": "شروع سشن"}
 {"k": "ui.btn.stop_and_switch", "src": "21c1d7af", "v": "توقف کار و تغییر"}
 {"k": "ui.btn.switch", "src": "3e44c920", "v": "تغییر"}
-{"k": "ui.btn.switch_to_ask", "src": "576d6996", "v": "تغییر به مود پرسش"}
-{"k": "ui.btn.switch_to_auto", "src": "13a0f246", "v": "تغییر به مود خودکار"}
+{"k": "ui.btn.switch_to_ask", "src": "adc38b97", "v": "تغییر به مود پرسش"}
+{"k": "ui.btn.switch_to_auto", "src": "6f248734", "v": "تغییر به مود خودکار"}
+{"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "تغییر به مود دسترسی کامل"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "دوباره امتحان کن"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "۱۰ دقیقهٔ دیگر صبر کن"}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "{session} حذف شود؟"}
@@ -984,11 +1007,13 @@
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "{session} بسته شود؟"}
 {"k": "ui.confirm.kill_body", "src": "beff52e4", "v": "سشن متوقف و از فهرست برداشته می‌شود. هر کاری در جریان باشد نیمه‌کاره می‌ماند."}
 {"k": "ui.confirm.perms_ask", "src": "c0710578", "v": "{session} به مود پرسش تغییر کند؟"}
-{"k": "ui.confirm.perms_ask_body", "src": "701538b8", "v": "Claude پیش از اجرای ابزارها می‌پرسد."}
 {"k": "ui.confirm.perms_auto", "src": "b6a1ddde", "v": "{session} به مود خودکار تغییر کند؟"}
-{"k": "ui.confirm.perms_auto_body", "src": "7d8bf9c6", "v": "Claude ابزارها را بدون پرسیدن اجرا می‌کند."}
-{"k": "ui.confirm.perms_busy_ask", "src": "a680d0a6", "v": "کار فعلی متوقف شود و {session} به مود پرسش تغییر کند؟"}
-{"k": "ui.confirm.perms_busy_auto", "src": "d4090a8b", "v": "کار فعلی متوقف شود و {session} به مود خودکار تغییر کند؟"}
+{"k": "ui.confirm.perms_busy_ask", "src": "666af671", "v": "کار فعلی متوقف شود و {session} به مود پرسش تغییر کند؟"}
+{"k": "ui.confirm.perms_busy_auto", "src": "1b03b9b8", "v": "کار فعلی متوقف شود و {session} به مود خودکار تغییر کند؟"}
+{"k": "ui.confirm.perms_busy_full", "src": "066f6071", "v": "کار فعلی متوقف شود و {session} به مود دسترسی کامل تغییر کند؟"}
+{"k": "ui.confirm.perms_full", "src": "401fe494", "v": "{session} به مود دسترسی کامل تغییر کند؟"}
+{"k": "ui.confirm.perms_full_body", "src": "36f1fb1e", "v": "همه چیز بدون هیچ بررسی اجرا می‌شود. سشن ری‌استارت می‌شود و گفتگو می‌ماند."}
+{"k": "ui.confirm.perms_leave_full_body", "src": "1159bfd9", "v": "سشن ری‌استارت می‌شود و گفتگو می‌ماند."}
 {"k": "ui.confirm.rename", "src": "92656d63", "v": "اسم {session} عوض شود؟"}
 {"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "سشن تاریخچه و پوشه‌اش را نگه می‌دارد. فقط اسمش عوض می‌شود."}
 {"k": "ui.confirm.reset", "src": "e13d0ebf", "v": "تنظیمات ریست شود؟"}
@@ -1035,6 +1060,7 @@
 {"k": "ui.done.delete", "src": "48ea780f", "v": "حذف شد."}
 {"k": "ui.done.generic", "src": "e2bcda84", "v": "انجام شد."}
 {"k": "ui.done.kill", "src": "eb388bd9", "v": "بسته شد."}
+{"k": "ui.done.mode_sent", "src": "e240134b", "v": "تغییر ارسال شد. Claude Code با قدم بعدی‌اش آن را تأیید می‌کند."}
 {"k": "ui.done.perms", "src": "144199df", "v": "عوض شد."}
 {"k": "ui.done.rename", "src": "b930ba4a", "v": "اسم عوض شد."}
 {"k": "ui.done.rename_same", "src": "ea00acbd", "v": "تغییری نکرد."}
@@ -1056,7 +1082,6 @@
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "مدل"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "تأیید نشد (سشن را چک کنید)"}
 {"k": "ui.model.unreachable", "src": "82a93142", "v": "به سرور وصل نشد. مدل سشن را چک کنید."}
-{"k": "ui.new.auto_needs_admin", "src": "ad1f0c2f", "v": "مود خودکار فقط برای ادمین است."}
 {"k": "ui.new.chips_recent", "src": "76eec760", "v": "اخیر"}
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "پیشنهادی"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "مدل پیش‌فرض خود Claude Code"}
@@ -1077,10 +1102,13 @@
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "شما اجازهٔ ساختن پوشه در اینجا را ندارید."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "اسم پوشهٔ جدید"}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "به سرور وصل نشد. پوشه‌ای ساخته نشد."}
+{"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "مود دسترسی کامل فقط برای ادمین است."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "پرسش"}
 {"k": "ui.new.mode_ask_help", "src": "eca1be33", "v": "Claude پیش از اجرای ابزارها می‌پرسد"}
 {"k": "ui.new.mode_auto", "src": "c614ba7c", "v": "خودکار"}
-{"k": "ui.new.mode_auto_help", "src": "306e8992", "v": "ابزارها را بدون پرسیدن اجرا می‌کند"}
+{"k": "ui.new.mode_auto_help", "src": "9dcf2566", "v": "یک بررسی ایمنی کارهای امن را اجرا و کارهای پرخطر را متوقف می‌کند"}
+{"k": "ui.new.mode_full", "src": "5e4017a2", "v": "دسترسی کامل"}
+{"k": "ui.new.mode_full_help", "src": "26c97cd3", "v": "همه چیز بدون هیچ بررسی اجرا می‌شود"}
 {"k": "ui.new.mode_title", "src": "9c8c621a", "v": "مود اجازه‌ها"}
 {"k": "ui.new.model_name", "src": "5ebb9765", "v": "اسم مدل"}
 {"k": "ui.new.model_needed", "src": "c585e482", "v": "برای ادامه، اسم یک مدل را بنویسید."}
@@ -1097,8 +1125,10 @@
 {"k": "ui.new.sub", "src": "23b19317", "v": "اسمی بگذارید، پوشه‌ای انتخاب کنید، و Claude همان‌جا شروع به کار می‌کند."}
 {"k": "ui.new.summary_ask", "src": "3e987f2e", "v": "Claude را در {where}، در مود پرسش، با {model} شروع می‌کند."}
 {"k": "ui.new.summary_auto", "src": "d0968e63", "v": "Claude را در {where}، در مود خودکار، با {model} شروع می‌کند."}
+{"k": "ui.new.summary_full", "src": "08065163", "v": "Claude را در {where}، در مود دسترسی کامل، با {model} شروع می‌کند."}
 {"k": "ui.new.summary_named_ask", "src": "ccbc6d09", "v": "Claude را با نام {name} در {where}، در مود پرسش، با {model} شروع می‌کند."}
 {"k": "ui.new.summary_named_auto", "src": "4b48c549", "v": "Claude را با نام {name} در {where}، در مود خودکار، با {model} شروع می‌کند."}
+{"k": "ui.new.summary_named_full", "src": "91a24e52", "v": "Claude را با نام {name} در {where}، در مود دسترسی کامل، با {model} شروع می‌کند."}
 {"k": "ui.new.title", "src": "5c881d23", "v": "سشن جدید"}
 {"k": "ui.new.where", "src": "525f61b6", "v": "کجا"}
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "تا وقتی این سشن بسته شد، چیزی ثبت نشد."}
