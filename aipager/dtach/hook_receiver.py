@@ -755,10 +755,14 @@ class HookReceiver:
         raw_mode = msg.get("permission_mode")
         if (isinstance(raw_mode, str) and raw_mode and not hook_agent_id
                 and event not in _INTERNAL_HOOK_EVENTS):
+            was_full = perm_modes.from_claude(sess_ref.reported_mode) == perm_modes.FULL
             verdict = sess_ref.note_reported_mode(raw_mode, now_mono)
             if verdict == "recorded":
+                # Logged when the session turns to bypass, not on every
+                # hook after it (a CLI session started with the bypass
+                # flag reports it on each event).
                 if (perm_modes.from_claude(raw_mode) == perm_modes.FULL
-                        and sess_ref.perm_mode != perm_modes.FULL):
+                        and sess_ref.perm_mode != perm_modes.FULL and not was_full):
                     log.warning("[%s] Claude Code reports %s; aipager launched it in %s",
                                 sess_ref.label, raw_mode, sess_ref.perm_mode)
                 if sess_ref.mode_switch is not None:

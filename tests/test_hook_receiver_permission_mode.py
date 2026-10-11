@@ -107,3 +107,28 @@ def test_bypass_in_full_access_is_not_logged(receiver, run_async, caplog):
         _send(recv, run_async, hook_event_name="Notification",
               permission_mode="bypassPermissions")
     assert "reports bypassPermissions" not in caplog.text
+
+
+def test_bypass_is_logged_once_not_on_every_hook(receiver, run_async, caplog):
+    # A CLI session started with the bypass flag reports it on every event:
+    # one WARNING when it turns to bypass, not one per hook.
+    sess, recv, _ = receiver
+    sess.perm_mode = "ask"
+    with caplog.at_level(logging.WARNING, logger=hr.log.name):
+        for i, event in enumerate(("PreToolUse", "PostToolUse", "PreToolUse")):
+            _send(recv, run_async, hook_event_name=event, tool_name="Bash",
+                  tool_input={"command": f"ls {i}"}, tool_use_id=f"toolu_{i}",
+                  permission_mode="bypassPermissions")
+    assert sess.reported_mode == "bypassPermissions"
+    assert caplog.text.count("reports bypassPermissions") == 1
+
+
+def test_bypass_again_after_leaving_it_is_logged_again(receiver, run_async, caplog):
+    sess, recv, _ = receiver
+    sess.perm_mode = "ask"
+    with caplog.at_level(logging.WARNING, logger=hr.log.name):
+        for i, raw in enumerate(("bypassPermissions", "default", "bypassPermissions")):
+            _send(recv, run_async, hook_event_name="PreToolUse", tool_name="Bash",
+                  tool_input={"command": f"ls {i}"}, tool_use_id=f"toolu_{i}",
+                  permission_mode=raw)
+    assert caplog.text.count("reports bypassPermissions") == 2
