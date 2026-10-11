@@ -151,11 +151,14 @@ def pin_moved_defaults(before, after) -> list:
     depends on every scope's label and root: a collision suffix comes and
     goes, a label changes) gets its old folder written as its ``root``.
     Repeats until nothing moves, since one pin can move another default.
-    A scope that is new, or has a root set, is left as it is."""
+    A scope that is new, or has a root set, is left as it is, and so is
+    one whose old folder could not be a root (a home folder with glob
+    characters would make the file unloadable)."""
     from dataclasses import replace
     before = list(before or ())
     out = list(after or ())
     old = {s.chat_id: os.path.normpath(effective_root(s, before)) for s in before}
+    old = {k: v for k, v in old.items() if root_problem(v) is None}
     while True:
         moved = [i for i, s in enumerate(out)
                  if not s.root and s.chat_id in old
