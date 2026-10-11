@@ -27,3 +27,31 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - A keyboard word (status, stop, new, kill) is ONE word with no space: it is typed as a word.
 - A mode word (mode.word.auto, mode.word.ask: خودکار, پرسش) is ONE word with no emoji: people type it after /mode, so it never changes once chosen. A mode label (mode.auto, mode.ask) is what people see: the emoji, that same word and the word for mode (🤖 مود خودکار, 💬 مود پرسش); a sentence around {mode} must not add its own word for mode.
 - A default button label (Continue, Run tests...) stays short: it is a button.
+
+## The voice (Persian rewrite, 2026-10-11)
+Write the way a good Persian app talks to people (Telegram, Snapp, Divar), not a translation of the English sentence. Read what the English MEANS in its place (a button, a card line, an error) and say that in natural Persian: everyday words, active voice, short sentences, the verb where Persian puts it. Prefer words people already use over formal or Arabic-heavy ones (کامپیوتر not رایانه, جواب in conversation, دوباره not مجدد). Buttons are the person's commands to the app: short, imperative or a noun ("ادامه بده", "بفرست", "لغو"). Messages address the person as شما.
+
+## Vocabulary (one word per idea)
+| idea | word |
+|---|---|
+| session | نشست |
+| idle (a session waiting for a message) | آماده |
+| busy / working | در حال کار |
+| waiting on you | منتظر شما |
+| admin | ادمین |
+| owner | مالک |
+| member | عضو |
+| mode (Ask, Auto) | مود (never حالت) |
+| your message to Claude (prompt) | پیام |
+| permission request | درخواست اجازه |
+| allow / deny | اجازه بده / رد کن (answered: اجازه داده شد / رد شد) |
+| compact (Claude Code's /compact) | خلاصه‌سازی گفتگو |
+| context window | حافظهٔ گفتگو |
+| the Telegram chat | چت |
+| the conversation with Claude | گفتگو |
+| restart | راه‌اندازی دوباره |
+| update (a new version) | به‌روزرسانی / نسخهٔ جدید |
+| background agent | ایجنت پس‌زمینه |
+| background shell command | دستور پس‌زمینه |
+| template (ready-made message) | قالب |
+| pinned message | پیام سنجاق‌شده |

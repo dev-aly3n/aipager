@@ -8,8 +8,9 @@
   ("Permission needed", "Needs input") in the chat's language
   (rev-iter1-006); a real tool summary is never translated.
 - (e) Russian "still running/working" agrees with every count (the
-  predicate is number-neutral, rev-iter1-001); Persian says "by" with
-  توسط, not با (rev-iter1-004).
+  predicate is number-neutral, rev-iter1-001); Persian names who did it
+  as the subject of the verb, never with با ("with", rev-iter1-004; the
+  passive توسط became active voice in the 2026-10-11 Persian rewrite).
 
 English is today's text in every case.
 """
@@ -268,8 +269,8 @@ def _values(code, key):
 
 
 @pytest.mark.parametrize("key", BY_KEYS)
-def test_persian_by_uses_tavassot(key):
-    assert all("توسط {person}" in v for v in _values("fa", key))
+def test_persian_by_makes_the_person_the_subject(key):
+    assert all(re.search(r"\{person\} .*کرد", v) for v in _values("fa", key))
 
 
 @pytest.mark.parametrize("key", BY_KEYS)
@@ -291,14 +292,15 @@ def _stop_by(mk_bot, monkeypatch, run_async, code):
     return card[-1], toast[-1]
 
 
-def test_a_persian_stop_tap_settles_the_card_with_tavassot(mk_bot, monkeypatch, run_async):
+def test_a_persian_stop_tap_settles_the_card_with_the_person_as_subject(
+        mk_bot, monkeypatch, run_async):
     card, _t = _stop_by(mk_bot, monkeypatch, run_async, "fa")
-    assert "توسط " + FSI + "@bob" + PDI in card
+    assert FSI + "@bob" + PDI + " متوقف کرد" in card
 
 
-def test_a_persian_stop_tap_toast_uses_tavassot(mk_bot, monkeypatch, run_async):
+def test_a_persian_stop_tap_toast_names_the_person_as_subject(mk_bot, monkeypatch, run_async):
     _c, toast = _stop_by(mk_bot, monkeypatch, run_async, "fa")
-    assert "توسط" in toast and PERSIAN.search(toast)
+    assert re.search("@bob" + r"\W* .*متوقف کرد", toast) and PERSIAN.search(toast)
 
 
 def test_a_persian_stop_card_keeps_the_mention_whole(mk_bot, monkeypatch, run_async):

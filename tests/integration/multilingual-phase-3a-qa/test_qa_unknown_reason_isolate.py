@@ -34,12 +34,13 @@ UNKNOWN = ["the moon is <b>full</b> & bright",
 IDS = [f"u{i}" for i in range(len(UNKNOWN))]
 
 #: The frames each language showed at the end of iteration 2 (tree 62ad7a3),
-#: with ``{r}`` for the HTML-escaped reason.
+#: with ``{r}`` for the HTML-escaped reason; Persian's as reworded in the
+#: 2026-10-11 rewrite.
 EN_FRAME = "🛑 <b>x1</b> · Blocked by safety policy: {r} (stopped)"
 RU_FRAME = ("🛑 <b>x1</b> · Заблокировано правилами безопасности: {r} "
             "(остановлено)")
-FA_FRAME_ITER2 = (RLM + "🛑 <b>" + FSI + "x1" + PDI + "</b> · مسدود به" + ZWNJ
-                  + "دست سیاست ایمنی: {r} (متوقف شد)")
+FA_FRAME = (RLM + "🛑 <b>" + FSI + "x1" + PDI + "</b> · قانون ایمنی جلویش را گرفت: {r} "
+            "(متوقف شد)")
 
 
 def _expected(frame: str, reason: str) -> str:
@@ -59,7 +60,7 @@ def test_a_persian_notice_isolates_the_escaped_unknown_reason(reason):
 
 @pytest.mark.parametrize("reason", UNKNOWN, ids=IDS)
 def test_a_persian_notice_of_an_unknown_reason_is_the_frame_plus_one_isolate(reason):
-    isolated = FA_FRAME_ITER2.replace("{r}", FSI + "{r}" + PDI)
+    isolated = FA_FRAME.replace("{r}", FSI + "{r}" + PDI)
     assert _notice("fa", reason) == _expected(isolated, reason)
 
 

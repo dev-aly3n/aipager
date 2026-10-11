@@ -123,7 +123,7 @@ def test_the_legacy_team_refusal(mk_bot, run_async):
         OWNER: team_mod.User(OWNER, "aly", team_mod.Role.ADMIN)})
     bot = mk_bot(team=team)
     text = _refuse(bot, run_async, chat=GROUP, language_code="fa")
-    assert text.startswith(RLM + "🚫 شما در فهرست")
+    assert text.startswith(RLM + "🚫 شما اجازهٔ استفاده")
 
 
 def test_the_non_member_tap_toast_is_theirs(bot, run_async):

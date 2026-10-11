@@ -144,8 +144,8 @@ def test_the_clock_is_in_persian_digits(mk_bot, run_async, monkeypatch):
 
 
 def test_who_stopped_or_refused_reads_by_not_with():
-    """"by @bob" is توسط in Persian; با means "with" and read "stopped with
-    @bob" (review rev-iter1-004)."""
+    """Persian makes @bob the subject ("@bob stopped it"); با means "with"
+    and read "stopped with @bob" (review rev-iter1-004)."""
     from aipager import i18n
     from aipager.bot import callbacks, session_ops
     fa = i18n.get("fa")
@@ -154,4 +154,4 @@ def test_who_stopped_or_refused_reads_by_not_with():
              fa.text(callbacks.STOPPED_BY, session="x1", person="@bob"),
              fa.n(callbacks.STOPPED_BY_DROPPED, 2, kind="text", session="x1", person="@bob")]
     for text in texts:
-        assert "توسط" in text and " با " not in text, text
+        assert re.search("@bob" + r"\W* .*کرد", text) and " با " not in text, text
