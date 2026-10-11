@@ -104,22 +104,31 @@ def parse_mode_args(words, session_exists) -> tuple[str | None, str | None, bool
       (*session_exists*); with one, it names that session (``/mode
       demander`` with a session ``demander``);
     - anything else is the session name;
+    - two mode words in either order (``/mode full ask``): the one that
+      names a live session is the session, when only one of them does
+      (any word order, design Decision 10); a single ``/mode full`` stays
+      the mode;
     - a word left over (a third, or a second name) is not ok: the caller
       shows the usage.
     """
-    mode = label = None
+    mode = label = mode_word = None
     for word in words:
         if mode is None and word.lower() in perm_modes.MODES:
-            mode = word.lower()
+            mode, mode_word = word.lower(), word.lstrip("/")
             continue
         translated = mode_from_word(word) if mode is None else None
         if translated is not None and (
                 label is not None or not session_exists(word.lstrip("/"))):
-            mode = translated
+            mode, mode_word = translated, word.lstrip("/")
         elif label is None:
             label = word.lstrip("/")
         else:
             return mode, label, False
+    if mode_word is not None and label is not None:
+        other = mode_from_word(label)
+        if (other is not None and session_exists(mode_word)
+                and not session_exists(label)):
+            return other, mode_word, True
     return mode, label, True
 
 

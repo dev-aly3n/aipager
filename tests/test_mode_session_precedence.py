@@ -172,3 +172,18 @@ def test_english_switches_even_with_a_session_of_that_name(bot, run_async, mk_up
     _mode(bot, run_async, mk_update, f"/mode {word}", word)
     sess, got = bot._mode_flow.await_args.args[:2]
     assert sess.label == "x1" and got == word
+
+
+@pytest.mark.parametrize("words, live, want", [
+    (["full", "ask"], {"full"}, ("ask", "full", True)),
+    (["ask", "full"], {"full"}, ("ask", "full", True)),
+    (["auto", "ask"], {"auto"}, ("ask", "auto", True)),
+    (["ask", "auto"], {"ask"}, ("auto", "ask", True)),
+    (["full", "ask"], set(), ("full", "ask", True)),
+    (["full", "ask"], {"full", "ask"}, ("full", "ask", True)),
+    (["full"], {"full"}, ("full", None, True)),
+], ids=["full-ask-session-full", "ask-full-session-full", "auto-ask-session-auto",
+        "ask-auto-session-ask", "no-such-session", "both-sessions", "single-word"])
+def test_two_mode_words_the_live_session_is_the_name(words, live, want):
+    # design Decision 10: /mode [<session>] ask|auto|full in any word order.
+    assert parse_mode_args(words, lambda n: n in live) == want
