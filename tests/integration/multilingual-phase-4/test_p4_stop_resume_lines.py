@@ -48,9 +48,9 @@ def _stop(env, p4, code, queued, label="dev"):
     return r, env.posted()[before:]
 
 
-def _resume(env, p4, code, *, actor=BOB, skip_perms=False, label="dev"):
+def _resume(env, p4, code, *, actor=BOB, mode="ask", label="dev"):
     _chat(p4, code)
-    env.session(label, status="gone", skip_perms=skip_perms, claude_session_id="abc")
+    env.session(label, status="gone", mode=mode, claude_session_id="abc")
     before = len(env.posted())
     r = env.call("POST", f"/api/sessions/{label}/resume", user=actor, scope=GROUP)
     return r, env.posted()[before:]
@@ -94,30 +94,31 @@ def test_resume_posts_one_line_to_the_group_in_any_chat_language(env, p4, pseudo
 
 @pytest.mark.parametrize("code", CODES)
 def test_resume_in_ask_answers_resumed_in_any_chat_language(env, p4, pseudo_on, code):
-    r, _lines = _resume(env, p4, code, actor=DEV, skip_perms=True)
-    assert (r.status, r.body["status"], r.body["mode"]) == (200, "resumed", "ask")
+    r, _lines = _resume(env, p4, code, actor=DEV, mode="full")
+    # Saved in Full access, resumed by someone not an admin: Auto.
+    assert (r.status, r.body["status"], r.body["mode"]) == (200, "resumed", "auto")
 
 
 @pytest.mark.parametrize("code", CODES)
 def test_resume_in_ask_posts_one_line_to_the_group_in_any_chat_language(env, p4, pseudo_on, code):
-    _r, lines = _resume(env, p4, code, actor=DEV, skip_perms=True)
+    _r, lines = _resume(env, p4, code, actor=DEV, mode="full")
     assert [chat for chat, _t in lines] == [GROUP]
 
 
 def test_resume_in_ask_line_is_in_the_chats_language(env, p4):
-    _r, lines = _resume(env, p4, "fa", actor=DEV, skip_perms=True)
+    _r, lines = _resume(env, p4, "fa", actor=DEV, mode="full")
     assert p4.has_arabic_script(lines[0][1])
 
 
 def test_resume_in_ask_line_differs_from_a_plain_resume_in_persian(env, p4):
     _r, plain = _resume(env, p4, "fa", label="aa")
-    _r, ask = _resume(env, p4, "fa", actor=DEV, skip_perms=True, label="bb")
+    _r, ask = _resume(env, p4, "fa", actor=DEV, mode="full", label="bb")
     assert plain[0][1].replace("aa", "L") != ask[0][1].replace("bb", "L")
 
 
 def test_resume_in_ask_detail_follows_the_viewer_not_the_chat(env, p4):
     p4.set_lang(DEV, "ru")
-    r, _lines = _resume(env, p4, "fa", actor=DEV, skip_perms=True)
+    r, _lines = _resume(env, p4, "fa", actor=DEV, mode="full")
     assert p4.has_cyrillic(r.body["detail"]) and not p4.has_arabic_script(r.body["detail"])
 
 

@@ -174,14 +174,14 @@ def chat(mk_bot):
     """The owner's DM with a current session x1 in Auto."""
     bot = bb.make_bot(mk_bot)
     x1 = bb.add_session(bot, chat=bb.DM_A, label="x1")
-    x1.skip_perms = True
+    x1.perm_mode = "full"
     bot.registry.last_active_session = x1.name
-    bot._perms_flow = AsyncMock()
+    bot._mode_flow = AsyncMock()
     return bot
 
 
 def _switched(bot):
-    return [(c.args[0].label, c.args[1]) for c in bot._perms_flow.await_args_list]
+    return [(c.args[0].label, c.args[1]) for c in bot._mode_flow.await_args_list]
 
 
 @pytest.mark.parametrize("word", ["demander", "preguntar", "chiedi", "tanya", "sor"])
@@ -200,41 +200,41 @@ def test_handler_a_live_session_of_that_name_is_not_switched_away(chat, run_asyn
 @pytest.mark.parametrize("word", ["demander", "preguntar", "chiedi", "tanya", "sor"])
 def test_handler_without_a_session_the_word_switches_the_current_one(chat, run_async, word):
     _run_mode(chat, run_async, f"/mode {word}")
-    assert _switched(chat) == [("x1", False)]
+    assert _switched(chat) == [("x1", "ask")]
 
 
 @pytest.mark.parametrize("word", ["demander", "tanya"])
 def test_handler_a_gone_session_of_that_name_does_not_count(chat, run_async, word):
     bb.add_session(chat, chat=bb.DM_A, label=word, status=Status.GONE)
     _run_mode(chat, run_async, f"/mode {word}")
-    assert _switched(chat) == [("x1", False)]
+    assert _switched(chat) == [("x1", "ask")]
 
 
 def test_handler_a_session_of_that_name_in_another_chat_does_not_count(chat, run_async):
     bb.add_session(chat, chat=bb.DM_B, label="demander")
     _run_mode(chat, run_async, "/mode demander")
-    assert _switched(chat) == [("x1", False)]
+    assert _switched(chat) == [("x1", "ask")]
 
 
 def test_handler_session_then_word_switches_that_session(chat, run_async):
     s = bb.add_session(chat, chat=bb.DM_A, label="demander")
-    s.skip_perms = True
+    s.perm_mode = "full"
     _run_mode(chat, run_async, "/mode demander demander")
-    assert _switched(chat) == [("demander", False)]
+    assert _switched(chat) == [("demander", "ask")]
 
 
 def test_handler_english_ask_with_a_session_named_ask_switches_the_current_one(chat, run_async):
     bb.add_session(chat, chat=bb.DM_A, label="ask")
     _run_mode(chat, run_async, "/mode ask")
-    assert _switched(chat) == [("x1", False)]
+    assert _switched(chat) == [("x1", "ask")]
 
 
 def test_handler_english_auto_with_a_session_named_auto_switches_the_current_one(chat,
                                                                                  run_async):
-    chat.registry.get(chat.registry.last_active_session).skip_perms = False
+    chat.registry.get(chat.registry.last_active_session).perm_mode = "ask"
     bb.add_session(chat, chat=bb.DM_A, label="auto")
     _run_mode(chat, run_async, "/mode auto")
-    assert _switched(chat) == [("x1", True)]
+    assert _switched(chat) == [("x1", "auto")]
 
 
 def test_handler_two_labels_give_the_usage_reply(chat, run_async):

@@ -241,7 +241,7 @@ def test_a_write_before_the_chord_does_not_block_its_ctrl_s(keys, run_async):
 
 def test_now_is_a_reserved_session_name(run_async):
     assert "now" in inject._RESERVED
-    ok, err = run_async(inject.launch_session("now"))
+    ok, err = run_async(inject.launch_session("now", mode="ask"))
     assert ok is False and "reserved" in err
 
 

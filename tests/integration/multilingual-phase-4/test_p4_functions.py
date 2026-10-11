@@ -26,7 +26,7 @@ EN, FA, RU = i18n.get("en"), i18n.get("fa"), i18n.get("ru")
 SESSIONS_EN = {
     "NO_TRANSCRIPT_REASON": "No resumable transcript - start a fresh session instead.",
     "NO_PERMISSION_REASON": "You don't have permission to control this session.",
-    "PERMS_ADMIN_REQUIRED_REASON": "Switching to Auto mode requires admin.",
+    "PERMS_ADMIN_REQUIRED_REASON": "Switching to Full access mode requires admin.",
     "QUEUE_EMPTY_REASON": "Nothing queued to clear.",
     "MODEL_SWITCH_BUSY_REASON": "Claude is working - switch the model when this turn ends.",
     "MODEL_SWITCH_PROMPT_OPEN_REASON":
@@ -299,11 +299,11 @@ def test_a_persian_count_does_not_touch_a_name_with_digits():
 # ---- chat lines: every function in fa, ru and English ----------------------------------------
 
 LINES = {
-    "session_created": ("made", False, "/srv/p"),
+    "session_created": ("made", "ask", "/srv/p"),
     "folder_created": ("/srv/p/web",),
     "setting_changed": ("answer_length", "short"),
     "session_setting_changed": ("dev", "answer_length", "short", False),
-    "perms_switched": ("dev", True),
+    "perms_switched": ("dev", "full"),
     "queue_cleared": ("dev", 2),
     "compacted": ("dev",),
     "model_switched": ("dev", "claude-opus-5-5"),
@@ -342,15 +342,15 @@ def test_a_line_holds_no_html_escapes(fn):
 
 
 def test_session_created_with_a_folder_has_a_second_line():
-    assert chat_lines.session_created(FA, "made", False, "/srv/p").count("\n") == 1
+    assert chat_lines.session_created(FA, "made", "ask", "/srv/p").count("\n") == 1
 
 
 def test_session_created_without_a_folder_is_one_line():
-    assert "\n" not in chat_lines.session_created(FA, "made", False, "")
+    assert "\n" not in chat_lines.session_created(FA, "made", "ask", "")
 
 
 def test_session_created_english_is_todays():
-    assert chat_lines.session_created(EN, "made", True, "/srv/p") == (
+    assert chat_lines.session_created(EN, "made", "auto", "/srv/p") == (
         "\U0001f680 made created from the Mini App \u00b7 \U0001f916 Auto mode\n\U0001f4c1 /srv/p")
 
 
@@ -369,7 +369,7 @@ def _detail():
     return {
         "label": "dev", "status": "busy", "model": "claude-opus-5", "context_pct": 45,
         "cost_usd": 1.5, "busy_elapsed_seconds": 192, "busy_elapsed_unit": "s",
-        "last_active_seconds_ago": 300, "cwd": "/srv/web2", "skip_perms": False,
+        "last_active_seconds_ago": 300, "cwd": "/srv/web2", "mode": "ask",
     }
 
 

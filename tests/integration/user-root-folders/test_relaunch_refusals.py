@@ -61,14 +61,14 @@ def where(outside, scopes, team_root):
     return _w
 
 
-def _session(bot, cwd, *, status, skip_perms=False):
+def _session(bot, cwd, *, status, mode="ask"):
     s = bot.registry.get_or_create(NAME)
     s.label = "old"
     s.scope_chat_id = GROUP
     s.scope_kind = "group"
     s.cwd = str(cwd)
     s.status = status
-    s.skip_perms = skip_perms
+    s.perm_mode = mode
     s.claude_session_id = "uuid-old"
     if status == Status.GONE:
         s.gone_at = time.time() - 30
@@ -224,7 +224,7 @@ def test_picker_resume_outside_root_allowed_for_owner(rbot, run_async, mk_update
 def _conflict(bot, sess, user):
     bot._new_conflict_pending[sess.name] = {
         "user_id": user, "msg_id": 0, "prompt": "", "cwd": None,
-        "skip_perms": False, "model": None, "was_working": False}
+        "mode": "ask", "model": None, "was_working": False}
     sess.tap_is_for_this_turn = lambda *_a, **_k: True
 
 
@@ -338,14 +338,14 @@ def test_menu_restart_inside_root_allowed_for_user(rbot, run_async, where, seams
     seams.kill.assert_awaited()
 
 
-# ---- the Ask/Auto mode switch -----------------------------------------------------------
+# ---- the mode switch: out of Full access (a restart) and Auto -> Ask (in place) ----------
 
 def _switch_core(bot):
     async def _switch(s, target):
-        s.skip_perms = target
+        s.perm_mode = target
         return SimpleNamespace(ok=True, reason="", err="", label=s.label)
-    bot._perms_switch_core = AsyncMock(side_effect=_switch)
-    return bot._perms_switch_core
+    bot._mode_switch_core = AsyncMock(side_effect=_switch)
+    return bot._mode_switch_core
 
 
 def _typed_mode(bot, run_async, mk_update, user):
@@ -363,7 +363,7 @@ def _ready_ask(bot, run_async, user):
 def _stop_switch(bot, run_async, user):
     sess = bot.registry._sessions[NAME]
     card = 503
-    bot._perms_pending[NAME] = {"target_skip_perms": False, "msg_id": card,
+    bot._perms_pending[NAME] = {"target_mode": "ask", "msg_id": card,
                                 "label": sess.label, "turn": sess.turn_key}
     return _tap(bot, run_async,
                 session_parity.session_cb(bot, GROUP, sess, "perms_stop_switch"), user,
@@ -384,25 +384,33 @@ SWITCHES = {
 }
 
 
-def _mode_session(bot, cwd, how):
+#: The mode the session is in before a switch to Ask: Full access (the
+#: switch restarts it) or Auto (Shift+Tab, in place).
+CURRENT = pytest.mark.parametrize("current", ["full", "auto"],
+                                  ids=["restart-out-of-full", "shift-tab-from-auto"])
+
+
+def _mode_session(bot, cwd, how, current="full"):
     status = Status.BUSY if how == "callbacks" else Status.IDLE
-    return _session(bot, cwd, status=status, skip_perms=True)
+    return _session(bot, cwd, status=status, mode=current)
 
 
+@CURRENT
 @pytest.mark.parametrize("how", list(SWITCHES))
 def test_mode_switch_outside_root_refused(rbot, run_async, mk_update, where, monkeypatch,
-                                          how):
-    _mode_session(rbot, where("outside"), how)
+                                          how, current):
+    _mode_session(rbot, where("outside"), how, current)
     monkeypatch.setattr(inject, "is_alive", AsyncMock(return_value=True))
     core = _switch_core(rbot)
     SWITCHES[how](rbot, run_async, mk_update, BOB)
     core.assert_not_awaited()
 
 
+@CURRENT
 @pytest.mark.parametrize("how", list(SWITCHES))
 def test_mode_switch_outside_root_says_why(rbot, run_async, mk_update, where, scopes,
-                                           monkeypatch, how):
-    _mode_session(rbot, where("outside"), how)
+                                           monkeypatch, how, current):
+    _mode_session(rbot, where("outside"), how, current)
     monkeypatch.setattr(inject, "is_alive", AsyncMock(return_value=True))
     _switch_core(rbot)
     out = SWITCHES[how](rbot, run_async, mk_update, BOB)
@@ -411,21 +419,23 @@ def test_mode_switch_outside_root_says_why(rbot, run_async, mk_update, where, sc
     assert _refused(extra + _all_text(rbot), scopes)
 
 
+@CURRENT
 @pytest.mark.parametrize("how", list(SWITCHES))
 def test_mode_switch_inside_root_goes_ahead_for_a_user(rbot, run_async, mk_update, where,
-                                                       monkeypatch, how):
-    _mode_session(rbot, where("inside"), how)
+                                                       monkeypatch, how, current):
+    _mode_session(rbot, where("inside"), how, current)
     monkeypatch.setattr(inject, "is_alive", AsyncMock(return_value=True))
     core = _switch_core(rbot)
     SWITCHES[how](rbot, run_async, mk_update, BOB)
     core.assert_awaited()
 
 
+@CURRENT
 @pytest.mark.parametrize("who", [OWNER, ADMIN], ids=["owner", "admin"])
 @pytest.mark.parametrize("how", list(SWITCHES))
 def test_mode_switch_outside_root_allowed_for_managers(rbot, run_async, mk_update, where,
-                                                       monkeypatch, how, who):
-    _mode_session(rbot, where("outside"), how)
+                                                       monkeypatch, how, who, current):
+    _mode_session(rbot, where("outside"), how, current)
     monkeypatch.setattr(inject, "is_alive", AsyncMock(return_value=True))
     core = _switch_core(rbot)
     SWITCHES[how](rbot, run_async, mk_update, who)

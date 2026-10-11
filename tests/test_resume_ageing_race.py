@@ -47,7 +47,7 @@ def _aged_gone_session(registry: SessionRegistry, *, past_cutoff_by: float) -> T
     sess.claude_session_id = "uuid-1234"
     sess.cwd = "/home/aly/aipager"
     sess.scope_chat_id = CHAT
-    sess.skip_perms = True
+    sess.perm_mode = "full"
     registry._sessions[NAME] = sess
     registry.track_message(MSG, NAME, CHAT)
     return sess
@@ -90,7 +90,7 @@ def test_a_sweep_during_the_launch_cannot_strand_the_resume(
     assert sess.status == Status.IDLE
     assert sess.cwd == "/home/aly/aipager"
     assert sess.scope_chat_id == CHAT
-    assert sess.skip_perms is True
+    assert sess.perm_mode == "full"
     assert sess.gone_at is None
     # `claude_session_id` is deliberately left empty by a SUCCESSFUL resume
     # (cleared before the launch so a repeat failure cannot loop; the hook

@@ -40,7 +40,7 @@ def test_claude_path_survives_a_subsequent_dump_scopes_call(tmp_path):
 
     assert scope_mod.load_claude_path(path=cfg_path) == "/opt/fixture/claude", (
         "claude_path was silently wiped by dump_scopes() -- it must join "
-        "the same preservation list as default_mode/miniapp"
+        "the same preservation list as miniapp"
     )
 
 
@@ -58,14 +58,14 @@ def test_clearing_claude_path_with_empty_string_removes_the_key(tmp_path):
     assert scope_mod.load_claude_path(path=cfg_path) == ""
 
 
-def test_claude_path_coexists_with_default_mode_and_miniapp_preservation(
+def test_claude_path_coexists_with_miniapp_preservation(
     tmp_path,
 ):
-    """The preservation list already carries default_mode + miniapp;
-    claude_path joining it must not come at the expense of the other
-    two silently regressing (a plausible way to "fix" this bug wrong:
-    special-case claude_path and accidentally drop the others).
-    """
+    """The preservation list carries miniapp; claude_path joining it must
+    not come at the expense of it silently regressing (a plausible way to
+    "fix" this bug wrong: special-case claude_path and accidentally drop
+    the other). The old default_mode key is not preserved since
+    2026-10-11: nothing read it and its values meant other modes."""
     cfg_path = tmp_path / "aipager.yaml"
     _seed_config(cfg_path)
     scope_mod.dump_miniapp(
@@ -74,12 +74,11 @@ def test_claude_path_coexists_with_default_mode_and_miniapp_preservation(
     )
     scope_mod.dump_scopes(
         [scope_mod.Scope(chat_id=42, kind="dm", label="owner")],
-        "TESTTOKEN", path=cfg_path, default_mode="auto",
+        "TESTTOKEN", path=cfg_path,
     )
     scope_mod.dump_claude_path("/opt/fixture/claude", path=cfg_path)
 
     _seed_config(cfg_path)  # another bare "aipager config" run
 
     assert scope_mod.load_claude_path(path=cfg_path) == "/opt/fixture/claude"
-    assert scope_mod.load_default_mode(path=cfg_path) == "auto"
     assert scope_mod.load_miniapp(path=cfg_path).get("enabled") is True

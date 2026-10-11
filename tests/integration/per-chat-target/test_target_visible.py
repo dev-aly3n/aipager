@@ -24,7 +24,7 @@ CHAT = 12345
 def _sess(bot, name, label, status=Status.IDLE, *, chat=CHAT, auto=False):
     s = TrackedSession(name=name, label=label, status=status)
     s.scope_chat_id = chat
-    s.skip_perms = auto
+    s.perm_mode = "auto" if auto else "ask"
     bot.registry._sessions[name] = s
     return s
 

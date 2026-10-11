@@ -70,7 +70,7 @@ def _make_bot(*, registry=None):
 
 
 # --------------------------------------------------------------------------- #
-# SC6 — IDLE Ask → Auto: confirm keyboard shown, on confirm registry updated  #
+# SC6 — IDLE Ask → Full access: confirm keyboard shown, on confirm registry updated  #
 # --------------------------------------------------------------------------- #
 
 def test_sc6_perms_idle_ask_to_auto_sends_confirm_keyboard():
@@ -78,12 +78,12 @@ def test_sc6_perms_idle_ask_to_auto_sends_confirm_keyboard():
     containing [Yes, switch] and [Cancel] buttons."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-ben"] = sess
     bot.registry.last_active_session = "claude-ben"
     bot._is_admin = MagicMock(return_value=True)
 
-    update = _make_update("/perms auto")
+    update = _make_update("/perms full")
     _run(bot._handle_perms_cmd(update, MagicMock()))
 
     update.message.reply_text.assert_awaited_once()
@@ -101,23 +101,23 @@ def test_sc6_perms_idle_ask_to_auto_sends_confirm_keyboard():
 
 
 def test_sc6_perms_idle_ask_to_auto_confirm_updates_registry():
-    """SC6b: After tapping [Yes, switch], session registry must have
-    skip_perms=True and the edited message must mention 'Auto mode' and '🤖'."""
+    """SC6b: After tapping [Yes, switch] (into Full access, a restart), the
+    registry must be in Full access and the edited message must say so."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     sess.claude_session_id = "uuid-001"
     sess.cwd = "/home/aly"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "ben",
     }
 
     update, query = _make_query("claude-ben:perms_confirm")
 
-    async def mock_launch(short_name, *, skip_perms=False, resume_id=None, cwd=None, **kw):
+    async def mock_launch(short_name, *, mode, resume_id=None, cwd=None, **kw):
         return True, ""
 
     with patch("aipager.dtach.inject.launch_session", side_effect=mock_launch), \
@@ -127,34 +127,36 @@ def test_sc6_perms_idle_ask_to_auto_confirm_updates_registry():
         _run(bot._handle_callback(update, MagicMock()))
 
     # Registry must be updated
-    assert sess.skip_perms is True, (
-        "Registry skip_perms must be True after perms_confirm"
+    assert sess.perm_mode == "full", (
+        "Registry must be in Full access after perms_confirm"
     )
     # Message must be edited
     # The card changes in place: "Switching…" (buttons gone), then the
     # /mode card for the new mode with the opposite switch (2026-10-01).
     edits = query.edit_message_text.await_args_list
     assert [c.args[0] for c in edits] == [
-        "⚙️ Switching <b>ben</b> to 🤖 Auto mode…", "<b>ben</b> is in 🤖 Auto mode."]
+        "⚙️ Switching <b>ben</b> to 🔓 Full access mode (the session restarts)…",
+        "<b>ben</b> is in 🔓 Full access mode."]
     kb = edits[-1].kwargs["reply_markup"]
-    assert [b.text for row in kb.inline_keyboard for b in row] == ["💬 Switch to Ask"]
+    assert [b.text for row in kb.inline_keyboard for b in row] == [
+        "💬 Switch to Ask mode", "🤖 Switch to Auto mode"]
 
 
 def test_sc6_perms_confirm_clears_pending():
     """SC6c: After perms_confirm, pending state for the session is removed."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "ben",
     }
 
     update, query = _make_query("claude-ben:perms_confirm")
 
-    async def mock_launch(short_name, *, skip_perms=False, **kw):
+    async def mock_launch(short_name, *, mode, **kw):
         return True, ""
 
     with patch("aipager.dtach.inject.launch_session", side_effect=mock_launch), \
@@ -169,7 +171,7 @@ def test_sc6_perms_confirm_clears_pending():
 
 
 # --------------------------------------------------------------------------- #
-# SC7 — IDLE Auto → Ask: no confirmation, immediate switch                     #
+# SC7 — IDLE Full access → Ask: no confirmation, immediate switch                     #
 # --------------------------------------------------------------------------- #
 
 def test_sc7_perms_idle_auto_to_ask_no_confirm_keyboard():
@@ -177,7 +179,7 @@ def test_sc7_perms_idle_auto_to_ask_no_confirm_keyboard():
     It should execute the switch directly (or send success message)."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
-    sess.skip_perms = True  # currently Auto
+    sess.perm_mode = "full"  # currently Auto
     sess.claude_session_id = "uuid-001"
     sess.cwd = "/home/aly"
     bot.registry._sessions["claude-ben"] = sess
@@ -203,10 +205,10 @@ def test_sc7_perms_idle_auto_to_ask_no_confirm_keyboard():
 
 
 def test_sc7_perms_idle_auto_to_ask_switch_sets_false():
-    """SC7: Auto→Ask switch must target skip_perms=False."""
+    """SC7: Full access→Ask switch must target Ask."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
-    sess.skip_perms = True
+    sess.perm_mode = "full"
     bot.registry._sessions["claude-ben"] = sess
     bot.registry.last_active_session = "claude-ben"
     bot._is_admin = MagicMock(return_value=True)
@@ -216,9 +218,9 @@ def test_sc7_perms_idle_auto_to_ask_switch_sets_false():
     _run(bot._handle_perms_cmd(update, MagicMock()))
 
     call_args = bot._do_perms_switch_via_fn.await_args
-    # Second positional arg is target_skip_perms
-    assert call_args[0][1] is False, (
-        "Auto→Ask switch must pass target_skip_perms=False"
+    # Second positional arg is the target mode
+    assert call_args[0][1] == "ask", (
+        "Full access→Ask switch must pass the target mode 'ask'"
     )
 
 
@@ -226,19 +228,19 @@ def test_sc7_perms_confirm_result_shows_ask_mode():
     """SC7: After a completed Ask switch, message must mention 💬 or 'Ask mode'."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
-    sess.skip_perms = True  # currently Auto
+    sess.perm_mode = "full"  # currently Auto
     sess.claude_session_id = "uuid-001"
     sess.cwd = "/home/aly"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
-        "target_skip_perms": False,
+        "target_mode": "ask",
         "msg_id": 42,
         "label": "ben",
     }
 
     update, query = _make_query("claude-ben:perms_confirm")
 
-    async def mock_launch(short_name, *, skip_perms=False, **kw):
+    async def mock_launch(short_name, *, mode, **kw):
         return True, ""
 
     with patch("aipager.dtach.inject.launch_session", side_effect=mock_launch), \
@@ -251,7 +253,7 @@ def test_sc7_perms_confirm_result_shows_ask_mode():
     assert "💬" in text or "Ask" in text, (
         f"Message must mention Ask mode after Auto→Ask switch; got: {text}"
     )
-    assert sess.skip_perms is False, "Registry must be updated to False"
+    assert sess.perm_mode == "ask", "Registry must be updated to False"
 
 
 # --------------------------------------------------------------------------- #
@@ -263,12 +265,12 @@ def test_sc8_perms_busy_sends_busy_keyboard():
     and [Not now] buttons."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.BUSY)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-ben"] = sess
     bot.registry.last_active_session = "claude-ben"
     bot._is_admin = MagicMock(return_value=True)
 
-    update = _make_update("/perms auto")
+    update = _make_update("/perms full")
     _run(bot._handle_perms_cmd(update, MagicMock()))
 
     update.message.reply_text.assert_awaited_once()
@@ -287,13 +289,13 @@ def test_sc8_perms_busy_sends_busy_keyboard():
 
 def test_sc8_perms_not_now_edits_to_cancellation():
     """SC8b: Tapping [Not now] must edit the message to a cancellation notice
-    and NOT change skip_perms."""
+    and NOT change the mode."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.BUSY)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "ben",
     }
@@ -305,9 +307,9 @@ def test_sc8_perms_not_now_edits_to_cancellation():
     query.edit_message_text.assert_awaited_once()
     msg = query.edit_message_text.await_args[0][0]
     assert msg == "<b>ben</b> is in 💬 Ask mode.", msg
-    # skip_perms must be unchanged
-    assert sess.skip_perms is False, (
-        "Not now must not change skip_perms"
+    # The mode must be unchanged
+    assert sess.perm_mode == "ask", (
+        "Not now must not change the mode"
     )
     # Pending state cleared
     assert "claude-ben" not in bot._perms_pending
@@ -318,10 +320,10 @@ def test_sc8_perms_not_now_message_contains_retry_hint():
     again, referencing 'perms' or 'idle'."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.BUSY)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "ben",
     }
@@ -331,7 +333,8 @@ def test_sc8_perms_not_now_message_contains_retry_hint():
 
     # The way to retry is the card's own switch.
     kb = query.edit_message_text.await_args.kwargs["reply_markup"]
-    assert [b.text for row in kb.inline_keyboard for b in row] == ["🤖 Switch to Auto"]
+    assert [b.text for row in kb.inline_keyboard for b in row] == [
+        "🤖 Switch to Auto mode", "🔓 Switch to Full access mode"]
 
 
 # --------------------------------------------------------------------------- #
@@ -342,12 +345,12 @@ def test_sc9_stop_switch_sends_ctrl_c():
     """SC9a: Tapping [Stop task & switch] must send Ctrl-C before relaunching."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.BUSY)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     sess.claude_session_id = "uuid-001"
     sess.cwd = "/home/aly"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "ben",
     }
@@ -358,7 +361,7 @@ def test_sc9_stop_switch_sends_ctrl_c():
         ctrl_c_received.append(key)
         return True
 
-    async def mock_launch(short_name, *, skip_perms=False, **kw):
+    async def mock_launch(short_name, *, mode, **kw):
         return True, ""
 
     update, query = _make_query("claude-ben:perms_stop_switch")
@@ -373,17 +376,17 @@ def test_sc9_stop_switch_sends_ctrl_c():
     )
 
 
-def test_sc9_stop_switch_relaunches_with_toggled_skip_perms():
+def test_sc9_stop_switch_relaunches_with_the_target_mode():
     """SC9b: After Ctrl-C and socket disappears, session relaunches with the
-    toggled skip_perms value."""
+    target mode (Full access)."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.BUSY)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     sess.claude_session_id = "uuid-001"
     sess.cwd = "/home/aly"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "ben",
     }
@@ -393,8 +396,8 @@ def test_sc9_stop_switch_relaunches_with_toggled_skip_perms():
     async def mock_send_keys(session_name, key):
         return True
 
-    async def mock_launch(short_name, *, skip_perms=False, resume_id=None, cwd=None, **kw):
-        launch_calls.append({"skip_perms": skip_perms})
+    async def mock_launch(short_name, *, mode, resume_id=None, cwd=None, **kw):
+        launch_calls.append({"mode": mode})
         return True, ""
 
     update, query = _make_query("claude-ben:perms_stop_switch")
@@ -405,22 +408,22 @@ def test_sc9_stop_switch_relaunches_with_toggled_skip_perms():
         _run(bot._handle_callback(update, MagicMock()))
 
     assert len(launch_calls) > 0, "Session must be relaunched"
-    assert launch_calls[-1]["skip_perms"] is True, (
-        f"Relaunch must use skip_perms=True (toggled); got {launch_calls}"
+    assert launch_calls[-1]["mode"] == "full", (
+        f"Relaunch must use Full access; got {launch_calls}"
     )
 
 
 def test_sc9_stop_switch_edits_message_to_new_mode():
     """SC9c: After [Stop & switch] completes, the message must be edited to
-    show the new mode (Auto in this case)."""
+    show the new mode (Full access in this case)."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.BUSY)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     sess.claude_session_id = "uuid-001"
     sess.cwd = "/home/aly"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "ben",
     }
@@ -428,7 +431,7 @@ def test_sc9_stop_switch_edits_message_to_new_mode():
     async def mock_send_keys(session_name, key):
         return True
 
-    async def mock_launch(short_name, *, skip_perms=False, **kw):
+    async def mock_launch(short_name, *, mode, **kw):
         return True, ""
 
     update, query = _make_query("claude-ben:perms_stop_switch")
@@ -439,8 +442,8 @@ def test_sc9_stop_switch_edits_message_to_new_mode():
         _run(bot._handle_callback(update, MagicMock()))
 
     text = query.edit_message_text.await_args[0][0]
-    assert "🤖" in text or "Auto" in text, (
-        f"After switch to Auto, message must say so; got: {text}"
+    assert "🔓 Full access mode" in text, (
+        f"After switch to Full access, message must say so; got: {text}"
     )
 
 
@@ -454,19 +457,19 @@ def test_sc19_perms_switch_preserves_claude_session_id():
     bot = _make_bot()
     original_session_id = "abc-session-uuid-original"
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     sess.claude_session_id = original_session_id
     sess.cwd = "/home/aly/project"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "ben",
     }
 
     launch_kwargs_captured = {}
 
-    async def mock_launch(short_name, *, skip_perms=False, resume_id=None, cwd=None, **kw):
+    async def mock_launch(short_name, *, mode, resume_id=None, cwd=None, **kw):
         launch_kwargs_captured["resume_id"] = resume_id
         launch_kwargs_captured["cwd"] = cwd
         return True, ""
@@ -490,19 +493,19 @@ def test_sc19_perms_switch_preserves_cwd():
     bot = _make_bot()
     original_cwd = "/home/aly/myproject"
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     sess.claude_session_id = "some-uuid"
     sess.cwd = original_cwd
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "ben",
     }
 
     launch_kwargs_captured = {}
 
-    async def mock_launch(short_name, *, skip_perms=False, resume_id=None, cwd=None, **kw):
+    async def mock_launch(short_name, *, mode, resume_id=None, cwd=None, **kw):
         launch_kwargs_captured["cwd"] = cwd
         return True, ""
 
@@ -542,7 +545,7 @@ def test_perms_cancel_edits_and_clears_pending():
     """Tapping Cancel must edit to cancellation text and clear pending state."""
     bot = _make_bot()
     bot._perms_pending["claude-ben"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "ben",
     }
@@ -568,12 +571,12 @@ def test_perms_unknown_status_sends_initializing_message():
     indicating the session is still initializing (not switch modes)."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.UNKNOWN)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-ben"] = sess
     bot.registry.last_active_session = "claude-ben"
     bot._is_admin = MagicMock(return_value=True)
 
-    update = _make_update("/perms auto")
+    update = _make_update("/perms full")
     _run(bot._handle_perms_cmd(update, MagicMock()))
 
     update.message.reply_text.assert_awaited_once()
@@ -584,10 +587,10 @@ def test_perms_unknown_status_sends_initializing_message():
 
 
 def test_perms_unknown_status_does_not_switch_mode():
-    """/perms on a session with Status.UNKNOWN must NOT change skip_perms."""
+    """/perms on a session with Status.UNKNOWN must NOT change the mode."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.UNKNOWN)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-ben"] = sess
     bot.registry.last_active_session = "claude-ben"
     bot._is_admin = MagicMock(return_value=True)
@@ -595,9 +598,9 @@ def test_perms_unknown_status_does_not_switch_mode():
     update = _make_update("/perms")
     _run(bot._handle_perms_cmd(update, MagicMock()))
 
-    assert sess.skip_perms is False, (
-        "UNKNOWN-status /perms must not mutate skip_perms; "
-        f"got skip_perms={sess.skip_perms}"
+    assert sess.perm_mode == "ask", (
+        "UNKNOWN-status /perms must not change the mode; "
+        f"got {sess.perm_mode}"
     )
     # Pending dict must not be populated either
     assert "claude-ben" not in bot._perms_pending, (

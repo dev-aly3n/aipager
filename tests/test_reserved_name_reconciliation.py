@@ -207,14 +207,14 @@ def test_an_existing_session_named_after_a_reserved_word_can_still_relaunch(
     monkeypatch.setattr(inject.Path, "is_socket", lambda self: True)
 
     _, err = asyncio.new_event_loop().run_until_complete(
-        inject.launch_session("ls", resume_id="x", cwd="/tmp", is_relaunch=True))
+        inject.launch_session("ls", mode="ask", resume_id="x", cwd="/tmp", is_relaunch=True))
     assert "reserved" not in err, (
         f"relaunching an existing reserved-named session was refused: {err}")
     assert "already exists" in err, (
         f"expected to stop at the existence check, got: {err!r}")
 
     _, err = asyncio.new_event_loop().run_until_complete(
-        inject.launch_session("ls"))
+        inject.launch_session("ls", mode="ask"))
     assert "reserved" in err, "creation must still refuse a reserved name"
 
 

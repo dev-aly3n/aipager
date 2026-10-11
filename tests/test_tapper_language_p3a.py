@@ -128,9 +128,9 @@ def test_mode_switch_taps(env):
     bot, tg = p3a._perms_world(env)
     x1 = p3a.session(bot, "x1", chat=GROUP)
     taps = Taps(env, bot, tg)
-    taps(p3a._sess_cb(x1, f"modeauto{x1.turn_key}"))
+    taps(p3a._sess_cb(x1, f"modefull{x1.turn_key}"))
     x1.relaunch_in_flight = True                       # a switch running: its toast
-    bot._perms_pending[x1.name] = {"target_skip_perms": False, "msg_id": 42,
+    bot._perms_pending[x1.name] = {"target_mode": "ask", "msg_id": 42,
                                    "label": "x1", "turn": x1.turn_key}
     taps(p3a._sess_cb(x1, "perms_confirm"))
     x1.relaunch_in_flight = False

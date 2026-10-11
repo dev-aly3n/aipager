@@ -48,8 +48,8 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from aipager.bot.mode_labels import mode_label
-from aipager import i18n
+from aipager.bot import mode_labels
+from aipager import i18n, perm_modes
 from aipager.bot import card_owner, group_intake, held_message, language_menu, settings_menu
 from aipager.bot.sibling_text import shown
 from aipager.i18n import Command, Msg, Plural, Safe
@@ -99,7 +99,7 @@ _SESSION_ACTIONS = frozenset({
     "diff",
     # Gone-session counterpart to "restart" — the ⋮ menu offers exactly
     # one of the two, never both, since each fails where the other works.
-    "resume", "resume-ask", "resume-auto", "resume-cancel",
+    "resume", "resume-ask", "resume-auto", "resume-full", "resume-cancel",
 })
 
 _DIFF_INLINE_THRESHOLD = 3500  # chars — entrypoints.md's "~3500" cutoff
@@ -1483,7 +1483,8 @@ async def handle_callback(
             (action.startswith("endok") and action[5:].isdigit())
             or (action.startswith("restartok") and action[9:].isdigit())
             or (action.startswith("modeask") and action[7:].isdigit())
-            or (action.startswith("modeauto") and action[8:].isdigit())):
+            or (action.startswith("modeauto") and action[8:].isdigit())
+            or (action.startswith("modefull") and action[8:].isdigit())):
         return False
 
     # The card is the chat's; a pop-up is the tapper's.
@@ -1619,11 +1620,13 @@ async def handle_callback(
         card_owner.release(bot, chat_id, _tapped_id(query))
         return True
 
-    if action.startswith("modeask") or action.startswith("modeauto"):
-        # /mode's switch. It relaunches the session: only on the turn the
-        # card showed, and only for someone who may prompt here.
-        target = action.startswith("modeauto")
-        shown = int(action[8:] if target else action[7:])
+    if (action.startswith("modeask") or action.startswith("modeauto")
+            or action.startswith("modefull")):
+        # /mode's switch, only for someone who may prompt here. One that
+        # relaunches the session (into or out of Full access) acts only on
+        # the turn the card showed; Ask <-> Auto kills nothing, so any turn.
+        target = next(m for m in perm_modes.MODES if action.startswith(f"mode{m}"))
+        shown = int(action[len(f"mode{target}"):])
         if not bot._can_prompt_user(user_id, chat_id):
             await bot._safe_answer(query, person.text(TOAST_CANT_CHANGE))
             return True
@@ -1633,25 +1636,27 @@ async def handle_callback(
         if sess.status == Status.GONE:
             await bot._safe_answer(query, person.text(TOAST_ENDED_SESSION))
             return True
-        if sess.skip_perms == target:
+        if bot._already_in_mode(sess, target):
             # Before the turn check: a switch made elsewhere relaunched the
             # session (a new turn), and "already in" is what happened. It
             # changes nothing, so it is right on any turn.
             await bot._safe_answer(query, person.text(
-                TOAST_ALREADY_IN, session=sess.label, mode=Safe(person.text(mode_label(target)))))
+                TOAST_ALREADY_IN, session=sess.label,
+                mode=Safe(mode_labels.shown_label(person, sess, html=False))))
             text, kb = bot._render_mode_card(chat_id, sess)
             await _edit(query, text, kb)
             return True
-        if not sess.tap_is_for_this_turn(None, turn=shown):
+        if (sess.mode_switch_restarts(target)
+                and not sess.tap_is_for_this_turn(None, turn=shown)):
             await bot._safe_answer(query, person.text(TOAST_MOVED_ON_SWITCH, session=sess.label))
             text, kb = bot._render_mode_card(chat_id, sess)
             await _edit(query, text, kb)
             return True
         # The card itself becomes the confirm, the switch and the result
         # (operator, 2026-10-01): no second message to leave it stale.
-        await bot._perms_flow(sess, target, query.message,
-                              may_auto=bot._may_use_auto(user_id, chat_id),
-                              chat_id=chat_id, query=query, requester=user_id)
+        await bot._mode_flow(sess, target, query.message,
+                             may_full=bot._may_use_full_access(user_id, chat_id),
+                             chat_id=chat_id, query=query, requester=user_id)
         return True
 
     if action == "menu-close":
@@ -1672,17 +1677,17 @@ async def handle_callback(
             await _edit(query, text, kb)
             await bot._safe_answer(query, person.text(TOAST_CANT_RESUME_NOW))
             return True
-        # Same Ask/Auto step `/resume` uses, and the same keyboard builder
+        # Same mode step `/resume` uses, and the same keyboard builder
         # — one resume flow, reached from two places.
         bot._resume_mode_pending[sess.name] = sess.label
         await _edit(
             query, shared.html(RESUME_AS, session=sess.label),
             # "(default)" marks what a plain resume gives this person: a
-            # session saved in Auto comes back in Ask for a non-admin
-            # (roadmap 8.83).
+            # session saved in Full access comes back in Auto for a
+            # non-admin (roadmap 8.83), who is not offered Full access.
             bot._build_resume_mode_keyboard(
-                sess, sess.skip_perms and bot._may_use_auto(user_id, chat_id),
-                chat_id=chat_id),
+                sess, sess.perm_mode, chat_id=chat_id,
+                may_full=bot._may_use_full_access(user_id, chat_id)),
         )
         # In a group, its mode buttons are the resumer's alone (8.94j).
         card_owner.claim(bot, chat_id, _tapped_id(query), user_id,
@@ -1690,7 +1695,7 @@ async def handle_callback(
                          who=getattr(query, "from_user", None))
         return True
 
-    if action in ("resume-ask", "resume-auto", "resume-cancel"):
+    if action in ("resume-ask", "resume-auto", "resume-full", "resume-cancel"):
         if not bot._can_prompt_user(user_id, chat_id):
             await bot._safe_answer(query, person.text(TOAST_CANT_RESUME))
             return True
@@ -1707,12 +1712,13 @@ async def handle_callback(
         # not a second resume implementation. Exactly the session this
         # button names (roadmap 8.78): by label, another chat's session of
         # the same name could be resumed and its last response shown here.
-        # Auto needs an admin: the tap gate (tap_gate.py) requires MANAGE
-        # for `resume-auto` before this handler runs.
+        # Full access needs an admin: the tap gate (tap_gate.py) requires
+        # MANAGE for `resume-full` before this handler runs, and
+        # `_do_resume` re-checks it.
         await bot._do_resume(
             label=sess.label, reply_fn=_reply,
             update=update, query=query, sess=sess,
-            skip_perms_override=(action == "resume-auto"),
+            mode_override=action.removeprefix("resume-"),
         )
         # Only now: until the card shows the result, its buttons stay the
         # resumer's (as the restart confirm's do, 8.91c).

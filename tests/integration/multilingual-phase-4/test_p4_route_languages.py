@@ -37,7 +37,11 @@ def _load_scenarios():
 
 
 SC = _load_scenarios()
-GOLDEN = json.loads(Path(__file__).with_name("base_english.json").read_text(encoding="utf-8"))
+# The base's answers, with the scenarios the three permission modes changed
+# on purpose (2026-10-11) as test_p4_english_bytes.py pins them.
+GOLDEN = {**json.loads(Path(__file__).with_name("base_english.json").read_text(encoding="utf-8")),
+          **json.loads(Path(__file__).with_name("three_modes_english.json")
+                       .read_text(encoding="utf-8"))}
 DETAILS = sorted(n for n, (k, _a, _r) in SC.SCENARIOS.items() if k == "detail")
 MIRRORS = sorted(n for n, (k, _a, _r) in SC.SCENARIOS.items() if k == "mirror")
 SCRIPT = {"fa": "has_arabic_script", "ru": "has_cyrillic"}
@@ -130,7 +134,7 @@ def test_no_em_dash_in_a_translated_detail(env, p4, name, code):
 
 
 def test_resumed_in_ask_is_in_the_viewers_language(env, p4):
-    detail = _run(env, p4, "resume_auto_by_member", viewer="ru")["body"]["detail"]
+    detail = _run(env, p4, "resume_full_by_member", viewer="ru")["body"]["detail"]
     assert p4.has_cyrillic(detail) and "dev" in detail
 
 
@@ -194,7 +198,7 @@ def test_a_russian_line_carries_no_direction_control(env, p4, name):
 
 @pytest.mark.parametrize("name,needle", [
     ("stop_busy_0", "dev"), ("kill_idle", "dev"), ("rename_ok", "web2"),
-    ("perms_to_auto", "dev"), ("dir_created", "web"), ("create_ok", "made"),
+    ("perms_to_full", "dev"), ("dir_created", "web"), ("create_ok", "made"),
     ("model_unconfirmed", "claude-opus-5-5"),
 ])
 def test_names_and_ids_in_a_persian_line_sit_in_an_isolate(env, p4, name, needle):
@@ -231,7 +235,7 @@ def test_a_persian_folder_line_keeps_the_path_whole(env, p4):
 
 def test_the_persian_mode_word_differs_by_mode(env, p4):
     ask = _run(env, p4, "perms_to_ask", chat="fa")["mirrors"][0]
-    auto = _run(env, p4, "perms_to_auto", chat="fa")["mirrors"][0]
+    auto = _run(env, p4, "perms_to_full", chat="fa")["mirrors"][0]
     assert ask.replace("\U0001f4ac", "") != auto.replace("\U0001f916", "")
 
 
@@ -293,7 +297,7 @@ def test_fact_labels_are_in_the_viewers_language(env, p4, code):
 def test_every_fact_carries_a_documented_id(env, p4):
     facts = _run(env, p4, "get_detail_idle", viewer="fa")["body"]["facts"]
     assert {f["id"] for f in facts} <= {"model", "context", "cost", "working",
-                                        "last_active", "cwd"}
+                                        "last_active", "mode", "cwd"}
 
 
 def test_the_model_and_folder_values_are_as_stored(env, p4):

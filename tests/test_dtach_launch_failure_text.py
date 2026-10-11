@@ -54,7 +54,7 @@ def _launch_failing(monkeypatch, tmp_path, run_async, *, rc: int, stderr: str):
         return _make_proc(rc, stderr.encode())
     monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _fake_exec)
     monkeypatch.setattr(dtach_inject.Path, "is_socket", lambda self: False)
-    return run_async(dtach_inject.launch_session(NAME, cwd=str(tmp_path)))
+    return run_async(dtach_inject.launch_session(NAME, mode="ask", cwd=str(tmp_path)))
 
 
 @pytest.mark.parametrize("stderr,phrase", SAMPLES, ids=[s[1][:24] for s in SAMPLES])
@@ -123,7 +123,7 @@ def test_not_installed_and_timeout_branches_are_unchanged(monkeypatch, tmp_path,
         raise FileNotFoundError("dtach")
     monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _missing)
     monkeypatch.setattr(dtach_inject.Path, "is_socket", lambda self: False)
-    ok, err = run_async(dtach_inject.launch_session(NAME, cwd=str(tmp_path)))
+    ok, err = run_async(dtach_inject.launch_session(NAME, mode="ask", cwd=str(tmp_path)))
     assert (ok, err) == (False, "dtach not installed")
 
 
@@ -132,7 +132,7 @@ def test_invalid_utf8_in_stderr_does_not_crash_the_launch(monkeypatch, tmp_path,
         return _make_proc(1, b"\xff\xfe: Address already in use")
     monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _fake_exec)
     monkeypatch.setattr(dtach_inject.Path, "is_socket", lambda self: False)
-    ok, err = run_async(dtach_inject.launch_session(NAME, cwd=str(tmp_path)))
+    ok, err = run_async(dtach_inject.launch_session(NAME, mode="ask", cwd=str(tmp_path)))
     assert ok is False
     assert err.endswith("kill it or pick another name")
 

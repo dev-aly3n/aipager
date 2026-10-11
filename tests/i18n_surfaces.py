@@ -55,6 +55,34 @@ MODE_LABEL_SURFACES = frozenset({
     "settings.taps", "status.switch",
 })
 
+#: The English surfaces the three permission modes (2026-10-11) changed on
+#: purpose: Auto is the default, the admin gate moved to Full access, a
+#: third mode on every card and button, every mode named as a mode, and the
+#: in-place switch's texts. Recorded in english_surfaces.json; a surface
+#: outside this set changing is a defect.
+THREE_MODES_SURFACES = frozenset({
+    "menu.commands", "miniapp.details", "miniapp.mirrors", "miniapp.payload_texts",
+    "modecard.card", "modecard.cmd_replies", "modecard.perms_flow", "modecard.switch_taps",
+    "newflow.closed", "newflow.conflict_taps", "newflow.name_card", "newflow.ready",
+    "newflow.ready_models", "newflow.ready_taps", "newflow.starting", "newflow.taps",
+    "prompt.keyboards", "sess.taps", "settings.new_sessions", "settings.taps",
+    "transport.texts",
+})
+#: The surface the three modes added (what the confirming hook does to a
+#: switch's card).
+THREE_MODES_NEW_SURFACES = frozenset({"modecard.switch_results"})
+#: The Mini App page screens (tests/golden/miniapp_page_english.json) the
+#: three modes changed or added.
+THREE_MODES_PAGE_SCREENS = frozenset({
+    "detail.busy.menu", "detail.busy.mode_sent", "detail.busy.perms", "detail.idle.menu",
+    "detail.idle.perms", "new.auto", "new.create_conflict", "new.create_failed",
+    "new.create_forbidden", "new.create_unreachable", "new.custom_model",
+    "new.custom_model_bad", "new.custom_model_ok", "new.default_dir", "new.folder",
+    "new.folder_busy", "new.folder_created", "new.folder_existed", "new.folder_failed",
+    "new.folder_forbidden", "new.folder_refused", "new.folder_unreachable", "new.full",
+    "new.groups", "new.named", "new.open",
+})
+
 _MODE_LABEL_UNDO = (
     (re.compile(r"(🤖 Auto|💬 Ask) mode"), r"\1"),
     # The sentences around the label that said "mode" themselves or read
@@ -693,8 +721,9 @@ def _keyboards(env, chat):
     for kb in (bot._build_stop_keyboard(sess), bot._build_retry_keyboard(sess),
                bot._build_compact_keyboard(sess), bot._build_perms_confirm_keyboard(sess),
                bot._build_perms_busy_keyboard(sess),
-               bot._build_resume_mode_keyboard(sess, True, chat_id=chat),
-               bot._build_resume_mode_keyboard(sess, False, chat_id=chat),
+               bot._build_resume_mode_keyboard(sess, "full", chat_id=chat, may_full=True),
+               bot._build_resume_mode_keyboard(sess, "full", chat_id=chat, may_full=False),
+               bot._build_resume_mode_keyboard(sess, "ask", chat_id=chat, may_full=True),
                bot._separate_permission_keyboard(sess)):
         out += _inline(kb)
     opts = [{"label": "Postgres", "description": "the usual"}, {"description": "x"},
@@ -1099,7 +1128,7 @@ def _status_switch(env):
         bot = _status_bot(env, chat)
         for status in (Status.IDLE, Status.INTERACTIVE, Status.BUSY):
             sess = _registered(bot, _sess(chat=chat, status=status))
-            sess.skip_perms = status == Status.BUSY
+            sess.perm_mode = "auto" if status == Status.BUSY else "ask"
             text, kb = bot._render_switch_reply(chat, sess)
             out += [text, *_inline(kb)]
     return out
@@ -1845,7 +1874,7 @@ def _transport_texts(env):
 
     from aipager.bot import transport
     env.store(CHAT)
-    out = [env.msg(transport.NEEDS_ADMIN_REPLY), env.msg(transport.RESUME_AUTO_NEEDS_ADMIN),
+    out = [env.msg(transport.NEEDS_ADMIN_REPLY), env.msg(transport.RESUME_FULL_NEEDS_ADMIN),
            env.msg(transport.RETRY_OTHERS_COMMAND_REPLY)]
     for text in API_ERRORS:
         out.append(env.with_tr(transport._detect_api_error, text)[0])
@@ -2086,7 +2115,7 @@ def _miniapp_mirrors(env):
     bot.create_session = AsyncMock(return_value=("claude-n1", ""))
     _ma_call(env, srv, "POST", "/api/sessions", {"name": "n1"})
     _ma_call(env, srv, "POST", "/api/sessions", {"name": "n2", "cwd": "/tmp"})
-    _ma_call(env, srv, "POST", "/api/sessions", {"name": "n3", "skip_perms": True})
+    _ma_call(env, srv, "POST", "/api/sessions", {"name": "n3", "mode": "full"})
     env.mp.setattr("aipager.miniapp.launch.create_directory",
                    lambda parent, name, roots, confined=False: ("/home/op/proj/web", False, ""))
     _ma_call(env, srv, "POST", "/api/directories", {"parent": "/tmp", "name": "web"})
@@ -2099,10 +2128,17 @@ def _miniapp_mirrors(env):
     _ma_call(env, srv, "PUT", f"/api/sessions/{LABEL}/preferences/answer_length",
              {"value": "short"})
     _ma_call(env, srv, "DELETE", f"/api/sessions/{LABEL}/preferences/answer_length")
-    bot._perms_switch_core = _ok(ok=True, reason=None, label=LABEL, err="")
-    _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/perms")
-    srv.registry.find_by_label(LABEL, scope_chat_id=CHAT).skip_perms = True
-    _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/perms")
+    # Into Full access and out of it (a restart each), then Ask -> Auto in
+    # place (no keys written: the presses are a stand-in).
+    bot._perms_switch_core = _ok(ok=True, reason="done", label=LABEL, err="")
+    env.mp.setattr("aipager.dtach.inject.press_mode_cycle", AsyncMock(return_value=True))
+    _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/perms", {"mode": "full"})
+    mode_sess = srv.registry.find_by_label(LABEL, scope_chat_id=CHAT)
+    mode_sess.perm_mode = "full"
+    _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/perms", {"mode": "ask"})
+    mode_sess.perm_mode = "ask"
+    _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/perms", {"mode": "auto"})
+    mode_sess.reset_mode_tracking()
     for dropped in (1, 2, 5, 11, 21, 22, 25):
         bot._clear_queue_core = _ok(ok=True, label=LABEL, dropped=dropped)
         _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/clearqueue")
@@ -2121,7 +2157,7 @@ def _miniapp_mirrors(env):
     _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/rename", {"label": "x2"})
     bot._kill_session_core = _ok(result="killed", label=LABEL)
     _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/kill")
-    bot._resume_auto_gate = lambda sess, override, actor, chat: (None, False)
+    bot._resume_full_gate = lambda sess, override, actor, chat: (None, False)
     bot._do_resume_core = _ok(reason=None, err="")
     _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/resume")
     _ma_sess(srv, "x3", status=Status.GONE)
@@ -2167,7 +2203,7 @@ def _miniapp_details(env):
     for result in ("still_running", "resuming"):
         bot._kill_session_core = _ok(result=result, label=LABEL)
         d("POST", f"/api/sessions/{LABEL}/kill")
-    bot._resume_auto_gate = lambda sess, override, actor, chat: (None, False)
+    bot._resume_full_gate = lambda sess, override, actor, chat: (None, False)
     for reason in ("not_gone", "no_transcript"):
         bot._do_resume_core = _ok(reason=reason, err="")
         d("POST", f"/api/sessions/{LABEL}/resume")
@@ -2177,7 +2213,7 @@ def _miniapp_details(env):
     d("DELETE", "/api/sessions/x4")
     for reason in ("not_live", "already_restarting", "still_stopping"):
         bot._perms_switch_core = _ok(ok=False, reason=reason, label=LABEL, err="")
-        d("POST", f"/api/sessions/{LABEL}/perms")
+        d("POST", f"/api/sessions/{LABEL}/perms", {"mode": "full"})
         bot._restart_session_core = _ok(ok=False, reason=reason, label=LABEL, err="")
         d("POST", f"/api/sessions/{LABEL}/restart")
     bot._clear_queue_core = _ok(ok=False, label=LABEL, dropped=0)
@@ -2203,11 +2239,11 @@ def _miniapp_details(env):
         if label == "x5":
             _ma_sess(srv, "x5")
         d("POST", f"/api/sessions/{LABEL}/rename", {"label": label})
-    # Auto mode needs an admin: creating in Auto, switching to Auto.
+    # Full access mode needs an admin: creating in it, switching to it.
     srv2 = _miniapp(env, admin=False)
     _ma_sess(srv2)
-    out.append(_detail_of(env, srv2, "POST", "/api/sessions", {"name": "n1", "skip_perms": True}))
-    out.append(_detail_of(env, srv2, "POST", f"/api/sessions/{LABEL}/perms"))
+    out.append(_detail_of(env, srv2, "POST", "/api/sessions", {"name": "n1", "mode": "full"}))
+    out.append(_detail_of(env, srv2, "POST", f"/api/sessions/{LABEL}/perms", {"mode": "full"}))
     # No folder yet: nothing in this chat has run anywhere.
     srv3 = _miniapp(env, project_dir="")
     out.append(_detail_of(env, srv3, "POST", "/api/sessions", {"name": "n1", "cwd": "/tmp"}))

@@ -237,7 +237,7 @@ def test_defaults_screen_lists_root_for_user(gbot, run_async, home, root):
 def test_create_session_outside_root_refused(gbot, run_async, home, fx, where):
     cwd = {"home": str(home), "repo": str(home / "aipager"), "none": None}[where]
     name, err = run_async(gbot().create_session(
-        "x", scope_chat_id=GROUP, cwd=cwd, driver_user_id=BOB))
+        "x", scope_chat_id=GROUP, cwd=cwd, driver_user_id=BOB, mode="auto"))
     assert (name, err) == ("", START)
     assert fx["launched"] == []
 
@@ -245,14 +245,14 @@ def test_create_session_outside_root_refused(gbot, run_async, home, fx, where):
 def test_create_session_inside_root_starts(gbot, run_async, root, fx):
     (root / "p").mkdir(parents=True)
     name, err = run_async(gbot().create_session(
-        "x", scope_chat_id=GROUP, cwd=str(root / "p"), driver_user_id=BOB))
+        "x", scope_chat_id=GROUP, cwd=str(root / "p"), driver_user_id=BOB, mode="auto"))
     assert err == "" and fx["launched"][0][1]["cwd"] == str(root / "p")
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA])
 def test_create_session_unchanged_for_owner_and_admin(gbot, run_async, home, fx, uid):
     run_async(gbot().create_session("x", scope_chat_id=GROUP, cwd=str(home / "aipager"),
-                                    driver_user_id=uid))
+                                    driver_user_id=uid, mode="auto"))
     assert len(fx["launched"]) == 1
 
 
@@ -277,7 +277,7 @@ def test_typed_resume_outside_root_refused(gbot, run_async, home, fx):
 def _conflict(bot, sess, author):
     bot._new_conflict_pending[sess.name] = {
         "user_id": author, "msg_id": 0, "prompt": "", "cwd": None,
-        "skip_perms": False, "model": None, "was_working": False}
+        "mode": "ask", "model": None, "was_working": False}
     sess.tap_is_for_this_turn = lambda *_a, **_k: True
 
 
@@ -330,27 +330,33 @@ def test_menu_restart_outside_root_refused(gbot, run_async, home, fx):
     bot._restart_session_core.assert_awaited_once()
 
 
+@pytest.mark.parametrize("current,target", [("full", "ask"), ("auto", "ask"), ("ask", "auto")],
+                         ids=["restart-out-of-full", "shift-tab-to-ask", "shift-tab-to-auto"])
 @pytest.mark.parametrize("surface", ["callbacks", "new_flow", "mode_cmd"])
-def test_mode_switch_outside_root_refused(gbot, run_async, home, fx, surface):
+def test_mode_switch_outside_root_refused(gbot, run_async, home, fx, surface, current, target):
+    """Every mode switch (a Full access restart, and the in-place Ask <->
+    Auto one) of a session outside the member's root is refused."""
     bot = gbot()
     sess = _outside(bot, home)
-    sess.skip_perms = True                           # to Ask: no admin needed
+    sess.perm_mode = current                         # none of these needs an admin
     sess.tap_is_for_this_turn = lambda *_a, **_k: True
     bot._perms_switch_core = AsyncMock()
+    bot._mode_switch_core = AsyncMock()
     if surface == "callbacks":
-        bot._perms_pending[OUT] = {"target_skip_perms": False, "msg_id": 900,
+        bot._perms_pending[OUT] = {"target_mode": target, "msg_id": 900,
                                    "label": "x", "turn": sess.turn_key}
         u, q = _tap(BOB, f"{OUT}:perms_confirm")
         run_async(bot._handle_callback(u, None))
     elif surface == "new_flow":
         u, q = _tap(BOB, "x")
-        run_async(new_flow._handle_ready_callback(bot, u, q, OUT, "rdy_ask"))
+        run_async(new_flow._handle_ready_callback(bot, u, q, OUT, f"rdy_{target}"))
     else:
         u, q = _tap(BOB, "x")
-        run_async(bot._perms_flow(sess, False, q.message, may_auto=False,
-                                  chat_id=GROUP, query=q, requester=BOB))
+        run_async(bot._mode_flow(sess, target, q.message, may_full=False,
+                                 chat_id=GROUP, query=q, requester=BOB))
     assert OUTSIDE in _answers(q)
     bot._perms_switch_core.assert_not_awaited()
+    bot._mode_switch_core.assert_not_awaited()
 
 
 # ---- the Mini App ----------------------------------------------------------------------
@@ -435,18 +441,24 @@ def test_miniapp_mkdir_outside_root_400(app, run_async, home, root):
     assert (status, body["path"]) == (200, str(root / "mine"))
 
 
-@pytest.mark.parametrize("route", ["resume", "restart", "perms"])
-def test_miniapp_relaunch_outside_root_403(app, run_async, home, route):
+@pytest.mark.parametrize("route,current,target", [
+    ("resume", "full", None), ("restart", "full", None),
+    ("perms", "full", "ask"),        # a restart, out of Full access
+    ("perms", "auto", "ask"),        # in place (Shift+Tab)
+    ("perms", "ask", "auto"),        # in place (Shift+Tab)
+], ids=["resume", "restart", "perms-restart", "perms-shift-tab-ask", "perms-shift-tab-auto"])
+def test_miniapp_relaunch_outside_root_403(app, run_async, home, route, current, target):
     sess = _outside(app.bot, home, Status.GONE if route == "resume" else Status.IDLE)
-    sess.skip_perms = True
+    sess.perm_mode = current
     cores = {"resume": "_do_resume_core", "restart": "_restart_session_core",
-             "perms": "_perms_switch_core"}
+             "perms": "_mode_switch_core"}
     core = AsyncMock()
     setattr(app.bot, cores[route], core)
-    status, body = _call(app, run_async, "POST", f"/api/sessions/x/{route}", BOB)
+    body_in = {"mode": target} if target else None
+    status, body = _call(app, run_async, "POST", f"/api/sessions/x/{route}", BOB, body_in)
     assert (status, body) == (403, {"error": "forbidden", "detail": OUTSIDE})
     core.assert_not_awaited()
-    _call(app, run_async, "POST", f"/api/sessions/x/{route}", ADA)
+    _call(app, run_async, "POST", f"/api/sessions/x/{route}", ADA, body_in)
     core.assert_awaited_once()
 
 

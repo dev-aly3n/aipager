@@ -91,14 +91,14 @@ def test_a_stranger_cannot_flip_someone_elses_wizard_to_auto(mk_bot, helpers):
     """No step may be driven by a bystander."""
     bot = _bot(mk_bot, helpers)
     message_id = _open_wizard(helpers, bot, mode_cb="_:nw:mode:ask")
-    assert new_flow._pending_store(bot)[(CHAT, OWNER)]["skip_perms"] is False, (
+    assert new_flow._pending_store(bot)[(CHAT, OWNER)]["mode"] == "ask", (
         "fixture drift: expected Ask mode")
 
     _run(bot._handle_callback(*helpers.make_callback_update(
         "_:nw:mode:auto", chat_id=CHAT, chat_type="group",
         user_id=STRANGER, message_id=message_id)))
 
-    assert new_flow._pending_store(bot)[(CHAT, OWNER)]["skip_perms"] is False, (
+    assert new_flow._pending_store(bot)[(CHAT, OWNER)]["mode"] == "ask", (
         "a bystander switched another member's card to Auto mode")
 
 
@@ -128,7 +128,7 @@ def test_the_caller_who_opened_the_wizard_can_still_finish_it(mk_bot, helpers):
 
     sess = bot.registry.find_by_label("ownedbyalice", CHAT)
     assert sess is not None, "the card's own caller could not finish it"
-    assert sess.skip_perms is True, "the owner's default Auto was lost"
+    assert sess.perm_mode == "auto", "the owner's default Auto was lost"
 
 
 # The rows below isolate the ownership guard: neither step has a

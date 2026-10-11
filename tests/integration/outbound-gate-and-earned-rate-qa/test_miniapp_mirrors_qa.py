@@ -17,6 +17,8 @@ which is how they actually fire in production.
 
 from __future__ import annotations
 
+from aipager.state import TrackedSession
+
 from unittest.mock import AsyncMock
 
 import pytest
@@ -104,10 +106,10 @@ def server(mk_bot, gated_bot, tmp_path, monkeypatch):
 
 #: Every mirror named in entrypoints.md, with arguments that make it fire.
 MIRRORS = [
-    ("_mirror_session_created", (SCOPE_CHAT, "dev", False, "/tmp/x")),
+    ("_mirror_session_created", (SCOPE_CHAT, "dev", "ask", "/tmp/x")),
     ("_mirror_directory_created", (SCOPE_CHAT, "/tmp/x/fresh")),
     ("_mirror_preference_change", (SCOPE_CHAT, ADMIN_ID, "layout", "merged")),
-    ("_mirror_session_perms_switched", (SCOPE_CHAT, "dev", True)),
+    ("_mirror_session_perms_switched", (SCOPE_CHAT, "dev", "full")),
     ("_mirror_session_queue_cleared", (SCOPE_CHAT, "dev", 2)),
     ("_mirror_session_compacted", (SCOPE_CHAT, "dev")),
     ("_mirror_session_restarted", (SCOPE_CHAT, "dev")),
@@ -118,6 +120,10 @@ MIRRORS = [
     ("_mirror_session_deleted", (SCOPE_CHAT, "dev")),
     # A fourteenth, added with the running-session model picker (8.35).
     ("_mirror_session_model", (SCOPE_CHAT, "dev", "claude-opus-5-5")),
+    # A fifteenth, with the three permission modes (2026-10-11): an
+    # Ask/Auto switch sent in place, the line its confirmation edits.
+    ("_mirror_session_mode_sent",
+     (TrackedSession(name="claude-dev", label="dev"), SCOPE_CHAT, "dev", "auto")),
 ]
 
 _KWARGS = {"_mirror_session_preference_change": {"reset": False}}

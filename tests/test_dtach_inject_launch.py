@@ -7,6 +7,8 @@ import time
 from pathlib import Path
 from unittest.mock import AsyncMock
 
+import pytest
+
 from aipager.dtach import inject as dtach_inject
 
 
@@ -44,7 +46,7 @@ def test_launch_session_includes_resume_flag(tmp_path, monkeypatch, run_async):
     monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
 
     ok, err = run_async(dtach_inject.launch_session(
-        "jim",
+        "jim", mode="ask",
         resume_id="e4f739a9-e19a-4d17-a8c2-12ba1b288907",
         cwd=str(tmp_path),  # real existing dir
     ))
@@ -74,7 +76,7 @@ def test_launch_session_no_resume_flag_when_id_missing(tmp_path, monkeypatch, ru
 
     monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
 
-    ok, _ = run_async(dtach_inject.launch_session("jim"))
+    ok, _ = run_async(dtach_inject.launch_session("jim", mode="ask"))
     assert ok
     bash_cmd = captured["args"][-1]
     assert "--resume" not in bash_cmd
@@ -110,7 +112,7 @@ def test_launch_session_passes_explicit_env_with_daemon_credential(
     # from the calling process's own environ.
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
 
-    ok, _ = run_async(dtach_inject.launch_session("jim"))
+    ok, _ = run_async(dtach_inject.launch_session("jim", mode="ask"))
     assert ok
     assert "env" in captured["kwargs"]
     assert captured["kwargs"]["env"]["CLAUDE_CODE_OAUTH_TOKEN"] == "sk-from-daemon-env"
@@ -152,7 +154,7 @@ def test_launch_session_quotes_claude_bin_with_metacharacters(
     monkeypatch.setattr(dtach_inject.claude_resolve, "try_resolve_claude_binary",
                         lambda **kw: fake_resolved)
 
-    ok, _ = run_async(dtach_inject.launch_session("jim"))
+    ok, _ = run_async(dtach_inject.launch_session("jim", mode="ask"))
     assert ok
     bash_cmd = captured["args"][-1]
     # The whole malicious string must appear as a single shlex-quoted
@@ -174,7 +176,7 @@ def test_launch_session_rejects_when_cwd_missing(tmp_path, monkeypatch, run_asyn
     bogus = tmp_path / "nope"  # doesn't exist
     with caplog.at_level("WARNING", logger="aipager.dtach.inject"):
         ok, err = run_async(dtach_inject.launch_session(
-            "jim",
+            "jim", mode="ask",
             resume_id="abc",
             cwd=str(bogus),
         ))
@@ -210,7 +212,7 @@ def test_launch_session_strips_inherited_oauth_token(tmp_path, monkeypatch, run_
     monkeypatch.setattr(dtach_inject, "_credentials_file_is_fresh",
                         lambda: True)
 
-    ok, _ = run_async(dtach_inject.launch_session("jim"))
+    ok, _ = run_async(dtach_inject.launch_session("jim", mode="ask"))
     assert ok
     bash_cmd = captured["args"][-1]
     assert "unset CLAUDE_CODE_OAUTH_TOKEN" in bash_cmd
@@ -239,7 +241,7 @@ def test_launch_session_keeps_oauth_token_when_no_credentials_file(
     monkeypatch.setattr(dtach_inject, "_credentials_file_is_fresh",
                         lambda: False)
 
-    ok, _ = run_async(dtach_inject.launch_session("jim"))
+    ok, _ = run_async(dtach_inject.launch_session("jim", mode="ask"))
     assert ok
     bash_cmd = captured["args"][-1]
     assert "unset CLAUDE_CODE_OAUTH_TOKEN" not in bash_cmd
@@ -437,7 +439,7 @@ def test_launch_session_stashes_expired_creds_and_keeps_env_token(
     monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
 
     ok, _ = run_async(dtach_inject.launch_session(
-        "jim", cwd=str(tmp_path),
+        "jim", mode="ask", cwd=str(tmp_path),
     ))
     assert ok
     # File was stashed
@@ -613,3 +615,53 @@ def test_stash_no_op_for_refresh_only_placeholder(tmp_path, monkeypatch):
     assert result is None
     assert creds.exists()
 
+
+
+# ---- the permission mode's flag (three modes) ----------------------------
+
+_MODE_FLAGS = ("--permission-mode default", "--permission-mode auto",
+               "--dangerously-skip-permissions")
+
+
+def _launch_cmd(monkeypatch, run_async, tmp_path, mode):
+    captured = {}
+
+    async def _fake_exec(*args, **kwargs):
+        captured["args"] = args
+        return _make_proc(returncode=0)
+
+    monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _fake_exec)
+    calls = {"n": 0}
+
+    def _is_socket(self):
+        calls["n"] += 1
+        return calls["n"] > 1
+
+    monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
+    ok, err = run_async(dtach_inject.launch_session("jim", mode=mode, cwd=str(tmp_path)))
+    return ok, err, (captured["args"][-1] if "args" in captured else None)
+
+
+
+
+@pytest.mark.parametrize("mode, flag", [
+    ("ask", "--permission-mode default"),
+    ("auto", "--permission-mode auto"),
+    ("full", "--dangerously-skip-permissions"),
+], ids=["ask", "auto", "full"])
+def test_launch_passes_exactly_one_mode_flag(tmp_path, monkeypatch, run_async, mode, flag):
+    ok, err, cmd = _launch_cmd(monkeypatch, run_async, tmp_path, mode)
+    assert ok, err
+    assert flag in cmd
+    assert [f for f in _MODE_FLAGS if f in cmd] == [flag]
+    assert cmd.count("--permission-mode") == (0 if mode == "full" else 1)
+    assert "--allow-dangerously" not in cmd
+
+
+@pytest.mark.parametrize("bad", [True, False, "", "bypass"],
+                         ids=["bool-true", "bool-false", "empty", "unknown"])
+def test_launch_refuses_anything_but_a_mode_id(tmp_path, monkeypatch, run_async, bad):
+    ok, err, cmd = _launch_cmd(monkeypatch, run_async, tmp_path, bad)
+    assert not ok
+    assert err == "Invalid permission mode"
+    assert cmd is None  # nothing was spawned

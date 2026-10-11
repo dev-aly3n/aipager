@@ -105,6 +105,21 @@ def _drive_form(node_bin, tmp_path, html, name="page.html", scenario=None):
     )
 
 
+@pytest.mark.parametrize("scenario, sent", [
+    ("modes", "full"), ("modes_member", "auto"), ("modes_default_ask", "full"),
+], ids=["admin", "member", "default-ask"])
+def test_new_session_form_offers_three_modes_on_the_default(node_bin, tmp_path, scenario,
+                                                           sent):
+    """Ask, Auto and Full access; it starts on the viewer's default (Auto
+    unless the chat says otherwise); Full access only for an admin; the
+    create request carries the mode, never the old boolean."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_form(node_bin, tmp_path, INDEX_HTML, scenario=scenario)
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert f"ok: modes {scenario} -> {sent}" in proc.stdout, proc.stdout
+
+
 def test_new_session_form_applies_every_setting_it_offers(node_bin, tmp_path):
     """Drive the real form end to end: render controls for model, working
     directory, permission mode and the reply-style settings; type a
@@ -334,8 +349,8 @@ def test_the_harness_detects_a_dead_resume_button_with_no_reason(node_bin, tmp_p
     from aipager.miniapp.static import INDEX_HTML
 
     broken = INDEX_HTML.replace(
-        'note.className = "menu-note";\n        note.textContent = plain(spec.reason);',
-        'note.className = "menu-note";\n        note.textContent = "";', 1,
+        'note.className = "menu-note";\n          note.textContent = plain(entry.reason);',
+        'note.className = "menu-note";\n          note.textContent = "";', 1,
     )
     assert broken != INDEX_HTML, "reason-rendering code not found — page changed shape"
 
@@ -735,14 +750,8 @@ def test_the_harness_detects_perms_busy_falling_back_to_idle_wording(node_bin, t
     always uses the idle wording, and the busy scenario must catch it."""
     from aipager.miniapp.static import INDEX_HTML
 
-    old = (
-        '        title: busy\n'
-        '          ? t(targetAuto ? "ui.confirm.perms_busy_auto" : "ui.confirm.perms_busy_ask", '
-        'session)\n'
-        '          : t(targetAuto ? "ui.confirm.perms_auto" : "ui.confirm.perms_ask", session),\n'
-    )
-    new = ('        title: t(targetAuto ? "ui.confirm.perms_auto" : "ui.confirm.perms_ask", '
-           'session),\n')
+    old = '        title: t((busy ? PERMS_BUSY_TITLES : PERMS_TITLES)[mode], session),\n'
+    new = '        title: t(PERMS_TITLES[mode], session),\n'
     assert old in INDEX_HTML, "perms busy-wording branch not found — page changed shape"
     broken = INDEX_HTML.replace(old, new, 1)
     assert broken != INDEX_HTML, "mutation was a no-op"
@@ -755,18 +764,53 @@ def test_the_harness_detects_perms_busy_falling_back_to_idle_wording(node_bin, t
     )
 
 
-def test_perms_auto_requires_admin_is_inert_with_reason(node_bin, tmp_path):
+def test_perms_full_requires_admin_is_inert_with_reason(node_bin, tmp_path):
     from aipager.miniapp.static import INDEX_HTML
 
     proc = _drive_controls(
-        node_bin, tmp_path, INDEX_HTML, "perms_auto_requires_admin",
+        node_bin, tmp_path, INDEX_HTML, "perms_full_requires_admin",
     )
     assert proc.returncode == 0, (
-        f"perms_auto_requires_admin scenario failed:\n"
+        f"perms_full_requires_admin scenario failed:\n"
         f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
     )
-    assert "ok: perms auto requires admin -> disabled with reason, no fetch" \
+    assert "ok: perms full access requires admin -> disabled with reason, no fetch" \
         in proc.stdout, proc.stdout
+
+
+def test_perms_ask_to_auto_is_sent_in_place_without_a_confirm(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "perms_in_place")
+    assert proc.returncode == 0, (
+        f"perms_in_place scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: perms ask -> auto in place -> one POST, no modal, sent toast" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_an_in_place_switch_asking_to_confirm(node_bin, tmp_path):
+    """Guard the guard: make every mode item confirm, and the in-place
+    scenario must catch it."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    old = "      if (!entry || !entry.restarts) {\n"
+    new = "      if (false) {\n"
+    assert old in INDEX_HTML, "in-place branch not found — page changed shape"
+    broken = INDEX_HTML.replace(old, new, 1)
+    proc = _drive_controls(node_bin, tmp_path, broken, "perms_in_place",
+                           name="broken-perms-in-place.html")
+    assert proc.returncode != 0, "harness passed a page where Ask -> Auto asks to confirm"
+
+
+def test_perms_leaving_full_access_confirms_without_an_admin(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "perms_leave_full")
+    assert proc.returncode == 0, (
+        f"perms_leave_full scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: perms leave full access -> confirm -> POST mode ask" in proc.stdout, proc.stdout
 
 
 def test_restart_idle_opens_confirm_and_posts(node_bin, tmp_path):
@@ -1414,8 +1458,8 @@ def test_the_harness_detects_a_reason_shown_with_its_em_dash(node_bin, tmp_path)
     from aipager.miniapp.static import INDEX_HTML
 
     broken = INDEX_HTML.replace(
-        "        note.textContent = plain(spec.reason);",
-        "        note.textContent = spec.reason;", 1,
+        "          note.textContent = plain(entry.reason);",
+        "          note.textContent = entry.reason;", 1,
     )
     assert broken != INDEX_HTML, "menu-note normalisation not found"
 

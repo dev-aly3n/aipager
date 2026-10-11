@@ -5,7 +5,8 @@ name (fr ``demander``, it ``chiedi``, id ``tanya``). When a LIVE session
 with exactly that name exists in the chat, the word names that session;
 otherwise it switches the mode. After a session name it is always the
 mode. English ``ask``/``auto`` behave exactly as before: always the mode,
-even with a session of that name.
+even with a session of that name, and ``full`` (Full access, 2026-10-11)
+joins them.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from aipager.bot.mode_labels import (
     MODE_ASK,
     WORD_ASK,
     WORD_AUTO,
+    WORD_FULL,
     mode_from_word,
     parse_mode_args,
 )
@@ -36,23 +38,26 @@ def _colliding_words():
     out = []
     for code in LANGS:
         tr = get(code)
-        for mode, msg in (("ask", WORD_ASK), ("auto", WORD_AUTO)):
+        for mode, msg in (("ask", WORD_ASK), ("auto", WORD_AUTO), ("full", WORD_FULL)):
             word = kbwords.mode_word(tr.text(msg))
-            if word in ("ask", "auto") or not _VALID_NAME.match(word):
+            if word in ("ask", "auto", "full") or not _VALID_NAME.match(word):
                 continue
             out.append((code, mode, word))
     return out
 
 
 COLLIDING = _colliding_words()
+COLLIDING_IDS = [f"{c}-{m}-{w}" for c, m, w in COLLIDING]
 
 
 def test_the_languages_that_collide_are_the_ones_the_translation_runs_named():
     words = {w for _c, _m, w in COLLIDING}
     assert {"demander", "automatique", "preguntar", "perguntar", "chiedi",
             "automatico", "fragen", "sor", "otomatik", "tanya"} <= words, words
-    # vi "Hỏi" is not ASCII; vi/de "Auto" is the English id.
-    assert "hỏi" not in words
+    # Full access's typed words that are valid session names too.
+    assert {"vollzugriff", "total", "complet", "completo", "penuh", "tam"} <= words, words
+    # vi "Hỏi" and "Toàn" are not ASCII; vi/de "Auto" is the English id.
+    assert "hỏi" not in words and "toàn" not in words
 
 
 def test_indonesian_ask_is_tanya_again():
@@ -63,17 +68,17 @@ def test_indonesian_ask_is_tanya_again():
 
 # ---- the pure rule ------------------------------------------------------------------
 
-@pytest.mark.parametrize("code, mode, word", COLLIDING)
+@pytest.mark.parametrize("code, mode, word", COLLIDING, ids=COLLIDING_IDS)
 def test_a_live_session_of_that_name_wins(code, mode, word):
     assert parse_mode_args([word], lambda n: n == word) == (None, word, True)
 
 
-@pytest.mark.parametrize("code, mode, word", COLLIDING)
+@pytest.mark.parametrize("code, mode, word", COLLIDING, ids=COLLIDING_IDS)
 def test_without_one_the_word_switches_the_mode(code, mode, word):
     assert parse_mode_args([word], lambda n: False) == (mode, None, True)
 
 
-@pytest.mark.parametrize("code, mode, word", COLLIDING)
+@pytest.mark.parametrize("code, mode, word", COLLIDING, ids=COLLIDING_IDS)
 def test_after_a_session_name_it_is_the_mode(code, mode, word):
     assert parse_mode_args(["x1", word], lambda n: True) == (mode, "x1", True)
     # And before one, with a session of that name too: it names the
@@ -81,7 +86,7 @@ def test_after_a_session_name_it_is_the_mode(code, mode, word):
     assert parse_mode_args([word, "x1"], lambda n: True)[2] is False
 
 
-@pytest.mark.parametrize("word", ["ask", "auto", "Ask", "AUTO"])
+@pytest.mark.parametrize("word", ["ask", "auto", "full", "Ask", "AUTO", "Full"])
 def test_english_ids_are_always_the_mode(word):
     assert parse_mode_args([word], lambda n: True) == (word.lower(), None, True)
     assert parse_mode_args(["x1", word], lambda n: True) == (word.lower(), "x1", True)
@@ -111,15 +116,15 @@ def bot(mk_bot):
     b = mk_bot()
     _sess(b, "x1")
     b.registry.last_active_session = "claude-x1"
-    b._perms_flow = AsyncMock()
+    b._mode_flow = AsyncMock()
     b._render_mode_card = MagicMock(return_value=("card", None))
     return b
 
 
 def _mode(bot, run_async, mk_update, text, mode=None):
     if mode is not None:
-        # x1 in the other mode, so the switch is a real one.
-        bot.registry._sessions["claude-x1"].skip_perms = mode == "ask"
+        # x1 in another mode, so the switch is a real one.
+        bot.registry._sessions["claude-x1"].perm_mode = "auto" if mode == "ask" else "ask"
     update = mk_update(text, chat_id=CHAT)
     update.effective_chat.type = "private"
     update.message.reply_text = AsyncMock(return_value=MagicMock(message_id=1))
@@ -127,44 +132,58 @@ def _mode(bot, run_async, mk_update, text, mode=None):
     return update
 
 
-@pytest.mark.parametrize("code, mode, word", COLLIDING)
+@pytest.mark.parametrize("code, mode, word", COLLIDING, ids=COLLIDING_IDS)
 def test_mode_word_names_an_existing_session(bot, run_async, mk_update, code, mode, word):
     _sess(bot, word)
     _mode(bot, run_async, mk_update, f"/mode {word}")
-    bot._perms_flow.assert_not_awaited()
+    bot._mode_flow.assert_not_awaited()
     assert bot._render_mode_card.call_args.args[1].label == word
 
 
-@pytest.mark.parametrize("code, mode, word", COLLIDING)
+@pytest.mark.parametrize("code, mode, word", COLLIDING, ids=COLLIDING_IDS)
 def test_mode_word_switches_without_such_a_session(bot, run_async, mk_update, code, mode,
                                                    word):
     _mode(bot, run_async, mk_update, f"/mode {word}", mode)
-    sess, want = bot._perms_flow.await_args.args[:2]
-    assert sess.label == "x1" and want is (mode == "auto")
+    sess, want = bot._mode_flow.await_args.args[:2]
+    assert sess.label == "x1" and want == mode
 
 
-@pytest.mark.parametrize("code, mode, word", COLLIDING)
+@pytest.mark.parametrize("code, mode, word", COLLIDING, ids=COLLIDING_IDS)
 def test_a_gone_session_of_that_name_does_not_count(bot, run_async, mk_update, code, mode,
                                                     word):
     _sess(bot, word, status=Status.GONE)
     _mode(bot, run_async, mk_update, f"/mode {word}", mode)
-    sess, want = bot._perms_flow.await_args.args[:2]
-    assert sess.label == "x1" and want is (mode == "auto")
+    sess, want = bot._mode_flow.await_args.args[:2]
+    assert sess.label == "x1" and want == mode
 
 
-@pytest.mark.parametrize("code, mode, word", COLLIDING)
+@pytest.mark.parametrize("code, mode, word", COLLIDING, ids=COLLIDING_IDS)
 def test_second_position_is_the_mode(bot, run_async, mk_update, code, mode, word):
     _sess(bot, word)
     _mode(bot, run_async, mk_update, f"/mode x1 {word}", mode)
-    sess, want = bot._perms_flow.await_args.args[:2]
-    assert sess.label == "x1" and want is (mode == "auto")
+    sess, want = bot._mode_flow.await_args.args[:2]
+    assert sess.label == "x1" and want == mode
 
 
-@pytest.mark.parametrize("word, want", [("ask", False), ("auto", True)])
-def test_english_switches_even_with_a_session_of_that_name(bot, run_async, mk_update, word,
-                                                           want):
+@pytest.mark.parametrize("word", ["ask", "auto", "full"])
+def test_english_switches_even_with_a_session_of_that_name(bot, run_async, mk_update, word):
     _sess(bot, word)
     bot.registry.last_active_session = "claude-x1"
     _mode(bot, run_async, mk_update, f"/mode {word}", word)
-    sess, got = bot._perms_flow.await_args.args[:2]
-    assert sess.label == "x1" and got is want
+    sess, got = bot._mode_flow.await_args.args[:2]
+    assert sess.label == "x1" and got == word
+
+
+@pytest.mark.parametrize("words, live, want", [
+    (["full", "ask"], {"full"}, ("ask", "full", True)),
+    (["ask", "full"], {"full"}, ("ask", "full", True)),
+    (["auto", "ask"], {"auto"}, ("ask", "auto", True)),
+    (["ask", "auto"], {"ask"}, ("auto", "ask", True)),
+    (["full", "ask"], set(), ("full", "ask", True)),
+    (["full", "ask"], {"full", "ask"}, ("full", "ask", True)),
+    (["full"], {"full"}, ("full", None, True)),
+], ids=["full-ask-session-full", "ask-full-session-full", "auto-ask-session-auto",
+        "ask-auto-session-ask", "no-such-session", "both-sessions", "single-word"])
+def test_two_mode_words_the_live_session_is_the_name(words, live, want):
+    # design Decision 10: /mode [<session>] ask|auto|full in any word order.
+    assert parse_mode_args(words, lambda n: n in live) == want

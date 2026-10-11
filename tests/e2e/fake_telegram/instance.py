@@ -109,7 +109,6 @@ def build_config(claude_path: str, members: dict | None = None, *,
     return {
         "schema_version": 3,
         "bot_token": FAKE_TOKEN,
-        "default_mode": "ask",
         "claude_path": claude_path,
         "miniapp": {"enabled": False, "port": 8765, "public_url": ""},
         "scopes": [

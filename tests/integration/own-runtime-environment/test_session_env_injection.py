@@ -48,7 +48,7 @@ def test_session_subprocess_env_carries_token_from_daemon_env_file(
         "aipager.dtach.inject._create_subprocess_exec", _fake_create_subprocess_exec,
     )
 
-    ok, err = run_async(launch_session("envinjsession"))
+    ok, err = run_async(launch_session("envinjsession", mode="ask"))
 
     assert "kwargs" in captured, "launch_session never reached create_subprocess_exec"
     env = captured["kwargs"].get("env")
@@ -90,7 +90,7 @@ def test_session_subprocess_env_is_absent_the_token_when_no_credential_exists(
         "aipager.dtach.inject._create_subprocess_exec", _fake_create_subprocess_exec,
     )
 
-    run_async(launch_session("envinjsession2"))
+    run_async(launch_session("envinjsession2", mode="ask"))
 
     env = captured["kwargs"].get("env") or {}
     assert "CLAUDE_CODE_OAUTH_TOKEN" not in env

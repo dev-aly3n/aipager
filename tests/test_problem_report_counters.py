@@ -415,7 +415,7 @@ def test_a_failed_launch_is_counted(monkeypatch):
 
     monkeypatch.setattr(inject, "_create_subprocess_exec", _failing)
     monkeypatch.setattr(inject.Path, "is_socket", lambda self: False)
-    ok, _err = asyncio.run(inject.launch_session("cnt-launch-1b3"))
+    ok, _err = asyncio.run(inject.launch_session("cnt-launch-1b3", mode="ask"))
     assert ok is False
     assert _counts() == {"dtach_failed": 1}
 

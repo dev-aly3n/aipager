@@ -624,7 +624,7 @@ def test_a_marked_new_tap_with_a_name_card_open_reopens_it(kbot, mk_update, run_
     new_flow._pending_store(kbot)[(G, BOB)] = {
         "step": "name", "user_id": BOB, "msg_id": 7000, "path_options": [],
         "new_folder_parent": "/w", "last_active": new_flow._now(),
-        "skip_perms": True, "can_auto": True, "model": None, "model_label": None,
+        "mode": "auto", "can_full": True, "model": None, "model_label": None,
         "cwd": None}
     _send(kbot, run_async, _upd(mk_update, MARK + "new", BOB, G))
     opened.assert_awaited_once()

@@ -122,7 +122,7 @@ def test_halt_for_safety_interrupts_real_dtach(
     nonce = uuid.uuid4().hex[:8]
     try:
         ok, err = run_async(inject.launch_session(
-            name, skip_perms=True, cwd=str(harness.REPO_ROOT)))
+            name, mode="full", cwd=str(harness.REPO_ROOT)))
         if not ok:
             pytest.fail(f"could not launch the dtach/claude session: {err}")
         assert hooks.wait("SessionStart", 60), (

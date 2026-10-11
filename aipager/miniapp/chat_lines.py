@@ -54,6 +54,17 @@ _TO_AUTO = Msg("app.mirror.to_auto", "🤖 {session} switched to Auto mode from 
                eg={"session": "x1"},
                note="Posted in the chat after a Mini App action. Auto is the permission mode "
                     "(as in /mode)")
+_TO_FULL = Msg("app.mirror.to_full",
+               "🔓 {session} switched to Full access mode from the Mini App",
+               eg={"session": "x1"},
+               note="Posted in the chat after a Mini App action. Full access is the permission "
+                    "mode (as in /mode)")
+_MODE_SENT = Msg("app.mirror.mode_sent",
+                 "⚙️ Switching {session} to {mode} from the Mini App without a restart.",
+                 eg={"session": "x1", "mode": "Auto mode"},
+                 note="Posted in the chat after a Mini App action: an Ask/Auto switch was sent; "
+                      "the line changes when Claude Code confirms it. {mode} is the mode's "
+                      "label, which already says mode")
 _TO_ASK = Msg("app.mirror.to_ask", "💬 {session} switched to Ask mode from the Mini App",
               eg={"session": "x1"},
               note="Posted in the chat after a Mini App action. Ask is the permission mode (as "
@@ -86,18 +97,18 @@ _KILLED = Msg("app.mirror.killed", "💀 Killed [{session}] from the Mini App",
               note="Posted in the chat after a Mini App action. Killed: its process was ended")
 _RESUMED = Msg("app.mirror.resumed", "♻️ Resumed [{session}] from the Mini App",
                eg={"session": "x1"}, note="Posted in the chat after a Mini App action")
-_RESUMED_IN_ASK = Msg("app.mirror.resumed_in_ask",
-                      "♻️ Resumed [{session}] from the Mini App in Ask: {reason}",
-                      eg={"session": "x1", "reason": "Auto needs an admin."},
-                      note="Posted in the chat after a Mini App action. Ask is the permission "
-                           "mode; the reason is a whole sentence of its own")
+_RESUMED_IN_AUTO = Msg("app.mirror.resumed_in_auto",
+                       "♻️ Resumed [{session}] from the Mini App in Auto mode: {reason}",
+                       eg={"session": "x1", "reason": "Full access mode needs an admin."},
+                       note="Posted in the chat after a Mini App action. Auto is the "
+                            "permission mode; the reason is a whole sentence of its own")
 _DELETED = Msg("app.mirror.deleted", "🗑️ Deleted [{session}] from the Mini App",
                eg={"session": "x1"}, note="Posted in the chat after a Mini App action")
 
 
-def session_created(tr, label: str, skip_perms: bool, cwd: str) -> str:
+def session_created(tr, label: str, mode: str, cwd: str) -> str:
     from aipager.bot.mode_labels import mode_label
-    mode = Safe(tr.text(mode_label(skip_perms)))
+    mode = Safe(tr.text(mode_label(mode)))
     if cwd:
         return tr.text(_CREATED_IN, session=label, mode=mode, folder=cwd)
     return tr.text(_CREATED, session=label, mode=mode)
@@ -135,8 +146,16 @@ def session_setting_changed(tr, label: str, field: str, value, reset: bool) -> s
     return tr.text(msg, setting=title, value=shown, session=label)
 
 
-def perms_switched(tr, label: str, skip_perms: bool) -> str:
-    return tr.text(_TO_AUTO if skip_perms else _TO_ASK, session=label)
+def perms_switched(tr, label: str, mode: str) -> str:
+    """A switch that restarted the session (into or out of Full access)."""
+    msg = {"ask": _TO_ASK, "auto": _TO_AUTO, "full": _TO_FULL}[mode]
+    return tr.text(msg, session=label)
+
+
+def mode_sent(tr, label: str, mode: str) -> str:
+    """An Ask/Auto switch sent in place, not confirmed yet."""
+    from aipager.bot.mode_labels import mode_label
+    return tr.text(_MODE_SENT, session=label, mode=Safe(tr.text(mode_label(mode))))
 
 
 def queue_cleared(tr, label: str, dropped: int) -> str:
@@ -169,10 +188,11 @@ def killed(tr, label: str) -> str:
     return tr.text(_KILLED, session=label)
 
 
-def resumed(tr, label: str, in_ask: bool) -> str:
-    if in_ask:
-        from aipager.bot.transport import RESUME_AUTO_NEEDS_ADMIN
-        return tr.text(_RESUMED_IN_ASK, session=label, reason=say(tr, RESUME_AUTO_NEEDS_ADMIN))
+def resumed(tr, label: str, in_auto: bool) -> str:
+    if in_auto:
+        from aipager.bot.transport import RESUME_FULL_NEEDS_ADMIN
+        return tr.text(_RESUMED_IN_AUTO, session=label,
+                       reason=say(tr, RESUME_FULL_NEEDS_ADMIN))
     return tr.text(_RESUMED, session=label)
 
 

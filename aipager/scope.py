@@ -296,36 +296,11 @@ def _parse_scope(entry, i: int) -> Scope:
     )
 
 
-def load_default_mode(path: Path = CONFIG_PATH) -> str:
-    """Return the file's ``default_mode`` key: ``"ask"`` or ``"auto"``.
-
-    Kept only so an older ``aipager.yaml`` round-trips through
-    :func:`dump_scopes` (roadmap 8.89). Nothing acts on the key: the
-    daemon ignores it, and the wizard no longer asks for it. New sessions
-    take their mode from ``/settings → New sessions``
-    (``new_flow.resolve_new_session_settings``). When the file is absent,
-    unreadable, or the key is missing, returns ``"ask"``.
-    """
-    if not path.exists():
-        return "ask"
-    try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (yaml.YAMLError, OSError):
-        return "ask"
-    if not isinstance(raw, dict):
-        return "ask"
-    mode = raw.get("default_mode", "ask")
-    if mode not in ("ask", "auto"):
-        return "ask"
-    return mode
-
-
 def _raw_yaml(path: Path) -> dict:
     """Best-effort read of the whole document as a plain dict.
 
     Never raises: the Mini App accessors below must work from a cold CLI
-    process against a file that may be absent or half-written, the same
-    tolerance :func:`load_default_mode` already applies.
+    process against a file that may be absent or half-written.
     """
     if not path.exists():
         return {}
@@ -499,26 +474,19 @@ def _member_to_dict(m: Member) -> dict:
 
 def dump_scopes(
     scopes: list[Scope], bot_token: str, path: Path = CONFIG_PATH,
-    *, default_mode: str = "",
 ) -> None:
     """Serialize scopes to ``aipager.yaml`` (atomic write, mode 0600).
 
-    ``default_mode`` is written as a top-level ``default_mode:`` key when
-    non-empty (``"ask"`` or ``"auto"``). Passing ``""`` (the default) leaves
-    any existing ``default_mode`` key in the file unchanged — this function
-    reads the existing value and re-emits it, so callers that don't care
-    about the mode key don't accidentally wipe it. The key is a leftover
-    the daemon ignores (roadmap 8.89); it is kept only so an older file
-    round-trips unchanged.
+    An older file's top-level ``default_mode`` key is not written back:
+    nothing ever read it (roadmap 8.89), and its values ("auto" meant
+    bypass) would mean something else now that there are three modes
+    (aipager/perm_modes.py). New sessions take their mode from
+    ``/settings → New sessions``. A file that still has it loads as before
+    and loses it on this rewrite.
     """
-    # Preserve an existing default_mode when the caller didn't pass one,
-    # and only when the file has one: a file without the key stays
-    # without it (nothing reads it any more, roadmap 8.89).
-    if not default_mode and "default_mode" in _raw_yaml(path):
-        default_mode = load_default_mode(path)
-    # Same reasoning for the Mini App block: this function rebuilds the
-    # document from scratch, so anything not re-emitted here is silently
-    # dropped. Without this, `aipager config` adding a scope would wipe the
+    # The Mini App block: this function rebuilds the document from
+    # scratch, so anything not re-emitted here is silently dropped.
+    # Without this, `aipager config` adding a scope would wipe the
     # Mini App settings — the exact silent-loss bug that moving them out of
     # config.env exists to fix.
     existing_miniapp = _raw_yaml(path).get(_MINIAPP_KEY)
@@ -563,11 +531,6 @@ def dump_scopes(
         if s.root:
             sd["root"] = s.root
         data["scopes"].append(sd)
-
-    # A leftover key, re-emitted so an older file round-trips; the
-    # daemon ignores it (roadmap 8.89).
-    if default_mode:
-        data["default_mode"] = default_mode
 
     if isinstance(existing_miniapp, dict):
         data[_MINIAPP_KEY] = existing_miniapp

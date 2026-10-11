@@ -72,8 +72,9 @@ def migrated_renders(monkeypatch) -> list[str]:
     out += [tr.text(m) for m in (*kbwords.NAV.values(), *kbwords.WORDS.values())
             if isinstance(m, Msg)]
     out += [tr.text(m) for m in (mode_labels.MODE_AUTO, mode_labels.MODE_ASK,
-                                 mode_labels.MODE_ASK_INSTEAD, mode_labels.MODE_AUTO_INSTEAD,
-                                 mode_labels.MODE_ASK_FOR_YOU)]
+                                 mode_labels.MODE_FULL, mode_labels.MODE_ASK_INSTEAD,
+                                 mode_labels.MODE_AUTO_INSTEAD, mode_labels.MODE_FULL_INSTEAD,
+                                 mode_labels.MODE_AUTO_FOR_YOU, mode_labels.MODE_ASK_NO_AUTO)]
     menu = {c.command: c.description for c in LifecycleMixin._command_list(set(), tr=tr)}
     out.append(menu["language"])
     from aipager.miniapp import server

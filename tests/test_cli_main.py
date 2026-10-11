@@ -183,15 +183,15 @@ def test_main_resume_no_arg_calls_picker(monkeypatch):
 
 def test_main_resume_with_name(monkeypatch):
     captured = {}
-    def _fake_one(label, *, force_auto=False):
+    def _fake_one(label, *, force_full=False):
         captured["label"] = label
-        captured["force_auto"] = force_auto
+        captured["force_full"] = force_full
         return 0
     monkeypatch.setattr("aipager.cli.resume._resume_one", _fake_one)
     rc = _run_main(["aipager", "resume", "jim"], monkeypatch)
     assert rc == 0
     assert captured["label"] == "jim"
-    assert captured["force_auto"] is False
+    assert captured["force_full"] is False
 
 
 def test_main_uninstall_with_yes_flag(monkeypatch):

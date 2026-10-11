@@ -847,12 +847,12 @@ async def _teardown(bot, sess, how):
         await bot._kill_session_core(sess.name, sess.label)
     elif how == "perms":
         await bot._kill_and_relaunch_core(
-            sess, target_skip_perms=True, interrupt_first=False)
+            sess, target_mode="full", interrupt_first=False)
     else:  # /new → Replace
         from pathlib import Path
 
         bot._new_conflict_pending[sess.name] = {
-            "prompt": "", "skip_perms": False, "user_id": 1, "msg_id": 5,
+            "prompt": "", "mode": "ask", "user_id": 1, "msg_id": 5,
             # The card showed it running, so Replace may stop that turn
             # (2026-09-30: otherwise a turn begun after it is refused).
             "was_working": True,

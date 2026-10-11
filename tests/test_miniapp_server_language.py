@@ -173,25 +173,25 @@ def test_the_answer_bodies_keep_their_names_and_english(server):
     assert data["detail"] == core._catalog("ru")["app.err.answer_not_waiting"]
 
 
-def test_resumed_in_ask_gives_its_owners_reason_in_the_viewers_language(server):
+def test_resumed_in_auto_gives_its_owners_reason_in_the_viewers_language(server):
     preferences.set_ui_language(VIEWER, "ru")
     _sess(server, status=Status.GONE)
-    server.bot._resume_auto_gate = lambda sess, override, actor, chat: (False, True)
+    server.bot._resume_full_gate = lambda sess, override, actor, chat: ("auto", True)
     server.bot._do_resume_core = _ok(reason=None, err="")
     status, data = _call(server, "POST", "/api/sessions/x1/resume")
-    assert status == 200 and data["mode"] == "ask"
-    from aipager.bot.transport import RESUME_AUTO_NEEDS_ADMIN
+    assert status == 200 and data["mode"] == "auto"
+    from aipager.bot.transport import RESUME_FULL_NEEDS_ADMIN
     # The reason is transport's key since phase 3b, so it arrives in the
     # viewer's language too (phase 4 decision 5).
     ru = i18n.get("ru")
-    reason = ru.text(RESUME_AUTO_NEEDS_ADMIN)
-    assert reason != str(RESUME_AUTO_NEEDS_ADMIN)
+    reason = ru.text(RESUME_FULL_NEEDS_ADMIN)
+    assert reason != str(RESUME_FULL_NEEDS_ADMIN)
     assert data["detail"] == ru.text(
-        "app.err.resumed_in_ask", "Resumed {session} in Ask: {reason}",
+        "app.err.resumed_in_auto", "Resumed {session} in Auto mode: {reason}",
         session="x1", reason=reason)
     preferences.set_ui_language(VIEWER, "")
     status, data = _call(server, "POST", "/api/sessions/x1/resume")
-    assert data["detail"] == f"Resumed x1 in Ask: {RESUME_AUTO_NEEDS_ADMIN}"
+    assert data["detail"] == f"Resumed x1 in Auto mode: {RESUME_FULL_NEEDS_ADMIN}"
 
 
 @pytest.mark.parametrize("code, constant", [
@@ -251,12 +251,13 @@ def test_facts_and_reasons_follow_the_viewer(server, monkeypatch):
     assert [(f["id"], f["label"], f["value"]) for f in data["facts"]] == [
         ("model", "Model", "Opus 4.6"), ("context", "Context", "45%"), ("cost", "Cost", "$1.50"),
         ("working", "Working for", "3:12"), ("last_active", "Last active", "2m ago"),
-        ("cwd", "Directory", "/home/op/proj")]
+        ("mode", "Mode", "💬 Ask mode"), ("cwd", "Directory", "/home/op/proj")]
     preferences.set_ui_language(VIEWER, "fa")
     data = _call(server, "GET", "/api/sessions/x1")[1]
     facts = {f["id"]: f for f in data["facts"]}
     assert [f["id"] for f in data["facts"]] == ["model", "context", "cost", "working",
-                                               "last_active", "cwd"]
+                                               "last_active", "mode", "cwd"]
+    assert facts["mode"]["value"].removeprefix(RLM) == "💬 مود پرسش"
     assert all(PERSIAN.search(f["label"]) for f in data["facts"])
     assert facts["context"]["value"] == "۴۵٪"
     assert facts["cost"]["value"] == "$۱٫۵۰"
@@ -288,8 +289,9 @@ def _mirror_all(srv) -> list[str]:
     _call(srv, "POST", "/api/sessions/x1/compact")
     _call(srv, "PUT", "/api/preferences/layout", {"value": "merged"})
     _call(srv, "PUT", "/api/sessions/x1/preferences/answer_length", {"value": "short"})
-    srv.bot._perms_switch_core = _ok(ok=True, reason=None, label="x1", err="")
-    _call(srv, "POST", "/api/sessions/x1/perms")
+    srv.bot._mode_switch_core = _ok(ok=True, reason="done", label="x1", err="",
+                                    mode="full")
+    _call(srv, "POST", "/api/sessions/x1/perms", {"mode": "full"})
     return _sent(srv)
 
 
@@ -299,7 +301,7 @@ def test_mirrors_are_todays_english(server):
         "📦 Compact triggered for [x1] from the Mini App",
         "⚙️ 🖼 Message layout → Merged into busy message (changed from the Mini App)",
         "⚙️ 📏 Answer length → Short for session x1 (changed from the Mini App)",
-        "🤖 x1 switched to Auto mode from the Mini App",
+        "🔓 x1 switched to Full access mode from the Mini App",
     ]
 
 
@@ -375,7 +377,7 @@ def test_a_line_that_cannot_be_written_never_fails_the_action(server, monkeypatc
         assert sess.preference_overrides().get("answer_length") == "short"
     else:
         _sess(server, status=Status.GONE)
-        server.bot._resume_auto_gate = lambda sess, override, actor, chat: (True, False)
+        server.bot._resume_full_gate = lambda sess, override, actor, chat: (True, False)
         server.bot._do_resume_core = _ok(reason=None, err="")
         status, data = _call(server, "POST", "/api/sessions/x1/resume")
         assert (status, data["status"]) == (200, "resumed")

@@ -307,7 +307,8 @@ def label_problems(codes) -> list[str]:
     with no space); each mode label shows its typed mode word; and no
     Latin keyboard label could be a session name unless it is reserved or
     grandfathered."""
-    from aipager.bot.mode_labels import MODE_ASK, MODE_AUTO, WORD_ASK, WORD_AUTO
+    from aipager.bot.mode_labels import (
+        MODE_ASK, MODE_AUTO, MODE_FULL, WORD_ASK, WORD_AUTO, WORD_FULL)
     from aipager.dtach.inject import _RESERVED, _VALID_NAME
     problems: list[str] = []
     owner: dict[str, str] = {}
@@ -341,14 +342,16 @@ def label_problems(codes) -> list[str]:
         kind = "cmd" if msg.key.startswith("kbl.cmd.") else "tpl"
         for label in _labels(msg, codes):
             claim(norm(label).lower(), label, f"{kind}:{english}")
-    for action, msg in (("mode:ask", WORD_ASK), ("mode:auto", WORD_AUTO)):
+    for action, msg in (("mode:ask", WORD_ASK), ("mode:auto", WORD_AUTO),
+                        ("mode:full", WORD_FULL)):
         for label in _labels(msg, codes):
             claim(mode_word(label), label, action)
         for label in _labels(msg, real):
             one_word(mode_word(label), label, action)
     # The word people type is the one the label shows them ("💬 مود پرسش"
     # shows پرسش), so what they read after /mode is what /mode accepts.
-    for word_msg, shown_msg in ((WORD_ASK, MODE_ASK), (WORD_AUTO, MODE_AUTO)):
+    for word_msg, shown_msg in ((WORD_ASK, MODE_ASK), (WORD_AUTO, MODE_AUTO),
+                                (WORD_FULL, MODE_FULL)):
         for code in dict.fromkeys(["en", *real]):
             tr = get(code)
             word, shown = tr.text(word_msg), tr.text(shown_msg)

@@ -25,7 +25,8 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 ## Markers, keyboard words and modes
 - Keep `**`, `_`, every HTML tag and every {placeholder} exactly as in the English: the same number of `**` and `_`, never a backtick.
 - A keyboard word (status, stop, new, kill) is ONE word with no space: it is typed as a word (статус, стоп, нова, завершити).
-- A mode word (mode.word.auto, mode.word.ask: Авто, Питати) is ONE word with no emoji: people type it after /mode, so it never changes once chosen. A mode label (mode.auto, mode.ask) is what people see: the emoji, that same word and the word for mode (🤖 Режим Авто, 💬 Режим «Питати»); a sentence around {mode} must not add its own word for mode.
+- A mode word (mode.word.auto, mode.word.ask, mode.word.full: Авто, Питати, Повний) is ONE word with no emoji: people type it after /mode, so it never changes once chosen. A mode label (mode.auto, mode.ask, mode.full) is what people see: the emoji, that same word and the word for mode (🤖 Режим Авто, 💬 Режим «Питати», 🔓 Режим «Повний доступ»); a sentence around {mode} must not add its own word for mode.
+- A button or sentence that names a permission mode names it as a mode (operator, 2026-10-11): the switch buttons (modecard.btn.to_*, ui.btn.switch_to_*), the "instead" buttons (mode.*_instead) and the busy confirms (ui.confirm.perms_busy_*) say the mode word and the word for mode, as mode.auto and mode.ask do. The typed words stay one word.
 - A default button label (Continue, Run tests...) stays short: it is a button.
 
 ## Words (the glossary's terms in context)

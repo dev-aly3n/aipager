@@ -393,7 +393,7 @@ def test_default_token_for_a_user_means_the_root(gbot, run_async, scopes, daemon
 def test_create_session_outside_root_refused(gbot, run_async, scopes, daemon_in_home,
                                              outside, seams, who, chat):
     bot = gbot()
-    name, err = run_async(bot.create_session("x", scope_chat_id=chat, cwd=str(outside),
+    name, err = run_async(bot.create_session("x", mode="auto", scope_chat_id=chat, cwd=str(outside),
                                              driver_user_id=who))
     assert (name, err) == ("", kit.outside_root_msg(_root_of(scopes, chat)))
 
@@ -401,7 +401,7 @@ def test_create_session_outside_root_refused(gbot, run_async, scopes, daemon_in_
 def test_create_session_outside_root_launches_nothing(gbot, run_async, scopes,
                                                       daemon_in_home, outside, seams):
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=GROUP, cwd=str(outside),
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=GROUP, cwd=str(outside),
                                  driver_user_id=BOB))
     seams.launch.assert_not_awaited()
 
@@ -413,7 +413,7 @@ def test_create_session_refuses_every_outside_shape(gbot, run_async, scopes, dae
               "dotdot": str(team_root / ".." / "elsewhere"),
               "other-root": str(hal_root)}[where]
     bot = gbot()
-    _name, err = run_async(bot.create_session("x", scope_chat_id=GROUP, cwd=folder,
+    _name, err = run_async(bot.create_session("x", mode="auto", scope_chat_id=GROUP, cwd=folder,
                                               driver_user_id=BOB))
     assert err == kit.outside_root_msg(_root_of(scopes, GROUP))
 
@@ -425,7 +425,7 @@ def test_create_session_refuses_a_symlink_out_of_the_root(gbot, run_async, scope
     link = os.path.join(root, "escape")
     os.symlink(outside, link)
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=GROUP, cwd=link, driver_user_id=BOB))
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=GROUP, cwd=link, driver_user_id=BOB))
     seams.launch.assert_not_awaited()
 
 
@@ -433,7 +433,7 @@ def test_create_session_with_no_folder_is_refused_when_daemon_is_outside_root(
         gbot, run_async, scopes, daemon_in_home, seams):
     """No folder means the daemon's folder (home here): outside the root."""
     bot = gbot()
-    _n, err = run_async(bot.create_session("x", scope_chat_id=GROUP, cwd=None,
+    _n, err = run_async(bot.create_session("x", mode="auto", scope_chat_id=GROUP, cwd=None,
                                            driver_user_id=BOB))
     assert err == kit.outside_root_msg(_root_of(scopes, GROUP))
 
@@ -443,7 +443,7 @@ def test_create_session_inside_root_launches(gbot, run_async, scopes, daemon_in_
                                              made, seams, sub):
     root = made(GROUP)
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=GROUP,
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=GROUP,
                                  cwd=os.path.join(root, sub) if sub else root,
                                  driver_user_id=BOB))
     seams.launch.assert_awaited_once()
@@ -453,7 +453,7 @@ def test_create_session_root_with_trailing_slash_launches(gbot, run_async, scope
                                                           daemon_in_home, made, seams):
     root = made(GROUP)
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=GROUP, cwd=root + "/",
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=GROUP, cwd=root + "/",
                                  driver_user_id=BOB))
     seams.launch.assert_awaited_once()
 
@@ -464,7 +464,7 @@ def test_a_group_user_is_held_to_the_groups_root_not_their_dm_root(
     root applies."""
     os.makedirs(hal_root)
     bot = gbot()
-    _n, err = run_async(bot.create_session("x", scope_chat_id=GROUP, cwd=str(hal_root),
+    _n, err = run_async(bot.create_session("x", mode="auto", scope_chat_id=GROUP, cwd=str(hal_root),
                                            driver_user_id=HAL))
     assert err == kit.outside_root_msg(_root_of(scopes, GROUP))
 
@@ -472,7 +472,7 @@ def test_a_group_user_is_held_to_the_groups_root_not_their_dm_root(
 def test_an_unknown_person_starts_nothing(gbot, run_async, daemon_in_home, seams, made):
     root = made(GROUP)
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=GROUP, cwd=root, driver_user_id=4242))
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=GROUP, cwd=root, driver_user_id=4242))
     seams.launch.assert_not_awaited()
 
 
@@ -509,14 +509,14 @@ def test_admin_new_card_defaults_to_the_daemon_folder(gbot, run_async, scopes,
 def test_admin_starts_outside_any_root(gbot, run_async, scopes, daemon_in_home, outside,
                                        seams, who, chat):
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=chat, cwd=str(outside),
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=chat, cwd=str(outside),
                                  driver_user_id=who))
     seams.launch.assert_awaited_once()
 
 
 def test_personal_mode_is_unchanged(mk_bot, run_async, daemon_in_home, outside, seams):
     bot = mk_bot(SessionRegistry())
-    run_async(bot.create_session("x", scope_chat_id=12345, cwd=str(outside),
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=12345, cwd=str(outside),
                                  driver_user_id=None))
     seams.launch.assert_awaited_once()
 
@@ -556,7 +556,7 @@ def test_a_root_with_a_trailing_slash_starts_inside(gbot, run_async, scopes, dae
                                                     seams, team_root):
     (team_root / "p").mkdir(parents=True)
     bot = gbot(scope_list=_with_group_root(scopes, str(team_root) + "/"))
-    run_async(bot.create_session("x", scope_chat_id=GROUP, cwd=str(team_root / "p"),
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=GROUP, cwd=str(team_root / "p"),
                                  driver_user_id=BOB))
     seams.launch.assert_awaited_once()
 
@@ -566,7 +566,7 @@ def test_a_root_with_a_trailing_slash_still_refuses_a_prefix_sibling(
     sib = str(team_root) + "2"
     os.makedirs(sib)
     bot = gbot(scope_list=_with_group_root(scopes, str(team_root) + "/"))
-    run_async(bot.create_session("x", scope_chat_id=GROUP, cwd=sib, driver_user_id=BOB))
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=GROUP, cwd=sib, driver_user_id=BOB))
     seams.launch.assert_not_awaited()
 
 
@@ -577,7 +577,7 @@ def test_a_symlinked_root_accepts_its_real_folder(gbot, run_async, scopes, daemo
     link = home / "team-link"
     os.symlink(real, link)
     bot = gbot(scope_list=_with_group_root(scopes, link))
-    run_async(bot.create_session("x", scope_chat_id=GROUP, cwd=str(real / "p"),
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=GROUP, cwd=str(real / "p"),
                                  driver_user_id=BOB))
     seams.launch.assert_awaited_once()
 
@@ -587,7 +587,7 @@ def test_a_root_that_is_a_file_starts_nothing(gbot, run_async, scopes, daemon_in
     team_root.parent.mkdir(parents=True)
     team_root.write_text("not a folder\n")
     bot = gbot()
-    run_async(bot.create_session("x", scope_chat_id=GROUP, cwd=str(team_root),
+    run_async(bot.create_session("x", mode="auto", scope_chat_id=GROUP, cwd=str(team_root),
                                  driver_user_id=BOB))
     seams.launch.assert_not_awaited()
 

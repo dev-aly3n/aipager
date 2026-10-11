@@ -179,9 +179,9 @@ _CMD_DESCRIPTIONS = (
                 note="/ menu description of /now: messages waiting for the turn go in now")),
     ("resume", Msg("cmd.resume", "Resume an ended session",
                    note="/ menu description of /resume")),
-    ("mode", Msg("cmd.mode", "Auto or Ask",
-                 note="/ menu description of /mode: the two permission modes, named as "
-                      "the mode.auto and mode.ask keys name them")),
+    ("mode", Msg("cmd.mode", "Ask, Auto or Full access mode",
+                 note="/ menu description of /mode: the three permission modes, named as "
+                      "the mode.ask, mode.auto and mode.full keys name them")),
     ("settings", Msg("cmd.settings", "Message layout, formatting, new sessions",
                      note="/ menu description of /settings")),
     ("language", _CMD_LANGUAGE),

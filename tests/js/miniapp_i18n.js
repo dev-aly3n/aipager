@@ -403,11 +403,23 @@ function facts(list) {
   const labels = OPTS.factLabels || {};
   return list.map((f) => ({ id: f[0], label: sv(labels[f[0]] || f[1]), value: f[2] }));
 }
+// The session's three modes as the server sends them (labels in the
+// viewer's language); Full access mode needs an admin.
+function modes(current, admin) {
+  const labels = { ask: "💬 Ask mode", auto: "🤖 Auto mode", full: "🔓 Full access mode" };
+  return ["ask", "auto", "full"].map((id) => ({
+    id, label: sv(labels[id]), current: id === current,
+    available: id !== "full" || !!admin,
+    reason: id === "full" && !admin ? sv("Switching to Full access mode requires admin.") : null,
+    restarts: id === "full" || current === "full",
+  }));
+}
 function detail(label, status, extra) {
   return Object.assign({
     label, status, waiting_kind: null, waiting_summary: null, model: "", context_pct: 0,
     cost_usd: 0, cwd: "", last_active_seconds_ago: null, busy_elapsed_seconds: null,
-    busy_elapsed_unit: "s", skip_perms: false, queue_depth: 0, last_message: "",
+    busy_elapsed_unit: "s", mode: "ask", mode_pending: false, modes: modes("ask", false),
+    queue_depth: 0, last_message: "",
     timeline: [], facts: [], model_switch: null, answer: null, actions: {},
   }, extra || {});
 }
@@ -426,9 +438,8 @@ const DETAILS = {
                   ["cost", "Cost", "$1.50"], ["working", "Working for", "3:12"],
                   ["last_active", "Last active", "30s ago"], ["cwd", "Directory", "/home/op/proj"]]),
     model_switch: { available: false, reason: sv("Claude is working - switch the model when this turn ends.") },
-    actions: actions(["stop", "clearqueue", "rename", "restart"],
-                     { compact: "Nothing to compact - context is already empty.",
-                       perms: "Switching to Auto mode requires admin." }),
+    actions: actions(["stop", "clearqueue", "rename", "perms", "restart"],
+                     { compact: "Nothing to compact - context is already empty." }),
   }),
   alpha: detail("alpha", "waiting", {
     waiting_kind: "permission", waiting_summary: sv("Bash: npm test"), model: "Opus 4.6",
@@ -444,7 +455,7 @@ const DETAILS = {
   }),
   echo: detail("echo", "idle", {
     model: "Sonnet 5", context_pct: 9, cost_usd: 0.25, cwd: "/home/op/other",
-    last_active_seconds_ago: 7200, skip_perms: true,
+    last_active_seconds_ago: 7200, mode: "full", modes: modes("full", true),
     facts: facts([["model", "Model", "Sonnet 5"], ["context", "Context", "9%"],
                   ["last_active", "Last active", "2h ago"], ["cwd", "Directory", "/home/op/other"]]),
     model_switch: { available: true, reason: null },
@@ -462,7 +473,7 @@ const OPTIONS = {
   directories: ["/home/op/proj", "/home/op/other"], default_directory: "/home/op/proj",
   models: [{ label: "Opus", hint: sv("Most capable") }, { label: "Sonnet", hint: "" }],
   schema: SCHEMA, scope_defaults: { answer_length: "none", layout: "split" },
-  can_create: true, can_use_auto: false,
+  can_create: true, can_use_full: false, default_mode: "auto",
 };
 const APP_LANGUAGE = {
   title: sv("App language"), hint: sv("Only aipager's own text. Claude's answers don't change."),
@@ -620,6 +631,11 @@ function findText(root, text) {
   }
   return null;
 }
+function modeItem(id) {
+  const n = q(".mode-" + id)[0];
+  if (!n) { fail("no mode item " + id); }
+  return n;
+}
 function menuItem(key) {
   const n = q(".act-" + key)[0];
   if (!n) { fail("no menu item " + key); }
@@ -692,13 +708,14 @@ async function open(label) { clearNotice(); api.openDetail(label); await wait();
 step("detail.busy", async () => { await open("charlie"); });
 step("detail.busy.menu", async () => { el("detail-menu-btn").click(); await wait(); });
 step("detail.busy.perms", async () => {
-  // Perms is unavailable here; a busy session that may switch:
+  // Full access is refused here; a busy session an admin may switch:
   R["GET /api/sessions/charlie"] = { status: 200, body: Object.assign({}, DETAILS.charlie, {
-    actions: actions(["stop", "clearqueue", "compact", "rename", "perms", "restart"]) }) };
+    actions: actions(["stop", "clearqueue", "compact", "rename", "perms", "restart"]),
+    modes: modes("ask", true) }) };
   el("overlay").click();
   await open("charlie");
   el("detail-menu-btn").click(); await wait();
-  menuItem("perms").click(); await wait();
+  modeItem("full").click(); await wait();
 });
 step("detail.busy.restart", async () => {
   el("confirm-cancel").click();
@@ -733,8 +750,12 @@ step("detail.busy.unreachable", async () => {
 step("detail.busy.perms_done", async () => {
   R["POST /api/sessions/charlie/perms"] = { status: 200, body: { status: "switched" } };
   confirmAnswer = false;
-  clearNotice(); el("detail-menu-btn").click(); menuItem("perms").click(); await wait();
+  clearNotice(); el("detail-menu-btn").click(); modeItem("full").click(); await wait();
   el("confirm-ok").click(); await wait();
+});
+step("detail.busy.mode_sent", async () => {
+  R["POST /api/sessions/charlie/perms"] = { status: 200, body: { status: "sent", pending: true } };
+  clearNotice(); el("detail-menu-btn").click(); modeItem("auto").click(); await wait();
 });
 step("detail.busy.restarted", async () => {
   R["POST /api/sessions/charlie/restart"] = { status: 200, body: { status: "restarted" } };
@@ -837,7 +858,7 @@ step("detail.idle.model_unreachable", async () => {
   clearNotice(); choices("detail-model")[0].click(); await wait();
 });
 step("detail.idle.menu", async () => { clearNotice(); el("detail-menu-btn").click(); await wait(); });
-step("detail.idle.perms", async () => { menuItem("perms").click(); await wait(); });
+step("detail.idle.perms", async () => { modeItem("ask").click(); await wait(); });
 step("detail.idle.kill", async () => {
   el("confirm-cancel").click(); el("detail-menu-btn").click(); menuItem("kill").click(); await wait();
 });
@@ -1118,12 +1139,12 @@ step("new.folder_created", async () => { clearNotice(); held.shift()(); await wa
     clearNotice(); type("new-folder-name", "zz"); el("new-folder-create").click(); await wait();
   });
 });
-step("new.auto", async () => {
-  R["GET /api/session-options"] = { status: 200, body: Object.assign({}, OPTIONS, { can_use_auto: true }) };
+step("new.full", async () => {
+  R["GET /api/session-options"] = { status: 200, body: Object.assign({}, OPTIONS, { can_use_full: true }) };
   api.showGrid(); await wait();
   el("new-session-btn").click(); await wait();
   openGroup("new-mode", 0); await wait();
-  choices("new-mode")[1].click(); await wait();
+  choices("new-mode")[2].click(); await wait();
 });
 step("new.default_dir", async () => {
   R["GET /api/session-options"] = { status: 200, body: Object.assign({}, OPTIONS, {

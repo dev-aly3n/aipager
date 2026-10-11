@@ -362,10 +362,10 @@ def test_mode_with_a_mode_and_one_other_members_session_is_a_picker(
         gbot, run_async, mk_update, want, verb):
     _one_candidate(gbot, "mode")
     _sess(gbot, X1).skip_perms = want == "ask"
-    gbot._perms_flow = AsyncMock()
+    gbot._mode_flow = AsyncMock()
     u = _msg(mk_update, f"/mode {want}", DAVE)
     _run(gbot, run_async, u)
-    gbot._perms_flow.assert_not_awaited()
+    gbot._mode_flow.assert_not_awaited()
     rows = _rows(gbot, G, _markup(u))
     assert [r[1] for r in rows] == [X1, "cancel"]
     assert rows[0][2].startswith(verb)
@@ -374,11 +374,11 @@ def test_mode_with_a_mode_and_one_other_members_session_is_a_picker(
 def test_mode_with_a_mode_on_the_own_target_switches_it(gbot, run_async, mk_update):
     gbot.registry.set_target(X1, G, DAVE)
     _sess(gbot, X2).status = Status.GONE
-    gbot._perms_flow = AsyncMock()
+    gbot._mode_flow = AsyncMock()
     u = _msg(mk_update, "/mode auto", DAVE)
     _run(gbot, run_async, u)
-    assert gbot._perms_flow.await_count == 1
-    assert gbot._perms_flow.await_args.args[0] is _sess(gbot, X1)
+    assert gbot._mode_flow.await_count == 1
+    assert gbot._mode_flow.await_args.args[0] is _sess(gbot, X1)
 
 
 @pytest.mark.parametrize("command", ALL)

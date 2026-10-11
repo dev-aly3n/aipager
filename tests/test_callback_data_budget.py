@@ -179,6 +179,9 @@ ALLOWED_VERB_JOINEDSTR_SIGNATURES = frozenset({
     "restartok{sess.turn_key}",
     "modeask{sess.turn_key}",
     "modeauto{sess.turn_key}",
+    # The /mode card's third switch (Full access, 2026-10-11): the same
+    # turn key; "_:sx:<idx>:modefull" + 16 digits is ~33 bytes.
+    "modefull{sess.turn_key}",
 })
 
 

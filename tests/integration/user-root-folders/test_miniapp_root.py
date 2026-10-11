@@ -46,13 +46,13 @@ def made(scopes):
     return _made
 
 
-def _session(app, label, cwd, *, status, chat=GROUP, skip_perms=False):
+def _session(app, label, cwd, *, status, chat=GROUP, mode="ask"):
     s = app.registry.get_or_create(f"claude-{label}")
     s.label = label
     s.scope_chat_id = chat
     s.cwd = str(cwd)
     s.status = status
-    s.skip_perms = skip_perms
+    s.perm_mode = mode
     s.claude_session_id = "uuid-1"
     if status == Status.GONE:
         s.gone_at = time.monotonic()
@@ -301,36 +301,48 @@ def test_miniapp_restart_outside_root_allowed_for_managers(app, call, outside, l
     assert status == 200
 
 
-def test_miniapp_perms_outside_root_403(app, call, scopes, outside, live):
-    # Auto -> Ask: a switch a user may make (Ask -> Auto needs an admin,
-    # which would be a 403 for another reason).
-    _session(app, "old", outside, status=Status.IDLE, skip_perms=True)
-    status, _b = call(app, "POST", "/api/sessions/old/perms", BOB, chat=GROUP)
+# Switches a user may make (Full access needs an admin, which would be a
+# 403 for another reason): out of Full access (a restart), and the
+# in-place Ask <-> Auto ones (Shift+Tab).
+SWITCHES = [("full", "ask"), ("auto", "ask"), ("ask", "auto")]
+SWITCH_IDS = ["restart-out-of-full", "shift-tab-to-ask", "shift-tab-to-auto"]
+
+
+@pytest.mark.parametrize("current,target", SWITCHES, ids=SWITCH_IDS)
+def test_miniapp_perms_outside_root_403(app, call, scopes, outside, live, current, target):
+    _session(app, "old", outside, status=Status.IDLE, mode=current)
+    status, _b = call(app, "POST", "/api/sessions/old/perms", BOB, {"mode": target},
+                      chat=GROUP)
     assert status == 403
 
 
-def test_miniapp_perms_outside_root_body(app, call, scopes, outside, live):
-    _session(app, "old", outside, status=Status.IDLE, skip_perms=True)
-    _s, body = call(app, "POST", "/api/sessions/old/perms", BOB, chat=GROUP)
+@pytest.mark.parametrize("current,target", SWITCHES, ids=SWITCH_IDS)
+def test_miniapp_perms_outside_root_body(app, call, scopes, outside, live, current, target):
+    _session(app, "old", outside, status=Status.IDLE, mode=current)
+    _s, body = call(app, "POST", "/api/sessions/old/perms", BOB, {"mode": target},
+                    chat=GROUP)
     assert body == {"error": "forbidden",
                     "detail": kit.session_outside_msg(_root(scopes, GROUP))}
 
 
-def test_miniapp_perms_outside_root_keeps_the_mode(app, call, outside, live):
-    sess = _session(app, "old", outside, status=Status.IDLE, skip_perms=True)
-    call(app, "POST", "/api/sessions/old/perms", BOB, chat=GROUP)
-    assert sess.skip_perms is True
+@pytest.mark.parametrize("current,target", SWITCHES, ids=SWITCH_IDS)
+def test_miniapp_perms_outside_root_keeps_the_mode(app, call, outside, live, current, target):
+    sess = _session(app, "old", outside, status=Status.IDLE, mode=current)
+    call(app, "POST", "/api/sessions/old/perms", BOB, {"mode": target}, chat=GROUP)
+    assert sess.perm_mode == current and sess.mode_switch is None
 
 
 def test_miniapp_perms_inside_root_allowed_for_user(app, call, made, live):
     root = made(GROUP)
-    _session(app, "old", os.path.join(root, "alpha"), status=Status.IDLE, skip_perms=True)
-    status, _b = call(app, "POST", "/api/sessions/old/perms", BOB, chat=GROUP)
+    _session(app, "old", os.path.join(root, "alpha"), status=Status.IDLE, mode="full")
+    status, _b = call(app, "POST", "/api/sessions/old/perms", BOB, {"mode": "ask"},
+                      chat=GROUP)
     assert status == 200
 
 
 @pytest.mark.parametrize("who", [OWNER, ADMIN], ids=["owner", "admin"])
 def test_miniapp_perms_outside_root_allowed_for_managers(app, call, outside, live, who):
-    _session(app, "old", outside, status=Status.IDLE, skip_perms=True)
-    status, _b = call(app, "POST", "/api/sessions/old/perms", who, chat=GROUP)
+    _session(app, "old", outside, status=Status.IDLE, mode="full")
+    status, _b = call(app, "POST", "/api/sessions/old/perms", who, {"mode": "ask"},
+                      chat=GROUP)
     assert status == 200

@@ -68,7 +68,7 @@ _GUARDED = {
     "ask": re.compile(r"talk|resume"),
     # The "Resume x1 as:" card after a Resume tap (8.94j): its mode
     # buttons and Cancel.
-    "resume": re.compile(r"resume-ask|resume-auto|resume-cancel"),
+    "resume": re.compile(r"resume-ask|resume-auto|resume-full|resume-cancel"),
     # Only ever pickers (below); here so every kind has a card form.
     "stop": re.compile(r"pstop\d+"),
     "rename": re.compile(r"rename"),
@@ -80,9 +80,9 @@ _PICKER_ROW = {
     "end": re.compile(r"end"),
     "restart": re.compile(r"restart"),
     "delete": re.compile(r"delete"),
-    "mode": re.compile(r"mode_show|modeask\d+|modeauto\d+"),
+    "mode": re.compile(r"mode_show|modeask\d+|modeauto\d+|modefull\d+"),
     "ask": re.compile(r"talk|resume"),
-    "resume": re.compile(r"resume-ask|resume-auto|resume-cancel"),
+    "resume": re.compile(r"resume-ask|resume-auto|resume-full|resume-cancel"),
     # /stop, /rename and /diff (8.94j): their rows act at once (a stop of
     # the turn shown, the rename question, the diff).
     "stop": re.compile(r"pstop\d+"),

@@ -39,8 +39,9 @@ hand.
 4. it checks the dependencies and installs Claude Code's hooks.
 
 It writes your DM as the first chat. It does not ask for a default
-mode: its summary says "New sessions start in Auto for owners and
-admins; change it in Telegram under /settings → New sessions." Then it
+mode: its summary says "New sessions start in Auto mode; owners and
+admins can choose Full access in Telegram under /settings → New
+sessions." Then it
 asks "Connected. Add a team group or other people now?" with Add a
 group, Add a person (DM) and I'm done.
 
@@ -83,16 +84,16 @@ offers:
 4. **You first.** When you are the owner of your own DM, the wizard
    asks to add you as the group's first member with the `owner` role
    (default Yes; you can skip it). Without an owner or admin in the
-   group, nobody there could use Auto, `/settings` or `/update`.
+   group, nobody there could use Full access, `/settings` or `/update`.
 5. **The other members**, one at a time: how to find them (auto-detect
    or paste an id or `@handle`), a label (shown as `@label` in the
    chat), and a role (default `user`). The role list includes `owner`,
    with a warning: an owner has full control of this machine, including
    aipager's config, the bot token and Claude's credentials. Give it
-   only to yourself. Give `admin` to people who should use Auto,
+   only to yourself. Give `admin` to people who should use Full access,
    `/settings` and `/update` in the group. (In their own private chat
    with the bot, anyone who can send prompts and answer Claude may use
-   Auto for their own sessions, whatever their role.)
+   Full access for their own sessions, whatever their role.)
 6. **One optional rule:** "Block file edits (Write, Edit) for `user`
    members in this group? Admins and the owner are not affected." The
    default is No: a `user` already writes only inside the session's
@@ -291,7 +292,7 @@ on the machine does that, which keeps it the owner's.
 |---|---|---|---|---|
 | Send prompts (`can_prompt`) | ✅ | ✅ | ✅ | ❌ |
 | Answer Claude: Allow, Deny, questions (`can_approve`) | ✅ | ✅ | ✅ | ❌ |
-| Manage: Auto, a group's `/settings`, `/update`, voice install (`can_manage`) | ✅ | ✅ | ❌ (Auto: ✅ in their own private chat) | ❌ |
+| Manage: Full access, a group's `/settings`, `/update`, voice install (`can_manage`) | ✅ | ✅ | ❌ (Full access: ✅ in their own private chat) | ❌ |
 | Change members and roles from Telegram or the Mini App | ❌ | ❌ | ❌ | ❌ |
 | Bypass role deny rules (`bypass_role_denies`) | ✅ | ✅ | ❌ | ❌ |
 | Bypass the safety floor (`bypass_safety`) | ✅ | ❌ | ❌ | ❌ |
@@ -306,8 +307,8 @@ on the machine does that, which keeps it the owner's.
 - **owner**: full control, including the built-in safety floor. There
   should be exactly one: the person who runs the machine.
 - **admin**: everything an owner can do in Telegram and the Mini App:
-  switch sessions to Auto (new sessions start in Auto for them), resume
-  a session in Auto, change a group's `/settings`, run `/update`,
+  switch sessions to Full access mode (and start them in it), resume
+  a session in Full access, change a group's `/settings`, run `/update`,
   install the voice extra, send any slash command. An admin also
   bypasses role deny rules (scope and member `deny_tools` do not apply
   to them). Two things stay with the owner:
@@ -367,7 +368,7 @@ on the machine does that, which keeps it the owner's.
 roles. A field you set replaces the built-in value. The fields:
 
 - `can_prompt`, `can_approve`: send prompts; answer Claude.
-- `can_manage`: use Auto, change a group's `/settings`, run `/update`
+- `can_manage`: use Full access, change a group's `/settings`, run `/update`
   and install the voice extra (built-in: `owner` and `admin` true,
   `user` and `read_only` false). It never lets anyone change members or
   roles, and never bypasses the safety floor.
@@ -683,29 +684,33 @@ asked for them: confirm cards and the `/new` cards, below.)
   Compact, Send now, End, Restart, Rename, Delete, Resume, the mode
   switch, ✍️ talk, Clear all, a session's own preferences and the
   `/new` cards. A button aipager does not know needs this too.
-- **Switching to Auto needs an admin** (MANAGE: `owner`, `admin`, or a
-  role with `can_manage`, the same rule as `/mode auto`): Yes, switch
-  and Stop task & switch on a card that switches to Auto, and Resume as
-  Auto. Resuming a session that was in Auto (typed `/resume x1`, the
-  picker, Resume on the `/new` name card, or the Mini App) brings it
-  back in Ask for anyone else, and the reply says so: "Resumed x1 in
-  Ask: Auto needs an admin."
-- **In their own private chat, a person may use Auto whatever their
-  role** (a `user` included; not `read_only`, which sends no prompts;
-  a custom role needs `can_prompt` and `can_approve`, since Auto answers
-  every one of Claude Code's permission prompts).
-  Every way into Auto above works there for them: `/mode auto`, the
-  mode card, `/new !x1`, the `/new` cards, `/resume` and the Mini App.
-  Their own chat is the only one where this applies: in a group, and
-  in anyone else's private chat, Auto still needs an admin. Their new
-  sessions start in Ask until they choose Auto under `/settings` → New
-  sessions. Nothing else an admin does opens up for them (`/update`,
-  the voice extra's Install, and a group's `/settings` stay admin-only).
-  Auto is safe to hand out this way: it starts Claude Code with
+- **Switching to Full access needs an admin** (MANAGE: `owner`,
+  `admin`, or a role with `can_manage`, the same rule as `/mode full`):
+  Yes, switch and Stop task & switch on a card that switches to Full
+  access, and Resume in Full access. Switching between Ask and Auto is
+  anyone's who can act on the session. Resuming a session that was in
+  Full access (typed `/resume x1`, the picker, Resume on the `/new` name
+  card, or the Mini App) brings it back in Auto mode for anyone else,
+  and the reply says so: "Resumed x1 in Auto mode: Full access mode
+  needs an admin."
+- **In their own private chat, a person may use Full access whatever
+  their role** (a `user` included; not `read_only`, which sends no
+  prompts; a custom role needs `can_prompt` and `can_approve`, since
+  Full access answers every one of Claude Code's permission prompts).
+  Every way into Full access above works there for them: `/mode full`,
+  the mode card, `/new !x1`, the `/new` cards, `/resume` and the Mini
+  App. Their own chat is the only one where this applies: in a group,
+  and in anyone else's private chat, Full access still needs an admin.
+  Their new sessions start in Auto mode, like everyone's, until they
+  choose Full access under `/settings` → New sessions. Nothing else an
+  admin does opens up for them (`/update`, the voice extra's Install,
+  and a group's `/settings` stay admin-only). Full access is safe to
+  hand out this way: it starts Claude Code with
   `--dangerously-skip-permissions`, which only skips Claude Code's own
   permission prompts. aipager's PreToolUse hook still runs on every
   tool call and enforces the member's role rules (the safety floor,
-  folder confinement, deny rules, credential files) exactly as in Ask.
+  folder confinement, deny rules, credential files) exactly as in Ask
+  and Auto.
 - **Installing needs an admin** (UPDATE): the voice extra's Install
   and Restart buttons, like `/update`'s.
 - **Changing a group's `/settings` needs an admin.** Anyone can look.
@@ -713,7 +718,7 @@ asked for them: confirm cards and the `/new` cards, below.)
   End (`/kill`, ⋮ End session), Restart, Delete and mode-switch confirm
   cards, the session pickers `/kill`, `/restart`, `/delete`, `/mode`,
   `/stop`, `/rename` and `/diff` show, and the "Resume x1 as:" card a
-  Resume tap draws (its Ask and Auto buttons) answer only the person who
+  Resume tap draws (its mode buttons) answer only the person who
   sent the command or tapped the button that drew them. Anyone else's
   tap, Cancel included, gets "This is @alice's card. Send /kill x2 for
   your own." (with that card's command) and changes nothing. The `/mode`

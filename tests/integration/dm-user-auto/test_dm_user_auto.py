@@ -1,20 +1,29 @@
-"""A person may use Auto mode in their own private chat, whatever their role
-(operator, 2026-10-11: "in a group scope, yes, a user cant switch the mode,
-but in their dm, they should be able to do it").
+"""A person may use Full access mode in their own private chat, whatever
+their role (operator, 2026-10-11: "in a group scope, yes, a user cant switch
+the mode, but in their dm, they should be able to do it"). Written for the
+bypass mode when it was called Auto (fix/dm-user-auto); since the three
+modes (ship/three-modes) that mode is Full access, and Auto is Claude
+Code's own safety check, open to everyone who may prompt.
 
-One rule (``AuthMixin._may_use_auto``) behind every way into Auto: an admin
-in the chat, or the member of that chat's DM scope (a role that may
-prompt and approve). Pinned here, with the REAL built-in policy:
+One rule (``AuthMixin._may_use_full_access``) behind every way into Full
+access: an admin in the chat, or the member of that chat's DM scope (a role
+that may prompt and approve). Pinned here, with the REAL built-in policy:
 
-- a ``user`` in their own DM can: /mode auto, Switch to Auto + Yes, Stop
-  task & switch, ``/new !x``, /new by the DM's New sessions = Auto, /resume
-  of an Auto session, the Mini App's mode switch and create;
-- a ``user`` (and a ``read_only`` member) in a GROUP is still refused on
-  every one of those paths, and nobody gets Auto in another person's DM;
+- a ``user`` in their own DM can: /mode full, Switch to Full access + Yes,
+  Stop task & switch, ``/new !x``, /new by the DM's New sessions = Full
+  access, /resume of a Full access session, the Ready card, the Mini App's
+  mode switch and create; and Auto, like everyone;
+- a ``user`` (and a ``read_only`` member) in a GROUP is still refused Full
+  access on every one of those paths (a ``user`` there may pick Auto), a
+  ``read_only`` member is refused it in their own DM too, and nobody gets
+  it in another person's DM;
+- a member whose role lacks ``can_manage`` cannot switch a session working
+  outside their root folder, in place (Shift+Tab, Ask <-> Auto) or with a
+  restart (Full access);
 - every other admin-only action stays refused to a ``user`` in their DM
   (/update, the voice Install button, the Mini App's Updates block);
-- the hook still applies the ``user`` role's rules (Auto changes nothing
-  aipager enforces);
+- the hook still applies the ``user`` role's rules in every mode (the mode
+  Claude Code reports changes nothing aipager enforces);
 - the Mini App's Settings tab follows /settings: a person changes their
   own DM's settings, a group's need an admin, nobody changes another
   person's DM (``_may_change_chat_settings``).
@@ -36,7 +45,7 @@ from aiohttp.test_utils import TestClient, TestServer
 from aipager import preferences
 from aipager import policy_snapshot as ps
 from aipager.bot import new_flow, session_parity, update_flow
-from aipager.bot.transport import RESUME_AUTO_NEEDS_ADMIN
+from aipager.bot.transport import RESUME_FULL_NEEDS_ADMIN
 from aipager.dtach import enforce, inject
 from aipager.miniapp.server import SCOPE_HEADER, MiniAppServer
 from aipager.policy import load_policy
@@ -50,10 +59,12 @@ G_S = "claude-api__g1001"
 BOB_S = "claude-mine__d2"
 ALY_S = "claude-ops__d1"
 
-NEEDS_ADMIN = "Auto mode needs an admin."
-APP_NEEDS_ADMIN = "Auto mode requires admin."     # the Mini App's wording
+NEEDS_ADMIN = "Full access mode needs an admin."
+APP_NEEDS_ADMIN = "Full access mode requires admin."     # the Mini App's wording
+APP_SWITCH_NEEDS_ADMIN = "Switching to Full access mode requires admin."
 REFUSED = "Your role can't do that here."
-ASK_NOTE = f"in Ask: {RESUME_AUTO_NEEDS_ADMIN}"
+AUTO_NOTE = f"in Auto mode: {RESUME_FULL_NEEDS_ADMIN}"
+OUTSIDE = "This session works outside your folder"
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
 
@@ -188,23 +199,31 @@ def _edited(q):
             for c in q.edit_message_text.await_args_list]
 
 
-def _session(bot, name, chat, *, label=None, status=Status.IDLE, auto=False):
+def _session(bot, name, chat, *, label=None, status=Status.IDLE, mode="ask", cwd=None):
     s = bot.registry.get_or_create(name)
     s.label = label or name.removeprefix("claude-").split("__")[0]
     s.scope_chat_id = chat
     s.scope_kind = "group" if chat < 0 else "dm"
     s.status = status
-    s.skip_perms = auto
-    if not s.cwd and chat in ROOTS:
+    s.perm_mode = mode
+    if cwd is not None:
+        s.cwd = cwd
+    elif not s.cwd and chat in ROOTS:
         s.cwd = ROOTS[chat]
     return s
 
 
-def _gone_auto(bot, name, chat):
-    s = _session(bot, name, chat, status=Status.GONE, auto=True)
+def _gone_full(bot, name, chat):
+    s = _session(bot, name, chat, status=Status.GONE, mode="full")
     s.claude_session_id, s.cwd = "sid-1", ROOTS.get(chat, "/srv/work")
     s.last_assistant_preview = "where we left off"
     return s
+
+
+def _outside(chat):
+    """A folder outside *chat*'s root folder (next to it, in the same
+    throwaway home)."""
+    return str(Path(ROOTS[chat]).parent / "elsewhere")
 
 
 # Where each person acts: (user, chat, session name in that chat).
@@ -233,12 +252,12 @@ G_IDS = ["group-user", "group-read_only"]
 ], ids=["user-own-dm", "owner-own-dm", "owner-group", "user-group",
         "ro-group", "ro-own-dm", "user-other-dm", "owner-other-dm",
         "stranger-dm", "no-chat", "no-user", "unscoped-dm"])
-def test_may_use_auto(bot, uid, chat, want):
-    assert bot._may_use_auto(uid, chat) is want
+def test_may_use_full_access(bot, uid, chat, want):
+    assert bot._may_use_full_access(uid, chat) is want
 
 
 def test_the_admin_rule_itself_is_unchanged(bot):
-    """Only Auto opens up: a user in their DM is still not an admin."""
+    """Only Full access opens up: a user in their DM is still not an admin."""
     assert bot._is_admin_user(BOB, BOB_DM) is False
     assert bot._is_update_admin(BOB, BOB_DM) is False
 
@@ -248,7 +267,7 @@ def test_a_dm_scope_needs_the_dm_kind(mk_bot):
     b = mk_bot(scopes=[Scope(chat_id=77, kind="group", label="solo",
                              members=(Member(id=BOB, label="bob", role="user"),))])
     b.policy = _policy()
-    assert b._may_use_auto(BOB, 77) is False
+    assert b._may_use_full_access(BOB, 77) is False
 
 
 @pytest.mark.parametrize("prompt,approve,want", [
@@ -256,60 +275,74 @@ def test_a_dm_scope_needs_the_dm_kind(mk_bot):
     ("false", "true", False),    # answers prompts, sends none
     ("true", "true", True),      # both: like ``user``
 ], ids=["prompt-only", "approve-only", "both"])
-def test_a_custom_role_needs_prompt_and_approve_for_auto_in_its_dm(
+def test_a_custom_role_needs_prompt_and_approve_for_full_access_in_its_dm(
         mk_bot, tmp_path, prompt, approve, want):
-    """Auto answers every Claude Code prompt: only a role that may both
-    send prompts and answer them gets Auto at home."""
+    """Full access answers every Claude Code prompt: only a role that may
+    both send prompts and answer them gets it at home."""
     (tmp_path / "policy.yaml").write_text(
         f"roles:\n  custom:\n    can_prompt: {prompt}\n    can_approve: {approve}\n")
     b = mk_bot(scopes=[Scope(chat_id=9, kind="dm", label="c DM",
                              members=(Member(id=9, label="c", role="custom"),))])
     b.policy = load_policy(tmp_path / "policy.yaml", tmp_path / "policy.d")
-    assert b._may_use_auto(9, 9) is want
+    assert b._may_use_full_access(9, 9) is want
 
 
 def test_a_dm_scope_on_a_group_id_is_not_a_private_chat(mk_bot):
     """A hand-edited ``kind: dm`` on a group's (negative) id counts for
-    neither Auto nor the settings rule."""
+    neither Full access nor the settings rule."""
     b = mk_bot(scopes=[Scope(chat_id=-88, kind="dm", label="odd",
                              members=(Member(id=BOB, label="bob", role="user"),))])
     b.policy = _policy()
-    assert b._may_use_auto(BOB, -88) is False
+    assert b._may_use_full_access(BOB, -88) is False
     assert b._may_change_chat_settings(BOB, -88) is False
 
 
 def test_personal_and_legacy_modes_keep_the_admin_rule(mk_bot):
     from aipager.team import Role, Team, User as TeamUser
     personal = mk_bot(scopes=None)
-    assert personal._may_use_auto(12345, 12345) is True
+    assert personal._may_use_full_access(12345, 12345) is True
     legacy = mk_bot(scopes=None)
     legacy.team = Team(group_id=-5, users={
         7: TeamUser(id=7, label="u", role=Role.DEVELOPER),
         8: TeamUser(id=8, label="a", role=Role.ADMIN)})
-    assert legacy._may_use_auto(7, 7) is False
-    assert legacy._may_use_auto(8, 8) is True
+    assert legacy._may_use_full_access(7, 7) is False
+    assert legacy._may_use_full_access(8, 8) is True
+
+
+@pytest.mark.parametrize("cap_name", ["MANAGE"])
+def test_the_tap_gates_manage_is_the_full_access_rule(bot, cap_name):
+    """The tap gate's MANAGE (resume-full, rdy_full, modefull, a /mode card
+    switching to Full access) asks the same rule."""
+    from aipager.bot import tap_gate
+    cap = getattr(tap_gate, cap_name)
+    member = bot._member_in_scope(bot._scope_for(BOB_DM), BOB)
+    assert bot._member_can(member, cap, BOB, BOB_DM) is True
+    gmember = bot._member_in_scope(bot._scope_for(GROUP), BOB)
+    assert bot._member_can(gmember, cap, BOB, GROUP) is False
+    romember = bot._member_in_scope(bot._scope_for(RO_DM), RO)
+    assert bot._member_can(romember, cap, RO, RO_DM) is False
 
 
 # ===========================================================================
-# /mode auto (typed)
+# /mode full (typed)
 # ===========================================================================
 
-def test_mode_auto_typed_in_own_dm(bot, run_async):
+def test_mode_full_typed_in_own_dm(bot, run_async):
     uid, chat, name = DM_USER
     sess = _session(bot, name, chat)
-    u = _cmd("/mode mine auto", user_id=uid, chat_id=chat)
+    u = _cmd("/mode mine full", user_id=uid, chat_id=chat)
     run_async(bot._handle_mode_cmd(u, MagicMock()))
     replies = _replies(u)
     assert replies and NEEDS_ADMIN not in replies
-    assert "Auto mode?" in replies[0]           # the confirm step
-    assert bot._perms_pending[name]["target_skip_perms"] is True
-    assert sess.skip_perms is False             # nothing yet without Yes
+    assert "Full access mode?" in replies[0]    # the confirm step
+    assert bot._perms_pending[name]["target_mode"] == "full"
+    assert sess.perm_mode == "ask"              # nothing yet without Yes
 
 
 @pytest.mark.parametrize("uid,chat,name", GROUP_REFUSED, ids=G_IDS)
-def test_mode_auto_typed_in_a_group_is_refused(bot, run_async, uid, chat, name):
+def test_mode_full_typed_in_a_group_is_refused(bot, run_async, uid, chat, name):
     _session(bot, name, chat)
-    u = _cmd("/mode api auto", user_id=uid, chat_id=chat)
+    u = _cmd("/mode api full", user_id=uid, chat_id=chat)
     run_async(bot._handle_mode_cmd(u, MagicMock()))
     if uid == BOB:
         assert _replies(u) == [NEEDS_ADMIN]
@@ -319,51 +352,105 @@ def test_mode_auto_typed_in_a_group_is_refused(bot, run_async, uid, chat, name):
     assert name not in bot._perms_pending
 
 
+def test_mode_full_typed_by_read_only_in_own_dm_is_refused(bot, run_async):
+    name = "claude-ro1__d3"
+    sess = _session(bot, name, RO_DM)
+    bot._mode_switch_core = AsyncMock()
+    u = _cmd("/mode ro1 full", user_id=RO, chat_id=RO_DM)
+    run_async(bot._handle_mode_cmd(u, MagicMock()))
+    assert len(_replies(u)) == 1 and NEEDS_ADMIN not in _replies(u)[0]
+    assert name not in bot._perms_pending
+    bot._mode_switch_core.assert_not_called()
+    assert sess.perm_mode == "ask"
+
+
 def test_perms_alias_in_own_dm(bot, run_async):
     uid, chat, name = DM_USER
     _session(bot, name, chat)
-    u = _cmd("/perms mine auto", user_id=uid, chat_id=chat)
+    u = _cmd("/perms mine full", user_id=uid, chat_id=chat)
     run_async(bot._handle_perms_cmd(u, MagicMock()))
     assert NEEDS_ADMIN not in _replies(u)
-    assert bot._perms_pending[name]["target_skip_perms"] is True
+    assert bot._perms_pending[name]["target_mode"] == "full"
+
+
+# ---- Auto (Claude Code's safety check) is everyone's who may prompt -------
+
+@pytest.mark.parametrize("uid,chat,name", [(BOB, BOB_DM, BOB_S), (BOB, GROUP, G_S)],
+                         ids=["user-own-dm", "user-group"])
+def test_mode_auto_typed_is_a_users_in_a_dm_and_a_group(bot, run_async, uid, chat, name):
+    sess = _session(bot, name, chat)
+    bot._mode_switch_core = AsyncMock(return_value=MagicMock(ok=True, reason="sent", label=sess.label))
+    u = _cmd(f"/mode {sess.label} auto", user_id=uid, chat_id=chat)
+    run_async(bot._handle_mode_cmd(u, MagicMock()))
+    assert NEEDS_ADMIN not in _replies(u)
+    bot._mode_switch_core.assert_awaited_once_with(sess, "auto")
+
+
+def test_mode_auto_typed_by_read_only_in_own_dm_is_refused(bot, run_async):
+    sess = _session(bot, "claude-ro1__d3", RO_DM)
+    bot._mode_switch_core = AsyncMock()
+    u = _cmd("/mode ro1 auto", user_id=RO, chat_id=RO_DM)
+    run_async(bot._handle_mode_cmd(u, MagicMock()))
+    bot._mode_switch_core.assert_not_called()
+    assert sess.perm_mode == "ask"
 
 
 # ===========================================================================
-# The mode card: Switch to Auto, then Yes / Stop task & switch
+# The mode card: Switch to Full access, then Yes / Stop task & switch
 # ===========================================================================
 
-def _switch_tap(bot, run_async, uid, chat, sess):
-    data = session_parity.session_cb(bot, chat, sess, f"modeauto{sess.turn_key}")
+def _switch_tap(bot, run_async, uid, chat, sess, verb="modefull"):
+    data = session_parity.session_cb(bot, chat, sess, f"{verb}{sess.turn_key}")
     u, q = _tap(chat, uid, data, msg_id=90)
     run_async(bot._handle_callback(u, MagicMock()))
     return q
 
 
-def test_switch_to_auto_then_yes_in_own_dm(bot, run_async):
+def test_switch_to_full_then_yes_in_own_dm(bot, run_async):
     uid, chat, name = DM_USER
     sess = _session(bot, name, chat)
     bot._do_perms_switch_via_fn = AsyncMock()
     q = _switch_tap(bot, run_async, uid, chat, sess)
-    assert NEEDS_ADMIN not in _answers(q)
-    assert bot._perms_pending[name]["target_skip_perms"] is True
+    assert NEEDS_ADMIN not in _answers(q) and REFUSED not in _answers(q)
+    assert bot._perms_pending[name]["target_mode"] == "full"
     u, q2 = _tap(chat, uid, f"{name}:perms_confirm",
                  msg_id=bot._perms_pending[name]["msg_id"] or 90)
     run_async(bot._handle_callback(u, MagicMock()))
     assert REFUSED not in _answers(q2)
     bot._do_perms_switch_via_fn.assert_awaited_once()
-    assert bot._do_perms_switch_via_fn.await_args.args[:2] == (sess, True)
+    assert bot._do_perms_switch_via_fn.await_args.args[:2] == (sess, "full")
 
 
 @pytest.mark.parametrize("uid,chat,name", GROUP_REFUSED, ids=G_IDS)
-def test_switch_to_auto_tap_in_a_group_is_refused(bot, run_async, uid, chat, name):
+def test_switch_to_full_tap_in_a_group_is_refused(bot, run_async, uid, chat, name):
     sess = _session(bot, name, chat)
     bot._do_perms_switch_via_fn = AsyncMock()
     q = _switch_tap(bot, run_async, uid, chat, sess)
-    # A user reaches the handler, which refuses; read_only is stopped at
-    # the tap gate (no prompting). Either way: no confirm, no switch.
-    assert _answers(q) == ([NEEDS_ADMIN] if uid == BOB else [REFUSED])
+    # modefull needs MANAGE at the tap gate (the same rule): refused there
+    # for both. No confirm, no switch.
+    assert _answers(q) == [REFUSED]
     assert name not in bot._perms_pending
     bot._do_perms_switch_via_fn.assert_not_called()
+
+
+def test_switch_to_full_tap_by_read_only_in_own_dm_is_refused(bot, run_async):
+    name = "claude-ro1__d3"
+    sess = _session(bot, name, RO_DM)
+    bot._do_perms_switch_via_fn = AsyncMock()
+    q = _switch_tap(bot, run_async, RO, RO_DM, sess)
+    assert _answers(q) == [REFUSED]
+    assert name not in bot._perms_pending
+    bot._do_perms_switch_via_fn.assert_not_called()
+
+
+@pytest.mark.parametrize("uid,chat,name", [(BOB, BOB_DM, BOB_S), (BOB, GROUP, G_S)],
+                         ids=["user-own-dm", "user-group"])
+def test_switch_to_auto_tap_is_a_users(bot, run_async, uid, chat, name):
+    sess = _session(bot, name, chat)
+    bot._mode_switch_core = AsyncMock(return_value=MagicMock(ok=True, reason="sent", label=sess.label))
+    q = _switch_tap(bot, run_async, uid, chat, sess, verb="modeauto")
+    assert REFUSED not in _answers(q) and NEEDS_ADMIN not in _answers(q)
+    bot._mode_switch_core.assert_awaited_once_with(sess, "auto")
 
 
 @pytest.mark.parametrize("verb", ["perms_confirm", "perms_stop_switch"])
@@ -371,14 +458,14 @@ def test_yes_and_stop_and_switch_in_own_dm(bot, run_async, verb):
     uid, chat, name = DM_USER
     sess = _session(bot, name, chat,
                     status=Status.BUSY if verb == "perms_stop_switch" else Status.IDLE)
-    bot._perms_pending[name] = {"target_skip_perms": True, "msg_id": 90,
+    bot._perms_pending[name] = {"target_mode": "full", "msg_id": 90,
                                 "label": sess.label, "turn": sess.turn_key}
     bot._do_perms_switch_via_fn = AsyncMock()
     u, q = _tap(chat, uid, f"{name}:{verb}", msg_id=90)
     run_async(bot._handle_callback(u, MagicMock()))
     assert REFUSED not in _answers(q)
     bot._do_perms_switch_via_fn.assert_awaited_once()
-    assert bot._do_perms_switch_via_fn.await_args.args[1] is True
+    assert bot._do_perms_switch_via_fn.await_args.args[1] == "full"
 
 
 @pytest.mark.parametrize("verb", ["perms_confirm", "perms_stop_switch"])
@@ -387,7 +474,7 @@ def test_yes_and_stop_and_switch_in_a_group_are_refused(
         bot, run_async, uid, chat, name, verb):
     sess = _session(bot, name, chat,
                     status=Status.BUSY if verb == "perms_stop_switch" else Status.IDLE)
-    record = {"target_skip_perms": True, "msg_id": 90, "label": sess.label,
+    record = {"target_mode": "full", "msg_id": 90, "label": sess.label,
               "turn": sess.turn_key}
     bot._perms_pending[name] = record
     bot._do_perms_switch_via_fn = AsyncMock()
@@ -402,21 +489,21 @@ def test_another_persons_dm_card_is_not_theirs(bot, run_async):
     """bob taps a Yes that names aly's DM session, from aly's DM: he is
     no member there, so nothing switches."""
     sess = _session(bot, ALY_S, ALY_DM)
-    bot._perms_pending[ALY_S] = {"target_skip_perms": True, "msg_id": 90,
+    bot._perms_pending[ALY_S] = {"target_mode": "full", "msg_id": 90,
                                  "label": sess.label, "turn": sess.turn_key}
     bot._do_perms_switch_via_fn = AsyncMock()
     for uid in (BOB, CARA):
         u, q = _tap(ALY_DM, uid, f"{ALY_S}:perms_confirm", msg_id=90)
         run_async(bot._handle_callback(u, MagicMock()))
     bot._do_perms_switch_via_fn.assert_not_called()
-    assert sess.skip_perms is False
+    assert sess.perm_mode == "ask"
 
 
-def test_own_dm_auto_does_not_reach_a_group_session(bot, run_async):
+def test_own_dm_full_access_does_not_reach_a_group_session(bot, run_async):
     """bob's Yes for the GROUP's session, tapped in his own DM: the button
     belongs to another chat."""
     sess = _session(bot, G_S, GROUP)
-    bot._perms_pending[G_S] = {"target_skip_perms": True, "msg_id": 90,
+    bot._perms_pending[G_S] = {"target_mode": "full", "msg_id": 90,
                                "label": sess.label, "turn": sess.turn_key}
     bot._do_perms_switch_via_fn = AsyncMock()
     u, q = _tap(BOB_DM, BOB, f"{G_S}:perms_confirm", msg_id=90)
@@ -434,40 +521,48 @@ def _new(bot, run_async, text, uid, chat):
     return u
 
 
-def test_new_bang_in_own_dm_starts_in_auto(bot, run_async, launched):
+def test_new_bang_in_own_dm_starts_in_full_access(bot, run_async, launched):
     uid, chat, _ = DM_USER
     _new(bot, run_async, "/new !x7", uid, chat)
     sess = bot.registry.find_by_label("x7", chat)
-    assert sess is not None and sess.skip_perms is True
-    assert launched and launched[-1][1]["skip_perms"] is True
+    assert sess is not None and sess.perm_mode == "full"
+    assert launched and launched[-1][1]["mode"] == "full"
 
 
 @pytest.mark.parametrize("uid,chat,name", GROUP_REFUSED, ids=G_IDS)
-def test_new_bang_in_a_group_gets_no_auto(bot, run_async, launched, uid, chat, name):
+def test_new_bang_in_a_group_gets_no_full_access(bot, run_async, launched, uid, chat, name):
     _new(bot, run_async, "/new !x7", uid, chat)
     sess = bot.registry.find_by_label("x7", chat)
-    assert sess is None or sess.skip_perms is False
-    assert all(kw["skip_perms"] is False for _s, kw in launched)
+    assert sess is None or sess.perm_mode == "auto"
+    assert all(kw["mode"] != "full" for _s, kw in launched)
 
 
-def test_new_bang_in_a_group_says_auto_needs_an_admin(bot, run_async, launched):
+def test_new_bang_by_read_only_in_own_dm_gets_no_full_access(bot, run_async, launched):
+    _new(bot, run_async, "/new !x7", RO, RO_DM)
+    sess = bot.registry.find_by_label("x7", RO_DM)
+    assert sess is None or sess.perm_mode != "full"
+    assert all(kw["mode"] != "full" for _s, kw in launched)
+
+
+def test_new_bang_in_a_group_says_full_access_needs_an_admin(bot, run_async, launched):
     u = _new(bot, run_async, "/new !x7", BOB, GROUP)
     sess = bot.registry.find_by_label("x7", GROUP)
-    assert sess is not None and sess.skip_perms is False
+    assert sess is not None and sess.perm_mode == "auto"
     b = bot._app.bot
     shown = "\n".join(_replies(u) + [
         str(c.kwargs.get("text", c.args[0] if c.args else ""))
         for m in (b.edit_message_text, b.send_message, u.message.reply_text.return_value.edit_text)
         for c in m.await_args_list])
-    assert str(new_flow.NOTE_AUTO_NEEDS_ADMIN) in shown
+    assert str(new_flow.NOTE_FULL_NEEDS_ADMIN) in shown
 
 
-def test_new_without_a_setting_stays_ask_in_own_dm(bot, run_async, launched):
+def test_new_without_a_setting_starts_in_auto_in_own_dm(bot, run_async, launched):
+    """Like everyone's: Auto unless the chat chose otherwise."""
     uid, chat, _ = DM_USER
     st = new_flow.resolve_new_session_settings(bot, chat, uid)
-    assert st["can_auto"] is True and st["skip_perms"] is False
+    assert st["can_full"] is True and st["mode"] == "auto"
     _new(bot, run_async, "/new x8", uid, chat)
-    assert bot.registry.find_by_label("x8", chat).skip_perms is False
+    assert bot.registry.find_by_label("x8", chat).perm_mode == "auto"
 
 
 def _ns_tap(bot, run_async, uid, chat, token):
@@ -476,186 +571,241 @@ def _ns_tap(bot, run_async, uid, chat, token):
     return q
 
 
-def test_new_follows_the_dms_new_sessions_auto(bot, run_async, launched):
+def _mode_rows(kb):
+    return [row[0].text for row in kb.inline_keyboard
+            if row[0].callback_data.startswith("_:set:ns:mode:")]
+
+
+def test_new_follows_the_dms_new_sessions_full_access(bot, run_async, launched):
     uid, chat, _ = DM_USER
-    q = _ns_tap(bot, run_async, uid, chat, "auto")
-    assert preferences.get_new_session_defaults(chat).mode == "auto"
-    # The page shows what /new now gives them: Auto, ticked.
+    q = _ns_tap(bot, run_async, uid, chat, "full")
+    assert preferences.get_new_session_defaults(chat).mode == "full"
+    # The page shows what /new now gives them: Full access, ticked.
     edits = (q.edit_message_text.await_args_list
              + bot._app.bot.edit_message_text.await_args_list)
     kb = edits[-1].kwargs["reply_markup"]
-    first_row = [b.text for b in kb.inline_keyboard[0]]
-    assert first_row[0].endswith("✅") and not first_row[1].endswith("✅")
+    rows = _mode_rows(kb)
+    assert rows[2].endswith("✅") and not rows[0].endswith("✅")
     page = edits[-1].kwargs.get("text") or edits[-1].args[0]
-    assert "Auto is for admins" not in page and "Auto mode" in page
+    assert "Full access is for admins" not in page and "Full access mode" in page
     st = new_flow.resolve_new_session_settings(bot, chat, uid)
-    assert st["skip_perms"] is True
+    assert st["mode"] == "full"
     _new(bot, run_async, "/new x9", uid, chat)
-    assert bot.registry.find_by_label("x9", chat).skip_perms is True
-    # And back: Ask is stored, /new gives Ask.
-    _ns_tap(bot, run_async, uid, chat, "ask")
-    assert new_flow.resolve_new_session_settings(bot, chat, uid)["skip_perms"] is False
+    assert bot.registry.find_by_label("x9", chat).perm_mode == "full"
+    # And back: Auto is stored, /new gives Auto.
+    _ns_tap(bot, run_async, uid, chat, "auto")
+    assert new_flow.resolve_new_session_settings(bot, chat, uid)["mode"] == "auto"
 
 
-def test_the_dm_page_ticks_ask_with_no_setting(bot):
+def test_the_dm_page_offers_full_access_to_its_member(bot):
     text, kb = new_flow.render_new_session_defaults(bot, BOB_DM, viewer=BOB)
-    first_row = [b.text for b in kb.inline_keyboard[0]]
-    assert first_row[1].endswith("✅") and not first_row[0].endswith("✅")
-    assert "Auto is for admins" not in text
+    rows = _mode_rows(kb)
+    assert len(rows) == 3 and rows[0].endswith("✅")
+    assert "Full access is for admins" not in text
 
 
-def test_an_admin_still_stores_auto_as_the_default(bot, run_async):
-    _ns_tap(bot, run_async, ALY, ALY_DM, "auto")
-    assert preferences.get_new_session_defaults(ALY_DM).mode == ""
-    assert new_flow.resolve_new_session_settings(bot, ALY_DM, ALY)["skip_perms"] is True
+def test_the_read_only_dm_page_does_not_offer_full_access(bot):
+    """Their own private chat, but a role that may not use Full access:
+    the row is not shown."""
+    _text, kb = new_flow.render_new_session_defaults(bot, RO_DM, viewer=RO)
+    assert [cb.callback_data for row in kb.inline_keyboard for cb in row
+            if cb.callback_data.startswith("_:set:ns:mode:")] == [
+        "_:set:ns:mode:auto", "_:set:ns:mode:ask"]
+
+
+def test_a_groups_page_keeps_the_full_access_row(bot):
+    """A group's page is shared: the row stays, and a tap is refused below."""
+    _text, kb = new_flow.render_new_session_defaults(bot, GROUP, viewer=BOB)
+    assert len(_mode_rows(kb)) == 3
+
+
+def test_read_only_in_own_dm_cannot_store_full_access(bot, run_async):
+    q = _ns_tap(bot, run_async, RO, RO_DM, "full")
+    assert NEEDS_ADMIN in _answers(q)
+    assert preferences.get_new_session_defaults(RO_DM).mode == "auto"
+
+
+def test_read_only_in_own_dm_may_store_ask(bot, run_async):
+    """Their own DM's settings are theirs (the /settings rule)."""
+    _ns_tap(bot, run_async, RO, RO_DM, "ask")
+    assert preferences.get_new_session_defaults(RO_DM).mode == "ask"
+
+
+def test_a_user_in_a_group_cannot_store_full_access(bot, run_async):
+    _ns_tap(bot, run_async, BOB, GROUP, "full")
+    assert preferences.get_new_session_defaults(GROUP).mode == "auto"
 
 
 @pytest.mark.parametrize("uid", [BOB, RO], ids=["user", "read_only"])
-def test_a_groups_auto_default_is_not_theirs(bot, uid):
-    preferences.set_new_session_default(GROUP, "mode", "auto")
+def test_a_groups_full_access_default_is_not_theirs(bot, uid):
+    preferences.set_new_session_default(GROUP, "mode", "full")
     st = new_flow.resolve_new_session_settings(bot, GROUP, uid)
-    assert st["skip_perms"] is False and st["can_auto"] is False
+    assert st["mode"] == "auto" and st["can_full"] is False and st["full_refused"] is True
 
 
-def test_another_dms_auto_default_does_not_apply_to_a_visitor(bot):
-    preferences.set_new_session_default(BOB_DM, "mode", "auto")
-    assert new_flow.resolve_new_session_settings(bot, BOB_DM, CARA)["skip_perms"] is False
+def test_another_dms_full_access_default_does_not_apply_to_a_visitor(bot):
+    preferences.set_new_session_default(BOB_DM, "mode", "full")
+    assert new_flow.resolve_new_session_settings(bot, BOB_DM, CARA)["mode"] == "auto"
 
 
-def test_name_card_mode_auto_tap_in_own_dm(bot, run_async):
+def test_name_card_mode_full_tap_in_own_dm(bot, run_async):
     uid, chat, _ = DM_USER
     _new(bot, run_async, "/new", uid, chat)
     pending = new_flow._pending_store(bot)[(chat, uid)]
-    assert pending["can_auto"] is True and pending["skip_perms"] is False
-    u, q = _tap(chat, uid, "_:nw:mode:auto", msg_id=pending.get("msg_id") or 901)
+    assert pending["can_full"] is True and pending["mode"] == "auto"
+    u, q = _tap(chat, uid, "_:nw:mode:full", msg_id=pending.get("msg_id") or 901)
     run_async(bot._handle_callback(u, MagicMock()))
     assert NEEDS_ADMIN not in _answers(q)
-    assert pending["skip_perms"] is True
+    assert pending["mode"] == "full"
 
 
-def test_name_card_mode_auto_tap_in_a_group_is_refused(bot, run_async):
+def test_name_card_mode_full_tap_in_a_group_is_refused(bot, run_async):
     _new(bot, run_async, "/new", BOB, GROUP)
     pending = new_flow._pending_store(bot)[(GROUP, BOB)]
-    u, q = _tap(GROUP, BOB, "_:nw:mode:auto", msg_id=pending.get("msg_id") or 901)
+    u, q = _tap(GROUP, BOB, "_:nw:mode:full", msg_id=pending.get("msg_id") or 901)
     run_async(bot._handle_callback(u, MagicMock()))
     assert NEEDS_ADMIN in _answers(q)
-    assert pending["skip_perms"] is False
+    assert pending["mode"] == "auto"
 
 
-def _ready_tap(bot, run_async, uid, chat, name):
-    sess = _session(bot, name, chat)
+def _ready_tap(bot, run_async, uid, chat, name, verb="rdy_full", **kw):
+    sess = _session(bot, name, chat, **kw)
     sess.tap_is_for_this_turn = lambda *a, **k: True
-    bot._perms_switch_core = AsyncMock(return_value=MagicMock(ok=True, err=""))
-    data = session_parity.session_cb(bot, chat, sess, "rdy_auto")
+    bot._mode_switch_core = AsyncMock(return_value=MagicMock(ok=True, err="", reason="ok"))
+    data = session_parity.session_cb(bot, chat, sess, verb)
     u, q = _tap(chat, uid, data, msg_id=95)
     run_async(bot._handle_callback(u, MagicMock()))
     return sess, q
 
 
-def test_ready_card_switch_to_auto_in_own_dm(bot, run_async):
+def test_ready_card_switch_to_full_in_own_dm(bot, run_async):
     uid, chat, name = DM_USER
     sess, q = _ready_tap(bot, run_async, uid, chat, name)
-    assert NEEDS_ADMIN not in _answers(q)
-    bot._perms_switch_core.assert_awaited_once_with(sess, True)
+    assert NEEDS_ADMIN not in _answers(q) and REFUSED not in _answers(q)
+    bot._mode_switch_core.assert_awaited_once_with(sess, "full")
 
 
-def test_ready_card_switch_to_auto_in_a_group_is_refused(bot, run_async):
+def test_ready_card_switch_to_full_in_a_group_is_refused(bot, run_async):
     _sess, q = _ready_tap(bot, run_async, BOB, GROUP, G_S)
-    assert NEEDS_ADMIN in _answers(q)
-    bot._perms_switch_core.assert_not_called()
+    assert _answers(q) == [REFUSED]
+    bot._mode_switch_core.assert_not_called()
+
+
+@pytest.mark.parametrize("uid,chat,name", [(BOB, BOB_DM, BOB_S), (BOB, GROUP, G_S)],
+                         ids=["user-own-dm", "user-group"])
+def test_ready_card_switch_to_auto_is_a_users(bot, run_async, uid, chat, name):
+    sess, q = _ready_tap(bot, run_async, uid, chat, name, verb="rdy_auto")
+    assert REFUSED not in _answers(q) and NEEDS_ADMIN not in _answers(q)
+    bot._mode_switch_core.assert_awaited_once_with(sess, "auto")
 
 
 # ===========================================================================
-# /resume of a session that was in Auto
+# /resume of a session that was in Full access
 # ===========================================================================
 
-def test_typed_resume_in_own_dm_comes_back_in_auto(bot, run_async, launched):
+def test_typed_resume_in_own_dm_comes_back_in_full_access(bot, run_async, launched):
     uid, chat, name = DM_USER
-    sess = _gone_auto(bot, name, chat)
+    sess = _gone_full(bot, name, chat)
     u = _cmd("/resume mine", user_id=uid, chat_id=chat)
     run_async(bot._handle_resume_cmd(u, MagicMock()))
-    assert launched[0][1]["skip_perms"] is True and sess.skip_perms is True
-    assert ASK_NOTE not in "\n".join(_replies(u))
+    assert launched[0][1]["mode"] == "full" and sess.perm_mode == "full"
+    assert AUTO_NOTE not in "\n".join(_replies(u))
 
 
 @pytest.mark.parametrize("uid", [BOB], ids=["group-user"])
-def test_typed_resume_in_a_group_comes_back_in_ask(bot, run_async, launched, uid):
-    sess = _gone_auto(bot, G_S, GROUP)
+def test_typed_resume_in_a_group_comes_back_in_auto(bot, run_async, launched, uid):
+    sess = _gone_full(bot, G_S, GROUP)
     u = _cmd("/resume api", user_id=uid, chat_id=GROUP)
     run_async(bot._handle_resume_cmd(u, MagicMock()))
-    assert launched[0][1]["skip_perms"] is False and sess.skip_perms is False
-    assert ASK_NOTE in "\n".join(_replies(u))
+    assert launched[0][1]["mode"] == "auto" and sess.perm_mode == "auto"
+    assert AUTO_NOTE in "\n".join(_replies(u))
 
 
-def test_picker_resume_auto_in_own_dm(bot, run_async, launched):
+def test_a_session_a_dm_member_put_in_bypass_before_comes_back_in_full_access(
+        bot, run_async, launched):
+    """Migration: a session saved by the dm-user-auto build in its bypass
+    "Auto" (skip_perms True) is Full access now, which its member may
+    still use in their own DM."""
+    from aipager import perm_modes
     uid, chat, name = DM_USER
-    sess = _gone_auto(bot, name, chat)
+    assert perm_modes.mode_from_saved({"skip_perms": True}) == "full"
+    sess = _gone_full(bot, name, chat)
+    u = _cmd("/resume mine", user_id=uid, chat_id=chat)
+    run_async(bot._handle_resume_cmd(u, MagicMock()))
+    assert launched[0][1]["mode"] == "full" and sess.perm_mode == "full"
+
+
+def test_picker_resume_full_in_own_dm(bot, run_async, launched):
+    uid, chat, name = DM_USER
+    sess = _gone_full(bot, name, chat)
     data = session_parity.session_cb(bot, chat, sess, "resume")
     u, q = _tap(chat, uid, data, msg_id=60)
     run_async(bot._handle_callback(u, MagicMock()))
     labels = [b.text for row in
               q.edit_message_text.await_args.kwargs["reply_markup"].inline_keyboard
               for b in row]
-    assert "🤖 Auto mode (default)" in labels
-    sess.skip_perms = False
-    data = session_parity.session_cb(bot, chat, sess, "resume-auto")
+    assert "🔓 Full access mode (default)" in labels
+    sess.perm_mode = "ask"
+    data = session_parity.session_cb(bot, chat, sess, "resume-full")
     u, q = _tap(chat, uid, data, msg_id=60)
     run_async(bot._handle_callback(u, MagicMock()))
     assert REFUSED not in _answers(q)
-    assert launched[0][1]["skip_perms"] is True
+    assert launched[0][1]["mode"] == "full"
 
 
 @pytest.mark.parametrize("uid,chat,name", GROUP_REFUSED, ids=G_IDS)
-def test_picker_resume_auto_in_a_group_is_refused(bot, run_async, launched,
+def test_picker_resume_full_in_a_group_is_refused(bot, run_async, launched,
                                                   uid, chat, name):
-    sess = _gone_auto(bot, name, chat)
-    sess.skip_perms = False
-    data = session_parity.session_cb(bot, chat, sess, "resume-auto")
+    sess = _gone_full(bot, name, chat)
+    sess.perm_mode = "ask"
+    data = session_parity.session_cb(bot, chat, sess, "resume-full")
     u, q = _tap(chat, uid, data, msg_id=60)
     run_async(bot._handle_callback(u, MagicMock()))
     assert _answers(q) == [REFUSED]
     assert launched == []
 
 
-def test_legacy_resume_mode_auto_in_own_dm(bot, run_async, launched):
+def test_legacy_resume_mode_auto_in_own_dm_is_auto(bot, run_async, launched):
+    """A button from before the three modes said Auto for bypass: it now
+    means Auto, never wider, in a DM too."""
     uid, chat, name = DM_USER
-    _gone_auto(bot, name, chat)
+    _gone_full(bot, name, chat)
     u, q = _tap(chat, uid, f"{name}:resume_mode_auto", msg_id=60)
     run_async(bot._handle_callback(u, MagicMock()))
-    assert launched and launched[0][1]["skip_perms"] is True
+    assert launched and launched[0][1]["mode"] == "auto"
 
 
 def test_new_conflict_card_resume_in_own_dm(bot, run_async, launched):
     uid, chat, name = DM_USER
-    sess = _gone_auto(bot, name, chat)
+    sess = _gone_full(bot, name, chat)
     bot._new_conflict_pending[name] = {"user_id": uid, "prompt": "",
-                                       "skip_perms": False, "msg_id": 0}
+                                       "mode": "auto", "msg_id": 0}
     u, q = _tap(chat, uid, f"{name}:new_resume", msg_id=70)
     run_async(bot._handle_callback(u, MagicMock()))
-    assert launched[0][1]["skip_perms"] is True and sess.skip_perms is True
-    assert not any(ASK_NOTE in t for t in _edited(q))
+    assert launched[0][1]["mode"] == "full" and sess.perm_mode == "full"
+    assert not any(AUTO_NOTE in t for t in _edited(q))
 
 
-def test_new_conflict_card_replace_keeps_auto_in_own_dm(bot, run_async, launched):
-    """Replace re-checks Auto against the card's author at creation."""
+def test_new_conflict_card_replace_keeps_full_access_in_own_dm(bot, run_async, launched):
+    """Replace re-checks Full access against the card's author at creation."""
     uid, chat, name = DM_USER
-    _gone_auto(bot, name, chat)
+    _gone_full(bot, name, chat)
     bot._new_conflict_pending[name] = {"user_id": uid, "prompt": "",
-                                       "skip_perms": True, "msg_id": 0,
+                                       "mode": "full", "msg_id": 0,
                                        "cwd": ROOTS[chat]}
     u, q = _tap(chat, uid, f"{name}:new_replace", msg_id=70)
     run_async(bot._handle_callback(u, MagicMock()))
-    assert launched and launched[-1][1]["skip_perms"] is True
+    assert launched and launched[-1][1]["mode"] == "full"
 
 
-def test_new_conflict_card_replace_in_a_group_drops_auto(bot, run_async, launched):
-    _gone_auto(bot, G_S, GROUP)
+def test_new_conflict_card_replace_in_a_group_drops_full_access(bot, run_async, launched):
+    _gone_full(bot, G_S, GROUP)
     bot._new_conflict_pending[G_S] = {"user_id": BOB, "prompt": "",
-                                      "skip_perms": True, "msg_id": 0,
+                                      "mode": "full", "msg_id": 0,
                                       "cwd": ROOTS[GROUP]}
     u, q = _tap(GROUP, BOB, f"{G_S}:new_replace", msg_id=70)
     run_async(bot._handle_callback(u, MagicMock()))
-    assert launched and launched[-1][1]["skip_perms"] is False
+    assert launched and launched[-1][1]["mode"] == "auto"
 
 
 # ===========================================================================
@@ -669,53 +819,76 @@ def _srv(bot, sess, chat, uid):
     return srv
 
 
-def test_miniapp_mode_switch_in_own_dm(bot, run_async):
+def _perms_request(mode):
+    req = MagicMock()
+    req.json = AsyncMock(return_value={"mode": mode})
+    return req
+
+
+def test_miniapp_mode_switch_to_full_in_own_dm(bot, run_async):
     uid, chat, name = DM_USER
     sess = _session(bot, name, chat)
-    bot._perms_switch_core = AsyncMock(return_value=MagicMock(ok=True, reason="ok"))
+    bot._mode_switch_core = AsyncMock(return_value=MagicMock(ok=True, reason="ok"))
     srv = _srv(bot, sess, chat, uid)
     srv._restart_outcome_response = MagicMock(return_value=MagicMock(status=200))
-    resp = run_async(srv._handle_session_perms(MagicMock()))
+    resp = run_async(srv._handle_session_perms(_perms_request("full")))
     assert resp.status == 200
-    bot._perms_switch_core.assert_awaited_once_with(sess, True)
+    bot._mode_switch_core.assert_awaited_once_with(sess, "full")
 
 
 @pytest.mark.parametrize("uid,chat,name", [(BOB, GROUP, G_S)], ids=["group-user"])
-def test_miniapp_mode_switch_in_a_group_is_refused(bot, run_async, uid, chat, name):
+def test_miniapp_mode_switch_to_full_in_a_group_is_refused(bot, run_async, uid, chat, name):
     sess = _session(bot, name, chat)
-    bot._perms_switch_core = AsyncMock()
-    resp = run_async(_srv(bot, sess, chat, uid)._handle_session_perms(MagicMock()))
+    bot._mode_switch_core = AsyncMock()
+    resp = run_async(_srv(bot, sess, chat, uid)._handle_session_perms(_perms_request("full")))
     assert resp.status == 403
-    assert json.loads(resp.body)["detail"] == APP_NEEDS_ADMIN
-    bot._perms_switch_core.assert_not_called()
+    assert json.loads(resp.body)["detail"] == APP_SWITCH_NEEDS_ADMIN
+    bot._mode_switch_core.assert_not_called()
 
 
-def test_miniapp_resume_in_own_dm_comes_back_in_auto(bot, run_async, launched):
+@pytest.mark.parametrize("uid,chat,name", [(BOB, BOB_DM, BOB_S), (BOB, GROUP, G_S)],
+                         ids=["user-own-dm", "user-group"])
+def test_miniapp_mode_switch_to_auto_is_a_users(bot, run_async, uid, chat, name):
+    sess = _session(bot, name, chat)
+    bot._mode_switch_core = AsyncMock(return_value=MagicMock(ok=True, reason="ok"))
+    srv = _srv(bot, sess, chat, uid)
+    srv._restart_outcome_response = MagicMock(return_value=MagicMock(status=200))
+    resp = run_async(srv._handle_session_perms(_perms_request("auto")))
+    assert resp.status == 200
+    bot._mode_switch_core.assert_awaited_once_with(sess, "auto")
+
+
+def test_miniapp_resume_in_own_dm_comes_back_in_full_access(bot, run_async, launched):
     uid, chat, name = DM_USER
-    sess = _gone_auto(bot, name, chat)
+    sess = _gone_full(bot, name, chat)
     resp = run_async(_srv(bot, sess, chat, uid)._handle_session_resume(MagicMock()))
     body = json.loads(resp.body)
     assert body["status"] == "resumed" and "detail" not in body
-    assert launched[0][1]["skip_perms"] is True
+    assert launched[0][1]["mode"] == "full"
 
 
-def test_miniapp_resume_in_a_group_comes_back_in_ask(bot, run_async, launched):
-    sess = _gone_auto(bot, G_S, GROUP)
+def test_miniapp_resume_in_a_group_comes_back_in_auto(bot, run_async, launched):
+    sess = _gone_full(bot, G_S, GROUP)
     resp = run_async(_srv(bot, sess, GROUP, BOB)._handle_session_resume(MagicMock()))
     body = json.loads(resp.body)
-    assert body["mode"] == "ask" and launched[0][1]["skip_perms"] is False
+    assert body["mode"] == "auto" and launched[0][1]["mode"] == "auto"
 
 
-def test_miniapp_session_detail_offers_the_switch_in_own_dm(bot, run_async):
+def _full_option(body):
+    return next(m for m in body["modes"] if m["id"] == "full")
+
+
+def test_miniapp_session_detail_offers_full_access_in_own_dm(bot, run_async):
     uid, chat, name = DM_USER
     sess = _session(bot, name, chat)
     body = json.loads(run_async(
         _srv(bot, sess, chat, uid)._handle_session_detail(MagicMock())).body)
-    assert body["actions"]["perms"]["available"] is True
+    assert _full_option(body)["available"] is True
     gsess = _session(bot, G_S, GROUP)
     body = json.loads(run_async(
         _srv(bot, gsess, GROUP, BOB)._handle_session_detail(MagicMock())).body)
-    assert body["actions"]["perms"]["available"] is False
+    assert _full_option(body)["available"] is False
+    assert next(m for m in body["modes"] if m["id"] == "auto")["available"] is True
 
 
 # ---- over HTTP, with the real authentication ------------------------------
@@ -752,22 +925,32 @@ def _http(bot, run_async, fn):
 
 
 @pytest.mark.parametrize("uid,chat,want", [
-    (BOB, BOB_DM, True), (BOB, GROUP, False), (RO, GROUP, False),
-    (ALY, GROUP, True)], ids=["user-own-dm", "user-group", "ro-group", "owner-group"])
-def test_miniapp_create_form_says_who_may_use_auto(bot, run_async, uid, chat, want):
+    (BOB, BOB_DM, True), (BOB, GROUP, False), (RO, GROUP, False), (RO, RO_DM, False),
+    (ALY, GROUP, True)], ids=["user-own-dm", "user-group", "ro-group", "ro-own-dm",
+                              "owner-group"])
+def test_miniapp_create_form_says_who_may_use_full_access(bot, run_async, uid, chat, want):
     async def _fn(client):
         resp = await client.get("/api/session-options", headers=_hdr(uid, chat))
         assert resp.status == 200, await resp.text()
         return await resp.json()
-    assert _http(bot, run_async, _fn)["can_use_auto"] is want
+    assert _http(bot, run_async, _fn)["can_use_full"] is want
+
+
+def test_miniapp_create_form_default_follows_the_dms_full_access(bot, run_async):
+    preferences.set_new_session_default(BOB_DM, "mode", "full")
+
+    async def _fn(client):
+        resp = await client.get("/api/session-options", headers=_hdr(BOB, BOB_DM))
+        return await resp.json()
+    assert _http(bot, run_async, _fn)["default_mode"] == "full"
 
 
 @pytest.mark.parametrize("uid,chat,want", [
     (BOB, BOB_DM, 201), (BOB, GROUP, 403)], ids=["user-own-dm", "user-group"])
-def test_miniapp_create_in_auto(bot, run_async, launched, uid, chat, want):
+def test_miniapp_create_in_full_access(bot, run_async, launched, uid, chat, want):
     async def _fn(client):
         resp = await client.post("/api/sessions", headers=_hdr(uid, chat),
-                                 json={"name": "web1", "skip_perms": True})
+                                 json={"name": "web1", "mode": "full"})
         return resp.status, await resp.json()
     status, body = _http(bot, run_async, _fn)
     if want == 403:
@@ -775,20 +958,106 @@ def test_miniapp_create_in_auto(bot, run_async, launched, uid, chat, want):
         assert launched == []
     else:
         assert status in (200, 201), body
-        assert launched and launched[-1][1]["skip_perms"] is True
+        assert launched and launched[-1][1]["mode"] == "full"
+
+
+@pytest.mark.parametrize("uid,chat", [(BOB, BOB_DM), (BOB, GROUP)],
+                         ids=["user-own-dm", "user-group"])
+def test_miniapp_create_in_auto_is_a_users(bot, run_async, launched, uid, chat):
+    async def _fn(client):
+        resp = await client.post("/api/sessions", headers=_hdr(uid, chat),
+                                 json={"name": "web2", "mode": "auto"})
+        return resp.status, await resp.json()
+    status, body = _http(bot, run_async, _fn)
+    assert status in (200, 201), body
+    assert launched and launched[-1][1]["mode"] == "auto"
 
 
 def test_miniapp_other_persons_dm_is_out_of_reach(bot, run_async):
     _session(bot, ALY_S, ALY_DM)
 
     async def _fn(client):
-        r1 = await client.post("/api/sessions/ops/perms", headers=_hdr(BOB, ALY_DM))
+        r1 = await client.post("/api/sessions/ops/perms", headers=_hdr(BOB, ALY_DM),
+                               json={"mode": "full"})
         r2 = await client.put("/api/preferences/layout", headers=_hdr(BOB, ALY_DM),
                               json={"value": "merged"})
         return r1.status, r2.status
     assert _http(bot, run_async, _fn) == (403, 403)
-    assert bot.registry.get(ALY_S).skip_perms is False
+    assert bot.registry.get(ALY_S).perm_mode == "ask"
     assert preferences.get_preferences(ALY_DM).layout != "merged"
+
+
+# ===========================================================================
+# Root folders: no mode switch of a session outside the member's root
+# ===========================================================================
+
+@pytest.mark.parametrize("target", ["auto", "full"], ids=["shift-tab-auto", "restart-full"])
+def test_typed_mode_switch_outside_the_root_is_refused(bot, run_async, target):
+    uid, chat, name = DM_USER
+    sess = _session(bot, name, chat, cwd=_outside(chat))
+    bot._mode_switch_core = AsyncMock()
+    u = _cmd(f"/mode mine {target}", user_id=uid, chat_id=chat)
+    run_async(bot._handle_mode_cmd(u, MagicMock()))
+    assert any(OUTSIDE in r for r in _replies(u)), _replies(u)
+    assert name not in bot._perms_pending
+    bot._mode_switch_core.assert_not_called()
+    assert sess.perm_mode == "ask"
+
+
+@pytest.mark.parametrize("verb", ["modeauto", "modefull"])
+def test_card_mode_switch_outside_the_root_is_refused(bot, run_async, verb):
+    uid, chat, name = DM_USER
+    sess = _session(bot, name, chat, cwd=_outside(chat))
+    bot._mode_switch_core = AsyncMock()
+    bot._do_perms_switch_via_fn = AsyncMock()
+    q = _switch_tap(bot, run_async, uid, chat, sess, verb=verb)
+    assert any(OUTSIDE in a for a in _answers(q)), _answers(q)
+    assert name not in bot._perms_pending
+    bot._mode_switch_core.assert_not_called()
+    bot._do_perms_switch_via_fn.assert_not_called()
+
+
+@pytest.mark.parametrize("verb", ["perms_confirm", "perms_stop_switch"])
+def test_full_access_confirm_outside_the_root_is_refused(bot, run_async, verb):
+    uid, chat, name = DM_USER
+    sess = _session(bot, name, chat, cwd=_outside(chat),
+                    status=Status.BUSY if verb == "perms_stop_switch" else Status.IDLE)
+    bot._perms_pending[name] = {"target_mode": "full", "msg_id": 90,
+                                "label": sess.label, "turn": sess.turn_key}
+    bot._do_perms_switch_via_fn = AsyncMock()
+    u, q = _tap(chat, uid, f"{name}:{verb}", msg_id=90)
+    run_async(bot._handle_callback(u, MagicMock()))
+    assert any(OUTSIDE in a for a in _answers(q)), _answers(q)
+    bot._do_perms_switch_via_fn.assert_not_called()
+
+
+@pytest.mark.parametrize("verb", ["rdy_auto", "rdy_full"])
+def test_ready_card_switch_outside_the_root_is_refused(bot, run_async, verb):
+    uid, chat, name = DM_USER
+    _sess, q = _ready_tap(bot, run_async, uid, chat, name, verb=verb,
+                          cwd=_outside(chat))
+    assert any(OUTSIDE in a for a in _answers(q)), _answers(q)
+    bot._mode_switch_core.assert_not_called()
+
+
+@pytest.mark.parametrize("target", ["auto", "full"], ids=["shift-tab-auto", "restart-full"])
+def test_miniapp_mode_switch_outside_the_root_is_refused(bot, run_async, target):
+    uid, chat, name = DM_USER
+    sess = _session(bot, name, chat, cwd=_outside(chat))
+    bot._mode_switch_core = AsyncMock()
+    resp = run_async(_srv(bot, sess, chat, uid)._handle_session_perms(_perms_request(target)))
+    assert resp.status == 403
+    assert OUTSIDE in json.loads(resp.body)["detail"]
+    bot._mode_switch_core.assert_not_called()
+
+
+def test_an_admin_switches_a_session_outside_the_root(bot, run_async):
+    """The root rule holds members without can_manage only."""
+    sess = _session(bot, ALY_S, ALY_DM, cwd=_outside(ALY_DM))
+    bot._mode_switch_core = AsyncMock(return_value=MagicMock(ok=True, reason="sent", label=sess.label))
+    u = _cmd("/mode ops auto", user_id=ALY, chat_id=ALY_DM)
+    run_async(bot._handle_mode_cmd(u, MagicMock()))
+    bot._mode_switch_core.assert_awaited_once_with(sess, "auto")
 
 
 # ===========================================================================
@@ -824,10 +1093,12 @@ def test_admin_slash_commands_are_still_refused_in_own_dm(bot, run_async):
 
 
 # ===========================================================================
-# Safety: the hook applies the user's role in Auto exactly as in Ask
+# Safety: the hook applies the user's role in every mode
 # ===========================================================================
 
-def test_the_hook_still_applies_the_user_role(tmp_path, monkeypatch, bot):
+@pytest.mark.parametrize("reported", ["default", "auto", "bypassPermissions"],
+                         ids=["ask", "auto", "full-access"])
+def test_the_hook_still_denies_a_users_bash_in_every_mode(tmp_path, monkeypatch, bot, reported):
     monkeypatch.setattr(ps, "snapshot_path", lambda n: tmp_path / f"{n}.policy.json")
     monkeypatch.delenv("CLAUDE_CODE_TMPDIR", raising=False)
     monkeypatch.delenv("TMPDIR", raising=False)
@@ -839,13 +1110,14 @@ def test_the_hook_still_applies_the_user_role(tmp_path, monkeypatch, bot):
     ps.write_merged_snapshot(BOB_S, ps.resolve_snapshot(
         bot.policy.get_role("user"), None, None))
     # decide() reads no permission mode: what it denies in Ask it denies
-    # in Auto. A user's Bash call is denied by the role's own rule.
+    # in Auto and in Full access. A user's Bash call is denied by the
+    # role's own rule.
     out = enforce.decide({
         "hook_event_name": "PreToolUse", "session": BOB_S,
         "session_id": "5b1d7363-aaaa-bbbb-cccc-000000000002",
         "cwd": str(project), "tool_name": "Bash",
         "tool_input": {"command": "ls"}, "transcript_path": str(tp),
-        "permission_mode": "bypassPermissions",
+        "permission_mode": reported,
     })
     assert out is not None and out["tool"] == "Bash"
     assert "deny_tools" in out["reason"]

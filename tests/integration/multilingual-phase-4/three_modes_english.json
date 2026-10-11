@@ -1,0 +1,516 @@
+{
+ "create_full_needs_admin": {
+  "body": {
+   "detail": "Full access mode requires admin.",
+   "error": "forbidden"
+  },
+  "mirrors": [],
+  "status": 403
+ },
+ "create_ok": {
+  "body": {
+   "label": "made"
+  },
+  "mirrors": [
+   "🚀 made created from the Mini App · 🤖 Auto mode\n📁 <proj>"
+  ],
+  "status": 200
+ },
+ "create_ok_full": {
+  "body": {
+   "label": "made"
+  },
+  "mirrors": [
+   "🚀 made created from the Mini App · 🔓 Full access mode\n📁 <proj>"
+  ],
+  "status": 200
+ },
+ "get_detail_busy": {
+  "body": {
+   "actions": {
+    "clearqueue": {
+     "available": false,
+     "reason": "Nothing queued to clear."
+    },
+    "compact": {
+     "available": false,
+     "reason": "Nothing to compact - context is already empty."
+    },
+    "perms": {
+     "available": true,
+     "reason": null
+    },
+    "rename": {
+     "available": true,
+     "reason": null
+    },
+    "restart": {
+     "available": true,
+     "reason": null
+    },
+    "stop": {
+     "available": true,
+     "reason": null
+    }
+   },
+   "answer": null,
+   "busy_elapsed_unit": "s",
+   "context_pct": 0,
+   "cost_usd": 0.0,
+   "facts": [
+    {
+     "label": "Model",
+     "value": "claude-opus-5"
+    },
+    {
+     "label": "Mode",
+     "value": "💬 Ask mode"
+    }
+   ],
+   "label": "dev",
+   "last_message": "",
+   "mode": "ask",
+   "mode_label": "💬 Ask mode",
+   "mode_pending": false,
+   "model": "claude-opus-5",
+   "model_switch": {
+    "available": false,
+    "reason": "Claude is working - switch the model when this turn ends."
+   },
+   "modes": [
+    {
+     "available": true,
+     "current": true,
+     "id": "ask",
+     "label": "💬 Ask mode",
+     "reason": null,
+     "restarts": false
+    },
+    {
+     "available": true,
+     "current": false,
+     "id": "auto",
+     "label": "🤖 Auto mode",
+     "reason": null,
+     "restarts": false
+    },
+    {
+     "available": true,
+     "current": false,
+     "id": "full",
+     "label": "🔓 Full access mode",
+     "reason": null,
+     "restarts": true
+    }
+   ],
+   "queue_depth": 0,
+   "status": "busy",
+   "timeline": [],
+   "waiting_kind": null,
+   "waiting_summary": null
+  },
+  "mirrors": [],
+  "status": 200
+ },
+ "get_detail_idle": {
+  "body": {
+   "actions": {
+    "compact": {
+     "available": false,
+     "reason": "Nothing to compact - context is already empty."
+    },
+    "kill": {
+     "available": true,
+     "reason": null
+    },
+    "perms": {
+     "available": true,
+     "reason": null
+    },
+    "rename": {
+     "available": true,
+     "reason": null
+    },
+    "restart": {
+     "available": true,
+     "reason": null
+    }
+   },
+   "answer": null,
+   "busy_elapsed_unit": "s",
+   "context_pct": 0,
+   "cost_usd": 0.0,
+   "facts": [
+    {
+     "label": "Model",
+     "value": "claude-opus-5"
+    },
+    {
+     "label": "Mode",
+     "value": "💬 Ask mode"
+    }
+   ],
+   "label": "dev",
+   "last_message": "",
+   "mode": "ask",
+   "mode_label": "💬 Ask mode",
+   "mode_pending": false,
+   "model": "claude-opus-5",
+   "model_switch": {
+    "available": true,
+    "reason": null
+   },
+   "modes": [
+    {
+     "available": true,
+     "current": true,
+     "id": "ask",
+     "label": "💬 Ask mode",
+     "reason": null,
+     "restarts": false
+    },
+    {
+     "available": true,
+     "current": false,
+     "id": "auto",
+     "label": "🤖 Auto mode",
+     "reason": null,
+     "restarts": false
+    },
+    {
+     "available": true,
+     "current": false,
+     "id": "full",
+     "label": "🔓 Full access mode",
+     "reason": null,
+     "restarts": true
+    }
+   ],
+   "queue_depth": 0,
+   "status": "idle",
+   "timeline": [],
+   "waiting_kind": null,
+   "waiting_summary": null
+  },
+  "mirrors": [],
+  "status": 200
+ },
+ "get_detail_viewer": {
+  "body": {
+   "actions": {
+    "compact": {
+     "available": false,
+     "reason": "You don't have permission to control this session."
+    },
+    "kill": {
+     "available": false,
+     "reason": "You don't have permission to control this session."
+    },
+    "perms": {
+     "available": false,
+     "reason": "You don't have permission to control this session."
+    },
+    "rename": {
+     "available": false,
+     "reason": "You don't have permission to control this session."
+    },
+    "restart": {
+     "available": false,
+     "reason": "You don't have permission to control this session."
+    }
+   },
+   "answer": null,
+   "busy_elapsed_unit": "s",
+   "context_pct": 0,
+   "cost_usd": 0.0,
+   "facts": [
+    {
+     "label": "Model",
+     "value": "claude-opus-5"
+    },
+    {
+     "label": "Mode",
+     "value": "💬 Ask mode"
+    }
+   ],
+   "label": "dev",
+   "last_message": "",
+   "mode": "ask",
+   "mode_label": "💬 Ask mode",
+   "mode_pending": false,
+   "model": "claude-opus-5",
+   "model_switch": {
+    "available": false,
+    "reason": "You don't have permission to control this session."
+   },
+   "modes": [
+    {
+     "available": false,
+     "current": true,
+     "id": "ask",
+     "label": "💬 Ask mode",
+     "reason": "You don't have permission to control this session.",
+     "restarts": false
+    },
+    {
+     "available": false,
+     "current": false,
+     "id": "auto",
+     "label": "🤖 Auto mode",
+     "reason": "You don't have permission to control this session.",
+     "restarts": false
+    },
+    {
+     "available": false,
+     "current": false,
+     "id": "full",
+     "label": "🔓 Full access mode",
+     "reason": "You don't have permission to control this session.",
+     "restarts": true
+    }
+   ],
+   "queue_depth": 0,
+   "status": "idle",
+   "timeline": [],
+   "waiting_kind": null,
+   "waiting_summary": null
+  },
+  "mirrors": [],
+  "status": 200
+ },
+ "get_session_options": {
+  "body": {
+   "can_create": true,
+   "can_use_full": true,
+   "default_mode": "auto",
+   "models": [
+    {
+     "hint": "Balanced - the everyday default",
+     "label": "Sonnet"
+    },
+    {
+     "hint": "Most capable - deep reasoning, hardest problems",
+     "label": "Opus"
+    },
+    {
+     "hint": "Fastest and cheapest - quick edits and lookups",
+     "label": "Haiku"
+    },
+    {
+     "hint": "Newest family alias",
+     "label": "Fable"
+    },
+    {
+     "hint": "Opus for planning, Sonnet to execute",
+     "label": "OpusPlan"
+    },
+    {
+     "hint": "",
+     "label": "Opus 5.5"
+    },
+    {
+     "hint": "",
+     "label": "Opus 5.5 1M"
+    },
+    {
+     "hint": "",
+     "label": "Sonnet 5.5"
+    },
+    {
+     "hint": "",
+     "label": "Fable 5.1"
+    },
+    {
+     "hint": "",
+     "label": "Haiku 5.5"
+    }
+   ],
+   "schema": [
+    {
+     "field": "layout",
+     "options": [
+      {
+       "help": "Busy card stays, the answer arrives as its own message.",
+       "label": "Busy card + result",
+       "value": "card"
+      },
+      {
+       "help": "The answer replaces the busy card's body in place.",
+       "label": "Merged into busy message",
+       "value": "merged"
+      },
+      {
+       "help": "The busy card is replaced by the answer alone.",
+       "label": "Replace with result",
+       "value": "replace"
+      }
+     ],
+     "section": "layout",
+     "title": "🖼 Message layout"
+    },
+    {
+     "field": "diff_preview",
+     "options": [
+      {
+       "help": "File edits show only as rows on the busy card.",
+       "label": "Off - busy card only",
+       "value": false
+      },
+      {
+       "help": "Each Write/Edit is also posted as its own diff message under the busy card.",
+       "label": "On - a diff message per edit",
+       "value": true
+      }
+     ],
+     "section": "diffs",
+     "title": "📝 Diff previews"
+    },
+    {
+     "field": "card_age_decay",
+     "options": [
+      {
+       "help": "The card refreshes less often as a turn runs on (every 10 s after 2 min, every 30 s after 10 min) and its clock then moves in 30 s steps, so it never looks frozen. A state change still shows at once.",
+       "label": "On - slow down as a turn gets long",
+       "value": true
+      },
+      {
+       "help": "The card refreshes at the same pace for the whole turn, however long.",
+       "label": "Off - same pace for the whole turn",
+       "value": false
+      }
+     ],
+     "section": "cadence",
+     "title": "⏱ Long-turn card updates"
+    },
+    {
+     "field": "simple_formatting",
+     "options": [
+      {
+       "help": "Claude formats replies however it likes.",
+       "label": "Off - default formatting",
+       "value": false
+      },
+      {
+       "help": "Plain prose and dashed lists only - no tables or code blocks.",
+       "label": "On - plain prose only",
+       "value": true
+      }
+     ],
+     "section": "formatting",
+     "title": "✏️ Simple formatting"
+    },
+    {
+     "field": "answer_length",
+     "options": [
+      {
+       "help": "No length guidance at all.",
+       "label": "Don't apply any rule",
+       "value": "none"
+      },
+      {
+       "help": "One or two sentences. No preamble, no summary.",
+       "label": "Extra short",
+       "value": "xshort"
+      },
+      {
+       "help": "A few sentences.",
+       "label": "Short",
+       "value": "short"
+      },
+      {
+       "help": "A couple of paragraphs.",
+       "label": "Medium",
+       "value": "medium"
+      },
+      {
+       "help": "Full detail when the answer needs it.",
+       "label": "Long",
+       "value": "long"
+      }
+     ],
+     "section": "length",
+     "title": "📏 Answer length"
+    },
+    {
+     "field": "language_level",
+     "options": [
+      {
+       "help": "No vocabulary guidance at all.",
+       "label": "Don't apply any rule",
+       "value": "none"
+      },
+      {
+       "help": "Everyday words, short sentences.",
+       "label": "Simple words",
+       "value": "simple"
+      },
+      {
+       "help": "Ordinary technical writing.",
+       "label": "Normal",
+       "value": "normal"
+      },
+      {
+       "help": "Assumes expertise; no hand-holding.",
+       "label": "Advanced",
+       "value": "advanced"
+      }
+     ],
+     "section": "level",
+     "title": "🎓 Vocabulary level"
+    }
+   ],
+   "scope_defaults": {
+    "answer_length": "none",
+    "card_age_decay": true,
+    "diff_preview": false,
+    "language_level": "none",
+    "layout": "card",
+    "simple_formatting": false
+   }
+  },
+  "mirrors": [],
+  "status": 200
+ },
+ "perms_full_needs_admin": {
+  "body": {
+   "detail": "Switching to Full access mode requires admin.",
+   "error": "forbidden"
+  },
+  "mirrors": [],
+  "status": 403
+ },
+ "perms_to_ask": {
+  "body": {
+   "label": "dev",
+   "mode": "ask",
+   "status": "switched"
+  },
+  "mirrors": [
+   "💬 dev switched to Ask mode from the Mini App"
+  ],
+  "status": 200
+ },
+ "perms_to_full": {
+  "body": {
+   "label": "dev",
+   "mode": "full",
+   "status": "switched"
+  },
+  "mirrors": [
+   "🔓 dev switched to Full access mode from the Mini App"
+  ],
+  "status": 200
+ },
+ "resume_full_by_member": {
+  "body": {
+   "detail": "Resumed dev in Auto mode: Full access mode needs an admin.",
+   "label": "dev",
+   "mode": "auto",
+   "status": "resumed"
+  },
+  "mirrors": [
+   "♻️ Resumed [dev] from the Mini App in Auto mode: Full access mode needs an admin."
+  ],
+  "status": 200
+ }
+}

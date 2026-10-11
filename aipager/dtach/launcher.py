@@ -314,13 +314,30 @@ def _resolve_launch_name(name: str) -> str:
     return normalize_session_name(raw)
 
 
+def _with_mode_flag(claude_args: list[str]) -> list[str]:
+    """*claude_args* with ``--permission-mode auto`` in front, unless they
+    already choose a mode (``--permission-mode <x>``, ``--permission-mode=<x>``
+    or ``--dangerously-skip-permissions``), so Claude Code's own starting
+    mode never decides. The flag that only adds bypass to the Shift+Tab
+    cycle is not a choice of mode: Auto is still added then."""
+    for arg in claude_args:
+        if arg in ("--permission-mode", "--dangerously-skip-permissions") or \
+                arg.startswith("--permission-mode="):
+            return list(claude_args)
+    from aipager import perm_modes
+    return [*perm_modes.launch_args(perm_modes.AUTO), *claude_args]
+
+
 def launch(name: str, claude_args: list[str] | None = None,
           *, claude_bin: str | None = None) -> int:
     """Create or reattach a Claude Code session inside dtach.
 
     All extra args in ``claude_args`` are passed through to claude
-    verbatim. To start with permission checks bypassed, pass
-    ``--dangerously-skip-permissions`` like you would to claude itself.
+    verbatim. A new session starts in Auto mode (``--permission-mode
+    auto``, added in front of them) unless they choose a mode themselves:
+    ``--permission-mode <mode>`` (e.g. ``default`` to be asked before each
+    action) or ``--dangerously-skip-permissions``, like you would pass to
+    claude itself (see :func:`_with_mode_flag`).
 
     ``claude_bin`` is the resolved absolute path the caller wants used
     (``cli/session.py`` passes ``require_claude()``'s return value).
@@ -420,7 +437,7 @@ def launch(name: str, claude_args: list[str] | None = None,
              "env", f"CLAUDE_DTACH_SESSION={session}",
              claude_bin or "claude",
              "--append-system-prompt", sys_prompt,
-             *claude_args],
+             *_with_mode_flag(claude_args)],
             capture_output=True, text=True, check=False,
             env=daemon_secrets.build_session_env(),
         )

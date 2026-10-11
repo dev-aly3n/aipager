@@ -439,18 +439,18 @@ def test_perms_prompt_muted_leaves_nothing_pending_and_does_not_raise(
     drop the ``sent is MUTED`` return and this raises on the sentinel."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-dev", label="dev", status=Status.IDLE)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-dev"] = sess
     bot.registry.last_active_session = "claude-dev"
     bot._is_admin = MagicMock(return_value=True)
     MUTE.mute(MUTED_CHAT, BAN)
 
-    update = _command(mk_update, "/perms auto", MUTED_CHAT)
+    update = _command(mk_update, "/perms full", MUTED_CHAT)
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_not_awaited()
     assert "claude-dev" not in bot._perms_pending
 
-    update = _command(mk_update, "/perms auto", OTHER_CHAT)
+    update = _command(mk_update, "/perms full", OTHER_CHAT)
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
     assert bot._perms_pending["claude-dev"]["msg_id"] == 900
@@ -461,14 +461,15 @@ def test_perms_busy_prompt_muted_leaves_nothing_pending_and_does_not_raise(
 ):
     bot = mk_bot()
     sess = TrackedSession(name="claude-dev", label="dev", status=Status.BUSY)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-dev"] = sess
     bot.registry.last_active_session = "claude-dev"
     bot._is_admin = MagicMock(return_value=True)
     MUTE.mute(MUTED_CHAT, BAN)
 
-    # Named, so it reaches the busy prompt (a bare /perms shows the card).
-    update = _command(mk_update, "/perms auto", MUTED_CHAT)
+    # Named, so it reaches the busy prompt (a bare /perms shows the card);
+    # into Full access, the switch that restarts and so asks first.
+    update = _command(mk_update, "/perms full", MUTED_CHAT)
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_not_awaited()
     assert "claude-dev" not in bot._perms_pending

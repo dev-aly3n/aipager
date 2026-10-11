@@ -364,11 +364,11 @@ def test_perms_confirm_calls_do_perms_switch(mk_bot, mk_query, run_async):
     """Tapping 'Yes, switch' confirms the perms switch."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-dev", label="dev", status=Status.IDLE)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     bot.registry._sessions["claude-dev"] = sess
     # Set up pending state
     bot._perms_pending["claude-dev"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "dev",
     }
@@ -386,7 +386,7 @@ def test_perms_cancel_edits_to_cancelled(mk_bot, mk_query, run_async):
     """Tapping Cancel edits message to cancelled notice."""
     bot = mk_bot()
     bot._perms_pending["claude-dev"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "dev",
     }
@@ -404,7 +404,7 @@ def test_perms_wait_edits_to_retry_hint(mk_bot, mk_query, run_async):
     """Tapping 'Not now' edits message to a try-again hint."""
     bot = mk_bot()
     bot._perms_pending["claude-dev"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "dev",
     }
@@ -417,9 +417,9 @@ def test_perms_wait_edits_to_retry_hint(mk_bot, mk_query, run_async):
     assert "claude-dev" not in bot._perms_pending
 
 
-# ---- resume_mode_ask: calls _do_resume with skip_perms_override=False ------
+# ---- resume_mode_ask: calls _do_resume with mode_override="ask" ------
 
-def test_resume_mode_ask_calls_do_resume_false(mk_bot, mk_query, run_async):
+def test_resume_mode_ask_calls_do_resume_with_ask(mk_bot, mk_query, run_async):
     bot = mk_bot()
     bot._resume_mode_pending["claude-dev"] = "dev"
     bot._do_resume = AsyncMock()
@@ -427,14 +427,14 @@ def test_resume_mode_ask_calls_do_resume_false(mk_bot, mk_query, run_async):
     run_async(bot._handle_callback(update, MagicMock()))
     bot._do_resume.assert_awaited_once()
     kwargs = bot._do_resume.await_args[1]
-    assert kwargs["skip_perms_override"] is False
+    assert kwargs["mode_override"] == "ask"
     assert kwargs["label"] == "dev"
     assert "claude-dev" not in bot._resume_mode_pending
 
 
-# ---- resume_mode_auto: calls _do_resume with skip_perms_override=True ------
+# ---- resume_mode_auto (a picker from before Full access): Auto ------------
 
-def test_resume_mode_auto_calls_do_resume_true(mk_bot, mk_query, run_async):
+def test_resume_mode_auto_calls_do_resume_with_auto(mk_bot, mk_query, run_async):
     bot = mk_bot()
     bot._resume_mode_pending["claude-dev"] = "dev"
     bot._do_resume = AsyncMock()
@@ -442,7 +442,7 @@ def test_resume_mode_auto_calls_do_resume_true(mk_bot, mk_query, run_async):
     run_async(bot._handle_callback(update, MagicMock()))
     bot._do_resume.assert_awaited_once()
     kwargs = bot._do_resume.await_args[1]
-    assert kwargs["skip_perms_override"] is True
+    assert kwargs["mode_override"] == "auto"
     assert kwargs["label"] == "dev"
     assert "claude-dev" not in bot._resume_mode_pending
 
@@ -466,12 +466,12 @@ def test_perms_stop_switch_sends_ctrl_c(mk_bot, mk_query, run_async):
     """Tapping 'Stop task & switch' sends Ctrl-C and then relaunches."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-dev", label="dev", status=Status.BUSY)
-    sess.skip_perms = False
+    sess.perm_mode = "ask"
     sess.claude_session_id = "some-uuid"
     sess.cwd = "/home/user/project"
     bot.registry._sessions["claude-dev"] = sess
     bot._perms_pending["claude-dev"] = {
-        "target_skip_perms": True,
+        "target_mode": "full",
         "msg_id": 42,
         "label": "dev",
     }
@@ -483,8 +483,8 @@ def test_perms_stop_switch_sends_ctrl_c(mk_bot, mk_query, run_async):
         ctrl_c_calls.append(key)
         return True
 
-    async def mock_launch_session(short_name, *, skip_perms=False, **kw):
-        launch_calls.append({"short_name": short_name, "skip_perms": skip_perms})
+    async def mock_launch_session(short_name, *, mode, **kw):
+        launch_calls.append({"short_name": short_name, "mode": mode})
         return True, ""
 
     update, query = mk_query("claude-dev:perms_stop_switch")
@@ -499,7 +499,7 @@ def test_perms_stop_switch_sends_ctrl_c(mk_bot, mk_query, run_async):
 
     # Ctrl-C should have been sent
     assert "C-c" in ctrl_c_calls
-    # Launch should have been called with skip_perms=True
-    assert any(c["skip_perms"] is True for c in launch_calls), launch_calls
+    # Launch should have been called with mode="full"
+    assert any(c["mode"] == "full" for c in launch_calls), launch_calls
     # Session should be updated
-    assert sess.skip_perms is True
+    assert sess.perm_mode == "full"
