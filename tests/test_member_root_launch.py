@@ -167,7 +167,10 @@ def test_user_picker_lists_only_root(gbot, run_async, home, root):
         str(root), str(root / "proj")]
 
 
-def test_user_folder_page_has_no_default_row(gbot, run_async, root):
+def test_user_folder_page_has_no_default_row(gbot, run_async, home, root, monkeypatch):
+    # The daemon in a project folder: the home folder rule alone (8.79)
+    # would offer it.
+    monkeypatch.setattr(inject, "_PROJECT_DIR", str(home / "aipager"))
     bot = gbot()
     _open(bot, run_async, BOB)
     _nw(bot, run_async, BOB, "nw:opt:path")
@@ -445,3 +448,33 @@ def test_miniapp_relaunch_outside_root_403(app, run_async, home, route):
     core.assert_not_awaited()
     _call(app, run_async, "POST", f"/api/sessions/x/{route}", ADA)
     core.assert_awaited_once()
+
+
+# ---- the turn's note ----------------------------------------------------------------------
+
+def _notes(monkeypatch):
+    from aipager import policy_snapshot
+    seen = []
+
+    def _fake(name, role, scope, member, **kw):
+        seen.append((role, kw.get("root_bound")))
+        return None
+    monkeypatch.setattr(policy_snapshot, "write_note", _fake)
+    return seen
+
+
+def test_member_message_note_carries_group_root(gbot, run_async, home, root, fx,
+                                                monkeypatch):
+    """The root comes from the chat the member's role is read in (the
+    group), not from the session's own chat (the owner's DM)."""
+    bot = gbot()
+    sess = bot.registry.get_or_create("claude-d1")
+    sess.label, sess.scope_chat_id, sess.scope_kind = "d1", DM, "dm"
+    sess.status = Status.IDLE
+    seen = _notes(monkeypatch)
+    run_async(bot._inject_prompt(sess, "hi", driver_user_id=BOB, chat_id=GROUP))
+    role, bound = seen[-1]
+    assert role.name == "user" and bound.root == str(root)
+    assert str(home / "aipager-users" / "aly") in bound.deny
+    run_async(bot._inject_prompt(sess, "hi", driver_user_id=ALY, chat_id=GROUP))
+    assert seen[-1][1] is None
