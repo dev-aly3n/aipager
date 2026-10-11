@@ -1376,8 +1376,16 @@ class CallbackDispatchMixin:
             # busy one; the core interrupts first). Whatever happens next
             # edits this card, its buttons going first, so its record is
             # spent. The record's turn decides whether the tap is current.
-            _consume()
             tapper = getattr(query, "from_user", None)
+            # A switch relaunches the session: a role without can_manage
+            # only for one inside its members' root folder.
+            from aipager import member_root
+            refusal = member_root.relaunch_refusal(
+                self, getattr(tapper, "id", None), chat, sess.cwd)
+            if refusal:
+                await self._safe_answer(query, shown(person, refusal), show_alert=True)
+                return
+            _consume()
             await self._do_perms_switch_via_fn(
                 sess, target_skip_perms, _edit, tapped_msg_id=tapped,
                 turn=pending.get("turn"), chat_id=chat,
@@ -1532,6 +1540,16 @@ class CallbackDispatchMixin:
             prompt_author = (pending or {}).get("user_id") or None
 
             if action == "new_resume":
+                # A role without can_manage resumes (or switches to) only a
+                # session inside its members' root folder: refused before
+                # the card is spent, so it can still Cancel.
+                from aipager import member_root
+                refusal = member_root.relaunch_refusal(
+                    self, tapper, calling_chat_id(update), sess.cwd)
+                if refusal:
+                    await self._safe_answer(query, shown(person, refusal),
+                                            show_alert=True)
+                    return
                 self._new_conflict_pending.pop(session_name, None)
                 # Live session → switch to it; GONE session → /resume flow.
                 if sess and sess.status != Status.GONE:
@@ -1606,13 +1624,17 @@ class CallbackDispatchMixin:
                         show_alert=True)
                     return
                 # The fresh session's folder must be one its author may
-                # start in (roadmap 8.79), checked before the old one is
-                # killed: create_session would refuse it only afterwards.
-                from aipager.miniapp import launch as launch_rules
-                refusal = launch_rules.launch_folder_refusal(
-                    (pending or {}).get("cwd") or None,
-                    self._is_confined_user(prompt_author,
-                                           sess.scope_chat_id or None))
+                # start in (roadmap 8.79, and a role without can_manage only
+                # inside its members' root folder), checked before the old
+                # one is killed: create_session would refuse it only
+                # afterwards. Nor does such a role kill a session working
+                # outside its root.
+                from aipager import member_root
+                refusal = (member_root.relaunch_refusal(
+                               self, tapper, calling_chat_id(update), sess.cwd)
+                           or member_root.launch_refusal(
+                               self, prompt_author, sess.scope_chat_id or None,
+                               (pending or {}).get("cwd") or None))
                 if refusal:
                     await self._safe_answer(query, shown(person, refusal), show_alert=True)
                     return

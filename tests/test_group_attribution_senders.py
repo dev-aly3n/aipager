@@ -59,7 +59,7 @@ def _scopes(dm_deny=()):
             Member(id=BOB, label="bob", role="user"),
             Member(id=CAROL, label="carol", role="user"),
             Member(id=DAVE, label="dave", role="admin"),
-        )),
+        ), root="/srv/team"),   # the members' root: the group's sessions work there
         Scope(chat_id=DM, kind="dm", label="alice-dm", members=(
             Member(id=ALICE, label="alice", role="owner"),
         ), deny_tools=tuple(dm_deny)),
@@ -72,6 +72,8 @@ def _registry() -> SessionRegistry:
         s = TrackedSession(name=name, label=label, status=Status.IDLE)
         s.scope_chat_id = chat
         s.scope_kind = "group" if chat < 0 else "dm"
+        if chat < 0:
+            s.cwd = f"/srv/team/{label}"   # inside the group's root
         r._sessions[name] = s
     return r
 

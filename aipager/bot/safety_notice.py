@@ -82,6 +82,25 @@ REASON_MSGS: dict[str, Msg] = {
         "and this role can only search inside a project folder",
         note="A restricted role's search while the session runs in the home folder",
         eg={"tool": "Grep"}),
+    safety.REASON_ROOT_CWD_WRITE: Msg(
+        "safety.reason.root_cwd_write",
+        "{tool} denied - this session runs outside this role's own folder, so this "
+        "role can only write in its scratchpad",
+        note="A restricted role's write while the session runs outside the folder the "
+             "owner gave this person or group; scratchpad is Claude's own temporary folder",
+        eg={"tool": "Write"}),
+    safety.REASON_ROOT_CWD_SEARCH: Msg(
+        "safety.reason.root_cwd_search",
+        "{tool} denied - this session runs outside this role's own folder, so this "
+        "role can only search in its scratchpad",
+        note="A restricted role's search while the session runs outside the folder the "
+             "owner gave this person or group; scratchpad is Claude's own temporary folder",
+        eg={"tool": "Grep"}),
+    safety.REASON_OUTSIDE_ROOT_READ: Msg(
+        "safety.reason.outside_root_read",
+        "{tool} denied - this role reads in the home folder only inside its own folder",
+        note="A restricted role read a file in the home folder outside the folder the "
+             "owner gave this person or group", eg={"tool": "Read"}),
     safety.REASON_OUTSIDE_WRITE: Msg(
         "safety.reason.outside_write",
         "{tool} outside the session's folder - a restricted turn writes only in its "

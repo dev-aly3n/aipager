@@ -74,7 +74,7 @@ def _group_scope():
         Member(id=BOB, label="bob", role="user"),
         Member(id=RO, label="ro", role="read_only"),
         Member(id=ADA, label="ada", role="admin"),
-    ))
+    ), root="/srv/team")   # the members' root: the sessions below work there
 
 
 def _dm_scope():

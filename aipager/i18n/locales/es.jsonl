@@ -87,6 +87,10 @@
 {"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "El nombre de la sesión debe tener {max} caracteres o menos."}
 {"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "Todavía no hay ninguna carpeta de proyecto donde empezar: pide a un administrador que inicie la sesión."}
 {"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "Elige una carpeta de proyecto: crea una con Nueva carpeta o pide a un administrador que inicie la sesión."}
+{"k": "app.launch.no_root", "src": "19345855", "v": "Aquí no tienes ninguna carpeta donde trabajar. Pide al propietario que te añada en aipager config."}
+{"k": "app.launch.outside_root", "src": "f8761328", "v": "Tu rol solo puede iniciar sesiones en tu carpeta {folder} o en una carpeta dentro de ella."}
+{"k": "app.launch.root_unavailable", "src": "6d332ade", "v": "No se pudo preparar tu carpeta {folder}. Pide al propietario que la revise en aipager config."}
+{"k": "app.launch.session_outside_root", "src": "c501e96d", "v": "Esta sesión trabaja fuera de tu carpeta {folder}, así que tu rol no puede reanudarla, reiniciarla ni cambiarla de modo. Pídeselo a un administrador."}
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Tu rol no puede iniciar una sesión en la carpeta personal ni en una carpeta superior. Elige una carpeta de proyecto: crea una con Nueva carpeta o pide a un administrador que inicie la sesión."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"many": "🧹 {n} mensajes en cola de [{session}] eliminados desde la Mini App", "one": "🧹 {n} mensaje en cola de [{session}] eliminado desde la Mini App", "other": "🧹 {n} mensajes en cola de [{session}] eliminados desde la Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Compactación iniciada para [{session}] desde la Mini App"}
@@ -607,12 +611,15 @@
 {"k": "safety.reason.glob_not_plain", "src": "6db7d611", "v": "{tool} con un glob que no es un patrón relativo simple"}
 {"k": "safety.reason.glob_unreadable", "src": "da95c3b5", "v": "{tool} con un glob ilegible"}
 {"k": "safety.reason.halted", "src": "343e090e", "v": "sesión detenida - una llamada a herramienta anterior en este turno fue bloqueada por la política de seguridad; inicia una nueva solicitud"}
+{"k": "safety.reason.outside_root_read", "src": "377378fa", "v": "{tool} denegado - este rol solo lee en la carpeta personal dentro de su propia carpeta"}
 {"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool} fuera de la carpeta de la sesión - un turno restringido solo busca en su proyecto y su scratchpad"}
 {"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool} fuera de la carpeta de la sesión - un turno restringido solo escribe en su proyecto y su scratchpad"}
 {"k": "safety.reason.path_protected", "src": "feff9877", "v": "{tool} en la ruta protegida {glob}"}
 {"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool}: escritura en la ruta protegida {glob}"}
 {"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool} con una ruta ilegible"}
 {"k": "safety.reason.pattern_unreadable", "src": "88053cf7", "v": "{tool} con un patrón ilegible"}
+{"k": "safety.reason.root_cwd_search", "src": "086246f6", "v": "{tool} denegado - esta sesión se ejecuta fuera de la carpeta propia de este rol, así que este rol solo puede buscar en su scratchpad"}
+{"k": "safety.reason.root_cwd_write", "src": "bc6e509f", "v": "{tool} denegado - esta sesión se ejecuta fuera de la carpeta propia de este rol, así que este rol solo puede escribir en su scratchpad"}
 {"k": "safety.reason.runs_commands", "src": "e180a703", "v": "{tool} en un archivo que ejecuta comandos (.claude/, .git/, .mcp.json)"}
 {"k": "safety.reason.search_anywhere", "src": "c1ad4431", "v": "{tool} denegado - la ruta protegida {glob} puede estar en cualquier carpeta, así que este rol no puede buscar con Grep ni Glob"}
 {"k": "safety.reason.search_could_reach", "src": "a95243b1", "v": "La búsqueda de {tool} podría llegar a la ruta protegida {glob}"}

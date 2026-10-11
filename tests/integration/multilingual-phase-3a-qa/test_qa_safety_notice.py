@@ -31,7 +31,9 @@ LISTED_CODES = {
     "halted", "unchecked",
     # enforce's refusal of SendMessage to a session aipager does not run
     # ("peer message authority").
-    "send_unmanaged"}
+    "send_unmanaged",
+    # A turn held to a members' root folder (user-root-folders).
+    "root_cwd_write", "root_cwd_search", "outside_root_read"}
 
 #: The code each writer's sentence (S.safety_reasons(), in order) is, per
 #: design.md section B's table.

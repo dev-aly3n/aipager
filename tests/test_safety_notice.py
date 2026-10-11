@@ -38,6 +38,8 @@ EXPECTED_CODES = [
     safety.REASON_GLOB_NOT_PLAIN, safety.REASON_GLOB_CLIMBS,
     safety.REASON_SEARCH_FOLDER_UNREADABLE, safety.REASON_PATTERN_UNREADABLE,
     safety.REASON_SEARCH_ANYWHERE, safety.REASON_SEARCH_PROTECTED_FILES,
+    safety.REASON_ROOT_CWD_WRITE, safety.REASON_ROOT_CWD_SEARCH,
+    safety.REASON_OUTSIDE_ROOT_READ,
 ]
 
 
@@ -63,7 +65,7 @@ def test_every_code_has_a_key_and_a_shape():
     codes = {code for code, _shape in safety.REASON_SHAPES}
     assert codes == set(safety_notice.REASON_MSGS)
     assert {safety_notice.HALTED, safety_notice.UNCHECKED} <= codes
-    assert len(codes) == len(safety.REASON_SHAPES) == 25
+    assert len(codes) == len(safety.REASON_SHAPES) == 28
 
 
 def test_enforces_two_shapes_match_its_sentences(tmp_path):

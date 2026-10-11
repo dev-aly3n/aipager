@@ -358,6 +358,13 @@ def safety_reasons(tmp: Path | None = None) -> list[tuple[str, str]]:
     add("Grep", safety.path_violation("Grep", {"path": "/w/p"}, ("**/.env",), (), cwd="/w/p"))
     add("Grep", safety.path_violation("Grep", {"path": "/srv"}, ("/srv/secret/**",), (),
                                        cwd="/w/p"))
+    # A turn held to a members' root folder (user-root-folders).
+    add("Write", safety.path_violation("Write", {"file_path": "/elsewhere/a"}, (), (),
+                                        cwd="/w/p", write_roots=("/w/s",), root_cwd=True))
+    add("Grep", safety.path_violation("Grep", {"path": "/elsewhere"}, (), (),
+                                       cwd="/w/p", write_roots=("/w/s",), root_cwd=True))
+    add("Read", safety.path_violation("Read", {"file_path": "~/elsewhere/a"}, (), (),
+                                       cwd="/w/p", home_read_roots=("/w/p",)))
     return out
 
 

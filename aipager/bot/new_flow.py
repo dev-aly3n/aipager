@@ -78,7 +78,7 @@ from aipager.bot.mode_labels import (
     MODE_AUTO_INSTEAD,
     mode_label,
 )
-from aipager import i18n, preferences
+from aipager import i18n, member_root, preferences
 from aipager.bot import group_intake, kbwords, language_menu, settings_menu
 from aipager.bot.sibling_text import shown
 from aipager.i18n import Command, Msg, Safe, Span
@@ -509,6 +509,9 @@ def resolve_new_session_settings(
     # Confined to the session's folder (roadmap 8.79): a stored default
     # that is the home folder, `/` or above the home folder is not theirs.
     confined = bool(bot._is_confined_user(user_id, chat_id))
+    # A role without can_manage: only its members' root folder and the
+    # folders inside it (None for anyone else).
+    root = member_root.restricted_root(bot, user_id, chat_id)
     model = model_label = None
     # Only a label still offered, or a retired pinned row: the defaults
     # screen stores a MODEL_CHOICES label, and one withdrawn since must
@@ -522,8 +525,10 @@ def resolve_new_session_settings(
         model, model_label = RETIRED_MODEL_LABELS[stored.model], stored.model
     cwd = None
     if stored.cwd and stored.cwd in launch.allowed_roots(
-            bot.registry, chat_id, confined=confined):
+            bot.registry, chat_id, confined=confined, root=root):
         cwd = stored.cwd
+    if cwd is None and root is not None and root != member_root.NOWHERE:
+        cwd = root
     return {
         "skip_perms": can_auto and stored.mode != "ask",
         "can_auto": can_auto,
@@ -531,6 +536,7 @@ def resolve_new_session_settings(
         "model_label": model_label,
         "cwd": cwd,
         "confined": confined,
+        "root": root,
     }
 
 
@@ -544,10 +550,11 @@ def _needs_folder(pending: dict) -> bool:
 def _note_folder_choices(bot: TelegramBot, chat_id: int, pending: dict) -> None:
     """Record whether a confined person has any launch folder to pick, so
     the Name card can say what to do when none is left (roadmap 8.79)."""
+    root = pending.get("root")
     pending["has_folders"] = bool(launch.allowed_roots(
-        bot.registry, chat_id, confined=bool(pending.get("confined"))))
+        bot.registry, chat_id, confined=bool(pending.get("confined")), root=root))
     # Somewhere New folder can create one (the home folder counts).
-    pending["has_parents"] = bool(launch.allowed_roots(bot.registry, chat_id))
+    pending["has_parents"] = bool(launch.allowed_roots(bot.registry, chat_id, root=root))
 
 
 def _settings_line(settings: dict, tr=None) -> str:
@@ -670,17 +677,19 @@ def _render_opt_path(
     # here, never reused from an earlier render.
     tr = tr or i18n.for_chat(chat_id)
     confined = bool(pending.get("confined"))
-    roots = launch.allowed_roots(bot.registry, chat_id, confined=confined)
+    root = pending.get("root")
+    roots = launch.allowed_roots(bot.registry, chat_id, confined=confined, root=root)
     pending["path_options"] = roots
     current = pending.get("cwd")
     rows = []
-    for idx, root in enumerate(roots):
-        marker = " ✅" if current == root else ""
+    for idx, folder in enumerate(roots):
+        marker = " ✅" if current == folder else ""
         rows.append([InlineKeyboardButton(
-            f"{_short_path(root)}{marker}", callback_data=f"_:nw:path:{idx}")])
-    if not (confined and launch.default_folder_is_wide()):
+            f"{_short_path(folder)}{marker}", callback_data=f"_:nw:path:{idx}")])
+    if root is None and not (confined and launch.default_folder_is_wide()):
         # The daemon's own folder; for a confined person only when it is
-        # not the home folder or above it (roadmap 8.79).
+        # not the home folder or above it (roadmap 8.79), and never for
+        # someone held to a members' root folder.
         default_marker = " ✅" if not current else ""
         rows.append([InlineKeyboardButton(
             f"{tr.text(NS_DEFAULT_FOLDER)}{default_marker}", callback_data="_:nw:path:default")])
@@ -1096,6 +1105,12 @@ async def _handle_ready_callback(
                 query, person.text(TOAST_WORKING_USE_MODE, session=sess.label),
                 show_alert=True)
             return
+        # A mode switch relaunches the session: a role without can_manage
+        # only for one inside its members' root folder.
+        refusal = member_root.relaunch_refusal(bot, actor, chat_id, sess.cwd)
+        if refusal:
+            await bot._safe_answer(query, shown(person, refusal), show_alert=True)
+            return
         await bot._safe_answer(query, person.text(TOAST_SWITCHING))
         if (sess.status in (Status.BUSY, Status.INTERACTIVE)
                 or not sess.tap_is_for_this_turn(tapped)):
@@ -1212,9 +1227,14 @@ def render_new_session_defaults(
         tr = i18n.for_chat(chat_id)
     back = tr.text(language_menu.BACK)
     stored = preferences.get_new_session_defaults(chat_id)
+    # A viewer held to a members' root folder sees only it and the folders
+    # inside it.
+    root = (member_root.restricted_root(bot, viewer, chat_id)
+            if viewer is not None else None)
     roots = launch.allowed_roots(
         bot.registry, chat_id,
-        confined=viewer is not None and bool(bot._is_confined_user(viewer, chat_id)))
+        confined=viewer is not None and bool(bot._is_confined_user(viewer, chat_id)),
+        root=root)
     if view == "model":
         rows = [[InlineKeyboardButton(
             f"{label}{' ✅' if stored.model == label else ''}",
@@ -1236,9 +1256,9 @@ def render_new_session_defaults(
     if view == "cwd":
         _defaults_folders_shown(bot)[chat_id] = list(roots)
         rows = [[InlineKeyboardButton(
-            f"{_short_path(root)}{' ✅' if stored.cwd == root else ''}",
+            f"{_short_path(folder)}{' ✅' if stored.cwd == folder else ''}",
             callback_data=f"_:set:ns:cwd:{idx}")]
-            for idx, root in enumerate(roots)]
+            for idx, folder in enumerate(roots)]
         rows.append([InlineKeyboardButton(
             f"{tr.text(NS_DEFAULT_FOLDER)}{' ✅' if not stored.cwd else ''}",
             callback_data="_:set:ns:cwd:default")])
@@ -1251,7 +1271,8 @@ def render_new_session_defaults(
                   else Safe(tr.html(NS_DEFAULT_MODEL)))
     model_text = (stored.model if stored.model
                   else Safe(tr.text(NS_DEFAULT_MODEL)))
-    folder = stored.cwd if stored.cwd in roots else _project_dir()
+    folder = stored.cwd if stored.cwd in roots else (
+        roots[0] if root is not None and roots else _project_dir())
     mode = mode_label(auto)
     if auto and viewer is not None and not bot._is_admin_user(viewer, chat_id):
         mode = MODE_ASK_FOR_YOU
@@ -1322,7 +1343,8 @@ async def handle_defaults_callback(
         elif (token.isdigit() and int(token) < len(shown)
               and shown[int(token)] in launch.allowed_roots(
                   bot.registry, scope,
-                  confined=bool(bot._is_confined_user(viewer, scope)))):
+                  confined=bool(bot._is_confined_user(viewer, scope)),
+                  root=member_root.restricted_root(bot, viewer, scope))):
             value = shown[int(token)]
     if value is None:
         await bot._safe_answer(query, person.text(CHOICE_GONE))
@@ -1416,7 +1438,7 @@ async def maybe_handle_text(
         # Every folder this chat works in may be the parent, the home
         # folder included; a confined person's result must still be a
         # project folder (roadmap 8.79).
-        roots = launch.allowed_roots(bot.registry, chat_id)
+        roots = launch.allowed_roots(bot.registry, chat_id, root=pending.get("root"))
         parent = pending.get("new_folder_parent") or (roots[0] if roots else "")
         path, existed, err = launch.create_directory(
             parent, text, roots, confined=bool(pending.get("confined")))
@@ -1585,6 +1607,16 @@ async def _handle_model_token(
 async def _handle_path_token(
     bot: TelegramBot, query: CallbackQuery, chat_id: int, pending: dict, token: str,
 ) -> None:
+    root = pending.get("root")
+    if token == "default" and root is not None:
+        # Held to a members' root folder: "default" is the root itself.
+        if root == member_root.NOWHERE:
+            await bot._safe_answer(query, _tapper(query).text(member_root.NO_ROOT),
+                                   show_alert=True)
+            return
+        pending["cwd"] = root
+        await _goto_name(bot, chat_id, pending)
+        return
     if token == "default":
         if pending.get("confined") and launch.default_folder_is_wide():
             await bot._safe_answer(query, _tapper(query).text(launch.WIDE_FOLDER_REFUSAL),
@@ -1595,10 +1627,10 @@ async def _handle_path_token(
         return
     if token == "new":
         options = pending.get("path_options") or launch.allowed_roots(
-            bot.registry, chat_id, confined=bool(pending.get("confined")))
+            bot.registry, chat_id, confined=bool(pending.get("confined")), root=root)
         # A confined person with no project folder yet creates one in a
         # folder they may not start in themselves (the home folder).
-        parents = options or launch.allowed_roots(bot.registry, chat_id)
+        parents = options or launch.allowed_roots(bot.registry, chat_id, root=root)
         parent = pending.get("cwd") or (parents[0] if parents else "")
         if not parent:
             await bot._safe_answer(query, _tapper(query).text(TOAST_NO_FOLDER_YET),

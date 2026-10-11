@@ -87,6 +87,10 @@
 {"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "Nama sesi maksimal {max} karakter."}
 {"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "Belum ada folder proyek untuk memulai: minta admin untuk memulai sesi."}
 {"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "Pilih folder proyek: buat dengan “Folder baru”, atau minta admin untuk memulai sesi."}
+{"k": "app.launch.no_root", "src": "19345855", "v": "Kamu tidak punya folder untuk bekerja di sini. Minta pemilik menambahkanmu di aipager config."}
+{"k": "app.launch.outside_root", "src": "f8761328", "v": "Peranmu hanya bisa memulai sesi di foldermu {folder} atau folder di dalamnya."}
+{"k": "app.launch.root_unavailable", "src": "6d332ade", "v": "Foldermu {folder} tidak bisa disiapkan. Minta pemilik memeriksanya di aipager config."}
+{"k": "app.launch.session_outside_root", "src": "c501e96d", "v": "Sesi ini bekerja di luar foldermu {folder}, jadi peranmu tidak bisa melanjutkan, memulai ulang, atau mengganti mode-nya. Minta bantuan admin."}
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Peranmu tidak bisa memulai sesi di folder home atau folder di atasnya. Pilih folder proyek: buat dengan “Folder baru”, atau minta admin untuk memulai sesi."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"other": "🧹 {n} pesan antrean untuk [{session}] dihapus dari Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Ringkas dijalankan untuk [{session}] dari Mini App"}
@@ -607,12 +611,15 @@
 {"k": "safety.reason.glob_not_plain", "src": "6db7d611", "v": "{tool} dengan glob yang bukan pola relatif biasa"}
 {"k": "safety.reason.glob_unreadable", "src": "da95c3b5", "v": "{tool} dengan glob yang tidak terbaca"}
 {"k": "safety.reason.halted", "src": "343e090e", "v": "sesi dihentikan - panggilan alat sebelumnya di giliran ini diblokir kebijakan keamanan; mulai permintaan baru"}
+{"k": "safety.reason.outside_root_read", "src": "377378fa", "v": "{tool} ditolak - peran ini hanya membaca di folder home di dalam foldernya sendiri"}
 {"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool} di luar folder sesi - giliran terbatas hanya mencari di proyek dan scratchpad-nya"}
 {"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool} di luar folder sesi - giliran terbatas hanya menulis di proyek dan scratchpad-nya"}
 {"k": "safety.reason.path_protected", "src": "feff9877", "v": "{tool} pada path terlindungi {glob}"}
 {"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool} menulis ke path terlindungi {glob}"}
 {"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool} dengan path yang tidak terbaca"}
 {"k": "safety.reason.pattern_unreadable", "src": "88053cf7", "v": "{tool} dengan pola yang tidak terbaca"}
+{"k": "safety.reason.root_cwd_search", "src": "086246f6", "v": "{tool} ditolak - sesi ini berjalan di luar folder milik peran ini, jadi peran ini hanya bisa mencari di scratchpad-nya"}
+{"k": "safety.reason.root_cwd_write", "src": "bc6e509f", "v": "{tool} ditolak - sesi ini berjalan di luar folder milik peran ini, jadi peran ini hanya bisa menulis di scratchpad-nya"}
 {"k": "safety.reason.runs_commands", "src": "e180a703", "v": "{tool} ke file yang menjalankan perintah (.claude/, .git/, .mcp.json)"}
 {"k": "safety.reason.search_anywhere", "src": "c1ad4431", "v": "{tool} ditolak - path terlindungi {glob} bisa ada di folder mana pun, jadi peran ini tidak bisa mencari dengan Grep atau Glob"}
 {"k": "safety.reason.search_could_reach", "src": "a95243b1", "v": "Pencarian {tool} bisa menjangkau path terlindungi {glob}"}

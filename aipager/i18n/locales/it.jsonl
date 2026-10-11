@@ -87,6 +87,10 @@
 {"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "Il nome della sessione deve avere al massimo {max} caratteri."}
 {"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "Non c'è ancora una cartella di progetto in cui iniziare: chiedi a un amministratore di avviare la sessione."}
 {"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "Scegli una cartella di progetto: creane una con Nuova cartella, o chiedi a un amministratore di avviare la sessione."}
+{"k": "app.launch.no_root", "src": "19345855", "v": "Qui non hai nessuna cartella in cui lavorare. Chiedi al proprietario di aggiungerti in aipager config."}
+{"k": "app.launch.outside_root", "src": "f8761328", "v": "Il tuo ruolo può avviare sessioni solo nella tua cartella {folder} o in una cartella al suo interno."}
+{"k": "app.launch.root_unavailable", "src": "6d332ade", "v": "Non è stato possibile preparare la tua cartella {folder}. Chiedi al proprietario di controllarla in aipager config."}
+{"k": "app.launch.session_outside_root", "src": "c501e96d", "v": "Questa sessione lavora fuori dalla tua cartella {folder}, quindi il tuo ruolo non può riprenderla, riavviarla o cambiarne la modalità. Chiedi a un amministratore."}
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Il tuo ruolo non può avviare una sessione nella cartella home o in una cartella sopra di essa. Scegli una cartella di progetto: creane una con Nuova cartella, o chiedi a un amministratore di avviare la sessione."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"many": "🧹 {n} messaggi in coda di [{session}] eliminati dalla Mini App", "one": "🧹 {n} messaggio in coda di [{session}] eliminato dalla Mini App", "other": "🧹 {n} messaggi in coda di [{session}] eliminati dalla Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Compattazione avviata per [{session}] dalla Mini App"}
@@ -607,12 +611,15 @@
 {"k": "safety.reason.glob_not_plain", "src": "6db7d611", "v": "{tool} con un glob che non è un semplice pattern relativo"}
 {"k": "safety.reason.glob_unreadable", "src": "da95c3b5", "v": "{tool} con un glob illeggibile"}
 {"k": "safety.reason.halted", "src": "343e090e", "v": "sessione fermata - una chiamata a strumento precedente in questo turno è stata bloccata dalla policy di sicurezza; avvia una nuova richiesta"}
+{"k": "safety.reason.outside_root_read", "src": "377378fa", "v": "{tool} negato - questo ruolo legge nella cartella home solo dentro la propria cartella"}
 {"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool} fuori dalla cartella della sessione - un turno ristretto cerca solo nel suo progetto e nello scratchpad"}
 {"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool} fuori dalla cartella della sessione - un turno ristretto scrive solo nel suo progetto e nello scratchpad"}
 {"k": "safety.reason.path_protected", "src": "feff9877", "v": "{tool} sul percorso protetto {glob}"}
 {"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool}: scrittura sul percorso protetto {glob}"}
 {"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool} con un percorso illeggibile"}
 {"k": "safety.reason.pattern_unreadable", "src": "88053cf7", "v": "{tool} con un pattern illeggibile"}
+{"k": "safety.reason.root_cwd_search", "src": "086246f6", "v": "{tool} negato - questa sessione gira fuori dalla cartella propria di questo ruolo, quindi questo ruolo può cercare solo nel suo scratchpad"}
+{"k": "safety.reason.root_cwd_write", "src": "bc6e509f", "v": "{tool} negato - questa sessione gira fuori dalla cartella propria di questo ruolo, quindi questo ruolo può scrivere solo nel suo scratchpad"}
 {"k": "safety.reason.runs_commands", "src": "e180a703", "v": "{tool} su un file che esegue comandi (.claude/, .git/, .mcp.json)"}
 {"k": "safety.reason.search_anywhere", "src": "c1ad4431", "v": "{tool} negato - il percorso protetto {glob} può trovarsi in qualsiasi cartella, quindi questo ruolo non può cercare con Grep o Glob"}
 {"k": "safety.reason.search_could_reach", "src": "a95243b1", "v": "La ricerca di {tool} potrebbe raggiungere il percorso protetto {glob}"}

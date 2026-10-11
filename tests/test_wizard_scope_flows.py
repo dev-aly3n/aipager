@@ -73,11 +73,14 @@ def test_add_dm_scope_writes(env, monkeypatch):
     )
     _stub_captures(monkeypatch, [{"id": 555, "label": "bob"}])
     monkeypatch.setattr(scope_flows, "_pick_role", lambda *a, **k: "user")
+    # A user is held to a root folder, asked for (prefilled) and written.
+    _stub_ask(monkeypatch, [str(env / "users" / "bob")])
     assert scope_flows.add_dm_scope("TOK", "bot") is True
     scopes, _ = _scope.load_scopes(_scope.CONFIG_PATH)
     bob = next(s for s in scopes if s.chat_id == 555)
     assert bob.kind == "dm"
     assert bob.members[0].role == "user"
+    assert bob.root == str(env / "users" / "bob")
 
 
 def test_add_dm_scope_offers_owner_role(env, monkeypatch):
@@ -128,12 +131,14 @@ def test_add_group_commits_and_clears_draft(env, monkeypatch):
     _stub_captures(monkeypatch, [
         {"id": 11, "label": "ann"}, {"id": 22, "label": "ben"},
     ])
-    # label text, "add another?" True (after ann), False (after ben)
-    _stub_ask(monkeypatch, ["dev-team", True, False])
+    # label text, "add another?" True (after ann), False (after ben), then
+    # the members' root folder ("": the default it is prefilled with)
+    _stub_ask(monkeypatch, ["dev-team", True, False, ""])
     assert scope_flows.add_group_scope("TOK", "bot") is True
     scopes, _ = _scope.load_scopes(_scope.CONFIG_PATH)
     grp = next(s for s in scopes if s.chat_id == -100)
     assert grp.label == "dev-team"
+    assert grp.root and grp.root.endswith("/aipager-users/group-dev-team")
     assert {m.label for m in grp.members} == {"ann", "ben"}
     assert draft_mod.load_draft() is None  # cleared
 
@@ -190,7 +195,7 @@ def test_resume_completes_group(env, monkeypatch):
     })
     monkeypatch.setattr(team_setup, "_collect_deny_tools", lambda: [])
     _stub_captures(monkeypatch, [None])  # no new members on resume
-    _stub_ask(monkeypatch, ["resume"])
+    _stub_ask(monkeypatch, ["resume", ""])  # "": the default root
     scope_flows.resume_or_discard_draft("TOK", "bot")
     scopes, _ = _scope.load_scopes(_scope.CONFIG_PATH)
     grp = next(s for s in scopes if s.chat_id == -100)

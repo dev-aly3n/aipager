@@ -561,6 +561,10 @@ def well_formed_rules(rules) -> bool:
         if v is not None and not (isinstance(v, list)
                                   and all(isinstance(x, str) for x in v)):
             return False
+    # A members' root folder (absent: no bound). Present, it must be text;
+    # anything else is not trusted to mean "no bound".
+    if "root" in rules and not isinstance(rules["root"], str):
+        return False
     return True
 
 
@@ -574,6 +578,10 @@ def rules_of(snap) -> dict:
     for f in _RULE_LISTS:
         v = snap.get(f)
         out[f] = [x for x in v if isinstance(x, str)] if isinstance(v, list) else []
+    from aipager.safety import normalise_root
+    root = normalise_root(snap.get("root"))
+    if root is not None:
+        out["root"] = root
     return out
 
 

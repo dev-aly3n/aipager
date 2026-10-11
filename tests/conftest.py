@@ -197,6 +197,27 @@ def _pin_finish_card_grace(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_member_roots(tmp_path_factory, monkeypatch):
+    """A members' default root folder (``~/aipager-users/<label>``) is
+    created the first time a restricted member opens /new or the Mini
+    App. A test that has not pointed ``HOME`` at a throwaway folder gets
+    one under pytest's temp dir instead of the operator's real home; a
+    test that has keeps ``$HOME/aipager-users``, as the daemon would."""
+    from aipager import member_root
+    real = member_root.users_dir
+    made: list[str] = []
+
+    def _users_dir() -> str:
+        if os.path.realpath(os.path.expanduser("~")) != os.path.realpath(
+                str(_HOME_AT_IMPORT)):
+            return real()
+        if not made:
+            made.append(str(tmp_path_factory.mktemp("home") / "aipager-users"))
+        return made[0]
+    monkeypatch.setattr(member_root, "users_dir", _users_dir)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_home_paths(tmp_path, monkeypatch):
     """Redirect every module-level ``Path.home()`` write target to tmp.
 

@@ -87,6 +87,10 @@
 {"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "Tên phiên tối đa {max} ký tự."}
 {"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "Chưa có thư mục dự án nào để bắt đầu: hãy nhờ quản trị viên bắt đầu phiên."}
 {"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "Hãy chọn một thư mục dự án: tạo bằng “Thư mục mới”, hoặc nhờ quản trị viên bắt đầu phiên."}
+{"k": "app.launch.no_root", "src": "19345855", "v": "Bạn không có thư mục nào để làm việc ở đây. Hãy nhờ chủ sở hữu thêm bạn trong aipager config."}
+{"k": "app.launch.outside_root", "src": "f8761328", "v": "Vai trò của bạn chỉ có thể bắt đầu phiên trong thư mục của bạn {folder} hoặc một thư mục bên trong nó."}
+{"k": "app.launch.root_unavailable", "src": "6d332ade", "v": "Không chuẩn bị được thư mục của bạn {folder}. Hãy nhờ chủ sở hữu kiểm tra nó trong aipager config."}
+{"k": "app.launch.session_outside_root", "src": "c501e96d", "v": "Phiên này làm việc bên ngoài thư mục của bạn {folder}, nên vai trò của bạn không thể tiếp tục, khởi động lại hoặc đổi chế độ của nó. Hãy nhờ quản trị viên."}
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Vai trò của bạn không thể bắt đầu phiên trong thư mục home hoặc thư mục cấp trên của nó. Hãy chọn một thư mục dự án: tạo bằng “Thư mục mới”, hoặc nhờ quản trị viên bắt đầu phiên."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"other": "🧹 Đã xóa {n} tin nhắn đang chờ của [{session}] từ Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Đã kích hoạt thu gọn cho [{session}] từ Mini App"}
@@ -607,12 +611,15 @@
 {"k": "safety.reason.glob_not_plain", "src": "6db7d611", "v": "{tool} dùng glob không phải mẫu tương đối đơn giản"}
 {"k": "safety.reason.glob_unreadable", "src": "da95c3b5", "v": "{tool} dùng glob không đọc được"}
 {"k": "safety.reason.halted", "src": "343e090e", "v": "phiên đã dừng - một lệnh gọi công cụ trước đó trong lượt này đã bị chính sách an toàn chặn; hãy bắt đầu một yêu cầu mới"}
+{"k": "safety.reason.outside_root_read", "src": "377378fa", "v": "{tool} bị từ chối - vai trò này chỉ đọc trong thư mục home ở bên trong thư mục riêng của nó"}
 {"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool} nằm ngoài thư mục của phiên - một lượt bị giới hạn chỉ tìm trong dự án và scratchpad của nó"}
 {"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool} nằm ngoài thư mục của phiên - một lượt bị giới hạn chỉ ghi trong dự án và scratchpad của nó"}
 {"k": "safety.reason.path_protected", "src": "feff9877", "v": "{tool} trên đường dẫn được bảo vệ {glob}"}
 {"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool} ghi vào đường dẫn được bảo vệ {glob}"}
 {"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool} với đường dẫn không đọc được"}
 {"k": "safety.reason.pattern_unreadable", "src": "88053cf7", "v": "{tool} với mẫu không đọc được"}
+{"k": "safety.reason.root_cwd_search", "src": "086246f6", "v": "{tool} bị từ chối - phiên này chạy bên ngoài thư mục riêng của vai trò này, nên vai trò này chỉ được tìm kiếm trong scratchpad của nó"}
+{"k": "safety.reason.root_cwd_write", "src": "bc6e509f", "v": "{tool} bị từ chối - phiên này chạy bên ngoài thư mục riêng của vai trò này, nên vai trò này chỉ được ghi trong scratchpad của nó"}
 {"k": "safety.reason.runs_commands", "src": "e180a703", "v": "{tool} vào tệp có thể chạy lệnh (.claude/, .git/, .mcp.json)"}
 {"k": "safety.reason.search_anywhere", "src": "c1ad4431", "v": "{tool} bị từ chối - đường dẫn được bảo vệ {glob} có thể nằm ở bất kỳ thư mục nào, nên vai trò này không thể tìm bằng Grep hay Glob"}
 {"k": "safety.reason.search_could_reach", "src": "a95243b1", "v": "Tìm kiếm {tool} có thể chạm tới đường dẫn được bảo vệ {glob}"}

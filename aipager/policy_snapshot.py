@@ -338,7 +338,8 @@ def floor_snapshot(policy=None) -> dict:
 
 
 def resolve_snapshot(role, scope, member, style_text: str = "",
-                     reply_context: str = "", *, policy=None) -> dict:
+                     reply_context: str = "", *, policy=None,
+                     root_bound=None) -> dict:
     """Compute the effective rule sets for a driver (pure).
 
     ``role`` is a policy.Role (or None), ``scope`` a scope.Scope (or
@@ -363,6 +364,13 @@ def resolve_snapshot(role, scope, member, style_text: str = "",
     The safety floor is the built-in one plus policy.yaml's ``safety:``
     section (roadmap 8.96): *policy*'s when given, else the daemon's
     live policy (:func:`safety_floor_lists`).
+
+    ``root_bound`` (``member_root.RootBound``: ``root`` and ``deny``,
+    computed by the daemon for the scope the sender's role comes from)
+    holds a role without ``can_manage`` to its members' root folder: the
+    result gains ``root``, and every other scope's root goes into
+    ``deny_paths_no_access``. Ignored for a role with ``can_manage`` and
+    for no role, so an owner's or admin's snapshot has no ``root``.
     """
     floor_lists = safety_floor_lists(policy)
     bypass_safety = bool(role and role.bypass_safety)
@@ -393,7 +401,17 @@ def resolve_snapshot(role, scope, member, style_text: str = "",
             deny_tools |= set(getattr(member, "deny_tools", ()))
             allow_tools |= set(getattr(member, "allow_tools", ()))
 
-    return {
+    root = None
+    if (root_bound is not None and role is not None
+            and getattr(role, "can_manage", False) is not True):
+        # Applied whatever the bypasses, like the floor lists: the root
+        # follows can_manage, not bypass_role_denies.
+        root = safety.normalise_root(getattr(root_bound, "root", None))
+        for p in getattr(root_bound, "deny", ()) or ():
+            if isinstance(p, str) and p and "\x00" not in p:
+                no_access.add(p.rstrip("/") + "/**")
+
+    out = {
         "origin": "telegram",
         "bypass_safety": bypass_safety,
         # Writes confined to the session's folder + scratchpad (roadmap
@@ -408,11 +426,14 @@ def resolve_snapshot(role, scope, member, style_text: str = "",
         "style_text": style_text,
         "reply_context": reply_context,
     }
+    if root is not None:
+        out["root"] = root
+    return out
 
 
 def write_snapshot(session_name: str, role, scope, member,
                    style_text: str = "", reply_context: str = "", *,
-                   policy=None) -> None:
+                   policy=None, root_bound=None) -> None:
     """Atomic-write the resolved snapshot for a session (best-effort).
 
     ``reply_context`` defaults to ``""`` — every one of the (12+)
@@ -421,7 +442,7 @@ def write_snapshot(session_name: str, role, scope, member,
     every turn rather than silently keeping a prior turn's value.
     """
     data = resolve_snapshot(role, scope, member, style_text, reply_context,
-                            policy=policy)
+                            policy=policy, root_bound=root_bound)
     path = snapshot_path(session_name)
     try:
         tmp = path.with_suffix(path.suffix + ".tmp")
@@ -485,6 +506,7 @@ def write_note(
     author_user_id=_FROM_SENDER_KEY,
     scope_mode: bool = False,
     policy=None,
+    root_bound=None,
 ) -> Path | None:
     """Write one per-message policy note (design.md "queue handoff").
 
@@ -513,7 +535,7 @@ def write_note(
     daemon's live policy when ``None``, :func:`resolve_snapshot`).
     """
     note = resolve_snapshot(role, scope, member, style_text, reply_context,
-                            policy=policy)
+                            policy=policy, root_bound=root_bound)
     note["msg_id"] = msg_id
     note["chat_id"] = chat_id
     note["sender_key"] = list(sender_key) if sender_key is not None else None
@@ -1080,6 +1102,10 @@ def merge_snapshots(notes: list[dict]) -> dict:
       substitutes :data:`_ALLOW_TOOLS_SENTINEL` — a value that can never
       equal a real tool name — so ``tool_violation`` denies every tool
       rather than reading the empty result as "unrestricted".
+    - ``root`` (a members' root folder) is :func:`safety.merge_roots`: a
+      note without one imposes nothing on this axis, a narrower nested
+      root wins, and roots that do not nest (or a malformed one) give
+      :data:`safety.ROOT_SENTINEL`, never "no root".
     """
     if not notes:
         return floor_snapshot()
@@ -1117,7 +1143,7 @@ def merge_snapshots(notes: list[dict]) -> dict:
             _ALLOW_TOOLS_SENTINEL)
 
     last = ordered[-1]
-    return {
+    merged = {
         "origin": "telegram",
         "bypass_safety": bypass_safety,
         "confine_writes": confine_writes,
@@ -1129,6 +1155,10 @@ def merge_snapshots(notes: list[dict]) -> dict:
         "style_text": last.get("style_text") or "",
         "reply_context": last.get("reply_context") or "",
     }
+    root = safety.merge_roots(n.get("root") for n in ordered)
+    if root is not None:
+        merged["root"] = root
+    return merged
 
 
 # The line ``session_ops._inject_prompt`` prepends to every Telegram
@@ -1225,6 +1255,9 @@ def carried_snapshot(current) -> dict | None:
     carried = {f: list(current.get(f) or []) for f in _LIST_FIELDS}
     carried["bypass_safety"] = current.get("bypass_safety") is True
     carried["confine_writes"] = current.get("confine_writes") is not False
+    root = safety.normalise_root(current.get("root"))
+    if root is not None:
+        carried["root"] = root
     # A confined turn gets the whole floor back, credential files included;
     # an owner's or admin's only the part every snapshot carries.
     floor = (floor_snapshot() if carried["confine_writes"]
@@ -2284,7 +2317,7 @@ def clear_triggers(session_name: str) -> None:
 
 #: The fields a snapshot's rules are made of: what :func:`merge_snapshots`
 #: reasons about and the hook enforces. Everything else is provenance.
-SAFETY_FIELDS = ("bypass_safety", "confine_writes", *_LIST_FIELDS)
+SAFETY_FIELDS = ("bypass_safety", "confine_writes", *_LIST_FIELDS, "root")
 
 #: What a narrowed snapshot keeps of the one it replaces: everything that
 #: is not a rule (the turn's origin and bodies, the style and reply text).
@@ -2306,6 +2339,10 @@ def safety_rules(snap) -> dict:
         v = snap.get(f)
         out[f] = sorted(x for x in v if isinstance(x, str)) \
             if isinstance(v, list) else []
+    # A members' root folder: only when there is one (absent = no bound).
+    root = safety.normalise_root(snap.get("root"))
+    if root is not None:
+        out["root"] = root
     return out
 
 

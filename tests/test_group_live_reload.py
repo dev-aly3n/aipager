@@ -516,8 +516,10 @@ def test_a_user_demoted_to_read_only_is_narrowed(gbot, run_async):
     _write_config([g, _dm()])
     run_async(bot.reload_team())
     after = ps.read_snapshot(S)
+    # The whole scope list, as the reload has it: the other scopes' roots
+    # are part of a restricted member's rules.
     expected = ps.narrowed_snapshot(
-        before, live_reload.sender_rules([g], POLICY, GROUP, BOB))
+        before, live_reload.sender_rules([g, _dm()], POLICY, GROUP, BOB))
     assert ps.safety_rules(after) == ps.safety_rules(expected)
     assert after["confine_writes"] is True
 

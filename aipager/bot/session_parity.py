@@ -1745,6 +1745,14 @@ async def handle_callback(
             text, kb = _render_session_menu(bot, chat_id, sess)
             await _edit(query, text, kb)
             return True
+        # A restart relaunches the session: a role without can_manage only
+        # for one inside its members' root folder.
+        from aipager import member_root
+        from aipager.bot.sibling_text import shown as shown_text
+        refusal = member_root.relaunch_refusal(bot, user_id, chat_id, sess.cwd)
+        if refusal:
+            await bot._safe_answer(query, shown_text(person, refusal), show_alert=True)
+            return True
         await bot._safe_answer(query, person.text(TOAST_RESTARTING, session=sess.label))
         outcome = await bot._restart_session_core(sess)
         await _edit(query, _restart_outcome_text(

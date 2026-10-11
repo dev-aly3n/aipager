@@ -1685,6 +1685,14 @@ class CommandHandlersMixin:
         if target_skip_perms and not may_auto:
             await refuse(person.text(TOAST_NEEDS_ADMIN_AUTO), tr.html(NEEDS_ADMIN_AUTO))
             return
+        # A switch relaunches the session: a role without can_manage only
+        # for one inside its members' root folder.
+        from aipager import member_root
+        from aipager.bot.sibling_text import shown as shown_text
+        refusal = member_root.relaunch_refusal(self, requester, chat_id, sess.cwd)
+        if refusal:
+            await refuse(shown_text(person, refusal), member_root.as_html(tr, refusal))
+            return
 
         if sess.status == Status.UNKNOWN:
             await refuse(person.text(TOAST_PERMS_STARTING, session=sess.label),

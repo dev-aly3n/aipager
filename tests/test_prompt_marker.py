@@ -96,7 +96,7 @@ def test_inject_writes_policy_snapshot(mk_bot, run_async, monkeypatch):
                          chat_id=None, sender_key=None, body="",
                          raw_text="", style_text="", reply_context="",
                          author_user_id=None, scope_mode=False,
-                         policy=None):
+                         policy=None, root_bound=None):
         captured.update(name=name, role=role, member=member,
                         style_text=style_text)
         return None
@@ -127,7 +127,7 @@ def test_inject_prompt_role_resolution_requires_an_explicit_driver_user_id(
                          chat_id=None, sender_key=None, body="",
                          raw_text="", style_text="", reply_context="",
                          author_user_id=None, scope_mode=False,
-                         policy=None):
+                         policy=None, root_bound=None):
         captured.update(role=role, member=member)
         return None
     monkeypatch.setattr(policy_snapshot, "write_note", _fake_write_note)
@@ -158,7 +158,7 @@ def test_inject_prompt_style_text_reflects_session_override(mk_bot, run_async, m
                          chat_id=None, sender_key=None, body="",
                          raw_text="", style_text="", reply_context="",
                          author_user_id=None, scope_mode=False,
-                         policy=None):
+                         policy=None, root_bound=None):
         captured.update(style_text=style_text)
         return None
     monkeypatch.setattr(policy_snapshot, "write_note", _fake_write_note)

@@ -87,6 +87,10 @@
 {"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "Le nom de la session doit comporter {max} caractères au maximum."}
 {"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "Il n'y a pas encore de dossier de projet où démarrer : demandez à un administrateur de démarrer la session."}
 {"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "Choisissez un dossier de projet : créez-en un avec Nouveau dossier, ou demandez à un administrateur de démarrer la session."}
+{"k": "app.launch.no_root", "src": "19345855", "v": "Vous n'avez ici aucun dossier où travailler. Demandez au propriétaire de vous ajouter dans aipager config."}
+{"k": "app.launch.outside_root", "src": "f8761328", "v": "Votre rôle ne peut démarrer des sessions que dans votre dossier {folder} ou dans un dossier à l'intérieur."}
+{"k": "app.launch.root_unavailable", "src": "6d332ade", "v": "Votre dossier {folder} n'a pas pu être préparé. Demandez au propriétaire de le vérifier dans aipager config."}
+{"k": "app.launch.session_outside_root", "src": "c501e96d", "v": "Cette session travaille hors de votre dossier {folder}, donc votre rôle ne peut pas la reprendre, la redémarrer ni changer son mode. Demandez à un administrateur."}
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Votre rôle ne permet pas de démarrer une session dans le dossier personnel ni dans un dossier au-dessus. Choisissez un dossier de projet : créez-en un avec Nouveau dossier, ou demandez à un administrateur de démarrer la session."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"many": "🧹 {n} messages en attente de [{session}] supprimés depuis la Mini App", "one": "🧹 {n} message en attente de [{session}] supprimé depuis la Mini App", "other": "🧹 {n} messages en attente de [{session}] supprimés depuis la Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Compactage lancé pour [{session}] depuis la Mini App"}
@@ -607,12 +611,15 @@
 {"k": "safety.reason.glob_not_plain", "src": "6db7d611", "v": "{tool} avec un glob qui n'est pas un motif relatif simple"}
 {"k": "safety.reason.glob_unreadable", "src": "da95c3b5", "v": "{tool} avec un glob illisible"}
 {"k": "safety.reason.halted", "src": "343e090e", "v": "session interrompue - un appel d'outil précédent dans ce tour a été bloqué par la politique de sécurité ; lancez une nouvelle demande"}
+{"k": "safety.reason.outside_root_read", "src": "377378fa", "v": "{tool} refusé - ce rôle ne lit dans le dossier personnel qu'à l'intérieur de son propre dossier"}
 {"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool} hors du dossier de la session - un tour restreint ne cherche que dans son projet et son scratchpad"}
 {"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool} hors du dossier de la session - un tour restreint n'écrit que dans son projet et son scratchpad"}
 {"k": "safety.reason.path_protected", "src": "feff9877", "v": "{tool} sur le chemin protégé {glob}"}
 {"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool} : écriture sur le chemin protégé {glob}"}
 {"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool} avec un chemin illisible"}
 {"k": "safety.reason.pattern_unreadable", "src": "88053cf7", "v": "{tool} avec un motif illisible"}
+{"k": "safety.reason.root_cwd_search", "src": "086246f6", "v": "{tool} refusé - cette session tourne hors du dossier propre à ce rôle, donc ce rôle ne peut chercher que dans son scratchpad"}
+{"k": "safety.reason.root_cwd_write", "src": "bc6e509f", "v": "{tool} refusé - cette session tourne hors du dossier propre à ce rôle, donc ce rôle ne peut écrire que dans son scratchpad"}
 {"k": "safety.reason.runs_commands", "src": "e180a703", "v": "{tool} vers un fichier qui exécute des commandes (.claude/, .git/, .mcp.json)"}
 {"k": "safety.reason.search_anywhere", "src": "c1ad4431", "v": "{tool} refusé - le chemin protégé {glob} peut se trouver dans n'importe quel dossier, ce rôle ne peut donc pas chercher avec Grep ou Glob"}
 {"k": "safety.reason.search_could_reach", "src": "a95243b1", "v": "La recherche {tool} pourrait atteindre le chemin protégé {glob}"}

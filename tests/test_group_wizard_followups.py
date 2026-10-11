@@ -278,7 +278,7 @@ def _resume_answers(monkeypatch):
     monkeypatch.setattr(team_setup, "_capture_user_identity",
                         lambda *a, **k: None)     # no more members
     monkeypatch.setattr(team_setup, "_collect_deny_tools", lambda: [])
-    _answers(monkeypatch, scope_flows, ["resume"])
+    _answers(monkeypatch, scope_flows, ["resume", ""])  # "": the default root
 
 
 def test_a_resumed_draft_reloads_the_running_daemon(monkeypatch):
@@ -340,7 +340,7 @@ def test_a_resumed_draft_paused_again_sends_nothing(monkeypatch):
     def _interrupt(*a, **k):
         raise KeyboardInterrupt
     monkeypatch.setattr(team_setup, "_capture_user_identity", _interrupt)
-    _answers(monkeypatch, scope_flows, ["resume"])
+    _answers(monkeypatch, scope_flows, ["resume", ""])  # "": the default root
     monkeypatch.setattr(scope_flows, "friendly_warn", lambda *a: None)
     sent = _daemon(monkeypatch)
     calls = _hint_calls(monkeypatch)
@@ -428,6 +428,7 @@ def test_adding_a_new_dm_still_adds_it_and_keeps_the_rest(monkeypatch):
     _write_config([_dm(), _group()])
     _capture(monkeypatch, EVE, label="eve")
     monkeypatch.setattr(scope_flows, "_pick_role", lambda *a, **k: "user")
+    _answers(monkeypatch, scope_flows, ["/srv/aipager-users/eve"])   # her root
     warned = _warned(monkeypatch)
     assert scope_flows.add_dm_scope(TOKEN, "aipagerbot") is True
     assert warned == []
@@ -436,7 +437,8 @@ def test_adding_a_new_dm_still_adds_it_and_keeps_the_rest(monkeypatch):
     assert scopes[:2] == [_dm(), _group()]
     assert scopes[2] == Scope(chat_id=EVE, kind="dm", label="eve DM",
                               members=(Member(id=EVE, label="eve",
-                                              role="user"),))
+                                              role="user"),),
+                              root="/srv/aipager-users/eve")
 
 
 def test_a_group_member_can_still_get_their_own_dm(monkeypatch):
@@ -444,6 +446,7 @@ def test_a_group_member_can_still_get_their_own_dm(monkeypatch):
     _write_config([_dm(), _group()])
     _capture(monkeypatch, BOB)
     monkeypatch.setattr(scope_flows, "_pick_role", lambda *a, **k: "user")
+    _answers(monkeypatch, scope_flows, [""])   # the default root
     assert scope_flows.add_dm_scope(TOKEN, "aipagerbot") is True
     assert [s.chat_id for s in scope_io.read_config()[0]] == [DM, GROUP, BOB]
 

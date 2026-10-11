@@ -41,13 +41,14 @@ def test_claude_reads_every_safety_reason_byte_identical(tmp_path):
 
 
 def test_the_corpus_covers_every_shape():
-    """One row per writer (26: safety.py's 24, enforce's two), 25 distinct
+    """One row per writer (29: safety.py's 27, enforce's two), 28 distinct
     sentences: the confined and the unconfined search both write "with an
     unreadable search folder". A new writer needs its row here and in the
-    golden."""
+    golden (the members' root folder added three, appended before
+    enforce's two; every earlier row is byte-identical)."""
     golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
-    assert len(golden) == 26
-    assert len({row["reason"] for row in golden}) == 25
+    assert len(golden) == 29
+    assert len({row["reason"] for row in golden}) == 28
 
 
 def test_the_chat_language_never_reaches_a_reason(tmp_path):

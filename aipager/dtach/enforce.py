@@ -999,6 +999,41 @@ def _write_roots(cwd: str | None, session_id,
     return tuple(roots)
 
 
+def _root_bounds(cwd: str | None, session_id, root: str, confined: bool,
+                 wide_cwd: bool, readable: tuple[str, ...] = (),
+                 ) -> tuple[tuple[str, ...], tuple[str, ...], bool]:
+    """A turn held to a members' root folder (*root*: a path, or
+    ``safety.ROOT_SENTINEL`` when two roots that do not nest were merged):
+    ``(write_roots, home_read_roots, root_cwd)``.
+
+    - The session folder counts only when it is absolute, not wide and
+      inside the root (any such folder under the sentinel).
+    - Confined: writes in that folder and the scratchpad, as before.
+      Unconfined (a custom role with ``bypass_role_denies`` but no
+      ``can_manage``): writes and searches anywhere in the root (the
+      session folder under the sentinel) and the scratchpad.
+    - Reads under the home folder: the root (the session folder under
+      the sentinel), the scratchpad and *readable* (the reply file).
+    - ``root_cwd``: a confined turn whose session folder is outside the
+      root, so its deny reasons say why."""
+    scratch = _scratch_root(cwd, session_id)
+    wide = wide_cwd if confined else _cwd_is_wide(cwd)
+    usable = bool(cwd) and os.path.isabs(cwd) and not wide
+    sentinel = root == safety.ROOT_SENTINEL
+    if sentinel:
+        allow = cwd if usable else None
+    else:
+        allow = safety._realpath(root)
+    cwd_ok = usable and (sentinel or safety.under_root(cwd, root))
+    if confined:
+        write_roots = ((cwd,) if cwd_ok else ()) + (scratch,)
+    else:
+        write_roots = ((allow,) if allow else ()) + (scratch,)
+    home_read_roots = ((allow,) if allow else ()) + (scratch,) + tuple(readable)
+    root_cwd = confined and usable and not cwd_ok
+    return write_roots, home_read_roots, root_cwd
+
+
 _FAIL_CLOSED_REASON = "this tool call could not be checked, so it was denied"
 
 
@@ -1656,12 +1691,22 @@ def _decide(data: dict):
     # The one control file a turn may read: its own session's reply
     # context, which the prompt tells Claude to Read (session_ops).
     readable = (str(reply_context_path(session)),) if session else ()
+    # A role without can_manage is held to its members' root folder: no
+    # write outside it, no read in the home folder outside it.
+    home_read_roots = None
+    root_cwd = False
+    root = snap.get("root")
+    if root is not None:
+        write_roots, home_read_roots, root_cwd = _root_bounds(
+            cwd, data.get("session_id"), root, confined, wide_cwd, readable)
 
     reason = (
         safety.path_violation(tool_name, tool_input, no_access, no_write,
                               cwd=cwd, write_roots=write_roots,
                               readable=readable,
-                              wide_cwd=wide_cwd)
+                              wide_cwd=wide_cwd,
+                              home_read_roots=home_read_roots,
+                              root_cwd=root_cwd)
         or (safety.bash_violation(tool_input.get("command", ""), bash_pats)
             if tool_name == "Bash" else None)
         or safety.tool_violation(tool_name, deny_tools, allow_tools)

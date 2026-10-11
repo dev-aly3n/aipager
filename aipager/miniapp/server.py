@@ -832,9 +832,23 @@ class MiniAppServer:
         # Someone whose turns are confined to the session's folder may not
         # start in `/`, the home folder or a folder above it (roadmap 8.79).
         confined = bool(self.bot._is_confined_user(user_id, scope_chat_id))
+        # A role without can_manage starts only inside its members' root
+        # folder (no folder chosen: the root itself).
+        from aipager import member_root
+        root = member_root.restricted_root(self.bot, user_id, scope_chat_id)
+        candidate = body.get("cwd")
+        if root is not None:
+            if not candidate and root != member_root.NOWHERE:
+                candidate = root
+            refusal = (member_root.launch_refusal(self.bot, user_id, scope_chat_id,
+                                                  candidate)
+                       if candidate is None or isinstance(candidate, str) else "")
+            if refusal:
+                return web.json_response(
+                    {"error": "bad_request", "detail": say(tr, refusal)}, status=400)
         cwd, err = validate_cwd(
-            body.get("cwd"),
-            allowed_roots(self.registry, scope_chat_id, confined=confined),
+            candidate,
+            allowed_roots(self.registry, scope_chat_id, confined=confined, root=root),
             confined=confined,
         )
         if err:
@@ -937,9 +951,23 @@ class MiniAppServer:
         # Any folder this chat works in may be the parent, the home folder
         # included; a confined caller's new folder must still be a project
         # folder, and is remembered so they can start in it (roadmap 8.79).
+        # A role without can_manage creates folders only inside its
+        # members' root folder.
+        from aipager import member_root
+        root = member_root.restricted_root(self.bot, user_id, scope_chat_id)
+        parent = body.get("parent")
+        if root is not None:
+            if not parent and root != member_root.NOWHERE:
+                parent = root
+            refusal = member_root.folder_refusal(root, parent)
+            if refusal:
+                return web.json_response({
+                    "error": "bad_request",
+                    "detail": say(self._viewer_tr(request, user_id), refusal),
+                }, status=400)
         path, existed, err = create_directory(
-            body.get("parent"), body.get("name"),
-            allowed_roots(self.registry, scope_chat_id),
+            parent, body.get("name"),
+            allowed_roots(self.registry, scope_chat_id, root=root),
             confined=bool(self.bot._is_confined_user(user_id, scope_chat_id)),
         )
         if err:
@@ -992,7 +1020,11 @@ class MiniAppServer:
         prefs = get_preferences(scope_chat_id)
         from aipager.config import MODEL_CHOICES, model_hint
 
-        roots = allowed_roots(self.registry, scope_chat_id)
+        # A role without can_manage: its members' root folder (created
+        # now) and the folders inside it, the root being the default.
+        from aipager import member_root
+        root = member_root.restricted_root(self.bot, user_id, scope_chat_id)
+        roots = allowed_roots(self.registry, scope_chat_id, root=root)
         # Which entry is the one a session lands in when nobody picks. The
         # client tags it `default` instead of offering a second "Default"
         # choice beside it — since _PROJECT_DIR became a root, the two were
@@ -1005,6 +1037,8 @@ class MiniAppServer:
         except OSError:
             project_dir = ""
         default_directory = project_dir if project_dir in roots else ""
+        if root is not None:
+            default_directory = roots[0] if roots else ""
 
         return web.json_response({
             "directories": roots,
@@ -2019,6 +2053,9 @@ class MiniAppServer:
         # not an admin (roadmap 8.83).
         override, auto_refused = self.bot._resume_auto_gate(
             sess, None, user_id, scope_chat_id)
+        refused = self._outside_root_response(request, sess, scope_chat_id, user_id)
+        if refused is not None:
+            return refused
         outcome = await self.bot._do_resume_core(
             sess, skip_perms_override=override, driver_user_id=user_id)
         tr = self._viewer_tr(request, user_id)
@@ -2140,6 +2177,23 @@ class MiniAppServer:
             }, status=400)
         return None
 
+    def _outside_root_response(self, request, sess, scope_chat_id, user_id):
+        """403 when a role without can_manage asks to resume, restart or
+        switch a session working outside its members' root folder, else
+        None (``member_root.relaunch_refusal``)."""
+        from aiohttp import web
+
+        from aipager import member_root
+        refusal = member_root.relaunch_refusal(self.bot, user_id, scope_chat_id,
+                                               sess.cwd)
+        if not refusal:
+            return None
+        log.info("miniapp: relaunch rejected (403) — session outside the caller's root")
+        return web.json_response({
+            "error": "forbidden",
+            "detail": say(self._viewer_tr(request, user_id), refusal),
+        }, status=403)
+
     async def _handle_session_perms(self, request):
         from aiohttp import web
 
@@ -2174,6 +2228,9 @@ class MiniAppServer:
         if not self._allow_write(user_id):
             log.info("miniapp: session perms rejected (429) — rate limited")
             return web.json_response({"error": "too_many_requests"}, status=429)
+        refused = self._outside_root_response(request, sess, scope_chat_id, user_id)
+        if refused is not None:
+            return refused
 
         outcome = await self.bot._perms_switch_core(sess, target_skip_perms)
         resp = self._restart_outcome_response(
@@ -2291,6 +2348,9 @@ class MiniAppServer:
         if not self._allow_write(user_id):
             log.info("miniapp: session restart rejected (429) — rate limited")
             return web.json_response({"error": "too_many_requests"}, status=429)
+        refused = self._outside_root_response(request, sess, scope_chat_id, user_id)
+        if refused is not None:
+            return refused
 
         outcome = await self.bot._restart_session_core(sess)
         tr = self._viewer_tr(request, user_id)

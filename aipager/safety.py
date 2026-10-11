@@ -551,6 +551,95 @@ def is_wide_folder(path: str) -> bool:
     return _under(home_folder(), real)
 
 
+# ---------------------------------------------------------------------------
+# Members' root folders. A role without ``can_manage`` (the built-in
+# ``user`` and ``read_only``) works only inside the root folder the owner
+# gave its chat (``aipager.yaml``'s per-scope ``root``, else a default
+# under ``~/aipager-users``). The daemon resolves the root and puts it in
+# the turn's snapshot as ``root``; the hook reads it from there and never
+# parses aipager.yaml. A snapshot with no ``root`` has no bound on this
+# axis (owner, admin, personal mode, the floor).
+# ---------------------------------------------------------------------------
+
+#: The bound two different roots merge to (and what a malformed value
+#: reads as): writes and home reads only in the session's own folder and
+#: scratchpad. It can never be a real path (a NUL byte).
+ROOT_SENTINEL = "\x00none"
+
+_ROOT_MAGIC = set("*?[]{}")
+
+
+def normalise_root(value) -> str | None:
+    """A snapshot's ``root`` as the checks use it: ``None`` (no bound),
+    :data:`ROOT_SENTINEL`, or a normalised absolute path. Anything else
+    (not a string, relative, a NUL byte) reads as the sentinel: fail
+    closed, never as no bound."""
+    if value is None:
+        return None
+    if value == ROOT_SENTINEL:
+        return ROOT_SENTINEL
+    if isinstance(value, str) and value and "\x00" not in value \
+            and os.path.isabs(value):
+        return os.path.normpath(value)
+    return ROOT_SENTINEL
+
+
+def merge_roots(values) -> str | None:
+    """The strictest of several ``root`` values: absent ones impose
+    nothing; any sentinel gives the sentinel; one root inside every other
+    one (symlinks resolved) is the narrowest and wins; roots that do not
+    nest give the sentinel. Never ``None`` when any value is a bound."""
+    roots = {r for r in (normalise_root(v) for v in values) if r is not None}
+    if not roots:
+        return None
+    if ROOT_SENTINEL in roots:
+        return ROOT_SENTINEL
+    real = {r: _realpath(r) for r in roots}
+    narrowest = sorted(r for r in roots
+                       if all(_under(real[r], real[o]) for o in roots))
+    return narrowest[0] if narrowest else ROOT_SENTINEL
+
+
+def under_root(path: str, root: str) -> bool:
+    """*path* is *root* or inside it, both with symlinks resolved, and
+    compared by whole path components."""
+    return _under(_realpath(os.path.abspath(path)),
+                  _realpath(os.path.abspath(root)))
+
+
+def root_problem(path) -> str | None:
+    """Why *path* cannot be a members' root folder, or ``None``. Plain
+    English for the wizard and the aipager.yaml parser (neither is
+    translated). A folder that does not exist yet is fine.
+
+    Refused: not text, empty, a NUL byte, not absolute after ``~``,
+    wildcard characters, ``/``, the home folder or a folder above it, and
+    a folder that is, lies inside or holds one of aipager's protected
+    paths or the credential files (``~/.claude``, ``~/.config/aipager``,
+    ``~/.ssh``...): a member's turn may write in its root."""
+    if not isinstance(path, str) or not path.strip():
+        return "it is empty"
+    if "\x00" in path:
+        return "it holds a NUL byte"
+    expanded = os.path.expanduser(path.strip())
+    if not os.path.isabs(expanded):
+        return "it is not an absolute path (start it with / or ~/)"
+    if _ROOT_MAGIC & set(expanded):
+        return "it holds a wildcard character (* ? [ ] { })"
+    spelled = os.path.abspath(expanded)
+    if is_wide_folder(spelled):
+        return "it is /, the home folder or a folder above the home folder"
+    for form in {spelled, _realpath(spelled)}:
+        for glob in (*DENY_PATHS_NO_ACCESS, *CREDENTIAL_PATHS):
+            spots = _protected_spots(glob)
+            if spots is None:
+                continue
+            if any(_reaches(form, folder, name) for folder, name in spots):
+                shown = glob[:-3] if glob.endswith("/**") else glob
+                return f"it is, holds or lies inside the protected path {shown}"
+    return None
+
+
 def _matches_one(target: str, g: str) -> bool:
     target, g = _fold(target), _fold(g)
     if g.startswith("/"):
@@ -665,9 +754,45 @@ _SHAPE_WIDE_CWD_WRITE = _wide_cwd_shape("write")
 _SHAPE_WIDE_CWD_SEARCH = _wide_cwd_shape("search")
 
 
+# The deny reason when a turn held to a members' root runs in a session
+# whose folder is outside that root (a session started before the root
+# rule, or by someone else): its folder is then no write or search root.
+def _root_cwd_reason(tool_name: str, verb: str) -> str:
+    return (f"{tool_name} denied - this session runs outside this role's "
+            f"own folder, so this role can only {verb} in its scratchpad")
+
+
+REASON_ROOT_CWD_WRITE = "root_cwd_write"
+REASON_ROOT_CWD_SEARCH = "root_cwd_search"
+
+
+def _root_cwd_shape(verb: str) -> str:
+    return reason_shape("{tool}", "denied", "-", "this", "session", "runs", "outside",
+                        "this", "role's", "own", "folder,", "so", "this", "role", "can",
+                        "only", verb, "in", "its", "scratchpad")
+
+
+_SHAPE_ROOT_CWD_WRITE = _root_cwd_shape("write")
+_SHAPE_ROOT_CWD_SEARCH = _root_cwd_shape("search")
+
+
+# The deny reason when a turn held to a members' root reads a file in the
+# home folder outside that root.
+def _outside_root_read_reason(tool_name: str) -> str:
+    return (f"{tool_name} denied - this role reads in the home folder only "
+            "inside its own folder")
+
+
+REASON_OUTSIDE_ROOT_READ = "outside_root_read"
+_SHAPE_OUTSIDE_ROOT_READ = reason_shape("{tool}", "denied", "-", "this", "role", "reads",
+                                        "in", "the", "home", "folder", "only", "inside",
+                                        "its", "own", "folder")
+
+
 def _search_violation(
     tool_name: str, tool_input: dict, no_access: tuple[str, ...],
     cwd: str | None, roots: tuple[str, ...], wide_cwd: bool = False,
+    root_cwd: bool = False,
 ) -> str | None:
     """A confined turn's Grep/Glob, as an allow-list (roadmap 8.52,
     operator decision 2026-09-27). Allowed only when:
@@ -696,6 +821,8 @@ def _search_violation(
     if not any(_under(real, _realpath(_norm(r))) for r in roots):
         if wide_cwd:
             return _wide_cwd_reason(tool_name, "search")
+        if root_cwd:
+            return _root_cwd_reason(tool_name, "search")
         return (f"{tool_name} outside the session's folder - a restricted "
                 "turn searches only its project and scratchpad")
     for glob in no_access:
@@ -868,7 +995,8 @@ _SHAPE_SEARCH_PROTECTED_FILES = reason_shape("{tool}", "denied", "-", "this", "s
 
 def _confinement_violation(tool_name: str, real: str,
                            write_roots: tuple[str, ...],
-                           wide_cwd: bool = False) -> str | None:
+                           wide_cwd: bool = False,
+                           root_cwd: bool = False) -> str | None:
     """A write that is not inside one of ``write_roots``, or that lands
     on a file which makes Claude Code or git run a command
     (:data:`_NEVER_WRITE_DIRS`, :data:`_NEVER_WRITE_FILES`). ``real`` is
@@ -889,6 +1017,8 @@ def _confinement_violation(tool_name: str, real: str,
         return None
     if wide_cwd:
         return _wide_cwd_reason(tool_name, "write")
+    if root_cwd:
+        return _root_cwd_reason(tool_name, "write")
     return (f"{tool_name} outside the session's folder - a restricted turn "
             "writes only in its project and scratchpad")
 
@@ -910,6 +1040,8 @@ def path_violation(
     write_roots: tuple[str, ...] | None = None,
     readable: tuple[str, ...] = (),
     wide_cwd: bool = False,
+    home_read_roots: tuple[str, ...] | None = None,
+    root_cwd: bool = False,
 ) -> str | None:
     """Reason string if this tool touches a protected path, else None.
 
@@ -927,6 +1059,14 @@ def path_violation(
     - ``wide_cwd``: the session runs in the home folder or above it, so
       ``write_roots`` left its folder out (roadmap 8.79); a write or
       search outside the roots then says so in its deny reason.
+    - ``home_read_roots``: the turn is held to a members' root folder
+      (``root`` in its snapshot): a reading tool (Read, LSP) may open a
+      path under the home folder only inside one of these (the root, the
+      scratchpad, the session's reply file). Paths outside the home folder
+      are not bound by it. ``None``: no such bound.
+    - ``root_cwd``: the session runs outside the turn's root folder, so
+      ``write_roots`` left its folder out; a write or search outside the
+      roots then says so in its deny reason.
     """
     key = _PATH_KEYS.get(tool_name)
     if not key:
@@ -935,7 +1075,7 @@ def path_violation(
     if tool_name in _SEARCH_TOOLS:
         if write_roots is not None:
             return _search_violation(tool_name, tool_input, no_access, cwd,
-                                     write_roots, wide_cwd)
+                                     write_roots, wide_cwd, root_cwd)
         return _unconfined_search_violation(tool_name, tool_input,
                                             no_access, cwd)
     raw = _js_trim(tool_input.get(key))
@@ -958,8 +1098,32 @@ def path_violation(
                 return f"{tool_name} write to protected path {glob}"
         if write_roots is not None:
             return _confinement_violation(tool_name, real, write_roots,
-                                          wide_cwd)
+                                          wide_cwd, root_cwd)
+        return None
+    if home_read_roots is not None and _outside_home_read_roots(
+            targets, home_read_roots):
+        return _outside_root_read_reason(tool_name)
     return None
+
+
+def _outside_home_read_roots(targets: set[str],
+                             roots: tuple[str, ...]) -> bool:
+    """True when any of *targets* (a path as spelled and as it really
+    leads) is under the home folder and inside none of *roots*: a link
+    inside the root to a file elsewhere in the home folder is outside."""
+    homes = {_realpath(os.path.expanduser("~")),
+             os.path.abspath(os.path.expanduser("~"))}
+    allowed: set[str] = set()
+    for r in roots:
+        if isinstance(r, str) and r and "\x00" not in r:
+            n = _norm(r)
+            allowed |= {n, _realpath(n)}
+    for t in targets:
+        if not any(_under(t, h) for h in homes):
+            continue
+        if not any(_under(t, a) for a in allowed):
+            return True
+    return False
 
 
 REASON_PATH_UNREADABLE = "path_unreadable"
@@ -1098,6 +1262,9 @@ REASON_SHAPES: tuple[tuple[str, str], ...] = (
     (REASON_RUNS_COMMANDS, _SHAPE_RUNS_COMMANDS),
     (REASON_WIDE_CWD_WRITE, _SHAPE_WIDE_CWD_WRITE),
     (REASON_WIDE_CWD_SEARCH, _SHAPE_WIDE_CWD_SEARCH),
+    (REASON_ROOT_CWD_WRITE, _SHAPE_ROOT_CWD_WRITE),
+    (REASON_ROOT_CWD_SEARCH, _SHAPE_ROOT_CWD_SEARCH),
+    (REASON_OUTSIDE_ROOT_READ, _SHAPE_OUTSIDE_ROOT_READ),
     (REASON_OUTSIDE_WRITE, _SHAPE_OUTSIDE_WRITE),
     (REASON_OUTSIDE_SEARCH, _SHAPE_OUTSIDE_SEARCH),
     (REASON_SEARCH_FOLDER_UNREADABLE, _SHAPE_SEARCH_FOLDER_UNREADABLE),

@@ -87,6 +87,10 @@
 {"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "O nome da sessão deve ter no máximo {max} caracteres."}
 {"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "Ainda não há pasta de projeto para começar: peça a um administrador para iniciar a sessão."}
 {"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "Escolha uma pasta de projeto: crie uma com Nova pasta ou peça a um administrador para iniciar a sessão."}
+{"k": "app.launch.no_root", "src": "19345855", "v": "Você não tem nenhuma pasta para trabalhar aqui. Peça ao dono para adicionar você em aipager config."}
+{"k": "app.launch.outside_root", "src": "f8761328", "v": "Sua função só pode iniciar sessões na sua pasta {folder} ou em uma pasta dentro dela."}
+{"k": "app.launch.root_unavailable", "src": "6d332ade", "v": "Não foi possível preparar sua pasta {folder}. Peça ao dono para verificá-la em aipager config."}
+{"k": "app.launch.session_outside_root", "src": "c501e96d", "v": "Esta sessão trabalha fora da sua pasta {folder}, então sua função não pode retomá-la, reiniciá-la nem trocar o modo dela. Peça a um administrador."}
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Sua função não pode iniciar uma sessão na pasta pessoal nem em uma pasta acima dela. Escolha uma pasta de projeto: crie uma com Nova pasta ou peça a um administrador para iniciar a sessão."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"many": "🧹 {n} mensagens na fila de [{session}] removidas pelo Mini App", "one": "🧹 {n} mensagem na fila de [{session}] removida pelo Mini App", "other": "🧹 {n} mensagens na fila de [{session}] removidas pelo Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Compactação iniciada para [{session}] pelo Mini App"}
@@ -607,12 +611,15 @@
 {"k": "safety.reason.glob_not_plain", "src": "6db7d611", "v": "{tool} com um glob que não é um padrão relativo simples"}
 {"k": "safety.reason.glob_unreadable", "src": "da95c3b5", "v": "{tool} com um glob ilegível"}
 {"k": "safety.reason.halted", "src": "343e090e", "v": "sessão interrompida - uma chamada de ferramenta anterior neste turno foi bloqueada pela política de segurança; comece um novo pedido"}
+{"k": "safety.reason.outside_root_read", "src": "377378fa", "v": "{tool} negado - esta função só lê na pasta pessoal dentro da própria pasta"}
 {"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool} fora da pasta da sessão - um turno restrito só pesquisa no próprio projeto e no scratchpad"}
 {"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool} fora da pasta da sessão - um turno restrito só escreve no próprio projeto e no scratchpad"}
 {"k": "safety.reason.path_protected", "src": "feff9877", "v": "{tool} no caminho protegido {glob}"}
 {"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool}: escrita no caminho protegido {glob}"}
 {"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool} com um caminho ilegível"}
 {"k": "safety.reason.pattern_unreadable", "src": "88053cf7", "v": "{tool} com um padrão ilegível"}
+{"k": "safety.reason.root_cwd_search", "src": "086246f6", "v": "{tool} negado - esta sessão roda fora da pasta própria desta função, então esta função só pode pesquisar no seu scratchpad"}
+{"k": "safety.reason.root_cwd_write", "src": "bc6e509f", "v": "{tool} negado - esta sessão roda fora da pasta própria desta função, então esta função só pode escrever no seu scratchpad"}
 {"k": "safety.reason.runs_commands", "src": "e180a703", "v": "{tool} em um arquivo que executa comandos (.claude/, .git/, .mcp.json)"}
 {"k": "safety.reason.search_anywhere", "src": "c1ad4431", "v": "{tool} negado - o caminho protegido {glob} pode estar em qualquer pasta, então esta função não pode pesquisar com Grep ou Glob"}
 {"k": "safety.reason.search_could_reach", "src": "a95243b1", "v": "A pesquisa de {tool} poderia alcançar o caminho protegido {glob}"}

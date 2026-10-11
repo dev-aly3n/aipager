@@ -1022,9 +1022,11 @@ class SessionOpsMixin:
         # it would make the per-session settings feature do nothing.
         # Best-effort.
         try:
+            from aipager import member_root
             from aipager import preferences as prefs_mod
             from aipager.policy_snapshot import write_note
             member = role = scope = None
+            root_bound = None
             if self.scopes is not None:
                 # See the docstring above: permission attribution uses
                 # ONLY the explicitly-passed id, never the fallback used
@@ -1039,6 +1041,11 @@ class SessionOpsMixin:
                 # 8.72): an unstamped session's note carries that chat's
                 # deny_tools too.
                 scope = self._scope_for(resolve_chat_id_int(sess))
+                if member is not None:
+                    # The members' root folder of the chat the role came
+                    # from (role_chat_id), never the session's chat.
+                    root_bound = member_root.snapshot_bound(
+                        role, self._scope_for(role_chat_id), self.scopes)
             style = prefs_mod.style_text(
                 prefs_mod.resolve_preferences(
                     sess.scope_chat_id or 0, sess.preference_overrides(),
@@ -1057,6 +1064,7 @@ class SessionOpsMixin:
                 # The safety floor's policy.yaml additions (roadmap
                 # 8.96), from the same policy the role came from.
                 policy=getattr(self, "policy", None),
+                root_bound=root_bound,
             )
         except Exception:
             log.debug("policy note write failed", exc_info=True)
@@ -1207,11 +1215,12 @@ class SessionOpsMixin:
 
         # A person whose turns are confined to the session's folder never
         # gets ``/``, the home folder or a folder above it as that folder
-        # (roadmap 8.79), whichever surface asked. The hook would still
-        # confine their writes; this says why up front instead.
-        from aipager.miniapp import launch as launch_rules
-        refusal = launch_rules.launch_folder_refusal(
-            cwd, self._is_confined_user(driver_user_id, scope_chat_id))
+        # (roadmap 8.79), and a role without can_manage starts only inside
+        # its members' root folder, whichever surface asked. The hook
+        # would still hold their turns; this says why up front instead.
+        from aipager import member_root
+        refusal = member_root.launch_refusal(
+            self, driver_user_id, scope_chat_id, cwd)
         if refusal:
             return "", refusal
 
@@ -2009,6 +2018,14 @@ class SessionOpsMixin:
         skip_perms_override, auto_refused = self._resume_auto_gate(
             sess, skip_perms_override, actor,
             calling_chat_id(update or query))
+        # A role without can_manage resumes only a session inside its
+        # members' root folder.
+        from aipager import member_root
+        refusal = member_root.relaunch_refusal(
+            self, actor, calling_chat_id(update or query), sess.cwd)
+        if refusal:
+            await reply_fn(member_root.as_html(tr, refusal), parse_mode="HTML")
+            return
         # The GONE snapshot, read before the core resumes the session:
         # leaving GONE clears it (state.transition, roadmap 8.34), and it
         # is still the right "where you left off" for the recap below.

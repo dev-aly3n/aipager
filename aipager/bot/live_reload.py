@@ -109,7 +109,11 @@ def sender_rules(scopes, policy, chat_id, user_id) -> list[dict]:
     if member is None:
         return [floor_snapshot()]
     role = policy.get_role(member.role)
-    rules = [resolve_snapshot(role, scope, member)]
+    # The members' root folder too, so a root the wizard moved (or a new
+    # scope's root to keep off) narrows a running turn like any rule.
+    from aipager.member_root import snapshot_bound
+    rules = [resolve_snapshot(role, scope, member,
+                              root_bound=snapshot_bound(role, scope, scopes))]
     if not (role and role.can_prompt):
         rules.append(floor_snapshot())
     return rules

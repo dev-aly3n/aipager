@@ -891,7 +891,7 @@ def test_a_group_set_up_meanwhile_is_not_replaced_at_commit(monkeypatch):
     _write_config([_dm()])
     monkeypatch.setattr(first_run, "_step_chat_id", lambda *a, **k: GROUP)
     monkeypatch.setattr(scope_flows, "_operator_member", lambda: None)
-    answers = iter(["team", False])
+    answers = iter(["team", False, ""])  # "": the default root
     monkeypatch.setattr(scope_flows, "_ask", lambda q: next(answers))
     monkeypatch.setattr(scope_flows, "friendly_warn", lambda *a: None)
 
@@ -911,7 +911,7 @@ def test_add_a_group_scope_for_a_new_group_still_adds_it(monkeypatch):
     monkeypatch.setattr(first_run, "_step_chat_id",
                         lambda *a, **k: NEW_GROUP)
     monkeypatch.setattr(scope_flows, "_operator_member", lambda: None)
-    answers = iter(["new team", False])
+    answers = iter(["new team", False, ""])  # "": the default root
     monkeypatch.setattr(scope_flows, "_ask", lambda q: next(answers))
     monkeypatch.setattr(team_setup, "_capture_user_identity",
                         lambda *a, **k: {"id": EVE, "label": "eve"})

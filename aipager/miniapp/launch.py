@@ -232,8 +232,15 @@ def validate_session_name(name: object) -> tuple[str, str]:
 
 
 def allowed_roots(registry, scope_chat_id: int, *,
-                  confined: bool = False) -> list[str]:
+                  confined: bool = False, root: str | None = None) -> list[str]:
     """Directories a new session may be launched in, for this scope.
+
+    ``root`` (a restricted member's root folder,
+    ``member_root.restricted_root``): only that folder and its immediate
+    subfolders (``member_root.folder_choices``, which creates the root),
+    whatever this chat's sessions use; ``[]`` when there is none. The
+    containment checks in :func:`validate_cwd` and
+    :func:`create_directory` then hold the person to it.
 
     ``confined`` (the caller's turns are confined to the session's folder,
     roadmap 8.79): ``/``, the home folder and the folders above it are
@@ -272,6 +279,9 @@ def allowed_roots(registry, scope_chat_id: int, *,
     still bounded by the permission prompts every non-Auto session asks
     for in chat.
     """
+    if root is not None:
+        from aipager import member_root  # local: it imports this module lazily
+        return member_root.folder_choices(root)
     roots: list[str] = []
     seen: set[str] = set()
 

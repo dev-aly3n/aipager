@@ -87,6 +87,10 @@
 {"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "세션 이름은 {max}자 이하여야 해요."}
 {"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "아직 시작할 프로젝트 폴더가 없어요. 관리자에게 세션을 시작해 달라고 하세요."}
 {"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "프로젝트 폴더를 골라 주세요. “새 폴더”로 만들거나 관리자에게 세션을 시작해 달라고 하세요."}
+{"k": "app.launch.no_root", "src": "19345855", "v": "여기에는 작업할 폴더가 없어요. 소유자에게 aipager config에서 추가해 달라고 하세요."}
+{"k": "app.launch.outside_root", "src": "f8761328", "v": "지금 역할로는 내 폴더 {folder} 또는 그 안의 폴더에서만 세션을 시작할 수 있어요."}
+{"k": "app.launch.root_unavailable", "src": "6d332ade", "v": "내 폴더 {folder}을(를) 준비하지 못했어요. 소유자에게 aipager config에서 확인해 달라고 하세요."}
+{"k": "app.launch.session_outside_root", "src": "c501e96d", "v": "이 세션은 내 폴더 {folder} 밖에서 작업 중이라 지금 역할로는 재개, 재시작, 모드 전환을 할 수 없어요. 관리자에게 요청하세요."}
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "지금 역할로는 홈 폴더나 그 위의 폴더에서 세션을 시작할 수 없어요. 프로젝트 폴더를 골라 주세요. “새 폴더”로 만들거나 관리자에게 세션을 시작해 달라고 하세요."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"other": "🧹 Mini App에서 [{session}]의 대기 중인 메시지 {n}개를 지웠어요"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Mini App에서 [{session}] 압축을 실행했어요"}
@@ -607,12 +611,15 @@
 {"k": "safety.reason.glob_not_plain", "src": "6db7d611", "v": "{tool}: 단순한 상대 패턴이 아닌 glob 사용"}
 {"k": "safety.reason.glob_unreadable", "src": "da95c3b5", "v": "{tool}: 읽을 수 없는 glob 사용"}
 {"k": "safety.reason.halted", "src": "343e090e", "v": "세션 중단됨: 이번 턴의 이전 도구 호출이 안전 정책으로 차단됐어요. 새 요청을 시작하세요"}
+{"k": "safety.reason.outside_root_read", "src": "377378fa", "v": "{tool} 거부됨: 이 역할은 홈 폴더에서 자기 폴더 안만 읽을 수 있어요"}
 {"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool}: 세션 폴더 밖이에요. 제한된 턴은 프로젝트와 scratchpad 안에서만 검색해요"}
 {"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool}: 세션 폴더 밖이에요. 제한된 턴은 프로젝트와 scratchpad 안에만 써요"}
 {"k": "safety.reason.path_protected", "src": "feff9877", "v": "{tool}: 보호된 경로 {glob}"}
 {"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool}: 보호된 경로 {glob}에 쓰기"}
 {"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool}: 읽을 수 없는 경로"}
 {"k": "safety.reason.pattern_unreadable", "src": "88053cf7", "v": "{tool}: 읽을 수 없는 패턴"}
+{"k": "safety.reason.root_cwd_search", "src": "086246f6", "v": "{tool} 거부됨: 이 세션은 이 역할의 폴더 밖에서 실행 중이라 이 역할은 자기 scratchpad 안에서만 검색할 수 있어요"}
+{"k": "safety.reason.root_cwd_write", "src": "bc6e509f", "v": "{tool} 거부됨: 이 세션은 이 역할의 폴더 밖에서 실행 중이라 이 역할은 자기 scratchpad 안에만 쓸 수 있어요"}
 {"k": "safety.reason.runs_commands", "src": "e180a703", "v": "{tool}: 명령을 실행하는 파일에 쓰기 (.claude/, .git/, .mcp.json)"}
 {"k": "safety.reason.search_anywhere", "src": "c1ad4431", "v": "{tool} 거부됨: 보호된 경로 {glob} 패턴은 어느 폴더에나 있을 수 있어서 이 역할은 Grep이나 Glob으로 검색할 수 없어요"}
 {"k": "safety.reason.search_could_reach", "src": "a95243b1", "v": "{tool} 검색이 보호된 경로 {glob}에 닿을 수 있어요"}
