@@ -365,3 +365,32 @@ def test_an_unknown_chat_is_still_nowhere_for_the_owner(home):
     assert member_root.restricted_root(bot, DM_OWNER, -999) == member_root.NOWHERE
 
 
+def test_pin_moved_defaults(home):
+    users = home / "aipager-users"
+    before = [_dm(DM_SARA, "Sara"), _dm(DM_SARA2, "sara!"), _dm(DM_OWNER, "aly", "owner")]
+    after = member_root.pin_moved_defaults(before, before[:1] + before[2:])
+    assert [s.root for s in after] == [str(users / "sara-101"), None]
+    # Nothing moves: the list comes back as it was.
+    assert member_root.pin_moved_defaults(before, before) == before
+    # A new scope is never pinned; a set root is never changed.
+    new = _dm(5, "aly")
+    after = member_root.pin_moved_defaults(before, [*before, new])
+    assert after[-1].root is None
+    assert after[2].root == str(users / "aly")
+    set_ = [replace_root(before[0], "/srv/s"), *before[1:]]
+    assert member_root.pin_moved_defaults(before, set_)[0].root == "/srv/s"
+
+
+def test_a_root_set_on_another_scopes_default_pins_it(home):
+    """Another chat given the folder Sara's default is: her default would
+    get her chat id; the pin keeps her where she was."""
+    users = home / "aipager-users"
+    before = [_dm(DM_SARA, "Sara"), _dm(DM_SARA2, "lee")]
+    after = member_root.pin_moved_defaults(
+        before, [before[0], replace_root(before[1], str(users / "sara"))])
+    assert after[0].root == str(users / "sara")
+
+
+def replace_root(scope, root):
+    from dataclasses import replace
+    return replace(scope, root=root)

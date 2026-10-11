@@ -203,3 +203,84 @@ def test_the_owner_never_gets_a_root_folder(cfg, home):
     """Nothing about a scope's root is created by loading or showing it."""
     _scopes()
     assert not Path(home / "aipager-users").exists()
+
+
+# ---- a default root never moves (review iter 1, rev-iter1-002) ------------------------
+
+def _sara_pair(cfg):
+    """Two DMs whose labels sanitise alike: their defaults carry the chat
+    id (``sara-101``, ``sara-102``)."""
+    _scope.dump_scopes([
+        Scope(chat_id=1, kind="dm", label="owner DM",
+              members=(Member(id=1, label="owner", role="owner"),)),
+        Scope(chat_id=101, kind="dm", label="Sara DM",
+              members=(Member(id=101, label="Sara", role="user"),)),
+        Scope(chat_id=102, kind="dm", label="sara DM",
+              members=(Member(id=102, label="sara!", role="user"),)),
+    ], "TOK", cfg)
+
+
+def _effective(chat_id):
+    from aipager import member_root
+    scopes = _scopes()
+    return member_root.effective_root(next(s for s in scopes if s.chat_id == chat_id),
+                                      scopes)
+
+
+def _root_of(chat_id):
+    return next(s for s in _scopes() if s.chat_id == chat_id).root
+
+
+def test_removing_a_scope_pins_the_default_it_would_move(cfg, home):
+    from aipager.wizard import scope_io
+    _sara_pair(cfg)
+    assert scope_io.remove_scope(102) is True
+    # Without the pin Sara's default would turn into ~/aipager-users/sara.
+    assert _root_of(101) == str(home / "aipager-users" / "sara-101")
+    assert _root_of(1) is None                      # nothing moved: no pin
+
+
+def test_setting_another_scopes_root_pins_the_default_it_would_move(cfg, monkeypatch,
+                                                                    home):
+    _sara_pair(cfg)
+    lee = next(s for s in _scopes() if s.chat_id == 102)
+    _stub(monkeypatch, edit_menu, ["root", "/srv/lee"])
+    assert edit_menu._edit_scope(lee, "TOK") is True
+    assert _root_of(102) == "/srv/lee"
+    assert _root_of(101) == str(home / "aipager-users" / "sara-101")
+
+
+def test_a_root_on_another_scopes_default_pins_it(cfg, home):
+    """Giving the group the folder Sara's default is pushes her default to
+    ``sara-101``; the pin keeps her where she was (the operator confirmed
+    sharing it in the wizard)."""
+    from aipager.wizard import scope_io
+    _scope.dump_scopes([*_scopes(), Scope(
+        chat_id=101, kind="dm", label="Sara DM",
+        members=(Member(id=101, label="Sara", role="user"),))], "TOK", cfg)
+    sara = str(home / "aipager-users" / "sara")
+    scope_io.commit_scope(replace(_group(), root=sara), "TOK")
+    assert _root_of(101) == sara
+
+
+@pytest.mark.parametrize("how", ["commit", "replace", "add"])
+def test_every_wizard_write_pins_moved_defaults(cfg, home, how):
+    from aipager.wizard import scope_io
+    _sara_pair(cfg)
+    if how == "commit":       # a DM member renamed: its default would follow the label
+        lee = next(s for s in _scopes() if s.chat_id == 102)
+        scope_io.commit_scope(replace(lee, members=(replace(lee.members[0],
+                                                            label="lee"),)), "TOK")
+    elif how == "replace":    # a whole-list write without the second Sara
+        scope_io.replace_scopes([s for s in _scopes() if s.chat_id != 102], "TOK")
+    else:                     # a new DM named like the owner's: only the old one is pinned
+        assert scope_io.add_new_scope(Scope(
+            chat_id=5, kind="dm", label="other owner DM",
+            members=(Member(id=5, label="Owner", role="user"),)), "TOK") is True
+        assert _root_of(1) == str(home / "aipager-users" / "owner")
+        assert _root_of(5) is None
+        assert _effective(5) == str(home / "aipager-users" / "owner-5")
+        return
+    assert _root_of(101) == str(home / "aipager-users" / "sara-101")
+
+

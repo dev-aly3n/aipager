@@ -35,9 +35,26 @@ def read_config() -> tuple[list[Scope], str]:
     return scopes, token
 
 
+def _current_scopes() -> list[Scope]:
+    """The scopes on disk now, ``[]`` when there are none to read."""
+    try:
+        return read_config()[0]
+    except _scope.ScopeConfigError:
+        return []
+
+
+def _write(before: list[Scope], out: list[Scope], token: str) -> None:
+    """Write *out*, every members' root folder that would move pinned
+    where it was in *before* (:func:`aipager.member_root.pin_moved_defaults`):
+    an edit of one scope never moves another scope's folder."""
+    from aipager import member_root  # local: the daemon side loads late
+    _scope.dump_scopes(member_root.pin_moved_defaults(before, out), token,
+                       _scope.CONFIG_PATH)
+
+
 def replace_scopes(scopes: list[Scope], token: str) -> None:
     """Overwrite ``aipager.yaml`` with the given scopes + token."""
-    _scope.dump_scopes(scopes, token, _scope.CONFIG_PATH)
+    _write(_current_scopes(), scopes, token)
 
 
 def commit_scope(new: Scope, token: str) -> None:
@@ -50,7 +67,7 @@ def commit_scope(new: Scope, token: str) -> None:
     token = token or existing_token
     out = [s for s in scopes if s.chat_id != new.chat_id]
     out.append(new)
-    _scope.dump_scopes(out, token, _scope.CONFIG_PATH)
+    _write(scopes, out, token)
 
 
 def remove_scope(chat_id: int) -> bool:
@@ -65,7 +82,7 @@ def remove_scope(chat_id: int) -> bool:
         return False
     if not out:
         return False
-    _scope.dump_scopes(out, token, _scope.CONFIG_PATH)
+    _write(scopes, out, token)
     return True
 
 
@@ -106,8 +123,7 @@ def add_new_scope(new: Scope, token: str) -> bool:
     scopes, existing_token = read_config()
     if configured_scope_for(new.chat_id, scopes) is not None:
         return False
-    _scope.dump_scopes([*scopes, new], token or existing_token,
-                       _scope.CONFIG_PATH)
+    _write(scopes, [*scopes, new], token or existing_token)
     return True
 
 
@@ -126,5 +142,5 @@ def append_member(chat_id: int, member: Member, token: str) -> str | None:
                 f"{current.label}.")
     out = [replace(s, members=(*s.members, member))
            if s.chat_id == chat_id else s for s in scopes]
-    _scope.dump_scopes(out, token or existing_token, _scope.CONFIG_PATH)
+    _write(scopes, out, token or existing_token)
     return None

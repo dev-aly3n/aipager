@@ -144,6 +144,28 @@ def effective_root(scope, scopes) -> str:
     return default_roots(scopes)[scope.chat_id]
 
 
+def pin_moved_defaults(before, after) -> list:
+    """*after* (the scopes about to be written) with every scope whose
+    root would move pinned where it was: a scope with no root set that was
+    in *before* and whose default would now be another folder (a default
+    depends on every scope's label and root: a collision suffix comes and
+    goes, a label changes) gets its old folder written as its ``root``.
+    Repeats until nothing moves, since one pin can move another default.
+    A scope that is new, or has a root set, is left as it is."""
+    from dataclasses import replace
+    before = list(before or ())
+    out = list(after or ())
+    old = {s.chat_id: os.path.normpath(effective_root(s, before)) for s in before}
+    while True:
+        moved = [i for i, s in enumerate(out)
+                 if not s.root and s.chat_id in old
+                 and os.path.normpath(effective_root(s, out)) != old[s.chat_id]]
+        if not moved:
+            return out
+        for i in moved:
+            out[i] = replace(out[i], root=old[out[i].chat_id])
+
+
 def root_problem(path) -> str | None:
     """Why *path* cannot be a root (plain English), or ``None``. The rule
     lives in :func:`aipager.root_rule.root_problem`, which the
