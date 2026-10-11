@@ -785,6 +785,13 @@ class TrackedSession:
     # Transient: an in-place Ask<->Auto switch waiting for a hook to
     # confirm it (aipager/bot/mode_switch.py).
     mode_switch: ModeSwitch | None = None
+    # Transient, per launch: a main-agent hook reported bypassPermissions
+    # since the last launch, so the live process has bypass in its
+    # Shift+Tab cycle (a CLI session started with the bypass flag keeps
+    # `perm_mode` "ask"). Every switch then restarts: presses in place
+    # could cycle it back into bypass. A forged report can only make a
+    # switch restart (narrower), never widen.
+    bypass_seen: bool = False
     # Per-session preference overrides (batch 4's "Per session settings").
     # `None` means unset/inherit the scope's own /settings value — never a
     # legal value for any of these: layout/answer_length/
@@ -2230,6 +2237,7 @@ class TrackedSession:
         self.auto_unavailable = False
         self.mode_launch_unchecked = False
         self.mode_switch = None
+        self.bypass_seen = False
 
     def note_reported_mode(self, raw: object, now: float) -> str:
         """Record the ``permission_mode`` a main-agent hook reported.
@@ -2242,6 +2250,10 @@ class TrackedSession:
         mapped = _perm_modes.from_claude(raw)
         if mapped is None:
             return "ignored"
+        if mapped == _perm_modes.FULL:
+            # Even while settling: whenever it was fired, bypass is in
+            # this process's cycle.
+            self.bypass_seen = True
         pending = self.mode_switch
         if pending is not None and now - pending.sent_at < _perm_modes.MODE_SETTLE_SECONDS:
             return "settling"
@@ -2274,9 +2286,11 @@ class TrackedSession:
 
     def mode_switch_restarts(self, target: str) -> bool:
         """Does switching to *target* need a restart? Into or out of Full
-        access does (bypass is only ever set at launch), and so does any
-        start Shift+Tab cannot cycle from."""
-        if target == _perm_modes.FULL or self.perm_mode == _perm_modes.FULL:
+        access does (bypass is only ever set at launch), so does a process
+        that reported bypass since its launch (presses could cycle it back
+        into bypass), and so does any start Shift+Tab cannot cycle from."""
+        if (target == _perm_modes.FULL or self.perm_mode == _perm_modes.FULL
+                or self.bypass_seen):
             return True
         return _perm_modes.presses(self.mode_raw(), target,
                                    auto_in_cycle=not self.auto_unavailable) is None
