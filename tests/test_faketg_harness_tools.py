@@ -683,3 +683,29 @@ def test_pane_report_counts_bytes_and_strips_controls_redacted(monkeypatch):
     assert "\x1b" not in out and "title" not in out and "\x07" not in out
     assert _OAUTH not in out and "sk-ant-<redacted>" in out
     assert fti.pane_text(b"\x1b[1mhi\x1b[0m\rthere") == "hi\nthere"
+
+
+@pytest.mark.parametrize("argv, raw", [
+    (["--permission-mode", "default"], "default"), (["--permission-mode", "manual"], "default"),
+    (["--permission-mode", "auto"], "auto"), (["--dangerously-skip-permissions"],
+                                              "bypassPermissions"),
+], ids=["ask", "manual", "auto", "full"])
+def test_standin_reports_its_launch_mode_and_cycles_on_shift_tab(
+        tmp_path, monkeypatch, argv, raw):
+    home, inst, proj = tmp_path / "h", tmp_path / "i", tmp_path / "p"
+    for d in (home / ".claude", inst, proj):
+        d.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(inst))
+    monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-ftt__m1")
+    monkeypatch.chdir(proj)
+    s = standin_claude.StandIn(argv)
+    assert s.raw_mode == raw
+    if raw == "default":
+        s._cycle_mode(3)
+        assert s.raw_mode == "auto"
+        s._cycle_mode(1)
+        assert s.raw_mode == "default"
+    elif raw == "bypassPermissions":
+        s._cycle_mode(2)  # bypass is never in the cycle aipager counts in
+        assert s.raw_mode == "bypassPermissions"

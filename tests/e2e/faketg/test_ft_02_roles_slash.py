@@ -3,7 +3,8 @@ rule, 8.74).
 
 A permission prompt in Ask mode shows Allow/Deny in the group; a
 read_only member's tap is refused and decides nothing, a user's tap
-decides and is attributed in the group. Switching to Auto needs an admin.
+decides and is attributed in the group. Switching to Auto is anyone's and
+happens in place; Full access needs an admin.
 A button of a DM session tapped from the group is refused. A user may
 not send a project slash command; an admin may.
 """
@@ -33,7 +34,7 @@ def test_roles_and_buttons(fresh):
     inst, fake = fresh, fresh.fake
     since_new = fake.mark()
     name = inst.new_session(G, fti.BOB, "ft3")
-    ready, _cb = fake.wait_button(G, "Switch to Auto", since=since_new)
+    ready, _cb = fake.wait_button(G, "Switch to Auto mode", since=since_new)
     dm_name = inst.new_session(DM, fti.ALICE, "ft4")
 
     # Bob asks for a file write: the prompt shows Allow/Deny in the group,
@@ -61,22 +62,35 @@ def test_roles_and_buttons(fresh):
     flows.wait_turn_end(inst, name, "ft3", since_log=turn_log)
     flows.settle(fake)
 
-    # Switching to Auto: refused for bob (user), done for dave (admin).
-    _msg, auto = fake.wait_button(G, "Switch to Auto", since=since_new)
+    # Switching to Auto: in place for bob (a user), with no restart.
+    _msg, auto = fake.wait_button(G, "Switch to Auto mode", since=since_new)
     ready = fake.message(G, ready["message_id"])
-    cb = fake.inject_callback(fti.user(fti.BOB), ready, auto)
-    assert flows.wait_toast(fake, cb) in ("Auto mode needs an admin.", REFUSED)
     starts = [e for e in inst.standin_log(name) if e.get("event") == "start"]
+    toast = _tap_once_the_turn_is_over(fake, fti.user(fti.BOB), ready, auto, "ft3")
+    assert toast != REFUSED
+    if inst.claude_mode == "standin":
+        fti.wait_until(lambda: any(e.get("event") == "mode" and e.get("mode") == "auto"
+                                   for e in inst.standin_log(name)),
+                       60, "Shift+Tab to reach Auto")
+        assert [e for e in inst.standin_log(name) if e.get("event") == "start"] == starts
+
+    # Full access: refused for bob, done for dave (an admin) by a restart.
+    flows.settle(fake)
     since = fake.mark()
-    _tap_once_the_turn_is_over(fake, fti.user(fti.DAVE), ready, auto, "ft3")
-    flows.wait_text(fake, G, "Switched to 🤖 Auto mode by @dave", since=since, timeout=90)
+    fake.inject_text(G, fti.user(fti.BOB), "/mode ft3 full")
+    flows.wait_text(fake, G, "Full access mode needs an admin.", since=since)
+    since = fake.mark()
+    fake.inject_text(G, fti.user(fti.DAVE), "/mode ft3 full")
+    confirm, yes = fake.wait_button(G, "Yes, switch", since=since)
+    fake.inject_callback(fti.user(fti.DAVE), confirm, yes)
+    flows.wait_text(fake, G, "Switched to 🔓 Full access mode by @dave", since=since,
+                    timeout=90)
     if inst.claude_mode == "standin":
         fti.wait_until(lambda: len([e for e in inst.standin_log(name)
                                     if e.get("event") == "start"]) > len(starts),
-                       60, "the session to restart in Auto")
-        assert inst.standin_log(name)[-1].get("skip_perms") is True or any(
-            e.get("event") == "start" and e.get("skip_perms")
-            for e in inst.standin_log(name)[len(starts):])
+                       60, "the session to restart in Full access")
+        assert any(e.get("event") == "start" and e.get("skip_perms")
+                   for e in inst.standin_log(name)[len(starts):])
 
     # A DM session's button tapped from the group is refused.
     flows.settle(fake)

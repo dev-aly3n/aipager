@@ -87,6 +87,16 @@ class StandIn:
     def __init__(self, argv: list[str]):
         self.argv = argv
         self.skip_perms = "--dangerously-skip-permissions" in argv
+        # Claude Code's raw permission mode, as its hooks report it; Shift+Tab
+        # cycles default -> acceptEdits -> plan -> auto (aipager never adds
+        # bypass to the cycle).
+        self.raw_mode = "bypassPermissions" if self.skip_perms else "default"
+        if "--permission-mode" in argv:
+            i = argv.index("--permission-mode")
+            if i + 1 < len(argv):
+                self.raw_mode = argv[i + 1]
+        if self.raw_mode == "manual":
+            self.raw_mode = "default"
         self.session = os.environ.get("CLAUDE_DTACH_SESSION", "")
         self.cwd = os.getcwd()
         self.session_id = str(uuid.uuid4())
@@ -172,7 +182,7 @@ class StandIn:
         payload = {
             "session_id": self.session_id, "transcript_path": self.transcript,
             "cwd": self.cwd, "hook_event_name": event,
-            "permission_mode": "bypassPermissions" if self.skip_perms else "default",
+            "permission_mode": self.raw_mode,
         }
         payload.update(extra or {})
         outputs = []
@@ -292,6 +302,15 @@ class StandIn:
                and time.monotonic() < deadline):
             time.sleep(0.1)
 
+    def _cycle_mode(self, count: int) -> None:
+        """Shift+Tab: the next mode in Claude Code's cycle (no hook fires;
+        the next event carries the new mode)."""
+        for _ in range(count):
+            if self.raw_mode in _MODE_CYCLE:
+                i = _MODE_CYCLE.index(self.raw_mode)
+                self.raw_mode = _MODE_CYCLE[(i + 1) % len(_MODE_CYCLE)]
+        self.log(event="mode", mode=self.raw_mode)
+
     def _ask_tool(self, tool: str, tool_input: dict, tool_use_id: str) -> str:
         pre = self.fire("PreToolUse", {"tool_name": tool, "tool_input": tool_input,
                                        "tool_use_id": tool_use_id}, tool=tool)
@@ -302,7 +321,9 @@ class StandIn:
                 return "denied"
             if d in ("allow", "approve"):
                 return "allowed"
-        if self.skip_perms:
+        # Auto asks like Ask here: the stand-in has no safety check, and the
+        # e2e scenarios drive the permission dialog in new (Auto) sessions.
+        if self.raw_mode == "bypassPermissions":
             return "allowed"
         with self.lock:
             self.dialog_answer = None
@@ -410,7 +431,8 @@ class StandIn:
 
         signal.signal(signal.SIGTERM, _bye)
         signal.signal(signal.SIGHUP, _bye)
-        self.log(event="start", argv=self.argv, skip_perms=self.skip_perms)
+        self.log(event="start", argv=self.argv, skip_perms=self.skip_perms,
+                 mode=self.raw_mode)
         self.fire("SessionStart", {"source": "startup"})
         sys.stdout.write("stand-in Claude Code\r\n❯ ")
         sys.stdout.flush()
@@ -443,6 +465,9 @@ class StandIn:
                 if prompt:
                     self.submit(prompt)
                 continue
+            if text and text == "\x1b[Z" * (len(text) // 3):
+                self._cycle_mode(len(text) // 3)
+                continue
             if "\x1b" in text:
                 buf = ""
                 self.interrupt()
@@ -450,6 +475,9 @@ class StandIn:
             if text in ("\x18", "\x13", "\x03", "\x15"):
                 continue  # send-now chord / Ctrl+C / Ctrl+U: nothing queued here
             buf += text
+
+
+_MODE_CYCLE = ("default", "acceptEdits", "plan", "auto")
 
 
 def _kill_group(proc: subprocess.Popen) -> None:
