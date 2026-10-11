@@ -278,9 +278,10 @@ def main() -> None:
     session_p.add_argument(
         "claude_args", nargs=argparse.REMAINDER,
         help="extra args passed through to claude verbatim "
-             "(e.g. --dangerously-skip-permissions, --continue, "
-             "--resume <session-id>); for `ls`: -a/--all, --json; "
-             "for `kill`: <name> and optional -y",
+             "(e.g. --permission-mode default, --continue, "
+             "--resume <session-id>); a new session starts in Auto mode "
+             "(--permission-mode auto) unless these choose a mode; "
+             "for `ls`: -a/--all, --json; for `kill`: <name> and optional -y",
     )
     session_p.set_defaults(fn=_cmd_session)
 
