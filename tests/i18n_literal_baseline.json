@@ -94,7 +94,7 @@
  "aipager/wizard/display.py": 16,
  "aipager/wizard/edit_menu.py": 70,
  "aipager/wizard/first_run.py": 64,
- "aipager/wizard/root_flow.py": 11,
+ "aipager/wizard/root_flow.py": 13,
  "aipager/wizard/scope_flows.py": 42,
  "aipager/wizard/scope_io.py": 5,
  "aipager/wizard/settings_patch.py": 34,

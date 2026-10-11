@@ -284,3 +284,23 @@ def test_every_wizard_write_pins_moved_defaults(cfg, home, how):
     assert _root_of(101) == str(home / "aipager-users" / "sara-101")
 
 
+# ---- a root where the system runs programs (review iter 1 nit) -------------------------
+
+@pytest.mark.parametrize("spot", ["~/bin", "~/.local/bin/tools", "~/.config/systemd/user",
+                                  "~/.config/autostart"])
+def test_wizard_confirms_a_code_loading_root(cfg, monkeypatch, home, spot):
+    _stub(monkeypatch, edit_menu, ["root", spot, False, "/srv/team"])
+    assert edit_menu._edit_scope(_group(), "TOK") is True
+    assert _group().root == "/srv/team"
+    _stub(monkeypatch, edit_menu, ["root", spot, True])
+    assert edit_menu._edit_scope(_group(), "TOK") is True
+    assert _group().root == str(home / spot[2:])
+
+
+def test_a_plain_root_is_not_asked_about_code(cfg, monkeypatch, home):
+    # One answer only: a confirm would run out of canned answers.
+    _stub(monkeypatch, edit_menu, ["root", "~/binaries"])
+    assert edit_menu._edit_scope(_group(), "TOK") is True
+    assert _group().root == str(home / "binaries")
+    assert root_flow.code_loading_folder(str(home / "bin" / "x")) == "~/bin"
+    assert root_flow.code_loading_folder(str(home / "bins")) is None

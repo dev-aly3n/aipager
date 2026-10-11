@@ -24,6 +24,26 @@ ROOT_QUESTION = ("Members' root folder (members without can_manage, such "
                  "as user and read_only, start and work only inside it):")
 
 
+#: Folders whose files the system runs or loads as code: a member's turn
+#: may write in its root, so a root here (or inside one) lets a member put
+#: a program the operator's account then runs.
+CODE_LOADING = ("~/bin", "~/.local/bin", "~/.config/systemd",
+                "~/.config/autostart")
+
+
+def code_loading_folder(path: str) -> str | None:
+    """The folder of :data:`CODE_LOADING` that *path* is or lies inside
+    (as written and with symlinks resolved), ``~``-shortened, or ``None``."""
+    from aipager import member_root
+    forms = {os.path.abspath(path), os.path.realpath(path)}
+    for spot in CODE_LOADING:
+        folder = os.path.expanduser(spot)
+        for f in {os.path.abspath(folder), os.path.realpath(folder)}:
+            if any(member_root.inside(form, f) for form in forms):
+                return spot
+    return None
+
+
 def _root_overlap(path: str, scope, scopes):
     """Another scope whose root is *path*, holds it or lies inside it."""
     from aipager import member_root
@@ -40,8 +60,10 @@ def _root_overlap(path: str, scope, scopes):
 def ask_root(scope, scopes, ask) -> str:
     """Ask for *scope*'s members' root folder, prefilled with its current
     one (the default when none is set). Re-asks while the answer is
-    refused (:func:`aipager.member_root.root_problem`) and asks to confirm
-    one that is, holds or lies inside another scope's root. Returns the
+    refused (:func:`aipager.member_root.root_problem`), and asks to
+    confirm one inside a folder the system runs code from
+    (:data:`CODE_LOADING`) and one that is, holds or lies inside another
+    scope's root. Returns the
     absolute path. The folder is not created here. *ask*: the prompt
     runner (the calling menu's own, so one stub answers every prompt)."""
     from aipager import member_root
@@ -56,6 +78,14 @@ def ask_root(scope, scopes, ask) -> str:
             friendly_warn(f"That folder can't be a root: {problem}.")
             continue
         path = os.path.abspath(os.path.expanduser(raw))
+        loader = code_loading_folder(path)
+        if loader is not None and not ask(questionary.confirm(
+            f"{member_root.short(path)} is in {loader}, whose files your "
+            "system runs as programs, and members' sessions can write in "
+            "their root folder. Use it anyway?",
+            default=False, qmark="?", style=_PROMPT_STYLE,
+        )):
+            continue
         other = _root_overlap(path, scope, scopes)
         if other is not None and not ask(questionary.confirm(
             f"{member_root.short(path)} is the same as, or nests with, the "
