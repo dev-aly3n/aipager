@@ -297,6 +297,29 @@ cover):
   can create a new folder inside your home folder and start in that
   (a new one: not a folder you already have there, and not `bin` or
   `node_modules`, which other programs load code from).
+- **Members stay in their root folder.** A role without `can_manage`
+  (the built-in `user` and `read_only`) works inside the chat's
+  [root folder](groups.md#root-folders), which you set in `aipager
+  config` (default `~/aipager-users/<label>`, created with mode 0700).
+  `/new`, Resume, Replace, Restart, the mode switch and the Mini App
+  only start or relaunch such a member's session inside it. The safety
+  hook enforces it whichever way a message arrives (Telegram, the Mini
+  App, another session's message): the root folder travels in the
+  turn's policy snapshot, in the receipts of messages between sessions
+  and in pinned and scheduled rights, and when members with different
+  root folders share a turn the narrower one wins (two that do not
+  nest leave only the session's own folder). Writes land only in the
+  session folder when it is inside the root folder (a session outside
+  it, such as one started before root folders existed, keeps running,
+  but its turns write only in the scratchpad, "this session runs
+  outside this role's own folder"), and `Read`, `LSP`, `Grep` and
+  `Glob` reach nothing in your home folder outside the root folder
+  ("this role reads in the home folder only inside its own folder"),
+  the session's scratchpad and its own reply file excepted. Every other
+  chat's root folder is a protected path for the member, wherever it
+  is. Folders outside your home folder (`/usr`, `/etc`, `/srv`) stay
+  readable. A custom role with `bypass_role_denies` but without
+  `can_manage` writes and searches anywhere inside its root folder.
 - **Searches stay in the project.** A `Grep` or `Glob` is allowed
   only when all of this holds: the folder it searches (its `path`, or
   the session's folder when it has none, symlinks followed) is inside
@@ -351,8 +374,11 @@ owner's Retry of their own message keeps Bash; a Retry of someone
 else's message, or of one whose sender aipager does not know, runs on
 the floor, so nobody's text borrows the tapper's rights.
 
-Reads outside the protected paths are allowed: a restricted user can
-read other projects of the OS user. Your credential files are protected
+Reads outside the protected paths are allowed for a role that is not
+held to a root folder (a custom role with `can_manage` but no bypass):
+it can read other projects of the OS user. The built-in `user` and
+`read_only` read nothing in your home folder outside their root folder
+(above). Your credential files are protected
 paths for every role without `bypass_role_denies` (the built-in `user`
 and `read_only`, roles you define, and the floor): `~/.ssh`,
 `~/.gnupg`, `~/.aws`, `~/.config/gh`, `~/.git-credentials`, `~/.netrc`,
@@ -397,9 +423,23 @@ their rules stay best-effort (below).
   turn ends, and its later tool calls are judged by whichever prompt
   is newest in the session: a later owner or terminal prompt lifts its
   restrictions.
-- A restricted member can still start in any project folder their
-  chat already works in (a folder an earlier session used), including
-  one of yours.
+- A role you define with `can_manage` but without either bypass is
+  not held to a root folder: it can still start in any project folder
+  its chat already works in (a folder an earlier session used),
+  including one of yours, and read your other projects.
+- A turn no member can be held to (an unknown sender, a removed member,
+  a message from another session whose sender cannot be verified) runs
+  under the restricted floor, which has no root folder: its reads in
+  your home folder are bounded only by the protected paths, as before.
+  A verified message from a member's session carries the member's
+  root folder.
+- The root folder binds the file tools only. A custom role you give
+  `Bash` can read outside it through the shell (the built-in `user`
+  and `read_only` have no `Bash`).
+- A deny reason that names another member's root folder shows that
+  folder's path to Claude and in the chat.
+- A member's turn already running when root folders arrive (an
+  upgrade) has none until that member's next message.
 - Inside the project a restricted user can change what you later run
   or read yourself (source, `Makefile`, `package.json` scripts,
   `conftest.py`, a `CLAUDE.md` your own turns load).
@@ -806,7 +846,7 @@ Known limits:
 | Stranger sends bot a command | Chat ID filter rejects |
 | Stolen bot token | Use `/revoke` in @BotFather, re-config |
 | Compromised claude tool call | aipager's safety check refuses what a Telegram turn's rules deny; in Ask, Claude Code's own rules in `settings.json` decide what it asks about and a person's tap is the only allow; an Auto session (the default for admins' `/new`) asks nothing, so only the safety check stands in the way, and for an owner's own turns and terminal prompts nothing does ([who decides](#who-decides-whether-a-tool-call-runs)) |
-| Restricted Telegram user escalates to the owner | No shell, writes and searches confined to the project (never the home folder), credential files unreadable, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
+| Restricted Telegram user escalates to the owner | No shell, sessions started only inside the member's own root folder, writes and searches confined to the project inside it (never the home folder), no reads in the home folder outside the root folder, other members' root folders unreachable, credential files unreadable, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
 | A session's message claims an owner's authority | The message runs with the sending turn's proven rights, never the receiving session's earlier ones; without proof, read and think only ([messages between sessions](#messages-between-claude-sessions)) |
 | A group member borrows someone else's rights | Each message runs with its own sender's role in the chat it came from; a different sender's message waits for the running turn; if one joins anyway, the strictest rules win; slash commands from restricted roles are limited to the keyboard's ([team-mode enforcement](#team-mode-enforcement)) |
 | Group chatter reaches a session | In a group only commands, replies to the bot, mentions of it and marked keyboard taps are acted on ([groups](groups.md#what-the-bot-reads-in-a-group)) |
