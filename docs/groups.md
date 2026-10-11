@@ -381,9 +381,11 @@ Bash** until you set `deny_tools` (`aipager doctor` warns once a
 member holds it).
 Write and search confinement applies to every role without
 `bypass_safety` or `bypass_role_denies`. The [root folder](#root-folders)
-applies to every role without `can_manage`: a role you define with
-`bypass_role_denies` but not `can_manage` writes and searches anywhere
-inside its root folder (and its scratchpad), and nowhere else.
+applies to every role without `can_manage`, whatever its bypasses: a
+role you define with `bypass_role_denies` or `bypass_safety` but not
+`can_manage` writes and searches anywhere inside its root folder (and
+its scratchpad), reads nothing in your home folder outside it, and
+nowhere else. Only owners and admins are unrestricted.
 
 ### Root folders
 
@@ -404,14 +406,22 @@ folder on purpose (the wizard asks you to confirm that).
   label) and `~/aipager-users/group-<label>` for a group. A label is
   lowercased and anything other than letters, digits, `.`, `_` and `-`
   becomes `-`; when two chats would get the same folder, each gets its
-  chat id added (`sara-123456`). The folder is created (only you can
-  open it, mode 0700) the first time a member opens `/new` or the Mini
-  App's New session form.
+  chat id added (`sara-123456`). The folder (and `~/aipager-users`,
+  when it is new) is created, mode 0700 so only you can open it, the
+  first time a member opens `/new` or the Mini App's New session form.
+  A default never moves: when an edit in `aipager config` (another
+  chat's root folder, a removed chat, a new label) would change a
+  chat's default folder, the wizard writes the folder it had as that
+  chat's root.
 - **What the wizard refuses**: a relative path, wildcard characters,
   `/`, your home folder or a folder above it, and a folder that is,
   lies inside or holds one of aipager's protected folders or the
   credential files (`~/.claude`, `~/.config/aipager`, `~/.config`,
-  `~/.ssh`, ...). A folder that does not exist yet is fine.
+  `~/.ssh`, ...), and Claude Code's temp folder (`/tmp/claude-*`,
+  where every session's scratchpad lives). A folder that does not exist
+  yet is fine. It asks you to confirm a folder your system runs
+  programs from (`~/bin`, `~/.local/bin`, `~/.config/systemd`,
+  `~/.config/autostart`, or one inside them).
 - **Starting sessions.** `/new`'s Folder page and the Mini App list the
   root folder and the folders directly inside it (not hidden ones, and
   no link that leads out of it), with no "Default folder" row; a new

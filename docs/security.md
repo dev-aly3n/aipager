@@ -300,7 +300,8 @@ cover):
 - **Members stay in their root folder.** A role without `can_manage`
   (the built-in `user` and `read_only`) works inside the chat's
   [root folder](groups.md#root-folders), which you set in `aipager
-  config` (default `~/aipager-users/<label>`, created with mode 0700).
+  config` (default `~/aipager-users/<label>`; `~/aipager-users` and the
+  folder are created with mode 0700).
   `/new`, Resume, Replace, Restart, the mode switch and the Mini App
   only start or relaunch such a member's session inside it. The safety
   hook enforces it whichever way a message arrives (Telegram, the Mini
@@ -318,8 +319,10 @@ cover):
   the session's scratchpad and its own reply file excepted. Every other
   chat's root folder is a protected path for the member, wherever it
   is. Folders outside your home folder (`/usr`, `/etc`, `/srv`) stay
-  readable. A custom role with `bypass_role_denies` but without
-  `can_manage` writes and searches anywhere inside its root folder.
+  readable. A custom role with `bypass_role_denies` or `bypass_safety`
+  but without `can_manage` writes and searches anywhere inside its root
+  folder, and its reads in your home folder stay inside it too: only
+  owners and admins are unrestricted.
 - **Searches stay in the project.** A `Grep` or `Glob` is allowed
   only when all of this holds: the folder it searches (its `path`, or
   the session's folder when it has none, symlinks followed) is inside
@@ -429,13 +432,18 @@ their rules stay best-effort (below).
   including one of yours, and read your other projects.
 - A turn no member can be held to (an unknown sender, a removed member,
   a message from another session whose sender cannot be verified) runs
-  under the restricted floor, which has no root folder: its reads in
-  your home folder are bounded only by the protected paths, as before.
-  A verified message from a member's session carries the member's
-  root folder.
+  under the restricted floor, which has no root folder. On reads that
+  floor is weaker than a built-in `user`: such a turn can read any file
+  in your home folder that is not a protected path (your other
+  projects, for example), where a `user`'s turn reads only inside its
+  root folder. Its writes stay confined to the session folder and the
+  scratchpad. A verified message from a member's session carries the
+  member's root folder.
 - The root folder binds the file tools only. A custom role you give
   `Bash` can read outside it through the shell (the built-in `user`
-  and `read_only` have no `Bash`).
+  and `read_only` have no `Bash`). A custom role with `bypass_safety`
+  but without `can_manage` keeps its bypass for everything but the
+  file tools' paths: no tool or command pattern is denied to it.
 - A deny reason that names another member's root folder shows that
   folder's path to Claude and in the chat.
 - A member's turn already running when root folders arrive (an
