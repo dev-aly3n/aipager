@@ -1,6 +1,6 @@
 # Bots observateurs
 
-<!-- i18n-source: docs/observers.md @ 6fc084f -->
+<!-- i18n-source: docs/observers.md @ b12e978 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../observers.md))
 
@@ -41,7 +41,7 @@ Les observateurs reçoivent ces notifications depuis **toutes les discussions qu
 | Compactage en cours | `🔄 x1 · Compactage de la conversation` |
 | Compactage terminé | `📦 x1 · Conversation compactée : 82% → 4%` |
 | Une demande qui attend toujours | `⬆️ x1 · attend toujours votre réponse plus haut`, avec l'autorisation ou la question qu'elle attend |
-| Une session au travail qui ne donne plus de nouvelles | `⏳ x1 · travaille encore (aucune nouvelle depuis 10 min)` |
+| Une session au travail qui ne donne plus de nouvelles | `⏳ x1 · travaille encore (aucune nouvelle depuis 120 min)` |
 | Un message que Claude Code n'a pas pris | `⚠️ x1 · Claude Code n'a pas reçu le message` |
 | Session terminée | `🔴 x1 · Session terminée` |
 

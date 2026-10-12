@@ -1,6 +1,6 @@
 # Mô hình bảo mật
 
-<!-- i18n-source: docs/security.md @ 6fc084f -->
+<!-- i18n-source: docs/security.md @ 76d125d -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../security.md))
 
@@ -185,7 +185,7 @@ Kết nối đi vào:
 
 **Mini App bật sẵn theo mặc định**, nên trên một bản cài chuẩn, aipager mở tunnel này mà không cần ai yêu cầu. Đó là một đánh đổi có chủ ý (một tùy chọn phải tự bật mà không ai phát hiện ra thì cũng như một tính năng không tồn tại), nhưng nó có nghĩa là một bản cài mới sẽ kết nối ra internet. Tắt nó bằng `aipager miniapp disable`, hoặc đặt `enabled: false` dưới `miniapp:` trong `aipager.yaml`; một giá trị `false` ghi rõ luôn được tôn trọng. Lưu ý rằng một khối `miniapp:` **bị thiếu hoặc bị hỏng** giờ sẽ được hiểu là BẬT chứ không phải TẮT.
 
-Mini App (trừ khi có `--url` thay thế) khởi động một [quick tunnel của Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) được quản lý, trỏ tới máy chủ loopback của chính aipager, và đăng địa chỉ công khai `https://*.trycloudflare.com` mà nó được cấp làm nút menu Telegram, nút trên bàn phím trả lời và câu trả lời của `/app`.
+Mini App (trừ khi có `--url` thay thế) khởi động một [quick tunnel của Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) được quản lý, trỏ tới máy chủ loopback của chính aipager, và đăng địa chỉ công khai `https://*.trycloudflare.com` mà nó được cấp làm nút menu Telegram và câu trả lời của `/app`.
 
 Địa chỉ đó **không phải bí mật, và cũng không cần là bí mật**: mọi yêu cầu mà Mini App phục vụ đều được kiểm tra với chữ ký `initData` của Telegram (xem [Ranh giới tin cậy](#trust-boundary) ở trên), chính bước kiểm tra bảo vệ nó dù URL đã được lấy bằng cách nào. Chỉ biết tên máy chủ thì kẻ tấn công không có thêm gì so với việc đoán bừa một tên miền con `trycloudflare.com`: bước kiểm tra chữ ký mới là cánh cổng thật sự. Hãy đối xử với nó như với mọi URL không công khai nhưng cũng không bí mật khác: cứ để chạy cũng được, nhưng đừng dán vào một kênh công khai khi không có lý do.
 

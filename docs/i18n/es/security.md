@@ -1,6 +1,6 @@
 # Modelo de seguridad
 
-<!-- i18n-source: docs/security.md @ 6fc084f -->
+<!-- i18n-source: docs/security.md @ 76d125d -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../security.md))
 
@@ -187,7 +187,7 @@ Esto significa que aipager no se puede atacar a distancia. Un atacante en la red
 
 **La Mini App está activada por defecto**, así que en una instalación normal aipager abre este túnel sin que nadie lo pida. Es una decisión consciente (una opción que nadie descubre es como si no existiera), pero significa que una instalación nueva se conecta a internet. Apágala con `aipager miniapp disable`, o pon `enabled: false` debajo de `miniapp:` en `aipager.yaml`; un `false` explícito siempre se respeta. Ten en cuenta que un bloque `miniapp:` **que falta o está roto** ahora vuelve a ACTIVADO, no a DESACTIVADO.
 
-La Mini App (salvo que pongas otra dirección con `--url`) lanza un [túnel rápido de Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) gestionado que apunta al servidor loopback del propio aipager, y publica la dirección pública `https://*.trycloudflare.com` que le toque como botón de menú de Telegram, botón del teclado y respuesta de `/app`.
+La Mini App (salvo que pongas otra dirección con `--url`) lanza un [túnel rápido de Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) gestionado que apunta al servidor loopback del propio aipager, y publica la dirección pública `https://*.trycloudflare.com` que le toque como botón de menú de Telegram y respuesta de `/app`.
 
 Esa dirección **no es secreta, ni pretende serlo**: cada petición que atiende la Mini App se comprueba con la firma `initData` de Telegram (mira [Límite de confianza](#trust-boundary) arriba), la misma comprobación que la protege se haya conseguido la URL como se haya conseguido. Conocer el nombre de host por sí solo no le da a un atacante nada que no pudiera conseguir adivinando al azar un subdominio de `trycloudflare.com`; la verdadera puerta es la comprobación de la firma. Trátala como cualquier otra URL que no está publicada pero tampoco es secreta: puede quedarse en marcha, pero no la pegues sin motivo en un canal público.
 

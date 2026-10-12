@@ -84,8 +84,8 @@ async def resolve_public_url() -> str:
     """The Mini App's public HTTPS URL, or ``""`` if there isn't one.
 
     The single answer to "where does the Mini App live", shared by
-    ``/app``, the chat menu button and the keyboard button — three
-    surfaces that must never disagree about the URL they hand out.
+    ``/app`` and the chat menu button, two surfaces that must never
+    disagree about the URL they hand out.
 
     Precedence: an explicit ``MINIAPP_PUBLIC_URL`` override wins
     outright; otherwise the managed tunnel's current URL (set by

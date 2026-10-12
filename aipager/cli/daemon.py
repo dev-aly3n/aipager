@@ -232,12 +232,12 @@ KEYBOARD_HOLD_SECONDS: float = 45.0
 
 
 def _is_private_target() -> bool:
-    """Could the configured chat ever show a web_app keyboard button?
+    """Is the configured chat a private chat (the startup hold's gate)?
 
     A positive Telegram chat id is a user (private chat); groups and
-    channels are negative, and Telegram rejects an entire keyboard that
-    carries a ``web_app`` button in one. Mirrors
-    ``bot/keyboards.py``'s own ``is_private`` test.
+    channels are negative. The hold was for the keyboard's ``web_app``
+    App button, private-chat-only, which the keyboard no longer has
+    (2026-10-12).
 
     Single-``CHAT_ID`` by construction, which is not a meaningful notion
     in multi-scope mode where the real targets live in ``scopes``. That
@@ -339,16 +339,15 @@ async def _run_daemon(bot_username: str) -> None:
     from aipager.miniapp.tunnel import resolve_public_url
     miniapp_url = await resolve_public_url() if MINIAPP_ENABLED else ""
     bot.prime_miniapp_url(miniapp_url)
-    # `_is_private_target` because a `web_app` keyboard button is
-    # private-chat-only (Telegram rejects the whole keyboard in a group),
-    # so holding a group's keyboard buys nothing and costs up to 45s of
-    # having no keyboard at all.
+    # `_is_private_target`: the hold was for a `web_app` keyboard button,
+    # which is private-chat-only. Since 2026-10-12 the keyboard has no
+    # App button (Telegram gives a Mini App opened from one no init
+    # data), so the hold no longer changes the keyboard; it only delays
+    # it. Kept until the operator decides to retire it.
     if MINIAPP_ENABLED and not miniapp_url and _is_private_target():
         # A managed tunnel is about to start and will hand us a URL in
-        # ~10-30s. Hold the first keyboard until then so the App button
-        # is there at first glance instead of appearing on some later
-        # unrelated refresh. Released by publish_miniapp_button, or by
-        # the timeout below if no tunnel ever arrives.
+        # ~10-30s. Released by publish_miniapp_button, or by the timeout
+        # below if no tunnel ever arrives.
         bot.defer_first_keyboard()
 
     await bot.start()

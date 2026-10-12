@@ -1,6 +1,6 @@
 # Comandos e interface do bot
 
-<!-- i18n-source: docs/commands.md @ 7228205 -->
+<!-- i18n-source: docs/commands.md @ b12e978 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../commands.md))
 
@@ -145,7 +145,7 @@ Embaixo do campo de digitação do chat fica um teclado fixo. Fileiras, de cima 
 |---|---|---|
 | Sessões | um botão para cada rótulo de sessão rodando | montada sozinha a partir da lista de sessões |
 | Ações | `status`, `stop`, `new` | atalhos de texto (`kill` continua funcionando quando digitado; encerrar uma sessão fica em `/status` → `⋮`) |
-| Navegação | `Templates ›`, `Comandos ›`, `📱 App` | App aparece nos chats privados enquanto o Mini App está ligado, e o abre direto |
+| Navegação | `Templates ›`, `Comandos ›` | O Mini App abre pelo botão de menu ao lado do campo de mensagem ou pelo `/app`, não por este teclado |
 
 `Modelo ›` fica dentro do submenu de Comandos. Tocar num item de um submenu manda uma mensagem pronta ou um comando de barra:
 
@@ -595,7 +595,7 @@ Algumas configurações são lidas do ambiente do aipager em vez do `aipager.yam
 | `MINIAPP_PUBLIC_URL` | nenhum | Serve o Mini App na sua própria URL `https://` em vez do túnel gerenciado ([Modelo de segurança](security.md#mini-app-tunnel)). |
 | `OBSERVER_BOTS` | nenhum | Bots observadores só de leitura ([bots observadores](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` faz de “Só a resposta (sem cartão)” a aparência dos chats que nunca escolheram uma no `/settings`. |
-| `STALE_BUSY_TIMEOUT` | `600` | Segundos que uma sessão trabalhando pode ficar sem notícias antes de o chat receber o aviso “ainda trabalhando (10 min sem novidades)”. |
+| `STALE_BUSY_TIMEOUT` | `7200` (2 horas) | Segundos que uma sessão trabalhando pode ficar sem notícias antes de o chat receber o aviso “ainda trabalhando (120 min sem novidades)”. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Segundos até uma mensagem que o Claude Code nunca pegou ser marcada como “O Claude Code não recebeu a mensagem” ([mensagens livres](#text)). |
 | `FINISH_CARD_GRACE_SECONDS` | `0.8` | Quanto o cartão terminado vem antes da resposta na aparência com cartão; `0` manda os dois juntos. |
 | `GONE_SESSION_MAX_AGE_DAYS` | `14` | Dias que uma sessão encerrada fica no `/resume`; `0` mantém todas. |

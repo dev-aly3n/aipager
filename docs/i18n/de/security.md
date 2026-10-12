@@ -1,6 +1,6 @@
 # Sicherheitsmodell
 
-<!-- i18n-source: docs/security.md @ 6fc084f -->
+<!-- i18n-source: docs/security.md @ 76d125d -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../security.md))
 
@@ -185,7 +185,7 @@ Das heißt: aipager ist keine Angriffsfläche aus der Ferne. Ein Angreifer im Ne
 
 **Die Mini App ist standardmäßig an**, bei einer normalen Installation öffnet aipager diesen Tunnel also, ohne gefragt zu werden. Das ist eine bewusste Abwägung (eine Option zum Einschalten, die niemand entdeckt hat, war eine Funktion, die es nicht gab), heißt aber, dass eine frische Installation ins Internet geht. Schalte sie mit `aipager miniapp disable` ab, oder setz `enabled: false` unter `miniapp:` in `aipager.yaml`; ein ausdrückliches `false` wird immer beachtet. Beachte, dass ein **fehlender oder beschädigter** Block `miniapp:` jetzt auf AN zurückfällt statt auf AUS.
 
-Die Mini App (außer eine `--url` ersetzt sie) startet einen verwalteten [Cloudflare Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/), der auf den eigenen Loopback-Server von aipager zeigt, und veröffentlicht die öffentliche Adresse `https://*.trycloudflare.com`, die er zugewiesen bekommt, als Menü-Button von Telegram, als Button der Tastatur und als Antwort von `/app`.
+Die Mini App (außer eine `--url` ersetzt sie) startet einen verwalteten [Cloudflare Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/), der auf den eigenen Loopback-Server von aipager zeigt, und veröffentlicht die öffentliche Adresse `https://*.trycloudflare.com`, die er zugewiesen bekommt, als Menü-Button von Telegram und als Antwort von `/app`.
 
 Diese Adresse **ist nicht geheim und soll es auch nicht sein**: Jede Anfrage, die die Mini App bedient, wird mit der `initData`-Signatur von Telegram geprüft (siehe [Vertrauensgrenze](#trust-boundary) oben), dieselbe Prüfung, die sie schützt, egal wie die URL bekannt wurde. Nur den Hostnamen zu kennen bringt einem Angreifer nichts, was er nicht auch durch zufälliges Raten einer Subdomain von `trycloudflare.com` bekäme: Die Signaturprüfung ist das eigentliche Tor. Behandle sie wie jede andere URL, die nicht veröffentlicht, aber auch nicht geheim ist: Sie laufen zu lassen ist in Ordnung, sie ohne Grund in einen öffentlichen Kanal zu stellen nicht.
 

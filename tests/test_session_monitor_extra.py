@@ -156,7 +156,7 @@ def test_loop_swallows_scan_exception(monkeypatch, run_async):
 
 # ---- _scan: stale_busy suppressed while a tool call is in flight -------
 
-def test_scan_stale_busy_suppressed_during_tool_in_flight(monkeypatch, run_async):
+def test_scan_stale_busy_suppressed_during_tool_in_flight(monkeypatch, run_async, steady_clock):
     """A tool that runs longer than STALE_BUSY_TIMEOUT must NOT trigger the
     'stuck' warning, because no hooks fire between PreToolUse and
     PostToolUse. The check must re-arm after the tool finishes, so
@@ -164,9 +164,9 @@ def test_scan_stale_busy_suppressed_during_tool_in_flight(monkeypatch, run_async
     from aipager.session_monitor import STALE_BUSY_TIMEOUT
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
-    sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    sess.last_hook_at = steady_clock() - STALE_BUSY_TIMEOUT - 60
     # Tool started 3 min ago — well under TOOL_INFLIGHT_MAX_SECONDS.
-    sess.pending_tool_started_at = time.monotonic() - 180.0
+    sess.pending_tool_started_at = steady_clock() - 180.0
     registry._sessions["claude-jim"] = sess
 
     notify = AsyncMock()
@@ -231,15 +231,15 @@ def test_scan_stale_busy_fires_when_no_tool_in_flight(steady_clock, monkeypatch,
 # ---- _scan: stale_busy suppressed during compaction --------------------
 
 def test_scan_stale_busy_suppressed_during_compact_in_flight(monkeypatch,
-                                                             run_async):
+                                                             run_async, steady_clock):
     """Between PreCompact and post-compact SessionStart no hooks fire —
     that window can be minutes on a large transcript, and the stale-busy
     warning must NOT fire during it."""
     from aipager.session_monitor import STALE_BUSY_TIMEOUT
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-cmp1", label="cmp1", status=Status.BUSY)
-    sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
-    sess.compact_started_at = time.monotonic() - 300.0  # 5 min ago
+    sess.last_hook_at = steady_clock() - STALE_BUSY_TIMEOUT - 60
+    sess.compact_started_at = steady_clock() - 300.0  # 5 min ago
     registry._sessions["claude-cmp1"] = sess
 
     notify = AsyncMock()
@@ -289,7 +289,7 @@ def _statusline_path(name):
 
 
 def test_scan_stale_busy_suppressed_by_recent_statusline(monkeypatch,
-                                                         run_async):
+                                                         run_async, steady_clock):
     """A recent statusLine mtime is a liveness heartbeat — even with no
     hook activity and no tool/compact in flight, the session is
     clearly doing something."""
@@ -300,7 +300,7 @@ def test_scan_stale_busy_suppressed_by_recent_statusline(monkeypatch,
     try:
         registry = SessionRegistry()
         sess = TrackedSession(name=NAME, label="sl", status=Status.BUSY)
-        sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+        sess.last_hook_at = steady_clock() - STALE_BUSY_TIMEOUT - 60
         registry._sessions[NAME] = sess
 
         notify = AsyncMock()
@@ -410,7 +410,7 @@ def test_scan_still_warns_when_THIS_turn_has_genuinely_stalled(steady_clock,
 
 
 def test_scan_reported_quiet_minutes_describe_this_turn_not_the_session(
-    monkeypatch, run_async,
+    monkeypatch, run_async, steady_clock,
 ):
     """The number in the message was the session's whole idle stretch
     (20038 min == the card's own "Active 333h58m ago"), which is what
@@ -418,9 +418,9 @@ def test_scan_reported_quiet_minutes_describe_this_turn_not_the_session(
     from aipager.session_monitor import STALE_BUSY_TIMEOUT
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
-    sess.last_hook_at = time.monotonic() - 14 * 24 * 3600     # 20160 min
+    sess.last_hook_at = steady_clock() - 14 * 24 * 3600     # 20160 min
     # This turn has been quiet for a bit over the timeout, no more.
-    sess.busy_started_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    sess.busy_started_at = steady_clock() - STALE_BUSY_TIMEOUT - 60
     registry._sessions["claude-jim"] = sess
 
     notify = AsyncMock()

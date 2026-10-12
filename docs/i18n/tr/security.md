@@ -1,6 +1,6 @@
 # Güvenlik modeli
 
-<!-- i18n-source: docs/security.md @ 6fc084f -->
+<!-- i18n-source: docs/security.md @ 76d125d -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../security.md))
 
@@ -185,7 +185,7 @@ Bu, aipager'ın uzaktan saldırı yüzeyi olmadığı anlamına gelir. Ağdaki b
 
 **Mini App varsayılan olarak açıktır**, bu yüzden standart bir kurulumda aipager bu tüneli kimseye sormadan açar. Bu bilinçli bir seçim (kimsenin bulamadığı bir “aç” seçeneği, var olmayan bir özellikti), ama yeni bir kurulumun internete çıktığı anlamına gelir. Onu `aipager miniapp disable` ile kapat ya da `aipager.yaml` içinde `miniapp:` altına `enabled: false` koy; açık bir `false` her zaman uygulanır. Dikkat: **eksik ya da bozuk** bir `miniapp:` bloğu artık KAPALI'ya değil, AÇIK'a döner.
 
-Mini App (`--url` onun yerine geçmiyorsa) aipager'ın kendi loopback sunucusuna bakan yönetilen bir [Cloudflare hızlı tüneli](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) başlatır ve ona verilen genel `https://*.trycloudflare.com` adresini Telegram'ın menü düğmesi, klavyedeki bir düğme ve `/app` yanıtı olarak yayınlar.
+Mini App (`--url` onun yerine geçmiyorsa) aipager'ın kendi loopback sunucusuna bakan yönetilen bir [Cloudflare hızlı tüneli](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) başlatır ve ona verilen genel `https://*.trycloudflare.com` adresini Telegram'ın menü düğmesi ve `/app` yanıtı olarak yayınlar.
 
 Bu adres **gizli değildir ve olması da gerekmez**: Mini App'in sunduğu her istek Telegram'ın `initData` imzasıyla doğrulanır (bkz. yukarıdaki [Güven sınırı](#trust-boundary)) ve URL nasıl elde edilmiş olursa olsun onu bu kontrol korur. Tek bir sunucu adını bilmek, bir saldırgana `trycloudflare.com` alt alan adını rastgele tahmin ederek elde edemeyeceği hiçbir şey vermez: gerçek kapı imza kontrolüdür. Ona yayımlanmamış ama gizli de olmayan herhangi bir URL gibi davran: açık tutmak sorun değil, ama nedensiz yere herkese açık bir kanala yapıştırmak iyi olmaz.
 

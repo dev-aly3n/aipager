@@ -57,7 +57,10 @@ dev = ["pytest>=7", "pytest-xdist>=3", "ruff>=0.5", "build", "twine", "babel>=2.
 # this comment claimed the base install was ~3 MB. It never was —
 # that figure was wrong by 14x and is most likely why the Mini App
 # was made optional in the first place.)
-voice = ["faster-whisper>=1.0"]
+# av<19: PyAV 19 removed av.open's `metadata_errors` argument, which
+# faster-whisper (1.2.1, the latest) still passes, so every transcription
+# failed on a fresh install (2026-10-12). 18.1.0 still accepts it.
+voice = ["faster-whisper>=1.0", "av<19"]
 # Compatibility alias, deliberately empty. aiohttp moved into the base
 # dependencies above, but `aipager[miniapp]` appears in this repo's docs
 # and CHANGELOG, in released error messages, and in users' notes and

@@ -1,4 +1,4 @@
-"""The Mini App is on by default, and its button is there at first glance.
+"""The Mini App is on by default, and the startup keyboard hold.
 
 Two changes, both operator decisions:
 
@@ -7,11 +7,11 @@ Two changes, both operator decisions:
    security-posture change, because enabling the Mini App starts a
    public Cloudflare tunnel. An explicit `enabled: false` must therefore
    still win, absolutely.
-2. The first keyboard is held until the tunnel URL lands, so the App
-   button is on it. Previously the URL was resolved *before* `start()`,
-   when no tunnel existed yet, so the first keyboard went out buttonless
-   and only gained the button on some later unrelated refresh — which is
-   why the Mini App felt like something you had to find by typing /app.
+2. The first keyboard is held until the tunnel URL lands. That was so
+   the keyboard's App button was on it; since 2026-10-12 the keyboard
+   has no App button (a Mini App opened from one gets no init data), so
+   the hold only delays the startup keyboard. These tests pin how the
+   hold behaves while it exists.
 """
 from __future__ import annotations
 
@@ -77,13 +77,17 @@ def test_the_held_keyboard_is_not_sent_before_the_url_arrives(
         "sent a buttonless keyboard while still waiting for the tunnel")
 
 
-def test_the_url_arriving_sends_the_keyboard_with_the_button(
+def test_the_url_arriving_sends_the_held_main_keyboard(
         mk_bot, run_async, monkeypatch):
     b = _bot(mk_bot, monkeypatch)
     b.defer_first_keyboard()
     run_async(b._update_bot_commands())
     run_async(b.publish_miniapp_button("https://tunnel.example/"))
-    assert "📱 App" in _keyboard_texts(b), "no App button at first glance"
+    assert b._app.bot.send_message.await_count == 1
+    texts = _keyboard_texts(b)
+    assert "status" in texts, "the held main keyboard never went out"
+    # Never a keyboard App button (2026-10-12: no init data from one).
+    assert "📱 App" not in texts
 
 
 def test_an_empty_publish_does_not_release_the_hold(
@@ -222,8 +226,8 @@ def test_a_stale_sub_keyboard_tap_does_not_consume_the_hold(
         mk_bot, run_async, monkeypatch, level):
     """Tapping an old Templates/Commands/Models button after a restart
     lands in `_send_keyboard` too. Clearing the hold there would consume
-    it without the user ever getting a main keyboard carrying the App
-    button — a quieter version of the very bug this feature fixes.
+    it without the user ever getting a main keyboard (the session
+    buttons, status, stop, new) for this start.
 
     Found in review, after my first fix for the `/start` case cleared
     the flag on every level.
@@ -239,8 +243,8 @@ def test_a_stale_sub_keyboard_tap_does_not_consume_the_hold(
 
     assert b._app.bot.send_message.await_count == 2, (
         "the hold was consumed by a sub-keyboard, so the main keyboard "
-        "with the App button never arrived")
-    assert "📱 App" in _keyboard_texts(b)
+        "never arrived")
+    assert "status" in _keyboard_texts(b)
 
 
 @pytest.mark.parametrize("from_level,lands_on_main", [

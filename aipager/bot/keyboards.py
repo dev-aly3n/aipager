@@ -18,13 +18,12 @@ from telegram import (
     InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
-    WebAppInfo,
 )
 from telegram.error import BadRequest, Forbidden
 
 
 from aipager import i18n
-from aipager.bot import kbwords, miniapp_link
+from aipager.bot import kbwords
 from aipager.i18n import Msg, Safe
 from aipager import perm_modes
 from aipager.bot.mode_labels import mode_label
@@ -177,18 +176,7 @@ class KeyboardMixin:
         if not self._app:
             return
 
-        # Resolved up front because the main keyboard needs to know the
-        # chat type before it builds its rows. A positive Telegram chat
-        # id IS the peer's user id, i.e. a private chat; groups and
-        # channels are negative. That matters here because a `web_app`
-        # button is private-chat-only, and Telegram rejects the WHOLE
-        # keyboard if one is present in a group — costing the operator
-        # every other button too, not just this one.
         target = chat_id if chat_id is not None else CHAT_ID
-        try:
-            is_private = int(target) > 0
-        except (TypeError, ValueError):
-            is_private = False
         # A group member's own keyboard (8.91b): a reply to their tap,
         # selective, its level kept for them alone. Everything else (a
         # private chat, the main keyboard aipager sends on its own) is the
@@ -242,17 +230,12 @@ class KeyboardMixin:
             # is in /status → ⋮, and `kill` still works when typed.
             rows.append([button(tr.text(kbwords.KB_STATUS)), button(tr.text(kbwords.KB_STOP)),
                          button(tr.text(kbwords.KB_NEW))])
-            # Rides along on the existing nav row rather than claiming one
-            # of its own: three across matches the status/stop/new row
-            # above it, and the keyboard is already the busiest surface in
-            # the chat.
-            nav = [button(tr.text(kbwords.KB_TEMPLATES)), button(tr.text(kbwords.KB_COMMANDS))]
-            if self._miniapp_url and is_private:
-                nav.append(KeyboardButton(
-                    kbwords.KB_APP,
-                    web_app=WebAppInfo(url=miniapp_link.with_lang(self._miniapp_url, tr.code)),
-                ))
-            rows.append(nav)
+            # No Mini App button here (2026-10-12): Telegram gives a Mini
+            # App opened from a reply-keyboard `web_app` button no init
+            # data, so it could never sign in. The menu button beside the
+            # message box, /app and the inline Open buttons carry it.
+            rows.append([button(tr.text(kbwords.KB_TEMPLATES)),
+                         button(tr.text(kbwords.KB_COMMANDS))])
             msg_text = "\u2328\ufe0f"
 
         levels = self._keyboard_levels
@@ -283,9 +266,8 @@ class KeyboardMixin:
         # Only the MAIN keyboard satisfies the hold. Tapping a stale
         # Templates/Commands/Models button after a restart also lands
         # here, and clearing on those levels would consume the hold
-        # without the user ever receiving a main keyboard carrying the
-        # App button — silently recreating the "buttonless until some
-        # unrelated later event" bug this whole feature exists to fix.
+        # without the user ever receiving a main keyboard (session
+        # buttons, status, stop, new) for this start.
         # `« Back` passes its parent level, so a Back-to-main does count.
         #
         # Cleared before the send, not after: the send's exceptions are
@@ -332,8 +314,7 @@ class KeyboardMixin:
                 # the hold must survive. Clearing before the send is
                 # deliberate for a *failed* attempt, but a main keyboard
                 # suppressed for the length of a ban would otherwise never
-                # be re-sent — exactly the "buttonless until some
-                # unrelated later event" bug this feature exists to fix.
+                # be re-sent until some unrelated later event.
                 # Restore both flags so the next trigger sends it once.
                 # Only what this call wrote and nobody has changed since:
                 # a member's tap handled during the await keeps its level.

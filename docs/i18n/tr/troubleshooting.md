@@ -1,6 +1,6 @@
 # Sorun giderme
 
-<!-- i18n-source: docs/troubleshooting.md @ 6fc084f -->
+<!-- i18n-source: docs/troubleshooting.md @ 76d125d -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../troubleshooting.md))
 
@@ -174,6 +174,7 @@ Sonra sırayla:
 2. Etiket `/telegram-web-app.js` adresini gösteriyorsa aipager'ın onu sunduğunu kontrol et: aipager bilgisayarında `curl -sI http://127.0.0.1:8765/telegram-web-app.js` (değiştirdiysen portu düzelt) `Content-Type: application/javascript` ile `200` döndürmeli. Kopya `~/.local/share/aipager/webapp-sdk/` içinde durur.
 3. URL, `/app` düğmesiyle ya da botun menü düğmesiyle değil, sıradan bir tarayıcıda açıldı: o zaman bu beklenen mesajdır. SDK, `initData` değerini yalnızca Telegram'ın içinde verir.
 4. Sayfa beş dakikadan uzun süre açık kaldı: `initData` süresi dolar ve sayfa yeniden açılmasını ister. `/app` düğmesine yeniden dokun.
+5. aipager'ın eski bir sürümünden kalan klavyede `📱 App` düğmesine dokundun. Telegram, klavye düğmesiyle açılan bir Mini App'e `initData` vermez; bu yüzden aipager'ın klavyesinde artık bu düğme yok. Güncel klavyeyi almak için `/start` gönder, uygulamayı da menü düğmesinden ya da `/app` ile aç.
 
 ## <a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>brew ile kurulumda `pyexpat _XML_SetAllocTrackerActivationThreshold`
 

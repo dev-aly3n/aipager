@@ -1,6 +1,6 @@
 # Comandi del bot e interfaccia
 
-<!-- i18n-source: docs/commands.md @ 7228205 -->
+<!-- i18n-source: docs/commands.md @ b12e978 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../commands.md))
 
@@ -145,7 +145,7 @@ Una tastiera fissa sta sotto il campo di scrittura della chat. Le righe, dall'al
 |---|---|---|
 | Sessioni | un pulsante per ogni etichetta di sessione in esecuzione | generati dall'elenco delle sessioni |
 | Azioni | `status`, `stop`, `new` | scorciatoie di testo (`kill` funziona ancora se lo scrivi; terminare una sessione è in `/status` → `⋮`) |
-| Navigazione | `Template ›`, `Comandi ›`, `📱 App` | App compare in una chat privata quando la Mini App è in funzione e la apre direttamente |
+| Navigazione | `Template ›`, `Comandi ›` | La Mini App si apre dal pulsante del menu accanto al campo di scrittura o con `/app`, non da questa tastiera |
 
 `Modello ›` sta dentro il sottomenu Comandi. Toccare una voce di un sottomenu invia un messaggio già scritto o un comando slash:
 
@@ -595,7 +595,7 @@ Alcune impostazioni si leggono dall'ambiente di aipager invece che da `aipager.y
 | `MINIAPP_PUBLIC_URL` | nessuno | Serve la Mini App sul tuo URL `https://` invece che dal tunnel gestito ([sicurezza](security.md#mini-app-tunnel)). |
 | `OBSERVER_BOTS` | nessuno | Bot osservatori di sola lettura ([bot osservatori](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` imposta l'aspetto «Solo la risposta (senza scheda)» per le chat che non hanno mai scelto in `/settings`. |
-| `STALE_BUSY_TIMEOUT` | `600` | Quanti secondi una sessione al lavoro può restare in silenzio prima che la chat riceva una nota «è ancora al lavoro (nessuna novità da 10 min)». |
+| `STALE_BUSY_TIMEOUT` | `7200` (2 ore) | Quanti secondi una sessione al lavoro può restare in silenzio prima che la chat riceva una nota «è ancora al lavoro (nessuna novità da 120 min)». |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Secondi dopo i quali un messaggio che Claude Code non ha mai preso viene segnato «Claude Code non ha ricevuto il messaggio» ([messaggi liberi](#text)). |
 | `FINISH_CARD_GRACE_SECONDS` | `0.8` | Quanto prima della risposta arriva la scheda finita negli aspetti con la scheda; `0` invia entrambe insieme. |
 | `GONE_SESSION_MAX_AGE_DAYS` | `14` | Per quanti giorni una sessione terminata resta in `/resume`; `0` le tiene per sempre. |

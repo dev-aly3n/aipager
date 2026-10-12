@@ -1,6 +1,6 @@
 # Bot pengamat
 
-<!-- i18n-source: docs/observers.md @ 6fc084f -->
+<!-- i18n-source: docs/observers.md @ b12e978 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../observers.md))
 
@@ -41,7 +41,7 @@ Pengamat menerima notifikasi ini dari **setiap chat yang dilayani bot**, setiap 
 | Peringkasan berjalan | `🔄 x1 · Meringkas percakapan` |
 | Peringkasan selesai | `📦 x1 · Percakapan diringkas: 82% → 4%` |
 | Permintaan masih menunggu | `⬆️ x1 · masih menunggu jawabanmu di atas`, dengan izin atau pertanyaan yang ditunggunya |
-| Sesi yang bekerja lama tidak memberi kabar | `⏳ x1 · masih bekerja (10 menit tanpa kabar)` |
+| Sesi yang bekerja lama tidak memberi kabar | `⏳ x1 · masih bekerja (120 menit tanpa kabar)` |
 | Pesan yang tidak diterima Claude Code | `⚠️ x1 · Claude Code tidak menerima pesan` |
 | Sesi berakhir | `🔴 x1 · Sesi berakhir` |
 

@@ -297,11 +297,11 @@ def test_an_orphaned_card_is_counted(monkeypatch):
     assert _counts() == {"orphan_card": 1}
 
 
-def test_a_stale_busy_session_is_counted_once(monkeypatch):
+def test_a_stale_busy_session_is_counted_once(monkeypatch, steady_clock):
     registry = SessionRegistry()
     sess = _busy("claude-cnt-stale")
-    sess.last_hook_at = time.monotonic() - sm.STALE_BUSY_TIMEOUT - 60
-    sess.pending_tool_started_at = time.monotonic() - sm.TOOL_INFLIGHT_MAX_SECONDS - 60
+    sess.last_hook_at = steady_clock() - sm.STALE_BUSY_TIMEOUT - 60
+    sess.pending_tool_started_at = steady_clock() - sm.TOOL_INFLIGHT_MAX_SECONDS - 60
     registry._sessions[sess.name] = sess
     monitor = _monitor(registry)
     _scan(monitor, monkeypatch, [sess.name])

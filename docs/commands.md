@@ -284,7 +284,7 @@ A persistent keyboard sits below the chat input. Rows, top to bottom:
 |---|---|---|
 | Sessions | one button per live session label | auto-built from the registry |
 | Actions | `status`, `stop`, `new` | plain-text shortcuts (`kill` still works typed; ending a session is in `/status` → `⋮`) |
-| Nav | `Templates`, `Commands`, `📱 App` | App appears in private chats while the Mini App is up, and opens it directly |
+| Nav | `Templates`, `Commands` | The Mini App opens from the menu button next to the message box or `/app`, not from this keyboard |
 
 `Model ›` lives inside the Commands submenu. Tapping a submenu
 entry sends a canned prompt or slash command:
@@ -1250,7 +1250,7 @@ them is needed for normal use.
 | `MINIAPP_PUBLIC_URL` | none | Serve the Mini App at your own `https://` URL instead of the managed tunnel ([security](security.md#mini-app-tunnel)). |
 | `OBSERVER_BOTS` | none | Read-only observer bots ([observers](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` makes "Replace with result" the message layout for chats that never chose one in `/settings`. |
-| `STALE_BUSY_TIMEOUT` | `600` | Seconds a working session may go with no news before the chat gets a "still working (quiet for 10 min)" note. |
+| `STALE_BUSY_TIMEOUT` | `7200` (2 hours) | Seconds a working session may go with no news before the chat gets a "still working (quiet for 120 min)" note. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Seconds before a message Claude Code never took is marked "Not taken by Claude Code" ([free messages](#text)). |
 | `FINISH_CARD_GRACE_SECONDS` | `0.8` | How long the finished card leads the answer in the card layout; `0` sends both at once. |
 | `GONE_SESSION_MAX_AGE_DAYS` | `14` | Days an ended session stays in `/resume`; `0` keeps them. |

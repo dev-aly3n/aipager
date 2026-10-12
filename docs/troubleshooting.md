@@ -393,6 +393,11 @@ Then, in order:
    only produces `initData` inside Telegram.
 4. The page was left open for more than five minutes: `initData`
    expires and the page asks to be reopened. Tap `/app` again.
+5. You tapped `📱 App` on a reply keyboard from an older aipager.
+   Telegram gives a Mini App opened from a keyboard button no
+   `initData`, so aipager's keyboard no longer has that button. Send
+   `/start` for the current keyboard and open the app from the menu
+   button or `/app`.
 
 ## `pyexpat _XML_SetAllocTrackerActivationThreshold` on brew install
 

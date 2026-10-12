@@ -2,7 +2,7 @@
 
 # نموذج الأمان
 
-<!-- i18n-source: docs/security.md @ 6fc084f -->
+<!-- i18n-source: docs/security.md @ 76d125d -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../security.md))
 
@@ -193,7 +193,7 @@ aipager **لا يرفع صلاحياته أبدًا**. لا sudo، ولا setuid
 
 **Mini App مفعّل افتراضيًا**، لذا في التثبيت العادي يفتح aipager هذا النفق دون أن يُطلب منه. هذه مقايضة مقصودة (خيار تفعيل يدوي لم يكتشفه أحد كان ميزة غير موجودة فعليًا)، لكنها تعني أن التثبيت الجديد يتصل بالإنترنت. لإيقافه: `aipager miniapp disable`، أو ضبط `enabled: false` تحت `miniapp:` في `aipager.yaml`؛ والقيمة `false` الصريحة تُحترم دائمًا. ويُلاحظ أن كتلة `miniapp:` **المفقودة أو التالفة** تُعامل الآن على أنها مفعّلة لا معطّلة.
 
-يشغّل Mini App (ما لم يُعطَ `--url` بديلًا) [نفق Cloudflare السريع](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) مُدارًا، موجّهًا إلى خادم loopback الخاص بـ aipager، وينشر عنوان `https://*.trycloudflare.com` العام الذي يُعطى له زرًا لقائمة Telegram، وزرًا في لوحة مفاتيح الرد، وإجابةً لـ `/app`.
+يشغّل Mini App (ما لم يُعطَ `--url` بديلًا) [نفق Cloudflare السريع](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) مُدارًا، موجّهًا إلى خادم loopback الخاص بـ aipager، وينشر عنوان `https://*.trycloudflare.com` العام الذي يُعطى له زرًا لقائمة Telegram وإجابةً لـ `/app`.
 
 ذلك العنوان **ليس سرًا، ولا يُفترض أن يكون**: كل طلب يقدّمه Mini App يُتحقق منه بتوقيع `initData` من Telegram (يُنظر [حدود الثقة](#trust-boundary) أعلاه)، وهو الفحص نفسه الذي يحميه أيًّا كانت طريقة الحصول على العنوان. معرفة اسم المضيف وحدها لا تعطي المهاجم شيئًا لا يستطيع الحصول عليه بتخمين نطاق فرعي عشوائي في `trycloudflare.com`: فحص التوقيع هو البوابة الحقيقية. يُعامل مثل أي عنوان غير مدرج لكنه ليس سرًا: لا بأس في تركه يعمل، لكن لا داعي للصقه في قناة عامة دون سبب.
 

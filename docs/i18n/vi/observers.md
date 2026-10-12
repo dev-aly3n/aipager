@@ -1,6 +1,6 @@
 # Bot quan sát
 
-<!-- i18n-source: docs/observers.md @ 6fc084f -->
+<!-- i18n-source: docs/observers.md @ b12e978 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../observers.md))
 
@@ -41,7 +41,7 @@ Bot quan sát nhận các thông báo này từ **mọi chat mà bot phục vụ
 | Đang thu gọn | `🔄 x1 · Đang thu gọn cuộc trò chuyện` |
 | Đã thu gọn xong | `📦 x1 · Đã thu gọn cuộc trò chuyện: 82% → 4%` |
 | Một yêu cầu vẫn đang chờ | `⬆️ x1 · vẫn đang chờ bạn trả lời ở trên`, kèm yêu cầu cấp quyền hoặc câu hỏi đang chờ |
-| Một phiên đang làm việc nhưng im lặng | `⏳ x1 · vẫn đang làm việc (10 phút chưa có tin)` |
+| Một phiên đang làm việc nhưng im lặng | `⏳ x1 · vẫn đang làm việc (120 phút chưa có tin)` |
 | Một tin nhắn mà Claude Code không nhận | `⚠️ x1 · Claude Code chưa nhận tin nhắn` |
 | Phiên đã kết thúc | `🔴 x1 · Phiên đã đóng` |
 

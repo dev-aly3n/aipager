@@ -159,23 +159,27 @@ def test_a_new_private_scope_gets_its_language_in_the_link(bot, run_async):
 
 def _keyboard_app_url(bot, chat_id):
     from telegram import ReplyKeyboardMarkup
+    sent = False
     for call in bot._app.bot.send_message.await_args_list:
         markup = call.kwargs.get("reply_markup")
         target = call.kwargs.get("chat_id", call.args[0] if call.args else None)
         if target == chat_id and isinstance(markup, ReplyKeyboardMarkup):
+            sent = True
             for row in markup.keyboard:
                 for button in row:
                     if getattr(button, "web_app", None) is not None:
                         return button.web_app.url
-    return "no button"
+    return "no button" if sent else "no keyboard sent"
 
 
 @pytest.mark.parametrize("chat_id", [DM_EN, DM_FA, DM_RU, DM_AR],
                          ids=["en", "fa", "ru", "ar"])
-def test_the_keyboard_app_button_carries_the_chats_language(bot, run_async, chat_id):
+def test_no_dm_keyboard_has_an_app_button_in_any_language(bot, run_async, chat_id):
+    """A Mini App opened from a reply-keyboard button gets no init data
+    and cannot sign in (2026-10-12): the menu button carries the link."""
     bot._miniapp_url = URL
     run_async(bot._send_keyboard(level="main", chat_id=chat_id))
-    assert _keyboard_app_url(bot, chat_id) == WANT[chat_id]
+    assert _keyboard_app_url(bot, chat_id) == "no button"
 
 
 def test_a_group_keyboard_still_has_no_app_button(bot, run_async):

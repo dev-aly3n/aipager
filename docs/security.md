@@ -701,7 +701,7 @@ The Mini App (unless a `--url` override is set) spawns a managed
 tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)
 pointed at the daemon's own loopback server, and publishes whatever
 public `https://*.trycloudflare.com` address it is assigned as the
-Telegram menu button, the reply-keyboard button, and `/app`'s answer.
+Telegram menu button and `/app`'s answer.
 
 That address **is not secret, and is not meant to be**: every request
 the Mini App serves is verified against Telegram's `initData` signature

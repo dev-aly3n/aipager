@@ -87,15 +87,16 @@ class TelegramBot(
         # silent.
         self._read_only_told: set[tuple] = set()
         # The Mini App's public URL for this daemon run. "" = no Mini
-        # App, which is what the keyboard checks before offering its
-        # launch button. Written twice at startup, in this order:
-        # prime_miniapp_url() before start() (so the FIRST keyboard
-        # already carries the button), then publish_miniapp_button()
+        # App, which is what the inline App buttons check before
+        # offering themselves. Written twice at startup, in this order:
+        # prime_miniapp_url() before start() (a URL known then means
+        # no startup keyboard hold), then publish_miniapp_button()
         # once the Mini App server is confirmed listening — which
         # re-clears this if it turned out not to be.
         self._miniapp_url: str = ""
-        # Hold the very first keyboard until the Mini App URL is known —
-        # see lifecycle.defer_first_keyboard.
+        # Hold the very first keyboard until the Mini App URL is known
+        # (no longer needed since the keyboard lost its App button on
+        # 2026-10-12): see lifecycle.defer_first_keyboard.
         self._keyboard_deferred: bool = False
         # Main keyboards a flood mute refused (roadmap 8.17c), per target
         # chat: normalised chat key -> the ``chat_id`` argument to re-send

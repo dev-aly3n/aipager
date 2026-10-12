@@ -72,19 +72,37 @@ def test_strips_quotes(tmp_path, monkeypatch):
     assert os.environ.get("TEST_KEY_QUOTED") == "quoted value"
 
 
-def test_stale_busy_timeout_below_inflight_caps():
-    """The in-flight caps must stay above the stale-busy threshold.
+def _stale_busy_timeout_in_a_fresh_process(tmp_path, extra_env=None) -> float:
+    """``config.STALE_BUSY_TIMEOUT`` as a fresh daemon reads it: a new
+    interpreter with a throwaway HOME and cwd and no AIPAGER_/CLAUDE_TG_
+    or STALE_BUSY_TIMEOUT in its environment (never the real home)."""
+    import subprocess
+    import sys
+    from pathlib import Path
 
-    TOOL_INFLIGHT_MAX_SECONDS and COMPACT_INFLIGHT_MAX_SECONDS SUPPRESS the
-    stale-busy note while a tool call or compaction is running. If either
-    ever drops to or below STALE_BUSY_TIMEOUT, its suppression window closes
-    before the note could have fired and the suppression silently becomes
-    dead code — every long tool call would surface as "still working" again.
-    Raising STALE_BUSY_TIMEOUT from 120s to 600s narrowed the tool margin
-    from 7.5x to 1.5x, so this ordering is now worth asserting.
-    """
-    assert cfg.STALE_BUSY_TIMEOUT < cfg.TOOL_INFLIGHT_MAX_SECONDS
-    assert cfg.STALE_BUSY_TIMEOUT < cfg.COMPACT_INFLIGHT_MAX_SECONDS
+    repo = Path(__file__).resolve().parents[1]
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith(("CLAUDE_TG_", "AIPAGER_")) and k != "STALE_BUSY_TIMEOUT"}
+    env.update(HOME=str(tmp_path), XDG_CONFIG_HOME=str(tmp_path / ".config"),
+               PYTHONDONTWRITEBYTECODE="1", PYTHONPATH=str(repo))
+    env.update(extra_env or {})
+    out = subprocess.run(
+        [sys.executable, "-B", "-c",
+         "from aipager import config; print(config.STALE_BUSY_TIMEOUT)"],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=120)
+    assert out.returncode == 0, out.stderr[-2000:]
+    return float(out.stdout.strip())
+
+
+def test_the_still_working_note_waits_two_hours_by_default(tmp_path):
+    """Operator, 2026-10-12: the "still working (quiet for N min)" note
+    after 10 minutes was noise; it waits 2 hours of silence now."""
+    assert _stale_busy_timeout_in_a_fresh_process(tmp_path) == 7200.0
+
+
+def test_the_environment_still_overrides_the_wait(tmp_path):
+    assert _stale_busy_timeout_in_a_fresh_process(
+        tmp_path, {"STALE_BUSY_TIMEOUT": "900"}) == 900.0
 
 
 # ----- _default_socket_path -----

@@ -1,6 +1,6 @@
 # 보안 모델
 
-<!-- i18n-source: docs/security.md @ 6fc084f -->
+<!-- i18n-source: docs/security.md @ 76d125d -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../security.md))
 
@@ -185,7 +185,7 @@ aipager는 **루프백 밖의 TCP 포트를 하나도 듣지 않아요**. Mini A
 
 **Mini App은 기본으로 켜져 있어서**, 표준 설치에서 aipager는 아무도 요청하지 않아도 이 터널을 열어요. 의도한 맞바꿈이지만(직접 켜야 하는데 아무도 발견하지 못하는 옵션은 없는 기능과 같아요), 새 설치가 인터넷에 연결된다는 뜻이에요. `aipager miniapp disable`로 끄거나, `aipager.yaml`의 `miniapp:` 아래에 `enabled: false`를 설정하세요. 분명히 적은 `false`는 항상 따라요. 참고로 **빠졌거나 망가진** `miniapp:` 블록은 이제 꺼짐이 아니라 켜짐으로 읽혀요.
 
-Mini App은(`--url`로 대신하지 않는 한) 관리형 [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)을 aipager 자체의 루프백 서버로 시작하고, 받은 공개 주소 `https://*.trycloudflare.com`을 Telegram 메뉴 버튼, 답장 키보드의 버튼, `/app`의 답변으로 올려요.
+Mini App은(`--url`로 대신하지 않는 한) 관리형 [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)을 aipager 자체의 루프백 서버로 시작하고, 받은 공개 주소 `https://*.trycloudflare.com`을 Telegram 메뉴 버튼과 `/app`의 답변으로 올려요.
 
 이 주소는 **비밀이 아니고, 비밀일 필요도 없어요**. Mini App이 처리하는 모든 요청은 Telegram의 `initData` 서명으로 확인하고(위의 [신뢰 경계](#trust-boundary) 참고), 주소를 어떻게 얻었든 그것을 지키는 것은 이 같은 확인이에요. 서버 이름을 아는 것만으로는 `trycloudflare.com` 하위 도메인을 아무렇게나 짐작하는 것보다 공격자에게 나을 게 없어요. 서명 확인이 진짜 문이에요. 공개하지는 않지만 비밀도 아닌 다른 주소처럼 다루세요. 계속 실행해도 괜찮지만, 이유 없이 공개 채널에 붙여 넣지는 마세요.
 

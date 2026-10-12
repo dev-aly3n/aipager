@@ -41,7 +41,7 @@ came from.
 | Compacting | `🔄 x1 · Compacting` |
 | Compact done | `📦 x1 · Compacted: 82% → 4%` |
 | A prompt still waiting | `⬆️ x1 · still waiting for your answer above`, with the permission or question it waits on |
-| A quiet working session | `⏳ x1 · still working (quiet for 10 min)` |
+| A quiet working session | `⏳ x1 · still working (quiet for 120 min)` |
 | A message Claude Code did not take | `⚠️ x1 · Not taken by Claude Code` |
 | Session ended | `🔴 x1 · Session exited` |
 

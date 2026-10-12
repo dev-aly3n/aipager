@@ -2,7 +2,7 @@
 
 # حل المشكلات
 
-<!-- i18n-source: docs/troubleshooting.md @ 6fc084f -->
+<!-- i18n-source: docs/troubleshooting.md @ 76d125d -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../troubleshooting.md))
 
@@ -192,6 +192,7 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # بالثواني
 2. إذا كان الوسم يشير إلى `/telegram-web-app.js`، يلزم التحقق من أن aipager يقدّمه: يجب أن يجيب `curl -sI http://127.0.0.1:8765/telegram-web-app.js` على كمبيوتر aipager (مع تعديل المنفذ إن غيّرته) بـ `200` مع `Content-Type: application/javascript`. النسخة موجودة في `~/.local/share/aipager/webapp-sdk/`.
 3. فُتح العنوان في متصفح عادي بدل زر `/app` أو زر القائمة في البوت: عندها هذه الرسالة متوقعة. لا ينتج SDK قيمة `initData` إلا داخل Telegram.
 4. بقيت الصفحة مفتوحة أكثر من خمس دقائق: تنتهي صلاحية `initData` وتطلب الصفحة إعادة فتحها. يكفي الضغط على `/app` مرة أخرى.
+5. ضُغط `📱 App` في لوحة مفاتيح من إصدار أقدم من aipager: لا يعطي Telegram تطبيق Mini App المفتوح من زر في لوحة المفاتيح أي `initData`، ولذلك لم تعد لوحة aipager تضم هذا الزر. يكفي إرسال `/start` للحصول على اللوحة الحالية، ثم فتح التطبيق من زر القائمة أو بـ `/app`.
 
 ## <a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>`pyexpat _XML_SetAllocTrackerActivationThreshold` عند التثبيت بـ brew
 

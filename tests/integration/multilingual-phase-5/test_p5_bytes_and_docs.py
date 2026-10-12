@@ -27,9 +27,11 @@ import pytest
 from aipager.i18n import locales
 from tests.i18n_surfaces import (
     MODE_LABEL_SURFACES,
+    NO_KEYBOARD_APP_SURFACES,
     THREE_MODES_NEW_SURFACES,
     THREE_MODES_PAGE_SCREENS,
     THREE_MODES_SURFACES,
+    with_keyboard_app_removed,
     without_mode_labels,
 )
 
@@ -99,8 +101,12 @@ def test_every_english_surface_of_the_base_is_unchanged():
     rel = "tests/golden/english_surfaces.json"
     base, cur = _surfaces(at_base(rel)), _surfaces(now(rel))
     kept = {k: v for k, v in base.items()
-            if k not in CHANGED_SINCE | MODE_LABEL_SURFACES | THREE_MODES_SURFACES}
+            if k not in CHANGED_SINCE | MODE_LABEL_SURFACES | THREE_MODES_SURFACES
+            | NO_KEYBOARD_APP_SURFACES}
     assert {k: cur.get(k) for k in kept} == kept
+    # The main keyboard lost its App button (2026-10-12), and only that.
+    for k in NO_KEYBOARD_APP_SURFACES:
+        assert cur[k] == with_keyboard_app_removed(base[k]), k
     # Each exemption is real: the surface did change, and still exists.
     assert all(k in base and k in cur and cur[k] != base[k] for k in CHANGED_SINCE)
     # The mode label surfaces changed by the mode labels (2026-10-10) and

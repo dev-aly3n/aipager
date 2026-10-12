@@ -1,6 +1,6 @@
 # Modelo de segurança
 
-<!-- i18n-source: docs/security.md @ 6fc084f -->
+<!-- i18n-source: docs/security.md @ 76d125d -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../security.md))
 
@@ -187,7 +187,7 @@ Isso quer dizer que o aipager não pode ser atacado a distância. Um atacante na
 
 **O Mini App vem ligado por padrão**, então numa instalação normal o aipager abre este túnel sem ninguém pedir. É uma escolha consciente (uma opção que ninguém descobre é como se não existisse), mas quer dizer que uma instalação nova se conecta à internet. Desligue com `aipager miniapp disable`, ou ponha `enabled: false` embaixo de `miniapp:` no `aipager.yaml`; um `false` explícito é sempre respeitado. Note que um bloco `miniapp:` **ausente ou quebrado** agora volta para LIGADO, não para DESLIGADO.
 
-O Mini App (a não ser que você defina outro endereço com `--url`) inicia um [túnel rápido do Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) gerenciado que aponta para o servidor loopback do próprio aipager, e publica o endereço público `https://*.trycloudflare.com` que receber como botão de menu do Telegram, botão do teclado e resposta do `/app`.
+O Mini App (a não ser que você defina outro endereço com `--url`) inicia um [túnel rápido do Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) gerenciado que aponta para o servidor loopback do próprio aipager, e publica o endereço público `https://*.trycloudflare.com` que receber como botão de menu do Telegram e resposta do `/app`.
 
 Esse endereço **não é secreto, nem pretende ser**: cada pedido que o Mini App atende é conferido com a assinatura `initData` do Telegram (veja [Limite de confiança](#trust-boundary) acima), a mesma verificação que o protege não importa como a URL foi obtida. Saber o nome do host sozinho não dá a um atacante nada que ele não conseguiria adivinhando ao acaso um subdomínio de `trycloudflare.com`; a porta de verdade é a verificação da assinatura. Trate-o como qualquer outra URL que não está publicada mas também não é secreta: pode ficar rodando, mas não a cole sem motivo num canal público.
 

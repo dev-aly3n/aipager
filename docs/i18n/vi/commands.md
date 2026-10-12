@@ -1,6 +1,6 @@
 # Lệnh và giao diện của bot
 
-<!-- i18n-source: docs/commands.md @ 7228205 -->
+<!-- i18n-source: docs/commands.md @ b12e978 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../commands.md))
 
@@ -145,7 +145,7 @@ Một bàn phím cố định nằm dưới ô nhập của chat. Các hàng, t�
 |---|---|---|
 | Phiên | mỗi nhãn phiên đang chạy một nút | tự tạo từ danh sách phiên |
 | Thao tác | `phiên`, `dừng`, `mới` | lối tắt bằng chữ (`tắt` vẫn dùng được khi gõ; kết thúc một phiên nằm trong `/status` → `⋮`) |
-| Điều hướng | `Mẫu`, `Lệnh`, `📱 App` | App xuất hiện trong chat riêng khi Mini App đang chạy, và mở thẳng nó |
+| Điều hướng | `Mẫu`, `Lệnh` | Mini App mở từ nút menu cạnh ô nhập tin nhắn hoặc bằng `/app`, không mở từ bàn phím này |
 
 `Mô hình ›` nằm bên trong menu con Lệnh. Chạm vào một mục của menu con sẽ gửi một tin nhắn soạn sẵn hoặc một lệnh slash:
 
@@ -595,7 +595,7 @@ Một vài cài đặt được đọc từ môi trường của aipager thay v�
 | `MINIAPP_PUBLIC_URL` | không có | Phục vụ Mini App ở URL `https://` riêng của bạn thay vì tunnel được quản lý ([bảo mật](security.md#mini-app-tunnel)). |
 | `OBSERVER_BOTS` | không có | Các bot quan sát chỉ đọc ([bot quan sát](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` đặt “Chỉ câu trả lời, xóa thẻ” làm bố cục tin nhắn cho các chat chưa bao giờ chọn bố cục trong `/settings`. |
-| `STALE_BUSY_TIMEOUT` | `600` | Số giây một phiên đang làm việc có thể im lặng trước khi chat nhận một ghi chú “vẫn đang làm việc (10 phút chưa có tin)”. |
+| `STALE_BUSY_TIMEOUT` | `7200` (2 giờ) | Số giây một phiên đang làm việc có thể im lặng trước khi chat nhận một ghi chú “vẫn đang làm việc (120 phút chưa có tin)”. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Số giây trước khi một tin nhắn mà Claude Code không bao giờ nhận được đánh dấu là “Claude Code chưa nhận tin nhắn” ([tin nhắn tự do](#text)). |
 | `FINISH_CARD_GRACE_SECONDS` | `0.8` | Thẻ đã xong đi trước câu trả lời bao lâu trong bố cục có thẻ; `0` gửi cả hai cùng lúc. |
 | `GONE_SESSION_MAX_AGE_DAYS` | `14` | Số ngày một phiên đã kết thúc còn ở trong `/resume`; `0` giữ chúng mãi. |

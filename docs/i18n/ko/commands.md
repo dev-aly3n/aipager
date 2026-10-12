@@ -1,6 +1,6 @@
 # 봇 명령과 화면
 
-<!-- i18n-source: docs/commands.md @ 7228205 -->
+<!-- i18n-source: docs/commands.md @ b12e978 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../commands.md))
 
@@ -145,7 +145,7 @@ aipager가 대화하는 모든 채팅(내 개인 채팅, 그리고 모든 그룹
 |---|---|---|
 | 세션 | 실행 중인 세션 라벨마다 하나 | 세션 목록에서 자동으로 만들어요 |
 | 작업 | `상태`, `중지`, `신규` | 글 바로 가기(`종료`를 입력해도 여전히 돼요. 세션 종료는 `/status` → `⋮`에 있어요) |
-| 탐색 | `템플릿`, `명령어`, `📱 App` | App은 Mini App이 실행 중일 때 개인 채팅에 나타나고, 바로 열어요 |
+| 탐색 | `템플릿`, `명령어` | Mini App은 입력창 옆 메뉴 버튼이나 `/app`으로 열어요. 이 키보드에서는 열 수 없어요 |
 
 `모델 ›`는 명령어 하위 메뉴 안에 있어요. 하위 메뉴의 항목을 누르면 미리 써 둔 메시지나 슬래시 명령을 보내요:
 
@@ -595,7 +595,7 @@ Claude Code의 `~/.claude/settings.json`에서 aipager 자체 항목도 지워�
 | `MINIAPP_PUBLIC_URL` | 없음 | 관리형 터널 대신 내 `https://` 주소에서 Mini App을 제공해요([보안](security.md#mini-app-tunnel)). |
 | `OBSERVER_BOTS` | 없음 | 읽기 전용 관찰 봇([관찰 봇](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0`은 `/settings`에서 배치를 한 번도 고른 적 없는 채팅의 메시지 배치를 “카드 지우고 답변만”으로 정해요. |
-| `STALE_BUSY_TIMEOUT` | `600` | 작업 중인 세션이 몇 초 동안 조용하면 채팅에 “아직 작업 중 (10분째 소식 없음)” 안내가 오는지. |
+| `STALE_BUSY_TIMEOUT` | `7200` (2시간) | 작업 중인 세션이 몇 초 동안 조용하면 채팅에 “아직 작업 중 (120분째 소식 없음)” 안내가 오는지. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Claude Code가 끝내 가져가지 않은 메시지를 몇 초 뒤에 “Claude Code가 메시지를 받지 않았어요”로 표시하는지([자유 메시지](#text)). |
 | `FINISH_CARD_GRACE_SECONDS` | `0.8` | 카드가 있는 배치에서 끝난 카드가 답변보다 얼마나 먼저 오는지. `0`은 둘을 함께 보내요. |
 | `GONE_SESSION_MAX_AGE_DAYS` | `14` | 종료된 세션이 `/resume`에 며칠 동안 남는지. `0`은 영원히 유지해요. |

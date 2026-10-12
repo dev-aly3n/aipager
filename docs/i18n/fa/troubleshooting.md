@@ -2,7 +2,7 @@
 
 # رفع مشکل
 
-<!-- i18n-source: docs/troubleshooting.md @ 6fc084f -->
+<!-- i18n-source: docs/troubleshooting.md @ 76d125d -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../troubleshooting.md))
 
@@ -192,6 +192,7 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # به ثانیه
 2. اگر تگ به `/telegram-web-app.js` اشاره می‌کند، چک کنید aipager آن را سرو می‌کند: `curl -sI http://127.0.0.1:8765/telegram-web-app.js` روی کامپیوتر aipager باید با `200` و `Content-Type: application/javascript` جواب بدهد (اگر پورت را عوض کرده‌اید، تنظیمش کنید). نسخهٔ آن زیر `~/.local/share/aipager/webapp-sdk/` است.
 3. آدرس را به جای دکمهٔ `/app` یا دکمهٔ منوی ربات، در یک مرورگر معمولی باز کرده‌اید: پیام همین را باید بگوید. SDK فقط داخل تلگرام `initData` می‌سازد.
 4. صفحه بیشتر از پنج دقیقه باز مانده: `initData` منقضی می‌شود و صفحه می‌خواهد دوباره باز شود. دوباره `/app` را بزنید.
+5. `📱 App` را روی کیبوردی از نسخهٔ قدیمی‌تر aipager زده‌اید. تلگرام به Mini Appی که از دکمهٔ کیبورد باز شود `initData` نمی‌دهد، برای همین کیبورد aipager دیگر این دکمه را ندارد. `/start` را بفرستید تا کیبورد جدید بیاید، و اپ را از دکمهٔ منو یا با `/app` باز کنید.
 
 ## <a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>`pyexpat _XML_SetAllocTrackerActivationThreshold` موقع نصب با brew
 

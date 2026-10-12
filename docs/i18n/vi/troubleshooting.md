@@ -1,6 +1,6 @@
 # Xử lý sự cố
 
-<!-- i18n-source: docs/troubleshooting.md @ 6fc084f -->
+<!-- i18n-source: docs/troubleshooting.md @ 76d125d -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../troubleshooting.md))
 
@@ -174,6 +174,7 @@ Sau đó, theo thứ tự:
 2. Nếu thẻ trỏ tới `/telegram-web-app.js`, hãy kiểm tra rằng aipager phục vụ nó: `curl -sI http://127.0.0.1:8765/telegram-web-app.js` trên máy chạy aipager (đổi cổng nếu bạn đã đổi) phải trả lời `200` với `Content-Type: application/javascript`. Bản sao nằm trong `~/.local/share/aipager/webapp-sdk/`.
 3. Bạn đã mở URL trong một trình duyệt thường chứ không phải từ nút `/app` hay nút menu của bot: khi đó thông báo này là đúng. SDK chỉ tạo ra `initData` bên trong Telegram.
 4. Trang đã mở quá năm phút: `initData` hết hạn và trang yêu cầu được mở lại. Chạm `/app` lần nữa.
+5. Bạn đã chạm `📱 App` trên bàn phím từ một phiên bản aipager cũ hơn. Telegram không cấp `initData` cho Mini App được mở từ một nút bàn phím, nên bàn phím của aipager không còn nút đó nữa. Gửi `/start` để nhận bàn phím hiện tại, rồi mở app bằng nút menu hoặc `/app`.
 
 ## <a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>`pyexpat _XML_SetAllocTrackerActivationThreshold` khi cài bằng brew
 

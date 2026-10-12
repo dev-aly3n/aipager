@@ -1,6 +1,6 @@
 # Pemecahan masalah
 
-<!-- i18n-source: docs/troubleshooting.md @ 6fc084f -->
+<!-- i18n-source: docs/troubleshooting.md @ 76d125d -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../troubleshooting.md))
 
@@ -174,6 +174,7 @@ Lalu, berurutan:
 2. Kalau tag-nya menunjuk ke `/telegram-web-app.js`, periksa bahwa aipager menyajikannya: `curl -sI http://127.0.0.1:8765/telegram-web-app.js` di komputer aipager (sesuaikan port kalau sudah kamu ubah) harus menjawab `200` dengan `Content-Type: application/javascript`. Salinannya ada di `~/.local/share/aipager/webapp-sdk/`.
 3. URL-nya dibuka di browser biasa, bukan lewat tombol `/app` atau tombol menu bot: maka pesan ini memang yang diharapkan. SDK memberi `initData` hanya di dalam Telegram.
 4. Halaman itu sudah terbuka lebih dari lima menit: `initData` kedaluwarsa dan halaman meminta dibuka lagi. Ketuk `/app` lagi.
+5. Kamu mengetuk `📱 App` di keyboard dari versi aipager yang lebih lama. Telegram tidak memberi `initData` ke Mini App yang dibuka dari tombol keyboard, jadi keyboard aipager sekarang tidak punya tombol itu lagi. Kirim `/start` untuk mendapatkan keyboard yang sekarang, lalu buka app-nya dari tombol menu atau dengan `/app`.
 
 ## <a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>`pyexpat _XML_SetAllocTrackerActivationThreshold` saat memasang dengan brew
 

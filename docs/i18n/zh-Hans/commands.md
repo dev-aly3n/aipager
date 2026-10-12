@@ -1,6 +1,6 @@
 # 机器人命令和界面
 
-<!-- i18n-source: docs/commands.md @ 7228205 -->
+<!-- i18n-source: docs/commands.md @ b12e978 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../commands.md)）
 
@@ -145,7 +145,7 @@ aipager 对话的每个聊天（你的私聊，以及每个群组 scope）都有
 |---|---|---|
 | 会话 | 每个正在运行的会话标签一个按钮 | 根据会话列表自动生成 |
 | 操作 | `状态`、`停止`、`新建` | 文字快捷方式（输入 `结束` 仍然有效；结束会话在 `/status` → `⋮` 里） |
-| 导航 | `模板`、`命令`、`📱 App` | App 在 Mini App 运行时出现在私聊里，并直接打开它 |
+| 导航 | `模板`、`命令` | Mini App 通过输入框旁的菜单按钮或 `/app` 打开，不在这个键盘上 |
 
 `模型 ›` 在“命令”子菜单里。点按子菜单里的一项会发送一条预先写好的消息或一个斜杠命令：
 
@@ -595,7 +595,7 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 | `MINIAPP_PUBLIC_URL` | 无 | 在你自己的 `https://` 网址上提供 Mini App，代替托管隧道（[安全](security.md#mini-app-tunnel)）。 |
 | `OBSERVER_BOTS` | 无 | 只读的观察机器人（[观察机器人](observers.md)）。 |
 | `KEEP_FINISHED_CARD` | `1` | `0` 会为从未在 `/settings` 里选择过布局的聊天，把消息布局设为“只留回答，删除卡片”。 |
-| `STALE_BUSY_TIMEOUT` | `600` | 工作中的会话可以沉默多少秒，之后聊天会收到一条“仍在工作（10 分钟没有消息）”的提示。 |
+| `STALE_BUSY_TIMEOUT` | `7200` (2 小时) | 工作中的会话可以沉默多少秒，之后聊天会收到一条“仍在工作（120 分钟没有消息）”的提示。 |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Claude Code 一直没有取走的消息，在多少秒之后被标为“Claude Code 没有收到消息”（[自由消息](#text)）。 |
 | `FINISH_CARD_GRACE_SECONDS` | `0.8` | 在有卡片的布局里，完成的卡片比回答提前多久；`0` 表示两者同时发送。 |
 | `GONE_SESSION_MAX_AGE_DAYS` | `14` | 已结束的会话在 `/resume` 里保留多少天；`0` 表示永远保留。 |

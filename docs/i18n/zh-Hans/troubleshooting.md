@@ -1,6 +1,6 @@
 # 故障排除
 
-<!-- i18n-source: docs/troubleshooting.md @ 6fc084f -->
+<!-- i18n-source: docs/troubleshooting.md @ 76d125d -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../troubleshooting.md)）
 
@@ -174,6 +174,7 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # 以秒为单位
 2. 如果标签指向 `/telegram-web-app.js`，检查 aipager 是否在提供它：在运行 aipager 的电脑上执行 `curl -sI http://127.0.0.1:8765/telegram-web-app.js`（如果你改过端口，请相应修改），应该返回 `200` 和 `Content-Type: application/javascript`。副本保存在 `~/.local/share/aipager/webapp-sdk/` 下。
 3. 你是在普通浏览器里打开的网址，而不是通过机器人的 `/app` 按钮或菜单按钮：那么这条消息就是正常的。SDK 只在 Telegram 内部生成 `initData`。
 4. 页面开着超过了五分钟：`initData` 过期了，页面要求重新打开。再点一次 `/app`。
+5. 你点的是旧版 aipager 键盘上的 `📱 App`。Telegram 不会给从键盘按钮打开的 Mini App 提供 `initData`，所以 aipager 的键盘已经去掉了这个按钮。发送 `/start` 拿到现在的键盘，再从菜单按钮或 `/app` 打开应用。
 
 ## <a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>用 brew 安装时出现 `pyexpat _XML_SetAllocTrackerActivationThreshold`
 

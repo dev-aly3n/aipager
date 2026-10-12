@@ -41,7 +41,7 @@ def test_picking_persian_sends_one_persian_keyboard(ml2_bot, run_async):
     for msg in (kbwords.KB_STATUS, kbwords.KB_STOP, kbwords.KB_NEW,
                 kbwords.KB_TEMPLATES, kbwords.KB_COMMANDS):
         assert fa.text(msg) in words
-    assert "📱 App" in words          # the App button is never translated
+    assert "📱 App" not in words      # no App button on the keyboard
     menus = [c.kwargs for c in ml2_bot._app.bot.set_my_commands.await_args_list
              if c.kwargs.get("scope") is not None and c.kwargs["scope"].chat_id == DM]
     assert len(menus) == 1

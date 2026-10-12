@@ -1,6 +1,6 @@
 # Modèle de sécurité
 
-<!-- i18n-source: docs/security.md @ 6fc084f -->
+<!-- i18n-source: docs/security.md @ 76d125d -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../security.md))
 
@@ -185,7 +185,7 @@ Cela veut dire qu'aipager n'est pas une surface d'attaque à distance. Un attaqu
 
 **La Mini App est activée par défaut**, donc sur une installation standard aipager ouvre ce tunnel sans qu'on le lui demande. C'est un choix voulu (une option à activer que personne ne découvrait était une fonction qui n'existait pas), mais cela veut dire qu'une installation neuve va sur internet. Désactivez-la avec `aipager miniapp disable`, ou mettez `enabled: false` sous `miniapp:` dans `aipager.yaml` ; un `false` explicite est toujours respecté. Notez qu'un bloc `miniapp:` **absent ou abîmé** revient maintenant à ACTIVÉ plutôt qu'à DÉSACTIVÉ.
 
-La Mini App (sauf si une URL `--url` la remplace) lance un [tunnel rapide Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) géré, qui pointe vers le serveur local d'aipager lui-même, et publie l'adresse publique `https://*.trycloudflare.com` qu'il reçoit comme bouton de menu de Telegram, comme bouton du clavier et comme réponse de `/app`.
+La Mini App (sauf si une URL `--url` la remplace) lance un [tunnel rapide Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) géré, qui pointe vers le serveur local d'aipager lui-même, et publie l'adresse publique `https://*.trycloudflare.com` qu'il reçoit comme bouton de menu de Telegram et comme réponse de `/app`.
 
 Cette adresse **n'est pas secrète, et n'a pas à l'être** : chaque demande que sert la Mini App est vérifiée avec la signature `initData` de Telegram (voir [Limite de confiance](#trust-boundary) plus haut), la même vérification qui la protège quelle que soit la façon dont l'URL a été obtenue. Connaître seulement le nom d'hôte ne donne rien à un attaquant qu'il ne pourrait pas déjà obtenir en devinant au hasard un sous-domaine de `trycloudflare.com` : la vérification de signature est la vraie porte. Traitez-la comme n'importe quelle autre URL non publiée mais pas secrète : rien de mal à la laisser tourner, mais pas question de la coller dans un canal public sans raison.
 

@@ -1,6 +1,6 @@
 # Modello di sicurezza
 
-<!-- i18n-source: docs/security.md @ 6fc084f -->
+<!-- i18n-source: docs/security.md @ 76d125d -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../security.md))
 
@@ -185,7 +185,7 @@ Vuol dire che aipager non è una superficie di attacco remota. Un attaccante in 
 
 **La Mini App è attiva di predefinito**, quindi su un'installazione standard aipager apre questo tunnel senza che nessuno glielo chieda. È un compromesso voluto (un'opzione da attivare che nessuno scopre è come una funzione che non c'è), ma vuol dire che una nuova installazione si collega a internet. Disattivala con `aipager miniapp disable`, oppure imposta `enabled: false` sotto `miniapp:` in `aipager.yaml`; un `false` scritto esplicitamente viene sempre rispettato. Nota che un blocco `miniapp:` **mancante o rovinato** ora viene letto come ATTIVO, non come DISATTIVO.
 
-La Mini App (salvo un `--url` al suo posto) avvia un [quick tunnel di Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) gestito verso il server di loopback di aipager e pubblica l'indirizzo pubblico `https://*.trycloudflare.com` che riceve come pulsante del menu di Telegram, come pulsante sulla tastiera di risposta e come risposta di `/app`.
+La Mini App (salvo un `--url` al suo posto) avvia un [quick tunnel di Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) gestito verso il server di loopback di aipager e pubblica l'indirizzo pubblico `https://*.trycloudflare.com` che riceve come pulsante del menu di Telegram e come risposta di `/app`.
 
 Quell'indirizzo **non è un segreto e non deve esserlo**: ogni richiesta servita dalla Mini App viene controllata con la firma `initData` di Telegram (vedi [Confine di fiducia](#trust-boundary) sopra), lo stesso controllo che la protegge comunque sia stato ottenuto l'URL. Conoscere solo il nome del server non dà a un attaccante niente di più che indovinare a caso un sottodominio di `trycloudflare.com`: il vero cancello è il controllo della firma. Trattalo come qualsiasi URL non pubblico ma nemmeno segreto: va bene lasciarlo attivo, ma non incollarlo in un canale pubblico senza motivo.
 
