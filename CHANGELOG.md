@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **Observer bots (`OBSERVER_BOTS`) are gone.** An observer bot was a second Telegram bot that got copies of aipager's short notices from every chat on your install, groups included. Setting one up meant editing the daemon's environment by hand, and almost nobody used it. To let someone just watch, add them to a group with the `read_only` role ([groups](docs/groups.md#roles)): they see everything in that group and cannot drive a session. If `OBSERVER_BOTS` is still set, aipager ignores it, logs one warning at start (it never prints the value) and runs normally; you can remove the setting. Problem reports no longer list observer bots among the features that are on.
+
 ### Fixed
 - **`/stop` and `/clearqueue` now wipe all of the messages Claude was holding.** When you stop a session or clear its queue, Claude Code puts the messages it had queued back into its input box, and aipager deletes them from there. It used to delete only the last line of what Claude showed, so the rest of a long message, or of several queued messages, stayed in the box and went out glued to the next message you sent. aipager now deletes all of it (up to about five full-length messages), and a message you send while it does so waits until the box is empty. The same goes for the Mini App's Clear queue.
 
