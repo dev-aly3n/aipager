@@ -333,7 +333,7 @@ With no tap within 20 seconds the hook prints nothing and Claude Code
 shows its own dialog; a later tap types the answer into that dialog
 through the session's terminal (`dtach -p`). Either way the tap is
 recorded in the audit log and posted under the card (`✅ jim · Allowed
-by @alice · Bash: ls -la /tmp`).
+· @alice · Bash: ls -la /tmp`).
 
 ## See also
 

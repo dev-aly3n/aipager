@@ -4,12 +4,15 @@
 [![Python](https://img.shields.io/pypi/pyversions/aipager?color=3775A9)](https://pypi.org/project/aipager/)
 [![License](https://img.shields.io/badge/license-MIT-black)](LICENSE)
 
-Telegram remote-control for [Claude Code](https://claude.com/claude-code)
-CLI sessions. Run Claude inside a detached terminal (`dtach`), drive it
-from your phone - read responses, send prompts, approve permission
-requests, switch sessions - without an SSH session staying open.
+Telegram remote control for [Claude Code](https://claude.com/claude-code)
+sessions. Claude runs on your computer inside a detached terminal
+(`dtach`), and you use it from your phone: read Claude's answers, send it
+messages, answer its permission prompts and questions, and switch between
+sessions, with no SSH connection kept open.
 
 [aipager.run](https://aipager.run) · [Docs](docs/) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/dev-aly3n/aipager/issues)
+
+**Read this in:** [Español](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/es) · [Русский](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/ru) · [Português (Brasil)](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/pt-BR) · [简体中文](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/zh-Hans) · [Français](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/fr) · [Deutsch](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/de) · [한국어](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/ko) · [العربية](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/ar) · [Bahasa Indonesia](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/id) · [Українська](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/uk) · [Italiano](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/it) · [Türkçe](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/tr) · [فارسی](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/fa) · [Tiếng Việt](https://github.com/dev-aly3n/aipager/tree/main/docs/i18n/vi)
 
 ## Install
 
@@ -158,20 +161,6 @@ input and pick its package up from `environment.systemPackages`:
 
 `aipager service install` will then wire up a systemd-user unit.
 
-### Group mode (multi-user)
-
-aipager runs by default as a 1:1 DM bot. To use it in a Telegram
-group with several developers, add the bot to the group (as an admin,
-so it can pin the group's status bar), re-run `aipager config` and
-pick **Add a group scope**. The wizard offers you (the owner of your
-own DM) as the group's owner, then adds each member with a role (`owner` / `admin` / `user` /
-`read_only`), and reloads the running daemon. In the group the bot
-acts only on commands, replies to its messages and mentions
-(`@aipagerbot fix the tests`, `/jim run the tests`); each message runs
-with its sender's role. **Adding a user grants them code-execution
-rights on the host**: see [docs/groups.md](docs/groups.md) for the
-full trust model.
-
 ### Snap
 
 ```sh
@@ -213,8 +202,9 @@ aipager session dev
 ```
 
 This creates (or reattaches to) a dtach session named `claude-dev`
-running Claude Code. The aipager daemon discovers it within seconds
-and Telegram starts mirroring it. Re-run the same command to reattach
+running Claude Code. The aipager daemon finds it within seconds and
+Telegram starts showing it. You can also start a session from Telegram:
+send `/new dev` to the bot. Re-run the same command to reattach
 later; to leave without stopping Claude, close the terminal or tmux
 pane (the session keeps running).
 
@@ -244,40 +234,65 @@ writes a launchd plist at `~/Library/LaunchAgents/com.aipager.daemon.plist`
 and bootstraps it. Subcommands: `start`, `stop`, `status`, `logs`,
 `uninstall`.
 
+## Team mode (groups and other people)
+
+aipager is a private bot by default: you and the bot in one private
+chat. To share it, add a Telegram group, other people's own private
+chats with the bot, or both. For a group, add the bot to the group (as
+an admin, so it can pin the group's status bar), run `aipager config`
+again and pick **Add a group scope**. The wizard offers you (the owner
+of your own private chat) as the group's owner, adds each member with a
+role (`owner`, `admin`, `user` or `read_only`), asks for the members'
+root folder, and reloads the running daemon. In the group the bot acts
+only on commands, replies to its messages and mentions
+(`@aipagerbot fix the tests`, `/jim run the tests`), and each message
+runs with its sender's role. A `user` or `read_only` member starts and
+keeps sessions only inside their chat's root folder (by default
+`~/aipager-users/<label>`). **Adding a member gives them the right to
+run code on your computer**: see [docs/groups.md](docs/groups.md) for
+the full trust model.
+
 ## What it does
 
-- Mirrors Claude Code session state to Telegram: busy/idle, tool calls,
-  context %, cost, line counts
-- Sends your messages to Claude **immediately**, even mid-turn - send
+- Shows what each Claude Code session is doing in Telegram: working or
+  idle, its tool calls, context %, cost and changed lines, on one card
+  per turn, then Claude's answer
+- Sends your messages to Claude **at once**, even while it works: send
   several and Claude queues them itself, exactly like typing in the
-  terminal. 👀 means sent, 👍 means Claude picked it up
-- Holds a message while a permission or question prompt is open, so it
-  can never be swallowed as an answer to that dialog - then delivers it
-  once you respond
-- Surfaces permission prompts and `AskUserQuestion` dialogs as Telegram
-  inline keyboards; buttons from an already-finished task refuse
-  instead of acting on your current work
-- Creates sessions from chat: `/new x1` starts one at once (`/new x1 fix
-  the tests` also sends its first message), with the mode, model and
-  folder set in `/settings`, and buttons to change them
-- Notifies on context warnings, compaction, session end, and stalls
-- Supports multiple concurrent sessions with one bot; optional
-  multi-user team mode with roles and per-tool rules
-  ([docs/groups.md](docs/groups.md))
+  terminal. 👀 means sent, 👍 means Claude took it
+- Holds a message while a permission prompt or a question is open, so it
+  is never read as the answer to it, and sends it once you have answered
+- Shows Claude's permission prompts and questions with buttons (Allow,
+  Deny, Allow always, one per option); a button left over from a
+  finished task refuses instead of acting on the work running now
+- Three permission modes per session, switched with `/mode`: 💬 Ask
+  mode (Claude asks before each action), 🤖 Auto mode, the default
+  (Claude Code's own safety check runs safe actions and stops risky
+  ones for you to decide) and 🔓 Full access mode (everything runs with
+  no checks; for admins, and for you in your own private chat)
+- Starts sessions from the chat: `/new x1` starts one at once (`/new x1
+  fix the tests` also sends its first message), with the mode, model
+  and folder set in `/settings`, and buttons to change them
+- Takes photos, files and voice messages (voice is turned into text on
+  your computer, with the optional voice extra)
+- Tells you about context warnings, compaction, a session that ended and
+  one that went quiet
+- Runs several sessions at once with one bot; optional team mode with
+  roles and per-tool rules ([docs/groups.md](docs/groups.md))
 - Optional read-only observer bots
-- Speaks English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی and Tiếng Việt: only aipager's own text, never your sessions or Claude's answers ([docs/commands.md](docs/commands.md#languages))
+- Speaks English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی and Tiếng Việt: only aipager's own text, never your sessions or Claude's answers ([docs/commands.md](docs/commands.md#languages)). This README and the docs are translated too (see **Read this in** above)
 
 ### Mini App
 
-`/app` opens a dashboard inside Telegram - live session list with
-stop / kill / restart / rename / permission controls, a diff viewer
-for `Write`/`Edit` changes, and settings. It is served by the daemon
-itself and is **on by default**; every request is verified against
-Telegram's `initData` signature. If you belong to more than one chat
-(your DM and a group), a row of chat names at the top switches between
-them. Manage it with
-`aipager miniapp enable|disable|status`, or point it at your own URL
-instead of the managed tunnel - see
+`/app` opens a dashboard inside Telegram: your sessions with Stop, End,
+Restart, Rename and the mode switch, a diff viewer for `Write`/`Edit`
+changes, the settings and, for the owner, Report a problem. It is
+served by the daemon itself and is **on by default**; every request is
+checked against Telegram's `initData` signature. If you belong to more
+than one chat (your DM and a group), a row of chat names at the top
+switches between them. Manage it with `aipager miniapp
+enable|disable|status`, or point it at your own URL instead of the
+managed tunnel - see
 [docs/security.md](docs/security.md#mini-app-tunnel).
 
 ### Note on model buttons (Bedrock / Vertex users)

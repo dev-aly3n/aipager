@@ -661,6 +661,13 @@ the chat they sent it from. Someone who is `user` in the group and
   messages are dropped, and a turn of theirs that is still running keeps
   running, held to the restricted floor until it ends; send `/stop` to
   end it now (see [Live reload](#live-reload)).
+- **A message from another Claude session carries its sender's
+  rights.** A message one session sends another (Claude Code's
+  `SendMessage`) runs with the rights of the turn that sent it, as
+  aipager verified them, never with the receiving session's earlier
+  rights. A message aipager cannot verify runs with the strictest rules
+  and no file changes or web access (see
+  [security → messages between Claude sessions](security.md#messages-between-claude-sessions)).
 - **A blocked tool stops the turn.** When a turn tries a tool its rules
   deny, the turn stops at once with "🛑 x1 · Blocked by safety policy:
   ... (stopped)", and every later tool call in that turn is denied too.
