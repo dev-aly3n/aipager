@@ -72,6 +72,19 @@ THREE_MODES_SURFACES = frozenset({
 #: The surface the three modes added (what the confirming hook does to a
 #: switch's card).
 THREE_MODES_NEW_SURFACES = frozenset({"modecard.switch_results"})
+#: The English surface the reply keyboard's App button left (2026-10-12:
+#: a Mini App opened from a keyboard button gets no init data). It
+#: differs from goldens recorded on older bases by that button only: see
+#: :func:`with_keyboard_app_removed`.
+NO_KEYBOARD_APP_SURFACES = frozenset({"keyboard.main"})
+
+
+def with_keyboard_app_removed(value):
+    """*value* (a keyboard surface's list of texts) without the "📱 App"
+    button older goldens recorded on the main keyboard."""
+    return [v for v in value if v != "📱 App"]
+
+
 #: The Mini App page screens (tests/golden/miniapp_page_english.json) the
 #: three modes changed or added.
 THREE_MODES_PAGE_SCREENS = frozenset({

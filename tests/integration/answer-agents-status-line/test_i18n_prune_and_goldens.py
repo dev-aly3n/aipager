@@ -21,8 +21,10 @@ import pytest
 
 from tests.i18n_surfaces import (
     MODE_LABEL_SURFACES,
+    NO_KEYBOARD_APP_SURFACES,
     THREE_MODES_NEW_SURFACES,
     THREE_MODES_SURFACES,
+    with_keyboard_app_removed,
     without_mode_labels,
 )
 
@@ -212,9 +214,13 @@ def test_english_surfaces_change_only_under_agents_line():
     # "💬 Ask mode" / "🤖 Auto mode" the same day, changing nothing else.
     # The three permission modes (2026-10-11) changed their own surfaces
     # further, and added one.
+    # The main keyboard lost its App button (2026-10-12), and only that.
     three = THREE_MODES_SURFACES | THREE_MODES_NEW_SURFACES
-    assert [k for k in changed if k not in MODE_LABEL_SURFACES | three] == [
+    exempt = MODE_LABEL_SURFACES | three | NO_KEYBOARD_APP_SURFACES
+    assert [k for k in changed if k not in exempt] == [
         "agents_line", "language.list"]
+    for k in NO_KEYBOARD_APP_SURFACES:
+        assert new[k] == with_keyboard_app_removed(old[k]), k
     assert set(changed) >= MODE_LABEL_SURFACES
     for k in MODE_LABEL_SURFACES - three:
         assert without_mode_labels(new[k]) == without_mode_labels(old[k]), k
