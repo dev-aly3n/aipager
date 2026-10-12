@@ -5,6 +5,7 @@ The conftest guard replaces ``self_update._run_command`` and ``_http_get``
 fetch of the update path really goes through them. This sweep fails the
 build on a ``subprocess.*`` / ``os.system`` / ``os.exec*`` / ``os.spawn*``
 / ``create_subprocess_*`` / ``urlopen`` call outside those two functions,
+on an ``os.kill``/``os.killpg`` outside ``self_update._kill_group``,
 on any ``shell=True``, and on an ``aiohttp`` import, in the four modules
 of the update path. The meta-tests below prove the guards themselves fire.
 """
@@ -31,6 +32,11 @@ SWEPT = [
 ]
 SEAMS = {"_run_command", "_http_get"}
 _OS_SPAWNERS = {"system", "popen", "fork", "forkpty"}
+# A direct signal: ``os.kill(os.getpid(), SIGTERM)`` would stop pytest past
+# the ``self_restart._kill`` refuser. Only ``self_update._kill_group`` may
+# signal, and only the process group of a child the seam itself started.
+_OS_SIGNALLERS = {"kill", "killpg"}
+SIGNAL_SEAMS = {"_kill_group"}
 
 
 def spawn_offenders(filename: str, source: str) -> list[str]:
@@ -73,6 +79,10 @@ def spawn_offenders(filename: str, source: str) -> list[str]:
             elif base == "os" and (func.attr in _OS_SPAWNERS
                                    or func.attr.startswith(("exec", "spawn", "posix_spawn"))):
                 name = f"os.{func.attr}"
+            elif base == "os" and func.attr in _OS_SIGNALLERS:
+                if enclosing_function(node) in SIGNAL_SEAMS:
+                    continue
+                name = f"os.{func.attr}"
             elif func.attr.startswith("create_subprocess_"):
                 name = func.attr
             elif func.attr == "urlopen":
@@ -100,6 +110,8 @@ def test_self_update_modules_spawn_only_through_seam():
     "import subprocess\ndef f():\n    subprocess.Popen(['x'])\n",
     "import os\ndef f():\n    os.system('x')\n",
     "import os\ndef f():\n    os.execv('/bin/x', ['x'])\n",
+    "import os, signal\ndef f():\n    os.kill(os.getpid(), signal.SIGTERM)\n",
+    "import os, signal\ndef g():\n    os.killpg(1, signal.SIGTERM)\n",
     "import asyncio\nasync def f():\n    await asyncio.create_subprocess_exec('x')\n",
     "import urllib.request\ndef f():\n    urllib.request.urlopen('https://x')\n",
     "def _run_command():\n    g(['x'], shell=True)\n",
@@ -108,6 +120,12 @@ def test_self_update_modules_spawn_only_through_seam():
 ])
 def test_sweep_catches_each_forbidden_shape(src):
     assert spawn_offenders("x.py", src), src
+
+
+def test_sweep_allows_the_child_group_kill_only():
+    src = ("import os, signal\n"
+           "def _kill_group(proc):\n    os.killpg(proc.pid, signal.SIGTERM)\n")
+    assert spawn_offenders("x.py", src) == []
 
 
 def test_sweep_allows_the_seams_themselves():

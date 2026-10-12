@@ -753,3 +753,17 @@ def test_a_root_folder_over_the_operators_folders_is_refused(tmp_path, monkeypat
     monkeypatch.setenv(fti.ROOT_DIR_ENV, value)
     with pytest.raises(AssertionError, match=fti.ROOT_DIR_ENV):
         fti.make_root()
+
+
+@pytest.mark.parametrize("inside", [".claude/live", ".config/aipager/live",
+                                    ".local/state/aipager/runs"])
+def test_a_root_folder_inside_the_operators_folders_is_refused(tmp_path, monkeypatch,
+                                                                inside):
+    home = tmp_path / "home"
+    parent = home / inside
+    parent.mkdir(parents=True)
+    monkeypatch.setattr(fti, "real_home", lambda: str(home))
+    monkeypatch.setenv(fti.ROOT_DIR_ENV, str(parent))
+    with pytest.raises(AssertionError, match="inside the operator's own"):
+        fti.make_root()
+    assert list(parent.iterdir()) == []

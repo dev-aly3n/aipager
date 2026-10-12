@@ -79,13 +79,17 @@ def user(uid: int) -> dict:
 #: Where the harness makes its ``apg-XXXXXXXX`` root instead of ``/tmp``
 #: (a run whose sockets must not live under ``/tmp``). The daemon's
 #: ``TMPDIR`` is set to it, so the real-home write guard allows the root.
+#: Keep the folder's path short: every socket must fit the 107-byte Unix
+#: socket path, and the longest (the daemon's reply socket) runs about
+#: 67 bytes past the folder, so a folder of at most 40 bytes is safe
+#: (:func:`assert_socket_lengths` refuses a longer one at start).
 ROOT_DIR_ENV = "AIPAGER_E2E_FAKETG_ROOT_DIR"
 
 
 def explicit_root_parent() -> Path | None:
-    """The folder :data:`ROOT_DIR_ENV` names (absolute, existing, and
-    holding none of the operator's aipager or Claude folders), or None
-    when it is not set. Anything else is refused outright."""
+    """The folder :data:`ROOT_DIR_ENV` names (absolute, existing, neither
+    holding nor inside any of the operator's aipager or Claude folders), or
+    None when it is not set. Anything else is refused outright."""
     value = os.environ.get(ROOT_DIR_ENV, "").strip()
     if not value:
         return None
@@ -93,14 +97,23 @@ def explicit_root_parent() -> Path | None:
     assert os.path.isabs(value) and parent.is_dir(), f"{ROOT_DIR_ENV}: not a folder: {value}"
     assert not _holds_protected(parent), (
         f"{ROOT_DIR_ENV}: {parent} holds the operator's own aipager or Claude folders")
+    assert not _in_protected(parent), (
+        f"{ROOT_DIR_ENV}: {parent} is inside the operator's own aipager or Claude folders")
     return parent
 
 
-def _holds_protected(parent: Path) -> bool:
+def _protected_paths() -> list[str]:
     from aipager import _test_guard
     home = real_home()
-    return any(_inside(os.path.realpath(os.path.join(home, p)), str(parent))
-               for p in _test_guard._PROTECTED)
+    return [os.path.realpath(os.path.join(home, p)) for p in _test_guard._PROTECTED]
+
+
+def _holds_protected(parent: Path) -> bool:
+    return any(_inside(p, str(parent)) for p in _protected_paths())
+
+
+def _in_protected(parent: Path) -> bool:
+    return any(_inside(str(parent), p) for p in _protected_paths())
 
 
 def _inside(path: str, root: str) -> bool:
@@ -111,7 +124,8 @@ def make_root() -> Path:
     """``/tmp/apg-XXXXXXXX``: never a ``/tmp/claude-*`` name (the real
     daemon's files), never under the real home. With
     :data:`ROOT_DIR_ENV` set, ``<that folder>/apg-XXXXXXXX`` instead (it
-    may lie under the real home, never over the operator's folders)."""
+    may lie under the real home, never over or inside the operator's
+    folders)."""
     explicit = explicit_root_parent()
     parent = explicit if explicit is not None else Path("/tmp")
     root = Path(tempfile.mkdtemp(prefix="apg-", dir=str(parent)))
