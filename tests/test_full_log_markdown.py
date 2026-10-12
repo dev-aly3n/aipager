@@ -258,9 +258,9 @@ def test_a_non_md_upload_keeps_ptbs_own_guess(monkeypatch):
     assert document_upload(b"x", "LOG.MD").mimetype == "text/markdown"
 
 
-# ---- the three sends' file names ----------------------------------------------
+# ---- the full log's file name -------------------------------------------------
 
-def test_long_idle_answer_sends_full_log_md_and_the_observer_copy_md(
+def test_long_idle_answer_sends_full_log_md(
     mk_bot, run_async, monkeypatch, caplog,
 ):
     monkeypatch.setattr("aipager.bot.notify.send_rich_message",
@@ -271,9 +271,6 @@ def test_long_idle_answer_sends_full_log_md_and_the_observer_copy_md(
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._app.bot.send_document = AsyncMock()
     bot._maybe_update_bot_name = AsyncMock()
-    bot.observers = MagicMock()
-    bot.observers.broadcast_document = AsyncMock()
-    bot.observers.broadcast = AsyncMock()
 
     long_md = "x" * 34_000
     with caplog.at_level(logging.INFO, logger="aipager.bot.notify"):
@@ -289,11 +286,6 @@ def test_long_idle_answer_sends_full_log_md_and_the_observer_copy_md(
     body = kw["document"].input_file_content.decode("utf-8")
     assert body.startswith("# jim - full log\n")
     assert body.endswith("## Final answer\n\n" + long_md)
-
-    bot.observers.broadcast_document.assert_called_once()
-    _text, doc_bytes, filename = bot.observers.broadcast_document.call_args.args
-    assert filename == "jim_response.md"
-    assert doc_bytes == kw["document"].input_file_content
 
 
 def test_a_failed_full_log_send_logs_no_success(mk_bot, run_async, monkeypatch, caplog):
@@ -314,20 +306,3 @@ def test_a_failed_full_log_send_logs_no_success(mk_bot, run_async, monkeypatch, 
     bot._app.bot.send_document.assert_awaited_once()
     assert "Failed to send full response file" in caplog.text
     assert "full-log attachment sent" not in caplog.text
-
-
-def test_observer_document_goes_out_as_markdown(monkeypatch, run_async):
-    from aipager.bot.observer import ObserverBroadcaster
-
-    fake = MagicMock()
-    fake.send_message = AsyncMock()
-    fake.send_document = AsyncMock()
-    b = ObserverBroadcaster([])
-    b._bots = [(fake, "c1")]
-    monkeypatch.setattr(mimetypes, "guess_type", lambda *a, **k: (None, None))
-    run_async(b.broadcast_document("summary", b"# log", "jim_response.md"))
-    kw = fake.send_document.await_args.kwargs
-    assert kw["filename"] == "jim_response.md"
-    assert kw["document"].filename == "jim_response.md"
-    assert kw["document"].mimetype == "text/markdown"
-    assert kw["document"].input_file_content == b"# log"

@@ -3,14 +3,12 @@ real ``notify()`` path (multilingual phase 3a, design section F/notify).
 
 The per-surface fa and ru sweeps live in the render tests; here: the
 session-end line chosen by Claude Code's ``source`` id (never by its
-words), observers fed the very text the chat got, and the chat-move
-notice in the language of the chat it moved to."""
+words) and the chat-move notice in the language of the chat it moved
+to."""
 
 from __future__ import annotations
 
-import asyncio
 import re
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -63,23 +61,6 @@ def test_every_end_line_has_its_own_words():
         tr = i18n.get(code)
         lines = [tr.html(m, session="x1") for m in notify_mod.SESSION_END_MSGS.values()]
         assert len(set(lines)) == len(lines), code
-
-
-@pytest.mark.parametrize("code,script", [("fa", PERSIAN), ("ru", CYRILLIC)])
-def test_observers_receive_the_rendered_text(mk_bot, run_async, monkeypatch, code, script):
-    env, bot, tg, x1 = _world(mk_bot, run_async, monkeypatch, code)
-    bot.observers = MagicMock()
-    bot.observers.broadcast = AsyncMock()
-
-    async def _go():
-        await bot.notify(x1, "session_end", {"source": "clear"})
-        await bot.notify(x1, "context_warning", {"context_pct": 92})
-        for _ in range(5):
-            await asyncio.sleep(0)
-    env.run(_go())
-    seen = [c.args[0] for c in bot.observers.broadcast.await_args_list]
-    assert len(seen) == 2 and seen == tg.out[:2]          # then the Compact button
-    assert all(script.search(text) for text in seen)
 
 
 @pytest.mark.parametrize("code,script", [("fa", PERSIAN), ("ru", CYRILLIC)])

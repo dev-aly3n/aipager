@@ -131,36 +131,6 @@ def _load_miniapp() -> dict:
     return _scope_mod.load_miniapp(_scope_mod.CONFIG_PATH)
 
 
-def _parse_observer_bots(raw: str) -> list[tuple[str, str]]:
-    """Parse 'token1:chatid1,token2:chatid2' into [(token, chatid), ...].
-
-    Uses rsplit(":", 1) to split at the LAST colon, since bot tokens
-    contain an internal colon (format NNNNN:XXXXXX).
-    """
-    if not raw.strip():
-        return []
-    result = []
-    for entry in raw.split(","):
-        entry = entry.strip()
-        if ":" not in entry:
-            continue
-        parts = entry.rsplit(":", 1)
-        if len(parts) != 2:
-            continue
-        token, chat_id = parts[0].strip(), parts[1].strip()
-        if token and chat_id:
-            result.append((token, chat_id))
-    return result
-
-
-# NOTE (multi-scope / R10): observer bots are a GLOBAL firehose — they
-# receive a copy of events from EVERY scope, with no per-scope filtering.
-# Treat an observer chat as trusted to see all scopes' activity. Per-scope
-# observer routing is a documented non-goal (see researches multi-scope §R10).
-OBSERVER_BOTS: list[tuple[str, str]] = _parse_observer_bots(
-    os.environ.get("OBSERVER_BOTS", "")
-)
-
 # ---- Mini App server (stage 1 — plumbing + auth) -----------------------
 #
 # Opt-in loopback HTTP server, embedded in the daemon, serving one

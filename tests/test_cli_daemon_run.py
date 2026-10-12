@@ -1,7 +1,7 @@
 """Tests for cli.daemon._run_daemon — the daemon main loop.
 
 This is the hard path: starts the bot, hook receiver, session monitor,
-optional observers, registers signal handlers, then blocks on
+registers signal handlers, then blocks on
 ``stop.wait()`` until SIGINT/SIGTERM fires. We test it by stubbing every
 component and faking the wait so the function returns synchronously.
 """
@@ -24,7 +24,7 @@ def _make_event_done():
     return ev
 
 
-def _patch_components(monkeypatch, *, with_observers=False, with_miniapp=None):
+def _patch_components(monkeypatch, *, with_miniapp=None):
     """Common mocks for _run_daemon's collaborators. Returns the patches.
 
     ``with_miniapp``: None → MINIAPP_ENABLED patched False;
@@ -38,7 +38,6 @@ def _patch_components(monkeypatch, *, with_observers=False, with_miniapp=None):
     bot.notify = AsyncMock()
     bot.recover_sessions = AsyncMock()
     bot.reload_team = AsyncMock()
-    bot.observers = None
     bot._update_bot_commands = AsyncMock()
     bot.publish_miniapp_button = AsyncMock()
 
@@ -55,12 +54,6 @@ def _patch_components(monkeypatch, *, with_observers=False, with_miniapp=None):
     registry.load = MagicMock()
     registry.save = MagicMock()
 
-    observers = None
-    if with_observers:
-        observers = MagicMock()
-        observers.start = AsyncMock()
-        observers.stop = AsyncMock()
-
     monkeypatch.setattr("aipager.bot.TelegramBot",
                         lambda r: bot)
     monkeypatch.setattr("aipager.dtach.hook_receiver.HookReceiver",
@@ -69,9 +62,6 @@ def _patch_components(monkeypatch, *, with_observers=False, with_miniapp=None):
                         lambda r, n: session_monitor)
     monkeypatch.setattr("aipager.state.SessionRegistry",
                         lambda: registry)
-    if observers:
-        monkeypatch.setattr("aipager.bot.observer.ObserverBroadcaster",
-                            lambda cfg: observers)
 
     miniapp_server = None
     if with_miniapp is not None:
@@ -111,7 +101,7 @@ def _patch_components(monkeypatch, *, with_observers=False, with_miniapp=None):
         return ev
     monkeypatch.setattr("aipager.cli.daemon._new_stop_event", _fake_event)
 
-    return bot, hook_receiver, session_monitor, registry, observers, miniapp_server
+    return bot, hook_receiver, session_monitor, registry, miniapp_server
 
 
 def test_run_daemon_exits_when_no_token(monkeypatch):
@@ -125,8 +115,7 @@ def test_run_daemon_exits_when_no_token(monkeypatch):
 def test_run_daemon_happy_path_personal_mode(monkeypatch):
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, hook, monitor, registry, _, _ = _patch_components(monkeypatch)
+    bot, hook, monitor, registry, _ = _patch_components(monkeypatch)
     order: list[str] = []
     registry.save.side_effect = lambda: order.append("save")
     bot.stop.side_effect = lambda *a, **k: order.append("bot.stop")
@@ -156,8 +145,7 @@ def test_run_daemon_wires_the_pinned_bar_to_the_monitor_tick(monkeypatch):
     Mutation: drop the wiring and ``on_tick`` stays unset."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, _hook, monitor, _registry, _, _ = _patch_components(monkeypatch)
+    bot, _hook, monitor, _registry, _ = _patch_components(monkeypatch)
     monitor.on_tick = None
     asyncio.new_event_loop().run_until_complete(
         daemon._run_daemon("bot_username"))
@@ -170,8 +158,7 @@ def test_run_daemon_wires_the_keyboard_catch_up_to_the_monitor_tick(monkeypatch)
     ``on_mute_catchup`` stays unset — the keyboard is owed for ever."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, _hook, monitor, _registry, _, _ = _patch_components(monkeypatch)
+    bot, _hook, monitor, _registry, _ = _patch_components(monkeypatch)
     monitor.on_mute_catchup = None
     asyncio.new_event_loop().run_until_complete(
         daemon._run_daemon("bot_username"))
@@ -184,8 +171,7 @@ def test_run_daemon_fires_startup_notice_after_bot_start(monkeypatch):
     bot.start() and must never send Telegram on its own."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, hook, monitor, registry, _, _ = _patch_components(monkeypatch)
+    bot, hook, monitor, registry, _ = _patch_components(monkeypatch)
 
     from aipager.claude_bootstrap import PendingAuthCheck, ProvenanceInfo
     # Only an unusable-auth start speaks at all now, so the ordering this
@@ -235,8 +221,7 @@ def test_run_daemon_never_refuses_to_launch_when_auth_is_absent(monkeypatch):
     stop the daemon from completing startup."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, hook, monitor, registry, _, _ = _patch_components(monkeypatch)
+    bot, hook, monitor, registry, _ = _patch_components(monkeypatch)
     bot.send_startup_notice = AsyncMock()
 
     from aipager.claude_bootstrap import PendingAuthCheck, ProvenanceInfo
@@ -269,8 +254,7 @@ def test_run_daemon_no_notice_task_when_provenance_is_none(monkeypatch):
     startup or schedule a notice with nothing to say."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, hook, monitor, registry, _, _ = _patch_components(monkeypatch)
+    bot, hook, monitor, registry, _ = _patch_components(monkeypatch)
     monkeypatch.setattr("aipager.claude_bootstrap.bootstrap_claude_settings",
                         lambda: None)
     # If send_startup_notice were (wrongly) called, a bare MagicMock
@@ -283,29 +267,11 @@ def test_run_daemon_no_notice_task_when_provenance_is_none(monkeypatch):
     bot.start.assert_awaited_once()
 
 
-def test_run_daemon_with_observers_starts_and_stops_them(monkeypatch):
-    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
-    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS",
-                        [("obs_tok", "obs_chat")])
-    bot, hook, monitor, registry, observers, _ = _patch_components(
-        monkeypatch, with_observers=True,
-    )
-
-    loop = asyncio.new_event_loop()
-    loop.run_until_complete(daemon._run_daemon("bot_username"))
-
-    observers.start.assert_awaited_once()
-    observers.stop.assert_awaited_once()
-    assert bot.observers is observers
-
-
 def test_run_daemon_handles_sigusr1_not_supported(monkeypatch, caplog):
     """On Windows / unusual event loops, SIGUSR1 add_signal_handler raises.
     The daemon must keep booting."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
     _patch_components(monkeypatch)
 
     # Make add_signal_handler for SIGUSR1 raise NotImplementedError
@@ -328,7 +294,6 @@ def test_run_daemon_miniapp_disabled_never_constructed(monkeypatch):
     base install (no `miniapp` extra) never even attempts the import."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
     _patch_components(monkeypatch)  # with_miniapp=None → MINIAPP_ENABLED=False
 
     called = MagicMock()
@@ -348,8 +313,7 @@ def test_run_daemon_miniapp_enabled_starts_last_stops_first(monkeypatch):
     session_monitor (the first teardown step)."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, hook, monitor, registry, _, miniapp = _patch_components(
+    bot, hook, monitor, registry, miniapp = _patch_components(
         monkeypatch, with_miniapp=True,
     )
 
@@ -374,8 +338,7 @@ def test_run_daemon_miniapp_unavailable_does_not_crash_daemon(monkeypatch, caplo
     every other component running instead of crashing."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, hook, monitor, registry, _, miniapp = _patch_components(
+    bot, hook, monitor, registry, miniapp = _patch_components(
         monkeypatch, with_miniapp="unavailable",
     )
 
@@ -396,12 +359,11 @@ def test_run_daemon_miniapp_port_in_use_does_not_crash_daemon(monkeypatch, caplo
     plausibly OSError/EADDRINUSE from a second `aipager start`, or an
     unrelated local service already bound to MINIAPP_PORT) must not
     propagate out of _run_daemon and take the bot, hook receiver,
-    session monitor, and observers down with it — the Mini App is
+    and session monitor down with it — the Mini App is
     opt-in and must never take the rest of the daemon down."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, hook, monitor, registry, _, miniapp = _patch_components(
+    bot, hook, monitor, registry, miniapp = _patch_components(
         monkeypatch, with_miniapp="port_in_use",
     )
 
@@ -438,8 +400,7 @@ def test_run_daemon_publishes_no_button_when_miniapp_is_disabled(monkeypatch):
     an earlier run published."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, _hook, _monitor, _registry, _, _miniapp = _patch_components(
+    bot, _hook, _monitor, _registry, _miniapp = _patch_components(
         monkeypatch, with_miniapp=None,
     )
 
@@ -453,8 +414,7 @@ def test_run_daemon_publishes_the_button_once_the_server_is_up(monkeypatch):
     """The button exists iff the server it points at is listening."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, _hook, _monitor, _registry, _, miniapp = _patch_components(
+    bot, _hook, _monitor, _registry, miniapp = _patch_components(
         monkeypatch, with_miniapp=True,
     )
 
@@ -478,8 +438,7 @@ def test_run_daemon_primes_the_url_before_the_bot_starts(monkeypatch):
     restart."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, _hook, _monitor, _registry, _, _miniapp = _patch_components(
+    bot, _hook, _monitor, _registry, _miniapp = _patch_components(
         monkeypatch, with_miniapp=True,
     )
 
@@ -500,8 +459,7 @@ def test_run_daemon_primes_the_url_before_the_bot_starts(monkeypatch):
 def test_run_daemon_primes_nothing_when_the_miniapp_is_off(monkeypatch):
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, _hook, _monitor, _registry, _, _miniapp = _patch_components(
+    bot, _hook, _monitor, _registry, _miniapp = _patch_components(
         monkeypatch, with_miniapp=None,
     )
 
@@ -541,8 +499,7 @@ def test_run_daemon_constructs_and_starts_the_tunnel_manager_with_no_override(
     started."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, _hook, _monitor, _registry, _, miniapp = _patch_components(
+    bot, _hook, _monitor, _registry, miniapp = _patch_components(
         monkeypatch, with_miniapp=True,
     )
     # _patch_components(with_miniapp=True) pins a public_url override —
@@ -567,7 +524,6 @@ def test_run_daemon_never_constructs_a_tunnel_manager_when_url_is_overridden(
 ):
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
     # with_miniapp=True already pins MINIAPP_PUBLIC_URL to a non-empty
     # override — the gate must stay closed.
     _patch_components(monkeypatch, with_miniapp=True)
@@ -587,7 +543,6 @@ def test_run_daemon_never_constructs_a_tunnel_manager_when_miniapp_disabled(
 ):
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
     _patch_components(monkeypatch, with_miniapp=None)  # MINIAPP_ENABLED=False
     monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
     calls, manager = _patch_tunnel_manager_class(monkeypatch)
@@ -607,7 +562,6 @@ def test_run_daemon_never_constructs_a_tunnel_manager_when_the_server_failed(
     at, so the manager must not be built either."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
     _patch_components(monkeypatch, with_miniapp="port_in_use")
     monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
     calls, manager = _patch_tunnel_manager_class(monkeypatch)
@@ -626,8 +580,7 @@ def test_run_daemon_stops_the_tunnel_manager_before_the_miniapp_server(
     (the tunnel) before stopping what serves it (the loopback server)."""
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    _bot, _hook, monitor, _registry, _, miniapp = _patch_components(
+    _bot, _hook, monitor, _registry, miniapp = _patch_components(
         monkeypatch, with_miniapp=True,
     )
     monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")

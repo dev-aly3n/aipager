@@ -1902,8 +1902,6 @@ class NotifyMixin:
                     )
             sess.trigger_msg_id = None
             self.registry.mark_dirty()
-            if self.observers:
-                asyncio.create_task(self.observers.broadcast(text))
             await self._drain_after_job(sess, job_sender)
             return
 
@@ -1946,8 +1944,6 @@ class NotifyMixin:
                                 exc_info=True)
             sess.trigger_msg_id = None
             self.registry.mark_dirty()
-            if self.observers:
-                asyncio.create_task(self.observers.broadcast(text))
             await self._drain_after_job(sess, job_sender)
             return
 
@@ -2093,8 +2089,6 @@ class NotifyMixin:
                 )
             except Exception:
                 log.debug("[%s] waiting reminder failed", label, exc_info=True)
-            if self.observers:
-                asyncio.create_task(self.observers.broadcast(reminder))
             return
 
         if event == "prompt_not_taken":
@@ -2166,8 +2160,6 @@ class NotifyMixin:
             sess.prompt_sent_msg = None
             sess.last_idle_at = time.monotonic()
             self.registry.mark_dirty()
-            if self.observers:
-                asyncio.create_task(self.observers.broadcast(warn_text))
             # A message held behind the rejected one (the mixed-sender
             # hold in _hold_for_open_dialog parks it in pending_queue)
             # would otherwise sit there until some later turn's idle
@@ -2435,8 +2427,6 @@ class NotifyMixin:
             # Start dot animation
             sess.animate_task = asyncio.create_task(
                 self._animate_compact(sess))
-            if self.observers:
-                asyncio.create_task(self.observers.broadcast(compacting))
             return
 
         if event == "context_warning":
@@ -2449,8 +2439,6 @@ class NotifyMixin:
                                        reply_markup=keyboard)
             except Exception:
                 pass
-            if self.observers:
-                asyncio.create_task(self.observers.broadcast(warn_text))
             return
 
         if event == "stale_busy":
@@ -2475,8 +2463,6 @@ class NotifyMixin:
                                        reply_markup=keyboard)
             except Exception:
                 pass
-            if self.observers:
-                asyncio.create_task(self.observers.broadcast(stale_text))
             return
 
         if event == "compact_done":
@@ -2537,8 +2523,6 @@ class NotifyMixin:
                     sess.busy_card_trigger = sess.trigger_msg_id  # review rev-iter1-002
                 except Exception:
                     log.warning("Failed to send compact_done message", exc_info=True)
-            if self.observers:
-                asyncio.create_task(self.observers.broadcast(text))
             # Brief pause so user can read the delta, then resume busy animation
             await asyncio.sleep(COMPACT_DONE_PAUSE_SECONDS)
             sess.last_token_pct = after_pct
@@ -2588,8 +2572,6 @@ class NotifyMixin:
                 # A real turn's busy card was live underneath — resume it
                 # exactly as compact_done already does today.
                 self._start_animation(sess)
-            if self.observers:
-                asyncio.create_task(self.observers.broadcast(text))
             return
 
         if event == "session_end":
@@ -2658,8 +2640,6 @@ class NotifyMixin:
                 await bot.send_message(resolve_chat_id(sess), text, parse_mode="HTML")
             except Exception:
                 log.warning("Failed to send session_end notification", exc_info=True)
-            if self.observers:
-                asyncio.create_task(self.observers.broadcast(text))
             return
 
         if sess.status == Status.IDLE:
@@ -3130,8 +3110,6 @@ class NotifyMixin:
                         await self._maybe_update_bot_name(sess.name)
                     except Exception:
                         log.warning("Failed to send error notification", exc_info=True)
-                    if self.observers:
-                        asyncio.create_task(self.observers.broadcast(text))
                     if toolless_card_msg_id:
                         self._delete_card_later(sess, toolless_card_msg_id)
                     # Don't clear trigger_msg_id — retry needs it
@@ -3172,8 +3150,8 @@ class NotifyMixin:
                                              **stats)
 
                 # ── merged layout: one combined edit, timeline + answer ────────
-                # Attempted here — after the header text exists (used only by the
-                # observer broadcast below) but before the per-answer-alone
+                # Attempted here — after the header text exists (the ordinary
+                # answer send below uses it too) but before the per-answer-alone
                 # overflow check, since merged has its own combined-text ceiling
                 # check inside _send_merged_final. Only attempted when the busy
                 # card is still live; if it isn't (e.g. it was already lost) there
@@ -3546,10 +3524,8 @@ class NotifyMixin:
                             "[%s] Response too large for Telegram (%.1f MB) — sent summary only",
                             label, mb,
                         )
-                        file_content = ""  # also skip the observer-broadcast path below
                     elif MUTE.is_muted(resolve_chat_id(sess)):
-                        # R3: a document is a send. Observers (own bots, own
-                        # budgets) still get theirs below.
+                        # R3: a document is a send.
                         log.info("[%s] full-log attachment skipped — chat "
                                  "flood-muted", label)
                     else:
@@ -3570,17 +3546,6 @@ class NotifyMixin:
                             _log_blocked_once(e)
                         except Exception:
                             log.warning("Failed to send full response file", exc_info=True)
-
-                # Broadcast to observer bots (header only — rich messages are not
-                # observable via the same channel; send the header as summary).
-                if self.observers:
-                    obs_text = header_text
-                    if attach_log and file_content:
-                        doc_bytes = file_content.encode("utf-8")
-                        asyncio.create_task(self.observers.broadcast_document(
-                            obs_text, doc_bytes, f"{label}_response.md"))
-                    else:
-                        asyncio.create_task(self.observers.broadcast(obs_text))
 
                 # This turn's card and answer are settled: the next turn's
                 # card may go up now. (A message Claude had queued and did not
@@ -3811,8 +3776,7 @@ class NotifyMixin:
                     pass  # message may be too old or already edited
 
 
-# The notices about a session (HTML; the session's chat's, sent to its
-# observers as rendered).
+# The notices about a session (HTML, sent to the session's chat).
 MEMCAP_HEAD = Msg("notice.memcap_head", "⚠️ <b>{session}</b> · memory cap hit",
                   note="A helper of aipager ran out of its memory limit", eg={"session": "x1"})
 MEMCAP_HEAD_TOOL = Msg("notice.memcap_head_tool",

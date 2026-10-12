@@ -50,7 +50,6 @@ def test_the_session_notices(world, code):
     from aipager.state import Status
     world.choose(bb.GROUP, code)
     x1 = world.session("x1", chat=bb.GROUP, status=Status.BUSY)
-    world.bot.observers = None
     world.bot._settle_card_text = AsyncMock(return_value=False)
     for kind, ctx in (("context_warning", {"context_pct": 92}),
                       ("prompt_not_taken", {"grace": 45.0}),

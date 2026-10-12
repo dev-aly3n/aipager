@@ -32,9 +32,9 @@ EM_DASH = "\u2014"
 
 #: Scenarios whose output is repr() of objects or Claude-facing text only.
 SKIP_TEXT = {"exported_renderers", "safety_reason_strings"}
-#: Lines that are not Telegram text: Claude's bytes, the audit, the
-#: observer calls (repr), compared elsewhere.
-NOT_SHOWN = ("[keys]", "[audit]", "[observer]")
+#: Lines that are not Telegram text: Claude's bytes and the audit,
+#: compared elsewhere.
+NOT_SHOWN = ("[keys]", "[audit]")
 NAMES = sorted(n for n in S.SCENARIOS if n not in SKIP_TEXT)
 CASES = [(n, lang) for n in NAMES for lang in ("fa", "ru")]
 

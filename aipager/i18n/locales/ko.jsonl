@@ -1172,7 +1172,6 @@
 {"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "알 수 없음"}
 {"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "변경 미리 보기"}
 {"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
-{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "관찰용 봇"}
 {"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "서식 있는 요약"}
 {"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "aipager가 관리하는 터널"}
 {"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "직접 지정한 터널 주소"}

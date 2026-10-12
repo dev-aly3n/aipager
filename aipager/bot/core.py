@@ -62,7 +62,6 @@ class TelegramBot(
         # job at a time, shared by both surfaces. See bot/update_flow.py.
         from aipager.bot.update_flow import UpdateManager
         self.updates = UpdateManager(self)
-        self.observers = None  # ObserverBroadcaster | None, injected by __main__
         self._registered_labels: set[str] | None = None  # None = never synced this run
         # Multi-scope: per-chat command-list state (chat_id → last labels set)
         # so we only re-register a scope's `/menu` when its labels change.
