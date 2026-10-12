@@ -1,6 +1,6 @@
 # aipager
 
-<!-- i18n-source: README.md @ 6fc084f -->
+<!-- i18n-source: README.md @ a175bc5 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../../README.md))
 

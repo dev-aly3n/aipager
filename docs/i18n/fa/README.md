@@ -2,7 +2,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ 6fc084f -->
+<!-- i18n-source: README.md @ a175bc5 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../../README.md))
 
