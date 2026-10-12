@@ -669,10 +669,11 @@ success.
   started yourself.
 - Otherwise a daemon you started yourself (`aipager start`), on Linux
   even when the service is also installed: spawn a detached replacement
-  that waits for the parent PID to die, then `exec aipager start`. The
-  current daemon SIGTERMs itself once the spawn is alive.
+  that waits for the parent PID to die, then runs the same command the
+  daemon was started with (its output goes to the self-restart log). The
+  current daemon stops cleanly once the spawn is alive.
 
-No SSH required.
+No SSH required. To finish an aipager update, the update card's **🔄 Restart now** restarts aipager in place instead, in the same terminal (see [Update](#update)).
 
 ## Update
 
@@ -684,7 +685,9 @@ No SSH required.
 
 Claude Code is compared with the latest on its own update channel (`autoUpdatesChannel`: latest, stable or rc). Below the lines, in small text, is how aipager was installed (e.g. `pipx, from PyPI` or `pipx, from local path …`; group chats never show paths).
 
-If anything is newer, there is ONE button that updates only the products that have an update: **Update aipager**, **Update Claude Code** or **Update both**, plus **Cancel**. When aipager is offered, the message also says how the restart happens: `Restart: automatic, once no turn is running.` or `Restart: manual (reason)`. A newer aipager on an install that cannot be updated from here (editable, Nix, Snap, a system package, a container, or another user's install) is shown with the reason and is not offered. The same goes for a newer Claude Code installed with npm into a folder your user can't write to (for example `sudo npm install -g` under `/usr/lib/node_modules`), where `claude update` could only fail: the line says `can't update from here: installed with npm into a folder your user can't write to; run "claude install" once to switch to Claude Code's own installer, then restart aipager`. If nothing can be updated, the message reads "Everything is up to date.", says a check failed, or, when something newer exists but can't be installed from here, "An update is out, but it can't be installed from here.", with a **Check again** button and no update button.
+If anything is newer, there is ONE button that updates only the products that have an update: **Update aipager**, **Update Claude Code** or **Update both**, plus **Cancel**. When aipager is offered, the message also says how the restart happens: `Restart: automatic, once no turn is running.`, `Restart: tap Restart now once it is installed.` (a daemon without a service, see below) or `Restart: manual (reason)`.
+
+If a newer aipager is already installed but the running daemon is still the old one (an update that finished without a restart, or a `pip install -U` by hand), the line reads `aipager 1.1.0 is installed and waiting for a restart (running 1.0.1).` and the message offers **🔄 Restart now** instead of an update: Update aipager is never offered for a version that only needs a restart. The installed version is checked by starting the interpreter the daemon would restart into, so a version that is installed but does not load says so (`aipager 1.1.0 is installed but does not load. Reinstall it with …`) and offers nothing. A newer release than the installed one is still offered as an update. A newer aipager on an install that cannot be updated from here (editable, Nix, Snap, a system package, a container, or another user's install) is shown with the reason and is not offered. The same goes for a newer Claude Code installed with npm into a folder your user can't write to (for example `sudo npm install -g` under `/usr/lib/node_modules`), where `claude update` could only fail: the line says `can't update from here: installed with npm into a folder your user can't write to; run "claude install" once to switch to Claude Code's own installer, then restart aipager`. If nothing can be updated, the message reads "Everything is up to date.", says a check failed, or, when something newer exists but can't be installed from here, "An update is out, but it can't be installed from here.", with a **Check again** button and no update button.
 
 The Update button starts only what the check offered. If the check is more than 10 minutes old, another update has run since, or the versions no longer match the button, it asks you to check again instead. Buttons from an older `/update` menu (the per-product **Update Claude Code** / **Update aipager** / **Both**) answer "This menu is out of date, send /update again" and do nothing. Every tap re-checks the admin rule.
 
@@ -721,13 +724,59 @@ Updating aipager (**Update aipager**, or the second half of **Update both**, whi
 
 In the Mini App, **Settings → Updates** shows "Restarting aipager…" with a turning lantern until the new daemon answers, then "Updated to B" with the re-adopted count. It never shows a countdown. After about 2 minutes without an answer (never before the old daemon could have reported a restart that did not happen) it says "Still restarting, reopen the app in a moment." With aipager's managed tunnel, the app's address changes on every restart, so once the old daemon stops answering the open page says "aipager restarted, reopen the app once the chat says it is updated"; close it and open it again from the chat's menu button or `/app`. The app's sign-in lasts 5 minutes, so a page opened longer ago says "Reopen the app to see the update's result." instead.
 
-The daemon restarts itself only when it runs as the systemd-user
-service **and** that unit has `KillMode=process` (or `none`). Otherwise aipager is
-still upgraded, and the message tells you how to restart: run
-`aipager service install` first (it lists the sessions a restart would
-kill), the `launchctl kickstart` command on macOS, or `Restart needed:
-no service unit is running this daemon; restart it yourself` for a
-daemon you started yourself.
+The daemon restarts itself after the update only when it runs as the
+systemd-user service **and** that unit has `KillMode=process` (or
+`none`). With an unsafe `KillMode` aipager is still upgraded, and the
+message says `Restart needed: …`: run `aipager service install` first
+(it lists the sessions a restart would kill).
+
+**Restart now, without a service.** A daemon no service manager restarts (`aipager start` in a terminal or
+tmux, Docker, or the launchd agent on macOS) installs the update and
+then shows `Tap Restart now to run it (aipager waits until no turn is
+running).` with a **🔄 Restart now** button. Tapping it (admin only, as
+every update button):
+
+1. checks the installed aipager loads (`⏳ Checking the installed
+   aipager…`); a broken install restarts nothing, and the same version
+   says there is nothing to restart;
+2. waits, like the systemd restart, until nothing is in flight, with
+   **Restart now** (skip the wait) and **Cancel**;
+3. checks the install again, then says `⏳ aipager A → B installed,
+   restarting…` and stops the daemon the clean way (as Ctrl+C does);
+4. starts the new aipager in place: the same process, the same command,
+   the same environment and folder, in the same terminal or tmux window
+   (and, in Docker, the same container process). Sessions keep running.
+   The new daemon edits the message into `✅ aipager updated A → B, N
+   sessions re-adopted`.
+
+Taps sent during the few seconds of the restart are dropped, as with any
+restart. A Ctrl+C or `docker stop` during the restart wins: aipager stops
+and does not start again. If the new aipager cannot be started in place,
+a detached copy starts it once the old one has gone (its output goes to
+the self-restart log, `aipager.log` in the instance folder or
+`/tmp/aipager.log`); if even that fails, the daemon log says
+`restart.failed:` with the command to run.
+
+When aipager cannot restart itself at all, the message gives the exact
+steps for your setup instead of a button:
+
+- a terminal or tmux: `In the terminal or tmux window where aipager runs,
+  press Ctrl+C, then run aipager start.`
+- macOS: `On the Mac, run launchctl kickstart -k
+  gui/<uid>/com.aipager.daemon.`
+- Docker: `On the Docker host, run docker restart <container>.` (the
+  container's short id when its host name is one), with a reminder that
+  recreating the container from its image brings back the aipager
+  version in that image.
+
+**Restart now** also appears on the result of **Check for updates** when
+a newer aipager is installed and waiting, and on a one-time notice: when
+Claude Code's hooks (which start fresh on every event, from the
+installed aipager) already run a newer aipager than the daemon, the owner
+gets one silent message per newer version and daemon run, `⚠️ The
+aipager update is only half done: …`, with the button. In the Mini App,
+**Settings → Updates** shows the same state as a line above the card,
+with **Restart now** (it asks first).
 
 Only one update runs at a time, across `/update`, the Mini App's
 **Settings → Updates** block (the same Check for updates button, the same one Update button, the same job) and
