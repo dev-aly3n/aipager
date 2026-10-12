@@ -1831,8 +1831,11 @@ class UpdateManager:
 
     def _owner_chat_wait_reason(self, owner: int) -> str | None:
         """Why an unsolicited message to the owner's chat should wait, or
-        None: a turn (or its card, answer or question) is live there, or
-        the chat is muted, in a 429 wait, a warning regime or minimal mode."""
+        None: a turn (or its card, answer, question or background agent) is
+        live there, an answer is held for it, or the chat is muted, in a 429
+        wait, a warning regime or minimal mode. The per-session predicates
+        and the held count are the ones ``self_update.restart_blockers``
+        asks, scoped to the owner's chat."""
         from aipager.bot import report_offer
         from aipager.state import Status, session_in_chat
 
@@ -1848,8 +1851,13 @@ class UpdateManager:
                     or (sess.busy_msg_id or 0) > 0 or sess.busy_card_owed
                     or sess.notify_in_flight or sess.pending_permission is not None
                     or sess.stack_top_kind() == "compacting"
-                    or sess.work_in_flight(now)):
+                    or sess.work_in_flight(now)
+                    or sess.job_background_open()):
                 return "owner-chat-busy"
+        from aipager.bot.held import HELD
+
+        if HELD.count(owner):
+            return "owner-chat-held-answers"
         if not report_offer.dm_clear(owner):
             return "owner-chat-not-clear"
         return None

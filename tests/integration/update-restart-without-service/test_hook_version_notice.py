@@ -7,12 +7,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from unittest.mock import AsyncMock
 
 import pytest
 
 from aipager import _version
 from aipager.bot import report_flow, report_offer, update_flow
+from aipager.bot.held import HELD
 from aipager.bot.flood_budget import PRIORITY_ORNAMENT, rate_limit_args
 from aipager.dtach import hook_receiver as hr
 from aipager.state import SessionRegistry, Status
@@ -290,20 +292,69 @@ def test_a_dm_session_whose_datagrams_all_come_mid_turn_gets_one_notice_after_th
     assert len(_notices(env)) == 1
 
 
+def _fields(**fields):
+    def apply(sess):
+        for key, value in fields.items():
+            setattr(sess, key, value)
+    return apply
+
+
+def _compacting(sess):
+    # A compacting card still being sent (-1 claim): only the stack top says so.
+    sess.push_compacting(-1, time.monotonic(), None)
+
+
+def _tool_in_flight(sess):
+    sess.pending_tool_started_at = time.monotonic()
+
+
+def _background_agent(sess):
+    # An interim Stop while a background agent the turn launched still runs.
+    sess.active_subagents = {"agent-1": {"started_at": time.monotonic(),
+                                         "last_seen": time.monotonic()}}
+
+
 @pytest.mark.parametrize("busy", [
-    {"status": Status.BUSY},
-    {"status": Status.INTERACTIVE},
-    {"busy_msg_id": 77},
-    {"busy_card_owed": True},
-    {"notify_in_flight": 1},
-    {"pending_permission": {"tool": "Bash"}},
+    _fields(status=Status.BUSY),
+    _fields(status=Status.INTERACTIVE),
+    _fields(busy_msg_id=77),
+    _fields(busy_card_owed=True),
+    _fields(notify_in_flight=1),
+    _fields(pending_permission={"tool": "Bash"}),
+    _compacting,
+    _tool_in_flight,
+    _background_agent,
 ], ids=["busy", "interactive", "live-card", "card-owed", "notify-in-flight",
-        "permission"])
+        "permission", "compacting", "tool-in-flight", "background-agent"])
 def test_any_live_turn_in_the_owner_chat_holds_the_notice_back(env, run, busy):
-    env.add_session(**busy)
+    sess = env.add_session(status=Status.IDLE)
+    busy(sess)
     _note(env, run, "1.1.0", "1.1.0")
     rec = env.manager._hook_seen["1.1.0"]
     assert (_notices(env), rec["attempts"], rec["task"]) == ([], 0, None)
+
+
+def _hold_an_answer(chat_id):
+    HELD.hold(chat_id=chat_id, session="claude-dev", label="dev",
+              rich_text="the answer", plain_text="the answer")
+
+
+def test_a_held_answer_for_the_owner_chat_holds_the_notice_back(env, run):
+    env.add_session(status=Status.IDLE)
+    _hold_an_answer(env.chat_id)
+    _note(env, run, "1.1.0", "1.1.0")
+    rec = env.manager._hook_seen["1.1.0"]
+    assert (_notices(env), rec["attempts"], rec["task"]) == ([], 0, None)
+    assert rec["deferred"] == "owner-chat-held-answers"
+    HELD.clear()                               # delivered: the notice follows
+    _note(env, run, "1.1.0")
+    assert len(_notices(env)) == 1
+
+
+def test_a_held_answer_for_another_chat_does_not_hold_the_notice_back(env, run):
+    _hold_an_answer(-1001234567890)
+    _note(env, run, "1.1.0")
+    assert len(_notices(env)) == 1
 
 
 def test_a_busy_session_in_another_chat_does_not_hold_the_notice_back(env, run):
