@@ -150,7 +150,7 @@
 {"k": "botdesc.short", "src": "483b3675", "v": "التحكم في جلسات Claude Code من Telegram."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ رجوع"}
 {"k": "btn.rep.cancel", "src": "196a9f45", "v": "✖️ إلغاء"}
-{"k": "btn.rep.dont_ask", "src": "7a05a2c0", "v": "لا تسأل عن هذا مجددًا"}
+{"k": "btn.rep.dont_ask", "src": "7a05a2c0", "v": "عدم السؤال عن هذا مجددًا"}
 {"k": "btn.rep.not_now", "src": "e4571490", "v": "ليس الآن"}
 {"k": "btn.rep.note", "src": "c4e7efca", "v": "✏️ إضافة ملاحظة"}
 {"k": "btn.rep.preview", "src": "2632041f", "v": "معاينة التقرير"}
