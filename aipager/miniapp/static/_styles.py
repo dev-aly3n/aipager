@@ -1079,6 +1079,9 @@ CSS = """
   .reveal-note { margin-top: 6px; font-size: 13px; line-height: 18px; color: var(--ink-3); }
   .reveal-note:empty { display: none; }
   .reveal-note.is-error { color: var(--danger-ink); }
+  /* A note read out as it changes (aria-live) stays in the tree while
+     empty, taking no room, so its first message is announced too. */
+  .reveal-note.is-live:empty { display: block; margin-top: 0; }
   .field-input {
     display: block;
     width: 100%;
@@ -1114,24 +1117,23 @@ CSS = """
     flex: 1 1 auto;
     min-width: 0;
     min-height: 46px;
-    padding: 0 6px;
+    padding-block: 0;
+    padding-inline: 6px 12px;
     border: 0;
     outline: none;
     font: 400 16px/22px var(--mono);
     color: var(--ink);
     background: transparent;
   }
-  .prefix-go {
-    display: grid;
-    place-items: center;
-    width: 44px;
-    height: 44px;
-    margin: 1px;
-    border-radius: 12px;
-    color: var(--on-accent);
-    background: var(--accent);
+  /* A secondary action beside the form's one primary button (the folder
+     picker's Create folder): the primary's shape, ink on the soft accent
+     fill (the working chip's pair, tests/test_miniapp_styles.py). */
+  .primary.tonal {
+    color: var(--ink);
+    background: var(--lamp-work-soft);
+    border: 1px solid var(--line);   /* still a button where the fill falls back to the card */
   }
-  .prefix-go:disabled { opacity: 0.4; }
+  .reveal-action { margin-top: var(--s2); }
 
   /* ---- disclosures: changed files and the timeline ------------------ */
   .disclosures { margin-top: var(--s5); }

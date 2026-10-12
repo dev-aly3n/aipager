@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The Mini App's Create folder is a button with words.** When you start a session in a new folder, the round "+" squeezed into the name field is now a "Create folder" button under it, in your language. It reads "Creating…" while it works and a second tap does nothing; a name aipager would refuse is explained before anything is sent; and when it fails, your typed name stays and the reason shows under the button. In Persian and Arabic the folder's path now reads left to right, with the new name at its end.
+
 ### Fixed
 - **`/stop` and `/clearqueue` now wipe all of the messages Claude was holding.** When you stop a session or clear its queue, Claude Code puts the messages it had queued back into its input box, and aipager deletes them from there. It used to delete only the last line of what Claude showed, so the rest of a long message, or of several queued messages, stayed in the box and went out glued to the next message you sent. aipager now deletes all of it (up to about five full-length messages), and a message you send while it does so waits until the box is empty. The same goes for the Mini App's Clear queue.
 

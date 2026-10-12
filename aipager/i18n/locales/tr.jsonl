@@ -1089,7 +1089,7 @@
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "Önerilen"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "Claude Code'un varsayılan modeli"}
 {"k": "ui.new.create_failed", "src": "c55f566f", "v": "Bu oturum oluşturulamadı."}
-{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "Bu klasörü oluştur"}
+{"k": "ui.new.create_folder", "src": "e59f63fa", "v": "Klasör oluştur"}
 {"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "Burada oturum oluşturma iznin yok."}
 {"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "Sunucuya ulaşılamadı. Oturum oluşturulmadı."}
 {"k": "ui.new.created", "src": "77ea75b5", "v": "Oturum oluşturuldu."}
@@ -1104,6 +1104,9 @@
 {"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "Bu klasör oluşturulamadı."}
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "Burada klasör oluşturma iznin yok."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Yeni klasör adı"}
+{"k": "ui.new.folder_pattern", "src": "c3b51490", "v": "Yalnızca Latin harfleri (Türkçe karakter olmadan), rakam, nokta, tire ve alt çizgi kullan; bir harf ya da rakamla başla."}
+{"k": "ui.new.folder_too_long", "src": "ae5dc64d", "v": "Klasör adı en fazla {max} karakter olabilir."}
+{"k": "ui.new.folder_too_many", "src": "468419ea", "v": "Çok fazla deneme. Bir dakika sonra tekrar dene."}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "Sunucuya ulaşılamadı. Klasör oluşturulmadı."}
 {"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "Tam erişim modu için yönetici gerekir."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "Sor"}

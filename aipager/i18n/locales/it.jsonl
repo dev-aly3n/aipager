@@ -1089,7 +1089,7 @@
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "Suggeriti"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "il modello predefinito di Claude Code"}
 {"k": "ui.new.create_failed", "src": "c55f566f", "v": "Non è stato possibile creare quella sessione."}
-{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "Crea questa cartella"}
+{"k": "ui.new.create_folder", "src": "e59f63fa", "v": "Crea cartella"}
 {"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "Qui non ti è consentito creare sessioni."}
 {"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "Non è stato possibile collegarsi al server. La sessione non è stata creata."}
 {"k": "ui.new.created", "src": "77ea75b5", "v": "Sessione creata."}
@@ -1104,6 +1104,9 @@
 {"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "Non è stato possibile creare quella cartella."}
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "Qui non ti è consentito creare cartelle."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Nome della nuova cartella"}
+{"k": "ui.new.folder_pattern", "src": "c3b51490", "v": "Usa solo lettere senza accenti, numeri, punti, trattini e trattini bassi; inizia con una lettera o un numero."}
+{"k": "ui.new.folder_too_long", "src": "ae5dc64d", "v": "Il nome della cartella deve avere al massimo {max} caratteri."}
+{"k": "ui.new.folder_too_many", "src": "468419ea", "v": "Troppi tentativi. Riprova tra un minuto."}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "Non è stato possibile collegarsi al server. Non è stata creata nessuna cartella."}
 {"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "La modalità «Completo» è solo per gli admin."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "Chiedi"}

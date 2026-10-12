@@ -1089,7 +1089,7 @@
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "추천"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "Claude Code 자체 기본 모델"}
 {"k": "ui.new.create_failed", "src": "c55f566f", "v": "그 세션을 만들 수 없어요."}
-{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "이 폴더 만들기"}
+{"k": "ui.new.create_folder", "src": "e59f63fa", "v": "폴더 만들기"}
 {"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "여기서 세션을 만들 권한이 없어요."}
 {"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "서버에 연결할 수 없어요. 세션을 만들지 않았어요."}
 {"k": "ui.new.created", "src": "77ea75b5", "v": "세션을 만들었어요."}
@@ -1104,6 +1104,9 @@
 {"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "그 폴더를 만들 수 없어요."}
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "여기서 폴더를 만들 권한이 없어요."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "새 폴더 이름"}
+{"k": "ui.new.folder_pattern", "src": "c3b51490", "v": "영문자, 숫자, 점, 하이픈, 밑줄만 쓰고 영문자나 숫자로 시작해 주세요."}
+{"k": "ui.new.folder_too_long", "src": "ae5dc64d", "v": "폴더 이름은 {max}자 이하여야 해요."}
+{"k": "ui.new.folder_too_many", "src": "468419ea", "v": "시도가 너무 많아요. 1분 뒤에 다시 시도해 주세요."}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "서버에 연결할 수 없어요. 폴더를 만들지 않았어요."}
 {"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "전체 권한 모드는 관리자만 쓸 수 있어요."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "확인"}

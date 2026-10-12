@@ -1089,7 +1089,7 @@
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "Saran"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "model bawaan Claude Code sendiri"}
 {"k": "ui.new.create_failed", "src": "c55f566f", "v": "Sesi itu tidak bisa dibuat."}
-{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "Buat folder ini"}
+{"k": "ui.new.create_folder", "src": "e59f63fa", "v": "Buat folder"}
 {"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "Kamu tidak boleh membuat sesi di sini."}
 {"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "Tidak bisa terhubung ke server. Sesi tidak dibuat."}
 {"k": "ui.new.created", "src": "77ea75b5", "v": "Sesi dibuat."}
@@ -1104,6 +1104,9 @@
 {"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "Folder itu tidak bisa dibuat."}
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "Kamu tidak boleh membuat folder di sini."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Nama folder baru"}
+{"k": "ui.new.folder_pattern", "src": "c3b51490", "v": "Gunakan huruf, angka, titik, tanda hubung, dan garis bawah; awali dengan huruf atau angka."}
+{"k": "ui.new.folder_too_long", "src": "ae5dc64d", "v": "Nama folder maksimal {max} karakter."}
+{"k": "ui.new.folder_too_many", "src": "468419ea", "v": "Terlalu banyak percobaan. Coba lagi dalam semenit."}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "Tidak bisa terhubung ke server. Tidak ada folder yang dibuat."}
 {"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "Mode Akses penuh khusus admin."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "Tanya"}

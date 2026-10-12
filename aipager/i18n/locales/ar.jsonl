@@ -1089,7 +1089,7 @@
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "مقترحة"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "النموذج الافتراضي في Claude Code"}
 {"k": "ui.new.create_failed", "src": "c55f566f", "v": "تعذّر إنشاء تلك الجلسة."}
-{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "إنشاء هذا المجلد"}
+{"k": "ui.new.create_folder", "src": "e59f63fa", "v": "إنشاء المجلد"}
 {"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "ليس مسموحًا لك بإنشاء جلسات هنا."}
 {"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "تعذّر الاتصال بالخادم. لم تُنشأ الجلسة."}
 {"k": "ui.new.created", "src": "77ea75b5", "v": "أُنشئت الجلسة."}
@@ -1104,6 +1104,9 @@
 {"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "تعذّر إنشاء ذلك المجلد."}
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "ليس مسموحًا لك بإنشاء مجلدات هنا."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "اسم المجلد الجديد"}
+{"k": "ui.new.folder_pattern", "src": "c3b51490", "v": "يُسمح بالحروف اللاتينية والأرقام والنقاط والشرطات والشرطات السفلية؛ ويبدأ الاسم بحرف أو رقم."}
+{"k": "ui.new.folder_too_long", "src": "ae5dc64d", "v": "يجب ألا يزيد اسم المجلد على {max} حرفًا."}
+{"k": "ui.new.folder_too_many", "src": "468419ea", "v": "محاولات كثيرة جدًا. يمكنك المحاولة بعد دقيقة."}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "تعذّر الاتصال بالخادم. لم يُنشأ أي مجلد."}
 {"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "وضع الوصول الكامل للمشرفين فقط."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "اسأل"}

@@ -145,6 +145,8 @@ const SCENARIOS = {
                   can_use_full: false },
   modes_default_ask: { directories: ["/home/aly/proj"], default_directory: "/home/aly/proj",
                        default_mode: "ask" },
+  // Create folder (2026-10-12): a text button, one request at a time.
+  folder: { directories: ["/home/alice/proj"], default_directory: "/home/alice/proj" },
 };
 function fatal(msg) { console.error("FAIL: " + msg); process.exit(1); }
 
@@ -615,7 +617,138 @@ function driveModes() {
   }, 10);
 }
 
+// ---- scenario: Create folder is a text button, one request at a time --
+//
+// Every POST /api/directories waits until the scenario answers it, so the
+// busy state is visible; a second tap or Enter while it waits sends
+// nothing; each kind of answer gives the button back with the typed name
+// kept and a reason; a name the server would refuse never leaves the page.
+// AIPAGER_TEST_FOLDER_NAMES: [[name, valid], ...] from the server's own
+// validator (tests/test_miniapp_create_folder.py).
+function driveFolder() {
+  const pending = [];
+  const baseFetch = global.fetch;
+  global.fetch = (url, opts) => {
+    if (/\/api\/directories$/.test(url.split("?")[0]) && opts && opts.method === "POST") {
+      fetchCalls.push({ url, method: "POST", body: JSON.parse(opts.body) });
+      return new Promise((resolve, reject) => pending.push({ resolve, reject }));
+    }
+    return baseFetch(url, opts);
+  };
+  function answer(status, body, notJson) {
+    const p = pending.shift();
+    if (!p) fail("no POST /api/directories is waiting for an answer");
+    p.resolve({ ok: status === 200, status,
+                json: () => notJson ? Promise.reject(new SyntaxError("not JSON"))
+                                    : Promise.resolve(body) });
+  }
+  function posts() {
+    return fetchCalls.filter(f => f.method === "POST" && /\/api\/directories$/.test(f.url)).length;
+  }
+  const btn = byId["new-folder-create"];
+  const name = byId["new-folder-name"];
+  const note = byId["new-folder-note"];
+  function idleWithName(when) {
+    if (btn.disabled) fail(when + ": the button stayed disabled");
+    if (btn.textContent !== "Create folder")
+      fail(when + ": the button reads " + JSON.stringify(btn.textContent));
+    if (name.value !== "my-project") fail(when + ": the typed name was lost");
+    if (!note.className.includes("is-error")) fail(when + ": the note is not an error");
+  }
+
+  api.openNewSession();
+  setTimeoutReal(() => {
+    const dirRows = rows(expand("new-cwd"));
+    dirRows[dirRows.length - 1].click();                       // New folder
+    if (btn.textContent !== "Create folder")
+      fail("the create button reads " + JSON.stringify(btn.textContent));
+    if (!btn.disabled) fail("Create folder is enabled with no name typed");
+
+    const table = JSON.parse(process.env.AIPAGER_TEST_FOLDER_NAMES || "[]");
+    for (const [value, valid] of table) {
+      name.value = value;
+      fireInput(name);
+      if (btn.disabled === valid)
+        fail("name " + JSON.stringify(value) + ": button disabled=" + btn.disabled +
+             ", but the server says valid=" + valid);
+      if (!valid && value.trim() && !note.className.includes("is-error"))
+        fail("no reason shown for the refused name " + JSON.stringify(value));
+      if (!valid) {
+        const before = posts();
+        fireKey(name, "Enter");
+        btn.click();
+        if (posts() !== before) fail("a refused name was sent: " + JSON.stringify(value));
+      }
+    }
+
+    name.value = "my-project";
+    fireInput(name);
+    if (btn.disabled) fail("a valid name left the button disabled");
+    if (note.className.includes("is-error")) fail("a valid name shows an error");
+    btn.click();
+    if (posts() !== 1) fail("one tap sent " + posts() + " requests");
+    if (!btn.disabled) fail("the button stayed enabled while the folder is created");
+    if (btn.textContent !== "Creating…")
+      fail("busy label: " + JSON.stringify(btn.textContent));
+    btn.click();
+    fireKey(name, "Enter");
+    if (posts() !== 1) fail("a second tap or Enter while busy sent another request");
+
+    // Each answer that is not a created folder: the button comes back,
+    // the typed name stays, and the note says why. The first request is
+    // the one already waiting; each later step taps again.
+    const FAILED = "Couldn't create that folder.";
+    const steps = [
+      ["a refusal with a reason", () => answer(400, { error: "bad_request",
+        detail: "A folder with that name already exists there. Pick a new name." }),
+       "A folder with that name already exists there. Pick a new name."],
+      ["a body that is not JSON", () => answer(502, null, true), FAILED],
+      ["a rate limit", () => answer(429, { error: "too_many_requests" }),
+       "Too many tries. Try again in a minute."],
+      ["a refusal of the caller", () => answer(403, { error: "forbidden" }),
+       "You're not allowed to create folders here."],
+      ["an OK with no path", () => answer(200, { existed: false }), FAILED],
+      ["a refusal with no reason", () => answer(400, { error: "bad_request" }), FAILED],
+      ["a server error", () => answer(500, { error: "internal" }), FAILED],
+      ["no answer at all", () => pending.shift().reject(new TypeError("Failed to fetch")),
+       "Couldn't reach the server. No folder was created."],
+    ];
+    function step(i) {
+      if (i === steps.length) { return created(); }
+      const [what, respond, says] = steps[i];
+      if (i > 0) { btn.click(); }
+      if (posts() !== i + 1) fail("before " + what + ": " + posts() + " requests");
+      if (btn.attrs["aria-busy"] !== "true") fail("not marked busy before " + what);
+      respond();
+      setTimeoutReal(() => {
+        idleWithName("after " + what);
+        if (btn.attrs["aria-busy"] !== "false") fail("still marked busy after " + what);
+        if (note.textContent !== says)
+          fail(what + " reads " + JSON.stringify(note.textContent));
+        step(i + 1);
+      }, 10);
+    }
+    function created() {
+      btn.click();
+      answer(200, { path: "/home/alice/proj/my-project", existed: false });
+      setTimeoutReal(() => {
+        if (headValue("new-cwd") !== "my-project")
+          fail("the new folder was not selected: " + headValue("new-cwd"));
+        if (byId["notice"].textContent.indexOf("Folder created") === -1)
+          fail("no Folder created notice: " + byId["notice"].textContent);
+        if (posts() !== steps.length + 1)
+          fail("expected " + (steps.length + 1) + " requests in all, sent " + posts());
+        console.log("ok: create folder is a text button, one request at a time, " +
+                    "every answer handled");
+        process.exit(0);
+      }, 10);
+    }
+    step(0);
+  }, 10);
+}
+
 const DRIVERS = { full: driveFull, empty: driveEmpty, noparent: driveNoParent, chips: driveChips,
+                  folder: driveFolder,
                   mainbutton: driveMainButton, schema_plain: driveSchemaPlain,
                   modes: driveModes, modes_member: driveModes, modes_default_ask: driveModes };
 (DRIVERS[SCENARIO] || (() => fail("unknown scenario: " + SCENARIO)))();
