@@ -1,9 +1,9 @@
 # Portuguese (Brazil) (pt-BR) style guide
 
-The translator (Claude) reads this with the glossary before every batch.
+The translator (Claude) reads TRANSLATING.md first, then this, then the glossary.
 
 ## Tone
-Plain, direct and friendly, Brazilian usage. Address the reader as você. Sound like the English: plain words, short sentences, no slang.
+Plain, direct and friendly, the way a good Brazilian app talks to people (Telegram, WhatsApp, Nubank, iFood). Address the reader as você. Everyday Brazilian Portuguese, not European Portuguese and not a word-for-word copy of the English.
 
 ## Address
 você
@@ -30,10 +30,38 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - A button or sentence that names a permission mode names it as a mode (operator, 2026-10-11): the switch buttons (modecard.btn.to_*, ui.btn.switch_to_*), the "instead" buttons (mode.*_instead) and the busy confirms (ui.confirm.perms_busy_*) say the mode word and the word for mode, as mode.auto and mode.ask do. The typed words stay one word.
 - A default button label (Continue, Run tests...) stays short: it is a button. Its payload stays English (Claude receives the English).
 
-## Terms
-- session: sessão; turn: turno; card: cartão; permission: permissão; prompt: prompt (the text sent to Claude; "mensagem" where it is just a message; "pedido" for a permission prompt or a question waiting for an answer); question: pergunta.
-- allow: permitir; deny: negar (a refused request: recusar); stop: interromper for a running turn, parar elsewhere; resume: retomar; queue: fila; agent: agente; background: segundo plano ("em segundo plano").
-- owner: dono; admin: administrador; member: membro; chat: chat (conversa where it reads better); group: grupo; settings: configurações; update: atualizar / atualização; folder: pasta; model: modelo.
-- Kept in English: commit, token, diff, log, ctx, prompt.
-- Other recurring words: Kill (end a session's process) = Encerrar; Restart = Reiniciar; Delete = Excluir; Rename = Renomear; Compact = Compactar; role = função; "o Mini App" ("pelo Mini App"); a session name stands for a sessão (feminine: "x1 interrompida").
-- In Portuguese the "one" plural form also covers 0: always write {n}, never the word "um".
+## Words people actually say (use these)
+| English idea | write | not |
+|---|---|---|
+| session | sessão | |
+| background agent | agente em segundo plano | |
+| background shell command | comando em segundo plano (the first line under an answer adds "(shell)") | shell alone, ordem |
+| your message to Claude (prompt) | mensagem | prompt (only where the text is about prompts as such) |
+| compact (Claude Code's /compact) | compactar (compactar a conversa) | |
+| context window | contexto | janela de contexto |
+| update | atualizar, atualização | |
+| restart | reiniciar | |
+| load, loading | carregar, carregando… | |
+| link | link | vínculo, ligação |
+| repository | repo | repositório (fine in a long explanation) |
+| hung, frozen | travado (travou) | congelado |
+| crashed | caiu, fechou com erro | crashou |
+| voice message | áudio | mensagem de voz |
+| computer, machine | computador | máquina |
+| default | padrão | predefinido |
+| private chat (DM) | chat privado | DM |
+| idle (a session waiting for a message) | pronta | ociosa, inativa |
+| busy, working | trabalhando | ocupada |
+| waiting on you | esperando sua resposta | interativa |
+| ended (a session no longer running) | encerrada | terminada |
+| end a session (Kill, End) | encerrar | matar |
+
+## Vocabulary (one word per idea)
+- session: sessão (feminine: "x1 está pronta", "x1 encerrada"); turn: vez where people take turns ("a vez de outra pessoa"), tarefa for Claude's work on one message ("quando esta tarefa terminar"); card: cartão; permission: permissão; a permission request: pedido de permissão; question: pergunta.
+- allow: permitir (answered: permitido); deny: negar (answered: negado); stop: parar (stopped: parada); resume: continuar / retomar (the /resume button: Continuar); queue: fila; agent: agente; background: em segundo plano.
+- owner: dono; admin: admin; member: membro; chat: chat; group: grupo; settings: configurações; folder: pasta; model: modelo; role: função; "o Mini App" ("pelo Mini App").
+- Kept in English: commit, token, diff, log, ctx. A diff is "alterações (diff)" where it is a label.
+- Restart = Reiniciar; Delete = Excluir; Rename = Renomear; Cancel = Cancelar; Close = Fechar; Retry = Tentar de novo; End = Encerrar.
+
+## Plurals
+one, many and other. In Portuguese "one" also covers 0: always write {n}, never the word "um". many is for large round numbers: give it the same text as other.
