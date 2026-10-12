@@ -317,7 +317,7 @@ def test_extra_install_argv_table(monkeypatch):
     assert extra_install_argv("pipx", "voice") == [
         "/abs/pipx", "install", "--force", "aipager[voice]"]
     fallback = [sys.executable, "-m", "pip", "install", "--upgrade",
-                "faster-whisper>=1.0"]
+                "faster-whisper>=1.0", "av<19"]
     assert extra_install_argv("brew", "voice") == fallback
     assert extra_install_argv(None, "voice") == fallback
     assert extra_install_argv(None, "telepathy") is None
