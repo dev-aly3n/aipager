@@ -1368,7 +1368,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         A rich-path ban arrives as a 200 body handled by
         ``rich_message._handle_response``, which mutes the chat and raises
         — it never reaches ``_run``'s ``RetryAfter`` branch. Rather than
-        an observer registry or a new callback, the limiter simply
+        a listener registry or a new callback, the limiter simply
         compares ``MUTE``'s wall deadline against what it has already
         recorded, on a path it runs anyway.
 

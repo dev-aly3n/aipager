@@ -356,7 +356,6 @@ Tutte le attività di tutti i ruoli tranne `owner` ricevono questa base per inte
 - In un'installazione con una chat privata, le sessioni del terminale e quelle della tua chat privata non compaiono mai in un gruppo (vedi [Dove vanno i messaggi](#where-messages-go)). Una sessione del terminale che una versione più vecchia di aipager ha spostato in un gruppo resta al gruppo: terminala, eliminala dalle sessioni terminate del gruppo e ricominciala.
 - `aipager.yaml` ha permessi 0600 (solo il proprietario). aipager non imposta i permessi di `policy.yaml`: tienilo tu solo per il proprietario (`chmod 600 ~/.config/aipager/policy.yaml`).
 - Il log di audit (`~/.claude/aipager-audit.jsonl`) non ha permessi suoi: è privato quanto la tua cartella `~/.claude`.
-- I [bot osservatori](observers.md) ricevono gli avvisi di ogni chat servita dal bot, gruppi compresi: configura un osservatore solo per chat di cui ti fidi per tutto questo.
 
 ## <a id="revoking-a-user"></a>Togliere l'accesso a qualcuno
 

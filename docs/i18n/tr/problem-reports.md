@@ -42,7 +42,7 @@ Her bölüm, sade sözcüklerle. Her değer, önizleme gösterilmeden önce ve g
 - `claude_code`: Claude Code sürümü, kaç Claude Code kurulumu bulunduğu ve nasıl giriş yaptığı (`env`, `file`, `keychain` ya da neden belirlenemediği). Giriş bilgilerinin kendisi asla değil.
 
 **Rakamlarla kurulumun**
-- `config`: mod (`personal`, `team`, `scope`); kaç özel sohbet ve kaç grup yapılandırıldığı; kaç özel rol olduğu (adları dahil edilmez); hangi özelliklerin açık olduğu (Mini App, tünelinin türü, gözlemciler, sesli mesajlar, değişiklik önizlemeleri, zengin özetler).
+- `config`: mod (`personal`, `team`, `scope`); kaç özel sohbet ve kaç grup yapılandırıldığı; kaç özel rol olduğu (adları dahil edilmez); hangi özelliklerin açık olduğu (Mini App, tünelinin türü, sesli mesajlar, değişiklik önizlemeleri, zengin özetler).
 - `runtime`: aipager'ın ne zamandır çalıştığı, aralık olarak (`<10m`, `10m-1h`, `1-24h`, `1-7d`, `>7d`); kaç oturumun başlatılmış olduğu ve çalıştığı; aipager'ın son 7 günde kaç kez beklenmedik şekilde durduğu ve son seferde nasıl bittiği (`clean`, `crash`, `reboot`).
 - `doctor`: kontroller yeniden çalıştırılmadan elde edilebildiğinde sabit bir sağlık kontrolü listesinin sonuçları (`ok`, `warn`, `fail`) (bottan ve terminalden gelen raporlar bu alanı boş bırakır).
 - `flood`: tüm sohbetler genelinde özetlenmiş Telegram sınır durumu: son 7 gündeki engellemeler, şu an gönderimi kapalı, minimal modda ya da yavaşlatılmış bir sohbet olup olmadığı ve en yoğun sohbetin saatlik bütçe payı, aralık olarak. Sohbet kimliği yok.

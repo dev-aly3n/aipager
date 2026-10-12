@@ -195,7 +195,6 @@ aipager service install
 - 接收照片、文件和语音消息（语音消息在你自己的电脑上转成文字，需安装语音消息功能）
 - 在上下文快满时、对话被压缩时、会话结束时，以及会话沉默太久时提醒你
 - 通过一个机器人同时运行多个会话；可选的团队模式，带角色和按工具划分的规则（[团队模式与群组](groups.md)）
-- 可选的只读观察机器人
 - 会说 English、Español、Русский、Português (Brasil)、简体中文、Français、Deutsch、한국어、العربية、Bahasa Indonesia、Українська、Italiano、Türkçe、فارسی 和 Tiếng Việt：只限 aipager 自己的文字，绝不涉及你的会话或 Claude 的回答（[语言](commands.md#languages)）。本 README 和文档也已翻译（见上方的 **用其他语言阅读**）
 
 ### <a id="mini-app"></a>Mini App
@@ -234,7 +233,6 @@ MIT；全文见 [LICENSE](../../../LICENSE)。
 | [Hook 事件](hooks.md) | aipager 从 Claude Code 收到的每个事件及其字段 |
 | [机器人命令](commands.md) | 命令、按钮、Mini App、语音消息和文件、每个 `aipager` 命令，以及来自环境的设置 |
 | [团队模式与群组](groups.md) | 多人设置、角色、规则、谁做了什么 |
-| [观察机器人](observers.md) | 接收通知副本的只读机器人 |
 | [故障排除](troubleshooting.md) | 常见故障和 `aipager doctor` 的修复表 |
 | [问题报告](problem-reports.md) | 问题报告包含什么、发到哪里，以及 aipager 何时提议发送 |
 | [安全模型](security.md) | 信任边界、机密信息、审计日志、网络连接 |

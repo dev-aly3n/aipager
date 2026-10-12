@@ -195,7 +195,6 @@ Di base aipager è un bot personale: tu e il bot in una chat privata. Per condiv
 - Accetta foto, file e vocali (i vocali diventano testo sul tuo computer, con il pacchetto opzionale per la voce)
 - Ti avvisa quando il contesto è quasi pieno, quando la conversazione viene compattata, quando una sessione termina e quando una sessione resta troppo a lungo in silenzio
 - Esegue più sessioni insieme con un solo bot; uso in team opzionale con ruoli e regole per strumento ([Uso in team e gruppi](groups.md))
-- Bot osservatori di sola lettura, opzionali
 - Parla English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی e Tiếng Việt: solo i testi di aipager, mai le tue sessioni né le risposte di Claude ([Lingue](commands.md#languages)). Anche questo README e la documentazione sono tradotti (vedi **Leggi in un'altra lingua** qui sopra)
 
 ### <a id="mini-app"></a>Mini App
@@ -234,7 +233,6 @@ MIT; il testo completo è in [LICENSE](../../../LICENSE).
 | [Eventi hook](hooks.md) | Ogni evento che aipager riceve da Claude Code, con i suoi campi |
 | [Comandi del bot](commands.md) | Comandi, pulsanti, la Mini App, vocali e file, tutti i comandi `aipager` e le impostazioni lette dall'ambiente |
 | [Uso in team e gruppi](groups.md) | Configurazione per più persone, ruoli, regole, chi ha fatto cosa |
-| [Bot osservatori](observers.md) | Bot di sola lettura che ricevono copie degli avvisi |
 | [Risoluzione dei problemi](troubleshooting.md) | Guasti frequenti e la tabella delle soluzioni di `aipager doctor` |
 | [Segnalazioni di problemi](problem-reports.md) | Cosa contiene una segnalazione, dove va e quando aipager propone di inviarla |
 | [Modello di sicurezza](security.md) | Confine di fiducia, segreti, log di audit, connessioni di rete |

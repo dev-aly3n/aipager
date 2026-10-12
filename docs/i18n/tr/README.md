@@ -195,7 +195,6 @@ Varsayılan olarak aipager kişisel bir bottur: sen ve bot, tek bir özel sohbet
 - Fotoğraf, dosya ve sesli mesaj kabul eder (sesli mesajlar, sesli mesaj paketiyle, senin bilgisayarında metne çevrilir)
 - Bağlam neredeyse dolduğunda, konuşma sıkıştırıldığında, bir oturum sona erdiğinde ve biri uzun süre sessiz kaldığında haber verir
 - Tek bir botla aynı anda birden çok oturumu yönetir; istersen her araç için roller ve kurallarla ekip modu ([Ekip modu ve gruplar](groups.md))
-- İsteğe bağlı, yalnızca okuyan gözlemci botlar
 - English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی ve Tiếng Việt konuşur: yalnızca aipager'ın kendi metinleri, asla oturumların ya da Claude'un yanıtları değil ([Diller](commands.md#languages)). Bu README ve belgeler de çevrildi (yukarıdaki **Başka bir dilde oku** satırına bak)
 
 ### <a id="mini-app"></a>Mini App
@@ -234,7 +233,6 @@ MIT; tam metin [LICENSE](../../../LICENSE) içinde.
 | [Hook olayları](hooks.md) | aipager'ın Claude Code'dan aldığı her olay, alanlarıyla |
 | [Bot komutları](commands.md) | Komutlar, düğmeler, Mini App, sesli mesajlar ve dosyalar, tüm `aipager` komutları ve ortam ayarları |
 | [Ekip modu ve gruplar](groups.md) | Birden çok kişi için kurulum, roller, kurallar, kimin ne yaptığı |
-| [Gözlemci botlar](observers.md) | Bildirimlerin kopyalarını alan, yalnızca okuyan botlar |
 | [Sorun giderme](troubleshooting.md) | Sık karşılaşılan arızalar ve `aipager doctor` çözüm tablosu |
 | [Sorun raporları](problem-reports.md) | Bir sorun raporunun neler içerdiği, nereye gittiği ve aipager'ın onu ne zaman önerdiği |
 | [Güvenlik modeli](security.md) | Güven sınırı, gizli bilgiler, denetim kaydı, ağ bağlantıları |

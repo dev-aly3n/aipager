@@ -254,6 +254,31 @@ def test_a_built_report_is_valid_as_built():
     assert again == report and problems == []
 
 
+# ---- the retired observers feature (observer bots were removed) --------------
+
+def test_an_old_report_with_the_retired_feature_still_validates():
+    """A report an older aipager built, naming observer bots among its
+    features, stays exactly valid and can still be previewed and sent."""
+    from aipager.report import send
+    report = json.loads(json.dumps(builder.build_report("manual")))
+    report["config"]["features"] = ["miniapp", "observers"]
+    assert sc.validate(report) == (report, [])
+    assert send.checked_preview(report) is not None
+
+
+def test_a_new_report_never_names_the_retired_feature(mk_bot, monkeypatch):
+    """Even with the old setting still in the environment."""
+    from aipager.bot import report_flow
+    monkeypatch.setenv("OBSERVER_BOTS", "123456:AAx:42")
+    monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
+    ctx = report_flow.report_context(mk_bot())
+    assert "miniapp" in ctx.features and "observers" not in ctx.features
+    report = builder.build_report("manual", context=ctx)
+    assert "observers" not in report["config"]["features"]
+    again, problems = sc.validate(json.loads(json.dumps(report)))
+    assert again == report and problems == []
+
+
 # ---- the report modules never read data -------------------------------------
 
 FORBIDDEN_ATTRS = {

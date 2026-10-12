@@ -2573,7 +2573,7 @@ APP_JS = r"""
   var RP_FEATURES = { miniapp: "ui.report.feature.miniapp",
     tunnel_managed: "ui.report.feature.tunnel_managed",
     tunnel_override: "ui.report.feature.tunnel_override",
-    observers: "ui.report.feature.observers", voice: "ui.report.feature.voice",
+    voice: "ui.report.feature.voice",
     diff_preview_any: "ui.report.feature.diff_preview_any",
     rich_summaries: "ui.report.feature.rich_summaries" };
   var RP_UPTIME = { "<10m": "ui.report.uptime.under_10m", "10m-1h": "ui.report.uptime.10m_1h",

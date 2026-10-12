@@ -42,7 +42,7 @@ Jeder Teil, in einfachen Worten. Jeder Wert wird mit der Liste der erlaubten Wer
 - `claude_code`: die Version von Claude Code, wie viele Installationen von Claude Code gefunden wurden und wie es sich anmeldet (`env`, `file`, `keychain` oder warum sich das nicht feststellen ließ). Nie die Anmeldedaten selbst.
 
 **Deine Einrichtung, als Zahlen**
-- `config`: der Modus (`personal`, `team`, `scope`); wie viele private Chats und wie viele Gruppen eingerichtet sind; wie viele eigene Rollen es gibt (ihre Namen sind nicht enthalten); welche Funktionen an sind (Mini App, ihre Tunnelart, Beobachter, Sprachnachrichten, Diff-Vorschauen, ausführliche Zusammenfassungen).
+- `config`: der Modus (`personal`, `team`, `scope`); wie viele private Chats und wie viele Gruppen eingerichtet sind; wie viele eigene Rollen es gibt (ihre Namen sind nicht enthalten); welche Funktionen an sind (Mini App, ihre Tunnelart, Sprachnachrichten, Diff-Vorschauen, ausführliche Zusammenfassungen).
 - `runtime`: wie lange aipager schon läuft, als Bereich (`<10m`, `10m-1h`, `1-24h`, `1-7d`, `>7d`); wie viele Sitzungen laufen und arbeiten; wie oft aipager in den letzten 7 Tagen unerwartet gestoppt ist und wie es zuletzt geendet hat (`clean`, `crash`, `reboot`).
 - `doctor`: die Ergebnisse (`ok`, `warn`, `fail`) einer festen Liste von Gesundheitsprüfungen, wenn sie verfügbar sind, ohne die Prüfungen erneut laufen zu lassen (Berichte aus dem Bot und aus dem Terminal lassen das leer).
 - `flood`: der Stand der Telegram-Limits über alle Chats zusammengezählt: Sperren in den letzten 7 Tagen, ob ein Chat gerade stummgeschaltet ist, im Minimalmodus oder gebremst, und der Anteil des Stundenbudgets des aktivsten Chats als Bereich. Keine Chat-IDs.

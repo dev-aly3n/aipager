@@ -58,7 +58,6 @@ Ein einziger Aufruf von `asyncio.run` in `aipager/cli/daemon.py` treibt alles an
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): bindet einen Unix-Datagram-Socket unter `$XDG_RUNTIME_DIR/aipager.sock`, liest das JSON, das `aipager-hook` und `aipager-statusline` schicken, und verteilt die Arbeit nach dessen `hook_event_name` (oder `type`, für die eigenen Nachrichten von aipager; siehe [Hook-Ereignisse](hooks.md)).
 - **`SessionMonitor`** (`aipager/session_monitor.py`): wacht alle 2 s auf, um `/tmp/claude-dtach-*.sock` zu durchsuchen, die gefundenen Sitzungen mit der Sitzungsliste abzugleichen und die Wächter laufen zu lassen: eine Arbeitskarte, die sich nicht mehr bewegt, eine Nachricht, die Claude Code nie angenommen hat, eine Berechtigungsanfrage seit 5 Minuten ohne Neuigkeiten, die laut gespeichertem Gespräch vorbei ist (`AIPAGER_INTERACTIVE_TIMEOUT`), eine Aufgabe, deren Ende verpasst wurde.
 - **`SessionRegistry`** (`aipager/state.py`): die `TrackedSession`-Objekte nach Namen. Werden beim Herunterfahren und immer dann, wenn sich etwas ändert, das einen Neustart überstehen muss, (atomar) in `~/.claude/aipager-sessions.json` gespeichert.
-- **`ObserverBroadcaster`** (optional, `aipager/bot/observer.py`): schickt Hinweise zusätzlich an Beobachter-Bots, die nur lesen, wenn `OBSERVER_BOTS` gesetzt ist ([Beobachter-Bots](observers.md)).
 - **Der Server der Mini App** (`aipager/miniapp/server.py`): eine aiohttp-App auf `127.0.0.1` mit `MINIAPP_PORT` (Standard 8765), die über einen verwalteten Cloudflare-Tunnel für Telegram erreichbar ist, solange sie an ist (das ist der Standard). Stellt das Dashboard von `/app` bereit.
 
 All das läuft als Tasks in derselben Loop. Arbeit, die sie blockieren würde, läuft in eigenen Threads: das Umwandeln von Sprachnachrichten in Text, das Erstellen und Senden eines Problemberichts, die Prüfung auf Updates und die Planung des Neustarts, die Downloads des Mini-App-Skripts und von `cloudflared` und die Anmeldeprüfung beim Start.
@@ -73,12 +72,11 @@ Aus `aipager/cli/daemon.py`:
 4. Die eigenen Dateien von Claude Code in Ordnung bringen: jeden fehlenden Hook von aipager und die Statuszeile in `~/.claude/settings.json` eintragen und die Fragen beim ersten Start beantworten, die eine Person in Telegram nicht beantworten könnte (siehe [Sicherheit](security.md#who-decides-whether-a-tool-call-runs)).
 5. `SessionRegistry.load()`: liest `~/.claude/aipager-sessions.json`. Eine fehlende oder unlesbare Datei startet mit einer leeren Liste.
 6. Die Adresse der Mini App ermitteln (deine eigene URL oder Tailscale), dann `bot.start()`: beginnt, Telegram abzufragen.
-7. `ObserverBroadcaster.start()`, nur wenn eingerichtet.
-8. `HookReceiver.start()`: entfernt eine alte Socket-Datei, bindet den Socket, hört zu.
-9. `bot.recover_sessions()`: holt die Karten und Anfragen der Sitzungen zurück, die gearbeitet oder gewartet haben, als aipager gestoppt wurde (siehe [Befehle → Antworten](commands.md#idle-responses)).
-10. `SessionMonitor.start()`: beginnt den Durchlauf alle 2 s.
-11. Der Server der Mini App startet, dann der Tunnel (wenn keine eigene URL gesetzt ist), und die Buttons `📱 App` werden veröffentlicht.
-12. aipager wartet auf Signale: SIGINT oder SIGTERM stoppen es, SIGUSR1 lädt die Chats und Regeln neu ([Gruppen → ohne Neustart neu laden](groups.md#live-reload)).
+7. `HookReceiver.start()`: entfernt eine alte Socket-Datei, bindet den Socket, hört zu.
+8. `bot.recover_sessions()`: holt die Karten und Anfragen der Sitzungen zurück, die gearbeitet oder gewartet haben, als aipager gestoppt wurde (siehe [Befehle → Antworten](commands.md#idle-responses)).
+9. `SessionMonitor.start()`: beginnt den Durchlauf alle 2 s.
+10. Der Server der Mini App startet, dann der Tunnel (wenn keine eigene URL gesetzt ist), und die Buttons `📱 App` werden veröffentlicht.
+11. aipager wartet auf Signale: SIGINT oder SIGTERM stoppen es, SIGUSR1 lädt die Chats und Regeln neu ([Gruppen → ohne Neustart neu laden](groups.md#live-reload)).
 
 ## <a id="shutdown-sequence"></a>Reihenfolge beim Herunterfahren
 
@@ -86,7 +84,7 @@ Aus `aipager/cli/daemon.py`:
 2. Ein laufendes `/update` bekommt eine kurze Frist, dann wird sein Installer gestoppt (siehe [Befehle → Update](commands.md#update)).
 3. `registry.save()`.
 4. Der Tunnel stoppt, dann der Server der Mini App.
-5. `session_monitor.stop()`, `hook_receiver.stop()` (schließt den Socket und entfernt seine Datei), `observers.stop()`, falls er läuft.
+5. `session_monitor.stop()`, `hook_receiver.stop()` (schließt den Socket und entfernt seine Datei).
 6. `bot.stop()`: bricht die Animationen ab und stoppt die `Application`.
 7. Noch einmal `registry.save()`, für eine Karte, deren Senden noch unterwegs war.
 

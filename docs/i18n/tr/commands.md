@@ -593,7 +593,6 @@ Birkaç ayar `aipager.yaml` yerine aipager'ın ortamından okunur. systemd hizme
 | `MINIAPP_PORT` | `8765` | Mini App'in `127.0.0.1` üzerindeki portu (`aipager miniapp enable --port` bunun yerine onu kaydeder). |
 | `MINIAPP_ENABLED` | `aipager.yaml` dosyasından | `0` Mini App'i kapatır, `1` açar; `aipager.yaml` ne derse desin (`aipager miniapp enable\|disable` bunun yerine seçimi kaydeder). |
 | `MINIAPP_PUBLIC_URL` | yok | Mini App'i yönetilen tünel yerine kendi `https://` adresinde sunar ([güvenlik modeli](security.md#mini-app-tunnel)). |
-| `OBSERVER_BOTS` | yok | Yalnızca okuyan gözlemci botlar ([gözlemci botlar](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0`, `/settings` içinde hiç görünüm seçmemiş sohbetler için görünümü “Yalnızca yanıt (kartsız)” yapar. |
 | `STALE_BUSY_TIMEOUT` | `7200` (2 saat) | Çalışan bir oturumun, sohbet “hâlâ çalışıyor (120 dk'dır haber yok)” notunu almadan önce haber vermeden kalabileceği saniye. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Claude Code'un hiç almadığı bir mesajın “Claude Code mesajı almadı” olarak işaretlenmesinden önceki saniye ([sıradan mesajlar](#text)). |

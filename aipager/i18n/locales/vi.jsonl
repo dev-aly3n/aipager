@@ -1175,7 +1175,6 @@
 {"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "không rõ"}
 {"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "xem trước thay đổi"}
 {"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
-{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "bot quan sát"}
 {"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "tóm tắt có định dạng"}
 {"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "tunnel được quản lý"}
 {"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "địa chỉ tunnel riêng"}

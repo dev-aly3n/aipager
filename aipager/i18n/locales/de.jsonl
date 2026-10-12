@@ -1175,7 +1175,6 @@
 {"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "unbekannt"}
 {"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "Vorschau von Änderungen"}
 {"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
-{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "Beobachter-Bots"}
 {"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "ausführliche Zusammenfassungen"}
 {"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "verwalteter Tunnel"}
 {"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "eigene Tunneladresse"}

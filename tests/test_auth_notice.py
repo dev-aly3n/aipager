@@ -37,8 +37,7 @@ DETAILED = "claude: /home/aly/.local/bin/claude (2.1.235) · auth: oauth_token (
 def _run_daemon_with(monkeypatch, provenance):
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, _hook, _monitor, _registry, _, _ = _patch_components(monkeypatch)
+    bot, _hook, _monitor, _registry, _ = _patch_components(monkeypatch)
     bot.send_startup_notice = AsyncMock()
     monkeypatch.setattr(
         "aipager.claude_bootstrap.bootstrap_claude_settings", lambda: provenance)

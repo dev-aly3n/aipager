@@ -195,7 +195,6 @@ Secara bawaan aipager adalah bot pribadi: kamu dan bot dalam satu chat pribadi. 
 - Menerima foto, file, dan pesan suara (pesan suara diubah menjadi teks di komputermu, dengan paket tambahan pesan suara)
 - Memberi tahu saat konteks hampir penuh, saat percakapan diringkas, saat sebuah sesi berakhir, dan saat ada sesi yang lama tidak memberi kabar
 - Mengelola beberapa sesi sekaligus lewat satu bot; opsional, mode tim dengan peran dan aturan per alat ([Mode tim dan grup](groups.md))
-- Bot pengamat yang hanya membaca, opsional
 - Berbicara dalam English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی, dan Tiếng Việt: hanya teks aipager sendiri, tidak pernah sesimu atau jawaban Claude ([Bahasa](commands.md#languages)). README ini dan dokumentasinya juga sudah diterjemahkan (lihat **Baca dalam bahasa lain** di atas)
 
 ### <a id="mini-app"></a>Mini App
@@ -234,7 +233,6 @@ MIT; teks lengkapnya di [LICENSE](../../../LICENSE).
 | [Event hook](hooks.md) | Setiap event yang diterima aipager dari Claude Code, beserta field-nya |
 | [Perintah bot](commands.md) | Perintah, tombol, Mini App, pesan suara dan file, semua perintah `aipager`, dan pengaturan dari environment |
 | [Mode tim dan grup](groups.md) | Pengaturan untuk beberapa orang, peran, aturan, siapa melakukan apa |
-| [Bot pengamat](observers.md) | Bot yang hanya membaca dan menerima salinan notifikasi |
 | [Pemecahan masalah](troubleshooting.md) | Kegagalan yang sering terjadi dan tabel solusi `aipager doctor` |
 | [Laporan masalah](problem-reports.md) | Isi laporan masalah, ke mana laporan dikirim, dan kapan aipager menawarkannya |
 | [Model keamanan](security.md) | Batas kepercayaan, rahasia, log audit, koneksi jaringan |

@@ -956,9 +956,6 @@ a wall; see
   ~/.config/aipager/policy.yaml`).
 - The audit log (`~/.claude/aipager-audit.jsonl`) gets no mode of its
   own: it is as private as your `~/.claude` folder.
-- [Observer bots](observers.md) get notices from every chat the bot
-  serves, groups included: set one up only for a chat you trust with
-  all of it.
 
 ## Revoking a user
 

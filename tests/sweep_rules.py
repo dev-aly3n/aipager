@@ -79,7 +79,8 @@ UNGATED_BY_CONSTRUCTION: dict[str, str] = {
 
 #: The only files whose direct calls this sweep does not police.
 #:
-#: SHRUNK from six to three in 8.26 (D-8). ``notify.py``, ``animation.py``
+#: SHRUNK from six to three in 8.26 (D-8), and to two when observer bots
+#: were removed. ``notify.py``, ``animation.py``
 #: and ``rich_message.py`` are no longer exempt — with the gate at the
 #: chokepoint they no longer need per-site checks, so there is nothing
 #: left to exempt them FOR, and every file removed from this set is a file
@@ -88,9 +89,7 @@ UNGATED_BY_CONSTRUCTION: dict[str, str] = {
 #: * ``transport.py`` — the seam itself. It keeps its own pre-checks
 #:   because it must hold for a bot that is not limiter-bound.
 #: * ``flood_budget.py`` — the gate. It cannot be gated by itself.
-#: * ``observer.py`` — observer bots keep their own tokens, their own
-#:   budgets and their own chats (8.21 §11 D12).
-EXEMPT_FILES: set[str] = {"transport.py", "flood_budget.py", "observer.py"}
+EXEMPT_FILES: set[str] = {"transport.py", "flood_budget.py"}
 
 #: Receiver expressions that ARE the daemon's one limiter-bound ``ExtBot``,
 #: and are therefore gated by construction. Anything else is an offender.
@@ -103,7 +102,6 @@ BOT_RECEIVERS: frozenset = frozenset({
 #: them runs OUTSIDE the daemon process or is a diagnostic with no limiter
 #: to route through, so there is no gate for them to bypass:
 #:
-#: * ``observer.py``  — observer bots, own ``telegram.Bot``, own token
 #: * ``doctor.py``    — reachability probe run from the CLI
 #: * ``daemon.py``    — ``aipager daemon``'s own preflight
 #: * ``team_setup.py``/``telegram_api.py`` — the wizard, before a daemon
@@ -120,7 +118,7 @@ BOT_RECEIVERS: frozenset = frozenset({
 #: (:data:`URL_FUNCTIONS`) outside these files, ``rich_message.py`` and
 #: ``lifecycle.py`` (the app's own limiter-bound bot).
 URL_ALLOWLIST: set[str] = {
-    "observer.py", "doctor.py", "daemon.py",
+    "doctor.py", "daemon.py",
     "team_setup.py", "telegram_api.py",
 }
 
@@ -240,7 +238,7 @@ def bot_construction_offenders(filename: str, source: str) -> list[str]:
     Weakening this sweep weakens :func:`gated_family_offenders` with it.
     """
     base = _basename(filename)
-    if base in {"lifecycle.py", "observer.py"}:
+    if base in {"lifecycle.py"}:
         return []
     tree = _parse(filename, source)
     if tree is None:

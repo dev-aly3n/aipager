@@ -593,7 +593,6 @@ Beberapa pengaturan dibaca dari environment aipager, bukan dari `aipager.yaml`. 
 | `MINIAPP_PORT` | `8765` | Port Mini App di `127.0.0.1` (`aipager miniapp enable --port` justru menyimpannya). |
 | `MINIAPP_ENABLED` | dari `aipager.yaml` | `0` mematikan Mini App dan `1` menyalakannya, apa pun kata `aipager.yaml` (`aipager miniapp enable\|disable` justru menyimpan pilihannya). |
 | `MINIAPP_PUBLIC_URL` | tidak ada | Menyajikan Mini App di URL `https://` milikmu sendiri, bukan lewat tunnel yang dikelola ([model keamanan](security.md#mini-app-tunnel)). |
-| `OBSERVER_BOTS` | tidak ada | Bot pengamat yang hanya membaca ([bot pengamat](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` menjadikan “Hanya jawaban, kartu dihapus” sebagai tata letak untuk chat yang belum pernah memilih tata letak di `/settings`. |
 | `STALE_BUSY_TIMEOUT` | `7200` (2 jam) | Berapa detik sesi yang bekerja boleh tanpa kabar sebelum chat mendapat catatan “masih bekerja (120 menit tanpa kabar)”. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Detik sebelum pesan yang tidak pernah diterima Claude Code ditandai sebagai “Claude Code tidak menerima pesan” ([pesan biasa](#text)). |

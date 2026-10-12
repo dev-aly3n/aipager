@@ -93,12 +93,14 @@ def test_features(mk_bot, monkeypatch):
     from aipager import preferences
     monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
     monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [("x", "y")])
+    # A still-set OBSERVER_BOTS names no feature: observer bots are gone.
+    monkeypatch.setenv("OBSERVER_BOTS", "1:a:2")
     monkeypatch.setattr("aipager.config.RICH_SUMMARIES", True)
     preferences.set_preference(OWNER, "diff_preview", True)
     features = report_flow.report_context(mk_bot()).features
-    assert {"miniapp", "tunnel_managed", "observers", "rich_summaries",
+    assert {"miniapp", "tunnel_managed", "rich_summaries",
             "diff_preview_any"} <= set(features)
+    assert "observers" not in features
     assert "tunnel_override" not in features
     monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "https://x.example")
     monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", False)

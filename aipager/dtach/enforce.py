@@ -356,7 +356,7 @@ def _origin_kind(entry: dict) -> tuple[str, dict]:
 
 def _own_agent(origin: dict) -> bool:
     """A message from one of this session's own background agents (its
-    hand-back, its SendMessage to the main thread, an observer's report):
+    hand-back, its SendMessage to the main thread, a monitoring agent's report):
     Claude Code stamps ``senderTaskId`` from the sending loop, never from
     tool input, and a message from another session never carries it. The
     job's own, like its task notifications."""

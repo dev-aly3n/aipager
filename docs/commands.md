@@ -1256,7 +1256,6 @@ them is needed for normal use.
 | `MINIAPP_PORT` | `8765` | The Mini App's port on `127.0.0.1` (`aipager miniapp enable --port` saves it instead). |
 | `MINIAPP_ENABLED` | from `aipager.yaml` | `0` turns the Mini App off and `1` on, whatever `aipager.yaml` says (`aipager miniapp enable\|disable` saves the choice instead). |
 | `MINIAPP_PUBLIC_URL` | none | Serve the Mini App at your own `https://` URL instead of the managed tunnel ([security](security.md#mini-app-tunnel)). |
-| `OBSERVER_BOTS` | none | Read-only observer bots ([observers](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` makes "Replace with result" the message layout for chats that never chose one in `/settings`. |
 | `STALE_BUSY_TIMEOUT` | `7200` (2 hours) | Seconds a working session may go with no news before the chat gets a "still working (quiet for 120 min)" note. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Seconds before a message Claude Code never took is marked "Not taken by Claude Code" ([free messages](#text)). |

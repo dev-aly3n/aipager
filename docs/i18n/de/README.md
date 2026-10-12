@@ -195,7 +195,6 @@ aipager ist standardmäßig ein privater Bot: du und der Bot in einem privaten C
 - Nimmt Fotos, Dateien und Sprachnachrichten an (Sprachnachrichten werden auf deinem Computer in Text umgewandelt, mit dem optionalen Sprachpaket)
 - Sagt dir Bescheid, wenn der Kontext fast voll ist, wenn die Unterhaltung komprimiert wurde, wenn eine Sitzung beendet ist und wenn eine sich länger nicht meldet
 - Lässt mehrere Sitzungen gleichzeitig mit einem einzigen Bot laufen; optionaler Teambetrieb mit Rollen und Regeln pro Tool ([Teambetrieb und Gruppen](groups.md))
-- Optionale Beobachter-Bots, die nur lesen
 - Spricht English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی und Tiếng Việt: nur die Texte von aipager selbst, nie deine Sitzungen oder die Antworten von Claude ([Sprachen](commands.md#languages)). Dieses README und die Dokumentation sind auch übersetzt (siehe **In einer anderen Sprache lesen** oben)
 
 ### <a id="mini-app"></a>Mini App
@@ -234,7 +233,6 @@ MIT; den vollständigen Text findest du in [LICENSE](../../../LICENSE).
 | [Hook-Ereignisse](hooks.md) | Jedes Ereignis, das aipager von Claude Code bekommt, mit seinen Feldern |
 | [Befehle des Bots](commands.md) | Befehle, Buttons, die Mini App, Sprachnachrichten und Dateien, alle `aipager`-Befehle und die Einstellungen aus der Umgebung |
 | [Teambetrieb und Gruppen](groups.md) | Einrichtung für mehrere Personen, Rollen, Regeln, Nachweis, wer was getan hat |
-| [Beobachter-Bots](observers.md) | Bots, die nur lesen und Kopien der Hinweise bekommen |
 | [Fehlerbehebung](troubleshooting.md) | Häufige Fehler und die Lösungstabelle von `aipager doctor` |
 | [Problemberichte](problem-reports.md) | Was ein Problembericht enthält, wohin er geht und wann aipager ihn anbietet |
 | [Sicherheitsmodell](security.md) | Vertrauensgrenze, Geheimnisse, Audit-Log, Netzwerkverbindungen |
