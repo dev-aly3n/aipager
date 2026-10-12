@@ -76,14 +76,50 @@ def user(uid: int) -> dict:
 # Pure builders (unit-tested in tests/test_faketg_harness_tools.py).
 # ---------------------------------------------------------------------------
 
+#: Where the harness makes its ``apg-XXXXXXXX`` root instead of ``/tmp``
+#: (a run whose sockets must not live under ``/tmp``). The daemon's
+#: ``TMPDIR`` is set to it, so the real-home write guard allows the root.
+ROOT_DIR_ENV = "AIPAGER_E2E_FAKETG_ROOT_DIR"
+
+
+def explicit_root_parent() -> Path | None:
+    """The folder :data:`ROOT_DIR_ENV` names (absolute, existing, and
+    holding none of the operator's aipager or Claude folders), or None
+    when it is not set. Anything else is refused outright."""
+    value = os.environ.get(ROOT_DIR_ENV, "").strip()
+    if not value:
+        return None
+    parent = Path(os.path.realpath(value))
+    assert os.path.isabs(value) and parent.is_dir(), f"{ROOT_DIR_ENV}: not a folder: {value}"
+    assert not _holds_protected(parent), (
+        f"{ROOT_DIR_ENV}: {parent} holds the operator's own aipager or Claude folders")
+    return parent
+
+
+def _holds_protected(parent: Path) -> bool:
+    from aipager import _test_guard
+    home = real_home()
+    return any(_inside(os.path.realpath(os.path.join(home, p)), str(parent))
+               for p in _test_guard._PROTECTED)
+
+
+def _inside(path: str, root: str) -> bool:
+    return path == root or path.startswith(root.rstrip(os.sep) + os.sep)
+
+
 def make_root() -> Path:
     """``/tmp/apg-XXXXXXXX``: never a ``/tmp/claude-*`` name (the real
-    daemon's files), never under the real home."""
-    root = Path(tempfile.mkdtemp(prefix="apg-", dir="/tmp"))
+    daemon's files), never under the real home. With
+    :data:`ROOT_DIR_ENV` set, ``<that folder>/apg-XXXXXXXX`` instead (it
+    may lie under the real home, never over the operator's folders)."""
+    explicit = explicit_root_parent()
+    parent = explicit if explicit is not None else Path("/tmp")
+    root = Path(tempfile.mkdtemp(prefix="apg-", dir=str(parent)))
     assert not root.name.startswith("claude-"), root
-    assert root.parent == Path("/tmp"), root
-    real_home = os.path.realpath(os.path.expanduser("~" + _login_name()))
-    assert not str(root).startswith(real_home + os.sep), root
+    assert root.parent == parent, root
+    if explicit is None:
+        real_home = os.path.realpath(os.path.expanduser("~" + _login_name()))
+        assert not str(root).startswith(real_home + os.sep), root
     return root
 
 
@@ -203,6 +239,10 @@ def daemon_env(base_env: dict, *, root: Path, base_url: str, claude_bin: str,
         "PYTEST_CURRENT_TEST": "faketg-daemon",
         "PYTHONDONTWRITEBYTECODE": "1",
     })
+    if explicit_root_parent() is not None:
+        # The root is not under /tmp: the daemon's write guard allows its
+        # temp folder, so that is the root's parent.
+        env["TMPDIR"] = str(root.parent)
     extra = dict(session_env or {})
     bad = sorted(set(extra) - SESSION_ENV_ALLOWED)
     assert not bad, f"not a per-instance session setting: {bad}"
@@ -222,8 +262,14 @@ def env_problems(env: dict, root: Path) -> list[str]:
         problems.append(f"HOME is not the instance home: {home!r}")
     if inst != str(root / "i"):
         problems.append(f"AIPAGER_INSTANCE_DIR is not the instance folder: {inst!r}")
+    explicit = explicit_root_parent()
+    in_explicit = explicit is not None and Path(os.path.realpath(root)).parent == explicit
     for name, value in (("HOME", home), ("AIPAGER_INSTANCE_DIR", inst)):
         rv = os.path.realpath(value) if value else ""
+        if in_explicit and _inside(rv, os.path.realpath(root)):
+            # A root in the explicitly chosen folder: inside it is fine,
+            # the folder holds none of the operator's own (checked above).
+            continue
         if rv == rh or rv.startswith(rh + os.sep):
             problems.append(f"{name} is under the real home")
     if str(root).startswith("/tmp/claude-") or Path(root).name.startswith("claude-"):
