@@ -1,6 +1,6 @@
 # 아키텍처
 
-<!-- i18n-source: docs/architecture.md @ 6fc084f -->
+<!-- i18n-source: docs/architecture.md @ 7e36944 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../architecture.md))
 
@@ -56,7 +56,7 @@ flowchart LR
 
 - **`TelegramBot`** (`aipager/bot/`): `python-telegram-bot`의 `Application`을 가지고 있어요. Telegram에서 업데이트를 받아 메시지, 버튼, 음성 메시지 처리기로 나눠 보내고, 작업 카드, 고정된 상태 표시줄, 답변을 최신 상태로 유지해요.
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): `$XDG_RUNTIME_DIR/aipager.sock`에 Unix datagram 소켓을 열고, `aipager-hook`과 `aipager-statusline`이 보내는 JSON을 읽어서 `hook_event_name`(aipager 자체 메시지는 `type`, [Hook 이벤트](hooks.md) 참고)에 따라 나눠 보내요.
-- **`SessionMonitor`** (`aipager/session_monitor.py`): 2초마다 깨어나서 `/tmp/claude-dtach-*.sock`을 훑고, 찾은 세션을 세션 목록과 맞춰 보고, 여러 감시를 실행해요. 멈춘 작업 카드, Claude Code가 가져가지 않은 메시지, 5분 동안 소식이 없는 권한 요청(`AIPAGER_INTERACTIVE_TIMEOUT`), 끝나는 순간을 놓친 작업을 살펴요.
+- **`SessionMonitor`** (`aipager/session_monitor.py`): 2초마다 깨어나서 `/tmp/claude-dtach-*.sock`을 훑고, 찾은 세션을 세션 목록과 맞춰 보고, 여러 감시를 실행해요. 멈춘 작업 카드, Claude Code가 가져가지 않은 메시지, 5분 동안 소식이 없고 저장된 대화에 끝났다고 나오는 권한 요청(`AIPAGER_INTERACTIVE_TIMEOUT`), 끝나는 순간을 놓친 작업을 살펴요.
 - **`SessionRegistry`** (`aipager/state.py`): 이름별로 저장된 `TrackedSession` 객체들이에요. 종료할 때와, 재시작 뒤에도 남아야 하는 것이 바뀔 때마다 `~/.claude/aipager-sessions.json`에 (원자적으로) 저장해요.
 - **`ObserverBroadcaster`** (선택, `aipager/bot/observer.py`): `OBSERVER_BOTS`가 설정되어 있으면 알림을 읽기 전용 관찰 봇에게도 보내요([관찰 봇](observers.md)).
 - **Mini App 서버** (`aipager/miniapp/server.py`): `127.0.0.1`의 `MINIAPP_PORT`(기본값 8765)에서 듣는 aiohttp 앱이고, 켜져 있는 동안(기본으로 켜져 있어요) 관리형 Cloudflare 터널을 통해 Telegram에 제공돼요. `/app` 대시보드를 제공해요.

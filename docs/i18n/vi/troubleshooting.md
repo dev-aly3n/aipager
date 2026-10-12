@@ -1,6 +1,6 @@
 # Xử lý sự cố
 
-<!-- i18n-source: docs/troubleshooting.md @ 76d125d -->
+<!-- i18n-source: docs/troubleshooting.md @ 7e36944 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../troubleshooting.md))
 
@@ -144,7 +144,7 @@ aipager session <label> --continue # dtach mới, cuộc trò chuyện gần nh�
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Một yêu cầu cấp quyền không có tin gì trong 5 phút
 
-Nếu một phiên đang chờ một yêu cầu cấp quyền và Claude Code không báo gì trong 5 phút, aipager thôi chờ yêu cầu đó và coi phiên là đang làm việc trở lại. Điều này bắt được trường hợp Claude Code bị crash giữa một yêu cầu mà không ai trả lời được nữa. Các nút của yêu cầu vẫn trả lời hộp thoại nếu nó vẫn đang mở (xem [phản hồi khi rảnh](commands.md#idle-responses)).
+Nếu một phiên đang chờ một yêu cầu cấp quyền hay câu hỏi và Claude Code không báo gì trong 5 phút, aipager đọc cuộc trò chuyện đã lưu của phiên. Chỉ khi nó cho thấy yêu cầu đã xong (đã trả lời trong terminal, và tin đó bị mất) thì aipager mới thôi chờ và coi phiên là đang làm việc trở lại. Nếu không, yêu cầu vẫn mở dù mất bao lâu: thẻ và thanh ghim vẫn báo phiên cần bạn trả lời, không có ghi chú "vẫn đang làm" nào được gửi, và tin nhắn của bạn được giữ lại cho đến khi bạn trả lời (xem [văn bản](commands.md#text)). Claude Code thoát khi yêu cầu còn mở thì phiên kết thúc. Các nút của yêu cầu vẫn trả lời hộp thoại nếu nó vẫn đang mở (xem [phản hồi khi rảnh](commands.md#idle-responses)).
 
 Để đổi thời gian chờ:
 

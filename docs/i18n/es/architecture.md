@@ -1,6 +1,6 @@
 # Arquitectura
 
-<!-- i18n-source: docs/architecture.md @ 6fc084f -->
+<!-- i18n-source: docs/architecture.md @ 7e36944 -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../architecture.md))
 
@@ -56,7 +56,7 @@ Una sola llamada a `asyncio.run` en `aipager/cli/daemon.py` lo mueve todo. Dentr
 
 - **`TelegramBot`** (`aipager/bot/`): tiene un `Application` de `python-telegram-bot`. Recibe las actualizaciones de Telegram, las reparte a los manejadores de mensajes, botones y audios, y mantiene al día las tarjetas de actividad, la barra de estado fijada y las respuestas.
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): abre un socket datagram de Unix en `$XDG_RUNTIME_DIR/aipager.sock`, lee el JSON que envían `aipager-hook` y `aipager-statusline`, y reparte el trabajo según su `hook_event_name` (o `type`, para los mensajes propios de aipager; mira [eventos de hook](hooks.md)).
-- **`SessionMonitor`** (`aipager/session_monitor.py`): se despierta cada 2 s para revisar `/tmp/claude-dtach-*.sock`, poner al día las sesiones que encuentra con la lista de sesiones, y ejecutar los vigilantes: una tarjeta de actividad que dejó de avanzar, un mensaje que Claude Code nunca recibió, una solicitud de permiso sin noticias durante 5 minutos (`AIPAGER_INTERACTIVE_TIMEOUT`), una tarea cuyo final no se vio.
+- **`SessionMonitor`** (`aipager/session_monitor.py`): se despierta cada 2 s para revisar `/tmp/claude-dtach-*.sock`, poner al día las sesiones que encuentra con la lista de sesiones, y ejecutar los vigilantes: una tarjeta de actividad que dejó de avanzar, un mensaje que Claude Code nunca recibió, una solicitud de permiso sin noticias durante 5 minutos que la conversación guardada muestra como terminada (`AIPAGER_INTERACTIVE_TIMEOUT`), una tarea cuyo final no se vio.
 - **`SessionRegistry`** (`aipager/state.py`): los objetos `TrackedSession` por nombre de sesión. Se guardan en `~/.claude/aipager-sessions.json` (de forma atómica) al apagarse y cada vez que cambia algo que tiene que sobrevivir a un reinicio.
 - **`ObserverBroadcaster`** (opcional, `aipager/bot/observer.py`): si `OBSERVER_BOTS` está puesto, envía también los avisos a los bots observadores de solo lectura ([bots observadores](observers.md)).
 - **Servidor de la Mini App** (`aipager/miniapp/server.py`): una app aiohttp en `127.0.0.1` y el puerto `MINIAPP_PORT` (por defecto 8765), que mientras está activada (por defecto) llega a Telegram por un túnel de Cloudflare gestionado. Sirve el panel de `/app`.

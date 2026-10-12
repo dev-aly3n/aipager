@@ -718,6 +718,23 @@ class TrackedSession:
     # cleared by ``transition()`` on every entry into INTERACTIVE.
     # Transient — a daemon restart starts a fresh wait anyway.
     waiting_reminder_sent: bool = False
+    # Messages held because a dialog was open (handlers'
+    # ``_hold_for_open_dialog``): ``{"entered_at": the wait's
+    # ``interactive_entered_at``, "told": sender ids already given the
+    # "answer it first" notice for that wait, "notices": [(chat_id,
+    # msg_id), ...] of those notices, "closed": "answered" | "ended"}``.
+    # ``closed`` is set by ``transition()`` when the session leaves
+    # INTERACTIVE (BUSY: answered, the held messages go out in order; any
+    # other status: the turn or the session ended, the queue is left to
+    # the paths that handled it before) and dropped again on a new entry.
+    # The bot settles it (``NotifyMixin._settle_dialog_hold``) once no
+    # dialog is open: releases, deletes the notices, clears it.
+    # Transient, never persisted: the held messages themselves are in
+    # ``pending_queue``.
+    dialog_hold: dict | None = None
+    # True while the bot sends the held messages on: one release at a
+    # time per session, whichever hold it is for. Transient.
+    dialog_settling: bool = False
     # Guards the idle-recovery fallback's own INFO log (session_monitor.py)
     # so a tool/compaction that stands the recovery down for minutes logs
     # ONE line for the whole episode rather than one per 2s scan tick.
@@ -2329,6 +2346,14 @@ class TrackedSession:
         """
         return self.status is Status.INTERACTIVE
 
+    def dialog_release_pending(self) -> bool:
+        """True when a dialog that held messages was answered and those
+        messages have not all gone out yet. A message arriving meanwhile is
+        held behind them, so the person's messages reach Claude in the order
+        they were sent."""
+        hold = self.dialog_hold
+        return hold is not None and hold.get("closed") == "answered"
+
     def tap_is_for_this_turn(self, tapped_msg_id: int | None, *,
                              turn: int | None = None) -> bool:
         """True if a button tap belongs to the turn currently running.
@@ -3026,6 +3051,15 @@ class SessionRegistry:
             # keeps it: the job is the turn, and its agent and its later
             # continuation run under the job's rules.
             sess.turn_sender_id = None
+        # Messages held for a dialog: how it closed, for the bot's release
+        # (``dialog_hold``). Before the debounce below, which can return
+        # early; a new dialog takes the mark back off.
+        if sess.dialog_hold is not None:
+            if new_status == Status.INTERACTIVE:
+                sess.dialog_hold.pop("closed", None)
+            elif sess.status == Status.INTERACTIVE:
+                sess.dialog_hold["closed"] = (
+                    "answered" if new_status == Status.BUSY else "ended")
         # Debounce: suppress rapid re-IDLE (e.g. user sends quick command,
         # Claude responds in <1s, triggers another idle notification)
         if new_status == Status.IDLE:

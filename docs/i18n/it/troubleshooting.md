@@ -1,6 +1,6 @@
 # Risoluzione dei problemi
 
-<!-- i18n-source: docs/troubleshooting.md @ 76d125d -->
+<!-- i18n-source: docs/troubleshooting.md @ 7e36944 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../troubleshooting.md))
 
@@ -144,7 +144,7 @@ aipager session <label> --continue # dtach nuovo, l'ultima conversazione della c
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Una richiesta di permesso senza notizie da 5 minuti
 
-Se una sessione aspetta una richiesta di permesso e Claude Code non dà notizie per 5 minuti, aipager smette di aspettare quella richiesta e conta di nuovo la sessione come al lavoro. Serve per il caso in cui Claude Code va in crash a metà di una richiesta a cui nessuno potrebbe più rispondere. I pulsanti della richiesta rispondono ancora al dialogo, se è ancora aperto (vedi [risposte a riposo](commands.md#idle-responses)).
+Se una sessione aspetta una richiesta di permesso o una domanda e Claude Code non dà notizie per 5 minuti, aipager legge la conversazione salvata della sessione. Solo se questa mostra che la richiesta è finita (risposta nel terminale, e la notizia è andata persa) aipager smette di aspettarla e conta di nuovo la sessione come al lavoro. Altrimenti la richiesta resta aperta per tutto il tempo che serve: la scheda e la barra fissata continuano a dire che la sessione ha bisogno della tua risposta, non arriva nessuna nota "ancora al lavoro", e i tuoi messaggi restano trattenuti finché non rispondi (vedi [testo](commands.md#text)). Un Claude Code che si chiude con la richiesta aperta termina la sessione. I pulsanti della richiesta rispondono ancora al dialogo, se è ancora aperto (vedi [risposte a riposo](commands.md#idle-responses)).
 
 Per cambiare l'attesa:
 

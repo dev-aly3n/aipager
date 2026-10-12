@@ -597,6 +597,9 @@
 {"k": "route.cleared", "src": "fd716ebc", "v": {"one": "🗑️ {n} پیام صف [<b>{session}</b>] پاک شد.", "other": "🗑️ {n} پیام صف [<b>{session}</b>] پاک شد."}}
 {"k": "route.ended_which", "src": "eb950d37", "v": "{session} بسته شده. کدام سشن؟"}
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ نمی‌دانم این فایل مال کدام سشن است. با {command} یا از کیبورد یکی را انتخاب کنید."}
+{"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude هنوز منتظر جواب شما به این درخواست اجازه است. اول جوابش را بدهید، بعد پیام جدیدتان بلافاصله برای Claude ارسال می‌شود."}
+{"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude هنوز منتظر جواب شما به این سؤال است. اول جوابش را بدهید، بعد پیام جدیدتان بلافاصله برای Claude ارسال می‌شود."}
+{"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude در ترمینال منتظر جواب است. همان‌جا جواب بدهید یا «توقف» را بزنید، بعد پیام جدیدتان بلافاصله برای Claude ارسال می‌شود."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ متن ویس به [{session}] ارسال نشد"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "سشنی برای بستن نیست."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "کدام سشن بسته شود؟"}

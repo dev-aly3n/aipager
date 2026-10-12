@@ -18,8 +18,10 @@ import logging
 import os
 import socket
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 from aipager import audit as audit_mod
+from aipager import session_monitor
 from aipager.bot.dashboard import _pinned_state
 from aipager.session_monitor import (
     IDLE_RECOVERY_GRACE,
@@ -328,12 +330,21 @@ def test_watchdog_counts_from_restore(replay, vloop, tmp_path):
         before_timeout = r.sess.status
         await asyncio.sleep(20)
         await monitor._scan()
-        return first, before_timeout, restored_at
+        nothing_in_transcript = r.sess.status
+        # The watchdog demotes only on the transcript's evidence that the
+        # dialog is over (2026-10-12): a closing hook lost.
+        monitor._dialog_checked.clear()  # the transcript changed
+        with patch.object(session_monitor, "dialog_closed_in_transcript",
+                          lambda *a: True):
+            await monitor._scan()
+        return first, before_timeout, nothing_in_transcript, restored_at
 
-    first, before_timeout, restored_at = _run(vloop, scenario())
+    first, before_timeout, nothing_in_transcript, restored_at = _run(
+        vloop, scenario())
     assert vloop.time() - r.sess.busy_started_at > INTERACTIVE_TIMEOUT_SECONDS
     assert first is Status.INTERACTIVE
     assert before_timeout is Status.INTERACTIVE
+    assert nothing_in_transcript is Status.INTERACTIVE  # no time limit
     assert r.sess.status is Status.BUSY  # demoted, at last
 
 

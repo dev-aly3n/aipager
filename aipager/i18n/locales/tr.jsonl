@@ -597,6 +597,9 @@
 {"k": "route.cleared", "src": "fd716ebc", "v": {"one": "🗑️ [<b>{session}</b>] kuyruğundan {n} mesaj silindi.", "other": "🗑️ [<b>{session}</b>] kuyruğundan {n} mesaj silindi."}}
 {"k": "route.ended_which", "src": "eb950d37", "v": "{session} sona erdi. Hangi oturum?"}
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Bu dosyanın hangi oturum için olduğunu bilmiyorum. {command} ile ya da klavyeden bir tane seç."}
+{"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude hâlâ bu izin isteğine yanıtını bekliyor. Önce yanıtla, yeni mesajın hemen ardından Claude'a gider."}
+{"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude hâlâ bu soruya yanıtını bekliyor. Önce yanıtla, yeni mesajın hemen ardından Claude'a gider."}
+{"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude terminalde bir yanıt bekliyor. Orada yanıtla ya da Durdur'a dokun, yeni mesajın hemen ardından Claude'a gider."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Sesli mesajın metni [{session}] oturumuna gönderilemedi"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Sonlandırılacak oturum yok."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "Hangi oturum sonlandırılsın?"}

@@ -1516,6 +1516,69 @@ class NotifyMixin:
                 # or from a sender removed while it waited.
                 await self._reply_needs_admin_queued(sess, queued_trigger)
 
+    async def _settle_dialog_hold(self, sess: TrackedSession) -> None:
+        """The messages held while a dialog was open (``dialog_hold``),
+        once no dialog is open: when it was answered, they go to Claude now,
+        in the order they were sent, through :meth:`_drain_next_queued`;
+        when its turn or its session ended instead, the queue is left to
+        the paths that handle that (the turn end's drain, /stop, the
+        session end). Either way the "answer it first" notices are deleted
+        (they were only about the wait) and the hold ends. A no-op while a
+        dialog is open, or while another settle of the same hold runs.
+
+        Stops releasing at a held message that may not join the running
+        turn (another person's, roadmap 8.77): it and those after it wait
+        for the turn's end, as before. A message arriving while this runs
+        is held behind the others (``dialog_release_pending``) and goes out
+        in this same pass."""
+        hold = sess.dialog_hold
+        if hold is None or sess.dialog_settling or sess.dialog_is_open():
+            return
+        sess.dialog_settling = True
+        try:
+            if hold.get("closed") == "answered" and sess.status is not Status.GONE:
+                while sess.pending_queue and not sess.dialog_is_open():
+                    before = len(sess.pending_queue)
+                    await self._drain_next_queued(sess)
+                    if len(sess.pending_queue) >= before:
+                        break  # the head may not join this turn
+        finally:
+            sess.dialog_settling = False
+            notices = list(hold.get("notices") or [])
+            if (sess.dialog_hold is hold and sess.dialog_is_open()
+                    and sess.pending_queue):
+                # Another dialog opened while they went out: the rest are
+                # held for that one now, and its first new message gets a
+                # notice of its own.
+                hold.pop("closed", None)
+                hold["entered_at"] = sess.interactive_entered_at
+                hold["told"] = set()
+                hold["notices"] = []
+            elif sess.dialog_hold is hold:
+                sess.dialog_hold = None
+            await self._delete_hold_notices(sess, notices)
+
+    async def _drop_dialog_hold(self, sess: TrackedSession) -> None:
+        """The messages held for a dialog were dropped (/clearqueue): its
+        notices no longer say anything true, and the next message held for
+        the dialog gets a notice of its own."""
+        hold, sess.dialog_hold = sess.dialog_hold, None
+        if hold is not None:
+            await self._delete_hold_notices(sess, list(hold.get("notices") or []))
+
+    async def _delete_hold_notices(self, sess: TrackedSession, notices) -> None:
+        """Delete the "answer it first" notices ``[(chat_id, msg_id)]``.
+        Best-effort."""
+        if not notices or self._app is None:
+            return
+        for chat_id, msg_id in notices:
+            try:
+                await self._app.bot.delete_message(chat_id=chat_id,
+                                                   message_id=msg_id)
+            except Exception:
+                log.debug("[%s] could not delete the held-message "
+                          "notice %s", sess.label, msg_id, exc_info=True)
+
     async def _reply_needs_admin_queued(
         self, sess: TrackedSession, msg_id: int | None,
     ) -> None:
@@ -1552,6 +1615,15 @@ class NotifyMixin:
         sess.notify_in_flight += 1
         try:
             await self._notify_event(sess, event, context)
+            # A hook that closed a dialog messages were held for (or the
+            # session monitor's backstop, ``dialog_hold_settle``): send
+            # them on now (:meth:`_settle_dialog_hold`).
+            if sess.dialog_hold is not None and not sess.dialog_is_open():
+                try:
+                    await self._settle_dialog_hold(sess)
+                except Exception:
+                    log.warning("[%s] releasing the messages held for a "
+                                "dialog failed", sess.label, exc_info=True)
         finally:
             sess.notify_in_flight -= 1
 
@@ -1559,6 +1631,11 @@ class NotifyMixin:
         self, sess: TrackedSession, event: str, context: dict,
     ) -> None:
         """:meth:`notify`'s body."""
+        # ── settle a dialog hold (the session monitor's backstop) ──
+        # The work is done by `notify` itself, after every event.
+        if event == "dialog_hold_settle":
+            return
+
         # ── the mode a hook reported, while a mode switch waits on it ──
         # Before the app check: the switch's state is decided whatever
         # can be shown (aipager/bot/mode_switch.py).
@@ -2186,6 +2263,11 @@ class NotifyMixin:
 
         if event in ("tool_done", "tool_failed"):
             # PostToolUse / PostToolUseFailure — mark tool as done or failed
+            if sess.status is Status.BUSY:
+                # A dialog answered in the terminal leaves INTERACTIVE at its
+                # tool's end (hook_receiver), with the animation still
+                # stopped from the prompt: bring it back.
+                self._resume_animation_if_dead(sess, reason="tool_done")
             tool_summary = context.get("tool_summary", "")
             agent_id = context.get("agent_id", "")
             mark = "failed" if event == "tool_failed" else True
@@ -2529,6 +2611,16 @@ class NotifyMixin:
                 # — a command or message Claude never got to run.
                 await self._mark_not_delivered(
                     sess, list(context.get("notes") or []) + lost)
+                if sess.dialog_hold is not None and not sess.is_restarting():
+                    # Claude Code ended with a dialog open that messages
+                    # were held for: nothing will take them now, and no
+                    # turn end will ever drain them. Dropped, with a 🤷.
+                    held = reactions.held_entries(sess.pending_queue)
+                    sess.pending_queue.clear()
+                    self.registry.mark_dirty()
+                    await self._mark_not_delivered(sess, held)
+                    log.info("[%s] session ended with a dialog open: %d "
+                             "held message(s) dropped", label, len(held))
             self._stop_animation(sess)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 try:

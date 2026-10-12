@@ -1,6 +1,6 @@
 # Kiến trúc
 
-<!-- i18n-source: docs/architecture.md @ 6fc084f -->
+<!-- i18n-source: docs/architecture.md @ 7e36944 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../architecture.md))
 
@@ -56,7 +56,7 @@ Một lần gọi `asyncio.run` trong `aipager/cli/daemon.py` chạy toàn bộ.
 
 - **`TelegramBot`** (`aipager/bot/`): giữ một `Application` của `python-telegram-bot`. Nhận cập nhật từ Telegram, chuyển chúng tới các phần xử lý tin nhắn, nút bấm và tin nhắn thoại, và giữ cho thẻ làm việc, thanh trạng thái được ghim và các câu trả lời luôn mới.
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): mở một socket datagram Unix ở `$XDG_RUNTIME_DIR/aipager.sock`, đọc JSON mà `aipager-hook` và `aipager-statusline` gửi tới, rồi phân việc theo `hook_event_name` của nó (hoặc `type`, với tin nhắn của chính aipager; xem [sự kiện hook](hooks.md)).
-- **`SessionMonitor`** (`aipager/session_monitor.py`): thức dậy mỗi 2 giây để quét `/tmp/claude-dtach-*.sock`, đối chiếu các phiên tìm thấy với danh sách phiên, và chạy các bộ canh chừng: một thẻ làm việc ngừng chuyển động, một tin nhắn Claude Code không bao giờ nhận, một yêu cầu cấp quyền không có tin gì trong 5 phút (`AIPAGER_INTERACTIVE_TIMEOUT`), một việc mà lúc kết thúc bị bỏ lỡ.
+- **`SessionMonitor`** (`aipager/session_monitor.py`): thức dậy mỗi 2 giây để quét `/tmp/claude-dtach-*.sock`, đối chiếu các phiên tìm thấy với danh sách phiên, và chạy các bộ canh chừng: một thẻ làm việc ngừng chuyển động, một tin nhắn Claude Code không bao giờ nhận, một yêu cầu cấp quyền không có tin gì trong 5 phút mà cuộc trò chuyện đã lưu cho thấy đã xong (`AIPAGER_INTERACTIVE_TIMEOUT`), một việc mà lúc kết thúc bị bỏ lỡ.
 - **`SessionRegistry`** (`aipager/state.py`): các đối tượng `TrackedSession` theo tên. Được lưu vào `~/.claude/aipager-sessions.json` (một cách nguyên tử) khi tắt và mỗi khi có thay đổi cần giữ qua lần khởi động lại.
 - **`ObserverBroadcaster`** (tùy chọn, `aipager/bot/observer.py`): nếu `OBSERVER_BOTS` được đặt, nó còn gửi thông báo tới các bot quan sát chỉ đọc ([bot quan sát](observers.md)).
 - **Máy chủ Mini App** (`aipager/miniapp/server.py`): một ứng dụng aiohttp ở `127.0.0.1` trên cổng `MINIAPP_PORT` (mặc định 8765), được đưa ra cho Telegram qua một tunnel Cloudflare được quản lý trong lúc nó bật (mặc định là bật). Cung cấp bảng điều khiển `/app`.

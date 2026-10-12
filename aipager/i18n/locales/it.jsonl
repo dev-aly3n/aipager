@@ -597,6 +597,9 @@
 {"k": "route.cleared", "src": "fd716ebc", "v": {"many": "🗑️ {n} messaggi in coda eliminati per [<b>{session}</b>].", "one": "🗑️ {n} messaggio in coda eliminato per [<b>{session}</b>].", "other": "🗑️ {n} messaggi in coda eliminati per [<b>{session}</b>]."}}
 {"k": "route.ended_which", "src": "eb950d37", "v": "{session} è terminata. Quale sessione?"}
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Non so per quale sessione è questo file. Scegline una con {command} o con la tastiera."}
+{"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude aspetta ancora la tua risposta a questa richiesta di permesso. Rispondi prima, e il tuo nuovo messaggio arriverà a Claude subito dopo."}
+{"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude aspetta ancora la tua risposta a questa domanda. Rispondi prima, e il tuo nuovo messaggio arriverà a Claude subito dopo."}
+{"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude aspetta una risposta nel terminale. Rispondi lì o tocca Ferma, e il tuo nuovo messaggio arriverà a Claude subito dopo."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Non è stato possibile inviare il testo del vocale a [{session}]"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Nessuna sessione da terminare."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "Quale sessione terminare?"}

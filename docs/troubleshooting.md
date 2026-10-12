@@ -329,11 +329,16 @@ aipager session <label> --continue # fresh dtach, the folder's last conversation
 
 ## A permission prompt with no news for 5 minutes
 
-If a session waits on a permission prompt and Claude Code sends no news
-for 5 minutes, aipager stops waiting on that prompt and counts the
-session as working again. This catches a Claude Code that crashed in
-the middle of a prompt, which nobody could answer. The prompt's buttons
-still answer the dialog if it is still open (see
+If a session waits on a permission prompt or a question and Claude Code
+sends no news for 5 minutes, aipager reads the session's saved
+conversation. Only if it shows the prompt is over (answered in the
+terminal, and the news of it lost) does aipager stop waiting on it and
+count the session as working again. Otherwise the prompt stays open
+however long it takes: the card and the pinned bar keep saying the
+session needs your answer, no "still working" note is sent, and your
+messages are held until you answer (see [text](commands.md#text)). A
+Claude Code that quits with the prompt open ends the session. The
+prompt's buttons still answer the dialog if it is still open (see
 [idle responses](commands.md#idle-responses)).
 
 Change the wait:

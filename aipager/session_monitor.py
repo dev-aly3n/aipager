@@ -34,6 +34,7 @@ from aipager.state import (
 from aipager.transcript import (
     extract_last_response,
     last_assistant_preview,
+    saved_prompt_evidence,
     turn_appears_complete,
     turn_tail_since,
 )
@@ -44,14 +45,14 @@ log = logging.getLogger(__name__)
 # ``asyncio.sleep`` (the global module; CLAUDE.md). Defaults to the real one.
 _loop_sleep = asyncio.sleep
 
-# Item 2.2 — auto-demote INTERACTIVE sessions back to BUSY if they've sat
-# in INTERACTIVE state with no hook activity for this long. The assumption:
-# claude crashed mid-permission-prompt, the user can never see / answer
-# it, so the session shouldn't sit forever. Demoting to BUSY lets the
-# session_monitor's existing stale-busy logic surface it after another
-# STALE_BUSY_TIMEOUT, instead of silently rotting. The two compound, so
-# a crashed permission prompt surfaces in 300s + STALE_BUSY_TIMEOUT
-# (about 2 h 5 min with the 2-hour default).
+# Item 2.2 — after this long with no hook activity, the INTERACTIVE
+# watchdog asks the transcript whether the dialog is still open, and
+# demotes the session to BUSY only when it shows the dialog was answered
+# or the turn went past it (a closing hook lost). A dialog nobody answered
+# stays open with no time limit (2026-10-12: the old blind demotion made
+# aipager type the next Telegram message into a question still on
+# screen, and its Enter picked the first option). A Claude Code that died
+# with the dialog open is a session that ends, which the scan sees.
 #
 # Tunable via `AIPAGER_INTERACTIVE_TIMEOUT` (seconds) for ops testing.
 INTERACTIVE_TIMEOUT_SECONDS: float = float(
@@ -573,6 +574,46 @@ def dialog_interrupted_in_terminal(sess: TrackedSession, now_mono: float,
     return turn_tail_since(sess.transcript_path, since) == "marker"
 
 
+def _open_prompt_tool(sess: TrackedSession) -> tuple[str, str]:
+    """``(tool_use_id, tool_name)`` of the dialog *sess* waits on, from
+    the inline prompt or the separate message shown during this wait;
+    ``("", "")`` when neither is known (a dialog left to the terminal)."""
+    perm = sess.pending_permission
+    if not isinstance(perm, dict):
+        sent = sess.pending_prompt_msg
+        cand = sent.get("perm") if isinstance(sent, dict) else None
+        perm = (cand if isinstance(cand, dict)
+                and (cand.get("wait_started_at") or 0) >= sess.interactive_entered_at
+                else None)
+    info = (perm or {}).get("tool_info")
+    if not isinstance(info, dict):
+        return "", ""
+    tuid, name = info.get("tool_use_id"), info.get("name")
+    return (tuid if isinstance(tuid, str) else "",
+            name if isinstance(name, str) else "")
+
+
+def dialog_closed_in_transcript(sess: TrackedSession, now_mono: float,
+                                now_wall: float) -> bool:
+    """True when the transcript of a session waiting on a dialog shows
+    the dialog is over: its tool's result, or any turn entry written since
+    it appeared other than its own pending call
+    (:func:`aipager.transcript.saved_prompt_evidence`, the check a restart
+    makes of a saved prompt). False when nothing contradicts the dialog,
+    when the transcript cannot be read, and when the wait's start is not
+    known: a dialog is never taken as closed without evidence.
+
+    *now_mono* / *now_wall*: this tick's clocks, to place the wait's start
+    (a monotonic stamp) on the transcript's wall-clock time line."""
+    if not sess.transcript_path or sess.interactive_entered_at <= 0:
+        return False
+    since = now_wall - max(0.0, now_mono - sess.interactive_entered_at)
+    tool_use_id, tool_name = _open_prompt_tool(sess)
+    evidence = saved_prompt_evidence(sess.transcript_path, since,
+                                     tool_use_id, tool_name)
+    return evidence in ("answered", "moved_on")
+
+
 class SessionMonitor:
     """Periodically discovers dtach sessions and marks dead ones GONE."""
 
@@ -606,6 +647,8 @@ class SessionMonitor:
         # transcript mtime, size) last read, so the transcript is read
         # again only after it changed.
         self._dialog_seen: dict[str, tuple[float, int, int]] = {}
+        # The same for the INTERACTIVE watchdog's evidence check.
+        self._dialog_checked: dict[str, tuple] = {}
         # One deprecation line per process, emitted here rather than at
         # import: `logging.basicConfig` runs in cli/daemon.py's start
         # command, so a message logged while this module is being imported
@@ -646,6 +689,22 @@ class SessionMonitor:
         if self._dialog_seen.get(name) == key:
             return False
         self._dialog_seen[name] = key
+        return True
+
+    def _dialog_evidence_changed(self, name: str, sess: TrackedSession) -> bool:
+        """:meth:`_dialog_transcript_changed` for the INTERACTIVE
+        watchdog, with its own record: a long wait reads the transcript only
+        after it changed. A transcript that does not exist (yet) counts as
+        changed, so its absence is asked about, and answers "no evidence"."""
+        try:
+            st = os.stat(sess.transcript_path) if sess.transcript_path else None
+        except OSError:
+            st = None
+        key = ((sess.interactive_entered_at, st.st_mtime_ns, st.st_size)
+               if st is not None else (sess.interactive_entered_at, None, None))
+        if self._dialog_checked.get(name) == key:
+            return False
+        self._dialog_checked[name] = key
         return True
 
     async def tick(self) -> None:
@@ -792,12 +851,24 @@ class SessionMonitor:
                 log.warning("Failed to notify compact_timeout for %s", expired_name)
 
         for name, sess in self.registry.all_sessions().items():
+            # Messages held while a dialog was open, and the dialog is not
+            # open any more: the bot sends them on (answered) and deletes
+            # its "answer it first" notice. Normally done at once by the
+            # hook that closed the dialog; this is the backstop for a close
+            # no hook reported (a tap, /stop, a turn ended in the terminal).
+            if sess.dialog_hold is not None and not sess.dialog_is_open():
+                try:
+                    await self.notify_fn(sess, "dialog_hold_settle", {})
+                except Exception:
+                    log.warning("Failed to settle the dialog hold for %s",
+                                name, exc_info=True)
             # A dialog answered "No" at the terminal (roadmap 8.113): Claude
             # Code ends the turn like an interrupt and fires no hook, so
             # only the transcript tells. Checked before the watchdog below,
             # which would otherwise wait out its 5 minutes.
             if sess.status != Status.INTERACTIVE:
                 self._dialog_seen.pop(name, None)
+                self._dialog_checked.pop(name, None)
             elif (self._dialog_transcript_changed(name, sess)
                   and dialog_interrupted_in_terminal(sess, now, time.time())):
                 log.info("[%s] the dialog was answered in the terminal: "
@@ -813,13 +884,17 @@ class SessionMonitor:
                     self._dialog_seen.pop(name, None)
                 continue
 
-            # INTERACTIVE watchdog (item 2.2)
+            # INTERACTIVE watchdog (item 2.2): demotes only on the
+            # transcript's evidence that the dialog is over. Read again only
+            # when the transcript changed since this wait's last reading.
             if sess.status == Status.INTERACTIVE:
                 baseline = _quiet_since(sess)
-                if baseline and (now - baseline) > INTERACTIVE_TIMEOUT_SECONDS:
+                if (baseline and (now - baseline) > INTERACTIVE_TIMEOUT_SECONDS
+                        and self._dialog_evidence_changed(name, sess)
+                        and dialog_closed_in_transcript(sess, now, time.time())):
                     log.warning(
-                        "[%s] INTERACTIVE > %d min with no hooks — "
-                        "demoting to BUSY (likely a crashed permission prompt)",
+                        "[%s] INTERACTIVE > %d min with no hooks, and the "
+                        "transcript shows the dialog is over — demoting to BUSY",
                         sess.label, int(INTERACTIVE_TIMEOUT_SECONDS / 60),
                     )
                     report_store.record_counter("interactive_demoted")

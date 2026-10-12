@@ -597,6 +597,9 @@
 {"k": "route.cleared", "src": "fd716ebc", "v": {"many": "🗑️ {n} mensagens da fila de [<b>{session}</b>] apagadas.", "one": "🗑️ {n} mensagem da fila de [<b>{session}</b>] apagada.", "other": "🗑️ {n} mensagens da fila de [<b>{session}</b>] apagadas."}}
 {"k": "route.ended_which", "src": "eb950d37", "v": "{session} foi encerrada. Qual sessão?"}
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Não sei para qual sessão é este arquivo. Escolha uma com {command} ou pelo teclado."}
+{"k": "route.held_permission", "src": "bf26d315", "v": "❓ O Claude ainda está esperando sua resposta a este pedido de permissão. Responda primeiro, e sua nova mensagem vai para o Claude logo em seguida."}
+{"k": "route.held_question", "src": "36ea2c5c", "v": "❓ O Claude ainda está esperando sua resposta a esta pergunta. Responda primeiro, e sua nova mensagem vai para o Claude logo em seguida."}
+{"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ O Claude está esperando uma resposta no terminal. Responda lá ou toque em Parar, e sua nova mensagem vai para o Claude logo em seguida."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Não foi possível enviar o texto do áudio para [{session}]"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Não há sessões para encerrar."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "Qual sessão encerrar?"}

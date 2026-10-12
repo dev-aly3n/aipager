@@ -330,6 +330,9 @@ def test_interactive_demotion_restarts_animation_in_the_same_scan(
     sess.busy_started_at = now - INTERACTIVE_TIMEOUT_SECONDS - 120
     sess.pending_permission = {"tool": "Bash"}
     registry._sessions["claude-jim"] = sess
+    # The transcript reads as past the dialog: the only demotion there is.
+    monkeypatch.setattr("aipager.session_monitor.dialog_closed_in_transcript",
+                        lambda *a: True)
 
     calls = _scan(registry, monkeypatch, run_async)
 

@@ -1,6 +1,6 @@
 # Fehlerbehebung
 
-<!-- i18n-source: docs/troubleshooting.md @ 76d125d -->
+<!-- i18n-source: docs/troubleshooting.md @ 7e36944 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../troubleshooting.md))
 
@@ -144,7 +144,7 @@ aipager session <label> --continue # neues dtach, die letzte Unterhaltung des Or
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Eine Berechtigungsanfrage seit 5 Minuten ohne Neuigkeiten
 
-Wenn eine Sitzung auf eine Berechtigungsanfrage wartet und Claude Code 5 Minuten lang nichts meldet, hört aipager auf, auf diese Anfrage zu warten, und zählt die Sitzung wieder als arbeitend. Das fängt ein Claude Code auf, das mitten in einer Anfrage abgestürzt ist, die niemand beantworten könnte. Die Buttons der Anfrage beantworten den Dialog weiterhin, wenn er noch offen ist (siehe [Antworten](commands.md#idle-responses)).
+Wenn eine Sitzung auf eine Berechtigungsanfrage oder eine Frage wartet und Claude Code 5 Minuten lang nichts meldet, liest aipager das gespeicherte Gespräch der Sitzung. Nur wenn es zeigt, dass die Anfrage vorbei ist (im Terminal beantwortet, und die Nachricht davon ging verloren), hört aipager auf, auf sie zu warten, und zählt die Sitzung wieder als arbeitend. Sonst bleibt die Anfrage offen, egal wie lange es dauert: Die Karte und die angeheftete Leiste sagen weiter, dass die Sitzung deine Antwort braucht, es kommt kein Hinweis „arbeitet noch“, und deine Nachrichten werden zurückgehalten, bis du antwortest (siehe [Text](commands.md#text)). Ein Claude Code, das sich mit offener Anfrage beendet, beendet die Sitzung. Die Buttons der Anfrage beantworten den Dialog weiterhin, wenn er noch offen ist (siehe [Antworten](commands.md#idle-responses)).
 
 Die Wartezeit ändern:
 

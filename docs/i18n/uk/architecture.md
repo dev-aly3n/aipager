@@ -1,6 +1,6 @@
 # Архітектура
 
-<!-- i18n-source: docs/architecture.md @ 6fc084f -->
+<!-- i18n-source: docs/architecture.md @ 7e36944 -->
 
 > Цю сторінку перекладено з англійської; якщо вони розходяться, правильною є англійська версія. ([English](../../architecture.md))
 
@@ -56,7 +56,7 @@ flowchart LR
 
 - **`TelegramBot`** (`aipager/bot/`): володіє `Application` з `python-telegram-bot`. Отримує оновлення від Telegram, роздає їх обробникам повідомлень, кнопок і голосових і тримає в актуальному вигляді робочі картки, закріплений рядок стану та відповіді.
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): відкриває Unix datagram-сокет у `$XDG_RUNTIME_DIR/aipager.sock`, читає JSON, який надсилають `aipager-hook` і `aipager-statusline`, і розподіляє роботу за його `hook_event_name` (або `type`, для власних повідомлень aipager; див. [події hooks](hooks.md)).
-- **`SessionMonitor`** (`aipager/session_monitor.py`): прокидається кожні 2 с, щоб переглянути `/tmp/claude-dtach-*.sock`, звірити знайдені сесії зі списком сесій і запустити вартових: робоча картка, що перестала рухатися, повідомлення, яке Claude Code так і не прийняв, запит на дозвіл без новин 5 хвилин (`AIPAGER_INTERACTIVE_TIMEOUT`), завдання, кінець якого пропущено.
+- **`SessionMonitor`** (`aipager/session_monitor.py`): прокидається кожні 2 с, щоб переглянути `/tmp/claude-dtach-*.sock`, звірити знайдені сесії зі списком сесій і запустити вартових: робоча картка, що перестала рухатися, повідомлення, яке Claude Code так і не прийняв, запит на дозвіл без новин 5 хвилин, який за збереженою розмовою вже закінчено (`AIPAGER_INTERACTIVE_TIMEOUT`), завдання, кінець якого пропущено.
 - **`SessionRegistry`** (`aipager/state.py`): об'єкти `TrackedSession` за назвами. Зберігаються в `~/.claude/aipager-sessions.json` (атомарно) під час вимкнення і щоразу, коли змінюється щось, що має пережити перезапуск.
 - **`ObserverBroadcaster`** (за бажанням, `aipager/bot/observer.py`): якщо задано `OBSERVER_BOTS`, розсилає сповіщення ще й ботам-спостерігачам лише для читання ([боти-спостерігачі](observers.md)).
 - **Сервер Mini App** (`aipager/miniapp/server.py`): застосунок aiohttp на `127.0.0.1` з портом `MINIAPP_PORT` (за замовчуванням 8765), доступний для Telegram через керований тунель Cloudflare, поки він увімкнений (за замовчуванням так). Віддає панель `/app`.

@@ -597,6 +597,9 @@
 {"k": "route.cleared", "src": "fd716ebc", "v": {"other": "🗑️ {n} pesan antrean untuk [<b>{session}</b>] dihapus."}}
 {"k": "route.ended_which", "src": "eb950d37", "v": "{session} sudah berakhir. Sesi yang mana?"}
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Aku tidak tahu file ini untuk sesi yang mana. Pilih satu dengan {command} atau dari papan ketik."}
+{"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude masih menunggu jawabanmu untuk permintaan izin ini. Jawab dulu, lalu pesan barumu langsung dikirim ke Claude."}
+{"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude masih menunggu jawabanmu untuk pertanyaan ini. Jawab dulu, lalu pesan barumu langsung dikirim ke Claude."}
+{"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude sedang menunggu jawaban di terminal. Jawab di sana atau ketuk Hentikan, lalu pesan barumu langsung dikirim ke Claude."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Teks pesan suara tidak terkirim ke [{session}]"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Tidak ada sesi untuk diakhiri."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "Sesi mana yang diakhiri?"}

@@ -1,6 +1,6 @@
 # Pemecahan masalah
 
-<!-- i18n-source: docs/troubleshooting.md @ 76d125d -->
+<!-- i18n-source: docs/troubleshooting.md @ 7e36944 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../troubleshooting.md))
 
@@ -144,7 +144,7 @@ aipager session <label> --continue # dtach baru, percakapan terakhir di folder i
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Permintaan izin tanpa kabar selama 5 menit
 
-Kalau sebuah sesi sedang menunggu permintaan izin dan Claude Code tidak melaporkan apa pun selama 5 menit, aipager berhenti menunggu permintaan itu dan menganggap sesi itu sedang bekerja lagi. Ini menangkap Claude Code yang crash di tengah permintaan yang tidak bisa dijawab siapa pun lagi. Tombol permintaan itu tetap menjawab di dialognya kalau dialog itu masih terbuka (lihat [jawaban](commands.md#idle-responses)).
+Kalau sebuah sesi sedang menunggu permintaan izin atau pertanyaan dan Claude Code tidak melaporkan apa pun selama 5 menit, aipager membaca percakapan sesi yang tersimpan. Hanya kalau percakapan itu menunjukkan permintaannya sudah selesai (dijawab di terminal, dan kabarnya hilang), aipager berhenti menunggunya dan menganggap sesi itu sedang bekerja lagi. Kalau tidak, permintaan itu tetap terbuka berapa lama pun: kartu dan bilah yang disematkan tetap bilang sesi itu butuh jawabanmu, tidak ada catatan "masih bekerja", dan pesanmu ditahan sampai kamu menjawab (lihat [teks](commands.md#text)). Claude Code yang tertutup saat permintaan masih terbuka mengakhiri sesinya. Tombol permintaan itu tetap menjawab di dialognya kalau dialog itu masih terbuka (lihat [jawaban](commands.md#idle-responses)).
 
 Untuk mengubah lamanya menunggu:
 

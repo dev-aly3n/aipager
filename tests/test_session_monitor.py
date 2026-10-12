@@ -35,6 +35,9 @@ def test_interactive_session_demoted_after_timeout(steady_clock, monkeypatch, ru
         "aipager.dtach.inject.list_sessions",
         lambda: _coroutine_returning(["claude-jim"]),
     )
+    # Only when the transcript shows the dialog is over (2026-10-12).
+    monkeypatch.setattr("aipager.session_monitor.dialog_closed_in_transcript",
+                        lambda *a: True)
     run_async(monitor._scan())
     # Auto-demoted to BUSY, permission cleared
     assert sess.status == Status.BUSY
