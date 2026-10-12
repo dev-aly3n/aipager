@@ -389,7 +389,9 @@ option (the first four), and for a question that allows several answers
 ⬜/☑ toggles and a `✅ Submit` button.
 
 At 80% context the chat gets `⚠️ name · Context at 82% - auto-compact
-soon` with **📦 Compact Now**, which sends `/compact` to that session.
+soon` with **📦 Compact Now**, which sends `/compact` to that session. It
+comes once per conversation: compacting does not bring it back, and a new
+conversation (after `/clear`, for example) gets it again.
 
 ### Stale buttons
 

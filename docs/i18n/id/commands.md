@@ -1,6 +1,6 @@
 # Perintah dan antarmuka bot
 
-<!-- i18n-source: docs/commands.md @ 6fc084f -->
+<!-- i18n-source: docs/commands.md @ 7228205 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../commands.md))
 
@@ -196,7 +196,7 @@ Selama sebuah permintaan (atau AskUserQuestion) menunggumu, sesi ditampilkan seb
 
 Dialog `AskUserQuestion` ditampilkan dengan cara yang sama, dengan satu tombol per opsi (empat pertama), dan, untuk pertanyaan yang bisa dijawab lebih dari satu, kotak centang ⬜/☑ dan tombol `✅ Kirim`.
 
-Saat konteks mencapai 80%, chat mendapat `⚠️ name · Konteks terisi 82% - sebentar lagi diringkas otomatis` dengan **📦 Ringkas sekarang**, yang mengirim `/compact` ke sesi itu.
+Saat konteks mencapai 80%, chat mendapat `⚠️ name · Konteks terisi 82% - sebentar lagi diringkas otomatis` dengan **📦 Ringkas sekarang**, yang mengirim `/compact` ke sesi itu. Peringatan ini datang sekali per percakapan: meringkas tidak memunculkannya lagi, dan percakapan baru (misalnya setelah `/clear`) mendapatkannya lagi.
 
 ### <a id="stale-buttons"></a>Tombol lama
 

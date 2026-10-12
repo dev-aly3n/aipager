@@ -1,6 +1,6 @@
 # Befehle und Oberfläche des Bots
 
-<!-- i18n-source: docs/commands.md @ 6fc084f -->
+<!-- i18n-source: docs/commands.md @ 7228205 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../commands.md))
 
@@ -196,7 +196,7 @@ Solange eine Anfrage (oder ein AskUserQuestion) auf dich wartet, gilt die Sitzun
 
 Dialoge von `AskUserQuestion` erscheinen genauso, mit einem Button pro Option (die ersten vier), und bei einer Frage, die mehrere Antworten erlaubt, mit Kästchen ⬜/☑ und einem Button `✅ Senden`.
 
-Bei 80 % Kontext bekommt der Chat `⚠️ name · Kontext bei 82% - wird bald automatisch komprimiert` mit **📦 Jetzt komprimieren**, das `/compact` an diese Sitzung schickt.
+Bei 80 % Kontext bekommt der Chat `⚠️ name · Kontext bei 82% - wird bald automatisch komprimiert` mit **📦 Jetzt komprimieren**, das `/compact` an diese Sitzung schickt. Der Hinweis kommt einmal pro Unterhaltung: Komprimieren bringt ihn nicht zurück, und eine neue Unterhaltung (zum Beispiel nach `/clear`) bekommt ihn wieder.
 
 ### <a id="stale-buttons"></a>Alte Buttons
 

@@ -1,6 +1,6 @@
 # Hook 事件
 
-<!-- i18n-source: docs/hooks.md @ 6fc084f -->
+<!-- i18n-source: docs/hooks.md @ 7228205 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../hooks.md)）
 
@@ -99,7 +99,7 @@ aipager 读取 Claude Code 的 `notification_type`：
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude 正在压缩它的上下文（`trigger` 为 `auto` 或 `manual`）。工作卡片显示 `🔄 name · 正在压缩对话`（没有卡片时会新发一条消息），这样这段停顿不会看起来像崩溃。`PostCompact` 结束这个状态；`📦 name · 对话已压缩：X% → Y%` 这一行来自随后的 `SessionStart`，如果错过了，则来自状态行。状态行还会在上下文达到 80% 时给出警告 `⚠️ name · 上下文已用 82%，即将自动压缩`（带一个“立即压缩”按钮），并且只有在降到 30% 以下之后才会再次给出。
+Claude 正在压缩它的上下文（`trigger` 为 `auto` 或 `manual`）。工作卡片显示 `🔄 name · 正在压缩对话`（没有卡片时会新发一条消息），这样这段停顿不会看起来像崩溃。`PostCompact` 结束这个状态；`📦 name · 对话已压缩：X% → Y%` 这一行来自随后的 `SessionStart`，如果错过了，则来自状态行。状态行还会在上下文达到 80% 时给出警告 `⚠️ name · 上下文已用 82%，即将自动压缩`（带一个“立即压缩”按钮），每个对话只给一次：压缩不会让它再次出现，新的对话（例如 `/clear` 之后）会再收到一次。
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

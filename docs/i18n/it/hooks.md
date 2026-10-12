@@ -1,6 +1,6 @@
 # Eventi hook
 
-<!-- i18n-source: docs/hooks.md @ 6fc084f -->
+<!-- i18n-source: docs/hooks.md @ 7228205 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../hooks.md))
 
@@ -99,7 +99,7 @@ Un subagent è partito o ha finito. Ogni subagent ha la sua riga nella scheda di
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude sta compattando il suo contesto (`trigger` `auto` o `manual`). La scheda di attività mostra `🔄 name · Compattazione della conversazione` (o, senza scheda, viene inviato un messaggio nuovo), così la pausa non sembra un crash. `PostCompact` chiude questo stato; la riga `📦 name · Conversazione compattata: X% → Y%` arriva dal `SessionStart` successivo, oppure dalla riga di stato se quello sfugge. La riga di stato dà anche l'avviso `⚠️ name · Contesto usato: 82% - presto verrà compattato in automatico` all'80% di contesto (con un pulsante «Compatta ora») e lo ripete solo dopo che è sceso sotto il 30%.
+Claude sta compattando il suo contesto (`trigger` `auto` o `manual`). La scheda di attività mostra `🔄 name · Compattazione della conversazione` (o, senza scheda, viene inviato un messaggio nuovo), così la pausa non sembra un crash. `PostCompact` chiude questo stato; la riga `📦 name · Conversazione compattata: X% → Y%` arriva dal `SessionStart` successivo, oppure dalla riga di stato se quello sfugge. La riga di stato dà anche l'avviso `⚠️ name · Contesto usato: 82% - presto verrà compattato in automatico` all'80% di contesto (con un pulsante «Compatta ora»), una sola volta per conversazione: la compattazione non lo ripete, e una conversazione nuova (per esempio dopo `/clear`) lo riceve di nuovo.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

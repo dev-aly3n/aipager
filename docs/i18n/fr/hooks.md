@@ -1,6 +1,6 @@
 # Événements de hook
 
-<!-- i18n-source: docs/hooks.md @ 6fc084f -->
+<!-- i18n-source: docs/hooks.md @ 7228205 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../hooks.md))
 
@@ -99,7 +99,7 @@ Un sous-agent a démarré ou s'est terminé. Chacun a sa propre ligne sur la car
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude compacte son contexte (`trigger` vaut `auto` ou `manual`). La carte d'activité affiche `🔄 name · Compactage de la conversation` (un nouveau message quand il n'y a pas de carte), pour que la pause ne ressemble pas à un plantage. `PostCompact` met fin à cet état ; la ligne `📦 name · Conversation compactée : X% → Y%` vient du `SessionStart` qui suit, ou de la ligne d'état quand celui-ci est manqué. La ligne d'état donne aussi l'avertissement `⚠️ name · Contexte à 82% - il sera bientôt compacté automatiquement` (avec un bouton Compacter) une fois que le contexte atteint 80 %, et à nouveau seulement après qu'il est redescendu sous 30 %.
+Claude compacte son contexte (`trigger` vaut `auto` ou `manual`). La carte d'activité affiche `🔄 name · Compactage de la conversation` (un nouveau message quand il n'y a pas de carte), pour que la pause ne ressemble pas à un plantage. `PostCompact` met fin à cet état ; la ligne `📦 name · Conversation compactée : X% → Y%` vient du `SessionStart` qui suit, ou de la ligne d'état quand celui-ci est manqué. La ligne d'état donne aussi l'avertissement `⚠️ name · Contexte à 82% - il sera bientôt compacté automatiquement` (avec un bouton Compacter) une fois que le contexte atteint 80 %, une seule fois par conversation : le compactage ne le répète pas, et une nouvelle conversation (après `/clear`, par exemple) le reçoit à nouveau.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

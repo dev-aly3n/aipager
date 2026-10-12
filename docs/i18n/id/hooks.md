@@ -1,6 +1,6 @@
 # Event hook
 
-<!-- i18n-source: docs/hooks.md @ 6fc084f -->
+<!-- i18n-source: docs/hooks.md @ 7228205 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../hooks.md))
 
@@ -99,7 +99,7 @@ Sebuah subagen mulai atau selesai. Masing-masing punya baris sendiri di kartu ke
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude sedang meringkas konteksnya (`trigger` bernilai `auto` atau `manual`). Kartu kerja menampilkan `🔄 name · Meringkas percakapan` (pesan baru kalau tidak ada kartu), supaya jeda itu tidak terlihat seperti crash. `PostCompact` mengakhiri keadaan itu; baris `📦 name · Percakapan diringkas: X% → Y%` datang dari `SessionStart` berikutnya, atau kalau itu terlewat, dari baris status. Baris status juga memberi peringatan `⚠️ name · Konteks terisi 82% - sebentar lagi diringkas otomatis` (dengan tombol Ringkas sekarang) saat konteks mencapai 80%, dan baru lagi setelah turun di bawah 30%.
+Claude sedang meringkas konteksnya (`trigger` bernilai `auto` atau `manual`). Kartu kerja menampilkan `🔄 name · Meringkas percakapan` (pesan baru kalau tidak ada kartu), supaya jeda itu tidak terlihat seperti crash. `PostCompact` mengakhiri keadaan itu; baris `📦 name · Percakapan diringkas: X% → Y%` datang dari `SessionStart` berikutnya, atau kalau itu terlewat, dari baris status. Baris status juga memberi peringatan `⚠️ name · Konteks terisi 82% - sebentar lagi diringkas otomatis` (dengan tombol Ringkas sekarang) saat konteks mencapai 80%, sekali per percakapan: meringkas tidak memunculkannya lagi, dan percakapan baru (misalnya setelah `/clear`) mendapatkannya lagi.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

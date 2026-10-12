@@ -1,6 +1,6 @@
 # Comandos e interface do bot
 
-<!-- i18n-source: docs/commands.md @ 6fc084f -->
+<!-- i18n-source: docs/commands.md @ 7228205 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../commands.md))
 
@@ -196,7 +196,7 @@ Enquanto um pedido (ou um AskUserQuestion) espera por você, a sessão aparece e
 
 Os diálogos de `AskUserQuestion` aparecem do mesmo jeito, com um botão por opção (as quatro primeiras), e, para uma pergunta que aceita várias respostas, caixas ⬜/☑ e um botão `✅ Enviar`.
 
-Com 80% do contexto, o chat recebe `⚠️ name · Contexto em 82% - logo vai ser compactado automaticamente` com **📦 Compactar agora**, que manda `/compact` para essa sessão.
+Com 80% do contexto, o chat recebe `⚠️ name · Contexto em 82% - logo vai ser compactado automaticamente` com **📦 Compactar agora**, que manda `/compact` para essa sessão. O aviso vem uma vez por conversa: compactar não traz ele de volta, e uma conversa nova (depois de `/clear`, por exemplo) recebe de novo.
 
 ### <a id="stale-buttons"></a>Botões antigos
 

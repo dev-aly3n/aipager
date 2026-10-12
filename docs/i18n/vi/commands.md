@@ -1,6 +1,6 @@
 # Lệnh và giao diện của bot
 
-<!-- i18n-source: docs/commands.md @ 6fc084f -->
+<!-- i18n-source: docs/commands.md @ 7228205 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../commands.md))
 
@@ -196,7 +196,7 @@ Trong lúc một yêu cầu (hoặc một AskUserQuestion) đang chờ bạn, ph
 
 Các hộp thoại `AskUserQuestion` hiện theo cùng cách, với một nút cho mỗi phương án (bốn phương án đầu), và với một câu hỏi cho phép chọn nhiều đáp án thì có các ô chọn ⬜/☑ và một nút `✅ Gửi`.
 
-Khi ngữ cảnh đạt 80%, chat nhận `⚠️ name · Ngữ cảnh đã đầy 82% - sắp tự động thu gọn` kèm **📦 Thu gọn ngay**, nút này gửi `/compact` tới phiên đó.
+Khi ngữ cảnh đạt 80%, chat nhận `⚠️ name · Ngữ cảnh đã đầy 82% - sắp tự động thu gọn` kèm **📦 Thu gọn ngay**, nút này gửi `/compact` tới phiên đó. Cảnh báo này đến một lần cho mỗi cuộc trò chuyện: thu gọn không làm nó quay lại, còn một cuộc trò chuyện mới (ví dụ sau `/clear`) sẽ nhận lại nó.
 
 ### <a id="stale-buttons"></a>Nút cũ
 

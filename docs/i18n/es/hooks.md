@@ -1,6 +1,6 @@
 # Eventos de hook
 
-<!-- i18n-source: docs/hooks.md @ 6fc084f -->
+<!-- i18n-source: docs/hooks.md @ 7228205 -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../hooks.md))
 
@@ -99,7 +99,7 @@ Un subagente arrancó o terminó. Cada uno tiene su propia fila en la tarjeta de
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude está compactando su contexto (`trigger` es `auto` o `manual`). La tarjeta de actividad dice `🔄 name · Compactando la conversación` (un mensaje nuevo si no hay tarjeta abierta), para que la pausa no parezca una caída. `PostCompact` termina ese estado; la línea `📦 name · Conversación compactada: X% → Y%` viene del `SessionStart` que sigue, o de la línea de estado si ese se pierde. La línea de estado también da el aviso `⚠️ name · Contexto al 82% - pronto se compactará solo` (con un botón para compactar) cuando el contexto llega al 80%, y otra vez solo después de bajar del 30%.
+Claude está compactando su contexto (`trigger` es `auto` o `manual`). La tarjeta de actividad dice `🔄 name · Compactando la conversación` (un mensaje nuevo si no hay tarjeta abierta), para que la pausa no parezca una caída. `PostCompact` termina ese estado; la línea `📦 name · Conversación compactada: X% → Y%` viene del `SessionStart` que sigue, o de la línea de estado si ese se pierde. La línea de estado también da el aviso `⚠️ name · Contexto al 82% - pronto se compactará solo` (con un botón para compactar) cuando el contexto llega al 80%, una vez por conversación: compactar no lo repite, y una conversación nueva (tras `/clear`, por ejemplo) lo vuelve a recibir.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

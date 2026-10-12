@@ -1,6 +1,6 @@
 # Sự kiện hook
 
-<!-- i18n-source: docs/hooks.md @ 6fc084f -->
+<!-- i18n-source: docs/hooks.md @ 7228205 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../hooks.md))
 
@@ -99,7 +99,7 @@ Một subagent đã bắt đầu hoặc kết thúc. Mỗi subagent có một d�
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude đang thu gọn ngữ cảnh của nó (`trigger` là `auto` hoặc `manual`). Thẻ làm việc hiện `🔄 name · Đang thu gọn cuộc trò chuyện` (một tin nhắn mới khi chưa có thẻ), để lúc tạm dừng không trông giống một lần crash. `PostCompact` kết thúc trạng thái đó; dòng `📦 name · Đã thu gọn cuộc trò chuyện: X% → Y%` đến từ `SessionStart` ngay sau đó, hoặc từ dòng trạng thái khi sự kiện kia bị lỡ. Dòng trạng thái cũng đưa ra cảnh báo `⚠️ name · Ngữ cảnh đã đầy 82% - sắp tự động thu gọn` (kèm nút Thu gọn ngay) khi ngữ cảnh đạt 80%, và chỉ đưa ra lại sau khi nó đã xuống dưới 30%.
+Claude đang thu gọn ngữ cảnh của nó (`trigger` là `auto` hoặc `manual`). Thẻ làm việc hiện `🔄 name · Đang thu gọn cuộc trò chuyện` (một tin nhắn mới khi chưa có thẻ), để lúc tạm dừng không trông giống một lần crash. `PostCompact` kết thúc trạng thái đó; dòng `📦 name · Đã thu gọn cuộc trò chuyện: X% → Y%` đến từ `SessionStart` ngay sau đó, hoặc từ dòng trạng thái khi sự kiện kia bị lỡ. Dòng trạng thái cũng đưa ra cảnh báo `⚠️ name · Ngữ cảnh đã đầy 82% - sắp tự động thu gọn` (kèm nút Thu gọn ngay) khi ngữ cảnh đạt 80%, mỗi cuộc trò chuyện một lần: thu gọn không làm nó hiện lại, còn một cuộc trò chuyện mới (ví dụ sau `/clear`) sẽ nhận lại nó.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

@@ -1,6 +1,6 @@
 # Hook olayları
 
-<!-- i18n-source: docs/hooks.md @ 6fc084f -->
+<!-- i18n-source: docs/hooks.md @ 7228205 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../hooks.md))
 
@@ -99,7 +99,7 @@ Bir alt ajan başladı ya da bitti. Her birinin çalışma kartında kendi satı
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude bağlamını sıkıştırıyor (`trigger` değeri `auto` ya da `manual`). Çalışma kartı `🔄 name · Konuşma sıkıştırılıyor` gösterir (kart yoksa yeni bir mesaj), böylece duraklama bir çökme gibi görünmez. `PostCompact` bu durumu bitirir; `📦 name · Konuşma sıkıştırıldı: X% → Y%` satırı bir sonraki `SessionStart` olayından ya da o kaçırılırsa durum satırından gelir. Durum satırı ayrıca bağlam %80'e ulaştığında `⚠️ name · Bağlam 82% dolu - yakında otomatik sıkıştırılacak` uyarısını verir (Sıkıştır düğmesiyle), ve yeniden ancak bağlam %30'un altına indikten sonra.
+Claude bağlamını sıkıştırıyor (`trigger` değeri `auto` ya da `manual`). Çalışma kartı `🔄 name · Konuşma sıkıştırılıyor` gösterir (kart yoksa yeni bir mesaj), böylece duraklama bir çökme gibi görünmez. `PostCompact` bu durumu bitirir; `📦 name · Konuşma sıkıştırıldı: X% → Y%` satırı bir sonraki `SessionStart` olayından ya da o kaçırılırsa durum satırından gelir. Durum satırı ayrıca bağlam %80'e ulaştığında `⚠️ name · Bağlam 82% dolu - yakında otomatik sıkıştırılacak` uyarısını verir (Sıkıştır düğmesiyle); bunu her konuşmada bir kez yapar: sıkıştırma uyarıyı tekrarlatmaz, yeni bir konuşma (örneğin `/clear` sonrası) onu yeniden alır.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

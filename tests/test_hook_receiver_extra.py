@@ -158,20 +158,22 @@ def test_statusline_high_pct_triggers_context_warning_once(receiver, run_async):
           type="statusline",
           session="claude-jim",
           context_pct=88)
-    # No second context_warning notify (sess.compact_warned is set)
+    # No second context_warning notify (sent once per conversation)
     events = [c.args[1] for c in notify_fn.await_args_list]
     assert "context_warning" not in events
 
 
-def test_statusline_low_pct_resets_compact_warned(receiver, run_async):
+def test_statusline_low_pct_does_not_rearm_the_context_warning(receiver, run_async):
+    """A low reading (the first statusLine after a compaction) keeps the
+    notice spent: it is sent once per conversation, not per compaction."""
     registry, recv, notify_fn = receiver
     sess = registry.get_or_create("claude-jim")
-    sess.compact_warned = True
+    sess.context_warned_conversation = "claude-jim"
     _send(recv, run_async,
           type="statusline",
           session="claude-jim",
           context_pct=10)
-    assert sess.compact_warned is False
+    assert sess.context_warned_conversation == "claude-jim"
 
 
 def test_statusline_compact_done_fallback_via_statusline(receiver, run_async):
