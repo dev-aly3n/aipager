@@ -653,7 +653,7 @@ process has gone. Its output then goes to the self-restart log
 (`aipager.log` in the instance folder, or `/tmp/aipager.log`) instead of
 your terminal, and the daemon log names the command to run if that copy
 does not come back. If the interpreter itself is gone (its environment
-was removed or replaced), or nothing could be started, aipager exits
+was removed), or nothing could be started, aipager exits
 with code 1, the daemon log ends with `restart.failed:` and the command
 to run, and the next start announces the update.
 
