@@ -6,7 +6,6 @@
   "diff",
   "log",
   "ctx",
-  "prompt",
   "background"
  ],
  "language": "Italian",
@@ -86,7 +85,8 @@
   ],
   "turn": [
    "turno",
-   "turni"
+   "turni",
+   "attività"
   ],
   "update": [
    "aggiorn",

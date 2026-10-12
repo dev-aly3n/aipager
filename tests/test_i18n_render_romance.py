@@ -54,7 +54,7 @@ AS_IS = {"es": {"beta"}, "pt-BR": {"beta", "offline"}, "fr": {"sections"},
 FOLD = {"es": ("▸ 1 herramienta usada", "▸ 2 herramientas usadas"),
         "pt-BR": ("▸ 1 ferramenta usada", "▸ 2 ferramentas usadas"),
         "fr": ("▸ 1 outil utilisé", "▸ 2 outils utilisés"),
-        "it": ("▸ 1 chiamata a strumento", "▸ 2 chiamate a strumenti")}
+        "it": ("▸ 1 strumento usato", "▸ 2 strumenti usati")}
 #: The golden surfaces of the design (first contact is checked below):
 #: the busy card, the permission prompt and its answered line, /settings,
 #: /language, /status, errors and refusals.
