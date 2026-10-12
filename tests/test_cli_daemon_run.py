@@ -9,6 +9,7 @@ component and faking the wait so the function returns synchronously.
 from __future__ import annotations
 
 import asyncio
+import logging
 import signal
 from unittest.mock import AsyncMock, MagicMock
 
@@ -597,3 +598,75 @@ def test_run_daemon_stops_the_tunnel_manager_before_the_miniapp_server(
 
     assert order.index("manager.stop") < order.index("miniapp.stop")
     assert order.index("miniapp.stop") < order.index("monitor.stop")
+
+
+# ---- a still-set OBSERVER_BOTS (observer bots were removed) ----------------
+
+REMOVED_WARNING = (
+    "OBSERVER_BOTS is set but observer bots were removed; "
+    "to let someone watch, add them to a group with the read_only role"
+)
+SECRET_VALUE = "123456:AAsecretTOKEN:42"
+
+
+def _run_with_observer_bots(monkeypatch, caplog, value):
+    """Run the daemon with OBSERVER_BOTS set to ``value`` (None: unset).
+
+    Set or deleted explicitly: the shell running the suite could have it.
+    """
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    if value is None:
+        monkeypatch.delenv("OBSERVER_BOTS", raising=False)
+    else:
+        monkeypatch.setenv("OBSERVER_BOTS", value)
+    bot, hook, monitor, _registry, _ = _patch_components(monkeypatch)
+    loop = asyncio.new_event_loop()
+    try:
+        with caplog.at_level(logging.DEBUG, logger="aipager"):
+            loop.run_until_complete(daemon._run_daemon("bot_username"))
+    finally:
+        loop.close()
+    return bot, hook, monitor
+
+
+def _assert_started_and_stopped(bot, hook, monitor):
+    bot.start.assert_awaited_once()
+    hook.start.assert_awaited_once()
+    monitor.start.assert_awaited_once()
+    monitor.stop.assert_called_once()
+    hook.stop.assert_called_once()
+    bot.stop.assert_awaited_once()
+
+
+def test_a_still_set_observer_bots_warns_once_and_the_daemon_starts(monkeypatch, caplog):
+    bot, hook, monitor = _run_with_observer_bots(monkeypatch, caplog, SECRET_VALUE)
+    hits = [r for r in caplog.records if r.getMessage() == REMOVED_WARNING]
+    assert len(hits) == 1
+    assert hits[0].levelno == logging.WARNING
+    assert hits[0].name == "aipager"
+    _assert_started_and_stopped(bot, hook, monitor)
+
+
+def test_the_warning_never_prints_the_value(monkeypatch, caplog, capsys):
+    _run_with_observer_bots(monkeypatch, caplog, SECRET_VALUE)
+    assert any(r.getMessage() == REMOVED_WARNING for r in caplog.records)
+    for r in caplog.records:
+        assert "AAsecretTOKEN" not in r.getMessage()
+        assert "AAsecretTOKEN" not in repr(r.args)
+    assert "AAsecretTOKEN" not in caplog.text
+    out, err = capsys.readouterr()
+    assert "AAsecretTOKEN" not in out + err
+
+
+@pytest.mark.parametrize("value", [None, "", "   \t"], ids=["unset", "empty", "spaces"])
+def test_unset_or_blank_observer_bots_is_silent(monkeypatch, caplog, value):
+    bot, hook, monitor = _run_with_observer_bots(monkeypatch, caplog, value)
+    assert not [r for r in caplog.records if "OBSERVER_BOTS" in r.getMessage()]
+    _assert_started_and_stopped(bot, hook, monitor)
+
+
+def test_a_malformed_value_still_warns(monkeypatch, caplog):
+    bot, hook, monitor = _run_with_observer_bots(monkeypatch, caplog, "garbage")
+    assert [r.getMessage() for r in caplog.records].count(REMOVED_WARNING) == 1
+    _assert_started_and_stopped(bot, hook, monitor)

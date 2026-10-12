@@ -320,6 +320,11 @@ async def _run_daemon(bot_username: str) -> None:
     provenance = bootstrap_claude_settings()
 
     log.info("connected as @%s, will message chat %s", bot_username, CHAT_ID)
+    # A setting for a feature that is gone: say so once and carry on. The
+    # value holds bot tokens, so the line never carries it.
+    if os.environ.get("OBSERVER_BOTS", "").strip():
+        log.warning("OBSERVER_BOTS is set but observer bots were removed; "
+                    "to let someone watch, add them to a group with the read_only role")
 
     registry = SessionRegistry()
     registry.load()
