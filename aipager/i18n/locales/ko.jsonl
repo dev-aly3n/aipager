@@ -617,7 +617,7 @@
 {"k": "route.retry_note_others", "src": "f54d6bb2", "v": "⏸ 다시 보내지 않았어요. 지금은 다른 사람 차례예요. 끝나면 “다시 시도”를 한 번 더 눌러 주세요."}
 {"k": "route.retry_note_prompt", "src": "a9f6356e", "v": "⏸ 다시 보내지 않았어요. 답하지 않은 요청이 있어요. 먼저 답한 뒤 “다시 시도”를 한 번 더 눌러 주세요."}
 {"k": "route.send_failed", "src": "3c65fe20", "v": "❌ [{session}] 세션에 메시지를 보내지 못했어요"}
-{"k": "route.sent_to", "src": "72283da2", "v": "{glyph} {what} → {session} 세션으로 보냈어요"}
+{"k": "route.sent_to", "src": "72283da2", "v": "{glyph} {session} 세션으로 보냈어요: {what}"}
 {"k": "route.session_missing", "src": "e8086da8", "v": "⚠️ “{name}” 세션을 찾을 수 없어요"}
 {"k": "route.unknown_session", "src": "2823272e", "v": "⚠️ 그런 이름의 세션이 없어요: {session}"}
 {"k": "route.voice_no_session", "src": "6c2d2821", "v": "⚠️ 음성을 글로 받아썼지만 아직 받을 세션을 고르지 않았어요. 먼저 {command} 명령으로 세션을 고르세요."}
