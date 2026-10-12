@@ -78,7 +78,7 @@ def test_the_dashboard_in_russian(mk_bot, monkeypatch):
     bot = mk_bot()
     text = bot._build_session_dashboard(_busy(bot, monkeypatch))
     assert text.startswith("⚙️ <b>[x1]</b> · работает 4:10\n\nМодель: <code>Opus 4.7</code>")
-    assert "Очередь: всего 3 (в очереди 2, заметок 1)" in text
+    assert "Очередь: ждут 3 (сообщений: 2, заметок: 1)" in text
     assert not any(m in text for m in MARKS)
 
 
@@ -121,7 +121,7 @@ def test_the_picker_in_persian_and_russian(mk_bot, monkeypatch):
     preferences.set_ui_language(CHAT, "ru")
     text, kb = bot._render_resume_picker(0, CHAT)
     assert text.startswith("📚 <b>Прошлые сессии</b> (всего 12)")
-    assert text.endswith("<i>Ещё 1 сессия без сохранённой истории, её не возобновить.</i>")
+    assert text.endswith("<i>Ещё 1 сессия без сохранённой переписки, её не продолжить.</i>")
     labels = [b.text for row in kb.inline_keyboard for b in row]
     assert labels[0] == "p0 (1 мин назад)" and labels[-2:] == ["Стр. 1/2", "Далее »"]
     preferences.set_ui_language(CHAT, "fa")

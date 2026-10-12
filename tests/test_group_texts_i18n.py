@@ -37,11 +37,12 @@ def test_dropped_in_persian_and_russian():
         f"{RLM}۳ پیام به Claude ارسال نشد: {FSI}@bob{PDI} دیگر اجازه ندارد اینجا پیام بفرستد.")
     ru = i18n.get("ru")
     assert live_reload.dropped_reply(ru, 1, None) == \
-        "Отброшено: этот отправитель больше не может писать здесь."
-    words = {"one": "сообщение", "few": "сообщения", "many": "сообщений"}
+        "Не отправлено Claude: этот человек больше не может писать здесь."
+    words = {"one": "сообщение не отправлено", "few": "сообщения не отправлены",
+             "many": "сообщений не отправлено"}
     for n in (2, 5, 11, 12, 21, 22, 25):
         text = live_reload.dropped_reply(ru, n, BOB)
-        assert text.startswith(f"Отброшено {n} {words[plurals.category('ru', n)]}: "), text
+        assert text.startswith(f"{n} {words[plurals.category('ru', n)]} Claude: "), text
 
 
 def test_dropped_reply_is_in_the_chats_language(mk_bot, run_async, monkeypatch):
@@ -57,7 +58,7 @@ def test_dropped_reply_is_in_the_chats_language(mk_bot, run_async, monkeypatch):
     sess.pending_queue = [("a", 101, None, None, 2), ("b", 102, None, None, 2)]
     run_async(live_reload._drop_held(bot, sess, GROUP, scopes, scopes, None))
     assert bot._app.bot.send_message.await_args.kwargs["text"] == \
-        "Отброшено 2 сообщения: @bob больше не может писать здесь."
+        "2 сообщения не отправлены Claude: @bob больше не может писать здесь."
 
 
 def test_post_as_yourself_in_the_chats_language(mk_bot, run_async):
@@ -81,7 +82,7 @@ def _bot(username):
 def test_the_help_talk_line_both_ways():
     ru = i18n.get("ru")
     assert group_intake.group_help_talk_line(_bot("aipager_bot"), tr=ru) == (
-        "<b>Говорить:</b> ответь на сообщение сессии или упомяни @aipager_bot · "
+        "<b>Общение:</b> ответь на сообщение сессии или упомяни @aipager_bot · "
         "/&lt;имя&gt; сообщение")
     assert group_intake.group_help_talk_line(_bot(None)) == (
         "<b>Talk:</b> reply to a session's message, or mention the bot · "
