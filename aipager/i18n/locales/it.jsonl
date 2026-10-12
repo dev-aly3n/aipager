@@ -450,7 +450,7 @@
 {"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ Sta lavorando al tuo primo messaggio."}
 {"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"many": "⏱️ <b>{session}</b> · Dopo {n} min la compattazione non ha ancora detto di aver finito", "one": "⏱️ <b>{session}</b> · Dopo {n} min la compattazione non ha ancora detto di aver finito", "other": "⏱️ <b>{session}</b> · Dopo {n} min la compattazione non ha ancora detto di aver finito"}}
 {"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · Conversazione compattata: {before} → {after}"}
-{"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · Contesto al {percent} - presto verrà compattato in automatico"}
+{"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · Contesto usato: {percent} - presto verrà compattato in automatico"}
 {"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · limite di memoria raggiunto"}
 {"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · limite di memoria raggiunto durante <code>{tool}</code>"}
 {"k": "notice.memcap_hook", "src": "657f02c3", "v": "<code>{hook}</code> ha superato il suo limite di memoria di {limit} GB e si è fermato. Se stava controllando uno strumento, molto probabilmente Claude Code l'ha rifiutato e Claude può riprovare; altrimenti è stato saltato solo quell'evento. La sessione continua."}
@@ -736,7 +736,7 @@
 {"k": "set.btn.problem_reports", "src": "2478212a", "v": "🐞 Segnalazioni di problemi: {value}"}
 {"k": "set.btn.reports_turn_on", "src": "8b383496", "v": "Riattiva le proposte"}
 {"k": "set.btn.use_chat_default", "src": "55c966bc", "v": "↩️ Usa il predefinito della chat"}
-{"k": "set.cadence.title", "src": "ed8a634b", "v": "⏱ Aggiorna scheda nei turni lunghi"}
+{"k": "set.cadence.title", "src": "ed8a634b", "v": "⏱ Aggiorna scheda nelle attività lunghe"}
 {"k": "set.diffs.title", "src": "9f74873f", "v": "📝 Anteprime dei diff"}
 {"k": "set.formatting.title", "src": "6b0a66a0", "v": "✏️ Formattazione semplice"}
 {"k": "set.help.cadence.off", "src": "71965ae1", "v": "La scheda si aggiorna allo stesso ritmo per tutta l'attività, per quanto lunga."}
