@@ -404,7 +404,7 @@
 {"k": "newflow.cancelled_nothing", "src": "4c346842", "v": "↩️ Annulé : aucune session n'a changé."}
 {"k": "newflow.changed_mode", "src": "a1779ae6", "v": "{person} a passé la session en {mode}."}
 {"k": "newflow.changed_model", "src": "1f771c06", "v": "{person} a changé le modèle pour {model}."}
-{"k": "newflow.closed", "src": "87aee987", "v": "✖️ Fermée, car vous êtes passé à autre chose. Envoyez /new pour lancer une session."}
+{"k": "newflow.closed", "src": "87aee987", "v": "✖️ Fermée, car vous avez fait autre chose. Envoyez /new pour lancer une session."}
 {"k": "newflow.conflict_replaced", "src": "0ab47818", "v": "↩️ Un /new plus récent pour <b>{session}</b> a remplacé cette carte."}
 {"k": "newflow.conflict_running", "src": "b36a4e23", "v": "⚠️ <b>{session}</b> tourne déjà.\nQue voulez-vous faire ?"}
 {"k": "newflow.conflict_used", "src": "5d97ff8c", "v": "♻️ Le nom <b>{session}</b> a déjà été utilisé.\nQue voulez-vous faire ?"}
@@ -697,7 +697,7 @@
 {"k": "sess.not_sent_to", "src": "0d040f9f", "v": "Pas envoyé à {session}."}
 {"k": "sess.pick_cancelled", "src": "d3e4142f", "v": "Annulé."}
 {"k": "sess.rename_cancelled", "src": "abe2ee6d", "v": "Renommage annulé."}
-{"k": "sess.rename_closed", "src": "d06e8a83", "v": "✖️ Renommage fermé, car vous êtes passé à autre chose. Envoyez /rename pour réessayer."}
+{"k": "sess.rename_closed", "src": "d06e8a83", "v": "✖️ Renommage fermé, car vous avez fait autre chose. Envoyez /rename pour réessayer."}
 {"k": "sess.rename_exists", "src": "3367e703", "v": "⚠️ Une session nommée {session} existe déjà dans cette discussion."}
 {"k": "sess.rename_expired", "src": "0235f755", "v": "⏱ Ce renommage a expiré. Envoyez /rename à nouveau."}
 {"k": "sess.rename_gone", "src": "86c694ee", "v": "⚠️ Cette session n'est plus disponible. Envoyez /rename à nouveau."}

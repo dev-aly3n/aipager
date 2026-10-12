@@ -96,6 +96,13 @@ Active voice, and the person first when a person did it:
 | 🗑️ Deleted [{session}] by {person} | 🗑️ {person} deleted [{session}] |
 | ⚙️ Switched to {mode} by {person} | ⚙️ {person} switched the session to {mode} |
 
+The reader can be anyone, so never give them a gender. Where the language
+marks gender on a verb or adjective about "you" (French "vous êtes passé",
+Italian "sei passato", Arabic and Russian past tenses), choose a phrasing
+that does not: "you did something else", not "you moved on". A person named
+by a placeholder ({person}, {who}) gets the same care where the language
+allows it.
+
 ## 5. Be honest about what aipager knows
 
 aipager often knows less than the English seems to say. Do not make it sound
