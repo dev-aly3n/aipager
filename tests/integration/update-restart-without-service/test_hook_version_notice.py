@@ -106,6 +106,13 @@ def test_one_notice_per_newer_version_per_run(env, run):
     assert len(_notices(env)) == 2
 
 
+def test_a_delivered_notice_is_never_sent_again_even_with_no_retry_wait(env, run,
+                                                                        monkeypatch):
+    monkeypatch.setattr(update_flow, "HOOK_NOTICE_RETRY_SECONDS", 0.0)
+    _note(env, run, "1.1.0", "1.1.0", "1.1.0")
+    assert len(_notices(env)) == 1
+
+
 def test_the_notice_goes_to_the_owner_quietly_with_restart_now(env, run):
     _note(env, run, "1.1.0")
     (sent,) = _notices(env)

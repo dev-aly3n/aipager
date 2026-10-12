@@ -75,6 +75,19 @@ def test_a_member_who_is_not_an_admin_is_refused(env, run):
     assert env.manager.snapshot() is None and env.calls == []
 
 
+def test_the_update_handler_itself_rechecks_the_admin(env, run):
+    # Below the dispatcher's tap gate: update_flow's own re-check.
+    from aipager.bot import update_flow
+    _scoped(env)
+    update, query = _tap(env, MEMBER, GROUP)
+
+    async def scenario():
+        return await update_flow.handle_callback(env.bot, update, query, "_", "up:rs")
+    assert run(scenario) is True
+    assert "🚫 Only an admin can update aipager." in _popups(query)
+    assert env.manager.snapshot() is None and env.calls == []
+
+
 def test_a_stranger_in_personal_mode_is_refused(env, run):
     update, query = _tap(env, STRANGER, STRANGER)
 
