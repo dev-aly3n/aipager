@@ -1,6 +1,6 @@
 # Розв'язання проблем
 
-<!-- i18n-source: docs/troubleshooting.md @ 7e36944 -->
+<!-- i18n-source: docs/troubleshooting.md @ 01d5a8b -->
 
 > Цю сторінку перекладено з англійської; якщо вони розходяться, правильною є англійська версія. ([English](../../troubleshooting.md))
 

@@ -1,6 +1,6 @@
 # Lệnh và giao diện của bot
 
-<!-- i18n-source: docs/commands.md @ 7e36944 -->
+<!-- i18n-source: docs/commands.md @ 01d5a8b -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../commands.md))
 
