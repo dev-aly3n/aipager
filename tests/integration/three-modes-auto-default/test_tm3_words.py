@@ -268,6 +268,8 @@ JUSTIFIED = {
     "newflow.ready_models",
     # /settings New sessions taps, with the Full access option and refusal.
     "settings.taps",
+    # /help's /mode line names all three modes (2026-10-11).
+    "help.dm", "help.group", "help.group_unnamed",
 }
 
 
