@@ -73,7 +73,8 @@ whole show. Inside that:
   to scan `/tmp/claude-dtach-*.sock`, reconcile the sessions it finds
   with the registry, and run the watchdogs: a busy card that stopped
   moving, a prompt Claude Code never took, a permission prompt with no
-  news for 5 minutes (`AIPAGER_INTERACTIVE_TIMEOUT`), a turn whose end
+  news for 5 minutes that the transcript shows is over
+  (`AIPAGER_INTERACTIVE_TIMEOUT`), a turn whose end
   was missed.
 - **`SessionRegistry`** (`aipager/state.py`): the `TrackedSession`
   objects keyed by name. Saved to `~/.claude/aipager-sessions.json`

@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+from unittest.mock import patch
 
 import pytest
 
 from aipager import preferences as prefs
-from aipager import state
+from aipager import session_monitor, state
 from aipager.session_monitor import INTERACTIVE_TIMEOUT_SECONDS, SessionMonitor
 
 CHAT = 256113222
@@ -90,7 +91,10 @@ async def _exit(r, tmp_path, how: str):
     elif how == "watchdog":
         monitor = SessionMonitor(r.bot.registry, r.bot.notify)
         await asyncio.sleep(INTERACTIVE_TIMEOUT_SECONDS + 30)
-        await monitor.tick()
+        # The watchdog ends a wait only on the transcript's evidence that
+        # the dialog is over (2026-10-12).
+        with _transcript_shows_it_over():
+            await monitor.tick()
     elif how == "gone":
         r.pty.alive.clear()
         monitor = SessionMonitor(r.bot.registry, r.bot.notify)
@@ -139,8 +143,14 @@ async def _exit_after_open(r, how, monitor):
         await r.tap(r.sess.busy_msg_id, "allow")
     else:
         await asyncio.sleep(INTERACTIVE_TIMEOUT_SECONDS + 30)
-        await monitor.tick()
+        with _transcript_shows_it_over():
+            await monitor.tick()
     await asyncio.sleep(1)
+
+
+def _transcript_shows_it_over():
+    return patch.object(session_monitor, "dialog_closed_in_transcript",
+                        lambda *a: True)
 
 
 def test_answered_separate_prompt_leaves_no_record_on_the_next_card_turn(

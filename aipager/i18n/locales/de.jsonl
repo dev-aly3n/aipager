@@ -597,6 +597,9 @@
 {"k": "route.cleared", "src": "fd716ebc", "v": {"one": "🗑️ {n} Nachricht aus der Warteschlange von [<b>{session}</b>] gelöscht.", "other": "🗑️ {n} Nachrichten aus der Warteschlange von [<b>{session}</b>] gelöscht."}}
 {"k": "route.ended_which", "src": "eb950d37", "v": "{session} ist beendet. Welche Sitzung?"}
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Ich weiß nicht, für welche Sitzung diese Datei ist. Wähle eine mit {command} oder über die Tastatur."}
+{"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude wartet noch auf deine Antwort auf diese Berechtigungsanfrage. Beantworte sie zuerst, dann geht deine neue Nachricht gleich danach an Claude."}
+{"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude wartet noch auf deine Antwort auf diese Frage. Beantworte sie zuerst, dann geht deine neue Nachricht gleich danach an Claude."}
+{"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude wartet im Terminal auf eine Antwort. Beantworte sie dort oder tippe auf Stoppen, dann geht deine neue Nachricht gleich danach an Claude."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Der Text der Sprachnachricht konnte nicht an [{session}] gesendet werden"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Keine Sitzungen zum Beenden."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "Welche Sitzung beenden?"}

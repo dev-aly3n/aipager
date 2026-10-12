@@ -171,8 +171,28 @@ def test_an_unchanged_transcript_is_not_read_again(monitored, run_async, monkeyp
     assert len(reads) == 2 and _events(notify) == []
 
 
-def test_the_watchdog_still_ends_a_dialog_nobody_answers(monitored, run_async, steady_clock):
+def test_the_watchdog_keeps_a_dialog_nobody_answers_open(monitored, run_async, steady_clock):
+    """2026-10-12: a question nobody answered is still on screen after the
+    timeout. Demoted, the session took the next Telegram message as a new
+    turn and typed it into the dialog. With nothing in the transcript past
+    the dialog, it stays waiting, with no time limit."""
     monitor, sess, notify = monitored
+    sess.interactive_entered_at = steady_clock() - 5  # on the monitor's clock
+    sess.last_hook_at = steady_clock() - INTERACTIVE_TIMEOUT_SECONDS - 60
+    run_async(monitor._scan())
+    run_async(monitor._scan())
+    assert sess.status is Status.INTERACTIVE
+    assert sess.pending_permission == {"tool_summary": "Bash: ls"}
+    assert "dialog_ended_in_terminal" not in _events(notify)
+
+
+def test_the_watchdog_ends_a_dialog_the_transcript_shows_is_over(
+        monitored, run_async, steady_clock):
+    """An Allow at the terminal whose closing hook was lost: the tool's
+    result is in the transcript, so the watchdog stops waiting on it."""
+    monitor, sess, notify = monitored
+    sess.interactive_entered_at = steady_clock() - 5  # on the monitor's clock
+    _write(sess.transcript_path, _tool_result(time.time() - 1))
     sess.last_hook_at = steady_clock() - INTERACTIVE_TIMEOUT_SECONDS - 60
     run_async(monitor._scan())
     assert sess.status is Status.BUSY and sess.pending_permission is None

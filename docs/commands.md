@@ -451,9 +451,11 @@ to be over (answered by a tap or in the terminal, its turn ended, or not
 brought back by a restart because it was answered meanwhile or could not
 be saved and read back), its old answer buttons answer "already
 answered" and type nothing, after a restart too. A prompt nobody
-answered that aipager stopped waiting on (5 minutes with no news from
-Claude) is not known to be over, so its buttons still answer the
-dialog.
+answers stays open for as long as Claude waits on it. aipager stops
+waiting on it only when Claude sends no news for 5 minutes and the
+saved conversation reads as past the prompt (the news of an answer
+lost); such a prompt is not known to be over, so its buttons still
+answer the dialog.
 
 A turn Claude starts **by itself** - a background agent reporting back
 with a `<task-notification>` when no job is open - gets its busy card
@@ -830,8 +832,14 @@ until Claude takes it or it is dropped.
 Three cases are held back instead of sent, and delivered automatically
 once resolved:
 
-- A permission or question prompt is open: your text would otherwise
-  be read as an answer to that dialog.
+- A permission or question prompt is open, for as long as it stays
+  open (there is no time limit): your text would otherwise be read as
+  an answer to that dialog. Your first message then gets one reply,
+  under the prompt, saying Claude is still waiting for your answer
+  (later ones only get the 👀). Once you answer, on Telegram or in the
+  terminal, the held messages go to Claude in the order you sent them
+  and that reply is deleted. If the session ends with the prompt still
+  open, they are dropped with a 🤷.
 - (Team mode) a different person's message is still waiting to be
   picked up.
 - (Team mode) a different person's turn is running, including a
@@ -1258,7 +1266,7 @@ them is needed for normal use.
 | `TYPING_INDICATOR_INTERVAL` | `4.5` | Seconds between "typing…" bubbles; `0` turns them off. |
 | `TELEGRAM_MAX_RETRY_AFTER` | `90` | Telegram's wait, in seconds, beyond which aipager treats a rate limit as a ban (do not lower it; see [troubleshooting](troubleshooting.md#the-bot-went-quiet-flood-control)). |
 | `CLAUDE_RICH_SUMMARIES` | `1` | `0` turns off the rich formatting of answers that contain code blocks (a fallback kept from older versions). |
-| `AIPAGER_INTERACTIVE_TIMEOUT` | `300` | Seconds a permission prompt may wait with no news from Claude Code before the session counts as working again ([troubleshooting](troubleshooting.md#a-permission-prompt-with-no-news-for-5-minutes)). |
+| `AIPAGER_INTERACTIVE_TIMEOUT` | `300` | Seconds a permission prompt or question may wait with no news from Claude Code before aipager checks the saved conversation; only if it shows the prompt is over does the session count as working again ([troubleshooting](troubleshooting.md#a-permission-prompt-with-no-news-for-5-minutes)). |
 | `AIPAGER_SUBAGENT_SILENCE` | `1800` | Seconds of silence after which a subagent with no stop seen is dropped ([hooks](hooks.md#subagentstart--subagentstop)). |
 | `AIPAGER_BG_SHELL_MAX_TRACK` | `7200` | Seconds after which a background command with no end seen stops counting. |
 | `AIPAGER_REPORT_PROMPTS` | on | `0` switches off the automatic problem-report offers ([problem reports](problem-reports.md#when-aipager-offers-a-report)). |

@@ -144,7 +144,7 @@ aipager session <label> --continue # yeni bir dtach, bu klasörün son konuşmas
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>5 dakikadır haber gelmeyen bir izin isteği
 
-Bir oturum bir izin isteğini bekliyorsa ve Claude Code 5 dakika boyunca hiçbir şey bildirmezse aipager o isteği beklemeyi bırakır ve oturumu yeniden çalışıyor sayar. Bu, artık kimsenin yanıtlayamayacağı bir isteğin ortasında çöken bir Claude Code'u yakalar. İsteğin düğmeleri, iletişim kutusu hâlâ açıksa onda yanıt vermeye devam eder (bkz. [yanıtlar](commands.md#idle-responses)).
+Bir oturum bir izin isteğini ya da soruyu bekliyorsa ve Claude Code 5 dakika boyunca hiçbir şey bildirmezse aipager oturumun kayıtlı sohbetini okur. aipager isteği beklemeyi ancak sohbet isteğin bittiğini gösterirse (terminalde yanıtlanmış ve haberi kaybolmuşsa) bırakır ve oturumu yeniden çalışıyor sayar. Aksi halde istek ne kadar sürerse sürsün açık kalır: kart ve sabitlenmiş çubuk oturumun yanıtını beklediğini söylemeye devam eder, "hâlâ çalışıyor" notu gelmez ve mesajların sen yanıt verene kadar bekletilir (bkz. [metin](commands.md#text)). İstek açıkken kapanan bir Claude Code oturumu sona erdirir. İsteğin düğmeleri, iletişim kutusu hâlâ açıksa onda yanıt vermeye devam eder (bkz. [yanıtlar](commands.md#idle-responses)).
 
 Beklemeyi değiştirmek için:
 

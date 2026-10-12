@@ -597,6 +597,9 @@
 {"k": "route.cleared", "src": "fd716ebc", "v": {"many": "🗑️ {n} messages en attente supprimés pour [<b>{session}</b>].", "one": "🗑️ {n} message en attente supprimé pour [<b>{session}</b>].", "other": "🗑️ {n} messages en attente supprimés pour [<b>{session}</b>]."}}
 {"k": "route.ended_which", "src": "eb950d37", "v": "{session} est terminée. Quelle session ?"}
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Je ne sais pas à quelle session ce fichier est destiné. Choisissez-en une avec {command} ou le clavier."}
+{"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude attend toujours votre réponse à cette demande d'autorisation. Répondez-y d'abord, et votre nouveau message sera envoyé à Claude juste après."}
+{"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude attend toujours votre réponse à cette question. Répondez-y d'abord, et votre nouveau message sera envoyé à Claude juste après."}
+{"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude attend une réponse dans le terminal. Répondez-y là-bas ou appuyez sur Arrêter, et votre nouveau message sera envoyé à Claude juste après."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Impossible d'envoyer le texte du message vocal à [{session}]"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Aucune session à terminer."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "Quelle session terminer ?"}

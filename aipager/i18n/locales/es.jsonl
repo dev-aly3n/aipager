@@ -597,6 +597,9 @@
 {"k": "route.cleared", "src": "fd716ebc", "v": {"many": "🗑️ Se borraron {n} mensajes en cola de [<b>{session}</b>].", "one": "🗑️ Se borró {n} mensaje en cola de [<b>{session}</b>].", "other": "🗑️ Se borraron {n} mensajes en cola de [<b>{session}</b>]."}}
 {"k": "route.ended_which", "src": "eb950d37", "v": "{session} terminó. ¿Qué sesión?"}
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ No sé para qué sesión es este archivo. Elige una con {command} o con el teclado."}
+{"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude sigue esperando tu respuesta a esta solicitud de permiso. Respóndela primero y tu nuevo mensaje le llegará a Claude justo después."}
+{"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude sigue esperando tu respuesta a esta pregunta. Respóndela primero y tu nuevo mensaje le llegará a Claude justo después."}
+{"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude está esperando una respuesta en la terminal. Responde allí o toca Detener, y tu nuevo mensaje le llegará a Claude justo después."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ No se pudo enviar el texto del audio a [{session}]"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "No hay sesiones que terminar."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "¿Qué sesión terminar?"}

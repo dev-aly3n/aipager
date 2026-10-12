@@ -2506,6 +2506,8 @@ class SessionOpsMixin:
         await self._mark_not_delivered(
             sess, reactions.held_entries(sess.pending_queue) + held)
         sess.pending_queue.clear()
+        # Its "answer it first" notices promised a send that will not come.
+        await self._drop_dialog_hold(sess)
         clear_notes_dir(sess.name)
         if held:
             await inject.discard_queued_input(sess.name)

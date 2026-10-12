@@ -15,11 +15,13 @@ import json
 import logging
 import socket
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pytest
 
 from aipager import audit as audit_mod
 from aipager import preferences as prefs
+from aipager import session_monitor
 from aipager.session_monitor import (
     IDLE_RECOVERY_GRACE,
     INTERACTIVE_TIMEOUT_SECONDS,
@@ -524,9 +526,18 @@ def test_watchdog_demotes_restored_prompt_past_the_timeout(
         monitor = await _old_prompt_restored(r, tmp_path)
         await asyncio.sleep(INTERACTIVE_TIMEOUT_SECONDS + 10)
         await monitor.tick()
-        return r.sess.status
+        unanswered = r.sess.status
+        # Ended only on the transcript's evidence that it is over
+        # (2026-10-12): a dialog nobody answered stays open.
+        monitor._dialog_checked.clear()  # the transcript changed
+        with patch.object(session_monitor, "dialog_closed_in_transcript",
+                          lambda *a: True):
+            await monitor.tick()
+        return unanswered, r.sess.status
 
-    assert _run(vloop, scenario()) is not Status.INTERACTIVE
+    unanswered, after = _run(vloop, scenario())
+    assert unanswered is Status.INTERACTIVE
+    assert after is not Status.INTERACTIVE
 
 
 # ── SC12: an answered restored prompt is not idle-recovered ──────────────

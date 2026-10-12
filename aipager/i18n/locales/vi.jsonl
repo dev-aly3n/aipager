@@ -597,6 +597,9 @@
 {"k": "route.cleared", "src": "fd716ebc", "v": {"other": "🗑️ Đã xóa {n} tin nhắn trong hàng đợi của [<b>{session}</b>]."}}
 {"k": "route.ended_which", "src": "eb950d37", "v": "{session} đã kết thúc. Phiên nào?"}
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Không rõ file này dành cho phiên nào. Hãy chọn một phiên bằng {command} hoặc từ bàn phím."}
+{"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude vẫn đang chờ bạn trả lời yêu cầu cấp quyền này. Hãy trả lời trước, rồi tin nhắn mới của bạn sẽ được gửi đến Claude ngay sau đó."}
+{"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude vẫn đang chờ bạn trả lời câu hỏi này. Hãy trả lời trước, rồi tin nhắn mới của bạn sẽ được gửi đến Claude ngay sau đó."}
+{"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude đang chờ trả lời trong terminal. Hãy trả lời ở đó hoặc nhấn Dừng, rồi tin nhắn mới của bạn sẽ được gửi đến Claude ngay sau đó."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Không gửi được nội dung tin nhắn thoại tới [{session}]"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Không có phiên nào để kết thúc."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "Kết thúc phiên nào?"}

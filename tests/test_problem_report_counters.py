@@ -262,6 +262,8 @@ def test_an_interactive_demotion_is_counted(monkeypatch):
     sess.last_hook_at = time.monotonic() - sm.INTERACTIVE_TIMEOUT_SECONDS - 60
     sess.pending_permission = {"tool": "Bash"}
     registry._sessions[sess.name] = sess
+    # The transcript reads as past the dialog: the only demotion there is.
+    monkeypatch.setattr(sm, "dialog_closed_in_transcript", lambda *a: True)
     _scan(_monitor(registry), monkeypatch, [sess.name])
     assert sess.status == Status.BUSY
     assert _counts() == {"interactive_demoted": 1}

@@ -354,6 +354,27 @@ QUEUE_FULL = Plural("route.queue_full",
                           "or clear the queue.",
                     note="HTML. A message could not be held: the queue already holds {n}",
                     eg={"session": "x1"})
+# The one notice a message held behind an open dialog gets (the first one
+# per person per dialog), as a reply to the dialog's card when it can be.
+HELD_QUESTION = Msg(
+    "route.held_question",
+    "❓ Claude is still waiting for your answer to this question. Answer it "
+    "first, and your new message goes to Claude right after.",
+    note="Reply to the open question's card when someone sends a message while "
+         "Claude waits for the answer: the message is held, not sent, until the "
+         "question is answered. Deleted once it is sent")
+HELD_PERMISSION = Msg(
+    "route.held_permission",
+    "❓ Claude is still waiting for your answer to this permission request. "
+    "Answer it first, and your new message goes to Claude right after.",
+    note="As route.held_question, for an open permission request (Allow / Deny)")
+HELD_TERMINAL = Msg(
+    "route.held_terminal",
+    "❓ Claude is waiting for an answer in the terminal. Answer it there or tap "
+    "Stop, and your new message goes to Claude right after.",
+    note="As route.held_question, for a question or permission request that can "
+         "only be answered in the terminal (Claude Code's own screen on the "
+         "computer); Stop is the busy card's Stop button")
 NO_SESSION_HERE = Msg("route.no_session_here", "⚠️ No session named <b>{session}</b> here.",
                       note="HTML. A typed name matches no session in this chat",
                       eg={"session": "x1"})
@@ -631,6 +652,58 @@ class _PendingAlbum:
     settle_task: asyncio.Task | None = None
 
 
+def open_dialog_surface(sess) -> tuple[str, int | None, int | None]:
+    """``(kind, chat_id, message_id)`` of the dialog *sess* waits on, as
+    the chat shows it: ``kind`` is ``"question"`` (AskUserQuestion),
+    ``"permission"`` (a tool permission) or ``"terminal"`` (no answerable
+    message of this wait in the chat: a dialog left to the terminal, or a
+    prompt whose send did not land). The message is the busy card that
+    carries the prompt inline, or the prompt's own message; ``None`` for
+    ``"terminal"``."""
+    from aipager.bot.transport import resolve_chat_id_int
+
+    def kind_of(perm: dict) -> str:
+        info = perm.get("tool_info")
+        name = info.get("name") if isinstance(info, dict) else None
+        return ("question" if perm.get("ask_question") or name == "AskUserQuestion"
+                else "permission")
+
+    card = sess.busy_msg_id
+    perm = sess.pending_permission
+    if isinstance(perm, dict) and isinstance(card, int) and card > 0:
+        return kind_of(perm), resolve_chat_id_int(sess), card
+    sent = sess.pending_prompt_msg
+    if isinstance(sent, dict):
+        sent_perm = sent.get("perm")
+        msg_id = sent.get("msg_id")
+        if (isinstance(sent_perm, dict) and isinstance(msg_id, int) and msg_id > 0
+                and (sent_perm.get("wait_started_at") or 0)
+                >= sess.interactive_entered_at):
+            chat = sent.get("chat_id")
+            return (kind_of(sent_perm),
+                    chat if isinstance(chat, int) and chat else resolve_chat_id_int(sess),
+                    msg_id)
+    return "terminal", None, None
+
+
+def _claim_dialog_hold(sess) -> dict | None:
+    """The hold (``TrackedSession.dialog_hold``) a message held for a
+    dialog belongs to, created for this dialog when there is none or the
+    one there is an earlier dialog's (its notices are carried along, to be
+    deleted at the release). None when no dialog is open and none is
+    being released. Synchronous: no await between the check and the
+    claim."""
+    hold = sess.dialog_hold
+    if not sess.dialog_is_open():
+        return hold
+    entered = sess.interactive_entered_at
+    if hold is None or hold.get("entered_at") != entered:
+        hold = {"entered_at": entered, "told": set(),
+                "notices": list(hold.get("notices") or []) if hold else []}
+        sess.dialog_hold = hold
+    return hold
+
+
 def _unique_save_path(directory: Path, filename: str) -> Path:
     """``directory/filename``, or ``stem-2.ext``, ``stem-3.ext``… if taken.
 
@@ -770,7 +843,12 @@ class CommandHandlersMixin:
         if it is discarded first (:mod:`aipager.bot.reactions`).
         """
         held_reason = ""
-        if sess.dialog_is_open():
+        for_dialog = sess.dialog_is_open() or sess.dialog_release_pending()
+        if for_dialog:
+            # A dialog is open (or was just answered and the messages held
+            # for it are still going out, ahead of this one). Keyed to the
+            # dialog, never to a time limit: typed now, the text and its
+            # Enter would answer the dialog (2026-10-12).
             held_reason = "prompt open"
         elif mixed_sender_note_outstanding(sess, update):
             held_reason = "different sender outstanding"
@@ -791,9 +869,64 @@ class CommandHandlersMixin:
             )
             return HOLD_DROPPED
         self.registry.mark_dirty()
+        if for_dialog:
+            # Recorded before any await: a dialog answered meanwhile then
+            # marks the hold answered, and this message goes out with it.
+            _claim_dialog_hold(sess)
         await self._react(update, reactions.HANDED_OFF)
         log.info("[%s] Held (%s): %s", sess.label, held_reason, text[:80])
+        if for_dialog:
+            await self._tell_held_for_dialog(update, sess)
         return True
+
+    async def _tell_held_for_dialog(self, update: Update, sess) -> None:
+        """Tell the sender of a message held behind an open dialog why it
+        waits: once per person per dialog (later messages only get the 👀),
+        as a reply to the dialog's card when it is in this chat, else to
+        the held message. Records the hold (``dialog_hold``) whatever the
+        send does, so the dialog's close releases the message and deletes
+        the notice. Best-effort: a failed send leaves the message held."""
+        hold = sess.dialog_hold
+        if hold is None or not sess.dialog_is_open():
+            return  # answered (or settled) meanwhile: nothing to wait for
+        hold = _claim_dialog_hold(sess)
+        person = driver_id_from_update(update) or 0
+        if person in hold["told"]:
+            return
+        hold["told"].add(person)  # claimed before the send's await
+        chat_id = calling_chat_id(update)
+        kind, surface_chat, surface_msg = open_dialog_surface(sess)
+        text = i18n.for_update(update).text(
+            {"question": HELD_QUESTION, "permission": HELD_PERMISSION}.get(
+                kind, HELD_TERMINAL))
+        held_id = update.message.message_id
+        targets = []
+        if surface_msg and surface_chat == chat_id:
+            targets.append(surface_msg)
+        targets.append(held_id)
+        sent = None
+        for reply_to in targets:
+            try:
+                sent = await send_text(self._app.bot, chat_id=chat_id, text=text,
+                                       reply_to_message_id=reply_to)
+                break
+            except Exception:
+                # The card is gone (deleted, too old): under the message.
+                log.debug("[%s] held-message notice under %s failed",
+                          sess.label, reply_to, exc_info=True)
+        message_id = getattr(sent, "message_id", None)
+        if not isinstance(message_id, int) or chat_id is None:
+            return
+        if sess.dialog_hold is hold:
+            hold["notices"].append((chat_id, message_id))
+            return
+        # The dialog closed and its hold was settled while this went out:
+        # the notice is already out of date.
+        try:
+            await self._app.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception:
+            log.debug("[%s] could not delete the late held-message notice",
+                      sess.label, exc_info=True)
 
     async def _react(self, update: Update, emoji: str) -> None:
         """React to the user's message — one lifecycle edge

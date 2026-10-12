@@ -144,7 +144,7 @@ aipager session <label> --continue # 新的 dtach，接着这个文件夹最近�
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>一个权限请求 5 分钟没有消息
 
-如果一个会话在等一个权限请求，而 Claude Code 5 分钟没有任何消息，aipager 就不再等这个请求，并重新把会话算作工作中。这能应对 Claude Code 在请求进行到一半时崩溃、再也没有人能回答它的情况。如果对话框仍然开着，请求上的按钮仍然可以回答它（见[空闲时的响应](commands.md#idle-responses)）。
+如果一个会话在等一个权限请求或问题，而 Claude Code 5 分钟没有任何消息，aipager 会读取这个会话保存的对话。只有对话显示请求已经结束（在终端里回答了，而这个消息丢了），aipager 才不再等它，并重新把会话算作工作中。否则请求会一直开着，不管多久：卡片和置顶栏会一直显示会话需要你回答，不会发出“仍在工作”的提示，你的消息会被暂存，直到你回答（见[文本](commands.md#text)）。Claude Code 在请求打开时退出，会话就结束了。如果对话框仍然开着，请求上的按钮仍然可以回答它（见[空闲时的响应](commands.md#idle-responses)）。
 
 要修改等待时间：
 

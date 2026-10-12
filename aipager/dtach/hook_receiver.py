@@ -1273,6 +1273,11 @@ class HookReceiver:
                     # Answered (in the terminal, if not by a tap): an old
                     # answer button on the card types nothing now (8.102).
                     sess.mark_prompt_closed(sess.busy_msg_id)
+                    # And the session works again from here, not from its
+                    # next tool call: a message held behind the dialog goes
+                    # out now (the bot's dialog-hold release).
+                    if sess.status == Status.INTERACTIVE:
+                        self.registry.transition(session_name, Status.BUSY)
                 if (not msg.get("agent_id")
                         or msg.get("agent_id") in sess.active_subagents):
                     # A detached background agent's tool ending says

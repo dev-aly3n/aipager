@@ -597,6 +597,9 @@
 {"k": "route.cleared", "src": "fd716ebc", "v": {"other": "🗑️ [<b>{session}</b>] 세션의 대기 중인 메시지 {n}개를 삭제했어요."}}
 {"k": "route.ended_which", "src": "eb950d37", "v": "{session} 세션이 종료됐어요. 어느 세션으로 할까요?"}
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ 이 파일을 어느 세션에 보낼지 모르겠어요. {command} 명령이나 키보드로 하나 골라 주세요."}
+{"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude가 아직 이 권한 요청에 대한 답을 기다리고 있어요. 먼저 답하면 새 메시지가 바로 Claude에게 전달돼요."}
+{"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude가 아직 이 질문에 대한 답을 기다리고 있어요. 먼저 답하면 새 메시지가 바로 Claude에게 전달돼요."}
+{"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude가 터미널에서 답을 기다리고 있어요. 터미널에서 답하거나 중지를 누르면 새 메시지가 바로 Claude에게 전달돼요."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ 음성 메시지를 받아쓴 내용을 [{session}] 세션에 보내지 못했어요"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "종료할 세션이 없어요."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "어느 세션을 종료할까요?"}

@@ -597,6 +597,9 @@
 {"k": "route.cleared", "src": "fd716ebc", "v": {"other": "🗑️ 已删除 [<b>{session}</b>] 的 {n} 条排队消息。"}}
 {"k": "route.ended_which", "src": "eb950d37", "v": "{session} 已结束。用哪个会话？"}
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ 我不知道这个文件要发给哪个会话。请用 {command} 或键盘选择一个。"}
+{"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude 还在等你回答这个权限请求。先回答它，你的新消息随后就会发给 Claude。"}
+{"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude 还在等你回答这个问题。先回答它，你的新消息随后就会发给 Claude。"}
+{"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude 正在终端里等待回答。请在终端回答或点按“停止”，你的新消息随后就会发给 Claude。"}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ 无法把语音转成的文字发送到 [{session}]"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "没有可结束的会话。"}
 {"k": "route.kill_which", "src": "65bf98de", "v": "要结束哪个会话？"}

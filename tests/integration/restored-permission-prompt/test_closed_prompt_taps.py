@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pytest
 
@@ -52,11 +53,15 @@ async def _inline_prompt(r, tmp_path, *, command: str = "rm -rf build",
 
 
 async def _demote(r) -> None:
-    """Past the INTERACTIVE watchdog's timeout with no hook, one monitor
-    scan: the session is demoted to BUSY and its prompt dropped."""
+    """Past the INTERACTIVE watchdog's timeout with no hook, and a
+    transcript that reads as past the dialog (a closing hook lost), one
+    monitor scan: the session is demoted to BUSY and its prompt dropped.
+    The watchdog never demotes without that evidence (2026-10-12)."""
     await asyncio.sleep(session_monitor.INTERACTIVE_TIMEOUT_SECONDS + 5)
     monitor = session_monitor.SessionMonitor(r.bot.registry, r.bot.notify)
-    await monitor._scan()
+    with patch.object(session_monitor, "dialog_closed_in_transcript",
+                      lambda *a: True):
+        await monitor._scan()
     await asyncio.sleep(1)
 
 
