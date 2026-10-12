@@ -239,6 +239,28 @@ def test_a_gate_skip_spends_no_attempt_and_is_retried_after_a_short_wait(
     assert len(_notices(env)) == 1 and rec["attempts"] == 0
 
 
+def test_a_streak_of_gate_skips_logs_once(env, run, monkeypatch, caplog):
+    results = [None, update_flow.SKIPPED, update_flow.SKIPPED, update_flow.SKIPPED,
+               update_flow.SKIPPED]
+
+    async def _send(*a, **kw):
+        return results.pop()
+    monkeypatch.setattr(update_flow, "send_text", _send)
+    monkeypatch.setattr(update_flow, "HOOK_NOTICE_SKIP_RETRY_SECONDS", 0.0)
+    monkeypatch.setattr(update_flow, "HOOK_NOTICE_RETRY_SECONDS", 0.0)
+    with caplog.at_level(logging.INFO, logger="aipager.bot.update_flow"):
+        _note(env, run, *["1.1.0"] * 4)       # four skips in a row: one line
+        skipped_streak = [r.getMessage() for r in caplog.records
+                          if "result=skipped" in r.getMessage()]
+        _note(env, run, "1.1.0")              # a failed send ends the streak
+        results[:] = [update_flow.SKIPPED]
+        _note(env, run, "1.1.0")              # a new streak: one more line
+    skipped = [r.getMessage() for r in caplog.records if "result=skipped" in r.getMessage()]
+    assert skipped_streak == ["update.hooks_newer.notice hook=1.1.0 result=skipped"]
+    assert len(skipped) == 2
+    assert env.manager._hook_seen["1.1.0"]["attempts"] == 1
+
+
 def test_at_most_sixteen_versions_are_remembered(env, run, monkeypatch):
     monkeypatch.setattr(report_offer, "dm_clear", lambda owner: False)
     _note(env, run, *[f"1.1.{i}" for i in range(16)])

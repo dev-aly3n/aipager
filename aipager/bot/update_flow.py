@@ -1760,7 +1760,8 @@ class UpdateManager:
                 if len(self._hook_seen) >= _HOOK_SEEN_MAX:
                     return
                 rec = {"delivered": False, "attempts": 0, "last_try_mono": None,
-                       "last_try": None, "task": None, "deferred": None}
+                       "last_try": None, "task": None, "deferred": None,
+                       "skip_logged": False}
                 self._hook_seen[version] = rec
                 log.info("update.hooks_newer hook=%s daemon=%s", version, mine)
             if self._hooks_newer is None or self_update.is_newer(version, self._hooks_newer):
@@ -1889,10 +1890,14 @@ class UpdateManager:
                 sent = None
         if sent is MUTED or sent is SKIPPED:
             # The outbound gate held it back: nothing reached Telegram, so
-            # no attempt is spent; tried again shortly.
+            # no attempt is spent; tried again shortly. Logged once per
+            # streak: the gate can stay tight for a long while.
             rec["last_try_mono"], rec["last_try"] = time.monotonic(), "skipped"
-            log.info("update.hooks_newer.notice hook=%s result=skipped", version)
+            if not rec.get("skip_logged"):
+                rec["skip_logged"] = True
+                log.info("update.hooks_newer.notice hook=%s result=skipped", version)
             return
+        rec["skip_logged"] = False
         if sent is None:
             rec["attempts"] += 1
             rec["last_try_mono"], rec["last_try"] = time.monotonic(), "failed"
