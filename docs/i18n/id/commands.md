@@ -1,6 +1,6 @@
 # Perintah dan antarmuka bot
 
-<!-- i18n-source: docs/commands.md @ 76d125d -->
+<!-- i18n-source: docs/commands.md @ b12e978 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../commands.md))
 
@@ -595,7 +595,7 @@ Beberapa pengaturan dibaca dari environment aipager, bukan dari `aipager.yaml`. 
 | `MINIAPP_PUBLIC_URL` | tidak ada | Menyajikan Mini App di URL `https://` milikmu sendiri, bukan lewat tunnel yang dikelola ([model keamanan](security.md#mini-app-tunnel)). |
 | `OBSERVER_BOTS` | tidak ada | Bot pengamat yang hanya membaca ([bot pengamat](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` menjadikan “Hanya jawaban, kartu dihapus” sebagai tata letak untuk chat yang belum pernah memilih tata letak di `/settings`. |
-| `STALE_BUSY_TIMEOUT` | `600` | Berapa detik sesi yang bekerja boleh tanpa kabar sebelum chat mendapat catatan “masih bekerja (10 menit tanpa kabar)”. |
+| `STALE_BUSY_TIMEOUT` | `7200` (2 jam) | Berapa detik sesi yang bekerja boleh tanpa kabar sebelum chat mendapat catatan “masih bekerja (120 menit tanpa kabar)”. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Detik sebelum pesan yang tidak pernah diterima Claude Code ditandai sebagai “Claude Code tidak menerima pesan” ([pesan biasa](#text)). |
 | `FINISH_CARD_GRACE_SECONDS` | `0.8` | Seberapa jauh kartu yang selesai mendahului jawaban dalam tata letak kartu; `0` mengirim keduanya bersamaan. |
 | `GONE_SESSION_MAX_AGE_DAYS` | `14` | Berapa hari sesi yang sudah berakhir tetap ada di `/resume`; `0` menyimpannya selamanya. |

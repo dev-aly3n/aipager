@@ -1,6 +1,6 @@
 # Bots observadores
 
-<!-- i18n-source: docs/observers.md @ 6fc084f -->
+<!-- i18n-source: docs/observers.md @ b12e978 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../observers.md))
 
@@ -41,7 +41,7 @@ Os observadores recebem estes avisos de **todos os chats em que o bot está**, d
 | Compactando | `🔄 x1 · Compactando a conversa` |
 | Compactação concluída | `📦 x1 · Conversa compactada: 82% → 4%` |
 | Um pedido que ainda está esperando | `⬆️ x1 · ainda esperando sua resposta lá em cima`, com a permissão ou a pergunta que ele espera |
-| Uma sessão trabalhando sem dar notícias | `⏳ x1 · ainda trabalhando (10 min sem novidades)` |
+| Uma sessão trabalhando sem dar notícias | `⏳ x1 · ainda trabalhando (120 min sem novidades)` |
 | Uma mensagem que o Claude Code não recebeu | `⚠️ x1 · O Claude Code não recebeu a mensagem` |
 | A sessão foi encerrada | `🔴 x1 · Sessão encerrada` |
 

@@ -1,6 +1,6 @@
 # 봇 명령과 화면
 
-<!-- i18n-source: docs/commands.md @ 76d125d -->
+<!-- i18n-source: docs/commands.md @ b12e978 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../commands.md))
 
@@ -595,7 +595,7 @@ Claude Code의 `~/.claude/settings.json`에서 aipager 자체 항목도 지워�
 | `MINIAPP_PUBLIC_URL` | 없음 | 관리형 터널 대신 내 `https://` 주소에서 Mini App을 제공해요([보안](security.md#mini-app-tunnel)). |
 | `OBSERVER_BOTS` | 없음 | 읽기 전용 관찰 봇([관찰 봇](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0`은 `/settings`에서 배치를 한 번도 고른 적 없는 채팅의 메시지 배치를 “카드 지우고 답변만”으로 정해요. |
-| `STALE_BUSY_TIMEOUT` | `600` | 작업 중인 세션이 몇 초 동안 조용하면 채팅에 “아직 작업 중 (10분째 소식 없음)” 안내가 오는지. |
+| `STALE_BUSY_TIMEOUT` | `7200` (2시간) | 작업 중인 세션이 몇 초 동안 조용하면 채팅에 “아직 작업 중 (120분째 소식 없음)” 안내가 오는지. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Claude Code가 끝내 가져가지 않은 메시지를 몇 초 뒤에 “Claude Code가 메시지를 받지 않았어요”로 표시하는지([자유 메시지](#text)). |
 | `FINISH_CARD_GRACE_SECONDS` | `0.8` | 카드가 있는 배치에서 끝난 카드가 답변보다 얼마나 먼저 오는지. `0`은 둘을 함께 보내요. |
 | `GONE_SESSION_MAX_AGE_DAYS` | `14` | 종료된 세션이 `/resume`에 며칠 동안 남는지. `0`은 영원히 유지해요. |

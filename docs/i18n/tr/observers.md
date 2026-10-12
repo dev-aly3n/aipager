@@ -1,6 +1,6 @@
 # Gözlemci botlar
 
-<!-- i18n-source: docs/observers.md @ 6fc084f -->
+<!-- i18n-source: docs/observers.md @ b12e978 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../observers.md))
 
@@ -41,7 +41,7 @@ Gözlemciler bu bildirimleri **botun hizmet verdiği her sohbetten**, her özel 
 | Sıkıştırma sürüyor | `🔄 x1 · Konuşma sıkıştırılıyor` |
 | Sıkıştırma bitti | `📦 x1 · Konuşma sıkıştırıldı: 82% → 4%` |
 | İstek hâlâ bekliyor | `⬆️ x1 · hâlâ yukarıdaki yanıtını bekliyor`, beklediği izin ya da soruyla birlikte |
-| Çalışan bir oturum uzun süre sessiz | `⏳ x1 · hâlâ çalışıyor (10 dk'dır haber yok)` |
+| Çalışan bir oturum uzun süre sessiz | `⏳ x1 · hâlâ çalışıyor (120 dk'dır haber yok)` |
 | Claude Code'un almadığı bir mesaj | `⚠️ x1 · Claude Code mesajı almadı` |
 | Oturum sona erdi | `🔴 x1 · Oturum sona erdi` |
 

@@ -1,6 +1,6 @@
 # Comandos e interfaz del bot
 
-<!-- i18n-source: docs/commands.md @ 76d125d -->
+<!-- i18n-source: docs/commands.md @ b12e978 -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../commands.md))
 
@@ -595,7 +595,7 @@ Unos pocos ajustes se leen del entorno de aipager en lugar de `aipager.yaml`. Pa
 | `MINIAPP_PUBLIC_URL` | ninguno | Sirve la Mini App en tu propia URL `https://` en lugar del túnel gestionado ([Modelo de seguridad](security.md#mini-app-tunnel)). |
 | `OBSERVER_BOTS` | ninguno | Bots observadores de solo lectura ([bots observadores](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` hace que «Solo la respuesta (sin tarjeta)» sea la forma de los chats que nunca eligieron una en `/settings`. |
-| `STALE_BUSY_TIMEOUT` | `600` | Segundos que una sesión trabajando puede pasar sin noticias antes de que el chat reciba la nota «sigue trabajando (10 min sin novedades)». |
+| `STALE_BUSY_TIMEOUT` | `7200` (2 horas) | Segundos que una sesión trabajando puede pasar sin noticias antes de que el chat reciba la nota «sigue trabajando (120 min sin novedades)». |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Segundos antes de que un mensaje que Claude Code nunca recibió se marque como «Claude Code no recibió el mensaje» ([mensajes libres](#text)). |
 | `FINISH_CARD_GRACE_SECONDS` | `0.8` | Cuánto se adelanta la tarjeta terminada a la respuesta en la forma de tarjeta; `0` envía las dos a la vez. |
 | `GONE_SESSION_MAX_AGE_DAYS` | `14` | Días que una sesión terminada sigue en `/resume`; `0` las conserva. |

@@ -1,6 +1,6 @@
 # Komutlar ve bot arayüzü
 
-<!-- i18n-source: docs/commands.md @ 76d125d -->
+<!-- i18n-source: docs/commands.md @ b12e978 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../commands.md))
 
@@ -595,7 +595,7 @@ Birkaç ayar `aipager.yaml` yerine aipager'ın ortamından okunur. systemd hizme
 | `MINIAPP_PUBLIC_URL` | yok | Mini App'i yönetilen tünel yerine kendi `https://` adresinde sunar ([güvenlik modeli](security.md#mini-app-tunnel)). |
 | `OBSERVER_BOTS` | yok | Yalnızca okuyan gözlemci botlar ([gözlemci botlar](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0`, `/settings` içinde hiç görünüm seçmemiş sohbetler için görünümü “Yalnızca yanıt (kartsız)” yapar. |
-| `STALE_BUSY_TIMEOUT` | `600` | Çalışan bir oturumun, sohbet “hâlâ çalışıyor (10 dk'dır haber yok)” notunu almadan önce haber vermeden kalabileceği saniye. |
+| `STALE_BUSY_TIMEOUT` | `7200` (2 saat) | Çalışan bir oturumun, sohbet “hâlâ çalışıyor (120 dk'dır haber yok)” notunu almadan önce haber vermeden kalabileceği saniye. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Claude Code'un hiç almadığı bir mesajın “Claude Code mesajı almadı” olarak işaretlenmesinden önceki saniye ([sıradan mesajlar](#text)). |
 | `FINISH_CARD_GRACE_SECONDS` | `0.8` | Kartlı görünümde biten kartın yanıtın ne kadar önünde geldiği; `0` ikisini aynı anda gönderir. |
 | `GONE_SESSION_MAX_AGE_DAYS` | `14` | Sona ermiş bir oturumun `/resume` içinde kaldığı gün; `0` onu tutar. |

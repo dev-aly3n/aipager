@@ -1,6 +1,6 @@
 # Befehle und Oberfläche des Bots
 
-<!-- i18n-source: docs/commands.md @ 76d125d -->
+<!-- i18n-source: docs/commands.md @ b12e978 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../commands.md))
 
@@ -595,7 +595,7 @@ Ein paar Einstellungen werden aus der Umgebung von aipager gelesen statt aus `ai
 | `MINIAPP_PUBLIC_URL` | keine | Stellt die Mini App unter deiner eigenen `https://`-URL bereit statt über den verwalteten Tunnel ([Sicherheitsmodell](security.md#mini-app-tunnel)). |
 | `OBSERVER_BOTS` | keine | Beobachter-Bots, die nur lesen ([Beobachter-Bots](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` macht „Nur die Antwort (ohne Karte)“ zum Aussehen für Chats, die nie eines in `/settings` gewählt haben. |
-| `STALE_BUSY_TIMEOUT` | `600` | Sekunden, die eine arbeitende Sitzung ohne Neuigkeiten sein darf, bevor der Chat den Hinweis „arbeitet noch (10 Min. ohne Neuigkeiten)“ bekommt. |
+| `STALE_BUSY_TIMEOUT` | `7200` (2 Stunden) | Sekunden, die eine arbeitende Sitzung ohne Neuigkeiten sein darf, bevor der Chat den Hinweis „arbeitet noch (120 Min. ohne Neuigkeiten)“ bekommt. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Sekunden, bevor eine Nachricht, die Claude Code nie angenommen hat, als „Claude Code hat die Nachricht nicht angenommen“ markiert wird ([freie Nachrichten](#text)). |
 | `FINISH_CARD_GRACE_SECONDS` | `0.8` | Wie lange die fertige Karte beim Aussehen mit Karte vor der Antwort kommt; `0` schickt beides gleichzeitig. |
 | `GONE_SESSION_MAX_AGE_DAYS` | `14` | Tage, die eine beendete Sitzung in `/resume` bleibt; `0` behält sie. |

@@ -1,6 +1,6 @@
 # Beobachter-Bots
 
-<!-- i18n-source: docs/observers.md @ 6fc084f -->
+<!-- i18n-source: docs/observers.md @ b12e978 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../observers.md))
 
@@ -41,7 +41,7 @@ Beobachter bekommen diese Hinweise aus **jedem Chat, für den der Bot zuständig
 | Komprimierung läuft | `🔄 x1 · Komprimiert die Unterhaltung` |
 | Komprimierung fertig | `📦 x1 · Unterhaltung komprimiert: 82% → 4%` |
 | Eine Anfrage wartet noch | `⬆️ x1 · wartet noch auf deine Antwort oben`, mit der Berechtigung oder Frage, auf die sie wartet |
-| Eine arbeitende Sitzung meldet sich nicht | `⏳ x1 · arbeitet noch (10 Min. ohne Neuigkeiten)` |
+| Eine arbeitende Sitzung meldet sich nicht | `⏳ x1 · arbeitet noch (120 Min. ohne Neuigkeiten)` |
 | Eine Nachricht, die Claude Code nicht angenommen hat | `⚠️ x1 · Claude Code hat die Nachricht nicht angenommen` |
 | Sitzung beendet | `🔴 x1 · Sitzung beendet` |
 

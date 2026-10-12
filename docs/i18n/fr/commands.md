@@ -1,6 +1,6 @@
 # Commandes et interface du bot
 
-<!-- i18n-source: docs/commands.md @ 76d125d -->
+<!-- i18n-source: docs/commands.md @ b12e978 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../commands.md))
 
@@ -595,7 +595,7 @@ Quelques paramètres sont lus dans l'environnement d'aipager plutôt que dans `a
 | `MINIAPP_PUBLIC_URL` | aucun | Sert la Mini App à votre propre URL `https://` au lieu du tunnel géré ([Modèle de sécurité](security.md#mini-app-tunnel)). |
 | `OBSERVER_BOTS` | aucun | Bots observateurs en lecture seule ([bots observateurs](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` fait de « Réponse seule (sans carte) » l'affichage des discussions qui n'en ont jamais choisi un dans `/settings`. |
-| `STALE_BUSY_TIMEOUT` | `600` | Les secondes qu'une session au travail peut passer sans nouvelles avant que la discussion reçoive la note « travaille encore (aucune nouvelle depuis 10 min) ». |
+| `STALE_BUSY_TIMEOUT` | `7200` (2 heures) | Les secondes qu'une session au travail peut passer sans nouvelles avant que la discussion reçoive la note « travaille encore (aucune nouvelle depuis 120 min) ». |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Les secondes avant qu'un message que Claude Code n'a jamais pris soit marqué « Claude Code n'a pas reçu le message » ([messages libres](#text)). |
 | `FINISH_CARD_GRACE_SECONDS` | `0.8` | De combien la carte terminée précède la réponse dans l'affichage avec carte ; `0` envoie les deux en même temps. |
 | `GONE_SESSION_MAX_AGE_DAYS` | `14` | Les jours pendant lesquels une session terminée reste dans `/resume` ; `0` les garde. |
