@@ -165,7 +165,7 @@ def test_a_keyed_area_reads_as_part_of_the_persian_sentence():
     assert report_offer.notice_text(_internal("aipager/bot/notify.py")).startswith(
         "aipager hit an internal error once (KeyError in message delivery).")
     assert report_offer.notice_text(_internal("aipager/bot/notify.py"), i18n.get("ru")).startswith(
-        "aipager 1 раз столкнулся с внутренней ошибкой (KeyError, область: доставка сообщений).")
+        "aipager 1 раз столкнулся с внутренней ошибкой (KeyError, область: отправка сообщений в Telegram).")
 
 
 def test_russian_one_time_offers_show_the_number():
@@ -227,7 +227,8 @@ def test_a_strangers_toast_is_theirs(mk_bot, run_async):
 def test_outcome_lines_in_russian_plurals():
     ru = i18n.get("ru")
     assert report_flow.outcome_line("daily_cap", tr=ru) == (
-        f"Не больше {send.SENDS_PER_DAY} отчётов в день с одной машины. Попробуй завтра.")
+        f"С одного компьютера можно отправить не больше {send.SENDS_PER_DAY} отчётов в день. "
+        "Попробуй завтра.")
     assert report_flow.outcome_line("bogus", tr=ru) == report_flow.outcome_line(
         "offline", tr=ru)
     assert _cyrillic(report_drafts.reply_for(report_drafts.FAILED, None, tr=ru).line)

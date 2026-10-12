@@ -70,4 +70,4 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - {clock} is a duration: "Готово ({clock})", "Працює ({clock})", never "з {clock}" or "після {clock}" (reads like a time of day).
 
 ## Plurals
-one, few, many and other: 1 сесія, 2 сесії, 5 сесій, 21 сесія; other is for fractions only and reads like few. A verb after a counted phrase sits outside the plural, so it must agree with any count: "{agents} ще в роботі".
+one, few, many and other: 1 сесія, 2 сесії, 5 сесій, 21 сесія; other is for fractions only and reads like few. A verb after a counted phrase sits outside the plural, so it must agree with any count: "{agents} ще в роботі". A one-time line with no {n} (the *_once keys) still writes the number: "1 раз", never "один раз" (operator decision 14).
