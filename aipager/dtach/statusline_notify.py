@@ -49,6 +49,12 @@ _MEMORY_CAP_BYTES = 1024 * 1024 * 1024
 
 _DEBUG = os.environ.get("AIPAGER_DEBUG") == "1"
 
+# This status line's own aipager release (see notify_hook.py).
+try:
+    from aipager._version import __version__ as _AIPAGER_VERSION
+except Exception:
+    _AIPAGER_VERSION = ""
+
 
 def _debug(msg: str) -> None:
     if _DEBUG:
@@ -126,6 +132,8 @@ def _run(session: str) -> None:
                 # sent once per conversation).
                 "session_id": data.get("session_id") or "",
             }
+            if _AIPAGER_VERSION:
+                msg["aipager_version"] = _AIPAGER_VERSION
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
             sock.sendto(json.dumps(msg).encode(), SOCKET_PATH)
             sock.close()

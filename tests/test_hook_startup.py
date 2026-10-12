@@ -160,6 +160,9 @@ def test_the_hook_reaches_the_daemon_for_every_event(root, daemon, event):
     assert got, f"no datagram for {event}"
     assert got[0]["hook_event_name"] == event
     assert all(g["session"] == SESSION for g in got), got
+    from aipager import _version
+    # The hook's own release rides on every forwarded event.
+    assert got[0]["aipager_version"] == _version.__version__
     if event == "PreToolUse":
         # No policy for this session: the safety check denies, as always.
         decision = json.loads(proc.stdout.strip().splitlines()[0])
@@ -174,6 +177,8 @@ def test_the_status_line_reaches_the_daemon_and_writes_its_file(root, daemon):
     assert _clean(proc.stderr) and "Opus" in proc.stdout, proc.stderr
     got = _received(daemon)
     assert [(g.get("type"), g.get("session")) for g in got] == [("statusline", SESSION)]
+    from aipager import _version
+    assert got[0]["aipager_version"] == _version.__version__
     assert (root / f"claude-status-{SESSION}.json").exists()
 
 
