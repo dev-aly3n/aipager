@@ -121,6 +121,10 @@ def _run(session: str) -> None:
                 "model_name": (data.get("model") or {}).get("display_name", ""),
                 "lines_added": cost.get("total_lines_added", 0),
                 "lines_removed": cost.get("total_lines_removed", 0),
+                # Claude Code's conversation id: compaction keeps it, /clear
+                # and a new conversation change it (the context notice is
+                # sent once per conversation).
+                "session_id": data.get("session_id") or "",
             }
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
             sock.sendto(json.dumps(msg).encode(), SOCKET_PATH)

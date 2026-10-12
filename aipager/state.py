@@ -548,8 +548,13 @@ class TrackedSession:
     pending_queue: list = field(default_factory=list)  # list of (text, trigger_msg_id)
     # Reply threading — Telegram message_id of the user's prompt that started this work
     trigger_msg_id: int | None = None
-    # Compact warning — prevents spamming "context high" alerts
-    compact_warned: bool = False
+    # The Claude conversation (Claude Code's session_id, or the session's
+    # own name while that is unknown) the "context almost full" notice was
+    # last sent for. The notice is a one-time heads-up per conversation:
+    # compaction keeps the id, so it never re-arms the notice; /clear or
+    # another conversation changes it. Persisted, so a daemon restart does
+    # not send it again.
+    context_warned_conversation: str = ""
     # Context % before compaction (for delta display in compact_done notification)
     pre_compact_pct: int = 0
     # Last injected prompt text — enables retry on API errors
@@ -3384,6 +3389,8 @@ class SessionRegistry:
         # Resume support — see TrackedSession docstring.
         "claude_session_id", "cwd", "gone_at", "last_assistant_preview",
         "hidden_from_status",
+        # The conversation the context notice was sent for (once each).
+        "context_warned_conversation",
         # Permission mode — persisted so daemon restarts preserve it.
         # save() also writes the legacy `skip_perms` mirror beside it.
         "perm_mode",
@@ -3655,6 +3662,8 @@ class SessionRegistry:
                     if gone_at is not None and not backfilled else ""
                 ),
                 hidden_from_status=sd.get("hidden_from_status", False),
+                context_warned_conversation=str(
+                    sd.get("context_warned_conversation") or ""),
                 perm_mode=_perm_modes.mode_from_saved(sd),
                 launch_model=str(sd.get("launch_model") or ""),
                 scope_chat_id=int(sd.get("scope_chat_id", 0) or 0),

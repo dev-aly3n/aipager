@@ -1593,7 +1593,6 @@ class HookReceiver:
                 log.info("[%s] SessionStart compact: post_pct=%d%% >= before=%d%%, deferring",
                          sess.label, post_pct, before_pct)
             else:
-                sess.compact_warned = False
                 log.info("[%s] Compacted: %d%% → %d%%", sess.label, before_pct, post_pct)
                 await self.notify_fn(sess, "compact_done", {
                     "before_pct": before_pct,
@@ -1647,20 +1646,24 @@ class HookReceiver:
                 before_pct = sess.pre_compact_pct
                 sess.pre_compact_pct = 0  # reset SYNCHRONOUSLY before await
                 sess.compact_started_at = None  # belt-and-braces if SessionStart missed
-                sess.compact_warned = False
                 log.info("[%s] Compacted (statusLine fallback): %d%% → %d%%",
                          sess.label, before_pct, ctx_pct)
                 await self.notify_fn(sess, "compact_done", {
                     "before_pct": before_pct,
                     "after_pct": ctx_pct,
                 })
-            # Context warning: alert user once when approaching auto-compact
-            elif ctx_pct >= 80 and not sess.compact_warned:
-                sess.compact_warned = True
-                await self.notify_fn(sess, "context_warning", {"context_pct": ctx_pct})
-            elif ctx_pct < 30:
-                # Reset after compaction (context drops to ~2-5%)
-                sess.compact_warned = False
+            # Context warning: a one-time heads-up per Claude conversation.
+            # Compaction keeps the conversation id, so a compaction never
+            # re-arms it (a 1M-context session compacts about hourly and is
+            # back above 80% minutes later); /clear or another conversation
+            # gets one heads-up again.
+            elif ctx_pct >= 80:
+                conversation = str(msg.get("session_id") or sess.claude_session_id
+                                   or sess.name)
+                if sess.context_warned_conversation != conversation:
+                    sess.context_warned_conversation = conversation
+                    self.registry.mark_dirty()
+                    await self.notify_fn(sess, "context_warning", {"context_pct": ctx_pct})
             log.debug("[%s] statusline: %d%% ctx, ↓%d out (base=%d, total=%d)",
                       sess.label, ctx_pct, sess.last_output_tokens,
                       sess.output_baseline or 0, total_out)

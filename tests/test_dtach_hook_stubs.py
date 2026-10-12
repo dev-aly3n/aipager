@@ -248,6 +248,7 @@ def test_statusline_writes_status_file_and_emits_line(monkeypatch, tmp_path, cap
     monkeypatch.setattr(statusline_notify.Path, "write_text", _write_to_tmp)
 
     payload = json.dumps({
+        "session_id": "conv-a",
         "model": {"display_name": "Opus 4.7"},
         "context_window": {
             "used_percentage": 25,
@@ -284,6 +285,8 @@ def test_statusline_writes_status_file_and_emits_line(monkeypatch, tmp_path, cap
         assert msg["session"] == "claude-jim"
         assert msg["context_pct"] == 25
         assert msg["model_name"] == "Opus 4.7"
+        # The conversation id: the context notice is sent once per it.
+        assert msg["session_id"] == "conv-a"
     finally:
         srv.close()
 

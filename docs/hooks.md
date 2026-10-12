@@ -224,8 +224,9 @@ up), so the pause does not look like a crash. `PostCompact` ends that
 state; the `📦 name · Compacted: X% → Y%` line comes from the
 `SessionStart` that follows, or from the status line when that is
 missed. The status line also gives the warning `⚠️ name · Context at
-82% - auto-compact soon` (with a Compact button) once the context
-reaches 80%, and again only after it has dropped below 30%.
+82% - auto-compact soon` (with a Compact button) when the context
+reaches 80%, once per conversation: compacting does not repeat it, and a
+new conversation (after `/clear`, for example) gets it again.
 
 ### `MessageDisplay`
 
