@@ -149,7 +149,7 @@ HELP_CONTROL = Msg("help.control", "<b>Control:</b> /stop · /now (send queued) 
 HELP_MANAGE = Msg("help.manage",
                   "<b>Manage:</b> /status, then ⋮ (restart, rename, diff, end, delete)",
                   note="/help: the session menu ⋮ on /status and what it does")
-HELP_SETTINGS = Msg("help.settings", "<b>Settings:</b> /settings · /mode (Auto or Ask)",
+HELP_SETTINGS = Msg("help.settings", "<b>Settings:</b> /settings · /mode (Ask, Auto or Full access)",
                     note="/help: settings and the permission mode; Auto and Ask are the "
                          "mode names")
 HELP_ADMIN = Msg("help.admin", "<b>Admin:</b> /update (aipager and Claude Code)",

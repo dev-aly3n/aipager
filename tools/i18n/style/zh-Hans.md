@@ -1,9 +1,9 @@
 # Chinese (Simplified) (zh-Hans) style guide
 
-The translator (Claude) reads this with the glossary before every batch.
+The translator (Claude) reads TRANSLATING.md first, then this, then the glossary.
 
 ## Tone
-Plain, direct and friendly. Address the reader as 你. Sound like the English: plain words, short sentences, no slang.
+Plain, direct and friendly, the way Telegram's own Chinese interface talks. Address the reader as 你. Everyday Chinese, not a word-for-word copy of the English: short sentences, no officialese ("进行", "予以" piled up), no slang. Chinese has no gender in verbs, so "你" needs no care; never write 他 or 她 for {person}.
 
 ## Address
 你
@@ -36,7 +36,50 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - Keep the English's half-width marks where they belong to a format: "·" separators, "→", "›", "«", the "-" between a label and its explanation in an option row, and the parentheses around a clock or a count in a status line may stay half-width when they wrap Latin text only.
 - Lists take 、 between Chinese items.
 
-## Terms
-- session 会话; turn 轮 (这一轮, 本轮); card 卡片; permission 权限; prompt 提示词 (a message to Claude: 消息); question 问题; allow 允许; deny 拒绝; stop 停止; resume 恢复; queue 队列 (排队 as a verb); agent 代理 (a subagent: 子代理); background 后台; owner 所有者; admin 管理员; member 成员; chat 聊天; group 群组; settings 设置; update 更新; folder 文件夹; model 模型.
-- Kill (end a session's process) 结束; Restart 重启; Delete 删除; Rename 重命名; Compact 压缩; Retry 重试; Cancel 取消; Back 返回; role 角色; transcript 对话记录; daemon 守护进程; install 安装.
-- Kept in English: commit, token, diff, log, ctx, shell (a background shell command).
+## Words people actually say (use these)
+| English idea | write | not |
+|---|---|---|
+| session | 会话 | |
+| agent, background agent | 代理，后台代理 (Claude Code's own Chinese word) | 智能体 |
+| background shell command | 后台命令 (the first line under an answer adds "(shell)") | 命令 alone |
+| your message to Claude (prompt) | 消息 | 提示词 (only where the text is about prompts as such) |
+| a permission or question prompt | 请求 (权限请求) | |
+| compact (Claude Code's /compact) | 压缩对话 | |
+| context window | 上下文 | 上下文窗口 |
+| Claude's conversation | 对话 | 会话 (that is the session) |
+| a Telegram chat | 聊天 (这个聊天, 私聊, 群组) | |
+| update | 更新 | |
+| restart | 重启 | |
+| link | 链接 | |
+| repository | 仓库 | 存储库 |
+| hung, frozen | 卡住 | 冻结 |
+| crashed | 崩溃 | |
+| voice message | 语音消息 | |
+| computer, machine | 电脑 | 机器, 主机 |
+| default | 默认 | |
+| private chat (DM) | 私聊 | DM |
+| tool (Claude's tools) | 工具 | |
+| idle (a session waiting for a message) | 就绪 | 空闲 |
+| busy, working | 工作中 | 忙碌 |
+| waiting on you | 等你回复 | 交互中 |
+| ended (a session no longer running) | 已结束 | |
+| end a session (Kill, End) | 结束 | 杀死 |
+| the aipager program (daemon, service) | aipager | 守护进程, 服务 |
+| saved transcript | 保存的对话 | 对话记录, 转录 |
+| working directory | 文件夹 | 工作目录 |
+| the person who makes aipager (maintainer) | aipager 开发者 | 维护者 |
+| the bot's owner (operator) | 机器人主人 | 运营者 |
+| bot | 机器人 | bot |
+
+## Vocabulary (one word per idea)
+- session 会话; turn: 轮 where people take turns ("现在轮到别人"), 任务 for Claude's work on one message ("这次任务结束后"); card 卡片; permission 权限; a permission request 权限请求; question 问题.
+- allow 允许 (answered: 已允许); deny 拒绝 (answered: 已拒绝); stop 停止 (stopped: 已停止); resume 恢复; queue 队列 (排队 as a verb); agent 代理 / 子代理; background 后台.
+- owner 所有者; admin 管理员; member 成员; group 群组; settings 设置; folder 文件夹; model 模型; role 角色; mode 模式; "Mini App".
+- Kept in English: commit, token, diff, ctx, hook. A diff is "改动 (diff)" where it is a label.
+- Buttons: 允许、拒绝、停止、恢复、重启、删除、重命名、取消、关闭、重试、结束、发送、立即发送.
+- Same situation, same words: "Couldn't …" is "无法…" ("无法下载文件"); "Couldn't reach the server" is "无法连接服务器"; a refused restart is "未重启：…"; a stale button or card is "已过时"; an expired one "已过期"; a running session "运行中".
+- {clock} is a duration: "已完成（{clock}）", "工作中（{clock}）", never "{clock} 后" (reads like a time of day). Parentheses inside a Chinese sentence are full-width （）.
+- Address the reader as 你; no 他/她 for {person}: put the person first with a verb ("{person} 拒绝了").
+
+## Plurals
+other only: Chinese does not mark the plural (2 个会话). Use a measure word where Chinese needs one (个、次、条).

@@ -35,10 +35,11 @@ IDS = [f"u{i}" for i in range(len(UNKNOWN))]
 
 #: The frames each language showed at the end of iteration 2 (tree 62ad7a3),
 #: with ``{r}`` for the HTML-escaped reason; Persian's as reworded in the
-#: 2026-10-11 rewrite.
+#: 2026-10-11 rewrite, Russian's in the 2026-10-12 one (the session, feminine,
+#: is what stopped).
 EN_FRAME = "🛑 <b>x1</b> · Blocked by safety policy: {r} (stopped)"
-RU_FRAME = ("🛑 <b>x1</b> · Заблокировано правилами безопасности: {r} "
-            "(остановлено)")
+RU_FRAME = ("🛑 <b>x1</b> · Заблокировано правилом безопасности: {r} "
+            "(остановлена)")
 FA_FRAME = (RLM + "🛑 <b>" + FSI + "x1" + PDI + "</b> · قانون ایمنی جلویش را گرفت: {r} "
             "(متوقف شد)")
 

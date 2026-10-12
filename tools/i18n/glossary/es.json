@@ -5,8 +5,7 @@
   "token",
   "diff",
   "log",
-  "ctx",
-  "prompt"
+  "ctx"
  ],
  "language": "Spanish",
  "terms": {
@@ -63,6 +62,7 @@
   ],
   "resume": [
    "reanud",
+   "continu",
    "/resume"
   ],
   "session": [
@@ -80,7 +80,8 @@
    "stop"
   ],
   "turn": [
-   "turno"
+   "turno",
+   "tarea"
   ],
   "update": [
    "actualiz",

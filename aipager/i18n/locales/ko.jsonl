@@ -1,13 +1,13 @@
 {"k": "agents.count_agents", "src": "263711d4", "v": {"other": "에이전트 {n}개"}}
-{"k": "agents.count_shells", "src": "9b747b65", "v": {"other": "셸 {n}개"}}
+{"k": "agents.count_shells", "src": "9b747b65", "v": {"other": "백그라운드 명령 {n}개"}}
 {"k": "agents.head.done", "src": "e20b4f9e", "v": {"other": "✅ 에이전트 {n}개 완료 ({clock})"}}
 {"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
-{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"other": "셸 {n}개 종료 ({clock})"}}
-{"k": "agents.head.shells_running", "src": "96153f47", "v": {"other": "🖥 셸 {n}개 실행 중"}}
-{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"other": "셸 {n}개 중지됨 ({clock})"}}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"other": "백그라운드 명령(shell) {n}개 종료 ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"other": "🖥 백그라운드 명령(shell) {n}개 실행 중"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"other": "백그라운드 명령(shell) {n}개 중지됨 ({clock})"}}
 {"k": "agents.head.working", "src": "6d8170f5", "v": {"other": "⏳ 에이전트 {n}개 작업 중"}}
-{"k": "agents.more", "src": "0d58b5f8", "v": {"other": "+{n}개 더"}}
-{"k": "agents.promise", "src": "29723a21", "v": "에이전트 결과가 여기에 표시돼요."}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"other": "+에이전트 {n}개 더"}}
+{"k": "agents.promise", "src": "29723a21", "v": "에이전트 작업이 끝나면 결과가 바로 여기로 와요."}
 {"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · 완료 ({clock})"}
 {"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
 {"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
@@ -23,41 +23,41 @@
 {"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
 {"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
 {"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ {session} 중지됨"}
-{"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {session} 중지됨 · {person}"}
-{"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"other": "⏹ {session} 중지됨 · {person} (대기 중인 메시지 {n}개 버림)"}}
-{"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"other": "⏹ {session} 중지됨 (대기 중인 메시지 {n}개 버림)"}}
+{"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {person} 님이 {session} 세션의 작업을 중지했어요"}
+{"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"other": "⏹ {person} 님이 {session} 세션의 작업을 중지했어요 (대기 중인 메시지 {n}개 삭제)"}}
+{"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"other": "⏹ {session} 중지됨 (대기 중인 메시지 {n}개 삭제)"}}
 {"k": "ans.verb.allow", "src": "77c7b490", "v": "허용됨"}
 {"k": "ans.verb.allow_always", "src": "141216b0", "v": "항상 허용됨"}
 {"k": "ans.verb.continue", "src": "0e4aa789", "v": "계속함"}
 {"k": "ans.verb.deny", "src": "63b16bd4", "v": "거부됨"}
 {"k": "ans.verb.option", "src": "7a8b9272", "v": "{n}번 옵션 선택"}
 {"k": "ans.verb.selected", "src": "5462eaaf", "v": "선택: {options}"}
-{"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "제출함 (선택 없음)"}
+{"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "선택 없이 제출함"}
 {"k": "app.chat.dm", "src": "05a3b9fa", "v": "개인 채팅"}
 {"k": "app.chat.group", "src": "171a0606", "v": "그룹"}
-{"k": "app.err.already_restarting", "src": "9234890e", "v": "이 세션은 이미 다시 시작하는 중이에요. 잠시 기다려 주세요."}
+{"k": "app.err.already_restarting", "src": "9234890e", "v": "이 세션은 이미 재시작하는 중이에요. 잠시 기다려 주세요."}
 {"k": "app.err.already_running", "src": "41e94cd2", "v": "이 세션은 이미 실행 중이에요."}
-{"k": "app.err.answer_chat_busy", "src": "e0f91f04", "v": "Telegram이 바쁜 상태예요. 잠시 후 다시 시도해 주세요."}
-{"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "이 세션은 더 이상 응답을 기다리지 않아요."}
-{"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "요청을 채팅에 올리지 못했어요."}
-{"k": "app.err.bad_mode", "src": "b0920696", "v": "확인, 자동, 전체 권한 모드 중에서 고르세요."}
-{"k": "app.err.delete_running", "src": "71f25b50", "v": "세션이 아직 실행 중이에요. 먼저 “종료”로 멈추세요."}
+{"k": "app.err.answer_chat_busy", "src": "e0f91f04", "v": "Telegram이 지금 바빠요. 잠시 후 다시 시도해 주세요."}
+{"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "이 세션은 이제 답변을 기다리지 않아요."}
+{"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "이 요청을 채팅에 보내지 못했어요."}
+{"k": "app.err.bad_mode", "src": "b0920696", "v": "확인, 자동, 전체 권한 모드 중에서 골라 주세요."}
+{"k": "app.err.delete_running", "src": "71f25b50", "v": "세션이 아직 실행 중이에요. 먼저 “종료”를 눌러 멈추세요."}
 {"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "전체 권한 모드는 관리자만 쓸 수 있어요."}
-{"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "종료하지 못했어요. 프로세스가 아직 실행 중이에요. 다시 시도해 주세요."}
-{"k": "app.err.mode_send_failed", "src": "887b8615", "v": "세션의 터미널에 닿지 못했어요 - 모드는 바뀌지 않았어요."}
+{"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "종료하지 못했어요. 프로그램이 아직 실행 중이에요. 다시 시도해 주세요."}
+{"k": "app.err.mode_send_failed", "src": "887b8615", "v": "세션의 터미널에 연결할 수 없어요 - 모드는 그대로예요."}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "이 채팅에 이미 {session} 이름의 세션이 있어요."}
-{"k": "app.err.not_busy", "src": "bbafa529", "v": "이 세션은 지금 바쁘지 않아요. 중지할 것이 없어요."}
+{"k": "app.err.not_busy", "src": "bbafa529", "v": "이 세션은 지금 아무 작업도 하지 않아요. 중지할 것이 없어요."}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "이 요청은 다시 보낼 수 없어요. 터미널에서 답해 주세요."}
-{"k": "app.err.not_running", "src": "af9ca5bc", "v": "세션이 실행 중이 아니에요."}
+{"k": "app.err.not_running", "src": "af9ca5bc", "v": "이 세션은 지금 실행 중이 아니에요."}
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} 세션이 아직 멈추는 중이라 모드를 바꾸지 않았어요. 잠시 후 다시 시도해 주세요."}
 {"k": "app.err.pick_model", "src": "773e24c4", "v": "모델을 골라 주세요."}
 {"k": "app.err.restart_still_stopping", "src": "701b0bd8", "v": "{session} 세션이 아직 멈추는 중이에요. 잠시 후 다시 시도해 주세요."}
-{"k": "app.err.resumed_in_auto", "src": "b26ccb3b", "v": "{session} 세션을 자동 모드로 재개했어요: {reason}"}
-{"k": "app.err.resuming", "src": "2a557399", "v": "이 세션은 지금 재개하는 중이에요. 잠시 후 다시 시도해 주세요."}
+{"k": "app.err.resumed_in_auto", "src": "b26ccb3b", "v": "{session} 세션을 자동 모드로 다시 열었어요: {reason}"}
+{"k": "app.err.resuming", "src": "2a557399", "v": "이 세션을 다시 여는 중이에요. 잠시 후 다시 시도해 주세요."}
 {"k": "app.err.send_failed", "src": "e4349ad3", "v": "{command} 명령을 보내지 못했어요."}
 {"k": "app.fact.context", "src": "cc11b3a2", "v": "컨텍스트"}
 {"k": "app.fact.cost", "src": "64ae43e8", "v": "비용"}
-{"k": "app.fact.cwd", "src": "4b892fe0", "v": "디렉터리"}
+{"k": "app.fact.cwd", "src": "4b892fe0", "v": "폴더"}
 {"k": "app.fact.last_active", "src": "b5665ec6", "v": "마지막 활동"}
 {"k": "app.fact.mode", "src": "a7b93d21", "v": "모드"}
 {"k": "app.fact.mode_pending", "src": "d8a50365", "v": "{mode} (Claude Code 확인 대기 중)"}
@@ -65,88 +65,88 @@
 {"k": "app.fact.working", "src": "e7df8df6", "v": "작업 시간"}
 {"k": "app.language.hint", "src": "90e01e41", "v": "aipager 자체 문구만 바뀌어요. Claude의 답변은 그대로예요."}
 {"k": "app.language.title", "src": "01e1787a", "v": "앱 언어"}
-{"k": "app.launch.cwd_bad_char", "src": "0dcfc308", "v": "작업 디렉터리에 잘못된 문자가 있어요."}
-{"k": "app.launch.cwd_no_roots", "src": "45693d90", "v": "아직 쓸 수 있는 디렉터리가 없어요. 먼저 채팅에서 세션을 시작하면 이 선택기에 그 프로젝트가 나와요."}
-{"k": "app.launch.cwd_not_allowed", "src": "8e0b71f9", "v": "이 채팅에서 이미 작업하는 디렉터리가 아니에요."}
-{"k": "app.launch.cwd_not_dir", "src": "9b0be449", "v": "그 경로는 디렉터리가 아니에요."}
-{"k": "app.launch.cwd_not_text", "src": "9497b469", "v": "작업 디렉터리는 텍스트여야 해요."}
-{"k": "app.launch.cwd_unresolvable", "src": "e87ce055", "v": "그 디렉터리를 확인할 수 없어요."}
+{"k": "app.launch.cwd_bad_char", "src": "0dcfc308", "v": "폴더 경로에 잘못된 문자가 있어요."}
+{"k": "app.launch.cwd_no_roots", "src": "45693d90", "v": "아직 쓸 수 있는 폴더가 없어요. 먼저 채팅에서 세션을 시작하면 그 프로젝트가 여기에 나와요."}
+{"k": "app.launch.cwd_not_allowed", "src": "8e0b71f9", "v": "이 채팅이 작업하는 폴더가 아니에요."}
+{"k": "app.launch.cwd_not_dir", "src": "9b0be449", "v": "그 경로는 폴더가 아니에요."}
+{"k": "app.launch.cwd_not_text", "src": "9497b469", "v": "폴더 경로는 텍스트여야 해요."}
+{"k": "app.launch.cwd_unresolvable", "src": "e87ce055", "v": "그 폴더를 찾을 수 없어요."}
 {"k": "app.launch.folder_bad_char", "src": "9052a17d", "v": "폴더 이름에 잘못된 문자가 있어요."}
 {"k": "app.launch.folder_empty", "src": "aa11b815", "v": "폴더 이름은 비워 둘 수 없어요."}
 {"k": "app.launch.folder_exists", "src": "8dec41ad", "v": "그곳에 같은 이름의 폴더가 이미 있어요. 새 이름을 골라 주세요."}
-{"k": "app.launch.folder_failed", "src": "4d757c2b", "v": "그 폴더를 만들지 못했어요."}
-{"k": "app.launch.folder_loads_code", "src": "78ba6bd6", "v": "“{name}” 폴더는 여기서 프로젝트 폴더로 쓸 수 없어요. 다른 프로그램이 그 안의 코드를 불러와요. 다른 이름을 골라 주세요."}
+{"k": "app.launch.folder_failed", "src": "4d757c2b", "v": "그 폴더를 만들 수 없어요."}
+{"k": "app.launch.folder_loads_code", "src": "78ba6bd6", "v": "“{name}” 폴더는 여기서 프로젝트 폴더로 쓸 수 없어요: 다른 프로그램이 거기서 코드를 불러와요. 다른 이름을 골라 주세요."}
 {"k": "app.launch.folder_not_text", "src": "3988a95d", "v": "폴더 이름은 텍스트여야 해요."}
-{"k": "app.launch.folder_parent", "src": "0a28b1e0", "v": "폴더를 만들 작업 디렉터리를 골라 주세요."}
-{"k": "app.launch.folder_pattern", "src": "c3b51490", "v": "문자, 숫자, 점, 하이픈, 밑줄을 쓰고 문자나 숫자로 시작해 주세요."}
+{"k": "app.launch.folder_parent", "src": "0a28b1e0", "v": "새 폴더를 만들 폴더를 골라 주세요."}
+{"k": "app.launch.folder_pattern", "src": "c3b51490", "v": "영문자, 숫자, 점, 하이픈, 밑줄만 쓰고 영문자나 숫자로 시작해 주세요."}
 {"k": "app.launch.folder_too_long", "src": "ae5dc64d", "v": "폴더 이름은 {max}자 이하여야 해요."}
 {"k": "app.launch.model_not_text", "src": "55a7cf25", "v": "모델은 텍스트여야 해요."}
-{"k": "app.launch.model_pattern", "src": "44cdf715", "v": "목록의 모델 중 하나나 {example} 같은 전체 모델 이름을 써 주세요."}
+{"k": "app.launch.model_pattern", "src": "44cdf715", "v": "목록의 모델 중 하나를 고르거나 {example} 같은 전체 모델 이름을 써 주세요."}
 {"k": "app.launch.model_too_long", "src": "47dfc21f", "v": "모델 이름은 {max}자 이하여야 해요."}
 {"k": "app.launch.name_bad_char", "src": "1b9271b6", "v": "세션 이름에 잘못된 문자가 있어요."}
 {"k": "app.launch.name_empty", "src": "e00fbfca", "v": "세션 이름은 비워 둘 수 없어요."}
 {"k": "app.launch.name_not_text", "src": "f6218198", "v": "세션 이름은 텍스트여야 해요."}
-{"k": "app.launch.name_pattern", "src": "b916e083", "v": "영문자, 숫자, 하이픈, 밑줄을 쓰고 영문자나 숫자로 시작해 주세요."}
-{"k": "app.launch.name_reserved", "src": "2efe289d", "v": "“{name}” 이름은 예약된 명령 이름({command})이에요. 다른 이름을 골라 주세요."}
+{"k": "app.launch.name_pattern", "src": "b916e083", "v": "영문자, 숫자, 하이픈, 밑줄만 쓰고 영문자나 숫자로 시작해 주세요."}
+{"k": "app.launch.name_reserved", "src": "2efe289d", "v": "“{name}” 이름은 봇의 명령 이름({command})이에요. 다른 이름을 골라 주세요."}
 {"k": "app.launch.name_too_long", "src": "9b31bc40", "v": "세션 이름은 {max}자 이하여야 해요."}
 {"k": "app.launch.no_folder_at_all", "src": "3d2c3604", "v": "아직 시작할 프로젝트 폴더가 없어요. 관리자에게 세션을 시작해 달라고 하세요."}
 {"k": "app.launch.no_project_folder", "src": "36c0c4fb", "v": "프로젝트 폴더를 골라 주세요. “새 폴더”로 만들거나 관리자에게 세션을 시작해 달라고 하세요."}
-{"k": "app.launch.no_root", "src": "19345855", "v": "여기에는 작업할 폴더가 없어요. 소유자에게 aipager config에서 추가해 달라고 하세요."}
+{"k": "app.launch.no_root", "src": "19345855", "v": "여기에는 작업할 폴더가 아직 없어요. 소유자에게 aipager config에서 추가해 달라고 하세요."}
 {"k": "app.launch.outside_root", "src": "f8761328", "v": "지금 역할로는 내 폴더 {folder} 또는 그 안의 폴더에서만 세션을 시작할 수 있어요."}
-{"k": "app.launch.root_unavailable", "src": "6d332ade", "v": "내 폴더 {folder}을(를) 준비하지 못했어요. 소유자에게 aipager config에서 확인해 달라고 하세요."}
-{"k": "app.launch.session_outside_root", "src": "c501e96d", "v": "이 세션은 내 폴더 {folder} 밖에서 작업 중이라 지금 역할로는 재개, 재시작, 모드 전환을 할 수 없어요. 관리자에게 요청하세요."}
+{"k": "app.launch.root_unavailable", "src": "6d332ade", "v": "내 폴더 {folder}을(를) 준비할 수 없어요. 소유자에게 aipager config에서 확인해 달라고 하세요."}
+{"k": "app.launch.session_outside_root", "src": "c501e96d", "v": "이 세션은 내 폴더 {folder} 밖에서 작업해요. 그래서 지금 역할로는 이 세션을 재개하거나 재시작하거나 모드를 바꿀 수 없어요. 관리자에게 부탁하세요."}
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "지금 역할로는 홈 폴더나 그 위의 폴더에서 세션을 시작할 수 없어요. 프로젝트 폴더를 골라 주세요. “새 폴더”로 만들거나 관리자에게 세션을 시작해 달라고 하세요."}
-{"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"other": "🧹 Mini App에서 [{session}]의 대기 중인 메시지 {n}개를 지웠어요"}}
-{"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Mini App에서 [{session}] 압축을 실행했어요"}
+{"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"other": "🧹 Mini App에서 [{session}] 세션의 대기 중인 메시지 {n}개를 삭제했어요"}}
+{"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Mini App에서 [{session}] 세션의 대화 압축을 시작했어요"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 Mini App에서 {session} 세션을 만들었어요 · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 Mini App에서 {session} 세션을 만들었어요 · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ Mini App에서 [{session}] 세션을 삭제했어요"}
 {"k": "app.mirror.folder", "src": "603d7ae2", "v": "📁 Mini App에서 새 폴더를 만들었어요:\n{path}"}
 {"k": "app.mirror.killed", "src": "63565832", "v": "💀 Mini App에서 [{session}] 세션을 종료했어요"}
-{"k": "app.mirror.mode_sent", "src": "c1718968", "v": "⚙️ Mini App에서 {session} 세션을 재시작 없이 {mode}(으)로 바꾸는 중이에요."}
+{"k": "app.mirror.mode_sent", "src": "c1718968", "v": "⚙️ Mini App에서 {session} 세션을 재시작 없이 {mode}로 바꾸는 중이에요."}
 {"k": "app.mirror.model", "src": "6df57f60", "v": "🔄 [{session}] → {model} (Mini App에서)"}
-{"k": "app.mirror.renamed", "src": "22ad8a4c", "v": "✏️ Mini App에서 이름 변경: [{old}] → [{new}]"}
-{"k": "app.mirror.restarted", "src": "9aa8323d", "v": "🔁 Mini App에서 [{session}] 세션을 다시 시작했어요"}
-{"k": "app.mirror.resumed", "src": "fafeafa6", "v": "♻️ Mini App에서 [{session}] 세션을 재개했어요"}
-{"k": "app.mirror.resumed_in_auto", "src": "85b6c017", "v": "♻️ Mini App에서 [{session}] 세션을 자동 모드로 재개했어요: {reason}"}
+{"k": "app.mirror.renamed", "src": "22ad8a4c", "v": "✏️ [{old}] 세션의 새 이름: [{new}] (Mini App에서)"}
+{"k": "app.mirror.restarted", "src": "9aa8323d", "v": "🔁 Mini App에서 [{session}] 세션을 재시작했어요"}
+{"k": "app.mirror.resumed", "src": "fafeafa6", "v": "♻️ Mini App에서 [{session}] 세션을 다시 열었어요"}
+{"k": "app.mirror.resumed_in_auto", "src": "85b6c017", "v": "♻️ Mini App에서 [{session}] 세션을 자동 모드로 다시 열었어요: {reason}"}
 {"k": "app.mirror.session_setting", "src": "3256d908", "v": "⚙️ {session} 세션의 {setting} → {value} (Mini App에서 변경)"}
 {"k": "app.mirror.session_setting_reset", "src": "4502514a", "v": "⚙️ {session} 세션의 {setting} 설정을 기본값({value})으로 되돌렸어요 (Mini App에서 변경)"}
 {"k": "app.mirror.setting", "src": "6820a9f7", "v": "⚙️ {setting} → {value} (Mini App에서 변경)"}
 {"k": "app.mirror.stopped", "src": "70cd9e81", "v": "⏹️ Mini App에서 [{session}] 세션을 중지했어요"}
-{"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"other": "⏹️ Mini App에서 [{session}] 세션을 중지했어요 (대기 중인 메시지 {n}개 버림)"}}
+{"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"other": "⏹️ Mini App에서 [{session}] 세션을 중지했어요 (대기 중인 메시지 {n}개 삭제)"}}
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 Mini App에서 {session} 세션을 확인 모드로 바꿨어요"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 Mini App에서 {session} 세션을 자동 모드로 바꿨어요"}
 {"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 Mini App에서 {session} 세션을 전체 권한 모드로 바꿨어요"}
 {"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "열려 있는 요청에 먼저 답한 다음 모드를 바꾸세요."}
-{"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude가 작업 중이에요. 이번 턴이 끝나면 모델을 바꾸세요."}
-{"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "세션이 실행 중이 아니에요."}
-{"k": "app.reason.model_pending", "src": "a3384cf1", "v": "지난 모델 변경이 아직 확인되지 않았어요. 다시 바꾸기 전에 터미널에서 Claude Code의 “Switch model?” 질문을 확인하세요."}
-{"k": "app.reason.model_prompt_open", "src": "c3641605", "v": "터미널에 열린 프롬프트가 있어요. 모델을 바꾸기 전에 먼저 답해 주세요."}
-{"k": "app.reason.model_unconfirmed", "src": "316e6e23", "v": "확인되지 않았어요. 세션을 확인하세요. Claude Code가 터미널에서 “Switch model?”을 묻고 있거나, 이미 그 모델을 쓰고 있었을 수 있어요."}
+{"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude가 작업 중이에요. 이 작업이 끝나면 모델을 바꾸세요."}
+{"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "이 세션은 지금 실행 중이 아니에요."}
+{"k": "app.reason.model_pending", "src": "a3384cf1", "v": "지난 모델 변경이 아직 확인되지 않았어요. 다시 바꾸기 전에 터미널에서 Claude Code가 “Switch model?” 질문을 하고 있는지 확인하세요."}
+{"k": "app.reason.model_prompt_open", "src": "c3641605", "v": "터미널에 열린 요청이 있어요. 모델을 바꾸기 전에 먼저 답하세요."}
+{"k": "app.reason.model_unconfirmed", "src": "316e6e23", "v": "확인되지 않았어요. 세션을 확인하세요. Claude Code가 터미널에서 “Switch model?”을 묻고 있거나, 원래 그 모델을 쓰고 있었을 수 있어요."}
 {"k": "app.reason.model_unknown", "src": "4e5022f6", "v": "aipager가 아직 이 세션의 상태를 알지 못해요. 잠시 후 다시 시도해 주세요."}
-{"k": "app.reason.no_context", "src": "8f590315", "v": "압축할 것이 없어요. 컨텍스트가 이미 비어 있어요."}
+{"k": "app.reason.no_context", "src": "8f590315", "v": "압축할 것이 없어요. 컨텍스트가 아직 비어 있어요."}
 {"k": "app.reason.no_permission", "src": "e1081627", "v": "이 세션을 제어할 권한이 없어요."}
-{"k": "app.reason.no_transcript", "src": "3426f123", "v": "재개할 대화 기록이 없어요. 대신 새 세션을 시작하세요."}
-{"k": "app.reason.perms_admin", "src": "c9f440cf", "v": "전체 권한 모드로 바꾸려면 관리자여야 해요."}
-{"k": "app.reason.queue_empty", "src": "35da34dc", "v": "지울 대기 메시지가 없어요."}
-{"k": "app.reason.queue_full", "src": "2bf9f868", "v": "대기열이 가득 찼어요({cap}개 대기 중). 비우거나 줄어들 때까지 기다려 주세요."}
+{"k": "app.reason.no_transcript", "src": "3426f123", "v": "재개할 저장된 대화가 없어요. 새 세션을 시작하세요."}
+{"k": "app.reason.perms_admin", "src": "c9f440cf", "v": "전체 권한 모드로 바꾸는 건 관리자만 할 수 있어요."}
+{"k": "app.reason.queue_empty", "src": "35da34dc", "v": "대기열이 비어 있어요."}
+{"k": "app.reason.queue_full", "src": "2bf9f868", "v": "대기열이 가득 찼어요 (메시지 {cap}개 대기 중). 대기열을 비우거나 Claude가 가져갈 때까지 기다리세요."}
 {"k": "appcmd.btn.open", "src": "0bfb9312", "v": "📱 Mini App 열기"}
-{"k": "appcmd.cant_start", "src": "24d56baf", "v": "📱 이 기기에서는 Mini App을 시작할 수 없어요. 설치가 불완전한 것 같아요.\n\n다른 기능은 계속 작동해요. 설치한 사람에게 aipager를 다시 설치해 달라고 하세요."}
-{"k": "appcmd.in_group", "src": "edb98eb2", "v": "📱 Mini App은 개인 채팅에서만 작동해요. 봇에게 개인 메시지를 보내고 거기서 /app을 보내세요."}
-{"k": "appcmd.no_dm", "src": "96dd0730", "v": "Mini App은 봇과의 개인 채팅에서 열려요. 운영자에게 추가해 달라고 하세요."}
-{"k": "appcmd.not_enabled", "src": "31154296", "v": "이 기기에서는 Mini App 서버가 켜져 있지 않아요.\n운영자에게 {command} 명령을 실행하고 데몬을 다시 시작해 달라고 하세요."}
-{"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 Mini App 링크를 아직 준비하는 중이에요. 몇 초 뒤에 /app을 다시 보내 보세요."}
-{"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 이 봇은 아직 이 계정과 대화하도록 설정되어 있지 않아요. 운영자에게 {command} 명령으로 Telegram 사용자 ID({user_id})를 추가해 달라고 하세요."}
-{"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "탭해서 aipager 대시보드를 여세요:"}
+{"k": "appcmd.cant_start", "src": "24d56baf", "v": "📱 이 컴퓨터에서는 Mini App을 시작할 수 없어요. 설치가 완전하지 않은 것 같아요.\n\n다른 기능은 그대로 작동해요. aipager를 설치한 사람에게 다시 설치해 달라고 하세요."}
+{"k": "appcmd.in_group", "src": "edb98eb2", "v": "📱 Mini App은 개인 채팅에서만 쓸 수 있어요. 봇에게 개인 메시지를 보낸 뒤 거기서 /app을 보내세요."}
+{"k": "appcmd.no_dm", "src": "96dd0730", "v": "Mini App은 봇과의 개인 채팅에서 열려요. 봇 소유자에게 추가해 달라고 하세요."}
+{"k": "appcmd.not_enabled", "src": "31154296", "v": "이 컴퓨터에서는 Mini App 서버가 켜져 있지 않아요.\n봇 소유자에게 {command} 명령을 실행하고 aipager를 재시작해 달라고 하세요."}
+{"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 Mini App 링크가 아직 준비되지 않았어요. 몇 초 뒤에 /app을 다시 보내 주세요."}
+{"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 이 봇은 아직 이 계정과 대화하도록 설정되어 있지 않아요. 봇 소유자에게 {command} 명령으로 Telegram ID({user_id})를 추가해 달라고 하세요."}
+{"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "aipager 대시보드를 열려면 누르세요:"}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} 차단됨"}
-{"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {person}에게 {tool} 차단됨"}
-{"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {person}에게 {tool} 차단됨 (역할 {role})"}
-{"k": "auth.read_only.scope", "src": "88683fbb", "v": "👀 {who} - 역할: <i>{role}</i>. <code>/status</code>는 쓸 수 있지만 세션을 조작할 수는 없어요."}
-{"k": "auth.read_only.team", "src": "87e66c02", "v": "👀 {who} - 역할: <i>read_only</i>. <code>/status</code>는 쓸 수 있지만 세션을 조작할 수는 없어요."}
-{"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 이 범위의 허용 목록에 없는 계정이에요. 운영자에게 {command} 명령으로 Telegram 사용자 ID({user_id})를 추가해 달라고 하세요."}
-{"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 이 봇의 허용 목록에 없는 계정이에요. 운영자에게 {command} 명령으로 Telegram 사용자 ID({user_id})를 추가해 달라고 하세요."}
-{"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 이 봇은 아직 이 계정과 대화하도록 설정되어 있지 않아요. 운영자에게 {command} 명령으로 Telegram 사용자 ID({user_id})를 추가해 달라고 하세요."}
-{"k": "botdesc.description", "src": "8ea2e350", "v": "aipager는 이 봇을 소유자 컴퓨터의 Claude Code 세션에 연결해요. 여기서 Claude가 하는 일을 지켜보고, 질문과 권한 요청에 답하고, 새 프롬프트를 보낼 수 있어요. 소유자가 추가한 사람만 사용할 수 있어요."}
+{"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {person} 님에게 {tool} 차단됨"}
+{"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {person} 님에게 {tool} 차단됨 (역할 {role})"}
+{"k": "auth.read_only.scope", "src": "88683fbb", "v": "👀 {who} - 역할: <i>{role}</i>. <code>/status</code>는 볼 수 있지만 세션을 조작할 수는 없어요."}
+{"k": "auth.read_only.team", "src": "87e66c02", "v": "👀 {who} - 역할: <i>read_only</i>. <code>/status</code>는 볼 수 있지만 세션을 조작할 수는 없어요."}
+{"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 이 채팅의 허용 목록에 없어요. 봇 소유자에게 {command} 명령으로 Telegram ID({user_id})를 추가해 달라고 하세요."}
+{"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 이 봇의 허용 목록에 없어요. 봇 소유자에게 {command} 명령으로 Telegram ID({user_id})를 추가해 달라고 하세요."}
+{"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 이 봇은 아직 이 계정과 대화하도록 설정되어 있지 않아요. 봇 소유자에게 {command} 명령으로 Telegram ID({user_id})를 추가해 달라고 하세요."}
+{"k": "botdesc.description", "src": "8ea2e350", "v": "aipager는 이 봇을 소유자 컴퓨터의 Claude Code 세션에 연결해요. 여기서 Claude가 하는 일을 보고, Claude의 질문과 권한 요청에 답하고, 새 메시지를 보낼 수 있어요. 소유자가 추가한 사람만 쓸 수 있어요."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Telegram에서 Claude Code 세션을 제어해요."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ 뒤로"}
 {"k": "btn.rep.cancel", "src": "196a9f45", "v": "✖️ 취소"}
@@ -168,40 +168,40 @@
 {"k": "btn.upd.check", "src": "cb743a2a", "v": "🔄 업데이트 확인"}
 {"k": "btn.upd.check_again", "src": "e185048c", "v": "다시 확인"}
 {"k": "btn.upd.claude", "src": "8b854ad6", "v": "Claude Code 업데이트"}
-{"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "지금 다시 시작"}
+{"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "지금 재시작"}
 {"k": "btn.upd.wait", "src": "060c561a", "v": "{mins}분 더 기다리기"}
 {"k": "card.agents", "src": "263711d4", "v": {"other": "에이전트 {n}개"}}
 {"k": "card.agents_typed", "src": "af56f555", "v": {"other": "에이전트 {n}개 ({types})"}}
-{"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · 압축하는 중{dots}"}
+{"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · 대화 압축 중{dots}"}
 {"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · 거부됨"}
-{"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · 거부됨 · {person}"}
+{"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · {person} 님이 거부했어요"}
 {"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · 터미널에서 거부됨"}
 {"k": "card.finishing", "src": "1bfd382d", "v": "마무리하는 중"}
-{"k": "card.fold", "src": "2061ab43", "v": {"other": "▸ 도구 호출 {n}개"}}
+{"k": "card.fold", "src": "2061ab43", "v": {"other": "▸ 도구 {n}번 사용"}}
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"other": "(에이전트 {n}개)"}}
-{"k": "card.legacy.earlier", "src": "7062cc28", "v": {"other": "✅ <i>이전 도구 {n}개</i>"}}
+{"k": "card.legacy.earlier", "src": "7062cc28", "v": {"other": "✅ <i>앞서 도구 {n}번 사용</i>"}}
 {"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
 {"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 **{session}**에서 보냄 ({who})"}
 {"k": "card.peer.from_plain", "src": "42467343", "v": "📨 **{session}**에서 보냄"}
-{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 **{session}**에서 보냄 (해당 터미널에서 입력)"}
+{"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 **{session}**에서 보냄 (그 세션의 터미널에서 입력)"}
 {"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 다른 세션에서 보냄 (확인되지 않음: 파일 변경 불가, 웹 사용 불가)"}
-{"k": "card.row.agent_done", "src": "d7362ffc", "v": {"other": "🤖 {agent} · 도구 호출 {n}개 · {clock}"}}
+{"k": "card.row.agent_done", "src": "d7362ffc", "v": {"other": "🤖 {agent} · 도구 {n}번 사용 · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (아직 실행 중)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "에이전트"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
-{"k": "card.row.shell_done", "src": "3b615634", "v": "셸: {label} - 완료 ({clock})"}
-{"k": "card.row.shell_failed", "src": "3e240f07", "v": "셸: {label} - 실패 ({clock})"}
-{"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "셸: {label} - 실패 (종료 코드 {code})"}
-{"k": "card.row.shell_live", "src": "6cebf6e9", "v": "셸: {label} ({clock})"}
-{"k": "card.row.shell_lost", "src": "83289e16", "v": "셸: {label} - 종료 확인 안 됨 ({clock})"}
-{"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "셸: {label} (아직 실행 중)"}
-{"k": "card.row.shell_stopped", "src": "315cab29", "v": "셸: {label} - 중지됨 ({clock})"}
+{"k": "card.row.shell_done", "src": "3b615634", "v": "백그라운드 명령: {label} - 완료 ({clock})"}
+{"k": "card.row.shell_failed", "src": "3e240f07", "v": "백그라운드 명령: {label} - 오류로 끝남 ({clock})"}
+{"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "백그라운드 명령: {label} - 오류로 끝남 (종료 코드 {code})"}
+{"k": "card.row.shell_live", "src": "6cebf6e9", "v": "백그라운드 명령: {label} ({clock})"}
+{"k": "card.row.shell_lost", "src": "83289e16", "v": "백그라운드 명령: {label} - 끝난 것을 확인하지 못함 ({clock})"}
+{"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "백그라운드 명령: {label} (아직 실행 중)"}
+{"k": "card.row.shell_stopped", "src": "315cab29", "v": "백그라운드 명령: {label} - 중지됨 ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "시작하는 중"}
-{"k": "card.shells", "src": "9b747b65", "v": {"other": "셸 {n}개"}}
+{"k": "card.shells", "src": "9b747b65", "v": {"other": "백그라운드 명령 {n}개"}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · 중지됨"}
-{"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · 중지됨 · {person}"}
+{"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} 님이 중지했어요"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · 터미널에서 중지됨"}
 {"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · 생각하는 중…"}
 {"k": "card.verb.done", "src": "e9b450d1", "v": "완료"}
@@ -217,7 +217,7 @@
 {"k": "card.verb.spin_processing", "src": "e63451d3", "v": "처리하는 중"}
 {"k": "card.verb.spin_reasoning", "src": "e272c597", "v": "추론하는 중"}
 {"k": "card.verb.spin_thinking", "src": "d08d8da0", "v": "생각하는 중"}
-{"k": "card.verb.waiting", "src": "33d30632", "v": "대기 중"}
+{"k": "card.verb.waiting", "src": "33d30632", "v": "답변 대기 중"}
 {"k": "card.verb.working", "src": "3b4dfc97", "v": "작업 중"}
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
 {"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} 아직 작업 중"}
@@ -234,44 +234,44 @@
 {"k": "cmd.stop", "src": "7c4cbc32", "v": "Claude가 하는 일 중지"}
 {"k": "cmd.talk", "src": "a0173425", "v": "{session} 세션과 대화"}
 {"k": "diff.more_lines", "src": "816da678", "v": {"other": "<i>…외 {n}줄 더</i>"}}
-{"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · 완료 (백그라운드 에이전트 유실)"}
-{"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · 완료 ({clock} 후 백그라운드 에이전트 유실)"}
+{"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · 완료 (백그라운드 에이전트가 사라짐)"}
+{"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · 완료 ({clock}, 백그라운드 에이전트가 사라짐)"}
 {"k": "fin.finished", "src": "6f65069e", "v": "{lead} · 완료 ({stats})"}
 {"k": "fin.finished_bare", "src": "53b60c70", "v": "{lead} · 완료"}
 {"k": "fin.full_attached", "src": "bcfddfdb", "v": "📎 <i>전체 응답은 아래 파일에 있어요 ↓</i>"}
 {"k": "fin.lines", "src": "a6f39b46", "v": "+{added} -{removed}"}
-{"k": "fin.shell_lost", "src": "c6c919fb", "v": "⚠️ <b>{session}</b> · 완료 (백그라운드 셸의 종료를 확인하지 못함)"}
-{"k": "fin.shell_lost_after", "src": "4692a050", "v": "⚠️ <b>{session}</b> · 완료 ({clock} 후에도 백그라운드 셸의 종료를 확인하지 못함)"}
+{"k": "fin.shell_lost", "src": "c6c919fb", "v": "⚠️ <b>{session}</b> · 완료 (백그라운드 명령 소식 없음)"}
+{"k": "fin.shell_lost_after", "src": "4692a050", "v": "⚠️ <b>{session}</b> · 완료 ({clock}, 백그라운드 명령 소식 없음)"}
 {"k": "fin.stats", "src": "9160a66c", "v": "{clock}, +{added} -{removed}"}
-{"k": "flood.card_paused", "src": "61a88de1", "v": "⏳ **{session}** · 작업 중 (업데이트 일시 중지)"}
-{"k": "flood.card_paused_html", "src": "3815781e", "v": "⏳ <b>{session}</b> · 작업 중 (업데이트 일시 중지)"}
-{"k": "flood.paused_hourly", "src": "1be79366", "v": "⏸ 카드 업데이트 일시 중지 (시간당 한도)"}
-{"k": "flood.paused_rate", "src": "57af71ab", "v": "⏸ 카드 업데이트 일시 중지 (속도 제한)"}
-{"k": "flood.slow", "src": "fd8f3fd7", "v": "🐢 Telegram 경고 후 느린 모드"}
-{"k": "grp.dropped", "src": "96346149", "v": {"other": "메시지 {n}개를 버렸어요. {who} 님은 더 이상 여기서 보낼 수 없어요."}}
-{"k": "grp.dropped_anon", "src": "c67a8cca", "v": {"other": "메시지 {n}개를 버렸어요. 이 보낸 사람은 더 이상 여기서 보낼 수 없어요."}}
-{"k": "grp.dropped_anon_one", "src": "8946b17f", "v": "버렸어요. 이 보낸 사람은 더 이상 여기서 보낼 수 없어요."}
-{"k": "grp.dropped_one", "src": "4ab273e1", "v": "버렸어요. {who} 님은 더 이상 여기서 보낼 수 없어요."}
+{"k": "flood.card_paused", "src": "61a88de1", "v": "⏳ **{session}** · 작업 중 (카드 업데이트 잠시 멈춤)"}
+{"k": "flood.card_paused_html", "src": "3815781e", "v": "⏳ <b>{session}</b> · 작업 중 (카드 업데이트 잠시 멈춤)"}
+{"k": "flood.paused_hourly", "src": "1be79366", "v": "⏸ 카드 업데이트 잠시 멈춤 (Telegram 시간당 한도)"}
+{"k": "flood.paused_rate", "src": "57af71ab", "v": "⏸ 카드 업데이트 잠시 멈춤 (Telegram 제한)"}
+{"k": "flood.slow", "src": "fd8f3fd7", "v": "🐢 Telegram 경고 후 천천히 보내는 중"}
+{"k": "grp.dropped", "src": "96346149", "v": {"other": "메시지 {n}개를 Claude에게 보내지 않았어요: {who} 님은 이제 여기서 메시지를 보낼 수 없어요."}}
+{"k": "grp.dropped_anon", "src": "c67a8cca", "v": {"other": "메시지 {n}개를 Claude에게 보내지 않았어요: 이 보낸 사람은 이제 여기서 메시지를 보낼 수 없어요."}}
+{"k": "grp.dropped_anon_one", "src": "8946b17f", "v": "Claude에게 보내지 않았어요: 이 보낸 사람은 이제 여기서 메시지를 보낼 수 없어요."}
+{"k": "grp.dropped_one", "src": "4ab273e1", "v": "Claude에게 보내지 않았어요: {who} 님은 이제 여기서 메시지를 보낼 수 없어요."}
 {"k": "grp.help_talk", "src": "07beac8e", "v": "<b>대화:</b> 세션의 메시지에 답장 · {mention} 멘션 · /&lt;이름&gt; 메시지"}
 {"k": "grp.help_talk_no_username", "src": "4c1fc9fd", "v": "<b>대화:</b> 세션의 메시지에 답장 · 봇 멘션 · /&lt;이름&gt; 메시지"}
-{"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "봇을 쓰려면 본인 계정으로 글을 올리세요."}
-{"k": "held.late_marker", "src": "e38c307b", "v": {"other": "⏳ 늦게 전달됨 (Telegram 속도 제한 중 {n}분 보류)"}}
-{"k": "held.too_old", "src": "7391de5a", "v": "이 메시지는 너무 오래돼서 보낼 수 없어요. 다시 보내 주세요."}
-{"k": "help.admin", "src": "29ac6154", "v": "<b>관리자:</b> /update (aipager와 Claude Code)"}
-{"k": "help.control", "src": "8bb13acf", "v": "<b>제어:</b> /stop · /now (대기 메시지 보내기) · /clearqueue"}
-{"k": "help.manage", "src": "75144040", "v": "<b>관리:</b> /status 다음 ⋮ (다시 시작, 이름 바꾸기, diff, 종료, 삭제)"}
-{"k": "help.settings", "src": "d51d2171", "v": "<b>설정:</b> /settings · /mode (자동 또는 확인)"}
+{"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "봇을 쓰려면 본인 이름으로 글을 올려 주세요."}
+{"k": "held.late_marker", "src": "e38c307b", "v": {"other": "⏳ 늦게 도착함: Telegram 제한 때문에 {n}분 동안 보류됨"}}
+{"k": "held.too_old", "src": "7391de5a", "v": "이 메시지는 너무 오래돼서 보내지 않았어요. 다시 보내 주세요."}
+{"k": "help.admin", "src": "29ac6154", "v": "<b>관리자:</b> /update (aipager와 Claude Code 업데이트)"}
+{"k": "help.control", "src": "8bb13acf", "v": "<b>제어:</b> /stop · /now (대기열 메시지 보내기) · /clearqueue"}
+{"k": "help.manage", "src": "75144040", "v": "<b>관리:</b> /status 다음 ⋮ (재시작, 이름 바꾸기, diff, 종료, 삭제)"}
+{"k": "help.settings", "src": "ab2b823b", "v": "<b>설정:</b> /settings · /mode (확인, 자동 또는 전체 권한 모드)"}
 {"k": "help.start", "src": "276a9c1b", "v": "<b>시작:</b> /new 이름 · /resume"}
 {"k": "help.talk_dm", "src": "c3ef5195", "v": "<b>대화:</b> 그냥 입력 (✍️ 세션으로 감) · 메시지에 답장 · /&lt;이름&gt; 메시지"}
-{"k": "help.tip", "src": "67a93e6b", "v": "<i>팁: 명령을 탭하면 바로 보내져요. 먼저 글을 덧붙이려면 길게 누르거나(휴대폰) Tab을 누르세요(데스크톱).</i>"}
+{"k": "help.tip", "src": "67a93e6b", "v": "<i>팁: 명령을 누르면 바로 보내져요. 먼저 글을 덧붙이려면 길게 누르거나(휴대폰) Tab을 누르세요(컴퓨터).</i>"}
 {"k": "help.title", "src": "8fffe930", "v": "<b>aipager 사용법</b>"}
 {"k": "home.btn.new", "src": "19b62fc4", "v": "🆕 새 세션"}
 {"k": "home.btn.resume", "src": "12a3163c", "v": "↩️ 재개"}
 {"k": "home.btn.settings", "src": "b1f2d607", "v": "⚙️ 설정"}
-{"k": "home.dm_target", "src": "099ec348", "v": "✍️ 메시지가 가는 곳: <b>{session}</b>"}
+{"k": "home.dm_target", "src": "099ec348", "v": "✍️ 메시지는 <b>{session}</b> 세션으로 가요."}
 {"k": "home.help_hint", "src": "d62b118c", "v": "<i>/help에서 할 수 있는 모든 일을 볼 수 있어요.</i>"}
-{"k": "home.start_one", "src": "ef9f6ba9", "v": "/new로 하나 시작하세요."}
-{"k": "home.tap_session", "src": "f14797d7", "v": "키보드에서 세션을 탭하면 대화할 수 있어요."}
+{"k": "home.start_one", "src": "ef9f6ba9", "v": "/new로 세션을 시작하세요."}
+{"k": "home.tap_session", "src": "f14797d7", "v": "키보드에서 세션 이름을 누르면 그 세션과 대화할 수 있어요."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Telegram에서 쓰는 Claude Code"}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« 뒤로"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "명령어"}
@@ -282,8 +282,8 @@
 {"k": "kb.stop", "src": "1b480158", "v": "중지"}
 {"k": "kb.templates", "src": "f25b700e", "v": "템플릿"}
 {"k": "kbl.cmd.clear", "src": "719ea396", "v": "대화 지우기"}
-{"k": "kbl.cmd.compact", "src": "1df39aa5", "v": "압축"}
-{"k": "kbl.cmd.init", "src": "19682bdb", "v": "초기 설정"}
+{"k": "kbl.cmd.compact", "src": "1df39aa5", "v": "대화 압축"}
+{"k": "kbl.cmd.init", "src": "19682bdb", "v": "프로젝트 준비"}
 {"k": "kbl.cmd.plan", "src": "bc0b2aff", "v": "계획 모드"}
 {"k": "kbl.cmd.security_review", "src": "52fab0c7", "v": "보안 검토"}
 {"k": "kbl.tpl.commit", "src": "1a1873ab", "v": "커밋"}
@@ -291,63 +291,63 @@
 {"k": "kbl.tpl.explain_plan", "src": "8197049c", "v": "계획 설명"}
 {"k": "kbl.tpl.lgtm", "src": "fddf8bc1", "v": "좋아요, 배포해요"}
 {"k": "kbl.tpl.run_tests", "src": "fcab481b", "v": "테스트 실행"}
-{"k": "kbl.tpl.show_diff", "src": "78016e77", "v": "diff 보기"}
+{"k": "kbl.tpl.show_diff", "src": "78016e77", "v": "변경 사항 보기"}
 {"k": "kbl.tpl.update_memory", "src": "cfa5cef7", "v": "메모리 업데이트"}
 {"k": "kbl.tpl.write_tests", "src": "391b1a96", "v": "테스트 작성"}
 {"k": "kbmsg.commands", "src": "52b6fd5f", "v": "🎛 명령어"}
 {"k": "kbmsg.models", "src": "78548025", "v": "🤖 모델"}
 {"k": "kbmsg.templates", "src": "ba85b523", "v": "📋 템플릿"}
 {"k": "lang.auto", "src": "a66c2e1b", "v": "자동 (내 Telegram 언어)"}
-{"k": "lang.changed", "src": "4e8c6791", "v": "✅ 이제 aipager가 여기서 {language} 언어를 써요. 세션과 Claude의 답변은 바뀌지 않아요."}
-{"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager는 여기서 {language} 언어를 써요 (aipager 자체 메시지만 해당하고, Claude는 메시지에 쓴 언어로 답해요). /language로 바꿀 수 있어요"}
-{"k": "lang.list.group", "src": "9462a94a", "v": "🌐 aipager가 이 그룹의 카드와 버튼에 쓰는 언어예요. Claude 세션은 바뀌지 않아요. Claude는 메시지에 쓴 언어로 답해요."}
-{"k": "lang.list.private", "src": "5d92850b", "v": "🌐 aipager가 여기와 Mini App에서 자체 메시지와 버튼에 쓰는 언어예요. Claude 세션은 바뀌지 않아요. Claude는 메시지에 쓴 언어로 답해요."}
+{"k": "lang.changed", "src": "4e8c6791", "v": "✅ 이제부터 aipager가 여기서 {language}를 써요. 세션과 Claude의 답변은 그대로예요."}
+{"k": "lang.first_contact", "src": "bbb74601", "v": "🌐 aipager는 여기서 {language}를 써요 (aipager 메시지만 해당돼요. Claude는 메시지를 쓴 언어로 답해요). /language로 바꿀 수 있어요"}
+{"k": "lang.list.group", "src": "9462a94a", "v": "🌐 aipager가 이 그룹의 카드와 버튼에 쓰는 언어예요. Claude 세션은 바뀌지 않아요. Claude는 메시지를 쓴 언어로 답해요."}
+{"k": "lang.list.private", "src": "5d92850b", "v": "🌐 aipager가 여기와 Mini App에서 자기 메시지와 버튼에 쓰는 언어예요. Claude 세션은 바뀌지 않아요. Claude는 메시지를 쓴 언어로 답해요."}
 {"k": "lang.offer.keep", "src": "c383d509", "v": "영어 유지"}
-{"k": "lang.offer.text", "src": "788b2767", "v": "🌐 이제 aipager가 {language} 언어를 지원해요. 바뀌는 건 여기와 Mini App에 있는 aipager 자체 메시지와 버튼뿐이고, Claude 세션은 그대로예요. Claude는 계속 메시지에 쓴 언어로 답해요."}
+{"k": "lang.offer.text", "src": "788b2767", "v": "🌐 이제 aipager에서 {language}를 쓸 수 있어요. 여기와 Mini App에서 aipager의 메시지와 버튼만 바뀌고, Claude 세션은 바뀌지 않아요. Claude는 계속 메시지를 쓴 언어로 답해요."}
 {"k": "lang.row", "src": "69fc399f", "v": "🌐 언어: {language}"}
-{"k": "life.daemon_restarted", "src": "7253e5d2", "v": "🔄 <b>{session}</b> · 데몬 다시 시작됨"}
+{"k": "life.daemon_restarted", "src": "7253e5d2", "v": "🔄 <b>{session}</b> · aipager 재시작됨"}
 {"k": "life.session_ended", "src": "84bf802a", "v": "🔴 <b>{session}</b> · 세션 종료됨"}
-{"k": "log.agent", "src": "ff163576", "v": {"other": "- 🤖 {agent} ({clock}, 도구 호출 {n}개)"}}
+{"k": "log.agent", "src": "ff163576", "v": {"other": "- 🤖 {agent} ({clock}, 도구 {n}번 사용)"}}
 {"k": "log.agents", "src": "5db5246b", "v": "## 에이전트"}
 {"k": "log.final_answer", "src": "f0ea5fc3", "v": "## 최종 답변"}
-{"k": "log.memory", "src": "df926a90", "v": {"other": "_메모리에는 최근 도구 기록 {n}줄만 남아 있어요. 아주 긴 턴의 오래된 줄은 이미 사라졌을 수 있어요._"}}
+{"k": "log.memory", "src": "df926a90", "v": {"other": "_최근 도구 기록 {n}줄만 보관해요. 아주 긴 작업에서는 오래된 줄이 이미 사라졌을 수 있어요._"}}
 {"k": "log.title", "src": "2d9e96f5", "v": "# {session} - 전체 로그"}
-{"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ 파일을 내려받지 못했어요: {names}"}
-{"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ 파일을 내려받지 못했어요: {names}"}
-{"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ 파일을 내려받지 못했어요: {names} (앨범에서 빠짐)"}
-{"k": "media.album_left_out_one", "src": "c91cd106", "v": "❌ 파일을 내려받지 못했어요: {names} (앨범에서 빠짐)"}
-{"k": "media.brew_footer", "src": "accb7c5a", "v": "<i>참고: 앞으로 {command} 명령이 formula venv를 다시 만들면서 faster-whisper를 빼 버릴 수 있어요. 음성 기능이 멈추면 “설치”를 다시 탭하세요.</i>"}
+{"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ 이 파일들을 다운로드할 수 없어요: {names}"}
+{"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ 이 파일을 다운로드할 수 없어요: {names}"}
+{"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ 이 파일들을 다운로드할 수 없어서 나머지 앨범만 보냈어요: {names}"}
+{"k": "media.album_left_out_one", "src": "c91cd106", "v": "❌ 이 파일을 다운로드할 수 없어서 나머지 앨범만 보냈어요: {names}"}
+{"k": "media.brew_footer", "src": "accb7c5a", "v": "<i>참고: 나중에 {command} 명령을 실행하면 formula의 venv가 다시 만들어지면서 faster-whisper가 지워질 수 있어요. 음성 메시지가 안 되면 설치 버튼을 다시 눌러 주세요.</i>"}
 {"k": "media.btn.cancel", "src": "77dfd213", "v": "취소"}
-{"k": "media.btn.install", "src": "75e85c25", "v": "📦 음성 설치"}
-{"k": "media.btn.restart", "src": "ec740c6a", "v": "🔄 지금 데몬 다시 시작"}
-{"k": "media.download_failed", "src": "cd9ea0b9", "v": "❌ 음성 메시지를 내려받지 못했어요."}
-{"k": "media.file_download_failed", "src": "fd5ed5a0", "v": "❌ 파일을 내려받지 못했어요: {name}"}
-{"k": "media.file_too_big", "src": "85d942ae", "v": "⚠️ 파일 크기가 {size}MB예요. Telegram 봇 API는 {limit}MB까지만 파일을 내려받을 수 있어요. 파일을 나누거나 내용을 텍스트로 붙여 넣어 보세요."}
+{"k": "media.btn.install", "src": "75e85c25", "v": "📦 음성 메시지 기능 설치"}
+{"k": "media.btn.restart", "src": "ec740c6a", "v": "🔄 aipager 재시작"}
+{"k": "media.download_failed", "src": "cd9ea0b9", "v": "❌ 음성 메시지를 다운로드할 수 없어요."}
+{"k": "media.file_download_failed", "src": "fd5ed5a0", "v": "❌ 파일을 다운로드할 수 없어요: {name}"}
+{"k": "media.file_too_big", "src": "85d942ae", "v": "⚠️ 파일 크기가 {size}MB인데, Telegram 봇은 {limit}MB까지만 다운로드할 수 있어요. 파일을 나누거나 내용을 텍스트로 붙여 넣어 주세요."}
 {"k": "media.heard", "src": "3164d86a", "v": "🎙️ <i>들은 내용:</i> {text}"}
-{"k": "media.install_cant_start", "src": "8f8e8cec", "v": "❌ 설치 프로그램을 시작하지 못했어요: {error}"}
-{"k": "media.install_failed", "src": "31267ed7", "v": "❌ 설치 실패 (종료 코드 {code}):\n<pre>{output}</pre>"}
-{"k": "media.install_no_recipe", "src": "065dd801", "v": "⚠️ 이 aipager 빌드에는 음성 확장의\n설치 방법이 없어요. aipager를 업데이트하고 다시 시도해 주세요."}
-{"k": "media.install_working", "src": "7ef2a045", "v": "📦 음성 확장 설치 중 - 아직 진행 중이에요… ({seconds}초)"}
-{"k": "media.installed", "src": "6e9fbf9b", "v": "✅ 설치했어요. 새 모듈을 불러오려면 데몬을 다시 시작해야 음성 기능을 쓸 수 있어요."}
-{"k": "media.installing", "src": "1978f3ef", "v": "📦 음성 확장 설치 중…"}
-{"k": "media.needs_extra", "src": "153956ee", "v": "⚠️ 음성 메시지를 쓰려면 선택 사항인 음성 확장이 필요해요 (설치 약 {install}MB · 처음 쓸 때 모델 약 {model}MB)."}
-{"k": "media.no_speech", "src": "8d84c0b6", "v": "⚠️ 말소리를 알아듣지 못했어요."}
+{"k": "media.install_cant_start", "src": "8f8e8cec", "v": "❌ 설치를 시작할 수 없어요: {error}"}
+{"k": "media.install_failed", "src": "31267ed7", "v": "❌ 설치하지 못했어요 (종료 코드 {code}):\n<pre>{output}</pre>"}
+{"k": "media.install_no_recipe", "src": "065dd801", "v": "⚠️ 이 버전의 aipager는 음성 메시지 기능을\n설치하는 방법을 몰라요. aipager를 업데이트한 뒤 다시 시도해 주세요."}
+{"k": "media.install_working", "src": "7ef2a045", "v": "📦 음성 메시지 기능 설치 중 - 아직 진행 중이에요… ({seconds}초)"}
+{"k": "media.installed", "src": "6e9fbf9b", "v": "✅ 설치했어요. 음성 메시지를 쓰려면 aipager를 재시작해야 해요."}
+{"k": "media.installing", "src": "1978f3ef", "v": "📦 음성 메시지 기능 설치 중…"}
+{"k": "media.needs_extra", "src": "153956ee", "v": "⚠️ 음성 메시지를 쓰려면 선택 패키지가 필요해요 (설치 약 {install}MB · 처음 쓸 때 모델 약 {model}MB)."}
+{"k": "media.no_speech", "src": "8d84c0b6", "v": "⚠️ 이 메시지에서 아무 말도 들리지 않았어요."}
 {"k": "media.not_installed", "src": "911c9456", "v": "faster-whisper가 설치되어 있지 않아요. 다음을 실행하세요:\n    {uv}\n또는:\n    {pip}"}
-{"k": "media.restart_busy_update", "src": "a6e0a620", "v": "⏳ 다시 시작하지 않아요. aipager 업데이트가 진행 중이거나 곧 데몬을 다시 시작해요. 끝난 뒤에 다시 시도해 주세요."}
-{"k": "media.restart_cant_open", "src": "d591e073", "v": "⚠️ {path} 파일을 열지 못했어요: {error}\n직접 다시 시작해 주세요."}
-{"k": "media.restart_cant_schedule", "src": "aa7ee7e7", "v": "⚠️ 다시 시작을 예약하지 못했어요: {detail}\n직접 다시 시작해 주세요."}
-{"k": "media.restart_cant_spawn", "src": "30877338", "v": "⚠️ 대체 프로세스를 띄우지 못했어요: {error}\n직접 다시 시작해 주세요."}
-{"k": "media.restart_failed_start", "src": "0aad8df0", "v": "⚠️ 대체 데몬이 시작되지 않았어요. 직접 다시 시작해 주세요."}
-{"k": "media.restart_killmode", "src": "08a54162", "v": "⚠️ 다시 시작하지 않아요. 서비스의 KillMode 때문에 세션이 멈출 거예요."}
-{"k": "media.restart_launchctl", "src": "1c55d98b", "v": "🔄 {command} 명령으로 다시 시작하는 중…"}
-{"k": "media.restart_locked", "src": "3f061ea2", "v": "⏳ 다시 시작하지 않아요. aipager 업데이트가 진행 중이에요 (업데이트 잠금이 걸려 있어요). 끝난 뒤에 다시 시도해 주세요."}
-{"k": "media.restart_refused", "src": "41b49bd1", "v": "⚠️ 다시 시작하지 않아요: {reason}."}
-{"k": "media.restart_resend_voice", "src": "f5ed81e2", "v": "🔄 다시 시작하는 중이에요. 몇 초 뒤에 음성 메시지를 다시 보내 주세요."}
-{"k": "media.restart_would_kill", "src": "d49632de", "v": "다시 시작하면 종료될 세션: {sessions}"}
-{"k": "media.restarting_in", "src": "f8016b1a", "v": "🔄 {seconds}초 후 다시 시작해요. 몇 초 뒤에 음성 메시지를 다시 보내 주세요."}
-{"k": "media.transcribe_failed", "src": "930964f7", "v": "❌ 받아쓰기 실패: {error}"}
-{"k": "media.transcribing", "src": "56629b0b", "v": "🎙️ <i>받아쓰는 중…</i>"}
-{"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ 알겠어요. 음성 기능은 설치하지 않았어요."}
+{"k": "media.restart_busy_update", "src": "a6e0a620", "v": "⏳ 재시작하지 않았어요: aipager가 업데이트 중이거나 곧 스스로 재시작해요. 끝난 뒤 다시 시도해 주세요."}
+{"k": "media.restart_cant_open", "src": "d591e073", "v": "⚠️ {path}을(를) 열 수 없어요: {error}\n직접 재시작해 주세요."}
+{"k": "media.restart_cant_schedule", "src": "aa7ee7e7", "v": "⚠️ 재시작을 예약할 수 없어요: {detail}\n직접 재시작해 주세요."}
+{"k": "media.restart_cant_spawn", "src": "30877338", "v": "⚠️ 대체 프로세스를 시작할 수 없어요: {error}\n직접 재시작해 주세요."}
+{"k": "media.restart_failed_start", "src": "0aad8df0", "v": "⚠️ 대체 aipager가 시작되지 않았어요. 직접 재시작해 주세요."}
+{"k": "media.restart_killmode", "src": "08a54162", "v": "⚠️ 재시작하지 않았어요: 이 서비스의 KillMode 설정 때문에 세션도 함께 멈춰요."}
+{"k": "media.restart_launchctl", "src": "1c55d98b", "v": "🔄 {command} 명령으로 재시작하는 중…"}
+{"k": "media.restart_locked", "src": "3f061ea2", "v": "⏳ 재시작하지 않았어요: aipager가 업데이트 중이에요 (업데이트 잠금 사용 중). 끝난 뒤 다시 시도해 주세요."}
+{"k": "media.restart_refused", "src": "41b49bd1", "v": "⚠️ 재시작하지 않았어요: {reason}."}
+{"k": "media.restart_resend_voice", "src": "f5ed81e2", "v": "🔄 재시작하는 중이에요. 몇 초 뒤에 음성 메시지를 다시 보내 주세요."}
+{"k": "media.restart_would_kill", "src": "d49632de", "v": "재시작하면 닫히는 세션: {sessions}"}
+{"k": "media.restarting_in", "src": "f8016b1a", "v": "🔄 {seconds}초 후 재시작해요. 잠시 뒤에 음성 메시지를 다시 보내 주세요."}
+{"k": "media.transcribe_failed", "src": "930964f7", "v": "❌ 음성을 글로 바꾸지 못했어요: {error}"}
+{"k": "media.transcribing", "src": "56629b0b", "v": "🎙️ <i>음성을 글로 바꾸는 중…</i>"}
+{"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ 알겠어요. 설치하지 않았어요."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ 음성 메시지가 {size}MB예요. Telegram 봇은 {limit}MB까지만 받을 수 있어요."}
 {"k": "mode.ask", "src": "07910591", "v": "💬 확인 모드"}
 {"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 대신 확인 모드로"}
@@ -360,36 +360,36 @@
 {"k": "mode.word.full", "src": "10b28a8c", "v": "전체"}
 {"k": "modecard.already", "src": "f57af91e", "v": "<b>{session}</b> 세션은 이미 {mode}예요."}
 {"k": "modecard.ask_no_auto", "src": "a50da965", "v": "💬 확인 모드 (여기서는 자동을 쓸 수 없어요)"}
-{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 내게는 자동 (🔓 전체 권한은 관리자 전용)"}
-{"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "{session} 세션에서는 자동 모드를 쓸 수 없어서 (모델 또는 요금제) 확인 모드로 남아요."}
+{"k": "modecard.auto_for_you", "src": "04ac4d9f", "v": "🤖 자동 모드 사용 (🔓 전체 권한 모드는 관리자 전용)"}
+{"k": "modecard.auto_unavailable", "src": "690f00e8", "v": "{session} 세션에서는 자동 모드를 쓸 수 없어서(모델 또는 요금제 때문) 확인 모드로 유지돼요."}
 {"k": "modecard.btn.to_ask", "src": "a2e6330c", "v": "💬 확인 모드로 전환"}
 {"k": "modecard.btn.to_auto", "src": "699cf419", "v": "🤖 자동 모드로 전환"}
 {"k": "modecard.btn.to_full", "src": "365ba002", "v": "🔓 전체 권한 모드로 전환"}
 {"k": "modecard.busy_to_ask", "src": "942b1d70", "v": "⚙️ <b>{session}</b> 세션이 작업 중이에요.\n확인 모드로 바꿀까요?"}
 {"k": "modecard.busy_to_auto", "src": "9a29b09c", "v": "⚙️ <b>{session}</b> 세션이 작업 중이에요.\n자동 모드로 바꿀까요?"}
 {"k": "modecard.busy_to_full", "src": "13160dd5", "v": "⚙️ <b>{session}</b> 세션이 작업 중이에요.\n전체 권한 모드로 바꿀까요? 세션이 재시작돼요."}
-{"k": "modecard.confirm_full", "src": "30bc1073", "v": "⚙️ <b>{session}</b> 세션을 {mode}(으)로 바꿀까요?\n<i>모든 작업이 아무 확인 없이 실행돼요 ({flag}). 전환하면 세션이 재시작되고 대화는 유지돼요.</i>"}
-{"k": "modecard.dialog_open", "src": "dbd6e8b6", "v": "⚠️ <b>{session}</b> 세션이 질문이나 권한 요청에 대한 답을 기다리고 있어요. 먼저 답한 다음 모드를 바꾸세요."}
-{"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ <b>{session}</b> 세션의 상태를 아직 초기화하는 중이에요. 잠시 후 /mode를 다시 보내 보세요."}
+{"k": "modecard.confirm_full", "src": "30bc1073", "v": "⚙️ <b>{session}</b> 세션을 {mode}로 바꿀까요?\n<i>모든 작업이 아무 확인 없이 실행돼요 ({flag}). 세션은 재시작되고 대화는 유지돼요.</i>"}
+{"k": "modecard.dialog_open", "src": "dbd6e8b6", "v": "⚠️ <b>{session}</b> 세션이 질문이나 권한 요청에 대한 답을 기다리고 있어요. 먼저 답한 다음 모드를 바꿔 주세요."}
+{"k": "modecard.initializing", "src": "77d86268", "v": "⚠️ <b>{session}</b> 세션의 상태를 아직 알 수 없어요. 잠시 후 /mode를 다시 보내 주세요."}
 {"k": "modecard.is", "src": "c057ad13", "v": "<b>{session}</b> 세션은 {mode}예요."}
 {"k": "modecard.is_target", "src": "92bc67e3", "v": "✍️ <b>{session}</b> 세션은 {mode}예요."}
 {"k": "modecard.moved_on", "src": "cc9d7c6f", "v": "⚠️ <b>{session}</b> 세션이 새 작업을 시작해서 아무것도 바꾸지 않았어요."}
 {"k": "modecard.needs_admin", "src": "20f8f3e6", "v": "전체 권한 모드는 관리자만 쓸 수 있어요."}
 {"k": "modecard.none_live", "src": "ae432c8c", "v": "여기에는 실행 중인 세션이 없어요. /new로 하나 시작하세요."}
-{"k": "modecard.other_mode", "src": "c8beff6c", "v": "⚙️ Claude Code의 {name} 모드"}
-{"k": "modecard.press_failed", "src": "b3c8a233", "v": "❌ <b>{session}</b> 세션의 터미널에 닿지 못했어요 - 모드는 바뀌지 않았어요."}
+{"k": "modecard.other_mode", "src": "c8beff6c", "v": "⚙️ Claude Code의 “{name}” 모드"}
+{"k": "modecard.press_failed", "src": "b3c8a233", "v": "❌ <b>{session}</b> 세션의 터미널에 연결할 수 없어요 - 모드는 그대로예요."}
 {"k": "modecard.refused_not_running", "src": "d62cf188", "v": "⚠️ <b>{session}</b> 세션이 실행 중이 아니라서 모드를 바꾸지 않았어요."}
-{"k": "modecard.refused_restarting", "src": "06433ed3", "v": "⚠️ <b>{session}</b> 세션이 지금 다시 시작하는 중이라 모드를 바꾸지 않았어요. 잠시 후 다시 시도해 주세요."}
+{"k": "modecard.refused_restarting", "src": "06433ed3", "v": "⚠️ <b>{session}</b> 세션이 지금 재시작 중이라 모드를 바꾸지 않았어요. 잠시 후 다시 시도해 주세요."}
 {"k": "modecard.session_missing", "src": "adf0d420", "v": "⚠️ 세션을 찾을 수 없어요."}
 {"k": "modecard.stale", "src": "9f0f5572", "v": "⚠️ 그 카드는 오래된 것이라 아무것도 바꾸지 않았어요."}
 {"k": "modecard.still_stopping", "src": "c74f9390", "v": "⚠️ <b>{session}</b> 세션이 아직 멈추는 중이라 모드를 바꾸지 않았어요."}
 {"k": "modecard.switch_confirmed", "src": "85dadf29", "v": "✅ {session} 세션이 이제 {mode}예요."}
 {"k": "modecard.switch_failed", "src": "5564c255", "v": "❌ 모드를 바꾸지 못했어요: {error}"}
 {"k": "modecard.switch_pending_line", "src": "661317d0", "v": "⏳ Claude Code가 전환을 확인하기를 기다리는 중이에요."}
-{"k": "modecard.switch_sent", "src": "dc418d95", "v": "⚙️ {session} 세션을 재시작 없이 {mode}(으)로 바꾸는 중이에요."}
+{"k": "modecard.switch_sent", "src": "dc418d95", "v": "⚙️ {session} 세션을 재시작 없이 {mode}로 바꾸는 중이에요."}
 {"k": "modecard.switch_unconfirmed", "src": "367038cc", "v": "{session} 세션이 바뀌지 않았어요: 지금은 {mode}예요."}
-{"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ 전환됨: {mode} · {person}"}
-{"k": "modecard.switching", "src": "60043e5a", "v": "⚙️ <b>{session}</b> 세션을 {mode}(으)로 바꾸는 중이에요 (세션이 재시작돼요)…"}
+{"k": "modecard.switched_by", "src": "7f5e0864", "v": "⚙️ {person} 님이 세션을 {mode}로 바꿨어요."}
+{"k": "modecard.switching", "src": "60043e5a", "v": "⚙️ <b>{session}</b> 세션을 {mode}로 바꾸는 중이에요 (세션이 재시작돼요)…"}
 {"k": "modecard.usage", "src": "b9b6e4b8", "v": "⚠️ /mode에는 세션 이름과 ask, auto 또는 full을 써요. 예: {example} 또는 {example_ask}."}
 {"k": "modecard.which", "src": "107abca0", "v": "어느 세션인가요?"}
 {"k": "modecard.which_to", "src": "4694464a", "v": "어느 세션을 {mode}로 바꿀까요?"}
@@ -398,26 +398,26 @@
 {"k": "newflow.btn.model", "src": "e252b8c8", "v": "🧠 모델"}
 {"k": "newflow.btn.new_folder", "src": "27a1f4a2", "v": "➕ 새 폴더"}
 {"k": "newflow.btn.other_model", "src": "48915641", "v": "✏️ 다른 모델..."}
-{"k": "newflow.btn.replace", "src": "caede00c", "v": "🆕 교체 (새로)"}
+{"k": "newflow.btn.replace", "src": "caede00c", "v": "🆕 새 세션으로 교체"}
 {"k": "newflow.btn.resume", "src": "cad6f900", "v": "♻️ 재개"}
-{"k": "newflow.btn.switch_to", "src": "8f04f92d", "v": "↩️ 이 세션으로 전환"}
+{"k": "newflow.btn.switch_to", "src": "8f04f92d", "v": "↩️ 그 세션으로 가기"}
 {"k": "newflow.cancelled_nothing", "src": "4c346842", "v": "↩️ 취소했어요. 바뀐 세션은 없어요."}
-{"k": "newflow.changed_mode", "src": "a1779ae6", "v": "전환됨: {mode} · {person}"}
-{"k": "newflow.changed_model", "src": "1f771c06", "v": "모델 변경: {model} · {person}"}
-{"k": "newflow.closed", "src": "87aee987", "v": "✖️ 다른 작업으로 넘어가서 닫았어요. 세션을 시작하려면 /new를 보내세요."}
-{"k": "newflow.conflict_replaced", "src": "0ab47818", "v": "↩️ <b>{session}</b>에 대한 더 새로운 /new가 이 카드를 대체했어요."}
+{"k": "newflow.changed_mode", "src": "a1779ae6", "v": "{person} 님이 세션을 {mode}로 바꿨어요."}
+{"k": "newflow.changed_model", "src": "1f771c06", "v": "{person} 님이 모델을 바꿨어요: {model}"}
+{"k": "newflow.closed", "src": "87aee987", "v": "✖️ 다른 작업을 해서 닫았어요. 세션을 시작하려면 /new를 보내세요."}
+{"k": "newflow.conflict_replaced", "src": "0ab47818", "v": "↩️ <b>{session}</b> 세션에 대한 더 새로운 /new가 이 카드를 대신했어요."}
 {"k": "newflow.conflict_running", "src": "b36a4e23", "v": "⚠️ <b>{session}</b> 세션이 이미 실행 중이에요.\n어떻게 할까요?"}
 {"k": "newflow.conflict_used", "src": "5d97ff8c", "v": "♻️ <b>{session}</b> 이름은 전에 쓴 적이 있어요.\n어떻게 할까요?"}
 {"k": "newflow.conflict_used_preview", "src": "b46e358d", "v": "♻️ <b>{session}</b> 이름은 전에 쓴 적이 있어요.\n<i>마지막 응답:</i>\n<blockquote>{preview}</blockquote>\n어떻게 할까요?"}
 {"k": "newflow.create_failed", "src": "3beecd9f", "v": "❌ {error}"}
 {"k": "newflow.example_line", "src": "ab8b1839", "v": "<code>{session} 실패하는 테스트를 고쳐 주세요</code>"}
 {"k": "newflow.expired", "src": "6f9c9ea0", "v": "⏱ 이 새 세션 카드는 만료됐어요. /new를 다시 보내세요."}
-{"k": "newflow.folder_page", "src": "f6e221a1", "v": "📁 <b>폴더</b>\n\n이 세션이 작업할 곳을 골라 주세요."}
+{"k": "newflow.folder_page", "src": "f6e221a1", "v": "📁 <b>폴더</b>\n\n이 세션은 어느 폴더에서 작업할까요?"}
 {"k": "newflow.full_needs_admin_note", "src": "3d60c811", "v": "전체 권한 모드는 관리자만 쓸 수 있어서 이 세션은 자동 모드로 시작해요."}
 {"k": "newflow.group_name_ask", "src": "eb31141c", "v": "이 메시지에 답장으로 이름을 보내 주세요. 원하면 먼저 할 일도 함께 적어 주세요:"}
-{"k": "newflow.hint_folder", "src": "f27c8294", "v": "📁 먼저 📁 폴더로 프로젝트 폴더를 골라 주세요."}
+{"k": "newflow.hint_folder", "src": "f27c8294", "v": "📁 먼저 “📁 폴더” 버튼으로 프로젝트 폴더를 골라 주세요."}
 {"k": "newflow.just_send", "src": "0b7a9b82", "v": "✍️ 메시지를 보내기만 하면 {session} 세션으로 가요."}
-{"k": "newflow.model_page", "src": "580279ec", "v": "🧠 <b>모델</b>\n\n이 세션에 쓸 모델을 골라 주세요."}
+{"k": "newflow.model_page", "src": "580279ec", "v": "🧠 <b>모델</b>\n\n이 세션은 어떤 모델을 쓸까요?"}
 {"k": "newflow.name_empty", "src": "e00fbfca", "v": "세션 이름은 비워 둘 수 없어요."}
 {"k": "newflow.new_folder_title", "src": "64007145", "v": "📁 <b>새 폴더</b>"}
 {"k": "newflow.note_mode_failed", "src": "12f5a535", "v": "모드를 바꾸지 못했어요."}
@@ -432,49 +432,49 @@
 {"k": "newflow.prompt_model_reply_eg", "src": "b8f4f722", "v": "이 메시지에 답장으로 모델 이름을 보내 주세요 (예: {example})."}
 {"k": "newflow.prompt_model_type", "src": "9d5677e2", "v": "모델 이름을 입력하세요."}
 {"k": "newflow.prompt_model_type_eg", "src": "8bac428b", "v": "모델 이름을 입력하세요 (예: {example})."}
-{"k": "newflow.prompt_queued", "src": "85768278", "v": "📝 프롬프트 대기 중"}
+{"k": "newflow.prompt_queued", "src": "85768278", "v": "📝 메시지 대기 중"}
 {"k": "newflow.ready", "src": "4edcea75", "v": "✅ <b>{session}</b> 준비 완료"}
 {"k": "newflow.ready_changed", "src": "39a18ac6", "v": "🔁 {changed}"}
 {"k": "newflow.ready_later", "src": "4d69ea9f", "v": "나중에는 키보드의 {session} 버튼을 탭하거나 {session} 메시지에 답장하세요."}
-{"k": "newflow.ready_models", "src": "1bccc9f4", "v": "🧠 <b>{session}</b>: 모델을 골라 주세요.\n\n그 자리에서 바뀌고 대화는 유지돼요."}
+{"k": "newflow.ready_models", "src": "1bccc9f4", "v": "🧠 <b>{session}</b>: 모델을 골라 주세요.\n\n이 자리에서 바로 바뀌고, 대화는 그대로 유지돼요."}
 {"k": "newflow.ready_settings", "src": "d40af8c6", "v": "{mode} · 🧠 {model} · 📁 <code>{folder}</code>"}
 {"k": "newflow.send_name", "src": "9b892a4c", "v": "이름을 보내 주세요. 원하면 먼저 할 일도 함께 적어 주세요:"}
 {"k": "newflow.settings_line", "src": "a770b6d4", "v": "{mode} · 🧠 {model} · 📁 {folder}"}
 {"k": "newflow.settings_no_folder", "src": "810727a6", "v": "{mode} · 🧠 {model} · 📁 아직 프로젝트 폴더 없음"}
 {"k": "newflow.started_over", "src": "3a2633bc", "v": "↩️ 취소하고 처음부터 다시 시작했어요."}
 {"k": "newflow.starting", "src": "c0338362", "v": "🚀 <b>{session}</b> 세션을 {mode}로 시작하는 중…"}
-{"k": "newflow.starting_fresh", "src": "fff58191", "v": "🚀 <b>{session}</b> 새로 시작하는 중…"}
-{"k": "newflow.switched_to", "src": "03553586", "v": "↩️ <b>{session}</b> 세션으로 전환했어요"}
+{"k": "newflow.starting_fresh", "src": "fff58191", "v": "🚀 <b>{session}</b> 세션을 처음부터 시작하는 중…"}
+{"k": "newflow.switched_to", "src": "03553586", "v": "↩️ 이제 <b>{session}</b> 세션과 대화해요"}
 {"k": "newflow.title", "src": "79dee51b", "v": "🆕 <b>새 세션</b>"}
 {"k": "newflow.title_owner", "src": "b8803b0f", "v": "🆕 <b>새 세션</b> ({owner})"}
 {"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ 첫 메시지를 처리하는 중이에요."}
-{"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"other": "⏱️ <b>{session}</b> · {n}분이 지나도 압축 완료가 확인되지 않았어요"}}
-{"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · 압축됨: {before} → {after}"}
-{"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · 컨텍스트 {percent} - 곧 자동 압축"}
+{"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"other": "⏱️ <b>{session}</b> · {n}분이 지났지만 대화 압축이 끝났다는 확인이 아직 없어요"}}
+{"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · 대화 압축됨: {before} → {after}"}
+{"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · 컨텍스트 {percent} 사용 - 곧 자동으로 압축해요"}
 {"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · 메모리 한도 도달"}
-{"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · <code>{tool}</code> 중 메모리 한도 도달"}
-{"k": "notice.memcap_hook", "src": "657f02c3", "v": "<code>{hook}</code> 프로세스가 메모리 한도 {limit}GB를 다 써서 멈췄어요. 도구 호출을 확인하던 중이었다면 Claude Code가 그 호출을 거부했을 가능성이 크고, Claude가 다시 시도할 수 있어요. 아니라면 그 이벤트 하나만 건너뛰었어요. 세션은 계속 실행돼요."}
-{"k": "notice.memcap_nudge_cli", "src": "726ab6ea", "v": "<i>이런 일이 계속 생기면 터미널에서 {command} 명령을 실행해 유지 관리자에게 보고서를 보내세요.</i>"}
-{"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>이런 일이 계속 생기면 소유자가 “이 문제 신고”를 탭해 유지 관리자에게 보고서를 보낼 수 있어요.</i>"}
-{"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> 프로세스가 메모리 한도 {limit}GB를 다 써서 상태 줄 업데이트를 한 번 건너뛰었어요. 세션은 계속 실행돼요."}
-{"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Claude Code가 받지 않았어요\n\n보낸 뒤 {grace}초 안에 hook이 오지 않았어요. “/”로 시작하는 메시지는 슬래시 명령으로 읽혀요. 터미널을 확인하세요."}
-{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "이 작업은 <b>{session}</b>에서 왔습니다."}
-{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "다른 세션의 메시지가 이 턴에 합류해 권한을 줄였습니다."}
-{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "이 작업은 aipager가 확인하지 못한 다른 세션에서 왔습니다."}
-{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b>가 <b>{sender}</b>가 보낸 메시지를 수행하지 않았습니다: {reason}"}
-{"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · 대기 중인 메시지가 제때 처리 시작이 확인되지 않았어요. Claude가 아직 처리할 수도 있어요."}
-{"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · 대기 중인 메시지가 제때 처리 시작이 확인되지 않았어요: “{preview}” - Claude가 아직 처리할 수도 있어요."}
-{"k": "notice.quiet_turn", "src": "baa52794", "v": {"other": "⏳ <b>{session}</b> · 아직 작업 중 ({n}분째 조용함)\n\n아직 상태 업데이트가 없어요. 보통은 정상이에요.\n\n<blockquote expandable>가능한 원인\n  • 오래 걸리는 도구 호출 (Bash, WebSearch, 큰 데이터 가져오기)\n  • 아주 큰 컨텍스트에서 많은 양을 생성하는 중\n  • 압축 진행 중\n  • 속도 제한에 따른 대기 또는 구독 한도\n  • 네트워크 멈춤 또는 claude 충돌</blockquote>"}}
+{"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · <code>{tool}</code> 실행 중 메모리 한도 도달"}
+{"k": "notice.memcap_hook", "src": "657f02c3", "v": "<code>{hook}</code> 훅이 메모리 한도 {limit}GB를 넘어 중지됐어요. 도구를 확인하던 중이었다면 Claude Code가 그 도구를 거부했을 가능성이 크고, Claude가 다시 시도할 수 있어요. 아니라면 그 이벤트 하나만 건너뛴 거예요. 세션은 계속 실행돼요."}
+{"k": "notice.memcap_nudge_cli", "src": "726ab6ea", "v": "<i>이런 일이 계속되면 터미널에서 {command} 명령을 실행해 aipager 개발자에게 보고서를 보내 주세요.</i>"}
+{"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>이런 일이 계속되면 소유자가 “이 문제 신고”를 눌러 aipager 개발자에게 보고서를 보낼 수 있어요.</i>"}
+{"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> 훅이 메모리 한도 {limit}GB를 넘어서 상태 표시줄 업데이트를 한 번 건너뛰었어요. 세션은 계속 실행돼요."}
+{"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Claude Code가 메시지를 받지 않았어요\n\n보낸 뒤 {grace}초 안에 훅이 하나도 오지 않았어요. “/”로 시작하는 메시지는 명령으로 처리돼요. 터미널을 확인해 주세요."}
+{"k": "notice.peer.halt_from", "src": "61e473d1", "v": "이 작업은 <b>{session}</b> 세션에서 왔어요."}
+{"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "다른 세션의 메시지가 이 작업에 합류해 권한을 줄였어요."}
+{"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "이 작업은 aipager가 확인하지 못한 다른 세션에서 왔어요."}
+{"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b> 세션이 <b>{sender}</b> 세션이 보낸 메시지를 실행하지 않았어요: {reason}"}
+{"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · 대기열의 메시지를 제때 가져갔는지 확인하지 못했어요. Claude가 나중에 처리할 수도 있어요."}
+{"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · 대기열의 메시지(“{preview}”)를 제때 가져갔는지 확인하지 못했어요. Claude가 나중에 처리할 수도 있어요."}
+{"k": "notice.quiet_turn", "src": "baa52794", "v": {"other": "⏳ <b>{session}</b> · 아직 작업 중 ({n}분째 소식 없음)\n\n아직 새 업데이트가 없어요. 보통은 정상이에요.\n\n<blockquote expandable>무슨 일이 있을 수 있나요\n  • 오래 걸리는 도구 (Bash, WebSearch, 큰 다운로드)\n  • 아주 큰 컨텍스트로 무거운 답변 작성\n  • 대화 압축 중\n  • 속도 제한이나 구독 한도로 대기 중\n  • 네트워크 끊김 또는 Claude 비정상 종료</blockquote>"}}
 {"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · 세션 초기화됨"}
-{"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · 세션 비정상 종료 또는 강제 종료됨"}
-{"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · 세션 종료됨"}
+{"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · 세션 비정상 종료 또는 종료됨"}
+{"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · 세션 닫힘"}
 {"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · 세션 로그아웃됨"}
-{"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · 세션 권한 오류"}
+{"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · 권한 오류로 세션 닫힘"}
 {"k": "notice.session_end.resume", "src": "86761a3d", "v": "🔴 <b>{session}</b> · 세션이 다른 대화로 전환됨"}
-{"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · 위의 답변을 아직 기다리고 있어요"}
+{"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · 위에서 아직 답변을 기다리고 있어요"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "권한: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "질문: {summary}"}
-{"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ 숨은 방향 문자가 들어 있어요(⟨U+...⟩로 표시). 보이는 것과 다른 것이 실행될 수 있어요."}
+{"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ 글자 방향을 바꾸는 숨은 문자가 들어 있어요(⟨U+...⟩로 표시). 보이는 것과 다른 것이 실행될 수 있어요."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ 허용"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 항상 허용"}
 {"k": "perm.btn.cancel", "src": "d20b1713", "v": "↩️ 취소"}
@@ -486,78 +486,78 @@
 {"k": "perm.btn.retry", "src": "fabc7541", "v": "🔄 다시 시도"}
 {"k": "perm.btn.stop", "src": "e3f8b9ee", "v": "⏹ 중지"}
 {"k": "perm.btn.stop_plain", "src": "9e253470", "v": "중지"}
-{"k": "perm.btn.stop_switch", "src": "bc469329", "v": "🛑 중지 후 전환"}
+{"k": "perm.btn.stop_switch", "src": "bc469329", "v": "🛑 중지 후 모드 전환"}
 {"k": "perm.btn.submit", "src": "c685950d", "v": "✅ 제출"}
 {"k": "perm.btn.yes_switch", "src": "9f6e4eb9", "v": "✅ 네, 전환"}
 {"k": "perm.loading", "src": "253222ec", "v": "{tool} (불러오는 중…)"}
-{"k": "perm.needed", "src": "7c7a8e5c", "v": "권한 필요"}
-{"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · 입력 필요"}
-{"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · 질문 없음"}
-{"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · 권한 필요"}
-{"k": "pin.btn.answer", "src": "24c3485a", "v": "{session} 응답하기"}
-{"k": "pin.count.idle", "src": "6abeefbf", "v": {"other": "유휴 {n}개"}}
+{"k": "perm.needed", "src": "7c7a8e5c", "v": "권한이 필요해요"}
+{"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · 선택을 기다리는 중"}
+{"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · 질문을 받지 못함"}
+{"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · 권한이 필요해요"}
+{"k": "pin.btn.answer", "src": "24c3485a", "v": "{session} 답하기"}
+{"k": "pin.count.idle", "src": "6abeefbf", "v": {"other": "준비됨 {n}개"}}
 {"k": "pin.count.starting", "src": "836f5c27", "v": {"other": "시작 중 {n}개"}}
 {"k": "pin.count.working", "src": "c3aee490", "v": {"other": "작업 중 {n}개"}}
-{"k": "pin.first.all_idle", "src": "195ea8a9", "v": "💤 모두 유휴"}
+{"k": "pin.first.all_idle", "src": "195ea8a9", "v": "💤 모두 준비됨"}
 {"k": "pin.first.counts", "src": "b5d804ae", "v": "{glyph} {counts}"}
 {"k": "pin.first.single", "src": "5674b34c", "v": "{glyph} {session} {state}"}
-{"k": "pin.first.waiting", "src": "7fa7cc46", "v": "⏳ {session} 세션이 기다려요"}
+{"k": "pin.first.waiting", "src": "7fa7cc46", "v": "⏳ {session} 세션이 답변을 기다려요"}
 {"k": "pin.line", "src": "de9ddb7a", "v": "• <b>{session}</b> {state}"}
 {"k": "pin.more", "src": "66adc298", "v": {"other": "(+{n}개 더)"}}
-{"k": "pin.needs_input", "src": "9a9d6640", "v": "입력 필요"}
+{"k": "pin.needs_input", "src": "9a9d6640", "v": "선택을 기다리는 중"}
 {"k": "pin.paren", "src": "d52abc3c", "v": "({running})"}
 {"k": "pin.running_agents", "src": "712d4c75", "v": {"other": "에이전트 {n}개 실행 중"}}
 {"k": "pin.running_both", "src": "48ac24f8", "v": "{agents}, {shells} 실행 중"}
-{"k": "pin.running_shells", "src": "af023360", "v": {"other": "셸 {n}개 실행 중"}}
+{"k": "pin.running_shells", "src": "af023360", "v": {"other": "백그라운드 명령 {n}개 실행 중"}}
 {"k": "pin.state", "src": "845c40c2", "v": "({state})"}
-{"k": "pin.state.idle", "src": "1adbcc34", "v": "유휴"}
-{"k": "pin.state.needs_you", "src": "19622ace", "v": "응답 필요"}
+{"k": "pin.state.idle", "src": "1adbcc34", "v": "준비됨"}
+{"k": "pin.state.needs_you", "src": "19622ace", "v": "답변 대기 중"}
 {"k": "pin.state.starting", "src": "9493af05", "v": "시작 중"}
 {"k": "pin.state.working", "src": "8178ea20", "v": "작업 중"}
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
-{"k": "pin.target", "src": "c9c5350f", "v": "✍️ 메시지가 가는 곳: <b>{session}</b>"}
+{"k": "pin.target", "src": "c9c5350f", "v": "✍️ 메시지는 <b>{session}</b> 세션으로 가요"}
 {"k": "rep.area.animation", "src": "6a3a8292", "v": "작업 카드"}
 {"k": "rep.area.callbacks", "src": "397d02b3", "v": "버튼 탭"}
-{"k": "rep.area.daemon", "src": "dbcc03a0", "v": "데몬"}
-{"k": "rep.area.dashboard", "src": "319e1d71", "v": "고정 표시줄"}
+{"k": "rep.area.daemon", "src": "dbcc03a0", "v": "aipager 자체"}
+{"k": "rep.area.dashboard", "src": "319e1d71", "v": "고정된 표시줄"}
 {"k": "rep.area.flood_budget", "src": "75f9bcb6", "v": "전송 한도"}
 {"k": "rep.area.handlers", "src": "0ff1035f", "v": "메시지 처리"}
-{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "hook 수신기"}
-{"k": "rep.area.inject", "src": "d784f7db", "v": "프롬프트 전달"}
-{"k": "rep.area.notify", "src": "c522bd84", "v": "메시지 전달"}
-{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "hook 프로그램"}
+{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "훅 수신기"}
+{"k": "rep.area.inject", "src": "d784f7db", "v": "Claude로 메시지 보내기"}
+{"k": "rep.area.notify", "src": "c522bd84", "v": "Telegram으로 메시지 보내기"}
+{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "훅"}
 {"k": "rep.area.server", "src": "8000cc31", "v": "Mini App"}
-{"k": "rep.area.session_monitor", "src": "1fff1160", "v": "세션 모니터"}
+{"k": "rep.area.session_monitor", "src": "1fff1160", "v": "세션 감시"}
 {"k": "rep.area.session_ops", "src": "6b7d9e30", "v": "세션 제어"}
 {"k": "rep.area.state", "src": "e0e05b06", "v": "세션 상태"}
 {"k": "rep.cancelled", "src": "ca0ed5b3", "v": "취소했어요. 아무것도 보내지 않았어요."}
-{"k": "rep.doc_failed", "src": "321fac57", "v": "report.json 파일을 보낼 수 없어서 아무것도 보내지 않았어요. 나중에 “문제 신고”를 다시 여세요."}
-{"k": "rep.document_line", "src": "f2943506", "v": "정확한 보고서는 이 카드에 답장으로 온 report.json 파일에 있어요."}
-{"k": "rep.explanation", "src": "d470a7df", "v": "이것이 보고서에 담긴 전부예요. 아직 아무것도 보내지 않았어요.\n채팅, 프롬프트, 세션 이름, 폴더, token, 채팅 ID, 사용자 이름은 들어 있지 않아요.\n보고서는 aipager 유지 관리자의 오류 수신함(Sentry)으로 익명으로 가요."}
+{"k": "rep.doc_failed", "src": "321fac57", "v": "report.json 파일을 보낼 수 없어서 보고서도 보내지 않았어요. 나중에 “문제 신고”를 다시 열어 주세요."}
+{"k": "rep.document_line", "src": "f2943506", "v": "전체 보고서는 이 카드에 답장으로 온 report.json 파일에 있어요."}
+{"k": "rep.explanation", "src": "d470a7df", "v": "이게 보고서의 전부예요. 아직 아무것도 보내지 않았어요.\n채팅, 메시지, 세션 이름, 폴더, token, 채팅 ID, 사용자 이름은 들어 있지 않아요.\n이름 없이 aipager 개발자의 오류 수신함(Sentry)으로 가요."}
 {"k": "rep.heading", "src": "ad1633d0", "v": "🐞 <b>문제 신고</b>"}
-{"k": "rep.lost", "src": "6b4837a4", "v": "이 미리 보기는 더 이상 열려 있지 않아서 아무것도 보내지 않았어요. 새 미리 보기를 보려면 “문제 신고”를 다시 여세요."}
-{"k": "rep.note.prompt", "src": "dc71be87", "v": {"other": "✏️ 메모를 메시지 하나로 입력하세요(최대 {n}자). 보내기 전에 보이는 그대로 보고서에 들어가요. 다른 동작을 하면 이 입력은 닫혀요."}}
+{"k": "rep.lost", "src": "6b4837a4", "v": "이 미리 보기는 이제 열려 있지 않아서 아무것도 보내지 않았어요. 새 미리 보기를 보려면 “문제 신고”를 다시 열어 주세요."}
+{"k": "rep.note.prompt", "src": "dc71be87", "v": {"other": "✏️ 메모를 메시지 하나로 써 주세요 (최대 {n}자). 보내기 전에 보고서에 들어갈 모습 그대로 보여 드려요. 다른 동작을 하면 이 창은 닫혀요."}}
 {"k": "rep.offer.also_other", "src": "2b336900", "v": {"other": "다른 오류도 {n}개 있어요."}}
 {"k": "rep.offer.declined", "src": "5d912282", "v": "알겠어요. 이 버전에서는 aipager가 이 일로 다시 묻지 않아요."}
-{"k": "rep.offer.internal", "src": "4df624aa", "v": {"other": "aipager에서 내부 오류가 {n}번 발생했어요 ({area}의 {error})."}}
-{"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "aipager에서 내부 오류가 한 번 발생했어요 ({area}의 {error})."}
-{"k": "rep.offer.memcap", "src": "698bc999", "v": {"other": "aipager hook이 메모리 한도에 {n}번 도달했어요."}}
-{"k": "rep.offer.memcap_once", "src": "63461898", "v": "aipager hook이 메모리 한도에 한 번 도달했어요."}
+{"k": "rep.offer.internal", "src": "4df624aa", "v": {"other": "aipager에서 내부 오류가 {n}번 생겼어요 ({area}의 {error})."}}
+{"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "aipager에서 내부 오류가 한 번 생겼어요 ({area}의 {error})."}
+{"k": "rep.offer.memcap", "src": "698bc999", "v": {"other": "aipager 훅이 메모리 한도에 {n}번 도달했어요."}}
+{"k": "rep.offer.memcap_once", "src": "63461898", "v": "aipager 훅이 메모리 한도에 한 번 도달했어요."}
 {"k": "rep.offer.not_opened", "src": "1df3fb0a", "v": "보고서 미리 보기를 열지 못했어요. /help의 “문제 신고”로 새 미리 보기를 열 수 있어요."}
-{"k": "rep.offer.off", "src": "3706223b", "v": "자동 제안이 이제 꺼졌어요. 다시 켜려면 /settings에서 “문제 보고서”로 가세요."}
+{"k": "rep.offer.off", "src": "3706223b", "v": "자동 제안을 껐어요. 다시 켜려면 /settings에서 “문제 신고”로 가세요."}
 {"k": "rep.offer.preview", "src": "0835e626", "v": "아래에 보고서 미리 보기를 열었어요."}
-{"k": "rep.offer.stopped", "src": "1f8a50a5", "v": {"other": "aipager가 {n}번 예기치 않게 멈췄어요."}}
-{"k": "rep.offer.stopped_once", "src": "98a8d806", "v": "aipager가 한 번 예기치 않게 멈췄어요."}
-{"k": "rep.offer.tail", "src": "e58f2a0c", "v": "보고서는 문제를 고치는 데 도움이 돼요. 버전과 코드 위치만 담고, 채팅, 프롬프트, 이름, 경로는 절대 담지 않아요."}
-{"k": "rep.outcome.daily_cap", "src": "2095768c", "v": {"other": "보고서는 기기 한 대에서 하루에 {n}개까지 보낼 수 있어요. 내일 다시 시도해 주세요."}}
-{"k": "rep.outcome.disabled", "src": "23061011", "v": "지금은 유지 관리자가 문제 보고서를 꺼 두었어요. 아무것도 보내지 않았어요."}
+{"k": "rep.offer.stopped", "src": "1f8a50a5", "v": {"other": "aipager가 {n}번 비정상 종료됐어요."}}
+{"k": "rep.offer.stopped_once", "src": "98a8d806", "v": "aipager가 한 번 비정상 종료됐어요."}
+{"k": "rep.offer.tail", "src": "e58f2a0c", "v": "보고서가 있으면 문제를 더 빨리 고칠 수 있어요. 버전과 오류가 난 코드 위치만 들어 있고, 채팅, 메시지, 이름, 경로는 절대 들어 있지 않아요."}
+{"k": "rep.outcome.daily_cap", "src": "2095768c", "v": {"other": "한 컴퓨터에서 하루에 보고서를 {n}개까지만 보낼 수 있어요. 내일 다시 시도해 주세요."}}
+{"k": "rep.outcome.disabled", "src": "23061011", "v": "지금은 aipager 개발자가 문제 신고를 꺼 두었어요. 아무것도 보내지 않았어요."}
 {"k": "rep.outcome.invalid", "src": "55ae1194", "v": "이 보고서는 자체 검사를 통과하지 못해서 보내지 않았어요."}
-{"k": "rep.outcome.sent", "src": "3456aede", "v": "보냈어요. 참조 번호 {reference} (GitHub 이슈를 열 때 함께 적어 주세요)."}
+{"k": "rep.outcome.sent", "src": "3456aede", "v": "보냈어요. 참조 번호: {reference} (GitHub 이슈를 열 때 함께 적어 주세요)."}
 {"k": "rep.outcome.too_old", "src": "3e8e0bff", "v": "이 aipager 버전은 더 이상 보고서를 보낼 수 없어요. 업데이트한 뒤({command}) 다시 시도해 주세요."}
 {"k": "rep.outcome.try_later", "src": "ab0f2d7c", "v": "지금은 보낼 수 없어요. 잃어버린 건 없으니 나중에 다시 시도해 주세요."}
 {"k": "rep.status.note_added", "src": "96d23c70", "v": "메모를 추가했어요."}
-{"k": "rep.status.note_closed", "src": "8187cfb3", "v": "메모를 추가하지 않았어요. 다른 동작을 했어요. 다시 하려면 “메모 추가”를 탭하세요."}
+{"k": "rep.status.note_closed", "src": "8187cfb3", "v": "메모를 추가하지 않았어요: 다른 동작을 했어요. 다시 하려면 “메모 추가”를 눌러 주세요."}
 {"k": "rep.status.note_cut", "src": "e9ab8458", "v": {"other": "메모를 추가했어요. {n}자로 잘랐어요."}}
 {"k": "rep.status.note_empty", "src": "1f872085", "v": "메모가 비어 있어서 아무것도 추가하지 않았어요."}
 {"k": "rep.status.note_refused", "src": "c92adef7", "v": "그 메모는 추가할 수 없어요. 더 짧고 단순하게 써 보세요."}
@@ -565,76 +565,76 @@
 {"k": "rep.status.sending", "src": "c338c191", "v": "보내는 중..."}
 {"k": "resume.header", "src": "74554c53", "v": "{icon} <b>[{session}]</b> · {state}"}
 {"k": "resume.header_clock", "src": "b1522d3c", "v": "{icon} <b>[{session}]</b> · {state} {clock}"}
-{"k": "resume.more_no_transcript", "src": "d8f1f6e8", "v": {"other": "<i>재개할 수 있는 저장된 대화 기록이 없는 세션이 {n}개 더 있어요.</i>"}}
+{"k": "resume.more_no_transcript", "src": "d8f1f6e8", "v": {"other": "<i>저장된 대화가 없어 재개할 수 없는 세션이 {n}개 더 있어요.</i>"}}
 {"k": "resume.no_preview", "src": "34384805", "v": "<i>(미리 보기 없음)</i>"}
-{"k": "resume.no_transcript", "src": "65416f58", "v": {"other": "<i>재개할 수 있는 저장된 대화 기록이 없는 세션 {n}개.</i>"}}
+{"k": "resume.no_transcript", "src": "65416f58", "v": {"other": "<i>저장된 대화가 없어 재개할 수 없는 세션 {n}개.</i>"}}
 {"k": "resume.none", "src": "f0e1dc3c", "v": "📭 재개할 이전 세션이 없어요."}
 {"k": "resume.recent", "src": "c14c1ce4", "v": "최근:"}
 {"k": "resume.row", "src": "c75d6298", "v": "🔘 <b>{session}</b> (<i>{when}</i>)"}
-{"k": "resume.row.active", "src": "ebbe643f", "v": "활동: {ago}"}
-{"k": "resume.row.active_now", "src": "95e3adc9", "v": "활동: 방금"}
-{"k": "resume.row.active_unknown", "src": "15d90554", "v": "활동: 알 수 없음"}
+{"k": "resume.row.active", "src": "ebbe643f", "v": "마지막 활동: {ago}"}
+{"k": "resume.row.active_now", "src": "95e3adc9", "v": "마지막 활동: 방금"}
+{"k": "resume.row.active_unknown", "src": "15d90554", "v": "마지막 활동: 알 수 없음"}
 {"k": "resume.row.agents", "src": "1344dd37", "v": {"other": "에이전트: {n} ({types})"}}
 {"k": "resume.row.agents_count", "src": "abe9706b", "v": {"other": "에이전트: {n}"}}
 {"k": "resume.row.cost", "src": "68433bc8", "v": "비용: {cost}"}
 {"k": "resume.row.ctx", "src": "edcc7a6b", "v": "컨텍스트: {percent} {bar}"}
-{"k": "resume.row.lines", "src": "439ccc8a", "v": "줄: {changes}"}
+{"k": "resume.row.lines", "src": "439ccc8a", "v": "바뀐 줄: {changes}"}
 {"k": "resume.row.model", "src": "e60d2adb", "v": "모델: {model}"}
-{"k": "resume.row.output", "src": "2a39ea71", "v": "출력 token: {tokens}"}
-{"k": "resume.row.queue", "src": "865b83a5", "v": "대기열: 보류 {pending}개 (대기 메시지 {queued}개, 메모 {notes}개)"}
+{"k": "resume.row.output", "src": "2a39ea71", "v": "작성한 token: {tokens}"}
+{"k": "resume.row.queue", "src": "865b83a5", "v": "대기열: {pending}개 대기 중 (메시지 {queued}개, 메모 {notes}개)"}
 {"k": "resume.state.busy", "src": "e18a89f9", "v": "작업 중"}
 {"k": "resume.state.gone", "src": "a6dfdeaa", "v": "종료됨"}
-{"k": "resume.state.idle", "src": "1adbcc34", "v": "유휴"}
-{"k": "resume.state.interactive", "src": "00753189", "v": "응답 대기"}
+{"k": "resume.state.idle", "src": "1adbcc34", "v": "준비됨"}
+{"k": "resume.state.interactive", "src": "00753189", "v": "답변 대기 중"}
 {"k": "resume.state.unknown", "src": "50d8b4a9", "v": "알 수 없음"}
-{"k": "resume.tap", "src": "c118e3b9", "v": "아래 버튼을 탭해서 재개하세요."}
+{"k": "resume.tap", "src": "c118e3b9", "v": "아래 버튼을 눌러 재개하세요."}
 {"k": "resume.title", "src": "d5cecda8", "v": {"other": "📚 <b>이전 세션</b> (총 {n}개)"}}
 {"k": "route.btn.resume", "src": "2db3fd81", "v": "🔁 재개"}
 {"k": "route.btn.resume_label", "src": "5a3f876a", "v": "▶️ {session} 재개"}
-{"k": "route.cant_clear_busy", "src": "cf8384cd", "v": "⚠️ 세션이 작업 중이라 지울 수 없어요"}
-{"k": "route.clear_no_active", "src": "1ada2799", "v": "활성 세션이 없어요. 먼저 {command} 명령으로 세션을 고르세요."}
+{"k": "route.cant_clear_busy", "src": "cf8384cd", "v": "⚠️ 세션이 작업 중이라 대화를 지울 수 없어요"}
+{"k": "route.clear_no_active", "src": "1ada2799", "v": "선택된 세션이 없어요. 먼저 {command} 명령으로 세션을 고르세요."}
 {"k": "route.clear_nothing", "src": "75578929", "v": "[{session}]에는 지울 것이 없어요."}
-{"k": "route.cleared", "src": "fd716ebc", "v": {"other": "🗑️ [<b>{session}</b>]의 대기 중인 메시지 {n}개를 지웠어요."}}
+{"k": "route.cleared", "src": "fd716ebc", "v": {"other": "🗑️ [<b>{session}</b>] 세션의 대기 중인 메시지 {n}개를 삭제했어요."}}
 {"k": "route.ended_which", "src": "eb950d37", "v": "{session} 세션이 종료됐어요. 어느 세션으로 할까요?"}
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ 이 파일을 어느 세션에 보낼지 모르겠어요. {command} 명령이나 키보드로 하나 골라 주세요."}
-{"k": "route.inject_failed", "src": "4793e79c", "v": "❌ 받아쓴 내용을 [{session}]에 넣지 못했어요"}
+{"k": "route.inject_failed", "src": "4793e79c", "v": "❌ 음성 메시지를 받아쓴 내용을 [{session}] 세션에 보내지 못했어요"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "종료할 세션이 없어요."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "어느 세션을 종료할까요?"}
 {"k": "route.mention_alone", "src": "c8588bc4", "v": "봇을 멘션하지 말고 {command} 명령만 따로 보내세요."}
 {"k": "route.model_now", "src": "721a5dbc", "v": "🧠 현재 {model}"}
-{"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "다른 멤버의 메시지가 아직 처리되길 기다리고 있어요. 그다음에 모델을 바꾸세요."}
+{"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "다른 멤버의 메시지를 Claude가 아직 가져가지 않았어요. 그다음에 모델을 바꿔 주세요."}
 {"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
-{"k": "route.no_active", "src": "96477f98", "v": "⚠️ 활성 세션 없음"}
+{"k": "route.no_active", "src": "96477f98", "v": "⚠️ 선택된 세션 없음"}
 {"k": "route.no_live_here", "src": "2a22b699", "v": "⚠️ 여기에는 <b>{session}</b> 이름의 실행 중인 세션이 없어요."}
 {"k": "route.no_session", "src": "f3bc5d54", "v": "⚠️ 이 메시지를 어느 세션에 보낼지 모르겠어요. {command} 명령이나 키보드로 하나 골라 주세요."}
 {"k": "route.no_session_here", "src": "d6bac23e", "v": "⚠️ 여기에는 <b>{session}</b> 이름의 세션이 없어요."}
-{"k": "route.not_alive", "src": "248cf0d5", "v": "⚠️ [{session}] 세션이 살아 있지 않아요"}
-{"k": "route.not_working", "src": "40bb3d05", "v": "<b>{session}</b> 세션은 작업 중이 아니에요."}
-{"k": "route.nothing_running", "src": "3c49e2a3", "v": "실행 중인 것이 없어요."}
-{"k": "route.queue_full", "src": "f6582eab", "v": {"other": "⚠️ [{session}]의 대기열이 가득 찼어요({n}개 대기 중). 요청에 답하거나 대기열을 비우세요."}}
+{"k": "route.not_alive", "src": "248cf0d5", "v": "⚠️ [{session}] 세션이 실행 중이 아니에요"}
+{"k": "route.not_working", "src": "40bb3d05", "v": "<b>{session}</b> 세션은 지금 아무 작업도 하지 않아요."}
+{"k": "route.nothing_running", "src": "3c49e2a3", "v": "지금 진행 중인 작업이 없어요."}
+{"k": "route.queue_full", "src": "f6582eab", "v": {"other": "⚠️ [{session}] 세션의 대기열이 가득 찼어요 (메시지 {n}개 대기 중). 요청에 답하거나 대기열을 비워 주세요."}}
 {"k": "route.refusal_frame", "src": "e19d24e3", "v": "⚠️ [{session}] {reason}"}
 {"k": "route.resume_then_resend", "src": "df2cce7e", "v": "▶️ 재개를 누른 뒤 메시지를 다시 보내세요."}
-{"k": "route.retry_note_others", "src": "f54d6bb2", "v": "⏸ 다시 시도하지 않았어요. 다른 사람의 턴이 진행 중이에요. 끝나면 “다시 시도”를 다시 탭하세요."}
-{"k": "route.retry_note_prompt", "src": "a9f6356e", "v": "⏸ 다시 시도하지 않았어요. 열린 요청이 있어요. 먼저 답한 뒤 “다시 시도”를 다시 탭하세요."}
-{"k": "route.send_failed", "src": "3c65fe20", "v": "❌ [{session}]에 보내지 못했어요"}
-{"k": "route.sent_to", "src": "72283da2", "v": "{glyph} {what} → {session} 전송됨"}
+{"k": "route.retry_note_others", "src": "f54d6bb2", "v": "⏸ 다시 보내지 않았어요. 지금은 다른 사람 차례예요. 끝나면 “다시 시도”를 한 번 더 눌러 주세요."}
+{"k": "route.retry_note_prompt", "src": "a9f6356e", "v": "⏸ 다시 보내지 않았어요. 답하지 않은 요청이 있어요. 먼저 답한 뒤 “다시 시도”를 한 번 더 눌러 주세요."}
+{"k": "route.send_failed", "src": "3c65fe20", "v": "❌ [{session}] 세션에 메시지를 보내지 못했어요"}
+{"k": "route.sent_to", "src": "72283da2", "v": "{glyph} {session} 세션으로 보냈어요: {what}"}
 {"k": "route.session_missing", "src": "e8086da8", "v": "⚠️ “{name}” 세션을 찾을 수 없어요"}
-{"k": "route.unknown_session", "src": "2823272e", "v": "⚠️ 알 수 없는 세션: {session}"}
-{"k": "route.voice_no_session", "src": "6c2d2821", "v": "⚠️ 음성을 받아썼지만 보낼 활성 세션이 없어요. 먼저 {command} 명령으로 하나 고르세요."}
+{"k": "route.unknown_session", "src": "2823272e", "v": "⚠️ 그런 이름의 세션이 없어요: {session}"}
+{"k": "route.voice_no_session", "src": "6c2d2821", "v": "⚠️ 음성을 글로 받아썼지만 아직 받을 세션을 고르지 않았어요. 먼저 {command} 명령으로 세션을 고르세요."}
 {"k": "route.warning", "src": "4329faf5", "v": "⚠️ {text}"}
 {"k": "route.which_reply", "src": "6771e2f8", "v": "어느 세션인가요? 그 세션의 메시지에 답장하거나 {command} 뒤에 메시지를 붙여 보내세요."}
-{"k": "route.which_stop", "src": "aba80827", "v": "어느 것을 중지할까요?"}
-{"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · 안전 정책으로 차단됨: {reason} (중지됨)"}
-{"k": "safety.reason.bash", "src": "f380389e", "v": "Bash 명령이 안전 정책으로 차단됨"}
-{"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Bash 명령이 안전 정책으로 차단됨: 홈 폴더 전체나 / 를 재귀적으로 검색하거나 나열할 수 없어요. 프로젝트 폴더 안에서 검색하세요"}
+{"k": "route.which_stop", "src": "aba80827", "v": "어느 세션을 중지할까요?"}
+{"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · 안전 규칙으로 차단됨: {reason} (중지됨)"}
+{"k": "safety.reason.bash", "src": "f380389e", "v": "Bash 명령이 안전 규칙으로 차단됨"}
+{"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Bash 명령이 안전 규칙으로 차단됨: 홈 폴더 전체나 /를 재귀적으로 검색하거나 나열할 수 없어요. 프로젝트 폴더 안에서 검색하세요"}
 {"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool}: .. 로 폴더 밖으로 나가는 glob 사용"}
-{"k": "safety.reason.glob_escaped", "src": "bf605149", "v": "{tool}: 이스케이프된 glob 사용"}
+{"k": "safety.reason.glob_escaped", "src": "bf605149", "v": "{tool}: 백슬래시가 들어간 glob 사용"}
 {"k": "safety.reason.glob_not_plain", "src": "6db7d611", "v": "{tool}: 단순한 상대 패턴이 아닌 glob 사용"}
 {"k": "safety.reason.glob_unreadable", "src": "da95c3b5", "v": "{tool}: 읽을 수 없는 glob 사용"}
-{"k": "safety.reason.halted", "src": "343e090e", "v": "세션 중단됨: 이번 턴의 이전 도구 호출이 안전 정책으로 차단됐어요. 새 요청을 시작하세요"}
-{"k": "safety.reason.outside_root_read", "src": "377378fa", "v": "{tool} 거부됨: 이 역할은 홈 폴더에서 자기 폴더 안만 읽을 수 있어요"}
-{"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool}: 세션 폴더 밖이에요. 제한된 턴은 프로젝트와 scratchpad 안에서만 검색해요"}
-{"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool}: 세션 폴더 밖이에요. 제한된 턴은 프로젝트와 scratchpad 안에만 써요"}
+{"k": "safety.reason.halted", "src": "343e090e", "v": "세션 중단됨: 이번 작업에서 앞서 쓴 도구가 안전 규칙으로 차단됐어요. 새 요청으로 시작하세요"}
+{"k": "safety.reason.outside_root_read", "src": "377378fa", "v": "{tool} 거부됨: 홈 폴더에서는 이 역할이 자기 폴더 안만 읽을 수 있어요"}
+{"k": "safety.reason.outside_search", "src": "61cc3e36", "v": "{tool}: 세션 폴더 밖이에요. 제한된 작업은 프로젝트와 scratchpad에서만 검색해요"}
+{"k": "safety.reason.outside_write", "src": "0060bf56", "v": "{tool}: 세션 폴더 밖이에요. 제한된 작업은 프로젝트와 scratchpad에만 써요"}
 {"k": "safety.reason.path_protected", "src": "feff9877", "v": "{tool}: 보호된 경로 {glob}"}
 {"k": "safety.reason.path_protected_write", "src": "2bdf96bb", "v": "{tool}: 보호된 경로 {glob}에 쓰기"}
 {"k": "safety.reason.path_unreadable", "src": "84b28972", "v": "{tool}: 읽을 수 없는 경로"}
@@ -650,25 +650,25 @@
 {"k": "safety.reason.send_unmanaged", "src": "430e7046", "v": "aipager가 관리하지 않는 Claude 세션으로 SendMessage"}
 {"k": "safety.reason.tool_denied", "src": "d12d8855", "v": "{tool}: 이 역할의 deny_tools에 있어요"}
 {"k": "safety.reason.tool_not_allowed", "src": "3f3efe13", "v": "{tool}: 이 역할의 allow_tools에 없어요"}
-{"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "이 도구 호출을 검사할 수 없어서 거부했어요"}
+{"k": "safety.reason.unchecked", "src": "8ba35d77", "v": "이 도구를 검사할 수 없어서 거부했어요"}
 {"k": "safety.reason.wide_cwd_search", "src": "5112bac1", "v": "{tool} 거부됨: 이 세션은 홈 폴더(또는 그 위 폴더)에서 실행 중이고, 이 역할은 프로젝트 폴더 안에서만 검색할 수 있어요"}
 {"k": "safety.reason.wide_cwd_write", "src": "90769493", "v": "{tool} 거부됨: 이 세션은 홈 폴더(또는 그 위 폴더)에서 실행 중이고, 이 역할은 프로젝트 폴더 안에만 쓸 수 있어요"}
 {"k": "sendnow.btn.send", "src": "edac6f66", "v": "⚡ 지금 보내기"}
-{"k": "sendnow.line", "src": "41e9ef1b", "v": "⏳ 대기 중 - Claude가 현재 단계 뒤에 읽어요"}
-{"k": "sendnow.line_unreached", "src": "d8eeb821", "v": "⏳ 대기 중 - Claude에 닿지 못했어요. “지금 보내기”를 탭해 다시 시도하세요"}
-{"k": "sendnow.reply_no_session", "src": "cfa31918", "v": "활성 세션이 없어요."}
-{"k": "sendnow.reply_nothing", "src": "7f03c384", "v": "대기열에 기다리는 것이 없어요"}
+{"k": "sendnow.line", "src": "41e9ef1b", "v": "⏳ 대기 중 - Claude가 이 단계 다음에 읽어요"}
+{"k": "sendnow.line_unreached", "src": "d8eeb821", "v": "⏳ 대기 중 - 아직 Claude에 전달되지 않았어요. “지금 보내기”를 다시 눌러 주세요"}
+{"k": "sendnow.reply_no_session", "src": "cfa31918", "v": "선택된 세션이 없어요."}
+{"k": "sendnow.reply_nothing", "src": "7f03c384", "v": "대기열에 기다리는 메시지가 없어요"}
 {"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ 지금 Claude에게 보냈어요"}
 {"k": "sess.btn.cancel", "src": "77dfd213", "v": "취소"}
 {"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ 취소"}
 {"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ 닫기"}
 {"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ 삭제"}
-{"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 Diff"}
+{"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 변경 사항 (diff)"}
 {"k": "sess.btn.end", "src": "58096fa3", "v": "⏹ 종료"}
 {"k": "sess.btn.end_session", "src": "cad78af6", "v": "⏹ 세션 종료"}
-{"k": "sess.btn.prefs", "src": "28784f50", "v": "👤 환경설정"}
+{"k": "sess.btn.prefs", "src": "28784f50", "v": "👤 세션 설정"}
 {"k": "sess.btn.rename", "src": "7decc377", "v": "✏️ 이름 바꾸기"}
-{"k": "sess.btn.restart", "src": "06188389", "v": "🔄 다시 시작"}
+{"k": "sess.btn.restart", "src": "06188389", "v": "🔄 재시작"}
 {"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ 재개"}
 {"k": "sess.cancelled", "src": "3678513b", "v": "↩️ 취소했어요."}
 {"k": "sess.delete_cancelled", "src": "7105554d", "v": "[<b>{session}</b>] 삭제를 취소했어요."}
@@ -677,106 +677,106 @@
 {"k": "sess.delete_still_running", "src": "ff86cceb", "v": "⚠️ [<b>{session}</b>] 세션이 아직 실행 중이에요. 먼저 /kill로 종료하세요."}
 {"k": "sess.delete_which", "src": "b568401d", "v": "어느 종료된 세션을 지울까요?"}
 {"k": "sess.deleted", "src": "5af8d1c8", "v": "🗑️ [<b>{session}</b>] 세션을 삭제했어요."}
-{"k": "sess.deleted_by", "src": "38b3ffbc", "v": "🗑️ [<b>{session}</b>] 삭제됨 · {person}"}
+{"k": "sess.deleted_by", "src": "38b3ffbc", "v": "🗑️ {person} 님이 [<b>{session}</b>] 세션을 삭제했어요."}
 {"k": "sess.diff_files", "src": "84597d92", "v": {"other": "📝 [<b>{session}</b>] 파일 {n}개 변경됨, +{added}/-{removed}"}}
-{"k": "sess.diff_none", "src": "3b2e4538", "v": "[<b>{session}</b>]의 작업 디렉터리에 변경 사항이 없어요."}
-{"k": "sess.diff_none_live", "src": "3f72a95c", "v": "diff를 볼 실행 중인 세션이 없어요."}
-{"k": "sess.diff_reason.cwd_missing", "src": "e6e5befa", "v": "[{label}]의 작업 디렉터리가 더 이상 없어요."}
-{"k": "sess.diff_reason.git_error", "src": "18d7631e", "v": "지금은 diff를 읽을 수 없어요. 다시 시도해 주세요."}
-{"k": "sess.diff_reason.git_not_installed", "src": "171dd6a9", "v": "이 기기에서는 git을 쓸 수 없어요."}
-{"k": "sess.diff_reason.no_commits_yet", "src": "94fb37e6", "v": "[{label}]의 저장소에 아직 commit이 없어요."}
-{"k": "sess.diff_reason.not_a_git_repo", "src": "c639ff9f", "v": "[{label}]의 디렉터리는 git 저장소가 아니에요."}
-{"k": "sess.diff_which", "src": "2485be52", "v": "어느 세션의 diff를 볼까요?"}
-{"k": "sess.end_confirm", "src": "dffc4f34", "v": "⏹ <b>{session}</b> 세션을 종료할까요? Claude가 멈추고 세션이 닫혀요."}
+{"k": "sess.diff_none", "src": "3b2e4538", "v": "[<b>{session}</b>] 세션의 폴더에 변경 사항이 없어요."}
+{"k": "sess.diff_none_live", "src": "3f72a95c", "v": "변경 사항을 볼 실행 중인 세션이 없어요."}
+{"k": "sess.diff_reason.cwd_missing", "src": "e6e5befa", "v": "[{label}] 세션의 폴더가 더 이상 없어요."}
+{"k": "sess.diff_reason.git_error", "src": "18d7631e", "v": "지금은 변경 사항을 읽을 수 없어요. 다시 시도해 주세요."}
+{"k": "sess.diff_reason.git_not_installed", "src": "171dd6a9", "v": "이 컴퓨터에 git이 설치되어 있지 않아요."}
+{"k": "sess.diff_reason.no_commits_yet", "src": "94fb37e6", "v": "[{label}] 세션의 저장소에 아직 commit이 없어요."}
+{"k": "sess.diff_reason.not_a_git_repo", "src": "c639ff9f", "v": "[{label}] 세션의 폴더는 git 저장소가 아니에요."}
+{"k": "sess.diff_which", "src": "2485be52", "v": "어느 세션의 변경 사항을 볼까요?"}
+{"k": "sess.end_confirm", "src": "dffc4f34", "v": "⏹ <b>{session}</b> 세션을 종료할까요? Claude가 작업을 멈추고 세션이 닫혀요."}
 {"k": "sess.ended", "src": "6659a4fd", "v": "⏹ <b>{session}</b> 종료됨"}
-{"k": "sess.ended_by", "src": "9e9bdbd1", "v": "⏹ <b>{session}</b> 종료됨 · {person}"}
+{"k": "sess.ended_by", "src": "9e9bdbd1", "v": "⏹ {person} 님이 <b>{session}</b> 세션을 종료했어요"}
 {"k": "sess.kill_cancelled", "src": "cf4e32bb", "v": "↩️ 취소했어요. 아무것도 종료하지 않았어요."}
 {"k": "sess.menu_closed", "src": "e2a2c077", "v": "[<b>{session}</b>] 메뉴를 닫았어요."}
-{"k": "sess.menu_no_transcript", "src": "72c75098", "v": "<i>재개할 수 있는 저장된 대화 기록이 없어요.</i>"}
-{"k": "sess.menu_title", "src": "2a8eb73c", "v": "⋮ <b>{session}</b> - 작업을 고르세요:"}
+{"k": "sess.menu_no_transcript", "src": "72c75098", "v": "<i>재개할 수 있는 저장된 대화가 없어요.</i>"}
+{"k": "sess.menu_title", "src": "2a8eb73c", "v": "⋮ <b>{session}</b> - 무엇을 할까요?"}
 {"k": "sess.not_sent_to", "src": "0d040f9f", "v": "{session} 세션에 보내지 않았어요."}
 {"k": "sess.pick_cancelled", "src": "d3e4142f", "v": "취소했어요."}
 {"k": "sess.rename_cancelled", "src": "abe2ee6d", "v": "이름 바꾸기를 취소했어요."}
-{"k": "sess.rename_closed", "src": "d06e8a83", "v": "✖️ 다른 작업으로 넘어가서 이름 바꾸기를 닫았어요. 다시 하려면 /rename을 보내세요."}
+{"k": "sess.rename_closed", "src": "d06e8a83", "v": "✖️ 다른 작업을 해서 이름 바꾸기를 닫았어요. 다시 하려면 /rename을 보내세요."}
 {"k": "sess.rename_exists", "src": "3367e703", "v": "⚠️ 이 채팅에 이미 {session} 이름의 세션이 있어요."}
 {"k": "sess.rename_expired", "src": "0235f755", "v": "⏱ 이름 바꾸기가 만료됐어요. /rename을 다시 보내세요."}
-{"k": "sess.rename_gone", "src": "86c694ee", "v": "⚠️ 그 세션은 더 이상 쓸 수 없어요. /rename을 다시 실행하세요."}
+{"k": "sess.rename_gone", "src": "86c694ee", "v": "⚠️ 그 세션은 더 이상 쓸 수 없어요. /rename을 다시 보내세요."}
 {"k": "sess.rename_none", "src": "2d24aff4", "v": "이름을 바꿀 세션이 없어요."}
-{"k": "sess.rename_not_allowed", "src": "97c2b455", "v": "🚫 이 세션의 이름은 바꿀 수 없어요."}
+{"k": "sess.rename_not_allowed", "src": "97c2b455", "v": "🚫 이 세션의 이름을 바꿀 권한이 없어요."}
 {"k": "sess.rename_prompt_reply", "src": "eaadafac", "v": "✏️ [<b>{session}</b>]의 새 이름은요? 이 메시지에 답장으로 새 이름을 보내 주세요."}
 {"k": "sess.rename_prompt_type", "src": "fdf5e253", "v": "✏️ [<b>{session}</b>]의 새 이름은요? 메시지로 보내 주세요."}
 {"k": "sess.rename_unchanged", "src": "f41d7d6e", "v": "[<b>{session}</b>] 이름이 바뀌지 않았어요."}
 {"k": "sess.rename_which", "src": "d74e26c1", "v": "어느 세션의 이름을 바꿀까요?"}
 {"k": "sess.renamed", "src": "53a36720", "v": "✏️ 이름 변경: [<b>{old}</b>] → [<b>{new}</b>]"}
-{"k": "sess.restart_cancelled", "src": "e2123246", "v": "[<b>{session}</b>] 다시 시작을 취소했어요."}
-{"k": "sess.restart_confirm", "src": "eea1e9db", "v": "🔄 [<b>{session}</b>] 세션을 다시 시작할까요? Claude가 멈췄다가 다시 시작하고, 대화는 유지돼요."}
-{"k": "sess.restart_failed", "src": "be8ef8e6", "v": "[{label}] 다시 시작 실패."}
-{"k": "sess.restart_none", "src": "fefd4861", "v": "다시 시작할 실행 중인 세션이 없어요."}
-{"k": "sess.restart_reason.already_restarting", "src": "119c20da", "v": "[{label}] 세션은 이미 다시 시작하는 중이에요."}
-{"k": "sess.restart_reason.launch_failed", "src": "fc0525be", "v": "[{label}] 다시 시작 실패: {err}"}
-{"k": "sess.restart_reason.not_live", "src": "d841d7b0", "v": "[{label}] 세션이 실행 중이 아니에요."}
+{"k": "sess.restart_cancelled", "src": "e2123246", "v": "[<b>{session}</b>] 재시작을 취소했어요."}
+{"k": "sess.restart_confirm", "src": "eea1e9db", "v": "🔄 [<b>{session}</b>] 세션을 재시작할까요? Claude가 멈췄다가 다시 시작하고, 대화는 그대로 유지돼요."}
+{"k": "sess.restart_failed", "src": "be8ef8e6", "v": "[{label}] 세션을 재시작하지 못했어요."}
+{"k": "sess.restart_none", "src": "fefd4861", "v": "재시작할 실행 중인 세션이 없어요."}
+{"k": "sess.restart_reason.already_restarting", "src": "119c20da", "v": "[{label}] 세션은 이미 재시작하는 중이에요."}
+{"k": "sess.restart_reason.launch_failed", "src": "fc0525be", "v": "[{label}] 세션을 재시작하지 못했어요: {err}"}
+{"k": "sess.restart_reason.not_live", "src": "d841d7b0", "v": "[{label}] 세션은 지금 실행 중이 아니에요."}
 {"k": "sess.restart_reason.still_stopping", "src": "635882f7", "v": "[{label}] 세션이 제때 멈추지 않았어요. 잠시 후 다시 시도해 주세요."}
-{"k": "sess.restart_which", "src": "0eada720", "v": "어느 세션을 다시 시작할까요?"}
-{"k": "sess.restarted", "src": "dc0ed3cb", "v": "🔄 [<b>{session}</b>] 다시 시작됨."}
-{"k": "sess.restarted_by", "src": "f2ddb551", "v": "🔄 [<b>{session}</b>] 다시 시작됨 · {person}"}
-{"k": "sess.resume_as", "src": "95516616", "v": "<b>{session}</b> 세션을 어떻게 재개할까요:"}
+{"k": "sess.restart_which", "src": "0eada720", "v": "어느 세션을 재시작할까요?"}
+{"k": "sess.restarted", "src": "dc0ed3cb", "v": "🔄 [<b>{session}</b>] 세션을 재시작했어요."}
+{"k": "sess.restarted_by", "src": "f2ddb551", "v": "🔄 {person} 님이 [<b>{session}</b>] 세션을 재시작했어요."}
+{"k": "sess.resume_as", "src": "95516616", "v": "<b>{session}</b> 세션을 어떤 모드로 재개할까요:"}
 {"k": "sess.resume_failed", "src": "f19c1968", "v": "❌ <b>{session}</b> 세션을 재개하지 못했어요: {error}"}
 {"k": "sess.resume_last_response", "src": "9e8e3733", "v": "<i>📜 이 세션의 마지막 응답</i>\n<blockquote>{preview}</blockquote>"}
-{"k": "sess.resume_no_transcript", "src": "6b8a4001", "v": "⚠️ <b>{session}</b> 세션은 디스크에 재개할 대화 기록이 없어요.\n{command} 명령으로 새로 시작하세요."}
-{"k": "sess.resume_not_found", "src": "4c1d68d2", "v": "⚠️ 기록에 <b>{session}</b> 이름의 세션이 없어요.\n이름 없이 {command} 명령을 보내면 쓸 수 있는 세션을 볼 수 있어요."}
-{"k": "sess.resume_running", "src": "c090af67", "v": "⚠️ <b>{session}</b> 세션이 이미 실행 중이에요.\n키보드의 {command} 버튼을 탭해 전환하세요."}
-{"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> 재개됨"}
-{"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> 세션을 자동 모드로 재개했어요: 전체 권한 모드는 관리자만 쓸 수 있어요."}
+{"k": "sess.resume_no_transcript", "src": "6b8a4001", "v": "⚠️ <b>{session}</b> 세션은 재개할 수 있는 저장된 대화가 없어요.\n{command} 명령으로 새 세션을 시작하세요."}
+{"k": "sess.resume_not_found", "src": "4c1d68d2", "v": "⚠️ 기록에 <b>{session}</b> 이름의 세션이 없어요.\n쓸 수 있는 세션을 보려면 이름 없이 {command} 명령을 보내세요."}
+{"k": "sess.resume_running", "src": "c090af67", "v": "⚠️ <b>{session}</b> 세션이 이미 실행 중이에요.\n키보드의 {command} 버튼을 눌러 그 세션으로 가세요."}
+{"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> 세션을 다시 열었어요"}
+{"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> 세션을 자동 모드로 다시 열었어요: 전체 권한 모드는 관리자만 쓸 수 있어요."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "{session} 세션에 보냈어요."}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ 닫기"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 새 세션"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 폴더: {folder} ›"}
 {"k": "set.btn.ns_model", "src": "6fb2e9a4", "v": "🧠 모델: {model} ›"}
-{"k": "set.btn.per_session", "src": "9748363d", "v": "👤 세션별 환경설정"}
-{"k": "set.btn.problem_reports", "src": "2478212a", "v": "🐞 문제 보고서: {value}"}
+{"k": "set.btn.per_session", "src": "9748363d", "v": "👤 세션별 설정"}
+{"k": "set.btn.problem_reports", "src": "2478212a", "v": "🐞 문제 신고: {value}"}
 {"k": "set.btn.reports_turn_on", "src": "8b383496", "v": "제안 다시 켜기"}
 {"k": "set.btn.use_chat_default", "src": "55c966bc", "v": "↩️ 채팅 기본값 사용"}
-{"k": "set.cadence.title", "src": "ed8a634b", "v": "⏱ 긴 턴의 카드 업데이트"}
-{"k": "set.diffs.title", "src": "9f74873f", "v": "📝 Diff 미리 보기"}
+{"k": "set.cadence.title", "src": "ed8a634b", "v": "⏱ 긴 작업의 카드 업데이트"}
+{"k": "set.diffs.title", "src": "9f74873f", "v": "📝 변경 사항 미리 보기 (diff)"}
 {"k": "set.formatting.title", "src": "6b0a66a0", "v": "✏️ 간단한 서식"}
-{"k": "set.help.cadence.off", "src": "71965ae1", "v": "턴이 아무리 길어도 카드는 같은 속도로 새로 고쳐져요."}
-{"k": "set.help.cadence.on", "src": "cb462e4f", "v": "턴이 길어질수록 카드를 덜 자주 새로 고치고(2분 뒤엔 10초마다, 10분 뒤엔 30초마다), 시계도 30초 단위로 움직여서 멈춘 것처럼 보이지 않아요. 상태가 바뀌면 여전히 바로 보여요."}
+{"k": "set.help.cadence.off", "src": "71965ae1", "v": "작업이 아무리 길어도 카드는 같은 속도로 새로 고쳐져요."}
+{"k": "set.help.cadence.on", "src": "cb462e4f", "v": "작업이 길어질수록 카드를 덜 자주 새로 고쳐요 (2분 뒤에는 10초마다, 10분 뒤에는 30초마다). 시계도 30초 단위로 움직여서 멈춘 것처럼 보이지 않아요. 상태가 바뀌면 바로 보여요."}
 {"k": "set.help.diffs.off", "src": "e9b93bde", "v": "파일 편집은 작업 카드의 줄로만 보여요."}
 {"k": "set.help.diffs.on", "src": "1ad75bf3", "v": "Write/Edit마다 작업 카드 아래에 별도의 diff 메시지도 올라와요."}
-{"k": "set.help.formatting.off", "src": "14016cc5", "v": "Claude가 원하는 대로 답변 서식을 정해요."}
-{"k": "set.help.formatting.on", "src": "13c31447", "v": "평범한 문장과 대시 목록만 써요. 표나 코드 블록은 없어요."}
+{"k": "set.help.formatting.off", "src": "14016cc5", "v": "Claude가 답변 서식을 마음대로 정해요."}
+{"k": "set.help.formatting.on", "src": "13c31447", "v": "평범한 문장과 대시 목록만 써요. 표나 코드 블록은 쓰지 않아요."}
 {"k": "set.help.layout.card", "src": "75971a73", "v": "작업 카드는 남고, 답변은 별도 메시지로 와요."}
-{"k": "set.help.layout.merged", "src": "cb79a1a7", "v": "답변이 그 자리에서 작업 카드의 본문을 대신해요."}
-{"k": "set.help.layout.replace", "src": "7802aaf9", "v": "작업 카드가 답변만으로 바뀌어요."}
+{"k": "set.help.layout.merged", "src": "cb79a1a7", "v": "답변이 같은 메시지 안에서 작업 카드의 본문을 대신해요."}
+{"k": "set.help.layout.replace", "src": "7802aaf9", "v": "작업 카드는 지워지고 답변만 남아요."}
 {"k": "set.help.length.long", "src": "6d4be59e", "v": "필요할 때는 자세하게 답해요."}
 {"k": "set.help.length.medium", "src": "1f258598", "v": "두 문단 정도."}
-{"k": "set.help.length.none", "src": "c889d841", "v": "길이 지침이 전혀 없어요."}
+{"k": "set.help.length.none", "src": "c889d841", "v": "길이 규칙 없음."}
 {"k": "set.help.length.short", "src": "c4b9b1e2", "v": "몇 문장."}
 {"k": "set.help.length.xshort", "src": "b3629257", "v": "한두 문장. 서두도 요약도 없어요."}
-{"k": "set.help.level.advanced", "src": "820e1448", "v": "전문 지식을 전제로 해요. 하나하나 풀어 설명하지 않아요."}
-{"k": "set.help.level.none", "src": "643f8019", "v": "어휘 지침이 전혀 없어요."}
+{"k": "set.help.level.advanced", "src": "820e1448", "v": "잘 아는 사람이라고 보고 따로 풀어 설명하지 않아요."}
+{"k": "set.help.level.none", "src": "643f8019", "v": "어휘 규칙 없음."}
 {"k": "set.help.level.normal", "src": "530e152e", "v": "일반적인 기술 문체."}
 {"k": "set.help.level.simple", "src": "748c89ff", "v": "일상적인 단어, 짧은 문장."}
 {"k": "set.layout.title", "src": "415df682", "v": "🖼 메시지 배치"}
 {"k": "set.length.title", "src": "0b4f4428", "v": "📏 답변 길이"}
 {"k": "set.level.title", "src": "4e19b762", "v": "🎓 어휘 수준"}
-{"k": "set.opt.cadence.off", "src": "b44b98a6", "v": "끄기 - 턴 내내 같은 속도"}
-{"k": "set.opt.cadence.on", "src": "3843eb22", "v": "켜기 - 턴이 길어지면 느리게"}
+{"k": "set.opt.cadence.off", "src": "b44b98a6", "v": "끄기 - 작업 내내 같은 속도"}
+{"k": "set.opt.cadence.on", "src": "3843eb22", "v": "켜기 - 작업이 길어지면 느리게"}
 {"k": "set.opt.chat_default", "src": "58286063", "v": "{option} (채팅 기본값)"}
 {"k": "set.opt.diffs.off", "src": "64a190d9", "v": "끄기 - 작업 카드만"}
 {"k": "set.opt.diffs.on", "src": "3c616425", "v": "켜기 - 편집마다 diff 메시지"}
-{"k": "set.opt.formatting.off", "src": "a779e619", "v": "끄기 - 기본 서식"}
-{"k": "set.opt.formatting.on", "src": "4321e58a", "v": "켜기 - 평범한 문장만"}
-{"k": "set.opt.layout.card", "src": "cb54ae30", "v": "작업 카드 + 결과"}
-{"k": "set.opt.layout.merged", "src": "732da229", "v": "작업 메시지에 합치기"}
-{"k": "set.opt.layout.replace", "src": "1f8e1a41", "v": "결과로 바꾸기"}
+{"k": "set.opt.formatting.off", "src": "a779e619", "v": "끄기 - 보통 서식"}
+{"k": "set.opt.formatting.on", "src": "4321e58a", "v": "켜기 - 평범한 글만"}
+{"k": "set.opt.layout.card", "src": "cb54ae30", "v": "작업 카드 + 따로 오는 답변"}
+{"k": "set.opt.layout.merged", "src": "732da229", "v": "답변을 카드 안에"}
+{"k": "set.opt.layout.replace", "src": "1f8e1a41", "v": "카드 지우고 답변만"}
 {"k": "set.opt.length.long", "src": "11eda67f", "v": "길게"}
 {"k": "set.opt.length.medium", "src": "d404968e", "v": "중간"}
-{"k": "set.opt.length.none", "src": "e6752500", "v": "규칙 적용 안 함"}
+{"k": "set.opt.length.none", "src": "e6752500", "v": "규칙 없음"}
 {"k": "set.opt.length.short", "src": "0fe7d82f", "v": "짧게"}
 {"k": "set.opt.length.xshort", "src": "e937255b", "v": "아주 짧게"}
 {"k": "set.opt.level.advanced", "src": "4d064726", "v": "고급"}
-{"k": "set.opt.level.none", "src": "e6752500", "v": "규칙 적용 안 함"}
+{"k": "set.opt.level.none", "src": "e6752500", "v": "규칙 없음"}
 {"k": "set.opt.level.normal", "src": "45e118d0", "v": "보통"}
 {"k": "set.opt.level.simple", "src": "0406a446", "v": "쉬운 단어"}
 {"k": "set.opt.ns_default_folder", "src": "56d18a09", "v": "기본 폴더"}
@@ -785,151 +785,151 @@
 {"k": "set.opt.reports.ask", "src": "10a8fd63", "v": "물어보기"}
 {"k": "set.opt.reports.auto_off", "src": "7e82eed6", "v": "제안 꺼짐"}
 {"k": "set.opt.reports.off", "src": "e3de5ab0", "v": "끄기"}
-{"k": "set.text.changed_by", "src": "63c7cabd", "v": "<i>변경: {person}</i>"}
+{"k": "set.text.changed_by", "src": "63c7cabd", "v": "<i>{person} 님이 바꿨어요.</i>"}
 {"k": "set.text.closed", "src": "731152a0", "v": "닫았어요."}
-{"k": "set.text.intro.cadence", "src": "c2f74acd", "v": "아주 긴 턴 동안 작업 카드를 얼마나 자주 새로 고칠지 정해요. 켜면 턴이 길어질수록 느려지고 시계가 30초 단위로 움직여서, 오래 이어지는 채팅도 Telegram 한도 안에 넉넉히 머물러요. 끄면 턴 내내 처음 몇 분의 속도를 유지해요."}
-{"k": "set.text.intro.diffs", "src": "7a426bb1", "v": "파일 편집마다 작업 카드 아래에 별도의 diff 메시지를 올릴지 정해요. 끄면 작업 카드 하나와 답변 하나만 남아요. 카드에는 여전히 모든 편집이 나오고, Mini App에는 diff 뷰어가 있어요."}
-{"k": "set.text.intro.formatting", "src": "71988826", "v": "켜면 답변에 평범한 문장과 간단한 대시 목록만 써요. 표, 코드 블록, 제목, 굵게/기울임은 쓰지 않아요."}
-{"k": "set.text.intro.layout", "src": "891af1fd", "v": "끝난 턴이 채팅에 어떻게 보일지 정해요."}
+{"k": "set.text.intro.cadence", "src": "c2f74acd", "v": "긴 작업 동안 작업 카드를 얼마나 자주 새로 고칠지 정해요. 켜면 작업이 길어질수록 덜 자주 새로 고치고 시계가 30초 단위로 움직여서, 오래 실행되는 채팅도 Telegram 한도에서 넉넉히 벗어나 있어요. 끄면 작업 내내 처음 몇 분의 속도를 유지해요."}
+{"k": "set.text.intro.diffs", "src": "7a426bb1", "v": "파일을 편집할 때마다 작업 카드 아래에 diff 메시지를 따로 보낼지 정해요. 끄면 작업 카드 하나와 답변 하나만 남아요. 카드에는 여전히 모든 편집이 나오고, Mini App에서도 diff를 볼 수 있어요."}
+{"k": "set.text.intro.formatting", "src": "71988826", "v": "켜면 답변에 평범한 글과 간단한 대시 목록만 써요. 표, 코드 블록, 제목, 굵게/기울임은 쓰지 않아요."}
+{"k": "set.text.intro.layout", "src": "891af1fd", "v": "끝난 작업이 채팅에 어떻게 보일지 정해요."}
 {"k": "set.text.intro.length", "src": "e64e4857", "v": "Claude의 답변 길이를 정해요."}
-{"k": "set.text.intro.level", "src": "5ca0f466", "v": "Claude 답변의 어휘 수준이에요."}
+{"k": "set.text.intro.level", "src": "5ca0f466", "v": "Claude 답변의 말을 얼마나 쉽게 할지 정해요."}
 {"k": "set.text.ns_folder_title", "src": "f4eab7d6", "v": "📁 <b>새 세션 폴더</b>"}
 {"k": "set.text.ns_model_title", "src": "386d1055", "v": "🧠 <b>새 세션 모델</b>"}
-{"k": "set.text.ns_root", "src": "af342243", "v": "🆕 <b>새 세션</b>\n\n/new로 세션을 시작할 때 쓰는 값이에요. 세션 하나만 카드에서 바꿀 수도 있어요.\n\n권한: {mode}\n모델: {model}\n폴더: {folder}"}
+{"k": "set.text.ns_root", "src": "af342243", "v": "🆕 <b>새 세션</b>\n\n/new가 세션을 시작할 때 쓰는 설정이에요. 카드에서 세션마다 따로 바꿀 수도 있어요.\n\n권한: {mode}\n모델: {model}\n폴더: {folder}"}
 {"k": "set.text.reports_auto_off", "src": "52adfc5a", "v": "자동 제안: 꺼짐 (제안을 연속 두 번 거절했어요)."}
-{"k": "set.text.reports_env_off", "src": "408411eb", "v": "이 기기에서는 AIPAGER_REPORT_PROMPTS=0으로도 제안이 꺼져 있어요."}
-{"k": "set.text.reports_intro", "src": "4fe65258", "v": "aipager에서 같은 내부 오류가 여러 번 생기면 보고서를 보내자고 제안할 수 있어요. 보고서는 항상 먼저 보여 주고, “보내기”를 탭하지 않으면 아무것도 보내지 않아요.\n\n물어보기: 가끔 제안해요 (3일에 최대 한 번).\n끄기: 제안하지 않아요. /help의 “문제 신고”는 언제든 쓸 수 있어요."}
-{"k": "set.text.reports_title", "src": "036f0be5", "v": "🐞 <b>문제 보고서</b>"}
-{"k": "set.text.root", "src": "25c10fde", "v": "⚙️ <b>설정</b>\n\n이 채팅에서 Claude가 답하는 방식에 대한 채팅별 환경설정이에요. 바꾸려면 항목을 탭하세요."}
+{"k": "set.text.reports_env_off", "src": "408411eb", "v": "이 컴퓨터에서는 AIPAGER_REPORT_PROMPTS=0으로도 제안이 꺼져 있어요."}
+{"k": "set.text.reports_intro", "src": "4fe65258", "v": "aipager에서 같은 내부 오류가 여러 번 생기면 보고서를 보낼지 물어볼 수 있어요. 보고서는 항상 먼저 보여 드리고, “보내기”를 누르기 전에는 아무것도 보내지 않아요.\n\n물어보기: 가끔 물어봐요 (최대 3일에 한 번).\n끄기: 묻지 않아요. /help의 “문제 신고”는 언제든 쓸 수 있어요."}
+{"k": "set.text.reports_title", "src": "036f0be5", "v": "🐞 <b>문제 신고</b>"}
+{"k": "set.text.root", "src": "25c10fde", "v": "⚙️ <b>설정</b>\n\n이 채팅에서 Claude가 답하는 방식이에요. 바꿀 항목을 누르세요."}
 {"k": "set.text.row", "src": "b98927cc", "v": "{title}: {value}"}
-{"k": "set.text.spref_field", "src": "53c8e84c", "v": "{title} - [<b>{session}</b>]용\n\n이 세션이 쓰는 {title} 설정이에요. 이 세션에서만 이 채팅의 /settings 대신 적용돼요."}
-{"k": "set.text.spref_none", "src": "3856fe99", "v": "👤 <b>세션별 환경설정</b>\n\n아직 세션이 없어요."}
-{"k": "set.text.spref_pick", "src": "fb84677e", "v": "👤 <b>세션별 환경설정</b>\n\n답변 스타일을 따로 정할 세션을 고르세요."}
-{"k": "set.text.spref_root", "src": "b29b833e", "v": "👤 <b>세션별 환경설정 - [{session}]</b>\n\n이 세션의 답변 스타일을 따로 정해요. 정하지 않은 항목은 이 채팅의 /settings를 따라요. ⭐ 표시는 이 세션이 따로 정한 항목이에요."}
-{"k": "status.btn.answer", "src": "a16a4eda", "v": "응답하기"}
+{"k": "set.text.spref_field", "src": "53c8e84c", "v": "{title} - [<b>{session}</b>] 세션\n\n이 세션의 {title} 설정이에요. 이 세션에서만 채팅의 /settings 대신 이 설정을 써요."}
+{"k": "set.text.spref_none", "src": "3856fe99", "v": "👤 <b>세션별 설정</b>\n\n아직 세션이 없어요."}
+{"k": "set.text.spref_pick", "src": "fb84677e", "v": "👤 <b>세션별 설정</b>\n\n답변 스타일을 따로 정할 세션을 고르세요."}
+{"k": "set.text.spref_root", "src": "b29b833e", "v": "👤 <b>세션별 설정 - [{session}]</b>\n\n이 세션의 답변 스타일을 따로 정해요. 정하지 않은 항목은 이 채팅의 /settings를 따라요. ⭐ 표시는 이 세션만 따로 정한 항목이에요."}
+{"k": "status.btn.answer", "src": "a16a4eda", "v": "답하기"}
 {"k": "status.btn.clear_all", "src": "4944581b", "v": "🧹 모두 지우기"}
 {"k": "status.btn.ended", "src": "ae183190", "v": {"other": "⚫ 종료됨 ({n})"}}
 {"k": "status.btn.more", "src": "a6bc69aa", "v": "⋮ 더 보기"}
-{"k": "status.btn.new", "src": "fb873221", "v": "🆕 새로"}
+{"k": "status.btn.new", "src": "fb873221", "v": "🆕 새 세션"}
 {"k": "status.btn.new_session", "src": "19b62fc4", "v": "🆕 새 세션"}
 {"k": "status.ctx", "src": "daeecae8", "v": "ctx {percent}"}
-{"k": "status.ended", "src": "63dbdb7e", "v": {"other": "⚫ <b>종료된 세션 ({n})</b>\n\n하나를 재개하거나 삭제하거나, /status에서 모두 지울 수 있어요 (/resume에는 남아 있어요)."}}
-{"k": "status.ended_shown", "src": "cdde3b66", "v": "최신 {max}개만 여기 있어요. /resume에는 모두 나와요."}
+{"k": "status.ended", "src": "63dbdb7e", "v": {"other": "⚫ <b>종료된 세션 ({n})</b>\n\n하나를 재개하거나 삭제할 수 있고, /status에서 모두 지울 수도 있어요 (/resume에는 남아 있어요)."}}
+{"k": "status.ended_shown", "src": "cdde3b66", "v": "최신 {max}개만 여기에 있어요. 전체 목록은 /resume에서 볼 수 있어요."}
 {"k": "status.head", "src": "570c54fe", "v": "{mark}<b>{session}</b> · {glyph} {state}"}
 {"k": "status.no_ended", "src": "a33a986b", "v": "종료된 세션이 없어요."}
 {"k": "status.no_live", "src": "8f779eb2", "v": "실행 중인 세션이 없어요."}
 {"k": "status.none", "src": "a44ee05c", "v": "아직 세션이 없어요."}
 {"k": "status.notes", "src": "2e411b05", "v": {"other": "메모 {n}개"}}
 {"k": "status.queue", "src": "20f40005", "v": "대기열 {total} ({queued}, {notes})"}
-{"k": "status.queued", "src": "45c54388", "v": {"other": "대기 {n}개"}}
+{"k": "status.queued", "src": "45c54388", "v": {"other": "대기열 {n}개"}}
 {"k": "status.sessions", "src": "65748ab3", "v": {"other": "📊 <b>세션 ({n})</b>"}}
 {"k": "status.switch", "src": "52424cce", "v": "✍️ 이제 <b>{session}</b> 세션과 대화해요 · {glyph} {state} · {mode}"}
 {"k": "status.talk_dm", "src": "777be8ce", "v": "메시지를 보내면 {session} 세션으로 가요."}
-{"k": "status.talk_group", "src": "bdc24dfd", "v": "{session} 세션의 메시지에 답장하면 (또는 {bot} 멘션) 대화할 수 있어요."}
-{"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "{session} 세션의 메시지에 답장하면 (또는 봇 멘션) 대화할 수 있어요."}
+{"k": "status.talk_group", "src": "bdc24dfd", "v": "{session} 세션의 메시지에 답장하면 (또는 {bot} 멘션) 그 세션과 대화할 수 있어요."}
+{"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "{session} 세션의 메시지에 답장하면 (또는 봇 멘션) 그 세션과 대화할 수 있어요."}
 {"k": "status.waiting_answer", "src": "e5832740", "v": "{session} 세션이 답변을 기다리고 있어요."}
 {"k": "toast.already_answered", "src": "3d131a46", "v": "이미 답했어요"}
-{"k": "toast.always_degraded", "src": "038f4355", "v": "이 명령에는 항상 허용 규칙이 없어요. 이번 한 번만 허용했어요 [{session}]"}
+{"k": "toast.always_degraded", "src": "038f4355", "v": "이 명령에는 “항상 허용” 규칙이 없어요. 이번 한 번만 허용했어요 [{session}]"}
 {"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}
 {"k": "toast.auth.not_listed", "src": "0baa8bbd", "v": "허용 목록에 없어요"}
-{"k": "toast.busy_retry", "src": "cfc92c41", "v": "바빠요. 잠시 후 다시 시도해 주세요"}
-{"k": "toast.cant_resend", "src": "3aa4d727", "v": "이 요청은 다시 보낼 수 없어요. 터미널에서 답해 주세요"}
-{"k": "toast.cant_stop", "src": "2bf57e30", "v": "이 세션은 중지할 수 없어요."}
+{"k": "toast.busy_retry", "src": "cfc92c41", "v": "Telegram이 지금 이 채팅을 제한하고 있어요. 잠시 후 다시 눌러 주세요"}
+{"k": "toast.cant_resend", "src": "3aa4d727", "v": "이 요청은 다시 보여 드릴 수 없어요. 터미널에서 답해 주세요"}
+{"k": "toast.cant_stop", "src": "2bf57e30", "v": "이 세션을 중지할 권한이 없어요."}
 {"k": "toast.choice_gone", "src": "54298c73", "v": "그 선택지는 더 이상 없어요."}
-{"k": "toast.clear_done", "src": "0e4a4845", "v": {"other": "/status에서 {n}개를 지웠어요 (/resume에는 남아 있어요)"}}
+{"k": "toast.clear_done", "src": "0e4a4845", "v": {"other": "/status에서 세션 {n}개를 지웠어요 (/resume에는 남아 있어요)"}}
 {"k": "toast.clear_nothing", "src": "ec219a9c", "v": "지울 것이 없어요"}
 {"k": "toast.compact_failed", "src": "84398886", "v": "/compact를 보내지 못했어요"}
-{"k": "toast.compact_sending", "src": "afcbfe26", "v": "[{session}] 압축 중"}
+{"k": "toast.compact_sending", "src": "afcbfe26", "v": "[{session}] 대화 압축 중"}
 {"k": "toast.gate_other_chat", "src": "fcc9d88a", "v": "이 버튼은 다른 채팅의 버튼이에요."}
-{"k": "toast.gate_refused", "src": "c6436f0e", "v": "지금 역할로는 여기서 할 수 없어요."}
-{"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "잘못된 콜백"}
-{"k": "toast.invalid_value", "src": "7e5ba817", "v": "잘못된 값"}
+{"k": "toast.gate_refused", "src": "c6436f0e", "v": "지금 역할로는 이 채팅에서 할 수 없어요."}
+{"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "알 수 없는 버튼이에요"}
+{"k": "toast.invalid_value", "src": "7e5ba817", "v": "허용되지 않는 값이에요"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "이 버튼은 오래됐어요. /kill을 다시 보내세요"}
-{"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} 세션이 요청에 대한 답을 기다리고 있어요. 먼저 답한 다음 모드를 바꾸세요."}
-{"k": "toast.moved_on_status", "src": "be925157", "v": "{session} 세션이 새 작업을 시작했어요. 중지하려면 ⏹ 중지를 다시 탭하세요"}
+{"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} 세션이 요청에 대한 답을 기다리고 있어요. 먼저 답한 뒤 모드를 바꾸세요."}
+{"k": "toast.moved_on_status", "src": "be925157", "v": "{session} 세션이 새 작업을 시작했어요. 중지하려면 ⏹ 중지를 다시 누르세요"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} 세션이 새 작업을 시작했어요. /stop을 다시 보내세요"}
-{"k": "toast.new_cant_change", "src": "279d4392", "v": "이 세션은 바꿀 수 없어요."}
-{"k": "toast.new_cant_start_here", "src": "9f749720", "v": "여기서는 세션을 시작할 수 없어요."}
-{"k": "toast.new_cant_start_resume", "src": "25c7e34f", "v": "여기서는 세션을 시작하거나 재개할 수 없어요."}
+{"k": "toast.new_cant_change", "src": "279d4392", "v": "이 세션을 바꿀 권한이 없어요."}
+{"k": "toast.new_cant_start_here", "src": "9f749720", "v": "이 채팅에서 세션을 시작할 권한이 없어요."}
+{"k": "toast.new_cant_start_resume", "src": "25c7e34f", "v": "이 채팅에서 세션을 시작하거나 재개할 권한이 없어요."}
 {"k": "toast.new_card_expired", "src": "c7d3826b", "v": "이 카드는 만료됐어요."}
-{"k": "toast.new_card_replaced", "src": "8e108c47", "v": "그 카드는 바뀌었어요. 새 카드를 쓰세요."}
+{"k": "toast.new_card_replaced", "src": "8e108c47", "v": "더 새로운 카드가 있어요. 그 카드를 쓰세요."}
 {"k": "toast.new_expired", "src": "85077001", "v": "이 카드는 만료됐어요. /new를 다시 보내세요."}
-{"k": "toast.new_folder_gone", "src": "4b183fca", "v": "그 폴더는 더 이상 없어요."}
-{"k": "toast.new_invalid_model", "src": "ae01cc11", "v": "잘못된 모델"}
-{"k": "toast.new_model_gone", "src": "0f464c34", "v": "그 모델은 더 이상 제공되지 않아요."}
+{"k": "toast.new_folder_gone", "src": "4b183fca", "v": "그 폴더는 이제 목록에 없어요."}
+{"k": "toast.new_invalid_model", "src": "ae01cc11", "v": "이 모델은 고를 수 없어요"}
+{"k": "toast.new_model_gone", "src": "0f464c34", "v": "그 모델은 이제 목록에 없어요."}
 {"k": "toast.new_no_folder_yet", "src": "87860358", "v": "아직 쓸 수 있는 폴더가 없어요. 먼저 실제 프로젝트 폴더에서 세션을 시작하세요."}
-{"k": "toast.new_not_yours", "src": "393f95a6", "v": "본인의 새 세션이 아니에요."}
+{"k": "toast.new_not_yours", "src": "393f95a6", "v": "이 새 세션은 본인 것이 아니에요."}
 {"k": "toast.new_only_sender", "src": "9e109f78", "v": "/new를 보낸 사람만 이 카드를 쓸 수 있어요."}
 {"k": "toast.new_started_since", "src": "e8602889", "v": "{session} 세션이 그사이 작업을 시작했어요. 바꾸려면 /new를 다시 보내세요."}
 {"k": "toast.new_switch_failed", "src": "a8ef2ee3", "v": "모델을 바꾸지 못했어요."}
 {"k": "toast.new_switching", "src": "8c8980ce", "v": "바꾸는 중..."}
-{"k": "toast.new_switching_to", "src": "09c7272f", "v": "모델 변경 중: {model}"}
+{"k": "toast.new_switching_to", "src": "09c7272f", "v": "모델 바꾸는 중: {model}"}
 {"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} 세션이 작업 중이에요. 끝난 뒤에 바꾸거나 /mode를 쓰세요."}
-{"k": "toast.not_working", "src": "1ec204d3", "v": "{session} 세션은 작업 중이 아니에요"}
+{"k": "toast.not_working", "src": "1ec204d3", "v": "{session} 세션은 지금 아무 작업도 하지 않아요"}
 {"k": "toast.open_chat", "src": "202c3e06", "v": "답하려면 채팅을 여세요"}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "{owner} 님의 카드예요."}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "{owner} 님의 카드예요. 본인 카드를 받으려면 {command} 명령을 보내세요."}
 {"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "전체 권한 모드는 관리자만 쓸 수 있어요."}
-{"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} 세션이 지금 다시 시작하는 중이에요. 잠시 후 다시 탭하세요"}
+{"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} 세션이 지금 재시작 중이에요. 잠시 후 다시 눌러 주세요"}
 {"k": "toast.perms_stale", "src": "4e34769b", "v": "이 카드는 오래됐어요. 바뀐 건 없어요"}
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} 세션이 아직 시작하는 중이에요. 잠시 후 다시 시도해 주세요"}
-{"k": "toast.prompt_expired", "src": "260f4c88", "v": "이 요청은 만료됐어요"}
-{"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram이 이 채팅의 속도를 제한하고 있어요. {time} 이후에 다시 시도해 주세요"}
+{"k": "toast.prompt_expired", "src": "260f4c88", "v": "이 요청은 이제 열려 있지 않아요"}
+{"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram이 이 채팅을 제한하고 있어요. {time} 이후에 다시 시도해 주세요"}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "이미 보내는 중이에요."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "이미 보냈어요."}
 {"k": "toast.rep.in_dm", "src": "88740c30", "v": "보고서 미리 보기는 봇과의 개인 채팅에 있어요."}
-{"k": "toast.rep.no_owner", "src": "b43a6c7c", "v": "보고서 미리 보기를 열 수 없어요. 이 설치에는 소유자 채팅이 하나로 정해져 있지 않아요."}
+{"k": "toast.rep.no_owner", "src": "b43a6c7c", "v": "보고서 미리 보기를 열 수 없어요. 이 설치에는 정해진 소유자 채팅이 없어요."}
 {"k": "toast.rep.not_opened", "src": "8841123f", "v": "지금은 보고서 미리 보기를 열 수 없어요. 나중에 다시 시도해 주세요."}
 {"k": "toast.rep.not_owner", "src": "ed142ea6", "v": "이 aipager의 소유자만 문제를 신고할 수 있어요."}
 {"k": "toast.rep.offer_stale", "src": "f5aa4d59", "v": "이 제안은 더 이상 열려 있지 않아요."}
-{"k": "toast.retry_failed", "src": "8954b4b9", "v": "다시 시도하지 못했어요"}
-{"k": "toast.retry_not_alive", "src": "807834ac", "v": "“{session}” 세션이 살아 있지 않아요"}
-{"k": "toast.retry_nothing", "src": "def91a40", "v": "다시 시도할 것이 없어요"}
-{"k": "toast.retry_others_turn", "src": "b243bab8", "v": "다른 사람의 턴이 진행 중이에요. 끝나면 다시 시도하세요"}
+{"k": "toast.retry_failed", "src": "8954b4b9", "v": "다시 보내지 못했어요"}
+{"k": "toast.retry_not_alive", "src": "807834ac", "v": "“{session}” 세션이 실행 중이 아니에요"}
+{"k": "toast.retry_nothing", "src": "def91a40", "v": "다시 보낼 것이 없어요"}
+{"k": "toast.retry_others_turn", "src": "b243bab8", "v": "지금은 다른 사람 차례예요. 끝나면 다시 시도하세요"}
 {"k": "toast.retry_prompt_open", "src": "2554567b", "v": "열린 요청에 먼저 답한 뒤 다시 시도하세요"}
-{"k": "toast.retry_retrying", "src": "b5a61b76", "v": "[{session}] 다시 시도하는 중"}
-{"k": "toast.send_failed", "src": "0fbea382", "v": "{session} 세션에 보내지 못했어요"}
-{"k": "toast.send_keys_failed", "src": "32458da9", "v": "키 입력을 보내지 못했어요"}
-{"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "바빠요. 잠시 후 다시 시도해 주세요"}
-{"k": "toast.sendnow_cant_prompt", "src": "bf90455f", "v": "이 세션에는 보낼 수 없어요"}
-{"k": "toast.sendnow_failed", "src": "57a26c8a", "v": "Claude에 닿지 못했어요. 다시 시도해 주세요"}
+{"k": "toast.retry_retrying", "src": "b5a61b76", "v": "[{session}] 다시 보내는 중"}
+{"k": "toast.send_failed", "src": "0fbea382", "v": "{session} 세션에 메시지를 보내지 못했어요"}
+{"k": "toast.send_keys_failed", "src": "32458da9", "v": "Claude Code에 답을 입력하지 못했어요"}
+{"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "지금은 할 수 없어요. 잠시 후 다시 시도해 주세요"}
+{"k": "toast.sendnow_cant_prompt", "src": "bf90455f", "v": "이 세션에 메시지를 보낼 권한이 없어요"}
+{"k": "toast.sendnow_failed", "src": "57a26c8a", "v": "Claude에 전달되지 않았어요. 다시 시도해 주세요"}
 {"k": "toast.sendnow_interactive", "src": "1b518935", "v": "열린 질문에 먼저 답하세요"}
-{"k": "toast.sendnow_sending", "src": "d05719f1", "v": "지금 Claude에게 보내는 중"}
+{"k": "toast.sendnow_sending", "src": "d05719f1", "v": "Claude에게 보내는 중"}
 {"k": "toast.sendnow_sent", "src": "9ab32ed2", "v": "지금 Claude에게 보냈어요"}
-{"k": "toast.sendnow_taken", "src": "00735887", "v": "이미 가져갔어요"}
-{"k": "toast.sendnow_typing", "src": "84af1903", "v": "프롬프트를 입력하는 중이라 바빠요. 잠시 후 다시 시도해 주세요"}
+{"k": "toast.sendnow_taken", "src": "00735887", "v": "Claude가 이미 가져갔어요"}
+{"k": "toast.sendnow_typing", "src": "84af1903", "v": "aipager가 메시지를 입력하는 중이에요. 잠시 후 다시 시도해 주세요"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "그 세션은 이미 종료됐어요."}
 {"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} 세션은 이미 {mode}예요."}
-{"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "이 세션은 삭제할 수 없어요."}
-{"k": "toast.sess_cant_end", "src": "ab082660", "v": "이 세션은 종료할 수 없어요."}
-{"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "이 세션의 이름은 바꿀 수 없어요."}
-{"k": "toast.sess_cant_restart", "src": "5e8c842b", "v": "이 세션은 다시 시작할 수 없어요."}
-{"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "이 세션은 재개할 수 없어요."}
+{"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "이 세션을 삭제할 권한이 없어요."}
+{"k": "toast.sess_cant_end", "src": "ab082660", "v": "이 세션을 종료할 권한이 없어요."}
+{"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "이 세션의 이름을 바꿀 권한이 없어요."}
+{"k": "toast.sess_cant_restart", "src": "5e8c842b", "v": "이 세션을 재시작할 권한이 없어요."}
+{"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "이 세션을 재개할 권한이 없어요."}
 {"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "그 세션은 지금 재개할 수 없어요."}
-{"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "이 세션에는 보낼 수 없어요."}
+{"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "이 세션에 메시지를 보낼 권한이 없어요."}
 {"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "{session} 세션이 멈추지 않았어요. 다시 시도해 주세요"}
 {"k": "toast.sess_ended", "src": "394de850", "v": "⏹ {session} 종료됨"}
-{"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {session} 종료됨 · {person}"}
-{"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} 세션이 새 작업을 시작했어요. 종료하려면 ⏹ 세션 종료를 다시 탭하세요"}
-{"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} 세션이 새 작업을 시작했어요. 다시 시작하려면 🔄 다시 시작을 다시 탭하세요"}
-{"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} 세션이 새 작업을 시작했어요. 그래도 바꾸려면 전환 버튼을 다시 탭하세요"}
+{"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {person} 님이 {session} 세션을 종료했어요"}
+{"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} 세션이 새 작업을 시작했어요. 그래도 종료하려면 ⏹ 세션 종료를 다시 누르세요"}
+{"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} 세션이 새 작업을 시작했어요. 그래도 재시작하려면 🔄 재시작을 다시 누르세요"}
+{"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} 세션이 새 작업을 시작했어요. 그래도 바꾸려면 전환 버튼을 다시 누르세요"}
 {"k": "toast.sess_not_found_named", "src": "a71f5ae2", "v": "{session} 세션을 찾을 수 없어요"}
-{"k": "toast.sess_not_your_rename", "src": "ed45ef6a", "v": "본인이 시작한 이름 바꾸기가 아니에요."}
+{"k": "toast.sess_not_your_rename", "src": "ed45ef6a", "v": "이 이름 바꾸기는 본인 것이 아니에요."}
 {"k": "toast.sess_restart_stale", "src": "753fe0fb", "v": "이 버튼은 오래됐어요. /restart를 다시 보내세요"}
-{"k": "toast.sess_restarting", "src": "5f69a1ca", "v": "{session} 다시 시작하는 중..."}
-{"k": "toast.sess_resuming", "src": "2a557399", "v": "이 세션은 지금 재개하는 중이에요. 잠시 후 다시 시도해 주세요."}
-{"k": "toast.sess_resuming_kill", "src": "227bdae1", "v": "{session} 세션을 재개하는 중이에요. 잠시 후 /kill을 다시 보내세요"}
-{"k": "toast.sess_resuming_retry", "src": "2845ff55", "v": "{session} 세션을 재개하는 중이에요. 잠시 후 다시 시도해 주세요"}
+{"k": "toast.sess_restarting", "src": "5f69a1ca", "v": "{session} 재시작하는 중..."}
+{"k": "toast.sess_resuming", "src": "2a557399", "v": "이 세션을 다시 여는 중이에요. 잠시 후 다시 시도해 주세요."}
+{"k": "toast.sess_resuming_kill", "src": "227bdae1", "v": "{session} 세션을 다시 여는 중이에요. 잠시 후 /kill을 다시 보내세요"}
+{"k": "toast.sess_resuming_retry", "src": "2845ff55", "v": "{session} 세션을 다시 여는 중이에요. 잠시 후 다시 시도해 주세요"}
 {"k": "toast.sess_still_running", "src": "1ab407e3", "v": "그 세션은 아직 실행 중이에요. 먼저 종료하세요."}
-{"k": "toast.sess_target", "src": "d28d6d9c", "v": "✍️ 메시지가 가는 곳: {session}"}
+{"k": "toast.sess_target", "src": "d28d6d9c", "v": "✍️ 메시지는 {session} 세션으로 가요"}
 {"k": "toast.session_ended", "src": "3a3a8392", "v": "그 세션은 종료됐어요."}
 {"k": "toast.session_gone", "src": "9360b8a3", "v": "“{session}” 세션을 찾을 수 없어요"}
 {"k": "toast.session_gone_settings", "src": "8af767e3", "v": "이 세션은 더 이상 쓸 수 없어요. /settings를 다시 여세요."}
 {"k": "toast.session_not_found", "src": "4c2e72c7", "v": "세션을 찾을 수 없어요"}
-{"k": "toast.session_not_here", "src": "54eb8580", "v": "그 세션은 여기서 실행 중이 아니에요."}
+{"k": "toast.session_not_here", "src": "54eb8580", "v": "그 세션은 이 채팅에 없어요."}
 {"k": "toast.session_unavailable", "src": "773d1a0f", "v": "그 세션은 더 이상 쓸 수 없어요"}
 {"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "이 그룹의 설정은 관리자만 바꿀 수 있어요."}
-{"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "이 세션의 환경설정은 바꿀 수 없어요."}
+{"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "이 세션의 설정을 바꿀 권한이 없어요."}
 {"k": "toast.stop_stale", "src": "51073518", "v": "그 작업은 이미 끝났어요. 현재 카드를 쓰세요"}
 {"k": "toast.unknown_action", "src": "967e7e51", "v": "알 수 없음: {action}"}
 {"k": "toast.upd.checking", "src": "820d6004", "v": "확인하는 중…"}
@@ -937,25 +937,25 @@
 {"k": "toast.upd.menu_old", "src": "6c988fa7", "v": "이 메뉴는 오래됐어요. /update를 다시 보내세요"}
 {"k": "toast.upd.stale", "src": "d9ed1389", "v": "그 업데이트는 이미 끝났어요"}
 {"k": "toast.verb", "src": "985eb765", "v": "{verb} [{session}]"}
-{"k": "tx.api.billing", "src": "031e8f3d", "v": "Anthropic 구독 또는 크레딧 잔액 문제예요. {url}에서 대시보드를 확인하세요"}
+{"k": "tx.api.billing", "src": "031e8f3d", "v": "Anthropic 구독 또는 크레딧 잔액에 문제가 있어요. {url}에서 계정을 확인하세요"}
 {"k": "tx.api.connection", "src": "3a0ef982", "v": "Anthropic과의 연결이 끊겼어요. 네트워크를 확인하고 다시 시도하세요."}
 {"k": "tx.api.generic", "src": "429166c0", "v": "API 오류가 발생했어요."}
-{"k": "tx.api.internal", "src": "030afe43", "v": "Anthropic 서버에 내부 오류가 생겼어요. 보통 몇 초 안에 해결돼요."}
-{"k": "tx.api.overloaded", "src": "6f545f5b", "v": "Anthropic 서버가 과부하 상태예요. 잠시 후 다시 시도해 주세요."}
-{"k": "tx.api.rate_limit", "src": "234c6146", "v": "속도 제한에 걸렸어요. 잠시 기다렸다가 다시 시도하세요."}
-{"k": "tx.api.rate_limit_wait", "src": "a2053ce3", "v": "속도 제한에 걸렸어요. {seconds}초 기다렸다가 다시 시도하세요."}
+{"k": "tx.api.internal", "src": "030afe43", "v": "Anthropic 서버에 내부 오류가 생겼어요. 보통 몇 초 안에 풀려요."}
+{"k": "tx.api.overloaded", "src": "6f545f5b", "v": "Anthropic 서버가 지금 매우 바빠요. 잠시 후 다시 시도해 주세요."}
+{"k": "tx.api.rate_limit", "src": "234c6146", "v": "요청 횟수 한도에 걸렸어요. 잠시 기다렸다가 다시 시도하세요."}
+{"k": "tx.api.rate_limit_wait", "src": "a2053ce3", "v": "요청 횟수 한도에 걸렸어요. {seconds}초 기다렸다가 다시 시도하세요."}
 {"k": "tx.full_needs_admin", "src": "20f8f3e6", "v": "전체 권한 모드는 관리자만 쓸 수 있어요."}
 {"k": "tx.needs_admin", "src": "a2f55b85", "v": "이 명령은 관리자만 쓸 수 있어요."}
 {"k": "tx.retry_others", "src": "4ad540c7", "v": "그 명령은 보낸 사람만 다시 시도할 수 있어요."}
 {"k": "tx.truncated", "src": "27710457", "v": "…[잘림]"}
-{"k": "ui.action.failed", "src": "1bd1baa4", "v": "완료하지 못했어요."}
-{"k": "ui.action.unreachable", "src": "209155a8", "v": "서버에 연결하지 못했어요. 바뀐 건 없어요."}
-{"k": "ui.activity.aria", "src": "649780e8", "v": {"other": "최근 활동: 도구 호출 {n}개. 타임라인을 열어요."}}
-{"k": "ui.activity.failed", "src": "6c746778", "v": "{tool} (실패)"}
-{"k": "ui.activity.queued", "src": "45c54388", "v": {"other": "대기 {n}개"}}
+{"k": "ui.action.failed", "src": "1bd1baa4", "v": "완료할 수 없어요."}
+{"k": "ui.action.unreachable", "src": "209155a8", "v": "서버에 연결할 수 없어요. 바뀐 건 없어요."}
+{"k": "ui.activity.aria", "src": "649780e8", "v": {"other": "최근 활동: 도구 {n}번 사용. 타임라인 열기."}}
+{"k": "ui.activity.failed", "src": "6c746778", "v": "{tool} (오류)"}
+{"k": "ui.activity.queued", "src": "45c54388", "v": {"other": "대기열 {n}개"}}
 {"k": "ui.activity.recent", "src": "72d5617f", "v": "최근 활동"}
 {"k": "ui.activity.running", "src": "21ceddba", "v": "{tool} (실행 중)"}
-{"k": "ui.activity.running_for", "src": "181f56b1", "v": "{tool} (실행 중 {clock})"}
+{"k": "ui.activity.running_for", "src": "181f56b1", "v": "{tool} (실행 중, {clock})"}
 {"k": "ui.activity.title", "src": "81c0d915", "v": "활동"}
 {"k": "ui.age.days", "src": "e827dc07", "v": "{n}일 전"}
 {"k": "ui.age.hours", "src": "1235f668", "v": "{n}시간 전"}
@@ -964,8 +964,8 @@
 {"k": "ui.answer.cannot", "src": "40c455f0", "v": "이 채팅에서는 요청에 답할 수 없어요."}
 {"k": "ui.answer.send_failed", "src": "9a2e8fac", "v": "요청을 채팅에 보내지 못했어요."}
 {"k": "ui.answer.sent", "src": "ba35b7cb", "v": "채팅에 보냈어요. 거기서 답하세요."}
-{"k": "ui.answer.unreachable", "src": "f159beba", "v": "서버에 연결하지 못했어요. 아무것도 보내지 않았어요."}
-{"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude가 뭔가 묻고 있어요."}
+{"k": "ui.answer.unreachable", "src": "f159beba", "v": "서버에 연결할 수 없어요. 아무것도 보내지 않았어요."}
+{"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude가 질문하고 있어요."}
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "{session} 열기"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude가 도구를 쓰려고 해요."}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "대기열 비우기"}
@@ -973,7 +973,7 @@
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "삭제"}
 {"k": "ui.btn.action.kill", "src": "7b932e77", "v": "종료"}
 {"k": "ui.btn.action.rename", "src": "d3f4cb89", "v": "이름 바꾸기"}
-{"k": "ui.btn.action.restart", "src": "b134bd55", "v": "다시 시작"}
+{"k": "ui.btn.action.restart", "src": "b134bd55", "v": "재시작"}
 {"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "재개"}
 {"k": "ui.btn.action.stop", "src": "9e253470", "v": "중지"}
 {"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "채팅에서 답하기"}
@@ -990,7 +990,7 @@
 {"k": "ui.btn.report", "src": "24f3f52d", "v": "문제 신고"}
 {"k": "ui.btn.reset", "src": "44c57abd", "v": "초기화"}
 {"k": "ui.btn.reset_defaults", "src": "ddefe47d", "v": "기본값으로 초기화"}
-{"k": "ui.btn.restart_now", "src": "af2c3d8e", "v": "지금 다시 시작"}
+{"k": "ui.btn.restart_now", "src": "af2c3d8e", "v": "지금 재시작"}
 {"k": "ui.btn.save", "src": "efc007a3", "v": "저장"}
 {"k": "ui.btn.send_report", "src": "a5b32af9", "v": "보고서 보내기"}
 {"k": "ui.btn.sending", "src": "c338c191", "v": "보내는 중..."}
@@ -1003,23 +1003,23 @@
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "다시 시도"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "10분 더 기다리기"}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "{session} 세션을 삭제할까요?"}
-{"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "세션을 목록에서 지워요. 대화 기록은 디스크에 남아요."}
+{"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "세션을 목록에서 지워요. 저장된 대화는 디스크에 남아요."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "{session} 세션을 종료할까요?"}
-{"k": "ui.confirm.kill_body", "src": "beff52e4", "v": "세션을 멈추고 지워요. 실행 중이던 작업은 모두 중단돼요."}
+{"k": "ui.confirm.kill_body", "src": "beff52e4", "v": "세션을 멈추고 목록에서 지워요. 진행 중인 작업은 모두 중단돼요."}
 {"k": "ui.confirm.perms_ask", "src": "c0710578", "v": "{session} 세션을 확인 모드로 바꿀까요?"}
 {"k": "ui.confirm.perms_auto", "src": "b6a1ddde", "v": "{session} 세션을 자동 모드로 바꿀까요?"}
 {"k": "ui.confirm.perms_busy_ask", "src": "666af671", "v": "현재 작업을 중지하고 {session} 세션을 확인 모드로 바꿀까요?"}
 {"k": "ui.confirm.perms_busy_auto", "src": "1b03b9b8", "v": "현재 작업을 중지하고 {session} 세션을 자동 모드로 바꿀까요?"}
 {"k": "ui.confirm.perms_busy_full", "src": "066f6071", "v": "현재 작업을 중지하고 {session} 세션을 전체 권한 모드로 바꿀까요?"}
 {"k": "ui.confirm.perms_full", "src": "401fe494", "v": "{session} 세션을 전체 권한 모드로 바꿀까요?"}
-{"k": "ui.confirm.perms_full_body", "src": "36f1fb1e", "v": "모든 작업이 아무 확인 없이 실행돼요. 세션이 재시작되고 대화는 유지돼요."}
+{"k": "ui.confirm.perms_full_body", "src": "36f1fb1e", "v": "모든 작업이 아무 확인 없이 실행돼요. 세션은 재시작되고 대화는 유지돼요."}
 {"k": "ui.confirm.perms_leave_full_body", "src": "1159bfd9", "v": "세션이 재시작되고 대화는 유지돼요."}
 {"k": "ui.confirm.rename", "src": "92656d63", "v": "{session} 세션의 이름을 바꿀까요?"}
-{"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "세션의 기록과 작업 디렉터리는 그대로예요. 이름만 바뀌어요."}
+{"k": "ui.confirm.rename_body", "src": "5f22f72c", "v": "세션의 기록과 폴더는 그대로예요. 이름만 바뀌어요."}
 {"k": "ui.confirm.reset", "src": "e13d0ebf", "v": "설정을 기본값으로 초기화할까요?"}
 {"k": "ui.confirm.reset_body", "src": "f2fd45cf", "v": "이 세션만의 설정이 지워지고, 다시 채팅의 기본값을 따라요."}
-{"k": "ui.confirm.restart", "src": "47a0c787", "v": "{session} 세션을 다시 시작할까요?"}
-{"k": "ui.confirm.restart_body", "src": "5ec9d004", "v": "세션이 멈췄다가 같은 기록으로 다시 실행돼요. 진행 중인 턴은 중단돼요."}
+{"k": "ui.confirm.restart", "src": "47a0c787", "v": "{session} 세션을 재시작할까요?"}
+{"k": "ui.confirm.restart_body", "src": "5ec9d004", "v": "세션이 멈췄다가 같은 기록으로 다시 실행돼요. 진행 중인 작업은 중단돼요."}
 {"k": "ui.conn.expired", "src": "45a6f9ad", "v": "만료됨"}
 {"k": "ui.conn.live", "src": "98aadb37", "v": "연결됨"}
 {"k": "ui.conn.no_init", "src": "e2ebd902", "v": "로그인하려면 Telegram 앱에서 이 페이지를 여세요."}
@@ -1030,47 +1030,47 @@
 {"k": "ui.daemon.uptime", "src": "18bb02cb", "v": "{n}분째 실행 중"}
 {"k": "ui.detail.latest_reply", "src": "455aaef0", "v": "최근 답변"}
 {"k": "ui.detail.session_settings", "src": "ed40d944", "v": "세션 설정"}
-{"k": "ui.detail.settings_readonly", "src": "aebade5f", "v": "이 세션에 프롬프트를 보낼 수 있는 사람만 바꿀 수 있어요."}
+{"k": "ui.detail.settings_readonly", "src": "aebade5f", "v": "이 세션에 메시지를 보낼 수 있는 사람만 이 설정을 바꿀 수 있어요."}
 {"k": "ui.diff.binary", "src": "810945bb", "v": "바이너리 파일 (미리 보기 없음)."}
 {"k": "ui.diff.change.added", "src": "172415f0", "v": "추가됨"}
 {"k": "ui.diff.change.deleted", "src": "b639f5cc", "v": "삭제됨"}
 {"k": "ui.diff.change.modified", "src": "99db3247", "v": "수정됨"}
 {"k": "ui.diff.change.renamed", "src": "87620709", "v": "이름 바뀜"}
-{"k": "ui.diff.change.untracked", "src": "d7390aa3", "v": "추적 안 됨"}
+{"k": "ui.diff.change.untracked", "src": "d7390aa3", "v": "git 밖"}
 {"k": "ui.diff.clean", "src": "6eb6e7bf", "v": "commit하지 않은 변경 사항이 없어요."}
 {"k": "ui.diff.clean_in", "src": "0bde87e2", "v": "{repo}에 commit하지 않은 변경 사항이 없어요."}
-{"k": "ui.diff.failed", "src": "5d47ec55", "v": "diff를 불러오지 못했어요."}
+{"k": "ui.diff.failed", "src": "5d47ec55", "v": "변경 사항을 불러올 수 없어요."}
 {"k": "ui.diff.gone", "src": "38a63905", "v": "세션을 더 이상 쓸 수 없어요."}
-{"k": "ui.diff.loading", "src": "c569ad51", "v": "diff를 불러오는 중…"}
+{"k": "ui.diff.loading", "src": "c569ad51", "v": "변경 사항을 불러오는 중…"}
 {"k": "ui.diff.no_changes", "src": "9b1fcbda", "v": "변경 사항이 없어요."}
-{"k": "ui.diff.partial", "src": "4aa4772f", "v": "변경된 파일 중 일부만 보여요. 전체 diff는 이 뷰어가 표시할 수 있는 것보다 커요."}
-{"k": "ui.diff.reason.cwd_missing", "src": "4140481e", "v": "이 세션의 작업 디렉터리가 더 이상 없어요."}
+{"k": "ui.diff.partial", "src": "4aa4772f", "v": "변경된 파일 중 일부만 보여요. 전체 변경 사항이 너무 커서 여기서 다 보여 줄 수 없어요."}
+{"k": "ui.diff.reason.cwd_missing", "src": "4140481e", "v": "이 세션의 폴더가 더 이상 없어요."}
 {"k": "ui.diff.reason.git_error", "src": "c6f57086", "v": "git이 이 세션의 diff를 만들지 못했어요."}
-{"k": "ui.diff.reason.git_not_installed", "src": "171dd6a9", "v": "이 기기에서는 git을 쓸 수 없어요."}
+{"k": "ui.diff.reason.git_not_installed", "src": "171dd6a9", "v": "이 컴퓨터에 git이 설치되어 있지 않아요."}
 {"k": "ui.diff.reason.no_commits_yet", "src": "cc383c84", "v": "이 저장소에는 아직 commit이 없어요."}
-{"k": "ui.diff.reason.not_a_git_repo", "src": "287b446f", "v": "이 세션의 작업 디렉터리는 git 저장소가 아니에요."}
+{"k": "ui.diff.reason.not_a_git_repo", "src": "287b446f", "v": "이 세션의 폴더는 git 저장소가 아니에요."}
 {"k": "ui.diff.title", "src": "fe25abc0", "v": "변경된 파일"}
 {"k": "ui.diff.title_n", "src": "6222be44", "v": {"other": "변경된 파일 ({n})"}}
 {"k": "ui.diff.title_none", "src": "447a466c", "v": "변경된 파일 (없음)"}
-{"k": "ui.diff.too_large", "src": "7aafaa23", "v": "diff가 너무 커서 보여 줄 수 없어요."}
-{"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "diff를 볼 수 없어요."}
-{"k": "ui.done.already_gone", "src": "9f734fbb", "v": "이미 없어졌어요."}
+{"k": "ui.diff.too_large", "src": "7aafaa23", "v": "변경 사항이 너무 커서 보여 줄 수 없어요."}
+{"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "변경 사항을 볼 수 없어요."}
+{"k": "ui.done.already_gone", "src": "9f734fbb", "v": "이미 닫혀 있었어요."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "비웠어요."}
-{"k": "ui.done.compact", "src": "399fec37", "v": "압축하는 중…"}
+{"k": "ui.done.compact", "src": "399fec37", "v": "대화를 압축하는 중…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "삭제했어요."}
 {"k": "ui.done.generic", "src": "e2bcda84", "v": "완료했어요."}
 {"k": "ui.done.kill", "src": "eb388bd9", "v": "종료했어요."}
-{"k": "ui.done.mode_sent", "src": "e240134b", "v": "전환을 보냈어요. Claude Code가 다음 단계에서 확인해요."}
+{"k": "ui.done.mode_sent", "src": "e240134b", "v": "모드 전환 요청을 보냈어요. Claude Code가 다음 단계에서 확인해요."}
 {"k": "ui.done.perms", "src": "144199df", "v": "전환했어요."}
 {"k": "ui.done.rename", "src": "b930ba4a", "v": "이름을 바꿨어요."}
 {"k": "ui.done.rename_same", "src": "ea00acbd", "v": "바뀐 게 없어요."}
-{"k": "ui.done.restart", "src": "519ed942", "v": "다시 시작했어요."}
-{"k": "ui.done.resume", "src": "ac66e08b", "v": "재개했어요."}
+{"k": "ui.done.restart", "src": "519ed942", "v": "재시작했어요."}
+{"k": "ui.done.resume", "src": "ac66e08b", "v": "다시 열었어요."}
 {"k": "ui.done.stop", "src": "8fcc7be3", "v": "중지했어요."}
-{"k": "ui.empty.text", "src": "8ff2cab6", "v": "여기서 하나 시작하거나 채팅에서 {command} 명령을 보내세요."}
+{"k": "ui.empty.text", "src": "8ff2cab6", "v": "여기서 세션을 시작하거나 채팅에서 {command} 명령을 보내세요."}
 {"k": "ui.empty.title", "src": "a44ee05c", "v": "아직 세션이 없어요."}
-{"k": "ui.grid.finished_n", "src": "8e06a605", "v": {"other": "끝남 ({n})"}}
-{"k": "ui.grid.needs_you", "src": "0d9d0df1", "v": "응답 필요"}
+{"k": "ui.grid.finished_n", "src": "8e06a605", "v": {"other": "종료됨 ({n})"}}
+{"k": "ui.grid.needs_you", "src": "0d9d0df1", "v": "답변 대기 중"}
 {"k": "ui.kind.permission", "src": "17857134", "v": "권한"}
 {"k": "ui.kind.question", "src": "002ff598", "v": "질문"}
 {"k": "ui.kind_word.permission", "src": "6d244f58", "v": "권한"}
@@ -1084,24 +1084,24 @@
 {"k": "ui.model.unreachable", "src": "82a93142", "v": "서버에 연결하지 못했어요. 세션의 모델을 확인하세요."}
 {"k": "ui.new.chips_recent", "src": "76eec760", "v": "최근"}
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "추천"}
-{"k": "ui.new.cli_model", "src": "80e3c49d", "v": "CLI 자체 기본 모델"}
-{"k": "ui.new.create_failed", "src": "c55f566f", "v": "그 세션을 만들지 못했어요."}
+{"k": "ui.new.cli_model", "src": "80e3c49d", "v": "Claude Code 자체 기본 모델"}
+{"k": "ui.new.create_failed", "src": "c55f566f", "v": "그 세션을 만들 수 없어요."}
 {"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "이 폴더 만들기"}
-{"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "여기서는 세션을 만들 수 없어요."}
-{"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "서버에 연결하지 못했어요. 세션을 만들지 않았어요."}
+{"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "여기서 세션을 만들 권한이 없어요."}
+{"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "서버에 연결할 수 없어요. 세션을 만들지 않았어요."}
 {"k": "ui.new.created", "src": "77ea75b5", "v": "세션을 만들었어요."}
 {"k": "ui.new.creating", "src": "94d7d8ee", "v": "만드는 중…"}
-{"k": "ui.new.cwd_title", "src": "e8c598ee", "v": "작업 디렉터리"}
-{"k": "ui.new.daemon_dir", "src": "2503c8cf", "v": "데몬 자체 디렉터리"}
+{"k": "ui.new.cwd_title", "src": "e8c598ee", "v": "폴더"}
+{"k": "ui.new.daemon_dir", "src": "2503c8cf", "v": "aipager 자체 폴더"}
 {"k": "ui.new.default", "src": "808d7dca", "v": "기본값"}
-{"k": "ui.new.default_dir_help", "src": "6d7d5fbc", "v": "데몬 자체 디렉터리"}
-{"k": "ui.new.default_model_help", "src": "17ab4082", "v": "CLI에 설정된 모델을 그대로 써요"}
+{"k": "ui.new.default_dir_help", "src": "6d7d5fbc", "v": "aipager 자체 폴더"}
+{"k": "ui.new.default_model_help", "src": "17ab4082", "v": "Claude Code에 설정된 모델"}
 {"k": "ui.new.folder_created", "src": "6b6ea299", "v": "폴더를 만들었어요."}
-{"k": "ui.new.folder_existed", "src": "bfe299bc", "v": "그 폴더가 이미 있어서 선택했어요."}
-{"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "그 폴더를 만들지 못했어요."}
-{"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "여기서는 폴더를 만들 수 없어요."}
+{"k": "ui.new.folder_existed", "src": "bfe299bc", "v": "그 폴더가 이미 있어서 바로 선택했어요."}
+{"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "그 폴더를 만들 수 없어요."}
+{"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "여기서 폴더를 만들 권한이 없어요."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "새 폴더 이름"}
-{"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "서버에 연결하지 못했어요. 폴더를 만들지 않았어요."}
+{"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "서버에 연결할 수 없어요. 폴더를 만들지 않았어요."}
 {"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "전체 권한 모드는 관리자만 쓸 수 있어요."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "확인"}
 {"k": "ui.new.mode_ask_help", "src": "eca1be33", "v": "Claude가 도구를 실행하기 전에 물어봐요"}
@@ -1116,27 +1116,27 @@
 {"k": "ui.new.more", "src": "86c0a35e", "v": "옵션 더 보기"}
 {"k": "ui.new.name", "src": "709a2322", "v": "이름"}
 {"k": "ui.new.new_folder", "src": "a711999b", "v": "새 폴더"}
-{"k": "ui.new.new_folder_help", "src": "29aa13d5", "v": "위에서 고른 디렉터리 안에 만들어요"}
+{"k": "ui.new.new_folder_help", "src": "29aa13d5", "v": "위에서 고른 폴더 안에 만들어요"}
 {"k": "ui.new.not_set", "src": "770e48ee", "v": "아직 정하지 않음"}
 {"k": "ui.new.other_model", "src": "cc3190e7", "v": "다른 모델"}
 {"k": "ui.new.other_model_help", "src": "561f7c9e", "v": "전체 이름을 입력하세요. 예: {example}"}
-{"k": "ui.new.pick_dir_first", "src": "969b0a9b", "v": "먼저 위에서 작업 디렉터리를 골라 주세요."}
-{"k": "ui.new.requires_admin", "src": "e18e02eb", "v": "관리자 필요"}
-{"k": "ui.new.sub", "src": "23b19317", "v": "이름을 정하고 폴더를 고르면 Claude가 거기서 시작해요."}
+{"k": "ui.new.pick_dir_first", "src": "969b0a9b", "v": "먼저 위에서 폴더를 골라 주세요."}
+{"k": "ui.new.requires_admin", "src": "e18e02eb", "v": "관리자 전용"}
+{"k": "ui.new.sub", "src": "23b19317", "v": "이름을 정하고 폴더를 고르면 Claude가 거기서 작업을 시작해요."}
 {"k": "ui.new.summary_ask", "src": "3e987f2e", "v": "{where}에서 확인 모드로 Claude를 시작하고 {model} 모델을 써요."}
 {"k": "ui.new.summary_auto", "src": "d0968e63", "v": "{where}에서 자동 모드로 Claude를 시작하고 {model} 모델을 써요."}
-{"k": "ui.new.summary_full", "src": "08065163", "v": "{where}에서 전체 권한 모드로 {model}을(를) 사용해 Claude를 시작해요."}
+{"k": "ui.new.summary_full", "src": "08065163", "v": "{where}에서 전체 권한 모드로 Claude를 시작하고 {model} 모델을 써요."}
 {"k": "ui.new.summary_named_ask", "src": "ccbc6d09", "v": "{where}에서 {name} 이름으로 확인 모드의 Claude를 시작하고 {model} 모델을 써요."}
 {"k": "ui.new.summary_named_auto", "src": "4b48c549", "v": "{where}에서 {name} 이름으로 자동 모드의 Claude를 시작하고 {model} 모델을 써요."}
-{"k": "ui.new.summary_named_full", "src": "91a24e52", "v": "{where}에서 {name}(이)라는 이름으로 전체 권한 모드로 {model}을(를) 사용해 Claude를 시작해요."}
+{"k": "ui.new.summary_named_full", "src": "91a24e52", "v": "{where}에서 {name} 이름으로 전체 권한 모드의 Claude를 시작하고 {model} 모델을 써요."}
 {"k": "ui.new.title", "src": "5c881d23", "v": "새 세션"}
 {"k": "ui.new.where", "src": "525f61b6", "v": "위치"}
-{"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "이 세션이 끝나기 전에 받아 둔 내용이 없어요."}
-{"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "아직 받아 둔 내용이 없어요. Claude가 답하면 나타나요."}
-{"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "모두 조용함"}
-{"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"other": "끝남 {n}개"}}
-{"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"other": "응답 필요 {n}개"}}
-{"k": "ui.pulse.resting", "src": "644f3b40", "v": {"other": "유휴 {n}개"}}
+{"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "이 세션이 끝날 때까지 기록된 내용이 없어요."}
+{"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "아직 내용이 없어요. Claude가 답하면 여기에 나와요."}
+{"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "모두 준비됨"}
+{"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"other": "종료됨 {n}개"}}
+{"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"other": "답변 대기 중 {n}개"}}
+{"k": "ui.pulse.resting", "src": "644f3b40", "v": {"other": "준비됨 {n}개"}}
 {"k": "ui.pulse.spent", "src": "908f77ef", "v": "{cost} 사용"}
 {"k": "ui.pulse.unknown", "src": "23ca6f83", "v": {"other": "알 수 없음 {n}개"}}
 {"k": "ui.pulse.working", "src": "c3aee490", "v": {"other": "작업 중 {n}개"}}
@@ -1148,45 +1148,45 @@
 {"k": "ui.report.also_through", "src": "1d1b7026", "v": "거쳐 간 곳: {names}"}
 {"k": "ui.report.as_written", "src": "21532af3", "v": "쓴 그대로 보내요."}
 {"k": "ui.report.bad_note", "src": "c92adef7", "v": "그 메모는 추가할 수 없어요. 더 짧고 단순하게 써 보세요."}
-{"k": "ui.report.card_text", "src": "45e21208", "v": "무엇이 잘못됐는지 유지 관리자에게 알려 주세요. 보내기 전에 보고서 전체를 볼 수 있어요."}
+{"k": "ui.report.card_text", "src": "45e21208", "v": "무엇이 잘못됐는지 aipager 개발자에게 알려 주세요. 보내기 전에 보고서 전체를 보여 드려요."}
 {"k": "ui.report.copied", "src": "dd2ce2e2", "v": "복사했어요."}
 {"k": "ui.report.copy_hint", "src": "7d76506f", "v": "참조 번호를 길게 눌러 복사하세요."}
 {"k": "ui.report.daily_cap_title", "src": "9bdf248a", "v": "하루 한도에 도달했어요"}
-{"k": "ui.report.err.crash", "src": "78d1bcc4", "v": "aipager가 예기치 않게 멈췄어요"}
+{"k": "ui.report.err.crash", "src": "78d1bcc4", "v": "aipager 비정상 종료"}
 {"k": "ui.report.err.error", "src": "7f2f6a15", "v": "오류"}
-{"k": "ui.report.err.hook_cap", "src": "f4162559", "v": "hook이 메모리 한도에 도달했어요"}
+{"k": "ui.report.err.hook_cap", "src": "f4162559", "v": "aipager 훅이 메모리 한도에 도달했어요"}
 {"k": "ui.report.err.logged_in", "src": "ad58db0c", "v": "{area}에서 기록된 오류"}
 {"k": "ui.report.err.type_in", "src": "15f9e48c", "v": "{area}의 {type}"}
 {"k": "ui.report.err_detail", "src": "97fb369f", "v": "{fingerprint}, 처음 발생 {day}, 버전 {versions}"}
 {"k": "ui.report.err_sub", "src": "917846a1", "v": "{times}, 마지막 발생 {day}"}
 {"k": "ui.report.errors", "src": "805e86a8", "v": "오류"}
 {"k": "ui.report.errors_n", "src": "07ba7666", "v": {"other": "오류 ({n})"}}
-{"k": "ui.report.exact", "src": "ea8e4b11", "v": "정확한 보고서 보기"}
+{"k": "ui.report.exact", "src": "ea8e4b11", "v": "보고서 원문 보기"}
 {"k": "ui.report.exact_note", "src": "991b0c14", "v": "이것이 보내지는 정확한 내용이에요. 메모도 포함돼요."}
 {"k": "ui.report.exit.clean", "src": "6a1cec45", "v": "정상"}
-{"k": "ui.report.exit.crash", "src": "dd472460", "v": "충돌"}
-{"k": "ui.report.exit.reboot", "src": "118341f6", "v": "재부팅"}
+{"k": "ui.report.exit.crash", "src": "dd472460", "v": "비정상 종료"}
+{"k": "ui.report.exit.reboot", "src": "118341f6", "v": "컴퓨터 재부팅"}
 {"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "알 수 없음"}
 {"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "변경 미리 보기"}
 {"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
-{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "옵저버 봇"}
-{"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "풍부한 요약"}
-{"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "관리형 터널"}
+{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "관찰용 봇"}
+{"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "서식 있는 요약"}
+{"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "aipager가 관리하는 터널"}
 {"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "직접 지정한 터널 주소"}
 {"k": "ui.report.feature.voice", "src": "704617a7", "v": "음성 메시지"}
-{"k": "ui.report.foot", "src": "09700e47", "v": "“보고서 보내기”를 탭하기 전에는 아무것도 보내지 않아요. 보고서는 이름 없이 유지 관리자의 오류 수신함으로 가요."}
+{"k": "ui.report.foot", "src": "09700e47", "v": "“보고서 보내기”를 누르기 전에는 아무것도 보내지 않아요. 보고서는 이름 없이 aipager 개발자의 오류 수신함으로 가요."}
 {"k": "ui.report.label.counts", "src": "a7e0a1c5", "v": "횟수, 최근 24시간"}
 {"k": "ui.report.label.features", "src": "fc338f87", "v": "기능"}
 {"k": "ui.report.label.libraries", "src": "27c968e6", "v": "라이브러리"}
 {"k": "ui.report.label.limits", "src": "ca1be69e", "v": "Telegram 제한"}
 {"k": "ui.report.label.log", "src": "499fd95d", "v": "로그, 최근 24시간"}
 {"k": "ui.report.label.setup", "src": "cdd7bb28", "v": "구성"}
-{"k": "ui.report.label.stops", "src": "0e648419", "v": "멈춤"}
+{"k": "ui.report.label.stops", "src": "0e648419", "v": "멈춘 기록"}
 {"k": "ui.report.label.system", "src": "bc0792d8", "v": "시스템"}
-{"k": "ui.report.later", "src": "685cd810", "v": "aipager가 제때 응답하지 않았어요. “보고서 보내기”를 다시 탭하세요. 이미 보냈다면 참조 번호가 보이고, 두 번 보내지 않아요."}
+{"k": "ui.report.later", "src": "685cd810", "v": "aipager가 제때 응답하지 않았어요. “보고서 보내기”를 다시 눌러 주세요. 이미 보냈다면 참조 번호가 보이고, 두 번 보내지지 않아요."}
 {"k": "ui.report.limits", "src": "22297d2d", "v": {"other": "7일 동안 차단 {n}회, 가장 바쁜 시간대 부하 {load}"}}
 {"k": "ui.report.log_line", "src": "5069aaa9", "v": {"other": "경고나 오류를 기록한 곳 {n}개 ({times})"}}
-{"k": "ui.report.missing", "src": "995357dd", "v": "(없음)"}
+{"k": "ui.report.missing", "src": "995357dd", "v": "(설치 안 됨)"}
 {"k": "ui.report.more", "src": "473710d3", "v": "자세히 보기"}
 {"k": "ui.report.n_groups", "src": "1a2fac9e", "v": {"other": "그룹 {n}개"}}
 {"k": "ui.report.n_private_chats", "src": "5922fc21", "v": {"other": "개인 채팅 {n}개"}}
@@ -1202,32 +1202,32 @@
 {"k": "ui.report.panel.build_title", "src": "76b58923", "v": "보고서를 준비하지 못했어요"}
 {"k": "ui.report.panel.group", "src": "a2c9e40d", "v": "보고서는 봇과의 개인 채팅에서 연 Mini App에서 보내요."}
 {"k": "ui.report.panel.group_title", "src": "73925937", "v": "개인 채팅을 여세요"}
-{"k": "ui.report.panel.noowner", "src": "9ee5b766", "v": "이 aipager에는 소유자 채팅이 하나로 정해져 있지 않아요. 터미널에서는 {command} 명령을 여전히 쓸 수 있어요."}
+{"k": "ui.report.panel.noowner", "src": "9ee5b766", "v": "이 aipager에는 정해진 소유자 채팅이 없어요. 터미널에서는 {command} 명령을 그대로 쓸 수 있어요."}
 {"k": "ui.report.panel.noowner_title", "src": "40631445", "v": "여기서는 보낼 수 없어요"}
 {"k": "ui.report.panel.owner", "src": "e83d9212", "v": "이 aipager의 소유자만 문제 보고서를 보낼 수 있어요."}
 {"k": "ui.report.panel.owner_title", "src": "e91f02d9", "v": "소유자 전용"}
 {"k": "ui.report.preparing", "src": "aaf61214", "v": "보고서를 준비하는 중..."}
-{"k": "ui.report.privacy", "src": "48fa34f1", "v": "버전, 횟수, aipager 코드의 위치가 들어 있어요. 채팅, 프롬프트, 이름, 경로는 절대 들어가지 않아요."}
+{"k": "ui.report.privacy", "src": "48fa34f1", "v": "버전, 횟수, aipager 코드의 위치만 들어 있어요. 채팅, 메시지, 이름, 경로는 절대 들어 있지 않아요."}
 {"k": "ui.report.sending_wait", "src": "176ed846", "v": "보내는 중이에요. 잠시만요."}
 {"k": "ui.report.sent_title", "src": "a7615ceb", "v": "보고서를 보냈어요"}
-{"k": "ui.report.setup.personal", "src": "2ca0506b", "v": "개인용 구성"}
-{"k": "ui.report.setup.scope", "src": "d662e796", "v": "여러 채팅 구성"}
-{"k": "ui.report.setup.team", "src": "a857214e", "v": "팀 구성"}
+{"k": "ui.report.setup.personal", "src": "2ca0506b", "v": "개인 사용"}
+{"k": "ui.report.setup.scope", "src": "d662e796", "v": "여러 채팅에서 사용"}
+{"k": "ui.report.setup.team", "src": "a857214e", "v": "팀 사용"}
 {"k": "ui.report.setup_line", "src": "c52e3d20", "v": "{mode}, {dms}, {groups}, 실행 시간 {uptime}"}
 {"k": "ui.report.setup_line_bare", "src": "60b4d8c7", "v": "{dms}, 실행 시간 {uptime}"}
 {"k": "ui.report.setup_line_no_groups", "src": "f0f3ef45", "v": "{mode}, {dms}, 실행 시간 {uptime}"}
 {"k": "ui.report.setup_line_no_mode", "src": "f94812f3", "v": "{dms}, {groups}, 실행 시간 {uptime}"}
 {"k": "ui.report.show_more", "src": "fdeb42f8", "v": {"other": "{n}개 더 보기"}}
-{"k": "ui.report.stale", "src": "25e3d152", "v": "그 보고서는 더 이상 없어요. 새 보고서예요. 확인한 뒤 “보고서 보내기”를 다시 탭하세요."}
-{"k": "ui.report.still_sending", "src": "5b89eba6", "v": "아직 보내는 중이에요. 잠시 기다린 뒤 “보고서 보내기”를 다시 탭하세요."}
-{"k": "ui.report.stops", "src": "8f971d67", "v": "마지막 멈춤: {last}. 7일 동안 예기치 않은 멈춤: {n}회."}
+{"k": "ui.report.stale", "src": "25e3d152", "v": "그 보고서는 더 이상 없어요. 새 보고서예요. 확인한 뒤 “보고서 보내기”를 다시 눌러 주세요."}
+{"k": "ui.report.still_sending", "src": "5b89eba6", "v": "아직 보내는 중이에요. 잠시 기다린 뒤 “보고서 보내기”를 다시 눌러 주세요."}
+{"k": "ui.report.stops", "src": "8f971d67", "v": "마지막 멈춤: {last}. 7일 동안 비정상 종료: {n}회."}
 {"k": "ui.report.system_in", "src": "7011d75d", "v": "{system}, {container} 안에서"}
-{"k": "ui.report.thanks", "src": "04d9993f", "v": "고마워요. GitHub 이슈를 열면 이 참조 번호를 적어 주세요:"}
-{"k": "ui.report.tidied", "src": "35efa495", "v": "메모를 정리했어요 (보이지 않는 문자, 여분의 공백, 500자를 넘는 부분을 지웠어요). 확인한 뒤 “보고서 보내기”를 다시 탭하세요."}
+{"k": "ui.report.thanks", "src": "04d9993f", "v": "고마워요. GitHub 이슈를 열면 이 참조 번호를 함께 적어 주세요:"}
+{"k": "ui.report.tidied", "src": "35efa495", "v": "메모를 정리했어요 (보이지 않는 문자, 남는 공백, 500자를 넘는 부분을 지웠어요). 확인한 뒤 “보고서 보내기”를 다시 눌러 주세요."}
 {"k": "ui.report.times", "src": "766020c6", "v": {"other": "{n}회"}}
 {"k": "ui.report.title", "src": "24f3f52d", "v": "문제 신고"}
 {"k": "ui.report.too_long", "src": "f600d1b3", "v": {"other": "{n}자 초과예요."}}
-{"k": "ui.report.too_many", "src": "392589ae", "v": "너무 많이 탭했어요. 1분 뒤에 다시 시도해 주세요."}
+{"k": "ui.report.too_many", "src": "392589ae", "v": "너무 자주 눌렀어요. 1분 뒤에 다시 시도해 주세요."}
 {"k": "ui.report.too_old_title", "src": "2a4d2b45", "v": "업데이트 필요"}
 {"k": "ui.report.try_later", "src": "ab0f2d7c", "v": "지금은 보낼 수 없어요. 잃어버린 건 없으니 나중에 다시 시도해 주세요."}
 {"k": "ui.report.uptime.10m_1h", "src": "4db7ea05", "v": "10분에서 1시간"}
@@ -1235,12 +1235,12 @@
 {"k": "ui.report.uptime.1h_24h", "src": "f23cc5e9", "v": "1시간에서 24시간"}
 {"k": "ui.report.uptime.over_week", "src": "7df7e421", "v": "일주일 이상"}
 {"k": "ui.report.uptime.under_10m", "src": "35d29633", "v": "10분 미만"}
-{"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "알 수 없는 시간 동안"}
+{"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "알 수 없음"}
 {"k": "ui.report.what_sent", "src": "6b776c8f", "v": "보내는 내용"}
-{"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "채팅 환경설정"}
+{"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "채팅 설정"}
 {"k": "ui.settings.default_tag", "src": "7505d64a", "v": "기본"}
 {"k": "ui.settings.intro", "src": "f1ea8e24", "v": "이 채팅의 모든 세션에 적용돼요."}
-{"k": "ui.settings.readonly", "src": "57fedd89", "v": "관리자만 바꿀 수 있어요."}
+{"k": "ui.settings.readonly", "src": "57fedd89", "v": "관리자만 이 설정을 바꿀 수 있어요."}
 {"k": "ui.settings.reset_done", "src": "5b3b5541", "v": "기본값으로 초기화했어요."}
 {"k": "ui.settings.reset_failed", "src": "38256d55", "v": "일부 설정을 초기화하지 못했어요. 다시 열어서 시도해 주세요."}
 {"k": "ui.settings.save_failed", "src": "cdb1d51d", "v": "저장하지 못했어요. 화면에 보이는 값이 저장된 값이에요."}
@@ -1252,99 +1252,99 @@
 {"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "새 세션"}
 {"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "섹션"}
 {"k": "ui.state.busy", "src": "8178ea20", "v": "작업 중"}
-{"k": "ui.state.gone", "src": "f957097d", "v": "끝남"}
-{"k": "ui.state.idle", "src": "e24cc7a4", "v": "쉬는 중"}
+{"k": "ui.state.gone", "src": "f957097d", "v": "종료됨"}
+{"k": "ui.state.idle", "src": "e24cc7a4", "v": "준비됨"}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "알 수 없음"}
-{"k": "ui.state.waiting", "src": "19622ace", "v": "응답 필요"}
-{"k": "ui.state_line.finished", "src": "355bcc57", "v": "끝남"}
-{"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "응답 필요"}
-{"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "응답 필요 ({kind})"}
-{"k": "ui.state_line.resting", "src": "296d1007", "v": "쉬는 중"}
-{"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "쉬는 중, 마지막 활동 {age}"}
-{"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "아직 상태 정보 없음"}
+{"k": "ui.state.waiting", "src": "19622ace", "v": "답변 대기 중"}
+{"k": "ui.state_line.finished", "src": "355bcc57", "v": "종료됨"}
+{"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "답변 대기 중"}
+{"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "답변 대기 중 ({kind})"}
+{"k": "ui.state_line.resting", "src": "296d1007", "v": "준비됨"}
+{"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "준비됨, 마지막 활동 {age}"}
+{"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "아직 정보 없음"}
 {"k": "ui.state_line.working", "src": "3b4dfc97", "v": "작업 중"}
-{"k": "ui.state_line.working_for", "src": "f555f372", "v": "작업 중 {clock}"}
+{"k": "ui.state_line.working_for", "src": "f555f372", "v": "작업 중 ({clock})"}
 {"k": "ui.tab.sessions", "src": "e11e37a9", "v": "세션"}
 {"k": "ui.tab.settings", "src": "c7f73bb5", "v": "설정"}
 {"k": "ui.tile.aria", "src": "eaa1d742", "v": "{session}, {state}, 컨텍스트 {pct}%, {model}, {cost}"}
 {"k": "ui.tile.aria_no_model", "src": "667d58b3", "v": "{session}, {state}, 컨텍스트 {pct}%, {cost}"}
 {"k": "ui.tile.no_folder", "src": "25fe67b1", "v": "폴더 없음"}
 {"k": "ui.timeline.empty", "src": "8bdea321", "v": "아직 활동이 없어요."}
-{"k": "ui.timeline.note", "src": "306606d2", "v": "타임라인은 현재 데몬 실행 동안의 내용만 담아요. 다시 시작하면 남지 않아서, 오래된 세션은 여기에 아무것도 안 보여요."}
+{"k": "ui.timeline.note", "src": "306606d2", "v": "타임라인에는 aipager가 마지막으로 켜진 뒤의 내용만 있어요. aipager를 재시작하면 남지 않아서, 오래된 세션은 여기에 아무것도 나오지 않아요."}
 {"k": "ui.timeline.title_empty", "src": "44748119", "v": "타임라인 (비어 있음)"}
 {"k": "ui.timeline.title_n", "src": "a7f6a618", "v": {"other": "타임라인 ({n})"}}
 {"k": "ui.update.check_failed", "src": "a15f1db5", "v": "업데이트를 확인하지 못했어요. 다시 시도해 주세요."}
 {"k": "ui.update.finished", "src": "80fa9b82", "v": "그 업데이트는 이미 끝났어요."}
 {"k": "ui.update.job.claude_updating", "src": "c587f1e1", "v": "작업 중… (claude 업데이트 중)"}
-{"k": "ui.update.job.gate_timeout", "src": "1499ee18", "v": "세션이 아직 작업 중이에요. 더 기다릴까요, 지금 다시 시작할까요, 아니면 취소할까요?"}
+{"k": "ui.update.job.gate_timeout", "src": "1499ee18", "v": "세션이 아직 작업 중이에요. 더 기다릴까요, 지금 재시작할까요, 아니면 취소할까요?"}
 {"k": "ui.update.job.starting", "src": "06080d40", "v": "작업 중… (시작하는 중)"}
-{"k": "ui.update.job.upgrading", "src": "c6e6577f", "v": "작업 중… (업그레이드 중)"}
-{"k": "ui.update.job.waiting_idle", "src": "2d4b64cc", "v": "다시 시작하기 전에 모든 세션이 쉴 때까지 기다리는 중이에요."}
+{"k": "ui.update.job.upgrading", "src": "c6e6577f", "v": "작업 중… (업데이트 중)"}
+{"k": "ui.update.job.waiting_idle", "src": "2d4b64cc", "v": "모든 세션이 준비되면 재시작해요."}
 {"k": "ui.update.job.working_phase", "src": "3a93346a", "v": "작업 중… ({phase})"}
-{"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "돌아오지 않음: {names}"}
-{"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}? 진행 중인 턴이 없을 때 aipager가 다시 시작해요."}
-{"k": "ui.update.other", "src": "7ae4a531", "v": "aipager가 다시 시작했지만 {version} 버전으로 실행 중이에요."}
-{"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager가 다시 시작했지만 {expected}가 아니라 {version} 버전으로 실행 중이에요."}
+{"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "다시 연결되지 않음: {names}"}
+{"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}? 진행 중인 작업이 없을 때 aipager가 재시작해요."}
+{"k": "ui.update.other", "src": "7ae4a531", "v": "aipager가 재시작했지만 {version} 버전으로 실행 중이에요."}
+{"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager가 재시작했지만 {expected}가 아니라 {version} 버전으로 실행 중이에요."}
 {"k": "ui.update.refused", "src": "651df229", "v": "업데이트 결과를 보려면 앱을 다시 여세요."}
-{"k": "ui.update.reopen", "src": "3bf2409f", "v": "aipager가 다시 시작했어요. 채팅에 업데이트됐다는 메시지가 오면 앱을 다시 여세요. 앱을 닫은 뒤 채팅에서 다시 여세요 (메뉴 버튼 또는 {command})."}
-{"k": "ui.update.restart_now_confirm", "src": "3f76f590", "v": "지금 다시 시작하면 여기 나온 진행 중인 턴이 중단돼요."}
-{"k": "ui.update.restarting", "src": "0cfedf00", "v": "aipager를 다시 시작하는 중…"}
+{"k": "ui.update.reopen", "src": "3bf2409f", "v": "aipager가 재시작했어요. 채팅에 업데이트됐다고 나오면 앱을 다시 여세요: 앱을 닫고 채팅에서 다시 여세요 (메뉴 버튼 또는 {command})."}
+{"k": "ui.update.restart_now_confirm", "src": "3f76f590", "v": "지금 재시작하면 여기 나온 진행 중인 작업이 중단돼요."}
+{"k": "ui.update.restarting", "src": "0cfedf00", "v": "aipager 재시작 중…"}
 {"k": "ui.update.running", "src": "5c38d794", "v": "업데이트가 이미 진행 중이에요."}
-{"k": "ui.update.shutting_down", "src": "190aec5c", "v": "aipager가 종료되는 중이에요. 다시 돌아오면 시도해 주세요."}
-{"k": "ui.update.slow", "src": "43a0f87b", "v": "아직 다시 시작하는 중이에요. 잠시 후 앱을 다시 여세요."}
-{"k": "ui.update.stale", "src": "fa8fd334", "v": "그 확인은 오래됐어요. 다시 확인하세요."}
+{"k": "ui.update.shutting_down", "src": "190aec5c", "v": "aipager가 종료되는 중이에요. aipager가 돌아오면 다시 시도해 주세요."}
+{"k": "ui.update.slow", "src": "43a0f87b", "v": "아직 재시작하는 중이에요. 잠시 후 앱을 다시 여세요."}
+{"k": "ui.update.stale", "src": "fa8fd334", "v": "그 확인 결과는 오래됐어요. 다시 확인하세요."}
 {"k": "ui.update.start_failed", "src": "2f57d419", "v": "시작하지 못했어요. 다시 시도해 주세요."}
 {"k": "ui.update.title", "src": "c76d1807", "v": "업데이트"}
 {"k": "ui.update.too_many", "src": "9a3f5b9e", "v": "요청이 너무 많아요. 1분 뒤에 다시 시도해 주세요."}
 {"k": "ui.update.unknown_version", "src": "90246157", "v": "알 수 없는 버전"}
-{"k": "ui.update.unreachable", "src": "fc17f70c", "v": "aipager에 연결하지 못했어요. 다시 시도해 주세요."}
+{"k": "ui.update.unreachable", "src": "fc17f70c", "v": "aipager에 연결할 수 없어요. 다시 시도해 주세요."}
 {"k": "ui.update.up_to_date", "src": "2772acac", "v": "모두 최신 상태예요."}
 {"k": "ui.update.updated", "src": "a56afb67", "v": "{version} 버전으로 업데이트했어요."}
-{"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"other": "{version} 버전으로 업데이트했고, 세션 {n}개를 다시 연결했어요."}}
+{"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"other": "{version} 버전으로 업데이트했어요. 세션 {n}개를 다시 연결했어요."}}
 {"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude가 묻고 있어요"}
-{"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude에게 권한이 필요해요"}
+{"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude가 권한을 요청하고 있어요"}
 {"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "채팅에 열린 권한 요청이 있어요."}
 {"k": "ui.waiting.question_open", "src": "3165c4fc", "v": "채팅에 열린 질문이 있어요."}
 {"k": "upd.ap.blocked", "src": "2b9633f6", "v": "🚫 <b>aipager</b>는 여기서 업데이트할 수 없어요: {reason}"}
 {"k": "upd.ap.blocked_here", "src": "cefc4c9b", "v": "🚫 aipager는 여기서 업데이트할 수 없어요: {reason}"}
 {"k": "upd.ap.cancelled", "src": "6eb974a3", "v": "↩️ <b>aipager</b> 업데이트를 취소했어요. 아무것도 설치하지 않았어요."}
 {"k": "upd.ap.current", "src": "fbd921a8", "v": "✅ <b>aipager</b>는 이미 최신이에요 ({version})."}
-{"k": "upd.ap.current_git", "src": "d645d1e5", "v": "✅ <b>aipager</b>는 이미 {running} 버전이에요. 이 {kind} 설치는 git 소스에서 업그레이드하는데, 거기에 더 새 버전이 없어요."}
-{"k": "upd.ap.current_index", "src": "86cb566d", "v": "✅ <b>aipager</b>는 이미 {running} 버전이에요. 패키지 색인에 더 새 버전이 없어요."}
-{"k": "upd.ap.current_local", "src": "dfdf1e49", "v": "✅ <b>aipager</b>는 이미 {running} 버전이에요. 이 {kind} 설치는 로컬 경로에서 업그레이드하는데, 거기도 아직 같은 버전이에요. 먼저 그 체크아웃을 업데이트하세요."}
-{"k": "upd.ap.current_local_at", "src": "126cee31", "v": "✅ <b>aipager</b>는 이미 {running} 버전이에요. 이 {kind} 설치는 로컬 경로 {where}에서 업그레이드하는데, 거기도 아직 같은 버전이에요. 먼저 그 체크아웃을 업데이트하세요."}
+{"k": "upd.ap.current_git", "src": "d645d1e5", "v": "✅ <b>aipager</b>는 이미 {running} 버전이에요. 이 {kind} 설치는 git 소스에서 업데이트하는데, 거기에 더 새 버전이 없어요."}
+{"k": "upd.ap.current_index", "src": "86cb566d", "v": "✅ <b>aipager</b>는 이미 {running} 버전이에요. PyPI에 더 새 버전이 없어요."}
+{"k": "upd.ap.current_local", "src": "dfdf1e49", "v": "✅ <b>aipager</b>는 이미 {running} 버전이에요. 이 {kind} 설치는 이 컴퓨터의 폴더에서 업데이트하는데, 그 폴더도 같은 버전이에요. 먼저 그 폴더를 업데이트하세요."}
+{"k": "upd.ap.current_local_at", "src": "126cee31", "v": "✅ <b>aipager</b>는 이미 {running} 버전이에요. 이 {kind} 설치는 이 컴퓨터의 {where} 폴더에서 업데이트하는데, 그 폴더도 같은 버전이에요. 먼저 그 폴더를 업데이트하세요."}
 {"k": "upd.ap.current_plain", "src": "598c28b0", "v": "✅ <b>aipager</b>는 이미 {running} 버전이에요."}
-{"k": "upd.ap.failed", "src": "8979f696", "v": "❌ <b>aipager</b> 업그레이드 실패 (종료 코드 {code}). 아무것도 다시 시작하지 않았어요."}
-{"k": "upd.ap.finished_shutdown", "src": "622303bd", "v": "✅ <b>aipager</b> 업그레이드를 마쳤어요. 데몬이 종료되는 중이라 아무것도 다시 시작하지 않았고, 다음에 시작할 때 설치된 버전이 실행돼요."}
-{"k": "upd.ap.import_failed", "src": "cba04fe9", "v": "❌ 새 버전을 불러오지 못했어요. 아직 {running} 버전이 실행 중이고, 아무것도 다시 시작하지 않았어요. <code>{hint}</code> 명령으로 다시 설치하세요"}
+{"k": "upd.ap.failed", "src": "8979f696", "v": "❌ <b>aipager</b> 업데이트에 실패했어요 (종료 코드 {code}). 아무것도 재시작하지 않았어요."}
+{"k": "upd.ap.finished_shutdown", "src": "622303bd", "v": "✅ <b>aipager</b> 업데이트를 마쳤어요. aipager가 종료되는 중이라 아무것도 재시작하지 않았어요. 다음에 켜질 때 설치된 버전으로 실행돼요."}
+{"k": "upd.ap.import_failed", "src": "cba04fe9", "v": "❌ 새 버전을 불러오지 못했어요. 아직 {running} 버전이 실행 중이고, 아무것도 재시작하지 않았어요. <code>{hint}</code> 명령으로 다시 설치하세요"}
 {"k": "upd.ap.installed", "src": "01a08996", "v": "✅ <b>aipager</b> {frm} → {to} 설치됨."}
-{"k": "upd.ap.installed_shutdown", "src": "d2a325d6", "v": "✅ <b>aipager</b> {frm} → {to} 설치됨. 데몬이 종료되는 중이라 아무것도 다시 시작하지 않았고, 다음에 시작할 때 {to} 버전이 실행돼요."}
-{"k": "upd.ap.not_found", "src": "f74b4ba7", "v": "❌ <b>aipager</b>: <code>{kind}</code> 프로그램을 찾지 못했어요 (찾아본 곳: {path})"}
-{"k": "upd.ap.prepare_failed", "src": "65e6b15f", "v": "✅ <b>aipager</b> {frm} → {to} 설치됨. 하지만 다시 시작을 준비하지 못했어요 ({error}). 직접 다시 시작하세요: <code>{cmd}</code>"}
-{"k": "upd.ap.restart_cancelled", "src": "23b8320e", "v": "✅ <b>aipager</b> {frm} → {to} 설치됨. 하지만 다시 시작이 취소됐어요. 직접 다시 시작하세요: <code>{cmd}</code>"}
-{"k": "upd.ap.restarting", "src": "e68754da", "v": "⏳ <b>aipager</b> {frm} → {to} 설치됨, 다시 시작하는 중…"}
-{"k": "upd.ap.schedule_failed", "src": "8ded320b", "v": "✅ <b>aipager</b> {frm} → {to} 설치됨. 하지만 다시 시작을 예약하지 못했어요: {detail}. 직접 다시 시작하세요: <code>{cmd}</code>"}
-{"k": "upd.ap.timeout", "src": "f834e535", "v": "⏱ <b>aipager</b> 업그레이드가 {seconds}초 후 시간 초과로 중지됐어요. 아무것도 다시 시작하지 않았고, 아직 {running} 버전이 실행 중이에요. 디스크의 설치가 불완전할 수 있어요. 다음에 다시 시작하기 전에 <code>{hint}</code> 명령으로 다시 설치하세요."}
-{"k": "upd.ap.waiting", "src": "dc25cdd1", "v": "⏳ <b>aipager</b> {frm} → {to} 설치됨, 현재 턴이 끝나면 다시 시작해요"}
-{"k": "upd.busy.restarting", "src": "6d1c5479", "v": "⏳ aipager가 업데이트 때문에 곧 다시 시작해요. 돌아오면 /update를 다시 보내 보세요."}
-{"k": "upd.busy.running", "src": "e0aa9bc2", "v": "⏳ 업데이트가 이미 진행 중이에요 ({phase}). 진행 상황은 그 상태 메시지에 나와요."}
+{"k": "upd.ap.installed_shutdown", "src": "d2a325d6", "v": "✅ <b>aipager</b> {frm} → {to} 설치됨. aipager가 종료되는 중이라 아무것도 재시작하지 않았어요. 다음에 켜질 때 {to} 버전으로 실행돼요."}
+{"k": "upd.ap.not_found", "src": "f74b4ba7", "v": "❌ <b>aipager</b>: <code>{kind}</code> 프로그램을 찾을 수 없어요 (찾아본 곳: {path})"}
+{"k": "upd.ap.prepare_failed", "src": "65e6b15f", "v": "✅ <b>aipager</b> {frm} → {to} 설치됨. 하지만 재시작을 준비할 수 없었어요 ({error}). 직접 재시작하세요: <code>{cmd}</code>"}
+{"k": "upd.ap.restart_cancelled", "src": "23b8320e", "v": "✅ <b>aipager</b> {frm} → {to} 설치됨. 하지만 재시작이 취소됐어요. 직접 재시작하세요: <code>{cmd}</code>"}
+{"k": "upd.ap.restarting", "src": "e68754da", "v": "⏳ <b>aipager</b> {frm} → {to} 설치됨, 재시작하는 중…"}
+{"k": "upd.ap.schedule_failed", "src": "8ded320b", "v": "✅ <b>aipager</b> {frm} → {to} 설치됨. 하지만 재시작을 예약할 수 없었어요: {detail}. 직접 재시작하세요: <code>{cmd}</code>"}
+{"k": "upd.ap.timeout", "src": "f834e535", "v": "⏱ <b>aipager</b> 업데이트가 {seconds}초 안에 끝나지 않아 중지했어요. 아무것도 재시작하지 않았고, 아직 {running} 버전이 실행 중이에요. 디스크의 설치가 불완전할 수 있어요: 다음 재시작 전에 <code>{hint}</code> 명령으로 다시 설치하세요."}
+{"k": "upd.ap.waiting", "src": "dc25cdd1", "v": "⏳ <b>aipager</b> {frm} → {to} 설치됨, 지금 작업이 끝나면 재시작해요"}
+{"k": "upd.busy.restarting", "src": "6d1c5479", "v": "⏳ aipager가 업데이트 때문에 곧 재시작해요. aipager가 돌아오면 /update를 다시 보내 주세요."}
+{"k": "upd.busy.running", "src": "e0aa9bc2", "v": "⏳ 업데이트가 이미 진행 중이에요 ({phase}). 진행 상황은 상태 메시지에서 볼 수 있어요."}
 {"k": "upd.busy.running_short", "src": "07e3480f", "v": "⏳ 업데이트가 이미 진행 중이에요 ({phase})."}
 {"k": "upd.cancelled", "src": "a85d8e48", "v": "↩️ 업데이트를 취소했어요. 바뀐 건 없어요."}
 {"k": "upd.cc.current", "src": "57516cde", "v": "✅ <b>Claude Code</b>는 이미 최신이에요 ({version})"}
 {"k": "upd.cc.done", "src": "cd97aa9e", "v": "✅ <b>Claude Code</b> {before} → {after}"}
-{"k": "upd.cc.done_shutdown", "src": "71cb416d", "v": "✅ <b>Claude Code</b> 업데이트를 마쳤어요. aipager가 종료되는 중이라, 돌아오면 /update에 새 버전이 나와요"}
+{"k": "upd.cc.done_shutdown", "src": "71cb416d", "v": "✅ <b>Claude Code</b> 업데이트를 마쳤어요. aipager가 종료되는 중이라, aipager가 돌아오면 /update에 새 버전이 보여요"}
 {"k": "upd.cc.error", "src": "fcf1f441", "v": "❌ <b>Claude Code</b>: {error}"}
 {"k": "upd.cc.failed", "src": "ef865b9a", "v": "❌ <b>Claude Code</b> 업데이트 실패 (종료 코드 {code})"}
-{"k": "upd.cc.timeout", "src": "c6c8c9ce", "v": "⏱ <b>Claude Code</b> 업데이트가 {seconds}초 후 시간 초과됐어요"}
+{"k": "upd.cc.timeout", "src": "c6c8c9ce", "v": "⏱ <b>Claude Code</b> 업데이트가 {seconds}초 안에 끝나지 않았어요"}
 {"k": "upd.check_failed_now", "src": "4ba67b54", "v": "⚠️ 지금은 업데이트를 확인할 수 없어요. 다시 시도해 주세요."}
 {"k": "upd.elapsed.m", "src": "a47d8efb", "v": "{m}분"}
 {"k": "upd.elapsed.ms", "src": "c017b27a", "v": "{m}분 {s}초"}
 {"k": "upd.elapsed.s", "src": "2b434962", "v": "{s}초"}
 {"k": "upd.fix.claude", "src": "94c58cdc", "v": "{command} 명령을 다시 실행하세요"}
 {"k": "upd.fix.reinstall", "src": "ae353907", "v": "{command} 명령으로 다시 설치하세요"}
-{"k": "upd.gate.busy", "src": "a8f53f0e", "v": {"other": "⏰ {n}분이 지나도 세션이 아직 작업 중이에요. {wait}분 더 기다릴까요, 지금 다시 시작할까요, 아니면 취소할까요? 지금 다시 시작하면 아래 목록의 모든 작업이 중단돼요."}}
-{"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"other": "⏰ {n}분이 지나도 세션이 아직 작업 중이에요. {wait}분 더 기다릴까요, 지금 다시 시작할까요, 아니면 취소할까요? 지금 다시 시작하면 아직 전달되지 않은 보류된 답변을 포함해 아래 목록의 모든 작업이 중단돼요."}}
-{"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: 다시 시작하기 전에 모든 세션이 쉴 때까지 기다리는 중이에요."}
+{"k": "upd.gate.busy", "src": "a8f53f0e", "v": {"other": "⏰ {n}분이 지났지만 세션이 아직 작업 중이에요. {wait}분 더 기다릴까요, 지금 재시작할까요, 아니면 취소할까요? 지금 재시작하면 아래 목록의 작업이 모두 중단돼요."}}
+{"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"other": "⏰ {n}분이 지났지만 세션이 아직 작업 중이에요. {wait}분 더 기다릴까요, 지금 재시작할까요, 아니면 취소할까요? 지금 재시작하면 아래 목록의 작업이 모두 중단되고, 아직 전달하지 못한 보류 중인 답변도 사라져요."}}
+{"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: 모든 세션이 준비되면 재시작해요."}
 {"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>업데이트</b>"}
 {"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (최신)"}
 {"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}
@@ -1355,30 +1355,30 @@
 {"k": "upd.line.cc_newer_blocked", "src": "aa86c9e2", "v": "Claude Code {current} → {latest} (여기서 업데이트할 수 없음: {reason})"}
 {"k": "upd.line.cc_unchecked", "src": "634412f0", "v": "Claude Code {current} (확인 못 함)"}
 {"k": "upd.line.cc_unknown", "src": "302340a8", "v": "Claude Code (확인 못 함)"}
-{"k": "upd.manual.needed", "src": "9abdaf5e", "v": "다시 시작 필요: {reason}"}
-{"k": "upd.manual.would_kill", "src": "df06a1e3", "v": "다시 시작하면 종료될 세션: {labels}"}
-{"k": "upd.marker.done", "src": "5a3ca85c", "v": {"other": "✅ aipager 업데이트됨 {frm} → {to}, 세션 {n}개를 다시 연결했어요"}}
-{"k": "upd.marker.interrupted", "src": "66f4f0b7", "v": "⚠️ aipager가 종료될 때 업데이트가 중단됐어요. 설치가 불완전할 수 있어요. 지금은 {running} 버전이 실행 중이에요. 문제가 있으면 {fix}."}
-{"k": "upd.marker.not_back", "src": "d253a83a", "v": "⚠️ 돌아오지 않음: {labels}"}
-{"k": "upd.marker.wrong_version", "src": "17ebf14f", "v": "⚠️ aipager가 다시 시작했지만 {to}가 아니라 {running} 버전으로 실행 중이에요."}
+{"k": "upd.manual.needed", "src": "9abdaf5e", "v": "재시작 필요: {reason}"}
+{"k": "upd.manual.would_kill", "src": "df06a1e3", "v": "재시작하면 닫히는 세션: {labels}"}
+{"k": "upd.marker.done", "src": "5a3ca85c", "v": {"other": "✅ aipager 업데이트됨 {frm} → {to}, 세션 {n}개 다시 연결됨"}}
+{"k": "upd.marker.interrupted", "src": "66f4f0b7", "v": "⚠️ aipager가 종료될 때 업데이트가 중단됐어요. 설치가 불완전할 수 있어요. 지금은 {running} 버전이 실행 중이에요. 문제가 생기면 {fix}."}
+{"k": "upd.marker.not_back", "src": "d253a83a", "v": "⚠️ 다시 연결되지 않음: {labels}"}
+{"k": "upd.marker.wrong_version", "src": "17ebf14f", "v": "⚠️ aipager가 재시작했지만 {to}가 아니라 {running} 버전으로 실행 중이에요."}
 {"k": "upd.note.ap_installed", "src": "5616e4b4", "v": "aipager {installed} 버전이 설치됐지만 아직 실행되지 않았어요."}
-{"k": "upd.offer_stale", "src": "a72655cc", "v": "⚠️ 이 확인은 오래됐어요. 업데이트하기 전에 다시 확인하세요."}
-{"k": "upd.output_in_log", "src": "3c62a9b7", "v": "(출력은 데몬 로그에 있어요)"}
-{"k": "upd.prompt", "src": "8a30cb51", "v": "⬆️ <b>업데이트</b>\n\naipager나 Claude Code에 새 버전이 있는지 확인하세요."}
-{"k": "upd.reason.unknown_install", "src": "0ab6e3a7", "v": "알 수 없는 설치"}
-{"k": "upd.reason.yourself", "src": "8ebd1480", "v": "직접 다시 시작하세요"}
-{"k": "upd.restart.auto", "src": "47924d9e", "v": "다시 시작: 자동, 진행 중인 턴이 없을 때."}
-{"k": "upd.restart.manual", "src": "8e3998af", "v": "다시 시작: 수동 ({reason})"}
+{"k": "upd.offer_stale", "src": "a72655cc", "v": "⚠️ 이 확인 결과는 오래됐어요. 업데이트하기 전에 다시 확인하세요."}
+{"k": "upd.output_in_log", "src": "3c62a9b7", "v": "(출력은 aipager 로그에 있어요)"}
+{"k": "upd.prompt", "src": "8a30cb51", "v": "⬆️ <b>업데이트</b>\n\naipager나 Claude Code에 새 버전이 있는지 확인해요."}
+{"k": "upd.reason.unknown_install", "src": "0ab6e3a7", "v": "설치 방식을 알 수 없음"}
+{"k": "upd.reason.yourself", "src": "8ebd1480", "v": "직접 재시작하세요"}
+{"k": "upd.restart.auto", "src": "47924d9e", "v": "재시작: 자동, 진행 중인 작업이 없을 때."}
+{"k": "upd.restart.manual", "src": "8e3998af", "v": "재시작: 수동 ({reason})"}
 {"k": "upd.sessions.new_version", "src": "a9ee48dc", "v": "새 세션은 {version} 버전을 써요."}
 {"k": "upd.sessions.none", "src": "1fe42f86", "v": "지금 실행 중인 세션이 없어요."}
-{"k": "upd.sessions.none_restarted", "src": "5807bbd1", "v": "실행 중인 세션은 다시 시작할 때까지 이전 버전을 그대로 써요. 다시 시작한 세션은 없어요."}
+{"k": "upd.sessions.none_restarted", "src": "5807bbd1", "v": "실행 중인 세션은 재시작할 때까지 이전 버전을 그대로 써요. 재시작한 세션은 없어요."}
 {"k": "upd.sessions.old", "src": "2e875cd3", "v": "아직 이전 버전: {labels}"}
-{"k": "upd.sessions.other_chats", "src": "7b515e23", "v": {"other": "다른 채팅에도 {n}개"}}
-{"k": "upd.shutdown.early", "src": "6b7541f0", "v": "⚠️ 업데이트가 끝나기 전에 데몬이 종료됐어요."}
-{"k": "upd.shutdown.partial", "src": "140c77c5", "v": "⚠️ 업데이트를 설치하는 동안 데몬이 종료됐어요. 설치 프로그램이 중지돼서 설치가 불완전할 수 있어요. 문제가 있으면 {fix}."}
-{"k": "upd.shutting_down", "src": "4dabffa5", "v": "⏳ aipager가 종료되는 중이에요. 다시 돌아오면 시도해 주세요."}
+{"k": "upd.sessions.other_chats", "src": "7b515e23", "v": {"other": "다른 채팅에도 세션 {n}개"}}
+{"k": "upd.shutdown.early", "src": "6b7541f0", "v": "⚠️ 업데이트가 끝나기 전에 aipager가 종료됐어요."}
+{"k": "upd.shutdown.partial", "src": "140c77c5", "v": "⚠️ 업데이트를 설치하는 중에 aipager가 종료됐어요. 설치가 중단돼서 불완전할 수 있어요. 문제가 생기면 {fix}."}
+{"k": "upd.shutting_down", "src": "4dabffa5", "v": "⏳ aipager가 종료되는 중이에요. aipager가 돌아오면 다시 시도해 주세요."}
 {"k": "upd.starting", "src": "0e316323", "v": "⏳ 업데이트를 시작하는 중…"}
-{"k": "upd.step.aipager", "src": "4baaa0e2", "v": "{kind} 사용해 aipager 업그레이드 중"}
+{"k": "upd.step.aipager", "src": "4baaa0e2", "v": "{kind}(으)로 aipager 업데이트 중"}
 {"k": "upd.step.claude", "src": "417c042d", "v": "Claude Code 업데이트 중"}
 {"k": "upd.step.started", "src": "cd17f00f", "v": "⏳ {step}…"}
 {"k": "upd.step.still_working", "src": "37b863ed", "v": "⏳ {step} - 아직 진행 중{elapsed}"}
@@ -1386,9 +1386,9 @@
 {"k": "upd.summary.cant_here", "src": "8abb0e4e", "v": "업데이트가 나왔지만 여기서는 설치할 수 없어요."}
 {"k": "upd.summary.check_failed", "src": "b8579281", "v": "더 새 버전은 없지만 확인 하나가 실패했어요. 나중에 다시 시도해 주세요."}
 {"k": "upd.summary.up_to_date", "src": "2772acac", "v": "모두 최신 상태예요."}
-{"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ 예기치 않은 오류로 업데이트가 멈췄어요 (데몬 로그를 보세요)."}
-{"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ 예약된 다시 시작이 일어나지 않았어요. 새 버전은 설치됐지만 이전 버전이 아직 실행 중이에요. 직접 다시 시작하세요: {command}"}
-{"k": "whoami.any", "src": "195d97a4", "v": "(모두)"}
+{"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ 예기치 않은 오류로 업데이트가 멈췄어요 (aipager 로그를 확인하세요)."}
+{"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ 예약된 재시작이 일어나지 않았어요. 새 버전은 설치됐지만 이전 버전이 아직 실행 중이에요. 직접 재시작하세요: {command}"}
+{"k": "whoami.any", "src": "195d97a4", "v": "(전체)"}
 {"k": "whoami.bypass_role_denies", "src": "9ed1452d", "v": "  bypass_role_denies: {value}"}
 {"k": "whoami.bypass_safety", "src": "a09645db", "v": "  bypass_safety: {value}"}
 {"k": "whoami.can_manage", "src": "e889ca71", "v": "  can_manage: {value}"}
@@ -1398,8 +1398,8 @@
 {"k": "whoami.no", "src": "fd128635", "v": "아니요"}
 {"k": "whoami.none", "src": "3c6b183d", "v": "(없음)"}
 {"k": "whoami.not_allowed", "src": "c9bfc640", "v": "🪪 이 봇의 허용 목록에 없어요."}
-{"k": "whoami.not_member", "src": "d86fddf7", "v": "🪪 이 범위의 멤버가 아니에요."}
-{"k": "whoami.personal", "src": "10ab5a55", "v": "🪪 개인 모드 - 이 개인 채팅에서 이 기기를 완전히 제어해요."}
+{"k": "whoami.not_member", "src": "d86fddf7", "v": "🪪 aipager 설정에서 이 채팅의 멤버가 아니에요."}
+{"k": "whoami.personal", "src": "10ab5a55", "v": "🪪 개인 사용 - 이 개인 채팅에서 이 컴퓨터를 완전히 제어해요."}
 {"k": "whoami.role", "src": "8ffb44b5", "v": "  역할: <b>{role}</b>"}
 {"k": "whoami.team_deny", "src": "e88735e1", "v": "  deny_tools: {tools}"}
 {"k": "whoami.team_head", "src": "c413798c", "v": "🪪 <b>{member}</b>"}

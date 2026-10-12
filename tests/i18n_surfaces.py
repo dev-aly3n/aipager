@@ -57,11 +57,12 @@ MODE_LABEL_SURFACES = frozenset({
 
 #: The English surfaces the three permission modes (2026-10-11) changed on
 #: purpose: Auto is the default, the admin gate moved to Full access, a
-#: third mode on every card and button, every mode named as a mode, and the
-#: in-place switch's texts. Recorded in english_surfaces.json; a surface
-#: outside this set changing is a defect.
+#: third mode on every card and button, every mode named as a mode, the
+#: in-place switch's texts, and /help's /mode line naming all three.
+#: Recorded in english_surfaces.json; a surface outside this set changing
+#: is a defect.
 THREE_MODES_SURFACES = frozenset({
-    "menu.commands", "miniapp.details", "miniapp.mirrors", "miniapp.payload_texts",
+    "help.dm", "help.group", "help.group_unnamed", "menu.commands", "miniapp.details", "miniapp.mirrors", "miniapp.payload_texts",
     "modecard.card", "modecard.cmd_replies", "modecard.perms_flow", "modecard.switch_taps",
     "newflow.closed", "newflow.conflict_taps", "newflow.name_card", "newflow.ready",
     "newflow.ready_models", "newflow.ready_taps", "newflow.starting", "newflow.taps",

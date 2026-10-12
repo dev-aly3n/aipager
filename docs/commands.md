@@ -151,7 +151,7 @@ Tiếng Việt, each listed in its own name.
 - **Right to left.** In Persian and Arabic, aipager's text reads right to left
   with Persian or Arabic digits.
 - **Mode words.** `/mode` takes the mode's word in your language (`/mode demander`),
-  and `ask` and `auto` always work. If a live session has exactly that name, the
+  and `ask`, `auto` and `full` always work. If a live session has exactly that name, the
   word names the session instead (see `/mode` above).
 - **Bot description.** At start, aipager writes the bot's description (the text on
   its empty chat screen) and short description in each of these languages, for
@@ -674,8 +674,8 @@ No SSH required.
 
 `/update` (admin only; in personal mode, only the operator) replies with one button, **🔄 Check for updates**. Nothing is looked up until you tap it. The tap edits that message into one line per product:
 
-- `aipager 0.7.15 → 0.7.16` when a newer version exists (the latest on PyPI);
-- `aipager 0.7.15 (up to date)` when it does not;
+- `aipager 1.0.1 → 1.1.0` when a newer version exists (the latest on PyPI);
+- `aipager 1.0.1 (up to date)` when it does not;
 - `Claude Code 2.1.282 (couldn't check)` when the lookup failed (network down, 5 s timeout, or `claude` not found).
 
 Claude Code is compared with the latest on its own update channel (`autoUpdatesChannel`: latest, stable or rc). Below the lines, in small text, is how aipager was installed (e.g. `pipx, from PyPI` or `pipx, from local path …`; group chats never show paths).
@@ -1200,7 +1200,7 @@ The checks of `aipager doctor` as one JSON object on stdout. Like plain
 ```json
 {
   "command": "doctor",
-  "version": "0.8.0",
+  "version": "1.0.1",
   "ok": true,
   "summary": {"ok": 14, "warn": 1, "fail": 0},
   "checks": [{"key": "token_valid", "status": "ok", "title": "Telegram bot token", "detail": ["@example_bot"], "fix": null}]
@@ -1256,7 +1256,7 @@ them is needed for normal use.
 | `TYPING_INDICATOR_INTERVAL` | `4.5` | Seconds between "typing…" bubbles; `0` turns them off. |
 | `TELEGRAM_MAX_RETRY_AFTER` | `90` | Telegram's wait, in seconds, beyond which aipager treats a rate limit as a ban (do not lower it; see [troubleshooting](troubleshooting.md#the-bot-went-quiet-flood-control)). |
 | `CLAUDE_RICH_SUMMARIES` | `1` | `0` turns off the rich formatting of answers that contain code blocks (a fallback kept from older versions). |
-| `AIPAGER_INTERACTIVE_TIMEOUT` | `300` | Seconds a permission prompt may wait with no news from Claude Code before the session counts as working again ([troubleshooting](troubleshooting.md#permission-prompt-stuck-on-interactive)). |
+| `AIPAGER_INTERACTIVE_TIMEOUT` | `300` | Seconds a permission prompt may wait with no news from Claude Code before the session counts as working again ([troubleshooting](troubleshooting.md#a-permission-prompt-with-no-news-for-5-minutes)). |
 | `AIPAGER_SUBAGENT_SILENCE` | `1800` | Seconds of silence after which a subagent with no stop seen is dropped ([hooks](hooks.md#subagentstart--subagentstop)). |
 | `AIPAGER_BG_SHELL_MAX_TRACK` | `7200` | Seconds after which a background command with no end seen stops counting. |
 | `AIPAGER_REPORT_PROMPTS` | on | `0` switches off the automatic problem-report offers ([problem reports](problem-reports.md#when-aipager-offers-a-report)). |

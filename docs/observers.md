@@ -29,7 +29,8 @@ The format is `token:chat_id` - parsing uses the **last** colon as delimiter (bo
 
 Observers get these notices from **every chat the bot serves**, every
 DM and every group, with no filter: set one up only for a chat you
-trust with all of it.
+trust with all of it. Each notice is in the language of the chat it
+came from.
 
 | Event | Example |
 |-------|---------|

@@ -50,7 +50,7 @@ def test_api_error_in_the_given_language():
     from aipager import i18n
     msg, retry = transport._detect_api_error("API Error: 429 rate_limit_error retry after 30",
                                              tr=i18n.get("ru"))
-    assert (msg, retry) == ("Достигнут лимит запросов. Подожди 30 с перед повтором.", 30)
+    assert (msg, retry) == ("Слишком много запросов. Подожди 30 с и попробуй снова.", 30)
     msg, _ = transport._detect_api_error("API Error: 529 overloaded", tr=i18n.get("fa"))
     assert msg.startswith("\u200fسرورهای Anthropic")
 

@@ -327,14 +327,16 @@ aipager session <label>            # or a fresh session, no history
 aipager session <label> --continue # fresh dtach, the folder's last conversation
 ```
 
-## Permission prompt stuck on INTERACTIVE
+## A permission prompt with no news for 5 minutes
 
-If a session sits in INTERACTIVE with no hook activity for >5 min,
-the session monitor auto-demotes it to BUSY and clears the pending
-permission. This catches the case where claude code crashed
-mid-prompt and the user can never respond.
+If a session waits on a permission prompt and Claude Code sends no news
+for 5 minutes, aipager stops waiting on that prompt and counts the
+session as working again. This catches a Claude Code that crashed in
+the middle of a prompt, which nobody could answer. The prompt's buttons
+still answer the dialog if it is still open (see
+[idle responses](commands.md#idle-responses)).
 
-Tune the timeout:
+Change the wait:
 
 ```sh
 AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # in seconds

@@ -5,8 +5,7 @@
   "token",
   "diff",
   "log",
-  "ctx",
-  "prompt"
+  "ctx"
  ],
  "language": "Portuguese (Brazil)",
  "terms": {
@@ -65,6 +64,7 @@
   ],
   "resume": [
    "retom",
+   "continu",
    "/resume"
   ],
   "session": [
@@ -85,7 +85,9 @@
    "stop"
   ],
   "turn": [
-   "turno"
+   "turno",
+   "tarefa",
+   "vez"
   ],
   "update": [
    "atualiz",

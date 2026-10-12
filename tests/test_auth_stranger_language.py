@@ -89,8 +89,8 @@ def test_a_disabled_language_gets_english(bot, run_async):
 
 def test_a_russian_non_member_in_a_group_is_refused_in_russian(bot, run_async):
     text = _refuse(bot, run_async, chat=GROUP, language_code="ru")
-    assert text == ("🚫 Тебя нет в списке разрешённых пользователей этой области. Попроси "
-                    f"оператора добавить твой Telegram ID ({STRANGER}) через `aipager config`.")
+    assert text == ("🚫 Тебя нет в списке разрешённых в этом чате. Попроси владельца бота "
+                    f"добавить твой Telegram ID ({STRANGER}) командой `aipager config`.")
 
 
 def test_a_stored_choice_wins(bot, run_async):
@@ -177,8 +177,8 @@ def test_the_read_only_notice_uses_the_chats_language(bot, run_async):
     preferences.set_ui_language(VIEWER, "fa")
     update = _update(VIEWER, GROUP, "fa")
     assert run_async(bot._authorize(update)) is False
-    assert _reply(update) == ("👀 @rob - твоя роль <i>read_only</i>; ты можешь использовать "
-                              "<code>/status</code>, но не можешь управлять сессиями.")
+    assert _reply(update) == ("👀 @rob - твоя роль <i>read_only</i>; ты можешь смотреть "
+                              "<code>/status</code>, но не управлять сессиями.")
 
 
 def test_auto_deny_audit_stays_english(mk_bot, run_async, monkeypatch):

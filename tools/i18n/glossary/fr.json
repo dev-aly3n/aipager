@@ -5,8 +5,7 @@
   "token",
   "diff",
   "log",
-  "ctx",
-  "prompt"
+  "ctx"
  ],
  "language": "French",
  "terms": {
@@ -80,7 +79,8 @@
    "stop"
   ],
   "turn": [
-   "tour"
+   "tour",
+   "tâche"
   ],
   "update": [
    "à jour",

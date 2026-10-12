@@ -52,7 +52,8 @@
   ],
   "prompt": [
    "Prompt",
-   "Anfrage"
+   "Anfrage",
+   "Nachricht"
   ],
   "question": [
    "Frage"
@@ -77,11 +78,14 @@
    "stopp",
    "stop",
    "angehalten",
-   "/stop"
+   "/stop",
+   "gestoppt"
   ],
   "turn": [
    "Durchlauf",
-   "Durchläuf"
+   "Durchläuf",
+   "Aufgabe",
+   "dran"
   ],
   "update": [
    "Update",

@@ -58,7 +58,7 @@ def test_the_check_in_russian():
     payload = update_flow.check_payload(update_status(), show_paths=True, tr=ru)
     assert payload["offer"] == {"kind": "both", "label": "Обновить оба"}
     assert payload["lines"][0] == "aipager 1.0.1 → 1.0.2"
-    assert payload["restart"] == "Перезапуск: автоматически, когда не идёт ни один ход."
+    assert payload["restart"] == "Перезапуск: автоматически, когда не идёт ни одна задача."
 
 
 def test_english_without_a_tr():
@@ -169,7 +169,7 @@ def test_marker_outcome_in_the_chats_language(mk_bot, run_async, monkeypatch):
     run_async(update_flow.deliver_update_marker(bot, bot.registry))
     text = bot._app.bot.send_message.await_args.kwargs.get("text") or \
         bot._app.bot.send_message.await_args.args[1]
-    assert text == ("✅ aipager обновлён 1.0.1 → 1.0.2, снова подхвачено 0 сессий\n"
+    assert text == ("✅ aipager обновлён 1.0.1 → 1.0.2; снова подключено 0 сессий\n"
                     "⚠️ Не вернулись: x9")
 
 
@@ -188,7 +188,7 @@ def test_russian_plural_of_re_adopted_sessions():
     ru = i18n.get("ru")
     for n in (1, 2, 5, 11, 12, 21, 22, 25):
         text = ru.n(update_flow._MARKER_DONE, n, kind="text", frm="1", to="2")
-        form = {"one": "подхвачена", "few": "подхвачены", "many": "подхвачено"}[
+        form = {"one": "подключена", "few": "подключены", "many": "подключено"}[
             plurals.category("ru", n)]
         assert f"снова {form} {n} " in text, (n, text)
 

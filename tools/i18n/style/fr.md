@@ -1,9 +1,9 @@
 # French (fr) style guide
 
-The translator (Claude) reads this with the glossary before every batch.
+The translator (Claude) reads TRANSLATING.md first, then this, then the glossary.
 
 ## Tone
-Plain, direct and friendly. Address the reader as vous (decided: French developer tools use vous; tu reads as marketing). Sound like the English: plain words, short sentences, no slang.
+Plain, direct and friendly, the way a good French app talks to people (Telegram, Doctolib, Lydia). Address the reader as vous (decided: French developer tools use vous; tu reads as marketing). Everyday French, not a word-for-word copy of the English.
 
 ## Address
 vous
@@ -30,10 +30,39 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - A button or sentence that names a permission mode names it as a mode (operator, 2026-10-11): the switch buttons (modecard.btn.to_*, ui.btn.switch_to_*), the "instead" buttons (mode.*_instead) and the busy confirms (ui.confirm.perms_busy_*) say the mode word and the word for mode, as mode.auto and mode.ask do. The typed words stay one word.
 - A default button label (Continue, Run tests...) stays short: it is a button. Its payload stays English (Claude receives the English).
 
-## Terms
-- session: session; turn: tour; card: carte; permission: autorisation; prompt: prompt (the text sent to Claude; "message" where it is just a message; "demande" for a permission prompt or a question waiting for an answer); question: question.
-- allow: autoriser; deny: refuser; stop: arrêter; resume: reprendre; queue: file d'attente; agent: agent; background: arrière-plan ("en arrière-plan").
-- owner: propriétaire; admin: administrateur; member: membre; chat: discussion (Telegram's own French word); group: groupe; settings: paramètres; update: mise à jour / mettre à jour; folder: dossier; model: modèle.
-- Kept in English: commit, token, diff, log, ctx, prompt.
-- Other recurring words: Kill (end a session's process) = Terminer; Restart = Redémarrer; Delete = Supprimer; Rename = Renommer; Compact = Compacter; role = rôle; "la Mini App"; a session name stands for a session (feminine: "x1 arrêtée").
-- In French the "one" plural form also covers 0: always write {n}, never the word "un".
+## Words people actually say (use these)
+| English idea | write | not |
+|---|---|---|
+| session | session | |
+| background agent | agent en arrière-plan | |
+| background shell command | commande en arrière-plan (the first line under an answer adds "(shell)") | shell alone, ordre |
+| your message to Claude (prompt) | message | prompt (only where the text is about prompts as such) |
+| compact (Claude Code's /compact) | compacter (compacter la conversation) | |
+| context window | contexte | fenêtre de contexte |
+| update | mise à jour, mettre à jour | update |
+| restart | redémarrer | relancer (fine for a session), rebooter |
+| load, loading | charger, chargement… | |
+| link | lien | |
+| repository | dépôt | repository |
+| hung, frozen | bloqué | gelé |
+| crashed | a planté | a crashé |
+| voice message | message vocal | note vocale |
+| computer, machine | ordinateur | machine |
+| default | par défaut | |
+| private chat (DM) | discussion privée | DM, MP |
+| idle (a session waiting for a message) | prête | inactive, au repos |
+| busy, working | au travail (status line), travaille | occupée |
+| waiting on you | attend votre réponse | interactive |
+| ended (a session no longer running) | terminée | fermée ("fermer la session" means log out) |
+| end a session (Kill, End) | terminer | tuer, fermer |
+| start a session (/new) | lancer, démarrer une session | ouvrir une session (it means log in) |
+
+## Vocabulary (one word per idea)
+- session: session (feminine: "x1 est prête", "x1 terminée"); turn: tour where people take turns ("le tour d'une autre personne"), tâche for Claude's work on one message ("quand cette tâche sera finie"); card: carte; permission: autorisation; a permission request: demande d'autorisation; question: question.
+- allow: autoriser (answered: autorisé); deny: refuser (answered: refusé); stop: arrêter (stopped: arrêtée); resume: reprendre; queue: file d'attente; agent: agent; background: en arrière-plan.
+- owner: propriétaire; admin: admin; member: membre; chat: discussion (Telegram's own French word); group: groupe; settings: paramètres; folder: dossier; model: modèle; role: rôle; "la Mini App".
+- Kept in English: commit, token, diff, log, ctx. A diff is "modifications (diff)" where it is a label.
+- Restart = Redémarrer; Delete = Supprimer; Rename = Renommer; Cancel = Annuler; Close = Fermer; Retry = Réessayer; End = Terminer.
+
+## Plurals
+one, many and other. In French "one" also covers 0: always write {n}, never the word "un". many is for large round numbers: give it the same text as other.

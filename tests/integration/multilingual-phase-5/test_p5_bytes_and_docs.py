@@ -222,17 +222,27 @@ def test_troubleshooting_has_the_language_entries(heading):
     assert re.search(rf"^#+ {re.escape(heading)}\s*$", doc("docs/troubleshooting.md"), re.M)
 
 
+def _readme_language_lines():
+    return [ln for ln in doc("README.md").splitlines()
+            if all(locales.LOCALES[c].endonym in ln for c in LAUNCHED)]
+
+
 def test_the_readme_lists_all_languages_on_one_line():
-    lines = [ln for ln in doc("README.md").splitlines()
-             if all(locales.LOCALES[c].endonym in ln for c in LAUNCHED)]
-    assert len(lines) == 1
+    # The feature line names every language on one line, and the "Read this
+    # in" row under the title links every translated README; nothing else
+    # repeats the list.
+    lines = _readme_language_lines()
+    assert len(lines) == 2
+    (row,) = [ln for ln in lines if ln.startswith("**Read this in:**")]
+    assert [ln for ln in lines if ln.startswith("- Speaks English")]
+    assert [c for c in LAUNCHED if f"/docs/i18n/{c})" not in row] == []
 
 
 def test_the_readme_languages_line_says_no_beta():
     # No "(beta)" anywhere a user reads the language list (operator, 2026-10-10).
-    (line,) = [ln for ln in doc("README.md").splitlines()
-               if all(locales.LOCALES[c].endonym in ln for c in LAUNCHED)]
-    assert "beta" not in line.lower()
+    lines = _readme_language_lines()
+    assert lines
+    assert [ln for ln in lines if "beta" in ln.lower()] == []
 
 
 @pytest.mark.parametrize("rel", ["README.md", "docs/commands.md", "CHANGELOG.md"])

@@ -6,7 +6,8 @@
   "diff",
   "log",
   "ctx",
-  "shell"
+  "shell",
+  "hook"
  ],
  "language": "Chinese (Simplified)",
  "terms": {
@@ -47,7 +48,8 @@
    "模型"
   ],
   "owner": [
-   "所有者"
+   "所有者",
+   "主人"
   ],
   "permission": [
    "权限"
@@ -80,7 +82,8 @@
    "/stop"
   ],
   "turn": [
-   "轮"
+   "轮",
+   "任务"
   ],
   "update": [
    "更新",
