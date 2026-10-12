@@ -1038,9 +1038,10 @@ class CommandHandlersMixin:
             next_line = tr.html(HOME_START_ONE)
         text = (f"{tr.html(HOME_TITLE)}\n\n{listing}\n\n{next_line}\n\n"
                 f"{tr.html(HOME_HELP_HINT)}")
-        # No inline App row: the menu button beside the message box opens
-        # the Mini App (see _app_button_row). Resume only with something to resume, or
-        # the tap would swap this screen for one line and no buttons.
+        # No inline App row: the menu button beside the message box
+        # opens the Mini App (see _app_button_row). Resume only with
+        # something to resume, or the tap would swap this screen for one
+        # line and no buttons.
         row = [InlineKeyboardButton(tr.text(HOME_BTN_NEW), callback_data="_:nw:open")]
         if any(s.claude_session_id for s in self._gone_sessions_sorted(chat_id)):
             row.append(InlineKeyboardButton(tr.text(HOME_BTN_RESUME),
@@ -1160,7 +1161,7 @@ class CommandHandlersMixin:
             return
 
         # One resolver for every surface that hands out this URL (/app,
-        # the chat menu button, the keyboard button) — it also keeps the
+        # the chat menu button) — it also keeps the
         # blocking tailscale probe off the event loop.
         from aipager.miniapp.tunnel import resolve_public_url
         url = await resolve_public_url()

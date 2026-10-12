@@ -1478,8 +1478,8 @@ class LifecycleMixin:
         keyboard until the tunnel lands or the timeout fires, still as
         one keyboard message per start.
 
-        Released by :meth:`publish_miniapp_button` (with or without a
-        URL) or by :meth:`release_deferred_keyboard`'s timeout, so a
+        Released by :meth:`publish_miniapp_button` (on a real URL) or
+        by :meth:`release_deferred_keyboard`'s timeout, so a
         tunnel that never comes up cannot cost the user their keyboard.
         """
         self._keyboard_deferred = True
@@ -1619,9 +1619,9 @@ class LifecycleMixin:
             # inside the loop's try.
             #
             # Fail closed: if the URL could not even be made into a
-            # button, /app and the inline App buttons must not go on
-            # offering it either, or the surfaces would disagree about
-            # whether there is a Mini App at all.
+            # button, the inline App buttons must not go on offering it
+            # either, or the surfaces would disagree about whether there
+            # is a Mini App at all.
             self._miniapp_url = ""
             log.warning("Could not build the Mini App menu button", exc_info=True)
             return
