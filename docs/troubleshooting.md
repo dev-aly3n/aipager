@@ -641,18 +641,21 @@ start` in a terminal or tmux, Docker, launchd) installs an update but
 keeps running the old code until it restarts. `/update` then says `aipager B is installed and
 waiting for a restart (running A).`, and Claude Code's hooks, which
 start fresh on every event, may already run B: the owner gets one notice
-that the update is only half done. Tap **🔄 Restart now** (in the update
+that the update is only half done (once no turn is running in the
+owner's private chat). Tap **🔄 Restart now** (in the update
 message, the notice, or the Mini App's **Settings → Updates**). aipager
 waits until no turn is running, stops cleanly and starts the new version
 in place: the same process in the same terminal, tmux window or
 container, with the same command and environment.
 
-If the in-place start fails (the interpreter was replaced, for example),
-a detached copy starts aipager once the old process has gone. Its output
-then goes to the self-restart log (`aipager.log` in the instance folder,
-or `/tmp/aipager.log`) instead of your terminal. If nothing could be
-started, the daemon log ends with `restart.failed:` and the command to
-run, and the next start announces the update.
+If the in-place start fails, a detached copy starts aipager once the old
+process has gone. Its output then goes to the self-restart log
+(`aipager.log` in the instance folder, or `/tmp/aipager.log`) instead of
+your terminal, and the daemon log names the command to run if that copy
+does not come back. If the interpreter itself is gone (its environment
+was removed or replaced), or nothing could be started, aipager exits
+with code 1, the daemon log ends with `restart.failed:` and the command
+to run, and the next start announces the update.
 
 When there is no **Restart now** button, the message gives the steps for
 your setup: in a terminal or tmux, press Ctrl+C and run `aipager start`;

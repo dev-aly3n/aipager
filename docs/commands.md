@@ -754,7 +754,9 @@ restart. A Ctrl+C or `docker stop` during the restart wins: aipager stops
 and does not start again. If the new aipager cannot be started in place,
 a detached copy starts it once the old one has gone (its output goes to
 the self-restart log, `aipager.log` in the instance folder or
-`/tmp/aipager.log`); if even that fails, the daemon log says
+`/tmp/aipager.log`, and the daemon log names the command to run should
+that copy not come back); if even that fails, or the interpreter itself
+is gone, aipager exits with code 1 and the daemon log says
 `restart.failed:` with the command to run.
 
 When aipager cannot restart itself at all, the message gives the exact
@@ -774,7 +776,8 @@ a newer aipager is installed and waiting, and on a one-time notice: when
 Claude Code's hooks (which start fresh on every event, from the
 installed aipager) already run a newer aipager than the daemon, the owner
 gets one silent message per newer version and daemon run, `⚠️ The
-aipager update is only half done: …`, with the button. In the Mini App,
+aipager update is only half done: …`, with the button. It waits until no
+turn is running in the owner's private chat. In the Mini App,
 **Settings → Updates** shows the same state as a line above the card,
 with **Restart now** (it asks first).
 
