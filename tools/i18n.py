@@ -59,6 +59,9 @@ TOOL_DIR = ROOT / "tools" / "i18n"
 SOURCE = TOOL_DIR / "source.jsonl"
 GLOSSARY_DIR = TOOL_DIR / "glossary"
 STYLE_DIR = TOOL_DIR / "style"
+#: The rules every language follows (from the reviewed Persian); todo hands
+#: them over before the language's own style guide.
+RULES = TOOL_DIR / "TRANSLATING.md"
 LOCALES_DIR = core.LOCALES_DIR
 BASELINE = ROOT / "tests" / "i18n_literal_baseline.json"
 GOLDEN = TOOL_DIR / "golden.txt"
@@ -588,6 +591,8 @@ GLOSSARY_EXEMPT: dict[str, dict[str, str]] = {
     "kbl.tpl.write_tests": {"Write": "the ordinary verb (write tests), not the Write tool"},
     "set.btn.reports_turn_on": {"turn": "the verb (turn offers on), not a turn of Claude's"},
     "rep.offer.off": {"turn": "the verb (turn them back on), not a turn of Claude's"},
+    "ui.report.label.stops": {"stop": "how aipager last exited, not the Stop action"},
+    "ui.report.stops": {"stop": "how aipager last exited, not the Stop action"},
 }
 
 
@@ -603,7 +608,7 @@ def check_glossary_exemptions(rows: list[dict]) -> list[str]:
             continue
         english = " ".join(english_forms(row))
         for word in words:
-            if not re.search(rf"\b{re.escape(word)}\b", english, re.I):
+            if not re.search(rf"\b{re.escape(word)}s?\b", english, re.I):
                 problems.append(f"GLOSSARY_EXEMPT: {key}'s English no longer says {word!r}")
     return problems
 
@@ -897,6 +902,8 @@ def todo(code: str, *, changed: bool = False) -> dict:
     glossary = all_glossaries().get(code, {})
     style_path = STYLE_DIR / f"{code}.md"
     style = style_path.read_text(encoding="utf-8") if style_path.exists() else ""
+    if RULES.exists():
+        style = RULES.read_text(encoding="utf-8") + "\n\n" + style
     return {"lang": code, "glossary": glossary, "style": style, "entries": entries}
 
 
