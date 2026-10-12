@@ -244,7 +244,13 @@ def test_facts_and_reasons_follow_the_viewer(server, monkeypatch):
                         lambda sess: {"model": "Opus 4.6", "context_pct": 45, "cost_usd": 1.5})
     monkeypatch.setattr(ma_sessions, "combined_queue_depth", lambda sess: 0)
     monkeypatch.setattr(ma_sessions, "cached_last_assistant_preview", lambda path: "")
-    now = time.monotonic()
+    # The clock the server reads per request, pinned: a runner that stalls
+    # for a second between here and there moved "3:12" to "3:13" (CI,
+    # 2026-10-12). Whole seconds, so the differences are exact.
+    now = 10_000.0
+    detail = ma_sessions.session_detail
+    monkeypatch.setattr(ma_sessions, "session_detail",
+                        lambda sess, _now, **kw: detail(sess, now, **kw))
     _sess(server, status=Status.BUSY, cwd="/home/op/proj", last_hook_at=now - 125,
           busy_started_at=now - 192)
     data = _call(server, "GET", "/api/sessions/x1")[1]

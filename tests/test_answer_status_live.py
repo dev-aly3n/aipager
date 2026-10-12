@@ -667,6 +667,10 @@ def test_the_header_clock_runs_to_the_last_agents_end(mk_bot, run_async, wire):
     bot = _wire_bot(mk_bot, wire)
     sess = _sess(bot)
     rec = _deliver(run_async, bot, sess, ("a1", "Explore"), ("a2", "Plan"), age=0)
+    # Whole seconds, so (sent_at + 200) - sent_at is exactly 200: from a
+    # clock reading with a fraction it is 199.99999... for about one value
+    # in twenty, and the floored clock showed 3:19 (CI, 2026-10-12).
+    rec["sent_at"] = rec["last_try"] = float(int(rec["sent_at"]))
     sess.bg_agent_stopped("a1", rec["sent_at"] + 60)
     sess.bg_agent_stopped("a2", rec["sent_at"] + 200)
     before = len(wire.calls)
