@@ -172,10 +172,12 @@ def _keyboard_app_url(bot, chat_id):
 
 @pytest.mark.parametrize("chat_id", [DM_EN, DM_FA, DM_RU, DM_AR],
                          ids=["en", "fa", "ru", "ar"])
-def test_the_keyboard_app_button_carries_the_chats_language(bot, run_async, chat_id):
+def test_no_dm_keyboard_has_an_app_button_in_any_language(bot, run_async, chat_id):
+    """A Mini App opened from a reply-keyboard button gets no init data
+    and cannot sign in (2026-10-12): the menu button carries the link."""
     bot._miniapp_url = URL
     run_async(bot._send_keyboard(level="main", chat_id=chat_id))
-    assert _keyboard_app_url(bot, chat_id) == WANT[chat_id]
+    assert _keyboard_app_url(bot, chat_id) == "no button"
 
 
 def test_a_group_keyboard_still_has_no_app_button(bot, run_async):

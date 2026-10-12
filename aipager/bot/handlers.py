@@ -1038,8 +1038,8 @@ class CommandHandlersMixin:
             next_line = tr.html(HOME_START_ONE)
         text = (f"{tr.html(HOME_TITLE)}\n\n{listing}\n\n{next_line}\n\n"
                 f"{tr.html(HOME_HELP_HINT)}")
-        # No inline App row: the keyboard sent right after carries 📱 App
-        # (see _app_button_row). Resume only with something to resume, or
+        # No inline App row: the menu button beside the message box opens
+        # the Mini App (see _app_button_row). Resume only with something to resume, or
         # the tap would swap this screen for one line and no buttons.
         row = [InlineKeyboardButton(tr.text(HOME_BTN_NEW), callback_data="_:nw:open")]
         if any(s.claude_session_id for s in self._gone_sessions_sorted(chat_id)):
@@ -1084,10 +1084,10 @@ class CommandHandlersMixin:
         carries a ``web_app`` button in a group, so one misplaced button
         costs every other button in the message.
 
-        Deliberately NOT used on ``/start``: that handler ends by sending
-        the persistent keyboard, which already carries the App button, and
-        design.md's own rule is to never offer a competing entry point in
-        the same turn.
+        Not used on ``/start``: the menu button beside the message box is
+        that screen's way into the Mini App. The reply keyboard has no App
+        button since 2026-10-12 (Telegram gives a Mini App opened from a
+        keyboard button no init data, so it cannot sign in).
         """
         chat = update.effective_chat
         if chat is None or chat.type != "private":

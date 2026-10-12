@@ -284,7 +284,7 @@ A persistent keyboard sits below the chat input. Rows, top to bottom:
 |---|---|---|
 | Sessions | one button per live session label | auto-built from the registry |
 | Actions | `status`, `stop`, `new` | plain-text shortcuts (`kill` still works typed; ending a session is in `/status` → `⋮`) |
-| Nav | `Templates`, `Commands`, `📱 App` | App appears in private chats while the Mini App is up, and opens it directly |
+| Nav | `Templates`, `Commands` | The Mini App opens from the menu button next to the message box or `/app`, not from this keyboard |
 
 `Model ›` lives inside the Commands submenu. Tapping a submenu
 entry sends a canned prompt or slash command:

@@ -161,16 +161,40 @@ def test_one_failing_chat_does_not_cost_the_others_their_button(mk_bot, run_asyn
 
 # ===== the reply-keyboard button ==========================================
 
-def test_the_keyboard_offers_the_app_button_in_a_dm(mk_bot, run_async):
+def _web_app_buttons(kb):
+    return [btn for row in kb.keyboard for btn in row
+            if getattr(btn, "web_app", None) is not None]
+
+
+@pytest.mark.parametrize("chat_id", [555, -1001234567], ids=["dm", "group"])
+@pytest.mark.parametrize("level", ["main", "templates", "commands", "models"])
+def test_no_reply_keyboard_carries_a_web_app_button(mk_bot, run_async, chat_id, level):
+    """2026-10-12: Telegram gives a Mini App opened from a reply-keyboard
+    `web_app` button no init data ("It is empty if the Mini App was
+    launched from a keyboard button"), so it showed "Open this page from
+    the Telegram app to sign in." and nothing else. No reply keyboard may
+    carry one, even with the Mini App on; the menu button, /app and the
+    inline Open buttons are the ways in."""
+    b = mk_bot()
+    b._miniapp_url = "https://tunnel.example/"
+
+    run_async(b._send_keyboard(level=level, chat_id=chat_id))
+
+    kb = b._app.bot.send_message.await_args.kwargs["reply_markup"]
+    assert _web_app_buttons(kb) == [], f"the {level} keyboard grew a web_app button"
+    texts = {btn.text for row in kb.keyboard for btn in row}
+    assert APP_BUTTON not in texts
+    assert group_intake.mark_label(APP_BUTTON, chat_id) not in texts
+
+
+def test_the_main_keyboards_last_row_is_templates_and_commands(mk_bot, run_async):
     b = mk_bot()
     b._miniapp_url = "https://tunnel.example/"
 
     run_async(b._send_keyboard(level="main", chat_id=555))
 
     kb = b._app.bot.send_message.await_args.kwargs["reply_markup"]
-    app_buttons = [btn for row in kb.keyboard for btn in row if btn.text == APP_BUTTON]
-    assert len(app_buttons) == 1
-    assert app_buttons[0].web_app.url == "https://tunnel.example/"
+    assert [btn.text for btn in kb.keyboard[-1]] == ["Templates", "Commands"]
 
 
 def test_the_keyboard_omits_the_app_button_in_a_group(mk_bot, run_async):
@@ -199,19 +223,6 @@ def test_the_keyboard_omits_the_app_button_with_no_miniapp(mk_bot, run_async):
     kb = b._app.bot.send_message.await_args.kwargs["reply_markup"]
     texts = {btn.text for row in kb.keyboard for btn in row}
     assert APP_BUTTON not in texts
-
-
-def test_no_web_app_button_ever_reaches_a_non_main_keyboard(mk_bot, run_async):
-    """Only the main level gained a button; the sub-menus are unchanged."""
-    b = mk_bot()
-    b._miniapp_url = "https://tunnel.example/"
-
-    for level in ("templates", "commands", "models"):
-        run_async(b._send_keyboard(level=level, chat_id=555))
-        kb = b._app.bot.send_message.await_args.kwargs["reply_markup"]
-        for row in kb.keyboard:
-            for btn in row:
-                assert btn.web_app is None, f"{level} keyboard grew a web_app button"
 
 
 # ===== the shared URL resolver ============================================
@@ -270,39 +281,27 @@ def test_anything_that_is_not_https_is_no_url(run_async, monkeypatch, value):
 
 # ===== the keyboard must know the URL before the FIRST keyboard goes out ==
 
-def test_the_first_keyboard_of_the_run_already_offers_the_app_button(
+def test_the_first_keyboard_of_the_run_goes_out_without_a_web_app_button(
     mk_bot, run_async, monkeypatch,
 ):
-    """rev-iter1-001. `TelegramBot.start()` ends by calling
-    `_update_bot_commands()`, which in personal mode sends the persistent
-    keyboard immediately — long before the Mini App server has started and
-    `publish_miniapp_button` has run.
-
-    So the URL has to be known *before* start(), or the very first
-    keyboard after every restart is missing its App button and nothing
-    re-sends it until some unrelated event (a session created, a
-    Templates→Back tap) happens to refresh it. That is the whole feature
-    silently not working on the surface the operator looks at most.
-    """
+    """`TelegramBot.start()` ends by calling `_update_bot_commands()`,
+    which in personal mode sends the persistent keyboard. With the Mini
+    App URL already primed that first keyboard goes out at once, and it
+    is the one that replaces a keyboard an older aipager left on the
+    phone with a `web_app` App button (2026-10-12)."""
     b = mk_bot()
     monkeypatch.setattr("aipager.bot.lifecycle.CHAT_ID", "555")
-    # keyboards.py binds its own CHAT_ID from config at import time and
-    # uses it to decide `is_private` (a web_app button is private-chat
-    # only). Patching only lifecycle's copy left this test reading the
-    # REAL machine's configured chat id, so it passed on a configured
-    # box and failed anywhere aipager.yaml was absent — including a
-    # fresh checkout and CI.
+    # keyboards.py binds its own CHAT_ID from config at import time;
+    # patching only lifecycle's copy would read the real machine's chat.
     monkeypatch.setattr("aipager.bot.keyboards.CHAT_ID", "555")
 
     b.prime_miniapp_url("https://tunnel.example/")
     run_async(b._update_bot_commands())      # what start() ends with
 
+    b._app.bot.send_message.assert_awaited()
     kb = b._app.bot.send_message.await_args.kwargs["reply_markup"]
-    texts = {btn.text for row in kb.keyboard for btn in row}
-    assert APP_BUTTON in texts, (
-        "the first keyboard of the run has no App button — the URL was not "
-        "known before start() sent it"
-    )
+    assert _web_app_buttons(kb) == []
+    assert APP_BUTTON not in {btn.text for row in kb.keyboard for btn in row}
 
 
 def test_priming_makes_no_telegram_call(mk_bot, run_async):

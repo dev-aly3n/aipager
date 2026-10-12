@@ -333,7 +333,8 @@ def test_app_refuses_non_https_manual_url(mk_bot, mk_update, run_async, monkeypa
 
 def test_the_app_keyboard_label_routes_to_the_app_command(mk_bot, mk_update, run_async):
     """rev-iter1-004. A `web_app` keyboard button sends no text, so this
-    label only ever arrives from a client too old to understand one.
+    label only ever arrives from a client too old to understand one (or
+    typed). The reply keyboard has no App button since 2026-10-12.
     It must reach /app's inline-button fallback rather than being taken
     for a prompt and typed into a session."""
     from unittest.mock import AsyncMock

@@ -1234,8 +1234,9 @@ class LifecycleMixin:
         # keyboard shows; a global broadcast would leak labels.
         if self.scopes is None:
             if self._keyboard_deferred:
-                # Held until the Mini App URL lands, so the first
-                # keyboard the user sees already carries the App button.
+                # Held until the Mini App URL lands (it once carried an
+                # App button; since 2026-10-12 the hold only keeps a start
+                # to one keyboard message).
                 return
             await self._send_keyboard(level="main")
         else:
