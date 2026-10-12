@@ -274,15 +274,77 @@ def test_exec_failure_hands_over_to_the_respawn(monkeypatch, tmp_path, no_settle
             in caplog.text)
 
 
-def test_a_gone_interpreter_skips_the_exec_and_respawns(monkeypatch, tmp_path, no_settle):
+def test_a_gone_interpreter_skips_the_exec_and_the_respawn_and_exits_one(
+        monkeypatch, tmp_path, no_settle, caplog):
     monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(tmp_path))
     execs, spawned = [], []
     monkeypatch.setattr(self_restart, "_execve", lambda *a: execs.append(a))
     monkeypatch.setattr(self_restart, "_popen",
                         lambda argv, **kw: spawned.append(argv) or _Proc())
-    _pending(_target(executable=str(tmp_path / "gone-python"), cwd=str(tmp_path)))
-    assert self_restart.after_shutdown(lambda: None) == 0
-    assert execs == [] and len(spawned) == 1
+    gone = str(tmp_path / "gone-python")
+    _pending(_target(executable=gone, cwd=str(tmp_path)))
+    with caplog.at_level(logging.INFO, logger="aipager.self_restart"):
+        rc = self_restart.after_shutdown(lambda: None)
+    assert rc == 1
+    assert execs == [] and spawned == []
+    errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert errors == [f"restart.exec.failed error=the interpreter {gone} is gone",
+                      "restart.failed: aipager stopped and could not start again; start "
+                      "it yourself: aipager start"]
+    assert "restart.respawn" not in caplog.text
+
+
+def test_an_interpreter_gone_by_the_failed_exec_is_not_respawned(monkeypatch, tmp_path,
+                                                                  no_settle, caplog):
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(tmp_path))
+    exe = tmp_path / "python"
+    exe.write_text("")
+    exe.chmod(0o755)
+
+    def vanish(path, argv, env):
+        exe.unlink()
+        raise OSError("No such file or directory")
+    monkeypatch.setattr(self_restart, "_execve", vanish)
+    spawned = []
+    monkeypatch.setattr(self_restart, "_popen",
+                        lambda argv, **kw: spawned.append(argv) or _Proc())
+    _pending(_target(executable=str(exe), cwd=str(tmp_path)), steps="systemd")
+    with caplog.at_level(logging.ERROR, logger="aipager.self_restart"):
+        rc = self_restart.after_shutdown(lambda: None)
+    assert rc == 1 and spawned == []
+    assert "start it yourself: systemctl --user restart aipager.service" in caplog.text
+
+
+@pytest.mark.parametrize("steps, command", [
+    ("terminal", "aipager start"),
+    ("docker", "docker restart <container>"),
+])
+def test_handing_over_to_the_respawn_logs_what_to_run_if_it_fails(
+        monkeypatch, tmp_path, no_settle, caplog, steps, command):
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(tmp_path))
+
+    def fail(exe, argv, env):
+        raise OSError("Exec format error")
+    monkeypatch.setattr(self_restart, "_execve", fail)
+    monkeypatch.setattr(self_restart, "_popen", lambda argv, **kw: _Proc(pid=777))
+    _pending(_target(cwd=str(tmp_path)), steps=steps)
+    with caplog.at_level(logging.WARNING, logger="aipager.self_restart"):
+        rc = self_restart.after_shutdown(lambda: None)
+    assert rc == 0
+    warned = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert warned == [
+        f"restart.respawn: if aipager is not back in a minute, see "
+        f"{instance.self_restart_log_path()} and start it yourself: {command}"]
+
+
+def test_the_waiter_result_is_the_documented_pair(monkeypatch, tmp_path, no_settle):
+    monkeypatch.setattr(self_restart, "_popen", lambda argv, **kw: _Proc(pid=4242))
+    res = self_restart.spawn_waiter(_target(cwd=str(tmp_path)), tmp_path / "log")
+    assert (res[0], res[1], len(res)) == (True, None, 2)
+    assert tuple(res) == (True, None) and res.pid == 4242 and res.stage is None
+    bad = self_restart.WaiterResult(False, "rc=127", "exited", 9)
+    assert (bad[0], bad[1], bad.ok, bad.error, bad.stage, bad.pid) == (
+        False, "rc=127", False, "rc=127", "exited", 9)
 
 
 @pytest.mark.parametrize("steps, command", [

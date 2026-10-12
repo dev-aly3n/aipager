@@ -289,16 +289,18 @@ def test_exec_failure_respawn_log_goes_to_instance_dir(bb, tmp_path, monkeypatch
     assert str(inst / "aipager.log") in caplog.text
 
 
-def test_executable_gone_after_request_goes_to_the_waiter(bb, tmp_path, monkeypatch):
-    """Step 2: the executable is re-checked; gone -> no exec, the waiter."""
+def test_executable_gone_after_request_starts_nothing_and_exits_1(bb, tmp_path,
+                                                                    monkeypatch):
+    """Step 2: the executable is re-checked; gone -> no exec and no waiter
+    (it would run the same missing file), exit 1 with the steps logged."""
     fake = tmp_path / "py"
     fake.write_text("#!/bin/sh\n")
     fake.chmod(0o755)
     monkeypatch.setattr(sys, "executable", str(fake))
     _request(bb)
     fake.unlink()
-    self_restart.after_shutdown(release_lock=_release(bb))
-    assert (bb.execs, len(bb.popens)) == ([], 1)
+    rc = self_restart.after_shutdown(release_lock=_release(bb))
+    assert (rc, bb.execs, len(bb.popens)) == (1, [], 0)
 
 
 def test_waiter_spawn_failure_returns_1(bb):

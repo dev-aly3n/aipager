@@ -68,20 +68,26 @@ class _Request:
     steps: str
 
 
-@dataclass
-class WaiterResult:
-    """The detached respawn's outcome. ``stage`` says where it failed:
-    ``"open"`` (the log file), ``"spawn"`` (the ``sh``) or ``"exited"``
-    (it died at once); None when it started."""
+class WaiterResult(tuple):
+    """The detached respawn's outcome: the pair ``(ok, error)`` (it unpacks
+    and indexes as one), plus ``stage``, where it failed: ``"open"`` (the
+    log file), ``"spawn"`` (the ``sh``) or ``"exited"`` (it died at once),
+    None when it started; and ``pid``."""
 
-    ok: bool
-    error: str | None = None
-    stage: str | None = None
-    pid: int | None = None
+    def __new__(cls, ok: bool, error: str | None = None, stage: str | None = None,
+                pid: int | None = None) -> WaiterResult:
+        self = super().__new__(cls, (ok, error))
+        self.stage = stage
+        self.pid = pid
+        return self
 
-    def __iter__(self):
-        # ``ok, error = spawn_waiter(...)`` reads as the design's pair.
-        return iter((self.ok, self.error))
+    @property
+    def ok(self) -> bool:
+        return self[0]
+
+    @property
+    def error(self) -> str | None:
+        return self[1]
 
 
 # ---- module state (one daemon per process) ----------------------------------
@@ -347,15 +353,27 @@ def _close_on_exec_above_stdio() -> None:
             pass
 
 
+def _manual_command(steps: str) -> str:
+    """The command that starts aipager again by hand, for the log."""
+    if steps == "systemd":
+        words = ("systemctl", "--user", "restart", "aipager.service")
+    elif steps == "launchd":
+        words = ("launchctl", "kickstart", "-k", f"gui/{os.getuid()}/com.aipager.daemon")
+    elif steps == "docker":
+        words = ("docker", "restart", "<container>")
+    else:
+        words = ("aipager", "start")
+    return " ".join(words)
+
+
 def _log_manual_steps(steps: str) -> None:
     # English, the daemon log only: what to run now that nothing restarts.
     log.error("restart.failed: aipager stopped and could not start again; start it "
-              "yourself: %s",
-              "systemctl --user restart aipager.service" if steps == "systemd"
-              else f"launchctl kickstart -k gui/{os.getuid()}/com.aipager.daemon"
-              if steps == "launchd"
-              else "docker restart <container>" if steps == "docker"
-              else "aipager start")
+              "yourself: %s", _manual_command(steps))
+
+
+def _runnable(exe: str) -> bool:
+    return os.path.isfile(exe) and os.access(exe, os.X_OK)
 
 
 def after_shutdown(release_lock: Callable[[], None]) -> int:
@@ -363,45 +381,54 @@ def after_shutdown(release_lock: Callable[[], None]) -> int:
     cleanly: exec the pending restart, else the respawn fallback. Returns
     the exit code (0: nothing pending, cancelled, or handed over to the
     respawn; 1: nothing could start, the manual steps are logged). Does
-    not return after a successful exec."""
+    not return after a successful exec. An interpreter that is gone is
+    never handed to a respawn: it would only fail the same way, later and
+    out of sight."""
     req = take()
     if req is None:
         return 0
     target = req.target
     exe = target.executable
-    if not (os.path.isfile(exe) and os.access(exe, os.X_OK)):
+    if not _runnable(exe):
         log.error("restart.exec.failed error=the interpreter %s is gone", exe)
+        _log_manual_steps(req.steps)
+        return 1
+    log.info("restart.exec from=%s to=%s executable=%s argv=%s",
+             req.frm, req.to, exe, target.argv)
+    _flush_everything()
+    try:
+        release_lock()
+    except Exception:
+        log.warning("restart.exec.lock_release_failed", exc_info=True)
+    _close_on_exec_above_stdio()
+    if target.cwd:
+        try:
+            _chdir(target.cwd)
+        except OSError:
+            pass
+    try:
+        _execve(exe, target.argv, target.env)
+    except OSError as e:
+        log.error("restart.exec.failed error=%s", e)
     else:
-        log.info("restart.exec from=%s to=%s executable=%s argv=%s",
-                 req.frm, req.to, exe, target.argv)
-        _flush_everything()
-        try:
-            release_lock()
-        except Exception:
-            log.warning("restart.exec.lock_release_failed", exc_info=True)
-        _close_on_exec_above_stdio()
-        if target.cwd:
-            try:
-                _chdir(target.cwd)
-            except OSError:
-                pass
-        try:
-            _execve(exe, target.argv, target.env)
-        except OSError as e:
-            log.error("restart.exec.failed error=%s", e)
-        else:
-            # Only a test's fake returns from an exec.
-            return 0
+        # Only a test's fake returns from an exec.
+        return 0
+    if not _runnable(exe):
+        log.error("restart.exec.failed error=the interpreter %s is gone", exe)
+        _log_manual_steps(req.steps)
+        return 1
     from aipager import instance
 
     log_path = instance.self_restart_log_path()
     res = spawn_waiter(target, log_path)
     if res.ok:
         log.info("restart.respawn.started pid=%s log=%s", res.pid, log_path)
+        # The respawn runs out of sight: what to do if it never comes back.
+        log.warning("restart.respawn: if aipager is not back in a minute, see %s and "
+                    "start it yourself: %s", log_path, _manual_command(req.steps))
         return 0
     _log_manual_steps(req.steps)
     return 1
-
 
 __all__ = [
     "ExecTarget", "WaiterResult", "after_shutdown", "attach", "cancel", "capture_launch",
