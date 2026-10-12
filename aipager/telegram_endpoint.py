@@ -10,7 +10,7 @@ Telegram.
 
 Every Bot API URL in aipager is built here: PTB's ``base_url`` /
 ``base_file_url``, the rich-message client, the start-up preflight,
-observer bots, ``aipager doctor`` and the setup wizard. Stdlib-only.
+``aipager doctor`` and the setup wizard. Stdlib-only.
 
 The URLs embed the bot token. Never log them.
 """
