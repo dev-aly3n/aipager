@@ -1,9 +1,9 @@
 # Indonesian (id) style guide
 
-The translator (Claude) reads this with the glossary before every batch.
+The translator (Claude) reads TRANSLATING.md first, then this, then the glossary.
 
 ## Tone
-Plain, direct and friendly. Address the reader as kamu (decided: Anda is more formal). Sound like the English: plain words, short sentences, no slang.
+Plain, direct and friendly, the way Telegram's own Indonesian interface talks. Address the reader as kamu (decided: Anda is more formal). Everyday Indonesian, not a word-for-word copy of the English: short sentences, no officialese ("dilakukan", "tersebut" piled up), no slang. Indonesian has no grammatical gender, so "kamu" and {person} need no care there.
 
 ## Address
 kamu
@@ -30,8 +30,44 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - A button or sentence that names a permission mode names it as a mode (operator, 2026-10-11): the switch buttons (modecard.btn.to_*, ui.btn.switch_to_*), the "instead" buttons (mode.*_instead) and the busy confirms (ui.confirm.perms_busy_*) say the mode word and the word for mode, as mode.auto and mode.ask do. The typed words stay one word.
 - A default button label (Continue, Run tests...) stays short: it is a button. Its payload stays English (Claude receives the English).
 
-## Terms
-- session sesi; turn giliran; card kartu; permission izin; prompt prompt (a message to Claude: pesan; a request waiting for an answer: permintaan); question pertanyaan; allow izinkan; deny tolak; stop hentikan (berhenti); resume lanjutkan; queue antrean; agent agen (a subagent: subagen); background latar belakang; owner pemilik; admin admin; member anggota; chat chat; group grup; settings pengaturan; update perbarui / pembaruan; folder folder; model model.
-- Kill (end a session's process) akhiri; Restart mulai ulang; Delete hapus; Rename ganti nama; Compact ringkas; Retry coba lagi; Cancel batal; Back kembali; role peran; transcript transkrip; daemon daemon; install pasang.
-- Kept in English: commit, token, diff, log, ctx, prompt, shell (a background shell command).
+## Words people actually say (use these)
+| English idea | write | not |
+|---|---|---|
+| session | sesi | |
+| background agent | agen latar belakang | |
+| background shell command | perintah latar belakang (the first line under an answer adds "(shell)") | shell alone |
+| your message to Claude (prompt) | pesan | prompt (only where the text is about prompts as such) |
+| a permission or question prompt | permintaan (permintaan izin) | |
+| compact (Claude Code's /compact) | ringkas (ringkas percakapan) | kompak |
+| context window | konteks | jendela konteks |
+| conversation | percakapan | dialog |
+| update | perbarui, pembaruan | |
+| restart | mulai ulang | |
+| link | tautan | |
+| repository | repo | repositori (fine in a long explanation) |
+| hung, frozen | macet | membeku |
+| crashed | crash | |
+| voice message | pesan suara | voice note |
+| computer, machine | komputer | mesin, host |
+| default | bawaan | default |
+| private chat (DM) | chat pribadi | DM |
+| tool (Claude's tools) | alat | tool |
+| idle (a session waiting for a message) | siap | menganggur |
+| busy, working | sedang bekerja | sibuk |
+| waiting on you | menunggu jawabanmu | interaktif |
+| ended (a session no longer running) | sudah berakhir | mati |
+| end a session (Kill, End) | akhiri | bunuh |
+| start a session (/new) | mulai, jalankan | |
+
+## Vocabulary (one word per idea)
+- session sesi; turn: giliran where people take turns ("sekarang giliran orang lain"), tugas for Claude's work on one message ("saat tugas ini selesai"); card kartu; permission izin; a permission request permintaan izin; question pertanyaan.
+- allow izinkan (answered: diizinkan); deny tolak (answered: ditolak); stop hentikan (stopped: dihentikan); resume lanjutkan; queue antrean; agent agen; background latar belakang.
+- owner pemilik; admin admin; member anggota; chat chat; group grup; settings pengaturan; folder folder; model model; role peran; mode mode; "Mini App".
+- Kept in English: commit, token, diff, log, ctx. A diff is "perubahan (diff)" where it is a label.
+- Buttons: Izinkan, Tolak, Hentikan, Lanjutkan, Mulai ulang, Hapus, Ganti nama, Batal, Tutup, Coba lagi, Akhiri, Kirim, Kirim sekarang.
+- Same situation, same words: "Couldn't …" is "Gagal …" or "… tidak bisa …" ("File tidak bisa diunduh"); "Couldn't reach the server" is "Tidak bisa terhubung ke server"; a refused restart is "Tidak dimulai ulang: …"; a stale button or card is "sudah usang"; a running session "sedang berjalan".
+- {clock} is a duration: "Selesai ({clock})", "Bekerja ({clock})", never "setelah {clock}" (reads like a time of day).
 - Use "kamu" (never "Anda"), and the active imperative for requests ("Kirim /new lagi").
+
+## Plurals
+other only: Indonesian does not mark the plural after a number (2 sesi).
