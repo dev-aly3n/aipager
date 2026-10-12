@@ -220,7 +220,7 @@
 {"k": "card.verb.waiting", "src": "33d30632", "v": "等你回复"}
 {"k": "card.verb.working", "src": "3b4dfc97", "v": "工作中"}
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
-{"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} 仍在工作"}
+{"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents}仍在工作"}
 {"k": "chatmove.notice", "src": "01364acb", "v": "Telegram 已升级这个群组。aipager 已随之迁移，你无需任何操作。"}
 {"k": "cmd.app", "src": "486dfc4e", "v": "打开 Mini App 控制面板"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "你可以做什么"}
@@ -507,7 +507,7 @@
 {"k": "pin.needs_input", "src": "9a9d6640", "v": "等你选择"}
 {"k": "pin.paren", "src": "d52abc3c", "v": "（{running}）"}
 {"k": "pin.running_agents", "src": "712d4c75", "v": {"other": "{n} 个代理运行中"}}
-{"k": "pin.running_both", "src": "48ac24f8", "v": "{agents}、{shells} 运行中"}
+{"k": "pin.running_both", "src": "48ac24f8", "v": "{agents}、{shells}运行中"}
 {"k": "pin.running_shells", "src": "af023360", "v": {"other": "{n} 个后台命令运行中"}}
 {"k": "pin.state", "src": "845c40c2", "v": "（{state}）"}
 {"k": "pin.state.idle", "src": "1adbcc34", "v": "就绪"}
@@ -540,8 +540,8 @@
 {"k": "rep.note.prompt", "src": "dc71be87", "v": {"other": "✏️ 请用一条消息写下你的备注（最多 {n} 个字符）。发送前，你会看到它在报告中的确切样子。做任何其他操作都会关闭这里。"}}
 {"k": "rep.offer.also_other", "src": "2b336900", "v": {"other": "另外还有 {n} 个其他错误。"}}
 {"k": "rep.offer.declined", "src": "5d912282", "v": "好的。在这个版本上，aipager 不会再询问这件事。"}
-{"k": "rep.offer.internal", "src": "4df624aa", "v": {"other": "aipager 遇到了 {n} 次内部错误（{area} 中的 {error}）。"}}
-{"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "aipager 遇到了一次内部错误（{area} 中的 {error}）。"}
+{"k": "rep.offer.internal", "src": "4df624aa", "v": {"other": "aipager 在“{area}”里遇到了 {n} 次内部错误（{error}）。"}}
+{"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "aipager 在“{area}”里遇到了一次内部错误（{error}）。"}
 {"k": "rep.offer.memcap", "src": "698bc999", "v": {"other": "aipager 的 hook 已经 {n} 次达到内存上限。"}}
 {"k": "rep.offer.memcap_once", "src": "63461898", "v": "aipager 的 hook 达到过一次内存上限。"}
 {"k": "rep.offer.not_opened", "src": "1df3fb0a", "v": "无法打开报告预览。/help 中的“报告问题”会打开一个新的预览。"}
@@ -613,7 +613,7 @@
 {"k": "route.nothing_running", "src": "3c49e2a3", "v": "现在没有正在进行的任务。"}
 {"k": "route.queue_full", "src": "f6582eab", "v": {"other": "⚠️ [{session}] 的队列已满（{n} 条消息在等）。请回答请求，或清空队列。"}}
 {"k": "route.refusal_frame", "src": "e19d24e3", "v": "⚠️ [{session}] {reason}"}
-{"k": "route.resume_then_resend", "src": "df2cce7e", "v": "点按 ▶️ 恢复 后，请重新发送你的消息。"}
+{"k": "route.resume_then_resend", "src": "df2cce7e", "v": "点按“▶️ 恢复”后，请重新发送你的消息。"}
 {"k": "route.retry_note_others", "src": "f54d6bb2", "v": "⏸ 没有重新发送：现在轮到别人。结束后再点一次“重试”。"}
 {"k": "route.retry_note_prompt", "src": "a9f6356e", "v": "⏸ 没有重新发送：还有一个请求没回答。请先回答，再点一次“重试”。"}
 {"k": "route.send_failed", "src": "3c65fe20", "v": "❌ 消息没能发送到 [{session}]"}
