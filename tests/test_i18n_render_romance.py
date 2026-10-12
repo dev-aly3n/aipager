@@ -51,7 +51,7 @@ EXPECTED = {
 AS_IS = {"es": {"beta"}, "pt-BR": {"beta", "offline"}, "fr": {"sections"},
          "it": {"beta", "offline"}}
 #: The fold line at 1 and 2, as each language writes it.
-FOLD = {"es": ("▸ 1 llamada a herramienta", "▸ 2 llamadas a herramientas"),
+FOLD = {"es": ("▸ 1 herramienta usada", "▸ 2 herramientas usadas"),
         "pt-BR": ("▸ 1 chamada de ferramenta", "▸ 2 chamadas de ferramenta"),
         "fr": ("▸ 1 appel d'outil", "▸ 2 appels d'outils"),
         "it": ("▸ 1 chiamata a strumento", "▸ 2 chiamate a strumenti")}
