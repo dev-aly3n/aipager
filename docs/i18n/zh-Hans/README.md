@@ -202,7 +202,7 @@ aipager service install
 
 ### <a id="note-on-model-buttons-bedrock--vertex-users"></a>关于模型按钮（Bedrock 和 Vertex 用户）
 
-常驻键盘上的**模型**子菜单（以及 Mini App 的模型选择器）提供 Claude Code 的系列别名 `sonnet`、`opus`、`haiku`、`fable` 和 `opusplan`，以及固定的模型，如 `claude-opus-5-5` 和 `claude-sonnet-5-5`（完整列表见[常驻键盘](commands.md#persistent-keyboard)）。在 Anthropic 的 API 上，别名总是指向该系列最新的模型。在 **Bedrock** 和 **Vertex** 上，同样的别名可能指向较旧的版本，取决于你的服务商提供什么。如果你使用这些服务并需要某个特定模型，请在聊天中发送 `/model <full-id>`。
+固定键盘上的**模型**子菜单（以及 Mini App 的模型选择器）提供 Claude Code 的系列别名 `sonnet`、`opus`、`haiku`、`fable` 和 `opusplan`，以及固定的模型，如 `claude-opus-5-5` 和 `claude-sonnet-5-5`（完整列表见[固定键盘](commands.md#persistent-keyboard)）。在 Anthropic 的 API 上，别名总是指向该系列最新的模型。在 **Bedrock** 和 **Vertex** 上，同样的别名可能指向较旧的版本，取决于你的服务商提供什么。如果你使用这些服务并需要某个特定模型，请在聊天中发送 `/model <full-id>`。
 
 ## <a id="developing-locally"></a>在本地开发
 
