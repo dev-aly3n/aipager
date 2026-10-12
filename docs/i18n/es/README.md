@@ -12,6 +12,8 @@ Control remoto de sesiones de [Claude Code](https://claude.com/claude-code) desd
 
 [aipager.run](https://aipager.run) · [Documentación](#docs) · [Historial de cambios](../../../CHANGELOG.md) · [Issues en GitHub](https://github.com/dev-aly3n/aipager/issues)
 
+**Leer en otro idioma:** [English](../../../README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
+
 ## <a id="install"></a>Instalación
 
 ¿Tienes un agente de programación (Claude Code, o cualquier agente con shell)? Crea un bot con [@BotFather](https://t.me/BotFather), pulsa Start en él y asegúrate de haber iniciado sesión en Claude Code en esta computadora. Guarda el token del bot en un archivo que tu agente nunca tenga que leer (pega el token, pulsa Enter y luego Ctrl-D):
@@ -194,7 +196,7 @@ Por defecto aipager es un bot privado: tú y el bot en un chat privado. Para com
 - Te avisa del contexto casi lleno, de la conversación compactada, de una sesión que terminó y de una que lleva rato sin dar noticias
 - Ejecuta varias sesiones a la vez con un solo bot; uso en equipo opcional con roles y reglas por herramienta ([Uso en equipo y grupos](groups.md))
 - Bots observadores de solo lectura, opcionales
-- Habla English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی y Tiếng Việt: solo los textos de aipager, nunca tus sesiones ni las respuestas de Claude ([Idiomas](commands.md#languages)). Este README y la documentación también están traducidos
+- Habla English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی y Tiếng Việt: solo los textos de aipager, nunca tus sesiones ni las respuestas de Claude ([Idiomas](commands.md#languages)). Este README y la documentación también están traducidos (mira **Leer en otro idioma** arriba)
 
 ### <a id="mini-app"></a>Mini App
 

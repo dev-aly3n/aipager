@@ -12,6 +12,8 @@
 
 [aipager.run](https://aipager.run) · [Tài liệu](#docs) · [Nhật ký thay đổi](../../../CHANGELOG.md) · [Issue trên GitHub](https://github.com/dev-aly3n/aipager/issues)
 
+**Đọc bằng ngôn ngữ khác:** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md)
+
 ## <a id="install"></a>Cài đặt
 
 Bạn có một agent lập trình (Claude Code, hoặc bất kỳ agent nào dùng được shell)? Tạo một bot với [@BotFather](https://t.me/BotFather), chạm Start trong bot đó, và chắc chắn rằng Claude Code trên máy tính này đã đăng nhập vào tài khoản của bạn. Lưu token của bot vào một file mà agent không bao giờ cần đọc (dán token, nhấn Enter, rồi Ctrl-D):
@@ -194,7 +196,7 @@ Mặc định aipager là một bot cá nhân: bạn và bot trong một chat ri
 - Báo cho bạn khi ngữ cảnh gần đầy, khi cuộc trò chuyện được thu gọn, khi một phiên kết thúc, và khi một phiên im lặng quá lâu
 - Chạy nhiều phiên cùng lúc qua một bot; tùy chọn chế độ làm việc nhóm với vai trò và quy tắc cho từng công cụ ([Chế độ làm việc nhóm và nhóm](groups.md))
 - Bot quan sát chỉ đọc, tùy chọn
-- Nói được English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی và Tiếng Việt: chỉ là chữ của chính aipager, không bao giờ là các phiên của bạn hay câu trả lời của Claude ([Ngôn ngữ](commands.md#languages)). README này và tài liệu cũng đã được dịch
+- Nói được English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی và Tiếng Việt: chỉ là chữ của chính aipager, không bao giờ là các phiên của bạn hay câu trả lời của Claude ([Ngôn ngữ](commands.md#languages)). README này và tài liệu cũng đã được dịch (xem **Đọc bằng ngôn ngữ khác** ở trên)
 
 ### <a id="mini-app"></a>Mini App
 

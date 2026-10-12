@@ -12,6 +12,8 @@
 
 [aipager.run](https://aipager.run) · [Документация](#docs) · [История изменений](../../../CHANGELOG.md) · [Issues на GitHub](https://github.com/dev-aly3n/aipager/issues)
 
+**Читать на другом языке:** [English](../../../README.md) · [Español](../es/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
+
 ## <a id="install"></a>Установка
 
 Есть агент для программирования (Claude Code или любой агент с shell)? Создай бота через [@BotFather](https://t.me/BotFather), нажми в нём Start и проверь, что Claude Code на этом компьютере вошёл в твой аккаунт. Сохрани токен бота в файл, который агенту никогда не придётся читать (вставь токен, нажми Enter, потом Ctrl-D):
@@ -194,7 +196,7 @@ aipager service install
 - Сообщает, когда контекст почти заполнен, когда переписка сжата, когда сессия завершилась и когда какая-то долго молчит
 - Держит несколько сессий одновременно через одного бота; по желанию работа в команде с ролями и правилами для каждого инструмента ([Работа в команде и группы](groups.md))
 - Боты-наблюдатели только для чтения, по желанию
-- Говорит на English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی и Tiếng Việt: только тексты самого aipager, никогда твои сессии или ответы Claude ([Языки](commands.md#languages)). Этот README и документация тоже переведены
+- Говорит на English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی и Tiếng Việt: только тексты самого aipager, никогда твои сессии или ответы Claude ([Языки](commands.md#languages)). Этот README и документация тоже переведены (см. **Читать на другом языке** выше)
 
 ### <a id="mini-app"></a>Mini App
 

@@ -12,6 +12,8 @@ La télécommande Telegram de vos sessions [Claude Code](https://claude.com/clau
 
 [aipager.run](https://aipager.run) · [Documentation](#docs) · [Historique des versions](../../../CHANGELOG.md) · [Issues sur GitHub](https://github.com/dev-aly3n/aipager/issues)
 
+**Lire dans une autre langue :** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
+
 ## <a id="install"></a>Installation
 
 Vous avez un agent de programmation (Claude Code, ou n'importe quel agent qui a un shell) ? Créez un bot avec [@BotFather](https://t.me/BotFather), appuyez sur Start dans ce bot, et vérifiez que Claude Code est connecté à votre compte sur cet ordinateur. Enregistrez le token du bot dans un fichier que votre agent n'aura jamais besoin de lire (collez le token, appuyez sur Entrée, puis sur Ctrl-D) :
@@ -194,7 +196,7 @@ Par défaut, aipager est un bot privé : vous et le bot dans une discussion pri
 - Vous prévient quand le contexte est presque plein, quand la conversation a été compactée, quand une session s'est terminée et quand une autre ne donne plus de nouvelles
 - Fait tourner plusieurs sessions à la fois avec un seul bot ; usage en équipe optionnel, avec des rôles et des règles par outil ([Usage en équipe et groupes](groups.md))
 - Bots observateurs en lecture seule, optionnels
-- Parle English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی et Tiếng Việt : seulement les textes d'aipager, jamais vos sessions ni les réponses de Claude ([Langues](commands.md#languages)). Ce README et la documentation sont aussi traduits
+- Parle English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی et Tiếng Việt : seulement les textes d'aipager, jamais vos sessions ni les réponses de Claude ([Langues](commands.md#languages)). Ce README et la documentation sont aussi traduits (voir **Lire dans une autre langue** plus haut)
 
 ### <a id="mini-app"></a>Mini App
 

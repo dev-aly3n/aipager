@@ -12,9 +12,11 @@ Controle remoto de sessões do [Claude Code](https://claude.com/claude-code) pel
 
 [aipager.run](https://aipager.run) · [Documentação](#docs) · [Histórico de mudanças](../../../CHANGELOG.md) · [Issues no GitHub](https://github.com/dev-aly3n/aipager/issues)
 
+**Leia em outro idioma:** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
+
 ## <a id="install"></a>Instalação
 
-Você tem um agente de programação (o Claude Code, ou qualquer agente com shell)? Crie um bot com o [@BotFather](https://t.me/BotFather), toque em Start nele e confirme que você está logado no Claude Code neste computador. Salve o token do bot num arquivo que o seu agente nunca precise ler (cole o token, aperte Enter e depois Ctrl-D):
+Você tem um agente de programação (o Claude Code, ou qualquer agente com shell)? Crie um bot com o [@BotFather](https://t.me/BotFather), toque em Start nele e confirme que você já fez login no Claude Code neste computador. Salve o token do bot num arquivo que o seu agente nunca precise ler (cole o token, aperte Enter e depois Ctrl-D):
 
 ```sh
 mkdir -p ~/.config/aipager
@@ -194,7 +196,7 @@ Por padrão o aipager é um bot privado: você e o bot num chat privado. Para co
 - Avisa sobre o contexto quase cheio, a conversa compactada, uma sessão que foi encerrada e uma que está há um tempo sem dar notícias
 - Roda várias sessões ao mesmo tempo com um único bot; uso em equipe opcional, com funções e regras por ferramenta ([Uso em equipe e grupos](groups.md))
 - Bots observadores somente leitura, opcionais
-- Fala English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی e Tiếng Việt: só os textos do aipager, nunca suas sessões nem as respostas do Claude ([Idiomas](commands.md#languages)). Este README e a documentação também estão traduzidos
+- Fala English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی e Tiếng Việt: só os textos do aipager, nunca suas sessões nem as respostas do Claude ([Idiomas](commands.md#languages)). Este README e a documentação também estão traduzidos (veja **Leia em outro idioma** acima)
 
 ### <a id="mini-app"></a>Mini App
 

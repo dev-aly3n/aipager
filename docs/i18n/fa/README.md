@@ -14,6 +14,8 @@
 
 [aipager.run](https://aipager.run) · [مستندات](#docs) · [تغییرات نسخه‌ها](../../../CHANGELOG.md) · [گزارش مشکل در GitHub](https://github.com/dev-aly3n/aipager/issues)
 
+**به زبان‌های دیگر:** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [Tiếng Việt](../vi/README.md)
+
 ## <a id="install"></a>نصب
 
 یک ایجنت برنامه‌نویسی دارید (Claude Code یا هر ایجنتی که shell دارد)؟ با [@BotFather](https://t.me/BotFather) یک ربات بسازید، در آن Start را بزنید و مطمئن شوید روی این کامپیوتر در Claude Code لاگین هستید. توکن ربات را در فایلی ذخیره کنید که ایجنت هیچ‌وقت لازم نباشد آن را بخواند (توکن را پیست کنید، Enter بزنید و بعد Ctrl-D):
@@ -264,7 +266,7 @@ aipager به‌طور پیش‌فرض یک ربات خصوصی است: شما و
 - دربارهٔ هشدار کانتکست، کامپکت شدن گفتگو، سشنی که بسته شد و سشنی که مدتی بی‌خبر مانده خبرتان می‌کند
 - چند سشن را همزمان با یک ربات اجرا می‌کند؛ استفادهٔ تیمی اختیاری با نقش‌ها و قانون برای هر ابزار ([استفادهٔ تیمی و گروه](groups.md))
 - ربات‌های ناظر فقط‌خواندنی، به‌شکل اختیاری
-- به English، Español، Русский، Português (Brasil)، 简体中文، Français، Deutsch، 한국어، العربية، Bahasa Indonesia، Українська، Italiano، Türkçe، فارسی و Tiếng Việt حرف می‌زند: فقط متن‌های خود aipager، نه سشن‌ها و نه جواب‌های Claude ([زبان‌ها](commands.md#languages)). این صفحه و مستندات هم ترجمه شده‌اند
+- به English، Español، Русский، Português (Brasil)، 简体中文، Français، Deutsch، 한국어، العربية، Bahasa Indonesia، Українська، Italiano، Türkçe، فارسی و Tiếng Việt حرف می‌زند: فقط متن‌های خود aipager، نه سشن‌ها و نه جواب‌های Claude ([زبان‌ها](commands.md#languages)). این صفحه و مستندات هم ترجمه شده‌اند (ردیف **به زبان‌های دیگر** را در بالا ببینید)
 
 ### <a id="mini-app"></a>Mini App
 

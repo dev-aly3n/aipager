@@ -14,6 +14,8 @@
 
 [aipager.run](https://aipager.run) · [التوثيق](#docs) · [سجل التغييرات](../../../CHANGELOG.md) · [مشكلات GitHub](https://github.com/dev-aly3n/aipager/issues)
 
+**اقرأ بلغة أخرى:** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
+
 ## <a id="install"></a>التثبيت
 
 هل لديك وكيل برمجة (Claude Code، أو أي وكيل يستطيع استخدام الطرفية)؟ يكفي إنشاء بوت عبر [@BotFather](https://t.me/BotFather)، والضغط على Start فيه، والتأكد من أن Claude Code على هذا الكمبيوتر مسجّل الدخول بحسابك. بعدها يُحفظ توكن البوت في ملف لا يحتاج الوكيل أبدًا إلى قراءته (لصق التوكن، ثم Enter، ثم Ctrl-D):
@@ -264,7 +266,7 @@ aipager service install
 - ينبّهك عندما يقترب السياق من الامتلاء، وعند تلخيص المحادثة، وعند انتهاء جلسة، وعندما تطول فترة صمت جلسة
 - يشغّل عدة جلسات في الوقت نفسه عبر بوت واحد؛ ووضع فريق اختياري بأدوار وقواعد لكل أداة ([وضع الفريق والمجموعات](groups.md))
 - بوتات مراقبة للقراءة فقط، اختيارية
-- يتحدث English وEspañol وРусский وPortuguês (Brasil) و简体中文 وFrançais وDeutsch و한국어 والعربية وBahasa Indonesia وУкраїнська وItaliano وTürkçe وفارسی وTiếng Việt: نصوص aipager وحدها، لا جلساتك ولا إجابات Claude أبدًا ([اللغات](commands.md#languages)). هذا الملف والتوثيق مترجمان أيضًا
+- يتحدث English وEspañol وРусский وPortuguês (Brasil) و简体中文 وFrançais وDeutsch و한국어 والعربية وBahasa Indonesia وУкраїнська وItaliano وTürkçe وفارسی وTiếng Việt: نصوص aipager وحدها، لا جلساتك ولا إجابات Claude أبدًا ([اللغات](commands.md#languages)). هذا الملف والتوثيق مترجمان أيضًا (انظر **اقرأ بلغة أخرى** في الأعلى)
 
 ### <a id="mini-app"></a>Mini App
 

@@ -12,6 +12,8 @@ Telegram으로 [Claude Code](https://claude.com/claude-code) 세션을 원격으
 
 [aipager.run](https://aipager.run) · [문서](#docs) · [변경 기록](../../../CHANGELOG.md) · [GitHub 이슈](https://github.com/dev-aly3n/aipager/issues)
 
+**다른 언어로 읽기:** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
+
 ## <a id="install"></a>설치
 
 코딩 에이전트(Claude Code, 또는 shell을 쓸 수 있는 다른 에이전트)가 있나요? [@BotFather](https://t.me/BotFather)에서 봇을 만들고, 봇에서 Start를 누르고, 이 컴퓨터의 Claude Code가 내 계정으로 로그인되어 있는지 확인하세요. 봇 token은 에이전트가 읽을 필요가 없는 파일에 저장하세요(token을 붙여 넣고 Enter, 그다음 Ctrl-D):
@@ -194,7 +196,7 @@ Linux에서는 systemd 사용자 서비스를 `~/.config/systemd/user/aipager.se
 - 컨텍스트가 거의 찼을 때, 대화를 압축할 때, 세션이 끝났을 때, 세션이 너무 오래 조용할 때 알려 줘요
 - 봇 하나로 여러 세션을 동시에 실행해요. 역할과 도구별 규칙이 있는 팀 모드도 선택할 수 있어요([팀 모드와 그룹](groups.md))
 - 읽기 전용 관찰 봇도 선택할 수 있어요
-- English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی, Tiếng Việt로 말해요. aipager 자체의 글에만 적용되고, 내 세션이나 Claude의 답변은 절대 건드리지 않아요([언어](commands.md#languages)). 이 README와 문서도 번역되어 있어요
+- English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی, Tiếng Việt로 말해요. aipager 자체의 글에만 적용되고, 내 세션이나 Claude의 답변은 절대 건드리지 않아요([언어](commands.md#languages)). 이 README와 문서도 번역되어 있어요(위의 **다른 언어로 읽기** 참고)
 
 ### <a id="mini-app"></a>Mini App
 

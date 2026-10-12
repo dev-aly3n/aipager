@@ -12,6 +12,8 @@
 
 [aipager.run](https://aipager.run) · [Belgeler](#docs) · [Değişiklik günlüğü](../../../CHANGELOG.md) · [GitHub'daki issue'lar](https://github.com/dev-aly3n/aipager/issues)
 
+**Başka bir dilde oku:** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
+
 ## <a id="install"></a>Kurulum
 
 Bir kodlama ajanın mı var (Claude Code ya da shell kullanabilen herhangi bir ajan)? [@BotFather](https://t.me/BotFather) ile bir bot oluştur, botta Start'a dokun ve bu bilgisayardaki Claude Code'un hesabına giriş yaptığından emin ol. Bot token'ını ajanın hiç okumak zorunda kalmayacağı bir dosyaya kaydet (token'ı yapıştır, Enter'a, sonra Ctrl-D'ye bas):
@@ -194,7 +196,7 @@ Varsayılan olarak aipager kişisel bir bottur: sen ve bot, tek bir özel sohbet
 - Bağlam neredeyse dolduğunda, konuşma sıkıştırıldığında, bir oturum sona erdiğinde ve biri uzun süre sessiz kaldığında haber verir
 - Tek bir botla aynı anda birden çok oturumu yönetir; istersen her araç için roller ve kurallarla ekip modu ([Ekip modu ve gruplar](groups.md))
 - İsteğe bağlı, yalnızca okuyan gözlemci botlar
-- English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی ve Tiếng Việt konuşur: yalnızca aipager'ın kendi metinleri, asla oturumların ya da Claude'un yanıtları değil ([Diller](commands.md#languages)). Bu README ve belgeler de çevrildi
+- English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی ve Tiếng Việt konuşur: yalnızca aipager'ın kendi metinleri, asla oturumların ya da Claude'un yanıtları değil ([Diller](commands.md#languages)). Bu README ve belgeler de çevrildi (yukarıdaki **Başka bir dilde oku** satırına bak)
 
 ### <a id="mini-app"></a>Mini App
 

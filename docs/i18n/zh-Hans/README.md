@@ -12,6 +12,8 @@
 
 [aipager.run](https://aipager.run) · [文档](#docs) · [更新日志](../../../CHANGELOG.md) · [GitHub issue](https://github.com/dev-aly3n/aipager/issues)
 
+**用其他语言阅读：** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
+
 ## <a id="install"></a>安装
 
 你有编程代理吗（Claude Code，或任何能用 shell 的代理）？用 [@BotFather](https://t.me/BotFather) 创建一个机器人，在机器人里点 Start，并确认这台电脑上的 Claude Code 已登录你的账号。把机器人的 token 保存到一个代理永远不需要读取的文件里（粘贴 token，按 Enter，再按 Ctrl-D）：
@@ -194,7 +196,7 @@ aipager service install
 - 在上下文快满时、对话被压缩时、会话结束时，以及会话沉默太久时提醒你
 - 通过一个机器人同时运行多个会话；可选的团队模式，带角色和按工具划分的规则（[团队模式与群组](groups.md)）
 - 可选的只读观察机器人
-- 会说 English、Español、Русский、Português (Brasil)、简体中文、Français、Deutsch、한국어、العربية、Bahasa Indonesia、Українська、Italiano、Türkçe、فارسی 和 Tiếng Việt：只限 aipager 自己的文字，绝不涉及你的会话或 Claude 的回答（[语言](commands.md#languages)）。本 README 和文档也已翻译
+- 会说 English、Español、Русский、Português (Brasil)、简体中文、Français、Deutsch、한국어、العربية、Bahasa Indonesia、Українська、Italiano、Türkçe、فارسی 和 Tiếng Việt：只限 aipager 自己的文字，绝不涉及你的会话或 Claude 的回答（[语言](commands.md#languages)）。本 README 和文档也已翻译（见上方的 **用其他语言阅读**）
 
 ### <a id="mini-app"></a>Mini App
 

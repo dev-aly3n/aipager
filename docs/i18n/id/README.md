@@ -12,6 +12,8 @@ Remote control lewat Telegram untuk sesi [Claude Code](https://claude.com/claude
 
 [aipager.run](https://aipager.run) · [Dokumentasi](#docs) · [Catatan perubahan](../../../CHANGELOG.md) · [Issue di GitHub](https://github.com/dev-aly3n/aipager/issues)
 
+**Baca dalam bahasa lain:** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
+
 ## <a id="install"></a>Pemasangan
 
 Punya agen coding (Claude Code atau agen apa pun yang bisa memakai shell)? Buat bot lewat [@BotFather](https://t.me/BotFather), ketuk Start di bot itu, dan pastikan Claude Code di komputer ini sudah masuk ke akunmu. Simpan token bot di file yang tidak perlu dibaca oleh agen (tempel token, tekan Enter, lalu Ctrl-D):
@@ -194,7 +196,7 @@ Secara bawaan aipager adalah bot pribadi: kamu dan bot dalam satu chat pribadi. 
 - Memberi tahu saat konteks hampir penuh, saat percakapan diringkas, saat sebuah sesi berakhir, dan saat ada sesi yang lama tidak memberi kabar
 - Mengelola beberapa sesi sekaligus lewat satu bot; opsional, mode tim dengan peran dan aturan per alat ([Mode tim dan grup](groups.md))
 - Bot pengamat yang hanya membaca, opsional
-- Berbicara dalam English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی, dan Tiếng Việt: hanya teks aipager sendiri, tidak pernah sesimu atau jawaban Claude ([Bahasa](commands.md#languages)). README ini dan dokumentasinya juga sudah diterjemahkan
+- Berbicara dalam English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی, dan Tiếng Việt: hanya teks aipager sendiri, tidak pernah sesimu atau jawaban Claude ([Bahasa](commands.md#languages)). README ini dan dokumentasinya juga sudah diterjemahkan (lihat **Baca dalam bahasa lain** di atas)
 
 ### <a id="mini-app"></a>Mini App
 
