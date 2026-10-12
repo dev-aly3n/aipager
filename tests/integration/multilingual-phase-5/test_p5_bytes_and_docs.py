@@ -7,7 +7,7 @@ design.md "Success criteria").
   ``miniapp_page_english.json`` and ``miniapp_css_ltr.json`` are unchanged.
 - Everything Claude reads byte-identical: ``claude_facing.json`` and
   ``safety_reasons.json`` are unchanged.
-- Item 6: the docs sections exist; CHANGELOG [Unreleased] has one
+- Item 6: the docs sections exist; CHANGELOG [1.1.0] has one
   multilingual Added bullet, plain words, no em dash, no stale sentence, and
   the phrases tests pin.
 
@@ -131,8 +131,9 @@ def test_no_english_surface_was_removed():
 # ---- CHANGELOG -------------------------------------------------------------------------------
 
 def unreleased():
+    """The release the multilingual work shipped in (it was [Unreleased])."""
     text = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
-    start = text.index("## [Unreleased]")
+    start = text.index("## [1.1.0]")
     end = text.find("\n## [", start + 1)
     return text[start:end if end != -1 else None]
 

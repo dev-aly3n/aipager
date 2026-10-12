@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-12
+
 ### Added
 - **aipager speaks 15 languages.** Next to English, aipager now speaks Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی and Tiếng Việt. Only aipager's own text changes: your Claude sessions don't, Claude answers in the language you write to it, and everything aipager sends to Claude stays as it was (a translated template button still sends Claude the English prompt, and the audit log stays English).
   - **Choosing.** `/settings` now starts with `🌐 Language: English`, and the new `/language` command (in the `/` menu, after `/settings`) opens the same list, each language in its own name. In a private chat the list starts with "Automatic (your Telegram language)", which follows your Telegram app's language, also when you change it later. In a group anyone can look and an admin picks the language, like every setting; until then a group is English. Every place that offers or confirms a language says, in one line, that it changes only aipager's own text. `language` is now a reserved session name: for a session you already named `language`, `/language` opens the list, so reach that session from the keyboard or `/rename` it.

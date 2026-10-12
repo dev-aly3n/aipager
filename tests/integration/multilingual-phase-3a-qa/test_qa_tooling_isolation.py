@@ -138,8 +138,9 @@ def test_safety_imports_nothing_new(golden):
 # ---- criterion 22 -----------------------------------------------------------------------------
 
 def _unreleased():
+    """The release the languages entry shipped in (it was [Unreleased])."""
     text = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
-    start = text.index("## [Unreleased]")
+    start = text.index("## [1.1.0]")
     end = text.find("\n## [", start + 1)
     return text[start:end if end != -1 else None]
 

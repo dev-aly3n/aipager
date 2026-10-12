@@ -3,7 +3,7 @@
 - The Mini App side of an in-place switch: the detail payload's
   ``mode_pending`` is true after a "sent" switch and false once the next
   main-agent hook confirms it (entrypoints: GET /api/sessions/{label}).
-- The docs and the CHANGELOG [Unreleased] entry: the three modes by their
+- The docs and the CHANGELOG [1.1.0] entry: the three modes by their
   shown names and flags, Auto as the default, Full access for admins, plain
   words with no em dashes (spec.md)."""
 
@@ -91,9 +91,11 @@ DOC_IDS = ["commands", "security", "groups"]
 
 
 def _unreleased() -> str:
+    """The release the three modes shipped in (it was [Unreleased])."""
     text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    m = re.search(r"^## \[Unreleased\]\n(.*?)(?=^## \[)", text, re.S | re.M)
-    return m.group(1) if m else ""
+    m = re.search(r"^## \[1\.1\.0\][^\n]*\n(.*?)(?=^## \[)", text, re.S | re.M)
+    assert m, "CHANGELOG has no [1.1.0] section"
+    return m.group(1)
 
 
 def _mode_lines(text: str) -> list[str]:
