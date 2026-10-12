@@ -1,6 +1,6 @@
 # Sorun giderme
 
-<!-- i18n-source: docs/troubleshooting.md @ 6fc084f -->
+<!-- i18n-source: docs/troubleshooting.md @ 7e36944 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../troubleshooting.md))
 

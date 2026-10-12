@@ -1,6 +1,6 @@
 # 架构
 
-<!-- i18n-source: docs/architecture.md @ 6fc084f -->
+<!-- i18n-source: docs/architecture.md @ 7e36944 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../architecture.md)）
 

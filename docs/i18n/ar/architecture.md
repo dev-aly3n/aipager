@@ -2,7 +2,7 @@
 
 # البنية
 
-<!-- i18n-source: docs/architecture.md @ 6fc084f -->
+<!-- i18n-source: docs/architecture.md @ 7e36944 -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../architecture.md))
 

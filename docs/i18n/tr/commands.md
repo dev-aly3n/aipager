@@ -1,6 +1,6 @@
 # Komutlar ve bot arayüzü
 
-<!-- i18n-source: docs/commands.md @ 7228205 -->
+<!-- i18n-source: docs/commands.md @ 7e36944 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../commands.md))
 

@@ -2,7 +2,7 @@
 
 # معماری
 
-<!-- i18n-source: docs/architecture.md @ 6fc084f -->
+<!-- i18n-source: docs/architecture.md @ 7e36944 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../architecture.md))
 

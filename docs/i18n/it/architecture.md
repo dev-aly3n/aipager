@@ -1,6 +1,6 @@
 # Architettura
 
-<!-- i18n-source: docs/architecture.md @ 6fc084f -->
+<!-- i18n-source: docs/architecture.md @ 7e36944 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../architecture.md))
 
