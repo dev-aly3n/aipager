@@ -1,6 +1,6 @@
 # Perintah dan antarmuka bot
 
-<!-- i18n-source: docs/commands.md @ 7228205 -->
+<!-- i18n-source: docs/commands.md @ 76d125d -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../commands.md))
 
@@ -145,7 +145,7 @@ Ada keyboard tetap di bawah kolom input chat. Barisnya dari atas ke bawah:
 |---|---|---|
 | Sesi | satu tombol per nama sesi yang berjalan | disusun otomatis dari daftar sesi |
 | Tindakan | `status`, `stop`, `new` | tombol teks cepat (`kill` tetap berfungsi kalau diketik; mengakhiri sesi ada di `/status` → `⋮`) |
-| Navigasi | `Templat ›`, `Perintah ›`, `📱 App` | App muncul di chat pribadi selama Mini App menyala, dan langsung membukanya |
+| Navigasi | `Templat ›`, `Perintah ›` | Mini App dibuka dari tombol menu di sebelah kolom ketik atau dengan `/app`, bukan dari keyboard ini |
 
 `Model ›` ada di dalam submenu “Perintah”. Mengetuk item submenu mengirim pesan siap pakai atau perintah slash:
 

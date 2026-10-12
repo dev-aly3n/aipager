@@ -1,6 +1,6 @@
 # 安全模型
 
-<!-- i18n-source: docs/security.md @ 6fc084f -->
+<!-- i18n-source: docs/security.md @ 76d125d -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../security.md)）
 
@@ -185,7 +185,7 @@ aipager **不在回环地址之外监听任何 TCP 端口**。Mini App 服务器
 
 **Mini App 默认开启**，所以在标准安装上，aipager 会在没有人要求的情况下打开这条隧道。这是一个有意的取舍（一个需要自己开启、却没有人发现的选项，就等于一个不存在的功能），但这意味着新安装会连接到互联网。用 `aipager miniapp disable` 关闭它，或者在 `aipager.yaml` 的 `miniapp:` 下设置 `enabled: false`；明确写出的 `false` 总是会被遵守。注意，**缺失或损坏**的 `miniapp:` 块现在会被理解为开启，而不是关闭。
 
-Mini App（除非用 `--url` 代替）会启动一个托管的 [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)，指向 aipager 自己的回环服务器，并把它得到的公开地址 `https://*.trycloudflare.com` 发布为 Telegram 的菜单按钮、回复键盘上的按钮和 `/app` 的回复。
+Mini App（除非用 `--url` 代替）会启动一个托管的 [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)，指向 aipager 自己的回环服务器，并把它得到的公开地址 `https://*.trycloudflare.com` 发布为 Telegram 的菜单按钮和 `/app` 的回复。
 
 这个地址**不是机密，也不需要是机密**：Mini App 提供的每个请求都会用 Telegram 的 `initData` 签名校验（见上面的[信任边界](#trust-boundary)），无论网址是怎么得到的，保护它的都是这同一项检查。仅仅知道主机名，攻击者得到的并不比随便猜一个 `trycloudflare.com` 子域名更多：签名检查才是真正的大门。像对待任何不公开但也不机密的网址那样对待它：让它运行没问题，但没有理由就不要贴到公开的频道里。
 

@@ -1,6 +1,6 @@
 # Розв'язання проблем
 
-<!-- i18n-source: docs/troubleshooting.md @ 6fc084f -->
+<!-- i18n-source: docs/troubleshooting.md @ 76d125d -->
 
 > Цю сторінку перекладено з англійської; якщо вони розходяться, правильною є англійська версія. ([English](../../troubleshooting.md))
 
@@ -174,6 +174,7 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # у секундах
 2. Якщо тег вказує на `/telegram-web-app.js`, перевір, що aipager його віддає: `curl -sI http://127.0.0.1:8765/telegram-web-app.js` на комп'ютері aipager (виправ порт, якщо він змінювався) має відповісти `200` з `Content-Type: application/javascript`. Копія лежить у `~/.local/share/aipager/webapp-sdk/`.
 3. URL відкрито у звичайному браузері, а не через кнопку `/app` або кнопку меню бота: тоді це очікуване повідомлення. SDK дає `initData` лише всередині Telegram.
 4. Сторінку було відкрито понад п'ять хвилин: `initData` спливає, і сторінка просить відкрити її заново. Натисни `/app` ще раз.
+5. Mini App відкрито кнопкою `📱 App` на клавіатурі від старішої версії aipager. Telegram не дає `initData` Mini App, відкритій кнопкою клавіатури, тому на клавіатурі aipager цієї кнопки більше немає. Надішли `/start`, щоб отримати поточну клавіатуру, і відкривай застосунок кнопкою меню або командою `/app`.
 
 ## <a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>`pyexpat _XML_SetAllocTrackerActivationThreshold` під час встановлення через brew
 

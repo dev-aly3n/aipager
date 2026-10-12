@@ -1,6 +1,6 @@
 # Lệnh và giao diện của bot
 
-<!-- i18n-source: docs/commands.md @ 7228205 -->
+<!-- i18n-source: docs/commands.md @ 76d125d -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../commands.md))
 
@@ -145,7 +145,7 @@ Một bàn phím cố định nằm dưới ô nhập của chat. Các hàng, t�
 |---|---|---|
 | Phiên | mỗi nhãn phiên đang chạy một nút | tự tạo từ danh sách phiên |
 | Thao tác | `phiên`, `dừng`, `mới` | lối tắt bằng chữ (`tắt` vẫn dùng được khi gõ; kết thúc một phiên nằm trong `/status` → `⋮`) |
-| Điều hướng | `Mẫu`, `Lệnh`, `📱 App` | App xuất hiện trong chat riêng khi Mini App đang chạy, và mở thẳng nó |
+| Điều hướng | `Mẫu`, `Lệnh` | Mini App mở từ nút menu cạnh ô nhập tin nhắn hoặc bằng `/app`, không mở từ bàn phím này |
 
 `Mô hình ›` nằm bên trong menu con Lệnh. Chạm vào một mục của menu con sẽ gửi một tin nhắn soạn sẵn hoặc một lệnh slash:
 

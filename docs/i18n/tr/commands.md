@@ -1,6 +1,6 @@
 # Komutlar ve bot arayüzü
 
-<!-- i18n-source: docs/commands.md @ 7228205 -->
+<!-- i18n-source: docs/commands.md @ 76d125d -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../commands.md))
 
@@ -145,7 +145,7 @@ Sohbetin giriş alanının altında kalıcı bir klavye vardır. Sıralar yukar�
 |---|---|---|
 | Oturumlar | çalışan her oturumun adı için bir düğme | oturum listesinden kendiliğinden oluşur |
 | İşlemler | `Özet`, `Stop`, `Oluştur` | hızlı metin düğmeleri (`Sonlandır` yazılınca çalışmaya devam eder; bir oturumu sonlandırmak `/status` → `⋮` içinde) |
-| Gezinme | `Şablonlar ›`, `Komutlar ›`, `📱 App` | App, Mini App açıkken özel sohbetlerde görünür ve onu hemen açar |
+| Gezinme | `Şablonlar ›`, `Komutlar ›` | Mini App, mesaj kutusunun yanındaki menü düğmesinden ya da `/app` ile açılır, bu klavyeden açılmaz |
 
 `Model ›`, “Komutlar” alt menüsünün içindedir. Bir alt menü öğesine dokunmak hazır bir mesaj ya da bir slash komutu gönderir:
 

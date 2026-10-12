@@ -1,6 +1,6 @@
 # Commandes et interface du bot
 
-<!-- i18n-source: docs/commands.md @ 7228205 -->
+<!-- i18n-source: docs/commands.md @ 76d125d -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../commands.md))
 
@@ -145,7 +145,7 @@ Un clavier fixe se trouve sous le champ de saisie de la discussion. Les rangées
 |---|---|---|
 | Sessions | un bouton par nom de session en cours | construite toute seule à partir de la liste des sessions |
 | Actions | `status`, `stop`, `new` | des raccourcis texte (`kill` marche toujours quand on le tape ; terminer une session se trouve dans `/status` → `⋮`) |
-| Navigation | `Modèles ›`, `Commandes ›`, `📱 App` | App apparaît dans les discussions privées tant que la Mini App est activée, et l'ouvre directement |
+| Navigation | `Modèles ›`, `Commandes ›` | La Mini App s'ouvre avec le bouton de menu à côté du champ de saisie ou avec `/app`, pas depuis ce clavier |
 
 `Modèle IA ›` se trouve dans le sous-menu Commandes. Toucher une entrée d'un sous-menu envoie un message tout prêt ou une commande slash :
 

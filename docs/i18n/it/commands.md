@@ -1,6 +1,6 @@
 # Comandi del bot e interfaccia
 
-<!-- i18n-source: docs/commands.md @ 7228205 -->
+<!-- i18n-source: docs/commands.md @ 76d125d -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../commands.md))
 
@@ -145,7 +145,7 @@ Una tastiera fissa sta sotto il campo di scrittura della chat. Le righe, dall'al
 |---|---|---|
 | Sessioni | un pulsante per ogni etichetta di sessione in esecuzione | generati dall'elenco delle sessioni |
 | Azioni | `status`, `stop`, `new` | scorciatoie di testo (`kill` funziona ancora se lo scrivi; terminare una sessione è in `/status` → `⋮`) |
-| Navigazione | `Template ›`, `Comandi ›`, `📱 App` | App compare in una chat privata quando la Mini App è in funzione e la apre direttamente |
+| Navigazione | `Template ›`, `Comandi ›` | La Mini App si apre dal pulsante del menu accanto al campo di scrittura o con `/app`, non da questa tastiera |
 
 `Modello ›` sta dentro il sottomenu Comandi. Toccare una voce di un sottomenu invia un messaggio già scritto o un comando slash:
 

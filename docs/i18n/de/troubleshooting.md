@@ -1,6 +1,6 @@
 # Fehlerbehebung
 
-<!-- i18n-source: docs/troubleshooting.md @ 6fc084f -->
+<!-- i18n-source: docs/troubleshooting.md @ 76d125d -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../troubleshooting.md))
 
@@ -174,6 +174,7 @@ Dann der Reihe nach:
 2. Zeigt das Tag auf `/telegram-web-app.js`, prüfe, ob aipager es ausliefert: `curl -sI http://127.0.0.1:8765/telegram-web-app.js` auf dem Computer von aipager (pass den Port an, wenn du ihn geändert hast) sollte mit `200` und `Content-Type: application/javascript` antworten. Die Kopie liegt unter `~/.local/share/aipager/webapp-sdk/`.
 3. Du hast die URL in einem normalen Browser geöffnet statt über den Button `/app` oder den Menü-Button des Bots: Dann ist das die erwartete Meldung. Das SDK erzeugt `initData` nur in Telegram.
 4. Die Seite war länger als fünf Minuten offen: `initData` läuft ab, und die Seite bittet darum, neu geöffnet zu werden. Tippe noch einmal auf `/app`.
+5. Du hast auf `📱 App` in einer Tastatur einer älteren aipager-Version getippt. Telegram gibt einer Mini App, die über einen Tastatur-Button geöffnet wird, kein `initData`, deshalb hat die Tastatur von aipager diesen Button nicht mehr. Schick `/start`, um die aktuelle Tastatur zu bekommen, und öffne die App über den Menü-Button oder mit `/app`.
 
 ## <a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>`pyexpat _XML_SetAllocTrackerActivationThreshold` bei der Installation mit brew
 

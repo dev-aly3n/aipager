@@ -1,6 +1,6 @@
 # Comandos e interfaz del bot
 
-<!-- i18n-source: docs/commands.md @ 7228205 -->
+<!-- i18n-source: docs/commands.md @ 76d125d -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../commands.md))
 
@@ -145,7 +145,7 @@ Debajo del campo de escritura del chat hay un teclado fijo. Filas, de arriba aba
 |---|---|---|
 | Sesiones | un botón por cada etiqueta de sesión en marcha | se crea solo a partir de la lista de sesiones |
 | Acciones | `status`, `stop`, `new` | atajos de texto (`kill` sigue funcionando si se escribe; terminar una sesión está en `/status` → `⋮`) |
-| Navegación | `Plantillas ›`, `Comandos ›`, `📱 App` | App aparece en los chats privados mientras la Mini App está activada, y la abre directamente |
+| Navegación | `Plantillas ›`, `Comandos ›` | La Mini App se abre desde el botón de menú junto al campo de escritura o con `/app`, no desde este teclado |
 
 `Modelo ›` está dentro del submenú de Comandos. Tocar una entrada de un submenú envía un mensaje preparado o un comando de barra:
 

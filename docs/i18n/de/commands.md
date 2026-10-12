@@ -1,6 +1,6 @@
 # Befehle und Oberfläche des Bots
 
-<!-- i18n-source: docs/commands.md @ 7228205 -->
+<!-- i18n-source: docs/commands.md @ 76d125d -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../commands.md))
 
@@ -145,7 +145,7 @@ Unter dem Eingabefeld des Chats sitzt eine feste Tastatur. Reihen, von oben nach
 |---|---|---|
 | Sitzungen | ein Button pro Name einer laufenden Sitzung | automatisch aus der Sitzungsliste gebaut |
 | Aktionen | `Status`, `Stop`, `Neu…` | Abkürzungen als Text (`kill` funktioniert getippt weiterhin; eine Sitzung beenden geht unter `/status` → `⋮`) |
-| Navigation | `Vorlagen ›`, `Befehle ›`, `📱 App` | App erscheint in privaten Chats, solange die Mini App an ist, und öffnet sie direkt |
+| Navigation | `Vorlagen ›`, `Befehle ›` | Die Mini App öffnest du über den Menü-Button neben dem Eingabefeld oder mit `/app`, nicht über diese Tastatur |
 
 `Modell ›` steckt im Untermenü Befehle. Ein Tippen auf einen Eintrag eines Untermenüs schickt eine fertige Nachricht oder einen Slash-Befehl:
 

@@ -1,6 +1,6 @@
 # Model keamanan
 
-<!-- i18n-source: docs/security.md @ 6fc084f -->
+<!-- i18n-source: docs/security.md @ 76d125d -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../security.md))
 
@@ -185,7 +185,7 @@ Artinya aipager bukan permukaan serangan jarak jauh. Penyerang di jaringan tidak
 
 **Mini App menyala secara bawaan**, jadi pada pemasangan standar aipager membuka tunnel ini tanpa bertanya ke siapa pun. Ini pilihan yang disengaja (opsi “nyalakan” yang tidak pernah ditemukan siapa pun adalah fitur yang sebenarnya tidak ada), tapi artinya pemasangan baru langsung terhubung ke internet. Matikan dengan `aipager miniapp disable` atau taruh `enabled: false` di bawah `miniapp:` di `aipager.yaml`; `false` yang eksplisit selalu dipatuhi. Perhatikan: blok `miniapp:` yang **tidak ada atau rusak** sekarang kembali ke MENYALA, bukan MATI.
 
-Mini App (kecuali `--url` menggantikannya) menjalankan [quick tunnel Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) yang dikelola, mengarah ke server loopback milik aipager sendiri, dan menerbitkan alamat publik `https://*.trycloudflare.com` yang diberikan kepadanya sebagai tombol menu Telegram, tombol di keyboard, dan balasan `/app`.
+Mini App (kecuali `--url` menggantikannya) menjalankan [quick tunnel Cloudflare](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) yang dikelola, mengarah ke server loopback milik aipager sendiri, dan menerbitkan alamat publik `https://*.trycloudflare.com` yang diberikan kepadanya sebagai tombol menu Telegram dan balasan `/app`.
 
 Alamat ini **bukan rahasia dan memang tidak perlu rahasia**: setiap permintaan yang dilayani Mini App diperiksa dengan tanda tangan `initData` dari Telegram (lihat [Batas kepercayaan](#trust-boundary) di atas), dan pemeriksaan itulah yang melindunginya, bagaimanapun URL itu didapat. Mengetahui satu nama host tidak memberi penyerang apa pun yang tidak bisa didapatnya dengan menebak subdomain `trycloudflare.com` secara acak: gerbang yang sebenarnya adalah pemeriksaan tanda tangan. Perlakukan alamat ini seperti URL lain yang tidak diterbitkan tapi juga tidak dirahasiakan: membiarkannya menyala tidak apa-apa, tapi menempelkannya ke kanal publik tanpa alasan sebaiknya tidak.
 

@@ -1,6 +1,6 @@
 # 문제 해결
 
-<!-- i18n-source: docs/troubleshooting.md @ 6fc084f -->
+<!-- i18n-source: docs/troubleshooting.md @ 76d125d -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../troubleshooting.md))
 
@@ -174,6 +174,7 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # 초 단위
 2. 태그가 `/telegram-web-app.js`를 가리키면 aipager가 그것을 제공하는지 확인하세요. aipager를 실행하는 컴퓨터에서 `curl -sI http://127.0.0.1:8765/telegram-web-app.js`(포트를 바꿨다면 맞게 고치세요)가 `200`과 `Content-Type: application/javascript`로 답해야 해요. 사본은 `~/.local/share/aipager/webapp-sdk/` 아래에 있어요.
 3. 봇의 `/app` 버튼이나 메뉴 버튼이 아니라 일반 브라우저에서 주소를 열었어요. 그렇다면 이 메시지가 맞아요. SDK는 Telegram 안에서만 `initData`를 만들어요.
 4. 페이지를 5분 넘게 열어 뒀어요. `initData`가 만료돼서 페이지가 다시 열어 달라고 해요. `/app`을 다시 누르세요.
+5. 예전 aipager 버전의 키보드에서 `📱 App`을 눌렀어요. Telegram은 키보드 버튼으로 연 Mini App에 `initData`를 주지 않아서, 이제 aipager 키보드에는 이 버튼이 없어요. `/start`를 보내 지금 키보드를 받고, 메뉴 버튼이나 `/app`으로 앱을 여세요.
 
 ## <a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>brew로 설치할 때 `pyexpat _XML_SetAllocTrackerActivationThreshold`
 
