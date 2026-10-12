@@ -80,9 +80,6 @@ whole show. Inside that:
   objects keyed by name. Saved to `~/.claude/aipager-sessions.json`
   (atomically) on shutdown and whenever something that must survive a
   restart changes.
-- **`ObserverBroadcaster`** (optional, `aipager/bot/observer.py`): if
-  `OBSERVER_BOTS` is set, also sends notices to read-only observer
-  bots ([observers](observers.md)).
 - **Mini App server** (`aipager/miniapp/server.py`): an aiohttp app
   bound to `127.0.0.1` on `MINIAPP_PORT` (default 8765), published to
   Telegram through a managed Cloudflare tunnel while enabled (the
@@ -110,15 +107,14 @@ From `aipager/cli/daemon.py`:
    A missing or unreadable file starts empty.
 6. Resolve the Mini App's address (your own URL, or Tailscale), then
    `bot.start()`: starts polling.
-7. `ObserverBroadcaster.start()`, only when configured.
-8. `HookReceiver.start()`: removes a stale socket file, binds, listens.
-9. `bot.recover_sessions()`: brings back the cards and prompts of
+7. `HookReceiver.start()`: removes a stale socket file, binds, listens.
+8. `bot.recover_sessions()`: brings back the cards and prompts of
    sessions that were working or waiting when the daemon stopped (see
    [commands → idle responses](commands.md#idle-responses)).
-10. `SessionMonitor.start()`: begins the 2 s tick.
-11. The Mini App server starts, then the tunnel (when no URL of your own
+9. `SessionMonitor.start()`: begins the 2 s tick.
+10. The Mini App server starts, then the tunnel (when no URL of your own
     is set), and the `📱 App` buttons are published.
-12. The daemon waits for signals: SIGINT or SIGTERM stops it, SIGUSR1
+11. The daemon waits for signals: SIGINT or SIGTERM stops it, SIGUSR1
     reloads the chats and rules ([groups → live reload](groups.md#live-reload)).
 
 ## Shutdown sequence
@@ -129,7 +125,7 @@ From `aipager/cli/daemon.py`:
 3. `registry.save()`.
 4. The tunnel stops, then the Mini App server.
 5. `session_monitor.stop()`, `hook_receiver.stop()` (closes the socket
-   and removes its file), `observers.stop()` if running.
+   and removes its file).
 6. `bot.stop()`: cancels the animations and stops the `Application`.
 7. `registry.save()` again, for a card whose send was still in flight.
 

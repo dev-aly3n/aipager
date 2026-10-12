@@ -356,7 +356,6 @@ Toda tarefa de toda função menos `owner` o recebe inteiro, assim como as taref
 - Numa instalação com chat privado, as suas sessões de terminal e as do seu chat privado nunca aparecem num grupo (veja [Para onde vão as mensagens](#where-messages-go)). Uma sessão de terminal que um aipager mais antigo já levou para o grupo continua sendo do grupo: encerre-a, exclua-a das sessões encerradas do grupo e inicie-a de novo.
 - O `aipager.yaml` tem permissões 0600 (só o dono). O aipager não define as permissões do `policy.yaml`: mantenha-o só para o dono você mesmo (`chmod 600 ~/.config/aipager/policy.yaml`).
 - O registro de auditoria (`~/.claude/aipager-audit.jsonl`) não tem permissões próprias: ele é tão privado quanto a sua pasta `~/.claude`.
-- Os [bots observadores](observers.md) recebem os avisos de todos os chats em que o bot trabalha, grupos incluídos: configure um só para um chat a quem você confiaria tudo isso.
 
 ## <a id="revoking-a-user"></a>Tirar o acesso de um usuário
 

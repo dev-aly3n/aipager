@@ -42,7 +42,7 @@ Từng phần, bằng lời dễ hiểu. Mọi giá trị đều được so v�
 - `claude_code`: phiên bản Claude Code, tìm thấy bao nhiêu bản cài Claude Code, và nó đăng nhập bằng cách nào (`env`, `file`, `keychain`, hoặc lý do không biết được). Không bao giờ có chính thông tin đăng nhập.
 
 **Thiết lập của bạn, dưới dạng số đếm**
-- `config`: chế độ (`personal`, `team`, `scope`); có bao nhiêu chat riêng và bao nhiêu nhóm được cấu hình; có bao nhiêu vai trò tự tạo (không kèm tên của chúng); tính năng nào đang bật (Mini App, loại tunnel của nó, bot quan sát, tin nhắn thoại, xem trước thay đổi, tóm tắt chi tiết).
+- `config`: chế độ (`personal`, `team`, `scope`); có bao nhiêu chat riêng và bao nhiêu nhóm được cấu hình; có bao nhiêu vai trò tự tạo (không kèm tên của chúng); tính năng nào đang bật (Mini App, loại tunnel của nó, tin nhắn thoại, xem trước thay đổi, tóm tắt chi tiết).
 - `runtime`: aipager đã chạy được bao lâu, theo khoảng (`<10m`, `10m-1h`, `1-24h`, `1-7d`, `>7d`); bao nhiêu phiên đang chạy và đang bận; aipager đã dừng bất ngờ bao nhiêu lần trong 7 ngày qua và lần gần nhất nó kết thúc ra sao (`clean`, `crash`, `reboot`).
 - `doctor`: kết quả (`ok`, `warn`, `fail`) của một danh sách kiểm tra sức khỏe cố định, khi có sẵn mà không cần chạy lại các bước kiểm tra (báo cáo từ bot và từ terminal để trống phần này).
 - `flood`: trạng thái giới hạn tốc độ của Telegram cộng dồn trên mọi chat: số lần bị chặn trong 7 ngày qua, ngay lúc này có chat nào đang bị tắt gửi, đang ở chế độ tối thiểu hay đang gửi chậm lại không, và phần ngân sách mỗi giờ mà chat bận nhất đã dùng, theo khoảng. Không có ID chat.

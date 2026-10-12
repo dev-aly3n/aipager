@@ -64,7 +64,6 @@ flowchart LR
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): يفتح مقبس datagram من نوع Unix في `$XDG_RUNTIME_DIR/aipager.sock`، ويقرأ JSON الذي يرسله `aipager-hook` و`aipager-statusline`، ويوزع العمل بحسب `hook_event_name` (أو `type` لرسائل aipager نفسه؛ يُنظر [أحداث الهوك](hooks.md)).
 - **`SessionMonitor`** (`aipager/session_monitor.py`): يستيقظ كل ثانيتين ليفحص `/tmp/claude-dtach-*.sock`، ويطابق الجلسات التي يجدها مع قائمة الجلسات، ويشغّل المراقبات: بطاقة عمل توقفت عن الحركة، ورسالة لم يأخذها Claude Code أبدًا، وطلب إذن بلا أخبار منذ ٥ دقائق تُظهر المحادثة المحفوظة أنه انتهى (`AIPAGER_INTERACTIVE_TIMEOUT`)، ومهمة فاتت لحظة انتهائها.
 - **`SessionRegistry`** (`aipager/state.py`): كائنات `TrackedSession` مفهرسة بالاسم. تُحفظ في `~/.claude/aipager-sessions.json` (بشكل ذري) عند الإيقاف وكلما تغيّر شيء يجب أن يبقى بعد إعادة التشغيل.
-- **`ObserverBroadcaster`** (اختياري، `aipager/bot/observer.py`): إذا ضُبط `OBSERVER_BOTS`، يرسل الإشعارات أيضًا إلى بوتات مراقبة للقراءة فقط ([بوتات المراقبة](observers.md)).
 - **خادم Mini App** (`aipager/miniapp/server.py`): تطبيق aiohttp على `127.0.0.1` في المنفذ `MINIAPP_PORT` (الافتراضي 8765)، ويُتاح لـ Telegram عبر نفق Cloudflare مُدار ما دام مفعّلًا (وهو مفعّل افتراضيًا). يقدّم لوحة `/app`.
 
 كل هذه الأجزاء تعمل كمهام على الحلقة نفسها. والعمل الذي قد يعطّل الحلقة يجري في خيوط منفصلة: تحويل الرسائل الصوتية إلى نص، وبناء تقرير المشكلة وإرساله، وفحص التحديثات وتخطيط إعادة التشغيل، وتنزيل سكربت Mini App و`cloudflared`، وفحص تسجيل الدخول عند البدء.
@@ -79,12 +78,11 @@ flowchart LR
 4. إصلاح ملفات Claude Code نفسه: إضافة أي هوك أو سطر حالة لـ aipager ينقص إلى `~/.claude/settings.json`، والإجابة عن أسئلة التشغيل الأول التي لا يستطيع مستخدم Telegram الإجابة عنها (يُنظر [الأمان](security.md#who-decides-whether-a-tool-call-runs)).
 5. `SessionRegistry.load()`: يقرأ `~/.claude/aipager-sessions.json`. إذا كان الملف غير موجود أو غير مقروء، تبدأ القائمة فارغة.
 6. تحديد عنوان Mini App (عنوانك الخاص، أو Tailscale)، ثم `bot.start()`: بدء استقبال التحديثات من Telegram.
-7. `ObserverBroadcaster.start()`، فقط إذا كان مضبوطًا.
-8. `HookReceiver.start()`: يحذف ملف مقبس قديمًا متبقيًا، ثم bind، ثم الاستماع.
-9. `bot.recover_sessions()`: يعيد البطاقات والطلبات للجلسات التي كانت تعمل أو تنتظر عندما توقف aipager (يُنظر [الأوامر ← الإجابات](commands.md#idle-responses)).
-10. `SessionMonitor.start()`: يبدأ الفحص كل ثانيتين.
-11. يبدأ خادم Mini App، ثم النفق (حين لا يكون هناك عنوان خاص بك)، وتُنشر أزرار `📱 App`.
-12. ينتظر aipager الإشارات: SIGINT أو SIGTERM يوقفه، وSIGUSR1 يعيد تحميل الدردشات والقواعد ([المجموعات ← إعادة التحميل دون إعادة تشغيل](groups.md#live-reload)).
+7. `HookReceiver.start()`: يحذف ملف مقبس قديمًا متبقيًا، ثم bind، ثم الاستماع.
+8. `bot.recover_sessions()`: يعيد البطاقات والطلبات للجلسات التي كانت تعمل أو تنتظر عندما توقف aipager (يُنظر [الأوامر ← الإجابات](commands.md#idle-responses)).
+9. `SessionMonitor.start()`: يبدأ الفحص كل ثانيتين.
+10. يبدأ خادم Mini App، ثم النفق (حين لا يكون هناك عنوان خاص بك)، وتُنشر أزرار `📱 App`.
+11. ينتظر aipager الإشارات: SIGINT أو SIGTERM يوقفه، وSIGUSR1 يعيد تحميل الدردشات والقواعد ([المجموعات ← إعادة التحميل دون إعادة تشغيل](groups.md#live-reload)).
 
 ## <a id="shutdown-sequence"></a>تسلسل الإيقاف
 
@@ -92,7 +90,7 @@ flowchart LR
 2. يُمنح `/update` الجاري مهلة قصيرة، ثم يُوقف المثبّت الخاص به (يُنظر [الأوامر ← التحديث](commands.md#update)).
 3. `registry.save()`.
 4. يتوقف النفق، ثم خادم Mini App.
-5. `session_monitor.stop()`، و`hook_receiver.stop()` (يغلق المقبس ويحذف ملفه)، و`observers.stop()` إن كان يعمل.
+5. `session_monitor.stop()`، و`hook_receiver.stop()` (يغلق المقبس ويحذف ملفه).
 6. `bot.stop()`: يلغي الحركات ويوقف `Application`.
 7. `registry.save()` مرة أخرى، لبطاقة لم يكتمل إرسالها بعد.
 

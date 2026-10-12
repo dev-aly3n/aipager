@@ -195,7 +195,6 @@ Par défaut, aipager est un bot privé : vous et le bot dans une discussion pri
 - Accepte les photos, les fichiers et les messages vocaux (un message vocal est transformé en texte sur votre ordinateur, avec le paquet vocal optionnel)
 - Vous prévient quand le contexte est presque plein, quand la conversation a été compactée, quand une session s'est terminée et quand une autre ne donne plus de nouvelles
 - Fait tourner plusieurs sessions à la fois avec un seul bot ; usage en équipe optionnel, avec des rôles et des règles par outil ([Usage en équipe et groupes](groups.md))
-- Bots observateurs en lecture seule, optionnels
 - Parle English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی et Tiếng Việt : seulement les textes d'aipager, jamais vos sessions ni les réponses de Claude ([Langues](commands.md#languages)). Ce README et la documentation sont aussi traduits (voir **Lire dans une autre langue** plus haut)
 
 ### <a id="mini-app"></a>Mini App
@@ -234,7 +233,6 @@ MIT ; le texte complet est dans [LICENSE](../../../LICENSE).
 | [Événements de hook](hooks.md) | Chaque événement qu'aipager reçoit de Claude Code, avec ses champs |
 | [Commandes du bot](commands.md) | Commandes, boutons, la Mini App, messages vocaux et fichiers, toutes les commandes `aipager` et les paramètres lus dans l'environnement |
 | [Usage en équipe et groupes](groups.md) | Configuration pour plusieurs personnes, rôles, règles, trace de qui a fait quoi |
-| [Bots observateurs](observers.md) | Bots en lecture seule qui reçoivent des copies des notifications |
 | [Dépannage](troubleshooting.md) | Pannes courantes et la table des solutions d'`aipager doctor` |
 | [Rapports de problèmes](problem-reports.md) | Ce que contient un rapport de problème, où il va et quand aipager le propose |
 | [Modèle de sécurité](security.md) | Limite de confiance, secrets, journal d'audit, connexions réseau |

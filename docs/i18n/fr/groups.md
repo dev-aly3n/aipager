@@ -356,7 +356,6 @@ Chaque tâche de chaque rôle sauf `owner` le reçoit en entier, tout comme les 
 - Sur une installation avec une discussion privée, vos sessions de terminal et celles de votre discussion privée n'apparaissent jamais dans un groupe (voir [Où vont les messages](#where-messages-go)). Une session de terminal qu'un aipager plus ancien a déjà mise dans le groupe reste au groupe : terminez-la, supprimez-la des sessions terminées du groupe et relancez-la.
 - `aipager.yaml` a les droits 0600 (le propriétaire seulement). aipager ne règle pas les droits de `policy.yaml` : gardez-le vous-même pour le propriétaire seulement (`chmod 600 ~/.config/aipager/policy.yaml`).
 - Le journal d'audit (`~/.claude/aipager-audit.jsonl`) n'a pas de droits à lui : il est aussi privé que votre dossier `~/.claude`.
-- Les [bots observateurs](observers.md) reçoivent les notifications de toutes les discussions que sert le bot, groupes compris : n'en configurez un que pour une discussion à qui vous confieriez tout cela.
 
 ## <a id="revoking-a-user"></a>Retirer l'accès d'un utilisateur
 

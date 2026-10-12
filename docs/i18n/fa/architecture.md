@@ -64,7 +64,6 @@ flowchart LR
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): یک سوکت datagram یونیکس در `$XDG_RUNTIME_DIR/aipager.sock` باز می‌کند و JSONی را که `aipager-hook` و `aipager-statusline` می‌فرستند می‌خواند، و بر اساس `hook_event_name` آن (یا `type` برای پیام‌های خود aipager؛ [رویدادهای هوک](hooks.md) را ببینید) کار را پخش می‌کند.
 - **`SessionMonitor`** (`aipager/session_monitor.py`): هر ۲ ثانیه بیدار می‌شود تا `/tmp/claude-dtach-*.sock` را بگردد، سشن‌هایی را که پیدا می‌کند با فهرست سشن‌ها هماهنگ کند و نگهبان‌ها را اجرا کند: کارت در حال کاری که دیگر جلو نمی‌رود، پیامی که Claude Code هیچ‌وقت تحویل نگرفت، درخواست اجازه‌ای که ۵ دقیقه هیچ خبری از آن نیست و گفتگوی ذخیره‌شده نشان می‌دهد تمام شده (`AIPAGER_INTERACTIVE_TIMEOUT`)، کاری که پایانش دیده نشد.
 - **`SessionRegistry`** (`aipager/state.py`): شیءهای `TrackedSession` که با اسم سشن پیدا می‌شوند. هنگام خاموش شدن، و هر وقت چیزی که باید بعد از ری‌استارت بماند عوض شود، (به‌شکل اتمی) در `~/.claude/aipager-sessions.json` ذخیره می‌شود.
-- **`ObserverBroadcaster`** (اختیاری، `aipager/bot/observer.py`): اگر `OBSERVER_BOTS` تنظیم شده باشد، اعلان‌ها را به ربات‌های ناظر فقط‌خواندنی هم می‌فرستد ([ربات‌های ناظر](observers.md)).
 - **سرور Mini App** (`aipager/miniapp/server.py`): یک اپ aiohttp روی `127.0.0.1` و پورت `MINIAPP_PORT` (پیش‌فرض 8765)، که تا وقتی روشن است (پیش‌فرض) از طریق یک تونل Cloudflare مدیریت‌شده به تلگرام می‌رسد. داشبورد `/app` را سرو می‌کند.
 
 همهٔ این‌ها به‌شکل task روی همان loop اجرا می‌شوند. کارهایی که loop را معطل می‌کنند در threadهای جدا اجرا می‌شوند: تبدیل ویس به متن، ساختن و فرستادن گزارش مشکل، چک کردن آپدیت و برنامه‌ریزی ری‌استارت، دانلود اسکریپت Mini App و `cloudflared`، و چک کردن لاگین در شروع.
@@ -79,12 +78,11 @@ flowchart LR
 4. فایل‌های خود Claude Code را درست می‌کند: هر هوک aipager یا خط وضعیتی را که در `~/.claude/settings.json` نیست اضافه می‌کند، و به سؤال‌های اولین اجرای Claude Code که کاربر تلگرام نمی‌تواند جوابشان را بدهد، جواب می‌دهد ([مدل امنیتی](security.md#who-decides-whether-a-tool-call-runs) را ببینید).
 5. `SessionRegistry.load()`: `~/.claude/aipager-sessions.json` را می‌خواند. اگر فایل نباشد یا خوانده نشود، با فهرست خالی شروع می‌کند.
 6. آدرس Mini App را پیدا می‌کند (آدرس خودتان یا Tailscale)، بعد `bot.start()`: گرفتن آپدیت‌ها از تلگرام شروع می‌شود.
-7. `ObserverBroadcaster.start()`، فقط وقتی تنظیم شده باشد.
-8. `HookReceiver.start()`: فایل سوکت جامانده را پاک می‌کند، سوکت را باز می‌کند و گوش می‌دهد.
-9. `bot.recover_sessions()`: کارت‌ها و درخواست‌های سشن‌هایی را که موقع خاموش شدن aipager در حال کار یا منتظر بودند برمی‌گرداند ([فرمان‌ها ← جواب‌ها](commands.md#idle-responses) را ببینید).
-10. `SessionMonitor.start()`: تیک ۲ ثانیه‌ای را شروع می‌کند.
-11. سرور Mini App شروع می‌شود، بعد تونل (وقتی آدرس خودتان را نداده‌اید)، و دکمه‌های `📱 App` منتشر می‌شوند.
-12. aipager منتظر سیگنال‌ها می‌ماند: SIGINT یا SIGTERM متوقفش می‌کند و SIGUSR1 چت‌ها و قانون‌ها را دوباره می‌خواند ([استفادهٔ تیمی ← خواندن دوبارهٔ تنظیمات بدون ری‌استارت](groups.md#live-reload)).
+7. `HookReceiver.start()`: فایل سوکت جامانده را پاک می‌کند، سوکت را باز می‌کند و گوش می‌دهد.
+8. `bot.recover_sessions()`: کارت‌ها و درخواست‌های سشن‌هایی را که موقع خاموش شدن aipager در حال کار یا منتظر بودند برمی‌گرداند ([فرمان‌ها ← جواب‌ها](commands.md#idle-responses) را ببینید).
+9. `SessionMonitor.start()`: تیک ۲ ثانیه‌ای را شروع می‌کند.
+10. سرور Mini App شروع می‌شود، بعد تونل (وقتی آدرس خودتان را نداده‌اید)، و دکمه‌های `📱 App` منتشر می‌شوند.
+11. aipager منتظر سیگنال‌ها می‌ماند: SIGINT یا SIGTERM متوقفش می‌کند و SIGUSR1 چت‌ها و قانون‌ها را دوباره می‌خواند ([استفادهٔ تیمی ← خواندن دوبارهٔ تنظیمات بدون ری‌استارت](groups.md#live-reload)).
 
 ## <a id="shutdown-sequence"></a>ترتیب خاموش شدن
 
@@ -92,7 +90,7 @@ flowchart LR
 2. یک `/update` در حال اجرا کمی فرصت می‌گیرد و بعد نصب‌کننده‌اش متوقف می‌شود ([فرمان‌ها ← آپدیت](commands.md#update) را ببینید).
 3. `registry.save()`.
 4. تونل متوقف می‌شود، بعد سرور Mini App.
-5. `session_monitor.stop()`، `hook_receiver.stop()` (سوکت را می‌بندد و فایلش را پاک می‌کند)، و اگر در حال اجرا باشد `observers.stop()`.
+5. `session_monitor.stop()`، `hook_receiver.stop()` (سوکت را می‌بندد و فایلش را پاک می‌کند).
 6. `bot.stop()`: انیمیشن‌ها را لغو می‌کند و `Application` را متوقف می‌کند.
 7. دوباره `registry.save()`، برای کارتی که ارسالش هنوز در جریان بود.
 

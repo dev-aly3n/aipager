@@ -58,7 +58,6 @@ flowchart LR
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): `$XDG_RUNTIME_DIR/aipager.sock`에 Unix datagram 소켓을 열고, `aipager-hook`과 `aipager-statusline`이 보내는 JSON을 읽어서 `hook_event_name`(aipager 자체 메시지는 `type`, [Hook 이벤트](hooks.md) 참고)에 따라 나눠 보내요.
 - **`SessionMonitor`** (`aipager/session_monitor.py`): 2초마다 깨어나서 `/tmp/claude-dtach-*.sock`을 훑고, 찾은 세션을 세션 목록과 맞춰 보고, 여러 감시를 실행해요. 멈춘 작업 카드, Claude Code가 가져가지 않은 메시지, 5분 동안 소식이 없고 저장된 대화에 끝났다고 나오는 권한 요청(`AIPAGER_INTERACTIVE_TIMEOUT`), 끝나는 순간을 놓친 작업을 살펴요.
 - **`SessionRegistry`** (`aipager/state.py`): 이름별로 저장된 `TrackedSession` 객체들이에요. 종료할 때와, 재시작 뒤에도 남아야 하는 것이 바뀔 때마다 `~/.claude/aipager-sessions.json`에 (원자적으로) 저장해요.
-- **`ObserverBroadcaster`** (선택, `aipager/bot/observer.py`): `OBSERVER_BOTS`가 설정되어 있으면 알림을 읽기 전용 관찰 봇에게도 보내요([관찰 봇](observers.md)).
 - **Mini App 서버** (`aipager/miniapp/server.py`): `127.0.0.1`의 `MINIAPP_PORT`(기본값 8765)에서 듣는 aiohttp 앱이고, 켜져 있는 동안(기본으로 켜져 있어요) 관리형 Cloudflare 터널을 통해 Telegram에 제공돼요. `/app` 대시보드를 제공해요.
 
 모두 같은 loop 위에서 작업으로 실행돼요. loop를 막을 수 있는 일은 별도 스레드에서 실행해요. 음성 메시지를 글로 바꾸기, 문제 신고 보고서를 만들고 보내기, 업데이트 확인과 재시작 계획, Mini App 스크립트와 `cloudflared` 다운로드, 그리고 시작할 때의 로그인 확인이에요.
@@ -73,12 +72,11 @@ flowchart LR
 4. Claude Code 자체 파일을 손봐요. 빠진 aipager hook과 상태 줄을 `~/.claude/settings.json` 파일에 추가하고, Telegram 사용자가 답할 수 없는 첫 실행 질문에 답해 둬요([보안](security.md#who-decides-whether-a-tool-call-runs) 참고).
 5. `SessionRegistry.load()`: `~/.claude/aipager-sessions.json` 파일을 읽어요. 파일이 없거나 읽을 수 없으면 빈 목록으로 시작해요.
 6. Mini App 주소(내 URL, 또는 Tailscale)를 정한 다음 `bot.start()`: Telegram에서 업데이트를 받기 시작해요.
-7. `ObserverBroadcaster.start()`, 설정되어 있을 때만.
-8. `HookReceiver.start()`: 남아 있는 소켓 파일을 지우고, bind하고, 듣기 시작해요.
-9. `bot.recover_sessions()`: aipager가 멈췄을 때 작업 중이었거나 기다리던 세션의 카드와 요청을 되살려요([명령 → 응답](commands.md#idle-responses) 참고).
-10. `SessionMonitor.start()`: 2초마다 하는 검사를 시작해요.
-11. Mini App 서버를 시작하고, 그다음 터널을 시작하고(내 URL을 설정하지 않았을 때), `📱 App` 버튼을 올려요.
-12. aipager는 신호를 기다려요. SIGINT나 SIGTERM은 멈추게 하고, SIGUSR1은 채팅과 규칙을 다시 불러와요([그룹 → 재시작 없이 다시 불러오기](groups.md#live-reload)).
+7. `HookReceiver.start()`: 남아 있는 소켓 파일을 지우고, bind하고, 듣기 시작해요.
+8. `bot.recover_sessions()`: aipager가 멈췄을 때 작업 중이었거나 기다리던 세션의 카드와 요청을 되살려요([명령 → 응답](commands.md#idle-responses) 참고).
+9. `SessionMonitor.start()`: 2초마다 하는 검사를 시작해요.
+10. Mini App 서버를 시작하고, 그다음 터널을 시작하고(내 URL을 설정하지 않았을 때), `📱 App` 버튼을 올려요.
+11. aipager는 신호를 기다려요. SIGINT나 SIGTERM은 멈추게 하고, SIGUSR1은 채팅과 규칙을 다시 불러와요([그룹 → 재시작 없이 다시 불러오기](groups.md#live-reload)).
 
 ## <a id="shutdown-sequence"></a>종료 순서
 
@@ -86,7 +84,7 @@ flowchart LR
 2. 실행 중인 `/update`에는 짧은 유예 시간이 있고, 그다음 설치 프로그램이 멈춰요([명령 → 업데이트](commands.md#update) 참고).
 3. `registry.save()`.
 4. 터널을 먼저 멈추고, 그다음 Mini App 서버를 멈춰요.
-5. `session_monitor.stop()`, `hook_receiver.stop()`(소켓을 닫고 파일을 지워요), 실행 중이라면 `observers.stop()`도.
+5. `session_monitor.stop()`, `hook_receiver.stop()`(소켓을 닫고 파일을 지워요).
 6. `bot.stop()`: 애니메이션을 취소하고 `Application`을 멈춰요.
 7. 아직 보내는 중이던 카드를 위해 `registry.save()`를 한 번 더 해요.
 

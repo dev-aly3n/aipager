@@ -643,7 +643,6 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 | `MINIAPP_PORT` | `8765` | منفذ Mini App على `127.0.0.1` (و`aipager miniapp enable --port` يحفظه بدلًا من ذلك). |
 | `MINIAPP_ENABLED` | من `aipager.yaml` | `0` يوقف Mini App و`1` يشغّله، مهما قال `aipager.yaml` (و`aipager miniapp enable\|disable` يحفظ الاختيار بدلًا من ذلك). |
 | `MINIAPP_PUBLIC_URL` | لا شيء | تقديم Mini App على عنوان `https://` خاص بك بدل النفق المُدار ([الأمان](security.md#mini-app-tunnel)). |
-| `OBSERVER_BOTS` | لا شيء | بوتات مراقبة للقراءة فقط ([بوتات المراقبة](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` يجعل «الإجابة فقط، بدل البطاقة» شكل الرسائل للدردشات التي لم تختر شكلًا في `/settings` أبدًا. |
 | `STALE_BUSY_TIMEOUT` | `7200` (ساعتان) | الثواني التي يمكن أن تمضيها جلسة عاملة دون أخبار قبل أن تتلقى الدردشة ملاحظة «لا تزال تعمل (١٢٠ دقيقة بلا أخبار)». |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | الثواني قبل أن تُعلَّم رسالة لم يأخذها Claude Code أبدًا بـ «لم يستلم Claude Code الرسالة» ([الرسائل الحرة](#text)). |

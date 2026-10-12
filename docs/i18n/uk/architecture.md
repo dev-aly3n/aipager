@@ -58,7 +58,6 @@ flowchart LR
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): відкриває Unix datagram-сокет у `$XDG_RUNTIME_DIR/aipager.sock`, читає JSON, який надсилають `aipager-hook` і `aipager-statusline`, і розподіляє роботу за його `hook_event_name` (або `type`, для власних повідомлень aipager; див. [події hooks](hooks.md)).
 - **`SessionMonitor`** (`aipager/session_monitor.py`): прокидається кожні 2 с, щоб переглянути `/tmp/claude-dtach-*.sock`, звірити знайдені сесії зі списком сесій і запустити вартових: робоча картка, що перестала рухатися, повідомлення, яке Claude Code так і не прийняв, запит на дозвіл без новин 5 хвилин, який за збереженою розмовою вже закінчено (`AIPAGER_INTERACTIVE_TIMEOUT`), завдання, кінець якого пропущено.
 - **`SessionRegistry`** (`aipager/state.py`): об'єкти `TrackedSession` за назвами. Зберігаються в `~/.claude/aipager-sessions.json` (атомарно) під час вимкнення і щоразу, коли змінюється щось, що має пережити перезапуск.
-- **`ObserverBroadcaster`** (за бажанням, `aipager/bot/observer.py`): якщо задано `OBSERVER_BOTS`, розсилає сповіщення ще й ботам-спостерігачам лише для читання ([боти-спостерігачі](observers.md)).
 - **Сервер Mini App** (`aipager/miniapp/server.py`): застосунок aiohttp на `127.0.0.1` з портом `MINIAPP_PORT` (за замовчуванням 8765), доступний для Telegram через керований тунель Cloudflare, поки він увімкнений (за замовчуванням так). Віддає панель `/app`.
 
 Усе це працює як задачі в одному циклі. Робота, яка б його блокувала, іде в окремих потоках: перетворення голосових на текст, збирання і надсилання звіту про проблему, перевірка оновлень і підготовка перезапуску, завантаження скрипта Mini App і `cloudflared` та перевірка входу під час запуску.
@@ -73,12 +72,11 @@ flowchart LR
 4. Упорядкувати файли самого Claude Code: додати в `~/.claude/settings.json` відсутні hooks aipager і рядок стану та відповісти на питання першого запуску, на які людина в Telegram відповісти не може (див. [безпека](security.md#who-decides-whether-a-tool-call-runs)).
 5. `SessionRegistry.load()`: читає `~/.claude/aipager-sessions.json`. Якщо файлу немає або він не читається, список починається порожнім.
 6. Визначити адресу Mini App (твій власний URL або Tailscale), потім `bot.start()`: починає опитувати Telegram.
-7. `ObserverBroadcaster.start()`, лише якщо його налаштовано.
-8. `HookReceiver.start()`: видаляє старий файл сокета, прив'язується до сокета, слухає.
-9. `bot.recover_sessions()`: повертає картки й запити сесій, які працювали або чекали, коли aipager зупинився (див. [команди → відповіді](commands.md#idle-responses)).
-10. `SessionMonitor.start()`: починає прохід кожні 2 с.
-11. Запускається сервер Mini App, потім тунель (якщо не задано твій власний URL), і публікуються кнопки `📱 App`.
-12. aipager чекає на сигнали: SIGINT або SIGTERM його зупиняють, SIGUSR1 перезавантажує чати й правила ([групи → перезавантаження без перезапуску](groups.md#live-reload)).
+7. `HookReceiver.start()`: видаляє старий файл сокета, прив'язується до сокета, слухає.
+8. `bot.recover_sessions()`: повертає картки й запити сесій, які працювали або чекали, коли aipager зупинився (див. [команди → відповіді](commands.md#idle-responses)).
+9. `SessionMonitor.start()`: починає прохід кожні 2 с.
+10. Запускається сервер Mini App, потім тунель (якщо не задано твій власний URL), і публікуються кнопки `📱 App`.
+11. aipager чекає на сигнали: SIGINT або SIGTERM його зупиняють, SIGUSR1 перезавантажує чати й правила ([групи → перезавантаження без перезапуску](groups.md#live-reload)).
 
 ## <a id="shutdown-sequence"></a>Порядок вимкнення
 
@@ -86,7 +84,7 @@ flowchart LR
 2. `/update`, що триває, отримує коротку відстрочку, потім його інсталятор зупиняється (див. [команди → оновлення](commands.md#update)).
 3. `registry.save()`.
 4. Зупиняється тунель, потім сервер Mini App.
-5. `session_monitor.stop()`, `hook_receiver.stop()` (закриває сокет і видаляє його файл), `observers.stop()`, якщо він працює.
+5. `session_monitor.stop()`, `hook_receiver.stop()` (закриває сокет і видаляє його файл).
 6. `bot.stop()`: скасовує анімації та зупиняє `Application`.
 7. Ще раз `registry.save()`, для картки, надсилання якої ще тривало.
 

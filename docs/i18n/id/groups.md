@@ -356,7 +356,6 @@ Setiap tugas dari setiap peran kecuali `owner` mendapatkannya utuh, begitu juga 
 - Pada pemasangan dengan chat pribadi, sesi terminalmu dan sesi chat pribadimu tidak pernah muncul di grup (lihat [Ke mana pesan pergi](#where-messages-go)). Sesi terminal yang sudah dipindahkan aipager versi lama ke grup tetap di grup: akhiri, hapus dari sesi grup yang sudah berakhir, lalu mulai lagi.
 - `aipager.yaml` berizin 0600 (hanya pemilik). aipager tidak mengatur izin `policy.yaml`: jaga supaya hanya pemilik yang bisa mengaksesnya (`chmod 600 ~/.config/aipager/policy.yaml`).
 - Log audit (`~/.claude/aipager-audit.jsonl`) tidak punya izin sendiri: sepribadi folder `~/.claude`-mu.
-- [Bot pengamat](observers.md) menerima notifikasi dari setiap chat yang dilayani bot, termasuk grup: pasang pengamat hanya untuk chat yang bisa dipercaya dengan semua itu.
 
 ## <a id="revoking-a-user"></a>Mencabut akses seseorang
 

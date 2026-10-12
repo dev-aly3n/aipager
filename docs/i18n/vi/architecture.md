@@ -58,7 +58,6 @@ Một lần gọi `asyncio.run` trong `aipager/cli/daemon.py` chạy toàn bộ.
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): mở một socket datagram Unix ở `$XDG_RUNTIME_DIR/aipager.sock`, đọc JSON mà `aipager-hook` và `aipager-statusline` gửi tới, rồi phân việc theo `hook_event_name` của nó (hoặc `type`, với tin nhắn của chính aipager; xem [sự kiện hook](hooks.md)).
 - **`SessionMonitor`** (`aipager/session_monitor.py`): thức dậy mỗi 2 giây để quét `/tmp/claude-dtach-*.sock`, đối chiếu các phiên tìm thấy với danh sách phiên, và chạy các bộ canh chừng: một thẻ làm việc ngừng chuyển động, một tin nhắn Claude Code không bao giờ nhận, một yêu cầu cấp quyền không có tin gì trong 5 phút mà cuộc trò chuyện đã lưu cho thấy đã xong (`AIPAGER_INTERACTIVE_TIMEOUT`), một việc mà lúc kết thúc bị bỏ lỡ.
 - **`SessionRegistry`** (`aipager/state.py`): các đối tượng `TrackedSession` theo tên. Được lưu vào `~/.claude/aipager-sessions.json` (một cách nguyên tử) khi tắt và mỗi khi có thay đổi cần giữ qua lần khởi động lại.
-- **`ObserverBroadcaster`** (tùy chọn, `aipager/bot/observer.py`): nếu `OBSERVER_BOTS` được đặt, nó còn gửi thông báo tới các bot quan sát chỉ đọc ([bot quan sát](observers.md)).
 - **Máy chủ Mini App** (`aipager/miniapp/server.py`): một ứng dụng aiohttp ở `127.0.0.1` trên cổng `MINIAPP_PORT` (mặc định 8765), được đưa ra cho Telegram qua một tunnel Cloudflare được quản lý trong lúc nó bật (mặc định là bật). Cung cấp bảng điều khiển `/app`.
 
 Tất cả những phần này chạy như các task trên cùng một loop. Việc nào có thể làm loop bị chặn thì chạy trong các thread riêng: chuyển tin nhắn thoại thành chữ, tạo và gửi báo cáo sự cố, kiểm tra cập nhật và lên kế hoạch khởi động lại, tải script của Mini App và `cloudflared`, và kiểm tra đăng nhập lúc khởi động.
@@ -73,12 +72,11 @@ Từ `aipager/cli/daemon.py`:
 4. Sửa lại các file của chính Claude Code: thêm hook aipager và dòng trạng thái còn thiếu vào `~/.claude/settings.json`, và trả lời các câu hỏi ở lần chạy đầu mà một người dùng Telegram không thể trả lời (xem [bảo mật](security.md#who-decides-whether-a-tool-call-runs)).
 5. `SessionRegistry.load()`: đọc `~/.claude/aipager-sessions.json`. Nếu file không có hoặc không đọc được, danh sách bắt đầu trống.
 6. Xác định địa chỉ của Mini App (URL riêng của bạn, hoặc Tailscale), rồi `bot.start()`: bắt đầu nhận cập nhật từ Telegram.
-7. `ObserverBroadcaster.start()`, chỉ khi đã được cấu hình.
-8. `HookReceiver.start()`: xóa file socket cũ còn sót, bind, lắng nghe.
-9. `bot.recover_sessions()`: đưa trở lại thẻ và yêu cầu của các phiên đang làm việc hoặc đang chờ lúc aipager dừng (xem [lệnh → phản hồi khi rảnh](commands.md#idle-responses)).
-10. `SessionMonitor.start()`: bắt đầu vòng quét mỗi 2 giây.
-11. Máy chủ Mini App khởi động, rồi tới tunnel (khi chưa đặt URL riêng), và các nút `📱 App` được đăng lên.
-12. aipager chờ tín hiệu: SIGINT hoặc SIGTERM làm nó dừng, SIGUSR1 tải lại các chat và quy tắc ([nhóm → tải lại không cần khởi động lại](groups.md#live-reload)).
+7. `HookReceiver.start()`: xóa file socket cũ còn sót, bind, lắng nghe.
+8. `bot.recover_sessions()`: đưa trở lại thẻ và yêu cầu của các phiên đang làm việc hoặc đang chờ lúc aipager dừng (xem [lệnh → phản hồi khi rảnh](commands.md#idle-responses)).
+9. `SessionMonitor.start()`: bắt đầu vòng quét mỗi 2 giây.
+10. Máy chủ Mini App khởi động, rồi tới tunnel (khi chưa đặt URL riêng), và các nút `📱 App` được đăng lên.
+11. aipager chờ tín hiệu: SIGINT hoặc SIGTERM làm nó dừng, SIGUSR1 tải lại các chat và quy tắc ([nhóm → tải lại không cần khởi động lại](groups.md#live-reload)).
 
 ## <a id="shutdown-sequence"></a>Trình tự tắt
 
@@ -86,7 +84,7 @@ Từ `aipager/cli/daemon.py`:
 2. Một lệnh `/update` đang chạy được cho thêm chút thời gian, rồi trình cài đặt của nó bị dừng (xem [lệnh → cập nhật](commands.md#update)).
 3. `registry.save()`.
 4. Tunnel dừng, rồi tới máy chủ Mini App.
-5. `session_monitor.stop()`, `hook_receiver.stop()` (đóng socket và xóa file của nó), `observers.stop()` nếu đang chạy.
+5. `session_monitor.stop()`, `hook_receiver.stop()` (đóng socket và xóa file của nó).
 6. `bot.stop()`: hủy các hiệu ứng chuyển động và dừng `Application`.
 7. `registry.save()` lần nữa, cho một thẻ mà việc gửi vẫn chưa xong.
 

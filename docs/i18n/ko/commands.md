@@ -593,7 +593,6 @@ Claude Code의 `~/.claude/settings.json`에서 aipager 자체 항목도 지워�
 | `MINIAPP_PORT` | `8765` | `127.0.0.1`에서 Mini App의 포트(`aipager miniapp enable --port`는 이것을 저장해요). |
 | `MINIAPP_ENABLED` | `aipager.yaml`을 따름 | `0`은 Mini App을 끄고 `1`은 켜요. `aipager.yaml`이 뭐라고 하든요(`aipager miniapp enable\|disable`은 선택을 저장해요). |
 | `MINIAPP_PUBLIC_URL` | 없음 | 관리형 터널 대신 내 `https://` 주소에서 Mini App을 제공해요([보안](security.md#mini-app-tunnel)). |
-| `OBSERVER_BOTS` | 없음 | 읽기 전용 관찰 봇([관찰 봇](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0`은 `/settings`에서 배치를 한 번도 고른 적 없는 채팅의 메시지 배치를 “카드 지우고 답변만”으로 정해요. |
 | `STALE_BUSY_TIMEOUT` | `7200` (2시간) | 작업 중인 세션이 몇 초 동안 조용하면 채팅에 “아직 작업 중 (120분째 소식 없음)” 안내가 오는지. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Claude Code가 끝내 가져가지 않은 메시지를 몇 초 뒤에 “Claude Code가 메시지를 받지 않았어요”로 표시하는지([자유 메시지](#text)). |

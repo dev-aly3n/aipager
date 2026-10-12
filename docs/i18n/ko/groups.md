@@ -356,7 +356,6 @@ safety:
 - 개인 채팅이 있는 설치에서는 터미널 세션과 내 개인 채팅의 세션이 그룹에 절대 나오지 않아요([메시지는 어디로 가나요](#where-messages-go) 참고). 예전 aipager가 그룹으로 옮긴 터미널 세션은 그룹에 남아요. 종료하고, 그룹의 종료된 세션에서 지운 다음, 다시 시작하세요.
 - `aipager.yaml`은 권한 0600(소유자만)이에요. aipager는 `policy.yaml`의 권한을 정하지 않아요. 직접 소유자 전용으로 유지하세요(`chmod 600 ~/.config/aipager/policy.yaml`).
 - 감사 로그(`~/.claude/aipager-audit.jsonl`)에는 따로 권한이 없어요. 내 `~/.claude` 폴더만큼 비공개예요.
-- [관찰 봇](observers.md)은 그룹을 포함해 봇이 서비스하는 모든 채팅의 알림을 받아요. 이 모든 내용을 맡겨도 되는 채팅에만 관찰 봇을 설정하세요.
 
 ## <a id="revoking-a-user"></a>사용자의 권한 거두기
 

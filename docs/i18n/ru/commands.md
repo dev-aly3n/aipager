@@ -593,7 +593,6 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 | `MINIAPP_PORT` | `8765` | Порт Mini App на `127.0.0.1` (`aipager miniapp enable --port` вместо этого его сохраняет). |
 | `MINIAPP_ENABLED` | из `aipager.yaml` | `0` выключает Mini App, а `1` включает, что бы ни говорил `aipager.yaml` (`aipager miniapp enable\|disable` вместо этого сохраняет выбор). |
 | `MINIAPP_PUBLIC_URL` | нет | Открывает Mini App по твоему собственному `https://`-адресу вместо управляемого туннеля ([модель безопасности](security.md#mini-app-tunnel)). |
-| `OBSERVER_BOTS` | нет | Боты-наблюдатели, которые только читают ([боты-наблюдатели](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` делает «Только ответ (без карточки)» видом для чатов, которые никогда не выбирали вид в `/settings`. |
 | `STALE_BUSY_TIMEOUT` | `7200` (2 часа) | Сколько секунд работающая сессия может быть без новостей, прежде чем чат получит заметку «всё ещё работает (120 минут без новостей)». |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Секунды, после которых сообщение, которое Claude Code так и не принял, отмечается как «Claude Code не принял сообщение» ([обычные сообщения](#text)). |

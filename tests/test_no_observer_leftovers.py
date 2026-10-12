@@ -15,6 +15,7 @@ import importlib.util
 from pathlib import Path
 
 import aipager.config
+from tests import i18n_tool
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "aipager"
@@ -65,3 +66,16 @@ def test_the_observer_module_and_setting_are_gone():
     assert importlib.util.find_spec("aipager.bot.observer") is None
     assert not hasattr(aipager.config, "OBSERVER_BOTS")
     assert not hasattr(aipager.config, "_parse_observer_bots")
+
+
+def test_no_doc_links_to_the_deleted_page():
+    """docs/observers.md and its translations are gone, and nothing links
+    to them (the English pages have no link checker of their own)."""
+    pages = [ROOT / "README.md", ROOT / "CHANGELOG.md",
+             ROOT / "tools" / "i18n" / "TRANSLATING.md",
+             *sorted((ROOT / "docs").rglob("*.md"))]
+    assert [p.relative_to(ROOT).as_posix() for p in pages
+            if "observers.md" in p.read_text(encoding="utf-8")] == []
+    assert not (ROOT / "docs" / "observers.md").exists()
+    assert sorted((ROOT / "docs" / "i18n").glob("*/observers.md")) == []
+    assert "observers.md" not in i18n_tool.load().DOC_PAGES

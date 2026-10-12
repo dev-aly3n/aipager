@@ -195,7 +195,6 @@ Por defecto aipager es un bot privado: tú y el bot en un chat privado. Para com
 - Acepta fotos, archivos y audios (el audio se pasa a texto en tu computadora, con el complemento opcional de voz)
 - Te avisa del contexto casi lleno, de la conversación compactada, de una sesión que terminó y de una que lleva rato sin dar noticias
 - Ejecuta varias sesiones a la vez con un solo bot; uso en equipo opcional con roles y reglas por herramienta ([Uso en equipo y grupos](groups.md))
-- Bots observadores de solo lectura, opcionales
 - Habla English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی y Tiếng Việt: solo los textos de aipager, nunca tus sesiones ni las respuestas de Claude ([Idiomas](commands.md#languages)). Este README y la documentación también están traducidos (mira **Leer en otro idioma** arriba)
 
 ### <a id="mini-app"></a>Mini App
@@ -234,7 +233,6 @@ MIT; el texto completo está en [LICENSE](../../../LICENSE).
 | [Eventos de hook](hooks.md) | Cada evento que aipager recibe de Claude Code, con sus campos |
 | [Comandos del bot](commands.md) | Comandos, botones, la Mini App, audios y archivos, todos los comandos `aipager` y los ajustes que se leen del entorno |
 | [Uso en equipo y grupos](groups.md) | Configuración para varias personas, roles, reglas, registro de quién hizo qué |
-| [Bots observadores](observers.md) | Bots de solo lectura que reciben copias de los avisos |
 | [Solución de problemas](troubleshooting.md) | Fallos frecuentes y la tabla de soluciones de `aipager doctor` |
 | [Informes de problemas](problem-reports.md) | Qué contiene un informe de problemas, adónde va y cuándo lo propone aipager |
 | [Modelo de seguridad](security.md) | Límite de confianza, secretos, registro de auditoría, conexiones de red |

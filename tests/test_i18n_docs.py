@@ -183,15 +183,15 @@ def test_a_link_inside_a_code_block_is_not_a_link(tmp_path):
 
 
 def test_a_long_dash_outside_code_is_named(tmp_path):
-    _append(_tree(tmp_path) / "observers.md", "یک \u2014 دو\n`a \u2014 b`\n")
+    _append(_tree(tmp_path) / "hooks.md", "یک \u2014 دو\n`a \u2014 b`\n")
     assert _check(tmp_path) == [
-        "docs/i18n/fa/observers.md: a long dash (U+2014) outside code: یک \u2014 دو"]
+        "docs/i18n/fa/hooks.md: a long dash (U+2014) outside code: یک \u2014 دو"]
 
 
 def test_a_direction_control_is_named(tmp_path):
-    _append(_tree(tmp_path) / "observers.md", "a\u202eb\n")
+    _append(_tree(tmp_path) / "hooks.md", "a\u202eb\n")
     assert _check(tmp_path) == [
-        "docs/i18n/fa/observers.md: a direction control character: a\u202eb"]
+        "docs/i18n/fa/hooks.md: a direction control character: a\u202eb"]
 
 
 @pytest.mark.parametrize("heading, slug", [
@@ -265,6 +265,6 @@ def test_code_on_a_right_to_left_page_must_close_its_ltr_div(tmp_path):
 def test_a_list_numbered_with_persian_digits_is_named(tmp_path):
     """Markdown only reads ASCII digits as a list number, so "۱. " runs the
     items together into one paragraph."""
-    _append(_tree(tmp_path) / "observers.md", "\u06f1. \u06cc\u06a9\n")
+    _append(_tree(tmp_path) / "hooks.md", "\u06f1. \u06cc\u06a9\n")
     assert _check(tmp_path) == [
-        "docs/i18n/fa/observers.md: a numbered list item needs Latin digits (1.): \u06f1. \u06cc\u06a9"]
+        "docs/i18n/fa/hooks.md: a numbered list item needs Latin digits (1.): \u06f1. \u06cc\u06a9"]
