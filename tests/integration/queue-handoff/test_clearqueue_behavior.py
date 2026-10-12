@@ -75,8 +75,8 @@ def test_clearqueue_sends_exactly_one_escape_when_something_outstanding(
         f"/clearqueue sent more than one Escape (would interrupt the "
         f"running turn): {keys}")
     assert keys[0] == "Escape"
-    assert len(keys) == 2, f"expected exactly [Escape, kill-line], got {keys}"
-    assert keys[1] != "Escape"
+    assert keys[1:] and set(keys[1:]) == {"KillLine"}, (
+        f"expected one Escape, then only kill-line writes, got {keys}")
 
 
 def test_clearqueue_never_sends_two_escapes_even_with_queue_and_notes(

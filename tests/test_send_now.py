@@ -197,7 +197,8 @@ def test_the_chord_wait_is_bounded(keys, run_async):
 @pytest.mark.parametrize("other,its_writes", [
     (lambda: inject.send_keys(NAME, "Escape"), [b"\x1b"]),
     (lambda: inject.send_text_and_enter(NAME, "hi"), [b"hi", b"\r"]),
-    (lambda: inject.discard_queued_input(NAME), [b"\x1b", b"\x15"]),
+    (lambda: inject.discard_queued_input(NAME),
+     [b"\x1b"] + [b"\x15" * inject.DISCARD_KILL_BATCH] * (inject.discard_presses(0) // inject.DISCARD_KILL_BATCH)),
 ], ids=["send_keys", "send_text_and_enter", "discard_queued_input"])
 def test_a_write_inside_a_slow_chord_means_no_ctrl_s(monkeypatch, run_async,
                                                      other, its_writes):

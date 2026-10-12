@@ -52,11 +52,19 @@ def wired(mk_bot, monkeypatch, tmp_path):
         keys.append(key)
         return True
 
+    # Wiping Claude's surfaced queue, recorded as one step: its own keys
+    # (one Escape, then Ctrl+U) are pinned in test_dtach_inject_helpers.py.
+    async def _discard_queued_input(_name, _chars=0):
+        keys.append("discard")
+        return True
+
     monkeypatch.setattr("aipager.dtach.inject.is_alive",
                         AsyncMock(return_value=True))
     monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter",
                         _send_text_and_enter)
     monkeypatch.setattr("aipager.dtach.inject.send_keys", _send_keys)
+    monkeypatch.setattr("aipager.dtach.inject.discard_queued_input",
+                        _discard_queued_input)
     monkeypatch.setattr("aipager.dtach.inject.kill_session",
                         AsyncMock(return_value=True))
 

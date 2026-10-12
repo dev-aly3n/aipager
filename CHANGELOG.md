@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`/stop` and `/clearqueue` now wipe all of the messages Claude was holding.** When you stop a session or clear its queue, Claude Code puts the messages it had queued back into its input box, and aipager deletes them from there. It used to delete only the last line of what Claude showed, so the rest of a long message, or of several queued messages, stayed in the box and went out glued to the next message you sent. aipager now deletes all of it (up to about five full-length messages), and a message you send while it does so waits until the box is empty. The same goes for the Mini App's Clear queue.
+
 ## [1.1.0] - 2026-10-12
 
 ### Added

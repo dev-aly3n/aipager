@@ -380,8 +380,10 @@ def test_with_claudes_queue_holding_messages_only_the_marker_ends_it(
     run_async(bot._keystroke_answer_watch(sess, refusal=True, by="",
                                           answered_at=t0, held=held))
     assert sess.status is Status.IDLE
-    # Pulled into the input box by the interrupt, as by /stop's Escape.
-    wiped.assert_awaited_once_with(NAME)
+    # Pulled into the input box by the interrupt, as by /stop's Escape,
+    # and wiped with enough Ctrl+U for every character Claude held.
+    from aipager.bot.session_ops import queued_chars
+    wiped.assert_awaited_once_with(NAME, queued_chars(sess, held))
     bot._mark_not_delivered.assert_awaited_once_with(sess, held)
     bot._discard_queued_targets.assert_called_once_with(sess)
 

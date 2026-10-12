@@ -166,3 +166,27 @@ def test_the_turns_pinned_transcript_is_read_first(tmp_path):
     _write(pinned, ("enqueue", "x"))
     sess.stream_transcript_path = str(pinned)
     assert held_by_claude(sess, [{"raw_text": "x"}]) == [{"raw_text": "x"}]
+
+
+# ── queued_chars: how much text the queue wipe must delete ──────────────────
+
+def test_queued_chars_counts_every_still_queued_message_and_its_line_break(tmp_path):
+    """The wipe presses Ctrl+U once per character at least: everything
+    Claude still holds counts, not only aipager's own candidates."""
+    from aipager.bot.session_ops import queued_chars
+    code = "\n".join(["x = compute(a, b)  # step"] * 150)
+    sess = _sess(tmp_path, ("enqueue", "[via Telegram]\n" + code),
+                 ("enqueue", "typed at the terminal"))
+    held = [{"raw_text": code}]
+    assert queued_chars(sess, held) == (
+        len("[via Telegram]\n" + code) + 1 + len("typed at the terminal") + 1)
+
+
+def test_queued_chars_falls_back_to_the_held_texts_once_their_fate_is_written(tmp_path):
+    """After the Escape the transcript says `popAll` and no longer shows
+    the text; the held messages still give a count."""
+    from aipager.bot.session_ops import queued_chars
+    sess = _sess(tmp_path, ("enqueue", "[m]\nfirst"), ("enqueue", "[m]\nsecond"),
+                 ("popAll",))
+    held = [{"body": "[m]\nfirst"}, {"raw_text": "second"}]
+    assert queued_chars(sess, held) == len("[m]\nfirst") + 1 + len("second") + 1

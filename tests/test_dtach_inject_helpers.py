@@ -562,36 +562,107 @@ def test_kill_line_key_is_ctrl_u():
     assert inject.KEYS["KillLine"] == "\x15"
 
 
-def test_discard_queued_input_sends_escape_then_kill_line(monkeypatch, run_async):
-    keys = []
+class _Pty:
+    """discard_queued_input's ``dtach -p`` writes and its pauses, captured
+    instead of sent. ``fail_at``: the index of the write that fails."""
 
-    async def _fake_send_keys(session, k):
-        keys.append(k)
-        return True
+    def __init__(self, fail_at: int | None = None) -> None:
+        self.writes: list[tuple[str, bytes]] = []
+        self.gaps: list[float] = []
+        self.fail_at = fail_at
 
-    monkeypatch.setattr(inject, "send_keys", _fake_send_keys)
-    assert run_async(inject.discard_queued_input("claude-jim")) is True
-    assert keys == ["Escape", "KillLine"]
+    async def run(self, args, stdin=b"", timeout=5):
+        self.writes.append((args[-1], bytes(stdin)))
+        return len(self.writes) - 1 != self.fail_at, ""
+
+    async def gap(self, seconds):
+        self.gaps.append(seconds)
+
+    @property
+    def data(self) -> list[bytes]:
+        return [data for _sock, data in self.writes]
 
 
-def test_discard_queued_input_returns_false_if_kill_line_send_fails(monkeypatch, run_async):
-    async def _fake_send_keys(session, k):
-        return k != "KillLine"
+def _discard(monkeypatch, run_async, session="claude-jim", fail_at=None, chars=0):
+    pty = _Pty(fail_at)
+    monkeypatch.setattr(inject, "_run", pty.run)
+    monkeypatch.setattr(inject, "_key_gap_sleep", pty.gap)
+    return run_async(inject.discard_queued_input(session, chars)), pty
 
-    monkeypatch.setattr(inject, "send_keys", _fake_send_keys)
-    assert run_async(inject.discard_queued_input("claude-jim")) is False
+
+def _presses(pty) -> int:
+    return sum(data.count(b"\x15") for data in pty.data)
+
+
+def test_discard_sends_one_escape_first_then_only_ctrl_u(monkeypatch, run_async):
+    """/clearqueue leaves the running turn alone: a second Escape could
+    interrupt it."""
+    ok, pty = _discard(monkeypatch, run_async)
+    assert ok is True
+    assert pty.data[0] == b"\x1b"
+    assert len(pty.data) > 1
+    assert all(data and set(data) == {0x15} for data in pty.data[1:]), pty.data
+    assert b"".join(pty.data).count(b"\x1b") == 1
+
+
+@pytest.mark.parametrize("chars", [0, 1, 39, 41, 4097, 2 * 4096 + 2])
+def test_discard_presses_ctrl_u_once_per_queued_character_and_more(
+        monkeypatch, run_async, chars):
+    """Each Ctrl+U deletes at least one character of Claude Code's input
+    box (one screen row or one line break), so one press per queued
+    character wipes it whatever the line lengths; the floor covers text
+    the caller could not count."""
+    _ok, pty = _discard(monkeypatch, run_async, chars=chars)
+    assert _presses(pty) >= chars + 480, (_presses(pty), chars)
+
+
+def test_discard_wipes_short_lines_that_a_row_count_would_miss(monkeypatch, run_async):
+    """Two queued 4,096-character messages of code (30-character lines)
+    need a press per row AND per line break: 2 x 264 at any width. One
+    press per character covers them; 480 presses did not."""
+    line = "x = compute(alpha, beta)  # ok"
+    message = "\n".join([line] * (4096 // (len(line) + 1)))
+    presses_needed = 2 * (2 * message.count("\n") + 1)
+    _ok, pty = _discard(monkeypatch, run_async, chars=2 * (len(message) + 1))
+    assert _presses(pty) >= presses_needed > 480
+
+
+def test_discard_is_capped_and_says_so(monkeypatch, run_async, caplog):
+    """A huge count never holds the terminal's write lock for long."""
+    with caplog.at_level("WARNING", logger=inject.log.name):
+        _ok, pty = _discard(monkeypatch, run_async, chars=10**6)
+    assert _presses(pty) == inject.DISCARD_MAX_PRESSES
+    assert "wiping at most" in caplog.text
+
+
+def test_discard_writes_ctrl_u_at_most_40_to_a_write(monkeypatch, run_async):
+    """A write of about 40 Ctrl+U is what was seen to work live."""
+    _ok, pty = _discard(monkeypatch, run_async)
+    assert all(len(data) <= 40 for data in pty.data[1:]), [len(d) for d in pty.data]
+
+
+def test_discard_lets_the_queue_surface_before_the_first_ctrl_u(monkeypatch, run_async):
+    """Claude Code moves its queue into the box on the Escape; the Ctrl+U
+    writes come 0.15 s later, then short pauses apart."""
+    _ok, pty = _discard(monkeypatch, run_async)
+    assert pty.gaps == [0.15] + [inject.DISCARD_KILL_GAP] * (len(pty.data) - 2)
+
+
+def test_discard_stops_at_a_failed_escape(monkeypatch, run_async):
+    ok, pty = _discard(monkeypatch, run_async, fail_at=0)
+    assert ok is False
+    assert pty.data == [b"\x1b"]
+
+
+def test_discard_stops_at_a_failed_ctrl_u_write(monkeypatch, run_async):
+    ok, pty = _discard(monkeypatch, run_async, fail_at=3)
+    assert ok is False
+    assert len(pty.data) == 4
 
 
 def test_discard_queued_input_sends_to_the_named_session(monkeypatch, run_async):
-    seen_sessions = []
-
-    async def _fake_send_keys(session, k):
-        seen_sessions.append(session)
-        return True
-
-    monkeypatch.setattr(inject, "send_keys", _fake_send_keys)
-    run_async(inject.discard_queued_input("claude-target"))
-    assert seen_sessions == ["claude-target", "claude-target"]
+    _ok, pty = _discard(monkeypatch, run_async, session="claude-target")
+    assert {sock for sock, _data in pty.writes} == {inject._sock_path("claude-target")}
 
 
 def test_kill_session_warns_when_the_socket_cannot_be_removed(

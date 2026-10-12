@@ -1,5 +1,6 @@
-"""Roadmap 8.37: ``/clearqueue`` and ``/stop`` type Escape+KillLine into
-Claude only when the transcript shows Claude holding a queued message.
+"""Roadmap 8.37: ``/clearqueue`` and ``/stop`` wipe Claude's queue (an
+Escape, then Ctrl+U) only when the transcript shows Claude holding a
+queued message.
 
 An Escape into Claude Code's empty queue interrupts the running turn. The
 old trigger was any outstanding note, and a slash command tapped while the
@@ -10,7 +11,7 @@ turn that had nothing queued at all.
 The evidence is Claude Code's own ``queue-operation`` lines: an
 ``enqueue`` for the message with no later ``dequeue``/``remove``/``popAll``.
 Scenarios drive the real handlers; the observables are the keys typed into
-the pty and the reactions set.
+the pty (the wipe recorded as one ``"discard"`` step) and the reactions set.
 """
 
 from __future__ import annotations
@@ -145,7 +146,7 @@ def test_a_genuinely_queued_message_is_cleared_and_shrugged(
     outcome = run_async(bot._clear_queue_core(sess))
 
     assert outcome.ok and outcome.dropped == 1
-    assert keys == ["Escape", "KillLine"], "never the interrupt pair"
+    assert keys == ["discard"], "never the interrupt pair"
     assert reactions(bot).get(2) == [EYES, SHRUG]
     assert reactions(bot).get(1) == [EYES, THUMBS]
     assert sess.status == Status.BUSY and sess.busy_msg_id == card
@@ -161,7 +162,7 @@ def test_a_genuinely_queued_message_beside_a_stale_note_counts_once(
     _queue_m2(bot, sess, run_async, send_text, pickup)
     outcome = run_async(bot._clear_queue_core(sess))
     assert outcome.dropped == 1
-    assert keys == ["Escape", "KillLine"]
+    assert keys == ["discard"]
     assert reactions(bot).get(7) == [OK]
 
 
@@ -173,7 +174,7 @@ def test_stop_still_wipes_a_message_claude_holds(
     _queue_m2(bot, sess, run_async, send_text, pickup)
     outcome = run_async(bot._stop_session_core(sess))
     assert outcome.dropped == 1
-    assert keys == ["Escape", "Escape", "Escape", "KillLine"]
+    assert keys == ["Escape", "Escape", "discard"]
     assert reactions(bot).get(2) == [EYES, SHRUG]
 
 
@@ -255,7 +256,7 @@ def test_absorbing_another_message_leaves_this_one_queued(
     _op(sess, "remove", "typed in the terminal", "absorbed_mid_turn")
     outcome = run_async(bot._clear_queue_core(sess))
     assert outcome.dropped == 1
-    assert keys == ["Escape", "KillLine"]
+    assert keys == ["discard"]
 
 
 # ── aipager's own held messages ─────────────────────────────────────────────

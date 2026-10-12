@@ -128,11 +128,10 @@ def test_stop_appends_discard_tail_when_notes_are_outstanding(
     assert keys[:2] == ["Escape", "Escape"], (
         "the interrupt pair must still come first: "
         f"{keys}")
-    assert len(keys) == 4, (
+    assert keys[2] == "Escape", (
         f"expected interrupt pair + one Escape + kill-line, got {keys}")
-    assert keys[2] == "Escape"
-    assert keys[3] != "Escape", (
-        f"the 4th key must be the kill-line, not another Escape: {keys}")
+    assert keys[3:] and set(keys[3:]) == {"KillLine"}, (
+        f"after the discard's Escape only kill-line writes, no other Escape: {keys}")
 
 
 # ---- chat acknowledgement states the combined count ----------------------

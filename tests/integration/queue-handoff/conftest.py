@@ -57,6 +57,24 @@ def wired(mk_bot, monkeypatch, tmp_path):
                         _send_text_and_enter)
     monkeypatch.setattr("aipager.dtach.inject.send_keys", _send_keys)
 
+    # discard_queued_input writes through inject._run under one lock hold,
+    # not through send_keys: each of its writes is recorded by name, an
+    # Escape as "Escape" and a batch of Ctrl+U as "KillLine".
+    async def _pty_write(args, stdin=b"", timeout=5):
+        if stdin == b"\x1b":
+            keys.append("Escape")
+        elif stdin and set(stdin) == {0x15}:
+            keys.append("KillLine")
+        else:
+            keys.append(repr(stdin))
+        return True, ""
+
+    async def _no_gap(_seconds):
+        pass
+
+    monkeypatch.setattr("aipager.dtach.inject._run", _pty_write)
+    monkeypatch.setattr("aipager.dtach.inject._key_gap_sleep", _no_gap)
+
     bot._send_busy_and_animate = AsyncMock()
     bot._react = AsyncMock()
 

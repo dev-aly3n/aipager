@@ -606,6 +606,25 @@ def _clear_turn_open(session_name: str) -> None:
     clear_turn_open(session_name)
 
 
+def _candidate_text(c: dict) -> str:
+    """The text a held candidate was typed with: a note's ``body``, a
+    queued target's ``raw_text``."""
+    return str(c.get("body") or c.get("raw_text") or "")
+
+
+def queued_chars(sess: TrackedSession, held: list[dict]) -> int:
+    """How many characters an Escape can move from Claude Code's queue into
+    its input box: every message the transcript shows still queued, one
+    line break each, or, once the transcript has written their fate,
+    *held*'s own texts. The queue wipe presses Ctrl+U at least this many
+    times (each press deletes at least one character,
+    :func:`aipager.dtach.inject.discard_presses`)."""
+    queued = read_still_queued(
+        sess.stream_transcript_path or sess.transcript_path or "")
+    return max(sum(len(text) + 1 for text in queued),
+               sum(len(_candidate_text(c)) + 1 for c in held))
+
+
 def held_by_claude(sess: TrackedSession, candidates: list[dict]) -> list[dict]:
     """The *candidates* (outstanding notes, queued targets) that Claude
     Code's transcript shows it still holding in its queue: each needs an
@@ -629,13 +648,10 @@ def held_by_claude(sess: TrackedSession, candidates: list[dict]) -> list[dict]:
     if not queued:
         return []
 
-    def _text(c: dict) -> str:
-        return str(c.get("body") or c.get("raw_text") or "")
-
     held: set[int] = set()
     for i in sorted(range(len(candidates)),
-                    key=lambda k: -len(_text(candidates[k]))):
-        text = _text(candidates[i])
+                    key=lambda k: -len(_candidate_text(candidates[k]))):
+        text = _candidate_text(candidates[i])
         if not text:
             continue
         for j, content in enumerate(queued):
@@ -1481,7 +1497,8 @@ class SessionOpsMixin:
             # Only ever with the marker seen (the grace stands down when
             # Claude's queue held anything).
             try:
-                await inject.discard_queued_input(sess.name)
+                await inject.discard_queued_input(sess.name,
+                                                  queued_chars(sess, held))
                 await self._mark_not_delivered(sess, held)
             except Exception:
                 log.warning("[%s] wiping Claude's queue after the dialog's "
@@ -1533,6 +1550,9 @@ class SessionOpsMixin:
         # and the queue wipe below must not be typed for it.
         held = held_by_claude(
             sess, list_outstanding_notes(sess.name) + self._queued_candidates(sess))
+        # Counted now too: the Escapes below make Claude Code write
+        # `popAll`, and the transcript then no longer shows the text.
+        held_chars = queued_chars(sess, held) if held else 0
 
         # 1. Send Escape twice to Claude Code — proven interrupt
         # behaviour this change does not touch.
@@ -1548,7 +1568,7 @@ class SessionOpsMixin:
         # "was anything actually outstanding" check and the combined
         # drop count below agree on the same snapshot (`held`, step 0).
         if held:
-            await inject.discard_queued_input(sess.name)
+            await inject.discard_queued_input(sess.name, held_chars)
 
         # 2. Cancel animation — and a self-woken turn's deferred card
         # (roadmap 8.32): this path ends the turn without the finish path,
@@ -2510,7 +2530,7 @@ class SessionOpsMixin:
         await self._drop_dialog_hold(sess)
         clear_notes_dir(sess.name)
         if held:
-            await inject.discard_queued_input(sess.name)
+            await inject.discard_queued_input(sess.name, queued_chars(sess, held))
         self._discard_queued_targets(sess)
         self.registry.mark_dirty()
         log.info("[%s] queue cleared (dropped %d)", sess.label, dropped)
