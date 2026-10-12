@@ -8,6 +8,7 @@
     python tools/i18n.py prune [--dry-run]
     python tools/i18n.py review-pack [--lang CODE] [--changed] [--golden] [--answers FILE]
     python tools/i18n.py pseudo [--rtl] TEXT
+    python tools/i18n.py docs
 
 ``extract`` reads every ``Msg(...)``, ``Plural(...)`` and inline
 ``tr.html|text|md("key", "English", ...)`` in ``aipager/`` and writes
@@ -25,6 +26,12 @@ direction control, 9 native digits for fa/ar (9b: ``←`` there, never
 ``→``), 10 reply-keyboard labels, 16 catalog format, plus the literal
 ratchet of check 11. The test suite imports these same functions,
 so CI and this command can never disagree.
+
+``docs`` checks the translated docs under ``docs/i18n/<code>/`` (one page
+per English page, the source comment, links and the English anchors) and
+lists the pages whose English page changed after the commit they were
+translated from. Only the checks fail it; a page behind its English page
+is listed, never an error.
 
 ``review-pack --golden`` gives a native reviewer the golden strings
 (``tools/i18n/golden.txt``, the keys people see most) with their English;
@@ -1061,6 +1068,142 @@ def check_golden(rows: list[dict], golden: list[tuple[str, str]] | None = None) 
     return problems
 
 
+# ---- translated docs ---------------------------------------------------------------------
+
+DOCS_DIR = ROOT / "docs"
+DOCS_I18N = DOCS_DIR / "i18n"
+#: Each translated page and the English page it is translated from.
+DOC_PAGES = {
+    "README.md": "README.md",
+    "install-with-an-agent.md": "docs/install-with-an-agent.md",
+    "architecture.md": "docs/architecture.md",
+    "hooks.md": "docs/hooks.md",
+    "commands.md": "docs/commands.md",
+    "groups.md": "docs/groups.md",
+    "observers.md": "docs/observers.md",
+    "troubleshooting.md": "docs/troubleshooting.md",
+    "problem-reports.md": "docs/problem-reports.md",
+    "security.md": "docs/security.md",
+}
+_DOC_SOURCE = re.compile(r"^<!-- i18n-source: (\S+) @ ([0-9a-f]{7,40}) -->$", re.M)
+_DOC_LINK = re.compile(r"\]\(([^)\s]+)\)")
+_DOC_ID = re.compile(r'<a id="([^"]+)"></a>')
+_DOC_FENCE = re.compile(r"^(```|~~~)")
+_DOC_BIDI = re.compile("[\u202a-\u202e\u2066-\u2069]")
+
+
+def _doc_prose(text: str) -> list[str]:
+    """The lines of a markdown page outside its fenced code blocks."""
+    lines, fenced = [], False
+    for line in text.splitlines():
+        if _DOC_FENCE.match(line.lstrip()):
+            fenced = not fenced
+            continue
+        if not fenced:
+            lines.append(line)
+    return lines
+
+
+def doc_slug(heading: str) -> str:
+    """The anchor GitHub gives a heading."""
+    text = heading.strip().lower()
+    text = re.sub(r"[^\w\- ]", "", text)
+    return text.replace(" ", "-")
+
+
+def doc_anchors(text: str, ids: bool = True, min_level: int = 1) -> set[str]:
+    """Every anchor a page has: its headings' (as GitHub numbers repeats;
+    only from ``min_level`` down) and, with ``ids``, its explicit
+    ``<a id>``s."""
+    found: set[str] = set()
+    seen: dict[str, int] = {}
+    for line in _doc_prose(text):
+        m = re.match(r"(#{1,6}) (.+)", line)
+        if m:
+            slug = doc_slug(m.group(2))
+            n = seen.get(slug, 0)
+            seen[slug] = n + 1
+            if len(m.group(1)) >= min_level:
+                found.add(slug if n == 0 else f"{slug}-{n}")
+        if ids:
+            found.update(_DOC_ID.findall(line))
+    return found
+
+
+def check_docs(root: Path = ROOT, codes=None) -> list[str]:
+    """Problems in the translated docs: a missing or extra page, a page
+    with no source comment (or one naming the wrong English page), a link
+    to a file or anchor that does not exist, an English heading's anchor
+    the page lacks, a long dash or a direction control outside code."""
+    problems: list[str] = []
+    base = root / "docs" / "i18n"
+    if not base.is_dir():
+        return problems
+    known = set(codes if codes is not None else TRANSLATED)
+    for folder in sorted(p for p in base.iterdir()):
+        rel = folder.relative_to(root)
+        if not folder.is_dir() or folder.name not in known:
+            problems.append(f"{rel}: not a translated language's folder")
+            continue
+        names = {p.name for p in folder.iterdir()}
+        for name in sorted(set(DOC_PAGES) - names):
+            problems.append(f"{rel}/{name}: missing")
+        for name in sorted(names - set(DOC_PAGES)):
+            problems.append(f"{rel}/{name}: not a page the English docs have")
+        for name in sorted(set(DOC_PAGES) & names):
+            page = folder / name
+            text = page.read_text(encoding="utf-8")
+            where = page.relative_to(root)
+            m = _DOC_SOURCE.search(text)
+            if not m:
+                problems.append(f"{where}: no <!-- i18n-source: ... @ <commit> --> line")
+            elif m.group(1) != DOC_PAGES[name]:
+                problems.append(f"{where}: translated from {m.group(1)}, want {DOC_PAGES[name]}")
+            english = (root / DOC_PAGES[name])
+            if english.is_file():
+                want = doc_anchors(english.read_text(encoding="utf-8"), ids=False, min_level=2)
+                have = doc_anchors(text)
+                for anchor in sorted(want - have):
+                    problems.append(f"{where}: no anchor {anchor!r} (the English heading's)")
+            for n, line in enumerate(_doc_prose(text), 1):
+                bare = re.sub(r"`[^`]*`", "", line)
+                if "\u2014" in bare:
+                    problems.append(f"{where}: a long dash (U+2014) outside code: {line.strip()[:60]}")
+                if _DOC_BIDI.search(line):
+                    problems.append(f"{where}: a direction control character: {line.strip()[:60]}")
+            for target in _DOC_LINK.findall("\n".join(_doc_prose(text))):
+                if re.match(r"[a-z]+:", target):
+                    continue
+                file, _, frag = target.partition("#")
+                dest = (page.parent / file).resolve() if file else page.resolve()
+                if not dest.exists():
+                    problems.append(f"{where}: link to a missing file: {target}")
+                elif frag and dest.suffix == ".md" and frag not in doc_anchors(
+                        dest.read_text(encoding="utf-8")):
+                    problems.append(f"{where}: link to a missing anchor: {target}")
+    return problems
+
+
+def stale_docs(root: Path = ROOT) -> list[str]:
+    """Translated pages whose English page changed after the commit the
+    page names (needs git; a commit git does not know counts as changed)."""
+    import subprocess
+    out: list[str] = []
+    base = root / "docs" / "i18n"
+    if not base.is_dir():
+        return out
+    for page in sorted(base.glob("*/*.md")):
+        m = _DOC_SOURCE.search(page.read_text(encoding="utf-8"))
+        if not m:
+            continue
+        source, commit = m.groups()
+        res = subprocess.run(["git", "-C", str(root), "diff", "--quiet", commit, "HEAD", "--", source],
+                             capture_output=True)
+        if res.returncode != 0:
+            out.append(f"{page.relative_to(root)}: {source} changed after {commit}")
+    return out
+
+
 # ---- command line --------------------------------------------------------------------------
 
 def main(argv=None) -> int:
@@ -1086,6 +1229,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("pseudo")
     p.add_argument("--rtl", action="store_true")
     p.add_argument("text")
+    sub.add_parser("docs")
     args = parser.parse_args(argv)
 
     if args.cmd == "extract":
@@ -1147,6 +1291,13 @@ def main(argv=None) -> int:
             Path(args.answers).write_text(
                 json.dumps(answers, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         return 0
+    if args.cmd == "docs":
+        problems = check_docs()
+        for line in problems:
+            print(line, file=sys.stderr)
+        for line in stale_docs():
+            print(line)
+        return 1 if problems else 0
     if args.cmd == "pseudo":
         text = core.pseudo(args.text)
         if args.rtl:

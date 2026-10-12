@@ -182,3 +182,72 @@ paths, code, and anything inside a placeholder.
 - The glossary's terms, names and commands.
 
 Then `python tools/i18n.py check` must print nothing.
+
+## 11. Translating the docs
+
+The docs follow the same rules as the strings: the meaning, the words
+people say, plain words, who did what, honest about what aipager knows.
+A doc is longer and read slowly, so it may explain a little more than a
+button can, but never by adding facts the English does not have.
+
+**Where they live.** `docs/i18n/<code>/` holds one file per English page:
+`README.md` (the top-level README, ending with the list of docs that
+`docs/README.md` has), and `install-with-an-agent.md`, `architecture.md`,
+`hooks.md`, `commands.md`, `groups.md`, `observers.md`,
+`troubleshooting.md`, `problem-reports.md` and `security.md`, the same
+names as in `docs/`. The English pages are the reference.
+
+**The first lines.** Every translated page starts with its title, then a
+comment naming the English page and the commit it was translated from,
+then one line in the language saying it is a translation and the English
+page wins when the two disagree, with a link to it:
+
+```
+# <title in the language>
+
+<!-- i18n-source: docs/commands.md @ <short commit> -->
+
+> <"This page is a translation of the English page; if they differ, the English page is right."> ([English](../../commands.md))
+```
+
+`python tools/i18n.py docs` lists every translated page whose English page
+changed after that commit.
+
+**Headings and links.** Translate every heading, and put the English
+heading's anchor above it, so a link works in every language:
+
+```
+<a id="settings-in-the-environment"></a>
+## <the heading in the language>
+```
+
+Links keep their targets: a link to another doc points at the same page in
+this folder (`commands.md#languages`), a link to the top-level README at
+this folder's `README.md`, and a link to a file outside `docs/`
+(`CHANGELOG.md`, `LICENSE`, `CONTRIBUTING.md`, `packaging/`) at the English
+file (`../../../CHANGELOG.md`). Links to other sites stay as they are.
+
+**What stays as it is.** Everything inside a code block or backticks that
+a person types or a program prints: commands, flags, paths, file names,
+environment variables, YAML and JSON keys, log lines, and the CLI's own
+output (the command line speaks English). Product, tool and model names,
+role names (`owner`, `admin`, `user`, `read_only`) and the session states
+the CLI prints (`IDLE`, `BUSY`, `WAITING`, `GONE`).
+
+**Text aipager shows in Telegram or the Mini App.** Quote it the way the
+reader sees it: the catalog's translation in this language, exactly, with
+its emoji (look it up by its English text in `tools/i18n/source.jsonl` and
+the language's catalog). A quote with no catalog entry (Claude Code's own
+text, a log line) stays English. A Telegram or Mini App button is named in
+the language's own words when the catalog has them.
+
+**Words.** The vocabulary of `style/<code>.md` and the glossary: the same
+word for the same idea as in the app. "The daemon" is aipager (or "the
+aipager program" where it must be told apart from the `aipager` command);
+"DM" is the private chat; "the machine" is the computer; "prompt" is the
+message a person sends (a permission prompt stays a permission request).
+
+**Shape.** Keep the English page's sections, lists, tables and examples in
+the same order, so a reader can hold the two side by side. Tables keep
+their columns. Write each paragraph as one line or wrap it, as you like;
+never break a line inside a link.
