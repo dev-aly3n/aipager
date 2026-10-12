@@ -417,8 +417,9 @@ SELF_WOKEN_CARD_DELAY: float = 15.0
 # runs. 7200s (2 hours, operator 2026-10-12: "otherwise it will be an
 # annoying noise message") makes the note a sign of a session that is
 # really stuck. It is above TOOL_INFLIGHT_MAX_SECONDS and
-# COMPACT_INFLIGHT_MAX_SECONDS, so a tool call or compaction in flight
-# no longer postpones the note: 2 hours of silence brings it either way
+# COMPACT_INFLIGHT_MAX_SECONDS, so with the default a tool call or
+# compaction in flight no longer postpones the note: 2 hours of silence
+# brings it either way
 # (the caps still bound the idle-recovery fallback). Override via the
 # env var.
 STALE_BUSY_TIMEOUT: float = float(os.environ.get("STALE_BUSY_TIMEOUT", "7200"))
@@ -477,9 +478,11 @@ RESUME_GUARD_SECONDS: float = float(
 # spinning) never surfacing. 15 minutes is long enough for real work
 # (large git clones, deep WebSearches, multi-minute relay round-trips)
 # and short enough that a wedged session still surfaces the same day.
-# Since STALE_BUSY_TIMEOUT became 2 hours (2026-10-12) it is above this
-# cap and the compaction cap below, so for the stale note these caps no
-# longer change anything; they still bound the idle-recovery fallback.
+# Since STALE_BUSY_TIMEOUT became 2 hours (2026-10-12), its default is
+# above this cap and the compaction cap below, so with the default these
+# caps no longer change when the stale note comes (a STALE_BUSY_TIMEOUT
+# set below them brings them back); they still bound the idle-recovery
+# fallback.
 TOOL_INFLIGHT_MAX_SECONDS: float = float(
     os.environ.get("TOOL_INFLIGHT_MAX_SECONDS", "900")
 )

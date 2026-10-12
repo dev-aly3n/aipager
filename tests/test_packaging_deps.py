@@ -178,3 +178,13 @@ def test_the_voice_extra_keeps_pyav_below_19():
     assert not spec.contains(Version("19.0.1"))
     assert spec.contains(Version("18.1.0")), "the cap must still allow a working av"
     assert any(r.name == "faster-whisper" for r in voice)
+
+
+def test_the_in_app_voice_install_asks_for_what_the_voice_extra_asks_for():
+    """The Install voice button pip-installs ``install_source._EXTRA_PACKAGES``
+    for Homebrew, editable, pip-user and unknown installs (no extras there).
+    It must ask for exactly the voice extra's requirements, or those
+    installs miss a cap such as ``av<19`` (2026-10-12)."""
+    from aipager import install_source
+
+    assert install_source._EXTRA_PACKAGES["voice"] == _project()["optional-dependencies"]["voice"]

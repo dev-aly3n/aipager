@@ -803,7 +803,7 @@ def test_idle_recovery_consults_the_shared_work_in_flight_helper(
 
 
 def test_stale_busy_consults_the_shared_work_in_flight_helper(
-    monkeypatch, run_async,
+    monkeypatch, run_async, steady_clock,
 ):
     """Same proof for the stale-busy path: with no pending_tool_started_at
     or compact_started_at set, patching the helper to report "in flight"
@@ -812,7 +812,7 @@ def test_stale_busy_consults_the_shared_work_in_flight_helper(
     from aipager.state import TrackedSession
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
-    sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    sess.last_hook_at = steady_clock() - STALE_BUSY_TIMEOUT - 60
     registry._sessions["claude-jim"] = sess
     monkeypatch.setattr(
         TrackedSession, "work_in_flight_reason",

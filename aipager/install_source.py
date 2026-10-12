@@ -37,7 +37,9 @@ _DOCKERENV = "/.dockerenv"
 # extras; editable / unknown installs have no installer to go through).
 # Keep in sync with [project.optional-dependencies] in pyproject.toml.
 _EXTRA_PACKAGES: dict[str, list[str]] = {
-    "voice": ["faster-whisper>=1.0"],
+    # av<19: PyAV 19 dropped an argument faster-whisper still passes
+    # (2026-10-12); the same cap as the pyproject voice extra.
+    "voice": ["faster-whisper>=1.0", "av<19"],
 }
 
 # The same Homebrew prefixes claude_resolve searches.

@@ -205,7 +205,7 @@ def test_install_extra_cmd_brew_uses_pip_fallback():
     instead of returning None."""
     assert updater.install_extra_cmd("brew", "voice") == [
         sys.executable, "-m", "pip", "install", "--upgrade",
-        "faster-whisper>=1.0",
+        "faster-whisper>=1.0", "av<19",
     ]
 
 
@@ -214,7 +214,7 @@ def test_install_extra_cmd_unknown_installer_uses_pip_fallback():
     through — pip into the running interpreter is the universal fallback."""
     expected = [
         sys.executable, "-m", "pip", "install", "--upgrade",
-        "faster-whisper>=1.0",
+        "faster-whisper>=1.0", "av<19",
     ]
     assert updater.install_extra_cmd(None, "voice") == expected
     assert updater.install_extra_cmd("editable", "voice") == expected
