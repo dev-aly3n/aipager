@@ -36,7 +36,7 @@ _OS_SPAWNERS = {"system", "popen", "fork", "forkpty"}
 # the ``self_restart._kill`` refuser. Only ``self_update._kill_group`` may
 # signal, and only the process group of a child the seam itself started.
 _OS_SIGNALLERS = {"kill", "killpg"}
-SIGNAL_SEAMS = {"_kill_group"}
+SIGNAL_SEAMS = {("self_update.py", "_kill_group")}
 
 
 def spawn_offenders(filename: str, source: str) -> list[str]:
@@ -80,7 +80,7 @@ def spawn_offenders(filename: str, source: str) -> list[str]:
                                    or func.attr.startswith(("exec", "spawn", "posix_spawn"))):
                 name = f"os.{func.attr}"
             elif base == "os" and func.attr in _OS_SIGNALLERS:
-                if enclosing_function(node) in SIGNAL_SEAMS:
+                if (filename, enclosing_function(node)) in SIGNAL_SEAMS:
                     continue
                 name = f"os.{func.attr}"
             elif func.attr.startswith("create_subprocess_"):
@@ -125,7 +125,13 @@ def test_sweep_catches_each_forbidden_shape(src):
 def test_sweep_allows_the_child_group_kill_only():
     src = ("import os, signal\n"
            "def _kill_group(proc):\n    os.killpg(proc.pid, signal.SIGTERM)\n")
-    assert spawn_offenders("x.py", src) == []
+    assert spawn_offenders("self_update.py", src) == []
+
+
+def test_sweep_allows_the_child_group_kill_in_self_update_only():
+    src = ("import os, signal\n"
+           "def _kill_group(proc):\n    os.killpg(proc.pid, signal.SIGTERM)\n")
+    assert spawn_offenders("self_restart.py", src)
 
 
 def test_sweep_allows_the_seams_themselves():
