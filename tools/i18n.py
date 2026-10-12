@@ -1090,6 +1090,8 @@ _DOC_LINK = re.compile(r"\]\(([^)\s]+)\)")
 _DOC_ID = re.compile(r'<a id="([^"]+)"></a>')
 _DOC_FENCE = re.compile(r"^(```|~~~)")
 _DOC_BIDI = re.compile("[\u202a-\u202e\u2066-\u2069]")
+#: Markdown reads only ASCII digits as a list number: "۱. " is a paragraph.
+_DOC_NATIVE_LIST = re.compile(r"\s*[\u06f0-\u06f9\u0660-\u0669]+[.)]\s")
 
 
 def _doc_prose(text: str) -> list[str]:
@@ -1173,6 +1175,9 @@ def check_docs(root: Path = ROOT, codes=None) -> list[str]:
                     problems.append(f"{where}: a long dash (U+2014) outside code: {line.strip()[:60]}")
                 if _DOC_BIDI.search(line):
                     problems.append(f"{where}: a direction control character: {line.strip()[:60]}")
+                if _DOC_NATIVE_LIST.match(line):
+                    problems.append(f"{where}: a numbered list item needs Latin digits (1.): "
+                                    f"{line.strip()[:60]}")
             for target in _DOC_LINK.findall("\n".join(_doc_prose(text))):
                 if re.match(r"[a-z]+:", target):
                     continue

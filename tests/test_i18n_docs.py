@@ -260,3 +260,11 @@ def test_code_on_a_right_to_left_page_must_close_its_ltr_div(tmp_path):
                     encoding="utf-8")
     assert _check(tmp_path) == [
         "docs/i18n/fa/hooks.md: a code block with no </div> after it: line 15"]
+
+
+def test_a_list_numbered_with_persian_digits_is_named(tmp_path):
+    """Markdown only reads ASCII digits as a list number, so "۱. " runs the
+    items together into one paragraph."""
+    _append(_tree(tmp_path) / "observers.md", "\u06f1. \u06cc\u06a9\n")
+    assert _check(tmp_path) == [
+        "docs/i18n/fa/observers.md: a numbered list item needs Latin digits (1.): \u06f1. \u06cc\u06a9"]
