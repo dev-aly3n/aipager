@@ -784,7 +784,7 @@ def match_notes_prefix_run(outstanding: list[dict], content: str) -> list[dict]:
       note, so its note lingers until a turn end marks it ran. Stopping
       there left the next real message unmatched, and its turn fell back
       to the strictest merge of everything waiting: the owner's own
-      message ran with the lingering note's rights (Mohamad's VM,
+      message ran with the lingering note's rights (a user's VM,
       2026-10-09). Passed over, it stays outstanding: it can still only
       make a fallback merge stricter.
     """

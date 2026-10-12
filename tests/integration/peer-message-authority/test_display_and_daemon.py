@@ -17,14 +17,14 @@ from aipager.bot import peer_notice
 from aipager.state import TURN_SENDER_TERMINAL, Status, TrackedSession, turn_sender_from_report
 
 EN = i18n.get("en")
-VERIFIED = {"status": "verified", "sender_session": "claude-morgh",
-            "driver": {"class": "owner", "labels": ["@mohamad"]}}
+VERIFIED = {"status": "verified", "sender_session": "claude-frontend",
+            "driver": {"class": "owner", "labels": ["@alice"]}}
 
 
 # ---- the card line -------------------------------------------------------------------
 
 def test_card_line_names_the_sender_and_who_drove_it():
-    assert peer_notice.card_line(EN, VERIFIED) == "📨 from **morgh** (@mohamad)"
+    assert peer_notice.card_line(EN, VERIFIED) == "📨 from **frontend** (@alice)"
 
 
 def test_card_line_for_a_terminal_sender():
@@ -45,15 +45,15 @@ def test_no_card_line_before_the_check(pf):
 @pytest.mark.parametrize("code", ["fa", "ar", "zh-Hans", "de", "ru"])
 def test_card_line_in_other_languages(code):
     line = peer_notice.card_line(i18n.get(code), VERIFIED)
-    assert "morgh" in line and "@mohamad" in line and line != peer_notice.card_line(EN, VERIFIED)
+    assert "frontend" in line and "@alice" in line and line != peer_notice.card_line(EN, VERIFIED)
 
 
 def test_the_busy_card_starts_with_the_sender_line():
     from aipager.bot.animation import build_stream_card_ex
-    sess = TrackedSession(name="claude-mohandes", label="mohandes", status=Status.BUSY)
+    sess = TrackedSession(name="claude-backend", label="backend", status=Status.BUSY)
     sess.peer_from = dict(VERIFIED)
     card, _dropped = build_stream_card_ex(sess, "Working")
-    assert card.startswith("📨 from **morgh** (@mohamad)")
+    assert card.startswith("📨 from **frontend** (@alice)")
     sess.peer_from = None
     card2, _ = build_stream_card_ex(sess, "Working")
     assert "📨" not in card2
@@ -63,7 +63,7 @@ def test_the_busy_card_starts_with_the_sender_line():
 
 def test_halt_suffix_names_the_sender():
     s = peer_notice.halt_suffix(EN, VERIFIED, False)
-    assert "This task came from <b>morgh</b>." == s
+    assert "This task came from <b>frontend</b>." == s
 
 
 def test_halt_suffix_unverified_and_narrowed():
@@ -74,9 +74,9 @@ def test_halt_suffix_unverified_and_narrowed():
 
 def _bot_with(mk_bot, monkeypatch, receiver_chat, sender_chat):
     bot = mk_bot()
-    recv = TrackedSession(name="claude-mohandes", label="mohandes", status=Status.BUSY)
+    recv = TrackedSession(name="claude-backend", label="backend", status=Status.BUSY)
     recv.scope_chat_id = receiver_chat
-    send = TrackedSession(name="claude-morgh", label="morgh", status=Status.IDLE)
+    send = TrackedSession(name="claude-frontend", label="frontend", status=Status.IDLE)
     send.scope_chat_id = sender_chat
     bot.registry._sessions.update({recv.name: recv, send.name: send})
     monkeypatch.setattr("aipager.dtach.inject.send_keys", AsyncMock(return_value=True))
@@ -98,7 +98,7 @@ def test_the_sending_chat_hears_when_its_task_was_stopped(mk_bot, run_async, mon
     run_async(bot._tell_peer_sender(recv, recv.peer_from,
                                     "SendMessage is in this role's deny_tools"))
     assert sent and sent[0][0] == -5
-    assert "<b>mohandes</b> did not carry out the message <b>morgh</b>" in sent[0][1]
+    assert "<b>backend</b> did not carry out the message <b>frontend</b>" in sent[0][1]
 
 
 def test_another_chat_hears_nothing_the_owner_hears_in_private(mk_bot, run_async, monkeypatch):
@@ -124,7 +124,7 @@ def test_no_owner_no_cross_chat_notice(mk_bot, run_async, monkeypatch):
 def test_an_unverified_sender_is_never_told(mk_bot, run_async, monkeypatch):
     bot, recv, sent = _bot_with(mk_bot, monkeypatch, -5, -5)
     run_async(bot._tell_peer_sender(recv, {"status": "unverified",
-                                           "sender_session": "claude-morgh"}, "x"))
+                                           "sender_session": "claude-frontend"}, "x"))
     assert sent == []
 
 
@@ -138,7 +138,7 @@ def test_peer_resolved_records_the_sender_on_the_session(monkeypatch):
     from aipager.dtach.hook_receiver import HookReceiver
     from aipager.state import SessionRegistry
     reg = SessionRegistry()
-    sess = TrackedSession(name="claude-mohandes", label="mohandes", status=Status.BUSY)
+    sess = TrackedSession(name="claude-backend", label="backend", status=Status.BUSY)
     reg._sessions[sess.name] = sess
     seen = []
 
@@ -147,11 +147,11 @@ def test_peer_resolved_records_the_sender_on_the_session(monkeypatch):
     rec = HookReceiver(reg, notify)
     import json
     asyncio.run(rec._on_datagram(json.dumps({
-        "hook_event_name": "peer_resolved", "session": "claude-mohandes",
-        "status": "verified", "sender_session": "claude-morgh",
+        "hook_event_name": "peer_resolved", "session": "claude-backend",
+        "status": "verified", "sender_session": "claude-frontend",
         "driver": {"class": "owner", "labels": ["@m"]}}).encode()))
     assert sess.peer_from["status"] == "verified"
-    assert sess.peer_from["sender_session"] == "claude-morgh"
+    assert sess.peer_from["sender_session"] == "claude-frontend"
     assert seen and seen[-1][0] == "peer_resolved"
 
 

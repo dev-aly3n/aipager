@@ -315,7 +315,7 @@ def test_extract_last_response_scrubs_leaked_invoke_xml(tmp_path):
         "court\n"
         "<invoke name=\"Bash\">\n"
         "<parameter name=\"command\">"
-        "tmux send-keys -t main:mohandes C-u"
+        "tmux send-keys -t main:backend C-u"
         "</parameter>\n"
         "</invoke>"
     )

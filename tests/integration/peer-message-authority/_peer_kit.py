@@ -13,8 +13,8 @@ from pathlib import Path
 from aipager import peer_auth
 from aipager import policy_snapshot as ps
 
-RECEIVER = "claude-mohandes"
-SENDER = "claude-morgh"
+RECEIVER = "claude-backend"
+SENDER = "claude-frontend"
 PROJECT = "/srv/proj"
 SENDER_PID = 4150118
 SENDER_START = 264312572
@@ -118,5 +118,5 @@ def put_receipt(rules: dict, *, body: str = BODY, sender: str = SENDER,
     return peer_auth.write_receipt(
         sender_session=sender, chain=[{"pid": pid, "start": start}],
         message=body, rules=rules, turn_origin=turn_origin,
-        driver=driver or {"class": "owner", "labels": ["@mohamad"]},
+        driver=driver or {"class": "owner", "labels": ["@alice"]},
         via=None, sender_chat=sender_chat, now=now)

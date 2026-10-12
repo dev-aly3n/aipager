@@ -174,7 +174,7 @@ def test_the_daemon_narrows_when_it_reads_the_queue_line(tmp_path):
     _owner()
     ps.mark_turn_open(R)
     t = _tx(tmp_path, [kit.telegram_entry("x"), kit.tool_result(), kit.enqueue(kit.BODY)])
-    sess = TrackedSession(name=R, label="mohandes", status=Status.BUSY)
+    sess = TrackedSession(name=R, label="backend", status=Status.BUSY)
     sess.stream_transcript_path = t
     animation._scan_queue_operations(sess)
     snap = ps.read_snapshot(R)
@@ -1341,7 +1341,7 @@ def test_live_reload_narrows_the_sessions_scheduled_prompts(tmp_path, monkeypatc
     ro = [ps.safety_rules(ps.resolve_snapshot(kit.builtin_role("read_only"), None, None))]
     monkeypatch.setattr(live_reload, "narrowed_rules",
                         lambda *a: ro if a[-1] == 3 else None)
-    sess = TrackedSession(name=R, label="mohandes", status=Status.IDLE)
+    sess = TrackedSession(name=R, label="backend", status=Status.IDLE)
     live_reload._narrow_turn(sess, -5, None, None, None, None)
     assert "Bash" in ps.read_trigger(R, PROMPT)["deny_tools"]
 
@@ -1641,7 +1641,7 @@ def test_the_owner_joining_their_cron_before_anything_is_written_keeps_it(tmp_pa
 def _registry_with(status):
     from aipager.state import SessionRegistry, TrackedSession
     reg = SessionRegistry()
-    reg._sessions[R] = TrackedSession(name=R, label="mohandes", status=status)
+    reg._sessions[R] = TrackedSession(name=R, label="backend", status=status)
     return reg
 
 

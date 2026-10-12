@@ -529,7 +529,7 @@ def test_stash_no_op_when_creds_file_access_token_wrong_type(
 # ---- _credentials_file_is_dead_placeholder ----------------------------
 
 def test_dead_placeholder_true_when_both_tokens_empty(tmp_path, monkeypatch):
-    """Mohamad's exact production shape."""
+    """A real headless install's exact shape."""
     _patch_home(monkeypatch, tmp_path)
     _write_creds(str(tmp_path), {"claudeAiOauth": {
         "accessToken": "", "refreshToken": "", "expiresAt": 0,

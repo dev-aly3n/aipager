@@ -379,7 +379,7 @@ def _send(tmp_path, run_hook, monkeypatch, *, snap, transcript_entries=None):
     monkeypatch.setattr(peer_auth, "sender_chain", lambda s, **k: list(CHAIN))
     ps.write_merged_snapshot(kit.SENDER, snap)
     t = kit.write_transcript(tmp_path / "s.jsonl",
-                             transcript_entries or [kit.telegram_entry("tell mohandes")])
+                             transcript_entries or [kit.telegram_entry("tell backend")])
     return run_hook(kit.pretool(t, "SendMessage",
                                 {"to": "hospitalaccounting-ef", "message": kit.BODY},
                                 session=kit.SENDER), session=kit.SENDER)
@@ -406,7 +406,7 @@ def test_a_denied_send_writes_no_receipt(tmp_path, run_hook, monkeypatch):
 def test_a_terminal_senders_receipt_says_terminal(tmp_path, run_hook, monkeypatch):
     _send(tmp_path, run_hook, monkeypatch, snap={**ps.floor_snapshot(),
                                                  "turn_origin": "terminal"},
-          transcript_entries=[kit.human_entry("tell mohandes")])
+          transcript_entries=[kit.human_entry("tell backend")])
     got = peer_auth.claim_receipts(peer_auth.body_sha256(kit.BODY))
     assert got[0]["turn_origin"] == "terminal" and got[0]["rules"]["bypass_safety"] is True
 
@@ -439,7 +439,7 @@ def test_the_resolving_call_tells_claude_without_an_allow_decision(tmp_path, run
     data = json.loads(out.strip().splitlines()[0])
     spec = data["hookSpecificOutput"]
     assert "permissionDecision" not in spec
-    assert "verified" in spec["additionalContext"] and "morgh" in spec["additionalContext"]
+    assert "verified" in spec["additionalContext"] and "frontend" in spec["additionalContext"]
 
 
 def test_the_prompt_hook_prints_the_pending_notice(run_hook):

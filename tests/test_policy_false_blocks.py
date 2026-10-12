@@ -100,7 +100,7 @@ BLOCKED_CONFIG = [
     "cat $HOME/.claude/settings.json",
     "cat ${HOME}/.claude/settings.json",
     "cat /home/aly/.claude/settings.json",
-    "cat /home/mohamad/.claude/projects/x.jsonl",
+    "cat /home/alice/.claude/projects/x.jsonl",
     "cat .claude/settings.local.json",
     "cd .claude && cat settings.json",
     "cat ~/.claude.json",

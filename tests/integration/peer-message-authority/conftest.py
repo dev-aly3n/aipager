@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from aipager.dtach import notify_hook
 
-RECEIVER = "claude-mohandes"
+RECEIVER = "claude-backend"
 
 
 @pytest.fixture(autouse=True)

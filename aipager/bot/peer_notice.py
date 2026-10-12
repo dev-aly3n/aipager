@@ -18,15 +18,15 @@ CARD_FROM = Msg(
     note="Top line of a busy card whose turn another Claude session started "
          "with a message; {session} is that session's name, {who} who drove "
          "it (people's names, kept as they are)",
-    eg={"session": "morgh", "who": "@mohamad"})
+    eg={"session": "frontend", "who": "@alice"})
 CARD_FROM_TERMINAL = Msg(
     "card.peer.from_terminal", "📨 from **{session}** (typed in its terminal)",
     note="As card.peer.from, when the sending turn was typed in that "
-         "session's terminal", eg={"session": "morgh"})
+         "session's terminal", eg={"session": "frontend"})
 CARD_FROM_PLAIN = Msg(
     "card.peer.from_plain", "📨 from **{session}**",
     note="As card.peer.from, when nobody is known to have driven it",
-    eg={"session": "morgh"})
+    eg={"session": "frontend"})
 CARD_UNVERIFIED = Msg(
     "card.peer.unverified",
     "📨 from another session (not verified: no file changes, no web)",
@@ -36,7 +36,7 @@ HALT_FROM = Msg(
     "notice.peer.halt_from", "This task came from <b>{session}</b>.",
     note="Under a safety stop: the turn was started by a message from "
          "another Claude session; {session} is its name",
-    eg={"session": "morgh"})
+    eg={"session": "frontend"})
 HALT_UNVERIFIED = Msg(
     "notice.peer.halt_unverified",
     "This task came from another session aipager could not verify.",
@@ -55,7 +55,7 @@ SENDER_NOTICE = Msg(
     note="In the chat of the session that sent a message to another Claude "
          "session: the receiving session was stopped by the safety rules; "
          "{reason} is why",
-    eg={"receiver": "mohandes", "sender": "morgh",
+    eg={"receiver": "backend", "sender": "frontend",
         "reason": "SendMessage is in this role's deny_tools"})
 
 

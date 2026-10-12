@@ -36,7 +36,7 @@ bucket on a NEGATIVE chat id (``_aioratelimiter.py:263``), so a private
 DM was paced by nothing but the 30/s overall bucket. Two sessions
 streaming their busy cards into one DM at 0.9 s each put ~2.2 edits/s
 into it; Telegram answered with 2,021 small 429s in 14 hours and then a
-5.4-hour ban (Mohamad's install, 2026-09-11). Because the limiter was
+5.4-hour ban (a user's install, 2026-09-11). Because the limiter was
 installed with ``max_retries=0``, each 429 was re-raised with a
 traceback before PTB's own halt could arm, and every caller hit the same
 window again on its next tick.
