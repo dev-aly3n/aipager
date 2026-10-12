@@ -67,6 +67,7 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - Restart = Riavvia; Delete = Elimina; Rename = Rinomina; Cancel = Annulla; Close = Chiudi; Retry = Riprova; End = Termina.
 - Same situation, same words: "Couldn't …" is "Non è stato possibile …" (not "Impossibile …"); "Couldn't reach the server" is "Non è stato possibile collegarsi al server"; a refused restart is "Il riavvio non parte: …"; a stale button or card is "è vecchio/vecchia"; a running session is "in esecuzione".
 - {clock} is a duration: "Finito ({clock})", "Al lavoro ({clock})", never "da {clock}" (reads like a time of day).
+- The places in rep.area.* are written with their preposition ("nella scheda di attività", "nel messaggio fissato"), because rep.offer.internal puts them straight after {error}: "(TypeError nella scheda di attività)", never "in la".
 
 ## Plurals
 one, many and other. many is for large round numbers: give it the same text as other. The count goes first as in the English ({n} sessioni).

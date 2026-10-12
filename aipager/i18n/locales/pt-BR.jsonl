@@ -517,20 +517,20 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ As mensagens vão para <b>{session}</b>"}
-{"k": "rep.area.animation", "src": "6a3a8292", "v": "o cartão de atividade"}
-{"k": "rep.area.callbacks", "src": "397d02b3", "v": "os botões"}
-{"k": "rep.area.daemon", "src": "dbcc03a0", "v": "o próprio aipager"}
-{"k": "rep.area.dashboard", "src": "319e1d71", "v": "a mensagem fixada"}
-{"k": "rep.area.flood_budget", "src": "75f9bcb6", "v": "o limite de envios"}
-{"k": "rep.area.handlers", "src": "0ff1035f", "v": "o processamento de mensagens"}
-{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "o recebimento de hooks"}
-{"k": "rep.area.inject", "src": "d784f7db", "v": "o envio de mensagens ao Claude"}
-{"k": "rep.area.notify", "src": "c522bd84", "v": "o envio de mensagens ao Telegram"}
-{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "o hook"}
-{"k": "rep.area.server", "src": "8000cc31", "v": "o Mini App"}
-{"k": "rep.area.session_monitor", "src": "1fff1160", "v": "o acompanhamento das sessões"}
-{"k": "rep.area.session_ops", "src": "6b7d9e30", "v": "o controle de sessões"}
-{"k": "rep.area.state", "src": "e0e05b06", "v": "o estado das sessões"}
+{"k": "rep.area.animation", "src": "6a3a8292", "v": "no cartão de atividade"}
+{"k": "rep.area.callbacks", "src": "397d02b3", "v": "nos toques nos botões"}
+{"k": "rep.area.daemon", "src": "dbcc03a0", "v": "no próprio aipager"}
+{"k": "rep.area.dashboard", "src": "319e1d71", "v": "na mensagem fixada"}
+{"k": "rep.area.flood_budget", "src": "75f9bcb6", "v": "no limite de envios"}
+{"k": "rep.area.handlers", "src": "0ff1035f", "v": "no processamento de mensagens"}
+{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "no recebimento de hooks"}
+{"k": "rep.area.inject", "src": "d784f7db", "v": "no envio de mensagens ao Claude"}
+{"k": "rep.area.notify", "src": "c522bd84", "v": "no envio de mensagens ao Telegram"}
+{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "no hook"}
+{"k": "rep.area.server", "src": "8000cc31", "v": "no Mini App"}
+{"k": "rep.area.session_monitor", "src": "1fff1160", "v": "no acompanhamento das sessões"}
+{"k": "rep.area.session_ops", "src": "6b7d9e30", "v": "no controle das sessões"}
+{"k": "rep.area.state", "src": "e0e05b06", "v": "no estado das sessões"}
 {"k": "rep.cancelled", "src": "ca0ed5b3", "v": "Cancelado. Nada foi enviado."}
 {"k": "rep.doc_failed", "src": "321fac57", "v": "Não foi possível enviar o arquivo report.json, então nada foi enviado. Abra “Relatar um problema” de novo mais tarde."}
 {"k": "rep.document_line", "src": "f2943506", "v": "O relatório completo está no arquivo report.json que responde a este cartão."}
@@ -540,8 +540,8 @@
 {"k": "rep.note.prompt", "src": "dc71be87", "v": {"many": "✏️ Digite sua nota em uma só mensagem (no máximo {n} caracteres). Antes de enviar, você vê exatamente como ela fica no relatório. Se fizer qualquer outra coisa, isto fecha.", "one": "✏️ Digite sua nota em uma só mensagem (no máximo {n} caractere). Antes de enviar, você vê exatamente como ela fica no relatório. Se fizer qualquer outra coisa, isto fecha.", "other": "✏️ Digite sua nota em uma só mensagem (no máximo {n} caracteres). Antes de enviar, você vê exatamente como ela fica no relatório. Se fizer qualquer outra coisa, isto fecha."}}
 {"k": "rep.offer.also_other", "src": "2b336900", "v": {"many": "E mais {n} erros.", "one": "E mais {n} erro.", "other": "E mais {n} erros."}}
 {"k": "rep.offer.declined", "src": "5d912282", "v": "Certo. O aipager não vai perguntar sobre isso de novo nesta versão."}
-{"k": "rep.offer.internal", "src": "4df624aa", "v": {"many": "O aipager teve um erro interno {n} vezes ({error} em {area}).", "one": "O aipager teve um erro interno {n} vez ({error} em {area}).", "other": "O aipager teve um erro interno {n} vezes ({error} em {area})."}}
-{"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "O aipager teve um erro interno uma vez ({error} em {area})."}
+{"k": "rep.offer.internal", "src": "4df624aa", "v": {"many": "O aipager teve um erro interno {n} vezes ({error} {area}).", "one": "O aipager teve um erro interno {n} vez ({error} {area}).", "other": "O aipager teve um erro interno {n} vezes ({error} {area})."}}
+{"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "O aipager teve um erro interno uma vez ({error} {area})."}
 {"k": "rep.offer.memcap", "src": "698bc999", "v": {"many": "O hook do aipager atingiu o limite de memória {n} vezes.", "one": "O hook do aipager atingiu o limite de memória {n} vez.", "other": "O hook do aipager atingiu o limite de memória {n} vezes."}}
 {"k": "rep.offer.memcap_once", "src": "63461898", "v": "O hook do aipager atingiu o limite de memória uma vez."}
 {"k": "rep.offer.not_opened", "src": "1df3fb0a", "v": "Não foi possível abrir a prévia do relatório. “Relatar um problema” em /help abre uma nova."}

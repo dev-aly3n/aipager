@@ -517,20 +517,20 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ Nachrichten gehen an <b>{session}</b>"}
-{"k": "rep.area.animation", "src": "6a3a8292", "v": "die Arbeitskarte"}
-{"k": "rep.area.callbacks", "src": "397d02b3", "v": "Tippen auf Buttons"}
-{"k": "rep.area.daemon", "src": "dbcc03a0", "v": "aipager selbst"}
-{"k": "rep.area.dashboard", "src": "319e1d71", "v": "die angeheftete Nachricht"}
-{"k": "rep.area.flood_budget", "src": "75f9bcb6", "v": "das Sendelimit"}
-{"k": "rep.area.handlers", "src": "0ff1035f", "v": "Nachrichtenverarbeitung"}
-{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "der Empfang der Hooks"}
-{"k": "rep.area.inject", "src": "d784f7db", "v": "das Senden der Nachrichten an Claude"}
-{"k": "rep.area.notify", "src": "c522bd84", "v": "das Senden der Nachrichten an Telegram"}
-{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "der Hook"}
-{"k": "rep.area.server", "src": "8000cc31", "v": "die Mini App"}
-{"k": "rep.area.session_monitor", "src": "1fff1160", "v": "die Sitzungsüberwachung"}
-{"k": "rep.area.session_ops", "src": "6b7d9e30", "v": "Sitzungssteuerung"}
-{"k": "rep.area.state", "src": "e0e05b06", "v": "Sitzungszustand"}
+{"k": "rep.area.animation", "src": "6a3a8292", "v": "in der Arbeitskarte"}
+{"k": "rep.area.callbacks", "src": "397d02b3", "v": "beim Tippen auf Buttons"}
+{"k": "rep.area.daemon", "src": "dbcc03a0", "v": "in aipager selbst"}
+{"k": "rep.area.dashboard", "src": "319e1d71", "v": "in der angehefteten Nachricht"}
+{"k": "rep.area.flood_budget", "src": "75f9bcb6", "v": "beim Sendelimit"}
+{"k": "rep.area.handlers", "src": "0ff1035f", "v": "bei der Nachrichtenverarbeitung"}
+{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "beim Empfang der Hooks"}
+{"k": "rep.area.inject", "src": "d784f7db", "v": "beim Senden der Nachrichten an Claude"}
+{"k": "rep.area.notify", "src": "c522bd84", "v": "beim Senden der Nachrichten an Telegram"}
+{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "im Hook"}
+{"k": "rep.area.server", "src": "8000cc31", "v": "in der Mini App"}
+{"k": "rep.area.session_monitor", "src": "1fff1160", "v": "bei der Sitzungsüberwachung"}
+{"k": "rep.area.session_ops", "src": "6b7d9e30", "v": "bei der Sitzungssteuerung"}
+{"k": "rep.area.state", "src": "e0e05b06", "v": "beim Sitzungszustand"}
 {"k": "rep.cancelled", "src": "ca0ed5b3", "v": "Abgebrochen. Es wurde nichts gesendet."}
 {"k": "rep.doc_failed", "src": "321fac57", "v": "Die Datei report.json konnte nicht gesendet werden, daher wurde nichts gesendet. Öffne „Problem melden“ später noch einmal."}
 {"k": "rep.document_line", "src": "f2943506", "v": "Der vollständige Bericht steht in der Datei report.json, die auf diese Karte antwortet."}
@@ -540,8 +540,8 @@
 {"k": "rep.note.prompt", "src": "dc71be87", "v": {"one": "✏️ Schreib deine Notiz in einer Nachricht (höchstens {n} Zeichen). Vor dem Senden siehst du genau, wie sie im Bericht steht. Wenn du etwas anderes machst, schließt sich das hier.", "other": "✏️ Schreib deine Notiz in einer Nachricht (höchstens {n} Zeichen). Vor dem Senden siehst du genau, wie sie im Bericht steht. Wenn du etwas anderes machst, schließt sich das hier."}}
 {"k": "rep.offer.also_other", "src": "2b336900", "v": {"one": "Außerdem {n} weiterer Fehler.", "other": "Außerdem {n} weitere Fehler."}}
 {"k": "rep.offer.declined", "src": "5d912282", "v": "OK. aipager fragt in dieser Version nicht mehr danach."}
-{"k": "rep.offer.internal", "src": "4df624aa", "v": {"one": "aipager hatte {n}-mal einen internen Fehler ({error} in {area}).", "other": "aipager hatte {n}-mal einen internen Fehler ({error} in {area})."}}
-{"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "aipager hatte einmal einen internen Fehler ({error} in {area})."}
+{"k": "rep.offer.internal", "src": "4df624aa", "v": {"one": "aipager hatte {n}-mal einen internen Fehler ({error} {area}).", "other": "aipager hatte {n}-mal einen internen Fehler ({error} {area})."}}
+{"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "aipager hatte einmal einen internen Fehler ({error} {area})."}
 {"k": "rep.offer.memcap", "src": "698bc999", "v": {"one": "Der Hook von aipager hat {n}-mal sein Speicherlimit erreicht.", "other": "Der Hook von aipager hat {n}-mal sein Speicherlimit erreicht."}}
 {"k": "rep.offer.memcap_once", "src": "63461898", "v": "Der Hook von aipager hat einmal sein Speicherlimit erreicht."}
 {"k": "rep.offer.not_opened", "src": "1df3fb0a", "v": "Die Berichtsvorschau konnte nicht geöffnet werden. „Problem melden“ in /help öffnet eine neue."}

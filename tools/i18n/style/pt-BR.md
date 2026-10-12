@@ -62,6 +62,7 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - owner: dono; admin: admin; member: membro; chat: chat; group: grupo; settings: configurações; folder: pasta; model: modelo; role: função; "o Mini App" ("pelo Mini App").
 - Kept in English: commit, token, diff, log, ctx. A diff is "alterações (diff)" where it is a label.
 - Restart = Reiniciar; Delete = Excluir; Rename = Renomear; Cancel = Cancelar; Close = Fechar; Retry = Tentar de novo; End = Encerrar.
+- The places in rep.area.* are written with their preposition ("no cartão de atividade", "na mensagem fixada"), because rep.offer.internal puts them straight after {error}: "(TypeError no cartão de atividade)", never "em o".
 
 ## Plurals
 one, many and other. In Portuguese "one" also covers 0: always write {n}, never the word "um". many is for large round numbers: give it the same text as other.

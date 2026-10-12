@@ -68,6 +68,7 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - Same situation, same words: "Couldn't …" is "… konnte nicht … werden" ("Die Datei konnte nicht geladen werden"); "Couldn't reach the server" is "Keine Verbindung zum Server"; a refused restart is "Kein Neustart: …"; a stale button or card is "veraltet"; a running session "läuft".
 - {clock} is a duration: "Fertig ({clock})", "Arbeitet ({clock})", never "seit {clock}" or "nach {clock}" (reads like a time of day).
 - Button names quoted in a sentence go in „ “: Tippe auf „Jetzt senden“.
+- The places in rep.area.* are written with their preposition ("in der Arbeitskarte", "beim Senden der Nachrichten an Claude"), because rep.offer.internal puts them straight after {error}: "(TypeError in der Arbeitskarte)", never "in die".
 
 ## Plurals
 one and other. The count goes first as in the English ({n} Sitzungen).
