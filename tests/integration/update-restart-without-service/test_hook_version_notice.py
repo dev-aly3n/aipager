@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from unittest.mock import AsyncMock
 
 import pytest
@@ -143,7 +144,7 @@ def test_no_owner_no_notice(env, run, monkeypatch):
 
 
 def test_a_busy_manager_defers_without_spending_an_attempt(env, run):
-    env.add_session(status=Status.BUSY)
+    sess = env.add_session(status=Status.BUSY)
 
     async def scenario():
         res = await env.start_restart()
@@ -153,6 +154,7 @@ def test_a_busy_manager_defers_without_spending_an_attempt(env, run):
         deferred = (len(_notices(env)), env.manager._hook_seen["1.2.0"]["attempts"])
         env.manager.control("cancel", res.job["id"])
         await env.finish()
+        sess.status = Status.IDLE
         env.manager.note_hook_version("1.2.0")
         await _drain(env)
         return deferred
@@ -174,17 +176,65 @@ def test_a_job_card_that_offers_the_restart_covers_the_notice(env, run):
     assert env.manager._hook_seen["1.1.0"]["delivered"] is True
 
 
-def test_a_muted_owner_is_retried_only_after_the_interval_and_at_most_three_times(
+def test_a_chat_that_is_not_clear_spends_no_attempt_and_is_sent_once_clear(
         env, run, monkeypatch):
     monkeypatch.setattr(report_offer, "dm_clear", lambda owner: False)
+    _note(env, run, *["1.1.0"] * 6)
+    rec = env.manager._hook_seen["1.1.0"]
+    assert (rec["attempts"], rec["task"], _notices(env)) == (0, None, [])
+    monkeypatch.setattr(report_offer, "dm_clear", lambda owner: True)
+    _note(env, run, "1.1.0")              # rechecked only after the short wait
+    assert _notices(env) == []
+    monkeypatch.setattr(update_flow, "HOOK_NOTICE_SKIP_RETRY_SECONDS", 0.0)
+
+    async def ticks():
+        for _ in range(3):
+            env.manager.hook_notice_tick()
+            await _drain(env)
+    run(ticks)
+    assert len(_notices(env)) == 1 and rec["attempts"] == 0 and rec["delivered"] is True
+
+
+def _failing_send(env, calls):
+    async def _fail(*a, **kw):
+        calls.append(kw)
+        raise RuntimeError("telegram down")
+    env.bot._app.bot.send_message = AsyncMock(side_effect=_fail)
+
+
+def test_a_failed_send_is_retried_only_after_the_interval_and_at_most_three_times(
+        env, run, monkeypatch):
+    calls: list = []
+    _failing_send(env, calls)
     _note(env, run, "1.1.0", "1.1.0", "1.1.0")
-    assert env.manager._hook_seen["1.1.0"]["attempts"] == 1
+    assert len(calls) == 1 and env.manager._hook_seen["1.1.0"]["attempts"] == 1
     monkeypatch.setattr(update_flow, "HOOK_NOTICE_RETRY_SECONDS", 0.0)
     _note(env, run, *["1.1.0"] * 6)
-    assert env.manager._hook_seen["1.1.0"]["attempts"] == 3
-    monkeypatch.setattr(report_offer, "dm_clear", lambda owner: True)
+    assert len(calls) == 3 and env.manager._hook_seen["1.1.0"]["attempts"] == 3
+    env.bot._app.bot.send_message = AsyncMock(side_effect=env._on_send)
     _note(env, run, "1.1.0")
     assert _notices(env) == []
+
+
+def test_a_gate_skip_spends_no_attempt_and_is_retried_after_a_short_wait(
+        env, run, monkeypatch):
+    results = [update_flow.SKIPPED]
+    real = update_flow.send_text
+
+    async def _send(*a, **kw):
+        if results:
+            return results.pop()
+        return await real(*a, **kw)
+    monkeypatch.setattr(update_flow, "send_text", _send)
+    _note(env, run, "1.1.0")
+    rec = env.manager._hook_seen["1.1.0"]
+    assert rec["attempts"] == 0 and _notices(env) == [] and rec["last_try"] == "skipped"
+    _note(env, run, "1.1.0")                  # not before the short wait...
+    assert _notices(env) == []
+    # ...and once it has passed, once.
+    monkeypatch.setattr(update_flow, "HOOK_NOTICE_SKIP_RETRY_SECONDS", 0.0)
+    _note(env, run, "1.1.0", "1.1.0")
+    assert len(_notices(env)) == 1 and rec["attempts"] == 0
 
 
 def test_at_most_sixteen_versions_are_remembered(env, run, monkeypatch):
@@ -200,3 +250,89 @@ def test_note_hook_version_never_raises(env):
     # Outside a running loop the notice cannot be scheduled: still no raise.
     env.manager.note_hook_version("1.1.0")
     assert env.manager.waiting_info()["source"] == "hooks"
+
+
+# ---- the owner's chat busy: held back, then sent when the turn ends -------------------------
+
+def _quiet_monitor(env, monkeypatch):
+    """The real ``TelegramBot.monitor_tick`` with only the notice's part live."""
+    async def _nothing(*a, **k):
+        return None
+    monkeypatch.setattr(env.bot, "pinned_tick", _nothing)
+    monkeypatch.setattr(report_offer, "tick", _nothing)
+
+
+def test_a_dm_session_whose_datagrams_all_come_mid_turn_gets_one_notice_after_the_turn(
+        env, run, monkeypatch):
+    _quiet_monitor(env, monkeypatch)
+    sess = env.add_session(status=Status.IDLE)
+    seen_mid_turn = []
+
+    async def scenario():
+        for _turn in range(3):
+            sess.status = Status.BUSY            # UserPromptSubmit ... Stop
+            for _ in range(4):
+                env.manager.note_hook_version("1.1.0")
+                await _drain(env)
+                await env.bot.monitor_tick()
+                await _drain(env)
+            rec = env.manager._hook_seen["1.1.0"]
+            seen_mid_turn.append((len(_notices(env)), rec["attempts"]))
+            sess.status = Status.IDLE            # the turn ended
+            for _ in range(3):
+                await env.bot.monitor_tick()
+                await _drain(env)
+    run(scenario)
+    # Nothing during the first turn, no attempt spent while it ran...
+    assert seen_mid_turn[0] == (0, 0)
+    # ...one notice once it ended, and never a second one.
+    assert seen_mid_turn[1:] == [(1, 0), (1, 0)]
+    assert len(_notices(env)) == 1
+
+
+@pytest.mark.parametrize("busy", [
+    {"status": Status.BUSY},
+    {"status": Status.INTERACTIVE},
+    {"busy_msg_id": 77},
+    {"busy_card_owed": True},
+    {"notify_in_flight": 1},
+    {"pending_permission": {"tool": "Bash"}},
+], ids=["busy", "interactive", "live-card", "card-owed", "notify-in-flight",
+        "permission"])
+def test_any_live_turn_in_the_owner_chat_holds_the_notice_back(env, run, busy):
+    env.add_session(**busy)
+    _note(env, run, "1.1.0", "1.1.0")
+    rec = env.manager._hook_seen["1.1.0"]
+    assert (_notices(env), rec["attempts"], rec["task"]) == ([], 0, None)
+
+
+def test_a_busy_session_in_another_chat_does_not_hold_the_notice_back(env, run):
+    env.add_session(status=Status.BUSY, scope_chat_id=-1001234567890)
+    _note(env, run, "1.1.0")
+    assert len(_notices(env)) == 1
+
+
+def test_a_held_back_notice_logs_once_per_reason_and_makes_no_task(env, run, caplog):
+    env.add_session(status=Status.BUSY)
+
+    async def scenario():
+        before = len(env.manager._tasks)
+        for _ in range(10):
+            env.manager.note_hook_version("1.1.0")
+            env.manager.hook_notice_tick()
+        await asyncio.sleep(0)
+        return len(env.manager._tasks) - before
+    with caplog.at_level(logging.INFO, logger="aipager.bot.update_flow"):
+        made = run(scenario)
+    held = [r.getMessage() for r in caplog.records if "result=deferred" in r.getMessage()]
+    assert made == 0
+    assert held == ["update.hooks_newer.notice hook=1.1.0 result=deferred "
+                    "reason=owner-chat-busy"]
+
+
+def test_the_tick_with_nothing_pending_does_nothing(env, run):
+    async def scenario():
+        env.manager.hook_notice_tick()
+        await asyncio.sleep(0)
+    run(scenario)
+    assert env.manager._tasks == set() and _notices(env) == []

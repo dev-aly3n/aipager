@@ -462,10 +462,15 @@ _RESTART_LOCKED = Msg("toast.upd.restart_locked",
                       "An update is running elsewhere. Try again once it has finished.",
                       note="Pop-up: Restart now while an update elsewhere holds the lock")
 
-#: One owner notice per newer hook version: retried no sooner than this...
+#: One owner notice per newer hook version: a failed send is retried no
+#: sooner than this...
 HOOK_NOTICE_RETRY_SECONDS = 600.0
-#: ...and at most this many times.
+#: ...and at most this many times. Held back (the owner's chat not clear,
+#: an update job running) costs no attempt and is retried on the session
+#: monitor's tick; the outbound gate skipping it costs none either and is
+#: retried after this.
 HOOK_NOTICE_MAX_ATTEMPTS = 3
+HOOK_NOTICE_SKIP_RETRY_SECONDS = 30.0
 # Hook versions remembered per run (a spoofed datagram can add at most one
 # notice per version, and only this many versions).
 _HOOK_SEEN_MAX = 16
@@ -1005,7 +1010,7 @@ class UpdateManager:
         self._waiting: str | None = None
         # The newest hook version seen running newer code than this daemon,
         # and one record per such version: {delivered, attempts,
-        # last_attempt_mono, task} (one owner notice per version per run).
+        # last_try_mono, last_try, task, deferred} (one owner notice per version per run).
         self._hooks_newer: str | None = None
         self._hook_seen: dict[str, dict] = {}
 
@@ -1751,27 +1756,100 @@ class UpdateManager:
             if rec is None:
                 if len(self._hook_seen) >= _HOOK_SEEN_MAX:
                     return
-                rec = {"delivered": False, "attempts": 0, "last_attempt_mono": None,
-                       "task": None}
+                rec = {"delivered": False, "attempts": 0, "last_try_mono": None,
+                       "last_try": None, "task": None, "deferred": None}
                 self._hook_seen[version] = rec
                 log.info("update.hooks_newer hook=%s daemon=%s", version, mine)
             if self._hooks_newer is None or self_update.is_newer(version, self._hooks_newer):
                 self._hooks_newer = version
-            if rec["delivered"] or rec["attempts"] >= HOOK_NOTICE_MAX_ATTEMPTS:
-                return
-            task = rec["task"]
-            if task is not None and not task.done():
-                return
-            last = rec["last_attempt_mono"]
-            if last is not None and time.monotonic() - last < HOOK_NOTICE_RETRY_SECONDS:
-                return
-            try:
-                asyncio.get_running_loop()
-            except RuntimeError:
-                return          # nothing to send it from (never in the daemon)
-            rec["task"] = self._spawn(self._hook_notice(version))
+            self._try_hook_notice(version, rec)
         except Exception:
             log.debug("hook version note failed", exc_info=True)
+
+    def hook_notice_tick(self) -> None:
+        """The session monitor's tick: a notice held back while the owner's
+        chat was not clear goes out once it is (a hook datagram mostly
+        arrives mid-turn, so waiting for the next one is not enough).
+        Cheap and sync; nothing at all when no notice is pending."""
+        try:
+            for version, rec in list(self._hook_seen.items()):
+                self._try_hook_notice(version, rec)
+        except Exception:
+            log.debug("hook notice tick failed", exc_info=True)
+
+    def _try_hook_notice(self, version: str, rec: dict) -> None:
+        """Start the notice for *version* when it is owed, due and the
+        owner's chat is clear. Holding it back costs no attempt and logs
+        only when the reason changes; no task is made for it."""
+        if rec["delivered"] or rec["attempts"] >= HOOK_NOTICE_MAX_ATTEMPTS:
+            return
+        task = rec["task"]
+        if task is not None and not task.done():
+            return
+        last = rec["last_try_mono"]
+        if last is not None:
+            wait = (HOOK_NOTICE_SKIP_RETRY_SECONDS if rec["last_try"] == "skipped"
+                    else HOOK_NOTICE_RETRY_SECONDS)
+            if time.monotonic() - last < wait:
+                return
+        if self._hook_notice_covered(version):
+            rec["delivered"] = True
+            log.info("update.hooks_newer.notice hook=%s result=covered", version)
+            return
+        from aipager.bot import report_flow
+
+        owner = None
+        reason = None
+        if self.busy or self._shutting_down:
+            reason = "update-job"
+        else:
+            owner = report_flow.resolve_owner(self.bot)
+            if owner is None:
+                rec["delivered"] = True
+                log.info("update.hooks_newer.no_owner hook=%s", version)
+                return
+            reason = self._owner_chat_wait_reason(owner)
+        if reason is not None:
+            if reason == "owner-chat-not-clear":
+                # Muted, a 429 wait, a warning regime: these last a while,
+                # so the (dearer) chat check is not redone every tick.
+                rec["last_try_mono"], rec["last_try"] = time.monotonic(), "skipped"
+            if rec["deferred"] != reason:
+                rec["deferred"] = reason
+                log.info("update.hooks_newer.notice hook=%s result=deferred reason=%s",
+                         version, reason)
+            return
+        rec["deferred"] = None
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return          # nothing to send it from (never in the daemon)
+        rec["task"] = self._spawn(self._hook_notice(version, owner))
+
+    def _owner_chat_wait_reason(self, owner: int) -> str | None:
+        """Why an unsolicited message to the owner's chat should wait, or
+        None: a turn (or its card, answer or question) is live there, or
+        the chat is muted, in a 429 wait, a warning regime or minimal mode."""
+        from aipager.bot import report_offer
+        from aipager.state import Status, session_in_chat
+
+        now = time.monotonic()
+        registry = getattr(self.bot, "registry", None)
+        sessions = registry.all_sessions() if registry is not None else {}
+        for sess in sessions.values():
+            if sess.status in (Status.GONE, Status.UNKNOWN):
+                continue
+            if not session_in_chat(sess, owner):
+                continue
+            if (sess.status in (Status.BUSY, Status.INTERACTIVE)
+                    or (sess.busy_msg_id or 0) > 0 or sess.busy_card_owed
+                    or sess.notify_in_flight or sess.pending_permission is not None
+                    or sess.stack_top_kind() == "compacting"
+                    or sess.work_in_flight(now)):
+                return "owner-chat-busy"
+        if not report_offer.dm_clear(owner):
+            return "owner-chat-not-clear"
+        return None
 
     def _hook_notice_covered(self, version: str) -> bool:
         """A job card already offers (or runs) the restart into *version*."""
@@ -1780,28 +1858,9 @@ class UpdateManager:
             return False
         return not job.terminal or self.restart_pending or job.can_restart
 
-    async def _hook_notice(self, version: str) -> None:
+    async def _hook_notice(self, version: str, owner: int) -> None:
         rec = self._hook_seen[version]
         mine = _daemon_code_version()
-        if self._hook_notice_covered(version):
-            rec["delivered"] = True
-            log.info("update.hooks_newer.notice hook=%s result=covered", version)
-            return
-        if self.busy or self._shutting_down:
-            log.info("update.hooks_newer.notice hook=%s result=deferred", version)
-            return
-        from aipager.bot import report_flow, report_offer
-
-        owner = report_flow.resolve_owner(self.bot)
-        if owner is None:
-            rec["delivered"] = True
-            log.info("update.hooks_newer.no_owner hook=%s", version)
-            return
-        rec["attempts"] += 1
-        rec["last_attempt_mono"] = time.monotonic()
-        if not report_offer.dm_clear(owner):
-            log.info("update.hooks_newer.notice hook=%s result=skipped", version)
-            return
         tr = i18n.for_chat(owner)
         app = getattr(self.bot, "_app", None)
         sent = None
@@ -1813,12 +1872,21 @@ class UpdateManager:
                     disable_notification=True,
                     rate_limit_args=rate_limit_args(kind="skip", priority=PRIORITY_ORNAMENT))
             except FloodMuted:
-                sent = None
+                sent = MUTED
             except Exception:
                 log.debug("hooks newer notice failed", exc_info=True)
                 sent = None
-        if sent is None or sent is MUTED or sent is SKIPPED:
+        if sent is MUTED or sent is SKIPPED:
+            # The outbound gate held it back: nothing reached Telegram, so
+            # no attempt is spent; tried again shortly.
+            rec["last_try_mono"], rec["last_try"] = time.monotonic(), "skipped"
             log.info("update.hooks_newer.notice hook=%s result=skipped", version)
+            return
+        if sent is None:
+            rec["attempts"] += 1
+            rec["last_try_mono"], rec["last_try"] = time.monotonic(), "failed"
+            log.info("update.hooks_newer.notice hook=%s result=failed attempt=%d",
+                     version, rec["attempts"])
             return
         rec["delivered"] = True
         log.info("update.hooks_newer.notice hook=%s result=sent", version)

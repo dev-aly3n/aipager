@@ -208,7 +208,7 @@ def test_deferred_notice_is_sent_on_a_later_datagram(bb):
     bb.restart_probe = ("1.0.5", True)
     bb.launch_as_daemon()
     bb.attach_stop()
-    bb.add_session(status=Status.BUSY)
+    sess = bb.add_session(status=Status.BUSY)
 
     async def body():
         res = await bb.start_restart()
@@ -217,6 +217,8 @@ def test_deferred_notice_is_sent_on_a_later_datagram(bb):
         await bb.drain()
         bb.manager.control("cancel", res.job["id"])
         await bb.finish()
+        # The session sits in the owner's chat: its turn must end first.
+        sess.status = Status.IDLE
         bb.manager.note_hook_version(NEWER)
         await bb.drain()
     run_scenario(bb, body)

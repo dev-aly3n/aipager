@@ -1715,9 +1715,9 @@ def _update_restart(env):
     mp.setattr(report_flow, "resolve_owner", lambda b: CHAT)
     mp.setattr(report_offer, "dm_clear", lambda owner: True)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9))
-    mgr._hook_seen["1.1.0"] = {"delivered": False, "attempts": 0,
-                               "last_attempt_mono": None, "task": None}
-    env.run(mgr._hook_notice("1.1.0"))
+    mgr._hook_seen["1.1.0"] = {"delivered": False, "attempts": 0, "last_try_mono": None,
+                               "last_try": None, "task": None, "deferred": None}
+    env.run(mgr._hook_notice("1.1.0", CHAT))
     for call in bot._app.bot.send_message.await_args_list:
         out.append(call.args[1] if len(call.args) > 1 else call.kwargs.get("text"))
         out += _inline(call.kwargs.get("reply_markup"))

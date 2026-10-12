@@ -201,9 +201,9 @@ class TelegramBot(
         card_owner.prune(self)
 
     async def monitor_tick(self) -> None:
-        """The session monitor's per-tick callback: the pinned bar, then
-        the problem report offer check, each on its own so one failing
-        never stops the other."""
+        """The session monitor's per-tick callback: the pinned bar, the
+        problem report offer check, then a held-back "hooks newer" notice,
+        each on its own so one failing never stops the other."""
         try:
             await self.pinned_tick()
         except Exception:
@@ -213,3 +213,8 @@ class TelegramBot(
             await report_offer.tick(self)
         except Exception as e:
             log.warning("problem report tick failed (%s)", type(e).__name__)
+        try:
+            # A "hooks newer" notice held back while the owner's chat was busy.
+            self.updates.hook_notice_tick()
+        except Exception as e:
+            log.warning("hook notice tick failed (%s)", type(e).__name__)
