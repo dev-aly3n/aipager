@@ -3379,8 +3379,9 @@ APP_JS = r"""
       actions.appendChild(updateButton(offer.label, function () {
         var go = function () { postUpdate("start", { kind: kind }); };
         if (kind === "claude") { go(); return; }
-        confirmThen(t(check.restart_auto === false ? "ui.update.offer_confirm_manual"
-                                                   : "ui.update.offer_confirm",
+        // "Tap Restart now" only where the job will offer Restart now.
+        confirmThen(t(check.restart_in_place === true ? "ui.update.offer_confirm_manual"
+                                                      : "ui.update.offer_confirm",
                       { offer: offer.label }), go);
       }));
       return;

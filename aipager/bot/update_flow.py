@@ -848,8 +848,11 @@ def check_payload(status: dict, *, show_paths: bool, tr=None) -> dict:
         # steps to restart by hand (plain text).
         "restart_offer": offer.restart_offer,
         "steps": offer.steps,
-        # Whether an offered aipager update restarts by itself.
+        # Whether an offered aipager update restarts by itself...
         "restart_auto": bool((status.get("restart") or {}).get("automatic")),
+        # ...or ends with Restart now (this process restarts in place).
+        # Neither: it ends with the steps to restart by hand.
+        "restart_in_place": bool((status.get("restart") or {}).get("in_place")),
     }
 
 

@@ -505,7 +505,15 @@ if (SCENARIO.indexOf("updates_") === 0) {
             offer: null, summary: "Everything is up to date.", restart: null,
             notes: [], source: "pipx, from PyPI" },
   };
-  const CHECK = { updates_check_aipager: "aipager",
+  // The update confirm: in place (Restart now follows), systemd (it
+  // restarts by itself) and neither (a fail-closed plan: steps follow).
+  const CONFIRM_PLAN = {
+    updates_confirm_in_place: { restart_auto: false, restart_in_place: true },
+    updates_confirm_systemd: { restart_auto: true, restart_in_place: false },
+    updates_confirm_manual_steps: { restart_auto: false, restart_in_place: false },
+  }[SCENARIO];
+  if (CONFIRM_PLAN) Object.assign(CHECKS.aipager, CONFIRM_PLAN);
+  const CHECK = (CONFIRM_PLAN ? "aipager" : null) || { updates_check_aipager: "aipager",
                   updates_check_nothing_newer: "none" }[SCENARIO] || "claude";
   FIXTURES["/api/update/check"] = { check: CHECKS[CHECK], job: null };
   FIXTURES["/api/update/start"] = { job: { id: 1, kind: CHECKS[CHECK].offer
@@ -1720,6 +1728,26 @@ function driveUpdatesCheckNothingNewer() {
   }, 10);
 }
 
+// ---- scenario: the update confirm promises Restart now only in place ---
+function driveUpdatesConfirm() {
+  const shown = [];
+  webApp.showConfirm = (message, cb) => { shown.push(message); cb(false); };
+  api.loadSettings();
+  setTimeoutReal(() => {
+    byId["updates-actions"].children[0].click();
+    setTimeoutReal(() => {
+      byId["updates-actions"].children[0].click();
+      setTimeoutReal(() => {
+        if (shown.length !== 1) fail("want one confirm: " + JSON.stringify(shown));
+        if (updateRequests().some(r => r.indexOf("/api/update/start") !== -1))
+          fail("a declined confirm still started the update");
+        console.log("ok: confirm -> " + shown[0]);
+        process.exit(0);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
 // ---- scenario: a 403 hides the block and does NOT expire the app ------
 function driveUpdatesForbidden() {
   POST_STATUS_OVERRIDE = { path: "/api/update", method: "GET", status: 403,
@@ -2222,6 +2250,9 @@ const DRIVERS = {
   updates_check_then_update: driveUpdatesCheckThenUpdate,
   updates_check_aipager: driveUpdatesCheckAipager,
   updates_check_nothing_newer: driveUpdatesCheckNothingNewer,
+  updates_confirm_in_place: driveUpdatesConfirm,
+  updates_confirm_systemd: driveUpdatesConfirm,
+  updates_confirm_manual_steps: driveUpdatesConfirm,
   updates_forbidden: driveUpdatesForbidden,
   model_switch: driveModelSwitch,
   model_unconfirmed: driveModelSwitch,

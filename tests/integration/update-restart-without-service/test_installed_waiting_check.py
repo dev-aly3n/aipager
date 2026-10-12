@@ -161,3 +161,26 @@ def test_the_check_is_remembered_for_the_banner(env, run):
     env.restart_probe = ("1.0.1", True)
     _check(env, run)
     assert env.manager.waiting_info() is None
+
+
+@pytest.mark.parametrize("plan, auto, in_place", [
+    ("foreground", False, True),
+    ("systemd", True, False),
+    ("systemd-killmode-unsafe", False, False),
+    ("systemd-other-main-pid", False, False),
+    ("foreground-no-exec-target", False, False),
+], ids=["foreground", "systemd", "killmode-unsafe", "other-main-pid", "no-exec-target"])
+def test_the_payload_says_whether_restart_now_follows_an_update(env, run, monkeypatch, plan,
+                                                                auto, in_place):
+    # The Mini App's update confirm promises Restart now on restart_in_place.
+    if plan.startswith("systemd"):
+        env.set_under_unit(True)
+    if plan == "systemd-killmode-unsafe":
+        env.killmode = "control-group"
+    if plan == "systemd-other-main-pid":
+        env.main_pid = env.main_pid + 1
+    if plan == "foreground-no-exec-target":
+        monkeypatch.setattr(self_restart, "_interpreter",
+                            lambda: str(env.tmp / "gone" / "python"))
+    payload = update_flow.check_payload(_check(env, run), show_paths=True)
+    assert (payload["restart_auto"], payload["restart_in_place"]) == (auto, in_place)

@@ -1235,6 +1235,29 @@ def test_updates_check_with_nothing_newer_offers_no_update(node_bin, tmp_path):
     assert "ok: nothing newer -> summary + Check again, no update button" in proc.stdout
 
 
+_IN_PLACE_CONFIRM = "Update aipager? Afterwards, tap Restart now to run the new version."
+
+
+@pytest.mark.parametrize("scenario, in_place", [
+    ("updates_confirm_in_place", True),
+    ("updates_confirm_systemd", False),
+    # A fail-closed plan (KillMode unsafe, MainPID mismatch, no exec target):
+    # the job ends with steps and no Restart now, so none is promised.
+    ("updates_confirm_manual_steps", False),
+], ids=["in-place", "systemd", "manual-steps"])
+def test_the_update_confirm_promises_restart_now_only_in_place(node_bin, tmp_path, scenario,
+                                                               in_place):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, scenario)
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    (line,) = [ln for ln in proc.stdout.splitlines() if ln.startswith("ok: confirm -> ")]
+    shown = line[len("ok: confirm -> "):]
+    assert shown.startswith("Update aipager?")
+    assert (shown == _IN_PLACE_CONFIRM) is in_place
+    assert ("Restart now" in shown) is in_place
+
+
 def test_updates_403_hides_block_not_expired(node_bin, tmp_path):
     from aipager.miniapp.static import INDEX_HTML
 
