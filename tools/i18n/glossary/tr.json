@@ -18,7 +18,8 @@
   "allow": [
    "izin",
    "İzin",
-   "izn"
+   "izn",
+   "İzn"
   ],
   "background": [
    "arka plan"
@@ -54,11 +55,16 @@
   "permission": [
    "izin",
    "İzin",
-   "izn"
+   "izn",
+   "İzn"
   ],
   "prompt": [
    "istem",
-   "İstem"
+   "İstem",
+   "mesaj",
+   "istek",
+   "isteğ",
+   "İstek"
   ],
   "question": [
    "soru"
@@ -84,10 +90,15 @@
    "durma",
    "duruş",
    "stop",
-   "/stop"
+   "/stop",
+   "durur",
+   "durac"
   ],
   "turn": [
-   "tur"
+   "tur",
+   "sıra",
+   "sıras",
+   "görev"
   ],
   "update": [
    "güncelle",

@@ -1,9 +1,9 @@
 # Turkish (tr) style guide
 
-The translator (Claude) reads this with the glossary before every batch.
+The translator (Claude) reads TRANSLATING.md first, then this, then the glossary.
 
 ## Tone
-Plain, direct and friendly. Address the reader as sen. Sound like the English: plain words, short sentences, no slang.
+Plain, direct and friendly, the way Telegram's own Turkish interface talks. Address the reader as sen. Everyday Turkish, not a word-for-word copy of the English: short sentences, no officialese ("gerçekleştirilmektedir", "söz konusu"), no slang. Turkish has no grammatical gender, so "sen" and {person} need no care there.
 
 ## Address
 sen
@@ -29,8 +29,44 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - A button or sentence that names a permission mode names it as a mode (operator, 2026-10-11): the switch buttons (modecard.btn.to_*, ui.btn.switch_to_*), the "instead" buttons (mode.*_instead) and the busy confirms (ui.confirm.perms_busy_*) say the mode word and the word for mode, as mode.auto and mode.ask do. The typed words stay one word.
 - A default button label (Continue, Run tests...) stays short: it is a button.
 
-## Words (the glossary's terms in context)
-oturum (session), tur (turn: one prompt and Claude's work on it), kart (card), izin (permission; a permission prompt is an izin isteği), istem (prompt: what you send to Claude), soru (question), İzin ver / izin verildi (allow), Reddet / reddedildi (deny), Durdur / durduruldu (stop), Devam ettir / devam ediyor (resume), kuyruk (queue), ajan (agent), arka planda (background), sahip (owner), yönetici (admin), üye (member), sohbet (chat), grup (group), ayarlar (settings), güncelleme / güncelle (update), klasör (folder), model (model). Buttons are short imperatives (sen form): İzin ver, Reddet, Durdur.
+## Words people actually say (use these)
+| English idea | write | not |
+|---|---|---|
+| session | oturum | seans |
+| background agent | arka plan ajanı | |
+| background shell command | arka plan komutu (the first line under an answer adds "(shell)") | shell alone, kabuk |
+| your message to Claude (prompt) | mesaj | istem (only where the text is about prompts as such) |
+| a permission or question prompt | istek (izin isteği) | |
+| compact (Claude Code's /compact) | sıkıştırmak (konuşmayı sıkıştır) | kompakt etmek |
+| context window | bağlam | bağlam penceresi |
+| conversation | konuşma | diyalog |
+| update | güncellemek, güncelleme | |
+| restart | yeniden başlatmak | |
+| load, loading | yüklemek, yükleniyor… | |
+| link | bağlantı | |
+| repository | repo | depo |
+| hung, frozen | takıldı | dondu |
+| crashed | çöktü | |
+| voice message | sesli mesaj | ses notu |
+| computer, machine | bilgisayar | makine, sunucu |
+| default | varsayılan | |
+| private chat (DM) | özel sohbet | DM |
+| tool (Claude's tools) | araç | tool |
+| idle (a session waiting for a message) | hazır | boşta |
+| busy, working | çalışıyor | meşgul |
+| waiting on you | yanıtını bekliyor | etkileşimli |
+| ended (a session no longer running) | sona erdi | öldü |
+| end a session (Kill, End) | sonlandırmak | öldürmek |
+| start a session (/new) | başlatmak | |
+
+## Vocabulary (one word per idea)
+- session: oturum; turn: sıra where people take turns ("şu an başka birinin sırası"), görev for Claude's work on one message ("bu görev bitince"); card: kart; permission: izin; a permission request: izin isteği; question: soru.
+- allow: izin vermek (answered: izin verildi); deny: reddetmek (answered: reddedildi); stop: durdurmak (stopped: durduruldu); resume: devam ettirmek; queue: kuyruk; agent: ajan; background: arka plan.
+- owner: sahip; admin: yönetici; member: üye; chat: sohbet; group: grup; settings: ayarlar; folder: klasör; model: model; role: rol; mode: mod; "Mini App".
+- Kept in English: commit, token, diff, log, ctx. A diff is "değişiklikler (diff)" where it is a label.
+- Buttons are short imperatives (sen form): İzin ver, Reddet, Durdur, Devam ettir, Yeniden başlat, Sil, Yeniden adlandır, İptal, Kapat, Tekrar dene, Sonlandır, Gönder, Şimdi gönder.
+- Same situation, same words: "Couldn't …" is "… yapılamadı" ("Dosya indirilemedi"); "Couldn't reach the server" is "Sunucuya bağlanılamadı"; a refused restart is "Yeniden başlatma yok: …"; a stale button or card is "eskidi"; a running session "çalışıyor".
+- {clock} is a duration: "Bitti ({clock})", "Çalışıyor ({clock})", never "{clock} sonra" (reads like a time of day).
 - Suffixes never go on a placeholder directly (its value is not known, so vowel harmony cannot be right): write "{session} oturumu", "{session} için" or put the value after a colon.
 
 ## Plurals
