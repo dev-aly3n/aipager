@@ -60,7 +60,8 @@ LOANWORDS = {
     "zh-Hans": {"shell", "token", "commit", "diff", "log", "ctx", "hook"},
     "ko": {"token", "commit", "diff", "log", "ctx", "hook"},
     "vi": {"shell", "token", "commit", "diff", "log", "ctx", "prompt", "hook", "auto", "chat",
-           "bot", "menu", "terminal", "daemon", "tunnel", "repo", "album"},
+           "bot", "menu", "terminal", "daemon", "tunnel", "repo", "album", "agent", "file",
+           "crash", "link", "test"},
     "id": {"shell", "token", "commit", "diff", "log", "ctx", "prompt", "hook", "auto", "chat",
            "bot", "menu", "terminal", "daemon", "tunnel", "repo", "album", "admin", "model",
            "folder", "file", "status", "mode", "normal", "server", "beta", "manual", "per",
@@ -77,7 +78,7 @@ NAMES = tuple(loc.endonym for loc in locales.LOCALES.values()) + ("ask", "auto",
 PAGE_NAMES = {
     "zh-Hans": {"Mini App"},
     "ko": {"Mini App"},
-    "vi": {"Mini App", "Auto"},
+    "vi": {"Mini App", "Auto", "Chat"},
     "id": {"Mini App", "Auto", "Model", "Normal", "Chat"},
 }
 
