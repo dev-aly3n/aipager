@@ -160,3 +160,21 @@ def test_every_base_dependency_has_a_downstream_mapping():
     unmapped = [n for n in _base_names() if n not in _DOWNSTREAM_NAMES]
     assert not unmapped, (
         f"add these to _DOWNSTREAM_NAMES (and to PKGBUILD/flake.nix): {unmapped}")
+
+
+def test_the_voice_extra_keeps_pyav_below_19():
+    """PyAV 19 removed ``av.open``'s ``metadata_errors`` argument, which
+    faster-whisper (1.2.1, the latest on 2026-10-12) still passes: a fresh
+    ``aipager[voice]`` install failed every transcription with "open() got
+    an unexpected keyword argument 'metadata_errors'". 18.1.0 accepts it."""
+    from packaging.requirements import Requirement
+    from packaging.version import Version
+
+    voice = [Requirement(r) for r in _project()["optional-dependencies"]["voice"]]
+    av = [r for r in voice if r.name.lower() == "av"]
+    assert len(av) == 1, "the voice extra must pin av itself"
+    spec = av[0].specifier
+    assert not spec.contains(Version("19.0.0"), prereleases=True)
+    assert not spec.contains(Version("19.0.1"))
+    assert spec.contains(Version("18.1.0")), "the cap must still allow a working av"
+    assert any(r.name == "faster-whisper" for r in voice)

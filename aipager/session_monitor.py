@@ -50,7 +50,8 @@ _loop_sleep = asyncio.sleep
 # it, so the session shouldn't sit forever. Demoting to BUSY lets the
 # session_monitor's existing stale-busy logic surface it after another
 # STALE_BUSY_TIMEOUT, instead of silently rotting. The two compound, so
-# a crashed permission prompt surfaces in 300s + STALE_BUSY_TIMEOUT.
+# a crashed permission prompt surfaces in 300s + STALE_BUSY_TIMEOUT
+# (about 2 h 5 min with the 2-hour default).
 #
 # Tunable via `AIPAGER_INTERACTIVE_TIMEOUT` (seconds) for ops testing.
 INTERACTIVE_TIMEOUT_SECONDS: float = float(
