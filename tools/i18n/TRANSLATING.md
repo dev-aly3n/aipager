@@ -214,11 +214,10 @@ page wins when the two disagree, with a link to it:
 changed after that commit.
 
 **Headings and links.** Translate every heading, and put the English
-heading's anchor above it, so a link works in every language:
+heading's anchor at its start, so a link works in every language:
 
 ```
-<a id="settings-in-the-environment"></a>
-## <the heading in the language>
+## <a id="settings-in-the-environment"></a><the heading in the language>
 ```
 
 Links keep their targets: a link to another doc points at the same page in
@@ -246,6 +245,14 @@ word for the same idea as in the app. "The daemon" is aipager (or "the
 aipager program" where it must be told apart from the `aipager` command);
 "DM" is the private chat; "the machine" is the computer; "prompt" is the
 message a person sends (a permission prompt stays a permission request).
+
+**Right to left.** A Persian or Arabic page starts with `<div dir="rtl">`
+and a blank line and ends with `</div>`, and every fenced code block in it
+sits in `<div dir="ltr">` ... `</div>` with a blank line on each side of
+the fence, so text reads right to left and code, commands and JSON keep
+their order. Digits follow the
+style guide in prose; numbers inside code, commands, versions and
+settings stay Latin.
 
 **Shape.** Keep the English page's sections, lists, tables and examples in
 the same order, so a reader can hold the two side by side. Tables keep

@@ -1165,6 +1165,8 @@ def check_docs(root: Path = ROOT, codes=None) -> list[str]:
                 have = doc_anchors(text)
                 for anchor in sorted(want - have):
                     problems.append(f"{where}: no anchor {anchor!r} (the English heading's)")
+            if folder.name in _RTL_CODES:
+                problems += _check_rtl_page(where, text)
             for n, line in enumerate(_doc_prose(text), 1):
                 bare = re.sub(r"`[^`]*`", "", line)
                 if "\u2014" in bare:
@@ -1181,6 +1183,31 @@ def check_docs(root: Path = ROOT, codes=None) -> list[str]:
                 elif frag and dest.suffix == ".md" and frag not in doc_anchors(
                         dest.read_text(encoding="utf-8")):
                     problems.append(f"{where}: link to a missing anchor: {target}")
+    return problems
+
+
+def _check_rtl_page(where, text: str) -> list[str]:
+    """A right-to-left page reads right to left, its code left to right:
+    the page in ``<div dir="rtl">``, each fenced block in ``<div dir="ltr">``."""
+    problems: list[str] = []
+    lines = text.splitlines()
+    if not lines or lines[0] != '<div dir="rtl">':
+        problems.append(f'{where}: does not start with <div dir="rtl">')
+    if not text.rstrip().endswith("</div>"):
+        problems.append(f"{where}: does not end with </div>")
+    fenced = False
+    for i, line in enumerate(lines):
+        if not _DOC_FENCE.match(line.lstrip()):
+            continue
+        if not fenced:
+            before = [x for x in lines[:i] if x.strip()][-1:]
+            if before != ['<div dir="ltr">']:
+                problems.append(f'{where}: a code block outside <div dir="ltr">: line {i + 1}')
+        else:
+            after = [x for x in lines[i + 1:] if x.strip()][:1]
+            if after != ["</div>"]:
+                problems.append(f"{where}: a code block with no </div> after it: line {i + 1}")
+        fenced = not fenced
     return problems
 
 
