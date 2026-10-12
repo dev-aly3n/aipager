@@ -77,6 +77,10 @@ THREE_MODES_NEW_SURFACES = frozenset({"modecard.switch_results"})
 #: differs from goldens recorded on older bases by that button only: see
 #: :func:`with_keyboard_app_removed`.
 NO_KEYBOARD_APP_SURFACES = frozenset({"keyboard.main"})
+#: The surface Restart now without a service unit added (2026-10-12): the
+#: installed-and-waiting check, the manual steps, the restart job, the
+#: hooks notice. New, so goldens recorded on older bases do not have it.
+RESTART_NOW_NEW_SURFACES = frozenset({"update.restart"})
 
 
 def with_keyboard_app_removed(value):

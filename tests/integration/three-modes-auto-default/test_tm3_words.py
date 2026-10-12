@@ -292,7 +292,10 @@ def test_english_goldens_change_only_in_the_justified_surfaces():
     after = json.loads((ROOT / rel).read_text())
     changed = {k for k in set(before) | set(after) if before.get(k) != after.get(k)}
     # The main keyboard lost its App button (2026-10-12), and only that.
-    from tests.i18n_surfaces import NO_KEYBOARD_APP_SURFACES, with_keyboard_app_removed
-    assert sorted(changed - JUSTIFIED - NO_KEYBOARD_APP_SURFACES) == []
+    from tests.i18n_surfaces import (NO_KEYBOARD_APP_SURFACES, RESTART_NOW_NEW_SURFACES,
+                                     with_keyboard_app_removed)
+    # Restart now without a service (2026-10-12) added one new surface.
+    assert sorted(changed - JUSTIFIED - NO_KEYBOARD_APP_SURFACES
+                  - RESTART_NOW_NEW_SURFACES) == []
     for k in NO_KEYBOARD_APP_SURFACES:
         assert after[k] == with_keyboard_app_removed(before[k]), k

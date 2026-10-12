@@ -28,6 +28,7 @@ from aipager.i18n import locales
 from tests.i18n_surfaces import (
     MODE_LABEL_SURFACES,
     NO_KEYBOARD_APP_SURFACES,
+    RESTART_NOW_NEW_SURFACES,
     THREE_MODES_NEW_SURFACES,
     THREE_MODES_PAGE_SCREENS,
     THREE_MODES_SURFACES,
@@ -119,7 +120,9 @@ def test_every_english_surface_of_the_base_is_unchanged():
 def test_the_english_surfaces_only_gain_the_three_new_ones():
     rel = "tests/golden/english_surfaces.json"
     base, cur = _surfaces(at_base(rel)), _surfaces(now(rel))
-    assert set(cur) - set(base) == NEW_SURFACES | THREE_MODES_NEW_SURFACES
+    # Later features added their own (the three modes, Restart now).
+    assert set(cur) - set(base) == (NEW_SURFACES | THREE_MODES_NEW_SURFACES
+                                    | RESTART_NOW_NEW_SURFACES)
 
 
 def test_no_english_surface_was_removed():
