@@ -303,6 +303,64 @@ def test_executable_gone_after_request_starts_nothing_and_exits_1(bb, tmp_path,
     assert (rc, bb.execs, len(bb.popens)) == (1, [], 0)
 
 
+def _gone_after_request(bb, tmp_path, monkeypatch):
+    fake = tmp_path / "py"
+    fake.write_text("#!/bin/sh\n")
+    fake.chmod(0o755)
+    monkeypatch.setattr(sys, "executable", str(fake))
+    _request(bb)
+    return fake
+
+
+def test_gone_interpreter_logs_the_manual_steps_at_error(bb, tmp_path, monkeypatch, caplog):
+    _gone_after_request(bb, tmp_path, monkeypatch).unlink()
+    with caplog.at_level(logging.INFO):
+        self_restart.after_shutdown(release_lock=_release(bb))
+    errors = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+    assert any("restart.failed" in m and "aipager start" in m for m in errors), errors
+
+
+def test_gone_interpreter_logs_no_respawn(bb, tmp_path, monkeypatch, caplog):
+    _gone_after_request(bb, tmp_path, monkeypatch).unlink()
+    with caplog.at_level(logging.DEBUG):
+        self_restart.after_shutdown(release_lock=_release(bb))
+    assert "restart.respawn" not in caplog.text
+
+
+def test_not_executable_interpreter_exits_1_without_respawn(bb, tmp_path, monkeypatch):
+    _gone_after_request(bb, tmp_path, monkeypatch).chmod(0o644)
+    rc = self_restart.after_shutdown(release_lock=_release(bb))
+    assert (rc, bb.execs, len(bb.popens)) == (1, [], 0)
+
+
+def test_interpreter_gone_by_a_failed_exec_is_not_respawned(bb, tmp_path, monkeypatch):
+    fake = _gone_after_request(bb, tmp_path, monkeypatch)
+    real = bb._fake_execve
+
+    def vanish_then_fail(exe, argv, envp):
+        fake.unlink()
+        bb.exec_raises = OSError(2, "No such file or directory")
+        real(exe, argv, envp)
+    monkeypatch.setattr(self_restart, "_execve", vanish_then_fail)
+    rc = self_restart.after_shutdown(release_lock=_release(bb))
+    assert (rc, len(bb.popens)) == (1, 0)
+
+
+def test_respawn_handover_logs_what_to_run_at_warning(bb, caplog):
+    _request(bb)
+    bb.exec_raises = OSError(8, "Exec format error")
+    with caplog.at_level(logging.INFO):
+        self_restart.after_shutdown(release_lock=_release(bb))
+    warns = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("restart.respawn" in m and "aipager start" in m for m in warns), warns
+
+
+def test_waiter_result_is_indexable_as_the_documented_pair(bb, tmp_path):
+    """tester-iter1-003: entrypoints.md says (ok, error)."""
+    _t, res = _spawn(bb, tmp_path)
+    assert (len(res), res[0], res[1]) == (2, True, None)
+
+
 def test_waiter_spawn_failure_returns_1(bb):
     _request(bb)
     bb.exec_raises = OSError(8, "Exec format error")
