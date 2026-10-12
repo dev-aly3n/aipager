@@ -553,10 +553,13 @@ def test_no_wait_start_is_no_evidence(tmp_path):
     path.write_text(json.dumps({"type": "user", "timestamp": stamp,
                                 "message": {"role": "user", "content": "hi"}}) + "\n")
     sess.transcript_path = str(path)
+    # A fixed monotonic clock: a CI runner booted minutes ago has a small
+    # time.monotonic(), so "an hour ago" from the real one goes negative.
+    now_mono = 10_000.0
     sess.interactive_entered_at = 0.0
-    assert dialog_closed_in_transcript(sess, time.monotonic(), time.time()) is False
-    sess.interactive_entered_at = time.monotonic() - 3600
-    assert dialog_closed_in_transcript(sess, time.monotonic(), time.time()) is True
+    assert dialog_closed_in_transcript(sess, now_mono, time.time()) is False
+    sess.interactive_entered_at = now_mono - 3600
+    assert dialog_closed_in_transcript(sess, now_mono, time.time()) is True
 
 
 def test_a_nested_settle_during_the_release_sends_each_message_once(
