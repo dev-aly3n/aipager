@@ -329,6 +329,12 @@ def run_scenario(env: BBEnv, coro_fn):
             return await coro_fn()
         finally:
             await env.close()
+            # What the scenario started and left running (the real
+            # monitor_tick's pinned-card task) ends here, not at loop close.
+            rest = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+            for t in rest:
+                t.cancel()
+            await asyncio.gather(*rest, return_exceptions=True)
     loop = asyncio.new_event_loop()
     try:
         return loop.run_until_complete(_wrapped())
