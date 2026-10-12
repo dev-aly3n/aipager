@@ -1,6 +1,6 @@
 # Hook-Ereignisse
 
-<!-- i18n-source: docs/hooks.md @ 6fc084f -->
+<!-- i18n-source: docs/hooks.md @ 7228205 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../hooks.md))
 
@@ -99,7 +99,7 @@ Ein Subagent ist gestartet oder beendet. Jeder bekommt seine eigene Zeile auf de
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude komprimiert seinen Kontext (`trigger` ist `auto` oder `manual`). Die Arbeitskarte zeigt `🔄 name · Komprimiert die Unterhaltung` (eine neue Nachricht, wenn keine Karte da ist), damit die Pause nicht wie ein Absturz aussieht. `PostCompact` beendet diesen Zustand; die Zeile `📦 name · Unterhaltung komprimiert: X% → Y%` kommt aus dem folgenden `SessionStart` oder, wenn das verpasst wird, aus der Statuszeile. Die Statuszeile gibt außerdem die Warnung `⚠️ name · Kontext bei 82% - wird bald automatisch komprimiert` (mit einem Button Komprimieren), sobald der Kontext 80 % erreicht, und erst wieder, nachdem er unter 30 % gefallen ist.
+Claude komprimiert seinen Kontext (`trigger` ist `auto` oder `manual`). Die Arbeitskarte zeigt `🔄 name · Komprimiert die Unterhaltung` (eine neue Nachricht, wenn keine Karte da ist), damit die Pause nicht wie ein Absturz aussieht. `PostCompact` beendet diesen Zustand; die Zeile `📦 name · Unterhaltung komprimiert: X% → Y%` kommt aus dem folgenden `SessionStart` oder, wenn das verpasst wird, aus der Statuszeile. Die Statuszeile gibt außerdem die Warnung `⚠️ name · Kontext bei 82% - wird bald automatisch komprimiert` (mit einem Button Komprimieren), sobald der Kontext 80 % erreicht, einmal pro Unterhaltung: Komprimieren wiederholt sie nicht, und eine neue Unterhaltung (zum Beispiel nach `/clear`) bekommt sie wieder.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

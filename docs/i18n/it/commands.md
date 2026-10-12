@@ -1,6 +1,6 @@
 # Comandi del bot e interfaccia
 
-<!-- i18n-source: docs/commands.md @ 6fc084f -->
+<!-- i18n-source: docs/commands.md @ 7228205 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../commands.md))
 
@@ -196,7 +196,7 @@ Mentre una richiesta (o un AskUserQuestion) ti aspetta, la sessione si vede in a
 
 I dialoghi `AskUserQuestion` si vedono allo stesso modo, con un pulsante per opzione (le prime quattro) e, per una domanda che accetta più risposte, caselle ⬜/☑ e un pulsante `✅ Invia`.
 
-All'80% di contesto la chat riceve `⚠️ name · Contesto usato: 82% - presto verrà compattato in automatico` con **📦 Compatta ora**, che invia `/compact` a quella sessione.
+All'80% di contesto la chat riceve `⚠️ name · Contesto usato: 82% - presto verrà compattato in automatico` con **📦 Compatta ora**, che invia `/compact` a quella sessione. L'avviso arriva una volta per conversazione: la compattazione non lo fa tornare, e una conversazione nuova (per esempio dopo `/clear`) lo riceve di nuovo.
 
 ### <a id="stale-buttons"></a>Pulsanti vecchi
 

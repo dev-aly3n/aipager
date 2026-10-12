@@ -1,6 +1,6 @@
 # Hook 이벤트
 
-<!-- i18n-source: docs/hooks.md @ 6fc084f -->
+<!-- i18n-source: docs/hooks.md @ 7228205 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../hooks.md))
 
@@ -99,7 +99,7 @@ API 오류로 작업이 끝났어요. 세션이 준비됨이 되고, 답변이 �
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude가 컨텍스트를 압축하고 있어요(`trigger`는 `auto` 또는 `manual`). 작업 카드에 `🔄 name · 대화 압축 중`이 나와서(카드가 없으면 새 메시지를 보내요), 이 멈춤이 비정상 종료처럼 보이지 않게 해요. `PostCompact`가 이 상태를 끝내요. `📦 name · 대화 압축됨: X% → Y%` 줄은 그다음 `SessionStart`에서 오고, 그것을 놓치면 상태 줄에서 와요. 상태 줄은 컨텍스트가 80%에 이르면 `⚠️ name · 컨텍스트 82% 사용 - 곧 자동으로 압축해요` 경고도 주고(“지금 압축” 버튼과 함께), 30% 아래로 내려간 뒤에야 다시 줘요.
+Claude가 컨텍스트를 압축하고 있어요(`trigger`는 `auto` 또는 `manual`). 작업 카드에 `🔄 name · 대화 압축 중`이 나와서(카드가 없으면 새 메시지를 보내요), 이 멈춤이 비정상 종료처럼 보이지 않게 해요. `PostCompact`가 이 상태를 끝내요. `📦 name · 대화 압축됨: X% → Y%` 줄은 그다음 `SessionStart`에서 오고, 그것을 놓치면 상태 줄에서 와요. 상태 줄은 컨텍스트가 80%에 이르면 `⚠️ name · 컨텍스트 82% 사용 - 곧 자동으로 압축해요` 경고도 주고(“지금 압축” 버튼과 함께), 대화마다 한 번만 줘요. 압축해도 다시 나오지 않고, 새 대화(예를 들어 `/clear` 뒤)에서는 다시 줘요.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

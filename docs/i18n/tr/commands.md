@@ -1,6 +1,6 @@
 # Komutlar ve bot arayüzü
 
-<!-- i18n-source: docs/commands.md @ 6fc084f -->
+<!-- i18n-source: docs/commands.md @ 7228205 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../commands.md))
 
@@ -196,7 +196,7 @@ Bir istek (ya da AskUserQuestion) seni beklerken oturum hazır değil, bekliyor 
 
 `AskUserQuestion` iletişim kutuları da aynı şekilde, her seçenek için bir düğmeyle (ilk dördü), birden fazla yanıtın seçilebildiği bir soru için ise ⬜/☑ onay kutuları ve bir `✅ Gönder` düğmesiyle gösterilir.
 
-Bağlam %80'e ulaştığında sohbet, o oturuma `/compact` gönderen **📦 Şimdi sıkıştır** ile `⚠️ name · Bağlam 82% dolu - yakında otomatik sıkıştırılacak` alır.
+Bağlam %80'e ulaştığında sohbet, o oturuma `/compact` gönderen **📦 Şimdi sıkıştır** ile `⚠️ name · Bağlam 82% dolu - yakında otomatik sıkıştırılacak` alır. Bu uyarı her konuşmada bir kez gelir: sıkıştırma onu geri getirmez, yeni bir konuşma (örneğin `/clear` sonrası) onu yeniden alır.
 
 ### <a id="stale-buttons"></a>Eski düğmeler
 
