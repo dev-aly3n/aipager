@@ -1614,7 +1614,11 @@ class UpdateManager:
             new, importable, err = await asyncio.to_thread(
                 self_update.probe_installed_version, source.python)
         if self._shutting_down and err == self_update.SHUTTING_DOWN_ERROR:
-            self._finish(job, "cancelled", self._shutdown_section(job))
+            if job.installed is not None:
+                # The first check found B: the next start runs it.
+                self._installed_at_shutdown(job, *job.installed)
+            else:
+                self._finish(job, "cancelled", self._shutdown_section(job))
             return None, None
         if not importable:
             log.info("update.restart.probe_failed job=%s error=%s", job.id, err)

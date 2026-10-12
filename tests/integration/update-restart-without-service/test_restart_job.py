@@ -237,3 +237,38 @@ def test_a_shutdown_during_the_wait_leaves_the_marker_for_the_next_start(env, ru
     marker = _marker()
     assert (marker["from"], marker["to"]) == ("1.0.1", "1.1.0")
     assert "the next start runs 1.1.0" in env.last_text()
+
+
+def test_a_second_check_refused_by_a_shutdown_leaves_the_marker(env, run, monkeypatch):
+    calls = []
+    real = self_update.probe_restart_target
+
+    def probe(target):
+        calls.append(1)
+        if len(calls) == 2:
+            # The daemon starts stopping as the second check begins: the
+            # seam refuses to start it.
+            env.manager._shutting_down = True
+            self_update.begin_shutdown()
+        return real(target)
+    monkeypatch.setattr(self_update, "probe_restart_target", probe)
+
+    async def scenario():
+        await env.start_restart()
+        await env.finish()
+    run(scenario)
+    assert len(calls) == 2 and len(env.restart_probe_calls()) == 1
+    assert env.stops == []
+    assert (_marker()["from"], _marker()["to"]) == ("1.0.1", "1.1.0")
+    assert "the next start runs 1.1.0" in env.last_text()
+
+
+def test_a_first_check_refused_by_a_shutdown_writes_no_marker(env, run):
+    async def scenario():
+        await env.start_restart()
+        env.manager._shutting_down = True
+        self_update.begin_shutdown()
+        await env.finish()
+    run(scenario)
+    assert env.manager.snapshot()["phase"] == "cancelled"
+    assert env.stops == [] and _marker() is None
