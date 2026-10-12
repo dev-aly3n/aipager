@@ -2062,10 +2062,10 @@ class CommandHandlersMixin:
             await self._send_keyboard(level="models", chat_id=kb_chat, tap=update)
             return
         if nav == "nav:app":
-            # A `web_app` keyboard button sends no text when tapped, so
-            # reaching here means a client too old to know what one is.
-            # Fall back to /app's inline button rather than letting the
-            # label through as a prompt to Claude.
+            # The label typed, or sent by a client too old to know a
+            # `web_app` button (an older aipager's keyboard had one until
+            # 2026-10-12). Answer with /app's inline button rather than
+            # letting the label through as a prompt to Claude.
             await self._handle_app_cmd(update, ctx)
             return
         if nav == "nav:back":

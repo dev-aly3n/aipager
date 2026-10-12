@@ -1,4 +1,4 @@
-"""The Mini App is on by default, and its button is there at first glance.
+"""The Mini App is on by default, and the startup keyboard hold.
 
 Two changes, both operator decisions:
 
@@ -7,11 +7,11 @@ Two changes, both operator decisions:
    security-posture change, because enabling the Mini App starts a
    public Cloudflare tunnel. An explicit `enabled: false` must therefore
    still win, absolutely.
-2. The first keyboard is held until the tunnel URL lands, so the App
-   button is on it. Previously the URL was resolved *before* `start()`,
-   when no tunnel existed yet, so the first keyboard went out buttonless
-   and only gained the button on some later unrelated refresh — which is
-   why the Mini App felt like something you had to find by typing /app.
+2. The first keyboard is held until the tunnel URL lands. That was so
+   the keyboard's App button was on it; since 2026-10-12 the keyboard
+   has no App button (a Mini App opened from one gets no init data), so
+   the hold only delays the startup keyboard. These tests pin how the
+   hold behaves while it exists.
 """
 from __future__ import annotations
 

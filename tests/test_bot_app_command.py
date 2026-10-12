@@ -343,7 +343,7 @@ def test_the_app_keyboard_label_routes_to_the_app_command(mk_bot, mk_update, run
 
     bot = mk_bot()
     bot._handle_app_cmd = AsyncMock()
-    update = mk_update(APP_BUTTON, chat_id=555)  # a DM: the only chat with the button
+    update = mk_update(APP_BUTTON, chat_id=555)  # a DM
 
     run_async(bot._handle_message(update, None))
 

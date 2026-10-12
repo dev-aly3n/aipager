@@ -159,15 +159,17 @@ def test_a_new_private_scope_gets_its_language_in_the_link(bot, run_async):
 
 def _keyboard_app_url(bot, chat_id):
     from telegram import ReplyKeyboardMarkup
+    sent = False
     for call in bot._app.bot.send_message.await_args_list:
         markup = call.kwargs.get("reply_markup")
         target = call.kwargs.get("chat_id", call.args[0] if call.args else None)
         if target == chat_id and isinstance(markup, ReplyKeyboardMarkup):
+            sent = True
             for row in markup.keyboard:
                 for button in row:
                     if getattr(button, "web_app", None) is not None:
                         return button.web_app.url
-    return "no button"
+    return "no button" if sent else "no keyboard sent"
 
 
 @pytest.mark.parametrize("chat_id", [DM_EN, DM_FA, DM_RU, DM_AR],

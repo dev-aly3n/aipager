@@ -1,7 +1,9 @@
-"""The permanent Mini App launch surfaces: the chat menu button and the
-reply-keyboard button.
+"""The permanent Mini App launch surface: the chat menu button. The
+reply keyboard had an App button too until 2026-10-12, when it was
+removed (a Mini App opened from a keyboard button gets no init data);
+the tests below pin that no reply keyboard carries one.
 
-Both hand out the Mini App's public URL, which is usable over the raw
+The menu button hands out the Mini App's public URL, which is usable over the raw
 internet once obtained (see ``AuthMixin._is_personal_mode_operator``) —
 so *which chats get it* is the security property under test here, not a
 detail. The same class of leak was already caught once on ``/app``.
@@ -159,7 +161,7 @@ def test_one_failing_chat_does_not_cost_the_others_their_button(mk_bot, run_asyn
     assert calls == [100, 200, 300], "a failure stopped the remaining chats"
 
 
-# ===== the reply-keyboard button ==========================================
+# ===== no Mini App button on the reply keyboard ===========================
 
 def _web_app_buttons(kb):
     return [btn for row in kb.keyboard for btn in row
@@ -180,7 +182,9 @@ def test_no_reply_keyboard_carries_a_web_app_button(mk_bot, run_async, chat_id, 
 
     run_async(b._send_keyboard(level=level, chat_id=chat_id))
 
+    b._app.bot.send_message.assert_awaited_once()
     kb = b._app.bot.send_message.await_args.kwargs["reply_markup"]
+    assert kb.keyboard, "no keyboard rows at all"
     assert _web_app_buttons(kb) == [], f"the {level} keyboard grew a web_app button"
     texts = {btn.text for row in kb.keyboard for btn in row}
     assert APP_BUTTON not in texts
@@ -195,34 +199,6 @@ def test_the_main_keyboards_last_row_is_templates_and_commands(mk_bot, run_async
 
     kb = b._app.bot.send_message.await_args.kwargs["reply_markup"]
     assert [btn.text for btn in kb.keyboard[-1]] == ["Templates", "Commands"]
-
-
-def test_the_keyboard_omits_the_app_button_in_a_group(mk_bot, run_async):
-    """Telegram rejects a keyboard containing a `web_app` button in a
-    group — the WHOLE keyboard, not just that button. Including it would
-    cost the operator every other button in the chat."""
-    b = mk_bot()
-    b._miniapp_url = "https://tunnel.example/"
-
-    run_async(b._send_keyboard(level="main", chat_id=-1001234567))
-
-    kb = b._app.bot.send_message.await_args.kwargs["reply_markup"]
-    texts = {btn.text for row in kb.keyboard for btn in row}
-    assert APP_BUTTON not in texts
-    assert group_intake.mark_label(APP_BUTTON, -1001234567) not in texts
-    assert group_intake.mark_label("status", -1001234567) in texts, (
-        "the rest of the keyboard must survive")
-
-
-def test_the_keyboard_omits_the_app_button_with_no_miniapp(mk_bot, run_async):
-    b = mk_bot()
-    b._miniapp_url = ""
-
-    run_async(b._send_keyboard(level="main", chat_id=555))
-
-    kb = b._app.bot.send_message.await_args.kwargs["reply_markup"]
-    texts = {btn.text for row in kb.keyboard for btn in row}
-    assert APP_BUTTON not in texts
 
 
 # ===== the shared URL resolver ============================================
@@ -279,7 +255,7 @@ def test_anything_that_is_not_https_is_no_url(run_async, monkeypatch, value):
     assert run_async(tunnel.resolve_public_url()) == ""
 
 
-# ===== the keyboard must know the URL before the FIRST keyboard goes out ==
+# ===== the first keyboard of the run ======================================
 
 def test_the_first_keyboard_of_the_run_goes_out_without_a_web_app_button(
     mk_bot, run_async, monkeypatch,

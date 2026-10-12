@@ -1234,9 +1234,10 @@ class LifecycleMixin:
         # keyboard shows; a global broadcast would leak labels.
         if self.scopes is None:
             if self._keyboard_deferred:
-                # Held until the Mini App URL lands (it once carried an
-                # App button; since 2026-10-12 the hold only keeps a start
-                # to one keyboard message).
+                # Held until the Mini App URL lands. The hold was for the
+                # keyboard's App button, which is gone since 2026-10-12;
+                # it now only delays this keyboard (see
+                # defer_first_keyboard).
                 return
             await self._send_keyboard(level="main")
         else:
@@ -1469,17 +1470,13 @@ class LifecycleMixin:
     def defer_first_keyboard(self) -> None:
         """Hold the startup keyboard until the Mini App URL is known.
 
-        The managed tunnel does not exist yet when ``start()`` runs, so
-        the URL is empty at that point and the first keyboard would go
-        out without its App button. It would then stay buttonless until
-        some unrelated event refreshed it, which is how the Mini App
-        ended up feeling like something you had to discover by typing
-        ``/app``.
-
-        Holding it keeps this to **one** keyboard message per start. The
-        obvious alternative — send a buttonless one now, a second one
-        when the tunnel lands — puts an extra message in the chat on
-        every single restart.
+        Built so the first keyboard of a run carried the App button the
+        managed tunnel's URL was needed for. The reply keyboard has no
+        App button since 2026-10-12 (Telegram gives a Mini App opened
+        from a keyboard button no init data), so the hold no longer
+        changes what the keyboard shows: it only delays the startup
+        keyboard until the tunnel lands or the timeout fires, still as
+        one keyboard message per start.
 
         Released by :meth:`publish_miniapp_button` (with or without a
         URL) or by :meth:`release_deferred_keyboard`'s timeout, so a
@@ -1557,17 +1554,14 @@ class LifecycleMixin:
         :meth:`start` ends by calling ``_update_bot_commands``, which in
         personal mode sends the persistent keyboard straight away — long
         before the Mini App server has started and
-        :meth:`publish_miniapp_button` has run. Without this the very
-        first keyboard after every restart is missing its App button,
-        and nothing re-sends it until some unrelated event (a session
-        created, a Templates→Back tap) happens to refresh it.
+        :meth:`publish_miniapp_button` has run. The keyboard used this
+        for its App button (gone since 2026-10-12); a URL known this
+        early also means the startup keyboard is not held
+        (``cli/daemon.py`` holds it only while the URL is unknown).
 
         Makes no Telegram call and sets no menu button: that still waits
         until the server is confirmed listening. If the server then
-        fails to start, ``publish_miniapp_button("")`` clears this, so
-        only the single keyboard already sent can carry a button whose
-        target is not up — a URL the operator could have got from
-        ``/app`` anyway.
+        fails to start, ``publish_miniapp_button("")`` clears this.
         """
         self._miniapp_url = url
 
@@ -1625,17 +1619,17 @@ class LifecycleMixin:
             # inside the loop's try.
             #
             # Fail closed: if the URL could not even be made into a
-            # button, the keyboard must not go on offering it either, or
-            # the two surfaces would disagree about whether there is a
-            # Mini App at all.
+            # button, /app and the inline App buttons must not go on
+            # offering it either, or the surfaces would disagree about
+            # whether there is a Mini App at all.
             self._miniapp_url = ""
             log.warning("Could not build the Mini App menu button", exc_info=True)
             return
 
         # Released only on a REAL url. The daemon calls this once with
         # "" immediately after starting the tunnel manager — before any
-        # tunnel exists — and releasing there would send exactly the
-        # buttonless keyboard this deferral exists to avoid. The timeout
+        # tunnel exists. (Releasing there once sent a keyboard without
+        # the App button, which the keyboard no longer has.) The timeout
         # in cli/daemon.py is what covers a tunnel that never arrives.
         if url:
             await self.release_deferred_keyboard()

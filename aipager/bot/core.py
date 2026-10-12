@@ -94,8 +94,9 @@ class TelegramBot(
         # once the Mini App server is confirmed listening — which
         # re-clears this if it turned out not to be.
         self._miniapp_url: str = ""
-        # Hold the very first keyboard until the Mini App URL is known —
-        # see lifecycle.defer_first_keyboard.
+        # Hold the very first keyboard until the Mini App URL is known
+        # (no longer needed since the keyboard lost its App button on
+        # 2026-10-12): see lifecycle.defer_first_keyboard.
         self._keyboard_deferred: bool = False
         # Main keyboards a flood mute refused (roadmap 8.17c), per target
         # chat: normalised chat key -> the ``chat_id`` argument to re-send

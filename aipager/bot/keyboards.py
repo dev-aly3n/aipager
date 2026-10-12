@@ -266,9 +266,8 @@ class KeyboardMixin:
         # Only the MAIN keyboard satisfies the hold. Tapping a stale
         # Templates/Commands/Models button after a restart also lands
         # here, and clearing on those levels would consume the hold
-        # without the user ever receiving a main keyboard, silently
-        # recreating the "buttonless until some
-        # unrelated later event" bug this whole feature exists to fix.
+        # without the user ever receiving a main keyboard (session
+        # buttons, status, stop, new) for this start.
         # `« Back` passes its parent level, so a Back-to-main does count.
         #
         # Cleared before the send, not after: the send's exceptions are
@@ -315,8 +314,7 @@ class KeyboardMixin:
                 # the hold must survive. Clearing before the send is
                 # deliberate for a *failed* attempt, but a main keyboard
                 # suppressed for the length of a ban would otherwise never
-                # be re-sent — exactly the "buttonless until some
-                # unrelated later event" bug this feature exists to fix.
+                # be re-sent until some unrelated later event.
                 # Restore both flags so the next trigger sends it once.
                 # Only what this call wrote and nobody has changed since:
                 # a member's tap handled during the await keeps its level.
