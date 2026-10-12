@@ -445,7 +445,9 @@ def test_page_load_makes_no_version_lookup(env, run):
     # Roadmap 8.45 added the in-process restart-watch fields (was exactly
     # {"job": None}); still nothing looked up.
     assert body["job"] is None
-    assert set(body) == {"job", "version", "restarted", "url_changes_on_restart"}
+    assert set(body) == {"job", "version", "restarted", "url_changes_on_restart",
+                         "waiting"}
+    assert body["waiting"] is None
     assert env.fetches == [] and env.calls == []
 
 

@@ -104,7 +104,18 @@ def test_status_shows_automatic_systemd_restart_mode(world, personal_bot, mk_upd
         upd, msg, h, personal_bot)
 
 
-def test_status_shows_manual_restart_mode_in_foreground(world, personal_bot, mk_update, h, run_async):
+def test_status_shows_restart_now_mode_in_foreground(world, personal_bot, mk_update, h, run_async):
+    # A foreground daemon restarts in place when Restart now is tapped.
+    world.set_under_unit(False)
+    upd, msg = _show(personal_bot, mk_update, h, run_async)
+    assert "Restart: tap Restart now once it is installed." in \
+        _status_text(upd, msg, h, personal_bot)
+
+
+def test_status_shows_manual_restart_mode_without_an_interpreter(
+        world, personal_bot, mk_update, h, run_async, monkeypatch):
+    from aipager import self_restart
+    monkeypatch.setattr(self_restart, "exec_target", lambda: None)
     world.set_under_unit(False)
     upd, msg = _show(personal_bot, mk_update, h, run_async)
     assert "manual" in _status_text(upd, msg, h, personal_bot)

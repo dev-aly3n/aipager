@@ -666,6 +666,27 @@ BTN_CHECKING = Msg("ui.btn.checking", "Checking…", note="Mini App button, whil
 BTN_CHECK_AGAIN = Msg("ui.btn.check_again", "Check again", note="Mini App button")
 BTN_WAIT_MORE = Msg("ui.btn.wait_more", "Wait 10 more min", note="Mini App button")
 BTN_RESTART_NOW = Msg("ui.btn.restart_now", "Restart now", note="Mini App button")
+UPDATE_RESTART_CONFIRM = Msg("ui.update.restart_confirm",
+                             "Restart aipager now? It waits until no turn is running, then is "
+                             "back in a few seconds.",
+                             note="Mini App: asked before Restart now runs the installed aipager")
+UPDATE_WAITING_BANNER = Msg("ui.update.waiting_banner",
+                            "aipager {version} is installed and waiting for a restart.",
+                            eg={"version": "1.1.0"},
+                            note="Mini App Updates card: only a restart is missing")
+UPDATE_HOOKS_BANNER = Msg("ui.update.hooks_banner",
+                          "Claude Code's hooks already run aipager {version}, but aipager "
+                          "itself still runs {running}. Restart it to finish the update.",
+                          eg={"version": "1.1.0", "running": "1.0.1"},
+                          note="Mini App Updates card: a newer aipager is installed, the "
+                               "running one is older")
+UPDATE_JOB_VERIFYING = Msg("ui.update.job.verifying", "Working… (checking the installed version)",
+                           note="Mini App: Restart now's step, the installed aipager is checked")
+UPDATE_OFFER_CONFIRM_MANUAL = Msg("ui.update.offer_confirm_manual",
+                                  "{offer}? Afterwards, tap Restart now to run the new version.",
+                                  eg={"offer": "Update aipager"},
+                                  note="offer is the update button's text; Restart now is a "
+                                       "button")
 
 # The new-session form.
 NEW_TITLE = Msg("ui.new.title", "New session", note="Mini App: the form's heading")

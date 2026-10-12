@@ -274,6 +274,7 @@ HTML_BODY = """\
       <span class="card-icon" aria-hidden="true"><svg class="ic"><use href="#i-refresh"></use></svg></span>
       <h3 class="card-title" data-i18n="ui.update.title">Updates</h3>
     </div>
+    <div id="updates-banner" class="updates-row" hidden></div>
     <div id="updates-lines" class="updates-lines"></div>
     <div id="updates-source" class="updates-small" hidden></div>
     <div id="updates-restart" class="updates-small" hidden></div>

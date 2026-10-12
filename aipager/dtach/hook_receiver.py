@@ -576,6 +576,10 @@ def _is_turn_activity(event: str, msg: dict | None = None) -> bool:
     return event in _TURN_ACTIVITY_EVENTS or event.lower() in _TURN_ENDING_EVENTS
 
 
+# A longer ``aipager_version`` is not a version: ignored.
+_HOOK_VERSION_MAX_CHARS = 40
+
+
 class HookReceiver:
     """Receives UDP datagrams from notify_hook.py and drives state transitions.
 
@@ -594,6 +598,11 @@ class HookReceiver:
         # event → each event fires the receiver twice) — the second
         # copy is dropped so the user doesn't see duplicate replies.
         self._recent_fingerprints: dict[str, float] = {}
+        # Told the ``aipager_version`` a hook or the status line stamped on
+        # its datagram (``UpdateManager.note_hook_version``): hooks newer
+        # than this daemon mean an update is installed but not running.
+        # Never changes how the datagram is handled.
+        self.on_hook_version = None
 
     async def start(self) -> None:
         try:
@@ -661,6 +670,15 @@ class HookReceiver:
 
         if not session_name or not event:
             return
+
+        hook_version = msg.get("aipager_version")
+        on_hook_version = getattr(self, "on_hook_version", None)
+        if (on_hook_version is not None and isinstance(hook_version, str)
+                and 0 < len(hook_version) <= _HOOK_VERSION_MAX_CHARS):
+            try:
+                on_hook_version(hook_version)
+            except Exception:
+                log.debug("hook version callback failed", exc_info=True)
 
         # Dedup: drop identical (session, event, payload) within the
         # HOOK_DEDUP_WINDOW_SECONDS window. Belt-and-braces against

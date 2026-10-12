@@ -1411,8 +1411,11 @@ def _update_steps(env):
              "probe": ("1.0.2", True, None), "plan": None, "marker_error": None,
              "schedule": (True, "aipager-restart"), "gates": []}
     auto = self_update.RestartPlan("systemd", True, None, "systemctl --user restart aipager")
-    manual = self_update.RestartPlan("foreground", False, "no service unit",
-                                     "aipager start", ["x1"])
+    # systemd's manual restart (KillMode): "Restart needed" as it always
+    # read. A daemon without a unit offers Restart now or the steps for its
+    # setup instead (surface "update.restart").
+    manual = self_update.RestartPlan("systemd", False, "no service unit",
+                                     "aipager start", ["x1"], steps="systemd")
     mp = env.mp
     mp.setattr(install_source, "detect_install_source", lambda **k: state["source"])
     mp.setattr(install_source, "upgrade_argv", lambda s: state["argv"])
@@ -1611,6 +1614,119 @@ def _update_taps(env):
     message.edit_text = AsyncMock()
     env.run(update_flow._show_check(bot, message, CHAT))
     out += _reply_texts(message.edit_text)
+    return out
+
+
+def _waiting_status(*, latest="1.1.0", installed_ok=True, mode="foreground", automatic=False,
+                    in_place=True, steps="terminal", container=None, ap_newer=False,
+                    manual_command=None):
+    status = update_status(latest=latest, ap_newer=ap_newer, cc_newer=False,
+                           cc_latest="2.1.300", installed="1.1.0", automatic=automatic)
+    status["aipager"]["installed_ok"] = installed_ok
+    status["restart"].update(mode=mode, in_place=in_place, steps=steps, container=container,
+                             manual_command=manual_command,
+                             reason=None if automatic else "no service unit")
+    return status
+
+
+@surface("update.restart")
+def _update_restart(env):
+    """Restart now (update-restart-without-service): the installed-and-
+    waiting check, the steps for each setup, the restart job's sections,
+    the owner's hooks notice and the Restart now refusals."""
+    from aipager import self_restart, self_update
+    from aipager.bot import report_flow, report_offer, update_flow
+    env.store(CHAT, GROUP)
+    out: list[str] = []
+    for status in (
+            _waiting_status(),
+            _waiting_status(automatic=True, mode="systemd", in_place=False, steps="systemd"),
+            _waiting_status(in_place=False),
+            _waiting_status(in_place=False, mode="docker", steps="docker",
+                            container="0123456789ab"),
+            _waiting_status(in_place=False, mode="docker", steps="docker"),
+            _waiting_status(in_place=False, mode="launchd", steps="launchd",
+                            manual_command="launchctl kickstart -k gui/501/com.aipager.daemon"),
+            _waiting_status(in_place=False, mode="systemd", steps="systemd",
+                            manual_command="systemctl --user restart aipager.service"),
+            _waiting_status(installed_ok=False, latest="1.0.2"),
+            _waiting_status(latest="1.0.2", ap_newer=True, installed_ok=None)):
+        text, kb = env.with_tr(update_flow.render_check, status, show_paths=True)
+        out += [text, *_inline(kb)]
+        payload = env.with_tr(update_flow.check_payload, status, show_paths=False)
+        out += payload["lines"] + payload["notes"]
+        out += [t for t in (payload["summary"], payload["restart"], payload["steps"]) if t]
+    # The restart job, through its step (the probe, the plan and the gate
+    # faked).
+    state = {"probe": ("1.1.0", True, None), "gate": "open", "request": True,
+             "plan": self_update.RestartPlan("foreground", False, "no service unit",
+                                             in_place=True)}
+    mp = env.mp
+    mp.setattr(self_update, "running_version", lambda: "1.0.1")
+    mp.setattr(self_update, "probe_restart_target", lambda target: state["probe"])
+    mp.setattr(self_update, "restart_plan", lambda registry: state["plan"])
+    mp.setattr(self_update, "write_marker", lambda marker: None)
+    mp.setattr(self_update, "clear_marker", lambda: None)
+    mp.setattr(self_restart, "request", lambda *a, **k: state["request"])
+    from aipager import install_source
+    mp.setattr(install_source, "reinstall_hint", lambda kind: "pipx install --force aipager")
+    plans = {
+        "terminal": self_update.RestartPlan("foreground", False, "no service unit"),
+        "docker": self_update.RestartPlan("docker", False, "no service unit", steps="docker",
+                                          container="0123456789ab"),
+    }
+    for changes in (dict(probe=("1.0.1", True, None)),
+                    dict(probe=(None, False, "ImportError")),
+                    dict(gate="cancel"),
+                    dict(plan=plans["terminal"]),
+                    dict(plan=plans["docker"]),
+                    dict(),
+                    dict(request=False)):
+        state.update(probe=("1.1.0", True, None), gate="open", request=True,
+                     plan=self_update.RestartPlan("foreground", False, "no service unit",
+                                                  in_place=True))
+        state.update(changes)
+        mgr = _steps_mgr(env)
+
+        async def _gate(job, _state=state):
+            return _state["gate"]
+        mgr._wait_gate = _gate
+        job = _job(kind="restart")
+        outcome = env.run(mgr._restart_step(job))
+        out.append(job.live or "")
+        if isinstance(outcome, update_flow._InPlace):
+            env.run(mgr._request_in_place(job, outcome))
+        out.append("\n\n".join(job.sections))
+    # A foreground update that ends with Restart now.
+    mgr = _steps_mgr(env)
+    job = _job()
+    out.append(mgr._after_install_text(job, self_update.RestartPlan(
+        "foreground", False, "no service unit", in_place=True), _tr(), "1.1.0"))
+    job.phase = "done"
+    out += _inline(env.with_tr(update_flow._job_markup, job))
+    # The owner's one notice: hooks already on a newer aipager.
+    bot = _update_bot(env)
+    mgr = bot.updates
+    mp.setattr(update_flow, "_daemon_code_version", lambda: "1.0.1")
+    mp.setattr(report_flow, "resolve_owner", lambda b: CHAT)
+    mp.setattr(report_offer, "dm_clear", lambda owner: True)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9))
+    mgr._hook_seen["1.1.0"] = {"delivered": False, "attempts": 0,
+                               "last_attempt_mono": None, "task": None}
+    env.run(mgr._hook_notice("1.1.0"))
+    for call in bot._app.bot.send_message.await_args_list:
+        out.append(call.args[1] if len(call.args) > 1 else call.kwargs.get("text"))
+        out += _inline(call.kwargs.get("reply_markup"))
+    # The Restart now refusals (pop-ups).
+    for error, detail, job in (("shutting_down", None, None),
+                               ("update_in_progress", "lock_held", None),
+                               ("update_in_progress", None, {"phase": "verifying"})):
+        async def _start(_e=error, _d=detail, _j=job, **k):
+            return update_flow.StartResult(False, _e, _j, detail=_d)
+        mgr.start_restart = _start
+        update, query = _cb_query()
+        env.run(update_flow.handle_callback(bot, update, query, "_", "up:rs"))
+        out += _tapped(query)
     return out
 
 
@@ -2352,7 +2468,7 @@ MIGRATED: set[str] = {
     "status.list", "status.switch",
     # Phase 3b.
     "update.prompt", "update.check", "update.job", "update.steps", "update.marker",
-    "update.taps", "report.card", "report.taps", "report.offer", "report.outcomes",
+    "update.taps", "update.restart", "report.card", "report.taps", "report.offer", "report.outcomes",
     "auth.refusals", "auth.auto_deny", "group.texts", "group.dropped",
     "transport.texts", "lifecycle.recovered", "dashboard.loading", "dashboard.diff_footer",
     "resume.dashboard", "resume.picker",
@@ -2453,5 +2569,11 @@ KNOWN_EXTRA: dict[str, tuple[str, ...]] = {
                     # never translated (operator, 2026-10-10).
                     "Reading", "Editing", "Searching", "web", "Fetching", "command",
                     "Starting", "an", "agent", "Using"),
+    # The manual restart steps' commands and key names, shown as plain
+    # text in the Mini App: data, never translated.
+    "update.restart": ("systemctl --user restart aipager.service", "docker restart",
+                       "<container>", "launchctl kickstart -k gui/501/com.aipager.daemon",
+                       "pipx install --force aipager", "aipager start", "Ctrl+C",
+                       "launchctl", "kickstart", "com.aipager.daemon", "daemon"),
 }
 from tests import i18n_surfaces_p3a  # noqa: E402,F401

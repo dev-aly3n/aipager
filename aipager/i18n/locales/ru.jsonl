@@ -168,6 +168,7 @@
 {"k": "btn.upd.check", "src": "cb743a2a", "v": "🔄 Проверить обновления"}
 {"k": "btn.upd.check_again", "src": "e185048c", "v": "Проверить снова"}
 {"k": "btn.upd.claude", "src": "8b854ad6", "v": "Обновить Claude Code"}
+{"k": "btn.upd.restart", "src": "3d234ba0", "v": "🔄 Перезапустить сейчас"}
 {"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "Перезапустить сейчас"}
 {"k": "btn.upd.wait", "src": "060c561a", "v": "Подождать ещё {mins} мин"}
 {"k": "card.agents", "src": "263711d4", "v": {"few": "{n} агента", "many": "{n} агентов", "one": "{n} агент", "other": "{n} агента"}}
@@ -938,6 +939,7 @@
 {"k": "toast.upd.checking", "src": "820d6004", "v": "Проверяю…"}
 {"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 Обновлять aipager может только админ."}
 {"k": "toast.upd.menu_old", "src": "6c988fa7", "v": "Это меню устарело: отправь /update ещё раз"}
+{"k": "toast.upd.restart_locked", "src": "1308d53f", "v": "Где-то ещё идёт обновление. Попробуй снова, когда оно закончится."}
 {"k": "toast.upd.stale", "src": "d9ed1389", "v": "Это обновление уже завершено"}
 {"k": "toast.verb", "src": "985eb765", "v": "{verb} [{session}]"}
 {"k": "tx.api.billing", "src": "031e8f3d", "v": "Проблема с подпиской или балансом Anthropic. Проверь свой аккаунт: {url}"}
@@ -1278,18 +1280,22 @@
 {"k": "ui.timeline.title_n", "src": "a7f6a618", "v": {"few": "Хронология ({n})", "many": "Хронология ({n})", "one": "Хронология ({n})", "other": "Хронология ({n})"}}
 {"k": "ui.update.check_failed", "src": "a15f1db5", "v": "Не удалось проверить обновления. Попробуй ещё раз."}
 {"k": "ui.update.finished", "src": "80fa9b82", "v": "Это обновление уже завершено."}
+{"k": "ui.update.hooks_banner", "src": "c71234bb", "v": "Хуки Claude Code уже работают на aipager {version}, а сам aipager всё ещё на {running}. Перезапусти его, чтобы завершить обновление."}
 {"k": "ui.update.job.claude_updating", "src": "c587f1e1", "v": "Работаю… (обновляется Claude Code)"}
 {"k": "ui.update.job.gate_timeout", "src": "1499ee18", "v": "Сессии всё ещё работают. Подождать ещё, перезапустить сейчас или отменить?"}
 {"k": "ui.update.job.starting", "src": "06080d40", "v": "Работаю… (запуск)"}
 {"k": "ui.update.job.upgrading", "src": "c6e6577f", "v": "Работаю… (ставлю новую версию)"}
+{"k": "ui.update.job.verifying", "src": "189339b0", "v": "Работаю… (проверяю установленную версию)"}
 {"k": "ui.update.job.waiting_idle", "src": "2d4b64cc", "v": "Перед перезапуском жду, пока все сессии станут готовы."}
 {"k": "ui.update.job.working_phase", "src": "3a93346a", "v": "Работаю… ({phase})"}
 {"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "Не вернулись: {names}"}
 {"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}? aipager перезапустится, когда не будет ни одной идущей задачи."}
+{"k": "ui.update.offer_confirm_manual", "src": "09a771c9", "v": "{offer}? Потом нажми «Перезапустить сейчас», чтобы запустить новую версию."}
 {"k": "ui.update.other", "src": "7ae4a531", "v": "aipager перезапустился, но сейчас работает {version}."}
 {"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager перезапустился, но сейчас работает {version}, а не {expected}."}
 {"k": "ui.update.refused", "src": "651df229", "v": "Открой приложение снова, чтобы увидеть результат обновления."}
 {"k": "ui.update.reopen", "src": "3bf2409f", "v": "aipager перезапустился. Открой приложение снова, когда чат сообщит об обновлении: закрой его и открой из чата (кнопкой меню или {command})."}
+{"k": "ui.update.restart_confirm", "src": "2c692e25", "v": "Перезапустить aipager сейчас? Он подождёт, пока не останется идущих задач, и вернётся через несколько секунд."}
 {"k": "ui.update.restart_now_confirm", "src": "3f76f590", "v": "«Перезапустить сейчас» прервёт задачи из этого списка."}
 {"k": "ui.update.restarting", "src": "0cfedf00", "v": "Перезапускаю aipager…"}
 {"k": "ui.update.running", "src": "5c38d794", "v": "Обновление уже идёт."}
@@ -1304,6 +1310,7 @@
 {"k": "ui.update.up_to_date", "src": "2772acac", "v": "Всё обновлено."}
 {"k": "ui.update.updated", "src": "a56afb67", "v": "Обновлено до {version}."}
 {"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"few": "Обновлено до {version}; снова подключены {n} сессии.", "many": "Обновлено до {version}; снова подключено {n} сессий.", "one": "Обновлено до {version}; снова подключена {n} сессия.", "other": "Обновлено до {version}; снова подключены {n} сессии."}}
+{"k": "ui.update.waiting_banner", "src": "a6d41f92", "v": "aipager {version} установлен и ждёт перезапуска."}
 {"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude тебя спрашивает"}
 {"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude нужно твоё разрешение"}
 {"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "В чате открыт запрос разрешения."}
@@ -1325,6 +1332,7 @@
 {"k": "upd.ap.not_found", "src": "f74b4ba7", "v": "❌ <b>aipager</b>: не найден <code>{kind}</code> (искали в {path})"}
 {"k": "upd.ap.prepare_failed", "src": "65e6b15f", "v": "✅ <b>aipager</b> {frm} → {to} установлен, но перезапуск не удалось подготовить ({error}). Перезапусти вручную: <code>{cmd}</code>"}
 {"k": "upd.ap.restart_cancelled", "src": "23b8320e", "v": "✅ <b>aipager</b> {frm} → {to} установлен, но перезапуск отменён. Перезапусти вручную: <code>{cmd}</code>"}
+{"k": "upd.ap.restart_offer", "src": "67c4cb2a", "v": "Нажми «Перезапустить сейчас», чтобы запустить её (aipager подождёт, пока не останется идущих задач)."}
 {"k": "upd.ap.restarting", "src": "e68754da", "v": "⏳ <b>aipager</b> {frm} → {to} установлен, перезапуск…"}
 {"k": "upd.ap.schedule_failed", "src": "8ded320b", "v": "✅ <b>aipager</b> {frm} → {to} установлен, но запланировать перезапуск не удалось: {detail}. Перезапусти вручную: <code>{cmd}</code>"}
 {"k": "upd.ap.timeout", "src": "f834e535", "v": "⏱ Обновление <b>aipager</b> не закончилось за {seconds} с и было остановлено; ничего не перезапущено, всё ещё работает {running}. Установка могла остаться неполной: переустанови командой <code>{hint}</code> до следующего перезапуска."}
@@ -1349,10 +1357,12 @@
 {"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"few": "⏰ Сессии всё ещё работают спустя {n} мин. Подождать ещё {wait} мин, перезапустить сейчас или отменить? «Перезапустить сейчас» прервёт всё, что перечислено ниже, включая задержанные ответы, которые ещё не доставлены.", "many": "⏰ Сессии всё ещё работают спустя {n} мин. Подождать ещё {wait} мин, перезапустить сейчас или отменить? «Перезапустить сейчас» прервёт всё, что перечислено ниже, включая задержанные ответы, которые ещё не доставлены.", "one": "⏰ Сессии всё ещё работают спустя {n} мин. Подождать ещё {wait} мин, перезапустить сейчас или отменить? «Перезапустить сейчас» прервёт всё, что перечислено ниже, включая задержанные ответы, которые ещё не доставлены.", "other": "⏰ Сессии всё ещё работают спустя {n} мин. Подождать ещё {wait} мин, перезапустить сейчас или отменить? «Перезапустить сейчас» прервёт всё, что перечислено ниже, включая задержанные ответы, которые ещё не доставлены."}}
 {"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: перед перезапуском ждёт, пока все сессии станут готовы."}
 {"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>Обновления</b>"}
+{"k": "upd.hooks.newer", "src": "d8c34918", "v": "⚠️ Обновление aipager сделано только наполовину: хуки Claude Code уже работают на {hook}, а сам aipager всё ещё на {running}. Перезапусти aipager, чтобы его завершить."}
 {"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (последняя версия)"}
 {"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}
 {"k": "upd.line.ap_newer_blocked", "src": "6c0b194f", "v": "aipager {running} → {latest} (отсюда не обновить: {reason})"}
 {"k": "upd.line.ap_unchecked", "src": "6e9c88e2", "v": "aipager {running} (не удалось проверить)"}
+{"k": "upd.line.ap_waiting", "src": "e9ef2362", "v": "aipager {installed} установлен и ждёт перезапуска (сейчас работает {running})."}
 {"k": "upd.line.cc_current", "src": "f360deb9", "v": "Claude Code {current} (последняя версия)"}
 {"k": "upd.line.cc_newer", "src": "f40a4485", "v": "Claude Code {current} → {latest}"}
 {"k": "upd.line.cc_newer_blocked", "src": "aa86c9e2", "v": "Claude Code {current} → {latest} (отсюда не обновить: {reason})"}
@@ -1364,6 +1374,7 @@
 {"k": "upd.marker.interrupted", "src": "66f4f0b7", "v": "⚠️ Обновление прервалось, когда aipager выключался; установка может быть неполной. Сейчас работает {running}. Если что-то пойдёт не так, {fix}."}
 {"k": "upd.marker.not_back", "src": "d253a83a", "v": "⚠️ Не вернулись: {labels}"}
 {"k": "upd.marker.wrong_version", "src": "17ebf14f", "v": "⚠️ aipager перезапустился, но работает версия {running}, а не {to}."}
+{"k": "upd.note.ap_broken", "src": "421b5511", "v": "aipager {installed} установлен, но не загружается. Переустанови его командой {command}."}
 {"k": "upd.note.ap_installed", "src": "5616e4b4", "v": "aipager {installed} установлен, но ещё не запущен."}
 {"k": "upd.offer_stale", "src": "a72655cc", "v": "⚠️ Этот результат устарел. Проверь снова перед обновлением."}
 {"k": "upd.output_in_log", "src": "3c62a9b7", "v": "(вывод в логе aipager)"}
@@ -1371,7 +1382,13 @@
 {"k": "upd.reason.unknown_install", "src": "0ab6e3a7", "v": "неизвестный способ установки"}
 {"k": "upd.reason.yourself", "src": "8ebd1480", "v": "перезапусти вручную"}
 {"k": "upd.restart.auto", "src": "47924d9e", "v": "Перезапуск: автоматически, когда не идёт ни одна задача."}
+{"k": "upd.restart.button", "src": "ce3642ee", "v": "Перезапуск: после установки нажми «Перезапустить сейчас»."}
 {"k": "upd.restart.manual", "src": "8e3998af", "v": "Перезапуск: вручную ({reason})"}
+{"k": "upd.rs.broken", "src": "72131c24", "v": "❌ Установленный aipager не загружается, поэтому aipager не перезапущен и всё ещё работает {running}. Переустанови командой <code>{hint}</code>"}
+{"k": "upd.rs.cancelled", "src": "13bbed02", "v": "↩️ Перезапуск отменён. aipager всё ещё работает {running}."}
+{"k": "upd.rs.checking", "src": "045dcbed", "v": "⏳ Проверяю установленный aipager…"}
+{"k": "upd.rs.not_possible", "src": "baabe4b6", "v": "⚠️ aipager не смог сам перезапуститься здесь."}
+{"k": "upd.rs.nothing", "src": "bb11e3f4", "v": "✅ aipager {running} и есть установленная версия, перезапускать нечего."}
 {"k": "upd.sessions.new_version", "src": "a9ee48dc", "v": "Новые сессии используют {version}."}
 {"k": "upd.sessions.none", "src": "1fe42f86", "v": "Сейчас нет запущенных сессий."}
 {"k": "upd.sessions.none_restarted", "src": "5807bbd1", "v": "Запущенные сессии остаются на старой версии, пока их не перезапустят; ни одна не перезапущена."}
@@ -1385,10 +1402,16 @@
 {"k": "upd.step.claude", "src": "417c042d", "v": "Обновляю Claude Code"}
 {"k": "upd.step.started", "src": "cd17f00f", "v": "⏳ {step}…"}
 {"k": "upd.step.still_working", "src": "37b863ed", "v": "⏳ {step} - всё ещё идёт{elapsed}"}
+{"k": "upd.steps.docker", "src": "6148f391", "v": "На компьютере, где работает Docker, выполни {command}."}
+{"k": "upd.steps.docker_image", "src": "2c81dbc2", "v": "Если пересоздать контейнер, он снова запустится из своего образа, и вернётся версия aipager из этого образа."}
+{"k": "upd.steps.launchd", "src": "c4815de4", "v": "На Mac выполни {command}."}
+{"k": "upd.steps.lead", "src": "0c8cf6bb", "v": "Чтобы запустить {to}, перезапусти aipager вручную:"}
+{"k": "upd.steps.terminal", "src": "9f90c52d", "v": "В окне терминала или tmux, где работает aipager, нажми {keys}, а потом выполни {command}."}
 {"k": "upd.still_running", "src": "c57fe950", "v": "Ещё работают:"}
 {"k": "upd.summary.cant_here", "src": "8abb0e4e", "v": "Есть обновление, но отсюда его не установить."}
 {"k": "upd.summary.check_failed", "src": "b8579281", "v": "Ничего новее не найдено, но одна из проверок не удалась. Попробуй позже."}
 {"k": "upd.summary.up_to_date", "src": "2772acac", "v": "Всё актуально."}
+{"k": "upd.summary.waiting", "src": "819e869e", "v": "Перезапусти aipager, чтобы завершить обновление."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ Обновление остановилось из-за непредвиденной ошибки (подробности в логе aipager)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ Запланированный перезапуск не произошёл: новая версия установлена, но всё ещё работает старая. Перезапусти вручную: {command}"}
 {"k": "whoami.any", "src": "195d97a4", "v": "(любые)"}

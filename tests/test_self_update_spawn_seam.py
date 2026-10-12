@@ -22,6 +22,12 @@ SWEPT = [
     ROOT / "self_update.py",
     ROOT / "bot" / "update_flow.py",
     ROOT / "updater.py",
+    # The restart in place: it may only exec, respawn or kill through its
+    # module aliases (``_execve = os.execve``, ``_popen = subprocess.Popen``,
+    # ``_kill``), which tests/conftest.py replaces with refusers. A direct
+    # ``os.exec*`` or ``subprocess.*`` call here would bypass that guard
+    # and replace the pytest process.
+    ROOT / "self_restart.py",
 ]
 SEAMS = {"_run_command", "_http_get"}
 _OS_SPAWNERS = {"system", "popen", "fork", "forkpty"}
@@ -150,3 +156,45 @@ def test_conftest_sees_no_real_cgroup():
 
     assert Path(self_update._PROC_SELF_CGROUP).read_text() == "0::/\n"
     assert self_update.restart_plan(None).mode == "foreground"
+
+
+# ----- the restart-in-place refusers (tests/conftest.py) ---------------------------
+
+# Removing a refuser must turn these red without harm: the exec and the
+# respawn name a binary that does not exist, and the kill sends signal 0.
+
+def test_conftest_refuses_exec_of_the_test_process(_never_exec_or_respawn):
+    from aipager import self_restart
+
+    with pytest.raises(AssertionError, match="would exec"):
+        self_restart._execve("/nonexistent/aipager-test/python",
+                             ["/nonexistent/aipager-test/python"], {})
+    assert [w for w, _ in _never_exec_or_respawn.refused] == ["exec"]
+    _never_exec_or_respawn.refused.clear()  # tripped on purpose
+
+
+def test_conftest_refuses_a_respawn(_never_exec_or_respawn):
+    from aipager import self_restart
+
+    with pytest.raises(AssertionError, match="would respawn"):
+        self_restart._popen(["/nonexistent/aipager-test/sh", "-c", "true"])
+    assert [w for w, _ in _never_exec_or_respawn.refused] == ["respawn"]
+    _never_exec_or_respawn.refused.clear()  # tripped on purpose
+
+
+def test_conftest_refuses_killing_the_test_process(_never_exec_or_respawn):
+    import os
+
+    from aipager import self_restart
+
+    with pytest.raises(AssertionError, match="would kill"):
+        self_restart._kill(os.getpid(), 0)
+    assert [w for w, _ in _never_exec_or_respawn.refused] == ["kill"]
+    _never_exec_or_respawn.refused.clear()  # tripped on purpose
+
+
+def test_conftest_sees_no_container():
+    from aipager import self_update
+
+    assert not Path(self_update._DOCKERENV_PATH).exists()
+    assert not Path(self_update._CONTAINERENV_PATH).exists()
