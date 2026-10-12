@@ -1236,7 +1236,10 @@ class UpdateManager:
         self._last_job_id = job_id
         self._lock_owner = job_id
         job = _Job(id=job_id, kind="restart", chat_id=chat_id, user_id=user_id,
-                   origin=origin, started_at=time.time(), event=asyncio.Event())
+                   origin=origin, started_at=time.time(), event=asyncio.Event(),
+                   phase="verifying")
+        # The card's first words: the installed version is checked first.
+        job.live = i18n.for_chat(chat_id).html(_RS_CHECKING)
         job.reporter = _Reporter(self.bot, chat_id, status_message)
         self._job = job
         self._job_epoch += 1
@@ -1758,6 +1761,10 @@ class UpdateManager:
             last = rec["last_attempt_mono"]
             if last is not None and time.monotonic() - last < HOOK_NOTICE_RETRY_SECONDS:
                 return
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                return          # nothing to send it from (never in the daemon)
             rec["task"] = self._spawn(self._hook_notice(version))
         except Exception:
             log.debug("hook version note failed", exc_info=True)
