@@ -97,7 +97,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 把你想让 Claude 修改的文件夹挂载到 `/workspace`。挂载 `~/.claude` 会带上你的 Claude 登录信息和对话历史；要登录，在本机运行一次 `claude`，或用 `docker exec -it aipager claude` 在容器里登录。
 
-标签：`latest`、`1.0`、`1.0.1`（一个对应精确版本，一个对应次版本）。
+标签：`latest`、`1.1`、`1.1.0`（一个对应精确版本，一个对应次版本）。
 
 ### <a id="nix-flake"></a>Nix flake
 

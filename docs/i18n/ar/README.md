@@ -131,7 +131,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 تُربط (mount) في `/workspace` المجلدات المطلوب أن يعدّلها Claude. ربط `~/.claude` يجلب معه تسجيل دخول Claude وسجل محادثاتك؛ لتسجيل الدخول، يكفي تشغيل `claude` مرة واحدة على الجهاز، أو `docker exec -it aipager claude` لتسجيل الدخول داخل الحاوية.
 
-الوسوم: `latest` و`1.0` و`1.0.1` (واحد للإصدار الدقيق وواحد للإصدار الفرعي).
+الوسوم: `latest` و`1.1` و`1.1.0` (واحد للإصدار الدقيق وواحد للإصدار الفرعي).
 
 ### <a id="nix-flake"></a>Nix flake
 

@@ -97,7 +97,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Monta sotto `/workspace` le cartelle che vuoi far modificare a Claude. Il montaggio di `~/.claude` porta con sé le tue credenziali di Claude e la cronologia delle conversazioni; per fare l'accesso, esegui `claude` una volta sul computer, oppure `docker exec -it aipager claude` per accedere dentro il container.
 
-Tag: `latest`, `1.0`, `1.0.1` (uno per la versione esatta e uno per la versione minore).
+Tag: `latest`, `1.1`, `1.1.0` (uno per la versione esatta e uno per la versione minore).
 
 ### <a id="nix-flake"></a>Nix flake
 

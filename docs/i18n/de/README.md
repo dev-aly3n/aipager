@@ -97,7 +97,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Binde unter `/workspace` die Ordner ein, die Claude bearbeiten soll. Die Einbindung von `~/.claude` bringt deine Claude-Anmeldedaten und den Verlauf deiner Unterhaltungen mit; zum Anmelden führ einmal `claude` auf dem System aus, oder `docker exec -it aipager claude`, um dich im Container anzumelden.
 
-Tags: `latest`, `1.0`, `1.0.1` (eines pro genauer Version und eines pro Unterversion).
+Tags: `latest`, `1.1`, `1.1.0` (eines pro genauer Version und eines pro Unterversion).
 
 ### <a id="nix-flake"></a>Nix flake
 
