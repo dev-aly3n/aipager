@@ -541,7 +541,7 @@ def test_no_mini_app_module_builds_its_own_telegram_bot():
 
     Asserted at its root: nothing under ``aipager/miniapp/`` so much as
     IMPORTS ``telegram``, so it cannot construct a ``Bot`` with a token
-    and a budget of its own the way ``bot/observer.py`` deliberately does.
+    and a budget of its own.
     A text scan rather than an AST sweep — the AST of this package peaks
     at ~5 MB of address space, and the suite has not got that to spare
     (roadmap 8.19).

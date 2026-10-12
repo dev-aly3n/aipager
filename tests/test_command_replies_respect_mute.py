@@ -710,16 +710,17 @@ def _sweep(fn, paths):
     return offenders
 
 
-def test_the_exempt_set_is_exactly_the_seam_the_gate_and_the_observer():
-    """D-8: `_EXEMPT` shrank from six files to three, and every file that
-    left it is a file the sweep now protects — that is the point of moving
-    enforcement to the chokepoint.
+def test_the_exempt_set_is_exactly_the_seam_and_the_gate():
+    """D-8: `_EXEMPT` shrank from six files to three, then to two when
+    observer bots were removed, and every file that left it is a file the
+    sweep now protects — that is the point of moving enforcement to the
+    chokepoint.
 
     Pinned as an EQUALITY, not a subset: re-exempting `notify.py` or
     `animation.py` to make a new offender go away is exactly the move that
     made the 2026-09-15 leak invisible, and it must fail here first.
     """
-    assert EXEMPT_FILES == {"transport.py", "flood_budget.py", "observer.py"}
+    assert EXEMPT_FILES == {"transport.py", "flood_budget.py"}
     assert "delete_message" in GATED_FAMILIES
     assert "delete_messages" in GATED_FAMILIES   # the batched line delete
     assert "send_chat_action" in GATED_FAMILIES
@@ -768,9 +769,8 @@ def test_the_bot_packages_name_no_telegram_api_url():
     """Sweep 2 (R2). The one in-daemon URL builder is
     `rich_message._api_url`; every other `api.telegram.org` string in the
     daemon is a path around the limiter. The allowlist is out-of-process
-    or diagnostic callers only (`doctor`, `cli/daemon`, the wizard,
-    observer bots) and is deliberately tiny — each entry is a path R1 does
-    not cover.
+    or diagnostic callers only (`doctor`, `cli/daemon`, the wizard) and
+    is deliberately tiny — each entry is a path R1 does not cover.
 
     Docstrings are skipped, which is what keeps `errors.py`'s explanatory
     prose from tripping it; a real URL in `errors.py` still fails.
@@ -786,8 +786,7 @@ def test_no_second_bot_is_constructed_in_the_daemon_packages():
     `bot` in reach is the app's limiter-bound one. The two sweeps are a
     PAIR — weakening this one silently weakens that one.
 
-    `lifecycle.py` builds the app's; `observer.py` builds the observers'
-    (own tokens, own budgets, 8.21 §11 D12).
+    `lifecycle.py` builds the app's, and nothing else builds one.
     """
     offenders = _sweep(bot_construction_offenders, _package_files())
     assert offenders == [], offenders
@@ -893,7 +892,10 @@ def test_the_constructor_sweep_names_a_second_bot(ctor):
     assert bot_construction_offenders("aipager/bot/x.py", src) == [
         f"x.py:2 {ctor}("]
     assert bot_construction_offenders("aipager/bot/lifecycle.py", src) == []
-    assert bot_construction_offenders("aipager/bot/observer.py", src) == []
+    # The removed observer bots' module had its own exemption; a file by
+    # that name is now policed like any other.
+    assert bot_construction_offenders("aipager/bot/observer.py", src) == [
+        f"observer.py:2 {ctor}("]
 
 
 def test_the_tolerance_sweep_names_a_send_outside_a_try():
