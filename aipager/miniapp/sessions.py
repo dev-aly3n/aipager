@@ -460,7 +460,7 @@ def session_detail(
         # daemon restart, so it is the one thing that reliably has content
         # for an older session. See last_message() for where it comes from.
         "last_message": preview_lines(last_message(sess)),
-        "timeline": build_timeline(sess),
+        "timeline": build_timeline(sess, now),
     }
     detail["modes"] = mode_options(sess, can_act=can_act, is_admin=is_admin, tr=tr)
     if status != "gone":
@@ -645,7 +645,7 @@ def _english():
     return i18n.get("en")
 
 
-def build_timeline(sess: "TrackedSession") -> list[dict[str, Any]]:
+def build_timeline(sess: "TrackedSession", now: float | None = None) -> list[dict[str, Any]]:
     """Interleave ``tool_history`` and ``stream_commentary`` in
     chronological order, uncapped — a scrollable webview has no 32 768
     byte ceiling and no live-batch-holding to honor (design.md
@@ -655,7 +655,13 @@ def build_timeline(sess: "TrackedSession") -> list[dict[str, Any]]:
     Each row is ``{"kind": "commentary", "text": str}`` or
     ``{"kind": "tool", "text": str, "state": "done"|"failed"|"running",
     "elapsed_seconds": int|None}``.
+
+    *now* is the payload's clock (``session_detail``'s), so a running
+    agent's time and "Working for" come from one reading; ``None`` reads
+    the clock here.
     """
+    if now is None:
+        now = time.monotonic()
     pending: dict[int, list[str]] = defaultdict(list)
     for anchor, text in sess.stream_commentary:
         pending[min(anchor, len(sess.tool_history))].append(text)
@@ -673,7 +679,7 @@ def build_timeline(sess: "TrackedSession") -> list[dict[str, Any]]:
         state = "failed" if done == "failed" else ("done" if done else "running")
         elapsed = None
         if state == "running" and idx in subagent_started:
-            elapsed = int(max(0.0, time.monotonic() - subagent_started[idx]))
+            elapsed = int(max(0.0, now - subagent_started[idx]))
         rows.append({
             "kind": "tool", "text": summary, "state": state,
             "elapsed_seconds": elapsed,

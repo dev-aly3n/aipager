@@ -133,6 +133,10 @@ def test_the_parity_check_would_see_a_drifted_port(mini_server, run_async, node_
 GROUP_CHAT = -1001
 BOB_ID = 2  # a member of the group scope only
 
+#: The moment ``_busy`` marked the session busy, the clock the ``detail``
+#: fixture pins the server to.
+_MARKED_AT: list[float] = []
+
 
 def _busy(bot, age, unit):
     sess = bot.registry.get_or_create("claude-dev")
@@ -140,14 +144,32 @@ def _busy(bot, age, unit):
     sess.scope_chat_id = GROUP_CHAT
     sess.scope_kind = "group"
     sess.status = Status.BUSY
-    sess.busy_started_at = time.monotonic() - age
+    now = time.monotonic()
+    sess.busy_started_at = now - age
     sess.card_elapsed_unit = unit
+    _MARKED_AT[:] = [now]
     return sess
 
 
 @pytest.fixture
-def detail(mini_server, run_async, ml):
-    return lambda: _detail(mini_server, run_async, ml.hdr(BOB_ID))
+def detail(mini_server, run_async, ml, monkeypatch):
+    """GET /api/sessions/dev as the group member, with the server's clock
+    pinned to the moment ``_busy`` marked the session busy. The server
+    reads the clock per request, after a test server starts: a runner
+    that stalled over 0.7 s there moved "9:59" to "10:00" (CI py3.13,
+    2026-10-13). The clock text still comes from the real payload."""
+    from aipager.miniapp import sessions as ma_sessions
+    real = ma_sessions.session_detail
+    _MARKED_AT.clear()
+
+    def at_marked(sess, _now, **kw):
+        return real(sess, _MARKED_AT[0], **kw)
+    monkeypatch.setattr(ma_sessions, "session_detail", at_marked)
+
+    def ask():
+        assert _MARKED_AT, "_busy must mark the session before the request"
+        return _detail(mini_server, run_async, ml.hdr(BOB_ID))
+    return ask
 
 
 def _detail(mini_server, run_async, headers):
@@ -217,8 +239,11 @@ def test_the_app_and_the_busy_card_show_the_same_clock(
         tg_bot, detail, age, unit):
     from aipager.bot.animation import build_stream_card
     sess = _busy(tg_bot, age, unit)
-    app = _working_for(detail())
+    # The card reads the real clock: build it at once, milliseconds after
+    # the session was marked busy (each age leaves 0.7 s before its next
+    # second), then ask the app for that same moment.
     status = build_stream_card(sess, "Working").rpartition("\n\n")[2]
+    app = _working_for(detail())
     assert f" · Working · {app}" in status
 
 

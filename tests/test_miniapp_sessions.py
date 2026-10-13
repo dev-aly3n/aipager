@@ -270,10 +270,27 @@ def test_detail_carries_the_cards_unit(unit, shown):
 def test_the_timeline_floors_a_running_agent():
     sess = _sess(status=Status.BUSY)
     sess.tool_history = [("\U0001f916 Explore", False)]
+    # An exact clock: 42.9 tells a floor from a rounding, and read from the
+    # real clock it left a slow runner 0.1 s before "42" became "43".
+    now = 10_000.0
     sess.active_subagents["a1"] = {"type": "Explore", "history_idx": 0,
-                                   "started_at": time.monotonic() - 42.9}
-    (row,) = build_timeline(sess)
+                                   "started_at": now - 42.9}
+    (row,) = build_timeline(sess, now)
     assert row["elapsed_seconds"] == 42
+
+
+def test_the_timeline_reads_the_payloads_clock():
+    """A running agent's time and "Working for" come from one reading of
+    the clock, the one the payload is built at."""
+    sess = _sess(status=Status.BUSY)
+    now = 10_000.0
+    sess.busy_started_at = now - 100.2
+    sess.tool_history = [("\U0001f916 Explore", False)]
+    sess.active_subagents["a1"] = {"type": "Explore", "history_idx": 0,
+                                   "started_at": now - 42.9}
+    detail = session_detail(sess, now)
+    assert detail["busy_elapsed_seconds"] == 100
+    assert [r["elapsed_seconds"] for r in detail["timeline"] if r["kind"] == "tool"] == [42]
 
 
 def test_session_detail_busy_elapsed_seconds_none_when_idle():
