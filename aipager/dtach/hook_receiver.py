@@ -14,13 +14,12 @@ import hashlib
 import json
 import logging
 import os
-import re
 import socket
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from aipager import bg_shells, bidi_guard, perm_modes, statusline_file
+from aipager import agent_tree, bg_shells, bidi_guard, perm_modes, statusline_file
 from aipager.config import (
     HOOK_DEDUP_WINDOW_SECONDS,
     RICH_SUMMARIES,
@@ -111,30 +110,17 @@ _CTX_WINDOW_SIZE = 200_000  # all current Claude models use 200k context
 # since personal mode has no role/snapshot separation to leak. See
 # enforce.py's own copy of this note for the full reasoning.
 _TASK_NOTIFICATION_PREFIX = "<task-notification>"
-# Roadmap 8.41. A <task-notification> for an agent carries a <note>; this
-# wording (Claude Code 2.1.280) marks an agent that stopped while background
-# work of its own still runs, and so will resume and notify again.
-_TASK_ID_RE = re.compile(r"<task-id>\s*([A-Za-z0-9_-]+)\s*</task-id>")
-_NOTE_RE = re.compile(r"<note>(.*?)</note>", re.DOTALL)
-_STILL_RUNNING_NOTE = "background work of its own still running"
-
-
-def _still_running_task_ids(prompt: str) -> list[str]:
-    """The task ids of the notifications in *prompt* whose agent stopped
-    with background work still running. One prompt can carry several
-    notifications (a background shell's, which has no note, then an
-    agent's), so each is read on its own. Only a notification's own <note>
-    counts: the agent's <result> after it is free text and may quote
-    anything."""
-    ids = []
-    for block in prompt.split(_TASK_NOTIFICATION_PREFIX)[1:]:
-        note = _NOTE_RE.search(block)
-        if note is None or _STILL_RUNNING_NOTE not in note.group(1):
-            continue
-        match = _TASK_ID_RE.search(block[:note.start()])
-        if match:
-            ids.append(match.group(1))
-    return ids
+# Roadmap 8.41: the task notification's "still running" note is read by
+# aipager.agent_tree.still_running_task_ids (shared with the card's
+# mid-turn queue scan).
+# A tool event fired inside an agent that says the agent works again: a
+# waiting agent resuming (its own resume SubagentStart may be lost, or
+# dropped as a repeat). Not MessageDisplay: Claude Code sends a message's
+# display at its end, so an agent's last message can land after its pause.
+_AGENT_RESUME_EVENTS = frozenset({
+    "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest",
+    "Notification",
+})
 
 
 # The tools Claude stops a background task with. TaskStop takes `task_id`
@@ -741,6 +727,15 @@ class HookReceiver:
         if hook_agent_id:
             sess_ref.touch_subagent(hook_agent_id, now_mono)
             sess_ref.bg_agent_touch(hook_agent_id, now_mono)
+            # A waiting agent's own tool activity: it resumed. Not the
+            # PostToolUse of the Agent call that started its child: that is
+            # the link (below), which can land after the pause.
+            if (msg.get("hook_event_name") in _AGENT_RESUME_EVENTS
+                    and not agent_tree.launched_child(msg)
+                    and sess_ref.agent_resumed(hook_agent_id)):
+                log.info("[%s] agent %s works again", sess_ref.label,
+                         hook_agent_id)
+                self.registry.mark_dirty()
         # Evidence that a turn is alive, for the "prompt not taken"
         # watchdog (session_monitor.prompt_not_taken): every datagram
         # counts except the two that arrive without any turn behind them.
@@ -965,7 +960,7 @@ class HookReceiver:
                 # of its own still running resumes later — its SubagentStop
                 # (a moment ago) did not end it. Claude Code says so in this
                 # notification's <note>, the one exact signal for it.
-                for still_running in _still_running_task_ids(prompt):
+                for still_running in agent_tree.still_running_task_ids(prompt):
                     self.registry.get_or_create(session_name) \
                         .bg_agent_still_running(still_running, now_mono)
                 # Continuation turn: the SAME job waking itself up, not a
@@ -1303,6 +1298,16 @@ class HookReceiver:
                     sess.pending_tool_started_at = None
                 if not msg.get("agent_id"):
                     sess.parent_tool_started_at = None
+                child = agent_tree.launched_child(msg)
+                if child:
+                    # An agent started an agent of its own: the link that
+                    # tells its later pause from its finish.
+                    if sess.agent_launched_child(msg["agent_id"], child,
+                                                 now_mono):
+                        log.info("[%s] agent %s waits for %s - back on the "
+                                 "agents line", sess.label,
+                                 msg["agent_id"], child)
+                    self.registry.mark_dirty()
                 done_ctx = {
                     "tool_name": tool_name,
                     "tool_summary": summary,
@@ -1386,6 +1391,10 @@ class HookReceiver:
             agent_type = msg.get("agent_type", "unknown")
             if agent_id:
                 sess = self.registry.get_or_create(session_name)
+                # Already in the job's table: a waiting agent resuming (its
+                # pause kept it there). It keeps its row, its count and its
+                # clock; only its liveness is refreshed.
+                resumed = agent_id in sess.active_subagents
                 # Roadmap 8.41's running set. The type is normalised the
                 # way the Agent call's is (PreToolUse above), so the two
                 # always match; a start with none (the phantom shape)
@@ -1393,6 +1402,17 @@ class HookReceiver:
                 sess.bg_agent_started(agent_id,
                                       _clean_text(msg.get("agent_type"), 80),
                                       now_mono)
+                if resumed:
+                    sess.active_subagents[agent_id]["last_seen"] = now_mono
+                    self.registry.mark_dirty()
+                    log.info("[%s] SubagentStart: %s (%s) - resumed",
+                             sess.label, agent_type, agent_id)
+                    await self.notify_fn(sess, "subagent_start", {
+                        "agent_id": agent_id,
+                        "agent_type": agent_type,
+                        "resumed": True,
+                    })
+                    return
                 # The cap lives inside add_subagent (state.py), enforced
                 # by the data structure itself so a future second caller
                 # cannot bypass it. Eviction keeps the newest agents; the
@@ -1432,6 +1452,28 @@ class HookReceiver:
                 sess = self.registry.get_or_create(session_name)
                 # Compute elapsed time if we have a matching start
                 elapsed = 0.0
+                waiting_for = sess.bg_agent_pause(agent_id, now_mono)
+                if waiting_for:
+                    # It ended its turn while an agent it started still
+                    # runs: a pause, not a finish. It stays running on the
+                    # line, the pin, the job and the card; no grace, no
+                    # settled row. Its resume is a SubagentStart of the
+                    # same id, its finish a stop with none of its own
+                    # agents running.
+                    self.registry.mark_dirty()
+                    info = sess.active_subagents.get(agent_id)
+                    if info:
+                        elapsed = time.monotonic() - info["started_at"]
+                    tasks = msg.get("background_tasks")
+                    bg_tasks = (str(sum(
+                        1 for t in tasks if isinstance(t, dict)
+                        and t.get("type") == "local_agent"))
+                        if isinstance(tasks, list) else "-")
+                    log.info("[%s] SubagentStop: %s (%s, %.1fs) - waiting for "
+                             "%d agent(s) of its own (bg_tasks=%s)",
+                             sess.label, agent_type, agent_id, elapsed,
+                             len(waiting_for), bg_tasks)
+                    return
                 sess.bg_agent_stopped(agent_id, now_mono)
                 info = sess.active_subagents.pop(agent_id, None)
                 if info:

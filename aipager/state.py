@@ -203,6 +203,15 @@ AGENT_CALL_MAX_AGE: float = 600.0
 # How much of a background agent's latest message is kept (its first
 # line is what the answer's block shows).
 BG_AGENT_PROSE_CAP: int = 1000
+# A background agent that ended its turn while an agent it started still
+# runs is WAITING, not done (it resumes when that agent reports). Once none
+# of its own agents runs any more it has this long to resume (Claude Code
+# resumes it within a second of its child's stop) before it stops counting
+# as running: silence, never "done".
+WAITING_PARENT_RESUME_SECONDS: float = 120.0
+# `TrackedSession.agent_parents` (child -> the agent that started it) is
+# held to this many links; the oldest goes first.
+AGENT_PARENTS_CAP: int = 200
 # Background shells a session has running (`TrackedSession.bg_shells`) are
 # held to this many at insertion; the oldest (by launch) is evicted when a
 # new launch would exceed it. Shells send no hooks while they run, so
@@ -1224,10 +1233,19 @@ class TrackedSession:
     # "attempts", "next_try", "gone_at"}. All transient: monotonic stamps
     # are meaningless across a restart (never in _PERSIST_FIELDS), so a
     # restart leaves pending blocks as last shown.
+    # An entry of an agent that ended its turn while an agent it started
+    # still runs also carries "waiting": True, "paused" (monotonic, its
+    # pause) and "children_gone_at" (monotonic or None: when the monitor
+    # first saw none of its own agents running).
     bg_agents: dict = field(default_factory=dict)
     bg_agents_recent: dict = field(default_factory=dict)
     pending_agent_calls: list = field(default_factory=list)
     agents_lines: list = field(default_factory=list)
+    # Which agent started which: child id -> parent id, from the parent's
+    # own PostToolUse of its Agent call (agent_tree.launched_child).
+    # Capped at AGENT_PARENTS_CAP; a link goes when its child or its
+    # parent finishes, and all go with the session.
+    agent_parents: dict = field(default_factory=dict)
     # Background shells the main loop started (a `Bash` PostToolUse whose
     # `tool_response` carries a `backgroundTaskId`), from launch until
     # their end is seen: a `<task-notification>` with a `<status>`, a
@@ -1656,6 +1674,10 @@ class TrackedSession:
         if info is not None:
             info["label"] = agent_type
             info["last_seen"] = now
+            # A waiting agent resuming: it works again.
+            info.pop("waiting", None)
+            info.pop("paused", None)
+            info.pop("children_gone_at", None)
         else:
             self.bg_agents[agent_id] = {
                 "label": agent_type, "last_seen": now, "started": now,
@@ -1742,10 +1764,16 @@ class TrackedSession:
 
     def bg_agent_stopped(self, agent_id: str, now: float) -> bool:
         """SubagentStop: the matching agent stopped. An id never started
-        (the constant phantom SubagentStops) matches nothing."""
+        (the constant phantom SubagentStops) matches nothing. Its links go
+        with it: an agent finished is nobody's running child, and an id
+        used again starts with no children of its own."""
         info = self.bg_agents.pop(agent_id, None)
         if info is None:
             return False
+        self._forget_agent_links(agent_id)
+        info.pop("waiting", None)
+        info.pop("paused", None)
+        info.pop("children_gone_at", None)
         self.bg_agents_recent[agent_id] = info
         while len(self.bg_agents_recent) > BG_AGENTS_RECENT_CAP:
             self.bg_agents_recent.pop(next(iter(self.bg_agents_recent)))
@@ -1783,11 +1811,15 @@ class TrackedSession:
         Silence is not completion: an agent parked on long background work
         of its own emits nothing. So an answer whose status block lists an
         expired agent is left exactly as last shown — never settled to
-        done on no evidence."""
+        done on no evidence. A waiting agent is silent by nature while its
+        own agents work: it is never dropped here while shielded
+        (agent_shielded); sweep_unresumed_parents bounds it instead."""
         silent = [a for a, info in self.bg_agents.items()
-                  if now - info["last_seen"] > window]
+                  if now - info["last_seen"] > window
+                  and not self.agent_shielded(a, now)]
         for agent_id in silent:
             self.bg_agents.pop(agent_id, None)
+            self._forget_agent_links(agent_id)
         if silent:
             self.agents_lines = [
                 rec for rec in self.agents_lines
@@ -1800,6 +1832,7 @@ class TrackedSession:
         line of it is owed an edit."""
         self.bg_agents.clear()
         self.bg_agents_recent.clear()
+        self.agent_parents.clear()
         self.pending_agent_calls = []
         self.bg_shells.clear()
         self.bg_shell_early_ends.clear()
@@ -1814,6 +1847,134 @@ class TrackedSession:
 
     def bg_agent_labels(self) -> list[str]:
         return [info["label"] for info in self.bg_agents.values()]
+
+    # ── agents waiting for agents of their own ────────────────────────────
+    #
+    # A background agent P that starts an agent C and then ends its own
+    # turn to wait for it gets an ordinary SubagentStop at that pause, and
+    # a fresh SubagentStart with the same id when it resumes. Which agent
+    # started which comes from P's own PostToolUse of its Agent call (it
+    # carries agent_id=P and the child's id in its tool_response), never
+    # from a SubagentStart (it carries the child's id only).
+
+    def _forget_agent_links(self, agent_id: str) -> None:
+        """*agent_id* finished or left: its own link, and its children's."""
+        self.agent_parents.pop(agent_id, None)
+        for child in [c for c, p in self.agent_parents.items()
+                      if p == agent_id]:
+            self.agent_parents.pop(child, None)
+
+    def agent_children_running(self, agent_id: str) -> list[str]:
+        """The running agents *agent_id* started."""
+        return [child for child, parent in self.agent_parents.items()
+                if parent == agent_id and child in self.bg_agents]
+
+    def agent_is_waiting(self, agent_id: str) -> bool:
+        info = self.bg_agents.get(agent_id)
+        return bool(info is not None and info.get("waiting"))
+
+    def agent_launched_child(self, parent: str, child: str,
+                             now: float) -> bool:
+        """*parent* started *child* (its own Agent call returned). Returns
+        whether this brought *parent* back as a running agent: the link
+        arrived after the parent's pause had already been taken for its
+        finish (it is in ``bg_agents_recent``) while the child runs. Then
+        it is waiting, exactly as if the link had come first, on the line
+        and the pin; its job row is not reopened (its resume is)."""
+        if not parent or not child or parent == child:
+            return False
+        self.agent_parents.pop(child, None)
+        self.agent_parents[child] = parent
+        while len(self.agent_parents) > AGENT_PARENTS_CAP:
+            self.agent_parents.pop(next(iter(self.agent_parents)))
+        if (parent in self.bg_agents or child not in self.bg_agents
+                or parent not in self.bg_agents_recent):
+            return False
+        info = self.bg_agents_recent.pop(parent)
+        info["last_seen"] = now
+        info["waiting"] = True
+        info["paused"] = now
+        info["children_gone_at"] = None
+        self.bg_agents[parent] = info
+        for rec in self.agents_lines:
+            rec.get("ends", {}).pop(parent, None)
+        return True
+
+    def bg_agent_pause(self, agent_id: str, now: float) -> list[str]:
+        """SubagentStop for *agent_id*, asked first: if it is a running
+        agent with at least one agent of its own still running, it has
+        only paused to wait for them. It is then marked waiting and stays
+        running everywhere; the running children are returned. An empty
+        list means the stop is a finish (or a phantom): nothing changed.
+        Recursion falls out: a child that is itself waiting is still in
+        ``bg_agents``, so it counts as running."""
+        info = self.bg_agents.get(agent_id)
+        if info is None:
+            return []
+        children = self.agent_children_running(agent_id)
+        if not children:
+            return []
+        info["waiting"] = True
+        info["paused"] = now
+        info["children_gone_at"] = None
+        info["last_seen"] = now
+        return children
+
+    def agent_resumed(self, agent_id: str) -> bool:
+        """A tool event of *agent_id*'s own: if it was waiting, it works
+        again (its resume SubagentStart was lost, or dropped as a repeat).
+        Returns whether it was waiting."""
+        info = self.bg_agents.get(agent_id)
+        if info is None or not info.get("waiting"):
+            return False
+        info.pop("waiting", None)
+        info.pop("paused", None)
+        info.pop("children_gone_at", None)
+        return True
+
+    def agent_shielded(self, agent_id: str, now: float) -> bool:
+        """Whether the silence sweeps must leave *agent_id* alone: it is
+        waiting, and an agent of its own runs, or the last of them ended
+        at most WAITING_PARENT_RESUME_SECONDS ago (or that is not stamped
+        yet)."""
+        info = self.bg_agents.get(agent_id)
+        if info is None or not info.get("waiting"):
+            return False
+        if self.agent_children_running(agent_id):
+            return True
+        gone = info.get("children_gone_at")
+        return gone is None or now - gone <= WAITING_PARENT_RESUME_SECONDS
+
+    def sweep_unresumed_parents(self, now: float) -> list[str]:
+        """Drop the waiting agents that did not resume within
+        WAITING_PARENT_RESUME_SECONDS after the last of their own agents
+        ended, and return their ids. When none of its agents runs is
+        stamped lazily, by the first sweep that sees it (and cleared if
+        one runs again). A dropped agent leaves the running set and the
+        job's table; an answer whose block lists it is left exactly as
+        last shown (silence, never "done")."""
+        dropped = []
+        for agent_id, info in self.bg_agents.items():
+            if not info.get("waiting"):
+                continue
+            if self.agent_children_running(agent_id):
+                info["children_gone_at"] = None
+                continue
+            gone = info.get("children_gone_at")
+            if gone is None:
+                info["children_gone_at"] = now
+            elif now - gone > WAITING_PARENT_RESUME_SECONDS:
+                dropped.append(agent_id)
+        for agent_id in dropped:
+            self.bg_agents.pop(agent_id, None)
+            self.active_subagents.pop(agent_id, None)
+            self._forget_agent_links(agent_id)
+        if dropped:
+            self.agents_lines = [
+                rec for rec in self.agents_lines
+                if not set(rec["ids"]) & set(dropped)
+            ]
+        return dropped
 
     # ── background shells ─────────────────────────────────────────────────
     #

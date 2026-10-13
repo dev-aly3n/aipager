@@ -27,6 +27,7 @@ from aipager.config import (
 )
 from aipager.state import (
     TURN_STATE_HOLD_SECONDS,
+    WAITING_PARENT_RESUME_SECONDS,
     SessionRegistry,
     Status,
     TrackedSession,
@@ -1000,6 +1001,31 @@ class SessionMonitor:
             # "still running" for at most one window — and each answer's
             # status block is looked at once its edit interval has passed
             # (edited only when what it shows changed).
+            # A waiting agent (it ended its turn to wait for an agent of its
+            # own) sends nothing while that agent works, so the silence
+            # bounds below leave it alone; this one bounds it instead: once
+            # none of its own agents runs, it must resume within
+            # WAITING_PARENT_RESUME_SECONDS. A job left waiting only on it
+            # then closes, like one whose agents went silent.
+            was_job_open = sess.job_background_open()
+            unresumed = sess.sweep_unresumed_parents(now)
+            for aid in unresumed:
+                log.info("[%s] waiting agent %s did not resume within %d s "
+                         "after its own agents ended - no longer counted as "
+                         "running", sess.label, aid,
+                         int(WAITING_PARENT_RESUME_SECONDS))
+            if unresumed:
+                self.registry.mark_dirty()
+            if (unresumed and was_job_open and sess.status == Status.IDLE
+                    and not sess.job_work_running()):
+                sess.job_interim_seen = False
+                sess.job_continuation_active = False
+                sess.job_grace_until = 0.0
+                try:
+                    await self.notify_fn(sess, "job_agents_lost", {})
+                except Exception:
+                    log.warning("Failed to notify job_agents_lost for %s",
+                                name)
             for aid in sess.sweep_bg_agents(now, SUBAGENT_SILENCE_SECONDS):
                 log.info("[%s] background agent %s silent for %d min — no "
                          "longer counted as running", sess.label, aid,
@@ -1049,6 +1075,9 @@ class SessionMonitor:
                 silent_ids = [
                     aid for aid, info in sess.active_subagents.items()
                     if (now - info["last_seen"]) > SUBAGENT_SILENCE_SECONDS
+                    # A waiting agent is silent while its own agents work:
+                    # sweep_unresumed_parents above bounds it.
+                    and not sess.agent_shielded(aid, now)
                 ]
                 for aid in silent_ids:
                     log.info("[%s] dropping silent subagent %s (no hook event "
