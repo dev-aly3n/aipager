@@ -90,7 +90,6 @@ class World:
         # The components (as tests/test_cli_daemon_run.py fakes them).
         mp.setattr("aipager.config.BOT_TOKEN", "tok")
         mp.setattr("aipager.config.CHAT_ID", "12345")
-        mp.setattr("aipager.config.OBSERVER_BOTS", [])
         mp.setattr("aipager.config.MINIAPP_ENABLED", False)
         bot = MagicMock()
         for name in ("start", "notify", "recover_sessions", "reload_team",
@@ -98,7 +97,6 @@ class World:
             setattr(bot, name, AsyncMock())
         bot.stop = AsyncMock(side_effect=self.rec("bot.stop"))
         bot.updates.shutdown = AsyncMock(side_effect=self.rec("updates.shutdown"))
-        bot.observers = None
         hook_receiver = MagicMock()
         hook_receiver.start = AsyncMock()
         hook_receiver.stop = MagicMock(side_effect=self.rec("hook_receiver.stop"))
