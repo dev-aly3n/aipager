@@ -224,7 +224,7 @@ A background agent that ends its turn while an agent it started still
 runs gets a `SubagentStop` too. aipager takes it as a pause, not an end:
 the agent stays running (its row, the job, the status under answers, the
 pinned bar). Its next `SubagentStart`, with the same id, is its resume
-and adds no second row; any tool event under its id counts as a resume
+and adds no second row; any tool call of its own counts as a resume
 too. It ends when it stops with none of its own agents running. If it
 has not resumed two minutes after the last of them ended, it is no
 longer counted as running, but is never shown as done. The running
