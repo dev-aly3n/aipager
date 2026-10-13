@@ -1236,26 +1236,29 @@ def test_updates_check_with_nothing_newer_offers_no_update(node_bin, tmp_path):
 
 
 _IN_PLACE_CONFIRM = "Update aipager? Afterwards, tap Restart now to run the new version."
+_AUTO_CONFIRM = "Update aipager? aipager restarts when no turn is running."
+_STEPS_CONFIRM = ("Update aipager? aipager can't restart itself here, so the steps to restart it "
+                  "show once the update is installed.")
 
 
-@pytest.mark.parametrize("scenario, in_place", [
-    ("updates_confirm_in_place", True),
-    ("updates_confirm_systemd", False),
+@pytest.mark.parametrize("scenario, want", [
+    ("updates_confirm_in_place", _IN_PLACE_CONFIRM),
+    ("updates_confirm_systemd", _AUTO_CONFIRM),
     # A fail-closed plan (KillMode unsafe, MainPID mismatch, no exec target):
-    # the job ends with steps and no Restart now, so none is promised.
-    ("updates_confirm_manual_steps", False),
-], ids=["in-place", "systemd", "manual-steps"])
-def test_the_update_confirm_promises_restart_now_only_in_place(node_bin, tmp_path, scenario,
-                                                               in_place):
+    # the job ends with the steps to restart by hand, never a restart.
+    ("updates_confirm_manual_steps", _STEPS_CONFIRM),
+    # A payload without restart_auto / restart_in_place keeps the old text.
+    ("updates_confirm_legacy", _AUTO_CONFIRM),
+], ids=["in-place", "systemd", "manual-steps", "legacy"])
+def test_the_update_confirm_says_what_the_job_ends_with(node_bin, tmp_path, scenario, want):
     from aipager.miniapp.static import INDEX_HTML
 
     proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, scenario)
     assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
     (line,) = [ln for ln in proc.stdout.splitlines() if ln.startswith("ok: confirm -> ")]
     shown = line[len("ok: confirm -> "):]
-    assert shown.startswith("Update aipager?")
-    assert (shown == _IN_PLACE_CONFIRM) is in_place
-    assert ("Restart now" in shown) is in_place
+    assert shown == want
+    assert ("Restart now" in shown) is (want == _IN_PLACE_CONFIRM)
 
 
 def test_updates_403_hides_block_not_expired(node_bin, tmp_path):

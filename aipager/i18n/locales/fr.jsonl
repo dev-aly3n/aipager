@@ -1293,6 +1293,7 @@
 {"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "Pas revenues : {names}"}
 {"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer} ? aipager redémarre quand aucune tâche n'est en cours."}
 {"k": "ui.update.offer_confirm_manual", "src": "09a771c9", "v": "{offer} ? Ensuite, touchez « Redémarrer maintenant » pour lancer la nouvelle version."}
+{"k": "ui.update.offer_confirm_steps", "src": "74456c70", "v": "{offer} ? aipager ne peut pas redémarrer tout seul ici, donc les étapes pour le redémarrer s'affichent une fois la mise à jour installée."}
 {"k": "ui.update.other", "src": "7ae4a531", "v": "aipager a redémarré mais tourne en {version}."}
 {"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager a redémarré mais tourne en {version}, pas en {expected}."}
 {"k": "ui.update.refused", "src": "651df229", "v": "Rouvrez l'app pour voir le résultat de la mise à jour."}

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The Mini App no longer promises a restart that will not happen.** Before an aipager update in **Settings → Updates**, the confirm said aipager restarts on its own even where it can't (for example a systemd unit with an unsafe KillMode); it now says that the steps to restart it show once the update is installed.
+
 ## [1.2.0] - 2026-10-13
 
 ### Added

@@ -3379,10 +3379,13 @@ APP_JS = r"""
       actions.appendChild(updateButton(offer.label, function () {
         var go = function () { postUpdate("start", { kind: kind }); };
         if (kind === "claude") { go(); return; }
-        // "Tap Restart now" only where the job will offer Restart now.
-        confirmThen(t(check.restart_in_place === true ? "ui.update.offer_confirm_manual"
-                                                      : "ui.update.offer_confirm",
-                      { offer: offer.label }), go);
+        // What the job will end with: Restart now (in place), the steps
+        // to restart by hand (restart_auto false), or its own restart. A
+        // payload without restart_auto keeps the automatic text.
+        var confirmKey = check.restart_in_place === true ? "ui.update.offer_confirm_manual"
+          : check.restart_auto === false ? "ui.update.offer_confirm_steps"
+          : "ui.update.offer_confirm";
+        confirmThen(t(confirmKey, { offer: offer.label }), go);
       }));
       return;
     }

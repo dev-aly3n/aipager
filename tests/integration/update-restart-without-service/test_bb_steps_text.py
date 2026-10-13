@@ -26,6 +26,7 @@ NEW_KEYS = {
     "upd.steps.docker_image", "upd.hooks.newer", "toast.upd.restart_locked",
     "ui.update.restart_confirm", "ui.update.waiting_banner", "ui.update.hooks_banner",
     "ui.update.job.verifying", "ui.update.offer_confirm_manual",
+    "ui.update.offer_confirm_steps",
 }
 
 
