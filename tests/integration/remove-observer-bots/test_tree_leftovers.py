@@ -152,8 +152,9 @@ def test_groups_doc_still_describes_the_read_only_role():
 # ---- CHANGELOG -----------------------------------------------------------------
 
 def _unreleased() -> str:
+    """The release the removal shipped in (it was [Unreleased])."""
     text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    start = text.index("## [Unreleased]")
+    start = text.index("## [1.2.0]")
     end = text.index("\n## [", start + 1)
     return text[start:end]
 

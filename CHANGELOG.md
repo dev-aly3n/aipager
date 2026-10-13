@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-13
+
 ### Added
 - **Restart now finishes an aipager update when aipager runs without a service** (a terminal, tmux, Docker, launchd). After the update, the message offers **🔄 Restart now**: aipager waits until no turn is running, checks the new version loads, stops cleanly and starts the new version in place, in the same terminal or tmux window (and the same container), with the same command. Your sessions keep running, and the message then says `✅ aipager updated A → B`. The Mini App's **Settings → Updates** has the same button.
 - aipager tells the owner once when Claude Code's hooks already run a newer aipager than the daemon (an update installed but not restarted yet), with a **Restart now** button. The notice waits until the turn running in the owner's private chat ends.
