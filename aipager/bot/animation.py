@@ -613,11 +613,16 @@ def _scan_queue_operations(sess: TrackedSession) -> None:
             # UserPromptSubmit either: its still-running note (it stopped
             # with work of its own still going, and resumes later) is read
             # here too, or the agent would show done within the settle.
+            # Logged only when it revives the agent: the note is read from
+            # both the enqueue and the remove line, and an agent already
+            # running (a waiting parent) changes nothing.
             for agent_id in agent_tree.still_running_task_ids(content):
-                if sess.bg_agent_still_running(agent_id, now):
+                was_running = agent_id in sess.bg_agents
+                if (sess.bg_agent_still_running(agent_id, now)
+                        and not was_running):
                     log.info("[%s] agent %s stopped with work of its own "
-                             "still running (taken mid-turn) - still "
-                             "counted as running", sess.label, agent_id)
+                             "still running (taken mid-turn) - counted as "
+                             "running again", sess.label, agent_id)
         if operation == "remove" and reason in (
             "absorbed_mid_turn", "delivered_to_agent",
         ):

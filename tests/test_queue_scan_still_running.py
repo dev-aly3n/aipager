@@ -5,6 +5,7 @@ queue-operation lines (agents-line-waiting design.md S2)."""
 from __future__ import annotations
 
 import json
+import logging
 
 from aipager.bot import animation
 from aipager.state import TrackedSession
@@ -55,6 +56,29 @@ def test_a_mid_turn_still_running_note_revives_the_agent(tmp_path):
     animation._scan_queue_operations(sess)
     assert sess.bg_agent_labels() == ["pipeline-runner"]
     assert rec["ends"] == {}
+
+
+_REVIVED = "counted as running again"
+
+
+def test_a_revival_is_logged_once(tmp_path, caplog):
+    sess, _rec = _stopped_agent(tmp_path)
+    _queue_lines(sess.stream_transcript_path, _NOTE.format(tid=P))
+    with caplog.at_level(logging.INFO, logger="aipager.bot.animation"):
+        animation._scan_queue_operations(sess)
+    assert sum(_REVIVED in m for m in caplog.messages) == 1
+
+
+def test_a_note_for_an_agent_already_running_logs_nothing(tmp_path, caplog):
+    """A waiting parent is still running: the note changes nothing, so the
+    journal does not say it was revived."""
+    sess, _rec = _stopped_agent(tmp_path)
+    sess.bg_agent_started(P, "pipeline-runner", 102.0)
+    _queue_lines(sess.stream_transcript_path, _NOTE.format(tid=P))
+    with caplog.at_level(logging.INFO, logger="aipager.bot.animation"):
+        animation._scan_queue_operations(sess)
+    assert sess.bg_agent_labels() == ["pipeline-runner"]
+    assert not any(_REVIVED in m for m in caplog.messages)
 
 
 def test_a_mid_turn_final_note_revives_nothing(tmp_path):
