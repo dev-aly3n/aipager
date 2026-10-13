@@ -27,6 +27,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
+from aipager import agent_tree as _agent_tree
 from aipager import bg_shells as _bg_shells
 from aipager import perm_modes as _perm_modes
 from aipager._test_guard import check_write
@@ -209,6 +210,10 @@ BG_AGENT_PROSE_CAP: int = 1000
 # resumes it within a second of its child's stop) before it stops counting
 # as running: silence, never "done".
 WAITING_PARENT_RESUME_SECONDS: float = 120.0
+# The running agents a restart keeps (the state file's per-session
+# "agents" record) are restored only from a file saved this recently:
+# agents that ended while the daemon was down longer would read as running.
+AGENTS_RESTORE_MAX_GAP_SECONDS: float = 1800.0
 # `TrackedSession.agent_parents` (child -> the agent that started it) is
 # held to this many links; the oldest goes first.
 AGENT_PARENTS_CAP: int = 200
@@ -1230,9 +1235,12 @@ class TrackedSession:
     # "items" ([{"id", "kind" agent|shell, "label", "started"}], one
     # snapshot), "ids", "ends" (id -> {"outcome" done|finished|stopped|
     # gone, "at"}), "is_rtl", "sent_at", "last_try", "refused", "final",
-    # "attempts", "next_try", "gone_at"}. All transient: monotonic stamps
-    # are meaningless across a restart (never in _PERSIST_FIELDS), so a
-    # restart leaves pending blocks as last shown.
+    # "attempts", "next_try", "gone_at"}. None of these is a persisted
+    # field (monotonic stamps are meaningless across a restart), so a
+    # restart leaves pending blocks as last shown. The running set itself
+    # is kept across a restart, though: save() writes it, with its waiting
+    # flags and links, as the computed "agents" record (wall-clock starts,
+    # see agents_record), and load() puts it back (restore_agents).
     # An entry of an agent that ended its turn while an agent it started
     # still runs also carries "waiting": True, "paused" (monotonic, its
     # pause) and "children_gone_at" (monotonic or None: when the monitor
@@ -1246,6 +1254,13 @@ class TrackedSession:
     # Capped at AGENT_PARENTS_CAP; a link goes when its child or its
     # parent finishes, and all go with the session.
     agent_parents: dict = field(default_factory=dict)
+    # The job's agents (the `active_subagents` table) the previous run
+    # saved, read once by the startup adoption of a still-running card
+    # (lifecycle._adopt_running_card), which puts them back on it, and
+    # emptied by the startup recovery whatever it decides: a job is never
+    # reopened without its card. Entries as agent_tree.validate_agents
+    # gives them. Transient.
+    restored_job_agents: list = field(default_factory=list)
     # Background shells the main loop started (a `Bash` PostToolUse whose
     # `tool_response` carries a `backgroundTaskId`), from launch until
     # their end is seen: a `<task-notification>` with a `<status>`, a
@@ -1546,9 +1561,12 @@ class TrackedSession:
         enough to make a restored entry wholly safe.
 
         ``active_subagents`` is transient and deliberately absent from
-        ``_PERSIST_FIELDS`` (see the note there), so no entry survives a
-        restart today and the ``load()`` call has nothing to restamp; it is
-        wired so the invariant holds on the day the table is persisted.
+        ``_PERSIST_FIELDS`` (see the note there), so the ``load()`` call
+        has nothing to restamp; it is wired so the invariant holds on the
+        day the table is persisted. The job's agents a restart keeps (the
+        "agents" record) come back through ``restored_job_agents`` and the
+        startup adoption instead, each with ``last_seen`` set to the
+        adoption's now and its ``started_at`` placed on this boot's clock.
         """
         for info in self.active_subagents.values():
             if reset or info.get("last_seen") is None:
@@ -1833,6 +1851,7 @@ class TrackedSession:
         self.bg_agents.clear()
         self.bg_agents_recent.clear()
         self.agent_parents.clear()
+        self.restored_job_agents = []
         self.pending_agent_calls = []
         self.bg_shells.clear()
         self.bg_shell_early_ends.clear()
@@ -1975,6 +1994,83 @@ class TrackedSession:
                 if not set(rec["ids"]) & set(dropped)
             ]
         return dropped
+
+    # ── the running agents across a restart ───────────────────────────────
+
+    def agents_record(self, now_mono: float, now_wall: float) -> dict | None:
+        """The state file's ``"agents"`` record: the running set (waiting
+        flags and links included) and the job's table, their monotonic
+        starts as wall-clock times. None when no agent runs."""
+        def wall(started: object) -> float:
+            if isinstance(started, bool) or not isinstance(
+                    started, (int, float)):
+                started = now_mono
+            return min(now_wall, now_wall - (now_mono - float(started)))
+
+        running = [{
+            "id": agent_id, "label": info.get("label", ""),
+            "started_wall": wall(info.get("started")),
+            "waiting": bool(info.get("waiting")),
+            "parent": self.agent_parents.get(agent_id, ""),
+            "desc": info.get("desc", ""), "prose": info.get("prose", ""),
+            "prose_msg": info.get("prose_msg", ""),
+            "tool": info.get("tool", ""), "tool_arg": info.get("tool_arg", ""),
+        } for agent_id, info in self.bg_agents.items()]
+        job = [{
+            "id": agent_id, "type": info.get("type") or "",
+            "started_wall": wall(info.get("started_at")),
+            "tool_count": info.get("tool_count") or 0,
+            "activity": info.get("activity") or "",
+        } for agent_id, info in self.active_subagents.items()]
+        return _agent_tree.encode_agents(running, job, now_wall,
+                                         cap=ACTIVE_SUBAGENTS_CAP)
+
+    def restore_agents(self, raw: object, now_mono: float,
+                       now_wall: float) -> tuple[int, int]:
+        """Put back the running agents a previous run saved
+        (:meth:`agents_record`): the running set with its waiting flags
+        and links, and the job's table into ``restored_job_agents`` for
+        the startup adoption. Returns (running, of which waiting). An
+        unusable record restores nothing (one WARNING) and never raises.
+        Every restored agent gets one honest silence window from *now_mono*
+        (its ``last_seen``), as normalize_subagent_liveness(reset=True)
+        intends for any restored stamp."""
+        rec = _agent_tree.validate_agents(
+            raw, now_mono, now_wall,
+            max_gap=AGENTS_RESTORE_MAX_GAP_SECONDS, cap=ACTIVE_SUBAGENTS_CAP)
+        if rec is None:
+            log.warning("[%s] saved running agents ignored - invalid or "
+                        "too old a record", self.label)
+            return 0, 0
+        waiting = 0
+        restarted = 0
+        for entry in rec["running"]:
+            info = {
+                "label": entry["label"], "last_seen": now_mono,
+                "started": entry["started"], "prose": entry["prose"],
+                "prose_msg": entry["prose_msg"], "tool": entry["tool"],
+                "tool_arg": entry["tool_arg"], "desc": entry["desc"],
+            }
+            if entry["waiting"]:
+                info["waiting"] = True
+                info["paused"] = now_mono
+                info["children_gone_at"] = None
+                waiting += 1
+            restarted += entry["clock_restarted"]
+            self.bg_agents[entry["id"]] = info
+            if entry["parent"]:
+                self.agent_parents[entry["id"]] = entry["parent"]
+        self.restored_job_agents = list(rec["job"])
+        if restarted:
+            log.info("[%s] %d restored agents' clocks restarted (the saved "
+                     "start is older than this boot's clock)", self.label,
+                     restarted)
+        return len(rec["running"]), waiting
+
+    def take_restored_job_agents(self) -> list[dict]:
+        """The saved job agents, read once (the startup adoption)."""
+        restored, self.restored_job_agents = self.restored_job_agents, []
+        return restored
 
     # ── background shells ─────────────────────────────────────────────────
     #
@@ -3615,7 +3711,11 @@ class SessionRegistry:
         # persisted, `load()`'s `normalize_subagent_liveness(..., reset=True)`
         # is what keeps that honest. The same goes for `bg_agents` and
         # `bg_shells` (monotonic stamps): after a restart a shell's wake-up
-        # takes the "no open job" fresh-turn path.
+        # takes the "no open job" fresh-turn path. The running agents are
+        # kept another way: save() writes `bg_agents` and the job's
+        # `active_subagents` as the computed "agents" record with
+        # wall-clock starts (agents_record), and load() places them on
+        # this boot's clock (restore_agents).
     )
     _MAX_MSG_MAP = 2000  # cap _msg_map entries to avoid unbounded growth (doubled — Part 1 roughly doubles density by also tracking user prompts)
 
@@ -3681,6 +3781,18 @@ class SessionRegistry:
             started_wall = sess.card_started_wall(time.monotonic(), time.time())
             if started_wall > 0:
                 d["card_started_wall"] = started_wall
+            # The running agents, waiting ones and their links included,
+            # and the job's table: computed, only while an agent runs, so a
+            # restart brings them back (restore_agents) instead of losing
+            # every agent that is still working.
+            try:
+                agents = sess.agents_record(time.monotonic(), time.time())
+            except Exception:  # noqa: BLE001 - the save itself must go on
+                log.warning("[%s] running agents not saved", sess.label,
+                            exc_info=True)
+                agents = None
+            if agents is not None:
+                d["agents"] = agents
             # Roadmap 8.102: computed from the live prompt, only while the
             # session waits on it, so every way out of the wait drops it
             # from the next save with no clear site of its own.
@@ -4018,8 +4130,17 @@ class SessionRegistry:
             # removes) or, if that boot ran longer than this one, sit in
             # the future and make the row immortal. `active_subagents` is
             # transient (not in _PERSIST_FIELDS), so there is nothing to
-            # restamp today — this is wired for the day it is persisted.
+            # restamp here: the job's saved agents wait in
+            # `restored_job_agents` for the adoption, which stamps them.
             sess.normalize_subagent_liveness(time.monotonic(), reset=True)
+            # The running agents the previous run saved, for a session
+            # whose socket is live only: a GONE one runs none.
+            if "agents" in sd and sess.status == Status.UNKNOWN:
+                restored, waiting = sess.restore_agents(
+                    sd.get("agents"), time.monotonic(), time.time())
+                if restored or sess.restored_job_agents:
+                    log.info("[%s] restored %d running agents (%d waiting)",
+                             sess.label, restored, waiting)
             self._sessions[name] = sess
             log.info("Restored session: %s [%s] (msg_id=%s, trigger=%s, queue=%d)",
                      name, sess.label, sess.last_msg_id, sess.trigger_msg_id,

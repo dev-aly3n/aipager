@@ -1,13 +1,16 @@
-"""Which background agent started which.
+"""Which background agent started which, and what of the running agents a
+restart keeps.
 
-Pure functions over Claude Code's hook payloads: nothing here sends,
-renders, reads a file or reads a clock. Standard library only: ``state.py`` imports
+Pure functions over Claude Code's hook payloads and aipager's own state
+file record: nothing here sends, renders, reads a file or reads a clock
+(the clocks are passed in). Standard library only: ``state.py`` imports
 this module, so it is in the ``aipager-hook`` import closure, which must
 never load ``aipager.i18n`` (tests/test_i18n_hook_isolation.py).
 """
 
 from __future__ import annotations
 
+import math
 import re
 
 #: The shape of a Claude Code agent id (and of a task id in a
@@ -80,3 +83,179 @@ def launched_child(msg: object) -> str:
     if not _is_agent_id(child) or child == parent:
         return ""
     return child
+
+
+# ── the state file record ───────────────────────────────────────────────────
+
+AGENTS_RECORD_VERSION = 1
+#: How many entries each list of the record holds at most (the state's
+#: ACTIVE_SUBAGENTS_CAP, passed in by the caller).
+DEFAULT_RECORD_CAP = 100
+
+# String caps, in characters.
+_CAPS = {
+    "label": 80, "type": 80, "desc": 200, "tool_arg": 200, "activity": 200,
+    "prose": 300, "prose_msg": 100, "tool": 80,
+}
+_RUNNING_STRINGS = ("desc", "prose", "prose_msg", "tool", "tool_arg")
+
+
+def _cap(key: str, value: str) -> str:
+    return value[:_CAPS[key]]
+
+
+def encode_agents(running: list[dict], job: list[dict], now_wall: float, *,
+                  cap: int = DEFAULT_RECORD_CAP) -> dict | None:
+    """The ``"agents"`` record the state file keeps for a session, or None
+    when there is nothing to keep. Each entry already carries its
+    ``started_wall``; strings are capped here and each list holds at most
+    *cap* entries (the first ones)."""
+    if not running and not job:
+        return None
+    out_running = []
+    for entry in running[:cap]:
+        out_running.append({
+            "id": entry["id"],
+            "label": _cap("label", entry.get("label") or ""),
+            "started_wall": float(entry["started_wall"]),
+            "waiting": bool(entry.get("waiting")),
+            "parent": entry.get("parent") or "",
+            **{k: _cap(k, entry.get(k) or "") for k in _RUNNING_STRINGS},
+        })
+    out_job = []
+    for entry in job[:cap]:
+        out_job.append({
+            "id": entry["id"],
+            "type": _cap("type", entry.get("type") or ""),
+            "started_wall": float(entry["started_wall"]),
+            "tool_count": int(entry.get("tool_count") or 0),
+            "activity": _cap("activity", entry.get("activity") or ""),
+        })
+    return {"v": AGENTS_RECORD_VERSION, "saved_wall": float(now_wall),
+            "running": out_running, "job": out_job}
+
+
+def _wall(value: object, now_wall: float) -> float | None:
+    """A usable wall-clock stamp: a finite number, not in the future."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    value = float(value)
+    if not math.isfinite(value) or value <= 0.0 or value > now_wall:
+        return None
+    return value
+
+
+def _place(started_wall: float, now_mono: float,
+           now_wall: float) -> tuple[float, bool]:
+    """This boot's monotonic stamp for a wall-clock start, and whether the
+    clock had to restart from *now_mono* (the card's own guard,
+    lifecycle._restore_card_clock): on a boot clock younger than the
+    agent's age a stamp in the past would be negative."""
+    elapsed = now_wall - started_wall
+    if 0.0 <= elapsed < now_mono:
+        return now_mono - elapsed, False
+    return now_mono, True
+
+
+def _strings(raw: dict, keys: tuple[str, ...]) -> dict | None:
+    out = {}
+    for key in keys:
+        value = raw.get(key, "")
+        if not isinstance(value, str):
+            return None
+        out[key] = _cap(key, value)
+    return out
+
+
+def _running_entry(raw: object, now_mono: float,
+                   now_wall: float) -> dict | None:
+    if not isinstance(raw, dict) or not _is_agent_id(raw.get("id")):
+        return None
+    label = raw.get("label")
+    if not isinstance(label, str) or not label.strip():
+        return None
+    started_wall = _wall(raw.get("started_wall"), now_wall)
+    if started_wall is None:
+        return None
+    waiting = raw.get("waiting", False)
+    if not isinstance(waiting, bool):
+        return None
+    parent = raw.get("parent", "")
+    if not isinstance(parent, str) or (
+            parent and (not _is_agent_id(parent) or parent == raw["id"])):
+        return None
+    strings = _strings(raw, _RUNNING_STRINGS)
+    if strings is None:
+        return None
+    started, restarted = _place(started_wall, now_mono, now_wall)
+    return {"id": raw["id"], "label": _cap("label", label.strip()),
+            "started": started, "clock_restarted": restarted,
+            "waiting": waiting, "parent": parent, **strings}
+
+
+def _job_entry(raw: object, now_mono: float, now_wall: float) -> dict | None:
+    if not isinstance(raw, dict) or not _is_agent_id(raw.get("id")):
+        return None
+    agent_type = raw.get("type")
+    if not isinstance(agent_type, str) or not agent_type.strip():
+        return None
+    started_wall = _wall(raw.get("started_wall"), now_wall)
+    if started_wall is None:
+        return None
+    tool_count = raw.get("tool_count", 0)
+    if (isinstance(tool_count, bool) or not isinstance(tool_count, int)
+            or tool_count < 0):
+        return None
+    activity = raw.get("activity", "")
+    if not isinstance(activity, str):
+        return None
+    started, restarted = _place(started_wall, now_mono, now_wall)
+    return {"id": raw["id"], "type": _cap("type", agent_type.strip()),
+            "started": started, "clock_restarted": restarted,
+            "tool_count": tool_count,
+            "activity": _cap("activity", activity)}
+
+
+def _entries(raw: object, build, now_mono: float, now_wall: float,
+             cap: int) -> list[dict] | None:
+    if not isinstance(raw, list):
+        return None
+    out: list[dict] = []
+    seen: set[str] = set()
+    for item in raw:
+        if len(out) >= cap:
+            break
+        entry = build(item, now_mono, now_wall)
+        if entry is None or entry["id"] in seen:
+            continue
+        seen.add(entry["id"])
+        out.append(entry)
+    return out
+
+
+def validate_agents(raw: object, now_mono: float, now_wall: float, *,
+                    max_gap: float, cap: int = DEFAULT_RECORD_CAP,
+                    ) -> dict | None:
+    """The saved ``"agents"`` record, checked and placed on this boot's
+    monotonic clock: ``{"running": [...], "job": [...]}``, each entry with
+    a monotonic ``started`` and a ``clock_restarted`` flag. None when the
+    record as a whole is unusable: not a dict, another version, lists of
+    the wrong type, or a ``saved_wall`` that is not within the last
+    *max_gap* seconds (agents that ended while the daemon was down that
+    long would otherwise read as running). A bad entry is dropped on its
+    own; a repeated id keeps its first entry. Never raises."""
+    try:
+        if not isinstance(raw, dict) or raw.get("v") != AGENTS_RECORD_VERSION:
+            return None
+        saved_wall = _wall(raw.get("saved_wall"), now_wall)
+        if saved_wall is None or not now_wall - saved_wall < max_gap:
+            return None
+        running = _entries(raw.get("running", []), _running_entry,
+                           now_mono, now_wall, cap)
+        job = _entries(raw.get("job", []), _job_entry, now_mono, now_wall,
+                       cap)
+        if running is None or job is None:
+            return None
+        return {"running": running, "job": job}
+    except Exception:  # noqa: BLE001 - a bad record never stops the start
+        return None

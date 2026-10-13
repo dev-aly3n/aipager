@@ -859,6 +859,10 @@ class LifecycleMixin:
             # False here; kept identical to that path on purpose.)
             self.registry.transition(name, Status.BUSY,
                                      preserve_job_state=sess.job_work_running())
+        # The job's agents the previous run saved go back on the card AFTER
+        # that transition, which therefore still sees no job and starts a
+        # turn of its own exactly as before (its turn_seq advances).
+        self._restore_job_agents(sess, now_mono)
         if sess.status is Status.BUSY:
             # The running turn's own card (roadmap 8.57 R1): a message sent
             # meanwhile asks for "the running turn's card" and must find
@@ -875,6 +879,41 @@ class LifecycleMixin:
         log.info("[%s] busy card %d adopted — the turn looks still running; "
                  "working again, %s", sess.label, sess.busy_msg_id, clock)
         self._resume_animation_if_dead(sess, reason="card adopted at startup")
+
+    def _restore_job_agents(self, sess: TrackedSession,
+                            now_mono: float) -> None:
+        """Put the job's agents the previous run saved back into the job's
+        table of an adopted BUSY card: each a running 🤖 row on it, its
+        clock going on from its real start, and counted in its agents
+        rollup. Their later SubagentStop settles those rows with their
+        real elapsed time; a waiting agent's resume adds no second row."""
+        restored = sess.take_restored_job_agents()
+        if not restored or sess.status is not Status.BUSY:
+            return
+        added = 0
+        for entry in restored:
+            agent_id = entry["id"]
+            if agent_id in sess.active_subagents:
+                continue
+            info = {
+                "type": entry["type"], "started_at": entry["started"],
+                "last_seen": now_mono, "history_idx": None,
+                "activity": entry["activity"],
+                "tool_count": entry["tool_count"], "last_tool_at": 0.0,
+                "tools": [],
+            }
+            sess.add_subagent(agent_id, info)
+            if agent_id not in sess.active_subagents:
+                continue  # evicted at the cap
+            info["history_idx"] = sess.record_tool(
+                f"\U0001f916 {entry['type']}", False)
+            sess.subagent_count_this_turn += 1
+            added += 1
+        if added:
+            sess.stream_dirty = True
+            self.registry.mark_dirty()
+            log.info("[%s] adopted card: %d agents of the job back on it",
+                     sess.label, added)
 
     @staticmethod
     def _restore_card_clock(sess: TrackedSession, now_mono: float) -> str:
@@ -1078,6 +1117,20 @@ class LifecycleMixin:
         return f"separate msg {rec['msg_id']}"
 
     async def recover_sessions(self) -> None:
+        """Clean up orphaned busy messages from a previous daemon lifecycle
+        (:meth:`_recover_sessions`). Whatever it decides, and however it
+        returns, no session keeps the job's agents the previous run saved
+        afterwards: only an adopted card takes them, and a session that was
+        not adopted (an interim, a closed card, a restored prompt, a GONE
+        one) never reopens a job without its card. Its running agents (the
+        answer's block, the pin) stay."""
+        try:
+            await self._recover_sessions()
+        finally:
+            for sess in self.registry.all_sessions().values():
+                sess.restored_job_agents = []
+
+    async def _recover_sessions(self) -> None:
         """Clean up orphaned busy messages from a previous daemon lifecycle.
 
         For every session with a persisted ``busy_msg_id`` left over from
