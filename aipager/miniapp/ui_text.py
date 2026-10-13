@@ -685,6 +685,12 @@ UPDATE_OFFER_CONFIRM_MANUAL = Msg("ui.update.offer_confirm_manual",
                                   eg={"offer": "Update aipager"},
                                   note="offer is the update button's text; Restart now is a "
                                        "button")
+UPDATE_OFFER_CONFIRM_STEPS = Msg("ui.update.offer_confirm_steps",
+                                 "{offer}? aipager can't restart itself here, so the steps to "
+                                 "restart it show once the update is installed.",
+                                 eg={"offer": "Update aipager"},
+                                 note="offer is the update button's text; the steps to restart "
+                                      "aipager by hand follow the finished update")
 
 # The new-session form.
 NEW_TITLE = Msg("ui.new.title", "New session", note="Mini App: the form's heading")

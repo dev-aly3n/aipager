@@ -1293,6 +1293,7 @@
 {"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "Chưa quay lại: {names}"}
 {"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}? aipager sẽ khởi động lại khi không còn việc nào đang chạy."}
 {"k": "ui.update.offer_confirm_manual", "src": "09a771c9", "v": "{offer}? Sau đó, chạm “Khởi động lại ngay” để chạy phiên bản mới."}
+{"k": "ui.update.offer_confirm_steps", "src": "74456c70", "v": "{offer}? aipager không tự khởi động lại được ở đây, nên các bước để khởi động lại sẽ hiện ra khi bản cập nhật được cài xong."}
 {"k": "ui.update.other", "src": "7ae4a531", "v": "aipager đã khởi động lại nhưng đang chạy {version}."}
 {"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager đã khởi động lại nhưng đang chạy {version}, không phải {expected}."}
 {"k": "ui.update.refused", "src": "651df229", "v": "Mở lại ứng dụng để xem kết quả cập nhật."}

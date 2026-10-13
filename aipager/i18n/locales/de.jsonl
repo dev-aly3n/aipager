@@ -1293,6 +1293,7 @@
 {"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "Nicht zurückgekommen: {names}"}
 {"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}? aipager startet neu, wenn keine Aufgabe läuft."}
 {"k": "ui.update.offer_confirm_manual", "src": "09a771c9", "v": "{offer}? Tippe danach auf „Jetzt neu starten“, um die neue Version zu starten."}
+{"k": "ui.update.offer_confirm_steps", "src": "74456c70", "v": "{offer}? aipager kann sich hier nicht selbst neu starten, deshalb siehst du die Schritte zum Neustart, sobald das Update installiert ist."}
 {"k": "ui.update.other", "src": "7ae4a531", "v": "aipager wurde neu gestartet, läuft aber mit {version}."}
 {"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager wurde neu gestartet, läuft aber mit {version} statt {expected}."}
 {"k": "ui.update.refused", "src": "651df229", "v": "Öffne die App neu, um das Ergebnis des Updates zu sehen."}

@@ -1293,6 +1293,7 @@
 {"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "다시 연결되지 않음: {names}"}
 {"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}? 진행 중인 작업이 없을 때 aipager가 재시작해요."}
 {"k": "ui.update.offer_confirm_manual", "src": "09a771c9", "v": "{offer}? 그다음 “지금 재시작”을 눌러 새 버전을 실행하세요."}
+{"k": "ui.update.offer_confirm_steps", "src": "74456c70", "v": "{offer}? 여기서는 aipager가 스스로 재시작할 수 없어서, 업데이트가 설치되면 직접 재시작하는 방법이 표시돼요."}
 {"k": "ui.update.other", "src": "7ae4a531", "v": "aipager가 재시작했지만 {version} 버전으로 실행 중이에요."}
 {"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager가 재시작했지만 {expected}가 아니라 {version} 버전으로 실행 중이에요."}
 {"k": "ui.update.refused", "src": "651df229", "v": "업데이트 결과를 보려면 앱을 다시 여세요."}

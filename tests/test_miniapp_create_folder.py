@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from aipager.miniapp.phrase import Phrase
+
 FORM_HARNESS = Path(__file__).parent / "js" / "miniapp_newsession.js"
 
 #: Names the page and the server must judge alike (server: launch.validate_new_dir_name).
@@ -26,7 +28,12 @@ NAMES = ["my-project", "a", "A1.b_c-d", "v2.0", "a..b", "  padded  ", "", "   ",
          "x" * 64, "x" * 65, "a/b", "..", ".", ".hidden", "-dash", "_under", "a b",
          "naïve", "پروژه", "名前", "a\\b", "tab\there", "semi;colon",
          # Pasted edges where JavaScript's trim() and Python's strip() differ.
-         "x\x1c", "x\x85", "\ufeffx", "\u3000x\u3000", "x\u2028", "\xa0x"]
+         "x\x1c", "x\x85", "\ufeffx", "\u3000x\u3000", "x\u2028", "\xa0x",
+         # Astral characters: one code point (Python's len()), two UTF-16
+         # units (JavaScript's .length), so the reason differs if the page
+         # counts units.
+         "😀", "😀" * 33, "😀" * 64, "😀" * 65, "𝒳" * 32, "𝒳" * 33, "a" + "𝒳" * 63,
+         "x" * 63 + "😀", "x" * 64 + "😀"]
 
 
 @pytest.fixture(scope="module")
@@ -47,8 +54,15 @@ def _reveal_markup() -> str:
 def _drive(node_bin, tmp_path, html, names=()):
     page = tmp_path / "folder.html"
     page.write_text(html, encoding="utf-8")
-    from aipager.miniapp.launch import validate_new_dir_name
-    table = [[n, validate_new_dir_name(n)[1] == ""] for n in names]
+    from aipager.miniapp import launch
+    table = []
+    for n in names:
+        reason = launch.validate_new_dir_name(n)[1]
+        # The page words these two exactly as the server does; the rest
+        # (empty, a NUL) the page does not word.
+        shown = (str(reason) if reason is launch._FOLDER_PATTERN
+                 or isinstance(reason, Phrase) else None)
+        table.append([n, reason == "", shown])
     env = dict(os.environ, AIPAGER_TEST_FOLDER_NAMES=json.dumps(table))
     return subprocess.run([node_bin, str(FORM_HARNESS), str(page), "folder"],
                           capture_output=True, text=True, timeout=60, env=env)
@@ -128,8 +142,8 @@ def test_create_folder_runs_once_and_handles_every_answer(node_bin, tmp_path):
 
 
 @pytest.mark.parametrize("old, new, what", [
-    ("if (newState.folderBusy || !folder || !newState.cwd || folderNameError(folder)) {",
-     "if (!folder || !newState.cwd || folderNameError(folder)) {",
+    ("if (newState.folderBusy || !folder || !newState.cwd || folderNameError(folder) ||",
+     "if (!folder || !newState.cwd || folderNameError(folder) ||",
      "the single-flight guard"),
     ("return res.json().then(function (data) { return data; }, function () { return null; })",
      "return res.json().then(function (data) { return data; })",
@@ -150,8 +164,30 @@ def test_create_folder_runs_once_and_handles_every_answer(node_bin, tmp_path):
      "the busy marker for screen readers"),
     ("var trimmed = folderNameTrim(value);", "var trimmed = (value || \"\").trim();",
      "Python's trim"),
+    ("folderNameError(folder) ||\n        !(newOptions && newOptions.can_create)) {",
+     "folderNameError(folder)) {",
+     "Enter's can-create gate"),
+    ('    } else if (!canCreate) {\n'
+     '      folderNote.textContent = t("ui.new.folder_forbidden");\n'
+     '      folderNote.className = "reveal-note is-live";\n', "    ",
+     "the forbidden button's reason"),
+    ('document.getElementById("new-folder-name").readOnly = newState.folderBusy;', "",
+     "the read-only name while busy"),
+    ("if (folderNameTrim(nameEl.value) === folder) { nameEl.value = \"\"; }",
+     "nameEl.value = \"\";",
+     "keeping a name typed meanwhile"),
+    ("if (folderNameTrim(nameEl.value) === folder) { nameEl.value = \"\"; }", "",
+     "clearing the sent name"),
+    ('setAttr(document.getElementById("daemon-line"), "dir", "auto");\n    paintFolderBusy();',
+     'setAttr(document.getElementById("daemon-line"), "dir", "auto");',
+     "the busy label across a language switch"),
+    ("if (Array.from(trimmed).length > FOLDER_NAME_MAX) {",
+     "if (trimmed.length > FOLDER_NAME_MAX) {",
+     "counting code points"),
 ], ids=["single-flight", "not-json", "rate-limit", "busy-disabled", "busy-label", "name-check",
-        "ok-without-path", "aria-busy", "python-trim"])
+        "ok-without-path", "aria-busy", "python-trim", "enter-can-create", "forbidden-reason",
+        "read-only", "keep-typed", "clear-sent", "language-switch",
+        "code-points"])
 def test_the_harness_catches_a_broken_create_folder(node_bin, tmp_path, old, new, what):
     """Guard the guards: each piece of the robust flow, removed, fails the
     scenario instead of passing it."""

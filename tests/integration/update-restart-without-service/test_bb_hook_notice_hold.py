@@ -570,8 +570,11 @@ def test_confirm_without_in_place_promises_no_restart_now(tmp_path, scenario):
     assert "Restart now" not in _shown_confirm(tmp_path, scenario)
 
 
-@pytest.mark.parametrize("scenario", ["updates_confirm_systemd", "updates_confirm_manual_steps"],
-                         ids=["systemd", "manual-steps"])
-def test_confirm_without_in_place_is_the_plain_confirm(tmp_path, scenario):
-    assert _shown_confirm(tmp_path, scenario) == _english(
+def test_confirm_with_an_automatic_restart_is_the_plain_confirm(tmp_path):
+    assert _shown_confirm(tmp_path, "updates_confirm_systemd") == _english(
         "ui.update.offer_confirm").format(offer="Update aipager")
+
+
+def test_confirm_without_any_restart_announces_the_steps(tmp_path):
+    assert _shown_confirm(tmp_path, "updates_confirm_manual_steps") == _english(
+        "ui.update.offer_confirm_steps").format(offer="Update aipager")

@@ -3379,10 +3379,13 @@ APP_JS = r"""
       actions.appendChild(updateButton(offer.label, function () {
         var go = function () { postUpdate("start", { kind: kind }); };
         if (kind === "claude") { go(); return; }
-        // "Tap Restart now" only where the job will offer Restart now.
-        confirmThen(t(check.restart_in_place === true ? "ui.update.offer_confirm_manual"
-                                                      : "ui.update.offer_confirm",
-                      { offer: offer.label }), go);
+        // What the job will end with: Restart now (in place), the steps
+        // to restart by hand (restart_auto false), or its own restart. A
+        // payload without restart_auto keeps the automatic text.
+        var confirmKey = check.restart_in_place === true ? "ui.update.offer_confirm_manual"
+          : check.restart_auto === false ? "ui.update.offer_confirm_steps"
+          : "ui.update.offer_confirm";
+        confirmThen(t(confirmKey, { offer: offer.label }), go);
       }));
       return;
     }
@@ -3724,16 +3727,18 @@ APP_JS = r"""
     var folderBtn = document.getElementById("new-folder-create");
     folderBtn.disabled = !folderNameTrim(folderRaw) || !!folderInvalid || !newState.cwd ||
       !canCreate || newState.folderBusy;
-    // The label says what is happening: one tap, then "Creating…" until
-    // the server answers.
-    folderBtn.textContent = t(newState.folderBusy ? "ui.new.creating" : "ui.new.create_folder");
-    folderBtn.setAttribute("aria-busy", newState.folderBusy ? "true" : "false");
+    paintFolderBusy();
+    // Read only, not disabled (keeps focus), while busy.
+    document.getElementById("new-folder-name").readOnly = newState.folderBusy;
 
     // "Default" has no path, so it cannot be a parent: say so rather
     // than open a reveal onto a dead button.
     var folderNote = document.getElementById("new-folder-note");
     if (!newState.cwd) {
       folderNote.textContent = t("ui.new.pick_dir_first");
+      folderNote.className = "reveal-note is-live";
+    } else if (!canCreate) {
+      folderNote.textContent = t("ui.new.folder_forbidden");
       folderNote.className = "reveal-note is-live";
     } else if (newState.folderError) {
       folderNote.textContent = newState.folderError;
@@ -3764,6 +3769,13 @@ APP_JS = r"""
     create.disabled = submitting || !name || !canCreate ||
       (isCustomModel && (!typed || modelBad));
     syncMainButton();
+  }
+
+  // "Creating…" until the answer; applyStatic() repaints it too.
+  function paintFolderBusy() {
+    var folderBtn = document.getElementById("new-folder-create");
+    folderBtn.textContent = t(newState.folderBusy ? "ui.new.creating" : "ui.new.create_folder");
+    folderBtn.setAttribute("aria-busy", newState.folderBusy ? "true" : "false");
   }
 
   function openNewSession() {
@@ -3815,7 +3827,8 @@ APP_JS = r"""
   function folderNameError(value) {
     var trimmed = folderNameTrim(value);
     if (!trimmed) { return ""; }
-    if (trimmed.length > FOLDER_NAME_MAX) {
+    // Code points, as Python's len().
+    if (Array.from(trimmed).length > FOLDER_NAME_MAX) {
       return t("ui.new.folder_too_long", { max: FOLDER_NAME_MAX });
     }
     if (!FOLDER_NAME_RE.test(trimmed)) { return t("ui.new.folder_pattern"); }
@@ -3829,7 +3842,9 @@ APP_JS = r"""
   function createFolder() {
     var nameEl = document.getElementById("new-folder-name");
     var folder = folderNameTrim(nameEl.value);
-    if (newState.folderBusy || !folder || !newState.cwd || folderNameError(folder)) {
+    // The button's gate.
+    if (newState.folderBusy || !folder || !newState.cwd || folderNameError(folder) ||
+        !(newOptions && newOptions.can_create)) {
       return;
     }
     newState.folderError = "";
@@ -3864,7 +3879,8 @@ APP_JS = r"""
       newState.cwd = path;
       newState.folderOpen = false;
       newState.folderError = "";
-      nameEl.value = "";
+      // Only the sent name.
+      if (folderNameTrim(nameEl.value) === folder) { nameEl.value = ""; }
       showNotice(t(r.data.existed ? "ui.new.folder_existed" : "ui.new.folder_created"), "ok");
       renderNewForm();
     }).catch(function () {
@@ -4211,6 +4227,7 @@ APP_JS = r"""
     // "Loading..." in the page's language until the grid writes the
     // version line (and its dir) there.
     setAttr(document.getElementById("daemon-line"), "dir", "auto");
+    paintFolderBusy();
   }
 
   // The last language other than English, kept on this phone so a later

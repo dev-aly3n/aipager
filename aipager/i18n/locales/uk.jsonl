@@ -1293,6 +1293,7 @@
 {"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "Не повернулися: {names}"}
 {"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}? aipager перезапуститься, коли не буде жодного завдання, що триває."}
 {"k": "ui.update.offer_confirm_manual", "src": "09a771c9", "v": "{offer}? Потім натисни «Перезапустити зараз», щоб запустити нову версію."}
+{"k": "ui.update.offer_confirm_steps", "src": "74456c70", "v": "{offer}? Тут aipager не може сам перезапуститися, тому кроки для перезапуску з'являться, коли оновлення встановиться."}
 {"k": "ui.update.other", "src": "7ae4a531", "v": "aipager перезапустився, але зараз працює {version}."}
 {"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager перезапустився, але зараз працює {version}, а не {expected}."}
 {"k": "ui.update.refused", "src": "651df229", "v": "Відкрий застосунок знову, щоб побачити результат оновлення."}

@@ -1293,6 +1293,7 @@
 {"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "No volvieron: {names}"}
 {"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "¿{offer}? aipager se reinicia cuando no haya ninguna tarea en curso."}
 {"k": "ui.update.offer_confirm_manual", "src": "09a771c9", "v": "¿{offer}? Después, toca «Reiniciar ahora» para usar la versión nueva."}
+{"k": "ui.update.offer_confirm_steps", "src": "74456c70", "v": "¿{offer}? aipager no puede reiniciarse solo aquí, así que los pasos para reiniciarlo aparecen cuando se instale la actualización."}
 {"k": "ui.update.other", "src": "7ae4a531", "v": "aipager se reinició, pero está ejecutando {version}."}
 {"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager se reinició, pero está ejecutando {version}, no {expected}."}
 {"k": "ui.update.refused", "src": "651df229", "v": "Vuelve a abrir la app para ver el resultado de la actualización."}

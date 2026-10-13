@@ -506,11 +506,13 @@ if (SCENARIO.indexOf("updates_") === 0) {
             notes: [], source: "pipx, from PyPI" },
   };
   // The update confirm: in place (Restart now follows), systemd (it
-  // restarts by itself) and neither (a fail-closed plan: steps follow).
+  // restarts by itself), neither (a fail-closed plan: steps follow) and
+  // a payload from before either field existed.
   const CONFIRM_PLAN = {
     updates_confirm_in_place: { restart_auto: false, restart_in_place: true },
     updates_confirm_systemd: { restart_auto: true, restart_in_place: false },
     updates_confirm_manual_steps: { restart_auto: false, restart_in_place: false },
+    updates_confirm_legacy: {},
   }[SCENARIO];
   if (CONFIRM_PLAN) Object.assign(CHECKS.aipager, CONFIRM_PLAN);
   const CHECK = (CONFIRM_PLAN ? "aipager" : null) || { updates_check_aipager: "aipager",
@@ -2253,6 +2255,7 @@ const DRIVERS = {
   updates_confirm_in_place: driveUpdatesConfirm,
   updates_confirm_systemd: driveUpdatesConfirm,
   updates_confirm_manual_steps: driveUpdatesConfirm,
+  updates_confirm_legacy: driveUpdatesConfirm,
   updates_forbidden: driveUpdatesForbidden,
   model_switch: driveModelSwitch,
   model_unconfirmed: driveModelSwitch,
