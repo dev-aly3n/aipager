@@ -584,11 +584,18 @@ again, a daemon restart included. A job whose agents report back more
 than once produces one answer per report, each sent as it is written.
 
 An agent that stopped while background work of its own is still running
-counts as working, since it resumes later - aipager learns this from
-Claude's `<task-notification>` for it, when that notification starts a
-turn. A row waits a few seconds before it shows done, so that note can
-take it back first. The status is added in every layout, in the chat's
-language.
+counts as working, since it resumes later. An agent that started an
+agent of its own and then stopped to wait for it is recognised from that
+start (its own call that launched the other agent): it stays on the
+status as working, and keeps the job open, until it stops with none of
+its own agents running. If it has not resumed two minutes after the last
+of them ended, it is no longer counted as running and the status is left
+as last shown. Claude's `<task-notification>` for an agent says the same
+in a note; aipager reads it when the notification starts a turn, and
+also when Claude takes it in the middle of a running turn while the busy
+card is up. A row waits a few seconds before it shows done, so that note
+can take it back first. The status is added in every layout, in the
+chat's language.
 
 **How it is kept up to date.** aipager edits the answer silently, only
 when what the status shows has changed, and at most once every 30
@@ -613,13 +620,15 @@ cannot know the work finished:
   (`AIPAGER_BG_SHELL_MAX_TRACK`) with no end seen is no longer counted;
 - a daemon restart forgets which answers are pending.
 
+A daemon restart keeps the agents that are still running, those waiting
+for their own agents included: an answer sent after the restart lists
+them, a busy card the restart takes over shows them again, and their
+later ends are matched as usual. Agents saved more than 30 minutes before
+the restart are not brought back.
+
 An answer held back by a flood mute, or delivered as plain text after
 the formatted send failed, goes out without the status, as does a turn
-that ends with no answer text (only a header). If Claude takes
-an agent's notification in the middle of a running turn, aipager does
-not see it; an agent that stopped with work still running can then be
-marked done too early, and the pinned bar shows it running again when it
-resumes.
+that ends with no answer text (only a header).
 
 ### End confirmation
 

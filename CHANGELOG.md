@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **The Mini App no longer promises a restart that will not happen.** Before an aipager update in **Settings → Updates**, the confirm said aipager restarts on its own even where it can't (for example a systemd unit with an unsafe KillMode); it now says that the steps to restart it show once the update is installed.
+- **An agent waiting for an agent it started stays on the agents line.** When a background agent starts an agent of its own and then stops to wait for it, aipager used to count it as finished at once: the status under the answer showed one agent too few and the job could close early. It now stays there as working, and keeps the job open, until it has really finished. aipager also reads Claude's note that an agent will resume when Claude takes it in the middle of a running turn.
+- **Running agents are remembered across a daemon restart.** After a restart (an update, for example) the agents still running were forgotten: answers sent afterwards listed none of them and their ends showed `0:00`. aipager now keeps them, those waiting for their own agents included: a busy card it takes over after the restart shows them again, the next answer lists them, and their ends show their real time.
 - **The Mini App's Create folder holds still while it works.** The name field can't be changed while a folder is being created, so nothing you type is lost when it finishes; where you may not create folders, the button says so and Enter no longer sends the name anyway; and the button keeps reading "Creating…" if you switch the app's language meanwhile.
 
 ## [1.2.0] - 2026-10-13

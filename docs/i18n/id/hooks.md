@@ -77,6 +77,8 @@ Sebuah alat selesai atau gagal. Barisnya di kartu kerja membeku (error ditandai 
 
 Pemanggilan `Bash` yang dipindahkan Claude Code ke latar belakang melaporkan `backgroundTaskId`. aipager lalu melacaknya sebagai perintah latar belakang (hanya perintah loop utama: pemanggilan dengan `agent_id` milik subagen itu) sampai ia melihat akhirnya: `<task-notification>` dengan `<status>` (di pesan yang membangunkan Claude, atau di riwayat percakapan kalau datang di tengah tugas), `TaskStop` atau `KillShell` dengan ID-nya, sesi berakhir, atau dua jam (`AIPAGER_BG_SHELL_MAX_TRACK`, dalam detik, bawaannya 7200). Tentang barisnya di kartu, lihat [perintah](commands.md#idle-responses).
 
+Pemanggilan `Agent` (atau `Task`) di dalam sebuah subagen (event-nya membawa `agent_id`) melaporkan ID agen yang dimulainya. aipager mengingat agen mana yang memulai agen mana, sehingga bisa membedakan agen yang berhenti untuk menunggu agennya sendiri dari agen yang sudah selesai (lihat `SubagentStart` / `SubagentStop` di bawah).
+
 ### <a id="notification"></a>`Notification`
 
 aipager membaca `notification_type` dari Claude Code:
@@ -96,6 +98,8 @@ Tugas berakhir dengan error API. Sesi menjadi siap dan jawaban, kalau ada, dikir
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
 Sebuah subagen mulai atau selesai. Masing-masing punya baris sendiri di kartu kerja, `🤖 <type> · <activity> · <elapsed>`, dengan pemanggilan alatnya sendiri dilipat di bawahnya, dan saat berhenti membeku menjadi `✅ 🤖 <type> · N alat · <elapsed>`. Subagen yang `SubagentStop`-nya tidak pernah datang dihapus setelah diam selama 30 menit (`AIPAGER_SUBAGENT_SILENCE`, dalam detik; tidak ada event jenis apa pun dengan ID-nya). Agen yang sedang bekerja mengirim event alat setiap beberapa detik, jadi yang dihapus dengan cara ini hanya agen yang berhentinya terlewat (mulai ulang, datagram yang hilang); satu pemanggilan alat yang berjalan 30 menit tanpa satu pun event di bawah ID agen itu juga menghapusnya. `AIPAGER_SUBAGENT_TTL` diterima sebagai nama lama untuk pengaturan yang sama. Event `SubagentStop` tanpa tipe dan dengan ID tak dikenal sering datang dan diabaikan.
+
+Agen latar belakang yang berhenti selagi agen yang dimulainya masih berjalan juga mendapat `SubagentStop`. aipager menganggapnya jeda, bukan akhir: agen itu tetap berjalan (barisnya, pekerjaan, status di bawah jawaban, bilah yang disematkan). `SubagentStart` berikutnya dengan ID yang sama adalah lanjutannya dan tidak menambah baris kedua; event alat apa pun dengan ID-nya juga dihitung sebagai lanjutan. Ia selesai saat berhenti tanpa ada lagi agennya sendiri yang berjalan. Kalau ia belum melanjutkan dua menit setelah yang terakhir dari mereka selesai, ia tidak lagi dihitung berjalan, tetapi tidak pernah ditampilkan selesai. Agen yang berjalan, termasuk yang menunggu, tetap disimpan saat aipager dimulai ulang.
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 

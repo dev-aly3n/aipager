@@ -77,6 +77,8 @@ Bir araç bitti ya da başarısız oldu. Çalışma kartındaki satırı donar (
 
 Claude Code'un arka plana taşıdığı bir `Bash` çağrısı bir `backgroundTaskId` bildirir. aipager onu, sonunu görene kadar bir arka plan komutu olarak izler (yalnızca ana döngünün komutları: `agent_id` taşıyan bir çağrı o alt ajana aittir): bir `<status>` taşıyan `<task-notification>` (Claude'u uyandıran mesajda ya da görevin ortasında gelirse konuşma geçmişinde), kimliğini taşıyan `TaskStop` ya da `KillShell`, oturumun sona ermesi ya da iki saat (`AIPAGER_BG_SHELL_MAX_TRACK`, saniye cinsinden, varsayılan 7200). Karttaki satırı için bkz. [komutlar](commands.md#idle-responses).
 
+Bir alt ajanın içinde yapılan bir `Agent` (ya da `Task`) çağrısı (olayı `agent_id` taşır) başlattığı ajanın kimliğini bildirir. aipager hangi ajanın hangisini başlattığını hatırlar; böylece kendi ajanını beklemek için duran bir ajanı bitmiş olandan ayırabilir (aşağıda `SubagentStart` / `SubagentStop`).
+
 ### <a id="notification"></a>`Notification`
 
 aipager, Claude Code'un `notification_type` alanını okur:
@@ -96,6 +98,8 @@ Görev bir API hatasıyla bitti. Oturum hazır olur ve varsa yanıt `Stop` gibi 
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
 Bir alt ajan başladı ya da bitti. Her birinin çalışma kartında kendi satırı vardır, `🤖 <type> · <activity> · <elapsed>`; kendi araç çağrıları altında katlanmıştır ve durduğunda `✅ 🤖 <type> · N araç · <elapsed>` olarak donar. `SubagentStop` olayı hiç gelmeyen bir alt ajan, 30 dakika sessiz kaldığında (`AIPAGER_SUBAGENT_SILENCE`, saniye cinsinden; kimliğiyle hiçbir türden olay yok) kaldırılır. Çalışan bir ajan birkaç saniyede bir araç olayı gönderir, bu yüzden böyle yalnızca durması kaçırılmış bir ajan kaldırılır (yeniden başlatma, kaybolan bir datagram); o ajanın kimliğiyle tek bir olay gelmeden 30 dakika süren tek bir araç çağrısı da onu kaldırır. `AIPAGER_SUBAGENT_TTL` aynı ayarın eski adı olarak kabul edilir. Türü olmayan ve kimliği bilinmeyen `SubagentStop` olayları sık gelir ve yok sayılır.
+
+Başlattığı bir ajan hâlâ çalışırken duran bir arka plan ajanı da bir `SubagentStop` alır. aipager bunu bir son değil, bir duraklama sayar: ajan çalışıyor olarak kalır (satırı, iş, yanıtların altındaki durum, sabitlenmiş satır). Aynı kimlikle gelen bir sonraki `SubagentStart` onun devam etmesidir ve ikinci bir satır eklemez; kimliğiyle gelen herhangi bir araç olayı da devam sayılır. Kendi ajanlarından hiçbiri artık çalışmıyorken durduğunda biter. Bunların sonuncusu bittikten iki dakika sonra hâlâ devam etmediyse artık çalışıyor sayılmaz, ama asla bitmiş gösterilmez. Çalışan ajanlar, bekleyenler dahil, aipager yeniden başlatıldığında korunur.
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 

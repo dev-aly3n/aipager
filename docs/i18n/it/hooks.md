@@ -77,6 +77,8 @@ Uno strumento ha finito, o è fallito. La sua riga nella scheda di attività si 
 
 Una chiamata `Bash` che Claude Code ha spostato in background riporta un `backgroundTaskId`. aipager la segue allora come comando in background (solo quelli del ciclo principale: una chiamata con `agent_id` appartiene a quel subagent) finché non ne vede la fine: un `<task-notification>` con `<status>` (nel messaggio che sveglia Claude, oppure nella cronologia se arriva a metà di un'attività), un `TaskStop` o `KillShell` per il suo ID, la fine della sessione, oppure due ore (`AIPAGER_BG_SHELL_MAX_TRACK`, in secondi, predefinito 7200). La sua riga sulla scheda è in [comandi](commands.md#idle-responses).
 
+Una chiamata `Agent` (o `Task`) fatta dentro un subagent (il suo evento porta `agent_id`) riporta l'ID dell'agente che ha avviato. aipager ricorda quale agente ha avviato quale, così distingue un agente che si è fermato per aspettare un suo agente da uno che ha finito (vedi `SubagentStart` / `SubagentStop` più sotto).
+
 ### <a id="notification"></a>`Notification`
 
 aipager legge il `notification_type` di Claude Code:
@@ -96,6 +98,8 @@ L'attività è finita per un errore dell'API. La sessione diventa pronta e la ri
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
 Un subagent è partito o ha finito. Ogni subagent ha la sua riga nella scheda di attività, `🤖 <type> · <activity> · <elapsed>`, con le sue chiamate agli strumenti raccolte sotto, e quando si ferma si fissa in `✅ 🤖 <type> · N strumenti usati · <elapsed>`. Un subagent il cui `SubagentStop` non arriva mai viene tolto dopo 30 minuti di silenzio (`AIPAGER_SUBAGENT_SILENCE`, in secondi; nessun evento con il suo ID nel frattempo). Un agente al lavoro invia eventi degli strumenti ogni pochi secondi, quindi questo raccoglie solo gli agenti di cui si è perso il segnale di fine (un riavvio, un datagram perso); lo fa anche una singola chiamata a uno strumento che dura 30 minuti senza nessun evento con l'ID di quell'agente. `AIPAGER_SUBAGENT_TTL` è ancora accettato come vecchio nome della stessa impostazione. Gli eventi `SubagentStop` senza tipo e con un ID sconosciuto arrivano spesso e vengono ignorati.
+
+Un agente in background che si ferma mentre un agente avviato da lui è ancora in esecuzione riceve anche lui un `SubagentStop`. aipager lo considera una pausa, non una fine: l'agente resta in esecuzione (la sua riga, il lavoro, lo stato sotto le risposte, la barra fissata). Il suo `SubagentStart` successivo, con lo stesso ID, è la sua ripresa e non aggiunge una seconda riga; anche qualsiasi evento di strumento con il suo ID conta come ripresa. Finisce quando si ferma senza più nessuno dei suoi agenti in esecuzione. Se non ha ripreso due minuti dopo la fine dell'ultimo di essi, non viene più contato come in esecuzione, ma non viene mai mostrato come finito. Gli agenti in esecuzione, anche quelli in attesa, restano dopo un riavvio di aipager.
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
