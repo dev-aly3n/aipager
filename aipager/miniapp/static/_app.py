@@ -3728,8 +3728,7 @@ APP_JS = r"""
     folderBtn.disabled = !folderNameTrim(folderRaw) || !!folderInvalid || !newState.cwd ||
       !canCreate || newState.folderBusy;
     paintFolderBusy();
-    // Read only (not disabled: it keeps focus) while the name is sent, so
-    // nothing typed then is lost when success clears the field.
+    // Read only, not disabled (keeps focus), while busy.
     document.getElementById("new-folder-name").readOnly = newState.folderBusy;
 
     // "Default" has no path, so it cannot be a parent: say so rather
@@ -3739,7 +3738,6 @@ APP_JS = r"""
       folderNote.textContent = t("ui.new.pick_dir_first");
       folderNote.className = "reveal-note is-live";
     } else if (!canCreate) {
-      // The disabled button's reason, the one the server would give.
       folderNote.textContent = t("ui.new.folder_forbidden");
       folderNote.className = "reveal-note is-live";
     } else if (newState.folderError) {
@@ -3773,9 +3771,7 @@ APP_JS = r"""
     syncMainButton();
   }
 
-  // The label says what is happening: one tap, then "Creating…" until
-  // the server answers. applyStatic() calls it too, after it rewrites the
-  // button's data-i18n label in a new language.
+  // "Creating…" until the answer; applyStatic() repaints it too.
   function paintFolderBusy() {
     var folderBtn = document.getElementById("new-folder-create");
     folderBtn.textContent = t(newState.folderBusy ? "ui.new.creating" : "ui.new.create_folder");
@@ -3831,7 +3827,7 @@ APP_JS = r"""
   function folderNameError(value) {
     var trimmed = folderNameTrim(value);
     if (!trimmed) { return ""; }
-    // Code points, as Python's len() counts: an emoji is one character.
+    // Code points, as Python's len().
     if (Array.from(trimmed).length > FOLDER_NAME_MAX) {
       return t("ui.new.folder_too_long", { max: FOLDER_NAME_MAX });
     }
@@ -3846,7 +3842,7 @@ APP_JS = r"""
   function createFolder() {
     var nameEl = document.getElementById("new-folder-name");
     var folder = folderNameTrim(nameEl.value);
-    // The button's own gate, so Enter never sends what a tap cannot.
+    // The button's gate.
     if (newState.folderBusy || !folder || !newState.cwd || folderNameError(folder) ||
         !(newOptions && newOptions.can_create)) {
       return;
@@ -3883,7 +3879,7 @@ APP_JS = r"""
       newState.cwd = path;
       newState.folderOpen = false;
       newState.folderError = "";
-      // Only the name that was sent: anything else is the person's.
+      // Only the sent name.
       if (folderNameTrim(nameEl.value) === folder) { nameEl.value = ""; }
       showNotice(t(r.data.existed ? "ui.new.folder_existed" : "ui.new.folder_created"), "ok");
       renderNewForm();
@@ -4231,7 +4227,6 @@ APP_JS = r"""
     // "Loading..." in the page's language until the grid writes the
     // version line (and its dir) there.
     setAttr(document.getElementById("daemon-line"), "dir", "auto");
-    // Create folder's label follows the request, not the markup.
     paintFolderBusy();
   }
 

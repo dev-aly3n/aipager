@@ -167,7 +167,7 @@ def test_create_folder_runs_once_and_handles_every_answer(node_bin, tmp_path):
     ("folderNameError(folder) ||\n        !(newOptions && newOptions.can_create)) {",
      "folderNameError(folder)) {",
      "Enter's can-create gate"),
-    ('    } else if (!canCreate) {\n      // The disabled button\'s reason, the one the server would give.\n'
+    ('    } else if (!canCreate) {\n'
      '      folderNote.textContent = t("ui.new.folder_forbidden");\n'
      '      folderNote.className = "reveal-note is-live";\n', "    ",
      "the forbidden button's reason"),
@@ -178,8 +178,9 @@ def test_create_folder_runs_once_and_handles_every_answer(node_bin, tmp_path):
      "keeping a name typed meanwhile"),
     ("if (folderNameTrim(nameEl.value) === folder) { nameEl.value = \"\"; }", "",
      "clearing the sent name"),
-    ("    // Create folder's label follows the request, not the markup.\n    paintFolderBusy();\n",
-     "", "the busy label across a language switch"),
+    ('setAttr(document.getElementById("daemon-line"), "dir", "auto");\n    paintFolderBusy();',
+     'setAttr(document.getElementById("daemon-line"), "dir", "auto");',
+     "the busy label across a language switch"),
     ("if (Array.from(trimmed).length > FOLDER_NAME_MAX) {",
      "if (trimmed.length > FOLDER_NAME_MAX) {",
      "counting code points"),
