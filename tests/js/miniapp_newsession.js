@@ -218,7 +218,7 @@ let script = page.match(/<script>([\s\S]*?)<\/script>/g)
 // unwrap the IIFE so the internals are reachable, and export what we drive
 // keep the IIFE (it contains top-level `return`s) but export its internals
 script = script.replace(/\}\)\(\);\s*$/,
-  "\n  global.__api = { openNewSession, renderNewForm, submitNewSession, openGroups };\n})();");
+  "\n  global.__api = { openNewSession, renderNewForm, submitNewSession, openGroups,\n                   applyStatic };\n})();");
 eval(script);
 
 // ---- simulate: fill in the whole form and submit it ----
@@ -623,9 +623,19 @@ function driveModes() {
 // busy state is visible; a second tap or Enter while it waits sends
 // nothing; each kind of answer gives the button back with the typed name
 // kept and a reason; a name the server would refuse never leaves the page.
-// AIPAGER_TEST_FOLDER_NAMES: [[name, valid], ...] from the server's own
-// validator (tests/test_miniapp_create_folder.py).
+// AIPAGER_TEST_FOLDER_NAMES: [[name, valid, reason], ...] from the server's
+// own validator (tests/test_miniapp_create_folder.py); reason is the
+// server's English for a too-long or badly formed name, else null.
 function driveFolder() {
+  // applyStatic() walks every [data-i18n] node: give the shim the marked
+  // nodes that carry an id, with their keys.
+  for (const m of page.matchAll(/<[^>]*\bid="([^"]+)"[^>]*>/g)) {
+    const k = /\sdata-i18n="([^"]+)"/.exec(m[0]);
+    if (k) { byId[m[1]].attrs["data-i18n"] = k[1]; }
+  }
+  global.document.querySelectorAll = () =>
+    Object.values(byId).filter(e => e.attrs["data-i18n"]);
+  const OPTIONS = FIXTURES["/api/session-options"];
   const pending = [];
   const baseFetch = global.fetch;
   global.fetch = (url, opts) => {
@@ -650,6 +660,7 @@ function driveFolder() {
   const note = byId["new-folder-note"];
   function idleWithName(when) {
     if (btn.disabled) fail(when + ": the button stayed disabled");
+    if (name.readOnly) fail(when + ": the name field stayed read only");
     if (btn.textContent !== "Create folder")
       fail(when + ": the button reads " + JSON.stringify(btn.textContent));
     if (name.value !== "my-project") fail(when + ": the typed name was lost");
@@ -664,8 +675,22 @@ function driveFolder() {
       fail("the create button reads " + JSON.stringify(btn.textContent));
     if (!btn.disabled) fail("Create folder is enabled with no name typed");
 
+    // A caller who may not create folders: the button is disabled and
+    // says why, and Enter sends nothing either (the same gate).
+    OPTIONS.can_create = false;
+    name.value = "my-project";
+    fireInput(name);
+    if (!btn.disabled) fail("Create folder is enabled for a caller who may not create");
+    const FORBIDDEN = "You're not allowed to create folders here.";
+    if (note.textContent !== FORBIDDEN)
+      fail("no reason for the forbidden button: " + JSON.stringify(note.textContent));
+    fireKey(name, "Enter");
+    btn.click();
+    if (posts() !== 0) fail("Enter sent a folder the caller may not create");
+    OPTIONS.can_create = true;
+
     const table = JSON.parse(process.env.AIPAGER_TEST_FOLDER_NAMES || "[]");
-    for (const [value, valid] of table) {
+    for (const [value, valid, reason] of table) {
       name.value = value;
       fireInput(name);
       if (btn.disabled === valid)
@@ -673,6 +698,9 @@ function driveFolder() {
              ", but the server says valid=" + valid);
       if (!valid && value.trim() && !note.className.includes("is-error"))
         fail("no reason shown for the refused name " + JSON.stringify(value));
+      if (reason && note.textContent !== reason)
+        fail("name " + JSON.stringify(value) + " reads " + JSON.stringify(note.textContent) +
+             ", the server says " + JSON.stringify(reason));
       if (!valid) {
         const before = posts();
         fireKey(name, "Enter");
@@ -690,6 +718,16 @@ function driveFolder() {
     if (!btn.disabled) fail("the button stayed enabled while the folder is created");
     if (btn.textContent !== "Creating…")
       fail("busy label: " + JSON.stringify(btn.textContent));
+    if (!name.readOnly || name.disabled)
+      fail("the name field is not read only (and enabled) while the folder is created");
+    // A language switch redraws every marked node: the label stays busy.
+    const other = Object.values(byId).find(e => e !== btn && e.attrs["data-i18n"]);
+    other.textContent = "stale";
+    api.applyStatic();
+    if (other.textContent === "stale") fail("applyStatic rewrote nothing (harness)");
+    if (btn.textContent !== "Creating…")
+      fail("a language switch reset the busy label: " + JSON.stringify(btn.textContent));
+    if (btn.attrs["aria-busy"] !== "true") fail("a language switch reset aria-busy");
     btn.click();
     fireKey(name, "Enter");
     if (posts() !== 1) fail("a second tap or Enter while busy sent another request");
@@ -732,12 +770,36 @@ function driveFolder() {
       btn.click();
       answer(200, { path: "/home/alice/proj/my-project", existed: false });
       setTimeoutReal(() => {
+        if (name.value !== "") fail("success kept the sent name: " + JSON.stringify(name.value));
         if (headValue("new-cwd") !== "my-project")
           fail("the new folder was not selected: " + headValue("new-cwd"));
         if (byId["notice"].textContent.indexOf("Folder created") === -1)
           fail("no Folder created notice: " + byId["notice"].textContent);
-        if (posts() !== steps.length + 1)
-          fail("expected " + (steps.length + 1) + " requests in all, sent " + posts());
+        createdAgain();
+      }, 10);
+    }
+    // Once more, inside the new folder: whatever reaches the field while
+    // the name is out stays there.
+    function createdAgain() {
+      const dirRows = rows(expand("new-cwd"));
+      dirRows[dirRows.length - 1].click();                     // New folder
+      name.value = "sub";
+      fireInput(name);
+      btn.click();
+      if (posts() !== steps.length + 2) fail("the second create sent no request");
+      const second = fetchCalls.filter(f => f.method === "POST" &&
+                                         /\/api\/directories$/.test(f.url)).pop();
+      if (second.body.parent !== "/home/alice/proj/my-project" || second.body.name !== "sub")
+        fail("the second create was not inside the new folder: " + JSON.stringify(second.body));
+      name.value = "sub-2";
+      answer(200, { path: "/home/alice/proj/my-project/sub", existed: false });
+      setTimeoutReal(() => {
+        if (name.value !== "sub-2")
+          fail("success wiped what was typed meanwhile: " + JSON.stringify(name.value));
+        if (headValue("new-cwd") !== "sub")
+          fail("the second folder was not selected: " + headValue("new-cwd"));
+        if (posts() !== steps.length + 2)
+          fail("expected " + (steps.length + 2) + " requests in all, sent " + posts());
         console.log("ok: create folder is a text button, one request at a time, " +
                     "every answer handled");
         process.exit(0);

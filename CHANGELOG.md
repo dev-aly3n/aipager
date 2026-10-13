@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **The Mini App no longer promises a restart that will not happen.** Before an aipager update in **Settings → Updates**, the confirm said aipager restarts on its own even where it can't (for example a systemd unit with an unsafe KillMode); it now says that the steps to restart it show once the update is installed.
+- **The Mini App's Create folder holds still while it works.** The name field can't be changed while a folder is being created, so nothing you type is lost when it finishes; where you may not create folders, the button says so and Enter no longer sends the name anyway; and the button keeps reading "Creating…" if you switch the app's language meanwhile.
 
 ## [1.2.0] - 2026-10-13
 
