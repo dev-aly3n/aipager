@@ -2965,7 +2965,8 @@ APP_JS = r"""
   // A running job's step in words, by its phase id (an unknown one shows its id).
   var UPDATE_PHASES = { starting: "ui.update.job.starting",
                         claude_updating: "ui.update.job.claude_updating",
-                        upgrading: "ui.update.job.upgrading" };
+                        upgrading: "ui.update.job.upgrading",
+                        verifying: "ui.update.job.verifying" };
 
   // A dedicated fetch, NOT apiFetch: a 401/403 here means "you are not the
   // admin" and must hide this block - apiFetch would turn it into the
@@ -3056,7 +3057,11 @@ APP_JS = r"""
         if (epoch !== chatEpoch) { renderUpdates(); return; }
         if (r.ok && r.data && r.data.check) {
           updatesCheck = r.data.check;
-          updatesData = { job: r.data.job || null };
+          // The check speaks for the installed version now; the banner's
+          // hooks notice (no lookup) stays.
+          var kept = updatesData && updatesData.waiting;
+          updatesData = { job: r.data.job || null,
+                          waiting: kept && kept.source === "hooks" ? kept : null };
         } else if (r.status === 409) {
           showNotice(t("ui.update.running"), "err");
           loadUpdates();
@@ -3097,7 +3102,7 @@ APP_JS = r"""
           showNotice(t("ui.update.start_failed"), "err");
         }
         // A started (or refused) update voids the check it came from.
-        if (action === "start") { updatesCheck = null; }
+        if (action === "start" || action === "restart") { updatesCheck = null; }
         loadUpdates();
       })
       .catch(function (err) {
@@ -3285,8 +3290,19 @@ APP_JS = r"""
     setLine("updates-source", "");
     setLine("updates-restart", "");
     setLine("updates-summary", "");
+    setLine("updates-banner", "");
     if (job && job.phase === "restart_scheduled") { beginRestartWatch(job, updatesData); }
     if (restartWatch) { renderRestartWatch(jobEl, actions); return; }
+    // Installed and waiting for a restart, or hooks already on a newer
+    // aipager: one line, while no job runs.
+    var waiting = (updatesData && updatesData.waiting) || null;
+    var banner = "";
+    if (waiting && !running) {
+      banner = waiting.source === "hooks"
+        ? t("ui.update.hooks_banner", { version: waiting.version, running: waiting.running })
+        : t("ui.update.waiting_banner", { version: waiting.version });
+    }
+    setLine("updates-banner", banner);
     if (job) {
       jobEl.hidden = false;
       var lines = [];
@@ -3331,8 +3347,18 @@ APP_JS = r"""
       actions.appendChild(busy);
       return;
     }
+    // Restart now, once: from the banner, a check that found the update
+    // installed and waiting, or a finished update that offers it.
+    var restartOffer = !!banner || !!(updatesCheck && updatesCheck.restart_offer)
+      || !!(job && job.phase === "done" && job.can_restart);
+    if (restartOffer) {
+      actions.appendChild(updateButton(t("ui.btn.restart_now"), function () {
+        confirmThen(t("ui.update.restart_confirm"), function () { postUpdate("restart"); });
+      }));
+    }
     if (!updatesCheck) {
-      actions.appendChild(updateButton(t("ui.btn.check_updates"), checkUpdates));
+      actions.appendChild(updateButton(t("ui.btn.check_updates"), checkUpdates,
+                                       restartOffer ? "updates-again" : undefined));
       return;
     }
     var check = updatesCheck;
@@ -3344,20 +3370,26 @@ APP_JS = r"""
     });
     setLine("updates-source", plain([check.source].concat(check.notes || [])
       .filter(function (t) { return !!t; }).join("\n")));
-    // The restart note comes only with an offered aipager update.
-    setLine("updates-restart", plain(check.restart || ""));
+    // The restart note comes only with an offered aipager update; the
+    // steps to restart by hand only with an installed one waiting.
+    setLine("updates-restart", plain(check.restart || check.steps || ""));
     var offer = check.offer;
     if (offer && offer.kind) {
       var kind = offer.kind;
       actions.appendChild(updateButton(offer.label, function () {
         var go = function () { postUpdate("start", { kind: kind }); };
         if (kind === "claude") { go(); return; }
-        confirmThen(t("ui.update.offer_confirm", { offer: offer.label }), go);
+        // "Tap Restart now" only where the job will offer Restart now.
+        confirmThen(t(check.restart_in_place === true ? "ui.update.offer_confirm_manual"
+                                                      : "ui.update.offer_confirm",
+                      { offer: offer.label }), go);
       }));
       return;
     }
     setLine("updates-summary", plain(check.summary || t("ui.update.up_to_date")));
-    actions.appendChild(updateButton(t("ui.btn.check_again"), checkUpdates, "updates-again"));
+    if (!check.restart_offer) {
+      actions.appendChild(updateButton(t("ui.btn.check_again"), checkUpdates, "updates-again"));
+    }
   }
 
 

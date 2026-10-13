@@ -13,10 +13,7 @@ import asyncio
 import html as html_mod
 import logging
 import os
-import shlex
-import signal
 import subprocess
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1042,7 +1039,8 @@ class CommandHandlersMixin:
         foreground daemon on a machine that also has a unit file installed,
         which the old ``LINUX_UNIT_PATH.exists()`` check sent to systemctl
         and so started a second daemon — spawns a detached replacement that
-        waits for us to die, then we SIGTERM ourselves.
+        waits for us to die (:func:`aipager.self_restart.spawn_waiter`, the
+        original launch argv), then stops this daemon cleanly.
         """
         import platform
         from aipager import self_update
@@ -1095,52 +1093,34 @@ class CommandHandlersMixin:
                        f"gui/{os.getuid()}/{MACOS_LABEL}"])
             return
 
-        # No service unit — spawn a detached replacement and self-kill.
-        # The shell wrapper polls our PID via `kill -0`; once we die
-        # (HookReceiver.stop unlinks the control socket as part of
-        # cli.py's SIGTERM handler) the wrapper execs aipager start.
-        parent_pid = os.getpid()
-        from aipager import instance
+        # No service unit: a detached replacement waits for us to die,
+        # then runs the original launch argv (aipager.self_restart); we
+        # then stop cleanly.
+        from aipager import instance, self_restart
+        target = self_restart.exec_target()
+        if target is None:
+            await self._safe_edit_callback(
+                query, tr.html(MEDIA_RESTART_CANT_SPAWN, error="no Python interpreter to run"))
+            return
         log_path = instance.self_restart_log_path()
-        try:
-            log_fd = os.open(
-                log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644,
-            )
-        except OSError as e:
-            # Escaped as ever, though the edit is plain text.
-            await self._safe_edit_callback(
-                query, tr.html(MEDIA_RESTART_CANT_OPEN, path=str(log_path), error=str(e)))
+        res = await asyncio.to_thread(self_restart.spawn_waiter, target, log_path)
+        if not res.ok:
+            if res.stage == "open":
+                # Escaped as ever, though the edit is plain text.
+                text = tr.html(MEDIA_RESTART_CANT_OPEN, path=str(log_path),
+                               error=str(res.error))
+            elif res.stage == "spawn":
+                text = tr.html(MEDIA_RESTART_CANT_SPAWN, error=str(res.error))
+            else:
+                text = tr.text(MEDIA_RESTART_FAILED_START)
+            await self._safe_edit_callback(query, text)
             return
 
-        shell_cmd = (
-            f"while kill -0 {parent_pid} 2>/dev/null; do sleep 0.2; done; "
-            f"exec {shlex.quote(sys.executable)} -m aipager.cli start"
-        )
-        try:
-            proc = subprocess.Popen(
-                ["sh", "-c", shell_cmd],
-                stdout=log_fd, stderr=log_fd, stdin=subprocess.DEVNULL,
-                start_new_session=True, close_fds=True,
-            )
-        except OSError as e:
-            os.close(log_fd)
-            await self._safe_edit_callback(
-                query, tr.html(MEDIA_RESTART_CANT_SPAWN, error=str(e)))
-            return
-        os.close(log_fd)
-
-        # If the shell wrapper died inside 300 ms, the spawn failed —
-        # don't kill ourselves and surface the failure.
-        await asyncio.sleep(0.3)
-        if proc.poll() is not None:
-            await self._safe_edit_callback(query, tr.text(MEDIA_RESTART_FAILED_START))
-            return
-
-        # Tell the user before we die. The HTTP edit needs a beat to
-        # flush before SIGTERM tears the event loop down.
+        # Tell the user before we stop. The HTTP edit needs a beat to
+        # flush before the shutdown tears the bot down.
         await self._safe_edit_callback(query, tr.text(MEDIA_RESTART_RESEND_VOICE))
         await asyncio.sleep(0.5)
-        os.kill(os.getpid(), signal.SIGTERM)
+        self_restart.stop_daemon()
 
     async def _handle_start_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """/start: the home screen (4.3). This chat's sessions (never another

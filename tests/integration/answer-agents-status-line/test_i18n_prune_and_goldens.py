@@ -22,6 +22,7 @@ import pytest
 from tests.i18n_surfaces import (
     MODE_LABEL_SURFACES,
     NO_KEYBOARD_APP_SURFACES,
+    RESTART_NOW_NEW_SURFACES,
     THREE_MODES_NEW_SURFACES,
     THREE_MODES_SURFACES,
     with_keyboard_app_removed,
@@ -216,7 +217,9 @@ def test_english_surfaces_change_only_under_agents_line():
     # further, and added one.
     # The main keyboard lost its App button (2026-10-12), and only that.
     three = THREE_MODES_SURFACES | THREE_MODES_NEW_SURFACES
-    exempt = MODE_LABEL_SURFACES | three | NO_KEYBOARD_APP_SURFACES
+    # Restart now without a service (2026-10-12) added one surface.
+    exempt = (MODE_LABEL_SURFACES | three | NO_KEYBOARD_APP_SURFACES
+              | RESTART_NOW_NEW_SURFACES)
     assert [k for k in changed if k not in exempt] == [
         "agents_line", "language.list"]
     for k in NO_KEYBOARD_APP_SURFACES:

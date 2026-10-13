@@ -45,9 +45,12 @@ uploads via PyPI Trusted Publisher (OIDC - no stored API token).
 
 ### Cutting a release
 
-1. Bump the version in `pyproject.toml`, `flake.nix` (`version =`),
-   `packaging/snap/snapcraft.yaml` (the snap job refuses a tag that does
-   not match it) and the README's Docker `Tags:` line.
+1. Bump the version in `pyproject.toml`, `aipager/_version.py` (the
+   version the hooks stamp on what they send the daemon;
+   `tests/test_version_file.py` fails when it differs from pyproject),
+   `flake.nix` (`version =`), `packaging/snap/snapcraft.yaml` (the snap
+   job refuses a tag that does not match it) and the README's Docker
+   `Tags:` line.
 2. In `CHANGELOG.md`, turn `## [Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD`
    and start a new empty `## [Unreleased]` above it.
 3. Commit: `git commit -m "release X.Y.Z"`

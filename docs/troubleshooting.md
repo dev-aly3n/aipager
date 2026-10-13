@@ -636,6 +636,35 @@ at A - this pipx install upgrades from its git source, which has
 nothing newer`. Push or pick the new version there, or switch to PyPI
 with `pipx install --force aipager`.
 
+**Without a service**, a daemon no service manager restarts (`aipager
+start` in a terminal or tmux, Docker, launchd) installs an update but
+keeps running the old code until it restarts. `/update` then says `aipager B is installed and
+waiting for a restart (running A).`, and Claude Code's hooks, which
+start fresh on every event, may already run B: the owner gets one notice
+that the update is only half done (once no turn is running in the
+owner's private chat). Tap **🔄 Restart now** (in the update
+message, the notice, or the Mini App's **Settings → Updates**). aipager
+waits until no turn is running, stops cleanly and starts the new version
+in place: the same process in the same terminal, tmux window or
+container, with the same command and environment.
+
+If the in-place start fails, a detached copy starts aipager once the old
+process has gone. Its output then goes to the self-restart log
+(`aipager.log` in the instance folder, or `/tmp/aipager.log`) instead of
+your terminal, and the daemon log names the command to run if that copy
+does not come back. If the interpreter itself is gone (its environment
+was removed), or nothing could be started, aipager exits
+with code 1, the daemon log ends with `restart.failed:` and the command
+to run, and the next start announces the update.
+
+When there is no **Restart now** button, the message gives the steps for
+your setup: in a terminal or tmux, press Ctrl+C and run `aipager start`;
+on macOS, `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; in
+Docker, `docker restart <container>` on the host. Recreating a Docker
+container (`docker compose up` after `down`, or `docker run` again)
+starts it from its image, which brings back the aipager version in that
+image: to keep a newer aipager, use a newer image.
+
 ## The daemon didn't come back after an update
 
 The upgrade checks that the new version imports before any restart, but
@@ -670,6 +699,10 @@ reinstall command from the message (for example
 `pipx install --force aipager`) and then
 `systemctl --user restart aipager.service`; for Claude Code, run
 `claude update` again.
+
+A Restart now that could not start aipager again (no service) leaves
+`restart.failed:` in the daemon log with the command to run; run it, and
+the new daemon announces the update.
 
 ## A chat is in the wrong language
 

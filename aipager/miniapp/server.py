@@ -1411,6 +1411,9 @@ class MiniAppServer:
             # page open across the restart can never reach the new daemon.
             "url_changes_on_restart": (not config.MINIAPP_PUBLIC_URL
                                        and bool(get_managed_tunnel_url())),
+            # A newer aipager installed and waiting for a restart, or hooks
+            # already running newer code (no lookup): the Restart now banner.
+            "waiting": manager.waiting_info(),
         })
 
     async def _handle_update_post(self, request):
@@ -1460,6 +1463,14 @@ class MiniAppServer:
             payload["check"] = check_payload(status, show_paths=private, tr=viewer)
             payload["job"] = manager.snapshot()
             return web.json_response(payload)
+        if action == "restart":
+            # Restart now: run the installed aipager (no body needed).
+            res = await manager.start_restart(chat_id=scope_chat_id, user_id=user_id,
+                                              origin="miniapp")
+            if not res.ok:
+                status = 503 if res.error == "shutting_down" else 409
+                return web.json_response({"error": res.error}, status=status)
+            return web.json_response({"job": res.job}, status=202)
         try:
             body = await request.json()
         except Exception:

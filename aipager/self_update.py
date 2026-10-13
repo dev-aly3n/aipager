@@ -60,6 +60,9 @@ UPGRADE_TIMEOUT_SECONDS = 600
 CLAUDE_UPDATE_TIMEOUT_SECONDS = 300
 CLAUDE_VERSION_TIMEOUT_SECONDS = 10
 PROBE_TIMEOUT_SECONDS = 60
+# The probe of what an in-place restart would import (Check for updates and
+# the restart job): shorter, it runs on a tap.
+RESTART_PROBE_TIMEOUT_SECONDS = 15
 SYSTEMCTL_TIMEOUT_SECONDS = 5
 SCHEDULE_TIMEOUT_SECONDS = 10
 KILL_GRACE_SECONDS = 5
@@ -87,6 +90,11 @@ UPDATE_MARKER_PATH = (
 )
 
 _PROC_SELF_CGROUP = "/proc/self/cgroup"
+# Container markers (Docker, podman): seams, so no test sees the host's.
+_DOCKERENV_PATH = "/.dockerenv"
+_CONTAINERENV_PATH = "/run/.containerenv"
+# Docker's default hostname is the container's short id.
+_HOSTNAME_RE = re.compile(r"^[0-9a-f]{12}$")
 _PROC_ROOT = "/proc"
 _CGROUP_ROOT = "/sys/fs/cgroup"
 
@@ -586,6 +594,24 @@ def probe_installed_version(python: str) -> tuple[str | None, bool, str | None]:
     """``(version, importable, error)`` from a FRESH interpreter."""
     res = run_command([python, "-I", "-c", _PROBE_SCRIPT],
                       timeout=PROBE_TIMEOUT_SECONDS, env=_scrub_env())
+    return _probe_result(res)
+
+
+def probe_restart_target(target) -> tuple[str | None, bool, str | None]:
+    """``(version, importable, error)``: what an in-place restart of
+    *target* (an :class:`aipager.self_restart.ExecTarget`) would import.
+
+    Deliberately NOT ``-I``: the exec'd daemon runs the same interpreter
+    with the same environment (PYTHONPATH included) in the same folder, so
+    that is what is probed. Secret values are not passed on."""
+    env = {k: v for k, v in (target.env or {}).items()
+           if not install_source._is_secret_key(k)}
+    res = run_command([target.executable, "-c", _PROBE_SCRIPT],
+                      timeout=RESTART_PROBE_TIMEOUT_SECONDS, env=env)
+    return _probe_result(res)
+
+
+def _probe_result(res: CommandResult) -> tuple[str | None, bool, str | None]:
     version = None
     for line in reversed((res.output_tail or "").splitlines()):
         m = _PROBE_LINE_RE.search(line)
@@ -772,16 +798,25 @@ def restart_blockers(registry, *, now: float | None = None,
 
 @dataclass
 class RestartPlan:
-    mode: str                       # systemd|launchd|foreground
+    mode: str                       # systemd|launchd|foreground|docker
     automatic: bool
     reason: str | None = None
     manual_command: str | None = None
     at_risk: list[str] = field(default_factory=list)
     killmode: str | None = None
+    # The daemon can restart itself in place (aipager.self_restart): no
+    # service manager restarts it, and there is an interpreter to exec.
+    in_place: bool = False
+    # Which manual steps fit this setup: terminal|systemd|launchd|docker.
+    steps: str = "terminal"
+    # Docker: the container's short id, when its hostname is one.
+    container: str | None = None
 
     def to_dict(self) -> dict:
         return {"mode": self.mode, "automatic": self.automatic,
-                "reason": self.reason, "manual_command": self.manual_command}
+                "reason": self.reason, "manual_command": self.manual_command,
+                "in_place": self.in_place, "steps": self.steps,
+                "container": self.container}
 
 
 def _system() -> str:
@@ -890,20 +925,39 @@ def restart_plan(registry=None) -> RestartPlan:
                            "could not tell how this daemon is run; restart it yourself")
 
 
+_NO_UNIT_REASON = "no service unit is running this daemon; restart it yourself"
+
+
+def _in_container() -> bool:
+    """Docker's or podman's marker file. Only reads; never raises."""
+    for path in (_DOCKERENV_PATH, _CONTAINERENV_PATH):
+        try:
+            if os.path.exists(path):
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _can_exec_in_place() -> bool:
+    from aipager import self_restart
+    return self_restart.exec_target() is not None
+
+
 def _restart_plan(registry) -> RestartPlan:
     system = _system()
     if system == "Linux" and _under_unit_cgroup():
         show = _systemctl_show("MainPID", "KillMode", "ControlGroup")
         if show is not None and show.get("MainPID") != str(os.getpid()):
             # A unit exists, but this process is not (or cannot be shown
-            # to be) its main PID: fail closed, like KillMode.
-            return RestartPlan(
-                "foreground", False,
-                "no service unit is running this daemon; restart it yourself")
+            # to be) its main PID: fail closed, like KillMode, and no
+            # restart in place either (systemd may restart it as well).
+            return RestartPlan("foreground", False, _NO_UNIT_REASON)
         cmd = f"systemctl --user restart {UNIT_NAME}"
         killmode = (show or {}).get("KillMode") or None
         if show is not None and _killmode_is_safe(killmode):
-            return RestartPlan("systemd", True, None, cmd, [], killmode)
+            return RestartPlan("systemd", True, None, cmd, [], killmode,
+                               steps="systemd")
         at_risk = _sessions_in_cgroup(
             registry, (show or {}).get("ControlGroup") or _own_cgroup())
         if at_risk is None:
@@ -911,15 +965,25 @@ def _restart_plan(registry) -> RestartPlan:
             at_risk = [f"may include: {', '.join(live)}"] if live else []
         reason = (f"KillMode={killmode}: " if killmode else
                   "KillMode could not be read: ") + killmode_fix_text()
-        return RestartPlan("systemd", False, reason, cmd, at_risk, killmode)
+        return RestartPlan("systemd", False, reason, cmd, at_risk, killmode,
+                           steps="systemd")
+    if system == "Linux" and _in_container():
+        # Docker under tini (or podman): nothing restarts the daemon but
+        # the container itself; an exec keeps the container's PID.
+        host = os.environ.get("HOSTNAME", "")
+        return RestartPlan("docker", False, _NO_UNIT_REASON,
+                           in_place=_can_exec_in_place(), steps="docker",
+                           container=host if _HOSTNAME_RE.match(host) else None)
     if system == "Darwin" and os.environ.get("XPC_SERVICE_NAME") == MACOS_LABEL:
+        # In place too: the exec keeps the PID launchd tracks, so KeepAlive
+        # never fires; kickstart stays the shown fallback.
         return RestartPlan(
             "launchd", False,
             "launchd restarts are not automatic; restart it yourself",
-            f"launchctl kickstart -k gui/{os.getuid()}/{MACOS_LABEL}")
-    return RestartPlan(
-        "foreground", False,
-        "no service unit is running this daemon; restart it yourself")
+            f"launchctl kickstart -k gui/{os.getuid()}/{MACOS_LABEL}",
+            in_place=_can_exec_in_place(), steps="launchd")
+    return RestartPlan("foreground", False, _NO_UNIT_REASON,
+                       in_place=_can_exec_in_place())
 
 
 _UNIT_SEQ = itertools.count(1)
@@ -1047,7 +1111,8 @@ __all__ = [
     "claude_channel_info", "claude_update_blocker", "clear_marker", "cli_restart_instruction",
     "current_claude", "installed_version", "is_newer",
     "latest_aipager_version", "latest_claude_version", "parse_version",
-    "probe_installed_version", "read_and_clear_marker", "redact_output",
+    "probe_installed_version", "probe_restart_target", "read_and_clear_marker",
+    "redact_output",
     "redacted_tail", "shutting_down",
     "restart_blockers", "restart_plan", "run_claude_update", "run_command",
     "running_command_count", "running_version", "schedule_restart",

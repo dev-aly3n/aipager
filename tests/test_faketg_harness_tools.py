@@ -709,3 +709,61 @@ def test_standin_reports_its_launch_mode_and_cycles_on_shift_tab(
     elif raw == "bypassPermissions":
         s._cycle_mode(2)  # bypass is never in the cycle aipager counts in
         assert s.raw_mode == "bypassPermissions"
+
+
+# ---- an explicit root folder (no sockets under /tmp) -------------------------------------
+
+def test_an_explicit_root_folder_holds_the_root(tmp_path, monkeypatch):
+    parent = tmp_path / "live"
+    parent.mkdir()
+    monkeypatch.setenv(fti.ROOT_DIR_ENV, str(parent))
+    root = fti.make_root()
+    assert root.parent == parent and root.name.startswith("apg-")
+    env = _env(root)
+    assert env["TMPDIR"] == str(parent)
+    assert fti.env_problems(env, root) == []
+
+
+def test_without_the_folder_the_root_and_temp_dir_are_as_before(root, monkeypatch):
+    monkeypatch.delenv(fti.ROOT_DIR_ENV, raising=False)
+    assert root.parent == Path("/tmp")
+    assert "TMPDIR" not in _env(root)
+
+
+def test_a_root_folder_under_the_home_is_allowed_only_when_chosen(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    parent = home / "work" / "live"
+    parent.mkdir(parents=True)
+    monkeypatch.setattr(fti, "real_home", lambda: str(home))
+    monkeypatch.setenv(fti.ROOT_DIR_ENV, str(parent))
+    root = fti.make_root()
+    env = _env(root)
+    assert fti.env_problems(env, root) == []
+    # The same root without the explicit choice is under the real home.
+    monkeypatch.delenv(fti.ROOT_DIR_ENV)
+    assert any("under the real home" in p for p in fti.env_problems(env, root))
+
+
+@pytest.mark.parametrize("where", ["home", "home/.config", "relative"])
+def test_a_root_folder_over_the_operators_folders_is_refused(tmp_path, monkeypatch, where):
+    home = tmp_path / "home"
+    (home / ".config").mkdir(parents=True)
+    monkeypatch.setattr(fti, "real_home", lambda: str(home))
+    value = "live-relative" if where == "relative" else str(tmp_path / where)
+    monkeypatch.setenv(fti.ROOT_DIR_ENV, value)
+    with pytest.raises(AssertionError, match=fti.ROOT_DIR_ENV):
+        fti.make_root()
+
+
+@pytest.mark.parametrize("inside", [".claude/live", ".config/aipager/live",
+                                    ".local/state/aipager/runs"])
+def test_a_root_folder_inside_the_operators_folders_is_refused(tmp_path, monkeypatch,
+                                                                inside):
+    home = tmp_path / "home"
+    parent = home / inside
+    parent.mkdir(parents=True)
+    monkeypatch.setattr(fti, "real_home", lambda: str(home))
+    monkeypatch.setenv(fti.ROOT_DIR_ENV, str(parent))
+    with pytest.raises(AssertionError, match="inside the operator's own"):
+        fti.make_root()
+    assert list(parent.iterdir()) == []

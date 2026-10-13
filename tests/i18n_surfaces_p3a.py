@@ -1072,11 +1072,9 @@ def _media_voice_restart(env):
     """The restart button: an update running, the update lock held, the
     service would kill sessions, a failed schedule, systemd's delay,
     launchctl, and the foreground respawn failing three ways."""
-    import os as _os
 
     from aipager import self_update
     from aipager import service as service_mod
-    from aipager.bot import handlers
     bot, tg = world(env)
     session(bot, "x1", chat=DM)
 
@@ -1118,26 +1116,14 @@ def _media_voice_restart(env):
     env.mp.setattr(service_mod, "_run", lambda *a, **k: None)
     run()
     env.mp.setattr(platform, "system", lambda: "Plan9")
-    fake_os = SimpleNamespace(
-        open=lambda *a, **k: (_ for _ in ()).throw(OSError("13")),
-        close=lambda fd: None, getpid=_os.getpid, getuid=_os.getuid,
-        O_WRONLY=_os.O_WRONLY, O_CREAT=_os.O_CREAT, O_APPEND=_os.O_APPEND,
-        kill=lambda *a: None)
-    env.mp.setattr(handlers, "os", fake_os)
-    from aipager import instance
+    # No service unit: the detached respawn (aipager.self_restart) fails to
+    # open its log, to spawn, and dies at once.
+    from aipager import instance, self_restart
     env.mp.setattr(instance, "self_restart_log_path", lambda: "/run/x1.log")
-    run()
-    fake_os.open = lambda *a, **k: 7
-
-    class _Popen:
-        def __init__(self, *a, **k):
-            pass
-
-        def poll(self):
-            return 1
-    for popen in (lambda *a, **k: (_ for _ in ()).throw(OSError("13")), _Popen):
-        env.mp.setattr(handlers, "subprocess", SimpleNamespace(
-            Popen=popen, DEVNULL=-3, SubprocessError=Exception))
+    for res in (self_restart.WaiterResult(False, "13", "open"),
+                self_restart.WaiterResult(False, "13", "spawn"),
+                self_restart.WaiterResult(False, "exit 1", "exited")):
+        env.mp.setattr(self_restart, "spawn_waiter", lambda t, p, r=res: r)
         run()
     return tg.out
 

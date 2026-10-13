@@ -1,6 +1,9 @@
 """SC-7: with KillMode=control-group, a foreground daemon, or launchd, no
-restart is scheduled; the message says why and gives the exact command.
-(design.md Success criteria #7; entrypoints.md "aipager outcomes")."""
+restart is scheduled. KillMode says why and gives the exact command; a
+daemon that can restart in place (foreground, launchd) offers Restart now
+instead, and one that cannot gives the exact steps for its setup
+(design.md Success criteria #7; entrypoints.md "aipager outcomes";
+update-restart-without-service)."""
 
 from __future__ import annotations
 
@@ -70,22 +73,43 @@ def test_manual_mode_releases_the_lock(world, manual, personal_bot, h, run_async
     assert h.lock_is_free()
 
 
-def test_foreground_says_no_service_unit(world, personal_bot, h, run_async):
+def _rs_buttons(bot, msg, h):
+    return [d for _, d in h.buttons_of(*h.telegram_mocks(bot, msg)) if d == "_:up:rs"]
+
+
+def test_foreground_offers_restart_now(world, personal_bot, h, run_async):
+    # Was "says no service unit": a foreground daemon now restarts in place.
     world.set_under_unit(False)
     _, msg, _ = _ap(personal_bot, h, run_async)
-    assert "no service unit" in h.all_text(personal_bot, msg)
+    assert "Tap Restart now to run it" in h.all_text(personal_bot, msg)
+    assert _rs_buttons(personal_bot, msg, h) == ["_:up:rs"]
 
 
-def test_unit_installed_but_not_main_pid_is_foreground(world, personal_bot, h, run_async):
+def test_unit_installed_but_not_main_pid_gives_the_terminal_steps(world, personal_bot, h,
+                                                                   run_async):
+    # Fail closed: no restart in place either, the exact steps instead.
     world.main_pid = os.getpid() + 1
     _, msg, _ = _ap(personal_bot, h, run_async)
-    assert "no service unit" in h.all_text(personal_bot, msg)
+    text = h.all_text(personal_bot, msg)
+    assert "press <code>Ctrl+C</code>, then run <code>aipager start</code>" in text
+    assert "no service unit" not in text
+    assert _rs_buttons(personal_bot, msg, h) == []
 
 
-def test_launchd_gives_the_kickstart_command(launchd, personal_bot, h, run_async):
+def test_launchd_offers_restart_now(launchd, personal_bot, h, run_async):
+    _, msg, _ = _ap(personal_bot, h, run_async)
+    assert "Tap Restart now to run it" in h.all_text(personal_bot, msg)
+    assert _rs_buttons(personal_bot, msg, h) == ["_:up:rs"]
+
+
+def test_launchd_without_an_interpreter_gives_the_kickstart_command(
+        launchd, personal_bot, h, run_async, monkeypatch):
+    from aipager import self_restart
+    monkeypatch.setattr(self_restart, "exec_target", lambda: None)
     _, msg, _ = _ap(personal_bot, h, run_async)
     assert f"launchctl kickstart -k gui/{os.getuid()}/com.aipager.daemon" in \
         h.all_text(personal_bot, msg)
+    assert _rs_buttons(personal_bot, msg, h) == []
 
 
 def test_control_group_killmode_names_killmode(world, personal_bot, h, run_async):

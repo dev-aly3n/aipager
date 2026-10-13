@@ -333,6 +333,9 @@ async def _run_daemon(bot_username: str) -> None:
     bot.claude_auth_source = (provenance.auth_source if provenance is not None
                               else "unknown")
     hook_receiver = HookReceiver(registry, bot.notify)
+    # Hooks newer than this daemon (an update installed, not yet running):
+    # the owner is told once per hook version.
+    hook_receiver.on_hook_version = bot.updates.note_hook_version
     session_monitor = SessionMonitor(registry, bot.notify)
 
     # Resolved BEFORE bot.start(), because start() ends by sending the
@@ -447,10 +450,22 @@ async def _run_daemon(bot_username: str) -> None:
 
     log.info("AIPager running — all components started")
 
+    from aipager import self_restart
+
     stop = _new_stop_event()
+    # A "Restart now" without a service unit stops through this same event
+    # and is exec'd once the shutdown below has run (_cmd_start).
+    self_restart.attach(stop.set)
     loop = asyncio.get_running_loop()
+
+    def _on_stop_signal() -> None:
+        # A real stop (Ctrl+C, docker stop, systemctl stop) always wins over
+        # a pending restart: never undo an operator's stop.
+        self_restart.cancel("signal")
+        stop.set()
+
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop.set)
+        loop.add_signal_handler(sig, _on_stop_signal)
 
     # SIGUSR1 → live-reload of team.yaml. Sent by `aipager config` on
     # success so admins don't have to restart the daemon for every
@@ -467,36 +482,40 @@ async def _run_daemon(bot_username: str) -> None:
 
     await stop.wait()
 
-    log.info("Shutting down...")
-    # Cancel the deferred-keyboard timer before anything else: it is a
-    # long sleep (KEYBOARD_HOLD_SECONDS) and leaving it pending keeps a
-    # task alive well past the daemon it belongs to. Harmless in
-    # production, but it also made every daemon test that drains pending
-    # tasks sit for the full 45s — the suite went from 100s to 413s
-    # before this was tracked and cancelled.
-    keyboard_release_task.cancel()
-    marker_task.cancel()
-    # Before bot.stop(): a running self-update gets a short grace, then its
-    # installer's process group is killed (it would otherwise outlive us
-    # under KillMode=process and write the venv while the next daemon
-    # starts); its final status edit still goes out.
-    await _shutdown_updates(bot)
-    registry.save()
-    if manager is not None:
-        # Before miniapp_server.stop(): stop accepting the world's
-        # traffic (terminate the tunnel that publishes it) before
-        # stopping what serves it.
-        await manager.stop()
-    if miniapp_server is not None:
-        await miniapp_server.stop()
-    session_monitor.stop()
-    hook_receiver.stop()
-    await bot.stop()
-    # Again, now that nothing sends any more: a busy card whose send was in
-    # flight at the first save landed since, and the next daemon can close
-    # it only if it is on disk (roadmap 8.55).
-    registry.save()
-    log.info("Goodbye")
+    try:
+        log.info("Shutting down...")
+        # Cancel the deferred-keyboard timer before anything else: it is a
+        # long sleep (KEYBOARD_HOLD_SECONDS) and leaving it pending keeps a
+        # task alive well past the daemon it belongs to. Harmless in
+        # production, but it also made every daemon test that drains pending
+        # tasks sit for the full 45s — the suite went from 100s to 413s
+        # before this was tracked and cancelled.
+        keyboard_release_task.cancel()
+        marker_task.cancel()
+        # Before bot.stop(): a running self-update gets a short grace, then its
+        # installer's process group is killed (it would otherwise outlive us
+        # under KillMode=process and write the venv while the next daemon
+        # starts); its final status edit still goes out.
+        await _shutdown_updates(bot)
+        registry.save()
+        if manager is not None:
+            # Before miniapp_server.stop(): stop accepting the world's
+            # traffic (terminate the tunnel that publishes it) before
+            # stopping what serves it.
+            await manager.stop()
+        if miniapp_server is not None:
+            await miniapp_server.stop()
+        session_monitor.stop()
+        hook_receiver.stop()
+        await bot.stop()
+        # Again, now that nothing sends any more: a busy card whose send was in
+        # flight at the first save landed since, and the next daemon can close
+        # it only if it is on disk (roadmap 8.55).
+        registry.save()
+        log.info("Goodbye")
+    finally:
+        # No restart can be asked for once the stop has run.
+        self_restart.detach()
 
 
 # Slack on top of update_flow.SHUTDOWN_DEADLINE_SECONDS: the updates'
@@ -521,6 +540,10 @@ async def _shutdown_updates(bot) -> None:
 
 
 def _cmd_start(args: argparse.Namespace) -> int:
+    from aipager import self_restart
+    # The launch argv, environment and folder, before anything below can
+    # change them: an in-place restart execs exactly these.
+    self_restart.capture_launch()
     from aipager import instance, telegram_endpoint
     from aipager.errors import friendly_error
     # Isolated-instance and API-base checks come FIRST: before reading
@@ -570,7 +593,27 @@ def _cmd_start(args: argparse.Namespace) -> int:
     _acquire_daemon_lock()     # airtight fcntl guard against startup races
     bot_username = _telegram_preflight()
     _run_daemon_reporting_crashes(bot_username)
-    return 0
+    # After the clean stop: a pending "Restart now" execs the installed
+    # aipager in place (or hands over to a detached respawn). A crash or
+    # Ctrl+C never gets here.
+    return self_restart.after_shutdown(release_lock=_release_daemon_lock)
+
+
+def _release_daemon_lock() -> None:
+    """Unlock and close the daemon lock (before an in-place exec; the
+    exec'd daemon takes it again)."""
+    global _daemon_lock_fd
+    fd, _daemon_lock_fd = _daemon_lock_fd, None
+    if fd is None:
+        return
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    except OSError:
+        pass
+    try:
+        os.close(fd)
+    except OSError:
+        pass
 
 
 def _running_as_service() -> bool:

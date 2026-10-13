@@ -159,7 +159,9 @@ def test_get_payload_is_the_job_only_and_looks_nothing_up(team_server, run_async
     # Roadmap 8.45 added the in-process restart-watch fields (was exactly
     # {"job": None}); still nothing looked up.
     assert body["job"] is None
-    assert set(body) == {"job", "version", "restarted", "url_changes_on_restart"}
+    assert set(body) == {"job", "version", "restarted", "url_changes_on_restart",
+                         "waiting"}
+    assert body["waiting"] is None
     assert world.urls == [] and world.calls == []
 
 

@@ -19,9 +19,16 @@ sent only when their content changed and at most once per
 seams, so a flood-muted chat receives nothing.
 
 Callback data (short-callback family ``_``): ``_:up:chk``,
-``_:up:go:<cc|ap|both>``, ``_:up:x``, ``_:up:now:<job>``,
-``_:up:wait:<job>``, ``_:up:stop:<job>``. The pre-8.43 ``_:up:cc``,
-``_:up:ap`` and ``_:up:both`` only answer that the menu is out of date.
+``_:up:go:<cc|ap|both>``, ``_:up:x``, ``_:up:rs`` (Restart now: run the
+installed aipager), ``_:up:now:<job>``, ``_:up:wait:<job>``,
+``_:up:stop:<job>``. The pre-8.43 ``_:up:cc``, ``_:up:ap`` and
+``_:up:both`` only answer that the menu is out of date.
+
+Restart now (a ``kind="restart"`` job) finishes an update without a
+service unit: it waits for idle sessions like the systemd restart, then
+asks :mod:`aipager.self_restart` to stop the daemon cleanly and exec the
+installed aipager in place (a systemd daemon schedules its restart as
+before).
 """
 
 from __future__ import annotations
@@ -37,7 +44,7 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 
-from aipager import i18n, install_source, self_update
+from aipager import _version, i18n, install_source, self_restart, self_update
 from aipager.bot.flood import FloodMuted
 from aipager.bot.flood_budget import PRIORITY_ORNAMENT, rate_limit_args
 from aipager.bot.transport import (
@@ -386,6 +393,90 @@ _NOT_BACK = Msg("upd.marker.not_back", "⚠️ Not back: {labels}",
                 note="Sessions that did not come back after the restart",
                 eg={"labels": "x9"})
 
+# ---- Restart now: finish an update without a service unit ----------------------
+_BTN_RESTART = Msg("btn.upd.restart", "🔄 Restart now",
+                   note="Button: restart aipager so it runs the version that is already "
+                        "installed (it waits until no turn is running)")
+_AP_WAITING_LINE = Msg("upd.line.ap_waiting",
+                       "aipager {installed} is installed and waiting for a restart "
+                       "(running {running}).",
+                       note="/update check line: a newer aipager is on disk; only a restart "
+                            "of aipager is missing", eg={"installed": "1.1.0", "running": "1.0.1"})
+_SUMMARY_WAITING = Msg("upd.summary.waiting", "Restart aipager to finish the update.",
+                       note="/update check: the update is installed; Restart now finishes it")
+_RESTART_BUTTON = Msg("upd.restart.button", "Restart: tap Restart now once it is installed.",
+                      note="/update check: after this update, aipager restarts when the "
+                           "Restart now button is tapped")
+_AP_BROKEN = Msg("upd.note.ap_broken",
+                 "aipager {installed} is installed but does not load. Reinstall it with "
+                 "{command}.", note="/update check: the newer aipager on disk fails to "
+                                    "import; {command} is a command",
+                 eg={"installed": "1.1.0", "command": "pipx install --force aipager"})
+_AP_RESTART_OFFER = Msg("upd.ap.restart_offer",
+                        "Tap Restart now to run it (aipager waits until no turn is running).",
+                        note="After aipager was installed: the Restart now button below "
+                             "starts the new version")
+_RS_CHECKING = Msg("upd.rs.checking", "⏳ Checking the installed aipager…",
+                   note="Restart now: first step, the installed version is checked")
+_RS_NOTHING = Msg("upd.rs.nothing",
+                  "✅ aipager {running} is already the installed version, so there is "
+                  "nothing to restart.", note="Restart now: nothing newer is installed",
+                  eg={"running": "1.1.0"})
+_RS_BROKEN = Msg("upd.rs.broken",
+                 "❌ The installed aipager does not load, so aipager was not restarted and "
+                 "still runs {running}. Reinstall with <code>{hint}</code>",
+                 note="Restart now: the installed version fails to import; {hint} is a "
+                      "command", eg={"running": "1.0.1", "hint": "pipx install --force aipager"})
+_RS_CANCELLED = Msg("upd.rs.cancelled", "↩️ Restart cancelled. aipager still runs {running}.",
+                    note="Restart now was cancelled while it waited for idle sessions",
+                    eg={"running": "1.0.1"})
+_RS_NOT_POSSIBLE = Msg("upd.rs.not_possible", "⚠️ aipager could not restart itself here.",
+                       note="Restart now: the restart could not be started; the steps to do "
+                            "it by hand follow")
+_STEPS_LEAD = Msg("upd.steps.lead", "To run {to}, restart aipager yourself:",
+                  note="Above the steps to restart aipager by hand; {to} is a version",
+                  eg={"to": "1.1.0"})
+_STEPS_TERMINAL = Msg("upd.steps.terminal",
+                      "In the terminal or tmux window where aipager runs, press {keys}, then "
+                      "run {command}.",
+                      note="Restart by hand; {keys} is a key name (Ctrl+C), {command} a "
+                           "command; tmux is a program's name",
+                      eg={"keys": "Ctrl+C", "command": "aipager start"})
+_STEPS_LAUNCHD = Msg("upd.steps.launchd", "On the Mac, run {command}.",
+                     note="Restart by hand on macOS; {command} is a command",
+                     eg={"command": "launchctl kickstart -k gui/501/com.aipager.daemon"})
+_STEPS_DOCKER = Msg("upd.steps.docker", "On the Docker host, run {command}.",
+                    note="Restart by hand: aipager runs in a Docker container; {command} is a "
+                         "command", eg={"command": "docker restart aipager"})
+_STEPS_DOCKER_IMAGE = Msg("upd.steps.docker_image",
+                          "Recreating the container starts it from its image again, which "
+                          "brings back the aipager version in that image.",
+                          note="Docker: a warning under the restart steps")
+_HOOKS_NEWER = Msg("upd.hooks.newer",
+                   "⚠️ The aipager update is only half done: Claude Code's hooks already run "
+                   "{hook}, but aipager itself still runs {running}. Restart aipager to "
+                   "finish it.", note="Sent once to the owner: a newer aipager is installed "
+                                     "but the running one is older; the Restart now button "
+                                     "follows", eg={"hook": "1.1.0", "running": "1.0.1"})
+_RESTART_LOCKED = Msg("toast.upd.restart_locked",
+                      "An update is running elsewhere. Try again once it has finished.",
+                      note="Pop-up: Restart now while an update elsewhere holds the lock")
+
+#: One owner notice per newer hook version: a failed send is retried no
+#: sooner than this...
+HOOK_NOTICE_RETRY_SECONDS = 600.0
+#: ...and at most this many times. Held back (the owner's chat not clear,
+#: an update job running) costs no attempt and is retried on the session
+#: monitor's tick; the outbound gate skipping it costs none either and is
+#: retried after this.
+HOOK_NOTICE_MAX_ATTEMPTS = 3
+HOOK_NOTICE_SKIP_RETRY_SECONDS = 30.0
+# Hook versions remembered per run (a spoofed datagram can add at most one
+# notice per version, and only this many versions).
+_HOOK_SEEN_MAX = 16
+#: Key names and commands of the manual steps (data, never translated).
+_CTRL_C = "Ctrl+C"
+
 
 def _esc(value) -> str:
     return html_mod.escape(str(value))
@@ -405,6 +496,9 @@ class StartResult:
     ok: bool
     error: str | None = None
     job: dict | None = None
+    # Why, beyond ``error``: ``"lock_held"`` when another process (the CLI)
+    # holds the update lock.
+    detail: str | None = None
 
 
 @dataclass
@@ -441,6 +535,9 @@ class _Job:
     # the post-install gate holds the restart (dropped before any marker is
     # written: the restart replaces it).
     waiting_section: str | None = None
+    # Finished ``done`` with a Restart now button (the new aipager is
+    # installed and this daemon can restart in place).
+    can_restart: bool = False
     event: asyncio.Event | None = None
     reporter: "_Reporter | None" = None
 
@@ -457,11 +554,32 @@ class _Job:
         if self.installed is not None:
             # The Mini App's restart watch waits for exactly this version.
             snap["installed"] = {"from": self.installed[0], "to": self.installed[1]}
+        if self.can_restart:
+            snap["can_restart"] = True
         return snap
 
     def wake(self) -> None:
         if self.event is not None:
             self.event.set()
+
+
+@dataclass(frozen=True)
+class _InPlace:
+    """A restart job's last step: ask the daemon to stop and exec this."""
+
+    target: "self_restart.ExecTarget"
+    frm: str
+    to: str
+    steps: str
+    # The plan's ``to_dict()``: the manual steps if the exec cannot start.
+    plan: dict = field(default_factory=dict)
+
+
+def _daemon_code_version() -> str:
+    """The aipager code THIS daemon loaded (``aipager._version``, never the
+    install's metadata, which an editable install can leave stale): what
+    the hooks' own stamp is compared with."""
+    return _version.__version__
 
 
 class _Reporter:
@@ -540,7 +658,10 @@ class UpdateOffer:
     """What a check found and the ONE update it offers (roadmap 8.43).
 
     ``kind`` is ``"aipager"``, ``"claude"``, ``"both"`` or None (nothing
-    to offer); ``lines`` holds one plain-text line per product."""
+    to offer); ``lines`` holds one plain-text line per product.
+    ``restart_offer``: a newer aipager is installed and waiting, and this
+    daemon can restart into it (the Restart now button); ``steps``: how
+    to restart it by hand when it cannot (plain text)."""
 
     kind: str | None
     label: str | None
@@ -548,6 +669,65 @@ class UpdateOffer:
     summary: str | None
     restart: str | None
     notes: list[str]
+    restart_offer: bool = False
+    steps: str | None = None
+
+
+def installed_waiting(running, installed, installed_ok, latest) -> bool:
+    """A newer aipager is installed (and loads) but not running yet, and
+    it is not older than the newest release (unknown counts as not
+    older): only a restart is missing, never another update."""
+    if not installed_ok:
+        return False
+    if not self_update.is_newer(installed, running):
+        return False
+    return not latest or not self_update.is_newer(latest, installed)
+
+
+def _code(command: str, html: bool):
+    """A command or key name as a placeholder value: a ``<code>`` span in
+    HTML, the plain command in text."""
+    return Span(f"<code>{_esc(command)}</code>") if html else str(command)
+
+
+def _docker_command(plan: dict) -> str:
+    container = plan.get("container")
+    return " ".join(("docker", "restart", str(container) if container else "<container>"))
+
+
+def restart_steps_text(plan: dict, tr, *, to, html: bool) -> str:
+    """How to restart aipager by hand for *plan* (a ``RestartPlan.to_dict()``),
+    in *tr*'s language: a lead line, then the steps for this setup
+    (terminal or tmux, launchd, Docker). systemd keeps its "Restart
+    needed" text. HTML for a chat, plain text for the Mini App."""
+    tr = tr or i18n.get("en")
+    steps = plan.get("steps") or "terminal"
+    if steps == "systemd":
+        text = _manual_restart_html(plan.get("reason"), plan.get("manual_command"), [], tr)
+        return text if html else _plain(text)
+    render = tr.html if html else tr.text
+    lines = [render(_STEPS_LEAD, to=str(to))]
+    if steps == "launchd":
+        command = plan.get("manual_command") or " ".join(
+            ("launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{self_update.MACOS_LABEL}"))
+        lines.append(render(_STEPS_LAUNCHD, command=_code(command, html)))
+    elif steps == "docker":
+        lines.append(render(_STEPS_DOCKER, command=_code(_docker_command(plan), html)))
+        lines.append(render(_STEPS_DOCKER_IMAGE))
+    else:
+        lines.append(render(_STEPS_TERMINAL, keys=_code(_CTRL_C, html),
+                            command=_code(" ".join(("aipager", "start")), html)))
+    return "\n".join(lines)
+
+
+def _manual_restart_html(reason, manual_command, at_risk, tr) -> str:
+    """systemd's "Restart needed: ..." (the plan's reason is English data)."""
+    lines = [tr.html(_MANUAL_NEEDED, reason=reason or Safe(tr.html(_YOURSELF)))]
+    if manual_command:
+        lines.append(f"<code>{_esc(manual_command)}</code>")
+    if at_risk:
+        lines.append(tr.html(_WOULD_KILL, labels=tr.join(at_risk)))
+    return "\n".join(lines)
 
 
 def update_offer(status: dict, tr=None) -> UpdateOffer:
@@ -568,9 +748,20 @@ def update_offer(status: dict, tr=None) -> UpdateOffer:
 
     running = ap["running"]
     latest = ap.get("latest")
+    installed = ap.get("installed")
     offer_ap = False
     held_back = False   # newer, but can't be updated from here
-    if not latest:
+    # Installed and waiting for a restart: never another update, only
+    # Restart now (or the steps when this daemon cannot restart itself).
+    waiting = installed_waiting(running, installed, ap.get("installed_ok") is True, latest)
+    restart_offer = False
+    steps = None
+    if waiting:
+        lines.append(tr.text(_AP_WAITING_LINE, installed=str(installed), running=str(running)))
+        restart_offer = bool(rs.get("in_place") or rs.get("automatic"))
+        if not restart_offer:
+            steps = restart_steps_text(rs, tr, to=installed, html=False)
+    elif not latest:
         failed = True
         lines.append(tr.text(_AP_UNCHECKED, running=str(running)))
     elif ap.get("update_available"):
@@ -584,9 +775,12 @@ def update_offer(status: dict, tr=None) -> UpdateOffer:
                                  latest=str(latest), reason=reason))
     else:
         lines.append(tr.text(_AP_CURRENT, running=str(running)))
-    installed = ap.get("installed")
-    if installed and installed != running:
-        notes.append(tr.text(_AP_INSTALLED, installed=str(installed)))
+    if not waiting and installed and installed != running:
+        if ap.get("installed_ok") is False and self_update.is_newer(installed, running):
+            notes.append(tr.text(_AP_BROKEN, installed=str(installed),
+                                 command=install_source.reinstall_hint(str(src.get("kind")))))
+        else:
+            notes.append(tr.text(_AP_INSTALLED, installed=str(installed)))
 
     cur = cl.get("current")
     cl_latest = cl.get("latest")
@@ -618,15 +812,18 @@ def update_offer(status: dict, tr=None) -> UpdateOffer:
         kind = label = None
     summary = None
     if kind is None:
-        summary = tr.text(CANT_UPDATE_HERE_TEXT if held_back
+        summary = tr.text(_SUMMARY_WAITING if waiting
+                          else CANT_UPDATE_HERE_TEXT if held_back
                           else CHECK_FAILED_TEXT if failed else UP_TO_DATE_TEXT)
     restart = None
     if offer_ap:
         restart = (tr.text(_RESTART_AUTO) if rs["automatic"]
+                   else tr.text(_RESTART_BUTTON) if rs.get("in_place")
                    else tr.text(_RESTART_MANUAL,
                                 reason=rs.get("reason") or Safe(tr.text(_YOURSELF))))
     return UpdateOffer(kind=kind, label=label, lines=lines, summary=summary,
-                       restart=restart, notes=notes)
+                       restart=restart, notes=notes, restart_offer=restart_offer,
+                       steps=steps)
 
 
 def _source_text(status: dict, show_paths: bool) -> str:
@@ -647,6 +844,15 @@ def check_payload(status: dict, *, show_paths: bool, tr=None) -> dict:
         "restart": offer.restart,
         "notes": list(offer.notes),
         "source": _source_text(status, show_paths),
+        # Installed and waiting: Restart now instead of an update, or the
+        # steps to restart by hand (plain text).
+        "restart_offer": offer.restart_offer,
+        "steps": offer.steps,
+        # Whether an offered aipager update restarts by itself...
+        "restart_auto": bool((status.get("restart") or {}).get("automatic")),
+        # ...or ends with Restart now (this process restarts in place).
+        # Neither: it ends with the steps to restart by hand.
+        "restart_in_place": bool((status.get("restart") or {}).get("in_place")),
     }
 
 
@@ -669,21 +875,37 @@ def render_check(status: dict, *, show_paths: bool,
     lines += [_esc_text(n) for n in offer.notes]
     if offer.restart:
         lines.append(_esc_text(offer.restart))
+    if offer.steps:
+        # In chat the commands are code spans.
+        lines += ["", restart_steps_text(status["restart"], tr,
+                                         to=status["aipager"]["installed"], html=True)]
+    rows = []
     if offer.kind is None:
         lines += ["", _esc_text(offer.summary)]
-        kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton(tr.text(_CHECK_AGAIN), callback_data="_:up:chk")]])
     else:
-        kb = InlineKeyboardMarkup([[
+        rows.append([
             InlineKeyboardButton(offer.label,
                                  callback_data=f"_:up:go:{_GO_VERBS[offer.kind]}"),
             InlineKeyboardButton(tr.text(_CANCEL), callback_data="_:up:x"),
-        ]])
-    return "\n".join(lines), kb
+        ])
+    if offer.restart_offer:
+        rows.append([InlineKeyboardButton(tr.text(_BTN_RESTART), callback_data="_:up:rs")])
+    if not rows:
+        rows.append([InlineKeyboardButton(tr.text(_CHECK_AGAIN), callback_data="_:up:chk")])
+    return "\n".join(lines), InlineKeyboardMarkup(rows)
+
+
+def restart_markup(tr=None) -> InlineKeyboardMarkup:
+    """The one Restart now button (``_:up:rs``)."""
+    tr = tr or i18n.get("en")
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(tr.text(_BTN_RESTART), callback_data="_:up:rs")]])
 
 
 def _job_markup(job: _Job, tr=None) -> InlineKeyboardMarkup | None:
     """The job's buttons, in *tr*'s language (the job chat's when None)."""
+    if job.phase == "done" and job.can_restart:
+        return restart_markup(tr or i18n.for_chat(job.chat_id))
     if job.phase not in ("waiting_for_idle", "gate_timeout"):
         return None
     tr = tr or i18n.for_chat(job.chat_id)
@@ -786,6 +1008,14 @@ class UpdateManager:
         # into: ``{"from", "to", "readopted", "missing"}``, shown by the
         # Mini App's restart watch.
         self.last_restart: dict | None = None
+        # A newer aipager known to be installed and waiting for a restart
+        # (the last check, or an update job that ended with Restart now).
+        self._waiting: str | None = None
+        # The newest hook version seen running newer code than this daemon,
+        # and one record per such version: {delivered, attempts,
+        # last_try_mono, last_try, task, deferred} (one owner notice per version per run).
+        self._hooks_newer: str | None = None
+        self._hook_seen: dict[str, dict] = {}
 
     # ---- read side -------------------------------------------------------
 
@@ -829,9 +1059,22 @@ class UpdateManager:
         data = await self.status(force=True)
         if epoch == self._job_epoch and not self.busy:
             self._checked = (time.monotonic(), data)
+            ap = data.get("aipager") or {}
+            self._waiting = str(ap["installed"]) if ap.get("waiting") else None
         else:
             log.info("update.check.discarded reason=job-started-or-ended")
         return data
+
+    def waiting_info(self) -> dict | None:
+        """For the Mini App's banner, no lookup: a newer aipager installed
+        and waiting for a restart, or hooks already running newer code."""
+        running = self_update.running_version()
+        if self._waiting and self_update.is_newer(self._waiting, running):
+            return {"version": self._waiting, "running": running, "source": "installed"}
+        mine = _daemon_code_version()
+        if self._hooks_newer and self_update.is_newer(self._hooks_newer, mine):
+            return {"version": self._hooks_newer, "running": mine, "source": "hooks"}
+        return None
 
     async def _collect_status(self) -> dict:
         async def bounded(fn, *args):
@@ -858,25 +1101,43 @@ class UpdateManager:
             blocked = await bounded(self_update.claude_update_blocker, realpath, method)
             return cur, method, channel, latest, blocked
 
+        async def installed_side():
+            # What a restart would run: probed in a fresh interpreter (the
+            # in-process metadata can predate a recreated venv).
+            target = self_restart.exec_target()
+            if target is None:
+                return None
+            return await bounded(self_update.probe_restart_target, target)
+
         source = install_source.detect_install_source()
         running = self_update.running_version()
-        installed = self_update.installed_version()
-        latest_ap, claude, plan = await asyncio.gather(
+        latest_ap, claude, plan, probe = await asyncio.gather(
             bounded(self_update.latest_aipager_version),
             claude_side(),
             bounded(self_update.restart_plan, self.bot.registry),
+            installed_side(),
         )
         cur, method, channel, latest_cl, blocked_cl = claude
         if plan is None:
             plan = self_update.RestartPlan(
                 "foreground", False, "could not tell how this daemon is run")
+        if probe is not None:
+            probed, installed_ok, _err = probe
+            installed = probed or self_update.installed_version()
+        else:
+            # The probe could not run: the in-process reading, unproven.
+            installed, installed_ok = self_update.installed_version(), None
+        waiting = installed_waiting(running, installed, installed_ok is True, latest_ap)
         log.info("update.check running=%s latest=%s claude=%s claude_latest=%s "
-                 "source=%s restart=%s", running, latest_ap,
-                 cur[1] if cur else None, latest_cl, source.kind, plan.mode)
+                 "source=%s restart=%s installed=%s waiting=%s in_place=%s", running,
+                 latest_ap, cur[1] if cur else None, latest_cl, source.kind, plan.mode,
+                 installed, waiting, plan.in_place)
         return {
             "aipager": {
                 "running": running,
                 "installed": installed,
+                "installed_ok": installed_ok,
+                "waiting": waiting,
                 "latest": latest_ap,
                 "update_available": self_update.is_newer(latest_ap, running),
                 "source": _source_dict(source),
@@ -961,6 +1222,40 @@ class UpdateManager:
         self._job_task = self._spawn(self._run_job(job))
         return StartResult(True, None, job.snapshot())
 
+    async def start_restart(self, *, chat_id: int, user_id: int | None, origin: str,
+                            status_message=None) -> StartResult:
+        """Restart now: run the aipager that is installed (a ``restart``
+        job). The same single-flight rules as :meth:`start`; no install
+        source is required (an editable or Docker install may have a newer
+        version waiting too)."""
+        if self._shutting_down:
+            log.info("update.restart.refused user=%s chat=%s reason=shutting-down",
+                     user_id, chat_id)
+            return StartResult(False, "shutting_down", self.snapshot())
+        if self.busy:
+            log.info("update.lock_busy user=%s chat=%s job=%s", user_id, chat_id,
+                     self._job.id if self._job else None)
+            return StartResult(False, "update_in_progress", self.snapshot())
+        if not self._lock.try_acquire():
+            log.info("update.lock_busy user=%s chat=%s (held elsewhere)", user_id, chat_id)
+            return StartResult(False, "update_in_progress", self.snapshot(),
+                               detail="lock_held")
+        job_id = max(int(time.time()), self._last_job_id + 1)
+        self._last_job_id = job_id
+        self._lock_owner = job_id
+        job = _Job(id=job_id, kind="restart", chat_id=chat_id, user_id=user_id,
+                   origin=origin, started_at=time.time(), event=asyncio.Event(),
+                   phase="verifying")
+        # The card's first words: the installed version is checked first.
+        job.live = i18n.for_chat(chat_id).html(_RS_CHECKING)
+        job.reporter = _Reporter(self.bot, chat_id, status_message)
+        self._job = job
+        self._job_epoch += 1
+        log.info("update.start job=%s kind=restart user=%s chat=%s origin=%s",
+                 job.id, user_id, chat_id, origin)
+        self._job_task = self._spawn(self._run_job(job))
+        return StartResult(True, None, job.snapshot())
+
     def control(self, action: str, job_id) -> ControlResult:
         job = self._job
         if (job is None or job.terminal or not isinstance(job_id, int)
@@ -1014,8 +1309,14 @@ class UpdateManager:
         # this job; to_thread copies the context into the worker thread.
         self_update.CURRENT_JOB_ID.set(job.id)
         restart_scheduled = False
+        in_place: _InPlace | None = None
         try:
             await self._report(job)
+            if job.kind == "restart":
+                outcome = await self._restart_step(job)
+                if isinstance(outcome, _InPlace):
+                    in_place = outcome
+                restart_scheduled = outcome is not None
             if job.kind in ("claude", "both"):
                 await self._claude_step(job)
             if job.kind in ("aipager", "both") and not job.terminal:
@@ -1052,7 +1353,11 @@ class UpdateManager:
                 await self._report(job)
             except Exception:
                 log.debug("final update report failed", exc_info=True)
-        if restart_scheduled:
+        if in_place is not None:
+            # Only now, with "installed, restarting…" on the card: the stop
+            # this asks for tears the bot down.
+            await self._request_in_place(job, in_place)
+        elif restart_scheduled:
             self._spawn(self._restart_watchdog(job))
 
     async def _await_with_heartbeat(self, job: _Job, label: str, fn, *args):
@@ -1136,12 +1441,24 @@ class UpdateManager:
         """How to restart by hand, in *tr*'s language (English when None);
         the plan's reason is English data."""
         tr = tr or i18n.get("en")
-        lines = [tr.html(_MANUAL_NEEDED, reason=plan.reason or Safe(tr.html(_YOURSELF)))]
-        if plan.manual_command:
-            lines.append(f"<code>{_esc(plan.manual_command)}</code>")
-        if plan.at_risk:
-            lines.append(tr.html(_WOULD_KILL, labels=tr.join(plan.at_risk)))
-        return "\n".join(lines)
+        return _manual_restart_html(plan.reason, plan.manual_command, plan.at_risk, tr)
+
+    def _after_install_text(self, job: _Job, plan, tr, new: str) -> str:
+        """What follows "A → B installed." when the daemon does not restart
+        itself: Restart now (in place), systemd's manual text, or the exact
+        steps for this setup."""
+        if plan.in_place:
+            job.can_restart = True
+            self._waiting = str(new)
+            return tr.html(_AP_RESTART_OFFER)
+        return self._steps_text(plan, tr, new)
+
+    def _steps_text(self, plan, tr, new: str) -> str:
+        """The manual way: systemd's "Restart needed" text, else the exact
+        steps for this setup."""
+        if plan.steps == "systemd":
+            return self._manual_restart_text(plan, tr)
+        return restart_steps_text(plan.to_dict(), tr, to=new, html=True)
 
     async def _aipager_step(self, job: _Job) -> bool:
         registry = self.bot.registry
@@ -1233,9 +1550,10 @@ class UpdateManager:
             return False
 
         if not plan.automatic:
-            log.info("update.restart.refused job=%s mode=%s", job.id, plan.mode)
+            log.info("update.restart.refused job=%s mode=%s in_place=%s", job.id, plan.mode,
+                     plan.in_place)
             self._finish(job, "done", tr.html(_AP_INSTALLED_OK, **ver) + "\n"
-                         + self._manual_restart_text(plan, tr))
+                         + self._after_install_text(job, plan, tr, new))
             return False
 
         if not job.restart_now:
@@ -1254,9 +1572,10 @@ class UpdateManager:
             self._installed_at_shutdown(job, running, new)
             return False
         if not plan.automatic:
-            log.info("update.restart.refused job=%s mode=%s (re-read)", job.id, plan.mode)
+            log.info("update.restart.refused job=%s mode=%s in_place=%s (re-read)", job.id,
+                     plan.mode, plan.in_place)
             self._finish(job, "done", tr.html(_AP_INSTALLED_OK, **ver) + "\n"
-                         + self._manual_restart_text(plan, tr))
+                         + self._after_install_text(job, plan, tr, new))
             return False
 
         try:
@@ -1285,6 +1604,308 @@ class UpdateManager:
         # into "✅ aipager updated A → B, N sessions re-adopted".
         self._finish(job, "restart_scheduled", tr.html(_AP_RESTARTING, **ver))
         return True
+
+    # ---- Restart now (kind "restart") ---------------------------------------------
+
+    async def _probe_target(self, job: _Job, running: str):
+        """``(target, new)`` when a newer aipager is installed and loads;
+        otherwise the job is finished and ``(None, None)`` comes back."""
+        tr = i18n.for_chat(job.chat_id)
+        target = self_restart.exec_target()
+        if target is not None:
+            new, importable, err = await asyncio.to_thread(
+                self_update.probe_restart_target, target)
+        else:
+            # No interpreter to exec (systemd still restarts through its
+            # unit): what the install itself imports.
+            source = install_source.detect_install_source()
+            new, importable, err = await asyncio.to_thread(
+                self_update.probe_installed_version, source.python)
+        if self._shutting_down and err == self_update.SHUTTING_DOWN_ERROR:
+            if job.installed is not None:
+                # The first check found B: the next start runs it.
+                self._installed_at_shutdown(job, *job.installed)
+            else:
+                self._finish(job, "cancelled", self._shutdown_section(job))
+            return None, None
+        if not importable:
+            log.info("update.restart.probe_failed job=%s error=%s", job.id, err)
+            hint = install_source.reinstall_hint(install_source.detect_install_source().kind)
+            self._finish(job, "failed", tr.html(_RS_BROKEN, running=str(running),
+                                                hint=str(hint))
+                         + _pre_tail(err, job.chat_id, tr))
+            return None, None
+        if not self_update.is_newer(new, running):
+            log.info("update.restart.nothing job=%s running=%s installed=%s", job.id,
+                     running, new)
+            self._waiting = None
+            self._finish(job, "done", tr.html(_RS_NOTHING, running=str(running)))
+            return None, None
+        return target, str(new)
+
+    async def _restart_step(self, job: _Job):
+        """Restart now. Returns ``_InPlace`` (exec once the final report is
+        out), ``"systemd"`` (a restart is scheduled) or None (finished)."""
+        registry = self.bot.registry
+        tr = i18n.for_chat(job.chat_id)
+        running = self_update.running_version()
+
+        def checking() -> None:
+            job.phase = "verifying"
+            job.blockers = []
+            job.live = tr.html(_RS_CHECKING)
+
+        checking()
+        await self._report(job)
+        target, new = await self._probe_target(job, running)
+        if new is None:
+            return None
+        job.installed = (running, new)
+        plan = await asyncio.to_thread(self_update.restart_plan, registry)
+        if self._shutting_down:
+            self._installed_at_shutdown(job, running, new)
+            return None
+        if not plan.automatic and not plan.in_place:
+            log.info("update.restart.refused job=%s mode=%s", job.id, plan.mode)
+            self._finish(job, "done", self._steps_text(plan, tr, new))
+            return None
+
+        # One rule for every restart: never while a turn is running.
+        if await self._wait_gate(job) == "cancel":
+            self._finish(job, "cancelled", tr.html(_RS_CANCELLED, running=str(running)))
+            return None
+
+        # The verification that counts: right before the restart.
+        checking()
+        await self._report(job)
+        plan = await asyncio.to_thread(self_update.restart_plan, registry)
+        if self._shutting_down:
+            self._installed_at_shutdown(job, running, new)
+            return None
+        target, new = await self._probe_target(job, running)
+        if new is None:
+            return None
+        job.installed = (running, new)
+        if self._shutting_down:
+            self._installed_at_shutdown(job, running, new)
+            return None
+        if not plan.automatic and not (plan.in_place and target is not None):
+            log.info("update.restart.refused job=%s mode=%s (re-read)", job.id, plan.mode)
+            self._finish(job, "done", self._steps_text(plan, tr, new))
+            return None
+
+        ver = {"frm": str(running), "to": str(new)}
+        manual = plan.manual_command or " ".join(("aipager", "start"))
+        try:
+            self_update.write_marker(self._update_marker(job, running, new))
+        except OSError as e:
+            log.info("update.restart.failed job=%s marker: %s", job.id, e)
+            self._finish(job, "failed", tr.html(
+                _AP_PREPARE_FAILED, **ver, error=str(e), cmd=str(manual)))
+            return None
+        if plan.automatic:
+            ok, detail = await asyncio.to_thread(self_update.schedule_restart, plan)
+            if self._shutting_down:
+                if ok:
+                    await asyncio.to_thread(self_update.cancel_scheduled_restart, detail,
+                                            during_shutdown=True)
+                self._installed_at_shutdown(job, running, new)
+                return None
+            if not ok:
+                self_update.clear_marker()
+                self._finish(job, "failed", tr.html(
+                    _AP_SCHEDULE_FAILED, **ver, detail=str(detail), cmd=str(manual)))
+                return None
+            job.restart_unit = detail
+            self._finish(job, "restart_scheduled", tr.html(_AP_RESTARTING, **ver))
+            return "systemd"
+        log.info("update.restart.in_place job=%s from=%s to=%s", job.id, running, new)
+        self._finish(job, "restart_scheduled", tr.html(_AP_RESTARTING, **ver))
+        return _InPlace(target=target, frm=str(running), to=str(new), steps=plan.steps,
+                        plan=plan.to_dict())
+
+    async def _request_in_place(self, job: _Job, step: _InPlace) -> None:
+        """Ask the daemon to stop and exec the new aipager; if it cannot,
+        say so with the steps, and free everything."""
+        if self_restart.request(step.target, frm=step.frm, to=step.to, steps=step.steps):
+            return
+        log.warning("update.restart.failed job=%s reason=in-place-not-possible", job.id)
+        self_update.clear_marker()
+        self._release_lock(job)
+        tr = i18n.for_chat(job.chat_id)
+        plan = dict(step.plan) or {"steps": step.steps}
+        job.sections = [tr.html(_RS_NOT_POSSIBLE) + "\n"
+                        + restart_steps_text(plan, tr, to=step.to, html=True)]
+        job.summary = _plain(job.sections[-1])
+        job.live = None
+        job.phase = "failed"
+        try:
+            await self._report(job)
+        except Exception:
+            log.debug("restart failure report failed", exc_info=True)
+
+    # ---- hooks newer than this daemon --------------------------------------------
+
+    def note_hook_version(self, version) -> None:
+        """A hook or the status line runs aipager *version*. Cheap, sync,
+        never raises: tells the owner once per newer version per run."""
+        try:
+            if self_update.parse_version(version) is None:
+                return
+            mine = _daemon_code_version()
+            if not self_update.is_newer(version, mine):
+                return
+            rec = self._hook_seen.get(version)
+            if rec is None:
+                if len(self._hook_seen) >= _HOOK_SEEN_MAX:
+                    return
+                rec = {"delivered": False, "attempts": 0, "last_try_mono": None,
+                       "last_try": None, "task": None, "deferred": None,
+                       "skip_logged": False}
+                self._hook_seen[version] = rec
+                log.info("update.hooks_newer hook=%s daemon=%s", version, mine)
+            if self._hooks_newer is None or self_update.is_newer(version, self._hooks_newer):
+                self._hooks_newer = version
+            self._try_hook_notice(version, rec)
+        except Exception:
+            log.debug("hook version note failed", exc_info=True)
+
+    def hook_notice_tick(self) -> None:
+        """The session monitor's tick: a notice held back while the owner's
+        chat was not clear goes out once it is (a hook datagram mostly
+        arrives mid-turn, so waiting for the next one is not enough).
+        Cheap and sync; nothing at all when no notice is pending."""
+        try:
+            for version, rec in list(self._hook_seen.items()):
+                self._try_hook_notice(version, rec)
+        except Exception:
+            log.debug("hook notice tick failed", exc_info=True)
+
+    def _try_hook_notice(self, version: str, rec: dict) -> None:
+        """Start the notice for *version* when it is owed, due and the
+        owner's chat is clear. Holding it back costs no attempt and logs
+        only when the reason changes; no task is made for it."""
+        if rec["delivered"] or rec["attempts"] >= HOOK_NOTICE_MAX_ATTEMPTS:
+            return
+        task = rec["task"]
+        if task is not None and not task.done():
+            return
+        last = rec["last_try_mono"]
+        if last is not None:
+            wait = (HOOK_NOTICE_SKIP_RETRY_SECONDS if rec["last_try"] == "skipped"
+                    else HOOK_NOTICE_RETRY_SECONDS)
+            if time.monotonic() - last < wait:
+                return
+        if self._hook_notice_covered(version):
+            rec["delivered"] = True
+            log.info("update.hooks_newer.notice hook=%s result=covered", version)
+            return
+        from aipager.bot import report_flow
+
+        owner = None
+        reason = None
+        if self.busy or self._shutting_down:
+            reason = "update-job"
+        else:
+            owner = report_flow.resolve_owner(self.bot)
+            if owner is None:
+                rec["delivered"] = True
+                log.info("update.hooks_newer.no_owner hook=%s", version)
+                return
+            reason = self._owner_chat_wait_reason(owner)
+        if reason is not None:
+            if reason == "owner-chat-not-clear":
+                # Muted, a 429 wait, a warning regime: these last a while,
+                # so the (dearer) chat check is not redone every tick.
+                rec["last_try_mono"], rec["last_try"] = time.monotonic(), "skipped"
+            if rec["deferred"] != reason:
+                rec["deferred"] = reason
+                log.info("update.hooks_newer.notice hook=%s result=deferred reason=%s",
+                         version, reason)
+            return
+        rec["deferred"] = None
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return          # nothing to send it from (never in the daemon)
+        rec["task"] = self._spawn(self._hook_notice(version, owner))
+
+    def _owner_chat_wait_reason(self, owner: int) -> str | None:
+        """Why an unsolicited message to the owner's chat should wait, or
+        None: a turn (or its card, answer, question or background agent) is
+        live there, an answer is held for it, or the chat is muted, in a 429
+        wait, a warning regime or minimal mode. The per-session predicates
+        and the held count are the ones ``self_update.restart_blockers``
+        asks, scoped to the owner's chat."""
+        from aipager.bot import report_offer
+        from aipager.state import Status, session_in_chat
+
+        now = time.monotonic()
+        registry = getattr(self.bot, "registry", None)
+        sessions = registry.all_sessions() if registry is not None else {}
+        for sess in sessions.values():
+            if sess.status in (Status.GONE, Status.UNKNOWN):
+                continue
+            if not session_in_chat(sess, owner):
+                continue
+            if (sess.status in (Status.BUSY, Status.INTERACTIVE)
+                    or (sess.busy_msg_id or 0) > 0 or sess.busy_card_owed
+                    or sess.notify_in_flight or sess.pending_permission is not None
+                    or sess.stack_top_kind() == "compacting"
+                    or sess.work_in_flight(now)
+                    or sess.job_background_open()):
+                return "owner-chat-busy"
+        from aipager.bot.held import HELD
+
+        if HELD.count(owner):
+            return "owner-chat-held-answers"
+        if not report_offer.dm_clear(owner):
+            return "owner-chat-not-clear"
+        return None
+
+    def _hook_notice_covered(self, version: str) -> bool:
+        """A job card already offers (or runs) the restart into *version*."""
+        job = self._job
+        if job is None or job.installed is None or job.installed[1] != version:
+            return False
+        return not job.terminal or self.restart_pending or job.can_restart
+
+    async def _hook_notice(self, version: str, owner: int) -> None:
+        rec = self._hook_seen[version]
+        mine = _daemon_code_version()
+        tr = i18n.for_chat(owner)
+        app = getattr(self.bot, "_app", None)
+        sent = None
+        if app is not None:
+            try:
+                sent = await send_text(
+                    app.bot, owner, tr.html(_HOOKS_NEWER, hook=str(version), running=str(mine)),
+                    parse_mode="HTML", reply_markup=restart_markup(tr),
+                    disable_notification=True,
+                    rate_limit_args=rate_limit_args(kind="skip", priority=PRIORITY_ORNAMENT))
+            except FloodMuted:
+                sent = MUTED
+            except Exception:
+                log.debug("hooks newer notice failed", exc_info=True)
+                sent = None
+        if sent is MUTED or sent is SKIPPED:
+            # The outbound gate held it back: nothing reached Telegram, so
+            # no attempt is spent; tried again shortly. Logged once per
+            # streak: the gate can stay tight for a long while.
+            rec["last_try_mono"], rec["last_try"] = time.monotonic(), "skipped"
+            if not rec.get("skip_logged"):
+                rec["skip_logged"] = True
+                log.info("update.hooks_newer.notice hook=%s result=skipped", version)
+            return
+        rec["skip_logged"] = False
+        if sent is None:
+            rec["attempts"] += 1
+            rec["last_try_mono"], rec["last_try"] = time.monotonic(), "failed"
+            log.info("update.hooks_newer.notice hook=%s result=failed attempt=%d",
+                     version, rec["attempts"])
+            return
+        rec["delivered"] = True
+        log.info("update.hooks_newer.notice hook=%s result=sent", version)
 
     @staticmethod
     def _drop_waiting_section(job: _Job) -> None:
@@ -1701,6 +2322,20 @@ async def handle_callback(bot: "TelegramBot", update, query, session_name: str,
             except Exception:
                 log.debug("update refusal edit failed", exc_info=True)
         return True
+    if verb == "rs" and len(parts) == 1:
+        # Restart now: run the installed aipager. Refusals are pop-ups, so
+        # they never overwrite a live job's card.
+        res = await mgr.start_restart(chat_id=chat_id, user_id=user_id, origin="chat",
+                                      status_message=message)
+        if not res.ok:
+            if res.error == "shutting_down":
+                text = pop.text(_SHUTTING_DOWN)
+            elif res.detail == "lock_held":
+                text = pop.text(_RESTART_LOCKED)
+            else:
+                text = pop.text(_BUSY_SHORT, phase=str((res.job or {}).get("phase", "…")))
+            await bot._safe_answer(query, text, show_alert=True)
+        return True
     if verb in ("now", "wait", "stop") and len(parts) == 2:
         try:
             job_id = int(parts[1])
@@ -1831,6 +2466,6 @@ def _marker_message_ref(marker: dict, chat_id: int) -> tuple[int, str] | None:
 
 __all__ = [
     "ControlResult", "StartResult", "UpdateManager", "UpdateOffer", "check_payload",
-    "deliver_update_marker", "handle_callback", "handle_update_cmd", "render_check",
-    "update_offer",
+    "deliver_update_marker", "handle_callback", "handle_update_cmd", "installed_waiting",
+    "render_check", "restart_markup", "restart_steps_text", "update_offer",
 ]

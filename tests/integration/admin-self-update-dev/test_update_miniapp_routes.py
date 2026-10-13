@@ -188,7 +188,8 @@ def test_update_api_status_shape(env, run):
     assert body["claude"]["current"] == "2.1.281"
     assert body["claude"]["latest"] == "2.1.290"
     assert body["restart"] == {"mode": "systemd", "automatic": True, "reason": None,
-                               "manual_command": "systemctl --user restart aipager.service"}
+                               "manual_command": "systemctl --user restart aipager.service",
+                               "in_place": False, "steps": "systemd", "container": None}
     assert body["job"] is None
 
 

@@ -5,6 +5,7 @@ The conftest guard replaces ``self_update._run_command`` and ``_http_get``
 fetch of the update path really goes through them. This sweep fails the
 build on a ``subprocess.*`` / ``os.system`` / ``os.exec*`` / ``os.spawn*``
 / ``create_subprocess_*`` / ``urlopen`` call outside those two functions,
+on an ``os.kill``/``os.killpg`` outside ``self_update._kill_group``,
 on any ``shell=True``, and on an ``aiohttp`` import, in the four modules
 of the update path. The meta-tests below prove the guards themselves fire.
 """
@@ -22,9 +23,20 @@ SWEPT = [
     ROOT / "self_update.py",
     ROOT / "bot" / "update_flow.py",
     ROOT / "updater.py",
+    # The restart in place: it may only exec, respawn or kill through its
+    # module aliases (``_execve = os.execve``, ``_popen = subprocess.Popen``,
+    # ``_kill``), which tests/conftest.py replaces with refusers. A direct
+    # ``os.exec*`` or ``subprocess.*`` call here would bypass that guard
+    # and replace the pytest process.
+    ROOT / "self_restart.py",
 ]
 SEAMS = {"_run_command", "_http_get"}
 _OS_SPAWNERS = {"system", "popen", "fork", "forkpty"}
+# A direct signal: ``os.kill(os.getpid(), SIGTERM)`` would stop pytest past
+# the ``self_restart._kill`` refuser. Only ``self_update._kill_group`` may
+# signal, and only the process group of a child the seam itself started.
+_OS_SIGNALLERS = {"kill", "killpg"}
+SIGNAL_SEAMS = {("self_update.py", "_kill_group")}
 
 
 def spawn_offenders(filename: str, source: str) -> list[str]:
@@ -67,6 +79,10 @@ def spawn_offenders(filename: str, source: str) -> list[str]:
             elif base == "os" and (func.attr in _OS_SPAWNERS
                                    or func.attr.startswith(("exec", "spawn", "posix_spawn"))):
                 name = f"os.{func.attr}"
+            elif base == "os" and func.attr in _OS_SIGNALLERS:
+                if (filename, enclosing_function(node)) in SIGNAL_SEAMS:
+                    continue
+                name = f"os.{func.attr}"
             elif func.attr.startswith("create_subprocess_"):
                 name = func.attr
             elif func.attr == "urlopen":
@@ -94,6 +110,8 @@ def test_self_update_modules_spawn_only_through_seam():
     "import subprocess\ndef f():\n    subprocess.Popen(['x'])\n",
     "import os\ndef f():\n    os.system('x')\n",
     "import os\ndef f():\n    os.execv('/bin/x', ['x'])\n",
+    "import os, signal\ndef f():\n    os.kill(os.getpid(), signal.SIGTERM)\n",
+    "import os, signal\ndef g():\n    os.killpg(1, signal.SIGTERM)\n",
     "import asyncio\nasync def f():\n    await asyncio.create_subprocess_exec('x')\n",
     "import urllib.request\ndef f():\n    urllib.request.urlopen('https://x')\n",
     "def _run_command():\n    g(['x'], shell=True)\n",
@@ -102,6 +120,18 @@ def test_self_update_modules_spawn_only_through_seam():
 ])
 def test_sweep_catches_each_forbidden_shape(src):
     assert spawn_offenders("x.py", src), src
+
+
+def test_sweep_allows_the_child_group_kill_only():
+    src = ("import os, signal\n"
+           "def _kill_group(proc):\n    os.killpg(proc.pid, signal.SIGTERM)\n")
+    assert spawn_offenders("self_update.py", src) == []
+
+
+def test_sweep_allows_the_child_group_kill_in_self_update_only():
+    src = ("import os, signal\n"
+           "def _kill_group(proc):\n    os.killpg(proc.pid, signal.SIGTERM)\n")
+    assert spawn_offenders("self_restart.py", src)
 
 
 def test_sweep_allows_the_seams_themselves():
@@ -150,3 +180,45 @@ def test_conftest_sees_no_real_cgroup():
 
     assert Path(self_update._PROC_SELF_CGROUP).read_text() == "0::/\n"
     assert self_update.restart_plan(None).mode == "foreground"
+
+
+# ----- the restart-in-place refusers (tests/conftest.py) ---------------------------
+
+# Removing a refuser must turn these red without harm: the exec and the
+# respawn name a binary that does not exist, and the kill sends signal 0.
+
+def test_conftest_refuses_exec_of_the_test_process(_never_exec_or_respawn):
+    from aipager import self_restart
+
+    with pytest.raises(AssertionError, match="would exec"):
+        self_restart._execve("/nonexistent/aipager-test/python",
+                             ["/nonexistent/aipager-test/python"], {})
+    assert [w for w, _ in _never_exec_or_respawn.refused] == ["exec"]
+    _never_exec_or_respawn.refused.clear()  # tripped on purpose
+
+
+def test_conftest_refuses_a_respawn(_never_exec_or_respawn):
+    from aipager import self_restart
+
+    with pytest.raises(AssertionError, match="would respawn"):
+        self_restart._popen(["/nonexistent/aipager-test/sh", "-c", "true"])
+    assert [w for w, _ in _never_exec_or_respawn.refused] == ["respawn"]
+    _never_exec_or_respawn.refused.clear()  # tripped on purpose
+
+
+def test_conftest_refuses_killing_the_test_process(_never_exec_or_respawn):
+    import os
+
+    from aipager import self_restart
+
+    with pytest.raises(AssertionError, match="would kill"):
+        self_restart._kill(os.getpid(), 0)
+    assert [w for w, _ in _never_exec_or_respawn.refused] == ["kill"]
+    _never_exec_or_respawn.refused.clear()  # tripped on purpose
+
+
+def test_conftest_sees_no_container():
+    from aipager import self_update
+
+    assert not Path(self_update._DOCKERENV_PATH).exists()
+    assert not Path(self_update._CONTAINERENV_PATH).exists()

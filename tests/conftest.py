@@ -1629,3 +1629,51 @@ def _no_real_self_update_io(tmp_path, monkeypatch):
         f"test reached a release-version fetch for {reached!r} without faking "
         "it. Mock aipager.self_update._http_get in the test."
     )
+
+
+@pytest.fixture(autouse=True)
+def _never_exec_or_respawn(tmp_path, monkeypatch):
+    """Make it impossible for a test to replace, respawn or kill the test
+    process through the restart-in-place path.
+
+    ``aipager.self_restart`` replaces the daemon with ``_execve`` (an
+    ``os.execve`` would replace pytest itself), starts the detached
+    respawn with ``_popen`` and stops the daemon with ``_kill`` (SIGTERM to
+    ``os.getpid()``, which is pytest here). Each is swapped for a refuser
+    that RECORDS the call and raises, and the teardown fails a test whose
+    refusal a broad ``except`` swallowed (the exec failure falls back on
+    purpose). ``_chdir`` is a recorder, so nothing moves pytest's cwd.
+    The module's state (the attached stop, a pending request, the launch
+    snapshot) starts and ends empty, and the container markers point at
+    paths that do not exist, so no test sees the host's ``/.dockerenv``.
+
+    Tests fake these seams themselves; a later monkeypatch wins.
+    """
+    from aipager import self_restart, self_update
+
+    refused: list = []
+
+    def _refuse(what):
+        def refuser(*args, **kwargs):
+            refused.append((what, args))
+            raise AssertionError(
+                f"test would {what} the test process via aipager.self_restart "
+                f"({args!r}). Fake aipager.self_restart._{what_seam[what]} in the test.")
+        return refuser
+
+    what_seam = {"exec": "execve", "respawn": "popen", "kill": "kill"}
+    monkeypatch.setattr(self_restart, "_execve", _refuse("exec"))
+    monkeypatch.setattr(self_restart, "_popen", _refuse("respawn"))
+    monkeypatch.setattr(self_restart, "_kill", _refuse("kill"))
+    monkeypatch.setattr(self_restart, "_chdir", lambda path: None)
+    monkeypatch.setattr(self_update, "_DOCKERENV_PATH",
+                        str(tmp_path / "no-such-dockerenv"))
+    monkeypatch.setattr(self_update, "_CONTAINERENV_PATH",
+                        str(tmp_path / "no-such-containerenv"))
+    self_restart._reset()
+    import types
+    yield types.SimpleNamespace(refused=refused)
+    self_restart._reset()
+    assert not refused, (
+        f"test reached a real exec/respawn/kill of the test process: {refused!r}. "
+        "Fake aipager.self_restart._execve/_popen/_kill in the test.")

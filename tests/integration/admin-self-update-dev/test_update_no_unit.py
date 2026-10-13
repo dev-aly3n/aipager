@@ -1,4 +1,5 @@
-"""No automatic restart without a safe systemd unit (8.36)."""
+"""No automatic restart without a safe systemd unit (8.36); without a
+unit, Restart now (in place) or the exact steps for the setup."""
 
 from __future__ import annotations
 
@@ -14,30 +15,51 @@ def _run_aipager(env, run):
     run(scenario)
 
 
-def test_foreground_daemon_gets_manual_instruction_and_no_restart(env, run):
+def test_foreground_daemon_offers_restart_now_and_no_restart(env, run):
     env.set_under_unit(False)
     _run_aipager(env, run)
     text = env.last_text()
     assert "0.7.13 → 0.7.14 installed" in text
-    assert "no service unit is running this daemon; restart it yourself" in text
+    assert "Tap Restart now to run it" in text
+    assert env.last_markup_data() == ["_:up:rs"]
+    assert env.manager.snapshot()["can_restart"] is True
     assert env.schedule_calls() == []
     assert not self_update.UPDATE_MARKER_PATH.exists()
 
 
-def test_launchd_gets_kickstart_instruction_and_no_restart(env, run, monkeypatch):
+def test_launchd_offers_restart_now_and_no_restart(env, run, monkeypatch):
     env.set_under_unit(False)
     monkeypatch.setattr(self_update, "_system", lambda: "Darwin")
     monkeypatch.setenv("XPC_SERVICE_NAME", "com.aipager.daemon")
     _run_aipager(env, run)
-    assert (f"launchctl kickstart -k gui/{os.getuid()}/com.aipager.daemon"
-            in env.last_text())
+    assert "Tap Restart now to run it" in env.last_text()
+    assert env.last_markup_data() == ["_:up:rs"]
     assert env.schedule_calls() == []
 
 
-def test_unit_installed_but_not_main_pid_is_foreground(env, run):
+def test_launchd_without_an_interpreter_gets_the_kickstart_steps(env, run, monkeypatch):
+    from aipager import self_restart
+    monkeypatch.setattr(self_restart, "exec_target", lambda: None)
+    env.set_under_unit(False)
+    monkeypatch.setattr(self_update, "_system", lambda: "Darwin")
+    monkeypatch.setenv("XPC_SERVICE_NAME", "com.aipager.daemon")
+    _run_aipager(env, run)
+    text = env.last_text()
+    assert "To run 0.7.14, restart aipager yourself:" in text
+    assert (f"On the Mac, run <code>launchctl kickstart -k gui/{os.getuid()}/"
+            "com.aipager.daemon</code>." in text)
+    assert env.last_markup_data() == []
+    assert env.schedule_calls() == []
+
+
+def test_unit_installed_but_not_main_pid_gets_the_terminal_steps(env, run):
     env.main_pid = os.getpid() + 4242
     _run_aipager(env, run)
-    assert "no service unit" in env.last_text()
+    text = env.last_text()
+    assert ("In the terminal or tmux window where aipager runs, press <code>Ctrl+C</code>, "
+            "then run <code>aipager start</code>." in text)
+    assert env.last_markup_data() == []
+    assert "can_restart" not in env.manager.snapshot()
     assert env.schedule_calls() == []
 
 

@@ -168,6 +168,7 @@
 {"k": "btn.upd.check", "src": "cb743a2a", "v": "🔄 업데이트 확인"}
 {"k": "btn.upd.check_again", "src": "e185048c", "v": "다시 확인"}
 {"k": "btn.upd.claude", "src": "8b854ad6", "v": "Claude Code 업데이트"}
+{"k": "btn.upd.restart", "src": "3d234ba0", "v": "🔄 지금 재시작"}
 {"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "지금 재시작"}
 {"k": "btn.upd.wait", "src": "060c561a", "v": "{mins}분 더 기다리기"}
 {"k": "card.agents", "src": "263711d4", "v": {"other": "에이전트 {n}개"}}
@@ -938,6 +939,7 @@
 {"k": "toast.upd.checking", "src": "820d6004", "v": "확인하는 중…"}
 {"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 aipager는 관리자만 업데이트할 수 있어요."}
 {"k": "toast.upd.menu_old", "src": "6c988fa7", "v": "이 메뉴는 오래됐어요. /update를 다시 보내세요"}
+{"k": "toast.upd.restart_locked", "src": "1308d53f", "v": "다른 곳에서 업데이트가 진행 중이에요. 끝나면 다시 시도하세요."}
 {"k": "toast.upd.stale", "src": "d9ed1389", "v": "그 업데이트는 이미 끝났어요"}
 {"k": "toast.verb", "src": "985eb765", "v": "{verb} [{session}]"}
 {"k": "tx.api.billing", "src": "031e8f3d", "v": "Anthropic 구독 또는 크레딧 잔액에 문제가 있어요. {url}에서 계정을 확인하세요"}
@@ -1280,18 +1282,22 @@
 {"k": "ui.timeline.title_n", "src": "a7f6a618", "v": {"other": "타임라인 ({n})"}}
 {"k": "ui.update.check_failed", "src": "a15f1db5", "v": "업데이트를 확인하지 못했어요. 다시 시도해 주세요."}
 {"k": "ui.update.finished", "src": "80fa9b82", "v": "그 업데이트는 이미 끝났어요."}
+{"k": "ui.update.hooks_banner", "src": "c71234bb", "v": "Claude Code의 hook은 이미 aipager {version} 버전을 실행하지만, aipager 자체는 아직 {running} 버전이에요. 업데이트를 마치려면 재시작하세요."}
 {"k": "ui.update.job.claude_updating", "src": "c587f1e1", "v": "작업 중… (claude 업데이트 중)"}
 {"k": "ui.update.job.gate_timeout", "src": "1499ee18", "v": "세션이 아직 작업 중이에요. 더 기다릴까요, 지금 재시작할까요, 아니면 취소할까요?"}
 {"k": "ui.update.job.starting", "src": "06080d40", "v": "작업 중… (시작하는 중)"}
 {"k": "ui.update.job.upgrading", "src": "c6e6577f", "v": "작업 중… (업데이트 중)"}
+{"k": "ui.update.job.verifying", "src": "189339b0", "v": "작업 중… (설치된 버전 확인 중)"}
 {"k": "ui.update.job.waiting_idle", "src": "2d4b64cc", "v": "모든 세션이 준비되면 재시작해요."}
 {"k": "ui.update.job.working_phase", "src": "3a93346a", "v": "작업 중… ({phase})"}
 {"k": "ui.update.not_back", "src": "f6dd1b4f", "v": "다시 연결되지 않음: {names}"}
 {"k": "ui.update.offer_confirm", "src": "40d35b1c", "v": "{offer}? 진행 중인 작업이 없을 때 aipager가 재시작해요."}
+{"k": "ui.update.offer_confirm_manual", "src": "09a771c9", "v": "{offer}? 그다음 “지금 재시작”을 눌러 새 버전을 실행하세요."}
 {"k": "ui.update.other", "src": "7ae4a531", "v": "aipager가 재시작했지만 {version} 버전으로 실행 중이에요."}
 {"k": "ui.update.other_not", "src": "20e6cd66", "v": "aipager가 재시작했지만 {expected}가 아니라 {version} 버전으로 실행 중이에요."}
 {"k": "ui.update.refused", "src": "651df229", "v": "업데이트 결과를 보려면 앱을 다시 여세요."}
 {"k": "ui.update.reopen", "src": "3bf2409f", "v": "aipager가 재시작했어요. 채팅에 업데이트됐다고 나오면 앱을 다시 여세요: 앱을 닫고 채팅에서 다시 여세요 (메뉴 버튼 또는 {command})."}
+{"k": "ui.update.restart_confirm", "src": "2c692e25", "v": "지금 aipager를 재시작할까요? 진행 중인 작업이 없을 때까지 기다렸다가 몇 초 뒤에 돌아와요."}
 {"k": "ui.update.restart_now_confirm", "src": "3f76f590", "v": "지금 재시작하면 여기 나온 진행 중인 작업이 중단돼요."}
 {"k": "ui.update.restarting", "src": "0cfedf00", "v": "aipager 재시작 중…"}
 {"k": "ui.update.running", "src": "5c38d794", "v": "업데이트가 이미 진행 중이에요."}
@@ -1306,6 +1312,7 @@
 {"k": "ui.update.up_to_date", "src": "2772acac", "v": "모두 최신 상태예요."}
 {"k": "ui.update.updated", "src": "a56afb67", "v": "{version} 버전으로 업데이트했어요."}
 {"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"other": "{version} 버전으로 업데이트했어요. 세션 {n}개를 다시 연결했어요."}}
+{"k": "ui.update.waiting_banner", "src": "a6d41f92", "v": "aipager {version} 버전이 설치됐고 재시작을 기다리고 있어요."}
 {"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude가 묻고 있어요"}
 {"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude가 권한을 요청하고 있어요"}
 {"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "채팅에 열린 권한 요청이 있어요."}
@@ -1327,6 +1334,7 @@
 {"k": "upd.ap.not_found", "src": "f74b4ba7", "v": "❌ <b>aipager</b>: <code>{kind}</code> 프로그램을 찾을 수 없어요 (찾아본 곳: {path})"}
 {"k": "upd.ap.prepare_failed", "src": "65e6b15f", "v": "✅ <b>aipager</b> {frm} → {to} 설치됨. 하지만 재시작을 준비할 수 없었어요 ({error}). 직접 재시작하세요: <code>{cmd}</code>"}
 {"k": "upd.ap.restart_cancelled", "src": "23b8320e", "v": "✅ <b>aipager</b> {frm} → {to} 설치됨. 하지만 재시작이 취소됐어요. 직접 재시작하세요: <code>{cmd}</code>"}
+{"k": "upd.ap.restart_offer", "src": "67c4cb2a", "v": "“지금 재시작”을 누르면 실행돼요 (진행 중인 작업이 없을 때까지 aipager가 기다려요)."}
 {"k": "upd.ap.restarting", "src": "e68754da", "v": "⏳ <b>aipager</b> {frm} → {to} 설치됨, 재시작하는 중…"}
 {"k": "upd.ap.schedule_failed", "src": "8ded320b", "v": "✅ <b>aipager</b> {frm} → {to} 설치됨. 하지만 재시작을 예약할 수 없었어요: {detail}. 직접 재시작하세요: <code>{cmd}</code>"}
 {"k": "upd.ap.timeout", "src": "f834e535", "v": "⏱ <b>aipager</b> 업데이트가 {seconds}초 안에 끝나지 않아 중지했어요. 아무것도 재시작하지 않았고, 아직 {running} 버전이 실행 중이에요. 디스크의 설치가 불완전할 수 있어요: 다음 재시작 전에 <code>{hint}</code> 명령으로 다시 설치하세요."}
@@ -1351,10 +1359,12 @@
 {"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"other": "⏰ {n}분이 지났지만 세션이 아직 작업 중이에요. {wait}분 더 기다릴까요, 지금 재시작할까요, 아니면 취소할까요? 지금 재시작하면 아래 목록의 작업이 모두 중단되고, 아직 전달하지 못한 보류 중인 답변도 사라져요."}}
 {"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: 모든 세션이 준비되면 재시작해요."}
 {"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>업데이트</b>"}
+{"k": "upd.hooks.newer", "src": "d8c34918", "v": "⚠️ aipager 업데이트가 절반만 끝났어요. Claude Code의 hook은 이미 {hook} 버전을 실행하지만, aipager 자체는 아직 {running} 버전이에요. 마무리하려면 aipager를 재시작하세요."}
 {"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (최신)"}
 {"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}
 {"k": "upd.line.ap_newer_blocked", "src": "6c0b194f", "v": "aipager {running} → {latest} (여기서 업데이트할 수 없음: {reason})"}
 {"k": "upd.line.ap_unchecked", "src": "6e9c88e2", "v": "aipager {running} (확인 못 함)"}
+{"k": "upd.line.ap_waiting", "src": "e9ef2362", "v": "aipager {installed} 버전이 설치됐고 재시작을 기다리고 있어요 (실행 중: {running})."}
 {"k": "upd.line.cc_current", "src": "f360deb9", "v": "Claude Code {current} (최신)"}
 {"k": "upd.line.cc_newer", "src": "f40a4485", "v": "Claude Code {current} → {latest}"}
 {"k": "upd.line.cc_newer_blocked", "src": "aa86c9e2", "v": "Claude Code {current} → {latest} (여기서 업데이트할 수 없음: {reason})"}
@@ -1366,6 +1376,7 @@
 {"k": "upd.marker.interrupted", "src": "66f4f0b7", "v": "⚠️ aipager가 종료될 때 업데이트가 중단됐어요. 설치가 불완전할 수 있어요. 지금은 {running} 버전이 실행 중이에요. 문제가 생기면 {fix}."}
 {"k": "upd.marker.not_back", "src": "d253a83a", "v": "⚠️ 다시 연결되지 않음: {labels}"}
 {"k": "upd.marker.wrong_version", "src": "17ebf14f", "v": "⚠️ aipager가 재시작했지만 {to}가 아니라 {running} 버전으로 실행 중이에요."}
+{"k": "upd.note.ap_broken", "src": "421b5511", "v": "aipager {installed} 버전이 설치됐지만 불러오지 못해요. {command} 명령으로 다시 설치하세요."}
 {"k": "upd.note.ap_installed", "src": "5616e4b4", "v": "aipager {installed} 버전이 설치됐지만 아직 실행되지 않았어요."}
 {"k": "upd.offer_stale", "src": "a72655cc", "v": "⚠️ 이 확인 결과는 오래됐어요. 업데이트하기 전에 다시 확인하세요."}
 {"k": "upd.output_in_log", "src": "3c62a9b7", "v": "(출력은 aipager 로그에 있어요)"}
@@ -1373,7 +1384,13 @@
 {"k": "upd.reason.unknown_install", "src": "0ab6e3a7", "v": "설치 방식을 알 수 없음"}
 {"k": "upd.reason.yourself", "src": "8ebd1480", "v": "직접 재시작하세요"}
 {"k": "upd.restart.auto", "src": "47924d9e", "v": "재시작: 자동, 진행 중인 작업이 없을 때."}
+{"k": "upd.restart.button", "src": "ce3642ee", "v": "재시작: 설치되면 “지금 재시작”을 누르세요."}
 {"k": "upd.restart.manual", "src": "8e3998af", "v": "재시작: 수동 ({reason})"}
+{"k": "upd.rs.broken", "src": "72131c24", "v": "❌ 설치된 aipager를 불러오지 못해서 재시작하지 않았고, 아직 {running} 버전이 실행 중이에요. <code>{hint}</code> 명령으로 다시 설치하세요"}
+{"k": "upd.rs.cancelled", "src": "13bbed02", "v": "↩️ 재시작을 취소했어요. aipager는 아직 {running} 버전이에요."}
+{"k": "upd.rs.checking", "src": "045dcbed", "v": "⏳ 설치된 aipager를 확인하는 중…"}
+{"k": "upd.rs.not_possible", "src": "baabe4b6", "v": "⚠️ 여기서는 aipager가 스스로 재시작하지 못했어요."}
+{"k": "upd.rs.nothing", "src": "bb11e3f4", "v": "✅ aipager {running} 버전이 이미 설치된 버전이라 재시작할 것이 없어요."}
 {"k": "upd.sessions.new_version", "src": "a9ee48dc", "v": "새 세션은 {version} 버전을 써요."}
 {"k": "upd.sessions.none", "src": "1fe42f86", "v": "지금 실행 중인 세션이 없어요."}
 {"k": "upd.sessions.none_restarted", "src": "5807bbd1", "v": "실행 중인 세션은 재시작할 때까지 이전 버전을 그대로 써요. 재시작한 세션은 없어요."}
@@ -1387,10 +1404,16 @@
 {"k": "upd.step.claude", "src": "417c042d", "v": "Claude Code 업데이트 중"}
 {"k": "upd.step.started", "src": "cd17f00f", "v": "⏳ {step}…"}
 {"k": "upd.step.still_working", "src": "37b863ed", "v": "⏳ {step} - 아직 진행 중{elapsed}"}
+{"k": "upd.steps.docker", "src": "6148f391", "v": "Docker가 실행되는 컴퓨터에서 {command} 명령을 실행하세요."}
+{"k": "upd.steps.docker_image", "src": "2c81dbc2", "v": "컨테이너를 다시 만들면 이미지에서 새로 시작하므로, 그 이미지에 든 aipager 버전으로 돌아가요."}
+{"k": "upd.steps.launchd", "src": "c4815de4", "v": "Mac에서 {command} 명령을 실행하세요."}
+{"k": "upd.steps.lead", "src": "0c8cf6bb", "v": "{to} 버전을 실행하려면 aipager를 직접 재시작하세요:"}
+{"k": "upd.steps.terminal", "src": "9f90c52d", "v": "aipager가 실행 중인 터미널이나 tmux 창에서 {keys}를 누른 다음 {command} 명령을 실행하세요."}
 {"k": "upd.still_running", "src": "c57fe950", "v": "아직 실행 중:"}
 {"k": "upd.summary.cant_here", "src": "8abb0e4e", "v": "업데이트가 나왔지만 여기서는 설치할 수 없어요."}
 {"k": "upd.summary.check_failed", "src": "b8579281", "v": "더 새 버전은 없지만 확인 하나가 실패했어요. 나중에 다시 시도해 주세요."}
 {"k": "upd.summary.up_to_date", "src": "2772acac", "v": "모두 최신 상태예요."}
+{"k": "upd.summary.waiting", "src": "819e869e", "v": "업데이트를 마치려면 aipager를 재시작하세요."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ 예기치 않은 오류로 업데이트가 멈췄어요 (aipager 로그를 확인하세요)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ 예약된 재시작이 일어나지 않았어요. 새 버전은 설치됐지만 이전 버전이 아직 실행 중이에요. 직접 재시작하세요: {command}"}
 {"k": "whoami.any", "src": "195d97a4", "v": "(전체)"}

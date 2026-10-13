@@ -54,6 +54,14 @@ _MEMORY_CAP_BYTES = 1024 * 1024 * 1024
 
 _DEBUG = os.environ.get("AIPAGER_DEBUG") == "1"
 
+# This hook's own aipager release, stamped on every forwarded event so the
+# daemon notices hooks that already run newer code than it does. A tiny
+# constant module (never importlib.metadata); any failure is just "".
+try:
+    from aipager._version import __version__ as _AIPAGER_VERSION
+except Exception:
+    _AIPAGER_VERSION = ""
+
 # A self-triggered continuation turn's prompt (design.md "model Claude
 # Code background-agent jobs") — Claude Code wakes a session back up when a
 # background agent it launched finishes, with a synthetic UserPromptSubmit
@@ -777,6 +785,8 @@ def _run(session: str, cap_slot: list) -> None:
 
     if session:
         data["session"] = session
+    if _AIPAGER_VERSION:
+        data["aipager_version"] = _AIPAGER_VERSION
 
     # Piggyback statusLine token data on hook events. Skipped for
     # MessageDisplay: it runs synchronously inside Claude Code's display
