@@ -482,7 +482,11 @@ def test_the_view_entry_leaves_no_transform_behind():
 
 
 def test_the_page_carries_the_stylesheet():
-    assert CSS in INDEX_HTML
+    """Served without its comments and indentation (roadmap 8.117); the
+    page as written carries the source itself."""
+    from aipager.miniapp.static import SERVED_CSS, SOURCE_INDEX_HTML
+    assert SERVED_CSS in INDEX_HTML
+    assert CSS in SOURCE_INDEX_HTML
 
 
 def test_every_pulse_clause_keeps_its_count_and_noun_on_one_line():

@@ -33,7 +33,14 @@ from aipager.miniapp.static._shell import (
     SDK_SRC_TELEGRAM,
     html_head,
 )
+from aipager.miniapp.static._strip import strip_css, strip_js
 from aipager.miniapp.static._styles import CSS
+
+# What the phone gets (roadmap 8.117): the script and styles without their
+# comments, indentation and blank lines, built once here. The source keeps
+# all of it; ``index_html(stripped=False)`` is the page as written.
+SERVED_APP_JS = strip_js(APP_JS)
+SERVED_CSS = strip_css(CSS)
 
 
 def _english_catalog_js(first: str = "") -> str:
@@ -53,17 +60,22 @@ def _english_catalog_js(first: str = "") -> str:
     return "var AIPAGER_UI_EN=" + data.replace("</", "<\\/") + first + ";\n"
 
 
-# Everything below the head is identical in both variants, so build it
-# once and only vary the head.
-_PAGE_TAIL = (
-    "<style>\n" + CSS + "</style>\n"
-    + HTML_BODY
-    + "<script>\n" + _english_catalog_js() + APP_JS + "\n</script>\n"
-    + HTML_TAIL
-)
+def _page_tail(css: str, body: str, first: str, js: str) -> str:
+    """Everything below the head."""
+    return ("<style>\n" + css + "</style>\n"
+            + body
+            + "<script>\n" + _english_catalog_js(first) + js + "\n</script>\n"
+            + HTML_TAIL)
 
 
-def index_html(*, sdk_from_self: bool = True, lang: str | None = None) -> str:
+# Everything below the head is identical in both SDK variants, so build it
+# once (served and as written) and only vary the head.
+_PAGE_TAIL = {True: _page_tail(SERVED_CSS, HTML_BODY, "", SERVED_APP_JS),
+              False: _page_tail(CSS, HTML_BODY, "", APP_JS)}
+
+
+def index_html(*, sdk_from_self: bool = True, lang: str | None = None,
+               stripped: bool = True) -> str:
     """The page, with Telegram's SDK loaded from this origin when the
     daemon has a copy of it (``sdk_from_self``) and straight from
     telegram.org when it does not — the pre-8.18 behaviour, which is the
@@ -74,21 +86,23 @@ def index_html(*, sdk_from_self: bool = True, lang: str | None = None) -> str:
     lang dir>``, the marked strings in the markup, and its catalog inlined
     for ``t()`` (no request before the first paint). Anything else is the
     English page, byte for byte.
+
+    *stripped* (the default, and what the daemon serves): the script and
+    styles without comments and indentation. ``False`` is the page as
+    written, for a test that finds or changes the source by its exact
+    text.
     """
     head = html_head(SDK_SRC_SELF if sdk_from_self else SDK_SRC_TELEGRAM)
     first = _first_language(lang)
     if first is None:
-        return head + _PAGE_TAIL
+        return head + _PAGE_TAIL[stripped]
     cat, version = first
     head = head.replace(_html_tag(lang="en"), _html_tag(
         lang=cat["code"], dir="rtl" if cat["rtl"] else "ltr"), 1)
-    return head + (
-        "<style>\n" + CSS + "</style>\n"
-        + _localized_body(HTML_BODY, cat)
-        + "<script>\n" + _english_catalog_js(_first_catalog_js(cat, version)) + APP_JS
-        + "\n</script>\n"
-        + HTML_TAIL
-    )
+    return head + _page_tail(SERVED_CSS if stripped else CSS,
+                             _localized_body(HTML_BODY, cat),
+                             _first_catalog_js(cat, version),
+                             SERVED_APP_JS if stripped else APP_JS)
 
 
 # ---- the first frame in the link's language ----------------------------------
@@ -245,5 +259,9 @@ def _localized_body(body: str, cat: dict) -> str:
 # this is the self-served page, the one the daemon renders once it has
 # the script. The fallback page is index_html(sdk_from_self=False).
 INDEX_HTML = index_html(sdk_from_self=True)
+# The page as written: what a test that finds or changes the source by its
+# exact text (indentation and comments included) works on.
+SOURCE_INDEX_HTML = index_html(sdk_from_self=True, stripped=False)
 
-__all__ = ["INDEX_HTML", "SDK_SRC_SELF", "SDK_SRC_TELEGRAM", "index_html", "page_language"]
+__all__ = ["INDEX_HTML", "SDK_SRC_SELF", "SDK_SRC_TELEGRAM", "SOURCE_INDEX_HTML", "index_html",
+           "page_language"]

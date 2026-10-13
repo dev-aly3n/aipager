@@ -24,7 +24,7 @@ from miniapp_redesign_bb import client_for  # noqa: E402 - alias set by conftest
 TELEGRAM_SDK = "https://telegram.org/js/telegram-web-app.js"
 # 8.117: the page is sent gzipped and that size is pinned in
 # tests/test_miniapp_page_rules.py; this is the ceiling on the page as built.
-BUDGET = 300_000
+from tests.test_miniapp_page_rules import PAGE_BUDGET_BYTES as BUDGET  # noqa: E402
 
 
 @pytest.fixture(scope="module")

@@ -191,8 +191,8 @@ def test_create_folder_runs_once_and_handles_every_answer(node_bin, tmp_path):
 def test_the_harness_catches_a_broken_create_folder(node_bin, tmp_path, old, new, what):
     """Guard the guards: each piece of the robust flow, removed, fails the
     scenario instead of passing it."""
-    from aipager.miniapp.static import INDEX_HTML
-    broken = INDEX_HTML.replace(old, new, 1)
-    assert broken != INDEX_HTML, f"{what}: code not found"
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
+    assert broken != SOURCE_INDEX_HTML, f"{what}: code not found"
     proc = _drive(node_bin, tmp_path, broken, NAMES)
     assert proc.returncode != 0, f"the harness passed a page without {what}"

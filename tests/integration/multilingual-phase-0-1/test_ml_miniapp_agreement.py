@@ -58,10 +58,17 @@ def _page(mini_server, run_async):
 
 
 def _port(page: str) -> str:
-    assert page.count(START) == 1, "the clock port's start marker is missing"
-    body = page.split(START, 1)[1]
+    """The clock port as *page* (the served page) carries it. Its markers
+    are comments, which the served page leaves out: cut it from the page
+    as written, strip it the way the page is, and find it in *page*."""
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
+    from aipager.miniapp.static._strip import strip_js
+    assert SOURCE_INDEX_HTML.count(START) == 1, "the clock port's start marker is missing"
+    body = SOURCE_INDEX_HTML.split(START, 1)[1]
     assert END in body, "the clock port's end marker is missing"
-    return body.split(END, 1)[0]
+    served = strip_js(body.split(END, 1)[0])
+    assert served.strip() and served in page, "the served page does not carry the clock port"
+    return served
 
 
 def _run_js(node, tmp_path, port_src, cases_js):

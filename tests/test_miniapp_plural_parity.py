@@ -43,8 +43,11 @@ def _run(node_bin, tmp_path, page_text):
 
 
 def test_miniapp_plural_parity(node_bin, tmp_path):
-    from aipager.miniapp.static import INDEX_HTML
-    got = _run(node_bin, tmp_path, INDEX_HTML)
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
+    # The port's markers are comments, which the served page leaves out:
+    # the harness cuts it from the page as written (tests/test_miniapp_strip.py
+    # proves the served page carries the same code).
+    got = _run(node_bin, tmp_path, SOURCE_INDEX_HTML)
     want = [plurals.category(code, n) for code, n in CASES]
     diffs = [(c, g, w) for c, g, w in zip(CASES, got, want) if g != w]
     assert not diffs, diffs[:10]
@@ -55,16 +58,16 @@ def test_miniapp_plural_parity(node_bin, tmp_path):
 
 
 def test_the_parity_harness_detects_a_drifted_port(node_bin, tmp_path):
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
     old = "if (mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14)) { return \"few\"; }"
-    assert INDEX_HTML.count(old) == 1
-    drifted = INDEX_HTML.replace(old, old.replace("mod10 <= 4", "mod10 <= 3"))
+    assert SOURCE_INDEX_HTML.count(old) == 1
+    drifted = SOURCE_INDEX_HTML.replace(old, old.replace("mod10 <= 4", "mod10 <= 3"))
     got = _run(node_bin, tmp_path, drifted)
     want = [plurals.category(code, n) for code, n in CASES]
     assert got != want
 
 
 def test_the_port_is_marked_once():
-    from aipager.miniapp.static import INDEX_HTML
-    assert INDEX_HTML.count("// plurals: port of aipager/i18n/plurals.py") == 1
-    assert INDEX_HTML.count("// end plurals") == 1
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
+    assert SOURCE_INDEX_HTML.count("// plurals: port of aipager/i18n/plurals.py") == 1
+    assert SOURCE_INDEX_HTML.count("// end plurals") == 1

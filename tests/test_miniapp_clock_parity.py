@@ -46,22 +46,26 @@ def _run(node_bin, tmp_path, page_text):
 
 
 def test_miniapp_clock_parity(node_bin, tmp_path):
-    from aipager.miniapp.static import INDEX_HTML
-    got = _run(node_bin, tmp_path, INDEX_HTML)
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
+    # The port's markers are comments, which the served page leaves out:
+    # the harness cuts it from the page as written (tests/test_miniapp_strip.py
+    # proves the served page carries the same code).
+    got = _run(node_bin, tmp_path, SOURCE_INDEX_HTML)
     want = [elapsed(s, u) for s, u in CASES]
     diffs = [(c, g, w) for c, g, w in zip(CASES, got, want) if g != w]
     assert not diffs, diffs[:10]
 
 
 def test_the_parity_harness_detects_a_drifted_port(node_bin, tmp_path):
-    from aipager.miniapp.static import INDEX_HTML
-    assert "var CLOCK_STEP_SECONDS = 30;" in INDEX_HTML
-    drifted = INDEX_HTML.replace("var CLOCK_STEP_SECONDS = 30;", "var CLOCK_STEP_SECONDS = 60;")
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
+    assert "var CLOCK_STEP_SECONDS = 30;" in SOURCE_INDEX_HTML
+    drifted = SOURCE_INDEX_HTML.replace("var CLOCK_STEP_SECONDS = 30;",
+                                        "var CLOCK_STEP_SECONDS = 60;")
     got = _run(node_bin, tmp_path, drifted)
     assert got != [elapsed(s, u) for s, u in CASES]
 
 
 def test_the_old_duration_helper_is_gone():
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import INDEX_HTML, SOURCE_INDEX_HTML
     assert "function duration(" not in INDEX_HTML
-    assert INDEX_HTML.count("// clock: port of aipager/clockfmt.py") == 1
+    assert SOURCE_INDEX_HTML.count("// clock: port of aipager/clockfmt.py") == 1

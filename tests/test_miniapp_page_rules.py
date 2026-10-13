@@ -14,17 +14,24 @@ import re
 
 import pytest
 
-from aipager.miniapp.static import SDK_SRC_TELEGRAM, index_html
+from aipager.miniapp.static import SDK_SRC_TELEGRAM, SOURCE_INDEX_HTML, index_html
 
 # Roadmap 8.117: the page goes over the wire gzipped (every Telegram in-app
-# browser takes gzip), so that is the budget that counts.
-SENT_BUDGET_BYTES = 80_000
+# browser takes gzip), so that is the budget that counts. Both budgets are
+# for the page as served, without its comments and indentation, and keep
+# about a tenth over the largest language (Russian, 2026-10-13: 237,623
+# bytes built, 56,810 sent), so a growing page is noticed in time.
+SENT_BUDGET_BYTES = 63_000
 # A ceiling on the page as built: what a client that takes no gzip gets,
 # and a stop for an accidental embed (an image, a data file).
-PAGE_BUDGET_BYTES = 300_000
+PAGE_BUDGET_BYTES = 262_000
 
 SELF = index_html(sdk_from_self=True)
 FALLBACK = index_html(sdk_from_self=False)
+# The rules about what the page may say hold for the page as written too:
+# its comments are not served, but they are read.
+PAGES = [SELF, FALLBACK, SOURCE_INDEX_HTML]
+PAGE_IDS = ["self-served", "fallback", "as-written"]
 
 
 @pytest.mark.parametrize("page", [SELF, FALLBACK], ids=["self-served", "fallback"])
@@ -39,10 +46,11 @@ def test_the_page_sent_stays_under_its_byte_budget(page):
     assert size <= SENT_BUDGET_BYTES, f"page sent is {size} bytes"
 
 
-def test_the_self_served_page_names_no_external_url_at_all():
+@pytest.mark.parametrize("page", [SELF, SOURCE_INDEX_HTML], ids=["self-served", "as-written"])
+def test_the_self_served_page_names_no_external_url_at_all(page):
     """Not in a src or href, not in a fetch string, not in a comment."""
-    assert "http://" not in SELF
-    assert "https://" not in SELF
+    assert "http://" not in page
+    assert "https://" not in page
 
 
 def test_the_fallback_names_exactly_the_telegram_sdk():
@@ -67,7 +75,7 @@ def test_the_page_fetches_only_its_own_api():
     assert all(p.startswith("/api/") for p in literal), literal
 
 
-@pytest.mark.parametrize("page", [SELF, FALLBACK], ids=["self-served", "fallback"])
+@pytest.mark.parametrize("page", PAGES, ids=PAGE_IDS)
 def test_the_page_carries_no_em_dash(page):
     assert "—" not in page
 

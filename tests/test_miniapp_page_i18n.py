@@ -104,10 +104,10 @@ def test_english_snapshot(node_bin, tmp_path):
 def test_the_english_snapshot_sees_one_changed_word(node_bin, tmp_path):
     """Guard the guard: one English word changed anywhere in the page's
     own text fails the snapshot."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace("Finished (", "Finishd (")
-    assert broken != INDEX_HTML
+    broken = SOURCE_INDEX_HTML.replace("Finished (", "Finishd (")
+    assert broken != SOURCE_INDEX_HTML
     got = _english(node_bin, tmp_path, broken)
     want = json.loads(GOLDEN.read_text(encoding="utf-8"))
     assert [s[1] for s in got["screens"]] != [s[1] for s in want["screens"]]
@@ -327,11 +327,11 @@ def test_no_raw_html(node_bin, tmp_path):
 
 def test_the_hostile_run_sees_raw_markup(node_bin, tmp_path):
     """Guard the guard: one innerHTML without escaping makes an <img>."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
     old = "    var html = '<span class=\"dis-title\">' + escapeHtml(title) +"
-    assert INDEX_HTML.count(old) == 1
-    broken = INDEX_HTML.replace(old, "    var html = '<span class=\"dis-title\">' + title +")
+    assert SOURCE_INDEX_HTML.count(old) == 1
+    broken = SOURCE_INDEX_HTML.replace(old, "    var html = '<span class=\"dis-title\">' + title +")
     run = drive(node_bin, tmp_path, broken, opts=_opts("fa", _hostile("fa"), hostile=True))
     assert run["imgs"] > 0
 

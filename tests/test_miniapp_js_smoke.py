@@ -76,10 +76,10 @@ def test_the_harness_actually_detects_a_broken_page(node_bin, tmp_path):
     Reintroduces the exact shipped bug (delete the `sessionSaveSeq`
     declaration) and asserts the harness rejects that page.
     """
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace("var sessionSaveSeq = Object.create(null);", "", 1)
-    assert broken != INDEX_HTML, "declaration not found — page changed shape"
+    broken = SOURCE_INDEX_HTML.replace("var sessionSaveSeq = Object.create(null);", "", 1)
+    assert broken != SOURCE_INDEX_HTML, "declaration not found — page changed shape"
 
     page = tmp_path / "broken.html"
     page.write_text(broken, encoding="utf-8")
@@ -180,13 +180,13 @@ def test_new_folder_on_the_default_row_says_why_it_cannot_run(node_bin, tmp_path
 def test_the_harness_detects_a_dead_create_folder_button(node_bin, tmp_path):
     """Guard the guard for the case above: drop the explanation and the
     no-parent scenario must fail rather than pass on an empty note."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         'folderNote.textContent = t("ui.new.pick_dir_first");',
         'folderNote.textContent = "";', 1,
     )
-    assert broken != INDEX_HTML, "folder-note code not found"
+    assert broken != SOURCE_INDEX_HTML, "folder-note code not found"
 
     proc = _drive_form(
         node_bin, tmp_path, broken, "broken-note.html", scenario="noparent",
@@ -199,14 +199,14 @@ def test_the_harness_detects_a_dead_create_folder_button(node_bin, tmp_path):
 def test_the_form_harness_detects_a_dropped_preference_step(node_bin, tmp_path):
     """Guard the guard: if the client stopped applying the chosen
     reply-style settings, the harness must say so rather than pass."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
     # neuter the post-create preference writes
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         "var writes = Object.keys(newState.prefs).map(function (field) {",
         "var writes = [].map(function (field) {", 1,
     )
-    assert broken != INDEX_HTML, "preference-application code not found"
+    assert broken != SOURCE_INDEX_HTML, "preference-application code not found"
 
     proc = _drive_form(node_bin, tmp_path, broken, "broken.html")
     assert proc.returncode != 0, (
@@ -221,10 +221,10 @@ def test_the_form_harness_detects_a_dropped_typed_model(node_bin, tmp_path):
     This is the shape of the bug the form is most exposed to — the value
     on screen and the value posted are computed in two different places.
     """
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace("model: chosenModel(),", "model: newState.model,", 1)
-    assert broken != INDEX_HTML, "model-resolution code not found"
+    broken = SOURCE_INDEX_HTML.replace("model: chosenModel(),", "model: newState.model,", 1)
+    assert broken != SOURCE_INDEX_HTML, "model-resolution code not found"
 
     proc = _drive_form(node_bin, tmp_path, broken, "broken-model.html")
     assert proc.returncode != 0, (
@@ -236,13 +236,13 @@ def test_the_form_harness_detects_a_folder_that_is_not_selected(node_bin, tmp_pa
     """Guard the guard: creating the folder but not selecting it would
     launch the session in whatever was picked before — silently, since the
     folder really was created and the notice really did appear."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         "      newState.cwd = path;\n      newState.folderOpen = false;",
         "      newState.folderOpen = false;", 1,
     )
-    assert broken != INDEX_HTML, "folder-selection code not found"
+    assert broken != SOURCE_INDEX_HTML, "folder-selection code not found"
 
     proc = _drive_form(node_bin, tmp_path, broken, "broken-folder.html")
     assert proc.returncode != 0, (
@@ -328,12 +328,12 @@ def test_the_harness_detects_a_kill_that_skips_confirmation(node_bin, tmp_path):
     """Guard the guard: make every action act straight from the menu, so
     Kill never raises its confirm modal. The kill scenario's own
     "issued a request before any confirmation" assertion must catch it."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         "    if (!CONFIRM_ACTIONS[action]) {", "    if (true) {", 1,
     )
-    assert broken != INDEX_HTML, "confirm-routing code not found — page changed shape"
+    assert broken != SOURCE_INDEX_HTML, "confirm-routing code not found — page changed shape"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "kill_idle", name="broken-kill.html",
@@ -346,13 +346,13 @@ def test_the_harness_detects_a_kill_that_skips_confirmation(node_bin, tmp_path):
 def test_the_harness_detects_a_dead_resume_button_with_no_reason(node_bin, tmp_path):
     """Guard the guard: blank out the disabled-reason text, and a Resume
     button with no transcript renders inert but silent."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         'note.className = "menu-note";\n          note.textContent = plain(entry.reason);',
         'note.className = "menu-note";\n          note.textContent = "";', 1,
     )
-    assert broken != INDEX_HTML, "reason-rendering code not found — page changed shape"
+    assert broken != SOURCE_INDEX_HTML, "reason-rendering code not found — page changed shape"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "resume_gone_no_transcript",
@@ -372,14 +372,14 @@ def test_the_form_harness_detects_a_rebuild_on_every_keystroke(node_bin, tmp_pat
     open/closed state the operator is looking at. Putting that back must
     fail the harness.
     """
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         'document.getElementById("new-model-name").addEventListener("input", refreshNewForm);',
         'document.getElementById("new-model-name").addEventListener("input", renderNewForm);',
         1,
     )
-    assert broken != INDEX_HTML, "model input listener not found"
+    assert broken != SOURCE_INDEX_HTML, "model input listener not found"
 
     proc = _drive_form(node_bin, tmp_path, broken, "broken-rerender.html")
     assert proc.returncode != 0, (
@@ -391,14 +391,14 @@ def test_the_form_harness_detects_a_reveal_left_outside_its_group(node_bin, tmp_
     """Guard the guard: the whole point of a conditional reveal is that
     the input and the option that revealed it read as one thing. An input
     rendered somewhere else on the page is the layout this replaced."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         "        if (opts.reveal && opts.reveal.after === o.value) {\n"
         "          list.appendChild(opts.reveal.node);\n"
         "        }", "", 1,
     )
-    assert broken != INDEX_HTML, "reveal placement code not found"
+    assert broken != SOURCE_INDEX_HTML, "reveal placement code not found"
 
     proc = _drive_form(node_bin, tmp_path, broken, "broken-reveal.html")
     assert proc.returncode != 0, (
@@ -410,12 +410,12 @@ def test_the_form_harness_detects_a_stale_collapsed_model_header(node_bin, tmp_p
     """Guard the guard: the collapsed Model header must show what was
     typed. Rendering the option's own label leaves it reading `Other
     model` forever — it names the row instead of the answer."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         "if (modelValueNode) { modelValueNode.textContent = modelValueText(); }", "", 1,
     )
-    assert broken != INDEX_HTML, "header-refresh code not found"
+    assert broken != SOURCE_INDEX_HTML, "header-refresh code not found"
 
     proc = _drive_form(node_bin, tmp_path, broken, "broken-header.html")
     assert proc.returncode != 0, (
@@ -427,10 +427,10 @@ def test_the_form_harness_detects_the_duplicated_default_directory(node_bin, tmp
     """Guard the guard: the daemon's own directory is in `directories`
     under its real path, so offering a separate `Default` row as well
     lists one directory twice — which is what the operator saw."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace("if (!dirs.length || !defaultDir) {", "if (true) {", 1)
-    assert broken != INDEX_HTML, "default-directory branch not found"
+    broken = SOURCE_INDEX_HTML.replace("if (!dirs.length || !defaultDir) {", "if (true) {", 1)
+    assert broken != SOURCE_INDEX_HTML, "default-directory branch not found"
 
     proc = _drive_form(node_bin, tmp_path, broken, "broken-dupe.html")
     assert proc.returncode != 0, (
@@ -477,13 +477,13 @@ def test_the_harness_detects_back_leaving_the_page_with_a_modal_open(
 ):
     """Guard the guard for the trapdoor: restore the old unconditional
     back handler and the scenario must fail rather than pass."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         "      if (overlayCloser) { overlayCloser(); return; }\n      showGrid();",
         "      showGrid();", 1,
     )
-    assert broken != INDEX_HTML, "back-handler code not found — page changed shape"
+    assert broken != SOURCE_INDEX_HTML, "back-handler code not found — page changed shape"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "modal_back_closes", name="broken-back.html",
@@ -496,13 +496,13 @@ def test_the_harness_detects_back_leaving_the_page_with_a_modal_open(
 def test_the_harness_detects_a_backdrop_that_confirms(node_bin, tmp_path):
     """Guard the guard: wire the backdrop to the confirm action instead
     of to cancel — a stray tap would then delete a session."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         'document.getElementById("overlay").addEventListener("click", closeOverlay);',
         'document.getElementById("overlay").addEventListener("click", onConfirmTap);', 1,
     )
-    assert broken != INDEX_HTML, "backdrop wiring not found — page changed shape"
+    assert broken != SOURCE_INDEX_HTML, "backdrop wiring not found — page changed shape"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "backdrop_cancels", name="broken-backdrop.html",
@@ -529,12 +529,12 @@ def test_a_session_with_no_actions_shows_no_kebab(node_bin, tmp_path):
 
 def test_the_harness_detects_a_kebab_offered_with_no_actions(node_bin, tmp_path):
     """Guard the guard for the above."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         "    kebab.hidden = count === 0;", "    kebab.hidden = false;", 1,
     )
-    assert broken != INDEX_HTML, "kebab-visibility code not found — page changed shape"
+    assert broken != SOURCE_INDEX_HTML, "kebab-visibility code not found — page changed shape"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "no_actions", name="broken-kebab.html",
@@ -564,14 +564,14 @@ def test_reset_to_defaults_asks_before_discarding_overrides(node_bin, tmp_path):
 def test_the_harness_detects_a_reset_that_skips_its_confirmation(node_bin, tmp_path):
     """Guard the guard: restore the old one-tap behaviour and the
     scenario must fail rather than pass."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         '    openConfirm({\n      title: t("ui.confirm.reset"),',
         '    resetSessionSettings(); return; openConfirm({\n'
         '      title: t("ui.confirm.reset"),', 1,
     )
-    assert broken != INDEX_HTML, "reset-confirm code not found — page changed shape"
+    assert broken != SOURCE_INDEX_HTML, "reset-confirm code not found — page changed shape"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "reset_confirm", name="broken-reset.html",
@@ -627,16 +627,16 @@ def test_the_harness_detects_a_menu_that_ignores_a_changed_session(
     """Guard the guard. This mechanism shipped with ZERO coverage in the
     first pass — the whole block could be deleted and all ten scenarios
     still passed."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         "    if (overlayCloser && menuSignature &&\n"
         "        actionsSignature(data) !== menuSignature) {\n"
         "      closeOverlay();\n"
         '      showNotice(t("ui.menu.changed"));\n'
         "    }", "", 1,
     )
-    assert broken != INDEX_HTML, "drift-guard code not found — page changed shape"
+    assert broken != SOURCE_INDEX_HTML, "drift-guard code not found — page changed shape"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "menu_drift_closes", name="broken-drift.html",
@@ -652,13 +652,13 @@ def test_the_harness_detects_a_change_check_blind_to_availability(
     """Guard the guard, narrower: a signature built from which actions
     exist — ignoring whether each can run — misses a Resume going
     inert."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         '        return k + ":" + (data.actions[k].available ? "1" : "0");',
         "        return k;", 1,
     )
-    assert broken != INDEX_HTML, "signature code not found — page changed shape"
+    assert broken != SOURCE_INDEX_HTML, "signature code not found — page changed shape"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "menu_drift_closes", name="broken-sig.html",
@@ -748,13 +748,13 @@ def test_perms_busy_uses_stop_task_wording(node_bin, tmp_path):
 def test_the_harness_detects_perms_busy_falling_back_to_idle_wording(node_bin, tmp_path):
     """Guard the guard: drop the busy-specific title branch so perms
     always uses the idle wording, and the busy scenario must catch it."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
     old = '        title: t((busy ? PERMS_BUSY_TITLES : PERMS_TITLES)[mode], session),\n'
     new = '        title: t(PERMS_TITLES[mode], session),\n'
-    assert old in INDEX_HTML, "perms busy-wording branch not found — page changed shape"
-    broken = INDEX_HTML.replace(old, new, 1)
-    assert broken != INDEX_HTML, "mutation was a no-op"
+    assert old in SOURCE_INDEX_HTML, "perms busy-wording branch not found — page changed shape"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
+    assert broken != SOURCE_INDEX_HTML, "mutation was a no-op"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "perms_busy", name="broken-perms-busy.html",
@@ -792,12 +792,12 @@ def test_perms_ask_to_auto_is_sent_in_place_without_a_confirm(node_bin, tmp_path
 def test_the_harness_detects_an_in_place_switch_asking_to_confirm(node_bin, tmp_path):
     """Guard the guard: make every mode item confirm, and the in-place
     scenario must catch it."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
     old = "      if (!entry || !entry.restarts) {\n"
     new = "      if (false) {\n"
-    assert old in INDEX_HTML, "in-place branch not found — page changed shape"
-    broken = INDEX_HTML.replace(old, new, 1)
+    assert old in SOURCE_INDEX_HTML, "in-place branch not found — page changed shape"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
     proc = _drive_controls(node_bin, tmp_path, broken, "perms_in_place",
                            name="broken-perms-in-place.html")
     assert proc.returncode != 0, "harness passed a page where Ask -> Auto asks to confirm"
@@ -850,14 +850,14 @@ def test_the_harness_detects_clearqueue_gaining_a_confirmation(node_bin, tmp_pat
     """Guard the guard: Clear queue is recoverable and must NOT gain a
     confirm step — if CONFIRM_ACTIONS ever grows to include it, the
     scenario's own single-POST assertion must catch it."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
     old = "var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, restart: true };"
     new = ("var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, "
            "restart: true, clearqueue: true };")
-    assert old in INDEX_HTML, "CONFIRM_ACTIONS declaration not found — page changed shape"
-    broken = INDEX_HTML.replace(old, new, 1)
-    assert broken != INDEX_HTML, "mutation was a no-op"
+    assert old in SOURCE_INDEX_HTML, "CONFIRM_ACTIONS declaration not found — page changed shape"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
+    assert broken != SOURCE_INDEX_HTML, "mutation was a no-op"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "clearqueue_busy", name="broken-clearqueue.html",
@@ -913,13 +913,13 @@ def test_rename_valid_prefills_and_posts_the_new_label(node_bin, tmp_path):
 def test_the_harness_detects_a_rename_field_that_is_not_prefilled(node_bin, tmp_path):
     """Guard the guard: drop the pre-fill so the rename field opens
     empty instead of showing the current label."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
     old = "    input.value = label;\n"
     new = '    input.value = "";\n'
-    assert old in INDEX_HTML, "rename pre-fill line not found — page changed shape"
-    broken = INDEX_HTML.replace(old, new, 1)
-    assert broken != INDEX_HTML, "mutation was a no-op"
+    assert old in SOURCE_INDEX_HTML, "rename pre-fill line not found — page changed shape"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
+    assert broken != SOURCE_INDEX_HTML, "mutation was a no-op"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "rename_valid", name="broken-rename-prefill.html",
@@ -947,12 +947,12 @@ def test_the_harness_detects_a_disabled_save_that_still_submits(node_bin, tmp_pa
     that a test harness (which does not enforce HTML `disabled`
     semantics the way a real browser does) can still click straight
     through to a submit."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
     old = '    if (document.getElementById("confirm-ok").disabled) { return; }\n'
-    assert old in INDEX_HTML, "onConfirmTap's disabled guard not found — page changed shape"
-    broken = INDEX_HTML.replace(old, "", 1)
-    assert broken != INDEX_HTML, "mutation was a no-op"
+    assert old in SOURCE_INDEX_HTML, "onConfirmTap's disabled guard not found — page changed shape"
+    broken = SOURCE_INDEX_HTML.replace(old, "", 1)
+    assert broken != SOURCE_INDEX_HTML, "mutation was a no-op"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "rename_client_side_invalid",
@@ -979,16 +979,16 @@ def test_the_harness_detects_a_dropped_server_detail_on_rename_failure(node_bin,
     """Guard the guard: a rename failure that shows a generic message
     instead of the server's own `detail` would silently hide WHY the
     rename was refused (which label is already taken, etc.)."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
     # The detail goes through plain() since roadmap 8.44 (em dashes in
     # server strings are shown as " - ").
     old = ('      showNotice(plain((r.data && r.data.detail) || t("ui.rename.failed")), '
            '"err");\n')
     new = '      showNotice(t("ui.rename.failed"), "err");\n'
-    assert old in INDEX_HTML, "rename failure-notice line not found — page changed shape"
-    broken = INDEX_HTML.replace(old, new, 1)
-    assert broken != INDEX_HTML, "mutation was a no-op"
+    assert old in SOURCE_INDEX_HTML, "rename failure-notice line not found — page changed shape"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
+    assert broken != SOURCE_INDEX_HTML, "mutation was a no-op"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "rename_server_conflict",
@@ -1014,7 +1014,7 @@ def test_the_harness_detects_a_missing_menu_divider(node_bin, tmp_path):
     """Guard the guard. This mechanism ships with ZERO coverage the
     moment its own scenario is removed — pinning it the same way the
     pre-existing menu-drift guard was pinned after shipping uncovered."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
     old = (
         '      if (CONFIRM_ACTIONS[key] && !dividerInserted && controlRendered > 0) {\n'
@@ -1026,9 +1026,9 @@ def test_the_harness_detects_a_missing_menu_divider(node_bin, tmp_path):
         '      if (!CONFIRM_ACTIONS[key]) { controlRendered++; }\n'
     )
     new = '      if (!CONFIRM_ACTIONS[key]) { controlRendered++; }\n'
-    assert old in INDEX_HTML, "divider-insertion code not found — page changed shape"
-    broken = INDEX_HTML.replace(old, new, 1)
-    assert broken != INDEX_HTML, "mutation was a no-op"
+    assert old in SOURCE_INDEX_HTML, "divider-insertion code not found — page changed shape"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
+    assert broken != SOURCE_INDEX_HTML, "mutation was a no-op"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "menu_grouping_divider", name="broken-divider.html",
@@ -1167,11 +1167,11 @@ def test_the_model_picker_is_inert_while_busy_with_the_reason(node_bin, tmp_path
 
 def test_the_model_harness_detects_a_missing_switching_state(node_bin, tmp_path):
     """Guard the guard: a page that never shows "switching…" must fail."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace('var MODEL_SWITCHING_TEXT = "ui.model.switching";',
+    broken = SOURCE_INDEX_HTML.replace('var MODEL_SWITCHING_TEXT = "ui.model.switching";',
                                 'var MODEL_SWITCHING_TEXT = "";', 1)
-    assert broken != INDEX_HTML, "switching text not found — page changed shape"
+    assert broken != SOURCE_INDEX_HTML, "switching text not found — page changed shape"
     proc = _drive_controls(node_bin, tmp_path, broken, "model_switch")
     assert proc.returncode != 0, "harness passed a page with no switching state"
 
@@ -1410,10 +1410,10 @@ def test_settings_tab_failed_put_restores_the_previous_value(node_bin, tmp_path)
 def test_the_harness_detects_the_missing_save_seq(node_bin, tmp_path, scenario):
     """Guard the guard: the exact shipped bug — no `saveSeq` declaration —
     must fail both Settings-tab scenarios."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace("var saveSeq = Object.create(null);", "", 1)
-    assert broken != INDEX_HTML, "saveSeq declaration not found — page changed shape"
+    broken = SOURCE_INDEX_HTML.replace("var saveSeq = Object.create(null);", "", 1)
+    assert broken != SOURCE_INDEX_HTML, "saveSeq declaration not found — page changed shape"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, scenario, name="broken-saveseq.html",
@@ -1428,10 +1428,10 @@ def test_the_harness_detects_a_failed_put_that_keeps_the_optimistic_value(
 ):
     """Guard the guard: drop the rollback and a failed write must fail the
     scenario rather than leave a button that lies about what is stored."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace("settingsData.values[field] = previous;", "", 1)
-    assert broken != INDEX_HTML, "rollback code not found — page changed shape"
+    broken = SOURCE_INDEX_HTML.replace("settingsData.values[field] = previous;", "", 1)
+    assert broken != SOURCE_INDEX_HTML, "rollback code not found — page changed shape"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "scope_save_fails", name="broken-rollback.html",
@@ -1464,11 +1464,11 @@ def test_app_language_row_saves_and_confirms(node_bin, tmp_path, scenario, ok):
 def test_the_harness_detects_a_broken_app_language_put(node_bin, tmp_path):
     """Guard the guard: a wrong PUT URL fails the scenario, even one the
     stub would answer exactly as the right one (its path ignores a query)."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace('fetch("/api/app-language"', 'fetch("/api/app-language?x=1"',
+    broken = SOURCE_INDEX_HTML.replace('fetch("/api/app-language"', 'fetch("/api/app-language?x=1"',
                                 1)
-    assert broken != INDEX_HTML, "the App language PUT not found - page changed shape"
+    assert broken != SOURCE_INDEX_HTML, "the App language PUT not found - page changed shape"
     proc = _drive_controls(node_bin, tmp_path, broken, "app_language",
                            name="broken-app-language.html")
     assert proc.returncode != 0
@@ -1481,13 +1481,13 @@ def test_the_harness_detects_a_reason_shown_with_its_em_dash(node_bin, tmp_path)
     with the chat, where they keep their em dash) with " - " instead. Drop
     the normalisation on the menu note and the no-transcript scenario,
     which compares against plain(NO_TRANSCRIPT_REASON), must fail."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         "          note.textContent = plain(entry.reason);",
         "          note.textContent = entry.reason;", 1,
     )
-    assert broken != INDEX_HTML, "menu-note normalisation not found"
+    assert broken != SOURCE_INDEX_HTML, "menu-note normalisation not found"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "resume_gone_no_transcript",
@@ -1500,13 +1500,13 @@ def test_the_harness_detects_a_reason_shown_with_its_em_dash(node_bin, tmp_path)
 
 def test_the_harness_detects_a_model_reason_shown_with_its_em_dash(node_bin, tmp_path):
     """Same guard for the model control's disabled reason."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    broken = INDEX_HTML.replace(
+    broken = SOURCE_INDEX_HTML.replace(
         'var reason = state.available ? "" : plain(state.reason || "");',
         'var reason = state.available ? "" : (state.reason || "");', 1,
     )
-    assert broken != INDEX_HTML, "model-note normalisation not found"
+    assert broken != SOURCE_INDEX_HTML, "model-note normalisation not found"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "model_busy", name="broken-plain-model.html",
@@ -1606,10 +1606,10 @@ _GRID_MUTANTS = [
 
 @pytest.mark.parametrize("old, new, scenario", _GRID_MUTANTS)
 def test_the_grid_harness_detects_a_broken_mechanism(node_bin, tmp_path, old, new, scenario):
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    assert INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
-    broken = INDEX_HTML.replace(old, new, 1)
+    assert SOURCE_INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
     proc = _drive_smoke(node_bin, tmp_path, broken, scenario)
     assert proc.returncode != 0, (
         f"harness passed a page with {old!r} broken\nstdout: {proc.stdout}"
@@ -1619,11 +1619,11 @@ def test_the_grid_harness_detects_a_broken_mechanism(node_bin, tmp_path, old, ne
 def test_the_harness_rejects_a_fetch_outside_the_api(node_bin, tmp_path):
     """The page may only talk to /api/ on its own origin. Point one fetch
     somewhere else and even an unrelated, passing scenario must fail."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
     old = '      apiFetch("/api/sessions")\n'
-    assert INDEX_HTML.count(old) == 1
-    broken = INDEX_HTML.replace(old, '      apiFetch("/elsewhere/sessions")\n', 1)
+    assert SOURCE_INDEX_HTML.count(old) == 1
+    broken = SOURCE_INDEX_HTML.replace(old, '      apiFetch("/elsewhere/sessions")\n', 1)
     proc = _drive_smoke(node_bin, tmp_path, broken, "settings")
     assert proc.returncode != 0, proc.stdout
     assert "outside /api/" in proc.stderr
@@ -1672,10 +1672,10 @@ _DETAIL_MUTANTS = [
 @pytest.mark.parametrize("old, new, scenario", _DETAIL_MUTANTS)
 def test_the_session_page_harness_detects_a_broken_mechanism(
         node_bin, tmp_path, old, new, scenario):
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    assert INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
-    broken = INDEX_HTML.replace(old, new, 1)
+    assert SOURCE_INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
     proc = _drive_smoke(node_bin, tmp_path, broken, scenario)
     assert proc.returncode != 0, (
         f"harness passed a page with {old!r} broken\nstdout: {proc.stdout}"
@@ -1709,10 +1709,10 @@ def test_the_quick_chips_choose_exactly_what_their_rows_choose(node_bin, tmp_pat
                  id="suggested-have-hints"),
 ])
 def test_the_form_harness_detects_broken_chips(node_bin, tmp_path, old, new):
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    assert INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
-    broken = INDEX_HTML.replace(old, new, 1)
+    assert SOURCE_INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
     proc = _drive_form(node_bin, tmp_path, broken, "broken-chips.html", scenario="chips")
     assert proc.returncode != 0, f"harness passed broken chips: {old!r}"
 
@@ -1745,11 +1745,11 @@ def test_the_harness_detects_an_unguarded_mainbutton(node_bin, tmp_path):
     """Guard the guard: the default mock has no MainButton (an older
     Telegram client). Drop the feature check and ordinary scenarios,
     which never touch the new API, must fail."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
     old = "    var mb = mainButton();\n    if (!mb) { return; }\n"
-    assert INDEX_HTML.count(old) == 1
-    broken = INDEX_HTML.replace(old, "    var mb = tg.MainButton;\n", 1)
+    assert SOURCE_INDEX_HTML.count(old) == 1
+    broken = SOURCE_INDEX_HTML.replace(old, "    var mb = tg.MainButton;\n", 1)
     for scenario in ("stop_busy", "grid_render"):
         proc = _drive_smoke(node_bin, tmp_path, broken, scenario)
         assert proc.returncode != 0, f"{scenario} passed with an unguarded MainButton"
@@ -1770,10 +1770,10 @@ def test_the_harness_detects_an_unguarded_mainbutton(node_bin, tmp_path):
                  "", "theme_changed", False, id="theme-event"),
 ])
 def test_the_harness_detects_a_broken_telegram_layer(node_bin, tmp_path, old, new, scenario, form):
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    assert INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
-    broken = INDEX_HTML.replace(old, new, 1)
+    assert SOURCE_INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
     if form:
         proc = _drive_form(node_bin, tmp_path, broken, "broken-tg.html", scenario=scenario)
     else:
@@ -1844,10 +1844,10 @@ _SCHEMA_PLAIN_MUTANTS = [
 def test_the_harness_detects_schema_text_shown_raw(node_bin, tmp_path, real_schema, old, new):
     """Guard the guard: drop any one normalisation and both the settings
     scenario and the new-form scenario must fail."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    assert INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
-    broken = INDEX_HTML.replace(old, new, 1)
+    assert SOURCE_INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
     proc = _drive_smoke(node_bin, tmp_path, broken, "schema_plain")
     assert proc.returncode != 0, f"settings scenario passed with {old!r} broken"
     proc = _drive_form(node_bin, tmp_path, broken, "broken-schema.html", scenario="schema_plain")
@@ -2036,10 +2036,10 @@ def test_report_exact_block_matches_preview(node_bin, tmp_path, monkeypatch):
 
 def test_the_report_harness_detects_a_broken_page(node_bin, tmp_path):
     """Guard the guard: an rpSend that does nothing must fail send_ok."""
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
 
     old = "  function rpSend() {\n    if (!rpCanSend()) { return; }\n"
-    assert INDEX_HTML.count(old) == 1
-    broken = INDEX_HTML.replace(old, "  function rpSend() {\n    return;\n", 1)
+    assert SOURCE_INDEX_HTML.count(old) == 1
+    broken = SOURCE_INDEX_HTML.replace(old, "  function rpSend() {\n    return;\n", 1)
     proc = _drive_report(node_bin, tmp_path, broken, "send_ok")
     assert proc.returncode != 0, "harness passed a page whose Send does nothing"

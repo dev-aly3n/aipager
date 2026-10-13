@@ -195,12 +195,14 @@ def test_the_catalog_url_is_under_api():
 
 # ---- budgets ---------------------------------------------------------------------------
 
-def test_the_page_stays_under_300000_bytes():
-    assert len(PAGE.encode("utf-8")) < 300_000
+def test_the_page_stays_under_its_byte_budget():
+    from tests.test_miniapp_page_rules import PAGE_BUDGET_BYTES
+    assert len(PAGE.encode("utf-8")) <= PAGE_BUDGET_BYTES
 
 
-def test_the_page_stays_under_80000_gzipped_bytes():
-    assert len(gzip.compress(PAGE.encode("utf-8"), 9)) < 80_000
+def test_the_page_stays_under_its_gzipped_byte_budget():
+    from tests.test_miniapp_page_rules import SENT_BUDGET_BYTES
+    assert len(gzip.compress(PAGE.encode("utf-8"), 9)) <= SENT_BUDGET_BYTES
 
 
 # ---- the plural port equals Python --------------------------------------------------------
@@ -218,9 +220,16 @@ def node():
 
 
 def _slice():
-    start = PAGE.index("// plurals: port of aipager/i18n/plurals.py")
-    end = PAGE.index("// end plurals", start)
-    return PAGE[start:end]
+    """The plural port as the page serves it. Its markers are comments,
+    which the served page leaves out: cut it from the page as written,
+    strip it the way the page is, and find it in the served page."""
+    from aipager.miniapp.static._strip import strip_js
+    src = static.SOURCE_INDEX_HTML
+    start = src.index("// plurals: port of aipager/i18n/plurals.py")
+    end = src.index("// end plurals", start)
+    served = strip_js(src[start:end])
+    assert served.strip() and served in PAGE
+    return served
 
 
 def test_the_page_marks_a_plural_slice():
