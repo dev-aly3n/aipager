@@ -273,6 +273,38 @@ def test_an_agent_already_back_in_the_job_keeps_its_entry(
     assert sess.subagent_count_this_turn == 1
 
 
+def test_an_agent_that_stopped_before_the_adoption_is_not_put_back(
+        mk_bot, run_async, tmp_state_file, monkeypatch, caplog):
+    """The hook receiver runs before the recovery: C's SubagentStop lands
+    while recover_sessions lists the sessions. C is done, so the adoption
+    puts back only P (still waiting), never a running row for C."""
+    from tests import answer_status_bb as bb
+
+    bot, sess = _restarted(mk_bot, tmp_state_file, monkeypatch)
+    bot._turn_still_running = lambda _s: True
+    recv = bb.receiver(bot.registry, [])
+
+    async def _list_sessions():
+        recv._recent_fingerprints.clear()
+        await recv._on_datagram(json.dumps({
+            "session": NAME, "hook_event_name": "SubagentStop",
+            "transcript_path": "", "agent_id": C,
+            "agent_type": "ship-reviewer"}).encode())
+        return [NAME]
+
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions", _list_sessions)
+    with caplog.at_level(logging.INFO, logger="aipager.bot.lifecycle"):
+        run_async(bot.recover_sessions())
+    assert sess.status is Status.BUSY
+    assert C not in sess.bg_agents and C in sess.bg_agents_recent
+    assert list(sess.active_subagents) == [P]
+    assert sess.tool_history == [("\U0001f916 pipeline-runner", False)]
+    assert sess.subagent_count_this_turn == 1
+    assert sess.job_background_open()
+    assert any("adopted card: 1 agents of the job back on it" in m
+               for m in caplog.messages)
+
+
 def test_an_agent_evicted_at_the_cap_gets_no_row(
         mk_bot, run_async, tmp_state_file, monkeypatch):
     bot, sess = _restarted(mk_bot, tmp_state_file, monkeypatch)

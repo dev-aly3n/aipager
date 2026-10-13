@@ -895,6 +895,12 @@ class LifecycleMixin:
             agent_id = entry["id"]
             if agent_id in sess.active_subagents:
                 continue
+            # Only an agent still running: the hook receiver starts before
+            # the recovery, so a SubagentStop landing in between has already
+            # closed this agent (it left the running set). Put back, it
+            # would be a running row nothing closes until the silence sweep.
+            if agent_id not in sess.bg_agents:
+                continue
             info = {
                 "type": entry["type"], "started_at": entry["started"],
                 "last_seen": now_mono, "history_idx": None,
