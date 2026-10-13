@@ -40,6 +40,26 @@ payloads (so the real ``aipager-hook`` and ``aipager-statusline`` run).
   the PermissionRequest hook a shorter reply deadline with
   ``standin-hook-deadline-<session>`` (seconds), so the hook stops
   waiting and the answer is typed into the dialog.
+- A prompt containing one of these keywords plays a tree of background
+  agents (agents-line-waiting), with Claude Code 2.1.296's hook shapes.
+  The ids come from the stand-in's session id: agent P is ``a`` + 16 hex,
+  agent C ``b`` + 16 hex.
+
+  - ``agents: launch``: the main loop's Agent call starts P
+    (``pipeline-runner``; ``SubagentStart`` P, then the call's
+    ``PostToolUse`` with ``agentId`` P); P's own Agent call (hooks with
+    ``agent_id`` P) starts C (``ship-reviewer``); P ends its turn to wait
+    for C (``SubagentStop`` P whose ``background_tasks`` lists C); one
+    phantom ``SubagentStop`` (empty type, random id). Then the answer and
+    ``Stop``.
+  - ``agents: hold``: a ``Bash`` call whose ``PreToolUse`` fires and which
+    then waits on ``standin-hold-<session>`` (up to 5 min) with the
+    transcript showing the turn still running (for a daemon restart that
+    adopts the card); then ``PostToolUse``, the answer and ``Stop``.
+  - ``agents: finish``: C stops, P resumes (``SubagentStart`` P), runs a
+    ``Read`` of its own (``PreToolUse``/``PostToolUse`` with ``agent_id``
+    P) and stops for good (``background_tasks`` empty). Then the answer
+    and ``Stop``.
 - Every prompt and decision goes to
   ``$AIPAGER_INSTANCE_DIR/standin-<CLAUDE_DTACH_SESSION>.jsonl``.
 """
@@ -72,6 +92,7 @@ REJECTED_TOOL_RESULT = ("The user doesn't want to proceed with this tool use. Th
                         "the user to tell you how to proceed.")
 INTERRUPT_MARKER = "[Request interrupted by user for tool use]"
 _NAME_RE = re.compile(r"create\s+([A-Za-z0-9_-]+)\.txt", re.I)
+_AGENTS_RE = re.compile(r"agents:\s*(launch|hold|finish)\b", re.I)
 _ARROWS_RE = re.compile(r"(?:\x1b\[[AB])+")
 
 
@@ -145,12 +166,12 @@ class StandIn:
     def user_text(self, text: str) -> None:
         self._append({"type": "user", "message": {"role": "user", "content": text}})
 
-    def assistant(self, content: list) -> str:
+    def assistant(self, content: list, stop_reason: str = "end_turn") -> str:
         self.n += 1
         mid = f"msg_standin_{self.session_id[:8]}_{self.n}"
         self._append({"type": "assistant", "message": {
             "id": mid, "type": "message", "role": "assistant", "model": "claude-haiku-standin",
-            "content": content, "stop_reason": "end_turn",
+            "content": content, "stop_reason": stop_reason,
             "usage": {"input_tokens": 10, "output_tokens": 5}}})
         return mid
 
@@ -252,7 +273,14 @@ class StandIn:
             self.log(event="blocked_prompt")
             return
         decision = "ok"
-        if "write tool" in prompt.lower():
+        agents = _AGENTS_RE.search(prompt)
+        if agents:
+            decision = self._agents_turn(agents.group(1).lower())
+            if self.interrupted:
+                self.log(event="interrupted")
+                self.user_text("[Request interrupted by user]")
+                return
+        elif "write tool" in prompt.lower():
             m = _NAME_RE.search(prompt)
             name = m.group(1) if m else "standin"
             path = os.path.join(self.cwd, f"{name}.txt")
@@ -292,6 +320,111 @@ class StandIn:
         self.fire("Stop", {"stop_hook_active": False, "last_assistant_message": answer})
         self.log(event="stop", answer=answer)
         self.statusline()
+
+    # -- a tree of background agents (agents-line-waiting) -------------------
+
+    def agent_ids(self) -> tuple[str, str]:
+        hexid = self.session_id.replace("-", "")
+        return "a" + hexid[:16], "b" + hexid[:16]
+
+    def _in_agent(self, agent_id: str, agent_type: str, prompt_id: str) -> dict:
+        """The base fields of a hook fired inside an agent."""
+        return {"agent_id": agent_id, "agent_type": agent_type,
+                "prompt_id": prompt_id}
+
+    def _agents_turn(self, kind: str) -> str:
+        p_id, c_id = self.agent_ids()
+        prompt_id = str(uuid.uuid4())
+        if kind == "launch":
+            p_input = {"subagent_type": "pipeline-runner",
+                       "description": "Run the pipeline",
+                       "prompt": "Run the pipeline", "run_in_background": True}
+            tuid = f"toolu_standin_{uuid.uuid4().hex[:12]}"
+            self.assistant([{"type": "tool_use", "id": tuid, "name": "Agent",
+                             "input": p_input}], stop_reason="tool_use")
+            self.fire("PreToolUse", {"tool_name": "Agent", "tool_input": p_input,
+                                     "tool_use_id": tuid, "prompt_id": prompt_id},
+                      tool="Agent")
+            self.fire("SubagentStart", {"agent_id": p_id,
+                                        "agent_type": "pipeline-runner"})
+            self.fire("PostToolUse", {
+                "tool_name": "Agent", "tool_input": p_input, "tool_use_id": tuid,
+                "prompt_id": prompt_id,
+                "tool_response": {"isAsync": True, "status": "async_launched",
+                                  "agentId": p_id, "description": "Run the pipeline"}},
+                tool="Agent")
+            self.tool_result(tuid, f"Async agent launched successfully. agentId: {p_id}",
+                             False)
+            # Inside P: its own Agent call starts C.
+            c_input = {"subagent_type": "ship-reviewer", "description": "Review",
+                       "prompt": "Review the change", "run_in_background": True}
+            inner = self._in_agent(p_id, "pipeline-runner", prompt_id)
+            ctuid = f"toolu_standin_{uuid.uuid4().hex[:12]}"
+            self.fire("PreToolUse", dict(inner, tool_name="Agent", tool_input=c_input,
+                                         tool_use_id=ctuid), tool="Agent")
+            self.fire("SubagentStart", {"agent_id": c_id, "agent_type": "ship-reviewer"})
+            self.fire("PostToolUse", dict(
+                inner, tool_name="Agent", tool_input=c_input, tool_use_id=ctuid,
+                tool_response={"isAsync": True, "status": "async_launched",
+                               "agentId": c_id, "description": "Review"}),
+                tool="Agent")
+            # P ends its turn to wait for C.
+            self.fire("SubagentStop", dict(
+                inner, stop_hook_active=False,
+                agent_transcript_path=os.path.join(
+                    os.path.dirname(self.transcript), "subagents",
+                    f"agent-{p_id}.jsonl"),
+                last_assistant_message="Waiting for the reviewer.",
+                background_tasks=[{"id": c_id, "type": "local_agent",
+                                   "status": "running", "description": "Review",
+                                   "agent_type": "ship-reviewer"}],
+                session_crons=[]))
+            # A phantom stop: empty type, an id nobody started.
+            self.fire("SubagentStop", {"agent_id": "a" + uuid.uuid4().hex[:16],
+                                       "agent_type": "", "stop_hook_active": False,
+                                       "last_assistant_message": "",
+                                       "background_tasks": [], "session_crons": []})
+            self.log(event="agents", kind=kind, parent=p_id, child=c_id)
+            return "agents launched"
+        if kind == "hold":
+            b_input = {"command": "sleep 1", "description": "Wait a moment"}
+            tuid = f"toolu_standin_{uuid.uuid4().hex[:12]}"
+            self.assistant([{"type": "tool_use", "id": tuid, "name": "Bash",
+                             "input": b_input}], stop_reason="tool_use")
+            self.fire("PreToolUse", {"tool_name": "Bash", "tool_input": b_input,
+                                     "tool_use_id": tuid, "prompt_id": prompt_id},
+                      tool="Bash")
+            self.log(event="agents", kind=kind, held=os.path.exists(self.hold_path))
+            self._wait_hold(limit=300.0)
+            if self.interrupted:
+                return "interrupted"
+            self.fire("PostToolUse", {"tool_name": "Bash", "tool_input": b_input,
+                                      "tool_use_id": tuid, "prompt_id": prompt_id,
+                                      "tool_response": {"stdout": "", "stderr": "",
+                                                        "interrupted": False}},
+                      tool="Bash")
+            self.tool_result(tuid, "", False)
+            return "agents held"
+        # finish
+        inner = self._in_agent(p_id, "pipeline-runner", prompt_id)
+        self.fire("SubagentStop", dict(
+            self._in_agent(c_id, "ship-reviewer", prompt_id), stop_hook_active=False,
+            last_assistant_message="Review done.", background_tasks=[],
+            session_crons=[]))
+        self.fire("SubagentStart", {"agent_id": p_id, "agent_type": "pipeline-runner",
+                                    "prompt_id": prompt_id})
+        r_input = {"file_path": os.path.join(self.cwd, "review.md")}
+        rtuid = f"toolu_standin_{uuid.uuid4().hex[:12]}"
+        self.fire("PreToolUse", dict(inner, tool_name="Read", tool_input=r_input,
+                                     tool_use_id=rtuid), tool="Read")
+        self.fire("PostToolUse", dict(inner, tool_name="Read", tool_input=r_input,
+                                      tool_use_id=rtuid,
+                                      tool_response={"type": "text"}), tool="Read")
+        self.fire("SubagentStop", dict(
+            inner, stop_hook_active=False, last_assistant_message="Pipeline done.",
+            background_tasks=[], session_crons=[]))
+        self.log(event="agents", kind=kind, parent=p_id, child=c_id)
+        return "agents finished"
 
     def _wait_hold(self, limit: float = 120.0) -> None:
         """A test may hold this session's next tool call (file

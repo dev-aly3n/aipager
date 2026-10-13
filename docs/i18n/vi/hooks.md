@@ -77,6 +77,8 @@ Một công cụ đã xong, hoặc thất bại. Dòng của nó trên thẻ là
 
 Một lần gọi `Bash` mà Claude Code đã chuyển xuống chạy nền sẽ báo một `backgroundTaskId`. Khi đó aipager theo dõi nó như một lệnh chạy nền (chỉ của vòng chính: một lần gọi mang `agent_id` thuộc về subagent đó) cho tới khi thấy nó kết thúc: một `<task-notification>` có `<status>` (trong tin nhắn đánh thức Claude, hoặc trong lịch sử trò chuyện khi nó đến giữa chừng một việc), một `TaskStop` hoặc `KillShell` với ID của nó, phiên kết thúc, hoặc hai giờ (`AIPAGER_BG_SHELL_MAX_TRACK`, tính bằng giây, mặc định 7200). Xem [lệnh](commands.md#idle-responses) về dòng của nó trên thẻ.
 
+Một lần gọi `Agent` (hoặc `Task`) bên trong một subagent (sự kiện của nó mang `agent_id`) cho biết ID của agent mà nó đã khởi chạy. aipager nhớ agent nào đã khởi chạy agent nào, nhờ đó phân biệt được một agent dừng lại để chờ agent của riêng nó với một agent đã xong (xem `SubagentStart` / `SubagentStop` bên dưới).
+
 ### <a id="notification"></a>`Notification`
 
 aipager đọc `notification_type` của Claude Code:
@@ -96,6 +98,8 @@ Việc kết thúc vì một lỗi API. Phiên trở về trạng thái sẵn s�
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
 Một subagent đã bắt đầu hoặc kết thúc. Mỗi subagent có một dòng riêng trên thẻ làm việc, `🤖 <type> · <activity> · <elapsed>`, với các lần gọi công cụ của nó được gộp bên dưới, và được chốt lại thành `✅ 🤖 <type> · N công cụ đã chạy · <elapsed>` khi nó dừng. Một subagent mà `SubagentStop` không bao giờ tới sẽ bị bỏ khi nó đã im lặng 30 phút (`AIPAGER_SUBAGENT_SILENCE`, tính bằng giây; không có sự kiện nào mang ID của nó). Một agent đang làm việc gửi sự kiện công cụ vài giây một lần, nên cách này chỉ dọn những agent mà lúc dừng bị bỏ lỡ (một lần khởi động lại, một datagram bị mất); một lần gọi công cụ duy nhất chạy 30 phút mà không có sự kiện nào dưới ID của agent đó cũng bị dọn. `AIPAGER_SUBAGENT_TTL` được chấp nhận như tên cũ của cùng cài đặt này. Các sự kiện `SubagentStop` không có loại và có ID lạ đến thường xuyên và được bỏ qua.
+
+Một agent nền dừng lại trong lúc một agent do nó khởi chạy vẫn đang chạy cũng nhận một `SubagentStop`. aipager coi đó là tạm dừng, không phải kết thúc: agent vẫn đang chạy (dòng của nó, công việc, trạng thái dưới các câu trả lời, thanh được ghim). `SubagentStart` tiếp theo của nó, cùng ID, là lúc nó tiếp tục và không thêm dòng thứ hai; bất kỳ lần gọi công cụ nào do chính nó thực hiện cũng được tính là tiếp tục. Nó kết thúc khi dừng mà không còn agent nào của riêng nó đang chạy. Nếu nó chưa tiếp tục sau hai phút kể từ khi agent cuối cùng trong số đó kết thúc, nó không còn được tính là đang chạy, nhưng không bao giờ được hiện là đã xong. Các agent đang chạy, kể cả những agent đang chờ, được giữ lại khi aipager khởi động lại.
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 

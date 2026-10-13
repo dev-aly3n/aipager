@@ -2327,17 +2327,20 @@ class NotifyMixin:
         if event == "subagent_start":
             agent_type = context.get("agent_type", "agent")
             agent_id = context.get("agent_id", "")
-            # Count this subagent for the "(N agents)" rollup (item 4.5).
-            sess.subagent_count_this_turn += 1
-            # Append to tool_history SYNCHRONOUSLY before any await.
-            # record_tool returns the (post-trim) index so the subagent
-            # bookkeeping below references the correct entry even after
-            # the history is trimmed.
-            summary = f"\U0001f916 {agent_type}"
-            history_idx = sess.record_tool(summary, False)
-            # Store index in active_subagents so SubagentStop can find it
-            if agent_id and agent_id in sess.active_subagents:
-                sess.active_subagents[agent_id]["history_idx"] = history_idx
+            if not context.get("resumed"):
+                # Count this subagent for the "(N agents)" rollup (item
+                # 4.5). A waiting agent resuming already has its count
+                # and its running row.
+                sess.subagent_count_this_turn += 1
+                # Append to tool_history SYNCHRONOUSLY before any await.
+                # record_tool returns the (post-trim) index so the
+                # subagent bookkeeping below references the correct entry
+                # even after the history is trimmed.
+                summary = f"\U0001f916 {agent_type}"
+                history_idx = sess.record_tool(summary, False)
+                # Store index in active_subagents so SubagentStop can find it
+                if agent_id and agent_id in sess.active_subagents:
+                    sess.active_subagents[agent_id]["history_idx"] = history_idx
             # An agent is work too: a self-woken turn's deferred card goes
             # up now if its Agent call's own PreToolUse did not already
             # send it (roadmap 8.32).

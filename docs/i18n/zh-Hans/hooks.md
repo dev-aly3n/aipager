@@ -77,6 +77,8 @@ hook 能回答时就自己回答这个请求。它打开一个短期的回复套
 
 被 Claude Code 移到后台的 `Bash` 调用会报告一个 `backgroundTaskId`。aipager 随后把它当作后台命令跟踪（只限主循环的：带 `agent_id` 的调用属于那个子代理），直到看到它结束：一个带 `<status>` 的 `<task-notification>`（在唤醒 Claude 的消息里，或者在任务进行中到达时出现在对话记录里）、针对它 ID 的 `TaskStop` 或 `KillShell`、会话结束，或两个小时（`AIPAGER_BG_SHELL_MAX_TRACK`，单位秒，默认 7200）。它在卡片上的那一行见[命令](commands.md#idle-responses)。
 
+在子代理内部发起的 `Agent`（或 `Task`）调用（它的事件带有 `agent_id`）会报告它启动的代理的 ID。aipager 记住哪个代理启动了哪个，这样就能区分停下来等待自己的代理的代理和已经完成的代理（见下文 `SubagentStart` / `SubagentStop`）。
+
 ### <a id="notification"></a>`Notification`
 
 aipager 读取 Claude Code 的 `notification_type`：
@@ -96,6 +98,8 @@ aipager 读取 Claude Code 的 `notification_type`：
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
 一个子代理启动或结束了。每个子代理在工作卡片上有自己的一行，`🤖 <type> · <activity> · <elapsed>`，它自己的工具调用折叠在下面，停止时定格为 `✅ 🤖 <type> · 用了 N 次工具 · <elapsed>`。一直等不到 `SubagentStop` 的子代理，在沉默 30 分钟后会被移除（`AIPAGER_SUBAGENT_SILENCE`，单位秒；期间没有任何带它 ID 的事件）。正在工作的代理每隔几秒就会发出工具事件，所以这只会收走那些停止信号被错过的代理（重启、丢失的 datagram）；单次运行 30 分钟、期间该代理 ID 下没有任何事件的工具调用，也会让它被收走。`AIPAGER_SUBAGENT_TTL` 作为同一设置的旧名称仍被接受。没有类型、ID 未知的 `SubagentStop` 事件经常出现，会被忽略。
+
+一个后台代理在它启动的代理仍在运行时停下，也会收到 `SubagentStop`。aipager 把它当作暂停，而不是结束：这个代理仍算作正在运行（它的那一行、这项工作、回答下方的状态、置顶栏）。它下一次带同一 ID 的 `SubagentStart` 表示它继续了，不会再添加第二行；它自己的任何工具调用也算作继续。当它在自己的代理都已不在运行时停下，它才算结束。如果在其中最后一个代理结束两分钟后它仍未继续，它就不再算作正在运行，但绝不会显示为已完成。正在运行的代理，包括正在等待的那些，在 aipager 重启后都会保留。
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 

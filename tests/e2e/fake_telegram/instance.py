@@ -581,6 +581,17 @@ class TestInstance:
                 os.environ.pop(telegram_endpoint.BASE_ENV, None)
             else:
                 os.environ[telegram_endpoint.BASE_ENV] = old
+        self._spawn()
+        wait_until(lambda: (self.fake.polling_started.is_set()
+                            and "AIPager running" in self.log_text())
+                   or self.proc.poll() is not None,
+                   timeout, "the daemon to poll the fake", self.log_tail)
+        assert self.proc.poll() is None, "daemon exited:\n" + self.log_tail()
+        return self
+
+    def _spawn(self) -> None:
+        """Start ``python -m aipager start`` for this instance, its output
+        appended to the instance's daemon log."""
         assert_env_isolated(self.env, self.root)
         self._log_fh = open(self.log_path, "ab")
         self.proc = subprocess.Popen(
@@ -588,11 +599,40 @@ class TestInstance:
             env=self.env, stdin=subprocess.DEVNULL, stdout=self._log_fh,
             stderr=subprocess.STDOUT, start_new_session=True)
         self.daemon_pid = self.proc.pid
-        wait_until(lambda: (self.fake.polling_started.is_set()
-                            and "AIPager running" in self.log_text())
+
+    def restart_daemon(self, timeout: float = 90) -> TestInstance:
+        """Restart the TEST daemon in place, as an update's restart does:
+        SIGTERM its own PID only (never another process), wait for it to
+        exit (SIGKILL if it is still ours after 20 s), then start it again
+        with the same command and environment. Returns once "AIPager
+        running" appears in the log AFTER the restart (the first run's line
+        is already there, and the fake's ``polling_started`` is already
+        set, so neither can be waited on). The dtach sessions are detached
+        and keep running, as they do across a real restart."""
+        assert self.proc is not None and self.root is not None, "start() first"
+        if self.proc.poll() is None:
+            assert pid_references(self.proc.pid, self.inst_dir), \
+                "the daemon PID no longer references this instance"
+            try:
+                os.kill(self.proc.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                self.proc.wait(20)
+            except subprocess.TimeoutExpired:
+                kill_pid_if_ours(self.proc.pid, self.inst_dir, signal.SIGKILL)
+                self.proc.wait(10)
+        if self._log_fh is not None:
+            self._log_fh.close()
+            self._log_fh = None
+        mark = self.log_mark()
+        self._spawn()
+        wait_until(lambda: any("AIPager running" in line
+                               for line in self.log_lines(mark))
                    or self.proc.poll() is not None,
-                   timeout, "the daemon to poll the fake", self.log_tail)
-        assert self.proc.poll() is None, "daemon exited:\n" + self.log_tail()
+                   timeout, "the restarted daemon to run", self.log_tail)
+        assert self.proc.poll() is None, \
+            "restarted daemon exited:\n" + self.log_tail()
         return self
 
     @property

@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 import httpx
 from telegram.error import RetryAfter
 
-from aipager import bg_shells, flood_policy, i18n, preferences
+from aipager import agent_tree, bg_shells, flood_policy, i18n, preferences
 from aipager.bot import card_rows
 from aipager.i18n import Msg, Plural, Safe, Span
 from aipager.bot.keyboards import LOADING, OPTION, PERM_NEEDED
@@ -609,6 +609,20 @@ def _scan_queue_operations(sess: TrackedSession) -> None:
             for task_id, status, exit_code in \
                     bg_shells.parse_shell_ends(content):
                 sess.end_bg_shell(task_id, status, now, exit_code)
+            # An agent's notification taken mid-turn fires no
+            # UserPromptSubmit either: its still-running note (it stopped
+            # with work of its own still going, and resumes later) is read
+            # here too, or the agent would show done within the settle.
+            # Logged only when it revives the agent: the note is read from
+            # both the enqueue and the remove line, and an agent already
+            # running (a waiting parent) changes nothing.
+            for agent_id in agent_tree.still_running_task_ids(content):
+                was_running = agent_id in sess.bg_agents
+                if (sess.bg_agent_still_running(agent_id, now)
+                        and not was_running):
+                    log.info("[%s] agent %s stopped with work of its own "
+                             "still running (taken mid-turn) - counted as "
+                             "running again", sess.label, agent_id)
         if operation == "remove" and reason in (
             "absorbed_mid_turn", "delivered_to_agent",
         ):

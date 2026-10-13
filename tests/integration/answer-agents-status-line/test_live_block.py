@@ -378,7 +378,11 @@ def test_a_restart_forgets_the_pending_block(bot, sess, wire, run_async, tmp_sta
     assert loaded is not None and loaded.agents_lines_due(t1 + 10_000) == []
 
 
-def test_a_restart_persists_no_agent_activity(bot, sess, wire, run_async, tmp_state_file):
+def test_a_restart_keeps_a_running_agents_activity_but_no_pending_call(
+        bot, sess, wire, run_async, tmp_state_file):
+    """Since agents-line-waiting a running agent and what it was last doing
+    survive a restart (the "agents" record); an Agent call not yet matched
+    to a start is still not kept."""
     now = time.monotonic()
     sess.bg_agent_started("a1", "Explore", now)
     sess.bg_agent_prose("a1", "m1", "Secret narration words", now)
@@ -388,16 +392,16 @@ def test_a_restart_persists_no_agent_activity(bot, sess, wire, run_async, tmp_st
     bot.registry.save()
     raw = tmp_state_file.read_text(encoding="utf-8")
     assert [w in raw for w in ("Secret narration", "hidden_file", "Pending description")] \
-        == [False, False, False]
+        == [True, True, False]
 
 
-def test_after_a_restart_the_loaded_session_has_no_agents(bot, sess, wire, run_async,
-                                                          tmp_state_file):
+def test_after_a_restart_the_loaded_session_keeps_its_running_agents(
+        bot, sess, wire, run_async, tmp_state_file):
     _deliver(run_async, bot, sess, ("a1", "Explore", time.monotonic()))
     bot.registry.save()
     again = SessionRegistry()
     again.load()
-    assert again.get(sess.name).bg_agent_labels() == []
+    assert again.get(sess.name).bg_agent_labels() == ["Explore"]
 
 
 # ---- criterion 6: shells of this job only -------------------------------------------------

@@ -77,6 +77,8 @@ hook은 답할 수 있으면 직접 이 요청에 답해요. 짧게 쓰는 응�
 
 Claude Code가 백그라운드로 옮긴 `Bash` 호출은 `backgroundTaskId`를 알려 줘요. 그러면 aipager는 그것을 백그라운드 명령으로 추적하는데(메인 루프의 것만이고, `agent_id`가 있는 호출은 그 서브에이전트의 것이에요), 끝나는 것을 볼 때까지예요. `<status>`가 있는 `<task-notification>`(Claude를 깨우는 메시지 안이나, 작업 중에 도착하면 대화 기록 안), 그 ID에 대한 `TaskStop`이나 `KillShell`, 세션 종료, 또는 두 시간(`AIPAGER_BG_SHELL_MAX_TRACK`, 초 단위, 기본값 7200)이에요. 카드의 그 줄은 [명령](commands.md#idle-responses)에 있어요.
 
+서브에이전트 안에서 한 `Agent`(또는 `Task`) 호출은(그 이벤트에 `agent_id`가 있어요) 자기가 시작한 에이전트의 ID를 알려 줘요. aipager는 어느 에이전트가 어느 에이전트를 시작했는지 기억해서, 자기 에이전트를 기다리려고 멈춘 에이전트와 끝난 에이전트를 구별해요(아래 `SubagentStart` / `SubagentStop` 참고).
+
 ### <a id="notification"></a>`Notification`
 
 aipager는 Claude Code의 `notification_type`을 읽어요:
@@ -96,6 +98,8 @@ API 오류로 작업이 끝났어요. 세션이 준비됨이 되고, 답변이 �
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
 서브에이전트가 시작했거나 끝났어요. 서브에이전트마다 작업 카드에 자기 줄 `🤖 <type> · <activity> · <elapsed>`이 있고, 자기 도구 호출은 그 아래에 접혀 있다가, 멈추면 `✅ 🤖 <type> · 도구 N번 사용 · <elapsed>`로 고정돼요. `SubagentStop`이 끝내 오지 않는 서브에이전트는 30분 동안 조용하면 지워져요(`AIPAGER_SUBAGENT_SILENCE`, 초 단위, 그동안 그 ID가 있는 이벤트가 하나도 없을 때). 일하는 에이전트는 몇 초마다 도구 이벤트를 보내니까, 이것은 멈춤 신호를 놓친 에이전트(재시작, 잃어버린 datagram)만 거둬 가요. 한 번에 30분 동안 실행되면서 그 에이전트 ID로 아무 이벤트도 없는 도구 호출도 에이전트를 거둬 가게 해요. `AIPAGER_SUBAGENT_TTL`은 같은 설정의 예전 이름으로 여전히 받아들여요. 유형이 없고 ID를 모르는 `SubagentStop` 이벤트는 자주 오고, 무시돼요.
+
+자기가 시작한 에이전트가 아직 실행 중인데 멈춘 백그라운드 에이전트도 `SubagentStop`을 받아요. aipager는 이것을 끝이 아니라 잠깐 멈춤으로 봐요. 그 에이전트는 계속 실행 중으로 남아요(자기 줄, 그 일, 답변 아래 상태, 고정된 표시줄). 같은 ID로 오는 다음 `SubagentStart`는 이어서 하는 것이고 두 번째 줄을 만들지 않아요. 그 에이전트가 직접 하는 도구 호출도 이어서 하는 것으로 쳐요. 자기 에이전트가 하나도 실행 중이지 않은 상태로 멈추면 끝나요. 그중 마지막 에이전트가 끝나고 2분이 지나도 이어서 하지 않으면 더 이상 실행 중으로 세지 않지만, 완료로 보여 주지는 않아요. 실행 중인 에이전트는, 기다리는 에이전트까지 포함해, aipager가 재시작해도 남아요.
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 

@@ -77,6 +77,8 @@ Un outil a fini, ou a échoué. Sa ligne sur la carte d'activité se fige (un é
 
 Un appel `Bash` que Claude Code a mis en arrière-plan indique un `backgroundTaskId`. aipager le suit alors comme une commande en arrière-plan (seulement celles de la boucle principale : un appel qui porte `agent_id` appartient à ce sous-agent) jusqu'à ce que sa fin soit vue : un `<task-notification>` avec un `<status>` (dans le message qui réveille Claude, ou dans l'historique de la conversation quand il arrive en pleine tâche), un `TaskStop` ou un `KillShell` de son identifiant, la fin de la session, ou deux heures (`AIPAGER_BG_SHELL_MAX_TRACK`, en secondes, par défaut 7200). Voir [commandes](commands.md#idle-responses) pour sa ligne sur la carte.
 
+Un appel `Agent` (ou `Task`) fait à l'intérieur d'un sous-agent (son événement porte `agent_id`) donne l'ID de l'agent qu'il a lancé. aipager retient quel agent a lancé lequel, et peut ainsi distinguer un agent qui s'est arrêté pour attendre son propre agent d'un agent qui a fini (voir `SubagentStart` / `SubagentStop` plus bas).
+
 ### <a id="notification"></a>`Notification`
 
 aipager lit le `notification_type` de Claude Code :
@@ -96,6 +98,8 @@ La tâche s'est terminée sur une erreur de l'API. La session devient prête et 
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
 Un sous-agent a démarré ou s'est terminé. Chacun a sa propre ligne sur la carte d'activité, `🤖 <type> · <activity> · <elapsed>`, avec ses propres appels d'outil repliés en dessous, et se fige en `✅ 🤖 <type> · N outils utilisés · <elapsed>` quand il s'arrête. Un sous-agent dont le `SubagentStop` n'arrive jamais est retiré une fois qu'il est resté silencieux 30 minutes (`AIPAGER_SUBAGENT_SILENCE`, en secondes ; aucun événement d'aucune sorte qui porte son identifiant). Un agent au travail envoie des événements d'outil toutes les quelques secondes, donc cela ne ramasse qu'un agent dont l'arrêt a été manqué (un redémarrage, un datagramme perdu) ; un seul appel d'outil qui dure 30 minutes sans aucun événement sous l'identifiant de cet agent le ramasse aussi. `AIPAGER_SUBAGENT_TTL` est accepté comme ancien nom du même réglage. Des événements `SubagentStop` sans type et avec un identifiant inconnu arrivent souvent et sont ignorés.
+
+Un agent en arrière-plan qui s'arrête pendant qu'un agent qu'il a lancé tourne encore reçoit lui aussi un `SubagentStop`. aipager le prend comme une pause, pas comme une fin : l'agent reste en cours (sa ligne, le travail, l'état sous les réponses, la barre épinglée). Son `SubagentStart` suivant, avec le même ID, est sa reprise et n'ajoute pas de deuxième ligne ; tout appel d'outil qu'il fait lui-même compte aussi comme une reprise. Il se termine quand il s'arrête sans plus aucun de ses agents en cours. S'il n'a pas repris deux minutes après la fin du dernier d'entre eux, il n'est plus compté comme en cours, mais n'est jamais affiché comme terminé. Les agents en cours, y compris ceux qui attendent, sont gardés après un redémarrage d'aipager.
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
