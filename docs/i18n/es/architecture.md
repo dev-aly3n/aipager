@@ -58,7 +58,6 @@ Una sola llamada a `asyncio.run` en `aipager/cli/daemon.py` lo mueve todo. Dentr
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): abre un socket datagram de Unix en `$XDG_RUNTIME_DIR/aipager.sock`, lee el JSON que envían `aipager-hook` y `aipager-statusline`, y reparte el trabajo según su `hook_event_name` (o `type`, para los mensajes propios de aipager; mira [eventos de hook](hooks.md)).
 - **`SessionMonitor`** (`aipager/session_monitor.py`): se despierta cada 2 s para revisar `/tmp/claude-dtach-*.sock`, poner al día las sesiones que encuentra con la lista de sesiones, y ejecutar los vigilantes: una tarjeta de actividad que dejó de avanzar, un mensaje que Claude Code nunca recibió, una solicitud de permiso sin noticias durante 5 minutos que la conversación guardada muestra como terminada (`AIPAGER_INTERACTIVE_TIMEOUT`), una tarea cuyo final no se vio.
 - **`SessionRegistry`** (`aipager/state.py`): los objetos `TrackedSession` por nombre de sesión. Se guardan en `~/.claude/aipager-sessions.json` (de forma atómica) al apagarse y cada vez que cambia algo que tiene que sobrevivir a un reinicio.
-- **`ObserverBroadcaster`** (opcional, `aipager/bot/observer.py`): si `OBSERVER_BOTS` está puesto, envía también los avisos a los bots observadores de solo lectura ([bots observadores](observers.md)).
 - **Servidor de la Mini App** (`aipager/miniapp/server.py`): una app aiohttp en `127.0.0.1` y el puerto `MINIAPP_PORT` (por defecto 8765), que mientras está activada (por defecto) llega a Telegram por un túnel de Cloudflare gestionado. Sirve el panel de `/app`.
 
 Todo esto funciona como tareas en el mismo loop. Lo que lo bloquearía se ejecuta en hilos aparte: pasar audios a texto, crear y enviar un informe de problemas, buscar actualizaciones y planear reinicios, descargar el script de la Mini App y `cloudflared`, y la comprobación de inicio de sesión al arrancar.
@@ -73,12 +72,11 @@ De `aipager/cli/daemon.py`:
 4. Arregla los archivos del propio Claude Code: añade cualquier hook de aipager o la línea de estado que falten en `~/.claude/settings.json`, y responde las preguntas del primer arranque que un usuario de Telegram no podría responder (mira [Modelo de seguridad](security.md#who-decides-whether-a-tool-call-runs)).
 5. `SessionRegistry.load()`: lee `~/.claude/aipager-sessions.json`. Si el archivo no está o no se puede leer, empieza con la lista vacía.
 6. Averigua la dirección de la Mini App (tu propia URL, o Tailscale), luego `bot.start()`: empieza a recibir actualizaciones.
-7. `ObserverBroadcaster.start()`, solo si está configurado.
-8. `HookReceiver.start()`: borra un archivo de socket que haya quedado, lo abre y escucha.
-9. `bot.recover_sessions()`: recupera las tarjetas y las solicitudes de las sesiones que estaban trabajando o esperando cuando aipager se detuvo (mira [comandos → respuestas](commands.md#idle-responses)).
-10. `SessionMonitor.start()`: empieza el tic de 2 s.
-11. Arranca el servidor de la Mini App, luego el túnel (si no pusiste una URL propia), y se publican los botones `📱 App`.
-12. aipager espera señales: SIGINT o SIGTERM lo detienen, SIGUSR1 vuelve a cargar los chats y las reglas ([uso en equipo → recargar la configuración sin reiniciar](groups.md#live-reload)).
+7. `HookReceiver.start()`: borra un archivo de socket que haya quedado, lo abre y escucha.
+8. `bot.recover_sessions()`: recupera las tarjetas y las solicitudes de las sesiones que estaban trabajando o esperando cuando aipager se detuvo (mira [comandos → respuestas](commands.md#idle-responses)).
+9. `SessionMonitor.start()`: empieza el tic de 2 s.
+10. Arranca el servidor de la Mini App, luego el túnel (si no pusiste una URL propia), y se publican los botones `📱 App`.
+11. aipager espera señales: SIGINT o SIGTERM lo detienen, SIGUSR1 vuelve a cargar los chats y las reglas ([uso en equipo → recargar la configuración sin reiniciar](groups.md#live-reload)).
 
 ## <a id="shutdown-sequence"></a>Orden de apagado
 
@@ -86,7 +84,7 @@ De `aipager/cli/daemon.py`:
 2. Un `/update` en curso tiene un poco de margen y luego se detiene su instalador (mira [comandos → actualizar](commands.md#update)).
 3. `registry.save()`.
 4. Se detiene el túnel y luego el servidor de la Mini App.
-5. `session_monitor.stop()`, `hook_receiver.stop()` (cierra el socket y borra su archivo), `observers.stop()` si está en marcha.
+5. `session_monitor.stop()`, `hook_receiver.stop()` (cierra el socket y borra su archivo).
 6. `bot.stop()`: cancela las animaciones y detiene el `Application`.
 7. Otra vez `registry.save()`, por si una tarjeta seguía enviándose.
 

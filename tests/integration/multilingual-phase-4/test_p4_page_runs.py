@@ -530,10 +530,16 @@ def test_en_requests_equal_the_base_page(en):
     assert [list(c) for c in _dynamic(en["detail"])["calls"]] == base["detail"]["calls"]
 
 
+#: Labels a later change removed on purpose: the folder picker's "+" (read
+#: out as "Create this folder") became the text button "Create folder",
+#: whose visible text is its name (2026-10-12).
+REMOVED_ARIAS = {"Create this folder"}
+
+
 def test_en_dynamic_aria_labels_equal_the_base_page(en):
     base = json.loads(BASE_PAGE.read_text(encoding="utf-8"))
     dyn = [a for a in _dynamic(en["grid"])["arias"]]
-    assert dyn == base["grid"]["arias"]
+    assert dyn == [a for a in base["grid"]["arias"] if a not in REMOVED_ARIAS]
 
 
 # ---- fallback: a missing translation shows English, never a key ------------------------------

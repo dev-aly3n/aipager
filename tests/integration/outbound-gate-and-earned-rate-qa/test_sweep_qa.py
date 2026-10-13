@@ -37,11 +37,11 @@ def _tolerant(body: str) -> str:
 
 # ===== criterion 7 — the shape of the sweep itself ======================
 
-def test_exempt_is_exactly_the_three_files_d8_names():
+def test_exempt_is_exactly_the_seam_and_the_gate():
     """Criterion 7. Every file REMOVED from ``_EXEMPT`` is a file the
     sweep now protects — that is the whole point of moving enforcement to
-    the chokepoint, and a fourth entry silently gives one back."""
-    assert EXEMPT_FILES == {"transport.py", "flood_budget.py", "observer.py"}
+    the chokepoint, and a third entry silently gives one back."""
+    assert EXEMPT_FILES == {"transport.py", "flood_budget.py"}
 
 
 @pytest.mark.parametrize("family", ["delete_message", "send_chat_action"])
@@ -93,8 +93,8 @@ def test_the_new_families_are_flagged_on_a_stray_receiver(family):
 
 
 def test_an_exempt_file_is_not_swept():
-    """The seam, the gate and the observer are the three files that must
-    be able to call a bot directly."""
+    """The seam and the gate are the two files that must be able to call
+    a bot directly."""
     assert gated_family_offenders(
         "aipager/bot/transport.py",
         _tolerant("await message.reply_text('hi')")) == []
@@ -140,9 +140,18 @@ def test_a_hand_built_bot_is_an_offender():
     assert bot_construction_offenders(BOT, "b = Bot(token='x')\n")
 
 
-def test_the_observers_own_bot_is_allowed():
+def test_a_bot_built_in_any_other_bot_module_is_an_offender():
+    """The removed observer bots' module was exempt by name; a file by
+    that name is now policed like any other."""
     assert bot_construction_offenders(
-        "aipager/bot/observer.py", "b = Bot(token='x')\n") == []
+        "aipager/bot/observer.py", "b = Bot(token='x')\n")
+
+
+def test_an_api_url_in_any_other_bot_module_is_an_offender():
+    """Same for the URL allowlist: the removed module's name buys
+    nothing now."""
+    assert telegram_url_offenders(
+        "aipager/bot/observer.py", "u = 'https://api.telegram.org/bot'\n")
 
 
 def test_the_applications_own_builder_is_allowed():

@@ -1911,7 +1911,6 @@ def _notice_world(env):
     alive(env)
     bot._settle_card_text = AsyncMock(return_value=False)
     bot._edit_busy_raw = AsyncMock(side_effect=lambda mid, text, **k: tg.note(text) or True)
-    bot.observers = None
     x1 = session(bot, "x1", chat=GROUP, status=Status.BUSY)
     return bot, tg, x1
 

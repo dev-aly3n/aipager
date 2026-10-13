@@ -356,7 +356,6 @@ Jede Aufgabe jeder Rolle außer `owner` bekommt sie ganz, ebenso die Aufgaben, d
 - Bei einer Installation mit privatem Chat tauchen deine Terminal-Sitzungen und die deines privaten Chats nie in einer Gruppe auf (siehe [Wohin Nachrichten gehen](#where-messages-go)). Eine Terminal-Sitzung, die ein älteres aipager schon in die Gruppe gebracht hat, bleibt bei der Gruppe: Beende sie, lösch sie aus den beendeten Sitzungen der Gruppe und starte sie neu.
 - `aipager.yaml` hat die Rechte 0600 (nur der Eigentümer). aipager setzt die Rechte von `policy.yaml` nicht: Halte sie selbst nur für den Eigentümer lesbar (`chmod 600 ~/.config/aipager/policy.yaml`).
 - Das Audit-Log (`~/.claude/aipager-audit.jsonl`) hat keine eigenen Rechte: Es ist so privat wie dein Ordner `~/.claude`.
-- [Beobachter-Bots](observers.md) bekommen die Hinweise aus jedem Chat, für den der Bot zuständig ist, Gruppen eingeschlossen: Richte einen nur für einen Chat ein, dem du all das anvertrauen würdest.
 
 ## <a id="revoking-a-user"></a>Einer Person den Zugang entziehen
 

@@ -33,7 +33,7 @@ _KILL_POLL_INTERVAL: float = 0.02
 # coroutine in the process, CLAUDE.md). Both default to the real functions.
 # ``_key_gap_sleep`` is the pause between two writes of one key sequence
 # (``send_text_and_enter``'s text-to-Enter gap, ``discard_queued_input``'s
-# Escape-to-KillLine gap).
+# Escape-to-Ctrl+U gap and the gaps between its Ctrl+U writes).
 _create_subprocess_exec = asyncio.create_subprocess_exec
 _key_gap_sleep = asyncio.sleep
 
@@ -218,9 +218,10 @@ KEYS = {
     "Left": "\x1b[D",
     "Tab": "\t",
     "Escape": "\x1b",
-    # readline's kill-whole-line (Ctrl-U). Used by discard_queued_input
-    # below to wipe text an Escape surfaced into the input box without
-    # submitting it.
+    # Ctrl+U. In Claude Code's input box one press deletes back to the
+    # start of the current screen row, or one line break, not the whole
+    # input (2.1.296), so discard_queued_input below presses it many times
+    # to wipe text an Escape surfaced there without submitting it.
     "KillLine": "\x15",
     # Shift+Tab: Claude Code cycles its permission mode on it
     # (press_mode_cycle below).
@@ -299,10 +300,13 @@ _LAST_WRITE_AT: dict[str, float] = {}
 # session's lock until the write has returned (``dtach -p`` exits only
 # after writing), so writes are delivered one at a time and in order, not
 # merely started in order:
-# - ``send_keys``: one hold per key write (``discard_queued_input`` and
-#   every other key path go through it);
+# - ``send_keys``: one hold per key write;
 # - ``send_text_and_enter``: ONE hold across the text, its settle delay and
 #   the Enter, so nothing can land between them;
+# - ``discard_queued_input``: ONE hold across its Escape, the settle gap and
+#   every Ctrl+U write (about 0.3 s for a short queue, one more write per
+#   40 characters queued, at most 512 writes), so no prompt's text lands in a
+#   half-wiped input box and goes out glued to what is left there;
 # - ``send_now``: one hold for the Ctrl+X; released for the gap; one hold
 #   from its "was anything written since my Ctrl+X?" check through the
 #   Ctrl+S write, so a foreign write falls before the check (and the
@@ -312,9 +316,11 @@ _LAST_WRITE_AT: dict[str, float] = {}
 #   so no prompt's text lands between two presses.
 # Waiting is FIFO. The bound on any writer's wait (Stop's Escape
 # included): at most ``_CHORD_WAIT_LIMIT`` (0.5 s) for a chord in flight,
-# then the lock hold in progress: one ``dtach -p`` write, or a prompt's
-# text + its settle delay (at most 0.5 s) + Enter. So one writer ahead
-# costs at most ~0.5 s plus the write in flight. (A chord never starts
+# then the lock hold in progress: one ``dtach -p`` write, a prompt's
+# text + its settle delay (at most 0.5 s) + Enter, or a discard's Escape
+# and Ctrl+U writes (about 0.3 s for a short queue, longer only for a long
+# one, see above). So one writer ahead costs at most ~0.5 s plus the
+# writes in flight, or a long discard. (A chord never starts
 # while a prompt is typed: bot/send_now.py refuses then. Several writers
 # queued at once on one session would add up, but Telegram updates are
 # handled one at a time.) Each ``dtach -p`` is capped by ``_run``'s
@@ -450,7 +456,38 @@ async def send_text_and_enter(session: str, text: str) -> bool:
     return ok
 
 
-async def discard_queued_input(session: str) -> bool:
+# discard_queued_input's wipe. Claude Code's Ctrl+U deletes, per press, one
+# line break or the text from the start of the current screen row back to
+# the cursor; on an empty box it deletes nothing (2.1.296; live, one press
+# took a 665-character input to 586). So every press on a non-empty box
+# deletes at least one character, and as many presses as there are
+# characters wipe the box whatever its line lengths or the terminal width.
+# The caller passes how many characters Claude's queue holds (its
+# transcript knows the text); DISCARD_MIN_PRESSES more cover what it cannot
+# count (a message whose enqueue line is not written yet, text typed at the
+# terminal): about four screens of a 40-column terminal. Capped at
+# DISCARD_MAX_PRESSES (five full Telegram messages) so one wipe never holds
+# the write lock for more than 512 writes (about 8 s on a fast machine). Written DISCARD_KILL_BATCH to a
+# write (live, one write of about 40 cleared that 665-character input), far
+# under the 800 characters above which Claude Code takes typed text as a
+# paste (in 2.1.296's code a Ctrl key is never taken as pasted text).
+DISCARD_KILL_BATCH: int = 40
+DISCARD_MIN_PRESSES: int = 480
+DISCARD_MAX_PRESSES: int = 20_480
+DISCARD_KILL_GAP: float = 0.01
+# From the Escape to the first Ctrl+U: Claude Code moves its queue into the
+# input box on the Escape.
+DISCARD_ESCAPE_SETTLE: float = 0.15
+
+
+def discard_presses(chars: int) -> int:
+    """How many Ctrl+U presses wipe *chars* characters surfaced into the
+    input box, plus the margin, in whole batches (see the note above)."""
+    presses = min(DISCARD_MAX_PRESSES, DISCARD_MIN_PRESSES + max(0, chars))
+    return -(-presses // DISCARD_KILL_BATCH) * DISCARD_KILL_BATCH
+
+
+async def discard_queued_input(session: str, chars: int = 0) -> bool:
     """Wipe text Claude's own not-yet-picked-up queue surfaced into the
     input box, without touching whatever turn is (or isn't) currently
     running.
@@ -461,24 +498,53 @@ async def discard_queued_input(session: str) -> bool:
     design.md "Stop and /clearqueue on the same primitive"). Left alone,
     that surfaced text would concatenate onto the next prompt sent. One
     more Escape (in case a fresh dialog opened underneath in the
-    meantime) then ``KillLine`` (``\\x15``, readline's kill-whole-line)
-    clears whatever landed in the input box.
+    meantime), then Ctrl+U (``KillLine``) pressed
+    ``discard_presses(chars)`` times clears whatever landed in the input
+    box: one press deletes only one screen row or one line break there, so
+    a single press left all but the last row of a long or multi-message
+    queue behind. *chars*: how many characters Claude's queue holds, as
+    far as the caller knows (see the sizing note above).
 
     The one function the version-fragile choreography above is isolated
     behind — every caller (Stop, ``/clearqueue``, the Mini App's
     clearqueue route) goes through this rather than reproducing the key
     sequence itself, so a future Claude Code release that changes the
-    mechanism only needs one call site fixed. Sends exactly two key
-    events (``Escape`` then ``KillLine``) — callers that also need the
-    two-Escape interrupt pair send those themselves, first (Stop), or
-    not at all (``/clearqueue`` — it must never send a second Escape,
-    which would risk interrupting the running turn it explicitly leaves
-    alone).
+    mechanism only needs one call site fixed. Sends exactly one Escape,
+    first, then only Ctrl+U — callers that also need the two-Escape
+    interrupt pair send those themselves, first (Stop), or not at all
+    (``/clearqueue`` — it must never send a second Escape, which would
+    risk interrupting the running turn it explicitly leaves alone).
+
+    Every write under ONE hold of the session's write lock, counted once,
+    so no prompt's text lands in a half-wiped box. Stops at the first
+    failed write and returns False; True once every write went out.
     """
     await _await_chord(session)
-    await send_keys(session, "Escape")
-    await _key_gap_sleep(0.15)
-    return await send_keys(session, "KillLine")
+    sock = _sock_path(session)
+    kills = KEYS["KillLine"].encode() * DISCARD_KILL_BATCH
+    presses = discard_presses(chars)
+    if DISCARD_MIN_PRESSES + chars > DISCARD_MAX_PRESSES:
+        log.warning("Discard → %s: %d characters queued, wiping at most %d",
+                    session, chars, DISCARD_MAX_PRESSES - DISCARD_MIN_PRESSES)
+    writes = presses // DISCARD_KILL_BATCH
+    async with _write_lock(session):
+        _note_write(session)
+        ok, _ = await _run([_DTACH, "-p", sock], stdin=KEYS["Escape"].encode())
+        if not ok:
+            log.warning("Discard → %s: the Escape write failed", session)
+            return False
+        await _key_gap_sleep(DISCARD_ESCAPE_SETTLE)
+        for i in range(writes):
+            if i:
+                await _key_gap_sleep(DISCARD_KILL_GAP)
+            ok, _ = await _run([_DTACH, "-p", sock], stdin=kills)
+            if not ok:
+                log.warning("Discard → %s: Ctrl+U write %d/%d failed",
+                            session, i + 1, writes)
+                return False
+    log.info("Discarded queued input → %s (Escape, %d x Ctrl+U)",
+             session, presses)
+    return True
 
 
 async def press_mode_cycle(session: str, presses: int) -> bool:

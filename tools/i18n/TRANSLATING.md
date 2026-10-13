@@ -193,8 +193,8 @@ button can, but never by adding facts the English does not have.
 **Where they live.** `docs/i18n/<code>/` holds one file per English page:
 `README.md` (the top-level README, ending with the list of docs that
 `docs/README.md` has), and `install-with-an-agent.md`, `architecture.md`,
-`hooks.md`, `commands.md`, `groups.md`, `observers.md`,
-`troubleshooting.md`, `problem-reports.md` and `security.md`, the same
+`hooks.md`, `commands.md`, `groups.md`, `troubleshooting.md`,
+`problem-reports.md` and `security.md`, the same
 names as in `docs/`. The English pages are the reference.
 
 **The first lines.** Every translated page starts with its title, then a

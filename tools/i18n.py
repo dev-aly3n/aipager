@@ -1080,7 +1080,6 @@ DOC_PAGES = {
     "hooks.md": "docs/hooks.md",
     "commands.md": "docs/commands.md",
     "groups.md": "docs/groups.md",
-    "observers.md": "docs/observers.md",
     "troubleshooting.md": "docs/troubleshooting.md",
     "problem-reports.md": "docs/problem-reports.md",
     "security.md": "docs/security.md",

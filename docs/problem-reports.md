@@ -38,7 +38,7 @@ Each part, in plain words. Every value is checked against the list of allowed va
 - `claude_code`: the Claude Code version, how many Claude Code installs were found, and how it logs in (`env`, `file`, `keychain`, or why that could not be told). Never the login itself.
 
 **Your setup, as counts**
-- `config`: the mode (`personal`, `team`, `scope`); how many private chats and how many groups are configured; how many custom roles exist (their names are not included); which features are on (Mini App, its tunnel kind, observers, voice, diff previews, rich summaries).
+- `config`: the mode (`personal`, `team`, `scope`); how many private chats and how many groups are configured; how many custom roles exist (their names are not included); which features are on (Mini App, its tunnel kind, voice, diff previews, rich summaries).
 - `runtime`: how long aipager has been running, as a range (`<10m`, `10m-1h`, `1-24h`, `1-7d`, `>7d`); how many sessions are live and busy; how many times aipager stopped unexpectedly in the last 7 days and how it ended last time (`clean`, `crash`, `reboot`).
 - `doctor`: the results (`ok`, `warn`, `fail`) of a fixed list of health checks, when they are available without running the checks again (reports from the bot and the terminal leave this empty).
 - `flood`: Telegram rate-limit state added up over all chats: bans in the last 7 days, whether a chat is muted, in minimal mode or backing off right now, and the busiest chat's share of its hourly budget as a range. No chat ids.

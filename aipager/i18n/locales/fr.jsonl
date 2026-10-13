@@ -1091,7 +1091,7 @@
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "Suggérés"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "le modèle par défaut de Claude Code"}
 {"k": "ui.new.create_failed", "src": "c55f566f", "v": "Impossible de créer cette session."}
-{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "Créer ce dossier"}
+{"k": "ui.new.create_folder", "src": "e59f63fa", "v": "Créer le dossier"}
 {"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "Vous n'êtes pas autorisé à créer des sessions ici."}
 {"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "Impossible de joindre le serveur. La session n'a pas été créée."}
 {"k": "ui.new.created", "src": "77ea75b5", "v": "Session créée."}
@@ -1106,6 +1106,9 @@
 {"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "Impossible de créer ce dossier."}
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "Vous n'êtes pas autorisé à créer des dossiers ici."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Nom du nouveau dossier"}
+{"k": "ui.new.folder_pattern", "src": "c3b51490", "v": "Utilisez seulement des lettres sans accent, des chiffres, des points, des tirets et des tirets bas ; commencez par une lettre ou un chiffre."}
+{"k": "ui.new.folder_too_long", "src": "ae5dc64d", "v": "Le nom du dossier doit comporter {max} caractères au maximum."}
+{"k": "ui.new.folder_too_many", "src": "468419ea", "v": "Trop de tentatives. Réessayez dans une minute."}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "Impossible de joindre le serveur. Aucun dossier n'a été créé."}
 {"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "Le Mode Accès complet est réservé aux admins."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "Demander"}
@@ -1174,7 +1177,6 @@
 {"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "inconnu"}
 {"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "aperçus des changements"}
 {"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
-{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "bots observateurs"}
 {"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "résumés enrichis"}
 {"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "tunnel géré"}
 {"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "adresse de tunnel personnalisée"}

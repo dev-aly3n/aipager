@@ -356,7 +356,6 @@ safety:
 - 在有私聊的安装上，终端会话和你私聊里的会话绝不会出现在群组里（见[消息发到哪里](#where-messages-go)）。旧版 aipager 移到群组里的终端会话会继续留在群组里：结束它，把它从群组已结束的会话里删除，然后重新开始。
 - `aipager.yaml` 的权限是 0600（只有所有者）。aipager 不会为 `policy.yaml` 设置权限：请自己让它保持只有所有者可读写（`chmod 600 ~/.config/aipager/policy.yaml`）。
 - 审计日志（`~/.claude/aipager-audit.jsonl`）没有单独的权限：它和你的 `~/.claude` 文件夹一样私密。
-- [观察机器人](observers.md)会收到机器人服务的每个聊天的通知，包括群组：只为你在所有这些内容上都信任的聊天设置观察机器人。
 
 ## <a id="revoking-a-user"></a>撤销一个人的权限
 

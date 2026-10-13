@@ -42,7 +42,7 @@ Campo per campo, in parole semplici. Ogni valore viene confrontato con un elenco
 - `claude_code`: la versione di Claude Code, quante installazioni di Claude Code sono state trovate e come accede (`env`, `file`, `keychain`, o il motivo per cui non si sa). Mai le credenziali stesse.
 
 **Le tue impostazioni, come numeri**
-- `config`: la modalità (`personal`, `team`, `scope`); quante chat private e quanti gruppi sono configurati; quanti ruoli personalizzati esistono (senza i nomi); quali funzioni sono attive (la Mini App e il tipo del suo tunnel, i bot osservatori, i vocali, le anteprime dei diff, i riepiloghi ricchi).
+- `config`: la modalità (`personal`, `team`, `scope`); quante chat private e quanti gruppi sono configurati; quanti ruoli personalizzati esistono (senza i nomi); quali funzioni sono attive (la Mini App e il tipo del suo tunnel, i vocali, le anteprime dei diff, i riepiloghi ricchi).
 - `runtime`: da quanto tempo gira aipager, come fascia (`<10m`, `10m-1h`, `1-24h`, `1-7d`, `>7d`); quante sessioni sono in esecuzione e quante al lavoro; quante volte aipager si è fermato in modo imprevisto negli ultimi 7 giorni e come è finita l'ultima volta (`clean`, `crash`, `reboot`).
 - `doctor`: il risultato (`ok`, `warn`, `fail`) di un elenco fisso di controlli di salute, quando è disponibile senza rifare i controlli (le segnalazioni dal bot e dal terminale lo lasciano vuoto).
 - `flood`: lo stato dei limiti di Telegram, sommato su tutte le chat: blocchi negli ultimi 7 giorni, se in questo momento c'è una chat con gli invii fermi, in modalità minima o rallentata, e quanta parte del budget orario ha usato la chat più impegnata, come fascia. Nessun ID di chat.

@@ -356,7 +356,6 @@ Mọi việc của mọi vai trò trừ `owner` đều nhận toàn bộ mức n
 - Trên một bản cài có chat riêng, các phiên terminal và các phiên trong chat riêng của bạn không bao giờ hiện trong một nhóm (xem [Tin nhắn đi đâu](#where-messages-go)). Một phiên terminal mà một bản aipager cũ đã chuyển sang nhóm thì vẫn ở lại với nhóm: hãy kết thúc nó, xóa nó khỏi các phiên đã kết thúc của nhóm, rồi bắt đầu lại.
 - `aipager.yaml` có quyền 0600 (chỉ chủ sở hữu). aipager không đặt quyền cho `policy.yaml`: hãy tự giữ nó ở chế độ chỉ chủ sở hữu (`chmod 600 ~/.config/aipager/policy.yaml`).
 - Log kiểm tra (`~/.claude/aipager-audit.jsonl`) không có quyền riêng: nó riêng tư đúng bằng thư mục `~/.claude` của bạn.
-- [Bot quan sát](observers.md) nhận thông báo từ mọi chat mà bot phục vụ, kể cả nhóm: chỉ thiết lập một bot quan sát cho chat mà bạn tin tưởng được với tất cả những thứ đó.
 
 ## <a id="revoking-a-user"></a>Thu hồi quyền của một người
 

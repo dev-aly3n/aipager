@@ -37,6 +37,8 @@ def test_stop_session_sends_two_escapes(mk_bot, run_async, monkeypatch):
     bot.registry._sessions["claude-jim"] = sess
     sent = AsyncMock(return_value=True)
     monkeypatch.setattr("aipager.dtach.inject.send_keys", sent)
+    discard = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.discard_queued_input", discard)
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
     bot._stop_animation = MagicMock()
@@ -44,6 +46,7 @@ def test_stop_session_sends_two_escapes(mk_bot, run_async, monkeypatch):
     run_async(bot._stop_session(sess))
     keys = [c.args[1] for c in sent.await_args_list]
     assert keys == ["Escape", "Escape"]
+    discard.assert_not_awaited()
 
 
 def test_stop_session_discards_pending_queue(mk_bot, run_async, monkeypatch):
@@ -373,9 +376,11 @@ def test_stop_session_core_discards_input_and_counts_notes_when_outstanding(
 ):
     """design.md "Stop and /clearqueue on the same primitive": with an
     outstanding note, Stop's dropped count includes it AND
-    discard_queued_input fires (Escape, KillLine) after the interrupt
-    pair — extending the pinned ["Escape", "Escape"] assertion (see
-    tests/test_stale_stop_button.py's docstring) for exactly this case."""
+    discard_queued_input fires after the interrupt pair — extending the
+    pinned ["Escape", "Escape"] assertion (see
+    tests/test_stale_stop_button.py's docstring) for exactly this case.
+    The discard's own keys (one Escape, then Ctrl+U) are pinned in
+    tests/test_dtach_inject_helpers.py; here it is one recorded step."""
     from aipager import policy_snapshot as ps
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
@@ -390,17 +395,24 @@ def test_stop_session_core_discards_input_and_counts_notes_when_outstanding(
         keys.append(k)
         return True
     monkeypatch.setattr("aipager.dtach.inject.send_keys", _send_keys)
+    wiped_chars = []
+    async def _discard(name, chars=0):
+        keys.append("discard")
+        wiped_chars.append(chars)
+        return True
+    monkeypatch.setattr("aipager.dtach.inject.discard_queued_input", _discard)
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
-    # discard_queued_input's Escape-to-KillLine gap lives in inject.
-    monkeypatch.setattr("aipager.dtach.inject._key_gap_sleep", _no_sleep)
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
 
     outcome = run_async(bot._stop_session_core(sess))
 
     assert outcome.dropped == 2  # 1 queued + 1 note
-    assert keys == ["Escape", "Escape", "Escape", "KillLine"]
+    assert keys == ["Escape", "Escape", "discard"]
+    # Counted before the Escapes: every character Claude held, line break
+    # included, gets its Ctrl+U.
+    assert wiped_chars == [len("note text") + 1]
     assert ps.list_outstanding_notes("claude-jim") == []
 
 
@@ -408,7 +420,7 @@ def test_stop_session_core_omits_discard_when_no_notes_outstanding(
     mk_bot, run_async, monkeypatch,
 ):
     """The reverse of the test above — no outstanding notes means no
-    extra Escape/KillLine, matching the pinned two-Escape assertions in
+    discard, matching the pinned two-Escape assertions in
     tests/test_stale_stop_button.py."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
@@ -419,6 +431,10 @@ def test_stop_session_core_omits_discard_when_no_notes_outstanding(
         keys.append(k)
         return True
     monkeypatch.setattr("aipager.dtach.inject.send_keys", _send_keys)
+    async def _discard(name, chars=0):
+        keys.append("discard")
+        return True
+    monkeypatch.setattr("aipager.dtach.inject.discard_queued_input", _discard)
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
     bot._stop_animation = MagicMock()
@@ -1007,8 +1023,8 @@ def test_clear_queue_core_clears_and_reports_dropped_count(mk_bot, run_async):
 def test_clear_queue_core_sends_no_keys_when_only_pending_queue(mk_bot, run_async, monkeypatch):
     """pending_queue holds are aipager-side only — never injected into
     the pty — so there is nothing in the input box to wipe. Confirms
-    /clearqueue does not send a stray Escape/KillLine for a hold that
-    never touched dtach."""
+    /clearqueue neither types a key nor wipes Claude's queue for a hold
+    that never touched dtach."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.queue_prompt("a", 1)
@@ -1017,6 +1033,7 @@ def test_clear_queue_core_sends_no_keys_when_only_pending_queue(mk_bot, run_asyn
     async def _boom(*a, **k):
         raise AssertionError("no dtach keys should be sent for a pending_queue-only clear")
     monkeypatch.setattr("aipager.dtach.inject.send_keys", _boom)
+    monkeypatch.setattr("aipager.dtach.inject.discard_queued_input", _boom)
 
     outcome = run_async(bot._clear_queue_core(sess))
     assert outcome.ok is True
@@ -1042,12 +1059,19 @@ def test_clear_queue_core_discards_notes_and_counts_them_combined(mk_bot, run_as
         keys.append(k)
         return True
     monkeypatch.setattr("aipager.dtach.inject.send_keys", _send_keys)
+    wiped_chars = []
+    async def _discard(name, chars=0):
+        keys.append("discard")
+        wiped_chars.append(chars)
+        return True
+    monkeypatch.setattr("aipager.dtach.inject.discard_queued_input", _discard)
 
     outcome = run_async(bot._clear_queue_core(sess))
 
     assert outcome.ok is True
     assert outcome.dropped == 1
-    assert keys == ["Escape", "KillLine"]  # never a second/interrupt Escape
+    assert keys == ["discard"]  # never an interrupt Escape before it
+    assert wiped_chars == [len("note text") + 1]
     assert ps.list_outstanding_notes("claude-jim") == []
 
 

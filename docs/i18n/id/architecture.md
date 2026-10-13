@@ -58,7 +58,6 @@ Satu pemanggilan `asyncio.run` di `aipager/cli/daemon.py` menjalankan semuanya. 
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): membuka soket datagram Unix di `$XDG_RUNTIME_DIR/aipager.sock`, membaca JSON yang dikirim `aipager-hook` dan `aipager-statusline`, lalu membagi pekerjaan berdasarkan `hook_event_name` (atau `type`, untuk pesan milik aipager sendiri; lihat [event hook](hooks.md)).
 - **`SessionMonitor`** (`aipager/session_monitor.py`): bangun setiap 2 dtk untuk memindai `/tmp/claude-dtach-*.sock`, mencocokkan sesi yang ditemukan dengan daftar sesi, dan menjalankan para penjaga: kartu kerja yang berhenti bergerak, pesan yang tidak pernah diterima Claude Code, permintaan izin tanpa kabar selama 5 menit yang menurut percakapan tersimpan sudah selesai (`AIPAGER_INTERACTIVE_TIMEOUT`), tugas yang akhirnya terlewat.
 - **`SessionRegistry`** (`aipager/state.py`): objek `TrackedSession` berdasarkan nama. Disimpan ke `~/.claude/aipager-sessions.json` (secara atomik) saat dimatikan dan setiap kali ada yang berubah yang harus bertahan melewati mulai ulang.
-- **`ObserverBroadcaster`** (opsional, `aipager/bot/observer.py`): kalau `OBSERVER_BOTS` diatur, juga mengirim notifikasi ke bot pengamat yang hanya membaca ([bot pengamat](observers.md)).
 - **Server Mini App** (`aipager/miniapp/server.py`): aplikasi aiohttp di `127.0.0.1` pada port `MINIAPP_PORT` (bawaannya 8765), bisa dijangkau Telegram lewat tunnel Cloudflare yang dikelola selama menyala (bawaannya menyala). Menyajikan dasbor `/app`.
 
 Semua ini berjalan sebagai task di loop yang sama. Pekerjaan yang akan memblokir loop berjalan di thread terpisah: mengubah pesan suara menjadi teks, menyusun dan mengirim laporan masalah, mengecek pembaruan dan menyiapkan mulai ulang, mengunduh skrip Mini App dan `cloudflared`, serta pemeriksaan login saat mulai.
@@ -73,12 +72,11 @@ Dari `aipager/cli/daemon.py`:
 4. Rapikan file milik Claude Code sendiri: tambahkan hook aipager dan baris status yang belum ada ke `~/.claude/settings.json`, dan jawab pertanyaan saat pertama kali jalan yang tidak bisa dijawab orang di Telegram (lihat [keamanan](security.md#who-decides-whether-a-tool-call-runs)).
 5. `SessionRegistry.load()`: membaca `~/.claude/aipager-sessions.json`. Kalau file itu tidak ada atau tidak bisa dibaca, daftarnya mulai kosong.
 6. Tentukan alamat Mini App (URL-mu sendiri atau Tailscale), lalu `bot.start()`: mulai melakukan polling ke Telegram.
-7. `ObserverBroadcaster.start()`, hanya kalau dikonfigurasi.
-8. `HookReceiver.start()`: menghapus file soket yang lama, bind, mendengarkan.
-9. `bot.recover_sessions()`: mengembalikan kartu dan permintaan dari sesi yang sedang bekerja atau menunggu saat aipager berhenti (lihat [perintah → jawaban](commands.md#idle-responses)).
-10. `SessionMonitor.start()`: memulai pemindaian setiap 2 dtk.
-11. Server Mini App mulai, lalu tunnel-nya (kecuali URL-mu sendiri diatur), dan tombol `📱 App` diterbitkan.
-12. aipager menunggu sinyal: SIGINT atau SIGTERM menghentikannya, SIGUSR1 memuat ulang chat dan aturan ([grup → muat ulang tanpa mulai ulang](groups.md#live-reload)).
+7. `HookReceiver.start()`: menghapus file soket yang lama, bind, mendengarkan.
+8. `bot.recover_sessions()`: mengembalikan kartu dan permintaan dari sesi yang sedang bekerja atau menunggu saat aipager berhenti (lihat [perintah → jawaban](commands.md#idle-responses)).
+9. `SessionMonitor.start()`: memulai pemindaian setiap 2 dtk.
+10. Server Mini App mulai, lalu tunnel-nya (kecuali URL-mu sendiri diatur), dan tombol `📱 App` diterbitkan.
+11. aipager menunggu sinyal: SIGINT atau SIGTERM menghentikannya, SIGUSR1 memuat ulang chat dan aturan ([grup → muat ulang tanpa mulai ulang](groups.md#live-reload)).
 
 ## <a id="shutdown-sequence"></a>Urutan saat dimatikan
 
@@ -86,7 +84,7 @@ Dari `aipager/cli/daemon.py`:
 2. `/update` yang sedang berjalan diberi sedikit waktu, lalu installer-nya dihentikan (lihat [perintah → pembaruan](commands.md#update)).
 3. `registry.save()`.
 4. Tunnel berhenti, lalu server Mini App.
-5. `session_monitor.stop()`, `hook_receiver.stop()` (menutup soket dan menghapus file-nya), `observers.stop()` kalau sedang berjalan.
+5. `session_monitor.stop()`, `hook_receiver.stop()` (menutup soket dan menghapus file-nya).
 6. `bot.stop()`: membatalkan animasi dan menghentikan `Application`.
 7. Sekali lagi `registry.save()`, untuk kartu yang pengirimannya masih berlangsung.
 

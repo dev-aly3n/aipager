@@ -487,7 +487,6 @@ def _notice_world(h, lang):
     bot, tg = world(h, lang)
     bot._settle_card_text = AsyncMock(return_value=False)
     bot._edit_busy_raw = AsyncMock(side_effect=lambda mid, text, **k: tg.note(text) or True)
-    bot.observers = None
     x1 = session(bot, "x1", chat=GROUP, status=Status.BUSY)
     return bot, tg, x1
 
@@ -831,29 +830,6 @@ def ready_card_model_refusals(h, lang):
             setattr(sess, key, value)
         tap(h, bot, tg, f"{sess.name}:rdy_m1", chat=GROUP)
     return [t for t in tg.out[start:] if t.startswith("[toast]")]
-
-
-@scenario
-def observer_broadcasts(h, lang):
-    """What observer bots are handed for each notice (fire-and-forget sends
-    drained)."""
-    from aipager.state import Status
-    bot, tg = world(h, lang)
-    bot._settle_card_text = AsyncMock(return_value=False)
-    bot._edit_busy_raw = AsyncMock(side_effect=lambda mid, text, **k: tg.note(text) or True)
-    bot.observers = MagicMock()
-    bot.observers.broadcast = AsyncMock()
-    x1 = session(bot, "x1", chat=GROUP, status=Status.BUSY)
-    for event, context in (
-            ("stale_busy", {"minutes": 5}), ("context_warning", {"context_pct": 92}),
-            ("session_end", {"source": "logout"}), ("prompt_not_taken", {"grace": 45.0}),
-            ("waiting_reminder", {"kind": "question", "summary": "Pick 2?"}),
-            ("queue_pickup", {"consumed": [], "expired": [{"raw_text": "x"}]}),
-            ("hook_memory_cap_hit", {"hook": "aipager-hook", "tool": ""})):
-        x1.status = Status.BUSY
-        h.run(drain(bot.notify(x1, event, context)))
-    seen = [repr(c) for c in bot.observers.broadcast.await_args_list]
-    return ["[observer] " + s for s in seen] + tg.out
 
 
 @scenario

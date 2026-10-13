@@ -42,7 +42,7 @@ Setiap bagian, dengan kata-kata sederhana. Setiap nilai dicocokkan dengan daftar
 - `claude_code`: versi Claude Code, berapa instalasi Claude Code yang ditemukan, dan cara ia login (`env`, `file`, `keychain`, atau kenapa hal itu tidak bisa diketahui). Tidak pernah data login-nya sendiri.
 
 **Pengaturanmu dalam angka**
-- `config`: mode (`personal`, `team`, `scope`); berapa chat pribadi dan berapa grup yang diatur; berapa peran buatan sendiri yang ada (namanya tidak disertakan); fitur mana yang menyala (Mini App, jenis tunnel-nya, pengamat, pesan suara, pratinjau perubahan, ringkasan kaya).
+- `config`: mode (`personal`, `team`, `scope`); berapa chat pribadi dan berapa grup yang diatur; berapa peran buatan sendiri yang ada (namanya tidak disertakan); fitur mana yang menyala (Mini App, jenis tunnel-nya, pesan suara, pratinjau perubahan, ringkasan kaya).
 - `runtime`: sudah berapa lama aipager berjalan, sebagai rentang (`<10m`, `10m-1h`, `1-24h`, `1-7d`, `>7d`); berapa sesi yang dimulai dan sedang berjalan; berapa kali aipager berhenti tanpa diduga dalam 7 hari terakhir dan bagaimana ia berakhir terakhir kali (`clean`, `crash`, `reboot`).
 - `doctor`: hasil (`ok`, `warn`, `fail`) dari daftar pemeriksaan kesehatan yang tetap, kalau tersedia tanpa menjalankan ulang pemeriksaan (laporan dari bot dan dari terminal membiarkan field ini kosong).
 - `flood`: keadaan batas Telegram, dirangkum dari semua chat: pemblokiran dalam 7 hari terakhir, apakah sekarang ada chat yang pengirimannya dimatikan, dalam mode minimal, atau sedang diperlambat, dan bagian anggaran per jam dari chat tersibuk sebagai rentang. Tanpa ID chat.

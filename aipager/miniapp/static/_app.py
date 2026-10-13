@@ -2573,7 +2573,7 @@ APP_JS = r"""
   var RP_FEATURES = { miniapp: "ui.report.feature.miniapp",
     tunnel_managed: "ui.report.feature.tunnel_managed",
     tunnel_override: "ui.report.feature.tunnel_override",
-    observers: "ui.report.feature.observers", voice: "ui.report.feature.voice",
+    voice: "ui.report.feature.voice",
     diff_preview_any: "ui.report.feature.diff_preview_any",
     rich_summaries: "ui.report.feature.rich_summaries" };
   var RP_UPTIME = { "<10m": "ui.report.uptime.under_10m", "10m-1h": "ui.report.uptime.10m_1h",
@@ -3719,25 +3719,31 @@ APP_JS = r"""
     // two cannot disagree.
     document.getElementById("new-folder-prefix").textContent =
       newState.cwd ? shortPath(newState.cwd) + "/" : "";
-    var folderName = document.getElementById("new-folder-name").value.trim();
-    document.getElementById("new-folder-create").disabled =
-      !folderName || !newState.cwd || !canCreate;
+    var folderRaw = document.getElementById("new-folder-name").value;
+    var folderInvalid = folderNameError(folderRaw);
+    var folderBtn = document.getElementById("new-folder-create");
+    folderBtn.disabled = !folderNameTrim(folderRaw) || !!folderInvalid || !newState.cwd ||
+      !canCreate || newState.folderBusy;
+    // The label says what is happening: one tap, then "Creating…" until
+    // the server answers.
+    folderBtn.textContent = t(newState.folderBusy ? "ui.new.creating" : "ui.new.create_folder");
+    folderBtn.setAttribute("aria-busy", newState.folderBusy ? "true" : "false");
 
     // "Default" has no path, so it cannot be a parent: say so rather
     // than open a reveal onto a dead button.
     var folderNote = document.getElementById("new-folder-note");
     if (!newState.cwd) {
       folderNote.textContent = t("ui.new.pick_dir_first");
-      folderNote.className = "reveal-note";
+      folderNote.className = "reveal-note is-live";
     } else if (newState.folderError) {
       folderNote.textContent = newState.folderError;
-      folderNote.className = "reveal-note is-error";
-    } else if (newState.folderBusy) {
-      folderNote.textContent = t("ui.new.creating");
-      folderNote.className = "reveal-note";
+      folderNote.className = "reveal-note is-live is-error";
+    } else if (folderInvalid) {
+      folderNote.textContent = folderInvalid;
+      folderNote.className = "reveal-note is-live is-error";
     } else {
       folderNote.textContent = "";
-      folderNote.className = "reveal-note";
+      folderNote.className = "reveal-note is-live";
     }
 
     var name = document.getElementById("new-name").value.trim();
@@ -3789,27 +3795,61 @@ APP_JS = r"""
       .catch(handleFetchError);
   }
 
+  // Client-side checks mirror launch.validate_new_dir_name as a courtesy
+  // (one path segment of Latin letters, digits, dots, hyphens and
+  // underscores, starting with a letter or digit, after trimming); the
+  // server is the gate. tests/test_miniapp_create_folder.py fails if the
+  // two drift.
+  var FOLDER_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+  var FOLDER_NAME_MAX = 64;
+  // What Python's str.strip() removes (str.isspace), which differs from
+  // JavaScript's trim(): Python strips \x1c-\x1f and \x85 and keeps \ufeff.
+  var PY_SPACE = "\t\n\x0b\x0c\r\x1c-\x1f \x85\xa0\u1680\u2000-\u200a\u2028\u2029" +
+    "\u202f\u205f\u3000";
+  var PY_STRIP_RE = new RegExp("^[" + PY_SPACE + "]+|[" + PY_SPACE + "]+$", "g");
+
+  function folderNameTrim(value) { return (value || "").replace(PY_STRIP_RE, ""); }
+
+  // The reason a typed folder name would be refused, or "" (an empty name
+  // has no reason: the button just waits for one).
+  function folderNameError(value) {
+    var trimmed = folderNameTrim(value);
+    if (!trimmed) { return ""; }
+    if (trimmed.length > FOLDER_NAME_MAX) {
+      return t("ui.new.folder_too_long", { max: FOLDER_NAME_MAX });
+    }
+    if (!FOLDER_NAME_RE.test(trimmed)) { return t("ui.new.folder_pattern"); }
+    return "";
+  }
+
+  // One request at a time: the button, Enter and a quick second tap all
+  // come here, and nothing goes out while one is running. Every answer,
+  // including a body that is not JSON and no answer at all, ends the busy
+  // state, keeps the typed name and says why.
   function createFolder() {
     var nameEl = document.getElementById("new-folder-name");
-    var btn = document.getElementById("new-folder-create");
-    var folder = nameEl.value.trim();
-    if (!folder || !newState.cwd) { return; }
+    var folder = folderNameTrim(nameEl.value);
+    if (newState.folderBusy || !folder || !newState.cwd || folderNameError(folder)) {
+      return;
+    }
     newState.folderError = "";
     newState.folderBusy = true;
     refreshNewForm();
-    btn.disabled = true;
     fetch("/api/directories", {
       method: "POST",
       headers: authHeaders(true),
       body: JSON.stringify({ parent: newState.cwd, name: folder })
     }).then(function (res) {
-      return res.json().then(function (data) { return { status: res.status, data: data }; });
+      return res.json().then(function (data) { return data; }, function () { return null; })
+        .then(function (data) { return { status: res.status, data: data }; });
     }).then(function (r) {
       newState.folderBusy = false;
-      btn.disabled = false;
       if (r.status !== 200 || !r.data || !r.data.path) {
-        newState.folderError = plain((r.data && r.data.detail) || "") ||
-          t(r.status === 403 ? "ui.new.folder_forbidden" : "ui.new.folder_failed");
+        newState.folderError =
+          (r.status === 403 && t("ui.new.folder_forbidden")) ||
+          (r.status === 429 && t("ui.new.folder_too_many")) ||
+          plain((r.data && r.data.detail) || "") ||
+          t("ui.new.folder_failed");
         refreshNewForm();
         return;
       }
@@ -3829,7 +3869,6 @@ APP_JS = r"""
       renderNewForm();
     }).catch(function () {
       newState.folderBusy = false;
-      btn.disabled = false;
       newState.folderError = t("ui.new.folder_unreachable");
       refreshNewForm();
     });
@@ -3909,7 +3948,7 @@ APP_JS = r"""
     refreshNewForm();
   });
   document.getElementById("new-folder-name").addEventListener("keydown", function (e) {
-    // Enter is the commit for a one-field reveal; the ＋ is for thumbs.
+    // Enter is the commit for a one-field reveal; the button is for thumbs.
     if (e && (e.key === "Enter" || e.keyCode === 13)) {
       if (e.preventDefault) { e.preventDefault(); }
       createFolder();

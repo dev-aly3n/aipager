@@ -395,22 +395,6 @@
    "\ud83d\udd34 <b>x1</b> \u00b7 Session exited",
    "\ud83d\udd34 <b>x1</b> \u00b7 Session exited"
   ],
-  "observer_broadcasts": [
-   "[observer] call('\u23f3 <b>x1</b> \u00b7 still working (quiet for 5 min)\\n\\nNo status updates yet. This is usually normal.\\n\\n<blockquote expandable>What could be happening\\n  \u2022 Long-running tool call (Bash, WebSearch, large fetch)\\n  \u2022 Heavy generation on a very large context\\n  \u2022 Compaction in progress\\n  \u2022 Rate-limit backoff or subscription limit\\n  \u2022 Network wedge or claude crash</blockquote>')",
-   "[observer] call('\u26a0\ufe0f <b>x1</b> \u00b7 Context at 92% - auto-compact soon')",
-   "[observer] call('\ud83d\udd34 <b>x1</b> \u00b7 Session logged out')",
-   "[observer] call('\u26a0\ufe0f <b>x1</b> \u00b7 Not taken by Claude Code\\n\\nNo hook arrived within 45 s of the send. A message that starts with \"/\" is read as a slash command - check the terminal.')",
-   "[observer] call('\u2b06\ufe0f <b>x1</b> \u00b7 still waiting for your answer above\\nQuestion: Pick 2?')",
-   "\u23f3 <b>x1</b> \u00b7 still working (quiet for 5 min)\n\nNo status updates yet. This is usually normal.\n\n<blockquote expandable>What could be happening\n  \u2022 Long-running tool call (Bash, WebSearch, large fetch)\n  \u2022 Heavy generation on a very large context\n  \u2022 Compaction in progress\n  \u2022 Rate-limit backoff or subscription limit\n  \u2022 Network wedge or claude crash</blockquote>",
-   "[btn] Stop",
-   "\u26a0\ufe0f <b>x1</b> \u00b7 Context at 92% - auto-compact soon",
-   "[btn] \ud83d\udce6 Compact Now",
-   "\ud83d\udd34 <b>x1</b> \u00b7 Session logged out",
-   "\u26a0\ufe0f <b>x1</b> \u00b7 Not taken by Claude Code\n\nNo hook arrived within 45 s of the send. A message that starts with \"/\" is read as a slash command - check the terminal.",
-   "\u2b06\ufe0f <b>x1</b> \u00b7 still waiting for your answer above\nQuestion: Pick 2?",
-   "\u23f3 <b>x1</b> \u00b7 a queued message wasn't confirmed picked up in time: \"x\" - Claude may still process it.",
-   "\u26a0\ufe0f <b>x1</b> \u00b7 memory cap hit\n\n<code>aipager-hook</code> ran out of its 1 GB memory limit and stopped. If it was checking a tool call, Claude Code most likely refused that call and Claude can try it again; otherwise only that one event was skipped. The session keeps running.\n\n<i>If this keeps happening, run <code>aipager report</code> in a terminal to send the maintainer a report.</i>"
-  ],
   "ready_card_model_refusals": [
    "[toast] Claude is working - switch the model when this turn ends.",
    "[toast] A prompt is open in the terminal - answer it before switching the model.",

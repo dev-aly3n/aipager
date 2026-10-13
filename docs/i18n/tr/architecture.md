@@ -58,7 +58,6 @@ flowchart LR
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): `$XDG_RUNTIME_DIR/aipager.sock` konumunda bir Unix datagram soketi açar, `aipager-hook` ve `aipager-statusline` programlarının gönderdiği JSON'u okur ve işi `hook_event_name` alanına (ya da aipager'ın kendi mesajları için `type` alanına; bkz. [hook olayları](hooks.md)) göre dağıtır.
 - **`SessionMonitor`** (`aipager/session_monitor.py`): her 2 sn'de bir uyanır; `/tmp/claude-dtach-*.sock` dosyalarını tarar, bulunan oturumları oturum listesiyle karşılaştırır ve bekçileri çalıştırır: hareket etmeyi bırakan bir çalışma kartı, Claude Code'un hiç almadığı bir mesaj, 5 dakikadır haber gelmeyen ve kayıtlı sohbete göre bitmiş bir izin isteği (`AIPAGER_INTERACTIVE_TIMEOUT`), sonu kaçırılmış bir görev.
 - **`SessionRegistry`** (`aipager/state.py`): adlarıyla `TrackedSession` nesneleri. Kapanışta ve yeniden başlatmadan sağ çıkması gereken bir şey her değiştiğinde `~/.claude/aipager-sessions.json` dosyasına (atomik olarak) kaydedilir.
-- **`ObserverBroadcaster`** (isteğe bağlı, `aipager/bot/observer.py`): `OBSERVER_BOTS` ayarlıysa bildirimleri yalnızca okuyan gözlemci botlara da gönderir ([gözlemci botlar](observers.md)).
 - **Mini App sunucusu** (`aipager/miniapp/server.py`): `127.0.0.1` üzerinde, `MINIAPP_PORT` portunda (varsayılan 8765) bir aiohttp uygulaması; açık olduğu sürece (varsayılan böyle) yönetilen bir Cloudflare tüneliyle Telegram'a açılır. `/app` panelini sunar.
 
 Bunların hepsi aynı döngüde görevler olarak çalışır. Döngüyü bloke edecek işler ayrı iş parçacıklarında yapılır: sesli mesajları metne çevirme, sorun raporunu derleyip gönderme, güncellemeleri kontrol edip yeniden başlatmayı hazırlama, Mini App betiğini ve `cloudflared` programını indirme ve başlangıçtaki giriş kontrolü.
@@ -73,12 +72,11 @@ Bunların hepsi aynı döngüde görevler olarak çalışır. Döngüyü bloke e
 4. Claude Code'un kendi dosyalarını düzenle: `~/.claude/settings.json` dosyasına eksik aipager hook'larını ve durum satırını ekle ve Telegram'daki bir kişinin yanıtlayamayacağı ilk çalıştırma sorularını yanıtla (bkz. [güvenlik](security.md#who-decides-whether-a-tool-call-runs)).
 5. `SessionRegistry.load()`: `~/.claude/aipager-sessions.json` dosyasını okur. Dosya yoksa ya da okunamıyorsa liste boş başlar.
 6. Mini App adresini belirle (kendi URL'in ya da Tailscale), ardından `bot.start()`: Telegram'ı yoklamaya başlar.
-7. `ObserverBroadcaster.start()`, yalnızca yapılandırılmışsa.
-8. `HookReceiver.start()`: eski soket dosyasını siler, sokete bağlanır, dinler.
-9. `bot.recover_sessions()`: aipager durduğunda çalışan ya da bekleyen oturumların kartlarını ve isteklerini geri getirir (bkz. [komutlar → yanıtlar](commands.md#idle-responses)).
-10. `SessionMonitor.start()`: 2 saniyelik taramayı başlatır.
-11. Mini App sunucusu başlar, sonra tünel (kendi URL'in ayarlı değilse) ve `📱 App` düğmeleri yayınlanır.
-12. aipager sinyalleri bekler: SIGINT ya da SIGTERM onu durdurur, SIGUSR1 sohbetleri ve kuralları yeniden yükler ([gruplar → yeniden başlatmadan yeniden yükleme](groups.md#live-reload)).
+7. `HookReceiver.start()`: eski soket dosyasını siler, sokete bağlanır, dinler.
+8. `bot.recover_sessions()`: aipager durduğunda çalışan ya da bekleyen oturumların kartlarını ve isteklerini geri getirir (bkz. [komutlar → yanıtlar](commands.md#idle-responses)).
+9. `SessionMonitor.start()`: 2 saniyelik taramayı başlatır.
+10. Mini App sunucusu başlar, sonra tünel (kendi URL'in ayarlı değilse) ve `📱 App` düğmeleri yayınlanır.
+11. aipager sinyalleri bekler: SIGINT ya da SIGTERM onu durdurur, SIGUSR1 sohbetleri ve kuralları yeniden yükler ([gruplar → yeniden başlatmadan yeniden yükleme](groups.md#live-reload)).
 
 ## <a id="shutdown-sequence"></a>Kapanış sırası
 
@@ -86,7 +84,7 @@ Bunların hepsi aynı döngüde görevler olarak çalışır. Döngüyü bloke e
 2. Süren bir `/update` kısa bir süre alır, sonra kurucusu durdurulur (bkz. [komutlar → güncelleme](commands.md#update)).
 3. `registry.save()`.
 4. Tünel durur, ardından Mini App sunucusu.
-5. `session_monitor.stop()`, `hook_receiver.stop()` (soketi kapatır ve dosyasını siler), çalışıyorsa `observers.stop()`.
+5. `session_monitor.stop()`, `hook_receiver.stop()` (soketi kapatır ve dosyasını siler).
 6. `bot.stop()`: animasyonları iptal eder ve `Application` nesnesini durdurur.
 7. Gönderimi hâlâ süren bir kart için bir kez daha `registry.save()`.
 

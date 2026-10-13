@@ -280,6 +280,19 @@ def test_the_stylesheet_has_no_backslash():
 # Components
 # ===========================================================================
 
+def test_the_tonal_button_uses_a_contrast_checked_pair():
+    """Create folder sits above Start session as a secondary action: ink on
+    the soft accent fill, the pair `_TEXT_PAIRS` checks ("ink" on
+    "work_soft"), never a colour pair nothing measures."""
+    body = _block(".primary.tonal")
+    assert re.search(r"(?<![-\w])color:\s*var\(--ink\)", body), body
+    assert re.search(r"background:\s*var\(--lamp-work-soft\)", body), body
+    # Without color-mix the soft fill falls back to the card's colour: the
+    # edge (whose own fallback is a solid grey) keeps it a button.
+    assert re.search(r"border:\s*1px solid var\(--line\)", body), body
+    assert ("ink", "work_soft") in {(fg, bg) for fg, bg, _ in _TEXT_PAIRS}
+
+
 def test_primary_is_a_solid_telegram_button():
     body = _block(".primary")
     assert "background: var(--tg-theme-button-color" in body
@@ -335,7 +348,7 @@ def test_every_control_is_at_least_44px_tall(selector):
     assert int(m.group(1)) >= 44, f"{selector} is {m.group(1)}px"
 
 
-@pytest.mark.parametrize("selector", [".tile", ".fab", ".prefix-go", ".kebab", ".icon-btn"])
+@pytest.mark.parametrize("selector", [".tile", ".fab", ".kebab", ".icon-btn"])
 def test_fixed_size_controls_are_at_least_44px_on_both_axes(selector):
     body = _block(selector)
     h = re.search(r"(?<![-\w])(?:min-)?height:\s*(\d+)px", body)

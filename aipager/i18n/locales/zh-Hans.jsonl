@@ -1091,7 +1091,7 @@
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "推荐"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "Claude Code 自己的默认模型"}
 {"k": "ui.new.create_failed", "src": "c55f566f", "v": "无法创建这个会话。"}
-{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "创建这个文件夹"}
+{"k": "ui.new.create_folder", "src": "e59f63fa", "v": "创建文件夹"}
 {"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "你无权在这里创建会话。"}
 {"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "无法连接服务器。会话没有创建。"}
 {"k": "ui.new.created", "src": "77ea75b5", "v": "会话已创建。"}
@@ -1106,6 +1106,9 @@
 {"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "无法创建这个文件夹。"}
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "你无权在这里创建文件夹。"}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "新文件夹名称"}
+{"k": "ui.new.folder_pattern", "src": "c3b51490", "v": "请使用英文字母、数字、点、连字符和下划线，并以英文字母或数字开头。"}
+{"k": "ui.new.folder_too_long", "src": "ae5dc64d", "v": "文件夹名称不能超过 {max} 个字符。"}
+{"k": "ui.new.folder_too_many", "src": "468419ea", "v": "尝试次数太多。请一分钟后再试。"}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "无法连接服务器。没有创建文件夹。"}
 {"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "完全访问模式仅限管理员。"}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "询问"}
@@ -1174,7 +1177,6 @@
 {"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "未知"}
 {"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "改动预览"}
 {"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
-{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "观察者机器人"}
 {"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "格式化摘要"}
 {"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "由 aipager 管理的隧道"}
 {"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "自定义隧道地址"}

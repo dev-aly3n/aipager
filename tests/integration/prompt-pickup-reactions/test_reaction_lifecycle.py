@@ -182,7 +182,7 @@ def test_clearqueue_marks_queued_and_held_messages_not_delivered(
 
     outcome = run_async(bot._clear_queue_core(sess))
     assert outcome.ok and outcome.dropped == 2
-    assert "KillLine" in keys, "Claude's own queue is wiped from the pty"
+    assert "discard" in keys, "Claude's own queue is wiped from the pty"
     got = reactions(bot)
     assert got.get(2) == [EYES, SHRUG]
     assert got.get(3) == [EYES, SHRUG]
@@ -198,7 +198,7 @@ def test_stop_marks_queued_and_held_messages_not_delivered(
 
     outcome = run_async(bot._stop_session_core(sess))
     assert outcome.ok and outcome.dropped == 2
-    assert "KillLine" in keys, "Claude's own queue is wiped from the pty"
+    assert "discard" in keys, "Claude's own queue is wiped from the pty"
     got = reactions(bot)
     assert got.get(2) == [EYES, SHRUG]
     assert got.get(3) == [EYES, SHRUG]
@@ -636,9 +636,25 @@ def test_stop_wipes_a_queue_its_own_escapes_just_pulled_into_the_input_box(
         return True
 
     monkeypatch.setattr("aipager.dtach.inject.send_keys", _send_keys)
+    # Its length is read before that Escape too: everything Claude holds
+    # (here also a message typed at the terminal, which aipager never
+    # sent) gets a Ctrl+U per character, not just the held message's text.
+    append_queue_op(sess, "enqueue", None, "typed at the terminal")
+    from aipager.bot.session_ops import queued_chars
+    expected = queued_chars(sess, [])
+    assert expected > len("second") + 1, "precondition: more than M2 is queued"
+    wiped: list[int] = []
+
+    async def _discard(_name, chars=0):
+        keys.append("discard")
+        wiped.append(chars)
+        return True
+
+    monkeypatch.setattr("aipager.dtach.inject.discard_queued_input", _discard)
     outcome = run_async(bot._stop_session_core(sess))
     assert outcome.dropped == 1
-    assert "KillLine" in keys
+    assert "discard" in keys
+    assert wiped == [expected]
     assert reactions(bot).get(2) == [EYES, SHRUG]
 
 

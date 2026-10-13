@@ -195,7 +195,6 @@ Linux에서는 systemd 사용자 서비스를 `~/.config/systemd/user/aipager.se
 - 사진, 파일, 음성 메시지를 받아요(음성 메시지는 내 컴퓨터에서 글로 바꿔요. 음성 메시지 기능을 설치해야 해요)
 - 컨텍스트가 거의 찼을 때, 대화를 압축할 때, 세션이 끝났을 때, 세션이 너무 오래 조용할 때 알려 줘요
 - 봇 하나로 여러 세션을 동시에 실행해요. 역할과 도구별 규칙이 있는 팀 모드도 선택할 수 있어요([팀 모드와 그룹](groups.md))
-- 읽기 전용 관찰 봇도 선택할 수 있어요
 - English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی, Tiếng Việt로 말해요. aipager 자체의 글에만 적용되고, 내 세션이나 Claude의 답변은 절대 건드리지 않아요([언어](commands.md#languages)). 이 README와 문서도 번역되어 있어요(위의 **다른 언어로 읽기** 참고)
 
 ### <a id="mini-app"></a>Mini App
@@ -234,7 +233,6 @@ MIT. 전문은 [LICENSE](../../../LICENSE)에 있어요.
 | [Hook 이벤트](hooks.md) | aipager가 Claude Code에서 받는 모든 이벤트와 그 필드 |
 | [봇 명령](commands.md) | 명령, 버튼, Mini App, 음성 메시지와 파일, 모든 `aipager` 명령, 환경 변수로 하는 설정 |
 | [팀 모드와 그룹](groups.md) | 여러 사람 설정, 역할, 규칙, 누가 무엇을 했는지 |
-| [관찰 봇](observers.md) | 알림 사본을 받는 읽기 전용 봇 |
 | [문제 해결](troubleshooting.md) | 흔한 문제와 `aipager doctor` 해결표 |
 | [문제 신고](problem-reports.md) | 문제 신고 보고서에 무엇이 들어 있고, 어디로 가고, aipager가 언제 보내자고 제안하는지 |
 | [보안 모델](security.md) | 신뢰 경계, 비밀 정보, 감사 로그, 네트워크 연결 |

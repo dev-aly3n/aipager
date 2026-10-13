@@ -1091,7 +1091,7 @@
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "Советуем"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "модель по умолчанию из Claude Code"}
 {"k": "ui.new.create_failed", "src": "c55f566f", "v": "Не удалось создать эту сессию."}
-{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "Создать эту папку"}
+{"k": "ui.new.create_folder", "src": "e59f63fa", "v": "Создать папку"}
 {"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "Здесь тебе не разрешено создавать сессии."}
 {"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "Нет связи с сервером. Сессия не создана."}
 {"k": "ui.new.created", "src": "77ea75b5", "v": "Сессия создана."}
@@ -1106,6 +1106,9 @@
 {"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "Не удалось создать эту папку."}
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "Здесь тебе не разрешено создавать папки."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Имя новой папки"}
+{"k": "ui.new.folder_pattern", "src": "c3b51490", "v": "Используй латинские буквы, цифры, точки, дефисы и подчёркивания; начинай с буквы или цифры."}
+{"k": "ui.new.folder_too_long", "src": "ae5dc64d", "v": "Имя папки должно быть не длиннее {max} символов."}
+{"k": "ui.new.folder_too_many", "src": "468419ea", "v": "Слишком много попыток. Попробуй через минуту."}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "Нет связи с сервером. Папка не создана."}
 {"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "Режим «Полный доступ» только для админов."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "Спрашивать"}
@@ -1174,7 +1177,6 @@
 {"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "неизвестно"}
 {"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "просмотр изменений"}
 {"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
-{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "боты-наблюдатели"}
 {"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "развёрнутые сводки"}
 {"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "управляемый туннель"}
 {"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "свой адрес туннеля"}

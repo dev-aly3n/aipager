@@ -643,7 +643,6 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 | `MINIAPP_PORT` | `8765` | پورت Mini App روی `127.0.0.1` (`aipager miniapp enable --port` به جایش آن را ذخیره می‌کند). |
 | `MINIAPP_ENABLED` | از `aipager.yaml` | `0` Mini App را خاموش و `1` روشن می‌کند، هر چه `aipager.yaml` بگوید (`aipager miniapp enable\|disable` به جایش انتخاب را ذخیره می‌کند). |
 | `MINIAPP_PUBLIC_URL` | هیچ | Mini App را به جای تونل مدیریت‌شده روی آدرس `https://` خودتان سرو می‌کند ([مدل امنیتی](security.md#mini-app-tunnel)). |
-| `OBSERVER_BOTS` | هیچ | ربات‌های ناظر فقط‌خواندنی ([ربات‌های ناظر](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` «فقط جواب، جای کارت» را شکل پیام‌های چت‌هایی می‌کند که هیچ‌وقت در `/settings` انتخابی نکرده‌اند. |
 | `STALE_BUSY_TIMEOUT` | `7200` (۲ ساعت) | چند ثانیه یک سشن در حال کار می‌تواند بی‌خبر بماند قبل از اینکه چت یادداشت «هنوز کار می‌کند (۱۲۰ دقیقه بی‌خبر)» را بگیرد. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | چند ثانیه قبل از اینکه پیامی که Claude Code هیچ‌وقت تحویل نگرفت «Claude Code پیام را تحویل نگرفت» علامت بخورد ([پیام‌های آزاد](#text)). |

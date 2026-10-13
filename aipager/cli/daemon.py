@@ -18,8 +18,8 @@ the daemon lifecycle live in separate files. Four concerns:
   bot token or chat-id is misconfigured (catches the common errors
   during install / token rotation).
 - ``_run_daemon`` — the actual async boot that wires up the bot,
-  the hook receiver, the session monitor, (optionally) observer
-  broadcasters, and (optionally, opt-in) the loopback Mini App server.
+  the hook receiver, the session monitor, and (optionally, opt-in) the
+  loopback Mini App server.
 """
 
 from __future__ import annotations
@@ -300,10 +300,8 @@ async def _run_daemon(bot_username: str) -> None:
     """Boot the daemon and run until SIGINT/SIGTERM."""
     from aipager.config import (
         BOT_TOKEN, CHAT_ID, MINIAPP_ENABLED, MINIAPP_PORT, MINIAPP_PUBLIC_URL,
-        OBSERVER_BOTS,
     )
     from aipager.dtach.hook_receiver import HookReceiver
-    from aipager.bot.observer import ObserverBroadcaster
     from aipager.session_monitor import SessionMonitor
     from aipager.state import SessionRegistry
     from aipager.bot import TelegramBot
@@ -322,6 +320,11 @@ async def _run_daemon(bot_username: str) -> None:
     provenance = bootstrap_claude_settings()
 
     log.info("connected as @%s, will message chat %s", bot_username, CHAT_ID)
+    # A setting for a feature that is gone: say so once and carry on. The
+    # value holds bot tokens, so the line never carries it.
+    if os.environ.get("OBSERVER_BOTS", "").strip():
+        log.warning("OBSERVER_BOTS is set but observer bots were removed; "
+                    "to let someone watch, add them to a group with the read_only role")
 
     registry = SessionRegistry()
     registry.load()
@@ -371,11 +374,6 @@ async def _run_daemon(bot_username: str) -> None:
         # re-sends on team-reload, Mini App reconnect, or any session
         # event.
         asyncio.create_task(_finish_auth_check(bot, provenance))
-    observers = None
-    if OBSERVER_BOTS:
-        observers = ObserverBroadcaster(OBSERVER_BOTS)
-        await observers.start()
-        bot.observers = observers
     await hook_receiver.start()
     await bot.recover_sessions()
     session_monitor.on_sessions_changed = bot._update_bot_commands
@@ -509,8 +507,6 @@ async def _run_daemon(bot_username: str) -> None:
             await miniapp_server.stop()
         session_monitor.stop()
         hook_receiver.stop()
-        if observers:
-            await observers.stop()
         await bot.stop()
         # Again, now that nothing sends any more: a busy card whose send was in
         # flight at the first save landed since, and the next daemon can close

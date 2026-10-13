@@ -206,29 +206,6 @@ def test_lifecycle_builder_urls(monkeypatch, mk_bot, base):
 
 
 @pytest.mark.parametrize("base", [None, LOCAL], ids=["unset", "override"])
-def test_observer_bot_urls(monkeypatch, run_async, base):
-    from aipager.bot import observer
-    if base:
-        _set(monkeypatch, base)
-    made = []
-
-    class _Bot:
-        def __init__(self, **kwargs):
-            made.append(kwargs)
-
-        async def initialize(self):
-            return None
-
-    monkeypatch.setattr(observer, "Bot", _Bot)
-    run_async(observer.ObserverBroadcaster([(TOKEN, "1")]).start())
-    params = inspect.signature(Bot.__init__).parameters
-    want = (f"{base}/bot", f"{base}/file/bot") if base else (
-        params["base_url"].default, params["base_file_url"].default)
-    assert (made[0].get("base_url"), made[0].get("base_file_url")) == want
-    assert made[0]["token"] == TOKEN
-
-
-@pytest.mark.parametrize("base", [None, LOCAL], ids=["unset", "override"])
 def test_doctor_urls(monkeypatch, base):
     from aipager import doctor
     monkeypatch.setattr("aipager.config.BOT_TOKEN", TOKEN)

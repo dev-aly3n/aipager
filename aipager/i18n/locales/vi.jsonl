@@ -1091,7 +1091,7 @@
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "Gợi ý"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "mô hình mặc định của Claude Code"}
 {"k": "ui.new.create_failed", "src": "c55f566f", "v": "Không tạo được phiên đó."}
-{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "Tạo thư mục này"}
+{"k": "ui.new.create_folder", "src": "e59f63fa", "v": "Tạo thư mục"}
 {"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "Bạn không được phép tạo phiên ở đây."}
 {"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "Không kết nối được máy chủ. Phiên chưa được tạo."}
 {"k": "ui.new.created", "src": "77ea75b5", "v": "Đã tạo phiên."}
@@ -1106,6 +1106,9 @@
 {"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "Không tạo được thư mục đó."}
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "Bạn không được phép tạo thư mục ở đây."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Tên thư mục mới"}
+{"k": "ui.new.folder_pattern", "src": "c3b51490", "v": "Dùng chữ cái không dấu, chữ số, dấu chấm, gạch nối và gạch dưới; bắt đầu bằng chữ cái hoặc chữ số."}
+{"k": "ui.new.folder_too_long", "src": "ae5dc64d", "v": "Tên thư mục tối đa {max} ký tự."}
+{"k": "ui.new.folder_too_many", "src": "468419ea", "v": "Thử quá nhiều lần. Thử lại sau một phút."}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "Không kết nối được máy chủ. Chưa tạo thư mục nào."}
 {"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "Chế độ Toàn quyền chỉ dành cho quản trị viên."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "Hỏi"}
@@ -1174,7 +1177,6 @@
 {"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "không rõ"}
 {"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "xem trước thay đổi"}
 {"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
-{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "bot quan sát"}
 {"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "tóm tắt có định dạng"}
 {"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "tunnel được quản lý"}
 {"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "địa chỉ tunnel riêng"}

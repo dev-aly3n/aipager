@@ -89,6 +89,12 @@ def test_clearqueue_also_clears_outstanding_notes_combined_count(
         keys.append(k)
         return True
     monkeypatch.setattr("aipager.dtach.inject.send_keys", _send_keys)
+    # The discard's own keys (one Escape, then Ctrl+U) are pinned in
+    # tests/test_dtach_inject_helpers.py; here it is one recorded step.
+    async def _discard(name, chars=0):
+        keys.append("discard")
+        return True
+    monkeypatch.setattr("aipager.dtach.inject.discard_queued_input", _discard)
 
     update = mk_update("/clearqueue")
     run_async(bot._handle_clearqueue_cmd(update, MagicMock()))
@@ -97,7 +103,7 @@ def test_clearqueue_also_clears_outstanding_notes_combined_count(
     assert "Cleared 2" in msg  # 1 queued + 1 note
     assert sess.pending_queue == []
     assert ps.list_outstanding_notes("claude-jim") == []
-    assert keys == ["Escape", "KillLine"]  # never a second/interrupt Escape
+    assert keys == ["discard"]  # never an interrupt Escape before it
 
 
 # ----- /kill confirmation flow -----

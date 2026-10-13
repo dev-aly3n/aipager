@@ -68,22 +68,44 @@ def test_what_claude_reads_is_byte_identical(rel):
     assert now(rel) == at_base(rel)
 
 
-@pytest.mark.parametrize("rel", ["tests/golden/miniapp_css_ltr.json",
-                                 "tests/integration/multilingual-phase-4/base_english.json",
+@pytest.mark.parametrize("rel", ["tests/integration/multilingual-phase-4/base_english.json",
                                  "tests/integration/multilingual-phase-4/base_page_english.json"])
 def test_the_english_mini_app_goldens_are_byte_identical(rel):
     assert now(rel) == at_base(rel)
 
 
+#: CSS rules a later feature changed on purpose: the folder picker's
+#: Create folder became a text button under the name field (operator,
+#: 2026-10-12), so the "+" inside the field and its padding went.
+CREATE_FOLDER_CSS = {".prefix-input", ".prefix-go", ".prefix-go:disabled",
+                     ".primary.tonal", ".reveal-action", ".reveal-note.is-live:empty"}
+
+
+def test_the_english_css_changed_only_where_create_folder_did():
+    rel = "tests/golden/miniapp_css_ltr.json"
+    base, cur = json.loads(at_base(rel)), json.loads(now(rel))
+    assert [r for r in base if r[1] not in CREATE_FOLDER_CSS] == \
+        [r for r in cur if r[1] not in CREATE_FOLDER_CSS]
+
+
+#: Page screens that show the folder picker: its "+" (read out as "Create
+#: this folder") became the visible text button "Create folder" (2026-10-12).
+CREATE_FOLDER_PAGE_SCREENS = {"new.folder", "new.folder_busy", "new.folder_failed",
+                              "new.folder_forbidden", "new.folder_refused",
+                              "new.folder_unreachable", "new.full"}
+
+
 def test_the_english_page_changed_only_where_three_modes_did():
     """The page golden: the three permission modes (2026-10-11) changed
-    the screens with a mode on them, and nothing else."""
+    the screens with a mode on them, Create folder (2026-10-12) the folder
+    picker's, and nothing else."""
     rel = "tests/golden/miniapp_page_english.json"
     base, cur = json.loads(at_base(rel)), json.loads(now(rel))
     old = {s[0]: s for s in base["screens"]}
     new = {s[0]: s for s in cur["screens"]}
     changed = {k for k in set(old) | set(new) if old.get(k) != new.get(k)}
-    assert changed <= THREE_MODES_PAGE_SCREENS, sorted(changed - THREE_MODES_PAGE_SCREENS)
+    allowed = THREE_MODES_PAGE_SCREENS | CREATE_FOLDER_PAGE_SCREENS
+    assert changed <= allowed, sorted(changed - allowed)
     assert {k: v for k, v in base.items() if k not in ("screens", "calls")} == \
         {k: v for k, v in cur.items() if k not in ("screens", "calls")}
 

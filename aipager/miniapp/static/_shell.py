@@ -250,15 +250,15 @@ HTML_BODY = """\
 
   <div id="new-folder-reveal" class="reveal">
     <label class="reveal-label" for="new-folder-name" data-i18n="ui.new.folder_name">New folder name</label>
-    <div class="prefix-field">
+    <div class="prefix-field" dir="ltr">
       <span id="new-folder-prefix" class="prefix-text" dir="ltr"></span>
       <input id="new-folder-name" class="prefix-input" type="text" autocomplete="off" dir="ltr"
              autocapitalize="none" spellcheck="false" placeholder="my-project"
              maxlength="64" enterkeyhint="done">
-      <button type="button" class="prefix-go" id="new-folder-create"
-              aria-label="Create this folder" data-i18n-label="ui.new.create_folder_aria"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button>
     </div>
-    <div id="new-folder-note" class="reveal-note"></div>
+    <button type="button" class="primary block tonal reveal-action" id="new-folder-create"
+            data-i18n="ui.new.create_folder">Create folder</button>
+    <div id="new-folder-note" class="reveal-note is-live" aria-live="polite"></div>
   </div>
 </div>
 

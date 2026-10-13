@@ -593,7 +593,6 @@ Quelques paramètres sont lus dans l'environnement d'aipager plutôt que dans `a
 | `MINIAPP_PORT` | `8765` | Le port de la Mini App sur `127.0.0.1` (`aipager miniapp enable --port` l'enregistre à la place). |
 | `MINIAPP_ENABLED` | selon `aipager.yaml` | `0` désactive la Mini App et `1` l'active, quoi que dise `aipager.yaml` (`aipager miniapp enable\|disable` enregistre le choix à la place). |
 | `MINIAPP_PUBLIC_URL` | aucun | Sert la Mini App à votre propre URL `https://` au lieu du tunnel géré ([Modèle de sécurité](security.md#mini-app-tunnel)). |
-| `OBSERVER_BOTS` | aucun | Bots observateurs en lecture seule ([bots observateurs](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` fait de « Réponse seule (sans carte) » l'affichage des discussions qui n'en ont jamais choisi un dans `/settings`. |
 | `STALE_BUSY_TIMEOUT` | `7200` (2 heures) | Les secondes qu'une session au travail peut passer sans nouvelles avant que la discussion reçoive la note « travaille encore (aucune nouvelle depuis 120 min) ». |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Les secondes avant qu'un message que Claude Code n'a jamais pris soit marqué « Claude Code n'a pas reçu le message » ([messages libres](#text)). |

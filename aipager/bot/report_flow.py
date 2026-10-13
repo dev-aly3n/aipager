@@ -333,8 +333,6 @@ def _features(bot: "TelegramBot") -> list[str]:
     if config.MINIAPP_ENABLED:
         out.append("miniapp")
         out.append("tunnel_override" if config.MINIAPP_PUBLIC_URL else "tunnel_managed")
-    if config.OBSERVER_BOTS:
-        out.append("observers")
     try:
         # Whether faster-whisper is installed, without importing it (the
         # import alone takes seconds).

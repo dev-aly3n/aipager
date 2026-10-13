@@ -570,8 +570,6 @@ REPORT_FEATURE_TUNNEL = Msg("ui.report.feature.tunnel_managed", "managed tunnel"
                             note="Mini App problem report: a feature (aipager runs the tunnel)")
 REPORT_FEATURE_OWN_TUNNEL = Msg("ui.report.feature.tunnel_override", "own tunnel address",
                                 note="Mini App problem report: a feature")
-REPORT_FEATURE_OBSERVERS = Msg("ui.report.feature.observers", "observer bots",
-                               note="Mini App problem report: a feature")
 REPORT_FEATURE_VOICE = Msg("ui.report.feature.voice", "voice notes",
                            note="Mini App problem report: a feature")
 REPORT_FEATURE_DIFFS = Msg("ui.report.feature.diff_preview_any", "change previews",
@@ -698,8 +696,8 @@ NEW_FULL_NEEDS_ADMIN = Msg("ui.new.full_needs_admin", "Full access mode requires
                            note="Full access is the permission mode (as in /mode)")
 NEW_MODEL_NAME = Msg("ui.new.model_name", "Model name", note="Mini App: a field's label")
 NEW_FOLDER_NAME = Msg("ui.new.folder_name", "New folder name", note="Mini App: a field's label")
-NEW_CREATE_FOLDER_ARIA = Msg("ui.new.create_folder_aria", "Create this folder",
-                             note="Mini App: screen-reader name of the + button")
+NEW_CREATE_FOLDER = Msg("ui.new.create_folder", "Create folder",
+                        note="Mini App: the button under the new folder's name that creates it")
 NEW_NOT_SET = Msg("ui.new.not_set", "Not set yet",
                   note="Mini App: no model typed yet (short)")
 NEW_DEFAULT = Msg("ui.new.default", "Default", note="Mini App: a choice (short)")
@@ -779,6 +777,17 @@ NEW_FOLDER_EXISTED = Msg("ui.new.folder_existed",
 NEW_FOLDER_CREATED = Msg("ui.new.folder_created", "Folder created.")
 NEW_FOLDER_UNREACHABLE = Msg("ui.new.folder_unreachable",
                              "Couldn't reach the server. No folder was created.")
+# The page's own copies of the server's folder-name refusals
+# (aipager/miniapp/launch.py validate_new_dir_name), shown before any
+# request; the server still checks and its refusal is still shown.
+NEW_FOLDER_TOO_LONG = Msg("ui.new.folder_too_long",
+                          "Folder name must be {max} characters or fewer.", eg={"max": 64})
+NEW_FOLDER_PATTERN = Msg("ui.new.folder_pattern",
+                         "Use letters, numbers, dots, hyphens and underscores; start with a "
+                         "letter or number.", note="What a new folder's name may hold")
+NEW_FOLDER_TOO_MANY = Msg("ui.new.folder_too_many",
+                          "Too many tries. Try again in a minute.",
+                          note="Mini App: folder creation was rate limited")
 
 
 #: Everything the page may ask for, in a stable order.

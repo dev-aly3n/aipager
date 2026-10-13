@@ -593,7 +593,6 @@ Một vài cài đặt được đọc từ môi trường của aipager thay v�
 | `MINIAPP_PORT` | `8765` | Cổng của Mini App trên `127.0.0.1` (`aipager miniapp enable --port` thì lưu nó lại). |
 | `MINIAPP_ENABLED` | theo `aipager.yaml` | `0` tắt Mini App và `1` bật nó, bất kể `aipager.yaml` nói gì (`aipager miniapp enable\|disable` thì lưu lựa chọn lại). |
 | `MINIAPP_PUBLIC_URL` | không có | Phục vụ Mini App ở URL `https://` riêng của bạn thay vì tunnel được quản lý ([bảo mật](security.md#mini-app-tunnel)). |
-| `OBSERVER_BOTS` | không có | Các bot quan sát chỉ đọc ([bot quan sát](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` đặt “Chỉ câu trả lời, xóa thẻ” làm bố cục tin nhắn cho các chat chưa bao giờ chọn bố cục trong `/settings`. |
 | `STALE_BUSY_TIMEOUT` | `7200` (2 giờ) | Số giây một phiên đang làm việc có thể im lặng trước khi chat nhận một ghi chú “vẫn đang làm việc (120 phút chưa có tin)”. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Số giây trước khi một tin nhắn mà Claude Code không bao giờ nhận được đánh dấu là “Claude Code chưa nhận tin nhắn” ([tin nhắn tự do](#text)). |

@@ -593,7 +593,6 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 | `MINIAPP_PORT` | `8765` | Mini App 在 `127.0.0.1` 上的端口（`aipager miniapp enable --port` 会把它保存下来）。 |
 | `MINIAPP_ENABLED` | 按 `aipager.yaml` | `0` 关闭 Mini App，`1` 开启它，无论 `aipager.yaml` 怎么写（`aipager miniapp enable\|disable` 会把选择保存下来）。 |
 | `MINIAPP_PUBLIC_URL` | 无 | 在你自己的 `https://` 网址上提供 Mini App，代替托管隧道（[安全](security.md#mini-app-tunnel)）。 |
-| `OBSERVER_BOTS` | 无 | 只读的观察机器人（[观察机器人](observers.md)）。 |
 | `KEEP_FINISHED_CARD` | `1` | `0` 会为从未在 `/settings` 里选择过布局的聊天，把消息布局设为“只留回答，删除卡片”。 |
 | `STALE_BUSY_TIMEOUT` | `7200` (2 小时) | 工作中的会话可以沉默多少秒，之后聊天会收到一条“仍在工作（120 分钟没有消息）”的提示。 |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Claude Code 一直没有取走的消息，在多少秒之后被标为“Claude Code 没有收到消息”（[自由消息](#text)）。 |

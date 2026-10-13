@@ -195,7 +195,6 @@ Mặc định aipager là một bot cá nhân: bạn và bot trong một chat ri
 - Nhận ảnh, file và tin nhắn thoại (tin nhắn thoại được chuyển thành chữ ngay trên máy tính của bạn, với gói tính năng thoại)
 - Báo cho bạn khi ngữ cảnh gần đầy, khi cuộc trò chuyện được thu gọn, khi một phiên kết thúc, và khi một phiên im lặng quá lâu
 - Chạy nhiều phiên cùng lúc qua một bot; tùy chọn chế độ làm việc nhóm với vai trò và quy tắc cho từng công cụ ([Chế độ làm việc nhóm và nhóm](groups.md))
-- Bot quan sát chỉ đọc, tùy chọn
 - Nói được English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی và Tiếng Việt: chỉ là chữ của chính aipager, không bao giờ là các phiên của bạn hay câu trả lời của Claude ([Ngôn ngữ](commands.md#languages)). README này và tài liệu cũng đã được dịch (xem **Đọc bằng ngôn ngữ khác** ở trên)
 
 ### <a id="mini-app"></a>Mini App
@@ -234,7 +233,6 @@ MIT; toàn văn trong [LICENSE](../../../LICENSE).
 | [Sự kiện hook](hooks.md) | Mọi sự kiện aipager nhận từ Claude Code, kèm các trường |
 | [Lệnh của bot](commands.md) | Lệnh, nút, Mini App, tin nhắn thoại và file, mọi lệnh `aipager`, và cài đặt từ môi trường |
 | [Chế độ làm việc nhóm và nhóm](groups.md) | Thiết lập cho nhiều người, vai trò, quy tắc, ai đã làm gì |
-| [Bot quan sát](observers.md) | Các bot chỉ đọc nhận bản sao thông báo |
 | [Xử lý sự cố](troubleshooting.md) | Các lỗi hay gặp và bảng cách khắc phục của `aipager doctor` |
 | [Báo cáo sự cố](problem-reports.md) | Một báo cáo sự cố chứa gì, gửi đi đâu, và khi nào aipager đề nghị gửi |
 | [Mô hình bảo mật](security.md) | Ranh giới tin cậy, thông tin bí mật, log kiểm tra, kết nối mạng |

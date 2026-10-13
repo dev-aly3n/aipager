@@ -593,7 +593,6 @@ Algumas configurações são lidas do ambiente do aipager em vez do `aipager.yam
 | `MINIAPP_PORT` | `8765` | A porta do Mini App em `127.0.0.1` (`aipager miniapp enable --port` a guarda no lugar). |
 | `MINIAPP_ENABLED` | conforme o `aipager.yaml` | `0` desliga o Mini App e `1` o liga, diga o que disser o `aipager.yaml` (`aipager miniapp enable\|disable` guarda a escolha no lugar). |
 | `MINIAPP_PUBLIC_URL` | nenhum | Serve o Mini App na sua própria URL `https://` em vez do túnel gerenciado ([Modelo de segurança](security.md#mini-app-tunnel)). |
-| `OBSERVER_BOTS` | nenhum | Bots observadores só de leitura ([bots observadores](observers.md)). |
 | `KEEP_FINISHED_CARD` | `1` | `0` faz de “Só a resposta (sem cartão)” a aparência dos chats que nunca escolheram uma no `/settings`. |
 | `STALE_BUSY_TIMEOUT` | `7200` (2 horas) | Segundos que uma sessão trabalhando pode ficar sem notícias antes de o chat receber o aviso “ainda trabalhando (120 min sem novidades)”. |
 | `PROMPT_HOOK_GRACE_SECONDS` | `8` | Segundos até uma mensagem que o Claude Code nunca pegou ser marcada como “O Claude Code não recebeu a mensagem” ([mensagens livres](#text)). |

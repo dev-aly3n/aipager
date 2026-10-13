@@ -1,4 +1,4 @@
-"""Additional notify.py tests — file attachment, observers fanout, edge cases."""
+"""Additional notify.py tests — file attachment, edge cases."""
 
 from __future__ import annotations
 
@@ -122,58 +122,6 @@ def test_idle_file_send_generic_exception_swallowed(mk_bot, run_async):
     run_async(bot.notify(sess, "idle_prompt", {
         "raw_md": long_md,
     }))
-
-
-# ===== Observer broadcast paths =========================================
-
-def test_idle_broadcasts_to_observers(mk_bot, run_async):
-    bot = mk_bot()
-    sess = _sess()
-    bot.observers = MagicMock()
-    bot.observers.broadcast = AsyncMock()
-    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
-    bot._maybe_update_bot_name = AsyncMock()
-    run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
-    # broadcast fires as a fire-and-forget task — verify at least scheduled
-
-
-def test_compacting_broadcasts_to_observers(mk_bot, run_async):
-    bot = mk_bot()
-    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
-    sess.busy_msg_id = 42
-    bot.observers = MagicMock()
-    bot.observers.broadcast = AsyncMock()
-    bot._edit_busy_raw = AsyncMock()
-    bot._stop_animation = MagicMock()
-    run_async(bot.notify(sess, "compacting", {"trigger": "auto"}))
-
-
-def test_context_warning_broadcasts(mk_bot, run_async):
-    bot = mk_bot()
-    sess = _sess(status=Status.BUSY)
-    bot.observers = MagicMock()
-    bot.observers.broadcast = AsyncMock()
-    bot._app.bot.send_message = AsyncMock()
-    run_async(bot.notify(sess, "context_warning", {"context_pct": 85}))
-
-
-def test_stale_busy_broadcasts(mk_bot, run_async):
-    bot = mk_bot()
-    sess = _sess(status=Status.BUSY)
-    bot.observers = MagicMock()
-    bot.observers.broadcast = AsyncMock()
-    bot._app.bot.send_message = AsyncMock()
-    run_async(bot.notify(sess, "stale_busy", {"minutes": 5}))
-
-
-def test_session_end_broadcasts(mk_bot, run_async):
-    bot = mk_bot()
-    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
-    bot.observers = MagicMock()
-    bot.observers.broadcast = AsyncMock()
-    bot._app.bot.send_message = AsyncMock()
-    bot._stop_animation = MagicMock()
-    run_async(bot.notify(sess, "session_end", {"source": "user"}))
 
 
 # ===== INTERACTIVE: more paths ==========================================

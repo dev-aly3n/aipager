@@ -2,7 +2,8 @@
 
 Every ``dtach -p`` write holds its session's lock until the write returns,
 so writes are delivered one at a time: ``send_text_and_enter`` holds it
-across its text and its Enter, and the send-now chord holds it for its
+across its text and its Enter, ``discard_queued_input`` across its Escape
+and every Ctrl+U write, and the send-now chord holds it for its
 Ctrl+X, and again from its "anything written since my Ctrl+X?" check
 through its Ctrl+S.
 
@@ -24,6 +25,8 @@ ESC = b"\x1b"
 KILL_LINE = b"\x15"
 CTRL_X = b"\x18"
 CTRL_S = b"\x13"
+#: discard_queued_input's writes: one Escape, then the Ctrl+U batches.
+DISCARD = [ESC] + [KILL_LINE * inject.DISCARD_KILL_BATCH] * (inject.discard_presses(0) // inject.DISCARD_KILL_BATCH)
 #: How long every fake ``dtach -p`` write takes.
 WRITE = 0.05
 
@@ -75,7 +78,7 @@ def test_two_key_writes_are_delivered_one_at_a_time(term, run_async):
 
 @pytest.mark.parametrize("other,its_writes", [
     (lambda: inject.send_keys(NAME, "Escape"), [ESC]),
-    (lambda: inject.discard_queued_input(NAME), [ESC, KILL_LINE]),
+    (lambda: inject.discard_queued_input(NAME), DISCARD),
     (lambda: inject.send_now(NAME), [CTRL_X, CTRL_S]),
 ], ids=["send_keys", "discard_queued_input", "send_now"])
 def test_nothing_lands_between_a_prompts_text_and_its_enter(term, run_async,
@@ -94,6 +97,23 @@ def test_nothing_lands_between_a_prompts_text_and_its_enter(term, run_async,
     assert term.writes == [b"hi", b"\r", *its_writes]
     assert term.overlaps() == []
     assert prompt_ok is True and other_ok is True
+
+
+def test_a_prompt_typed_during_a_discard_waits_for_its_last_ctrl_u(term, run_async):
+    """A prompt that arrives while a Stop or /clearqueue is wiping Claude's
+    surfaced queue lands in an empty input box, after every Ctrl+U: in a
+    half-wiped box it would go out glued to what is left there, and later
+    Ctrl+U writes could eat its text."""
+    async def scenario():
+        discard = asyncio.ensure_future(inject.discard_queued_input(NAME))
+        await asyncio.sleep(WRITE / 2)  # the Escape write is in flight
+        assert term.writes == [ESC], "precondition: the Escape write started"
+        prompt_ok = await inject.send_text_and_enter(NAME, "hi")
+        return await discard, prompt_ok
+
+    assert run_async(scenario()) == (True, True)
+    assert term.writes == [*DISCARD, b"hi", b"\r"]
+    assert term.overlaps() == []
 
 
 def test_a_write_in_flight_when_the_chord_starts_ends_before_its_ctrl_x(

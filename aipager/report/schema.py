@@ -241,6 +241,9 @@ COUNTER_KEYS = ("watchdog_restart", "watchdog_refresh", "interactive_demoted",
                 "tg_retry_after", "tg_conflict", "tg_forbidden", "tg_invalid_token",
                 "env_network", "env_timeout", "env_cancelled", "env_disk_full",
                 "env_read_only", "env_permission", "env_no_memory")
+# A retired feature id stays listed so a report an older aipager built
+# still validates (send.checked_preview refuses any report validate()
+# changes) and the id is never reused; nothing emits it now.
 FEATURES = ("miniapp", "tunnel_managed", "tunnel_override", "observers", "voice",
             "diff_preview_any", "rich_summaries")
 DEPENDENCIES = ("python-telegram-bot", "httpx", "aiohttp", "PyYAML", "rich",

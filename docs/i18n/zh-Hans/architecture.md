@@ -58,7 +58,6 @@ flowchart LR
 - **`HookReceiver`**（`aipager/dtach/hook_receiver.py`）：在 `$XDG_RUNTIME_DIR/aipager.sock` 打开一个 Unix datagram 套接字，读取 `aipager-hook` 和 `aipager-statusline` 发来的 JSON，并按其中的 `hook_event_name`（对 aipager 自己的消息则按 `type`；见 [Hook 事件](hooks.md)）分派。
 - **`SessionMonitor`**（`aipager/session_monitor.py`）：每 2 秒醒来一次，扫描 `/tmp/claude-dtach-*.sock`，把找到的会话与会话列表对照，并运行各个看守：停止动的工作卡片、Claude Code 一直没取走的消息、5 分钟没有动静、保存的对话显示已经结束的权限请求（`AIPAGER_INTERACTIVE_TIMEOUT`）、结束时刻被错过的任务。
 - **`SessionRegistry`**（`aipager/state.py`）：按名称存放的 `TrackedSession` 对象。在关闭时，以及每当有需要在重启后保留的东西发生变化时，（原子地）保存到 `~/.claude/aipager-sessions.json`。
-- **`ObserverBroadcaster`**（可选，`aipager/bot/observer.py`）：如果设置了 `OBSERVER_BOTS`，还会把通知发给只读的观察机器人（[观察机器人](observers.md)）。
 - **Mini App 服务器**（`aipager/miniapp/server.py`）：一个监听 `127.0.0.1`、端口为 `MINIAPP_PORT`（默认 8765）的 aiohttp 应用，在开启期间（默认开启）通过托管的 Cloudflare 隧道提供给 Telegram。提供 `/app` 控制面板。
 
 这些都作为任务运行在同一个 loop 上。可能阻塞 loop 的工作在单独的线程里运行：把语音消息转成文字、生成并发送问题报告、检查更新和规划重启、下载 Mini App 脚本和 `cloudflared`，以及启动时的登录检查。
@@ -73,12 +72,11 @@ flowchart LR
 4. 修整 Claude Code 自己的文件：把缺少的 aipager hook 和状态行加到 `~/.claude/settings.json`，并回答 Telegram 用户无法回答的首次启动问题（见[安全](security.md#who-decides-whether-a-tool-call-runs)）。
 5. `SessionRegistry.load()`：读取 `~/.claude/aipager-sessions.json`。文件不存在或无法读取时，列表从空开始。
 6. 确定 Mini App 的地址（你自己的 URL，或 Tailscale），然后 `bot.start()`：开始从 Telegram 接收更新。
-7. `ObserverBroadcaster.start()`，仅在已配置时。
-8. `HookReceiver.start()`：删除残留的套接字文件，bind，开始监听。
-9. `bot.recover_sessions()`：恢复 aipager 停止时正在工作或等待中的会话的卡片和请求（见[命令 → 回答](commands.md#idle-responses)）。
-10. `SessionMonitor.start()`：开始每 2 秒一次的扫描。
-11. 启动 Mini App 服务器，然后启动隧道（未设置你自己的 URL 时），并发布 `📱 App` 按钮。
-12. aipager 等待信号：SIGINT 或 SIGTERM 让它停止，SIGUSR1 重新加载聊天和规则（[群组 → 无需重启的重新加载](groups.md#live-reload)）。
+7. `HookReceiver.start()`：删除残留的套接字文件，bind，开始监听。
+8. `bot.recover_sessions()`：恢复 aipager 停止时正在工作或等待中的会话的卡片和请求（见[命令 → 回答](commands.md#idle-responses)）。
+9. `SessionMonitor.start()`：开始每 2 秒一次的扫描。
+10. 启动 Mini App 服务器，然后启动隧道（未设置你自己的 URL 时），并发布 `📱 App` 按钮。
+11. aipager 等待信号：SIGINT 或 SIGTERM 让它停止，SIGUSR1 重新加载聊天和规则（[群组 → 无需重启的重新加载](groups.md#live-reload)）。
 
 ## <a id="shutdown-sequence"></a>关闭顺序
 
@@ -86,7 +84,7 @@ flowchart LR
 2. 正在运行的 `/update` 有一小段宽限时间，然后它的安装程序会被停止（见[命令 → 更新](commands.md#update)）。
 3. `registry.save()`。
 4. 先停止隧道，再停止 Mini App 服务器。
-5. `session_monitor.stop()`、`hook_receiver.stop()`（关闭套接字并删除它的文件），如果在运行还有 `observers.stop()`。
+5. `session_monitor.stop()`、`hook_receiver.stop()`（关闭套接字并删除它的文件）。
 6. `bot.stop()`：取消动画并停止 `Application`。
 7. 再次 `registry.save()`，为了那些发送还没完成的卡片。
 

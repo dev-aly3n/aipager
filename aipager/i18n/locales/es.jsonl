@@ -1091,7 +1091,7 @@
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "Sugeridos"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "el modelo por defecto de Claude Code"}
 {"k": "ui.new.create_failed", "src": "c55f566f", "v": "No se pudo crear esa sesión."}
-{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "Crear esta carpeta"}
+{"k": "ui.new.create_folder", "src": "e59f63fa", "v": "Crear carpeta"}
 {"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "No tienes permiso para crear sesiones aquí."}
 {"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "No se pudo contactar con el servidor. La sesión no se creó."}
 {"k": "ui.new.created", "src": "77ea75b5", "v": "Sesión creada."}
@@ -1106,6 +1106,9 @@
 {"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "No se pudo crear esa carpeta."}
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "No tienes permiso para crear carpetas aquí."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Nombre de la nueva carpeta"}
+{"k": "ui.new.folder_pattern", "src": "c3b51490", "v": "Usa solo letras sin tildes, números, puntos, guiones y guiones bajos; empieza con una letra o un número."}
+{"k": "ui.new.folder_too_long", "src": "ae5dc64d", "v": "El nombre de la carpeta debe tener {max} caracteres o menos."}
+{"k": "ui.new.folder_too_many", "src": "468419ea", "v": "Demasiados intentos. Vuelve a intentarlo en un minuto."}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "No se pudo contactar con el servidor. No se creó ninguna carpeta."}
 {"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "El Modo Acceso total es solo para admins."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "Preguntar"}
@@ -1174,7 +1177,6 @@
 {"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "desconocido"}
 {"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "vistas previas de cambios"}
 {"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
-{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "bots observadores"}
 {"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "resúmenes enriquecidos"}
 {"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "túnel gestionado"}
 {"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "dirección de túnel propia"}

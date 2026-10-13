@@ -53,7 +53,6 @@ def test_run_daemon_completes_and_starts_every_component_with_auth_absent(
 
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
-    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
     monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", False)
 
     bot = MagicMock()
@@ -62,7 +61,6 @@ def test_run_daemon_completes_and_starts_every_component_with_auth_absent(
     bot.notify = AsyncMock()
     bot.recover_sessions = AsyncMock()
     bot.reload_team = AsyncMock()
-    bot.observers = None
     bot._update_bot_commands = AsyncMock()
     bot.publish_miniapp_button = AsyncMock()
     bot.send_startup_notice = AsyncMock()

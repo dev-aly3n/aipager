@@ -356,7 +356,6 @@ safety:
 - Özel sohbeti olan bir kurulumda terminal oturumların ve özel sohbetinin oturumları asla grupta görünmez (bkz. [Mesajlar nereye gider](#where-messages-go)). Daha eski bir aipager'ın zaten gruba taşıdığı bir terminal oturumu grupta kalır: onu sonlandır, grubun sona eren oturumlarından sil ve yeniden başlat.
 - `aipager.yaml` dosyasının izinleri 0600'dür (yalnızca sahibi). aipager `policy.yaml` dosyasının izinlerini ayarlamaz: onu yalnızca sahibin erişebileceği şekilde tut (`chmod 600 ~/.config/aipager/policy.yaml`).
 - Denetim kaydının (`~/.claude/aipager-audit.jsonl`) kendi izinleri yoktur: `~/.claude` klasörün ne kadar kişiselse o kadar kişiseldir.
-- [Gözlemci botlar](observers.md), gruplar dahil botun hizmet verdiği her sohbetten bildirim alır: gözlemciyi yalnızca bunların hepsiyle güvenilebilecek bir sohbet için kur.
 
 ## <a id="revoking-a-user"></a>Bir kişinin erişimini kaldırmak
 

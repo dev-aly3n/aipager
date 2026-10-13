@@ -1091,7 +1091,7 @@
 {"k": "ui.new.chips_suggested", "src": "7fcd8d44", "v": "Vorgeschlagen"}
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "dem Standardmodell von Claude Code"}
 {"k": "ui.new.create_failed", "src": "c55f566f", "v": "Diese Sitzung konnte nicht erstellt werden."}
-{"k": "ui.new.create_folder_aria", "src": "ee95075e", "v": "Diesen Ordner anlegen"}
+{"k": "ui.new.create_folder", "src": "e59f63fa", "v": "Ordner erstellen"}
 {"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "Du darfst hier keine Sitzungen erstellen."}
 {"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "Keine Verbindung zum Server. Die Sitzung wurde nicht erstellt."}
 {"k": "ui.new.created", "src": "77ea75b5", "v": "Sitzung erstellt."}
@@ -1106,6 +1106,9 @@
 {"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "Dieser Ordner konnte nicht angelegt werden."}
 {"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "Du darfst hier keine Ordner anlegen."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Name des neuen Ordners"}
+{"k": "ui.new.folder_pattern", "src": "c3b51490", "v": "Verwende nur Buchstaben ohne Umlaute, Ziffern, Punkte, Bindestriche und Unterstriche; beginne mit einem Buchstaben oder einer Ziffer."}
+{"k": "ui.new.folder_too_long", "src": "ae5dc64d", "v": "Der Ordnername darf höchstens {max} Zeichen lang sein."}
+{"k": "ui.new.folder_too_many", "src": "468419ea", "v": "Zu viele Versuche. Versuch es in einer Minute noch einmal."}
 {"k": "ui.new.folder_unreachable", "src": "3ce530b4", "v": "Keine Verbindung zum Server. Es wurde kein Ordner angelegt."}
 {"k": "ui.new.full_needs_admin", "src": "1a9bee51", "v": "Der Vollzugriff-Modus ist nur für Admins."}
 {"k": "ui.new.mode_ask", "src": "3562777b", "v": "Fragen"}
@@ -1174,7 +1177,6 @@
 {"k": "ui.report.exit.unknown", "src": "50d8b4a9", "v": "unbekannt"}
 {"k": "ui.report.feature.diff_preview_any", "src": "459054d4", "v": "Vorschau von Änderungen"}
 {"k": "ui.report.feature.miniapp", "src": "c6cd4358", "v": "Mini App"}
-{"k": "ui.report.feature.observers", "src": "c5c144bd", "v": "Beobachter-Bots"}
 {"k": "ui.report.feature.rich_summaries", "src": "1a2884b2", "v": "ausführliche Zusammenfassungen"}
 {"k": "ui.report.feature.tunnel_managed", "src": "61efa69a", "v": "verwalteter Tunnel"}
 {"k": "ui.report.feature.tunnel_override", "src": "853d6ef5", "v": "eigene Tunneladresse"}

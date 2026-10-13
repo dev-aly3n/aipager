@@ -64,6 +64,9 @@ def running(mk_bot, monkeypatch):
     monkeypatch.setattr(
         "aipager.dtach.inject.send_keys",
         AsyncMock(side_effect=lambda n, k: keys.append(k) or True))
+    monkeypatch.setattr(
+        "aipager.dtach.inject.discard_queued_input",
+        AsyncMock(side_effect=lambda n, chars=0: keys.append("discard") or True))
     sess = bot.registry.get_or_create(NAME)
     sess.label = "x"
     bot.registry.transition(NAME, Status.BUSY)
