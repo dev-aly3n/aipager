@@ -212,6 +212,31 @@ def test_a_tool_event_of_its_own_clears_waiting(mk_bot, run_async):
     assert P in sess.bg_agents
 
 
+def test_an_agent_call_naming_itself_is_a_resume_not_a_link(
+        mk_bot, run_async):
+    """A PostToolUse of P's own whose result names P is no link (the hook
+    side's self-link check): it is a tool event of P's own, so P works
+    again, and P is never its own child."""
+    bot = mk_bot()
+    sess, recv = _tree(run_async, bot)
+    _stop(run_async, recv, sess, P, "pipeline-runner")
+    _link(run_async, recv, sess, P, P)
+    assert not sess.agent_is_waiting(P)
+    assert P not in sess.agent_parents
+
+
+def test_the_state_refuses_a_self_link(mk_bot):
+    """state's own self-link check, for any caller: P as its own child
+    would make each of its stops a pause, for good."""
+    bot = mk_bot()
+    sess = bb.make_sess(bot, label="wait")
+    sess.bg_agent_started(P, "pipeline-runner", 100.0)
+    assert not sess.agent_launched_child(P, P, 101.0)
+    assert sess.agent_parents == {}
+    assert sess.agent_children_running(P) == []
+    assert sess.bg_agent_pause(P, 102.0) == []
+
+
 def test_a_message_display_of_its_own_does_not_clear_waiting(
         mk_bot, run_async):
     """Claude Code sends a message's display at its end: the parent's last
