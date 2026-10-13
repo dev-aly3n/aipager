@@ -463,13 +463,16 @@ _GUARDED_HOME_PATHS = (
 
 #: Inside the guarded roots, what the operator's live daemon writes while a
 #: full run goes on (roadmap 8.115): a session launch writes its folder, a
-#: Mini App load the SDK cache, a restart the lock and the markers. Not
-#: snapshotted, or a deploy or a session launch during a run fails it. Safe
-#: because every writer of these goes through ``_test_guard.check_write``,
-#: which fails a test that writes there for real
-#: (tests/test_real_home_live_daemon_paths.py proves each one does).
+#: Mini App load the SDK cache, a restart the lock and the markers, a chat
+#: setting the preferences file. Not snapshotted, or a deploy, a session
+#: launch or a settings tap during a run fails it. Safe because every
+#: writer of these goes through ``_test_guard.check_write``, which fails a
+#: test that writes there for real (tests/test_real_home_live_daemon_paths.py
+#: proves each one does). In ``~/.config/aipager`` only that one file is
+#: left out: the config, policy, team and credential files stay watched.
 _SHARE = Path.home() / ".local" / "share" / "aipager"
 LIVE_DAEMON_PATHS = (
+    Path.home() / ".config" / "aipager" / "preferences.json",  # preferences._save_raw
     _SHARE / "sessions",             # session_store.write_session_files
     _SHARE / "webapp-sdk",           # miniapp.webapp_sdk (Mini App load)
     _SHARE / "cloudflared",          # miniapp.cloudflared_fetch

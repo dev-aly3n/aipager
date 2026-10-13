@@ -4,8 +4,9 @@ The suite's last net against a test writing the operator's real files is a
 snapshot of the guarded real-home roots, taken before and after the run.
 The operator's own daemon writes into one of them while a run goes on: a
 session launch writes its folder, a Mini App load the SDK cache, a restart
-the lock and markers. So a full run that overlapped a deploy or a session
-launch failed for nothing. Those paths (``LIVE_DAEMON_PATHS`` in the
+the lock and markers, a chat setting the preferences file. So a full run
+that overlapped a deploy, a session launch or a settings tap failed for
+nothing. Those paths (``LIVE_DAEMON_PATHS`` in the
 conftest) are no longer snapshotted.
 
 That is safe only while every writer of them refuses a real-home path
@@ -17,9 +18,12 @@ write into tmp, never the operator's home.
 
 from __future__ import annotations
 
+import ast
+import inspect
+
 import pytest
 
-from aipager import _test_guard, config, self_update, session_store
+from aipager import _test_guard, config, preferences, self_update, session_store
 from aipager.cli import daemon as daemon_cli
 from aipager.miniapp import cloudflared_fetch, webapp_sdk
 from aipager.report import markers
@@ -44,6 +48,8 @@ def fake_home(tmp_path, monkeypatch, real_home_refusals_expected):
     monkeypatch.setattr(config, "REPORT_RUNNING_FILE", share / "running.json")
     monkeypatch.setattr(self_update, "UPDATE_LOCK_PATH", share / "update.lock")
     monkeypatch.setattr(self_update, "UPDATE_MARKER_PATH", share / "update-restart.json")
+    monkeypatch.setattr(preferences, "_PREFERENCES_PATH",
+                        home / ".config" / "aipager" / "preferences.json")
     return home
 
 
@@ -52,28 +58,31 @@ def _session_folder():
         Scope(chat_id=42, kind="dm", label="me"), None, "x1")
 
 
-#: Each live-daemon path and its writer, as the daemon calls it.
+SHARE = ".local/share/aipager/"
+PREFERENCES = ".config/aipager/preferences.json"
+
+#: Each live-daemon path, from the home, and its writer as the daemon calls it.
 WRITERS = {
-    "sessions": _session_folder,
-    "webapp-sdk": webapp_sdk.cache_dir,
-    "cloudflared": cloudflared_fetch.cache_dir,
-    "daemon.lock": daemon_cli._acquire_daemon_lock,
-    "install.json": markers.first_start,
-    "running.json": lambda: markers.write_running(service=False),
-    "update.lock": lambda: self_update.UpdateLock().try_acquire(),
-    "update-restart.json": lambda: self_update.write_marker({"to": "1.0"}),
+    SHARE + "sessions": _session_folder,
+    SHARE + "webapp-sdk": webapp_sdk.cache_dir,
+    SHARE + "cloudflared": cloudflared_fetch.cache_dir,
+    SHARE + "daemon.lock": daemon_cli._acquire_daemon_lock,
+    SHARE + "install.json": markers.first_start,
+    SHARE + "running.json": lambda: markers.write_running(service=False),
+    SHARE + "update.lock": lambda: self_update.UpdateLock().try_acquire(),
+    SHARE + "update-restart.json": lambda: self_update.write_marker({"to": "1.0"}),
+    PREFERENCES: lambda: preferences.set_preference(42, "layout", "merged"),
 }
 
 
 def test_every_path_left_out_has_its_writer_checked_here():
-    assert sorted(p.name for p in guard.LIVE_DAEMON_PATHS) == sorted(WRITERS)
-    share = guard.Path.home() / ".local" / "share" / "aipager"
-    assert all(p.parent == share for p in guard.LIVE_DAEMON_PATHS)
+    home = guard._HOME_AT_IMPORT
+    assert sorted(p.relative_to(home).as_posix() for p in guard.LIVE_DAEMON_PATHS) == sorted(WRITERS)
 
 
 @pytest.mark.parametrize("name", sorted(WRITERS))
 def test_its_writer_is_refused_in_the_real_home(fake_home, name):
-    target = fake_home / ".local" / "share" / "aipager" / name
+    target = fake_home / name
     _test_guard.refusals.clear()
     try:
         WRITERS[name]()
@@ -158,3 +167,69 @@ def test_its_deleter_is_refused_in_the_real_home(fake_home, name):
         pass
     assert target.exists(), f"{name} was deleted in the real home"
     assert any(str(target) in r for r in _test_guard.refusals), _test_guard.refusals
+
+
+# ---- the preferences file ----------------------------------------------------------
+
+#: Every function that saves the preferences file, as a chat setting or a
+#: supergroup move calls it. They all end in ``preferences._save_raw``.
+PREFERENCE_WRITERS = {
+    "set_preference": lambda: preferences.set_preference(42, "layout", "merged"),
+    "move_chat": lambda: preferences.move_chat(42, 43),
+    "set_new_session_default": lambda: preferences.set_new_session_default(42, "mode", "ask"),
+    "set_ui_language": lambda: preferences.set_ui_language(42, "fa"),
+    "set_problem_reports": lambda: preferences.set_problem_reports("off"),
+}
+
+
+def _uses(node, name):
+    return sum(isinstance(n, ast.Name) and n.id == name for n in ast.walk(node))
+
+
+def test_every_function_that_saves_the_preferences_file_is_checked_here():
+    """Only ``_load_raw`` and ``_save_raw`` touch the file's path, so a
+    function that wrote it directly (past ``check_write``, while the file
+    is no longer snapshotted) fails here; every caller of ``_save_raw`` is
+    proven below."""
+    tree = ast.parse(inspect.getsource(preferences))
+    funcs = {n.name: n for n in ast.walk(tree)
+             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    path_users = {name for name, fn in funcs.items() if _uses(fn, "_PREFERENCES_PATH")}
+    assert path_users == {"_load_raw", "_save_raw"}
+    # Nothing outside a function touches it either, past its one definition.
+    assert _uses(tree, "_PREFERENCES_PATH") == 1 + sum(
+        _uses(funcs[name], "_PREFERENCES_PATH") for name in path_users)
+    savers = {name for name, fn in funcs.items() if name != "_save_raw" and any(
+        isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "_save_raw"
+        for n in ast.walk(fn))}
+    assert savers == set(PREFERENCE_WRITERS)
+
+
+@pytest.mark.parametrize("name", sorted(PREFERENCE_WRITERS))
+def test_every_preferences_writer_is_refused_in_the_real_home(fake_home, monkeypatch, name):
+    target = fake_home / PREFERENCES
+    # A chat with settings already, so move_chat has an entry to move.
+    monkeypatch.setattr(preferences, "_cache", {"42": {"layout": "card"}})
+    _test_guard.refusals.clear()
+    with pytest.raises(_test_guard.RealHomeWriteError):
+        PREFERENCE_WRITERS[name]()
+    assert not target.exists(), f"{name} wrote the preferences file in the real home"
+    assert not target.with_name(target.name + ".tmp").exists()
+    assert any(str(target) in r for r in _test_guard.refusals), _test_guard.refusals
+
+
+def test_in_the_config_folder_only_the_preferences_file_is_left_out(tmp_path):
+    config_dir = guard._HOME_AT_IMPORT / ".config" / "aipager"
+    assert [p for p in guard.LIVE_DAEMON_PATHS
+            if p == config_dir or config_dir in p.parents] == [config_dir / "preferences.json"]
+    root = tmp_path / "aipager"
+    for rel in ("aipager.yaml", "policy.yaml", "team.yaml", "daemon.env", ".credentials.json",
+                "preferences.json", "preferences.json.tmp", "preferences.json.bak",
+                "old/preferences.json"):
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x")
+    snap = guard.snapshot_guarded(roots=(root,), skip=(root / "preferences.json",))
+    assert sorted(guard.Path(p).relative_to(root).as_posix() for p in snap) == [
+        ".", ".credentials.json", "aipager.yaml", "daemon.env", "old", "old/preferences.json",
+        "policy.yaml", "preferences.json.bak", "team.yaml"]
