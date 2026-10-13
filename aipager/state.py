@@ -1926,7 +1926,17 @@ class TrackedSession:
         running everywhere; the running children are returned. An empty
         list means the stop is a finish (or a phantom): nothing changed.
         Recursion falls out: a child that is itself waiting is still in
-        ``bg_agents``, so it counts as running."""
+        ``bg_agents``, so it counts as running.
+
+        This holds for an agent its caller launched in the foreground too,
+        on purpose: Claude Code (2.1.296, the Agent tool's synchronous
+        path) moves a foreground agent that is done while an agent of its
+        own still runs into the background (``isBackgrounded``) and returns
+        ``{isAsync: true, status: "async_launched"}`` to its caller, so it
+        waits and resumes exactly like an agent launched in the background.
+        Its caller's Agent PostToolUse only arrives after this stop, so
+        whether it was launched in the background is not known here, and
+        need not be."""
         info = self.bg_agents.get(agent_id)
         if info is None:
             return []

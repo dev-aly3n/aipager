@@ -237,6 +237,44 @@ def test_the_state_refuses_a_self_link(mk_bot):
     assert sess.bg_agent_pause(P, 102.0) == []
 
 
+def test_a_foreground_agent_with_a_running_child_waits_like_a_background_one(
+        mk_bot, run_async):
+    """The decision on foreground agents (review-1 rev-iter1-002): Claude
+    Code moves a foreground agent that is done while an agent of its own
+    still runs into the background, and its caller's Agent PostToolUse
+    (after the stop) says async_launched. So its stop is a pause too, the
+    late PostToolUse changes nothing, and its final stop is its finish."""
+    bot = mk_bot()
+    sink: list = []
+    sess = bb.make_sess(bot, label="wait")
+    recv = _rx(bot, sink)
+    # The main loop's foreground Agent call: no run_in_background.
+    bb.hook(run_async, recv, sess, "PreToolUse", tool_name="Agent",
+            tool_input={"subagent_type": "pipeline-runner",
+                        "description": "Run the pipeline"})
+    _start(run_async, recv, sess, P, "pipeline-runner")
+    _start(run_async, recv, sess, C, "ship-reviewer")
+    _link(run_async, recv, sess, P, C)
+    _stop(run_async, recv, sess, P, "pipeline-runner")
+    assert sess.agent_is_waiting(P)
+    assert P in sess.active_subagents
+    # The foreground call returns only now, backgrounded.
+    bb.hook(run_async, recv, sess, "PostToolUse", tool_name="Agent",
+            tool_input={"subagent_type": "pipeline-runner",
+                        "description": "Run the pipeline"},
+            tool_response={"isAsync": True, "status": "async_launched",
+                           "agentId": P})
+    assert sess.agent_is_waiting(P)
+    sess.status = Status.IDLE
+    assert sess.job_background_open()
+    _stop(run_async, recv, sess, C, "ship-reviewer")
+    _start(run_async, recv, sess, P, "pipeline-runner")
+    _stop(run_async, recv, sess, P, "pipeline-runner")
+    assert sess.bg_agent_labels() == []
+    assert sess.active_subagents == {}
+    assert [c["agent_id"] for e, c in sink if e == "subagent_stop"] == [C, P]
+
+
 def test_a_message_display_of_its_own_does_not_clear_waiting(
         mk_bot, run_async):
     """Claude Code sends a message's display at its end: the parent's last
