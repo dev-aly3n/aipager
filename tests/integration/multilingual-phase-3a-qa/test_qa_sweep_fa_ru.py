@@ -26,6 +26,7 @@ FOLLOWS_CLAUDE = {"held_answers"}
 #: Every bidi control: LRM, RLM, ALM, embeddings, overrides, isolates.
 BIDI = re.compile("[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]")
 PERSIAN = re.compile("[؀-ۿ]")
+QUOTE_OPEN = re.compile(r"<blockquote\b[^>]*>")
 CYRILLIC = re.compile("[Ѐ-ӿ]")
 LATIN_WORD = re.compile(r"[A-Za-z]{3,}")
 EM_DASH = "\u2014"
@@ -117,7 +118,12 @@ def test_every_persian_line_opens_right_to_left(run_both, name):
                 if line.startswith(RLM):
                     bad.append(line)
             elif PERSIAN.search(line) and not line.startswith(RLM):
-                bad.append(line)
+                # A quote's first line has no mark before its tag (it would
+                # show as an empty line above the quote): it reads right to
+                # left from its first letter.
+                m = QUOTE_OPEN.match(line)
+                if not (m and PERSIAN.match(line, m.end())):
+                    bad.append(line)
     assert bad == []
 
 

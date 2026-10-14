@@ -41,7 +41,7 @@ EN_FRAME = "🛑 <b>x1</b> · Blocked by safety policy: {r} (stopped)"
 RU_FRAME = ("🛑 <b>x1</b> · Заблокировано правилом безопасности: {r} "
             "(остановлена)")
 FA_FRAME = (RLM + "🛑 <b>" + FSI + "x1" + PDI + "</b> · قانون ایمنی جلویش را گرفت: {r} "
-            "(متوقف شد)")
+            "(متوقف شد)" + RLM)
 
 
 def _expected(frame: str, reason: str) -> str:

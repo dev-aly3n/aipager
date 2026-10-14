@@ -247,3 +247,48 @@ def test_a_mode_label_must_show_its_typed_word(german):
     german({"mode.word.ask": "Fragen", "mode.word.auto": "Automatik",
             "mode.ask": "💬 Fragen-Modus", "mode.auto": "🤖 Auto-Modus"})
     assert kbwords.label_problems(("en", "de")) == ["de '🤖 Auto-Modus' ∌ 'Automatik'"]
+
+
+# ---- right-to-left labels carry a mark at both ends ------------------------------------
+
+_RLM = "\u200f"
+
+
+def _tapped(label: str) -> list[str]:
+    """*label* as a tap may bring it: as rendered (a mark at each end in
+    fa/ar), with one end's mark dropped by a client, or with none."""
+    bare = label.strip(_RLM)
+    return [label, _RLM + bare, bare + _RLM, _RLM + bare + _RLM, bare]
+
+
+@pytest.mark.parametrize("code", ["fa", "ar"])
+def test_a_label_with_marks_at_both_ends_reads_as_the_bare_label(code, bot):
+    from aipager import i18n
+    from aipager.bot import mode_labels
+    tr = i18n.get(code)
+    for action, msg in kbwords.WORDS.items():
+        label = tr.text(msg)
+        assert label.startswith(_RLM) and label.endswith(_RLM)
+        for tapped in _tapped(label):
+            assert kbwords.norm(tapped) == kbwords.norm(label.strip(_RLM))
+            assert kbwords.bare_word(tapped) == action, ascii(tapped)
+            assert kbwords.classify(bot, tapped) == kbwords.classify(bot, str(msg))
+            if action != "kill":
+                assert kbwords.is_group_label(bot, -1001, tapped), ascii(tapped)
+    for action, msg in kbwords.NAV.items():
+        for tapped in _tapped(tr.text(msg) if isinstance(msg, core.Msg) else msg):
+            assert kbwords.nav_action(tapped) == f"nav:{action}", ascii(tapped)
+    shipped = SimpleNamespace(
+        _template_map={}, _command_map={}, _model_map={},
+        registry=SimpleNamespace(live_labels=lambda chat_id: set()))
+    for (label, payload), msg in kbwords.DEFAULT_LABELS.items():
+        kind = "tpl" if not payload.startswith("/") else "cmd"
+        getattr(shipped, f"_{'template' if kind == 'tpl' else 'command'}_map")[label] = payload
+    for (label, payload), msg in kbwords.DEFAULT_LABELS.items():
+        for tapped in _tapped(tr.text(msg)):
+            assert kbwords.custom_action(shipped, tapped, chat_code=code)[1] == payload, (
+                ascii(tapped))
+    for msg in (mode_labels.MODE_AUTO, mode_labels.MODE_ASK, mode_labels.MODE_FULL):
+        word = kbwords.mode_word(tr.text(msg).strip(_RLM))
+        for tapped in _tapped(tr.text(msg)):
+            assert kbwords.mode_word(tapped) == word, ascii(tapped)

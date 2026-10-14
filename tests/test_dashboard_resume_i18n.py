@@ -70,7 +70,7 @@ def test_the_lines_row_keeps_its_signs_in_persian(mk_bot, monkeypatch):
     bot = mk_bot()
     text = bot._build_session_dashboard(_busy(bot, monkeypatch))
     (row,) = [line for line in text.split("\n") if "+۱۰" in line]
-    assert row.endswith("\u2068+۱۰ -۵\u2069"), row
+    assert row.endswith("\u2068+۱۰ -۵\u2069\u200f"), row
 
 
 def test_the_dashboard_in_russian(mk_bot, monkeypatch):
@@ -127,7 +127,7 @@ def test_the_picker_in_persian_and_russian(mk_bot, monkeypatch):
     preferences.set_ui_language(CHAT, "fa")
     text, kb = bot._render_resume_picker(page=1, scope_chat_id=CHAT)
     labels = [b.text for row in kb.inline_keyboard for b in row]
-    assert labels[-2:] == ["\u200f« قبلی", "\u200fصفحهٔ ۲/۲"]
+    assert labels[-2:] == ["\u200f« قبلی\u200f", "\u200fصفحهٔ ۲/۲\u200f"]
 
 
 def test_the_unscoped_picker_speaks_the_one_pinned_chats_language(mk_bot, monkeypatch):

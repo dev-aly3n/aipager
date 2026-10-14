@@ -3098,9 +3098,9 @@ class NotifyMixin:
                         sess.busy_msg_id = None
                     friendly_error, _retry_after = error_detection
                     # In the session chat's language; the line starts with a
-                    # name, so a right-to-left one gets its mark first.
-                    text = (f"{error_tr.mark}⚠️ <b>{html_mod.escape(label)}</b> · "
-                            f"{html_mod.escape(friendly_error, quote=False)}")
+                    # name, so a right-to-left one is marked at both ends.
+                    text = error_tr.line(f"⚠️ <b>{html_mod.escape(label)}</b> · "
+                                         f"{html_mod.escape(friendly_error, quote=False)}")
                     keyboard = (self._build_retry_keyboard(sess)
                                 if sess.last_prompt else None)
                     try:

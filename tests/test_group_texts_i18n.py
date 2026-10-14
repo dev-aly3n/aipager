@@ -34,7 +34,7 @@ def test_dropped_english_equals_the_constants():
 def test_dropped_in_persian_and_russian():
     fa = i18n.get("fa")
     assert live_reload.dropped_reply(fa, 3, BOB) == (
-        f"{RLM}۳ پیام به Claude ارسال نشد: {FSI}@bob{PDI} دیگر اجازه ندارد اینجا پیام بفرستد.")
+        f"{RLM}۳ پیام به Claude ارسال نشد: {FSI}@bob{PDI} دیگر اجازه ندارد اینجا پیام بفرستد.{RLM}")
     ru = i18n.get("ru")
     assert live_reload.dropped_reply(ru, 1, None) == \
         "Не отправлено Claude: этот человек больше не может писать здесь."
@@ -70,7 +70,7 @@ def test_post_as_yourself_in_the_chats_language(mk_bot, run_async):
     msg.reply_text = AsyncMock(return_value=MagicMock(message_id=3))
     run_async(group_intake._answer_anonymous_sender(bot, msg))
     assert msg.reply_text.await_args.args[0] == \
-        f"{RLM}برای استفاده از ربات، با نام خودتان پیام بفرستید."
+        f"{RLM}برای استفاده از ربات، با نام خودتان پیام بفرستید.{RLM}"
 
 
 def _bot(username):

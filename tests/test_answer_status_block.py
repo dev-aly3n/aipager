@@ -372,7 +372,7 @@ def test_ru_header_takes_the_cldr_form(n):
 def test_ar_header_takes_the_cldr_form(n):
     tr = i18n.get("ar")
     header = _lines(al.render_block(V(agents=(A("a", False),) * n), tr))[0]
-    assert header == RLM + _form("ar", "agents.head.working", n)
+    assert header == RLM + _form("ar", "agents.head.working", n) + RLM
 
 
 def test_ar_one_and_two_name_the_count_in_words():

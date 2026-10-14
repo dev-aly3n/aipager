@@ -263,7 +263,7 @@ def test_facts_and_reasons_follow_the_viewer(server, monkeypatch):
     facts = {f["id"]: f for f in data["facts"]}
     assert [f["id"] for f in data["facts"]] == ["model", "context", "cost", "working",
                                                "last_active", "mode", "cwd"]
-    assert facts["mode"]["value"].removeprefix(RLM) == "💬 مود پرسش"
+    assert facts["mode"]["value"].strip(RLM) == "💬 مود پرسش"
     assert all(PERSIAN.search(f["label"]) for f in data["facts"])
     assert facts["context"]["value"] == "۴۵٪"
     assert facts["cost"]["value"] == "$۱٫۵۰"

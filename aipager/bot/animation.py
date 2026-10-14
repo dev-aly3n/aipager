@@ -1373,7 +1373,7 @@ def _status_line(
                 else tr.md(WAITING_WORKING, session=label, agents=Safe(phrase)))
         if sess.busy_started_at:
             line += f" · {_clock(sess.busy_started_at)}"
-        return line
+        return tr.line(line)
 
     # ── Segments: state, label, verb, then the turn's live stats ──
     # Joined with " · " in every language (punctuation between stats).
@@ -1421,7 +1421,9 @@ def _status_line(
                  verb=Safe(_verb(tr, verb)))
     if parts:
         line += " · " + " · ".join(parts)
-    return line
+    # Right to left at both ends in a right-to-left card, whatever its
+    # last part (a clock, a tally).
+    return tr.line(line)
 
 
 def build_stream_card_ex(
@@ -2178,6 +2180,9 @@ class AnimationMixin:
                 n_agents = sess.subagent_count_this_turn
                 agent_note = (f" {tr.n(LEGACY_AGENTS, n_agents)}" if n_agents > 0 else "")
                 text += f" · 💰 {tr.num(f'${cost_delta:.2f}')}{agent_note}"
+        # The head is one line built from pieces: right to left at both
+        # ends in a right-to-left card, whatever it ends with.
+        text = tr.line(text)
         # Show tool history — collapse old done tools if too many
         history = sess.tool_history
         max_visible = 15
@@ -2220,9 +2225,12 @@ class AnimationMixin:
                 for i, opt in enumerate(perm.get("options", [])):
                     opt_label = opt["label"] if "label" in opt else tr.text(OPTION, n=i + 1)
                     desc = opt.get("description", "")
-                    text += f"\n  {tr.num(i + 1)}. {html_mod.escape(opt_label)}"
+                    row = f"{tr.num(i + 1)}. {html_mod.escape(opt_label)}"
                     if desc:
-                        text += f" - {html_mod.escape(desc[:60])}"
+                        row += f" - {html_mod.escape(desc[:60])}"
+                    # A row whose label is ours (Claude gave none) reads right to
+                    # left at both ends; Claude's own rows get no mark.
+                    text += "\n  " + (row if "label" in opt else tr.line(row))
             else:
                 tool_info = perm.get("tool_info") or {}
                 tool_summary = perm.get("tool_summary", str(PERM_NEEDED))

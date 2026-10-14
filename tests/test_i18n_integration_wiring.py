@@ -77,7 +77,7 @@ def test_memory_cap_report_button_reads_in_the_chats_language(mk_bot, run_async,
     else:
         assert SCRIPT[code].search(tg.out[-1])
         # The nudge above it names the button by the same words.
-        words = tr.text(report_flow.REPORT_THIS_BUTTON).lstrip(RLM).removeprefix("🐞 ")
+        words = tr.text(report_flow.REPORT_THIS_BUTTON).strip(RLM).removeprefix("🐞 ")
         assert words in tg.out[-2]
 
 
@@ -116,7 +116,9 @@ def test_an_api_error_reads_in_the_chats_language(mk_bot, run_async, monkeypatch
     assert line == f"{tr.mark}⚠️ <b>x1</b> · {html.escape(friendly, quote=False)}"
     assert SCRIPT[code].search(line) and "Anthropic's servers" not in line
     if code == "fa":
-        assert line.startswith(RLM)
+        # Right to left at both ends, one mark each (the friendly text's
+        # own end mark is the line's).
+        assert line.startswith(RLM) and line.endswith(RLM) and RLM * 2 not in line
     else:
         assert not line.startswith(RLM)
 

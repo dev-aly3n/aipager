@@ -211,7 +211,7 @@ def test_the_final_card_status_line_reads_left_to_right(code):
                                                  tr=i18n.get(code)))
     tr = i18n.get(code)
     assert status.startswith("✅ **")
-    assert " · " + LRM + RLI + str(tr.md(animation._VERB_MSGS["Done"])).lstrip(RLM) + PDI \
+    assert " · " + LRM + RLI + str(tr.md(animation._VERB_MSGS["Done"])).strip(RLM) + PDI \
         in status
     assert tr.clock(123) in status and "Agent ×" + tr.num(1) in status
 

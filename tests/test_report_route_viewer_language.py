@@ -36,7 +36,7 @@ def test_draft_areas_follow_the_viewer(mk_bot, run_async, monkeypatch):
     monkeypatch.setattr(report_drafts, "open_draft", _open)
     status, body = _post(run_async, srv, "/api/report/draft", _hdr(OWNER))
     assert status == 200
-    assert body["areas"] == ["\u200fارسال پیام‌ها به Telegram"]
+    assert body["areas"] == ["\u200fارسال پیام‌ها به Telegram\u200f"]
     assert body["preview"] == "{}"
 
 

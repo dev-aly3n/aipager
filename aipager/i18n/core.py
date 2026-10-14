@@ -17,11 +17,21 @@ escaped for its target and is never escaped again. Placeholders are
 form is refused, a missing parameter raises ``KeyError`` and an unused
 one ``ValueError``, so a typo cannot ship silently.
 
-Right-to-left languages (fa, ar) only: every line starts with U+200F
-(right after a Markdown block marker such as ``# `` or ``- `` when the
-line has one), each text parameter is wrapped in U+2068...U+2069, and
-nothing invisible is ever placed inside ``<code>``, ``<pre>``, a tag, a
-:class:`Span` or a :class:`Command` (a copied command must paste clean).
+Right-to-left languages (fa, ar) only: every line of a pattern starts
+with U+200F (right after a Markdown block marker such as ``# `` or
+``- `` when the line has one) and ends with U+200F, each text parameter
+is wrapped in U+2068...U+2069, and nothing invisible is ever placed
+inside ``<code>``, ``<pre>``, a tag, a :class:`Span` or a
+:class:`Command` (a copied command must paste clean). The end mark is
+for Telegram for iPhone, which puts a line on the right only when the
+end of it reads right to left (a line ending in an English word or a
+number would sit on the left). A blank line gets no mark, no mark
+stands beside a ``<pre>`` or ``<blockquote>`` on its own line (it would
+show as an empty line), newlines inside a parameter get none, and no
+two marks ever end up side by side (Telegram turns all but the last of
+such a run into U+200C). A line built in code from pieces takes
+:meth:`Tr.line`, a rendered piece nested in another line
+:meth:`Tr.bare`, a ``/`` menu description :meth:`Tr.lead`.
 Numeric parameters (``int``/``float``, not ``bool``) and
 ``Tr.num``/``Tr.clock`` get the language's own digits there (and, through
 ``Tr.num``, its thousands separator and percent sign); string parameters
@@ -41,13 +51,12 @@ A message that carries Claude's text takes the direction of that text,
 not the chat's (multilingual design 5.7, rule 5): :meth:`Tr.directed`
 gives the ``Tr`` that renders aipager's own lines of such a message in a
 given direction. A right-to-left language rendered left to right puts no
-U+200F at line starts; each of its right-to-left phrases is wrapped in
-U+2067...U+2069 so it still reads right to left inside the line, and a
-line whose first strong character outside the isolates is not left to
-right gets U+200E, so it still aligns left. Parameters stay isolated and
-numbers keep the language's digits. A
-left-to-right language ignores the direction, so English output never
-changes.
+U+200F at line starts or ends; each of its right-to-left phrases is
+wrapped in U+2067...U+2069 so it still reads right to left inside the
+line, and a line whose first strong character outside the isolates is
+not left to right gets U+200E, so it still aligns left. Parameters stay
+isolated and numbers keep the language's digits. A left-to-right
+language ignores the direction, so English output never changes.
 
 The ``Tr`` is always passed explicitly, never through a context variable,
 so a task started in one chat can never carry its language to another.
@@ -92,6 +101,11 @@ _LRM = "\u200e"      # LEFT-TO-RIGHT MARK
 #: decided once the line is whole (:func:`_ltr_render`). A
 #: noncharacter: never in a message, never sent.
 _LINE_SLOT = "\ufdd0"
+#: Where a right-to-left line starts and ends while it is being built;
+#: resolved by :func:`_rtl_ends` once the text is whole. Noncharacters
+#: like :data:`_LINE_SLOT`: never in a message, never sent.
+_START = "\ufdd1"
+_END = "\ufdd2"
 _FSI = "\u2068"      # FIRST STRONG ISOLATE
 _PDI = "\u2069"      # POP DIRECTIONAL ISOLATE
 
@@ -175,8 +189,8 @@ ISOLATE_COMMANDS = True
 #: starts with one gets its mark right AFTER the marker: the paragraph's
 #: direction comes from its first strong character, and the marker must
 #: stay first or the heading, quote or list item is lost.
-_BLOCK_MARKER_AFTER_RLM = re.compile(
-    "(?m)^\u200f(#{1,6} |> |[-*+] |[0-9]{1,9}\\. )")
+_BLOCK_MARKER_AFTER_START = re.compile(
+    "(?m)^\ufdd1(#{1,6} |> |[-*+] |[0-9]{1,9}\\. )")
 _BLOCK_MARKER_AFTER_SLOT = re.compile(
     "(?m)^\ufdd0(#{1,6} |> |[-*+] |[0-9]{1,9}\\. )")
 
@@ -347,6 +361,104 @@ def _ltr_render(text: str, kind: str) -> str:
     return "".join(out)
 
 
+_MARK_RUN = re.compile("[\u200e\u200f]{2,}")
+#: A line that opens a block (Telegram starts the block on a line of its
+#: own) or ends with one: a mark beside it would be a line of its own,
+#: an empty-looking line above or below the block. An isolate around a
+#: block (a parameter that is a ``<pre>``'s whole content) is looked past.
+_OPENS_BLOCK = re.compile(r"[\s\u2066-\u2069]*(?:<(?:pre|blockquote)\b|```)", re.I)
+_CLOSES_BLOCK = re.compile(r"(?:</(?:pre|blockquote)\s*>|```)[\s\u2066-\u2069]*\Z", re.I)
+_EMPHASIS_AT_END = re.compile(r"[*_~]+\Z")
+_CLOSING_TAGS = re.compile(r"(?:</[A-Za-z][A-Za-z0-9-]*\s*>\s*)+\Z")
+_QUOTE_OPEN = re.compile(r"<blockquote\b", re.I)
+_CODE_CLOSE = re.compile(r"</(?:code|pre)\b", re.I)
+
+
+def _blank(text: str) -> bool:
+    return not text.strip()
+
+
+def _end_before_emphasis(line: str) -> str:
+    """*line* (ending with :data:`_END`) with the end mark moved before a
+    closing Markdown emphasis run that follows punctuation (``*(x)*``):
+    a mark after it would stop the run closing (CommonMark's
+    right-flanking rule), one before it is still the line's last shown
+    character. An escaped run (an odd number of backslashes) is text."""
+    body = line[:-1]
+    m = _EMPHASIS_AT_END.search(body)
+    if not m or m.start() == 0:
+        return line
+    before = body[:m.start()]
+    slashes = len(before) - len(before.rstrip("\\"))
+    if slashes % 2:
+        return line
+    if not unicodedata.category(before[-1]).startswith(("P", "S")):
+        return line
+    return before + _END + body[m.start():]
+
+
+def _end_inside_quote(line: str) -> str:
+    """*line* (its end mark already dropped: it closes a block) with the
+    end mark put back inside a ``<blockquote>`` it closes, before the
+    closing tags, when the line is aipager's own (it kept its start
+    mark) and the quote opened on an earlier line: the last line of a
+    quote aipager wrote ends right to left too, and nothing follows the
+    quote. A quote opened on the same line may hold Claude's text, and
+    ``<pre>``/``<code>`` never get a mark."""
+    if _START not in line or _QUOTE_OPEN.search(line):
+        return line
+    m = _CLOSING_TAGS.search(line)
+    if not m or _CODE_CLOSE.search(m.group(0)):
+        return line
+    return line[:m.start()] + _END + line[m.start():]
+
+
+def _collapse_marks(text: str) -> str:
+    """Every run of two or more U+200E/U+200F reduced to its last mark,
+    outside ``<code>``/``<pre>``. Telegram's server turns all but the
+    last mark of such a run into U+200C, which breaks the joining of two
+    Persian letters; the last one is the one that counts."""
+    if not _MARK_RUN.search(text):
+        return text
+    out: list[str] = []
+    pos = 0
+    for m in _CODE_REGION.finditer(text):
+        out.append(_MARK_RUN.sub(lambda r: r.group(0)[-1], text[pos:m.start()]))
+        out.append(m.group(0))
+        pos = m.end()
+    out.append(_MARK_RUN.sub(lambda r: r.group(0)[-1], text[pos:]))
+    return "".join(out)
+
+
+def _rtl_ends(text: str) -> str:
+    """Finish a right-to-left rendering: resolve every :data:`_START`
+    (a line start) and :data:`_END` (a line end) to U+200F. A start mark
+    goes after a Markdown block marker; neither goes on a blank line; a
+    start mark never stands before a line that opens a ``<pre>`` or
+    ``<blockquote>`` (or a ``` fence) and an end mark never after one
+    that closes it (it goes inside a quote aipager wrote,
+    :func:`_end_inside_quote`); a closing Markdown emphasis run after
+    punctuation keeps its place last (:func:`_end_before_emphasis`); and
+    no two marks are left side by side (:func:`_collapse_marks`)."""
+    text = _BLOCK_MARKER_AFTER_START.sub("\\1" + _START, text)
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        if _START in line:
+            head, _s, rest = line.partition(_START)
+            body = rest[:-1] if rest.endswith(_END) else rest
+            if _blank(body) or _OPENS_BLOCK.match(body):
+                line = head + rest
+        if line.endswith(_END):
+            body = line[:-1].rpartition(_START)[2]
+            if _blank(body) or _CLOSES_BLOCK.search(body):
+                line = _end_inside_quote(line[:-1])
+            else:
+                line = _end_before_emphasis(line)
+        lines[i] = line
+    text = "\n".join(lines).replace(_START, _LRM_RTL).replace(_END, _LRM_RTL)
+    return _collapse_marks(text)
+
+
 # ---- placeholders -------------------------------------------------------
 
 _TOKEN = re.compile(r"\{\{|\}\}|\{([A-Za-z_][A-Za-z0-9_]*)\}|[{}]")
@@ -421,7 +533,10 @@ class _Scan:
     def plain(self) -> bool:
         return self.tag is None and self.code == 0
 
-    def feed(self, text: str, *, mark: str) -> str:
+    def feed(self, text: str, *, mark: str, end: str = "") -> str:
+        """*text* (literal pattern text) with *end* before and *mark*
+        after each of its line breaks outside a tag and outside
+        ``<code>``/``<pre>``."""
         out: list[str] = []
         for ch in text:
             if self.tag is not None:
@@ -437,9 +552,10 @@ class _Scan:
                 continue
             if ch == "<":
                 self.tag = []
-            out.append(ch)
             if ch == "\n" and mark and self.code == 0:
-                out.append(mark)
+                out.append(end + ch + mark)
+                continue
+            out.append(ch)
         return "".join(out)
 
 
@@ -480,10 +596,46 @@ class Tr:
 
     @property
     def mark(self) -> str:
-        """U+200F in a right-to-left language, else ``""``: for a line
-        built in code from pieces (a /status details line) whose first
-        piece is a name, so the line still reads right to left."""
+        """U+200F in a right-to-left rendering, else ``""``. A line built
+        in code from pieces takes :meth:`line` instead, which marks both
+        of its ends; a field that only needs its start marked takes
+        :meth:`lead`."""
         return _LRM_RTL if self.rtl else ""
+
+    def line(self, text):
+        """*text*, one whole line built in code from pieces (a /status
+        details line, a row ending in a clock), marked the way a pattern
+        line is in a right-to-left rendering: one U+200F at its start
+        (after a Markdown block marker) and one at its end, none beside a
+        ``<pre>``/``<blockquote>`` it opens or closes, and no two marks
+        side by side (its pieces' own marks at its ends are not doubled).
+        Text holding line breaks gets only its outer ends marked. In any
+        other rendering, and for blank text, *text* as it is. A
+        :class:`Safe` stays a :class:`Safe`."""
+        if not self.rtl:
+            return text
+        out = _rtl_ends(_START + str(text).strip(_LRM_RTL) + _END)
+        return Safe(out) if isinstance(text, Safe) else out
+
+    def bare(self, text):
+        """*text*, a rendered piece about to be nested inside another
+        line, without the U+200F runs at its very start and end (in a
+        right-to-left rendering; otherwise as it is). A :class:`Safe`
+        stays a :class:`Safe`."""
+        if not self.rtl:
+            return text
+        out = str(text).strip(_LRM_RTL)
+        return Safe(out) if isinstance(text, Safe) else out
+
+    def lead(self, text):
+        """*text*, a rendered field that is not a message line (a ``/``
+        menu description), with U+200F at its start only, in a
+        right-to-left rendering; otherwise as it is. A :class:`Safe`
+        stays a :class:`Safe`."""
+        if not self.rtl:
+            return text
+        out = _LRM_RTL + str(text).strip(_LRM_RTL)
+        return Safe(out) if isinstance(text, Safe) else out
 
     # -- lookup -----------------------------------------------------------
 
@@ -547,10 +699,11 @@ class Tr:
         extra = set(params) - used
         if extra:
             raise ValueError(f"unused parameters {sorted(extra)} for {pattern!r}")
-        # Isolates and digits follow the LANGUAGE; the line-start mark
-        # follows the direction this Tr renders in (see `directed`).
+        # Isolates and digits follow the LANGUAGE; the line marks follow
+        # the direction this Tr renders in (see `directed`).
         rtl = self._loc.rtl
-        mark = _LRM_RTL if self.rtl else _LINE_SLOT if rtl else ""
+        mark = _START if self.rtl else _LINE_SLOT if rtl else ""
+        end = _END if self.rtl else ""
         scan = _Scan()
         out: list[str] = [mark] if mark else []
         close_after_tag = False
@@ -560,10 +713,10 @@ class Tr:
                 if close_after_tag:
                     m = _CLOSE_CODE_AT_START.match(text)
                     if m:
-                        out.append(scan.feed(text[:m.end()], mark=mark) + _PDI)
+                        out.append(scan.feed(text[:m.end()], mark=mark, end=end) + _PDI)
                         text = text[m.end():]
                     close_after_tag = False
-                out.append(scan.feed(text, mark=mark))
+                out.append(scan.feed(text, mark=mark, end=end))
                 continue
             value = params[piece[0]]
             numeric = (isinstance(value, (int, float)) and not isinstance(value, bool))
@@ -598,7 +751,7 @@ class Tr:
             out.append(text)
         text = "".join(out)
         if self.rtl:
-            text = _BLOCK_MARKER_AFTER_RLM.sub("\\1" + _LRM_RTL, text)
+            text = _rtl_ends(text + _END)
         elif rtl:
             text = _ltr_render(text, kind)
         return text

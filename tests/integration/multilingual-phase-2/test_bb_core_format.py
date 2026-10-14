@@ -64,7 +64,7 @@ def test_a_persian_line_starts_with_the_rlm():
 
 def test_a_persian_text_parameter_is_isolated_whole():
     out = i18n.get("fa").html(TALK, session="x1")
-    assert out == RLM + _fa_talk().replace("{session}", FSI + "x1" + PDI)
+    assert out == RLM + _fa_talk().replace("{session}", FSI + "x1" + PDI) + RLM
 
 
 def test_a_session_name_keeps_latin_digits_in_persian():
