@@ -1691,7 +1691,8 @@ class TrackedSession:
         """SubagentStart: *agent_id* is running. An empty id or type is not
         an agent (the phantom shape) and adds nothing. A restart of a known
         id (an agent resuming itself) refreshes it and keeps what it was
-        doing.
+        doing. A stopped one coming back (an id in ``bg_agents_recent``)
+        keeps its description and takes no call.
 
         A new agent is matched to the waiting Agent calls of its type
         (:meth:`_match_agent_call`): it takes a call's description only
@@ -1712,7 +1713,15 @@ class TrackedSession:
             info.pop("paused", None)
             info.pop("children_gone_at", None)
         else:
-            desc, parent = self._match_agent_call(agent_type, now)
+            recent = self.bg_agents_recent.get(agent_id)
+            if recent is not None:
+                # A stopped agent resumed (SendMessage): no Agent call of
+                # its own started it, so it takes none of the waiting
+                # ones (it would take another agent's child's place) and
+                # keeps the description it had.
+                desc, parent = recent.get("desc", ""), None
+            else:
+                desc, parent = self._match_agent_call(agent_type, now)
             self.bg_agents[agent_id] = {
                 "label": agent_type, "last_seen": now, "started": now,
                 "prose": "", "prose_msg": "", "tool": "", "tool_arg": "",

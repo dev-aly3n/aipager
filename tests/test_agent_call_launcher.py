@@ -132,6 +132,28 @@ def test_a_resumed_agent_takes_no_call():
     assert len(sess.pending_agent_calls) == 1
 
 
+def test_an_agent_back_after_its_stop_takes_no_call_and_keeps_its_description():
+    """A finished agent resumed by SendMessage starts again with no Agent
+    call of its own: it must not take another agent's waiting call (that
+    would link it under that agent and leave the real child unlinked)."""
+    sess = _sess()
+    _running(sess, P)
+    _call(sess, "", "its own work", at=99.5)
+    sess.bg_agent_started(C, T, 100.0)
+    assert sess.bg_agents[C]["desc"] == "its own work"
+    sess.bg_agent_stopped(C, 100.2)
+    assert C in sess.bg_agents_recent
+    _call(sess, P, "helper work", at=100.5)
+    sess.bg_agent_started(C, T, 101.0)
+    assert C not in sess.agent_parents
+    assert sess.bg_agents[C]["desc"] == "its own work"
+    assert [(c["launcher"], c["desc"]) for c in sess.pending_agent_calls] == [
+        (P, "helper work")]
+    # P's real child still finds its call.
+    sess.bg_agent_started(D, T, 101.5)
+    assert sess.agent_parents[D] == P
+    assert sess.bg_agents[D]["desc"] == "helper work"
+
 def test_a_stopped_agents_calls_go_with_it():
     sess = _sess()
     _running(sess, P, Q)
