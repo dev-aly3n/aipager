@@ -94,7 +94,9 @@ Whatever the layout, every busy card ends with its session's status
 line (`⏳`/`✅ name · …`) and every answer starts with its result line
 (`💬 name`, plus `· Finished (…)` when no finished card is left to show
 the stats); the merged layout stacks the two, each line in its own
-section. In the card layout the answer deliberately follows the
+section. A divider line sits above the busy card's status line, and in
+the merged layout a second one separates the finished card from the
+answer. In the card layout the answer deliberately follows the
 finished card by a moment, so the card is seen to say Finished before
 the answer lands under it; tune or disable that head start with
 `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at
@@ -474,7 +476,11 @@ refreshed as its own tool calls come in. Once that agent has made three
 or more tool calls, they fold into their own `▸ N tool calls` tap
 directly beneath its row - never appearing in the parent's timeline or
 its `Bash ×N` tallies. When the agent finishes, its row settles to `✅
-🤖 <type> · N tool calls · <elapsed>` and keeps the same tap. The full
+🤖 <type> · N tool calls · <elapsed>` and keeps the same tap. An agent
+started by another agent (a helper) names the agent at the top of its
+chain before its own type, `🤖 pipeline-runner › ship-tester`, when
+aipager knows who started it at the moment it starts; the rows stay in
+the order the agents started. The full
 play-by-play `.md` attachment above gains an Agents section listing
 every agent that ran the turn, its elapsed time, tool count, and the
 tools it called.
@@ -524,16 +530,20 @@ attachment above carries the complete record.
 #### Agents still running when the answer goes out
 
 Claude Code can run agents in the background, and the turn that launched
-them can end while they work. The answer then ends with a short status of
-that background work, in the style of Claude Code's own agent panel, kept
-up to date while it runs:
+them can end while they work. The answer then ends with a divider line
+and a short status of that background work, in the style of Claude
+Code's own agent panel, kept up to date while it runs:
 
 ```
-⏳ 2 agents working · 🖥 1 shell running
+⏳ 5 agents working · 🖥 1 shell running
 
-○ pipeline-runner · Writing final.md for the pipeline
+○ 🤖 pipeline-runner · Writing final.md for the pipeline
 
-○ Explore · Reading state.py
+- ○ 🤖 ship-tester · Write and run criteria tests
+- ○ 🤖 ship-developer · Editing state.py
+- ○ 🤖 ship-developer › ship-reviewer · Collect line numbers
+
+⏸ 🤖 r2-runner · waiting for its own agents
 
 Results from the agents will follow here.
 ```
@@ -541,19 +551,33 @@ Results from the agents will follow here.
 - **The first line counts.** Agents working (or done), and the background
   commands (shells) of this job running, finished or stopped. A shell is
   only ever a count, never its command.
-- **One row per agent,** its type in bold, then what it is doing now:
-  its own latest line of text (Claude's words, shown as written, never
-  translated), else its latest tool as a short phrase (`Reading
-  state.py`, `Writing final.md`, `Running a command`, `Searching for
-  …`), else the description Claude gave the agent when it launched it,
-  else just the type. At most four rows, then `+N more`.
+- **One row per agent,** a 🤖 and its type in bold, then what it is
+  doing now: its own latest line of text (Claude's words, shown as
+  written, never translated), else its latest tool as a short phrase
+  (`Reading state.py`, `Writing final.md`, `Running a command`,
+  `Searching for …`), else the description Claude gave the agent when it
+  launched it, else just the type. An agent that has stopped to wait for
+  agents it started itself says `⏸ … waiting for its own agents`
+  instead.
+- **Agents as a tree.** The agents the session started are the first
+  level. Every agent one of them started, at any depth, is listed right
+  under it, each right after the agent that started it; one started by
+  an agent of the second level names that agent first (`ship-developer ›
+  ship-reviewer`). There are never more than two levels. An agent whose
+  starter aipager does not know yet is shown on the first level, never
+  under a guess, and moves under its starter once that is known.
+- **At most six rows,** the agents still working first, then `+N more`
+  for the agents without a row. An agent never shows without the agents
+  above it.
 - **The promise** "Results from the agents will follow here." stays only
   while an agent is still working. Shells never carry it: a dev server
   may never end.
 
-Each agent's row settles on its own when that agent stops, to `✓
+Each agent's row settles on its own when that agent stops, to `✓ 🤖
 Explore · done (0:42)` (how long that agent ran), and the first line
-counts down. Once every agent is done, the rows give way to one line,
+counts down. An agent that a listed agent starts after the answer went
+out joins the status under it at the next update; one the session
+itself starts later is listed under a later answer instead. Once every agent is done, the rows give way to one line,
 with the time from the answer to the last agent's end:
 
 ```
