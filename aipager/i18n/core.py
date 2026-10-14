@@ -380,7 +380,10 @@ _MARK_RUN = re.compile("[\u200e\u200f]{2,}")
 _OPENS_BLOCK = re.compile(r"[\s\u2066-\u2069]*(?:<(?:pre|blockquote)\b|```)", re.I)
 _CLOSES_BLOCK = re.compile(r"(?:</(?:pre|blockquote)\s*>|```)[\s\u2066-\u2069]*\Z", re.I)
 _EMPHASIS_AT_END = re.compile(r"[*_~]+\Z")
-_CODE_SPAN = re.compile(r"(?<![`\\])(`+)(?!`).*?(?<!`)\1(?!`)", re.S)
+#: A Markdown code span: an opening backtick run (not escaped, not part
+#: of a longer run) closed by a run of the same length, within one
+#: paragraph (it may cross a line break, never a blank line).
+_CODE_SPAN = re.compile(r"(?<![`\\])(`+)(?!`)(?:[^\n]|\n(?![ \t]*\n))*?(?<!`)\1(?!`)")
 _UNDERSCORE_RUN = re.compile(r"(?<!_)_+(?!_)")
 _SENTINELS = re.compile("[\ufdd0-\ufdd2]")
 

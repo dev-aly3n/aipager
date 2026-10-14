@@ -478,6 +478,11 @@ def test_marks_in_a_markdown_code_span_stay_as_they_are():
     assert fa.line("x " + span) == RLM + "x " + span + RLM
     assert fa.line("x " + span, kind="md") == RLM + "x " + span + RLM
     assert fa.line("x " + span, kind="html") == RLM + "x `echo a" + RLM + "b`" + RLM
+    # A span may cross a line break, never a blank line (a new paragraph).
+    across = Safe("`a\nb" + LRM + RLM + "c`")
+    assert fa.md("a.b", "x {s}", s=across) == RLM + "x " + across + RLM
+    apart = Safe("`a\n \nb" + LRM + RLM + "c`")
+    assert fa.md("a.b", "x {s}", s=apart) == RLM + "x `a\n \nb" + RLM + "c`" + RLM
     both = "<code>a" + LRM + RLM + "b</code> " + span
     assert fa.line("x " + both) == RLM + "x " + both + RLM
     assert fa.html("a.b", "x {s}", s=Safe(span)) == RLM + "x `echo a" + RLM + "b`" + RLM
