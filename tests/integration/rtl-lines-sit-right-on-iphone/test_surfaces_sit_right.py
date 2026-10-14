@@ -23,6 +23,7 @@ _CODE = re.compile(r"<code\b[^>]*>.*?</code>|<pre\b[^>]*>.*?</pre>|`+[^`\n]*`+",
 _TAG = re.compile(r"<[^>]+>")
 _SPLIT_NAME = re.compile("[/@][\u200e\u200f]")
 _SPLIT_WORD = re.compile("\\w[\u200e\u200f]\\w")
+_LEAD_UNDERSCORES = re.compile(r"^([\u200e\u200f]?(?:#{1,6} |- |\d+\. |> )?)_{1,2}(?=[^_])")
 _CACHE: dict[str, dict[str, list[str]]] = {}
 
 
@@ -112,12 +113,57 @@ def test_no_mark_between_a_slash_or_at_and_a_name(code, mk_bot, run_async, monke
     assert bad == [], bad[:10]
 
 
+def _without_opening_underscores(text):
+    """A ``_``/``__`` delimiter run at a line start (after an optional
+    block marker) is Markdown markup, not a word character (design.md
+    amendment), so it is dropped before looking for split words."""
+    return "\n".join(_LEAD_UNDERSCORES.sub(r"\1", line) for line in text.split("\n"))
+
+
 @pytest.mark.parametrize("code", ("fa", "ar"))
 def test_no_mark_between_two_word_characters(code, mk_bot, run_async, monkeypatch):
     bad = [(name, m.group()) for name, texts in
            _renders(code, mk_bot, run_async, monkeypatch).items()
-           for text in texts for m in _SPLIT_WORD.finditer(_TAG.sub("", text))]
+           for text in texts
+           for m in _SPLIT_WORD.finditer(_without_opening_underscores(_TAG.sub("", text)))]
     assert bad == [], bad[:10]
+
+
+def _memory_notes(renders):
+    """card.full_log lines that are one whole ``_..._`` emphasis (the
+    log.memory note)."""
+    return [line for text in renders["card.full_log"] for line in text.split("\n")
+            if line.strip(RLM).startswith("_") and line.strip(RLM).endswith("_")]
+
+
+@pytest.mark.parametrize("code", ("fa", "ar"))
+def test_the_full_log_memory_note_is_rendered(code, mk_bot, run_async, monkeypatch):
+    assert _memory_notes(_renders(code, mk_bot, run_async, monkeypatch))
+
+
+@pytest.mark.parametrize("code", ("fa", "ar"))
+def test_the_full_log_memory_note_starts_with_the_underscore_then_a_mark(
+        code, mk_bot, run_async, monkeypatch):
+    notes = _memory_notes(_renders(code, mk_bot, run_async, monkeypatch))
+    assert [n for n in notes if not n.startswith("_" + RLM)] == []
+
+
+@pytest.mark.parametrize("code", ("fa", "ar"))
+def test_the_full_log_memory_note_ends_with_a_mark_then_the_underscore(
+        code, mk_bot, run_async, monkeypatch):
+    notes = _memory_notes(_renders(code, mk_bot, run_async, monkeypatch))
+    assert [n for n in notes if not n.endswith(RLM + "_")] == []
+
+
+@pytest.mark.parametrize("code", ("fa", "ar"))
+def test_the_full_log_memory_note_sits_right_on_iphone(code, mk_bot, run_async, monkeypatch):
+    notes = _memory_notes(_renders(code, mk_bot, run_async, monkeypatch))
+    assert notes and all(bidi_uba.sits_right_on_iphone(n) for n in notes)
+
+
+def test_the_english_full_log_memory_note_holds_no_mark(mk_bot, run_async, monkeypatch):
+    notes = _memory_notes(_renders("en", mk_bot, run_async, monkeypatch))
+    assert notes and not any(RLM in n or LRM in n for n in notes)
 
 
 @pytest.mark.parametrize("code", ("fa", "ar"))

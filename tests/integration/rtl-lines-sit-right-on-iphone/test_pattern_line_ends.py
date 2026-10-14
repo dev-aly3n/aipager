@@ -267,10 +267,18 @@ def test_md_every_block_marker_kind(code):
 
 
 @pytest.mark.parametrize("code", ("fa", "ar"))
-@pytest.mark.parametrize("closer", ("**", "_", "~", "__", "*"))
+@pytest.mark.parametrize("closer", ("**", "~", "*"))
 def test_md_an_emphasis_closer_after_punctuation_stays_after_the_mark(code, closer):
     out = _render(code, "md", closer + "word:" + closer)
     assert out == RLM + closer + "word:" + RLM + closer
+
+
+@pytest.mark.parametrize("code", ("fa", "ar"))
+@pytest.mark.parametrize("run", ("_", "__"))
+def test_md_an_underscore_run_opening_the_line_keeps_both_marks_inside_it(code, run):
+    """design.md amendment: "RLM _word: RLM _" becomes "_ RLM word: RLM _"."""
+    out = _render(code, "md", run + "word:" + run)
+    assert out == run + RLM + "word:" + RLM + run
 
 
 @pytest.mark.parametrize("code", ("fa", "ar"))
