@@ -20,7 +20,7 @@ aipager doctor
 
 ## <a id="another-aipager-daemon-already-owns-the-socket"></a>«Another aipager daemon already owns the socket»
 
-دو aipager نمی‌توانند یک سوکت کنترل مشترک داشته باشند. این خطا یعنی یک aipager هنوز اجرا می‌شود و روی آن جواب می‌دهد (سوکت `$XDG_RUNTIME_DIR/aipager.sock` است، یا وقتی `$XDG_RUNTIME_DIR` تنظیم نشده `/tmp/aipager.sock`). فایل سوکتی که از یک aipager کرش‌کرده جا مانده مشکلی نیست: شروع بعدی پاکش می‌کند و یک سوکت جدید باز می‌کند. اول aipager در حال اجرا را متوقف کنید:
+دو aipager نمی‌توانند یک سوکت کنترل مشترک داشته باشند. این خطا یعنی یک aipager هنوز اجرا می‌شود و روی آن جواب می‌دهد (سوکت &lrm;`$XDG_RUNTIME_DIR/aipager.sock` است، یا وقتی &lrm;`$XDG_RUNTIME_DIR` تنظیم نشده &lrm;`/tmp/aipager.sock`). فایل سوکتی که از یک aipager کرش‌کرده جا مانده مشکلی نیست: شروع بعدی پاکش می‌کند و یک سوکت جدید باز می‌کند. اول aipager در حال اجرا را متوقف کنید:
 
 <div dir="ltr">
 
@@ -31,14 +31,14 @@ pkill -f 'aipager start'      # در غیر این صورت
 
 </div>
 
-اگر بررسی سوکت آن را نبیند، `aipager start` باز هم با `aipager is already running (pid=N)` شروع نمی‌شود و فایل قفلش را نام می‌برد (`~/.local/share/aipager/daemon.lock`): همان پروسه را به همان روش متوقف کنید.
+اگر بررسی سوکت آن را نبیند، `aipager start` باز هم با `aipager is already running (pid=N)` شروع نمی‌شود و فایل قفلش را نام می‌برد (&lrm;`~/.local/share/aipager/daemon.lock`): همان پروسه را به همان روش متوقف کنید.
 
 ## <a id="telegram-bot-doesnt-respond"></a>ربات تلگرام جواب نمی‌دهد
 
-1. `aipager status`: اگر ردیف aipager می‌گوید `not running`، اجرایش کنید.
-2. `aipager doctor`: بررسی‌های `token_valid` و `chat_reachable` از اول تا آخر با API تلگرام تماس می‌گیرند و خطای دقیق را نشان می‌دهند.
+1. &rlm;`aipager status`: اگر ردیف aipager می‌گوید `not running`، اجرایش کنید.
+2. &rlm;`aipager doctor`: بررسی‌های `token_valid` و `chat_reachable` از اول تا آخر با API تلگرام تماس می‌گیرند و خطای دقیق را نشان می‌دهند.
 3. چت اشتباه: `aipager config` را اجرا کنید و **Test bot reachability** را انتخاب کنید. برای درست کردن یک چت خصوصی اشتباه، چت درست را با **Add a DM scope** اضافه کنید ([پیدا کردن آیدی‌ها](groups.md#finding-ids-auto-detect) را ببینید) و بعد چت اشتباه را زیر **Edit a scope** حذف کنید.
-4. در ربات هیچ‌وقت `/start` زده نشده: ربات را در تلگرام باز کنید و یک بار Start را بزنید.
+4. در ربات هیچ‌وقت &lrm;`/start` زده نشده: ربات را در تلگرام باز کنید و یک بار Start را بزنید.
 
 ## <a id="busy-cards-got-slower"></a>کارت‌های در حال کار کند شده‌اند
 
@@ -65,7 +65,7 @@ pkill -f 'aipager start'      # در غیر این صورت
 
 یک ردیف ابزار یا جملهٔ جدید منتظر آپدیت بعدی می‌ماند؛ **تغییر وضعیت** (سشنی که از کار کردن به انتظار برای یک ایجنت پس‌زمینه می‌رود، و برعکس) فوراً دیده می‌شود، حداکثر هر ۱۰ ثانیه یک بار. ردیف‌های زندهٔ ایجنت‌ها و خط انتظار هم همین پله‌ها را دارند. کارت تمام‌شده مدت کار را با ثانیه‌های واقعی نشان می‌دهد (`۲۳:۱۷`).
 
-همین جلوی این را می‌گیرد که یک کار چهارساعته یک پیام را هزاران بار ویرایش کند: در ۲۰۲۶-۰۹-۲۳ یک کارت دقیقاً همین کار را کرد و چت هفت ساعت بن شد. برای اینکه سرعت بالا در کل کار بماند، **`/settings` ← ⏱ آپدیت کارت در کار طولانی** را خاموش کنید (برای کل چت، یا برای یک سشن از Mini App یا `👤 تنظیمات هر سشن`).
+همین جلوی این را می‌گیرد که یک کار چهارساعته یک پیام را هزاران بار ویرایش کند: در ۲۰۲۶-۰۹-۲۳ یک کارت دقیقاً همین کار را کرد و چت هفت ساعت بن شد. برای اینکه سرعت بالا در کل کار بماند، &lrm;**`/settings` ← ⏱ آپدیت کارت در کار طولانی** را خاموش کنید (برای کل چت، یا برای یک سشن از Mini App یا `👤 تنظیمات هر سشن`).
 
 ### <a id="the-typing-bubble"></a>حباب «در حال تایپ…»
 
@@ -86,8 +86,8 @@ pkill -f 'aipager start'      # در غیر این صورت
 
 آنچه می‌بینید:
 
-- `aipager status` (و ردیف `aipager daemon` در `aipager doctor`) **`Telegram flood backoff ×4 (chat …), last 429 12 s ago`** را نشان می‌دهد.
-- دقیقاً یک خط در `aipager logs`، بدون traceback: `flood: chat … 429 retry_after=5s → cadence ×2`.
+- &rlm;`aipager status` (و ردیف `aipager daemon` در `aipager doctor`) **`Telegram flood backoff ×4 (chat …), last 429 12 s ago`** را نشان می‌دهد.
+- دقیقاً یک خط در `aipager logs`، بدون traceback:&rlm; `flood: chat … 429 retry_after=5s → cadence ×2`.
 - چیزی ساکت نمی‌شود و **هیچ جوابی از دست نمی‌رود**: عقب می‌افتد، حذف نمی‌شود.
 - **سرعتی که چت به دست آورده نصف می‌شود** و چت وارد یک **دورهٔ هشدار شش‌ساعته** می‌شود (`FLOOD_WARNING_HOURS`): سرعتش نمی‌تواند از ۰٫۵ درخواست در ثانیه (`FLOOD_WARNED_CEILING`) بالاتر برود و آهسته بالا می‌رود. `aipager status` نشانش می‌دهد: `Telegram chat 123: rate 0.25/s (ceiling 0.50/s), 212/1200 calls in the last hour (as of 18s ago), 7/30 in the last minute - warning regime, 5h 52m left`.
 
@@ -101,7 +101,7 @@ pkill -f 'aipager start'      # در غیر این صورت
 - با ۱۰۸۰، چت وارد **حالت حداقلی** (پایین) می‌شود تا ساعت به ۸۶۴ برسد؛
 - جواب‌ها هیچ‌وقت به خاطر سهمیهٔ ساعتی رد نمی‌شوند؛ اگر روزی از ۱۲۰۰ بگذرند، لاگ ساعتی یک بار این را می‌گوید.
 
-`aipager status` درخواست‌های ساعت گذشتهٔ چت را کنار سهمیه‌اش نشان می‌دهد. این عدد از فایل وضعیتی می‌آید که aipager تا وقتی درخواست‌ها جریان دارند حداکثر دقیقه‌ای یک بار بازنویسی می‌کند، پس سنش هم کنارش نوشته می‌شود. دو سشن شلوغ که ساعت‌ها در یک چت خصوصی متن می‌فرستند خیلی زیر سهمیه می‌مانند (اتفاق ۲۰۲۶-۰۹-۲۳ وقتی دوباره اجرا شد: حدود ۹۰۰ درخواست در شلوغ‌ترین ساعت، در برابر حدود ۳۴۰۰ برای همان کار بدون این سهمیه).
+&rlm;`aipager status` درخواست‌های ساعت گذشتهٔ چت را کنار سهمیه‌اش نشان می‌دهد. این عدد از فایل وضعیتی می‌آید که aipager تا وقتی درخواست‌ها جریان دارند حداکثر دقیقه‌ای یک بار بازنویسی می‌کند، پس سنش هم کنارش نوشته می‌شود. دو سشن شلوغ که ساعت‌ها در یک چت خصوصی متن می‌فرستند خیلی زیر سهمیه می‌مانند (اتفاق ۲۰۲۶-۰۹-۲۳ وقتی دوباره اجرا شد: حدود ۹۰۰ درخواست در شلوغ‌ترین ساعت، در برابر حدود ۳۴۰۰ برای همان کار بدون این سهمیه).
 
 ### <a id="the-earned-rate-and-why-your-cards-may-be-slower-than-they-were"></a>سرعت به‌دست‌آمده، و چرا ممکن است کارت‌هایتان از قبل کندتر باشند
 
@@ -115,11 +115,11 @@ pkill -f 'aipager start'      # در غیر این صورت
 
 آنچه می‌بینید:
 
-- `aipager status` (و ردیف `aipager daemon` در `aipager doctor`) **`Telegram flood-muted until HH:MM (chat …)`** را نشان می‌دهد.
-- یک خط در `aipager logs`: `Telegram flood control — chat … muted for Ns (until HH:MM) …`، بعد سکوت برای آن چت. بعداً یک خط `flood mute on chat … lifted`.
-- `aipager status` وضعیت کامل چت را هم نشان می‌دهد: `Telegram chat 123: rate 0.05/s (ceiling 0.50/s), 431/600 calls in the last hour (as of 12s ago) - MINIMAL MODE, card updates paused - flood-muted until 09:41 - warning regime, 5h 59m left (1 ban(s) in the last 7 days)`.
+- &rlm;`aipager status` (و ردیف `aipager daemon` در `aipager doctor`) **`Telegram flood-muted until HH:MM (chat …)`** را نشان می‌دهد.
+- یک خط در `aipager logs`:&rlm; `Telegram flood control — chat … muted for Ns (until HH:MM) …`&lrm;، بعد سکوت برای آن چت. بعداً یک خط `flood mute on chat … lifted`.
+- &rlm;`aipager status` وضعیت کامل چت را هم نشان می‌دهد: `Telegram chat 123: rate 0.05/s (ceiling 0.50/s), 431/600 calls in the last hour (as of 12s ago) - MINIMAL MODE, card updates paused - flood-muted until 09:41 - warning regime, 5h 59m left (1 ban(s) in the last 7 days)`.
 
-aipager چت را دقیقاً همان مدتی که تلگرام خواسته ساکت می‌کند و **هیچ درخواستی از هیچ نوع** به آن نمی‌فرستد: جواب‌ها، ویرایش کارت‌ها، پیوست‌ها، ری‌اکشن‌ها، نشانگر تایپ، پیام‌های کوچک بعد از زدن دکمه، و جواب‌هایی که فرمان‌هایتان می‌گرفتند. هر کدام یک تخلف تازه بود که بن را طولانی‌تر می‌کرد؛ یک درخواست وسط بن فعال همان چیزی بود که در ۲۰۲۶-۰۹-۱۵ یک بن ۲۱ دقیقه‌ای را به ۹٫۵ ساعت رساند. پس فرمانی که وسط سکوت تایپ شود هیچ جوابی نمی‌گیرد، و **زدن دکمه هم تأییدی نمی‌گیرد**؛ تا نسخهٔ 0.7.12 پیام کوچک بعد از دکمه هنوز فرستاده می‌شد، با این فرض که تلگرام آن را جدا حساب می‌کند. برای کم کردن سرعت جدا حساب می‌کند، برای بن نه. بقیهٔ چت‌ها تحت تأثیر نیستند.
+&rlm;aipager چت را دقیقاً همان مدتی که تلگرام خواسته ساکت می‌کند و **هیچ درخواستی از هیچ نوع** به آن نمی‌فرستد: جواب‌ها، ویرایش کارت‌ها، پیوست‌ها، ری‌اکشن‌ها، نشانگر تایپ، پیام‌های کوچک بعد از زدن دکمه، و جواب‌هایی که فرمان‌هایتان می‌گرفتند. هر کدام یک تخلف تازه بود که بن را طولانی‌تر می‌کرد؛ یک درخواست وسط بن فعال همان چیزی بود که در ۲۰۲۶-۰۹-۱۵ یک بن ۲۱ دقیقه‌ای را به ۹٫۵ ساعت رساند. پس فرمانی که وسط سکوت تایپ شود هیچ جوابی نمی‌گیرد، و **زدن دکمه هم تأییدی نمی‌گیرد**؛ تا نسخهٔ 0.7.12 پیام کوچک بعد از دکمه هنوز فرستاده می‌شد، با این فرض که تلگرام آن را جدا حساب می‌کند. برای کم کردن سرعت جدا حساب می‌کند، برای بن نه. بقیهٔ چت‌ها تحت تأثیر نیستند.
 
 **پیام دادن به ربات وسط بن بی‌خطر است و چیزی از دست نمی‌رود.** هیچ کاری که در چت بکنید باعث نمی‌شود ربات وقتی چت ساکت است به تلگرام درخواست بفرستد، پس نمی‌تواند بن را طولانی‌تر کند:
 
@@ -135,16 +135,16 @@ aipager چت را دقیقاً همان مدتی که تلگرام خواسته 
 
 کارهایی که نباید بکنید:
 
-- برای «درست کردن» بن، aipager را ری‌استارت نکنید. سکوت در همان ساعتی که نشان داده شده خودش تمام می‌شود. از نسخهٔ 0.7.13، ری‌استارت دیگر بن را فراموش نمی‌کند (مهلت، سرعت به‌دست‌آمدهٔ چت و تاریخچهٔ بن‌هایش در `~/.claude/aipager-flood-state.json` ذخیره و در شروع برگردانده می‌شوند، و همین‌طور درخواست‌های ساعت آخر چت و دورهٔ هشدارش)، پس ری‌استارت دیگر بن را طولانی‌تر هم نمی‌کند. ولی جواب‌هایی را که هنوز نگه داشته شده‌اند دور می‌ریزد و چیزی را درست نمی‌کند.
-- `TELEGRAM_MAX_RETRY_AFTER` را به امید زودتر امتحان کردن پایین‌تر از ۹۰ ثانیهٔ پیش‌فرض نیاورید: هر چیزی بیشتر از این سقف بن است، نه محدودیت سرعت.
+- برای «درست کردن» بن، aipager را ری‌استارت نکنید. سکوت در همان ساعتی که نشان داده شده خودش تمام می‌شود. از نسخهٔ 0.7.13، ری‌استارت دیگر بن را فراموش نمی‌کند (مهلت، سرعت به‌دست‌آمدهٔ چت و تاریخچهٔ بن‌هایش در &lrm;`~/.claude/aipager-flood-state.json` ذخیره و در شروع برگردانده می‌شوند، و همین‌طور درخواست‌های ساعت آخر چت و دورهٔ هشدارش)، پس ری‌استارت دیگر بن را طولانی‌تر هم نمی‌کند. ولی جواب‌هایی را که هنوز نگه داشته شده‌اند دور می‌ریزد و چیزی را درست نمی‌کند.
+- &rlm;`TELEGRAM_MAX_RETRY_AFTER` را به امید زودتر امتحان کردن پایین‌تر از ۹۰ ثانیهٔ پیش‌فرض نیاورید: هر چیزی بیشتر از این سقف بن است، نه محدودیت سرعت.
 
 برای پیشگیری: سشن‌های همزمان کمتری در هر چت اجرا کنید، یا پرکارترین‌ها را به یک چت جدا ببرید (`aipager config`).
 
 ## <a id="a-session-dropped-off-the-pinned-status-bar-it-is-gone"></a>یک سشن از نوار وضعیت سنجاق‌شده بیرون افتاد (GONE است)
 
-پروسهٔ dtach آن سشن بسته شده (ری‌استارت کامپیوتر، `pkill claude`، کسی در سشن وصل‌شده به dtach `exit` تایپ کرده). از اول بسازیدش؛ پوشهٔ `~/.claude/projects/...` آن هنوز گفتگو را دارد:
+پروسهٔ dtach آن سشن بسته شده (ری‌استارت کامپیوتر، `pkill claude`، کسی در سشن وصل‌شده به dtach `exit` تایپ کرده). از اول بسازیدش؛ پوشهٔ &lrm;`~/.claude/projects/...`&lrm; آن هنوز گفتگو را دارد:
 
-ساده‌ترین راه، `/resume <label>` در تلگرام است (یا `/resume` خالی برای یک فهرست انتخاب): سشن را دوباره اجرا می‌کند و گفتگو را از همان‌جا ادامه می‌دهد. از خط فرمان:
+ساده‌ترین راه، &lrm;`/resume <label>`&lrm; در تلگرام است (یا &lrm;`/resume` خالی برای یک فهرست انتخاب): سشن را دوباره اجرا می‌کند و گفتگو را از همان‌جا ادامه می‌دهد. از خط فرمان:
 
 <div dir="ltr">
 
@@ -175,8 +175,8 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # به ثانیه
 دکمهٔ `[📦 نصب قابلیت ویس]` نصب‌کننده را اجرا می‌کند و تا وقتی کار می‌کند هر چند ثانیه پیامش را ویرایش می‌کند (`📦 در حال نصب قابلیت ویس - هنوز ادامه دارد… (۲۵ ثانیه)`). اگر نصب شکست بخورد، پیام کد خروج و ۵۰۰ حرف آخر خروجی نصب‌کننده را نشان می‌دهد. دلیل‌های رایج:
 
 - شبکه: pip به PyPI نمی‌رسد. اتصال را از کامپیوتری که aipager رویش اجرا می‌شود چک کنید.
-- دیسک: `~/.cache/huggingface/` حدود ۷۴ مگابایت برای مدل لازم دارد و حافظهٔ wheel مربوط به pip حدود ۲۵۰ مگابایت دیگر. اول جا باز کنید.
-- Permission denied: venv فقط‌خواندنی است. به `uv tool install` بروید که همیشه venvی مال خود کاربر به کار می‌برد.
+- دیسک: &lrm;`~/.cache/huggingface/`&lrm; حدود ۷۴ مگابایت برای مدل لازم دارد و حافظهٔ wheel مربوط به pip حدود ۲۵۰ مگابایت دیگر. اول جا باز کنید.
+- &rlm;Permission denied:&rlm; venv فقط‌خواندنی است. به `uv tool install` بروید که همیشه venvی مال خود کاربر به کار می‌برد.
 
 اگر ربات وسط نصب ارتباطش را از دست داد، خود نصب معمولاً روی کامپیوتر تمام شده: aipager را ری‌استارت کنید و دوباره یک ویس امتحان کنید.
 
@@ -184,22 +184,22 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # به ثانیه
 
 صفحه لود شد، ولی اسکریپت Mini App تلگرام (همان که `initData` را می‌سازد) لود نشد، پس صفحه چیزی برای ورود ندارد و هیچ درخواستی به API نمی‌فرستد. پیام تقصیر را گردن شما می‌اندازد؛ دلیلش شبکه است.
 
-نسخه‌های اخیر aipager آن اسکریپت را خودشان دانلود می‌کنند و از آدرس خود صفحه (`/telegram-web-app.js`) سرو می‌کنند، پس گوشی فقط باید به همان جایی برسد که صفحه را داده، نه به `telegram.org` هم. اگر این را در یک نسخهٔ قدیمی‌تر می‌بینید، آپدیت کنید.
+نسخه‌های اخیر aipager آن اسکریپت را خودشان دانلود می‌کنند و از آدرس خود صفحه (&lrm;`/telegram-web-app.js`) سرو می‌کنند، پس گوشی فقط باید به همان جایی برسد که صفحه را داده، نه به `telegram.org` هم. اگر این را در یک نسخهٔ قدیمی‌تر می‌بینید، آپدیت کنید.
 
 بعد، به ترتیب:
 
-1. سورس صفحه را نگاه کنید. اگر تگ `<script>` آن به `https://telegram.org/js/telegram-web-app.js` اشاره می‌کند، aipager هنوز نتوانسته اسکریپت را دانلود کند و صفحه دارد آن را از خود تلگرام لود می‌کند، و این همان حالتی است که روی گوشی‌ای که به `telegram.org` نمی‌رسد شکست می‌خورد. aipager اسکریپت را وقتی سرور Mini App شروع می‌شود دانلود می‌کند و حداکثر روزی یک بار دوباره امتحان می‌کند، پس ری‌استارت aipager فوراً دوباره امتحان می‌کند؛ `journalctl --user -u aipager | grep "webapp sdk"` می‌گوید چه چیزی خراب شد (معمولاً یک `telegram.org` بسته یا فیلترشده).
-2. اگر تگ به `/telegram-web-app.js` اشاره می‌کند، چک کنید aipager آن را سرو می‌کند: `curl -sI http://127.0.0.1:8765/telegram-web-app.js` روی کامپیوتر aipager باید با `200` و `Content-Type: application/javascript` جواب بدهد (اگر پورت را عوض کرده‌اید، تنظیمش کنید). نسخهٔ آن زیر `~/.local/share/aipager/webapp-sdk/` است.
-3. آدرس را به جای دکمهٔ `/app` یا دکمهٔ منوی ربات، در یک مرورگر معمولی باز کرده‌اید: پیام همین را باید بگوید. SDK فقط داخل تلگرام `initData` می‌سازد.
-4. صفحه بیشتر از پنج دقیقه باز مانده: `initData` منقضی می‌شود و صفحه می‌خواهد دوباره باز شود. دوباره `/app` را بزنید.
-5. `📱 App` را روی کیبوردی از نسخهٔ قدیمی‌تر aipager زده‌اید. تلگرام به Mini Appی که از دکمهٔ کیبورد باز شود `initData` نمی‌دهد، برای همین کیبورد aipager دیگر این دکمه را ندارد. `/start` را بفرستید تا کیبورد جدید بیاید، و اپ را از دکمهٔ منو یا با `/app` باز کنید.
+1. سورس صفحه را نگاه کنید. اگر تگ &lrm;`<script>`&lrm; آن به `https://telegram.org/js/telegram-web-app.js` اشاره می‌کند، aipager هنوز نتوانسته اسکریپت را دانلود کند و صفحه دارد آن را از خود تلگرام لود می‌کند، و این همان حالتی است که روی گوشی‌ای که به `telegram.org` نمی‌رسد شکست می‌خورد. aipager اسکریپت را وقتی سرور Mini App شروع می‌شود دانلود می‌کند و حداکثر روزی یک بار دوباره امتحان می‌کند، پس ری‌استارت aipager فوراً دوباره امتحان می‌کند؛ `journalctl --user -u aipager | grep "webapp sdk"`&lrm; می‌گوید چه چیزی خراب شد (معمولاً یک `telegram.org` بسته یا فیلترشده).
+2. اگر تگ به &lrm;`/telegram-web-app.js` اشاره می‌کند، چک کنید aipager آن را سرو می‌کند: `curl -sI http://127.0.0.1:8765/telegram-web-app.js` روی کامپیوتر aipager باید با `200` و `Content-Type: application/javascript` جواب بدهد (اگر پورت را عوض کرده‌اید، تنظیمش کنید). نسخهٔ آن زیر &lrm;`~/.local/share/aipager/webapp-sdk/`&lrm; است.
+3. آدرس را به جای دکمهٔ &lrm;`/app` یا دکمهٔ منوی ربات، در یک مرورگر معمولی باز کرده‌اید: پیام همین را باید بگوید. SDK فقط داخل تلگرام `initData` می‌سازد.
+4. صفحه بیشتر از پنج دقیقه باز مانده: `initData` منقضی می‌شود و صفحه می‌خواهد دوباره باز شود. دوباره &lrm;`/app` را بزنید.
+5. &rlm;&lrm;`📱 App` را روی کیبوردی از نسخهٔ قدیمی‌تر aipager زده‌اید. تلگرام به Mini Appی که از دکمهٔ کیبورد باز شود `initData` نمی‌دهد، برای همین کیبورد aipager دیگر این دکمه را ندارد. &lrm;`/start` را بفرستید تا کیبورد جدید بیاید، و اپ را از دکمهٔ منو یا با &lrm;`/app` باز کنید.
 
-## <a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>`pyexpat _XML_SetAllocTrackerActivationThreshold` موقع نصب با brew
+## &rlm;<a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>`pyexpat _XML_SetAllocTrackerActivationThreshold` موقع نصب با brew
 
 بستهٔ `python@3.12` هوم‌برو با libexpat جدیدتری از آنچه سیستم شما دارد ساخته شده؛ تقریباً همیشه به این دلیل که روی macOS Tahoe (26.x) **Xcode و Command Line Tools قدیمی‌اند**. خروجی خود brew معمولاً همین را می‌گوید. دو راه:
 
 - **به جایش `uv tool install aipager` را به کار ببرید.** uv پایتون خودش را همراه دارد و کلاً از این مشکل دور می‌ماند. این راه پیشنهادی روی macOS است؛ [README](README.md#install) را ببینید.
-- **Xcode و Command Line Tools را آپدیت کنید**:
+- &rlm;**Xcode و Command Line Tools را آپدیت کنید**:
 
 <div dir="ltr">
 
@@ -227,11 +227,11 @@ uv tool install --reinstall aipager
 
 ## <a id="the-session-list-was-lost-or-damaged"></a>فهرست سشن‌ها گم شد یا خراب شد
 
-aipager سشن‌هایش را در `~/.claude/aipager-sessions.json` نگه می‌دارد و آن را به‌شکل اتمی بازنویسی می‌کند (یک فایل جدید، بعد تغییر اسم)، پس نوشتنی که نیمه‌کاره بماند فایل قبلی را سالم می‌گذارد. اگر فایل با این حال نباشد، خوانده نشود یا JSON معتبر نباشد، aipager در لاگ می‌نویسد که از نو شروع می‌کند (اگر فایل بوده ولی خوانده نشده، به‌شکل هشدار) و با فهرست خالی شروع می‌کند؛ متوقف نمی‌شود. از این فایل نسخهٔ پشتیبانی نیست. چیز مهمی از دست نمی‌رود:
+&rlm;aipager سشن‌هایش را در &lrm;`~/.claude/aipager-sessions.json` نگه می‌دارد و آن را به‌شکل اتمی بازنویسی می‌کند (یک فایل جدید، بعد تغییر اسم)، پس نوشتنی که نیمه‌کاره بماند فایل قبلی را سالم می‌گذارد. اگر فایل با این حال نباشد، خوانده نشود یا JSON معتبر نباشد، aipager در لاگ می‌نویسد که از نو شروع می‌کند (اگر فایل بوده ولی خوانده نشده، به‌شکل هشدار) و با فهرست خالی شروع می‌کند؛ متوقف نمی‌شود. از این فایل نسخهٔ پشتیبانی نیست. چیز مهمی از دست نمی‌رود:
 
-- سشن‌های در حال اجرا در اولین تیک ناظر، از روی سوکت‌های dtach‌شان (`/tmp/claude-dtach-*.sock`)، دوباره پیدا می‌شوند؛
-- همهٔ گفتگوها هنوز در پوشهٔ `~/.claude/projects/...` خود Claude Code هستند، پس `aipager session <name> --continue` در پوشهٔ همان سشن ادامه‌شان می‌دهد (`--resume` اجازه می‌دهد یکی را انتخاب کنید)؛
-- آنچه از دست می‌رود فهرست سشن‌های بسته‌شده (`/resume`)، کارت‌هایی که باز بودند، و بقیهٔ چیزهایی است که aipager دربارهٔ هر سشن یادش بود.
+- سشن‌های در حال اجرا در اولین تیک ناظر، از روی سوکت‌های dtach‌شان (&lrm;`/tmp/claude-dtach-*.sock`)، دوباره پیدا می‌شوند؛
+- همهٔ گفتگوها هنوز در پوشهٔ &lrm;`~/.claude/projects/...`&lrm; خود Claude Code هستند، پس `aipager session <name> --continue` در پوشهٔ همان سشن ادامه‌شان می‌دهد (&lrm;`--resume` اجازه می‌دهد یکی را انتخاب کنید)؛
+- آنچه از دست می‌رود فهرست سشن‌های بسته‌شده (&lrm;`/resume`)، کارت‌هایی که باز بودند، و بقیهٔ چیزهایی است که aipager دربارهٔ هر سشن یادش بود.
 
 اگر aipager مدام موقع شروع شکست می‌خورد، `aipager logs` (یا `journalctl --user -u aipager`) دلیلش را نشان می‌دهد؛ فایل را کنار بگذارید (`mv ~/.claude/aipager-sessions.json ~/aipager-sessions.json.old`) تا مطمئن شوید مشکل از آن نیست.
 
@@ -243,32 +243,32 @@ aipager سشن‌هایش را در `~/.claude/aipager-sessions.json` نگه م�
 
 ترتیب مهم است: هر بررسی بعدی فرض می‌کند قبلی‌ها رد شده‌اند. بررسی‌ای که در یک محیط غیرمنتظره کرش کند، به‌شکل یک ردیف ⚠ با اسم بررسی و خطا نشان داده می‌شود؛ بقیهٔ بررسی‌ها باز هم اجرا می‌شوند.
 
-| بررسی (کلید `--json`) | چه چیزی را چک می‌کند | راه‌حل |
+| بررسی (کلید &lrm;`--json`) | چه چیزی را چک می‌کند | راه‌حل |
 |---|---|---|
 | `config_parses` | `aipager.yaml` و `policy.yaml` خوانده می‌شوند؛ اول اجرا می‌شود، چون همهٔ بررسی‌های بعدی تنظیمات را می‌خوانند | خطا فایل و خط را نام می‌برد |
-| `config` | `~/.config/aipager/aipager.yaml` وجود دارد و توکن و چت دارد | `aipager config` |
+| `config` | &lrm;`~/.config/aipager/aipager.yaml` وجود دارد و توکن و چت دارد | `aipager config` |
 | `token_valid` | توکن با `getMe` تلگرام کار می‌کند | دوباره `aipager config` |
 | `chat_reachable` | تلگرام چت تنظیم‌شده را می‌شناسد (`getChat`؛ چیزی فرستاده نمی‌شود) | ربات را باز کنید و Start را بزنید |
 | `team` | چت‌ها و اعضا (یا یک `team.yaml` قدیمی): می‌گوید استفادهٔ شخصی است یا تیمی، و یک `team.yaml` قدیمی خراب یا ناجور را نشان می‌دهد | `aipager config` |
 | `role_shell_access` | برای هر نقشی که عضوی دارد و می‌تواند Bash اجرا کند یک بار هشدار می‌دهد (قانون‌های ایمنی‌اش در حد تلاش است، نه یک مرز؛ [استفادهٔ تیمی](groups.md#roles) را ببینید) | در `policy.yaml` به آن نقش Bash ندهید، یا قبولش کنید |
 | `peer_messages` | پیام‌های بین سشن‌های Claude: رسیدهایشان کجا نگه داشته می‌شود و آن پوشه خصوصی است یا نه، این سیستم می‌تواند زمان شروع فرستنده را چک کند یا نه، و یک هشدار برای هر نقشی که یک policy به آن اجازهٔ SendMessage داده ([مدل امنیتی](security.md#messages-between-claude-sessions) را ببینید) | پوشهٔ رسیدی را که مشترک شده پاک کنید (aipager دوباره می‌سازدش)، یا به آن نقش SendMessage ندهید |
-| `claude` | فایل اجرایی `claude` را همان‌طور که هر شروع سشن پیدا می‌کند پیدا می‌کند (`claude_path` در `aipager.yaml` یا `$AIPAGER_CLAUDE_BIN` بی‌چون‌وچرا برنده‌اند؛ وگرنه جدیدترین نسخه بین `~/.local/bin`، PATH و Homebrew)، و هر نصب جداگانهٔ دیگری را که پیدا شد فهرست می‌کند | Claude Code را نصب کنید، یا `claude_path` / `AIPAGER_CLAUDE_BIN` را تنظیم کنید |
+| `claude` | فایل اجرایی `claude` را همان‌طور که هر شروع سشن پیدا می‌کند پیدا می‌کند (`claude_path` در `aipager.yaml` یا &lrm;`$AIPAGER_CLAUDE_BIN` بی‌چون‌وچرا برنده‌اند؛ وگرنه جدیدترین نسخه بین &lrm;`~/.local/bin`،&rlm; PATH و Homebrew)، و هر نصب جداگانهٔ دیگری را که پیدا شد فهرست می‌کند | Claude Code را نصب کنید، یا `claude_path` /&rlm; `AIPAGER_CLAUDE_BIN` را تنظیم کنید |
 | `claude_auth` | `claude auth status` را در همان محیطی که یک سشن واقعی می‌گیرد اجرا می‌کند. **هیچ‌وقت FAIL نمی‌شود**: «لاگین نیست» و «خود بررسی شکست خورد» جدا از هم گزارش می‌شوند و هیچ‌کدام جلوی شروع سشن را نمی‌گیرد | `claude auth login`، یا یک کلید API یا `CLAUDE_CODE_OAUTH_TOKEN` تنظیم کنید |
 | `dtach` | فایل اجرایی `dtach` پیدا شد (`dtach-bin` خود aipager، یا یکی در PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` و `aipager-statusline` در PATH هستند | `uv tool install --reinstall aipager` |
-| `settings_json` | هوک‌های aipager در `~/.claude/settings.json` وصل شده‌اند | `aipager config` |
+| `settings_json` | هوک‌های aipager در &lrm;`~/.claude/settings.json` وصل شده‌اند | `aipager config` |
 | `daemon` | aipager اجرا می‌شود و سوکتش جواب می‌دهد؛ وضعیت محدودیت سرعت تلگرام را هم نشان می‌دهد ([بالا](#the-bot-slowed-down-a-rate-limit-429) را ببینید) | `aipager start` |
 | `service_installed` | اختیاری: فایل سرویس وجود دارد | `aipager service install` |
-| `service_unit_path` | فقط Linux: `Environment=PATH=` در فایل سرویس *نصب‌شده* واقعاً پوشهٔ فایل اجرایی claude را دارد؛ به‌شکل متن خوانده می‌شود، چون doctor نمی‌تواند PATH خود systemd را از shell تعاملی شما ببیند | `aipager service install --yes` |
+| `service_unit_path` | فقط Linux:&rlm; `Environment=PATH=`&lrm; در فایل سرویس *نصب‌شده* واقعاً پوشهٔ فایل اجرایی claude را دارد؛ به‌شکل متن خوانده می‌شود، چون doctor نمی‌تواند PATH خود systemd را از shell تعاملی شما ببیند | `aipager service install --yes` |
 | `miniapp` | وقتی Mini App روشن است، می‌تواند شروع شود یا نه. **هیچ‌وقت FAIL نمی‌شود**: Mini App اختیاری است | راه‌حلی که خودش نام می‌برد |
 
-`aipager doctor --json` همین بررسی‌ها را، به همین ترتیب، با همین کلیدها چاپ می‌کند ([فرمان‌ها](commands.md#aipager-doctor---json) را ببینید).
+&rlm;`aipager doctor --json` همین بررسی‌ها را، به همین ترتیب، با همین کلیدها چاپ می‌کند ([فرمان‌ها](commands.md#aipager-doctor---json) را ببینید).
 
-`aipager doctor --fix` را اجرا کنید تا به‌شکل تعاملی یک اطلاعات ورود Claude را پیدا کند و در `daemon.env` کپی کند (همین‌طور وقتی فایل هست ولی چیزی ندارد)، یا وقتی بیش از یک نصب پیدا شده `claude_path` را ثابت کند. همیشه فقط بعد از پرسیدن کاری می‌کند. برای فایل سرویسی که PATH آن پوشهٔ claude را ندارد، `aipager service install --yes` را اجرا کنید.
+&rlm;`aipager doctor --fix` را اجرا کنید تا به‌شکل تعاملی یک اطلاعات ورود Claude را پیدا کند و در `daemon.env` کپی کند (همین‌طور وقتی فایل هست ولی چیزی ندارد)، یا وقتی بیش از یک نصب پیدا شده `claude_path` را ثابت کند. همیشه فقط بعد از پرسیدن کاری می‌کند. برای فایل سرویسی که PATH آن پوشهٔ claude را ندارد، `aipager service install --yes` را اجرا کنید.
 
-## <a id="the-daemon-cant-find-claude-or-picks-the-wrong-install"></a>aipager `claude` را پیدا نمی‌کند، یا نصب اشتباه را انتخاب می‌کند
+## &rlm;<a id="the-daemon-cant-find-claude-or-picks-the-wrong-install"></a>aipager `claude` را پیدا نمی‌کند، یا نصب اشتباه را انتخاب می‌کند
 
-قبلاً شش جای مختلف `claude` را جداگانه پیدا می‌کردند و ممکن بود با هم فرق کنند. حالا همه از یک پیداکننده (`aipager/claude_resolve.py`) می‌گذرند. `claude_path` در `aipager.yaml`، و بعد `$AIPAGER_CLAUDE_BIN`، وقتی کار کنند بی‌چون‌وچرا برنده‌اند. وگرنه هر `claude` که در `~/.local/bin`، در `$PATH` و در پوشه‌های Homebrew پیدا شود چک می‌شود و جدیدترین نسخه برنده است (پس جابه‌جا کردن ترتیب `$PATH`، وقتی نصب دیگر جدیدتر است، انتخاب را عوض نمی‌کند). `aipager doctor` را اجرا کنید تا ببینید دقیقاً کدام را انتخاب کرده و چه چیزهای دیگری پیدا کرده؛ اگر نصب اشتباه برنده شده، نصب درست را ثابت کنید:
+قبلاً شش جای مختلف `claude` را جداگانه پیدا می‌کردند و ممکن بود با هم فرق کنند. حالا همه از یک پیداکننده (`aipager/claude_resolve.py`) می‌گذرند. `claude_path` در `aipager.yaml`، و بعد &lrm;`$AIPAGER_CLAUDE_BIN`، وقتی کار کنند بی‌چون‌وچرا برنده‌اند. وگرنه هر `claude` که در &lrm;`~/.local/bin`، در &lrm;`$PATH` و در پوشه‌های Homebrew پیدا شود چک می‌شود و جدیدترین نسخه برنده است (پس جابه‌جا کردن ترتیب &lrm;`$PATH`، وقتی نصب دیگر جدیدتر است، انتخاب را عوض نمی‌کند). `aipager doctor` را اجرا کنید تا ببینید دقیقاً کدام را انتخاب کرده و چه چیزهای دیگری پیدا کرده؛ اگر نصب اشتباه برنده شده، نصب درست را ثابت کنید:
 
 <div dir="ltr">
 
@@ -282,7 +282,7 @@ echo 'claude_path: /home/you/.local/bin/claude' >> ~/.config/aipager/aipager.yam
 
 ## <a id="sessions-cant-authenticate-under-the-systemd-service-but-claude-works-fine-in-a-terminal"></a>سشن‌ها زیر سرویس systemd لاگین نمی‌شوند، ولی `claude` در ترمینال خوب کار می‌کند
 
-سرویس‌های `systemctl --user` هیچ‌وقت `~/.bashrc` یا `~/.profile` را نمی‌خوانند، پس یک خط `export CLAUDE_CODE_OAUTH_TOKEN=…` در آن‌ها هیچ‌وقت به aipager نمی‌رسد. به جایش، فایل سرویس از `LoadCredential=` خود systemd استفاده می‌کند و `~/.config/aipager/daemon.env` را می‌خواند: یک فایل ساده `KEY=VALUE` با حالت دسترسی 0600 که اولین بار که `aipager service install` را اجرا می‌کنید خودکار ساخته می‌شود (اگر یک `config.env` قدیمی توکن داشته باشد از آن کپی می‌شود، وگرنه یک بار از shell لاگین شما پیدا می‌شود، وگرنه با یک هشدار خالی می‌ماند). اگر هنوز خالی است، `aipager doctor --fix` وقتی بله بگویید دوباره همان جاها را می‌گردد و خطی را که پیدا می‌کند اضافه می‌کند و بقیهٔ خط‌های فایل را نگه می‌دارد؛ هیچ‌وقت توکن را چاپ نمی‌کند. یا خودتان خط را اضافه کنید:
+سرویس‌های `systemctl --user` هیچ‌وقت &lrm;`~/.bashrc` یا &lrm;`~/.profile` را نمی‌خوانند، پس یک خط `export CLAUDE_CODE_OAUTH_TOKEN=…`&lrm; در آن‌ها هیچ‌وقت به aipager نمی‌رسد. به جایش، فایل سرویس از `LoadCredential=`&lrm; خود systemd استفاده می‌کند و &lrm;`~/.config/aipager/daemon.env` را می‌خواند: یک فایل ساده `KEY=VALUE` با حالت دسترسی 0600 که اولین بار که `aipager service install` را اجرا می‌کنید خودکار ساخته می‌شود (اگر یک `config.env` قدیمی توکن داشته باشد از آن کپی می‌شود، وگرنه یک بار از shell لاگین شما پیدا می‌شود، وگرنه با یک هشدار خالی می‌ماند). اگر هنوز خالی است، `aipager doctor --fix` وقتی بله بگویید دوباره همان جاها را می‌گردد و خطی را که پیدا می‌کند اضافه می‌کند و بقیهٔ خط‌های فایل را نگه می‌دارد؛ هیچ‌وقت توکن را چاپ نمی‌کند. یا خودتان خط را اضافه کنید:
 
 <div dir="ltr">
 
@@ -299,11 +299,11 @@ aipager service stop && aipager service start
 
 ## <a id="the-daemons-control-socket-moved"></a>جای سوکت کنترل aipager عوض شد
 
-`aipager doctor` و `aipager status` قبلاً همیشه به `/tmp/aipager.sock` نگاه می‌کردند. زیر سرویس systemd، سوکت کنترل حالا در `$XDG_RUNTIME_DIR/aipager.sock` است (فقط وقتی `$XDG_RUNTIME_DIR` تنظیم نشده به `/tmp` برمی‌گردد: کانتینرها، WSL1، توزیع‌های حداقلی). فقط همین یک سوکت جابه‌جا شد؛ سوکت‌های dtach هر سشن (`/tmp/claude-dtach-*.sock`) تغییری نکرده‌اند. اگر جای مشخصی لازم دارید، با `AIPAGER_SOCKET_PATH` عوضش کنید.
+&rlm;`aipager doctor` و `aipager status` قبلاً همیشه به &lrm;`/tmp/aipager.sock` نگاه می‌کردند. زیر سرویس systemd، سوکت کنترل حالا در &lrm;`$XDG_RUNTIME_DIR/aipager.sock` است (فقط وقتی &lrm;`$XDG_RUNTIME_DIR` تنظیم نشده به &lrm;`/tmp` برمی‌گردد: کانتینرها، WSL1، توزیع‌های حداقلی). فقط همین یک سوکت جابه‌جا شد؛ سوکت‌های dtach هر سشن (&lrm;`/tmp/claude-dtach-*.sock`) تغییری نکرده‌اند. اگر جای مشخصی لازم دارید، با `AIPAGER_SOCKET_PATH` عوضش کنید.
 
-## <a id="update-says-the-restart-would-kill-sessions-killmode"></a>`/update` می‌گوید ری‌استارت سشن‌ها را می‌بندد (KillMode)
+## &rlm;<a id="update-says-the-restart-would-kill-sessions-killmode"></a>&lrm;`/update` می‌گوید ری‌استارت سشن‌ها را می‌بندد (KillMode)
 
-فایل‌های سرویسی که قبل از این نسخه نوشته شده‌اند خط `KillMode=` ندارند، پس systemd از `control-group` استفاده می‌کند: متوقف یا ری‌استارت کردن `aipager.service` همهٔ سشن‌های Claude را که aipager شروع کرده می‌بندد. برای همین `/update` نسخهٔ جدید را نصب می‌کند ولی aipager را ری‌استارت نمی‌کند و سشن‌هایی را که ری‌استارت می‌بست فهرست می‌کند. یک بار درستش کنید:
+فایل‌های سرویسی که قبل از این نسخه نوشته شده‌اند خط `KillMode=`&lrm; ندارند، پس systemd از `control-group` استفاده می‌کند: متوقف یا ری‌استارت کردن `aipager.service` همهٔ سشن‌های Claude را که aipager شروع کرده می‌بندد. برای همین &lrm;`/update` نسخهٔ جدید را نصب می‌کند ولی aipager را ری‌استارت نمی‌کند و سشن‌هایی را که ری‌استارت می‌بست فهرست می‌کند. یک بار درستش کنید:
 
 <div dir="ltr">
 
@@ -315,23 +315,23 @@ aipager service install
 
 فایل سرویس را با `KillMode=process` بازنویسی می‌کند، systemd را دوباره بارگذاری می‌کند و aipager را ری‌استارت می‌کند، و همان ری‌استارت با تنظیم جدید انجام می‌شود. با `systemctl --user show -p KillMode aipager.service` چک کنید (`KillMode=process`). با این تنظیم، systemd در هر ری‌استارت برای سشن‌هایتان خط‌های «left-over process» در لاگ می‌نویسد؛ این عادی است.
 
-## <a id="aipager-update-cant-find-uv--pipx"></a>`aipager update` نمی‌تواند uv یا pipx را پیدا کند
+## &rlm;<a id="aipager-update-cant-find-uv--pipx"></a>`aipager update` نمی‌تواند uv یا pipx را پیدا کند
 
-`aipager update` نصب‌کننده را با مسیر کامل در `PATH` شما به‌علاوهٔ `~/.local/bin`، `~/.cargo/bin`، پوشه‌های Homebrew، `/usr/bin` و `/bin` پیدا می‌کند. اگر باز هم می‌گوید `pipx` را پیدا نکرد، نصب‌کننده‌ای که این aipager را ساخته دیگر نیست یا جای دیگری است؛ با ابزاری که دارید دوباره نصب کنید (`pipx install --force aipager`، `uv tool install --reinstall aipager`).
+&rlm;`aipager update` نصب‌کننده را با مسیر کامل در `PATH` شما به‌علاوهٔ &lrm;`~/.local/bin`،&rlm; &lrm;`~/.cargo/bin`، پوشه‌های Homebrew،&rlm; &lrm;`/usr/bin` و &lrm;`/bin` پیدا می‌کند. اگر باز هم می‌گوید `pipx` را پیدا نکرد، نصب‌کننده‌ای که این aipager را ساخته دیگر نیست یا جای دیگری است؛ با ابزاری که دارید دوباره نصب کنید (`pipx install --force aipager`،&rlm; `uv tool install --reinstall aipager`).
 
 ## <a id="update-refused-editable--not-your-install"></a>آپدیت رد شد: editable یا نصبی که مال شما نیست
 
-`/update` و `aipager update` فقط نصبی را آپدیت می‌کنند که مال خود کاربر شماست و می‌تواند رویش بنویسد، از طریق همان نصب‌کننده‌ای که ساختش. برای این‌ها رد می‌کنند و دلیل را می‌گویند:
+&rlm;&lrm;`/update` و `aipager update` فقط نصبی را آپدیت می‌کنند که مال خود کاربر شماست و می‌تواند رویش بنویسد، از طریق همان نصب‌کننده‌ای که ساختش. برای این‌ها رد می‌کنند و دلیل را می‌گویند:
 
 - یک checkout قابل ویرایش (برای توسعه): با `git pull` آپدیتش کنید؛
-- نصب Nix، Snap، Docker یا پکیج سیستم‌عامل: از آپدیت خود آن سیستم استفاده کنید؛
-- نصبی که مال کاربر دیگری است (مثلاً یک venv مال root زیر `/opt`): با همان کاربر آپدیتش کنید؛
+- نصب Nix،&rlm; Snap،&rlm; Docker یا پکیج سیستم‌عامل: از آپدیت خود آن سیستم استفاده کنید؛
+- نصبی که مال کاربر دیگری است (مثلاً یک venv مال root زیر &lrm;`/opt`): با همان کاربر آپدیتش کنید؛
 - نصبی که از یک پوشهٔ محلی ساخته شده (`pipx install /path/to/aipager`): `can't update from here: it was installed from a local folder; update it from that folder`. نسخهٔ جدید را در آن پوشه بیاورید و از آن دوباره نصب کنید، یا با `pipx install --force aipager` به PyPI بروید؛
 - نصبی که نصب‌کننده‌اش معلوم نیست (`could not tell which installer owns this aipager`): با `uv tool install aipager` یا `pipx install aipager` دوباره نصبش کنید.
 
 ## <a id="update-failed-unexpected-argument---refresh"></a>آپدیت شکست خورد: unexpected argument '--refresh'
 
-aipager نسخهٔ 1.0.0 و قدیمی‌تر `uv tool upgrade aipager --refresh` را اجرا می‌کرد که هیچ نسخه‌ای از uv قبولش نمی‌کند، پس هر آپدیت نصب uv با `error: unexpected argument '--refresh' found` متوقف می‌شد و چیزی ری‌استارت نمی‌شد. نسخه‌های جدیدتر `uv tool upgrade aipager` را اجرا می‌کنند. برای یک بار رد شدن از این، از ترمینال همان کامپیوتر آپدیت کنید (`aipager update` در آن نسخه‌ها همین مشکل را دارد):
+&rlm;aipager نسخهٔ 1.0.0 و قدیمی‌تر `uv tool upgrade aipager --refresh` را اجرا می‌کرد که هیچ نسخه‌ای از uv قبولش نمی‌کند، پس هر آپدیت نصب uv با `error: unexpected argument '--refresh' found` متوقف می‌شد و چیزی ری‌استارت نمی‌شد. نسخه‌های جدیدتر `uv tool upgrade aipager` را اجرا می‌کنند. برای یک بار رد شدن از این، از ترمینال همان کامپیوتر آپدیت کنید (`aipager update` در آن نسخه‌ها همین مشکل را دارد):
 
 <div dir="ltr">
 
@@ -346,13 +346,13 @@ systemctl --user restart aipager.service
 
 ## <a id="claude-code-update-installed-with-npm-into-a-folder-you-cant-write-to"></a>آپدیت Claude Code: با npm در پوشه‌ای نصب شده که نمی‌توانید رویش بنویسید
 
-Claude Codeی که با `sudo npm install -g` نصب شده در پوشه‌ای است که فقط root می‌تواند عوضش کند (مثل `/usr/lib/node_modules`)، پس `claude update` که با کاربر شما اجرا شود با `global folder isn't writable` شکست می‌خورد. `/update` و Mini App نسخهٔ جدیدتر را با `can't update from here: installed with npm into a folder your user can't write to` و بدون دکمه برایش نشان می‌دهند. یک بار `claude install` را با همان کاربری که aipager با آن اجرا می‌شود اجرا کنید: Claude Code را به نصب‌کنندهٔ خودش زیر پوشهٔ خانهٔ شما می‌برد که بدون sudo آپدیت می‌شود. بعد aipager را ری‌استارت کنید (`systemctl --user restart aipager.service`، یا همان‌طور که اجرایش کرده بودید): aipager در حال اجرا همان Claude Codeی را نگه می‌دارد که در شروع پیدا کرده، و بعد از ری‌استارت جدیدترینی را که پیدا کند برمی‌دارد. اگر `claude_path` در `aipager.yaml` (`aipager doctor --fix` می‌تواند تنظیمش کند) یا `AIPAGER_CLAUDE_BIN` به نصب npm اشاره می‌کند، اول آن را به `~/.local/bin/claude` ببرید یا پاکش کنید، چون این دو همیشه برنده‌اند.
+&rlm;Claude Codeی که با `sudo npm install -g` نصب شده در پوشه‌ای است که فقط root می‌تواند عوضش کند (مثل &lrm;`/usr/lib/node_modules`)، پس `claude update` که با کاربر شما اجرا شود با `global folder isn't writable` شکست می‌خورد. &lrm;`/update` و Mini App نسخهٔ جدیدتر را با `can't update from here: installed with npm into a folder your user can't write to` و بدون دکمه برایش نشان می‌دهند. یک بار `claude install` را با همان کاربری که aipager با آن اجرا می‌شود اجرا کنید: Claude Code را به نصب‌کنندهٔ خودش زیر پوشهٔ خانهٔ شما می‌برد که بدون sudo آپدیت می‌شود. بعد aipager را ری‌استارت کنید (`systemctl --user restart aipager.service`، یا همان‌طور که اجرایش کرده بودید): aipager در حال اجرا همان Claude Codeی را نگه می‌دارد که در شروع پیدا کرده، و بعد از ری‌استارت جدیدترینی را که پیدا کند برمی‌دارد. اگر `claude_path` در `aipager.yaml` (`aipager doctor --fix` می‌تواند تنظیمش کند) یا `AIPAGER_CLAUDE_BIN` به نصب npm اشاره می‌کند، اول آن را به &lrm;`~/.local/bin/claude` ببرید یا پاکش کنید، چون این دو همیشه برنده‌اند.
 
 ## <a id="updated-but-the-version-didnt-change"></a>آپدیت شد، ولی نسخه عوض نشد
 
-نصب pipx که از یک آدرس git ساخته شده از همان منبع git آپدیت می‌شود، نه از PyPI. وقتی آن منبع چیز جدیدتری ندارد، `/update` می‌گوید `already at A - this pipx install upgrades from its git source, which has nothing newer`. نسخهٔ جدید را آنجا push یا انتخاب کنید، یا با `pipx install --force aipager` به PyPI بروید.
+نصب pipx که از یک آدرس git ساخته شده از همان منبع git آپدیت می‌شود، نه از PyPI. وقتی آن منبع چیز جدیدتری ندارد، &lrm;`/update` می‌گوید `already at A - this pipx install upgrades from its git source, which has nothing newer`. نسخهٔ جدید را آنجا push یا انتخاب کنید، یا با `pipx install --force aipager` به PyPI بروید.
 
-## <a id="the-daemon-didnt-come-back-after-an-update"></a>aipager بعد از آپدیت برنگشت
+## &rlm;<a id="the-daemon-didnt-come-back-after-an-update"></a>aipager بعد از آپدیت برنگشت
 
 آپدیت قبل از هر ری‌استارتی چک می‌کند نسخهٔ جدید import می‌شود، ولی اگر aipager جدید باز هم شروع نشود، systemd هر ۵ ثانیه دوباره امتحان می‌کند. دلیلش را ببینید:
 
@@ -377,23 +377,23 @@ systemctl --user restart aipager.service
 
 </div>
 
-نصب pipx از یک مسیر محلی: `pipx install --force /path/to/aipager` روی commit قبلی. اگر یک اعلان قدیمی منتظر مانده، با `rm -f ~/.local/share/aipager/update-restart.json` پاکش کنید (در هر حال بعد از ۲۴ ساعت نادیده گرفته می‌شود)؛ `~/.local/share/aipager/update.lock` فقط یک فایل قفل است و وقتی آپدیتی در جریان نیست پاک کردنش بی‌خطر است.
+نصب pipx از یک مسیر محلی: `pipx install --force /path/to/aipager` روی commit قبلی. اگر یک اعلان قدیمی منتظر مانده، با `rm -f ~/.local/share/aipager/update-restart.json` پاکش کنید (در هر حال بعد از ۲۴ ساعت نادیده گرفته می‌شود)؛ &lrm;`~/.local/share/aipager/update.lock` فقط یک فایل قفل است و وقتی آپدیتی در جریان نیست پاک کردنش بی‌خطر است.
 
 ## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>«An update was interrupted when aipager shut down»
 
-aipager وقتی `/update` داشت نصب می‌کرد متوقف (یا ری‌استارت) شد و نصب‌کننده هم همراهش متوقف شد، پس ممکن است نصب نیمه‌کاره نوشته شده باشد. اگر aipager یا Claude Code درست کار نمی‌کند، تعمیرش کنید: برای aipager دستور نصب دوباره‌ای را که در پیام آمده اجرا کنید (مثلاً `pipx install --force aipager`) و بعد `systemctl --user restart aipager.service`؛ برای Claude Code دوباره `claude update` را اجرا کنید.
+&rlm;aipager وقتی &lrm;`/update` داشت نصب می‌کرد متوقف (یا ری‌استارت) شد و نصب‌کننده هم همراهش متوقف شد، پس ممکن است نصب نیمه‌کاره نوشته شده باشد. اگر aipager یا Claude Code درست کار نمی‌کند، تعمیرش کنید: برای aipager دستور نصب دوباره‌ای را که در پیام آمده اجرا کنید (مثلاً `pipx install --force aipager`) و بعد `systemctl --user restart aipager.service`؛ برای Claude Code دوباره `claude update` را اجرا کنید.
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>یک چت زبان اشتباهی دارد
 
-زبان aipager از چیزی می‌آید که برای آن چت انتخاب شده، نه از پیام‌های داخلش. در همان چت `/language` را باز کنید و زبانی را که می‌خواهید انتخاب کنید: این انتخاب بر همه‌چیز مقدم است. در چت خصوصی، **خودکار (زبان Telegram شما)** دنبال زبان برنامهٔ تلگرامتان می‌رود (Settings ← Language در تلگرام)؛ زبانی که aipager ندارد انگلیسی خوانده می‌شود. چت خصوصی‌ای که قبل از اضافه شدن زبان‌ها وجود داشته تا شما انتخاب نکنید انگلیسی می‌ماند. یک گروه تا وقتی یک ادمین زبانش را انتخاب کند انگلیسی است. زبان فقط متن‌های خود aipager را عوض می‌کند: Claude به همان زبانی جواب می‌دهد که برایش می‌نویسید، هر چه aipager نشان دهد. [زبان‌ها](commands.md#languages) را ببینید.
+زبان aipager از چیزی می‌آید که برای آن چت انتخاب شده، نه از پیام‌های داخلش. در همان چت &lrm;`/language` را باز کنید و زبانی را که می‌خواهید انتخاب کنید: این انتخاب بر همه‌چیز مقدم است. در چت خصوصی، **خودکار (زبان Telegram شما)** دنبال زبان برنامهٔ تلگرامتان می‌رود (Settings ← Language در تلگرام)؛ زبانی که aipager ندارد انگلیسی خوانده می‌شود. چت خصوصی‌ای که قبل از اضافه شدن زبان‌ها وجود داشته تا شما انتخاب نکنید انگلیسی می‌ماند. یک گروه تا وقتی یک ادمین زبانش را انتخاب کند انگلیسی است. زبان فقط متن‌های خود aipager را عوض می‌کند: Claude به همان زبانی جواب می‌دهد که برایش می‌نویسید، هر چه aipager نشان دهد. [زبان‌ها](commands.md#languages) را ببینید.
 
 ## <a id="the-bot-description-is-not-the-one-i-wrote"></a>توضیح ربات همانی نیست که من نوشتم
 
-aipager توضیح و توضیح کوتاه ربات را به هر زبانی که بلد است تنظیم می‌کند، برای کسانی که برنامهٔ تلگرامشان به آن زبان است، و تلگرام همین متن را به جای متنی که شما در BotFather نوشته‌اید به آن‌ها نشان می‌دهد. aipager این کار را فقط تا وقتی می‌کند که شما توضیح خودتان را ندارید، پس توضیحی که قبل از نصب این نسخه بنویسید به همه می‌رسد. اگر آن را بعد از اینکه aipager متن خودش را گذاشته نوشته‌اید، کسانی که به آن زبان‌ها هستند هنوز متن aipager را می‌بینند. برای اینکه متن شما را ببینند، متن aipager را برای هر زبان از طریق Bot API پاک کنید (`setMyDescription` و `setMyShortDescription` با متن خالی و همان `language_code`)؛ aipager تا وقتی متن شما آنجاست دیگر هیچ‌وقت آن را تنظیم نمی‌کند.
+&rlm;aipager توضیح و توضیح کوتاه ربات را به هر زبانی که بلد است تنظیم می‌کند، برای کسانی که برنامهٔ تلگرامشان به آن زبان است، و تلگرام همین متن را به جای متنی که شما در BotFather نوشته‌اید به آن‌ها نشان می‌دهد. aipager این کار را فقط تا وقتی می‌کند که شما توضیح خودتان را ندارید، پس توضیحی که قبل از نصب این نسخه بنویسید به همه می‌رسد. اگر آن را بعد از اینکه aipager متن خودش را گذاشته نوشته‌اید، کسانی که به آن زبان‌ها هستند هنوز متن aipager را می‌بینند. برای اینکه متن شما را ببینند، متن aipager را برای هر زبان از طریق Bot API پاک کنید (`setMyDescription` و `setMyShortDescription` با متن خالی و همان `language_code`)؛ aipager تا وقتی متن شما آنجاست دیگر هیچ‌وقت آن را تنظیم نمی‌کند.
 
-## <a id="aipager-says-languagesjson-could-not-be-used"></a>aipager می‌گوید از languages.json نمی‌شود استفاده کرد
+## &rlm;<a id="aipager-says-languagesjson-could-not-be-used"></a>aipager می‌گوید از languages.json نمی‌شود استفاده کرد
 
-aipager چیزهایی را که دربارهٔ زبان‌ها یاد گرفته (چه کسانی قبل از اضافه شدن زبان‌ها اینجا بودند، آخرین زبان تلگرامی که از هر نفر دید، و اینکه پیشنهاد یک‌باره و خط اولین آشنایی فرستاده شده یا نه) در `~/.local/state/aipager/languages.json` نگه می‌دارد. اگر این فایل خوانده نشود، aipager آن را در همان پوشه به `languages.json.bad-<time>` کنار می‌گذارد، یک هشدار در لاگ می‌نویسد (و در هر شروع، تا شما تصمیم بگیرید، دوباره) و تا وقتی تصمیم بگیرید همهٔ چت‌ها را انگلیسی و بدون پیشنهاد زبان نگه می‌دارد: اگر می‌توانید فایل قدیمی را تعمیر کنید آن را برگردانید، یا `languages.json` را پاک کنید و ری‌استارت کنید، و aipager همهٔ کسانی را که می‌شناسد دوباره قدیمی حساب می‌کند (تا خودشان انتخاب کنند انگلیسی). زبانی که کسی انتخاب کرده در این فایل نیست و هیچ‌وقت از دست نمی‌رود.
+&rlm;aipager چیزهایی را که دربارهٔ زبان‌ها یاد گرفته (چه کسانی قبل از اضافه شدن زبان‌ها اینجا بودند، آخرین زبان تلگرامی که از هر نفر دید، و اینکه پیشنهاد یک‌باره و خط اولین آشنایی فرستاده شده یا نه) در &lrm;`~/.local/state/aipager/languages.json` نگه می‌دارد. اگر این فایل خوانده نشود، aipager آن را در همان پوشه به `languages.json.bad-<time>`&lrm; کنار می‌گذارد، یک هشدار در لاگ می‌نویسد (و در هر شروع، تا شما تصمیم بگیرید، دوباره) و تا وقتی تصمیم بگیرید همهٔ چت‌ها را انگلیسی و بدون پیشنهاد زبان نگه می‌دارد: اگر می‌توانید فایل قدیمی را تعمیر کنید آن را برگردانید، یا `languages.json` را پاک کنید و ری‌استارت کنید، و aipager همهٔ کسانی را که می‌شناسد دوباره قدیمی حساب می‌کند (تا خودشان انتخاب کنند انگلیسی). زبانی که کسی انتخاب کرده در این فایل نیست و هیچ‌وقت از دست نمی‌رود.
 
 ## <a id="right-to-left-text-looks-wrong"></a>متن راست‌به‌چپ درست به نظر نمی‌رسد
 
@@ -401,11 +401,11 @@ aipager چیزهایی را که دربارهٔ زبان‌ها یاد گرفت�
 
 ## <a id="a-translated-keyboard-word-does-nothing-in-another-chat"></a>یک کلمهٔ ترجمه‌شدهٔ کیبورد در چت دیگری کاری نمی‌کند
 
-کیبورد هر چت به زبان همان چت است. کلمه‌های کیبورد اصلی (وضعیت، توقف، جدید، بستن و بقیه) در هر چت و به هر زبانی فهمیده می‌شوند، و کلمه‌های انگلیسی همیشه کار می‌کنند. کلمهٔ دکمه‌های قالب و فرمان فرق دارد: اگر در چتی که زبان دیگری دارد تایپ شود، یک پیام برای Claude است، نه یک دکمه، پس «Clear» روسی هیچ‌وقت در یک چت فارسی یا انگلیسی `/clear` را اجرا نمی‌کند. از خود دکمه استفاده کنید، یا فرمان انگلیسی (`/clear`). اگر بعد از عوض شدن زبان چت، کیبوردی قدیمی به نظر می‌رسد، `/start` را بفرستید تا کیبورد فعلی را بگیرید. کلمه‌ای که اسم یکی از سشن‌هایتان هم هست با همان سشن حرف می‌زند. `/mode` همیشه `ask`، `auto` و `full` را مود می‌خواند، و یک کلمهٔ ترجمه‌شدهٔ مود را فقط وقتی سشن حساب می‌کند که یک سشن روشن دقیقاً همین اسم را داشته باشد.
+کیبورد هر چت به زبان همان چت است. کلمه‌های کیبورد اصلی (وضعیت، توقف، جدید، بستن و بقیه) در هر چت و به هر زبانی فهمیده می‌شوند، و کلمه‌های انگلیسی همیشه کار می‌کنند. کلمهٔ دکمه‌های قالب و فرمان فرق دارد: اگر در چتی که زبان دیگری دارد تایپ شود، یک پیام برای Claude است، نه یک دکمه، پس «Clear» روسی هیچ‌وقت در یک چت فارسی یا انگلیسی &lrm;`/clear` را اجرا نمی‌کند. از خود دکمه استفاده کنید، یا فرمان انگلیسی (&lrm;`/clear`). اگر بعد از عوض شدن زبان چت، کیبوردی قدیمی به نظر می‌رسد، &lrm;`/start` را بفرستید تا کیبورد فعلی را بگیرید. کلمه‌ای که اسم یکی از سشن‌هایتان هم هست با همان سشن حرف می‌زند. &lrm;`/mode` همیشه `ask`،&rlm; `auto` و `full` را مود می‌خواند، و یک کلمهٔ ترجمه‌شدهٔ مود را فقط وقتی سشن حساب می‌کند که یک سشن روشن دقیقاً همین اسم را داشته باشد.
 
 ## <a id="still-stuck"></a>هنوز گیر کرده‌اید؟
 
-یک گزارش مشکل بفرستید: در چت خصوصی‌تان با ربات زیر `/help` روی **گزارش مشکل** بزنید، یا در ترمینال `aipager report` را اجرا کنید. قبل از اینکه چیزی فرستاده شود کل گزارش را می‌بینید، و هیچ چت، پیام، اسم، مسیر یا توکنی در آن نیست ([گزارش مشکل](problem-reports.md) را ببینید). بعد از ارسال، یک کد پیگیری مثل `ap1-7c41d09e2b3a` می‌گیرید.
+یک گزارش مشکل بفرستید: در چت خصوصی‌تان با ربات زیر &lrm;`/help` روی **گزارش مشکل** بزنید، یا در ترمینال `aipager report` را اجرا کنید. قبل از اینکه چیزی فرستاده شود کل گزارش را می‌بینید، و هیچ چت، پیام، اسم، مسیر یا توکنی در آن نیست ([گزارش مشکل](problem-reports.md) را ببینید). بعد از ارسال، یک کد پیگیری مثل `ap1-7c41d09e2b3a` می‌گیرید.
 
 بعد، اگر می‌خواهید درباره‌اش حرف بزنید، در [github.com/dev-aly3n/aipager/issues](https://github.com/dev-aly3n/aipager/issues) یک issue باز کنید و همان کد را بنویسید. لطفاً خروجی `aipager doctor` یا `aipager logs` را در issue نگذارید: آیدی چت، مسیرهای پوشهٔ خانه، اسم سشن‌ها و اول پیام‌هایتان در آن‌هاست. اگر یک خط لاگ لازم باشد، سازندهٔ aipager همان یک خط را می‌خواهد، و شما می‌توانید قبلش هر چیز خصوصی را از آن پاک کنید.
 

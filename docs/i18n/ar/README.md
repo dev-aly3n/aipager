@@ -12,13 +12,13 @@
 
 التحكم عن بُعد عبر Telegram في جلسات [Claude Code](https://claude.com/claude-code). يعمل Claude على كمبيوترك داخل طرفية منفصلة (`dtach`)، ويمكنك استخدامه من هاتفك: قراءة إجابات Claude، وإرسال الرسائل إليه، والرد على طلبات الإذن وأسئلته، والتنقل بين الجلسات، دون إبقاء اتصال SSH مفتوحًا.
 
-[aipager.run](https://aipager.run) · [التوثيق](#docs) · [سجل التغييرات](../../../CHANGELOG.md) · [مشكلات GitHub](https://github.com/dev-aly3n/aipager/issues)
+&rlm;[aipager.run](https://aipager.run) · [التوثيق](#docs) · [سجل التغييرات](../../../CHANGELOG.md) · [مشكلات GitHub](https://github.com/dev-aly3n/aipager/issues)
 
-**اقرأ بلغة أخرى:** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
+**اقرأ بلغة أخرى:** [English](../../../README.md) ·&rlm; [Español](../es/README.md) ·&rlm; [Русский](../ru/README.md) ·&rlm; [Português (Brasil)](../pt-BR/README.md) ·&rlm; [简体中文](../zh-Hans/README.md) ·&rlm; [Français](../fr/README.md) ·&rlm; [Deutsch](../de/README.md) ·&rlm; [한국어](../ko/README.md) ·&rlm; [Bahasa Indonesia](../id/README.md) ·&rlm; [Українська](../uk/README.md) ·&rlm; [Italiano](../it/README.md) ·&rlm; [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
 
 ## <a id="install"></a>التثبيت
 
-هل لديك وكيل برمجة (Claude Code، أو أي وكيل يستطيع استخدام الطرفية)؟ يكفي إنشاء بوت عبر [@BotFather](https://t.me/BotFather)، والضغط على Start فيه، والتأكد من أن Claude Code على هذا الكمبيوتر مسجّل الدخول بحسابك. بعدها يُحفظ توكن البوت في ملف لا يحتاج الوكيل أبدًا إلى قراءته (لصق التوكن، ثم Enter، ثم Ctrl-D):
+هل لديك وكيل برمجة (Claude Code، أو أي وكيل يستطيع استخدام الطرفية)؟ يكفي إنشاء بوت عبر &lrm;[@BotFather](https://t.me/BotFather)، والضغط على Start فيه، والتأكد من أن Claude Code على هذا الكمبيوتر مسجّل الدخول بحسابك. بعدها يُحفظ توكن البوت في ملف لا يحتاج الوكيل أبدًا إلى قراءته (لصق التوكن، ثم Enter، ثم Ctrl-D):
 
 <div dir="ltr">
 
@@ -59,7 +59,7 @@ curl -fsSL https://raw.githubusercontent.com/dev-aly3n/aipager/main/install.sh |
 
 يستخدم `uv` إن وُجد، وإلا `pipx`، وإلا (على macOS فقط) Homebrew. وإذا لم يوجد أيٌّ منها، يثبّت `uv` أولًا (أداة إدارة برامج Python من Astral) ثم يثبّت aipager بها.
 
-### <a id="uv-recommended-on-macos"></a>uv (موصى به على macOS)
+### &rlm;<a id="uv-recommended-on-macos"></a>uv (موصى به على macOS)
 
 <div dir="ltr">
 
@@ -94,7 +94,7 @@ pipx install aipager
 
 ### <a id="homebrew-tap-macos-linuxbrew"></a>Homebrew tap (macOS، Linuxbrew)
 
-> **ملاحظة:** على macOS، الطريقة الموصى بها هي `uv tool install aipager`. تعمل وصفة brew عندما يتوافق `python@3.12` من Homebrew مع Xcode / Command Line Tools لديك، لكنهما يختلفان أحيانًا؛ وآخر مرة كانت على **macOS Tahoe (26.x)**، حيث توقف التثبيت بخطأ الرمز `pyexpat _XML_SetAllocTrackerActivationThreshold` ([المشكلة في المصدر](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). تحديث Xcode وCommand Line Tools يحل المشكلة عادةً، لكن uv أبسط.
+> **ملاحظة:** على macOS، الطريقة الموصى بها هي `uv tool install aipager`. تعمل وصفة brew عندما يتوافق `python@3.12` من Homebrew مع Xcode /&rlm; Command Line Tools لديك، لكنهما يختلفان أحيانًا؛ وآخر مرة كانت على **macOS Tahoe (26.x)**، حيث توقف التثبيت بخطأ الرمز `pyexpat _XML_SetAllocTrackerActivationThreshold` ([المشكلة في المصدر](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). تحديث Xcode وCommand Line Tools يحل المشكلة عادةً، لكن uv أبسط.
 
 <div dir="ltr">
 
@@ -108,7 +108,7 @@ brew install dev-aly3n/tap/aipager
 
 ### <a id="docker"></a>Docker
 
-صورة جاهزة فيها python وnode و`claude` و`dtach`؛ مناسبة لخادم VPS أو NAS أو Raspberry Pi لا يُراد فيه تثبيت Python أو Node على النظام. متعددة المعماريات (amd64، arm64).
+صورة جاهزة فيها python وnode و`claude` و`dtach`؛ مناسبة لخادم VPS أو NAS أو Raspberry Pi لا يُراد فيه تثبيت Python أو Node على النظام. متعددة المعماريات (amd64،&rlm; arm64).
 
 <div dir="ltr">
 
@@ -129,7 +129,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 </div>
 
-تُربط (mount) في `/workspace` المجلدات المطلوب أن يعدّلها Claude. ربط `~/.claude` يجلب معه تسجيل دخول Claude وسجل محادثاتك؛ لتسجيل الدخول، يكفي تشغيل `claude` مرة واحدة على الجهاز، أو `docker exec -it aipager claude` لتسجيل الدخول داخل الحاوية.
+تُربط (mount) في &lrm;`/workspace` المجلدات المطلوب أن يعدّلها Claude. ربط &lrm;`~/.claude` يجلب معه تسجيل دخول Claude وسجل محادثاتك؛ لتسجيل الدخول، يكفي تشغيل `claude` مرة واحدة على الجهاز، أو `docker exec -it aipager claude` لتسجيل الدخول داخل الحاوية.
 
 الوسوم: `latest` و`1.2` و`1.2.0` (واحد للإصدار الدقيق وواحد للإصدار الفرعي).
 
@@ -180,7 +180,7 @@ snap install aipager
 
 </div>
 
-حزمة snap معزولة بإحكام فيها python وnode و`claude` و`dtach` وaipager. بسبب عزل snap، يجب أن تكون مجلدات العمل داخل `~/` (مثل `~/projects/foo`). ملف التعريف موجود في [`packaging/snap/`](../../../packaging/snap/).
+حزمة snap معزولة بإحكام فيها python وnode و`claude` و`dtach` وaipager. بسبب عزل snap، يجب أن تكون مجلدات العمل داخل `~/` (مثل &lrm;`~/projects/foo`). ملف التعريف موجود في [`packaging/snap/`](../../../packaging/snap/)&lrm;.
 
 ## <a id="configure"></a>الإعداد
 
@@ -192,7 +192,7 @@ aipager config
 
 </div>
 
-معالج إعداد تفاعلي: يطلب توكن بوت Telegram (من [@BotFather](https://t.me/BotFather)) ومعرّف الدردشة، ويتحقق من كليهما، ثم يضيف بنفسه الهوكات اللازمة إلى `~/.claude/settings.json`. لا حاجة أبدًا إلى تعديل أي ملف بيدك.
+معالج إعداد تفاعلي: يطلب توكن بوت Telegram (من &lrm;[@BotFather](https://t.me/BotFather)) ومعرّف الدردشة، ويتحقق من كليهما، ثم يضيف بنفسه الهوكات اللازمة إلى &lrm;`~/.claude/settings.json`. لا حاجة أبدًا إلى تعديل أي ملف بيدك.
 
 هل الإعداد لشخص آخر، من سكربت أو عبر وكيل برمجة؟ الأمر `aipager setup --token-file FILE --chat-id ID` يفعل الشيء نفسه دون أي سؤال (يُنظر [أمر setup](commands.md#command-line-aipager-setup-for-coding-agents) و[دليل الوكيل](install-with-an-agent.md)).
 
@@ -216,9 +216,9 @@ aipager session dev
 
 </div>
 
-ينشئ هذا جلسة dtach باسم `claude-dev` تشغّل Claude Code (أو يتصل بها إن كانت موجودة). يكتشفها aipager خلال ثوانٍ ويبدأ Telegram في عرضها. يمكنك أيضًا بدء جلسة من Telegram: إرسال `/new dev` إلى البوت. للعودة إليها لاحقًا، يكفي تشغيل الأمر نفسه مرة أخرى؛ وللخروج دون إيقاف Claude، يكفي إغلاق الطرفية أو لوحة tmux (تستمر الجلسة في العمل).
+ينشئ هذا جلسة dtach باسم `claude-dev` تشغّل Claude Code (أو يتصل بها إن كانت موجودة). يكتشفها aipager خلال ثوانٍ ويبدأ Telegram في عرضها. يمكنك أيضًا بدء جلسة من Telegram: إرسال &lrm;`/new dev` إلى البوت. للعودة إليها لاحقًا، يكفي تشغيل الأمر نفسه مرة أخرى؛ وللخروج دون إيقاف Claude، يكفي إغلاق الطرفية أو لوحة tmux (تستمر الجلسة في العمل).
 
-إذا كانت جلسة dtach قد أُغلقت (أُعيد تشغيل الكمبيوتر مثلًا) والمطلوب متابعة محادثة Claude المحفوظة على القرص، يُضاف `--continue`:
+إذا كانت جلسة dtach قد أُغلقت (أُعيد تشغيل الكمبيوتر مثلًا) والمطلوب متابعة محادثة Claude المحفوظة على القرص، يُضاف &lrm;`--continue`:
 
 <div dir="ltr">
 
@@ -228,7 +228,7 @@ aipager session dev --continue    # آخر محادثة claude في هذا ال�
 
 </div>
 
-ويمكن أيضًا إضافة `--resume <session-id>` (أو أي خيار آخر لـ claude) في النهاية:
+ويمكن أيضًا إضافة &lrm;`--resume <session-id>`&lrm; (أو أي خيار آخر لـ claude) في النهاية:
 
 <div dir="ltr">
 
@@ -248,11 +248,11 @@ aipager service install
 
 </div>
 
-على Linux، يكتب هذا خدمة مستخدم systemd في `~/.config/systemd/user/aipager.service` ثم يشغّلها. على macOS، يكتب ملف plist لـ launchd في `~/Library/LaunchAgents/com.aipager.daemon.plist` ثم يشغّله. الأوامر الفرعية: `start` و`stop` و`status` و`logs` و`uninstall`.
+على Linux، يكتب هذا خدمة مستخدم systemd في &lrm;`~/.config/systemd/user/aipager.service` ثم يشغّلها. على macOS، يكتب ملف plist لـ launchd في &lrm;`~/Library/LaunchAgents/com.aipager.daemon.plist` ثم يشغّله. الأوامر الفرعية: `start` و`stop` و`status` و`logs` و`uninstall`.
 
 ## <a id="team-mode-groups-and-other-people"></a>وضع الفريق (المجموعات وأشخاص آخرون)
 
-افتراضيًا، aipager بوت شخصي: أنت والبوت في دردشة خاصة واحدة. للمشاركة، يمكنك إضافة مجموعة Telegram، أو دردشات خاصة لأشخاص آخرين مع البوت، أو كليهما. لمجموعة: إضافة البوت إلى المجموعة (مشرفًا، ليتمكن من تثبيت شريط الحالة فيها)، ثم تشغيل `aipager config` مرة أخرى واختيار **Add a group scope**. يقترح المعالج حسابك (مالك دردشتك الخاصة) مالكًا للمجموعة، ويضيف كل عضو بدور (`owner` أو `admin` أو `user` أو `read_only`)، ويسأل عن المجلد الجذر للأعضاء، ثم يعيد تحميل إعدادات aipager دون إعادة تشغيل. في المجموعة لا يستجيب البوت إلا للأوامر، والردود على رسائله، والرسائل التي تذكره (`@aipagerbot fix the tests`، `/jim run the tests`)، وكل رسالة تعمل بدور مرسلها. العضو بدور `user` أو `read_only` لا يبدأ جلساته ولا يحتفظ بها إلا داخل المجلد الجذر لدردشته (افتراضيًا `~/aipager-users/<label>`). **إضافة عضو تعني منحه القدرة على تشغيل شيفرة على كمبيوترك**: نموذج الثقة كاملًا موصوف في [وضع الفريق والمجموعات](groups.md).
+افتراضيًا، aipager بوت شخصي: أنت والبوت في دردشة خاصة واحدة. للمشاركة، يمكنك إضافة مجموعة Telegram، أو دردشات خاصة لأشخاص آخرين مع البوت، أو كليهما. لمجموعة: إضافة البوت إلى المجموعة (مشرفًا، ليتمكن من تثبيت شريط الحالة فيها)، ثم تشغيل `aipager config` مرة أخرى واختيار **Add a group scope**. يقترح المعالج حسابك (مالك دردشتك الخاصة) مالكًا للمجموعة، ويضيف كل عضو بدور (`owner` أو `admin` أو `user` أو `read_only`)، ويسأل عن المجلد الجذر للأعضاء، ثم يعيد تحميل إعدادات aipager دون إعادة تشغيل. في المجموعة لا يستجيب البوت إلا للأوامر، والردود على رسائله، والرسائل التي تذكره (&lrm;`@aipagerbot fix the tests`،&rlm; &lrm;`/jim run the tests`)، وكل رسالة تعمل بدور مرسلها. العضو بدور `user` أو `read_only` لا يبدأ جلساته ولا يحتفظ بها إلا داخل المجلد الجذر لدردشته (افتراضيًا &lrm;`~/aipager-users/<label>`&lrm;). **إضافة عضو تعني منحه القدرة على تشغيل شيفرة على كمبيوترك**: نموذج الثقة كاملًا موصوف في [وضع الفريق والمجموعات](groups.md).
 
 ## <a id="what-it-does"></a>ماذا يفعل
 
@@ -260,8 +260,8 @@ aipager service install
 - يوصل رسائلك إلى Claude **فورًا**، حتى أثناء عمله: يمكنك إرسال عدة رسائل وسيضعها Claude في قائمة انتظاره، تمامًا كما في الطرفية. 👀 تعني أنها أُرسلت، و👍 تعني أن Claude أخذها
 - يحتجز الرسائل ما دام هناك طلب إذن أو سؤال مفتوح، حتى لا تُقرأ أبدًا كإجابة عنه، ثم يرسلها بعد ردك
 - يعرض طلبات الإذن وأسئلة Claude مع أزرار (سماح، رفض، سماح دائمًا، زر لكل خيار)؛ والزر المتبقي من مهمة انتهت يرفض بدل أن يؤثر في المهمة الجارية
-- ثلاثة أوضاع للأذونات لكل جلسة، تتغير عبر `/mode`: 💬 وضع «اسأل» (يسأل Claude قبل كل إجراء)، و🤖 الوضع التلقائي، وهو الافتراضي (فحص الأمان في Claude Code نفسه يشغّل الإجراءات الآمنة ويوقف الخطرة ليكون القرار لك)، و🔓 وضع الوصول الكامل (يعمل كل شيء دون أي فحص؛ للمشرفين، ولك في دردشتك الخاصة)
-- يبدأ الجلسات من الدردشة: `/new x1` يبدأ جلسة فورًا (و`/new x1 fix the tests` يرسل أيضًا أول رسالة)، بالوضع والنموذج والمجلد المأخوذة من `/settings` ومع أزرار لتغييرها
+- ثلاثة أوضاع للأذونات لكل جلسة، تتغير عبر &lrm;`/mode`: 💬 وضع «اسأل» (يسأل Claude قبل كل إجراء)، و🤖 الوضع التلقائي، وهو الافتراضي (فحص الأمان في Claude Code نفسه يشغّل الإجراءات الآمنة ويوقف الخطرة ليكون القرار لك)، و🔓 وضع الوصول الكامل (يعمل كل شيء دون أي فحص؛ للمشرفين، ولك في دردشتك الخاصة)
+- يبدأ الجلسات من الدردشة: &lrm;`/new x1` يبدأ جلسة فورًا (و&lrm;`/new x1 fix the tests` يرسل أيضًا أول رسالة)، بالوضع والنموذج والمجلد المأخوذة من &lrm;`/settings` ومع أزرار لتغييرها
 - يستقبل الصور والملفات والرسائل الصوتية (تُحوَّل الرسائل الصوتية إلى نص على كمبيوترك نفسه، مع ميزة الرسائل الصوتية)
 - ينبّهك عندما يقترب السياق من الامتلاء، وعند تلخيص المحادثة، وعند انتهاء جلسة، وعندما تطول فترة صمت جلسة
 - يشغّل عدة جلسات في الوقت نفسه عبر بوت واحد؛ ووضع فريق اختياري بأدوار وقواعد لكل أداة ([وضع الفريق والمجموعات](groups.md))
@@ -269,11 +269,11 @@ aipager service install
 
 ### <a id="mini-app"></a>Mini App
 
-يفتح `/app` لوحة تحكم داخل Telegram: جلساتك مع الإيقاف والإنهاء وإعادة التشغيل وإعادة التسمية وتغيير الوضع، وعرض التغييرات (diff) لتعديلات `Write`/`Edit`، والإعدادات، ولمالك البوت «الإبلاغ عن مشكلة». يقدّمها aipager نفسه وهي **مفعّلة افتراضيًا**؛ ويُتحقق من كل طلب بتوقيع `initData` من Telegram. إذا كنت في أكثر من دردشة (دردشتك الخاصة ومجموعة)، يظهر صف بأسماء الدردشات في الأعلى للتنقل بينها. للإدارة: `aipager miniapp enable|disable|status`، أو يمكنك توجيهها إلى عنوانك الخاص بدل النفق المُدار: يُنظر [نموذج الأمان](security.md#mini-app-tunnel).
+يفتح &lrm;`/app` لوحة تحكم داخل Telegram: جلساتك مع الإيقاف والإنهاء وإعادة التشغيل وإعادة التسمية وتغيير الوضع، وعرض التغييرات (diff) لتعديلات `Write`/`Edit`، والإعدادات، ولمالك البوت «الإبلاغ عن مشكلة». يقدّمها aipager نفسه وهي **مفعّلة افتراضيًا**؛ ويُتحقق من كل طلب بتوقيع `initData` من Telegram. إذا كنت في أكثر من دردشة (دردشتك الخاصة ومجموعة)، يظهر صف بأسماء الدردشات في الأعلى للتنقل بينها. للإدارة: `aipager miniapp enable|disable|status`، أو يمكنك توجيهها إلى عنوانك الخاص بدل النفق المُدار: يُنظر [نموذج الأمان](security.md#mini-app-tunnel).
 
 ### <a id="note-on-model-buttons-bedrock--vertex-users"></a>ملاحظة عن أزرار النماذج (لمستخدمي Bedrock وVertex)
 
-قائمة **النموذج** الفرعية في لوحة المفاتيح الدائمة (ومنتقي النموذج في Mini App) تعرض أسماء العائلات المستعارة في Claude Code، `sonnet` و`opus` و`haiku` و`fable` و`opusplan`، ونماذج مثبّتة مثل `claude-opus-5-5` و`claude-sonnet-5-5` (القائمة كاملة في [لوحة المفاتيح الدائمة](commands.md#persistent-keyboard)). على واجهة Anthropic البرمجية يشير الاسم المستعار دائمًا إلى أحدث نموذج في عائلته. على **Bedrock** و**Vertex** قد تشير الأسماء نفسها إلى إصدارات أقدم، بحسب ما يوفره مزوّدك. لمن يستخدم هذه الخدمات ويحتاج إلى نموذج محدد: إرسال `/model <full-id>` من الدردشة.
+قائمة **النموذج** الفرعية في لوحة المفاتيح الدائمة (ومنتقي النموذج في Mini App) تعرض أسماء العائلات المستعارة في Claude Code،&rlm; `sonnet` و`opus` و`haiku` و`fable` و`opusplan`، ونماذج مثبّتة مثل `claude-opus-5-5` و`claude-sonnet-5-5` (القائمة كاملة في [لوحة المفاتيح الدائمة](commands.md#persistent-keyboard)). على واجهة Anthropic البرمجية يشير الاسم المستعار دائمًا إلى أحدث نموذج في عائلته. على **Bedrock** و**Vertex** قد تشير الأسماء نفسها إلى إصدارات أقدم، بحسب ما يوفره مزوّدك. لمن يستخدم هذه الخدمات ويحتاج إلى نموذج محدد: إرسال &lrm;`/model <full-id>`&lrm; من الدردشة.
 
 ## <a id="developing-locally"></a>التطوير على كمبيوترك
 
@@ -296,7 +296,7 @@ ruff check aipager tests
 
 ## <a id="license"></a>الرخصة
 
-MIT؛ النص الكامل في [LICENSE](../../../LICENSE).
+&rlm;MIT؛ النص الكامل في [LICENSE](../../../LICENSE).
 
 ## <a id="docs"></a>التوثيق
 

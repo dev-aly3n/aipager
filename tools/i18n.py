@@ -1107,7 +1107,7 @@ def _doc_prose(text: str) -> list[str]:
 
 def doc_slug(heading: str) -> str:
     """The anchor GitHub gives a heading."""
-    text = heading.strip().lower()
+    text = re.sub("&[lr]lm;|[\u200e\u200f]", "", heading.strip().lower())
     text = re.sub(r"[^\w\- ]", "", text)
     return text.replace(" ", "-")
 
@@ -1190,10 +1190,507 @@ def check_docs(root: Path = ROOT, codes=None) -> list[str]:
     return problems
 
 
+# GitHub gives every paragraph, heading and list ``dir="auto"`` (its
+# markdown API, 2026-10-13; on a list it is the <ul>, so the first item
+# decides for all): a block that starts with a left-to-right letter lays
+# out left to right even inside ``<div dir="rtl">``. Within a right-to-left
+# line the bidi algorithm needs four kinds of help, each an invisible mark
+# that changes no word:
+#   start  a block mixing both directions that starts left to right:
+#          ``&rlm;`` first;
+#   join   punctuation between two left-to-right runs joins them (in a
+#          Persian "... Telegram. Claude ..." the sentences read backwards):
+#          ``&rlm;`` after it;
+#   lead   a left-to-right word that starts with a symbol or a digit, after
+#          right-to-left text, loses that start ("/kill" shows "kill/"):
+#          ``&lrm;`` before it;
+#   trail  a code span that ends with a symbol, before right-to-left text,
+#          loses that end ("save()" shows "()save"): ``&lrm;`` after it.
+# Digits and bracket pairs are judged the way the algorithm does
+# (``_bidi_types``): a mark inside brackets can turn them around.
+# ``fix_rtl_bidi`` adds them. An ``&lrm;`` right after punctuation keeps an
+# English phrase together on purpose ("e.g.&lrm; foo").
+_RTL_LETTER = re.compile(r"(?=[^\W\d_])[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc]|\u200f")
+_LTR_LETTER = re.compile(r"(?![\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc])[^\W\d_]|\u200e")
+# (letters only: digits and the Arabic comma choose no direction)
+_DOC_BLOCK_START = re.compile(r"(#{1,6} |\s*(?:[-*+]|\d+[.)]) |> ?)")
+_DOC_ITEM = re.compile(r"\s*(?:[-*+]|\d+[.)]) ")
+#: Punctuation that ends a sentence or a clause, or separates a list
+#: (the middle dot between links and a spaced slash included).
+_RTL_BREAK = set(".:;!?,/\u060c\u061b\u061f\u00b7")
+_RTL_OPEN = set("([{\u00ab\u201c\"'")
+_RTL_PAIR = {")": "(", "]": "[", "}": "{"}
+_RTL_MARK = {"start": "&rlm;", "join": "&rlm;", "lead": "&lrm;", "trail": "&lrm;"}
+_LINK = re.compile(r"\[((?:[^\]`]|`[^`]*`)*)\]\((?:[^()\s]|\([^()\s]*\))*(?:\s+\"[^\"]*\")?\)")
+_AUTOLINK = re.compile(r"<([a-z][a-z0-9+.-]*:[^>\s]+)>", re.I)
+_DOC_QUOTE = re.compile(r"\s*(?:> ?)+(?:(?:[-*+]|\d+[.)]) )?")
+#: Entities the docs use, as the characters a reader sees.
+_ENTITIES = (("&rlm;", "\u200f"), ("&lrm;", "\u200e"), ("&lt;", "<"), ("&gt;", ">"),
+             ("&amp;", "&"), ("&quot;", '"'), ("&nbsp;", "\u00a0"))
+#: What ends a word without being part of it: sentence punctuation,
+#: closing brackets and quotes (those take their side as the text does).
+_RTL_NOT_TRAIL = set(".:;!?,\u060c\u061b\u061f\u00b7)]}\u00bb\u201d\"'")
+_IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+_TAG = re.compile(r"<[^>]+>")
+_ESCAPABLE = set("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
+
+
+def _rendered(line: str, base: int = 0) -> tuple[str, list, list[int], list[int]]:
+    """*line* as a reader sees it (links as their text, no images, tags,
+    emphasis marks or escapes, ``&rlm;``/``&lrm;`` as the marks) and, per
+    character, whether it sits in code or a quotation (\u00ab\u00bb, "", \u201c\u201d: its
+    punctuation is the quoted text's own) and the columns in *line* (plus
+    *base*) where it starts and ends (an entity is longer than one). A
+    code character's flag is ``"code"`` (truthy, like a quoted one's
+    ``True``), so a mark is never put inside code."""
+    chars: list[str] = []
+    quoted: list = []
+    cols: list[int] = []
+    ends: list[int] = []
+    quote = False
+
+    def put(ch: str, col: int, q, width: int = 1) -> None:
+        chars.append(ch)
+        quoted.append(q)
+        cols.append(base + col)
+        ends.append(base + col + width)
+
+    i = 0
+    while i < len(line):
+        ch = line[i]
+        if ch == "`":
+            run = len(line) - i - len(line[i:].lstrip("`"))
+            close = i + run
+            while True:
+                close = line.find("`" * run, close)
+                if close == -1 or line[close + run:close + run + 1] != "`":
+                    break
+                close += len(line[close:]) - len(line[close:].lstrip("`"))
+            if close == -1:              # no closing run: literal backticks
+                for k in range(run):
+                    put("`", i + k, quote)
+                i += run
+                continue
+            for k in range(i + run, close):
+                put(line[k], k, "code")
+            i = close + run
+            continue
+        if ch == "\\" and i + 1 < len(line) and line[i + 1] in _ESCAPABLE:
+            put(line[i + 1], i, quote, 2)
+            i += 2
+            continue
+        for entity, mark in _ENTITIES:
+            if line.startswith(entity, i):
+                if mark == '"':
+                    quote = not quote
+                put(mark, i, quote, len(entity))
+                i += len(entity)
+                break
+        else:
+            m = _AUTOLINK.match(line, i)
+            if m:                          # a bare URL: one word, marks go outside <...>
+                for k in range(m.start(1), m.end(1)):
+                    start = m.start() if k == m.start(1) else k
+                    end = m.end() if k == m.end(1) - 1 else k + 1
+                    put(line[k], start, quote, end - start)
+                i = m.end()
+                continue
+            m = _IMAGE.match(line, i) or _TAG.match(line, i)
+            if m:
+                i = m.end()
+                continue
+            m = _LINK.match(line, i)
+            if m:
+                text, q, c, d = _rendered(m.group(1), base + m.start(1))
+                chars.extend(text)
+                quoted.extend(x if x == "code" else (x or quote) for x in q)
+                cols.extend(c)
+                ends.extend(d)
+                i = m.end()
+                continue
+            if line.startswith(("**", "__", "~~"), i):
+                i += 2
+                continue
+            if ch in "*_":                 # emphasis, or an underscore in a word:
+                i += 1                     # neither turns a direction
+                continue
+            if ch in "\u00ab\u201c":
+                quote = True
+            elif ch in "\u00bb\u201d":
+                quote = False
+            elif ch == '"':
+                quote = not quote
+            put(ch, i, quote)
+            i += 1
+    return "".join(chars), quoted, cols, ends
+
+
+def _first_strong(text: str) -> str:
+    for ch in text:
+        if _RTL_LETTER.match(ch):
+            return "R"
+        if _LTR_LETTER.match(ch):
+            return "L"
+    return ""
+
+
+def _bidi_types(shown: str) -> list[str]:
+    """The direction the bidi algorithm gives each character of *shown*
+    in a right-to-left line, as far as the checks need it: ``"L"``, ``"R"``
+    or ``""`` (decided by its neighbours). Letters and marks are what they
+    are; a digit takes the direction of the letter before it (rules W2,
+    W7); a bracket pair takes right to left if anything inside is right to
+    left, else left to right if something inside and the text before it
+    are (rule N0), so a mark inside brackets can turn them."""
+    types: list[str] = []
+    last_letter = ""
+    for ch in shown:
+        if _RTL_LETTER.match(ch):
+            last_letter = "R"
+            types.append("R")
+        elif _LTR_LETTER.match(ch):
+            last_letter = "L"
+            types.append("L")
+        elif "\u0660" <= ch <= "\u0669":
+            types.append("R")                  # an Arabic-Indic digit
+        elif ch.isdigit():
+            types.append("L" if last_letter == "L" else "R")
+        else:
+            types.append("")
+    stack: list[int] = []
+    pairs: list[tuple[int, int]] = []
+    for i, ch in enumerate(shown):
+        if ch in "([{":
+            stack.append(i)
+        elif ch in _RTL_PAIR:
+            for k in range(len(stack) - 1, -1, -1):
+                if shown[stack[k]] == _RTL_PAIR[ch]:
+                    pairs.append((stack[k], i))
+                    del stack[k:]
+                    break
+    for o, c in sorted(pairs):
+        inside = set(types[o + 1:c])
+        if "R" in inside:
+            side = "R"
+        elif "L" in inside:
+            side = "L" if _strong_before(types, o - 1) == "L" else "R"
+        else:
+            continue
+        types[o] = types[c] = side
+    return types
+
+
+def _strong_before(types: list[str], j: int) -> str:
+    """The nearest decided direction at or before *j*, ``""`` if none."""
+    while j >= 0:
+        if types[j]:
+            return types[j]
+        j -= 1
+    return ""
+
+
+def _strong_after(types: list[str], k: int) -> str:
+    """The nearest decided direction at or after *k*, ``""`` if none."""
+    while k < len(types):
+        if types[k]:
+            return types[k]
+        k += 1
+    return ""
+
+
+def _blocks(lines: list[str]) -> tuple[list[dict], dict[int, int]]:
+    """The page's markdown blocks outside code, and its loose lists.
+
+    A block is ``{"kind", "entries", "group"}``, each entry ``(line index,
+    column, text)``: a paragraph, list item or quote keeps the lines that
+    continue it; a table row gives one block per cell; consecutive list
+    items share a ``group`` (GitHub's one ``<ul dir="auto">``); a paragraph
+    after a blank line inside an item is a block of its own (GitHub gives
+    it its own ``<p dir="auto">``). *loose* maps a group with a blank line
+    inside it to its first line."""
+    blocks: list[dict] = []
+    loose: dict[int, int] = {}
+    cur: dict | None = None
+    group = 0
+    first_line: dict[int, int] = {}
+    in_list = False
+    fenced = False
+    prev_blank = True
+    for idx, raw in enumerate(lines):
+        line = raw.rstrip()
+        stripped = line.lstrip()
+        indent = len(line) - len(stripped)
+        if _DOC_FENCE.match(stripped):
+            fenced = not fenced
+            cur = None
+            prev_blank = not fenced        # after a closing fence, as after a blank
+            continue
+        if fenced:
+            continue
+        if not stripped:
+            cur = None
+            prev_blank = True
+            continue
+        # An indented code block: each of its lines still has the blank
+        # line before it (``prev_blank`` is set only by a line read here).
+        if prev_blank and indent >= 4 and not in_list:
+            continue
+        was_blank, prev_blank = prev_blank, False
+        if stripped.startswith("|"):
+            cur = None
+            in_list = False
+            start = line.index("|") + 1
+            for cell in re.finditer(r"(?:\\.|[^|\\])+", line[start:]):
+                blocks.append({"kind": "cell", "group": None,
+                               "entries": [(idx, start + cell.start(), cell.group())]})
+            continue
+        if stripped.startswith("<") and not _rendered(line)[0].strip():
+            cur = None
+            in_list = False
+            continue
+        if stripped.startswith(">"):
+            m = _DOC_QUOTE.match(line)
+            in_list = False
+            if cur is not None and cur["kind"] == "quote" and not was_blank:
+                cur["entries"].append((idx, m.end(), line[m.end():]))
+            else:
+                cur = {"kind": "quote", "group": None, "entries": [(idx, m.end(), line[m.end():])]}
+                blocks.append(cur)
+            continue
+        m = _DOC_BLOCK_START.match(line)
+        if m and m.group(1).startswith("#"):
+            cur = None
+            in_list = False
+            blocks.append({"kind": "heading", "group": None,
+                           "entries": [(idx, m.end(), line[m.end():])]})
+            continue
+        if m and _DOC_ITEM.match(line):
+            if not in_list:
+                group += 1
+                first_line[group] = idx
+            elif was_blank:
+                loose[group] = first_line[group]
+            in_list = True
+            cur = {"kind": "item", "group": group, "entries": [(idx, m.end(), line[m.end():])]}
+            blocks.append(cur)
+            continue
+        if cur is not None and cur["kind"] in ("para", "item"):
+            cur["entries"].append((idx, indent, stripped))
+            continue
+        if in_list and was_blank and indent >= 2:
+            loose[group] = first_line[group]   # a paragraph inside an item
+        else:
+            in_list = False
+        cur = {"kind": "para", "group": None, "entries": [(idx, indent, stripped)]}
+        blocks.append(cur)
+    return blocks, loose
+
+
+def rtl_loose_lists(text: str) -> list[int]:
+    """The first lines of the right-to-left lists with a blank line inside:
+    GitHub wraps each item in its own ``<p dir="auto">``, and the list
+    itself then lays out left to right, bullets on the left, which no mark
+    can change."""
+    blocks, loose = _blocks(text.split("\n"))
+    rtl = {b["group"] for b in blocks if b["group"] is not None and any(
+        _RTL_LETTER.search(_rendered(t)[0]) for _i, _c, t in b["entries"])}
+    return sorted(line + 1 for g, line in loose.items() if g in rtl)
+
+
+def _inline_problems(body: str) -> list[tuple[int, str, str]]:
+    """``(column, kind, snippet)`` for the joins, leads and trails of
+    *body*, a line of a right-to-left block."""
+    shown, quoted, cols, ends = _rendered(body)
+    types = _bidi_types(shown)
+    n = len(shown)
+    out: list[tuple[int, str, str]] = []
+
+    def snip(a: int, b: int) -> str:
+        return shown[max(0, a - 14):b + 15]
+
+    def lead(t: int) -> None:
+        floor = ends[t - 1] if t else 0
+        col = cols[t]
+        while col > floor and body[col - 1] in "`[":     # outside code and link text
+            col -= 1
+        out.append((col, "lead", snip(t, t)))
+
+    i = 0
+    while i < n:                           # joins
+        if shown[i] not in _RTL_BREAK or quoted[i] or (
+                shown[i] == "/" and not (i and shown[i - 1].isspace())):
+            i += 1                         # "a/b", "foo/ bar": part of a word
+            continue
+        end = i
+        while end + 1 < n and shown[end + 1] in _RTL_BREAK:
+            end += 1
+        gap = end + 1
+        if (gap < n and shown[gap].isspace() and _strong_before(types, i - 1) == "L"
+                and _strong_after(types, gap) == "L"):
+            out.append((ends[end], "join", snip(i, end)))
+        i = end + 1
+    for i in range(n):                     # leads of words in text
+        if shown[i].isspace() or (i and not shown[i - 1].isspace()) or quoted[i] == "code":
+            continue
+        t = i
+        while t < n and shown[t] in _RTL_OPEN:
+            t += 1
+        if (t >= n or shown[t].isspace() or quoted[t] == "code" or types[t] == "L"
+                or _RTL_LETTER.match(shown[t])):
+            continue
+        k = t                              # the word's first letter
+        while k < n and not shown[k].isspace() and not (
+                _RTL_LETTER.match(shown[k]) or _LTR_LETTER.match(shown[k])):
+            k += 1
+        signed = not shown[t].isdigit() and t + 1 < n and shown[t + 1] in "0123456789"
+        if ((k < n and _LTR_LETTER.match(shown[k])) or signed) \
+                and _strong_before(types, t - 1) in ("R", ""):
+            lead(t)                        # ("-5" too: it would show "5-")
+    s = 0
+    while s < n:                           # a code span is one left-to-right word
+        if quoted[s] != "code":
+            s += 1
+            continue
+        e = s
+        while e + 1 < n and quoted[e + 1] == "code" and cols[e + 1] == ends[e]:
+            e += 1
+        span = shown[s:e + 1]
+        if _LTR_LETTER.search(span) and not _RTL_LETTER.search(span):
+            if types[s] != "L" and _strong_before(types, s - 1) in ("R", ""):
+                lead(s)
+            if types[e] != "L" and _strong_after(types, e + 1) in ("R", ""):
+                out.append((_after_markup(body, ends[e]), "trail", snip(e, e)))
+        s = e + 1
+    for e in range(n):                     # trails of words in text ("<label>")
+        if shown[e].isspace() or (e + 1 < n and not shown[e + 1].isspace()):
+            continue                       # (e ends a word)
+        last = e                           # its last character before closing
+        while last >= 0 and shown[last] in _RTL_NOT_TRAIL:     # quotes and punctuation,
+            last -= 1                                          # which take the text's side
+        if last < 0 or shown[last].isspace() or quoted[last] == "code" or types[last]:
+            continue
+        w = last
+        while w > 0 and not shown[w - 1].isspace():
+            w -= 1
+        word = shown[w:last + 1]
+        rtl_end = max((i for i, ch in enumerate(word) if _RTL_LETTER.match(ch)), default=-1)
+        if _LTR_LETTER.search(word[rtl_end + 1:]) and _strong_after(types, last + 1) in ("R", ""):
+            out.append((_after_markup(body, ends[last]), "trail", snip(last, last)))
+    return out
+
+
+def _after_markup(body: str, col: int) -> int:
+    """*col* moved past the markup that closes what ends just before it:
+    backticks, emphasis, a link's ``](...)``."""
+    while col < len(body):
+        if body[col] in "`*_":
+            col += 1
+        elif body.startswith("](", col):
+            close = body.find(")", col + 2)
+            col = len(body) if close == -1 else close + 1
+        else:
+            break
+    return col
+
+
+def rtl_bidi_problems(text: str) -> list[tuple[int, int, str, str]]:
+    """``(line, column, kind, snippet)`` for each place a right-to-left page
+    would show out of order on GitHub (the kinds above); *column* is where
+    its mark goes (``_RTL_MARK``). Code, all-English blocks (they read as
+    English) and English quotations are left alone."""
+    lines = text.split("\n")
+    blocks, _loose = _blocks(lines)
+    rtl_groups = {b["group"] for b in blocks if b["group"] is not None and any(
+        _RTL_LETTER.search(_rendered(t)[0]) for _i, _c, t in b["entries"])}
+    seen: set[int] = set()
+    found: list[tuple[int, int, str, str]] = []
+    for b in blocks:
+        whole = "".join(_rendered(t)[0] for _i, _c, t in b["entries"])
+        rtl = (b["kind"] == "cell" or bool(_RTL_LETTER.search(whole))
+               or b["group"] in rtl_groups)
+        first = b["group"] is not None and b["group"] not in seen
+        if b["group"] is not None:
+            seen.add(b["group"])
+        if b["kind"] != "cell" and (bool(_RTL_LETTER.search(whole)) or first and rtl) \
+                and _first_strong(whole) == "L":
+            idx, col, _t = b["entries"][0]
+            found.append((idx + 1, col, "start", lines[idx].strip()[:70]))
+        if rtl:                            # its lines read as one (a line break is a blank)
+            joined, spans = "", []
+            for idx, col, t in b["entries"]:
+                joined += " " if joined else ""
+                spans.append((len(joined), idx, col))
+                joined += t
+            for c, k, s in _inline_problems(joined):
+                start, idx, col = [sp for sp in spans if sp[0] <= c][-1]
+                found.append((idx + 1, col + c - start, k, s))
+    return sorted(found)
+
+
+def fix_rtl_bidi(text: str) -> str:
+    """*text* with a mark at every place :func:`rtl_bidi_problems` names (a
+    mark can bring up the next: "/kill" after a new ``&rlm;``), until none
+    is left. The words stay as they are."""
+    for _ in range(8):
+        problems = rtl_bidi_problems(text)
+        if not problems:
+            break
+        lines = text.split("\n")
+        by_line: dict[int, dict[int, set[str]]] = {}
+        for n, col, kind, _snippet in problems:
+            by_line.setdefault(n, {}).setdefault(col, set()).add(kind)
+        for n, at in by_line.items():
+            line = lines[n - 1]
+            for col in sorted(at, reverse=True):
+                kinds = at[col]
+                mark = ("&rlm;" if kinds & {"start", "join"} else "") + \
+                    ("&lrm;" if kinds & {"lead", "trail"} else "")
+                line = line[:col] + mark + line[col:]
+            lines[n - 1] = line
+        text = "\n".join(lines)
+    left = rtl_bidi_problems(text)
+    if left:
+        raise ValueError(f"the marks did not settle: {left[:3]}")
+    return text
+
+
+def fix_rtl_docs(root: Path = ROOT, codes=None) -> list[Path]:
+    """Put the marks into every right-to-left translated page under *root*
+    that needs them (``python tools/i18n.py docs --fix-rtl``); the pages it
+    changed."""
+    changed: list[Path] = []
+    base = root / "docs" / "i18n"
+    for code in sorted(codes if codes is not None else _RTL_CODES):
+        for page in sorted((base / code).glob("*.md")):
+            text = page.read_text(encoding="utf-8")
+            fixed = fix_rtl_bidi(text)
+            if fixed != text:
+                page.write_text(fixed, encoding="utf-8")
+                changed.append(page)
+    return changed
+
+
 def _check_rtl_page(where, text: str) -> list[str]:
     """A right-to-left page reads right to left, its code left to right:
-    the page in ``<div dir="rtl">``, each fenced block in ``<div dir="ltr">``."""
+    the page in ``<div dir="rtl">``, each fenced block in ``<div dir="ltr">``,
+    and no block or punctuation GitHub would show in the wrong order
+    (:func:`rtl_bidi_problems`)."""
     problems: list[str] = []
+    for n in rtl_loose_lists(text):
+        problems.append(f"{where}:{n}: a list with a blank line inside it lays out left to "
+                        f"right on GitHub (bullets on the left); keep its items together, or "
+                        f"move the paragraph out of the list")
+    for n, _col, kind, snippet in rtl_bidi_problems(text):
+        what = {
+            "start": "starts with a left-to-right word, so GitHub lays it out left to right",
+            "join": "punctuation between two left-to-right runs reads in the wrong order "
+                    "(an &lrm; there instead keeps an English phrase together)",
+            "lead": "a left-to-right word starting with a symbol or digit shows that start "
+                    "on the wrong side",
+            "trail": "a word or code ending with a symbol shows that end on the wrong side",
+        }[kind]
+        problems.append(f"{where}:{n}: {what}; add {_RTL_MARK[kind]} "
+                        f"(python tools/i18n.py docs --fix-rtl places it): {snippet}")
     lines = text.splitlines()
     if not lines or lines[0] != '<div dir="rtl">':
         problems.append(f'{where}: does not start with <div dir="rtl">')
@@ -1260,7 +1757,9 @@ def main(argv=None) -> int:
     p = sub.add_parser("pseudo")
     p.add_argument("--rtl", action="store_true")
     p.add_argument("text")
-    sub.add_parser("docs")
+    p = sub.add_parser("docs")
+    p.add_argument("--fix-rtl", action="store_true",
+                   help="put the right-to-left marks into the Persian and Arabic pages first")
     args = parser.parse_args(argv)
 
     if args.cmd == "extract":
@@ -1323,10 +1822,13 @@ def main(argv=None) -> int:
                 json.dumps(answers, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         return 0
     if args.cmd == "docs":
-        problems = check_docs()
+        if args.fix_rtl:
+            for page in fix_rtl_docs(ROOT):
+                print(f"marked {page.relative_to(ROOT)}")
+        problems = check_docs(ROOT)
         for line in problems:
             print(line, file=sys.stderr)
-        for line in stale_docs():
+        for line in stale_docs(ROOT):
             print(line)
         return 1 if problems else 0
     if args.cmd == "pseudo":

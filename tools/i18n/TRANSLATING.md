@@ -254,6 +254,20 @@ their order. Digits follow the
 style guide in prose; numbers inside code, commands, versions and
 settings stay Latin.
 
+**Order inside a line.** GitHub lays out each paragraph, list and
+heading by its first letter, and mixes of English and Persian or Arabic
+can read out of order: a sentence ending on an English word before one
+starting with one ("... Telegram. Claude ..." reads backwards), or a
+command starting with a symbol after Persian text (`/kill` shows as
+`kill/`). Invisible marks fix them without changing a word: `&rlm;` after
+such punctuation or at the start of such a block, `&lrm;` before a word
+starting with a symbol or after one ending with it. `python tools/i18n.py
+docs --fix-rtl` puts them in, and `docs` and CI name any place still
+missing one. To keep an English phrase together on purpose ("e.g. foo"),
+put `&lrm;` right after its punctuation instead. Keep lists tight: a list
+with a blank line inside it lays out left to right on GitHub, bullets on
+the left, so a paragraph that belongs after an item goes after the list.
+
 **Shape.** Keep the English page's sections, lists, tables and examples in
 the same order, so a reader can hold the two side by side. Tables keep
 their columns. Write each paragraph as one line or wrap it, as you like;

@@ -20,7 +20,7 @@ aipager doctor
 
 ## <a id="another-aipager-daemon-already-owns-the-socket"></a>«Another aipager daemon already owns the socket»
 
-لا يمكن لنسختين من aipager مشاركة مقبس تحكم واحد. هذا الخطأ يعني أن aipager ما زال يعمل ويجيب عليه (المقبس هو `$XDG_RUNTIME_DIR/aipager.sock`، أو `/tmp/aipager.sock` عندما لا يكون `$XDG_RUNTIME_DIR` مضبوطًا). ملف مقبس متبقٍّ من aipager تعطّل ليس مشكلة: البدء التالي يحذفه وينشئ مقبسًا جديدًا. يلزم أولًا إيقاف aipager الجاري:
+لا يمكن لنسختين من aipager مشاركة مقبس تحكم واحد. هذا الخطأ يعني أن aipager ما زال يعمل ويجيب عليه (المقبس هو &lrm;`$XDG_RUNTIME_DIR/aipager.sock`، أو &lrm;`/tmp/aipager.sock` عندما لا يكون &lrm;`$XDG_RUNTIME_DIR` مضبوطًا). ملف مقبس متبقٍّ من aipager تعطّل ليس مشكلة: البدء التالي يحذفه وينشئ مقبسًا جديدًا. يلزم أولًا إيقاف aipager الجاري:
 
 <div dir="ltr">
 
@@ -31,14 +31,14 @@ pkill -f 'aipager start'      # وإلا
 
 </div>
 
-إذا فات فحصَ المقبس، يرفض `aipager start` مع ذلك بالرسالة `aipager is already running (pid=N)` ويذكر ملف القفل (`~/.local/share/aipager/daemon.lock`): تُوقف تلك العملية بالطريقة نفسها.
+إذا فات فحصَ المقبس، يرفض `aipager start` مع ذلك بالرسالة `aipager is already running (pid=N)` ويذكر ملف القفل (&lrm;`~/.local/share/aipager/daemon.lock`): تُوقف تلك العملية بالطريقة نفسها.
 
 ## <a id="telegram-bot-doesnt-respond"></a>بوت Telegram لا يستجيب
 
-1. `aipager status`: إذا كان سطر aipager يقول `not running`، يلزم تشغيله.
-2. `aipager doctor`: يتصل الفحصان `token_valid` و`chat_reachable` بواجهة Telegram البرمجية من البداية إلى النهاية ويظهران الخطأ بالضبط.
+1. &rlm;`aipager status`: إذا كان سطر aipager يقول `not running`، يلزم تشغيله.
+2. &rlm;`aipager doctor`: يتصل الفحصان `token_valid` و`chat_reachable` بواجهة Telegram البرمجية من البداية إلى النهاية ويظهران الخطأ بالضبط.
 3. دردشة خاطئة: تشغيل `aipager config` واختيار **Test bot reachability**. لإصلاح دردشة خاصة خاطئة، تُضاف الصحيحة عبر **Add a DM scope** (يُنظر [إيجاد المعرّفات](groups.md#finding-ids-auto-detect))، ثم تُحذف الخاطئة من **Edit a scope**.
-4. البوت لم يتلقَّ `/start` أبدًا: فتح البوت في Telegram والضغط على Start مرة واحدة.
+4. البوت لم يتلقَّ &lrm;`/start` أبدًا: فتح البوت في Telegram والضغط على Start مرة واحدة.
 
 ## <a id="busy-cards-got-slower"></a>بطاقات العمل أصبحت أبطأ
 
@@ -65,7 +65,7 @@ pkill -f 'aipager start'      # وإلا
 
 سطر أداة جديد أو جملة جديدة ينتظر التحديث التالي؛ أما **تغيّر الحالة** (انتقال الجلسة من العمل إلى انتظار وكيل في الخلفية، والعكس) فيظهر فورًا، مرة كل ١٠ ثوانٍ على الأكثر. أسطر الوكلاء الحية وسطر الانتظار تتبع الخطوات نفسها. وتعرض البطاقة المنتهية مدة المهمة بالثواني الحقيقية (`٢٣:١٧`).
 
-هذا ما يمنع مهمة من أربع ساعات من تعديل رسالة واحدة آلاف المرات: في ٢٠٢٦-٠٩-٢٣ فعلت بطاقة ذلك بالضبط، وحُظرت الدردشة سبع ساعات. للإبقاء على الإيقاع السريع طوال المهمة، يُوقف **`/settings` ← ⏱ تحديث البطاقة في المهام الطويلة** (للدردشة، أو لكل جلسة من Mini App أو من `👤 إعدادات كل جلسة`).
+هذا ما يمنع مهمة من أربع ساعات من تعديل رسالة واحدة آلاف المرات: في ٢٠٢٦-٠٩-٢٣ فعلت بطاقة ذلك بالضبط، وحُظرت الدردشة سبع ساعات. للإبقاء على الإيقاع السريع طوال المهمة، يُوقف &lrm;**`/settings` ← ⏱ تحديث البطاقة في المهام الطويلة** (للدردشة، أو لكل جلسة من Mini App أو من `👤 إعدادات كل جلسة`).
 
 ### <a id="the-typing-bubble"></a>فقاعة الكتابة
 
@@ -87,7 +87,7 @@ pkill -f 'aipager start'      # وإلا
 ما يظهر لك:
 
 - يعرض `aipager status` (وسطر `aipager daemon` في `aipager doctor`) **`Telegram flood backoff ×4 (chat …), last 429 12 s ago`**.
-- سطر واحد بالضبط في `aipager logs`، دون traceback: `flood: chat … 429 retry_after=5s → cadence ×2`.
+- سطر واحد بالضبط في `aipager logs`، دون traceback:&rlm; `flood: chat … 429 retry_after=5s → cadence ×2`.
 - لا شيء يُوقف، و**لا تضيع أي إجابة**: تُؤجَّل، ولا تُترك.
 - **ينخفض معدل الإرسال الذي اكتسبته الدردشة إلى النصف**، وتدخل الدردشة **فترة تحذير من ست ساعات** (`FLOOD_WARNING_HOURS`): لا يمكن أن يرتفع معدلها فوق ٠٫٥ طلب في الثانية (`FLOOD_WARNED_CEILING`)، ويعود إلى الارتفاع ببطء. يعرض `aipager status` ذلك: `Telegram chat 123: rate 0.25/s (ceiling 0.50/s), 212/1200 calls in the last hour (as of 18s ago), 7/30 in the last minute - warning regime, 5h 52m left`.
 
@@ -116,7 +116,7 @@ pkill -f 'aipager start'      # وإلا
 ما يظهر لك:
 
 - يعرض `aipager status` (وسطر `aipager daemon` في `aipager doctor`) **`Telegram flood-muted until HH:MM (chat …)`**.
-- سطر واحد في `aipager logs`: `Telegram flood control — chat … muted for Ns (until HH:MM) …`، ثم صمت لتلك الدردشة. ولاحقًا سطر واحد `flood mute on chat … lifted`.
+- سطر واحد في `aipager logs`:&rlm; `Telegram flood control — chat … muted for Ns (until HH:MM) …`&lrm;، ثم صمت لتلك الدردشة. ولاحقًا سطر واحد `flood mute on chat … lifted`.
 - يعرض `aipager status` أيضًا حالة الدردشة كاملة: `Telegram chat 123: rate 0.05/s (ceiling 0.50/s), 431/600 calls in the last hour (as of 12s ago) - MINIMAL MODE, card updates paused - flood-muted until 09:41 - warning regime, 5h 59m left (1 ban(s) in the last 7 days)`.
 
 يوقف aipager الإرسال إلى الدردشة طوال المدة التي طلبها Telegram بالضبط و**لا يرسل إليها أي طلب من أي نوع**: لا إجابات، ولا تعديلات لبطاقات العمل، ولا مرفقات، ولا تفاعلات، ولا مؤشرات كتابة، ولا إشعارات الضغط على الأزرار، ولا الردود التي كانت أوامرك ستنتجها. كل واحد منها سيكون مخالفة جديدة تطيل الحظر؛ فطلب واحد أثناء حظر قائم هو ما حوّل حظرًا من ٢١ دقيقة إلى ٩٫٥ ساعات في ٢٠٢٦-٠٩-١٥. لذا فالأمر المكتوب أثناء الحظر لا يتلقى أي رد، و**الضغط على زر لا يُؤكَّد أيضًا**: حتى 0.7.12 كان إشعار الزر ما زال يُرسل، على افتراض أن Telegram يحسبه منفصلًا. يفعل ذلك في ضبط الإيقاع؛ ولا يفعله في الحظر. الدردشات الأخرى لا تتأثر.
@@ -135,16 +135,16 @@ pkill -f 'aipager start'      # وإلا
 
 ما يجب تجنبه:
 
-- إعادة تشغيل aipager «لإصلاح» الأمر. يزول الإيقاف وحده في الوقت المعروض. منذ 0.7.13 لم تعد إعادة التشغيل تنسى الحظر (موعد انتهائه، ومعدل الدردشة المكتسب، وتاريخ حظرها تُحفظ في `~/.claude/aipager-flood-state.json` وتُستعاد عند البدء، وكذلك طلبات الدردشة في الساعة الأخيرة وفترة التحذير)، لذا لم تعد إعادة التشغيل تطيله أيضًا. لكنها ترمي كل إجابة ما زالت محتجزة، ولا تصلح شيئًا.
+- إعادة تشغيل aipager «لإصلاح» الأمر. يزول الإيقاف وحده في الوقت المعروض. منذ 0.7.13 لم تعد إعادة التشغيل تنسى الحظر (موعد انتهائه، ومعدل الدردشة المكتسب، وتاريخ حظرها تُحفظ في &lrm;`~/.claude/aipager-flood-state.json` وتُستعاد عند البدء، وكذلك طلبات الدردشة في الساعة الأخيرة وفترة التحذير)، لذا لم تعد إعادة التشغيل تطيله أيضًا. لكنها ترمي كل إجابة ما زالت محتجزة، ولا تصلح شيئًا.
 - خفض `TELEGRAM_MAX_RETRY_AFTER` تحت الافتراضي ٩٠ ثانية أملًا في إعادة المحاولة أسرع: كل ما يتجاوز ذلك الحد حظر، لا حد سرعة.
 
 للتجنب: تشغيل جلسات متزامنة أقل في كل دردشة، أو إعطاء الجلسات الأكثر انشغالًا دردشة خاصة بها (`aipager config`).
 
 ## <a id="a-session-dropped-off-the-pinned-status-bar-it-is-gone"></a>جلسة اختفت من شريط الحالة المثبّت (حالتها GONE)
 
-خرجت عملية dtach الخاصة بتلك الجلسة (إعادة تشغيل الكمبيوتر، أو `pkill claude`، أو كتابة أحدهم `exit` في جلسة dtach المتصلة). يمكن إنشاؤها من جديد: محادثتها ما زالت في مجلدها `~/.claude/projects/...`.
+خرجت عملية dtach الخاصة بتلك الجلسة (إعادة تشغيل الكمبيوتر، أو `pkill claude`، أو كتابة أحدهم `exit` في جلسة dtach المتصلة). يمكن إنشاؤها من جديد: محادثتها ما زالت في مجلدها &lrm;`~/.claude/projects/...`&lrm;.
 
-أسهل طريق هو `/resume <label>` في Telegram (أو `/resume` وحده لقائمة اختيار): يعيد تشغيل الجلسة ويكمل المحادثة. ومن سطر الأوامر:
+أسهل طريق هو &lrm;`/resume <label>`&lrm; في Telegram (أو &lrm;`/resume` وحده لقائمة اختيار): يعيد تشغيل الجلسة ويكمل المحادثة. ومن سطر الأوامر:
 
 <div dir="ltr">
 
@@ -175,8 +175,8 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # بالثواني
 يشغّل الزر `[📦 تثبيت ميزة الرسائل الصوتية]` المثبّت ويعدّل رسالته كل بضع ثوانٍ أثناء العمل (`لا يزال مستمرًا… (٢٥ ث)`). إذا فشل التثبيت، تعرض الرسالة رمز الخروج وآخر ٥٠٠ حرف من مخرجات المثبّت. الأسباب الشائعة:
 
 - الشبكة: pip لا يصل إلى PyPI. يلزم فحص الاتصال من الكمبيوتر الذي يعمل عليه aipager.
-- القرص: يحتاج `~/.cache/huggingface/` إلى نحو ٧٤ ميغابايت للنموذج، وذاكرة wheel المؤقتة لـ pip إلى نحو ٢٥٠ ميغابايت أخرى. يلزم إخلاء مساحة أولًا.
-- Permission denied: البيئة الافتراضية للقراءة فقط. الحل الانتقال إلى `uv tool install`، الذي يستخدم دائمًا بيئة افتراضية يملكها مستخدمك.
+- القرص: يحتاج &lrm;`~/.cache/huggingface/`&lrm; إلى نحو ٧٤ ميغابايت للنموذج، وذاكرة wheel المؤقتة لـ pip إلى نحو ٢٥٠ ميغابايت أخرى. يلزم إخلاء مساحة أولًا.
+- &rlm;Permission denied: البيئة الافتراضية للقراءة فقط. الحل الانتقال إلى `uv tool install`، الذي يستخدم دائمًا بيئة افتراضية يملكها مستخدمك.
 
 إذا انقطع اتصال البوت في منتصف التثبيت، فالتثبيت نفسه على الكمبيوتر يكون قد اكتمل عادةً: إعادة تشغيل aipager ثم تجربة رسالة صوتية مرة أخرى.
 
@@ -184,17 +184,17 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # بالثواني
 
 تحمّلت الصفحة، لكن سكربت Mini App SDK من Telegram (الذي ينتج `initData`) لم يتحمّل، فلا شيء لدى الصفحة لتسجيل الدخول به ولا ترسل أي طلب إلى الواجهة البرمجية. الرسالة تلومك؛ والسبب في الحقيقة يتعلق بالشبكة.
 
-الإصدارات الحديثة من aipager تجلب ذلك السكربت بنفسها وتقدّمه من مصدر الصفحة نفسه (`/telegram-web-app.js`)، فلا يحتاج الهاتف إلا إلى الوصول إلى الخادم الذي قدّم الصفحة، لا إلى `telegram.org` أيضًا. إذا ظهر هذا في إصدار قديم، يلزم التحديث.
+الإصدارات الحديثة من aipager تجلب ذلك السكربت بنفسها وتقدّمه من مصدر الصفحة نفسه (&lrm;`/telegram-web-app.js`)، فلا يحتاج الهاتف إلا إلى الوصول إلى الخادم الذي قدّم الصفحة، لا إلى `telegram.org` أيضًا. إذا ظهر هذا في إصدار قديم، يلزم التحديث.
 
 ثم، بالترتيب:
 
-1. النظر في مصدر الصفحة. إذا كان وسم `<script>` يشير إلى `https://telegram.org/js/telegram-web-app.js`، فإن aipager لم يتمكن بعد من جلب السكربت والصفحة تحمّله من Telegram احتياطًا، وهذه بالضبط الحالة التي تفشل على هاتف لا يصل إلى `telegram.org`. يجلبه aipager عند بدء خادم Mini App ويعيد المحاولة مرة في اليوم على الأكثر، لذا فإعادة تشغيل aipager تعيد المحاولة فورًا؛ ويبيّن `journalctl --user -u aipager | grep "webapp sdk"` ما الخطأ (عادةً `telegram.org` محظور أو مُرشَّح).
-2. إذا كان الوسم يشير إلى `/telegram-web-app.js`، يلزم التحقق من أن aipager يقدّمه: يجب أن يجيب `curl -sI http://127.0.0.1:8765/telegram-web-app.js` على كمبيوتر aipager (مع تعديل المنفذ إن غيّرته) بـ `200` مع `Content-Type: application/javascript`. النسخة موجودة في `~/.local/share/aipager/webapp-sdk/`.
-3. فُتح العنوان في متصفح عادي بدل زر `/app` أو زر القائمة في البوت: عندها هذه الرسالة متوقعة. لا ينتج SDK قيمة `initData` إلا داخل Telegram.
-4. بقيت الصفحة مفتوحة أكثر من خمس دقائق: تنتهي صلاحية `initData` وتطلب الصفحة إعادة فتحها. يكفي الضغط على `/app` مرة أخرى.
-5. ضُغط `📱 App` في لوحة مفاتيح من إصدار أقدم من aipager: لا يعطي Telegram تطبيق Mini App المفتوح من زر في لوحة المفاتيح أي `initData`، ولذلك لم تعد لوحة aipager تضم هذا الزر. يكفي إرسال `/start` للحصول على اللوحة الحالية، ثم فتح التطبيق من زر القائمة أو بـ `/app`.
+1. النظر في مصدر الصفحة. إذا كان وسم &lrm;`<script>`&lrm; يشير إلى `https://telegram.org/js/telegram-web-app.js`، فإن aipager لم يتمكن بعد من جلب السكربت والصفحة تحمّله من Telegram احتياطًا، وهذه بالضبط الحالة التي تفشل على هاتف لا يصل إلى `telegram.org`. يجلبه aipager عند بدء خادم Mini App ويعيد المحاولة مرة في اليوم على الأكثر، لذا فإعادة تشغيل aipager تعيد المحاولة فورًا؛ ويبيّن `journalctl --user -u aipager | grep "webapp sdk"`&lrm; ما الخطأ (عادةً `telegram.org` محظور أو مُرشَّح).
+2. إذا كان الوسم يشير إلى &lrm;`/telegram-web-app.js`، يلزم التحقق من أن aipager يقدّمه: يجب أن يجيب `curl -sI http://127.0.0.1:8765/telegram-web-app.js` على كمبيوتر aipager (مع تعديل المنفذ إن غيّرته) بـ `200` مع `Content-Type: application/javascript`. النسخة موجودة في &lrm;`~/.local/share/aipager/webapp-sdk/`&lrm;.
+3. فُتح العنوان في متصفح عادي بدل زر &lrm;`/app` أو زر القائمة في البوت: عندها هذه الرسالة متوقعة. لا ينتج SDK قيمة `initData` إلا داخل Telegram.
+4. بقيت الصفحة مفتوحة أكثر من خمس دقائق: تنتهي صلاحية `initData` وتطلب الصفحة إعادة فتحها. يكفي الضغط على &lrm;`/app` مرة أخرى.
+5. ضُغط &lrm;`📱 App` في لوحة مفاتيح من إصدار أقدم من aipager: لا يعطي Telegram تطبيق Mini App المفتوح من زر في لوحة المفاتيح أي `initData`، ولذلك لم تعد لوحة aipager تضم هذا الزر. يكفي إرسال &lrm;`/start` للحصول على اللوحة الحالية، ثم فتح التطبيق من زر القائمة أو بـ &lrm;`/app`.
 
-## <a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>`pyexpat _XML_SetAllocTrackerActivationThreshold` عند التثبيت بـ brew
+## &rlm;<a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>`pyexpat _XML_SetAllocTrackerActivationThreshold` عند التثبيت بـ brew
 
 حزمة `python@3.12` من Homebrew بُنيت على libexpat أحدث مما في نظامك، وغالبًا لأن **Xcode وCommand Line Tools قديمان** على macOS Tahoe (26.x). مخرجات brew نفسها تقول ذلك عادةً. حلّان:
 
@@ -227,11 +227,11 @@ uv tool install --reinstall aipager
 
 ## <a id="the-session-list-was-lost-or-damaged"></a>قائمة الجلسات ضاعت أو تلفت
 
-يحفظ aipager جلساته في `~/.claude/aipager-sessions.json`، ويعيد كتابته بشكل ذري (ملف جديد، ثم إعادة تسمية)، فالكتابة المقطوعة تترك الملف القديم سليمًا. إذا كان الملف رغم ذلك غير موجود، أو غير مقروء، أو ليس JSON صالحًا، يكتب aipager في السجل أنه يبدأ من جديد (تحذيرًا حين يكون الملف موجودًا لكن غير مقروء) ويبدأ بقائمة فارغة؛ ولا يتوقف. لا توجد نسخ احتياطية لهذا الملف. لا يضيع شيء مهم:
+يحفظ aipager جلساته في &lrm;`~/.claude/aipager-sessions.json`، ويعيد كتابته بشكل ذري (ملف جديد، ثم إعادة تسمية)، فالكتابة المقطوعة تترك الملف القديم سليمًا. إذا كان الملف رغم ذلك غير موجود، أو غير مقروء، أو ليس JSON صالحًا، يكتب aipager في السجل أنه يبدأ من جديد (تحذيرًا حين يكون الملف موجودًا لكن غير مقروء) ويبدأ بقائمة فارغة؛ ولا يتوقف. لا توجد نسخ احتياطية لهذا الملف. لا يضيع شيء مهم:
 
-- الجلسات الجارية يُعثر عليها مجددًا في أول دورة مراقبة، عبر مقابس dtach الخاصة بها (`/tmp/claude-dtach-*.sock`)؛
-- كل محادثة ما زالت في مجلد Claude Code نفسه `~/.claude/projects/...`، لذا فإن `aipager session <name> --continue` في مجلد تلك الجلسة يكملها (و`--resume` يتيح الاختيار)؛
-- ما يضيع هو قائمة الجلسات المنتهية (`/resume`)، والبطاقات التي كانت مفتوحة، وبقية ما تذكّره aipager عن كل جلسة.
+- الجلسات الجارية يُعثر عليها مجددًا في أول دورة مراقبة، عبر مقابس dtach الخاصة بها (&lrm;`/tmp/claude-dtach-*.sock`)؛
+- كل محادثة ما زالت في مجلد Claude Code نفسه &lrm;`~/.claude/projects/...`&lrm;، لذا فإن `aipager session <name> --continue` في مجلد تلك الجلسة يكملها (و&lrm;`--resume` يتيح الاختيار)؛
+- ما يضيع هو قائمة الجلسات المنتهية (&lrm;`/resume`)، والبطاقات التي كانت مفتوحة، وبقية ما تذكّره aipager عن كل جلسة.
 
 إذا ظل aipager يفشل عند البدء، يبيّن `aipager logs` (أو `journalctl --user -u aipager`) السبب؛ ونقل الملف جانبًا (`mv ~/.claude/aipager-sessions.json ~/aipager-sessions.json.old`) يستبعده من الشك.
 
@@ -243,32 +243,32 @@ uv tool install --reinstall aipager
 
 الترتيب مهم: كل فحص لاحق يفترض نجاح ما قبله. الفحص الذي يتعطل بسبب بيئة غير متوقعة يظهر كسطر ⚠ واحد يذكر الفحص والخطأ؛ وتعمل بقية الفحوص.
 
-| الفحص (مفتاح `--json`) | ما يتحقق منه | تلميح الإصلاح |
+| الفحص (مفتاح &lrm;`--json`) | ما يتحقق منه | تلميح الإصلاح |
 |---|---|---|
 | `config_parses` | يمكن قراءة `aipager.yaml` و`policy.yaml`؛ يعمل أولًا لأن كل فحص لاحق يقرأ الإعداد | الخطأ يذكر الملف والسطر |
-| `config` | `~/.config/aipager/aipager.yaml` موجود وفيه توكن ودردشة | `aipager config` |
+| `config` | &lrm;`~/.config/aipager/aipager.yaml` موجود وفيه توكن ودردشة | `aipager config` |
 | `token_valid` | التوكن يعمل مع `getMe` في Telegram | إعادة تشغيل `aipager config` |
 | `chat_reachable` | يعرف Telegram الدردشة المضبوطة (`getChat`؛ لا يُرسل شيء) | فتح البوت والضغط على Start |
 | `team` | الدردشات والأعضاء (أو `team.yaml` قديم): يذكر الوضع الشخصي أو وضع الفريق، وينبّه إلى `team.yaml` قديم تالف أو غير متطابق | `aipager config` |
 | `role_shell_access` | يحذّر مرة لكل دور لدى عضو يستطيع تشغيل Bash (قواعد الأمان فيه بذل للجهد، لا حدود؛ يُنظر [المجموعات](groups.md#roles)) | عدم إعطاء ذلك الدور Bash في `policy.yaml`، أو قبول ذلك |
 | `peer_messages` | الرسائل بين جلسات Claude: أين تُحفظ إيصالاتها وهل ذلك المجلد خاص، وهل يستطيع هذا النظام فحص وقت بدء المرسِل، وتحذير لكل دور تسمح له سياسةٌ باستخدام SendMessage (يُنظر [الأمان](security.md#messages-between-claude-sessions)) | حذف مجلد إيصالات مشترك (يعيد aipager إنشاءه)، أو عدم إعطاء ذلك الدور SendMessage |
-| `claude` | يجد برنامج `claude` بالطريقة التي يستخدمها كل تشغيل (`claude_path` في `aipager.yaml` أو `$AIPAGER_CLAUDE_BIN` يغلبان مباشرة؛ وإلا فالأحدث من `~/.local/bin` وPATH وHomebrew)، ويسرد كل تثبيت آخر مختلف عُثر عليه | تثبيت Claude Code، أو ضبط `claude_path` / `AIPAGER_CLAUDE_BIN` |
-| `claude_auth` | يجرّب `claude auth status` في البيئة نفسها التي تحصل عليها الجلسة الحقيقية. **لا يفشل أبدًا**: «غير مسجّل الدخول» و«فشلت التجربة نفسها» يُذكران بشكل مختلف، ولا يمنع أي منهما بدء جلسة | `claude auth login`، أو ضبط مفتاح API / `CLAUDE_CODE_OAUTH_TOKEN` |
+| `claude` | يجد برنامج `claude` بالطريقة التي يستخدمها كل تشغيل (`claude_path` في `aipager.yaml` أو &lrm;`$AIPAGER_CLAUDE_BIN` يغلبان مباشرة؛ وإلا فالأحدث من &lrm;`~/.local/bin` وPATH وHomebrew)، ويسرد كل تثبيت آخر مختلف عُثر عليه | تثبيت Claude Code، أو ضبط `claude_path` /&rlm; `AIPAGER_CLAUDE_BIN` |
+| `claude_auth` | يجرّب `claude auth status` في البيئة نفسها التي تحصل عليها الجلسة الحقيقية. **لا يفشل أبدًا**: «غير مسجّل الدخول» و«فشلت التجربة نفسها» يُذكران بشكل مختلف، ولا يمنع أي منهما بدء جلسة | `claude auth login`، أو ضبط مفتاح API /&rlm; `CLAUDE_CODE_OAUTH_TOKEN` |
 | `dtach` | عُثر على برنامج `dtach` (`dtach-bin` الخاص بـ aipager، أو واحد في PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` و`aipager-statusline` موجودان في PATH | `uv tool install --reinstall aipager` |
-| `settings_json` | في `~/.claude/settings.json` هوكات aipager مربوطة | `aipager config` |
+| `settings_json` | في &lrm;`~/.claude/settings.json` هوكات aipager مربوطة | `aipager config` |
 | `daemon` | aipager يعمل ومقبسه يجيب؛ ويعرض أيضًا حالة حدود السرعة في Telegram (يُنظر [أعلاه](#the-bot-slowed-down-a-rate-limit-429)) | `aipager start` |
 | `service_installed` | اختياري: ملف الخدمة موجود | `aipager service install` |
-| `service_unit_path` | Linux فقط: `Environment=PATH=` في الخدمة *المثبّتة* يحتوي فعلًا على مجلد برنامج claude الذي عُثر عليه، مقروءًا كنص، لأن doctor لا يرى PATH الخاص بـ systemd من الطرفية التفاعلية لمالك البوت | `aipager service install --yes` |
+| `service_unit_path` | Linux فقط: `Environment=PATH=`&lrm; في الخدمة *المثبّتة* يحتوي فعلًا على مجلد برنامج claude الذي عُثر عليه، مقروءًا كنص، لأن doctor لا يرى PATH الخاص بـ systemd من الطرفية التفاعلية لمالك البوت | `aipager service install --yes` |
 | `miniapp` | هل يمكن لـ Mini App أن يبدأ حين يكون مفعّلًا. **لا يفشل أبدًا**: Mini App اختياري | الإصلاح الذي يذكره |
 
 يطبع `aipager doctor --json` الفحوص نفسها، بهذا الترتيب، بهذه المفاتيح (يُنظر [الأوامر](commands.md#aipager-doctor---json)).
 
 يشغّل `aipager doctor --fix` بحثًا تفاعليًا عن بيانات اعتماد Claude ونسخها إلى `daemon.env` (حتى حين يكون الملف موجودًا ولا يحتوي على أي منها)، أو تثبيت `claude_path` حين يُعثر على أكثر من تثبيت. لا يتصرف إلا بعد السؤال. ولخدمة ينقص PATH فيها مجلدُ claude، يُشغَّل `aipager service install --yes`.
 
-## <a id="the-daemon-cant-find-claude-or-picks-the-wrong-install"></a>aipager لا يجد `claude`، أو يختار التثبيت الخطأ
+## &rlm;<a id="the-daemon-cant-find-claude-or-picks-the-wrong-install"></a>aipager لا يجد `claude`، أو يختار التثبيت الخطأ
 
-كانت ستة مواضع تبحث عن `claude` كلٌّ بطريقته وقد تختلف نتائجها. الآن كلها تمر عبر باحث واحد (`aipager/claude_resolve.py`). `claude_path` في `aipager.yaml`، ثم `$AIPAGER_CLAUDE_BIN`، يغلبان مباشرة إن كانا يعملان. وإلا فكل `claude` يُعثر عليه في `~/.local/bin` وفي `$PATH` وفي مجلدات Homebrew يُفحص، ويغلب الإصدار الأحدث (لذا لا يغيّر إعادة ترتيب `$PATH` الاختيار حين يكون التثبيت الآخر أحدث). يعرض `aipager doctor` بالضبط ما اختاره وما الذي وجده غيره؛ وإن غلب الخطأ، يُثبَّت الصحيح:
+كانت ستة مواضع تبحث عن `claude` كلٌّ بطريقته وقد تختلف نتائجها. الآن كلها تمر عبر باحث واحد (`aipager/claude_resolve.py`). `claude_path` في `aipager.yaml`، ثم &lrm;`$AIPAGER_CLAUDE_BIN`، يغلبان مباشرة إن كانا يعملان. وإلا فكل `claude` يُعثر عليه في &lrm;`~/.local/bin` وفي &lrm;`$PATH` وفي مجلدات Homebrew يُفحص، ويغلب الإصدار الأحدث (لذا لا يغيّر إعادة ترتيب &lrm;`$PATH` الاختيار حين يكون التثبيت الآخر أحدث). يعرض `aipager doctor` بالضبط ما اختاره وما الذي وجده غيره؛ وإن غلب الخطأ، يُثبَّت الصحيح:
 
 <div dir="ltr">
 
@@ -282,7 +282,7 @@ echo 'claude_path: /home/you/.local/bin/claude' >> ~/.config/aipager/aipager.yam
 
 ## <a id="sessions-cant-authenticate-under-the-systemd-service-but-claude-works-fine-in-a-terminal"></a>الجلسات لا تستطيع تسجيل الدخول تحت خدمة systemd، لكن `claude` يعمل جيدًا في الطرفية
 
-خدمات `systemctl --user` لا تقرأ أبدًا `~/.bashrc` / `~/.profile`، لذا فسطر `export CLAUDE_CODE_OAUTH_TOKEN=…` هناك لا يصل أبدًا إلى aipager. بدلًا من ذلك تستخدم الخدمة `LoadCredential=` من systemd، وتقرأ `~/.config/aipager/daemon.env`: ملف `KEY=VALUE` بسيط، بالصلاحية 0600، يُنشأ تلقائيًا أول مرة يُشغَّل فيها `aipager service install` (يُنقل من `config.env` قديم إن كان فيه توكن، وإلا يُبحث عنه مرة واحدة في طرفية تسجيل الدخول لديك، وإلا يُترك فارغًا مع تحذير). إذا بقي فارغًا، يبحث `aipager doctor --fix` في المواضع نفسها مرة أخرى عند الموافقة ويضيف السطر الذي يجده، مع إبقاء الأسطر الأخرى في الملف؛ ولا يطبع التوكن أبدًا. أو يمكنك إضافة السطر بنفسك:
+خدمات `systemctl --user` لا تقرأ أبدًا &lrm;`~/.bashrc` /&rlm; &lrm;`~/.profile`، لذا فسطر `export CLAUDE_CODE_OAUTH_TOKEN=…`&lrm; هناك لا يصل أبدًا إلى aipager. بدلًا من ذلك تستخدم الخدمة `LoadCredential=`&lrm; من systemd، وتقرأ &lrm;`~/.config/aipager/daemon.env`: ملف `KEY=VALUE` بسيط، بالصلاحية 0600، يُنشأ تلقائيًا أول مرة يُشغَّل فيها `aipager service install` (يُنقل من `config.env` قديم إن كان فيه توكن، وإلا يُبحث عنه مرة واحدة في طرفية تسجيل الدخول لديك، وإلا يُترك فارغًا مع تحذير). إذا بقي فارغًا، يبحث `aipager doctor --fix` في المواضع نفسها مرة أخرى عند الموافقة ويضيف السطر الذي يجده، مع إبقاء الأسطر الأخرى في الملف؛ ولا يطبع التوكن أبدًا. أو يمكنك إضافة السطر بنفسك:
 
 <div dir="ltr">
 
@@ -299,11 +299,11 @@ aipager service stop && aipager service start
 
 ## <a id="the-daemons-control-socket-moved"></a>مقبس التحكم في aipager تغيّر مكانه
 
-كان `aipager doctor` / `aipager status` ينظران دائمًا إلى `/tmp/aipager.sock`. تحت خدمة systemd أصبح مقبس التحكم الآن في `$XDG_RUNTIME_DIR/aipager.sock` (ويعود إلى `/tmp` فقط حين لا يكون `$XDG_RUNTIME_DIR` مضبوطًا: الحاويات، وWSL1، والتوزيعات المصغّرة). لم ينتقل إلا هذا المقبس؛ أما مقابس dtach لكل جلسة (`/tmp/claude-dtach-*.sock`) فلم تتأثر. يمكن ضبط `AIPAGER_SOCKET_PATH` عند الحاجة إلى مكان محدد.
+كان `aipager doctor` /&rlm; `aipager status` ينظران دائمًا إلى &lrm;`/tmp/aipager.sock`. تحت خدمة systemd أصبح مقبس التحكم الآن في &lrm;`$XDG_RUNTIME_DIR/aipager.sock` (ويعود إلى &lrm;`/tmp` فقط حين لا يكون &lrm;`$XDG_RUNTIME_DIR` مضبوطًا: الحاويات، وWSL1، والتوزيعات المصغّرة). لم ينتقل إلا هذا المقبس؛ أما مقابس dtach لكل جلسة (&lrm;`/tmp/claude-dtach-*.sock`) فلم تتأثر. يمكن ضبط `AIPAGER_SOCKET_PATH` عند الحاجة إلى مكان محدد.
 
-## <a id="update-says-the-restart-would-kill-sessions-killmode"></a>`/update` يقول إن إعادة التشغيل ستُنهي الجلسات (KillMode)
+## &rlm;<a id="update-says-the-restart-would-kill-sessions-killmode"></a>&lrm;`/update` يقول إن إعادة التشغيل ستُنهي الجلسات (KillMode)
 
-ملفات الخدمة المكتوبة قبل هذا الإصدار ليس فيها سطر `KillMode=`، لذا يستخدم systemd القيمة `control-group`: إيقاف `aipager.service` أو إعادة تشغيله يُنهي كل جلسة Claude بدأها aipager. لذلك يثبّت `/update` الإصدار الجديد دون أن يعيد تشغيل aipager، ويسرد الجلسات التي ستُسقطها إعادة التشغيل. الإصلاح مرة واحدة:
+ملفات الخدمة المكتوبة قبل هذا الإصدار ليس فيها سطر `KillMode=`&lrm;، لذا يستخدم systemd القيمة `control-group`: إيقاف `aipager.service` أو إعادة تشغيله يُنهي كل جلسة Claude بدأها aipager. لذلك يثبّت &lrm;`/update` الإصدار الجديد دون أن يعيد تشغيل aipager، ويسرد الجلسات التي ستُسقطها إعادة التشغيل. الإصلاح مرة واحدة:
 
 <div dir="ltr">
 
@@ -315,17 +315,17 @@ aipager service install
 
 يعيد هذا كتابة الخدمة مع `KillMode=process`، ويعيد تحميل systemd، ويعيد تشغيل aipager، وإعادة التشغيل تلك تعمل بالإعداد الجديد أصلًا. للتحقق: `systemctl --user show -p KillMode aipager.service` (`KillMode=process`). ومعه يكتب systemd أسطر «left-over process» لجلساتك عند كل إعادة تشغيل؛ وهذا متوقع.
 
-## <a id="aipager-update-cant-find-uv--pipx"></a>`aipager update` لا يجد uv / pipx
+## &rlm;<a id="aipager-update-cant-find-uv--pipx"></a>`aipager update` لا يجد uv /&rlm; pipx
 
-يبحث `aipager update` عن المثبّت بمسار مطلق في `PATH` لديك، إضافة إلى `~/.local/bin` و`~/.cargo/bin` ومجلدات Homebrew و`/usr/bin` و`/bin`. إذا ظل يقول إنه لم يجد `pipx`، فالمثبّت الذي أنشأ هذا الـ aipager لم يعد موجودًا أو موجود في مكان آخر؛ الحل إعادة التثبيت بالأداة المتوفرة (`pipx install --force aipager`، `uv tool install --reinstall aipager`).
+يبحث `aipager update` عن المثبّت بمسار مطلق في `PATH` لديك، إضافة إلى &lrm;`~/.local/bin` و&lrm;`~/.cargo/bin` ومجلدات Homebrew و&lrm;`/usr/bin` و&lrm;`/bin`. إذا ظل يقول إنه لم يجد `pipx`، فالمثبّت الذي أنشأ هذا الـ aipager لم يعد موجودًا أو موجود في مكان آخر؛ الحل إعادة التثبيت بالأداة المتوفرة (`pipx install --force aipager`،&rlm; `uv tool install --reinstall aipager`).
 
 ## <a id="update-refused-editable--not-your-install"></a>التحديث مرفوض: editable أو ليس تثبيتك
 
-لا يحدّث `/update` و`aipager update` إلا تثبيتًا يملكه مستخدمك ويستطيع الكتابة فيه، عبر المثبّت الذي أنشأه. ويرفضان، مع ذكر السبب، في هذه الحالات:
+لا يحدّث &lrm;`/update` و`aipager update` إلا تثبيتًا يملكه مستخدمك ويستطيع الكتابة فيه، عبر المثبّت الذي أنشأه. ويرفضان، مع ذكر السبب، في هذه الحالات:
 
 - نسخة شيفرة بوضع editable (للتطوير): تُحدَّث بـ `git pull`؛
 - تثبيت عبر Nix أو Snap أو Docker أو حزمة نظام: يُستخدم تحديث ذلك النظام نفسه؛
-- تثبيت يملكه مستخدم آخر (مثل بيئة افتراضية يملكها root تحت `/opt`): يُحدَّث بصفة ذلك المستخدم؛
+- تثبيت يملكه مستخدم آخر (مثل بيئة افتراضية يملكها root تحت &lrm;`/opt`): يُحدَّث بصفة ذلك المستخدم؛
 - تثبيت من مجلد محلي (`pipx install /path/to/aipager`): `لا يمكن التحديث من هنا: it was installed from a local folder; update it from that folder`. يُجلب الإصدار الجديد إلى ذلك المجلد ويُعاد التثبيت منه، أو الانتقال إلى PyPI بـ `pipx install --force aipager`؛
 - تثبيت لا يمكن معرفة مثبّته (`could not tell which installer owns this aipager`): إعادة تثبيته بـ `uv tool install aipager` أو `pipx install aipager`.
 
@@ -346,13 +346,13 @@ systemctl --user restart aipager.service
 
 ## <a id="claude-code-update-installed-with-npm-into-a-folder-you-cant-write-to"></a>تحديث Claude Code: مثبّت بـ npm في مجلد لا يمكنك الكتابة فيه
 
-Claude Code المثبّت بـ `sudo npm install -g` يوجد في مجلد لا يغيّره إلا root (مثل `/usr/lib/node_modules`)، لذا يفشل `claude update` المشغَّل بمستخدمك مع `global folder isn't writable`. يعرض `/update` وMini App الإصدار الأحدث مع `لا يمكن التحديث من هنا: installed with npm into a folder your user can't write to` ودون زر له. الحل تشغيل `claude install` مرة واحدة بالمستخدم الذي يعمل به aipager: ينتقل إلى مثبّت Claude Code الخاص به تحت مجلدك الرئيسي، الذي يحدّث دون sudo. ثم إعادة تشغيل aipager (`systemctl --user restart aipager.service`، أو بالطريقة التي بدأ بها): aipager الجاري يحتفظ بـ Claude Code الذي وجده عند البدء، وبعد إعادة التشغيل يأخذ الأحدث مما يجده. إذا كان `claude_path` في `aipager.yaml` (يمكن لـ `aipager doctor --fix` ضبطه) أو `AIPAGER_CLAUDE_BIN` يشير إلى نسخة npm، يُوجَّه إلى `~/.local/bin/claude` أو يُحذف أولًا، لأنهما يغلبان دائمًا.
+&rlm;Claude Code المثبّت بـ `sudo npm install -g` يوجد في مجلد لا يغيّره إلا root (مثل &lrm;`/usr/lib/node_modules`)، لذا يفشل `claude update` المشغَّل بمستخدمك مع `global folder isn't writable`. يعرض &lrm;`/update` وMini App الإصدار الأحدث مع `لا يمكن التحديث من هنا: installed with npm into a folder your user can't write to` ودون زر له. الحل تشغيل `claude install` مرة واحدة بالمستخدم الذي يعمل به aipager: ينتقل إلى مثبّت Claude Code الخاص به تحت مجلدك الرئيسي، الذي يحدّث دون sudo. ثم إعادة تشغيل aipager (`systemctl --user restart aipager.service`، أو بالطريقة التي بدأ بها): aipager الجاري يحتفظ بـ Claude Code الذي وجده عند البدء، وبعد إعادة التشغيل يأخذ الأحدث مما يجده. إذا كان `claude_path` في `aipager.yaml` (يمكن لـ `aipager doctor --fix` ضبطه) أو `AIPAGER_CLAUDE_BIN` يشير إلى نسخة npm، يُوجَّه إلى &lrm;`~/.local/bin/claude` أو يُحذف أولًا، لأنهما يغلبان دائمًا.
 
 ## <a id="updated-but-the-version-didnt-change"></a>حُدّث، لكن الإصدار لم يتغير
 
-تثبيت pipx المصنوع من رابط git يُحدَّث من مصدر git ذلك، لا من PyPI. حين لا يكون في المصدر شيء أحدث، يقول `/update`: `✅ aipager على A بالفعل - تثبيت pipx هذا يُحدَّث من مصدر git الخاص به، ولا يوجد هناك إصدار أحدث.`. الحل دفع الإصدار الجديد إلى هناك أو اختياره، أو الانتقال إلى PyPI بـ `pipx install --force aipager`.
+تثبيت pipx المصنوع من رابط git يُحدَّث من مصدر git ذلك، لا من PyPI. حين لا يكون في المصدر شيء أحدث، يقول &lrm;`/update`:&rlm; `✅ aipager على A بالفعل - تثبيت pipx هذا يُحدَّث من مصدر git الخاص به، ولا يوجد هناك إصدار أحدث.`. الحل دفع الإصدار الجديد إلى هناك أو اختياره، أو الانتقال إلى PyPI بـ `pipx install --force aipager`.
 
-## <a id="the-daemon-didnt-come-back-after-an-update"></a>aipager لم يعد بعد التحديث
+## &rlm;<a id="the-daemon-didnt-come-back-after-an-update"></a>aipager لم يعد بعد التحديث
 
 يتحقق التحديث من أن الإصدار الجديد يُستورد قبل أي إعادة تشغيل، لكن إذا ظل aipager الجديد يفشل في البدء، يعيد systemd المحاولة كل ٥ ثوانٍ. لمعرفة السبب:
 
@@ -377,23 +377,23 @@ systemctl --user restart aipager.service
 
 </div>
 
-تثبيت pipx من مسار محلي: `pipx install --force /path/to/aipager` عند الـ commit القديم. إذا كان هناك إعلان قديم ينتظر، يُحذف بـ `rm -f ~/.local/share/aipager/update-restart.json` (يُتجاهل بعد ٢٤ ساعة على أي حال)؛ و`~/.local/share/aipager/update.lock` مجرد ملف قفل وحذفه آمن حين لا يجري أي تحديث.
+تثبيت pipx من مسار محلي: `pipx install --force /path/to/aipager` عند الـ commit القديم. إذا كان هناك إعلان قديم ينتظر، يُحذف بـ `rm -f ~/.local/share/aipager/update-restart.json` (يُتجاهل بعد ٢٤ ساعة على أي حال)؛ و&lrm;`~/.local/share/aipager/update.lock` مجرد ملف قفل وحذفه آمن حين لا يجري أي تحديث.
 
 ## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>«انقطع تحديث حين توقف aipager»
 
-توقف aipager (أو أُعيد تشغيله) بينما كان `/update` يثبّت، فتوقف المثبّت معه، لذا قد يكون التثبيت مكتوبًا نصفه. إذا لم يعمل aipager أو Claude Code كما يجب، يلزم الإصلاح: لـ aipager، تشغيل أمر إعادة التثبيت المذكور في الرسالة (مثل `pipx install --force aipager`) ثم `systemctl --user restart aipager.service`؛ ولـ Claude Code، تشغيل `claude update` مرة أخرى.
+توقف aipager (أو أُعيد تشغيله) بينما كان &lrm;`/update` يثبّت، فتوقف المثبّت معه، لذا قد يكون التثبيت مكتوبًا نصفه. إذا لم يعمل aipager أو Claude Code كما يجب، يلزم الإصلاح: لـ aipager، تشغيل أمر إعادة التثبيت المذكور في الرسالة (مثل `pipx install --force aipager`) ثم `systemctl --user restart aipager.service`؛ ولـ Claude Code، تشغيل `claude update` مرة أخرى.
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>دردشة بلغة خاطئة
 
-لغة aipager تأتي مما اختير للدردشة، لا من الرسائل فيها. فتح `/language` في تلك الدردشة واختيار اللغة المطلوبة: هذا الاختيار يغلب كل شيء آخر. في الدردشة الخاصة، يتبع **تلقائي** لغة تطبيق Telegram لديك (الإعدادات ← اللغة في Telegram)؛ واللغة التي لا يملكها aipager تظهر بالإنجليزية. الدردشة الخاصة الموجودة قبل إضافة اللغات تبقى بالإنجليزية حتى اختيار لغة. والمجموعة بالإنجليزية حتى يختار مشرف لغتها. اللغة لا تغيّر إلا نصوص aipager نفسه: يجيب Claude بلغة الرسالة التي تصله، مهما عرض aipager. يُنظر [اللغات](commands.md#languages).
+لغة aipager تأتي مما اختير للدردشة، لا من الرسائل فيها. فتح &lrm;`/language` في تلك الدردشة واختيار اللغة المطلوبة: هذا الاختيار يغلب كل شيء آخر. في الدردشة الخاصة، يتبع **تلقائي** لغة تطبيق Telegram لديك (الإعدادات ← اللغة في Telegram)؛ واللغة التي لا يملكها aipager تظهر بالإنجليزية. الدردشة الخاصة الموجودة قبل إضافة اللغات تبقى بالإنجليزية حتى اختيار لغة. والمجموعة بالإنجليزية حتى يختار مشرف لغتها. اللغة لا تغيّر إلا نصوص aipager نفسه: يجيب Claude بلغة الرسالة التي تصله، مهما عرض aipager. يُنظر [اللغات](commands.md#languages).
 
 ## <a id="the-bot-description-is-not-the-one-i-wrote"></a>وصف البوت ليس الذي كتبته
 
 يضبط aipager وصف البوت ووصفه القصير بكل لغة يتحدثها، للأشخاص الذين تطبيق Telegram لديهم بتلك اللغة، ويعرض Telegram ذلك النص لهم بدل النص الذي كتبته في BotFather. لا يفعل aipager ذلك إلا ما دام ليس لديك وصف خاص بك، لذا فالوصف المكتوب قبل تثبيت هذا الإصدار يصل إلى الجميع. إذا كتبته بعد أن ضبط aipager وصفه، فمن يستخدمون تلك اللغات ما زالوا يرون وصف aipager. لكي يروا وصفك، يُمسح نص aipager لكل لغة عبر Bot API (`setMyDescription` و`setMyShortDescription` بنص فارغ و`language_code` تلك اللغة)؛ ولا يضبطه aipager مرة أخرى ما دام وصفك موجودًا.
 
-## <a id="aipager-says-languagesjson-could-not-be-used"></a>aipager يقول إن languages.json تعذّر استخدامه
+## &rlm;<a id="aipager-says-languagesjson-could-not-be-used"></a>aipager يقول إن languages.json تعذّر استخدامه
 
-يحفظ aipager ما تعلّمه عن اللغات (من كان هنا قبل إضافة اللغات، وآخر لغة Telegram رآها لدى كل شخص، وهل أُرسل العرض الذي يأتي مرة واحدة وسطر الترحيب الأول) في `~/.local/state/aipager/languages.json`. إذا تعذّرت قراءة ذلك الملف، ينقله aipager جانبًا إلى `languages.json.bad-<time>` في المجلد نفسه، ويكتب تحذيرًا في السجل (مرة أخرى عند كل بدء حتى يُتخذ قرار)، ويُبقي كل دردشة بالإنجليزية دون أي عرض للغة حتى يُتخذ قرار: إعادة الملف القديم إن أمكن إصلاحه، أو حذف `languages.json` ثم إعادة التشغيل، فيعدّ aipager كل شخص يعرفه موجودًا من قبل (الإنجليزية حتى يختار). اللغة التي اختارها أي شخص ليست في هذا الملف ولا تضيع أبدًا.
+يحفظ aipager ما تعلّمه عن اللغات (من كان هنا قبل إضافة اللغات، وآخر لغة Telegram رآها لدى كل شخص، وهل أُرسل العرض الذي يأتي مرة واحدة وسطر الترحيب الأول) في &lrm;`~/.local/state/aipager/languages.json`. إذا تعذّرت قراءة ذلك الملف، ينقله aipager جانبًا إلى `languages.json.bad-<time>`&lrm; في المجلد نفسه، ويكتب تحذيرًا في السجل (مرة أخرى عند كل بدء حتى يُتخذ قرار)، ويُبقي كل دردشة بالإنجليزية دون أي عرض للغة حتى يُتخذ قرار: إعادة الملف القديم إن أمكن إصلاحه، أو حذف `languages.json` ثم إعادة التشغيل، فيعدّ aipager كل شخص يعرفه موجودًا من قبل (الإنجليزية حتى يختار). اللغة التي اختارها أي شخص ليست في هذا الملف ولا تضيع أبدًا.
 
 ## <a id="right-to-left-text-looks-wrong"></a>النص من اليمين إلى اليسار يبدو خاطئًا
 
@@ -401,11 +401,11 @@ systemctl --user restart aipager.service
 
 ## <a id="a-translated-keyboard-word-does-nothing-in-another-chat"></a>كلمة لوحة مفاتيح مترجمة لا تفعل شيئًا في دردشة أخرى
 
-لوحة مفاتيح الرد في كل دردشة بلغة تلك الدردشة. كلمات لوحة المفاتيح الرئيسية (status وstop وnew وkill والبقية) مفهومة في كل دردشة، بكل لغة، والكلمات الإنجليزية تعمل دائمًا. أما كلمة زر قالب أو أمر فمختلفة: إذا كُتبت في دردشة مضبوطة على لغة أخرى، فهي رسالة إلى Claude لا زر، لذا فكلمة «مسح المحادثة» العربية لا تشغّل أبدًا `/clear` في دردشة فارسية أو إنجليزية. الحل استخدام الزر نفسه، أو الأمر الإنجليزي (`/clear`). إذا بدت لوحة المفاتيح قديمة بعد تغيير لغة الدردشة، يُرسل `/start` للحصول على الحالية. الكلمة التي هي أيضًا اسم إحدى جلساتك تخاطب تلك الجلسة. يقرأ `/mode` الكلمات `ask` و`auto` و`full` كوضع دائمًا، ويقرأ كلمة الوضع المترجمة كاسم جلسة فقط حين يكون لجلسة جارية هذا الاسم بالضبط.
+لوحة مفاتيح الرد في كل دردشة بلغة تلك الدردشة. كلمات لوحة المفاتيح الرئيسية (status وstop وnew وkill والبقية) مفهومة في كل دردشة، بكل لغة، والكلمات الإنجليزية تعمل دائمًا. أما كلمة زر قالب أو أمر فمختلفة: إذا كُتبت في دردشة مضبوطة على لغة أخرى، فهي رسالة إلى Claude لا زر، لذا فكلمة «مسح المحادثة» العربية لا تشغّل أبدًا &lrm;`/clear` في دردشة فارسية أو إنجليزية. الحل استخدام الزر نفسه، أو الأمر الإنجليزي (&lrm;`/clear`). إذا بدت لوحة المفاتيح قديمة بعد تغيير لغة الدردشة، يُرسل &lrm;`/start` للحصول على الحالية. الكلمة التي هي أيضًا اسم إحدى جلساتك تخاطب تلك الجلسة. يقرأ &lrm;`/mode` الكلمات `ask` و`auto` و`full` كوضع دائمًا، ويقرأ كلمة الوضع المترجمة كاسم جلسة فقط حين يكون لجلسة جارية هذا الاسم بالضبط.
 
 ## <a id="still-stuck"></a>ما زالت المشكلة قائمة؟
 
-إرسال تقرير مشكلة: الضغط على **الإبلاغ عن مشكلة** تحت `/help` في دردشتك الخاصة مع البوت، أو تشغيل `aipager report` في طرفية. يظهر لك التقرير كاملًا قبل إرسال أي شيء، ولا يحتوي على دردشات أو رسائل أو أسماء أو مسارات أو توكنات (يُنظر [تقارير المشكلات](problem-reports.md)). بعد الإرسال يصلك رقم مرجع مثل `ap1-7c41d09e2b3a`.
+إرسال تقرير مشكلة: الضغط على **الإبلاغ عن مشكلة** تحت &lrm;`/help` في دردشتك الخاصة مع البوت، أو تشغيل `aipager report` في طرفية. يظهر لك التقرير كاملًا قبل إرسال أي شيء، ولا يحتوي على دردشات أو رسائل أو أسماء أو مسارات أو توكنات (يُنظر [تقارير المشكلات](problem-reports.md)). بعد الإرسال يصلك رقم مرجع مثل `ap1-7c41d09e2b3a`.
 
 ثم، إن رغبت في مناقشة الأمر، يمكنك فتح issue في [github.com/dev-aly3n/aipager/issues](https://github.com/dev-aly3n/aipager/issues) وذكر رقم المرجع ذاك. يُرجى عدم لصق مخرجات `aipager doctor` أو `aipager logs` في issue: ففيها معرّف دردشتك، ومسارات مجلدك الرئيسي، وأسماء الجلسات، وبدايات رسائلك. إذا احتاج المطوّر سطرًا من السجل، فسيطلب ذلك السطر وحده، ويمكن حذف أي شيء خاص منه أولًا.
 
