@@ -449,6 +449,8 @@ def test_an_underscore_in_a_name_is_not_emphasis():
     # Paired, the marks go inside as before.
     assert fa.md("a.b", "x _my_var_") == RLM + "x _my_var" + RLM + "_"
     assert fa.md("a.b", "(_x_)") == RLM + "(_x_)" + RLM
+    # Punctuation after a closer still lets it close.
+    assert fa.md("a.b", "_x_, y") == "_" + RLM + "x_, y" + RLM
 
 
 @pytest.mark.parametrize("kind", ["html", "text", None])
