@@ -96,6 +96,27 @@ def test_custom_buttons_match_as_written(bot):
     assert kbwords.custom_action(SimpleNamespace(), "Clear") is None
 
 
+def test_a_custom_label_with_end_marks_matches_the_label(bot):
+    """A model label tapped from a right-to-left row may carry RLM at its
+    ends; it still runs the label's payload, and nothing else."""
+    rlm = "\u200f"
+    assert kbwords.custom_action(bot, rlm + "Opus" + rlm) == ("model", "/model opus")
+    assert kbwords.custom_action(bot, "Clear" + rlm) == ("cmd", "/clear")
+    assert kbwords.classify(bot, rlm + "Opus") == "acting"
+    assert kbwords.custom_action(bot, rlm + "opus" + rlm) is None
+    assert kbwords.custom_action(bot, rlm) is None
+
+
+def test_the_label_as_written_wins_over_a_normalized_one():
+    """keyboard.json's own spelling is matched first: a label written with
+    a mark is its own button even when a bare twin exists."""
+    rlm = "\u200f"
+    bot = SimpleNamespace(_template_map={"Opus": "bare"},
+                          _model_map={rlm + "Opus": "/model marked"})
+    assert kbwords.custom_action(bot, rlm + "Opus") == ("model", "/model marked")
+    assert kbwords.custom_action(bot, "Opus") == ("tpl", "bare")
+
+
 def test_classify_keeps_the_capture_rules(bot):
     for text in ("new", " Status ", "Templates", "« Back", "📱 App"):
         assert kbwords.classify(bot, text) == "looking", text
