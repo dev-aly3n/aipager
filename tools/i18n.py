@@ -672,25 +672,28 @@ def check_budget(key: str, text: str, *, src: dict | None = None, code: str = "e
             value = str(examples.get(name, "{" + name + "}"))
         filled = filled.replace("{" + name + "}", value)
     measure = cells if budget["unit"] == "cells" else len
-    size = measure(filled) + rtl_overhead(code, text, src)
+    size = measure(filled) + rtl_overhead(code, text, src, kind=budget["kind"])
     if size > budget["limit"]:
         return [f"{code} {key}: {size} {budget['unit']} > {budget['limit']}: {filled!r}"]
     return []
 
 
-def rtl_overhead(code: str, text: str, src: dict | None) -> int:
+def rtl_overhead(code: str, text: str, src: dict | None, *, kind: str | None = None) -> int:
     """The invisible marks a right-to-left language renders *text* with:
-    the leading U+200F, one more per line, and an isolate pair around
-    each text placeholder (a count, ``{n}`` or an example that is a
-    number, gets none). Telegram counts them toward its limits too (a
-    toast past 200 characters is dropped), so the budget does."""
+    a U+200F at the start and at the end of each line (only at the start
+    for a ``/`` menu description, *kind* ``"menu"``, which ``Tr.lead``
+    marks so), and an isolate pair around each text placeholder (a
+    count, ``{n}`` or an example that is a number, gets none). Telegram
+    counts them toward its limits too (a toast past 200 characters is
+    dropped), so the budget does."""
     loc = locales.LOCALES.get(code) or locales.PSEUDO.get(code)
     if loc is None or not loc.rtl:
         return 0
     examples = (src or {}).get("eg") or {}
     text_holders = [name for name in core.placeholders(text)
                     if name != "n" and not isinstance(examples.get(name), (int, float))]
-    return 1 + text.count("\n") + 2 * len(text_holders)
+    per_line = 1 if kind == "menu" else 2
+    return per_line * (1 + text.count("\n")) + 2 * len(text_holders)
 
 
 def check_english_budgets(rows: list[dict]) -> list[str]:
@@ -1834,8 +1837,10 @@ def main(argv=None) -> int:
     if args.cmd == "pseudo":
         text = core.pseudo(args.text)
         if args.rtl:
-            # As the RTL pseudo locale shows it: a mark at every line start.
-            text = "\n".join("\u200f" + line for line in text.split("\n"))
+            # As the RTL pseudo locale shows it: each line marked at its
+            # start and its end (none on a blank line or beside a block).
+            tr = core.get("qps-rtl")
+            text = "\n".join(tr.line(line) for line in text.split("\n"))
         print(text)
         return 0
     return 2  # pragma: no cover

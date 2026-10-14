@@ -33,7 +33,7 @@ def test_the_check_in_persian():
     fa = i18n.get("fa")
     offer = update_flow.update_offer(update_status(), fa)
     assert offer.kind == "both"
-    assert offer.lines[0] == f"{RLM}aipager {FSI}1.0.1{PDI} ← {FSI}1.0.2{PDI}"
+    assert offer.lines[0] == f"{RLM}aipager {FSI}1.0.1{PDI} ← {FSI}1.0.2{PDI}{RLM}"
     assert "→" not in "".join(offer.lines)
     assert _persian(offer.label) and _persian(offer.restart)
     text, kb = update_flow.render_check(update_status(), show_paths=True, tr=fa)
@@ -82,9 +82,9 @@ def test_elapsed_label_in_persian():
     """The heartbeat keeps its own shape, with translated units and Persian
     digits (ruling 6)."""
     fa = i18n.get("fa")
-    assert update_flow._elapsed_label(150, fa) == f" ({RLM}۲ دقیقه و ۳۰ ثانیه)"
-    assert update_flow._elapsed_label(60, fa) == f" ({RLM}۱ دقیقه)"
-    assert update_flow._elapsed_label(30, fa) == f" ({RLM}۳۰ ثانیه)"
+    assert update_flow._elapsed_label(150, fa) == f" ({RLM}۲ دقیقه و ۳۰ ثانیه{RLM})"
+    assert update_flow._elapsed_label(60, fa) == f" ({RLM}۱ دقیقه{RLM})"
+    assert update_flow._elapsed_label(30, fa) == f" ({RLM}۳۰ ثانیه{RLM})"
     assert update_flow._elapsed_label(0, fa) == ""
 
 

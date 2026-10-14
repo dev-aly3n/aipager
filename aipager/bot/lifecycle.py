@@ -1377,7 +1377,10 @@ class LifecycleMixin:
 
         ``tr``: the chat's language (English when None): every
         description is rendered through it; the command words stay as
-        they are."""
+        they are. A description is one field of the / list, not a message
+        line, so in a right-to-left language it is marked at its start
+        only (`Tr.lead`): the end mark would only cost one of its 40
+        characters."""
         tr = tr or _english()
         commands = []
         for label in sorted(labels):
@@ -1390,13 +1393,13 @@ class LifecycleMixin:
                           "command; the session is still reachable by "
                           "keyboard button and by typing it in full", label)
                 continue
-            commands.append(BotCommand(command, tr.text(_CMD_TALK, session=label)))
-        commands += [BotCommand(name, tr.text(msg)) for name, msg in _CMD_DESCRIPTIONS]
+            commands.append(BotCommand(command, tr.lead(tr.text(_CMD_TALK, session=label))))
+        commands += [BotCommand(name, tr.lead(tr.text(msg))) for name, msg in _CMD_DESCRIPTIONS]
         # Read late (not module-level) so a live `aipager miniapp enable`
         # + restart is reflected without re-importing this module.
         from aipager.config import MINIAPP_ENABLED
         if MINIAPP_ENABLED and not group:
-            commands.append(BotCommand("app", tr.text(_CMD_APP)))
+            commands.append(BotCommand("app", tr.lead(tr.text(_CMD_APP))))
         return commands
 
     @classmethod

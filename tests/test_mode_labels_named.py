@@ -78,7 +78,7 @@ RLM = "\u200f"
 
 
 def _shown(code, msg):
-    return i18n.get(code).text(msg).removeprefix(RLM)
+    return i18n.get(code).text(msg).strip(RLM)
 
 
 def test_every_enabled_language_is_covered():

@@ -39,9 +39,11 @@ def test_the_pseudo_command(tmp_path):
     out = subprocess.run([sys.executable, tool_path, "pseudo", "Send /new"],
                          capture_output=True, text=True, check=True, cwd=tool.ROOT, env=env)
     assert out.stdout.strip() == core.pseudo("Send /new")
-    out = subprocess.run([sys.executable, tool_path, "pseudo", "--rtl", "Hi"],
+    out = subprocess.run([sys.executable, tool_path, "pseudo", "--rtl", "Hi\n\nYo"],
                          capture_output=True, text=True, check=True, cwd=tool.ROOT, env=env)
-    assert out.stdout.strip() == "\u200f" + core.pseudo("Hi")
+    rlm = "\u200f"
+    first, blank, last = core.pseudo("Hi\n\nYo").split("\n")
+    assert out.stdout == rlm + first + rlm + "\n" + blank + "\n" + rlm + last + rlm + "\n"
 
 
 #: Language names are names: the list shows each in its own name, with no

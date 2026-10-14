@@ -1154,6 +1154,9 @@ class DashboardMixin:
             summary = self._pinned_summary(sess, tr)
             if summary:
                 head += f" · {esc(summary)}"
+        # One line built from pieces: right to left at both ends, whatever
+        # its last piece (a clock, a tool summary).
+        head = tr.line(head, kind="html")
         sl = self._read_status_file(sess.name)
         details = []
         model = (sl.get("model") if sl else None) or sess.model_name
@@ -1178,7 +1181,7 @@ class DashboardMixin:
                               (len(sess.bg_shells), COUNT_SHELLS)):
             if count:
                 details.append(tr.n(plural, count))
-        return head + (f"\n   {tr.mark}{' · '.join(details)}" if details else "")
+        return head + ("\n   " + tr.line(" · ".join(details), kind="html") if details else "")
 
     def _status_sessions(self, chat_id) -> tuple[list[TrackedSession], list[TrackedSession]]:
         """(live, ended) sessions of *chat_id*: live by label, ended (GONE,

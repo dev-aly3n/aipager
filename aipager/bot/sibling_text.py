@@ -23,8 +23,8 @@ def shown(tr, value, kind: str = "text"):
 
     ``kind="text"``: a whole message (a reply, a pop-up), plain text.
     ``kind="html"``: a parameter of another HTML sentence, as a Safe
-    without its own leading right-to-left mark (the sentence it goes into
-    has one); a str passed through is then escaped like any value."""
+    without its own right-to-left marks (the sentence it goes into has
+    them); a str passed through is then escaped like any value."""
     if isinstance(value, Phrase):
         msg, params = value.msg, dict(value.params)
     elif isinstance(value, Msg):
@@ -38,5 +38,5 @@ def shown(tr, value, kind: str = "text"):
     else:
         out = tr.html(msg, **params) if out_kind == "html" else tr.text(msg, **params)
     if kind == "html":
-        return Safe(out.removeprefix(tr.mark))
+        return Safe(tr.bare(out))
     return out

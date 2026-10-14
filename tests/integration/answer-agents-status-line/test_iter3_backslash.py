@@ -304,7 +304,9 @@ def test_rtl_a_trailing_backslash_is_an_even_run_before_the_isolate_closes(field
 @pytest.mark.parametrize("code", ["fa", "ar"])
 def test_rtl_a_type_ending_in_a_backslash_ends_isolate_then_bold(code):
     row = _row(agent_type="weird" + BS, tr=i18n.get(code))
-    assert row.endswith(PDI + "**")
+    # Then the line's own end mark (after the closer: a PDI before it is
+    # no punctuation, so the closer still closes).
+    assert row.endswith(PDI + "**" + RLM)
 
 
 @pytest.mark.parametrize("code", ["fa", "ar"])

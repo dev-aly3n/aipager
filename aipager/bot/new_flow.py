@@ -565,12 +565,11 @@ def _settings_line(settings: dict, tr=None) -> str:
     """What a session started from this card would get (HTML), in *tr*'s
     language (English when None). A model's name is shown as it is."""
     tr = tr or i18n.get("en")
-    # Each piece without its own leading right-to-left mark: the line has
-    # one already, at its start.
-    mode = Safe(tr.html(mode_label(settings.get("mode") or perm_modes.AUTO))
-                .removeprefix(tr.mark))
+    # Each piece without its own right-to-left marks: the line has them
+    # already, at its ends.
+    mode = Safe(tr.bare(tr.html(mode_label(settings.get("mode") or perm_modes.AUTO))))
     model = (settings.get("model_label")
-             or Safe(tr.html(NS_DEFAULT_MODEL).removeprefix(tr.mark)))
+             or Safe(tr.bare(tr.html(NS_DEFAULT_MODEL))))
     if _needs_folder(settings):
         return tr.html(NEW_SETTINGS_NO_FOLDER, mode=mode, model=model)
     folder = settings.get("cwd") or _project_dir()
@@ -1019,8 +1018,8 @@ def render_ready(
     from aipager.bot import session_parity  # local: avoids an import cycle
     chat_id = sess.scope_chat_id or (calling_chat_id(update) if update else 0) or 0
     tr = tr or i18n.for_chat(chat_id)
-    # Without their own leading right-to-left mark (the line has one).
-    mode = Safe(shown_label(tr, sess).removeprefix(tr.mark))
+    # Without their own right-to-left marks (the line has them).
+    mode = Safe(tr.bare(shown_label(tr, sess)))
     # The model just picked wins; then, while a switch is not yet
     # confirmed, the one it was switched to; then what the statusline
     # reports; then what it was started with. A model's name as it is.
@@ -1028,7 +1027,7 @@ def render_ready(
     model = (model_label
              or (chosen if sess.model_switch_pending() else "")
              or sess.model_name or chosen
-             or Safe(tr.html(NS_DEFAULT_MODEL).removeprefix(tr.mark)))
+             or Safe(tr.bare(tr.html(NS_DEFAULT_MODEL))))
     folder = sess.cwd or _project_dir()
     lines = [
         tr.html(READY, session=sess.label),

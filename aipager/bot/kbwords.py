@@ -16,8 +16,8 @@ The rules each caller had are kept exactly:
 - navigation buttons ("Templates", "« Back"...) match the whole text;
 - the bare words (status, stop, kill, new) match case-insensitively, and
   in the text router only a text with no space that is not a command;
-- template, command and model labels match the whole text, unnormalized
-  (they come from keyboard.json and are matched as written); a DEFAULT
+- template, command and model labels match the whole text, as written
+  first and then normalized (keyboard.json's own spelling wins); a DEFAULT
   template or command label (one keyboard.json did not replace) is also
   matched in English and the chat's own language (every enabled language
   where no chat is given), normalized, and always sends its English
@@ -210,8 +210,10 @@ def _defaults_in_use(bot):
 
 def custom_action(bot, text: str, chat_code: str | None = None) -> tuple[str, str] | None:
     """``("tpl"|"cmd"|"model", payload)`` for a template, command or model
-    button's label: matched exactly, as keyboard.json wrote it, then a
-    default template or command label (with the English payload).
+    button's label: matched exactly, as keyboard.json wrote it, then
+    normalized (:func:`norm`: a label with an invisible mark at its ends
+    still matches), then a default template or command label (with the
+    English payload).
 
     With *chat_code* (the text router: the chat's language, in which its
     keyboard is drawn), a default label matches only in English and that
@@ -226,6 +228,13 @@ def custom_action(bot, text: str, chat_code: str | None = None) -> tuple[str, st
     t = norm(text)
     if not t:
         return None
+    # The same label with an invisible mark at its ends (a right-to-left
+    # keyboard row) or in another normal form still matches.
+    for kind, attr in _MAPS:
+        mapping = getattr(bot, attr, None) or {}
+        for label, payload in mapping.items():
+            if norm(label) == t:
+                return kind, payload
     codes = None if chat_code is None else [chat_code]
     for kind, _label, payload, msg in _defaults_in_use(bot):
         if any(t == norm(shown) for shown in _labels(msg, codes)):

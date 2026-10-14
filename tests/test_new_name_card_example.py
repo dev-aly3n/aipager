@@ -44,13 +44,15 @@ def test_the_example_reads_in_the_chats_language(mk_bot, run_async, monkeypatch,
 
 @pytest.mark.parametrize("code", ["fa", "ru"])
 def test_the_settings_line_has_one_mark_at_most(mk_bot, run_async, monkeypatch, code):
-    """The Name card's settings line (mode, model, folder) starts with a
-    single right-to-left mark in Persian, not one per nested piece."""
+    """The Name card's settings line (mode, model, folder) starts and ends
+    with a single right-to-left mark in Persian, not one per nested
+    piece."""
     card = _card(mk_bot, run_async, monkeypatch, code)
     (line,) = [line for line in card.split("\n") if "🧠" in line]
     assert RLM * 2 not in card
     if code == "fa":
-        assert line.startswith(RLM) and line.count(RLM) == 1, ascii(line)
+        assert line.startswith(RLM) and line.endswith(RLM), ascii(line)
+        assert line.count(RLM) == 2, ascii(line)
     else:
         assert RLM not in card
 
@@ -65,4 +67,4 @@ def test_the_ready_cards_settings_line_has_one_mark_at_most(mk_bot, run_async, m
     for card in ready:
         (line,) = [line for line in card.split("\n") if "🧠" in line]
         assert RLM * 2 not in card
-        assert line.count(RLM) == (1 if code == "fa" else 0), ascii(line)
+        assert line.count(RLM) == (2 if code == "fa" else 0), ascii(line)

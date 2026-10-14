@@ -384,9 +384,12 @@ class KeyboardMixin:
         for i, opt in enumerate(options):
             opt_label = opt["label"] if "label" in opt else tr.text(OPTION, n=i + 1)
             desc = opt.get("description", "")
-            text += f"\n  {tr.num(i + 1)}. {html_mod.escape(opt_label)}"
+            row = f"{tr.num(i + 1)}. {html_mod.escape(opt_label)}"
             if desc:
-                text += f" - {html_mod.escape(desc[:60])}"
+                row += f" - {html_mod.escape(desc[:60])}"
+            # A row whose label is ours (Claude gave none) reads right to
+            # left at both ends; Claude's own rows get no mark.
+            text += "\n  " + (row if "label" in opt else tr.line(row, kind="html"))
 
         # Local import, not top-level — avoids an import cycle with
         # session_parity (which itself imports from this package).

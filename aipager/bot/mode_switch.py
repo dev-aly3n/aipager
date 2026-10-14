@@ -204,8 +204,8 @@ def _notes(tr, sess: TrackedSession, pending: ModeSwitch, outcome: str) -> tuple
                         mode=Safe(shown_label(tr, sess, html=False)))
         html = tr.html(SWITCH_UNCONFIRMED, session=sess.label,
                        mode=Safe(shown_label(tr, sess)))
-    # One line, one mark at its start (the warning line's).
-    return tr.html(WARNING_LINE, text=Safe(html.removeprefix(tr.mark))), plain
+    # One line, marked at its ends by the warning line (its own marks go).
+    return tr.html(WARNING_LINE, text=Safe(tr.bare(html))), plain
 
 
 async def settle(bot, sess: TrackedSession, pending: ModeSwitch, outcome: str) -> None:

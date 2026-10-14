@@ -307,7 +307,10 @@ def test_group_titles_keep_every_word(tmp_path):
         assert got[title] == re.sub(r"^[^A-Za-z0-9]+\s+", "", title), title
     for title in titles["ru"] + titles["fa"]:
         words = title.replace("\u200f", "").split()[1:]
-        assert got[title] == " ".join(words), (title, got[title])
+        # A right-to-left title's end mark stays (harmless in the page,
+        # which is laid out right to left from its <html dir>).
+        end = "\u200f" if title.endswith("\u200f") else ""
+        assert got[title] == " ".join(words) + end, (title, got[title])
 
 
 def test_option_labels_keep_their_lead_separator():

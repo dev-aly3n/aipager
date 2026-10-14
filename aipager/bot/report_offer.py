@@ -208,21 +208,16 @@ def _innermost_file(entry: dict) -> str | None:
     return file if isinstance(file, str) and file else None
 
 
-#: The right-to-left mark a translated text starts with (escaped: no raw
-#: direction control in source).
-_RLM = "\u200f"
-
-
 def _area_in_sentence(entry: dict, tr) -> str:
     """:func:`area` for use inside the notice's sentence: a keyed area is
     the translation itself (``Safe``: not isolated like a name, and
-    without its line-start mark, which mid-sentence is noise); a file
+    without its line marks, which mid-sentence are noise); a file
     stem stays a plain value, isolated like any name."""
     file = _innermost_file(entry)
     words = _AREAS.get(file) if file is not None else None
     if words is None:
         return area(entry, tr)
-    return Safe(tr.text(words).removeprefix(_RLM))
+    return Safe(tr.bare(tr.text(words)))
 
 
 def notice_text(entries: list[dict], tr=None) -> str:

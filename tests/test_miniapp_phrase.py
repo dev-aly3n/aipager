@@ -58,15 +58,15 @@ def test_say_renders_a_phrase():
     p = Phrase(GREET, name="x1", command=Command("/new"))
     assert say(i18n.get("en"), p) == p
     # No catalog entry for a test key: the English, but laid out for Persian
-    # (a leading mark, the name and the command isolated whole).
-    assert say(fa, p) == "\u200fHello \u2068x1\u2069, use \u2068/new\u2069."
+    # (a mark at each end, the name and the command isolated whole).
+    assert say(fa, p) == "\u200fHello \u2068x1\u2069, use \u2068/new\u2069.\u200f"
     assert say(i18n.get("ru"), Phrase(COUNT, n=2, where="a")) == "2 files in a"
-    assert say(fa, Phrase(COUNT, n=2, where="a")) == "\u200f۲ files in \u2068a\u2069"
+    assert say(fa, Phrase(COUNT, n=2, where="a")) == "\u200f۲ files in \u2068a\u2069\u200f"
 
 
 def test_say_renders_a_msg_and_passes_anything_else():
     fa = i18n.get("fa")
-    assert say(fa, PLAIN) == "\u200fNothing to do."
+    assert say(fa, PLAIN) == "\u200fNothing to do.\u200f"
     assert say(fa, "Auto needs an admin.") == "Auto needs an admin."
     assert say(fa, 5) == "5"
 

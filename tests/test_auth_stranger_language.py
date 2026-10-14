@@ -203,6 +203,6 @@ def test_auto_deny_audit_stays_english(mk_bot, run_async, monkeypatch):
                              triggerer))
     text = bot._app.bot.send_message.await_args.args[1]
     assert text == (f"{RLM}⛔ <b>{FSI}x1{PDI}</b> · {FSI}Bash{PDI} برای {FSI}@bob{PDI} "
-                    f"(نقش {FSI}developer{PDI}) مسدود شد\n<i>Bash: rm -rf build/</i>")
+                    f"(نقش {FSI}developer{PDI}) مسدود شد{RLM}\n<i>Bash: rm -rf build/</i>")
     assert records and records[0]["action"] == "Auto-denied"
     assert records[0]["reason"] == "deny_tools"

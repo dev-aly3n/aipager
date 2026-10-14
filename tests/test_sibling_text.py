@@ -33,7 +33,7 @@ def test_a_msg_is_rendered_and_a_str_passes_through():
     fa = i18n.get("fa")
     assert shown(fa, STANDIN) == fa.text(STANDIN) != str(STANDIN)
     html = shown(fa, STANDIN, "html")
-    assert isinstance(html, Safe) and RLM + html == fa.html(STANDIN)
+    assert isinstance(html, Safe) and RLM + html + RLM == fa.html(STANDIN)
     assert shown(i18n.get("ru"), STANDIN, "html") == i18n.get("ru").html(STANDIN)
     plain = "That command needs an admin."
     assert shown(fa, plain) is plain and shown(fa, plain, "html") is plain
@@ -150,8 +150,8 @@ def test_a_phrase_is_rendered_with_its_parameters(code):
     assert shown(tr, err) == want != str(err)
     html = shown(tr, err, "html")
     assert isinstance(html, Safe)
-    assert tr.mark + html == tr.html(launch._NAME_RESERVED, name="status",
-                                     command=Command("/status"))
+    assert tr.mark + html + tr.mark == tr.html(launch._NAME_RESERVED, name="status",
+                                               command=Command("/status"))
     assert shown(i18n.get("en"), err) == str(err)
     script = PERSIAN if code == "fa" else CYRILLIC
     assert script.search(shown(tr, err))
@@ -169,7 +169,7 @@ def test_a_plural_phrase_is_rendered_for_its_count(code, n):
     assert shown(tr, value) == tr.n(plural, n, kind="text", session="x1")
     html = shown(tr, value, "html")
     assert isinstance(html, Safe)
-    assert tr.mark + html == tr.n(plural, n, kind="html", session="x1")
+    assert tr.mark + html + tr.mark == tr.n(plural, n, kind="html", session="x1")
     if code == "en":
         assert shown(tr, value) == str(value)
     else:

@@ -1,0 +1,5537 @@
+[
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "x",
+  "params": {},
+  "out": "x"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "x",
+  "params": {},
+  "out": "x"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "x",
+  "params": {},
+  "out": "x"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "x\ny"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "x\ny"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "x\ny"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "x\n\ny"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "x\n\ny"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "x\n\ny"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "line\n",
+  "params": {},
+  "out": "line\n"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "line\n",
+  "params": {},
+  "out": "line\n"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "line\n",
+  "params": {},
+  "out": "line\n"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "Run <code>ls -la</code>\nthen x1"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "Run <code>ls -la</code>\nthen x1"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "Run <code>ls -la</code>\nthen x1"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "<a href=\"https://x.y/?a=1\">go</a>\n<pre>one\ntwo</pre>\nafter"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "<a href=\"https://x.y/?a=1\">go</a>\n<pre>one\ntwo</pre>\nafter"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "<a href=\"https://x.y/?a=1\">go</a>\n<pre>one\ntwo</pre>\nafter"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "x\n<blockquote>q1\nq2</blockquote>\ny"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "x\n<blockquote>q1\nq2</blockquote>\ny"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "x\n<blockquote>q1\nq2</blockquote>\ny"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "<blockquote>a\nb</blockquote>\nend"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "<blockquote>a\nb</blockquote>\nend"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "<blockquote>a\nb</blockquote>\nend"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "# x1 log\n\n- item\n> quote\n## Agents\n1. one\nplain"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "# x1 log\n\n- item\n> quote\n## Agents\n1. one\nplain"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "# x1 log\n\n- item\n> quote\n## Agents\n1. one\nplain"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "line one\nline two"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "line one\nline two"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "line one\nline two"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "Send /x12 to @alice"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "Send /x12 to @alice"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "Send /x12 to @alice"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "`Read: /a_b*.py` done in 12"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "`Read: /a_b*.py` done in 12"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "`Read: /a_b*.py` done in 12"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "<i>s</i>"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "<i>s</i>"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "<i>s</i>"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200fa\u200f: \u200fb\u200f"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200fa\u200f: \u200fb\u200f"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200fa\u200f: \u200fb\u200f"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u200ea\u200e\n\u200fb"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u200ea\u200e\n\u200fb"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u200ea\u200e\n\u200fb"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "count 1234"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "count 1234"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "count 1234"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "ends in emoji \ud83d\ude80"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "ends in emoji \ud83d\ude80"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "ends in emoji \ud83d\ude80"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "**bold:**\n_a._\n~(x)~"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "**bold:**\n_a._\n~(x)~"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "**bold:**\n_a._\n~(x)~"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "tail <code>ls</code>"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "tail <code>ls</code>"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "tail <code>ls</code>"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "<b>frontend</b> \u00b7 /home/alice"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "<b>frontend</b> \u00b7 /home/alice"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "<b>frontend</b> \u00b7 /home/alice"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "1 agent on x1"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "1 agent on x1"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "1 agent on x1"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "2 agents on x1\nmore"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "2 agents on x1\nmore"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "2 agents on x1\nmore"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "x",
+  "params": {},
+  "out": "x"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "x",
+  "params": {},
+  "out": "x"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "x",
+  "params": {},
+  "out": "x"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "x\ny"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "x\ny"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "x\ny"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "x\n\ny"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "x\n\ny"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "x\n\ny"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "line\n",
+  "params": {},
+  "out": "line\n"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "line\n",
+  "params": {},
+  "out": "line\n"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "line\n",
+  "params": {},
+  "out": "line\n"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "Run <code>ls -la</code>\nthen x1"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "Run <code>ls -la</code>\nthen x1"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "Run <code>ls -la</code>\nthen x1"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "<a href=\"https://x.y/?a=1\">go</a>\n<pre>one\ntwo</pre>\nafter"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "<a href=\"https://x.y/?a=1\">go</a>\n<pre>one\ntwo</pre>\nafter"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "<a href=\"https://x.y/?a=1\">go</a>\n<pre>one\ntwo</pre>\nafter"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "x\n<blockquote>q1\nq2</blockquote>\ny"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "x\n<blockquote>q1\nq2</blockquote>\ny"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "x\n<blockquote>q1\nq2</blockquote>\ny"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "<blockquote>a\nb</blockquote>\nend"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "<blockquote>a\nb</blockquote>\nend"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "<blockquote>a\nb</blockquote>\nend"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "# x1 log\n\n- item\n> quote\n## Agents\n1. one\nplain"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "# x1 log\n\n- item\n> quote\n## Agents\n1. one\nplain"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "# x1 log\n\n- item\n> quote\n## Agents\n1. one\nplain"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "line one\nline two"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "line one\nline two"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "line one\nline two"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "Send /x12 to @alice"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "Send /x12 to @alice"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "Send /x12 to @alice"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "`Read: /a_b*.py` done in 12"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "`Read: /a_b*.py` done in 12"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "`Read: /a_b*.py` done in 12"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "<i>s</i>"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "<i>s</i>"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "<i>s</i>"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200fa\u200f: \u200fb\u200f"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200fa\u200f: \u200fb\u200f"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200fa\u200f: \u200fb\u200f"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u200ea\u200e\n\u200fb"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u200ea\u200e\n\u200fb"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u200ea\u200e\n\u200fb"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "count 1234"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "count 1234"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "count 1234"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "ends in emoji \ud83d\ude80"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "ends in emoji \ud83d\ude80"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "ends in emoji \ud83d\ude80"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "**bold:**\n_a._\n~(x)~"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "**bold:**\n_a._\n~(x)~"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "**bold:**\n_a._\n~(x)~"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "tail <code>ls</code>"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "tail <code>ls</code>"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "tail <code>ls</code>"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "<b>frontend</b> \u00b7 /home/alice"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "<b>frontend</b> \u00b7 /home/alice"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "<b>frontend</b> \u00b7 /home/alice"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "1 agent on x1"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "1 agent on x1"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "1 agent on x1"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "2 agents on x1\nmore"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "2 agents on x1\nmore"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "2 agents on x1\nmore"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "x",
+  "params": {},
+  "out": "x"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "x",
+  "params": {},
+  "out": "x"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "x",
+  "params": {},
+  "out": "x"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "x\ny"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "x\ny"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "x\ny"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "x\n\ny"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "x\n\ny"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "x\n\ny"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "line\n",
+  "params": {},
+  "out": "line\n"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "line\n",
+  "params": {},
+  "out": "line\n"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "line\n",
+  "params": {},
+  "out": "line\n"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "Run \u2068<code>ls -la</code>\u2069\nthen \u2068x1\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "Run \u2068<code>ls -la</code>\u2069\nthen \u2068x1\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "Run \u2068<code>ls -la</code>\u2069\nthen \u2068x1\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "<a href=\"https://x.y/?a=1\">go</a>\n<pre>one\ntwo</pre>\nafter"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "<a href=\"https://x.y/?a=1\">go</a>\n<pre>one\ntwo</pre>\nafter"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "<a href=\"https://x.y/?a=1\">go</a>\n<pre>one\ntwo</pre>\nafter"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "x\n<blockquote>q1\nq2</blockquote>\ny"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "x\n<blockquote>q1\nq2</blockquote>\ny"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "x\n<blockquote>q1\nq2</blockquote>\ny"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "\u200e<blockquote>\u2068a\nb\u2069</blockquote>\nend"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "<blockquote>\u2068a\nb\u2069</blockquote>\nend"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "<blockquote>\u2068a\nb\u2069</blockquote>\nend"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "# \u2068x1\u2069 log\n\n- item\n> quote\n## Agents\n1. one\nplain"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "# \u2068x1\u2069 log\n\n- item\n> quote\n## Agents\n1. one\nplain"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "# \u2068x1\u2069 log\n\n- item\n> quote\n## Agents\n1. one\nplain"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "\u200e\u2068line one\nline two\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "\u200e\u2068line one\nline two\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "\u200e\u2068line one\nline two\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "Send \u2068/x12\u2069 to \u2068@alice\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "Send \u2068/x12\u2069 to \u2068@alice\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "Send \u2068/x12\u2069 to \u2068@alice\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "\u2068`Read: /a_b*.py`\u2069 done in \u06f1\u06f2"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "\u2068`Read: /a_b*.py`\u2069 done in \u06f1\u06f2"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "\u2068`Read: /a_b*.py`\u2069 done in \u06f1\u06f2"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "<i>s</i>"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "<i>s</i>"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "<i>s</i>"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200e\u200fa\u200f: \u200fb\u200f"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200e\u200fa\u200f: \u200fb\u200f"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200e\u200fa\u200f: \u200fb\u200f"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u200ea\u200e\n\u200e\u200fb"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u200ea\u200e\n\u200e\u200fb"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u200ea\u200e\n\u200e\u200fb"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "count \u06f1\u06f2\u06f3\u06f4"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "count \u06f1\u06f2\u06f3\u06f4"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "count \u06f1\u06f2\u06f3\u06f4"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "ends in emoji \ud83d\ude80"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "ends in emoji \ud83d\ude80"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "ends in emoji \ud83d\ude80"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "**bold:**\n_a._\n~(x)~"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "**bold:**\n_a._\n~(x)~"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "**bold:**\n_a._\n~(x)~"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "tail \u2068<code>ls</code>\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "tail \u2068<code>ls</code>\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "tail \u2068<code>ls</code>\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "\u200e<b>\u2068frontend\u2069</b> \u00b7 \u2068/home/alice\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "<b>\u2068frontend\u2069</b> \u00b7 \u2068/home/alice\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "<b>\u2068frontend\u2069</b> \u00b7 \u2068/home/alice\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u06f1 agent on \u2068x1\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u06f1 agent on \u2068x1\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u06f1 agent on \u2068x1\u2069"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u06f2 agents on \u2068x1\u2069\nmore"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u06f2 agents on \u2068x1\u2069\nmore"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u06f2 agents on \u2068x1\u2069\nmore"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "x",
+  "params": {},
+  "out": "x"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "x",
+  "params": {},
+  "out": "x"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "x",
+  "params": {},
+  "out": "x"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "x\ny"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "x\ny"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "x\ny"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "x\n\ny"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "x\n\ny"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "x\n\ny"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "line\n",
+  "params": {},
+  "out": "line\n"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "line\n",
+  "params": {},
+  "out": "line\n"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "line\n",
+  "params": {},
+  "out": "line\n"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "Run \u2068<code>ls -la</code>\u2069\nthen \u2068x1\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "Run \u2068<code>ls -la</code>\u2069\nthen \u2068x1\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "Run \u2068<code>ls -la</code>\u2069\nthen \u2068x1\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "<a href=\"https://x.y/?a=1\">go</a>\n<pre>one\ntwo</pre>\nafter"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "<a href=\"https://x.y/?a=1\">go</a>\n<pre>one\ntwo</pre>\nafter"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "<a href=\"https://x.y/?a=1\">go</a>\n<pre>one\ntwo</pre>\nafter"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "x\n<blockquote>q1\nq2</blockquote>\ny"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "x\n<blockquote>q1\nq2</blockquote>\ny"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "x\n<blockquote>q1\nq2</blockquote>\ny"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "\u200e<blockquote>\u2068a\nb\u2069</blockquote>\nend"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "<blockquote>\u2068a\nb\u2069</blockquote>\nend"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "<blockquote>\u2068a\nb\u2069</blockquote>\nend"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "# \u2068x1\u2069 log\n\n- item\n> quote\n## Agents\n1. one\nplain"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "# \u2068x1\u2069 log\n\n- item\n> quote\n## Agents\n1. one\nplain"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "# \u2068x1\u2069 log\n\n- item\n> quote\n## Agents\n1. one\nplain"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "\u200e\u2068line one\nline two\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "\u200e\u2068line one\nline two\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "\u200e\u2068line one\nline two\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "Send \u2068/x12\u2069 to \u2068@alice\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "Send \u2068/x12\u2069 to \u2068@alice\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "Send \u2068/x12\u2069 to \u2068@alice\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "\u2068`Read: /a_b*.py`\u2069 done in \u0661\u0662"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "\u2068`Read: /a_b*.py`\u2069 done in \u0661\u0662"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "\u2068`Read: /a_b*.py`\u2069 done in \u0661\u0662"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "<i>s</i>"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "<i>s</i>"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "<i>s</i>"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200e\u200fa\u200f: \u200fb\u200f"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200e\u200fa\u200f: \u200fb\u200f"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200e\u200fa\u200f: \u200fb\u200f"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u200ea\u200e\n\u200e\u200fb"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u200ea\u200e\n\u200e\u200fb"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u200ea\u200e\n\u200e\u200fb"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "count \u0661\u0662\u0663\u0664"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "count \u0661\u0662\u0663\u0664"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "count \u0661\u0662\u0663\u0664"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "ends in emoji \ud83d\ude80"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "ends in emoji \ud83d\ude80"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "ends in emoji \ud83d\ude80"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "**bold:**\n_a._\n~(x)~"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "**bold:**\n_a._\n~(x)~"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "**bold:**\n_a._\n~(x)~"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "tail \u2068<code>ls</code>\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "tail \u2068<code>ls</code>\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "tail \u2068<code>ls</code>\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "\u200e<b>\u2068frontend\u2069</b> \u00b7 \u2068/home/alice\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "<b>\u2068frontend\u2069</b> \u00b7 \u2068/home/alice\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "<b>\u2068frontend\u2069</b> \u00b7 \u2068/home/alice\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u0661 agent on \u2068x1\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u0661 agent on \u2068x1\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u0661 agent on \u2068x1\u2069"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u0662 agents on \u2068x1\u2069\nmore"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u0662 agents on \u2068x1\u2069\nmore"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u0662 agents on \u2068x1\u2069\nmore"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "x",
+  "params": {},
+  "out": "\u27e6\u1e8b~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "x",
+  "params": {},
+  "out": "\u27e6\u1e8b~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "x",
+  "params": {},
+  "out": "\u27e6\u1e8b~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "\u27e6\u1e8b\n\u00fd~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "\u27e6\u1e8b\n\u00fd~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "x\ny",
+  "params": {},
+  "out": "\u27e6\u1e8b\n\u00fd~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "\u27e6\u1e8b\n\n\u00fd~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "\u27e6\u1e8b\n\n\u00fd~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "x\n\ny",
+  "params": {},
+  "out": "\u27e6\u1e8b\n\n\u00fd~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "line\n",
+  "params": {},
+  "out": "\u27e6\u013a\u00ee\u00f1\u00e9\n\u200e~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "line\n",
+  "params": {},
+  "out": "\u27e6\u013a\u00ee\u00f1\u00e9\n\u200e~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "line\n",
+  "params": {},
+  "out": "\u27e6\u013a\u00ee\u00f1\u00e9\n\u200e~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e6\u0154\u00fb\u00f1 \u2068<code>ls -la</code>\u2069\n\u0163\u0125\u00e9\u00f1 \u2068x1\u2069~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e6\u0154\u00fb\u00f1 \u2068<code>ls -la</code>\u2069\n\u0163\u0125\u00e9\u00f1 \u2068x1\u2069~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "Run <code>{cmd}</code>\nthen {name}",
+  "params": {
+   "cmd": [
+    "str",
+    "ls -la"
+   ],
+   "name": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e6\u0154\u00fb\u00f1 \u2068<code>ls -la</code>\u2069\n\u0163\u0125\u00e9\u00f1 \u2068x1\u2069~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "\u27e6<a href=\"https://x.y/?a=1\">\u011d\u00f6</a>\n<pre>one\ntwo</pre>\n\u00e0\u0192\u0163\u00e9\u0155~~~~~~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "\u27e6<a href=\"https://x.y/?a=1\">\u011d\u00f6</a>\n<pre>one\ntwo</pre>\n\u00e0\u0192\u0163\u00e9\u0155~~~~~~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "<a href=\"{url}\">go</a>\n<pre>{a}\n{b}</pre>\nafter",
+  "params": {
+   "url": [
+    "str",
+    "https://x.y/?a=1"
+   ],
+   "a": [
+    "str",
+    "one"
+   ],
+   "b": [
+    "str",
+    "two"
+   ]
+  },
+  "out": "\u27e6<a href=\"https://x.y/?a=1\">\u011d\u00f6</a>\n<pre>one\ntwo</pre>\n\u00e0\u0192\u0163\u00e9\u0155~~~~~~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "\u27e6\u1e8b\n<blockquote>\u01eb1\n\u01eb2</blockquote>\n\u00fd~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "\u27e6\u1e8b\n<blockquote>\u01eb1\n\u01eb2</blockquote>\n\u00fd~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "x\n<blockquote>q1\nq2</blockquote>\ny",
+  "params": {},
+  "out": "\u27e6\u1e8b\n<blockquote>\u01eb1\n\u01eb2</blockquote>\n\u00fd~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "\u200e\u27e6<blockquote>\u2068a\nb\u2069</blockquote>\n\u00e9\u00f1\u0111~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "\u27e6<blockquote>\u2068a\nb\u2069</blockquote>\n\u00e9\u00f1\u0111~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "<blockquote>{q}</blockquote>\nend",
+  "params": {
+   "q": [
+    "str",
+    "a\nb"
+   ]
+  },
+  "out": "\u27e6<blockquote>\u2068a\nb\u2069</blockquote>\n\u00e9\u00f1\u0111~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e6# \u2068x1\u2069 \u013a\u00f6\u011d\n\n- \u00ee\u0163\u00e9\u0271\n> \u01eb\u00fb\u00f6\u0163\u00e9\n## \u00c0\u011d\u00e9\u00f1\u0163\u0161\n1. \u00f6\u00f1\u00e9\n\u00fe\u013a\u00e0\u00ee\u00f1~~~~~~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e6# \u2068x1\u2069 \u013a\u00f6\u011d\n\n- \u00ee\u0163\u00e9\u0271\n> \u01eb\u00fb\u00f6\u0163\u00e9\n## \u00c0\u011d\u00e9\u00f1\u0163\u0161\n1. \u00f6\u00f1\u00e9\n\u00fe\u013a\u00e0\u00ee\u00f1~~~~~~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "# {s} log\n\n- item\n> quote\n## Agents\n1. one\nplain",
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e6# \u2068x1\u2069 \u013a\u00f6\u011d\n\n- \u00ee\u0163\u00e9\u0271\n> \u01eb\u00fb\u00f6\u0163\u00e9\n## \u00c0\u011d\u00e9\u00f1\u0163\u0161\n1. \u00f6\u00f1\u00e9\n\u00fe\u013a\u00e0\u00ee\u00f1~~~~~~~~~~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "\u200e\u27e6\u2068line one\nline two\u2069~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "\u200e\u27e6\u2068line one\nline two\u2069~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "{reason}",
+  "params": {
+   "reason": [
+    "str",
+    "line one\nline two"
+   ]
+  },
+  "out": "\u200e\u27e6\u2068line one\nline two\u2069~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "\u27e6\u0160\u00e9\u00f1\u0111 \u2068/x12\u2069 \u0163\u00f6 \u2068@alice\u2069~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "\u27e6\u0160\u00e9\u00f1\u0111 \u2068/x12\u2069 \u0163\u00f6 \u2068@alice\u2069~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "Send {cmd} to {who}",
+  "params": {
+   "cmd": [
+    "command",
+    "/x12"
+   ],
+   "who": [
+    "command",
+    "@alice"
+   ]
+  },
+  "out": "\u27e6\u0160\u00e9\u00f1\u0111 \u2068/x12\u2069 \u0163\u00f6 \u2068@alice\u2069~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "\u27e6\u2068`Read: /a_b*.py`\u2069 \u0111\u00f6\u00f1\u00e9 \u00ee\u00f1 12~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "\u27e6\u2068`Read: /a_b*.py`\u2069 \u0111\u00f6\u00f1\u00e9 \u00ee\u00f1 12~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "{row} done in {n}",
+  "params": {
+   "row": [
+    "span",
+    "`Read: /a_b*.py`"
+   ],
+   "n": [
+    "int",
+    12
+   ]
+  },
+  "out": "\u27e6\u2068`Read: /a_b*.py`\u2069 \u0111\u00f6\u00f1\u00e9 \u00ee\u00f1 12~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "\u27e6<i>s</i>~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "\u27e6<i>s</i>~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "{x}",
+  "params": {
+   "x": [
+    "safe",
+    "<i>s</i>"
+   ]
+  },
+  "out": "\u27e6<i>s</i>~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200e\u27e6\u200fa\u200f: \u200fb\u200f~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200e\u27e6\u200fa\u200f: \u200fb\u200f~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "{x}: {y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200fa\u200f"
+   ],
+   "y": [
+    "safe",
+    "\u200fb\u200f"
+   ]
+  },
+  "out": "\u200e\u27e6\u200fa\u200f: \u200fb\u200f~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u27e6\u200ea\u200e\n\u200e\u200fb~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u27e6\u200ea\u200e\n\u200e\u200fb~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "{x}\n{y}",
+  "params": {
+   "x": [
+    "safe",
+    "\u200ea\u200e"
+   ],
+   "y": [
+    "safe",
+    "\u200fb"
+   ]
+  },
+  "out": "\u27e6\u200ea\u200e\n\u200e\u200fb~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "\u27e6\u00e7\u00f6\u00fb\u00f1\u0163 1234~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "\u27e6\u00e7\u00f6\u00fb\u00f1\u0163 1234~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "count {n}",
+  "params": {
+   "n": [
+    "int",
+    1234
+   ]
+  },
+  "out": "\u27e6\u00e7\u00f6\u00fb\u00f1\u0163 1234~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "\u27e6\u00e9\u00f1\u0111\u0161 \u00ee\u00f1 \u00e9\u0271\u00f6\u0135\u00ee \ud83d\ude80~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "\u27e6\u00e9\u00f1\u0111\u0161 \u00ee\u00f1 \u00e9\u0271\u00f6\u0135\u00ee \ud83d\ude80~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "ends in emoji \ud83d\ude80",
+  "params": {},
+  "out": "\u27e6\u00e9\u00f1\u0111\u0161 \u00ee\u00f1 \u00e9\u0271\u00f6\u0135\u00ee \ud83d\ude80~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "\u27e6**\u0180\u00f6\u013a\u0111:**\n_\u00e0._\n~(\u1e8b)~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "\u27e6**\u0180\u00f6\u013a\u0111:**\n_\u00e0._\n~(\u1e8b)~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "**bold:**\n_a._\n~(x)~",
+  "params": {},
+  "out": "\u27e6**\u0180\u00f6\u013a\u0111:**\n_\u00e0._\n~(\u1e8b)~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "\u27e6\u0163\u00e0\u00ee\u013a \u2068<code>ls</code>\u2069~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "\u27e6\u0163\u00e0\u00ee\u013a \u2068<code>ls</code>\u2069~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "tail <code>{c}</code>",
+  "params": {
+   "c": [
+    "str",
+    "ls"
+   ]
+  },
+  "out": "\u27e6\u0163\u00e0\u00ee\u013a \u2068<code>ls</code>\u2069~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "\u200e\u27e6<b>\u2068frontend\u2069</b> \u00b7 \u2068/home/alice\u2069~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "\u27e6<b>\u2068frontend\u2069</b> \u00b7 \u2068/home/alice\u2069~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "<b>{s}</b> \u00b7 {t}",
+  "params": {
+   "s": [
+    "str",
+    "frontend"
+   ],
+   "t": [
+    "str",
+    "/home/alice"
+   ]
+  },
+  "out": "\u27e6<b>\u2068frontend\u2069</b> \u00b7 \u2068/home/alice\u2069~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e61 \u00e0\u011d\u00e9\u00f1\u0163 \u00f6\u00f1 \u2068x1\u2069~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e61 \u00e0\u011d\u00e9\u00f1\u0163 \u00f6\u00f1 \u2068x1\u2069~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "plural": 1,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e61 \u00e0\u011d\u00e9\u00f1\u0163 \u00f6\u00f1 \u2068x1\u2069~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e62 \u00e0\u011d\u00e9\u00f1\u0163\u0161 \u00f6\u00f1 \u2068x1\u2069\n\u0271\u00f6\u0155\u00e9~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e62 \u00e0\u011d\u00e9\u00f1\u0163\u0161 \u00f6\u00f1 \u2068x1\u2069\n\u0271\u00f6\u0155\u00e9~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "plural": 2,
+  "params": {
+   "s": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e62 \u00e0\u011d\u00e9\u00f1\u0163\u0161 \u00f6\u00f1 \u2068x1\u2069\n\u0271\u00f6\u0155\u00e9~~~~~~~~\u27e7"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "_word: x_"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "- __x__"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "> _q_"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "# _t_"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "_",
+  "params": {},
+  "out": "_"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "_ x",
+  "params": {},
+  "out": "_ x"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "___x___",
+  "params": {},
+  "out": "___x___"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "*word: x*"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "x _y_"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "x __y__"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "x *y+*"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "_word: x_\n- __x1__"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "see `a\u200e\u200fb` now"
+ },
+ {
+  "lang": "en",
+  "kind": "html",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "`a\u200f\u200fb`"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "_word: x_"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "- __x__"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "> _q_"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "# _t_"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "_",
+  "params": {},
+  "out": "_"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "_ x",
+  "params": {},
+  "out": "_ x"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "___x___",
+  "params": {},
+  "out": "___x___"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "*word: x*"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "x _y_"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "x __y__"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "x *y+*"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "_word: x_\n- __x1__"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "see `a\u200e\u200fb` now"
+ },
+ {
+  "lang": "en",
+  "kind": "text",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "`a\u200f\u200fb`"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "_word: x_"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "- __x__"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "> _q_"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "# _t_"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "_",
+  "params": {},
+  "out": "_"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "_ x",
+  "params": {},
+  "out": "_ x"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "___x___",
+  "params": {},
+  "out": "___x___"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "*word: x*"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "x _y_"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "x __y__"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "x *y+*"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "_word: x_\n- __x1__"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "see `a\u200e\u200fb` now"
+ },
+ {
+  "lang": "en",
+  "kind": "md",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "`a\u200f\u200fb`"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "_word: x_"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "- __x__"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "> _q_"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "# _t_"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "_",
+  "params": {},
+  "out": "_"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "_ x",
+  "params": {},
+  "out": "_ x"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "___x___",
+  "params": {},
+  "out": "___x___"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "*word: x*"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "x _y_"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "x __y__"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "x *y+*"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "_word: x_\n- __x1__"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "see `a\u200e\u200fb` now"
+ },
+ {
+  "lang": "ru",
+  "kind": "html",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "`a\u200f\u200fb`"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "_word: x_"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "- __x__"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "> _q_"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "# _t_"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "_",
+  "params": {},
+  "out": "_"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "_ x",
+  "params": {},
+  "out": "_ x"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "___x___",
+  "params": {},
+  "out": "___x___"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "*word: x*"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "x _y_"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "x __y__"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "x *y+*"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "_word: x_\n- __x1__"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "see `a\u200e\u200fb` now"
+ },
+ {
+  "lang": "ru",
+  "kind": "text",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "`a\u200f\u200fb`"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "_word: x_"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "- __x__"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "> _q_"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "# _t_"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "_",
+  "params": {},
+  "out": "_"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "_ x",
+  "params": {},
+  "out": "_ x"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "___x___",
+  "params": {},
+  "out": "___x___"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "*word: x*"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "x _y_"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "x __y__"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "x *y+*"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "_word: x_\n- __x1__"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "see `a\u200e\u200fb` now"
+ },
+ {
+  "lang": "ru",
+  "kind": "md",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "`a\u200f\u200fb`"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "_word: x_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "- __x__"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "> _q_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "# _t_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "_",
+  "params": {},
+  "out": "\u200e_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "_ x",
+  "params": {},
+  "out": "_ x"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "___x___",
+  "params": {},
+  "out": "___x___"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "*word: x*"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "x _y_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "x __y__"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "x *y+*"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "_word: x_\n- \u200e__\u2068x1\u2069__"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "see `a\u200e\u200fb` now"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "html",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "`a\u200f\u200fb`"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "_word: x_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "- __x__"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "> _q_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "# _t_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "_",
+  "params": {},
+  "out": "\u200e_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "_ x",
+  "params": {},
+  "out": "_ x"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "___x___",
+  "params": {},
+  "out": "___x___"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "*word: x*"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "x _y_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "x __y__"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "x *y+*"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "_word: x_\n- \u200e__\u2068x1\u2069__"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "see `a\u200e\u200fb` now"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "text",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "`a\u200f\u200fb`"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "_word: x_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "- __x__"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "> _q_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "# _t_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "_",
+  "params": {},
+  "out": "\u200e_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "_ x",
+  "params": {},
+  "out": "_ x"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "___x___",
+  "params": {},
+  "out": "___x___"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "*word: x*"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "x _y_"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "x __y__"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "x *y+*"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "_word: x_\n- \u200e__\u2068x1\u2069__"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "see `a\u200e\u200fb` now"
+ },
+ {
+  "lang": "fa@ltr",
+  "kind": "md",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "`a\u200f\u200fb`"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "_word: x_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "- __x__"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "> _q_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "# _t_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "_",
+  "params": {},
+  "out": "\u200e_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "_ x",
+  "params": {},
+  "out": "_ x"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "___x___",
+  "params": {},
+  "out": "___x___"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "*word: x*"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "x _y_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "x __y__"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "x *y+*"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "_word: x_\n- \u200e__\u2068x1\u2069__"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "see `a\u200e\u200fb` now"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "html",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "`a\u200f\u200fb`"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "_word: x_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "- __x__"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "> _q_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "# _t_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "_",
+  "params": {},
+  "out": "\u200e_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "_ x",
+  "params": {},
+  "out": "_ x"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "___x___",
+  "params": {},
+  "out": "___x___"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "*word: x*"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "x _y_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "x __y__"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "x *y+*"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "_word: x_\n- \u200e__\u2068x1\u2069__"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "see `a\u200e\u200fb` now"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "text",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "`a\u200f\u200fb`"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "_word: x_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "- __x__"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "> _q_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "# _t_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "_",
+  "params": {},
+  "out": "\u200e_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "_ x",
+  "params": {},
+  "out": "_ x"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "___x___",
+  "params": {},
+  "out": "___x___"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "*word: x*"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "x _y_"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "x __y__"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "x *y+*"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "_word: x_\n- \u200e__\u2068x1\u2069__"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "see `a\u200e\u200fb` now"
+ },
+ {
+  "lang": "ar@ltr",
+  "kind": "md",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "`a\u200f\u200fb`"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "\u27e6_\u0175\u00f6\u0155\u0111: \u1e8b_~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "\u27e6- __\u1e8b__~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "\u27e6> _\u01eb_~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "\u27e6# _\u0163_~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "_",
+  "params": {},
+  "out": "\u200e\u27e6_~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "_ x",
+  "params": {},
+  "out": "\u27e6_ \u1e8b~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "___x___",
+  "params": {},
+  "out": "\u27e6___\u1e8b___~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "\u27e6*\u0175\u00f6\u0155\u0111: \u1e8b*~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "\u27e6\u1e8b _\u00fd_~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "\u27e6\u1e8b __\u00fd__~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "\u27e6\u1e8b *\u00fd+*~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e6_\u0175\u00f6\u0155\u0111: \u1e8b_\n- \u200e__\u2068x1\u2069__~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "\u27e6\u0161\u00e9\u00e9 `\u00e0\u200e\u200f\u0180` \u00f1\u00f6\u0175~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "html",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "\u27e6`a\u200f\u200fb`~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "\u27e6_\u0175\u00f6\u0155\u0111: \u1e8b_~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "\u27e6- __\u1e8b__~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "\u27e6> _\u01eb_~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "\u27e6# _\u0163_~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "_",
+  "params": {},
+  "out": "\u200e\u27e6_~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "_ x",
+  "params": {},
+  "out": "\u27e6_ \u1e8b~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "___x___",
+  "params": {},
+  "out": "\u27e6___\u1e8b___~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "\u27e6*\u0175\u00f6\u0155\u0111: \u1e8b*~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "\u27e6\u1e8b _\u00fd_~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "\u27e6\u1e8b __\u00fd__~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "\u27e6\u1e8b *\u00fd+*~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e6_\u0175\u00f6\u0155\u0111: \u1e8b_\n- \u200e__\u2068x1\u2069__~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "\u27e6\u0161\u00e9\u00e9 `\u00e0\u200e\u200f\u0180` \u00f1\u00f6\u0175~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "text",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "\u27e6`a\u200f\u200fb`~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "_word: x_",
+  "params": {},
+  "out": "\u27e6_\u0175\u00f6\u0155\u0111: \u1e8b_~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "- __x__",
+  "params": {},
+  "out": "\u27e6- __\u1e8b__~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "> _q_",
+  "params": {},
+  "out": "\u27e6> _\u01eb_~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "# _t_",
+  "params": {},
+  "out": "\u27e6# _\u0163_~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "_",
+  "params": {},
+  "out": "\u200e\u27e6_~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "_ x",
+  "params": {},
+  "out": "\u27e6_ \u1e8b~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "___x___",
+  "params": {},
+  "out": "\u27e6___\u1e8b___~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "*word: x*",
+  "params": {},
+  "out": "\u27e6*\u0175\u00f6\u0155\u0111: \u1e8b*~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "x _y_",
+  "params": {},
+  "out": "\u27e6\u1e8b _\u00fd_~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "x __y__",
+  "params": {},
+  "out": "\u27e6\u1e8b __\u00fd__~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "x *y+*",
+  "params": {},
+  "out": "\u27e6\u1e8b *\u00fd+*~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "_word: x_\n- __{v}__",
+  "params": {
+   "v": [
+    "str",
+    "x1"
+   ]
+  },
+  "out": "\u27e6_\u0175\u00f6\u0155\u0111: \u1e8b_\n- \u200e__\u2068x1\u2069__~~~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "see `a\u200e\u200fb` now",
+  "params": {},
+  "out": "\u27e6\u0161\u00e9\u00e9 `\u00e0\u200e\u200f\u0180` \u00f1\u00f6\u0175~~~~~\u27e7"
+ },
+ {
+  "lang": "qps-rtl@ltr",
+  "kind": "md",
+  "pattern": "{v}",
+  "params": {
+   "v": [
+    "safe",
+    "`a\u200f\u200fb`"
+   ]
+  },
+  "out": "\u27e6`a\u200f\u200fb`~~\u27e7"
+ }
+]

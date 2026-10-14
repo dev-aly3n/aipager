@@ -78,4 +78,4 @@ def test_checking_toast_russian_edit_persian(bot, run_async):
     run_async(update_flow.handle_callback(bot, update, query, "_", "up:chk"))
     assert _answers(query) == ["Проверяю…"]
     edit = query.edit_message_text.await_args.args[0]
-    assert edit == "🔎 \u200fدر حال چک کردن…"
+    assert edit == "🔎 \u200fدر حال چک کردن…\u200f"

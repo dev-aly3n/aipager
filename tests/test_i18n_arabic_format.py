@@ -54,7 +54,7 @@ def test_numbers_get_arabic_indic_digits_and_separators():
     assert ar.num("45%") == "٤٥٪" + ALM
     assert ar.clock(250) == "٤:١٠"
     assert ar.clock(5010) == "١:٢٣:٣٠"
-    assert ar.text("a.b", "{n}", n=2026) == RLM + "٢٠٢٦"
+    assert ar.text("a.b", "{n}", n=2026) == RLM + "٢٠٢٦" + RLM
     assert ar.join(["a", "b", "c"]) == "a، b، c"
 
 
@@ -93,7 +93,7 @@ def test_rtl_marks_and_isolates_are_persians():
         a = ar.html(key, pattern, **params)
         f = fa.html(key, pattern, **params)
         assert a.translate(table) == f, pattern
-        assert a.count(RLM) == pattern.count("\n") + 1
+        assert a.count(RLM) == 2 * (pattern.count("\n") + 1)
 
 
 def test_six_plural_forms(catalogs):
@@ -108,7 +108,7 @@ def test_six_plural_forms(catalogs):
     for n, cat in want.items():
         assert plurals.category("ar", n) == cat, n
         out = ar.n(msg, n, kind="text")
-        assert out == RLM + cat + " " + ar.num(n), n
+        assert out == RLM + cat + " " + ar.num(n) + RLM, n
     assert plurals.categories("ar") == ("zero", "one", "two", "few", "many", "other")
 
 
@@ -155,10 +155,10 @@ def test_a_form_may_name_the_count_in_words(catalogs):
              "other": "{n} \u0648\u0643\u064a\u0644"}
     catalogs("ar", [{"k": "card.agents", "src": "0", "v": forms}])
     ar = i18n.get("ar")
-    assert ar.n(msg, 1, kind="text") == RLM + forms["one"]
-    assert ar.n(msg, 2, kind="text") == RLM + forms["two"]
-    assert ar.n(msg, 0, kind="text") == RLM + forms["zero"]
-    assert ar.n(msg, 5, kind="text") == RLM + "\u0665 \u0648\u0643\u0644\u0627\u0621"
+    assert ar.n(msg, 1, kind="text") == RLM + forms["one"] + RLM
+    assert ar.n(msg, 2, kind="text") == RLM + forms["two"] + RLM
+    assert ar.n(msg, 0, kind="text") == RLM + forms["zero"] + RLM
+    assert ar.n(msg, 5, kind="text") == RLM + "\u0665 \u0648\u0643\u0644\u0627\u0621" + RLM
     # A form that names neither the count nor a given parameter still
     # refuses the parameter it does not use.
     with pytest.raises(ValueError):

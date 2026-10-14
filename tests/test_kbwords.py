@@ -96,6 +96,27 @@ def test_custom_buttons_match_as_written(bot):
     assert kbwords.custom_action(SimpleNamespace(), "Clear") is None
 
 
+def test_a_custom_label_with_end_marks_matches_the_label(bot):
+    """A model label tapped from a right-to-left row may carry RLM at its
+    ends; it still runs the label's payload, and nothing else."""
+    rlm = "\u200f"
+    assert kbwords.custom_action(bot, rlm + "Opus" + rlm) == ("model", "/model opus")
+    assert kbwords.custom_action(bot, "Clear" + rlm) == ("cmd", "/clear")
+    assert kbwords.classify(bot, rlm + "Opus") == "acting"
+    assert kbwords.custom_action(bot, rlm + "opus" + rlm) is None
+    assert kbwords.custom_action(bot, rlm) is None
+
+
+def test_the_label_as_written_wins_over_a_normalized_one():
+    """keyboard.json's own spelling is matched first: a label written with
+    a mark is its own button even when a bare twin exists."""
+    rlm = "\u200f"
+    bot = SimpleNamespace(_template_map={"Opus": "bare"},
+                          _model_map={rlm + "Opus": "/model marked"})
+    assert kbwords.custom_action(bot, rlm + "Opus") == ("model", "/model marked")
+    assert kbwords.custom_action(bot, "Opus") == ("tpl", "bare")
+
+
 def test_classify_keeps_the_capture_rules(bot):
     for text in ("new", " Status ", "Templates", "« Back", "📱 App"):
         assert kbwords.classify(bot, text) == "looking", text
@@ -247,3 +268,48 @@ def test_a_mode_label_must_show_its_typed_word(german):
     german({"mode.word.ask": "Fragen", "mode.word.auto": "Automatik",
             "mode.ask": "💬 Fragen-Modus", "mode.auto": "🤖 Auto-Modus"})
     assert kbwords.label_problems(("en", "de")) == ["de '🤖 Auto-Modus' ∌ 'Automatik'"]
+
+
+# ---- right-to-left labels carry a mark at both ends ------------------------------------
+
+_RLM = "\u200f"
+
+
+def _tapped(label: str) -> list[str]:
+    """*label* as a tap may bring it: as rendered (a mark at each end in
+    fa/ar), with one end's mark dropped by a client, or with none."""
+    bare = label.strip(_RLM)
+    return [label, _RLM + bare, bare + _RLM, _RLM + bare + _RLM, bare]
+
+
+@pytest.mark.parametrize("code", ["fa", "ar"])
+def test_a_label_with_marks_at_both_ends_reads_as_the_bare_label(code, bot):
+    from aipager import i18n
+    from aipager.bot import mode_labels
+    tr = i18n.get(code)
+    for action, msg in kbwords.WORDS.items():
+        label = tr.text(msg)
+        assert label.startswith(_RLM) and label.endswith(_RLM)
+        for tapped in _tapped(label):
+            assert kbwords.norm(tapped) == kbwords.norm(label.strip(_RLM))
+            assert kbwords.bare_word(tapped) == action, ascii(tapped)
+            assert kbwords.classify(bot, tapped) == kbwords.classify(bot, str(msg))
+            if action != "kill":
+                assert kbwords.is_group_label(bot, -1001, tapped), ascii(tapped)
+    for action, msg in kbwords.NAV.items():
+        for tapped in _tapped(tr.text(msg) if isinstance(msg, core.Msg) else msg):
+            assert kbwords.nav_action(tapped) == f"nav:{action}", ascii(tapped)
+    shipped = SimpleNamespace(
+        _template_map={}, _command_map={}, _model_map={},
+        registry=SimpleNamespace(live_labels=lambda chat_id: set()))
+    for (label, payload), msg in kbwords.DEFAULT_LABELS.items():
+        kind = "tpl" if not payload.startswith("/") else "cmd"
+        getattr(shipped, f"_{'template' if kind == 'tpl' else 'command'}_map")[label] = payload
+    for (label, payload), msg in kbwords.DEFAULT_LABELS.items():
+        for tapped in _tapped(tr.text(msg)):
+            assert kbwords.custom_action(shipped, tapped, chat_code=code)[1] == payload, (
+                ascii(tapped))
+    for msg in (mode_labels.MODE_AUTO, mode_labels.MODE_ASK, mode_labels.MODE_FULL):
+        word = kbwords.mode_word(tr.text(msg).strip(_RLM))
+        for tapped in _tapped(tr.text(msg)):
+            assert kbwords.mode_word(tapped) == word, ascii(tapped)

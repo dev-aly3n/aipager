@@ -49,7 +49,7 @@ def test_the_busy_prompt_in_persian(mk_bot, run_async, target):
     question = text.split("\n", 1)[1]
     # The question names the mode as its label does, without the emoji
     # ("مود خودکار", operator 2026-10-10).
-    name = i18n.get("fa").text(mode_labels.mode_label(target)).split(" ", 1)[1]
+    name = i18n.get("fa").text(mode_labels.mode_label(target)).strip("\u200f").split(" ", 1)[1]
     assert name in ("مود خودکار", "مود پرسش", "مود دسترسی کامل")
     assert PERSIAN.search(question) and name.strip("\u200f") in question
     assert "Auto" not in question and "Ask" not in question and "Full" not in question

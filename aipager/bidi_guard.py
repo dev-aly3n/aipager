@@ -44,8 +44,8 @@ def reveal(text):
 
 
 #: The three characters aipager itself adds to its own right-to-left text
-#: (multilingual design 5.7): the mark at a line start and the isolate
-#: pair around a value. Arabic numbers also carry U+061C after the
+#: (multilingual design 5.7): the mark at a line's start and end and the
+#: isolate pair around a value. Arabic numbers also carry U+061C after the
 #: percent sign (``Tr.num``), but that is deliberately not listed here: no
 #: saved prompt holds a formatted percentage, so a restored prompt that
 #: shows one revealed is Claude's, as the phase-2 contract tests pin.
