@@ -98,9 +98,13 @@ def test_the_restored_job_list_is_used_up(adopted):
     assert adopted.sess.restored_job_agents == []
 
 
-@pytest.mark.parametrize("agent_type", [P_TYPE, C_TYPE])
-def test_the_adopted_card_has_one_running_row_per_job_agent(adopted, agent_type):
-    assert adopted.robot_rows(agent_type) == [(f"{h.ROBOT} {agent_type}", False)]
+@pytest.mark.parametrize("agent_type, name", [
+    (P_TYPE, P_TYPE),
+    # The restored link names the agent that started it (2026-10-14).
+    (C_TYPE, f"{P_TYPE} › {C_TYPE}"),
+], ids=["parent", "child"])
+def test_the_adopted_card_has_one_running_row_per_job_agent(adopted, agent_type, name):
+    assert adopted.robot_rows(agent_type) == [(f"{h.ROBOT} {name}", False)]
 
 
 def test_the_pin_count_includes_both(adopted):
@@ -134,9 +138,12 @@ def test_the_next_answer_lists_both(adopted):
     assert h.header(adopted.answer()) == "⏳ 2 agents working"
 
 
-@pytest.mark.parametrize("agent_type", [P_TYPE, C_TYPE])
-def test_the_next_answer_shows_each_working(adopted, agent_type):
-    assert h.is_working_row(h.row_of(adopted.answer(), agent_type))
+def test_the_next_answer_shows_the_child_working(adopted):
+    assert h.is_working_row(h.row_of(adopted.answer(), C_TYPE))
+
+
+def test_the_next_answer_shows_the_parent_waiting(adopted):
+    assert h.is_waiting_row(h.row_of(adopted.answer(), P_TYPE))
 
 
 # ---- later stops close them --------------------------------------------------------

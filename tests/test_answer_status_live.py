@@ -17,6 +17,7 @@ import time
 
 import pytest
 
+from aipager.bot.divider import DIVIDER_SEP
 from aipager.bot.flood_budget import FloodSkipped
 from aipager.state import (
     AGENT_CALL_MAX_AGE,
@@ -57,8 +58,9 @@ def wire(monkeypatch):
 
 
 def _block(text: str, rec: dict) -> str:
-    assert text.startswith(rec["body"] + "\n\n")
-    return text[len(rec["body"]) + 2:]
+    """The block of an edit: after the body and the divider under it."""
+    assert text.startswith(rec["body"] + DIVIDER_SEP)
+    return text[len(rec["body"]) + len(DIVIDER_SEP):]
 
 
 def _edits(wire, before=0):
@@ -90,7 +92,7 @@ def test_an_agents_prose_is_its_row(mk_bot, run_async, wire):
     _settle(run_async, bot, sess, time.monotonic())
     (edit,) = _edits(wire, before)
     assert _block(_markdown(edit), rec) == (
-        "⏳ 1 agent working\n\n○ **pipeline-runner** · Writing final.md for the pipeline."
+        "⏳ 1 agent working\n\n○ 🤖 **pipeline-runner** · Writing final.md for the pipeline."
         "\n\n" + PROMISE)
 
 
@@ -104,13 +106,13 @@ def test_an_agents_tool_is_its_row_and_a_command_never_shows(mk_bot, run_async, 
           tool_input={"file_path": "/home/x/aipager/state.py"})
     _settle(run_async, bot, sess, time.monotonic())
     (edit,) = _edits(wire, before)
-    assert "○ **Explore** · Reading state.py" in _block(_markdown(edit), rec)
+    assert "○ 🤖 **Explore** · Reading state.py" in _block(_markdown(edit), rec)
     _hook(run_async, recv, sess, "PreToolUse", agent_id="a1", tool_name="Bash",
           tool_input={"command": "rm -rf build", "description": "clean"})
     _settle(run_async, bot, sess, time.monotonic() + AGENTS_LINE_EDIT_INTERVAL)
     last = _markdown(_edits(wire, before)[-1])
     # The call's own description (Claude's words), never its command.
-    assert "○ **Explore** · clean" in last
+    assert "○ 🤖 **Explore** · clean" in last
     assert "rm -rf" not in last
 
 
@@ -162,7 +164,7 @@ def test_the_agent_calls_description_is_its_row(mk_bot, run_async, wire):
     assert sess.bg_agents["a1"]["desc"] == "Run the full suite"
     sess.status = Status.IDLE
     rec = _deliver(run_async, bot, sess)
-    assert rec["shown"].split("\n\n")[1] == "○ **pipeline-runner** · Run the full suite"
+    assert rec["shown"].split("\n\n")[1] == "○ 🤖 **pipeline-runner** · Run the full suite"
     assert "secret plan" not in rec["shown"]
 
 
@@ -258,17 +260,17 @@ def test_rows_settle_in_the_order_their_agents_stop(mk_bot, run_async, wire):
     _settle(run_async, bot, sess, t)
     lines = _block(_markdown(_edits(wire, before)[-1]), rec).split("\n\n")
     assert lines[0] == "⏳ 2 agents working"
-    assert lines[1] == "○ **Explore**"
+    assert lines[1] == "○ 🤖 **Explore**"
     # Its own run time (it started just before the answer went out).
-    assert re.fullmatch(r"✓ \*\*pipeline-runner\*\* · done \(0:0\d\)", lines[2])
-    assert lines[3] == "○ **Plan**"
+    assert re.fullmatch(r"✓ 🤖 \*\*pipeline-runner\*\* · done \(0:0\d\)", lines[2])
+    assert lines[3] == "○ 🤖 **Plan**"
     _hook(run_async, recv, sess, "SubagentStop", agent_id="a1", agent_type="Explore")
     t += AGENTS_LINE_EDIT_INTERVAL
     _settle(run_async, bot, sess, t)
     lines = _block(_markdown(_edits(wire, before)[-1]), rec).split("\n\n")
     assert lines[0] == "⏳ 1 agent working"
-    assert lines[1].startswith("✓ **Explore** · done (")
-    assert lines[3] == "○ **Plan**"
+    assert lines[1].startswith("✓ 🤖 **Explore** · done (")
+    assert lines[3] == "○ 🤖 **Plan**"
     assert len(_edits(wire, before)) == 2
 
 
@@ -281,7 +283,7 @@ def test_a_done_row_shows_the_agents_own_run_time(mk_bot, run_async, wire):
     before = len(wire.calls)
     _settle(run_async, bot, sess, time.monotonic() + BG_AGENTS_SETTLE_SECONDS + 0.1)
     line = _block(_markdown(_edits(wire, before)[-1]), rec).split("\n\n")[1]
-    assert re.fullmatch(r"✓ \*\*Explore\*\* · done \(0:4[23]\)", line)
+    assert re.fullmatch(r"✓ 🤖 \*\*Explore\*\* · done \(0:4[23]\)", line)
 
 
 def test_a_row_waits_the_settle_window(mk_bot, run_async, wire):
@@ -657,7 +659,11 @@ def test_a_text_that_does_not_end_with_the_block_is_not_kept(mk_bot):
               "sent_at": time.monotonic()}
     bot._remember_agents_line(sess, CHAT, 5, "an answer without it", agents, False)
     assert sess.agents_lines == []
+    # The block without the divider above it is not the block as sent.
     bot._remember_agents_line(sess, CHAT, 5, "an answer\n\n⏳ 1 agent working",
+                              agents, False)
+    assert sess.agents_lines == []
+    bot._remember_agents_line(sess, CHAT, 5, "an answer\n\n---\n\n⏳ 1 agent working",
                               agents, False)
     (rec,) = sess.agents_lines
     assert rec["body"] == "an answer"

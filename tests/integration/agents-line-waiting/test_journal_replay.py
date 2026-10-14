@@ -101,17 +101,22 @@ def test_the_interim_answer_counts_both_agents(paused):
     assert h.header(paused.answer()) == "⏳ 2 agents working"
 
 
-@pytest.mark.parametrize("agent_type", [P_TYPE, C_TYPE])
-def test_the_interim_answer_lists_both_as_working(paused, agent_type):
-    assert h.is_working_row(h.row_of(paused.answer(), agent_type))
+def test_the_interim_answer_lists_the_child_as_working(paused):
+    assert h.is_working_row(h.row_of(paused.answer(), C_TYPE))
+
+
+def test_the_interim_answer_lists_the_parent_as_waiting(paused):
+    """Not done, and not its stale last tool: it waits for its own agents
+    (a waiting agent's row since the agents tree, 2026-10-14)."""
+    assert h.is_waiting_row(h.row_of(paused.answer(), P_TYPE))
 
 
 @pytest.mark.parametrize("seconds", [5.1, 30.1, 600.0])
-def test_past_the_settle_and_the_edit_interval_the_parent_still_works(paused, seconds):
+def test_past_the_settle_and_the_edit_interval_the_parent_still_waits(paused, seconds):
     paused.answer()
     paused.tick(seconds)
     paused.tick(31)
-    assert h.is_working_row(h.row_of(paused.last_block(), P_TYPE))
+    assert h.is_waiting_row(h.row_of(paused.last_block(), P_TYPE))
 
 
 def test_past_the_settle_the_header_is_unchanged(paused):
@@ -136,9 +141,10 @@ def test_the_childs_stop_shows_the_child_done(child_done):
     assert h.is_done_row(h.row_of(child_done.last_block(), C_TYPE))
 
 
-def test_the_childs_stop_leaves_the_parent_working(child_done):
+def test_the_childs_stop_leaves_the_parent_waiting(child_done):
+    """Not done: it waits to resume (a waiting agent's row)."""
     child_done.tick(31)
-    assert h.is_working_row(h.row_of(child_done.last_block(), P_TYPE))
+    assert h.is_waiting_row(h.row_of(child_done.last_block(), P_TYPE))
 
 
 def test_the_childs_stop_does_not_end_the_parent(child_done):

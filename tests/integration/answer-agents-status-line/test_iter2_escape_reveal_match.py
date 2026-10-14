@@ -136,7 +136,7 @@ def test_a_fenced_only_prose_falls_back_to_the_tool():
 
 
 def test_a_fenced_only_description_gives_a_bare_row():
-    assert _row(description="```\nx = 1\n```") == "○ **t**"
+    assert _row(description="```\nx = 1\n```") == "○ 🤖 **t**"
 
 
 def test_a_description_after_a_fenced_block_is_found():
@@ -178,7 +178,7 @@ def test_a_backslash_before_a_mark_in_a_tool_argument_does_not_unescape_it():
 
 def test_a_backslash_before_a_mark_in_an_agent_type_does_not_unescape_it():
     row = _row(agent_type="a\\_b")
-    inner = row[len("○ **"):-len("**")]
+    inner = row[len("○ 🤖 **"):-len("**")]
     assert _unescaped_meta(inner) == []
 
 
@@ -191,7 +191,7 @@ def _backslash_run_before(text: str, end: int) -> int:
 
 def test_an_agent_type_ending_in_a_backslash_opens_its_bold():
     row = _row(agent_type="weird\\")
-    assert row.startswith("○ **")
+    assert row.startswith("○ 🤖 **")
 
 
 def test_an_agent_type_ending_in_a_backslash_ends_with_the_closing_bold():
@@ -261,7 +261,7 @@ def test_fa_an_own_mark_in_a_tool_name_is_not_passed_through(name):
 
 def test_a_control_in_the_agent_type_is_made_visible_not_dropped():
     row = _row(agent_type="ev\u202eil")
-    assert row not in ("○ **evil**", "○ **ev**", "○ **il**")
+    assert row not in ("○ 🤖 **evil**", "○ 🤖 **ev**", "○ 🤖 **il**")
 
 
 def test_a_control_in_a_tool_name_is_made_visible_not_dropped():
@@ -270,7 +270,7 @@ def test_a_control_in_a_tool_name_is_made_visible_not_dropped():
 
 def test_the_visible_type_keeps_the_letters_around_the_control():
     row = _row(agent_type="ev\u202eil")
-    assert re.fullmatch(r"○ \*\*ev.+il\*\*", row) is not None
+    assert re.fullmatch(r"○ 🤖 \*\*ev.+il\*\*", row) is not None
 
 
 @pytest.mark.parametrize("field", ["prose", "description"])
@@ -332,7 +332,7 @@ def test_hook_prose_markup_reaches_the_answer_escaped(bot, sess, wire, run_async
             final=False)
     bb.finish(run_async, bot, sess)
     rows = bb.block_of(bb.answer_text(wire)).split(SEP)
-    assert "○ **Explore** · Now \\`code\\` and \\*\\*bold\\*\\* here" in rows
+    assert "○ 🤖 **Explore** · Now \\`code\\` and \\*\\*bold\\*\\* here" in rows
 
 
 def test_hook_description_markup_reaches_the_answer_escaped(bot, sess, wire, run_async):
@@ -342,7 +342,7 @@ def test_hook_description_markup_reaches_the_answer_escaped(bot, sess, wire, run
             agent_type="Explore")
     bb.finish(run_async, bot, sess)
     rows = bb.block_of(bb.answer_text(wire)).split(SEP)
-    assert "○ **Explore** · Run \\`make\\` now" in rows
+    assert "○ 🤖 **Explore** · Run \\`make\\` now" in rows
 
 
 # ---- description matching survives a normalised type ------------------------------------

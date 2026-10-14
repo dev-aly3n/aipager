@@ -8,9 +8,10 @@
 {"k": "agents.head.working", "src": "6d8170f5", "v": {"many": "⏳ {n} agentes trabalhando", "one": "⏳ {n} agente trabalhando", "other": "⏳ {n} agentes trabalhando"}}
 {"k": "agents.more", "src": "0d58b5f8", "v": {"many": "+{n} outros agentes", "one": "+{n} outro agente", "other": "+{n} outros agentes"}}
 {"k": "agents.promise", "src": "29723a21", "v": "Quando os agentes terminarem, o resultado vai chegar aqui mesmo."}
-{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · concluído ({clock})"}
-{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
-{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
+{"k": "agents.row.done", "src": "fb8af87e", "v": "✓ 🤖 **{agent}** · concluído ({clock})"}
+{"k": "agents.row.waiting", "src": "64543c86", "v": "⏸ 🤖 **{agent}** · esperando os próprios agentes"}
+{"k": "agents.row.working", "src": "06b07790", "v": "○ 🤖 **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "0b3c4948", "v": "○ 🤖 **{agent}**"}
 {"k": "ago.days", "src": "3650e46d", "v": {"many": "há {n} d", "one": "há {n} d", "other": "há {n} d"}}
 {"k": "ago.earlier", "src": "f12e996a", "v": "antes"}
 {"k": "ago.hours", "src": "72292bb6", "v": {"many": "há {n} h", "one": "há {n} h", "other": "há {n} h"}}

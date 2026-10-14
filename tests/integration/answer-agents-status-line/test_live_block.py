@@ -17,6 +17,7 @@ import pytest
 
 from aipager import i18n, preferences
 from aipager.bot.agents_line import AgentRow, BlockView, render_block
+from aipager.bot.divider import DIVIDER_SEP
 from aipager.state import (
     AGENTS_LINE_EDIT_INTERVAL,
     BG_AGENTS_RETRY_SECONDS,
@@ -71,7 +72,7 @@ def test_interval_is_thirty_seconds():
 def test_the_answer_ends_with_the_block(bot, sess, wire, run_async):
     _t0, _t1, text = _deliver(run_async, bot, sess,
                               ("a1", "pipeline-runner", time.monotonic()))
-    assert bb.block_of(text) == f"⏳ 1 agent working{SEP}○ **pipeline-runner**{SEP}{PROMISE}"
+    assert bb.block_of(text) == f"⏳ 1 agent working{SEP}○ 🤖 **pipeline-runner**{SEP}{PROMISE}"
 
 
 def test_no_agent_and_no_shell_means_no_block(bot, sess, wire, run_async):
@@ -127,7 +128,7 @@ def test_a_visible_change_is_edited_in(bot, sess, wire, run_async):
     sess.bg_agent_tool("a1", "Read", "state.py", t1)
     bb.tick(run_async, bot, sess, t1 + 31)
     assert _last_block(wire) == \
-        f"⏳ 1 agent working{SEP}○ **Explore** · Reading state.py{SEP}{PROMISE}"
+        f"⏳ 1 agent working{SEP}○ 🤖 **Explore** · Reading state.py{SEP}{PROMISE}"
 
 
 def test_the_edit_keeps_the_answer_text(bot, sess, wire, run_async):
@@ -188,7 +189,7 @@ def test_the_second_change_goes_out_after_thirty_seconds(bot, sess, wire, run_as
     sess.bg_agent_tool("a1", "Read", "two.py", first)
     bb.tick(run_async, bot, sess, first + 29.9)
     bb.tick(run_async, bot, sess, first + 30.1)
-    assert _last_block(wire).split(SEP)[1] == "○ **Explore** · Reading two.py"
+    assert _last_block(wire).split(SEP)[1] == "○ 🤖 **Explore** · Reading two.py"
 
 
 def test_a_refused_edit_is_not_retried_for_the_same_text(bot, sess, wire, run_async):
@@ -211,7 +212,7 @@ def test_a_refused_edit_waits_for_the_next_change(bot, sess, wire, run_async):
     bb.tick(run_async, bot, sess, t1 + 62)
     sess.bg_agent_tool("a1", "Read", "two.py", t1 + 70)
     bb.tick(run_async, bot, sess, t1 + 100)
-    assert _last_block(wire).split(SEP)[1] == "○ **Explore** · Reading two.py"
+    assert _last_block(wire).split(SEP)[1] == "○ 🤖 **Explore** · Reading two.py"
 
 
 def test_a_muted_chat_gets_no_live_edit(bot, sess, wire, run_async):
@@ -260,8 +261,8 @@ def test_the_second_agent_settles_first_in_its_own_row(bot, sess, wire, run_asyn
     bb.tick(run_async, bot, sess, stop + BG_AGENTS_SETTLE_SECONDS + 0.1)
     assert _last_block(wire) == SEP.join([
         "⏳ 1 agent working",
-        "○ **pipeline-runner**",
-        "✓ **Explore** · done (5:40)",
+        "○ 🤖 **pipeline-runner**",
+        "✓ 🤖 **Explore** · done (5:40)",
         PROMISE])
 
 
@@ -523,8 +524,8 @@ def _body(chars):
 
 
 def test_an_edit_never_grows_the_message_past_8800_chars(bot, sess, wire, run_async):
-    initial_block = f"⏳ 1 agent working{SEP}○ **t**{SEP}{PROMISE}"
-    body = _body(8790 - 2 - len(initial_block) - len(HEADER))
+    initial_block = f"⏳ 1 agent working{SEP}○ 🤖 **t**{SEP}{PROMISE}"
+    body = _body(8790 - len(DIVIDER_SEP) - len(initial_block) - len(HEADER))
     _t0, t1, text = _deliver(run_async, bot, sess, ("a1", "t", time.monotonic()),
                              text=body)
     assert len(text) == 8790                     # precondition: sent whole
@@ -534,8 +535,8 @@ def test_an_edit_never_grows_the_message_past_8800_chars(bot, sess, wire, run_as
 
 
 def test_a_growing_edit_under_8800_chars_goes_out(bot, sess, wire, run_async):
-    initial_block = f"⏳ 1 agent working{SEP}○ **t**{SEP}{PROMISE}"
-    body = _body(8700 - 2 - len(initial_block) - len(HEADER))
+    initial_block = f"⏳ 1 agent working{SEP}○ 🤖 **t**{SEP}{PROMISE}"
+    body = _body(8700 - len(DIVIDER_SEP) - len(initial_block) - len(HEADER))
     _t0, t1, text = _deliver(run_async, bot, sess, ("a1", "t", time.monotonic()),
                              text=body)
     assert len(text) == 8700

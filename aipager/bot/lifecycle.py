@@ -911,8 +911,11 @@ class LifecycleMixin:
             sess.add_subagent(agent_id, info)
             if agent_id not in sess.active_subagents:
                 continue  # evicted at the cap
+            # Its links came back with the running set (restore_agents),
+            # so a helper names the agent at the top of its chain again.
+            info["card_label"] = sess.agent_card_label(agent_id, entry["type"])
             info["history_idx"] = sess.record_tool(
-                f"\U0001f916 {entry['type']}", False)
+                f"\U0001f916 {info['card_label']}", False)
             sess.subagent_count_this_turn += 1
             added += 1
         if added:

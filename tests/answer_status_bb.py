@@ -161,12 +161,14 @@ def answer_edits(wire, text=ANSWER) -> list[dict]:
 
 
 def block_of(full: str, body: str = ANSWER) -> str:
-    """The status block: everything after the answer's own text."""
+    """The status block: everything after the answer's own text and the
+    divider between them."""
+    from aipager.bot.divider import DIVIDER_SEP
     idx = full.rfind(body)
     assert idx >= 0
     rest = full[idx + len(body):]
-    assert rest.startswith("\n\n"), repr(rest[:20])
-    return rest[2:]
+    assert rest.startswith(DIVIDER_SEP), repr(rest[:20])
+    return rest[len(DIVIDER_SEP):]
 
 
 def receiver(registry, sink=None):

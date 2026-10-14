@@ -170,7 +170,7 @@ def test_answer_line_names_agents_and_shells(replay, vloop):
 
     _run(vloop, scenario())
     assert _answer(r)[0].split("\n\n")[-3:] == [
-        "⏳ 1 agent working · 🖥 1 shell running", "○ **ship-reviewer**",
+        "⏳ 1 agent working · 🖥 1 shell running", "○ 🤖 **ship-reviewer**",
         "Results from the agents will follow here."]
 
 

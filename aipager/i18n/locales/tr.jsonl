@@ -8,9 +8,10 @@
 {"k": "agents.head.working", "src": "6d8170f5", "v": {"one": "⏳ {n} ajan çalışıyor", "other": "⏳ {n} ajan çalışıyor"}}
 {"k": "agents.more", "src": "0d58b5f8", "v": {"one": "+{n} ajan daha", "other": "+{n} ajan daha"}}
 {"k": "agents.promise", "src": "29723a21", "v": "Ajanlar bitirince sonuç tam buraya gelecek."}
-{"k": "agents.row.done", "src": "91117cf8", "v": "✓ **{agent}** · tamamlandı ({clock})"}
-{"k": "agents.row.working", "src": "328500cb", "v": "○ **{agent}** · {activity}"}
-{"k": "agents.row.working_bare", "src": "a007ff85", "v": "○ **{agent}**"}
+{"k": "agents.row.done", "src": "fb8af87e", "v": "✓ 🤖 **{agent}** · tamamlandı ({clock})"}
+{"k": "agents.row.waiting", "src": "64543c86", "v": "⏸ 🤖 **{agent}** · kendi ajanlarını bekliyor"}
+{"k": "agents.row.working", "src": "06b07790", "v": "○ 🤖 **{agent}** · {activity}"}
+{"k": "agents.row.working_bare", "src": "0b3c4948", "v": "○ 🤖 **{agent}**"}
 {"k": "ago.days", "src": "3650e46d", "v": {"one": "{n} g önce", "other": "{n} g önce"}}
 {"k": "ago.earlier", "src": "f12e996a", "v": "daha önce"}
 {"k": "ago.hours", "src": "72292bb6", "v": {"one": "{n} sa önce", "other": "{n} sa önce"}}

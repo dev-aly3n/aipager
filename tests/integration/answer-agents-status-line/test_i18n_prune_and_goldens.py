@@ -20,12 +20,15 @@ from pathlib import Path
 import pytest
 
 from tests.i18n_surfaces import (
+    AGENTS_TREE_CARD_SURFACES,
+    AGENTS_TREE_NEW_SURFACES,
     MODE_LABEL_SURFACES,
     NO_KEYBOARD_APP_SURFACES,
     RESTART_NOW_NEW_SURFACES,
     THREE_MODES_NEW_SURFACES,
     THREE_MODES_SURFACES,
     with_keyboard_app_removed,
+    without_card_divider,
     without_mode_labels,
 )
 
@@ -218,12 +221,18 @@ def test_english_surfaces_change_only_under_agents_line():
     # The main keyboard lost its App button (2026-10-12), and only that.
     three = THREE_MODES_SURFACES | THREE_MODES_NEW_SURFACES
     # Restart now without a service (2026-10-12) added one surface.
+    # The agents tree (2026-10-14) put a divider above the card's status
+    # line, and added a helper's card rows.
     exempt = (MODE_LABEL_SURFACES | three | NO_KEYBOARD_APP_SURFACES
-              | RESTART_NOW_NEW_SURFACES)
+              | RESTART_NOW_NEW_SURFACES | AGENTS_TREE_CARD_SURFACES
+              | AGENTS_TREE_NEW_SURFACES)
     assert [k for k in changed if k not in exempt] == [
         "agents_line", "language.list"]
     for k in NO_KEYBOARD_APP_SURFACES:
         assert new[k] == with_keyboard_app_removed(old[k]), k
+    for k in AGENTS_TREE_CARD_SURFACES:
+        assert new[k] != old[k], k
+        assert without_card_divider(new[k]) == old[k], k
     assert set(changed) >= MODE_LABEL_SURFACES
     for k in MODE_LABEL_SURFACES - three:
         assert without_mode_labels(new[k]) == without_mode_labels(old[k]), k

@@ -23,6 +23,12 @@ from telegram import (
 from telegram.error import Forbidden
 
 from aipager.bot import agents_line as _agents_line
+from aipager.bot.divider import (
+    DIVIDER,
+    DIVIDER_SEP,
+    PLAIN_DIVIDER,
+    without_dividers,
+)
 from aipager.bot import reactions
 from aipager.bot.sibling_text import shown
 from aipager.bot.dashboard import PIN_NEEDS_INPUT, new_prompt_token
@@ -45,6 +51,7 @@ from aipager.bot.rich_message import (
 )
 
 
+from aipager import agent_tree as _agent_tree
 from aipager import bg_shells as _bg_shells
 from aipager import bidi_guard
 from aipager import i18n, preferences
@@ -124,11 +131,20 @@ _finish_sleep = asyncio.sleep
 # task collected mid-flight is a delete that silently never happened.
 _BACKGROUND_TASKS: set = set()
 
-# Separator row between the finished timeline and the answer in `merged`
-# layout — a literal row, not a second "✅ Finished" header (that would be
-# redundant with the card's own header, per the same reasoning the
-# header-skip logic below already uses for `card` layout).
-_MERGED_SEPARATOR = "―――――――――――――"
+# Separator between the finished timeline and the answer in `merged`
+# layout: Telegram's own divider line (aipager.bot.divider), not a second
+# "✅ Finished" header (that would be redundant with the card's own header,
+# per the same reasoning the header-skip logic below already uses for
+# `card` layout). A plain-text copy shows PLAIN_DIVIDER in its place.
+_MERGED_SEPARATOR = DIVIDER
+
+
+def _with_agents_block(text: str, line: str) -> str:
+    """*text* with the agents block *line* under it, a divider between.
+    The one way an answer and its block are joined: the send, the record
+    of what went out (``_remember_agents_line``) and every later edit
+    agree by construction."""
+    return f"{text}{DIVIDER_SEP}{line}"
 
 # The result line ("session-name-on-every-message"): the FIRST line of
 # every result message, as the status line is the LAST line of every busy
@@ -442,8 +458,11 @@ class NotifyMixin:
             if answer else card_md
         )
         # The held copy (a mute below) never carries the ⏳ line: it goes
-        # out late, and a line frozen into it could not be settled.
+        # out late, and a line frozen into it could not be settled. Its
+        # plain-text copy (the last resort once rich delivery keeps
+        # failing) shows a line of its own where a divider is.
         held = combined
+        held_plain = without_dividers(held, PLAIN_DIVIDER)
         if agents:
             # Room for the block's largest form, so no later edit of it can
             # push this message past the ceiling.
@@ -452,7 +471,7 @@ class NotifyMixin:
                          "block over the byte ceiling — falling back to "
                          "replace", sess.label)
                 return False
-            combined = f"{combined}\n\n{agents['line']}"
+            combined = _with_agents_block(combined, agents["line"])
         if len(combined.encode("utf-8")) > _RICH_LIMIT:
             log.info("[%s] merged: combined card+answer over the byte ceiling "
                      "— falling back to replace", sess.label)
@@ -485,7 +504,7 @@ class NotifyMixin:
                 # both refused — but the answer is still worth reading once
                 # the ban lifts. `return False` is unchanged, so the
                 # caller's control flow is exactly as before.
-                self._hold_answer(sess, held, held, reply_to, is_rtl=rtl)
+                self._hold_answer(sess, held, held_plain, reply_to, is_rtl=rtl)
                 return False
             except (RichMessageFallbackRequired, Exception):
                 log.debug("[%s] merged: send-as-new failed", sess.label,
@@ -517,7 +536,7 @@ class NotifyMixin:
             return False
         except RichMessageFloodBanned:
             # HELD, not dropped (8.29 R6) — see the send-as-new arm above.
-            self._hold_answer(sess, held, held, reply_to, is_rtl=rtl)
+            self._hold_answer(sess, held, held_plain, reply_to, is_rtl=rtl)
             return False
         if result is not None and agents:
             self._remember_agents_line(
@@ -545,10 +564,15 @@ class NotifyMixin:
         with none. The agents are all this session's running background
         agents; the shells only this job's own (``in_job``): a dev server
         an earlier task left up is not repeated under every answer (the
-        pinned bar still counts it)."""
+        pinned bar still counts it). Each agent keeps its nearest ancestor
+        the answer lists (``"parent"``, "" for a top one): the links
+        themselves go when an agent stops."""
         now = time.monotonic()
+        listed = set(sess.bg_agents)
         items = [{"id": agent_id, "kind": "agent", "label": info["label"],
-                  "started": info.get("started")}
+                  "started": info.get("started"),
+                  "parent": _agent_tree.nearest_listed(
+                      sess.agent_parents, agent_id, listed)}
                  for agent_id, info in sess.bg_agents.items()]
         items += [{"id": task_id, "kind": "shell",
                    "label": sess.bg_shells[task_id]["label"],
@@ -570,9 +594,14 @@ class NotifyMixin:
         """What an answer's block shows at *now*: its own items, each
         ended only once its end is BG_AGENTS_SETTLE_SECONDS old (an agent
         the still-running note brings back stays working), the activity
-        of the agents still working read live from ``bg_agents``."""
+        and the waiting of the agents still working read live from
+        ``bg_agents``, each agent under the one its item names."""
         ends = rec.get("ends") or {}
         sent_at = rec["sent_at"]
+        row_of = {}
+        for item in rec["items"]:
+            if item["kind"] != "shell":
+                row_of[item["id"]] = len(row_of)
 
         def settled(item_id: str) -> dict | None:
             end = ends.get(item_id)
@@ -594,16 +623,19 @@ class NotifyMixin:
                     shells["stopped" if end["outcome"] == "stopped"
                            else "finished"].append(ran)
                 continue
+            parent = row_of.get(item.get("parent") or "", -1)
             if end is not None:
                 agent_ends.append(end["at"])
                 ran = end["at"] - (started if started is not None else sent_at)
-                rows.append(_agents_line.AgentRow(item["label"], True, ran))
+                rows.append(_agents_line.AgentRow(item["label"], True, ran,
+                                                  parent=parent))
                 continue
             info = sess.bg_agents.get(item["id"]) or {}
             rows.append(_agents_line.AgentRow(
                 item["label"], False, prose=info.get("prose", ""),
                 tool=info.get("tool", ""), tool_arg=info.get("tool_arg", ""),
-                description=info.get("desc", "")))
+                description=info.get("desc", ""),
+                waiting=bool(info.get("waiting")), parent=parent))
         all_done = bool(rows) and len(agent_ends) == len(rows)
         return _agents_line.BlockView(
             agents=tuple(rows),
@@ -621,7 +653,7 @@ class NotifyMixin:
         """An answer carrying the status block landed as *msg_id*: keep
         exactly what went out before the block, so every later edit is
         that text plus the block, never a re-render of the answer."""
-        tail = f"\n\n{agents['line']}"
+        tail = _with_agents_block("", agents["line"])
         if not text.endswith(tail):
             log.warning("[%s] agents block: the sent text does not end with "
                         "it - not kept current", sess.label)
@@ -673,8 +705,8 @@ class NotifyMixin:
             return final
         if not final and block == rec.get("refused"):
             return False
-        text = f"{rec['body']}\n\n{block}"
-        shown = f"{rec['body']}\n\n{rec['shown']}"
+        text = _with_agents_block(rec["body"], block)
+        shown = _with_agents_block(rec["body"], rec["shown"])
         if (len(text.encode("utf-8")) > _RICH_LIMIT
                 or (len(text) > _CARD_CHAR_BUDGET and len(text) > len(shown))):
             # Never past the ceiling, never longer past Telegram's fold:
@@ -1290,7 +1322,7 @@ class NotifyMixin:
         held_rich = f"{lead_md}\n\n{body}"
         rich_text = held_rich
         if agents:
-            rich_text = f"{rich_text}\n\n{agents['line']}"
+            rich_text = _with_agents_block(rich_text, agents["line"])
         plain_text = f"{lead_plain}\n\n{content}"
         chat_id = resolve_chat_id_int(sess)
         # The interim turn's own message: the queued pick-up at this Stop
@@ -2332,15 +2364,21 @@ class NotifyMixin:
                 # 4.5). A waiting agent resuming already has its count
                 # and its running row.
                 sess.subagent_count_this_turn += 1
+                # A helper names the agent at the top of its chain
+                # ("pipeline-runner › ship-tester"), fixed now: the card's
+                # rows stay in the order things started.
+                card_label = (sess.agent_card_label(agent_id, agent_type)
+                              if agent_id else agent_type)
                 # Append to tool_history SYNCHRONOUSLY before any await.
                 # record_tool returns the (post-trim) index so the
                 # subagent bookkeeping below references the correct entry
                 # even after the history is trimmed.
-                summary = f"\U0001f916 {agent_type}"
+                summary = f"\U0001f916 {card_label}"
                 history_idx = sess.record_tool(summary, False)
                 # Store index in active_subagents so SubagentStop can find it
                 if agent_id and agent_id in sess.active_subagents:
                     sess.active_subagents[agent_id]["history_idx"] = history_idx
+                    sess.active_subagents[agent_id]["card_label"] = card_label
             # An agent is work too: a self-woken turn's deferred card goes
             # up now if its Agent call's own PreToolUse did not already
             # send it (roadmap 8.32).
@@ -2364,7 +2402,8 @@ class NotifyMixin:
             # (was blank before this feature) so the settled row's
             # three-segment shape ("type · N tool calls · elapsed") is
             # always fixed ("agent activity rows on the busy card").
-            done_summary = settled_agent_row(agent_type, tool_count, elapsed)
+            done_summary = settled_agent_row(
+                context.get("card_label") or agent_type, tool_count, elapsed)
             # Mark the matching tool_history entry as done SYNCHRONOUSLY
             if history_idx is not None and 0 <= history_idx < len(sess.tool_history):
                 sess.tool_history[history_idx] = (done_summary, True)
@@ -3362,7 +3401,7 @@ class NotifyMixin:
                     # either could never be settled, so neither carries it.
                     held_rich = rich_text
                     if agents:
-                        rich_text = f"{rich_text}\n\n{agents['line']}"
+                        rich_text = _with_agents_block(rich_text, agents["line"])
                     is_rtl = turn_rtl
                     log.info("[%s] sendRichMessage: %d chars, rtl=%s, overflow=%s, "
                              "lead=%s",

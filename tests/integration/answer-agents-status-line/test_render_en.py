@@ -38,8 +38,8 @@ def test_state_working_two_agents_and_a_shell():
         shells_running=1)
     assert render_block(view) == _lines(
         "⏳ 2 agents working · 🖥 1 shell running",
-        "○ **pipeline-runner** · Writing final.md for the pipeline",
-        "○ **Explore** · Reading state.py",
+        "○ 🤖 **pipeline-runner** · Writing final.md for the pipeline",
+        "○ 🤖 **Explore** · Reading state.py",
         PROMISE)
 
 
@@ -51,8 +51,8 @@ def test_state_one_agent_done_the_other_still_going():
         shells_running=1)
     assert render_block(view) == _lines(
         "⏳ 1 agent working · 🖥 1 shell running",
-        "✓ **Explore** · done (0:42)",
-        "○ **pipeline-runner** · Running the full suite",
+        "✓ 🤖 **Explore** · done (0:42)",
+        "○ 🤖 **pipeline-runner** · Running the full suite",
         PROMISE)
 
 
@@ -102,7 +102,7 @@ def test_nothing_to_show_is_empty():
 def test_one_agent_singular_with_no_activity_is_a_bare_row():
     view = BlockView(agents=(AgentRow("general-purpose", False),))
     assert render_block(view) == _lines(
-        "⏳ 1 agent working", "○ **general-purpose**", PROMISE)
+        "⏳ 1 agent working", "○ 🤖 **general-purpose**", PROMISE)
 
 
 def test_one_agent_done_alone_is_singular():
@@ -122,40 +122,40 @@ def _working(n: int) -> BlockView:
     return BlockView(agents=tuple(AgentRow(f"type{i}", False) for i in range(n)))
 
 
-@pytest.mark.parametrize("n", [3, 4], ids=["three", "four"])
-def test_up_to_four_rows_have_no_more_line(n):
+@pytest.mark.parametrize("n", [5, 6], ids=["five", "six"])
+def test_up_to_six_rows_have_no_more_line(n):
     assert "more" not in render_block(_working(n))
 
 
-@pytest.mark.parametrize("n", [3, 4], ids=["three", "four"])
-def test_up_to_four_rows_are_all_shown(n):
+@pytest.mark.parametrize("n", [5, 6], ids=["five", "six"])
+def test_up_to_six_rows_are_all_shown(n):
     out = render_block(_working(n))
-    assert [f"○ **type{i}**" in out for i in range(n)] == [True] * n
+    assert [f"○ 🤖 **type{i}**" in out for i in range(n)] == [True] * n
 
 
-def test_rows_max_is_four():
-    assert ROWS_MAX == 4
+def test_rows_max_is_six():
+    assert ROWS_MAX == 6
 
 
-def test_five_agents_show_four_rows():
-    out = render_block(_working(5)).split(SEP)
-    assert sum(1 for x in out if x.startswith("○ ")) == 4
+def test_seven_agents_show_six_rows():
+    out = render_block(_working(7)).split(SEP)
+    assert sum(1 for x in out if x.startswith("○ ")) == 6
 
 
-def test_five_agents_show_plus_one_more():
-    assert "+1 more" in render_block(_working(5)).split(SEP)
+def test_seven_agents_show_plus_one_more():
+    assert "+1 more" in render_block(_working(7)).split(SEP)
 
 
-def test_seven_agents_show_plus_three_more():
-    assert "+3 more" in render_block(_working(7)).split(SEP)
+def test_nine_agents_show_plus_three_more():
+    assert "+3 more" in render_block(_working(9)).split(SEP)
 
 
-def test_the_fifth_agent_is_the_one_folded():
-    assert "type4" not in render_block(_working(5))
+def test_the_seventh_agent_is_the_one_folded():
+    assert "type6" not in render_block(_working(7))
 
 
 def test_the_more_line_comes_before_the_promise():
-    out = render_block(_working(6)).split(SEP)
+    out = render_block(_working(8)).split(SEP)
     assert out[-2:] == ["+2 more", PROMISE]
 
 
@@ -199,25 +199,25 @@ def _row(**kw) -> str:
 
 def test_prose_wins_over_tool_and_description():
     assert _row(prose="Thinking aloud", tool="Read", tool_arg="a.py",
-                description="Audit the code") == "○ **t** · Thinking aloud"
+                description="Audit the code") == "○ 🤖 **t** · Thinking aloud"
 
 
 def test_tool_wins_over_description():
     assert _row(tool="Write", tool_arg="final.md",
-                description="Audit the code") == "○ **t** · Writing final.md"
+                description="Audit the code") == "○ 🤖 **t** · Writing final.md"
 
 
 def test_description_when_no_prose_and_no_tool():
-    assert _row(description="Audit the code") == "○ **t** · Audit the code"
+    assert _row(description="Audit the code") == "○ 🤖 **t** · Audit the code"
 
 
 def test_bare_type_when_nothing_is_known():
-    assert _row() == "○ **t**"
+    assert _row() == "○ 🤖 **t**"
 
 
 def test_whitespace_only_prose_falls_back_to_the_tool():
     assert _row(prose="  \n \n", tool="Read", tool_arg="a.py") == \
-        "○ **t** · Reading a.py"
+        "○ 🤖 **t** · Reading a.py"
 
 
 @pytest.mark.parametrize("tool, arg, phrase", [
@@ -237,24 +237,24 @@ def test_whitespace_only_prose_falls_back_to_the_tool():
 ], ids=["read", "write", "edit", "multiedit", "notebookedit", "bash", "grep",
         "glob", "websearch", "webfetch", "agent", "task", "other"])
 def test_tool_phrase(tool, arg, phrase):
-    assert _row(tool=tool, tool_arg=arg) == f"○ **t** · {phrase}"
+    assert _row(tool=tool, tool_arg=arg) == f"○ 🤖 **t** · {phrase}"
 
 
 def test_bash_shows_its_description_or_running_a_command():
     # tool_arg is what the hook recorded: the call's description, never
     # its command (tests/integration/.../test_hook_capture.py).
-    assert _row(tool="Bash", tool_arg="Verify the build") == "○ **t** · Verify the build"
-    assert _row(tool="Bash", tool_arg="") == "○ **t** · Running a command"
+    assert _row(tool="Bash", tool_arg="Verify the build") == "○ 🤖 **t** · Verify the build"
+    assert _row(tool="Bash", tool_arg="") == "○ 🤖 **t** · Running a command"
 
 
 def test_a_file_tool_with_no_file_names_the_tool():
-    assert _row(tool="Read", tool_arg="") == "○ **t** · Using Read"
+    assert _row(tool="Read", tool_arg="") == "○ 🤖 **t** · Using Read"
 
 
 # ---- criterion 3: first line, 60 code points, escaping ----------------------------------
 
 def test_prose_shows_only_its_first_line():
-    assert _row(prose="Line one here\nLine two there") == "○ **t** · Line one here"
+    assert _row(prose="Line one here\nLine two there") == "○ 🤖 **t** · Line one here"
 
 
 def test_prose_stops_at_the_first_sentence():
@@ -263,7 +263,7 @@ def test_prose_stops_at_the_first_sentence():
 
 def test_a_dotted_file_name_is_not_a_sentence_end():
     assert _row(prose="Writing final.md for the pipeline") == \
-        "○ **t** · Writing final.md for the pipeline"
+        "○ 🤖 **t** · Writing final.md for the pipeline"
 
 
 def test_first_line_skips_blank_lines():
@@ -343,20 +343,20 @@ def test_prose_markdown_is_escaped(raw, escaped):
 
 def test_an_agent_type_is_escaped_inside_the_bold():
     out = render_block(BlockView(agents=(AgentRow("general_purpose", False),)))
-    assert "○ **general\\_purpose**" in out
+    assert "○ 🤖 **general\\_purpose**" in out
 
 
 def test_a_tool_argument_is_escaped():
-    assert _row(tool="Read", tool_arg="my_file.py") == "○ **t** · Reading my\\_file.py"
+    assert _row(tool="Read", tool_arg="my_file.py") == "○ 🤖 **t** · Reading my\\_file.py"
 
 
 def test_a_description_is_escaped():
     assert _row(description="fix *all* the [things]") == \
-        "○ **t** · fix \\*all\\* the \\[things\\]"
+        "○ 🤖 **t** · fix \\*all\\* the \\[things\\]"
 
 
 def test_an_unknown_tool_name_is_escaped():
-    assert _row(tool="mcp__srv__go") == "○ **t** · Using mcp\\_\\_srv\\_\\_go"
+    assert _row(tool="mcp__srv__go") == "○ 🤖 **t** · Using mcp\\_\\_srv\\_\\_go"
 
 
 def test_a_done_row_drops_its_activity():

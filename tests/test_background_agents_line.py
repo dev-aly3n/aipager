@@ -41,6 +41,7 @@ import pytest
 
 from aipager import preferences as prefs
 from aipager.bot import notify as notify_mod
+from aipager.bot.divider import DIVIDER_SEP
 from aipager.bot.flood_budget import FloodSkipped
 from aipager.dtach import hook_receiver as hr
 from aipager.state import (
@@ -53,7 +54,7 @@ CHAT = 555
 TRIGGER = 7
 CARD = 42
 ANSWER = "The settings fix is still running its final full test run."
-BLOCK_1 = ("⏳ 1 agent working\n\n○ **pipeline-runner**\n\n"
+BLOCK_1 = ("⏳ 1 agent working\n\n○ 🤖 **pipeline-runner**\n\n"
            "Results from the agents will follow here.")
 
 
@@ -364,10 +365,10 @@ def test_an_answer_delivered_while_an_agent_runs_says_so(
     answer = [p for p in wire.of(method) if ANSWER in _markdown(p)]
     assert len(answer) == 1
     text = _markdown(answer[0])
-    assert text.endswith("\n\n" + BLOCK_1)
+    assert text.endswith(DIVIDER_SEP + BLOCK_1)
     assert text.count("⏳") == 1
     (rec,) = sess.agents_lines
-    assert f"{rec['body']}\n\n{rec['shown']}" == text
+    assert rec["body"] + DIVIDER_SEP + rec["shown"] == text
     assert rec["shown"] == BLOCK_1
 
 
@@ -387,7 +388,7 @@ def test_two_agents_are_counted_and_each_has_a_row(mk_bot, run_async, wire):
     _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
     (answer,) = wire.of("sendRichMessage")
     assert _markdown(answer).endswith(
-        "⏳ 2 agents working\n\n○ **pipeline-runner**\n\n○ **ship-reviewer**"
+        "⏳ 2 agents working\n\n○ 🤖 **pipeline-runner**\n\n○ 🤖 **ship-reviewer**"
         "\n\nResults from the agents will follow here.")
 
 
@@ -417,7 +418,7 @@ def test_the_fact_4_sequence_ends_with_the_line(mk_bot, run_async, wire):
     _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
     (answer,) = [p for p in wire.of("sendRichMessage")
                  if ANSWER in _markdown(p)]
-    assert _markdown(answer).endswith("\n\n" + BLOCK_1)
+    assert _markdown(answer).endswith(DIVIDER_SEP + BLOCK_1)
 
 
 def test_the_plain_text_fallback_does_not_carry_the_line(
@@ -458,7 +459,7 @@ def test_a_long_answer_keeps_the_line_last(mk_bot, run_async, wire, long):
     _finish(run_async, bot, sess, summary=long, raw_md=long)
     (answer,) = wire.of("sendRichMessage")
     text = _markdown(answer)
-    assert text.endswith("\n\n" + BLOCK_1)
+    assert text.endswith(DIVIDER_SEP + BLOCK_1)
     (rec,) = sess.agents_lines
     assert (len(rec["body"].encode()) + agents_line.reserve_bytes()
             <= _RICH_LIMIT)
@@ -536,9 +537,9 @@ def test_the_agents_stop_edits_the_line_once_to_done(mk_bot, run_async, wire):
     edit = new[0][1]
     assert edit["message_id"] == rec["msg_id"]
     # Six minutes after the answer, in true seconds (the clock).
-    block = _markdown(edit)[len(rec["body"]) + 2:]
+    block = _markdown(edit)[len(rec["body"]) + len(DIVIDER_SEP):]
     assert re.fullmatch(r"✅ 1 agent done \(6:0\d\)", block)
-    assert _markdown(edit) == f"{rec['body']}\n\n{block}"
+    assert _markdown(edit) == rec["body"] + DIVIDER_SEP + block
     # ORNAMENT, skip-class: the flood gate may refuse it, never queue it.
     assert edit["_kw"] == {"kind": "skip", "priority": "ornament"}
     assert sess.agents_lines == []
@@ -562,8 +563,8 @@ def test_one_of_two_finishing_settles_its_row_and_both_settle_the_header(
     (edit,) = [p for m, p in wire.calls[before:]]
     lines = _markdown(edit).split("\n\n")[-4:]
     assert lines[0] == "⏳ 1 agent working"
-    assert re.fullmatch(r"✓ \*\*pipeline-runner\*\* · done \(\d+:\d\d\)", lines[1])
-    assert lines[2:] == ["○ **ship-reviewer**",
+    assert re.fullmatch(r"✓ 🤖 \*\*pipeline-runner\*\* · done \(\d+:\d\d\)", lines[1])
+    assert lines[2:] == ["○ 🤖 **ship-reviewer**",
                          "Results from the agents will follow here."]
     assert sess.agents_lines
 

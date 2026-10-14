@@ -160,9 +160,10 @@ def test_the_next_answer_does_not_show_the_child_working(c_stopped_before):
     assert _working_rows(block, C_TYPE) == [], block
 
 
-def test_the_next_answer_still_shows_the_parent_working(c_stopped_before):
+def test_the_next_answer_still_shows_the_parent_waiting(c_stopped_before):
+    """Not done: it waits to resume (a waiting agent's row)."""
     block = c_stopped_before.answer()
-    assert len(_working_rows(block, P_TYPE)) == 1, block
+    assert h.is_waiting_row(h.row_of(block, P_TYPE)), block
 
 
 def test_later_edits_of_the_answer_never_show_the_child_working(c_stopped_before):
@@ -248,7 +249,7 @@ def test_all_stopped_before_the_adoption_the_job_closes_after_the_grace(all_stop
 
 def test_all_stopped_before_the_adoption_the_answer_shows_no_one_working(all_stopped_before):
     text = _send_answer(all_stopped_before)
-    assert "○ **" not in text, text
+    assert "○ 🤖 **" not in text, text
 
 
 def test_all_stopped_before_the_adoption_no_lost_agents_notice_later(

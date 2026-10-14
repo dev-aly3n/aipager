@@ -69,11 +69,13 @@ def test_the_interim_answer_counts_the_waiting_foreground_agent(fg_paused):
     assert h.header(fg_paused.answer()) == "⏳ 2 agents working"
 
 
-def test_the_waiting_foreground_agent_is_working_past_the_settle_and_edit(fg_paused):
+def test_the_waiting_foreground_agent_is_waiting_past_the_settle_and_edit(fg_paused):
+    """Not done: its row says it waits for its own agents (a waiting
+    agent's row since the agents tree, 2026-10-14)."""
     fg_paused.answer()
     fg_paused.tick(6)
     fg_paused.tick(31)
-    assert len(_working_rows(fg_paused.last_block(), F_TYPE)) == 1
+    assert h.is_waiting_row(h.row_of(fg_paused.last_block(), F_TYPE))
 
 
 def test_the_pause_is_independent_of_the_callers_return(rig):

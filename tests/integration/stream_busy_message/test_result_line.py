@@ -115,10 +115,12 @@ def test_merged_layout_marks_both_sections(mk_bot, run_async, rich_calls):
     (merged,) = _md(rich_calls, "editMessageText")
     assert not _md(rich_calls, "sendRichMessage")
     status = merged.index("✅ **dev** · Done")
-    sep = merged.index(_MERGED_SEPARATOR)
+    # The card's own divider sits above its status line (2026-10-14).
+    card_divider = merged.index(f"\n\n{_MERGED_SEPARATOR}\n\n")
+    sep = merged.index(_MERGED_SEPARATOR, status)
     line = merged.index("💬 **dev**")
     body = merged.index("the answer")
-    assert status < sep < line < body
+    assert card_divider < status < sep < line < body
     assert merged.endswith(f"{_MERGED_SEPARATOR}\n\n💬 **dev**\n\nthe answer")
     assert "Finished" not in merged
 

@@ -70,8 +70,12 @@ def _run_tool(path, sess, name: str, summary: str, done=True):
 def _rows(card: str) -> list[str]:
     """The timeline rows, in order, without the header line."""
     # Contract change ("status-line-at-card-bottom"): the status line is
-    # the card's LAST element, so strip it from the END.
+    # the card's LAST element, so strip it from the END, with the divider
+    # above it (2026-10-14).
     body, _, _status = card.rpartition("\n\n")
+    if body:
+        assert body.endswith("\n\n---") or body == "---", card
+        body = body[:-len("---")].rstrip("\n")
     return body.split("\n\n") if body else []
 
 

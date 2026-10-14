@@ -201,7 +201,9 @@ def render_text(tr, summary: str) -> str:
 
 
 def _agent_name(tr, info: dict):
-    agent_type = info.get("type")
+    # A helper's card label names the agent at the top of its chain
+    # ("pipeline-runner › ship-tester"): names, never translated.
+    agent_type = info.get("card_label") or info.get("type")
     return Span(_mono(agent_type)) if agent_type else Safe(tr.md(AGENT_WORD))
 
 
@@ -223,8 +225,8 @@ def live_agent_final(tr, info: dict) -> str:
     """A running agent on a settled card: no counter."""
     from aipager.bot import animation
     if tr.code == "en":
-        return _mono(f"{animation._SUBAGENT_MARK}{info.get('type') or 'agent'}"
-                     " (still running)")
+        name = info.get("card_label") or info.get("type") or "agent"
+        return _mono(f"{animation._SUBAGENT_MARK}{name} (still running)")
     return tr.md(AGENT_STILL_RUNNING, agent=_agent_name(tr, info))
 
 
