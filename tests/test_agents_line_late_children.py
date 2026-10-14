@@ -133,7 +133,7 @@ def test_a_child_whose_link_came_at_its_end_joins_as_done():
     sess.bg_agent_stopped(C, 105.0)
     sess.agent_launched_child(P, C, 106.0)
     assert _item(rec, C)["parent"] == P
-    assert rec["ends"][C] == {"outcome": "done", "at": 106.0}
+    assert rec["ends"][C] == {"outcome": "done", "at": 105.0}
 
 
 def test_an_unknown_child_does_not_join():

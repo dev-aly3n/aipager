@@ -1230,7 +1230,8 @@ class TrackedSession:
     # (that message's id), "tool": str, "tool_arg": str (its latest tool
     # call: the name and a short argument), "desc": str (its Agent call's
     # description, or "")}. `bg_agents_recent` remembers stopped ones (id
-    # -> entry, capped at BG_AGENTS_RECENT_CAP) for the still-running note.
+    # -> entry plus "stopped_at" (monotonic, its stop), capped at
+    # BG_AGENTS_RECENT_CAP) for the still-running note.
     # `pending_agent_calls` holds the Agent calls not yet matched to a
     # SubagentStart: [{"type", "desc", "at", "launcher" (the calling
     # agent's id, "" for the session's own call)}], capped at
@@ -1845,6 +1846,7 @@ class TrackedSession:
         info.pop("waiting", None)
         info.pop("paused", None)
         info.pop("children_gone_at", None)
+        info["stopped_at"] = now
         self.bg_agents_recent[agent_id] = info
         while len(self.bg_agents_recent) > BG_AGENTS_RECENT_CAP:
             self.bg_agents_recent.pop(next(iter(self.bg_agents_recent)))
@@ -2004,7 +2006,7 @@ class TrackedSession:
             listed.add(child)
             if ended:
                 rec.setdefault("ends", {})[child] = {
-                    "outcome": "done", "at": now}
+                    "outcome": "done", "at": info.get("stopped_at", now)}
         else:
             return
         # The child's own agents the answer lists sit under it now, when it
