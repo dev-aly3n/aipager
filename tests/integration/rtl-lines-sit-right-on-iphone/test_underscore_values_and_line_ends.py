@@ -257,13 +257,33 @@ def test_md_a_partner_on_another_line_does_not_pair(code):
     assert _md(code, "_a\nb_") == RLM + "_a" + RLM + "\n" + RLM + "b_" + RLM
 
 
+_LONE_RUNS = {
+    "star": ("x y+*", RLM + "x y+" + RLM + "*"),
+    "tilde": ("x y.~", RLM + "x y." + RLM + "~"),
+    "unequal-stars": ("x *y.**", RLM + "x *y." + RLM + "**"),
+}
+
+
 @pytest.mark.parametrize("code", RTL)
-@pytest.mark.parametrize("pattern", ("x y+*", "x y.~"), ids=["star", "tilde"])
-def test_md_a_run_after_punctuation_without_a_partner_keeps_the_mark_after_it(code, pattern):
-    """entrypoints.md Amendments: the end mark goes before "a `*`/`~` run
-    after punctuation, only when the run has a matching partner on the same
-    line"; a lone run is literal, so the mark stays at the very end."""
-    assert _md(code, pattern) == RLM + pattern + RLM
+@pytest.mark.parametrize("case", _LONE_RUNS)
+def test_md_a_star_or_tilde_run_after_punctuation_takes_the_end_mark_before_it(code, case):
+    """entrypoints.md Amendments (corrected): the partner rule is for `_`
+    only; a `*`/`~` run after punctuation in md takes the end mark before
+    it whether or not it has a partner."""
+    pattern, want = _LONE_RUNS[case]
+    assert _md(code, pattern) == want
+
+
+@pytest.mark.parametrize("code", RTL)
+@pytest.mark.parametrize("case", _LONE_RUNS)
+def test_md_a_line_ending_in_a_star_or_tilde_run_sits_right_on_iphone(code, case):
+    assert bidi_uba.sits_right_on_iphone(_md(code, _LONE_RUNS[case][0]))
+
+
+@pytest.mark.parametrize("code", RTL)
+@pytest.mark.parametrize("case", _LONE_RUNS)
+def test_md_a_star_or_tilde_run_puts_no_mark_between_word_characters(code, case):
+    assert re.search("\\w[\u200e\u200f]\\w", _md(code, _LONE_RUNS[case][0])) is None
 
 
 @pytest.mark.parametrize("code", RTL)
