@@ -388,6 +388,80 @@ def test_an_emphasis_closer_after_punctuation_keeps_its_place():
     assert fa.md("a.b", "**x**") == RLM + "**x**" + RLM
     assert fa.md("a.b", "x.\\*") == RLM + "x.\\*" + RLM
     assert fa.md("a.b", "x.\\\\*") == RLM + "x.\\\\" + RLM + "*"
+    # A symbol counts as punctuation (CommonMark's punctuation is P and S).
+    assert fa.md("a.b", "x *y+*") == RLM + "x *y+" + RLM + "*"
+
+
+def test_an_underscore_closer_keeps_its_place_after_a_letter():
+    """A ``_`` run followed by anything but a space or punctuation never
+    closes (CommonMark), and U+200F is neither: the end mark goes before
+    it even after a letter, where a ``*`` run keeps it after."""
+    fa = i18n.get("fa")
+    assert fa.md("a.b", "x _y_") == RLM + "x _y" + RLM + "_"
+    assert fa.md("a.b", "x __y__") == RLM + "x __y" + RLM + "__"
+    assert fa.md("a.b", "x *y*") == RLM + "x *y*" + RLM
+    assert fa.md("a.b", "x \\_y\\_") == RLM + "x \\_y\\_" + RLM
+    # A run that is the whole line is text, not a closer.
+    assert fa.md("a.b", "_") == RLM + "_" + RLM
+    assert fa.md("a.b", "__") == RLM + "__" + RLM
+
+
+def test_marks_in_a_markdown_code_span_stay_as_they_are():
+    """Markdown output (and a line built in code, which may be Markdown)
+    keeps a run of marks inside a backtick span; in HTML a backtick is
+    only text."""
+    fa = i18n.get("fa")
+    span = "`echo a" + LRM + RLM + "b`"
+    assert fa.md("a.b", "x {s}", s=Safe(span)) == RLM + "x " + span + RLM
+    assert fa.md("a.b", "x {s} y", s=Safe("``a" + LRM + RLM + "b``")) == (
+        RLM + "x ``a" + LRM + RLM + "b`` y" + RLM)
+    assert fa.line("x " + span) == RLM + "x " + span + RLM
+    both = "<code>a" + LRM + RLM + "b</code> " + span
+    assert fa.line("x " + both) == RLM + "x " + both + RLM
+    assert fa.html("a.b", "x {s}", s=Safe(span)) == RLM + "x `echo a" + RLM + "b`" + RLM
+    # An escaped backtick opens nothing, and runs of different lengths
+    # make no span: the marks between them are collapsed.
+    for left, right in (("\\`", "`"), ("``", "`"), ("`", "``")):
+        piece = Safe(left + "a" + LRM + RLM + "b" + right)
+        assert fa.md("a.b", "x {s}", s=piece) == RLM + "x " + left + "a" + RLM + "b" + right + RLM
+
+
+#: The noncharacters the marks are built from (U+FDD0 the twin's line
+#: slot, U+FDD1 a line start, U+FDD2 a line end) and what a value holding
+#: one shows instead.
+SENTINELS = "\ufdd0\ufdd1\ufdd2"
+FFFD = "\ufffd"
+
+
+@pytest.mark.parametrize("code", ["fa", "fa-ltr"])
+def test_a_value_never_adds_a_mark(code):
+    tr = i18n.get("fa").directed(code == "fa")
+    out = tr.text("a.b", "x {t} y", t="e" + SENTINELS + "\nm")
+    assert FSI + "e" + FFFD * 3 + "\nm" + PDI in out
+    out = tr.html("a.b", "x <code>{c}</code>", c=Safe("a" + SENTINELS + "b"))
+    assert "<code>a" + FFFD * 3 + "b</code>" in out
+    from aipager.i18n import Command
+    from aipager.i18n.core import Span
+    out = tr.md("a.b", "x {s} {c}", s=Span("`a" + SENTINELS + "`"), c=Command("/a" + SENTINELS))
+    assert "`a" + FFFD * 3 + "`" in out and "/a" + FFFD * 3 in out
+    for out in (tr.text("a.b", "x {t} y", t="e" + SENTINELS + "\nm"),
+                tr.html("a.b", "x <code>{c}</code>", c=Safe("a" + SENTINELS + "b"))):
+        assert not set(SENTINELS) & set(out)
+        assert out.count(RLM) == (2 if code == "fa" else 0)
+
+
+def test_line_never_turns_a_placeholder_into_a_mark():
+    fa = i18n.get("fa")
+    assert fa.line("\ufdd2x\ufdd1y\ufdd0") == RLM + FFFD + "x" + FFFD + "y" + FFFD + RLM
+
+
+def test_line_keeps_outer_line_breaks_outside_its_marks():
+    fa = i18n.get("fa")
+    assert fa.line("x\n") == RLM + "x" + RLM + "\n"
+    assert fa.line("\n\nx\ny\n") == "\n\n" + RLM + "x\ny" + RLM + "\n"
+    assert fa.line(RLM + "x" + RLM + "\n") == RLM + "x" + RLM + "\n"
+    assert fa.line("\n\n") == "\n\n"
+    assert isinstance(fa.line(Safe("x\n")), Safe)
 
 
 def test_a_plural_ends_with_a_mark():

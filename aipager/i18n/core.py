@@ -29,7 +29,9 @@ number would sit on the left). A blank line gets no mark, no mark
 stands beside a ``<pre>`` or ``<blockquote>`` on its own line (it would
 show as an empty line), newlines inside a parameter get none, and no
 two marks ever end up side by side (Telegram turns all but the last of
-such a run into U+200C). A line built in code from pieces takes
+such a run into U+200C). A value never adds a mark: the placeholders
+the marks are built from (noncharacters) become U+FFFD in it. A line
+built in code from pieces takes
 :meth:`Tr.line`, a rendered piece nested in another line
 :meth:`Tr.bare`, a ``/`` menu description :meth:`Tr.lead`.
 Numeric parameters (``int``/``float``, not ``bool``) and
@@ -106,6 +108,15 @@ _LINE_SLOT = "\ufdd0"
 #: like :data:`_LINE_SLOT`: never in a message, never sent.
 _START = "\ufdd1"
 _END = "\ufdd2"
+#: The three placeholders as they may arrive in a value (Claude's text,
+#: a path): each becomes U+FFFD before it can turn into a mark.
+_SCRUB = str.maketrans(dict.fromkeys(_LINE_SLOT + _START + _END, "\ufffd"))
+
+
+def _scrub(text: str) -> str:
+    """*text* with :data:`_LINE_SLOT`, :data:`_START` and :data:`_END`
+    replaced by U+FFFD, so a value never adds or moves a mark."""
+    return text.translate(_SCRUB)
 _FSI = "\u2068"      # FIRST STRONG ISOLATE
 _PDI = "\u2069"      # POP DIRECTIONAL ISOLATE
 
@@ -369,6 +380,7 @@ _MARK_RUN = re.compile("[\u200e\u200f]{2,}")
 _OPENS_BLOCK = re.compile(r"[\s\u2066-\u2069]*(?:<(?:pre|blockquote)\b|```)", re.I)
 _CLOSES_BLOCK = re.compile(r"(?:</(?:pre|blockquote)\s*>|```)[\s\u2066-\u2069]*\Z", re.I)
 _EMPHASIS_AT_END = re.compile(r"[*_~]+\Z")
+_CODE_SPAN = re.compile(r"(?<![`\\])(`+)(?!`).*?(?<!`)\1(?!`)", re.S)
 _CLOSING_TAGS = re.compile(r"(?:</[A-Za-z][A-Za-z0-9-]*\s*>\s*)+\Z")
 _QUOTE_OPEN = re.compile(r"<blockquote\b", re.I)
 _CODE_CLOSE = re.compile(r"</(?:code|pre)\b", re.I)
@@ -380,19 +392,21 @@ def _blank(text: str) -> bool:
 
 def _end_before_emphasis(line: str) -> str:
     """*line* (ending with :data:`_END`) with the end mark moved before a
-    closing Markdown emphasis run that follows punctuation (``*(x)*``):
-    a mark after it would stop the run closing (CommonMark's
-    right-flanking rule), one before it is still the line's last shown
-    character. An escaped run (an odd number of backslashes) is text."""
+    closing Markdown emphasis run that follows punctuation (``*(x)*``)
+    or holds a ``_`` (``_x_``): a mark after it would stop the run
+    closing (CommonMark's flanking rules: a ``_`` followed by anything
+    but a space or punctuation never closes, and the mark is neither),
+    one before it is still the line's last shown character. An escaped
+    run (an odd number of backslashes) is text."""
     body = line[:-1]
     m = _EMPHASIS_AT_END.search(body)
-    if not m or m.start() == 0:
+    if not m or not body[:m.start()].replace(_START, ""):
         return line
     before = body[:m.start()]
     slashes = len(before) - len(before.rstrip("\\"))
     if slashes % 2:
         return line
-    if not unicodedata.category(before[-1]).startswith(("P", "S")):
+    if "_" not in m.group(0) and not unicodedata.category(before[-1]).startswith(("P", "S")):
         return line
     return before + _END + body[m.start():]
 
@@ -413,16 +427,33 @@ def _end_inside_quote(line: str) -> str:
     return line[:m.start()] + _END + line[m.start():]
 
 
-def _collapse_marks(text: str) -> str:
+def _code_regions(text: str, kind: str | None):
+    """The code of *text*: ``<code>``/``<pre>`` elements, and for Markdown
+    (``kind`` ``"md"``, or ``None``: a line built in code may be either)
+    also the backtick code spans, in order and never overlapping."""
+    if kind not in ("md", None):
+        yield from _CODE_REGION.finditer(text)
+        return
+    pos = 0
+    while True:
+        found = [m for m in (_CODE_REGION.search(text, pos), _CODE_SPAN.search(text, pos)) if m]
+        if not found:
+            return
+        m = min(found, key=lambda x: x.start())
+        yield m
+        pos = m.end()
+
+
+def _collapse_marks(text: str, kind: str | None = "html") -> str:
     """Every run of two or more U+200E/U+200F reduced to its last mark,
-    outside ``<code>``/``<pre>``. Telegram's server turns all but the
-    last mark of such a run into U+200C, which breaks the joining of two
-    Persian letters; the last one is the one that counts."""
+    outside code (:func:`_code_regions`). Telegram's server turns all
+    but the last mark of such a run into U+200C, which breaks the joining
+    of two Persian letters; the last one is the one that counts."""
     if not _MARK_RUN.search(text):
         return text
     out: list[str] = []
     pos = 0
-    for m in _CODE_REGION.finditer(text):
+    for m in _code_regions(text, kind):
         out.append(_MARK_RUN.sub(lambda r: r.group(0)[-1], text[pos:m.start()]))
         out.append(m.group(0))
         pos = m.end()
@@ -430,7 +461,7 @@ def _collapse_marks(text: str) -> str:
     return "".join(out)
 
 
-def _rtl_ends(text: str) -> str:
+def _rtl_ends(text: str, kind: str | None = "html") -> str:
     """Finish a right-to-left rendering: resolve every :data:`_START`
     (a line start) and :data:`_END` (a line end) to U+200F. A start mark
     goes after a Markdown block marker; neither goes on a blank line; a
@@ -456,7 +487,7 @@ def _rtl_ends(text: str) -> str:
                 line = _end_before_emphasis(line)
         lines[i] = line
     text = "\n".join(lines).replace(_START, _LRM_RTL).replace(_END, _LRM_RTL)
-    return _collapse_marks(text)
+    return _collapse_marks(text, kind)
 
 
 # ---- placeholders -------------------------------------------------------
@@ -559,6 +590,9 @@ class _Scan:
         return "".join(out)
 
 
+_OUTER_BREAKS = re.compile(r"(\n*)(.*?)(\n*)\Z", re.S)
+
+
 class Tr:
     """Renders messages in one language. Get one with :func:`get` or a
     resolver (``for_chat``, ``for_update``...), never build one."""
@@ -610,11 +644,14 @@ class Tr:
         ``<pre>``/``<blockquote>`` it opens or closes, and no two marks
         side by side (its pieces' own marks at its ends are not doubled).
         Text holding line breaks gets only its outer ends marked. In any
-        other rendering, and for blank text, *text* as it is. A
-        :class:`Safe` stays a :class:`Safe`."""
+        other rendering, and for blank text, *text* as it is. Line breaks
+        at its very start or end stay outside the marks. A :class:`Safe`
+        stays a :class:`Safe`."""
         if not self.rtl:
             return text
-        out = _rtl_ends(_START + str(text).strip(_LRM_RTL) + _END)
+        m = _OUTER_BREAKS.match(_scrub(str(text)))
+        lead, body, trail = m.group(1), m.group(2), m.group(3)
+        out = lead + _rtl_ends(_START + body.strip(_LRM_RTL) + _END, None) + trail
         return Safe(out) if isinstance(text, Safe) else out
 
     def bare(self, text):
@@ -720,21 +757,22 @@ class Tr:
                 continue
             value = params[piece[0]]
             numeric = (isinstance(value, (int, float)) and not isinstance(value, bool))
+            raw = _scrub(str(value)) if rtl else str(value)
             if isinstance(value, (Span, Command)):
-                text = str(value) if isinstance(value, Span) else _escape(kind, str(value))
+                text = raw if isinstance(value, Span) else _escape(kind, raw)
                 whole = isinstance(value, Span) or ISOLATE_COMMANDS
                 if rtl and whole and scan.plain:
                     text = _FSI + text + _PDI
                 out.append(text)
                 continue
             if isinstance(value, Safe):
-                out.append(str(value))
+                out.append(raw)
                 continue
             if numeric:
                 raw = self.num(value) if scan.plain else str(value)
                 out.append(_escape(kind, raw))
                 continue
-            text = _escape(kind, str(value))
+            text = _escape(kind, raw)
             if rtl and scan.tag is None:
                 if scan.code == 0:
                     text = _FSI + text + _PDI
@@ -751,7 +789,7 @@ class Tr:
             out.append(text)
         text = "".join(out)
         if self.rtl:
-            text = _rtl_ends(text + _END)
+            text = _rtl_ends(text + _END, kind)
         elif rtl:
             text = _ltr_render(text, kind)
         return text
