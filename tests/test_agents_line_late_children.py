@@ -63,7 +63,7 @@ def test_a_child_of_a_listed_agent_joins_under_it():
     assert sess.agent_launched_child(P, C, 101.0) is False
     assert rec["ids"] == [P, C]
     assert _item(rec, C) == {"id": C, "kind": "agent", "label": "ship-tester",
-                             "started": 100.0, "parent": P}
+                             "started": 100.0, "parent": P, "late": True}
     assert C not in rec["ends"]
 
 
@@ -293,3 +293,72 @@ def test_a_link_to_an_agent_the_answer_does_not_list_leaves_the_row_in_place():
     rec = _rec(sess, P, C, parents={C: P})
     sess.agent_launched_child(Q, C, 101.0)
     assert _item(rec, C)["parent"] == P
+
+
+# ---- the authoritative link replacing a launcher match ---------------------------------
+
+D = "ad2e3f4a5b6c7d8e9"
+
+
+def _matched_late(sess, rec):
+    """C starts while P's stale call of its type waits: it is matched to P
+    and joins the answer late, under P."""
+    sess.agent_call_launched("ship-tester", "helper work", 100.5, launcher=P)
+    sess.bg_agent_started(C, "ship-tester", 101.0)
+    assert (_item(rec, C)["parent"], _item(rec, C)["late"]) == (P, True)
+
+
+def test_a_late_row_whose_link_is_replaced_by_an_unlisted_parent_leaves():
+    """Q (not listed, its own chain reaches nothing listed) really started
+    C: C is not one of the answer's agents, so it leaves the block."""
+    sess = _state((P, "pipeline-runner"), (Q, "r2-runner"))
+    rec = _rec(sess, P)
+    _matched_late(sess, rec)
+    sess.agent_launched_child(Q, C, 102.0)
+    assert sess.agent_parents[C] == Q
+    assert rec["ids"] == [P]
+    assert [i["id"] for i in rec["items"]] == [P]
+
+
+def test_a_left_late_row_takes_its_late_rows_and_its_end_with_it():
+    sess = _state((P, "pipeline-runner"), (Q, "r2-runner"), (D, "Explore"))
+    rec = _rec(sess, P)
+    _matched_late(sess, rec)
+    sess.agent_launched_child(C, D, 101.5)
+    assert _item(rec, D)["parent"] == C
+    sess.bg_agent_stopped(D, 101.8)
+    assert D in rec["ends"]
+    sess.agent_launched_child(Q, C, 102.0)
+    assert rec["ids"] == [P]
+    assert rec["ends"] == {}
+
+
+def test_a_sent_row_under_a_left_late_row_goes_to_the_top():
+    sess = _state((P, "pipeline-runner"), (Q, "r2-runner"), (G, "Explore"))
+    rec = _rec(sess, P, G)
+    _matched_late(sess, rec)
+    sess.agent_launched_child(C, G, 101.5)
+    assert _item(rec, G)["parent"] == C
+    sess.agent_launched_child(Q, C, 102.0)
+    assert rec["ids"] == [P, G]
+    assert _item(rec, G)["parent"] == ""
+
+
+def test_a_sent_row_whose_link_is_replaced_by_an_unlisted_parent_goes_to_the_top():
+    sess = _state((P, "pipeline-runner"), (Q, "r2-runner"), (C, "ship-tester"))
+    sess.agent_parents[C] = P
+    rec = _rec(sess, P, C, parents={C: P})
+    sess.agent_launched_child(Q, C, 102.0)
+    assert rec["ids"] == [P, C]
+    assert _item(rec, C)["parent"] == ""
+
+
+def test_the_same_link_again_keeps_a_row_whose_chain_was_forgotten():
+    """C -> X -> G put C under G; X's link went with a stop. X's own
+    PostToolUse for C again replaces nothing: C stays under G."""
+    sess = _state((G, "pipeline-runner"), (Q, "r2-runner"), (C, "ship-tester"))
+    sess.agent_parents.update({C: Q, Q: G})
+    rec = _rec(sess, G, C, parents={C: G})
+    sess.agent_parents.pop(Q)
+    sess.agent_launched_child(Q, C, 102.0)
+    assert _item(rec, C)["parent"] == G

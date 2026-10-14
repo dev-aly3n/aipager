@@ -1240,8 +1240,9 @@ class TrackedSession:
     # markdown before the divider and the block), "shown" (the block in
     # the message), "items" ([{"id", "kind" agent|shell, "label",
     # "started", "parent" (an agent's nearest ancestor the answer lists,
-    # or "")}]: the snapshot at the send, then each agent a listed agent
-    # starts later, up to AGENTS_LINE_ITEMS_CAP), "ids", "ends" (id ->
+    # or ""), "late" (True on an agent that joined after the send)}]: the
+    # snapshot at the send, then each agent a listed agent starts later,
+    # up to AGENTS_LINE_ITEMS_CAP), "ids", "ends" (id ->
     # {"outcome" done|finished|stopped|gone, "at"}), "is_rtl", "sent_at",
     # "last_try", "refused", "final", "attempts", "next_try",
     # "gone_at"}. An item keeps its "parent" once known: the links in
@@ -1953,27 +1954,39 @@ class TrackedSession:
         started after the answer went out). A child already stopped (its
         link came at its end) joins as done. An agent the session itself
         starts has no link, so it never joins an earlier answer. False
-        (and nothing changes) for an empty or self link."""
+        (and nothing changes) for an empty or self link.
+
+        A link that replaces a different one (the parent's PostToolUse
+        correcting a launcher match) and reaches nothing an answer lists
+        proves the row's place wrong there: a row the answer was sent with
+        goes to the top, and a row that joined late only through the old
+        link leaves the answer (see :meth:`_drop_late_item`)."""
         if not parent or not child or parent == child:
             return False
-        self.agent_parents.pop(child, None)
+        old = self.agent_parents.pop(child, None)
         self.agent_parents[child] = parent
         while len(self.agent_parents) > AGENT_PARENTS_CAP:
             self.agent_parents.pop(next(iter(self.agent_parents)))
+        replaced = old is not None and old != parent
         for rec in self.agents_lines:
-            self._adopt_in_line(rec, child, now)
+            self._adopt_in_line(rec, child, now, replaced)
         return True
 
-    def _adopt_in_line(self, rec: dict, child: str, now: float) -> None:
+    def _adopt_in_line(self, rec: dict, child: str, now: float,
+                       replaced: bool = False) -> None:
         ids = rec.setdefault("ids", [])
         listed = set(ids)
         anc = _agent_tree.nearest_listed(self.agent_parents, child, listed)
         items = rec.setdefault("items", [])
         if child in listed:
-            if anc:
-                for item in items:
-                    if item.get("id") == child:
-                        item["parent"] = anc
+            mine = [item for item in items if item.get("id") == child]
+            if not anc and replaced and any(item.get("late")
+                                            for item in mine):
+                self._drop_late_item(rec, child)
+                return
+            if anc or replaced:
+                for item in mine:
+                    item["parent"] = anc
         elif anc and sum(1 for item in items if item.get("kind") == "agent"
                          ) < AGENTS_LINE_ITEMS_CAP:
             info = self.bg_agents.get(child)
@@ -1985,12 +1998,13 @@ class TrackedSession:
                 return
             items.append({"id": child, "kind": "agent",
                           "label": info.get("label", ""),
-                          "started": info.get("started"), "parent": anc})
+                          "started": info.get("started"), "parent": anc,
+                          "late": True})
             ids.append(child)
             listed.add(child)
             if ended:
-                rec.setdefault("ends", {})[child] = {"outcome": "done",
-                                                     "at": now}
+                rec.setdefault("ends", {})[child] = {
+                    "outcome": "done", "at": now}
         else:
             return
         # The child's own agents the answer lists sit under it now, when it
@@ -2002,6 +2016,33 @@ class TrackedSession:
                                                 item["id"], listed)
             if nearer == child:
                 item["parent"] = child
+
+    def _drop_late_item(self, rec: dict, child: str) -> None:
+        """*child* joined *rec* after the send only through a link now
+        replaced by one that reaches nothing *rec* lists: it is not one of
+        the answer's agents (as an agent the session starts never joins an
+        earlier answer), so it leaves, and with it each late row that
+        joined under it (it joined through *child*, the same way). A row
+        the answer was sent with that sat under a leaving row goes under
+        its nearest listed ancestor that stays, or to the top."""
+        gone = {child}
+        while True:
+            more = {item["id"] for item in rec.get("items", ())
+                    if item.get("late") and item["id"] not in gone
+                    and item.get("parent") in gone}
+            if not more:
+                break
+            gone |= more
+        rec["items"] = [item for item in rec.get("items", ())
+                        if item.get("id") not in gone]
+        rec["ids"] = [i for i in rec.get("ids", ()) if i not in gone]
+        for agent_id in gone:
+            rec.get("ends", {}).pop(agent_id, None)
+        listed = set(rec["ids"])
+        for item in rec["items"]:
+            if item.get("kind") == "agent" and item.get("parent") in gone:
+                item["parent"] = _agent_tree.nearest_listed(
+                    self.agent_parents, item["id"], listed)
 
     def agent_card_label(self, agent_id: str, agent_type: str) -> str:
         """What the busy card names *agent_id* by: its type, or ``"<top>
