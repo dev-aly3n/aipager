@@ -132,6 +132,7 @@ def test_a_resumed_agent_takes_no_call():
     assert len(sess.pending_agent_calls) == 1
 
 
+
 def test_an_agent_back_after_its_stop_takes_no_call_and_keeps_its_description():
     """A finished agent resumed by SendMessage starts again with no Agent
     call of its own: it must not take another agent's waiting call (that
@@ -219,13 +220,21 @@ def test_an_agents_other_tool_records_no_call(mk_bot, run_async):
     assert sess.pending_agent_calls == []
 
 
-def test_an_agents_call_type_is_normalised_like_the_start(mk_bot, run_async):
-    """Both sides go through the same clean-up, so they always match."""
+@pytest.mark.parametrize("call_type,start_type", [
+    pytest.param("ship  tester", "ship \n\t tester", id="inner-whitespace"),
+    pytest.param("x" * 90, "x" * 85, id="over-80-chars"),
+])
+def test_an_agents_call_type_is_normalised_like_the_start(mk_bot, run_async,
+                                                          call_type, start_type):
+    """Both sides go through the same clean-up, so they always match. The
+    two types differ, and only that clean-up (not the state's own strip)
+    makes them one, so a raw value on either side breaks the link."""
     _bot, sess, recv = _hook_sess(mk_bot)
     bb.hook(run_async, recv, sess, "SubagentStart", agent_id=P, agent_type="pipeline-runner")
-    _pre(run_async, recv, sess, {"subagent_type": f"  {T}\n", "description": "x"},
+    _pre(run_async, recv, sess, {"subagent_type": call_type, "description": "x"},
          agent_id=P)
-    bb.hook(run_async, recv, sess, "SubagentStart", agent_id=C, agent_type=f"{T} ")
+    assert call_type.strip() != start_type.strip()
+    bb.hook(run_async, recv, sess, "SubagentStart", agent_id=C, agent_type=start_type)
     assert sess.agent_parents.get(C) == P
 
 
