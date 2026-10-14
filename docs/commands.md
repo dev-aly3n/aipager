@@ -563,9 +563,11 @@ Results from the agents will follow here.
   level. Every agent one of them started, at any depth, is listed right
   under it, each right after the agent that started it; one started by
   an agent of the second level names that agent first (`ship-developer ›
-  ship-reviewer`). There are never more than two levels. An agent whose
-  starter aipager does not know yet is shown on the first level, never
-  under a guess, and moves under its starter once that is known.
+  ship-reviewer`). The busy card names the same agent after the agent
+  at the top instead (`pipeline-runner › ship-reviewer`). There are
+  never more than two levels. An agent whose starter aipager does not
+  know yet is shown on the first level, never under a guess, and moves
+  under its starter once that is known.
 - **At most six rows,** the agents still working first, then `+N more`
   for the agents without a row. An agent never shows without the agents
   above it.
@@ -577,8 +579,9 @@ Each agent's row settles on its own when that agent stops, to `✓ 🤖
 Explore · done (0:42)` (how long that agent ran), and the first line
 counts down. An agent that a listed agent starts after the answer went
 out joins the status under it at the next update; one the session
-itself starts later is listed under a later answer instead. Once every agent is done, the rows give way to one line,
-with the time from the answer to the last agent's end:
+itself starts later is listed under a later answer instead. Once every
+agent is done, the rows give way to one line, with the time from the
+answer to the last agent's end:
 
 ```
 ✅ 2 agents done (6:12) · 🖥 1 shell running

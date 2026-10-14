@@ -219,9 +219,10 @@ linked to that agent at once (its card row reads `🤖 pipeline-runner ›
 ship-tester`, and it joins the agents under it in an answer's status);
 when they came from different agents, nothing is linked until the
 starting agent's own `PostToolUse` names it. A call's description is
-used only when exactly one call of the type is waiting. A subagent whose `SubagentStop` never arrives is dropped once it
-has been silent for 30 minutes (`AIPAGER_SUBAGENT_SILENCE`, seconds; no
-event of any kind carrying its id). A working agent sends tool events
+used only when exactly one call of the type is waiting. A subagent
+whose `SubagentStop` never arrives is dropped once it has been silent
+for 30 minutes (`AIPAGER_SUBAGENT_SILENCE`, seconds; no event of any
+kind carrying its id). A working agent sends tool events
 every few seconds, so this only collects one whose stop was missed (a
 restart, a lost datagram); a single tool call that runs 30 minutes
 without any event under that agent's id collects it too.
