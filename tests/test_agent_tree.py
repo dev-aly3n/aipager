@@ -287,3 +287,51 @@ def test_a_missing_optional_string_reads_empty():
     out = _validate(rec)
     assert out["running"][0]["desc"] == "" and out["running"][0]["parent"] == ""
     assert out["job"][0]["activity"] == ""
+
+
+# ---- walking the links (agents tree, 2026-10-14) ------------------------------------
+
+def test_nearest_listed_is_the_parent_when_it_is_listed():
+    assert at.nearest_listed({"c": "p"}, "c", {"p"}) == "p"
+
+
+def test_nearest_listed_skips_ancestors_not_listed():
+    parents = {"g": "c", "c": "p"}
+    assert at.nearest_listed(parents, "g", {"p"}) == "p"
+    assert at.nearest_listed(parents, "g", {"p", "c"}) == "c"
+
+
+def test_nearest_listed_never_names_the_agent_itself():
+    assert at.nearest_listed({"c": "p"}, "c", {"c"}) == ""
+
+
+def test_nearest_listed_with_no_parent_is_nothing():
+    assert at.nearest_listed({}, "c", {"c", "p"}) == ""
+    assert at.nearest_listed({"c": "p"}, "c", set()) == ""
+
+
+@pytest.mark.parametrize("parents", [
+    {"a": "b", "b": "a"},
+    {"a": "b", "b": "c", "c": "b"},
+    {"a": "a"},
+], ids=["two", "three-into-two", "self"])
+def test_nearest_listed_ends_on_a_loop(parents):
+    assert at.nearest_listed(parents, "a", {"z"}) == ""
+
+
+def test_top_ancestor_is_the_end_of_the_chain():
+    assert at.top_ancestor({"g": "c", "c": "p"}, "g") == "p"
+    assert at.top_ancestor({"g": "c", "c": "p"}, "c") == "p"
+
+
+def test_top_ancestor_of_a_top_agent_is_nothing():
+    assert at.top_ancestor({"g": "c"}, "p") == ""
+
+
+def test_top_ancestor_ends_on_a_loop():
+    assert at.top_ancestor({"a": "b", "b": "a"}, "a") == "b"
+    assert at.top_ancestor({"a": "b", "b": "c", "c": "b"}, "a") == "c"
+
+
+def test_the_lineage_glyph():
+    assert at.LINEAGE_SEP == " › "

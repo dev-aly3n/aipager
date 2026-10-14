@@ -1193,6 +1193,16 @@ class HookReceiver:
                     sess.bg_agent_tool(agent_id, tool_name,
                                        _activity_arg(tool_name, tool_input),
                                        now_mono)
+                    if tool_name in ("Agent", "Task") and isinstance(
+                            tool_input, dict):
+                        # The agent launching an agent of its own: with
+                        # its launcher, so the SubagentStart that follows
+                        # can sit under it at once (and never take a
+                        # description of the session's own call).
+                        sess.agent_call_launched(
+                            _clean_text(tool_input.get("subagent_type"), 80),
+                            _clean_text(tool_input.get("description"), 200),
+                            now_mono, launcher=agent_id)
                     await self.notify_fn(sess, "tool_use", {
                         "tool_name": tool_name,
                         "tool_summary": summary,
@@ -1208,7 +1218,7 @@ class HookReceiver:
                     sess.agent_call_launched(
                         _clean_text(tool_input.get("subagent_type"), 80),
                         _clean_text(tool_input.get("description"), 200),
-                        now_mono)
+                        now_mono, launcher="")
                 # Mark tool-in-flight so session_monitor's stale-busy
                 # warning stands down for the duration — no hooks fire
                 # between PreToolUse and PostToolUse, so a long tool
@@ -1500,6 +1510,8 @@ class HookReceiver:
                     "elapsed": elapsed,
                     "history_idx": info["history_idx"] if info else None,
                     "tool_count": info.get("tool_count", 0) if info else 0,
+                    # Its card row's name, as its start drew it.
+                    "card_label": (info.get("card_label") or "") if info else "",
                 })
 
         elif event == "safety_blocked":
