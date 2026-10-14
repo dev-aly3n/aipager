@@ -3100,7 +3100,8 @@ class NotifyMixin:
                     # In the session chat's language; the line starts with a
                     # name, so a right-to-left one is marked at both ends.
                     text = error_tr.line(f"⚠️ <b>{html_mod.escape(label)}</b> · "
-                                         f"{html_mod.escape(friendly_error, quote=False)}")
+                                         f"{html_mod.escape(friendly_error, quote=False)}",
+                                         kind="html")
                     keyboard = (self._build_retry_keyboard(sess)
                                 if sess.last_prompt else None)
                     try:

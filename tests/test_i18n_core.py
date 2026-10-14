@@ -414,14 +414,13 @@ def test_an_underscore_opener_keeps_its_place_at_a_line_start():
     assert fa.md("a.b", "_word: x_") == "_" + RLM + "word: x" + RLM + "_"
     assert fa.md("a.b", "- __x__") == "- __" + RLM + "x" + RLM + "__"
     assert fa.md("a.b", "a\n_b_") == RLM + "a" + RLM + "\n_" + RLM + "b" + RLM + "_"
-    assert fa.line("_x · 4:10_") == "_" + RLM + "x · 4:10" + RLM + "_"
+    assert fa.line("_x · 4:10_", kind="md") == "_" + RLM + "x · 4:10" + RLM + "_"
     # Not an opener followed by text: a space, a longer run, or no text.
     assert fa.md("a.b", "_ x") == RLM + "_ x" + RLM
     assert fa.md("a.b", "___x___") == RLM + "___x" + RLM + "___"
     assert fa.md("a.b", "_") == RLM + "_" + RLM
-    # A star after the mark opens fine; HTML has no emphasis.
+    # A star after the mark opens fine.
     assert fa.md("a.b", "*x*") == RLM + "*x*" + RLM
-    assert fa.html("a.b", "_x_") == RLM + "_x" + RLM + "_"
     # The left-to-right twin is untouched.
     twin = fa.directed(False)
     assert twin.md("a.b", "_x_") == "_x_"
@@ -429,6 +428,42 @@ def test_an_underscore_opener_keeps_its_place_at_a_line_start():
     for code in ("fa", "ar"):
         note = i18n.get(code).n(LOG_MEMORY, 500, kind="md")
         assert note.startswith("_" + RLM) and note.endswith("." + RLM + "_"), ascii(note)
+
+
+def test_an_underscore_in_a_name_is_not_emphasis():
+    """A ``_`` run is moved across only when a run of the same length
+    pairs with it on the line; ``_private_var`` and ``my_var_`` are names."""
+    fa = i18n.get("fa")
+    assert fa.md("a.b", "_private_var") == RLM + "_private_var" + RLM
+    assert fa.md("a.b", "x my_var_") == RLM + "x my_var_" + RLM
+    # The opener pairs only with a closer of its own length.
+    assert fa.md("a.b", "_x__") == RLM + "_x__" + RLM
+    assert fa.md("a.b", "__x_") == RLM + "__x_" + RLM
+    # A closer only with an opener before it, of its own length.
+    assert fa.md("a.b", "x_ y_") == RLM + "x_ y_" + RLM
+    assert fa.md("a.b", "x __y_") == RLM + "x __y_" + RLM
+    # A run with a space on both sides neither opens nor closes.
+    assert fa.md("a.b", "x _ y_") == RLM + "x _ y_" + RLM
+    # An escaped opener opens nothing.
+    assert fa.md("a.b", "\\_x_") == RLM + "\\_x_" + RLM
+    # Paired, the marks go inside as before.
+    assert fa.md("a.b", "x _my_var_") == RLM + "x _my_var" + RLM + "_"
+    assert fa.md("a.b", "(_x_)") == RLM + "(_x_)" + RLM
+
+
+@pytest.mark.parametrize("kind", ["html", "text", None])
+def test_emphasis_rules_are_markdown_only(kind):
+    """In HTML and plain text ``*`` and ``_`` are characters: no mark
+    goes into a name or a path (/status ending in ``ls __pycache__``)."""
+    fa = i18n.get("fa")
+    for text in ("x foo_", "Reading __init__", "__init__.py changed", "_x_", "x *(y)*",
+                 "\u23f3 x \u00b7 ls __pycache__", "**"):
+        assert fa.line(text, kind=kind) == RLM + text + RLM, (kind, text)
+    if kind is not None:
+        render = fa.html if kind == "html" else fa.text
+        assert render("a.b", "x foo_") == RLM + "x foo_" + RLM
+        assert render("a.b", "_x_") == RLM + "_x_" + RLM
+        assert render("a.b", "x *(y)*") == RLM + "x *(y)*" + RLM
 
 
 def test_marks_in_a_markdown_code_span_stay_as_they_are():
@@ -441,6 +476,8 @@ def test_marks_in_a_markdown_code_span_stay_as_they_are():
     assert fa.md("a.b", "x {s} y", s=Safe("``a" + LRM + RLM + "b``")) == (
         RLM + "x ``a" + LRM + RLM + "b`` y" + RLM)
     assert fa.line("x " + span) == RLM + "x " + span + RLM
+    assert fa.line("x " + span, kind="md") == RLM + "x " + span + RLM
+    assert fa.line("x " + span, kind="html") == RLM + "x `echo a" + RLM + "b`" + RLM
     both = "<code>a" + LRM + RLM + "b</code> " + span
     assert fa.line("x " + both) == RLM + "x " + both + RLM
     assert fa.html("a.b", "x {s}", s=Safe(span)) == RLM + "x `echo a" + RLM + "b`" + RLM

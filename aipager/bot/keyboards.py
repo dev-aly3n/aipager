@@ -389,7 +389,7 @@ class KeyboardMixin:
                 row += f" - {html_mod.escape(desc[:60])}"
             # A row whose label is ours (Claude gave none) reads right to
             # left at both ends; Claude's own rows get no mark.
-            text += "\n  " + (row if "label" in opt else tr.line(row))
+            text += "\n  " + (row if "label" in opt else tr.line(row, kind="html"))
 
         # Local import, not top-level — avoids an import cycle with
         # session_parity (which itself imports from this package).

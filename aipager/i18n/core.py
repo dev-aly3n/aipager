@@ -202,11 +202,6 @@ ISOLATE_COMMANDS = True
 #: stay first or the heading, quote or list item is lost.
 _BLOCK_MARKER_AFTER_START = re.compile(
     "(?m)^\ufdd1(#{1,6} |> |[-*+] |[0-9]{1,9}\\. )")
-#: An opening ``_`` or ``__`` run at a right-to-left Markdown line's
-#: start (after a block marker), followed by text: the mark goes after
-#: it, as after a block marker. A ``_`` run preceded by anything but a
-#: space or punctuation never opens (CommonMark), and U+200F is neither.
-_UNDERSCORE_AFTER_START = re.compile("\ufdd1(__?)(?=[^\\s_\ufdd0-\ufdd2])")
 _BLOCK_MARKER_AFTER_SLOT = re.compile(
     "(?m)^\ufdd0(#{1,6} |> |[-*+] |[0-9]{1,9}\\. )")
 
@@ -386,6 +381,54 @@ _OPENS_BLOCK = re.compile(r"[\s\u2066-\u2069]*(?:<(?:pre|blockquote)\b|```)", re
 _CLOSES_BLOCK = re.compile(r"(?:</(?:pre|blockquote)\s*>|```)[\s\u2066-\u2069]*\Z", re.I)
 _EMPHASIS_AT_END = re.compile(r"[*_~]+\Z")
 _CODE_SPAN = re.compile(r"(?<![`\\])(`+)(?!`).*?(?<!`)\1(?!`)", re.S)
+_UNDERSCORE_RUN = re.compile(r"(?<!_)_+(?!_)")
+_SENTINELS = re.compile("[\ufdd0-\ufdd2]")
+
+
+def _md_punct(ch: str) -> bool:
+    return unicodedata.category(ch)[0] in "PS"
+
+
+def _underscore_delimiter(text: str, m: re.Match, opener: bool) -> bool:
+    """Whether the ``_`` run *m* of *text* can open (or close) emphasis,
+    CommonMark's way for ``_``: not escaped; an opener is followed by
+    text and preceded by a space, punctuation or the line start, a
+    closer the other way round."""
+    i, j = m.start(), m.end()
+    if (i - len(text[:i].rstrip("\\"))) % 2:
+        return False
+    before = text[i - 1] if i else " "
+    after = text[j] if j < len(text) else " "
+    inner, outer = (after, before) if opener else (before, after)
+    return not inner.isspace() and (outer.isspace() or _md_punct(outer))
+
+
+def _underscore_paired(text: str, m: re.Match, opener: bool) -> bool:
+    """Whether the ``_`` run *m*, an opener at the line's start (*opener*)
+    or a closer at its end, has a partner of the same length on the line
+    (a closer for an opener, an opener for a closer): only then is it
+    emphasis, and not part of a name such as ``_private_var`` or
+    ``my_var_``. At the line's very start or end, a partner can only be
+    on the other side of it, and the run itself never qualifies (the
+    line edge counts as a space)."""
+    if not _underscore_delimiter(text, m, opener):
+        return False
+    size = len(m.group(0))
+    return any(len(r.group(0)) == size and _underscore_delimiter(text, r, not opener)
+               for r in _UNDERSCORE_RUN.finditer(text))
+
+
+def _start_after_underscore(line: str) -> str:
+    """*line* (Markdown, holding :data:`_START`) with the start mark moved
+    after an opening ``_``/``__`` run right behind it that a run of the
+    same length closes later on the line: a ``_`` run after U+200F never
+    opens (CommonMark: the mark is neither a space nor punctuation)."""
+    head, _s, rest = line.partition(_START)
+    clean = _SENTINELS.sub("", rest)
+    m = _UNDERSCORE_RUN.match(clean)
+    if not m or len(m.group(0)) > 2 or not _underscore_paired(clean, m, True):
+        return line
+    return head + m.group(0) + _START + rest[m.end():]
 _CLOSING_TAGS = re.compile(r"(?:</[A-Za-z][A-Za-z0-9-]*\s*>\s*)+\Z")
 _QUOTE_OPEN = re.compile(r"<blockquote\b", re.I)
 _CODE_CLOSE = re.compile(r"</(?:code|pre)\b", re.I)
@@ -395,14 +438,18 @@ def _blank(text: str) -> bool:
     return not text.strip()
 
 
-def _end_before_emphasis(line: str) -> str:
+def _end_before_emphasis(line: str, kind: str | None) -> str:
     """*line* (ending with :data:`_END`) with the end mark moved before a
     closing Markdown emphasis run that follows punctuation (``*(x)*``)
     or holds a ``_`` (``_x_``): a mark after it would stop the run
     closing (CommonMark's flanking rules: a ``_`` followed by anything
     but a space or punctuation never closes, and the mark is neither),
     one before it is still the line's last shown character. An escaped
-    run (an odd number of backslashes) is text."""
+    run (an odd number of backslashes) is text, and so is a ``_`` run
+    that nothing opened on the line (``my_var_``). Markdown only: in HTML
+    and plain text ``*`` and ``_`` are characters (``__init__``)."""
+    if kind != "md":
+        return line
     body = line[:-1]
     m = _EMPHASIS_AT_END.search(body)
     if not m or not body[:m.start()].replace(_START, ""):
@@ -411,7 +458,11 @@ def _end_before_emphasis(line: str) -> str:
     slashes = len(before) - len(before.rstrip("\\"))
     if slashes % 2:
         return line
-    if "_" not in m.group(0) and not unicodedata.category(before[-1]).startswith(("P", "S")):
+    if not m.group(0).strip("_"):
+        clean = _SENTINELS.sub("", body)
+        if not _underscore_paired(clean, _EMPHASIS_AT_END.search(clean), False):
+            return line
+    elif "_" not in m.group(0) and not _md_punct(before[-1]):
         return line
     return before + _END + body[m.start():]
 
@@ -470,7 +521,8 @@ def _rtl_ends(text: str, kind: str | None = "html") -> str:
     """Finish a right-to-left rendering: resolve every :data:`_START`
     (a line start) and :data:`_END` (a line end) to U+200F. A start mark
     goes after a Markdown block marker, and in Markdown (``kind``
-    ``"md"`` or ``None``) after an opening ``_``/``__`` run; neither goes on a blank line; a
+    ``"md"``) after an opening ``_``/``__`` run that is closed on the
+    line (:func:`_start_after_underscore`); neither goes on a blank line; a
     start mark never stands before a line that opens a ``<pre>`` or
     ``<blockquote>`` (or a ``` fence) and an end mark never after one
     that closes it (it goes inside a quote aipager wrote,
@@ -478,10 +530,10 @@ def _rtl_ends(text: str, kind: str | None = "html") -> str:
     punctuation keeps its place last (:func:`_end_before_emphasis`); and
     no two marks are left side by side (:func:`_collapse_marks`)."""
     text = _BLOCK_MARKER_AFTER_START.sub("\\1" + _START, text)
-    if kind in ("md", None):
-        text = _UNDERSCORE_AFTER_START.sub("\\1" + _START, text)
     lines = text.split("\n")
     for i, line in enumerate(lines):
+        if kind == "md" and _START in line:
+            line = _start_after_underscore(line)
         if _START in line:
             head, _s, rest = line.partition(_START)
             body = rest[:-1] if rest.endswith(_END) else rest
@@ -492,7 +544,7 @@ def _rtl_ends(text: str, kind: str | None = "html") -> str:
             if _blank(body) or _CLOSES_BLOCK.search(body):
                 line = _end_inside_quote(line[:-1])
             else:
-                line = _end_before_emphasis(line)
+                line = _end_before_emphasis(line, kind)
         lines[i] = line
     text = "\n".join(lines).replace(_START, _LRM_RTL).replace(_END, _LRM_RTL)
     return _collapse_marks(text, kind)
@@ -644,7 +696,7 @@ class Tr:
         :meth:`lead`."""
         return _LRM_RTL if self.rtl else ""
 
-    def line(self, text):
+    def line(self, text, *, kind: str | None = None):
         """*text*, one whole line built in code from pieces (a /status
         details line, a row ending in a clock), marked the way a pattern
         line is in a right-to-left rendering: one U+200F at its start
@@ -653,13 +705,17 @@ class Tr:
         side by side (its pieces' own marks at its ends are not doubled).
         Text holding line breaks gets only its outer ends marked. In any
         other rendering, and for blank text, *text* as it is. Line breaks
-        at its very start or end stay outside the marks. A :class:`Safe`
-        stays a :class:`Safe`."""
+        at its very start or end stay outside the marks. *kind* is the
+        output it goes into: ``"md"`` (the busy card) also keeps a
+        Markdown emphasis run whole at either end, ``"html"`` treats
+        backticks as text; ``None`` (either) leaves ``*``/``_`` alone and
+        keeps both ``<code>`` and backtick spans untouched. A
+        :class:`Safe` stays a :class:`Safe`."""
         if not self.rtl:
             return text
         m = _OUTER_BREAKS.match(_scrub(str(text)))
         lead, body, trail = m.group(1), m.group(2), m.group(3)
-        out = lead + _rtl_ends(_START + body.strip(_LRM_RTL) + _END, None) + trail
+        out = lead + _rtl_ends(_START + body.strip(_LRM_RTL) + _END, kind) + trail
         return Safe(out) if isinstance(text, Safe) else out
 
     def bare(self, text):

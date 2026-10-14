@@ -5,6 +5,7 @@ iPhone puts them on the right; lines of Claude's own text get no mark."""
 
 from __future__ import annotations
 
+import re
 import time
 
 from aipager import i18n
@@ -72,3 +73,44 @@ def test_a_mode_switch_warning_has_its_marks_at_its_ends():
         assert RLM * 2 not in html
         english, _plain = mode_switch._notes(i18n.get("en"), sess, pending, outcome)
         assert RLM not in english
+
+
+def test_a_status_head_ending_in_a_path_keeps_the_path_whole(mk_bot):
+    """/status is HTML and its head ends with the running step: no mark
+    may land inside ``__pycache__`` (a copied path would break) or
+    between any two word characters; the line still ends with one."""
+    bot = mk_bot()
+    sess = _sess(tool_history=[("Bash: ls __pycache__", False)])
+    for code in ("fa", "ar"):
+        head = bot._status_block(sess, None, tr=i18n.get(code)).split("\n")[0]
+        assert head.endswith("__pycache__" + RLM), ascii(head)
+        assert re.search(r"\w\u200f\w|\w\u200f_|_\u200f\w", head) is None, ascii(head)
+
+
+def test_the_busy_cards_status_line_keeps_its_markdown(monkeypatch):
+    """The card's status line is Markdown: an emphasis run at its end
+    stays whole, the end mark goes before it."""
+    sess = _sess()
+    fa = i18n.get("fa")
+    monkeypatch.setattr(animation, "_verb", lambda tr, verb, *a: "_" + verb + "_")
+    sess.busy_started_at = None
+    line = animation._status_line(sess, "Working", tr=fa)
+    assert line.endswith(RLM + "_") and "_Working" in line, ascii(line)
+
+
+def test_html_lines_built_in_code_keep_underscores_as_text(mk_bot, monkeypatch):
+    """The question rows (in the card and in their own message) are HTML:
+    a ``_x_`` at their end is text, so the end mark comes after it."""
+    bot = mk_bot()
+    sess = _sess(pending_permission={
+        "ask_question": True, "question": "Which one?",
+        "options": [{"description": "run _x_"}]})
+    for code in ("fa", "ar"):
+        tr = i18n.get(code)
+        rows = bot._build_busy_text("x1", "Working", sess, tr=tr).split("\n")
+        assert [r for r in rows if "run _x_" in r][0].endswith("run _x_" + RLM), ascii(rows)
+        monkeypatch.setattr(i18n, "for_sess", lambda _sess, tr=tr: tr)
+        text, _kb = bot._build_ask_keyboard(sess, "x1", {"questions": [
+            {"question": "Which one?", "options": [{"description": "run _x_"}]}]})
+        row = [r for r in text.split("\n") if "run _x_" in r][0]
+        assert row.endswith("run _x_" + RLM), ascii(row)
