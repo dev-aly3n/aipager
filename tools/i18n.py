@@ -1837,8 +1837,10 @@ def main(argv=None) -> int:
     if args.cmd == "pseudo":
         text = core.pseudo(args.text)
         if args.rtl:
-            # As the RTL pseudo locale shows it: a mark at every line start.
-            text = "\n".join("\u200f" + line for line in text.split("\n"))
+            # As the RTL pseudo locale shows it: each line marked at its
+            # start and its end (none on a blank line or beside a block).
+            tr = core.get("qps-rtl")
+            text = "\n".join(tr.line(line) for line in text.split("\n"))
         print(text)
         return 0
     return 2  # pragma: no cover
