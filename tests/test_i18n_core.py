@@ -406,6 +406,31 @@ def test_an_underscore_closer_keeps_its_place_after_a_letter():
     assert fa.md("a.b", "__") == RLM + "__" + RLM
 
 
+def test_an_underscore_opener_keeps_its_place_at_a_line_start():
+    """By the same rule a ``_`` run right after U+200F never opens: in
+    Markdown the start mark goes after an opening ``_``/``__`` run, like
+    after a block marker (the full log's italic memory note)."""
+    fa = i18n.get("fa")
+    assert fa.md("a.b", "_word: x_") == "_" + RLM + "word: x" + RLM + "_"
+    assert fa.md("a.b", "- __x__") == "- __" + RLM + "x" + RLM + "__"
+    assert fa.md("a.b", "a\n_b_") == RLM + "a" + RLM + "\n_" + RLM + "b" + RLM + "_"
+    assert fa.line("_x · 4:10_") == "_" + RLM + "x · 4:10" + RLM + "_"
+    # Not an opener followed by text: a space, a longer run, or no text.
+    assert fa.md("a.b", "_ x") == RLM + "_ x" + RLM
+    assert fa.md("a.b", "___x___") == RLM + "___x" + RLM + "___"
+    assert fa.md("a.b", "_") == RLM + "_" + RLM
+    # A star after the mark opens fine; HTML has no emphasis.
+    assert fa.md("a.b", "*x*") == RLM + "*x*" + RLM
+    assert fa.html("a.b", "_x_") == RLM + "_x" + RLM + "_"
+    # The left-to-right twin is untouched.
+    twin = fa.directed(False)
+    assert twin.md("a.b", "_x_") == "_x_"
+    from aipager.bot.animation import LOG_MEMORY
+    for code in ("fa", "ar"):
+        note = i18n.get(code).n(LOG_MEMORY, 500, kind="md")
+        assert note.startswith("_" + RLM) and note.endswith("." + RLM + "_"), ascii(note)
+
+
 def test_marks_in_a_markdown_code_span_stay_as_they_are():
     """Markdown output (and a line built in code, which may be Markdown)
     keeps a run of marks inside a backtick span; in HTML a backtick is

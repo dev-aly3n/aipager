@@ -202,6 +202,11 @@ ISOLATE_COMMANDS = True
 #: stay first or the heading, quote or list item is lost.
 _BLOCK_MARKER_AFTER_START = re.compile(
     "(?m)^\ufdd1(#{1,6} |> |[-*+] |[0-9]{1,9}\\. )")
+#: An opening ``_`` or ``__`` run at a right-to-left Markdown line's
+#: start (after a block marker), followed by text: the mark goes after
+#: it, as after a block marker. A ``_`` run preceded by anything but a
+#: space or punctuation never opens (CommonMark), and U+200F is neither.
+_UNDERSCORE_AFTER_START = re.compile("\ufdd1(__?)(?=[^\\s_\ufdd0-\ufdd2])")
 _BLOCK_MARKER_AFTER_SLOT = re.compile(
     "(?m)^\ufdd0(#{1,6} |> |[-*+] |[0-9]{1,9}\\. )")
 
@@ -464,7 +469,8 @@ def _collapse_marks(text: str, kind: str | None = "html") -> str:
 def _rtl_ends(text: str, kind: str | None = "html") -> str:
     """Finish a right-to-left rendering: resolve every :data:`_START`
     (a line start) and :data:`_END` (a line end) to U+200F. A start mark
-    goes after a Markdown block marker; neither goes on a blank line; a
+    goes after a Markdown block marker, and in Markdown (``kind``
+    ``"md"`` or ``None``) after an opening ``_``/``__`` run; neither goes on a blank line; a
     start mark never stands before a line that opens a ``<pre>`` or
     ``<blockquote>`` (or a ``` fence) and an end mark never after one
     that closes it (it goes inside a quote aipager wrote,
@@ -472,6 +478,8 @@ def _rtl_ends(text: str, kind: str | None = "html") -> str:
     punctuation keeps its place last (:func:`_end_before_emphasis`); and
     no two marks are left side by side (:func:`_collapse_marks`)."""
     text = _BLOCK_MARKER_AFTER_START.sub("\\1" + _START, text)
+    if kind in ("md", None):
+        text = _UNDERSCORE_AFTER_START.sub("\\1" + _START, text)
     lines = text.split("\n")
     for i, line in enumerate(lines):
         if _START in line:
