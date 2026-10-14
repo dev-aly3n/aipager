@@ -109,12 +109,12 @@ def test_html_and_text_keep_the_start_mark_before_an_underscore(code, kind):
 
 @pytest.mark.parametrize("code", RTL)
 def test_line_puts_the_start_mark_after_an_opening_underscore(code):
-    assert i18n.get(code).line("_word: x_") == "_" + RLM + "word: x" + RLM + "_"
+    assert i18n.get(code).line("_word: x_", kind="md") == "_" + RLM + "word: x" + RLM + "_"
 
 
 @pytest.mark.parametrize("code", RTL)
 def test_line_puts_the_start_mark_after_a_list_marker_and_a_double_underscore(code):
-    assert i18n.get(code).line("- __x__") == "- __" + RLM + "x" + RLM + "__"
+    assert i18n.get(code).line("- __x__", kind="md") == "- __" + RLM + "x" + RLM + "__"
 
 
 @pytest.mark.parametrize("code", RTL)
@@ -125,8 +125,37 @@ def test_line_of_an_underscore_line_keeps_a_safe_a_safe(code):
 @pytest.mark.parametrize("code", RTL)
 def test_line_of_an_underscore_line_is_stable(code):
     tr = i18n.get(code)
-    once = tr.line("_word: x_")
-    assert tr.line(once) == once
+    once = tr.line("_word: x_", kind="md")
+    assert tr.line(once, kind="md") == once
+
+
+@pytest.mark.parametrize("code", RTL)
+@pytest.mark.parametrize("kind", (None, "html"))
+@pytest.mark.parametrize("text", ("_x_", "__x__", "_word: x_", "x _y_", "x *y+*"))
+def test_line_without_md_kind_keeps_the_marks_at_the_very_ends(code, kind, text):
+    """entrypoints.md Amendments: only kind="md" moves marks around runs."""
+    assert i18n.get(code).line(text, kind=kind) == RLM + text + RLM
+
+
+@pytest.mark.parametrize("code", RTL)
+def test_line_default_kind_keeps_the_marks_outside_an_underscore_pair(code):
+    assert i18n.get(code).line("_x_") == RLM + "_x_" + RLM
+
+
+@pytest.mark.parametrize("code", RTL)
+def test_line_md_puts_the_end_mark_before_a_closing_underscore(code):
+    assert i18n.get(code).line("x _y_", kind="md") == RLM + "x _y" + RLM + "_"
+
+
+@pytest.mark.parametrize("code", RTL)
+@pytest.mark.parametrize("text", ("_private_var", "x my_var_", "_x", "x_", "__init"))
+def test_line_md_keeps_the_marks_outside_an_unpaired_underscore(code, text):
+    assert i18n.get(code).line(text, kind="md") == RLM + text + RLM
+
+
+@pytest.mark.parametrize("code", RTL)
+def test_line_md_of_a_safe_keeps_a_safe(code):
+    assert type(i18n.get(code).line(Safe("_x_"), kind="md")) is Safe
 
 
 @pytest.mark.parametrize("code", RTL)
@@ -177,29 +206,69 @@ def test_md_a_star_closer_after_a_letter_comes_before_the_mark(code):
     assert _md(code, "x *y*") == RLM + "x *y*" + RLM
 
 
-@pytest.mark.parametrize("code", RTL)
-@pytest.mark.parametrize("kind", ("html", "text"))
-@pytest.mark.parametrize("pattern", ("x _y_", "x *y+*", "**word:**", "_word: x_"),
-                         ids=["underscore", "star-after-plus", "double-star-after-colon",
-                              "underscore-opener"])
-def test_html_and_text_lines_ending_in_a_closer_like_run_sit_right_on_iphone(code, kind,
-                                                                            pattern):
-    """design.md step d lets the closer rule touch html/text ("harmless if
-    it does"); whichever side of the run the end mark takes there, the
-    line must still sit right on iPhone."""
-    out = str(getattr(i18n.get(code), kind)("zz.case", pattern))
-    assert bidi_uba.sits_right_on_iphone(out)
+_LITERAL_RUNS = ("x _y_", "x *y+*", "**word:**", "_word: x_", "~(x)~", "x foo_",
+                 "__pycache__", "see __pycache__", "_private_var", "x my_var_")
 
 
 @pytest.mark.parametrize("code", RTL)
 @pytest.mark.parametrize("kind", ("html", "text"))
-@pytest.mark.parametrize("pattern", ("x _y_", "x *y+*", "**word:**", "_word: x_"),
-                         ids=["underscore", "star-after-plus", "double-star-after-colon",
-                              "underscore-opener"])
-def test_html_and_text_end_mark_sits_at_the_end_or_before_the_closing_run(code, kind,
-                                                                          pattern):
+@pytest.mark.parametrize("pattern", _LITERAL_RUNS,
+                         ids=[f"r{i}" for i in range(len(_LITERAL_RUNS))])
+def test_html_and_text_keep_the_marks_at_the_very_ends(code, kind, pattern):
+    """entrypoints.md Amendments: in HTML and text output `_`, `*` and `~`
+    are literal and the marks stay at the very start and end."""
     out = str(getattr(i18n.get(code), kind)("zz.case", pattern))
-    assert re.search("\u200f[*_~]*$", out)
+    assert out == RLM + pattern + RLM
+
+
+@pytest.mark.parametrize("code", RTL)
+def test_html_ends_a_name_with_a_trailing_underscore_then_the_mark(code):
+    assert str(i18n.get(code).html("zz.case", "x foo_")).endswith("foo_" + RLM)
+
+
+@pytest.mark.parametrize("code", RTL)
+@pytest.mark.parametrize("kind", ("html", "text"))
+def test_html_and_text_never_put_a_mark_inside_a_dunder_name(code, kind):
+    out = str(getattr(i18n.get(code), kind)("zz.case", "a __pycache__ b\n__pycache__"))
+    assert out.count("__pycache__") == 2
+
+
+@pytest.mark.parametrize("code", RTL)
+@pytest.mark.parametrize("kind", ("html", "text"))
+def test_html_and_text_lines_with_literal_runs_sit_right_on_iphone(code, kind):
+    out = str(getattr(i18n.get(code), kind)("zz.case", "x foo_\n__pycache__"))
+    assert all(bidi_uba.sits_right_on_iphone(line) for line in out.split("\n"))
+
+
+# ---- md: a run moves a mark only with a same-length partner on its line ------------------
+
+@pytest.mark.parametrize("code", RTL)
+@pytest.mark.parametrize("pattern", ("_private_var", "x my_var_", "_x", "x_", "__init",
+                                     "x foo__", "_x__", "__x_"),
+                         ids=["private-var", "my-var", "lone-opener", "lone-closer",
+                              "lone-double-opener", "lone-double-closer", "short-long",
+                              "long-short"])
+def test_md_an_unpaired_underscore_keeps_the_marks_outside(code, pattern):
+    assert _md(code, pattern) == RLM + pattern + RLM
+
+
+@pytest.mark.parametrize("code", RTL)
+def test_md_a_partner_on_another_line_does_not_pair(code):
+    assert _md(code, "_a\nb_") == RLM + "_a" + RLM + "\n" + RLM + "b_" + RLM
+
+
+@pytest.mark.parametrize("code", RTL)
+@pytest.mark.parametrize("pattern", ("x y+*", "x y.~"), ids=["star", "tilde"])
+def test_md_a_run_after_punctuation_without_a_partner_keeps_the_mark_after_it(code, pattern):
+    """entrypoints.md Amendments: the end mark goes before "a `*`/`~` run
+    after punctuation, only when the run has a matching partner on the same
+    line"; a lone run is literal, so the mark stays at the very end."""
+    assert _md(code, pattern) == RLM + pattern + RLM
+
+
+@pytest.mark.parametrize("code", RTL)
+def test_md_a_paired_underscore_still_moves_both_marks(code):
+    assert _md(code, "_word x_") == "_" + RLM + "word x" + RLM + "_"
 
 
 # ---- 3. noncharacters in values ----------------------------------------------------------
@@ -310,6 +379,31 @@ def test_line_keeps_a_mark_pair_inside_a_backtick_span(code):
 def test_line_still_collapses_a_pair_outside_a_backtick_span(code):
     out = i18n.get(code).line("x" + RLM + RLM + "y `a" + RLM + RLM + "b`")
     assert out.startswith(RLM + "x" + RLM + "y `")
+
+
+@pytest.mark.parametrize("code", RTL)
+def test_md_a_backtick_pair_across_a_blank_line_is_not_a_span(code):
+    """entrypoints change: a Markdown code span never crosses a blank line,
+    so both lines are ordinary lines with marks at their ends."""
+    assert _md(code, "a `x\n\ny` b") == (RLM + "a `x" + RLM + "\n\n" + RLM + "y` b" + RLM)
+
+
+@pytest.mark.parametrize("code", RTL)
+def test_md_collapses_a_pair_between_backticks_across_a_blank_line(code):
+    out = _md(code, "{v}", v=Safe("`a" + RLM + RLM + "b\n\nc`"))
+    assert _PAIR.search(out) is None
+
+
+@pytest.mark.parametrize("code", RTL)
+def test_md_a_backtick_span_without_a_blank_line_still_keeps_its_pair(code):
+    out = _md(code, "{v}", v=Safe("`a" + RLM + RLM + "b\nc`"))
+    assert "`a" + RLM + RLM + "b\nc`" in out
+
+
+@pytest.mark.parametrize("code", RTL)
+def test_line_md_keeps_a_mark_pair_inside_a_backtick_span(code):
+    out = i18n.get(code).line("x `a" + LRM + RLM + "b` y", kind="md")
+    assert "`a" + LRM + RLM + "b`" in out
 
 
 # ---- 5. Tr.line keeps outer newlines outside its marks -----------------------------------
