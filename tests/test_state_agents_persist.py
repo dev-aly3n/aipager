@@ -196,8 +196,9 @@ def test_an_adopted_card_gets_the_job_agents_back(
     assert now - sess.active_subagents[P]["last_seen"] < 3
     rows = [sess.tool_history[sess.active_subagents[a]["history_idx"]]
             for a in (P, C)]
+    # The restored link names the agent that started C (2026-10-14).
     assert rows == [("\U0001f916 pipeline-runner", False),
-                    ("\U0001f916 ship-reviewer", False)]
+                    ("\U0001f916 pipeline-runner › ship-reviewer", False)]
     assert sess.subagent_count_this_turn == 2
     assert sess.restored_job_agents == []
     assert sess.job_background_open()
@@ -269,7 +270,7 @@ def test_an_agent_already_back_in_the_job_keeps_its_entry(
     sess.add_subagent(P, mine)
     run_async(bot.recover_sessions())
     assert sess.active_subagents[P] is mine
-    assert sess.tool_history == [("\U0001f916 ship-reviewer", False)]
+    assert sess.tool_history == [("\U0001f916 pipeline-runner › ship-reviewer", False)]
     assert sess.subagent_count_this_turn == 1
 
 

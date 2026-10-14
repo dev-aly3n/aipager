@@ -81,6 +81,22 @@ NO_KEYBOARD_APP_SURFACES = frozenset({"keyboard.main"})
 #: installed-and-waiting check, the manual steps, the restart job, the
 #: hooks notice. New, so goldens recorded on older bases do not have it.
 RESTART_NOW_NEW_SURFACES = frozenset({"update.restart"})
+#: The busy card's surfaces the agents tree (2026-10-14) changed: a
+#: divider above the status line, and nothing else (see
+#: :func:`without_card_divider`).
+AGENTS_TREE_CARD_SURFACES = frozenset({"card.busy", "card.final", "card.status_lines",
+                                       "card.waiting"})
+#: Every English surface the agents tree changed: those, and the block
+#: under an answer (a 🤖 on each row, six rows, the tree).
+AGENTS_TREE_SURFACES = AGENTS_TREE_CARD_SURFACES | frozenset({"agents_line"})
+#: The surface the agents tree added (a helper's rows on the card).
+AGENTS_TREE_NEW_SURFACES = frozenset({"card.helpers"})
+
+
+def without_card_divider(value):
+    """*value* (a card surface's list of texts) without the divider above
+    each card's status line, as goldens recorded on older bases have it."""
+    return [v.replace("\n\n---\n\n", "\n\n") for v in value]
 
 
 def with_keyboard_app_removed(value):
@@ -562,6 +578,37 @@ def _card_waiting(env):
     return out
 
 
+@surface("card.helpers")
+def _card_helpers(env):
+    """A helper agent's rows (2026-10-14): named after the agent at the top
+    of its chain ("pipeline-runner › ship-tester"), running and settled,
+    next to the session's own agent, on the rich and the legacy card."""
+    from aipager.bot import animation
+    env.store(CHAT)
+    bot = env.mk_bot()
+    sess = _sess()
+    sess.busy_started_at = NOW - 120
+    sess.tool_history = [
+        ("🤖 pipeline-runner", False),
+        ("🤖 pipeline-runner › ship-tester · 2 tool calls · 0:15", True),
+        ("🤖 pipeline-runner › Explore", False),
+    ]
+    # Claude's words: the card follows their direction, as card.busy does.
+    sess.stream_commentary = [(0, "Now the agent.")]
+    sess.finished_subagents = [{"history_idx": 1, "tools": ["Read: /a", "Bash: ls"]}]
+    sess.active_subagents = {
+        "r1": {"type": "pipeline-runner", "activity": "Write: /final.md",
+               "started_at": NOW - 100, "history_idx": 0, "tools": ["Write: /final.md"],
+               "tool_count": 1},
+        "e1": {"type": "Explore", "card_label": "pipeline-runner › Explore",
+               "activity": "Grep: agent_parents", "started_at": NOW - 12,
+               "history_idx": 2, "tools": ["Grep: agent_parents"], "tool_count": 1},
+    }
+    return [animation.build_stream_card(sess, "Working"),
+            animation.build_stream_card(sess, animation.FINAL_VERB, final=True),
+            bot._build_busy_text(LABEL, "Working", sess)]
+
+
 @surface("card.status_lines")
 def _card_status_lines(env):
     """The status line alone: a bare turn, one with a cost, the decayed
@@ -712,7 +759,7 @@ def _agents_line(env):
         V(shells_stopped=2, shells_stopped_seconds=61),
         V(shells_finished=1, shells_finished_seconds=90, shells_stopped=1,
           shells_stopped_seconds=30),
-        # One agent done alone; more than four rows; a bare row.
+        # One agent done alone; as many rows as the cap; a bare row.
         V(agents=(A("Explore", True, 42),), agents_done_seconds=42),
         V(agents=tuple(A(f"general_purpose{i}", False) for i in range(6))),
         V(agents=(A("Explore", False),)),
@@ -723,6 +770,28 @@ def _agents_line(env):
              ("WebFetch", "docs.python.org"), ("Agent", ""), ("Task", ""),
              ("TodoWrite", ""), ("Read", ""))
     views += [V(agents=(A("Explore", False, tool=t, tool_arg=arg),)) for t, arg in tools]
+    views += [
+        # The tree (2026-10-14): two agents of the session's own, each with
+        # its own agents under it, one of them deeper (named after the
+        # agent that started it), one waiting for its own, one done.
+        V(agents=(A("pipeline-runner", False, prose="Writing final.md for the pipeline"),
+                  A("ship-tester", False, description="Write and run criteria tests",
+                    parent=0),
+                  A("ship-developer", False, tool="Edit", tool_arg="state.py", parent=0),
+                  A("r2-runner", False, waiting=True, tool="Bash"),
+                  A("ship-reviewer", False, description="Collect line numbers",
+                    parent=2),
+                  A("Explore", True, 42, parent=3))),
+        # More agents than rows: the ones working first, each under its own.
+        V(agents=(A("pipeline-runner", False, waiting=True),
+                  A("ship-tester", True, 15, parent=0),
+                  A("ship-developer", False, parent=0),
+                  A("ship-reviewer", False, parent=2),
+                  A("r2-runner", False, waiting=True),
+                  A("Explore", False, parent=4),
+                  A("Plan", False, parent=4),
+                  A("general_purpose", False, parent=5))),
+    ]
     return [env.with_tr(al.render_block, view) for view in views]
 
 
@@ -2464,6 +2533,7 @@ MIGRATED: set[str] = {
     "settings.per_session", "settings.problem_reports", "settings.taps",
     "menu.commands", "menu.button",
     "card.busy", "card.final", "card.waiting", "card.status_lines", "card.legacy",
+    "card.helpers",
     "card.full_log", "card.thinking", "card.paused", "card.compacting", "prompt.detail",
     "agents_line", "prompt.keyboards", "prompt.separate", "prompt.inline",
     "prompt.question_inline", "prompt.loading", "prompt.stop_taps",
@@ -2542,7 +2612,7 @@ PENDING: set[str] = set()
 #: :func:`assert_follows_claude`; tests/test_message_direction.py covers
 #: both directions.
 FOLLOWS_CLAUDE = frozenset({"answer.headers", "card.busy", "card.final", "card.legacy",
-                            "card.waiting", "held.late_marker"})
+                            "card.waiting", "card.helpers", "held.late_marker"})
 
 
 def assert_follows_claude(name: str, text: str) -> None:
@@ -2572,7 +2642,13 @@ KNOWN_EXTRA: dict[str, tuple[str, ...]] = {
                     # The activity phrases: Claude Code's English words,
                     # never translated (operator, 2026-10-10).
                     "Reading", "Editing", "Searching", "web", "Fetching", "command",
-                    "Starting", "an", "agent", "Using"),
+                    "Starting", "an", "agent", "Using",
+                    # The tree's agent types and Claude's words in it.
+                    "ship-tester", "ship-developer", "ship-reviewer", "r2-runner",
+                    "Explore", "Plan", "general\\_purpose", "general_purpose",
+                    "Write and run criteria tests", "Collect line numbers",
+                    "Write", "and", "run", "criteria", "tests", "Collect", "line",
+                    "numbers", "Editing state.py"),
     # The manual restart steps' commands and key names, shown as plain
     # text in the Mini App: data, never translated.
     "update.restart": ("systemctl --user restart aipager.service", "docker restart",

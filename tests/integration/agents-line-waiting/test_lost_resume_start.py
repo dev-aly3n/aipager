@@ -49,9 +49,12 @@ def test_a_message_display_does_not_end_the_wait(waiting):
 
 
 def test_a_message_display_still_updates_the_parents_activity(waiting):
+    """Kept for when it works again; while it waits its row says so
+    (a waiting agent's row since the agents tree, 2026-10-14)."""
     waiting.hook("MessageDisplay", agent_id=P, delta="Waiting for the reviewer.",
                  message_id="m1", index=0, final=True)
-    assert "Waiting for the reviewer." in h.row_of(waiting.answer(), P_TYPE)
+    assert waiting.sess.bg_agents[P]["prose"] == "Waiting for the reviewer."
+    assert h.is_waiting_row(h.row_of(waiting.answer(), P_TYPE))
 
 
 def test_another_agents_tool_event_does_not_end_the_wait(waiting):

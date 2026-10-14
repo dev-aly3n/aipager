@@ -147,7 +147,7 @@ def test_bb_mixed_answer_line_wording(replay, vloop, monkeypatch):
     snap = _waiting(replay, vloop, monkeypatch, agent=True)
     blocks = snap["answers"][0].rstrip().split("\n\n")
     assert blocks[-3:] == ["⏳ 1 agent working · 🖥 1 shell running",
-                           "○ **pipeline-runner**",
+                           "○ 🤖 **pipeline-runner**",
                            "Results from the agents will follow here."]
     assert DESC not in snap["answers"][0]
 

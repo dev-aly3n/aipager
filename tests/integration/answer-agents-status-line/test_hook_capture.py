@@ -133,7 +133,7 @@ def test_an_agents_prose_shows_as_its_activity(bot, sess, wire, run_async):
             agent_type="pipeline-runner")
     _md(run_async, recv, sess, PROSE, agent_id="a1")
     assert _row_of(_block(run_async, bot, sess, wire), "pipeline-runner") == \
-        f"○ **pipeline-runner** · {PROSE}"
+        f"○ 🤖 **pipeline-runner** · {PROSE}"
 
 
 def test_chunks_of_one_message_join(bot, sess, wire, run_async):
@@ -143,7 +143,7 @@ def test_chunks_of_one_message_join(bot, sess, wire, run_async):
     _md(run_async, recv, sess, "Writing final", agent_id="a1", index=0)
     _md(run_async, recv, sess, ".md for the pipeline", agent_id="a1", index=1)
     assert _row_of(_block(run_async, bot, sess, wire), "pipeline-runner") == \
-        f"○ **pipeline-runner** · {PROSE}"
+        f"○ 🤖 **pipeline-runner** · {PROSE}"
 
 
 def test_a_new_message_replaces_the_prose(bot, sess, wire, run_async):
@@ -153,7 +153,7 @@ def test_a_new_message_replaces_the_prose(bot, sess, wire, run_async):
     _md(run_async, recv, sess, "Old words", agent_id="a1", message_id="m1")
     _md(run_async, recv, sess, "New words", agent_id="a1", message_id="m2")
     assert _row_of(_block(run_async, bot, sess, wire), "pipeline-runner") == \
-        "○ **pipeline-runner** · New words"
+        "○ 🤖 **pipeline-runner** · New words"
 
 
 def test_a_blank_new_message_keeps_the_last_prose(bot, sess, wire, run_async):
@@ -163,7 +163,7 @@ def test_a_blank_new_message_keeps_the_last_prose(bot, sess, wire, run_async):
     _md(run_async, recv, sess, "Real words", agent_id="a1", message_id="m1")
     _md(run_async, recv, sess, "   \n", agent_id="a1", message_id="m2")
     assert _row_of(_block(run_async, bot, sess, wire), "pipeline-runner") == \
-        "○ **pipeline-runner** · Real words"
+        "○ 🤖 **pipeline-runner** · Real words"
 
 
 def test_an_agents_read_shows_the_file_basename(bot, sess, wire, run_async):
@@ -174,7 +174,7 @@ def test_an_agents_read_shows_the_file_basename(bot, sess, wire, run_async):
             tool_name="Read",
             tool_input={"file_path": "/home/someone/proj/aipager/state.py"})
     assert _row_of(_block(run_async, bot, sess, wire), "Explore") == \
-        "○ **Explore** · Reading state.py"
+        "○ 🤖 **Explore** · Reading state.py"
 
 
 def test_an_agents_bash_never_shows_the_command(bot, sess, wire, run_async):
@@ -186,7 +186,7 @@ def test_an_agents_bash_never_shows_the_command(bot, sess, wire, run_async):
             tool_input={"command": "cat topsecret.env", "description": "peek"})
     # Its own description (Claude's words), never the command.
     row = _row_of(_block(run_async, bot, sess, wire), "Explore")
-    assert row == "○ **Explore** · peek"
+    assert row == "○ 🤖 **Explore** · peek"
     assert "topsecret" not in row
 
 
@@ -198,7 +198,7 @@ def test_an_agents_bash_with_no_description_says_running_a_command(bot, sess, wi
     bb.hook(run_async, recv, sess, "PreToolUse", agent_id="a1",
             tool_name="Bash", tool_input={"command": "cat topsecret.env"})
     row = _row_of(_block(run_async, bot, sess, wire), "Explore")
-    assert row == "○ **Explore** · Running a command"
+    assert row == "○ 🤖 **Explore** · Running a command"
 
 
 def test_an_agents_grep_shows_the_pattern(bot, sess, wire, run_async):
@@ -208,7 +208,7 @@ def test_an_agents_grep_shows_the_pattern(bot, sess, wire, run_async):
     bb.hook(run_async, recv, sess, "PreToolUse", agent_id="a1",
             tool_name="Grep", tool_input={"pattern": "agents_lines"})
     assert _row_of(_block(run_async, bot, sess, wire), "Explore") == \
-        "○ **Explore** · Searching for agents\\_lines"
+        "○ 🤖 **Explore** · Searching for agents\\_lines"
 
 
 def test_the_latest_tool_wins(bot, sess, wire, run_async):
@@ -220,7 +220,7 @@ def test_the_latest_tool_wins(bot, sess, wire, run_async):
     bb.hook(run_async, recv, sess, "PreToolUse", agent_id="a1",
             tool_name="Write", tool_input={"file_path": "/x/two.md"})
     assert _row_of(_block(run_async, bot, sess, wire), "Explore") == \
-        "○ **Explore** · Writing two.md"
+        "○ 🤖 **Explore** · Writing two.md"
 
 
 def test_prose_beats_a_later_tool(bot, sess, wire, run_async):
@@ -231,7 +231,7 @@ def test_prose_beats_a_later_tool(bot, sess, wire, run_async):
     bb.hook(run_async, recv, sess, "PreToolUse", agent_id="a1",
             tool_name="Read", tool_input={"file_path": "/x/one.py"})
     assert _row_of(_block(run_async, bot, sess, wire), "Explore") == \
-        "○ **Explore** · Looking around"
+        "○ 🤖 **Explore** · Looking around"
 
 
 def test_a_subagents_tool_call_is_still_reported_as_tool_use(rig, run_async):
@@ -258,7 +258,7 @@ def test_the_agent_calls_description_shows_until_anything_else(
     bb.hook(run_async, recv, sess, "SubagentStart", agent_id="a1",
             agent_type="pipeline-runner")
     assert _row_of(_block(run_async, bot, sess, wire), "pipeline-runner") == \
-        "○ **pipeline-runner** · Deliver the settings fix"
+        "○ 🤖 **pipeline-runner** · Deliver the settings fix"
 
 
 def test_a_task_call_also_gives_the_description(bot, sess, wire, run_async):
@@ -269,7 +269,7 @@ def test_a_task_call_also_gives_the_description(bot, sess, wire, run_async):
     bb.hook(run_async, recv, sess, "SubagentStart", agent_id="a1",
             agent_type="Explore")
     assert _row_of(_block(run_async, bot, sess, wire), "Explore") == \
-        "○ **Explore** · Map the repo"
+        "○ 🤖 **Explore** · Map the repo"
 
 
 def test_two_pending_calls_of_one_type_give_no_description(
@@ -282,7 +282,7 @@ def test_two_pending_calls_of_one_type_give_no_description(
     bb.hook(run_async, recv, sess, "SubagentStart", agent_id="a1",
             agent_type="general-purpose")
     assert _row_of(_block(run_async, bot, sess, wire), "general-purpose") == \
-        "○ **general-purpose**"
+        "○ 🤖 **general-purpose**"
 
 
 def test_descriptions_match_by_type(bot, sess, wire, run_async):
@@ -295,7 +295,7 @@ def test_descriptions_match_by_type(bot, sess, wire, run_async):
             agent_type="Explore")
     block = _block(run_async, bot, sess, wire)
     assert (_row_of(block, "pipeline-runner"), _row_of(block, "Explore")) == (
-        "○ **pipeline-runner** · Runner job", "○ **Explore** · Explore job")
+        "○ 🤖 **pipeline-runner** · Runner job", "○ 🤖 **Explore** · Explore job")
 
 
 def test_a_used_description_is_not_given_twice(bot, sess, wire, run_async):

@@ -85,6 +85,42 @@ def launched_child(msg: object) -> str:
     return child
 
 
+# ── walking the links ───────────────────────────────────────────────────────
+
+#: Joins two agent names where a row names the agent that started another
+#: ("pipeline-runner › ship-tester"). Two names and a glyph, not a
+#: sentence: never translated.
+LINEAGE_SEP = " › "
+
+
+def nearest_listed(parents: dict, agent_id: str, listed) -> str:
+    """The first ancestor of *agent_id* (its parent, then that one's parent,
+    and so on) that is in *listed*; "" when none is. *parents* maps a child
+    to its parent. Ends on a cycle (an id seen twice)."""
+    seen = {agent_id}
+    current = parents.get(agent_id)
+    while current and current not in seen:
+        if current in listed:
+            return current
+        seen.add(current)
+        current = parents.get(current)
+    return ""
+
+
+def top_ancestor(parents: dict, agent_id: str) -> str:
+    """The last id on *agent_id*'s chain of parents (the agent at its top),
+    or "" when it has no parent. Ends on a cycle (an id seen twice), with
+    the last id before it repeated."""
+    seen = {agent_id}
+    top = ""
+    current = parents.get(agent_id)
+    while current and current not in seen:
+        top = current
+        seen.add(current)
+        current = parents.get(current)
+    return top
+
+
 # ── the state file record ───────────────────────────────────────────────────
 
 AGENTS_RECORD_VERSION = 1

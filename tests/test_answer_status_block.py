@@ -48,11 +48,11 @@ STATES = {
 #: The English goldens: exactly what the operator's spec drew.
 GOLDEN = {
     "working": ("⏳ 2 agents working · 🖥 1 shell running\n\n"
-                "○ **pipeline-runner** · Writing final.md for the pipeline\n\n"
-                "○ **Explore** · Reading state.py\n\n" + PROMISE),
+                "○ 🤖 **pipeline-runner** · Writing final.md for the pipeline\n\n"
+                "○ 🤖 **Explore** · Reading state.py\n\n" + PROMISE),
     "one-done": ("⏳ 1 agent working · 🖥 1 shell running\n\n"
-                 "✓ **Explore** · done (0:42)\n\n"
-                 "○ **pipeline-runner** · Running a command\n\n" + PROMISE),
+                 "✓ 🤖 **Explore** · done (0:42)\n\n"
+                 "○ 🤖 **pipeline-runner** · Running a command\n\n" + PROMISE),
     "agents-done-shell-up": "✅ 2 agents done (6:12) · 🖥 1 shell running",
     "agents-done-shell-ended": "✅ 2 agents done (6:12) · 1 shell finished (2:13:05)",
     "shell-only": "🖥 1 shell running",
@@ -98,22 +98,22 @@ def test_rows_show_only_while_an_agent_works():
     assert len(_lines(al.render_block(AGENTS_DONE_SHELL_UP))) == 1
 
 
-def test_at_most_four_rows_then_more():
-    """Rule 3."""
-    view = V(agents=tuple(A(f"t{i}", False) for i in range(7)))
+def test_at_most_six_rows_then_more():
+    """Rule 3 (six rows since the agents tree, 2026-10-14)."""
+    view = V(agents=tuple(A(f"t{i}", False) for i in range(9)))
     lines = _lines(al.render_block(view))
-    assert lines[0] == "⏳ 7 agents working"
-    assert lines[1:5] == ["○ **t0**", "○ **t1**", "○ **t2**", "○ **t3**"]
-    assert lines[5] == "+3 more"
-    assert lines[6] == PROMISE
-    exactly_four = V(agents=tuple(A(f"t{i}", False) for i in range(4)))
-    assert "more" not in al.render_block(exactly_four)
+    assert lines[0] == "⏳ 9 agents working"
+    assert lines[1:7] == [f"○ 🤖 **t{i}**" for i in range(6)]
+    assert lines[7] == "+3 more"
+    assert lines[8] == PROMISE
+    exactly_six = V(agents=tuple(A(f"t{i}", False) for i in range(6)))
+    assert "more" not in al.render_block(exactly_six)
 
 
 def test_the_header_counts_down_as_rows_settle():
     one = al.render_block(V(agents=(A("a", True, 5), A("b", False), A("c", False))))
     assert _lines(one)[0] == "⏳ 2 agents working"
-    assert _lines(one)[1] == "✓ **a** · done (0:05)"
+    assert _lines(one)[1] == "✓ 🤖 **a** · done (0:05)"
 
 
 def test_shells_finished_and_stopped_together_and_running_wins():
@@ -148,7 +148,7 @@ def test_the_description_when_nothing_else_is_known():
 
 
 def test_nothing_known_is_the_bare_type():
-    assert _lines(al.render_block(V(agents=(A("Explore", False),))))[1] == "○ **Explore**"
+    assert _lines(al.render_block(V(agents=(A("Explore", False),))))[1] == "○ 🤖 **Explore**"
 
 
 def test_blank_prose_falls_through():
@@ -201,8 +201,8 @@ def test_markdown_in_prose_types_and_arguments_is_escaped():
         A("general_purpose", False, prose="Fix [the] `x_y` *now*"),
         A("a_b", False, tool="Grep", tool_arg="[a]*"))))
     lines = _lines(block)
-    assert lines[1] == "○ **general\\_purpose** · Fix \\[the\\] \\`x\\_y\\` \\*now\\*"
-    assert lines[2] == "○ **a\\_b** · Searching for \\[a\\]\\*"
+    assert lines[1] == "○ 🤖 **general\\_purpose** · Fix \\[the\\] \\`x\\_y\\` \\*now\\*"
+    assert lines[2] == "○ 🤖 **a\\_b** · Searching for \\[a\\]\\*"
 
 
 @pytest.mark.parametrize("field, raw, escaped", [
@@ -217,7 +217,7 @@ def test_inline_markup_is_kept_as_written_and_escaped(field, raw, escaped):
     """Claude's words are shown as written: inline markup is escaped,
     never stripped."""
     line = _lines(al.render_block(V(agents=(A("t", False, **{field: raw}),))))[1]
-    assert line == "○ **t** · " + escaped
+    assert line == "○ 🤖 **t** · " + escaped
 
 
 @pytest.mark.parametrize("field", ["agent_type", "tool"], ids=["agent-type", "tool-name"])
@@ -237,12 +237,12 @@ def test_a_direction_control_in_a_name_is_revealed(field):
 # can never cancel the escape of the mark after it (or the bold's closing
 # star): each case below fails when its own site loses the doubling.
 @pytest.mark.parametrize("agent, kw, line", [
-    ("t", {"prose": "a\\*b* c"}, "○ **t** · a\\\\\\*b\\* c"),
-    ("t", {"description": "q \\[z]"}, "○ **t** · q \\\\\\[z\\]"),
-    ("t", {"tool": "Read", "tool_arg": "f\\*.py"}, "○ **t** · Reading f\\\\\\*.py"),
-    ("t", {"tool": "My\\Tool"}, "○ **t** · Using My\\\\Tool"),
-    ("a\\_b", {}, "○ **a\\\\\\_b**"),
-    ("weird\\", {}, "○ **weird\\\\**"),
+    ("t", {"prose": "a\\*b* c"}, "○ 🤖 **t** · a\\\\\\*b\\* c"),
+    ("t", {"description": "q \\[z]"}, "○ 🤖 **t** · q \\\\\\[z\\]"),
+    ("t", {"tool": "Read", "tool_arg": "f\\*.py"}, "○ 🤖 **t** · Reading f\\\\\\*.py"),
+    ("t", {"tool": "My\\Tool"}, "○ 🤖 **t** · Using My\\\\Tool"),
+    ("a\\_b", {}, "○ 🤖 **a\\\\\\_b**"),
+    ("weird\\", {}, "○ 🤖 **weird\\\\**"),
 ], ids=["prose", "description", "tool-argument", "tool-name", "agent-type",
         "agent-type-trailing"])
 def test_a_backslash_in_claudes_text_is_escaped(agent, kw, line):
@@ -251,7 +251,7 @@ def test_a_backslash_in_claudes_text_is_escaped(agent, kw, line):
 
 def test_a_backslash_in_a_done_agents_type_is_escaped():
     block = al.render_block(V(agents=(A("weird\\", True, 42), A("t", False))))
-    assert _lines(block)[1] == "✓ **weird\\\\** · done (0:42)"
+    assert _lines(block)[1] == "✓ 🤖 **weird\\\\** · done (0:42)"
 
 
 @pytest.mark.parametrize("code", ["fa", "ar"])
@@ -265,7 +265,7 @@ def test_rtl_a_backslash_is_escaped_inside_its_isolate(code):
 
 def test_a_long_type_is_cut():
     line = _lines(al.render_block(V(agents=(A("x" * 80, False),))))[1]
-    assert line == "○ **" + "x" * (al.LABEL_MAX - 1) + "…**"
+    assert line == "○ 🤖 **" + "x" * (al.LABEL_MAX - 1) + "…**"
 
 
 # ── first_line ────────────────────────────────────────────────────────────────

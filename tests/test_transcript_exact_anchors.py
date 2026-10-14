@@ -32,6 +32,7 @@ from aipager.bot.animation import (
     _sync_anchors_from_transcript,
     build_stream_card_ex,
 )
+from aipager.bot.divider import DIVIDER_SEP
 from aipager.state import TOOL_HISTORY_CAP, Status, TrackedSession
 
 
@@ -90,8 +91,9 @@ def _age_batch(sess):
 
 
 def _rows(card: str) -> list[str]:
-    body, _, _status = card.rpartition(_ROW_SEP)
-    return body.split(_ROW_SEP) if body else []
+    """The timeline rows: before the divider above the status line."""
+    body, sep, _status = card.rpartition(DIVIDER_SEP)
+    return body.split(_ROW_SEP) if sep and body else []
 
 
 def _at(rows: list[str], needle: str) -> int:

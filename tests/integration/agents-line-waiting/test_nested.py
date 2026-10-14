@@ -54,9 +54,15 @@ def test_the_answer_counts_three(tree):
     assert h.header(tree.answer()) == "⏳ 3 agents working"
 
 
-@pytest.mark.parametrize("agent_type", [P_TYPE, C_TYPE, G_TYPE])
-def test_the_answer_shows_every_level_working(tree, agent_type):
-    assert h.is_working_row(h.row_of(tree.answer(), agent_type))
+@pytest.mark.parametrize("agent_type", [P_TYPE, C_TYPE])
+def test_the_answer_shows_both_parents_waiting(tree, agent_type):
+    """Each waits for its own agent (a waiting agent's row since the
+    agents tree, 2026-10-14)."""
+    assert h.is_waiting_row(h.row_of(tree.answer(), agent_type))
+
+
+def test_the_answer_shows_the_grandchild_working(tree):
+    assert h.is_working_row(h.row_of(tree.answer(), G_TYPE))
 
 
 # ---- G stops ------------------------------------------------------------------------

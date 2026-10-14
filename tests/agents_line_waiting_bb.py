@@ -232,8 +232,17 @@ class Rig:
         return bb.block_of(bb.md(edits[-1]), text)
 
     def robot_rows(self, agent_type: str) -> list[tuple[str, bool]]:
-        return [(s, d) for s, d in self.sess.tool_history
-                if s.startswith(ROBOT) and agent_type in s]
+        """The card rows of the agents of *agent_type*: its name is the
+        type, or the type after the agent at the top of its chain
+        ("🤖 pipeline-runner › ship-reviewer")."""
+        out = []
+        for s, d in self.sess.tool_history:
+            if not s.startswith(ROBOT):
+                continue
+            name = s[len(ROBOT):].strip().split(" · ")[0]
+            if name == agent_type or name.endswith(f" › {agent_type}"):
+                out.append((s, d))
+        return out
 
 
 def make_session(bot, loop, transcript, *, name=NAME, label=LABEL):
@@ -264,17 +273,27 @@ def header(block: str) -> str:
 
 
 def rows(block: str) -> list[str]:
-    return [x for x in block.split("\n\n")[1:] if "**" in x]
+    """The agent rows, both levels, in order, a list item without its
+    "- " marker."""
+    lines = block.split("\n\n", 1)[1].split("\n") if "\n\n" in block else []
+    return [x[2:] if x.startswith("- ") else x for x in lines if "**" in x]
 
 
 def row_of(block: str, agent_type: str) -> str:
-    found = [x for x in rows(block) if f"**{agent_type}**" in x]
+    """The one row of *agent_type*: its name alone, or after the agent
+    that started it ("**ship-tester › Explore**")."""
+    found = [x for x in rows(block)
+             if f"**{agent_type}**" in x or f" › {agent_type}**" in x]
     assert len(found) == 1, block
     return found[0]
 
 
 def is_working_row(row: str) -> bool:
     return row.startswith("○ ")
+
+
+def is_waiting_row(row: str) -> bool:
+    return row.startswith("⏸ ")
 
 
 def is_done_row(row: str) -> bool:

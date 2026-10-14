@@ -196,10 +196,11 @@ AGENTS_LINES_CAP: int = 5
 # An answer's status block is edited at most once per this many seconds
 # (its send counts as the first), and only when what it shows changed.
 AGENTS_LINE_EDIT_INTERVAL: float = 30.0
-# The parent's Agent calls waiting for their SubagentStart, to give each
-# started agent its call's description: at most this many, none older
-# than AGENT_CALL_MAX_AGE seconds.
-AGENT_CALLS_CAP: int = 20
+# The Agent calls waiting for their SubagentStart (the session's own and
+# its agents'), to give each started agent its call's description and,
+# when it can be told, the agent that started it: at most this many, none
+# older than AGENT_CALL_MAX_AGE seconds.
+AGENT_CALLS_CAP: int = 40
 AGENT_CALL_MAX_AGE: float = 600.0
 # How much of a background agent's latest message is kept (its first
 # line is what the answer's block shows).
@@ -217,6 +218,10 @@ AGENTS_RESTORE_MAX_GAP_SECONDS: float = 1800.0
 # `TrackedSession.agent_parents` (child -> the agent that started it) is
 # held to this many links; the oldest goes first.
 AGENT_PARENTS_CAP: int = 200
+# An answer's status block lists at most this many agents: the ones
+# running when it went out, plus the agents they start later. A row cap
+# (agents_line.ROWS_MAX) bounds what it shows; this bounds what it keeps.
+AGENTS_LINE_ITEMS_CAP: int = 100
 # Background shells a session has running (`TrackedSession.bg_shells`) are
 # held to this many at insertion; the oldest (by launch) is evicted when a
 # new launch would exceed it. Shells send no hooks while they run, so
@@ -1225,17 +1230,24 @@ class TrackedSession:
     # (that message's id), "tool": str, "tool_arg": str (its latest tool
     # call: the name and a short argument), "desc": str (its Agent call's
     # description, or "")}. `bg_agents_recent` remembers stopped ones (id
-    # -> entry, capped at BG_AGENTS_RECENT_CAP) for the still-running note.
-    # `pending_agent_calls` holds the parent's Agent calls not yet matched
-    # to a SubagentStart: [{"type", "desc", "at"}], capped at
+    # -> entry plus "stopped_at" (monotonic, its stop), capped at
+    # BG_AGENTS_RECENT_CAP) for the still-running note.
+    # `pending_agent_calls` holds the Agent calls not yet matched to a
+    # SubagentStart: [{"type", "desc", "at", "launcher" (the calling
+    # agent's id, "" for the session's own call)}], capped at
     # AGENT_CALLS_CAP. `agents_lines` holds what each answer that carried
     # the status block needs to keep it current, oldest first, capped at
     # AGENTS_LINES_CAP: {"chat_id", "msg_id", "body" (the exact rich
-    # markdown before the block), "shown" (the block in the message),
-    # "items" ([{"id", "kind" agent|shell, "label", "started"}], one
-    # snapshot), "ids", "ends" (id -> {"outcome" done|finished|stopped|
-    # gone, "at"}), "is_rtl", "sent_at", "last_try", "refused", "final",
-    # "attempts", "next_try", "gone_at"}. None of these is a persisted
+    # markdown before the divider and the block), "shown" (the block in
+    # the message), "items" ([{"id", "kind" agent|shell, "label",
+    # "started", "parent" (an agent's nearest ancestor the answer lists,
+    # or ""), "late" (True on an agent that joined after the send)}]: the
+    # snapshot at the send, then each agent a listed agent starts later,
+    # up to AGENTS_LINE_ITEMS_CAP), "ids", "ends" (id ->
+    # {"outcome" done|finished|stopped|gone, "at"}), "is_rtl", "sent_at",
+    # "last_try", "refused", "final", "attempts", "next_try",
+    # "gone_at"}. An item keeps its "parent" once known: the links in
+    # `agent_parents` go when an agent stops. None of these is a persisted
     # field (monotonic stamps are meaningless across a restart), so a
     # restart leaves pending blocks as last shown. The running set itself
     # is kept across a restart, though: save() writes it, with its waiting
@@ -1250,9 +1262,11 @@ class TrackedSession:
     pending_agent_calls: list = field(default_factory=list)
     agents_lines: list = field(default_factory=list)
     # Which agent started which: child id -> parent id, from the parent's
-    # own PostToolUse of its Agent call (agent_tree.launched_child).
-    # Capped at AGENT_PARENTS_CAP; a link goes when its child or its
-    # parent finishes, and all go with the session.
+    # own PostToolUse of its Agent call (agent_tree.launched_child), or
+    # earlier, at the child's SubagentStart, when the waiting Agent calls
+    # of its type all came from one agent (_match_agent_call). Capped at
+    # AGENT_PARENTS_CAP; a link goes when its child or its parent
+    # finishes, and all go with the session.
     agent_parents: dict = field(default_factory=dict)
     # The job's agents (the `active_subagents` table) the previous run
     # saved, read once by the startup adoption of a still-running card
@@ -1679,15 +1693,19 @@ class TrackedSession:
         """SubagentStart: *agent_id* is running. An empty id or type is not
         an agent (the phantom shape) and adds nothing. A restart of a known
         id (an agent resuming itself) refreshes it and keeps what it was
-        doing.
+        doing. A stopped one coming back (an id in ``bg_agents_recent``)
+        keeps its description and takes no call.
 
-        A new agent takes the description of the parent's Agent call of
-        its type, when exactly one such call is waiting. Two or more of
-        that type cannot be told apart: they are all dropped and the agent
-        gets none, never a wrong one."""
+        A new agent is matched to the waiting Agent calls of its type
+        (:meth:`_match_agent_call`): it takes a call's description only
+        when exactly one is waiting, and is linked to the agent that made
+        the calls only when they all came from that one agent. Calls that
+        cannot be told apart give nothing, never a wrong description or a
+        wrong parent; the parent's own PostToolUse links it later."""
         agent_type = (agent_type or "").strip()
         if not agent_id or not agent_type:
             return False
+        parent = None
         info = self.bg_agents.get(agent_id)
         if info is not None:
             info["label"] = agent_type
@@ -1697,16 +1715,26 @@ class TrackedSession:
             info.pop("paused", None)
             info.pop("children_gone_at", None)
         else:
+            recent = self.bg_agents_recent.get(agent_id)
+            if recent is not None:
+                # A stopped agent resumed (SendMessage): no Agent call of
+                # its own started it, so it takes none of the waiting
+                # ones (it would take another agent's child's place) and
+                # keeps the description it had.
+                desc, parent = recent.get("desc", ""), None
+            else:
+                desc, parent = self._match_agent_call(agent_type, now)
             self.bg_agents[agent_id] = {
                 "label": agent_type, "last_seen": now, "started": now,
                 "prose": "", "prose_msg": "", "tool": "", "tool_arg": "",
-                "desc": self._match_agent_call(agent_type, now),
+                "desc": desc,
             }
         self.bg_agents_recent.pop(agent_id, None)
         while len(self.bg_agents) > ACTIVE_SUBAGENTS_CAP:
             oldest = min(self.bg_agents,
                          key=lambda a: self.bg_agents[a]["last_seen"])
             self.bg_agents.pop(oldest)
+        self._set_agent_parent(agent_id, parent or "", now)
         return True
 
     def _expire_agent_calls(self, now: float) -> None:
@@ -1714,23 +1742,43 @@ class TrackedSession:
             call for call in self.pending_agent_calls
             if now - call["at"] <= AGENT_CALL_MAX_AGE]
 
-    def _match_agent_call(self, agent_type: str, now: float) -> str:
-        """The description of the one waiting Agent call of *agent_type*,
-        taken off the list; "" when there is none or more than one (then
-        all of that type go)."""
+    def _match_agent_call(self, agent_type: str,
+                          now: float) -> tuple[str, str | None]:
+        """``(description, parent)`` for a new agent of *agent_type*, from
+        the waiting Agent calls of that type; exact or nothing:
+
+        - none waiting: ``("", None)``;
+        - exactly one: its description and its launcher (None for the
+          session's own call), and it is taken off the list;
+        - two or more, all from one launcher: that launcher, no
+          description (which call this is cannot be told); the oldest is
+          taken off and the others of the type lose their description,
+          so a later start of the type can never take a sibling's;
+        - two or more from different launchers: ``("", None)``, and all
+          of that type go (one kept could later link to the wrong one)."""
         self._expire_agent_calls(now)
         same = [c for c in self.pending_agent_calls if c["type"] == agent_type]
         if not same:
-            return ""
-        self.pending_agent_calls = [
-            c for c in self.pending_agent_calls if c["type"] != agent_type]
-        return same[0]["desc"] if len(same) == 1 else ""
+            return "", None
+        launchers = {c.get("launcher", "") for c in same}
+        if len(same) == 1:
+            self.pending_agent_calls.remove(same[0])
+            return same[0]["desc"], same[0].get("launcher", "") or None
+        if len(launchers) > 1:
+            self.pending_agent_calls = [
+                c for c in self.pending_agent_calls if c["type"] != agent_type]
+            return "", None
+        self.pending_agent_calls.remove(same[0])
+        for call in same[1:]:
+            call["desc"] = ""
+        return "", same[0].get("launcher", "") or None
 
     def agent_call_launched(self, subagent_type: str, description: str,
-                            now: float) -> None:
-        """The parent called the Agent tool: remember its type and
-        description until the agent it starts says SubagentStart. A call
-        with no type records nothing (it could match nothing)."""
+                            now: float, launcher: str = "") -> None:
+        """An Agent tool call: remember its type, description and launcher
+        (the calling agent's id, "" for the session's own call) until the
+        agent it starts says SubagentStart. A call with no type records
+        nothing (it could match nothing)."""
         subagent_type = (subagent_type or "").strip() if isinstance(
             subagent_type, str) else ""
         if not subagent_type:
@@ -1740,6 +1788,7 @@ class TrackedSession:
             "type": subagent_type,
             "desc": description if isinstance(description, str) else "",
             "at": now,
+            "launcher": launcher if isinstance(launcher, str) else "",
         })
         if len(self.pending_agent_calls) > AGENT_CALLS_CAP:
             del self.pending_agent_calls[:len(self.pending_agent_calls)
@@ -1789,9 +1838,15 @@ class TrackedSession:
         if info is None:
             return False
         self._forget_agent_links(agent_id)
+        # Its Agent calls that no agent took: none can start now, and kept,
+        # one could later link an agent of another to it.
+        self.pending_agent_calls = [
+            c for c in self.pending_agent_calls
+            if c.get("launcher", "") != agent_id]
         info.pop("waiting", None)
         info.pop("paused", None)
         info.pop("children_gone_at", None)
+        info["stopped_at"] = now
         self.bg_agents_recent[agent_id] = info
         while len(self.bg_agents_recent) > BG_AGENTS_RECENT_CAP:
             self.bg_agents_recent.pop(next(iter(self.bg_agents_recent)))
@@ -1892,6 +1947,120 @@ class TrackedSession:
         info = self.bg_agents.get(agent_id)
         return bool(info is not None and info.get("waiting"))
 
+    def _set_agent_parent(self, child: str, parent: str, now: float) -> bool:
+        """*parent* started *child*: the one place a link is made. Every
+        pending answer's block follows it: a *child* the answer lists goes
+        under its nearest listed ancestor (the link is the truth, so a row
+        shown at the top moves), and a *child* it does not list joins it,
+        under that ancestor, when one is listed (an agent a listed agent
+        started after the answer went out). A child already stopped (its
+        link came at its end) joins as done. An agent the session itself
+        starts has no link, so it never joins an earlier answer. False
+        (and nothing changes) for an empty or self link.
+
+        A link that replaces a different one (the parent's PostToolUse
+        correcting a launcher match) and reaches nothing an answer lists
+        proves the row's place wrong there: a row the answer was sent with
+        goes to the top, and a row that joined late only through the old
+        link leaves the answer (see :meth:`_drop_late_item`)."""
+        if not parent or not child or parent == child:
+            return False
+        old = self.agent_parents.pop(child, None)
+        self.agent_parents[child] = parent
+        while len(self.agent_parents) > AGENT_PARENTS_CAP:
+            self.agent_parents.pop(next(iter(self.agent_parents)))
+        replaced = old is not None and old != parent
+        for rec in self.agents_lines:
+            self._adopt_in_line(rec, child, now, replaced)
+        return True
+
+    def _adopt_in_line(self, rec: dict, child: str, now: float,
+                       replaced: bool = False) -> None:
+        ids = rec.setdefault("ids", [])
+        listed = set(ids)
+        anc = _agent_tree.nearest_listed(self.agent_parents, child, listed)
+        items = rec.setdefault("items", [])
+        if child in listed:
+            mine = [item for item in items if item.get("id") == child]
+            if not anc and replaced and any(item.get("late")
+                                            for item in mine):
+                self._drop_late_item(rec, child)
+                return
+            if anc or replaced:
+                for item in mine:
+                    item["parent"] = anc
+        elif anc and sum(1 for item in items if item.get("kind") == "agent"
+                         ) < AGENTS_LINE_ITEMS_CAP:
+            info = self.bg_agents.get(child)
+            ended = False
+            if info is None:
+                info = self.bg_agents_recent.get(child)
+                ended = info is not None
+            if info is None:
+                return
+            items.append({"id": child, "kind": "agent",
+                          "label": info.get("label", ""),
+                          "started": info.get("started"), "parent": anc,
+                          "late": True})
+            ids.append(child)
+            listed.add(child)
+            if ended:
+                rec.setdefault("ends", {})[child] = {
+                    "outcome": "done", "at": info.get("stopped_at", now)}
+        else:
+            return
+        # The child's own agents the answer lists sit under it now, when it
+        # is nearer than the ancestor they were under.
+        for item in items:
+            if item.get("kind") != "agent" or item.get("id") == child:
+                continue
+            nearer = _agent_tree.nearest_listed(self.agent_parents,
+                                                item["id"], listed)
+            if nearer == child:
+                item["parent"] = child
+
+    def _drop_late_item(self, rec: dict, child: str) -> None:
+        """*child* joined *rec* after the send only through a link now
+        replaced by one that reaches nothing *rec* lists: it is not one of
+        the answer's agents (as an agent the session starts never joins an
+        earlier answer), so it leaves, and with it each late row that
+        joined under it (it joined through *child*, the same way). A row
+        the answer was sent with that sat under a leaving row goes under
+        its nearest listed ancestor that stays, or to the top."""
+        gone = {child}
+        while True:
+            more = {item["id"] for item in rec.get("items", ())
+                    if item.get("late") and item["id"] not in gone
+                    and item.get("parent") in gone}
+            if not more:
+                break
+            gone |= more
+        rec["items"] = [item for item in rec.get("items", ())
+                        if item.get("id") not in gone]
+        rec["ids"] = [i for i in rec.get("ids", ()) if i not in gone]
+        for agent_id in gone:
+            rec.get("ends", {}).pop(agent_id, None)
+        listed = set(rec["ids"])
+        for item in rec["items"]:
+            if item.get("kind") == "agent" and item.get("parent") in gone:
+                item["parent"] = _agent_tree.nearest_listed(
+                    self.agent_parents, item["id"], listed)
+
+    def agent_card_label(self, agent_id: str, agent_type: str) -> str:
+        """What the busy card names *agent_id* by: its type, or ``"<top>
+        › <type>"`` when an agent started it and the agent at the top of
+        its chain is known by name (an agent the session started itself,
+        or one whose starter is not known, is its type alone)."""
+        top = _agent_tree.top_ancestor(self.agent_parents, agent_id)
+        if not top:
+            return agent_type
+        label = ((self.bg_agents.get(top) or {}).get("label")
+                 or (self.active_subagents.get(top) or {}).get("type")
+                 or (self.bg_agents_recent.get(top) or {}).get("label"))
+        if not label:
+            return agent_type
+        return f"{label}{_agent_tree.LINEAGE_SEP}{agent_type}"
+
     def agent_launched_child(self, parent: str, child: str,
                              now: float) -> bool:
         """*parent* started *child* (its own Agent call returned). Returns
@@ -1900,12 +2069,8 @@ class TrackedSession:
         finish (it is in ``bg_agents_recent``) while the child runs. Then
         it is waiting, exactly as if the link had come first, on the line
         and the pin; its job row is not reopened (its resume is)."""
-        if not parent or not child or parent == child:
+        if not self._set_agent_parent(child, parent, now):
             return False
-        self.agent_parents.pop(child, None)
-        self.agent_parents[child] = parent
-        while len(self.agent_parents) > AGENT_PARENTS_CAP:
-            self.agent_parents.pop(next(iter(self.agent_parents)))
         if (parent in self.bg_agents or child not in self.bg_agents
                 or parent not in self.bg_agents_recent):
             return False

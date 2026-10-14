@@ -23,6 +23,7 @@ from telegram.error import RetryAfter
 
 from aipager import agent_tree, bg_shells, flood_policy, i18n, preferences
 from aipager.bot import card_rows
+from aipager.bot.divider import DIVIDER_SEP, without_dividers
 from aipager.i18n import Msg, Plural, Safe, Span
 from aipager.bot.keyboards import LOADING, OPTION, PERM_NEEDED
 from aipager.clockfmt import elapsed as clock
@@ -1242,10 +1243,12 @@ def _fit_sections(
 
 
 def _assemble_card(body: str, status: str) -> str:
-    """Join the card's parts, status LAST ("status-line-at-card-bottom").
-    A blank line between them: Telegram's rich markdown collapses a single
-    newline into a space."""
-    return f"{body}\n\n{status}" if body else status
+    """Join the card's parts, status LAST ("status-line-at-card-bottom"),
+    with Telegram's divider line between them (a blank line on both
+    sides: rich markdown collapses a single newline into a space, and a
+    ``---`` right under a line would make it a heading). A card with no
+    body is its status line alone."""
+    return f"{body}{DIVIDER_SEP}{status}" if body else status
 
 
 def _elapsed_str(started_at: float, unit: str = "s") -> str:
@@ -1257,7 +1260,7 @@ def _elapsed_str(started_at: float, unit: str = "s") -> str:
 
 
 def _agent_live_row(info: dict, unit: str = "s") -> str:
-    """``"🤖 <type> · <activity or 'starting'> · <elapsed>"`` — the LIVE
+    """``"🤖 <name> · <activity or 'starting'> · <elapsed>"`` — the LIVE
     agent row text ("agent activity rows on the busy card"), shared
     verbatim by both card renderers. Each caller applies its OWN
     destination escaping to the whole returned string exactly as it
@@ -1269,8 +1272,11 @@ def _agent_live_row(info: dict, unit: str = "s") -> str:
     ``unit`` is the card's elapsed unit (8.30 "other counters"): at the
     30 s tiers an agent row moves in 30 s steps like the status line,
     rather than counting seconds that would sit frozen between refreshes.
+
+    ``<name>`` is the row's card label (a helper's ``"<top> › <type>"``,
+    ``TrackedSession.agent_card_label``), else its type.
     """
-    agent_type = info.get("type") or "agent"
+    agent_type = info.get("card_label") or info.get("type") or "agent"
     activity = info.get("activity") or "starting"
     elapsed = _elapsed_str(info.get("started_at", time.monotonic()), unit)
     return f"{_SUBAGENT_MARK}{agent_type} · {activity} · {elapsed}"
@@ -1470,13 +1476,14 @@ def build_stream_card_ex(
     from aipager.bot import peer_notice
     peer_line = peer_notice.card_line(tr, getattr(sess, "peer_from", None))
 
-    # Reserve: the status line plus the "\n\n" join above it, so the
-    # fitter's budget is exactly what the BODY may use — both units,
-    # since _fit_sections enforces the char and byte ceilings in the
-    # same pass (no separate outer byte pass here). The peer line and
-    # its join are reserved the same way.
-    reserve_chars = len(status) + len(_ROW_SEP)
-    reserve_bytes = len(status.encode("utf-8")) + len(_ROW_SEP.encode("utf-8"))
+    # Reserve: the status line plus the divider above it
+    # (`_assemble_card`), so the fitter's budget is exactly what the BODY
+    # may use — both units, since _fit_sections enforces the char and
+    # byte ceilings in the same pass (no separate outer byte pass here).
+    # The peer line and its join are reserved the same way.
+    reserve_chars = len(status) + len(DIVIDER_SEP)
+    reserve_bytes = (len(status.encode("utf-8"))
+                     + len(DIVIDER_SEP.encode("utf-8")))
     if peer_line:
         reserve_chars += len(peer_line) + len(_ROW_SEP)
         reserve_bytes += (len(peer_line.encode("utf-8"))
@@ -2477,8 +2484,10 @@ class AnimationMixin:
                     "— degrading to a plain-text edit", sess.label,
                 )
                 try:
+                    # Plain text has no divider: a "---" would show as
+                    # it is, so it goes.
                     await self._app.bot.edit_message_text(
-                        _strip_details_tags(markdown),
+                        without_dividers(_strip_details_tags(markdown)),
                         chat_id=int(resolve_chat_id(sess)),
                         message_id=int(sess.busy_msg_id),
                         reply_markup=reply_markup,
@@ -4210,7 +4219,8 @@ class AnimationMixin:
             # this turn's own Stop an interim one.
             for agent_id, info in carried_agents.items():
                 info["history_idx"] = sess.record_tool(
-                    f"\U0001f916 {info.get('type', 'agent')}", False)
+                    f"\U0001f916 {info.get('card_label') or info.get('type', 'agent')}",
+                    False)
                 sess.active_subagents[agent_id] = info
             for task_id in carried_shells:
                 shell = sess.bg_shells.get(task_id)

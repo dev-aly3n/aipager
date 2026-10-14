@@ -34,6 +34,7 @@ import pytest
 
 from aipager import preferences as prefs
 from aipager.bot import notify as notify_mod
+from aipager.bot.divider import DIVIDER_SEP
 from aipager.dtach import hook_receiver as hr
 from aipager.state import (
     BG_AGENTS_SETTLE_SECONDS,
@@ -47,7 +48,7 @@ CARD = 42
 INTERIM = "Launched the full test run in the background; the fix itself is in."
 INTERIM_2 = "The first run found one failure; a second agent is re-running it."
 FINAL = "All 9597 tests pass. The fix is ready to commit."
-BLOCK_1 = ("⏳ 1 agent working\n\n○ **general-purpose**\n\n"
+BLOCK_1 = ("⏳ 1 agent working\n\n○ 🤖 **general-purpose**\n\n"
            "Results from the agents will follow here.")
 
 
@@ -213,7 +214,7 @@ def test_the_interim_answer_goes_out_now_with_the_agents_line(
     assert method == "sendRichMessage"
     text = _markdown(payload)
     assert text.startswith("💬 **boss**\n\n")
-    assert text.endswith("\n\n" + BLOCK_1)
+    assert text.endswith(DIVIDER_SEP + BLOCK_1)
     # Threaded to the prompt, and notifying like any answer.
     assert payload["reply_to_message_id"] == TRIGGER
     assert not payload.get("disable_notification")
@@ -225,7 +226,7 @@ def test_the_interim_answer_goes_out_now_with_the_agents_line(
                 if m == "editMessageText" and INTERIM in _markdown(p)]
     # 8.41 keeps that block current.
     (rec,) = sess.agents_lines
-    assert f"{rec['body']}\n\n{rec['shown']}" == text
+    assert rec["body"] + DIVIDER_SEP + rec["shown"] == text
 
 
 def test_the_waiting_card_keeps_its_stop_button(mk_bot, run_async, wire):
@@ -315,7 +316,7 @@ def test_the_job_end_settles_the_interim_line_to_done(mk_bot, run_async, wire):
     edit = new[0][1]
     assert edit["message_id"] == rec["msg_id"]
     assert _last_line(_markdown(edit)).startswith("✅ 1 agent done (")
-    assert _markdown(edit) == f"{rec['body']}\n\n{_last_line(_markdown(edit))}"
+    assert _markdown(edit) == rec["body"] + DIVIDER_SEP + _last_line(_markdown(edit))
     assert edit["_kw"] == {"kind": "skip", "priority": "ornament"}
     assert sess.agents_lines == []
 
@@ -466,7 +467,7 @@ def test_a_long_interim_keeps_the_line_last_and_attaches_the_rest(
     _idle(run_async, bot, sess, long)
     (answer,) = wire.of("sendRichMessage")
     text = _markdown(answer)
-    assert text.endswith("\n\n" + BLOCK_1)
+    assert text.endswith(DIVIDER_SEP + BLOCK_1)
     assert len(text.encode()) <= _RICH_LIMIT
     # Room for the block's largest form, not just the one sent.
     from aipager.bot import agents_line

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **The Mini App opens faster on a slow connection.** The page your phone downloads each time you open it is about a quarter smaller: the notes written for developers inside its code are no longer sent along.
+- The status block under an answer shows background agents as a tree: each agent's own agents are listed under it, every agent row has a 🤖, and an agent waiting for its own agents says so.
+- Agents that a listed agent starts after the answer went out join its block, under the agent that started them.
+- A helper agent nests under the agent that started it as soon as it starts, and no longer takes the description of the session's own agent call.
+- On the busy card, a helper agent's row names the agent that started it, like pipeline-runner › ship-tester.
+- A divider line now separates an answer from its agents and shells, sits above the busy card's status line, and replaces the line of dashes in the merged layout.
 
 ### Fixed
 - On iPhone, a Persian or Arabic line that ended with an English word, a number or a command sat on the left; now every such line sits on the right like the rest.

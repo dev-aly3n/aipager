@@ -549,7 +549,10 @@ def test_the_merged_answer_takes_the_answers_direction(code, script, mk_bot, run
     answer = ENGLISH if script == "english" else OWN_SCRIPT[code]
     assert run_async(bot._send_merged_final(s, answer)) is True
     text, is_rtl = edit.await_args.args[2], edit.await_args.kwargs["is_rtl"]
-    status = text.split("\n\n" + notify._MERGED_SEPARATOR, 1)[0].rsplit("\n", 1)[-1]
+    # The card's status line: before the divider above the answer's
+    # result line (the card has a divider of its own above its status).
+    head = text.split(f"\n\n{notify._MERGED_SEPARATOR}\n\n💬", 1)[0]
+    status = head.rsplit("\n", 1)[-1]
     assert is_rtl is (script == "own")
     assert status.startswith(RLM) is (script == "own")
 

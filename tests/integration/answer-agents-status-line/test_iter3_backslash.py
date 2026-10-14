@@ -151,7 +151,7 @@ def test_a_backslash_before_a_mark_reads_back_as_written(field, mark):
 @pytest.mark.parametrize("n", [1, 2, 3], ids=["one", "two", "three"])
 def test_a_running_type_ending_in_backslashes_closes_its_bold(n):
     row = _row(agent_type="weird" + BS * n)
-    assert (row.startswith("○ **"), row.endswith("**"),
+    assert (row.startswith("○ 🤖 **"), row.endswith("**"),
             _run_before(row, len(row) - 2) % 2) == (True, True, 0)
 
 
@@ -164,7 +164,7 @@ def test_a_done_type_ending_in_backslashes_closes_its_bold(n):
 
 def test_a_type_that_is_only_a_backslash_closes_its_bold():
     row = _row(agent_type=BS)
-    assert (row.startswith("○ **"), row.endswith("**"),
+    assert (row.startswith("○ 🤖 **"), row.endswith("**"),
             _run_before(row, len(row) - 2) % 2) == (True, True, 0)
 
 
@@ -351,7 +351,7 @@ def test_hook_prose_with_a_backslashed_star_leaves_no_mark_unescaped(
             delta="Now \\*bold\\* here", message_id="m1", index=0, final=False)
     bb.finish(run_async, bot, sess)
     rows = bb.block_of(bb.answer_text(wire)).split(SEP)
-    row = next(r for r in rows if r.startswith("○ **Explore**"))
+    row = next(r for r in rows if r.startswith("○ 🤖 **Explore**"))
     assert _unescaped_meta(_activity(row)) == []
 
 
@@ -363,7 +363,7 @@ def test_hook_a_windows_path_argument_reads_back_as_written(bot, sess, wire, run
             tool_input={"file_path": "C:\\dir\\"})
     bb.finish(run_async, bot, sess)
     rows = bb.block_of(bb.answer_text(wire)).split(SEP)
-    row = next(r for r in rows if r.startswith("○ **Explore**"))
+    row = next(r for r in rows if r.startswith("○ 🤖 **Explore**"))
     assert _unescape(_activity(row)).endswith("C:\\dir\\")
 
 
@@ -375,7 +375,7 @@ def test_hook_a_windows_path_argument_ends_on_an_even_run(bot, sess, wire, run_a
             tool_input={"file_path": "C:\\dir\\"})
     bb.finish(run_async, bot, sess)
     rows = bb.block_of(bb.answer_text(wire)).split(SEP)
-    row = next(r for r in rows if r.startswith("○ **Explore**"))
+    row = next(r for r in rows if r.startswith("○ 🤖 **Explore**"))
     assert _run_before(row, len(row)) % 2 == 0
 
 

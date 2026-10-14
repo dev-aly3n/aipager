@@ -185,7 +185,7 @@ def test_hiva_sequence_replayed_end_to_end(mk_bot, run_async, tmp_path, monkeypa
     # per background job": the interim answer goes out NOW, on its own,
     # ending with the status block ("⏳ 1 agent working" first).
     assert len(rich_sends) == 1
-    assert rich_sends[0].startswith(INTERIM_ANSWER + "\n\n⏳ 1 agent working\n\n")
+    assert rich_sends[0].startswith(INTERIM_ANSWER + "\n\n---\n\n⏳ 1 agent working\n\n")
 
     # ---- step 4: five phantom SubagentStops ----
     tool_history_len_before = len(sess.tool_history)
@@ -744,8 +744,8 @@ def test_double_hop_continuation_spawning_new_agents(
     # Roadmap 8.42: three messages, each sent as it was written, in order,
     # none repeated — the final one carries only the final answer.
     assert len(rich_sends) == 3
-    assert rich_sends[0].startswith("interim one\n\n⏳")
-    assert rich_sends[1].startswith("interim two\n\n⏳")
+    assert rich_sends[0].startswith("interim one\n\n---\n\n⏳")
+    assert rich_sends[1].startswith("interim two\n\n---\n\n⏳")
     assert rich_sends[2] == "the real final answer"
     finals = [c for c in edit_calls if c["final"]]
     assert len(finals) == 1

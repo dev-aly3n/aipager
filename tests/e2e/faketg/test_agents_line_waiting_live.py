@@ -74,7 +74,7 @@ def test_waiting_agent_and_restart_on_the_agents_line(fresh):
     time.sleep(40)
     later = [c.text for c in fake.calls(chat_id=DM, since=first.seq)
              if c.method == "editMessageText" and c.params.get("message_id") == first_id]
-    assert not any("✅" in t or "✓ **pipeline-runner**" in t for t in later), later
+    assert not any("✅" in t or "✓ 🤖 **pipeline-runner**" in t for t in later), later
     if later:
         _show("the same answer 40 s later (last edit)", _block(later[-1]))
 

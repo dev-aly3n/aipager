@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from aipager.bot.divider import DIVIDER_SEP
 from aipager.state import Status, TrackedSession
 from aipager.bot.animation import (
     build_stream_card,
@@ -376,10 +377,11 @@ def _body(card: str) -> list[str]:
 
     Contract change ("status-line-at-card-bottom"): the status line is the
     card's LAST element, not its first — a top header scrolled out of
-    sight exactly when a turn grew long enough to need it.
+    sight exactly when a turn grew long enough to need it. A divider sits
+    between them (2026-10-14).
     """
-    body, _, _status = card.rpartition("\n\n")
-    return body.split("\n\n") if body else []
+    body, sep, _status = card.rpartition(DIVIDER_SEP)
+    return body.split("\n\n") if sep and body else []
 
 
 def test_timeline_interleaves_commentary_between_tools():
@@ -938,10 +940,11 @@ def _rows(card: str) -> list[str]:
     """The timeline rows, in order, without the status line.
 
     Contract change ("status-line-at-card-bottom"): the status line is the
-    card's LAST element, so it is stripped from the end, not the front.
+    card's LAST element, so it is stripped from the end, not the front,
+    with the divider above it (2026-10-14).
     """
-    body, _, _status = card.rpartition("\n\n")
-    return body.split("\n\n") if body else []
+    body, sep, _status = card.rpartition(DIVIDER_SEP)
+    return body.split("\n\n") if sep and body else []
 
 
 def test_final_card_keeps_every_tool_row():

@@ -13,7 +13,7 @@ import re
 import pytest
 
 from aipager import i18n
-from aipager.bot.agents_line import AgentRow, BlockView, render_block
+from aipager.bot.agents_line import ROWS_MAX, AgentRow, BlockView, render_block
 from tests.i18n_ml2_bb import BIDI_CONTROLS, FSI, PDI, RLM, catalog, strip_marks
 
 SEP = "\n\n"
@@ -215,10 +215,10 @@ def test_ru_shells_running_picks_the_cldr_form(n):
     assert out == _pick("ru", "agents.head.shells_running", n)
 
 
-@pytest.mark.parametrize("n", [5, 6, 9], ids=["more1", "more2", "more5"])
+@pytest.mark.parametrize("n", [7, 8, 11], ids=["more1", "more2", "more5"])
 def test_ru_more_line_picks_the_cldr_form(n):
     lines = render_block(_working(n), i18n.get("ru")).split(SEP)
-    assert _pick("ru", "agents.more", n - 4) in lines
+    assert _pick("ru", "agents.more", n - ROWS_MAX) in lines
 
 
 @pytest.mark.parametrize("n", sorted(AR_FORM))
