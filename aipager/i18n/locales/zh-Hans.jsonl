@@ -1382,6 +1382,7 @@
 {"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"other": "⏰ 已过 {n} 分钟，会话仍在工作。再等 {wait} 分钟、立即重启，还是取消？立即重启会中断下面列出的所有内容，包括尚未送达的暂缓回答。"}}
 {"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>：等所有会话就绪后再重启。"}
 {"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>更新</b>"}
+{"k": "upd.hooks.finished", "src": "7aa89c72", "v": "✅ aipager 更新已完成：aipager 现在运行的是 {version}。"}
 {"k": "upd.hooks.newer", "src": "d8c34918", "v": "⚠️ aipager 更新只完成了一半：Claude Code 的 hook 已在运行 {hook}，但 aipager 本身仍是 {running}。重启 aipager 即可完成。"}
 {"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running}（最新）"}
 {"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}

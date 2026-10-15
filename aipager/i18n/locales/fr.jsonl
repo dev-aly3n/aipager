@@ -1382,6 +1382,7 @@
 {"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"many": "⏰ Les sessions travaillent encore après {n} min. Attendre {wait} min de plus, redémarrer maintenant ou annuler ? « Redémarrer maintenant » laisse en plan tout ce qui est listé ci-dessous, y compris les réponses retenues pas encore livrées.", "one": "⏰ Les sessions travaillent encore après {n} min. Attendre {wait} min de plus, redémarrer maintenant ou annuler ? « Redémarrer maintenant » laisse en plan tout ce qui est listé ci-dessous, y compris les réponses retenues pas encore livrées.", "other": "⏰ Les sessions travaillent encore après {n} min. Attendre {wait} min de plus, redémarrer maintenant ou annuler ? « Redémarrer maintenant » laisse en plan tout ce qui est listé ci-dessous, y compris les réponses retenues pas encore livrées."}}
 {"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b> : attend que toutes les sessions soient prêtes avant de redémarrer."}
 {"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>Mises à jour</b>"}
+{"k": "upd.hooks.finished", "src": "7aa89c72", "v": "✅ La mise à jour d'aipager est terminée : aipager tourne maintenant en {version}."}
 {"k": "upd.hooks.newer", "src": "d8c34918", "v": "⚠️ La mise à jour d'aipager n'est faite qu'à moitié : les hooks de Claude Code exécutent déjà {hook}, mais aipager lui-même tourne encore en {running}. Redémarrez aipager pour la terminer."}
 {"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (à jour)"}
 {"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}

@@ -88,6 +88,13 @@ UPDATE_LOCK_PATH = Path.home() / ".local" / "share" / "aipager" / "update.lock"
 UPDATE_MARKER_PATH = (
     Path.home() / ".local" / "share" / "aipager" / "update-restart.json"
 )
+#: The owner's "update is only half done" notices that went out, so the
+#: daemon that runs their version can mark them finished.
+HOOK_NOTICES_PATH = (
+    Path.home() / ".local" / "share" / "aipager" / "update-hook-notices.json"
+)
+#: At most this many notices are remembered (the newest).
+HOOK_NOTICES_MAX = 8
 
 _PROC_SELF_CGROUP = "/proc/self/cgroup"
 # Container markers (Docker, podman): seams, so no test sees the host's.
@@ -1105,6 +1112,53 @@ def read_and_clear_marker() -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+# ---------------------------------------------------------------------------
+# The owner's "update is only half done" notices
+# ---------------------------------------------------------------------------
+
+def read_hook_notices() -> list[dict]:
+    """The notices remembered on disk (each a dict), oldest first; ``[]``
+    when there are none or the file is unreadable. Never raises."""
+    path = Path(HOOK_NOTICES_PATH)
+    try:
+        raw = path.read_text()
+    except FileNotFoundError:
+        return []
+    except OSError:
+        log.warning("could not read the hook notices file", exc_info=True)
+        return []
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [e for e in data if isinstance(e, dict)]
+
+
+def write_hook_notices(entries: list[dict]) -> None:
+    """Replace the remembered notices with the newest
+    :data:`HOOK_NOTICES_MAX` of *entries* (atomically, mode 0600); an
+    empty list removes the file. Raises OSError on failure."""
+    path = Path(HOOK_NOTICES_PATH)
+    check_write(path)
+    entries = list(entries)[-HOOK_NOTICES_MAX:]
+    if not entries:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, json.dumps(entries).encode())
+    finally:
+        os.close(fd)
+    os.replace(tmp, path)
+
+
 __all__ = [
     "CURRENT_JOB_ID", "CommandResult", "ClaudeUpdateResult", "RestartPlan",
     "NPM_NOT_WRITABLE_REASON", "UpdateLock", "begin_shutdown", "cancel_scheduled_restart",
@@ -1112,6 +1166,7 @@ __all__ = [
     "current_claude", "installed_version", "is_newer",
     "latest_aipager_version", "latest_claude_version", "parse_version",
     "probe_installed_version", "probe_restart_target", "read_and_clear_marker",
+    "read_hook_notices", "write_hook_notices",
     "redact_output",
     "redacted_tail", "shutting_down",
     "restart_blockers", "restart_plan", "run_claude_update", "run_command",

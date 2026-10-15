@@ -458,6 +458,11 @@ _HOOKS_NEWER = Msg("upd.hooks.newer",
                    "finish it.", note="Sent once to the owner: a newer aipager is installed "
                                      "but the running one is older; the Restart now button "
                                      "follows", eg={"hook": "1.1.0", "running": "1.0.1"})
+_HOOKS_FINISHED = Msg("upd.hooks.finished",
+                      "✅ The aipager update is finished: aipager runs {version} now.",
+                      note="Replaces the \"update is only half done\" notice once aipager "
+                           "was restarted into the newer version; {version} is a version",
+                      eg={"version": "1.1.0"})
 _RESTART_LOCKED = Msg("toast.upd.restart_locked",
                       "An update is running elsewhere. Try again once it has finished.",
                       note="Pop-up: Restart now while an update elsewhere holds the lock")
@@ -471,6 +476,19 @@ HOOK_NOTICE_RETRY_SECONDS = 600.0
 #: retried after this.
 HOOK_NOTICE_MAX_ATTEMPTS = 3
 HOOK_NOTICE_SKIP_RETRY_SECONDS = 30.0
+#: A newer hook is mostly followed by a restart within seconds (systemd
+#: restarting after an install, an idle-gated restart): the first notice
+#: for a version waits this long after it was first seen, so that case
+#: never shows it. Costs no attempt; the session monitor's tick sends it
+#: after. A restart later than this finishes the sent notice instead
+#: (finish_hook_notices).
+HOOK_NOTICE_GRACE_SECONDS = 120.0
+#: A remembered notice older than this is dropped unfinished.
+HOOK_NOTICE_MAX_AGE_SECONDS = 7 * 86400
+#: After a restart, a "finished" edit the outbound gate held back is tried
+#: this many times in all, HOOK_NOTICE_SKIP_RETRY_SECONDS apart; still
+#: held, it is kept for the next start.
+HOOK_FINISH_TRIES = 3
 # Hook versions remembered per run (a spoofed datagram can add at most one
 # notice per version, and only this many versions).
 _HOOK_SEEN_MAX = 16
@@ -1265,6 +1283,10 @@ class UpdateManager:
         # The card's first words: the installed version is checked first.
         job.live = i18n.for_chat(chat_id).html(_RS_CHECKING)
         job.reporter = _Reporter(self.bot, chat_id, status_message)
+        if status_message is not None:
+            # Restart now tapped on a notice: that message is the job's
+            # card now, so it is never edited into "finished".
+            _forget_hook_notice(chat_id, getattr(status_message, "message_id", None))
         self._job = job
         self._job_epoch += 1
         log.info("update.start job=%s kind=restart user=%s chat=%s origin=%s",
@@ -1777,7 +1799,7 @@ class UpdateManager:
                     return
                 rec = {"delivered": False, "attempts": 0, "last_try_mono": None,
                        "last_try": None, "task": None, "deferred": None,
-                       "skip_logged": False}
+                       "skip_logged": False, "first_seen_mono": time.monotonic()}
                 self._hook_seen[version] = rec
                 log.info("update.hooks_newer hook=%s daemon=%s", version, mine)
             if self._hooks_newer is None or self_update.is_newer(version, self._hooks_newer):
@@ -1812,6 +1834,14 @@ class UpdateManager:
                     else HOOK_NOTICE_RETRY_SECONDS)
             if time.monotonic() - last < wait:
                 return
+        first = rec.get("first_seen_mono")
+        if first is not None and time.monotonic() - first < HOOK_NOTICE_GRACE_SECONDS:
+            # A restart usually follows within seconds: give it the chance.
+            if rec["deferred"] != "grace":
+                rec["deferred"] = "grace"
+                log.info("update.hooks_newer.notice hook=%s result=deferred reason=grace",
+                         version)
+            return
         if self._hook_notice_covered(version):
             rec["delivered"] = True
             log.info("update.hooks_newer.notice hook=%s result=covered", version)
@@ -1922,6 +1952,7 @@ class UpdateManager:
             return
         rec["delivered"] = True
         log.info("update.hooks_newer.notice hook=%s result=sent", version)
+        _remember_hook_notice(owner, getattr(sent, "message_id", None), version, mine)
 
     @staticmethod
     def _drop_waiting_section(job: _Job) -> None:
@@ -2465,6 +2496,131 @@ async def deliver_update_marker(bot: "TelegramBot", registry) -> None:
         log.warning("update marker delivery failed", exc_info=True)
 
 
+def _remember_hook_notice(chat_id, message_id, hook: str, running: str) -> None:
+    """Remember a sent "only half done" notice, so the daemon that runs
+    *hook* can mark it finished. Never raises."""
+    if not _is_int(chat_id) or not _is_int(message_id):
+        return
+    try:
+        entries = self_update.read_hook_notices()
+        entries.append({"chat_id": chat_id, "message_id": message_id, "hook": str(hook),
+                        "running": str(running), "sent_at": time.time()})
+        self_update.write_hook_notices(entries)
+    except Exception:
+        log.warning("update.hooks_newer.remember_failed hook=%s", hook, exc_info=True)
+
+
+def _forget_hook_notice(chat_id, message_id) -> None:
+    """Stop remembering the notice *message_id* (another flow owns that
+    message now). Never raises."""
+    try:
+        entries = self_update.read_hook_notices()
+        kept = [e for e in entries
+                if (e.get("chat_id"), e.get("message_id")) != (chat_id, message_id)]
+        if len(kept) != len(entries):
+            self_update.write_hook_notices(kept)
+    except Exception:
+        log.warning("update.hooks_newer.forget_failed", exc_info=True)
+
+
+def _is_int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+async def finish_hook_notices(bot: "TelegramBot") -> None:
+    """After a restart: edit every remembered "only half done" notice
+    whose version this daemon now runs into "the update is finished",
+    without its Restart now button. A notice for a version this daemon
+    still lacks is kept for a later restart; one older than
+    :data:`HOOK_NOTICE_MAX_AGE_SECONDS`, malformed, or that cannot be
+    edited is dropped. Never sends a new message; never raises."""
+    try:
+        await asyncio.sleep(self_update.MARKER_SETTLE_SECONDS)
+        app = getattr(bot, "_app", None)
+        entries = self_update.read_hook_notices()
+        if not entries or app is None:
+            return
+        mine = _daemon_code_version()
+        if self_update.parse_version(mine) is None:
+            # A dev or pre-release build: which version it has is unknown,
+            # so nothing is called finished.
+            log.info("update.hooks_finished.kept_all running=%s", mine)
+            return
+        now = time.time()
+        due, settled = [], []
+        for entry in entries:
+            chat_id, message_id = entry.get("chat_id"), entry.get("message_id")
+            hook, sent_at = entry.get("hook"), entry.get("sent_at")
+            reason = None
+            if (not _is_int(chat_id) or not _is_int(message_id)
+                    or self_update.parse_version(hook) is None
+                    or not isinstance(sent_at, (int, float))):
+                reason = "malformed"
+            elif not -300 <= now - sent_at <= HOOK_NOTICE_MAX_AGE_SECONDS:
+                reason = "age"
+            if reason is not None:
+                settled.append(entry)
+                log.info("update.hooks_finished.dropped chat=%s message=%s hook=%s "
+                         "reason=%s", chat_id, message_id, hook, reason)
+            elif self_update.is_newer(hook, mine):
+                log.info("update.hooks_finished.kept chat=%s message=%s hook=%s "
+                         "running=%s", chat_id, message_id, hook, mine)
+            else:
+                due.append(entry)
+        for attempt in range(HOOK_FINISH_TRIES):
+            if attempt:
+                await asyncio.sleep(HOOK_NOTICE_SKIP_RETRY_SECONDS)
+                # Restart now tapped meanwhile: that message is a job card now.
+                current = self_update.read_hook_notices()
+                due = [e for e in due if e in current]
+            held = []
+            for entry in due:
+                if await _finish_hook_notice(app.bot, entry, mine):
+                    settled.append(entry)
+                else:
+                    held.append(entry)
+            if settled:
+                # Read again: a notice this daemon sent meanwhile stays.
+                self_update.write_hook_notices(
+                    [e for e in self_update.read_hook_notices() if e not in settled])
+                settled = []
+            due = held
+            if not due:
+                break
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.warning("hook notice finishing failed", exc_info=True)
+
+
+async def _finish_hook_notice(tg_bot, entry: dict, running: str) -> bool:
+    """Edit one notice into "finished". True when it is settled (edited,
+    or it can never be: deleted, too old); False when the outbound gate
+    held it back, so it is tried again (finish_hook_notices)."""
+    chat_id, message_id, hook = entry["chat_id"], entry["message_id"], entry["hook"]
+    text = i18n.for_chat(chat_id).html(_HOOKS_FINISHED, version=str(running))
+    try:
+        result = await edit_text_at(
+            tg_bot, text=text, chat_id=chat_id, message_id=message_id, parse_mode="HTML",
+            rate_limit_args=rate_limit_args(kind="skip", priority=PRIORITY_ORNAMENT))
+    except BadRequest as e:
+        # Deleted, too old to edit, or already says it: nothing to retry.
+        log.info("update.hooks_finished.edit_failed chat=%s message=%s hook=%s detail=%s",
+                 chat_id, message_id, hook, e)
+        return True
+    except Exception as e:
+        log.info("update.hooks_finished.edit_failed chat=%s message=%s hook=%s detail=%s",
+                 chat_id, message_id, hook, type(e).__name__)
+        return True
+    if result is MUTED or result is SKIPPED:
+        log.info("update.hooks_finished.held chat=%s message=%s hook=%s reason=%s",
+                 chat_id, message_id, hook, "muted" if result is MUTED else "skipped")
+        return False
+    log.info("update.hooks_finished.edited chat=%s message=%s hook=%s running=%s",
+             chat_id, message_id, hook, running)
+    return True
+
+
 def _marker_message_ref(marker: dict, chat_id: int) -> tuple[int, str] | None:
     """``(message_id, prefix_html)`` of the message the marker says to
     edit, or ``None``. Only a message in the marker's own chat (the one
@@ -2482,6 +2638,7 @@ def _marker_message_ref(marker: dict, chat_id: int) -> tuple[int, str] | None:
 
 __all__ = [
     "ControlResult", "StartResult", "UpdateManager", "UpdateOffer", "check_payload",
-    "deliver_update_marker", "handle_callback", "handle_update_cmd", "installed_waiting",
+    "deliver_update_marker", "finish_hook_notices", "handle_callback",
+    "handle_update_cmd", "installed_waiting",
     "render_check", "restart_markup", "restart_steps_text", "update_offer",
 ]

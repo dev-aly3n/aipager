@@ -1382,6 +1382,7 @@
 {"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"one": "⏰ Die Sitzungen arbeiten nach {n} Min. immer noch. Noch {wait} Min. warten, jetzt neu starten oder abbrechen? „Jetzt neu starten“ unterbricht alles, was unten steht, auch die zurückgehaltenen Antworten, die noch nicht zugestellt sind.", "other": "⏰ Die Sitzungen arbeiten nach {n} Min. immer noch. Noch {wait} Min. warten, jetzt neu starten oder abbrechen? „Jetzt neu starten“ unterbricht alles, was unten steht, auch die zurückgehaltenen Antworten, die noch nicht zugestellt sind."}}
 {"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: Wartet vor dem Neustart, bis alle Sitzungen bereit sind."}
 {"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>Updates</b>"}
+{"k": "upd.hooks.finished", "src": "7aa89c72", "v": "✅ Das aipager-Update ist fertig: aipager läuft jetzt mit {version}."}
 {"k": "upd.hooks.newer", "src": "d8c34918", "v": "⚠️ Das aipager-Update ist erst halb fertig: Die Hooks von Claude Code laufen schon mit {hook}, aipager selbst aber noch mit {running}. Starte aipager neu, um es abzuschließen."}
 {"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (aktuell)"}
 {"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}

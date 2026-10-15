@@ -2377,6 +2377,7 @@
   "\ud83d\udd04 Restart now",
   "\u26a0\ufe0f The aipager update is only half done: Claude Code's hooks already run 1.1.0, but aipager itself still runs 1.0.1. Restart aipager to finish it.",
   "\ud83d\udd04 Restart now",
+  "\u2705 The aipager update is finished: aipager runs 1.1.0 now.",
   "\u23f3 aipager is shutting down. Try again once it is back.",
   "An update is running elsewhere. Try again once it has finished.",
   "\u23f3 An update is already running (verifying)."

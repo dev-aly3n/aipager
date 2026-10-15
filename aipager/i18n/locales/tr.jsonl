@@ -1382,6 +1382,7 @@
 {"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"one": "⏰ Oturumlar {n} dk sonra hâlâ çalışıyor. {wait} dk daha beklensin mi, şimdi yeniden başlatılsın mı, yoksa iptal mi? “Şimdi yeniden başlat”, henüz teslim edilmemiş bekletilen yanıtlar dahil, aşağıdaki her şeyi yarıda bırakır.", "other": "⏰ Oturumlar {n} dk sonra hâlâ çalışıyor. {wait} dk daha beklensin mi, şimdi yeniden başlatılsın mı, yoksa iptal mi? “Şimdi yeniden başlat”, henüz teslim edilmemiş bekletilen yanıtlar dahil, aşağıdaki her şeyi yarıda bırakır."}}
 {"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: yeniden başlatmadan önce tüm oturumların hazır olmasını bekliyor."}
 {"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>Güncellemeler</b>"}
+{"k": "upd.hooks.finished", "src": "7aa89c72", "v": "✅ aipager güncellemesi tamamlandı: aipager artık {version} sürümünde çalışıyor."}
 {"k": "upd.hooks.newer", "src": "d8c34918", "v": "⚠️ aipager güncellemesi yarım kaldı: Claude Code'un hook'ları zaten {hook} çalıştırıyor, ama aipager'ın kendisi hâlâ {running}. Bitirmek için aipager'ı yeniden başlat."}
 {"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (güncel)"}
 {"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}

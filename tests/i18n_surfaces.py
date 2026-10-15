@@ -1884,6 +1884,14 @@ def _update_restart(env):
     for call in bot._app.bot.send_message.await_args_list:
         out.append(call.args[1] if len(call.args) > 1 else call.kwargs.get("text"))
         out += _inline(call.kwargs.get("reply_markup"))
+    # ...and that notice once aipager runs 1.1.0: edited into "finished".
+    mp.setattr(self_update, "MARKER_SETTLE_SECONDS", 0)
+    mp.setattr(update_flow, "_daemon_code_version", lambda: "1.1.0")
+    bot._app.bot.edit_message_text = AsyncMock(return_value=MagicMock(message_id=9))
+    env.run(update_flow.finish_hook_notices(bot))
+    for call in bot._app.bot.edit_message_text.await_args_list:
+        out.append(call.kwargs.get("text"))
+        out += _inline(call.kwargs.get("reply_markup"))
     # The Restart now refusals (pop-ups).
     for error, detail, job in (("shutting_down", None, None),
                                ("update_in_progress", "lock_held", None),

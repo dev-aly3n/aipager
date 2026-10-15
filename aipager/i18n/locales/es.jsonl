@@ -1382,6 +1382,7 @@
 {"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"many": "⏰ Las sesiones siguen trabajando después de {n} min. ¿Esperar {wait} min más, reiniciar ahora o cancelar? «Reiniciar ahora» deja a medias todo lo que aparece abajo, incluidas las respuestas retenidas que aún no se entregaron.", "one": "⏰ Las sesiones siguen trabajando después de {n} min. ¿Esperar {wait} min más, reiniciar ahora o cancelar? «Reiniciar ahora» deja a medias todo lo que aparece abajo, incluidas las respuestas retenidas que aún no se entregaron.", "other": "⏰ Las sesiones siguen trabajando después de {n} min. ¿Esperar {wait} min más, reiniciar ahora o cancelar? «Reiniciar ahora» deja a medias todo lo que aparece abajo, incluidas las respuestas retenidas que aún no se entregaron."}}
 {"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: esperando a que todas las sesiones queden listas antes de reiniciar."}
 {"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>Actualizaciones</b>"}
+{"k": "upd.hooks.finished", "src": "7aa89c72", "v": "✅ La actualización de aipager terminó: aipager ya está en {version}."}
 {"k": "upd.hooks.newer", "src": "d8c34918", "v": "⚠️ La actualización de aipager está a medias: los hooks de Claude Code ya ejecutan {hook}, pero aipager sigue en {running}. Reinicia aipager para terminarla."}
 {"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (actualizado)"}
 {"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}

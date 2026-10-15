@@ -1382,6 +1382,7 @@
 {"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"many": "⏰ Le sessioni lavorano ancora dopo {n} min. Aspettare altri {wait} min, riavviare ora o annullare? «Riavvia ora» lascia a metà tutto quello che è elencato qui sotto, comprese le risposte trattenute non ancora consegnate.", "one": "⏰ Le sessioni lavorano ancora dopo {n} min. Aspettare altri {wait} min, riavviare ora o annullare? «Riavvia ora» lascia a metà tutto quello che è elencato qui sotto, comprese le risposte trattenute non ancora consegnate.", "other": "⏰ Le sessioni lavorano ancora dopo {n} min. Aspettare altri {wait} min, riavviare ora o annullare? «Riavvia ora» lascia a metà tutto quello che è elencato qui sotto, comprese le risposte trattenute non ancora consegnate."}}
 {"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: aspetta che tutte le sessioni siano pronte prima di riavviarsi."}
 {"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>Aggiornamenti</b>"}
+{"k": "upd.hooks.finished", "src": "7aa89c72", "v": "✅ L'aggiornamento di aipager è completato: ora aipager è alla {version}."}
 {"k": "upd.hooks.newer", "src": "d8c34918", "v": "⚠️ L'aggiornamento di aipager è fatto solo a metà: gli hook di Claude Code eseguono già la {hook}, ma aipager è ancora alla {running}. Riavvia aipager per completarlo."}
 {"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (aggiornato)"}
 {"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}

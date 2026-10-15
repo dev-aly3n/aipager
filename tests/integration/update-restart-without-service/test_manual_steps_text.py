@@ -81,5 +81,5 @@ def test_no_new_text_has_a_long_dash():
     keys += [m for m in vars(ui_text).values() if isinstance(m, i18n.Msg) and m.key in (
         "ui.update.restart_confirm", "ui.update.waiting_banner", "ui.update.hooks_banner",
         "ui.update.job.verifying", "ui.update.offer_confirm_manual")]
-    assert len(keys) == 23
+    assert len(keys) == 24
     assert not [m.key for m in keys if "—" in str(m)]

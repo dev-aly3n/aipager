@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The "update is only half done" notice no longer goes stale.** It waits two minutes before it is sent, so a restart right after an install never shows it, and once aipager runs the new version the notice turns into "The aipager update is finished" without its Restart now button.
+
 ## [1.3.4] - 2026-10-15
 
 ### Changed
