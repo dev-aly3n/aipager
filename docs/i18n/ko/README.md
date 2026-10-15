@@ -97,7 +97,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Claude가 수정할 폴더를 `/workspace`에 마운트하세요. `~/.claude`를 마운트하면 Claude 로그인 정보와 대화 기록이 함께 들어가요. 로그인하려면 컴퓨터에서 `claude`를 한 번 실행하거나, `docker exec -it aipager claude` 명령으로 컨테이너 안에서 로그인하세요.
 
-태그: `latest`, `1.3`, `1.3.1` (정확한 버전 하나, 마이너 버전 하나).
+태그: `latest`, `1.3`, `1.3.2` (정확한 버전 하나, 마이너 버전 하나).
 
 ### <a id="nix-flake"></a>Nix flake
 

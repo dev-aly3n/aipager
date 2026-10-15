@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-10-15
+
 ### Added
 - **🎨 Appearance: choose your buttons' colours.** `/settings` → 🎨 Appearance, and the Mini App's Settings tab, set how aipager's buttons look in a chat: the Stop button (Normal, Blue, Green or Red), Allow and Deny (Normal, or Allow green and Deny red), the App button (Normal, Blue, Green or Red) and whether `/settings` also shows the current choice in blue. Everything starts on Normal, Telegram's own look; Telegram allows only these three colours, and apps that do not support colours show every button plain.
 

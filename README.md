@@ -126,7 +126,7 @@ conversation history - run `claude` on the host once to authenticate,
 or `docker exec -it aipager claude` for an interactive login in the
 container.
 
-Tags: `latest`, `1.3`, `1.3.1` (semver track + minor track).
+Tags: `latest`, `1.3`, `1.3.2` (semver track + minor track).
 
 ### Nix flake
 
