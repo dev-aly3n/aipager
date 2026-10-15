@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **The "update is only half done" notice no longer goes stale.** It waits two minutes before it is sent, so a restart right after an install never shows it, and once aipager runs the new version the notice turns into "The aipager update is finished" without its Restart now button.
+- **Each agent under an answer shows its task while it runs a command without a description.** An agent's row said only `Running a command` (or `Using …`) then, so two agents of the same type looked the same. Now it shows the task the agent was started with, and the plain `Running a command` only when there is no task.
 
 ### Fixed
 - **The agents under an answer keep their indent when one is waiting.** An agent waiting for its own agents was marked with ⏸, which Telegram draws as a wide emoji, so its row's 🤖 sat as far right as the indented agents below it. Its mark is now a narrow ‖, like the ○ and ✓ of the other rows, in every language.

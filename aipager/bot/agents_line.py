@@ -31,9 +31,11 @@ divider, the send, the bookkeeping and the edits live in ``notify`` and
 ``state``.
 
 What an agent is doing comes, in this order, from its own latest prose
-(Claude's text: never translated, shown as written), its latest tool as a
-translated phrase ("Reading state.py"), or its Agent call's description.
-An agent waiting for agents of its own says that instead. Agent types and
+(Claude's text: never translated, shown as written), its latest tool when
+that says something of its own ("Reading state.py", a command's own
+description), its Agent call's description (the task it was started
+with), or its latest tool's generic phrase ("Running a command"). An agent
+waiting for agents of its own says that instead. Agent types and
 tool names are names: never translated.
 """
 
@@ -201,7 +203,8 @@ PROMISE = Msg(
 #: matches the worktree", not a translated "running a command"): a tool that
 #: names a file, a pattern, a query or a site reads "<phrase> <argument>";
 #: a Bash, Agent or Task call shows its own description (Claude's words,
-#: never the command), else the phrase alone.
+#: never the command), else the phrase alone, which gives way to the
+#: agent's task (its Agent call's description) when it has one.
 _TOOL_PHRASES: dict[str, str] = {
     "Read": "Reading", "Write": "Writing", "Edit": "Editing", "MultiEdit": "Editing",
     "NotebookEdit": "Editing", "Grep": "Searching for", "Glob": "Searching for",
@@ -302,33 +305,42 @@ def _trim(text: str, limit: int) -> str:
     return cut.rstrip() + "…"
 
 
-def _tool_phrase(tool: str, arg: str) -> str | None:
-    """The agent's tool call as Claude Code would say it, in English."""
+def _tool_phrase(tool: str, arg: str) -> tuple[str, bool] | None:
+    """The agent's tool call as Claude Code would say it, in English, and
+    whether it says something of its own: True for a phrase with its
+    argument ("Reading state.py") or a Bash, Agent or Task call's own
+    description; False for the generic phrase alone ("Running a command",
+    "Using TodoWrite"). ``None`` when there is no tool."""
     if not tool:
         return None
     arg = reveal(arg or "")
     if tool in _DESCRIBED:
-        text = first_line(arg) or _TOOL_PHRASES[tool]
-        return _bs(text)
+        own = first_line(arg)
+        return _bs(own or _TOOL_PHRASES[tool]), bool(own)
     phrase = _TOOL_PHRASES.get(tool)
     arg = _cut(arg, ARG_MAX)
     if phrase is not None and arg:
-        return _bs(f"{phrase} {arg}")
-    return _bs(f"Using {_label(tool)}")
+        return _bs(f"{phrase} {arg}"), True
+    return _bs(f"Using {_label(tool)}"), False
 
 
 def _activity(row: AgentRow, tr):
-    """What the row says the agent is doing: its prose (a plain string,
-    escaped and isolated by ``tr``), its tool's phrase, its Agent call's
-    description, or ``None``."""
+    """What the row says the agent is doing, the first there is of: its
+    prose (a plain string, escaped and isolated by ``tr``), its tool's own
+    phrase, its Agent call's description (the task it was started with),
+    its tool's generic phrase, else ``None``. A generic phrase never hides
+    the task (operator, 2026-10-15: two agents of one type, each "Running
+    a command", could not be told apart)."""
     prose = first_line(row.prose)
     if prose:
         return _bs(prose)
     phrase = _tool_phrase(row.tool, row.tool_arg)
-    if phrase is not None:
-        return phrase
+    if phrase is not None and phrase[1]:
+        return phrase[0]
     desc = first_line(row.description)
-    return _bs(desc) if desc else None
+    if desc:
+        return _bs(desc)
+    return phrase[0] if phrase is not None else None
 
 
 # ---- the block --------------------------------------------------------------------
@@ -510,7 +522,10 @@ def _worst_rows(tr) -> int:
         rows = [AgentRow(agent, True, _WORST_CLOCK), AgentRow(agent, False),
                 AgentRow(agent, False, waiting=True),
                 AgentRow(agent, False, prose=wide * (ACTIVITY_MAX + 1)),
-                AgentRow(agent, False, tool=wide * LABEL_MAX)]
+                AgentRow(agent, False, tool=wide * LABEL_MAX),
+                # The task over a generic phrase: cut like prose, so as
+                # wide as the prose row; tried should the cuts ever differ.
+                AgentRow(agent, False, tool="Bash", description=wide * (ACTIVITY_MAX + 1))]
         rows += [AgentRow(agent, False, tool=tool, tool_arg=wide * (ARG_MAX + 1))
                  for tool in _TOOL_PHRASES]
         best = max(best, max(_size(footer(str(_row(row, tr, hint, item=item))))

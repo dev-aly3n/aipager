@@ -557,9 +557,12 @@ Results from the agents will follow here.
 - **One row per agent,** a 🤖 and its type in bold, then what it is
   doing now: its own latest line of text (Claude's words, shown as
   written, never translated), else its latest tool as a short phrase
-  (`Reading state.py`, `Writing final.md`, `Running a command`,
-  `Searching for …`), else the description Claude gave the agent when it
-  launched it, else just the type. An agent that has stopped to wait for
+  that names what it works on (`Reading state.py`, `Writing final.md`,
+  `Searching for …`, or a command's own description), else the task
+  Claude gave the agent when it launched it, else its latest tool alone
+  (`Running a command`, `Using TodoWrite`), else just the type. So two
+  agents of one type running commands without a description still show
+  their own tasks. An agent that has stopped to wait for
   agents it started itself says `‖ … waiting for its own agents`
   instead.
 - **Agents as a tree.** The agents the session started are the first
