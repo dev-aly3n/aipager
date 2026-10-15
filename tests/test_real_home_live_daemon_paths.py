@@ -48,6 +48,7 @@ def fake_home(tmp_path, monkeypatch, real_home_refusals_expected):
     monkeypatch.setattr(config, "REPORT_RUNNING_FILE", share / "running.json")
     monkeypatch.setattr(self_update, "UPDATE_LOCK_PATH", share / "update.lock")
     monkeypatch.setattr(self_update, "UPDATE_MARKER_PATH", share / "update-restart.json")
+    monkeypatch.setattr(self_update, "HOOK_NOTICES_PATH", share / "update-hook-notices.json")
     monkeypatch.setattr(preferences, "_PREFERENCES_PATH",
                         home / ".config" / "aipager" / "preferences.json")
     return home
@@ -71,6 +72,8 @@ WRITERS = {
     SHARE + "running.json": lambda: markers.write_running(service=False),
     SHARE + "update.lock": lambda: self_update.UpdateLock().try_acquire(),
     SHARE + "update-restart.json": lambda: self_update.write_marker({"to": "1.0"}),
+    SHARE + "update-hook-notices.json":
+        lambda: self_update.write_hook_notices([{"hook": "1.0"}]),
     PREFERENCES: lambda: preferences.set_preference(42, "layout", "merged"),
 }
 
@@ -152,6 +155,7 @@ def test_a_left_out_files_temporary_twin_is_left_out_too(tmp_path):
 DELETERS = {
     "running.json": markers.clear_running,
     "update-restart.json": self_update.clear_marker,
+    "update-hook-notices.json": lambda: self_update.write_hook_notices([]),
 }
 
 

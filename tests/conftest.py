@@ -318,6 +318,8 @@ def _isolate_home_paths(tmp_path, monkeypatch):
             home / ".local" / "share" / "aipager" / "update.lock",
         "aipager.self_update.UPDATE_MARKER_PATH":
             home / ".local" / "share" / "aipager" / "update-restart.json",
+        "aipager.self_update.HOOK_NOTICES_PATH":
+            home / ".local" / "share" / "aipager" / "update-hook-notices.json",
         # Wizard constants + every by-value re-import of them.
         "aipager.wizard._constants.CLAUDE_SETTINGS": settings,
         "aipager.wizard.settings_patch.CLAUDE_SETTINGS": settings,
@@ -484,6 +486,7 @@ LIVE_DAEMON_PATHS = (
     _SHARE / "running.json",         # report.markers.write_running
     _SHARE / "update.lock",          # self_update.UpdateLock
     _SHARE / "update-restart.json",  # self_update.write_marker
+    _SHARE / "update-hook-notices.json",  # self_update.write_hook_notices
 )
 
 

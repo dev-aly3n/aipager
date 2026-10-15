@@ -1382,6 +1382,7 @@
 {"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"other": "⏰ Sudah {n} menit, sesi masih bekerja. Tunggu {wait} menit lagi, mulai ulang sekarang, atau batal? Mulai ulang sekarang memutus semua yang ada di bawah, termasuk jawaban tertahan yang belum terkirim."}}
 {"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: menunggu semua sesi siap, lalu dimulai ulang."}
 {"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>Pembaruan</b>"}
+{"k": "upd.hooks.finished", "src": "7aa89c72", "v": "✅ Pembaruan aipager sudah selesai: aipager sekarang sudah menjalankan {version}."}
 {"k": "upd.hooks.newer", "src": "d8c34918", "v": "⚠️ Pembaruan aipager baru setengah jalan: hook Claude Code sudah menjalankan {hook}, tetapi aipager sendiri masih {running}. Mulai ulang aipager untuk menyelesaikannya."}
 {"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (terbaru)"}
 {"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}

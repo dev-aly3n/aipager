@@ -641,8 +641,11 @@ start` in a terminal or tmux, Docker, launchd) installs an update but
 keeps running the old code until it restarts. `/update` then says `aipager B is installed and
 waiting for a restart (running A).`, and Claude Code's hooks, which
 start fresh on every event, may already run B: the owner gets one notice
-that the update is only half done (once no turn is running in the
-owner's private chat). Tap **🔄 Restart now** (in the update
+that the update is only half done (two minutes after the hooks first ran
+B, so a restart that follows the install at once never shows it, and
+once no turn is running in the owner's private chat). Once aipager runs
+B, that notice turns into `✅ The aipager update is finished: aipager
+runs B now.`, without its button. Tap **🔄 Restart now** (in the update
 message, the notice, or the Mini App's **Settings → Updates**). aipager
 waits until no turn is running, stops cleanly and starts the new version
 in place: the same process in the same terminal, tmux window or

@@ -233,6 +233,13 @@ class Env:
         self.manager._lock.release()
 
 
+@pytest.fixture(autouse=True)
+def _no_hook_notice_grace(monkeypatch):
+    """The hooks notice tests here send at once; the grace before the
+    first notice has its own tests (test_hook_notice_finished.py)."""
+    monkeypatch.setattr(update_flow, "HOOK_NOTICE_GRACE_SECONDS", 0.0)
+
+
 @pytest.fixture
 def env(monkeypatch, tmp_path, mk_bot):
     return Env(monkeypatch, tmp_path, mk_bot)

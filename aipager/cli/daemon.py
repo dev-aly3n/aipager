@@ -389,6 +389,10 @@ async def _run_daemon(bot_username: str) -> None:
     from aipager.bot import update_flow
     marker_task = asyncio.create_task(
         update_flow.deliver_update_marker(bot, registry))
+    # And the owner's "update is only half done" notices an older daemon
+    # sent: those for a version this one runs become "finished" (edits
+    # only, never a new message).
+    hook_notices_task = asyncio.create_task(update_flow.finish_hook_notices(bot))
 
     # Mini App server — newest and highest-risk component, so it starts
     # last and (below) stops first. Behind a lazy import to keep
@@ -497,6 +501,7 @@ async def _run_daemon(bot_username: str) -> None:
         # before this was tracked and cancelled.
         keyboard_release_task.cancel()
         marker_task.cancel()
+        hook_notices_task.cancel()
         # Before bot.stop(): a running self-update gets a short grace, then its
         # installer's process group is killed (it would otherwise outlive us
         # under KillMode=process and write the venv while the next daemon

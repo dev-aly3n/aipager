@@ -816,8 +816,12 @@ a newer aipager is installed and waiting, and on a one-time notice: when
 Claude Code's hooks (which start fresh on every event, from the
 installed aipager) already run a newer aipager than the daemon, the owner
 gets one silent message per newer version and daemon run, `⚠️ The
-aipager update is only half done: …`, with the button. It waits until no
-turn is running in the owner's private chat. In the Mini App,
+aipager update is only half done: …`, with the button. It waits two
+minutes from when the hooks first ran the newer version (a restart right
+after an install never shows it), then until no turn is running in the
+owner's private chat. After the restart into that version, the notice is
+edited into `✅ The aipager update is finished: aipager runs B now.`,
+without the button. In the Mini App,
 **Settings → Updates** shows the same state as a line above the card,
 with **Restart now** (it asks first).
 
