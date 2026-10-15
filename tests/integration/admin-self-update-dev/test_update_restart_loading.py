@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import time
+
+import pytest
 from unittest.mock import AsyncMock
 
 from telegram.error import BadRequest
@@ -290,12 +292,17 @@ def test_get_update_carries_the_restart_outcome(env, run, monkeypatch):
     assert body["restarted"]["readopted"] == 2
 
 
-def test_quick_tunnel_url_changes_on_restart(env, run, monkeypatch):
+@pytest.mark.parametrize("keep,changes", [(True, False), (False, True)],
+                         ids=["tunnel-kept", "tunnel-not-kept"])
+def test_quick_tunnel_url_changes_on_restart(env, run, monkeypatch, keep, changes):
+    """A restart that keeps the tunnel keeps the address: the open page
+    waits for the new daemon instead of saying "reopen the app"."""
     from aipager.miniapp import tunnel
 
     monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    monkeypatch.setattr("aipager.config.MINIAPP_KEEP_TUNNEL", keep)
     monkeypatch.setattr(tunnel, "_managed_tunnel_url", "https://a-b-c.trycloudflare.com")
-    assert _get_update(env, run, monkeypatch)["url_changes_on_restart"] is True
+    assert _get_update(env, run, monkeypatch)["url_changes_on_restart"] is changes
 
 
 def test_a_configured_public_url_is_stable(env, run, monkeypatch):

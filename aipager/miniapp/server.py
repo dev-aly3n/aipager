@@ -1408,9 +1408,14 @@ class MiniAppServer:
             # Set in the daemon an update restarted into (8.45).
             "restarted": manager.last_restart,
             # A managed quick tunnel gets a new hostname every run, so a
-            # page open across the restart can never reach the new daemon.
+            # page open across the restart can never reach the new daemon:
+            # unless the restart keeps the tunnel (MINIAPP_KEEP_TUNNEL), when
+            # the page waits for the new daemon on the same address. If the
+            # keep fails after all, the wait ends on "reopen the app in a
+            # moment", still the right advice.
             "url_changes_on_restart": (not config.MINIAPP_PUBLIC_URL
-                                       and bool(get_managed_tunnel_url())),
+                                       and bool(get_managed_tunnel_url())
+                                       and not config.MINIAPP_KEEP_TUNNEL),
             # A newer aipager installed and waiting for a restart, or hooks
             # already running newer code (no lookup): the Restart now banner.
             "waiting": manager.waiting_info(),

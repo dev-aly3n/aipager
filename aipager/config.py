@@ -212,6 +212,35 @@ TUNNEL_KILL_TIMEOUT_SECONDS: float = float(
     os.environ.get("TUNNEL_KILL_TIMEOUT_SECONDS", "3.0")
 )
 
+# A planned restart (an update's, Restart now, the in-place exec) keeps
+# the managed tunnel running so its address survives and the next daemon
+# adopts it (tunnel_manager's "keeping the address"). 0 turns that off:
+# every stop kills the tunnel, as before 1.3.2.
+MINIAPP_KEEP_TUNNEL: bool = (os.environ.get("MINIAPP_KEEP_TUNNEL", "1").strip().lower()
+                              not in ("0", "false", "no", "off"))
+
+# How long a kept tunnel waits for a new daemon to take it over before
+# its guard kills it (a restart that failed, a downgrade, an operator's
+# stop while a restart was scheduled).
+TUNNEL_HANDOVER_SECONDS: float = float(
+    os.environ.get("TUNNEL_HANDOVER_SECONDS", "180")
+)
+
+# How often the tunnel this daemon holds (spawned or adopted after a
+# restart) is checked for being alive.
+TUNNEL_CHECK_SECONDS: float = float(
+    os.environ.get("TUNNEL_CHECK_SECONDS", "5")
+)
+
+# Which cloudflared process the daemon holds, for the next daemon to
+# adopt or clean up: its pid, its local metrics port, a hash of its
+# hostname (never the address itself), the port it forwards to. Runtime
+# state beside the session file, not configuration.
+#
+# TESTS: redirected into tmp_path by `tests/conftest.py::_isolate_home_paths`,
+# and read LATE by aipager.miniapp.tunnel_manager (never imported by value).
+TUNNEL_STATE_FILE = Path.home() / ".claude" / "aipager-tunnel.json"
+
 def _default_socket_path() -> str:
     """Resolve the control socket path.
 

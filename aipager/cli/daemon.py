@@ -438,9 +438,14 @@ async def _run_daemon(bot_username: str) -> None:
     # runs with whatever resolve_public_url() returned earlier — "" —
     # and the button is simply absent until the tunnel's first URL
     # republishes it a few seconds later.
-    await bot.publish_miniapp_button(
-        miniapp_url if miniapp_server is not None else "",
-    )
+    #
+    # Except when a planned restart kept the tunnel: then the tunnel's own
+    # first answer (the same address, or none) goes out instead, so the
+    # button is never cleared and set again, and a clear here can never
+    # land after the kept address.
+    startup_url = miniapp_url if miniapp_server is not None else ""
+    if manager is None or startup_url or not _tunnel_kept():
+        await bot.publish_miniapp_button(startup_url)
 
     # Backstop for the held keyboard: if no tunnel URL has arrived by
     # now, send it anyway. A Mini App that never comes up must cost the
@@ -501,8 +506,9 @@ async def _run_daemon(bot_username: str) -> None:
         if manager is not None:
             # Before miniapp_server.stop(): stop accepting the world's
             # traffic (terminate the tunnel that publishes it) before
-            # stopping what serves it.
-            await manager.stop()
+            # stopping what serves it. A planned restart keeps the tunnel
+            # instead, for the next daemon to adopt: same address.
+            await manager.stop(keep=_restart_planned(bot))
         if miniapp_server is not None:
             await miniapp_server.stop()
         session_monitor.stop()
@@ -516,6 +522,28 @@ async def _run_daemon(bot_username: str) -> None:
     finally:
         # No restart can be asked for once the stop has run.
         self_restart.detach()
+
+
+def _tunnel_kept() -> bool:
+    from aipager.miniapp.tunnel_manager import has_kept_tunnel
+    return has_kept_tunnel()
+
+
+def _restart_planned(bot) -> bool:
+    """Whether this stop is a planned restart: the in-place restart is
+    pending, or an update scheduled the service manager's restart (whose
+    SIGTERM is this stop). A real stop (Ctrl+C, docker stop) cancels an
+    in-place one (``_on_stop_signal``), so it is never planned. Never
+    raises."""
+    from aipager import self_restart
+
+    try:
+        if self_restart.pending():
+            return True
+        updates = getattr(bot, "updates", None)
+        return getattr(updates, "service_restart_pending", False) is True
+    except Exception:
+        return False
 
 
 # Slack on top of update_flow.SHUTDOWN_DEADLINE_SECONDS: the updates'

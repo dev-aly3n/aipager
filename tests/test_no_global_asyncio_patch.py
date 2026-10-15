@@ -274,7 +274,6 @@ def test_every_seam_defaults_to_the_real_asyncio_function():
     from aipager.bot import animation, auth, callbacks, handlers, session_ops
     from aipager.cli import daemon
     from aipager.dtach import inject
-    from aipager.miniapp import tunnel_manager
     from aipager import session_monitor
 
     assert session_ops._sleep is asyncio.sleep
@@ -286,7 +285,6 @@ def test_every_seam_defaults_to_the_real_asyncio_function():
     assert inject._key_gap_sleep is asyncio.sleep
     assert inject._create_subprocess_exec is asyncio.create_subprocess_exec
     assert handlers._create_subprocess_exec is asyncio.create_subprocess_exec
-    assert tunnel_manager._create_subprocess_exec is asyncio.create_subprocess_exec
     assert daemon._new_stop_event is asyncio.Event
 
 

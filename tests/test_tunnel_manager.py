@@ -1,9 +1,10 @@
 """Tests for aipager.miniapp.tunnel_manager — spawn_and_discover_url,
 _backoff_seconds, and the TunnelManager supervision loop.
 
-No test here spawns a real subprocess: tunnel_manager's spawn seam
-`_create_subprocess_exec` is always monkeypatched to a fake (never the
-global `asyncio.create_subprocess_exec`, which that seam does not read). TunnelManager tests additionally
+No test here spawns a real subprocess: the spawn tests run against
+tests/tunnel_fakes.py's process table, which replaces every seam the
+tunnel code spawns, probes or signals through (``self_restart._popen``
+and ``_kill`` among them, both refused by default). TunnelManager tests additionally
 patch `ensure_cloudflared` to a fixed AsyncMock so the restart loop
 never touches the real cloudflared_fetch download path (that module has
 its own test file) — the one thing under test here is TunnelManager's
@@ -14,9 +15,13 @@ documented `spawn_and_discover_url` seam.
 from __future__ import annotations
 
 import asyncio
+import signal
+import subprocess
 from unittest.mock import AsyncMock
 
 import pytest
+
+from tests import tunnel_fakes
 
 from aipager.miniapp import cloudflared_fetch
 from aipager.miniapp import tunnel as tunnel_mod
@@ -28,7 +33,8 @@ from aipager.miniapp import tunnel_manager as tm
 # ===========================================================================
 
 class _FakeStderr:
-    """Feeds canned lines, then EOF (b"")."""
+    """Feeds canned lines, then EOF (b""). Only a shape the fake
+    processes below carry; nothing reads it any more."""
 
     def __init__(self, lines: list[bytes]):
         self._lines = list(lines)
@@ -37,14 +43,6 @@ class _FakeStderr:
         if self._lines:
             return self._lines.pop(0)
         return b""
-
-
-class _HangingStderr:
-    """Never yields a line — simulates a wedged discovery read."""
-
-    async def readline(self) -> bytes:
-        await asyncio.Event().wait()
-        raise AssertionError("unreachable")  # pragma: no cover
 
 
 class _FakeProcess:
@@ -78,46 +76,6 @@ class _FakeProcess:
         self.die(-9)
 
 
-def _fake_exec_returning(proc: _FakeProcess, captured: dict | None = None):
-    async def _exec(*args, **kwargs):
-        if captured is not None:
-            captured["args"] = args
-            captured["kwargs"] = kwargs
-        return proc
-    return _exec
-
-
-def _run_and_drain(coro):
-    """Like the shared `run_async` fixture, but also cancels and closes
-    out any task still pending when the coroutine finishes, then closes
-    the loop.
-
-    A successful `spawn_and_discover_url()` schedules a background
-    `_drain_stderr` task via `asyncio.create_task` and returns
-    immediately — it never awaits that task itself (by design: draining
-    stderr is a whole-process-lifetime concern, not part of discovery).
-    `run_async`'s plain `run_until_complete` stops the loop the instant
-    the awaited coroutine resolves, before the scheduled task ever gets
-    a turn to run, and never closes the loop either — left like that,
-    the loop is garbage-collected later (mid some unrelated test, since
-    GC timing isn't deterministic) still holding a pending task, which
-    surfaces as a `BaseEventLoop.__del__` unraisable-exception warning
-    attributed to whatever test happened to be running at the time.
-    Only needed for tests that reach a successful discovery.
-    """
-    loop = asyncio.new_event_loop()
-    try:
-        result = loop.run_until_complete(coro)
-        pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
-        for t in pending:
-            t.cancel()
-        if pending:
-            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-        return result
-    finally:
-        loop.close()
-
-
 # ===========================================================================
 # _backoff_seconds — pure
 # ===========================================================================
@@ -149,38 +107,35 @@ def test_backoff_seconds_respects_a_different_base_and_cap(monkeypatch):
 # spawn_and_discover_url
 # ===========================================================================
 
-def test_finds_the_url_inside_the_real_box_art_banner(monkeypatch):
-    """The real cloudflared banner is NOT a bare URL — see design.md's
-    ORCHESTRATOR VERIFICATION. A line-equality or startswith match would
-    fail this; only the regex-search approach passes it."""
-    banner = (
-        b"2026-08-18T18:59:25Z INF |  "
-        b"https://yes-consolidation-math-shorter.trycloudflare.com   |\n"
-    )
-    proc = _FakeProcess([
-        b"2026-08-18T18:59:18Z INF Requesting new quick Tunnel on trycloudflare.com...\n",
-        banner,
-    ])
-    captured: dict = {}
-    monkeypatch.setattr(tm, "_create_subprocess_exec",
-                        _fake_exec_returning(proc, captured))
+def test_spawns_cloudflared_detached_and_reads_its_url_from_the_metrics(monkeypatch, run_async):
+    """Detached: its own session, no death signal, no pipe (a Go program
+    exits on SIGPIPE writing to a pipe a restart closed), its metrics
+    server on a free local port, and the address read from that server's
+    /quicktunnel, never from the process's output."""
+    table = tunnel_fakes.install(monkeypatch)
+    table.hosts[40001] = '{"hostname":"yes-consolidation-math-shorter.trycloudflare.com"}'
 
-    result_proc, url = _run_and_drain(tm.spawn_and_discover_url("/fake/cloudflared", 8765))
+    tunnel, url = run_async(tm.spawn_and_discover_url("/fake/cloudflared", 8765))
 
     assert url == "https://yes-consolidation-math-shorter.trycloudflare.com"
-    assert result_proc is proc
-    assert captured["args"] == (
-        "/fake/cloudflared", "tunnel", "--url", "http://127.0.0.1:8765",
-        "--no-autoupdate",
-    )
-    assert captured["kwargs"]["stdout"] == asyncio.subprocess.DEVNULL
-    assert captured["kwargs"]["stderr"] == asyncio.subprocess.PIPE
+    assert isinstance(tunnel, tm.Tunnel) and tunnel.pid == 4000
+    assert tunnel.metrics_port == 40001 and tunnel.host == url[len("https://"):]
+    [(argv, kwargs)] = table.spawns
+    assert argv[:9] == table.tunnel_argv()
+    assert argv[9] == "--logfile" and argv[10].endswith("aipager-cloudflared.log")
+    assert kwargs["start_new_session"] is True
+    assert "preexec_fn" not in kwargs
+    for stream in ("stdin", "stdout", "stderr"):
+        assert kwargs[stream] == subprocess.DEVNULL
 
 
 def test_raises_when_the_process_exits_before_a_url_appears(monkeypatch, run_async):
-    proc = _FakeProcess([b"some unrelated log line\n"])  # then EOF, no URL
-    monkeypatch.setattr(tm, "_create_subprocess_exec",
-                        _fake_exec_returning(proc))
+    table = tunnel_fakes.install(monkeypatch)
+
+    async def _gone_first(port, path):
+        table.alive.discard(4000)
+        return None
+    monkeypatch.setattr(tm, "_query_metrics", _gone_first)
 
     with pytest.raises(tm.TunnelLaunchError):
         run_async(tm.spawn_and_discover_url("/fake/cloudflared", 8765))
@@ -188,20 +143,30 @@ def test_raises_when_the_process_exits_before_a_url_appears(monkeypatch, run_asy
 
 def test_kills_and_raises_on_discovery_timeout(monkeypatch, run_async):
     monkeypatch.setattr("aipager.config.TUNNEL_URL_DISCOVERY_TIMEOUT_SECONDS", 0.02)
-    proc = _FakeProcess()
-    proc.stderr = _HangingStderr()
-    monkeypatch.setattr(tm, "_create_subprocess_exec",
-                        _fake_exec_returning(proc))
+    table = tunnel_fakes.install(monkeypatch)
+    table.hosts[40001] = '{"hostname":""}'            # still negotiating
 
     with pytest.raises(tm.TunnelLaunchError):
         run_async(tm.spawn_and_discover_url("/fake/cloudflared", 8765))
-    assert proc.killed is True
+    assert (4000, signal.SIGKILL) in table.signals
+    assert 4000 not in table.alive
+
+
+@pytest.mark.parametrize("host", [
+    "evil.example.com", "words.trycloudflare.com.evil.example", "evil/words.trycloudflare.com",
+], ids=["other-site", "lookalike-suffix", "lookalike-path"])
+def test_an_address_that_is_not_a_quick_tunnel_is_never_taken(monkeypatch, run_async, host):
+    monkeypatch.setattr("aipager.config.TUNNEL_URL_DISCOVERY_TIMEOUT_SECONDS", 0.02)
+    table = tunnel_fakes.install(monkeypatch)
+    table.hosts[40001] = '{"hostname":"%s"}' % host
+
+    with pytest.raises(tm.TunnelLaunchError):
+        run_async(tm.spawn_and_discover_url("/fake/cloudflared", 8765))
 
 
 def test_wraps_a_spawn_oserror(monkeypatch, run_async):
-    async def _raise(*a, **k):
-        raise OSError("no such file or directory")
-    monkeypatch.setattr(tm, "_create_subprocess_exec", _raise)
+    table = tunnel_fakes.install(monkeypatch)
+    table.spawn_error = OSError("no such file or directory")
 
     with pytest.raises(tm.TunnelLaunchError):
         run_async(tm.spawn_and_discover_url("/fake/cloudflared", 8765))
@@ -379,13 +344,11 @@ def test_gives_up_after_exactly_the_ceiling_and_never_calls_the_seam_again(
     run_async(_scenario())
 
     assert calls["n"] == 3
-    # Every attempt failed before ever discovering a URL, so the
-    # manager's "" -> "" transition is never a REAL change —
-    # on_url_change is correctly never called at all here (design.md:
-    # it fires only when the discovered URL differs from the previous
-    # one). "publishes no button" means exactly this: no publish call,
-    # not a redundant empty one.
-    assert published == []
+    # Every attempt failed before ever discovering a URL. The manager's
+    # first answer always goes out once (the daemon leaves the startup
+    # clear to it, so a button the last run left is removed), and after
+    # that only real changes: one "" publish, not one per attempt.
+    assert published == [""]
     messages = [r.getMessage() for r in caplog.records]
     assert any("cloudflared" in m and "giving up" in m for m in messages)
 
@@ -519,42 +482,19 @@ def test_cancelling_during_discovery_kills_the_child(run_async, monkeypatch):
     """The window between spawning cloudflared and discovering its URL is
     ~7-20 seconds in reality, and it happens on every spawn AND every
     restart. If the supervision task is cancelled in that window,
-    CancelledError — a BaseException, not an Exception — bypasses the
+    CancelledError (a BaseException, not an Exception) bypasses the
     TimeoutError/TunnelLaunchError handler, and TunnelManager._proc has
     not been assigned yet, so stop() has no handle to terminate.
 
     Without the fix that leaks a live cloudflared holding a PUBLIC tunnel
     open past daemon shutdown.
     """
-    import asyncio
-
-    from aipager.miniapp import tunnel_manager as tm
-
-    killed = []
-
-    class _FakeProc:
-        returncode = None
-        def kill(self):
-            killed.append(True)
-        def terminate(self):
-            pass
-        async def wait(self):
-            return 0
-
-    fake = _FakeProc()
-
-    async def _never_yields_a_url(*_a, **_k):
-        # stderr that stays silent — exactly a tunnel still negotiating.
-        await asyncio.sleep(3600)
-
-    monkeypatch.setattr(tm, "_create_subprocess_exec",
-                        _make_spawn_returning(fake), raising=False)
+    table = tunnel_fakes.install(monkeypatch)
+    table.hosts[40001] = '{"hostname":""}'            # never yields a URL
 
     async def _run():
-        # Drive the REAL spawn_and_discover_url, then cancel it mid-wait.
-        task = asyncio.create_task(tm.spawn_and_discover_url("/nonexistent/cloudflared", 8765))
-        await asyncio.sleep(0)          # let it reach the discovery wait
-        await asyncio.sleep(0)
+        task = asyncio.create_task(tm.spawn_and_discover_url("/fake/cloudflared", 8765))
+        await asyncio.sleep(0.01)                     # inside the discovery wait
         task.cancel()
         try:
             await task
@@ -562,16 +502,4 @@ def test_cancelling_during_discovery_kills_the_child(run_async, monkeypatch):
             pass
 
     run_async(_run())
-    assert killed, "cancelled mid-discovery without killing the child — tunnel leaked"
-
-
-def _make_spawn_returning(proc):
-    async def _spawn(*_a, **_k):
-        class _Stderr:
-            async def readline(self):
-                import asyncio as _a2
-                await _a2.sleep(3600)   # never yields a URL
-                return b""
-        proc.stderr = _Stderr()
-        return proc
-    return _spawn
+    assert (4000, signal.SIGKILL) in table.signals, "cancelled mid-discovery: tunnel leaked"

@@ -1026,6 +1026,14 @@ class UpdateManager:
         return self._job is not None and self._job.phase == "restart_scheduled"
 
     @property
+    def service_restart_pending(self) -> bool:
+        """The service manager's restart (systemd) is scheduled: the SIGTERM
+        that ends this daemon is that restart, not an operator's stop. An
+        in-place restart is ``self_restart.pending()`` instead, which a real
+        stop signal cancels."""
+        return self.restart_pending and bool(self._job.restart_unit)
+
+    @property
     def shutting_down(self) -> bool:
         return self._shutting_down
 

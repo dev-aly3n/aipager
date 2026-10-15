@@ -13,7 +13,8 @@ to fake a seam here must fail LOUDLY, not silently spawn a real
 2. Every subprocess spawn is patched to raise by default
    (``tests.conftest.forbid_every_spawn``: the global
    ``asyncio.create_subprocess_exec`` and each module's
-   ``_create_subprocess_exec`` seam, tunnel_manager's included). Every
+   ``_create_subprocess_exec`` seam; tunnel_manager itself spawns
+   through ``self_restart._popen``, which the root conftest refuses). Every
    test that wants a "spawn" must fake
    ``aipager.miniapp.tunnel_manager.spawn_and_discover_url`` itself (the
    documented seam) — nothing in this package should ever reach a real
@@ -239,8 +240,8 @@ def leak_guard(tmp_path, monkeypatch):
             "it explicitly in the test if this call is expected"
         )
 
-    # Global AND module seams: tunnel_manager spawns through its own
-    # ``_create_subprocess_exec``, which a global patch alone never reaches.
+    # Global AND module seams. tunnel_manager spawns cloudflared through
+    # ``self_restart._popen``, which the root conftest already refuses.
     forbid_every_spawn(monkeypatch, _raise_subprocess)
     monkeypatch.setattr(urllib.request, "urlopen", _raise_urlopen)
 

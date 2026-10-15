@@ -268,6 +268,9 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         # `_guard_real_home` deliberately excludes ~/.claude/ from its
         # snapshot, so nothing else would catch it.
         "aipager.config.FLOOD_STATE_FILE": flood_state_json,
+        # The managed tunnel's record, beside the session file, read LATE
+        # by aipager.miniapp.tunnel_manager.
+        "aipager.config.TUNNEL_STATE_FILE": claude / "aipager-tunnel.json",
         # Problem reports (8.112): read LATE by aipager.report.store and
         # .markers, so one entry each covers every reader.
         "aipager.config.REPORTS_FILE": home / ".local" / "state" / "aipager" / "reports.json",
@@ -1303,7 +1306,6 @@ def steady_clock(monkeypatch):
 SPAWN_SEAMS = (
     "aipager.bot.handlers._create_subprocess_exec",
     "aipager.dtach.inject._create_subprocess_exec",
-    "aipager.miniapp.tunnel_manager._create_subprocess_exec",
 )
 
 
