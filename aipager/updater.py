@@ -142,6 +142,9 @@ def cmd_update(_args=None) -> int:
 _USER_PATHS_TO_REMOVE = [
     Path.home() / ".config" / "aipager",
     Path.home() / ".claude" / "aipager-sessions.json",
+    # The Mini App tunnel's record and log (aipager.miniapp.tunnel_manager).
+    Path.home() / ".claude" / "aipager-tunnel.json",
+    Path.home() / ".claude" / "aipager-cloudflared.log",
 ]
 
 _MACOS_PATHS_TO_REMOVE = [
@@ -366,6 +369,10 @@ def cmd_uninstall(args=None) -> int:
 
     # 1. Stop daemon
     _stop_daemon()
+    # 1b. A Mini App tunnel a restart kept, or a crash left, for the next
+    # daemon: there is none now (its record and log are in the list above).
+    from aipager.miniapp.tunnel_manager import kill_recorded_tunnel
+    kill_recorded_tunnel()
 
     # 2. Remove user state
     for p in _USER_PATHS_TO_REMOVE:

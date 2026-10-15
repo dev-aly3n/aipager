@@ -518,6 +518,29 @@ def test_run_daemon_constructs_and_starts_the_tunnel_manager_with_no_override(
     assert on_url_change == bot.publish_miniapp_button
     manager.start.assert_awaited_once()
     manager.stop.assert_awaited_once()
+    # No kept tunnel: the button a previous run left is cleared at once.
+    bot.publish_miniapp_button.assert_awaited_once_with("")
+
+
+def test_run_daemon_leaves_a_kept_tunnels_button_to_the_tunnel(monkeypatch):
+    """After a planned restart kept the tunnel, no startup clear: the
+    tunnel's own first answer (the same address) goes out instead, so the
+    button is never cleared and set again, and a clear can never land
+    after the kept address."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    bot, _hook, _monitor, _registry, _miniapp = _patch_components(
+        monkeypatch, with_miniapp=True,
+    )
+    monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    _patch_tunnel_manager_class(monkeypatch)
+    monkeypatch.setattr(daemon, "_tunnel_kept", lambda: True)
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+    loop.close()
+
+    bot.publish_miniapp_button.assert_not_awaited()
 
 
 def test_run_daemon_never_constructs_a_tunnel_manager_when_url_is_overridden(
@@ -588,7 +611,7 @@ def test_run_daemon_stops_the_tunnel_manager_before_the_miniapp_server(
     _calls, manager = _patch_tunnel_manager_class(monkeypatch)
 
     order = []
-    manager.stop = AsyncMock(side_effect=lambda: order.append("manager.stop"))
+    manager.stop = AsyncMock(side_effect=lambda **kw: order.append("manager.stop"))
     miniapp.stop = AsyncMock(side_effect=lambda: order.append("miniapp.stop"))
     monitor.stop.side_effect = lambda: order.append("monitor.stop")
 
@@ -598,6 +621,38 @@ def test_run_daemon_stops_the_tunnel_manager_before_the_miniapp_server(
 
     assert order.index("manager.stop") < order.index("miniapp.stop")
     assert order.index("miniapp.stop") < order.index("monitor.stop")
+
+
+@pytest.mark.parametrize("planned,keep", [
+    ("plain-stop", False), ("in-place-restart", True), ("update-restart", True),
+    ("in-place-update-stopped", False),
+], ids=["plain-stop", "in-place-restart", "update-restart", "in-place-update-stopped"])
+def test_run_daemon_keeps_the_tunnel_only_for_a_planned_restart(monkeypatch, planned, keep):
+    """A planned restart (the in-place exec pending, or an update's
+    scheduled restart) keeps the tunnel for the next daemon; any other
+    stop kills it. A MagicMock's truthy attribute is not a plan."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    bot, _hook, _monitor, _registry, _miniapp = _patch_components(
+        monkeypatch, with_miniapp=True,
+    )
+    monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    _calls, manager = _patch_tunnel_manager_class(monkeypatch)
+    if planned == "in-place-restart":
+        monkeypatch.setattr("aipager.self_restart.pending", lambda: True)
+    elif planned == "update-restart":
+        bot.updates.service_restart_pending = True
+    elif planned == "in-place-update-stopped":
+        # An update's in-place restart, then Ctrl+C: the signal cancelled
+        # self_restart, and the job's restart is not the service's.
+        bot.updates.restart_pending = True
+        bot.updates.service_restart_pending = False
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+    loop.close()
+
+    manager.stop.assert_awaited_once_with(keep=keep)
 
 
 # ---- a still-set OBSERVER_BOTS (observer bots were removed) ----------------

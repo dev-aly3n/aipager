@@ -27,8 +27,10 @@ _TAILSCALE_TIMEOUT_SECONDS = 3
 
 # The managed tunnel's current URL, if any. In-memory only — never
 # written to aipager.yaml, config.env, or anywhere under
-# ~/.config/aipager/, so a restarting daemon always re-discovers a
-# fresh hostname rather than advertising a stale one. The ONLY writer
+# ~/.config/aipager/, so a restarting daemon never advertises a stale
+# hostname: it re-discovers the address from the tunnel itself (a fresh
+# one, or the one a planned restart kept, whose record holds only a hash
+# of the hostname; see tunnel_manager). The ONLY writer
 # is aipager.miniapp.tunnel_manager.TunnelManager; this module just
 # holds the answer, keeping "URL resolution" (here) separate from
 # "process management" (tunnel_manager.py).

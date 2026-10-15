@@ -713,9 +713,24 @@ check is the actual gate. Treat it the way you'd treat any other
 unlisted-but-not-secret URL: fine to leave running, not something to
 paste into a public channel for no reason.
 
-The hostname changes on every daemon restart and is held only in
-memory - it is never written to `aipager.yaml` or anywhere under
-`~/.config/aipager/`. If the tunnel dies mid-run,
+The hostname is held only in memory - it is never written to
+`aipager.yaml` or anywhere under `~/.config/aipager/`. A planned
+restart (an update's restart, **Restart now**, the in-place restart
+without a service) keeps the tunnel running, so the address, the menu
+button and an open Mini App keep working: the next daemon takes it over
+only after checking that it is the same boot, the same port, that the
+process is that `cloudflared` (its command line), that it still reports
+the same address (`~/.claude/aipager-tunnel.json` keeps a hash of it,
+never the address) and that the address answers. Anything else stops it
+and starts a new one, and a kept tunnel no daemon takes over within 3
+minutes is stopped by a small guard process. Any other stop (Ctrl+C,
+`docker stop`, `systemctl stop`) stops the tunnel, and a reboot or a
+container restart gives a new address. `MINIAPP_KEEP_TUNNEL=0` turns
+keeping off. If aipager is killed outright (out of memory, `kill -9`),
+the tunnel keeps running until aipager starts again with the managed
+tunnel on (the Mini App enabled, no `MINIAPP_PUBLIC_URL`) and takes it
+over or stops it, or until the machine reboots; `aipager uninstall`
+stops it too. If the tunnel dies mid-run,
 aipager restarts it with backoff and republishes the new address; if
 it cannot come back up after several attempts, the button is removed
 rather than left pointing at a dead port (see [Network

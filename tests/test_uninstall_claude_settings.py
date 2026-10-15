@@ -568,3 +568,16 @@ def test_a_copy_is_never_written_into_a_file_already_there(tmp_path):
     with pytest.raises(FileExistsError):
         settings_patch._write_with_mode(taken, "new", 0o600)
     assert taken.read_text() == "someone else's"
+
+
+def test_uninstall_stops_a_mini_app_tunnel_a_restart_kept(at_opt, monkeypatch, capsys):
+    """A tunnel a planned restart kept (or a crash left) for the next
+    daemon has no next daemon after an uninstall: it is stopped after the
+    daemon, and its record goes."""
+    from aipager.miniapp import tunnel_manager
+
+    events = []
+    monkeypatch.setattr(tunnel_manager, "kill_recorded_tunnel",
+                        lambda: events.append("tunnel stopped") or True)
+    _uninstall(monkeypatch, capsys, events=events)
+    assert events == ["daemon stopped", "tunnel stopped"]

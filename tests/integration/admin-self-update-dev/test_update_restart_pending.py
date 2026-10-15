@@ -184,3 +184,16 @@ def test_a_finished_jobs_release_cannot_free_a_later_jobs_lock(env, run):
         env.upgrade_release.set()
         await env.finish()
     run(scenario)
+
+
+def test_only_a_scheduled_service_restart_is_the_services(env, run):
+    """The daemon keeps its Mini App tunnel through the SIGTERM of a
+    restart the service manager was asked for; an in-place restart's job
+    (no restart unit) is not that, so a Ctrl+C during it is a real stop."""
+    async def scenario():
+        await _scheduled(env)
+        assert env.manager.service_restart_pending is True
+        env.manager._job.restart_unit = None        # an in-place restart's job
+        assert env.manager.restart_pending is True
+        assert env.manager.service_restart_pending is False
+    run(scenario)

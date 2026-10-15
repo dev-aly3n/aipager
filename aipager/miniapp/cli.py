@@ -197,7 +197,8 @@ def _cmd_miniapp_enable(args: argparse.Namespace) -> int:
             "[muted]    That address is not secret and is not meant to "
             "be: every request is verified against Telegram's initData "
             "signature, not by the URL being hard to guess. The hostname "
-            "changes on every restart and is never written to config - "
+            "stays through an update's restart, changes on any other "
+            "restart, and is never written to config - "
             "if Tailscale is set up, it is used as the fallback while "
             "the tunnel comes up.[/muted]"
         )
