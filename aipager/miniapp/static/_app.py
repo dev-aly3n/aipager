@@ -3132,6 +3132,11 @@ APP_JS = r"""
   var RESTART_POLL_MAX_MS = 8000;
   // Polls, after the new version answered, to wait for its re-adopted count.
   var RESTART_COUNT_POLLS = 3;
+  // One poll's limit. A fetch to a quick tunnel's dead hostname can hang
+  // rather than fail (a phone's WebView, 2026-10-15): past this the poll
+  // counts as "down", whether or not the fetch ever settles. (Without
+  // AbortController a timed-out fetch is left to hang; it is ignored.)
+  var RESTART_POLL_TIMEOUT_MS = 6000;
   var restartWatch = null;
 
   function beginRestartWatch(job, data) {
@@ -3143,13 +3148,35 @@ APP_JS = r"""
       from: String(inst.from || (data && data.version) || ""),
       urlChanges: !!(data && data.url_changes_on_restart),
       startedAt: Date.now(), delay: RESTART_POLL_FIRST_MS, timer: null,
-      state: "restarting", version: "", restarted: null, countPolls: 0, downs: 0
+      state: "restarting", version: "", restarted: null, countPolls: 0, downs: 0,
+      done: false, watchdog: null, pollTimer: null, ctl: null
     };
-    scheduleRestartPoll(restartWatch);
+    var w = restartWatch;
+    // The give-up, on its own clock: it ends the watch on time even while
+    // a poll never settles.
+    w.watchdog = setTimeout(function () {
+      w.watchdog = null;
+      if (restartWatch !== w || w.done) { return; }
+      restartGiveUp(w);
+    }, RESTART_GIVE_UP_MS);
+    scheduleRestartPoll(w);
+  }
+
+  function restartGiveUp(w) {
+    endRestartWatch(w, w.state === "updated" ? "updated" : (w.urlChanges ? "reopen" : "slow"));
+  }
+
+  // Cancels every timer of the watch and the poll in flight.
+  function clearRestartTimers(w) {
+    if (w.timer) { clearTimeout(w.timer); }
+    if (w.watchdog) { clearTimeout(w.watchdog); }
+    if (w.pollTimer) { clearTimeout(w.pollTimer); }
+    if (w.ctl) { try { w.ctl.abort(); } catch (e) { /* gone */ } }
+    w.timer = w.watchdog = w.pollTimer = w.ctl = null;
   }
 
   function stopRestartWatch() {
-    if (restartWatch && restartWatch.timer) { clearTimeout(restartWatch.timer); }
+    if (restartWatch) { restartWatch.done = true; clearRestartTimers(restartWatch); }
     restartWatch = null;
   }
 
@@ -3160,39 +3187,54 @@ APP_JS = r"""
 
   function endRestartWatch(w, state) {
     w.state = state;
-    w.timer = null;
+    w.done = true;
+    clearRestartTimers(w);
     renderUpdates();
   }
 
   function restartPoll(w) {
-    if (restartWatch !== w) { return; }
+    if (restartWatch !== w || w.done) { return; }
     w.timer = null;
-    fetch("/api/update", { method: "GET", cache: "no-store",
-                           headers: authHeaders() })
+    var ctl = typeof AbortController === "function" ? new AbortController() : null;
+    var over = false;
+    var finish = function (r) {
+      if (over) { return; }
+      over = true;
+      if (w.pollTimer) { clearTimeout(w.pollTimer); }
+      w.pollTimer = w.ctl = null;
+      restartPolled(w, r);
+    };
+    w.ctl = ctl;
+    w.pollTimer = setTimeout(function () {
+      w.pollTimer = null;
+      if (ctl) { try { ctl.abort(); } catch (e) { /* gone */ } }
+      finish({ kind: "down" });
+    }, RESTART_POLL_TIMEOUT_MS);
+    fetch("/api/update", { method: "GET", cache: "no-store", headers: authHeaders(),
+                           signal: ctl ? ctl.signal : undefined })
       .then(function (res) {
         if (res.status === 401 || res.status === 403) { return { kind: "refused" }; }
         if (!res.ok) { return { kind: "down" }; }
         return res.json().then(function (d) { return { kind: "up", data: d }; },
                                function () { return { kind: "down" }; });
       }, function () { return { kind: "down" }; })
-      .then(function (r) {
-        if (restartWatch !== w) { return; }
-        // A refused sign-in: the page's initData is too old (5 min).
-        if (r.kind === "refused") { endRestartWatch(w, "refused"); return; }
-        if (r.kind === "down") {
-          // Twice in a row, so one flaky fetch is not taken for the restart.
-          w.downs += 1;
-          if (w.urlChanges && w.downs >= 2) { endRestartWatch(w, "reopen"); return; }
-        } else {
-          w.downs = 0;
-          if (restartAnswered(w, r.data)) { return; }
-        }
-        if (Date.now() - w.startedAt >= RESTART_GIVE_UP_MS) {
-          endRestartWatch(w, w.state === "updated" ? "updated" : "slow");
-          return;
-        }
-        scheduleRestartPoll(w);
-      });
+      .then(finish);
+  }
+
+  function restartPolled(w, r) {
+    if (restartWatch !== w || w.done) { return; }
+    // A refused sign-in: the page's initData is too old (5 min).
+    if (r.kind === "refused") { endRestartWatch(w, "refused"); return; }
+    if (r.kind === "down") {
+      // Twice in a row, so one flaky fetch is not taken for the restart.
+      w.downs += 1;
+      if (w.urlChanges && w.downs >= 2) { endRestartWatch(w, "reopen"); return; }
+    } else {
+      w.downs = 0;
+      if (restartAnswered(w, r.data)) { return; }
+    }
+    if (Date.now() - w.startedAt >= RESTART_GIVE_UP_MS) { restartGiveUp(w); return; }
+    scheduleRestartPoll(w);
   }
 
   // True when the watch is over (or handed back to the job view).

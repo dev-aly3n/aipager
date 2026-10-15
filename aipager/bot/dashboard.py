@@ -14,6 +14,7 @@ import html as html_mod
 import itertools
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -353,6 +354,10 @@ _SKIP_RETRY = 5.0
 #: How long a transient failure (network, timeout, 5xx) of the bar's
 #: first send waits before the trailing refresh tries again.
 _TRANSIENT_RETRY = 60.0
+#: Outcomes of `DashboardMixin._pinned_edit`.
+_EDIT_DONE = "done"
+_EDIT_REFUSED = "refused"
+_EDIT_STOP = "stop"
 
 _prompt_tokens = itertools.count(1)
 
@@ -498,6 +503,16 @@ class PinnedChat:
     ``disabled``: a group where the pin was refused — no bar until restart.
     ``pin_pending``: the pin was held back by a ban or the budget.
     ``hold_until``: a transient send failure's back-off, on the same clock.
+    ``shown_app``: the Mini App URL the bar's App button last carried
+    (``""`` none), ``None`` while unknown (no edit since this daemon
+    started: the button may still hold last run's address).
+    ``app_tried``: the address of an App-change edit Telegram refused,
+    so it is not sent as ESSENTIAL again.
+    ``verify_pin``: ask Telegram whether the bar is still the chat's
+    pinned message (private chats only). Set for each chat's first
+    refresh after a start and after every Mini App URL change.
+    ``verify_after``: a transient failure of that check waits until then
+    (the bar's own edits do not).
     """
 
     shown: tuple | None = None
@@ -510,6 +525,38 @@ class PinnedChat:
     hold_until: float = 0.0
     disabled: bool = False
     pin_pending: bool = False
+    shown_app: str | None = None
+    app_tried: str | None = None
+    verify_pin: bool = True
+    verify_after: float = 0.0
+
+    def show(self, sig: tuple, flood: tuple, app: str) -> None:
+        """The bar now shows *sig*, with *flood* lines and App URL *app*.
+        A refusal of an earlier address no longer applies."""
+        self.shown, self.shown_flood, self.shown_app = sig, flood, app
+        self.app_tried = None
+
+
+def _keyboard_app_url(keyboard) -> str:
+    """The Mini App URL on *keyboard*'s App button, ``""`` without one."""
+    if keyboard is None:
+        return ""
+    for row in keyboard.inline_keyboard:
+        for button in row:
+            if button.web_app is not None:
+                return button.web_app.url
+    return ""
+
+
+#: Telegram's answers for a message id that no longer exists (the user
+#: deleted the bar): "Message to edit not found", "Message to pin not
+#: found", "Message not found". Never "Chat not found".
+_GONE_MESSAGE = re.compile(r"message (?:to (?:edit|pin) )?not found", re.I)
+
+
+def _is_gone_message_error(exc: BaseException) -> bool:
+    """True when *exc* says the bar's message is gone (not the chat)."""
+    return _GONE_MESSAGE.search(str(exc)) is not None
 
 
 def _keyboard_sig(keyboard) -> str:
@@ -745,6 +792,22 @@ class DashboardMixin:
                 web_app=WebAppInfo(url=miniapp_link.for_chat(url, chat)))])
         return "\n".join(lines), (InlineKeyboardMarkup(rows) if rows else None)
 
+    async def pinned_app_changed(self) -> None:
+        """The Mini App URL changed (a new tunnel address, or the Mini App
+        came or went): refresh the bars now, and ask once more whether
+        each private chat's bar is still its pinned message (see
+        `_pinned_verify`). Returns at once, like :meth:`pinned_tick`, and
+        never raises: it runs inside `publish_miniapp_button`."""
+        try:
+            # Every chat is marked; `_refresh_pinned_once` asks only in
+            # private chats.
+            for chat in self._pinned_chats():
+                self._pinned.setdefault(chat, PinnedChat()).verify_pin = True
+            await self.pinned_tick()
+        except Exception:
+            log.debug("pinned bar refresh after a Mini App URL change "
+                      "failed", exc_info=True)
+
     async def _maybe_update_bot_name(self, session_name: str) -> None:
         """A state transition happened: refresh the pinned bars.
 
@@ -823,9 +886,17 @@ class DashboardMixin:
             return  # nothing to show, and never shown: no bar yet
         text, keyboard = self._render_pinned(chat, sessions)
         sig = (text, _keyboard_sig(keyboard))
-        if msg_id and sig == st.shown:
-            return  # what the bar already shows: no call
+        # Is the bar still the chat's pinned message? Asked once after a
+        # start and after each Mini App URL change, in a private chat only
+        # (see `_pinned_verify`).
         now = asyncio.get_running_loop().time()
+        verify = (st.verify_pin and not is_group_chat(chat)
+                  and now >= st.verify_after)
+        if msg_id and sig == st.shown and not verify:
+            if st.verify_pin and now < st.verify_after:
+                # A check that failed for a moment: ask again on time.
+                self._schedule_pinned_trailing(chat, st.verify_after - now)
+            return  # what the bar already shows: no call
         # MUTE: never a call into a ban. Wake up exactly when it lifts and
         # catch up then, with the state as it is at that moment.
         if MUTE.is_muted(chat):
@@ -850,6 +921,30 @@ class DashboardMixin:
             await self._pinned_pin(chat, st, msg_id)
             if st.disabled:
                 return
+        # Up to four calls in one refresh (a pending pin, the edit, the
+        # check and its re-pin), each through the gate: the gap paces
+        # refreshes, not each call.
+        if sig != st.shown:
+            edited = await self._pinned_edit(chat, st, msg_id, text,
+                                             keyboard, sig, now)
+            # A refused edit still leaves the bar there: check its pin
+            # anyway, or a bar Telegram keeps refusing would never be
+            # checked. (A skipped ornament stops here; the check waits for
+            # the retry, a few seconds on.)
+            if edited is _EDIT_STOP:
+                return
+        if verify and st.verify_pin:
+            st.attempt_at = now
+            await self._pinned_verify(chat, st, msg_id)
+
+    async def _pinned_edit(self, chat: int, st: "PinnedChat", msg_id: int,
+                           text: str, keyboard, sig: tuple,
+                           now: float) -> str:
+        """Edit the bar to *text*/*keyboard*. ``_EDIT_DONE`` when the bar
+        now shows it; ``_EDIT_REFUSED`` when Telegram refused this edit
+        (the bar is still there); ``_EDIT_STOP`` when nothing more should
+        be asked this time (skipped, muted, the chat refused, or the
+        message was gone and a new bar took its place)."""
         # ORNAMENT, skip class (8.26 R3, 8.30): the bar is a summary that
         # is always re-derivable, so it counts in the hourly budget as an
         # ornament and is dropped when the budget is tight. A drop is
@@ -862,9 +957,24 @@ class DashboardMixin:
         # refused by the very minimal mode it announces, and the "⏸" line
         # could never be shown, or never taken down. Still gapped and
         # never into a mute; at most one per regime edge.
+        #
+        # And the edit that changes the App button's Mini App URL (added,
+        # removed, or a new address: a managed quick tunnel gets a new
+        # hostname on every start) is ESSENTIAL too. The button on the
+        # bar is how the operator opens the Mini App from the chat's top,
+        # and an old address opens nothing (2026-10-15). Until this
+        # daemon has edited the bar it does not know which address the
+        # button holds, so its first edit that carries an App button
+        # counts as a change. At most one per change: `shown_app` moves
+        # when it lands. (A group's bar never has the button.)
         flood = tuple(self._pinned_flood_lines(chat))
         regime_edge = st.shown is not None and flood != st.shown_flood
-        rl = (_rl_args(priority=PRIORITY_ESSENTIAL) if regime_edge
+        app = _keyboard_app_url(keyboard)
+        app_edge = ((app != st.shown_app if st.shown_app is not None
+                     else bool(app))
+                    and app != st.app_tried)
+        rl = (_rl_args(priority=PRIORITY_ESSENTIAL)
+              if regime_edge or app_edge
               else _rl_args(kind="skip", priority=PRIORITY_ORNAMENT))
         previous_attempt, st.attempt_at = st.attempt_at, now
         try:
@@ -877,21 +987,20 @@ class DashboardMixin:
         except Forbidden as e:
             # Kicked from the group, or blocked in the DM: every later call
             # would be refused the same way. No bar here until restart.
-            self._pinned_disable(chat, st, f"the bot can't post there ({e})")
-            return
+            self._pinned_forbidden(chat, st, e)
+            return _EDIT_STOP
         except ChatMigrated as e:
             self._pinned_migrated(chat, st, e)
-            return
+            return _EDIT_STOP
         except BadRequest as e:
             low = str(e).lower()
             if "not modified" in low:
-                st.shown, st.shown_flood = sig, flood
-                return
+                st.show(sig, flood, app)
+                return _EDIT_DONE
             if "chat not found" in low:
                 self._pinned_disable(chat, st, f"the chat is gone ({e})")
-                return
-            if "message to edit not found" in low or low.endswith(
-                    "message not found"):
+                return _EDIT_STOP
+            if _is_gone_message_error(e):
                 # The user deleted the pinned message. Forget it and pin a
                 # new one: at most once per PINNED_RECREATE_MIN_INTERVAL.
                 log.info("Pinned status bar in chat %s is gone (%s) — "
@@ -900,22 +1009,124 @@ class DashboardMixin:
                 self.registry.mark_dirty()
                 st.attempt_at = None
                 await self._refresh_pinned_once(chat, st)
-                return
+                return _EDIT_STOP
             log.debug("Pinned status bar edit refused in %s: %s", chat, e)
-            return
+            if app_edge:
+                # Telegram refused it: retried as an ornament from now on,
+                # never an ESSENTIAL call every gap.
+                st.app_tried = app
+            return _EDIT_REFUSED
         if edited is SKIPPED:
             # The budget was short for a skip-class call: nothing went out,
             # so it does not open a gap. The trailing refresh retries soon
             # (and the tick may get there first); never dropped.
             st.attempt_at = previous_attempt
             self._schedule_pinned_trailing(chat, _SKIP_RETRY)
-            return
+            return _EDIT_STOP
         if edited is MUTED:
             # A ban armed under the call: the next refresh sees the mute
             # and waits for the lift.
             self._schedule_pinned_trailing(chat, PINNED_MIN_EDIT_GAP)
+            return _EDIT_STOP
+        st.show(sig, flood, app)
+        return _EDIT_DONE
+
+    async def _pinned_verify(self, chat: int, st: "PinnedChat",
+                             msg_id: int) -> None:
+        """Make sure the bar *msg_id* is the chat's pinned message, and
+        pin it again (silently) when it is not.
+
+        Nothing else would notice: the registry keeps the bar's id across
+        restarts while a pin can be lost without a word (unpinned by
+        hand, or held back by the budget before a restart, since
+        `pin_pending` lives in memory). A phone then keeps showing a stale
+        pinned copy whose App button holds a dead address (2026-10-15:
+        getChat had no pinned message at all). Asked once per start and
+        per Mini App URL change, and re-pinned only when Telegram says the
+        bar is not the pinned message, so no needless pin (and no pin
+        service message) goes out.
+
+        Private chats only. In a group the members pin their own messages
+        too, and getChat names only the most recent pin: re-pinning the
+        bar there would push theirs down on every restart. In a DM, a
+        newer pinned message is left alone too (see below). (A private
+        chat is never upgraded, so there is no ChatMigrated arm here.)
+
+        ESSENTIAL, blocking: one getChat (and at most one pin) per event,
+        and the App button is the way into the Mini App. Through the gate
+        like every call, so never into a mute."""
+        rl = _rl_args(priority=PRIORITY_ESSENTIAL)
+        now = asyncio.get_running_loop().time()
+        try:
+            info = await self._app.bot.get_chat(chat_id=chat,
+                                                rate_limit_args=rl)
+        except (FloodMuted, FloodSkipped):
+            self._schedule_pinned_trailing(
+                chat, max(MUTE.remaining(chat), PINNED_MIN_EDIT_GAP))
             return
-        st.shown, st.shown_flood = sig, flood
+        except Forbidden as e:
+            self._pinned_forbidden(chat, st, e)
+            return
+        except BadRequest as e:
+            st.verify_pin = False
+            log.info("Couldn't look up the pinned message of chat %s: %s",
+                     chat, e)
+            return
+        except Exception as e:
+            # Transient: ask again in a minute. Only the check waits; the
+            # bar's edits go on meanwhile.
+            st.verify_after = now + _TRANSIENT_RETRY
+            self._schedule_pinned_trailing(chat, _TRANSIENT_RETRY)
+            log.info("Couldn't look up the pinned message of chat %s (%s) "
+                     "- retrying in %.0fs", chat, e, _TRANSIENT_RETRY)
+            return
+        pinned = getattr(info, "pinned_message", None)
+        if pinned is not None and getattr(pinned, "message_id", None) == msg_id:
+            st.verify_pin = False
+            return
+        if pinned is not None and getattr(pinned, "message_id", 0) > msg_id:
+            # getChat names the most recent pin by SENDING date: a newer
+            # message pinned (the operator's note, or one of Claude's
+            # answers they pinned) hides whether the older bar is pinned
+            # under it, and pinning the bar again could not change what
+            # getChat names, so it would repeat on every start. Leave it.
+            st.verify_pin = False
+            return
+        log.info("The status bar in chat %s is not its pinned message - "
+                 "pinning it again", chat)
+        try:
+            await self._app.bot.pin_chat_message(
+                chat, msg_id, disable_notification=True, rate_limit_args=rl)
+        except (FloodMuted, FloodSkipped):
+            self._schedule_pinned_trailing(
+                chat, max(MUTE.remaining(chat), PINNED_MIN_EDIT_GAP))
+            return
+        except Forbidden as e:
+            self._pinned_forbidden(chat, st, e)
+            return
+        except BadRequest as e:
+            if _is_gone_message_error(e):
+                # The bar is gone: forget it and send a new one, which is
+                # pinned as it is created.
+                log.info("Pinned status bar in chat %s is gone (%s) - "
+                         "will pin a new one", chat, e)
+                self.registry.pinned_msg_ids.pop(chat, None)
+                self.registry.mark_dirty()
+                st.attempt_at = None
+                await self._refresh_pinned_once(chat, st)
+                return
+            st.verify_pin = False
+            log.info("Couldn't pin the status bar in chat %s again: %s",
+                     chat, e)
+            return
+        except Exception as e:
+            st.verify_after = now + _TRANSIENT_RETRY
+            self._schedule_pinned_trailing(chat, _TRANSIENT_RETRY)
+            log.info("Couldn't pin the status bar in chat %s again (%s) - "
+                     "retrying in %.0fs", chat, e, _TRANSIENT_RETRY)
+            return
+        st.verify_pin = False
+        st.pin_pending = False
 
     async def _pinned_create(self, chat: int, st: "PinnedChat", text: str,
                              keyboard, sig: tuple, now: float) -> None:
@@ -941,7 +1152,7 @@ class DashboardMixin:
                 rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
             )
         except Forbidden as e:
-            self._pinned_disable(chat, st, f"the bot can't post there ({e})")
+            self._pinned_forbidden(chat, st, e)
             return
         except ChatMigrated as e:
             # Permanent for this id, NOT the transient arm below: retried
@@ -974,8 +1185,8 @@ class DashboardMixin:
         # Stamped when the send came BACK: a blocking ornament may have
         # waited in the limiter, and both clocks run from what went out.
         st.created_at = st.attempt_at = asyncio.get_running_loop().time()
-        st.shown = sig
-        st.shown_flood = tuple(self._pinned_flood_lines(chat))
+        st.show(sig, tuple(self._pinned_flood_lines(chat)),
+                _keyboard_app_url(keyboard))
         self.registry.pinned_msg_ids[chat] = msg.message_id
         self.registry.mark_dirty()
         await self._pinned_pin(chat, st, msg.message_id)
@@ -1002,6 +1213,8 @@ class DashboardMixin:
             self._pinned_migrated(chat, st, e)
         except Exception as e:
             if not is_group_chat(chat):
+                # Tried just now: nothing more to ask Telegram about.
+                st.verify_pin = False
                 log.info("Couldn't pin the status bar in chat %s: %s — "
                          "will edit it in place.", chat, e)
                 return
@@ -1016,6 +1229,9 @@ class DashboardMixin:
             except Exception:
                 log.warning("Couldn't delete the unpinned status bar in "
                             "group %s", chat, exc_info=True)
+        else:
+            # Pinned just now: nothing to ask Telegram about.
+            st.verify_pin = False
 
     def _pinned_migrated(self, chat: int, st: "PinnedChat",
                          exc: ChatMigrated) -> None:
@@ -1025,6 +1241,12 @@ class DashboardMixin:
         self._pinned_disable(
             chat, st, f"Telegram upgraded the group to {exc.new_chat_id}")
         chat_migration.note_chat_migrated(chat, exc.new_chat_id)
+
+    def _pinned_forbidden(self, chat: int, st: "PinnedChat",
+                          exc: Exception) -> None:
+        """Kicked from the group, or blocked in the DM: every later call
+        would be refused the same way. No bar here until restart."""
+        self._pinned_disable(chat, st, f"the bot can't post there ({exc})")
 
     def _pinned_disable(self, chat: int, st: "PinnedChat", why: str) -> None:
         """No bar in *chat* for the rest of this daemon's life: every call

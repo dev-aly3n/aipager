@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The pinned message's App button opens the Mini App again after aipager restarts.** With a tunnel whose address changes on every start, the button could keep the old, dead address; aipager now puts the new address on it right away, and pins the message again (silently) when Telegram says it is no longer the chat's pinned message.
+- **The Mini App no longer stays on "Restarting aipager…" after an update.** A check that got no answer used to stop the wait for good; each check now gives up after a few seconds, and the page says to reopen the app (or that aipager is still restarting) on time.
+
 ## [1.3.0] - 2026-10-15
 
 ### Changed

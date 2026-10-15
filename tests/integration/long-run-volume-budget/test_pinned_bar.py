@@ -38,9 +38,25 @@ GAP = config.PINNED_MIN_EDIT_GAP
 EPS = 1e-3
 
 
+#: The bot's own user id, and the operator's.
+BOT_ID = 777000
+OPERATOR_ID = 4242
+
+
+class _User:
+    def __init__(self, user_id: int) -> None:
+        self.id = user_id
+
+
 class _Msg:
-    def __init__(self, message_id: int) -> None:
+    def __init__(self, message_id: int, from_id: int = BOT_ID) -> None:
         self.message_id = message_id
+        self.from_user = _User(from_id)
+
+
+class _Chat:
+    def __init__(self, pinned_message) -> None:
+        self.pinned_message = pinned_message
 
 
 class _PinBot:
@@ -60,10 +76,23 @@ class _PinBot:
         self._next_id = 5000
         #: kwargs of every send_message, e.g. ``disable_notification``.
         self.send_kwargs: list[dict] = []
+        #: kwargs of every pin_chat_message, ``rate_limit_args`` included.
+        self.pin_kwargs: list[dict] = []
+        #: ``rate_limit_args`` of every get_chat.
+        self.get_chat_args: list = []
+        #: ``rate_limit_args`` of every edit_message_text, in call order.
+        self.edit_args: list = []
         #: seconds every edit stays in flight before it reaches the gate.
         self.edit_delay = 0.0
         #: the same for every send (a send waiting in the limiter).
         self.send_delay = 0.0
+        #: what getChat says is the chat's pinned message (``None``: no
+        #: pinned message). A successful pin moves it, like Telegram.
+        self.pinned_id: int | None = PINNED
+        #: who sent the message getChat names as pinned.
+        self.pinned_from = BOT_ID
+        #: the bot's own id (``ExtBot.id``).
+        self.id = BOT_ID
 
     async def _gate(self, endpoint, chat_id, rate_limit_args, result, *,
                     msg_id=None, text=None, markup=None):
@@ -96,6 +125,7 @@ class _PinBot:
     async def edit_message_text(self, text=None, chat_id=None,
                                 message_id=None, *, rate_limit_args=None,
                                 reply_markup=None, **_kw):
+        self.edit_args.append(rate_limit_args)
         if self.edit_delay:
             await asyncio.sleep(self.edit_delay)
         return await self._gate("editMessageText", chat_id, rate_limit_args,
@@ -103,9 +133,19 @@ class _PinBot:
                                 markup=reply_markup)
 
     async def pin_chat_message(self, chat_id=None, message_id=None, *,
-                               rate_limit_args=None, **_kw):
-        return await self._gate("pinChatMessage", chat_id, rate_limit_args,
-                                True, msg_id=message_id)
+                               rate_limit_args=None, **kw):
+        self.pin_kwargs.append(dict(kw, rate_limit_args=rate_limit_args))
+        result = await self._gate("pinChatMessage", chat_id, rate_limit_args,
+                                  True, msg_id=message_id)
+        self.pinned_id, self.pinned_from = message_id, BOT_ID
+        return result
+
+    async def get_chat(self, chat_id=None, *, rate_limit_args=None, **_kw):
+        self.get_chat_args.append(rate_limit_args)
+        pinned = (None if self.pinned_id is None
+                  else _Msg(self.pinned_id, self.pinned_from))
+        return await self._gate("getChat", chat_id, rate_limit_args,
+                                _Chat(pinned))
 
     async def delete_message(self, chat_id=None, message_id=None, *,
                              rate_limit_args=None, **_kw):
@@ -1635,3 +1675,708 @@ def test_agents_starting_inside_the_gap_coalesce_into_one_trailing_edit(
         "💤 solo (idle, 3 agents running)",
     ]
     assert edits[1][5] - edits[0][5] >= GAP - EPS
+
+
+# ── the App button after a new Mini App address (2026-10-15) ────────────────
+#
+# A managed quick tunnel gets a new hostname on every start. The operator's
+# phone kept a pinned bar whose App button held the dead address while the
+# menu button had the new one: getChat named no pinned message at all, and
+# the bar's edit was a skip-class ornament.
+
+URL_A = "https://alpha.example.test"
+URL_B = "https://bravo.example.test"
+
+
+def _dm_bot(mk_bot, pbot, *, url=URL_A, pinned=PINNED, group=False):
+    """A v2 install with one DM scope (and a group scope when *group*):
+    the DM's bar carries the App button for *url*."""
+    scopes = [Scope(chat_id=CHAT, kind="dm", label="me")]
+    if group:
+        scopes.append(Scope(chat_id=GROUP, kind="group", label="team"))
+    bot = _bot(mk_bot, pbot, scopes=scopes, pinned=pinned)
+    bot._miniapp_url = url
+    return bot
+
+
+def _app_urls(markup) -> list[str]:
+    return [b.web_app.url for b in _buttons(markup) if b.web_app is not None]
+
+
+def _is_essential(args) -> bool:
+    from aipager.bot.flood_budget import PRIORITY_ESSENTIAL
+    return args is None or (args.get("class") == PRIORITY_ESSENTIAL
+                            and args.get("kind") != "skip")
+
+
+def _is_skip_ornament(args) -> bool:
+    from aipager.bot.flood_budget import PRIORITY_ORNAMENT
+    return (args is not None and args.get("kind") == "skip"
+            and args.get("class") == PRIORITY_ORNAMENT)
+
+
+@pytest.fixture
+def no_chat_id(monkeypatch):
+    monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", "")
+
+
+def test_a_new_app_address_on_the_bar_is_an_essential_edit(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """The bar shows address A. The Mini App moves to B: the edit that
+    puts B on the button is ESSENTIAL (an ornament would be refused by a
+    tight budget, leaving the dead address). The next edit that changes
+    only the state is a skip-class ornament again: one per change.
+
+    Mutation: drop ``app_edge`` and the B edit is a skip-class ornament."""
+    bot = _dm_bot(mk_bot, pbot)
+    s0 = _session(bot, "s0", Status.BUSY)
+
+    async def _move():
+        bot._miniapp_url = URL_B
+        await bot.refresh_pinned()
+
+    async def _idle():
+        s0.status = Status.IDLE
+        await bot.refresh_pinned()
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _move),
+                 (GAP + 1.0, _idle)])
+    edits = pbot.pinned_edits()
+    assert len(edits) == 3, edits
+    assert all(u.startswith(URL_A) for u in _app_urls(edits[0][4]))
+    assert [u[:len(URL_B)] for u in _app_urls(edits[1][4])] == [URL_B]
+    assert _is_essential(pbot.edit_args[1]), pbot.edit_args
+    assert _is_skip_ornament(pbot.edit_args[2]), pbot.edit_args
+
+
+def test_the_first_edit_after_a_start_with_an_app_button_is_essential(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """After a restart the daemon does not know which address the bar's
+    button holds (last run's tunnel, most likely dead): its first edit
+    that carries an App button is ESSENTIAL.
+
+    Mutation: treat an unknown address as unchanged and it is an
+    ornament."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+    _run(vloop, [(0.0, bot.refresh_pinned)])
+    assert len(pbot.pinned_edits()) == 1
+    assert _is_essential(pbot.edit_args[0]), pbot.edit_args
+
+
+def test_an_app_button_taken_off_the_bar_is_an_essential_edit(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """The Mini App goes away (its URL stops answering): the edit that
+    removes the button is ESSENTIAL too, so a dead button does not stay."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+
+    async def _gone():
+        bot._miniapp_url = ""
+        await bot.refresh_pinned()
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _gone)])
+    edits = pbot.pinned_edits()
+    assert len(edits) == 2, edits
+    assert _app_urls(edits[1][4]) == []
+    assert _is_essential(pbot.edit_args[1]), pbot.edit_args
+
+
+def test_a_new_app_address_waits_for_the_gap_and_never_goes_into_a_mute(
+    mk_bot, pbot, vloop, vlimiter, no_chat_id,
+):
+    """ESSENTIAL does not skip the bar's rules: an address change inside
+    the gap waits for the gap's end, and one during a ban goes out only
+    after the lift."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+    out: dict = {}
+
+    async def _move_in_gap():
+        out["moved"] = vloop.time()
+        bot._miniapp_url = URL_B
+        await bot.refresh_pinned()
+
+    async def _ban_then_move():
+        MUTE.mute(CHAT, 100.0)
+        vlimiter.reset()
+        out["ban"] = vloop.time()
+        bot._miniapp_url = URL_A
+        await bot.refresh_pinned()
+
+    async def main():
+        await bot.refresh_pinned()
+        await asyncio.sleep(2.0)
+        await _move_in_gap()
+        await asyncio.sleep(2 * GAP)
+        await _ban_then_move()
+        await asyncio.sleep(150.0)
+
+    vloop.run_until_complete(main())
+    edits = pbot.pinned_edits()
+    assert len(edits) == 3, edits
+    first_at = edits[0][5]
+    assert edits[1][5] - first_at >= GAP - EPS
+    assert edits[2][5] >= out["ban"] + 100.0 - EPS
+    assert [u[:len(URL_A)] for u in _app_urls(edits[2][4])] == [URL_A]
+
+
+def test_a_group_bar_never_gets_an_app_button_or_an_essential_edit(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """In a group the bar keeps today's rule: no App button (a web_app
+    button there gets the whole keyboard rejected), so an address change
+    is nothing to the group's bar."""
+    bot = _dm_bot(mk_bot, pbot, group=True)
+    bot.registry.pinned_msg_ids[GROUP] = PINNED + 1
+    _session(bot, "g0", Status.BUSY, chat=GROUP, kind="group")
+
+    async def _move():
+        bot._miniapp_url = URL_B
+        await bot.pinned_app_changed()
+        await asyncio.sleep(0)
+        await bot.refresh_pinned()
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _move)])
+    group_edits = pbot.pinned_edits(chat=GROUP, msg_id=PINNED + 1)
+    assert len(group_edits) == 1, group_edits
+    assert _app_urls(group_edits[0][4]) == []
+    assert pbot.of("getChat", GROUP) == []
+    assert pbot.of("pinChatMessage", GROUP) == []
+
+
+def test_publish_miniapp_button_refreshes_the_bar_without_waiting(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """A new tunnel address published: the bar gets it right away (not at
+    the next state change), and the publish never waits for the bar.
+
+    Mutations: drop the refresh from ``publish_miniapp_button`` and no
+    edit carries B; await the refresh instead of starting it as a task and
+    the publish returns only after the slow edit."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+    out: dict = {}
+
+    async def _menu(**_kw):
+        return True
+
+    pbot.set_chat_menu_button = _menu
+
+    async def main():
+        await bot.refresh_pinned()
+        await asyncio.sleep(GAP + 1.0)
+        pbot.edit_delay = 20.0
+        t0 = vloop.time()
+        await bot.publish_miniapp_button(URL_B)
+        out["publish_took"] = vloop.time() - t0
+        await asyncio.sleep(3 * GAP)
+
+    vloop.run_until_complete(main())
+    assert out["publish_took"] < 1.0, out
+    edits = pbot.pinned_edits()
+    assert len(edits) == 2, edits
+    assert [u[:len(URL_B)] for u in _app_urls(edits[1][4])] == [URL_B]
+
+
+def test_publish_with_the_same_address_does_not_touch_the_bar(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """The daemon primes the URL and then publishes the same one at start:
+    that is no change, so no extra getChat."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+
+    async def _menu(**_kw):
+        return True
+
+    pbot.set_chat_menu_button = _menu
+
+    async def _republish():
+        await bot.publish_miniapp_button(URL_A)
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _republish)])
+    assert len(pbot.of("getChat")) == 1
+    assert len(pbot.pinned_edits()) == 1
+
+
+def test_an_unpinned_bar_is_pinned_again_silently_at_start(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """The registry holds the bar's id but Telegram has no pinned message
+    in the chat (2026-10-15). The first refresh after a start asks getChat
+    and pins the bar again, silently and ESSENTIAL; later refreshes ask
+    nothing.
+
+    Mutations: drop the check and nothing re-pins it; pin without asking
+    and an already pinned bar gets a needless pin (next test)."""
+    bot = _dm_bot(mk_bot, pbot)
+    s0 = _session(bot, "s0", Status.BUSY)
+    pbot.pinned_id = None
+
+    async def _idle():
+        s0.status = Status.IDLE
+        await bot.refresh_pinned()
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _idle),
+                 (GAP + 1.0, bot.refresh_pinned)])
+    assert len(pbot.of("getChat")) == 1
+    assert [p[2] for p in pbot.of("pinChatMessage")] == [PINNED]
+    assert pbot.pin_kwargs[0].get("disable_notification") is True
+    assert _is_essential(pbot.pin_kwargs[0]["rate_limit_args"])
+    assert _is_essential(pbot.get_chat_args[0])
+    assert pbot.pinned_id == PINNED
+    assert pbot.of("sendMessage") == []
+
+
+def test_a_bar_that_is_still_pinned_is_not_pinned_again(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, bot.refresh_pinned)])
+    assert len(pbot.of("getChat")) == 1
+    assert pbot.of("pinChatMessage") == []
+
+
+def test_each_app_address_change_asks_again(mk_bot, pbot, vloop, no_chat_id):
+    """After a Mini App URL change the check runs once more: the pin may
+    have been lost since the start.
+
+    Mutation: drop the ``verify_pin`` mark in ``pinned_app_changed`` and
+    the lost pin stays lost."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+
+    async def _unpin_then_move():
+        pbot.pinned_id = None          # unpinned by hand meanwhile
+        bot._miniapp_url = URL_B
+        await bot.pinned_app_changed()
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _unpin_then_move)])
+    assert len(pbot.of("getChat")) == 2
+    assert [p[2] for p in pbot.of("pinChatMessage")] == [PINNED]
+
+
+def test_a_check_with_an_unchanged_bar_still_runs(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """The check is not tied to an edit: with nothing to edit, a pending
+    check still asks (and re-pins).
+
+    Mutation: return early on an unchanged render even with the check
+    pending and nothing is asked."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+
+    async def _lost_pin():
+        pbot.pinned_id = None
+        await bot.pinned_app_changed()     # same address: no edit
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _lost_pin)])
+    assert len(pbot.pinned_edits()) == 1
+    assert len(pbot.of("getChat")) == 2
+    assert [p[2] for p in pbot.of("pinChatMessage")] == [PINNED]
+
+
+def test_a_bar_that_is_gone_is_sent_and_pinned_anew(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """getChat says the bar is not pinned and the pin answers that the
+    message is gone: a new bar is sent and pinned in its place.
+
+    Mutation: drop the gone branch and the chat keeps no bar."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+
+    async def _deleted():
+        pbot.pinned_id = None
+        pbot.fail["pinChatMessage"] = [
+            lambda: BadRequest("Message to pin not found")]
+        await bot.pinned_app_changed()
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _deleted),
+                 (GAP + 1.0, bot.refresh_pinned)])
+    # The new bar was pinned as it was made: nothing more to ask.
+    assert len(pbot.of("getChat")) == 2
+    sent = pbot.of("sendMessage")
+    assert len(sent) == 1, pbot.calls
+    new_id = bot.registry.pinned_msg_ids[CHAT]
+    assert new_id == sent[0][2] != PINNED
+    assert [p[2] for p in pbot.of("pinChatMessage")] == [PINNED, new_id]
+    assert pbot.pinned_id == new_id
+
+
+def test_no_check_into_a_mute(mk_bot, pbot, vloop, vlimiter, no_chat_id):
+    """A ban is on the chat at start: no getChat (or pin) goes out during
+    it; the check runs after the lift."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+    pbot.pinned_id = None
+    out: dict = {}
+
+    async def main():
+        MUTE.mute(CHAT, 100.0)
+        vlimiter.reset()
+        out["ban"] = vloop.time()
+        await bot.refresh_pinned()
+        await asyncio.sleep(150.0)
+
+    vloop.run_until_complete(main())
+    checks = pbot.of("getChat")
+    assert len(checks) == 1
+    assert checks[0][5] >= out["ban"] + 100.0 - EPS
+    pins = pbot.of("pinChatMessage")
+    assert len(pins) == 1 and pins[0][5] >= out["ban"] + 100.0 - EPS
+
+
+def test_the_check_runs_only_in_private_chats(mk_bot, pbot, vloop, no_chat_id):
+    """In a group the members pin their own messages, and getChat names
+    only the most recent pin: the bar is never re-pinned there."""
+    bot = _dm_bot(mk_bot, pbot, group=True, pinned=0)
+    bot.registry.pinned_msg_ids[GROUP] = PINNED + 1
+    _session(bot, "g0", Status.BUSY, chat=GROUP, kind="group")
+    pbot.pinned_id = None
+    _run(vloop, [(0.0, bot.refresh_pinned)])
+    assert len(pbot.pinned_edits(chat=GROUP, msg_id=PINNED + 1)) == 1
+    assert pbot.of("getChat", GROUP) == []
+    assert pbot.of("pinChatMessage", GROUP) == []
+
+
+def test_a_failed_check_does_not_hold_the_bar_and_is_asked_again(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """A network blip on getChat: the bar's own edits go on meanwhile, and
+    the check is asked again a minute later.
+
+    Mutations: back off the whole bar on the blip and the state edit
+    waits a minute; drop the retry and the check is never asked again."""
+    from telegram.error import NetworkError
+
+    bot = _dm_bot(mk_bot, pbot)
+    s0 = _session(bot, "s0", Status.BUSY)
+    pbot.pinned_id = None
+    pbot.fail["getChat"] = [lambda: NetworkError("blip")]
+
+    async def _idle():
+        s0.status = Status.IDLE
+        await bot.refresh_pinned()
+
+    async def main():
+        await bot.refresh_pinned()
+        await asyncio.sleep(GAP + 1.0)
+        await _idle()
+        for _ in range(40):            # the session monitor's 2 s tick
+            await asyncio.sleep(2.0)
+            await bot.refresh_pinned()
+
+    vloop.run_until_complete(main())
+    edits = pbot.pinned_edits()
+    assert len(edits) == 2, edits
+    assert edits[1][5] - edits[0][5] <= GAP + 2.0
+    checks = pbot.of("getChat")
+    assert len(checks) == 2, checks
+    assert checks[1][5] - checks[0][5] >= 60.0 - EPS
+    assert [p[2] for p in pbot.of("pinChatMessage")] == [PINNED]
+
+
+def test_a_bar_made_by_this_daemon_is_not_asked_about(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """A bar this daemon sent and pinned itself needs no getChat.
+
+    Mutation: leave the check pending after a successful pin and the next
+    refresh asks."""
+    bot = _dm_bot(mk_bot, pbot, pinned=0)
+    s0 = _session(bot, "s0", Status.BUSY)
+
+    async def _idle():
+        s0.status = Status.IDLE
+        await bot.refresh_pinned()
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _idle)])
+    assert len(pbot.of("sendMessage")) == 1
+    assert len(pbot.of("pinChatMessage")) == 1
+    assert pbot.of("getChat") == []
+
+
+def _ticks(bot, seconds: float):
+    """The session monitor's 2 s tick for *seconds*."""
+    async def _tick():
+        for _ in range(int(seconds / 2.0)):
+            await asyncio.sleep(2.0)
+            await bot.refresh_pinned()
+    return _tick
+
+
+def test_a_blocked_chat_on_the_check_turns_the_bar_off(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """getChat answers Forbidden (the operator blocked the bot): no bar in
+    that chat until restart, so no call every minute for the daemon's life.
+
+    Mutation: drop the Forbidden arm and getChat is asked every minute."""
+    from telegram.error import Forbidden
+
+    bot = _dm_bot(mk_bot, pbot)
+    s0 = _session(bot, "s0", Status.BUSY)
+    pbot.fail["getChat"] = [lambda: Forbidden("bot was blocked by the user")]
+
+    async def _idle():
+        s0.status = Status.IDLE
+        await bot.refresh_pinned()
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _idle),
+                 (0.0, _ticks(bot, 180.0))])
+    assert len(pbot.of("getChat")) == 1
+    assert len(pbot.pinned_edits()) == 1
+    assert CHAT not in bot.registry.pinned_msg_ids
+
+
+@pytest.mark.parametrize("endpoint", ["getChat", "pinChatMessage"])
+def test_a_refused_check_or_pin_is_not_asked_again(
+    mk_bot, pbot, vloop, no_chat_id, endpoint,
+):
+    """Telegram refuses the getChat, or the re-pin, for good (a bad
+    request that is not "message gone"): the check ends there, never a
+    retry every minute.
+
+    Mutations: drop the getChat BadRequest arm, or leave the check pending
+    after a refused re-pin, and getChat is asked again."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+    pbot.pinned_id = None
+    pbot.fail[endpoint] = [lambda: BadRequest("Not enough rights")]
+    _run(vloop, [(0.0, bot.refresh_pinned), (0.0, _ticks(bot, 180.0))])
+    assert len(pbot.of("getChat")) == 1
+    assert len(pbot.of("pinChatMessage")) == (1 if endpoint == "pinChatMessage" else 0)
+    assert bot.registry.pinned_msg_ids[CHAT] == PINNED
+
+
+def test_a_blocked_chat_on_the_re_pin_turns_the_bar_off(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    from telegram.error import Forbidden
+
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+    pbot.pinned_id = None
+    pbot.fail["pinChatMessage"] = [lambda: Forbidden("bot was blocked by the user")]
+    _run(vloop, [(0.0, bot.refresh_pinned), (0.0, _ticks(bot, 180.0))])
+    assert len(pbot.of("getChat")) == 1
+    assert len(pbot.of("pinChatMessage")) == 1
+    assert CHAT not in bot.registry.pinned_msg_ids
+
+
+@pytest.mark.parametrize("endpoint", ["getChat", "pinChatMessage"])
+def test_a_ban_armed_under_the_check_waits_only_for_the_ban(
+    mk_bot, pbot, vloop, vlimiter, no_chat_id, endpoint,
+):
+    """A 10 s ban is armed while getChat (or the re-pin) is in flight: the
+    check is asked again once the ban and the gap have passed, not a whole
+    minute later.
+
+    Mutation: drop either flood arm (so the ban counts as a network blip)
+    and the next ask waits 60 s."""
+    from aipager.bot.flood import FloodMuted
+
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+    pbot.pinned_id = None
+
+    def _ban():
+        MUTE.mute(CHAT, 10.0)
+        return FloodMuted(10.0, CHAT)
+
+    pbot.fail[endpoint] = [_ban]
+    _run(vloop, [(0.0, bot.refresh_pinned), (0.0, _ticks(bot, 120.0))])
+    checks = pbot.of("getChat")
+    assert len(checks) == 2, checks
+    # The gap, plus the limiter's own pacing after a ban; a blip's
+    # back-off would be a whole minute.
+    assert checks[1][5] - checks[0][5] < 50.0
+    assert pbot.pinned_id == PINNED
+
+
+@pytest.mark.parametrize("sender", [OPERATOR_ID, BOT_ID],
+                         ids=["operators-note", "pinned-claude-answer"])
+def test_a_newer_pin_is_left_on_top(
+    mk_bot, pbot, vloop, no_chat_id, sender,
+):
+    """getChat names a message pinned after the bar was sent (the
+    operator's note, or one of Claude's answers they pinned, which the
+    bot sent): the bar may still be pinned under it, and a re-pin could
+    not change what getChat names, so it would repeat (with a service
+    message) on every restart. Nothing is pinned.
+
+    Mutation: re-pin whenever the pinned message is not the bar."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+    pbot.pinned_id, pbot.pinned_from = PINNED + 50, sender
+    _run(vloop, [(0.0, bot.refresh_pinned)])
+    assert len(pbot.of("getChat")) == 1
+    assert pbot.of("pinChatMessage") == []
+
+
+def test_an_older_pinned_message_gets_the_bar_pinned_again(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """getChat names the most recent pin by sending date. When it names a
+    message OLDER than the bar, the bar is certainly not pinned: it is
+    pinned again.
+
+    Mutation: leave every other pinned message alone and it is not."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+    pbot.pinned_id, pbot.pinned_from = PINNED - 50, BOT_ID
+    _run(vloop, [(0.0, bot.refresh_pinned)])
+    assert [p[2] for p in pbot.of("pinChatMessage")] == [PINNED]
+
+
+def test_a_refused_app_change_edit_is_not_essential_every_gap(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """Telegram refuses the edit that puts the new address on the button:
+    it is retried, but as a skip-class ornament, never an ESSENTIAL call
+    every 30 s.
+
+    Mutation: drop ``app_tried`` and every retry is ESSENTIAL."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+
+    async def _move():
+        pbot.fail["editMessageText"] = [
+            lambda: BadRequest("Message can't be edited")] * 3
+        bot._miniapp_url = URL_B
+        await bot.refresh_pinned()
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _move),
+                 (0.0, _ticks(bot, 4 * GAP))])
+    assert len(pbot.edit_args) >= 4, pbot.edit_args
+    assert _is_essential(pbot.edit_args[1])
+    assert all(_is_skip_ornament(a) for a in pbot.edit_args[2:]), pbot.edit_args
+
+
+def test_a_pending_pin_that_lands_needs_no_check(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """The new bar's pin was held back by the budget; the next refresh
+    pins it. That pin is the answer: no getChat in the same attempt.
+
+    Mutation: use the check flag read before the pin and getChat goes."""
+    bot = _dm_bot(mk_bot, pbot, pinned=0)
+    s0 = _session(bot, "s0", Status.BUSY)
+    pbot.skip["pinChatMessage"] = 1
+
+    async def _idle():
+        s0.status = Status.IDLE
+        await bot.refresh_pinned()
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _idle)])
+    assert len(pbot.of("pinChatMessage")) == 1
+    assert pbot.of("getChat") == []
+
+
+def test_a_mini_app_url_that_cannot_be_a_button_clears_the_bars_too(
+    mk_bot, pbot, vloop, no_chat_id, monkeypatch,
+):
+    """publish_miniapp_button fails closed when the URL cannot even be
+    made into a menu button: the URL is dropped, and the bars follow at
+    once (an ESSENTIAL edit taking the App button off), with a check.
+
+    Mutation: drop the bars' refresh on that path and the bar keeps the
+    button until some state changes."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+
+    def _boom(*_a, **_k):
+        raise ValueError("no button")
+
+    monkeypatch.setattr(bot, "_menu_button_webapp", _boom)
+
+    async def _publish():
+        await bot.publish_miniapp_button(URL_B)
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _publish)])
+    assert bot._miniapp_url == ""
+    edits = pbot.pinned_edits()
+    assert len(edits) == 2, edits
+    assert _app_urls(edits[1][4]) == []
+    assert _is_essential(pbot.edit_args[1])
+    assert len(pbot.of("getChat")) == 2
+
+
+def test_a_refusal_long_ago_does_not_demote_a_later_app_change(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """B refused (then shown as an ornament), the Mini App gone, B back:
+    that last edit is a new change and ESSENTIAL again.
+
+    Mutation: never clear ``app_tried`` and it goes as an ornament."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+
+    async def _to_b_refused():
+        pbot.fail["editMessageText"] = [
+            lambda: BadRequest("Message can't be edited")]
+        bot._miniapp_url = URL_B
+        await bot.refresh_pinned()
+
+    async def _set(url):
+        bot._miniapp_url = url
+        await bot.refresh_pinned()
+
+    _run(vloop, [(0.0, bot.refresh_pinned),
+                 (GAP + 1.0, _to_b_refused),
+                 (GAP + 1.0, bot.refresh_pinned),        # B lands, ornament
+                 (GAP + 1.0, lambda: _set("")),
+                 (GAP + 1.0, lambda: _set(URL_B))])
+    assert len(pbot.edit_args) == 5, pbot.edit_args
+    assert _is_skip_ornament(pbot.edit_args[2])
+    assert _is_essential(pbot.edit_args[3])
+    assert _is_essential(pbot.edit_args[4]), pbot.edit_args
+
+
+def test_a_bar_whose_edit_is_refused_is_still_checked(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """Telegram refuses the bar's edit (a bad request, not "gone"): the
+    bar is still there, so its pin is checked, and re-pinned, anyway.
+
+    Mutation: stop after any edit that did not land and it never is."""
+    bot = _dm_bot(mk_bot, pbot)
+    _session(bot, "s0", Status.BUSY)
+    pbot.pinned_id = None
+    pbot.fail["editMessageText"] = [
+        lambda: BadRequest("Message can't be edited")]
+    _run(vloop, [(0.0, bot.refresh_pinned)])
+    assert len(pbot.of("getChat")) == 1
+    assert [p[2] for p in pbot.of("pinChatMessage")] == [PINNED]
+
+
+def test_a_dm_pin_refused_at_creation_is_not_checked_again(
+    mk_bot, pbot, vloop, no_chat_id,
+):
+    """A new DM bar's pin is refused by Telegram (not the budget): the bar
+    is edited in place, and nobody asks getChat (or pins again) on the
+    next refresh; the pin was just tried.
+
+    Mutation: leave the check pending after that refusal and the next
+    refresh asks getChat and pins again."""
+    bot = _dm_bot(mk_bot, pbot, pinned=0)
+    s0 = _session(bot, "s0", Status.BUSY)
+    pbot.fail["pinChatMessage"] = [lambda: BadRequest("Not enough rights")]
+
+    async def _idle():
+        s0.status = Status.IDLE
+        await bot.refresh_pinned()
+
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP + 1.0, _idle),
+                 (0.0, _ticks(bot, 120.0))])
+    assert len(pbot.of("sendMessage")) == 1
+    assert len(pbot.of("pinChatMessage")) == 1
+    assert pbot.of("getChat") == []
+    assert len(pbot.of("editMessageText")) == 1
