@@ -104,6 +104,11 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"set\.opt\.[a-z0-9_.]+", "button", "cells", 40, ""),
     (r"set\.help\.[a-z0-9_.]+", "hint", "chars", 200, ""),
     (r"set\.text\.[a-z0-9_.]+", "message", "chars", 400, ""),
+    # /settings → 🎨 Appearance (aipager/bot/appearance.py).
+    (r"set\.ap\.[a-z0-9_]+\.title", "label", "cells", 40, ""),
+    (r"set\.ap\.opt\.[a-z0-9_.]+", "button", "cells", 40, ""),
+    (r"set\.ap\.help\.[a-z0-9_.]+", "hint", "chars", 200, ""),
+    (r"set\.ap\.(?:text|intro\.[a-z0-9_]+)", "message", "chars", 400, ""),
     (r"app\.[a-z0-9_]+\.title", "label", "cells", 40, ""),
     (r"app\.[a-z0-9_]+\.hint", "hint", "chars", 80, ""),
     (r"card\.verb\.[a-z0-9_]+", "label", "cells", 24, ""),

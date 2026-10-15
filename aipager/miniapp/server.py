@@ -484,6 +484,9 @@ class MiniAppServer:
         # path so batch 4's per-session variant can slot in beside it as
         # /api/sessions/{label}/preferences/{field} without reshaping this.
         app.router.add_put("/api/preferences/{field}", self._handle_preferences_put)
+        # /settings → 🎨 Appearance (button colours), chat-wide: the same
+        # gate, rate limit and chat mirror line as a chat preference.
+        app.router.add_put("/api/appearance/{field}", self._handle_appearance_put)
         # The viewer's own App language (the multilingual design, 7.2):
         # personal, so any member may set it, never admin-gated, and it is
         # written to the viewer's own private-chat entry, never to the chat
@@ -1144,6 +1147,9 @@ class MiniAppServer:
                                and report_flow.is_owner(self.bot, user_id)),
             # The viewer's own App language: personal, never admin-gated.
             "app_language": self._app_language_payload(request, user_id),
+            # Button colours (/settings → 🎨 Appearance): chat-wide, the
+            # same edit rule as the preferences above.
+            "appearance": self._appearance_payload(request, user_id, scope_chat_id),
         }, self._viewer_tr(request, user_id)))
 
     @staticmethod
@@ -1564,6 +1570,49 @@ class MiniAppServer:
             },
             "changed": after != before,
         })
+
+    def _appearance_payload(self, request, user_id, scope_chat_id) -> dict:
+        from aipager.bot import appearance
+        tr = self._viewer_tr(request, user_id)
+        return {"title": tr.text(appearance.BUTTON),
+                "schema": appearance.appearance_schema(tr=tr),
+                "values": appearance.values(scope_chat_id)}
+
+    async def _handle_appearance_put(self, request):
+        """One appearance choice for the chat: the same gate, rate limit
+        and chat mirror line as ``/api/preferences/{field}``."""
+        from aiohttp import web
+
+        from aipager import preferences
+        from aipager.bot import appearance
+
+        result = await self._authenticate_user(request, "/api/appearance/{field}")
+        if isinstance(result, web.Response):
+            return result
+        scope_chat_id, user_id = result
+        if not self.bot._may_change_chat_settings(user_id, scope_chat_id):
+            log.info("miniapp: appearance write rejected (403) - may not change this chat's settings")
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: appearance write rejected (429) - rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+        field = request.match_info["field"]
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad_request"}, status=400)
+        if not isinstance(body, dict) or "value" not in body:
+            return web.json_response({"error": "bad_request"}, status=400)
+        before = appearance.values(scope_chat_id).get(field)
+        try:
+            preferences.set_appearance(scope_chat_id, field, body["value"])
+        except ValueError:
+            log.info("miniapp: appearance write rejected (400) - invalid field/value")
+            return web.json_response({"error": "bad_request"}, status=400)
+        now = appearance.values(scope_chat_id)
+        if now[field] != before:
+            await self._mirror_preference_change(scope_chat_id, user_id, field, now[field])
+        return web.json_response({"values": now, "changed": now[field] != before})
 
     def _log_auth_failure(self, route_name: str, reason: str,
                           *, exc_info: bool = False) -> None:

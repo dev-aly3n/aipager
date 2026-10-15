@@ -179,6 +179,7 @@ PREFERENCE_WRITERS = {
     "set_new_session_default": lambda: preferences.set_new_session_default(42, "mode", "ask"),
     "set_ui_language": lambda: preferences.set_ui_language(42, "fa"),
     "set_problem_reports": lambda: preferences.set_problem_reports("off"),
+    "set_appearance": lambda: preferences.set_appearance(42, "stop", "red"),
 }
 
 

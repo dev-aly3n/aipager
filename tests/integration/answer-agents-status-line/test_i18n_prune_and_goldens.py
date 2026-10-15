@@ -22,12 +22,15 @@ import pytest
 from tests.i18n_surfaces import (
     AGENTS_TREE_CARD_SURFACES,
     AGENTS_TREE_NEW_SURFACES,
+    APPEARANCE_NEW_SURFACES,
+    APPEARANCE_SURFACES,
     MODE_LABEL_SURFACES,
     NO_KEYBOARD_APP_SURFACES,
     RESTART_NOW_NEW_SURFACES,
     THREE_MODES_NEW_SURFACES,
     THREE_MODES_SURFACES,
     with_keyboard_app_removed,
+    without_appearance_row,
     without_card_divider,
     without_mode_labels,
 )
@@ -223,9 +226,12 @@ def test_english_surfaces_change_only_under_agents_line():
     # Restart now without a service (2026-10-12) added one surface.
     # The agents tree (2026-10-14) put a divider above the card's status
     # line, and added a helper's card rows.
+    # 🎨 Appearance (2026-10-15) added one row to the settings menus, and
+    # its own page.
     exempt = (MODE_LABEL_SURFACES | three | NO_KEYBOARD_APP_SURFACES
               | RESTART_NOW_NEW_SURFACES | AGENTS_TREE_CARD_SURFACES
-              | AGENTS_TREE_NEW_SURFACES)
+              | AGENTS_TREE_NEW_SURFACES | APPEARANCE_SURFACES
+              | APPEARANCE_NEW_SURFACES)
     assert [k for k in changed if k not in exempt] == [
         "agents_line", "language.list"]
     for k in NO_KEYBOARD_APP_SURFACES:
@@ -233,6 +239,10 @@ def test_english_surfaces_change_only_under_agents_line():
     for k in AGENTS_TREE_CARD_SURFACES:
         assert new[k] != old[k], k
         assert without_card_divider(new[k]) == old[k], k
+    for k in APPEARANCE_SURFACES:
+        assert new[k] != old[k], k
+        assert without_appearance_row(new[k]) == old[k], k
+    assert APPEARANCE_NEW_SURFACES <= set(new) - set(old)
     assert set(changed) >= MODE_LABEL_SURFACES
     for k in MODE_LABEL_SURFACES - three:
         assert without_mode_labels(new[k]) == without_mode_labels(old[k]), k

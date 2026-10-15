@@ -410,3 +410,97 @@ def test_diff_preview_round_trips_through_the_api(server, run_async):
         finally:
             await client.close()
     run_async(_run())
+
+
+# ===== button colours (/settings → 🎨 Appearance) ===========================
+
+def test_get_preferences_carries_the_appearance_choices(server, run_async):
+    async def _run():
+        client = await _client_for(server)
+        try:
+            body = await (await client.get("/api/preferences", headers=_hdr(MEMBER_ID))).json()
+            ap = body["appearance"]
+            assert ap["title"] == "🎨 Appearance"
+            assert [g["field"] for g in ap["schema"]] == ["stop", "prompt", "app", "settings"]
+            assert ap["values"] == {"stop": "normal", "prompt": "normal", "app": "normal",
+                                    "settings": "normal"}
+            # The preferences' own schema is unchanged: appearance is not one.
+            assert "stop" not in {g["field"] for g in body["schema"]}
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_an_admin_sets_a_colour_and_the_chat_is_told(server, run_async):
+    from aipager import preferences
+
+    async def _run():
+        client = await _client_for(server)
+        send = server.bot._app.bot.send_message
+        try:
+            resp = await client.put("/api/appearance/stop", headers=_hdr(ADMIN_ID),
+                                    json={"value": "red"})
+            assert resp.status == 200
+            body = await resp.json()
+            assert body["values"]["stop"] == "red" and body["changed"] is True
+            assert preferences.get_appearance(-100).stop == "red"
+            text = send.await_args.kwargs["text"]
+            assert "🛑 Stop button" in text and "Red" in text
+            # The same value again: no second line in the chat.
+            calls = send.await_count
+            again = await client.put("/api/appearance/stop", headers=_hdr(ADMIN_ID),
+                                     json={"value": "red"})
+            assert (await again.json())["changed"] is False
+            assert send.await_count == calls
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("user,field,body,status", [
+    (MEMBER_ID, "stop", {"value": "red"}, 403),
+    (OUTSIDER_ID, "stop", {"value": "red"}, 403),
+    (ADMIN_ID, "stop", {"value": "#ff0000"}, 400),
+    (ADMIN_ID, "layout", {"value": "card"}, 400),
+    (ADMIN_ID, "stop", {"value": 3}, 400),
+    (ADMIN_ID, "stop", {}, 400),
+], ids=["member", "outsider", "hex", "a-preference", "not-text", "no-value"])
+def test_an_appearance_write_that_is_not_allowed_changes_nothing(
+        server, run_async, user, field, body, status):
+    from aipager import preferences
+
+    async def _run():
+        client = await _client_for(server)
+        try:
+            resp = await client.put(f"/api/appearance/{field}", headers=_hdr(user), json=body)
+            assert resp.status == status
+            assert preferences.get_appearance(-100) == preferences.Appearance()
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_the_colour_route_is_rate_limited(server, run_async):
+    """It shares the preferences' per-user write budget: past it, a write
+    is refused with 429 and nothing is stored."""
+    from aipager import preferences
+
+    async def _run():
+        client = await _client_for(server)
+        try:
+            seen_429, stored = False, "normal"
+            for i in range(45):
+                value = "red" if i % 2 else "blue"
+                resp = await client.put("/api/appearance/stop", headers=_hdr(ADMIN_ID),
+                                        json={"value": value})
+                if resp.status == 429:
+                    seen_429 = True
+                    break
+                stored = preferences.get_appearance(-100).stop
+            assert seen_429, "the colour route accepted unbounded writes"
+            # The refused write changed nothing.
+            assert value != stored
+            assert preferences.get_appearance(-100).stop == stored
+        finally:
+            await client.close()
+    run_async(_run())

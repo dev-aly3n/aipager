@@ -733,6 +733,24 @@
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> yeniden çalışıyor"}
 {"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> yeniden çalışıyor, Otomatik modda: Tam erişim modu yalnızca yöneticiler için."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "{session} oturumuna gönderildi."}
+{"k": "set.ap.app.title", "src": "86920bff", "v": "📱 App düğmesi"}
+{"k": "set.ap.help.normal", "src": "bfa72d24", "v": "Telegram'ın kendi görünümü, diğer düğmeler gibi."}
+{"k": "set.ap.help.settings_normal", "src": "d7830ec5", "v": "Geçerli seçimi yalnızca ✅ işaretler."}
+{"k": "set.ap.intro.app", "src": "24955be8", "v": "Sabitlenmiş mesajdaki ve /app altındaki App düğmesi. Mesaj kutusunun yanındaki menü düğmesi hep aynı görünür."}
+{"k": "set.ap.intro.prompt", "src": "98ac28c7", "v": "Bir izin isteğinin altındaki İzin ver ve Reddet düğmeleri."}
+{"k": "set.ap.intro.settings", "src": "d578c71b", "v": "/settings'in geçerli seçimi nasıl işaretlediği."}
+{"k": "set.ap.intro.stop", "src": "8ffbb917", "v": "Çalışma kartındaki ve bir sorunun ya da izin isteğinin altındaki Durdur düğmesi."}
+{"k": "set.ap.opt.blue", "src": "7d44bc44", "v": "Mavi"}
+{"k": "set.ap.opt.coloured", "src": "9cb35f64", "v": "Renkli - İzin ver yeşil, Reddet kırmızı"}
+{"k": "set.ap.opt.green", "src": "933bf21a", "v": "Yeşil"}
+{"k": "set.ap.opt.highlight", "src": "64695a26", "v": "Geçerli seçim mavi"}
+{"k": "set.ap.opt.normal", "src": "45e118d0", "v": "Normal"}
+{"k": "set.ap.opt.red", "src": "cc9db3a7", "v": "Kırmızı"}
+{"k": "set.ap.prompt.title", "src": "6d208c65", "v": "🔐 İzin ver ve Reddet düğmeleri"}
+{"k": "set.ap.settings.title", "src": "e264c4ca", "v": "⚙️ Ayarlar menüsü"}
+{"k": "set.ap.stop.title", "src": "15b66004", "v": "🛑 Durdur düğmesi"}
+{"k": "set.ap.text", "src": "b16481f8", "v": "🎨 <b>Görünüm</b>\n\naipager düğmelerinin bu sohbette nasıl göründüğü. Telegram, bir botun düğmeyi maviye, yeşile ya da kırmızıya boyamasına veya normal bırakmasına izin verir. Renkleri desteklemeyen uygulamalar tüm düğmeleri normal gösterir."}
+{"k": "set.btn.appearance", "src": "be0e75bb", "v": "🎨 Görünüm"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Kapat"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Yeni oturumlar"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 Klasör: {folder} ›"}

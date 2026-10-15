@@ -733,6 +733,24 @@
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ أُعيد فتح <b>{session}</b>"}
 {"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ أُعيد فتح <b>{session}</b> في الوضع التلقائي: وضع الوصول الكامل للمشرفين فقط."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "تم الإرسال إلى {session}."}
+{"k": "set.ap.app.title", "src": "86920bff", "v": "📱 زر App"}
+{"k": "set.ap.help.normal", "src": "bfa72d24", "v": "شكل Telegram المعتاد، مثل باقي الأزرار."}
+{"k": "set.ap.help.settings_normal", "src": "d7830ec5", "v": "علامة ✅ وحدها تُبرز الخيار الحالي."}
+{"k": "set.ap.intro.app", "src": "24955be8", "v": "زر App على الشريط المثبت وتحت /app. زر القائمة بجانب خانة الكتابة يبقى بالشكل نفسه دائمًا."}
+{"k": "set.ap.intro.prompt", "src": "98ac28c7", "v": "زرّا «السماح» و«رفض» تحت طلب الإذن."}
+{"k": "set.ap.intro.settings", "src": "d578c71b", "v": "كيف تُبرز /settings الخيار الحالي."}
+{"k": "set.ap.intro.stop", "src": "8ffbb917", "v": "زر الإيقاف على بطاقة العمل وتحت سؤال أو طلب إذن."}
+{"k": "set.ap.opt.blue", "src": "7d44bc44", "v": "أزرق"}
+{"k": "set.ap.opt.coloured", "src": "9cb35f64", "v": "ملوّن - السماح أخضر والرفض أحمر"}
+{"k": "set.ap.opt.green", "src": "933bf21a", "v": "أخضر"}
+{"k": "set.ap.opt.highlight", "src": "64695a26", "v": "الخيار الحالي بالأزرق"}
+{"k": "set.ap.opt.normal", "src": "45e118d0", "v": "عادي"}
+{"k": "set.ap.opt.red", "src": "cc9db3a7", "v": "أحمر"}
+{"k": "set.ap.prompt.title", "src": "6d208c65", "v": "🔐 زرّا السماح والرفض"}
+{"k": "set.ap.settings.title", "src": "e264c4ca", "v": "⚙️ قائمة الإعدادات"}
+{"k": "set.ap.stop.title", "src": "15b66004", "v": "🛑 زر الإيقاف"}
+{"k": "set.ap.text", "src": "b16481f8", "v": "🎨 <b>المظهر</b>\n\nشكل أزرار aipager في هذه الدردشة. يسمح Telegram للبوت بتلوين الزر بالأزرق أو الأخضر أو الأحمر، أو تركه عاديًا. التطبيقات التي لا تدعم الألوان تعرض كل الأزرار عادية."}
+{"k": "set.btn.appearance", "src": "be0e75bb", "v": "🎨 المظهر"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ إغلاق"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 الجلسات الجديدة"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 المجلد: {folder} ›"}

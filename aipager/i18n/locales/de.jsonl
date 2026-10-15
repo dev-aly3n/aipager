@@ -733,6 +733,24 @@
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> läuft wieder"}
 {"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> läuft wieder, im Auto-Modus: Der Vollzugriff-Modus ist nur für Admins."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "An {session} gesendet."}
+{"k": "set.ap.app.title", "src": "86920bff", "v": "📱 App-Button"}
+{"k": "set.ap.help.normal", "src": "bfa72d24", "v": "Das normale Aussehen von Telegram, wie bei allen anderen Buttons."}
+{"k": "set.ap.help.settings_normal", "src": "d7830ec5", "v": "Nur ✅ markiert die aktuelle Auswahl."}
+{"k": "set.ap.intro.app", "src": "24955be8", "v": "Der App-Button in der angehefteten Nachricht und unter /app. Der Menü-Button neben dem Eingabefeld sieht immer gleich aus."}
+{"k": "set.ap.intro.prompt", "src": "98ac28c7", "v": "Die Buttons Erlauben und Ablehnen unter einer Berechtigungsanfrage."}
+{"k": "set.ap.intro.settings", "src": "d578c71b", "v": "Wie /settings die aktuelle Auswahl markiert."}
+{"k": "set.ap.intro.stop", "src": "8ffbb917", "v": "Der Stoppen-Button auf der Arbeitskarte und unter einer Frage oder Berechtigungsanfrage."}
+{"k": "set.ap.opt.blue", "src": "7d44bc44", "v": "Blau"}
+{"k": "set.ap.opt.coloured", "src": "9cb35f64", "v": "Farbig - Erlauben grün, Ablehnen rot"}
+{"k": "set.ap.opt.green", "src": "933bf21a", "v": "Grün"}
+{"k": "set.ap.opt.highlight", "src": "64695a26", "v": "Aktuelle Auswahl in Blau"}
+{"k": "set.ap.opt.normal", "src": "45e118d0", "v": "Normal"}
+{"k": "set.ap.opt.red", "src": "cc9db3a7", "v": "Rot"}
+{"k": "set.ap.prompt.title", "src": "6d208c65", "v": "🔐 Erlauben- und Ablehnen-Buttons"}
+{"k": "set.ap.settings.title", "src": "e264c4ca", "v": "⚙️ Einstellungsmenü"}
+{"k": "set.ap.stop.title", "src": "15b66004", "v": "🛑 Stoppen-Button"}
+{"k": "set.ap.text", "src": "b16481f8", "v": "🎨 <b>Aussehen</b>\n\nWie die Buttons von aipager in diesem Chat aussehen. Telegram lässt einen Bot einen Button blau, grün oder rot färben oder normal lassen. Apps, die keine Farben können, zeigen alle Buttons normal."}
+{"k": "set.btn.appearance", "src": "be0e75bb", "v": "🎨 Aussehen"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Schließen"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Neue Sitzungen"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 Ordner: {folder} ›"}

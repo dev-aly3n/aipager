@@ -223,6 +223,23 @@ def test_the_app_command_button_carries_the_chats_language(bot, run_async, mk_up
     assert markup.inline_keyboard[0][0].web_app.url == WANT[chat_id]
 
 
+def test_the_app_command_button_takes_the_chats_colour(bot, run_async, mk_update,
+                                                       monkeypatch):
+    """/settings → 🎨 Appearance → App button reaches /app's button too."""
+    from aipager import preferences
+    monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
+    monkeypatch.setattr("aipager.miniapp.tunnel.resolve_public_url",
+                        AsyncMock(return_value=URL))
+    monkeypatch.setattr(type(bot), "_authorize", AsyncMock(return_value=True))
+    preferences.set_appearance(DM_EN, "app", "red")
+    update = mk_update("/app", user_id=DM_EN, chat_id=DM_EN)
+    update.effective_chat.type = "private"
+    update.effective_user.language_code = None
+    run_async(bot._handle_app_cmd(update, MagicMock()))
+    markup = update.message.reply_text.await_args.kwargs["reply_markup"]
+    assert markup.inline_keyboard[0][0].to_dict()["style"] == "danger"
+
+
 @pytest.mark.parametrize("chat_id", [DM_EN, DM_FA], ids=["en", "fa"])
 def test_the_pinned_bar_app_button_carries_the_chats_language(bot, chat_id):
     bot._miniapp_url = URL

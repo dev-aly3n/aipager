@@ -733,6 +733,24 @@
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> знову працює"}
 {"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> знову працює, у режимі Авто: режим «Повний доступ» лише для адмінів."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "Надіслано в {session}."}
+{"k": "set.ap.app.title", "src": "86920bff", "v": "📱 Кнопка App"}
+{"k": "set.ap.help.normal", "src": "bfa72d24", "v": "Звичайний вигляд Telegram, як в інших кнопок."}
+{"k": "set.ap.help.settings_normal", "src": "d7830ec5", "v": "Поточний вибір позначено лише ✅."}
+{"k": "set.ap.intro.app", "src": "24955be8", "v": "Кнопка App у закріпленому повідомленні та під /app. Кнопка меню біля поля введення завжди виглядає однаково."}
+{"k": "set.ap.intro.prompt", "src": "98ac28c7", "v": "Кнопки «Дозволити» і «Відхилити» під запитом дозволу."}
+{"k": "set.ap.intro.settings", "src": "d578c71b", "v": "Як /settings позначає поточний вибір."}
+{"k": "set.ap.intro.stop", "src": "8ffbb917", "v": "Кнопка «Зупинити» в робочій картці та під запитанням чи запитом дозволу."}
+{"k": "set.ap.opt.blue", "src": "7d44bc44", "v": "Синій"}
+{"k": "set.ap.opt.coloured", "src": "9cb35f64", "v": "Зелена «Дозволити», червона «Відхилити»"}
+{"k": "set.ap.opt.green", "src": "933bf21a", "v": "Зелений"}
+{"k": "set.ap.opt.highlight", "src": "64695a26", "v": "Поточний вибір синім"}
+{"k": "set.ap.opt.normal", "src": "45e118d0", "v": "Звичайний"}
+{"k": "set.ap.opt.red", "src": "cc9db3a7", "v": "Червоний"}
+{"k": "set.ap.prompt.title", "src": "6d208c65", "v": "🔐 Кнопки «Дозволити» і «Відхилити»"}
+{"k": "set.ap.settings.title", "src": "e264c4ca", "v": "⚙️ Меню налаштувань"}
+{"k": "set.ap.stop.title", "src": "15b66004", "v": "🛑 Кнопка «Зупинити»"}
+{"k": "set.ap.text", "src": "b16481f8", "v": "🎨 <b>Оформлення</b>\n\nЯк виглядають кнопки aipager у цьому чаті. Telegram дозволяє боту фарбувати кнопку в синій, зелений чи червоний колір або лишити її звичайною. Застосунки без підтримки кольорів показують усі кнопки звичайними."}
+{"k": "set.btn.appearance", "src": "be0e75bb", "v": "🎨 Оформлення"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Закрити"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Нові сесії"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 Папка: {folder} ›"}

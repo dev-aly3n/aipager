@@ -76,11 +76,6 @@ log = logging.getLogger(__name__)
 
 STOP_PLAIN = Msg("perm.btn.stop_plain", "Stop",
                  note="The busy card's button: stop what Claude is doing")
-#: The busy card's Stop button in the Bot API's "primary" style (blue):
-#: easy to find on a card that changes all the time, without the alarm of
-#: "danger" (red) or the "go" of "success" (green). An app that does not
-#: know button styles draws it as a plain button.
-STOP_STYLE = "primary"
 ALLOW = Msg("perm.btn.allow", "✅ Allow", note="Permission prompt button: let the tool run once")
 DENY = Msg("perm.btn.deny", "❌ Deny", note="Permission prompt button: refuse the tool call")
 ALLOW_ALWAYS = Msg("perm.btn.allow_always", "🟢 Allow always",
@@ -446,12 +441,15 @@ class KeyboardMixin:
         # _build_resume_mode_keyboard below; do not hoist to module top.
         from aipager.bot import session_parity
 
+        from aipager.bot import appearance
+
         chat_id = resolve_chat_id_int(sess) or 0
         return InlineKeyboardMarkup([[
             InlineKeyboardButton(
                 i18n.for_sess(sess).text(STOP_PLAIN),
                 callback_data=session_parity.session_cb(self, chat_id, sess, "stop"),
-                style=STOP_STYLE),
+                # The chat's Appearance choice; Normal sends no style at all.
+                style=appearance.stop_style(chat_id)),
         ]])
 
     def _build_retry_keyboard(self, sess: TrackedSession) -> InlineKeyboardMarkup:
@@ -500,23 +498,30 @@ class KeyboardMixin:
             always_available = (
                 (sess.pending_permission or {}).get("tool_info") or {}
             ).get("always_available")
+        from aipager.bot import appearance
+
         chat_id = resolve_chat_id_int(sess) or 0
         tr = i18n.for_sess(sess)
+        allow_style, deny_style = appearance.prompt_styles(chat_id)
         stop = InlineKeyboardButton(
-            tr.text(STOP), callback_data=session_parity.session_cb(self, chat_id, sess, "stop"))
+            tr.text(STOP), callback_data=session_parity.session_cb(self, chat_id, sess, "stop"),
+            style=appearance.stop_style(chat_id))
         rows = [
             [InlineKeyboardButton(
                 tr.text(ALLOW),
-                callback_data=session_parity.session_cb(self, chat_id, sess, "allow")),
+                callback_data=session_parity.session_cb(self, chat_id, sess, "allow"),
+                style=allow_style),
              InlineKeyboardButton(
                 tr.text(DENY),
-                callback_data=session_parity.session_cb(self, chat_id, sess, "deny"))],
+                callback_data=session_parity.session_cb(self, chat_id, sess, "deny"),
+                style=deny_style)],
         ]
         if always_available is True:
             rows.append([
                 InlineKeyboardButton(
                     tr.text(ALLOW_ALWAYS),
-                    callback_data=session_parity.session_cb(self, chat_id, sess, "allow_always")),
+                    callback_data=session_parity.session_cb(self, chat_id, sess, "allow_always"),
+                    style=allow_style),
                 stop,
             ])
         else:
@@ -656,6 +661,8 @@ class KeyboardMixin:
                 ))
             if buttons:
                 rows.append(buttons)
+        from aipager.bot import appearance
         rows.append([InlineKeyboardButton(
-            tr.text(STOP), callback_data=session_parity.session_cb(self, chat_id, sess, "stop"))])
+            tr.text(STOP), callback_data=session_parity.session_cb(self, chat_id, sess, "stop"),
+            style=appearance.stop_style(chat_id))])
         return InlineKeyboardMarkup(rows)

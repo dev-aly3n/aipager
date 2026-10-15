@@ -733,6 +733,24 @@
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> está rodando de novo"}
 {"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> está rodando de novo no Modo Automático: o Modo Acesso total é só para admins."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "Enviado para {session}."}
+{"k": "set.ap.app.title", "src": "86920bff", "v": "📱 Botão App"}
+{"k": "set.ap.help.normal", "src": "bfa72d24", "v": "A aparência do próprio Telegram, como os outros botões."}
+{"k": "set.ap.help.settings_normal", "src": "d7830ec5", "v": "Só ✅ marca a opção atual."}
+{"k": "set.ap.intro.app", "src": "24955be8", "v": "O botão App na mensagem fixada e embaixo de /app. O botão de menu ao lado da caixa de mensagem sempre fica igual."}
+{"k": "set.ap.intro.prompt", "src": "98ac28c7", "v": "Os botões Permitir e Negar embaixo de um pedido de permissão."}
+{"k": "set.ap.intro.settings", "src": "d578c71b", "v": "Como /settings marca a opção atual."}
+{"k": "set.ap.intro.stop", "src": "8ffbb917", "v": "O botão Parar no cartão de atividade e embaixo de uma pergunta ou de um pedido de permissão."}
+{"k": "set.ap.opt.blue", "src": "7d44bc44", "v": "Azul"}
+{"k": "set.ap.opt.coloured", "src": "9cb35f64", "v": "Cor - Permitir verde, Negar vermelho"}
+{"k": "set.ap.opt.green", "src": "933bf21a", "v": "Verde"}
+{"k": "set.ap.opt.highlight", "src": "64695a26", "v": "Opção atual em azul"}
+{"k": "set.ap.opt.normal", "src": "45e118d0", "v": "Normal"}
+{"k": "set.ap.opt.red", "src": "cc9db3a7", "v": "Vermelho"}
+{"k": "set.ap.prompt.title", "src": "6d208c65", "v": "🔐 Botões Permitir e Negar"}
+{"k": "set.ap.settings.title", "src": "e264c4ca", "v": "⚙️ Menu de configurações"}
+{"k": "set.ap.stop.title", "src": "15b66004", "v": "🛑 Botão Parar"}
+{"k": "set.ap.text", "src": "b16481f8", "v": "🎨 <b>Aparência</b>\n\nComo os botões do aipager aparecem neste chat. O Telegram deixa um bot pintar um botão de azul, verde ou vermelho, ou deixá-lo normal. Apps que não aceitam cores mostram todos os botões normais."}
+{"k": "set.btn.appearance", "src": "be0e75bb", "v": "🎨 Aparência"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Fechar"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Novas sessões"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 Pasta: {folder} ›"}

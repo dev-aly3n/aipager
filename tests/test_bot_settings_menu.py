@@ -30,11 +30,12 @@ def test_root_has_four_sections_then_per_session_then_close():
     data = _all_callback_data(kb)
     # 8.30 added "cadence" (Long-turn card updates) after "diffs";
     # 2026-09-30 added "🆕 New sessions" (the chat's /new defaults) above
-    # the per-session row; the multilingual design put "🌐 Language" first.
+    # the per-session row; the multilingual design put "🌐 Language" first;
+    # 2026-10-15 added "🎨 Appearance" (button colours) above New sessions.
     assert data == [
         "_:set:lang",
         "_:set:layout", "_:set:diffs", "_:set:cadence", "_:set:formatting",
-        "_:set:length", "_:set:level", "_:set:ns", "_:spref", "_:set:close",
+        "_:set:length", "_:set:level", "_:set:ap", "_:set:ns", "_:spref", "_:set:close",
     ]
 
 

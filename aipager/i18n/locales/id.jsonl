@@ -733,6 +733,24 @@
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> dilanjutkan"}
 {"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> dilanjutkan dalam Mode Auto: Mode Akses penuh perlu admin."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "Dikirim ke {session}."}
+{"k": "set.ap.app.title", "src": "86920bff", "v": "📱 Tombol App"}
+{"k": "set.ap.help.normal", "src": "bfa72d24", "v": "Tampilan bawaan Telegram, seperti tombol lain."}
+{"k": "set.ap.help.settings_normal", "src": "d7830ec5", "v": "Hanya ✅ yang menandai pilihan saat ini."}
+{"k": "set.ap.intro.app", "src": "24955be8", "v": "Tombol App di bilah yang disematkan dan di bawah /app. Tombol menu di samping kotak pesan selalu terlihat sama."}
+{"k": "set.ap.intro.prompt", "src": "98ac28c7", "v": "Tombol Izinkan dan Tolak di bawah permintaan izin."}
+{"k": "set.ap.intro.settings", "src": "d578c71b", "v": "Cara /settings menandai pilihan saat ini."}
+{"k": "set.ap.intro.stop", "src": "8ffbb917", "v": "Tombol Hentikan di kartu kerja dan di bawah pertanyaan atau permintaan izin."}
+{"k": "set.ap.opt.blue", "src": "7d44bc44", "v": "Biru"}
+{"k": "set.ap.opt.coloured", "src": "9cb35f64", "v": "Berwarna - Izinkan hijau, Tolak merah"}
+{"k": "set.ap.opt.green", "src": "933bf21a", "v": "Hijau"}
+{"k": "set.ap.opt.highlight", "src": "64695a26", "v": "Pilihan saat ini biru"}
+{"k": "set.ap.opt.normal", "src": "45e118d0", "v": "Biasa"}
+{"k": "set.ap.opt.red", "src": "cc9db3a7", "v": "Merah"}
+{"k": "set.ap.prompt.title", "src": "6d208c65", "v": "🔐 Tombol Izinkan dan Tolak"}
+{"k": "set.ap.settings.title", "src": "e264c4ca", "v": "⚙️ Menu pengaturan"}
+{"k": "set.ap.stop.title", "src": "15b66004", "v": "🛑 Tombol Hentikan"}
+{"k": "set.ap.text", "src": "b16481f8", "v": "🎨 <b>Tampilan</b>\n\nCara tombol aipager terlihat di chat ini. Telegram membolehkan bot mewarnai tombol biru, hijau, atau merah, atau membiarkannya biasa. Aplikasi yang tidak mendukung warna menampilkan semua tombol biasa."}
+{"k": "set.btn.appearance", "src": "be0e75bb", "v": "🎨 Tampilan"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Tutup"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Sesi baru"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 Folder: {folder} ›"}

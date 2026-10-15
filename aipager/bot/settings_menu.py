@@ -292,6 +292,11 @@ def render_settings_root(
                               callback_data=f"_:set:{section}")]
         for section in SECTIONS
     ]
+    # How aipager's buttons look here (appearance.py): chat-wide, kept out
+    # of SECTIONS on purpose (not a reply style, no per-session override).
+    from aipager.bot import appearance
+    rows.append([InlineKeyboardButton(
+        tr.text(appearance.BUTTON), callback_data="_:set:ap")])
     # What /new starts a session with (mode, model, folder): the chat's
     # own defaults, kept out of SECTIONS on purpose (new_flow.py).
     rows.append([InlineKeyboardButton(
@@ -353,6 +358,8 @@ def render_settings_section(
     # so a section added there cannot be forgotten here.
     order, labels = _SECTION_ORDERS[section], _SECTION_LABELS[section]
 
+    from aipager.bot import appearance
+    marked = appearance.choice_style(chat_id)
     rows = []
     for value in order:
         marker = " ✅" if value == current else ""
@@ -363,6 +370,7 @@ def render_settings_section(
         rows.append([InlineKeyboardButton(
             f"{tr.text(labels[value])}{marker}",
             callback_data=f"_:set:{section}:{token}",
+            style=marked if value == current else None,
         )])
     rows.append([InlineKeyboardButton(tr.text(language_menu.BACK),
                                       callback_data="_:set:back")])

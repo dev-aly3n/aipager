@@ -733,6 +733,24 @@
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> vuelve a estar en marcha"}
 {"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> vuelve a estar en marcha en Modo Automático: el Modo Acceso total es solo para admins."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "Enviado a {session}."}
+{"k": "set.ap.app.title", "src": "86920bff", "v": "📱 Botón App"}
+{"k": "set.ap.help.normal", "src": "bfa72d24", "v": "El aspecto propio de Telegram, como el resto de botones."}
+{"k": "set.ap.help.settings_normal", "src": "d7830ec5", "v": "Solo ✅ marca la opción actual."}
+{"k": "set.ap.intro.app", "src": "24955be8", "v": "El botón App en el mensaje fijado y debajo de /app. El botón de menú junto al cuadro de mensaje siempre se ve igual."}
+{"k": "set.ap.intro.prompt", "src": "98ac28c7", "v": "Los botones Permitir y Rechazar debajo de una solicitud de permiso."}
+{"k": "set.ap.intro.settings", "src": "d578c71b", "v": "Cómo marca /settings la opción actual."}
+{"k": "set.ap.intro.stop", "src": "8ffbb917", "v": "El botón Detener en la tarjeta de actividad y debajo de una pregunta o una solicitud de permiso."}
+{"k": "set.ap.opt.blue", "src": "7d44bc44", "v": "Azul"}
+{"k": "set.ap.opt.coloured", "src": "9cb35f64", "v": "Color - Permitir verde, Rechazar rojo"}
+{"k": "set.ap.opt.green", "src": "933bf21a", "v": "Verde"}
+{"k": "set.ap.opt.highlight", "src": "64695a26", "v": "Opción actual en azul"}
+{"k": "set.ap.opt.normal", "src": "45e118d0", "v": "Normal"}
+{"k": "set.ap.opt.red", "src": "cc9db3a7", "v": "Rojo"}
+{"k": "set.ap.prompt.title", "src": "6d208c65", "v": "🔐 Botones Permitir y Rechazar"}
+{"k": "set.ap.settings.title", "src": "e264c4ca", "v": "⚙️ Menú de ajustes"}
+{"k": "set.ap.stop.title", "src": "15b66004", "v": "🛑 Botón Detener"}
+{"k": "set.ap.text", "src": "b16481f8", "v": "🎨 <b>Apariencia</b>\n\nCómo se ven los botones de aipager en este chat. Telegram deja que un bot pinte un botón de azul, verde o rojo, o lo deje normal. Las apps que no admiten colores muestran todos los botones normales."}
+{"k": "set.btn.appearance", "src": "be0e75bb", "v": "🎨 Apariencia"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Cerrar"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Sesiones nuevas"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 Carpeta: {folder} ›"}

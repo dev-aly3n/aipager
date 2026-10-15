@@ -1054,6 +1054,26 @@ CSS = """
   .choice:disabled { opacity: 0.5; }
   .choice-main { grid-column: 2; grid-row: 1; }
   .choice.is-active .choice-main { font-weight: 600; }
+  /* Button colours (Appearance): Telegram's three button styles. */
+  .choice-main.swatch::before {
+    content: "";
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-inline-end: 6px;
+    vertical-align: -1px;
+  }
+  .swatch-blue::before { background: #3390ec; }
+  .swatch-green::before { background: #31b545; }
+  .swatch-red::before { background: #e53935; }
+  .swatch-green-red::before { background: linear-gradient(90deg, #31b545 50%, #e53935 50%); }
+  .settings-subhead {
+    padding: var(--s3) 0 var(--s1);
+    font-size: var(--fs-cap);
+    font-weight: 600;
+    color: var(--ink-2);
+  }
   .tag {
     grid-column: 3;
     grid-row: 1;

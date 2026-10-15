@@ -733,6 +733,24 @@
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> 세션을 다시 열었어요"}
 {"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> 세션을 자동 모드로 다시 열었어요: 전체 권한 모드는 관리자만 쓸 수 있어요."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "{session} 세션에 보냈어요."}
+{"k": "set.ap.app.title", "src": "86920bff", "v": "📱 App 버튼"}
+{"k": "set.ap.help.normal", "src": "bfa72d24", "v": "다른 버튼처럼 Telegram 기본 모양이에요."}
+{"k": "set.ap.help.settings_normal", "src": "d7830ec5", "v": "✅로만 지금 선택한 항목을 표시해요."}
+{"k": "set.ap.intro.app", "src": "24955be8", "v": "고정된 표시줄과 /app 아래에 있는 App 버튼이에요. 메시지 입력창 옆의 메뉴 버튼은 항상 같은 모양이에요."}
+{"k": "set.ap.intro.prompt", "src": "98ac28c7", "v": "권한 요청 아래에 있는 허용 버튼과 거부 버튼이에요."}
+{"k": "set.ap.intro.settings", "src": "d578c71b", "v": "/settings가 지금 선택한 항목을 표시하는 방식이에요."}
+{"k": "set.ap.intro.stop", "src": "8ffbb917", "v": "작업 카드와 질문이나 권한 요청 아래에 있는 중지 버튼이에요."}
+{"k": "set.ap.opt.blue", "src": "7d44bc44", "v": "파란색"}
+{"k": "set.ap.opt.coloured", "src": "9cb35f64", "v": "색 있음 - 허용은 초록, 거부는 빨강"}
+{"k": "set.ap.opt.green", "src": "933bf21a", "v": "초록색"}
+{"k": "set.ap.opt.highlight", "src": "64695a26", "v": "지금 선택한 항목을 파란색으로"}
+{"k": "set.ap.opt.normal", "src": "45e118d0", "v": "기본"}
+{"k": "set.ap.opt.red", "src": "cc9db3a7", "v": "빨간색"}
+{"k": "set.ap.prompt.title", "src": "6d208c65", "v": "🔐 허용·거부 버튼"}
+{"k": "set.ap.settings.title", "src": "e264c4ca", "v": "⚙️ 설정 메뉴"}
+{"k": "set.ap.stop.title", "src": "15b66004", "v": "🛑 중지 버튼"}
+{"k": "set.ap.text", "src": "b16481f8", "v": "🎨 <b>모양</b>\n\n이 채팅에서 aipager 버튼이 보이는 방식이에요. Telegram에서는 봇이 버튼을 파란색, 초록색, 빨간색으로 칠하거나 기본 모양으로 둘 수 있어요. 색을 지원하지 않는 앱에서는 모든 버튼이 기본 모양으로 보여요."}
+{"k": "set.btn.appearance", "src": "be0e75bb", "v": "🎨 모양"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ 닫기"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 새 세션"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 폴더: {folder} ›"}

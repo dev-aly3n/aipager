@@ -293,15 +293,21 @@ def test_english_goldens_change_only_in_the_justified_surfaces():
     changed = {k for k in set(before) | set(after) if before.get(k) != after.get(k)}
     # The main keyboard lost its App button (2026-10-12), and only that.
     from tests.i18n_surfaces import (AGENTS_TREE_CARD_SURFACES, AGENTS_TREE_NEW_SURFACES,
-                                     AGENTS_TREE_SURFACES, NO_KEYBOARD_APP_SURFACES,
+                                     AGENTS_TREE_SURFACES, APPEARANCE_NEW_SURFACES,
+                                     APPEARANCE_SURFACES, NO_KEYBOARD_APP_SURFACES,
                                      RESTART_NOW_NEW_SURFACES, with_keyboard_app_removed,
-                                     without_card_divider)
+                                     without_appearance_row, without_card_divider)
     # Restart now without a service (2026-10-12) added one new surface.
     # The agents tree (2026-10-14) changed the block under an answer, put a
     # divider above the card's status line, and added one surface.
+    # 🎨 Appearance (2026-10-15) added one row to the settings menus, and
+    # its own page.
     assert sorted(changed - JUSTIFIED - NO_KEYBOARD_APP_SURFACES
                   - RESTART_NOW_NEW_SURFACES - AGENTS_TREE_SURFACES
-                  - AGENTS_TREE_NEW_SURFACES) == []
+                  - AGENTS_TREE_NEW_SURFACES - APPEARANCE_SURFACES
+                  - APPEARANCE_NEW_SURFACES) == []
+    for k in APPEARANCE_SURFACES:
+        assert without_appearance_row(after[k]) == before[k], k
     for k in NO_KEYBOARD_APP_SURFACES:
         assert after[k] == with_keyboard_app_removed(before[k]), k
     for k in AGENTS_TREE_CARD_SURFACES:

@@ -74,11 +74,22 @@ def test_english_status_is_todays(env, golden, name):
     assert got["status"] == golden[name]["status"]
 
 
+#: The scenarios whose body /settings → 🎨 Appearance (2026-10-15) gave an
+#: "appearance" entry (the Mini App's Appearance group), and nothing else.
+APPEARANCE_BODIES = {"get_preferences"}
+
+
 @pytest.mark.parametrize("name", sorted(_scenarios.SCENARIOS))
 def test_english_body_is_todays(env, golden, name):
     if RECORD:
         return
-    assert _run(env, name)["body"] == golden[name]["body"]
+    body = _run(env, name)["body"]
+    if name in APPEARANCE_BODIES:
+        body = dict(body)
+        appearance = body.pop("appearance")
+        assert appearance["title"] == "🎨 Appearance"
+        assert [g["field"] for g in appearance["schema"]] == ["stop", "prompt", "app", "settings"]
+    assert body == golden[name]["body"]
 
 
 @pytest.mark.parametrize("name", sorted(_scenarios.SCENARIOS))

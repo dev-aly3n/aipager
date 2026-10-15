@@ -1109,11 +1109,12 @@ def settings_row_state(bot: "TelegramBot", chat_id, user_id) -> str | None:
     return SETTINGS_ROW_LABELS["ask"]
 
 
-def render_settings_section(tr=None) -> tuple[str, InlineKeyboardMarkup]:
+def render_settings_section(tr=None, chat_id=None) -> tuple[str, InlineKeyboardMarkup]:
     """The Problem reports page of /settings, in *tr*'s language (the
-    owner's private chat; English when None)."""
+    owner's private chat; English when None), the current choice with
+    *chat_id*'s 🎨 Appearance highlight."""
     from aipager import i18n, preferences
-    from aipager.bot import language_menu
+    from aipager.bot import appearance, language_menu
     from aipager.report import store
 
     tr = tr or i18n.get("en")
@@ -1127,8 +1128,11 @@ def render_settings_section(tr=None) -> tuple[str, InlineKeyboardMarkup]:
     def _label(value: str) -> str:
         return tr.text(SETTINGS_ROW_LABELS[value]) + (" ✅" if value == current else "")
 
-    rows = [[InlineKeyboardButton(_label("ask"), callback_data="_:rp:set:ask")],
-            [InlineKeyboardButton(_label("off"), callback_data="_:rp:set:off")]]
+    on = appearance.choice_style(chat_id)
+    rows = [[InlineKeyboardButton(_label("ask"), callback_data="_:rp:set:ask",
+                                  style=on if current == "ask" else None)],
+            [InlineKeyboardButton(_label("off"), callback_data="_:rp:set:off",
+                                  style=on if current == "off" else None)]]
     if auto_off:
         rows.append([InlineKeyboardButton(tr.text(TURN_ON_BUTTON),
                                           callback_data="_:rp:set:on")])
@@ -1151,8 +1155,8 @@ async def _tap_settings(bot: "TelegramBot", query, parts: list[str], *, pop=None
         else:
             await bot._safe_answer(query, _pop(query, pop).text(INVALID_CALLBACK))
             return
-    text, kb = render_settings_section(
-        i18n.for_chat(_message_chat_id(getattr(query, "message", None))))
+    chat_id = _message_chat_id(getattr(query, "message", None))
+    text, kb = render_settings_section(i18n.for_chat(chat_id), chat_id)
     try:
         await edit_text(query, text, parse_mode="HTML", reply_markup=kb,
                         rate_limit_args=_INSTANT)

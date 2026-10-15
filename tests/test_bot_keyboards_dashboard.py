@@ -9,6 +9,8 @@ from __future__ import annotations
 import time
 from unittest.mock import AsyncMock
 
+import pytest
+
 from telegram import InlineKeyboardMarkup
 
 from aipager.state import Status, TrackedSession
@@ -177,16 +179,42 @@ def test_build_stop_keyboard(mk_bot):
     assert _destination(bot, kb.inline_keyboard[0][0].callback_data) == (sess.name, "stop")
 
 
-def test_the_busy_cards_stop_button_is_blue_and_the_prompts_is_not(mk_bot):
-    """The busy card's Stop is the Bot API's "primary" (blue) style, on
-    the wire too; the permission prompt's Stop, beside Allow and Deny,
-    keeps the app's own look."""
+def test_buttons_are_plain_until_the_chat_picks_colours(mk_bot):
+    """Appearance starts on Normal: no button carries a style at all, on
+    the wire too (byte-identical to before button colours existed)."""
     bot = mk_bot()
     sess = _sess(bot)
+    for kb in (bot._build_stop_keyboard(sess),
+               bot._build_permission_keyboard(sess, always_available=True)):
+        assert all("style" not in b for row in kb.to_dict()["inline_keyboard"] for b in row)
+
+
+@pytest.mark.parametrize("colour,style", [("blue", "primary"), ("green", "success"),
+                                          ("red", "danger")])
+def test_the_stop_buttons_take_the_chats_colour(mk_bot, colour, style):
+    from aipager import preferences
+    from aipager.bot.transport import resolve_chat_id_int
+    bot = mk_bot()
+    sess = _sess(bot)
+    preferences.set_appearance(resolve_chat_id_int(sess) or 0, "stop", colour)
     [[stop]] = bot._build_stop_keyboard(sess).to_dict()["inline_keyboard"]
-    assert stop["style"] == "primary"
+    assert stop["style"] == style
     prompt = bot._build_permission_keyboard(sess, always_available=False).to_dict()
-    assert all("style" not in button for row in prompt["inline_keyboard"] for button in row)
+    [[allow, deny], [prompt_stop]] = prompt["inline_keyboard"]
+    assert prompt_stop["style"] == style
+    assert "style" not in allow and "style" not in deny
+
+
+def test_coloured_prompt_buttons_are_allow_green_and_deny_red(mk_bot):
+    from aipager import preferences
+    from aipager.bot.transport import resolve_chat_id_int
+    bot = mk_bot()
+    sess = _sess(bot)
+    preferences.set_appearance(resolve_chat_id_int(sess) or 0, "prompt", "coloured")
+    prompt = bot._build_permission_keyboard(sess, always_available=True).to_dict()
+    [[allow, deny], [always, stop]] = prompt["inline_keyboard"]
+    assert (allow["style"], deny["style"], always["style"]) == ("success", "danger", "success")
+    assert "style" not in stop
 
 
 def test_build_retry_keyboard(mk_bot):

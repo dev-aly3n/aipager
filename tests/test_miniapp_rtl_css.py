@@ -136,6 +136,27 @@ _PERCENT_BEFORE = [".lamp-num::after"]
 _PERCENT_AFTER = ".lamp-pct"
 
 
+#: The rules /settings → 🎨 Appearance added (2026-10-15), right after
+#: the choice label's: the colour dot before a choice's label, one colour
+#: per Telegram button style, and the Appearance group's subheading.
+_APPEARANCE_AFTER = ".choice.is-active .choice-main"
+_APPEARANCE_ADDED = [
+    ["", ".choice-main.swatch::before", [
+        ["border-radius", "50%"], ["content", "\"\""], ["display", "inline-block"],
+        ["height", "12px"], ["margin-right", "6px"], ["vertical-align", "-1px"],
+        ["width", "12px"]]],
+    ["", ".swatch-blue::before", [["background", "#3390ec"]]],
+    ["", ".swatch-green::before", [["background", "#31b545"]]],
+    ["", ".swatch-red::before", [["background", "#e53935"]]],
+    ["", ".swatch-green-red::before", [
+        ["background", "linear-gradient(90deg, #31b545 50%, #e53935 50%)"]]],
+    ["", ".settings-subhead", [
+        ["color", "var(--ink-2)"], ["font-size", "var(--fs-cap)"], ["font-weight", "600"],
+        ["padding-bottom", "var(--s1)"], ["padding-left", "0"], ["padding-right", "0"],
+        ["padding-top", "var(--s3)"]]],
+]
+
+
 def _expected_now(golden: list) -> list:
     out = []
     for ctx, sel, props in golden:
@@ -143,6 +164,8 @@ def _expected_now(golden: list) -> list:
             out.append([ctx, _PERCENT_AFTER, [p for p in props if p[0] != "content"]])
         else:
             out.append([ctx, sel, props])
+        if sel == _APPEARANCE_AFTER:
+            out.extend(_APPEARANCE_ADDED)
     return out
 
 

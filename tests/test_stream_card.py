@@ -585,11 +585,37 @@ def test_edit_busy_rich_reply_markup_on_every_call(mk_bot, run_async, monkeypatc
     run_async(bot._edit_busy_rich(sess, "Working"))
     assert len(payloads) == 1
     assert "reply_markup" in payloads[0]
-    # The blue Stop goes out with the edit itself, not only in the builder.
+    # The Stop button's look goes out with the edit itself: plain by default.
     markup = payloads[0]["reply_markup"]
     if isinstance(markup, str):
         markup = json.loads(markup)
-    assert markup["inline_keyboard"][0][0]["style"] == "primary"
+    assert "style" not in markup["inline_keyboard"][0][0]
+
+
+def test_edit_busy_rich_stop_takes_the_chats_colour(mk_bot, run_async, monkeypatch):
+    """The chat's Appearance choice reaches the edit itself, not only the
+    builder."""
+    import aipager.bot.rich_message as rm_mod
+    from aipager import preferences
+    from aipager.bot.transport import resolve_chat_id_int
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 10
+    sess.busy_started_at = time.monotonic() - 5
+    sess.stream_last_rendered = ""
+    preferences.set_appearance(resolve_chat_id_int(sess) or 0, "stop", "red")
+    payloads = []
+
+    async def _fake_post(method, payload, **_kw):
+        payloads.append(payload)
+        return {"ok": True, "result": {}}
+
+    monkeypatch.setattr(rm_mod, "_post", _fake_post)
+    run_async(bot._edit_busy_rich(sess, "Working"))
+    markup = payloads[0]["reply_markup"]
+    if isinstance(markup, str):
+        markup = json.loads(markup)
+    assert markup["inline_keyboard"][0][0]["style"] == "danger"
 
 
 def test_edit_busy_rich_blocked_returns_none(mk_bot, run_async, monkeypatch):

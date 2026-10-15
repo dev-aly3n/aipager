@@ -91,12 +91,23 @@ AGENTS_TREE_CARD_SURFACES = frozenset({"card.busy", "card.final", "card.status_l
 AGENTS_TREE_SURFACES = AGENTS_TREE_CARD_SURFACES | frozenset({"agents_line"})
 #: The surface the agents tree added (a helper's rows on the card).
 AGENTS_TREE_NEW_SURFACES = frozenset({"card.helpers"})
+#: The settings menus /settings → 🎨 Appearance (2026-10-15) changed: one
+#: "🎨 Appearance" row, and nothing else (see :func:`without_appearance_row`).
+APPEARANCE_SURFACES = frozenset({"settings.root", "settings.sections"})
+#: The surface it added (the Appearance page and each choice's page).
+APPEARANCE_NEW_SURFACES = frozenset({"settings.appearance"})
 
 
 def without_card_divider(value):
     """*value* (a card surface's list of texts) without the divider above
     each card's status line, as goldens recorded on older bases have it."""
     return [v.replace("\n\n---\n\n", "\n\n") for v in value]
+
+
+def without_appearance_row(value):
+    """*value* (a settings menu's list of texts) without the "🎨 Appearance"
+    row goldens recorded on older bases do not have."""
+    return [v for v in value if v != "🎨 Appearance"]
 
 
 def with_keyboard_app_removed(value):
@@ -351,6 +362,31 @@ def _ns_bot(env):
     env.mp.setattr(launch, "allowed_roots", lambda *a, **k: ["/work/app", "/work/lib"])
     bot = env.mk_bot()
     return bot
+
+
+@surface("settings.appearance")
+def _settings_appearance(env):
+    """/settings → 🎨 Appearance: the page, each choice's options, and
+    the page again with every choice changed (the current one highlighted)."""
+    from aipager import preferences
+    from aipager.bot import appearance
+    env.store(CHAT)
+    out = []
+    text, kb = appearance.render_page(CHAT)
+    out += [text, *_inline(kb)]
+    for field in preferences.APPEARANCE_FIELDS:
+        text, kb = appearance.render_field(CHAT, field)
+        out += [text, *_inline(kb)]
+    for field, value in (("stop", "red"), ("prompt", "coloured"), ("app", "blue"),
+                         ("settings", "highlight")):
+        preferences.set_appearance(CHAT, field, value)
+    text, kb = appearance.render_page(CHAT)
+    out += [text, *_inline(kb)]
+    for entry in env.with_tr(appearance.appearance_schema):
+        out.append(entry["title"])
+        for option in entry["options"]:
+            out += [option["label"], option["help"]]
+    return out
 
 
 @surface("settings.new_sessions")
@@ -2530,7 +2566,7 @@ MIGRATED: set[str] = {
     "keyboard.main", "keyboard.main_group", "keyboard.templates", "keyboard.commands",
     "keyboard.models", "language.list",
     "settings.root", "settings.sections", "settings.schema", "settings.new_sessions",
-    "settings.per_session", "settings.problem_reports", "settings.taps",
+    "settings.per_session", "settings.problem_reports", "settings.taps", "settings.appearance",
     "menu.commands", "menu.button",
     "card.busy", "card.final", "card.waiting", "card.status_lines", "card.legacy",
     "card.helpers",

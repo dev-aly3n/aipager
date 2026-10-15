@@ -787,9 +787,11 @@ class DashboardMixin:
         # the WHOLE keyboard rejected, and the URL is a credential).
         url = getattr(self, "_miniapp_url", "")
         if url and chat in self._miniapp_button_chats():
+            from aipager.bot import appearance
             rows.append([InlineKeyboardButton(
                 kbwords.KB_APP,
-                web_app=WebAppInfo(url=miniapp_link.for_chat(url, chat)))])
+                web_app=WebAppInfo(url=miniapp_link.for_chat(url, chat)),
+                style=appearance.app_style(chat))])
         return "\n".join(lines), (InlineKeyboardMarkup(rows) if rows else None)
 
     async def pinned_app_changed(self) -> None:

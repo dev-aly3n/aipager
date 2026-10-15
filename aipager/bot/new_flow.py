@@ -1272,6 +1272,12 @@ def render_new_session_defaults(
         tr = i18n.for_chat(chat_id)
     back = tr.text(language_menu.BACK)
     stored = preferences.get_new_session_defaults(chat_id)
+    # The chat's 🎨 Appearance highlight, for the ✅ button only.
+    from aipager.bot import appearance
+    on = appearance.choice_style(chat_id)
+
+    def _hl(current: bool) -> str | None:
+        return on if current else None
     # A viewer held to a members' root folder sees only it and the folders
     # inside it.
     root = (member_root.restricted_root(bot, viewer, chat_id)
@@ -1283,7 +1289,7 @@ def render_new_session_defaults(
     if view == "model":
         rows = [[InlineKeyboardButton(
             f"{label}{' ✅' if stored.model == label else ''}",
-            callback_data=f"_:set:ns:model:{idx}")]
+            callback_data=f"_:set:ns:model:{idx}", style=_hl(stored.model == label))]
             for idx, (label, _cmd) in enumerate(MODEL_CHOICES)]
         if (stored.model in RETIRED_MODEL_LABELS
                 and stored.model not in {lbl for lbl, _cmd in MODEL_CHOICES}):
@@ -1292,21 +1298,21 @@ def render_new_session_defaults(
             # the list (pick another row to change it).
             rows.append([InlineKeyboardButton(
                 f"{tr.text(NS_OLDER_MODEL, model=stored.model)} ✅",
-                callback_data="_:set:ns:model")])
+                callback_data="_:set:ns:model", style=on)])
         rows.append([InlineKeyboardButton(
             f"{tr.text(NS_DEFAULT_MODEL)}{' ✅' if not stored.model else ''}",
-            callback_data="_:set:ns:model:default")])
+            callback_data="_:set:ns:model:default", style=_hl(not stored.model))])
         rows.append([InlineKeyboardButton(back, callback_data="_:set:ns")])
         return (tr.html(NS_MODEL_TITLE), InlineKeyboardMarkup(rows))
     if view == "cwd":
         _defaults_folders_shown(bot)[chat_id] = list(roots)
         rows = [[InlineKeyboardButton(
             f"{_short_path(folder)}{' ✅' if stored.cwd == folder else ''}",
-            callback_data=f"_:set:ns:cwd:{idx}")]
+            callback_data=f"_:set:ns:cwd:{idx}", style=_hl(stored.cwd == folder))]
             for idx, folder in enumerate(roots)]
         rows.append([InlineKeyboardButton(
             f"{tr.text(NS_DEFAULT_FOLDER)}{' ✅' if not stored.cwd else ''}",
-            callback_data="_:set:ns:cwd:default")])
+            callback_data="_:set:ns:cwd:default", style=_hl(not stored.cwd))])
         rows.append([InlineKeyboardButton(back, callback_data="_:set:ns")])
         return (tr.html(NS_FOLDER_TITLE), InlineKeyboardMarkup(rows))
 
@@ -1337,12 +1343,15 @@ def render_new_session_defaults(
                   or not isinstance(chat_id, int) or chat_id < 0
                   or bool(bot._may_use_full_access(viewer, chat_id)))
     rows = [
-        [InlineKeyboardButton(_mark(perm_modes.AUTO), callback_data="_:set:ns:mode:auto")],
-        [InlineKeyboardButton(_mark(perm_modes.ASK), callback_data="_:set:ns:mode:ask")],
+        [InlineKeyboardButton(_mark(perm_modes.AUTO), callback_data="_:set:ns:mode:auto",
+                              style=_hl(stored.mode == perm_modes.AUTO))],
+        [InlineKeyboardButton(_mark(perm_modes.ASK), callback_data="_:set:ns:mode:ask",
+                              style=_hl(stored.mode == perm_modes.ASK))],
     ]
     if offer_full:
         rows.append([InlineKeyboardButton(_mark(perm_modes.FULL),
-                                          callback_data="_:set:ns:mode:full")])
+                                          callback_data="_:set:ns:mode:full",
+                                          style=_hl(stored.mode == perm_modes.FULL))])
     rows += [
         [InlineKeyboardButton(tr.text(NS_MODEL_BUTTON, model=model_text),
                               callback_data="_:set:ns:model")],

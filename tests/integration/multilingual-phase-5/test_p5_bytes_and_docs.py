@@ -28,6 +28,8 @@ from aipager.i18n import locales
 from tests.i18n_surfaces import (
     AGENTS_TREE_CARD_SURFACES,
     AGENTS_TREE_NEW_SURFACES,
+    APPEARANCE_NEW_SURFACES,
+    APPEARANCE_SURFACES,
     MODE_LABEL_SURFACES,
     NO_KEYBOARD_APP_SURFACES,
     RESTART_NOW_NEW_SURFACES,
@@ -35,6 +37,7 @@ from tests.i18n_surfaces import (
     THREE_MODES_PAGE_SCREENS,
     THREE_MODES_SURFACES,
     with_keyboard_app_removed,
+    without_appearance_row,
     without_card_divider,
     without_mode_labels,
 )
@@ -128,7 +131,7 @@ def test_every_english_surface_of_the_base_is_unchanged():
     base, cur = _surfaces(at_base(rel)), _surfaces(now(rel))
     kept = {k: v for k, v in base.items()
             if k not in CHANGED_SINCE | MODE_LABEL_SURFACES | THREE_MODES_SURFACES
-            | NO_KEYBOARD_APP_SURFACES | AGENTS_TREE_CARD_SURFACES}
+            | NO_KEYBOARD_APP_SURFACES | AGENTS_TREE_CARD_SURFACES | APPEARANCE_SURFACES}
     assert {k: cur.get(k) for k in kept} == kept
     # The main keyboard lost its App button (2026-10-12), and only that.
     for k in NO_KEYBOARD_APP_SURFACES:
@@ -137,6 +140,11 @@ def test_every_english_surface_of_the_base_is_unchanged():
     # that.
     for k in AGENTS_TREE_CARD_SURFACES & set(base):
         assert without_card_divider(cur[k]) == base[k], k
+    # The settings menus got a "🎨 Appearance" row (2026-10-15), and only
+    # that.
+    for k in APPEARANCE_SURFACES:
+        assert cur[k] != base[k], k
+        assert without_appearance_row(cur[k]) == base[k], k
     # Each exemption is real: the surface did change, and still exists.
     assert all(k in base and k in cur and cur[k] != base[k] for k in CHANGED_SINCE)
     # The mode label surfaces changed by the mode labels (2026-10-10) and
@@ -150,9 +158,10 @@ def test_the_english_surfaces_only_gain_the_three_new_ones():
     rel = "tests/golden/english_surfaces.json"
     base, cur = _surfaces(at_base(rel)), _surfaces(now(rel))
     # Later features added their own (the three modes, Restart now, the
-    # agents tree).
+    # agents tree, Appearance).
     assert set(cur) - set(base) == (NEW_SURFACES | THREE_MODES_NEW_SURFACES
-                                    | RESTART_NOW_NEW_SURFACES | AGENTS_TREE_NEW_SURFACES)
+                                    | RESTART_NOW_NEW_SURFACES | AGENTS_TREE_NEW_SURFACES
+                                    | APPEARANCE_NEW_SURFACES)
 
 
 def test_no_english_surface_was_removed():

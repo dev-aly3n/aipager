@@ -171,11 +171,23 @@ let POST_STATUS_OVERRIDE = null; // { path, method, status, body }
 // A scenario can make every fetch of one path fail at the network level
 // (the tunnel dropped), the way a real fetch rejects with a TypeError.
 let FETCH_REJECT_PATH = null;
+// A scenario can hold every PUT under one path prefix until it settles it
+// itself (heldPuts[i].settle(status, body)), to answer writes out of order.
+let HOLD_PUT_PREFIX = null;
+const heldPuts = [];
+// A scenario can have every fixture answered as a fresh copy, so a page
+// that edits what it was given does not edit the next answer too.
+let COPY_FIXTURES = false;
 global.fetch = (url, opts) => {
   const method = (opts && opts.method) || "GET";
   fetchCalls.push({ url, method, body: opts && opts.body,
                    headers: (opts && opts.headers) || {} });
   const path = url.split("?")[0];
+  if (HOLD_PUT_PREFIX && method === "PUT" && path.indexOf(HOLD_PUT_PREFIX) === 0) {
+    return new Promise(resolve => heldPuts.push({ path, body: opts.body,
+      settle: (status, body) => resolve({ ok: status < 400, status,
+                                          json: () => Promise.resolve(body) }) }));
+  }
   if (FETCH_REJECT_PATH && path === FETCH_REJECT_PATH) {
     return Promise.reject(new TypeError("Failed to fetch"));
   }
@@ -195,7 +207,8 @@ global.fetch = (url, opts) => {
       if (DETAIL_OVERRIDE && path === "/api/sessions/dev") {
         return Promise.resolve(DETAIL_OVERRIDE);
       }
-      return Promise.resolve(FIXTURES[path] || {});
+      const fixture = FIXTURES[path] || {};
+      return Promise.resolve(COPY_FIXTURES ? JSON.parse(JSON.stringify(fixture)) : fixture);
     },
   });
 };
@@ -601,6 +614,47 @@ if (SCENARIO.indexOf("scope_save") === 0) {
                              method: "PUT", status: 500,
                              body: { error: "boom" } };
   }
+}
+
+// ---- Settings tab: button colours (/settings → 🎨 Appearance) --------
+if (SCENARIO.indexOf("appearance_save") === 0) {
+  FIXTURES["/api/preferences"] = {
+    schema: SCHEMA, values: { answer_length: "none" }, can_edit: true,
+    appearance: {
+      title: "🎨 Appearance",
+      schema: [{ field: "stop", title: "🛑 Stop button", options: [
+        { value: "normal", label: "Normal", help: "Telegram's own look.", swatch: [] },
+        { value: "blue", label: "Blue", help: "", swatch: ["blue"] },
+        { value: "green", label: "Green", help: "", swatch: ["green"] },
+        { value: "red", label: "Red", help: "", swatch: ["red"] }] },
+               { field: "prompt", title: "🔐 Allow and Deny buttons", options: [
+        { value: "normal", label: "Normal", help: "", swatch: [] },
+        { value: "coloured", label: "Coloured", help: "", swatch: ["green", "red"] }] }],
+      values: { stop: "normal", prompt: "normal" },
+    },
+  };
+  FIXTURES["/api/appearance/stop"] = { values: { stop: "red", prompt: "normal" } };
+  if (SCENARIO === "appearance_save_fails") {
+    POST_STATUS_OVERRIDE = { path: "/api/appearance/stop", method: "PUT", status: 500,
+                             body: { error: "boom" } };
+  }
+}
+if (SCENARIO.indexOf("appearance_") === 0 && SCENARIO.indexOf("appearance_save") !== 0) {
+  FIXTURES["/api/preferences"] = {
+    schema: SCHEMA, values: { answer_length: "none" },
+    can_edit: SCENARIO !== "appearance_read_only",
+    appearance: {
+      title: "🎨 Appearance",
+      schema: [{ field: "stop", title: "🛑 Stop button", options: [
+        { value: "normal", label: "Normal", help: "", swatch: [] },
+        { value: "blue", label: "Blue", help: "", swatch: ["blue"] },
+        { value: "green", label: "Green", help: "", swatch: ["green"] },
+        { value: "red", label: "Red", help: "", swatch: ["red"] }] }],
+      values: { stop: "normal" },
+    },
+  };
+  HOLD_PUT_PREFIX = "/api/appearance/";
+  COPY_FIXTURES = true;
 }
 
 // ---- Settings tab: the viewer's own App language (multilingual) -------
@@ -2620,6 +2674,142 @@ function driveAppLanguage() {
   }, 10);
 }
 
+// The Appearance group: under its own heading, each colour with its dot,
+// a tap saved through /api/appearance/<field>.
+function driveAppearanceSave() {
+  const failing = SCENARIO === "appearance_save_fails";
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    const host = byId["settings-groups"];
+    const head = host.children.find(c => c.className === "settings-subhead");
+    if (!head || head.textContent !== "🎨 Appearance") fail("no Appearance heading");
+    // Every tap redraws the list: look the groups up again each time.
+    const groups = () => byId["settings-groups"].children
+      .filter(c => (c.className || "").indexOf("grp") === 0);
+    if (groups().length !== 3) fail("want 1 setting + 2 appearance groups, got " + groups().length);
+    groups()[1].children[0].click();                       // expand Stop
+    const mains = groups()[1].children[1].children.map(r => r.children[0]);
+    const classes = mains.map(m => m.className);
+    if (JSON.stringify(classes) !== JSON.stringify([
+        "choice-main", "choice-main swatch swatch-blue", "choice-main swatch swatch-green",
+        "choice-main swatch swatch-red"])) fail("dots: " + JSON.stringify(classes));
+    if (mains[3].textContent !== "Red") fail("label: " + mains[3].textContent);
+    groups()[2].children[0].click();                       // expand Allow and Deny
+    const pair = groups()[2].children[1].children[1].children[0].className;
+    if (pair !== "choice-main swatch swatch-green-red") fail("two-colour dot: " + pair);
+    groups()[1].children[1].children[0].click();           // Normal, already in force
+    if (fetchCalls.some(f => f.method === "PUT")) fail("re-tapping the colour in force wrote");
+    const before = fetchCalls.length;
+    groups()[1].children[1].children[3].click();           // Red
+    const put = fetchCalls.slice(before).find(f => f.method === "PUT");
+    if (!put || put.url !== "/api/appearance/stop") fail("PUT: " + JSON.stringify(put));
+    if (JSON.stringify(JSON.parse(put.body)) !== JSON.stringify({ value: "red" }))
+      fail("PUT body: " + put.body);
+    // Optimistic: Red is shown before the write has answered.
+    const stopActive = () => groups()[1].children[1].children
+      .filter(c => c.classList.contains("is-active")).map(c => c.children[0].textContent);
+    if (JSON.stringify(stopActive()) !== JSON.stringify(["Red"]))
+      fail("no optimistic render: " + JSON.stringify(stopActive()));
+    setTimeoutReal(() => {
+      const notice = byId["notice"].textContent || "";
+      if (failing) {
+        if (JSON.stringify(stopActive()) !== JSON.stringify(["Normal"]))
+          fail("failed PUT left the optimistic colour: " + JSON.stringify(stopActive()));
+        if (notice.indexOf("Couldn't save") === -1) fail("failed PUT said nothing: " + notice);
+        console.log("ok: appearance tap -> PUT /api/appearance/stop -> restored on failure");
+      } else {
+        if (JSON.stringify(stopActive()) !== JSON.stringify(["Red"]))
+          fail("saved colour not kept: " + JSON.stringify(stopActive()));
+        if (notice.indexOf("Saved") === -1) fail("no Saved notice");
+        console.log("ok: appearance group -> dots -> PUT /api/appearance/stop -> saved");
+      }
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+// The Stop group of the appearance scenarios below (the one appearance
+// group after the one reply-style group), and its row labels.
+function apStop() {
+  return byId["settings-groups"].children
+    .filter(c => (c.className || "").indexOf("grp") === 0)[1];
+}
+function apStopActive() {
+  return apStop().children[1].children.filter(c => c.classList.contains("is-active"))
+    .map(c => c.children[0].textContent);
+}
+
+// A chat the viewer may not change: every colour is shown, none is
+// tappable, and nothing is written.
+function driveAppearanceReadOnly() {
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    apStop().children[0].click();                          // expand
+    const rows = apStop().children[1].children;
+    if (rows.length !== 4) fail("want 4 colours, got " + rows.length);
+    const tappable = rows.filter(r => !r.disabled).map(r => r.children[0].textContent);
+    if (tappable.length) fail("tappable in a read-only chat: " + JSON.stringify(tappable));
+    if (fetchCalls.some(f => f.method === "PUT")) fail("a read-only chat wrote");
+    console.log("ok: appearance read-only -> every colour disabled");
+    process.exit(0);
+  }, 10);
+}
+
+// Writes answered out of order, or after the chat was switched: only the
+// last tap in the chat on screen may decide what is shown.
+function driveAppearanceRace() {
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    apStop().children[0].click();                          // expand
+    apStop().children[1].children[3].click();              // Red
+    if (heldPuts.length !== 1) fail("Red sent no PUT: " + heldPuts.length);
+    if (SCENARIO.indexOf("appearance_chat_switch") === 0) {
+      api.switchChat("-100777");
+      // The other chat's Stop is Green. On the Settings tab the page loads
+      // its settings (this harness opened Settings without the tab bar,
+      // so load them here).
+      FIXTURES["/api/preferences"].appearance.values = { stop: "green" };
+      api.loadSettings();
+      setTimeoutReal(() => {
+        if (!apStop().children[1]) apStop().children[0].click();
+        if (JSON.stringify(apStopActive()) !== JSON.stringify(["Green"]))
+          fail("the new chat did not load: " + JSON.stringify(apStopActive()));
+        // The old chat's answer: a success (Red) or a failure (back to Normal).
+        if (SCENARIO === "appearance_chat_switch_fails") heldPuts[0].settle(500, { error: "boom" });
+        else heldPuts[0].settle(200, { values: { stop: "red" } });
+        setTimeoutReal(() => {
+          if (!apStop().children[1]) apStop().children[0].click();
+          if (JSON.stringify(apStopActive()) !== JSON.stringify(["Green"]))
+            fail("the old chat's save showed here: " + JSON.stringify(apStopActive()));
+          if ((byId["notice"].textContent || "").indexOf("Couldn't save") !== -1)
+            fail("the old chat's failure was reported here");
+          console.log("ok: " + SCENARIO + " -> the old chat's save does nothing");
+          process.exit(0);
+        }, 10);
+      }, 10);
+      return;
+    }
+    apStop().children[1].children[2].click();              // then Green
+    if (heldPuts.length !== 2) fail("Green sent no PUT: " + heldPuts.length);
+    heldPuts[1].settle(200, { values: { stop: "green" } });
+    setTimeoutReal(() => {
+      if (SCENARIO === "appearance_superseded_fails") heldPuts[0].settle(500, { error: "boom" });
+      else heldPuts[0].settle(200, { values: { stop: "red" } });
+      setTimeoutReal(() => {
+        if (JSON.stringify(apStopActive()) !== JSON.stringify(["Green"]))
+          fail("the earlier tap's late answer won: " + JSON.stringify(apStopActive()));
+        if ((byId["notice"].textContent || "").indexOf("Couldn't save") !== -1)
+          fail("the earlier tap's failure was reported");
+        console.log("ok: " + SCENARIO + " -> the last tap stands");
+        process.exit(0);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
 function driveScopeSave() {
   const failing = SCENARIO === "scope_save_fails";
   api.showView("settings");
@@ -2707,6 +2897,13 @@ function driveSchemaPlain() {
 
 const DRIVERS = {
   scope_save: driveScopeSave,
+  appearance_save: driveAppearanceSave,
+  appearance_save_fails: driveAppearanceSave,
+  appearance_read_only: driveAppearanceReadOnly,
+  appearance_superseded_fails: driveAppearanceRace,
+  appearance_superseded_ok: driveAppearanceRace,
+  appearance_chat_switch: driveAppearanceRace,
+  appearance_chat_switch_fails: driveAppearanceRace,
   app_language: driveAppLanguage,
   app_language_fails: driveAppLanguage,
   app_language_absent: driveAppLanguage,

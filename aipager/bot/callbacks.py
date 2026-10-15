@@ -34,6 +34,7 @@ from telegram.ext import (
 from aipager.bot.mode_labels import mode_label
 from aipager.bot.sibling_text import shown
 from aipager.bot import (
+    appearance,
     card_owner,
     card_rows,
     held_message,
@@ -701,7 +702,8 @@ class CallbackDispatchMixin:
             tr = i18n.for_update(update)
             text, kb = language_menu.render_language_menu(
                 tr, private=private,
-                current=language_menu.current_choice(chat_id, private=private))
+                current=language_menu.current_choice(chat_id, private=private),
+                style=appearance.choice_style(chat_id))
             try:
                 await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
             except Exception:
@@ -733,7 +735,8 @@ class CallbackDispatchMixin:
         tr = i18n.for_chat(chat_id)
         menu_text, kb = language_menu.render_language_menu(
             tr, private=private,
-            current=language_menu.current_choice(chat_id, private=private))
+            current=language_menu.current_choice(chat_id, private=private),
+            style=appearance.choice_style(chat_id))
         text = f"{language_menu.confirmation(tr, tr.code)}\n\n{menu_text}"
         text += self._changed_by_line(query, chat_id, tr)
         try:
@@ -950,6 +953,9 @@ class CallbackDispatchMixin:
         if await report_flow.handle_callback(self, update, query, session_name, action):
             return
         if await new_flow.handle_callback(self, update, query, session_name, action):
+            return
+        # `_:set:ap...`: /settings → Appearance (a change is admin-gated inside).
+        if await appearance.handle_callback(self, update, query, session_name, action):
             return
         if await session_parity.handle_callback(self, update, query, session_name, action):
             return

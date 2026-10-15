@@ -121,9 +121,10 @@ def folder_created(tr, path: str) -> str:
 def _setting(tr, field: str, value) -> tuple:
     """A setting's title and the option's label, from the schema in
     *tr*'s language; an unknown field or value shows its id."""
+    from aipager.bot.appearance import appearance_schema
     from aipager.bot.settings_menu import settings_schema
     label, shown = field, value
-    for section in settings_schema(tr=tr):
+    for section in [*settings_schema(tr=tr), *appearance_schema(tr=tr)]:
         if section["field"] != field:
             continue
         label = Safe(section["title"])

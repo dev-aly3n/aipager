@@ -1482,6 +1482,59 @@ def test_settings_tab_tap_sends_the_put_and_paints_optimistically(node_bin, tmp_
         in proc.stdout, proc.stdout
 
 
+def test_the_appearance_group_shows_its_colours_and_saves(node_bin, tmp_path):
+    """Button colours: the group sits under its own heading, each colour
+    with its dot (Allow and Deny with a two-colour one), and a tap saves
+    through /api/appearance/<field>."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "appearance_save")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: appearance group -> dots -> PUT /api/appearance/stop -> saved" in proc.stdout
+
+
+def test_a_failed_colour_save_shows_the_stored_colour_again(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "appearance_save_fails")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: appearance tap -> PUT /api/appearance/stop -> restored on failure" in proc.stdout
+
+
+@pytest.mark.parametrize("scenario, ok", [
+    ("appearance_read_only", "ok: appearance read-only -> every colour disabled"),
+    ("appearance_superseded_fails", "ok: appearance_superseded_fails -> the last tap stands"),
+    ("appearance_superseded_ok", "ok: appearance_superseded_ok -> the last tap stands"),
+    ("appearance_chat_switch", "ok: appearance_chat_switch -> the old chat's save does nothing"),
+    ("appearance_chat_switch_fails",
+     "ok: appearance_chat_switch_fails -> the old chat's save does nothing"),
+])
+def test_colour_saves_answered_late_never_show_a_stale_colour(node_bin, tmp_path, scenario, ok):
+    """A chat the viewer may not change offers no colour; an earlier tap's
+    late answer (a failure or a success) never undoes the later tap; a
+    save answered after a chat switch never shows in the new chat."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, scenario)
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert ok in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_a_failed_colour_save_that_keeps_the_new_colour(
+    node_bin, tmp_path,
+):
+    """Guard the guard: without the rollback a failed write must fail the
+    scenario, not leave a colour on screen the chat does not have."""
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
+
+    broken = SOURCE_INDEX_HTML.replace("if (now) { now.values[field] = previous; }", "", 1)
+    assert broken != SOURCE_INDEX_HTML, "rollback code not found - page changed shape"
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "appearance_save_fails", name="broken-ap-rollback.html",
+    )
+    assert proc.returncode != 0, "harness passed a colour kept after a failed save"
+
+
 def test_settings_tab_failed_put_restores_the_previous_value(node_bin, tmp_path):
     from aipager.miniapp.static import INDEX_HTML
 

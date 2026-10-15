@@ -1211,21 +1211,27 @@ def render_session_preferences_field(
     overridden = field in overrides
     override_value = overrides.get(field)
     scope_value = getattr(get_preferences(sess.scope_chat_id or 0), field)
+    # The chat's 🎨 Appearance highlight, for the ✅ button only.
+    from aipager.bot import appearance
+    on = appearance.choice_style(chat_id)
 
     rows = []
     for option in entry["options"]:
         value = option["value"]
         token = _token_for_value(value)
-        marker = " ✅" if overridden and value == override_value else ""
+        current = overridden and value == override_value
+        marker = " ✅" if current else ""
         label = (tr.text(CHAT_DEFAULT, option=Safe(option["label"]))
                  if value == scope_value else option["label"])
         rows.append([InlineKeyboardButton(
             f"{label}{marker}",
             callback_data=f"{cb_prefix}:{section}:{token}",
+            style=on if current else None,
         )])
     rows.append([InlineKeyboardButton(
         tr.text(USE_CHAT_DEFAULT) + ("" if overridden else " ✅"),
         callback_data=f"{cb_prefix}:{section}:default",
+        style=None if overridden else on,
     )])
     rows.append([InlineKeyboardButton(tr.text(language_menu.BACK), callback_data=cb_prefix)])
 

@@ -733,6 +733,24 @@
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> a repris"}
 {"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> a repris en Mode Automatique : le Mode Accès complet est réservé aux admins."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "Envoyé à {session}."}
+{"k": "set.ap.app.title", "src": "86920bff", "v": "📱 Bouton App"}
+{"k": "set.ap.help.normal", "src": "bfa72d24", "v": "L'aspect habituel de Telegram, comme les autres boutons."}
+{"k": "set.ap.help.settings_normal", "src": "d7830ec5", "v": "Seul ✅ marque le choix actuel."}
+{"k": "set.ap.intro.app", "src": "24955be8", "v": "Le bouton App sur le message épinglé et sous /app. Le bouton de menu à côté de la zone de saisie garde toujours le même aspect."}
+{"k": "set.ap.intro.prompt", "src": "98ac28c7", "v": "Les boutons Autoriser et Refuser sous une demande d'autorisation."}
+{"k": "set.ap.intro.settings", "src": "d578c71b", "v": "Comment /settings marque le choix actuel."}
+{"k": "set.ap.intro.stop", "src": "8ffbb917", "v": "Le bouton Arrêter sur la carte d'activité et sous une question ou une demande d'autorisation."}
+{"k": "set.ap.opt.blue", "src": "7d44bc44", "v": "Bleu"}
+{"k": "set.ap.opt.coloured", "src": "9cb35f64", "v": "Couleurs - Autoriser vert, Refuser rouge"}
+{"k": "set.ap.opt.green", "src": "933bf21a", "v": "Vert"}
+{"k": "set.ap.opt.highlight", "src": "64695a26", "v": "Choix actuel en bleu"}
+{"k": "set.ap.opt.normal", "src": "45e118d0", "v": "Normal"}
+{"k": "set.ap.opt.red", "src": "cc9db3a7", "v": "Rouge"}
+{"k": "set.ap.prompt.title", "src": "6d208c65", "v": "🔐 Boutons Autoriser et Refuser"}
+{"k": "set.ap.settings.title", "src": "e264c4ca", "v": "⚙️ Menu des paramètres"}
+{"k": "set.ap.stop.title", "src": "15b66004", "v": "🛑 Bouton Arrêter"}
+{"k": "set.ap.text", "src": "b16481f8", "v": "🎨 <b>Apparence</b>\n\nL'aspect des boutons d'aipager dans cette discussion. Telegram permet à un bot de colorer un bouton en bleu, vert ou rouge, ou de le laisser normal. Les apps qui ne gèrent pas les couleurs affichent tous les boutons normaux."}
+{"k": "set.btn.appearance", "src": "be0e75bb", "v": "🎨 Apparence"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Fermer"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Nouvelles sessions"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 Dossier : {folder} ›"}

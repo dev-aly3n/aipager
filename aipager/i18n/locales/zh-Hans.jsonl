@@ -733,6 +733,24 @@
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> 已重新打开"}
 {"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> 已以自动模式重新打开：完全访问模式仅限管理员。"}
 {"k": "sess.sent_to", "src": "d856101f", "v": "已发送到 {session}。"}
+{"k": "set.ap.app.title", "src": "86920bff", "v": "📱 App 按钮"}
+{"k": "set.ap.help.normal", "src": "bfa72d24", "v": "Telegram 自带的样式，和其他按钮一样。"}
+{"k": "set.ap.help.settings_normal", "src": "d7830ec5", "v": "只用 ✅ 标出当前选项。"}
+{"k": "set.ap.intro.app", "src": "24955be8", "v": "置顶栏上和 /app 下方的 App 按钮。输入框旁边的菜单按钮样式始终不变。"}
+{"k": "set.ap.intro.prompt", "src": "98ac28c7", "v": "权限请求下方的允许和拒绝按钮。"}
+{"k": "set.ap.intro.settings", "src": "d578c71b", "v": "/settings 如何标出当前选项。"}
+{"k": "set.ap.intro.stop", "src": "8ffbb917", "v": "工作卡片上的停止按钮，以及问题或权限请求下方的停止按钮。"}
+{"k": "set.ap.opt.blue", "src": "7d44bc44", "v": "蓝色"}
+{"k": "set.ap.opt.coloured", "src": "9cb35f64", "v": "彩色 - 允许为绿色，拒绝为红色"}
+{"k": "set.ap.opt.green", "src": "933bf21a", "v": "绿色"}
+{"k": "set.ap.opt.highlight", "src": "64695a26", "v": "当前选项显示为蓝色"}
+{"k": "set.ap.opt.normal", "src": "45e118d0", "v": "普通"}
+{"k": "set.ap.opt.red", "src": "cc9db3a7", "v": "红色"}
+{"k": "set.ap.prompt.title", "src": "6d208c65", "v": "🔐 允许和拒绝按钮"}
+{"k": "set.ap.settings.title", "src": "e264c4ca", "v": "⚙️ 设置菜单"}
+{"k": "set.ap.stop.title", "src": "15b66004", "v": "🛑 停止按钮"}
+{"k": "set.ap.text", "src": "b16481f8", "v": "🎨 <b>外观</b>\n\naipager 的按钮在这个聊天里的样子。Telegram 允许机器人把按钮设成蓝色、绿色或红色，也可以保持普通样式。不支持颜色的应用会把所有按钮都显示为普通样式。"}
+{"k": "set.btn.appearance", "src": "be0e75bb", "v": "🎨 外观"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ 关闭"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 新会话"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 文件夹：{folder} ›"}

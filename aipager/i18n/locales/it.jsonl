@@ -733,6 +733,24 @@
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> è ripartita"}
 {"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> è ripartita in modalità «Automatico»: la modalità «Completo» è solo per gli admin."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "Inviato a {session}."}
+{"k": "set.ap.app.title", "src": "86920bff", "v": "📱 Pulsante App"}
+{"k": "set.ap.help.normal", "src": "bfa72d24", "v": "L'aspetto normale di Telegram, come gli altri pulsanti."}
+{"k": "set.ap.help.settings_normal", "src": "d7830ec5", "v": "Solo ✅ segna la scelta attuale."}
+{"k": "set.ap.intro.app", "src": "24955be8", "v": "Il pulsante App nel messaggio fissato e sotto /app. Il pulsante del menu accanto alla casella del messaggio resta sempre uguale."}
+{"k": "set.ap.intro.prompt", "src": "98ac28c7", "v": "I pulsanti Consenti e Nega sotto una richiesta di permesso."}
+{"k": "set.ap.intro.settings", "src": "d578c71b", "v": "Come /settings segna la scelta attuale."}
+{"k": "set.ap.intro.stop", "src": "8ffbb917", "v": "Il pulsante Ferma sulla scheda di attività e sotto una domanda o una richiesta di permesso."}
+{"k": "set.ap.opt.blue", "src": "7d44bc44", "v": "Blu"}
+{"k": "set.ap.opt.coloured", "src": "9cb35f64", "v": "Colorati - Consenti verde, Nega rosso"}
+{"k": "set.ap.opt.green", "src": "933bf21a", "v": "Verde"}
+{"k": "set.ap.opt.highlight", "src": "64695a26", "v": "Scelta attuale in blu"}
+{"k": "set.ap.opt.normal", "src": "45e118d0", "v": "Normale"}
+{"k": "set.ap.opt.red", "src": "cc9db3a7", "v": "Rosso"}
+{"k": "set.ap.prompt.title", "src": "6d208c65", "v": "🔐 Pulsanti Consenti e Nega"}
+{"k": "set.ap.settings.title", "src": "e264c4ca", "v": "⚙️ Menu impostazioni"}
+{"k": "set.ap.stop.title", "src": "15b66004", "v": "🛑 Pulsante Ferma"}
+{"k": "set.ap.text", "src": "b16481f8", "v": "🎨 <b>Aspetto</b>\n\nCome appaiono i pulsanti di aipager in questa chat. Telegram permette a un bot di colorare un pulsante di blu, verde o rosso, o di lasciarlo normale. Le app che non supportano i colori mostrano tutti i pulsanti normali."}
+{"k": "set.btn.appearance", "src": "be0e75bb", "v": "🎨 Aspetto"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Chiudi"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Nuove sessioni"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 Cartella: {folder} ›"}

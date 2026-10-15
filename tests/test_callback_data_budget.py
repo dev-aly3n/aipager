@@ -125,6 +125,11 @@ ALLOWED_JOINEDSTR_SIGNATURES = frozenset({
     # settings_menu.py — chat-level /settings, never session-scoped.
     "_:set:{section}",
     "_:set:{section}:{token}",
+    # appearance.py — /settings → 🎨 Appearance, chat-wide: `field` and
+    # `value` come from preferences.APPEARANCE_FIELDS (longest
+    # "_:set:ap:settings:highlight", 26 bytes), never a session name.
+    "_:set:ap:{field}",
+    "_:set:ap:{field}:{value}",
     # session_parity.py's per-session-preferences index scheme —
     # already short-form before this ship (entrypoints.md).
     # Interpolates a table INDEX (int: the table's base, below 1,000,000

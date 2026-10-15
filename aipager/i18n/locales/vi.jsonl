@@ -733,6 +733,24 @@
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ Đã mở lại <b>{session}</b>"}
 {"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ Đã mở lại <b>{session}</b> ở Chế độ Auto: Chế độ Toàn quyền chỉ dành cho quản trị viên."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "Đã gửi đến {session}."}
+{"k": "set.ap.app.title", "src": "86920bff", "v": "📱 Nút App"}
+{"k": "set.ap.help.normal", "src": "bfa72d24", "v": "Giao diện sẵn có của Telegram, như các nút khác."}
+{"k": "set.ap.help.settings_normal", "src": "d7830ec5", "v": "Chỉ ✅ đánh dấu lựa chọn hiện tại."}
+{"k": "set.ap.intro.app", "src": "24955be8", "v": "Nút App trên thanh được ghim và dưới /app. Nút menu cạnh ô nhập tin nhắn luôn giữ nguyên."}
+{"k": "set.ap.intro.prompt", "src": "98ac28c7", "v": "Các nút Cho phép và Từ chối dưới yêu cầu cấp quyền."}
+{"k": "set.ap.intro.settings", "src": "d578c71b", "v": "Cách /settings đánh dấu lựa chọn hiện tại."}
+{"k": "set.ap.intro.stop", "src": "8ffbb917", "v": "Nút Dừng trên thẻ làm việc và dưới một câu hỏi hoặc yêu cầu cấp quyền."}
+{"k": "set.ap.opt.blue", "src": "7d44bc44", "v": "Xanh dương"}
+{"k": "set.ap.opt.coloured", "src": "9cb35f64", "v": "Có màu - Cho phép xanh lá, Từ chối đỏ"}
+{"k": "set.ap.opt.green", "src": "933bf21a", "v": "Xanh lá"}
+{"k": "set.ap.opt.highlight", "src": "64695a26", "v": "Lựa chọn hiện tại màu xanh dương"}
+{"k": "set.ap.opt.normal", "src": "45e118d0", "v": "Bình thường"}
+{"k": "set.ap.opt.red", "src": "cc9db3a7", "v": "Đỏ"}
+{"k": "set.ap.prompt.title", "src": "6d208c65", "v": "🔐 Nút Cho phép và Từ chối"}
+{"k": "set.ap.settings.title", "src": "e264c4ca", "v": "⚙️ Menu cài đặt"}
+{"k": "set.ap.stop.title", "src": "15b66004", "v": "🛑 Nút Dừng"}
+{"k": "set.ap.text", "src": "b16481f8", "v": "🎨 <b>Giao diện</b>\n\nCác nút của aipager trông thế nào trong chat này. Telegram cho bot tô nút màu xanh dương, xanh lá hoặc đỏ, hoặc để bình thường. Ứng dụng không hỗ trợ màu sẽ hiện mọi nút bình thường."}
+{"k": "set.btn.appearance", "src": "be0e75bb", "v": "🎨 Giao diện"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ Đóng"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 Phiên mới"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 Thư mục: {folder} ›"}

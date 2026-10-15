@@ -1210,8 +1210,10 @@ class CommandHandlersMixin:
         if not url:
             return []
         chat_tr = i18n.for_chat(getattr(chat, "id", None))
+        from aipager.bot import appearance
         return [[InlineKeyboardButton(kbwords.KB_APP, web_app=WebAppInfo(
-            url=miniapp_link.with_lang(url, chat_tr.code)))]]
+            url=miniapp_link.with_lang(url, chat_tr.code)),
+            style=appearance.app_style(getattr(chat, "id", None)))]]
 
     async def _handle_settings_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /settings — open the root preferences menu.
@@ -1240,11 +1242,13 @@ class CommandHandlersMixin:
         group's language is admin-gated in the callback."""
         if not await self._authorize(update, allow_read_only=True):
             return
+        from aipager.bot import appearance
         chat_id = calling_chat_id(update)
         private = isinstance(chat_id, int) and chat_id > 0
         text, kb = language_menu.render_language_menu(
             i18n.for_update(update), private=private,
-            current=language_menu.current_choice(chat_id, private=private))
+            current=language_menu.current_choice(chat_id, private=private),
+            style=appearance.choice_style(chat_id))
         await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
 
     async def _handle_app_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1311,9 +1315,11 @@ class CommandHandlersMixin:
                     command=Span("`aipager config`")))
                 return
 
+        from aipager.bot import appearance
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton(tr.text(APP_BTN_OPEN), web_app=WebAppInfo(
-                url=miniapp_link.with_lang(url, tr.code))),
+                url=miniapp_link.with_lang(url, tr.code)),
+                style=appearance.app_style(getattr(update.effective_chat, "id", None))),
         ]])
         await reply_text(update.message, tr.text(APP_TAP_TO_OPEN), reply_markup=keyboard)
 

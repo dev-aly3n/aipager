@@ -85,11 +85,12 @@ def list_text(tr: Tr, *, private: bool) -> str:
     return tr.html(LIST_PRIVATE if private else LIST_GROUP)
 
 
-def render_language_menu(tr: Tr, *, private: bool, current: str
+def render_language_menu(tr: Tr, *, private: bool, current: str, style: str | None = None
                          ) -> tuple[str, InlineKeyboardMarkup]:
     """The language list: the 7.0 line, then (private chats) Automatic,
     one row per selectable language in its own name, and « Back. The
-    choice in force (*current*: ``"auto"`` or a code) carries ✅."""
+    choice in force (*current*: ``"auto"`` or a code) carries ✅, and
+    *style* (the chat's 🎨 Appearance highlight, None for plain)."""
     # A /settings callback like every other section's value,
     # ``_:set:<section>:<token>``: a short code, never a session name.
     section = "lang"
@@ -104,7 +105,8 @@ def render_language_menu(tr: Tr, *, private: bool, current: str
             label = endonym(token)
         mark = " ✅" if current == token else ""
         rows.append([InlineKeyboardButton(f"{label}{mark}",
-                                          callback_data=f"_:set:{section}:{token}")])
+                                          callback_data=f"_:set:{section}:{token}",
+                                          style=style if current == token else None)])
     rows.append([InlineKeyboardButton(tr.text(BACK), callback_data="_:set:back")])
     return list_text(tr, private=private), InlineKeyboardMarkup(rows)
 

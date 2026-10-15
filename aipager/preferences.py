@@ -393,6 +393,81 @@ def set_new_session_default(chat_id: int, field: str, value: str) -> NewSessionD
     return get_new_session_defaults(chat_id)
 
 
+# ---- appearance: how aipager's buttons look in a chat ---------------------
+#
+# Chat-wide (no per-session override), one flat key per choice inside the
+# chat's entry. Every choice starts on "normal": Telegram's own plain look,
+# no button style at all. The Bot API offers only three colours for a
+# button (InlineKeyboardButton.style "primary" blue, "success" green,
+# "danger" red), so these are the only values there are. Not part of
+# :class:`Preferences`: nothing here changes how Claude replies.
+
+APPEARANCE_FIELDS: dict[str, tuple[str, ...]] = {
+    # The busy card's Stop and the Stop under a question or permission prompt.
+    "stop": ("normal", "blue", "green", "red"),
+    # A permission prompt's Allow and Deny: Allow green, Deny red, or plain.
+    "prompt": ("normal", "coloured"),
+    # The App (Mini App) button on the pinned bar and under /app.
+    "app": ("normal", "blue", "green", "red"),
+    # /settings pages: the current choice also highlighted, or only ✅.
+    "settings": ("normal", "highlight"),
+}
+_APPEARANCE_KEY = "appearance_{}"
+
+
+@dataclass(frozen=True)
+class Appearance:
+    stop: str = "normal"
+    prompt: str = "normal"
+    app: str = "normal"
+    settings: str = "normal"
+
+
+def get_appearance(chat_id: int) -> Appearance:
+    """A chat's appearance choices. Never raises; a missing or unknown
+    stored value reads as "normal"."""
+    store = _ensure_loaded()
+    raw = store.get(str(chat_id))
+    scope_raw = raw if isinstance(raw, dict) else {}
+    values = {}
+    for field, allowed in APPEARANCE_FIELDS.items():
+        value = scope_raw.get(_APPEARANCE_KEY.format(field), "normal")
+        values[field] = value if value in allowed else "normal"
+    return Appearance(**values)
+
+
+def set_appearance(chat_id: int, field: str, value: str) -> Appearance:
+    """Store one appearance choice for ``chat_id`` ("normal" removes the
+    key: the built-in look). Raises ``ValueError`` for an unknown field or
+    value, before anything is written. Writes nothing when the stored
+    value would not change, so re-picking the choice in force never
+    creates an entry."""
+    allowed = APPEARANCE_FIELDS.get(field)
+    if allowed is None:
+        raise ValueError(field)             # not an appearance choice
+    if value not in allowed:
+        raise ValueError(value)             # not one of its values
+    store = _ensure_loaded()
+    key = str(chat_id)
+    name = _APPEARANCE_KEY.format(field)
+    existing = store.get(key)
+    scope_raw = dict(existing) if isinstance(existing, dict) else {}
+    if scope_raw.get(name, "normal") == value and (value != "normal" or name not in scope_raw):
+        return get_appearance(chat_id)
+    if value == "normal":
+        scope_raw.pop(name, None)
+    else:
+        scope_raw[name] = value
+    if scope_raw:
+        store[key] = scope_raw
+    else:
+        # Back to the plain look, and that choice was all this chat stored:
+        # leave no empty entry behind (it would block a supergroup move).
+        store.pop(key, None)
+    _save_raw(store)
+    return get_appearance(chat_id)
+
+
 # ---- the language aipager speaks in a chat (multilingual design) --------
 #
 # ``ui_language`` inside a chat's entry: the language of aipager's own

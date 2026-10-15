@@ -733,6 +733,24 @@
 {"k": "sess.resumed", "src": "57e147d3", "v": "♻️ <b>{session}</b> دوباره باز شد"}
 {"k": "sess.resumed_in_auto", "src": "7d881ea6", "v": "♻️ <b>{session}</b> در مود خودکار دوباره باز شد: مود دسترسی کامل فقط برای ادمین است."}
 {"k": "sess.sent_to", "src": "d856101f", "v": "به {session} ارسال شد."}
+{"k": "set.ap.app.title", "src": "86920bff", "v": "📱 دکمهٔ App"}
+{"k": "set.ap.help.normal", "src": "bfa72d24", "v": "همان ظاهر خود Telegram، مثل بقیهٔ دکمه‌ها."}
+{"k": "set.ap.help.settings_normal", "src": "d7830ec5", "v": "فقط ✅ گزینهٔ فعلی را نشان می‌دهد."}
+{"k": "set.ap.intro.app", "src": "24955be8", "v": "دکمهٔ App روی پیام سنجاق‌شده و زیر /app. دکمهٔ منو کنار جای نوشتن پیام همیشه همین شکل می‌ماند."}
+{"k": "set.ap.intro.prompt", "src": "98ac28c7", "v": "دکمه‌های «اجازه بده» و «رد کن» زیر درخواست اجازه."}
+{"k": "set.ap.intro.settings", "src": "d578c71b", "v": "اینکه /settings گزینهٔ فعلی را چطور نشان بدهد."}
+{"k": "set.ap.intro.stop", "src": "8ffbb917", "v": "دکمهٔ توقف روی کارت در حال کار و زیر سؤال یا درخواست اجازه."}
+{"k": "set.ap.opt.blue", "src": "7d44bc44", "v": "آبی"}
+{"k": "set.ap.opt.coloured", "src": "9cb35f64", "v": "رنگی - اجازه سبز، رد قرمز"}
+{"k": "set.ap.opt.green", "src": "933bf21a", "v": "سبز"}
+{"k": "set.ap.opt.highlight", "src": "64695a26", "v": "گزینهٔ فعلی آبی"}
+{"k": "set.ap.opt.normal", "src": "45e118d0", "v": "معمولی"}
+{"k": "set.ap.opt.red", "src": "cc9db3a7", "v": "قرمز"}
+{"k": "set.ap.prompt.title", "src": "6d208c65", "v": "🔐 دکمه‌های اجازه و رد"}
+{"k": "set.ap.settings.title", "src": "e264c4ca", "v": "⚙️ منوی تنظیمات"}
+{"k": "set.ap.stop.title", "src": "15b66004", "v": "🛑 دکمهٔ توقف"}
+{"k": "set.ap.text", "src": "b16481f8", "v": "🎨 <b>ظاهر</b>\n\nدکمه‌های aipager در این چت چه شکلی باشند. Telegram به ربات اجازه می‌دهد دکمه را آبی، سبز یا قرمز کند یا ساده بگذارد. اپ‌هایی که رنگ دکمه را پشتیبانی نمی‌کنند همهٔ دکمه‌ها را ساده نشان می‌دهند."}
+{"k": "set.btn.appearance", "src": "be0e75bb", "v": "🎨 ظاهر"}
 {"k": "set.btn.close", "src": "d7bfbcc3", "v": "✖️ بستن"}
 {"k": "set.btn.new_sessions", "src": "0b5194d8", "v": "🆕 سشن‌های جدید"}
 {"k": "set.btn.ns_folder", "src": "ac85a8cc", "v": "📁 پوشه: {folder} ›"}

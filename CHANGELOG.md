@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **🎨 Appearance: choose your buttons' colours.** `/settings` → 🎨 Appearance, and the Mini App's Settings tab, set how aipager's buttons look in a chat: the Stop button (Normal, Blue, Green or Red), Allow and Deny (Normal, or Allow green and Deny red), the App button (Normal, Blue, Green or Red) and whether `/settings` also shows the current choice in blue. Everything starts on Normal, Telegram's own look; Telegram allows only these three colours, and apps that do not support colours show every button plain.
+
 ### Changed
-- **The busy card's Stop button is blue.** It is easier to find on a card that changes all the time, without the alarm of a red button. Telegram apps that do not know button colours show it as before.
 - **The Mini App keeps its address through an update.** An update's restart, **Restart now** and the restart without a service no longer give the Mini App a new address: aipager keeps its Cloudflare tunnel running and the new aipager takes it over once it has checked it. An open Mini App rides through the update and shows the new version, and the pinned App button, the menu button and App buttons in older messages keep working. Any other stop, a reboot or a container restart still gives a new address. The first update to this version still changes it once.
 
 ### Fixed

@@ -2210,7 +2210,10 @@ APP_JS = r"""
         if (opts.disabled) { row.disabled = true; }
 
         var main = document.createElement("span");
-        main.className = "choice-main";
+        // Button colours (Appearance): a dot in the colours the choice
+        // paints, drawn by CSS (swatch-blue, swatch-green-red, ...).
+        main.className = "choice-main" + (o.swatch && o.swatch.length
+          ? " swatch swatch-" + o.swatch.join("-") : "");
         main.textContent = plain(o.label);
         if (opts.ltr) { main.setAttribute("dir", "auto"); }
         row.appendChild(main);
@@ -2436,6 +2439,70 @@ APP_JS = r"""
           savePreference(group.field, value);
         }
       });
+    });
+    renderAppearance(root);
+  }
+
+  // Button colours (/settings → 🎨 Appearance): chat-wide, saved through
+  // /api/appearance/<field>, the same edit rule as the groups above.
+  function renderAppearance(root) {
+    var ap = settingsData && settingsData.appearance;
+    if (!ap || !ap.schema) { return; }
+    var head = document.createElement("div");
+    head.className = "settings-subhead";
+    head.textContent = plain(ap.title || "");
+    root.appendChild(head);
+    ap.schema.forEach(function (group) {
+      renderOptionGroup(root, {
+        key: "appearance:" + group.field,
+        title: group.title,
+        options: group.options,
+        current: ap.values[group.field],
+        disabled: !settingsData.can_edit,
+        rerender: renderSettings,
+        onPick: function (value) { saveAppearance(group.field, value); }
+      });
+    });
+  }
+
+  var appearanceSeq = Object.create(null);
+  function saveAppearance(field, value) {
+    var ap = settingsData && settingsData.appearance;
+    if (!ap || ap.values[field] === value) { return; }
+    // Optimistic, with the previous value kept for a failed write.
+    var previous = ap.values[field];
+    var seq = (appearanceSeq[field] || 0) + 1;
+    appearanceSeq[field] = seq;
+    ap.values[field] = value;
+    renderSettings();
+    var epoch = chatEpoch;
+    fetch("/api/appearance/" + encodeURIComponent(field), {
+      method: "PUT",
+      headers: authHeaders(true),
+      body: JSON.stringify({ value: value })
+    }).then(function (res) {
+      if (res.status === 401 || res.status === 403) {
+        var authErr = new Error("auth");
+        authErr.authFailed = true;
+        throw authErr;
+      }
+      if (!res.ok) { throw new Error("HTTP " + res.status); }
+      return res.json();
+    }).then(function (data) {
+      if (epoch !== chatEpoch) { return; }        // saved in the chat left behind
+      if (appearanceSeq[field] !== seq) { return; } // superseded - ignore
+      var now = settingsData && settingsData.appearance;
+      if (now) { now.values = data.values; }
+      renderSettings();
+      showNotice(t("ui.settings.saved"), "ok");
+    }).catch(function (err) {
+      if (err && err.authFailed) { handleFetchError(err); return; }
+      if (epoch !== chatEpoch) { return; }
+      if (appearanceSeq[field] !== seq) { return; }
+      var now = settingsData && settingsData.appearance;
+      if (now) { now.values[field] = previous; }
+      renderSettings();
+      showNotice(t("ui.settings.save_failed"), "err");
     });
   }
 
