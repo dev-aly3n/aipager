@@ -196,7 +196,7 @@ def test_a_parent_waiting_on_its_helper_says_so(rig):
     rig.stop(R1, R1_TYPE)
     block = rig.answer()
     assert h.row_of(block, R1_TYPE) == \
-        f"\u23f8 {ROBOT} **{R1_TYPE}** \u00b7 waiting for its own agents"
+        f"\u2016 {ROBOT} **{R1_TYPE}** \u00b7 waiting for its own agents"
 
 
 def test_a_parent_waiting_after_a_tool_never_shows_the_tool(rig):

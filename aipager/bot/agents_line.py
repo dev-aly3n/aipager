@@ -13,7 +13,7 @@ block::
     - ○ 🤖 **ship-tester** · Write and run criteria tests
     - ○ 🤖 **ship-tester › Explore** · Searching for agent_parents
 
-    ⏸ 🤖 **r2-runner** · waiting for its own agents
+    ‖ 🤖 **r2-runner** · waiting for its own agents
 
     Results from the agents will follow here.
 
@@ -171,12 +171,15 @@ ITEM_WORKING_BARE = Msg(
          "name, never translated; or two names, the agent that started it first). Keep "
          "the 🤖, and add no mark before it",
     eg={"agent": "Explore"})
+#: Its mark is a narrow text glyph like ○ and ✓: an emoji mark (it was ⏸)
+#: is drawn twice as wide and pushed the 🤖 as far right as an indented
+#: row's, so the tree lost its indent (operator, 2026-10-15).
 ROW_WAITING = Msg(
-    "agents.row.waiting", "⏸ 🤖 **{agent}** · waiting for its own agents",
+    "agents.row.waiting", "‖ 🤖 **{agent}** · waiting for its own agents",
     note="One background agent under an answer that has paused until the agents it "
          "started itself finish (then it goes on): {agent} is its type (a name, never "
-         "translated; or two names, the agent that started it first). Keep the ⏸ "
-         "and the 🤖",
+         "translated; or two names, the agent that started it first). Keep the ‖ (a "
+         "narrow text mark, never an emoji such as ⏸) and the 🤖",
     eg={"agent": "pipeline-runner"})
 ROW_DONE = Msg(
     "agents.row.done", "✓ 🤖 **{agent}** · done ({clock})",
@@ -360,7 +363,7 @@ def _row(row: AgentRow, tr, hint: str | None = None, *, item: bool = False) -> s
     started it, goes before its own name ("ship-tester › Explore").
     *item*: an indented row (a list item, after Telegram's own bullet), so
     a working agent has no "○" of its own (operator, 2026-10-15); done and
-    waiting keep their ✓ and ⏸."""
+    waiting keep their ✓ and ‖."""
     agent = _bs(_label(row.agent_type))
     if hint is not None:
         agent = f"{_bs(_label(hint))}{LINEAGE_SEP}{agent}"

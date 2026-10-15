@@ -99,7 +99,7 @@ def test_a_hint_is_cut_and_escaped_like_a_name():
 def test_a_waiting_row_says_so_never_its_last_tool():
     view = BlockView(agents=(A("r2-runner", False, waiting=True, tool="Bash",
                                prose="Checking"),))
-    assert _lines(view)[1] == "⏸ 🤖 **r2-runner** · waiting for its own agents"
+    assert _lines(view)[1] == "‖ 🤖 **r2-runner** · waiting for its own agents"
 
 
 def test_done_wins_over_waiting():
@@ -331,7 +331,7 @@ def test_an_indented_working_row_has_no_circle_of_its_own(code):
         body = row[2:].lstrip(RLM)
         assert body.startswith("\U0001f916 ") and "○" not in row  # an activity: 🤖 first
     assert reviewer[2:].lstrip(RLM).startswith("✓ ")             # done keeps its ✓
-    assert waiter[2:].lstrip(RLM).startswith("⏸ ")               # waiting keeps its ⏸
+    assert waiter[2:].lstrip(RLM).startswith("‖ ")               # waiting keeps its ‖
     if tr.rtl:
         assert all(row.startswith("- " + RLM) for row in items.split("\n"))
 

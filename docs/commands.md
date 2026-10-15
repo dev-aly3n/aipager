@@ -546,7 +546,7 @@ stands out:
 - 🤖 ship-developer · Editing state.py
 - 🤖 ship-developer › ship-reviewer · Collect line numbers
 
-⏸ 🤖 r2-runner · waiting for its own agents
+‖ 🤖 r2-runner · waiting for its own agents
 
 Results from the agents will follow here.
 ```
@@ -560,7 +560,7 @@ Results from the agents will follow here.
   (`Reading state.py`, `Writing final.md`, `Running a command`,
   `Searching for …`), else the description Claude gave the agent when it
   launched it, else just the type. An agent that has stopped to wait for
-  agents it started itself says `⏸ … waiting for its own agents`
+  agents it started itself says `‖ … waiting for its own agents`
   instead.
 - **Agents as a tree.** The agents the session started are the first
   level. Every agent one of them started, at any depth, is listed right

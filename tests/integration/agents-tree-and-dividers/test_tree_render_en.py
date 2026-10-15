@@ -36,7 +36,7 @@ GOLDEN = (
     f"- {R} **ship-developer** \u00b7 Editing state.py\n"
     f"- {R} **ship-developer \u203a ship-reviewer** \u00b7 "
     "Collect line numbers for review issues\n\n"
-    f"\u23f8 {R} **r2-runner** \u00b7 waiting for its own agents\n\n"
+    f"\u2016 {R} **r2-runner** \u00b7 waiting for its own agents\n\n"
     f"- {R} **Explore** \u00b7 Searching for the parents\n\n"
     f"{PROMISE}"
 )
@@ -69,7 +69,7 @@ def test_no_line_starts_with_a_space():
 
 def test_top_agents_are_paragraphs(shapes):
     paras = shapes.paragraphs(render_block(_example()))
-    tops = [p for p in paras if p.startswith(("\u25cb", "\u23f8", "\u2713"))]
+    tops = [p for p in paras if p.startswith(("\u25cb", "\u2016", "\u2713"))]
     assert len(tops) == 2 and all("\n" not in p for p in tops)
 
 
@@ -187,7 +187,7 @@ def test_a_cycle_below_a_valid_top_keeps_every_row():
 
 def test_the_waiting_row_exact():
     view = BlockView(agents=(_row("r2-runner", waiting=True),))
-    assert f"\u23f8 {R} **r2-runner** \u00b7 waiting for its own agents" in render_block(view)
+    assert f"\u2016 {R} **r2-runner** \u00b7 waiting for its own agents" in render_block(view)
 
 
 @pytest.mark.parametrize("kw", [
@@ -198,7 +198,7 @@ def test_the_waiting_row_exact():
 def test_a_waiting_row_never_shows_its_last_activity(kw):
     view = BlockView(agents=(AgentRow("r2-runner", False, waiting=True, **kw),))
     row = render_block(view).split("\n\n")[1]
-    assert row == f"\u23f8 {R} **r2-runner** \u00b7 waiting for its own agents"
+    assert row == f"\u2016 {R} **r2-runner** \u00b7 waiting for its own agents"
 
 
 def test_a_waiting_agent_counts_as_working_in_the_header():
@@ -238,7 +238,7 @@ def test_a_waiting_depth_three_row_keeps_its_hint(shapes):
     view = BlockView(agents=(_row("pipeline-runner"), _row("ship-developer", parent=0),
                              _row("ship-reviewer", parent=1, waiting=True)))
     assert shapes.agent_lines(render_block(view))[2] == \
-        f"- \u23f8 {R} **ship-developer \u203a ship-reviewer** \u00b7 waiting for its own agents"
+        f"- \u2016 {R} **ship-developer \u203a ship-reviewer** \u00b7 waiting for its own agents"
 
 
 # ---- all done: the header alone ----------------------------------------------------------

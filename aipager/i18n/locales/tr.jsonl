@@ -11,7 +11,7 @@
 {"k": "agents.row.done", "src": "fb8af87e", "v": "✓ 🤖 **{agent}** · tamamlandı ({clock})"}
 {"k": "agents.row.item_working", "src": "ef3d6ab7", "v": "🤖 **{agent}** · {activity}"}
 {"k": "agents.row.item_working_bare", "src": "83e5d7e4", "v": "🤖 **{agent}**"}
-{"k": "agents.row.waiting", "src": "64543c86", "v": "⏸ 🤖 **{agent}** · kendi ajanlarını bekliyor"}
+{"k": "agents.row.waiting", "src": "a1590b5c", "v": "‖ 🤖 **{agent}** · kendi ajanlarını bekliyor"}
 {"k": "agents.row.working", "src": "06b07790", "v": "○ 🤖 **{agent}** · {activity}"}
 {"k": "agents.row.working_bare", "src": "0b3c4948", "v": "○ 🤖 **{agent}**"}
 {"k": "ago.days", "src": "3650e46d", "v": {"one": "{n} g önce", "other": "{n} g önce"}}

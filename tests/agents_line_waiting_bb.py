@@ -291,12 +291,12 @@ def row_of(block: str, agent_type: str) -> str:
 def is_working_row(row: str) -> bool:
     """A working row: "○ 🤖 …" on the first level, "🤖 …" alone on the
     second (Telegram's bullet is its mark, 2026-10-15). No other row starts
-    with the robot: done and waiting rows start with ✓ and ⏸."""
+    with the robot: done and waiting rows start with ✓ and ‖."""
     return row.startswith("○ ") or row.startswith("\U0001f916 ")
 
 
 def is_waiting_row(row: str) -> bool:
-    return row.startswith("⏸ ")
+    return row.startswith("‖ ")
 
 
 def is_done_row(row: str) -> bool:

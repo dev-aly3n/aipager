@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The agents under an answer keep their indent when one is waiting.** An agent waiting for its own agents was marked with ⏸, which Telegram draws as a wide emoji, so its row's 🤖 sat as far right as the indented agents below it. Its mark is now a narrow ‖, like the ○ and ✓ of the other rows, in every language.
+
 ## [1.3.4] - 2026-10-15
 
 ### Changed
