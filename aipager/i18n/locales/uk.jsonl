@@ -1264,6 +1264,8 @@
 {"k": "ui.report.uptime.under_10m", "src": "35d29633", "v": "менше 10 хвилин"}
 {"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "невідомо скільки"}
 {"k": "ui.report.what_sent", "src": "6b776c8f", "v": "Що надішлеться"}
+{"k": "ui.settings.appearance", "src": "41def7a0", "v": "Оформлення"}
+{"k": "ui.settings.appearance_intro", "src": "4de50754", "v": "Як виглядають кнопки aipager у цьому чаті."}
 {"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "Налаштування чату"}
 {"k": "ui.settings.default_tag", "src": "7505d64a", "v": "за замовчуванням"}
 {"k": "ui.settings.intro", "src": "f1ea8e24", "v": "Вони діють для кожної сесії в цьому чаті."}

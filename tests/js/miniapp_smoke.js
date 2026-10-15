@@ -634,7 +634,6 @@ if (SCENARIO.indexOf("appearance_save") === 0) {
   FIXTURES["/api/preferences"] = {
     schema: SCHEMA, values: { answer_length: "none" }, can_edit: true,
     appearance: {
-      title: "🎨 Appearance",
       schema: [{ field: "stop", title: "🛑 Stop button", options: [
         { value: "normal", label: "Normal", help: "Telegram's own look.", swatch: [] },
         { value: "blue", label: "Blue", help: "", swatch: ["blue"] },
@@ -657,7 +656,6 @@ if (SCENARIO.indexOf("appearance_") === 0 && SCENARIO.indexOf("appearance_save")
     schema: SCHEMA, values: { answer_length: "none" },
     can_edit: SCENARIO !== "appearance_read_only",
     appearance: {
-      title: "🎨 Appearance",
       schema: [{ field: "stop", title: "🛑 Stop button", options: [
         { value: "normal", label: "Normal", help: "", swatch: [] },
         { value: "blue", label: "Blue", help: "", swatch: ["blue"] },
@@ -2826,40 +2824,44 @@ function driveAppLanguage() {
   }, 10);
 }
 
-// The Appearance group: under its own heading, each colour with its dot,
-// a tap saved through /api/appearance/<field>.
+// The Appearance section: its own, after the chat's preferences, each
+// colour with its dot, a tap saved through /api/appearance/<field>.
 function driveAppearanceSave() {
   const failing = SCENARIO === "appearance_save_fails";
   api.showView("settings");
   api.loadSettings();
   setTimeoutReal(() => {
-    const host = byId["settings-groups"];
-    const head = host.children.find(c => c.className === "settings-subhead");
-    if (!head || head.textContent !== "🎨 Appearance") fail("no Appearance heading");
+    if (byId["settings-appearance"].hidden) fail("the Appearance section is hidden");
+    if (!byId["settings-appearance-readonly"].hidden)
+      fail("the read-only note shows where the viewer may change the colours");
+    // The chat's preferences hold their own group and nothing else.
+    const prefs = byId["settings-groups"].children;
+    if (prefs.length !== 1) fail("chat preferences hold " + prefs.length + " rows, want 1 group");
     // Every tap redraws the list: look the groups up again each time.
-    const groups = () => byId["settings-groups"].children
-      .filter(c => (c.className || "").indexOf("grp") === 0);
-    if (groups().length !== 3) fail("want 1 setting + 2 appearance groups, got " + groups().length);
-    groups()[1].children[0].click();                       // expand Stop
-    const mains = groups()[1].children[1].children.map(r => r.children[0]);
+    const groups = () => byId["settings-appearance-groups"].children;
+    const kinds = groups().map(c => (c.className || "").split(" ")[0]);
+    if (JSON.stringify(kinds) !== JSON.stringify(["grp", "grp"]))
+      fail("want the 2 appearance groups alone, got " + JSON.stringify(kinds));
+    groups()[0].children[0].click();                       // expand Stop
+    const mains = groups()[0].children[1].children.map(r => r.children[0]);
     const classes = mains.map(m => m.className);
     if (JSON.stringify(classes) !== JSON.stringify([
         "choice-main", "choice-main swatch swatch-blue", "choice-main swatch swatch-green",
         "choice-main swatch swatch-red"])) fail("dots: " + JSON.stringify(classes));
     if (mains[3].textContent !== "Red") fail("label: " + mains[3].textContent);
-    groups()[2].children[0].click();                       // expand Allow and Deny
-    const pair = groups()[2].children[1].children[1].children[0].className;
+    groups()[1].children[0].click();                       // expand Allow and Deny
+    const pair = groups()[1].children[1].children[1].children[0].className;
     if (pair !== "choice-main swatch swatch-green-red") fail("two-colour dot: " + pair);
-    groups()[1].children[1].children[0].click();           // Normal, already in force
+    groups()[0].children[1].children[0].click();           // Normal, already in force
     if (fetchCalls.some(f => f.method === "PUT")) fail("re-tapping the colour in force wrote");
     const before = fetchCalls.length;
-    groups()[1].children[1].children[3].click();           // Red
+    groups()[0].children[1].children[3].click();           // Red
     const put = fetchCalls.slice(before).find(f => f.method === "PUT");
     if (!put || put.url !== "/api/appearance/stop") fail("PUT: " + JSON.stringify(put));
     if (JSON.stringify(JSON.parse(put.body)) !== JSON.stringify({ value: "red" }))
       fail("PUT body: " + put.body);
     // Optimistic: Red is shown before the write has answered.
-    const stopActive = () => groups()[1].children[1].children
+    const stopActive = () => groups()[0].children[1].children
       .filter(c => c.classList.contains("is-active")).map(c => c.children[0].textContent);
     if (JSON.stringify(stopActive()) !== JSON.stringify(["Red"]))
       fail("no optimistic render: " + JSON.stringify(stopActive()));
@@ -2881,12 +2883,9 @@ function driveAppearanceSave() {
   }, 10);
 }
 
-// The Stop group of the appearance scenarios below (the one appearance
-// group after the one reply-style group), and its row labels.
-function apStop() {
-  return byId["settings-groups"].children
-    .filter(c => (c.className || "").indexOf("grp") === 0)[1];
-}
+// The Stop group of the appearance scenarios below (their one appearance
+// group), and its row labels.
+function apStop() { return byId["settings-appearance-groups"].children[0]; }
 function apStopActive() {
   return apStop().children[1].children.filter(c => c.classList.contains("is-active"))
     .map(c => c.children[0].textContent);
@@ -2898,6 +2897,8 @@ function driveAppearanceReadOnly() {
   api.showView("settings");
   api.loadSettings();
   setTimeoutReal(() => {
+    if (byId["settings-appearance"].hidden) fail("the Appearance section is hidden");
+    if (byId["settings-appearance-readonly"].hidden) fail("no read-only note under the colours");
     apStop().children[0].click();                          // expand
     const rows = apStop().children[1].children;
     if (rows.length !== 4) fail("want 4 colours, got " + rows.length);
@@ -2925,6 +2926,10 @@ function driveAppearanceRace() {
       // so load them here).
       FIXTURES["/api/preferences"].appearance.values = { stop: "green" };
       api.loadSettings();
+      // Until the new chat's settings arrive, no colours at all: the old
+      // chat's must not stay on screen.
+      if (!byId["settings-appearance"].hidden || byId["settings-appearance-groups"].children.length)
+        fail("the old chat's colours stayed on screen while the new chat loaded");
       setTimeoutReal(() => {
         if (!apStop().children[1]) apStop().children[0].click();
         if (JSON.stringify(apStopActive()) !== JSON.stringify(["Green"]))
@@ -2962,6 +2967,26 @@ function driveAppearanceRace() {
   }, 10);
 }
 
+// A server that sends no colours (an empty list, or none at all) leaves no
+// empty Appearance section behind.
+function driveAppearanceGone() {
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (byId["settings-appearance"].hidden) fail("the Appearance section did not show");
+    if (SCENARIO === "appearance_gone_empty") FIXTURES["/api/preferences"].appearance.schema = [];
+    else delete FIXTURES["/api/preferences"].appearance;
+    api.loadSettings();
+    setTimeoutReal(() => {
+      if (!byId["settings-appearance"].hidden) fail("an Appearance section with no colours");
+      if (byId["settings-appearance-groups"].children.length) fail("colours left on screen");
+      if (byId["settings-groups"].children.length !== 1) fail("the chat's preferences did not render");
+      console.log("ok: " + SCENARIO + " -> no Appearance section");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
 function driveScopeSave() {
   const failing = SCENARIO === "scope_save_fails";
   api.showView("settings");
@@ -2969,6 +2994,7 @@ function driveScopeSave() {
   setTimeoutReal(() => {
     const host = byId["settings-groups"];
     if (host.children.length !== 1) fail("settings group did not render: " + host.children.length);
+    if (!byId["settings-appearance"].hidden) fail("an Appearance section with no appearance");
     if (scopeHeaderValue() !== "Don't apply any rule")
       fail("initial value not rendered: " + JSON.stringify(scopeHeaderValue()));
     scopeGroup().children[0].click();                     // expand
@@ -3056,6 +3082,8 @@ const DRIVERS = {
   appearance_superseded_ok: driveAppearanceRace,
   appearance_chat_switch: driveAppearanceRace,
   appearance_chat_switch_fails: driveAppearanceRace,
+  appearance_gone_empty: driveAppearanceGone,
+  appearance_gone_absent: driveAppearanceGone,
   app_language: driveAppLanguage,
   app_language_fails: driveAppLanguage,
   app_language_absent: driveAppLanguage,

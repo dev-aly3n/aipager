@@ -138,7 +138,8 @@ _PERCENT_AFTER = ".lamp-pct"
 
 #: The rules /settings → 🎨 Appearance added (2026-10-15), right after
 #: the choice label's: the colour dot before a choice's label, one colour
-#: per Telegram button style, and the Appearance group's subheading.
+#: per Telegram button style. (Its subheading went when Appearance became
+#: a section of its own, below.)
 _APPEARANCE_AFTER = ".choice.is-active .choice-main"
 _APPEARANCE_ADDED = [
     ["", ".choice-main.swatch::before", [
@@ -150,11 +151,17 @@ _APPEARANCE_ADDED = [
     ["", ".swatch-red::before", [["background", "#e53935"]]],
     ["", ".swatch-green-red::before", [
         ["background", "linear-gradient(90deg, #31b545 50%, #e53935 50%)"]]],
-    ["", ".settings-subhead", [
-        ["color", "var(--ink-2)"], ["font-size", "var(--fs-cap)"], ["font-weight", "600"],
-        ["padding-bottom", "var(--s1)"], ["padding-left", "0"], ["padding-right", "0"],
-        ["padding-top", "var(--s3)"]]],
 ]
+
+
+#: Appearance as a section of its own on the Settings tab (2026-10-15):
+#: its groups sit under its heading the way the chat's preferences do,
+#: right after their rule.
+_APPEARANCE_SECTION_ADDED = {
+    ("", "#settings-groups"): [
+        ["", "#settings-appearance-groups", [["margin-top", "var(--s2)"]]],
+    ],
+}
 
 
 #: The rules the quiet Updates card (2026-10-15) added: the card first on
@@ -203,6 +210,7 @@ def _expected_now(golden: list) -> list:
         if sel == _APPEARANCE_AFTER:
             out.extend(_APPEARANCE_ADDED)
         out.extend(_UPDATES_CARD_ADDED.get((ctx, sel), []))
+        out.extend(_APPEARANCE_SECTION_ADDED.get((ctx, sel), []))
     return out
 
 

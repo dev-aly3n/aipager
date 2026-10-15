@@ -1264,6 +1264,8 @@
 {"k": "ui.report.uptime.under_10m", "src": "35d29633", "v": "weniger als 10 Minuten"}
 {"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "unbekannter Zeit"}
 {"k": "ui.report.what_sent", "src": "6b776c8f", "v": "Was gesendet wird"}
+{"k": "ui.settings.appearance", "src": "41def7a0", "v": "Aussehen"}
+{"k": "ui.settings.appearance_intro", "src": "4de50754", "v": "Wie die Buttons von aipager in diesem Chat aussehen."}
 {"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "Chat-Einstellungen"}
 {"k": "ui.settings.default_tag", "src": "7505d64a", "v": "Standard"}
 {"k": "ui.settings.intro", "src": "f1ea8e24", "v": "Sie gelten für jede Sitzung in diesem Chat."}

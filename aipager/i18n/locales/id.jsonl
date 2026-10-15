@@ -1264,6 +1264,8 @@
 {"k": "ui.report.uptime.under_10m", "src": "35d29633", "v": "kurang dari 10 menit"}
 {"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "entah berapa lama"}
 {"k": "ui.report.what_sent", "src": "6b776c8f", "v": "Yang dikirim"}
+{"k": "ui.settings.appearance", "src": "41def7a0", "v": "Tampilan"}
+{"k": "ui.settings.appearance_intro", "src": "4de50754", "v": "Cara tombol aipager terlihat di chat ini."}
 {"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "Pengaturan chat"}
 {"k": "ui.settings.default_tag", "src": "7505d64a", "v": "bawaan"}
 {"k": "ui.settings.intro", "src": "f1ea8e24", "v": "Ini berlaku untuk setiap sesi di chat ini."}

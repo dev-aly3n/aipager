@@ -152,6 +152,28 @@ def updates_card_change_only(before: list, after: list) -> bool:
         text == "Check for updates" or _RUNNING_VERSION.fullmatch(text) for text in added)
 
 
+#: The Appearance section (2026-10-15) every Settings screen shows after
+#: Chat preferences, as the page fixture draws it: its heading, its intro
+#: and its one group, then the read-only note where the chat is read-only.
+#: See :func:`without_appearance_section`.
+APPEARANCE_SECTION_TEXTS = ("Appearance", "How aipager's buttons look in this chat.",
+                            "Stop button", "Normal")
+_READ_ONLY_NOTE = "Only an admin can change these."
+
+
+def without_appearance_section(texts: list) -> list:
+    """*texts* (a page screen's) without the Appearance section, which
+    must be exactly :data:`APPEARANCE_SECTION_TEXTS` (and the note)."""
+    if APPEARANCE_SECTION_TEXTS[0] not in texts:
+        return list(texts)
+    i = texts.index(APPEARANCE_SECTION_TEXTS[0])
+    j = i + len(APPEARANCE_SECTION_TEXTS)
+    assert tuple(texts[i:j]) == APPEARANCE_SECTION_TEXTS, texts[i:j]
+    if texts[j:j + 1] == [_READ_ONLY_NOTE]:
+        j += 1
+    return texts[:i] + texts[j:]
+
+
 #: The Mini App page screens (tests/golden/miniapp_page_english.json) the
 #: three modes changed or added.
 THREE_MODES_PAGE_SCREENS = frozenset({

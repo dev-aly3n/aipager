@@ -356,6 +356,7 @@ def test_live_switch(node_bin, tmp_path):
     fa = core._catalog("fa")
     shown = {row[0]: row[1] for row in sw["texts"]}
     assert shown["ui.settings.chat_prefs"] == fa["ui.settings.chat_prefs"]
+    assert shown["ui.settings.appearance"] == fa["ui.settings.appearance"]
     assert shown["ui.tab.settings"] == fa["ui.tab.settings"]
     assert fa["ui.btn.check_updates"] in sw["screen"]
     assert (back["lang"], back["dir"]) == ("en", "ltr")

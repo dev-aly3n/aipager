@@ -2423,6 +2423,7 @@ APP_JS = r"""
   function renderSettings() {
     var root = document.getElementById("settings-groups");
     root.innerHTML = "";
+    renderAppearance();
     if (!settingsData) { return; }
     renderAppLanguage();
     document.getElementById("settings-readonly").hidden = !!settingsData.can_edit;
@@ -2440,18 +2441,20 @@ APP_JS = r"""
         }
       });
     });
-    renderAppearance(root);
   }
 
   // Button colours (/settings → 🎨 Appearance): chat-wide, saved through
-  // /api/appearance/<field>, the same edit rule as the groups above.
-  function renderAppearance(root) {
+  // /api/appearance/<field>, the same edit rule as the chat's preferences.
+  // A section of its own after them, hidden until the chat's settings
+  // arrive (another chat's colours never stay on screen).
+  function renderAppearance() {
+    var box = document.getElementById("settings-appearance");
+    var root = document.getElementById("settings-appearance-groups");
+    root.innerHTML = "";
     var ap = settingsData && settingsData.appearance;
-    if (!ap || !ap.schema) { return; }
-    var head = document.createElement("div");
-    head.className = "settings-subhead";
-    head.textContent = plain(ap.title || "");
-    root.appendChild(head);
+    box.hidden = !ap || !ap.schema || !ap.schema.length;
+    if (box.hidden) { return; }
+    document.getElementById("settings-appearance-readonly").hidden = !!settingsData.can_edit;
     ap.schema.forEach(function (group) {
       renderOptionGroup(root, {
         key: "appearance:" + group.field,
@@ -2601,6 +2604,7 @@ APP_JS = r"""
   function loadSettings() {
     // Re-entry shows held values; only a first visit gets the skeleton.
     if (settingsData) { renderSettings(); } else {
+      renderAppearance();
       skeleton(document.getElementById("settings-groups"), 4, "skel-row");
     }
     var epoch = chatEpoch;

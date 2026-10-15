@@ -1264,6 +1264,8 @@
 {"k": "ui.report.uptime.under_10m", "src": "35d29633", "v": "不到 10 分钟"}
 {"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "未知"}
 {"k": "ui.report.what_sent", "src": "6b776c8f", "v": "会发送什么"}
+{"k": "ui.settings.appearance", "src": "41def7a0", "v": "外观"}
+{"k": "ui.settings.appearance_intro", "src": "4de50754", "v": "aipager 的按钮在这个聊天里的样子。"}
 {"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "聊天设置"}
 {"k": "ui.settings.default_tag", "src": "7505d64a", "v": "默认"}
 {"k": "ui.settings.intro", "src": "f1ea8e24", "v": "这些设置适用于这个聊天中的每个会话。"}

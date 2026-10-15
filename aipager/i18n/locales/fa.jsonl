@@ -1264,6 +1264,8 @@
 {"k": "ui.report.uptime.under_10m", "src": "35d29633", "v": "کمتر از ۱۰ دقیقه"}
 {"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "نامعلوم"}
 {"k": "ui.report.what_sent", "src": "6b776c8f", "v": "چه چیزی فرستاده می‌شود"}
+{"k": "ui.settings.appearance", "src": "41def7a0", "v": "ظاهر"}
+{"k": "ui.settings.appearance_intro", "src": "4de50754", "v": "دکمه‌های aipager در این چت چه شکلی باشند."}
 {"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "تنظیمات چت"}
 {"k": "ui.settings.default_tag", "src": "7505d64a", "v": "پیش‌فرض"}
 {"k": "ui.settings.intro", "src": "f1ea8e24", "v": "این‌ها روی همهٔ سشن‌های این چت اثر دارند."}

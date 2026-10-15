@@ -1527,14 +1527,24 @@ def test_settings_tab_tap_sends_the_put_and_paints_optimistically(node_bin, tmp_
 
 
 def test_the_appearance_group_shows_its_colours_and_saves(node_bin, tmp_path):
-    """Button colours: the group sits under its own heading, each colour
-    with its dot (Allow and Deny with a two-colour one), and a tap saves
-    through /api/appearance/<field>."""
+    """Button colours: a section of their own after the chat's preferences
+    (which hold none of them), each colour with its dot (Allow and Deny
+    with a two-colour one), and a tap saves through
+    /api/appearance/<field>."""
     from aipager.miniapp.static import INDEX_HTML
 
     proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "appearance_save")
     assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
     assert "ok: appearance group -> dots -> PUT /api/appearance/stop -> saved" in proc.stdout
+
+
+def test_the_appearance_section_starts_hidden():
+    """No Appearance heading before the chat's colours arrive, not even
+    before the page's script runs."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    tag = re.search(r'<div id="settings-appearance"[^>]*>', INDEX_HTML).group(0)
+    assert re.search(r"\shidden[\s>]", tag), tag
 
 
 def test_a_failed_colour_save_shows_the_stored_colour_again(node_bin, tmp_path):
@@ -1552,11 +1562,15 @@ def test_a_failed_colour_save_shows_the_stored_colour_again(node_bin, tmp_path):
     ("appearance_chat_switch", "ok: appearance_chat_switch -> the old chat's save does nothing"),
     ("appearance_chat_switch_fails",
      "ok: appearance_chat_switch_fails -> the old chat's save does nothing"),
+    ("appearance_gone_empty", "ok: appearance_gone_empty -> no Appearance section"),
+    ("appearance_gone_absent", "ok: appearance_gone_absent -> no Appearance section"),
 ])
 def test_colour_saves_answered_late_never_show_a_stale_colour(node_bin, tmp_path, scenario, ok):
-    """A chat the viewer may not change offers no colour; an earlier tap's
-    late answer (a failure or a success) never undoes the later tap; a
-    save answered after a chat switch never shows in the new chat."""
+    """A chat the viewer may not change offers no colour and says why; an
+    earlier tap's late answer (a failure or a success) never undoes the
+    later tap; after a chat switch the old chat's colours leave the screen
+    at once, and a save answered late never shows in the new chat; no
+    colours from the server, no Appearance section."""
     from aipager.miniapp.static import INDEX_HTML
 
     proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, scenario)

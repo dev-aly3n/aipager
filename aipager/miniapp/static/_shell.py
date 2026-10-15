@@ -288,6 +288,12 @@ HTML_BODY = """\
   <p class="sect-note" id="settings-intro" data-i18n="ui.settings.intro">These apply to every session in this chat.</p>
   <div id="settings-groups" class="groups"></div>
   <div id="settings-readonly" class="note" data-i18n="ui.settings.readonly" hidden>Only an admin can change these.</div>
+  <div id="settings-appearance" hidden>
+    <h2 class="sect-title" data-i18n="ui.settings.appearance">Appearance</h2>
+    <p class="sect-note" data-i18n="ui.settings.appearance_intro">How aipager's buttons look in this chat.</p>
+    <div id="settings-appearance-groups" class="groups"></div>
+    <div id="settings-appearance-readonly" class="note" data-i18n="ui.settings.readonly" hidden>Only an admin can change these.</div>
+  </div>
   <div id="report-block" class="card updates" hidden>
     <div class="card-head">
       <span class="card-icon" aria-hidden="true"><svg class="ic"><use href="#i-question"></use></svg></span>

@@ -1264,6 +1264,8 @@
 {"k": "ui.report.uptime.under_10m", "src": "35d29633", "v": "10분 미만"}
 {"k": "ui.report.uptime.unknown", "src": "c3d94b14", "v": "알 수 없음"}
 {"k": "ui.report.what_sent", "src": "6b776c8f", "v": "보내는 내용"}
+{"k": "ui.settings.appearance", "src": "41def7a0", "v": "모양"}
+{"k": "ui.settings.appearance_intro", "src": "4de50754", "v": "이 채팅에서 aipager 버튼이 보이는 방식이에요."}
 {"k": "ui.settings.chat_prefs", "src": "5f76a05b", "v": "채팅 설정"}
 {"k": "ui.settings.default_tag", "src": "7505d64a", "v": "기본"}
 {"k": "ui.settings.intro", "src": "f1ea8e24", "v": "이 채팅의 모든 세션에 적용돼요."}

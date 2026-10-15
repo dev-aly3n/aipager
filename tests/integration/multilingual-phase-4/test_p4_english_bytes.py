@@ -87,7 +87,6 @@ def test_english_body_is_todays(env, golden, name):
     if name in APPEARANCE_BODIES:
         body = dict(body)
         appearance = body.pop("appearance")
-        assert appearance["title"] == "🎨 Appearance"
         assert [g["field"] for g in appearance["schema"]] == ["stop", "prompt", "app", "settings"]
     assert body == golden[name]["body"]
 

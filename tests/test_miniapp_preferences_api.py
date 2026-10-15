@@ -420,7 +420,8 @@ def test_get_preferences_carries_the_appearance_choices(server, run_async):
         try:
             body = await (await client.get("/api/preferences", headers=_hdr(MEMBER_ID))).json()
             ap = body["appearance"]
-            assert ap["title"] == "🎨 Appearance"
+            # The page names the section itself (ui.settings.appearance).
+            assert set(ap) == {"schema", "values"}
             assert [g["field"] for g in ap["schema"]] == ["stop", "prompt", "app", "settings"]
             assert ap["values"] == {"stop": "normal", "prompt": "normal", "app": "normal",
                                     "settings": "normal"}

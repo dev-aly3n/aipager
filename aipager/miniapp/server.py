@@ -1575,8 +1575,7 @@ class MiniAppServer:
     def _appearance_payload(self, request, user_id, scope_chat_id) -> dict:
         from aipager.bot import appearance
         tr = self._viewer_tr(request, user_id)
-        return {"title": tr.text(appearance.BUTTON),
-                "schema": appearance.appearance_schema(tr=tr),
+        return {"schema": appearance.appearance_schema(tr=tr),
                 "values": appearance.values(scope_chat_id)}
 
     async def _handle_appearance_put(self, request):

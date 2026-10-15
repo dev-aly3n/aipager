@@ -486,6 +486,11 @@ function prefs(extra) {
   return Object.assign({
     schema: SCHEMA, values: { answer_length: "short", layout: "split" }, can_edit: false,
     can_update: true, can_report: true, app_language: JSON.parse(JSON.stringify(APP_LANGUAGE)),
+    appearance: { schema: [{ field: "stop", title: sv("🛑 Stop button"), options: [
+      { value: "normal", label: sv("Normal"), help: sv("Telegram's own look, like every other button."),
+        swatch: [] },
+      { value: "red", label: sv("Red"), help: "", swatch: ["red"] }] }],
+      values: { stop: "normal" } },
   }, OPTS.ui ? { ui: OPTS.ui } : {}, extra || {});
 }
 const CHECKS = {

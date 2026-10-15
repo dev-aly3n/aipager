@@ -384,6 +384,10 @@ SETTINGS_CHAT_PREFS = Msg("ui.settings.chat_prefs", "Chat preferences",
                           note="Mini App Settings: a heading")
 SETTINGS_INTRO = Msg("ui.settings.intro", "These apply to every session in this chat.")
 SETTINGS_READONLY = Msg("ui.settings.readonly", "Only an admin can change these.")
+SETTINGS_APPEARANCE = Msg("ui.settings.appearance", "Appearance",
+                          note="Mini App Settings: a heading, the section of button colours")
+SETTINGS_APPEARANCE_INTRO = Msg("ui.settings.appearance_intro",
+                                "How aipager's buttons look in this chat.")
 
 # Telegram's own button.
 BTN_START_SESSION = Msg("ui.btn.start_session", "Start session", note="Mini App button")

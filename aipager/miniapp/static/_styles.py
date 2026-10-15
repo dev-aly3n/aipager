@@ -1068,12 +1068,6 @@ CSS = """
   .swatch-green::before { background: #31b545; }
   .swatch-red::before { background: #e53935; }
   .swatch-green-red::before { background: linear-gradient(90deg, #31b545 50%, #e53935 50%); }
-  .settings-subhead {
-    padding: var(--s3) 0 var(--s1);
-    font-size: var(--fs-cap);
-    font-weight: 600;
-    color: var(--ink-2);
-  }
   .tag {
     grid-column: 3;
     grid-row: 1;
@@ -1304,6 +1298,7 @@ CSS = """
 
   /* ---- settings ------------------------------------------------------- */
   #settings-groups { margin-top: var(--s2); }
+  #settings-appearance-groups { margin-top: var(--s2); }
   .updates { margin-top: var(--s5); }
   /* Updates: first on the tab, one quiet row until there is something to do. */
   #updates-block { margin-top: 0; margin-bottom: var(--s4); padding-top: var(--s3); padding-bottom: var(--s3); }
