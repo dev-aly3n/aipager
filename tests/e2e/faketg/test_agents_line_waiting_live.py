@@ -17,13 +17,24 @@ from __future__ import annotations
 import re
 import time
 
+import pytest
+
 from tests.e2e.fake_telegram import instance as fti
+from tests.e2e.faketg import conftest as ftc
 from tests.e2e.faketg import flows
+
+#: ``agents: launch`` and the rest are the stand-in's own words: real Claude
+#: would only answer them.
+pytestmark = pytest.mark.skipif(
+    ftc.claude_mode() != "standin",
+    reason="stand-in only: it plays Claude Code's agent hooks on cue")
 
 DM = fti.DM_ID
 LABEL = "ft20"
 WORKING_2 = "⏳ 2 agents working"
 DONE_2 = "✅ 2 agents done ("
+WAITING_ROW = "‖ 🤖 pipeline-runner · waiting for its own agents"
+_TAG = re.compile(r"</?[a-z]+(?: [^>]*)?>")
 
 
 def _block(text: str) -> str:
@@ -32,6 +43,17 @@ def _block(text: str) -> str:
     j = text.find("✅ ")
     starts = [k for k in (i, j) if k >= 0]
     return text[min(starts):] if starts else ""
+
+
+def _plain(text: str) -> str:
+    """*text* as read: no footer or bold tags, no Markdown bold."""
+    return _TAG.sub("", text).replace("**", "")
+
+
+def _rows_shown(text: str, *agents: str) -> bool:
+    """Every one of *agents* has a 🤖 row in the answer's block."""
+    plain = _plain(_block(text))
+    return all(f"🤖 {agent}" in plain for agent in agents)
 
 
 def _show(title: str, text: str) -> None:
@@ -64,7 +86,7 @@ def test_waiting_agent_and_restart_on_the_agents_line(fresh):
     flows.wait_turn_end(inst, name, LABEL, since_log=log0)
     first = flows.wait_text(fake, DM, WORKING_2, since=since)
     _show("answer after 'agents: launch' (before the restart)", _block(first.text))
-    assert "**pipeline-runner**" in first.text and "**ship-reviewer**" in first.text
+    assert _rows_shown(first.text, "pipeline-runner", "ship-reviewer"), first.text
     inst.wait_log(f"[{LABEL}] SubagentStop: pipeline-runner",
                   "waiting for 1 agent(s) of its own", since=log0)
     first_id = (first.response.get("result") or {}).get("message_id") \
@@ -74,7 +96,9 @@ def test_waiting_agent_and_restart_on_the_agents_line(fresh):
     time.sleep(40)
     later = [c.text for c in fake.calls(chat_id=DM, since=first.seq)
              if c.method == "editMessageText" and c.params.get("message_id") == first_id]
-    assert not any("✅" in t or "✓ 🤖 **pipeline-runner**" in t for t in later), later
+    assert not any("✅" in t or "✓ 🤖 pipeline-runner" in _plain(t) for t in later), later
+    # P paused for C says so (in the answer, or in an edit once it paused).
+    assert any(WAITING_ROW in _plain(t) for t in [first.text, *later]), [first.text, *later]
     if later:
         _show("the same answer 40 s later (last edit)", _block(later[-1]))
 
@@ -105,7 +129,7 @@ def test_waiting_agent_and_restart_on_the_agents_line(fresh):
     inst.release_tools(name)
     second = flows.wait_text(fake, DM, WORKING_2, since=since2, timeout=90)
     _show("answer after the restart", _block(second.text))
-    assert "**pipeline-runner**" in second.text and "**ship-reviewer**" in second.text
+    assert _rows_shown(second.text, "pipeline-runner", "ship-reviewer"), second.text
 
     # 5. C stops, P resumes and stops for good: the answer settles to done.
     log2 = inst.log_mark()

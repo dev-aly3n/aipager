@@ -174,8 +174,13 @@ def test_telegram_slash_command_denied(call, session, tmp_path):
 def test_terminal_slash_command_allowed(call, session, tmp_path):
     harness.write_snapshot(session, role_name="user")
     snap = harness.write_terminal_prompt(session, "/e2ecmd")
-    assert snap["turn_origin"] == "terminal" and snap["scope_mode"] is True, snap
-    assert "/e2ecmd" not in snap["note_bodies"], snap
+    # The typed turn never keeps the Telegram turn's rights: its snapshot
+    # is the floor (Bash denied), marked for the origin check, and no
+    # Telegram body names the command. Only the transcript's origin can
+    # let it run.
+    assert snap["turn_origin"] == "terminal" and snap.get("verify_origin") is True, snap
+    assert "Bash" in snap["deny_tools"], snap
+    assert "/e2ecmd" not in (snap.get("note_bodies") or ()), snap
     t = _transcript(tmp_path, _prompt(_MARKED), *_command_record("/e2ecmd", _EXPANDED))
     assert call(t, "Bash", {"command": "echo hi"}) is None
 

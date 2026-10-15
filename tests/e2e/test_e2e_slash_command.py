@@ -5,7 +5,10 @@ A slash command is typed raw (no ``[via Telegram]`` marker), and Claude
 Code records it as a ``<command-name>/x</command-name>`` prompt with the
 expanded text in a separate meta entry. The hook calls such a prompt
 Telegram when the scope-mode snapshot's ``note_bodies`` (the Telegram
-messages its ``UserPromptSubmit`` consumed) name ``/x``. These tests run a
+messages its ``UserPromptSubmit`` consumed) name ``/x``. A command typed in
+the terminal gets the floor snapshot, marked for the origin check, and runs
+only because the hook reads its origin from the transcript ("peer message
+authority": a typed turn never keeps a Telegram turn's rights). These tests run a
 real project command (``.claude/commands/e2ecmd.md``) through
 ``claude -p "/e2ecmd"`` and check that record assumption against the real
 Claude Code: when no ``<command-name>/e2ecmd`` record is written, they
@@ -60,10 +63,16 @@ def test_telegram_slash_command_held_to_sender_rules(claude_available, cmd_proje
 
 def test_terminal_slash_command_unrestricted(claude_available, cmd_project, session):
     """The same command typed in the terminal after a restricted member's
-    Telegram turn: no Telegram body names it, so it runs."""
+    Telegram turn: its snapshot is the floor (Bash denied), and it runs
+    because the hook reads a terminal origin from the transcript."""
     harness.write_snapshot(session, role_name="user")       # an earlier Telegram turn
     snap = harness.write_terminal_prompt(session, COMMAND)  # then the terminal types it
-    assert snap["scope_mode"] is True and COMMAND not in snap["note_bodies"], snap
+    # Not the Telegram turn's rights: the floor (Bash denied), marked for
+    # the origin check, with no Telegram body naming the command. Only the
+    # transcript's origin can let the command's Bash call run.
+    assert snap["turn_origin"] == "terminal" and snap.get("verify_origin") is True, snap
+    assert "Bash" in snap["deny_tools"], snap
+    assert COMMAND not in (snap.get("note_bodies") or ()), snap
     r = harness.run(COMMAND, session=session, project=cmd_project, marker=False)
     _require_command_record(r)
     r.assert_ran("Bash")

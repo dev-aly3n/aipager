@@ -41,5 +41,6 @@ def test_group_upgrade_is_followed(fresh):
                           "failed calls in the new chat")
 
     # The session answers in the new chat.
-    flows.prompt_turn(inst, SG, fti.ALICE, name, f"@{fti.BOT_USERNAME} after the move",
+    flows.prompt_turn(inst, SG, fti.ALICE, name,
+                      f"@{fti.BOT_USERNAME} after the move: reply with exactly OK",
                       "after the move")

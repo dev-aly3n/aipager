@@ -62,7 +62,8 @@ def test_intake_routes_only_what_is_addressed(fresh):
     flows.prompt_turn(inst, G, fti.ALICE, name, "reply to the bot r1", "reply to the bot r1",
                       reply_to=bot_msgs[-1])
 
-    prompt = flows.prompt_turn(inst, G, fti.ALICE, name, f"/ft1@{fti.BOT_USERNAME} do it now",
+    prompt = flows.prompt_turn(inst, G, fti.ALICE, name,
+                               f"/ft1@{fti.BOT_USERNAME} do it now: reply with exactly OK",
                                "do it now")
     assert "/ft1" not in prompt
 
