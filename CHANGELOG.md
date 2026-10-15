@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **The busy card's Stop button is blue.** It is easier to find on a card that changes all the time, without the alarm of a red button. Telegram apps that do not know button colours show it as before.
 
+### Fixed
+- **The Mini App's update view follows aipager's restart.** When aipager restarted right after checking the installed version, the view could stay on "Working… (checking the installed version)" until you reopened the app; it now notices the restart and says to reopen the app (or shows the new version), and one lost check no longer stops it.
+
 ## [1.3.1] - 2026-10-15
 
 ### Fixed

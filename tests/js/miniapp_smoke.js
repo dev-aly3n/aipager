@@ -515,6 +515,16 @@ if (SCENARIO.indexOf("updates_") === 0) {
     updates_confirm_legacy: {},
   }[SCENARIO];
   if (CONFIRM_PLAN) Object.assign(CHECKS.aipager, CONFIRM_PLAN);
+  if (SCENARIO === "updates_restart_now_lost_poll") {
+    CHECKS.claude = { lines: ["aipager 0.7.18 installed, 0.7.17 running"], offer: null,
+                      summary: "Restart aipager to run 0.7.18.", restart: null, notes: [],
+                      source: "pipx, from PyPI", restart_offer: true };
+    FIXTURES["/api/update"].version = "0.7.17";
+    FIXTURES["/api/update"].url_changes_on_restart = true;
+    FIXTURES["/api/update/restart"] = { job: { id: 9, kind: "restart", phase: "verifying",
+      blockers: [], summary: "", started_at: 1 } };
+    webApp.close = () => { global.__closed = true; };
+  }
   const CHECK = (CONFIRM_PLAN ? "aipager" : null) || { updates_check_aipager: "aipager",
                   updates_check_nothing_newer: "none" }[SCENARIO] || "claude";
   FIXTURES["/api/update/check"] = { check: CHECKS[CHECK], job: null };
@@ -533,7 +543,17 @@ if (SCENARIO.indexOf("updates_") === 0) {
                       updates_restart_watchdog_late: "restart_scheduled",
                       updates_restart_hang_tunnel: "restart_scheduled",
                       updates_restart_stuck: "restart_scheduled",
-                      updates_restart_stuck_tunnel: "restart_scheduled" }[SCENARIO];
+                      updates_restart_stuck_tunnel: "restart_scheduled",
+                      updates_verify_dead_tunnel: "verifying",
+                      updates_verify_hang: "verifying",
+                      updates_verify_same_daemon_done: "verifying",
+                      updates_verify_blip: "verifying",
+                      updates_upgrading_blip: "upgrading",
+                      updates_installed_dead_tunnel: "upgrading",
+                      updates_chat_switch_lost_poll: "verifying",
+                      updates_done_lost_poll: "done",
+                      updates_double_load: "upgrading",
+                      updates_verify_blip_then_gone: "verifying" }[SCENARIO];
   if (JOB_PHASE) {
     FIXTURES["/api/update"].job = { id: 7, kind: "aipager", phase: JOB_PHASE,
       blockers: [], summary: JOB_PHASE === "done" ? "aipager is already up to date" : "",
@@ -550,7 +570,18 @@ if (SCENARIO.indexOf("updates_") === 0) {
       || SCENARIO === "updates_restart_hang_tunnel"
       || SCENARIO === "updates_restart_stuck_tunnel";
   }
-  if (SCENARIO === "updates_restart_tunnel" || SCENARIO === "updates_restart_hang_tunnel") {
+  if (SCENARIO === "updates_installed_dead_tunnel") {
+    FIXTURES["/api/update"].job.installed = { from: "0.7.17", to: "0.7.18" };
+    FIXTURES["/api/update"].version = "0.7.17";
+    FIXTURES["/api/update"].url_changes_on_restart = true;
+  }
+  if (JOB_PHASE === "verifying") {
+    FIXTURES["/api/update"].version = "0.7.17";
+    FIXTURES["/api/update"].url_changes_on_restart = SCENARIO === "updates_verify_dead_tunnel"
+      || SCENARIO === "updates_verify_blip_then_gone";
+  }
+  if (SCENARIO === "updates_restart_tunnel" || SCENARIO === "updates_restart_hang_tunnel"
+      || SCENARIO === "updates_verify_dead_tunnel" || SCENARIO === "updates_installed_dead_tunnel") {
     webApp.close = () => { global.__closed = true; };
   }
 }
@@ -1853,10 +1884,14 @@ function restartHarness(replies) {
       return Promise.resolve({ ok: false, status: r,
         json: () => Promise.reject(new SyntaxError("Unexpected token <")) });
     }
+    if (r && r.__status) {                 // an error reply WITH a JSON body
+      return Promise.resolve({ ok: false, status: r.__status, json: () => Promise.resolve(r.body) });
+    }
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(r) });
   };
   global.fetch = (url, opts) => {
-    // The first GET is loadUpdates' own (from FIXTURES); the rest are the watch's.
+    // The first GET is loadUpdates' own (from FIXTURES); the rest answer from
+    // `replies`, the job's later polls and the restart watch's alike.
     if (url === "/api/update" && fetchCalls.some(c => c.url === "/api/update")) {
       fetchCalls.push({ url, method: "GET" });
       polls += 1;
@@ -2078,6 +2113,305 @@ function driveUpdatesRestartHangTunnel() {
       h.tick(step);
     };
     step();
+  }, 10);
+}
+
+// ---- a restart the page never saw scheduled (2026-10-15) ---------------
+// aipager restarts within one 3 s poll of `verifying` (no turn running), so
+// the page's next job poll finds the old host gone: it must follow into the
+// restart watch, not freeze on "checking the installed version".
+function driveUpdatesVerifyDeadTunnel() {
+  const h = restartHarness([]);             // every poll after the first: down
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (h.jobText().indexOf("checking the installed version") === -1)
+      fail("the verifying step first: " + JSON.stringify(h.jobText()));
+    let rounds = 0;
+    const step = () => {
+      const text = h.jobText();
+      if (text.indexOf("aipager restarted, reopen the app") === 0) {
+        if (h.elapsed() > 30000) fail("reopen only after " + h.elapsed() + " ms");
+        if (h.queue.length) fail("timers left after the reopen: " + JSON.stringify(h.queue.map(t => t.ms)));
+        const close = byId["updates-actions"].children.find(c => c.textContent === "Close the app");
+        if (!close) fail("no Close the app button");
+        console.log("ok: verifying -> host gone -> reopen the app");
+        process.exit(0);
+      }
+      if (text.indexOf("checking the installed version") === -1 && text !== "Restarting aipager\u2026")
+        fail("between the steps: " + JSON.stringify(text));
+      if (++rounds > 60) fail("never left the verifying step");
+      h.tick(step);
+    };
+    step();
+  }, 10);
+}
+
+// The job poll hangs (no answer, no error): its time limit ends it and the
+// restart watch takes over.
+function driveUpdatesVerifyHang() {
+  const h = restartHarness(["hang"]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    let rounds = 0;
+    const step = () => {
+      if (h.jobText() === "Restarting aipager\u2026") {
+        if (h.aborted() !== 1) fail("the hanging job poll was not aborted: " + h.aborted());
+        if (h.elapsed() > 3000 + 6000) fail("watch only after " + h.elapsed() + " ms");
+        console.log("ok: verifying -> job poll hangs -> times out -> restart watch");
+        process.exit(0);
+      }
+      if (h.jobText().indexOf("checking the installed version") === -1)
+        fail("before the watch: " + JSON.stringify(h.jobText()));
+      if (++rounds > 10) fail("the hanging poll froze the view");
+      h.tick(step);
+    };
+    step();
+  }, 10);
+}
+
+// One lost poll while verifying, then the same daemon answers: the job
+// finished without a restart. The view shows what the job says and polls
+// no more.
+function driveUpdatesVerifySameDaemonDone() {
+  const DONE = JSON.parse(JSON.stringify(FIXTURES["/api/update"]));
+  DONE.job.phase = "done";
+  DONE.job.summary = "aipager is already up to date";
+  const h = restartHarness(["down", DONE]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    let rounds = 0;
+    const step = () => {
+      const text = h.jobText();
+      if (text.indexOf("aipager is already up to date") !== -1) {
+        if (h.queue.length) fail("still polling a finished job: " + JSON.stringify(h.queue.map(t => t.ms)));
+        if (h.spinning()) fail("still spinning on a finished job");
+        console.log("ok: verifying -> one lost poll -> same daemon done -> job view");
+        process.exit(0);
+      }
+      if (++rounds > 10) fail("never showed the job's end: " + JSON.stringify(text));
+      h.tick(step);
+    };
+    step();
+  }, 10);
+}
+
+// One lost poll while verifying, and the same daemon is still verifying:
+// back to the job's step, and the job is followed again.
+function driveUpdatesVerifyBlip() {
+  const OLD = JSON.parse(JSON.stringify(FIXTURES["/api/update"]));
+  const h = restartHarness(["down", OLD]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    let rounds = 0, sawWatch = false;
+    const step = () => {
+      const text = h.jobText();
+      if (text === "Restarting aipager\u2026") { sawWatch = true; }
+      else if (sawWatch && text.indexOf("checking the installed version") !== -1) {
+        if (h.queue.map(t => t.ms).indexOf(3000) === -1)
+          fail("the job is not followed again: " + JSON.stringify(h.queue.map(t => t.ms)));
+        console.log("ok: verifying -> one lost poll -> same daemon verifying -> polling again");
+        process.exit(0);
+      }
+      if (++rounds > 10) fail("never came back to the job: " + JSON.stringify(text));
+      h.tick(step);
+    };
+    step();
+  }, 10);
+}
+
+// The Update job past its install (`installed` set) restarts within one
+// poll: the page follows into the restart watch, not a retry loop.
+function driveUpdatesInstalledDeadTunnel() {
+  const h = restartHarness([]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    let rounds = 0;
+    const step = () => {
+      const text = h.jobText();
+      if (text.indexOf("aipager restarted, reopen the app") === 0) {
+        if (h.elapsed() > 30000) fail("reopen only after " + h.elapsed() + " ms");
+        console.log("ok: installed -> host gone -> reopen the app");
+        process.exit(0);
+      }
+      if (++rounds > 20) fail("never left the install step: " + JSON.stringify(text));
+      h.tick(step);
+    };
+    step();
+  }, 10);
+}
+
+// A job poll from the chat left behind fails after the switch: nothing of
+// that chat's job may start a restart watch in the new chat's view.
+function driveUpdatesChatSwitchLostPoll() {
+  const h = restartHarness(["stuck"]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    h.tick(() => {                         // the job poll: in flight for good
+      if (h.stuckCount() !== 1) fail("no job poll in flight: " + h.stuckCount());
+      api.switchChat("-100777");
+      setTimeoutReal(() => {
+        h.settleStuck("down");             // the old chat's poll fails now
+        setTimeoutReal(() => {
+          if (h.jobText() === "Restarting aipager\u2026")
+            fail("the old chat's lost poll started a restart watch");
+          if (h.queue.some(t => t.ms === 1500))
+            fail("a restart poll was scheduled for the old chat's job");
+          console.log("ok: chat switched -> the old chat's lost poll does nothing");
+          process.exit(0);
+        }, 10);
+      }, 10);
+    });
+  }, 10);
+}
+
+// A finished job's poll fails: nothing to follow, no retries.
+function driveUpdatesDoneLostPoll() {
+  const h = restartHarness(["down"]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    api.loadUpdates();                     // asked again: this one fails
+    setTimeoutReal(() => {
+      if (h.polls() !== 1) fail("polls: " + h.polls());
+      if (h.queue.some(t => t.ms !== 6000))
+        fail("a finished job is polled again: " + JSON.stringify(h.queue.map(t => t.ms)));
+      console.log("ok: finished job -> lost poll -> no retry");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+// Update tapped, and the first poll of the job it started is lost: the
+// started job is known, so the poll is retried, not dropped.
+function driveUpdatesStartLostPoll() {
+  const h = restartHarness(["down"]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    byId["updates-actions"].children[0].click();          // Check for updates
+    setTimeoutReal(() => {
+      byId["updates-actions"].children[0].click();        // Update Claude Code
+      setTimeoutReal(() => {
+        if (h.polls() !== 1) fail("job polls after the start: " + h.polls());
+        if (!h.queue.some(t => t.ms === 3000))
+          fail("the started job is not polled again: " + JSON.stringify(h.queue.map(t => t.ms)));
+        console.log("ok: start -> first job poll lost -> retried");
+        process.exit(0);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+// Two polls of a running job answer close together: one poll loop, not two.
+function driveUpdatesDoubleLoad() {
+  const OLD = JSON.parse(JSON.stringify(FIXTURES["/api/update"]));
+  const h = restartHarness([OLD, OLD]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    api.loadUpdates();
+    api.loadUpdates();
+    setTimeoutReal(() => {
+      const loops = h.queue.filter(t => t.ms === 3000).length;
+      if (loops !== 1) fail("poll loops: " + loops + " " + JSON.stringify(h.queue.map(t => t.ms)));
+      console.log("ok: two answers close together -> one poll loop");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+// A blip while verifying hands back to the job, then aipager restarts
+// within one poll: the second watch still knows the address dies with it.
+function driveUpdatesVerifyBlipThenGone() {
+  const OLD = JSON.parse(JSON.stringify(FIXTURES["/api/update"]));
+  const h = restartHarness(["down", OLD]);  // then: down for good
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    let rounds = 0, back = false;
+    const step = () => {
+      const text = h.jobText();
+      if (text.indexOf("checking the installed version") !== -1 && h.polls() >= 2) back = true;
+      if (text.indexOf("aipager restarted, reopen the app") === 0) {
+        if (!back) fail("reopen before the hand-back");
+        if (h.elapsed() > 40000) fail("reopen only after " + h.elapsed() + " ms");
+        console.log("ok: verifying -> blip -> back -> host gone -> reopen the app");
+        process.exit(0);
+      }
+      if (++rounds > 60) fail("never said reopen: " + JSON.stringify(text));
+      h.tick(step);
+    };
+    step();
+  }, 10);
+}
+
+// Restart now from a check result, and its first poll is lost: the watch
+// knows this page's address dies with the restart.
+function driveUpdatesRestartNowLostPoll() {
+  webApp.showConfirm = (message, cb) => { cb(true); };
+  const h = restartHarness([]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    byId["updates-actions"].children[0].click();          // Check for updates
+    setTimeoutReal(() => {
+      const restart = byId["updates-actions"].children.find(c => c.textContent === "Restart now");
+      if (!restart) fail("no Restart now: " + JSON.stringify(byId["updates-actions"].children.map(c => c.textContent)));
+      restart.click();
+      setTimeoutReal(() => {
+        let rounds = 0;
+        const step = () => {
+          const text = h.jobText();
+          if (text.indexOf("aipager restarted, reopen the app") === 0) {
+            if (h.elapsed() > 30000) fail("reopen only after " + h.elapsed() + " ms");
+            console.log("ok: Restart now from a check -> lost poll -> reopen the app");
+            process.exit(0);
+          }
+          if (++rounds > 60) fail("never said reopen: " + JSON.stringify(text));
+          h.tick(step);
+        };
+        step();
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+// A lost poll while the package is still installing is a blip, not a
+// restart: polling goes on (after a longer gap) and the view keeps the step.
+function driveUpdatesUpgradingBlip() {
+  const OLD = JSON.parse(JSON.stringify(FIXTURES["/api/update"]));
+  const h = restartHarness(["down", { __status: 500, body: { error: "boom" } }, OLD, "down"]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    const first = h.jobText();
+    if (first === "Restarting aipager\u2026" || first === "") fail("start: " + JSON.stringify(first));
+    h.tick(() => {                         // poll 1: down
+      if (h.jobText() !== first) fail("after a lost poll: " + JSON.stringify(h.jobText()));
+      if (!h.queue.length) fail("polling stopped after one lost poll");
+      h.tick(() => {                       // poll 2: an error reply
+        if (h.jobText() !== first) fail("after an error reply: " + JSON.stringify(h.jobText()));
+        const gaps = h.queue.map(t => t.ms);
+        if (gaps.indexOf(6000) === -1) fail("no longer gap after two lost polls: " + JSON.stringify(gaps));
+        h.tick(() => {                     // poll 3: the daemon answers
+          if (h.jobText() !== first) fail("back: " + JSON.stringify(h.jobText()));
+          if (h.queue.map(t => t.ms).indexOf(3000) === -1)
+            fail("not back to 3 s polls: " + JSON.stringify(h.queue.map(t => t.ms)));
+          h.tick(() => {                   // poll 4: lost again, the gap starts over
+            if (h.queue.map(t => t.ms).indexOf(3000) === -1)
+              fail("the backoff did not start over: " + JSON.stringify(h.queue.map(t => t.ms)));
+            console.log("ok: upgrading -> lost polls retried with backoff -> polling goes on");
+            process.exit(0);
+          });
+        });
+      });
+    });
   }, 10);
 }
 
@@ -2392,6 +2726,18 @@ const DRIVERS = {
   updates_restart_hang_tunnel: driveUpdatesRestartHangTunnel,
   updates_restart_stuck: driveUpdatesRestartStuck,
   updates_restart_stuck_tunnel: driveUpdatesRestartStuckTunnel,
+  updates_verify_dead_tunnel: driveUpdatesVerifyDeadTunnel,
+  updates_verify_hang: driveUpdatesVerifyHang,
+  updates_verify_same_daemon_done: driveUpdatesVerifySameDaemonDone,
+  updates_verify_blip: driveUpdatesVerifyBlip,
+  updates_installed_dead_tunnel: driveUpdatesInstalledDeadTunnel,
+  updates_chat_switch_lost_poll: driveUpdatesChatSwitchLostPoll,
+  updates_done_lost_poll: driveUpdatesDoneLostPoll,
+  updates_start_lost_poll: driveUpdatesStartLostPoll,
+  updates_double_load: driveUpdatesDoubleLoad,
+  updates_verify_blip_then_gone: driveUpdatesVerifyBlipThenGone,
+  updates_restart_now_lost_poll: driveUpdatesRestartNowLostPoll,
+  updates_upgrading_blip: driveUpdatesUpgradingBlip,
   updates_hidden: driveUpdatesHidden,
   updates_render: driveUpdatesRender,
   updates_check_then_update: driveUpdatesCheckThenUpdate,

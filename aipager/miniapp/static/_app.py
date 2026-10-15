@@ -2971,14 +2971,18 @@ APP_JS = r"""
   // A dedicated fetch, NOT apiFetch: a 401/403 here means "you are not the
   // admin" and must hide this block - apiFetch would turn it into the
   // terminal "session expired" state for the whole app.
-  function updatesFetch(path, method, body) {
+  // `timeoutMs`: give up (reject) past it, whether or not the fetch ever
+  // settles, aborting it where AbortController exists.
+  function updatesFetch(path, method, body, timeoutMs) {
+    var ctl = timeoutMs && typeof AbortController === "function" ? new AbortController() : null;
     var headers = authHeaders();
     var opts = { method: method || "GET", headers: headers };
     if (body !== undefined) {
       headers["Content-Type"] = "application/json";
       opts.body = JSON.stringify(body);
     }
-    return fetch(path, opts).then(function (res) {
+    if (ctl) { opts.signal = ctl.signal; }
+    var asked = fetch(path, opts).then(function (res) {
       if (res.status === 401 || res.status === 403) {
         var err = new Error("forbidden");
         err.forbidden = true;
@@ -2987,6 +2991,15 @@ APP_JS = r"""
       return res.json().then(function (data) {
         return { ok: res.ok, status: res.status, data: data };
       });
+    });
+    if (!timeoutMs) { return asked; }
+    return new Promise(function (resolve, reject) {
+      var timer = setTimeout(function () {
+        if (ctl) { try { ctl.abort(); } catch (e) { /* gone */ } }
+        reject(new Error("timeout"));
+      }, timeoutMs);
+      asked.then(function (r) { clearTimeout(timer); resolve(r); },
+                 function (e) { clearTimeout(timer); reject(e); });
     });
   }
 
@@ -3001,25 +3014,67 @@ APP_JS = r"""
     document.getElementById("updates-block").hidden = true;
   }
 
+  // A running job is asked about every 3 s. A poll that fails (no network,
+  // the tunnel's error page, no answer within UPDATE_POLL_TIMEOUT_MS) is
+  // tried again, each gap twice the last up to UPDATE_POLL_MAX_MS, never
+  // dropped: one lost poll used to freeze the view on the last step. Right
+  // before a restart (`afterInstall`) aipager may restart within one poll,
+  // too fast for the page to see `restart_scheduled`, so a failed poll there
+  // starts the restart watch, which knows a dead host. A network outage of
+  // a few seconds there can end on "reopen the app" with nothing restarted;
+  // Check for updates or reopening shows the truth, and those steps are short.
+  var UPDATE_POLL_MS = 3000;
+  var UPDATE_POLL_MAX_MS = 15000;
+  var UPDATE_POLL_TIMEOUT_MS = 6000;
+  var updatesRetryMs = UPDATE_POLL_MS;
+
+  // Restart now's check of the installed version, or the Update job past
+  // its install (`installed` set, any wait for idle sessions over). Never
+  // `waiting_for_idle`: that can last minutes with no restart coming.
+  function afterInstall(job) {
+    return job.phase === "verifying" || (job.phase === "upgrading" && !!job.installed);
+  }
+
+  function keepPollingUpdates(delay) {
+    stopUpdatesPoll();
+    if (currentView.type === "settings" && document.visibilityState !== "hidden") {
+      updatesTimer = setTimeout(loadUpdates, delay);
+    }
+  }
+
   function loadUpdates() {
     stopUpdatesPoll();
     if (!settingsData || !settingsData.can_update) { hideUpdates(); return; }
     var epoch = chatEpoch;
-    updatesFetch("/api/update")
+    var known = updatesData;                     // what the view shows now
+    updatesFetch("/api/update", undefined, undefined, UPDATE_POLL_TIMEOUT_MS)
       .then(function (r) {
         if (epoch !== chatEpoch) { return; }     // asked in the chat left behind
-        if (!r.ok) { return; }
+        if (!r.ok) { updatesPollFailed(known); return; }
+        updatesRetryMs = UPDATE_POLL_MS;
         updatesData = r.data;
         renderUpdates();
         var job = updatesData.job;
-        if (job && !UPDATE_TERMINAL[job.phase] && currentView.type === "settings"
-            && document.visibilityState !== "hidden") {
-          updatesTimer = setTimeout(loadUpdates, 3000);
-        }
+        if (job && !UPDATE_TERMINAL[job.phase]) { keepPollingUpdates(UPDATE_POLL_MS); }
       })
       .catch(function (err) {
-        if (err && err.forbidden) { hideUpdates(); }
+        if (err && err.forbidden) { hideUpdates(); return; }
+        if (epoch !== chatEpoch) { return; }
+        updatesPollFailed(known);
       });
+  }
+
+  // A poll got no usable answer. Nothing to follow without a running job.
+  function updatesPollFailed(known) {
+    var job = known && known.job;
+    if (!job || UPDATE_TERMINAL[job.phase]) { return; }
+    if (afterInstall(job)) {
+      beginRestartWatch(job, known);
+      renderUpdates();
+      return;
+    }
+    keepPollingUpdates(updatesRetryMs);
+    updatesRetryMs = Math.min(updatesRetryMs * 2, UPDATE_POLL_MAX_MS);
   }
 
   function updateButton(label, onTap, className) {
@@ -3059,9 +3114,14 @@ APP_JS = r"""
           updatesCheck = r.data.check;
           // The check speaks for the installed version now; the banner's
           // hooks notice (no lookup) stays.
-          var kept = updatesData && updatesData.waiting;
+          var prev = updatesData || {};
+          var kept = prev.waiting;
+          // The running version and whether this page's address survives a
+          // restart stay known, for a restart watch started from here.
           updatesData = { job: r.data.job || null,
-                          waiting: kept && kept.source === "hooks" ? kept : null };
+                          waiting: kept && kept.source === "hooks" ? kept : null,
+                          version: prev.version,
+                          url_changes_on_restart: prev.url_changes_on_restart };
         } else if (r.status === 409) {
           showNotice(t("ui.update.running"), "err");
           loadUpdates();
@@ -3103,6 +3163,15 @@ APP_JS = r"""
         }
         // A started (or refused) update voids the check it came from.
         if (action === "start" || action === "restart") { updatesCheck = null; }
+        // The job it started, so a lost first poll is retried, not dropped.
+        if (r.ok && r.data && r.data.job) {
+          var base = updatesData || {}, merged = {};
+          for (var key in base) {
+            if (Object.prototype.hasOwnProperty.call(base, key)) { merged[key] = base[key]; }
+          }
+          merged.job = r.data.job;
+          updatesData = merged;
+        }
         loadUpdates();
       })
       .catch(function (err) {
@@ -3242,10 +3311,13 @@ APP_JS = r"""
     var job = (d && d.job) || null;
     if (job && job.id === w.jobId) {
       if (job.phase === "restart_scheduled") { return false; }   // the old daemon, still up
-      // The old daemon gave up on the restart: show what the job says.
+      // The old daemon gave up on the restart, or never began one (a lost
+      // poll while verifying): show what the job says, and keep following
+      // a job that still runs.
       stopRestartWatch();
-      updatesData = { job: job };
+      updatesData = d;                 // whole, so a later watch knows the tunnel
       renderUpdates();
+      if (!UPDATE_TERMINAL[job.phase]) { keepPollingUpdates(UPDATE_POLL_MS); }
       return true;
     }
     // A daemon that does not know this job: the new one.

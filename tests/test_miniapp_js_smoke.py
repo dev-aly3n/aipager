@@ -1371,6 +1371,52 @@ def test_updates_restart_stuck_poll_on_a_quick_tunnel_says_reopen(node_bin, tmp_
     assert "ok: stuck poll on a quick tunnel -> reopen at the give-up" in proc.stdout
 
 
+# ---- a restart the page never saw scheduled (2026-10-15) --------------------
+# aipager restarted within one poll of "checking the installed version", and
+# the view froze there for good: one failed job poll ended the polling.
+
+@pytest.mark.parametrize("scenario,ok", [
+    ("updates_verify_dead_tunnel", "ok: verifying -> host gone -> reopen the app"),
+    ("updates_verify_hang", "ok: verifying -> job poll hangs -> times out -> restart watch"),
+    ("updates_verify_same_daemon_done",
+     "ok: verifying -> one lost poll -> same daemon done -> job view"),
+    ("updates_verify_blip",
+     "ok: verifying -> one lost poll -> same daemon verifying -> polling again"),
+    ("updates_upgrading_blip",
+     "ok: upgrading -> lost polls retried with backoff -> polling goes on"),
+    ("updates_installed_dead_tunnel", "ok: installed -> host gone -> reopen the app"),
+    ("updates_chat_switch_lost_poll",
+     "ok: chat switched -> the old chat's lost poll does nothing"),
+    ("updates_done_lost_poll", "ok: finished job -> lost poll -> no retry"),
+    ("updates_start_lost_poll", "ok: start -> first job poll lost -> retried"),
+    ("updates_double_load", "ok: two answers close together -> one poll loop"),
+    ("updates_verify_blip_then_gone",
+     "ok: verifying -> blip -> back -> host gone -> reopen the app"),
+    ("updates_restart_now_lost_poll",
+     "ok: Restart now from a check -> lost poll -> reopen the app"),
+], ids=["dead-tunnel", "hang", "same-daemon-done", "verify-blip", "upgrading-blip",
+        "installed-dead-tunnel", "chat-switch", "done-lost-poll", "start-lost-poll",
+        "double-load", "blip-then-gone", "restart-now-lost-poll"])
+def test_a_lost_job_poll_never_freezes_the_update_view(node_bin, tmp_path, scenario, ok):
+    """Mutations: drop the hand-over to the restart watch (or its
+    installed-upgrading half) and a dead tunnel freezes on the last step;
+    drop the job poll's time limit and the hang does; drop the retry, the
+    doubling gap or its reset after a good answer and the blip fails; drop
+    the resumed polling and the same daemon's later steps are never shown;
+    drop the chat-switch check and the old chat's lost poll starts a watch;
+    drop the finished-job check and a done job is polled forever; forget
+    the job a start returned and its lost first poll stops the polling;
+    drop the stop before a new poll and two loops run at once; keep only
+    the job on a hand-back, drop the tunnel flag a check carries, or keep
+    only the job when a start is merged, and a later restart on a quick
+    tunnel ends on "still restarting" instead of "reopen"."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, scenario)
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert ok in proc.stdout
+
+
 def test_updates_restart_back_on_the_old_version_says_so(node_bin, tmp_path):
     from aipager.miniapp.static import INDEX_HTML
 
