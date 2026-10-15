@@ -663,7 +663,9 @@ tunnel described below. Outbound:
   is never used. None of this happens with your own Mini App URL (see
   below).
 - Version checks, only when someone taps **Check for updates** or
-  **Update** (`/update`, the Mini App's Updates): `pypi.org` for aipager, and
+  **Update** (`/update`, the Mini App's Updates), or when someone who may
+  update opens the Mini App's Settings tab (at most once every ten
+  minutes per open app): `pypi.org` for aipager, and
   `downloads.claude.ai` or `registry.npmjs.org` for Claude Code,
   depending on how it was installed. An update then runs the installer
   (which talks to PyPI or Homebrew) and `claude update`.

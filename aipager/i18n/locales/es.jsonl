@@ -1002,7 +1002,6 @@
 {"k": "ui.btn.action.stop", "src": "9e253470", "v": "Detener"}
 {"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "Responder en el chat"}
 {"k": "ui.btn.cancel", "src": "77dfd213", "v": "Cancelar"}
-{"k": "ui.btn.check_again", "src": "e185048c", "v": "Volver a buscar"}
 {"k": "ui.btn.check_updates", "src": "736b9062", "v": "Buscar actualizaciones"}
 {"k": "ui.btn.checking", "src": "820d6004", "v": "Comprobando…"}
 {"k": "ui.btn.close_app", "src": "73743dc4", "v": "Cerrar la app"}

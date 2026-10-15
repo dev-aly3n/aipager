@@ -263,16 +263,16 @@ HTML_BODY = """\
 </div>
 
 <section id="view-settings" hidden>
-  <div id="settings-app-language" class="groups"></div>
-  <p class="sect-note" id="settings-app-language-hint" hidden></p>
-  <h2 class="sect-title" data-i18n="ui.settings.chat_prefs">Chat preferences</h2>
-  <p class="sect-note" id="settings-intro" data-i18n="ui.settings.intro">These apply to every session in this chat.</p>
-  <div id="settings-groups" class="groups"></div>
-  <div id="settings-readonly" class="note" data-i18n="ui.settings.readonly" hidden>Only an admin can change these.</div>
   <div id="updates-block" class="card updates" hidden>
-    <div class="card-head">
-      <span class="card-icon" aria-hidden="true"><svg class="ic"><use href="#i-refresh"></use></svg></span>
-      <h3 class="card-title" data-i18n="ui.update.title">Updates</h3>
+    <div class="updates-head">
+      <div class="updates-name">
+        <h3 class="card-title" data-i18n="ui.update.title">Updates</h3>
+        <div id="updates-version" class="updates-version" dir="ltr" hidden></div>
+      </div>
+      <button type="button" class="updates-check" id="updates-check" hidden>
+        <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg>
+        <span id="updates-check-label" data-i18n="ui.btn.check_updates">Check for updates</span>
+      </button>
     </div>
     <div id="updates-banner" class="updates-row" hidden></div>
     <div id="updates-lines" class="updates-lines"></div>
@@ -282,6 +282,12 @@ HTML_BODY = """\
     <div id="updates-job" class="updates-job" hidden></div>
     <div id="updates-actions" class="updates-actions"></div>
   </div>
+  <div id="settings-app-language" class="groups"></div>
+  <p class="sect-note" id="settings-app-language-hint" hidden></p>
+  <h2 class="sect-title" data-i18n="ui.settings.chat_prefs">Chat preferences</h2>
+  <p class="sect-note" id="settings-intro" data-i18n="ui.settings.intro">These apply to every session in this chat.</p>
+  <div id="settings-groups" class="groups"></div>
+  <div id="settings-readonly" class="note" data-i18n="ui.settings.readonly" hidden>Only an admin can change these.</div>
   <div id="report-block" class="card updates" hidden>
     <div class="card-head">
       <span class="card-icon" aria-hidden="true"><svg class="ic"><use href="#i-question"></use></svg></span>

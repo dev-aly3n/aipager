@@ -3021,13 +3021,22 @@ APP_JS = r"""
 
   // ---- updates (admin only) -------------------------------------------
   // As /update in chat (8.43): Check, then ONE Update button. The offer
-  // comes from the server's update_offer(); nothing is looked up until
-  // Check is tapped. Shown only with `can_update`; the server enforces it.
+  // comes from the server's update_offer(). The card is first on the
+  // Settings tab: its name and the running version, and a quiet Check for
+  // updates at the row's end. Opening the tab checks by itself (at most
+  // every UPDATE_AUTO_MS, never during a job or a restart); the big
+  // button appears only when there is something to do. Shown only with
+  // `can_update`; the server enforces it.
 
   var updatesData = null;     // GET /api/update payload: { job }
   var updatesCheck = null;    // POST /api/update/check result, or null
   var updatesChecking = false;
   var updatesTimer = null;
+  // The tab was just opened: the next answer of GET /api/update may check.
+  var updatesAutoWanted = false;
+  // When the last check was asked (Date.now()), automatic or tapped.
+  var updatesLastCheck = 0;
+  var UPDATE_AUTO_MS = 10 * 60 * 1000;
   var UPDATE_TERMINAL = { done: 1, failed: 1, cancelled: 1, restart_scheduled: 1 };
   // A running job's step in words, by its phase id (an unknown one shows its id).
   var UPDATE_PHASES = { starting: "ui.update.job.starting",
@@ -3111,6 +3120,8 @@ APP_JS = r"""
 
   function loadUpdates() {
     stopUpdatesPoll();
+    var auto = updatesAutoWanted;
+    updatesAutoWanted = false;
     if (!settingsData || !settingsData.can_update) { hideUpdates(); return; }
     var epoch = chatEpoch;
     var known = updatesData;                     // what the view shows now
@@ -3123,6 +3134,7 @@ APP_JS = r"""
         renderUpdates();
         var job = updatesData.job;
         if (job && !UPDATE_TERMINAL[job.phase]) { keepPollingUpdates(UPDATE_POLL_MS); }
+        if (auto) { autoCheckUpdates(); }
       })
       .catch(function (err) {
         if (err && err.forbidden) { hideUpdates(); return; }
@@ -3165,9 +3177,24 @@ APP_JS = r"""
     fn();
   }
 
-  function checkUpdates() {
+  // Opening the Settings tab checks by itself: not while a job runs or a
+  // restart is watched (they have their own buttons), and not again within
+  // UPDATE_AUTO_MS of the last check (the lookup goes online, and every
+  // check counts against the viewer's write budget).
+  function autoCheckUpdates() {
+    var job = updatesData && updatesData.job;
+    if (updatesChecking || restartWatch || (job && !UPDATE_TERMINAL[job.phase])) { return; }
+    if (updatesLastCheck && Date.now() - updatesLastCheck < UPDATE_AUTO_MS) { return; }
+    checkUpdates(true);
+  }
+
+  // `auto` (true only from autoCheckUpdates): a failure says nothing, the
+  // card just goes back to its quiet row.
+  function checkUpdates(auto) {
     if (updatesChecking) { return; }
+    var quiet = auto === true;
     updatesChecking = true;
+    updatesLastCheck = Date.now();
     updatesCheck = null;
     renderUpdates();
     var epoch = chatEpoch;
@@ -3190,8 +3217,10 @@ APP_JS = r"""
                           version: prev.version,
                           url_changes_on_restart: prev.url_changes_on_restart };
         } else if (r.status === 409) {
-          showNotice(t("ui.update.running"), "err");
+          if (!quiet) { showNotice(t("ui.update.running"), "err"); }
           loadUpdates();
+        } else if (quiet) {
+          // An automatic check that got no answer: nothing to say.
         } else if (r.status === 429) {
           showNotice(t("ui.update.too_many"), "err");
         } else if (r.status === 503) {
@@ -3204,7 +3233,7 @@ APP_JS = r"""
       .catch(function (err) {
         updatesChecking = false;
         if (err && err.forbidden) { hideUpdates(); return; }
-        showNotice(t("ui.update.unreachable"), "err");
+        if (!quiet) { showNotice(t("ui.update.unreachable"), "err"); }
         renderUpdates();
       });
   }
@@ -3387,8 +3416,9 @@ APP_JS = r"""
       if (!UPDATE_TERMINAL[job.phase]) { keepPollingUpdates(UPDATE_POLL_MS); }
       return true;
     }
-    // A daemon that does not know this job: the new one.
-    updatesData = { job: job };
+    // A daemon that does not know this job: the new one. Its version is
+    // the card's head's from here.
+    updatesData = { job: job, version: d && d.version };
     w.version = String((d && d.version) || "");
     var done = d && d.restarted;
     if (done && (!w.to || done.to === w.to)) { w.restarted = done; }
@@ -3462,6 +3492,8 @@ APP_JS = r"""
     block.hidden = false;
     var job = (updatesData && updatesData.job) || null;
     var running = job && !UPDATE_TERMINAL[job.phase];
+    if (job && job.phase === "restart_scheduled") { beginRestartWatch(job, updatesData); }
+    renderUpdatesHead(running);
 
     var jobEl = document.getElementById("updates-job");
     var actions = document.getElementById("updates-actions");
@@ -3472,7 +3504,6 @@ APP_JS = r"""
     setLine("updates-restart", "");
     setLine("updates-summary", "");
     setLine("updates-banner", "");
-    if (job && job.phase === "restart_scheduled") { beginRestartWatch(job, updatesData); }
     if (restartWatch) { renderRestartWatch(jobEl, actions); return; }
     // Installed and waiting for a restart, or hooks already on a newer
     // aipager: one line, while no job runs.
@@ -3522,12 +3553,6 @@ APP_JS = r"""
       return;
     }
 
-    if (updatesChecking) {
-      var busy = updateButton(t("ui.btn.checking"), function () {});
-      busy.disabled = true;
-      actions.appendChild(busy);
-      return;
-    }
     // Restart now, once: from the banner, a check that found the update
     // installed and waiting, or a finished update that offers it.
     var restartOffer = !!banner || !!(updatesCheck && updatesCheck.restart_offer)
@@ -3537,12 +3562,13 @@ APP_JS = r"""
         confirmThen(t("ui.update.restart_confirm"), function () { postUpdate("restart"); });
       }));
     }
-    if (!updatesCheck) {
-      actions.appendChild(updateButton(t("ui.btn.check_updates"), checkUpdates,
-                                       restartOffer ? "updates-again" : undefined));
+    if (!updatesCheck) { return; }              // the head's Check for updates
+    var check = updatesCheck;
+    if (check.up_to_date) {
+      // Nothing to do: one quiet line, no button.
+      setLine("updates-summary", plain(check.summary || t("ui.update.up_to_date")));
       return;
     }
-    var check = updatesCheck;
     (check.lines || []).forEach(function (line) {
       var row = document.createElement("div");
       row.className = "updates-row";
@@ -3571,9 +3597,21 @@ APP_JS = r"""
       return;
     }
     setLine("updates-summary", plain(check.summary || t("ui.update.up_to_date")));
-    if (!check.restart_offer) {
-      actions.appendChild(updateButton(t("ui.btn.check_again"), checkUpdates, "updates-again"));
-    }
+  }
+
+  // The card's head: the running version, and Check for updates at the
+  // row's end (hidden while a job runs or a restart is watched: they have
+  // their own buttons). While a check is asked it reads Checking… and its
+  // arrows turn.
+  function renderUpdatesHead(running) {
+    var version = updatesData && updatesData.version;
+    setLine("updates-version", version ? "v" + String(version) : "");
+    var btn = document.getElementById("updates-check");
+    btn.hidden = !!(running || restartWatch);
+    btn.disabled = updatesChecking;
+    btn.classList.toggle("is-checking", updatesChecking);
+    document.getElementById("updates-check-label").textContent =
+      updatesChecking ? t("ui.btn.checking") : t("ui.btn.check_updates");
   }
 
 
@@ -4190,7 +4228,10 @@ APP_JS = r"""
       .classList.toggle("is-active", name === "sessions");
     document.getElementById("maintab-settings")
       .classList.toggle("is-active", name === "settings");
-    if (name === "sessions") { pollTick(); } else { loadSettings(); }
+    if (name === "sessions") { pollTick(); } else {
+      updatesAutoWanted = true;                 // opening Settings checks for updates
+      loadSettings();
+    }
   }
 
   if (tg && tg.BackButton) {
@@ -4238,6 +4279,8 @@ APP_JS = r"""
     .addEventListener("click", function () { setMainTab("sessions"); });
   document.getElementById("maintab-settings")
     .addEventListener("click", function () { setMainTab("settings"); });
+  document.getElementById("updates-check")
+    .addEventListener("click", function () { checkUpdates(false); });
   document.getElementById("gone-toggle").addEventListener("click", function () {
     goneCollapsed = !goneCollapsed;
     if (lastGridData) { renderGrid(lastGridData); }

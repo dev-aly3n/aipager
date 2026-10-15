@@ -503,9 +503,10 @@ if (SCENARIO.indexOf("updates_") === 0) {
     schema: [], values: {}, can_edit: true,
     can_update: SCENARIO !== "updates_hidden",
   };
-  // Opening Settings asks only for the running job (roadmap 8.43): the
-  // versions come from POST /api/update/check, after "Check for updates".
-  FIXTURES["/api/update"] = { job: null };
+  // Loading Settings asks only for the running job (roadmap 8.43): the
+  // versions come from POST /api/update/check, after "Check for updates"
+  // or when the Settings tab is opened (updates_auto_*).
+  FIXTURES["/api/update"] = { job: null, version: "0.7.13" };
   const CHECKS = {
     claude: { lines: ["aipager 0.7.13 (up to date)", "Claude Code 2.1.281 → 2.1.290"],
               offer: { kind: "claude", label: "Update Claude Code" },
@@ -517,6 +518,9 @@ if (SCENARIO.indexOf("updates_") === 0) {
     none: { lines: ["aipager 0.7.13 (up to date)", "Claude Code 2.1.281 (couldn't check)"],
             offer: null, summary: "Everything is up to date.", restart: null,
             notes: [], source: "pipx, from PyPI" },
+    current: { lines: ["aipager 0.7.13 (up to date)", "Claude Code 2.1.281 (up to date)"],
+               offer: null, summary: "Everything is up to date.", restart: null,
+               notes: [], source: "pipx, from PyPI", up_to_date: true },
   };
   // The update confirm: in place (Restart now follows), systemd (it
   // restarts by itself), neither (a fail-closed plan: steps follow) and
@@ -528,6 +532,10 @@ if (SCENARIO.indexOf("updates_") === 0) {
     updates_confirm_legacy: {},
   }[SCENARIO];
   if (CONFIRM_PLAN) Object.assign(CHECKS.aipager, CONFIRM_PLAN);
+  if (SCENARIO === "updates_waiting_check") {
+    FIXTURES["/api/update"].version = "0.7.17";
+    FIXTURES["/api/update"].waiting = { source: "installed", version: "0.7.18" };
+  }
   if (SCENARIO === "updates_restart_now_lost_poll") {
     CHECKS.claude = { lines: ["aipager 0.7.18 installed, 0.7.17 running"], offer: null,
                       summary: "Restart aipager to run 0.7.18.", restart: null, notes: [],
@@ -539,7 +547,10 @@ if (SCENARIO.indexOf("updates_") === 0) {
     webApp.close = () => { global.__closed = true; };
   }
   const CHECK = (CONFIRM_PLAN ? "aipager" : null) || { updates_check_aipager: "aipager",
-                  updates_check_nothing_newer: "none" }[SCENARIO] || "claude";
+                  updates_check_nothing_newer: "none", updates_auto_current: "current",
+                  updates_auto_throttle: "current", updates_auto_quiet: "current",
+                  updates_auto_offline: "current", updates_auto_conflict: "current" }[SCENARIO]
+                  || "claude";
   FIXTURES["/api/update/check"] = { check: CHECKS[CHECK], job: null };
   FIXTURES["/api/update/start"] = { job: { id: 1, kind: CHECKS[CHECK].offer
     ? CHECKS[CHECK].offer.kind : "claude",
@@ -566,7 +577,9 @@ if (SCENARIO.indexOf("updates_") === 0) {
                       updates_chat_switch_lost_poll: "verifying",
                       updates_done_lost_poll: "done",
                       updates_double_load: "upgrading",
-                      updates_verify_blip_then_gone: "verifying" }[SCENARIO];
+                      updates_verify_blip_then_gone: "verifying",
+                      updates_auto_during_job: "upgrading",
+                      updates_auto_during_restart: "restart_scheduled" }[SCENARIO];
   if (JOB_PHASE) {
     FIXTURES["/api/update"].job = { id: 7, kind: "aipager", phase: JOB_PHASE,
       blockers: [], summary: JOB_PHASE === "done" ? "aipager is already up to date" : "",
@@ -1722,6 +1735,12 @@ function driveUpdatesHidden() {
 function actionLabels() {
   return byId["updates-actions"].children.map(c => c.textContent);
 }
+// The head's quiet Check for updates (the card's only check control).
+function checkBtn() { return byId["updates-check"]; }
+function checkLabel() { return byId["updates-check-label"].textContent; }
+function checkReady() {
+  return !checkBtn().hidden && !checkBtn().disabled && checkLabel() === "Check for updates";
+}
 function lineTexts() {
   return byId["updates-lines"].children.map(c => c.textContent);
 }
@@ -1734,8 +1753,12 @@ function driveUpdatesRender() {
   api.loadSettings();
   setTimeoutReal(() => {
     if (byId["updates-block"].hidden) fail("updates block hidden despite can_update");
-    if (JSON.stringify(actionLabels()) !== JSON.stringify(["Check for updates"]))
-      fail("page load should offer only Check for updates: " + JSON.stringify(actionLabels()));
+    // At rest: the name, the running version and the quiet head button,
+    // no big button.
+    if (!checkReady()) fail("no Check for updates in the head: " + JSON.stringify(checkLabel()));
+    if (byId["updates-version"].hidden || byId["updates-version"].textContent !== "v0.7.13")
+      fail("running version: " + JSON.stringify(byId["updates-version"].textContent));
+    if (actionLabels().length) fail("buttons at rest: " + JSON.stringify(actionLabels()));
     if (lineTexts().length) fail("versions shown before any check: " + JSON.stringify(lineTexts()));
     if (JSON.stringify(updateRequests()) !== JSON.stringify(["GET /api/update"]))
       fail("page load looked versions up: " + JSON.stringify(updateRequests()));
@@ -1748,11 +1771,12 @@ function driveUpdatesRender() {
 function driveUpdatesCheckThenUpdate() {
   api.loadSettings();
   setTimeoutReal(() => {
-    byId["updates-actions"].children[0].click();
-    // Synchronously after the tap: the Checking state.
-    const busy = byId["updates-actions"].children;
-    if (busy.length !== 1 || busy[0].textContent !== "Checking…" || !busy[0].disabled)
-      fail("no disabled Checking… state: " + JSON.stringify(actionLabels()));
+    checkBtn().click();
+    // Synchronously after the tap: the head says Checking… and turns.
+    if (checkLabel() !== "Checking…" || !checkBtn().disabled
+        || !checkBtn().classList.contains("is-checking"))
+      fail("no disabled Checking… state: " + JSON.stringify(checkLabel()));
+    if (actionLabels().length) fail("buttons while checking: " + JSON.stringify(actionLabels()));
     setTimeoutReal(() => {
       const want = ["aipager 0.7.13 (up to date)", "Claude Code 2.1.281 → 2.1.290"];
       if (JSON.stringify(lineTexts()) !== JSON.stringify(want))
@@ -1780,7 +1804,7 @@ function driveUpdatesCheckThenUpdate() {
 function driveUpdatesCheckAipager() {
   api.loadSettings();
   setTimeoutReal(() => {
-    byId["updates-actions"].children[0].click();
+    checkBtn().click();
     setTimeoutReal(() => {
       if (JSON.stringify(actionLabels()) !== JSON.stringify(["Update aipager"]))
         fail("want exactly one Update aipager button: " + JSON.stringify(actionLabels()));
@@ -1796,27 +1820,150 @@ function driveUpdatesCheckAipager() {
 function driveUpdatesCheckNothingNewer() {
   api.loadSettings();
   setTimeoutReal(() => {
-    byId["updates-actions"].children[0].click();
+    checkBtn().click();
     setTimeoutReal(() => {
       if (lineTexts()[1] !== "Claude Code 2.1.281 (couldn't check)")
         fail("failed lookup line: " + JSON.stringify(lineTexts()));
       if (byId["updates-summary"].hidden ||
           byId["updates-summary"].textContent !== "Everything is up to date.")
         fail("no up-to-date summary");
-      if (JSON.stringify(actionLabels()) !== JSON.stringify(["Check again"]))
-        fail("nothing newer must offer only Check again: " + JSON.stringify(actionLabels()));
-      if (byId["updates-actions"].children[0].className === "primary")
-        fail("Check again should be small, not a big primary button");
-      byId["updates-actions"].children[0].click();
+      // Nothing to do: no button at all; the head checks again.
+      if (actionLabels().length)
+        fail("nothing newer must offer no button: " + JSON.stringify(actionLabels()));
+      if (!checkReady()) fail("the head cannot check again: " + JSON.stringify(checkLabel()));
+      checkBtn().click();
       setTimeoutReal(() => {
         const checks = updateRequests().filter(r => r === "POST /api/update/check");
-        if (checks.length !== 2) fail("Check again did not re-check: " + JSON.stringify(updateRequests()));
+        if (checks.length !== 2) fail("the head did not re-check: " + JSON.stringify(updateRequests()));
         if (updateRequests().some(r => r.indexOf("/api/update/start") !== -1))
           fail("an update started although nothing was newer");
-        console.log("ok: nothing newer -> summary + Check again, no update button");
+        console.log("ok: nothing newer -> summary, no button, the head checks again");
         process.exit(0);
       }, 10);
     }, 10);
+  }, 10);
+}
+
+// ---- the Settings tab opened: the card checks by itself ----------------
+// Opening the tab (the tab bar, not a reload) checks for updates: an offer
+// brings the big button, up to date one quiet line, a failure nothing at
+// all. Not during a job or a restart, and not again within ten minutes;
+// a tap on the head always checks.
+function checkCount() {
+  return updateRequests().filter(r => r === "POST /api/update/check").length;
+}
+function driveUpdatesAuto() {
+  let now = 1000000;
+  Date.now = () => now;
+  if (SCENARIO === "updates_auto_quiet") {
+    POST_STATUS_OVERRIDE = { path: "/api/update/check", method: "POST", status: 500,
+                             body: { error: "boom" } };
+  }
+  if (SCENARIO === "updates_auto_offline") FETCH_REJECT_PATH = "/api/update/check";
+  if (SCENARIO === "updates_auto_conflict") {
+    // An update started elsewhere between the job poll and the check.
+    POST_STATUS_OVERRIDE = { path: "/api/update/check", method: "POST", status: 409,
+                             body: { error: "update_in_progress" } };
+  }
+  const quiet = SCENARIO === "updates_auto_quiet" || SCENARIO === "updates_auto_offline"
+    || SCENARIO === "updates_auto_conflict";
+  const busy = SCENARIO === "updates_auto_during_job" || SCENARIO === "updates_auto_during_restart";
+  byId["maintab-settings"].click();
+  setTimeoutReal(() => {
+    if (checkCount() !== (busy ? 0 : 1))
+      fail("checks on opening Settings: " + JSON.stringify(updateRequests()));
+    if (busy) {
+      console.log("ok: " + SCENARIO + " -> no automatic check");
+      process.exit(0);
+    }
+    if (SCENARIO === "updates_auto_offer") {
+      const big = byId["updates-actions"].children.filter(c => c.className === "primary")
+        .map(c => c.textContent);
+      if (JSON.stringify(big) !== JSON.stringify(["Update Claude Code"]))
+        fail("a newer version without its big button: " + JSON.stringify(actionLabels()));
+      if (lineTexts().length !== 2) fail("what is new: " + JSON.stringify(lineTexts()));
+      console.log("ok: opening Settings -> checked -> newer -> the big button");
+      process.exit(0);
+    }
+    if (SCENARIO === "updates_auto_current") {
+      if (actionLabels().length) fail("a button although up to date: " + JSON.stringify(actionLabels()));
+      if (lineTexts().length) fail("lines although up to date: " + JSON.stringify(lineTexts()));
+      if (!byId["updates-source"].hidden) fail("the install source although up to date");
+      if (byId["updates-summary"].hidden ||
+          byId["updates-summary"].textContent !== "Everything is up to date.")
+        fail("summary: " + JSON.stringify(byId["updates-summary"].textContent));
+      if (!checkReady()) fail("the head after the check: " + JSON.stringify(checkLabel()));
+      console.log("ok: opening Settings -> checked -> up to date -> one quiet line");
+      process.exit(0);
+    }
+    if (quiet) {
+      if (byId["notice"].textContent) fail("a failed automatic check said: " + byId["notice"].textContent);
+      if (!checkReady() || actionLabels().length)
+        fail("the card after a failed automatic check: " + JSON.stringify([checkLabel(), actionLabels()]));
+      checkBtn().click();                     // a tap still checks, and says it failed
+      setTimeoutReal(() => {
+        if (checkCount() !== 2) fail("the tap did not check: " + JSON.stringify(updateRequests()));
+        const said = { updates_auto_offline: "Couldn't reach aipager",
+                       updates_auto_conflict: "An update is already running" }[SCENARIO]
+          || "Couldn't check for updates";
+        if ((byId["notice"].textContent || "").indexOf(said) === -1)
+          fail("a failed tapped check said nothing: " + JSON.stringify(byId["notice"].textContent));
+        console.log("ok: " + SCENARIO + " -> a failed automatic check stays quiet, a tapped one says so");
+        process.exit(0);
+      }, 10);
+      return;
+    }
+    // updates_auto_throttle: each step, then the count once the page settled.
+    const MIN = 60 * 1000;
+    const reopen = () => { byId["maintab-sessions"].click(); byId["maintab-settings"].click(); };
+    const steps = [
+      [reopen, 1, "reopened within minutes and checked again"],
+      // A poll of the job is not opening the tab.
+      [() => { now += 10 * MIN + 1; api.loadUpdates(); }, 1, "a poll checked for updates"],
+      [reopen, 2, "not checked again after ten minutes"],
+      // A tap always checks, and counts as the last check.
+      [() => { now += 9 * MIN; checkBtn().click(); }, 3, "the tap within minutes did not check"],
+      [() => { now += 2 * MIN; reopen(); }, 3, "checked again two minutes after a tap"],
+      [() => { now += 8 * MIN + 1; reopen(); }, 4, "not checked again ten minutes after a tap"],
+    ];
+    const run = (i) => {
+      if (i === steps.length) {
+        console.log("ok: one automatic check per ten minutes, a tap always checks");
+        process.exit(0);
+      }
+      const [act, want, why] = steps[i];
+      act();
+      setTimeoutReal(() => {
+        if (checkCount() !== want) fail(why + ": " + checkCount());
+        run(i + 1);
+      }, 10);
+    };
+    run(0);
+  }, 10);
+}
+
+// ---- a check while Restart now is offered: it stays --------------------
+// A newer aipager installed and waiting: the banner's Restart now is still
+// the right button while a check is asked.
+function driveUpdatesWaitingCheck() {
+  const realFetch = global.fetch;
+  global.fetch = (url, opts) => {
+    if (url === "/api/update/check") {
+      fetchCalls.push({ url, method: "POST", body: opts && opts.body, headers: {} });
+      return new Promise(() => {});             // held: the check never answers
+    }
+    return realFetch(url, opts);
+  };
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (actionLabels().indexOf("Restart now") === -1)
+      fail("no Restart now with the waiting banner: " + JSON.stringify(actionLabels()));
+    checkBtn().click();
+    if (checkLabel() !== "Checking…") fail("the head while checking: " + JSON.stringify(checkLabel()));
+    if (actionLabels().indexOf("Restart now") === -1)
+      fail("Restart now went away while checking: " + JSON.stringify(actionLabels()));
+    console.log("ok: waiting banner -> Restart now stays while checking");
+    process.exit(0);
   }, 10);
 }
 
@@ -1826,7 +1973,7 @@ function driveUpdatesConfirm() {
   webApp.showConfirm = (message, cb) => { shown.push(message); cb(false); };
   api.loadSettings();
   setTimeoutReal(() => {
-    byId["updates-actions"].children[0].click();
+    checkBtn().click();
     setTimeoutReal(() => {
       byId["updates-actions"].children[0].click();
       setTimeoutReal(() => {
@@ -1869,6 +2016,7 @@ function driveUpdatesPollRunning() {
   setTimeoutReal(() => {
     if (updatePolls() !== 1) fail("a running job scheduled " + updatePolls() + " polls, want 1");
     if (startLabels().length) fail("check/start buttons offered mid-job: " + JSON.stringify(startLabels()));
+    if (!checkBtn().hidden) fail("the head's Check for updates shown mid-job");
     console.log("ok: running job -> polls every 3 s, no check or start buttons");
     process.exit(0);
   }, 10);
@@ -1879,8 +2027,8 @@ function driveUpdatesNoPollTerminal() {
   api.loadSettings();
   setTimeoutReal(() => {
     if (updatePolls() !== 0) fail("a finished job still polls");
-    if (JSON.stringify(startLabels()) !== JSON.stringify(["Check for updates"]))
-      fail("finished job should offer Check for updates again: " + JSON.stringify(startLabels()));
+    if (startLabels().length) fail("start buttons after a finished job: " + JSON.stringify(startLabels()));
+    if (!checkReady()) fail("finished job should offer Check for updates again: " + JSON.stringify(checkLabel()));
     console.log("ok: finished job -> no poll, Check for updates back");
     process.exit(0);
   }, 10);
@@ -1896,6 +2044,7 @@ function driveUpdatesRestartPending() {
            JSON.stringify(byId["updates-actions"].children.map(c => c.textContent)));
     if (!byId["updates-job"].textContent.includes("Restarting"))
       fail("pending restart not shown: " + JSON.stringify(byId["updates-job"].textContent));
+    if (!checkBtn().hidden) fail("the head's Check for updates shown while restarting");
     console.log("ok: pending restart -> no buttons, no poll");
     process.exit(0);
   }, 10);
@@ -2025,6 +2174,9 @@ function driveUpdatesRestartBack() {
               const text = h.jobText();
               if (text !== "Updated to 0.7.18, 2 sessions re-adopted.")
                 fail("updated: " + JSON.stringify(text));
+              if (byId["updates-version"].textContent !== "v0.7.18")
+                fail("the head's version after the restart: " +
+                     JSON.stringify(byId["updates-version"].textContent));
               if (h.queue.length) fail("still polling once the count arrived");
               // The poll delays alone (not the poll's own time limit or
               // the give-up watchdog).
@@ -2348,7 +2500,7 @@ function driveUpdatesStartLostPoll() {
   api.showView("settings");
   api.loadSettings();
   setTimeoutReal(() => {
-    byId["updates-actions"].children[0].click();          // Check for updates
+    checkBtn().click();                                    // Check for updates
     setTimeoutReal(() => {
       byId["updates-actions"].children[0].click();        // Update Claude Code
       setTimeoutReal(() => {
@@ -2413,7 +2565,7 @@ function driveUpdatesRestartNowLostPoll() {
   api.showView("settings");
   api.loadSettings();
   setTimeoutReal(() => {
-    byId["updates-actions"].children[0].click();          // Check for updates
+    checkBtn().click();                                    // Check for updates
     setTimeoutReal(() => {
       const restart = byId["updates-actions"].children.find(c => c.textContent === "Restart now");
       if (!restart) fail("no Restart now: " + JSON.stringify(byId["updates-actions"].children.map(c => c.textContent)));
@@ -2590,7 +2742,7 @@ function driveUpdatesRestartWatchdog() {
 function driveUpdatesShuttingDown() {
   api.loadSettings();
   setTimeoutReal(() => {
-    byId["updates-actions"].children[0].click();     // Check for updates
+    checkBtn().click();                               // Check for updates
   }, 10);
   setTimeoutReal(() => {
     POST_STATUS_OVERRIDE = { path: "/api/update/start", method: "POST", status: 503,
@@ -2910,6 +3062,15 @@ const DRIVERS = {
   schema_plain: driveSchemaPlain,
   scope_save_fails: driveScopeSave,
   updates_shutting_down: driveUpdatesShuttingDown,
+  updates_auto_offer: driveUpdatesAuto,
+  updates_auto_current: driveUpdatesAuto,
+  updates_auto_quiet: driveUpdatesAuto,
+  updates_auto_offline: driveUpdatesAuto,
+  updates_auto_conflict: driveUpdatesAuto,
+  updates_waiting_check: driveUpdatesWaitingCheck,
+  updates_auto_throttle: driveUpdatesAuto,
+  updates_auto_during_job: driveUpdatesAuto,
+  updates_auto_during_restart: driveUpdatesAuto,
   updates_poll_running: driveUpdatesPollRunning,
   updates_no_poll_terminal: driveUpdatesNoPollTerminal,
   updates_restart_pending: driveUpdatesRestartPending,
@@ -3594,9 +3755,9 @@ function driveChatsLateCheckBoth() {
         global.__held.shift()();        // the DM's check answers now
         setTimeoutReal(() => {
           if (byId["updates-block"].hidden) fail("the group's Updates block is hidden");
-          const labels = actionLabels();
-          if (JSON.stringify(labels) !== JSON.stringify(["Check for updates"]))
-            fail("the group's Updates block after the old check: " + JSON.stringify(labels));
+          if (actionLabels().length || !checkReady())
+            fail("the group's Updates block after the old check: " +
+                 JSON.stringify([actionLabels(), checkLabel()]));
           if (lineTexts().length) fail("the old chat's check was shown: " + JSON.stringify(lineTexts()));
           console.log("ok: an update check answered after a switch leaves the new chat's block ready");
           process.exit(0);

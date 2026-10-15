@@ -2395,6 +2395,15 @@ class AnimationMixin:
                 # copy, a superseded card's log attachment): a busy frame
                 # now would put "Working" and a Stop button back on it.
                 return None
+            if (not final and sess.status == Status.INTERACTIVE
+                    and sess.pending_permission):
+                # The card holds an open prompt (its question and buttons,
+                # inline): a busy frame now would draw over them. A
+                # background agent keeps working while Claude waits, and
+                # its rows reached this edit (live 2026-10-15). Nothing is
+                # sent and nothing is stamped, so the first frame after
+                # the answer carries them (transient, as a skipped edit).
+                return False
             # The tier unit every live counter renders in (8.30), set
             # BEFORE the build so the renderer itself stays pure.
             sess.card_elapsed_unit = (

@@ -1305,6 +1305,28 @@ CSS = """
   /* ---- settings ------------------------------------------------------- */
   #settings-groups { margin-top: var(--s2); }
   .updates { margin-top: var(--s5); }
+  /* Updates: first on the tab, one quiet row until there is something to do. */
+  #updates-block { margin-top: 0; margin-bottom: var(--s4); padding-top: var(--s3); padding-bottom: var(--s3); }
+  .updates-head { display: flex; align-items: center; gap: var(--s3); min-height: 40px; }
+  .updates-name { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; flex: 1 1 auto; }
+  .updates-version { font-size: 13px; line-height: 18px; color: var(--ink-3); }
+  .updates-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    min-height: 40px;
+    margin-inline-end: calc(-1 * var(--s2));
+    padding: 0 var(--s2);
+    border-radius: var(--r-pill);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .updates-check .ic { width: 18px; height: 18px; }
+  .updates-check:disabled { color: var(--ink-3); }
+  .updates-check.is-checking .ic { animation: spin 1.1s linear infinite; }
+  .updates-actions:empty { display: none; }
   .updates-lines { display: flex; flex-direction: column; }
   .updates-row { padding: var(--s2) 0; font-size: var(--fs-sm); line-height: var(--lh-sm); }
   .updates-row + .updates-row { border-top: 1px solid var(--line); }
@@ -1451,6 +1473,7 @@ CSS = """
     .bead-running { animation: none; transform: none; }
     .skel::after { animation: none; display: none; }
     .lamp-spin::before { animation: none; }
+    .updates-check.is-checking .ic { animation: none; }
     section:not([hidden]), .is-new, .menu, .modal, .overlay, .grp-body { animation: none; }
     #notice, .tile, .fab, .primary, .chip, .grp-caret::before, .chev { transition: none; }
     .tile:active, .primary:active, .fab:active, .pill:active, .chip:active,
