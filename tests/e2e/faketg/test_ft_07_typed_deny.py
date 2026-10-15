@@ -99,7 +99,7 @@ def _standin(inst, where):
     # The session is IDLE again within seconds, not after the 900 s cap.
     flows.wait_turn_end(inst, name, label, since_log=log_since, timeout=30)
     assert time.monotonic() - answered < 30
-    assert not inst.file_in_project(f"{label}.txt").exists()
+    assert not inst.file_in_session(name, f"{label}.txt").exists()
     assert not [e for e in inst.standin_log(name) if e.get("event") == "stop"]
     inst.wait_log(f"[{label}] turn ended at the permission dialog", since=log_since,
                   timeout=30)
@@ -266,7 +266,7 @@ def _real_card(inst):
     flows.wait_turn_end(inst, name, label, since_log=log_since,
                         timeout=max(1.0, REAL_IDLE_WITHIN - (time.monotonic() - answered)))
     assert time.monotonic() - answered < REAL_IDLE_WITHIN
-    assert not inst.file_in_project(f"{label}.txt").exists()
+    assert not inst.file_in_session(name, f"{label}.txt").exists()
 
     # And it takes the next message as a new turn.
     flows.control(inst, G, fti.BOB, name, f"ping{label}")

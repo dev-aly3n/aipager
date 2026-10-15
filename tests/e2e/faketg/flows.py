@@ -127,7 +127,10 @@ def control(inst, chat_id: int, uid: int, name: str, word: str, timeout: float =
     once it arrived every earlier update was handled too. Returns after
     the control's turn ended (see :func:`prompt_turn`)."""
     target = f"@{fti.BOT_USERNAME} " if chat_id < 0 else ""
-    return prompt_turn(inst, chat_id, uid, name, f"{target}{word}", word, timeout=timeout)
+    # Never the bare word: real Claude reads "ping6" as "run ping6", and a
+    # member without Bash then ends the turn in a safety halt.
+    return prompt_turn(inst, chat_id, uid, name, f"{target}{word}: reply with exactly OK",
+                       word, timeout=timeout)
 
 
 def settle(fake, idle: float = 2.0, timeout: float = 60) -> None:

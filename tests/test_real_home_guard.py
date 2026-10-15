@@ -575,10 +575,11 @@ def test_migrate_retire_v1(fake_home, monkeypatch):
     assert _nothing_under(fake_home) == ["config.env"]
 
 
-def test_claude_bootstrap_atomic_write(fake_home):
+def test_claude_bootstrap_update_json(fake_home):
     from aipager import claude_bootstrap
     with pytest.raises(RealHomeWriteError):
-        claude_bootstrap._atomic_write(fake_home / ".claude" / "settings.json", {})
+        claude_bootstrap._update_json(fake_home / ".claude" / "settings.json",
+                                      lambda data: True)
     assert _nothing_under(fake_home) == []
 
 

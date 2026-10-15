@@ -26,18 +26,22 @@ the wizard sets when the user accepts the prompts interactively — a
 Telegram-only user (containerized friend deploy, SSH-less host) never
 sees those prompts, so aipager has to write the acceptance for them.
 
-Best-effort: failures are logged at DEBUG and skipped so a missing
-``~/.claude`` directory or non-writable filesystem never blocks daemon
-startup.
+Best-effort: failures are logged and skipped so a missing ``~/.claude``
+directory or non-writable filesystem never blocks daemon startup. A file
+that cannot be read whole, or that a running Claude changes meanwhile, is
+left as it is (:func:`_update_json`).
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import shutil
+import stat
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -127,54 +131,167 @@ _TOOL_MATCHER_EVENTS = {"PreToolUse", "PostToolUse", "PermissionRequest"}
 _MODEL_SWITCH_HOOK_TIMEOUT_SECONDS = 5
 
 
-def _load(path: Path) -> dict:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return {}
+#: How many times :func:`_update_json` reads a file again that changed
+#: under it (every running Claude Code rewrites ~/.claude.json) before it
+#: leaves the file alone.
+UPDATE_TRIES = 3
 
 
-def _atomic_write(path: Path, data: dict) -> None:
-    check_write(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+def _stamp(path: Path) -> tuple[int, int, int] | None:
+    """``(inode, size, mtime_ns)`` of *path*, or None when it does not
+    exist (any other error raises)."""
     try:
-        os.chmod(tmp, 0o600 if path.name.startswith(".") else 0o644)
-    except OSError:
-        pass
-    os.replace(tmp, path)
+        st = os.stat(path)
+    except FileNotFoundError:
+        return None
+    return st.st_ino, st.st_size, st.st_mtime_ns
+
+
+def _read_bytes(path: Path) -> bytes:
+    """*path*'s bytes (a seam: a test plays a read torn by a writer)."""
+    return path.read_bytes()
+
+
+def _replace(src: str, dst: Path) -> None:
+    """``os.replace`` (a seam: a test makes the write fail)."""
+    os.replace(src, dst)
+
+
+def _before_replace(path: Path) -> None:
+    """Test seam: runs after the new content is written to its temp file,
+    before the check that *path* is unchanged."""
+
+
+def _update_json(path: Path, change) -> bool:
+    """Apply *change* to the JSON object in *path* and write it back, only
+    when that is safe. *change* edits the dict in place and returns True
+    when it changed it. True when the file was written. Never raises for a
+    bad or busy file: it logs and returns False.
+
+    These are Claude Code's own files: ~/.claude.json holds its whole user
+    config (the account, every project), and every running Claude
+    rewrites it. So a file that cannot be read, is not JSON or is not an
+    object is never written (a half-written one would otherwise be
+    replaced by a near-empty one); a missing one is created; and the file
+    must be unchanged (inode, size, mtime) from the read until the
+    replace, else it is read again, at most :data:`UPDATE_TRIES` times,
+    then left as it is: a change of Claude's is never lost to ours.
+    Claude Code 2.1.301 names no lock file for it, so there is none to
+    take. A symlinked file (a dotfile manager's) is written where it points,
+    the link kept; the file keeps its mode."""
+    # A new file's mode comes from the name asked for: a link
+    # ~/.claude.json -> dotfiles/claude.json still holds a dot-file.
+    new_mode = 0o600 if Path(path).name.startswith(".") else 0o644
+    path = Path(os.path.realpath(path))
+    for _ in range(UPDATE_TRIES):
+        try:
+            before = _stamp(path)
+            raw = b""
+            if before is None:
+                data = {}
+                mode = new_mode
+            else:
+                mode = stat.S_IMODE(os.stat(path).st_mode)
+                raw = _read_bytes(path)
+                if _stamp(path) != before:
+                    # Read while Claude wrote it: maybe torn, read again
+                    # rather than give up on it as broken.
+                    continue
+                data = json.loads(raw.decode("utf-8"))
+        except (OSError, ValueError) as e:
+            log.warning("claude bootstrap: %s is not readable JSON (%s) - left as it is",
+                        path, type(e).__name__)
+            return False
+        if not isinstance(data, dict):
+            log.warning("claude bootstrap: %s is not a JSON object - left as it is", path)
+            return False
+        if not change(data):
+            return False
+        check_write(path)
+        tmp = None
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".",
+                                       suffix=".tmp")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.chmod(tmp, mode)
+            _before_replace(path)
+            # The bytes too: a same-size rewrite in place within one tick
+            # of the file clock leaves inode, size and mtime as they were.
+            if _stamp(path) != before or (before is not None and _read_bytes(path) != raw):
+                os.unlink(tmp)
+                continue
+            _replace(tmp, path)
+        except OSError as e:
+            if tmp is not None:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp)
+            log.warning("claude bootstrap: could not write %s (%s)", path, type(e).__name__)
+            return False
+        return True
+    log.warning("claude bootstrap: %s kept changing while aipager updated it - left as it is",
+                path)
+    return False
 
 
 def _ensure_bypass_accepted() -> bool:
     """Return True if the settings file was modified."""
-    settings = _load(_SETTINGS)
-    if settings.get("skipDangerousModePermissionPrompt") is True:
-        return False
-    settings["skipDangerousModePermissionPrompt"] = True
-    _atomic_write(_SETTINGS, settings)
-    return True
+    def change(settings: dict) -> bool:
+        if settings.get("skipDangerousModePermissionPrompt") is True:
+            return False
+        settings["skipDangerousModePermissionPrompt"] = True
+        return True
+    return _update_json(_SETTINGS, change)
+
+
+def _trusted(projects: dict, folder: str) -> bool:
+    """*folder* or a folder above it is trusted: Claude Code asks about no
+    folder under a trusted one (checked with 2.1.301)."""
+    path = folder
+    while True:
+        entry = projects.get(path)
+        if isinstance(entry, dict) and entry.get("hasTrustDialogAccepted") is True:
+            return True
+        parent = os.path.dirname(path)
+        if parent == path:
+            return False
+        path = parent
+
+
+def ensure_folder_trusted(folder: str) -> bool:
+    """Trust *folder* in ~/.claude.json, as answering Claude Code's "Do you
+    trust this folder?" with yes would, unless it or a folder above it is
+    trusted already. True when the file was written.
+
+    A session started over Telegram cannot answer that dialog: the first
+    message sent to it lands on the dialog as Enter on "No, exit" and the
+    session ends. The key is the folder's real path, the one Claude Code
+    looks up."""
+    folder = os.path.realpath(folder)
+
+    def change(data: dict) -> bool:
+        projects = data.setdefault("projects", {})
+        if not isinstance(projects, dict) or _trusted(projects, folder):
+            return False
+        entry = projects.get(folder)
+        if not isinstance(entry, dict):
+            entry = {}
+        entry.setdefault("allowedTools", [])
+        entry.setdefault("mcpContextUris", [])
+        entry.setdefault("mcpServers", {})
+        entry.setdefault("hasClaudeMdExternalIncludesWarningShown", False)
+        entry["hasTrustDialogAccepted"] = True
+        projects[folder] = entry
+        return True
+    return _update_json(_CLAUDE_JSON, change)
 
 
 def _ensure_workdir_trusted(workdir: str) -> bool:
     """Return True if .claude.json was modified."""
-    data = _load(_CLAUDE_JSON)
-    projects = data.setdefault("projects", {})
-    if not isinstance(projects, dict):
-        return False
-    entry = projects.get(workdir)
-    if isinstance(entry, dict) and entry.get("hasTrustDialogAccepted") is True:
-        return False
-    if not isinstance(entry, dict):
-        entry = {}
-    entry.setdefault("allowedTools", [])
-    entry.setdefault("mcpContextUris", [])
-    entry.setdefault("mcpServers", {})
-    entry.setdefault("hasClaudeMdExternalIncludesWarningShown", False)
-    entry["hasTrustDialogAccepted"] = True
-    projects[workdir] = entry
-    _atomic_write(_CLAUDE_JSON, data)
-    return True
+    return ensure_folder_trusted(workdir)
 
 
 def _resolve(cmd: str) -> str | None:
@@ -230,7 +347,13 @@ def _ensure_hooks_and_statusline() -> bool:
         log.debug("claude bootstrap: %s not on PATH; skipping hook wiring", _HOOK_CMD)
         return False
 
-    settings = _load(_SETTINGS)
+    return _update_json(_SETTINGS, lambda settings: _wire_hooks(
+        settings, hook_path, statusline_path))
+
+
+def _wire_hooks(settings: dict, hook_path: str, statusline_path: str | None) -> bool:
+    """:func:`_ensure_hooks_and_statusline`'s edit of *settings*, in place;
+    True when it changed anything."""
     changed = False
 
     hooks = settings.get("hooks")
@@ -275,9 +398,6 @@ def _ensure_hooks_and_statusline() -> bool:
     if not sl_good and statusline_path:
         settings["statusLine"] = {"type": "command", "command": statusline_path}
         changed = True
-
-    if changed:
-        _atomic_write(_SETTINGS, settings)
     return changed
 
 

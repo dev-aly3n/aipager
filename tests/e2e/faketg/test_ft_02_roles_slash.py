@@ -42,7 +42,7 @@ def test_roles_and_buttons(fresh):
     since = fake.mark()
     turn_log = inst.log_mark()
     card, allow = flows.ask_write(inst, name, "ft3", G, fti.BOB, "ft3")
-    target = inst.file_in_project("ft3.txt")
+    target = inst.file_in_session(name, "ft3.txt")
 
     # carol (read_only) taps Allow: refused, nothing reaches Claude.
     cb = fake.inject_callback(fti.user(fti.CAROL), card, allow)
@@ -173,7 +173,7 @@ def test_allow_by_a_user_is_attributed_when_the_prompt_beats_the_busy_card(fresh
     cb = fake.inject_callback(fti.user(fti.BOB), card, allow)
     fake.wait_answer(cb)
     flows.wait_text(fake, G, "Allowed · @bob", since=since, timeout=30)
-    fti.wait_until(inst.file_in_project("ft15.txt").exists, 60, "the file bob allowed")
+    fti.wait_until(inst.file_in_session(name, "ft15.txt").exists, 60, "the file bob allowed")
     flows.wait_turn_end(inst, name, "ft15", since_log=log_since)
     # Answered by the hook's decision, not by keys typed into the dialog.
     assert [d["decision"] for d in _decisions(inst, name)] == ["allowed"]

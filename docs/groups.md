@@ -414,6 +414,9 @@ folder on purpose (the wizard asks you to confirm that).
   chat id added (`sara-123456`). The folder (and `~/aipager-users`,
   when it is new) is created, mode 0700 so only you can open it, the
   first time a member opens `/new` or the Mini App's New session form.
+  Before a session starts in it, aipager marks it trusted for Claude
+  Code, so Claude Code's "Do you trust this folder?" question does not
+  end the member's first session.
   A default never moves: when an edit in `aipager config` (another
   chat's root folder, a removed chat, a new label) would change a
   chat's default folder, the wizard writes the folder it had as that

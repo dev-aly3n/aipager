@@ -1006,6 +1006,26 @@ async def launch_session(
         f"--append-system-prompt {shlex.quote(sys_prompt)}"
     )
 
+    # Claude Code asks "Do you trust this folder?" in a folder it has never
+    # trusted, and the first message sent to the session would answer it:
+    # Enter on "No, exit", and the session ends at once. No one on Telegram
+    # sees that dialog, so the folder is trusted here, as the bootstrap
+    # trusts the work folder (restricted members cannot write the files a
+    # trusted folder runs: .claude/, .git/, .mcp.json). Never blocks the
+    # launch: an untrusted folder is no worse off than before.
+    # Never the home folder, / or a folder above home: Claude Code looks up
+    # the folders above a session's folder, so trusting one of those would
+    # trust every folder under it, repositories cloned later included.
+    from aipager import claude_bootstrap, safety
+    try:
+        if safety.is_wide_folder(launch_cwd):
+            log.info("[%s] the session's folder is the home folder, / or a folder above "
+                     "it - not marked trusted for Claude Code", name)
+        elif claude_bootstrap.ensure_folder_trusted(launch_cwd):
+            log.info("[%s] marked the session's folder trusted for Claude Code", name)
+    except Exception:
+        log.warning("[%s] could not mark the session's folder trusted", name, exc_info=True)
+
     try:
         proc = await _create_subprocess_exec(
             _DTACH, "-n", sock, "-Ez", "bash", "-c", bash_cmd,

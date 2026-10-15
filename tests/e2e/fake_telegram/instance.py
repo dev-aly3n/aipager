@@ -548,9 +548,13 @@ class TestInstance:
             "bypassPermissionsModeAccepted": True,
             "projects": {str(self.project): {"hasTrustDialogAccepted": True}},
         }))
-        cmds = self.project / ".claude" / "commands"
-        cmds.mkdir(parents=True, exist_ok=True)
-        (cmds / "ftcmd.md").write_text("Reply with exactly: FTCMD\n")
+        # A user command, so it exists in every folder a session runs in: a
+        # member without can_manage starts in the chat's root folder, where
+        # a command of the project's is unknown to Claude Code.
+        for cmds in (self.project / ".claude" / "commands",
+                     self.home / ".claude" / "commands"):
+            cmds.mkdir(parents=True, exist_ok=True)
+            (cmds / "ftcmd.md").write_text("Reply with exactly: FTCMD\n")
         self.fake_thread = FakeBotApiThread(FAKE_TOKEN, BOT_ID, BOT_USERNAME)
         base = self.fake_thread.start()
         self.fake = self.fake_thread.api
@@ -887,8 +891,40 @@ class TestInstance:
                 pass
         return out
 
-    def file_in_project(self, name: str) -> Path:
-        return self.project / name
+    def session_folder(self, name: str) -> Path:
+        """The folder session *name* runs in: the registry's ``cwd`` (from
+        its hooks), else the one folder its live processes run in. A
+        member without ``can_manage`` works in the chat's root folder
+        (``~/aipager-users/...``), not in the project. Never a guess: an
+        unknown folder fails, as a "nothing was written" check looking in
+        the wrong folder would pass for nothing."""
+        cwd = ""
+        try:
+            data = json.loads((self.home / ".claude" / "aipager-sessions.json").read_text())
+            cwd = str(data["sessions"][name].get("cwd") or "")
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            pass
+        if not cwd:
+            inst = b"AIPAGER_INSTANCE_DIR=" + os.fsencode(str(self.inst_dir))
+            sess = b"CLAUDE_DTACH_SESSION=" + os.fsencode(name)
+            cwds = set()
+            for pid in _own_pids():
+                environ = _read(f"/proc/{pid}/environ").split(b"\0")
+                if inst in environ and sess in environ:
+                    try:
+                        cwds.add(os.readlink(f"/proc/{pid}/cwd"))
+                    except OSError:
+                        pass
+            assert len(cwds) <= 1, f"{name} runs in more than one folder: {sorted(cwds)}"
+            cwd = cwds.pop() if cwds else ""
+        assert cwd, f"the folder {name} runs in is not known (no registry cwd, no live process)"
+        folder = Path(cwd)
+        assert _inside(str(folder), str(self.root)), f"{name} runs outside the instance: {folder}"
+        return folder
+
+    def file_in_session(self, name: str, filename: str) -> Path:
+        """*filename* in the folder session *name* runs in."""
+        return self.session_folder(name) / filename
 
     def screen(self, name: str, seconds: float = 2.0) -> str:
         """The session's visible screen, redacted (diagnostics only); see

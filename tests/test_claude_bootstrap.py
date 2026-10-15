@@ -92,17 +92,18 @@ def test_does_not_clobber_other_projects(tmp_path, monkeypatch):
     assert data["projects"]["/workspace"]["hasTrustDialogAccepted"] is True
 
 
-def test_recovers_from_corrupted_settings(tmp_path, monkeypatch):
+def test_leaves_a_corrupted_settings_file_alone(tmp_path, monkeypatch):
+    """A settings.json that is not JSON (half written, or broken by hand)
+    is never replaced: rewriting it would drop the user's own hooks and
+    permissions for the one key aipager wanted. Nothing raises."""
     settings = tmp_path / "settings.json"
     settings.write_text("{ not valid json")
     monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
     monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
 
-    # Should not raise; corrupted file gets overwritten with the fix.
     claude_bootstrap.bootstrap_claude_settings("/workspace")
 
-    data = json.loads(settings.read_text())
-    assert data["skipDangerousModePermissionPrompt"] is True
+    assert settings.read_text() == "{ not valid json"
 
 
 def test_wires_aipager_hook_when_helper_resolves(tmp_path, monkeypatch):
