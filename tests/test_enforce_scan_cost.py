@@ -297,7 +297,10 @@ def _old_and_new(monkeypatch, path, chunk):
                   functools.partial(_ORACLE_ITER, chunk_bytes=chunk))
         m.setattr(enforce, "_iter_raw_lines_reversed",
                   functools.partial(_NEW_RAW, chunk_bytes=chunk))
-        old = (_outcome(_ORACLE_ORIGIN, path), _outcome(_ORACLE_BLOCKED, path))
+        # A fresh scan cache: the corpus rewrites one file, and two cases of
+        # the same size inside one mtime tick would share a cached result.
+        m.setattr(enforce, "_SCAN_CACHE", {})
+        old =(_outcome(_ORACLE_ORIGIN, path), _outcome(_ORACLE_BLOCKED, path))
         new = (_outcome(enforce._origin_from_transcript, path),
                _outcome(enforce._turn_already_blocked, path))
     return old, new
