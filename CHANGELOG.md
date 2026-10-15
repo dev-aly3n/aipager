@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The Mini App's Updates card is first on the Settings tab, and quiet.** It shows the running version and a small **Check for updates** at the end of its row, checks by itself when you open the Settings tab (at most once every ten minutes), and shows the big Update button only when a newer version is out; up to date is one quiet line.
+
 ### Fixed
 - **Claude's questions and permission prompts stay on Telegram while a background agent works.** A tool call of a background agent was taken as the prompt being answered in the terminal, and the busy card's next frame drew over the question within a second, so it could only be answered at the terminal. Now an agent's activity closes only its own prompt, and the card is not redrawn over an open one.
 

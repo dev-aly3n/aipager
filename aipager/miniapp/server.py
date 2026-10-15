@@ -1391,8 +1391,9 @@ class MiniAppServer:
     _UPDATE_RETIRED = ("claude", "aipager", "both")
 
     async def _handle_update_get(self, request):
-        """The running job only. No version lookup: the Updates block does
-        not touch the network until "Check for updates" is tapped."""
+        """The running job only, with no version lookup: the page asks
+        POST /api/update/check for that (a tap on Check for updates, or
+        the Settings tab opened)."""
         from aiohttp import web
 
         result = await self._authenticate_user(request, "/api/update")

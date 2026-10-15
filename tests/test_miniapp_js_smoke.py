@@ -26,6 +26,7 @@ precisely what the operator reported as not working.
 """
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -1232,7 +1233,50 @@ def test_updates_check_with_nothing_newer_offers_no_update(node_bin, tmp_path):
 
     proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_check_nothing_newer")
     assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
-    assert "ok: nothing newer -> summary + Check again, no update button" in proc.stdout
+    assert "ok: nothing newer -> summary, no button, the head checks again" in proc.stdout
+
+
+@pytest.mark.parametrize("scenario, ok", [
+    ("updates_auto_offer", "ok: opening Settings -> checked -> newer -> the big button"),
+    ("updates_auto_current", "ok: opening Settings -> checked -> up to date -> one quiet line"),
+    ("updates_auto_quiet",
+     "ok: updates_auto_quiet -> a failed automatic check stays quiet, a tapped one says so"),
+    ("updates_auto_offline",
+     "ok: updates_auto_offline -> a failed automatic check stays quiet, a tapped one says so"),
+    ("updates_auto_conflict",
+     "ok: updates_auto_conflict -> a failed automatic check stays quiet, a tapped one says so"),
+    ("updates_auto_throttle", "ok: one automatic check per ten minutes, a tap always checks"),
+    ("updates_auto_during_job", "ok: updates_auto_during_job -> no automatic check"),
+    ("updates_auto_during_restart", "ok: updates_auto_during_restart -> no automatic check"),
+])
+def test_opening_settings_checks_for_updates_by_itself(node_bin, tmp_path, scenario, ok):
+    """The Settings tab checks for updates when it is opened: the big
+    button only for a newer version, one quiet line when up to date,
+    nothing at all when the check fails, at most once per ten minutes, and
+    never while an update runs or aipager restarts."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, scenario)
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert ok in proc.stdout, proc.stdout
+
+
+def test_restart_now_stays_while_a_check_is_asked(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "updates_waiting_check")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: waiting banner -> Restart now stays while checking" in proc.stdout
+
+
+def test_the_updates_card_is_first_on_the_settings_tab():
+    from aipager.miniapp.static import INDEX_HTML
+
+    start = INDEX_HTML.index('<section id="view-settings"')
+    section = INDEX_HTML[start:INDEX_HTML.index("</section>", start)]
+    ids = re.findall(r'<[a-z0-9]+ id="([^"]+)"', section)[1:]   # past the section's own
+    assert ids[0] == "updates-block", ids[:3]
+    assert ids.index("updates-block") < ids.index("settings-app-language")
 
 
 _IN_PLACE_CONFIRM = "Update aipager? Afterwards, tap Restart now to run the new version."

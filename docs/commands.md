@@ -818,8 +818,18 @@ turn is running in the owner's private chat. In the Mini App,
 **Settings → Updates** shows the same state as a line above the card,
 with **Restart now** (it asks first).
 
+In the Mini App, **Updates** is the first card on the Settings tab: its
+name, the running version, and a small **Check for updates** at the end
+of the row. Opening the Settings tab checks by itself (at most once every
+ten minutes, never while an update runs or aipager restarts; a check that
+fails there says nothing), and a tap always checks. The card stays one
+quiet row until there is something to do: a newer version brings its
+lines and the one Update button, "Everything is up to date." is a single
+line with no button, and a running update, a restart or **Restart now**
+keep their own buttons.
+
 Only one update runs at a time, across `/update`, the Mini App's
-**Settings → Updates** block (the same Check for updates button, the same one Update button, the same job) and
+**Settings → Updates** card (the same check, the same one Update button, the same job) and
 `aipager update` on the command line. That includes the seconds between
 "installed, restarting…" and the restart itself: `/update` answers that
 aipager is about to restart, the Mini App offers no buttons, and the

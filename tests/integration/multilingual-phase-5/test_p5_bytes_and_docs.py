@@ -35,10 +35,12 @@ from tests.i18n_surfaces import (
     RESTART_NOW_NEW_SURFACES,
     THREE_MODES_NEW_SURFACES,
     THREE_MODES_PAGE_SCREENS,
+    UPDATES_CARD_PAGE_SCREENS,
     THREE_MODES_SURFACES,
     with_keyboard_app_removed,
     without_appearance_row,
     without_card_divider,
+    updates_card_change_only,
     without_mode_labels,
 )
 
@@ -104,14 +106,17 @@ CREATE_FOLDER_PAGE_SCREENS = {"new.folder", "new.folder_busy", "new.folder_faile
 def test_the_english_page_changed_only_where_three_modes_did():
     """The page golden: the three permission modes (2026-10-11) changed
     the screens with a mode on them, Create folder (2026-10-12) the folder
-    picker's, and nothing else."""
+    picker's, the quiet Updates card (2026-10-15) the Settings tab's, and
+    nothing else."""
     rel = "tests/golden/miniapp_page_english.json"
     base, cur = json.loads(at_base(rel)), json.loads(now(rel))
     old = {s[0]: s for s in base["screens"]}
     new = {s[0]: s for s in cur["screens"]}
     changed = {k for k in set(old) | set(new) if old.get(k) != new.get(k)}
-    allowed = THREE_MODES_PAGE_SCREENS | CREATE_FOLDER_PAGE_SCREENS
+    allowed = THREE_MODES_PAGE_SCREENS | CREATE_FOLDER_PAGE_SCREENS | UPDATES_CARD_PAGE_SCREENS
     assert changed <= allowed, sorted(changed - allowed)
+    for k in changed & UPDATES_CARD_PAGE_SCREENS:
+        assert updates_card_change_only(old[k][1], new[k][1]), k
     assert {k: v for k, v in base.items() if k not in ("screens", "calls")} == \
         {k: v for k, v in cur.items() if k not in ("screens", "calls")}
 

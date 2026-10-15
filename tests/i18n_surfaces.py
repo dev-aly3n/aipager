@@ -23,6 +23,7 @@ from __future__ import annotations
 import inspect
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -114,6 +115,38 @@ def with_keyboard_app_removed(value):
     """*value* (a keyboard surface's list of texts) without the "📱 App"
     button older goldens recorded on the main keyboard."""
     return [v for v in value if v != "📱 App"]
+
+
+#: The Mini App page screens (tests/golden/miniapp_page_english.json) the
+#: quiet Updates card (2026-10-15) changed: the card moved first on the
+#: Settings tab (every Settings screen's texts in a new order), its head
+#: offers Check for updates whenever no job runs (in place of Check again),
+#: and it names the running version. See :func:`updates_card_change_only`.
+UPDATES_CARD_PAGE_SCREENS = frozenset({
+    "settings", "settings.app_language", "settings.app_language_failed", "settings.saved",
+    "settings.save_failed", "updates.checking", "updates.claude", "updates.claude_start",
+    "updates.aipager", "updates.none", "updates.said", "updates.check_refused_0",
+    "updates.check_refused_1", "updates.check_refused_2", "updates.check_refused_3",
+    "updates.check_refused_4", "updates.start_refused_0", "updates.start_refused_1",
+    "updates.start_refused_2", "updates.start_refused_3", "updates.start_refused_4",
+    "updates.start_refused_5", "updates.start_refused_6", "updates.job_waiting_for_idle",
+    "updates.job_gate_timeout", "updates.job_starting", "updates.job_claude_updating",
+    "updates.job_upgrading", "updates.job_some_new_phase", "updates.job_done",
+    "updates.job_restart_now", "updates.restart_waiting", "updates.restart_updated",
+    "updates.restart_updated_one", "updates.restart_other", "updates.restart_reopen",
+    "updates.restart_refused", "updates.restart_slow",
+})
+_RUNNING_VERSION = re.compile(r"v\d+(?:\.\d+)+")
+
+
+def updates_card_change_only(before: list, after: list) -> bool:
+    """Whether *after* (a page screen's texts) differs from *before* only
+    as the quiet Updates card changes it: any order, "Check again" gone,
+    "Check for updates" and the running version ("v1.2.3") added."""
+    gone = Counter(before) - Counter(after)
+    added = Counter(after) - Counter(before)
+    return set(gone) <= {"Check again"} and all(
+        text == "Check for updates" or _RUNNING_VERSION.fullmatch(text) for text in added)
 
 
 #: The Mini App page screens (tests/golden/miniapp_page_english.json) the

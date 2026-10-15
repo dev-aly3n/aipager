@@ -171,7 +171,7 @@ aipager는 **루프백 밖의 TCP 포트를 하나도 듣지 않아요**. Mini A
 - `api.telegram.org`로의 HTTPS long polling(Telegram 봇이 업데이트를 받아요).
 - Mini App SDK 스크립트(`telegram-web-app.js`)를 받으려고 `telegram.org`로 HTTPS. Mini App 서버가 시작할 때 한 번 받고, 최대 하루에 한 번 새로 받으며, `~/.local/share/aipager/webapp-sdk/`에 캐시해요. aipager는 이 바이트를 페이지 자신의 출처에서 페이지에 제공하고, 직접 실행하는 일은 절대 없어요. aipager는 이 스크립트를 재배포하지 않아요. 패키지에 들어 있지 않고, aipager에 사본이 없으면 페이지는 예전처럼 `telegram.org`에서 바로 불러와요.
 - Mini App이 켜져 있는 동안(기본으로 켜져 있어요) Cloudflare로의 터널. 터널이 실행하는 `cloudflared` 프로그램은 `github.com/cloudflare/cloudflared` 릴리스에서 한 번 받고, 고정된 SHA-256으로 확인하고, `~/.local/share/aipager/cloudflared/`에 캐시해요. 내 `PATH`에 있는 `cloudflared`는 절대 쓰지 않아요. 내 Mini App 주소를 쓰면 이 가운데 아무 일도 일어나지 않아요(아래 참고).
-- 누군가 **업데이트 확인**이나 **업데이트**를 누를 때만 하는 버전 확인(`/update`, Mini App의 업데이트 부분): aipager는 `pypi.org`, Claude Code는 설치 방식에 따라 `downloads.claude.ai`나 `registry.npmjs.org`. 그다음 업데이트는 설치 프로그램(PyPI나 Homebrew와 통신)과 `claude update`를 실행해요. 명령줄의 `aipager update`는 설치 프로그램만 실행해요.
+- 누군가 **업데이트 확인**이나 **업데이트**를 누를 때(`/update`, Mini App의 업데이트 부분), 또는 업데이트할 수 있는 사람이 Mini App의 **설정** 탭을 열 때(열린 앱마다 최대 10분에 한 번)만 하는 버전 확인: aipager는 `pypi.org`, Claude Code는 설치 방식에 따라 `downloads.claude.ai`나 `registry.npmjs.org`. 그다음 업데이트는 설치 프로그램(PyPI나 Homebrew와 통신)과 `claude update`를 실행해요. 명령줄의 `aipager update`는 설치 프로그램만 실행해요.
 - 음성 메시지 기능 설치, 그 버튼을 누를 때: 설치 프로그램이 PyPI에서 패키지를 받고, 음성 인식 모델은 처음 쓸 때 Hugging Face(`huggingface.co`)에서 받아요.
 - `raw.githubusercontent.com`(신고 키 파일)과 Sentry의 수신 서버로 HTTPS, 문제 신고 보고서를 보내겠다고 내가 확인했을 때만: 내가 미리 본 보고서와 그것으로 만든 짧은 요약이고, 다른 것은 없어요. [문제 신고](problem-reports.md)를 보세요.
 
