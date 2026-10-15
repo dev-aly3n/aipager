@@ -1665,6 +1665,7 @@ class LifecycleMixin:
                 )
                 url = ""
 
+        previous = getattr(self, "_miniapp_url", "") or ""
         self._miniapp_url = url
         if not self._app:
             return          # same guard every sibling that touches _app.bot uses
@@ -1689,7 +1690,16 @@ class LifecycleMixin:
             # is a Mini App at all.
             self._miniapp_url = ""
             log.warning("Could not build the Mini App menu button", exc_info=True)
+            if previous:
+                await self._bars_follow_miniapp_url()
             return
+
+        # The pinned bars carry the same URL on their App button: refresh
+        # them now (pinned_tick starts a task, so this await returns at
+        # once) instead of leaving a dead address on the bar until some
+        # session changes state.
+        if url != previous:
+            await self._bars_follow_miniapp_url()
 
         # Released only on a REAL url. The daemon calls this once with
         # "" immediately after starting the tunnel manager — before any
@@ -1716,6 +1726,15 @@ class LifecycleMixin:
             "Mini App menu button %s for %d chat(s)",
             "published" if url else "cleared", len(chats),
         )
+
+    async def _bars_follow_miniapp_url(self) -> None:
+        """Hand a Mini App URL change to the pinned bars (dashboard's
+        `pinned_app_changed`). Never raises, like its caller."""
+        try:
+            await self.pinned_app_changed()
+        except Exception:
+            log.debug("pinned bars not told about the Mini App URL change",
+                      exc_info=True)
 
     def _all_notify_chat_ids(self) -> list[int]:
         """Every chat that gets the one-time startup auth warning.

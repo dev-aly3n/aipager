@@ -11,7 +11,7 @@
  "aipager/bot/card_owner.py": 1,
  "aipager/bot/card_rows.py": 9,
  "aipager/bot/chat_migration.py": 2,
- "aipager/bot/dashboard.py": 31,
+ "aipager/bot/dashboard.py": 29,
  "aipager/bot/flood.py": 2,
  "aipager/bot/flood_budget.py": 2,
  "aipager/bot/flood_state.py": 1,

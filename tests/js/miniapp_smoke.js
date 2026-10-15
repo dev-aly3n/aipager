@@ -530,7 +530,10 @@ if (SCENARIO.indexOf("updates_") === 0) {
                       updates_restart_wrong_version: "restart_scheduled",
                       updates_restart_watchdog: "restart_scheduled",
                       updates_restart_refused: "restart_scheduled",
-                      updates_restart_watchdog_late: "restart_scheduled" }[SCENARIO];
+                      updates_restart_watchdog_late: "restart_scheduled",
+                      updates_restart_hang_tunnel: "restart_scheduled",
+                      updates_restart_stuck: "restart_scheduled",
+                      updates_restart_stuck_tunnel: "restart_scheduled" }[SCENARIO];
   if (JOB_PHASE) {
     FIXTURES["/api/update"].job = { id: 7, kind: "aipager", phase: JOB_PHASE,
       blockers: [], summary: JOB_PHASE === "done" ? "aipager is already up to date" : "",
@@ -543,9 +546,11 @@ if (SCENARIO.indexOf("updates_") === 0) {
     FIXTURES["/api/update"].job.summary = "\u23f3 aipager 0.7.17 \u2192 0.7.18 installed, restarting\u2026";
     FIXTURES["/api/update"].version = "0.7.17";
     FIXTURES["/api/update"].restarted = null;
-    FIXTURES["/api/update"].url_changes_on_restart = SCENARIO === "updates_restart_tunnel";
+    FIXTURES["/api/update"].url_changes_on_restart = SCENARIO === "updates_restart_tunnel"
+      || SCENARIO === "updates_restart_hang_tunnel"
+      || SCENARIO === "updates_restart_stuck_tunnel";
   }
-  if (SCENARIO === "updates_restart_tunnel") {
+  if (SCENARIO === "updates_restart_tunnel" || SCENARIO === "updates_restart_hang_tunnel") {
     webApp.close = () => { global.__closed = true; };
   }
 }
@@ -1817,13 +1822,39 @@ function driveUpdatesRestartPending() {
 // Each poll of /api/update answers from `replies` (in order); a reply is
 // "down" (fetch rejects), a status number (an error page, not JSON), or a
 // JSON body.
+// The queue is ordered by due time (a timer set later but due sooner runs
+// first, as in a browser), and clearTimeout really removes a timer.
+// "hang" is a fetch that never answers until the page aborts it; "stuck"
+// is one that ignores the abort too, and is settled only by the scenario
+// (`h.settleStuck(reply)`).
 function restartHarness(replies) {
   const queue = [];
   let now = 1000000;
+  const start = now;
+  let nextId = 1;
   Date.now = () => now;
-  global.setTimeout = (f, ms) => { timeoutCalls.push(ms); queue.push({ f, ms }); return queue.length; };
+  global.setTimeout = (f, ms) => {
+    timeoutCalls.push(ms);
+    const id = nextId++;
+    queue.push({ f, ms, due: now + ms, id });
+    return id;
+  };
+  global.clearTimeout = (id) => {
+    const i = queue.findIndex(t => t.id === id);
+    if (i !== -1) queue.splice(i, 1);
+  };
   const baseFetch = global.fetch;
   let polls = 0;
+  const stuck = [];
+  let aborted = 0;
+  const reply = (r) => {
+    if (r === "down") { return Promise.reject(new TypeError("Failed to fetch")); }
+    if (typeof r === "number") {
+      return Promise.resolve({ ok: false, status: r,
+        json: () => Promise.reject(new SyntaxError("Unexpected token <")) });
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(r) });
+  };
   global.fetch = (url, opts) => {
     // The first GET is loadUpdates' own (from FIXTURES); the rest are the watch's.
     if (url === "/api/update" && fetchCalls.some(c => c.url === "/api/update")) {
@@ -1831,12 +1862,19 @@ function restartHarness(replies) {
       polls += 1;
       const r = typeof replies === "function" ? replies(now)
         : (replies.length ? replies.shift() : "down");
-      if (r === "down") { return Promise.reject(new TypeError("Failed to fetch")); }
-      if (typeof r === "number") {
-        return Promise.resolve({ ok: false, status: r,
-          json: () => Promise.reject(new SyntaxError("Unexpected token <")) });
+      if (r === "hang") {
+        return new Promise((_res, rej) => {
+          const signal = opts && opts.signal;
+          if (signal) signal.addEventListener("abort", () => {
+            aborted += 1;
+            rej(new Error("AbortError"));
+          });
+        });
       }
-      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(r) });
+      if (r === "stuck") {
+        return new Promise((res, rej) => { stuck.push({ res, rej }); });
+      }
+      return reply(r);
     }
     return baseFetch(url, opts);
   };
@@ -1848,14 +1886,23 @@ function restartHarness(replies) {
     return false;
   }
   function tick(done) {
-    const t = queue.shift();
-    if (!t) { fail("no timer queued; job text: " + JSON.stringify(jobText())); }
-    now += t.ms;
+    if (!queue.length) { fail("no timer queued; job text: " + JSON.stringify(jobText())); }
+    let k = 0;
+    for (let i = 1; i < queue.length; i++) if (queue[i].due < queue[k].due) k = i;
+    const t = queue.splice(k, 1)[0];
+    now = Math.max(now, t.due);
     t.f();
     setTimeoutReal(done, 5);
   }
-  return { queue, tick, jobText, spinning, polls: () => polls,
-           advance: (ms) => { now += ms; } };
+  // Settle the latest "stuck" fetch with a reply (see `reply` above).
+  function settleStuck(r) {
+    const s = stuck.pop();
+    if (!s) fail("no stuck fetch to settle");
+    reply(r).then(s.res, s.rej);
+  }
+  return { queue, tick, jobText, spinning, polls: () => polls, settleStuck,
+           stuckCount: () => stuck.length, aborted: () => aborted,
+           elapsed: () => now - start, advance: (ms) => { now += ms; } };
 }
 
 function noCountdown(text) {
@@ -1890,7 +1937,9 @@ function driveUpdatesRestartBack() {
               if (text !== "Updated to 0.7.18, 2 sessions re-adopted.")
                 fail("updated: " + JSON.stringify(text));
               if (h.queue.length) fail("still polling once the count arrived");
-              const delays = timeoutCalls.slice(-5);
+              // The poll delays alone (not the poll's own time limit or
+              // the give-up watchdog).
+              const delays = timeoutCalls.filter(ms => ms !== 6000 && ms !== 140000).slice(-5);
               if (!(delays[1] > delays[0] && delays[2] > delays[1]))
                 fail("no backoff: " + JSON.stringify(delays));
               const labels = byId["updates-actions"].children.map(c => c.textContent);
@@ -1917,7 +1966,7 @@ function driveUpdatesRestartGiveUp() {
       const text = h.jobText();
       if (text === "Still restarting, reopen the app in a moment.") {
         if (h.queue.length) fail("still polling after giving up");
-        const elapsed = timeoutCalls.reduce((a, b) => a + b, 0);
+        const elapsed = h.elapsed();
         // About 2 minutes, but after the old daemon's 125 s watchdog.
         if (elapsed < 130000 || elapsed > 160000) fail("gave up after " + elapsed + " ms");
         if (h.spinning()) fail("still spinning after giving up");
@@ -2000,6 +2049,99 @@ function driveUpdatesRestartRefused() {
       console.log("ok: 401 after restart -> reopen the app");
       process.exit(0);
     }));
+  }, 10);
+}
+
+// A quick tunnel's old hostname that HANGS instead of failing (a phone's
+// WebView, 2026-10-15): each poll gives up after its time limit and counts
+// as down, so two of them say "reopen" well before the give-up.
+function driveUpdatesRestartHangTunnel() {
+  const h = restartHarness(["hang", "hang", "hang"]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    let rounds = 0;
+    const step = () => {
+      const text = h.jobText();
+      if (text.indexOf("aipager restarted, reopen the app") === 0) {
+        if (h.elapsed() > 30000) fail("reopen only after " + h.elapsed() + " ms");
+        if (h.polls() !== 2) fail("polls: " + h.polls());
+        if (h.aborted() !== 2) fail("hanging fetches aborted: " + h.aborted());
+        if (h.queue.length) fail("timers left after the reopen: " + JSON.stringify(h.queue.map(t => t.ms)));
+        const close = byId["updates-actions"].children.find(c => c.textContent === "Close the app");
+        if (!close) fail("no Close the app button");
+        console.log("ok: hanging polls time out -> reopen the app");
+        process.exit(0);
+      }
+      if (text !== "Restarting aipager\u2026") fail("while hanging: " + JSON.stringify(text));
+      if (++rounds > 60) fail("never ended");
+      h.tick(step);
+    };
+    step();
+  }, 10);
+}
+
+// The daemon is down, and the poll in flight at the give-up time is stuck
+// for good (it ignores the abort too): the give-up watchdog ends the watch
+// on time, on its own clock, and that poll settling afterwards changes
+// nothing. (Polls fail at once until 135 s; the one sent at about 139.8 s
+// is still in flight at 140 s.)
+function driveUpdatesRestartStuck() {
+  const NEW = { job: null, version: "0.7.18", restarted: null, url_changes_on_restart: false };
+  const h = restartHarness(() => (h.elapsed() >= 135000 ? "stuck" : "down"));
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    let rounds = 0;
+    const step = () => {
+      const text = h.jobText();
+      if (text === "Still restarting, reopen the app in a moment.") {
+        if (h.elapsed() !== 140000) fail("gave up after " + h.elapsed() + " ms, want exactly 140000");
+        if (h.queue.length) fail("timers left after giving up: " + JSON.stringify(h.queue.map(t => t.ms)));
+        if (h.spinning()) fail("still spinning after giving up");
+        if (h.stuckCount() !== 1) fail("stuck polls in flight: " + h.stuckCount());
+        h.settleStuck(NEW);
+        setTimeoutReal(() => {
+          if (h.jobText() !== "Still restarting, reopen the app in a moment.")
+            fail("a late answer reopened the watch: " + JSON.stringify(h.jobText()));
+          if (h.queue.length) fail("polling again after giving up");
+          console.log("ok: stuck polls -> gives up on time, late answer ignored");
+          process.exit(0);
+        }, 10);
+        return;
+      }
+      if (text !== "Restarting aipager\u2026") fail("while stuck: " + JSON.stringify(text));
+      if (++rounds > 200) fail("never gave up");
+      h.tick(step);
+    };
+    step();
+  }, 10);
+}
+
+// A quick tunnel, the old daemon answering "restart scheduled" until
+// 135 s and then a poll stuck at the give-up time: the watchdog ends the
+// watch with "reopen", since this page's address dies with the restart.
+function driveUpdatesRestartStuckTunnel() {
+  const OLD = FIXTURES["/api/update"];
+  const h = restartHarness(() => (h.elapsed() >= 135000 ? "stuck"
+    : JSON.parse(JSON.stringify(OLD))));
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    let rounds = 0;
+    const step = () => {
+      const text = h.jobText();
+      if (text.indexOf("aipager restarted, reopen the app") === 0) {
+        if (h.elapsed() !== 140000) fail("reopen after " + h.elapsed() + " ms, want exactly 140000");
+        if (h.queue.length) fail("timers left: " + JSON.stringify(h.queue.map(t => t.ms)));
+        console.log("ok: stuck poll on a quick tunnel -> reopen at the give-up");
+        process.exit(0);
+      }
+      if (text !== "Restarting aipager\u2026") fail("while waiting: " + JSON.stringify(text));
+      if (++rounds > 200) fail("never ended");
+      h.tick(step);
+    };
+    step();
   }, 10);
 }
 
@@ -2247,6 +2389,9 @@ const DRIVERS = {
   updates_restart_watchdog: driveUpdatesRestartWatchdog,
   updates_restart_refused: driveUpdatesRestartRefused,
   updates_restart_watchdog_late: driveUpdatesRestartWatchdogLate,
+  updates_restart_hang_tunnel: driveUpdatesRestartHangTunnel,
+  updates_restart_stuck: driveUpdatesRestartStuck,
+  updates_restart_stuck_tunnel: driveUpdatesRestartStuckTunnel,
   updates_hidden: driveUpdatesHidden,
   updates_render: driveUpdatesRender,
   updates_check_then_update: driveUpdatesCheckThenUpdate,

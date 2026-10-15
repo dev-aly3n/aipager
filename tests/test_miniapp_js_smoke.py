@@ -1329,6 +1329,48 @@ def test_updates_restart_on_a_quick_tunnel_says_reopen(node_bin, tmp_path):
     assert "ok: quick tunnel gone -> reopen the app, no spinning" in proc.stdout
 
 
+def test_updates_restart_hanging_polls_time_out_and_say_reopen(node_bin, tmp_path):
+    """2026-10-15: a fetch to the quick tunnel's dead hostname can hang
+    instead of failing (a phone's WebView). Each poll has its own time
+    limit and counts as down past it, so the page says "reopen" within
+    seconds, with its Close the app button.
+
+    Mutation: drop the poll's time limit and the first hanging poll
+    freezes the watch until the give-up."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_restart_hang_tunnel")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: hanging polls time out -> reopen the app" in proc.stdout
+
+
+def test_updates_restart_stuck_polls_give_up_on_time(node_bin, tmp_path):
+    """A poll that never settles at all (it ignores the abort too): the
+    give-up watchdog ends the watch at exactly the give-up time, and an
+    answer that arrives after that does not restart the watch.
+
+    Mutations: drop the watchdog and the watch ends later, at a poll;
+    drop the ended-watch guard and the late answer changes the page."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_restart_stuck")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: stuck polls -> gives up on time, late answer ignored" in proc.stdout
+
+
+def test_updates_restart_stuck_poll_on_a_quick_tunnel_says_reopen(node_bin, tmp_path):
+    """The watchdog's own ending follows the tunnel: "reopen" when this
+    page's address dies with the restart.
+
+    Mutation: end the watchdog with "slow" always and this says "Still
+    restarting"."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_restart_stuck_tunnel")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: stuck poll on a quick tunnel -> reopen at the give-up" in proc.stdout
+
+
 def test_updates_restart_back_on_the_old_version_says_so(node_bin, tmp_path):
     from aipager.miniapp.static import INDEX_HTML
 
