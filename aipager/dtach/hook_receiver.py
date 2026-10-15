@@ -227,6 +227,35 @@ def _input_digest(tool_input) -> str:
     return hashlib.sha256(canon.encode()).hexdigest()
 
 
+def _open_prompt_owner(sess) -> str | None:
+    """Whose dialog the session's open prompt is: the asking agent's id,
+    ``""`` for the session's own (Claude's, not a subagent's), or None
+    when no prompt is on record. The inline prompt's context first, then a
+    separate-message prompt's (8.99) when it was shown during this wait
+    (its record outlives its answer). A prompt whose tool is not known (no
+    ``tool_info``) has no known owner either."""
+    separate = (sess.pending_prompt_msg or {}).get("perm")
+    if not (isinstance(separate, dict)
+            and (separate.get("wait_started_at") or 0)
+            >= (getattr(sess, "interactive_entered_at", 0) or 0)):
+        separate = None
+    for pending in (sess.pending_permission, separate):
+        if isinstance(pending, dict):
+            info = pending.get("tool_info")
+            if not isinstance(info, dict):
+                return None
+            return str(info.get("agent_id") or "")
+    return None
+
+
+def _prompt_waits_on(sess) -> bool:
+    """Whether the open prompt is one still waiting for an answer: the
+    session's own, or a running agent's (one that has ended asks nothing
+    any more)."""
+    owner = _open_prompt_owner(sess)
+    return owner == "" or bool(owner and owner in sess.active_subagents)
+
+
 def _finishes_open_prompt(msg: dict, tool_name: str, tool_input,
                           sess) -> bool:
     """Whether this PostToolUse / PostToolUseFailure is the end of the very
@@ -939,6 +968,10 @@ class HookReceiver:
             # transcript goes by the prompt's time alone.
             if tool_info:
                 tool_info["tool_use_id"] = ""
+                # Whose dialog it is, so another agent's tool call does
+                # not close it (an agent's own prompt: its id).
+                if msg.get("agent_id"):
+                    tool_info["agent_id"] = msg["agent_id"]
             new_status = Status.INTERACTIVE
             context = {"tool_info": tool_info, "transcript_path": transcript_path}
 
@@ -1003,9 +1036,14 @@ class HookReceiver:
                     # background-job endgame" requirement 2).
                     cont_sess.job_continuation_active = True
                     cont_sess.job_grace_until = 0.0
-                    self.registry.transition(
-                        session_name, Status.BUSY, preserve_job_state=True,
-                    )
+                    if not (cont_sess.status == Status.INTERACTIVE
+                            and _prompt_waits_on(cont_sess)):
+                        # An open prompt stays open: an agent finishing
+                        # does not answer it (its own tool's end, or the
+                        # next tool call, ends the wait).
+                        self.registry.transition(
+                            session_name, Status.BUSY, preserve_job_state=True,
+                        )
                     await self.notify_fn(cont_sess, "job_continuation", {})
                     return
                 # Nothing to continue. The daemon has no turn or job open
@@ -1179,11 +1217,20 @@ class HookReceiver:
                         # keeps the stale-busy warning quiet, as the
                         # parent's own would.
                         sess.pending_tool_started_at = time.monotonic()
-                    if sess.status == Status.INTERACTIVE:
+                    owner = (_open_prompt_owner(sess)
+                             if sess.status == Status.INTERACTIVE else None)
+                    if sess.status == Status.INTERACTIVE and owner in (None, agent_id):
                         # Its tool running means the permission prompt
                         # it waited on was answered (in the terminal):
                         # the session is working again, as before 8.58.
                         # Only IDLE -> BUSY is what an agent never causes.
+                        # Only ITS prompt, though: a question of Claude's
+                        # own, or another agent's, is still open while a
+                        # background agent works (live 2026-10-15: every
+                        # tool call of a running reviewer closed Claude's
+                        # question within a second, and the card's next
+                        # frame drew over it). With no prompt on record
+                        # the owner is not known, and this stays as it was.
                         self.registry.transition(
                             session_name, Status.BUSY,
                             preserve_job_state=bool(sess.active_subagents),
@@ -1356,6 +1403,14 @@ class HookReceiver:
                                          msg.get("tool_input", {}), sess):
                     # Answered or refused: the dialog is closed (8.102).
                     sess.mark_prompt_closed(sess.busy_msg_id)
+                    if msg.get("agent_id") and sess.status == Status.INTERACTIVE:
+                        # An agent's, refused in the terminal: the agent
+                        # goes on (or stops), and the session with it.
+                        # (Claude's own refusal ends its turn: the session
+                        # monitor's dialog_ended_in_terminal.)
+                        self.registry.transition(
+                            session_name, Status.BUSY,
+                            preserve_job_state=bool(sess.active_subagents))
                 if (not msg.get("agent_id")
                         or msg.get("agent_id") in sess.active_subagents):
                     # A detached background agent's tool ending says
@@ -1460,6 +1515,14 @@ class HookReceiver:
             agent_type = msg.get("agent_type", "unknown")
             if agent_id:
                 sess = self.registry.get_or_create(session_name)
+                if (sess.status == Status.INTERACTIVE
+                        and _open_prompt_owner(sess) == agent_id):
+                    # The asking agent's turn ended (a finish or a pause):
+                    # the dialog it asked in is gone, however it ended.
+                    sess.mark_prompt_closed(sess.busy_msg_id)
+                    self.registry.transition(
+                        session_name, Status.BUSY,
+                        preserve_job_state=bool(sess.active_subagents))
                 # Compute elapsed time if we have a matching start
                 elapsed = 0.0
                 waiting_for = sess.bg_agent_pause(agent_id, now_mono)
