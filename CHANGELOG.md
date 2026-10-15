@@ -7,16 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-15
+
 ### Changed
+- **Background agents show as a tree under an answer.** Each agent the session started has its own line with a 🤖, and the agents it started are listed under it, at any depth; one started further down names the agent that started it, like `ship-developer › ship-reviewer`. An agent waiting for its own agents says so instead of showing its last step, and agents started after the answer went out join the list under the agent that started them. A helper is placed under its agent as soon as it starts, and no longer takes the description of the session's own agent call. On the busy card, a helper's row names the agent at the top, like `pipeline-runner › ship-tester`.
+- **Divider lines.** A divider now separates an answer from its agents and shells, sits above the busy card's status line, and replaces the line of dashes in the merged layout.
 - **The Mini App opens faster on a slow connection.** The page your phone downloads each time you open it is about a quarter smaller: the notes written for developers inside its code are no longer sent along.
-- The status block under an answer shows background agents as a tree: each agent's own agents are listed under it, every agent row has a 🤖, and an agent waiting for its own agents says so.
-- Agents that a listed agent starts after the answer went out join its block, under the agent that started them.
-- A helper agent nests under the agent that started it as soon as it starts, and no longer takes the description of the session's own agent call.
-- On the busy card, a helper agent's row names the agent that started it, like pipeline-runner › ship-tester.
-- A divider line now separates an answer from its agents and shells, sits above the busy card's status line, and replaces the line of dashes in the merged layout.
 
 ### Fixed
-- On iPhone, a Persian or Arabic line that ended with an English word, a number or a command sat on the left; now every such line sits on the right like the rest.
+- **Persian and Arabic lines sit on the right on iPhone.** A line that ended with an English word, a number or a command sat on the left; now every such line sits on the right like the rest.
 - **The Persian and Arabic docs read in the right order on GitHub.** Where a sentence ended on an English word and the next began with one ("... Telegram. Claude ..."), or a paragraph, list or heading started with an English word or a command, GitHub showed the words out of order or laid the line out left to right; and commands, paths and options that start or end with a symbol showed it on the wrong side (`/kill` as `kill/`, `--recursive` as `recursive--`). The pages now carry invisible direction marks in those places (no word changed), and the docs check catches new ones.
 - **The Mini App no longer promises a restart that will not happen.** Before an aipager update in **Settings → Updates**, the confirm said aipager restarts on its own even where it can't (for example a systemd unit with an unsafe KillMode); it now says that the steps to restart it show once the update is installed.
 - **An agent waiting for an agent it started stays on the agents line.** When a background agent starts an agent of its own and then stops to wait for it, aipager used to count it as finished at once: the status under the answer showed one agent too few and the job could close early. It now stays there as working, and keeps the job open, until it has really finished. aipager also reads Claude's note that an agent will resume when Claude takes it in the middle of a running turn.

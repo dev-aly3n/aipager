@@ -97,7 +97,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Pasang (mount) folder yang ingin Claude ubah di `/workspace`. Memasang `~/.claude` membawa kredensial Claude dan riwayat percakapanmu; untuk masuk, jalankan `claude` sekali di sistem, atau `docker exec -it aipager claude` untuk masuk dari dalam kontainer.
 
-Tag: `latest`, `1.2`, `1.2.0` (satu untuk versi persis dan satu untuk versi minor).
+Tag: `latest`, `1.3`, `1.3.0` (satu untuk versi persis dan satu untuk versi minor).
 
 ### <a id="nix-flake"></a>Nix flake
 
