@@ -97,7 +97,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Claude'un düzenlemesini istediğin klasörleri `/workspace` altına bağla. `~/.claude` klasörünü bağlamak Claude kimlik bilgilerini ve konuşma geçmişini taşır; giriş yapmak için sistemde bir kez `claude` çalıştır ya da konteynerin içinde giriş yapmak için `docker exec -it aipager claude` kullan.
 
-Etiketler: `latest`, `1.3`, `1.3.3` (tam sürüm ve küçük sürüm başına birer tane).
+Etiketler: `latest`, `1.3`, `1.3.4` (tam sürüm ve küçük sürüm başına birer tane).
 
 ### <a id="nix-flake"></a>Nix flake
 

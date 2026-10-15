@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-10-15
+
 ### Changed
 - **Appearance is its own section on the Mini App's Settings tab.** The button colours sit under their own Appearance heading after Chat preferences, no longer inside them.
 
