@@ -210,10 +210,18 @@ person's tap. Three things let calls run with no prompt to a person:
   `skipDangerousModePermissionPrompt` in `~/.claude/settings.json` at
   every start (Claude Code's warning before it runs in this mode would
   otherwise stop the session); that also turns the warning off for the
-  sessions you start yourself. It likewise marks its default session
-  folder as trusted in `~/.claude.json`, so Claude Code's "Do you trust
-  this folder?" question does not stop a session started from Telegram
-  in that folder.
+  sessions you start yourself. It likewise marks the folder each
+  session starts in as trusted in `~/.claude.json` (unless that folder
+  or one above it is trusted already), so Claude Code's "Do you trust
+  this folder?" question does not stop a session started from Telegram:
+  the first message would answer it with "No, exit". A trusted folder's
+  own `.claude/` settings, `.git/` hooks and `.mcp.json` can run
+  commands, which is why members without `can_manage` can never write
+  those files (unless `policy.yaml` gives their role a shell back). The
+  home folder, `/` and the folders above home are never marked trusted
+  this way: that would trust every folder under them. aipager leaves `~/.claude.json` and
+  `~/.claude/settings.json` alone when it cannot read them whole, or
+  when a running Claude changed them while aipager was updating them.
 - **Allow always**, which hands Claude Code back the "don't ask again"
   rule it offered with the prompt, exactly as that option in its own
   dialog would.
