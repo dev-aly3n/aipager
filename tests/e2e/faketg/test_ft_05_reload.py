@@ -38,5 +38,5 @@ def test_reload_drops_a_removed_members_held_message(fresh):
     cb = fake.inject_callback(fti.user(fti.ALICE), fake.message(G, card["message_id"]), deny)
     fake.wait_answer(cb)
     flows.wait_turn_end(inst, name, "ft13", since_log=log_since)
-    assert not inst.file_in_project("ft13.txt").exists()
+    assert not inst.file_in_session(name, "ft13.txt").exists()
     assert not any("bob was here" in p for p in inst.prompts_seen(name)[n:])

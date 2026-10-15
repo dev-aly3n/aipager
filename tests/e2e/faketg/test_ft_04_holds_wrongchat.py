@@ -26,7 +26,7 @@ def test_another_senders_message_is_held_then_runs_as_its_own_turn(fresh):
     # bob allows; his turn ends; then alice's message runs as its own turn.
     cb = fake.inject_callback(fti.user(fti.BOB), card, allow)
     fake.wait_answer(cb)
-    fti.wait_until(inst.file_in_project("ft10.txt").exists, 60, "bob's file")
+    fti.wait_until(inst.file_in_session(name, "ft10.txt").exists, 60, "bob's file")
     prompt = flows.wait_prompt(inst, name, "hello from alice", after=n)
     assert "@alice" in prompt.splitlines()[0], prompt
     assert "@bob" not in prompt
@@ -48,7 +48,7 @@ def test_dm_session_traffic_stays_in_the_dm(fresh):
     cb = fake.inject_callback(fti.user(fti.ALICE), card, allow)
     fake.wait_answer(cb)
     flows.wait_text(fake, DM, "Allowed", since=since)
-    fti.wait_until(inst.file_in_project("ft11.txt").exists, 60, "alice's file")
+    fti.wait_until(inst.file_in_session(name, "ft11.txt").exists, 60, "alice's file")
     flows.wait_turn_end(inst, name, "ft11", since_log=turn_log)
     flows.settle(fake)
 
