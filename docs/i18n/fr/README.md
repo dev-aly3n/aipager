@@ -97,7 +97,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Montez sous `/workspace` les dossiers que Claude doit pouvoir modifier. Le montage de `~/.claude` apporte vos identifiants Claude et l'historique de vos conversations ; pour vous connecter, lancez `claude` une fois sur le système, ou `docker exec -it aipager claude` pour vous connecter dans le conteneur.
 
-Tags : `latest`, `1.3`, `1.3.0` (une par version exacte et une par version mineure).
+Tags : `latest`, `1.3`, `1.3.1` (une par version exacte et une par version mineure).
 
 ### <a id="nix-flake"></a>Nix flake
 
