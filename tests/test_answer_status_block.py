@@ -4,10 +4,10 @@ style).
 
 The spec's states in English, byte for byte; the same states in fa, ar,
 ru and zh-Hans (marks, isolates, digits, plural forms, frame words); the
-activity's precedence (prose > tool phrase > description > the bare
-type), its first-line trimming and escaping; the four-row limit, the
-promise only while an agent works; and the reserve that keeps every later
-edit inside the ceiling.
+activity's precedence (prose > a tool phrase of its own > description >
+a generic tool phrase > the bare type), its first-line trimming and
+escaping; the four-row limit, the promise only while an agent works; and
+the reserve that keeps every later edit inside the ceiling.
 """
 
 from __future__ import annotations
@@ -141,6 +141,64 @@ def test_prose_wins_over_the_tool_and_the_description():
 def test_the_tool_wins_over_the_description():
     row = A("t", False, tool="Read", tool_arg="a.py", description="Audit the cache")
     assert _activity(row) == "Reading a.py"
+
+
+# A generic tool phrase never hides the task (operator, 2026-10-15: two
+# pipeline-runners, each "Running a command", could not be told apart).
+
+@pytest.mark.parametrize("tool, arg", [
+    ("Bash", ""), ("Bash", "  \n "), ("Agent", ""), ("Task", ""),
+    ("TodoWrite", ""), ("Read", ""), ("my_tool", ""), ("mcp__srv__go", "x"),
+], ids=["bash", "bash-blank", "agent", "task", "other", "file-without-arg",
+        "unknown", "unknown-with-arg"])
+def test_the_task_wins_over_a_generic_tool_phrase(tool, arg):
+    row = A("t", False, tool=tool, tool_arg=arg, description="Fix the waiting row")
+    assert _activity(row) == "Fix the waiting row"
+
+
+@pytest.mark.parametrize("tool, arg, text", [
+    ("Bash", "Run the targeted tests", "Run the targeted tests"),
+    ("Agent", "Review the diff", "Review the diff"),
+    ("Read", "state.py", "Reading state.py"),
+    ("Grep", "agent_parents", "Searching for agent\\_parents"),
+], ids=["bash-described", "agent-described", "read", "grep"])
+def test_a_tool_phrase_of_its_own_still_wins_over_the_task(tool, arg, text):
+    row = A("t", False, tool=tool, tool_arg=arg, description="Fix the waiting row")
+    assert _activity(row) == text
+
+
+def test_prose_still_wins_over_a_generic_phrase_and_the_task():
+    row = A("t", False, prose="Checking the cache.", tool="Bash",
+            description="Fix the waiting row")
+    assert _activity(row) == "Checking the cache."
+
+
+@pytest.mark.parametrize("description", ["", "  \n", "```\ncode\n```"],
+                         ids=["none", "blank", "only-code"])
+def test_without_a_task_the_generic_phrase_still_shows(description):
+    assert _activity(A("t", False, tool="Bash", description=description)) == \
+        "Running a command"
+    assert _activity(A("t", False, tool="TodoWrite", description=description)) == \
+        "Using TodoWrite"
+
+
+def test_two_agents_of_one_type_show_their_own_tasks():
+    """The operator's screenshot: both ran a command without a description."""
+    block = al.render_block(V(agents=(
+        A("pipeline-runner", False, tool="Bash", description="Fix the waiting row's mark"),
+        A("pipeline-runner", False, tool="Bash", description="Show the task name"),
+    )))
+    rows = _lines(block)[1:3]
+    assert rows == ["○ 🤖 **pipeline-runner** · Fix the waiting row's mark",
+                    "○ 🤖 **pipeline-runner** · Show the task name"]
+
+
+@pytest.mark.parametrize("code", ["fa", "ru"])
+def test_the_task_wins_over_a_generic_phrase_in_every_language(code):
+    block = al.render_block(V(agents=(A("t", False, tool="Bash",
+                                        description="Fix the waiting row"),)),
+                            tr=i18n.get(code))
+    assert "Fix the waiting row" in block and "Running a command" not in block
 
 
 def test_the_description_when_nothing_else_is_known():
