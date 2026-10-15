@@ -585,6 +585,11 @@ def test_edit_busy_rich_reply_markup_on_every_call(mk_bot, run_async, monkeypatc
     run_async(bot._edit_busy_rich(sess, "Working"))
     assert len(payloads) == 1
     assert "reply_markup" in payloads[0]
+    # The blue Stop goes out with the edit itself, not only in the builder.
+    markup = payloads[0]["reply_markup"]
+    if isinstance(markup, str):
+        markup = json.loads(markup)
+    assert markup["inline_keyboard"][0][0]["style"] == "primary"
 
 
 def test_edit_busy_rich_blocked_returns_none(mk_bot, run_async, monkeypatch):

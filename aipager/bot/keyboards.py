@@ -76,6 +76,11 @@ log = logging.getLogger(__name__)
 
 STOP_PLAIN = Msg("perm.btn.stop_plain", "Stop",
                  note="The busy card's button: stop what Claude is doing")
+#: The busy card's Stop button in the Bot API's "primary" style (blue):
+#: easy to find on a card that changes all the time, without the alarm of
+#: "danger" (red) or the "go" of "success" (green). An app that does not
+#: know button styles draws it as a plain button.
+STOP_STYLE = "primary"
 ALLOW = Msg("perm.btn.allow", "✅ Allow", note="Permission prompt button: let the tool run once")
 DENY = Msg("perm.btn.deny", "❌ Deny", note="Permission prompt button: refuse the tool call")
 ALLOW_ALWAYS = Msg("perm.btn.allow_always", "🟢 Allow always",
@@ -445,7 +450,8 @@ class KeyboardMixin:
         return InlineKeyboardMarkup([[
             InlineKeyboardButton(
                 i18n.for_sess(sess).text(STOP_PLAIN),
-                callback_data=session_parity.session_cb(self, chat_id, sess, "stop")),
+                callback_data=session_parity.session_cb(self, chat_id, sess, "stop"),
+                style=STOP_STYLE),
         ]])
 
     def _build_retry_keyboard(self, sess: TrackedSession) -> InlineKeyboardMarkup:

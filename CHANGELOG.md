@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The busy card's Stop button is blue.** It is easier to find on a card that changes all the time, without the alarm of a red button. Telegram apps that do not know button colours show it as before.
+
 ## [1.3.1] - 2026-10-15
 
 ### Fixed

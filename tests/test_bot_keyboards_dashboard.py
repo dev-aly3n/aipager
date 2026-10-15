@@ -177,6 +177,18 @@ def test_build_stop_keyboard(mk_bot):
     assert _destination(bot, kb.inline_keyboard[0][0].callback_data) == (sess.name, "stop")
 
 
+def test_the_busy_cards_stop_button_is_blue_and_the_prompts_is_not(mk_bot):
+    """The busy card's Stop is the Bot API's "primary" (blue) style, on
+    the wire too; the permission prompt's Stop, beside Allow and Deny,
+    keeps the app's own look."""
+    bot = mk_bot()
+    sess = _sess(bot)
+    [[stop]] = bot._build_stop_keyboard(sess).to_dict()["inline_keyboard"]
+    assert stop["style"] == "primary"
+    prompt = bot._build_permission_keyboard(sess, always_available=False).to_dict()
+    assert all("style" not in button for row in prompt["inline_keyboard"] for button in row)
+
+
 def test_build_retry_keyboard(mk_bot):
     bot = mk_bot()
     sess = _sess(bot)
