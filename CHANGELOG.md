@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Claude's questions and permission prompts stay on Telegram while a background agent works.** A tool call of a background agent was taken as the prompt being answered in the terminal, and the busy card's next frame drew over the question within a second, so it could only be answered at the terminal. Now an agent's activity closes only its own prompt, and the card is not redrawn over an open one.
+
 ## [1.3.2] - 2026-10-15
 
 ### Added
