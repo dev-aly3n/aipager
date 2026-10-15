@@ -14,6 +14,7 @@ from aipager import session_monitor
 from aipager.bot.agents_line import AgentRow, BlockView, render_block
 from aipager.session_monitor import SessionMonitor, resolve_bg_shell_max_track
 from aipager.state import BG_SHELLS_CAP
+from tests.footer_text import unfooter
 
 CHAT = 256113222
 DESC = "run the tests"
@@ -111,7 +112,7 @@ def test_bb_stop_closes_the_job_card(replay, vloop, monkeypatch):
 
 def test_bb_stop_keeps_the_answer_line_running(replay, vloop, monkeypatch):
     out = _stopped(replay, vloop, monkeypatch)
-    assert out["answers"][0].rstrip().splitlines()[-1] == "🖥 1 shell running"
+    assert unfooter(out["answers"][0]).rstrip().splitlines()[-1] == "🖥 1 shell running"
 
 
 def test_bb_wakeup_after_stop_opens_a_fresh_card(replay, vloop, monkeypatch):

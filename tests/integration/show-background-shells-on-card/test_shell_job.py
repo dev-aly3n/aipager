@@ -17,6 +17,7 @@ from aipager import preferences as prefs
 from aipager import session_monitor
 from aipager.session_monitor import SessionMonitor
 from aipager.state import JOB_CONTINUATION_GRACE_SECONDS
+from tests.footer_text import unfooter
 
 CHAT = 256113222
 DESC = "run the tests"
@@ -94,12 +95,12 @@ def test_waiting_card_says_a_shell_is_still_working(replay, vloop):
     async def scenario():
         w = _worker(r)
         await _shell_job(r)
-        alone = _only_card(r)["text"]
+        alone = unfooter(_only_card(r)["text"])
         w.cancel()
         return alone
 
     alone = _run(vloop, scenario())
-    assert "🔄 **aipager\\_boss** · 1 shell still working · " in alone
+    assert "🔄 **aipager_boss** · 1 shell still working · " in alone
     assert "finishing up" not in alone
 
 

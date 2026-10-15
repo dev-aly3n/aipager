@@ -11,6 +11,7 @@ import pytest
 from aipager import bg_shells, preferences
 from aipager.bot import animation
 from tests import i18n_surfaces
+from tests.footer_text import status_md
 
 
 def _huge_session():
@@ -53,5 +54,5 @@ def test_a_long_card_fits_its_ceilings(code, mk_bot, run_async, monkeypatch):
         assert len(card) <= animation._CARD_CHAR_BUDGET
         assert len(card.encode("utf-8")) <= animation._RICH_LIMIT
         # The status line, translated, is still the last line.
-        assert card.rsplit("\n", 1)[-1].lstrip("\u200f").startswith(
+        assert status_md(card).lstrip("\u200f").startswith(
             "✅" if final else "⏳")

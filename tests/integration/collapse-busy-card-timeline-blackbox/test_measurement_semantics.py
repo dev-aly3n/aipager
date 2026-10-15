@@ -12,6 +12,7 @@ import time
 
 from aipager.bot.animation import build_stream_card_ex
 from aipager.state import Status, TrackedSession
+from tests.footer_text import status_md
 
 CARD_CHAR_BUDGET = 8_800
 RICH_LIMIT_BYTES = 32_768
@@ -136,5 +137,4 @@ def test_real_measured_length_holds_near_the_boundary_despite_block_overhead():
     card, _truncated = build_stream_card_ex(sess, "Working")
     assert len(card) <= CARD_CHAR_BUDGET
     assert len(card.encode("utf-8")) <= RICH_LIMIT_BYTES
-    last_line = card.rstrip("\n").splitlines()[-1]
-    assert last_line.startswith("⏳ **jim**")
+    assert status_md(card).startswith("⏳ **jim**")

@@ -35,6 +35,7 @@ from aipager import preferences as prefs
 from aipager.bot import notify as notify_mod
 from aipager.bot.animation import final_card_has_timeline
 from aipager.state import Status, TrackedSession
+from tests.footer_text import as_md
 
 CHAT = 555
 TRIGGER = 7
@@ -181,7 +182,7 @@ def test_a_turn_with_tools_keeps_its_card_and_answer(mk_bot, run_async, wire):
     assert wire.methods() == ["editMessageText", "sendRichMessage"]
     (card,) = wire.of("editMessageText")
     assert card["message_id"] == CARD
-    assert card["rich_message"]["markdown"].rpartition("\n\n")[2] \
+    assert as_md(card["rich_message"]["markdown"].rpartition("\n\n")[2]) \
         .startswith("✅ **q** · Done")
     (answer,) = wire.of("sendRichMessage")
     assert answer["rich_message"]["markdown"] == f"💬 **q**\n\n{ANSWER}"

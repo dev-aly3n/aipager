@@ -16,6 +16,7 @@ import re
 
 from aipager import preferences as prefs
 from aipager.state import Status
+from tests.footer_text import as_md
 
 CHAT = 256113222
 MIN = 60.0
@@ -51,7 +52,7 @@ def animate(vloop, bot, sess, seconds):
 
 
 def status_line(markdown):
-    return markdown.rsplit("\n", 1)[-1]
+    return as_md(markdown.rsplit("\n", 1)[-1])
 
 
 def gaps_after_age(edits, started_at, age_at):

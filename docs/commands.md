@@ -95,9 +95,9 @@ Whatever the layout, every busy card ends with its session's status
 line (`⏳`/`✅ name · …`) and every answer starts with its result line
 (`💬 name`, plus `· Finished (…)` when no finished card is left to show
 the stats); the merged layout stacks the two, each line in its own
-section. A divider line sits above the busy card's status line, and in
-the merged layout a second one separates the finished card from the
-answer. In the card layout the answer deliberately follows the
+section. A divider line sits above the busy card's status line (small
+text), and in the merged layout a second one separates the finished card
+from the answer. In the card layout the answer deliberately follows the
 finished card by a moment, so the card is seen to say Finished before
 the answer lands under it; tune or disable that head start with
 `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at
@@ -533,7 +533,9 @@ attachment above carries the complete record.
 Claude Code can run agents in the background, and the turn that launched
 them can end while they work. The answer then ends with a divider line
 and a short status of that background work, in the style of Claude
-Code's own agent panel, kept up to date while it runs:
+Code's own agent panel, kept up to date while it runs. Everything under
+the divider is small text (Telegram's footer), so the answer itself
+stands out:
 
 ```
 ⏳ 5 agents working · 🖥 1 shell running

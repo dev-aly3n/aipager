@@ -33,6 +33,7 @@ from aipager.session_monitor import (
     orphan_card_due,
 )
 from aipager.state import SessionRegistry, Status
+from tests.footer_text import unfooter
 
 CHAT = 256113222
 
@@ -96,7 +97,7 @@ def test_adopted_card_ticks_with_no_hook_and_the_stop_finishes_it(
     assert status_mid is Status.BUSY
     assert 69 <= age <= 72           # 40 s before the restart + 30 s since
     # The clock went on from 40 s: past a minute by the last tick.
-    assert texts and re.search(r"· 1:(?:0\d|1[0-2])$", texts[-1]), texts[-1:]
+    assert texts and re.search(r"· 1:(?:0\d|1[0-2])$", unfooter(texts[-1])), texts[-1:]
     assert r.chat.live_cards() == []
     assert sess.busy_msg_id is None and sess.status is Status.IDLE
     assert not any("Stop while already IDLE" in m for m in caplog.messages)

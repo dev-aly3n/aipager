@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import html
 import re
 
 import pytest
@@ -118,10 +119,16 @@ class Shapes:
 
     @staticmethod
     def name_of(line: str) -> str:
-        """The bold name of a row ("ship-developer \u203a ship-reviewer")."""
+        """The bold name of a row ("ship-developer \u203a ship-reviewer"),
+        as rendered (Markdown ``**``) or as drawn under an answer (a
+        footer's ``<b>``, 2026-10-15)."""
         m = re.search(r"\*\*(.+?)\*\*", line)
-        assert m, line
-        return m.group(1).replace("\u2068", "").replace("\u2069", "")
+        name = m.group(1) if m else None
+        if name is None:
+            m = re.search(r"<b>(.+?)</b>", line)
+            assert m, line
+            name = html.unescape(m.group(1))
+        return name.replace("\u2068", "").replace("\u2069", "")
 
     @staticmethod
     def tree(block: str) -> list[tuple[int, str]]:

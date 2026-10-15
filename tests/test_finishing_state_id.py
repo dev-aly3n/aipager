@@ -9,6 +9,7 @@ import time
 from aipager.bot import animation
 from aipager.bot.animation import build_stream_card
 from aipager.state import Status, TrackedSession
+from tests.footer_text import as_md
 
 
 def _sess():
@@ -20,7 +21,7 @@ def _sess():
 
 
 def _status(sess):
-    return build_stream_card(sess, "Working", waiting=True).splitlines()[-1]
+    return as_md(build_stream_card(sess, "Working", waiting=True).splitlines()[-1])
 
 
 def test_finishing_state_survives_a_reworded_phrase(monkeypatch):

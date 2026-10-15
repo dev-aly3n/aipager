@@ -49,6 +49,7 @@ from aipager.bg_shells import duration  # noqa: F401
 from aipager.agent_tree import LINEAGE_SEP
 from aipager.bidi_guard import reveal
 from aipager.bot.divider import DIVIDER_SEP
+from aipager.bot.footer import CLOSE, OPEN, footer, md_to_html
 from aipager.i18n import Msg, Plural, Safe
 
 #: A label (an agent type, a tool name) longer than this is cut, with an
@@ -448,7 +449,9 @@ def render_block(view: BlockView, tr=None) -> str:
     line (a list's items by one line break), in *tr*'s language (English
     when None); ``""`` when it has no agent and no shell. The block alone:
     the divider above it is the caller's (:data:`~aipager.bot.divider.
-    DIVIDER_SEP`)."""
+    DIVIDER_SEP`). Drawn under an answer as small text, each line a
+    footer block (:func:`~aipager.bot.footer.footer_block`, the caller's);
+    :func:`reserve_bytes` measures it that way."""
     tr = _tr(tr)
     header = _header(view, tr)
     if not header:
@@ -469,6 +472,7 @@ def render_block(view: BlockView, tr=None) -> str:
 _WORST_COUNTS = tuple(range(0, 121)) + (999,)
 _WORST_CLOCK = 999 * 3600 + 59 * 60 + 59
 _WIDE = "\U0001f600"  # one character, four UTF-8 bytes
+_AMP = "&"  # one character, five bytes once HTML-escaped
 _RESERVE: dict[tuple[str, bool], int] = {}
 
 
@@ -477,14 +481,21 @@ def _size(text) -> int:
 
 
 def _worst_rows(tr) -> int:
-    agent = _WIDE * LABEL_MAX
-    rows = [AgentRow(agent, True, _WORST_CLOCK), AgentRow(agent, False),
-            AgentRow(agent, False, waiting=True),
-            AgentRow(agent, False, prose=_WIDE * (ACTIVITY_MAX + 1)),
-            AgentRow(agent, False, tool=_WIDE * LABEL_MAX)]
-    rows += [AgentRow(agent, False, tool=tool, tool_arg=_WIDE * (ARG_MAX + 1))
-             for tool in _TOOL_PHRASES]
-    return max(_size(_row(row, tr, hint)) for row in rows for hint in (None, agent))
+    """The largest row as drawn (a footer block). Tried with the widest
+    character in UTF-8 and with the one HTML escapes widest ("&" →
+    "&amp;"), since the footer's text is HTML."""
+    best = 0
+    for wide in (_WIDE, _AMP):
+        agent = wide * LABEL_MAX
+        rows = [AgentRow(agent, True, _WORST_CLOCK), AgentRow(agent, False),
+                AgentRow(agent, False, waiting=True),
+                AgentRow(agent, False, prose=wide * (ACTIVITY_MAX + 1)),
+                AgentRow(agent, False, tool=wide * LABEL_MAX)]
+        rows += [AgentRow(agent, False, tool=tool, tool_arg=wide * (ARG_MAX + 1))
+                 for tool in _TOOL_PHRASES]
+        best = max(best, max(_size(footer(str(_row(row, tr, hint))))
+                             for row in rows for hint in (None, agent)))
+    return best
 
 
 def _worst_header(tr) -> int:
@@ -494,14 +505,16 @@ def _worst_header(tr) -> int:
     clock = Safe(tr.clock(_WORST_CLOCK))
 
     def most(plural, **params) -> int:
-        return max(_size(tr.n(plural, n, kind="md", **params)) for n in _WORST_COUNTS)
+        return max(_size(md_to_html(str(tr.n(plural, n, kind="md", **params))))
+                   for n in _WORST_COUNTS)
 
-    join = _size(tr.md(HEAD_JOIN, first=Safe(""), second=Safe("")))
+    join = _size(md_to_html(str(tr.md(HEAD_JOIN, first=Safe(""), second=Safe("")))))
     agents = max(most(HEAD_WORKING), most(HEAD_DONE, clock=clock))
     shells = max(most(HEAD_SHELLS_RUNNING),
                  most(HEAD_SHELLS_FINISHED, clock=clock) + join
                  + most(HEAD_SHELLS_STOPPED, clock=clock))
-    return agents + join + shells
+    # Drawn as one footer block.
+    return _size(OPEN + CLOSE) + agents + join + shells
 
 
 def reserve_bytes(tr=None) -> int:
@@ -522,9 +535,9 @@ def reserve_bytes(tr=None) -> int:
     # a top row has the blank line, an item the line break or blank line
     # and the marker.
     row_lead = sep + _size(LIST_ITEM)
-    more = max(_size(tr.n(MORE, n, kind="md")) for n in _WORST_COUNTS)
+    more = max(_size(footer(str(tr.n(MORE, n, kind="md")))) for n in _WORST_COUNTS)
     total = (_size(DIVIDER_SEP) + _worst_header(tr)
              + ROWS_MAX * (row_lead + _worst_rows(tr))
-             + sep + more + sep + _size(tr.md(PROMISE)))
+             + sep + more + sep + _size(footer(str(tr.md(PROMISE)))))
     _RESERVE[key] = total
     return total

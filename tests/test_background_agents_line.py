@@ -42,6 +42,7 @@ import pytest
 from aipager import preferences as prefs
 from aipager.bot import notify as notify_mod
 from aipager.bot.divider import DIVIDER_SEP
+from tests.footer_text import as_md, footered
 from aipager.bot.flood_budget import FloodSkipped
 from aipager.dtach import hook_receiver as hr
 from aipager.state import (
@@ -54,8 +55,9 @@ CHAT = 555
 TRIGGER = 7
 CARD = 42
 ANSWER = "The settings fix is still running its final full test run."
-BLOCK_1 = ("⏳ 1 agent working\n\n○ 🤖 **pipeline-runner**\n\n"
-           "Results from the agents will follow here.")
+# As drawn: every line small text, a footer block (operator, 2026-10-15).
+BLOCK_1 = footered("⏳ 1 agent working\n\n○ 🤖 **pipeline-runner**\n\n"
+                   "Results from the agents will follow here.")
 
 
 # ── harness (the 8.32 wire, one list for every call) ─────────────────────────
@@ -387,9 +389,9 @@ def test_two_agents_are_counted_and_each_has_a_row(mk_bot, run_async, wire):
     _agents(sess, ("a1", "pipeline-runner"), ("a2", "ship-reviewer"))
     _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
     (answer,) = wire.of("sendRichMessage")
-    assert _markdown(answer).endswith(
+    assert _markdown(answer).endswith(footered(
         "⏳ 2 agents working\n\n○ 🤖 **pipeline-runner**\n\n○ 🤖 **ship-reviewer**"
-        "\n\nResults from the agents will follow here.")
+        "\n\nResults from the agents will follow here."))
 
 
 def test_a_long_label_is_truncated(mk_bot, run_async, wire):
@@ -399,7 +401,7 @@ def test_a_long_label_is_truncated(mk_bot, run_async, wire):
     _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
     (rec,) = sess.agents_lines
     assert "x" * 80 not in rec["shown"]
-    assert "**" + "x" * 31 + "…**" in rec["shown"]
+    assert "<b>" + "x" * 31 + "…</b>" in rec["shown"]
 
 
 def test_the_fact_4_sequence_ends_with_the_line(mk_bot, run_async, wire):
@@ -538,7 +540,7 @@ def test_the_agents_stop_edits_the_line_once_to_done(mk_bot, run_async, wire):
     assert edit["message_id"] == rec["msg_id"]
     # Six minutes after the answer, in true seconds (the clock).
     block = _markdown(edit)[len(rec["body"]) + len(DIVIDER_SEP):]
-    assert re.fullmatch(r"✅ 1 agent done \(6:0\d\)", block)
+    assert re.fullmatch(r"✅ 1 agent done \(6:0\d\)", as_md(block))
     assert _markdown(edit) == rec["body"] + DIVIDER_SEP + block
     # ORNAMENT, skip-class: the flood gate may refuse it, never queue it.
     assert edit["_kw"] == {"kind": "skip", "priority": "ornament"}
@@ -561,7 +563,7 @@ def test_one_of_two_finishing_settles_its_row_and_both_settle_the_header(
     t1 = time.monotonic() + BG_AGENTS_SETTLE_SECONDS + 0.1
     _settle(run_async, bot, sess, t1)
     (edit,) = [p for m, p in wire.calls[before:]]
-    lines = _markdown(edit).split("\n\n")[-4:]
+    lines = [as_md(line) for line in _markdown(edit).split("\n\n")[-4:]]
     assert lines[0] == "⏳ 1 agent working"
     assert re.fullmatch(r"✓ 🤖 \*\*pipeline-runner\*\* · done \(\d+:\d\d\)", lines[1])
     assert lines[2:] == ["○ 🤖 **ship-reviewer**",
@@ -576,7 +578,7 @@ def test_one_of_two_finishing_settles_its_row_and_both_settle_the_header(
     _settle(run_async, bot, sess, t1 + 30)
     edits = [p for m, p in wire.calls[before:]]
     assert len(edits) == 2
-    assert re.fullmatch(r"✅ 2 agents done \(6:0\d\)", _last_line(_markdown(edits[-1])))
+    assert re.fullmatch(r"✅ 2 agents done \(6:0\d\)", as_md(_last_line(_markdown(edits[-1]))))
     assert sess.agents_lines == []
 
 
@@ -685,7 +687,7 @@ def test_the_monitor_scan_makes_the_edit(mk_bot, run_async, wire, monkeypatch):
     run_async(_bounded(SessionMonitor(bot.registry, _notify)._scan()))
     assert seen.count("agents_line_done") == 1
     assert re.fullmatch(r"✅ 1 agent done \(5:0\d\)",
-                        _last_line(_markdown(wire.of("editMessageText")[-1])))
+                        as_md(_last_line(_markdown(wire.of("editMessageText")[-1]))))
 
 
 def test_a_deleted_answer_is_never_retried(mk_bot, run_async, wire, monkeypatch):
@@ -846,7 +848,7 @@ def test_two_answers_carrying_the_line_are_each_settled_once(
     _settle(run_async, bot, sess, later)
     edits = [p for m, p in wire.calls[before:] if m == "editMessageText"]
     assert sorted(e["message_id"] for e in edits) == sorted(ids)
-    assert all(_last_line(_markdown(e)).startswith("✅ 1 agent done")
+    assert all(as_md(_last_line(_markdown(e))).startswith("✅ 1 agent done")
                for e in edits)
     assert sess.agents_lines == []
     _settle(run_async, bot, sess, later + 3600)

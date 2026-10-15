@@ -29,6 +29,7 @@ from aipager import preferences as prefs
 from aipager.bot.animation import FINAL_VERB, _RICH_LIMIT, build_stream_card_ex
 from aipager.bot.notify import _MERGED_SEPARATOR
 from aipager.state import Status, TrackedSession
+from tests.footer_text import unfooter
 
 
 def _sess(label="dev", *, scope_chat_id=555, busy_msg_id=42):
@@ -61,7 +62,7 @@ def _wire_bot(mk_bot):
 
 
 def _md(calls, method):
-    return [p["rich_message"]["markdown"] for m, p in calls if m == method]
+    return [unfooter(p["rich_message"]["markdown"]) for m, p in calls if m == method]
 
 
 def _finish(bot, run_async, sess, answer="the answer"):

@@ -28,6 +28,7 @@ from aipager.bot.animation import (
     _strip_details_tags,
     _tool_fold_summary,
 )
+from tests.footer_text import status_md
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -100,7 +101,8 @@ def test_card_status_rides_on_the_last_line():
     sess.tool_history = [("Bash: ls", True)]
     sess.stream_commentary = [(0, "body text")]
     status = build_stream_card(sess, "Working").rpartition("\n\n")[2]
-    assert status == "⏳ **dev** · Working · 0:07 · $0.25 · Bash ×1"
+    # Small text: a footer block, its HTML (operator, 2026-10-15).
+    assert status == "<footer>⏳ <b>dev</b> · Working · 0:07 · $0.25 · Bash ×1</footer>"
 
 
 # ── build_stream_card: status-line segments ─────────────────────────────────
@@ -202,16 +204,18 @@ def test_card_label_asterisk_escaped():
     sess = _sess()
     sess.label = "my*project"
     card = build_stream_card(sess, "Working")
-    # The raw asterisk must not appear unescaped in the header
-    # (it would break the **label** bold formatting)
-    assert "my\\*project" in card
+    # The status line is a footer, HTML: the star is just a star inside the
+    # bold, never the end of it (nor a Markdown escape shown as written).
+    assert "<b>my*project</b>" in card
+    assert "my\\*project" not in card
 
 
 def test_card_label_backtick_escaped():
     sess = _sess()
     sess.label = "my`project"
     card = build_stream_card(sess, "Working")
-    assert "my\\`project" in card
+    assert "<b>my`project</b>" in card
+    assert "my\\`project" not in card
 
 
 # ── build_stream_card: purity ─────────────────────────────────────────────────
@@ -258,7 +262,7 @@ def test_card_truncation_status_line_preserved():
     sess.tool_history = [("Bash: " + "y" * 40_000, True)]
     card = build_stream_card(sess, "Working")
     assert len(card.encode("utf-8")) <= 32768
-    status = card.rstrip().splitlines()[-1]
+    status = status_md(card)
     assert status.startswith("⏳ **dev** · Working ·")
     assert status.endswith("Bash ×1")
 
@@ -1032,8 +1036,7 @@ def test_final_card_footer_is_settled_not_hourglass():
     sess = _sess()
     sess.tool_history = [("Read: a.py", True)]
     card = build_stream_card(sess, "Done", final=True)
-    footer = card.rsplit("\n\n", 1)[-1]
-    assert footer.startswith("✅")
+    assert status_md(card).startswith("✅")
 
 
 def test_final_card_folds_the_older_run_keeping_commentary_visible():
@@ -1543,7 +1546,7 @@ def test_trimming_the_history_shifts_the_card_anchors():
 def _header(card: str) -> str:
     """The status line — now the card's LAST element
     ("status-line-at-card-bottom")."""
-    return card.rsplit("\n\n", 1)[-1]
+    return status_md(card)
 
 
 def test_waiting_header_single_agent_no_types_over_three():
@@ -1597,7 +1600,7 @@ def test_waiting_body_is_the_same_timeline_with_a_waiting_status_line():
     sess.tool_history = [("Bash: ls", True)]
     waiting_card = build_stream_card(sess, "Working", waiting=True)
     normal_card = build_stream_card(sess, "Whatever", waiting=False)
-    status = waiting_card.splitlines()[-1]
+    status = status_md(waiting_card)
     assert status.startswith("🔄")
     assert "still working" in status
     assert "1 agent (Explore)" in status
@@ -1614,7 +1617,7 @@ def test_waiting_status_line_survives_truncation():
     sess.tool_history = [(f"Bash: cmd-{i}", True) for i in range(400)]
     card = build_stream_card(sess, "Working", waiting=True)
     assert len(card.encode("utf-8")) <= 32768
-    status = card.splitlines()[-1]
+    status = status_md(card)
     assert status.startswith("🔄")
     assert "still working" in status
 
@@ -1648,7 +1651,7 @@ def test_waiting_status_during_grace_says_finishing_up():
     sess.job_grace_until = 10**12  # far future; table empty
     sess.tool_history = [("Bash: ls", True)]
     card = build_stream_card(sess, "Working", waiting=True)
-    status = card.splitlines()[-1]
+    status = status_md(card)
     assert status.startswith("🔄")
     assert "finishing up" in status
     assert "0 agent" not in card
@@ -2086,7 +2089,7 @@ def test_property_sweep_every_generated_shape_holds_both_budgets_and_status_last
         )
         assert len(card) <= _CARD_CHAR_BUDGET
         assert len(card.encode("utf-8")) <= 32_768
-        last_line = card.rstrip("\n").splitlines()[-1] if card else ""
+        last_line = status_md(card) if card else ""
         mark = "✅" if final else ("\U0001f504" if waiting else "⏳")
         assert last_line.startswith(mark), (seed, card[-120:])
 
@@ -2104,9 +2107,9 @@ def test_status_line_is_last_on_every_frame():
     final = build_stream_card(sess, "Done", final=True)
     sess.active_subagents["a1"] = {"type": "Explore", "started_at": 1.0}
     waiting = build_stream_card(sess, "Working", waiting=True)
-    assert busy.splitlines()[-1].startswith("⏳ **omni** ·")
-    assert final.splitlines()[-1].startswith("✅ **omni** ·")
-    assert waiting.splitlines()[-1].startswith("🔄 **omni** ·")
+    assert status_md(busy).startswith("⏳ **omni** ·")
+    assert status_md(final).startswith("✅ **omni** ·")
+    assert status_md(waiting).startswith("🔄 **omni** ·")
     # ...and nothing status-shaped at the top: the story leads.
     for card in (busy, final, waiting):
         assert card.startswith("> opening prose")
@@ -2163,7 +2166,7 @@ def test_status_line_survives_every_shedding_shape():
     for card in (folded, dropped_whole, backstop):
         assert len(card) <= _CARD_CHAR_BUDGET
         assert len(card.encode("utf-8")) <= 32768
-        assert card.splitlines()[-1].startswith("⏳ **omni** ·")
+        assert status_md(card).startswith("⏳ **omni** ·")
     assert "<details" in folded and "tool call" in folded
     assert "BIG-00" not in dropped_whole and "BIG-05" in dropped_whole
     assert backstop.startswith("…")
@@ -2190,7 +2193,7 @@ def test_reserve_keeps_the_card_clean_across_the_ceiling_boundary():
         card = build_stream_card(sess, "Working")
         assert len(card) <= _CARD_CHAR_BUDGET, n
         assert len(card.encode("utf-8")) <= 32768, n
-        assert card.splitlines()[-1].startswith("⏳ **omni** ·"), n
+        assert status_md(card).startswith("⏳ **omni** ·"), n
 
 
 def test_newest_content_and_agent_row_survive_extreme_pressure():
@@ -2232,7 +2235,7 @@ def test_newest_content_and_agent_row_survive_extreme_pressure():
     assert "worker" in card                          # rev-iter1-006
     assert "OLD-NARRATIVE" not in card               # oldest still yields first
     assert len(card) <= 8_800
-    assert card.rstrip().splitlines()[-1].startswith("\u23f3 **probe** \u00b7")
+    assert status_md(card).startswith("\u23f3 **probe** \u00b7")
 
 
 def test_chop_never_leaves_unbalanced_details_markup_around_an_agent_row():
@@ -2301,7 +2304,7 @@ def test_no_dangling_details_tag_across_a_family_of_pressured_shapes():
                 assert card.count("<details>") == card.count("</details>"), shape
                 assert "</details>" not in card.split("<details>")[0], shape
                 assert len(card) <= 8_800, shape
-                assert card.rstrip().splitlines()[-1].startswith("⏳ "), shape
+                assert status_md(card).startswith("⏳ "), shape
 
 
 def test_a_row_whose_text_contains_a_close_tag_costs_no_content():
@@ -2325,4 +2328,4 @@ def test_a_row_whose_text_contains_a_close_tag_costs_no_content():
     clean, poisoned = _card(False), _card(True)
     assert poisoned.count("✅ `Grep") == clean.count("✅ `Grep")
     assert len(poisoned) >= len(clean) - 40   # same card, give or take the row
-    assert poisoned.rstrip().splitlines()[-1].startswith("⏳ **probe** ·")
+    assert status_md(poisoned).startswith("⏳ **probe** ·")

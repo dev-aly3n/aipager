@@ -28,6 +28,7 @@ from tests.i18n_ml2_bb import (
     code_segments,
     strip_marks,
 )
+from tests.footer_text import as_md
 
 FORM_OF = {1: "one", 21: "one", 2: "few", 22: "few",
            5: "many", 11: "many", 12: "many", 25: "many"}
@@ -140,7 +141,7 @@ def busy():
 
 
 def _status_line(card):
-    return card.rstrip("\n").rsplit("\n", 1)[-1]
+    return as_md(card.rstrip("\n").rsplit("\n", 1)[-1])
 
 
 def test_persian_card_clock_in_persian_digits(busy):

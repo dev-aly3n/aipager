@@ -16,6 +16,7 @@ from aipager.bot.animation import build_stream_card_ex
 from aipager.bot.divider import DIVIDER_SEP
 from aipager.state import Status, TrackedSession
 from tests import answer_status_bb as bb
+from tests.footer_text import as_md
 
 A1 = "a505c081ca3926ed5"
 A2 = "ac1d54c85d78f59ea"
@@ -150,7 +151,7 @@ def _card_sess(rows=None):
 def test_a_card_ends_with_divider_then_status(kw, sigil):
     card, _ = build_stream_card_ex(_card_sess(), "Working", **kw)
     body, _, status = card.rpartition(DIVIDER_SEP)
-    assert (body != "", status.startswith(f"{sigil} **frontend**"), "\n" in status) == \
+    assert (body != "", as_md(status).startswith(f"{sigil} **frontend**"), "\n" in status) == \
         (True, True, False)
 
 
@@ -163,7 +164,8 @@ def test_a_card_has_one_divider(kw, sigil):
 @pytest.mark.parametrize("kw,sigil", FRAMES, ids=FRAME_IDS)
 def test_an_empty_card_is_its_status_line_alone(kw, sigil):
     card, _ = build_stream_card_ex(_card_sess([]), "Working", **kw)
-    assert ("---" in card.split("\n"), card.startswith(f"{sigil} **frontend**")) == (False, True)
+    assert ("---" in card.split("\n"), as_md(card).startswith(f"{sigil} **frontend**")) == (
+        False, True)
 
 
 @pytest.mark.parametrize("kw,sigil", FRAMES, ids=FRAME_IDS)
@@ -171,7 +173,7 @@ def test_a_card_with_folds_still_ends_divider_status(kw, sigil):
     s = _card_sess([(f"Bash: step-{i}", True) for i in range(20)])
     s.stream_commentary = [(0, "Phase one."), (6, "Phase two."), (12, "Phase three.")]
     card, _ = build_stream_card_ex(s, "Working", **kw)
-    assert card.rpartition(DIVIDER_SEP)[2].startswith(f"{sigil} **frontend**")
+    assert as_md(card.rpartition(DIVIDER_SEP)[2]).startswith(f"{sigil} **frontend**")
 
 
 def test_a_card_with_a_helper_row_ends_divider_status():
@@ -182,7 +184,7 @@ def test_a_card_with_a_helper_row_ends_divider_status():
         "activity": "Read: /a.py", "started_at": time.monotonic() - 12,
         "history_idx": len(s.tool_history) - 1, "tools": ["Read: /a.py"]}
     card, _ = build_stream_card_ex(s, "Working")
-    assert card.rpartition(DIVIDER_SEP)[2].startswith("\u23f3 **frontend**")
+    assert as_md(card.rpartition(DIVIDER_SEP)[2]).startswith("\u23f3 **frontend**")
 
 
 def test_the_kept_card_in_the_card_layout_ends_divider_status(bot, sess, wire, run_async):

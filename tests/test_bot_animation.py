@@ -23,6 +23,7 @@ from aipager.bot.animation import (
     build_stream_card,
     build_stream_card_ex,
 )
+from tests.footer_text import status_md
 
 
 # ===== _safe_edit_callback ===============================================
@@ -528,7 +529,7 @@ def test_send_busy_and_animate_reclaims_when_job_background_open(
     assert [c[0] for c in seen] == ["edit", "send"]
     _, msg_id, markdown, kw, task_at_edit, _ = seen[0]
     assert msg_id == 99
-    assert markdown.splitlines()[-1].startswith("✅")
+    assert status_md(markdown).startswith("✅")
     assert "still working" not in markdown
     assert kw["reply_markup"] is None  # Stop button comes off
     assert _INTERIM in markdown  # the interim prose stays in the card

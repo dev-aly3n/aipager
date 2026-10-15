@@ -12,6 +12,7 @@ import asyncio
 from aipager import preferences as prefs
 from aipager.session_monitor import SessionMonitor
 from aipager.state import AGENTS_LINE_EDIT_INTERVAL
+from tests.footer_text import as_md, unfooter
 
 CHAT = 256113222
 DESC = "run the tests"
@@ -51,7 +52,7 @@ def _answers(r) -> list[str]:
 
 
 def _last_line(text: str) -> str:
-    return text.rstrip().splitlines()[-1]
+    return as_md(text.rstrip().splitlines()[-1])
 
 
 async def _job_waiting(r, *, agent=False, desc=DESC, task_id="bshell1"):
@@ -145,7 +146,7 @@ def test_bb_mixed_waiting_card_wording(replay, vloop, monkeypatch):
 
 def test_bb_mixed_answer_line_wording(replay, vloop, monkeypatch):
     snap = _waiting(replay, vloop, monkeypatch, agent=True)
-    blocks = snap["answers"][0].rstrip().split("\n\n")
+    blocks = unfooter(snap["answers"][0]).rstrip().split("\n\n")
     assert blocks[-3:] == ["⏳ 1 agent working · 🖥 1 shell running",
                            "○ 🤖 **pipeline-runner**",
                            "Results from the agents will follow here."]

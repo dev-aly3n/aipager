@@ -29,6 +29,7 @@ from aipager.bot.divider import (
     PLAIN_DIVIDER,
     without_dividers,
 )
+from aipager.bot.footer import footer_block, without_last_footer
 from aipager.bot import reactions
 from aipager.bot.sibling_text import shown
 from aipager.bot.dashboard import PIN_NEEDS_INPUT, new_prompt_token
@@ -137,6 +138,12 @@ _BACKGROUND_TASKS: set = set()
 # per the same reasoning the header-skip logic below already uses for
 # `card` layout). A plain-text copy shows PLAIN_DIVIDER in its place.
 _MERGED_SEPARATOR = DIVIDER
+
+
+def _drawn_block(block: str) -> str:
+    """The agents block as drawn under an answer: small text, each line a
+    footer block (operator, 2026-10-15); nothing when there is none."""
+    return footer_block(block) if block else ""
 
 
 def _with_agents_block(text: str, line: str) -> str:
@@ -452,17 +459,19 @@ class NotifyMixin:
         # card's status line at its end, the answer's result line at its
         # start ("session-name-on-every-message") — so the merged shape
         # reads the same as the two-message one.
-        combined = (
-            f"{card_md}\n\n{_MERGED_SEPARATOR}\n\n"
-            f"{_result_line_md(sess.label)}\n\n{answer}"
-            if answer else card_md
-        )
+        def _merged(card: str) -> str:
+            return (f"{card}\n\n{_MERGED_SEPARATOR}\n\n"
+                    f"{_result_line_md(sess.label)}\n\n{answer}" if answer else card)
+
+        combined = _merged(card_md)
         # The held copy (a mute below) never carries the ⏳ line: it goes
         # out late, and a line frozen into it could not be settled. Its
         # plain-text copy (the last resort once rich delivery keeps
         # failing) shows a line of its own where a divider is.
         held = combined
-        held_plain = without_dividers(held, PLAIN_DIVIDER)
+        # Only the card's own status line is a footer to strip: the answer
+        # is Claude's, a "<footer>" in it stays as written.
+        held_plain = without_dividers(_merged(without_last_footer(card_md)), PLAIN_DIVIDER)
         if agents:
             # Room for the block's largest form, so no later edit of it can
             # push this message past the ceiling.
@@ -584,8 +593,8 @@ class NotifyMixin:
         tr = i18n.for_sess(sess).directed(rtl)
         rec = {"items": items, "ids": [item["id"] for item in items],
                "ends": {}, "sent_at": now}
-        return {"line": _agents_line.render_block(
-                    self._agents_view(sess, rec, now), tr),
+        return {"line": _drawn_block(_agents_line.render_block(
+                    self._agents_view(sess, rec, now), tr)),
                 "items": items, "ids": rec["ids"], "sent_at": now,
                 "reserve": _agents_line.reserve_bytes(tr)}
 
@@ -698,9 +707,9 @@ class NotifyMixin:
             # replace the card with the old answer. Never; wait.
             return False
         # The answer's direction, kept with it (`_remember_agents_line`).
-        block = _agents_line.render_block(
+        block = _drawn_block(_agents_line.render_block(
             self._agents_view(sess, rec, now),
-            i18n.for_sess(sess).directed(rec.get("is_rtl")))
+            i18n.for_sess(sess).directed(rec.get("is_rtl"))))
         if block == rec["shown"]:
             return final
         if not final and block == rec.get("refused"):
@@ -710,7 +719,9 @@ class NotifyMixin:
         if (len(text.encode("utf-8")) > _RICH_LIMIT
                 or (len(text) > _CARD_CHAR_BUDGET and len(text) > len(shown))):
             # Never past the ceiling, never longer past Telegram's fold:
-            # an ornament that does not fit is skipped.
+            # an ornament that does not fit is skipped. The block is
+            # measured as sent, its footer tags and entities included
+            # (more than Telegram shows): it can only be skipped sooner.
             log.info("[%s] agents block: the edit would not fit - skipped",
                      sess.label)
             if final:

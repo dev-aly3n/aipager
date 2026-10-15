@@ -28,6 +28,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from aipager.i18n.locales import LOCALES
+from tests.footer_text import unfooter
 
 #: The pinned single chat of the test config (``_pin_single_chat_config``).
 CHAT = 256113222
@@ -99,9 +100,11 @@ APPEARANCE_NEW_SURFACES = frozenset({"settings.appearance"})
 
 
 def without_card_divider(value):
-    """*value* (a card surface's list of texts) without the divider above
-    each card's status line, as goldens recorded on older bases have it."""
-    return [v.replace("\n\n---\n\n", "\n\n") for v in value]
+    """*value* (a card surface's list of texts) as goldens recorded on older
+    bases have it: without the divider above each card's status line, and
+    (2026-10-15) with that status line in Markdown again rather than drawn
+    as a footer block (small text), and nothing else changed."""
+    return [unfooter(v).replace("\n\n---\n\n", "\n\n") for v in value]
 
 
 def without_appearance_row(value):

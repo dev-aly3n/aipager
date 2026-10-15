@@ -13,6 +13,7 @@ from aipager.bot.animation import build_stream_card_ex
 from aipager.bot.divider import DIVIDER_SEP
 from aipager.state import Status, TrackedSession
 from tests import answer_status_bb as bb
+from tests.footer_text import as_md
 
 CARD_CHARS = 8800
 RICH_BYTES = 32768
@@ -57,7 +58,7 @@ def test_a_card_stays_within_the_byte_ceiling(n, row, kw):
 @pytest.mark.parametrize("n", [40, 70, 400], ids=lambda n: f"n{n}")
 def test_a_card_at_the_budget_edge_keeps_its_divider_and_status(n, row, kw):
     card = _card(n, ROWS[row], kw)
-    assert card.rpartition(DIVIDER_SEP)[2].split(" ", 1)[1].startswith("**frontend**")
+    assert as_md(card.rpartition(DIVIDER_SEP)[2]).split(" ", 1)[1].startswith("**frontend**")
 
 
 def test_the_char_sweep_reaches_the_ceiling():

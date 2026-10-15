@@ -24,6 +24,7 @@ from telegram.error import RetryAfter
 from aipager import agent_tree, bg_shells, flood_policy, i18n, preferences
 from aipager.bot import card_rows
 from aipager.bot.divider import DIVIDER_SEP, without_dividers
+from aipager.bot.footer import footer, without_last_footer
 from aipager.i18n import Msg, Plural, Safe, Span
 from aipager.bot.keyboards import LOADING, OPTION, PERM_NEEDED
 from aipager.clockfmt import elapsed as clock
@@ -1246,8 +1247,11 @@ def _assemble_card(body: str, status: str) -> str:
     """Join the card's parts, status LAST ("status-line-at-card-bottom"),
     with Telegram's divider line between them (a blank line on both
     sides: rich markdown collapses a single newline into a space, and a
-    ``---`` right under a line would make it a heading). A card with no
-    body is its status line alone."""
+    ``---`` right under a line would make it a heading). The status line
+    is small text, a footer block (operator, 2026-10-15: what is under the
+    divider is footer text). A card with no body is its status line
+    alone."""
+    status = footer(status)
     return f"{body}{DIVIDER_SEP}{status}" if body else status
 
 
@@ -1481,8 +1485,10 @@ def build_stream_card_ex(
     # may use — both units, since _fit_sections enforces the char and
     # byte ceilings in the same pass (no separate outer byte pass here).
     # The peer line and its join are reserved the same way.
-    reserve_chars = len(status) + len(DIVIDER_SEP)
-    reserve_bytes = (len(status.encode("utf-8"))
+    # Measured as drawn: a footer block, its HTML longer than the line.
+    drawn = footer(status)
+    reserve_chars = len(drawn) + len(DIVIDER_SEP)
+    reserve_bytes = (len(drawn.encode("utf-8"))
                      + len(DIVIDER_SEP.encode("utf-8")))
     if peer_line:
         reserve_chars += len(peer_line) + len(_ROW_SEP)
@@ -2487,7 +2493,8 @@ class AnimationMixin:
                     # Plain text has no divider: a "---" would show as
                     # it is, so it goes.
                     await self._app.bot.edit_message_text(
-                        without_dividers(_strip_details_tags(markdown)),
+                        without_last_footer(
+                            without_dividers(_strip_details_tags(markdown))),
                         chat_id=int(resolve_chat_id(sess)),
                         message_id=int(sess.busy_msg_id),
                         reply_markup=reply_markup,

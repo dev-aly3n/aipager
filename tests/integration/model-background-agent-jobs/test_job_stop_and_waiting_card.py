@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from aipager.bot import animation
 from aipager.state import Status, TrackedSession
+from tests.footer_text import unfooter
 
 
 def _waiting_sess(*, n_agents=1, types=("Explore",), elapsed_s=260):
@@ -32,14 +33,14 @@ def _waiting_sess(*, n_agents=1, types=("Explore",), elapsed_s=260):
 
 def test_waiting_header_singular_agent_count():
     sess = _waiting_sess(n_agents=1, types=("Explore",), elapsed_s=260)
-    out = animation.build_stream_card(sess, "Verb", waiting=True)
+    out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
     assert "1 agent" in out
     assert "1 agents" not in out
 
 
 def test_waiting_header_plural_agent_count():
     sess = _waiting_sess(n_agents=2, types=("Explore", "Plan"), elapsed_s=260)
-    out = animation.build_stream_card(sess, "Verb", waiting=True)
+    out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
     assert "2 agents" in out
 
 
@@ -49,22 +50,22 @@ def test_waiting_status_never_says_finished():
     "waiting on background work" phrasing folded into it when the header
     and footer were unified into one bottom line."""
     sess = _waiting_sess()
-    out = animation.build_stream_card(sess, "Verb", waiting=True)
+    out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
     assert "Finished" not in out
     assert "still working" in out
-    assert out.rstrip().splitlines()[-1].startswith("🔄")
+    assert out.splitlines()[-1].startswith("🔄")
 
 
 def test_waiting_header_shows_types_for_one_to_three_distinct():
     sess = _waiting_sess(n_agents=2, types=("Explore", "Plan"), elapsed_s=10)
-    out = animation.build_stream_card(sess, "Verb", waiting=True)
+    out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
     assert "Explore" in out
     assert "Plan" in out
 
 
 def test_waiting_header_omits_types_beyond_three_distinct():
     sess = _waiting_sess(n_agents=4, types=("A", "B", "C", "D"), elapsed_s=10)
-    out = animation.build_stream_card(sess, "Verb", waiting=True)
+    out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
     # The parenthetical type list must be absent once distinct types > 3 —
     # none of the fabricated single-letter type names may appear bracketed.
     assert not re.search(r"\(\s*[ABCD](,\s*[ABCD]){1,3}\s*\)", out)
@@ -72,26 +73,26 @@ def test_waiting_header_omits_types_beyond_three_distinct():
 
 def test_waiting_header_elapsed_under_60s_reads_zero_minutes_clock():
     sess = _waiting_sess(elapsed_s=45)
-    out = animation.build_stream_card(sess, "Verb", waiting=True)
+    out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
     assert re.search(r"still working · 0:4[0-9]$", out), out
 
 
 def test_waiting_header_elapsed_at_60s_boundary_reads_one_minute_clock():
     sess = _waiting_sess(elapsed_s=60)
-    out = animation.build_stream_card(sess, "Verb", waiting=True)
+    out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
     assert re.search(r"still working · 1:0[0-9]$", out), out
 
 
 def test_waiting_header_elapsed_just_under_60s_boundary_reads_0_59():
     sess = _waiting_sess(elapsed_s=59)
-    out = animation.build_stream_card(sess, "Verb", waiting=True)
+    out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
     assert re.search(r"still working · 0:59$", out), out
 
 
 def test_waiting_status_omits_elapsed_when_busy_started_at_falsy():
     sess = _waiting_sess()
     sess.busy_started_at = 0.0
-    out = animation.build_stream_card(sess, "Verb", waiting=True)
+    out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
     assert "still working" in out
 
 

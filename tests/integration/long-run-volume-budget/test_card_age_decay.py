@@ -30,6 +30,7 @@ from aipager.session_monitor import (
     card_stale_after,
 )
 from aipager.state import Status, TrackedSession
+from tests.footer_text import as_md
 
 CHAT = 256113222
 MIN = 60.0
@@ -60,7 +61,7 @@ def _gaps(edits) -> list[float]:
 
 
 def _status(markdown: str) -> str:
-    return markdown.rsplit("\n", 1)[-1]
+    return as_md(markdown.rsplit("\n", 1)[-1])
 
 
 def _run_animator(vloop, bot, sess, seconds: float) -> None:

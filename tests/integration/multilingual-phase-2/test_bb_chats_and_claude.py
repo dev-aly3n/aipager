@@ -37,6 +37,7 @@ from tests.i18n_ml2_bb import (
     message,
     toast_texts,
 )
+from tests.footer_text import status_md
 
 
 @pytest.fixture
@@ -76,7 +77,7 @@ def test_the_unset_dm_card_is_english(three_chats):
 
 def test_the_unset_dm_card_is_todays_english(three_chats):
     card = animation.build_stream_card(three_chats[DM_B], "Working")
-    assert card.endswith("⏳ **b1** · Working · 0:30 · Read ×1")
+    assert status_md(card) == "⏳ **b1** · Working · 0:30 · Read ×1"
 
 
 @pytest.mark.parametrize("chat, want, other", [(DM_A, CYRILLIC, PERSIAN),

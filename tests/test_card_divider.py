@@ -6,6 +6,7 @@ form ever carries a ``---`` line of aipager's."""
 
 from __future__ import annotations
 
+import re
 import time
 from unittest.mock import AsyncMock
 
@@ -22,6 +23,7 @@ from aipager.bot.animation import (
 from aipager.bot.divider import DIVIDER_SEP, PLAIN_DIVIDER
 from aipager.bot.rich_message import RichMessageFallbackRequired, RichMessageFloodBanned
 from aipager.state import Status, TrackedSession
+from tests.footer_text import as_md
 
 
 def _sess(rows=(("Bash: ls", True),), label="jim"):
@@ -34,9 +36,12 @@ def _sess(rows=(("Bash: ls", True),), label="jim"):
 
 
 def _divided(card: str) -> tuple[str, str]:
+    """The card's body, and its status line under the divider read back
+    as Markdown (it is a footer block, small text: :func:`as_md` fails
+    unless it is one)."""
     body, sep, status = card.rpartition(DIVIDER_SEP)
     assert sep, card
-    return body, status
+    return body, as_md(status)
 
 
 @pytest.mark.parametrize("final", [False, True], ids=["live", "final"])
@@ -105,6 +110,8 @@ def test_the_plain_degrade_drops_the_divider(mk_bot, run_async, monkeypatch):
     assert run_async(bot._edit_busy_rich(sess, "Working")) is True
     text = bot._app.bot.edit_message_text.await_args.args[0]
     assert "---" not in text
+    # Nor a footer's tags: the status line's text alone.
+    assert "<footer>" not in text and "<b>" not in text
     # The status line still follows the timeline after one blank line.
     assert text.startswith("✅ `Bash: ls`\n\n✅ `Read: /a.py`\n\n⏳ ")
 
@@ -140,12 +147,13 @@ def test_the_merged_message_has_two_dividers_and_no_dash_row(mk_bot, run_async,
     parts = text.split(DIVIDER_SEP)
     assert len(parts) == 3
     assert parts[0] == "✅ `Bash: ls`"
-    assert parts[1].startswith("✅ **jim** · Done")
+    assert as_md(parts[1].rsplit("\n\n", 1)[-1]).startswith("✅ **jim** · Done")
     assert parts[2] == "💬 **jim**\n\nthe answer"
 
 
+@pytest.mark.parametrize("answer", ["the answer", ""], ids=["answer", "no-answer"])
 def test_the_held_merged_plain_copy_shows_a_text_line_for_each_divider(
-    mk_bot, run_async, monkeypatch,
+    mk_bot, run_async, monkeypatch, answer,
 ):
     bot = mk_bot()
     sess = _merged_sess(bot)
@@ -154,14 +162,56 @@ def test_the_held_merged_plain_copy_shows_a_text_line_for_each_divider(
     held = []
     monkeypatch.setattr(bot, "_hold_answer",
                         lambda _s, rich, plain, *_a, **_k: held.append((rich, plain)))
-    assert run_async(bot._send_merged_final(sess, "the answer")) is False
+    assert run_async(bot._send_merged_final(sess, answer)) is False
     ((rich, plain),) = held
-    assert rich.count(DIVIDER_SEP) == 2
+    assert rich.count(DIVIDER_SEP) == (2 if answer else 1)
     assert "---" not in plain
-    assert plain == rich.replace(DIVIDER_SEP, f"\n\n{PLAIN_DIVIDER}\n\n")
+    # Nor a footer's tags: its text alone (the card's status line), with or
+    # without an answer under it.
+    assert "<footer>" in rich and "<footer>" not in plain and "<b>" not in plain
+    status = re.search(r"<footer>(.*?)</footer>", rich).group(1)
+    assert plain == rich.replace(DIVIDER_SEP, f"\n\n{PLAIN_DIVIDER}\n\n").replace(
+        f"<footer>{status}</footer>", re.sub(r"</?b>", "", status))
 
 
 def test_the_merged_separator_is_the_divider():
     assert notify._MERGED_SEPARATOR == "---"
-    assert animation._assemble_card("body", "status") == "body\n\n---\n\nstatus"
-    assert animation._assemble_card("", "status") == "status"
+    assert animation._assemble_card("body", "status") == (
+        "body\n\n---\n\n<footer>status</footer>")
+    assert animation._assemble_card("", "status") == "<footer>status</footer>"
+
+
+# ---- a plain copy strips only aipager's own footer ----------------------------------------
+
+CLAUDES_FOOTER = "<footer>&copy; Acme &amp; co</footer>"
+
+
+def test_the_plain_degrade_keeps_claudes_footer_as_written(mk_bot, run_async, monkeypatch):
+    """Claude's prose with a literal <footer> (web work) is Claude's: only
+    the status line, the footer aipager drew, loses its tags."""
+    bot = mk_bot()
+    sess = _sess(rows=[("Bash: ls", True), ("Read: /a.py", True)])
+    sess.stream_commentary = [(1, f"Use {CLAUDES_FOOTER} here.")]
+    monkeypatch.setattr("aipager.bot.animation.edit_message_text_rich",
+                        AsyncMock(side_effect=RichMessageFallbackRequired("transport")))
+    bot._app.bot.edit_message_text = AsyncMock()
+    assert run_async(bot._edit_busy_rich(sess, "Working")) is True
+    text = bot._app.bot.edit_message_text.await_args.args[0]
+    assert CLAUDES_FOOTER in text
+    assert text.rstrip().rsplit("\n\n", 1)[-1].startswith("⏳ jim · ")
+
+
+def test_the_held_plain_copy_keeps_claudes_footer_as_written(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = _merged_sess(bot)
+    monkeypatch.setattr(notify, "edit_message_text_rich",
+                        AsyncMock(side_effect=RichMessageFloodBanned(555, 60)))
+    held = []
+    monkeypatch.setattr(bot, "_hold_answer",
+                        lambda _s, rich, plain, *_a, **_k: held.append((rich, plain)))
+    answer = f"Put this at the end:\n\n```html\n{CLAUDES_FOOTER}\n```"
+    assert run_async(bot._send_merged_final(sess, answer)) is False
+    ((rich, plain),) = held
+    assert plain.endswith(answer)                       # the answer, as written
+    assert plain.count("<footer>") == 1                 # Claude's alone
+    assert rich.count("<footer>") == 2                  # the status line's and Claude's

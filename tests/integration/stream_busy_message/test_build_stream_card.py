@@ -34,6 +34,7 @@ import pytest
 
 from aipager.state import Status, TrackedSession
 from aipager.bot.animation import build_stream_card
+from tests.footer_text import as_md, status_md
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -226,7 +227,7 @@ def test_card_truncation_head_dropped_status_preserved():
     assert len(card.encode("utf-8")) <= 32_768, "Card exceeds 32 768 UTF-8 bytes"
     assert head_marker not in card, "Head of body was kept instead of being dropped"
     assert tail_marker in card, "Tail of body was dropped; head should have been dropped instead"
-    assert card.rstrip().splitlines()[-1].startswith("⏳ "), (
+    assert status_md(card).startswith("⏳ "), (
         "status line missing after truncation")
 
     # Must be valid UTF-8
@@ -234,7 +235,7 @@ def test_card_truncation_head_dropped_status_preserved():
         card.encode("utf-8").decode("utf-8")
     except UnicodeDecodeError as e:
         pytest.fail(f"Card contains invalid UTF-8 after truncation: {e}")
-    status = card.rstrip().splitlines()[-1]
+    status = as_md(card.rstrip().splitlines()[-1])
     assert status.startswith("⏳")
 
 def test_card_truncation_multibyte_valid_utf8():

@@ -32,6 +32,7 @@ from aipager.dtach import hook_receiver
 from aipager.i18n import Safe, locales
 from aipager.state import SessionRegistry, Status
 from tests import i18n_surfaces as surf
+from tests.footer_text import unfooter
 
 RLM, LRM, FSI, RLI, PDI = "\u200f", "\u200e", "\u2068", "\u2067", "\u2069"
 LTR_LANGS = sorted(c for c, loc in locales.LOCALES.items() if not loc.rtl)
@@ -163,11 +164,11 @@ def test_the_prompt_text_is_the_persons_own(prompt, raw, want):
 @pytest.mark.parametrize("code", RTL_LANGS)
 def test_card_under_english_commentary_reads_left_to_right(code):
     s = _session(commentary=(ENGLISH,))
-    card = animation.build_stream_card(s, "Calculating", tr=i18n.get(code))
+    card = unfooter(animation.build_stream_card(s, "Calculating", tr=i18n.get(code)))
     assert _no_rlm_at_line_start(card)
     assert RLM not in card
     status = _status(card)
-    assert status.startswith("⏳ **" + FSI + "aipager\\_boss" + PDI + "** · " + LRM + RLI)
+    assert status.startswith("⏳ **" + FSI + "aipager_boss" + PDI + "** · " + LRM + RLI)
     agent = [line for line in card.split("\n") if "pipeline-runner" in line][0]
     assert agent.startswith("⏳ " + LRM)          # an agent row opens left to right
     assert animation._card_rtl(s, i18n.get(code)) is False
@@ -176,7 +177,7 @@ def test_card_under_english_commentary_reads_left_to_right(code):
 @pytest.mark.parametrize("code", RTL_LANGS)
 def test_card_under_own_script_commentary_reads_right_to_left(code):
     s = _session(commentary=(OWN_SCRIPT[code],))
-    card = animation.build_stream_card(s, "Calculating", tr=i18n.get(code))
+    card = unfooter(animation.build_stream_card(s, "Calculating", tr=i18n.get(code)))
     assert _status(card).startswith(RLM + "⏳")
     assert LRM not in card and RLI not in card
     assert animation._card_rtl(s, i18n.get(code)) is True
@@ -190,7 +191,7 @@ def test_card_before_commentary_follows_the_prompt_then_the_chat(code, prompt, r
     s = _session(prompt=OWN_SCRIPT[code] if prompt == "own" else prompt)
     s.active_subagents = {}
     s.tool_history = []
-    card = animation.build_stream_card(s, "Working", tr=i18n.get(code))
+    card = unfooter(animation.build_stream_card(s, "Working", tr=i18n.get(code)))
     assert card.startswith(RLM) is rtl
     assert (LRM in card) is (not rtl)
     assert animation._card_rtl(s, i18n.get(code)) is rtl
@@ -207,8 +208,8 @@ def test_commentary_wins_over_the_prompt():
 def test_the_final_card_status_line_reads_left_to_right(code):
     s = _session(prompt=ENGLISH)
     s.active_subagents = {}
-    status = _status(animation.build_stream_card(s, animation.FINAL_VERB, final=True,
-                                                 tr=i18n.get(code)))
+    status = _status(unfooter(animation.build_stream_card(
+        s, animation.FINAL_VERB, final=True, tr=i18n.get(code))))
     tr = i18n.get(code)
     assert status.startswith("✅ **")
     assert " · " + LRM + RLI + str(tr.md(animation._VERB_MSGS["Done"])).strip(RLM) + PDI \
@@ -278,7 +279,8 @@ def _answer(env, summary, *, prompt="", agents=False):
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
     env.run(bot.notify(sess, "idle_prompt", {"summary": summary}))
-    return rich.await_args.args[1], rich.await_args.kwargs["is_rtl"], sess
+    # As shown: the footer blocks under the divider read as their text.
+    return unfooter(rich.await_args.args[1]), rich.await_args.kwargs["is_rtl"], sess
 
 
 @pytest.mark.parametrize("code", RTL_LANGS)
@@ -334,7 +336,7 @@ def test_the_agents_block_keeps_the_answers_direction_when_it_changes(
     edit = AsyncMock(return_value={"message_id": 77})
     monkeypatch.setattr("aipager.bot.notify.edit_message_text_rich", edit)
     run_async(bot._tick_agents_line(sess, rec, surf.NOW + 60))
-    sent = edit.await_args.args[2]
+    sent = unfooter(edit.await_args.args[2])
     assert edit.await_args.kwargs["is_rtl"] is False
     assert RLM not in sent.rsplit("\n\n" + ENGLISH + "\n\n", 1)[1]
 
@@ -399,7 +401,7 @@ def test_each_language_rotates_its_own_verbs(code):
 @pytest.mark.parametrize("code", TRANSLATED)
 def test_the_card_shows_the_chats_verb(code):
     s = _session(commentary=(ENGLISH,))
-    card = animation.build_stream_card(s, "Calculating", tr=i18n.get(code))
+    card = unfooter(animation.build_stream_card(s, "Calculating", tr=i18n.get(code)))
     want = surf_strip(animation._verb(i18n.get(code), "Calculating"))
     assert want in _catalog_values(code, "card.verb.spin_")
     assert want in surf_strip(_status(card)) and "Calculating" not in card
@@ -407,8 +409,8 @@ def test_the_card_shows_the_chats_verb(code):
 
 def test_an_english_card_shows_the_english_verb():
     s = _session(commentary=(ENGLISH,))
-    status = _status(animation.build_stream_card(s, "Noodling", tr=i18n.get("en")))
-    assert status.startswith("⏳ **aipager\\_boss** · Noodling · ")
+    status = _status(unfooter(animation.build_stream_card(s, "Noodling", tr=i18n.get("en"))))
+    assert status.startswith("⏳ **aipager_boss** · Noodling · ")
 
 
 def surf_strip(text: str) -> str:
@@ -548,7 +550,7 @@ def test_the_merged_answer_takes_the_answers_direction(code, script, mk_bot, run
     monkeypatch.setattr(notify, "edit_message_text_rich", edit)
     answer = ENGLISH if script == "english" else OWN_SCRIPT[code]
     assert run_async(bot._send_merged_final(s, answer)) is True
-    text, is_rtl = edit.await_args.args[2], edit.await_args.kwargs["is_rtl"]
+    text, is_rtl = unfooter(edit.await_args.args[2]), edit.await_args.kwargs["is_rtl"]
     # The card's status line: before the divider above the answer's
     # result line (the card has a divider of its own above its status).
     head = text.split(f"\n\n{notify._MERGED_SEPARATOR}\n\n💬", 1)[0]
@@ -635,7 +637,7 @@ def test_the_waiting_card_reads_left_to_right_under_english(code, agents):
     s.status = Status.IDLE
     if not agents:
         s.active_subagents = {}
-    card = animation.build_stream_card(s, "Working", waiting=True, tr=i18n.get(code))
+    card = unfooter(animation.build_stream_card(s, "Working", waiting=True, tr=i18n.get(code)))
     assert RLM not in card and RLI in _status(card)
 
 

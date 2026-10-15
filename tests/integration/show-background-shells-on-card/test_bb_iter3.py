@@ -30,6 +30,7 @@ import pytest
 
 import aipager.bot.rich_message as rm
 from aipager import preferences as prefs
+from tests.footer_text import unfooter
 
 CHAT = 256113222
 DESC = "run the tests"
@@ -99,7 +100,7 @@ def _answer_saying(r, words: str) -> int:
 
 
 def _answer(r, words: str) -> str:
-    return r.chat.answer_texts[_answer_saying(r, words)][-1]
+    return unfooter(r.chat.answer_texts[_answer_saying(r, words)][-1])
 
 
 def _hold_first_answer(monkeypatch, seconds: float) -> None:

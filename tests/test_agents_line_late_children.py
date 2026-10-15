@@ -18,6 +18,7 @@ from aipager.state import (
     Status,
     TrackedSession,
 )
+from tests.footer_text import as_md, footered
 from tests.test_background_agents_line import (
     ANSWER,
     _finish,
@@ -239,9 +240,9 @@ def test_the_answer_shows_the_tree_and_a_late_child_joins_it(mk_bot, run_async, 
     _hook(run_async, recv, sess, "SubagentStart", agent_id=C, agent_type="ship-tester")
     _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
     (sent,) = [p for m, p in wire.calls if m == "sendRichMessage" and ANSWER in _markdown(p)]
-    assert _block_of(_markdown(sent)).split("\n\n")[1:3] == [
-        "○ 🤖 **pipeline-runner** · Write the tests",
-        "- ○ 🤖 **ship-tester** · Write the tests"]
+    assert _block_of(_markdown(sent)).split("\n\n")[1:3] == footered(
+        "○ 🤖 **pipeline-runner** · Write the tests\n\n"
+        "- ○ 🤖 **ship-tester** · Write the tests").split("\n\n")
     # C starts an agent of its own after the answer went out.
     _hook(run_async, recv, sess, "PreToolUse", agent_id=C, agent_type="ship-tester",
           tool_name="Agent", tool_input={"subagent_type": "Explore",
@@ -253,8 +254,8 @@ def test_the_answer_shows_the_tree_and_a_late_child_joins_it(mk_bot, run_async, 
     _settle(run_async, bot, sess, time.monotonic())
     (edit,) = [p for m, p in wire.calls[before:] if m == "editMessageText"]
     block = _block_of(_markdown(edit))
-    assert block.split("\n\n")[0] == "⏳ 3 agents working"
-    assert block.split("\n\n")[2] == (
+    assert block.split("\n\n")[0] == footered("⏳ 3 agents working")
+    assert block.split("\n\n")[2] == footered(
         "- ○ 🤖 **ship-tester** · Find the callers\n"
         "- ○ 🤖 **ship-tester › Explore** · Find the callers")
 
@@ -276,9 +277,10 @@ def test_a_late_child_settles_done_under_its_parent(mk_bot, run_async, wire):
     _settle(run_async, bot, sess, time.monotonic() + BG_AGENTS_SETTLE_SECONDS + 0.1)
     (edit,) = [p for m, p in wire.calls[before:] if m == "editMessageText"]
     lines = _block_of(_markdown(edit)).split("\n\n")
-    assert lines[0] == "⏳ 1 agent working"
-    assert lines[1].startswith("○ 🤖 **pipeline-runner**")
-    assert lines[2].startswith("- ✓ 🤖 **ship-tester** · done (")
+    assert lines[0] == footered("⏳ 1 agent working")
+    assert as_md(lines[1]).startswith("○ 🤖 **pipeline-runner**")
+    assert lines[2].startswith("- ")
+    assert as_md(lines[2][2:]).startswith("✓ 🤖 **ship-tester** · done (")
 
 
 def test_agents_of_an_agent_the_answer_does_not_list_never_join():

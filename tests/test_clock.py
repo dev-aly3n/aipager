@@ -10,6 +10,7 @@ import pytest
 
 from aipager import clockfmt
 from aipager.i18n import clock
+from tests.footer_text import as_md
 
 TABLE = [
     # seconds, unit, shown
@@ -79,7 +80,7 @@ def test_the_final_card_shows_true_seconds():
     sess.scope_kind, sess.scope_chat_id = "dm", 12345
     sess.busy_started_at = time.monotonic() - 1397.5
     sess.card_elapsed_unit = "m"
-    live = build_stream_card(sess, "Working").rsplit("\n", 1)[-1]
-    final = build_stream_card(sess, "Done", final=True).rsplit("\n", 1)[-1]
+    live = as_md(build_stream_card(sess, "Working").rsplit("\n", 1)[-1])
+    final = as_md(build_stream_card(sess, "Done", final=True).rsplit("\n", 1)[-1])
     assert live.endswith(" · 23:00"), live
     assert final.endswith(" · 23:17"), final

@@ -19,6 +19,7 @@ import pytest
 from aipager import clockfmt
 from aipager import preferences as prefs
 from aipager.state import SessionRegistry, Status, TrackedSession
+from tests.footer_text import as_md
 
 
 # ---- the function: unit "s" ------------------------------------------------------
@@ -222,7 +223,8 @@ def _card_sess(age, unit, chat=256113222):
 
 
 def _status_of(card):
-    return card.rpartition("\n\n")[2]
+    """The card's status line (a footer block) read back as Markdown."""
+    return as_md(card.rpartition("\n\n")[2])
 
 
 @pytest.mark.parametrize("age,clock", [

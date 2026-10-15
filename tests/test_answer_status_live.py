@@ -33,15 +33,22 @@ from tests.test_background_agents_line import (
     _agents,
     _finish,
     _hook,
-    _markdown,
+    _markdown as _raw_markdown,
     _receiver,
     _sess,
     _settle,
     _Wire,
     _wire_bot,
 )
+from tests.footer_text import unfooter
 
 PROMISE = "Results from the agents will follow here."
+
+
+def _markdown(payload: dict) -> str:
+    """A sent message's text, its footer blocks (the small text under the
+    divider) read back as Markdown: these checks read the block's lines."""
+    return unfooter(_raw_markdown(payload))
 
 
 @pytest.fixture
@@ -58,9 +65,10 @@ def wire(monkeypatch):
 
 
 def _block(text: str, rec: dict) -> str:
-    """The block of an edit: after the body and the divider under it."""
+    """The block of an edit: after the body and the divider under it, its
+    footer blocks read back as Markdown (tests/footer_text.py)."""
     assert text.startswith(rec["body"] + DIVIDER_SEP)
-    return text[len(rec["body"]) + len(DIVIDER_SEP):]
+    return unfooter(text[len(rec["body"]) + len(DIVIDER_SEP):])
 
 
 def _edits(wire, before=0):
@@ -164,7 +172,7 @@ def test_the_agent_calls_description_is_its_row(mk_bot, run_async, wire):
     assert sess.bg_agents["a1"]["desc"] == "Run the full suite"
     sess.status = Status.IDLE
     rec = _deliver(run_async, bot, sess)
-    assert rec["shown"].split("\n\n")[1] == "○ 🤖 **pipeline-runner** · Run the full suite"
+    assert unfooter(rec["shown"]).split("\n\n")[1] == "○ 🤖 **pipeline-runner** · Run the full suite"
     assert "secret plan" not in rec["shown"]
 
 
@@ -311,7 +319,7 @@ def test_an_older_shell_is_not_listed_a_shell_of_the_job_is(mk_bot, run_async, w
     _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
     (rec,) = sess.agents_lines
     assert rec["ids"] == ["bnew"]
-    assert rec["shown"] == "🖥 1 shell running"
+    assert rec["shown"] == "<footer>🖥 1 shell running</footer>"
     # The pinned bar still counts both.
     assert len(sess.bg_shells) == 2
 

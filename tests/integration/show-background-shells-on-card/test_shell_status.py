@@ -19,6 +19,7 @@ from aipager import session_monitor
 from aipager import state as state_mod
 from aipager.session_monitor import SessionMonitor, resolve_bg_shell_max_track
 from aipager.state import AGENTS_LINE_EDIT_INTERVAL, BG_AGENTS_SETTLE_SECONDS, BG_SHELLS_CAP
+from tests.footer_text import unfooter
 
 CHAT = 256113222
 DESC = "run the tests"
@@ -74,7 +75,8 @@ def _pin(r) -> str:
 
 def _answer(r) -> list[str]:
     """Every version of the scenario's first answer."""
-    return r.chat.answer_texts[min(r.chat.answer_texts)]
+    # As shown: the footer blocks under the divider read as their text.
+    return [unfooter(t) for t in r.chat.answer_texts[min(r.chat.answer_texts)]]
 
 
 def _mock_dtach(monkeypatch) -> None:

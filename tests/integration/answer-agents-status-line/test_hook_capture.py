@@ -207,8 +207,10 @@ def test_an_agents_grep_shows_the_pattern(bot, sess, wire, run_async):
             agent_type="Explore")
     bb.hook(run_async, recv, sess, "PreToolUse", agent_id="a1",
             tool_name="Grep", tool_input={"pattern": "agents_lines"})
-    assert _row_of(_block(run_async, bot, sess, wire), "Explore") == \
-        "○ 🤖 **Explore** · Searching for agents\\_lines"
+    _block(run_async, bot, sess, wire)
+    # Drawn as a footer (HTML): the pattern shows as written, no escape.
+    assert "<footer>○ 🤖 <b>Explore</b> · Searching for agents_lines</footer>" in \
+        bb.answer_raw(wire)
 
 
 def test_the_latest_tool_wins(bot, sess, wire, run_async):

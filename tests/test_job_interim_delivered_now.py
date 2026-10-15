@@ -41,6 +41,7 @@ from aipager.state import (
     SessionRegistry,
     Status,
 )
+from tests.footer_text import unfooter
 
 CHAT = 555
 TRIGGER = 7
@@ -177,7 +178,7 @@ def _settle(run_async, bot, sess, now):
 
 
 def _markdown(payload: dict) -> str:
-    return payload["rich_message"]["markdown"]
+    return unfooter(payload["rich_message"]["markdown"])
 
 
 def _last_line(text: str) -> str:
@@ -226,7 +227,7 @@ def test_the_interim_answer_goes_out_now_with_the_agents_line(
                 if m == "editMessageText" and INTERIM in _markdown(p)]
     # 8.41 keeps that block current.
     (rec,) = sess.agents_lines
-    assert rec["body"] + DIVIDER_SEP + rec["shown"] == text
+    assert unfooter(rec["body"] + DIVIDER_SEP + rec["shown"]) == text
 
 
 def test_the_waiting_card_keeps_its_stop_button(mk_bot, run_async, wire):

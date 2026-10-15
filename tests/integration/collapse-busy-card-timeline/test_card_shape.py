@@ -20,6 +20,7 @@ import time
 
 from aipager.bot.animation import build_stream_card_ex
 from aipager.state import Status, TrackedSession
+from tests.footer_text import status_md
 
 
 def _sess(label="jim"):
@@ -63,7 +64,7 @@ def test_short_turn_card_is_byte_identical_to_before_within_the_ceilings():
     card, _truncated = build_stream_card_ex(sess, "Working")
     assert len(card) <= 8_800
     assert len(card.encode("utf-8")) <= 32_768
-    assert card.rstrip().splitlines()[-1].startswith("⏳ **jim** ·")
+    assert status_md(card).startswith("⏳ **jim** ·")
 
 
 # ---- a long turn's <details> block is exactly what it claims ---------------
@@ -103,7 +104,7 @@ def test_long_turn_status_line_stays_the_cards_last_line():
     sess = _sess()
     sess.tool_history = [(f"Bash: step-{i} " + "z" * 60, True) for i in range(150)]
     card, _truncated = build_stream_card_ex(sess, "Working")
-    assert card.rstrip().splitlines()[-1].startswith("⏳ **jim** ·")
+    assert status_md(card).startswith("⏳ **jim** ·")
 
 
 # ---- an extremely long turn: genuine truncation, both ceilings hold --------
@@ -121,4 +122,4 @@ def test_extremely_long_turn_still_reports_the_status_line_last():
     sess = _sess()
     sess.tool_history = [(f"Bash: step-{i} " + "z" * 300, True) for i in range(500)]
     card, _truncated = build_stream_card_ex(sess, "Working")
-    assert card.rstrip().splitlines()[-1].startswith("⏳ **jim** ·")
+    assert status_md(card).startswith("⏳ **jim** ·")

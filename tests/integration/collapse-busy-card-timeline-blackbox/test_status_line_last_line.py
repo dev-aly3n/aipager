@@ -17,6 +17,7 @@ import time
 
 from aipager.bot.animation import build_stream_card_ex
 from aipager.state import Status, TrackedSession
+from tests.footer_text import status_md
 
 MARK = "\U0001f916"  # 🤖
 FRAMES = [
@@ -33,7 +34,8 @@ def _sess(label="jim"):
 
 
 def _last_line(card):
-    return card.rstrip("\n").splitlines()[-1]
+    """The card's status line, its last line (a footer, read as Markdown)."""
+    return status_md(card)
 
 
 # ---- zero folds -------------------------------------------------------------
@@ -123,7 +125,8 @@ def test_several_folds_status_line_is_last_on_every_frame():
 def test_several_folds_no_block_appears_after_the_status_line():
     sess = _sess_several_folds()
     card, _truncated = build_stream_card_ex(sess, "Working")
-    last = _last_line(card)
+    last = card.rstrip("\n").splitlines()[-1]          # as drawn: where it sits
+    _last_line(card)                                    # and it is the status line
     idx = card.rindex(last)
     tail = card[idx + len(last):]
     assert "<details" not in tail

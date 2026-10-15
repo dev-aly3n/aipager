@@ -22,6 +22,7 @@ from aipager import preferences as prefs
 from aipager.bot import notify as notify_mod
 from aipager.dtach import hook_receiver as hr
 from aipager.state import Status
+from tests.footer_text import unfooter
 
 CHAT = 777
 TRIGGER = 11
@@ -134,11 +135,25 @@ def tick(run_async, bot, sess, now):
 
 
 def md(payload: dict) -> str:
-    return payload["rich_message"]["markdown"]
+    """The message's rich Markdown, its footer blocks (the small text under
+    a divider, 2026-10-15) read back as the Markdown they were drawn from:
+    these checks read the block's lines as written. The footers' own form
+    is pinned in tests/test_footer_text.py."""
+    return unfooter(payload["rich_message"]["markdown"])
 
 
 def answer_text(wire, text=ANSWER) -> str:
     sent = [md(p) for m, p in wire.calls
+            if m in ("sendRichMessage", "editMessageText")
+            and "rich_message" in p and text in md(p)]
+    assert sent, "the answer was never sent"
+    return sent[0]
+
+
+def answer_raw(wire, text=ANSWER) -> str:
+    """The answer's rich Markdown exactly as sent, its footer blocks (HTML)
+    as they are: for checks of what a footer shows."""
+    sent = [p["rich_message"]["markdown"] for m, p in wire.calls
             if m in ("sendRichMessage", "editMessageText")
             and "rich_message" in p and text in md(p)]
     assert sent, "the answer was never sent"

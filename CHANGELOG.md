@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Small text under the dividers.** The busy card's status line and the agents and shells block under an answer are now Telegram's small footer text, so the card's steps and the answer itself stand out. The tree of agents keeps its indent.
+
 ## [1.3.2] - 2026-10-15
 
 ### Added

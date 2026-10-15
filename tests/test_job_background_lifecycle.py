@@ -39,6 +39,7 @@ from aipager.dtach import hook_receiver as hr
 from aipager.dtach import notify_hook as nh
 from aipager import policy_snapshot as ps
 from aipager.state import SessionRegistry, Status
+from tests.footer_text import unfooter
 
 SESSION = "hiva"
 AGENT_ID = "ab2ae82400fc97e4c"
@@ -116,7 +117,7 @@ def test_hiva_sequence_replayed_end_to_end(mk_bot, run_async, tmp_path, monkeypa
 
     rich_sends: list[str] = []
     async def _send_rich(chat_id, content, **kwargs):
-        rich_sends.append(_strip_result_line(content))
+        rich_sends.append(unfooter(_strip_result_line(content)))
         return {"message_id": next_id[0]}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
 
@@ -361,7 +362,7 @@ def test_ishaq_endgame_job_stays_open_through_continuation(
 
     rich_sends: list[str] = []
     async def _send_rich(chat_id, content, **kwargs):
-        rich_sends.append(_strip_result_line(content))
+        rich_sends.append(unfooter(_strip_result_line(content)))
         return {"message_id": next_id[0]}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
 
@@ -474,7 +475,7 @@ def test_final_path_dedup_suppresses_stale_redelivery(
     bot._app.bot.delete_message = AsyncMock(return_value=None)
     rich_sends: list[str] = []
     async def _send_rich(chat_id, content, **kwargs):
-        rich_sends.append(_strip_result_line(content))
+        rich_sends.append(unfooter(_strip_result_line(content)))
         return {"message_id": next_id[0]}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     async def _edit_rich_transport(chat_id, msg_id, markdown, **kwargs):
@@ -679,7 +680,7 @@ def test_double_hop_continuation_spawning_new_agents(
     bot._app.bot.delete_message = AsyncMock(return_value=None)
     rich_sends: list[str] = []
     async def _send_rich(chat_id, content, **kwargs):
-        rich_sends.append(_strip_result_line(content))
+        rich_sends.append(unfooter(_strip_result_line(content)))
         return {"message_id": next_id[0]}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     edit_calls: list[dict] = []
@@ -775,7 +776,7 @@ def test_real_prompt_during_grace_supersedes_and_late_continuation_closes(
     bot._app.bot.delete_message = AsyncMock(return_value=None)
     rich_sends: list[str] = []
     async def _send_rich(chat_id, content, **kwargs):
-        rich_sends.append(_strip_result_line(content))
+        rich_sends.append(unfooter(_strip_result_line(content)))
         return {"message_id": next_id[0]}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     edit_calls: list[dict] = []
@@ -852,7 +853,7 @@ def _delivered_interim_sess(bot, run_async, monkeypatch, rich_sends,
     sess.active_subagents["a1"] = {"type": "Explore", "started_at": 1.0}
 
     async def _send_rich(chat_id, content, **kw):
-        rich_sends.append(_strip_result_line(content))
+        rich_sends.append(unfooter(_strip_result_line(content)))
         return {"message_id": 9001 + len(rich_sends)}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     run_async(bot._deliver_job_interim(sess, "interim work", 0.0))
@@ -919,7 +920,7 @@ def test_an_overflowing_interim_and_the_final_answer_both_stay_visible(
 
     rich_sends = []
     async def _send_rich(chat_id, content, **kw):
-        rich_sends.append(_strip_result_line(content))
+        rich_sends.append(unfooter(_strip_result_line(content)))
         return {"message_id": 9107}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9108))

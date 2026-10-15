@@ -336,9 +336,8 @@ def test_hook_a_type_ending_in_a_backslash_closes_its_bold(bot, sess, wire, run_
     bb.hook(run_async, recv, sess, "SubagentStart", agent_id="a1",
             agent_type="weird" + BS)
     bb.finish(run_async, bot, sess)
-    rows = bb.block_of(bb.answer_text(wire)).split(SEP)
-    row = next(r for r in rows if "weird" in r)
-    assert (row.endswith("**"), _run_before(row, len(row) - 2) % 2) == (True, 0)
+    # Drawn as a footer (HTML): the backslash is a character, the bold closes.
+    assert "<footer>○ 🤖 <b>weird" + BS + "</b></footer>" in bb.answer_raw(wire)
 
 
 def test_hook_prose_with_a_backslashed_star_leaves_no_mark_unescaped(
@@ -374,9 +373,9 @@ def test_hook_a_windows_path_argument_ends_on_an_even_run(bot, sess, wire, run_a
     bb.hook(run_async, recv, sess, "PreToolUse", agent_id="a1", tool_name="Read",
             tool_input={"file_path": "C:\\dir\\"})
     bb.finish(run_async, bot, sess)
-    rows = bb.block_of(bb.answer_text(wire)).split(SEP)
-    row = next(r for r in rows if r.startswith("○ 🤖 **Explore**"))
-    assert _run_before(row, len(row)) % 2 == 0
+    # Drawn as a footer (HTML): the path shows as written, then the tag.
+    assert "<footer>○ 🤖 <b>Explore</b> · Reading C:" + BS + "dir" + BS + "</footer>" in \
+        bb.answer_raw(wire)
 
 
 # ---- the size reserve with backslash-heavy input (each one doubles) --------------------

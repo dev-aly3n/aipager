@@ -331,8 +331,9 @@ def test_hook_prose_markup_reaches_the_answer_escaped(bot, sess, wire, run_async
             delta="Now `code` and **bold** here", message_id="m1", index=0,
             final=False)
     bb.finish(run_async, bot, sess)
-    rows = bb.block_of(bb.answer_text(wire)).split(SEP)
-    assert "○ 🤖 **Explore** · Now \\`code\\` and \\*\\*bold\\*\\* here" in rows
+    # Drawn as a footer (HTML): Claude's marks show as written, never bold.
+    assert "<footer>○ 🤖 <b>Explore</b> · Now `code` and **bold** here</footer>" in \
+        bb.answer_raw(wire)
 
 
 def test_hook_description_markup_reaches_the_answer_escaped(bot, sess, wire, run_async):
@@ -341,8 +342,7 @@ def test_hook_description_markup_reaches_the_answer_escaped(bot, sess, wire, run
     bb.hook(run_async, recv, sess, "SubagentStart", agent_id="a1",
             agent_type="Explore")
     bb.finish(run_async, bot, sess)
-    rows = bb.block_of(bb.answer_text(wire)).split(SEP)
-    assert "○ 🤖 **Explore** · Run \\`make\\` now" in rows
+    assert "<footer>○ 🤖 <b>Explore</b> · Run `make` now</footer>" in bb.answer_raw(wire)
 
 
 # ---- description matching survives a normalised type ------------------------------------

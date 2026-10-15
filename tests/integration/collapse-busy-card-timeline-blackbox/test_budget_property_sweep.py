@@ -32,6 +32,7 @@ import pytest
 
 from aipager.bot.animation import build_stream_card_ex
 from aipager.state import Status, TrackedSession
+from tests.footer_text import status_md
 
 MARK = "\U0001f916"  # 🤖
 CARD_CHAR_BUDGET = 8_800
@@ -118,8 +119,7 @@ def test_generated_shape_never_exceeds_the_byte_ceiling(seed):
 def test_generated_shape_ends_with_its_own_status_line(seed):
     sess, kwargs, frame = _gen_session(seed)
     card, _truncated = build_stream_card_ex(sess, "Working", **kwargs)
-    last_line = card.rstrip("\n").splitlines()[-1]
-    assert last_line.startswith(f"{SIGIL[frame]} **sw**")
+    assert status_md(card).startswith(f"{SIGIL[frame]} **sw**")
 
 
 @pytest.mark.parametrize("seed", range(N_SEEDS))

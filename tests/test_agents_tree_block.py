@@ -24,6 +24,7 @@ from aipager.bot.agents_line import (
 from aipager.bot.divider import DIVIDER_SEP
 from aipager.i18n.locales import LOCALES
 from tests import bidi_uba
+from aipager.bot.footer import footer, footer_block
 
 A = AgentRow
 SEP = "\n\n"
@@ -243,7 +244,8 @@ def test_the_reserve_covers_the_widest_block_in_both_directions(code):
         tr = i18n.get(code).directed(rtl)
         reserve = reserve_bytes(tr)
         for view in _worst_views():
-            size = len((DIVIDER_SEP + render_block(view, tr)).encode("utf-8"))
+            # As drawn under the answer: each line a footer block.
+            size = len((DIVIDER_SEP + footer_block(render_block(view, tr))).encode("utf-8"))
             assert size <= reserve, (code, rtl, size, reserve)
 
 
@@ -255,10 +257,12 @@ def test_the_reserve_is_the_divider_and_the_widest_lines(code):
     rows, so the widest render stays some way under this (the test above);
     the parts are pinned here so none is dropped from the count."""
     tr = i18n.get(code)
-    more = max(len(str(tr.n(al.MORE, n, kind="md")).encode()) for n in al._WORST_COUNTS)
+    # Each line as drawn: a footer block (2026-10-15).
+    more = max(len(footer(str(tr.n(al.MORE, n, kind="md"))).encode())
+               for n in al._WORST_COUNTS)
     expected = (len(DIVIDER_SEP) + al._worst_header(tr)
                 + ROWS_MAX * (len("\n\n- ") + al._worst_rows(tr))
-                + len(SEP) + more + len(SEP) + len(str(tr.md(al.PROMISE)).encode()))
+                + len(SEP) + more + len(SEP) + len(footer(str(tr.md(al.PROMISE))).encode()))
     assert reserve_bytes(tr) == expected
 
 

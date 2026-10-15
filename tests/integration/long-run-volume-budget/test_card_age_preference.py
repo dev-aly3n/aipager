@@ -25,6 +25,7 @@ from aipager.bot import settings_menu
 from aipager.state import Status
 from aipager.policy import load_policy
 from pathlib import Path
+from tests.footer_text import as_md
 
 CHAT = 256113222
 HOUR = 3600.0
@@ -60,7 +61,7 @@ def _long_card(mk_bot, vbot, vloop, rich_http, *, override=None):
 def _is_today(edits, gaps) -> bool:
     """0.7.13 at 2 h: a quiet card every 4.4 s, its clock in true seconds
     (``2:00:13``)."""
-    lasts = [m.rsplit("\n", 1)[-1] for _t, m in edits]
+    lasts = [as_md(m.rsplit("\n", 1)[-1]) for _t, m in edits]
     return (len(edits) >= 10
             and all(abs(g - 4.4) < EPS for g in gaps)
             and all(re.search(r"· 2:\d\d:\d\d$", line) for line in lasts)
@@ -72,7 +73,7 @@ def _is_decayed(edits, gaps) -> bool:
     the minute, its clock in 30 s steps (``2:00:30``)."""
     return (1 <= len(edits) <= 3
             and all(g >= 30.0 - EPS for g in gaps)
-            and all(re.search(r"· 2:\d\d:(?:00|30)$", m.rsplit("\n", 1)[-1])
+            and all(re.search(r"· 2:\d\d:(?:00|30)$", as_md(m.rsplit("\n", 1)[-1]))
                     for _t, m in edits))
 
 
