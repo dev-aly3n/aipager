@@ -542,9 +542,9 @@ stands out:
 
 ○ 🤖 pipeline-runner · Writing final.md for the pipeline
 
-- ○ 🤖 ship-tester · Write and run criteria tests
-- ○ 🤖 ship-developer · Editing state.py
-- ○ 🤖 ship-developer › ship-reviewer · Collect line numbers
+- 🤖 ship-tester · Write and run criteria tests
+- 🤖 ship-developer · Editing state.py
+- 🤖 ship-developer › ship-reviewer · Collect line numbers
 
 ⏸ 🤖 r2-runner · waiting for its own agents
 
@@ -568,9 +568,10 @@ Results from the agents will follow here.
   an agent of the second level names that agent first (`ship-developer ›
   ship-reviewer`). The busy card names the same agent after the agent
   at the top instead (`pipeline-runner › ship-reviewer`). There are
-  never more than two levels. An agent whose starter aipager does not
-  know yet is shown on the first level, never under a guess, and moves
-  under its starter once that is known.
+  never more than two levels. A working agent on the second level has no
+  ○ of its own: Telegram draws a bullet there. An agent whose starter
+  aipager does not know yet is shown on the first level, never under a
+  guess, and moves under its starter once that is known.
 - **At most six rows,** the agents still working first, then `+N more`
   for the agents without a row. An agent never shows without the agents
   above it.

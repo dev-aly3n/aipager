@@ -9,6 +9,8 @@
 {"k": "agents.more", "src": "0d58b5f8", "v": {"few": "+{n} وكلاء آخرين", "many": "+{n} وكيلًا آخر", "one": "+وكيل آخر", "other": "+{n} وكيل آخر", "two": "+وكيلان آخران", "zero": "+{n} وكلاء آخرين"}}
 {"k": "agents.promise", "src": "29723a21", "v": "عندما ينتهي عمل الوكلاء، تُرسل النتيجة إلى هنا."}
 {"k": "agents.row.done", "src": "fb8af87e", "v": "✓ 🤖 **{agent}** · اكتمل ({clock})"}
+{"k": "agents.row.item_working", "src": "ef3d6ab7", "v": "🤖 **{agent}** · {activity}"}
+{"k": "agents.row.item_working_bare", "src": "83e5d7e4", "v": "🤖 **{agent}**"}
 {"k": "agents.row.waiting", "src": "64543c86", "v": "⏸ 🤖 **{agent}** · بانتظار الوكلاء الذين شغّلهم"}
 {"k": "agents.row.working", "src": "06b07790", "v": "○ 🤖 **{agent}** · {activity}"}
 {"k": "agents.row.working_bare", "src": "0b3c4948", "v": "○ 🤖 **{agent}**"}

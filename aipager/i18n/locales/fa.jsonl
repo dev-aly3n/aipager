@@ -9,6 +9,8 @@
 {"k": "agents.more", "src": "0d58b5f8", "v": {"one": "+{n} ایجنت دیگر", "other": "+{n} ایجنت دیگر"}}
 {"k": "agents.promise", "src": "29723a21", "v": "وقتی کار ایجنت‌ها تمام شود، نتیجه همین‌جا ارسال می‌شود."}
 {"k": "agents.row.done", "src": "fb8af87e", "v": "✓ 🤖 **{agent}** · تمام شد ({clock})"}
+{"k": "agents.row.item_working", "src": "ef3d6ab7", "v": "🤖 **{agent}** · {activity}"}
+{"k": "agents.row.item_working_bare", "src": "83e5d7e4", "v": "🤖 **{agent}**"}
 {"k": "agents.row.waiting", "src": "64543c86", "v": "⏸ 🤖 **{agent}** · منتظر ایجنت‌های خودش"}
 {"k": "agents.row.working", "src": "06b07790", "v": "○ 🤖 **{agent}** · {activity}"}
 {"k": "agents.row.working_bare", "src": "0b3c4948", "v": "○ 🤖 **{agent}**"}

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **The Mini App's Updates card is first on the Settings tab, and quiet.** It shows the running version and a small **Check for updates** at the end of its row, checks by itself when you open the Settings tab (at most once every ten minutes), and shows the big Update button only when a newer version is out; up to date is one quiet line.
-- **Small text under the dividers.** The busy card's status line and the agents and shells block under an answer are now Telegram's small footer text, so the card's steps and the answer itself stand out. The tree of agents keeps its indent.
+- **Small text under the dividers.** The busy card's status line and the agents and shells block under an answer are now Telegram's small footer text, so the card's steps and the answer itself stand out. The tree of agents keeps its indent, and an indented agent's row starts with Telegram's own bullet alone.
 
 ### Fixed
 - **Claude's questions and permission prompts stay on Telegram while a background agent works.** A tool call of a background agent was taken as the prompt being answered in the terminal, and the busy card's next frame drew over the question within a second, so it could only be answered at the terminal. Now an agent's activity closes only its own prompt, and the card is not redrawn over an open one.

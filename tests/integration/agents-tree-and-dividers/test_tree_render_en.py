@@ -32,12 +32,12 @@ def _example():
 GOLDEN = (
     "\u23f3 6 agents working\n\n"
     f"\u25cb {R} **pipeline-runner** \u00b7 Writing final.md for the pipeline\n\n"
-    f"- \u25cb {R} **ship-tester** \u00b7 Write and run criteria tests\n"
-    f"- \u25cb {R} **ship-developer** \u00b7 Editing state.py\n"
-    f"- \u25cb {R} **ship-developer \u203a ship-reviewer** \u00b7 "
+    f"- {R} **ship-tester** \u00b7 Write and run criteria tests\n"
+    f"- {R} **ship-developer** \u00b7 Editing state.py\n"
+    f"- {R} **ship-developer \u203a ship-reviewer** \u00b7 "
     "Collect line numbers for review issues\n\n"
     f"\u23f8 {R} **r2-runner** \u00b7 waiting for its own agents\n\n"
-    f"- \u25cb {R} **Explore** \u00b7 Searching for the parents\n\n"
+    f"- {R} **Explore** \u00b7 Searching for the parents\n\n"
     f"{PROMISE}"
 )
 
@@ -94,7 +94,7 @@ def test_a_single_helper_is_a_one_item_list():
     view = BlockView(agents=(_row("pipeline-runner"), _row("ship-tester", parent=0)))
     assert render_block(view) == (
         f"\u23f3 2 agents working\n\n\u25cb {R} **pipeline-runner**\n\n"
-        f"- \u25cb {R} **ship-tester**\n\n{PROMISE}")
+        f"- {R} **ship-tester**\n\n{PROMISE}")
 
 
 # ---- criterion 3: depth 3+ at level 2, pre-order, hint ---------------------------------

@@ -242,7 +242,7 @@ def test_the_answer_shows_the_tree_and_a_late_child_joins_it(mk_bot, run_async, 
     (sent,) = [p for m, p in wire.calls if m == "sendRichMessage" and ANSWER in _markdown(p)]
     assert _block_of(_markdown(sent)).split("\n\n")[1:3] == footered(
         "○ 🤖 **pipeline-runner** · Write the tests\n\n"
-        "- ○ 🤖 **ship-tester** · Write the tests").split("\n\n")
+        "- 🤖 **ship-tester** · Write the tests").split("\n\n")
     # C starts an agent of its own after the answer went out.
     _hook(run_async, recv, sess, "PreToolUse", agent_id=C, agent_type="ship-tester",
           tool_name="Agent", tool_input={"subagent_type": "Explore",
@@ -256,8 +256,8 @@ def test_the_answer_shows_the_tree_and_a_late_child_joins_it(mk_bot, run_async, 
     block = _block_of(_markdown(edit))
     assert block.split("\n\n")[0] == footered("⏳ 3 agents working")
     assert block.split("\n\n")[2] == footered(
-        "- ○ 🤖 **ship-tester** · Find the callers\n"
-        "- ○ 🤖 **ship-tester › Explore** · Find the callers")
+        "- 🤖 **ship-tester** · Find the callers\n"
+        "- 🤖 **ship-tester › Explore** · Find the callers")
 
 
 def test_a_late_child_settles_done_under_its_parent(mk_bot, run_async, wire):

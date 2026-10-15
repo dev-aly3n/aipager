@@ -55,7 +55,7 @@ def test_a_late_helper_appears_under_its_parent(helper, shapes):
 
 
 def test_a_late_helper_row_shows_its_description(helper):
-    assert f"- \u25cb {ROBOT} **{T_TYPE}** \u00b7 Write and run criteria tests" in \
+    assert f"- {ROBOT} **{T_TYPE}** \u00b7 Write and run criteria tests" in \
         helper.last_block().split("\n")
 
 

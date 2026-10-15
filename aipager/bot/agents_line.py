@@ -157,6 +157,20 @@ ROW_WORKING_BARE = Msg(
          "about what it does: {agent} is its type (a name, never translated; or two "
          "names, the agent that started it first). Keep the ○ and the 🤖",
     eg={"agent": "Explore"})
+ITEM_WORKING = Msg(
+    "agents.row.item_working", "🤖 **{agent}** · {activity}",
+    note="One background agent still working, on an indented row under the agent that "
+         "started it (Telegram draws a bullet before it): {agent} is its type (a name, "
+         "never translated; or two names, the agent that started it first); {activity} "
+         "what it is doing now. Keep the 🤖, and add no mark before it",
+    eg={"agent": "ship-tester", "activity": "Reading state.py"})
+ITEM_WORKING_BARE = Msg(
+    "agents.row.item_working_bare", "🤖 **{agent}**",
+    note="One background agent still working, on an indented row under the agent that "
+         "started it, when nothing is known about what it does: {agent} is its type (a "
+         "name, never translated; or two names, the agent that started it first). Keep "
+         "the 🤖, and add no mark before it",
+    eg={"agent": "Explore"})
 ROW_WAITING = Msg(
     "agents.row.waiting", "⏸ 🤖 **{agent}** · waiting for its own agents",
     note="One background agent under an answer that has paused until the agents it "
@@ -341,9 +355,12 @@ def _header(view: BlockView, tr) -> str:
     return str(head)
 
 
-def _row(row: AgentRow, tr, hint: str | None = None) -> str:
+def _row(row: AgentRow, tr, hint: str | None = None, *, item: bool = False) -> str:
     """*row* in *tr*'s language; *hint*, the type of the agent that
-    started it, goes before its own name ("ship-tester › Explore")."""
+    started it, goes before its own name ("ship-tester › Explore").
+    *item*: an indented row (a list item, after Telegram's own bullet), so
+    a working agent has no "○" of its own (operator, 2026-10-15); done and
+    waiting keep their ✓ and ⏸."""
     agent = _bs(_label(row.agent_type))
     if hint is not None:
         agent = f"{_bs(_label(hint))}{LINEAGE_SEP}{agent}"
@@ -354,8 +371,8 @@ def _row(row: AgentRow, tr, hint: str | None = None) -> str:
         return tr.md(ROW_WAITING, agent=agent)
     activity = _activity(row, tr)
     if activity is None:
-        return tr.md(ROW_WORKING_BARE, agent=agent)
-    return tr.md(ROW_WORKING, agent=agent, activity=activity)
+        return tr.md(ITEM_WORKING_BARE if item else ROW_WORKING_BARE, agent=agent)
+    return tr.md(ITEM_WORKING if item else ROW_WORKING, agent=agent, activity=activity)
 
 
 # ---- the tree ---------------------------------------------------------------------
@@ -435,7 +452,7 @@ def _agent_lines(view: BlockView, tr) -> list[str]:
             lines.append(str(_row(view.agents[i], tr)))
             continue
         hint = view.agents[p].agent_type if parent[p] != -1 else None
-        items.append(LIST_ITEM + str(_row(view.agents[i], tr, hint)))
+        items.append(LIST_ITEM + str(_row(view.agents[i], tr, hint, item=True)))
     if items:
         lines.append("\n".join(items))
     hidden = len(view.agents) - len(taken)
@@ -493,8 +510,9 @@ def _worst_rows(tr) -> int:
                 AgentRow(agent, False, tool=wide * LABEL_MAX)]
         rows += [AgentRow(agent, False, tool=tool, tool_arg=wide * (ARG_MAX + 1))
                  for tool in _TOOL_PHRASES]
-        best = max(best, max(_size(footer(str(_row(row, tr, hint))))
-                             for row in rows for hint in (None, agent)))
+        best = max(best, max(_size(footer(str(_row(row, tr, hint, item=item))))
+                             for row in rows for hint in (None, agent)
+                             for item in (False, True)))
     return best
 
 

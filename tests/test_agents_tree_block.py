@@ -60,9 +60,9 @@ def test_the_screenshot_case_reads_as_two_trees():
     assert render_block(view) == SEP.join([
         "⏳ 4 agents working",
         "○ 🤖 **r2-runner** · Running a command",
-        "- ○ 🤖 **ship-reviewer** · Collect line numbers",
+        "- 🤖 **ship-reviewer** · Collect line numbers",
         "○ 🤖 **pipeline-runner** · Writing final.md",
-        "- ○ 🤖 **ship-tester** · Write the tests",
+        "- 🤖 **ship-tester** · Write the tests",
         PROMISE])
 
 
@@ -78,7 +78,7 @@ def test_a_list_is_tight_and_never_indented():
     view = BlockView(agents=(A("R1", False), A("a", False, parent=0),
                              A("b", False, parent=1), A("c", False, parent=0)))
     out = render_block(view)
-    assert "- ○ 🤖 **a**\n- ○ 🤖 **a › b**\n- ○ 🤖 **c**" in out
+    assert "- 🤖 **a**\n- 🤖 **a › b**\n- 🤖 **c**" in out
     assert all(not line.startswith(" ") for line in out.split("\n"))
 
 
@@ -93,7 +93,7 @@ def test_a_hint_is_cut_and_escaped_like_a_name():
     view = BlockView(agents=(A("R1", False), A("general_purpose", False, parent=0),
                              A(long, False, parent=1)))
     row = _lines(view)[2].split("\n")[1]
-    assert row == f"- ○ 🤖 **general\\_purpose › {'x' * (LABEL_MAX - 1)}…**"
+    assert row == f"- 🤖 **general\\_purpose › {'x' * (LABEL_MAX - 1)}…**"
 
 
 def test_a_waiting_row_says_so_never_its_last_tool():
@@ -306,3 +306,43 @@ def test_the_divider_above_the_block_carries_no_mark(code):
     text = "answer" + DIVIDER_SEP + block
     assert "\n---\n" in text
     assert not any(m + "---" in text or "---" + m in text for m in MARKS)
+
+
+# ---- an indented row starts with Telegram's bullet alone (operator, 2026-10-15) ----------
+
+def _bullets_view():
+    return BlockView(agents=(
+        A("pipeline-runner", False, prose="Running the pipeline"),
+        A("ship-tester", False, description="Write the tests", parent=0),
+        A("Explore", False, parent=0),
+        A("ship-reviewer", True, 72, parent=0),
+        A("r2-runner", False, waiting=True, parent=0),
+    ))
+
+
+@pytest.mark.parametrize("code", ["en", "fa"])
+def test_an_indented_working_row_has_no_circle_of_its_own(code):
+    tr = i18n.get(code)
+    top, items = render_block(_bullets_view(), tr).split("\n\n")[1:3]
+    assert top.lstrip(RLM).startswith("○ ")                    # a top row keeps its ○
+    tester, explore, reviewer, waiter = items.split("\n")
+    for row in (tester, explore):                                # working, with and without
+        assert row.startswith("- ")
+        body = row[2:].lstrip(RLM)
+        assert body.startswith("\U0001f916 ") and "○" not in row  # an activity: 🤖 first
+    assert reviewer[2:].lstrip(RLM).startswith("✓ ")             # done keeps its ✓
+    assert waiter[2:].lstrip(RLM).startswith("⏸ ")               # waiting keeps its ⏸
+    if tr.rtl:
+        assert all(row.startswith("- " + RLM) for row in items.split("\n"))
+
+
+def test_the_indented_form_fits_the_row_reserve():
+    """The indented form is the full one without its "○", so it is never
+    the widest; _worst_rows measures it anyway, should a language ever
+    write it longer."""
+    tr = i18n.get("en")
+    wide = "\U0001f600"
+    row = A(wide * 80, False, prose=wide * 200)
+    for item in (False, True):
+        drawn = footer(str(al._row(row, tr, wide * 80, item=item)))
+        assert len(drawn.encode("utf-8")) <= al._worst_rows(tr)
