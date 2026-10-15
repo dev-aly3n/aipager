@@ -171,7 +171,7 @@ aipager **不在回环地址之外监听任何 TCP 端口**。Mini App 服务器
 - 到 `api.telegram.org` 的 HTTPS 长轮询（Telegram 机器人接收更新）。
 - 到 `telegram.org` 的 HTTPS，用于获取 Mini App 的 SDK 脚本（`telegram-web-app.js`），在 Mini App 服务器启动时下载一次，最多每天刷新一次；缓存在 `~/.local/share/aipager/webapp-sdk/`。aipager 从页面自己的来源把这些字节提供给页面，自己从不运行它们。aipager 不会再分发这个脚本：安装包里没有附带它，当 aipager 没有副本时，页面会像以前一样直接从 `telegram.org` 加载它。
 - Mini App 开启时（默认开启）到 Cloudflare 的隧道。它运行的 `cloudflared` 程序从 `github.com/cloudflare/cloudflared` 的发布版本下载一次，用一个固定的 SHA-256 校验，并缓存在 `~/.local/share/aipager/cloudflared/`；你 `PATH` 上的 `cloudflared` 从不会被使用。使用你自己的 Mini App 网址时（见下文），这些都不会发生。
-- 版本检查，只在有人点按**检查更新**或**更新**时进行（`/update`、Mini App 的“更新”部分）：aipager 查 `pypi.org`，Claude Code 根据安装方式查 `downloads.claude.ai` 或 `registry.npmjs.org`。之后，一次更新会运行安装程序（与 PyPI 或 Homebrew 通信）和 `claude update`。命令行里的 `aipager update` 只运行安装程序。
+- 版本检查，只在有人点按**检查更新**或**更新**时进行（`/update`、Mini App 的“更新”部分），或在有权更新的人打开 Mini App 的**设置**标签页时进行（每个打开的应用最多每十分钟一次）：aipager 查 `pypi.org`，Claude Code 根据安装方式查 `downloads.claude.ai` 或 `registry.npmjs.org`。之后，一次更新会运行安装程序（与 PyPI 或 Homebrew 通信）和 `claude update`。命令行里的 `aipager update` 只运行安装程序。
 - 安装语音消息功能，在你点按它的按钮时：安装程序从 PyPI 下载软件包，语音识别模型在第一次使用时从 Hugging Face（`huggingface.co`）下载。
 - 到 `raw.githubusercontent.com`（报告密钥文件）和 Sentry 接收服务器的 HTTPS，只在你确认发送问题报告时进行：你预览过的报告，以及由它生成的一份简短摘要，别无其他。见[问题报告](problem-reports.md)。
 

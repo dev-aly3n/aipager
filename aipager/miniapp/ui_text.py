@@ -661,7 +661,6 @@ UPDATE_UP_TO_DATE = Msg("ui.update.up_to_date", "Everything is up to date.")
 BTN_CLOSE_APP = Msg("ui.btn.close_app", "Close the app", note="Mini App button")
 BTN_CHECK_UPDATES = Msg("ui.btn.check_updates", "Check for updates", note="Mini App button")
 BTN_CHECKING = Msg("ui.btn.checking", "Checking…", note="Mini App button, while checking")
-BTN_CHECK_AGAIN = Msg("ui.btn.check_again", "Check again", note="Mini App button")
 BTN_WAIT_MORE = Msg("ui.btn.wait_more", "Wait 10 more min", note="Mini App button")
 BTN_RESTART_NOW = Msg("ui.btn.restart_now", "Restart now", note="Mini App button")
 UPDATE_RESTART_CONFIRM = Msg("ui.update.restart_confirm",

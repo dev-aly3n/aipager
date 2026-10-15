@@ -661,7 +661,10 @@ class UpdateOffer:
     to offer); ``lines`` holds one plain-text line per product.
     ``restart_offer``: a newer aipager is installed and waiting, and this
     daemon can restart into it (the Restart now button); ``steps``: how
-    to restart it by hand when it cannot (plain text)."""
+    to restart it by hand when it cannot (plain text). ``up_to_date``:
+    both lookups succeeded and found nothing newer, nothing installed is
+    waiting and there is no note (an installed version that does not load,
+    or one not running yet): the summary alone says it all."""
 
     kind: str | None
     label: str | None
@@ -671,6 +674,7 @@ class UpdateOffer:
     notes: list[str]
     restart_offer: bool = False
     steps: str | None = None
+    up_to_date: bool = False
 
 
 def installed_waiting(running, installed, installed_ok, latest) -> bool:
@@ -823,7 +827,9 @@ def update_offer(status: dict, tr=None) -> UpdateOffer:
                                 reason=rs.get("reason") or Safe(tr.text(_YOURSELF))))
     return UpdateOffer(kind=kind, label=label, lines=lines, summary=summary,
                        restart=restart, notes=notes, restart_offer=restart_offer,
-                       steps=steps)
+                       steps=steps,
+                       up_to_date=(kind is None and not notes
+                                   and not (waiting or held_back or failed)))
 
 
 def _source_text(status: dict, show_paths: bool) -> str:
@@ -847,6 +853,8 @@ def check_payload(status: dict, *, show_paths: bool, tr=None) -> dict:
         # Installed and waiting: Restart now instead of an update, or the
         # steps to restart by hand (plain text).
         "restart_offer": offer.restart_offer,
+        # Nothing to do: the page shows the summary alone.
+        "up_to_date": offer.up_to_date,
         "steps": offer.steps,
         # Whether an offered aipager update restarts by itself...
         "restart_auto": bool((status.get("restart") or {}).get("automatic")),

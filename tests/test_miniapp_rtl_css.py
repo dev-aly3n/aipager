@@ -157,6 +157,42 @@ _APPEARANCE_ADDED = [
 ]
 
 
+#: The rules the quiet Updates card (2026-10-15) added: the card first on
+#: the Settings tab, its head row (name, version, the small Check for
+#: updates at the row's end, turning while it checks), no empty button row;
+#: after ``.updates``, and its reduced-motion stop after the lantern's.
+_UPDATES_CARD_ADDED = {
+    ("", ".updates"): [
+        ["", "#updates-block", [
+            ["margin-bottom", "var(--s4)"], ["margin-top", "0"],
+            ["padding-bottom", "var(--s3)"], ["padding-top", "var(--s3)"]]],
+        ["", ".updates-head", [
+            ["align-items", "center"], ["display", "flex"], ["gap", "var(--s3)"],
+            ["min-height", "40px"]]],
+        ["", ".updates-name", [
+            ["align-items", "baseline"], ["display", "flex"], ["flex", "1 1 auto"],
+            ["gap", "var(--s2)"], ["min-width", "0"]]],
+        ["", ".updates-version", [
+            ["color", "var(--ink-3)"], ["font-size", "13px"], ["line-height", "18px"]]],
+        ["", ".updates-check", [
+            ["align-items", "center"], ["border-radius", "var(--r-pill)"],
+            ["color", "var(--accent)"], ["display", "inline-flex"], ["flex", "0 0 auto"],
+            ["font-size", "var(--fs-sm)"], ["font-weight", "600"], ["gap", "6px"],
+            ["margin-right", "calc(-1 * var(--s2))"], ["min-height", "40px"],
+            ["padding-bottom", "0"], ["padding-left", "var(--s2)"],
+            ["padding-right", "var(--s2)"], ["padding-top", "0"]]],
+        ["", ".updates-check .ic", [["height", "18px"], ["width", "18px"]]],
+        ["", ".updates-check:disabled", [["color", "var(--ink-3)"]]],
+        ["", ".updates-check.is-checking .ic", [["animation", "spin 1.1s linear infinite"]]],
+        ["", ".updates-actions:empty", [["display", "none"]]],
+    ],
+    ("@media (prefers-reduced-motion: reduce)", ".lamp-spin::before"): [
+        ["@media (prefers-reduced-motion: reduce)", ".updates-check.is-checking .ic",
+         [["animation", "none"]]],
+    ],
+}
+
+
 def _expected_now(golden: list) -> list:
     out = []
     for ctx, sel, props in golden:
@@ -166,6 +202,7 @@ def _expected_now(golden: list) -> list:
             out.append([ctx, sel, props])
         if sel == _APPEARANCE_AFTER:
             out.extend(_APPEARANCE_ADDED)
+        out.extend(_UPDATES_CARD_ADDED.get((ctx, sel), []))
     return out
 
 
