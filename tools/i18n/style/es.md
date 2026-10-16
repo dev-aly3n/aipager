@@ -29,6 +29,7 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - A navigation button that opens another keyboard ends with " ›" ("Plantillas ›", "Comandos ›"; the model list is "Modelo ›"), like "Model ›": the arrow keeps the label from ever being a session name.
 - A mode word (mode.word.auto, mode.word.ask, mode.word.full: Automático, Preguntar, Total) is ONE word with no emoji: people type it after /mode, so it never changes once chosen. A mode label (mode.auto, mode.ask, mode.full) is what people see: the emoji, that same word and the word for mode (🤖 Modo Automático, 💬 Modo Preguntar, 🔓 Modo Acceso total); a sentence around {mode} must not add its own word for mode.
 - A button or sentence that names a permission mode names it as a mode: the switch buttons, the "instead" buttons and the busy confirms say "Modo …", as mode.auto does. The typed words stay one word.
+- The "instead" buttons on /new (mode.*_instead) say exactly what the switch buttons say ("💬 Cambiar a Modo Preguntar"), not a word for "instead" (operator, 2026-10-16: a literal "instead" read oddly on a button).
 - A default button label (Continue, Run tests...) stays short: it is a button. Its payload stays English (Claude receives the English).
 
 ## Words people actually say (use these)

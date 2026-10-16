@@ -354,11 +354,11 @@
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ Tamam, sesli mesaj desteği kurulmadı."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ Sesli mesaj {size} MB; Telegram botları en fazla {limit} MB kabul ediyor."}
 {"k": "mode.ask", "src": "07910591", "v": "💬 Sor modu"}
-{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Bunun yerine Sor modu"}
+{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Sor moduna geç"}
 {"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 Otomatik mod"}
-{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Bunun yerine Otomatik mod"}
+{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Otomatik moda geç"}
 {"k": "mode.full", "src": "2b63c484", "v": "🔓 Tam erişim modu"}
-{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Bunun yerine Tam erişim modu"}
+{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Tam erişim moduna geç"}
 {"k": "mode.word.ask", "src": "3562777b", "v": "Sor"}
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Otomatik"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Tam"}

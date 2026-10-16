@@ -354,11 +354,11 @@
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ OK, die Sprachfunktion wird nicht installiert."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ Die Sprachnachricht ist {size} MB groß; Telegram-Bots nehmen höchstens {limit} MB an."}
 {"k": "mode.ask", "src": "07910591", "v": "💬 Fragen-Modus"}
-{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Lieber Fragen-Modus"}
+{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Zum Fragen-Modus wechseln"}
 {"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 Auto-Modus"}
-{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Lieber Auto-Modus"}
+{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Zum Auto-Modus wechseln"}
 {"k": "mode.full", "src": "2b63c484", "v": "🔓 Vollzugriff-Modus"}
-{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Lieber Vollzugriff-Modus"}
+{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Zum Vollzugriff-Modus wechseln"}
 {"k": "mode.word.ask", "src": "3562777b", "v": "Fragen"}
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Auto"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Vollzugriff"}

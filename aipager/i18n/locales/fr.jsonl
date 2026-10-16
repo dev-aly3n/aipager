@@ -354,11 +354,11 @@
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ D'accord, rien n'a été installé."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ Le message vocal fait {size} Mo ; les bots Telegram n'acceptent que {limit} Mo au maximum."}
 {"k": "mode.ask", "src": "07910591", "v": "💬 Mode Demander"}
-{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Plutôt en Mode Demander"}
+{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Passer en Mode Demander"}
 {"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 Mode Automatique"}
-{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Plutôt en Mode Automatique"}
+{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Passer en Mode Automatique"}
 {"k": "mode.full", "src": "2b63c484", "v": "🔓 Mode Accès complet"}
-{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Plutôt en Mode Accès complet"}
+{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Passer en Mode Accès complet"}
 {"k": "mode.word.ask", "src": "3562777b", "v": "Demander"}
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Automatique"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Complet"}

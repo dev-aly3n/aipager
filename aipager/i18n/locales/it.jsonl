@@ -354,11 +354,11 @@
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ Va bene, la funzione vocale non è stata installata."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ Il vocale pesa {size} MB; i bot di Telegram accettano al massimo {limit} MB."}
 {"k": "mode.ask", "src": "07910591", "v": "💬 Modalità «Chiedi»"}
-{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Invece: modalità «Chiedi»"}
+{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Passa alla modalità «Chiedi»"}
 {"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 Modalità «Automatico»"}
-{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Invece: modalità «Automatico»"}
+{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Passa alla modalità «Automatico»"}
 {"k": "mode.full", "src": "2b63c484", "v": "🔓 Modalità «Completo»"}
-{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Invece: modalità «Completo»"}
+{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Passa alla modalità «Completo»"}
 {"k": "mode.word.ask", "src": "3562777b", "v": "Chiedi"}
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Automatico"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Completo"}

@@ -28,6 +28,7 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - A navigation button that opens another keyboard ends with " ›" ("Modèles ›", "Commandes ›"; the model list is "Modèle IA ›", so the two never read alike), like "Model ›": the arrow keeps the label from ever being a session name.
 - A mode word (mode.word.auto, mode.word.ask, mode.word.full: Automatique, Demander, Complet) is ONE word with no emoji: people type it after /mode, so it never changes once chosen. A mode label (mode.auto, mode.ask, mode.full) is what people see: the emoji, that same word and the word for mode (🤖 Mode Automatique, 💬 Mode Demander, 🔓 Mode Accès complet); a sentence around {mode} must not add its own word for mode.
 - A button or sentence that names a permission mode names it as a mode (operator, 2026-10-11): the switch buttons (modecard.btn.to_*, ui.btn.switch_to_*), the "instead" buttons (mode.*_instead) and the busy confirms (ui.confirm.perms_busy_*) say the mode word and the word for mode, as mode.auto and mode.ask do. The typed words stay one word.
+- The "instead" buttons on /new (mode.*_instead) say exactly what the switch buttons say ("💬 Passer en Mode Demander"), not a word for "instead" (operator, 2026-10-16: a literal "instead" read oddly on a button).
 - A default button label (Continue, Run tests...) stays short: it is a button. Its payload stays English (Claude receives the English).
 
 ## Words people actually say (use these)

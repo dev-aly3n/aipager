@@ -354,11 +354,11 @@
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ Хорошо, голосовые не установлены."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ Голосовое весит {size} МБ, а боты Telegram принимают не больше {limit} МБ."}
 {"k": "mode.ask", "src": "07910591", "v": "💬 Режим «Спрашивать»"}
-{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Лучше режим «Спрашивать»"}
+{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Включить режим «Спрашивать»"}
 {"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 Режим Авто"}
-{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Лучше режим Авто"}
+{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Включить режим Авто"}
 {"k": "mode.full", "src": "2b63c484", "v": "🔓 Режим «Полный доступ»"}
-{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Лучше режим «Полный доступ»"}
+{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Включить режим «Полный доступ»"}
 {"k": "mode.word.ask", "src": "3562777b", "v": "Спрашивать"}
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Авто"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Полный"}

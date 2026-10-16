@@ -28,6 +28,7 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - A mode word (mode.word.auto, mode.word.ask, mode.word.full: خودکار, پرسش, کامل) is ONE word with no emoji: people type it after /mode, so it never changes once chosen. A mode label (mode.auto, mode.ask, mode.full) is what people see: the emoji, that same word and the word for mode (🤖 مود خودکار, 💬 مود پرسش, 🔓 مود دسترسی کامل); a sentence around {mode} must not add its own word for mode.
 - Persian: "ادمین" for admin in new text, never "حالت" for mode (always "مود"), active plain sentences: "💬 تغییر به مود پرسش", "🔓 تغییر به مود دسترسی کامل".
 - A button or sentence that names a permission mode names it as a mode (operator, 2026-10-11): the switch buttons (modecard.btn.to_*, ui.btn.switch_to_*), the "instead" buttons (mode.*_instead) and the busy confirms (ui.confirm.perms_busy_*) say the mode word and the word for mode, as mode.auto and mode.ask do. The typed words stay one word.
+- The "instead" buttons on /new (mode.*_instead) say exactly what the switch buttons say ("💬 تغییر به مود پرسش"), not a word for "instead" (operator, 2026-10-16: a literal "instead" read oddly on a button).
 - A default button label (Continue, Run tests...) stays short: it is a button.
 
 ## The voice (Persian rewrite, 2026-10-11)

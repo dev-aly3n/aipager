@@ -354,11 +354,11 @@
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ Được, chưa cài."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ Tin nhắn thoại nặng {size} MB; bot Telegram chỉ nhận tối đa {limit} MB."}
 {"k": "mode.ask", "src": "07910591", "v": "💬 Chế độ Hỏi"}
-{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Dùng Chế độ Hỏi thay thế"}
+{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Chuyển sang Chế độ Hỏi"}
 {"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 Chế độ Auto"}
-{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Dùng Chế độ Auto thay thế"}
+{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Chuyển sang Chế độ Auto"}
 {"k": "mode.full", "src": "2b63c484", "v": "🔓 Chế độ Toàn quyền"}
-{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Dùng Chế độ Toàn quyền thay thế"}
+{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Chuyển sang Chế độ Toàn quyền"}
 {"k": "mode.word.ask", "src": "3562777b", "v": "Hỏi"}
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Auto"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Toàn"}

@@ -354,11 +354,11 @@
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ De acuerdo, no se instaló."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ El audio pesa {size} MB; los bots de Telegram solo aceptan hasta {limit} MB."}
 {"k": "mode.ask", "src": "07910591", "v": "💬 Modo Preguntar"}
-{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Mejor Modo Preguntar"}
+{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 Cambiar a Modo Preguntar"}
 {"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 Modo Automático"}
-{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Mejor Modo Automático"}
+{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 Cambiar a Modo Automático"}
 {"k": "mode.full", "src": "2b63c484", "v": "🔓 Modo Acceso total"}
-{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Mejor Modo Acceso total"}
+{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 Cambiar a Modo Acceso total"}
 {"k": "mode.word.ask", "src": "3562777b", "v": "Preguntar"}
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "Automático"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "Total"}

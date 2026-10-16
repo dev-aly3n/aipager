@@ -354,11 +354,11 @@
 {"k": "media.voice_not_installed_ok", "src": "3103990a", "v": "↩️ حسنًا، لم يُثبَّت شيء."}
 {"k": "media.voice_too_big", "src": "d72d5439", "v": "⚠️ حجم الرسالة الصوتية {size} ميغابايت؛ بوتات Telegram لا تستقبل أكثر من {limit} ميغابايت."}
 {"k": "mode.ask", "src": "07910591", "v": "💬 وضع «اسأل»"}
-{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 وضع «اسأل» بدلًا من ذلك"}
+{"k": "mode.ask_instead", "src": "41cd4c04", "v": "💬 التبديل إلى وضع «اسأل»"}
 {"k": "mode.auto", "src": "c6e9ac62", "v": "🤖 الوضع التلقائي"}
-{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 الوضع التلقائي بدلًا من ذلك"}
+{"k": "mode.auto_instead", "src": "ee525579", "v": "🤖 التبديل إلى الوضع التلقائي"}
 {"k": "mode.full", "src": "2b63c484", "v": "🔓 وضع الوصول الكامل"}
-{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 وضع الوصول الكامل بدلًا من ذلك"}
+{"k": "mode.full_instead", "src": "c82539c6", "v": "🔓 التبديل إلى وضع الوصول الكامل"}
 {"k": "mode.word.ask", "src": "3562777b", "v": "اسأل"}
 {"k": "mode.word.auto", "src": "c614ba7c", "v": "تلقائي"}
 {"k": "mode.word.full", "src": "10b28a8c", "v": "كامل"}
