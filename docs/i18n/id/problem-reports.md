@@ -1,6 +1,6 @@
 # Laporan masalah: isi sebuah laporan
 
-<!-- i18n-source: docs/problem-reports.md @ 6fc084f -->
+<!-- i18n-source: docs/problem-reports.md @ 16ee949 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../problem-reports.md))
 

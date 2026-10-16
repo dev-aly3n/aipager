@@ -1,6 +1,6 @@
 # Segnalazioni di problemi: cosa contiene una segnalazione
 
-<!-- i18n-source: docs/problem-reports.md @ 6fc084f -->
+<!-- i18n-source: docs/problem-reports.md @ 16ee949 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../problem-reports.md))
 

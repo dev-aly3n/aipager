@@ -1,6 +1,6 @@
 # 문제 해결
 
-<!-- i18n-source: docs/troubleshooting.md @ 01d5a8b -->
+<!-- i18n-source: docs/troubleshooting.md @ bb690d5 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../troubleshooting.md))
 
@@ -308,6 +308,12 @@ systemctl --user restart aipager.service
 
 git 주소로 만든 pipx 설치는 PyPI가 아니라 그 git 소스에서 업그레이드해요. 소스에 더 새 것이 없으면 `/update`가 `✅ aipager는 이미 A 버전이에요. 이 pipx 설치는 git 소스에서 업데이트하는데, 거기에 더 새 버전이 없어요.`라고 해요. 거기에 새 버전을 push하거나 고르세요. 또는 `pipx install --force aipager`로 PyPI 설치로 바꾸세요.
 
+**서비스 없이** 실행되는 aipager(터미널이나 tmux의 `aipager start`, Docker, launchd처럼 서비스 관리자가 재시작해 주지 않는 경우)는 업데이트를 설치하지만 재시작할 때까지 예전 코드로 계속 실행돼요. 그러면 `/update`가 `aipager B 버전이 설치됐고 재시작을 기다리고 있어요 (실행 중: A).`라고 알려 주고, 이벤트마다 새로 시작하는 Claude Code의 hook은 이미 B를 실행하고 있을 수 있어요. 그래서 소유자는 업데이트가 절반만 끝났다는 알림을 한 번 받아요(hook이 처음 B를 실행하고 2분 뒤, 그래서 설치 바로 뒤에 이어지는 재시작에서는 절대 나오지 않아요. 그리고 소유자의 개인 채팅에서 진행 중인 작업이 없을 때). aipager가 B로 실행되면 그 알림은 버튼 없이 `✅ aipager 업데이트가 끝났어요. 이제 aipager는 B 버전으로 실행 중이에요.`로 바뀌어요. **🔄 지금 재시작**을 누르세요(업데이트 메시지, 알림, 또는 Mini App의 **설정 → 업데이트**에서). aipager는 진행 중인 작업이 없을 때까지 기다렸다가 깔끔하게 멈추고 새 버전을 제자리에서 시작해요. 같은 터미널, tmux 창, 컨테이너의 같은 프로세스가 같은 명령과 같은 환경으로 실행돼요.
+
+제자리 시작이 실패하면 예전 프로세스가 끝난 뒤 따로 떨어진 복사본이 aipager를 시작해요. 그때 출력은 터미널이 아니라 자체 재시작 로그(인스턴스 폴더의 `aipager.log`, 또는 `/tmp/aipager.log`)로 가고, 그 복사본이 돌아오지 않으면 실행할 명령을 aipager 로그가 알려 줘요. 인터프리터 자체가 사라졌거나(환경이 지워짐) 아무것도 시작할 수 없으면 aipager는 코드 1로 종료하고, aipager 로그는 `restart.failed:`와 실행할 명령으로 끝나요. 다음에 시작할 때 업데이트를 알려 줘요.
+
+**지금 재시작** 버튼이 없을 때는 메시지가 내 환경에 맞는 단계를 알려 줘요. 터미널이나 tmux에서는 Ctrl+C를 누르고 `aipager start`를 실행하고, macOS에서는 `launchctl kickstart -k gui/<uid>/com.aipager.daemon`, Docker에서는 호스트에서 `docker restart <container>`를 실행해요. Docker 컨테이너를 다시 만들면(`down` 뒤의 `docker compose up`, 또는 `docker run`을 다시 실행) 이미지에서 시작하기 때문에 그 이미지에 든 aipager 버전으로 돌아가요. 더 새 aipager를 유지하려면 더 새 이미지를 쓰세요.
+
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>업데이트 뒤에 aipager가 다시 실행되지 않아요
 
 업그레이드는 무엇이든 재시작하기 전에 새 버전을 import할 수 있는지 확인하지만, 새 aipager가 그래도 시작하지 못하면 systemd가 5초마다 다시 시도해요. 이유를 보려면:
@@ -330,6 +336,8 @@ systemctl --user restart aipager.service
 ## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>“aipager가 종료될 때 업데이트가 중단됐어요”
 
 `/update`가 설치하는 동안 aipager가 멈췄고(또는 재시작했고), 설치 프로그램도 함께 멈춰서 설치가 반만 쓰였을 수 있어요. aipager나 Claude Code가 이상하게 동작하면 고치세요. aipager라면 메시지에 있는 다시 설치 명령(예: `pipx install --force aipager`)을 실행한 다음 `systemctl --user restart aipager.service`를 실행하고, Claude Code라면 `claude update`를 다시 실행하세요.
+
+aipager를 다시 시작하지 못한 지금 재시작(서비스 없음)은 aipager 로그에 `restart.failed:`와 실행할 명령을 남겨요. 그 명령을 실행하면 새 aipager가 업데이트를 알려 줘요.
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>채팅의 언어가 잘못됐어요
 

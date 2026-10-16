@@ -1,6 +1,6 @@
 # Arquitectura
 
-<!-- i18n-source: docs/architecture.md @ 7e36944 -->
+<!-- i18n-source: docs/architecture.md @ c91598e -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../architecture.md))
 
@@ -109,11 +109,12 @@ El reinicio que se pide desde Telegram depende de que todo este camino termine a
 | `~/.claude/aipager-sessions.json` | El estado duradero de la lista de sesiones | aipager |
 | `~/.claude/aipager-audit.jsonl` | Registro de permitir, rechazar y respuestas | aipager (solo añade) |
 | `~/.claude/aipager-flood-state.json` | El historial de límites de velocidad de Telegram de cada chat, que sobrevive a los reinicios ([solución de problemas](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | El túnel de la Mini App que mantiene aipager: su proceso, sus puertos locales y un hash de su dirección (nunca la dirección), para que el siguiente aipager pueda quedárselo tras un reinicio planificado (permisos 600); los avisos de cloudflared | aipager; el registro también lo borran el guardián del túnel conservado y `aipager uninstall` |
 | `~/.claude/aipager-pending-users.json` | Personas que llamaron al bot en un grupo donde no trabaja, o que no son miembros de un grupo donde sí trabaja, para que `aipager config` pueda añadirlas (permisos 0600, se reemplaza entero en cada escritura, las 200 más recientes vistas en los últimos 30 días) | aipager (lo escribe), `aipager config` (lo lee) |
 | `~/aipager-users/<label>/` | Las [carpetas raíz](groups.md#root-folders) por defecto de los miembros (permisos 0700), donde los miembros `user` y `read_only` crean sus sesiones; `aipager uninstall` las conserva | aipager (la crea en el primer `/new` o «Nueva sesión» de la Mini App de un miembro) |
 | `~/.claude/settings.json` | La configuración de hooks de Claude Code | `aipager config` / `aipager setup`; en cada arranque aipager añade cualquier hook o línea de estado que falte y pone `skipDangerousModePermissionPrompt` ([Modelo de seguridad](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | Copias de seguridad antes de cada reescritura | `aipager config`, `aipager setup`, `aipager uninstall` |
-| `~/.claude.json` | El archivo propio de Claude Code: al arrancar, aipager marca como de confianza la carpeta por defecto de sus sesiones (la carpeta de trabajo de aipager, o `AIPAGER_WORK_DIR`), para que la pregunta de confianza de Claude Code no frene una sesión creada desde Telegram en esa carpeta | aipager |
+| `~/.claude.json` | El archivo propio de Claude Code: aipager marca como de confianza la carpeta donde empieza una sesión justo antes de que empiece (también la carpeta personal, nunca `/` ni una carpeta por encima de la personal), para que la pregunta de confianza de Claude Code no frene una sesión creada desde Telegram. Al arrancar aipager no se marca nada. Nunca se reescribe si no se puede leer entero o si un Claude en marcha lo cambió mientras tanto | aipager |
 | `~/.claude/.credentials.json` → `.credentials.json.stale` | El archivo de inicio de sesión de Claude Code, que se aparta cuando una sesión arranca con `CLAUDE_CODE_OAUTH_TOKEN` puesto y el archivo solo tiene un inicio de sesión caducado o vacío (si no, ganaría al token); devuélvelo a su sitio para deshacerlo | aipager |
 | `~/.config/aipager/aipager.yaml` | Token del bot, chats, miembros y roles, ajustes de la Mini App | `aipager config` (permisos 600); aipager mueve la entrada de un grupo cuando Telegram lo convierte en supergrupo, y guarda una copia `aipager.yaml.bak.<time>` cuando pasa ahí ajustes viejos de la Mini App |
 | `~/.config/aipager/policy.yaml` | Reglas por rol y reglas de seguridad adicionales | tú (se comprueba con `aipager policy validate`); se escribe una vez un ejemplo comentado cuando se migra una instalación antigua |

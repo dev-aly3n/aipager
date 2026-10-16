@@ -1,6 +1,6 @@
 # Kiến trúc
 
-<!-- i18n-source: docs/architecture.md @ 7e36944 -->
+<!-- i18n-source: docs/architecture.md @ c91598e -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../architecture.md))
 
@@ -109,11 +109,12 @@ Việc tự khởi động lại từ Telegram dựa vào việc toàn bộ trì
 | `~/.claude/aipager-sessions.json` | Trạng thái lâu dài của danh sách phiên | aipager |
 | `~/.claude/aipager-audit.jsonl` | Log Cho phép / Từ chối / câu trả lời | aipager (chỉ ghi thêm) |
 | `~/.claude/aipager-flood-state.json` | Lịch sử giới hạn tốc độ của Telegram cho từng chat, được giữ qua các lần khởi động lại ([xử lý sự cố](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | Tunnel Mini App mà aipager giữ: tiến trình, các cổng cục bộ và một mã băm của địa chỉ (không bao giờ là chính địa chỉ), để aipager kế tiếp tiếp quản nó sau một lần khởi động lại có kế hoạch (quyền 600); các cảnh báo của cloudflared | aipager; bản ghi này cũng bị xóa bởi tiến trình canh gác của tunnel được giữ lại và `aipager uninstall` |
 | `~/.claude/aipager-pending-users.json` | Những người đã nhắn bot trong một nhóm mà bot không phục vụ, hoặc không phải thành viên của một nhóm mà bot phục vụ, để `aipager config` thêm họ (quyền 0600, mỗi lần ghi thì thay cả file, 200 người mới nhất trong 30 ngày qua) | aipager (ghi), `aipager config` (đọc) |
 | `~/aipager-users/<label>/` | [Thư mục gốc](groups.md#root-folders) mặc định của các thành viên (quyền 0700), nơi các thành viên `user` và `read_only` bắt đầu phiên của mình; `aipager uninstall` giữ lại chúng | aipager (tạo ra ở lần `/new` đầu tiên hoặc lần “Bắt đầu phiên” đầu tiên trong Mini App của một thành viên) |
 | `~/.claude/settings.json` | Cấu hình hook của Claude Code | `aipager config` / `aipager setup`; mỗi lần khởi động, aipager thêm hook hoặc dòng trạng thái aipager còn thiếu và đặt `skipDangerousModePermissionPrompt` ([bảo mật](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | Bản sao lưu trước mỗi lần ghi lại | `aipager config`, `aipager setup`, `aipager uninstall` |
-| `~/.claude.json` | File của chính Claude Code: lúc khởi động, aipager đánh dấu thư mục phiên mặc định (thư mục làm việc của aipager, hoặc `AIPAGER_WORK_DIR`) là đáng tin, để câu hỏi về độ tin cậy của Claude Code không chặn một phiên bắt đầu từ Telegram trong thư mục đó | aipager |
+| `~/.claude.json` | File của chính Claude Code: aipager đánh dấu thư mục nơi một phiên bắt đầu là đáng tin ngay trước khi phiên bắt đầu (kể cả thư mục home, không bao giờ `/` hay một thư mục phía trên thư mục home), để câu hỏi về độ tin cậy của Claude Code không chặn một phiên bắt đầu từ Telegram. Lúc aipager khởi động, không có gì được đánh dấu. Không bao giờ bị ghi đè khi không đọc được trọn vẹn hoặc một Claude đang chạy đã thay đổi nó trong lúc đó | aipager |
 | `~/.claude/.credentials.json` → `.credentials.json.stale` | File đăng nhập của Claude Code, được cất sang một bên khi một phiên bắt đầu với `CLAUDE_CODE_OAUTH_TOKEN` được đặt mà file chỉ chứa một lần đăng nhập đã hết hạn hoặc trống (nếu không, file sẽ được ưu tiên hơn token); muốn hoàn tác thì chuyển nó về chỗ cũ | aipager |
 | `~/.config/aipager/aipager.yaml` | Token bot, các chat, thành viên + vai trò, cài đặt Mini App | `aipager config` (quyền 600); aipager chuyển mục của một nhóm khi Telegram nâng cấp nó thành supergroup, và giữ một bản `aipager.yaml.bak.<time>` khi chuyển cài đặt Mini App cũ vào đó |
 | `~/.config/aipager/policy.yaml` | Quy tắc theo vai trò + phần bổ sung cho mức an toàn | bạn (kiểm tra bằng `aipager policy validate`); một bản mẫu có chú thích được ghi một lần khi chuyển một bản cài cũ sang |

@@ -1,6 +1,6 @@
 # Báo cáo sự cố: một báo cáo chứa gì
 
-<!-- i18n-source: docs/problem-reports.md @ 6fc084f -->
+<!-- i18n-source: docs/problem-reports.md @ 16ee949 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../problem-reports.md))
 

@@ -1,6 +1,6 @@
 # Dépannage
 
-<!-- i18n-source: docs/troubleshooting.md @ 01d5a8b -->
+<!-- i18n-source: docs/troubleshooting.md @ bb690d5 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../troubleshooting.md))
 
@@ -308,6 +308,12 @@ Un Claude Code installé avec `sudo npm install -g` se trouve dans un dossier qu
 
 Une installation pipx faite depuis une URL git se met à jour depuis cette source git, pas depuis PyPI. Quand la source n'a rien de plus récent, `/update` dit `✅ aipager est déjà en A : cette installation pipx se met à jour depuis son dépôt git, qui n'a rien de plus récent.`. Publiez ou choisissez la nouvelle version là-bas, ou passez à PyPI avec `pipx install --force aipager`.
 
+**Sans service**, un aipager qu'aucun gestionnaire de services ne redémarre (`aipager start` dans un terminal ou tmux, Docker, launchd) installe une mise à jour mais continue d'exécuter l'ancien code jusqu'à son redémarrage. `/update` dit alors `aipager B est installé et attend un redémarrage (en cours : A).`, et les hooks de Claude Code, qui repartent de zéro à chaque événement, tournent peut-être déjà en B : le propriétaire reçoit un avis disant que la mise à jour n'est faite qu'à moitié (deux minutes après le premier passage des hooks en B, donc un redémarrage qui suit tout de suite l'installation ne le montre jamais, et dès qu'aucune tâche n'est en cours dans la discussion privée du propriétaire). Une fois qu'aipager tourne en B, cet avis devient `✅ La mise à jour d'aipager est terminée : aipager tourne maintenant en B.`, sans son bouton. Touchez **🔄 Redémarrer maintenant** (dans le message de mise à jour, dans l'avis ou dans **Paramètres → Mises à jour** de la Mini App). aipager attend qu'aucune tâche ne soit en cours, s'arrête proprement et lance la nouvelle version sur place : le même processus dans le même terminal, la même fenêtre tmux ou le même conteneur, avec la même commande et le même environnement.
+
+Si le lancement sur place échoue, une copie détachée lance aipager une fois l'ancien processus parti. Sa sortie va alors dans le journal du redémarrage automatique (`aipager.log` dans le dossier de l'instance, ou `/tmp/aipager.log`) au lieu de votre terminal, et le journal d'aipager donne la commande à lancer si cette copie ne revient pas. Si l'interpréteur lui-même a disparu (son environnement a été supprimé), ou si rien n'a pu être lancé, aipager sort avec le code 1, le journal d'aipager se termine par `restart.failed:` et la commande à lancer, et le démarrage suivant annonce la mise à jour.
+
+Quand il n'y a pas de bouton **Redémarrer maintenant**, le message donne les étapes pour votre installation : dans un terminal ou tmux, appuyez sur Ctrl+C et lancez `aipager start` ; sur macOS, `launchctl kickstart -k gui/<uid>/com.aipager.daemon` ; dans Docker, `docker restart <container>` sur l'hôte. Recréer un conteneur Docker (`docker compose up` après `down`, ou `docker run` à nouveau) le relance depuis son image, ce qui ramène la version d'aipager de cette image : pour garder un aipager plus récent, utilisez une image plus récente.
+
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>aipager n'est pas revenu après une mise à jour
 
 La mise à jour vérifie que la nouvelle version se charge avant tout redémarrage, mais si le nouvel aipager n'arrive toujours pas à démarrer, systemd continue de réessayer toutes les 5 s. Regardez pourquoi :
@@ -330,6 +336,8 @@ Une installation pipx depuis un chemin local : `pipx install --force /path/to/a
 ## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>« Une mise à jour est restée à moitié à l'arrêt d'aipager »
 
 aipager s'est arrêté (ou a été redémarré) pendant que `/update` installait, et l'installateur a été arrêté avec lui, donc l'installation est peut-être à moitié écrite. Si aipager ou Claude Code se comporte mal, réparez-le : pour aipager, lancez la commande de réinstallation du message (par exemple `pipx install --force aipager`) puis `systemctl --user restart aipager.service` ; pour Claude Code, relancez `claude update`.
+
+Un Redémarrer maintenant qui n'a pas pu relancer aipager (sans service) laisse `restart.failed:` dans le journal d'aipager avec la commande à lancer ; lancez-la, et le nouvel aipager annonce la mise à jour.
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>Une discussion est dans la mauvaise langue
 

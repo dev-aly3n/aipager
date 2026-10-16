@@ -1,6 +1,6 @@
 # Pemecahan masalah
 
-<!-- i18n-source: docs/troubleshooting.md @ 01d5a8b -->
+<!-- i18n-source: docs/troubleshooting.md @ bb690d5 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../troubleshooting.md))
 
@@ -308,6 +308,12 @@ Claude Code yang dipasang dengan `sudo npm install -g` ada di folder yang hanya 
 
 Instalasi pipx dari URL git diperbarui dari sumber git itu, bukan dari PyPI. Saat di sumbernya tidak ada yang lebih baru, `/update` menampilkan `✅ aipager sudah di A - instalasi pipx ini diperbarui dari sumber git-nya, dan di sana tidak ada versi yang lebih baru.`. Push atau pilih versi baru di sana, atau pindah ke PyPI dengan `pipx install --force aipager`.
 
+**Tanpa layanan**, aipager yang tidak dimulai ulang oleh pengelola layanan mana pun (`aipager start` di terminal atau tmux, Docker, launchd) memasang pembaruan tetapi tetap menjalankan kode lama sampai ia dimulai ulang. `/update` lalu mengatakan `aipager B sudah terpasang dan menunggu dimulai ulang (yang berjalan: A).`, dan hook Claude Code, yang mulai baru di setiap event, mungkin sudah menjalankan B: pemilik mendapat satu pemberitahuan bahwa pembaruan baru setengah jalan (dua menit setelah hook pertama kali menjalankan B, jadi mulai ulang yang langsung menyusul pemasangan tidak pernah memunculkannya, dan setelah tidak ada tugas yang berjalan di chat pribadi pemilik). Setelah aipager menjalankan B, pemberitahuan itu berubah menjadi `✅ Pembaruan aipager sudah selesai: aipager sekarang sudah menjalankan B.`, tanpa tombolnya. Ketuk **🔄 Mulai ulang sekarang** (di pesan pembaruan, di pemberitahuan, atau di **Pengaturan → Pembaruan** Mini App). aipager menunggu sampai tidak ada tugas yang berjalan, berhenti dengan rapi, dan menjalankan versi baru di tempat: proses yang sama di terminal, jendela tmux, atau kontainer yang sama, dengan perintah dan lingkungan yang sama.
+
+Kalau menjalankan di tempat gagal, sebuah salinan terpisah menjalankan aipager setelah proses lama hilang. Keluarannya lalu masuk ke log mulai ulang sendiri (`aipager.log` di folder instans, atau `/tmp/aipager.log`), bukan ke terminalmu, dan log aipager menyebut perintah yang harus dijalankan kalau salinan itu tidak kembali. Kalau interpreternya sendiri hilang (lingkungannya dihapus), atau tidak ada yang bisa dijalankan, aipager keluar dengan kode 1, log aipager berakhir dengan `restart.failed:` dan perintah yang harus dijalankan, dan awal berikutnya mengumumkan pembaruan.
+
+Kalau tidak ada tombol **Mulai ulang sekarang**, pesannya memberi langkah untuk penyiapanmu: di terminal atau tmux, tekan Ctrl+C lalu jalankan `aipager start`; di macOS, `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; di Docker, `docker restart <container>` di host. Membuat ulang kontainer Docker (`docker compose up` setelah `down`, atau `docker run` lagi) menjalankannya dari image-nya, yang mengembalikan versi aipager di image itu: untuk mempertahankan aipager yang lebih baru, pakai image yang lebih baru.
+
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>aipager tidak kembali setelah pembaruan
 
 Pembaruan memeriksa bahwa versi baru bisa dimuat sebelum memulai ulang apa pun, tapi kalau aipager yang baru tetap gagal mulai, systemd mencoba lagi setiap 5 dtk. Lihat penyebabnya:
@@ -330,6 +336,8 @@ Instalasi pipx dari path lokal: `pipx install --force /path/to/aipager` pada com
 ## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>“Sebuah pembaruan terputus saat aipager dimatikan”
 
 aipager berhenti (atau dimulai ulang) saat `/update` sedang memasang, dan installer ikut berhenti bersamanya, jadi pemasangannya mungkin baru tertulis setengah. Kalau aipager atau Claude Code berperilaku aneh, perbaiki: untuk aipager, jalankan perintah pasang ulang dari pesannya (misalnya `pipx install --force aipager`) lalu `systemctl --user restart aipager.service`; untuk Claude Code, jalankan lagi `claude update`.
+
+Mulai ulang sekarang yang tidak bisa menjalankan aipager lagi (tanpa layanan) meninggalkan `restart.failed:` di log aipager beserta perintah yang harus dijalankan; jalankan perintah itu, dan aipager yang baru mengumumkan pembaruan.
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>Sebuah chat memakai bahasa yang salah
 

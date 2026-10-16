@@ -1,6 +1,6 @@
 # Sorun raporları: bir rapor neler içerir
 
-<!-- i18n-source: docs/problem-reports.md @ 6fc084f -->
+<!-- i18n-source: docs/problem-reports.md @ 16ee949 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../problem-reports.md))
 

@@ -2,7 +2,7 @@
 
 # رفع مشکل
 
-<!-- i18n-source: docs/troubleshooting.md @ 01d5a8b -->
+<!-- i18n-source: docs/troubleshooting.md @ bb690d5 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../troubleshooting.md))
 
@@ -352,6 +352,12 @@ systemctl --user restart aipager.service
 
 نصب pipx که از یک آدرس git ساخته شده از همان منبع git آپدیت می‌شود، نه از PyPI. وقتی آن منبع چیز جدیدتری ندارد، &lrm;`/update` می‌گوید `already at A - this pipx install upgrades from its git source, which has nothing newer`. نسخهٔ جدید را آنجا push یا انتخاب کنید، یا با `pipx install --force aipager` به PyPI بروید.
 
+**بدون سرویس**، aipagerی که هیچ مدیر سرویسی ری‌استارتش نمی‌کند (`aipager start` در یک ترمینال یا tmux،&rlm; Docker،&rlm; launchd) آپدیت را نصب می‌کند اما تا وقتی ری‌استارت نشود با همان کد قدیمی کار می‌کند. آن وقت &lrm;`/update` می‌گوید `aipager B نصب شده و منتظر ری‌استارت است (نسخهٔ در حال اجرا: A).`، و هوک‌های Claude Code که در هر رویداد از نو شروع می‌شوند شاید همین حالا B را اجرا کنند: مالک یک اعلان می‌گیرد که آپدیت نیمه‌کاره مانده (دو دقیقه بعد از اینکه هوک‌ها اولین بار B را اجرا کردند، پس ری‌استارتی که درست بعد از نصب بیاید هیچ‌وقت آن را نشان نمی‌دهد، و وقتی هیچ کاری در چت خصوصی مالک در جریان نباشد). وقتی aipager با B اجرا شود، آن اعلان بدون دکمه‌اش به `✅ آپدیت aipager تمام شد: حالا aipager نسخهٔ B است.` تبدیل می‌شود. روی **🔄 همین حالا ری‌استارت کن** بزنید (در پیام آپدیت، در اعلان، یا در **تنظیمات ← آپدیت** در Mini App). aipager صبر می‌کند تا هیچ کاری در جریان نباشد، تمیز می‌ایستد و نسخهٔ جدید را درجا شروع می‌کند: همان پروسه در همان ترمینال، پنجرهٔ tmux یا کانتینر، با همان دستور و همان محیط.
+
+اگر شروع درجا شکست بخورد، بعد از رفتن پروسهٔ قدیمی یک نسخهٔ جدا aipager را شروع می‌کند. آن وقت خروجی‌اش به‌جای ترمینال شما به لاگ ری‌استارت خودکار می‌رود (`aipager.log` در پوشهٔ همان نصب، یا &lrm;`/tmp/aipager.log`)، و اگر آن نسخه برنگردد، لاگ aipager دستوری را که باید اجرا کنید می‌گوید. اگر خود مفسر از بین رفته باشد (محیطش پاک شده باشد)، یا هیچ چیزی شروع نشود، aipager با کد 1 خارج می‌شود، لاگ aipager با `restart.failed:`&lrm; و دستوری که باید اجرا کنید تمام می‌شود، و شروع بعدی آپدیت را اعلام می‌کند.
+
+وقتی دکمهٔ **همین حالا ری‌استارت کن** نیست، پیام قدم‌های مخصوص راه‌اندازی شما را می‌دهد: در ترمینال یا tmux،&rlm; Ctrl+C را بزنید و `aipager start` را اجرا کنید؛ روی macOS،&rlm; `launchctl kickstart -k gui/<uid>/com.aipager.daemon`؛ در Docker،&rlm; `docker restart <container>`&lrm; روی میزبان. ساختن دوبارهٔ یک کانتینر Docker (`docker compose up` بعد از `down`، یا دوباره `docker run`) آن را از image خودش شروع می‌کند، و این نسخهٔ aipager داخل همان image را برمی‌گرداند: برای نگه داشتن aipager جدیدتر، از یک image جدیدتر استفاده کنید.
+
 ## &rlm;<a id="the-daemon-didnt-come-back-after-an-update"></a>aipager بعد از آپدیت برنگشت
 
 آپدیت قبل از هر ری‌استارتی چک می‌کند نسخهٔ جدید import می‌شود، ولی اگر aipager جدید باز هم شروع نشود، systemd هر ۵ ثانیه دوباره امتحان می‌کند. دلیلش را ببینید:
@@ -382,6 +388,8 @@ systemctl --user restart aipager.service
 ## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>«An update was interrupted when aipager shut down»
 
 &rlm;aipager وقتی &lrm;`/update` داشت نصب می‌کرد متوقف (یا ری‌استارت) شد و نصب‌کننده هم همراهش متوقف شد، پس ممکن است نصب نیمه‌کاره نوشته شده باشد. اگر aipager یا Claude Code درست کار نمی‌کند، تعمیرش کنید: برای aipager دستور نصب دوباره‌ای را که در پیام آمده اجرا کنید (مثلاً `pipx install --force aipager`) و بعد `systemctl --user restart aipager.service`؛ برای Claude Code دوباره `claude update` را اجرا کنید.
+
+«همین حالا ری‌استارت کن»ی که نتوانسته aipager را دوباره شروع کند (بدون سرویس)، در لاگ aipager یک `restart.failed:`&lrm; همراه دستوری که باید اجرا کنید می‌گذارد؛ اجرایش کنید تا aipager جدید آپدیت را اعلام کند.
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>یک چت زبان اشتباهی دارد
 

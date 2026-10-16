@@ -1,6 +1,6 @@
 # aipager
 
-<!-- i18n-source: README.md @ a175bc5 -->
+<!-- i18n-source: README.md @ c91598e -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../../README.md)）
 
@@ -178,7 +178,7 @@ aipager session dev -- --resume abc1234
 aipager service install
 ```
 
-在 Linux 上，它把一个 systemd 用户服务写到 `~/.config/systemd/user/aipager.service` 并启动它。在 macOS 上，它把一个 launchd plist 写到 `~/Library/LaunchAgents/com.aipager.daemon.plist` 并启动它。子命令：`start`、`stop`、`status`、`logs`、`uninstall`。
+在 Linux 上，它把一个 systemd 用户服务写到 `~/.config/systemd/user/aipager.service` 并启动它。在 macOS 上，它把一个 launchd plist 写到 `~/Library/LaunchAgents/com.aipager.daemon.plist` 并启动它。两种情况下 aipager 都在你的主文件夹中运行，除非你另选文件夹，新会话也从这里开始。子命令：`start`、`stop`、`status`、`logs`、`uninstall`。
 
 ## <a id="team-mode-groups-and-other-people"></a>团队模式（群组和其他人）
 

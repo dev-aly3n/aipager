@@ -1,6 +1,6 @@
 # 아키텍처
 
-<!-- i18n-source: docs/architecture.md @ 7e36944 -->
+<!-- i18n-source: docs/architecture.md @ c91598e -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../architecture.md))
 
@@ -109,11 +109,12 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 | `~/.claude/aipager-sessions.json` | 세션 목록의 저장된 상태 | aipager |
 | `~/.claude/aipager-audit.jsonl` | 허용 / 거부 / 답변 로그 | aipager (추가만 함) |
 | `~/.claude/aipager-flood-state.json` | 채팅마다의 Telegram 속도 제한 기록, 재시작해도 유지돼요([문제 해결](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | aipager가 붙잡고 있는 Mini App 터널: 프로세스, 로컬 포트, 주소의 해시(주소 자체는 절대 아님)를 적어 두어서 계획된 재시작 뒤 다음 aipager가 이어받을 수 있게 해요(권한 600). cloudflared의 경고도 있어요 | aipager. 유지된 터널의 감시 프로세스와 `aipager uninstall`도 이 기록을 지워요 |
 | `~/.claude/aipager-pending-users.json` | 봇이 서비스하지 않는 그룹에서 봇을 부른 사람, 또는 서비스하는 그룹에 있지만 멤버가 아닌 사람, `aipager config`로 추가할 수 있게(권한 0600, 쓸 때마다 통째로 바꿈, 최근 30일 동안 나타난 최신 200명 보관) | aipager (씀), `aipager config` (읽음) |
 | `~/aipager-users/<label>/` | 멤버의 기본 [루트 폴더](groups.md#root-folders)(권한 0700), `user`와 `read_only` 멤버가 여기서 세션을 시작해요. `aipager uninstall`은 이것을 남겨 둬요 | aipager (멤버가 처음 `/new`를 쓰거나 Mini App에서 처음 “세션 시작”을 할 때 만들어요) |
 | `~/.claude/settings.json` | Claude Code의 hook 설정 | `aipager config` / `aipager setup`. 시작할 때마다 aipager가 빠진 aipager hook이나 상태 줄을 채우고 `skipDangerousModePermissionPrompt`를 설정해요([보안](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | 다시 쓰기 전마다 만드는 백업 | `aipager config`, `aipager setup`, `aipager uninstall` |
-| `~/.claude.json` | Claude Code 자체 파일: 시작할 때 aipager가 기본 세션 폴더(aipager의 작업 폴더, 또는 `AIPAGER_WORK_DIR`)를 신뢰하는 폴더로 표시해서, Claude Code의 신뢰 질문이 Telegram에서 그 폴더로 시작한 세션을 막지 않게 해요 | aipager |
+| `~/.claude.json` | Claude Code 자체 파일: aipager가 세션이 시작될 폴더를 시작 직전에 신뢰하는 폴더로 표시해서(홈 폴더도 포함, `/`나 홈 폴더 위의 폴더는 절대 아님), Claude Code의 신뢰 질문이 Telegram에서 시작한 세션을 막지 않게 해요. aipager가 시작할 때는 아무것도 표시하지 않아요. 전체를 읽을 수 없거나 실행 중인 Claude가 그사이 바꿨다면 절대 다시 쓰지 않아요 | aipager |
 | `~/.claude/.credentials.json` → `.credentials.json.stale` | Claude Code의 로그인 파일, `CLAUDE_CODE_OAUTH_TOKEN`을 설정한 채 세션을 시작하는데 이 파일에 만료됐거나 빈 로그인만 있을 때 옆으로 치워 둬요(그렇지 않으면 token보다 우선해요). 되돌리려면 다시 옮겨 놓으세요 | aipager |
 | `~/.config/aipager/aipager.yaml` | 봇 token, 채팅, 멤버 + 역할, Mini App 설정 | `aipager config` (권한 600). Telegram이 그룹을 supergroup으로 업그레이드하면 aipager가 그 그룹 항목을 옮기고, 예전 Mini App 설정을 안으로 옮길 때 `aipager.yaml.bak.<time>`을 남겨요 |
 | `~/.config/aipager/policy.yaml` | 역할별 규칙 + 안전 기준선 추가분 | 나 (`aipager policy validate`로 확인). 예전 설치를 옮길 때 주석이 달린 템플릿을 한 번 써요 |

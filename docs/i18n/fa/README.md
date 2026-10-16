@@ -2,7 +2,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ a175bc5 -->
+<!-- i18n-source: README.md @ c91598e -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../../README.md))
 
@@ -248,7 +248,7 @@ aipager service install
 
 </div>
 
-روی Linux یک سرویس systemd کاربری در &lrm;`~/.config/systemd/user/aipager.service` می‌نویسد و اجرایش می‌کند. روی macOS یک plist برای launchd در &lrm;`~/Library/LaunchAgents/com.aipager.daemon.plist` می‌نویسد و راهش می‌اندازد. زیردستورها: `start`،&rlm; `stop`،&rlm; `status`،&rlm; `logs`،&rlm; `uninstall`.
+روی Linux یک سرویس systemd کاربری در &lrm;`~/.config/systemd/user/aipager.service` می‌نویسد و اجرایش می‌کند. روی macOS یک plist برای launchd در &lrm;`~/Library/LaunchAgents/com.aipager.daemon.plist` می‌نویسد و راهش می‌اندازد. در هر دو حالت aipager در پوشهٔ خانهٔ شما اجرا می‌شود و سشن جدید هم همان‌جا شروع می‌شود، مگر اینکه پوشهٔ دیگری انتخاب کنید. زیردستورها: `start`،&rlm; `stop`،&rlm; `status`،&rlm; `logs`،&rlm; `uninstall`.
 
 ## <a id="team-mode-groups-and-other-people"></a>استفادهٔ تیمی (گروه‌ها و آدم‌های دیگر)
 

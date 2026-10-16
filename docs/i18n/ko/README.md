@@ -1,6 +1,6 @@
 # aipager
 
-<!-- i18n-source: README.md @ a175bc5 -->
+<!-- i18n-source: README.md @ c91598e -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../../README.md))
 
@@ -178,7 +178,7 @@ aipager session dev -- --resume abc1234
 aipager service install
 ```
 
-Linux에서는 systemd 사용자 서비스를 `~/.config/systemd/user/aipager.service`에 쓰고 시작해요. macOS에서는 launchd plist를 `~/Library/LaunchAgents/com.aipager.daemon.plist`에 쓰고 시작해요. 하위 명령: `start`, `stop`, `status`, `logs`, `uninstall`.
+Linux에서는 systemd 사용자 서비스를 `~/.config/systemd/user/aipager.service`에 쓰고 시작해요. macOS에서는 launchd plist를 `~/Library/LaunchAgents/com.aipager.daemon.plist`에 쓰고 시작해요. 어느 쪽이든 aipager는 홈 폴더에서 실행되고, 다른 폴더를 고르지 않으면 새 세션도 거기서 시작돼요. 하위 명령: `start`, `stop`, `status`, `logs`, `uninstall`.
 
 ## <a id="team-mode-groups-and-other-people"></a>팀 모드 (그룹과 다른 사람)
 

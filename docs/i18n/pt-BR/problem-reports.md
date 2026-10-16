@@ -1,6 +1,6 @@
 # Relatórios de problemas: o que eles contêm
 
-<!-- i18n-source: docs/problem-reports.md @ 6fc084f -->
+<!-- i18n-source: docs/problem-reports.md @ 16ee949 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../problem-reports.md))
 

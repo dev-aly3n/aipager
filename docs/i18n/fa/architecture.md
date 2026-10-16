@@ -2,7 +2,7 @@
 
 # معماری
 
-<!-- i18n-source: docs/architecture.md @ 7e36944 -->
+<!-- i18n-source: docs/architecture.md @ c91598e -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../architecture.md))
 
@@ -115,11 +115,12 @@ flowchart LR
 | &lrm;`~/.claude/aipager-sessions.json` | وضعیت ماندگار فهرست سشن‌ها | aipager |
 | &lrm;`~/.claude/aipager-audit.jsonl` | لاگ اجازه دادن، رد کردن و جواب‌ها | aipager (فقط اضافه می‌کند) |
 | &lrm;`~/.claude/aipager-flood-state.json` | تاریخچهٔ محدودیت سرعت تلگرام برای هر چت، که بعد از ری‌استارت هم می‌ماند ([رفع مشکل](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
+| &lrm;`~/.claude/aipager-tunnel.json`،&rlm; `aipager-cloudflared.log` | تونل Mini App که aipager نگهش می‌دارد: پروسه‌اش، پورت‌های محلی‌اش و هش آدرسش (هیچ‌وقت خود آدرس)، تا aipager بعدی بعد از یک ری‌استارت برنامه‌ریزی‌شده آن را تحویل بگیرد (حالت دسترسی 600)؛ و هشدارهای cloudflared | aipager؛ این رکورد را نگهبانِ تونلِ نگه‌داشته‌شده و `aipager uninstall` هم پاک می‌کنند |
 | &lrm;`~/.claude/aipager-pending-users.json` | کسانی که در گروهی که ربات در آن کار نمی‌کند ربات را صدا زده‌اند، یا عضو گروهی که ربات در آن کار می‌کند نیستند، تا `aipager config` بتواند اضافه‌شان کند (حالت دسترسی 0600، هر بار کامل عوض می‌شود، ۲۰۰ نفر آخری که در ۳۰ روز گذشته دیده شده‌اند) | aipager (می‌نویسد)، `aipager config` (می‌خواند) |
 | &lrm;`~/aipager-users/<label>/`&lrm; | پوشهٔ ریشهٔ پیش‌فرض اعضا ([پوشه‌های ریشه](groups.md#root-folders))، با حالت دسترسی 0700، جایی که اعضای `user` و `read_only` سشن‌هایشان را شروع می‌کنند؛ `aipager uninstall` نگهشان می‌دارد | aipager (در اولین &lrm;`/new` یا «سشن جدید» یک عضو در Mini App می‌سازدش) |
 | &lrm;`~/.claude/settings.json` | تنظیم هوک‌های Claude Code | `aipager config` /&rlm; `aipager setup`؛ در هر شروع، aipager هر هوک یا خط وضعیتی را که کم باشد اضافه می‌کند و `skipDangerousModePermissionPrompt` را تنظیم می‌کند ([مدل امنیتی](security.md#who-decides-whether-a-tool-call-runs)) |
 | &lrm;`~/.claude/settings.json.bak.*`&lrm; | نسخهٔ پشتیبان قبل از هر بازنویسی | `aipager config`،&rlm; `aipager setup`،&rlm; `aipager uninstall` |
-| &lrm;`~/.claude.json` | فایل خود Claude Code: در شروع، aipager پوشهٔ پیش‌فرض سشن‌هایش را (پوشهٔ کاری aipager، یا `AIPAGER_WORK_DIR`) مورد اعتماد علامت می‌زند تا سؤال اعتماد Claude Code جلوی سشنی را که از تلگرام در آن پوشه شروع می‌شود نگیرد | aipager |
+| &lrm;`~/.claude.json` | فایل خود Claude Code:&rlm; aipager پوشه‌ای را که سشن در آن شروع می‌شود درست پیش از شروع، مورد اعتماد علامت می‌زند (پوشهٔ خانه هم، ولی هیچ‌وقت `/` یا پوشه‌ای بالاتر از پوشهٔ خانه)، تا سؤال اعتماد Claude Code جلوی سشنی را که از تلگرام شروع می‌شود نگیرد. موقع شروع aipager چیزی علامت نمی‌خورد. اگر نشود کامل خواندش یا یک Claude در حال اجرا در همین فاصله تغییرش داده باشد، هیچ‌وقت بازنویسی نمی‌شود | aipager |
 | &lrm;`~/.claude/.credentials.json` ← `.credentials.json.stale` | فایل لاگین Claude Code؛ وقتی سشنی با `CLAUDE_CODE_OAUTH_TOKEN` شروع شود و این فایل فقط یک لاگین منقضی یا خالی داشته باشد کنار گذاشته می‌شود (وگرنه بر توکن مقدم می‌شد)؛ برای برگرداندن، دوباره سر جایش بگذاریدش | aipager |
 | &lrm;`~/.config/aipager/aipager.yaml` | توکن ربات، چت‌ها، اعضا و نقش‌ها، تنظیمات Mini App | `aipager config` (حالت دسترسی 600)؛ وقتی تلگرام یک گروه را به سوپرگروه ارتقا می‌دهد aipager بخش آن گروه را جابه‌جا می‌کند، و وقتی تنظیمات قدیمی Mini App را به آن منتقل می‌کند یک کپی `aipager.yaml.bak.<time>`&lrm; نگه می‌دارد |
 | &lrm;`~/.config/aipager/policy.yaml` | قانون‌های هر نقش و قانون‌های اضافهٔ ایمنی | خودتان (با `aipager policy validate` چک می‌شود)؛ وقتی یک نصب قدیمی منتقل می‌شود، یک بار یک نمونهٔ شروع با توضیح نوشته می‌شود |

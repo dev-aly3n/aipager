@@ -1,6 +1,6 @@
 # Звіти про проблеми: що містить звіт
 
-<!-- i18n-source: docs/problem-reports.md @ 6fc084f -->
+<!-- i18n-source: docs/problem-reports.md @ 16ee949 -->
 
 > Цю сторінку перекладено з англійської; якщо вони розходяться, правильною є англійська версія. ([English](../../problem-reports.md))
 

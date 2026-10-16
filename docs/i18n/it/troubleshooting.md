@@ -1,6 +1,6 @@
 # Risoluzione dei problemi
 
-<!-- i18n-source: docs/troubleshooting.md @ 01d5a8b -->
+<!-- i18n-source: docs/troubleshooting.md @ bb690d5 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../troubleshooting.md))
 
@@ -308,6 +308,12 @@ Un Claude Code installato con `sudo npm install -g` sta in una cartella che solo
 
 Un'installazione con pipx fatta da un URL git si aggiorna da quella sorgente git, non da PyPI. Quando la sorgente non ha niente di più recente, `/update` dice `✅ aipager è già alla A: questa installazione con pipx si aggiorna dal suo repo git, che non ha niente di più recente.`. Pubblica o scegli lì la nuova versione, oppure passa a PyPI con `pipx install --force aipager`.
 
+**Senza servizio**, un aipager che nessun gestore di servizi riavvia (`aipager start` in un terminale o in tmux, Docker, launchd) installa un aggiornamento ma continua a eseguire il vecchio codice finché non si riavvia. `/update` dice allora `aipager B è installato e aspetta un riavvio (in funzione: A).`, e gli hook di Claude Code, che ripartono da zero a ogni evento, potrebbero già usare B: il proprietario riceve un avviso che l'aggiornamento è fatto solo a metà (due minuti dopo che gli hook hanno usato B per la prima volta, così un riavvio subito dopo l'installazione non lo mostra mai, e quando nessuna attività è in corso nella chat privata del proprietario). Quando aipager usa B, quell'avviso diventa `✅ L'aggiornamento di aipager è completato: ora aipager è alla B.`, senza il suo pulsante. Tocca **🔄 Riavvia ora** (nel messaggio dell'aggiornamento, nell'avviso o in **Impostazioni → Aggiornamenti** della Mini App). aipager aspetta che nessuna attività sia in corso, si ferma in modo pulito e avvia la nuova versione sul posto: lo stesso processo nello stesso terminale, nella stessa finestra di tmux o nello stesso container, con lo stesso comando e lo stesso ambiente.
+
+Se l'avvio sul posto non riesce, una copia separata avvia aipager quando il vecchio processo non c'è più. Il suo output va allora nel log del riavvio automatico (`aipager.log` nella cartella dell'istanza, o `/tmp/aipager.log`) invece che nel tuo terminale, e il log di aipager indica il comando da eseguire se quella copia non torna. Se l'interprete stesso non c'è più (il suo ambiente è stato rimosso), o non si è potuto avviare niente, aipager esce con codice 1, il log di aipager finisce con `restart.failed:` e il comando da eseguire, e l'avvio successivo annuncia l'aggiornamento.
+
+Quando non c'è il pulsante **Riavvia ora**, il messaggio dà i passaggi per il tuo ambiente: in un terminale o in tmux, premi Ctrl+C ed esegui `aipager start`; su macOS, `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; in Docker, `docker restart <container>` sull'host. Ricreare un container Docker (`docker compose up` dopo `down`, o di nuovo `docker run`) lo fa partire dalla sua immagine, e questo riporta la versione di aipager di quell'immagine: per tenere un aipager più nuovo, usa un'immagine più nuova.
+
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>aipager non è ripartito dopo un aggiornamento
 
 L'aggiornamento controlla che la nuova versione si importi prima di qualsiasi riavvio, ma se il nuovo aipager non riesce comunque a partire, systemd riprova ogni 5 s. Guarda perché:
@@ -330,6 +336,8 @@ Un'installazione con pipx da un percorso locale: `pipx install --force /path/to/
 ## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>«Un aggiornamento è rimasto a metà quando aipager si è spento»
 
 aipager si è fermato (o è stato riavviato) mentre `/update` installava, e l'installatore si è fermato con lui, quindi l'installazione potrebbe essere scritta a metà. Se aipager o Claude Code non funzionano bene, sistemali: per aipager, esegui il comando di reinstallazione del messaggio (per esempio `pipx install --force aipager`) e poi `systemctl --user restart aipager.service`; per Claude Code, esegui di nuovo `claude update`.
+
+Un Riavvia ora che non è riuscito a far ripartire aipager (senza servizio) lascia `restart.failed:` nel log di aipager con il comando da eseguire; eseguilo, e il nuovo aipager annuncia l'aggiornamento.
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>Una chat è nella lingua sbagliata
 

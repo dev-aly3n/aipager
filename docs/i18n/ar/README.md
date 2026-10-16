@@ -2,7 +2,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ a175bc5 -->
+<!-- i18n-source: README.md @ c91598e -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../../README.md))
 
@@ -248,7 +248,7 @@ aipager service install
 
 </div>
 
-على Linux، يكتب هذا خدمة مستخدم systemd في &lrm;`~/.config/systemd/user/aipager.service` ثم يشغّلها. على macOS، يكتب ملف plist لـ launchd في &lrm;`~/Library/LaunchAgents/com.aipager.daemon.plist` ثم يشغّله. الأوامر الفرعية: `start` و`stop` و`status` و`logs` و`uninstall`.
+على Linux، يكتب هذا خدمة مستخدم systemd في &lrm;`~/.config/systemd/user/aipager.service` ثم يشغّلها. على macOS، يكتب ملف plist لـ launchd في &lrm;`~/Library/LaunchAgents/com.aipager.daemon.plist` ثم يشغّله. في الحالتين يعمل aipager في مجلدك الرئيسي، وهناك تبدأ الجلسة الجديدة ما لم تختر مجلدًا آخر. الأوامر الفرعية: `start` و`stop` و`status` و`logs` و`uninstall`.
 
 ## <a id="team-mode-groups-and-other-people"></a>وضع الفريق (المجموعات وأشخاص آخرون)
 

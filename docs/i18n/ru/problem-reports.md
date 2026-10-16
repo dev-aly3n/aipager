@@ -1,6 +1,6 @@
 # Отчёты о проблемах: что содержит отчёт
 
-<!-- i18n-source: docs/problem-reports.md @ 6fc084f -->
+<!-- i18n-source: docs/problem-reports.md @ 16ee949 -->
 
 > Эта страница переведена с английской; если они расходятся, верна английская версия. ([English](../../problem-reports.md))
 
