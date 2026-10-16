@@ -1,6 +1,6 @@
 # Архитектура
 
-<!-- i18n-source: docs/architecture.md @ 7e36944 -->
+<!-- i18n-source: docs/architecture.md @ c91598e -->
 
 > Эта страница переведена с английской; если они расходятся, верна английская версия. ([English](../../architecture.md))
 
@@ -109,11 +109,12 @@ flowchart LR
 | `~/.claude/aipager-sessions.json` | Долговременное состояние списка сессий | aipager |
 | `~/.claude/aipager-audit.jsonl` | Журнал Разрешить / Отклонить / ответов | aipager (только дописывает) |
 | `~/.claude/aipager-flood-state.json` | История лимитов Telegram для каждого чата, сохраняется между перезапусками ([решение проблем](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | Туннель Mini App, который держит aipager: его процесс, локальные порты и хеш его адреса (никогда не сам адрес), чтобы следующий aipager мог подхватить его после планового перезапуска (права 600); предупреждения cloudflared | aipager; запись также удаляют сторож оставленного туннеля и `aipager uninstall` |
 | `~/.claude/aipager-pending-users.json` | Люди, которые обратились к боту в группе, которую он не обслуживает, или которые не участники группы, которую он обслуживает, чтобы `aipager config` мог их добавить (права 0600, целиком перезаписывается при каждой записи, последние 200 человек за 30 дней) | aipager (пишет), `aipager config` (читает) |
 | `~/aipager-users/<label>/` | [Корневые папки](groups.md#root-folders) участников по умолчанию (права 0700), где участники с `user` и `read_only` запускают свои сессии; `aipager uninstall` их сохраняет | aipager (создаёт при первом `/new` или первой «Новой сессии» в Mini App у участника) |
 | `~/.claude/settings.json` | Конфигурация hooks Claude Code | `aipager config` / `aipager setup`; при каждом запуске aipager добавляет недостающие hooks или строку состояния aipager и ставит `skipDangerousModePermissionPrompt` ([безопасность](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | Резервные копии перед каждой перезаписью | `aipager config`, `aipager setup`, `aipager uninstall` |
-| `~/.claude.json` | Собственный файл Claude Code: при запуске aipager отмечает свою папку сессий по умолчанию (рабочую папку aipager или `AIPAGER_WORK_DIR`) как доверенную, чтобы вопрос о доверии Claude Code не останавливал сессию, запущенную из Telegram в этой папке | aipager |
+| `~/.claude.json` | Собственный файл Claude Code: aipager отмечает папку, в которой запускается сессия, как доверенную прямо перед запуском (домашнюю папку тоже, но никогда `/` или папку выше домашней), чтобы вопрос о доверии Claude Code не останавливал сессию, запущенную из Telegram. При запуске aipager ничего не отмечается. Никогда не перезаписывается, если его нельзя прочитать целиком или работающий Claude успел его изменить | aipager |
 | `~/.claude/.credentials.json` → `.credentials.json.stale` | Файл входа Claude Code, отодвигается в сторону, когда сессия запускается с заданным `CLAUDE_CODE_OAUTH_TOKEN`, а в файле только истёкший или пустой вход (иначе он взял бы верх над токеном); чтобы отменить, верни его на место | aipager |
 | `~/.config/aipager/aipager.yaml` | Токен бота, чаты, участники + роли, настройки Mini App | `aipager config` (права 600); aipager переносит запись группы, когда Telegram делает её супергруппой, и сохраняет копию `aipager.yaml.bak.<time>`, когда переносит туда старые настройки Mini App |
 | `~/.config/aipager/policy.yaml` | Правила для каждой роли + дополнения к порогу безопасности | ты (проверяется через `aipager policy validate`); шаблон с комментариями пишется один раз при переносе старой установки |

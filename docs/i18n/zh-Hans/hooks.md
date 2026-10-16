@@ -1,6 +1,6 @@
 # Hook 事件
 
-<!-- i18n-source: docs/hooks.md @ 7228205 -->
+<!-- i18n-source: docs/hooks.md @ 8526c26 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../hooks.md)）
 
@@ -97,7 +97,7 @@ aipager 读取 Claude Code 的 `notification_type`：
 
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
-一个子代理启动或结束了。每个子代理在工作卡片上有自己的一行，`🤖 <type> · <activity> · <elapsed>`，它自己的工具调用折叠在下面，停止时定格为 `✅ 🤖 <type> · 用了 N 次工具 · <elapsed>`。一直等不到 `SubagentStop` 的子代理，在沉默 30 分钟后会被移除（`AIPAGER_SUBAGENT_SILENCE`，单位秒；期间没有任何带它 ID 的事件）。正在工作的代理每隔几秒就会发出工具事件，所以这只会收走那些停止信号被错过的代理（重启、丢失的 datagram）；单次运行 30 分钟、期间该代理 ID 下没有任何事件的工具调用，也会让它被收走。`AIPAGER_SUBAGENT_TTL` 作为同一设置的旧名称仍被接受。没有类型、ID 未知的 `SubagentStop` 事件经常出现，会被忽略。
+一个子代理启动或结束了。每个子代理在工作卡片上有自己的一行，`🤖 <type> · <activity> · <elapsed>`，它自己的工具调用折叠在下面，停止时定格为 `✅ 🤖 <type> · 用了 N 次工具 · <elapsed>`。`SubagentStart` 不说明是哪个代理启动了它：aipager 把它和正在等待的同类型 `Agent` 调用（`PreToolUse`）配对。如果这些调用都来自同一个代理，新代理会立刻挂到那个代理下（它在卡片上的行显示为 `🤖 pipeline-runner › ship-tester`，在回答下方的状态里也列在那个代理下面）；如果来自不同的代理，就先不挂靠，直到启动它的代理自己的 `PostToolUse` 说出它的名字。只有恰好一个该类型的调用在等待时，才会用调用的描述。一直等不到 `SubagentStop` 的子代理，在沉默 30 分钟后会被移除（`AIPAGER_SUBAGENT_SILENCE`，单位秒；期间没有任何带它 ID 的事件）。正在工作的代理每隔几秒就会发出工具事件，所以这只会收走那些停止信号被错过的代理（重启、丢失的 datagram）；单次运行 30 分钟、期间该代理 ID 下没有任何事件的工具调用，也会让它被收走。`AIPAGER_SUBAGENT_TTL` 作为同一设置的旧名称仍被接受。没有类型、ID 未知的 `SubagentStop` 事件经常出现，会被忽略。
 
 一个后台代理在它启动的代理仍在运行时停下，也会收到 `SubagentStop`。aipager 把它当作暂停，而不是结束：这个代理仍算作正在运行（它的那一行、这项工作、回答下方的状态、置顶栏）。它下一次带同一 ID 的 `SubagentStart` 表示它继续了，不会再添加第二行；它自己的任何工具调用也算作继续。当它在自己的代理都已不在运行时停下，它才算结束。如果在其中最后一个代理结束两分钟后它仍未继续，它就不再算作正在运行，但绝不会显示为已完成。正在运行的代理，包括正在等待的那些，在 aipager 重启后都会保留。
 

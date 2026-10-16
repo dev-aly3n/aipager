@@ -1,6 +1,6 @@
 # Sorun giderme
 
-<!-- i18n-source: docs/troubleshooting.md @ 01d5a8b -->
+<!-- i18n-source: docs/troubleshooting.md @ bb690d5 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../troubleshooting.md))
 
@@ -308,6 +308,12 @@ Hizmet yoksa (ya da macOS'ta) aipager'ı nasıl başlatıldıysa öyle yeniden b
 
 Bir git URL'inden yapılmış bir pipx kurulumu PyPI'dan değil, o git kaynağından güncellenir. Kaynakta daha yeni bir şey olmadığında `/update` şunu yazar: `✅ aipager zaten A sürümünde: bu pipx kurulumu kendi git reposundan güncellenir ve orada daha yenisi yok.`. Yeni bir sürümü oraya gönder ya da seç veya `pipx install --force aipager` ile PyPI'a geç.
 
+**Hizmet olmadan**, hiçbir hizmet yöneticisinin yeniden başlatmadığı bir aipager (bir terminalde ya da tmux'ta `aipager start`, Docker, launchd) bir güncellemeyi kurar ama yeniden başlayana kadar eski kodla çalışmaya devam eder. `/update` o zaman `aipager B kurulu ve yeniden başlatılmayı bekliyor (çalışan: A).` der, ve her olayda yeniden başlayan Claude Code hook'ları zaten B'yi çalıştırıyor olabilir: sahip, güncellemenin yarım kaldığını söyleyen tek bir bildirim alır (hook'lar B'yi ilk kez çalıştırdıktan iki dakika sonra, yani kurulumun hemen ardından gelen bir yeniden başlatma onu hiç göstermez, ve sahibin özel sohbetinde çalışan görev kalmayınca). aipager B'yi çalıştırdığında bu bildirim, düğmesi olmadan `✅ aipager güncellemesi tamamlandı: aipager artık B sürümünde çalışıyor.` olur. **🔄 Şimdi yeniden başlat** düğmesine dokun (güncelleme mesajında, bildirimde ya da Mini App'in **Ayarlar → Güncellemeler** bölümünde). aipager çalışan görev kalmayana kadar bekler, temiz bir şekilde durur ve yeni sürümü yerinde başlatır: aynı terminalde, tmux penceresinde ya da konteynerde aynı süreç, aynı komut ve aynı ortamla.
+
+Yerinde başlatma başarısız olursa, eski süreç gittikten sonra ayrı bir kopya aipager'ı başlatır. Bu durumda çıktısı terminaline değil kendi kendini yeniden başlatma günlüğüne (örnek klasöründeki `aipager.log` ya da `/tmp/aipager.log`) gider, ve bu kopya geri gelmezse aipager günlüğü çalıştırılacak komutu söyler. Yorumlayıcının kendisi yoksa (ortamı silindiyse) ya da hiçbir şey başlatılamadıysa, aipager 1 koduyla çıkar, aipager günlüğü `restart.failed:` ve çalıştırılacak komutla biter, ve bir sonraki başlangıç güncellemeyi duyurur.
+
+**Şimdi yeniden başlat** düğmesi yoksa, mesaj kurulumuna uygun adımları verir: bir terminalde ya da tmux'ta Ctrl+C'ye bas ve `aipager start` çalıştır; macOS'ta `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; Docker'da sunucuda `docker restart <container>`. Bir Docker konteynerini yeniden oluşturmak (`down` sonrasında `docker compose up` ya da yeniden `docker run`) onu imajından başlatır, bu da o imajdaki aipager sürümünü geri getirir: daha yeni bir aipager'ı tutmak için daha yeni bir imaj kullan.
+
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>aipager bir güncellemeden sonra geri gelmedi
 
 Güncelleme, bir şeyi yeniden başlatmadan önce yeni sürümün yüklendiğini kontrol eder, ama yeni aipager yine de başlamazsa systemd her 5 sn'de bir yeniden dener. Nedenine bak:
@@ -330,6 +336,8 @@ Yerel bir yoldan yapılmış pipx kurulumu: eski bir commit üzerinde `pipx inst
 ## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>“aipager kapanırken bir güncelleme yarıda kaldı”
 
 `/update` kurulum yaparken aipager durdu (ya da yeniden başlatıldı) ve kurucu onunla birlikte durdu, bu yüzden kurulum yarım yazılmış olabilir. aipager ya da Claude Code tuhaf davranıyorsa onar: aipager için mesajdaki yeniden kurulum komutunu çalıştır (örneğin `pipx install --force aipager`), sonra `systemctl --user restart aipager.service`; Claude Code için `claude update` komutunu yeniden çalıştır.
+
+aipager'ı yeniden başlatamayan bir Şimdi yeniden başlat (hizmet olmadan), aipager günlüğünde çalıştırılacak komutla birlikte `restart.failed:` bırakır; onu çalıştır, yeni aipager da güncellemeyi duyurur.
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>Bir sohbet yanlış dilde
 

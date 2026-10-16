@@ -1,6 +1,6 @@
 # aipager
 
-<!-- i18n-source: README.md @ a175bc5 -->
+<!-- i18n-source: README.md @ c91598e -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../../README.md))
 
@@ -178,7 +178,7 @@ aipager session dev -- --resume abc1234
 aipager service install
 ```
 
-Di Linux, ini menulis layanan pengguna systemd ke `~/.config/systemd/user/aipager.service` lalu menjalankannya. Di macOS, ini menulis plist launchd ke `~/Library/LaunchAgents/com.aipager.daemon.plist` lalu menjalankannya. Subperintah: `start`, `stop`, `status`, `logs`, `uninstall`.
+Di Linux, ini menulis layanan pengguna systemd ke `~/.config/systemd/user/aipager.service` lalu menjalankannya. Di macOS, ini menulis plist launchd ke `~/Library/LaunchAgents/com.aipager.daemon.plist` lalu menjalankannya. Di keduanya aipager berjalan di folder home-mu, tempat sesi baru dimulai kecuali kamu memilih folder lain. Subperintah: `start`, `stop`, `status`, `logs`, `uninstall`.
 
 ## <a id="team-mode-groups-and-other-people"></a>Mode tim (grup dan orang lain)
 

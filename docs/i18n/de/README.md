@@ -1,6 +1,6 @@
 # aipager
 
-<!-- i18n-source: README.md @ a175bc5 -->
+<!-- i18n-source: README.md @ c91598e -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../../README.md))
 
@@ -178,7 +178,7 @@ aipager session dev -- --resume abc1234
 aipager service install
 ```
 
-Auf Linux schreibt das einen systemd-Benutzerdienst nach `~/.config/systemd/user/aipager.service` und startet ihn. Auf macOS schreibt es eine launchd-plist nach `~/Library/LaunchAgents/com.aipager.daemon.plist` und startet sie. Unterbefehle: `start`, `stop`, `status`, `logs`, `uninstall`.
+Auf Linux schreibt das einen systemd-Benutzerdienst nach `~/.config/systemd/user/aipager.service` und startet ihn. Auf macOS schreibt es eine launchd-plist nach `~/Library/LaunchAgents/com.aipager.daemon.plist` und startet sie. In beiden Fällen läuft aipager in deinem Home-Ordner, und dort startet eine neue Sitzung, wenn du keinen anderen Ordner wählst. Unterbefehle: `start`, `stop`, `status`, `logs`, `uninstall`.
 
 ## <a id="team-mode-groups-and-other-people"></a>Teambetrieb (Gruppen und andere Personen)
 

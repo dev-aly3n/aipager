@@ -1,6 +1,6 @@
 # Xử lý sự cố
 
-<!-- i18n-source: docs/troubleshooting.md @ 01d5a8b -->
+<!-- i18n-source: docs/troubleshooting.md @ bb690d5 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../troubleshooting.md))
 
@@ -308,6 +308,12 @@ Một bản Claude Code cài bằng `sudo npm install -g` nằm trong thư mục
 
 Một bản cài pipx tạo từ một URL git được nâng cấp từ nguồn git đó, không phải từ PyPI. Khi nguồn không có gì mới hơn, `/update` báo `✅ aipager đã ở bản A - bản cài pipx này được cập nhật từ nguồn git của nó, và ở đó không có bản mới hơn.`. Hãy push hoặc chọn bản mới ở đó, hoặc chuyển sang PyPI bằng `pipx install --force aipager`.
 
+**Khi không có dịch vụ**, một aipager không được trình quản lý dịch vụ nào khởi động lại (`aipager start` trong một terminal hoặc tmux, Docker, launchd) cài bản cập nhật nhưng vẫn chạy mã cũ cho tới khi khởi động lại. Lúc đó `/update` báo `aipager B đã được cài và đang chờ khởi động lại (đang chạy A).`, và các hook của Claude Code, vốn khởi động mới ở mỗi sự kiện, có thể đã chạy B: chủ sở hữu nhận một thông báo rằng bản cập nhật mới xong một nửa (hai phút sau khi các hook chạy B lần đầu, nên một lần khởi động lại ngay sau khi cài sẽ không bao giờ hiện nó, và khi không còn việc nào đang chạy trong chat riêng của chủ sở hữu). Khi aipager đã chạy B, thông báo đó đổi thành `✅ Bản cập nhật aipager đã xong: aipager giờ đang chạy B.`, không còn nút của nó. Chạm **🔄 Khởi động lại ngay** (trong tin nhắn cập nhật, trong thông báo, hoặc trong **Cài đặt → Cập nhật** của Mini App). aipager chờ tới khi không còn việc nào đang chạy, dừng gọn gàng và khởi động phiên bản mới tại chỗ: cùng tiến trình trong cùng terminal, cửa sổ tmux hoặc container, với cùng lệnh và cùng môi trường.
+
+Nếu khởi động tại chỗ thất bại, một bản sao tách riêng sẽ khởi động aipager khi tiến trình cũ đã thoát. Đầu ra của nó khi đó đi vào log tự khởi động lại (`aipager.log` trong thư mục của phiên bản cài, hoặc `/tmp/aipager.log`) thay vì terminal của bạn, và log của aipager nêu lệnh cần chạy nếu bản sao đó không quay lại. Nếu chính trình thông dịch đã mất (môi trường của nó đã bị xóa), hoặc không khởi động được gì, aipager thoát với mã 1, log của aipager kết thúc bằng `restart.failed:` cùng lệnh cần chạy, và lần khởi động tiếp theo sẽ thông báo bản cập nhật.
+
+Khi không có nút **Khởi động lại ngay**, tin nhắn đưa ra các bước cho cách cài của bạn: trong terminal hoặc tmux, nhấn Ctrl+C rồi chạy `aipager start`; trên macOS, `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; trong Docker, `docker restart <container>` trên máy chủ. Tạo lại một container Docker (`docker compose up` sau `down`, hoặc `docker run` lần nữa) sẽ khởi động nó từ image, điều này mang lại phiên bản aipager trong image đó: để giữ một aipager mới hơn, hãy dùng một image mới hơn.
+
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>aipager không chạy lại sau khi cập nhật
 
 Lần nâng cấp kiểm tra rằng bản mới import được trước khi khởi động lại gì, nhưng nếu aipager mới vẫn không khởi động được, systemd sẽ thử lại mỗi 5 giây. Xem nguyên nhân:
@@ -330,6 +336,8 @@ Một bản cài pipx từ đường dẫn trên máy: `pipx install --force /pa
 ## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>“Một lần cập nhật đã bị ngắt khi aipager tắt”
 
 aipager đã dừng (hoặc được khởi động lại) trong lúc `/update` đang cài, và trình cài đặt cũng bị dừng theo, nên bản cài có thể mới được ghi một nửa. Nếu aipager hoặc Claude Code chạy không ổn, hãy sửa: với aipager, chạy lệnh cài lại trong tin nhắn (ví dụ `pipx install --force aipager`) rồi `systemctl --user restart aipager.service`; với Claude Code, chạy lại `claude update`.
+
+Một lần Khởi động lại ngay không khởi động lại được aipager (khi không có dịch vụ) để lại `restart.failed:` trong log của aipager cùng lệnh cần chạy; hãy chạy lệnh đó, và aipager mới sẽ thông báo bản cập nhật.
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>Một chat đang dùng sai ngôn ngữ
 

@@ -1,6 +1,6 @@
 # aipager
 
-<!-- i18n-source: README.md @ a175bc5 -->
+<!-- i18n-source: README.md @ c91598e -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../../README.md))
 
@@ -178,7 +178,7 @@ aipager session dev -- --resume abc1234
 aipager service install
 ```
 
-Trên Linux, lệnh này ghi một dịch vụ người dùng systemd vào `~/.config/systemd/user/aipager.service` rồi khởi động nó. Trên macOS, nó ghi một plist launchd vào `~/Library/LaunchAgents/com.aipager.daemon.plist` rồi khởi động nó. Các lệnh con: `start`, `stop`, `status`, `logs`, `uninstall`.
+Trên Linux, lệnh này ghi một dịch vụ người dùng systemd vào `~/.config/systemd/user/aipager.service` rồi khởi động nó. Trên macOS, nó ghi một plist launchd vào `~/Library/LaunchAgents/com.aipager.daemon.plist` rồi khởi động nó. Dù cách nào, aipager cũng chạy trong thư mục home của bạn, nơi một phiên mới bắt đầu trừ khi bạn chọn thư mục khác. Các lệnh con: `start`, `stop`, `status`, `logs`, `uninstall`.
 
 ## <a id="team-mode-groups-and-other-people"></a>Chế độ làm việc nhóm (nhóm và người khác)
 

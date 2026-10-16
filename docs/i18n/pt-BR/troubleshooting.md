@@ -1,6 +1,6 @@
 # Solução de problemas
 
-<!-- i18n-source: docs/troubleshooting.md @ 01d5a8b -->
+<!-- i18n-source: docs/troubleshooting.md @ bb690d5 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../troubleshooting.md))
 
@@ -308,6 +308,12 @@ Um Claude Code instalado com `sudo npm install -g` fica numa pasta que só o roo
 
 Uma instalação do pipx feita a partir de uma URL do git se atualiza por essa fonte do git, não pelo PyPI. Quando a fonte não tem nada mais novo, o `/update` diz `already at A - this pipx install upgrades from its git source, which has nothing newer`. Publique ou escolha a versão nova lá, ou mude para o PyPI com `pipx install --force aipager`.
 
+**Sem serviço**, um aipager que nenhum gerenciador de serviços reinicia (`aipager start` num terminal ou tmux, Docker, launchd) instala uma atualização, mas continua rodando o código antigo até reiniciar. O `/update` então diz `O aipager B está instalado e esperando um reinício (rodando agora: A).`, e os hooks do Claude Code, que começam do zero a cada evento, podem já rodar o B: o dono recebe um aviso de que a atualização está pela metade (dois minutos depois de os hooks rodarem o B pela primeira vez, então um reinício logo depois da instalação nunca o mostra, e quando nenhuma tarefa estiver em andamento no chat privado do dono). Quando o aipager passa a rodar o B, esse aviso vira `✅ A atualização do aipager terminou: o aipager agora está no B.`, sem o botão. Toque em **🔄 Reiniciar agora** (na mensagem da atualização, no aviso ou em **Configurações → Atualizações** da Mini App). O aipager espera até nenhuma tarefa estar em andamento, para de forma limpa e inicia a versão nova no lugar: o mesmo processo no mesmo terminal, janela do tmux ou contêiner, com o mesmo comando e o mesmo ambiente.
+
+Se o início no lugar falhar, uma cópia separada inicia o aipager quando o processo antigo já tiver saído. A saída dela vai então para o log do reinício próprio (`aipager.log` na pasta da instância, ou `/tmp/aipager.log`) em vez do seu terminal, e o log do aipager diz o comando a rodar se essa cópia não voltar. Se o próprio interpretador sumiu (o ambiente dele foi removido), ou nada pôde ser iniciado, o aipager sai com o código 1, o log do aipager termina com `restart.failed:` e o comando a rodar, e o próximo início anuncia a atualização.
+
+Quando não há o botão **Reiniciar agora**, a mensagem dá os passos para a sua instalação: num terminal ou tmux, aperte Ctrl+C e rode `aipager start`; no macOS, `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; no Docker, `docker restart <container>` no host. Recriar um contêiner do Docker (`docker compose up` depois de `down`, ou `docker run` de novo) o inicia a partir da imagem, o que traz de volta a versão do aipager dessa imagem: para manter um aipager mais novo, use uma imagem mais nova.
+
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>O aipager não voltou depois de uma atualização
 
 A atualização confere se a versão nova é importada antes de reiniciar qualquer coisa, mas se mesmo assim o aipager novo não iniciar, o systemd tenta de novo a cada 5 s. Veja por quê:
@@ -330,6 +336,8 @@ Uma instalação do pipx a partir de um caminho local: `pipx install --force /pa
 ## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>“An update was interrupted when aipager shut down”
 
 O aipager parou (ou reiniciou) enquanto o `/update` estava instalando, e o instalador parou junto, então a instalação pode ter ficado pela metade. Se o aipager ou o Claude Code não funcionarem direito, conserte: para o aipager, rode o comando de reinstalação da mensagem (por exemplo `pipx install --force aipager`) e depois `systemctl --user restart aipager.service`; para o Claude Code, rode `claude update` de novo.
+
+Um Reiniciar agora que não conseguiu iniciar o aipager de novo (sem serviço) deixa `restart.failed:` no log do aipager com o comando a rodar; rode-o, e o novo aipager anuncia a atualização.
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>Um chat está no idioma errado
 

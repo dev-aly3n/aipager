@@ -2,7 +2,7 @@
 
 # البنية
 
-<!-- i18n-source: docs/architecture.md @ 7e36944 -->
+<!-- i18n-source: docs/architecture.md @ c91598e -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../architecture.md))
 
@@ -115,11 +115,12 @@ flowchart LR
 | &lrm;`~/.claude/aipager-sessions.json` | الحالة الدائمة لقائمة الجلسات | aipager |
 | &lrm;`~/.claude/aipager-audit.jsonl` | سجل السماح / الرفض / الإجابات | aipager (إضافة فقط) |
 | &lrm;`~/.claude/aipager-flood-state.json` | سجل حدود السرعة في Telegram لكل دردشة، محفوظ عبر إعادات التشغيل ([حل المشكلات](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
+| &lrm;`~/.claude/aipager-tunnel.json` و`aipager-cloudflared.log` | نفق Mini App الذي يحتفظ به aipager: عمليته ومنافذه المحلية وبصمة عنوانه (لا العنوان نفسه أبدًا)، حتى يتولاه aipager التالي بعد إعادة تشغيل مخطط لها (الصلاحية 600)؛ وتحذيرات cloudflared | aipager؛ ويحذف هذا السجل أيضًا حارس النفق المحفوظ والأمر `aipager uninstall` |
 | &lrm;`~/.claude/aipager-pending-users.json` | الأشخاص الذين خاطبوا البوت في مجموعة لا يخدمها، أو ليسوا أعضاء في مجموعة يخدمها، لكي يضيفهم `aipager config` (الصلاحية 0600، يُستبدل كاملًا عند كل كتابة، أحدث ٢٠٠ شخص ظهروا خلال آخر ٣٠ يومًا) | aipager (يكتب)، `aipager config` (يقرأ) |
 | &lrm;`~/aipager-users/<label>/`&lrm; | [المجلدات الجذرية](groups.md#root-folders) الافتراضية للأعضاء (الصلاحية 0700)، حيث يبدأ أعضاء `user` و`read_only` جلساتهم؛ ويحتفظ بها `aipager uninstall` | aipager (يُنشئها عند أول &lrm;`/new` أو أول «بدء الجلسة» في Mini App لعضو) |
 | &lrm;`~/.claude/settings.json` | إعداد الهوكات في Claude Code | `aipager config` /&rlm; `aipager setup`؛ وعند كل بدء يضيف aipager أي هوك أو سطر حالة لـ aipager ينقص ويضبط `skipDangerousModePermissionPrompt` ([الأمان](security.md#who-decides-whether-a-tool-call-runs)) |
 | &lrm;`~/.claude/settings.json.bak.*`&lrm; | نسخ احتياطية قبل كل إعادة كتابة | `aipager config`،&rlm; `aipager setup`،&rlm; `aipager uninstall` |
-| &lrm;`~/.claude.json` | ملف Claude Code نفسه: عند البدء يعلّم aipager مجلد الجلسات الافتراضي (مجلد عمل aipager، أو `AIPAGER_WORK_DIR`) بأنه موثوق، حتى لا يوقف سؤالُ الثقة في Claude Code جلسةً بدأت من Telegram في ذلك المجلد | aipager |
+| &lrm;`~/.claude.json` | ملف Claude Code نفسه: يعلّم aipager المجلد الذي تبدأ فيه الجلسة بأنه موثوق قبل بدئها مباشرة (بما في ذلك المجلد الرئيسي، وليس `/` أو مجلدًا أعلى من المجلد الرئيسي أبدًا)، حتى لا يوقف سؤال الثقة في Claude Code جلسة بدأت من Telegram. لا يُعلَّم أي شيء عند بدء aipager. ولا تُعاد كتابته أبدًا إذا تعذّرت قراءته كاملًا أو غيّره Claude يعمل في الأثناء | aipager |
 | &lrm;`~/.claude/.credentials.json` ← `.credentials.json.stale` | ملف تسجيل الدخول في Claude Code، يُنقل جانبًا عندما تبدأ جلسة مع ضبط `CLAUDE_CODE_OAUTH_TOKEN` والملف لا يحتوي إلا على تسجيل دخول منتهٍ أو فارغ (وإلا لتقدّم على التوكن)؛ وللتراجع يُعاد إلى مكانه | aipager |
 | &lrm;`~/.config/aipager/aipager.yaml` | توكن البوت، والدردشات، والأعضاء مع الأدوار، وإعدادات Mini App | `aipager config` (الصلاحية 600)؛ وينقل aipager مدخل المجموعة عندما يرقّيها Telegram إلى supergroup، ويحتفظ بنسخة `aipager.yaml.bak.<time>`&lrm; عندما ينقل إليه إعدادات Mini App القديمة |
 | &lrm;`~/.config/aipager/policy.yaml` | قواعد كل دور + إضافات الحد الأدنى للأمان | أنت (يُتحقق منه بـ `aipager policy validate`)؛ ويُكتب قالب عليه تعليقات مرة واحدة عند ترحيل تثبيت قديم |

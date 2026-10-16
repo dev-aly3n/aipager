@@ -1,6 +1,6 @@
 # 架构
 
-<!-- i18n-source: docs/architecture.md @ 7e36944 -->
+<!-- i18n-source: docs/architecture.md @ c91598e -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../architecture.md)）
 
@@ -109,11 +109,12 @@ flowchart LR
 | `~/.claude/aipager-sessions.json` | 会话列表的持久状态 | aipager |
 | `~/.claude/aipager-audit.jsonl` | 允许 / 拒绝 / 回答的日志 | aipager（只追加） |
 | `~/.claude/aipager-flood-state.json` | 每个聊天的 Telegram 限流历史，跨重启保留（[故障排除](troubleshooting.md#the-bot-went-quiet-flood-control)） | aipager |
+| `~/.claude/aipager-tunnel.json`、`aipager-cloudflared.log` | aipager 持有的 Mini App 隧道：它的进程、本地端口和地址的哈希（从不保存地址本身），以便计划内重启后下一个 aipager 接管它（权限 600）；cloudflared 的警告 | aipager；保留隧道的守护进程和 `aipager uninstall` 也会删除这条记录 |
 | `~/.claude/aipager-pending-users.json` | 在机器人不服务的群组里找过它的人，或在它服务的群组里但不是成员的人，供 `aipager config` 添加（权限 0600，每次写入都整个替换，保留最近 30 天里出现过的最新 200 人） | aipager（写入）、`aipager config`（读取） |
 | `~/aipager-users/<label>/` | 成员的默认[根文件夹](groups.md#root-folders)（权限 0700），`user` 和 `read_only` 成员在这里启动会话；`aipager uninstall` 会保留它们 | aipager（在成员第一次 `/new` 或第一次在 Mini App 里“启动会话”时创建） |
 | `~/.claude/settings.json` | Claude Code 的 hook 配置 | `aipager config` / `aipager setup`；每次启动时 aipager 会补上缺少的 aipager hook 或状态行，并设置 `skipDangerousModePermissionPrompt`（[安全](security.md#who-decides-whether-a-tool-call-runs)） |
 | `~/.claude/settings.json.bak.*` | 每次改写前的备份 | `aipager config`、`aipager setup`、`aipager uninstall` |
-| `~/.claude.json` | Claude Code 自己的文件：启动时 aipager 把默认会话文件夹（aipager 的工作目录，或 `AIPAGER_WORK_DIR`）标记为受信任，这样 Claude Code 的信任问题不会挡住从 Telegram 在那个文件夹里启动的会话 | aipager |
+| `~/.claude.json` | Claude Code 自己的文件：aipager 在会话启动前一刻，把会话所在的文件夹标记为受信任（包括主文件夹，但绝不会是 `/` 或主文件夹的上级文件夹），这样 Claude Code 的信任问题不会挡住从 Telegram 启动的会话。aipager 启动时不标记任何文件夹。无法完整读取，或运行中的 Claude 在此期间改动过时，绝不重写 | aipager |
 | `~/.claude/.credentials.json` → `.credentials.json.stale` | Claude Code 的登录文件，在会话以设置了 `CLAUDE_CODE_OAUTH_TOKEN` 的方式启动、而该文件只有过期或空的登录时被移到一边（否则它会优先于 token）；要撤销，把它移回来 | aipager |
 | `~/.config/aipager/aipager.yaml` | 机器人 token、聊天、成员 + 角色、Mini App 设置 | `aipager config`（权限 600）；当 Telegram 把群组升级为 supergroup 时，aipager 会迁移该群组的条目，并在把旧的 Mini App 设置移进来时保留一份 `aipager.yaml.bak.<time>` |
 | `~/.config/aipager/policy.yaml` | 按角色的规则 + 安全底线的补充 | 你（用 `aipager policy validate` 检查）；迁移旧安装时会写入一次带注释的模板 |

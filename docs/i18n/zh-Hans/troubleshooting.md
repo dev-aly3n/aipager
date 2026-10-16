@@ -1,6 +1,6 @@
 # 故障排除
 
-<!-- i18n-source: docs/troubleshooting.md @ 01d5a8b -->
+<!-- i18n-source: docs/troubleshooting.md @ bb690d5 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../troubleshooting.md)）
 
@@ -308,6 +308,12 @@ systemctl --user restart aipager.service
 
 从 git 网址安装的 pipx 会从那个 git 源升级，而不是从 PyPI。当源里没有更新的版本时，`/update` 会说 `✅ aipager 已是 A：这个 pipx 安装从它的 git 源更新，那里没有更新的版本。`。在那里推送或选择新版本，或者用 `pipx install --force aipager` 改为从 PyPI 安装。
 
+**没有服务时**，一个不由任何服务管理器重启的 aipager（在终端或 tmux 里运行 `aipager start`、Docker、launchd）会安装更新，但在重启之前仍运行旧代码。这时 `/update` 会说 `aipager B 已安装，正在等待重启（当前运行 A）。`，而 Claude Code 的 hook 每个事件都会重新启动，可能已经在运行 B：所有者会收到一条更新只完成了一半的通知（在 hook 第一次运行 B 两分钟之后，所以安装后立刻重启的话永远不会出现；并且要等所有者的私聊里没有任务在运行）。aipager 运行 B 之后，这条通知会变成 `✅ aipager 更新已完成：aipager 现在运行的是 B。`，不再带按钮。点 **🔄 立即重启**（在更新消息里、通知里，或 Mini App 的 **设置 → 更新** 里）。aipager 会等到没有任务在运行，干净地停下，然后原地启动新版本：同一个终端、tmux 窗口或容器里的同一个进程，用同样的命令和环境。
+
+如果原地启动失败，旧进程退出后会由一个分离的副本启动 aipager。这时它的输出会写入自重启日志（实例文件夹里的 `aipager.log`，或 `/tmp/aipager.log`），而不是你的终端；如果这个副本没有回来，aipager 的日志会写出要运行的命令。如果解释器本身已经没了（它的环境被删除了），或者什么都启动不了，aipager 会以代码 1 退出，aipager 的日志以 `restart.failed:` 和要运行的命令结尾，下一次启动会宣布这次更新。
+
+没有 **立即重启** 按钮时，消息会给出适合你的环境的步骤：在终端或 tmux 里，按 Ctrl+C 再运行 `aipager start`；在 macOS 上，运行 `launchctl kickstart -k gui/<uid>/com.aipager.daemon`；在 Docker 里，在主机上运行 `docker restart <container>`。重新创建 Docker 容器（在 `down` 之后运行 `docker compose up`，或再次运行 `docker run`）会从它的镜像启动，这会带回该镜像里的 aipager 版本：要保留更新的 aipager，请使用更新的镜像。
+
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>更新后 aipager 没有重新运行
 
 升级会在重启任何东西之前检查新版本能否导入，但如果新的 aipager 仍然无法启动，systemd 会每 5 秒重试一次。查看原因：
@@ -330,6 +336,8 @@ systemctl --user restart aipager.service
 ## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>“aipager 关闭时中断了一次更新”
 
 在 `/update` 正在安装时 aipager 停止了（或被重启了），安装程序也随之停止，所以安装可能只写了一半。如果 aipager 或 Claude Code 运行不正常，修复它：对于 aipager，运行消息里的重新安装命令（例如 `pipx install --force aipager`），然后运行 `systemctl --user restart aipager.service`；对于 Claude Code，再运行一次 `claude update`。
+
+没能再次启动 aipager 的立即重启（没有服务时）会在 aipager 的日志里留下 `restart.failed:` 和要运行的命令；运行它，新的 aipager 就会宣布这次更新。
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>聊天的语言不对
 

@@ -1,6 +1,6 @@
 # Fehlerbehebung
 
-<!-- i18n-source: docs/troubleshooting.md @ 01d5a8b -->
+<!-- i18n-source: docs/troubleshooting.md @ bb690d5 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../troubleshooting.md))
 
@@ -308,6 +308,12 @@ Ein mit `sudo npm install -g` installiertes Claude Code liegt in einem Ordner, d
 
 Eine pipx-Installation aus einer git-URL aktualisiert aus dieser git-Quelle, nicht aus PyPI. Hat die Quelle nichts Neueres, sagt `/update` `✅ aipager ist schon auf A: Diese pipx-Installation aktualisiert aus ihrem git-Repo, und dort gibt es nichts Neueres.`. Push die neue Version dorthin oder wähl sie dort aus, oder wechsel mit `pipx install --force aipager` zu PyPI.
 
+**Ohne Dienst** installiert ein aipager, das kein Dienstmanager neu startet (`aipager start` in einem Terminal oder tmux, Docker, launchd), ein Update, läuft aber mit dem alten Code weiter, bis es neu startet. `/update` sagt dann `aipager B ist installiert und wartet auf einen Neustart (läuft noch: A).`, und die Hooks von Claude Code, die bei jedem Ereignis frisch starten, laufen vielleicht schon mit B: Der Besitzer bekommt einen Hinweis, dass das Update erst halb fertig ist (zwei Minuten nachdem die Hooks zum ersten Mal mit B liefen, sodass ein Neustart direkt nach der Installation ihn nie zeigt, und sobald im privaten Chat des Besitzers keine Aufgabe läuft). Sobald aipager mit B läuft, wird dieser Hinweis zu `✅ Das aipager-Update ist fertig: aipager läuft jetzt mit B.`, ohne seinen Button. Tippe auf **🔄 Jetzt neu starten** (in der Update-Nachricht, im Hinweis oder in **Einstellungen → Updates** der Mini App). aipager wartet, bis keine Aufgabe läuft, beendet sich sauber und startet die neue Version an Ort und Stelle: derselbe Prozess im selben Terminal, tmux-Fenster oder Container, mit demselben Befehl und derselben Umgebung.
+
+Schlägt der Start an Ort und Stelle fehl, startet eine abgekoppelte Kopie aipager, sobald der alte Prozess weg ist. Ihre Ausgabe geht dann in das Log des Selbstneustarts (`aipager.log` im Ordner der Instanz oder `/tmp/aipager.log`) statt in dein Terminal, und das Log von aipager nennt den Befehl, den du ausführen musst, falls diese Kopie nicht zurückkommt. Ist der Interpreter selbst weg (seine Umgebung wurde entfernt) oder ließ sich nichts starten, beendet sich aipager mit Code 1, das Log von aipager endet mit `restart.failed:` und dem Befehl, den du ausführen musst, und der nächste Start meldet das Update.
+
+Gibt es keinen Button **Jetzt neu starten**, nennt die Nachricht die Schritte für dein Setup: in einem Terminal oder tmux Ctrl+C drücken und `aipager start` ausführen; auf macOS `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; in Docker `docker restart <container>` auf dem Host. Ein Docker-Container, der neu erzeugt wird (`docker compose up` nach `down` oder noch einmal `docker run`), startet aus seinem Image, und das bringt die aipager-Version aus diesem Image zurück: Um ein neueres aipager zu behalten, nimm ein neueres Image.
+
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>aipager ist nach einem Update nicht zurückgekommen
 
 Das Update prüft vor jedem Neustart, dass die neue Version lädt, aber wenn das neue aipager trotzdem nicht startet, versucht systemd es alle 5 s erneut. Sieh nach, warum:
@@ -330,6 +336,8 @@ Eine pipx-Installation aus einem lokalen Pfad: `pipx install --force /path/to/ai
 ## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>„Ein Update wurde unterbrochen, als aipager herunterfuhr“
 
 aipager wurde gestoppt (oder neu gestartet), während `/update` installierte, und der Installer wurde mitgestoppt, die Installation ist also vielleicht halb geschrieben. Wenn aipager oder Claude Code sich seltsam verhalten, repariere es: Für aipager führ den Befehl zur Neuinstallation aus der Nachricht aus (zum Beispiel `pipx install --force aipager`) und danach `systemctl --user restart aipager.service`; für Claude Code führ `claude update` noch einmal aus.
+
+Ein Jetzt neu starten, das aipager nicht wieder starten konnte (ohne Dienst), hinterlässt `restart.failed:` im Log von aipager, mit dem Befehl, den du ausführen musst; führ ihn aus, und das neue aipager meldet das Update.
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>Ein Chat ist in der falschen Sprache
 

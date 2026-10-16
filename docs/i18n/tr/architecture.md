@@ -1,6 +1,6 @@
 # Mimari
 
-<!-- i18n-source: docs/architecture.md @ 7e36944 -->
+<!-- i18n-source: docs/architecture.md @ c91598e -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../architecture.md))
 
@@ -109,11 +109,12 @@ Telegram'dan yeniden başlatma, yerine gelen sürecin sokete bağlanmasından ö
 | `~/.claude/aipager-sessions.json` | Oturum listesinin kalıcı durumu | aipager |
 | `~/.claude/aipager-audit.jsonl` | İzin ver / Reddet / yanıtların kaydı | aipager (yalnızca sonuna ekler) |
 | `~/.claude/aipager-flood-state.json` | Her sohbetin Telegram sınır geçmişi, yeniden başlatmalar arasında saklanır ([sorun giderme](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | aipager'ın tuttuğu Mini App tüneli: süreci, yerel portları ve adresinin bir hash'i (asla adresin kendisi değil), böylece planlı bir yeniden başlatmadan sonra bir sonraki aipager onu devralabilir (izinler 600); cloudflared'in uyarıları | aipager; kaydı tutulan tünelin bekçisi ve `aipager uninstall` de siler |
 | `~/.claude/aipager-pending-users.json` | Botun hizmet vermediği bir grupta bota yazan ya da hizmet verdiği bir grubun üyesi olmayan kişiler, `aipager config` onları ekleyebilsin diye (izinler 0600, her yazımda baştan yazılır, son 30 günün son 200 kişisi) | aipager (yazar), `aipager config` (okur) |
 | `~/aipager-users/<label>/` | Üyelerin varsayılan [kök klasörleri](groups.md#root-folders) (izinler 0700); `user` ve `read_only` üyeler oturumlarını burada başlatır; `aipager uninstall` bunları korur | aipager (üyenin ilk `/new` komutunda ya da Mini App'teki ilk “Yeni oturum” işleminde oluşturur) |
 | `~/.claude/settings.json` | Claude Code hook yapılandırması | `aipager config` / `aipager setup`; her başlangıçta aipager eksik hook'ları ya da aipager durum satırını ekler ve `skipDangerousModePermissionPrompt` ayarlar ([güvenlik](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | Her yeniden yazımdan önceki yedekler | `aipager config`, `aipager setup`, `aipager uninstall` |
-| `~/.claude.json` | Claude Code'un kendi dosyası: başlangıçta aipager, varsayılan oturum klasörünü (aipager'ın çalışma klasörü ya da `AIPAGER_WORK_DIR`) güvenilir olarak işaretler, böylece Claude Code'un güven sorusu Telegram'dan o klasörde başlatılan bir oturumu durdurmaz | aipager |
+| `~/.claude.json` | Claude Code'un kendi dosyası: aipager, bir oturumun başlayacağı klasörü başlamadan hemen önce güvenilir olarak işaretler (ev klasörü dahil, ama asla `/` ya da ev klasörünün üstündeki bir klasör değil), böylece Claude Code'un güven sorusu Telegram'dan başlatılan bir oturumu durdurmaz. aipager başlarken hiçbir şey işaretlenmez. Tamamı okunamıyorsa ya da çalışan bir Claude onu bu arada değiştirdiyse asla yeniden yazılmaz | aipager |
 | `~/.claude/.credentials.json` → `.credentials.json.stale` | Claude Code'un giriş dosyası; bir oturum `CLAUDE_CODE_OAUTH_TOKEN` ayarlıyken başlatıldığında ve dosyada yalnızca süresi dolmuş ya da boş bir giriş varsa kenara alınır (yoksa token'ın önüne geçerdi); geri almak için yerine koy | aipager |
 | `~/.config/aipager/aipager.yaml` | Bot token'ı, sohbetler, üyeler + roller, Mini App ayarları | `aipager config` (izinler 600); Telegram bir grubu süper gruba çevirdiğinde aipager grubun kaydını taşır ve eski Mini App ayarlarını oraya taşırken bir `aipager.yaml.bak.<time>` kopyası tutar |
 | `~/.config/aipager/policy.yaml` | Her rol için kurallar + güvenlik alt sınırına eklemeler | sen (`aipager policy validate` ile kontrol edilir); eski bir kurulum taşınırken açıklamalı bir şablon bir kez yazılır |

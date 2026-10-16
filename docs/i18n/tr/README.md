@@ -1,6 +1,6 @@
 # aipager
 
-<!-- i18n-source: README.md @ a175bc5 -->
+<!-- i18n-source: README.md @ c91598e -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../../README.md))
 
@@ -178,7 +178,7 @@ aipager session dev -- --resume abc1234
 aipager service install
 ```
 
-Linux'ta bu, `~/.config/systemd/user/aipager.service` içine bir systemd kullanıcı hizmeti yazar ve başlatır. macOS'ta `~/Library/LaunchAgents/com.aipager.daemon.plist` içine bir launchd plist'i yazar ve başlatır. Alt komutlar: `start`, `stop`, `status`, `logs`, `uninstall`.
+Linux'ta bu, `~/.config/systemd/user/aipager.service` içine bir systemd kullanıcı hizmeti yazar ve başlatır. macOS'ta `~/Library/LaunchAgents/com.aipager.daemon.plist` içine bir launchd plist'i yazar ve başlatır. Her iki durumda da aipager ev klasöründe çalışır; başka bir klasör seçmezsen yeni oturum da orada başlar. Alt komutlar: `start`, `stop`, `status`, `logs`, `uninstall`.
 
 ## <a id="team-mode-groups-and-other-people"></a>Ekip modu (gruplar ve diğer kişiler)
 

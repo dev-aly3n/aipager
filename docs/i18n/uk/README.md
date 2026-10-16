@@ -1,6 +1,6 @@
 # aipager
 
-<!-- i18n-source: README.md @ a175bc5 -->
+<!-- i18n-source: README.md @ c91598e -->
 
 > Цю сторінку перекладено з англійської; якщо вони розходяться, правильною є англійська версія. ([English](../../../README.md))
 
@@ -178,7 +178,7 @@ aipager session dev -- --resume abc1234
 aipager service install
 ```
 
-На Linux це записує користувацьку службу systemd у `~/.config/systemd/user/aipager.service` і запускає її. На macOS це записує plist для launchd у `~/Library/LaunchAgents/com.aipager.daemon.plist` і запускає його. Підкоманди: `start`, `stop`, `status`, `logs`, `uninstall`.
+На Linux це записує користувацьку службу systemd у `~/.config/systemd/user/aipager.service` і запускає її. На macOS це записує plist для launchd у `~/Library/LaunchAgents/com.aipager.daemon.plist` і запускає його. В обох випадках aipager працює у твоїй домашній папці, і нова сесія запускається там, якщо ти не вибереш іншу папку. Підкоманди: `start`, `stop`, `status`, `logs`, `uninstall`.
 
 ## <a id="team-mode-groups-and-other-people"></a>Робота в команді (групи та інші люди)
 

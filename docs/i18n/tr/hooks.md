@@ -1,6 +1,6 @@
 # Hook olayları
 
-<!-- i18n-source: docs/hooks.md @ 7228205 -->
+<!-- i18n-source: docs/hooks.md @ 8526c26 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../hooks.md))
 
@@ -97,7 +97,7 @@ Görev bir API hatasıyla bitti. Oturum hazır olur ve varsa yanıt `Stop` gibi 
 
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
-Bir alt ajan başladı ya da bitti. Her birinin çalışma kartında kendi satırı vardır, `🤖 <type> · <activity> · <elapsed>`; kendi araç çağrıları altında katlanmıştır ve durduğunda `✅ 🤖 <type> · N araç · <elapsed>` olarak donar. `SubagentStop` olayı hiç gelmeyen bir alt ajan, 30 dakika sessiz kaldığında (`AIPAGER_SUBAGENT_SILENCE`, saniye cinsinden; kimliğiyle hiçbir türden olay yok) kaldırılır. Çalışan bir ajan birkaç saniyede bir araç olayı gönderir, bu yüzden böyle yalnızca durması kaçırılmış bir ajan kaldırılır (yeniden başlatma, kaybolan bir datagram); o ajanın kimliğiyle tek bir olay gelmeden 30 dakika süren tek bir araç çağrısı da onu kaldırır. `AIPAGER_SUBAGENT_TTL` aynı ayarın eski adı olarak kabul edilir. Türü olmayan ve kimliği bilinmeyen `SubagentStop` olayları sık gelir ve yok sayılır.
+Bir alt ajan başladı ya da bitti. Her birinin çalışma kartında kendi satırı vardır, `🤖 <type> · <activity> · <elapsed>`; kendi araç çağrıları altında katlanmıştır ve durduğunda `✅ 🤖 <type> · N araç · <elapsed>` olarak donar. `SubagentStart`, onu hangi ajanın başlattığını söylemez: aipager onu, bekleyen aynı türden `Agent` çağrısıyla (`PreToolUse`) eşleştirir. Bu tür çağrıların hepsi tek bir ajandan geldiyse, yeni ajan hemen o ajana bağlanır (karttaki satırı `🤖 pipeline-runner › ship-tester` olur ve bir yanıtın altındaki durumda o ajanın altında yer alır); farklı ajanlardan geldiyse, başlatan ajanın kendi `PostToolUse` olayı onun adını verene kadar hiçbir şey bağlanmaz. Bir çağrının açıklaması yalnızca o türden tam olarak bir çağrı beklerken kullanılır. `SubagentStop` olayı hiç gelmeyen bir alt ajan, 30 dakika sessiz kaldığında (`AIPAGER_SUBAGENT_SILENCE`, saniye cinsinden; kimliğiyle hiçbir türden olay yok) kaldırılır. Çalışan bir ajan birkaç saniyede bir araç olayı gönderir, bu yüzden böyle yalnızca durması kaçırılmış bir ajan kaldırılır (yeniden başlatma, kaybolan bir datagram); o ajanın kimliğiyle tek bir olay gelmeden 30 dakika süren tek bir araç çağrısı da onu kaldırır. `AIPAGER_SUBAGENT_TTL` aynı ayarın eski adı olarak kabul edilir. Türü olmayan ve kimliği bilinmeyen `SubagentStop` olayları sık gelir ve yok sayılır.
 
 Başlattığı bir ajan hâlâ çalışırken duran bir arka plan ajanı da bir `SubagentStop` alır. aipager bunu bir son değil, bir duraklama sayar: ajan çalışıyor olarak kalır (satırı, iş, yanıtların altındaki durum, sabitlenmiş satır). Aynı kimlikle gelen bir sonraki `SubagentStart` onun devam etmesidir ve ikinci bir satır eklemez; kendi yaptığı herhangi bir araç çağrısı da devam sayılır. Kendi ajanlarından hiçbiri artık çalışmıyorken durduğunda biter. Bunların sonuncusu bittikten iki dakika sonra hâlâ devam etmediyse artık çalışıyor sayılmaz, ama asla bitmiş gösterilmez. Çalışan ajanlar, bekleyenler dahil, aipager yeniden başlatıldığında korunur.
 

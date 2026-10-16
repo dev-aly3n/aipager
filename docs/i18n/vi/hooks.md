@@ -1,6 +1,6 @@
 # Sự kiện hook
 
-<!-- i18n-source: docs/hooks.md @ 7228205 -->
+<!-- i18n-source: docs/hooks.md @ 8526c26 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../hooks.md))
 
@@ -97,7 +97,7 @@ Việc kết thúc vì một lỗi API. Phiên trở về trạng thái sẵn s�
 
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
-Một subagent đã bắt đầu hoặc kết thúc. Mỗi subagent có một dòng riêng trên thẻ làm việc, `🤖 <type> · <activity> · <elapsed>`, với các lần gọi công cụ của nó được gộp bên dưới, và được chốt lại thành `✅ 🤖 <type> · N công cụ đã chạy · <elapsed>` khi nó dừng. Một subagent mà `SubagentStop` không bao giờ tới sẽ bị bỏ khi nó đã im lặng 30 phút (`AIPAGER_SUBAGENT_SILENCE`, tính bằng giây; không có sự kiện nào mang ID của nó). Một agent đang làm việc gửi sự kiện công cụ vài giây một lần, nên cách này chỉ dọn những agent mà lúc dừng bị bỏ lỡ (một lần khởi động lại, một datagram bị mất); một lần gọi công cụ duy nhất chạy 30 phút mà không có sự kiện nào dưới ID của agent đó cũng bị dọn. `AIPAGER_SUBAGENT_TTL` được chấp nhận như tên cũ của cùng cài đặt này. Các sự kiện `SubagentStop` không có loại và có ID lạ đến thường xuyên và được bỏ qua.
+Một subagent đã bắt đầu hoặc kết thúc. Mỗi subagent có một dòng riêng trên thẻ làm việc, `🤖 <type> · <activity> · <elapsed>`, với các lần gọi công cụ của nó được gộp bên dưới, và được chốt lại thành `✅ 🤖 <type> · N công cụ đã chạy · <elapsed>` khi nó dừng. `SubagentStart` không cho biết agent nào đã khởi động nó: aipager ghép nó với lần gọi `Agent` (`PreToolUse`) cùng loại đang chờ. Khi mọi lần gọi như vậy đều đến từ một agent, agent mới được gắn ngay với agent đó (dòng của nó trên thẻ thành `🤖 pipeline-runner › ship-tester`, và trong trạng thái dưới một câu trả lời nó nằm dưới agent đó); khi chúng đến từ các agent khác nhau, không gì được gắn cho tới khi chính `PostToolUse` của agent đã khởi động nó nêu tên nó. Mô tả của một lần gọi chỉ được dùng khi có đúng một lần gọi loại đó đang chờ. Một subagent mà `SubagentStop` không bao giờ tới sẽ bị bỏ khi nó đã im lặng 30 phút (`AIPAGER_SUBAGENT_SILENCE`, tính bằng giây; không có sự kiện nào mang ID của nó). Một agent đang làm việc gửi sự kiện công cụ vài giây một lần, nên cách này chỉ dọn những agent mà lúc dừng bị bỏ lỡ (một lần khởi động lại, một datagram bị mất); một lần gọi công cụ duy nhất chạy 30 phút mà không có sự kiện nào dưới ID của agent đó cũng bị dọn. `AIPAGER_SUBAGENT_TTL` được chấp nhận như tên cũ của cùng cài đặt này. Các sự kiện `SubagentStop` không có loại và có ID lạ đến thường xuyên và được bỏ qua.
 
 Một agent nền dừng lại trong lúc một agent do nó khởi chạy vẫn đang chạy cũng nhận một `SubagentStop`. aipager coi đó là tạm dừng, không phải kết thúc: agent vẫn đang chạy (dòng của nó, công việc, trạng thái dưới các câu trả lời, thanh được ghim). `SubagentStart` tiếp theo của nó, cùng ID, là lúc nó tiếp tục và không thêm dòng thứ hai; bất kỳ lần gọi công cụ nào do chính nó thực hiện cũng được tính là tiếp tục. Nó kết thúc khi dừng mà không còn agent nào của riêng nó đang chạy. Nếu nó chưa tiếp tục sau hai phút kể từ khi agent cuối cùng trong số đó kết thúc, nó không còn được tính là đang chạy, nhưng không bao giờ được hiện là đã xong. Các agent đang chạy, kể cả những agent đang chờ, được giữ lại khi aipager khởi động lại.
 
