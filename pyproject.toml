@@ -92,6 +92,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["aipager"]
 
+# The README's images load from GitHub, so the source package leaves them out.
+[tool.hatch.build.targets.sdist]
+exclude = ["/docs/assets"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # e2e tests drive REAL Claude (claude -p) + the real hook; they need claude
