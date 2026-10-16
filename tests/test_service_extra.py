@@ -4,6 +4,7 @@ for both Linux (systemd-user) and macOS (launchd) dispatch."""
 from __future__ import annotations
 
 import argparse
+import plistlib
 import subprocess
 from unittest.mock import MagicMock
 
@@ -61,6 +62,16 @@ def test_render_macos_plist_includes_label_and_bin(monkeypatch):
     plist = service._render_macos_plist()
     assert "/usr/local/bin/aipager" in plist
     assert service.MACOS_LABEL in plist
+
+
+def test_render_macos_plist_runs_the_daemon_in_the_home_folder(monkeypatch):
+    """launchd starts a job in / without a WorkingDirectory, and / is never
+    marked trusted for Claude Code, so a default /new would stop at its
+    trust question. The Linux user unit runs in home by default."""
+    monkeypatch.setattr(service, "_resolve_aipager_bin",
+                        lambda: "/usr/local/bin/aipager")
+    plist = plistlib.loads(service._render_macos_plist().encode())
+    assert plist["WorkingDirectory"] == str(service.Path.home())
 
 
 # ---- _run ---------------------------------------------------------------

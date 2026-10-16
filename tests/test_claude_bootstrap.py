@@ -36,15 +36,16 @@ def test_preserves_existing_settings_keys(tmp_path, monkeypatch):
     assert data["skipDangerousModePermissionPrompt"] is True
 
 
-def test_trusts_workdir_in_claude_json(tmp_path, monkeypatch):
+def test_leaves_claude_json_alone(tmp_path, monkeypatch):
+    """The work folder is marked trusted when a session starts in it
+    (inject.launch_session), not at daemon start."""
     monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
     claude_json = tmp_path / ".claude.json"
     monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", claude_json)
 
     claude_bootstrap.bootstrap_claude_settings("/workspace")
 
-    data = json.loads(claude_json.read_text())
-    assert data["projects"]["/workspace"]["hasTrustDialogAccepted"] is True
+    assert not claude_json.exists()
 
 
 def test_idempotent_on_already_set_flags(tmp_path, monkeypatch):
@@ -81,10 +82,9 @@ def test_does_not_clobber_other_projects(tmp_path, monkeypatch):
             "/other": {"hasTrustDialogAccepted": False, "myKey": "preserve me"},
         }
     }))
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
     monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", claude_json)
 
-    claude_bootstrap.bootstrap_claude_settings("/workspace")
+    assert claude_bootstrap.ensure_folder_trusted("/workspace") is True
 
     data = json.loads(claude_json.read_text())
     assert data["projects"]["/other"]["myKey"] == "preserve me"

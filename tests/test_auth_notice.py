@@ -163,7 +163,6 @@ def _bootstrap_with_auth(monkeypatch, tmp_path, auth, *, recover=None):
     """Drive bootstrap_claude_settings() with everything real stubbed out
     except the auth decision under test."""
     monkeypatch.setattr(claude_bootstrap, "_ensure_bypass_accepted", lambda: False)
-    monkeypatch.setattr(claude_bootstrap, "_ensure_workdir_trusted", lambda w: False)
     monkeypatch.setattr(claude_bootstrap, "_ensure_hooks_and_statusline", lambda: False)
 
     chosen = claude_resolve.ClaudeInstall(

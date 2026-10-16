@@ -551,6 +551,23 @@ def is_wide_folder(path: str) -> bool:
     return _under(home_folder(), real)
 
 
+def holds_home_folder(path: str) -> bool:
+    """True when ``path``, symlinks resolved, is ``/`` or a folder above
+    the home folder: :func:`is_wide_folder` without the home folder
+    itself. ``/`` counts even when it is the home folder. An unusable
+    path counts too (fail closed)."""
+    if not isinstance(path, str) or not path or "\x00" in path:
+        return True
+    try:
+        real = _realpath(os.path.abspath(path))
+    except OSError:
+        return True
+    if not real.rstrip("/"):
+        return True
+    home = home_folder()
+    return _under(home, real) and _fold(real.rstrip("/")) != _fold(home.rstrip("/"))
+
+
 # ---------------------------------------------------------------------------
 # Members' root folders. A role without ``can_manage`` (the built-in
 # ``user`` and ``read_only``) works only inside the root folder the owner
