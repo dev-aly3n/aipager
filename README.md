@@ -231,8 +231,9 @@ aipager service install
 On Linux this writes a systemd-user unit at
 `~/.config/systemd/user/aipager.service` and starts it. On macOS it
 writes a launchd plist at `~/Library/LaunchAgents/com.aipager.daemon.plist`
-and bootstraps it. Subcommands: `start`, `stop`, `status`, `logs`,
-`uninstall`.
+and bootstraps it. Either way the daemon runs in your home folder,
+where a new session starts unless you pick another folder.
+Subcommands: `start`, `stop`, `status`, `logs`, `uninstall`.
 
 ## Team mode (groups and other people)
 

@@ -13,7 +13,9 @@ normally what writes them:
 
 2. ``~/.claude.json`` — without ``hasTrustDialogAccepted`` for the
    working directory, claude shows a "Do you trust this folder?" picker
-   on launch in any new cwd. Same Telegram failure mode.
+   on launch in any new cwd. Same Telegram failure mode. Not written at
+   start: ``inject.launch_session`` calls :func:`ensure_folder_trusted`
+   for each session's folder right before the session starts there.
 
 3. ``~/.claude/settings.json`` ``hooks`` + ``statusLine`` — without the
    ``aipager-hook`` wired into ``UserPromptSubmit``/``Stop``/etc.,
@@ -261,6 +263,17 @@ def _trusted(projects: dict, folder: str) -> bool:
         path = parent
 
 
+def _already_trusted(folder: str) -> bool:
+    """*folder* or a folder above it is trusted in ~/.claude.json (read
+    only; an unreadable file counts as not trusted)."""
+    try:
+        data = json.loads(_read_bytes(_CLAUDE_JSON))
+    except (OSError, ValueError):
+        return False
+    projects = data.get("projects") if isinstance(data, dict) else None
+    return isinstance(projects, dict) and _trusted(projects, os.path.realpath(folder))
+
+
 def ensure_folder_trusted(folder: str) -> bool:
     """Trust *folder* in ~/.claude.json, as answering Claude Code's "Do you
     trust this folder?" with yes would, unless it or a folder above it is
@@ -287,11 +300,6 @@ def ensure_folder_trusted(folder: str) -> bool:
         projects[folder] = entry
         return True
     return _update_json(_CLAUDE_JSON, change)
-
-
-def _ensure_workdir_trusted(workdir: str) -> bool:
-    """Return True if .claude.json was modified."""
-    return ensure_folder_trusted(workdir)
 
 
 def _resolve(cmd: str) -> str | None:
@@ -425,11 +433,21 @@ def bootstrap_claude_settings(workdir: str | None = None) -> ProvenanceInfo | No
             log.info("claude bootstrap: set skipDangerousModePermissionPrompt=true in %s", _SETTINGS)
     except Exception:
         log.debug("claude bootstrap: failed to patch settings.json", exc_info=True)
+    # The work folder is not marked trusted here: launch_session marks a
+    # session's folder right before a session starts in it, never / or a
+    # folder above home. A session started in one of those that is not
+    # trusted yet would stop at Claude Code's trust question, so say so
+    # once at start.
     try:
-        if _ensure_workdir_trusted(workdir):
-            log.info("claude bootstrap: trusted %s in %s", workdir, _CLAUDE_JSON)
+        from aipager import safety
+        if safety.holds_home_folder(workdir) and not _already_trusted(workdir):
+            log.warning("claude bootstrap: the default session folder %s is / or a folder "
+                        "above the home folder and Claude Code does not trust it; a session "
+                        "started there stops at its \"Do you trust this folder?\" question - "
+                        "start aipager in a project folder (`aipager service install` runs it "
+                        "in the home folder) or set AIPAGER_WORK_DIR", workdir)
     except Exception:
-        log.debug("claude bootstrap: failed to patch .claude.json", exc_info=True)
+        log.debug("claude bootstrap: failed to check the default session folder", exc_info=True)
     try:
         if _ensure_hooks_and_statusline():
             log.info("claude bootstrap: wired %s hooks + statusLine into %s",

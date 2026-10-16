@@ -1009,18 +1009,21 @@ async def launch_session(
     # Claude Code asks "Do you trust this folder?" in a folder it has never
     # trusted, and the first message sent to the session would answer it:
     # Enter on "No, exit", and the session ends at once. No one on Telegram
-    # sees that dialog, so the folder is trusted here, as the bootstrap
-    # trusts the work folder (restricted members cannot write the files a
+    # sees that dialog, so the folder is trusted here, right before a
+    # session starts in it (restricted members cannot write the files a
     # trusted folder runs: .claude/, .git/, .mcp.json). Never blocks the
     # launch: an untrusted folder is no worse off than before.
-    # Never the home folder, / or a folder above home: Claude Code looks up
-    # the folders above a session's folder, so trusting one of those would
-    # trust every folder under it, repositories cloned later included.
+    # Claude Code applies a folder's trust to every folder under it that is
+    # not inside a git repository; a repository still asks (2.1.301). The
+    # home folder is marked too: a yes given there is kept only for that one
+    # session, and a session started from Telegram cannot give it. Never /
+    # or a folder above home, which would reach every such folder on the
+    # machine.
     from aipager import claude_bootstrap, safety
     try:
-        if safety.is_wide_folder(launch_cwd):
-            log.info("[%s] the session's folder is the home folder, / or a folder above "
-                     "it - not marked trusted for Claude Code", name)
+        if safety.holds_home_folder(launch_cwd):
+            log.info("[%s] the session's folder is / or a folder above the home folder "
+                     "- not marked trusted for Claude Code", name)
         elif claude_bootstrap.ensure_folder_trusted(launch_cwd):
             log.info("[%s] marked the session's folder trusted for Claude Code", name)
     except Exception:

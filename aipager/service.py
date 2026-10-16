@@ -93,6 +93,8 @@ MACOS_PLIST_TEMPLATE = """\
         <key>HOME</key>
         <string>{home}</string>
     </dict>
+    <key>WorkingDirectory</key>
+    <string>{home}</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>

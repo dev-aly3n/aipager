@@ -217,11 +217,27 @@ person's tap. Three things let calls run with no prompt to a person:
   the first message would answer it with "No, exit". A trusted folder's
   own `.claude/` settings, `.git/` hooks and `.mcp.json` can run
   commands, which is why members without `can_manage` can never write
-  those files (unless `policy.yaml` gives their role a shell back). The
-  home folder, `/` and the folders above home are never marked trusted
-  this way: that would trust every folder under them. aipager leaves `~/.claude.json` and
-  `~/.claude/settings.json` alone when it cannot read them whole, or
-  when a running Claude changed them while aipager was updating them.
+  those files (unless `policy.yaml` gives their role a shell back).
+  Claude Code applies a folder's trust to the folders under it that are
+  not inside a git repository; a repository still gets its own
+  question. The home folder is marked when a session starts there,
+  since Claude Code keeps a yes given in the home folder for that one
+  session only. After that, Claude Code asks nothing in a folder under
+  your home folder that is not inside a git repository, in the
+  sessions you start yourself too. `/` and the folders above home are
+  never marked: that would reach every such folder on the machine, so
+  a session started in one of them stops at the question. The daemon
+  marks nothing at start, only the folder a session is about to start
+  in. A new session starts in the folder the daemon runs in (the home
+  folder for `aipager service install` on Linux and macOS and for the
+  container) or in `AIPAGER_WORK_DIR` when that is set; the daemon log
+  warns at start when that folder is `/` or a folder above home and
+  not trusted. Versions before this one marked the daemon's folder at
+  every start, `/` included for a macOS service (which ran in `/`);
+  aipager cannot tell such an entry from one you made, so it leaves
+  it. aipager leaves `~/.claude.json` and `~/.claude/settings.json`
+  alone when it cannot read them whole, or when a running Claude
+  changed them while aipager was updating them.
 - **Allow always**, which hands Claude Code back the "don't ask again"
   rule it offered with the prompt, exactly as that option in its own
   dialog would.

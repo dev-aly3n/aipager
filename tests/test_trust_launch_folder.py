@@ -14,6 +14,7 @@ replaces one that changed since it read it.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import stat
 from pathlib import Path
@@ -21,7 +22,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from aipager import claude_bootstrap
+from aipager import claude_bootstrap, safety
 from aipager.dtach import inject as dtach_inject
 
 
@@ -316,15 +317,122 @@ def test_the_bootstrap_never_writes_a_broken_claude_json(claude_json, tmp_path, 
     assert claude_json.read_bytes() == b'{"oauthAccount": {'
 
 
-def test_the_bootstrap_trusts_the_work_folder(claude_json, tmp_path, monkeypatch):
+def test_the_bootstrap_never_marks_the_work_folder_trusted(claude_json, tmp_path, monkeypatch):
+    """A folder is marked when a session starts in it, never at daemon
+    start: the work folder may never get a session."""
     monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
-    _write(claude_json, {"oauthAccount": {"x": 1}})
+    raw = _write(claude_json, {"oauthAccount": {"x": 1}})
 
     claude_bootstrap.bootstrap_claude_settings(str(tmp_path))
 
-    data = json.loads(claude_json.read_text())
-    assert data["oauthAccount"] == {"x": 1}
-    assert data["projects"][str(tmp_path)]["hasTrustDialogAccepted"] is True
+    assert claude_json.read_bytes() == raw
+
+
+@pytest.mark.parametrize("where, warned", [
+    ("root", True), ("above home", True), ("above home, trusted", False),
+    ("above home, a folder below it trusted", True), ("home", False), ("project", False)])
+def test_the_bootstrap_warns_when_sessions_would_start_above_home(
+        claude_json, tmp_path, monkeypatch, caplog, where, warned):
+    """A session started in / or a folder above home that Claude Code does
+    not trust yet stops at its trust question (never marked), so the
+    daemon says so at start."""
+    home = tmp_path / "h"
+    (home / "project").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
+    workdir = {"root": Path("/"), "above home": tmp_path, "above home, trusted": tmp_path,
+               "above home, a folder below it trusted": tmp_path,
+               "home": home, "project": home / "project"}[where]
+    raw = None
+    if where == "above home, trusted":
+        raw = _write(claude_json, {"projects": {str(tmp_path): {"hasTrustDialogAccepted": True}}})
+    if where == "above home, a folder below it trusted":
+        raw = _write(claude_json, {"projects": {str(home): {"hasTrustDialogAccepted": True}}})
+
+    with caplog.at_level(logging.WARNING, logger="aipager.claude_bootstrap"):
+        claude_bootstrap.bootstrap_claude_settings(str(workdir))
+
+    lines = [r.getMessage() for r in caplog.records
+             if "Do you trust this folder?" in r.getMessage()]
+    assert lines == ([f"claude bootstrap: the default session folder {workdir} is / or a "
+                      "folder above the home folder and Claude Code does not trust it; a "
+                      "session started there stops at its \"Do you trust this folder?\" "
+                      "question - start aipager in a project folder (`aipager service "
+                      "install` runs it in the home folder) or set AIPAGER_WORK_DIR"]
+                     if warned else [])
+    assert (claude_json.read_bytes() if raw else claude_json.exists()) == (raw or False)
+
+
+def test_the_bootstrap_goes_on_when_the_folder_check_raises(claude_json, tmp_path, monkeypatch):
+    def _boom(path):
+        raise FileNotFoundError("the daemon's folder was removed")
+
+    monkeypatch.setattr(safety, "holds_home_folder", _boom)
+    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
+    wired = []
+    monkeypatch.setattr(claude_bootstrap, "_ensure_hooks_and_statusline",
+                        lambda: wired.append(True) or False)
+
+    claude_bootstrap.bootstrap_claude_settings("relative/folder")
+
+    assert wired == [True]
+
+
+# ---- safety.holds_home_folder: the folders never marked trusted -----------------
+
+def test_holds_home_folder_is_root_and_the_folders_above_home(tmp_path, monkeypatch):
+    home = tmp_path / "home" / "alice"
+    (home / "proj").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    (tmp_path / "to-home").symlink_to(home)
+    (tmp_path / "to-above").symlink_to(home.parent)
+
+    assert safety.holds_home_folder("/")
+    assert safety.holds_home_folder(str(home.parent))
+    assert safety.holds_home_folder(str(tmp_path))
+    assert safety.holds_home_folder(str(tmp_path / "to-above"))
+    monkeypatch.chdir(home.parent)
+    assert safety.holds_home_folder(".")
+
+    assert not safety.holds_home_folder(str(home))
+    assert not safety.holds_home_folder(str(home) + "/")
+    assert not safety.holds_home_folder(str(tmp_path / "to-home"))
+    assert not safety.holds_home_folder(str(home / "proj"))
+    assert not safety.holds_home_folder(str(tmp_path / "elsewhere"))
+
+
+@pytest.mark.parametrize("path", ["", None, 7, "/srv/a\x00b"])
+def test_holds_home_folder_fails_closed_on_an_unusable_path(path):
+    assert safety.holds_home_folder(path) is True
+
+
+def test_holds_home_folder_matches_home_in_any_case_where_case_is_ignored(
+        tmp_path, monkeypatch):
+    """On a case-insensitive file system (macOS) home spelled in other
+    letters is still home itself, not a folder above it."""
+    home = tmp_path / "Users" / "alice"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(safety, "_case_insensitive_fs", lambda: True)
+
+    assert not safety.holds_home_folder(str(tmp_path / "Users" / "ALICE"))
+    assert safety.holds_home_folder(str(tmp_path / "USERS"))
+
+
+def test_holds_home_folder_fails_closed_when_the_current_folder_is_gone(
+        tmp_path, monkeypatch):
+    gone = tmp_path / "gone"
+    gone.mkdir()
+    monkeypatch.chdir(gone)
+    gone.rmdir()
+
+    assert safety.holds_home_folder("relative/folder") is True
+
+
+def test_root_holds_the_home_folder_even_when_it_is_home(monkeypatch):
+    monkeypatch.setenv("HOME", "/")
+
+    assert safety.holds_home_folder("/") is True
 
 
 # ---- launch_session trusts the folder before the session starts -----------------
@@ -378,15 +486,35 @@ def test_launch_goes_on_when_the_folder_cannot_be_trusted(
     assert claude_json.read_bytes() == b"{ half"
 
 
-@pytest.mark.parametrize("where", ["home", "above home", "root"])
-def test_launch_never_trusts_a_folder_that_holds_the_home_folder(
-        claude_json, tmp_path, monkeypatch, run_async, where):
-    """Trusting the home folder, / or a folder above home would trust
-    every folder under it: never done at launch, and the launch goes on."""
+def test_launch_trusts_the_home_folder(claude_json, tmp_path, monkeypatch, run_async):
+    """The home folder is the default session folder (a systemd user unit,
+    the container). Claude Code keeps a yes given there for that session
+    only, which a session started from Telegram cannot give."""
     home = tmp_path / "h"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
-    cwd = {"home": home, "above home": tmp_path, "root": Path("/")}[where]
+    _write(claude_json, {"oauthAccount": {"x": 1}})
+    seen: dict = {}
+    _spawn_recorder(monkeypatch, seen, claude_json)
+
+    ok, err = run_async(dtach_inject.launch_session("ft5", mode="ask", cwd=str(home)))
+
+    assert ok, err
+    at_spawn = json.loads(seen["claude_json_at_spawn"])
+    assert at_spawn["projects"][str(home)]["hasTrustDialogAccepted"] is True
+    assert list(at_spawn["projects"]) == [str(home)]
+
+
+@pytest.mark.parametrize("where", ["above home", "root"])
+def test_launch_never_trusts_a_folder_that_holds_the_home_folder(
+        claude_json, tmp_path, monkeypatch, run_async, where):
+    """Trusting / or a folder above home would trust every folder under it
+    outside a git repository, other users' included: never done at
+    launch, and the launch goes on."""
+    home = tmp_path / "h"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    cwd = {"above home": tmp_path, "root": Path("/")}[where]
     raw = _write(claude_json, {"oauthAccount": {"x": 1}})
     seen: dict = {}
     _spawn_recorder(monkeypatch, seen, claude_json)
