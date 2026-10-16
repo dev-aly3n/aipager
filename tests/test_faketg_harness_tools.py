@@ -626,7 +626,7 @@ def test_a_failed_report_names_every_live_instance_log(root, monkeypatch):
 def test_own_instance_is_refused_while_another_instance_is_alive(monkeypatch):
     built = []
     monkeypatch.setattr(ftc, "faketg_instance",
-                        lambda env: contextlib.nullcontext(built.append(env)))
+                        lambda env, before_start=None: contextlib.nullcontext(built.append(env)))
     monkeypatch.setattr(ftc, "LIVE", [object()])
     with ftc.own_instances() as make:
         with pytest.raises(AssertionError, match="another instance is alive"):
@@ -638,6 +638,49 @@ def test_own_instance_is_refused_while_another_instance_is_alive(monkeypatch):
             make({"AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS": "2"})
             make({"AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS": "2"})
     assert built == [{"AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS": "2"}]
+
+
+def test_before_start_runs_between_build_and_start(monkeypatch):
+    """A test may change what the daemon runs (its environment) after the
+    instance is built and before its daemon starts; teardown always runs."""
+    calls = []
+
+    class _Inst:
+        root = None
+
+        class fake:  # noqa: N801 - stands for the instance's fake Bot API
+            unknown_methods: list = []
+
+        def __init__(self, **kw):
+            pass
+
+        def build(self):
+            calls.append("build")
+
+        def start(self):
+            calls.append("start")
+
+        def stop(self):
+            calls.append("stop")
+
+    monkeypatch.setattr(ftc.fti, "TestInstance", _Inst)
+    monkeypatch.setattr(ftc, "LIVE", [])
+    with ftc.own_instances() as make:
+        make({}, before_start=lambda inst: calls.append(("before_start", type(inst))))
+    assert calls == ["build", ("before_start", _Inst), "start", "stop"]
+
+    # A before_start that fails: no daemon starts, the instance is torn
+    # down, and the error reaches the test.
+    calls.clear()
+
+    def _broken(inst):
+        raise RuntimeError("the copy could not be made")
+
+    with pytest.raises(RuntimeError, match="could not be made"):
+        with ftc.own_instances() as make:
+            make({}, before_start=_broken)
+    assert calls == ["build", "stop"]
+    assert ftc.LIVE == []
 
 
 def test_settled_denied_card_is_what_the_daemon_writes_as_the_fake_shows_it():

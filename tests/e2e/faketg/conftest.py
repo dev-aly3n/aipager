@@ -158,12 +158,16 @@ LIVE: list = []
 
 
 @contextlib.contextmanager
-def faketg_instance(session_env: dict | None = None):
-    """An isolated daemon, built, started, and always torn down."""
+def faketg_instance(session_env: dict | None = None, before_start=None):
+    """An isolated daemon, built, started, and always torn down.
+    *before_start*, when given, is called with the built instance before
+    its daemon starts (a test that changes what the daemon runs)."""
     inst = fti.TestInstance(claude_mode=claude_mode(), session_env=session_env)
     LIVE.append(inst)
     try:
         inst.build()
+        if before_start is not None:
+            before_start(inst)
         inst.start()
         yield inst
     finally:
@@ -200,10 +204,10 @@ def own_instances():
     one daemon at a time (do not combine with ``fresh``)."""
     made: list = []
     with contextlib.ExitStack() as stack:
-        def make(session_env: dict):
+        def make(session_env: dict, before_start=None):
             assert not made, "one own instance per test"
             assert not LIVE, "own_faketg while another instance is alive"
-            inst = stack.enter_context(faketg_instance(session_env))
+            inst = stack.enter_context(faketg_instance(session_env, before_start))
             made.append(inst)
             return inst
         yield make
