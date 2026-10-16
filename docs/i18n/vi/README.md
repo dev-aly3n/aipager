@@ -1,22 +1,166 @@
+<div align="center">
+
+<a href="https://aipager.run"><img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/logo.png" width="96" height="96" alt="aipager"></a>
+
 # aipager
 
-<!-- i18n-source: README.md @ c91598e -->
+<!-- i18n-source: README.md @ ec7afc2 -->
 
-> Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../../README.md))
+<h3>Claude giờ chỉ là thêm một cuộc chat.</h3>
 
-[![PyPI](https://img.shields.io/pypi/v/aipager?label=pypi&color=3775A9)](https://pypi.org/project/aipager/)
-[![Python](https://img.shields.io/pypi/pyversions/aipager?color=3775A9)](https://pypi.org/project/aipager/)
-[![License](https://img.shields.io/badge/license-MIT-black)](../../../LICENSE)
+Các phiên [Claude Code](https://claude.com/claude-code) của bạn ngay trong Telegram, cạnh gia đình, bạn bè và nhóm của bạn.<br>
+Chúng chạy trên chính máy tính của bạn. Ở đâu bạn cũng theo dõi được, trả lời được và giao việc tiếp theo cho chúng.
 
-Điều khiển từ xa qua Telegram cho các phiên [Claude Code](https://claude.com/claude-code). Claude chạy trên máy tính của bạn trong một terminal tách rời (`dtach`), còn bạn dùng nó từ điện thoại: đọc câu trả lời của Claude, gửi tin nhắn cho nó, trả lời các yêu cầu cấp quyền và câu hỏi của nó, và chuyển qua lại giữa các phiên, mà không cần giữ kết nối SSH luôn mở.
+<p>
+<a href="https://pypi.org/project/aipager/"><img alt="PyPI" src="https://img.shields.io/pypi/v/aipager?style=flat-square&label=pypi&labelColor=181c20&color=2aabee"></a>
+<a href="https://pypi.org/project/aipager/"><img alt="Python" src="https://img.shields.io/pypi/pyversions/aipager?style=flat-square&labelColor=181c20&color=2aabee"></a>
+<a href="https://github.com/dev-aly3n/aipager/actions/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/dev-aly3n/aipager/test.yml?branch=main&style=flat-square&label=tests&labelColor=181c20"></a>
+<img alt="Linux and macOS" src="https://img.shields.io/badge/runs%20on-Linux%20%7C%20macOS-2aabee?style=flat-square&labelColor=181c20">
+<a href="../../../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-2aabee?style=flat-square&labelColor=181c20"></a>
+</p>
 
-[aipager.run](https://aipager.run) · [Tài liệu](#docs) · [Nhật ký thay đổi](../../../CHANGELOG.md) · [Issue trên GitHub](https://github.com/dev-aly3n/aipager/issues)
+**[Trang web](https://aipager.run)** · **[Cài đặt](#install)** · **[Tài liệu](#documentation)** · **[Bảo mật](security.md)** · **[Nhật ký thay đổi](../../../CHANGELOG.md)**
 
 **Đọc bằng ngôn ngữ khác:** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md)
 
+<sub>Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../../README.md))</sub>
+
+<br>
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/hero.webp" width="100%" alt="Tin nhắn gõ trong Telegram tới được Claude Code trong terminal, và một thẻ trong chat tự cập nhật khi Claude làm việc">
+
+<sub>Bạn viết trong Telegram. aipager gõ nó vào Claude Code trên máy tính của bạn, và một thẻ tự cập nhật khi việc đang chạy.</sub>
+
+</div>
+
+<br>
+
+## <a id="why-aipager"></a>Vì sao chọn aipager
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+**📟 Một thẻ trực tiếp cho mỗi việc**<br>
+Claude đang làm gì lúc này: các công cụ nó chạy, ngữ cảnh, chi phí và số dòng đã đổi, rồi tới câu trả lời. Thẻ tự cập nhật nên chat luôn gọn gàng.
+
+</td>
+<td width="33%" valign="top">
+
+**⚡ Nhắn cả khi nó đang làm**<br>
+Tin nhắn của bạn được gõ vào phiên ngay lập tức, kể cả khi Claude đang làm việc, y như gõ trong terminal. 👀 nghĩa là đã gửi, 👍 nghĩa là Claude đã nhận.
+
+</td>
+<td width="33%" valign="top">
+
+**✅ Trả lời bằng một chạm**<br>
+Yêu cầu cấp quyền và câu hỏi của Claude đến kèm một nút cho mỗi câu trả lời. Nút còn sót lại từ một việc đã xong sẽ từ chối, thay vì tác động lên việc tiếp theo.
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
+**🛡️ Ba chế độ quyền**<br>
+💬 Chế độ Hỏi, 🤖 Chế độ Auto (mặc định cho phiên mới) và 🔓 Chế độ Toàn quyền, đặt cho từng phiên và đổi bất cứ lúc nào bằng `/mode`.
+
+</td>
+<td width="33%" valign="top">
+
+**👥 Làm cho cả nhóm**<br>
+Thêm bot vào một nhóm. Mỗi tin nhắn chạy với vai trò của người gửi, thành viên có thể bị giới hạn trong thư mục riêng, và mọi lần chạm đều nằm trong nhật ký kiểm tra.
+
+</td>
+<td width="33%" valign="top">
+
+**🔒 Không có ai ở giữa**<br>
+Không máy chủ aipager, không tài khoản, không cổng mở. Token bot của bạn, máy tính của bạn, chat của bạn.
+
+</td>
+</tr>
+</table>
+
+## <a id="a-quick-tour"></a>Một vòng ngắn
+
+### <a id="questions-come-to-you"></a>Câu hỏi tìm đến bạn
+
+Khi Claude hỏi bạn điều gì hoặc cần cấp quyền, câu hỏi tới chat của bạn kèm một nút cho mỗi câu trả lời, và thanh được ghim cho biết điều gì đang chờ bạn. Lần chạm của bạn được gõ vào phiên như thể bạn đang ngồi trước bàn phím, và terminal hiện đúng câu trả lời đó.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/question.webp" width="100%" alt="Claude hỏi nên tăng thời gian chờ hay chờ cookie; câu trả lời chạm trong Telegram được chọn trong terminal">
+
+### <a id="three-permission-modes"></a>Ba chế độ quyền
+
+Mỗi phiên ở một trong ba chế độ, đổi bất cứ lúc nào bằng `/mode`, kể cả khi Claude đang làm việc.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/modes.webp" width="100%" alt="Cùng một việc ở Chế độ Hỏi, Chế độ Auto và Chế độ Toàn quyền">
+
+| Chế độ | Điều gì xảy ra |
+|---|---|
+| 💬 **Chế độ Hỏi**<br>`/mode ask` | Claude hỏi trước mỗi thao tác. |
+| 🤖 **Chế độ Auto**, mặc định<br>`/mode auto` | Bước kiểm tra an toàn của chính Claude Code chạy các thao tác an toàn và dừng các thao tác rủi ro để bạn quyết định. |
+| 🔓 **Chế độ Toàn quyền**<br>`/mode full` | Mọi thứ chạy mà không có bất kỳ kiểm tra nào. Dành cho admin, và cho bạn trong chat riêng của chính bạn với bot. |
+
+Chuyển giữa Chế độ Hỏi và Chế độ Auto diễn ra ngay tại chỗ, không khởi động lại. Vào hoặc ra khỏi Chế độ Toàn quyền sẽ khởi động lại phiên và giữ nguyên cuộc trò chuyện. Câu hỏi của Claude vẫn tới bạn ở mọi chế độ.
+
+### <a id="your-team-in-one-group"></a>Nhóm của bạn, trong một nhóm chat
+
+Thêm bot vào một nhóm và giao cho mỗi thành viên một vai trò: `owner`, `admin`, `user` hoặc `read_only`. Trong nhóm, bot chỉ phản hồi lệnh, câu trả lời cho tin nhắn của nó và lượt nhắc tên (`@aipagerbot fix the tests`, `/web run the tests`), và mỗi tin nhắn chạy với vai trò của người gửi: công cụ mà vai trò đó không được dùng sẽ bị từ chối trước khi chạy. Thành viên `user` hoặc `read_only` chỉ làm việc trong thư mục gốc của riêng họ (mặc định `~/aipager-users/<label>`). Người khác cũng có thể có chat riêng của họ với bot.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/team.webp" width="100%" alt="Một nhóm chat của đội, nơi một lệnh bị từ chối vì vai trò của một thành viên trong khi các bài test vẫn qua">
+
+> **⚠️ Quan trọng:** Thêm một thành viên là cho họ quyền chạy mã trên máy tính của bạn. Hãy đọc [mô hình tin cậy](groups.md) trước khi chia sẻ bot.
+
+Để thiết lập, thêm bot vào nhóm với quyền admin (để nó ghim được thanh trạng thái của nhóm), chạy lại `aipager config` và chọn **Add a group scope**. Trình hướng dẫn sẽ thêm từng thành viên kèm vai trò, hỏi thư mục gốc của các thành viên và nạp lại cấu hình của aipager đang chạy.
+
+### <a id="a-dashboard-inside-telegram"></a>Một bảng điều khiển ngay trong Telegram
+
+`/app` mở Mini App: các phiên của bạn với Dừng, Kết thúc, Khởi động lại, Đổi tên và nút đổi chế độ, trình xem diff cho mỗi `Write` và `Edit`, phần cài đặt và, với chủ sở hữu, Báo cáo sự cố. Chính aipager phục vụ nó, nó bật sẵn theo mặc định, và mỗi yêu cầu đều được kiểm tra bằng chữ ký của Telegram. Nếu bạn ở nhiều hơn một chat, một hàng tên chat ở trên cùng giúp bạn chuyển qua lại. Tắt nó bằng `aipager miniapp disable`, hoặc trỏ nó về địa chỉ của riêng bạn ([cách làm](security.md#mini-app-tunnel)).
+
+### <a id="fifteen-languages"></a>Mười lăm ngôn ngữ
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/languages.webp" width="420" align="right" alt="Một yêu cầu cấp quyền bằng tiếng Ba Tư, từ phải sang trái, với chữ số Ba Tư">
+
+- Nói English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی và Tiếng Việt.
+- Chọn một ngôn ngữ bằng `/language`, hoặc để chat riêng theo ngôn ngữ của ứng dụng Telegram của bạn.
+- Tiếng Ba Tư và tiếng Ả Rập đọc từ phải sang trái, với chữ số riêng của chúng.
+- Chỉ chữ của chính aipager thay đổi. Phiên của bạn thì không: Claude trả lời bằng ngôn ngữ bạn viết cho nó.
+- README này và [tài liệu](#documentation) cũng đã được dịch.
+
+<br clear="right">
+
+### <a id="and-the-small-things"></a>Và những điều nhỏ
+
+- **Nhiều phiên, một bot.** Tin nhắn thường sẽ tới phiên bạn nói chuyện gần nhất; trả lời một tin nhắn của một phiên để nói với đúng phiên đó, hoặc gửi `/x1 <message>`.
+- **Không có gì bị lẫn.** Tin nhắn gửi khi đang có yêu cầu cấp quyền hoặc câu hỏi mở sẽ chờ tới khi bạn trả lời, nên không bao giờ bị đọc thành câu trả lời.
+- **Ảnh, file và tin nhắn thoại.** Tin nhắn thoại được chuyển thành chữ ngay trên máy tính của bạn, với phần bổ sung tùy chọn `voice`.
+- **Nó báo cho bạn.** Ngữ cảnh sắp đầy, cuộc trò chuyện được thu gọn, một phiên đã kết thúc và một phiên im lặng lâu.
+- **Phiên sống qua mọi thứ.** Claude chạy bên trong `dtach`, nên vẫn tiếp tục làm việc khi bạn đóng terminal, mất kết nối SSH hoặc khởi động lại aipager.
+
+## <a id="how-it-works"></a>Cách hoạt động
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/how-it-works.webp" width="100%" alt="Claude Code, hook của nó, aipager, Telegram và các chat của bạn, xếp thành hàng">
+
+Claude Code chạy trong một terminal thật, bên trong `dtach`, nên không ai phải giữ cửa sổ mở. Mỗi bước kích hoạt một [hook](hooks.md) gửi một datagram tới aipager qua socket cục bộ, và aipager sửa một tin nhắn trong chat của bạn. Câu trả lời của bạn quay về theo đúng đường đó: một quyết định gửi cho hook đang giữ lời gọi, hoặc các phím gõ vào phiên. Terminal vẫn là nguồn sự thật. Xem thêm ở [kiến trúc](architecture.md).
+
 ## <a id="install"></a>Cài đặt
 
-Bạn có một agent lập trình (Claude Code, hoặc bất kỳ agent nào dùng được shell)? Tạo một bot với [@BotFather](https://t.me/BotFather), chạm Start trong bot đó, và chắc chắn rằng Claude Code trên máy tính này đã đăng nhập vào tài khoản của bạn. Lưu token của bot vào một file mà agent không bao giờ cần đọc (dán token, nhấn Enter, rồi Ctrl-D):
+Linux hoặc macOS, mọi kiến trúc. Bạn cần Claude Code đã đăng nhập trên máy tính này, và một bot Telegram: tạo một bot với [@BotFather](https://t.me/BotFather) rồi bấm Start trong đó.
+
+```sh
+curl -fsSL https://aipager.run/install | sh   # uv, pipx hoặc Homebrew: cái nào bạn có
+aipager config                                # token bot, chat của bạn, hook của Claude Code
+aipager service install                       # giữ aipager chạy cả khi bạn đăng xuất
+aipager session api                           # Claude Code trong thư mục này, và trong chat của bạn
+```
+
+Trình cài đặt dùng `uv` nếu bạn có, nếu không thì `pipx`, nếu không nữa thì (trên macOS) Homebrew, và cài `uv` khi không có cái nào. `dtach` đi kèm aipager (gói [`dtach-bin`](https://pypi.org/project/dtach-bin/)), nên không cần cài gì thêm. `aipager config` là một trình hướng dẫn: nó kiểm tra token bot và chat của bạn, rồi tự thêm các hook của aipager vào `~/.claude/settings.json`. Bạn không bao giờ phải sửa file bằng tay.
+
+<details>
+<summary><b>Để một agent lập trình cài giúp bạn</b></summary>
+
+<br>
+
+Bạn có Claude Code, hoặc bất kỳ agent nào có shell? Tạo bot, bấm Start trong đó, và lưu token bot vào một file mà agent không bao giờ phải đọc (dán token, nhấn Enter, rồi Ctrl-D):
 
 ```sh
 mkdir -p ~/.config/aipager
@@ -25,69 +169,49 @@ rm -f ~/.config/aipager/bot-token
 chmod 600 ~/.config/aipager/bot-token
 ```
 
-Sau đó đưa cho agent tin nhắn này:
+Sau đó đưa cho agent prompt này:
 
 ```text
 Install aipager for me by following https://aipager.run/agent.md. My Telegram bot token is in ~/.config/aipager/bot-token and my Telegram user id is <your id>.
 ```
 
-Nếu bạn không biết ID Telegram của mình, cứ nói với agent; nó có thể tìm ra.
+Nếu bạn không biết ID người dùng Telegram của mình, cứ nói vậy; agent có thể tự tìm. Hướng dẫn nó làm theo, gồm cả cách giao token an toàn, là [Cài đặt bằng agent](install-with-an-agent.md). Với script, `aipager setup --token-file FILE --chat-id ID` thiết lập aipager mà không hỏi gì cả ([lệnh setup](commands.md#command-line-aipager-setup-for-coding-agents)).
 
-Hướng dẫn mà agent làm theo, kể cả cách đưa token cho nó một cách an toàn, nằm ở [Cài đặt bằng agent](install-with-an-agent.md). Để tự cài, hãy đọc tiếp.
+</details>
 
-Linux hoặc macOS, kiến trúc nào cũng được. `dtach` được cài tự động qua phụ thuộc [`dtach-bin`](https://pypi.org/project/dtach-bin/): không cần gói hệ thống riêng.
-
-### <a id="one-line-install-recommended"></a>Cài bằng một dòng (khuyên dùng)
+### <a id="other-ways-to-install"></a>Các cách cài đặt khác
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dev-aly3n/aipager/main/install.sh | sh
+uv tool install aipager                        # uv: nên dùng trên macOS, mang theo Python riêng
+pipx install aipager                           # pipx
+brew install dev-aly3n/tap/aipager             # Homebrew, trên macOS và Linuxbrew (xem ghi chú bên dưới)
+nix profile install github:dev-aly3n/aipager   # Nix: không kèm claude (xem bên dưới)
+snap install aipager                           # Snap: cô lập chặt, có sẵn claude, thư mục làm việc nằm trong ~/
 ```
 
-Nó dùng `uv` nếu có, nếu không thì `pipx`, nếu không nữa thì (chỉ trên macOS) Homebrew. Nếu không có cái nào, nó cài `uv` trước (trình quản lý công cụ Python của Astral) rồi cài aipager bằng nó.
+Hoặc chạy nó trong [Docker](#docker), với Python, Node, `claude` và `dtach` có sẵn bên trong.
 
-### <a id="uv-recommended-on-macos"></a>uv (khuyên dùng trên macOS)
+<details>
+<summary><b>Homebrew trên macOS 26 (Tahoe)</b></summary>
 
-```sh
-uv tool install aipager     # nếu đã có uv
-```
+<br>
 
-Hoặc, để cài uv trước:
+Formula hoạt động khi bottle `python@3.12` của Homebrew và Command Line Tools của Xcode khớp nhau, nhưng thỉnh thoảng hai thứ này lệch nhau. Trên macOS 26, cài đặt thất bại với lỗi ký hiệu `pyexpat _XML_SetAllocTrackerActivationThreshold` ([issue ở upstream](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). Cập nhật Xcode và Command Line Tools thường sửa được, nhưng với `uv tool install aipager` thì lỗi này không hề xảy ra. Formula lấy `dtach` từ Homebrew và cài aipager vào một môi trường Python do Homebrew quản lý.
 
-```sh
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv tool install aipager
-```
-
-uv mang theo trình thông dịch Python riêng, nên chạy được trên mọi phiên bản macOS hay Linux, bất kể Python của hệ thống đang ra sao; nhờ vậy bạn tránh được xung đột giữa Python của Homebrew và Xcode được mô tả ở phần Homebrew bên dưới.
-
-### <a id="pipx"></a>pipx
-
-```sh
-pipx install aipager
-```
-
-### <a id="homebrew-tap-macos-linuxbrew"></a>Homebrew tap (macOS, Linuxbrew)
-
-> **Lưu ý:** trên macOS, cách được khuyên dùng là `uv tool install aipager`. Công thức brew chạy được khi gói `python@3.12` của Homebrew và Xcode / Command Line Tools của bạn khớp nhau, nhưng thỉnh thoảng chúng lệch nhau; lần gần nhất là trên **macOS Tahoe (26.x)**, việc cài đặt dừng với lỗi ký hiệu `pyexpat _XML_SetAllocTrackerActivationThreshold` ([issue upstream](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). Cập nhật Xcode và Command Line Tools thường giải quyết được, nhưng dùng uv thì đơn giản hơn.
-
-```sh
-brew install dev-aly3n/tap/aipager
-```
-
-Lấy `dtach` từ công thức chuẩn của Homebrew và cài aipager vào một venv Python do Homebrew quản lý.
+</details>
 
 ### <a id="docker"></a>Docker
 
-Một image dựng sẵn đã có python, node, `claude` và `dtach`; tiện cho VPS, NAS hay Raspberry Pi, nơi bạn không muốn cài Python hay Node vào hệ thống. Hỗ trợ nhiều kiến trúc (amd64, arm64).
+Một image tự đủ với Python, Node, `claude` và `dtach`, hợp cho VPS, NAS hoặc Raspberry Pi khi bạn không muốn có Python hay Node trên máy chủ. Hỗ trợ nhiều kiến trúc (amd64, arm64).
 
 ```sh
-# 1. Chạy trình thiết lập một lần (tương tác)
+# 1. Chạy trình hướng dẫn thiết lập một lần (tương tác)
 docker run --rm -it \
   -v "$HOME/.claude:/home/aipager/.claude" \
   -v aipager-config:/home/aipager/.config/aipager \
   ghcr.io/dev-aly3n/aipager:latest config
 
-# 2. Chạy aipager (nền, tự khởi động lại)
+# 2. Khởi động aipager (chạy nền, tự khởi động lại)
 docker run -d --restart=unless-stopped --name aipager \
   -v "$HOME/.claude:/home/aipager/.claude" \
   -v aipager-config:/home/aipager/.config/aipager \
@@ -95,20 +219,25 @@ docker run -d --restart=unless-stopped --name aipager \
   ghcr.io/dev-aly3n/aipager:latest
 ```
 
-Gắn (mount) các thư mục bạn muốn Claude sửa vào `/workspace`. Gắn `~/.claude` sẽ mang theo thông tin đăng nhập Claude và lịch sử cuộc trò chuyện của bạn; để đăng nhập, chạy `claude` một lần trên máy, hoặc `docker exec -it aipager claude` để đăng nhập bên trong container.
+Gắn (mount) các thư mục bạn muốn Claude sửa vào dưới `/workspace`. Mount `~/.claude` mang theo thông tin đăng nhập Claude và lịch sử trò chuyện của bạn: chạy `claude` một lần trên máy chủ để đăng nhập, hoặc `docker exec -it aipager claude` để đăng nhập bên trong container.
 
 Tag: `latest`, `1.3`, `1.3.4` (một cho phiên bản chính xác và một cho phiên bản minor).
 
-### <a id="nix-flake"></a>Nix flake
+### <a id="nix"></a>Nix
 
 ```sh
 nix run github:dev-aly3n/aipager -- --version
 nix profile install github:dev-aly3n/aipager
 ```
 
-Build aipager từ mã nguồn với các phụ thuộc được ghim từ nixpkgs. `dtach` do Nix cung cấp; `claude` thì **không**: hãy cài riêng (`nix profile install nixpkgs#nodejs && npm install -g @anthropic-ai/claude-code`, hoặc theo tài liệu của Anthropic).
+Build aipager từ mã nguồn với nixpkgs đã ghim. `dtach` do Nix cung cấp; `claude` thì không, nên hãy cài riêng (`nix profile install nixpkgs#nodejs && npm install -g @anthropic-ai/claude-code`, hoặc theo tài liệu của Anthropic).
 
-Với cấu hình NixOS hay Home Manager kiểu khai báo, thêm aipager làm một input của flake và lấy gói của nó vào `environment.systemPackages`:
+<details>
+<summary><b>NixOS và Home Manager</b></summary>
+
+<br>
+
+Thêm aipager làm một input của flake và đưa gói của nó vào `environment.systemPackages`:
 
 ```nix
 {
@@ -126,86 +255,130 @@ Với cấu hình NixOS hay Home Manager kiểu khai báo, thêm aipager làm m�
 }
 ```
 
-Sau đó `aipager service install` sẽ thiết lập một dịch vụ người dùng của systemd.
+Sau đó `aipager service install` sẽ tạo một unit người dùng của systemd.
 
-### <a id="snap"></a>Snap
+</details>
 
-```sh
-snap install aipager
-```
+## <a id="everyday-use"></a>Dùng hằng ngày
 
-Một snap cô lập chặt chẽ có sẵn python, node, `claude`, `dtach` và aipager. Do sandbox của snap, các thư mục làm việc phải nằm trong `~/` (ví dụ `~/projects/foo`). File manifest nằm trong [`packaging/snap/`](../../../packaging/snap/).
+### <a id="in-telegram"></a>Trong Telegram
 
-## <a id="configure"></a>Thiết lập
+| Gửi | Để |
+|---|---|
+| `/status` | Xem các phiên của chat này, mỗi phiên kèm trạng thái và các nút. |
+| `/new x1` | Bắt đầu một phiên tên x1. `/new x1 fix the tests` còn gửi luôn tin nhắn đầu tiên. |
+| `/x1` | Đặt x1 làm phiên nhận tin nhắn của bạn. `/x1 <message>` gửi thẳng một tin nhắn tới nó. |
+| `/stop` | Ngắt việc đang chạy và bỏ những gì đang xếp hàng. |
+| `/mode` | Chuyển giữa Chế độ Hỏi, Chế độ Auto và Chế độ Toàn quyền. |
+| `/app` | Mở Mini App. |
+| `/language` | Chọn ngôn ngữ aipager dùng trong chat này. |
+| `/update` | Cập nhật aipager và Claude Code, rồi khởi động lại tại chỗ (admin). |
+| `/help` | Hướng dẫn ngắn theo từng việc. |
 
-```sh
-aipager config
-```
+Mọi lệnh, nút và cài đặt đều có trong [Lệnh của bot](commands.md).
 
-Một trình thiết lập tương tác: hỏi token bot Telegram của bạn (từ [@BotFather](https://t.me/BotFather)) và ID chat, kiểm tra cả hai, rồi tự thêm các hook cần thiết vào `~/.claude/settings.json`. Bạn không bao giờ phải tự sửa file.
-
-Bạn đang thiết lập aipager cho người khác từ một script, hoặc qua một agent lập trình? `aipager setup --token-file FILE --chat-id ID` làm điều tương tự mà không hỏi gì (xem [lệnh setup](commands.md#command-line-aipager-setup-for-coding-agents) và [hướng dẫn cho agent](install-with-an-agent.md)).
-
-## <a id="run"></a>Chạy
-
-```sh
-aipager start
-```
-
-aipager chạy ở tiền cảnh. Bắt đầu một phiên Claude ở terminal khác:
+### <a id="on-the-command-line"></a>Trên dòng lệnh
 
 ```sh
-aipager session dev
+aipager start                             # chính aipager, chạy ở tiền cảnh
+aipager session dev                       # bắt đầu ở đây một phiên tên dev, hoặc kết nối lại với nó
+aipager session dev --continue            # tiếp tục cuộc trò chuyện Claude gần nhất trong thư mục này
+aipager session dev -- --resume abc1234   # mọi tùy chọn khác của claude được chuyển nguyên vẹn
+aipager doctor                            # kiểm tra bản cài đặt
 ```
 
-Lệnh này tạo một phiên dtach tên `claude-dev` chạy Claude Code (hoặc kết nối vào phiên đó nếu đã có). aipager phát hiện nó trong vài giây và Telegram bắt đầu hiển thị nó. Bạn cũng có thể bắt đầu phiên từ Telegram: gửi `/new dev` cho bot. Để kết nối lại sau, chạy lại đúng lệnh đó; để thoát mà không dừng Claude, đóng terminal hoặc ô tmux (phiên vẫn tiếp tục chạy).
+Để rời một phiên mà không dừng Claude, hãy đóng terminal hoặc ô tmux: phiên vẫn chạy tiếp, và cùng lệnh đó sẽ kết nối bạn lại.
 
-Nếu phiên dtach đã đóng (ví dụ máy tính đã khởi động lại) và bạn muốn tiếp tục cuộc trò chuyện của Claude từ ổ đĩa, thêm `--continue`:
+`aipager service install` giữ aipager chạy nền: một unit người dùng của systemd trên Linux (`~/.config/systemd/user/aipager.service`) hoặc một agent của launchd trên macOS (`~/Library/LaunchAgents/com.aipager.daemon.plist`). Cách nào thì aipager cũng chạy trong thư mục home của bạn, nơi một phiên mới bắt đầu nếu bạn không chọn thư mục khác. `aipager service start`, `stop`, `status`, `logs` và `uninstall` dùng để quản lý nó.
 
-```sh
-aipager session dev --continue    # cuộc trò chuyện claude gần nhất trong thư mục này
-```
+## <a id="security"></a>Bảo mật
 
-Bạn cũng có thể thêm `--resume <session-id>` (hoặc bất kỳ cờ claude nào khác) ở cuối:
+- **Không có máy chủ aipager.** aipager nói chuyện với Bot API của Telegram bằng chính token bot của bạn. Không có tài khoản aipager, cũng không có dịch vụ aipager.
+- **Không có cổng mở.** aipager chỉ lắng nghe trên loopback. Mini App đi ra ngoài qua một đường hầm Cloudflare, nơi mọi yêu cầu phải mang chữ ký của Telegram, và `aipager miniapp disable` sẽ tắt nó.
+- **Mọi câu trả lời đều được ghi lại.** Mỗi lần Cho phép, Từ chối và mỗi câu trả lời được ghi thêm vào `~/.claude/aipager-audit.jsonl`, kèm người đã chạm trong nhóm.
+- **Claude Code vẫn là bên quyết định.** Cài đặt Claude Code của bạn quy định điều gì cần hỏi. aipager chỉ chuyển câu hỏi đi và không bao giờ nâng quyền: không sudo, mọi thứ chạy bằng người dùng của bạn.
 
-```sh
-aipager session dev -- --resume abc1234
-```
+Toàn cảnh, gồm cả những gì bảo vệ thông tin đăng nhập Claude của bạn, có trong [mô hình bảo mật](security.md).
 
-### <a id="run-as-a-service-survives-logout"></a>Chạy như một dịch vụ (vẫn chạy sau khi đăng xuất)
+## <a id="faq"></a>Câu hỏi thường gặp
 
-```sh
-aipager service install
-```
+<details>
+<summary><b>Khác gì so với ứng dụng di động của Claude?</b></summary>
 
-Trên Linux, lệnh này ghi một dịch vụ người dùng systemd vào `~/.config/systemd/user/aipager.service` rồi khởi động nó. Trên macOS, nó ghi một plist launchd vào `~/Library/LaunchAgents/com.aipager.daemon.plist` rồi khởi động nó. Dù cách nào, aipager cũng chạy trong thư mục home của bạn, nơi một phiên mới bắt đầu trừ khi bạn chọn thư mục khác. Các lệnh con: `start`, `stop`, `status`, `logs`, `uninstall`.
+<br>
 
-## <a id="team-mode-groups-and-other-people"></a>Chế độ làm việc nhóm (nhóm và người khác)
+Ứng dụng của Claude nói chuyện với trợ lý do Anthropic lưu trữ. aipager kết nối bạn với một phiên Claude Code chạy trên chính máy tính của bạn: kho mã của bạn, công cụ của bạn, môi trường của bạn.
 
-Mặc định aipager là một bot cá nhân: bạn và bot trong một chat riêng. Để chia sẻ, hãy thêm một nhóm Telegram, chat riêng của người khác với bot, hoặc cả hai. Với một nhóm: thêm bot vào nhóm (làm quản trị viên, để bot có thể ghim thanh trạng thái của nhóm), chạy lại `aipager config` và chọn **Add a group scope**. Trình thiết lập đề xuất bạn (chủ sở hữu chat riêng của chính bạn) làm chủ sở hữu nhóm, thêm từng thành viên với một vai trò (`owner`, `admin`, `user` hoặc `read_only`), hỏi thư mục gốc của các thành viên, rồi tải lại cài đặt của aipager mà không cần khởi động lại. Trong nhóm, bot chỉ phản hồi lệnh, tin nhắn trả lời tin của nó và tin nhắn nhắc đến nó (`@aipagerbot fix the tests`, `/jim run the tests`), và mỗi tin nhắn chạy với vai trò của người gửi. Một thành viên `user` hoặc `read_only` chỉ bắt đầu và giữ phiên trong thư mục gốc của chat mình (mặc định `~/aipager-users/<label>`). **Thêm một thành viên là cho người đó quyền chạy mã trên máy tính của bạn**: toàn bộ mô hình tin cậy được mô tả ở [Chế độ làm việc nhóm và nhóm](groups.md).
+</details>
 
-## <a id="what-it-does"></a>Nó làm được gì
+<details>
+<summary><b>Mã của tôi có rời khỏi máy tính không?</b></summary>
 
-- Cho bạn thấy trên Telegram mỗi phiên Claude Code đang làm gì: đang làm việc hay sẵn sàng, đang dùng công cụ nào, % ngữ cảnh, chi phí và số dòng đã đổi, trên một thẻ cho mỗi việc, rồi tới câu trả lời của Claude
-- Gửi tin nhắn của bạn tới Claude **ngay lập tức**, kể cả khi nó đang làm việc: gửi vài tin, Claude sẽ tự xếp hàng chúng, giống như khi gõ trong terminal. 👀 nghĩa là đã gửi, 👍 nghĩa là Claude đã nhận
-- Giữ lại tin nhắn khi đang có yêu cầu cấp quyền hoặc câu hỏi mở, để tin nhắn đó không bao giờ bị đọc thành câu trả lời cho nó, rồi gửi đi khi bạn đã trả lời
-- Hiện các yêu cầu cấp quyền và câu hỏi của Claude kèm nút bấm (Cho phép, Từ chối, Luôn cho phép, một nút cho mỗi phương án); một nút còn sót lại từ việc đã xong sẽ từ chối, thay vì tác động lên việc đang chạy
-- Ba chế độ quyền cho mỗi phiên, đổi bằng `/mode`: 💬 Chế độ Hỏi (Claude hỏi trước mỗi thao tác), 🤖 Chế độ Auto, mặc định (bước kiểm tra an toàn của chính Claude Code chạy các thao tác an toàn và dừng các thao tác rủi ro để bạn quyết định), và 🔓 Chế độ Toàn quyền (mọi thứ chạy mà không có kiểm tra nào; cho quản trị viên và cho bạn trong chat riêng của chính bạn)
-- Bắt đầu phiên từ chat: `/new x1` bắt đầu một phiên ngay (`/new x1 fix the tests` còn gửi luôn tin nhắn đầu tiên), với chế độ, mô hình và thư mục lấy từ `/settings` cùng các nút để đổi chúng
-- Nhận ảnh, file và tin nhắn thoại (tin nhắn thoại được chuyển thành chữ ngay trên máy tính của bạn, với gói tính năng thoại)
-- Báo cho bạn khi ngữ cảnh gần đầy, khi cuộc trò chuyện được thu gọn, khi một phiên kết thúc, và khi một phiên im lặng quá lâu
-- Chạy nhiều phiên cùng lúc qua một bot; tùy chọn chế độ làm việc nhóm với vai trò và quy tắc cho từng công cụ ([Chế độ làm việc nhóm và nhóm](groups.md))
-- Nói được English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی và Tiếng Việt: chỉ là chữ của chính aipager, không bao giờ là các phiên của bạn hay câu trả lời của Claude ([Ngôn ngữ](commands.md#languages)). README này và tài liệu cũng đã được dịch (xem **Đọc bằng ngôn ngữ khác** ở trên)
+<br>
 
-### <a id="mini-app"></a>Mini App
+aipager chỉ gửi tới Telegram những gì bạn thấy trong chat của mình, bằng chính token bot của bạn; không có máy chủ aipager nào ở giữa. Còn Claude Code thì vẫn nói chuyện với Anthropic như mọi khi.
 
-`/app` mở một bảng điều khiển ngay trong Telegram: các phiên của bạn với Dừng, Kết thúc, Khởi động lại, Đổi tên và đổi chế độ, xem diff cho các thay đổi `Write`/`Edit`, cài đặt, và với chủ sở hữu thì có “Báo cáo sự cố”. Nó do chính aipager cung cấp và **bật sẵn mặc định**; mọi yêu cầu đều được kiểm tra bằng chữ ký `initData` của Telegram. Nếu bạn ở trong nhiều chat (chat riêng của bạn và một nhóm), một hàng tên chat ở trên cùng giúp chuyển qua lại giữa chúng. Quản lý bằng `aipager miniapp enable|disable|status`, hoặc trỏ nó tới địa chỉ của riêng bạn thay cho tunnel được quản lý: xem [Mô hình bảo mật](security.md#mini-app-tunnel).
+</details>
 
-### <a id="note-on-model-buttons-bedrock--vertex-users"></a>Về các nút mô hình (người dùng Bedrock và Vertex)
+<details>
+<summary><b>dtach là gì?</b></summary>
 
-Menu con **Mô hình** trên bàn phím cố định (và bộ chọn mô hình trong Mini App) đưa ra các bí danh theo dòng của Claude Code, `sonnet`, `opus`, `haiku`, `fable` và `opusplan`, cùng các mô hình được ghim như `claude-opus-5-5` và `claude-sonnet-5-5` (danh sách đầy đủ ở [Bàn phím cố định](commands.md#persistent-keyboard)). Trên API của Anthropic, một bí danh luôn trỏ tới mô hình mới nhất trong dòng của nó. Trên **Bedrock** và **Vertex**, cùng các bí danh đó có thể trỏ tới phiên bản cũ hơn, tùy những gì nhà cung cấp của bạn có. Nếu bạn dùng các dịch vụ đó và cần một mô hình cụ thể, hãy gửi `/model <full-id>` từ chat.
+<br>
 
-## <a id="developing-locally"></a>Phát triển trên máy của bạn
+Một chương trình nhỏ giúp tách terminal ra. Nó giữ Claude Code sống khi terminal đóng hoặc SSH bị ngắt, nên câu trả lời bạn gửi một giờ sau vẫn tới được một phiên còn sống. Nó đi kèm aipager.
+
+</details>
+
+<details>
+<summary><b>Nếu Claude đi chệch hướng thì sao?</b></summary>
+
+<br>
+
+Các yêu cầu chờ bạn chạm, `/stop` ngắt việc đang chạy và bỏ mọi thứ đang xếp hàng, `/kill` kết thúc phiên, và nút của một việc đã xong sẽ từ chối.
+
+</details>
+
+<details>
+<summary><b>Cập nhật thế nào?</b></summary>
+
+<br>
+
+Gửi `/update`: nó kiểm tra aipager và Claude Code rồi cài bản mới, và 🔄 Khởi động lại ngay sẽ đưa aipager chạy lại, dù có chạy dưới dạng dịch vụ hay không. Các phiên của bạn vẫn chạy trong lúc đó. Trên dòng lệnh, `aipager update` cập nhật qua trình cài đặt đã cài aipager.
+
+</details>
+
+<details>
+<summary><b>Tôi dùng Bedrock hoặc Vertex. Các nút chọn mô hình có dùng được không?</b></summary>
+
+<br>
+
+Menu **Mô hình** trên bàn phím và Mini App đưa ra các bí danh theo họ của Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) và các mô hình cố định như `claude-opus-5-5` và `claude-sonnet-5-5`. Trên API của Anthropic, một bí danh trỏ tới mô hình mới nhất trong họ của nó. Trên Bedrock và Vertex, cùng bí danh đó có thể trỏ tới một bản cũ hơn, tùy vào những gì nhà cung cấp của bạn có; hãy gửi `/model <full-id>` để chọn đúng một mô hình.
+
+</details>
+
+<details>
+<summary><b>Tốn bao nhiêu tiền?</b></summary>
+
+<br>
+
+Không tốn gì. aipager dùng giấy phép MIT, bot là của bạn, và Claude Code vẫn dùng gói hoặc khóa mà nó đang dùng.
+
+</details>
+
+## <a id="documentation"></a>Tài liệu
+
+| Trang | Nội dung |
+|---|---|
+| [Lệnh của bot](commands.md) | Mọi lệnh, nút, cài đặt và tùy chọn dòng lệnh |
+| [Chế độ làm việc nhóm và nhóm](groups.md) | Vai trò, thư mục gốc, ai được chạm vào gì, mô hình tin cậy |
+| [Mô hình bảo mật](security.md) | Ranh giới tin cậy, bí mật, nhật ký kiểm tra, mạng |
+| [Sự kiện hook](hooks.md) | Mỗi hook của Claude Code làm gì trong aipager |
+| [Kiến trúc](architecture.md) | Các phần của aipager, file và socket của nó |
+| [Xử lý sự cố](troubleshooting.md) | `aipager doctor` và cách sửa các lỗi thường gặp |
+| [Báo cáo sự cố](problem-reports.md) | Một báo cáo chứa gì, và khi nào aipager đề nghị gửi nó |
+| [Cài đặt bằng agent](install-with-an-agent.md) | Hướng dẫn mà agent lập trình làm theo |
+
+## <a id="contributing"></a>Đóng góp
 
 ```sh
 git clone https://github.com/dev-aly3n/aipager.git && cd aipager
@@ -216,23 +389,16 @@ systemd-run --user --scope -q -p MemoryMax=2G -p MemorySwapMax=0 \
 ruff check aipager tests
 ```
 
-`dtach` đi kèm phụ thuộc `dtach-bin`, không cần gì thêm. Hãy chạy test với giới hạn bộ nhớ như trên (trên macOS thì bỏ `systemd-run`): nếu không, một test chạy mất kiểm soát có thể ngốn hết bộ nhớ của máy.
-
-Quy trình phát hành được mô tả trong [CONTRIBUTING.md](../../../CONTRIBUTING.md).
+`dtach` đi kèm phụ thuộc `dtach-bin`, nên không cần gì thêm. Hãy chạy test với giới hạn bộ nhớ như trên (trên macOS thì không có `systemd-run`): nếu không, một bài test mất kiểm soát có thể chiếm hết bộ nhớ của máy. Quy trình phát hành nằm trong [CONTRIBUTING.md](../../../CONTRIBUTING.md).
 
 ## <a id="license"></a>Giấy phép
 
-MIT; toàn văn trong [LICENSE](../../../LICENSE).
+MIT. Xem [LICENSE](../../../LICENSE).
 
-## <a id="docs"></a>Tài liệu
+<br>
 
-| Trang | Nội dung |
-|---|---|
-| [Cài đặt bằng agent](install-with-an-agent.md) | Các bước một agent lập trình làm theo để cài và thiết lập aipager cho người của nó |
-| [Kiến trúc](architecture.md) | Chương trình được dựng thế nào, sơ đồ các phần, file và socket nằm ở đâu |
-| [Sự kiện hook](hooks.md) | Mọi sự kiện aipager nhận từ Claude Code, kèm các trường |
-| [Lệnh của bot](commands.md) | Lệnh, nút, Mini App, tin nhắn thoại và file, mọi lệnh `aipager`, và cài đặt từ môi trường |
-| [Chế độ làm việc nhóm và nhóm](groups.md) | Thiết lập cho nhiều người, vai trò, quy tắc, ai đã làm gì |
-| [Xử lý sự cố](troubleshooting.md) | Các lỗi hay gặp và bảng cách khắc phục của `aipager doctor` |
-| [Báo cáo sự cố](problem-reports.md) | Một báo cáo sự cố chứa gì, gửi đi đâu, và khi nào aipager đề nghị gửi |
-| [Mô hình bảo mật](security.md) | Ranh giới tin cậy, thông tin bí mật, log kiểm tra, kết nối mạng |
+<div align="center">
+<a href="https://aipager.run"><img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/logo.png" width="32" height="32" alt=""></a>
+<br>
+<sub><a href="https://aipager.run">aipager.run</a></sub>
+</div>

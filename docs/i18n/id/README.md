@@ -1,22 +1,166 @@
+<div align="center">
+
+<a href="https://aipager.run"><img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/logo.png" width="96" height="96" alt="aipager"></a>
+
 # aipager
 
-<!-- i18n-source: README.md @ c91598e -->
+<!-- i18n-source: README.md @ ec7afc2 -->
 
-> Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../../README.md))
+<h3>Claude jadi satu chat lagi.</h3>
 
-[![PyPI](https://img.shields.io/pypi/v/aipager?label=pypi&color=3775A9)](https://pypi.org/project/aipager/)
-[![Python](https://img.shields.io/pypi/pyversions/aipager?color=3775A9)](https://pypi.org/project/aipager/)
-[![License](https://img.shields.io/badge/license-MIT-black)](../../../LICENSE)
+Sesi [Claude Code](https://claude.com/claude-code) kamu di Telegram, di samping keluarga, teman, dan timmu.<br>
+Semuanya berjalan di komputermu sendiri. Kamu bisa memantau, menjawab, dan memberi tugas berikutnya dari mana saja.
 
-Remote control lewat Telegram untuk sesi [Claude Code](https://claude.com/claude-code). Claude berjalan di komputermu dalam terminal yang terlepas (`dtach`), dan kamu memakainya dari ponsel: membaca jawaban Claude, mengirim pesan, menjawab permintaan izin dan pertanyaannya, serta berpindah antarsesi, tanpa perlu menjaga koneksi SSH tetap terbuka.
+<p>
+<a href="https://pypi.org/project/aipager/"><img alt="PyPI" src="https://img.shields.io/pypi/v/aipager?style=flat-square&label=pypi&labelColor=181c20&color=2aabee"></a>
+<a href="https://pypi.org/project/aipager/"><img alt="Python" src="https://img.shields.io/pypi/pyversions/aipager?style=flat-square&labelColor=181c20&color=2aabee"></a>
+<a href="https://github.com/dev-aly3n/aipager/actions/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/dev-aly3n/aipager/test.yml?branch=main&style=flat-square&label=tests&labelColor=181c20"></a>
+<img alt="Linux and macOS" src="https://img.shields.io/badge/runs%20on-Linux%20%7C%20macOS-2aabee?style=flat-square&labelColor=181c20">
+<a href="../../../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-2aabee?style=flat-square&labelColor=181c20"></a>
+</p>
 
-[aipager.run](https://aipager.run) · [Dokumentasi](#docs) · [Catatan perubahan](../../../CHANGELOG.md) · [Issue di GitHub](https://github.com/dev-aly3n/aipager/issues)
+**[Situs](https://aipager.run)** · **[Pemasangan](#install)** · **[Dokumentasi](#documentation)** · **[Keamanan](security.md)** · **[Catatan perubahan](../../../CHANGELOG.md)**
 
 **Baca dalam bahasa lain:** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
 
+<sub>Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../../README.md))</sub>
+
+<br>
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/hero.webp" width="100%" alt="Pesan yang diketik di Telegram sampai ke Claude Code di terminal, dan satu kartu di chat memperbarui dirinya sendiri selama Claude bekerja">
+
+<sub>Kamu menulis di Telegram. aipager mengetiknya ke Claude Code di komputermu, dan satu kartu memperbarui dirinya sendiri selama tugas berjalan.</sub>
+
+</div>
+
+<br>
+
+## <a id="why-aipager"></a>Kenapa aipager
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+**📟 Satu kartu langsung per tugas**<br>
+Apa yang sedang dikerjakan Claude saat ini: alat yang dijalankannya, konteks, biaya, dan baris yang berubah, lalu jawabannya. Kartunya memperbarui diri sendiri, jadi chat tetap tenang.
+
+</td>
+<td width="33%" valign="top">
+
+**⚡ Ajak bicara di tengah tugas**<br>
+Pesanmu langsung diketik ke sesi, bahkan saat Claude sedang bekerja, persis seperti mengetik di terminal. 👀 berarti terkirim, 👍 berarti Claude sudah mengambilnya.
+
+</td>
+<td width="33%" valign="top">
+
+**✅ Jawab dengan sekali ketuk**<br>
+Permintaan izin dan pertanyaan Claude datang dengan satu tombol untuk tiap jawaban. Tombol yang tersisa dari tugas yang sudah selesai akan menolak, bukan memengaruhi tugas berikutnya.
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
+**🛡️ Tiga mode izin**<br>
+💬 Mode Tanya, 🤖 Mode Auto (bawaan untuk sesi baru), dan 🔓 Mode Akses penuh, diatur per sesi dan bisa diganti kapan saja dengan `/mode`.
+
+</td>
+<td width="33%" valign="top">
+
+**👥 Dibuat untuk tim**<br>
+Masukkan bot ke grup. Setiap pesan berjalan dengan peran pengirimnya, anggota bisa dibatasi ke folder mereka sendiri, dan setiap ketukan tercatat di log audit.
+
+</td>
+<td width="33%" valign="top">
+
+**🔒 Tidak ada perantara**<br>
+Tanpa server aipager, tanpa akun, tanpa port terbuka. Token bot milikmu, komputermu, chat-mu.
+
+</td>
+</tr>
+</table>
+
+## <a id="a-quick-tour"></a>Tur singkat
+
+### <a id="questions-come-to-you"></a>Pertanyaan datang kepadamu
+
+Saat Claude menanyakan sesuatu atau butuh izin, pertanyaannya masuk ke chat-mu dengan satu tombol untuk tiap jawaban, dan bilah yang disematkan memberi tahu apa yang menunggumu. Ketukanmu diketik ke sesi seolah kamu duduk di depan keyboard, dan terminal menampilkan jawaban yang sama.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/question.webp" width="100%" alt="Claude bertanya apakah perlu menaikkan timeout atau menunggu cookie; jawaban yang diketuk di Telegram dipilih di terminal">
+
+### <a id="three-permission-modes"></a>Tiga mode izin
+
+Setiap sesi berada di salah satu dari tiga mode, yang bisa diganti kapan saja dengan `/mode`, bahkan saat Claude sedang bekerja.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/modes.webp" width="100%" alt="Tugas yang sama di Mode Tanya, Mode Auto, dan Mode Akses penuh">
+
+| Mode | Yang terjadi |
+|---|---|
+| 💬 **Mode Tanya**<br>`/mode ask` | Claude bertanya sebelum setiap tindakan. |
+| 🤖 **Mode Auto**, bawaan<br>`/mode auto` | Pemeriksaan keamanan Claude Code sendiri menjalankan tindakan yang aman dan menghentikan yang berisiko supaya kamu yang memutuskan. |
+| 🔓 **Mode Akses penuh**<br>`/mode full` | Semuanya berjalan tanpa pemeriksaan apa pun. Untuk admin, dan untukmu di chat pribadimu sendiri dengan bot. |
+
+Pindah antara Mode Tanya dan Mode Auto terjadi di tempat, tanpa mulai ulang. Masuk ke Mode Akses penuh atau keluar darinya memulai ulang sesi dan tetap menyimpan percakapan. Pertanyaan dari Claude tetap datang kepadamu di mode apa pun.
+
+### <a id="your-team-in-one-group"></a>Timmu, dalam satu grup
+
+Tambahkan bot ke grup dan beri setiap anggota satu peran: `owner`, `admin`, `user`, atau `read_only`. Di grup, bot hanya menanggapi perintah, balasan ke pesannya, dan mention (`@aipagerbot fix the tests`, `/web run the tests`), dan setiap pesan berjalan dengan peran pengirimnya: alat yang tidak boleh dipakai peran itu ditolak sebelum dijalankan. Anggota `user` atau `read_only` hanya bekerja di dalam folder akarnya sendiri (bawaannya `~/aipager-users/<label>`). Orang lain juga bisa punya chat pribadi sendiri dengan bot.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/team.webp" width="100%" alt="Grup tim tempat sebuah perintah ditolak karena peran seorang anggota, sementara tesnya lolos">
+
+> **⚠️ Penting:** Menambahkan anggota berarti memberinya hak menjalankan kode di komputermu. Baca [model kepercayaannya](groups.md) sebelum membagikan bot.
+
+Untuk menyiapkannya, tambahkan bot ke grup sebagai admin (supaya bisa menyematkan bilah status grup), jalankan `aipager config` lagi, lalu pilih **Add a group scope**. Wizard akan menambahkan setiap anggota dengan perannya, menanyakan folder akar para anggota, dan memuat ulang konfigurasi aipager yang sedang berjalan.
+
+### <a id="a-dashboard-inside-telegram"></a>Dasbor di dalam Telegram
+
+`/app` membuka Mini App: sesi-sesimu dengan Hentikan, Akhiri, Mulai ulang, Ganti nama, dan pengalih mode, penampil diff untuk setiap `Write` dan `Edit`, pengaturan, dan, untuk pemilik, Laporkan masalah. Mini App disajikan oleh aipager sendiri, aktif secara bawaan, dan setiap permintaan diperiksa dengan tanda tangan Telegram. Kalau kamu ada di lebih dari satu chat, sebaris nama chat di atas bisa memindahkanmu di antaranya. Matikan dengan `aipager miniapp disable`, atau arahkan ke alamatmu sendiri ([caranya](security.md#mini-app-tunnel)).
+
+### <a id="fifteen-languages"></a>Lima belas bahasa
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/languages.webp" width="420" align="right" alt="Permintaan izin dalam bahasa Persia, dari kanan ke kiri, dengan angka Persia">
+
+- Berbicara dalam English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی, dan Tiếng Việt.
+- Pilih satu dengan `/language`, atau biarkan chat pribadi mengikuti bahasa aplikasi Telegram-mu.
+- Bahasa Persia dan Arab dibaca dari kanan ke kiri, dengan angkanya sendiri.
+- Hanya teks aipager sendiri yang berubah. Sesimu tidak: Claude menjawab dalam bahasa yang kamu pakai untuk menulis kepadanya.
+- README ini dan [dokumentasinya](#documentation) juga sudah diterjemahkan.
+
+<br clear="right">
+
+### <a id="and-the-small-things"></a>Dan hal-hal kecil
+
+- **Banyak sesi, satu bot.** Pesan biasa masuk ke sesi yang terakhir kamu ajak bicara; balas salah satu pesan sebuah sesi untuk bicara dengan sesi itu, atau kirim `/x1 <message>`.
+- **Tidak ada yang tertukar.** Pesan yang dikirim saat ada permintaan izin atau pertanyaan yang terbuka akan menunggu sampai kamu menjawab, jadi tidak pernah dibaca sebagai jawabannya.
+- **Foto, file, dan pesan suara.** Pesan suara diubah menjadi teks di komputermu, dengan tambahan opsional `voice`.
+- **Ia memberi tahu.** Konteks yang hampir penuh, percakapan yang dipadatkan, sesi yang berakhir, dan sesi yang lama tak ada kabar.
+- **Sesi bertahan dari apa saja.** Claude berjalan di dalam `dtach`, jadi tetap bekerja saat kamu menutup terminal, kehilangan SSH, atau memulai ulang aipager.
+
+## <a id="how-it-works"></a>Cara kerjanya
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/how-it-works.webp" width="100%" alt="Claude Code, hook-nya, aipager, Telegram, dan chat-mu, berjajar">
+
+Claude Code berjalan di terminal sungguhan, di dalam `dtach`, jadi tidak ada yang perlu membiarkan jendela terbuka. Setiap langkah memicu sebuah [hook](hooks.md) yang mengirim satu datagram ke aipager lewat socket lokal, dan aipager menyunting sebuah pesan di chat-mu. Jawabanmu kembali lewat jalan yang sama: keputusan untuk hook yang sedang menahan panggilan, atau ketukan tombol ke dalam sesi. Terminal tetap menjadi sumber kebenaran. Selengkapnya di [arsitektur](architecture.md).
+
 ## <a id="install"></a>Pemasangan
 
-Punya agen coding (Claude Code atau agen apa pun yang bisa memakai shell)? Buat bot lewat [@BotFather](https://t.me/BotFather), ketuk Start di bot itu, dan pastikan Claude Code di komputer ini sudah masuk ke akunmu. Simpan token bot di file yang tidak perlu dibaca oleh agen (tempel token, tekan Enter, lalu Ctrl-D):
+Linux atau macOS, arsitektur apa pun. Kamu butuh Claude Code yang sudah login di komputer ini, dan bot Telegram: buat satu dengan [@BotFather](https://t.me/BotFather) lalu tekan Start di dalamnya.
+
+```sh
+curl -fsSL https://aipager.run/install | sh   # uv, pipx, atau Homebrew: yang mana pun yang kamu punya
+aipager config                                # token bot, chat-mu, hook Claude Code
+aipager service install                       # menjaga aipager tetap jalan setelah kamu logout
+aipager session api                           # Claude Code di folder ini, dan di chat-mu
+```
+
+Penginstal memakai `uv` kalau kamu punya, kalau tidak `pipx`, kalau tidak (di macOS) Homebrew, dan memasang `uv` kalau tidak ada satu pun. `dtach` ikut bersama aipager (paket [`dtach-bin`](https://pypi.org/project/dtach-bin/)), jadi tidak ada lagi yang perlu dipasang. `aipager config` adalah wizard: ia memeriksa token bot dan chat-mu, lalu menambahkan hook aipager ke `~/.claude/settings.json` untukmu. Kamu tidak pernah menyunting file secara manual.
+
+<details>
+<summary><b>Biarkan agen pemrograman yang memasangnya</b></summary>
+
+<br>
+
+Punya Claude Code, atau agen apa pun yang punya shell? Buat bot, tekan Start di dalamnya, lalu simpan token bot ke file yang tidak pernah perlu dibaca agenmu (tempel tokennya, tekan Enter, lalu Ctrl-D):
 
 ```sh
 mkdir -p ~/.config/aipager
@@ -25,69 +169,49 @@ rm -f ~/.config/aipager/bot-token
 chmod 600 ~/.config/aipager/bot-token
 ```
 
-Lalu beri agenmu pesan ini:
+Lalu berikan prompt ini ke agenmu:
 
 ```text
 Install aipager for me by following https://aipager.run/agent.md. My Telegram bot token is in ~/.config/aipager/bot-token and my Telegram user id is <your id>.
 ```
 
-Kalau kamu tidak tahu ID Telegram-mu, bilang saja ke agen; ia bisa menemukannya.
+Kalau kamu tidak tahu ID pengguna Telegram-mu, katakan saja; agen bisa menemukannya. Panduan yang diikutinya, termasuk cara menyerahkan token dengan aman, ada di [Pemasangan dengan agen](install-with-an-agent.md). Untuk skrip, `aipager setup --token-file FILE --chat-id ID` menyiapkan aipager tanpa pertanyaan apa pun ([perintah setup](commands.md#command-line-aipager-setup-for-coding-agents)).
 
-Petunjuk yang diikuti agen, termasuk cara aman memberinya token, ada di [Pemasangan dengan agen](install-with-an-agent.md). Untuk memasang sendiri, lanjutkan membaca.
+</details>
 
-Linux atau macOS, arsitektur apa pun. `dtach` terpasang otomatis lewat dependensi [`dtach-bin`](https://pypi.org/project/dtach-bin/): tidak perlu paket sistem terpisah.
-
-### <a id="one-line-install-recommended"></a>Pemasangan satu baris (disarankan)
+### <a id="other-ways-to-install"></a>Cara lain untuk memasang
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dev-aly3n/aipager/main/install.sh | sh
+uv tool install aipager                        # uv: disarankan di macOS, membawa Python-nya sendiri
+pipx install aipager                           # pipx
+brew install dev-aly3n/tap/aipager             # Homebrew, di macOS dan Linuxbrew (lihat catatan di bawah)
+nix profile install github:dev-aly3n/aipager   # Nix: claude tidak termasuk (lihat di bawah)
+snap install aipager                           # Snap: kurungan ketat, claude sudah ada, folder kerja di dalam ~/
 ```
 
-Skrip ini memakai `uv` kalau ada, kalau tidak `pipx`, kalau tidak juga (hanya di macOS) Homebrew. Kalau semuanya tidak ada, skrip ini memasang `uv` dulu (pengelola alat Python dari Astral) lalu memasang aipager dengannya.
+Atau jalankan di [Docker](#docker), dengan Python, Node, `claude`, dan `dtach` di dalamnya.
 
-### <a id="uv-recommended-on-macos"></a>uv (disarankan di macOS)
+<details>
+<summary><b>Homebrew di macOS 26 (Tahoe)</b></summary>
 
-```sh
-uv tool install aipager     # kalau uv sudah terpasang
-```
+<br>
 
-Atau, untuk memasang uv dulu:
+Formula ini berjalan kalau bottle `python@3.12` dari Homebrew dan Command Line Tools Xcode-mu selaras, tetapi sesekali keduanya tidak cocok. Di macOS 26 pemasangan gagal dengan galat simbol `pyexpat _XML_SetAllocTrackerActivationThreshold` ([issue di upstream](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). Memperbarui Xcode dan Command Line Tools biasanya membereskannya, tetapi dengan `uv tool install aipager` masalah ini tidak muncul sama sekali. Formula mengambil `dtach` dari Homebrew dan memasang aipager di lingkungan Python yang dikelola Homebrew.
 
-```sh
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv tool install aipager
-```
-
-uv membawa interpreter Python-nya sendiri, jadi ini berjalan di versi macOS atau Linux mana pun, apa pun keadaan Python sistem; dengan begitu kamu menghindari bentrok antara Python dari Homebrew dan Xcode yang dijelaskan di bagian Homebrew di bawah.
-
-### <a id="pipx"></a>pipx
-
-```sh
-pipx install aipager
-```
-
-### <a id="homebrew-tap-macos-linuxbrew"></a>Homebrew tap (macOS, Linuxbrew)
-
-> **Catatan:** di macOS jalur yang disarankan adalah `uv tool install aipager`. Formula brew berjalan kalau paket `python@3.12` dari Homebrew dan Xcode / Command Line Tools milikmu cocok, tapi sesekali keduanya tidak cocok; terakhir kali di **macOS Tahoe (26.x)**, pemasangan gagal dengan error simbol `pyexpat _XML_SetAllocTrackerActivationThreshold` ([issue upstream](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). Memperbarui Xcode dan Command Line Tools biasanya menyelesaikannya, tapi memakai uv lebih mudah.
-
-```sh
-brew install dev-aly3n/tap/aipager
-```
-
-Mengambil `dtach` dari formula standar Homebrew dan memasang aipager di venv Python yang dikelola Homebrew.
+</details>
 
 ### <a id="docker"></a>Docker
 
-Image siap pakai yang sudah berisi python, node, `claude`, dan `dtach`; praktis untuk VPS, NAS, atau Raspberry Pi tempat kamu tidak mau memasang Python atau Node di sistem. Multi-arsitektur (amd64, arm64).
+Image mandiri berisi Python, Node, `claude`, dan `dtach`, cocok untuk VPS, NAS, atau Raspberry Pi tempat kamu tidak ingin ada Python atau Node di host. Mendukung banyak arsitektur (amd64, arm64).
 
 ```sh
-# 1. Jalankan wizard pengaturan sekali (interaktif)
+# 1. Jalankan wizard penyiapan sekali (interaktif)
 docker run --rm -it \
   -v "$HOME/.claude:/home/aipager/.claude" \
   -v aipager-config:/home/aipager/.config/aipager \
   ghcr.io/dev-aly3n/aipager:latest config
 
-# 2. Jalankan aipager (di latar belakang, dengan mulai ulang otomatis)
+# 2. Jalankan aipager (di latar belakang, mulai ulang otomatis)
 docker run -d --restart=unless-stopped --name aipager \
   -v "$HOME/.claude:/home/aipager/.claude" \
   -v aipager-config:/home/aipager/.config/aipager \
@@ -95,20 +219,25 @@ docker run -d --restart=unless-stopped --name aipager \
   ghcr.io/dev-aly3n/aipager:latest
 ```
 
-Pasang (mount) folder yang ingin Claude ubah di `/workspace`. Memasang `~/.claude` membawa kredensial Claude dan riwayat percakapanmu; untuk masuk, jalankan `claude` sekali di sistem, atau `docker exec -it aipager claude` untuk masuk dari dalam kontainer.
+Pasang (mount) folder yang ingin kamu suntingkan ke Claude di bawah `/workspace`. Mount `~/.claude` membawa kredensial Claude dan riwayat percakapanmu: jalankan `claude` sekali di host untuk login, atau `docker exec -it aipager claude` untuk login di dalam container.
 
-Tag: `latest`, `1.3`, `1.3.4` (satu untuk versi persis dan satu untuk versi minor).
+Tag: `latest`, `1.3`, `1.3.4` (satu per versi persis dan satu per versi minor).
 
-### <a id="nix-flake"></a>Nix flake
+### <a id="nix"></a>Nix
 
 ```sh
 nix run github:dev-aly3n/aipager -- --version
 nix profile install github:dev-aly3n/aipager
 ```
 
-Membangun aipager dari sumber dengan dependensi dari nixpkgs yang dikunci versinya. `dtach` disediakan oleh Nix; `claude` **tidak**: pasang terpisah (`nix profile install nixpkgs#nodejs && npm install -g @anthropic-ai/claude-code`, atau ikuti dokumentasi Anthropic).
+Membangun aipager dari kode sumber dengan nixpkgs yang dipatok. `dtach` datang dari Nix; `claude` tidak, jadi pasang terpisah (`nix profile install nixpkgs#nodejs && npm install -g @anthropic-ai/claude-code`, atau ikuti dokumentasi Anthropic).
 
-Untuk konfigurasi deklaratif NixOS atau Home Manager, tambahkan aipager sebagai input flake dan ambil paketnya di `environment.systemPackages`:
+<details>
+<summary><b>NixOS dan Home Manager</b></summary>
+
+<br>
+
+Tambahkan aipager sebagai input flake dan masukkan paketnya ke `environment.systemPackages`:
 
 ```nix
 {
@@ -126,86 +255,130 @@ Untuk konfigurasi deklaratif NixOS atau Home Manager, tambahkan aipager sebagai 
 }
 ```
 
-Setelah itu `aipager service install` memasang layanan pengguna systemd.
+Setelah itu `aipager service install` memasang unit pengguna systemd.
 
-### <a id="snap"></a>Snap
+</details>
 
-```sh
-snap install aipager
-```
+## <a id="everyday-use"></a>Sehari-hari
 
-Snap dengan isolasi ketat yang berisi python, node, `claude`, `dtach`, dan aipager. Karena sandbox snap, folder kerja harus berada di dalam `~/` (misalnya `~/projects/foo`). Manifest-nya ada di [`packaging/snap/`](../../../packaging/snap/).
+### <a id="in-telegram"></a>Di Telegram
 
-## <a id="configure"></a>Pengaturan
+| Kirim | Untuk |
+|---|---|
+| `/status` | Melihat sesi-sesi chat ini, masing-masing dengan status dan tombolnya. |
+| `/new x1` | Memulai sesi bernama x1. `/new x1 fix the tests` sekaligus mengirim pesan pertamanya. |
+| `/x1` | Menjadikan x1 sesi tujuan pesan-pesanmu. `/x1 <message>` mengirim pesan langsung ke sesi itu. |
+| `/stop` | Menghentikan tugas yang sedang berjalan dan membuang yang masih mengantre. |
+| `/mode` | Berpindah antara Mode Tanya, Mode Auto, dan Mode Akses penuh. |
+| `/app` | Membuka Mini App. |
+| `/language` | Memilih bahasa yang dipakai aipager di chat ini. |
+| `/update` | Memperbarui aipager dan Claude Code, lalu memulai ulang di tempat (admin). |
+| `/help` | Panduan singkat per tugas. |
 
-```sh
-aipager config
-```
+Semua perintah, tombol, dan pengaturan ada di [Perintah bot](commands.md).
 
-Wizard interaktif: menanyakan token bot Telegram-mu (dari [@BotFather](https://t.me/BotFather)) dan ID chat, memeriksa keduanya, lalu menambahkan sendiri hook yang diperlukan ke `~/.claude/settings.json`. Kamu tidak perlu mengedit file apa pun dengan tangan.
-
-Memasang aipager untuk orang lain dari skrip atau lewat agen coding? `aipager setup --token-file FILE --chat-id ID` melakukan hal yang sama tanpa bertanya (lihat [perintah setup](commands.md#command-line-aipager-setup-for-coding-agents) dan [petunjuk untuk agen](install-with-an-agent.md)).
-
-## <a id="run"></a>Menjalankan
-
-```sh
-aipager start
-```
-
-aipager tetap berjalan di latar depan. Mulai sesi Claude di terminal lain:
+### <a id="on-the-command-line"></a>Di baris perintah
 
 ```sh
-aipager session dev
+aipager start                             # aipager sendiri, di latar depan
+aipager session dev                       # memulai sesi bernama dev di sini, atau menyambung ke sana
+aipager session dev --continue            # melanjutkan percakapan Claude terakhir di folder ini
+aipager session dev -- --resume abc1234   # opsi claude lainnya diteruskan apa adanya
+aipager doctor                            # memeriksa pemasangan
 ```
 
-Ini membuat sesi dtach bernama `claude-dev` yang menjalankan Claude Code (atau menyambung ke sesi itu kalau sudah ada). aipager menemukannya dalam beberapa detik dan Telegram mulai menampilkannya. Sesi juga bisa dimulai dari Telegram: kirim `/new dev` ke bot. Untuk menyambung lagi nanti, jalankan perintah yang sama; untuk keluar tanpa menghentikan Claude, tutup terminal atau panel tmux (sesinya tetap berjalan).
+Untuk keluar dari sesi tanpa menghentikan Claude, tutup terminal atau panel tmux: sesi tetap berjalan, dan perintah yang sama menyambungkanmu lagi.
 
-Kalau sesi dtach sudah tertutup (misalnya komputer dinyalakan ulang) dan kamu ingin melanjutkan percakapan Claude dari disk, tambahkan `--continue`:
+`aipager service install` menjaga aipager tetap berjalan di latar belakang: unit pengguna systemd di Linux (`~/.config/systemd/user/aipager.service`) atau agen launchd di macOS (`~/Library/LaunchAgents/com.aipager.daemon.plist`). Dalam kedua cara, aipager berjalan di folder rumahmu, tempat sesi baru dimulai kecuali kamu memilih folder lain. `aipager service start`, `stop`, `status`, `logs`, dan `uninstall` mengelolanya.
 
-```sh
-aipager session dev --continue    # percakapan claude terakhir di folder ini
-```
+## <a id="security"></a>Keamanan
 
-Kamu juga bisa menambahkan `--resume <session-id>` (atau flag claude lain) di akhir:
+- **Tanpa server aipager.** aipager berbicara dengan Bot API Telegram memakai token bot milikmu sendiri. Tidak ada akun aipager dan tidak ada layanan aipager.
+- **Tanpa port terbuka.** aipager hanya mendengarkan di loopback. Mini App keluar lewat terowongan Cloudflare yang setiap permintaannya harus membawa tanda tangan Telegram, dan `aipager miniapp disable` mematikannya.
+- **Setiap jawaban tercatat.** Setiap Izinkan, Tolak, dan jawaban ditambahkan ke `~/.claude/aipager-audit.jsonl`, beserta siapa yang mengetuknya di grup.
+- **Claude Code tetap yang memutuskan.** Pengaturan Claude Code-mu menentukan apa yang perlu ditanyakan. aipager hanya meneruskan pertanyaannya dan tidak pernah menaikkan hak akses: tanpa sudo, semuanya berjalan sebagai penggunamu.
 
-```sh
-aipager session dev -- --resume abc1234
-```
+Gambaran lengkapnya, termasuk apa yang melindungi kredensial Claude-mu, ada di [model keamanan](security.md).
 
-### <a id="run-as-a-service-survives-logout"></a>Menjalankan sebagai layanan (tetap berjalan setelah logout)
+## <a id="faq"></a>Pertanyaan umum
 
-```sh
-aipager service install
-```
+<details>
+<summary><b>Apa bedanya dengan aplikasi Claude di ponsel?</b></summary>
 
-Di Linux, ini menulis layanan pengguna systemd ke `~/.config/systemd/user/aipager.service` lalu menjalankannya. Di macOS, ini menulis plist launchd ke `~/Library/LaunchAgents/com.aipager.daemon.plist` lalu menjalankannya. Di keduanya aipager berjalan di folder home-mu, tempat sesi baru dimulai kecuali kamu memilih folder lain. Subperintah: `start`, `stop`, `status`, `logs`, `uninstall`.
+<br>
 
-## <a id="team-mode-groups-and-other-people"></a>Mode tim (grup dan orang lain)
+Aplikasi Claude berbicara dengan asisten yang dihosting Anthropic. aipager menghubungkanmu dengan sesi Claude Code yang berjalan di komputermu sendiri: repositorimu, alat-alatmu, lingkunganmu.
 
-Secara bawaan aipager adalah bot pribadi: kamu dan bot dalam satu chat pribadi. Untuk berbagi, tambahkan grup Telegram, chat pribadi orang lain dengan bot, atau keduanya. Untuk grup: tambahkan bot ke grup (sebagai admin, supaya bot bisa menyematkan bilah status grup), jalankan lagi `aipager config`, lalu pilih **Add a group scope**. Wizard menyarankan kamu (pemilik chat pribadimu sendiri) sebagai pemilik grup, menambahkan setiap anggota dengan sebuah peran (`owner`, `admin`, `user`, atau `read_only`), menanyakan folder utama para anggota, lalu memuat ulang pengaturan aipager tanpa memulai ulang. Di grup, bot hanya merespons perintah, balasan ke pesannya, dan sebutan (`@aipagerbot fix the tests`, `/jim run the tests`), dan setiap pesan berjalan dengan peran pengirimnya. Anggota dengan `user` atau `read_only` memulai dan menyimpan sesi hanya di folder utama chat-nya (bawaannya `~/aipager-users/<label>`). **Menambahkan anggota berarti memberinya hak menjalankan kode di komputermu**: model kepercayaan lengkapnya ada di [Mode tim dan grup](groups.md).
+</details>
 
-## <a id="what-it-does"></a>Apa yang dilakukannya
+<details>
+<summary><b>Apakah kodeku keluar dari komputerku?</b></summary>
 
-- Menampilkan di Telegram apa yang sedang dikerjakan setiap sesi Claude Code: sedang bekerja atau siap, alat apa yang dipakai, % konteks, biaya, dan baris yang berubah, dalam satu kartu per tugas, lalu jawaban Claude
-- Mengirim pesanmu ke Claude **langsung**, bahkan saat ia sedang bekerja: kirim beberapa, dan Claude sendiri yang mengantrekannya, seperti saat mengetik di terminal. 👀 berarti terkirim, 👍 berarti Claude sudah mengambilnya
-- Menahan pesan selama ada permintaan izin atau pertanyaan yang terbuka, supaya pesan itu tidak pernah dibaca sebagai jawabannya, lalu mengirimnya setelah kamu menjawab
-- Menampilkan permintaan izin dan pertanyaan Claude dengan tombol (Izinkan, Tolak, Selalu izinkan, satu per opsi); tombol yang tersisa dari tugas yang sudah selesai akan menolak, bukan memengaruhi pekerjaan yang sedang berjalan
-- Tiga mode izin per sesi, diganti dengan `/mode`: 💬 Mode Tanya (Claude bertanya sebelum setiap tindakan), 🤖 Mode Auto, bawaan (pemeriksaan keamanan Claude Code sendiri menjalankan tindakan aman dan menghentikan yang berisiko supaya kamu yang memutuskan), dan 🔓 Mode Akses penuh (semuanya berjalan tanpa pemeriksaan apa pun; untuk admin dan untukmu di chat pribadimu sendiri)
-- Memulai sesi dari chat: `/new x1` langsung memulai satu (`/new x1 fix the tests` sekaligus mengirim pesan pertama), dengan mode, model, dan folder dari `/settings` dan tombol untuk menggantinya
-- Menerima foto, file, dan pesan suara (pesan suara diubah menjadi teks di komputermu, dengan paket tambahan pesan suara)
-- Memberi tahu saat konteks hampir penuh, saat percakapan diringkas, saat sebuah sesi berakhir, dan saat ada sesi yang lama tidak memberi kabar
-- Mengelola beberapa sesi sekaligus lewat satu bot; opsional, mode tim dengan peran dan aturan per alat ([Mode tim dan grup](groups.md))
-- Berbicara dalam English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی, dan Tiếng Việt: hanya teks aipager sendiri, tidak pernah sesimu atau jawaban Claude ([Bahasa](commands.md#languages)). README ini dan dokumentasinya juga sudah diterjemahkan (lihat **Baca dalam bahasa lain** di atas)
+<br>
 
-### <a id="mini-app"></a>Mini App
+aipager hanya mengirim ke Telegram apa yang kamu lihat di chat-mu, dengan token bot milikmu sendiri; tidak ada server aipager di tengahnya. Claude Code sendiri tetap berbicara dengan Anthropic seperti biasa.
 
-`/app` membuka dasbor di dalam Telegram: sesi-sesimu dengan Hentikan, Akhiri, Mulai ulang, Ganti nama, dan pergantian mode, tampilan diff untuk perubahan `Write`/`Edit`, pengaturan, dan, untuk pemilik, “Laporkan masalah”. Dasbor ini disajikan oleh aipager sendiri dan **menyala secara bawaan**; setiap permintaan diperiksa dengan tanda tangan `initData` dari Telegram. Kalau kamu ada di lebih dari satu chat (chat pribadimu dan sebuah grup), baris nama chat di bagian atas berpindah di antara keduanya. Kelola lewat `aipager miniapp enable|disable|status`, atau arahkan ke alamatmu sendiri sebagai ganti tunnel yang dikelola: lihat [Model keamanan](security.md#mini-app-tunnel).
+</details>
 
-### <a id="note-on-model-buttons-bedrock--vertex-users"></a>Tentang tombol model (pengguna Bedrock dan Vertex)
+<details>
+<summary><b>Apa itu dtach?</b></summary>
 
-Submenu **Model** di keyboard tetap (dan pemilih model di Mini App) menawarkan alias keluarga Claude Code, `sonnet`, `opus`, `haiku`, `fable`, dan `opusplan`, serta model yang dikunci seperti `claude-opus-5-5` dan `claude-sonnet-5-5` (daftar lengkap di [Keyboard tetap](commands.md#persistent-keyboard)). Di API Anthropic, sebuah alias selalu menunjuk ke model terbaru di keluarganya. Di **Bedrock** dan **Vertex**, alias yang sama bisa menunjuk ke versi lebih lama, tergantung apa yang tersedia di penyediamu. Kalau kamu memakai layanan itu dan butuh model tertentu, kirim `/model <full-id>` dari chat.
+<br>
 
-## <a id="developing-locally"></a>Mengembangkan di komputermu
+Program kecil yang melepaskan terminal. Ia menjaga Claude Code tetap hidup saat terminal ditutup atau SSH terputus, jadi jawaban yang kamu kirim sejam kemudian tetap sampai ke sesi yang masih hidup. Ia ikut bersama aipager.
+
+</details>
+
+<details>
+<summary><b>Bagaimana kalau Claude melenceng?</b></summary>
+
+<br>
+
+Permintaan menunggu ketukanmu, `/stop` menghentikan tugas dan membuang semua yang mengantre, `/kill` mengakhiri sesi, dan tombol dari tugas yang sudah selesai akan menolak.
+
+</details>
+
+<details>
+<summary><b>Bagaimana cara memperbaruinya?</b></summary>
+
+<br>
+
+Kirim `/update`: ia memeriksa aipager dan Claude Code dan memasang yang baru, lalu 🔄 Mulai ulang sekarang menghidupkan aipager lagi, entah sebagai layanan atau tidak. Sesimu tetap berjalan selama itu. Di baris perintah, `aipager update` memperbarui lewat penginstal yang memasang aipager.
+
+</details>
+
+<details>
+<summary><b>Aku memakai Bedrock atau Vertex. Apakah tombol model berfungsi?</b></summary>
+
+<br>
+
+Menu **Model** di keyboard dan Mini App menawarkan alias keluarga Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) dan model tetap seperti `claude-opus-5-5` dan `claude-sonnet-5-5`. Di API Anthropic, sebuah alias mengarah ke model terbaru dalam keluarganya. Di Bedrock dan Vertex alias yang sama bisa mengarah ke versi yang lebih lama, tergantung apa yang ditawarkan penyedia layananmu; kirim `/model <full-id>` untuk memilih model yang persis.
+
+</details>
+
+<details>
+<summary><b>Berapa biayanya?</b></summary>
+
+<br>
+
+Gratis. aipager berlisensi MIT, botnya milikmu, dan Claude Code tetap memakai paket atau kunci yang sudah dipakainya.
+
+</details>
+
+## <a id="documentation"></a>Dokumentasi
+
+| Halaman | Isinya |
+|---|---|
+| [Perintah bot](commands.md) | Semua perintah, tombol, pengaturan, dan opsi baris perintah |
+| [Mode tim dan grup](groups.md) | Peran, folder akar, siapa boleh mengetuk apa, model kepercayaan |
+| [Model keamanan](security.md) | Batas kepercayaan, rahasia, log audit, jaringan |
+| [Event hook](hooks.md) | Apa yang dilakukan setiap hook Claude Code di aipager |
+| [Arsitektur](architecture.md) | Bagian-bagian aipager, file, dan socket-nya |
+| [Pemecahan masalah](troubleshooting.md) | `aipager doctor` dan solusi masalah umum |
+| [Laporan masalah](problem-reports.md) | Isi sebuah laporan, dan kapan aipager menawarkannya |
+| [Pemasangan dengan agen](install-with-an-agent.md) | Panduan yang diikuti agen pemrograman |
+
+## <a id="contributing"></a>Berkontribusi
 
 ```sh
 git clone https://github.com/dev-aly3n/aipager.git && cd aipager
@@ -216,23 +389,16 @@ systemd-run --user --scope -q -p MemoryMax=2G -p MemorySwapMax=0 \
 ruff check aipager tests
 ```
 
-`dtach` ikut datang bersama dependensi `dtach-bin`, tidak perlu yang lain. Jalankan tes dengan batas memori seperti di atas (di macOS tanpa `systemd-run`): kalau tidak, satu tes yang lepas kendali bisa menghabiskan seluruh memori komputer.
-
-Proses rilis dijelaskan di [CONTRIBUTING.md](../../../CONTRIBUTING.md).
+`dtach` ikut lewat dependensi `dtach-bin`, jadi tidak perlu apa-apa lagi. Jalankan tes dengan batas memori seperti di atas (di macOS, tanpa `systemd-run`): kalau tidak, tes yang lepas kendali bisa memakan seluruh memori mesin. Proses rilis ada di [CONTRIBUTING.md](../../../CONTRIBUTING.md).
 
 ## <a id="license"></a>Lisensi
 
-MIT; teks lengkapnya di [LICENSE](../../../LICENSE).
+MIT. Lihat [LICENSE](../../../LICENSE).
 
-## <a id="docs"></a>Dokumentasi
+<br>
 
-| Halaman | Isi |
-|---|---|
-| [Pemasangan dengan agen](install-with-an-agent.md) | Langkah yang diikuti agen coding untuk memasang dan mengatur aipager bagi orangnya |
-| [Arsitektur](architecture.md) | Cara program disusun, diagram bagian-bagiannya, letak file dan soket |
-| [Event hook](hooks.md) | Setiap event yang diterima aipager dari Claude Code, beserta field-nya |
-| [Perintah bot](commands.md) | Perintah, tombol, Mini App, pesan suara dan file, semua perintah `aipager`, dan pengaturan dari environment |
-| [Mode tim dan grup](groups.md) | Pengaturan untuk beberapa orang, peran, aturan, siapa melakukan apa |
-| [Pemecahan masalah](troubleshooting.md) | Kegagalan yang sering terjadi dan tabel solusi `aipager doctor` |
-| [Laporan masalah](problem-reports.md) | Isi laporan masalah, ke mana laporan dikirim, dan kapan aipager menawarkannya |
-| [Model keamanan](security.md) | Batas kepercayaan, rahasia, log audit, koneksi jaringan |
+<div align="center">
+<a href="https://aipager.run"><img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/logo.png" width="32" height="32" alt=""></a>
+<br>
+<sub><a href="https://aipager.run">aipager.run</a></sub>
+</div>

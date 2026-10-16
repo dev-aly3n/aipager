@@ -1,22 +1,166 @@
+<div align="center">
+
+<a href="https://aipager.run"><img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/logo.png" width="96" height="96" alt="aipager"></a>
+
 # aipager
 
-<!-- i18n-source: README.md @ c91598e -->
+<!-- i18n-source: README.md @ ec7afc2 -->
 
-> 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../../README.md))
+<h3>이제 Claude도 채팅 하나예요.</h3>
 
-[![PyPI](https://img.shields.io/pypi/v/aipager?label=pypi&color=3775A9)](https://pypi.org/project/aipager/)
-[![Python](https://img.shields.io/pypi/pyversions/aipager?color=3775A9)](https://pypi.org/project/aipager/)
-[![License](https://img.shields.io/badge/license-MIT-black)](../../../LICENSE)
+내 [Claude Code](https://claude.com/claude-code) 세션을 Telegram에서, 가족과 친구와 팀 채팅 바로 옆에서 만나요.<br>
+세션은 내 컴퓨터에서 돌아가요. 어디에 있든 진행 상황을 보고, 질문에 답하고, 다음 일을 맡길 수 있어요.
 
-Telegram으로 [Claude Code](https://claude.com/claude-code) 세션을 원격으로 조종해요. Claude는 내 컴퓨터의 분리된 터미널(`dtach`)에서 실행되고, 나는 휴대폰에서 Claude를 써요. Claude의 답변을 읽고, 메시지를 보내고, 권한 요청과 질문에 답하고, 세션 사이를 오갈 수 있어요. SSH 연결을 계속 열어 둘 필요가 없어요.
+<p>
+<a href="https://pypi.org/project/aipager/"><img alt="PyPI" src="https://img.shields.io/pypi/v/aipager?style=flat-square&label=pypi&labelColor=181c20&color=2aabee"></a>
+<a href="https://pypi.org/project/aipager/"><img alt="Python" src="https://img.shields.io/pypi/pyversions/aipager?style=flat-square&labelColor=181c20&color=2aabee"></a>
+<a href="https://github.com/dev-aly3n/aipager/actions/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/dev-aly3n/aipager/test.yml?branch=main&style=flat-square&label=tests&labelColor=181c20"></a>
+<img alt="Linux and macOS" src="https://img.shields.io/badge/runs%20on-Linux%20%7C%20macOS-2aabee?style=flat-square&labelColor=181c20">
+<a href="../../../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-2aabee?style=flat-square&labelColor=181c20"></a>
+</p>
 
-[aipager.run](https://aipager.run) · [문서](#docs) · [변경 기록](../../../CHANGELOG.md) · [GitHub 이슈](https://github.com/dev-aly3n/aipager/issues)
+**[웹사이트](https://aipager.run)** · **[설치](#install)** · **[문서](#documentation)** · **[보안](security.md)** · **[변경 사항](../../../CHANGELOG.md)**
 
 **다른 언어로 읽기:** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
 
+<sub>이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../../README.md))</sub>
+
+<br>
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/hero.webp" width="100%" alt="Telegram에서 입력한 메시지가 터미널의 Claude Code에 전달되고, 채팅의 카드 하나가 Claude가 일하는 동안 스스로 업데이트돼요">
+
+<sub>Telegram에 쓰면 aipager가 내 컴퓨터의 Claude Code에 그대로 입력하고, 작업이 진행되는 동안 카드 하나가 스스로 업데이트돼요.</sub>
+
+</div>
+
+<br>
+
+## <a id="why-aipager"></a>aipager를 쓰는 이유
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+**📟 작업마다 실시간 카드 하나**<br>
+Claude가 지금 하고 있는 일: 실행 중인 도구, 컨텍스트, 비용, 바뀐 줄 수, 그리고 마지막에 답변까지. 카드가 스스로 업데이트되니 채팅이 어수선해지지 않아요.
+
+</td>
+<td width="33%" valign="top">
+
+**⚡ 작업 중에도 말을 걸어요**<br>
+Claude가 일하는 중이어도 내 메시지가 바로 세션에 입력돼요. 터미널에서 입력하는 것과 똑같아요. 👀는 전달됨, 👍는 Claude가 가져갔다는 뜻이에요.
+
+</td>
+<td width="33%" valign="top">
+
+**✅ 탭 한 번으로 답해요**<br>
+권한 요청과 Claude의 질문은 답마다 버튼이 붙어서 와요. 끝난 작업에 남은 버튼은 다음 작업에 작용하지 않고 거절해요.
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
+**🛡️ 권한 모드 세 가지**<br>
+💬 확인 모드, 🤖 자동 모드(새 세션의 기본값), 🔓 전체 권한 모드. 세션마다 정하고 `/mode`로 언제든 바꿔요.
+
+</td>
+<td width="33%" valign="top">
+
+**👥 팀을 위해 만들었어요**<br>
+봇을 그룹에 넣어 보세요. 메시지는 보낸 사람의 역할로 실행되고, 멤버를 각자의 폴더 안으로 제한할 수 있고, 모든 탭이 감사 로그에 남아요.
+
+</td>
+<td width="33%" valign="top">
+
+**🔒 중간에 아무것도 없어요**<br>
+aipager 서버도, 계정도, 열린 포트도 없어요. 내 봇 토큰, 내 컴퓨터, 내 채팅뿐이에요.
+
+</td>
+</tr>
+</table>
+
+## <a id="a-quick-tour"></a>짧게 둘러보기
+
+### <a id="questions-come-to-you"></a>질문이 나에게 와요
+
+Claude가 무언가를 묻거나 권한이 필요하면, 질문이 답마다 버튼이 붙은 채로 내 채팅에 오고, 고정된 막대가 무엇이 나를 기다리는지 알려 줘요. 내가 누른 답은 키보드 앞에 앉아 있는 것처럼 세션에 입력되고, 터미널에도 같은 답이 보여요.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/question.webp" width="100%" alt="Claude가 타임아웃을 늘릴지 쿠키를 기다릴지 묻고, Telegram에서 누른 답이 터미널에서 선택돼요">
+
+### <a id="three-permission-modes"></a>권한 모드 세 가지
+
+세션은 세 가지 모드 중 하나에 있고, Claude가 일하는 중에도 `/mode`로 언제든 바꿀 수 있어요.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/modes.webp" width="100%" alt="같은 작업을 확인 모드, 자동 모드, 전체 권한 모드에서 본 모습">
+
+| 모드 | 어떻게 되나요 |
+|---|---|
+| 💬 **확인 모드**<br>`/mode ask` | Claude가 작업마다 먼저 물어봐요. |
+| 🤖 **자동 모드**, 기본값<br>`/mode auto` | Claude Code 자체의 안전 검사가 안전한 작업은 실행하고, 위험한 작업은 멈춰서 내가 결정하게 해요. |
+| 🔓 **전체 권한 모드**<br>`/mode full` | 아무 검사 없이 모든 것이 실행돼요. 관리자, 그리고 봇과의 내 개인 채팅에 있는 나를 위한 모드예요. |
+
+확인 모드와 자동 모드 사이는 재시작 없이 그 자리에서 바뀌어요. 전체 권한 모드로 들어가거나 나오면 세션이 재시작되고 대화는 그대로 남아요. Claude의 질문은 어떤 모드에서든 나에게 와요.
+
+### <a id="your-team-in-one-group"></a>그룹 하나에 팀 전체
+
+봇을 그룹에 추가하고 멤버마다 역할을 줘요: `owner`, `admin`, `user`, `read_only`. 그룹에서 봇은 명령, 봇의 메시지에 단 답장, 멘션에만 반응하고(`@aipagerbot fix the tests`, `/web run the tests`), 메시지는 보낸 사람의 역할로 실행돼요. 역할이 쓸 수 없는 도구는 실행 전에 거절돼요. `user`나 `read_only` 멤버는 자기 루트 폴더 안에서만 일해요(기본값은 `~/aipager-users/<label>`). 다른 사람도 봇과 자기만의 개인 채팅을 가질 수 있어요.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/team.webp" width="100%" alt="멤버의 역할 때문에 명령이 거절되는 동안 테스트는 통과하는 팀 그룹">
+
+> **⚠️ 중요:** 멤버를 추가하면 그 사람에게 내 컴퓨터에서 코드를 실행할 권한을 주는 거예요. 봇을 공유하기 전에 [신뢰 모델](groups.md)을 읽어 보세요.
+
+설정하려면 봇을 그룹에 관리자로 추가하고(그룹의 상태 막대를 고정할 수 있게), `aipager config`를 다시 실행한 뒤 **Add a group scope**를 고르세요. 마법사가 멤버마다 역할을 붙여 추가하고, 멤버들의 루트 폴더를 묻고, 실행 중인 aipager의 설정을 다시 불러와요.
+
+### <a id="a-dashboard-inside-telegram"></a>Telegram 안의 대시보드
+
+`/app`을 보내면 Mini App이 열려요. 중지, 종료, 재시작, 이름 바꾸기, 모드 전환이 붙은 내 세션들, 모든 `Write`와 `Edit`의 diff 보기, 설정, 그리고 소유자에게는 문제 신고가 있어요. aipager가 직접 띄우고, 기본으로 켜져 있으며, 모든 요청은 Telegram의 서명으로 확인해요. 채팅이 여러 개라면 위쪽의 채팅 이름 줄로 오갈 수 있어요. `aipager miniapp disable`로 끄거나, 내 주소로 연결할 수 있어요([방법](security.md#mini-app-tunnel)).
+
+### <a id="fifteen-languages"></a>15개 언어
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/languages.webp" width="420" align="right" alt="페르시아어로, 오른쪽에서 왼쪽으로, 페르시아 숫자와 함께 보이는 권한 요청">
+
+- English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی, Tiếng Việt를 말해요.
+- `/language`로 하나를 고르거나, 개인 채팅이 내 Telegram 앱의 언어를 따르게 두세요.
+- 페르시아어와 아랍어는 오른쪽에서 왼쪽으로 읽고, 그 언어의 숫자를 써요.
+- 바뀌는 건 aipager 자신의 글뿐이에요. 내 세션은 그대로예요. Claude는 내가 쓴 언어로 답해요.
+- 이 README와 [문서](#documentation)도 번역되어 있어요.
+
+<br clear="right">
+
+### <a id="and-the-small-things"></a>그리고 작은 것들
+
+- **세션은 여러 개, 봇은 하나.** 일반 메시지는 마지막으로 대화한 세션으로 가요. 다른 세션과 말하려면 그 세션의 메시지에 답장하거나 `/x1 <message>`를 보내세요.
+- **섞이지 않아요.** 권한 요청이나 질문이 열려 있는 동안 보낸 메시지는 내가 답할 때까지 기다려서, 그 답으로 읽히는 일이 없어요.
+- **사진, 파일, 음성 메시지.** 음성 메시지는 선택 사항인 `voice` 추가 기능으로 내 컴퓨터에서 글로 바뀌어요.
+- **알려 줘요.** 컨텍스트가 거의 찼을 때, 대화가 압축됐을 때, 세션이 끝났을 때, 세션이 한동안 조용할 때요.
+- **세션은 무엇이든 버텨요.** Claude는 `dtach` 안에서 돌아가서, 터미널을 닫거나 SSH가 끊기거나 aipager를 재시작해도 계속 일해요.
+
+## <a id="how-it-works"></a>작동 방식
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/how-it-works.webp" width="100%" alt="Claude Code, 그 hook, aipager, Telegram, 그리고 내 채팅이 한 줄로 이어진 모습">
+
+Claude Code는 `dtach` 안의 진짜 터미널에서 돌아가서, 누구도 창을 열어 둘 필요가 없어요. 단계마다 [hook](hooks.md)이 실행되어 로컬 소켓으로 aipager에 데이터그램 하나를 보내고, aipager는 내 채팅의 메시지를 고쳐요. 내 답은 같은 길로 돌아가요. 호출을 붙잡고 있는 hook에 결정을 보내거나, 세션에 키를 입력해요. 기준은 언제나 터미널이에요. 자세한 내용은 [아키텍처](architecture.md)에 있어요.
+
 ## <a id="install"></a>설치
 
-코딩 에이전트(Claude Code, 또는 shell을 쓸 수 있는 다른 에이전트)가 있나요? [@BotFather](https://t.me/BotFather)에서 봇을 만들고, 봇에서 Start를 누르고, 이 컴퓨터의 Claude Code가 내 계정으로 로그인되어 있는지 확인하세요. 봇 token은 에이전트가 읽을 필요가 없는 파일에 저장하세요(token을 붙여 넣고 Enter, 그다음 Ctrl-D):
+Linux나 macOS, 어떤 아키텍처든 돼요. 이 컴퓨터에 로그인된 Claude Code와 Telegram 봇이 필요해요. [@BotFather](https://t.me/BotFather)로 봇을 만들고 그 안에서 Start를 누르세요.
+
+```sh
+curl -fsSL https://aipager.run/install | sh   # uv, pipx, Homebrew 중 있는 것으로
+aipager config                                # 봇 토큰, 내 채팅, Claude Code의 hook
+aipager service install                       # 로그아웃해도 aipager가 계속 돌아가게
+aipager session api                           # 이 폴더의 Claude Code를 내 채팅에서도
+```
+
+설치 스크립트는 `uv`가 있으면 그걸 쓰고, 없으면 `pipx`, 그것도 없으면(macOS에서) Homebrew를 쓰고, 아무것도 없으면 `uv`를 설치해요. `dtach`는 aipager와 함께 와요([`dtach-bin`](https://pypi.org/project/dtach-bin/) 패키지). 그래서 따로 설치할 게 없어요. `aipager config`는 마법사예요. 봇 토큰과 내 채팅을 확인한 다음 aipager의 hook을 `~/.claude/settings.json`에 알아서 추가해요. 파일을 직접 고칠 일은 없어요.
+
+<details>
+<summary><b>코딩 에이전트에게 설치를 맡기기</b></summary>
+
+<br>
+
+Claude Code나 셸을 쓸 수 있는 에이전트가 있나요? 봇을 만들고 그 안에서 Start를 누른 다음, 봇 토큰을 에이전트가 읽을 필요가 없는 파일에 저장하세요(토큰을 붙여 넣고 Enter, 그다음 Ctrl-D):
 
 ```sh
 mkdir -p ~/.config/aipager
@@ -25,69 +169,49 @@ rm -f ~/.config/aipager/bot-token
 chmod 600 ~/.config/aipager/bot-token
 ```
 
-그다음 에이전트에게 이 메시지를 주세요:
+그다음 에이전트에게 이 프롬프트를 주세요:
 
 ```text
 Install aipager for me by following https://aipager.run/agent.md. My Telegram bot token is in ~/.config/aipager/bot-token and my Telegram user id is <your id>.
 ```
 
-내 Telegram ID를 모르면 에이전트에게 그렇게 말하세요. 에이전트가 찾아낼 수 있어요.
+내 Telegram 사용자 ID를 모르면 그렇다고 말하면 돼요. 에이전트가 찾을 수 있어요. 에이전트가 따르는 안내서는 토큰을 안전하게 넘기는 방법까지 담은 [에이전트로 설치하기](install-with-an-agent.md)예요. 스크립트에서는 `aipager setup --token-file FILE --chat-id ID`가 아무것도 묻지 않고 aipager를 설정해요([setup 명령](commands.md#command-line-aipager-setup-for-coding-agents)).
 
-에이전트가 따르는 안내(token을 안전하게 건네는 방법 포함)는 [에이전트로 설치하기](install-with-an-agent.md)에 있어요. 직접 설치하려면 계속 읽으세요.
+</details>
 
-Linux나 macOS에서, 어떤 아키텍처든 돌아가요. `dtach`는 의존성인 [`dtach-bin`](https://pypi.org/project/dtach-bin/)으로 자동 설치돼요. 시스템 패키지를 따로 설치할 필요가 없어요.
-
-### <a id="one-line-install-recommended"></a>한 줄 설치 (추천)
+### <a id="other-ways-to-install"></a>다른 설치 방법
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dev-aly3n/aipager/main/install.sh | sh
+uv tool install aipager                        # uv: macOS에서 추천, 자체 Python을 함께 가져와요
+pipx install aipager                           # pipx
+brew install dev-aly3n/tap/aipager             # Homebrew, macOS와 Linuxbrew에서(아래 참고)
+nix profile install github:dev-aly3n/aipager   # Nix: claude는 포함되지 않아요(아래 참고)
+snap install aipager                           # Snap: 엄격한 격리, claude 포함, 작업 폴더는 ~/ 안에
 ```
 
-`uv`가 있으면 `uv`를, 없으면 `pipx`를, 그것도 없으면(macOS에서만) Homebrew를 써요. 아무것도 없으면 먼저 `uv`(Astral의 Python 도구 관리자)를 설치하고 그것으로 aipager를 설치해요.
+또는 Python, Node, `claude`, `dtach`가 들어 있는 [Docker](#docker)로 실행하세요.
 
-### <a id="uv-recommended-on-macos"></a>uv (macOS에서 추천)
+<details>
+<summary><b>macOS 26(Tahoe)의 Homebrew</b></summary>
 
-```sh
-uv tool install aipager     # uv가 이미 있다면
-```
+<br>
 
-또는 먼저 uv를 설치하세요:
+이 formula는 Homebrew의 `python@3.12` bottle과 Xcode Command Line Tools가 서로 맞을 때 잘 동작하지만, 둘은 가끔 어긋나요. macOS 26에서는 `pyexpat _XML_SetAllocTrackerActivationThreshold` 심볼 오류로 설치가 실패해요([upstream issue](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). 보통 Xcode와 Command Line Tools를 업데이트하면 해결되지만, `uv tool install aipager`를 쓰면 이 문제가 아예 생기지 않아요. formula는 `dtach`를 Homebrew에서 가져오고, aipager를 Homebrew가 관리하는 Python 환경에 설치해요.
 
-```sh
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv tool install aipager
-```
-
-uv는 자체 Python 인터프리터를 함께 가져와서, 시스템 Python이 어떤 상태든 모든 버전의 macOS와 Linux에서 돌아가요. 그래서 아래 Homebrew 부분에서 설명하는 Homebrew Python과 Xcode의 충돌을 피할 수 있어요.
-
-### <a id="pipx"></a>pipx
-
-```sh
-pipx install aipager
-```
-
-### <a id="homebrew-tap-macos-linuxbrew"></a>Homebrew tap (macOS, Linuxbrew)
-
-> **참고**: macOS에서는 `uv tool install aipager`를 추천해요. brew formula는 Homebrew의 `python@3.12`가 내 Xcode / Command Line Tools와 맞을 때는 잘 돌아가지만, 둘이 가끔 어긋나요. 가장 최근에는 **macOS Tahoe (26.x)** 환경에서 설치가 심볼 오류 `pyexpat _XML_SetAllocTrackerActivationThreshold`로 멈췄어요([업스트림 이슈](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). 보통 Xcode와 Command Line Tools를 업데이트하면 해결되지만, uv를 쓰는 편이 더 간단해요.
-
-```sh
-brew install dev-aly3n/tap/aipager
-```
-
-`dtach`는 Homebrew의 기본 formula에서 가져오고, aipager는 Homebrew가 관리하는 Python 가상 환경에 설치해요.
+</details>
 
 ### <a id="docker"></a>Docker
 
-python, node, `claude`, `dtach`가 들어 있는 미리 만든 이미지예요. 시스템에 Python이나 Node를 설치하고 싶지 않은 VPS, NAS, 라즈베리 파이에 알맞아요. 여러 아키텍처(amd64, arm64)를 지원해요.
+Python, Node, `claude`, `dtach`가 모두 들어 있는 독립 이미지예요. 호스트에 Python이나 Node를 두고 싶지 않은 VPS, NAS, Raspberry Pi에 잘 맞아요. 여러 아키텍처를 지원해요(amd64, arm64).
 
 ```sh
-# 1. 설정 마법사를 한 번 실행 (대화형)
+# 1. 설정 마법사를 한 번 실행(대화형)
 docker run --rm -it \
   -v "$HOME/.claude:/home/aipager/.claude" \
   -v aipager-config:/home/aipager/.config/aipager \
   ghcr.io/dev-aly3n/aipager:latest config
 
-# 2. aipager 실행 (백그라운드, 자동 재시작)
+# 2. aipager 시작(백그라운드, 자동 재시작)
 docker run -d --restart=unless-stopped --name aipager \
   -v "$HOME/.claude:/home/aipager/.claude" \
   -v aipager-config:/home/aipager/.config/aipager \
@@ -95,20 +219,25 @@ docker run -d --restart=unless-stopped --name aipager \
   ghcr.io/dev-aly3n/aipager:latest
 ```
 
-Claude가 수정할 폴더를 `/workspace`에 마운트하세요. `~/.claude`를 마운트하면 Claude 로그인 정보와 대화 기록이 함께 들어가요. 로그인하려면 컴퓨터에서 `claude`를 한 번 실행하거나, `docker exec -it aipager claude` 명령으로 컨테이너 안에서 로그인하세요.
+Claude가 고칠 폴더를 `/workspace` 아래에 마운트하세요. `~/.claude` 마운트로 Claude 로그인 정보와 대화 기록이 함께 들어가요. 로그인하려면 호스트에서 `claude`를 한 번 실행하거나, 컨테이너 안에서 `docker exec -it aipager claude`로 로그인하세요.
 
-태그: `latest`, `1.3`, `1.3.4` (정확한 버전 하나, 마이너 버전 하나).
+태그: `latest`, `1.3`, `1.3.4`(정확한 버전마다 하나, 마이너 버전마다 하나).
 
-### <a id="nix-flake"></a>Nix flake
+### <a id="nix"></a>Nix
 
 ```sh
 nix run github:dev-aly3n/aipager -- --version
 nix profile install github:dev-aly3n/aipager
 ```
 
-nixpkgs에서 고정한 의존성으로 aipager를 소스에서 빌드해요. `dtach`는 Nix가 제공해요. `claude`는 Nix가 제공하지 **않아요**. 따로 설치하세요(`nix profile install nixpkgs#nodejs && npm install -g @anthropic-ai/claude-code`, 또는 Anthropic 문서를 따르세요).
+고정된 nixpkgs로 aipager를 소스에서 빌드해요. `dtach`는 Nix가 주지만 `claude`는 아니라서 따로 설치하세요(`nix profile install nixpkgs#nodejs && npm install -g @anthropic-ai/claude-code`, 또는 Anthropic 문서를 따라서).
 
-선언적인 NixOS나 Home Manager 설정에서는 aipager를 flake 입력으로 추가하고, 그 패키지를 `environment.systemPackages`에 넣으세요:
+<details>
+<summary><b>NixOS와 Home Manager</b></summary>
+
+<br>
+
+aipager를 flake 입력으로 추가하고, 패키지를 `environment.systemPackages`에 넣으세요:
 
 ```nix
 {
@@ -126,86 +255,130 @@ nixpkgs에서 고정한 의존성으로 aipager를 소스에서 빌드해요. `d
 }
 ```
 
-그다음 `aipager service install` 명령으로 systemd 사용자 서비스를 설정하세요.
+그다음 `aipager service install`이 systemd 사용자 유닛을 만들어요.
 
-### <a id="snap"></a>Snap
+</details>
 
-```sh
-snap install aipager
-```
+## <a id="everyday-use"></a>매일 쓰기
 
-python, node, `claude`, `dtach`, aipager가 들어 있는 엄격하게 격리된 snap이에요. snap 샌드박스 때문에 작업 폴더는 `~/` 아래에 있어야 해요(예: `~/projects/foo`). 매니페스트는 [`packaging/snap/`](../../../packaging/snap/)에 있어요.
+### <a id="in-telegram"></a>Telegram에서
 
-## <a id="configure"></a>설정
+| 보내기 | 하는 일 |
+|---|---|
+| `/status` | 이 채팅의 세션을 상태와 버튼과 함께 봐요. |
+| `/new x1` | x1이라는 세션을 시작해요. `/new x1 fix the tests`는 첫 메시지도 보내요. |
+| `/x1` | 내 메시지가 x1로 가게 해요. `/x1 <message>`는 x1에 메시지 하나를 바로 보내요. |
+| `/stop` | 실행 중인 작업을 멈추고 대기열에 있는 것을 버려요. |
+| `/mode` | 확인 모드, 자동 모드, 전체 권한 모드 사이를 오가요. |
+| `/app` | Mini App을 열어요. |
+| `/language` | 이 채팅에서 aipager가 쓸 언어를 골라요. |
+| `/update` | aipager와 Claude Code를 업데이트하고 그 자리에서 재시작해요(관리자). |
+| `/help` | 작업별 짧은 안내를 봐요. |
 
-```sh
-aipager config
-```
+모든 명령, 버튼, 설정은 [봇 명령](commands.md)에 있어요.
 
-대화형 설정 마법사예요. Telegram 봇 token([@BotFather](https://t.me/BotFather)에서 받은 것)과 채팅 ID를 묻고, 둘을 확인한 다음, 필요한 hook을 `~/.claude/settings.json` 파일에 자동으로 추가해요. 파일을 직접 편집할 일은 없어요.
-
-스크립트나 코딩 에이전트로 다른 사람에게 aipager를 설정해 주나요? `aipager setup --token-file FILE --chat-id ID` 명령은 같은 일을 질문 없이 해요([setup 명령](commands.md#command-line-aipager-setup-for-coding-agents)과 [에이전트 안내](install-with-an-agent.md)를 보세요).
-
-## <a id="run"></a>실행
-
-```sh
-aipager start
-```
-
-aipager가 포그라운드에서 실행돼요. 다른 터미널에서 Claude 세션을 시작하세요:
+### <a id="on-the-command-line"></a>명령줄에서
 
 ```sh
-aipager session dev
+aipager start                             # aipager 자체를 이 터미널에서 실행
+aipager session dev                       # 여기서 dev라는 세션을 시작하거나 다시 연결
+aipager session dev --continue            # 이 폴더의 마지막 Claude 대화를 이어서
+aipager session dev -- --resume abc1234   # 다른 claude 옵션은 그대로 전달돼요
+aipager doctor                            # 설치 상태 확인
 ```
 
-Claude Code를 실행하는 `claude-dev`라는 dtach 세션을 만들어요(이미 있으면 거기에 연결해요). aipager가 몇 초 안에 알아채고, Telegram에 세션이 나타나기 시작해요. Telegram에서 세션을 시작할 수도 있어요. 봇에게 `/new dev`를 보내세요. 나중에 다시 연결하려면 같은 명령을 다시 실행하세요. Claude를 멈추지 않고 나가려면 터미널이나 tmux 창을 닫으면 돼요(세션은 계속 실행돼요).
+Claude를 멈추지 않고 세션에서 나가려면 터미널이나 tmux 창을 닫으세요. 세션은 계속 돌아가고, 같은 명령으로 다시 연결돼요.
 
-dtach 세션이 이미 닫혔고(예: 컴퓨터를 재시작한 경우) 디스크에 있는 Claude 대화를 이어 가고 싶다면 `--continue` 옵션을 붙이세요:
+`aipager service install`은 aipager를 백그라운드에서 계속 돌아가게 해요. Linux에서는 systemd 사용자 유닛(`~/.config/systemd/user/aipager.service`), macOS에서는 launchd 에이전트(`~/Library/LaunchAgents/com.aipager.daemon.plist`)로요. 어느 쪽이든 aipager는 홈 폴더에서 실행되고, 다른 폴더를 고르지 않으면 새 세션도 거기서 시작해요. `aipager service start`, `stop`, `status`, `logs`, `uninstall`로 관리해요.
 
-```sh
-aipager session dev --continue    # 이 폴더의 가장 최근 claude 대화
-```
+## <a id="security"></a>보안
 
-끝에 `--resume <session-id>`(또는 다른 claude 인수)를 붙일 수도 있어요:
+- **aipager 서버가 없어요.** aipager는 내 봇 토큰으로 Telegram Bot API와 바로 이야기해요. aipager 계정도, aipager 서비스도 없어요.
+- **열린 포트가 없어요.** aipager는 루프백에서만 들어요. Mini App은 Cloudflare 터널로 밖에 나가는데, 그곳의 모든 요청은 Telegram의 서명이 있어야 하고, `aipager miniapp disable`로 끌 수 있어요.
+- **모든 답이 기록돼요.** 허용, 거부, 그리고 모든 답이 `~/.claude/aipager-audit.jsonl`에 덧붙여져요. 그룹에서는 누가 눌렀는지도 함께요.
+- **결정은 여전히 Claude Code가 해요.** 무엇을 물어볼지는 내 Claude Code 설정이 정해요. aipager는 질문을 전달할 뿐이고 권한을 올리는 일이 없어요. sudo도 없고, 모든 것이 내 사용자로 실행돼요.
 
-```sh
-aipager session dev -- --resume abc1234
-```
+Claude 로그인 정보를 무엇이 지키는지까지 포함한 전체 그림은 [보안 모델](security.md)에 있어요.
 
-### <a id="run-as-a-service-survives-logout"></a>서비스로 실행 (로그아웃해도 계속 실행)
+## <a id="faq"></a>자주 묻는 질문
 
-```sh
-aipager service install
-```
+<details>
+<summary><b>Claude 모바일 앱과 무엇이 다른가요?</b></summary>
 
-Linux에서는 systemd 사용자 서비스를 `~/.config/systemd/user/aipager.service`에 쓰고 시작해요. macOS에서는 launchd plist를 `~/Library/LaunchAgents/com.aipager.daemon.plist`에 쓰고 시작해요. 어느 쪽이든 aipager는 홈 폴더에서 실행되고, 다른 폴더를 고르지 않으면 새 세션도 거기서 시작돼요. 하위 명령: `start`, `stop`, `status`, `logs`, `uninstall`.
+<br>
 
-## <a id="team-mode-groups-and-other-people"></a>팀 모드 (그룹과 다른 사람)
+Claude 앱은 Anthropic이 운영하는 어시스턴트와 이야기해요. aipager는 내 컴퓨터에서 돌아가는 Claude Code 세션에 나를 연결해요. 내 저장소, 내 도구, 내 환경 그대로요.
 
-기본적으로 aipager는 개인 봇이에요. 나와 봇만 있는 개인 채팅 하나예요. 함께 쓰려면 Telegram 그룹, 다른 사람과 봇의 개인 채팅, 또는 둘 다를 추가하세요. 그룹이라면: 봇을 그룹에 추가하고(그룹의 상태 표시줄을 고정할 수 있도록 관리자로), `aipager config` 명령을 다시 실행해서 **Add a group scope**를 고르세요. 설정 마법사가 나(내 개인 채팅의 소유자)를 그룹의 소유자로 제안하고, 멤버마다 역할(`owner`, `admin`, `user`, `read_only`)을 정하고, 멤버의 루트 폴더를 물은 다음, 재시작 없이 aipager 설정을 다시 불러와요. 그룹에서 봇은 명령, 자기 메시지에 대한 답장, 자기를 멘션한 메시지(`@aipagerbot fix the tests`, `/jim run the tests`)에만 반응하고, 모든 메시지는 보낸 사람의 역할로 실행돼요. `user`나 `read_only` 멤버는 자기 채팅의 루트 폴더(기본값 `~/aipager-users/<label>`) 안에서만 세션을 시작하고 유지해요. **멤버를 추가하면 그 사람이 내 컴퓨터에서 코드를 실행할 수 있게 돼요**. 전체 신뢰 모델은 [팀 모드와 그룹](groups.md)에 있어요.
+</details>
 
-## <a id="what-it-does"></a>할 수 있는 일
+<details>
+<summary><b>내 코드가 컴퓨터 밖으로 나가나요?</b></summary>
 
-- 각 Claude Code 세션이 무엇을 하는지 Telegram에서 보여 줘요. 작업 중인지 준비됨인지, 쓰고 있는 도구, 컨텍스트 비율, 비용, 바뀐 줄 수를 작업마다 카드 하나로 보여 주고, 마지막에 Claude의 답변이 와요
-- Claude가 작업 중이어도 내 메시지를 **바로** Claude에게 전달해요. 여러 개를 보내도 돼요. 터미널에서 입력할 때처럼 Claude가 직접 대기열에 넣어요. 👀는 전달됨, 👍는 Claude가 가져갔다는 뜻이에요
-- 답하지 않은 권한 요청이나 질문이 있으면 내 메시지를 잠시 보류해서, 메시지가 그 요청에 대한 답으로 읽히는 일이 없게 해요. 답하고 나면 보내요
-- Claude의 권한 요청과 질문을 버튼으로 보여 줘요(허용, 거부, 항상 허용, 선택지마다 버튼 하나). 끝난 작업에 남은 버튼은 지금 실행 중인 작업에 작용하지 않고 거절해요
-- 세션마다 권한 모드가 세 가지 있고 `/mode` 명령으로 바꿔요. 💬 확인 모드(Claude가 작업마다 먼저 물어봐요), 기본값인 🤖 자동 모드(Claude Code 자체의 안전 검사가 안전한 작업은 실행하고 위험한 작업은 멈춰서 내가 결정하게 해요), 🔓 전체 권한 모드(모든 작업이 확인 없이 실행돼요. 관리자용이고, 내 개인 채팅에서는 나도 쓸 수 있어요)
-- 채팅에서 세션을 시작해요. `/new x1`은 세션을 바로 시작하고(`/new x1 fix the tests`는 첫 메시지도 보내요), 모드, 모델, 폴더는 `/settings`에서 가져오고, 바꿀 수 있는 버튼이 함께 와요
-- 사진, 파일, 음성 메시지를 받아요(음성 메시지는 내 컴퓨터에서 글로 바꿔요. 음성 메시지 기능을 설치해야 해요)
-- 컨텍스트가 거의 찼을 때, 대화를 압축할 때, 세션이 끝났을 때, 세션이 너무 오래 조용할 때 알려 줘요
-- 봇 하나로 여러 세션을 동시에 실행해요. 역할과 도구별 규칙이 있는 팀 모드도 선택할 수 있어요([팀 모드와 그룹](groups.md))
-- English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی, Tiếng Việt로 말해요. aipager 자체의 글에만 적용되고, 내 세션이나 Claude의 답변은 절대 건드리지 않아요([언어](commands.md#languages)). 이 README와 문서도 번역되어 있어요(위의 **다른 언어로 읽기** 참고)
+<br>
 
-### <a id="mini-app"></a>Mini App
+aipager는 내 채팅에서 보이는 것만 내 봇 토큰으로 Telegram에 보내요. 중간에 aipager 서버는 없어요. Claude Code 자체는 늘 하던 대로 Anthropic과 이야기해요.
 
-`/app` 명령은 Telegram 안에서 대시보드를 열어요. 중지, 종료, 재시작, 이름 바꾸기, 모드 전환이 있는 내 세션, `Write`/`Edit` 변경 사항을 보는 diff 뷰어, 설정, 그리고 소유자에게는 “문제 신고”가 있어요. aipager가 직접 제공하고 **기본으로 켜져 있어요**. 모든 요청은 Telegram의 `initData` 서명으로 확인해요. 여러 채팅(내 개인 채팅과 그룹)에 속해 있으면 맨 위에 채팅 이름 줄이 나와서 서로 오갈 수 있어요. `aipager miniapp enable|disable|status` 명령으로 관리하거나, 관리형 터널 대신 내 주소를 가리키게 할 수 있어요. [보안 모델](security.md#mini-app-tunnel)을 보세요.
+</details>
 
-### <a id="note-on-model-buttons-bedrock--vertex-users"></a>모델 버튼에 대해 (Bedrock과 Vertex 사용자)
+<details>
+<summary><b>dtach가 뭔가요?</b></summary>
 
-고정 키보드의 **모델** 하위 메뉴(와 Mini App의 모델 선택기)는 Claude Code의 계열 별칭 `sonnet`, `opus`, `haiku`, `fable`, `opusplan`과 `claude-opus-5-5`, `claude-sonnet-5-5` 같은 고정 모델을 보여 줘요(전체 목록은 [고정 키보드](commands.md#persistent-keyboard)에 있어요). Anthropic API에서는 별칭이 항상 그 계열의 최신 모델을 가리켜요. **Bedrock**과 **Vertex**에서는 같은 별칭이 서비스 제공자가 제공하는 것에 따라 더 오래된 버전을 가리킬 수 있어요. 이런 서비스를 쓰면서 특정 모델이 필요하다면 채팅에서 `/model <full-id>`를 보내세요.
+<br>
 
-## <a id="developing-locally"></a>로컬에서 개발하기
+터미널을 떼어 내는 작은 프로그램이에요. 터미널이 닫히거나 SSH가 끊겨도 Claude Code를 살려 두니까, 한 시간 뒤에 보낸 답도 살아 있는 세션에 닿아요. aipager와 함께 와요.
+
+</details>
+
+<details>
+<summary><b>Claude가 엉뚱한 길로 가면요?</b></summary>
+
+<br>
+
+요청은 내가 누를 때까지 기다리고, `/stop`은 작업을 멈추고 대기열을 비우고, `/kill`은 세션을 끝내고, 끝난 작업의 버튼은 거절해요.
+
+</details>
+
+<details>
+<summary><b>어떻게 업데이트하나요?</b></summary>
+
+<br>
+
+`/update`를 보내세요. aipager와 Claude Code를 확인해서 새 버전을 설치하고, 🔄 지금 재시작이 서비스로 실행 중이든 아니든 aipager를 다시 띄워요. 그동안 세션은 계속 돌아가요. 명령줄에서는 `aipager update`가 aipager를 설치한 도구로 업데이트해요.
+
+</details>
+
+<details>
+<summary><b>Bedrock이나 Vertex를 써요. 모델 버튼이 동작하나요?</b></summary>
+
+<br>
+
+키보드의 **모델** 메뉴와 Mini App은 Claude Code의 계열 별칭(`sonnet`, `opus`, `haiku`, `fable`, `opusplan`)과 `claude-opus-5-5`, `claude-sonnet-5-5` 같은 고정 모델을 보여 줘요. Anthropic API에서 별칭은 그 계열의 최신 모델을 가리켜요. Bedrock과 Vertex에서는 제공자가 가진 버전에 따라 같은 별칭이 더 오래된 버전을 가리킬 수 있어요. 정확한 모델을 고르려면 `/model <full-id>`를 보내세요.
+
+</details>
+
+<details>
+<summary><b>비용이 드나요?</b></summary>
+
+<br>
+
+아니요. aipager는 MIT 라이선스이고, 봇은 내 것이며, Claude Code는 원래 쓰던 요금제나 키를 그대로 써요.
+
+</details>
+
+## <a id="documentation"></a>문서
+
+| 페이지 | 내용 |
+|---|---|
+| [봇 명령](commands.md) | 모든 명령, 버튼, 설정, 명령줄 옵션 |
+| [팀 모드와 그룹](groups.md) | 역할, 루트 폴더, 누가 무엇을 누를 수 있는지, 신뢰 모델 |
+| [보안 모델](security.md) | 신뢰 경계, 비밀 정보, 감사 로그, 네트워크 |
+| [Hook 이벤트](hooks.md) | Claude Code의 hook이 aipager에서 각각 하는 일 |
+| [아키텍처](architecture.md) | aipager의 구성 요소, 파일, 소켓 |
+| [문제 해결](troubleshooting.md) | `aipager doctor`와 흔한 문제의 해결법 |
+| [문제 신고](problem-reports.md) | 신고에 무엇이 담기는지, aipager가 언제 신고를 권하는지 |
+| [에이전트로 설치하기](install-with-an-agent.md) | 코딩 에이전트가 따르는 안내서 |
+
+## <a id="contributing"></a>기여하기
 
 ```sh
 git clone https://github.com/dev-aly3n/aipager.git && cd aipager
@@ -216,23 +389,16 @@ systemd-run --user --scope -q -p MemoryMax=2G -p MemorySwapMax=0 \
 ruff check aipager tests
 ```
 
-`dtach`는 의존성인 `dtach-bin`과 함께 오니까 다른 건 필요 없어요. 테스트는 위처럼 메모리 한도 아래에서 실행하세요(macOS에서는 `systemd-run`을 빼세요). 그렇지 않으면 통제를 벗어난 테스트 하나가 컴퓨터 메모리를 다 써 버릴 수 있어요.
-
-릴리스 절차는 [CONTRIBUTING.md](../../../CONTRIBUTING.md)에 있어요.
+`dtach`는 `dtach-bin` 의존성과 함께 오니 다른 건 필요 없어요. 테스트는 위처럼 메모리 제한을 걸고 실행하세요(macOS에서는 `systemd-run` 없이). 그러지 않으면 폭주한 테스트 하나가 컴퓨터의 메모리를 다 차지할 수 있어요. 릴리스 과정은 [CONTRIBUTING.md](../../../CONTRIBUTING.md)에 있어요.
 
 ## <a id="license"></a>라이선스
 
-MIT. 전문은 [LICENSE](../../../LICENSE)에 있어요.
+MIT. [LICENSE](../../../LICENSE)를 보세요.
 
-## <a id="docs"></a>문서
+<br>
 
-| 페이지 | 내용 |
-|---|---|
-| [에이전트로 설치하기](install-with-an-agent.md) | 코딩 에이전트가 사용자를 위해 aipager를 설치하고 설정할 때 따르는 단계 |
-| [아키텍처](architecture.md) | 프로그램이 어떻게 짜여 있는지, 구성 요소 그림, 파일과 소켓의 위치 |
-| [Hook 이벤트](hooks.md) | aipager가 Claude Code에서 받는 모든 이벤트와 그 필드 |
-| [봇 명령](commands.md) | 명령, 버튼, Mini App, 음성 메시지와 파일, 모든 `aipager` 명령, 환경 변수로 하는 설정 |
-| [팀 모드와 그룹](groups.md) | 여러 사람 설정, 역할, 규칙, 누가 무엇을 했는지 |
-| [문제 해결](troubleshooting.md) | 흔한 문제와 `aipager doctor` 해결표 |
-| [문제 신고](problem-reports.md) | 문제 신고 보고서에 무엇이 들어 있고, 어디로 가고, aipager가 언제 보내자고 제안하는지 |
-| [보안 모델](security.md) | 신뢰 경계, 비밀 정보, 감사 로그, 네트워크 연결 |
+<div align="center">
+<a href="https://aipager.run"><img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/logo.png" width="32" height="32" alt=""></a>
+<br>
+<sub><a href="https://aipager.run">aipager.run</a></sub>
+</div>
