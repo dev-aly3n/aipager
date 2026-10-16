@@ -20,6 +20,7 @@ import json
 import pathlib
 import random
 import re
+import time
 from pathlib import Path
 
 import pytest
@@ -202,12 +203,14 @@ def test_a_trailing_newline_never_passes_a_name_or_a_stored_key():
     assert fp.qualified_type(type("Boom", (Exception,), {"__module__": "aipager.state"})) == (
         "aipager.state.Boom")
     # The store drops an hour key with one, and a policy naming a
-    # fingerprint with one is not ours (automatic offers off).
+    # fingerprint with one is not ours (automatic offers off). The hour is
+    # this one: loading trims by the real clock, so a fixed date ages out.
+    now = int(time.time())
+    hour = store._hour(now)
     config.REPORTS_FILE.parent.mkdir(parents=True, exist_ok=True)
     config.REPORTS_FILE.write_text(json.dumps({"version": store.SCHEMA_VERSION, "counters": {
-        "2026-10-08T12": {"tg_5xx": 1}, "2026-10-08T12\n": {"tg_5xx": 5}}}))
-    noon = 1_791_460_800 + 1800  # 2026-10-08T12:30Z
-    assert store.counters_24h(now=noon) == {"tg_5xx": 1}
+        hour: {"tg_5xx": 1}, hour + "\n": {"tg_5xx": 5}}}))
+    assert store.counters_24h(now=now) == {"tg_5xx": 1}
     clean = {"last_offer_ts": 1_791_000_000, "pending": [], "declines_in_row": 0,
              "auto_off": False, "offered": {}}
     assert store._clean_policy(clean).auto_off is False
