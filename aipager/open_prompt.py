@@ -35,11 +35,17 @@ MAX_TOOL_USE_ID = 200
 MAX_TOOL_NAME = 200
 MAX_SUMMARY = 1000
 MAX_DETAIL = 4000
-MAX_TEXT = 4096          # a Telegram message's own limit
+#: A separate prompt's text as sent, HTML: Telegram limits the text it
+#: shows to 4,096 characters, and each of those can be sent as an entity
+#: of up to six (``&quot;``), plus the tags around them.
+MAX_TEXT = 8 * 4096
 MAX_HOOK_ADDR = 107      # an AF_UNIX path's limit
 MAX_REQUEST_ID = 200
 MAX_OPTION_LABEL = 200
-MAX_OPTION_DESCRIPTION = 1000
+#: Claude's question and each option's description, whole: the card shows
+#: them as Claude wrote them (a message holds no more than this anyway).
+MAX_QUESTION = 4096
+MAX_OPTION_DESCRIPTION = 4096
 MAX_OPTIONS = 4          # the question keyboard shows the first four
 
 #: The standing-rule suggestion types an "Allow always" may echo. The
@@ -114,7 +120,7 @@ def _question_record(questions) -> dict | None:
         clean.append({"label": label,
                       "description": _cut(desc, MAX_OPTION_DESCRIPTION)})
     text = q.get("question", "?")
-    return {"question": _cut(text if isinstance(text, str) else "?", MAX_SUMMARY),
+    return {"question": _cut(text if isinstance(text, str) else "?", MAX_QUESTION),
             "options": clean}
 
 
@@ -266,7 +272,7 @@ def _is_digest(x) -> bool:
 def _valid_question(q) -> dict | None:
     if not (isinstance(q, dict) and set(q) == _QUESTION_KEYS):
         return None
-    if not _str_within(q["question"], MAX_SUMMARY):
+    if not _str_within(q["question"], MAX_QUESTION):
         return None
     options = q["options"]
     if not isinstance(options, list) or not 1 <= len(options) <= MAX_OPTIONS:

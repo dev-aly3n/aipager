@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **A session started in a new folder no longer ends at its first message.** Claude Code asks "Do you trust this folder?" in a folder it has not seen, such as a member's new root folder, and the first message sent from Telegram answered it with "No, exit". aipager now marks the folder a session starts in as trusted first, unless it or a folder above it is trusted already. It also never rewrites Claude Code's `~/.claude.json` or `~/.claude/settings.json` when it cannot read them whole, or when a running Claude changed them in the meantime.
 - **The agents under an answer keep their indent when one is waiting.** An agent waiting for its own agents was marked with ⏸, which Telegram draws as a wide emoji, so its row's 🤖 sat as far right as the indented agents below it. Its mark is now a narrow ‖, like the ○ and ✓ of the other rows, in every language.
+- **Claude's questions arrive whole.** A question on the busy card stopped after 120 characters and each option's description after 60, mid-word. Now the question and its options are shown as Claude wrote them, on the card and as their own message, and across a restart; only a form too long for one Telegram message is shortened, at a word, with "…".
 
 ## [1.3.4] - 2026-10-15
 

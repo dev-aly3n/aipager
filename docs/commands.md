@@ -389,7 +389,11 @@ above` as a reply to the prompt, once per wait.
 
 `AskUserQuestion` dialogs render the same way, with one button per
 option (the first four), and for a question that allows several answers
-⬜/☑ toggles and a `✅ Submit` button.
+⬜/☑ toggles and a `✅ Submit` button. The question and each option's
+description are shown whole, as in the terminal. Only a form too long for
+one Telegram message is shortened: the busy card first shows fewer of its
+tool rows, then the longest of the question and the descriptions end in
+`…` at a word.
 
 At 80% context the chat gets `⚠️ name · Context at 82% - auto-compact
 soon` with **📦 Compact Now**, which sends `/compact` to that session. It

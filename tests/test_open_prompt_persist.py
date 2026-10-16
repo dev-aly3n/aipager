@@ -348,7 +348,7 @@ _INVALID = [
     ("separate", "chat-id-string", _set(["chat_id"], str(CHAT))),
     ("separate", "chat-id-bool", _set(["chat_id"], False)),
     ("separate", "empty-text", _set(["text"], "")),
-    ("separate", "text-too-long", _set(["text"], "t" * 4097)),
+    ("separate", "text-too-long", _set(["text"], "t" * 32769)),
     ("separate", "missing-summary", _drop(["summary"])),
     ("separate", "card-key-on-separate", _set(["card_msg_id"], 77)),
     ("inline", "not-a-dict", None),
@@ -395,6 +395,15 @@ def test_a_valid_record_loads_unchanged(kind, caplog):
         sess = _reload().get(NAME)
     assert sess.restored_open_prompt is not None
     assert not any("invalid record" in m for m in caplog.messages)
+
+
+def test_a_separate_record_with_the_longest_html_loads(caplog):
+    """Every character of a full message sent as an entity (``&quot;``),
+    with its tags: the longest text a separate prompt can hold."""
+    data = _valid_file("separate")
+    data["sessions"][NAME]["open_prompt"]["text"] = "t" * 32768
+    state.SESSION_STATE_FILE.write_text(json.dumps(data))
+    assert _reload().get(NAME).restored_open_prompt is not None
 
 
 DIGEST = "0123456789abcdef" * 4

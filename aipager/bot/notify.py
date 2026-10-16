@@ -30,7 +30,7 @@ from aipager.bot.divider import (
     without_dividers,
 )
 from aipager.bot.footer import footer_block, without_last_footer
-from aipager.bot import reactions
+from aipager.bot import question_form, reactions
 from aipager.bot.sibling_text import shown
 from aipager.bot.dashboard import PIN_NEEDS_INPUT, new_prompt_token
 from aipager.bot.flood import MUTE, FloodMuted
@@ -394,9 +394,11 @@ class NotifyMixin:
         same builders the busy card uses; a separate-message prompt is
         re-sent exactly as it was sent."""
         if sess.pending_permission:
-            text = _safe_truncate(
-                self._build_busy_text(sess.label, "Waiting", sess),
-                TELEGRAM_MAX_TEXT_LEN, True)
+            text = self._build_busy_text(sess.label, "Waiting", sess)
+            # Telegram counts the text it shows, not the HTML: a question
+            # form the card already fitted to that goes out whole.
+            if question_form.shown_len(text) > TELEGRAM_MAX_TEXT_LEN:
+                text = _safe_truncate(text, TELEGRAM_MAX_TEXT_LEN, True)
             return text, self._pending_prompt_keyboard(sess)
         if sess.pending_prompt_msg:
             return (sess.pending_prompt_msg.get("text", ""),

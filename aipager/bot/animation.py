@@ -22,11 +22,11 @@ import httpx
 from telegram.error import RetryAfter
 
 from aipager import agent_tree, bg_shells, flood_policy, i18n, preferences
-from aipager.bot import card_rows
+from aipager.bot import card_rows, question_form
 from aipager.bot.divider import DIVIDER_SEP, without_dividers
 from aipager.bot.footer import footer, without_last_footer
 from aipager.i18n import Msg, Plural, Safe, Span
-from aipager.bot.keyboards import LOADING, OPTION, PERM_NEEDED
+from aipager.bot.keyboards import LOADING, PERM_NEEDED
 from aipager.clockfmt import elapsed as clock
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CARD_CADENCE_FLOOR_GROUP, CARD_CADENCE_FLOOR_PRIVATE,
@@ -1685,6 +1685,15 @@ def _card_edit_lock(sess: TrackedSession) -> asyncio.Lock:
     return lock
 
 
+def _question_html(tr, perm: dict, *, budget: int) -> str:
+    """The open question on the card: Claude's whole question and each
+    option's whole description, within *budget* shown characters."""
+    question = perm.get("question")
+    return question_form.render(
+        tr, question if isinstance(question, str) else "?",
+        perm.get("options") or [], lead="❓ ", budget=budget)
+
+
 class AnimationMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
@@ -2196,17 +2205,61 @@ class AnimationMixin:
         # The head is one line built from pieces: right to left at both
         # ends in a right-to-left card, whatever it ends with.
         text = tr.line(text, kind="html")
-        # Show tool history — collapse old done tools if too many
+        perm = sess.pending_permission
+        question = perm if perm and perm.get("ask_question") else None
+        if question is not None:
+            # Claude's whole question: the tool history gives way first
+            # (fewer rows shown), then question_form shortens the form.
+            form_len = question_form.shown_len(_question_html(
+                tr, question, budget=question_form.UNLIMITED))
+            visible_rows = 15
+            while visible_rows > 0 and (
+                    question_form.shown_len(text + self._history_html(
+                        sess, tr, visible_rows)) + 2 + form_len
+                    > TELEGRAM_MAX_TEXT_LEN):
+                visible_rows -= 1
+            text += self._history_html(sess, tr, visible_rows)
+            text += "\n\n" + _question_html(
+                tr, question,
+                budget=TELEGRAM_MAX_TEXT_LEN - question_form.shown_len(text) - 2)
+            return text
+        text += self._history_html(sess, tr, 15)
+        # Append inline permission display if active
+        if perm:
+            tool_info = perm.get("tool_info") or {}
+            tool_summary = perm.get("tool_summary", str(PERM_NEEDED))
+            if tr.code != "en" and ("tool_summary" not in perm
+                                    or perm.get("tool_info") is None):
+                # No tool details: the words, not a stored summary.
+                text += f"\n\n🔐 {tr.html(PERM_NEEDED)}"
+            elif tr.code != "en" and tool_info.get("name") == "AskUserQuestion":
+                # The question has not arrived: the tool's name as it is.
+                text += "\n\n🔐 " + tr.html(
+                    LOADING, tool=Span(f"<code>{tool_info['name']}</code>"))
+            else:
+                text += f"\n\n🔐 <code>{html_mod.escape(tool_summary)}</code>"
+            # The real command / path (hook_receiver's ``detail``), not
+            # only Claude's own description of it: approving a shell
+            # command on the model's summary of itself is a weak check.
+            # Skipped when the summary already spells it out (a short
+            # command with no description, a bare file path).
+            text += _format_perm_detail(
+                tool_summary, tool_info.get("detail") or "", tr=tr)
+        return text
+
+    def _history_html(self, sess: TrackedSession, tr, max_visible: int) -> str:
+        """The card's tool rows, the last *max_visible* of them, under an
+        "earlier" line counting the finished ones not shown."""
+        text = ""
         history = sess.tool_history
-        max_visible = 15
         if len(history) <= max_visible:
             visible = history
             hidden_done = 0
         else:
             # Count done tools that will be hidden
-            hidden = history[:-max_visible]
+            hidden = history[:len(history) - max_visible]
             hidden_done = sum(1 for _, d in hidden if d)
-            visible = history[-max_visible:]
+            visible = history[len(history) - max_visible:]
         if hidden_done:
             text += f"\n{tr.n(LEGACY_EARLIER, hidden_done)}"
         # Build a map of history_idx → the full info dict for live agent
@@ -2229,42 +2282,6 @@ class AnimationMixin:
                 display = (_agent_live_row(info, self._card_elapsed_unit(sess))
                            if info is not None else summary)
                 text += f"\n⏳ <code>{html_mod.escape(display)}</code>"
-        # Append inline permission display if active
-        if sess.pending_permission:
-            perm = sess.pending_permission
-            if perm.get("ask_question"):
-                q = perm["question"]
-                text += f"\n\n❓ {html_mod.escape(q[:120])}"
-                for i, opt in enumerate(perm.get("options", [])):
-                    opt_label = opt["label"] if "label" in opt else tr.text(OPTION, n=i + 1)
-                    desc = opt.get("description", "")
-                    row = f"{tr.num(i + 1)}. {html_mod.escape(opt_label)}"
-                    if desc:
-                        row += f" - {html_mod.escape(desc[:60])}"
-                    # A row whose label is ours (Claude gave none) reads right to
-                    # left at both ends; Claude's own rows get no mark.
-                    text += "\n  " + (row if "label" in opt else tr.line(row, kind="html"))
-            else:
-                tool_info = perm.get("tool_info") or {}
-                tool_summary = perm.get("tool_summary", str(PERM_NEEDED))
-                if tr.code != "en" and ("tool_summary" not in perm
-                                        or perm.get("tool_info") is None):
-                    # No tool details: the words, not a stored summary.
-                    text += f"\n\n🔐 {tr.html(PERM_NEEDED)}"
-                elif (tr.code != "en" and tool_info.get("name") == "AskUserQuestion"
-                        and not perm.get("ask_question")):
-                    # The question has not arrived: the tool's name as it is.
-                    text += "\n\n🔐 " + tr.html(
-                        LOADING, tool=Span(f"<code>{tool_info['name']}</code>"))
-                else:
-                    text += f"\n\n🔐 <code>{html_mod.escape(tool_summary)}</code>"
-                # The real command / path (hook_receiver's ``detail``), not
-                # only Claude's own description of it: approving a shell
-                # command on the model's summary of itself is a weak check.
-                # Skipped when the summary already spells it out (a short
-                # command with no description, a bare file path).
-                text += _format_perm_detail(
-                    tool_summary, tool_info.get("detail") or "", tr=tr)
         return text
 
     async def _edit_busy_raw(self, msg_id: int, text: str,

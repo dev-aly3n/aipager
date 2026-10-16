@@ -23,7 +23,7 @@ from telegram.error import BadRequest, Forbidden
 
 
 from aipager import i18n
-from aipager.bot import kbwords
+from aipager.bot import kbwords, question_form
 from aipager.i18n import Msg, Safe
 from aipager import perm_modes
 from aipager.bot.mode_labels import mode_label
@@ -376,20 +376,13 @@ class KeyboardMixin:
         question = q.get("question", "?")
         options = q.get("options", [])
 
-        # The session's name and Claude's question: no words of ours.
-        text = f"❓ <b>{html_mod.escape(label)}</b> · {html_mod.escape(question)}"
+        # The session's name and Claude's whole question and options (no
+        # words of ours), shortened only past Telegram's message limit.
+        text = question_form.render(
+            tr, question if isinstance(question, str) else "?", options,
+            lead=f"❓ <b>{html_mod.escape(label)}</b> · ")
         if not options:
             return text, None
-
-        for i, opt in enumerate(options):
-            opt_label = opt["label"] if "label" in opt else tr.text(OPTION, n=i + 1)
-            desc = opt.get("description", "")
-            row = f"{tr.num(i + 1)}. {html_mod.escape(opt_label)}"
-            if desc:
-                row += f" - {html_mod.escape(desc[:60])}"
-            # A row whose label is ours (Claude gave none) reads right to
-            # left at both ends; Claude's own rows get no mark.
-            text += "\n  " + (row if "label" in opt else tr.line(row, kind="html"))
 
         # Local import, not top-level — avoids an import cycle with
         # session_parity (which itself imports from this package).

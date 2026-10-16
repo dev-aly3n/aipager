@@ -255,8 +255,11 @@ _INVALID_Q = {
     "question-null": lambda rec: rec["perm"].update(question=None),
     "question-text-int": lambda rec: rec["perm"]["question"].update(
         question=3),
-    "question-1001": lambda rec: rec["perm"]["question"].update(
-        question="q" * 1001),
+    # Claude's whole question is kept, up to a message's own limit.
+    "question-4097": lambda rec: rec["perm"]["question"].update(
+        question="q" * 4097),
+    "description-4097": lambda rec: rec["perm"]["question"]["options"][0].update(
+        description="d" * 4097),
     "label-201": lambda rec: rec["perm"]["question"]["options"][0].update(
         label="L" * 201),
     "question-with-hook_reply": lambda rec: rec["perm"].update(
@@ -270,8 +273,10 @@ _VALID_Q = {
         options=[{"label": "Only", "description": ""}]),
     "label-200": lambda rec: rec["perm"]["question"]["options"][0].update(
         label="L" * 200),
-    "question-1000": lambda rec: rec["perm"]["question"].update(
-        question="q" * 1000),
+    "question-4096": lambda rec: rec["perm"]["question"].update(
+        question="q" * 4096),
+    "description-4096": lambda rec: rec["perm"]["question"]["options"][0].update(
+        description="d" * 4096),
 }
 
 
@@ -309,3 +314,57 @@ def test_valid_question_boundary_record_is_restored(replay, vloop, edit):
     r = replay
     _run(vloop, _edited_question_restart(r, edit))
     assert r.sess.status is Status.INTERACTIVE
+
+
+# ── Claude's whole question across a restart (2026-10-15) ─────────────────
+
+# Each past the 1,000 characters a restart used to keep; together within
+# one message.
+_LONG_Q = " ".join(f"question{i}" for i in range(100))          # ~1,090 characters
+_LONG_D = [" ".join(f"desc{n}word{i}" for i in range(90)) for n in range(2)]
+
+
+def _long_q() -> dict:
+    return {"question": _LONG_Q, "header": "Pick", "multiSelect": False,
+            "options": [{"label": f"Option {chr(65 + n)}", "description": d}
+                        for n, d in enumerate(_LONG_D)]}
+
+
+def test_a_restart_restores_the_whole_question_on_the_card(replay, vloop):
+    r = replay
+
+    async def scenario():
+        card = await _card_question(r, [_long_q()])
+        before = r.chat.cards[card]["text"]
+        await r.restart()
+        return before
+
+    before = _run(vloop, scenario())
+    assert len(_LONG_Q) > 1000 and all(len(d) > 1000 for d in _LONG_D)
+    assert _LONG_Q in before and all(d in before for d in _LONG_D)
+    perm = r.sess.pending_permission
+    assert perm["question"] == _LONG_Q
+    assert [o["description"] for o in perm["options"]] == _LONG_D
+    after = r.bot._build_busy_text(r.sess.label, "Waiting", r.sess)
+    assert _LONG_Q in after and all(d in after for d in _LONG_D)
+
+
+def test_a_restart_restores_the_whole_question_on_its_own_message(replay, vloop):
+    r = replay
+    # Quotes and ampersands: the sent HTML is longer than the text shown.
+    # Too long for one message, so its descriptions are shortened: the
+    # point here is that what was sent comes back.
+    question = _LONG_Q + ' "&" ' * 300
+
+    async def scenario():
+        q = _long_q()
+        q["question"] = question
+        msg = await _separate_question(r, [q])
+        sent = next(t for m, t, _r in r.chat.sent if m == msg)
+        await r.restart()
+        return sent
+
+    sent = _run(vloop, scenario())
+    assert len(sent) > 4096                  # longer as HTML than as shown
+    assert r.sess.status is Status.INTERACTIVE
+    assert r.sess.pending_prompt_msg["text"] == sent
