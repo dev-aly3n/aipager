@@ -25,6 +25,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from aipager.bot import handlers
 from aipager.state import Status, TrackedSession
+from tests.card_tasks import drain_card_tasks
 from tests.test_bot_handlers_file_retry_album import (
     CHAT_ID,
     _Downloads,
@@ -61,7 +62,11 @@ def test_lone_photo_captioned_with_label_routes_there_and_strips_prefix(
     downloads = _Downloads()
     update, _photo, _tg = _photo_update(mk_update, downloads, caption="/ann")
 
-    run_async(bot._handle_file(update, MagicMock()))
+    async def scenario():
+        await bot._handle_file(update, MagicMock())
+        await drain_card_tasks()  # the card step runs in the background
+
+    run_async(scenario())
 
     sent.assert_awaited_once()
     assert sent.await_args.args[0] == "claude-ann"
@@ -70,7 +75,8 @@ def test_lone_photo_captioned_with_label_routes_there_and_strips_prefix(
     assert ann.trigger_msg_id == 999
     assert ann.status == Status.BUSY
     assert jim.status == Status.IDLE and jim.trigger_msg_id is None
-    bot._send_busy_and_animate.assert_awaited_once_with(ann)
+    bot._send_busy_and_animate.assert_awaited_once_with(
+        ann, turn=ann.turn_seq)
     bot._react.assert_awaited_once_with(update, "👀")
     update.message.reply_text.assert_not_awaited()
 
@@ -95,6 +101,7 @@ def test_album_captioned_with_label_and_text_routes_and_keeps_the_text(
         await bot._handle_file(u1, MagicMock())
         await bot._handle_file(u2, MagicMock())
         await bot._albums[(CHAT_ID, "g1")].settle_task
+        await drain_card_tasks()  # the card step runs in the background
 
     run_async(scenario())
 
@@ -103,7 +110,8 @@ def test_album_captioned_with_label_and_text_routes_and_keeps_the_text(
     assert sent.await_args.args[1] == "look " + " ".join(downloads.written)
     assert len(downloads.written) == 2
     assert ann.trigger_msg_id == 101  # the album's first item, as before
-    bot._send_busy_and_animate.assert_awaited_once_with(ann)
+    bot._send_busy_and_animate.assert_awaited_once_with(
+        ann, turn=ann.turn_seq)
 
 
 # ===== unknown label: refused, nothing injected =========================
@@ -195,7 +203,11 @@ def test_label_alive_but_untracked_is_adopted_and_used(
     downloads = _Downloads()
     update, _photo, _tg = _photo_update(mk_update, downloads, caption="/ann")
 
-    run_async(bot._handle_file(update, MagicMock()))
+    async def scenario():
+        await bot._handle_file(update, MagicMock())
+        await drain_card_tasks()  # the card step runs in the background
+
+    run_async(scenario())
 
     sent.assert_awaited_once()
     assert sent.await_args.args[0] == "claude-ann"

@@ -34,6 +34,7 @@ from aipager.bot.held import HELD
 from aipager.bot.rich_message import RichMessageFloodBanned
 from aipager.session_monitor import SessionMonitor
 from aipager.state import Status
+from tests.card_tasks import drain_card_tasks
 
 CHAT = 256113222          # the chat `_pin_single_chat_config` pins
 BAN = 600.0
@@ -370,6 +371,7 @@ def test_a_quick_template_tap_during_a_mute(
 
     async def scenario():
         await bot._send_template(update, "review this")
+        await drain_card_tasks()  # the card step runs in the background
         assert gated_bot.calls == [], gated_bot.calls
         assert sess.status is Status.BUSY
         assert _owed(sess)
@@ -755,7 +757,11 @@ def test_retry_after_the_lift_works_as_before(
     _lift(flood_clock)
     _affordable(limiter, flood_clock)
 
-    run_async(bot._handle_callback(update, MagicMock()))
+    async def scenario():
+        await bot._handle_callback(update, MagicMock())
+        await drain_card_tasks()  # the card step runs in the background
+
+    run_async(scenario())
     bot._inject_prompt.assert_awaited_once()
     assert sess.status is Status.BUSY
     assert gated_bot.endpoints() == ["deleteMessage", "sendMessage"]
