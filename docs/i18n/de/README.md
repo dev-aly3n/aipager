@@ -1,22 +1,166 @@
+<div align="center">
+
+<a href="https://aipager.run"><img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/logo.png" width="96" height="96" alt="aipager"></a>
+
 # aipager
 
-<!-- i18n-source: README.md @ c91598e -->
+<!-- i18n-source: README.md @ ec7afc2 -->
 
-> Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../../README.md))
+<h3>Claude ist einfach ein Chat mehr.</h3>
 
-[![PyPI](https://img.shields.io/pypi/v/aipager?label=pypi&color=3775A9)](https://pypi.org/project/aipager/)
-[![Python](https://img.shields.io/pypi/pyversions/aipager?color=3775A9)](https://pypi.org/project/aipager/)
-[![License](https://img.shields.io/badge/license-MIT-black)](../../../LICENSE)
+Deine [Claude Code](https://claude.com/claude-code)-Sitzungen in Telegram, gleich neben deiner Familie, deinen Freunden und deinem Team.<br>
+Sie laufen auf deinem eigenen Computer. Du verfolgst sie, beantwortest ihre Fragen und gibst ihnen die nächste Aufgabe, egal wo du gerade bist.
 
-Die Telegram-Fernbedienung für deine [Claude Code](https://claude.com/claude-code)-Sitzungen. Claude läuft auf deinem Computer in einem abgekoppelten Terminal (`dtach`), und du nutzt es vom Handy aus: Du liest Claudes Antworten, schickst ihm Nachrichten, beantwortest seine Berechtigungsanfragen und Fragen und wechselst zwischen Sitzungen, ohne dass eine SSH-Verbindung offen bleiben muss.
+<p>
+<a href="https://pypi.org/project/aipager/"><img alt="PyPI" src="https://img.shields.io/pypi/v/aipager?style=flat-square&label=pypi&labelColor=181c20&color=2aabee"></a>
+<a href="https://pypi.org/project/aipager/"><img alt="Python" src="https://img.shields.io/pypi/pyversions/aipager?style=flat-square&labelColor=181c20&color=2aabee"></a>
+<a href="https://github.com/dev-aly3n/aipager/actions/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/dev-aly3n/aipager/test.yml?branch=main&style=flat-square&label=tests&labelColor=181c20"></a>
+<img alt="Linux and macOS" src="https://img.shields.io/badge/runs%20on-Linux%20%7C%20macOS-2aabee?style=flat-square&labelColor=181c20">
+<a href="../../../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-2aabee?style=flat-square&labelColor=181c20"></a>
+</p>
 
-[aipager.run](https://aipager.run) · [Dokumentation](#docs) · [Änderungsprotokoll](../../../CHANGELOG.md) · [Issues auf GitHub](https://github.com/dev-aly3n/aipager/issues)
+**[Website](https://aipager.run)** · **[Installation](#install)** · **[Dokumentation](#documentation)** · **[Sicherheit](security.md)** · **[Änderungsprotokoll](../../../CHANGELOG.md)**
 
 **In einer anderen Sprache lesen:** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
 
+<sub>Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../../README.md))</sub>
+
+<br>
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/hero.webp" width="100%" alt="Eine in Telegram getippte Nachricht erreicht Claude Code in einem Terminal, und eine Karte im Chat aktualisiert sich, während Claude arbeitet">
+
+<sub>Du schreibst in Telegram. aipager tippt es in Claude Code auf deinem Computer, und eine Karte aktualisiert sich, während die Aufgabe läuft.</sub>
+
+</div>
+
+<br>
+
+## <a id="why-aipager"></a>Warum aipager
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+**📟 Eine Live-Karte pro Aufgabe**<br>
+Was Claude gerade tut: die Tools, die es aufruft, Kontext, Kosten und geänderte Zeilen, danach die Antwort. Die Karte aktualisiert sich selbst, so bleibt der Chat ruhig.
+
+</td>
+<td width="33%" valign="top">
+
+**⚡ Auch mitten in der Arbeit**<br>
+Deine Nachricht wird sofort in die Sitzung getippt, auch während Claude arbeitet, genau wie beim Tippen im Terminal. 👀 heißt gesendet, 👍 heißt, Claude hat sie abgeholt.
+
+</td>
+<td width="33%" valign="top">
+
+**✅ Antworten mit einem Tipp**<br>
+Berechtigungsanfragen und Fragen von Claude kommen mit einem Button pro Antwort. Ein Button, der von einer fertigen Aufgabe übrig ist, verweigert, statt auf die nächste zu wirken.
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
+**🛡️ Drei Berechtigungsmodi**<br>
+💬 Fragen-Modus, 🤖 Auto-Modus (der Standard für neue Sitzungen) und 🔓 Vollzugriff-Modus, pro Sitzung eingestellt und jederzeit mit `/mode` gewechselt.
+
+</td>
+<td width="33%" valign="top">
+
+**👥 Gemacht für Teams**<br>
+Füg den Bot zu einer Gruppe hinzu. Jede Nachricht läuft mit der Rolle der Person, die sie schickt, Mitglieder lassen sich auf ihren eigenen Ordner beschränken, und jeder Tipp steht im Audit-Log.
+
+</td>
+<td width="33%" valign="top">
+
+**🔒 Nichts dazwischen**<br>
+Kein aipager-Server, kein Konto, kein offener Port. Dein Bot-Token, dein Computer, deine Chats.
+
+</td>
+</tr>
+</table>
+
+## <a id="a-quick-tour"></a>Ein kurzer Rundgang
+
+### <a id="questions-come-to-you"></a>Fragen kommen zu dir
+
+Wenn Claude dich etwas fragt oder eine Berechtigung braucht, landet die Frage mit einem Button pro Antwort in deinem Chat, und die angeheftete Leiste sagt, was auf dich wartet. Dein Tipp wird in die Sitzung getippt, als säßest du an der Tastatur, und das Terminal zeigt dieselbe Antwort.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/question.webp" width="100%" alt="Claude fragt, ob es das Timeout erhöhen oder auf das Cookie warten soll; die in Telegram getippte Antwort wird im Terminal gewählt">
+
+### <a id="three-permission-modes"></a>Drei Berechtigungsmodi
+
+Jede Sitzung ist in einem von drei Modi, jederzeit mit `/mode` gewechselt, auch während Claude arbeitet.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/modes.webp" width="100%" alt="Dieselbe Aufgabe im Fragen-Modus, im Auto-Modus und im Vollzugriff-Modus">
+
+| Modus | Was passiert |
+|---|---|
+| 💬 **Fragen-Modus**<br>`/mode ask` | Claude fragt vor jeder Aktion. |
+| 🤖 **Auto-Modus**, der Standard<br>`/mode auto` | Die eigene Sicherheitsprüfung von Claude Code lässt sichere Aktionen durch und stoppt riskante, damit du entscheidest. |
+| 🔓 **Vollzugriff-Modus**<br>`/mode full` | Alles läuft ohne jede Prüfung. Für Admins und für dich in deinem eigenen privaten Chat mit dem Bot. |
+
+Zwischen Fragen-Modus und Auto-Modus wird direkt gewechselt, ohne Neustart. Der Wechsel in den Vollzugriff-Modus oder aus ihm heraus startet die Sitzung neu und behält die Unterhaltung. Fragen von Claude kommen in jedem Modus zu dir.
+
+### <a id="your-team-in-one-group"></a>Dein Team in einer Gruppe
+
+Füg den Bot zu einer Gruppe hinzu und gib jedem Mitglied eine Rolle: `owner`, `admin`, `user` oder `read_only`. In der Gruppe reagiert der Bot nur auf Befehle, Antworten auf seine Nachrichten und Erwähnungen (`@aipagerbot fix the tests`, `/web run the tests`), und jede Nachricht läuft mit der Rolle der Person, die sie schickt: Ein Tool, das die Rolle nicht nutzen darf, wird abgelehnt, bevor es läuft. Ein Mitglied mit `user` oder `read_only` arbeitet nur in seinem eigenen Stammordner (standardmäßig `~/aipager-users/<label>`). Andere Personen können auch ihren eigenen privaten Chat mit dem Bot haben.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/team.webp" width="100%" alt="Eine Teamgruppe, in der ein Befehl wegen der Rolle eines Mitglieds abgelehnt wird, während die Tests durchlaufen">
+
+> **⚠️ Wichtig:** Wer Mitglied wird, darf Code auf deinem Computer ausführen. Lies [das Vertrauensmodell](groups.md), bevor du den Bot teilst.
+
+Zum Einrichten fügst du den Bot als Admin zur Gruppe hinzu (damit er die Statusleiste der Gruppe anheften kann), führst `aipager config` noch einmal aus und wählst **Add a group scope**. Der Assistent fügt jedes Mitglied mit einer Rolle hinzu, fragt nach dem Stammordner der Mitglieder und lädt die Konfiguration des laufenden aipager neu.
+
+### <a id="a-dashboard-inside-telegram"></a>Ein Dashboard in Telegram
+
+`/app` öffnet die Mini App: deine Sitzungen mit Stoppen, Beenden, Neu starten, Umbenennen und dem Moduswechsel, eine Diff-Ansicht für jedes `Write` und `Edit`, die Einstellungen und, für den Besitzer, Problem melden. aipager stellt sie selbst bereit, sie ist standardmäßig an, und jede Anfrage wird mit der Signatur von Telegram geprüft. Wenn du in mehr als einem Chat bist, wechselt eine Zeile mit Chatnamen oben zwischen ihnen. Schalte sie mit `aipager miniapp disable` aus oder lass sie auf deine eigene Adresse zeigen ([so geht's](security.md#mini-app-tunnel)).
+
+### <a id="fifteen-languages"></a>Fünfzehn Sprachen
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/languages.webp" width="420" align="right" alt="Eine Berechtigungsanfrage auf Persisch, von rechts nach links, mit persischen Ziffern">
+
+- Spricht English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی und Tiếng Việt.
+- Wähl eine mit `/language` oder lass einen privaten Chat der Sprache deiner Telegram-App folgen.
+- Persisch und Arabisch laufen von rechts nach links, mit ihren eigenen Ziffern.
+- Nur die Texte von aipager selbst ändern sich. Deine Sitzungen nicht: Claude antwortet in der Sprache, in der du ihm schreibst.
+- Dieses README und [die Dokumentation](#documentation) sind auch übersetzt.
+
+<br clear="right">
+
+### <a id="and-the-small-things"></a>Und die kleinen Dinge
+
+- **Viele Sitzungen, ein Bot.** Eine normale Nachricht geht an die Sitzung, mit der du zuletzt geredet hast; antworte auf eine Nachricht einer Sitzung, um mit genau dieser zu reden, oder schick `/x1 <message>`.
+- **Nichts kommt durcheinander.** Eine Nachricht, die du schickst, während eine Berechtigungsanfrage oder eine Frage offen ist, wartet, bis du geantwortet hast, damit sie nie als Antwort darauf gelesen wird.
+- **Fotos, Dateien und Sprachnachrichten.** Sprachnachrichten werden auf deinem Computer in Text umgewandelt, mit dem optionalen Extra `voice`.
+- **Es sagt dir Bescheid.** Wenn der Kontext fast voll ist, die Unterhaltung komprimiert wird, eine Sitzung beendet ist oder eine sich länger nicht meldet.
+- **Sitzungen überleben alles.** Claude läuft in `dtach` und arbeitet weiter, wenn du das Terminal schließt, SSH abbricht oder aipager neu startet.
+
+## <a id="how-it-works"></a>So funktioniert es
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/how-it-works.webp" width="100%" alt="Claude Code, sein Hook, aipager, Telegram und deine Chats, in einer Reihe">
+
+Claude Code läuft in einem echten Terminal, in `dtach`, damit niemand ein Fenster offen halten muss. Jeder Schritt löst einen [Hook](hooks.md) aus, der ein Datagramm über einen lokalen Socket an aipager schickt, und aipager bearbeitet eine Nachricht in deinem Chat. Deine Antworten nehmen denselben Weg zurück: eine Entscheidung an den Hook, der auf den Aufruf wartet, oder Tastendrücke in die Sitzung. Das Terminal bleibt die Quelle der Wahrheit. Mehr dazu in der [Architektur](architecture.md).
+
 ## <a id="install"></a>Installation
 
-Du hast einen Coding-Agenten (Claude Code oder irgendeinen Agenten mit Shell)? Erstelle einen Bot mit [@BotFather](https://t.me/BotFather), tippe darin auf Start und prüfe, dass Claude Code auf diesem Computer bei deinem Konto angemeldet ist. Speichere den Token des Bots in einer Datei, die dein Agent nie lesen muss (Token einfügen, Enter drücken, dann Ctrl-D):
+Linux oder macOS, jede Architektur. Du brauchst Claude Code, auf diesem Computer angemeldet, und einen Telegram-Bot: Erstell einen mit [@BotFather](https://t.me/BotFather) und tippe darin auf Start.
+
+```sh
+curl -fsSL https://aipager.run/install | sh   # uv, pipx oder Homebrew: was du eben hast
+aipager config                                # dein Bot-Token, dein Chat, die Hooks von Claude Code
+aipager service install                       # hält aipager am Laufen, auch nach dem Abmelden
+aipager session api                           # Claude Code in diesem Ordner und in deinem Chat
+```
+
+Das Installationsskript nimmt `uv`, wenn du es hast, sonst `pipx`, sonst (auf macOS) Homebrew, und installiert `uv`, wenn nichts davon da ist. `dtach` kommt mit aipager (das Paket [`dtach-bin`](https://pypi.org/project/dtach-bin/)), du musst also sonst nichts installieren. `aipager config` ist ein Assistent: Er prüft den Bot-Token und deinen Chat und trägt dann die Hooks von aipager für dich in `~/.claude/settings.json` ein. Du bearbeitest nie eine Datei von Hand.
+
+<details>
+<summary><b>Lass einen Coding-Agenten installieren</b></summary>
+
+<br>
+
+Du hast Claude Code oder einen anderen Agenten mit Shell? Erstell den Bot, tippe darin auf Start und speichere den Token des Bots in einer Datei, die dein Agent nie lesen muss (Token einfügen, Enter drücken, dann Ctrl-D):
 
 ```sh
 mkdir -p ~/.config/aipager
@@ -25,60 +169,40 @@ rm -f ~/.config/aipager/bot-token
 chmod 600 ~/.config/aipager/bot-token
 ```
 
-Dann gib deinem Agenten diese Nachricht:
+Dann gib deinem Agenten diesen Prompt:
 
 ```text
 Install aipager for me by following https://aipager.run/agent.md. My Telegram bot token is in ~/.config/aipager/bot-token and my Telegram user id is <your id>.
 ```
 
-Wenn du deine Telegram-ID nicht kennst, sag das dem Agenten; er kann sie herausfinden.
+Wenn du deine Telegram-User-ID nicht kennst, sag das stattdessen; der Agent kann sie herausfinden. Die Anleitung, der er folgt, auch dazu, wie der Token sicher übergeben wird, ist [Mit einem Agenten installieren](install-with-an-agent.md). Für Skripte richtet `aipager setup --token-file FILE --chat-id ID` aipager ohne jede Frage ein ([der Befehl setup](commands.md#command-line-aipager-setup-for-coding-agents)).
 
-Die Anleitung, der der Agent folgt, einschließlich der sicheren Übergabe des Tokens, ist [Mit einem Agenten installieren](install-with-an-agent.md). Wenn du selbst installieren willst, lies weiter.
+</details>
 
-Linux oder macOS, jede Architektur. `dtach` wird über die Abhängigkeit [`dtach-bin`](https://pypi.org/project/dtach-bin/) automatisch installiert; ein eigenes Systempaket ist nicht nötig.
-
-### <a id="one-line-install-recommended"></a>Installation in einer Zeile (empfohlen)
+### <a id="other-ways-to-install"></a>Weitere Wege zur Installation
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dev-aly3n/aipager/main/install.sh | sh
+uv tool install aipager                        # uv: auf macOS empfohlen, bringt sein eigenes Python mit
+pipx install aipager                           # pipx
+brew install dev-aly3n/tap/aipager             # Homebrew, auf macOS und Linuxbrew (siehe Hinweis unten)
+nix profile install github:dev-aly3n/aipager   # Nix: claude ist nicht dabei (siehe unten)
+snap install aipager                           # Snap: strikt abgeschottet, claude dabei, Arbeitsordner unter ~/
 ```
 
-Sie nimmt `uv`, wenn es da ist, sonst `pipx`, sonst (nur auf macOS) Homebrew. Findet sie nichts davon, installiert sie zuerst `uv` (den Python-Tool-Manager von Astral) und installiert aipager damit.
+Oder lass es in [Docker](#docker) laufen, mit Python, Node, `claude` und `dtach` an Bord.
 
-### <a id="uv-recommended-on-macos"></a>uv (empfohlen auf macOS)
+<details>
+<summary><b>Homebrew auf macOS 26 (Tahoe)</b></summary>
 
-```sh
-uv tool install aipager     # wenn uv schon installiert ist
-```
+<br>
 
-Oder, um zuerst uv zu installieren:
+Die Formel funktioniert, wenn die `python@3.12`-Bottle von Homebrew und deine Xcode Command Line Tools zusammenpassen, aber die beiden laufen ab und zu auseinander. Auf macOS 26 bricht die Installation mit einem Symbolfehler `pyexpat _XML_SetAllocTrackerActivationThreshold` ab ([Upstream-Issue](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). Xcode und die Command Line Tools zu aktualisieren hilft meistens, aber mit `uv tool install aipager` passiert das gar nicht erst. Die Formel nimmt `dtach` von Homebrew und installiert aipager in eine Python-Umgebung, die Homebrew verwaltet.
 
-```sh
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv tool install aipager
-```
-
-uv bringt seinen eigenen Python-Interpreter mit, deshalb funktioniert das auf jeder macOS- oder Linux-Version, egal in welchem Zustand das Python des Systems ist; so umgehst du den Konflikt zwischen dem Python von Homebrew und Xcode, der weiter unten im Abschnitt Homebrew beschrieben ist.
-
-### <a id="pipx"></a>pipx
-
-```sh
-pipx install aipager
-```
-
-### <a id="homebrew-tap-macos-linuxbrew"></a>Homebrew tap (macOS, Linuxbrew)
-
-> **Hinweis:** Auf macOS ist `uv tool install aipager` der empfohlene Weg. Die brew-Formel funktioniert, wenn das Paket `python@3.12` von Homebrew und deine Xcode / Command Line Tools zueinander passen, aber sie geraten immer wieder auseinander; zuletzt auf **macOS Tahoe (26.x)**, wo die Installation mit dem Symbolfehler `pyexpat _XML_SetAllocTrackerActivationThreshold` scheitert ([Issue im Upstream](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). Ein Update von Xcode und den Command Line Tools behebt das meistens, aber mit uv ist es einfacher.
-
-```sh
-brew install dev-aly3n/tap/aipager
-```
-
-Holt `dtach` aus der Standardformel von Homebrew und installiert aipager in ein Python-venv, das Homebrew verwaltet.
+</details>
 
 ### <a id="docker"></a>Docker
 
-Ein vollständiges Image, in dem python, node, `claude` und `dtach` schon drin sind; praktisch für einen VPS, ein NAS oder einen Raspberry Pi, auf dem du weder Python noch Node im System haben willst. Für mehrere Architekturen (amd64, arm64).
+Ein in sich geschlossenes Image mit Python, Node, `claude` und `dtach`, gut für einen VPS, ein NAS oder einen Raspberry Pi, wenn du auf dem Host kein Python oder Node haben willst. Für mehrere Architekturen (amd64, arm64).
 
 ```sh
 # 1. Den Einrichtungsassistenten einmal ausführen (interaktiv)
@@ -95,20 +219,25 @@ docker run -d --restart=unless-stopped --name aipager \
   ghcr.io/dev-aly3n/aipager:latest
 ```
 
-Binde unter `/workspace` die Ordner ein, die Claude bearbeiten soll. Die Einbindung von `~/.claude` bringt deine Claude-Anmeldedaten und den Verlauf deiner Unterhaltungen mit; zum Anmelden führ einmal `claude` auf dem System aus, oder `docker exec -it aipager claude`, um dich im Container anzumelden.
+Häng die Ordner, die Claude bearbeiten soll, unter `/workspace` ein. Der Mount von `~/.claude` bringt deine Anmeldedaten für Claude und den Verlauf deiner Unterhaltungen mit: Führ `claude` einmal auf dem Host aus, um dich anzumelden, oder melde dich mit `docker exec -it aipager claude` im Container an.
 
 Tags: `latest`, `1.3`, `1.3.4` (eines pro genauer Version und eines pro Unterversion).
 
-### <a id="nix-flake"></a>Nix flake
+### <a id="nix"></a>Nix
 
 ```sh
 nix run github:dev-aly3n/aipager -- --version
 nix profile install github:dev-aly3n/aipager
 ```
 
-Baut aipager aus dem Quellcode mit festgelegten Abhängigkeiten aus nixpkgs. `dtach` kommt von Nix; `claude` **nicht**: Installiere es getrennt (`nix profile install nixpkgs#nodejs && npm install -g @anthropic-ai/claude-code`, oder nach der Dokumentation von Anthropic).
+Baut aipager aus dem Quellcode gegen fest gepinnte nixpkgs. `dtach` kommt von Nix, `claude` nicht, installier es also getrennt (`nix profile install nixpkgs#nodejs && npm install -g @anthropic-ai/claude-code`, oder folge der Dokumentation von Anthropic).
 
-Für eine deklarative Konfiguration mit NixOS oder Home Manager füg aipager als Eingabe des Flakes hinzu und nimm sein Paket in `environment.systemPackages` auf:
+<details>
+<summary><b>NixOS und Home Manager</b></summary>
+
+<br>
+
+Füg aipager als Flake-Input hinzu und nimm sein Paket in `environment.systemPackages` auf:
 
 ```nix
 {
@@ -126,86 +255,130 @@ Für eine deklarative Konfiguration mit NixOS oder Home Manager füg aipager als
 }
 ```
 
-Danach richtet `aipager service install` einen systemd-Benutzerdienst ein.
+Danach richtet `aipager service install` eine systemd-Benutzereinheit ein.
 
-### <a id="snap"></a>Snap
+</details>
 
-```sh
-snap install aipager
-```
+## <a id="everyday-use"></a>Im Alltag
 
-Ein Snap mit strikter Isolierung, das python, node, `claude`, `dtach` und aipager enthält. Wegen der Sandbox von Snap müssen die Arbeitsordner unter `~/` liegen (zum Beispiel `~/projects/foo`). Das Manifest liegt in [`packaging/snap/`](../../../packaging/snap/).
+### <a id="in-telegram"></a>In Telegram
 
-## <a id="configure"></a>Einrichten
+| Schick | Um |
+|---|---|
+| `/status` | die Sitzungen dieses Chats zu sehen, jede mit ihrem Zustand und ihren Buttons. |
+| `/new x1` | eine Sitzung namens x1 zu starten. `/new x1 fix the tests` schickt auch gleich die erste Nachricht. |
+| `/x1` | x1 zur Sitzung zu machen, an die deine Nachrichten gehen. `/x1 <message>` schickt ihr direkt eine Nachricht. |
+| `/stop` | die laufende Aufgabe zu unterbrechen und alles Wartende zu verwerfen. |
+| `/mode` | zwischen Fragen-Modus, Auto-Modus und Vollzugriff-Modus zu wechseln. |
+| `/app` | die Mini App zu öffnen. |
+| `/language` | die Sprache zu wählen, die aipager in diesem Chat spricht. |
+| `/update` | aipager und Claude Code zu aktualisieren und an Ort und Stelle neu zu starten (für Admins). |
+| `/help` | eine kurze Anleitung nach Aufgaben zu bekommen. |
 
-```sh
-aipager config
-```
+Jeder Befehl, jeder Button und jede Einstellung steht in [Befehle des Bots](commands.md).
 
-Ein interaktiver Assistent: Er fragt nach dem Token deines Telegram-Bots (von [@BotFather](https://t.me/BotFather)) und der Chat-ID, prüft beide und trägt dann die nötigen Hooks selbst in `~/.claude/settings.json` ein. Du bearbeitest nie eine Datei von Hand.
-
-Du richtest aipager für jemanden per Skript oder mit einem Coding-Agenten ein? `aipager setup --token-file FILE --chat-id ID` macht dasselbe ohne Rückfragen (siehe [den Befehl setup](commands.md#command-line-aipager-setup-for-coding-agents) und [die Anleitung für Agenten](install-with-an-agent.md)).
-
-## <a id="run"></a>Starten
-
-```sh
-aipager start
-```
-
-aipager bleibt im Vordergrund. Starte in einem anderen Terminal eine Claude-Sitzung:
+### <a id="on-the-command-line"></a>Auf der Kommandozeile
 
 ```sh
-aipager session dev
+aipager start                             # aipager selbst, im Vordergrund
+aipager session dev                       # hier eine Sitzung namens dev starten oder sich mit ihr verbinden
+aipager session dev --continue            # die letzte Claude-Unterhaltung in diesem Ordner fortsetzen
+aipager session dev -- --resume abc1234   # jedes andere claude-Flag geht unverändert durch
+aipager doctor                            # die Installation prüfen
 ```
 
-Das erstellt eine dtach-Sitzung namens `claude-dev`, in der Claude Code läuft (oder verbindet sich wieder mit ihr, wenn es sie schon gibt). aipager findet sie innerhalb weniger Sekunden, und Telegram zeigt sie an. Du kannst eine Sitzung auch aus Telegram starten: Schick dem Bot `/new dev`. Führ denselben Befehl noch einmal aus, um dich später wieder zu verbinden; um zu gehen, ohne Claude zu stoppen, schließ das Terminal oder den tmux-Bereich (die Sitzung läuft weiter).
+Um eine Sitzung zu verlassen, ohne Claude zu stoppen, schließ das Terminal oder den tmux-Bereich: Die Sitzung läuft weiter, und derselbe Befehl verbindet dich wieder.
 
-Wenn die dtach-Sitzung beendet wurde (zum Beispiel nach einem Neustart des Computers), du die Unterhaltung von Claude aber von der Festplatte fortsetzen willst, häng `--continue` an:
+`aipager service install` hält aipager im Hintergrund am Laufen: als systemd-Benutzereinheit auf Linux (`~/.config/systemd/user/aipager.service`) oder als launchd-Agent auf macOS (`~/Library/LaunchAgents/com.aipager.daemon.plist`). In beiden Fällen läuft aipager in deinem Home-Ordner, wo eine neue Sitzung startet, wenn du keinen anderen Ordner wählst. Mit `aipager service start`, `stop`, `status`, `logs` und `uninstall` verwaltest du den Dienst.
 
-```sh
-aipager session dev --continue    # die letzte claude-Unterhaltung in diesem Ordner
-```
+## <a id="security"></a>Sicherheit
 
-Du kannst auch `--resume <session-id>` (oder jede andere Option von claude) am Ende mitgeben:
+- **Kein aipager-Server.** aipager spricht mit deinem eigenen Bot-Token direkt mit der Bot API von Telegram. Es gibt kein aipager-Konto und keinen aipager-Dienst.
+- **Kein offener Port.** aipager lauscht nur auf Loopback. Die Mini App geht über einen Cloudflare-Tunnel nach draußen, in dem jede Anfrage die Signatur von Telegram tragen muss, und `aipager miniapp disable` schaltet ihn ab.
+- **Jede Antwort wird festgehalten.** Jedes Erlauben, Ablehnen und jede Antwort wird an `~/.claude/aipager-audit.jsonl` angehängt, in einer Gruppe mit dem Namen der Person, die getippt hat.
+- **Claude Code entscheidet weiterhin.** Deine Einstellungen von Claude Code legen fest, was gefragt wird. aipager leitet die Frage nur weiter und holt sich nie mehr Rechte: kein sudo, alles läuft als dein Benutzer.
 
-```sh
-aipager session dev -- --resume abc1234
-```
+Das ganze Bild, auch was deine Anmeldedaten für Claude schützt, steht im [Sicherheitsmodell](security.md).
 
-### <a id="run-as-a-service-survives-logout"></a>Als Dienst laufen lassen (läuft nach dem Abmelden weiter)
+## <a id="faq"></a>Häufige Fragen
 
-```sh
-aipager service install
-```
+<details>
+<summary><b>Was ist der Unterschied zu den Mobil-Apps von Claude?</b></summary>
 
-Auf Linux schreibt das einen systemd-Benutzerdienst nach `~/.config/systemd/user/aipager.service` und startet ihn. Auf macOS schreibt es eine launchd-plist nach `~/Library/LaunchAgents/com.aipager.daemon.plist` und startet sie. In beiden Fällen läuft aipager in deinem Home-Ordner, und dort startet eine neue Sitzung, wenn du keinen anderen Ordner wählst. Unterbefehle: `start`, `stop`, `status`, `logs`, `uninstall`.
+<br>
 
-## <a id="team-mode-groups-and-other-people"></a>Teambetrieb (Gruppen und andere Personen)
+Die Apps von Claude sprechen mit dem Assistenten, den Anthropic betreibt. aipager verbindet dich mit einer Claude-Code-Sitzung auf deinem eigenen Computer: dein Repository, deine Tools, deine Umgebung.
 
-aipager ist standardmäßig ein privater Bot: du und der Bot in einem privaten Chat. Zum Teilen fügst du eine Telegram-Gruppe hinzu, die privaten Chats anderer Personen mit dem Bot oder beides. Für eine Gruppe: Füg den Bot zur Gruppe hinzu (als Admin, damit er die Statusleiste der Gruppe anheften kann), führ `aipager config` noch einmal aus und wähl **Add a group scope**. Der Assistent schlägt dich (den Besitzer deines eigenen privaten Chats) als Besitzer der Gruppe vor, fügt jedes Mitglied mit einer Rolle hinzu (`owner`, `admin`, `user` oder `read_only`), fragt nach dem Stammordner der Mitglieder und lädt die Konfiguration von aipager ohne Neustart neu. In der Gruppe reagiert der Bot nur auf Befehle, Antworten auf seine Nachrichten und Erwähnungen (`@aipagerbot fix the tests`, `/jim run the tests`), und jede Nachricht läuft mit der Rolle der Person, die sie geschickt hat. Ein Mitglied mit `user` oder `read_only` startet und behält Sitzungen nur im Stammordner seines Chats (standardmäßig `~/aipager-users/<label>`). **Ein Mitglied hinzuzufügen gibt ihm das Recht, Code auf deinem Computer auszuführen**: Das vollständige Vertrauensmodell steht in [Teambetrieb und Gruppen](groups.md).
+</details>
 
-## <a id="what-it-does"></a>Was es macht
+<details>
+<summary><b>Verlässt mein Code meinen Computer?</b></summary>
 
-- Zeigt in Telegram, was jede Claude-Code-Sitzung tut: ob sie arbeitet oder bereit ist, welche Tools sie nutzt, den Kontext in %, die Kosten und die geänderten Zeilen, auf einer Karte pro Aufgabe, danach die Antwort von Claude
-- Schickt deine Nachrichten **sofort** an Claude, auch während es arbeitet: Schick mehrere, und Claude stellt sie selbst in die Warteschlange, genau wie beim Tippen im Terminal. 👀 heißt gesendet, 👍 heißt, Claude hat sie abgeholt
-- Hält eine Nachricht zurück, solange eine Berechtigungsanfrage oder eine Frage offen ist, damit sie nie als Antwort darauf gelesen wird, und schickt sie, sobald du geantwortet hast
-- Zeigt die Berechtigungsanfragen und Fragen von Claude mit Buttons (Erlauben, Ablehnen, Immer erlauben, einer pro Option); ein Button, der von einer schon fertigen Aufgabe übrig ist, verweigert, statt auf die laufende Arbeit zu wirken
-- Drei Berechtigungsmodi pro Sitzung, gewechselt mit `/mode`: 💬 Fragen-Modus (Claude fragt vor jeder Aktion), 🤖 Auto-Modus, der Standard (die eigene Sicherheitsprüfung von Claude Code lässt sichere Aktionen durch und stoppt riskante, damit du entscheidest) und 🔓 Vollzugriff-Modus (alles läuft ohne jede Prüfung; für Admins und für dich in deinem eigenen privaten Chat)
-- Startet Sitzungen aus dem Chat: `/new x1` startet sofort eine (`/new x1 fix the tests` schickt auch gleich die erste Nachricht), mit dem in `/settings` eingestellten Modus, Modell und Ordner, und mit Buttons, um sie zu ändern
-- Nimmt Fotos, Dateien und Sprachnachrichten an (Sprachnachrichten werden auf deinem Computer in Text umgewandelt, mit dem optionalen Sprachpaket)
-- Sagt dir Bescheid, wenn der Kontext fast voll ist, wenn die Unterhaltung komprimiert wurde, wenn eine Sitzung beendet ist und wenn eine sich länger nicht meldet
-- Lässt mehrere Sitzungen gleichzeitig mit einem einzigen Bot laufen; optionaler Teambetrieb mit Rollen und Regeln pro Tool ([Teambetrieb und Gruppen](groups.md))
-- Spricht English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی und Tiếng Việt: nur die Texte von aipager selbst, nie deine Sitzungen oder die Antworten von Claude ([Sprachen](commands.md#languages)). Dieses README und die Dokumentation sind auch übersetzt (siehe **In einer anderen Sprache lesen** oben)
+<br>
 
-### <a id="mini-app"></a>Mini App
+aipager schickt an Telegram nur, was du in deinen Chats siehst, mit deinem eigenen Bot-Token; dazwischen gibt es keinen aipager-Server. Claude Code selbst spricht wie immer mit Anthropic.
 
-`/app` öffnet ein Dashboard in Telegram: deine Sitzungen mit Stoppen, Beenden, Neu starten, Umbenennen und dem Moduswechsel, eine Diff-Ansicht für Änderungen durch `Write`/`Edit`, die Einstellungen und, für den Besitzer, Problem melden. Sie wird von aipager selbst bereitgestellt und ist **standardmäßig an**; jede Anfrage wird mit der `initData`-Signatur von Telegram geprüft. Wenn du in mehr als einem Chat bist (dein privater Chat und eine Gruppe), wechselt eine Zeile mit Chatnamen oben zwischen ihnen. Verwalte sie mit `aipager miniapp enable|disable|status`, oder lass sie statt auf den verwalteten Tunnel auf deine eigene Adresse zeigen: siehe [Sicherheitsmodell](security.md#mini-app-tunnel).
+</details>
 
-### <a id="note-on-model-buttons-bedrock--vertex-users"></a>Hinweis zu den Modell-Buttons (für Bedrock und Vertex)
+<details>
+<summary><b>Was ist dtach?</b></summary>
 
-Das Untermenü **Modell** der festen Tastatur (und die Modellauswahl der Mini App) bietet die Familien-Aliase von Claude Code an, `sonnet`, `opus`, `haiku`, `fable` und `opusplan`, und feste Modelle wie `claude-opus-5-5` und `claude-sonnet-5-5` (die vollständige Liste steht unter [Feste Tastatur](commands.md#persistent-keyboard)). Über die API von Anthropic zeigt ein Alias immer auf das neueste Modell seiner Familie. Auf **Bedrock** und **Vertex** können dieselben Aliase je nach den Versionen deines Anbieters auf ältere Stände zeigen. Wenn du diese Dienste nutzt und ein bestimmtes Modell willst, schick `/model <full-id>` aus dem Chat.
+<br>
 
-## <a id="developing-locally"></a>Auf deinem Computer entwickeln
+Ein winziges Programm, das ein Terminal abkoppelt. Es hält Claude Code am Leben, wenn das Terminal geschlossen wird oder SSH abbricht, sodass eine Antwort, die du eine Stunde später schickst, noch eine laufende Sitzung erreicht. Es kommt mit aipager.
+
+</details>
+
+<details>
+<summary><b>Und wenn Claude aus dem Ruder läuft?</b></summary>
+
+<br>
+
+Anfragen warten auf deinen Tipp, `/stop` unterbricht die Aufgabe und verwirft alles Wartende, `/kill` beendet die Sitzung, und Buttons einer fertigen Aufgabe verweigern.
+
+</details>
+
+<details>
+<summary><b>Wie aktualisiere ich es?</b></summary>
+
+<br>
+
+Schick `/update`: Es prüft aipager und Claude Code und installiert, was neu ist, und 🔄 Jetzt neu starten bringt aipager wieder hoch, ob als Dienst oder nicht. Deine Sitzungen laufen dabei weiter. Auf der Kommandozeile aktualisiert `aipager update` über das Installationsprogramm, dem aipager gehört.
+
+</details>
+
+<details>
+<summary><b>Ich nutze Bedrock oder Vertex. Funktionieren die Modell-Buttons?</b></summary>
+
+<br>
+
+Das Menü **Modell** der Tastatur und die Mini App bieten die Familien-Aliase von Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) und feste Modelle wie `claude-opus-5-5` und `claude-sonnet-5-5` an. Über die API von Anthropic zeigt ein Alias auf das neueste Modell seiner Familie. Auf Bedrock und Vertex kann derselbe Alias je nach Angebot deines Anbieters auf einen älteren Stand zeigen; schick `/model <full-id>`, um ein genaues Modell zu wählen.
+
+</details>
+
+<details>
+<summary><b>Was kostet es?</b></summary>
+
+<br>
+
+Nichts. aipager steht unter der MIT-Lizenz, der Bot gehört dir, und Claude Code nutzt weiter den Plan oder Schlüssel, den es schon nutzt.
+
+</details>
+
+## <a id="documentation"></a>Dokumentation
+
+| Seite | Worum es geht |
+|---|---|
+| [Befehle des Bots](commands.md) | Jeder Befehl, jeder Button, jede Einstellung und jede Option der Kommandozeile |
+| [Teambetrieb und Gruppen](groups.md) | Rollen, Stammordner, wer was antippen darf, das Vertrauensmodell |
+| [Sicherheitsmodell](security.md) | Vertrauensgrenze, Geheimnisse, Audit-Log, Netzwerk |
+| [Hook-Ereignisse](hooks.md) | Was jeder Hook von Claude Code in aipager tut |
+| [Architektur](architecture.md) | Die Teile von aipager, seine Dateien und Sockets |
+| [Fehlerbehebung](troubleshooting.md) | `aipager doctor` und Lösungen für häufige Probleme |
+| [Problemberichte](problem-reports.md) | Was ein Bericht enthält und wann aipager ihn anbietet |
+| [Mit einem Agenten installieren](install-with-an-agent.md) | Die Anleitung, der ein Coding-Agent folgt |
+
+## <a id="contributing"></a>Mitmachen
 
 ```sh
 git clone https://github.com/dev-aly3n/aipager.git && cd aipager
@@ -216,23 +389,16 @@ systemd-run --user --scope -q -p MemoryMax=2G -p MemorySwapMax=0 \
 ruff check aipager tests
 ```
 
-`dtach` kommt mit der Abhängigkeit `dtach-bin`, mehr braucht es nicht. Führ die Tests wie oben mit einer Speichergrenze aus (auf macOS ohne `systemd-run`): Sonst kann ein außer Kontrolle geratener Test den ganzen Speicher des Computers belegen.
-
-Wie Versionen veröffentlicht werden, steht in [CONTRIBUTING.md](../../../CONTRIBUTING.md).
+`dtach` kommt mit der Abhängigkeit `dtach-bin`, mehr braucht es nicht. Führ die Tests wie oben mit einer Speichergrenze aus (auf macOS ohne `systemd-run`): Sonst kann ein außer Kontrolle geratener Test den ganzen Speicher des Computers belegen. Wie Versionen veröffentlicht werden, steht in [CONTRIBUTING.md](../../../CONTRIBUTING.md).
 
 ## <a id="license"></a>Lizenz
 
 MIT; den vollständigen Text findest du in [LICENSE](../../../LICENSE).
 
-## <a id="docs"></a>Dokumentation
+<br>
 
-| Seite | Worum es geht |
-|---|---|
-| [Mit einem Agenten installieren](install-with-an-agent.md) | Die Schritte, denen ein Coding-Agent folgt, um aipager für seine Person zu installieren und einzurichten |
-| [Architektur](architecture.md) | Wie das Programm funktioniert, Diagramm der Teile, wo die Dateien und Sockets liegen |
-| [Hook-Ereignisse](hooks.md) | Jedes Ereignis, das aipager von Claude Code bekommt, mit seinen Feldern |
-| [Befehle des Bots](commands.md) | Befehle, Buttons, die Mini App, Sprachnachrichten und Dateien, alle `aipager`-Befehle und die Einstellungen aus der Umgebung |
-| [Teambetrieb und Gruppen](groups.md) | Einrichtung für mehrere Personen, Rollen, Regeln, Nachweis, wer was getan hat |
-| [Fehlerbehebung](troubleshooting.md) | Häufige Fehler und die Lösungstabelle von `aipager doctor` |
-| [Problemberichte](problem-reports.md) | Was ein Problembericht enthält, wohin er geht und wann aipager ihn anbietet |
-| [Sicherheitsmodell](security.md) | Vertrauensgrenze, Geheimnisse, Audit-Log, Netzwerkverbindungen |
+<div align="center">
+<a href="https://aipager.run"><img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/logo.png" width="32" height="32" alt=""></a>
+<br>
+<sub><a href="https://aipager.run">aipager.run</a></sub>
+</div>

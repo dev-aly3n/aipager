@@ -1,22 +1,166 @@
+<div align="center">
+
+<a href="https://aipager.run"><img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/logo.png" width="96" height="96" alt="aipager"></a>
+
 # aipager
 
-<!-- i18n-source: README.md @ c91598e -->
+<!-- i18n-source: README.md @ ec7afc2 -->
 
-> Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../../README.md))
+<h3>Claude artık sohbetlerinden biri.</h3>
 
-[![PyPI](https://img.shields.io/pypi/v/aipager?label=pypi&color=3775A9)](https://pypi.org/project/aipager/)
-[![Python](https://img.shields.io/pypi/pyversions/aipager?color=3775A9)](https://pypi.org/project/aipager/)
-[![License](https://img.shields.io/badge/license-MIT-black)](../../../LICENSE)
+[Claude Code](https://claude.com/claude-code) oturumların Telegram'da; ailenin, arkadaşlarının ve ekibinin hemen yanında.<br>
+Kendi bilgisayarında çalışırlar. Nerede olursan ol onları takip eder, sorularını yanıtlar ve sıradaki işi verirsin.
 
-[Claude Code](https://claude.com/claude-code) oturumları için Telegram üzerinden bir uzaktan kumanda. Claude senin bilgisayarında, ayrılmış bir terminalde (`dtach`) çalışır; sen de onu telefonundan kullanırsın: Claude'un yanıtlarını okur, ona mesaj gönderir, izin isteklerini ve sorularını yanıtlar, oturumlar arasında geçiş yaparsın; bunun için açık bir SSH bağlantısı tutman gerekmez.
+<p>
+<a href="https://pypi.org/project/aipager/"><img alt="PyPI" src="https://img.shields.io/pypi/v/aipager?style=flat-square&label=pypi&labelColor=181c20&color=2aabee"></a>
+<a href="https://pypi.org/project/aipager/"><img alt="Python" src="https://img.shields.io/pypi/pyversions/aipager?style=flat-square&labelColor=181c20&color=2aabee"></a>
+<a href="https://github.com/dev-aly3n/aipager/actions/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/dev-aly3n/aipager/test.yml?branch=main&style=flat-square&label=tests&labelColor=181c20"></a>
+<img alt="Linux and macOS" src="https://img.shields.io/badge/runs%20on-Linux%20%7C%20macOS-2aabee?style=flat-square&labelColor=181c20">
+<a href="../../../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-2aabee?style=flat-square&labelColor=181c20"></a>
+</p>
 
-[aipager.run](https://aipager.run) · [Belgeler](#docs) · [Değişiklik günlüğü](../../../CHANGELOG.md) · [GitHub'daki issue'lar](https://github.com/dev-aly3n/aipager/issues)
+**[Web sitesi](https://aipager.run)** · **[Kurulum](#install)** · **[Belgeler](#documentation)** · **[Güvenlik](security.md)** · **[Değişiklik günlüğü](../../../CHANGELOG.md)**
 
 **Başka bir dilde oku:** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Français](../fr/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
 
+<sub>Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../../README.md))</sub>
+
+<br>
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/hero.webp" width="100%" alt="Telegram'da yazılan bir mesaj terminaldeki Claude Code'a ulaşır ve sohbetteki tek bir kart, Claude çalışırken kendini günceller">
+
+<sub>Sen Telegram'a yazarsın. aipager bunu bilgisayarındaki Claude Code'a yazar ve tek bir kart, görev ilerledikçe kendini günceller.</sub>
+
+</div>
+
+<br>
+
+## <a id="why-aipager"></a>Neden aipager
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+**📟 Görev başına tek canlı kart**<br>
+Claude'un şu an ne yaptığı: çalıştırdığı araçlar, bağlam, maliyet ve değişen satırlar, ardından yanıt. Kart kendini günceller, böylece sohbet sakin kalır.
+
+</td>
+<td width="33%" valign="top">
+
+**⚡ İş sürerken de yaz**<br>
+Mesajın, Claude çalışırken bile, hemen oturuma yazılır; tıpkı terminalde yazmak gibi. 👀 gönderildi demek, 👍 Claude onu aldı demek.
+
+</td>
+<td width="33%" valign="top">
+
+**✅ Tek dokunuşla yanıtla**<br>
+İzin istekleri ve Claude'un soruları her yanıt için bir düğmeyle gelir. Bitmiş bir görevden kalan düğme, sıradaki görevi etkilemek yerine reddeder.
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
+**🛡️ Üç izin modu**<br>
+💬 Sor modu, 🤖 Otomatik mod (yeni oturumların varsayılanı) ve 🔓 Tam erişim modu; oturum başına ayarlanır ve `/mode` ile istediğin an değiştirilir.
+
+</td>
+<td width="33%" valign="top">
+
+**👥 Ekipler için**<br>
+Botu bir gruba ekle. Her mesaj gönderenin rolüyle çalışır, üyeler kendi klasörleriyle sınırlanabilir ve her dokunuş denetim günlüğüne yazılır.
+
+</td>
+<td width="33%" valign="top">
+
+**🔒 Arada kimse yok**<br>
+aipager sunucusu yok, hesap yok, açık port yok. Senin bot token'ın, senin bilgisayarın, senin sohbetlerin.
+
+</td>
+</tr>
+</table>
+
+## <a id="a-quick-tour"></a>Kısa bir tur
+
+### <a id="questions-come-to-you"></a>Sorular sana gelir
+
+Claude sana bir şey sorduğunda ya da izin istediğinde, soru her yanıt için bir düğmeyle sohbetine düşer ve sabitlenmiş çubuk seni neyin beklediğini söyler. Dokunuşun, klavyenin başındaymışsın gibi oturuma yazılır ve terminal de aynı yanıtı gösterir.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/question.webp" width="100%" alt="Claude zaman aşımını artırmayı mı yoksa cookie'yi beklemeyi mi soruyor; Telegram'da dokunulan yanıt terminalde seçiliyor">
+
+### <a id="three-permission-modes"></a>Üç izin modu
+
+Her oturum üç moddan birindedir ve `/mode` ile istediğin an, Claude çalışırken bile değiştirilir.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/modes.webp" width="100%" alt="Aynı görev Sor modunda, Otomatik modda ve Tam erişim modunda">
+
+| Mod | Ne olur |
+|---|---|
+| 💬 **Sor modu**<br>`/mode ask` | Claude her işlemden önce sorar. |
+| 🤖 **Otomatik mod**, varsayılan<br>`/mode auto` | Claude Code'un kendi güvenlik denetimi güvenli işlemleri çalıştırır, riskli olanları karar senin olsun diye durdurur. |
+| 🔓 **Tam erişim modu**<br>`/mode full` | Her şey hiçbir denetim olmadan çalışır. Yöneticiler için ve botla olan kendi özel sohbetinde senin için. |
+
+Sor modu ile Otomatik mod arasında geçiş yerinde olur, yeniden başlatma olmadan. Tam erişim moduna geçmek ya da ondan çıkmak oturumu yeniden başlatır ve konuşmayı korur. Claude'un soruları her modda sana gelir.
+
+### <a id="your-team-in-one-group"></a>Ekibin, tek bir grupta
+
+Botu bir gruba ekle ve her üyeye bir rol ver: `owner`, `admin`, `user` ya da `read_only`. Grupta bot yalnızca komutlara, kendi mesajlarına verilen yanıtlara ve bahsetmelere tepki verir (`@aipagerbot fix the tests`, `/web run the tests`) ve her mesaj gönderenin rolüyle çalışır: rolün kullanamadığı bir araç, çalışmadan önce reddedilir. `user` ya da `read_only` rolündeki bir üye yalnızca kendi kök klasöründe çalışır (varsayılan olarak `~/aipager-users/<label>`). Başka kişiler de botla kendi özel sohbetlerine sahip olabilir.
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/team.webp" width="100%" alt="Testler geçerken bir üyenin rolü yüzünden bir komutun reddedildiği bir ekip grubu">
+
+> **⚠️ Önemli:** Bir üye eklemek, ona bilgisayarında kod çalıştırma hakkı verir. Botu paylaşmadan önce [güven modelini](groups.md) oku.
+
+Kurmak için botu gruba yönetici olarak ekle (grubun durum çubuğunu sabitleyebilsin diye), `aipager config` komutunu yeniden çalıştır ve **Add a group scope** seçeneğini seç. Sihirbaz her üyeyi bir rolle ekler, üyelerin kök klasörünü sorar ve çalışan aipager'ın ayarlarını yeniden yükler.
+
+### <a id="a-dashboard-inside-telegram"></a>Telegram'ın içinde bir pano
+
+`/app`, Mini App'i açar: Durdur, Sonlandır, Yeniden başlat, Yeniden adlandır ve mod değiştirme düğmeleriyle oturumların, her `Write` ve `Edit` için bir diff görüntüleyici, ayarlar ve sahibi için Sorun bildir. Onu aipager'ın kendisi sunar, varsayılan olarak açıktır ve her istek Telegram'ın imzasıyla denetlenir. Birden fazla sohbetteysen, üstteki sohbet adları satırı aralarında geçiş yapar. `aipager miniapp disable` ile kapat ya da kendi adresine yönlendir ([nasıl](security.md#mini-app-tunnel)).
+
+### <a id="fifteen-languages"></a>On beş dil
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/languages.webp" width="420" align="right" alt="Farsça, sağdan sola ve Farsça rakamlarla bir izin isteği">
+
+- English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی ve Tiếng Việt konuşur.
+- `/language` ile birini seç ya da özel sohbetin Telegram uygulamanın dilini izlemesine izin ver.
+- Farsça ve Arapça sağdan sola okunur, kendi rakamlarıyla.
+- Yalnızca aipager'ın kendi metinleri değişir. Oturumların değişmez: Claude ona hangi dilde yazarsan o dilde yanıt verir.
+- Bu README ve [belgeler](#documentation) de çevrildi.
+
+<br clear="right">
+
+### <a id="and-the-small-things"></a>Ve küçük şeyler
+
+- **Çok oturum, tek bot.** Normal bir mesaj en son konuştuğun oturuma gider; o oturumla konuşmak için mesajlarından birine yanıt ver ya da `/x1 <message>` gönder.
+- **Hiçbir şey karışmaz.** Açık bir izin isteği ya da soru varken gönderilen mesaj sen yanıtlayana kadar bekler, böylece asla yanıt gibi okunmaz.
+- **Fotoğraf, dosya ve sesli mesaj.** Sesli mesajlar, isteğe bağlı `voice` ekiyle senin bilgisayarında metne çevrilir.
+- **Sana haber verir.** Neredeyse dolan bağlam, sıkıştırılan konuşma, biten bir oturum ve uzun süredir ses vermeyen bir oturum.
+- **Oturumlar her şeye dayanır.** Claude `dtach` içinde çalışır; terminali kapatsan, SSH kopsa ya da aipager'ı yeniden başlatsan da çalışmaya devam eder.
+
+## <a id="how-it-works"></a>Nasıl çalışır
+
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/how-it-works.webp" width="100%" alt="Claude Code, hook'u, aipager, Telegram ve sohbetlerin, yan yana">
+
+Claude Code gerçek bir terminalde, `dtach` içinde çalışır, böylece kimsenin bir pencereyi açık tutması gerekmez. Her adım bir [hook](hooks.md) tetikler; hook yerel bir soket üzerinden aipager'a tek bir datagram gönderir ve aipager sohbetindeki bir mesajı düzenler. Yanıtların da aynı yoldan geri döner: çağrıyı bekleten hook'a bir karar ya da oturuma tuş vuruşları. Terminal her zaman asıl kaynak olarak kalır. Ayrıntılar [mimaride](architecture.md).
+
 ## <a id="install"></a>Kurulum
 
-Bir kodlama ajanın mı var (Claude Code ya da shell kullanabilen herhangi bir ajan)? [@BotFather](https://t.me/BotFather) ile bir bot oluştur, botta Start'a dokun ve bu bilgisayardaki Claude Code'un hesabına giriş yaptığından emin ol. Bot token'ını ajanın hiç okumak zorunda kalmayacağı bir dosyaya kaydet (token'ı yapıştır, Enter'a, sonra Ctrl-D'ye bas):
+Linux ya da macOS, her mimari. Bu bilgisayarda oturum açılmış Claude Code'a ve bir Telegram botuna ihtiyacın var: [@BotFather](https://t.me/BotFather) ile bir tane oluştur ve içinde Start'a bas.
+
+```sh
+curl -fsSL https://aipager.run/install | sh   # uv, pipx ya da Homebrew: hangisi varsa
+aipager config                                # bot token'ın, sohbetin, Claude Code'un hook'ları
+aipager service install                       # oturumu kapatsan da aipager'ı çalışır tutar
+aipager session api                           # bu klasörde ve sohbetinde Claude Code
+```
+
+Yükleyici varsa `uv` kullanır, yoksa `pipx`, o da yoksa (macOS'te) Homebrew; hiçbiri yoksa `uv` kurar. `dtach` aipager ile birlikte gelir ([`dtach-bin`](https://pypi.org/project/dtach-bin/) paketi), yani kurulacak başka bir şey yok. `aipager config` bir sihirbazdır: bot token'ını ve sohbetini denetler, sonra aipager'ın hook'larını senin için `~/.claude/settings.json` dosyasına ekler. Hiçbir dosyayı elle düzenlemezsin.
+
+<details>
+<summary><b>Bir kodlama ajanı kursun</b></summary>
+
+<br>
+
+Claude Code ya da shell'i olan başka bir ajanın mı var? Botu oluştur, içinde Start'a bas ve bot token'ını ajanının hiç okumak zorunda kalmayacağı bir dosyaya kaydet (token'ı yapıştır, Enter'a bas, sonra Ctrl-D):
 
 ```sh
 mkdir -p ~/.config/aipager
@@ -25,60 +169,40 @@ rm -f ~/.config/aipager/bot-token
 chmod 600 ~/.config/aipager/bot-token
 ```
 
-Sonra ajanına şu mesajı ver:
+Sonra ajanına şu prompt'u ver:
 
 ```text
 Install aipager for me by following https://aipager.run/agent.md. My Telegram bot token is in ~/.config/aipager/bot-token and my Telegram user id is <your id>.
 ```
 
-Telegram kimliğini bilmiyorsan ajana bunu söyle; onu bulabilir.
+Telegram kullanıcı kimliğini bilmiyorsan bunu söyle; ajan onu bulabilir. İzlediği rehber, token'ın güvenle nasıl teslim edileceği de dahil, [Ajanla kurulum](install-with-an-agent.md). Betikler için `aipager setup --token-file FILE --chat-id ID` aipager'ı hiç soru sormadan kurar ([setup komutu](commands.md#command-line-aipager-setup-for-coding-agents)).
 
-Ajanın izlediği talimatlar, token'ı ona güvenle nasıl vereceğin de dahil, [Ajanla kurulum](install-with-an-agent.md) sayfasındadır. Kendin kurmak için okumaya devam et.
+</details>
 
-Linux ya da macOS, herhangi bir mimari. `dtach`, [`dtach-bin`](https://pypi.org/project/dtach-bin/) bağımlılığı sayesinde kendiliğinden kurulur: ayrı bir sistem paketi gerekmez.
-
-### <a id="one-line-install-recommended"></a>Tek satırla kurulum (önerilen)
+### <a id="other-ways-to-install"></a>Diğer kurulum yolları
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dev-aly3n/aipager/main/install.sh | sh
+uv tool install aipager                        # uv: macOS'te önerilir, kendi Python'unu getirir
+pipx install aipager                           # pipx
+brew install dev-aly3n/tap/aipager             # Homebrew, macOS ve Linuxbrew'da (aşağıdaki nota bak)
+nix profile install github:dev-aly3n/aipager   # Nix: claude dahil değil (aşağıya bak)
+snap install aipager                           # Snap: sıkı yalıtım, claude içinde, çalışma klasörleri ~/ altında
 ```
 
-Varsa `uv`, yoksa `pipx`, o da yoksa (yalnızca macOS'ta) Homebrew kullanır. Hiçbiri yoksa önce `uv` aracını (Astral'ın Python araç yöneticisi) kurar ve aipager'ı onunla kurar.
+Ya da içinde Python, Node, `claude` ve `dtach` olan [Docker](#docker) ile çalıştır.
 
-### <a id="uv-recommended-on-macos"></a>uv (macOS'ta önerilen)
+<details>
+<summary><b>macOS 26'da (Tahoe) Homebrew</b></summary>
 
-```sh
-uv tool install aipager     # uv zaten kuruluysa
-```
+<br>
 
-Ya da önce uv aracını kurmak için:
+Formül, Homebrew'un `python@3.12` bottle'ı ile Xcode Command Line Tools'un uyumlu olduğu sürece çalışır, ama ikisi zaman zaman birbirinden kopar. macOS 26'da kurulum `pyexpat _XML_SetAllocTrackerActivationThreshold` sembol hatasıyla başarısız olur ([upstream issue](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). Xcode'u ve Command Line Tools'u güncellemek genelde düzeltir, ama `uv tool install aipager` ile bu sorun hiç çıkmaz. Formül `dtach`'ı Homebrew'dan alır ve aipager'ı Homebrew'un yönettiği bir Python ortamına kurar.
 
-```sh
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv tool install aipager
-```
-
-uv kendi Python yorumlayıcısını getirir, bu yüzden sistem Python'u ne durumda olursa olsun her macOS ya da Linux sürümünde çalışır; böylece aşağıdaki Homebrew bölümünde anlatılan Homebrew Python'u ile Xcode arasındaki çakışmadan kaçınmış olursun.
-
-### <a id="pipx"></a>pipx
-
-```sh
-pipx install aipager
-```
-
-### <a id="homebrew-tap-macos-linuxbrew"></a>Homebrew tap (macOS, Linuxbrew)
-
-> **Not:** macOS'ta önerilen yol `uv tool install aipager`. brew formülü, Homebrew'un `python@3.12` paketi ile Xcode / Command Line Tools uyumlu olduğunda çalışır, ama zaman zaman aralarında uyumsuzluk çıkar; en son **macOS Tahoe (26.x)** üzerinde, kurulum `pyexpat _XML_SetAllocTrackerActivationThreshold` sembol hatasıyla duruyordu ([upstream issue](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). Xcode'u ve Command Line Tools'u güncellemek genelde işe yarar, ama uv kullanmak daha kolay.
-
-```sh
-brew install dev-aly3n/tap/aipager
-```
-
-`dtach` paketini Homebrew'un standart formülünden alır ve aipager'ı Homebrew'un yönettiği bir Python venv'ine kurar.
+</details>
 
 ### <a id="docker"></a>Docker
 
-İçinde python, node, `claude` ve `dtach` hazır gelen bir imaj; sisteme Python ya da Node kurmak istemediğin bir VPS, NAS ya da Raspberry Pi için kullanışlı. Birden çok mimari (amd64, arm64).
+Python, Node, `claude` ve `dtach` içeren bağımsız bir imaj; ana makinede Python ya da Node istemediğin bir VPS, NAS ya da Raspberry Pi için ideal. Çoklu mimari (amd64, arm64).
 
 ```sh
 # 1. Kurulum sihirbazını bir kez çalıştır (etkileşimli)
@@ -87,7 +211,7 @@ docker run --rm -it \
   -v aipager-config:/home/aipager/.config/aipager \
   ghcr.io/dev-aly3n/aipager:latest config
 
-# 2. aipager'ı çalıştır (arka planda, otomatik yeniden başlatmayla)
+# 2. aipager'ı başlat (arka planda, otomatik yeniden başlatmayla)
 docker run -d --restart=unless-stopped --name aipager \
   -v "$HOME/.claude:/home/aipager/.claude" \
   -v aipager-config:/home/aipager/.config/aipager \
@@ -95,20 +219,25 @@ docker run -d --restart=unless-stopped --name aipager \
   ghcr.io/dev-aly3n/aipager:latest
 ```
 
-Claude'un düzenlemesini istediğin klasörleri `/workspace` altına bağla. `~/.claude` klasörünü bağlamak Claude kimlik bilgilerini ve konuşma geçmişini taşır; giriş yapmak için sistemde bir kez `claude` çalıştır ya da konteynerin içinde giriş yapmak için `docker exec -it aipager claude` kullan.
+Claude'un düzenlemesini istediğin klasörleri `/workspace` altına bağla. `~/.claude` bağlaması Claude kimlik bilgilerini ve konuşma geçmişini taşır: giriş yapmak için ana makinede bir kez `claude` çalıştır ya da konteynerin içinde giriş için `docker exec -it aipager claude` kullan.
 
-Etiketler: `latest`, `1.3`, `1.3.4` (tam sürüm ve küçük sürüm başına birer tane).
+Etiketler: `latest`, `1.3`, `1.3.4` (biri tam sürüm, biri küçük sürüm için).
 
-### <a id="nix-flake"></a>Nix flake
+### <a id="nix"></a>Nix
 
 ```sh
 nix run github:dev-aly3n/aipager -- --version
 nix profile install github:dev-aly3n/aipager
 ```
 
-aipager'ı nixpkgs'ten sabitlenmiş bağımlılıklarla kaynaktan derler. `dtach` paketini Nix sağlar; `claude` ise **sağlanmaz**: onu ayrıca kur (`nix profile install nixpkgs#nodejs && npm install -g @anthropic-ai/claude-code` ya da Anthropic'in belgelerine göre).
+aipager'ı sabitlenmiş nixpkgs ile kaynaktan derler. `dtach` Nix'ten gelir; `claude` gelmez, onu ayrıca kur (`nix profile install nixpkgs#nodejs && npm install -g @anthropic-ai/claude-code` ya da Anthropic'in belgelerini izle).
 
-Bildirimsel bir NixOS ya da Home Manager yapılandırması için aipager'ı bir flake girdisi olarak ekle ve paketini `environment.systemPackages` içine al:
+<details>
+<summary><b>NixOS ve Home Manager</b></summary>
+
+<br>
+
+aipager'ı bir flake girdisi olarak ekle ve paketini `environment.systemPackages` içine koy:
 
 ```nix
 {
@@ -126,86 +255,130 @@ Bildirimsel bir NixOS ya da Home Manager yapılandırması için aipager'ı bir 
 }
 ```
 
-Ardından `aipager service install` bir systemd kullanıcı hizmeti kurar.
+Ardından `aipager service install` bir systemd kullanıcı birimi kurar.
 
-### <a id="snap"></a>Snap
+</details>
 
-```sh
-snap install aipager
-```
+## <a id="everyday-use"></a>Günlük kullanım
 
-İçinde python, node, `claude`, `dtach` ve aipager bulunan, sıkı yalıtımlı bir snap. Snap'in korumalı alanı yüzünden çalışma klasörleri `~/` altında olmalı (örneğin `~/projects/foo`). Bildirim dosyası [`packaging/snap/`](../../../packaging/snap/) içinde.
+### <a id="in-telegram"></a>Telegram'da
 
-## <a id="configure"></a>Yapılandırma
+| Gönder | Amaç |
+|---|---|
+| `/status` | Bu sohbetin oturumlarını, her biri durumu ve düğmeleriyle görmek. |
+| `/new x1` | x1 adında bir oturum başlatmak. `/new x1 fix the tests` ilk mesajı da gönderir. |
+| `/x1` | x1'i mesajlarının gideceği oturum yapmak. `/x1 <message>` ona doğrudan bir mesaj gönderir. |
+| `/stop` | Süren görevi kesmek ve sırada bekleyenleri atmak. |
+| `/mode` | Sor modu, Otomatik mod ve Tam erişim modu arasında geçmek. |
+| `/app` | Mini App'i açmak. |
+| `/language` | aipager'ın bu sohbette konuşacağı dili seçmek. |
+| `/update` | aipager'ı ve Claude Code'u güncelleyip yerinde yeniden başlatmak (yöneticiler). |
+| `/help` | Göreve göre kısa bir rehber. |
 
-```sh
-aipager config
-```
+Her komut, düğme ve ayar [Bot komutları](commands.md) sayfasında.
 
-Etkileşimli bir sihirbaz: Telegram bot token'ını ([@BotFather](https://t.me/BotFather)'dan) ve sohbet kimliğini sorar, ikisini doğrular ve gereken hook'ları `~/.claude/settings.json` dosyasına kendisi ekler. Hiçbir dosyayı elle düzenlemen gerekmez.
-
-aipager'ı bir betikten ya da bir kodlama ajanıyla başkası için mi kuruyorsun? `aipager setup --token-file FILE --chat-id ID` aynı şeyi soru sormadan yapar (bkz. [setup komutu](commands.md#command-line-aipager-setup-for-coding-agents) ve [ajanlar için talimatlar](install-with-an-agent.md)).
-
-## <a id="run"></a>Çalıştırma
-
-```sh
-aipager start
-```
-
-aipager ön planda kalır. Başka bir terminalde bir Claude oturumu başlat:
+### <a id="on-the-command-line"></a>Komut satırında
 
 ```sh
-aipager session dev
+aipager start                             # aipager'ın kendisi, ön planda
+aipager session dev                       # burada dev adında bir oturum başlat ya da ona bağlan
+aipager session dev --continue            # bu klasördeki son Claude konuşmasını sürdür
+aipager session dev -- --resume abc1234   # claude'un diğer seçenekleri olduğu gibi geçer
+aipager doctor                            # kurulumu denetle
 ```
 
-Bu, içinde Claude Code çalışan `claude-dev` adlı bir dtach oturumu oluşturur (zaten varsa ona bağlanır). aipager onu birkaç saniye içinde bulur ve Telegram göstermeye başlar. Oturumu Telegram'dan da başlatabilirsin: bota `/new dev` gönder. Sonra yeniden bağlanmak için aynı komutu çalıştır; Claude'u durdurmadan çıkmak için terminali ya da tmux bölmesini kapat (oturum çalışmaya devam eder).
+Claude'u durdurmadan bir oturumdan çıkmak için terminali ya da tmux bölmesini kapat: oturum çalışmaya devam eder ve aynı komut seni yeniden bağlar.
 
-dtach oturumu kapandıysa (örneğin bilgisayar yeniden başladıysa) ve Claude'un konuşmasına diskten devam etmek istiyorsan `--continue` ekle:
+`aipager service install`, aipager'ı arka planda çalışır tutar: Linux'ta bir systemd kullanıcı birimi (`~/.config/systemd/user/aipager.service`), macOS'te bir launchd ajanı (`~/Library/LaunchAgents/com.aipager.daemon.plist`). İki durumda da aipager ev klasöründe çalışır; başka bir klasör seçmezsen yeni oturum da orada başlar. `aipager service start`, `stop`, `status`, `logs` ve `uninstall` onu yönetir.
 
-```sh
-aipager session dev --continue    # bu klasördeki son claude konuşması
-```
+## <a id="security"></a>Güvenlik
 
-Sona `--resume <session-id>` (ya da başka herhangi bir claude bayrağı) da ekleyebilirsin:
+- **aipager sunucusu yok.** aipager, Telegram Bot API ile senin bot token'ınla konuşur. aipager hesabı da aipager hizmeti de yoktur.
+- **Açık port yok.** aipager yalnızca loopback'i dinler. Mini App, her isteğin Telegram'ın imzasını taşıması gereken bir Cloudflare tüneliyle dışarı çıkar ve `aipager miniapp disable` onu kapatır.
+- **Her yanıt kayıtta.** Her İzin ver, Reddet ve yanıt `~/.claude/aipager-audit.jsonl` dosyasına eklenir; grupta kimin dokunduğuyla birlikte.
+- **Kararı yine Claude Code verir.** Neyin sorulacağını Claude Code ayarların belirler. aipager yalnızca soruyu iletir ve asla yetki yükseltmez: sudo yok, her şey senin kullanıcınla çalışır.
 
-```sh
-aipager session dev -- --resume abc1234
-```
+Claude kimlik bilgini neyin koruduğu da dahil tüm tablo [güvenlik modelinde](security.md).
 
-### <a id="run-as-a-service-survives-logout"></a>Hizmet olarak çalıştırma (oturumu kapatınca da çalışır)
+## <a id="faq"></a>Sık sorulanlar
 
-```sh
-aipager service install
-```
+<details>
+<summary><b>Claude'un mobil uygulamalarından farkı ne?</b></summary>
 
-Linux'ta bu, `~/.config/systemd/user/aipager.service` içine bir systemd kullanıcı hizmeti yazar ve başlatır. macOS'ta `~/Library/LaunchAgents/com.aipager.daemon.plist` içine bir launchd plist'i yazar ve başlatır. Her iki durumda da aipager ev klasöründe çalışır; başka bir klasör seçmezsen yeni oturum da orada başlar. Alt komutlar: `start`, `stop`, `status`, `logs`, `uninstall`.
+<br>
 
-## <a id="team-mode-groups-and-other-people"></a>Ekip modu (gruplar ve diğer kişiler)
+Claude'un uygulamaları Anthropic'in barındırdığı asistanla konuşur. aipager seni kendi bilgisayarında çalışan bir Claude Code oturumuna bağlar: senin deposun, senin araçların, senin ortamın.
 
-Varsayılan olarak aipager kişisel bir bottur: sen ve bot, tek bir özel sohbette. Paylaşmak için bir Telegram grubu, başka kişilerin botla olan özel sohbetlerini ya da ikisini birden ekle. Grup için: botu gruba ekle (grubun durum satırını sabitleyebilmesi için yönetici olarak), `aipager config` komutunu yeniden çalıştır ve **Add a group scope** seçeneğini seç. Sihirbaz seni (kendi özel sohbetinin sahibi olarak) grubun sahibi olarak önerir, her üyeyi bir rolle (`owner`, `admin`, `user` ya da `read_only`) ekler, üyelerin kök klasörünü sorar ve aipager'ın ayarlarını yeniden başlatmadan yeniden yükler. Grupta bot yalnızca komutlara, kendi mesajlarına verilen yanıtlara ve kendisinin anıldığı mesajlara tepki verir (`@aipagerbot fix the tests`, `/jim run the tests`) ve her mesaj, gönderen kişinin rolüyle çalışır. `user` ya da `read_only` rolündeki bir üye oturumları yalnızca kendi sohbetinin kök klasöründe başlatır ve orada tutar (varsayılan `~/aipager-users/<label>`). **Bir üye eklemek, ona senin bilgisayarında kod çalıştırma hakkı vermektir**: güven modelinin tamamı [Ekip modu ve gruplar](groups.md) sayfasında anlatılıyor.
+</details>
 
-## <a id="what-it-does"></a>Neler yapar
+<details>
+<summary><b>Kodum bilgisayarımdan çıkıyor mu?</b></summary>
 
-- Her Claude Code oturumunun ne yaptığını Telegram'da gösterir: çalışıyor mu hazır mı, hangi araçları kullanıyor, bağlam %'si, maliyet ve değişen satırlar, görev başına tek bir kartta; ardından Claude'un yanıtı
-- Mesajlarını Claude'a **hemen** gönderir, o çalışırken bile: birkaç tane gönder, Claude onları terminalde yazıyormuşsun gibi kendisi sıraya koyar. 👀 gönderildi demek, 👍 Claude onu aldı demek
-- Açık bir izin isteği ya da soru varken mesajı bekletir, böylece mesaj asla ona verilmiş bir yanıt gibi okunmaz; yanıt verdiğinde de gönderir
-- Claude'un izin isteklerini ve sorularını düğmelerle gösterir (İzin ver, Reddet, Hep izin ver, her seçenek için bir düğme); zaten bitmiş bir görevden kalan bir düğme, o anki işi etkilemek yerine reddeder
-- Oturum başına üç izin modu, `/mode` ile değiştirilir: 💬 Sor modu (Claude her işlemden önce sorar), varsayılan olan 🤖 Otomatik mod (Claude Code'un kendi güvenlik denetimi güvenli işlemleri geçirir, riskli olanları karar senin olsun diye durdurur) ve 🔓 Tam erişim modu (her şey hiçbir denetim olmadan çalışır; yöneticiler için ve kendi özel sohbetinde senin için)
-- Oturumları sohbetten başlatır: `/new x1` hemen bir tane başlatır (`/new x1 fix the tests` ilk mesajı da gönderir), `/settings` içindeki mod, model ve klasörle ve bunları değiştirmek için düğmelerle
-- Fotoğraf, dosya ve sesli mesaj kabul eder (sesli mesajlar, sesli mesaj paketiyle, senin bilgisayarında metne çevrilir)
-- Bağlam neredeyse dolduğunda, konuşma sıkıştırıldığında, bir oturum sona erdiğinde ve biri uzun süre sessiz kaldığında haber verir
-- Tek bir botla aynı anda birden çok oturumu yönetir; istersen her araç için roller ve kurallarla ekip modu ([Ekip modu ve gruplar](groups.md))
-- English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی ve Tiếng Việt konuşur: yalnızca aipager'ın kendi metinleri, asla oturumların ya da Claude'un yanıtları değil ([Diller](commands.md#languages)). Bu README ve belgeler de çevrildi (yukarıdaki **Başka bir dilde oku** satırına bak)
+<br>
 
-### <a id="mini-app"></a>Mini App
+aipager, Telegram'a yalnızca sohbetlerinde gördüklerini kendi bot token'ınla gönderir; arada hiçbir aipager sunucusu yok. Claude Code'un kendisi ise her zamanki gibi Anthropic ile konuşur.
 
-`/app`, Telegram'ın içinde bir panel açar: Durdur, Sonlandır, Yeniden başlat, Yeniden adlandır ve mod değiştirme ile oturumların, `Write`/`Edit` değişiklikleri için diff görünümü, ayarlar ve sahip için “Sorun bildir”. Onu aipager'ın kendisi sunar ve **varsayılan olarak açıktır**; her istek, Telegram'ın `initData` imzasıyla doğrulanır. Birden fazla sohbette bulunuyorsan (kendi özel sohbetin ve bir grup), üstteki sohbet adları satırı aralarında geçiş yapar. `aipager miniapp enable|disable|status` ile yönet ya da yönetilen tünel yerine kendi adresine yönlendir: bkz. [Güvenlik modeli](security.md#mini-app-tunnel).
+</details>
 
-### <a id="note-on-model-buttons-bedrock--vertex-users"></a>Model düğmeleri hakkında (Bedrock ve Vertex kullanıcıları)
+<details>
+<summary><b>dtach nedir?</b></summary>
 
-Kalıcı klavyedeki **Model** alt menüsü (ve Mini App'teki model seçici), Claude Code'un aile takma adlarını (`sonnet`, `opus`, `haiku`, `fable` ve `opusplan`) ve `claude-opus-5-5` ile `claude-sonnet-5-5` gibi sabitlenmiş modelleri sunar (tam liste [Kalıcı klavye](commands.md#persistent-keyboard) bölümünde). Anthropic API'sinde bir takma ad her zaman kendi ailesinin en yeni modelini gösterir. **Bedrock** ve **Vertex** üzerinde aynı takma adlar, sağlayıcında ne olduğuna bağlı olarak daha eski sürümleri gösterebilir. Bu hizmetler üzerinden çalışıyorsan ve belirli bir model gerekiyorsa sohbetten `/model <full-id>` gönder.
+<br>
 
-## <a id="developing-locally"></a>Kendi bilgisayarında geliştirme
+Bir terminali ayıran minik bir program. Terminal kapandığında ya da SSH koptuğunda Claude Code'u canlı tutar, böylece bir saat sonra gönderdiğin yanıt bile canlı bir oturuma ulaşır. aipager ile birlikte gelir.
+
+</details>
+
+<details>
+<summary><b>Ya Claude yoldan çıkarsa?</b></summary>
+
+<br>
+
+İstekler senin dokunuşunu bekler, `/stop` görevi keser ve sırada ne varsa atar, `/kill` oturumu sonlandırır ve bitmiş bir görevin düğmeleri reddeder.
+
+</details>
+
+<details>
+<summary><b>Nasıl güncellerim?</b></summary>
+
+<br>
+
+`/update` gönder: aipager'ı ve Claude Code'u denetler ve yeni olanı kurar; 🔄 Şimdi yeniden başlat da aipager'ı, hizmet olarak çalışsın ya da çalışmasın, yeniden ayağa kaldırır. Oturumların bu sırada çalışmaya devam eder. Komut satırında `aipager update`, aipager'ı kuran yükleyiciyle günceller.
+
+</details>
+
+<details>
+<summary><b>Bedrock ya da Vertex kullanıyorum. Model düğmeleri çalışır mı?</b></summary>
+
+<br>
+
+Klavyedeki **Model** menüsü ve Mini App, Claude Code'un aile takma adlarını (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) ve `claude-opus-5-5`, `claude-sonnet-5-5` gibi sabit modelleri sunar. Anthropic API'sinde bir takma ad, ailesinin en yeni modelini gösterir. Bedrock ve Vertex'te aynı takma ad, sağlayıcının sunduğuna göre daha eski bir sürümü gösterebilir; belirli bir modeli seçmek için `/model <full-id>` gönder.
+
+</details>
+
+<details>
+<summary><b>Ücreti ne kadar?</b></summary>
+
+<br>
+
+Hiç. aipager MIT lisanslıdır, bot senindir ve Claude Code zaten kullandığı planı ya da anahtarı kullanmaya devam eder.
+
+</details>
+
+## <a id="documentation"></a>Belgeler
+
+| Sayfa | İçinde ne var |
+|---|---|
+| [Bot komutları](commands.md) | Her komut, düğme, ayar ve komut satırı seçeneği |
+| [Ekip modu ve gruplar](groups.md) | Roller, kök klasörler, kimin neye dokunabileceği, güven modeli |
+| [Güvenlik modeli](security.md) | Güven sınırı, gizli bilgiler, denetim günlüğü, ağ |
+| [Hook olayları](hooks.md) | Claude Code'un her hook'unun aipager'da ne yaptığı |
+| [Mimari](architecture.md) | aipager'ın parçaları, dosyaları ve soketleri |
+| [Sorun giderme](troubleshooting.md) | `aipager doctor` ve sık sorunların çözümleri |
+| [Sorun raporları](problem-reports.md) | Bir raporda ne olduğu ve aipager'ın onu ne zaman önerdiği |
+| [Ajanla kurulum](install-with-an-agent.md) | Bir kodlama ajanının izlediği rehber |
+
+## <a id="contributing"></a>Katkıda bulunmak
 
 ```sh
 git clone https://github.com/dev-aly3n/aipager.git && cd aipager
@@ -216,23 +389,16 @@ systemd-run --user --scope -q -p MemoryMax=2G -p MemorySwapMax=0 \
 ruff check aipager tests
 ```
 
-`dtach`, `dtach-bin` bağımlılığıyla gelir, başka bir şey gerekmez. Testleri yukarıdaki gibi bellek sınırıyla çalıştır (macOS'ta `systemd-run` olmadan): yoksa kontrolden çıkan bir test bilgisayarın tüm belleğini tüketebilir.
-
-Sürüm yayınlama süreci [CONTRIBUTING.md](../../../CONTRIBUTING.md) içinde.
+`dtach`, `dtach-bin` bağımlılığıyla gelir, başka bir şey gerekmez. Testleri yukarıdaki gibi bellek sınırıyla çalıştır (macOS'te `systemd-run` olmadan): yoksa kontrolden çıkan bir test makinenin tüm belleğini alabilir. Sürüm yayınlama süreci [CONTRIBUTING.md](../../../CONTRIBUTING.md) dosyasında.
 
 ## <a id="license"></a>Lisans
 
-MIT; tam metin [LICENSE](../../../LICENSE) içinde.
+MIT. Bkz. [LICENSE](../../../LICENSE).
 
-## <a id="docs"></a>Belgeler
+<br>
 
-| Sayfa | Konusu |
-|---|---|
-| [Ajanla kurulum](install-with-an-agent.md) | Bir kodlama ajanının aipager'ı kendi kişisi için kurup yapılandırdığı adımlar |
-| [Mimari](architecture.md) | Programın nasıl kurulduğu, parçaların şeması, dosyaların ve soketlerin yerleri |
-| [Hook olayları](hooks.md) | aipager'ın Claude Code'dan aldığı her olay, alanlarıyla |
-| [Bot komutları](commands.md) | Komutlar, düğmeler, Mini App, sesli mesajlar ve dosyalar, tüm `aipager` komutları ve ortam ayarları |
-| [Ekip modu ve gruplar](groups.md) | Birden çok kişi için kurulum, roller, kurallar, kimin ne yaptığı |
-| [Sorun giderme](troubleshooting.md) | Sık karşılaşılan arızalar ve `aipager doctor` çözüm tablosu |
-| [Sorun raporları](problem-reports.md) | Bir sorun raporunun neler içerdiği, nereye gittiği ve aipager'ın onu ne zaman önerdiği |
-| [Güvenlik modeli](security.md) | Güven sınırı, gizli bilgiler, denetim kaydı, ağ bağlantıları |
+<div align="center">
+<a href="https://aipager.run"><img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/logo.png" width="32" height="32" alt=""></a>
+<br>
+<sub><a href="https://aipager.run">aipager.run</a></sub>
+</div>
