@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The agents under an answer keep their indent when one is waiting.** An agent waiting for its own agents was marked with ⏸, which Telegram draws as a wide emoji, so its row's 🤖 sat as far right as the indented agents below it. Its mark is now a narrow ‖, like the ○ and ✓ of the other rows, in every language.
 - **Claude's questions arrive whole.** A question on the busy card stopped after 120 characters and each option's description after 60, mid-word. Now the question and its options are shown as Claude wrote them, on the card and as their own message, and across a restart; only a form too long for one Telegram message is shortened, at a word, with "…".
 - **The mode buttons on the new-session card read naturally in other languages.** In 11 languages, Persian included, they said a word-for-word "Ask mode instead". They now say what the /mode card's buttons say, "Switch to Ask mode".
+- **A tap or a message is no longer held up while a busy group waits to send another message's busy card.** A message that starts a turn now sends its busy card in the background, as a message sent during a turn already did, so an Allow tap or the next message is handled at once.
+- **A background agent that finishes while a new message's card is being set up no longer stays "still working".** Its card now ends when the job does, instead of keeping a live Stop button.
 
 ## [1.3.4] - 2026-10-15
 

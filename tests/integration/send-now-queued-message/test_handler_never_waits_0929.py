@@ -16,6 +16,7 @@ import asyncio
 import pytest
 
 from aipager import preferences as prefs
+from tests.card_tasks import drain_card_tasks
 
 CHAT = 256113222
 
@@ -75,14 +76,17 @@ def test_queued_messages_reach_claude_while_the_card_is_stuck(
 
 def test_a_message_that_starts_a_turn_still_gets_its_card(replay, vloop,
                                                          pty):
-    """The first message (no turn running) still waits for its card, as
-    before: the card is up when its handler returns."""
+    """The first message (no turn running) gets its card too. Since
+    2026-10-16 that card is sent in the background like a queued message's
+    (``test_turn_card_in_background_1016.py``): it is up once the card step
+    is drained, not necessarily when the handler returns."""
     r = replay
 
     async def scenario():
         w = r.worker()
         r.say(1, "first")
         await r.updates.join()
+        await drain_card_tasks()
         cards = [c for c in r.chat.cards.values() if c["reply_to"] == 1]
         w.cancel()
         return cards

@@ -111,8 +111,9 @@ _card_retry_sleep = asyncio.sleep
 # the card does not move at all (None means "try the two-step copy").
 _COPY_REFUSED = object()
 
-# Strong references to the card steps a queued message's handler starts in
-# the background (`_card_for_injected`), so none is collected mid-flight.
+# Strong references to the card steps a message's handler starts in the
+# background (`_card_for_injected`, for every injected message, whether it
+# starts a turn or is queued behind one), so none is collected mid-flight.
 _CARD_TASKS: set = set()
 
 
@@ -122,7 +123,7 @@ def _card_task_done(task: "asyncio.Task") -> None:
         return
     exc = task.exception()
     if exc is not None:
-        log.warning("busy card step for a queued message failed",
+        log.warning("busy card step for an injected message failed",
                     exc_info=exc)
 
 _RICH_LIMIT = 32_768  # UTF-8 byte ceiling for rich messages
@@ -3869,20 +3870,32 @@ class AnimationMixin:
 
     async def _card_for_injected(self, sess: TrackedSession, *,
                                  was_busy: bool) -> None:
-        """The busy card for a message just injected. A message that starts
-        a turn (*was_busy* False) waits for its card, as before. One queued
-        behind a running turn does NOT: the card step waits for the card's
-        lock, which a tick holds while its edit waits for a flood token, and
-        PTB handles updates one at a time, so waiting here held every later
-        message back from Claude (live test 2026-09-29: 18 s). For that
-        message the step runs in the background; there is usually nothing
-        for it to do."""
-        if not was_busy:
-            await self._send_busy_and_animate(sess)
-            return
-        # The turn is read NOW, as the awaited call did, so a step that only
-        # runs after a later event cannot act for a turn it was not asked
-        # about.
+        """The busy card for a message just injected, run in the background
+        so the handler that called this returns at once. PTB handles
+        updates one at a time, so a handler that waits for the card holds
+        every later update, from every chat, behind it: a tap on Allow,
+        /stop, the next message. For a message queued behind a running turn
+        (*was_busy* True) the card step waits for the card's lock, which a
+        tick holds while its edit waits for a flood token (live test
+        2026-09-29: 18 s); for a message that starts a turn the card's own
+        send is a paced ornament, which in a busy group waits for a send
+        slot (fake-Telegram e2e 2026-10-15: 11 to 35 s, the Allow tap held
+        until the card went out).
+
+        Nothing the handler does after this call needs the card. Everything
+        that does copes with a card not there yet, as it already did for
+        the card the turn's own UserPromptSubmit hook opens from the hook
+        receiver's task: the step claims ``busy_msg_id = -1`` under
+        ``sess.animate_lock`` before its send, a permission prompt that
+        comes first is shown as its own message (8.99), the finish path
+        takes the same lock and so waits for a send in flight, a Stop types
+        its Escapes at once and then takes that lock too (the card in
+        flight lands and is settled as stopped), and a step that only runs
+        after its turn ended or was replaced sends nothing.
+        The turn is read NOW, as the awaited call did, so a step that only
+        runs after a later event cannot act for a turn it was not asked
+        about. *was_busy* is kept for the callers' record; both kinds of
+        message take the same path."""
         task = asyncio.create_task(
             self._send_busy_and_animate(sess, turn=sess.turn_seq))
         _CARD_TASKS.add(task)
@@ -4116,6 +4129,17 @@ class AnimationMixin:
                             bool(sess.job_grace_until),
                         )
                     await self._close_superseded_card(sess)
+                    if carried_agents or carried_shells:
+                        # Read again after the old card's settling edit,
+                        # which can wait seconds for a flood token: an
+                        # agent that stopped meanwhile must not be carried
+                        # back in as running (its card would then never
+                        # finish), and one that started meanwhile must not
+                        # be dropped by the reset below. (Only when the
+                        # job's agents are carried at all: a reclaimed job
+                        # drops its agents, as before.)
+                        carried_agents = dict(sess.active_subagents)
+                        carried_shells = sess.job_shell_ids()
                     sess.busy_msg_id = None
                 elif sess.animate_task and not sess.animate_task.done():
                     return  # already showing busy — original race guard, unchanged

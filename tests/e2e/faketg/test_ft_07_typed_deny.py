@@ -83,11 +83,16 @@ def _standin(inst, where):
     since = fake.mark()
     _msg, deny = fake.wait_button(G, "Deny", since=0, message_text_contains=label)
     cb = fake.inject_callback(fti.user(fti.BOB), fake.message(G, card["message_id"]), deny)
-    # Updates are handled one at a time: on the separate path the tap
-    # waits behind the prompt's own handler, which is sending the busy
-    # card through the group's flood pacing.
-    fake.wait_answer(cb, timeout=90)
+    # The busy card is sent in the background, so the tap is answered at
+    # once. On the separate path that card may still be waiting for a send
+    # slot in the group's flood pacing: the turn's end waits for it to land
+    # and then settles it, so it may take as long as that wait (still far
+    # below the 900 s cap this test guards against).
+    # (Tight on the separate path: a tap held behind the card's send again
+    # fails here.)
+    fake.wait_answer(cb, timeout=15 if where == "separate" else 90)
     answered = time.monotonic()
+    settle_within = 30 if where == "card" else 90
     # Typed: the stand-in's dialog took the last row, and its turn ended
     # like an interrupt (no Stop).
     fti.wait_until(lambda: any(e.get("event") == "interrupted" and e.get("by") == "dialog"
@@ -95,14 +100,14 @@ def _standin(inst, where):
                    30, "the typed Deny to reach the dialog's last row")
     assert [e.get("answer") for e in inst.standin_log(name)
             if e.get("event") == "dialog_key"] == ["rejected"]
-    flows.wait_text(fake, G, "Denied by @bob", since=since, timeout=30)
+    flows.wait_text(fake, G, "Denied by @bob", since=since, timeout=settle_within)
     # The session is IDLE again within seconds, not after the 900 s cap.
-    flows.wait_turn_end(inst, name, label, since_log=log_since, timeout=30)
-    assert time.monotonic() - answered < 30
+    flows.wait_turn_end(inst, name, label, since_log=log_since, timeout=settle_within)
+    assert time.monotonic() - answered < settle_within
     assert not inst.file_in_session(name, f"{label}.txt").exists()
     assert not [e for e in inst.standin_log(name) if e.get("event") == "stop"]
     inst.wait_log(f"[{label}] turn ended at the permission dialog", since=log_since,
-                  timeout=30)
+                  timeout=settle_within)
 
     # And it takes the next message as a new turn.
     (inst.inst_dir / f"standin-hook-deadline-{name}").unlink(missing_ok=True)
