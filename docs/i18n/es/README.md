@@ -221,7 +221,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Monta bajo `/workspace` las carpetas que quieres que Claude edite. El montaje de `~/.claude` lleva tus credenciales de Claude y el historial de conversaciones: ejecuta `claude` una vez en el host para iniciar sesión, o `docker exec -it aipager claude` para iniciarla dentro del contenedor.
 
-Etiquetas: `latest`, `1.3`, `1.3.5` (una por versión exacta y una por versión menor).
+Etiquetas: `latest`, `1.3`, `1.3.6` (una por versión exacta y una por versión menor).
 
 ### <a id="nix"></a>Nix
 

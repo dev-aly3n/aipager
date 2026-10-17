@@ -243,7 +243,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 پوشه‌هایی را که می‌خواهید Claude ویرایششان کند زیر &lrm;`/workspace` مونت کنید. مونت &lrm;`~/.claude` اطلاعات ورود Claude و تاریخچهٔ گفتگوهایتان را به کانتینر می‌برد؛ برای لاگین، یک بار `claude` را روی خود سیستم اجرا کنید، یا با `docker exec -it aipager claude` داخل کانتینر لاگین کنید.
 
-تگ‌ها: `latest`،&rlm; `1.3`،&rlm; `1.3.5` (یکی برای هر نسخهٔ دقیق و یکی برای هر نسخهٔ minor).
+تگ‌ها: `latest`،&rlm; `1.3`،&rlm; `1.3.6` (یکی برای هر نسخهٔ دقیق و یکی برای هر نسخهٔ minor).
 
 ### <a id="nix"></a>Nix
 

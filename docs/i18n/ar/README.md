@@ -243,7 +243,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 اربط تحت &lrm;`/workspace` المجلدات التي تريد أن يعدّلها Claude. ربط &lrm;`~/.claude` ينقل بيانات دخولك إلى Claude وسجل محادثاتك: شغّل `claude` مرة واحدة على المضيف لتسجيل الدخول، أو `docker exec -it aipager claude` لتسجيل الدخول داخل الحاوية.
 
-الوسوم: `latest`،&rlm; `1.3`،&rlm; `1.3.5` (واحد لكل إصدار بعينه وواحد لكل إصدار فرعي).
+الوسوم: `latest`،&rlm; `1.3`،&rlm; `1.3.6` (واحد لكل إصدار بعينه وواحد لكل إصدار فرعي).
 
 ### <a id="nix"></a>Nix
 

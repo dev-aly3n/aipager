@@ -221,7 +221,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Gắn (mount) các thư mục bạn muốn Claude sửa vào dưới `/workspace`. Mount `~/.claude` mang theo thông tin đăng nhập Claude và lịch sử trò chuyện của bạn: chạy `claude` một lần trên máy chủ để đăng nhập, hoặc `docker exec -it aipager claude` để đăng nhập bên trong container.
 
-Tag: `latest`, `1.3`, `1.3.5` (một cho phiên bản chính xác và một cho phiên bản minor).
+Tag: `latest`, `1.3`, `1.3.6` (một cho phiên bản chính xác và một cho phiên bản minor).
 
 ### <a id="nix"></a>Nix
 
