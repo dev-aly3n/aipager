@@ -9,7 +9,8 @@ socket, which any local process can write, so here each file is:
    input that was checked), or from the PostToolUse ``tool_input`` when
    that request was missed; never from Claude Code's ``tool_response``;
 2. **checked again**: the send floor and file checks, and the root of the
-   session's current snapshot for a member;
+   session's current snapshot for a member, all on one resolution of the
+   path, which is the one opened;
 3. **copied** into ``<outbox>/<chat key>/`` (``config.OUTBOX_DIR``, folder
    ``0700``, file ``0600``, the per-chat helpers of ``aipager.uploads``),
    from a file opened without following a link and found to be the very
@@ -33,7 +34,6 @@ import errno
 import logging
 import os
 import re
-import stat as _stat
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -465,36 +465,58 @@ def _same_file(a: os.stat_result, b: os.stat_result) -> bool:
 
 
 def _opened_path(fd: int) -> str | None:
-    """Where an open file really is (Linux), or None when unknown."""
+    """Where an open file really is (Linux's ``/proc/self/fd``, macOS's
+    ``F_GETPATH``), or None when unknown."""
     try:
         return os.readlink(f"/proc/self/fd/{fd}")
     except OSError:
+        pass
+    try:
+        import fcntl
+        getpath = getattr(fcntl, "F_GETPATH", None)
+        if getpath is None:
+            return None
+        raw = fcntl.fcntl(fd, getpath, b"\0" * 1024)
+        return os.fsdecode(raw.split(b"\0", 1)[0]) or None
+    except (OSError, ImportError, ValueError):
         return None
+
+
+def _copy_failed_for(code: str) -> CopyFailed:
+    if code == send_check.CODE_TOO_BIG:
+        return CopyFailed(CAUSE_TOO_BIG, code)
+    if code in (send_check.CODE_MISSING, send_check.CODE_UNREADABLE):
+        return CopyFailed(CAUSE_GONE, code)
+    return CopyFailed(CAUSE_NOT_ALLOWED, code)
 
 
 def copy_one(entry: str, cwd: str | None, chat_id: int, display: str | None,
              *, bound: bool = False, allowed_root: str | None = None) -> Item:
     """Check one file again and copy it into the chat's outbox folder.
-    Raises :class:`CopyFailed`. Blocking: run it in a thread."""
+    Raises :class:`CopyFailed`. Blocking: run it in a thread.
+
+    The path is resolved ONCE. The floor, the file checks and the root are
+    judged on that one resolution (``real``), ``real`` is what is opened
+    (without following a link), and the open file must be the one found
+    there (``fstat``: same file, regular, one link, size) and still be at
+    ``real`` (``/proc/self/fd``), so a link or folder swapped at any point
+    after the resolution sends nothing (review 2026-10-17, rev-iter1-001)."""
     entry = safety._js_trim(entry)
     if not isinstance(entry, str) or not entry or "\x00" in entry:
         raise CopyFailed(CAUSE_NOT_ALLOWED, "unreadable-path")
     spelled = safety._norm(entry, cwd)
     real = safety._realpath(spelled)
     try:
-        before = os.stat(real)
+        before = os.lstat(real)
     except FileNotFoundError as exc:
         raise CopyFailed(CAUSE_GONE, "no-such-file") from exc
     except OSError as exc:
         raise CopyFailed(CAUSE_GONE, str(exc)) from exc
-    code = send_check.check_entry(entry, cwd)
+    code = send_check.check_resolved(spelled, real)
     if code is not None:
-        if code == send_check.CODE_TOO_BIG:
-            raise CopyFailed(CAUSE_TOO_BIG, code)
-        if code in (send_check.CODE_MISSING, send_check.CODE_UNREADABLE):
-            raise CopyFailed(CAUSE_GONE, code)
-        raise CopyFailed(CAUSE_NOT_ALLOWED, code)
-    if bound and send_check.root_refusals({"files": [entry]}, cwd, allowed_root):
+        raise _copy_failed_for(code)
+    if bound and not send_check.inside_root_resolved(
+            spelled, real, send_check.root_set(allowed_root)):
         raise CopyFailed(CAUSE_NOT_ALLOWED, "outside-root")
     flags = (os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
              | getattr(os, "O_CLOEXEC", 0))
@@ -507,11 +529,13 @@ def copy_one(entry: str, cwd: str | None, chat_id: int, display: str | None,
     dest: Path | None = None
     try:
         st = os.fstat(fd)
-        if (not _stat.S_ISREG(st.st_mode) or st.st_nlink != 1
-                or not _same_file(st, before)):
+        code = send_check.stat_code(st)
+        if code is not None:
+            raise _copy_failed_for(code)
+        if not _same_file(st, before):
             raise CopyFailed(CAUSE_GONE, "changed-after-check")
         # Opened where it was checked: a folder on the way swapped for a
-        # link after the check would lead elsewhere.
+        # link after the resolution would lead elsewhere.
         opened = _opened_path(fd)
         if opened is not None and safety._fold(opened) != safety._fold(real):
             raise CopyFailed(CAUSE_GONE, "moved-after-check")

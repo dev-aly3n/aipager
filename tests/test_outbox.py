@@ -80,18 +80,137 @@ def test_copy_rechecks_a_file_swapped_for_a_floor_link(home, tmp_path):
 def test_copy_refuses_a_file_replaced_after_the_check(home, tmp_path, monkeypatch):
     src = tmp_path / "proj" / "chart.png"
     _file(src, _png_bytes())
-    real_check = send_check.check_entry
+    real_check = send_check.check_resolved
 
-    def check_then_swap(entry, cwd):
-        out = real_check(entry, cwd)
+    def check_then_swap(spelled, real):
+        out = real_check(spelled, real)
         src.unlink()
         src.write_bytes(b"another file, written after the check")
         return out
-    monkeypatch.setattr(send_check, "check_entry", check_then_swap)
+    monkeypatch.setattr(send_check, "check_resolved", check_then_swap)
     with pytest.raises(ob.CopyFailed) as exc:
         ob.copy_one(str(src), None, CHAT, None)
     assert exc.value.cause == ob.CAUSE_GONE
     assert not [p for p in Path(config.OUTBOX_DIR).rglob("*") if p.is_file()]
+
+
+def test_copy_refuses_a_file_hard_linked_after_the_check(home, tmp_path, monkeypatch):
+    """The same file, given a second hard link after the check: the open
+    file's own stat is checked, so it is refused."""
+    src = tmp_path / "proj" / "chart.png"
+    _file(src, _png_bytes())
+    real_check = send_check.check_resolved
+
+    def check_then_link(spelled, real):
+        out = real_check(spelled, real)
+        os.link(src, tmp_path / "proj" / "second-name.png")
+        return out
+    monkeypatch.setattr(send_check, "check_resolved", check_then_link)
+    with pytest.raises(ob.CopyFailed) as exc:
+        ob.copy_one(str(src), None, CHAT, None)
+    assert exc.value.cause == ob.CAUSE_NOT_ALLOWED
+    assert not [p for p in Path(config.OUTBOX_DIR).rglob("*") if p.is_file()]
+
+
+def test_copy_judges_the_path_it_resolved_not_a_second_resolution(
+        home, tmp_path, monkeypatch):
+    """rev-iter1-001: a link that leads to a key when the copy resolves it,
+    swapped for a harmless file right after, must not get the key copied:
+    every check is about the one resolution, which is what is opened."""
+    from aipager import safety
+    proj = tmp_path / "proj"
+    secret = Path(_file(proj / "id_rsa", b"PRIVATE KEY"))
+    benign = Path(_file(proj / "ok.txt", b"hello"))
+    link = proj / "pic.png"
+    link.symlink_to(secret)
+    real_realpath = safety._realpath
+    swapped = []
+
+    def resolve_then_swap(path):
+        out = real_realpath(path)
+        if path == str(link) and not swapped:
+            swapped.append(out)
+            link.unlink()
+            link.symlink_to(benign)
+        return out
+    monkeypatch.setattr(safety, "_realpath", resolve_then_swap)
+    with pytest.raises(ob.CopyFailed) as exc:
+        ob.copy_one(str(link), None, CHAT, None)
+    assert swapped == [str(secret)]
+    assert exc.value.cause == ob.CAUSE_NOT_ALLOWED
+    copies = [p for p in Path(config.OUTBOX_DIR).rglob("*") if p.is_file()]
+    assert not any(p.read_bytes() == b"PRIVATE KEY" for p in copies)
+
+
+def test_copy_link_swapped_inside_the_check_sends_what_was_checked(
+        home, tmp_path, monkeypatch):
+    """The reviewer's probe the other way round: a link to a harmless file,
+    swapped to a key while the check runs. The copy opens the path the
+    check judged (the harmless file), never the key."""
+    proj = tmp_path / "proj"
+    secret = Path(_file(proj / "id_rsa", b"PRIVATE KEY"))
+    benign = Path(_file(proj / "ok.txt", b"hello"))
+    link = proj / "pic.png"
+    link.symlink_to(benign)
+    real_check = send_check.check_resolved
+
+    def racing_check(spelled, real):
+        link.unlink()
+        link.symlink_to(secret)
+        return real_check(spelled, real)
+    monkeypatch.setattr(send_check, "check_resolved", racing_check)
+    item = ob.copy_one(str(link), None, CHAT, None)
+    assert item.path.read_bytes() == b"hello"
+
+
+def test_copy_refuses_a_folder_swapped_for_a_link_after_the_check(
+        home, tmp_path, monkeypatch):
+    """The same file (same inode, same size), reached through a folder that
+    became a link after the check: the open file is not at the checked
+    path, so nothing is copied (the /proc/self/fd compare)."""
+    proj = tmp_path / "proj"
+    src = Path(_file(proj / "sub" / "chart.png", _png_bytes()))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    real_check = send_check.check_resolved
+
+    def check_then_move(spelled, real):
+        out = real_check(spelled, real)
+        os.rename(proj / "sub", elsewhere / "sub")
+        (proj / "sub").symlink_to(elsewhere / "sub")
+        return out
+    monkeypatch.setattr(send_check, "check_resolved", check_then_move)
+    with pytest.raises(ob.CopyFailed) as exc:
+        ob.copy_one(str(src), None, CHAT, None)
+    assert exc.value.cause == ob.CAUSE_GONE
+    assert not [p for p in Path(config.OUTBOX_DIR).rglob("*") if p.is_file()]
+
+
+def test_copy_root_is_judged_on_the_one_resolution(home, tmp_path, monkeypatch):
+    """A member's file: a link that leads outside her root when the copy
+    resolves it, swapped to lead inside right after, is refused."""
+    from aipager import safety
+    root = home / "aipager-users" / "bob"
+    inside = Path(_file(root / "a.png", _png_bytes()))
+    outside = Path(_file(tmp_path / "x.png", _png_bytes()))
+    link = root / "pic.png"
+    link.symlink_to(outside)
+    bound, allowed = ob.allowed_root_for({"root": str(root)}, str(root))
+    real_realpath = safety._realpath
+    swapped = []
+
+    def resolve_then_swap(path):
+        out = real_realpath(path)
+        if path == str(link) and not swapped:
+            swapped.append(out)
+            link.unlink()
+            link.symlink_to(inside)
+        return out
+    monkeypatch.setattr(safety, "_realpath", resolve_then_swap)
+    with pytest.raises(ob.CopyFailed) as exc:
+        ob.copy_one(str(link), None, CHAT, None, bound=bound, allowed_root=allowed)
+    assert swapped == [str(outside)]
+    assert exc.value.cause == ob.CAUSE_NOT_ALLOWED
 
 
 @pytest.mark.parametrize("make, cause", [

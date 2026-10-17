@@ -152,6 +152,11 @@ def _stat_checks(real: str) -> str | None:
         return CODE_MISSING
     except (OSError, ValueError):
         return CODE_UNREADABLE
+    return stat_code(st)
+
+
+def stat_code(st: os.stat_result) -> str | None:
+    """The file-check code for a file's stat, or None when it may be sent."""
     if not _stat.S_ISREG(st.st_mode):
         return CODE_NOT_FILE
     if st.st_nlink > 1:
@@ -163,13 +168,20 @@ def _stat_checks(real: str) -> str | None:
     return None
 
 
-def check_entry(entry: str, cwd: str | None) -> str | None:
-    """The refusal code for one trimmed entry, or None when it passes the
-    floor and the file checks."""
-    spelled, real = _spelled_and_real(entry, cwd)
+def check_resolved(spelled: str, real: str) -> str | None:
+    """The refusal code for a path already resolved (``spelled`` as given,
+    ``real`` its one resolution), or None when it passes the floor and the
+    file checks. Nothing here resolves the path again, so the verdict is
+    about exactly ``real``: the daemon's copy opens that same path."""
     if _on_floor(spelled, real):
         return CODE_FLOOR
     return _stat_checks(real)
+
+
+def check_entry(entry: str, cwd: str | None) -> str | None:
+    """The refusal code for one trimmed entry, or None when it passes the
+    floor and the file checks."""
+    return check_resolved(*_spelled_and_real(entry, cwd))
 
 
 def check_files(tool_input, cwd: str | None) -> list[Refusal]:
@@ -200,16 +212,27 @@ def root_refusals(tool_input, cwd: str | None,
     entries = _entries(tool_input)
     if entries is None:
         return [Refusal("", CODE_UNREADABLE_LIST, "")]
-    roots: set[str] = set()
-    if isinstance(allowed_root, str) and allowed_root and "\x00" not in allowed_root:
-        n = safety._norm(allowed_root)
-        roots = {n, safety._realpath(n)}
+    roots = root_set(allowed_root)
     out: list[Refusal] = []
     for entry in entries:
-        spelled, real = _spelled_and_real(entry, cwd)
-        if not roots or not (_inside(spelled, roots) and _inside(real, roots)):
+        if not inside_root_resolved(*_spelled_and_real(entry, cwd), roots):
             out.append(_refusal(entry, CODE_OUTSIDE_ROOT))
     return out
+
+
+def root_set(allowed_root: str | None) -> set[str]:
+    """``allowed_root`` as spelled and as it really leads (empty: none)."""
+    if isinstance(allowed_root, str) and allowed_root and "\x00" not in allowed_root:
+        n = safety._norm(allowed_root)
+        return {n, safety._realpath(n)}
+    return set()
+
+
+def inside_root_resolved(spelled: str, real: str, roots: set[str]) -> bool:
+    """True when a path already resolved (``spelled``, ``real``) is inside
+    the root (``roots``, from :func:`root_set`), both ways, with no second
+    resolution. An empty set allows nothing."""
+    return bool(roots) and _inside(spelled, roots) and _inside(real, roots)
 
 
 def _item(r: Refusal) -> str:
