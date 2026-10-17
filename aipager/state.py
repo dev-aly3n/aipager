@@ -2923,6 +2923,14 @@ class TrackedSession:
         if self.status is not Status.INTERACTIVE and not self.prompt_wait_carry:
             return []
         out = self._primary_records()
+        carried = self.carried_inline_prompt
+        if self.prompt_wait_carry and isinstance(carried, dict):
+            # The card's prompt kept through Claude's Stop (8.120) is
+            # still open: a close during the carry (its agent's tool
+            # ended, the agent stopped) must see it, or it is sent again
+            # for a dialog that is gone. No surface: the card shows the
+            # answer, and its message comes once the carry ends.
+            out.insert(0, ("carried", carried, None))
         for rec in self.extra_prompts:
             perm = rec.get("perm") if isinstance(rec, dict) else None
             if isinstance(perm, dict):
@@ -2969,6 +2977,8 @@ class TrackedSession:
                 stamp(self.busy_msg_id)
                 self.pending_permission = None
                 inline_closed = True
+            elif where == "carried":
+                self.carried_inline_prompt = None
             elif where == "separate":
                 stamp(rec.get("msg_id"))
                 self.pending_prompt_msg = None
@@ -2977,7 +2987,8 @@ class TrackedSession:
                 self.extra_prompts = [r for r in self.extra_prompts if r is not rec]
         shown = [r for r in self.extra_prompts
                  if isinstance(r, dict) and not r.get("auto_deny_due")]
-        if self.pending_permission is None and not self._primary_records() and shown:
+        if (self.pending_permission is None and not self._primary_records()
+                and self.carried_inline_prompt is None and shown):
             # A refusal waiting to be typed has no message: never the
             # primary (the pinned bar's Answer would re-send nothing).
             promoted = shown[0]
@@ -2991,6 +3002,8 @@ class TrackedSession:
         the inline one, else its own message. None when not open."""
         for where, p, rec in self._open_records():
             if p is perm:
+                if where == "carried":
+                    return None
                 return self.busy_msg_id if where == "inline" else rec.get("msg_id")
         return None
 
@@ -3029,6 +3042,8 @@ class TrackedSession:
             return []
         ids = []
         for where, _perm, rec in records:
+            if where == "carried":
+                continue
             msg_id = self.busy_msg_id if where == "inline" else rec.get("msg_id")
             if type(msg_id) is int and msg_id > 0 and msg_id not in ids:
                 ids.append(msg_id)

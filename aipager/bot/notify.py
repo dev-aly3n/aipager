@@ -577,6 +577,17 @@ class NotifyMixin:
             carried = sess.pending_permission
             sess.mark_prompt_closed(sess.busy_msg_id)
             sess.pending_permission = None
+        if carried is None and not sess.open_prompts():
+            # Every carried prompt closed during the carry (its agent's
+            # tool ended, the agent stopped): nothing is left to wait on,
+            # and Claude's turn is over. The session stays IDLE, and what
+            # was held behind the dialog goes out.
+            log.info("[%s] carried prompts closed during the Stop - not "
+                     "waiting", sess.label)
+            if sess.dialog_hold is not None:
+                sess.dialog_hold["closed"] = "answered"
+            self.registry.mark_dirty()
+            return
         if self.registry.resume_wait(sess.name) is None:
             return
         log.info("[%s] waiting on %d open prompts after the turn ended",

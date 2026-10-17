@@ -1478,7 +1478,9 @@ class HookReceiver:
                         # keeps the stale-busy warning quiet, as the
                         # parent's own would.
                         sess.pending_tool_started_at = time.monotonic()
-                    if sess.status == Status.INTERACTIVE:
+                    if sess.dialog_is_open():
+                        # (INTERACTIVE, or the Stop carrying an agent's
+                        # prompt over: a close then must be seen, 8.120.)
                         # Its tool running means the permission prompt
                         # it waited on was answered (in the terminal):
                         # the session is working again, as before 8.58.
@@ -1826,7 +1828,9 @@ class HookReceiver:
             agent_type = msg.get("agent_type", "unknown")
             if agent_id:
                 sess = self.registry.get_or_create(session_name)
-                if sess.status == Status.INTERACTIVE:
+                if sess.dialog_is_open():
+                    # (Also during the Stop that carries its prompt over:
+                    # that prompt must not be waited on again, 8.120.)
                     # The asking agent's turn ended (a finish or a pause):
                     # the dialogs it asked in are gone, however it ended.
                     # By exact id: a phantom stop closes nothing (8.120).

@@ -6,6 +6,7 @@ Stop; Claude's own prompt refused while an agent's is open."""
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -412,3 +413,145 @@ def test_extra_prompt_after_the_wait_ended_is_not_shown(rig, run_async):
         "tool_info": {"name": "Bash", "summary": "make", "input": _bash("make")}}))
     assert len(rig.sent) == before
     assert rig.sess.extra_prompts == []
+
+
+# -- a carried prompt closing during the carry (rev-iter2-001) --------------
+
+def _at_carry_end(rig, close):
+    """Play *close* (a hook name) once, just before the carry ends: the
+    turn's answer is out, the session is IDLE, and the carried prompts
+    are about to be waited on again."""
+    real = rig.recv.notify_fn
+    done = []
+
+    async def _notify(sess, event, context):
+        if event == "prompts_carried" and not done:
+            done.append(True)
+            assert sess.prompt_wait_carry and sess.status == Status.IDLE
+            rig.recv._recent_fingerprints.clear()
+            if close == "tool-end":
+                fields = {"hook_event_name": "PostToolUse", "tool_name": "Bash",
+                          "tool_input": _bash("make"), "tool_use_id": "toolu_a",
+                          "tool_response": {"stdout": "ok"}}
+            elif close == "next-tool":
+                fields = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                          "tool_input": _bash("ls"), "tool_use_id": "toolu_b"}
+            else:
+                fields = {"hook_event_name": "SubagentStop",
+                          "agent_type": "ship-reviewer"}
+            await rig.recv._on_datagram(json.dumps(dict(
+                {"session": S, "transcript_path": "", "agent_id": BG,
+                 "agent_type": "ship-reviewer"}, **fields)).encode())
+        await real(sess, event, context)
+
+    rig.recv.notify_fn = _notify
+    return done
+
+
+def _carry_and_close(rig, shape, close):
+    rig.launch(BG)
+    if shape == "own-message":
+        rig.question()
+    _agent_pre(rig, BG, "make", "toolu_a")
+    _agent_request(rig, BG, "make")
+    if shape == "inline":
+        assert rig.sess.pending_permission is not None
+    else:
+        assert len(rig.sess.open_prompts()) == 2
+    hold = {"entered_at": rig.sess.interactive_entered_at,
+            "told": set(), "notices": []}
+    rig.sess.dialog_hold = hold
+    done = _at_carry_end(rig, close)
+    before = len(rig.sent)
+    rig.hook("Stop", stop_hook_active=False, last_assistant_message="Agent runs.")
+    assert done
+    return hold, before
+
+
+@pytest.mark.parametrize("close", ["tool-end", "next-tool", "agent-stop"])
+@pytest.mark.parametrize("shape", ["inline", "own-message"])
+def test_carried_prompt_closed_during_the_carry_is_not_waited_on(rig, shape, close):
+    hold, before = _carry_and_close(rig, shape, close)
+    sess = rig.sess
+    assert sess.open_prompts() == []
+    assert sess.status == Status.IDLE
+    assert not sess.resumed_after_stop
+    assert hold["closed"] == "answered"
+    # A closed prompt is never sent again as a live one.
+    assert not [m for m in rig.sent[before:]
+                if m.get("reply_markup") is not None and "make" in (m.get("text") or "")]
+    assert sess.pending_prompt_msg is None and sess.carried_inline_prompt is None
+
+
+
+def _card_prompt_carried(rig, *others):
+    """The non-interim Stop's carry (notify's Finished path): the card's
+    prompt moved off the card into ``carried_inline_prompt``, the card
+    closed, the session IDLE, the carry not yet ended. Each of *others*
+    (a background agent) has a prompt of its own message open too."""
+    rig.launch(BG)
+    for agent in others:
+        rig.launch(agent)
+    _agent_pre(rig, BG, "make", "toolu_a")
+    _agent_request(rig, BG, "make")
+    for agent in others:
+        rig.agent_bash(agent, f"test-{agent[:4]}")
+    sess = rig.sess
+    perm = sess.pending_permission
+    assert perm is not None
+    sess.prompt_wait_carry = True
+    rig.bot.registry.transition(S, Status.IDLE)
+    sess.carried_inline_prompt = perm
+    sess.pending_permission = None
+    sess.mark_prompt_closed(sess.busy_msg_id)
+    return len(rig.sent)
+
+
+def test_carried_card_prompt_is_sent_again_when_still_open(rig):
+    """Control: nothing closed it, so it gets its own message and the
+    session waits on it."""
+    before = _card_prompt_carried(rig)
+    rig.run_async(rig.recv._end_carry(S))
+    assert rig.sess.status == Status.INTERACTIVE
+    assert [m for m in rig.sent[before:] if m.get("reply_markup") is not None]
+
+
+@pytest.mark.parametrize("close", ["tool-end", "next-tool", "agent-stop"])
+def test_carried_card_prompt_closed_during_the_carry_is_not_sent_again(rig, close):
+    before = _card_prompt_carried(rig)
+    if close == "tool-end":
+        _agent_post(rig, BG, "make", "toolu_a")
+    elif close == "next-tool":
+        _agent_pre(rig, BG, "ls", "toolu_b")
+    else:
+        rig.hook("SubagentStop", agent_id=BG, agent_type="ship-reviewer")
+    assert rig.sess.open_prompts() == []
+    rig.run_async(rig.recv._end_carry(S))
+    assert rig.sess.status == Status.IDLE
+    assert not rig.sess.resumed_after_stop
+    assert not [m for m in rig.sent[before:] if m.get("reply_markup") is not None]
+
+
+def test_carried_card_prompt_has_no_surface_of_its_own(rig):
+    """During the carry the card shows the answer: the carried prompt has
+    no buttons anywhere yet, and the state file's list of unsaved prompt
+    messages holds only the real ones."""
+    _card_prompt_carried(rig, FG)
+    sess = rig.sess
+    carried = sess.carried_inline_prompt
+    assert carried in sess.open_prompts()
+    assert sess.prompt_surface(carried) is None
+    extra = sess.extra_prompts[0]["msg_id"]
+    assert sess.unsaved_prompt_surfaces() == [extra]
+
+
+def test_carry_keeps_every_other_prompt_when_one_closes(rig):
+    """An agent's prompt closing during the carry promotes no other one to
+    the primary slot the carried card prompt takes back at the carry's
+    end, so none is lost."""
+    _card_prompt_carried(rig, FG, OTHER)
+    rig.hook("SubagentStop", agent_id=FG, agent_type="ship-reviewer")
+    assert sorted(owners(rig)) == sorted([BG, OTHER])
+    rig.run_async(rig.recv._end_carry(S))
+    assert rig.sess.status == Status.INTERACTIVE
+    assert sorted(owners(rig)) == sorted([BG, OTHER])
