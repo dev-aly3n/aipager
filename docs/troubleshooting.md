@@ -331,7 +331,9 @@ aipager session <label> --continue # fresh dtach, the folder's last conversation
 
 If a session waits on a permission prompt or a question and Claude Code
 sends no news for 5 minutes, aipager reads the session's saved
-conversation. Only if it shows the prompt is over (answered in the
+conversation. Only Claude's own news and that of the agent that asked
+count: a background agent that keeps working does not keep this check
+from running. Only if it shows the prompt is over (answered in the
 terminal, and the news of it lost) does aipager stop waiting on it and
 count the session as working again. Otherwise the prompt stays open
 however long it takes: the card and the pinned bar keep saying the
