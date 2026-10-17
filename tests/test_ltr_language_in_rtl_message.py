@@ -274,21 +274,35 @@ def _card_session():
     s.busy_started_at = time.monotonic() - 125
     s.tool_history = [("SendMessage", True), ("Read: /a", "failed"),
                       ("\U0001f916 general-purpose \u00b7 43 tool calls \u00b7 17:38", True),
-                      ("\U0001f916 general-purpose", False), ("Bash: sleep 9", False)]
+                      ("\U0001f916 general-purpose", False), ("Bash: sleep 9", False),
+                      ("shell: npm test - stopped (0:12)", "stopped"),
+                      ("Bash: npm run dev", False)]
     s.active_subagents = {"a": {"type": "general-purpose", "activity": "Bash: Dump listing",
                                 "started_at": time.monotonic() - 2310, "history_idx": 3,
                                 "tools": ["Read: /a", "Read: /b"]}}
     s.finished_subagents = [{"history_idx": 2, "tools": ["Read: /x"]}]
+    s.bg_shells = {"t1": {"label": "npm run dev", "summary": "Bash: npm run dev",
+                          "started": time.monotonic() - 30, "in_job": True,
+                          "history_idx": 6}}
     s.stream_commentary = [(0, FA_WORDS + ".")]
     return s
+
+
+CARD_MARKS = ("\u2705", "\u274c", "\u23f3", "\u23f9")
+
+
+def _card_rows(card: str) -> list[str]:
+    return [line for line in card.split("\n") if any(m in line[:3] for m in CARD_MARKS)]
 
 
 def test_every_code_built_card_row_is_marked_outside_its_code_span():
     s = _card_session()
     card, _ = animation.build_stream_card_ex(s, "Working", rtl=True)
-    rows = [line for line in card.split("\n")
-            if any(m in line[:3] for m in ("\u2705", "\u274c", "\u23f3", "\u23f9"))]
-    assert len(rows) >= 7
+    rows = _card_rows(card)
+    assert len(rows) >= 9
+    # The stopped shell's row and the live shell's row are among them.
+    assert any("\u23f9" in line[:3] and "npm test" in line for line in rows)
+    assert any("\u23f3" in line[:3] and "shell: npm run dev (" in line for line in rows)
     for line in rows:
         assert line.startswith(LRM) and line.endswith(LRM), line
         for span in re.findall(r"`[^`]*`", line):
@@ -310,3 +324,45 @@ def test_card_tr_not_rich_is_the_base():
     s.turn_prompt = FA_WORDS
     assert animation.card_tr(s).ltr_in_rtl
     assert animation.card_tr(s, rich=False) is i18n.get("en")
+
+
+@pytest.mark.parametrize("code", ["de", "ru"])
+def test_a_non_english_card_row_carries_one_mark_at_each_end(code):
+    # The row's body is drawn in the twin too (its own U+200E at both
+    # ends): the row takes those off before marking itself, so the mark
+    # after the glyph is not there (review rev-iter1-002).
+    s = _card_session()
+    card, _ = animation.build_stream_card_ex(s, "Working", tr=i18n.get(code), rtl=True)
+    rows = _card_rows(card)
+    assert len(rows) >= 9
+    for line in rows:
+        assert line.startswith(LRM) and line.endswith(LRM), line
+        assert line.count(LRM) == 2, line
+        assert not ADJACENT.search(line), line
+    # The live agent's and the live shell's rows are drawn in the language.
+    assert any("\u23f3" in line[:3] and "npm run dev" in line for line in rows)
+
+
+def test_the_cards_divider_is_never_marked():
+    # The divider above the status line is drawn by the app ("---" is a
+    # rule, not text): no mark may sit on it or it stops being one.
+    s = _card_session()
+    card, _ = animation.build_stream_card_ex(s, "Working", rtl=True)
+    assert animation.DIVIDER_SEP in card
+    assert "---" in card.split("\n")
+    assert not any(INVISIBLE.search(line) for line in card.split("\n")
+                   if line.strip(LRM + FSI + PDI) == "---")
+
+
+def test_question_rows_go_only_into_the_html_card_and_stay_unmarked():
+    # The question form is drawn only into HTML (the legacy card and its
+    # prompt), which has no is_rtl: an English chat with a Persian turn
+    # draws it with the base, so no U+200E is added.
+    s = _card_session()
+    s.turn_prompt = FA_WORDS
+    tr = animation.card_tr(s, rich=False)
+    perm = {"ask_question": True, "question": "Which one?",
+            "options": [{"label": "A", "description": FA_WORDS}, "x"]}
+    html = animation._question_html(tr, perm, budget=4000)
+    assert "Which one?" in html and FA_WORDS in html
+    assert not INVISIBLE.search(html)

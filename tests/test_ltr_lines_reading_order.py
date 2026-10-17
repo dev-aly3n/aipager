@@ -376,3 +376,51 @@ def test_the_plain_card_frames_are_judged_on_their_own(tr):
                            verb=Safe(animation._verb(tr, "Working"))) + " · 2:05",
                      kind="md")
     assert reads_in_order(shown(marked), 1)
+
+
+def test_a_live_shell_row_reads_in_order(frozen):
+    s = _card_session()
+    s.tool_history = [("Bash: npm run dev", False),
+                      ("shell: npm test - stopped (0:12)", "stopped")]
+    s.bg_shells = {"t1": {"label": "npm run dev", "summary": "Bash: npm run dev",
+                          "started": surf.NOW - 75, "in_job": True, "history_idx": 0}}
+    card, _ = animation.build_stream_card_ex(s, "Working", rtl=True)
+    seen = [_judge(row) for row in _rows(card)]
+    assert seen == ["⏳shell:npmrundev(1:15)",
+                    "⏹shell:npmtest-stopped(0:12)"]
+    # Without the twin the live shell row is the bug: its clock moves.
+    plain, _ = animation.build_stream_card_ex(s, "Working", rtl=False)
+    assert not reads_in_order(shown(_rows(plain)[0]), 1)
+
+
+def test_a_live_shell_row_with_a_persian_label_keeps_the_mark_first(frozen):
+    s = _card_session()
+    s.tool_history = [("Bash: " + FA_FILE, False)]
+    s.bg_shells = {"t1": {"label": FA_FILE, "summary": "Bash: " + FA_FILE,
+                          "started": surf.NOW - 75, "in_job": True, "history_idx": 0}}
+    card, _ = animation.build_stream_card_ex(s, "Working", rtl=True)
+    (row,) = _rows(card)
+    assert visual(shown(row)).startswith("⏳shell:")
+
+
+@pytest.mark.parametrize("label", ["x1", FA_NAME], ids=["latin", "persian"])
+def test_the_paused_line_reads_in_order(tr, label):
+    seen = _judge(tr.md(animation.PAUSED_MD, session=label))
+    assert seen.startswith("⏳")
+    assert seen.endswith("working(updatespaused)")
+    if label == FA_NAME:
+        assert seen.startswith("⏳" + FA_NAME[::-1] + "·")
+
+
+@pytest.mark.parametrize("sender", ["claude-alice", "claude-" + FA_NAME],
+                         ids=["latin", "persian"])
+def test_the_peer_line_on_the_card_reads_in_order(frozen, sender):
+    s = _card_session()
+    s.peer_from = {"status": "verified", "sender_session": sender,
+                   "driver": {"labels": ["@alice"]}}
+    card, _ = animation.build_stream_card_ex(s, "Working", rtl=True)
+    first = card.split("\n")[0]
+    seen = _judge(first)
+    name = sender[len("claude-"):]
+    shown_name = name if name.isascii() else name[::-1]
+    assert seen == "\U0001f4e8from" + shown_name + "(@alice)"
