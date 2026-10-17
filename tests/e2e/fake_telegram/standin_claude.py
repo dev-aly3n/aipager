@@ -78,6 +78,15 @@ payloads (so the real ``aipager-hook`` and ``aipager-statusline`` run).
   dialog it reached (``dialog_key``, ``hook_decision``,
   ``question_answered``, ``agent_answer``). Then A's tool ends, A stops,
   and the main loop answers and stops.
+- A prompt asking for a file, "send me the image at <path>" (or the
+  Persian "... \u062f\u0631 <path> \u0647\u0633\u062a ..."), plays Claude
+  Code 2.1.302's SendUserFile with ``CLAUDE_CODE_ATTACHMENTS_BY_PATH``: the
+  tool_use (``files`` a list, ``status`` normal), ``PreToolUse``; on a deny
+  the hook's reason is the tool result and the answer quotes it; else (a
+  read-only tool, no dialog) ``PostToolUse`` with a 2.1.302-shaped
+  ``tool_response`` (``attachments`` with the absolute ``path``, ``size``,
+  ``isImage``, ``media_type``, ``pathValidated``), the tool result "1 file
+  delivered to user.", the answer and ``Stop``.
 - Every prompt and decision goes to
   ``$AIPAGER_INSTANCE_DIR/standin-<CLAUDE_DTACH_SESSION>.jsonl``.
 """
@@ -86,6 +95,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import mimetypes
 import os
 import re
 import signal
@@ -98,6 +108,10 @@ import uuid
 VERSION = "2.1.291"
 
 _REPLY_RE = re.compile(r"Reply with exactly:\s*(.+)", re.I)
+# "send me the image at <path>", and the Persian "<...> \u062f\u0631 <path>
+# \u0647\u0633\u062a <...>" ("the picture that is at <path>").
+_SEND_EN_RE = re.compile(r"send me the (?:image|file|picture|photo) at (\S+)", re.I)
+_SEND_FA_RE = re.compile("\u062f\u0631 (\\S+) \u0647\u0633\u062a")
 
 #: Claude Code 2.1.291's Write permission dialog, top to bottom. Row 1
 #: reads as a plain "allowed" here: the stand-in keeps no session mode.
@@ -328,6 +342,9 @@ class StandIn:
                 self.log(event="interrupted")
                 self.user_text("[Request interrupted by user]")
                 return
+        elif _SEND_EN_RE.search(prompt) or _SEND_FA_RE.search(prompt):
+            m = _SEND_EN_RE.search(prompt) or _SEND_FA_RE.search(prompt)
+            decision = self._send_file_turn(m.group(1).rstrip(".,;:!?"))
         elif "write tool" in prompt.lower():
             m = _NAME_RE.search(prompt)
             name = m.group(1) if m else "standin"
@@ -368,6 +385,43 @@ class StandIn:
         self.fire("Stop", {"stop_hook_active": False, "last_assistant_message": answer})
         self.log(event="stop", answer=answer)
         self.statusline()
+
+    # -- a file sent to the person (SendUserFile) ------------------------------
+
+    def _send_file_turn(self, path: str) -> str:
+        tool_input = {"files": [path], "status": "normal"}
+        tool_use_id = f"toolu_standin_{uuid.uuid4().hex[:12]}"
+        self.assistant([{"type": "tool_use", "id": tool_use_id, "name": "SendUserFile",
+                         "input": tool_input}])
+        pre = self.fire("PreToolUse", {"tool_name": "SendUserFile",
+                                       "tool_input": tool_input,
+                                       "tool_use_id": tool_use_id}, tool="SendUserFile")
+        reason = None
+        for o in pre:
+            hso = o.get("hookSpecificOutput") or {}
+            if hso.get("permissionDecision") == "deny" or o.get("decision") == "block":
+                reason = hso.get("permissionDecisionReason") or o.get("reason") or "denied"
+        if reason is not None:
+            self.tool_result(tool_use_id, reason, True)
+            self.log(event="decision", tool="SendUserFile", decision="denied",
+                     reason=reason, path=path)
+            return f"could not send: {reason}"
+        full = path if os.path.isabs(path) else os.path.join(self.cwd, path)
+        try:
+            size = os.path.getsize(full)
+        except OSError:
+            size = 0
+        media_type = mimetypes.guess_type(full)[0] or "application/octet-stream"
+        response = {"attachments": [{
+            "path": os.path.abspath(full), "size": size,
+            "isImage": media_type.startswith("image/"), "media_type": media_type,
+            "pathValidated": True}]}
+        self.fire("PostToolUse", {"tool_name": "SendUserFile", "tool_input": tool_input,
+                                  "tool_response": response,
+                                  "tool_use_id": tool_use_id}, tool="SendUserFile")
+        self.tool_result(tool_use_id, "1 file delivered to user.", False)
+        self.log(event="decision", tool="SendUserFile", decision="sent", path=path)
+        return "sent"
 
     # -- a tree of background agents (agents-line-waiting) -------------------
 

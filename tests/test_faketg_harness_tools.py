@@ -810,3 +810,120 @@ def test_a_root_folder_inside_the_operators_folders_is_refused(tmp_path, monkeyp
     with pytest.raises(AssertionError, match="inside the operator's own"):
         fti.make_root()
     assert list(parent.iterdir()) == []
+
+
+# ---- files aipager sends for Claude (SendUserFile) ----------------------------------
+
+def _fake_api():
+    from tests.e2e.fake_telegram.server import FakeBotApiThread
+    t = FakeBotApiThread("7000000001:AAFakeHarnessSecret0123456789", 7000000001,
+                         "aipager_fake_bot")
+    base = t.start()
+    t.api.add_chat(fti.DM_ID, "private")
+    return t, base
+
+
+def _items(tmp_path):
+    from aipager.bot import outbox
+    png = (b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\x0dIHDR" + (64).to_bytes(4, "big")
+           + (48).to_bytes(4, "big") + b"\x08\x02\x00\x00\x00" + b"\x00" * 32)
+    out = []
+    for name, data, method in (("a.png", png, "photo"), ("b.png", png, "photo"),
+                               ("c.txt", b"notes", "document")):
+        p = tmp_path / name
+        p.write_bytes(data)
+        out.append(outbox.Item(name=name, path=p, size=len(data), kind="", width=None,
+                               height=None, method=method))
+    return out
+
+
+def test_the_fake_api_takes_every_file_send_ptb_makes(tmp_path):
+    """The real PTB calls aipager makes (outbox.send_planned): a photo, an
+    album and a document, each silent and replying with
+    allow_sending_without_reply; the fake records the method, the file
+    bytes, the caption (an album's from its first item) and the reply."""
+    import asyncio
+
+    from telegram import Bot
+
+    from aipager.bot import outbox
+    t, base = _fake_api()
+    try:
+        a, b, c = _items(tmp_path)
+        anchor = None
+
+        async def go():
+            nonlocal anchor
+            async with Bot(t.api.token, base_url=f"{base}/bot",
+                           base_file_url=f"{base}/file/bot") as bot:
+                await bot.get_updates(timeout=0)
+                anchor = t.api.inject_text(fti.DM_ID, t.api.user(fti.ALICE, "alice", "Alice"),
+                                           "send it")["message_id"]
+                for planned in outbox.plan_sends([a], "x1", "chart") + \
+                        outbox.plan_sends([a, b], "x1", None) + \
+                        outbox.plan_sends([c], "x1", None):
+                    assert await outbox.send_planned(bot, fti.DM_ID, planned, anchor)
+        asyncio.run(go())
+        calls = [x for x in t.api.calls() if x.method.startswith("send")]
+        assert [x.method for x in calls] == ["sendPhoto", "sendMediaGroup", "sendDocument"]
+        assert all(x.status == 200 for x in calls)
+        assert t.api.unknown_methods == []
+        photo, album, doc = calls
+        assert photo.text == "💬 x1\nchart" and album.text == "💬 x1"
+        assert photo.params["disable_notification"] is True
+        assert list(photo.files.values())[0][1] == a.path.read_bytes()
+        assert len(album.params["media"]) == 2 and len(album.response["result"]) == 2
+        assert list(doc.files.values())[0] == ("c.txt", b"notes")
+        for x in calls:
+            result = x.response["result"]
+            first = result[0] if isinstance(result, list) else result
+            assert first["reply_to_message"]["message_id"] == anchor
+    finally:
+        t.stop()
+
+
+def test_the_fake_api_refuses_a_mixed_album(tmp_path):
+    import asyncio
+
+    from telegram import Bot
+    from telegram.error import BadRequest
+
+    from aipager.bot import outbox
+    t, base = _fake_api()
+    try:
+        a, _b, c = _items(tmp_path)
+        bad = outbox.Planned(method=outbox.METHOD_MEDIA_GROUP, items=[a, c], caption="x")
+
+        async def go():
+            async with Bot(t.api.token, base_url=f"{base}/bot",
+                           base_file_url=f"{base}/file/bot") as bot:
+                with pytest.raises(BadRequest):
+                    await outbox.send_planned(bot, fti.DM_ID, bad, None)
+        asyncio.run(go())
+    finally:
+        t.stop()
+
+
+def test_standin_plays_send_user_file(tmp_path, monkeypatch):
+    home, inst, proj = tmp_path / "h", tmp_path / "i", tmp_path / "p"
+    for d in (home / ".claude", inst, proj):
+        d.mkdir(parents=True)
+    (proj / "pic.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(inst))
+    monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-fts__d1")
+    monkeypatch.chdir(proj)
+    s = standin_claude.StandIn(["--dangerously-skip-permissions"])
+    s.run_turn(f"send me the image at {proj / 'pic.png'}")
+    persian = ("عکسی که در pic.png "
+               "هست رو برام "
+               "بفرست")
+    s.run_turn(persian)
+    entries = [json.loads(line) for line in Path(s.transcript).read_text().splitlines()]
+    uses = [b for e in entries if e["type"] == "assistant"
+            for b in e["message"]["content"] if b.get("type") == "tool_use"]
+    assert [(u["name"], u["input"]["files"]) for u in uses] == [
+        ("SendUserFile", [str(proj / "pic.png")]), ("SendUserFile", ["pic.png"])]
+    log = [json.loads(line) for line in (inst / "standin-claude-fts__d1.jsonl").read_text()
+           .splitlines()]
+    assert [e.get("decision") for e in log if e["event"] == "decision"] == ["sent", "sent"]
