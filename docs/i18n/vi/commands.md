@@ -1,6 +1,6 @@
 # Lệnh và giao diện của bot
 
-<!-- i18n-source: docs/commands.md @ f182f07 -->
+<!-- i18n-source: docs/commands.md @ b99c20c -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../commands.md))
 
@@ -90,7 +90,7 @@ aipager nói được English, Español, Русский, Português (Brasil), �
 - **Tự động** (chỉ trong chat riêng) đi theo ngôn ngữ của ứng dụng Telegram của bạn, và lại đi theo nếu bạn đổi nó. Một ngôn ngữ mà aipager không có sẽ hiện bằng tiếng Anh.
 - **Chat mới và chat cũ.** Một chat riêng bắt đầu sau bản phát hành này đi theo ngôn ngữ của ứng dụng Telegram của bạn cho tới khi bạn chọn một ngôn ngữ, và tin nhắn đầu tiên của nó bằng một ngôn ngữ không phải tiếng Anh sẽ có thêm một dòng ngắn nói điều đó và cách đổi. Một chat đã có từ trước vẫn dùng tiếng Anh. Nếu ứng dụng Telegram của bạn dùng một ngôn ngữ mà aipager nói được, bạn nhận một thẻ đề nghị ngôn ngữ đó, kèm nút `Giữ tiếng Anh`; nó chỉ đến một lần, dù bạn trả lời thế nào.
 - **Nhóm** có một ngôn ngữ, do một quản trị viên đặt trong `/language`; cho tới lúc đó nhóm dùng tiếng Anh. Thông báo nhanh sau một lần chạm hiện bằng ngôn ngữ của chính người chạm: lựa chọn của họ trong chat riêng với bot, nếu không thì ngôn ngữ ứng dụng Telegram của họ với người tham gia sau bản phát hành này, nếu không nữa thì ngôn ngữ của nhóm. Xem [nhóm](groups.md).
-- **Từ phải sang trái.** Trong tiếng Ba Tư và tiếng Ả Rập, chữ của aipager đọc từ phải sang trái với chữ số Ba Tư hoặc Ả Rập.
+- **Từ phải sang trái.** Trong tiếng Ba Tư và tiếng Ả Rập, chữ của aipager đọc từ phải sang trái với chữ số Ba Tư hoặc Ả Rập. Khi Claude trả lời bằng tiếng Ba Tư hoặc tiếng Ả Rập trong một chat có ngôn ngữ viết từ trái sang phải, cả câu trả lời là một tin nhắn từ phải sang trái: các dòng của chính aipager trong đó (các agent dưới câu trả lời, dòng trạng thái của thẻ làm việc) nằm bên phải như phần còn lại, và vẫn đọc từ trái sang phải.
 - **Từ chỉ chế độ.** `/mode` nhận từ chỉ chế độ bằng ngôn ngữ của bạn (`/mode Hỏi`), và `ask`, `auto` cùng `full` luôn dùng được. Nếu một phiên đang chạy có đúng tên đó, từ đó sẽ là tên phiên (xem `/mode` ở trên).
 - **Mô tả của bot.** Khi khởi động, aipager ghi mô tả của bot (dòng chữ trên màn hình chat trống) và mô tả ngắn bằng từng ngôn ngữ này, cho những người có Telegram dùng ngôn ngữ đó. Telegram hiện chữ đó thay cho chữ bạn viết trong BotFather, nên aipager không đặt gì khi bạn đã có chữ của riêng mình (mô tả và mô tả ngắn được kiểm tra riêng). Nó không bao giờ ghi đè chữ của bạn và không bao giờ đổi mô tả tiếng Anh hay mô tả mặc định. Khi chữ hiện tại của nó đã được đặt ở mọi ngôn ngữ, một lần khởi động không hỏi Telegram gì cả. Nếu không, trước tiên nó đọc chữ của bạn trong BotFather (một lần đọc cho mô tả và một lần cho mô tả ngắn): nếu bạn có, nó dừng ở đó, nên khi có chữ của riêng bạn, mỗi lần khởi động chỉ tốn những lần đọc đó, không hơn. Nếu bạn không có, nó đọc từng ngôn ngữ chưa có chữ hiện tại của nó, nên một ngôn ngữ mà bạn đã viết chữ riêng sẽ được đọc lại ở mỗi lần khởi động. Nếu bạn viết mô tả trong BotFather sau khi aipager đã đặt mô tả của nó, người đọc bằng các ngôn ngữ này vẫn thấy mô tả của aipager (xem [xử lý sự cố](troubleshooting.md#the-bot-description-is-not-the-one-i-wrote)).
 
