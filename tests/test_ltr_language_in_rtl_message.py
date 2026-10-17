@@ -154,6 +154,13 @@ def test_line_does_not_double_a_pieces_own_mark():
     assert t.line("   ") == "   "
 
 
+def test_line_keeps_an_emphasis_run_whole_past_a_pieces_own_marks():
+    # The piece's own end mark must go first, or the line's end mark is
+    # put after the closing "*" and stops it closing.
+    t = twin()
+    assert t.line(LRM + "*(x)*" + LRM, kind="md") == LRM + "*(x)" + LRM + "*"
+
+
 def test_line_keeps_a_block_marker_first():
     assert twin().line("- x", kind="md") == "- " + LRM + "x" + LRM
 
