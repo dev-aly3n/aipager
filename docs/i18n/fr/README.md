@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ ec7afc2 -->
+<!-- i18n-source: README.md @ e6f0c88 -->
 
 <h3>Claude, c'est une discussion de plus.</h3>
 
