@@ -41,6 +41,7 @@
  "path.2": "\"Edit outside the session's folder - a restricted turn writes only in its project and scratchpad\"",
  "path.3": "'Read with an unreadable path'",
  "pretool.deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"aipager safety policy: Bash command blocked by safety policy\"}}",
+ "pretool.soft_deny": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"SendUserFile refused, nothing was sent: a.png (no such file). Tell the person which file could not be sent and why.\"}}",
  "prompt.command.reply_context": "ctx",
  "prompt.command.style": "Apply this reply guidance to your next answer; do not mention or quote it:\n- If you start background agents, your reply is delivered now; results from those agents arrive later as a separate message.",
  "prompt.command.typed": "/compact",

@@ -113,6 +113,9 @@ def _safety() -> dict[str, str]:
         "model_switch_allow": model_switch_marker.ALLOW_REASON,
         "task_notification_prefix": _TASK_NOTIFICATION_PREFIX,
         "pretool.deny": enforce.deny_decision_json("Bash command blocked by safety policy"),
+        "pretool.soft_deny": enforce.soft_deny_json(
+            "SendUserFile refused, nothing was sent: a.png (no such file). Tell "
+            "the person which file could not be sent and why."),
         "hook.allow": json.dumps(hook_reply.allow_decision()),
         "hook.allow_always": json.dumps(hook_reply.allow_decision(
             updated_permissions=[{"type": "addRules"}])),

@@ -58,7 +58,7 @@ log = logging.getLogger(__name__)
 #: The ``hook_event_name`` values aipager's own hook sends for its own
 #: datagrams (not Claude Code events); kept equal to the hook's by a test.
 _INTERNAL_HOOK_EVENTS = frozenset({"queue_pickup", "safety_blocked", "permission_reply_timeout",
-                                   "peer_resolved"})
+                                   "peer_resolved", "send_files_refused"})
 
 #: Where a hook's memory-cap hit is recorded (problem reports, 8.112): the
 #: hook's own main, by the hook name its cap datagram carries.

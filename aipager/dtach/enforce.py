@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 from typing import Iterator
 
-from aipager import peer_auth, safety
+from aipager import peer_auth, safety, send_check
 from aipager.policy_snapshot import (
     LOOP_SENTINELS,
     SCHEDULING_TOOLS,
@@ -1020,10 +1020,7 @@ def _root_bounds(cwd: str | None, session_id, root: str, confined: bool,
     wide = wide_cwd if confined else _cwd_is_wide(cwd)
     usable = bool(cwd) and os.path.isabs(cwd) and not wide
     sentinel = root == safety.ROOT_SENTINEL
-    if sentinel:
-        allow = cwd if usable else None
-    else:
-        allow = safety._realpath(root)
+    allow = _send_root(cwd, root, confined, wide_cwd)
     cwd_ok = usable and (sentinel or safety.under_root(cwd, root))
     if confined:
         write_roots = ((cwd,) if cwd_ok else ()) + (scratch,)
@@ -1032,6 +1029,42 @@ def _root_bounds(cwd: str | None, session_id, root: str, confined: bool,
     home_read_roots = ((allow,) if allow else ()) + (scratch,) + tuple(readable)
     root_cwd = confined and usable and not cwd_ok
     return write_roots, home_read_roots, root_cwd
+
+
+def _send_root(cwd: str | None, root: str, confined: bool,
+               wide_cwd: bool) -> str | None:
+    """The one folder a turn held to a members' root may send files from:
+    the root with symlinks resolved, or under the sentinel (two roots that
+    do not nest) the session folder when it is usable, else None (nothing
+    may be sent). Unlike the read bound it has no scratchpad and no
+    exception for paths outside the home folder."""
+    wide = wide_cwd if confined else _cwd_is_wide(cwd)
+    usable = bool(cwd) and os.path.isabs(cwd) and not wide
+    if root == safety.ROOT_SENTINEL:
+        return cwd if usable else None
+    return safety._realpath(root)
+
+
+def _send_refusal_list(refusals) -> list[dict]:
+    """Each refused file as the hook reports it to the daemon (for the
+    audit): the path as given, the code and the English why."""
+    return [{"path": r.shown, "code": r.code, "reason": r.why}
+            for r in refusals]
+
+
+def _send_root_block(data: dict, root: str, confined: bool,
+                     wide_cwd: bool) -> dict | None:
+    """A member's SendUserFile of a file outside its root: the soft
+    refusal naming each such file, else None."""
+    cwd = data.get("cwd") if isinstance(data.get("cwd"), str) else None
+    refusals = send_check.root_refusals(
+        data.get("tool_input") or {}, cwd,
+        _send_root(cwd, root, confined, wide_cwd))
+    if not refusals:
+        return None
+    return {"tool": send_check.SEND_TOOL,
+            "reason": send_check.refusal_reason(refusals), "soft": True,
+            "send_refusals": _send_refusal_list(refusals)}
 
 
 def _sticky_halt(data: dict, scan: dict, info: dict,
@@ -1092,6 +1125,20 @@ def _bypass_root_violation(rules: dict, data: dict, session) -> str | None:
         home_read_roots=home_read_roots, root_cwd=root_cwd)
 
 
+def _bypass_send_root_block(rules: dict, data: dict) -> dict | None:
+    """A root-bound ``bypass_safety`` turn's SendUserFile outside its
+    root (the strict send bound :func:`_send_root_block`), worked out with
+    the same folder rules as :func:`_bypass_root_violation`."""
+    root = rules.get("root")
+    if root is None:
+        return None
+    cwd = data.get("cwd") if isinstance(data.get("cwd"), str) else None
+    elsewhere = (bool(cwd) and os.path.isabs(cwd) and not _cwd_is_wide(cwd)
+                 and root != safety.ROOT_SENTINEL
+                 and not safety.under_root(cwd, root))
+    return _send_root_block(data, root, elsewhere, False)
+
+
 _FAIL_CLOSED_REASON = "this tool call could not be checked, so it was denied"
 
 
@@ -1102,11 +1149,18 @@ def fail_closed(data: dict) -> dict | None:
     owner's turn keeps working, anyone else's is refused rather than
     let through unchecked (it used to be allowed).
 
+    A SendUserFile is refused (softly, so the turn goes on) for everyone,
+    the owner included: its send floor holds for every turn, and a file
+    that could not be checked may be one of Claude's credentials.
+
     The bypass is NOT honoured on a snapshot whose origin must still be
     checked ("peer message authority": a message from another session, a
     pending check, a turn no Telegram message accounts for) nor for a
     background agent pinned to rights without it: those are exactly the
     turns the failed check was about."""
+    if data.get("tool_name") == send_check.SEND_TOOL:
+        return {"tool": send_check.SEND_TOOL,
+                "reason": send_check.SEND_UNCHECKED_REASON, "soft": True}
     try:
         snap = read_snapshot(str(data.get("session") or ""))
     except Exception:
@@ -1188,14 +1242,77 @@ def decide_full(data: dict) -> tuple[dict | None, dict | None, dict]:
     _cur = {"rules": None, "info": {}}
     if data.get("hook_event_name") != "PreToolUse":
         return None, None, {}
+    if data.get("tool_name") == send_check.SEND_TOOL:
+        # The send floor and the file checks, before anything that lets
+        # an owner's or a terminal turn through unchecked.
+        try:
+            block = _send_pre_gate(data)
+        except Exception as exc:
+            _decide_error = exc
+            block = fail_closed(data)
+        if block is not None:
+            return _send_block(data, block), None, _cur["info"]
     try:
         block = _decide(data)
     except Exception as exc:
         _decide_error = exc  # for the hook's problem report, after its answer
         block = fail_closed(data)
         # An owner allowed by fail_closed: its rules are the owner's.
+        if block is not None and data.get("tool_name") == send_check.SEND_TOOL:
+            block = _send_block(data, block)
         return block, (None if block else peer_auth.UNRESTRICTED_RULES), _cur["info"]
+    if block is not None and data.get("tool_name") == send_check.SEND_TOOL:
+        block = _send_block(data, block)
     return block, (None if block else _cur["rules"]), _cur["info"]
+
+
+def _send_pre_gate(data: dict) -> dict | None:
+    """SendUserFile's send floor and file checks, for every turn: the
+    soft refusal naming each file that may not be sent, else None."""
+    cwd = data.get("cwd") if isinstance(data.get("cwd"), str) else None
+    refusals = send_check.check_files(data.get("tool_input") or {}, cwd)
+    if not refusals:
+        return None
+    return {"tool": send_check.SEND_TOOL,
+            "reason": send_check.refusal_reason(refusals), "soft": True,
+            "send_refusals": _send_refusal_list(refusals)}
+
+
+def _send_block(data: dict, block: dict) -> dict:
+    """A SendUserFile refusal as the hook prints it: soft (Claude reads the
+    reason and tells the person; the turn is never halted), with each
+    refused file in ``info["send_refusals"]`` for the daemon's audit. The
+    one exception is a turn already halted by an earlier block, which
+    stays a hard deny like any tool's. A soft answer that is not about the
+    files (a peer check still running) is passed on as it is."""
+    info = _cur["info"]
+    reason = str(block.get("reason") or "")
+    if "send_refusals" in block:
+        info["send_refusals"] = block["send_refusals"]
+        return {k: v for k, v in block.items() if k != "send_refusals"}
+    if block.get("soft"):
+        if reason == send_check.SEND_UNCHECKED_REASON:
+            info["send_refusals"] = _send_file_codes(
+                data, send_check.CODE_UNCHECKED, reason)
+        return block
+    if reason.startswith("session halted"):
+        return block
+    info["send_refusals"] = _send_file_codes(data, send_check.CODE_TURN_RULES,
+                                             reason)
+    return {"tool": send_check.SEND_TOOL,
+            "reason": send_check.turn_rule_reason(reason), "soft": True}
+
+
+def _send_file_codes(data: dict, code: str, reason: str) -> list[dict]:
+    """Every file of the call, refused for one reason that is not about a
+    file of its own (the turn's rules, a check that failed)."""
+    try:
+        entries = safety.path_targets(send_check.SEND_TOOL,
+                                      data.get("tool_input") or {})
+    except Exception:
+        entries = None
+    return [{"path": e if isinstance(e, str) else "", "code": code,
+             "reason": reason} for e in (entries or [""])]
 
 
 #: Filled by :func:`_decide` for the call in progress: the rules it
@@ -1718,6 +1835,10 @@ def _decide(data: dict):
             halted = _sticky_halt(data, scan, info, tool_name)
             if halted is not None:
                 return halted
+            if tool_name == send_check.SEND_TOOL:
+                sent = _bypass_send_root_block(current, data)
+                if sent is not None:
+                    return sent
         reason = _bypass_root_violation(current, data, session)
         if reason:
             return {"tool": tool_name, "reason": reason}
@@ -1757,6 +1878,15 @@ def _decide(data: dict):
     if root is not None:
         write_roots, home_read_roots, root_cwd = _root_bounds(
             cwd, data.get("session_id"), root, confined, wide_cwd, readable)
+        if tool_name == send_check.SEND_TOOL:
+            # A member sends only files inside its own folder: no
+            # scratchpad and no outside-home exception, unlike its reads.
+            sent = _send_root_block(data, root, confined, wide_cwd)
+            if sent is not None:
+                if info.get("peer_waiting") or info.get("loop_waiting"):
+                    return {"tool": tool_name,
+                            "reason": peer_auth.SOFT_DENY_REASON, "soft": True}
+                return sent
 
     reason = (
         safety.path_violation(tool_name, tool_input, no_access, no_write,
@@ -1790,7 +1920,8 @@ def _decide(data: dict):
 def soft_deny_json(reason: str) -> str:
     """A deny that does NOT halt the turn: no "aipager safety policy"
     marker, so the sticky block (:func:`_turn_already_blocked`) does not
-    see it. Used only while a peer check is still running (C8)."""
+    see it. Used while a peer check is still running (C8), and for every
+    refused SendUserFile, whose reason Claude reads and tells the person."""
     return json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
