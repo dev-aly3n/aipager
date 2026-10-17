@@ -1576,36 +1576,78 @@ class NotifyMixin:
         bound, allowed = outbox.allowed_root_for(snap, req.cwd)
         ctx = self._file_audit_ctx(sess)
 
-        async def _copy() -> None:
+        prompt_id = sess.trigger_msg_id or None
+
+        async def _copy():
             batch = await asyncio.to_thread(
                 outbox.copy_batch, sess.name, chat_id, req.files, req.cwd,
                 req.caption, req.display, req.agent_id or (
                     context.get("agent_id") or ""),
-                bound=bound, allowed_root=allowed)
+                bound=bound, allowed_root=allowed,
+                prompt_id=prompt_id)
             for failure in batch.failures:
                 outbox.audit_file(ctx, outbox.ACTION_FAILED, failure.name,
                                   failure.size, failure.cause)
-            outbox.OUTBOX.add_batch(batch)
+            outbox.OUTBOX.finish_copy(batch)
+            return batch
 
         task = asyncio.create_task(_copy())
         outbox.OUTBOX.track(sess.name, task)
         _BACKGROUND_TASKS.add(task)
         task.add_done_callback(_BACKGROUND_TASKS.discard)
 
-    async def _deliver_turn_files(self, sess: TrackedSession, anchor,
-                                  prompt_id, held_before: str | None) -> None:
+    def _deliver_turn_files(self, sess: TrackedSession, anchor,
+                            prompt_id, held_before: str | None):
         """Send the files Claude sent this turn, after its answer (*anchor*:
-        the answer's message, else the prompt). Waits for copies still
-        running (at most 30 s). Queued instead when the answer was held
-        (they follow it once it lands) or the chat is flood-muted. Never
-        raises: the turn's finish must go on."""
+        the answer's message, else the prompt), in a background task: the
+        finish never waits for an upload (review 2026-10-17, rev-iter1-003).
+
+        What belongs to this turn is taken NOW (its batches and the copies
+        still running), and so is whether its answer was held, so a later
+        turn's files and answers change nothing. The task runs after the
+        session's earlier deliveries (one at a time, in order), waits for
+        the copies (at most 30 s), then sends, or queues behind the held
+        answer or a mute. Returns the task (None when there is nothing to
+        send). Never raises."""
         try:
             from aipager.bot import outbox
             box = outbox.OUTBOX
             if not box.has_batches(sess.name):
-                return
-            await box.wait_in_flight(sess.name)
+                return None
             batches = box.take_batches(sess.name)
+            copies = box.claim_copies(sess.name)
+            held_now = self._held_key_now(sess)
+            held = held_now if held_now and held_now != held_before else None
+            audit = self._file_audit_ctx(sess)
+
+            async def _run() -> None:
+                await self._turn_files_now(sess, batches, copies, anchor,
+                                           prompt_id, held, audit)
+            return box.run_delivery(sess.name, _run, _BACKGROUND_TASKS)
+        except Exception:
+            log.warning("[%s] turn files: delivery not started", sess.label,
+                        exc_info=True)
+            return None
+
+    async def _turn_files_now(self, sess: TrackedSession, batches, copies,
+                              anchor, prompt_id, held: str | None,
+                              audit: dict) -> None:
+        """:meth:`_deliver_turn_files`'s task. Never raises."""
+        try:
+            from aipager.bot import outbox
+            box = outbox.OUTBOX
+            if copies:
+                try:
+                    await box.wait_tasks(copies)
+                finally:
+                    # One still running goes into the store when it ends.
+                    box.unclaim([t for t in copies if not t.done()])
+            for task in copies:
+                batch = outbox.task_batch(task)
+                if batch is not None and (batch.items or batch.failures):
+                    batches.append(batch)
+                box.unclaim([task])
+            batches = sorted(batches, key=lambda b: b.created)
             if not batches:
                 return
             chat_id = self._files_chat(sess)
@@ -1613,10 +1655,9 @@ class NotifyMixin:
                 session=sess.name, chat_id=chat_id,
                 anchor=(anchor or None), held_key=None,
                 prompt_id=prompt_id or None, batches=batches,
-                created=time.monotonic(), audit=self._file_audit_ctx(sess))
-            held_now = self._held_key_now(sess)
-            if held_now and held_now != held_before:
-                pending.held_key, pending.anchor = held_now, None
+                created=time.monotonic(), audit=audit)
+            if held:
+                pending.held_key, pending.anchor = held, None
                 box.queue(pending)
                 log.info("[%s] turn files held behind the held answer", sess.label)
                 return
@@ -1642,14 +1683,20 @@ class NotifyMixin:
 
     async def flush_turn_files(self, sess: TrackedSession) -> int:
         """Deliver this session's files that waited (for a mute to lift, or
-        for the held answer they follow to land), oldest first. Driven by
-        the session monitor's tick and by :meth:`flush_held_answers`.
-        Returns how many deliveries went out."""
+        for the held answer they follow to land), oldest first, then any
+        orphan copies: in the session's delivery task, so neither the
+        monitor's tick nor a held answer's flush waits for an upload.
+        Driven by the session monitor's tick and by
+        :meth:`flush_held_answers`. Returns how many waiting deliveries
+        were handed to the task."""
         from aipager.bot import outbox
         from aipager.bot.held import HELD
         box = outbox.OUTBOX
         chat_id = self._files_chat(sess)
         if not chat_id or MUTE.is_muted(chat_id) or sess.name in _HELD_FLUSHING:
+            return 0
+        if box.delivering(sess.name):
+            # This session's delivery task runs: the next tick comes back.
             return 0
         # A held answer that is no longer held and never landed (dropped by
         # a cap, expired): its files reply to the prompt.
@@ -1657,21 +1704,29 @@ class NotifyMixin:
             if (p.session == sess.name and p.held_key
                     and not HELD.has_key(chat_id, p.held_key)):
                 box.answer_gone(p.held_key)
-        self._adopt_orphan_files(sess, chat_id)
-        sent = 0
         due = box.due(chat_id, sess.name)
-        for i, pending in enumerate(due):
-            if not await self._send_turn_files(sess, pending):
-                for rest in reversed(due[i + 1:]):
-                    box.requeue_front(rest)
-                break
-            sent += 1
-        return sent
+        if due:
+            async def _send_due() -> None:
+                for i, pending in enumerate(due):
+                    try:
+                        done = await self._send_turn_files(sess, pending)
+                    except Exception:
+                        log.warning("[%s] turn files: delivery failed",
+                                    sess.label, exc_info=True)
+                        done = True
+                    if not done:
+                        for rest in reversed(due[i + 1:]):
+                            box.requeue_front(rest)
+                        return
+            box.run_delivery(sess.name, _send_due, _BACKGROUND_TASKS)
+        self._adopt_orphan_files(sess, chat_id)
+        return len(due)
 
     def _adopt_orphan_files(self, sess: TrackedSession, chat_id) -> None:
         """Copied files no finish took (the copy ended after the finish had
-        stopped waiting): queued with no reply target, once the session is
-        idle with no finish out."""
+        stopped waiting): delivered once the session is idle with no finish
+        out, as replies to the prompt of the turn they were copied in, and
+        only once their call is found in the transcript."""
         from aipager.bot import outbox
         box = outbox.OUTBOX
         if (sess.status is not Status.IDLE or box.in_flight.get(sess.name)
@@ -1684,10 +1739,10 @@ class NotifyMixin:
         if any(now - b.created < _ORPHAN_FILES_SECONDS
                for b in box.batches[sess.name]):
             return
-        box.queue(outbox.Pending(
-            session=sess.name, chat_id=chat_id, anchor=None, held_key=None,
-            prompt_id=None, batches=box.take_batches(sess.name), created=now,
-            audit=self._file_audit_ctx(sess)))
+        prompt_id = next((b.prompt_id for b in box.batches[sess.name]
+                          if b.prompt_id), None)
+        self._deliver_turn_files(sess, prompt_id, prompt_id,
+                                 self._held_key_now(sess))
 
     async def _deliver_job_interim(
         self, sess: TrackedSession, content: str, turn_end_wall: float,
@@ -1889,11 +1944,11 @@ class NotifyMixin:
         held_before = self._held_key_now(sess)
         landed = await self._deliver_job_interim(sess, content, turn_end_wall,
                                                  reply_to=reply_to)
-        # This interim turn's files, after its answer.
-        await self._deliver_turn_files(sess, landed or prompt_id, prompt_id,
-                                       held_before)
         if gate is not None:
             self._release_finish_gate(sess, gate)
+        # This interim turn's files, after its answer (in the background).
+        self._deliver_turn_files(sess, landed or prompt_id, prompt_id,
+                                 held_before)
         await self._drain_next_queued(sess)
 
     def _end_job_turn(self, sess: TrackedSession):
@@ -3661,8 +3716,9 @@ class NotifyMixin:
                         log.warning("Failed to send error notification", exc_info=True)
                     if toolless_card_msg_id:
                         self._delete_card_later(sess, toolless_card_msg_id)
-                    # Files Claude sent before the error: under the prompt.
-                    await self._deliver_turn_files(
+                    # Files Claude sent before the error: under the prompt
+                    # (in the background).
+                    self._deliver_turn_files(
                         sess, finish_trigger, finish_trigger,
                         self._held_key_now(sess))
                     # Don't clear trigger_msg_id — retry needs it
@@ -4112,19 +4168,20 @@ class NotifyMixin:
                         except Exception:
                             log.warning("Failed to send full response file", exc_info=True)
 
-                # ── Files Claude sent this turn (SendUserFile) ──────────────
-                # After the answer, as replies to it (the prompt when there is
-                # none), or queued behind a held answer or a mute.
-                await self._deliver_turn_files(
-                    sess, files_anchor or msg_id or finish_trigger,
-                    finish_trigger, files_held_before)
-
                 # This turn's card and answer are settled: the next turn's
                 # card may go up now. (A message Claude had queued and did not
                 # absorb was taken as the next turn at this Stop's arrival,
                 # `_take_next_prompt` (R8, "anchor-on-transcript-consumption"),
                 # and its card follows once this returns.)
                 self._release_finish_gate(sess, gate)
+
+                # ── Files Claude sent this turn (SendUserFile) ──────────────
+                # After the answer, as replies to it (the prompt when there is
+                # none), or queued behind a held answer or a mute: in the
+                # background, so nothing here waits for an upload.
+                self._deliver_turn_files(
+                    sess, files_anchor or msg_id or finish_trigger,
+                    finish_trigger, files_held_before)
 
                 # Flush next queued message (one at a time, rest flush on next IDLE)
                 await self._drain_next_queued(sess)

@@ -74,6 +74,14 @@ async def _send_files(bot, sess, paths, *, tool_use_id="toolu_1", caption=None,
 async def _finish(bot, sess, answer):
     bot.registry.transition(sess.name, Status.IDLE)
     await bot.notify(sess, "idle_prompt", {"summary": answer})
+    await outbox.OUTBOX.settled(sess.name)
+
+
+async def _settled(bot, sess, coro):
+    """*coro* (a flush), then the session's delivery task it started."""
+    out = await coro
+    await outbox.OUTBOX.settled(sess.name)
+    return out
 
 
 def _rich_ids(files_bot):
@@ -224,6 +232,7 @@ def test_a_job_interim_answer_takes_its_turns_files(mk_bot, files_bot, rich, run
         bot.registry.transition(sess.name, Status.IDLE)
         await bot._handle_job_interim(sess, {"summary": "An agent still runs."},
                                       time.time(), reply_to=TRIGGER)
+        await outbox.OUTBOX.settled(sess.name)
     run_async(go())
     [interim_id] = _rich_ids(files_bot)
     [photo] = files_bot.file_calls()
@@ -264,13 +273,13 @@ def test_files_follow_the_held_answer_never_before(mk_bot, files_bot, rich, run_
     assert files_bot.calls == []
     assert HELD.count(CHAT) == 1
     # Still muted: the monitor's flush sends nothing.
-    run_async(bot.flush_turn_files(sess))
+    run_async(_settled(bot, sess, bot.flush_turn_files(sess)))
     assert files_bot.calls == []
     MUTE.clear()
     # Lifted, but the held answer has not gone yet: the files wait for it.
-    run_async(bot.flush_turn_files(sess))
+    run_async(_settled(bot, sess, bot.flush_turn_files(sess)))
     assert files_bot.file_calls() == []
-    run_async(bot.flush_held_answers(sess))
+    run_async(_settled(bot, sess, bot.flush_held_answers(sess)))
     [answer_id] = _rich_ids(files_bot)
     [photo] = files_bot.file_calls()
     assert photo[2]["reply_to_message_id"] == answer_id
@@ -294,7 +303,7 @@ def test_files_wait_while_muted_without_answer(mk_bot, files_bot, rich, run_asyn
     assert files_bot.refused == []
     assert outbox.OUTBOX.has_pending(sess.name)
     MUTE.clear()
-    run_async(bot.notify(sess, "turn_files_flush", {}))
+    run_async(_settled(bot, sess, bot.notify(sess, "turn_files_flush", {})))
     [photo] = files_bot.file_calls()
     assert photo[2]["reply_to_message_id"] == TRIGGER
     assert not outbox.OUTBOX.has_pending(sess.name)
@@ -316,7 +325,7 @@ def test_a_mute_that_starts_during_the_send_keeps_the_files(mk_bot, files_bot, r
     assert files_bot.file_calls() == []
     assert outbox.OUTBOX.has_pending(sess.name)
     del files_bot.fail["send_photo"]
-    run_async(bot.flush_turn_files(sess))
+    run_async(_settled(bot, sess, bot.flush_turn_files(sess)))
     [answer_id] = _rich_ids(files_bot)
     [photo] = files_bot.file_calls()
     assert photo[2]["reply_to_message_id"] == answer_id
@@ -365,3 +374,115 @@ def test_a_file_gone_before_the_copy_gets_its_line(mk_bot, files_bot, rich, run_
     assert files_bot.file_calls() == []
     lines = [c for c in files_bot.calls if c[0] == "send_message"]
     assert len(lines) == 1
+
+
+# ---- the finish never waits for an upload (rev-iter1-003) ---------------------
+
+def test_the_finish_returns_and_opens_its_gate_before_the_upload_ends(
+        mk_bot, files_bot, rich, run_async, tmp_path):
+    """An upload that takes long: the turn's finish is done (its gate open,
+    the next turn's card free to go up) while the file is still uploading,
+    and the file still goes, after the answer, once the upload ends."""
+    import asyncio
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+
+    async def go():
+        files_bot.hold["send_photo"] = asyncio.Event()
+        await _send_files(bot, sess, [_pic(tmp_path)])
+        bot.registry.transition(sess.name, Status.IDLE)
+        finish = asyncio.ensure_future(
+            bot.notify(sess, "idle_prompt", {"summary": "Here it is."}))
+        done, _ = await asyncio.wait([finish], timeout=3.0)
+        finished_first = finish in done
+        gate_open = sess.finish_gate is None
+        uploading = outbox.OUTBOX.delivering(sess.name)
+        files_bot.hold["send_photo"].set()
+        await finish
+        await outbox.OUTBOX.settled(sess.name)
+        return finished_first, gate_open, uploading
+    finished_first, gate_open, uploading = run_async(go())
+    assert finished_first, "the finish waited for the upload"
+    assert gate_open and uploading
+    [answer_id] = _rich_ids(files_bot)
+    [photo] = files_bot.file_calls()
+    assert photo[2]["reply_to_message_id"] == answer_id
+
+
+# ---- orphan copies reply to their turn's prompt ------------------------------
+
+def test_orphan_files_reply_to_the_prompt_of_their_turn(mk_bot, files_bot, rich,
+                                                        run_async, tmp_path):
+    """A copy no finish took (the turn ended with no finish of its own): the
+    monitor's flush sends it as a reply to that turn's prompt."""
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+
+    async def go():
+        await _send_files(bot, sess, [_pic(tmp_path)])
+        await outbox.OUTBOX.wait_in_flight(sess.name)
+        bot.registry.transition(sess.name, Status.IDLE)
+        sess.trigger_msg_id = 999      # a later prompt: not the reply target
+        for b in outbox.OUTBOX.batches[sess.name]:
+            b.created -= 120
+        await bot.flush_turn_files(sess)
+        await outbox.OUTBOX.settled(sess.name)
+    run_async(go())
+    [photo] = files_bot.file_calls()
+    assert photo[2]["reply_to_message_id"] == TRIGGER
+
+
+def test_a_slow_copy_stays_with_its_own_turn(mk_bot, files_bot, rich, run_async,
+                                             tmp_path, monkeypatch):
+    """Turn one's copy is still running when turn two's file is copied and
+    its turn ends: each file replies to its own turn's answer, once."""
+    import asyncio
+    real = outbox.copy_batch
+    slow = threading.Event()
+
+    def copy(session, chat_id, files, *a, **k):
+        if any(f.endswith("first.png") for f in files):
+            slow.wait(1.0)      # never set: a copy that takes a second
+        return real(session, chat_id, files, *a, **k)
+    monkeypatch.setattr(outbox, "copy_batch", copy)
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    first, second = _pic(tmp_path, "first.png"), _pic(tmp_path, "second.png")
+
+    async def go():
+        await _send_files(bot, sess, [first], tool_use_id="toolu_a")
+        bot.registry.transition(sess.name, Status.IDLE)
+        await bot.notify(sess, "idle_prompt", {"summary": "The first."})
+        bot.registry.transition(sess.name, Status.BUSY)
+        await _send_files(bot, sess, [second], tool_use_id="toolu_b")
+        await asyncio.sleep(0.2)            # turn two's copy is done
+        bot.registry.transition(sess.name, Status.IDLE)
+        await bot.notify(sess, "idle_prompt", {"summary": "The second."})
+        await outbox.OUTBOX.settled(sess.name)
+    run_async(go())
+    answers = _rich_ids(files_bot)
+    sent = [(c[2]["photo"].filename, c[2]["reply_to_message_id"])
+            for c in files_bot.file_calls()]
+    assert sent == [("first.png", answers[0]), ("second.png", answers[1])]
+
+
+def test_a_job_interim_answer_does_not_wait_for_the_upload(mk_bot, files_bot, rich,
+                                                           run_async, tmp_path):
+    import asyncio
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+
+    async def go():
+        files_bot.hold["send_photo"] = asyncio.Event()
+        await _send_files(bot, sess, [_pic(tmp_path)])
+        bot.registry.transition(sess.name, Status.IDLE)
+        interim = asyncio.ensure_future(bot._handle_job_interim(
+            sess, {"summary": "An agent still runs."}, time.time(), reply_to=TRIGGER))
+        done, _ = await asyncio.wait([interim], timeout=3.0)
+        files_bot.hold["send_photo"].set()
+        await interim
+        await outbox.OUTBOX.settled(sess.name)
+        return interim in done
+    assert run_async(go()), "the interim answer waited for the upload"
+    [photo] = files_bot.file_calls()
+    assert photo[2]["reply_to_message_id"] == _rich_ids(files_bot)[0]

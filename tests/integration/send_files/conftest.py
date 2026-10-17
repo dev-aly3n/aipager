@@ -51,6 +51,9 @@ class FilesBot:
         #: reached Telegram, but the call was attempted.
         self.refused: list[str] = []
         self.fail: dict[str, BaseException] = {}
+        #: A method name -> an event its calls wait for (an upload that
+        #: takes as long as the test wants).
+        self.hold: dict[str, asyncio.Event] = {}
         self.id = 999
         self._next = 5000
 
@@ -67,6 +70,8 @@ class FilesBot:
             if chat is not None and MUTE.is_muted(chat):
                 self.refused.append(name)
                 raise FloodMuted(MUTE.remaining(chat), chat)
+            if name in self.hold:
+                await self.hold[name].wait()
             if name in self.fail:
                 raise self.fail[name]
             self.calls.append((name, chat, dict(kwargs, _args=args)))

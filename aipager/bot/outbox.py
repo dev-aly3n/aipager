@@ -19,7 +19,8 @@ socket, which any local process can write, so here each file is:
 4. **sorted** into Telegram sends (``plan_sends``): photos and videos in
    albums of 2-10, documents with documents, audio with audio, an
    animation on its own, each album at most 50 MiB;
-5. **delivered** after the answer (``notify``), and its copy deleted.
+5. **delivered** after the answer (``notify``, in a background task per
+   session, one at a time), and its copy deleted.
 
 Copies and waiting deliveries live in memory, like held answers: a
 restart loses them, and the day sweep deletes what is left on disk.
@@ -179,6 +180,9 @@ class Batch:
     agent_id: str
     created: float
     failures: list[Failure] = field(default_factory=list)
+    #: The prompt of the turn it was copied in (the reply target when the
+    #: turn's own finish did not take it).
+    prompt_id: int | None = None
 
 
 @dataclass
@@ -216,12 +220,56 @@ class Outbox:
         self.in_flight: dict[str, set[asyncio.Task]] = {}
         self.batches: dict[str, list[Batch]] = {}
         self.pending: dict[int, list[Pending]] = {}
+        #: Each session's newest delivery task (they run one at a time).
+        self.deliveries: dict[str, asyncio.Task] = {}
+        #: Copies a delivery waits for: their batch goes to that delivery
+        #: (the task's result), never into the store for another to take.
+        self.claimed: set[asyncio.Task] = set()
 
     def clear(self) -> None:
         self.requests.clear()
         self.in_flight.clear()
         self.batches.clear()
         self.pending.clear()
+        self.deliveries.clear()
+        self.claimed.clear()
+
+    # delivery tasks ----------------------------------------------------------
+
+    def run_delivery(self, session: str, work, keep: set | None = None) -> asyncio.Task:
+        """Run ``await work()`` in a task, after the session's earlier
+        delivery tasks are done: one at a time per session, in the order
+        they were started. *keep* holds a strong reference until it ends."""
+        prev = self.deliveries.get(session)
+
+        async def _after_prev() -> None:
+            if prev is not None and not prev.done():
+                await asyncio.wait([prev])
+            await work()
+
+        task = asyncio.create_task(_after_prev())
+        self.deliveries[session] = task
+        if keep is not None:
+            keep.add(task)
+            task.add_done_callback(keep.discard)
+
+        def _done(t: asyncio.Task) -> None:
+            if self.deliveries.get(session) is t:
+                del self.deliveries[session]
+        task.add_done_callback(_done)
+        return task
+
+    def delivering(self, session: str) -> bool:
+        task = self.deliveries.get(session)
+        return task is not None and not task.done()
+
+    async def settled(self, session: str) -> None:
+        """Wait until the session's delivery tasks are all done."""
+        while True:
+            task = self.deliveries.get(session)
+            if task is None or task.done():
+                return
+            await asyncio.wait([task])
 
     # requests -------------------------------------------------------------
 
@@ -294,7 +342,11 @@ class Outbox:
 
     async def wait_in_flight(self, session: str, timeout: float = 30.0) -> None:
         """Wait (at most *timeout* seconds) for this session's copies."""
-        tasks = list(self.in_flight.get(session, ()))
+        await self.wait_tasks(list(self.in_flight.get(session, ())), timeout)
+
+    async def wait_tasks(self, tasks: list[asyncio.Task],
+                         timeout: float = 30.0) -> None:
+        """Wait (at most *timeout* seconds) for these copies."""
         if not tasks:
             return
         done, pending = await asyncio.wait(tasks, timeout=timeout)
@@ -310,6 +362,32 @@ class Outbox:
 
     def take_batches(self, session: str) -> list[Batch]:
         return self.batches.pop(session, [])
+
+    def claim_copies(self, session: str) -> list[asyncio.Task]:
+        """The session's copies still running, claimed for one delivery:
+        each one's batch is that delivery's alone (:meth:`finish_copy`)."""
+        tasks = [t for t in self.in_flight.get(session, ())
+                 if not t.done() and t not in self.claimed]
+        self.claimed.update(tasks)
+        return tasks
+
+    def unclaim(self, tasks) -> None:
+        """Copies a delivery gave up waiting for: their batch goes into the
+        store when they end (an orphan, for the monitor's flush)."""
+        for t in tasks:
+            self.claimed.discard(t)
+
+    def finish_copy(self, batch: Batch) -> None:
+        """A copy ended: its batch goes into the store, unless a delivery
+        claimed the copy and takes the batch from the task itself."""
+        task = None
+        try:
+            task = asyncio.current_task()
+        except RuntimeError:
+            pass
+        if task is not None and task in self.claimed:
+            return
+        self.add_batch(batch)
 
     def has_batches(self, session: str) -> bool:
         return bool(self.batches.get(session)) or bool(self.in_flight.get(session))
@@ -395,6 +473,15 @@ class Outbox:
 
 
 OUTBOX = Outbox()
+
+
+def task_batch(task: asyncio.Task) -> Batch | None:
+    """The batch a finished copy task made, or None (still running,
+    cancelled, failed, or no batch)."""
+    if not task.done() or task.cancelled() or task.exception() is not None:
+        return None
+    result = task.result()
+    return result if isinstance(result, Batch) else None
 
 
 def sweep_disk(now: float | None = None) -> int:
@@ -620,11 +707,11 @@ def _entry_size(entry: str, cwd: str | None) -> int | None:
 def copy_batch(session: str, chat_id: int, files: list[str], cwd: str | None,
                caption: str | None, display: str | None, agent_id: str = "",
                *, bound: bool = False, allowed_root: str | None = None,
-               clock=time.monotonic) -> Batch:
+               prompt_id: int | None = None, clock=time.monotonic) -> Batch:
     """Copy every file of one call, in order (blocking: run it in a
     thread). A file that fails is a :class:`Failure` of the batch."""
     batch = Batch(session=session, caption=caption, display=display, items=[],
-                  agent_id=agent_id, created=clock())
+                  agent_id=agent_id, created=clock(), prompt_id=prompt_id)
     for entry in files:
         try:
             batch.items.append(copy_one(entry, cwd, chat_id, display, bound=bound,

@@ -528,3 +528,34 @@ def test_each_refused_file_adds_one_audit_record(mk_bot, run_async):
         ("FileRefused", "SendUserFile", "id_rsa", True, "floor: a protected file"),
         ("FileRefused", "SendUserFile", "b.png", True, "missing: no such file")]
     assert bot._app.bot.send_message.await_count == 0
+
+
+# ---- one delivery at a time per session (rev-iter1-003) -----------------------
+
+def test_run_delivery_runs_a_sessions_tasks_in_order():
+    import asyncio
+    box = ob.Outbox()
+    order = []
+
+    async def go():
+        gate = asyncio.Event()
+
+        async def first():
+            await gate.wait()
+            order.append("first")
+
+        async def second():
+            order.append("second")
+
+        async def other():
+            order.append("other")
+        box.run_delivery("s", first)
+        box.run_delivery("s", second)
+        box.run_delivery("t", other)
+        await asyncio.sleep(0.05)
+        assert order == ["other"] and box.delivering("s")
+        gate.set()
+        await box.settled("s")
+        assert not box.delivering("s")
+    asyncio.run(go())
+    assert order == ["other", "first", "second"]
