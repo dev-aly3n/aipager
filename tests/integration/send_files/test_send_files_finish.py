@@ -697,6 +697,48 @@ def test_a_slow_copy_stays_with_its_own_turn(mk_bot, files_bot, rich, run_async,
     sent = [(c[2]["photo"].filename, c[2]["reply_to_message_id"])
             for c in files_bot.file_calls()]
     assert sent == [("first.png", answers[0]), ("second.png", answers[1])]
+    # Turn one's batch went to turn one's delivery only, not into the store.
+    assert not outbox.OUTBOX.batches.get(sess.name)
+
+
+def test_a_slow_copy_held_by_a_mute_is_sent_once(mk_bot, files_bot, rich, run_async,
+                                                 tmp_path, monkeypatch):
+    """The same, with both answers held by a flood mute: turn one's files
+    wait behind its answer, turn two's behind its own, and once the mute
+    lifts each file goes once, as a reply to its own answer."""
+    import asyncio
+    real = outbox.copy_batch
+    slow = threading.Event()
+
+    def copy(session, chat_id, files, *a, **k):
+        if any(f.endswith("first.png") for f in files):
+            slow.wait(1.0)
+        return real(session, chat_id, files, *a, **k)
+    monkeypatch.setattr(outbox, "copy_batch", copy)
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    first, second = _pic(tmp_path, "first.png"), _pic(tmp_path, "second.png")
+
+    async def turns():
+        MUTE.mute(CHAT, 600, source="test")
+        await _send_files(bot, sess, [first], tool_use_id="toolu_a")
+        bot.registry.transition(sess.name, Status.IDLE)
+        await bot.notify(sess, "idle_prompt", {"summary": "The first."})
+        bot.registry.transition(sess.name, Status.BUSY)
+        await _send_files(bot, sess, [second], tool_use_id="toolu_b")
+        await asyncio.sleep(0.2)
+        bot.registry.transition(sess.name, Status.IDLE)
+        await bot.notify(sess, "idle_prompt", {"summary": "The second."})
+        await outbox.OUTBOX.settled(sess.name)
+    run_async(turns())
+    assert files_bot.file_calls() == []
+    MUTE.clear()
+    run_async(_settled(bot, sess, bot.flush_held_answers(sess)))
+    answers = _rich_ids(files_bot)
+    sent = [(c[2]["photo"].filename, c[2]["reply_to_message_id"])
+            for c in files_bot.file_calls()]
+    assert sorted(sent) == [("first.png", answers[0]), ("second.png", answers[1])]
+    assert not outbox.OUTBOX.batches.get(sess.name)
 
 
 def test_a_job_interim_answer_does_not_wait_for_the_upload(mk_bot, files_bot, rich,

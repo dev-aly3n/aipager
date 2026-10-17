@@ -157,3 +157,7 @@ def test_a_jpeg_walk_stops_at_its_bounds(tmp_path, monkeypatch):
            + b"\x03" + b"\x00" * 9)
     p.write_bytes(b"\xff\xd8" + _big_app_segments(200_000) + sof)
     assert mk.probe(str(p))[0] == mk.KIND_DOCUMENT
+    # And never past its byte bound.
+    monkeypatch.setattr(mk, "_JPEG_MAX_SEGMENTS", 512)
+    monkeypatch.setattr(mk, "_JPEG_MAX_OFFSET", 100_000)
+    assert mk.probe(str(p))[0] == mk.KIND_DOCUMENT

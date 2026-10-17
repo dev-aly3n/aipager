@@ -620,6 +620,12 @@ def test_batch_in_transcript_looks_in_the_subagents_own_file(home):
     assert ob.batch_in_transcript(batch)
     batch.agent_id = "../a1"
     assert not ob.batch_in_transcript(batch)
+    # An agent id that climbs out of subagents/ to a file holding the call.
+    (sub.parent / "agent-x").mkdir()
+    planted = tp.with_suffix("") / "evil.jsonl"
+    planted.write_text(json.dumps(_call("toolu_s", ["/w/a.png"])) + "\n")
+    batch.agent_id = "x/../../evil"
+    assert not ob.batch_in_transcript(batch)
     batch.agent_id = ""
     assert not ob.batch_in_transcript(batch)
 
@@ -678,3 +684,32 @@ def test_run_delivery_runs_a_sessions_tasks_in_order():
         assert not box.delivering("s")
     asyncio.run(go())
     assert order == ["other", "first", "second"]
+
+
+def test_a_running_copy_is_claimed_by_one_delivery_only():
+    """A copy a delivery waits for is that delivery's: a later delivery of
+    the same session never claims it again (its batch is not shared), and
+    the copy's batch stays out of the store while it is claimed."""
+    import asyncio
+    box = ob.Outbox()
+
+    async def go():
+        gate = asyncio.Event()
+        batch = ob.Batch(session="s", caption=None, display=None,
+                         items=[_item("photo")], agent_id="", created=0.0)
+
+        async def copy():
+            await gate.wait()
+            box.finish_copy(batch)
+            return batch
+        task = asyncio.ensure_future(copy())
+        box.track("s", task)
+        first = box.claim_copies("s")
+        second = box.claim_copies("s")
+        gate.set()
+        await task
+        return first, second, task
+    first, second, task = asyncio.run(go())
+    assert first == [task] and second == []
+    assert ob.task_batch(task) is not None
+    assert not box.batches.get("s")
