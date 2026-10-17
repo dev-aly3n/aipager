@@ -510,11 +510,11 @@ def copy_one(entry: str, cwd: str | None, chat_id: int, display: str | None,
         if (not _stat.S_ISREG(st.st_mode) or st.st_nlink != 1
                 or not _same_file(st, before)):
             raise CopyFailed(CAUSE_GONE, "changed-after-check")
+        # Opened where it was checked: a folder on the way swapped for a
+        # link after the check would lead elsewhere.
         opened = _opened_path(fd)
         if opened is not None and safety._fold(opened) != safety._fold(real):
             raise CopyFailed(CAUSE_GONE, "moved-after-check")
-        if opened is not None and send_check.check_entry(opened, None) is not None:
-            raise CopyFailed(CAUSE_NOT_ALLOWED, "protected-after-check")
         folder = uploads.ensure_chat_folder(outbox_dir(), chat_id)
         name = shown_name(entry)
         dest = uploads.reserve_file(folder, name)
