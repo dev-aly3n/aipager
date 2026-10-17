@@ -1,6 +1,6 @@
 # Événements de hook
 
-<!-- i18n-source: docs/hooks.md @ 8526c26 -->
+<!-- i18n-source: docs/hooks.md @ 054b893 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../hooks.md))
 
@@ -71,6 +71,8 @@ Claude Code va demander une autorisation. La carte d'activité devient la demand
 
 Le hook répond lui-même à la demande quand il le peut. Il ouvre un socket de réponse de courte durée, envoie son adresse avec l'événement, et attend votre appui jusqu'à 20 secondes. Un appui à temps revient comme une décision `PermissionRequest` (autoriser, autoriser avec la règle, ou refuser), donc Claude Code n'affiche jamais sa propre boîte de dialogue. Si aucun appui n'arrive à temps, le hook dit à aipager que l'attente est finie (`permission_reply_timeout`) et n'affiche rien ; il n'affiche rien non plus quand aipager est injoignable ou que quelque chose échoue sur ce chemin. Claude Code affiche alors sa propre boîte de dialogue dans le terminal, et un appui plus tard y répond en tapant les touches. Le journal d'audit (`~/.claude/aipager-audit.jsonl`) note par quelle voie chaque appui a répondu, `"via": "hook_decision"` ou `"via": "keystroke_fallback"`.
 
+Un `PermissionRequest` qui arrive pendant qu'une autre demande est ouverte est affiché lui aussi, comme son propre message sous la carte d'activité. La même boîte de dialogue reçue une deuxième fois (même demandeur, même outil et même appel, ou même entrée) n'est affichée qu'une fois. Claude Code exécute aussi ce hook pour un `AskUserQuestion` ; cette question est déjà affichée depuis son `PreToolUse`, elle n'est donc jamais affichée une deuxième fois. La boîte de dialogue d'un agent en arrière-plan n'apparaît dans le terminal qu'une fois que son hook a cessé d'attendre, sous toute boîte de dialogue déjà ouverte ; c'est pourquoi un appui ne tape des touches que dans la demande que Claude Code affiche en premier (voir [commandes → demandes d'autorisation](commands.md#permission-prompts)).
+
 ### <a id="posttooluse--posttoolusefailure"></a>`PostToolUse` / `PostToolUseFailure`
 
 Un outil a fini, ou a échoué. Sa ligne sur la carte d'activité se fige (un échec est marqué sur la ligne), et une réponse à une demande ouverte est remarquée : un vieux Autoriser ou Refuser pour elle ne tape plus rien ensuite. La session garde les 200 lignes d'outil les plus récentes.
@@ -83,7 +85,7 @@ Un appel `Agent` (ou `Task`) fait à l'intérieur d'un sous-agent (son événeme
 
 aipager lit le `notification_type` de Claude Code :
 
-- `permission_prompt` : un signal plus lent et plus ancien d'une demande d'autorisation. Il n'affiche la demande que si `PermissionRequest` ne l'a pas déjà fait.
+- `permission_prompt` : un signal plus lent et plus ancien d'une demande d'autorisation. Il n'affiche la demande que si aucune demande n'est ouverte : s'il y en a une, c'est la boîte de dialogue que `PermissionRequest` a déjà affichée.
 - `idle_prompt` pendant qu'une demande d'autorisation ou une question attend : la session reste en attente, et la discussion reçoit `⬆️ jim · attend toujours votre réponse plus haut`, une fois par attente.
 - `idle_prompt` sinon : traité comme `Stop` (ci-dessous). Il rattrape une tâche dont le `Stop` s'est perdu ; une réponse déjà livrée n'est jamais renvoyée.
 
