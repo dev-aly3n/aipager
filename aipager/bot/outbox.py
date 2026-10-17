@@ -6,8 +6,9 @@ The PreToolUse hook already checked every file (``aipager.send_check``,
 socket, which any local process can write, so here each file is:
 
 1. **taken from the PreToolUse request** for that ``tool_use_id`` (the
-   input that was checked), or from the PostToolUse ``tool_input`` when
-   that request was missed; never from Claude Code's ``tool_response``;
+   input that was checked, recorded only while a turn or job runs), or
+   from the PostToolUse ``tool_input`` when that request was missed and a
+   turn or job runs; never from Claude Code's ``tool_response``;
 2. **checked again**: the send floor and file checks, and the root of the
    session's current snapshot for a member, all on one resolution of the
    path, which is the one opened;
@@ -20,7 +21,8 @@ socket, which any local process can write, so here each file is:
    albums of 2-10, documents with documents, audio with audio, an
    animation on its own, each album at most 50 MiB;
 5. **delivered** after the answer (``notify``, in a background task per
-   session, one at a time), and its copy deleted.
+   session, one at a time), only once the call is found in the session's
+   transcript (:func:`verify_batch`), and its copy deleted.
 
 Copies and waiting deliveries live in memory, like held answers: a
 restart loses them, and the day sweep deletes what is left on disk.
@@ -32,9 +34,11 @@ from __future__ import annotations
 
 import asyncio
 import errno
+import json
 import logging
 import os
 import re
+import stat as _stat
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -145,6 +149,8 @@ class Request:
     cwd: str | None
     agent_id: str
     created: float
+    #: False when no PreToolUse was seen for it (taken from the PostToolUse).
+    seen: bool = True
 
 
 @dataclass
@@ -180,6 +186,11 @@ class Batch:
     agent_id: str
     created: float
     failures: list[Failure] = field(default_factory=list)
+    #: The call it came from, as the daemon was told it: checked against
+    #: the session's transcript before anything is sent (:func:`verify_batch`).
+    tool_use_id: str = ""
+    files: list[str] = field(default_factory=list)
+    transcript_path: str = ""
     #: The prompt of the turn it was copied in (the reply target when the
     #: turn's own finish did not take it).
     prompt_id: int | None = None
@@ -320,7 +331,7 @@ class Outbox:
                        caption=caption if isinstance(caption, str) and caption else None,
                        display=display if isinstance(display, str) else None,
                        cwd=cwd if isinstance(cwd, str) and cwd else None,
-                       agent_id="", created=self._clock())
+                       agent_id="", created=self._clock(), seen=False)
 
     def _drop_old_requests(self) -> None:
         now = self._clock()
@@ -707,11 +718,14 @@ def _entry_size(entry: str, cwd: str | None) -> int | None:
 def copy_batch(session: str, chat_id: int, files: list[str], cwd: str | None,
                caption: str | None, display: str | None, agent_id: str = "",
                *, bound: bool = False, allowed_root: str | None = None,
+               tool_use_id: str = "", transcript_path: str = "",
                prompt_id: int | None = None, clock=time.monotonic) -> Batch:
     """Copy every file of one call, in order (blocking: run it in a
     thread). A file that fails is a :class:`Failure` of the batch."""
     batch = Batch(session=session, caption=caption, display=display, items=[],
-                  agent_id=agent_id, created=clock(), prompt_id=prompt_id)
+                  agent_id=agent_id, created=clock(), tool_use_id=tool_use_id,
+                  files=list(files), transcript_path=transcript_path,
+                  prompt_id=prompt_id)
     for entry in files:
         try:
             batch.items.append(copy_one(entry, cwd, chat_id, display, bound=bound,
@@ -722,6 +736,149 @@ def copy_batch(session: str, chat_id: int, files: list[str], cwd: str | None,
             batch.failures.append(Failure(shown_name(entry), _entry_size(entry, cwd),
                                           exc.cause))
     return batch
+
+
+# ---- the call in the transcript ----------------------------------------------
+#
+# The control socket can be written by any local process, so a datagram
+# alone never sends a file: the call it names must be in the session's
+# transcript, which only Claude Code writes, as a SendUserFile ``tool_use``
+# with that id and that file list (review 2026-10-17, rev-iter1-002).
+# Claude Code writes its transcript lazily (after the tool-result round),
+# so the check waits for it, at most TRANSCRIPT_WAIT_SECONDS; a call not
+# found by then is not sent (fail closed) and each of its files gets a
+# FileFailed audit record with cause "unverified".
+
+#: How long a delivery waits for the call to appear in the transcript.
+TRANSCRIPT_WAIT_SECONDS = 20.0
+TRANSCRIPT_POLL_SECONDS = 0.25
+#: How much of a transcript's end is read (the call is from this turn).
+TRANSCRIPT_TAIL_BYTES = 64 * 1024 * 1024
+CAUSE_UNVERIFIED = "unverified"
+
+_AGENT_ID_RE = re.compile(r"\A[A-Za-z0-9_-]{1,128}\Z")
+
+
+def _transcript_roots() -> list[str]:
+    """The folders Claude Code keeps transcripts in: ``projects`` under
+    ``~/.claude`` and under ``$CLAUDE_CONFIG_DIR`` when set, resolved."""
+    roots = [os.path.expanduser("~/.claude/projects")]
+    env = os.environ.get("CLAUDE_CONFIG_DIR")
+    if env and os.path.isabs(env):
+        roots.append(os.path.join(env, "projects"))
+    return [safety._realpath(r) for r in roots]
+
+
+def transcript_allowed(path: str) -> bool:
+    """True when *path* can be a transcript Claude Code wrote for this OS
+    user: a ``.jsonl`` regular file under a transcript folder (symlinks
+    resolved), owned by the daemon's own user. A datagram names the
+    transcript too, so a path elsewhere (a file another user planted) is
+    never read as one."""
+    if not isinstance(path, str) or not path or "\x00" in path:
+        return False
+    real = safety._realpath(os.path.abspath(path))
+    if not real.endswith(".jsonl"):
+        return False
+    if not any(safety._under(real, root) and real != root
+               for root in _transcript_roots()):
+        return False
+    try:
+        st = os.stat(real)
+    except OSError:
+        return False
+    return _stat.S_ISREG(st.st_mode) and st.st_uid == _own_uid()
+
+
+def _own_uid() -> int:
+    """The daemon's own user id (a seam for the test of another owner)."""
+    return os.geteuid()
+
+
+def transcript_candidates(transcript_path: str, agent_id: str) -> list[str]:
+    """The files a call can be written in: the session's transcript, and
+    for a subagent's call its own transcript in ``subagents/``."""
+    out = [transcript_path] if transcript_path else []
+    if transcript_path and agent_id and _AGENT_ID_RE.match(agent_id):
+        base = transcript_path[:-len(".jsonl")] if transcript_path.endswith(
+            ".jsonl") else transcript_path
+        name = f"agent-{agent_id}.jsonl"
+        out.append(os.path.join(base, "subagents", name))
+        out.append(os.path.join(os.path.dirname(transcript_path), "subagents", name))
+    return out
+
+
+def _block_matches(block, tool_use_id: str, files: list[str]) -> bool:
+    if not isinstance(block, dict) or block.get("type") != "tool_use":
+        return False
+    if block.get("id") != tool_use_id or block.get("name") != send_check.SEND_TOOL:
+        return False
+    listed = safety.path_targets(send_check.SEND_TOOL, block.get("input") or {})
+    return listed is not None and list(listed) == list(files)
+
+
+def call_in_transcript(path: str, tool_use_id: str, files: list[str]) -> bool:
+    """True when the transcript at *path* holds a SendUserFile ``tool_use``
+    with this id and exactly these files. Reads at most the file's last
+    TRANSCRIPT_TAIL_BYTES; never raises."""
+    if not tool_use_id or not files or not transcript_allowed(path):
+        return False
+    needle = json_needle(tool_use_id)
+    try:
+        with open(path, "rb") as fh:
+            size = os.fstat(fh.fileno()).st_size
+            if size > TRANSCRIPT_TAIL_BYTES:
+                fh.seek(size - TRANSCRIPT_TAIL_BYTES)
+                fh.readline()       # a partial first line
+            for line in fh:
+                if needle not in line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except (ValueError, RecursionError):
+                    continue
+                message = entry.get("message") if isinstance(entry, dict) else None
+                if (not isinstance(entry, dict) or entry.get("type") != "assistant"
+                        or not isinstance(message, dict)):
+                    continue
+                content = message.get("content")
+                if isinstance(content, list) and any(
+                        _block_matches(b, tool_use_id, files) for b in content):
+                    return True
+    except OSError:
+        return False
+    return False
+
+
+def json_needle(text: str) -> bytes:
+    """*text* as it appears inside a JSON string (quotes included)."""
+    return json.dumps(text).encode("utf-8")
+
+
+def batch_in_transcript(batch: Batch, transcript_path: str = "") -> bool:
+    """One look: is *batch*'s call in its session's transcript (the one
+    the batch was copied under, or *transcript_path*, the session's now)?"""
+    paths: list[str] = []
+    for tp in (batch.transcript_path, transcript_path):
+        for cand in transcript_candidates(tp, batch.agent_id):
+            if cand not in paths:
+                paths.append(cand)
+    return any(call_in_transcript(p, batch.tool_use_id, batch.files) for p in paths)
+
+
+async def verify_batch(batch: Batch, transcript_path=lambda: "",
+                       wait: float | None = None) -> bool:
+    """Wait (at most TRANSCRIPT_WAIT_SECONDS) for *batch*'s call to show
+    in the transcript. *transcript_path* returns the session's transcript
+    now (it is read again on each look)."""
+    wait = TRANSCRIPT_WAIT_SECONDS if wait is None else wait
+    deadline = time.monotonic() + wait
+    while True:
+        if await asyncio.to_thread(batch_in_transcript, batch, transcript_path()):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        await asyncio.sleep(TRANSCRIPT_POLL_SECONDS)
 
 
 # ---- sorting and captions --------------------------------------------------

@@ -1565,6 +1565,17 @@ class NotifyMixin:
         if req is None or not req.files:
             log.warning("[%s] turn files: no readable file list", sess.label)
             return
+        if not req.seen and not self._files_turn_live(sess):
+            # No PreToolUse was seen for this call and no turn or job runs:
+            # not a call of Claude's (a forged datagram). Nothing is read.
+            log.warning("[%s] turn files: a send with no request and no turn "
+                        "running was dropped", sess.label)
+            ctx = self._file_audit_ctx(sess)
+            for entry in req.files[:100]:
+                outbox.audit_file(ctx, outbox.ACTION_FAILED,
+                                  outbox.shown_name(entry), None,
+                                  outbox.CAUSE_UNVERIFIED)
+            return
         chat_id = self._files_chat(sess)
         if not chat_id:
             log.warning("[%s] turn files: no chat to send them to", sess.label)
@@ -1576,6 +1587,7 @@ class NotifyMixin:
         bound, allowed = outbox.allowed_root_for(snap, req.cwd)
         ctx = self._file_audit_ctx(sess)
 
+        transcript_path = sess.transcript_path or ""
         prompt_id = sess.trigger_msg_id or None
 
         async def _copy():
@@ -1584,6 +1596,7 @@ class NotifyMixin:
                 req.caption, req.display, req.agent_id or (
                     context.get("agent_id") or ""),
                 bound=bound, allowed_root=allowed,
+                tool_use_id=req.tool_use_id, transcript_path=transcript_path,
                 prompt_id=prompt_id)
             for failure in batch.failures:
                 outbox.audit_file(ctx, outbox.ACTION_FAILED, failure.name,
@@ -1596,6 +1609,13 @@ class NotifyMixin:
         _BACKGROUND_TASKS.add(task)
         task.add_done_callback(_BACKGROUND_TASKS.discard)
 
+    @staticmethod
+    def _files_turn_live(sess: TrackedSession) -> bool:
+        """A turn or a background job of this session is running: the only
+        time Claude can be calling SendUserFile."""
+        return (sess.status in (Status.BUSY, Status.INTERACTIVE)
+                or sess.job_background_open())
+
     def _deliver_turn_files(self, sess: TrackedSession, anchor,
                             prompt_id, held_before: str | None):
         """Send the files Claude sent this turn, after its answer (*anchor*:
@@ -1606,9 +1626,9 @@ class NotifyMixin:
         still running), and so is whether its answer was held, so a later
         turn's files and answers change nothing. The task runs after the
         session's earlier deliveries (one at a time, in order), waits for
-        the copies (at most 30 s), then sends, or queues behind the held
-        answer or a mute. Returns the task (None when there is nothing to
-        send). Never raises."""
+        the copies (at most 30 s), checks each call is in the transcript,
+        then sends, or queues behind the held answer or a mute. Returns the
+        task (None when there is nothing to send). Never raises."""
         try:
             from aipager.bot import outbox
             box = outbox.OUTBOX
@@ -1647,7 +1667,7 @@ class NotifyMixin:
                 if batch is not None and (batch.items or batch.failures):
                     batches.append(batch)
                 box.unclaim([task])
-            batches = sorted(batches, key=lambda b: b.created)
+            batches = await self._verified_batches(sess, batches, audit)
             if not batches:
                 return
             chat_id = self._files_chat(sess)
@@ -1669,6 +1689,30 @@ class NotifyMixin:
         except Exception:
             log.warning("[%s] turn files: delivery failed", sess.label,
                         exc_info=True)
+
+    async def _verified_batches(self, sess: TrackedSession, batches,
+                                audit: dict) -> list:
+        """The batches whose call is in the session's transcript (each
+        waits for it, at most ``outbox.TRANSCRIPT_WAIT_SECONDS``). Any other
+        is dropped: its copies deleted, a FileFailed record per file
+        (cause ``unverified``), nothing in the chat."""
+        from aipager.bot import outbox
+        ordered = sorted(batches, key=lambda b: b.created)
+        found = await asyncio.gather(*(
+            outbox.verify_batch(b, lambda: sess.transcript_path or "")
+            for b in ordered))
+        out = []
+        for batch, ok in zip(ordered, found):
+            if ok:
+                out.append(batch)
+                continue
+            log.warning("[%s] turn files: call %s not in the transcript, "
+                        "nothing sent", sess.label, batch.tool_use_id or "?")
+            for item in batch.items:
+                outbox.audit_file(audit, outbox.ACTION_FAILED, item.name,
+                                  item.size, outbox.CAUSE_UNVERIFIED)
+                outbox.delete_copy(item)
+        return out
 
     async def _send_turn_files(self, sess: TrackedSession, pending) -> bool:
         from aipager.bot import outbox
@@ -2182,6 +2226,11 @@ class NotifyMixin:
         # Before the app check: recording, copying and auditing need no bot.
         if event == "send_files_requested":
             from aipager.bot.outbox import OUTBOX
+            if not self._files_turn_live(sess):
+                # No turn or job runs: nothing Claude does can be asking.
+                log.warning("[%s] turn files: a request with no turn running "
+                            "was ignored", sess.label)
+                return
             OUTBOX.record_request(sess.name, context.get("tool_use_id"),
                                   context.get("tool_input"),
                                   context.get("cwd") or sess.cwd,

@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from aipager.bot import outbox
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.rich_message import RichMessageFloodBanned
 
@@ -85,6 +86,14 @@ class FilesBot:
         return [c for c in self.calls
                 if c[0] in ("send_photo", "send_video", "send_animation", "send_audio",
                             "send_document", "send_media_group")]
+
+
+@pytest.fixture(autouse=True)
+def _claude_config_dir(tmp_path, monkeypatch):
+    """Where the sessions' transcripts live (Claude Code's own folder, here
+    a throwaway one): the daemon reads a call only from there."""
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude-config"))
+    monkeypatch.setattr(outbox, "TRANSCRIPT_WAIT_SECONDS", 1.0)
 
 
 @pytest.fixture

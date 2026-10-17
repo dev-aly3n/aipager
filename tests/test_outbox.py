@@ -4,6 +4,7 @@ the caption, the day sweep."""
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 import struct
@@ -528,6 +529,124 @@ def test_each_refused_file_adds_one_audit_record(mk_bot, run_async):
         ("FileRefused", "SendUserFile", "id_rsa", True, "floor: a protected file"),
         ("FileRefused", "SendUserFile", "b.png", True, "missing: no such file")]
     assert bot._app.bot.send_message.await_count == 0
+
+
+# ---- the call in the transcript (rev-iter1-002) --------------------------------
+
+def _transcript(home, name="5b1d.jsonl", lines=()):
+    tp = home / ".claude" / "projects" / "-proj" / name
+    tp.parent.mkdir(parents=True, exist_ok=True)
+    tp.write_text("".join(json.dumps(x) + "\n" for x in lines))
+    return tp
+
+
+def _call(tid, files, name="SendUserFile"):
+    return {"type": "assistant", "message": {"content": [
+        {"type": "text", "text": "Here."},
+        {"type": "tool_use", "id": tid, "name": name, "input": {"files": files}}]}}
+
+
+def test_transcript_allowed_only_under_claudes_projects(home, tmp_path, monkeypatch):
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    good = _transcript(home)
+    assert ob.transcript_allowed(str(good))
+    planted = tmp_path / "x.jsonl"
+    planted.write_text("")
+    assert not ob.transcript_allowed(str(planted))
+    # A link inside the folder that leads out of it.
+    link = good.parent / "link.jsonl"
+    link.symlink_to(planted)
+    assert not ob.transcript_allowed(str(link))
+    other = good.parent / "notes.txt"
+    other.write_text("")
+    assert not ob.transcript_allowed(str(other))
+    assert not ob.transcript_allowed("")
+    assert not ob.transcript_allowed(str(good.parent / "missing.jsonl"))
+    # $CLAUDE_CONFIG_DIR is Claude's folder too.
+    cfg = tmp_path / "cfg"
+    alt = cfg / "projects" / "-p" / "a.jsonl"
+    alt.parent.mkdir(parents=True)
+    alt.write_text("")
+    assert not ob.transcript_allowed(str(alt))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(cfg))
+    assert ob.transcript_allowed(str(alt))
+
+
+def test_transcript_owned_by_another_user_is_not_read(home, monkeypatch):
+    tp = _transcript(home)
+    monkeypatch.setattr(ob, "_own_uid", lambda: os.geteuid() + 1)
+    assert not ob.transcript_allowed(str(tp))
+
+
+def test_call_in_transcript_matches_id_name_and_files(home):
+    tp = _transcript(home, lines=[
+        {"type": "user", "message": {"content": "send it"}},
+        _call("toolu_a", ["/w/a.png"]),
+        _call("toolu_r", ["/w/r.png"], name="Read"),
+        {"type": "user", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "toolu_u", "content": "x"}]}},
+        # A tool_use-shaped block in a line that is not the assistant's.
+        {"type": "user", "message": {"content": [
+            {"type": "tool_use", "id": "toolu_q", "name": "SendUserFile",
+             "input": {"files": ["/w/q.png"]}}]}},
+    ])
+    assert ob.call_in_transcript(str(tp), "toolu_a", ["/w/a.png"])
+    assert not ob.call_in_transcript(str(tp), "toolu_a", ["/w/b.png"])
+    assert not ob.call_in_transcript(str(tp), "toolu_a", ["/w/a.png", "/w/b.png"])
+    assert not ob.call_in_transcript(str(tp), "toolu_r", ["/w/r.png"])
+    # Named only in a user line (a tool result, or a prompt quoting it).
+    assert not ob.call_in_transcript(str(tp), "toolu_u", ["/w/a.png"])
+    assert not ob.call_in_transcript(str(tp), "toolu_q", ["/w/q.png"])
+    assert not ob.call_in_transcript(str(tp), "", ["/w/a.png"])
+
+
+def test_call_in_transcript_reads_only_the_tail(home, monkeypatch):
+    tp = _transcript(home, lines=[_call("toolu_a", ["/w/a.png"])])
+    with open(tp, "a") as fh:
+        fh.write(json.dumps({"type": "user", "message": {"content": "x" * 5000}}) + "\n")
+    assert ob.call_in_transcript(str(tp), "toolu_a", ["/w/a.png"])
+    monkeypatch.setattr(ob, "TRANSCRIPT_TAIL_BYTES", 1000)
+    assert not ob.call_in_transcript(str(tp), "toolu_a", ["/w/a.png"])
+
+
+def test_batch_in_transcript_looks_in_the_subagents_own_file(home):
+    tp = _transcript(home, lines=[])
+    sub = tp.with_suffix("") / "subagents" / "agent-a1.jsonl"
+    sub.parent.mkdir(parents=True)
+    sub.write_text(json.dumps(_call("toolu_s", ["/w/a.png"])) + "\n")
+    batch = ob.Batch(session="s", caption=None, display=None, items=[], agent_id="a1",
+                     created=0.0, tool_use_id="toolu_s", files=["/w/a.png"],
+                     transcript_path=str(tp))
+    assert ob.batch_in_transcript(batch)
+    batch.agent_id = "../a1"
+    assert not ob.batch_in_transcript(batch)
+    batch.agent_id = ""
+    assert not ob.batch_in_transcript(batch)
+
+
+def test_verify_batch_waits_a_bounded_time(home, monkeypatch):
+    import asyncio
+    tp = _transcript(home, lines=[])
+    batch = ob.Batch(session="s", caption=None, display=None, items=[], agent_id="",
+                     created=0.0, tool_use_id="toolu_late", files=["/w/a.png"],
+                     transcript_path=str(tp))
+    monkeypatch.setattr(ob, "TRANSCRIPT_POLL_SECONDS", 0.05)
+
+    async def late():
+        await asyncio.sleep(0.2)
+        with open(tp, "a") as fh:
+            fh.write(json.dumps(_call("toolu_late", ["/w/a.png"])) + "\n")
+
+    async def go(wait):
+        writer = asyncio.ensure_future(late())
+        ok = await ob.verify_batch(batch, wait=wait)
+        await writer
+        return ok
+    assert asyncio.run(go(2.0)) is True
+    tp.write_text("")
+    t0 = time.monotonic()
+    assert asyncio.run(go(0.1)) is False
+    assert time.monotonic() - t0 < 1.5
 
 
 # ---- one delivery at a time per session (rev-iter1-003) -----------------------

@@ -237,7 +237,10 @@ def turn(mk_bot, home, tmp_path, run_async):
         for m in ("edit_message_text", "delete_message", "set_message_reaction",
                   "edit_message_reply_markup", "pin_chat_message"):
             setattr(b, m, recorder(m))
-        t = tmp_path / "turn.jsonl"
+        # Where Claude Code keeps the session's transcript; the daemon reads
+        # a SendUserFile call only from a transcript there (fix iteration 2).
+        t = home / ".claude" / "projects" / "-proj" / f"{SID}.jsonl"
+        t.parent.mkdir(parents=True, exist_ok=True)
         t.write_text(json.dumps({"type": "user", "message": {
             "content": MARKERS["owner"]}}) + "\n")
         rec = HookReceiver(reg, bot.notify)
@@ -260,6 +263,12 @@ def turn(mk_bot, home, tmp_path, run_async):
                 if c.get("display") is not None:
                     tin["display"] = c["display"]
                 tid = f"toolu_{i}"
+                # Claude Code writes the call in the transcript.
+                with open(t, "a") as f:
+                    f.write(json.dumps({"type": "assistant", "message": {
+                        "role": "assistant", "content": [{
+                            "type": "tool_use", "id": tid, "name": TOOL,
+                            "input": tin}]}}) + "\n")
                 await dg(hook_event_name="PreToolUse", tool_name=TOOL,
                          tool_use_id=tid, tool_input=tin)
                 await asyncio.sleep(0.02)
