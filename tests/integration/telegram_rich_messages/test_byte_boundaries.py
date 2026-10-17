@@ -58,6 +58,18 @@ def _body_ceiling(label: str) -> int:
     return 32_768 - len(f"💬 **{label}** · Finished\n\n".encode("utf-8"))
 
 
+def _body_ceiling_rtl(label: str) -> int:
+    """:func:`_body_ceiling` for a right-to-left answer in an English chat:
+    the Finished line is then marked with U+200E and its name isolated
+    (aipager's own lines inside a right-to-left message), so it takes a
+    few more bytes."""
+    from aipager import i18n
+    from aipager.bot.notify import _result_line_md, finished_line
+    tr = i18n.get("en").directed(True)
+    line = finished_line(tr, _result_line_md(label, tr), "md")
+    return 32_768 - len(f"{line}\n\n".encode("utf-8"))
+
+
 def _no_elapsed(sess):
     sess.busy_started_at = None
     sess.busy_started_wall = 0.0
@@ -177,8 +189,8 @@ def test_sc9_multibyte_persian_under_byte_limit_no_attachment(mk_bot, run_async,
     change "session-name-on-every-message")."""
     sess = _no_elapsed(_sess())
     persian_char = "ا"
-    persian_content = persian_char * (_body_ceiling(sess.label) // 2)
-    assert len(persian_content.encode("utf-8")) <= _body_ceiling(sess.label)
+    persian_content = persian_char * (_body_ceiling_rtl(sess.label) // 2)
+    assert len(persian_content.encode("utf-8")) <= _body_ceiling_rtl(sess.label)
 
     bot = mk_bot()
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
