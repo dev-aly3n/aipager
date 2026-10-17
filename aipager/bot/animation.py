@@ -1012,9 +1012,12 @@ def _own_row(tr):
     is one whole code span is isolated from outside it, so the mark stays
     first on Telegram Desktop and Web and a Persian word inside the span
     cannot pull the rest of the row around it; nothing ever goes inside
-    the span. Claude's prose quotes never go through it."""
+    the span. A body rendered in the twin (a non-English row) loses its
+    own end marks first, so the row carries one mark at each end. Claude's
+    prose quotes never go through it."""
     if tr is not None and tr.ltr_in_rtl:
         def own(mark: str, body: str) -> str:
+            body = tr.bare(body)
             if _WHOLE_CODE_SPAN.fullmatch(body):
                 body = tr.isolate(body)
             return str(tr.line(f"{mark} {body}", kind="md"))
