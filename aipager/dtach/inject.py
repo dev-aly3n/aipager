@@ -957,7 +957,7 @@ async def launch_session(
     # The session's name, and (for a Claude Code with SendUserFile, or one
     # whose version is unknown) that Claude can send files to the chat.
     sys_prompt = claude_launch.base_system_prompt(
-        name, resolved.chosen.version if resolved else None)
+        name, getattr(resolved.chosen, "version", None) if resolved else None)
     if system_prompt_extra:
         # SESSION.md roster + rules (Phase D) appended so claude knows
         # who can address it and what's blocked from Telegram.
