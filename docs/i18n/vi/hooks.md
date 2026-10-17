@@ -82,7 +82,7 @@ Một lần gọi `Bash` mà Claude Code đã chuyển xuống chạy nền sẽ
 
 Một lần gọi `Agent` (hoặc `Task`) bên trong một subagent (sự kiện của nó mang `agent_id`) cho biết ID của agent mà nó đã khởi chạy. aipager nhớ agent nào đã khởi chạy agent nào, nhờ đó phân biệt được một agent dừng lại để chờ agent của riêng nó với một agent đã xong (xem `SubagentStart` / `SubagentStop` bên dưới).
 
-Với một `SendUserFile` đã chạy, aipager sao chép file của nó ngay, theo danh sách mà `PreToolUse` của nó cho thấy (không bao giờ theo kết quả của công cụ), kiểm tra lại từng file; các bản sao được gửi sau câu trả lời của việc ([lệnh](commands.md#files-claude-sends)).
+Với một `SendUserFile` đã chạy, aipager sao chép file của nó ngay, theo danh sách mà `PreToolUse` của nó cho thấy (không bao giờ theo kết quả của công cụ), kiểm tra lại từng file; các bản sao được gửi sau câu trả lời của việc, khi đã tìm thấy lời gọi trong lịch sử trò chuyện của phiên ([bảo mật](security.md#files-claude-sends), [lệnh](commands.md#files-claude-sends)).
 
 ### <a id="notification"></a>`Notification`
 

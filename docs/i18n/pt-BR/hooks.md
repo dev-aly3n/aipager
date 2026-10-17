@@ -82,7 +82,7 @@ Um `Bash` que o Claude Code mandou para segundo plano informa um `backgroundTask
 
 Uma chamada `Agent` (ou `Task`) feita dentro de um subagente (o evento dela traz `agent_id`) informa o ID do agente que ela começou. O aipager lembra qual agente começou qual, e assim distingue um agente que parou para esperar pelo próprio agente de um que terminou (veja `SubagentStart` / `SubagentStop` mais abaixo).
 
-Depois de um `SendUserFile` que rodou, o aipager copia na hora os arquivos dele, da lista que o `PreToolUse` mostrou (nunca do resultado da ferramenta), verificando cada um de novo; as cópias são enviadas depois da resposta da tarefa ([comandos](commands.md#files-claude-sends)).
+Depois de um `SendUserFile` que rodou, o aipager copia na hora os arquivos dele, da lista que o `PreToolUse` mostrou (nunca do resultado da ferramenta), verificando cada um de novo; as cópias são enviadas depois da resposta da tarefa, quando a chamada é encontrada na conversa salva da sessão ([segurança](security.md#files-claude-sends), [comandos](commands.md#files-claude-sends)).
 
 ### <a id="notification"></a>`Notification`
 

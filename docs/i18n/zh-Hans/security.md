@@ -135,7 +135,9 @@ aipager 启动的每个会话都有 Claude Code 的 SendUserFile 工具（`CLAUD
 
 拒绝是温和的拒绝：Claude 会读到原因（"SendUserFile refused, nothing was sent: ... Tell the person which file could not be sent and why."），任务继续进行；不会像工具被拦截时那样停下会话。检查本身出错时会拒绝该文件，owner 也一样。每个被拒绝的文件在审计日志里都有一条 `FileRefused` 记录。
 
-aipager 不信任任何本地进程都能写入的控制套接字。它从自己看到的 `PreToolUse` 中取文件列表，从不使用 Claude Code 的结果，会再次检查每个文件（底线、文件检查和会话的根文件夹），打开文件时不跟随链接，确认就是检查过的那个文件，然后复制到 `~/.local/state/aipager/outbox/<chat>/`（文件夹 `0700`，文件 `0600`），所有受限任务本来就不能碰这个地方。发送的只是副本，而且只发到会话自己的聊天；副本发送后立即删除，或一天后删除。
+说到文件，aipager 不会轻信控制套接字：任何本地进程都能写入它，并随意指明任何会话、任何调用或任何对话记录。所以，只有在该会话正在运行任务或后台工作时到达的 `PreToolUse`，它才会记下其中调用的文件列表；`PostToolUse` 自带的列表（在它的 `PreToolUse` 漏掉时，比如重启之后）也只在其中之一正在运行时才接受；从不使用 Claude Code 的结果。它只找一次每个文件的真实路径，并在这个路径上再次检查（底线、文件检查和会话的根文件夹），打开时就打开这个路径、不跟随链接，确认打开的就是检查过的那个文件、而且它仍在这个路径上，然后复制到 `~/.local/state/aipager/outbox/<chat>/`（文件夹 `0700`，文件 `0600`），所有受限任务本来就不能碰这个地方。发送之前，它会在会话的对话记录里找这次调用：一个带有这个 id、文件正好是这些文件的 SendUserFile `tool_use`，位于 `~/.claude/projects`（或 `$CLAUDE_CONFIG_DIR/projects`）下、属于 aipager 自己的系统用户的 `.jsonl` 文件里。Claude Code 写对话记录会晚一些，所以 aipager 最多等这次调用 20 秒；找不到的调用不发送，它的副本会被删除，它的每个文件都会在审计日志里留下一条原因为 `unverified` 的 `FileFailed` 记录（聊天里什么都不发）。发送的只是副本，只发到会话自己的聊天，在任务的回答之后，而且不会拖住下一个任务；副本发送后立即删除，或一天后删除。
+
+这些检查管不到的情况：以 aipager 自己的系统用户运行的进程，既能写套接字，也能写 Claude 的对话记录（它本来就能自己读这些文件）。能连到套接字的其他用户的进程，如果某份对话记录里一次真实的 SendUserFile 调用指明过某个文件，仍然可以在某个会话运行任务时，让 aipager 把这个文件再发一次到该会话的聊天。设置了 `$XDG_RUNTIME_DIR` 时，套接字在这个其他用户连不到的地方；没有设置时，它在 `/tmp` 里。
 
 ## <a id="audit-log"></a>审计日志
 

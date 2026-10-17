@@ -82,7 +82,7 @@ Ein `Bash`-Aufruf, den Claude Code in den Hintergrund verschoben hat, meldet ein
 
 Ein `Agent`-Aufruf (oder `Task`-Aufruf) innerhalb eines Subagenten (sein Ereignis trägt `agent_id`) meldet die ID des Agenten, den er gestartet hat. aipager merkt sich, welcher Agent welchen gestartet hat, und kann so einen Agenten, der gestoppt hat, um auf seinen eigenen Agenten zu warten, von einem unterscheiden, der fertig ist (siehe `SubagentStart` / `SubagentStop` unten).
 
-Bei einem `SendUserFile`, das gelaufen ist, kopiert aipager die Dateien sofort, aus der Liste, die sein `PreToolUse` gezeigt hat (nie aus dem Ergebnis des Tools), und prüft jede noch einmal; die Kopien werden nach der Antwort der Aufgabe geschickt ([Befehle](commands.md#files-claude-sends)).
+Bei einem `SendUserFile`, das gelaufen ist, kopiert aipager die Dateien sofort, aus der Liste, die sein `PreToolUse` gezeigt hat (nie aus dem Ergebnis des Tools), und prüft jede noch einmal; die Kopien werden nach der Antwort der Aufgabe geschickt, sobald der Aufruf im Gesprächsverlauf der Sitzung gefunden ist ([Sicherheit](security.md#files-claude-sends), [Befehle](commands.md#files-claude-sends)).
 
 ### <a id="notification"></a>`Notification`
 

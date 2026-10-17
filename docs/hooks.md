@@ -186,7 +186,7 @@ which agent started which, so it can tell an agent that stopped to wait
 for its own agent from one that finished (see `SubagentStart` /
 `SubagentStop` below).
 
-A `SendUserFile` that ran has its files copied by the daemon at once, from the list its `PreToolUse` showed (never from the tool's result), each checked again; the copies are sent after the turn's answer ([commands](commands.md#files-claude-sends)).
+A `SendUserFile` that ran has its files copied by the daemon at once, from the list its `PreToolUse` showed (never from the tool's result), each checked again; the copies are sent after the turn's answer, once the call is found in the session's transcript ([security](security.md#files-claude-sends), [commands](commands.md#files-claude-sends)).
 
 ### `Notification`
 
