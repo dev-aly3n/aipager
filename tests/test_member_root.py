@@ -262,6 +262,14 @@ def test_relaunch_refusal(home, monkeypatch):
 
 # ---- the hook's bound -----------------------------------------------------------
 
+def _root_denies(bound) -> tuple[str, ...]:
+    """The other scopes' roots in ``bound.deny``, without the other chats'
+    upload folders (``test_private_uploads.py`` covers those)."""
+    from aipager import config
+    base = str(config.FILE_DOWNLOAD_DIR)
+    return tuple(d for d in bound.deny if not d.startswith(base + "/"))
+
+
 def test_snapshot_bound_only_without_can_manage(home):
     scopes = [_group(), _dm(DM_SARA, "sara")]
     pol = _pol()
@@ -273,7 +281,7 @@ def test_snapshot_bound_only_without_can_manage(home):
     assert member_root.snapshot_bound(pol.get_role("user"), g, None) is None
     bound = member_root.snapshot_bound(pol.get_role("read_only"), g, scopes)
     assert bound.root == str(home / "aipager-users" / "group-team")
-    assert bound.deny == (str(home / "aipager-users" / "sara"),)
+    assert _root_denies(bound) == (str(home / "aipager-users" / "sara"),)
 
 
 def test_snapshot_bound_never_denies_its_own_or_a_nested_root(home):
@@ -283,7 +291,7 @@ def test_snapshot_bound_never_denies_its_own_or_a_nested_root(home):
     other = _dm(DM_OWNER, "aly", root="/srv/other")
     bound = member_root.snapshot_bound(_pol().get_role("user"), mine,
                                        [mine, nested, same, other])
-    assert bound.deny == ("/srv/other",)
+    assert _root_denies(bound) == ("/srv/other",)
 
 
 def test_snapshot_bound_names_both_spellings_of_a_linked_root(home, tmp_path):
@@ -293,7 +301,7 @@ def test_snapshot_bound_names_both_spellings_of_a_linked_root(home, tmp_path):
     mine = _group(root="/srv/team")
     other = _dm(DM_SARA, "sara", root=str(tmp_path / "link"))
     bound = member_root.snapshot_bound(_pol().get_role("user"), mine, [mine, other])
-    assert set(bound.deny) == {str(tmp_path / "link"), str(real)}
+    assert set(_root_denies(bound)) == {str(tmp_path / "link"), str(real)}
 
 
 def test_safety_root_helpers():

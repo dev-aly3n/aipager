@@ -386,7 +386,11 @@ cover):
   ("this role reads in the home folder only inside its own folder"),
   the session's scratchpad and its own reply file excepted. Every other
   chat's root folder is a protected path for the member, wherever it
-  is. Folders outside your home folder (`/usr`, `/etc`, `/srv`) stay
+  is, and so is every other chat's upload folder under
+  `/tmp/aipager-files/` (`Read`, `Grep`, `Glob` and the write tools;
+  for a role given Bash, a command naming one is refused, best effort),
+  with the files every chat shared there before per-chat folders.
+  Uploads made in the member's own chat stay readable. Folders outside your home folder (`/usr`, `/etc`, `/srv`) stay
   readable. A custom role with `bypass_role_denies` or `bypass_safety`
   but without `can_manage` writes and searches anywhere inside its root
   folder, and its reads in your home folder stay inside it too: only
@@ -509,7 +513,9 @@ their rules stay best-effort (below).
   projects, for example), where a `user`'s turn reads only inside its
   root folder. Its writes stay confined to the session folder and the
   scratchpad. A verified message from a member's session carries the
-  member's root folder.
+  member's root folder. Such a turn can also read every chat's uploads
+  in `/tmp/aipager-files/`, which a `user`'s turn reads only for its
+  own chat.
 - The root folder binds the file tools only. A custom role you give
   `Bash` can read outside it through the shell (the built-in `user`
   and `read_only` have no `Bash`). A custom role with `bypass_safety`
@@ -798,7 +804,8 @@ would rather not depend on Cloudflare at all.
 ## Voice transcription
 
 `faster-whisper` runs in-process. The audio is downloaded as `.ogg`
-into `/tmp/aipager-files/` (the folder uploaded files go to),
+into the chat's own folder under `/tmp/aipager-files/` (where uploaded
+files go, `0700`, the file `0600`),
 transcribed locally on CPU, and the file stays under your control. **No audio leaves the machine.**
 No third-party API. No key needed beyond the bot token to talk to
 Telegram in the first place.
@@ -966,7 +973,7 @@ Known limits:
 | Stranger sends bot a command | Chat ID filter rejects |
 | Stolen bot token | Use `/revoke` in @BotFather, re-config |
 | Compromised claude tool call | aipager's safety check refuses what a Telegram turn's rules deny; in Ask, Claude Code's own rules in `settings.json` decide what it asks about and a person's tap is the only allow; in Auto (the default for every new session) Claude Code's own safety check runs the calls it judges safe without a prompt and stops the risky ones for a person; a Full access session (admins, and a person in their own private chat) asks nothing, so only aipager's safety check stands in the way, and for an owner's own turns and terminal prompts nothing does ([who decides](#who-decides-whether-a-tool-call-runs)) |
-| Restricted Telegram user escalates to the owner | No shell, sessions started only inside the member's own root folder, writes and searches confined to the project inside it (never the home folder), no reads in the home folder outside the root folder, other members' root folders unreachable, credential files unreadable, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
+| Restricted Telegram user escalates to the owner | No shell, sessions started only inside the member's own root folder, writes and searches confined to the project inside it (never the home folder), no reads in the home folder outside the root folder, other members' root folders and other chats' uploads unreachable, credential files unreadable, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
 | A session's message claims an owner's authority | The message runs with the sending turn's proven rights, never the receiving session's earlier ones; without proof, read and think only ([messages between sessions](#messages-between-claude-sessions)) |
 | A group member borrows someone else's rights | Each message runs with its own sender's role in the chat it came from; a different sender's message waits for the running turn; if one joins anyway, the strictest rules win; slash commands from restricted roles are limited to the keyboard's ([team-mode enforcement](#team-mode-enforcement)) |
 | Group chatter reaches a session | In a group only commands, replies to the bot, mentions of it and marked keyboard taps are acted on ([groups](groups.md#what-the-bot-reads-in-a-group)) |

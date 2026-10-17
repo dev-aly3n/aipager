@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
+- **Files you send from one chat can no longer be read from another, or by other users of the machine.** Every chat's uploads used to share one folder, `/tmp/aipager-files`, which other local users could read and where a member's session in one chat could open another chat's files. Each chat now has its own folder there that only the user aipager runs as can open, and a member's session is refused another chat's uploads. Files sent before this change stay where they are and are not moved or deleted; aipager closes their folder to other users when it starts. The owner and admins can still read every chat's uploads.
 - **An image in Claude's answer no longer makes Telegram download its address.** An image such as `![chart](https://example.com/a.png)` in Claude's answer made Telegram's servers fetch that address to show it, so a prompt injection could carry a secret out in the address with no tool call and no permission prompt. Images in Claude's text now arrive as a plain link with their alt text, and image, video, audio and button tags arrive as text. Link previews, which also make Telegram fetch an address, are now off on every plain-text and HTML message aipager sends. Telegram offers no such option for its rich messages, which most answers are, and whether it builds previews for them has not been checked.
 
 ### Fixed

@@ -518,6 +518,15 @@ class LifecycleMixin:
         # notice straight into it.
         MUTE.clear()
         clear_backoff_signal()
+        # The download folder, 0700 before anything is sent: an older
+        # aipager left it, and the files every chat shared there, open to
+        # every local user (aipager/uploads.py). Never stops the start.
+        try:
+            from aipager import config as _config
+            from aipager import uploads
+            uploads.secure_base(_config.FILE_DOWNLOAD_DIR)
+        except Exception:
+            log.warning("Could not make the download folder private", exc_info=True)
         builder = self._make_builder()
 
         self._app = builder.build()

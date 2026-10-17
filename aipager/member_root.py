@@ -71,10 +71,16 @@ NO_ROOT = Msg(
 
 class RootBound(NamedTuple):
     """What a restricted turn's snapshot is held to: its ``root`` (real
-    path) and the other scopes' roots it may never touch (``deny``)."""
+    path), the folders it may never touch (``deny``: the other scopes'
+    roots and the other chats' upload folders), deny globs used as they
+    are (``deny_globs``: the uploads every chat shared before per-chat
+    folders) and Bash patterns (``deny_bash``: a command naming another
+    chat's upload folder, best effort like every Bash pattern)."""
 
     root: str
     deny: tuple[str, ...]
+    deny_globs: tuple[str, ...] = ()
+    deny_bash: tuple[str, ...] = ()
 
 
 # ---- defaults ----------------------------------------------------------
@@ -368,7 +374,40 @@ def snapshot_bound(role, scope, scopes) -> RootBound | None:
         if safety._under(real, root) or safety._under(root, real):
             continue   # the same folder, or nested: given on purpose
         deny |= {os.path.normpath(path), real}
-    return RootBound(root, tuple(sorted(deny)))
+    globs, bash = _upload_bounds(scope, scopes, deny)
+    return RootBound(root, tuple(sorted(deny)), globs, bash)
+
+
+def _upload_bounds(scope, scopes, deny: set[str]
+                   ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Keep a restricted turn of *scope*'s chat off every other chat's
+    uploads (``aipager/uploads.py``). Adds to *deny* each other scope's
+    upload folder (made or not yet) and whatever else is in the download
+    folder now (a chat no longer configured, a stray file), except this
+    chat's own folder and the old shared files, which the returned glob
+    covers. Returns ``(deny_globs, deny_bash)``."""
+    from aipager import config, uploads
+    base = os.path.abspath(os.fspath(config.FILE_DOWNLOAD_DIR))
+    own = uploads.chat_key(scope.chat_id)
+    for other in scopes:
+        if other.chat_id != scope.chat_id:
+            deny.add(str(uploads.chat_folder(base, other.chat_id)))
+    try:
+        with os.scandir(base) as entries:
+            for entry in entries:
+                if entry.name != own and not "0" <= entry.name[:1] <= "9":
+                    deny.add(os.path.join(base, entry.name))
+    except OSError:
+        pass   # no download folder yet: the other scopes' folders suffice
+    name = re.escape(os.path.basename(base))
+    # Any mention of the download folder that is not this chat's own
+    # folder, and any `..` path step in a command that mentions the
+    # download folder at all (a climb out, quoted, after a `cd`, in a
+    # subshell). Anchored lookaheads keep it linear: it runs on every Bash
+    # call. Any case: macOS disks ignore it.
+    bash = (rf"(?i){name}(?!/{own}(?![\w-]))",
+            rf"(?is)\A(?=.*?{name})(?=.*?(?:^|[^\w.-])\.\.(?![\w.-]))")
+    return (uploads.legacy_glob(base),), bash
 
 
 def as_html(tr, refusal) -> str:
