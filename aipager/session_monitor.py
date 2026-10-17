@@ -433,6 +433,36 @@ def _quiet_since(sess: TrackedSession) -> float | None:
     return max(sess.last_hook_at, sess.busy_started_at) or None
 
 
+def _prompt_agent(perm) -> str:
+    """The agent id that owns open prompt *perm*, ``""`` for Claude's own
+    (or one whose tool is not known)."""
+    info = perm.get("tool_info") if isinstance(perm, dict) else None
+    return str(info.get("agent_id") or "") if isinstance(info, dict) else ""
+
+
+def _interactive_quiet_since(sess: TrackedSession) -> float | None:
+    """When the dialogs a waiting session shows last had a sign of life,
+    for the INTERACTIVE watchdog (roadmap 8.120): the latest of Claude's
+    own hook (``parent_hook_at``), the turn's start, and each open agent
+    prompt's owner's latest hook (or its arrival). A background agent that
+    owns no open prompt keeps working while Claude waits, and its hooks
+    said nothing about the dialog: counted, they kept the watchdog from
+    ever firing. ``None`` when nothing is known (a fresh daemon)."""
+    stamps = [sess.parent_hook_at, sess.busy_started_at]
+    for perm in sess.open_prompts():
+        if not _prompt_agent(perm):
+            continue
+        order = perm["tool_info"].get("order")
+        if isinstance(order, dict):
+            stamps.append(max(order.get("owner_hook_at") or 0.0,
+                              order.get("arrived") or 0.0))
+        else:
+            stamps.append(perm.get("wait_started_at") or 0.0)
+    # Nothing of Claude's own or an owner's on record (a hand-built or
+    # older state): the session's latest hook, as before 8.120.
+    return max(stamps) or sess.last_hook_at or None
+
+
 def expired_compacting_sessions(
     sessions: dict[str, TrackedSession], now: float,
 ) -> list[str]:
@@ -575,11 +605,13 @@ def dialog_interrupted_in_terminal(sess: TrackedSession, now_mono: float,
     return turn_tail_since(sess.transcript_path, since) == "marker"
 
 
-def _open_prompt_tool(sess: TrackedSession) -> tuple[str, str]:
+def _open_prompt_tool(sess: TrackedSession, perm=None) -> tuple[str, str]:
     """``(tool_use_id, tool_name)`` of the dialog *sess* waits on, from
+    *perm* when given (one of several open prompts, roadmap 8.120), else
     the inline prompt or the separate message shown during this wait;
     ``("", "")`` when neither is known (a dialog left to the terminal)."""
-    perm = sess.pending_permission
+    if perm is None:
+        perm = sess.pending_permission
     if not isinstance(perm, dict):
         sent = sess.pending_prompt_msg
         cand = sent.get("perm") if isinstance(sent, dict) else None
@@ -595,7 +627,7 @@ def _open_prompt_tool(sess: TrackedSession) -> tuple[str, str]:
 
 
 def dialog_closed_in_transcript(sess: TrackedSession, now_mono: float,
-                                now_wall: float) -> bool:
+                                now_wall: float, perm=None) -> bool:
     """True when the transcript of a session waiting on a dialog shows
     the dialog is over: its tool's result, or any turn entry written since
     it appeared other than its own pending call
@@ -605,11 +637,16 @@ def dialog_closed_in_transcript(sess: TrackedSession, now_mono: float,
     known: a dialog is never taken as closed without evidence.
 
     *now_mono* / *now_wall*: this tick's clocks, to place the wait's start
-    (a monotonic stamp) on the transcript's wall-clock time line."""
+    (a monotonic stamp) on the transcript's wall-clock time line. *perm*:
+    one of Claude's own open prompts (roadmap 8.120), read from when it
+    was shown; the parent's transcript says nothing about an agent's."""
     if not sess.transcript_path or sess.interactive_entered_at <= 0:
         return False
-    since = now_wall - max(0.0, now_mono - sess.interactive_entered_at)
-    tool_use_id, tool_name = _open_prompt_tool(sess)
+    start = sess.interactive_entered_at
+    if isinstance(perm, dict):
+        start = max(start, perm.get("wait_started_at") or 0.0)
+    since = now_wall - max(0.0, now_mono - start)
+    tool_use_id, tool_name = _open_prompt_tool(sess, perm)
     evidence = saved_prompt_evidence(sess.transcript_path, since,
                                      tool_use_id, tool_name)
     return evidence in ("answered", "moved_on")
@@ -691,6 +728,57 @@ class SessionMonitor:
             return False
         self._dialog_seen[name] = key
         return True
+
+    async def _interactive_watchdog(self, name: str, sess: TrackedSession,
+                                    now: float) -> None:
+        """INTERACTIVE watchdog (item 2.2): demotes only on the
+        transcript's evidence that the dialog is over, read again only when
+        the transcript changed since this wait's last reading. Quiet time
+        counts Claude's own hooks and the open prompts' owners' only
+        (roadmap 8.120). With several prompts open the parent's transcript
+        closes only Claude's own: it says nothing about an agent's dialog,
+        which its own hooks, a tap, /stop or the turn's end close."""
+        baseline = _interactive_quiet_since(sess)
+        if not (baseline and (now - baseline) > INTERACTIVE_TIMEOUT_SECONDS):
+            return
+        prompts = sess.open_prompts()
+        own = [p for p in prompts if not _prompt_agent(p)]
+        if len(prompts) > 1:
+            if not own or not self._dialog_evidence_changed(name, sess):
+                return
+            wall = time.time()
+            ended = [p for p in own if dialog_closed_in_transcript(sess, now, wall, p)]
+            if not ended:
+                return
+            report_store.record_counter("interactive_demoted")
+            closed, inline_closed = sess.close_prompts(
+                lambda p: any(p is e for e in ended), mark=False)
+            left = len(sess.open_prompts())
+            log.warning("[%s] INTERACTIVE > %d min with no hooks, and the "
+                        "transcript shows %d of Claude's prompts are over - "
+                        "%d still open", sess.label,
+                        int(INTERACTIVE_TIMEOUT_SECONDS / 60), closed, left)
+            self.registry.mark_dirty()
+            if not left:
+                self.registry.transition(name, Status.BUSY)
+            else:
+                await self.notify_fn(sess, "prompt_closed",
+                                     {"inline_closed": inline_closed})
+            return
+        if prompts and not own:
+            # An agent's prompt: the parent's transcript proves nothing.
+            return
+        if (self._dialog_evidence_changed(name, sess)
+                and dialog_closed_in_transcript(sess, now, time.time())):
+            log.warning(
+                "[%s] INTERACTIVE > %d min with no hooks, and the "
+                "transcript shows the dialog is over — demoting to BUSY",
+                sess.label, int(INTERACTIVE_TIMEOUT_SECONDS / 60),
+            )
+            report_store.record_counter("interactive_demoted")
+            sess.pending_permission = None
+            self.registry.transition(name, Status.BUSY)
+            self.registry.mark_dirty()
 
     def _dialog_evidence_changed(self, name: str, sess: TrackedSession) -> bool:
         """:meth:`_dialog_transcript_changed` for the INTERACTIVE
@@ -889,20 +977,7 @@ class SessionMonitor:
             # transcript's evidence that the dialog is over. Read again only
             # when the transcript changed since this wait's last reading.
             if sess.status == Status.INTERACTIVE:
-                baseline = _quiet_since(sess)
-                if (baseline and (now - baseline) > INTERACTIVE_TIMEOUT_SECONDS
-                        and self._dialog_evidence_changed(name, sess)
-                        and dialog_closed_in_transcript(sess, now, time.time())):
-                    log.warning(
-                        "[%s] INTERACTIVE > %d min with no hooks, and the "
-                        "transcript shows the dialog is over — demoting to BUSY",
-                        sess.label, int(INTERACTIVE_TIMEOUT_SECONDS / 60),
-                    )
-                    report_store.record_counter("interactive_demoted")
-                    sess.pending_permission = None
-                    self.registry.transition(name, Status.BUSY)
-                    self.registry.mark_dirty()
-                    # Fall through so stale-busy logic still applies.
+                await self._interactive_watchdog(name, sess, now)
 
             # "Prompt not taken" watchdog (roadmap 8.11). Cleared BEFORE
             # the notify so it fires exactly once per send, whatever the
@@ -1072,12 +1147,15 @@ class SessionMonitor:
                 # window from its own start stamp, or from now when it has
                 # neither — never from zero, which would drop it on sight.
                 sess.normalize_subagent_liveness(now)
+                prompt_owners = sess.prompt_owners()
                 silent_ids = [
                     aid for aid, info in sess.active_subagents.items()
                     if (now - info["last_seen"]) > SUBAGENT_SILENCE_SECONDS
                     # A waiting agent is silent while its own agents work:
                     # sweep_unresumed_parents above bounds it.
                     and not sess.agent_shielded(aid, now)
+                    # Nor while its dialog waits on a person (roadmap 8.120).
+                    and aid not in prompt_owners
                 ]
                 for aid in silent_ids:
                     log.info("[%s] dropping silent subagent %s (no hook event "

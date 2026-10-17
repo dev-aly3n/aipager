@@ -2414,11 +2414,14 @@ class AnimationMixin:
                 # now would put "Working" and a Stop button back on it.
                 return None
             if (not final and sess.status == Status.INTERACTIVE
-                    and sess.pending_permission):
+                    and (sess.pending_permission or sess.extra_prompts
+                         or (sess.pending_prompt_msg or {}).get("promoted"))):
                 # The card holds an open prompt (its question and buttons,
                 # inline): a busy frame now would draw over them. A
                 # background agent keeps working while Claude waits, and
-                # its rows reached this edit (live 2026-10-15). Nothing is
+                # its rows reached this edit (live 2026-10-15). The same
+                # while other prompts stay open after the card's own closed
+                # (roadmap 8.120): the card shows Waiting, not Working. Nothing is
                 # sent and nothing is stamped, so the first frame after
                 # the answer carries them (transient, as a skipped edit).
                 return False

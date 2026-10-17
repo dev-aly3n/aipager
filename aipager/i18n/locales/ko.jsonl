@@ -898,7 +898,9 @@
 {"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} 세션이 지금 재시작 중이에요. 잠시 후 다시 눌러 주세요"}
 {"k": "toast.perms_stale", "src": "4e34769b", "v": "이 카드는 오래됐어요. 바뀐 건 없어요"}
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} 세션이 아직 시작하는 중이에요. 잠시 후 다시 시도해 주세요"}
+{"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code가 다른 요청을 먼저 보여 주고 있어요. 그 요청에 먼저 답한 다음 이 요청에 답해 주세요."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "이 요청은 이제 열려 있지 않아요"}
+{"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "Claude Code가 어떤 요청을 먼저 보여 주는지 aipager가 알 수 없어요. 이 요청은 터미널에서 답해 주세요."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram이 이 채팅을 제한하고 있어요. {time} 이후에 다시 시도해 주세요"}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "이미 보내는 중이에요."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "이미 보냈어요."}

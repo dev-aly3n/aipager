@@ -898,7 +898,9 @@
 {"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} 正在重启，请稍后再点"}
 {"k": "toast.perms_stale", "src": "4e34769b", "v": "这张卡片已过时，没有任何更改"}
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} 仍在启动，请稍后再试"}
+{"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code 正在先显示另一个请求，请先回答那个，再回答这个。"}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "这个请求已不再打开"}
+{"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager 无法确定 Claude Code 先显示哪个请求，请在终端中回答这个请求。"}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram 正在限制这个聊天，请在 {time} 之后再试"}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "正在发送中。"}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "已经发送过了。"}

@@ -1033,6 +1033,8 @@ class LifecycleMixin:
         # The INTERACTIVE watchdog counts its silence from here, not from
         # the turn's start before the restart.
         sess.last_hook_at = now_mono
+        # And so does the watchdog's quiet time of Claude's own (8.120).
+        sess.parent_hook_at = now_mono
         # The prompt's tool is in flight once answered (its PostToolUse
         # clears this): without it, idle-recovery could end the answered
         # turn on a quiet transcript whose tail is the previous turn's end.

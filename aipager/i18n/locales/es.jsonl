@@ -898,7 +898,9 @@
 {"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} se está reiniciando ahora mismo: toca otra vez en un momento"}
 {"k": "toast.perms_stale", "src": "4e34769b", "v": "Esta tarjeta es antigua: no cambió nada"}
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} todavía está arrancando: vuelve a intentarlo en un momento"}
+{"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code muestra primero otra solicitud: responde esa antes que esta."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "esta solicitud ya no está abierta"}
+{"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager no puede saber qué solicitud muestra primero Claude Code, así que responde esta en la terminal."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram está limitando este chat: vuelve a intentarlo después de las {time}"}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "Ya se está enviando."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "Ya se envió."}

@@ -484,6 +484,24 @@ def current_prompt_token(sess: TrackedSession, *, create: bool = False):
     return token
 
 
+def open_prompt_tokens(sess: TrackedSession) -> set:
+    """The identities of every prompt *sess* is waiting on right now
+    (roadmap 8.120): the primary's (:func:`current_prompt_token`) and each
+    prompt that opened while it was open. Empty unless INTERACTIVE. A
+    message bound to a token outside this set shows a closed prompt."""
+    if sess.status != Status.INTERACTIVE:
+        return set()
+    tokens = set()
+    primary = current_prompt_token(sess)
+    if primary is not None:
+        tokens.add(primary)
+    for rec in sess.extra_prompts:
+        token = rec.get("prompt_token") if isinstance(rec, dict) else None
+        if token is not None:
+            tokens.add(token)
+    return tokens
+
+
 def new_prompt_token() -> int:
     """A fresh prompt identity. notify stamps one on a separate-message
     prompt the moment it RECORDS it — before the send, which may wait in

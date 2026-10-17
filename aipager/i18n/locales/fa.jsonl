@@ -898,7 +898,9 @@
 {"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} همین الان در حال ری‌استارت است - چند لحظه بعد دوباره بزنید"}
 {"k": "toast.perms_stale", "src": "4e34769b", "v": "این کارت قدیمی است - چیزی عوض نشد"}
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} هنوز در حال بالا آمدن است - چند لحظه بعد دوباره امتحان کنید"}
+{"k": "toast.prompt_behind_other", "src": "25c51410", "v": "فعلاً Claude Code یک درخواست دیگر را جلوتر نشان می‌دهد؛ اول به آن جواب بدهید، بعد به این یکی."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "این درخواست دیگر باز نیست"}
+{"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "برای aipager معلوم نیست Claude Code کدام درخواست را اول نشان می‌دهد؛ این یکی را در ترمینال جواب بدهید."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram فعلاً این چت را محدود کرده - بعد از {time} دوباره امتحان کنید"}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "دارد ارسال می‌شود."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "قبلاً ارسال شده."}

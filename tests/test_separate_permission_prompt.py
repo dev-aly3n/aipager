@@ -189,6 +189,7 @@ def test_allow_on_a_separate_prompt_answers_through_the_hook_and_names_who(
     # runner booted minutes ago reads below any fixed "earlier" value.
     started = time.monotonic() / 2
     sess.busy_started_at = started
+    perm = sess.pending_prompt_msg["perm"]
     q = world.tap(run_async, GROUP, BOB, "allow")
 
     assert world.keys == []                           # nothing typed
@@ -204,7 +205,10 @@ def test_allow_on_a_separate_prompt_answers_through_the_hook_and_names_who(
     assert any("Allowed" in a for a in _answers(q))
     world.bot._watch_keystroke_answer.assert_not_called()
     # One decision per parked hook: the channel is spent.
-    assert sess.pending_prompt_msg["perm"]["hook_reply"] is None
+    assert perm["hook_reply"] is None
+    # And the answered prompt is no longer on record (roadmap 8.120: the
+    # session may stay waiting on another, which must not look like it).
+    assert sess.pending_prompt_msg is None
 
 
 def test_the_session_is_busy_before_the_paced_sends(world, run_async):

@@ -898,7 +898,9 @@
 {"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} сейчас перезапускается: нажми ещё раз чуть позже"}
 {"k": "toast.perms_stale", "src": "4e34769b", "v": "Эта карточка устарела: ничего не изменилось"}
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} ещё запускается: попробуй чуть позже"}
+{"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code сейчас показывает сначала другой запрос: ответь сначала на него, потом на этот."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "этот запрос уже закрыт"}
+{"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager не может понять, какой запрос Claude Code показывает первым, поэтому ответь на этот в терминале."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram ограничивает этот чат: попробуй после {time}"}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "Уже отправляется."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "Уже отправлено."}
