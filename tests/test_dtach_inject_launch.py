@@ -665,3 +665,66 @@ def test_launch_refuses_anything_but_a_mode_id(tmp_path, monkeypatch, run_async,
     assert not ok
     assert err == "Invalid permission mode"
     assert cmd is None  # nothing was spawned
+
+
+# ---- files Claude sends: the switch and the note ----------------------------
+
+def _send_launch_cmd(tmp_path, monkeypatch, run_async, *, version="2.1.302", extra=None):
+    from aipager.claude_resolve import ClaudeInstall, ResolvedClaude
+    captured = {}
+
+    async def _fake_exec(*args, **kwargs):
+        captured["args"] = args
+        return _make_proc(returncode=0)
+    monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _fake_exec)
+    calls = {"n": 0}
+
+    def _is_socket(self):
+        calls["n"] += 1
+        return calls["n"] > 1
+    monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
+    resolved = ResolvedClaude(chosen=ClaudeInstall(path="/opt/claude",
+                                                   realpath="/opt/claude", version=version))
+    monkeypatch.setattr(dtach_inject.claude_resolve, "try_resolve_claude_binary",
+                        lambda **kw: resolved)
+    ok, err = run_async(dtach_inject.launch_session(
+        "jim", mode="ask", cwd=str(tmp_path), system_prompt_extra=extra))
+    assert ok, err
+    return captured["args"][-1]
+
+
+def _prompt_of(bash_cmd: str) -> str:
+    import shlex as _shlex
+    words = _shlex.split(bash_cmd)
+    return words[words.index("--append-system-prompt") + 1]
+
+
+def test_launch_exports_attachments_by_path(tmp_path, monkeypatch, run_async):
+    bash_cmd = _send_launch_cmd(tmp_path, monkeypatch, run_async)
+    assert "export CLAUDE_CODE_ATTACHMENTS_BY_PATH=1; " in bash_cmd
+    assert bash_cmd.index("CLAUDE_CODE_ATTACHMENTS_BY_PATH") < bash_cmd.index("/opt/claude")
+
+
+def test_personal_mode_prompt_carries_the_send_note(tmp_path, monkeypatch, run_async):
+    from aipager.claude_launch import SEND_FILES_NOTE
+    prompt = _prompt_of(_send_launch_cmd(tmp_path, monkeypatch, run_async))
+    assert prompt == ('Your session name is "jim". When users address you by this name, '
+                      'respond naturally -- it is your name in this session.\n\n'
+                      + SEND_FILES_NOTE)
+
+
+def test_scoped_prompt_has_the_note_once_before_session_md(tmp_path, monkeypatch,
+                                                           run_async):
+    from aipager.claude_launch import SEND_FILES_NOTE
+    prompt = _prompt_of(_send_launch_cmd(tmp_path, monkeypatch, run_async,
+                                    extra="# SESSION.md\nrules"))
+    assert prompt.count(SEND_FILES_NOTE) == 1
+    assert prompt.index(SEND_FILES_NOTE) < prompt.index("# SESSION.md")
+
+
+def test_an_old_claude_gets_no_note(tmp_path, monkeypatch, run_async):
+    from aipager.claude_launch import SEND_FILES_NOTE
+    bash_cmd = _send_launch_cmd(tmp_path, monkeypatch, run_async, version="2.1.299")
+    assert SEND_FILES_NOTE not in _prompt_of(bash_cmd)
+    # The switch is set whatever the version: it does nothing on an older one.
+    assert "export CLAUDE_CODE_ATTACHMENTS_BY_PATH=1; " in bash_cmd

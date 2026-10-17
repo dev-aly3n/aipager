@@ -18,7 +18,7 @@ import signal
 import time
 from pathlib import Path
 
-from aipager import claude_resolve, daemon_secrets, instance, perm_modes
+from aipager import claude_launch, claude_resolve, daemon_secrets, instance, perm_modes
 
 log = logging.getLogger(__name__)
 
@@ -948,9 +948,16 @@ async def launch_session(
     # re-sent the last one). Setting it on the command line means the
     # session simply starts on that model.
     model_flag = f"--model {shlex.quote(model)}" if model else ""
-    sys_prompt = (f'Your session name is "{name}". '
-                  f'When users address you by this name, respond naturally '
-                  f'-- it is your name in this session.')
+    # Lazy resolution — see the comment above _PROJECT_DIR. On no
+    # candidate resolving, fall back to the literal "claude", exactly
+    # preserving today's `shutil.which("claude") or "claude"` behaviour:
+    # launch has never been gated on resolution and stays that way.
+    resolved = claude_resolve.try_resolve_claude_binary()
+    claude_bin = resolved.chosen.path if resolved else "claude"
+    # The session's name, and (for a Claude Code with SendUserFile, or one
+    # whose version is unknown) that Claude can send files to the chat.
+    sys_prompt = claude_launch.base_system_prompt(
+        name, resolved.chosen.version if resolved else None)
     if system_prompt_extra:
         # SESSION.md roster + rules (Phase D) appended so claude knows
         # who can address it and what's blocked from Telegram.
@@ -987,16 +994,13 @@ async def launch_session(
         "stripping" if unset_token else "keeping",
         "fresh" if unset_token else "missing/expired",
     )
-    # Lazy resolution — see the comment above _PROJECT_DIR. On no
-    # candidate resolving, fall back to the literal "claude", exactly
-    # preserving today's `shutil.which("claude") or "claude"` behaviour:
-    # launch has never been gated on resolution and stays that way.
-    resolved = claude_resolve.try_resolve_claude_binary()
-    claude_bin = resolved.chosen.path if resolved else "claude"
     bash_cmd = (
         f"unset CLAUDECODE; "
         f"{unset_token}"
         f"export CLAUDE_DTACH_SESSION=claude-{name}; "
+        # Claude Code's SendUserFile (2.1.301+): read once, at start; the
+        # hook checks every file and the daemon delivers it to the chat.
+        f"export {claude_launch.ATTACHMENTS_ENV}=1; "
         # Every sibling value on this line is shlex.quote()d; the binary
         # was the lone exception, safe only because it came verbatim from
         # shutil.which(). Once it can come from config (claude_path) or

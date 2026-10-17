@@ -163,6 +163,10 @@ def send_corpus() -> dict[str, str]:
     out["send.unchecked"] = sc.SEND_UNCHECKED_REASON
     out["pretool.soft_deny"] = enforce.soft_deny_json(
         sc.refusal_reason([sc.Refusal("a.png", "missing", sc._why("missing"))]))
+    from aipager import claude_launch
+    out["send_files_note"] = claude_launch.SEND_FILES_NOTE
+    out["base_prompt.new"] = claude_launch.base_system_prompt("x1", "2.1.302")
+    out["base_prompt.old"] = claude_launch.base_system_prompt("x1", "2.1.300")
     return out
 
 

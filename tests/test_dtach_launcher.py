@@ -177,3 +177,56 @@ def test_dtach_works_recognizes_usage_output(monkeypatch):
     ok, why = dtach_launcher._dtach_works("/usr/bin/dtach")
     assert ok is True
     assert why == ""
+
+
+# ----- files Claude sends: the switch and the note ---------------------------
+
+def _spawn_argv(monkeypatch, *, claude_bin="/opt/claude", version="2.1.302"):
+    from aipager import claude_resolve
+    from aipager.claude_resolve import ClaudeInstall, ResolvedClaude
+    monkeypatch.setattr(dtach_launcher, "_resolve_dtach", lambda: "/fake/dtach")
+    monkeypatch.setattr(dtach_launcher, "_dtach_works", lambda p: (True, ""))
+    monkeypatch.setattr(dtach_launcher, "_socket_alive", lambda s: False)
+    resolved = ResolvedClaude(chosen=ClaudeInstall(path="/opt/claude",
+                                                   realpath="/opt/claude",
+                                                   version=version))
+    monkeypatch.setattr(claude_resolve, "try_resolve_claude_binary",
+                        lambda **kw: resolved)
+    seen = {}
+
+    class _Fake:
+        returncode = 1
+        stderr = "stop here\n"
+        stdout = ""
+
+    def _run(argv, *a, **k):
+        seen["argv"] = argv
+        return _Fake()
+    monkeypatch.setattr(dtach_launcher.subprocess, "run", _run)
+    assert dtach_launcher.launch("dev", claude_bin=claude_bin) == 1
+    return seen["argv"]
+
+
+def test_terminal_session_sets_attachments_by_path(monkeypatch):
+    argv = _spawn_argv(monkeypatch)
+    assert "CLAUDE_CODE_ATTACHMENTS_BY_PATH=1" in argv
+    env_at = argv.index("env")
+    assert env_at < argv.index("CLAUDE_CODE_ATTACHMENTS_BY_PATH=1") < argv.index("/opt/claude")
+
+
+def test_terminal_prompt_carries_the_send_note(monkeypatch):
+    from aipager.claude_launch import SEND_FILES_NOTE
+    argv = _spawn_argv(monkeypatch)
+    prompt = argv[argv.index("--append-system-prompt") + 1]
+    assert prompt.startswith('Your session name is "dev". ')
+    assert prompt.endswith("\n\n" + SEND_FILES_NOTE)
+
+
+def test_terminal_prompt_has_no_note_for_an_old_claude(monkeypatch):
+    from aipager.claude_launch import SEND_FILES_NOTE
+    argv = _spawn_argv(monkeypatch, version="2.1.300")
+    prompt = argv[argv.index("--append-system-prompt") + 1]
+    assert SEND_FILES_NOTE not in prompt
+    # Another binary than the one resolved: its version is unknown.
+    argv = _spawn_argv(monkeypatch, claude_bin="/elsewhere/claude", version="2.1.300")
+    assert SEND_FILES_NOTE in argv[argv.index("--append-system-prompt") + 1]
