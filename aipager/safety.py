@@ -419,6 +419,50 @@ _PATH_KEYS = {
 _WRITE_TOOLS = {"Edit", "MultiEdit", "Write", "NotebookEdit"}
 _SEARCH_TOOLS = {"Glob", "Grep"}
 
+# Tools that name a LIST of paths, and the input key holding it. Kept
+# apart from ``_PATH_KEYS``, whose readers assume one string per tool.
+# Claude Code's SendUserFile (2.1.301+) reads every file it is given and
+# delivers it to the person, so each entry is checked exactly like a Read.
+# Its schema turns a bare string into a one-item list, so a string is
+# read the same way here.
+_LIST_PATH_KEYS = {
+    "SendUserFile": "files",
+}
+
+
+def path_targets(tool_name: str, tool_input: dict) -> list[str] | None:
+    """The raw path strings a path tool names, as given (not trimmed or
+    expanded). A one-item list for a single-path tool (empty when it names
+    none); for a list tool every entry, a bare string as one item. None
+    when the value cannot be read as paths (a list tool's value that is
+    not a string or a list of strings, an empty list, or an entry that is
+    empty or holds a NUL; a single-path tool's non-string value). ``[]``
+    for a tool that names no path."""
+    tool_input = tool_input if isinstance(tool_input, dict) else {}
+    list_key = _LIST_PATH_KEYS.get(tool_name)
+    if list_key:
+        raw = tool_input.get(list_key)
+        if isinstance(raw, str):
+            raw = [raw]
+        if not isinstance(raw, list) or not raw:
+            return None
+        out: list[str] = []
+        for entry in raw:
+            trimmed = _js_trim(entry)
+            if not isinstance(trimmed, str) or not trimmed or "\x00" in trimmed:
+                return None
+            out.append(entry)
+        return out
+    key = _PATH_KEYS.get(tool_name)
+    if not key:
+        return []
+    raw = tool_input.get(key)
+    if raw is None or raw == "":
+        return []
+    if not isinstance(raw, str):
+        return None
+    return [raw]
+
 # Inside a confined write root, these still may not be written: each one
 # makes Claude Code or git run a command as the OS user. ``.claude/``
 # holds project settings (hooks, statusLine), ``.mcp.json`` starts MCP
@@ -1047,7 +1091,16 @@ def path_violation(
     - ``root_cwd``: the session runs outside the turn's root folder, so
       ``write_roots`` left its folder out; a write or search outside the
       roots then says so in its deny reason.
+
+    A tool that names a list of paths (``_LIST_PATH_KEYS``: SendUserFile's
+    ``files``) has every entry checked as a Read; the first reason is
+    returned with the real tool name, and a list that cannot be read
+    (:func:`path_targets` is None) fails closed.
     """
+    if tool_name in _LIST_PATH_KEYS:
+        return _list_violation(tool_name, tool_input, no_access, no_write,
+                               cwd=cwd, readable=readable,
+                               home_read_roots=home_read_roots)
     key = _PATH_KEYS.get(tool_name)
     if not key:
         return None
@@ -1083,6 +1136,26 @@ def path_violation(
     if home_read_roots is not None and _outside_home_read_roots(
             targets, home_read_roots):
         return _outside_root_read_reason(tool_name)
+    return None
+
+
+def _list_violation(tool_name: str, tool_input: dict,
+                    no_access: tuple[str, ...], no_write: tuple[str, ...],
+                    *, cwd: str | None, readable: tuple[str, ...],
+                    home_read_roots: tuple[str, ...] | None) -> str | None:
+    """A list tool's reason: every entry checked as a Read, the first
+    reason written with the real tool name, so the shapes in
+    :data:`REASON_SHAPES` read it unchanged. A list that cannot be read
+    fails closed."""
+    entries = path_targets(tool_name, tool_input)
+    if entries is None:
+        return f"{tool_name} with an unreadable path"  # fail closed
+    for entry in entries:
+        reason = path_violation("Read", {"file_path": entry}, no_access,
+                                no_write, cwd=cwd, readable=readable,
+                                home_read_roots=home_read_roots)
+        if reason is not None:
+            return tool_name + reason[len("Read"):]
     return None
 
 
