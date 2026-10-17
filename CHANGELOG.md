@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.5] - 2026-10-17
+
 ### Changed
 - **The "update is only half done" notice no longer goes stale.** It waits two minutes before it is sent, so a restart right after an install never shows it, and once aipager runs the new version the notice turns into "The aipager update is finished" without its Restart now button.
 - **Each agent under an answer shows its task while it runs a command without a description.** An agent's row said only `Running a command` (or `Using …`) then, so two agents of the same type looked the same. Now it shows the task the agent was started with, and the plain `Running a command` only when there is no task.

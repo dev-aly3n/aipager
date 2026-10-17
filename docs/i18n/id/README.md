@@ -221,7 +221,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Pasang (mount) folder yang ingin kamu suntingkan ke Claude di bawah `/workspace`. Mount `~/.claude` membawa kredensial Claude dan riwayat percakapanmu: jalankan `claude` sekali di host untuk login, atau `docker exec -it aipager claude` untuk login di dalam container.
 
-Tag: `latest`, `1.3`, `1.3.4` (satu per versi persis dan satu per versi minor).
+Tag: `latest`, `1.3`, `1.3.5` (satu per versi persis dan satu per versi minor).
 
 ### <a id="nix"></a>Nix
 
