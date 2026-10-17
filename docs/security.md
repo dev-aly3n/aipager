@@ -493,10 +493,7 @@ their rules stay best-effort (below).
   cannot read its own status file, or runs out of memory while
   starting), Claude Code treats that as "allow". A restricted user
   cannot cause this; any error while deciding denies.
-- Tools that are not file tools but can read a file or send data out
-  are not path-checked: `SendFile`, `WebFetch` (anything the turn can
-  read it can send to a URL), and Claude Code's other file-delivery
-  tools. Deny them for a role in `policy.yaml` if that matters to you.
+- Tools that are not file tools but can send data out are not path-checked: `WebFetch` (anything the turn can read it can send to a URL) and Claude Code's other delivery tools. Deny them for a role in `policy.yaml` if that matters to you. `SendUserFile`, which sends files to the chat, is checked (see [files Claude sends](#files-claude-sends)).
 - A background agent a restricted turn started keeps running after the
   turn ends, and its later tool calls are judged by whichever prompt
   is newest in the session: a later owner or terminal prompt lifts its
@@ -604,6 +601,18 @@ kept narrow.
 
 See [groups → how rules work](groups.md#how-rules-work) for the
 user-facing rules these notes carry.
+
+### Files Claude sends
+
+Every session aipager starts has Claude Code's SendUserFile tool (`CLAUDE_CODE_ATTACHMENTS_BY_PATH=1`), which reads files and delivers them to the session's chat ([commands](commands.md#files-claude-sends)). The `PreToolUse` hook checks every file of the call before Claude Code reads it:
+
+1. **The send floor, for every turn**, the owner's and a terminal prompt's included: aipager's config and state (`~/.config/aipager/**`, `~/.local/share/aipager/**`, `~/.local/state/aipager/**` and its `/tmp` control files), all of `~/.claude/**` and `~/.claude.json*` (Claude's credentials and account), the credential files every restricted role is kept off (`~/.ssh/**`, `~/.gnupg/**`, `~/.aws/**`, `~/.git-credentials`, `~/.netrc` and the rest of that list), `/proc/**`, `/sys/**`, `/dev/**`, and secret-looking names anywhere (`.env`, `.env.*`, `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*` and the other key names, `*.p12`, `*.pfx`, `*.kdbx`, `*.jks`, `*.keystore`, `.pgpass`, `credentials`, `*credentials*.json`). Matched on the path as written and as it really leads, so a symlink to one of these is refused too. Some harmless files share these names (a Keynote `*.key`, a `.env.example`) and are refused as well.
+2. **The file itself**: a regular file once symlinks are resolved, with one hard link, not empty, at most 50 MB.
+3. **The turn's own rules**: what the turn may not Read, and for a member (a role without `can_manage`, held to a [root folder](groups.md#root-folders)) the stricter rule that every file, as written and as it really leads, is inside the root folder. Unlike a member's reads, there is no exception for files outside the home folder (`/tmp`, `/etc`) and none for the session's scratchpad.
+
+A refusal is a soft deny: Claude reads the reason ("SendUserFile refused, nothing was sent: ... Tell the person which file could not be sent and why.") and the turn goes on; it does not halt the session the way a blocked tool does. A check that fails refuses the file, for the owner too. Each refused file has a `FileRefused` record in the audit log.
+
+The daemon does not trust the control socket, which any local process can write to. It takes the file list from the `PreToolUse` it saw, never from Claude Code's result, checks every file again (the floor, the file checks and the session's root folder), opens it without following a link, makes sure it is the file it checked, and copies it into `~/.local/state/aipager/outbox/<chat>/` (folder `0700`, file `0600`), a place every restricted turn is already kept off. Only the copy is sent, and only to the session's own chat; it is deleted once sent, or after a day.
 
 ## Audit log
 

@@ -61,6 +61,7 @@ aipager 把会话标记为工作中，如果还没有工作卡片就打开一张
 
 - 从 Telegram 开始的任务要遵守发送者角色的规则和安全底线（受保护的路径、命令模式），只有 `owner` 角色可以绕过；aipager 无法归属的任务会得到安全底线；你在终端里输入的消息不受限制。规则见[群组](groups.md#how-rules-work)和[安全](security.md#team-mode-enforcement)。
 - 当某条规则拒绝了这次调用时，hook 打印 `deny` 决定，Claude Code 不经询问就拒绝该工具，并通知 aipager（`safety_blocked`）：任务以 `🛑 x1 · 被安全规则阻止：...（已停止）` 停止，该任务之后的每一次工具调用也都会被拒绝。
+- `SendUserFile` 调用（Claude 往聊天里发文件）对每个任务都会检查，owner 的任务和在终端输入的消息也包括在内：发送底线、文件检查和任务自己的规则（[安全](security.md#files-claude-sends)）。被拒绝的调用会得到一个不带 "aipager safety policy" 标记的 `deny`：Claude 读到原因并告诉你，任务继续，钩子会把列出每个文件的 `send_files_refused` 发给 aipager，用于审计日志。
 - 检查本身出错时会拒绝，除非会话的规则能读取并授予所有者绕过权限。
 
 在 aipager 这一边，这次调用会成为工作卡片上的一行（子代理的调用会放到该代理的那一行上），当 `/settings` → 改动预览（diff）打开时（默认关闭），`Write` 或 `Edit` 会显示改动预览。`AskUserQuestion` 调用会变成问题，每个选项一个按钮；在没有任务运行时由 Claude Code 的辅助代理提出的问题不会显示（那不是 Claude 在问你）。Claude 自己的 `Agent` 调用会为它启动的代理留下 `subagent_type` 和 `description`，而子代理的调用就是该代理最新的动态：在代理于后台运行期间，两者都会显示在回答下方的状态里。
@@ -80,6 +81,8 @@ hook 能回答时就自己回答这个请求。它打开一个短期的回复套
 被 Claude Code 移到后台的 `Bash` 调用会报告一个 `backgroundTaskId`。aipager 随后把它当作后台命令跟踪（只限主循环的：带 `agent_id` 的调用属于那个子代理），直到看到它结束：一个带 `<status>` 的 `<task-notification>`（在唤醒 Claude 的消息里，或者在任务进行中到达时出现在对话记录里）、针对它 ID 的 `TaskStop` 或 `KillShell`、会话结束，或两个小时（`AIPAGER_BG_SHELL_MAX_TRACK`，单位秒，默认 7200）。它在卡片上的那一行见[命令](commands.md#idle-responses)。
 
 在子代理内部发起的 `Agent`（或 `Task`）调用（它的事件带有 `agent_id`）会报告它启动的代理的 ID。aipager 记住哪个代理启动了哪个，这样就能区分停下来等待自己的代理的代理和已经完成的代理（见下文 `SubagentStart` / `SubagentStop`）。
+
+已经运行的 `SendUserFile`，aipager 会立刻复制它的文件，依据的是它的 `PreToolUse` 给出的列表（从不使用工具的结果），并逐个再检查一遍；副本在任务的回答之后发送（[命令](commands.md#files-claude-sends)）。
 
 ### <a id="notification"></a>`Notification`
 
@@ -150,6 +153,7 @@ Claude Code 2.1.101 及更高版本会忽略它不认识的 hook 事件，所以
 |---|---|---|
 | `queue_pickup` | hook | 在 `UserPromptSubmit` 时：Claude 取走了哪些 Telegram 消息。 |
 | `safety_blocked` | hook | 在 `PreToolUse` 时，安全检查拒绝了这次调用。 |
+| `send_files_refused` | 钩子 | 在 `PreToolUse` 时，Claude 想发送的文件被拒绝：每个文件及原因，用于审计日志。 |
 | `permission_reply_timeout` | hook | 一次 `PermissionRequest` 等待结束，没有任何点按。 |
 | `statusline` | 状态行 | 每次重绘状态行时。 |
 | `hook_memory_cap_hit` | hook、状态行 | 进程触到了内存上限。 |

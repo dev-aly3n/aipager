@@ -61,6 +61,7 @@ Sebuah alat akan dijalankan. Pemeriksaan keamanan milik aipager sendiri berjalan
 
 - Tugas yang dimulai dari Telegram terikat pada aturan peran pengirimnya dan pada batas bawah keamanan (path yang dilindungi, pola perintah), yang hanya bisa dilewati peran `owner`; tugas yang tidak bisa dikaitkan aipager ke siapa pun mendapat batas bawah itu; pesan yang kamu ketik di terminal tidak dibatasi. Aturannya dijelaskan di [grup](groups.md#how-rules-work) dan [keamanan](security.md#team-mode-enforcement).
 - Saat sebuah aturan menolak pemanggilan, hook mencetak keputusan `deny`, Claude Code menolak alat itu tanpa bertanya, dan aipager mengetahuinya (`safety_blocked`): tugas berhenti dengan `🛑 x1 · Diblokir aturan keamanan: ... (dihentikan)`, dan setiap pemanggilan alat berikutnya dalam tugas itu juga ditolak.
+- Panggilan `SendUserFile` (Claude mengirim file ke chat) diperiksa untuk setiap tugas, termasuk tugas owner dan pesan yang diketik di terminal: batas dasar pengiriman, pemeriksaan file, dan aturan tugas itu sendiri ([keamanan](security.md#files-claude-sends)). Panggilan yang ditolak mendapat `deny` tanpa tanda "aipager safety policy": Claude membaca alasannya dan memberitahumu, tugas berjalan terus, dan hook mengirim `send_files_refused` ke aipager dengan setiap file, untuk log audit.
 - Pemeriksaan yang rusak sendiri akan menolak, kecuali aturan sesi berhasil dibaca dan memberi pengecualian pemilik.
 
 Di sisi aipager, pemanggilan itu menjadi satu baris di kartu kerja (pemanggilan subagen masuk ke baris agen itu), dan `Write` atau `Edit` menampilkan pratinjau perubahan saat `/settings` → Pratinjau perubahan (diff) menyala (bawaannya mati). Pemanggilan `AskUserQuestion` menjadi pertanyaan dengan satu tombol per opsi; pertanyaan yang diajukan agen pembantu Claude Code saat tidak ada tugas yang berjalan tidak ditampilkan (bukan Claude yang bertanya kepadamu). Pemanggilan `Agent` milik Claude sendiri menyimpan `subagent_type` dan `description` untuk agen yang dimulainya, dan pemanggilan subagen adalah tindakan terakhir agen itu: keduanya terlihat di status di bawah jawaban selama agen bekerja di latar belakang.
@@ -80,6 +81,8 @@ Sebuah alat selesai atau gagal. Barisnya di kartu kerja membeku (error ditandai 
 Pemanggilan `Bash` yang dipindahkan Claude Code ke latar belakang melaporkan `backgroundTaskId`. aipager lalu melacaknya sebagai perintah latar belakang (hanya perintah loop utama: pemanggilan dengan `agent_id` milik subagen itu) sampai ia melihat akhirnya: `<task-notification>` dengan `<status>` (di pesan yang membangunkan Claude, atau di riwayat percakapan kalau datang di tengah tugas), `TaskStop` atau `KillShell` dengan ID-nya, sesi berakhir, atau dua jam (`AIPAGER_BG_SHELL_MAX_TRACK`, dalam detik, bawaannya 7200). Tentang barisnya di kartu, lihat [perintah](commands.md#idle-responses).
 
 Pemanggilan `Agent` (atau `Task`) di dalam sebuah subagen (event-nya membawa `agent_id`) melaporkan ID agen yang dimulainya. aipager mengingat agen mana yang memulai agen mana, sehingga bisa membedakan agen yang berhenti untuk menunggu agennya sendiri dari agen yang sudah selesai (lihat `SubagentStart` / `SubagentStop` di bawah).
+
+Setelah `SendUserFile` dijalankan, aipager langsung menyalin file-filenya, dari daftar yang ditunjukkan `PreToolUse`-nya (tidak pernah dari hasil alat itu), sambil memeriksa setiap file lagi; salinannya dikirim setelah jawaban tugas ([perintah](commands.md#files-claude-sends)).
 
 ### <a id="notification"></a>`Notification`
 
@@ -150,6 +153,7 @@ Selain event hook, program pembantu mengirim beberapa pesan milik mereka sendiri
 |---|---|---|
 | `queue_pickup` | hook | Saat `UserPromptSubmit`: pesan Telegram mana yang diambil Claude. |
 | `safety_blocked` | hook | Saat `PreToolUse`, ketika pemeriksaan keamanan menolak pemanggilan. |
+| `send_files_refused` | hook | Saat `PreToolUse`, ketika file yang ingin dikirim Claude ditolak: setiap file dan alasannya, untuk log audit. |
 | `permission_reply_timeout` | hook | Penantian `PermissionRequest` berakhir tanpa ketukan. |
 | `statusline` | baris status | Setiap kali baris status digambar ulang. |
 | `hook_memory_cap_hit` | hook, baris status | Sebuah proses mentok di batas memorinya. |

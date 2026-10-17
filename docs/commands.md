@@ -1108,6 +1108,19 @@ then every file path in order) once its last item has landed; if one
 item cannot be downloaded the rest still go out, with one note naming
 the missing one.
 
+### Files Claude sends
+
+Claude can send you files from its session: ask in your own words ("send me the screenshot", "send me the image at ~/proj/chart.png"), or it sends one when it thinks you want it. It uses Claude Code's SendUserFile tool (Claude Code 2.1.301 or newer), which every session aipager starts gets: aipager starts it with `CLAUDE_CODE_ATTACHMENTS_BY_PATH=1` and tells Claude the tool is there. A session started before your aipager had this needs a restart to get it: `/restart`, a mode switch that restarts it, or Resume.
+
+- The files arrive after the turn's answer, as replies to it (to your message when the turn has no answer), silently, in the session's own chat only. While the turn runs, the busy card shows `📎 Sending 2 files`.
+- Each file goes by its content, not its name: an image as a photo when it fits Telegram's photo limits (at most 10 MB, width plus height at most 10,000, the long side at most 20 times the short one), else as a file; a GIF as an animation; an MP4 as a video; an MP3 or M4A as audio; anything else as a file. When Claude asks for a plain attachment, everything goes as a file.
+- 2 to 10 photos and videos go as one album; files go with files and audio with audio; an animation goes on its own. More are split evenly (11 go as 6 and 5), and no album is over 50 MB.
+- The caption is `💬 <session>`, with Claude's own caption on the next line of the first message, at most 1,024 characters.
+- Every file is checked first, for everyone, the owner included ([security](security.md#files-claude-sends)): aipager's settings, Claude's credentials, keys and secret-looking files are never sent; a file must be a regular file, not empty and at most 50 MB; a member sends only files inside the chat's [root folder](groups.md#root-folders). If a file of a request is refused, nothing of that request is sent: Claude is told why and tells you, and the turn goes on.
+- aipager sends a private copy it took when Claude Code read the file, kept in `~/.local/state/aipager/outbox/` and deleted once sent, or after a day.
+- aipager sets no count limit of its own: sends are paced to Telegram's rate limits, an album counting one per file. While the chat is flood-muted, the files wait and follow the answer.
+- A file that cannot be sent gets one line in the chat, for example `⚠️ Couldn't send report.pdf: Telegram refused it.` Every file sent, refused or failed has its own record in the [audit log](security.md#audit-log).
+
 ### Voice
 
 Voice messages route through `faster-whisper` (the `aipager[voice]`

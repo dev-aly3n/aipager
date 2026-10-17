@@ -61,6 +61,7 @@ Una herramienta está a punto de ejecutarse. Aquí es donde se ejecuta la compro
 
 - Una tarea que empezó en Telegram queda sujeta a las reglas del rol de quien la envió y al piso de seguridad (rutas protegidas, patrones de comandos), del que solo está exento el rol `owner`; una tarea que aipager no puede atribuir a nadie recibe el piso; un mensaje que escribiste tú en la terminal no tiene restricciones. Las reglas están en [uso en equipo](groups.md#how-rules-work) y en [Modelo de seguridad](security.md#team-mode-enforcement).
 - Cuando una regla rechaza la ejecución, el hook imprime una decisión `deny`, Claude Code rechaza la herramienta sin preguntar, y se avisa a aipager (`safety_blocked`): la tarea se detiene con `🛑 x1 · Bloqueado por una regla de seguridad: ... (detenida)`, y todas las herramientas siguientes de esa tarea también se rechazan.
+- Una llamada a `SendUserFile` (Claude envía archivos al chat) se comprueba para cada tarea, la del owner y un mensaje escrito en el terminal incluidos: el mínimo de envío, las comprobaciones de archivo y las reglas de la tarea ([seguridad](security.md#files-claude-sends)). Una llamada rechazada recibe un `deny` sin la marca «aipager safety policy»: Claude lee el motivo y te lo dice, la tarea sigue, y el hook le envía a aipager `send_files_refused` con cada archivo, para el registro de auditoría.
 - Una comprobación que falla rechaza, salvo que las reglas de la sesión se puedan leer y den la exención del propietario.
 
 Del lado de aipager, la ejecución se convierte en una fila de la tarjeta de actividad (la de un subagente va en la fila de ese agente), y un `Write` o `Edit` muestra una vista previa del diff cuando `/settings` → Vistas previas de diff está activado (por defecto está desactivado). Una llamada a `AskUserQuestion` se convierte en la pregunta con un botón por opción; una que hace un agente auxiliar de Claude Code mientras no hay ninguna tarea en curso no se muestra (no es Claude preguntándote a ti). La llamada `Agent` del propio Claude deja `subagent_type` y `description` para el agente que arranca, y una ejecución de un subagente es la última actividad de ese agente: las dos se ven en el estado debajo de una respuesta mientras el agente trabaja en segundo plano.
@@ -80,6 +81,8 @@ Una herramienta terminó, o falló. Su fila de la tarjeta de actividad queda fij
 Un `Bash` que Claude Code mandó a segundo plano informa un `backgroundTaskId`. aipager lo sigue entonces como un comando en segundo plano (solo los del bucle principal: una llamada con `agent_id` es de ese subagente) hasta ver su final: un `<task-notification>` con un `<status>` (en el mensaje que despierta a Claude, o en la conversación guardada cuando llega a mitad de una tarea), un `TaskStop` o `KillShell` con su ID, el final de la sesión, o dos horas (`AIPAGER_BG_SHELL_MAX_TRACK`, en segundos, por defecto 7200). Mira [comandos](commands.md#idle-responses) para su fila en la tarjeta.
 
 Una llamada `Agent` (o `Task`) hecha dentro de un subagente (su evento lleva `agent_id`) informa del ID del agente que arrancó. aipager recuerda qué agente arrancó a cuál, así puede distinguir un agente que paró para esperar a su propio agente de uno que terminó (ver `SubagentStart` / `SubagentStop` más abajo).
+
+Tras un `SendUserFile` que se ejecutó, aipager copia enseguida sus archivos, a partir de la lista que mostró su `PreToolUse` (nunca del resultado de la herramienta), comprobando cada uno otra vez; las copias se envían después de la respuesta de la tarea ([comandos](commands.md#files-claude-sends)).
 
 ### <a id="notification"></a>`Notification`
 
@@ -150,6 +153,7 @@ Además de los eventos de hook, los ayudantes le envían a aipager algunos mensa
 |---|---|---|
 | `queue_pickup` | hook | En `UserPromptSubmit`: qué mensajes de Telegram tomó Claude. |
 | `safety_blocked` | hook | En `PreToolUse`, cuando la comprobación de seguridad rechazó la ejecución. |
+| `send_files_refused` | hook | En `PreToolUse`, cuando se rechazaron archivos que Claude quería enviar: cada archivo y el motivo, para el registro de auditoría. |
 | `permission_reply_timeout` | hook | La espera de un `PermissionRequest` terminó sin ningún toque. |
 | `statusline` | línea de estado | En cada redibujo de la línea de estado. |
 | `hook_memory_cap_hit` | hook, línea de estado | El proceso llegó a su límite de memoria. |

@@ -61,6 +61,7 @@ Bir araç çalışmak üzere. aipager'ın kendi güvenlik kontrolü burada, hook
 
 - Telegram'dan başlatılan bir görev, onu gönderenin rol kurallarına ve yalnızca `owner` rolünün aşabildiği güvenlik alt sınırına (korunan yollar, komut kalıpları) bağlı kalır; aipager'ın kimseye bağlayamadığı bir görev alt sınırı alır; senin terminalde yazdığın bir mesaj sınırsızdır. Kurallar [gruplar](groups.md#how-rules-work) ve [güvenlik](security.md#team-mode-enforcement) sayfalarında.
 - Bir kural çağrıyı reddettiğinde hook bir `deny` kararı yazdırır, Claude Code aracı sormadan reddeder ve aipager bunu öğrenir (`safety_blocked`): görev `🛑 x1 · Bir güvenlik kuralı engelledi: ... (durduruldu)` ile durur ve o görevdeki sonraki her araç çağrısı da reddedilir.
+- Bir `SendUserFile` çağrısı (Claude'un sohbete dosya göndermesi) her görev için denetlenir, owner'ınki ve terminalde yazılmış bir mesaj dahil: gönderim tabanı, dosya denetimleri ve görevin kendi kuralları ([güvenlik](security.md#files-claude-sends)). Reddedilen bir çağrı "aipager safety policy" işareti olmadan bir `deny` alır: Claude nedenini okur ve sana söyler, görev devam eder ve hook, denetim kaydı için her dosyayı adıyla belirten `send_files_refused` mesajını aipager'a gönderir.
 - Kendisi bozulan bir kontrol reddeder; oturumun kuralları okunabilmiş ve sahip istisnası veriyorsa durum farklıdır.
 
 aipager tarafında çağrı çalışma kartında bir satıra dönüşür (bir alt ajanın çağrısı o ajanın satırına gider); `/settings` → Değişiklik önizlemeleri açıkken (varsayılan kapalı) bir `Write` ya da `Edit` değişikliklerin önizlemesini gösterir. Bir `AskUserQuestion` çağrısı, her seçenek için bir düğmesi olan bir soruya dönüşür; hiçbir görev sürmezken Claude Code'un yardımcı bir ajanının sorduğu soru gösterilmez (seni soran Claude değildir). Claude'un kendi `Agent` çağrısı, başlattığı ajan için `subagent_type` ve `description` değerlerini saklar; bir alt ajanın çağrısı da o ajanın son işlemidir: ajan arka planda çalışırken ikisi de yanıtın altındaki durumda görünür.
@@ -80,6 +81,8 @@ Bir araç bitti ya da başarısız oldu. Çalışma kartındaki satırı donar (
 Claude Code'un arka plana taşıdığı bir `Bash` çağrısı bir `backgroundTaskId` bildirir. aipager onu, sonunu görene kadar bir arka plan komutu olarak izler (yalnızca ana döngünün komutları: `agent_id` taşıyan bir çağrı o alt ajana aittir): bir `<status>` taşıyan `<task-notification>` (Claude'u uyandıran mesajda ya da görevin ortasında gelirse konuşma geçmişinde), kimliğini taşıyan `TaskStop` ya da `KillShell`, oturumun sona ermesi ya da iki saat (`AIPAGER_BG_SHELL_MAX_TRACK`, saniye cinsinden, varsayılan 7200). Karttaki satırı için bkz. [komutlar](commands.md#idle-responses).
 
 Bir alt ajanın içinde yapılan bir `Agent` (ya da `Task`) çağrısı (olayı `agent_id` taşır) başlattığı ajanın kimliğini bildirir. aipager hangi ajanın hangisini başlattığını hatırlar; böylece kendi ajanını beklemek için duran bir ajanı bitmiş olandan ayırabilir (aşağıda `SubagentStart` / `SubagentStop`).
+
+Çalışmış bir `SendUserFile`'ın dosyalarını aipager hemen kopyalar; listeyi `PreToolUse`'un gösterdiği listeden alır (asla aracın sonucundan değil) ve her dosyayı yeniden denetler; kopyalar görevin cevabından sonra gönderilir ([komutlar](commands.md#files-claude-sends)).
 
 ### <a id="notification"></a>`Notification`
 
@@ -150,6 +153,7 @@ Hook olaylarının yanı sıra yardımcı programlar aynı soket üzerinden aipa
 |---|---|---|
 | `queue_pickup` | hook | `UserPromptSubmit` sırasında: Claude'un hangi Telegram mesajlarını aldığı. |
 | `safety_blocked` | hook | `PreToolUse` sırasında, güvenlik kontrolü bir çağrıyı reddettiğinde. |
+| `send_files_refused` | hook | `PreToolUse` sırasında, Claude'un göndermek istediği dosyalar reddedildiğinde: denetim kaydı için her dosya ve nedeni. |
 | `permission_reply_timeout` | hook | `PermissionRequest` beklemesi dokunuş olmadan bitti. |
 | `statusline` | durum satırı | Durum satırının her yeniden çiziminde. |
 | `hook_memory_cap_hit` | hook, durum satırı | Bir süreç bellek sınırına dayandı. |

@@ -424,6 +424,19 @@ Claude Code 会与它自己更新渠道（`autoUpdatesChannel`：latest、stable
 
 上传的文件会被下载到 `/tmp/aipager-files/`（命名为 `<time>_<file name>`），路径会交给 claude：有说明文字时，消息是说明文字加上路径；没有说明文字时只有 `check this: <path>`（相册是 `check these: <paths>`），这样 claude 会被指向文件，而不会被告知要拿它做什么。以 `/<label>` 开头的说明文字会选择会话，和文字的 `/<label> <prompt>` 一样，标签会从消息里去掉：只有 `/api` 会把 `check this: <path>` 发给 `api`，而 `/api compare these` 会把 `compare these <paths>` 发到那里。只有开头的 `/<label>` 才会选择目标；说明文字后面的斜杠只是文字。没有会话使用的标签会被拒绝，显示 `⚠️ 这里没有名为 … 的会话`，不发送任何东西。会先检查 Telegram 机器人 20 MB 的下载上限；过大的文件会在任何下载之前得到明确的拒绝。遇到临时网络错误的下载总共最多尝试三次（等 1 秒，然后 2 秒），然后你才会看到错误，错误会写明是哪个文件。相册（作为一条消息发送的多张照片或多个文档）会在最后一项到达后作为一条消息交给 claude（说明文字，然后依次是每个文件路径）；如果某一项下载失败，其余的仍会发送，并附一条写明缺少哪一项的备注。
 
+### <a id="files-claude-sends"></a>Claude 发送的文件
+
+Claude 可以从它的会话里给你发文件：用你自己的话说就行（"把截图发给我"、"把 ~/proj/chart.png 这张图发给我"），或者它觉得你需要时会自己发。它用的是 Claude Code 的 SendUserFile 工具（Claude Code 2.1.301 或更新版本），aipager 启动的每个会话都有这个工具：aipager 用 `CLAUDE_CODE_ATTACHMENTS_BY_PATH=1` 启动会话，并告诉 Claude 有这个工具。在你的 aipager 支持这个功能之前启动的会话，需要重启后才有这个工具：`/restart`、会重启会话的模式切换，或者恢复。
+
+- 文件在这次任务的回答之后到达，作为对回答的回复（任务没有回答时，回复你的消息），不响提示音，而且只发到这个会话自己的聊天。任务运行期间，工作卡片会显示 `📎 正在发送 2 个文件`。
+- 每个文件按内容而不是按名字发送：图片在符合 Telegram 的照片限制时作为照片发送（最大 10 MB，宽加高最多 10,000，长边最多是短边的 20 倍），否则作为文件发送；GIF 作为动图；MP4 作为视频；MP3 或 M4A 作为音频；其他都作为文件。Claude 要求普通附件时，全部作为文件发送。
+- 2 到 10 张照片和视频作为一个相册发送；文件和文件一起，音频和音频一起；动图单独发送。更多时会平均拆分（11 个分成 6 个和 5 个），每个相册不超过 50 MB。
+- 说明文字是 `💬 <session>`，Claude 自己写的说明放在第一条消息的下一行，最多 1,024 个字符。
+- 每个文件都会先检查，对所有人都一样，owner 也不例外（[安全](security.md#files-claude-sends)）：aipager 的设置、Claude 的凭据、密钥和看起来像机密的文件永远不会发送；文件必须是普通文件、不能为空、最大 50 MB；成员只能发送聊天[根文件夹](groups.md#root-folders)里的文件。一个请求里只要有一个文件被拒绝，这个请求就什么都不发：Claude 会知道原因并告诉你，任务继续进行。
+- aipager 发送的是 Claude Code 读取文件时它做的一份私有副本，保存在 `~/.local/state/aipager/outbox/`，发送后立即删除，或一天后删除。
+- aipager 自己不设数量上限：发送节奏按 Telegram 的频率限制来，一个相册按每个文件各算一次。聊天被禁言期间，文件会等待，并跟在回答之后发出。
+- 发不出去的文件会在聊天里有一行说明，例如 `⚠️ 无法发送 report.pdf：Telegram 拒收了这个文件。` 每个已发送、被拒绝或发送失败的文件在[审计日志](security.md#audit-log)里都有自己的记录。
+
 ### <a id="voice"></a>语音消息
 
 语音消息会经过 `faster-whisper`（附加组件 `aipager[voice]`）。音频在本机转成文字，以 `🎙️ 我听到的是：…` 的形式复述，然后像你自己输入的一样被输入，包括作为 `/new` 的名称或等待中的重命名。超过 Telegram 机器人 20 MB 下载上限的语音消息会被拒绝。接下来会发生什么，见 [hook → UserPromptSubmit](hooks.md#userpromptsubmit)。

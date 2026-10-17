@@ -61,6 +61,7 @@ Ein Tool wird gleich ausgeführt. Hier läuft die eigene Sicherheitsprüfung von
 
 - Eine aus Telegram gestartete Aufgabe wird an die Regeln der Rolle der Person gebunden, die sie geschickt hat, und an die Sicherheitsuntergrenze (geschützte Pfade, Befehlsmuster), die nur die Rolle `owner` umgeht; eine Aufgabe, die aipager niemandem zuordnen kann, bekommt die Untergrenze; eine Nachricht, die du im Terminal getippt hast, ist nicht eingeschränkt. Die Regeln stehen unter [Gruppen](groups.md#how-rules-work) und [Sicherheit](security.md#team-mode-enforcement).
 - Wenn eine Regel den Aufruf ablehnt, gibt der Hook eine Entscheidung `deny` aus, Claude Code lehnt das Tool ohne Rückfrage ab, und aipager erfährt es (`safety_blocked`): Die Aufgabe stoppt mit `🛑 x1 · Von einer Sicherheitsregel blockiert: ... (gestoppt)`, und jeder weitere Tool-Aufruf in dieser Aufgabe wird ebenfalls abgelehnt.
+- Ein Aufruf von `SendUserFile` (Claude schickt Dateien in den Chat) wird für jede Aufgabe geprüft, auch die des Owners und eine im Terminal getippte: die Grenze für das Senden, die Dateiprüfungen und die eigenen Regeln der Aufgabe ([Sicherheit](security.md#files-claude-sends)). Ein abgelehnter Aufruf bekommt ein `deny` ohne die Markierung „aipager safety policy“: Claude liest den Grund und sagt ihn dir, die Aufgabe läuft weiter, und der Hook schickt aipager `send_files_refused` mit jeder Datei, für das Audit-Log.
 - Eine Prüfung, die fehlschlägt, lehnt ab, außer die Regeln der Sitzung konnten gelesen werden und gewähren die Ausnahme des Besitzers.
 
 Auf der Seite von aipager wird der Aufruf zu einer Zeile auf der Arbeitskarte (der Aufruf eines Subagenten kommt auf die Zeile dieses Agenten), und ein `Write` oder `Edit` zeigt eine Diff-Vorschau, wenn `/settings` → Diff-Vorschauen an ist (standardmäßig aus). Ein Aufruf `AskUserQuestion` wird zur Frage mit einem Button pro Option; eine Frage, die ein Hilfsagent von Claude Code stellt, während keine Aufgabe läuft, wird nicht gezeigt (das ist nicht Claude, das dich etwas fragt). Der eigene Aufruf `Agent` von Claude hinterlässt seinen `subagent_type` und seine `description` für den Agenten, den er startet, und der Aufruf eines Subagenten ist die neueste Aktivität dieses Agenten: Beides erscheint im Status unter einer Antwort, solange der Agent im Hintergrund läuft.
@@ -80,6 +81,8 @@ Ein Tool ist fertig oder fehlgeschlagen. Seine Zeile auf der Arbeitskarte kommt 
 Ein `Bash`-Aufruf, den Claude Code in den Hintergrund verschoben hat, meldet eine `backgroundTaskId`. aipager verfolgt ihn dann als Hintergrundbefehl (nur die der Hauptschleife: Ein Aufruf mit `agent_id` gehört zu diesem Subagenten), bis sein Ende gesehen wird: eine `<task-notification>` mit einem `<status>` (in der Nachricht, die Claude weckt, oder im Gesprächsverlauf, wenn sie mitten in einer Aufgabe kommt), ein `TaskStop` oder `KillShell` mit seiner ID, das Ende der Sitzung oder zwei Stunden (`AIPAGER_BG_SHELL_MAX_TRACK`, in Sekunden, Standard 7200). Seine Zeile auf der Karte steht unter [Befehle](commands.md#idle-responses).
 
 Ein `Agent`-Aufruf (oder `Task`-Aufruf) innerhalb eines Subagenten (sein Ereignis trägt `agent_id`) meldet die ID des Agenten, den er gestartet hat. aipager merkt sich, welcher Agent welchen gestartet hat, und kann so einen Agenten, der gestoppt hat, um auf seinen eigenen Agenten zu warten, von einem unterscheiden, der fertig ist (siehe `SubagentStart` / `SubagentStop` unten).
+
+Bei einem `SendUserFile`, das gelaufen ist, kopiert aipager die Dateien sofort, aus der Liste, die sein `PreToolUse` gezeigt hat (nie aus dem Ergebnis des Tools), und prüft jede noch einmal; die Kopien werden nach der Antwort der Aufgabe geschickt ([Befehle](commands.md#files-claude-sends)).
 
 ### <a id="notification"></a>`Notification`
 
@@ -150,6 +153,7 @@ Neben den Hook-Ereignissen schicken die Hilfsprogramme aipager ein paar eigene N
 |---|---|---|
 | `queue_pickup` | Hook | Bei `UserPromptSubmit`: welche Telegram-Nachrichten Claude abgeholt hat. |
 | `safety_blocked` | Hook | Bei `PreToolUse`, wenn die Sicherheitsprüfung den Aufruf abgelehnt hat. |
+| `send_files_refused` | Hook | Bei `PreToolUse`, wenn Dateien abgelehnt wurden, die Claude schicken wollte: jede Datei und der Grund, für das Audit-Log. |
 | `permission_reply_timeout` | Hook | Das Warten bei einem `PermissionRequest` endete ohne Tippen. |
 | `statusline` | Statuszeile | Bei jedem Neuzeichnen der Statuszeile. |
 | `hook_memory_cap_hit` | Hook, Statuszeile | Der Prozess hat seine Speichergrenze erreicht. |

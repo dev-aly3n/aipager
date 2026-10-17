@@ -929,8 +929,7 @@ except `owner` is denied (`aipager doctor` warns about it). The
 protected paths hold for Claude Code's file tools (`Read`, `Write`, `Edit`,
 `MultiEdit`, `NotebookEdit`, `LSP`, `Grep`, `Glob`); a restricted
 role's `Grep`/`Glob` must also stay inside the session's folder (a
-search of `~/.config` for `aipager/**` is denied). Tools such as
-`WebFetch` or `SendFile` are not path-checked. A Telegram turn aipager
+search of `~/.config` for `aipager/**` is denied). `WebFetch` is not path-checked; `SendUserFile` (files Claude sends to the chat) is, like a Read, and a member sends only from the chat's root folder ([security](security.md#files-claude-sends)). A Telegram turn aipager
 cannot attribute to a sender gets the floor, which is at least as
 strict as `user`. Retry runs as whoever tapped it if they sent the
 prompt being retried, and on the floor otherwise. The command patterns

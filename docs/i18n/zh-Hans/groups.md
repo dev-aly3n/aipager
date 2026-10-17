@@ -347,7 +347,7 @@ safety:
   deny_bash_patterns: ['\bcurl\b']          # 要拦下的 Bash 命令
 ```
 
-除 `owner` 之外每个角色的每个任务都会得到整条底线，aipager 不知道是谁的任务也一样；`aipager doctor --safety-check` 会列出当前生效的内容。一次不重启的重新加载之后，其中的更改适用于重新加载之后发送的消息；正在运行的任务，或者正在队列里等待的消息，仍然保留旧的列表（停止那个任务可以让更改立即生效）。那里不以 `/` 或 `~` 开头的 `deny_paths_no_access` 路径在任何地方都能匹配，所以有这样的路径时，除 `owner` 之外每个角色的每次 `Grep`/`Glob` 都会被拒绝（`aipager doctor` 会对此发出警告）。受保护路径对 Claude Code 的文件工具（`Read`、`Write`、`Edit`、`MultiEdit`、`NotebookEdit`、`LSP`、`Grep`、`Glob`）生效；受限角色的 `Grep`/`Glob` 还必须留在会话的文件夹里（在 `~/.config` 里搜索 `aipager/**` 会被拒绝）。像 `WebFetch` 或 `SendFile` 这样的工具不做路径检查。aipager 无法归到任何发送者身上的、来自 Telegram 的任务会得到最低权限，它至少和 `user` 一样严格。“重试”如果是由发送了被重试消息的人点按的，就以点按者的权限运行，否则按最低权限运行。命令模式只对有 Bash 的角色有意义，在那里它们是过滤器而不是墙；见[安全 → 团队模式下的规则执行](security.md#team-mode-enforcement)。
+除 `owner` 之外每个角色的每个任务都会得到整条底线，aipager 不知道是谁的任务也一样；`aipager doctor --safety-check` 会列出当前生效的内容。一次不重启的重新加载之后，其中的更改适用于重新加载之后发送的消息；正在运行的任务，或者正在队列里等待的消息，仍然保留旧的列表（停止那个任务可以让更改立即生效）。那里不以 `/` 或 `~` 开头的 `deny_paths_no_access` 路径在任何地方都能匹配，所以有这样的路径时，除 `owner` 之外每个角色的每次 `Grep`/`Glob` 都会被拒绝（`aipager doctor` 会对此发出警告）。受保护路径对 Claude Code 的文件工具（`Read`、`Write`、`Edit`、`MultiEdit`、`NotebookEdit`、`LSP`、`Grep`、`Glob`）生效；受限角色的 `Grep`/`Glob` 还必须留在会话的文件夹里（在 `~/.config` 里搜索 `aipager/**` 会被拒绝）。`WebFetch` 不做路径检查；`SendUserFile`（Claude 发到聊天里的文件）会像 Read 一样检查，而且成员只能从聊天的根文件夹发送（[安全](security.md#files-claude-sends)）。aipager 无法归到任何发送者身上的、来自 Telegram 的任务会得到最低权限，它至少和 `user` 一样严格。“重试”如果是由发送了被重试消息的人点按的，就以点按者的权限运行，否则按最低权限运行。命令模式只对有 Bash 的角色有意义，在那里它们是过滤器而不是墙；见[安全 → 团队模式下的规则执行](security.md#team-mode-enforcement)。
 
 ## <a id="privacy-considerations"></a>隐私方面的考虑
 
