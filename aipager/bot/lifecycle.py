@@ -20,12 +20,14 @@ from typing import TYPE_CHECKING
 from telegram import (
     BotCommand,
     BotCommandScopeChat,
+    LinkPreviewOptions,
     Update,
 )
 from telegram.ext import (
     ApplicationBuilder,
     CallbackQueryHandler,
     CommandHandler,
+    Defaults,
     MessageHandler,
     TypeHandler,
     filters,
@@ -427,6 +429,17 @@ class LifecycleMixin:
             .base_url(telegram_endpoint.ptb_base_url())
             .base_file_url(telegram_endpoint.ptb_base_file_url())
         )
+
+        # No link previews, on every message this bot sends or edits. A
+        # preview makes Telegram's servers fetch the first URL in the text,
+        # and Claude's answers, prose, agent descriptions and tool
+        # arguments reach send_message / edit_message_text (the plain-text
+        # fallbacks, the HTML cards) as written: a prompt injection could
+        # make Claude write a URL that carries a secret out. Off for all
+        # of them, aipager's own messages included, because nothing
+        # aipager sends needs a preview (its Mini App links are buttons).
+        builder = builder.defaults(
+            Defaults(link_preview_options=LinkPreviewOptions(is_disabled=True)))
 
         # Long-poll config: timeout=30 means Telegram holds the connection
         # for up to 30s waiting for updates → instant response to taps.

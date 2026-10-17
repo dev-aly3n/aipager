@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **An image in Claude's answer no longer makes Telegram download its address.** An image such as `![chart](https://example.com/a.png)` in Claude's answer made Telegram's servers fetch that address to show it, so a prompt injection could carry a secret out in the address with no tool call and no permission prompt. Images in Claude's text now arrive as a plain link with their alt text, and image, video, audio and button tags arrive as text. Link previews, which also make Telegram fetch an address, are now off on every plain-text and HTML message aipager sends. Telegram offers no such option for its rich messages, which most answers are, and whether it builds previews for them has not been checked.
+
 ### Fixed
 - **Your own language's lines under a Persian or Arabic answer read in order.** When Claude answered in Persian or Arabic in a chat set to English or another left-to-right language, aipager's lines in that message, such as "⏳ 8 agents working", "+2 more", "Results from the agents will follow here." and the busy card's status line, showed their words, numbers and full stops out of order in Telegram Desktop and Web. They now read left to right. They still sit on the right, like the rest of a right-to-left message.
 
