@@ -118,3 +118,42 @@ def test_kinds_go_as_themselves():
     assert mk.choose_method("video", None, None, 1000, None) == "video"
     assert mk.choose_method("audio", None, None, 1000, None) == "audio"
     assert mk.choose_method("document", None, None, 1000, None) == "document"
+
+
+def _big_app_segments(total: int) -> bytes:
+    """APP1 (EXIF) and APP2 (ICC) segments, as a phone writes them, of
+    about *total* bytes: each segment at most 65,535 bytes long."""
+    out = b""
+    marker = 0xE1
+    while len(out) < total:
+        body = b"\x00" * 65000
+        out += bytes((0xFF, marker)) + struct.pack(">H", len(body) + 2) + body
+        marker = 0xE2
+    return out
+
+
+def test_a_jpeg_whose_frame_header_is_past_64_kb_is_a_photo(tmp_path):
+    """EXIF and ICC segments push the frame header (SOF) to about 200 KB in:
+    the segments are walked by their lengths, so it still reads as a
+    photo with its size."""
+    w, h = 1200, 900
+    sof = (b"\xff\xc0" + struct.pack(">H", 17) + b"\x08" + struct.pack(">HH", h, w)
+           + b"\x03" + b"\x00" * 9)
+    data = b"\xff\xd8" + _big_app_segments(200_000) + sof + b"\xff\xda" + b"\x00" * 10
+    assert data.index(b"\xff\xc0") > 64 * 1024
+    p = tmp_path / "phone.jpg"
+    p.write_bytes(data)
+    assert mk.probe(str(p)) == (mk.KIND_IMAGE, w, h)
+    assert mk.choose_method(*mk.probe(str(p)), len(data), None) == "photo"
+
+
+def test_a_jpeg_walk_stops_at_its_bounds(tmp_path, monkeypatch):
+    """No frame header within the walk's bounds: a document, never a hang."""
+    p = tmp_path / "endless.jpg"
+    p.write_bytes(b"\xff\xd8" + _big_app_segments(300_000))
+    assert mk.probe(str(p))[0] == mk.KIND_DOCUMENT
+    monkeypatch.setattr(mk, "_JPEG_MAX_SEGMENTS", 2)
+    sof = (b"\xff\xc0" + struct.pack(">H", 17) + b"\x08" + struct.pack(">HH", 9, 9)
+           + b"\x03" + b"\x00" * 9)
+    p.write_bytes(b"\xff\xd8" + _big_app_segments(200_000) + sof)
+    assert mk.probe(str(p))[0] == mk.KIND_DOCUMENT

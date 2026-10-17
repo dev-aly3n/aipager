@@ -6,7 +6,8 @@ a video, an audio file or a document. The kind is read from the file's own
 header, never its name: a PNG, JPEG or WebP is an image (with its width and
 height, which Telegram's photo limits need), a GIF an animation, an MP4 a
 video, an MP3 or M4A an audio file, anything else a document. Stdlib only,
-at most the first 64 KB read, and a header that cannot be read is a
+the first 64 KB read (a JPEG's segments are then walked by their lengths,
+up to Telegram's 10 MB photo limit), and a header that cannot be read is a
 document.
 """
 
@@ -31,6 +32,10 @@ METHOD_AUDIO = "audio"
 METHOD_DOCUMENT = "document"
 
 _HEAD_BYTES = 64 * 1024
+#: A JPEG's frame header (SOF) may follow large EXIF and ICC segments, past
+#: the first 64 KB: walk at most this many segments, never past this byte.
+_JPEG_MAX_SEGMENTS = 512
+_JPEG_MAX_OFFSET = PHOTO_MAX_BYTES
 
 _PNG_SIG = b"\x89PNG\r\n\x1a\n"
 _VIDEO_BRANDS = frozenset({b"isom", b"iso2", b"iso4", b"iso5", b"iso6", b"mp41",
@@ -74,6 +79,48 @@ def _jpeg(head: bytes) -> tuple[int, int] | None:
             h, w = struct.unpack(">HH", head[i + 5:i + 9])
             return w, h
         i += 2 + length
+    return None
+
+
+def _jpeg_file(fh) -> tuple[int, int] | None:
+    """A JPEG's ``(width, height)`` read from its open file *fh*, walking
+    the segments by their lengths with ``seek`` (each segment's 4-byte
+    header and, for the frame header, 5 more bytes are read): a phone
+    photo's EXIF thumbnail and ICC profile can push the frame header well
+    past 64 KB. None when it is not found within the bounds."""
+    fh.seek(0)
+    if fh.read(2) != b"\xff\xd8":
+        return None
+    pos = 2
+    for _ in range(_JPEG_MAX_SEGMENTS):
+        if pos > _JPEG_MAX_OFFSET:
+            return None
+        fh.seek(pos)
+        b = fh.read(2)
+        if len(b) < 2 or b[0] != 0xFF:
+            return None
+        marker = b[1]
+        if marker == 0xFF:          # fill byte
+            pos += 1
+            continue
+        if marker in (0x01, 0xD8) or 0xD0 <= marker <= 0xD7:
+            pos += 2                # standalone marker
+            continue
+        if marker in (0xD9, 0xDA):  # end of image, start of scan
+            return None
+        raw = fh.read(2)
+        if len(raw) < 2:
+            return None
+        length = struct.unpack(">H", raw)[0]
+        if length < 2:
+            return None
+        if 0xC0 <= marker <= 0xCF and marker not in _JPEG_NOT_SOF:
+            body = fh.read(5)
+            if len(body) < 5:
+                return None
+            h, w = struct.unpack(">HH", body[1:5])
+            return w, h
+        pos += 2 + length
     return None
 
 
@@ -159,8 +206,11 @@ def probe(path: str) -> tuple[str, int | None, int | None]:
     try:
         with open(path, "rb") as fh:
             head = fh.read(_HEAD_BYTES)
-    except OSError:
+            jpeg = _jpeg_file(fh) if head.startswith(b"\xff\xd8") else None
+    except (OSError, struct.error, ValueError):
         return KIND_DOCUMENT, None, None
+    if jpeg:
+        return KIND_IMAGE, jpeg[0], jpeg[1]
     try:
         return sniff(head)
     except (struct.error, IndexError, ValueError):
