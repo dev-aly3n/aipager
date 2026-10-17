@@ -152,11 +152,15 @@ Tiếng Việt, each listed in its own name.
   language for someone who joined after this release, else the group's
   language. See [groups](groups.md).
 - **Right to left.** In Persian and Arabic, aipager's text reads right to left
-  with Persian or Arabic digits. When Claude answers in Persian or Arabic in a
-  chat whose language is written left to right, the whole answer is a
-  right-to-left message: aipager's own lines in it (the agents under the
-  answer, the busy card's status line) sit on the right like the rest, and
-  still read left to right.
+  with Persian or Arabic digits. The busy card follows the chat's language,
+  whatever language Claude writes in: in an English chat it reads left to
+  right, in a Persian or Arabic chat right to left, and a sentence of Claude's
+  on it that is written the other way still reads in its own direction.
+  Claude's answer follows Claude's text: when Claude answers in Persian or
+  Arabic in a chat whose language is written left to right, the whole answer
+  is a right-to-left message, and aipager's own lines in it (the agents under
+  the answer, and in the merged layout the finished card above it) sit on the
+  right like the rest and still read left to right.
 - **Mode words.** `/mode` takes the mode's word in your language (`/mode demander`),
   and `ask`, `auto` and `full` always work. If a live session has exactly that name, the
   word names the session instead (see `/mode` above).

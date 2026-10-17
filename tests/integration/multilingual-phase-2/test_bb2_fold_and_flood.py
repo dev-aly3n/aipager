@@ -91,11 +91,12 @@ def test_a_persian_fold_summary_starts_right_to_left_inside_the_element():
     assert summary.startswith(RLM)
 
 
-def test_a_persian_fold_under_english_commentary_starts_left_to_right():
-    # Claude writes English: the whole card reads left to right, the
-    # Persian words kept whole (multilingual design 5.7, rule 5).
+def test_a_persian_fold_under_english_commentary_starts_right_to_left():
+    # Changed 2026-10-17 (was: starts left to right): Claude writes
+    # English, but the card keeps the chat's direction, so its fold
+    # summary reads right to left like the rest of a Persian card.
     (summary,) = _summaries(_card(5, "fa"))
-    assert summary.startswith("\u200e") and RLM not in summary
+    assert summary.startswith(RLM) and "\u200e" not in summary
 
 
 def test_a_persian_fold_reads_the_catalog():

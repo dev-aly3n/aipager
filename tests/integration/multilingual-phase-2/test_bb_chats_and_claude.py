@@ -261,14 +261,16 @@ def test_a_group_card_without_commentary_follows_the_chat(bot, run_async, monkey
     assert _card_is_rtl(bot, run_async, monkeypatch) is want
 
 
-def test_english_commentary_turns_a_persian_group_card_left_to_right(bot, run_async,
-                                                                    monkeypatch):
+def test_english_commentary_keeps_a_persian_group_card_right_to_left(bot, run_async,
+                                                                     monkeypatch):
+    # Changed 2026-10-17 (was: English commentary turns it left to right).
     preferences.set_ui_language(GROUP, "fa")
-    assert _card_is_rtl(bot, run_async, monkeypatch, ["Reading it now."]) is False
+    assert _card_is_rtl(bot, run_async, monkeypatch, ["Reading it now."]) is True
 
 
-def test_persian_commentary_turns_a_russian_group_card_right_to_left(bot, run_async,
-                                                                    monkeypatch):
+def test_persian_commentary_keeps_a_russian_group_card_left_to_right(bot, run_async,
+                                                                     monkeypatch):
+    # Changed 2026-10-17 (was: Persian commentary turns it right to left).
     preferences.set_ui_language(GROUP, "ru")
     assert _card_is_rtl(bot, run_async, monkeypatch,
-                        ["فایل را می\u200cخوانم"]) is True
+                        ["فایل را می\u200cخوانم"]) is False

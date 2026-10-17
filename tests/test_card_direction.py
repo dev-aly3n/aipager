@@ -1,7 +1,7 @@
-"""The busy card's direction (multilingual design 5.7, rule 5): Claude's
-own words decide once it has written some; before that, the chat's
-language does, so a Persian card with only tool rows reads right to left
-(G65)."""
+"""The busy card's direction: the chat's language decides, so a Persian
+card with only tool rows reads right to left (G65). Since 2026-10-17
+(operator) Claude's own words no longer turn it: the card is aipager's
+own, and Claude's sentences on it keep their own direction inside it."""
 
 from __future__ import annotations
 
@@ -52,13 +52,16 @@ def test_a_persian_card_without_commentary_is_rtl(mk_bot, run_async, monkeypatch
     assert _edited_rtl(mk_bot, run_async, monkeypatch, _sess()) is False
 
 
-def test_commentary_still_decides(mk_bot, run_async, monkeypatch):
+def test_commentary_no_longer_decides(mk_bot, run_async, monkeypatch):
+    # Changed 2026-10-17 (was test_commentary_still_decides: English
+    # commentary made a Persian chat's card False, Persian an English
+    # chat's True).
     preferences.set_ui_language(CHAT, "fa")
     assert _edited_rtl(mk_bot, run_async, monkeypatch,
-                       _sess(["Reading the file now."])) is False
+                       _sess(["Reading the file now."])) is True
     preferences.set_ui_language(CHAT, "")
     assert _edited_rtl(mk_bot, run_async, monkeypatch,
-                       _sess(["فایل را می‌خوانم."])) is True
+                       _sess(["فایل را می‌خوانم."])) is False
 
 
 def test_the_moved_copy_follows_the_same_rule(mk_bot, run_async, monkeypatch):

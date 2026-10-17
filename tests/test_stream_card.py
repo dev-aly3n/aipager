@@ -771,8 +771,10 @@ def test_edit_busy_rich_success_clears_stream_dirty(mk_bot, run_async, monkeypat
     assert sess.stream_dirty is False
 
 
-def test_edit_busy_rich_rtl_body_passes_is_rtl_true(mk_bot, run_async, monkeypatch):
-    """RTL body text → is_rtl=True in the payload."""
+def test_edit_busy_rich_rtl_body_in_an_english_chat_passes_is_rtl_false(mk_bot, run_async, monkeypatch):
+    """RTL body text in an English chat → is_rtl=False in the payload
+    (changed 2026-10-17: the card follows the chat's language, was True);
+    Claude's Persian line is isolated right to left inside it."""
     import aipager.bot.rich_message as rm_mod
     bot = mk_bot()
     sess = _sess()
@@ -790,7 +792,8 @@ def test_edit_busy_rich_rtl_body_passes_is_rtl_true(mk_bot, run_async, monkeypat
     monkeypatch.setattr(rm_mod, "_post", _fake_post)
     run_async(bot._edit_busy_rich(sess, "Working"))
     assert len(payloads) == 1
-    assert payloads[0]["rich_message"]["is_rtl"] is True
+    assert payloads[0]["rich_message"]["is_rtl"] is False
+    assert "> \u200f\u2067" in payloads[0]["rich_message"]["markdown"]
 
 
 # ── _send_busy_and_animate: streaming field seeding ──────────────────────────

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The busy card follows the chat's language.** It took the direction of what Claude wrote, so in an English chat talking with Claude in Persian the whole card, aipager's English rows and status line included, sat on the right in Telegram Desktop and Web. Now an English chat's card reads left to right and a Persian or Arabic chat's right to left, whatever language Claude or the prompt uses. A sentence, question or search of Claude's on the card that is written the other way still reads in its own direction, and a clock after it stays after it. A session with a Persian or Arabic name keeps its status line reading left to right on iPhone and Android in such a card. Claude's answer still follows Claude's text, and so does the finished card when the merged layout puts the answer into it.
+
 ### Fixed
 - **A scheduled prompt no longer loses its rights when its turn compacts on its own.** When Claude Code compacted the conversation during a scheduled prompt's turn, aipager read the summary as another scheduled prompt with no rights, and the turn's next tool call was stopped as if it had none.
 
