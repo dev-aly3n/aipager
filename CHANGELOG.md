@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A scheduled prompt no longer loses its rights when its turn compacts on its own.** When Claude Code compacted the conversation during a scheduled prompt's turn, aipager read the summary as another scheduled prompt with no rights, and the turn's next tool call was stopped as if it had none.
+
 ## [1.3.6] - 2026-10-17
 
 ### Security
