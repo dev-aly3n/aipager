@@ -32,6 +32,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 GOLDEN = Path(__file__).parent / "golden" / "claude_facing.json"
+#: What Claude reads about files it sends (SendUserFile), kept apart so
+#: the corpus above stays byte-identical to the feature bases that pin it
+#: (tests/integration/*: answer-agents-status-line, multilingual-phase-5,
+#: three-modes-auto-default).
+SEND_GOLDEN = Path(__file__).parent / "golden" / "claude_facing_send.json"
 
 GROUP = -1001
 DM = 555
@@ -113,9 +118,6 @@ def _safety() -> dict[str, str]:
         "model_switch_allow": model_switch_marker.ALLOW_REASON,
         "task_notification_prefix": _TASK_NOTIFICATION_PREFIX,
         "pretool.deny": enforce.deny_decision_json("Bash command blocked by safety policy"),
-        "pretool.soft_deny": enforce.soft_deny_json(
-            "SendUserFile refused, nothing was sent: a.png (no such file). Tell "
-            "the person which file could not be sent and why."),
         "hook.allow": json.dumps(hook_reply.allow_decision()),
         "hook.allow_always": json.dumps(hook_reply.allow_decision(
             updated_permissions=[{"type": "addRules"}])),
@@ -143,9 +145,11 @@ def _safety() -> dict[str, str]:
     return out
 
 
-def _send() -> dict[str, str]:
-    """What Claude reads when a file it asked to send is refused."""
+def send_corpus() -> dict[str, str]:
+    """What Claude reads about the files it sends: each refusal, the
+    soft deny payload it arrives in."""
     from aipager import send_check as sc
+    from aipager.dtach import enforce
     out = {}
     for code in sc._WHY_WORDS:
         one = sc.Refusal("/work/a.png", code, sc._why(code))
@@ -157,6 +161,8 @@ def _send() -> dict[str, str]:
     out["send.turn_rules"] = sc.turn_rule_reason(
         "SendUserFile on protected path ~/.claude/**")
     out["send.unchecked"] = sc.SEND_UNCHECKED_REASON
+    out["pretool.soft_deny"] = enforce.soft_deny_json(
+        sc.refusal_reason([sc.Refusal("a.png", "missing", sc._why("missing"))]))
     return out
 
 
@@ -292,7 +298,7 @@ def _deny_taps(mk_bot, monkeypatch, run_async) -> dict[str, str]:
 def build_corpus(mk_bot, monkeypatch, run_async) -> dict[str, str]:
     corpus: dict[str, str] = {}
     for part in (_style_lines(), _file_prompts(), _reply_contexts(), _safety(),
-                 _send(), _defaults(), _session_md(),
+                 _defaults(), _session_md(),
                  _prompts(mk_bot, monkeypatch, run_async),
                  _deny_taps(mk_bot, monkeypatch, run_async)):
         assert not set(part) & set(corpus)
@@ -314,6 +320,26 @@ def test_claude_facing_text_is_byte_identical(mk_bot, monkeypatch, run_async):
     assert sorted(corpus) == sorted(golden)
     changed = [k for k in corpus if corpus[k] != golden[k]]
     assert not changed, f"Claude-facing text changed: {changed}"
+
+
+def test_send_text_claude_reads_is_byte_identical():
+    corpus = send_corpus()
+    if os.environ.get("AIPAGER_RECORD_CLAUDE_GOLDEN") == "1":
+        SEND_GOLDEN.write_text(_dump(corpus), encoding="utf-8")
+        pytest.skip("send golden recorded")
+    golden = json.loads(SEND_GOLDEN.read_text(encoding="utf-8"))
+    assert sorted(corpus) == sorted(golden)
+    changed = [k for k in corpus if corpus[k] != golden[k]]
+    assert not changed, f"Claude-facing text changed: {changed}"
+
+
+@pytest.mark.parametrize("code", ["fa", "ru"])
+def test_send_text_is_the_same_in_persian_and_russian(code):
+    from aipager import preferences
+    for chat in (GROUP, DM, ALY, BOB):
+        preferences.set_ui_language(chat, code)
+    golden = json.loads(SEND_GOLDEN.read_text(encoding="utf-8"))
+    assert send_corpus() == golden
 
 
 def test_the_deny_reason_names_the_person():
