@@ -164,13 +164,15 @@ def _built_bot(mk_bot, monkeypatch, posts):
     app = builder.build()
     ext = app.bot
 
-    async def _do_post(endpoint, data, *args, **kwargs):
+    async def _do_post(self, endpoint, data, *args, **kwargs):
         posts.append((endpoint, json.loads(json.dumps(
             {k: v for k, v in data.items()}, default=lambda o: o.to_dict()))))
         return {"message_id": 7, "date": 0, "chat": {"id": 1, "type": "private"},
                 "text": "x"}
 
-    monkeypatch.setattr(ext, "_do_post", _do_post)
+    # On the class: a bot instance's attributes are read-only on some
+    # Python/PTB versions (3.13 in CI). monkeypatch restores it after.
+    monkeypatch.setattr(type(ext), "_do_post", _do_post)
     return ext
 
 
