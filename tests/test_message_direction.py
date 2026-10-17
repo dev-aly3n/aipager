@@ -84,9 +84,16 @@ def _status(card: str) -> str:
 # ---- the i18n core: Tr.directed ------------------------------------------------------------
 
 @pytest.mark.parametrize("code", LTR_LANGS)
-def test_a_left_to_right_language_ignores_the_direction(code):
+def test_a_left_to_right_language_marks_its_lines_only_in_a_right_to_left_message(code):
     tr = i18n.get(code)
-    assert tr.directed(True) is tr and tr.directed(False) is tr and tr.directed(None) is tr
+    assert tr.directed(None) is tr and tr.directed(False) is tr
+    assert tr.directed(True, rich=False) is tr
+    twin = tr.directed(True)
+    assert twin is tr.directed(True) and twin is not tr
+    assert twin.ltr_in_rtl and not tr.ltr_in_rtl
+    assert not twin.rtl and not twin.language_rtl and twin.code == code
+    assert twin.directed(None) is tr and twin.directed(False) is tr
+    assert twin.directed(True) is twin
 
 
 @pytest.mark.parametrize("code", RTL_LANGS)
@@ -124,12 +131,27 @@ def test_a_line_that_opens_left_to_right_gets_no_mark(code):
     assert not shown.startswith(LRM) and RLM not in shown
 
 
-def test_english_renders_byte_for_byte_in_either_direction():
+_ENGLISH_RENDERS = (
+    lambda t: finished_line(t, "\U0001f4ac **x1**", "md", seconds=250, added=3),
+    lambda t: t.n(animation.FOLD, 5, kind="md"),
+    lambda t: held_message.late_marker_text(t, 600),
+)
+
+
+def test_english_renders_byte_for_byte_with_no_direction_or_left_to_right():
     en = i18n.get("en")
-    for render in (lambda t: finished_line(t, "\U0001f4ac **x1**", "md", seconds=250, added=3),
-                   lambda t: t.n(animation.FOLD, 5, kind="md"),
-                   lambda t: held_message.late_marker_text(t, 600)):
-        assert render(en.directed(True)) == render(en) == render(en.directed(False))
+    for render in _ENGLISH_RENDERS:
+        assert render(en) == render(en.directed(None)) == render(en.directed(False))
+        assert render(en.directed(True, rich=False)) == render(en)
+
+
+def test_english_in_a_right_to_left_message_gets_marks_only():
+    en = i18n.get("en")
+    for render in _ENGLISH_RENDERS:
+        marked = str(render(en.directed(True)))
+        assert marked.startswith(LRM) and marked.endswith(LRM) and RLM not in marked
+        bare = marked.replace(LRM, "").replace(FSI, "").replace(PDI, "")
+        assert bare == render(en)
 
 
 # ---- the direction rule ----------------------------------------------------------------------

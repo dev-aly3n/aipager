@@ -53,6 +53,8 @@ def test_a_long_card_fits_its_ceilings(code, mk_bot, run_async, monkeypatch):
         assert dropped
         assert len(card) <= animation._CARD_CHAR_BUDGET
         assert len(card.encode("utf-8")) <= animation._RICH_LIMIT
-        # The status line, translated, is still the last line.
-        assert status_md(card).lstrip("\u200f").startswith(
+        # The status line, translated, is still the last line (its start
+        # mark: U+200F in Persian, U+200E for Russian under Claude's
+        # Persian commentary, a right-to-left message).
+        assert status_md(card).lstrip("\u200f\u200e").startswith(
             "✅" if final else "⏳")

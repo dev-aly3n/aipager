@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Your own language's lines under a Persian or Arabic answer read in order.** When Claude answered in Persian or Arabic in a chat set to English or another left-to-right language, aipager's lines in that message, such as "⏳ 8 agents working", "+2 more", "Results from the agents will follow here." and the busy card's status line, showed their words, numbers and full stops out of order in Telegram Desktop and Web. They now read left to right. They still sit on the right, like the rest of a right-to-left message.
+
 ## [1.3.5] - 2026-10-17
 
 ### Changed

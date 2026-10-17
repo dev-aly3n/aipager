@@ -836,6 +836,8 @@ def _build_sections(
     def row(summary) -> str:
         return card_rows.render_md(tr, summary)
 
+    own = _own_row(tr)
+
     history = sess.tool_history
     if (not final and sess.stream_hook_live
             and sess.stream_batch_since is not None
@@ -894,9 +896,9 @@ def _build_sections(
         for text in by_anchor.pop(i, ()):
             _push("prose", _quote(text))
         if done == "failed":
-            _push("run", f"❌ {row(summary)}")
+            _push("run", own("❌", row(summary)))
         elif done == bg_shells.STOPPED:
-            _push("run", f"⏹ {row(summary)}")
+            _push("run", own("⏹", row(summary)))
         elif done:
             settled = finished_by_idx.get(i)
             if summary.startswith(_SUBAGENT_MARK) and settled is not None:
@@ -907,10 +909,10 @@ def _build_sections(
                 # FINISHED_SUBAGENTS_CAP, no match here) falls through to
                 # the plain "run" branch below — "same section rules as
                 # any other run" per design.
-                _push("agent-settled", f"✅ {row(summary)}",
+                _push("agent-settled", own("✅", row(summary)),
                       list(settled.get("tools", [])))
             else:
-                _push("run", f"✅ {row(summary)}")
+                _push("run", own("✅", row(summary)))
         else:
             info = subagent_live.get(i)
             if info is not None:
@@ -927,7 +929,7 @@ def _build_sections(
                     live = card_rows.live_agent_final(tr, info)
                 else:
                     live = card_rows.live_agent(tr, info, _card_unit(sess, final))
-                _push("agent-run", f"⏳ {live}",
+                _push("agent-run", own("⏳", live),
                       list(info.get("tools", [])))
             elif i in shell_live:
                 shell = shell_live[i]
@@ -937,9 +939,9 @@ def _build_sections(
                 else:
                     live = card_rows.live_shell(tr, shell["label"], shell["started"],
                                                 _card_unit(sess, final))
-                _push("run", f"⏳ {live}")
+                _push("run", own("⏳", live))
             else:
-                _push("run", f"⏳ {row(summary)}")
+                _push("run", own("⏳", row(summary)))
     for slot in sorted(by_anchor):
         for text in by_anchor[slot]:
             _push("prose", _quote(text))
@@ -998,14 +1000,41 @@ def _strip_details_tags(markdown: str) -> str:
     return _DETAILS_BLOCK_RE.sub(r"\1", markdown)
 
 
-def _render_agent_tool_rows(tools: list[str]) -> list[str]:
+_WHOLE_CODE_SPAN = re.compile(r"(`+)[^\n]*\1")
+
+
+def _own_row(tr):
+    """How a card row built in code, a mark and its text (``own("✅",
+    body)``), is put together in *tr*: ``"✅ body"``. In the in-RTL twin
+    of a left-to-right language (an English chat, Claude's text Persian:
+    :attr:`~aipager.i18n.core.Tr.ltr_in_rtl`) the row is marked at both
+    ends with U+200E (:meth:`~aipager.i18n.core.Tr.line`) and a body that
+    is one whole code span is isolated from outside it, so the mark stays
+    first on Telegram Desktop and Web and a Persian word inside the span
+    cannot pull the rest of the row around it; nothing ever goes inside
+    the span. A body rendered in the twin (a non-English row) loses its
+    own end marks first, so the row carries one mark at each end. Claude's
+    prose quotes never go through it."""
+    if tr is not None and tr.ltr_in_rtl:
+        def own(mark: str, body: str) -> str:
+            body = tr.bare(body)
+            if _WHOLE_CODE_SPAN.fullmatch(body):
+                body = tr.isolate(body)
+            return str(tr.line(f"{mark} {body}", kind="md"))
+        return own
+    return lambda mark, body: f"{mark} {body}"
+
+
+def _render_agent_tool_rows(tools: list[str], tr=None) -> list[str]:
     """An agent's own attributed tool-call summaries, formatted the same
     way an ordinary tool row is (a checkmark plus a code span) — these
     are historical, already-attributed calls; no per-call done/failed
     state is tracked for them (``record_agent_tool`` appends on
     PreToolUse, with no separate completion event), so every row gets the
-    same settled-looking mark. Pure."""
-    return [f"✅ {_mono(t)}" for t in tools]
+    same settled-looking mark. Marked like the card's other rows in *tr*
+    (:func:`_own_row`). Pure."""
+    own = _own_row(tr)
+    return [own("✅", _mono(t)) for t in tools]
 
 
 def _render_section(
@@ -1041,7 +1070,7 @@ def _render_section(
     tools = agent_tools or []
     if not tools:
         return agent_row
-    tool_rows = _render_agent_tool_rows(tools)
+    tool_rows = _render_agent_tool_rows(tools, tr)
     if len(tool_rows) >= _FOLD_MIN_ROWS:
         nested = _build_details_block(_tool_fold_summary(len(tool_rows), tr), tool_rows)
     else:
@@ -1330,13 +1359,14 @@ def _card_rtl(sess: TrackedSession, tr=None) -> bool:
     return message_rtl(tr.language_rtl, commentary, sess.turn_prompt)
 
 
-def card_tr(sess: TrackedSession, tr=None):
+def card_tr(sess: TrackedSession, tr=None, *, rich: bool = True):
     """*tr* (the session's chat's when None) in the card's direction
     (:func:`_card_rtl`): what draws aipager's own lines on the card, so a
     Persian chat talking with Claude in English gets a card that reads
-    left to right."""
+    left to right. *rich* ``False`` for a card sent as HTML (no
+    ``is_rtl``): an English chat's lines need no marks there."""
     tr = tr or i18n.for_sess(sess)
-    return tr.directed(_card_rtl(sess, tr))
+    return tr.directed(_card_rtl(sess, tr), rich=rich)
 
 
 def _card_unit(sess: TrackedSession, final: bool) -> str:
@@ -1433,7 +1463,8 @@ def _status_line(
     if parts:
         line += " · " + " · ".join(parts)
     # Right to left at both ends in a right-to-left card, whatever its
-    # last part (a clock, a tally).
+    # last part (a clock, a tally); left to right at both ends when an
+    # English chat's card follows Claude's right-to-left text.
     return tr.line(line, kind="md")
 
 
@@ -2097,7 +2128,7 @@ class AnimationMixin:
         if not self._app:
             return None
         target = reply_to if reply_to is not None else sess.trigger_msg_id
-        text = card_tr(sess).html(THINKING, session=sess.label)
+        text = card_tr(sess, rich=False).html(THINKING, session=sess.label)
         try:
             msg = await self._app.bot.send_message(
                 resolve_chat_id(sess), text, parse_mode="HTML",
@@ -2182,7 +2213,7 @@ class AnimationMixin:
         message has one direction (a prompt sent as its own message keeps
         the chat's)."""
         if tr is None:
-            tr = card_tr(sess)
+            tr = card_tr(sess, rich=False)
         elapsed = ""
         if sess.busy_started_at:
             now = time.monotonic()
@@ -3162,7 +3193,7 @@ class AnimationMixin:
         try:
             sent = await self._edit_busy_raw(
                 sess.busy_msg_id,
-                card_tr(sess).html(PAUSED_HTML, session=sess.label),
+                card_tr(sess, rich=False).html(PAUSED_HTML, session=sess.label),
                 chat_id=resolve_chat_id(sess),
                 priority=PRIORITY_ESSENTIAL,
             )

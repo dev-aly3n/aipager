@@ -57,8 +57,20 @@ U+200F at line starts or ends; each of its right-to-left phrases is
 wrapped in U+2067...U+2069 so it still reads right to left inside the
 line, and a line whose first strong character outside the isolates is
 not left to right gets U+200E, so it still aligns left. Parameters stay
-isolated and numbers keep the language's digits. A left-to-right
-language ignores the direction, so English output never changes.
+isolated and numbers keep the language's digits.
+
+A left-to-right language (English and the rest) rendered right to left
+(the "in-RTL twin", :attr:`Tr.ltr_in_rtl`) mirrors the right-to-left
+rule with U+200E: every line starts (after a Markdown block marker) and
+ends with U+200E, every text parameter, :class:`Span` and
+:class:`Command` is wrapped in U+2068...U+2069, with the same rules
+about blank lines, ``<pre>``/``<blockquote>``, code, emphasis and
+adjacent marks. Telegram Desktop and Web lay out every block of a
+right-to-left rich message right to left, so without the marks an
+English line's numbers, emoji and full stop move; with them it reads in
+order (it still sits on the right). Removing U+200E, U+2068 and U+2069
+gives the English bytes back. With no direction, or left to right, a
+left-to-right language never changes.
 
 The ``Tr`` is always passed explicitly, never through a context variable,
 so a task started in one chat can never carry its language to another.
@@ -520,9 +532,10 @@ def _collapse_marks(text: str, kind: str | None = "html") -> str:
     return "".join(out)
 
 
-def _rtl_ends(text: str, kind: str | None = "html") -> str:
+def _rtl_ends(text: str, kind: str | None = "html", *, mark: str = _LRM_RTL) -> str:
     """Finish a right-to-left rendering: resolve every :data:`_START`
-    (a line start) and :data:`_END` (a line end) to U+200F. A start mark
+    (a line start) and :data:`_END` (a line end) to *mark*: U+200F, or
+    U+200E for the in-RTL twin of a left-to-right language. A start mark
     goes after a Markdown block marker, and in Markdown (``kind``
     ``"md"``) after an opening ``_``/``__`` run that is closed on the
     line (:func:`_start_after_underscore`); neither goes on a blank line; a
@@ -549,7 +562,7 @@ def _rtl_ends(text: str, kind: str | None = "html") -> str:
             else:
                 line = _end_before_emphasis(line, kind)
         lines[i] = line
-    text = "\n".join(lines).replace(_START, _LRM_RTL).replace(_END, _LRM_RTL)
+    text = "\n".join(lines).replace(_START, mark).replace(_END, mark)
     return _collapse_marks(text, kind)
 
 
@@ -660,16 +673,23 @@ class Tr:
     """Renders messages in one language. Get one with :func:`get` or a
     resolver (``for_chat``, ``for_update``...), never build one."""
 
-    def __init__(self, loc: _locales.Locale, *, ltr: bool = False):
+    def __init__(self, loc: _locales.Locale, *, ltr: bool = False, in_rtl: bool = False):
         self._loc = loc
         self.code = loc.code
         #: The direction this ``Tr`` renders in: the language's, unless
-        #: :meth:`directed` made it a left-to-right one.
+        #: :meth:`directed` made it a left-to-right one. Only a
+        #: right-to-left LANGUAGE ever renders with U+200F.
         self.rtl = loc.rtl and not ltr
+        #: A left-to-right language rendered into a right-to-left message
+        #: (:meth:`directed`): its lines are marked with U+200E and its
+        #: parameters isolated.
+        self.ltr_in_rtl = in_rtl and not loc.rtl
         self._pseudo = loc.code in _locales.PSEUDO
 
     def __repr__(self) -> str:
         ltr = "-ltr" if self._loc.rtl and not self.rtl else ""
+        if self.ltr_in_rtl:
+            ltr = "-in-rtl"
         return f"<Tr {self.code}{ltr}>"
 
     @property
@@ -678,13 +698,26 @@ class Tr:
         direction this ``Tr`` renders in."""
         return self._loc.rtl
 
-    def directed(self, rtl: bool | None) -> Tr:
+    def directed(self, rtl: bool | None, *, rich: bool = True) -> Tr:
         """This language rendered in the direction *rtl* (multilingual
         design 5.7, rule 5): for a message that carries Claude's text,
         whose direction is that text's. ``None`` keeps the language's
-        own. A left-to-right language is returned as it is: its lines
-        carry no mark either way, so English never changes."""
-        if not self._loc.rtl or rtl is None or rtl:
+        own. A left-to-right language rendered right to left gives the
+        in-RTL twin (:attr:`ltr_in_rtl`), which marks its lines with
+        U+200E; with ``None`` or ``False`` it is returned as it is, so
+        English never changes there. *rich* ``False`` says the message is
+        not a rich one sent with ``is_rtl`` (plain text or HTML, where
+        every app takes a line's direction from its first letter): a
+        left-to-right language is then returned as it is. A right-to-left
+        language ignores *rich*."""
+        if not self._loc.rtl:
+            if not rtl or not rich:
+                return _base(self._loc)
+            tr = _IN_RTL_TRS.get(self._loc.code)
+            if tr is None:
+                tr = _IN_RTL_TRS[self._loc.code] = Tr(self._loc, in_rtl=True)
+            return tr
+        if rtl is None or rtl:
             return _base(self._loc)
         tr = _LTR_TRS.get(self._loc.code)
         if tr is None:
@@ -696,7 +729,8 @@ class Tr:
         """U+200F in a right-to-left rendering, else ``""``. A line built
         in code from pieces takes :meth:`line` instead, which marks both
         of its ends; a field that only needs its start marked takes
-        :meth:`lead`."""
+        :meth:`lead`. U+200F only: the in-RTL twin of a left-to-right
+        language gets ``""`` here."""
         return _LRM_RTL if self.rtl else ""
 
     def line(self, text, *, kind: str | None = None):
@@ -713,29 +747,58 @@ class Tr:
         Markdown emphasis run whole at either end, ``"html"`` treats
         backticks as text; ``None`` (either) leaves ``*``/``_`` alone and
         keeps both ``<code>`` and backtick spans untouched. A
-        :class:`Safe` stays a :class:`Safe`."""
-        if not self.rtl:
+        :class:`Safe` stays a :class:`Safe`. In the in-RTL twin of a
+        left-to-right language (:attr:`ltr_in_rtl`) the same, with
+        U+200E."""
+        if self.rtl:
+            mark = _LRM_RTL
+        elif self.ltr_in_rtl:
+            mark = _LRM
+        else:
             return text
         m = _OUTER_BREAKS.match(_scrub(str(text)))
         lead, body, trail = m.group(1), m.group(2), m.group(3)
-        out = lead + _rtl_ends(_START + body.strip(_LRM_RTL) + _END, kind) + trail
+        out = lead + _rtl_ends(_START + body.strip(mark) + _END, kind, mark=mark) + trail
         return Safe(out) if isinstance(text, Safe) else out
 
     def bare(self, text):
         """*text*, a rendered piece about to be nested inside another
         line, without the U+200F runs at its very start and end (in a
-        right-to-left rendering; otherwise as it is). A :class:`Safe`
+        right-to-left rendering; the U+200E runs in the in-RTL twin of a
+        left-to-right language; otherwise as it is). A :class:`Safe`
         stays a :class:`Safe`."""
-        if not self.rtl:
+        if self.rtl:
+            mark = _LRM_RTL
+        elif self.ltr_in_rtl:
+            mark = _LRM
+        else:
             return text
-        out = str(text).strip(_LRM_RTL)
+        out = str(text).strip(mark)
+        return Safe(out) if isinstance(text, Safe) else out
+
+    @property
+    def isolates(self) -> bool:
+        """Whether this rendering wraps its text parameters in
+        U+2068...U+2069: a right-to-left language in either direction,
+        and the in-RTL twin of a left-to-right one."""
+        return self._loc.rtl or self.ltr_in_rtl
+
+    def isolate(self, text):
+        """*text*, a value placed in a line built in code (a session
+        name), wrapped in U+2068...U+2069 the way a parameter is, where
+        this rendering isolates parameters (:attr:`isolates`); otherwise
+        as it is. A :class:`Safe` stays a :class:`Safe`."""
+        if not self.isolates:
+            return text
+        out = _FSI + _scrub(str(text)) + _PDI
         return Safe(out) if isinstance(text, Safe) else out
 
     def lead(self, text):
         """*text*, a rendered field that is not a message line (a ``/``
         menu description), with U+200F at its start only, in a
         right-to-left rendering; otherwise as it is. A :class:`Safe`
-        stays a :class:`Safe`."""
+        stays a :class:`Safe`. U+200F only: the in-RTL twin of a
+        left-to-right language returns *text* as it is."""
         if not self.rtl:
             return text
         out = _LRM_RTL + str(text).strip(_LRM_RTL)
@@ -804,10 +867,13 @@ class Tr:
         if extra:
             raise ValueError(f"unused parameters {sorted(extra)} for {pattern!r}")
         # Isolates and digits follow the LANGUAGE; the line marks follow
-        # the direction this Tr renders in (see `directed`).
-        rtl = self._loc.rtl
-        mark = _START if self.rtl else _LINE_SLOT if rtl else ""
-        end = _END if self.rtl else ""
+        # the direction this Tr renders in (see `directed`). A
+        # left-to-right language in a right-to-left message isolates its
+        # parameters too and marks its lines with U+200E.
+        rtl = self._loc.rtl or self.ltr_in_rtl
+        marked = self.rtl or self.ltr_in_rtl
+        mark = _START if marked else _LINE_SLOT if rtl else ""
+        end = _END if marked else ""
         scan = _Scan()
         out: list[str] = [mark] if mark else []
         close_after_tag = False
@@ -857,7 +923,9 @@ class Tr:
         text = "".join(out)
         if self.rtl:
             text = _rtl_ends(text + _END, kind)
-        elif rtl:
+        elif self.ltr_in_rtl:
+            text = _rtl_ends(text + _END, kind, mark=_LRM)
+        elif self._loc.rtl:
             text = _ltr_render(text, kind)
         return text
 
@@ -946,6 +1014,8 @@ def has_translation(code: str, key: str) -> bool:
 _TRS: dict[str, Tr] = {}
 #: The left-to-right twins of the right-to-left languages (`Tr.directed`).
 _LTR_TRS: dict[str, Tr] = {}
+#: The in-RTL twins of the left-to-right languages (`Tr.directed`).
+_IN_RTL_TRS: dict[str, Tr] = {}
 
 
 def _base(loc: _locales.Locale) -> Tr:

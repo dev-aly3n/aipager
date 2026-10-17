@@ -164,7 +164,14 @@ def _with_agents_block(text: str, line: str) -> str:
 _RESULT_GLYPH = "💬"
 
 
-def _result_line_md(label: str) -> str:
+def _result_line_md(label: str, tr=None) -> str:
+    """The result line for a rich message drawn by *tr*. In the in-RTL
+    twin of a left-to-right language (an English chat, a Persian answer:
+    :attr:`~aipager.i18n.core.Tr.ltr_in_rtl`) the line is marked at both
+    ends and the name isolated, so the glyph stays first on Telegram
+    Desktop and Web; otherwise the bytes are as they always were."""
+    if tr is not None and tr.ltr_in_rtl:
+        return tr.line(f"{_RESULT_GLYPH} **{tr.isolate(_md_escape(label))}**", kind="md")
     return f"{_RESULT_GLYPH} **{_md_escape(label)}**"
 
 
@@ -461,9 +468,11 @@ class NotifyMixin:
         # card's status line at its end, the answer's result line at its
         # start ("session-name-on-every-message") — so the merged shape
         # reads the same as the two-message one.
+        line_tr = i18n.for_sess(sess).directed(rtl)
+
         def _merged(card: str) -> str:
             return (f"{card}\n\n{_MERGED_SEPARATOR}\n\n"
-                    f"{_result_line_md(sess.label)}\n\n{answer}" if answer else card)
+                    f"{_result_line_md(sess.label, line_tr)}\n\n{answer}" if answer else card)
 
         combined = _merged(card_md)
         # The held copy (a mute below) never carries the ⏳ line: it goes
@@ -1212,6 +1221,10 @@ class NotifyMixin:
                 is_rtl = detect_rtl(entry.rich_text)
             marker = held_message.late_marker_text(tr.directed(is_rtl),
                                                    entry.held_seconds())
+            # The plain fallback is not a rich message: no is_rtl there,
+            # so an English marker needs no marks (rich=False).
+            plain_marker = held_message.late_marker_text(
+                tr.directed(is_rtl, rich=False), entry.held_seconds())
             try:
                 sent = await send_rich_message(
                     int(chat_id), f"{marker}\n\n{entry.rich_text}",
@@ -1244,7 +1257,7 @@ class NotifyMixin:
                     entry.label, entry.attempts, exc_info=True,
                 )
                 HELD.drop(entry.chat_id, entry.key)
-                if await self._deliver_held_as_plain_text(entry, marker):
+                if await self._deliver_held_as_plain_text(entry, plain_marker):
                     delivered += 1
                     self._confirm_held(sess, entry)
                     log.info(
@@ -1315,7 +1328,7 @@ class NotifyMixin:
         sess.remember_delivered(digest, pending=True)
         is_rtl = self._answer_rtl(sess, content)
         agents = self._agents_snapshot(sess, is_rtl)
-        lead_md = _result_line_md(label)
+        lead_md = _result_line_md(label, i18n.for_sess(sess).directed(is_rtl))
         lead_plain = _result_line_plain(label)
         # The same byte budget as the finish path: an answer over the
         # ceiling keeps its head at a markdown-safe cut, with the ⏳ line
@@ -3196,13 +3209,18 @@ class NotifyMixin:
                     sess, raw_md or summary,
                     " ".join(t for _a, t in log_commentary))
                 header_tr = i18n.for_sess(sess).directed(turn_rtl)
+                # The HTML header and the plain copies are not rich
+                # messages (no is_rtl): an English chat's lines there need
+                # no marks.
+                plain_tr = i18n.for_sess(sess).directed(turn_rtl, rich=False)
                 stats = {"seconds": elapsed_s, "added": sess.last_lines_added,
                          "removed": sess.last_lines_removed}
                 header_text = finished_line(
-                    header_tr, f"{_RESULT_GLYPH} <b>{html_mod.escape(label)}</b>", "html",
+                    plain_tr, f"{_RESULT_GLYPH} <b>{html_mod.escape(label)}</b>", "html",
                     **stats)
-                header_md = finished_line(header_tr, _result_line_md(label), "md", **stats)
-                header_plain = finished_line(header_tr, _result_line_plain(label), "text",
+                header_md = finished_line(header_tr, _result_line_md(label, header_tr), "md",
+                                          **stats)
+                header_plain = finished_line(plain_tr, _result_line_plain(label), "text",
                                              **stats)
 
                 # ── merged layout: one combined edit, timeline + answer ────────
@@ -3310,7 +3328,7 @@ class NotifyMixin:
                 # remains (`replace`, `merged`'s fallback, a turn that never
                 # had a card). It counts against the byte ceiling, so the
                 # overflow check below leaves room for it.
-                lead_md = _result_line_md(label) if card_kept else header_md
+                lead_md = _result_line_md(label, header_tr) if card_kept else header_md
                 lead_plain = _result_line_plain(label) if card_kept else header_plain
                 body_limit = _RICH_LIMIT - len(f"{lead_md}\n\n".encode("utf-8"))
                 if agents:
@@ -3380,7 +3398,7 @@ class NotifyMixin:
                     log.info("[%s] IDLE header skipped — chat flood-muted", label)
                 elif standalone_header:
                     if send_file:
-                        header_text += "\n\n" + header_tr.html(FULL_ATTACHED)
+                        header_text += "\n\n" + plain_tr.html(FULL_ATTACHED)
                     log.debug("[%s] Sending IDLE notification (%d chars header)",
                               label, len(header_text))
                     try:
