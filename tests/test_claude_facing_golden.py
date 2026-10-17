@@ -140,6 +140,23 @@ def _safety() -> dict[str, str]:
     return out
 
 
+def _send() -> dict[str, str]:
+    """What Claude reads when a file it asked to send is refused."""
+    from aipager import send_check as sc
+    out = {}
+    for code in sc._WHY_WORDS:
+        one = sc.Refusal("/work/a.png", code, sc._why(code))
+        two = sc.Refusal("b.pdf", "missing", sc._why("missing"))
+        out[f"send.reason.{code}.one"] = sc.refusal_reason([one])
+        out[f"send.reason.{code}.two"] = sc.refusal_reason([two, one])
+    out["send.reason.unreadable_list"] = sc.refusal_reason(
+        [sc.Refusal("", "unreadable_list", "")])
+    out["send.turn_rules"] = sc.turn_rule_reason(
+        "SendUserFile on protected path ~/.claude/**")
+    out["send.unchecked"] = sc.SEND_UNCHECKED_REASON
+    return out
+
+
 def _defaults() -> dict[str, str]:
     from aipager import config
     out = {}
@@ -272,7 +289,7 @@ def _deny_taps(mk_bot, monkeypatch, run_async) -> dict[str, str]:
 def build_corpus(mk_bot, monkeypatch, run_async) -> dict[str, str]:
     corpus: dict[str, str] = {}
     for part in (_style_lines(), _file_prompts(), _reply_contexts(), _safety(),
-                 _defaults(), _session_md(),
+                 _send(), _defaults(), _session_md(),
                  _prompts(mk_bot, monkeypatch, run_async),
                  _deny_taps(mk_bot, monkeypatch, run_async)):
         assert not set(part) & set(corpus)
