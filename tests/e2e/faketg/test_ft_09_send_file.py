@@ -204,6 +204,8 @@ def test_real_claude_outside_the_session_folder_observation(fresh, case):
     try:
         card, allow = fake.wait_button(DM, "Allow", since=since, timeout=120)
         print(f"[{case}] permission card: {card.get('text', '')[:300]!r}")
+        rows = (card.get("reply_markup") or {}).get("inline_keyboard") or []
+        print(f"[{case}] its buttons: {[b.get('text') for row in rows for b in row]}")
         cb = fake.inject_callback(fti.user(ALICE), fake.message(DM, card["message_id"]),
                                   allow)
         fake.wait_answer(cb, timeout=30)
