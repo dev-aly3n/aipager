@@ -1115,7 +1115,7 @@ def path_violation(
     if raw is None or raw == "":
         return None
     if not isinstance(raw, str) or "\x00" in raw:
-        return f"{tool_name} with an unreadable path"  # fail closed
+        return _unreadable_path_reason(tool_name)  # fail closed
     spelled = _norm(raw, cwd)
     real = _realpath(spelled)
     targets = {spelled, real}
@@ -1139,6 +1139,10 @@ def path_violation(
     return None
 
 
+def _unreadable_path_reason(tool_name: str) -> str:
+    return f"{tool_name} with an unreadable path"
+
+
 def _list_violation(tool_name: str, tool_input: dict,
                     no_access: tuple[str, ...], no_write: tuple[str, ...],
                     *, cwd: str | None, readable: tuple[str, ...],
@@ -1149,7 +1153,7 @@ def _list_violation(tool_name: str, tool_input: dict,
     fails closed."""
     entries = path_targets(tool_name, tool_input)
     if entries is None:
-        return f"{tool_name} with an unreadable path"  # fail closed
+        return _unreadable_path_reason(tool_name)  # fail closed
     for entry in entries:
         reason = path_violation("Read", {"file_path": entry}, no_access,
                                 no_write, cwd=cwd, readable=readable,

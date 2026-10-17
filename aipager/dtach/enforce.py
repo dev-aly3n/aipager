@@ -1295,7 +1295,7 @@ def _send_block(data: dict, block: dict) -> dict:
             info["send_refusals"] = _send_file_codes(
                 data, send_check.CODE_UNCHECKED, reason)
         return block
-    if reason.startswith("session halted"):
+    if re.match(safety._SHAPE_HALTED, reason):
         return block
     info["send_refusals"] = _send_file_codes(data, send_check.CODE_TURN_RULES,
                                              reason)

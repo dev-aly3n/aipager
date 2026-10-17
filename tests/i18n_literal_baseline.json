@@ -80,6 +80,7 @@
  "aipager/safety.py": 27,
  "aipager/scope.py": 48,
  "aipager/self_update.py": 33,
+ "aipager/send_check.py": 3,
  "aipager/service.py": 86,
  "aipager/session_store.py": 9,
  "aipager/setup_cmd.py": 128,

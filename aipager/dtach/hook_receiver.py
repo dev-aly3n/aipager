@@ -20,7 +20,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from aipager import (
-    agent_tree, bg_shells, bidi_guard, perm_modes, prompt_stack, statusline_file,
+    agent_tree, bg_shells, bidi_guard, perm_modes, prompt_stack, safety, send_check,
+    statusline_file,
 )
 from aipager.config import (
     HOOK_DEDUP_WINDOW_SECONDS,
@@ -433,7 +434,21 @@ def _summary_text(name: str, inp: dict) -> str:
         return f"WebSearch: {inp.get('query', '')[:80]}"
     if name == "NotebookEdit":
         return f"NotebookEdit: {inp.get('notebook_path', '')}"
+    if name == send_check.SEND_TOOL:
+        files = _send_files(inp)
+        return send_check.sending_row(len(files)) if files else name
     return name
+
+
+def _send_files(inp) -> list[str]:
+    """SendUserFile's file list as strings (a bare string is one file);
+    [] when it cannot be read."""
+    files = inp.get("files") if isinstance(inp, dict) else None
+    if isinstance(files, str):
+        files = [files]
+    if not isinstance(files, list):
+        return []
+    return [f for f in files if isinstance(f, str)]
 
 
 def _clean_text(value, limit: int) -> str:
@@ -462,6 +477,9 @@ def _activity_arg(name: str, inp) -> str:
         return _clean_text(inp.get("pattern", ""), 80)
     elif name == "WebSearch":
         return _clean_text(inp.get("query", ""), 80)
+    elif name == send_check.SEND_TOOL:
+        files = _send_files(inp)
+        value = files[0] if files else ""
     elif name == "WebFetch":
         url = inp.get("url", "")
         if not isinstance(url, str):
@@ -524,7 +542,24 @@ def _standing_rule_suggestion(suggestions: object) -> dict | None:
 
 def _read_outside_working_dir(tool_name: str, tool_input: object, cwd: str) -> bool:
     """True when ``tool_name`` is one of :data:`_OUTSIDE_READ_TOOLS` and its
-    path lies outside ``cwd`` (see :func:`_outside_working_dir`)."""
+    path lies outside ``cwd`` (see :func:`_outside_working_dir`).
+
+    SendUserFile runs each of its files through Claude Code's Read check,
+    so it may draw the same dialog: it counts as outside when ANY file (or
+    a file list that cannot be read) lies outside ``cwd``. Whether it
+    really draws that dialog is not known (it was not seen in the binary
+    strings), so this answers on the safe side: an "Allow always" for it
+    is gated like a Read's."""
+    if tool_name == send_check.SEND_TOOL:
+        files = (tool_input.get("files") if isinstance(tool_input, dict)
+                 else None)
+        if isinstance(files, str):
+            files = [files]
+        if not isinstance(files, list) or not files:
+            return True
+        return any(_outside_working_dir(
+            safety._expand_tool_home(safety._js_trim(f)) if isinstance(f, str) else f,
+            cwd) for f in files)
     spec = _OUTSIDE_READ_TOOLS.get(tool_name)
     if spec is None:
         return False
@@ -582,6 +617,8 @@ def _detail_text(name: str, inp: dict) -> str:
     if name == "NotebookEdit":
         path = inp.get("notebook_path", "")
         return path if isinstance(path, str) else ""
+    if name == send_check.SEND_TOOL:
+        return "\n".join(_send_files(inp))
     return ""
 
 
@@ -902,6 +939,20 @@ class HookReceiver:
             )
             return
         self._recent_fingerprints[fp] = now_mono
+
+        if event == "send_files_refused":
+            # The PreToolUse hook refused files Claude asked to send (it
+            # already told Claude why). For the audit only, and only for a
+            # session the daemon already knows: any local process can
+            # write here, so this never creates one.
+            sess = self.registry.get(session_name)
+            files = msg.get("files")
+            if sess is not None and isinstance(files, list):
+                await self.notify_fn(sess, "send_files_refused", {
+                    "tool_use_id": msg.get("tool_use_id", ""),
+                    "files": [f for f in files[:100] if isinstance(f, dict)],
+                })
+            return
 
         # Problem reports (8.112): a hook event aipager never installed is
         # Claude Code drift, counted (its name never kept).

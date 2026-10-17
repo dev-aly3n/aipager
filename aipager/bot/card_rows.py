@@ -74,6 +74,12 @@ SHELL_LOST = Msg("card.row.shell_lost", "shell: {label} - no end seen ({clock})"
 SHELL_STOPPED = Msg("card.row.shell_stopped", "shell: {label} - stopped ({clock})",
                     note="A background shell that was stopped",
                     eg={"label": "tail -f log", "clock": "0:30"})
+SENDING_FILES = Plural(
+    "card.row.sending_files",
+    one="📎 Sending {n} file",
+    other="📎 Sending {n} files",
+    note="A busy card row: Claude is sending files to this chat (they arrive after "
+         "the answer)")
 ANSWER = Msg("card.row.answer", "{icon} {detail} → {verb}",
              note="An answered prompt on the busy card: the tool call or question (code), "
                   "then how it was answered. RTL catalogs use ←",
@@ -108,6 +114,10 @@ _ANSWER_RE = re.compile(
     r"\A(?P<icon>🔑|❓) (?P<detail>.*) → (?P<verb>Allowed always|Allowed|Denied|Continued"
     r"|Selected option (?P<opt>\d+)|Submitted \(none\)|Selected: (?P<sel>.*))\Z", re.S)
 _CLOCK_ONLY = re.compile(r"\A" + _CLOCK + r"\Z")
+# Written by aipager.send_check.sending_row: SENDING_FILES's English forms.
+_SENDING_FILES_RES = tuple(
+    re.compile(r"\A" + re.escape(form).replace(re.escape("{n}"), r"(?P<n>\d+)", 1) + r"\Z")
+    for form in (SENDING_FILES.one, SENDING_FILES.other))
 
 _SHELL_MSGS = {"done": SHELL_DONE, "failed": SHELL_FAILED, "no end seen": SHELL_LOST,
                "stopped": SHELL_STOPPED}
@@ -170,6 +180,10 @@ def _render(tr, summary: str, kind: str, code) -> str | None:
             return render(_SHELL_MSGS[what], label=span(label),
                           clock=Safe(tr.clock(_seconds(detail))))
         return None
+    for pattern in _SENDING_FILES_RES:
+        m = pattern.match(summary)
+        if m:
+            return tr.n(SENDING_FILES, int(m.group("n")), kind=kind)
     m = _ANSWER_RE.match(summary)
     if m:
         return render(ANSWER, icon=Safe(m.group("icon")), detail=span(m.group("detail")),

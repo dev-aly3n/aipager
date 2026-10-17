@@ -194,6 +194,7 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (hâlâ çalışıyor)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "ajan"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"one": "📎 {n} dosya gönderiliyor", "other": "📎 {n} dosya gönderiliyor"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "arka plan komutu: {label} - bitti ({clock})"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "arka plan komutu: {label} - hatayla bitti ({clock})"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "arka plan komutu: {label} - hatayla bitti (çıkış kodu {code})"}

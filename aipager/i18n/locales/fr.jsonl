@@ -194,6 +194,7 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (travaille encore)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "agent"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"many": "📎 Envoi de {n} fichiers", "one": "📎 Envoi de {n} fichier", "other": "📎 Envoi de {n} fichiers"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "commande en arrière-plan : {label} - terminée ({clock})"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "commande en arrière-plan : {label} - terminée avec une erreur ({clock})"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "commande en arrière-plan : {label} - terminée avec une erreur (code de sortie {code})"}
