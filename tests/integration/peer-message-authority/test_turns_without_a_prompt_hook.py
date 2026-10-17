@@ -1726,3 +1726,87 @@ def test_scheduling_into_a_folder_no_one_can_trust_is_refused(tmp_path):
     t = _tx(tmp_path, [kit.telegram_entry("x")])
     out = _decide(t, ("ScheduleWakeup", {"delaySeconds": 60, "prompt": "p", "reason": "r"}))
     assert out is not None and out.get("soft") is True
+
+
+# ---- a scheduled turn that compacts on its own --------------------------------------
+
+FIRE_PID = "prompt-of-the-fire"
+COMPACT_BOUNDARY = {"type": "system", "subtype": "compact_boundary",
+                    "compactMetadata": {"trigger": "auto", "preTokens": 190000}}
+CLAUDE_BASH = {"type": "assistant", "message": {"role": "assistant", "content": [
+    {"type": "tool_use", "id": "tu1", "name": "Bash", "input": {"command": "rm -rf ~/x"}}]}}
+
+
+def _stamped_summary():
+    """How Claude Code (2.1.302) writes the summary of a scheduled turn
+    that compacted: the fire's promptId and turnOrigin copied onto it."""
+    return {"type": "user", "isCompactSummary": True, "isVisibleInTranscriptOnly": True,
+            "turnOrigin": "scheduled", "promptId": FIRE_PID,
+            "message": {"role": "user", "content":
+                        "This session is being continued from a previous conversation "
+                        "that ran out of context. Summary: checking the deploy."}}
+
+
+def _compacted_fire(tmp_path, text, how, after=()):
+    """*text* fires, the turn compacts at once, then Claude calls Bash.
+    *how*: ``picked-up`` (its prompt hook ran) or ``queued`` (Claude Code
+    ran it after a terminal turn with no prompt hook)."""
+    fire = {**_fire_entry(text), "promptId": FIRE_PID}
+    rest = [fire, COMPACT_BOUNDARY, _stamped_summary(), *after, CLAUDE_BASH]
+    if how == "picked-up":
+        ps.clear_turn_open(R)
+        earlier = [kit.telegram_entry("set up a cron"), kit.tool_result()]
+        t = _tx(tmp_path, earlier, "compacted.jsonl")
+        notify_hook._match_and_promote(R, text, transcript_path=t)
+        return _tx(tmp_path, [*earlier, *rest], "compacted.jsonl")
+    ps.write_merged_snapshot(R, {**ps.floor_snapshot(), "turn_origin": "terminal",
+                                 "turn_start_size": 0})
+    return _tx(tmp_path, [kit.human_entry("typed"), kit.tool_result(), *rest],
+               "compacted.jsonl")
+
+
+@pytest.mark.parametrize("how", ["picked-up", "queued"])
+def test_an_owners_cron_keeps_its_rights_when_its_turn_compacts(tmp_path, run_hook, how):
+    """2026-10-17: the owner's cron fired, the turn compacted on its own and
+    its first Bash call was stopped as the floor's: the summary carries the
+    fire's turnOrigin and was read as a second fire with no record."""
+    _owner()
+    _schedule(tmp_path, run_hook)
+    assert ps.read_trigger(R, PROMPT)["bypass_safety"] is True
+    t = _compacted_fire(tmp_path, PROMPT, how)
+    assert _decide(t, BASH) is None
+
+
+@pytest.mark.parametrize("how", ["picked-up", "queued"])
+def test_a_members_cron_that_compacts_keeps_the_members_limits(tmp_path, run_hook, how):
+    """Passing the summary over never widens a turn: a member's fire keeps
+    the member's limits after the compaction."""
+    _member()
+    _schedule(tmp_path, run_hook, "ScheduleWakeup")
+    assert ps.read_trigger(R, PROMPT)["bypass_safety"] is False
+    _owner()
+    t = _compacted_fire(tmp_path, PROMPT, how)
+    assert _decide(t, BASH) is not None
+
+
+@pytest.mark.parametrize("how", ["picked-up", "queued"])
+def test_a_real_second_fire_after_the_compaction_still_narrows(tmp_path, run_hook, how):
+    """A fire of its own after the summary (its own text, its own
+    promptId, no record) still takes the turn to the floor."""
+    _owner()
+    _schedule(tmp_path, run_hook)
+    second = {**_fire_entry("a prompt nobody recorded"), "promptId": "prompt-of-another"}
+    t = _compacted_fire(tmp_path, PROMPT, how, after=[kit.tool_result(), second])
+    assert _decide(t, BASH) is not None
+
+
+def test_both_scans_pass_the_compact_summary_over(tmp_path):
+    """The backward scan reaches the fire itself, and the turn's own bytes
+    hold one fire, whatever turnOrigin the summary carries."""
+    t = _tx(tmp_path, [kit.telegram_entry("x"), kit.tool_result(),
+                       {**_fire_entry(), "promptId": FIRE_PID}, COMPACT_BOUNDARY,
+                       _stamped_summary(), CLAUDE_BASH])
+    scan = enforce._classify_turn(t)
+    assert scan["origin"] == "scheduled"
+    assert scan["entry_origin"]["text"] == PROMPT
+    assert enforce._turn_region(t, 0)["fires"] == [PROMPT]

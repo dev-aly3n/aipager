@@ -314,6 +314,17 @@ def _is_injected(entry: dict) -> bool:
     return bool(entry.get("isCompactSummary") or entry.get("isMeta"))
 
 
+def _scheduled_fire(entry: dict) -> bool:
+    """True for a scheduled prompt's own fire (``turnOrigin: "scheduled"``,
+    which Claude Code computes; a local fire is ``isMeta``, so that is no
+    reason to pass it over). Never the compact summary: when a scheduled
+    turn compacts, Claude Code (2.1.302) copies the turn's ``promptId``
+    and ``turnOrigin`` onto its summary, and read as a second fire its
+    text has no record, so the turn fell to the floor."""
+    return (entry.get("turnOrigin") == "scheduled"
+            and not entry.get("isCompactSummary"))
+
+
 def _is_tool_result(entry: dict) -> bool:
     """True if a transcript entry is a tool-result carrier.
 
@@ -377,7 +388,10 @@ _KIND_BYTES = re.compile(rb'"kind"\s*:\s*"([^"\\]{0,64})"')
 _SUBKIND_BYTES = re.compile(rb'"subkind"\s*:\s*"([^"\\]{0,64})"')
 _QUEUE_LINE_BYTES = re.compile(rb'"type"\s*:\s*"queue-operation"')
 #: A scheduled prompt firing: its rights are its own, never the owner
-#: turn's before it (the full path reads them).
+#: turn's before it (the full path reads them). A compact summary of a
+#: scheduled turn carries the same key; matching it too only sends the
+#: owner down the full path, which passes it over (a cost, never a wrong
+#: answer), so the byte check stays structural and simple.
 _FIRE_BYTES = re.compile(rb'"turnOrigin"\s*:\s*"scheduled"')
 _SENDER_TASK_BYTES = re.compile(rb'"senderTaskId"\s*:\s*"[^"]')
 #: A peer origin's last keys: found even when its body pushed the start
@@ -547,7 +561,7 @@ def _turn_region(path: str | None, start, note_bodies=()) -> dict | None:
         if kind not in _LOCAL_KINDS:
             out["outside"] = True
             continue
-        if entry.get("turnOrigin") == "scheduled":
+        if _scheduled_fire(entry):
             _region_fire(out, entry)
             continue
         if _is_injected(entry):
@@ -776,7 +790,7 @@ def _classify_turn_uncached(path: str | None, note_bodies=()) -> dict:
                 out["origin"] = "channel" if kind == "channel" else "foreign"
                 out["entry_origin"] = origin
                 return out
-            if entry.get("turnOrigin") == "scheduled":
+            if _scheduled_fire(entry):
                 return _fire_origin(out, entry)
             if _is_injected(entry):
                 continue
