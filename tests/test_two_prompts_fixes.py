@@ -188,6 +188,25 @@ def test_agent_moved_to_the_background_keeps_waiting(rig, run_async):
     assert owners(rig) == [FG]
 
 
+
+def test_interrupt_closes_the_dead_foreground_agents_prompt_beside_a_background_one(
+        rig, run_async):
+    """rev-iter2-002: prompt by prompt, a foreground agent's prompt dies
+    with the interrupted turn even while a background agent's survives."""
+    rig.launch(BG)
+    rig.launch(FG, background=False)
+    rig.agent_bash(BG, "make", request_id="req-bg")
+    rig.agent_bash(FG, "pytest", request_id="req-fg")
+    fg_msg = [m["msg_id"] for m in rig.prompt_messages()
+              if "pytest" in (m.get("text") or "")]
+    _interrupt(rig, run_async)
+    assert owners(rig) == [BG]
+    assert fg_msg and all(rig.sess.prompt_known_closed(m) for m in fg_msg)
+    bg = rig.sess.prompt_surface(rig.sess.open_prompts()[0])
+    rig.tap(bg, "allow")
+    assert rig.sess.status != Status.INTERACTIVE
+    assert rig.sess.open_prompts() == []
+
 # -- the Stop-carry window (rev-iter1-002) ----------------------------------
 
 def _during_carry(rig, action):

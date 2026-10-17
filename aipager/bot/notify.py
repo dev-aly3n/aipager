@@ -2310,8 +2310,12 @@ class NotifyMixin:
             running = [p for p in sess.open_prompts()
                        if sess.agent_survives_interrupt(_prompt_owner(p))]
             if running:
+                # Prompt by prompt: Claude's own and every agent's that
+                # died with the turn close, so a dead foreground agent's
+                # buttons can never type into a background agent's dialog.
                 closed, inline_closed = sess.close_prompts(
-                    lambda p: not _prompt_owner(p))
+                    lambda p: not sess.agent_survives_interrupt(
+                        _prompt_owner(p)))
                 log.info("[%s] prompt closed (answered in the terminal), %d "
                          "still open", sess.label, len(sess.open_prompts()))
                 self.registry.mark_dirty()
