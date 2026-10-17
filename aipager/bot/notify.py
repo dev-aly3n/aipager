@@ -1611,7 +1611,7 @@ class NotifyMixin:
             chat_id = self._files_chat(sess)
             pending = outbox.Pending(
                 session=sess.name, chat_id=chat_id,
-                anchor=(anchor or prompt_id or None), held_key=None,
+                anchor=(anchor or None), held_key=None,
                 prompt_id=prompt_id or None, batches=batches,
                 created=time.monotonic(), audit=self._file_audit_ctx(sess))
             held_now = self._held_key_now(sess)

@@ -290,12 +290,36 @@ def test_files_wait_while_muted_without_answer(mk_bot, files_bot, rich, run_asyn
         await _finish(bot, sess, "")
     run_async(turn())
     assert files_bot.file_calls() == []
+    # Not even an attempt into the mute: the files were queued at once.
+    assert files_bot.refused == []
     assert outbox.OUTBOX.has_pending(sess.name)
     MUTE.clear()
     run_async(bot.notify(sess, "turn_files_flush", {}))
     [photo] = files_bot.file_calls()
     assert photo[2]["reply_to_message_id"] == TRIGGER
     assert not outbox.OUTBOX.has_pending(sess.name)
+
+
+def test_a_mute_that_starts_during_the_send_keeps_the_files(mk_bot, files_bot, rich,
+                                                           run_async, tmp_path):
+    """The chat was not muted when the files went out, but Telegram's ban
+    arrived with the first one: they are kept and sent once it lifts."""
+    from aipager.bot.flood import FloodMuted
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    files_bot.fail["send_photo"] = FloodMuted(600, CHAT)
+
+    async def go():
+        await _send_files(bot, sess, [_pic(tmp_path)])
+        await _finish(bot, sess, "Done.")
+    run_async(go())
+    assert files_bot.file_calls() == []
+    assert outbox.OUTBOX.has_pending(sess.name)
+    del files_bot.fail["send_photo"]
+    run_async(bot.flush_turn_files(sess))
+    [answer_id] = _rich_ids(files_bot)
+    [photo] = files_bot.file_calls()
+    assert photo[2]["reply_to_message_id"] == answer_id
 
 
 # ---- a failure ------------------------------------------------------------------------

@@ -47,6 +47,9 @@ class FilesBot:
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, object, dict]] = []
+        #: Calls the outbound gate refused (the chat was muted): nothing
+        #: reached Telegram, but the call was attempted.
+        self.refused: list[str] = []
         self.fail: dict[str, BaseException] = {}
         self.id = 999
         self._next = 5000
@@ -62,6 +65,7 @@ class FilesBot:
         async def _method(*args, **kwargs):
             chat = kwargs.get("chat_id", args[0] if args else None)
             if chat is not None and MUTE.is_muted(chat):
+                self.refused.append(name)
                 raise FloodMuted(MUTE.remaining(chat), chat)
             if name in self.fail:
                 raise self.fail[name]
