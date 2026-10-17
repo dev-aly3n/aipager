@@ -99,11 +99,11 @@ def test_wrong_token_is_401_and_recorded(fake, run_async):
 
 def test_unknown_method_is_404_and_recorded(fake):
     api, base = fake
-    r = httpx.post(f"{base}/bot{TOKEN}/sendPhoto", data={"chat_id": str(GROUP)})
+    r = httpx.post(f"{base}/bot{TOKEN}/sendDice", data={"chat_id": str(GROUP)})
     assert r.status_code == 404
     assert r.json() == {"ok": False, "error_code": 404,
                         "description": "Not Found: method not found"}
-    assert api.unknown_methods == ["sendPhoto"]
+    assert api.unknown_methods == ["sendDice"]
 
 
 def test_send_edit_delete_round_trip(fake, run_async):
