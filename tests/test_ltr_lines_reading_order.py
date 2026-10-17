@@ -316,10 +316,10 @@ def test_a_persian_word_inside_a_code_span_reads_in_its_place(frozen):
     # get an isolate of its own. The row's whole span is isolated from
     # outside instead: the ⏳ stays first, the agent and the tool read in
     # order, the colon stays after the tool and the Persian reads right
-    # to left in its place. Known limit (UBA W7/N1): a number right after
-    # the span's last Persian word (" · 36:30") joins that word's run, so
-    # the clock shows before it. Only an isolate inside the span could
-    # stop that, and nothing goes inside a code span.
+    # to left in its place. Changed 2026-10-17: the activity is drawn in a
+    # span of its own, isolated whole from outside it, so the clock after
+    # it (" · 36:30") no longer joins the last Persian word's run (UBA
+    # W7/N1); it shows last.
     s = _card_session()
     s.tool_history = [("\U0001f916 general-purpose", False)]
     s.active_subagents = {"a": {
@@ -334,11 +334,21 @@ def test_a_persian_word_inside_a_code_span_reads_in_its_place(frozen):
     persian = FA.replace(" ", "")[::-1]
     assert seen.startswith("\u23f3\U0001f916general-purpose\u203ageneral-purpose"
                            "\u00b7WebSearch:" + persian + "OR")
-    assert seen.endswith(persian) and "36:30" in seen
+    assert seen.endswith(persian + "OR" + persian + "\u00b736:30")
     assert paragraph_level(line) == 0
-    # Without the twin the ⏳ is not first.
+    # Changed 2026-10-17 (was: without the twin the ⏳ is not first): an
+    # English chat's card is left to right now, and there the activity's
+    # span is isolated whole from outside it, so the ⏳ is first, the
+    # Persian reads right to left and the clock stays last, on every app.
     plain, _ = animation.build_stream_card_ex(s, "Working", rtl=False)
-    assert not visual(shown(_rows(plain)[0])).startswith("\u23f3")
+    (row,) = _rows(plain)
+    assert "`" + FSI not in row and FSI + "`" in row
+    line = shown(row)
+    for para in (0, None):
+        assert reads_in_order(line, para), para
+        seen = visual(line, para)
+        assert seen.startswith("\u23f3\U0001f916general-purpose"), para
+        assert seen.endswith("36:30"), para
 
 
 def test_a_read_row_with_a_persian_file_name_reads_in_order(frozen):

@@ -49,10 +49,12 @@ Two parameter types say what a value is, so it is never broken:
   while :data:`ISOLATE_COMMANDS` is on, so no mark ever lands between the
   ``/`` and the name.
 
-A message that carries Claude's text takes the direction of that text,
-not the chat's (multilingual design 5.7, rule 5): :meth:`Tr.directed`
+A message that carries Claude's answer takes the direction of that
+text, not the chat's (multilingual design 5.7, rule 5): :meth:`Tr.directed`
 gives the ``Tr`` that renders aipager's own lines of such a message in a
-given direction. A right-to-left language rendered left to right puts no
+given direction. The busy card is aipager's own and keeps the chat's
+direction (``animation._card_rtl``); Claude's words on it keep theirs
+(``aipager.bot.claude_bidi``). A right-to-left language rendered left to right puts no
 U+200F at line starts or ends; each of its right-to-left phrases is
 wrapped in U+2067...U+2069 so it still reads right to left inside the
 line, and a line whose first strong character outside the isolates is

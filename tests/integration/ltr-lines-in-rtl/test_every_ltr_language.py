@@ -58,13 +58,55 @@ def _now_renders():
     return _NOW
 
 
+#: Changed on purpose (operator, 2026-10-17): a Persian or Arabic chat's
+#: card under Claude's English (``rtl=None``) keeps the chat's direction
+#: now; on main it followed Claude's English and read left to right.
+CARD_FOLLOWS_CHAT = frozenset(
+    f"{code}/card/en/{fa}/{w}" for code in RTL_LANGS for fa in (False, True)
+    for w in ("busy", "waiting"))
+
+
+#: Changed on purpose (review 2026-10-17): a left-to-right card whose
+#: session name is Persian opens its status line with one U+200E, so
+#: iPhone and Android lay it out left to right; nothing else changes.
+NAME_LEADS_LTR = frozenset(
+    f"{code}/{card}/{c}/True/{w}" for code in LTR_LANGS for card in ("card", "card-ltr")
+    for c in ("none", "en") for w in ("busy", "waiting"))
+STATUS_OPEN = "<footer>"
+
+
 @pytest.mark.parametrize("code", sorted(locales.LOCALES))
 def test_what_must_not_change_renders_as_on_main(code):
     now = _now_renders()
-    keys = [k for k in MAIN if k.split("/", 1)[0] == code]
+    keys = [k for k in MAIN if k.split("/", 1)[0] == code
+            and k not in CARD_FOLLOWS_CHAT | NAME_LEADS_LTR]
     assert keys
     changed = [k for k in keys if now.get(k) != MAIN[k]]
     assert changed == [], changed[:5]
+
+
+@pytest.mark.parametrize("key", sorted(NAME_LEADS_LTR))
+def test_a_persian_name_adds_one_mark_to_the_status_line(key):
+    now = _now_renders()
+    assert key in MAIN
+    head, sep, status = now[key].rpartition(STATUS_OPEN)
+    assert sep and status.startswith(kit.LRM) and status.count(kit.LRM) == 1
+    assert head + sep + status[1:] == MAIN[key]
+
+
+@pytest.mark.parametrize("key", sorted(CARD_FOLLOWS_CHAT))
+def test_a_right_to_left_chats_card_under_english_keeps_the_chats_direction(key):
+    code, _card, _en, fa, wname = key.split("/")
+    now = _now_renders()
+    assert key in MAIN and now[key] != MAIN[key]
+    waiting = wname == "waiting"
+    s = kit.card_session(kit.FA_NAME if fa == "True" else "x1", kit.EN_ANSWER,
+                         waiting_agents=3 if waiting else 0)
+    rtl, _ = animation.build_stream_card_ex(s, "Working", tr=i18n.get(code), rtl=True,
+                                            waiting=waiting)
+    assert now[key] == rtl
+    assert kit.RLM not in MAIN[key]
+    assert ("> " + kit.LRM + "\u2066" + kit.EN_ANSWER + "\u2069" + kit.LRM) in rtl.split("\n")
 
 
 def test_the_main_recording_covers_every_language():
@@ -107,7 +149,19 @@ def test_twin_output_without_its_marks_is_the_base_output(code):
 @pytest.mark.parametrize("code", LTR_LANGS)
 @pytest.mark.parametrize("label,waiting", _CARDS, ids=_CARD_IDS)
 def test_twin_card_without_its_marks_is_the_left_to_right_card(code, label, waiting):
+    # Changed 2026-10-17: the left-to-right card (the chat's own, now)
+    # keeps Claude's Persian sentence reading right to left between
+    # U+200F U+2067 and U+2069 U+200F; with those gone the two match.
+    # A Persian session name: the left-to-right card's status line opens
+    # with one U+200E as well (iPhone and Android).
     rtl, ltr = _card_pair(code, label, waiting)
+    prose = "> " + kit.RLM + "\u2067" + kit.FA_PROSE + "\u2069" + kit.RLM
+    assert prose in ltr.split("\n")
+    ltr = ltr.replace(prose, "> " + kit.FA_PROSE)
+    if label == kit.FA_NAME:
+        head, sep, status = ltr.rpartition(STATUS_OPEN)
+        assert status.startswith(kit.LRM)
+        ltr = head + sep + status[1:]
     assert kit.strip_marks(rtl) == ltr
 
 

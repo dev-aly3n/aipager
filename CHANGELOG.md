@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The busy card follows the chat's language.** It took the direction of what Claude wrote, so in an English chat talking with Claude in Persian the whole card, aipager's English rows and status line included, sat on the right in Telegram Desktop and Web. Now an English chat's card reads left to right and a Persian or Arabic chat's right to left, whatever language Claude or the prompt uses. A sentence, question or search of Claude's on the card that is written the other way still reads in its own direction, and a clock after it stays after it. A session with a Persian or Arabic name keeps its status line reading left to right on iPhone and Android in such a card. Claude's answer still follows Claude's text, and so does the finished card when the merged layout puts the answer into it.
+
 ### Fixed
 - **Your own language's lines under a Persian or Arabic answer read in order.** When Claude answered in Persian or Arabic in a chat set to English or another left-to-right language, aipager's lines in that message, such as "⏳ 8 agents working", "+2 more", "Results from the agents will follow here." and the busy card's status line, showed their words, numbers and full stops out of order in Telegram Desktop and Web. They now read left to right. They still sit on the right, like the rest of a right-to-left message.
 - **A second prompt is shown in Telegram.** When an agent asked for permission while Claude's question or another prompt was already open, Telegram never showed it, and the session could look busy while Claude still waited. Now every open prompt gets its own buttons, the session waits until the last one is answered, and a button that would type into the wrong dialog says so instead of guessing.

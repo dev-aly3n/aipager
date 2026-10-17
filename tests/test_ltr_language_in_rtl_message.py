@@ -313,16 +313,25 @@ def test_every_code_built_card_row_is_marked_outside_its_code_span():
 
 
 def test_the_card_strips_back_to_the_english_card():
+    # Changed 2026-10-17: the left-to-right card keeps Claude's Persian
+    # sentence reading right to left (U+200F U+2067 ... U+2069 U+200F);
+    # nothing else on it is invisible, and the right-to-left message
+    # (Claude's own direction) needs no such marks around it.
     s = _card_session()
     marked, _ = animation.build_stream_card_ex(s, "Working", rtl=True)
     plain, _ = animation.build_stream_card_ex(s, "Working", rtl=False)
-    assert strip(marked) == plain and not INVISIBLE.search(plain)
+    prose = "> " + RLM + RLI + FA_WORDS + "." + PDI + RLM
+    assert prose in plain.split("\n")
+    bare = plain.replace(prose, "> " + FA_WORDS + ".")
+    assert strip(marked) == bare and not INVISIBLE.search(bare)
 
 
-def test_card_tr_not_rich_is_the_base():
+def test_card_tr_is_the_base_whatever_claude_writes():
+    # Changed 2026-10-17 (was: the in-RTL twin under a Persian prompt):
+    # the card takes the chat's direction.
     s = _card_session()
     s.turn_prompt = FA_WORDS
-    assert animation.card_tr(s).ltr_in_rtl
+    assert animation.card_tr(s) is i18n.get("en")
     assert animation.card_tr(s, rich=False) is i18n.get("en")
 
 
