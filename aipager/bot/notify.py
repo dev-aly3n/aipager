@@ -530,7 +530,7 @@ class NotifyMixin:
     async def _on_extra_prompt(self, sess: TrackedSession, context: dict) -> None:
         """A prompt that opened while another is open (roadmap 8.120): its
         own message with its own buttons, under the card."""
-        if sess.status != Status.INTERACTIVE:
+        if sess.status != Status.INTERACTIVE and not sess.prompt_wait_carry:
             log.info("[%s] a second prompt arrived after the wait ended - "
                      "not shown", sess.label)
             return
@@ -2302,13 +2302,13 @@ class NotifyMixin:
                     perm = sent
             refused = not (perm or {}).get("ask_question")
             # Roadmap 8.120: the interrupt ended Claude's own dialogs. A
-            # running agent's prompt is still open in the terminal: the
-            # session keeps waiting on it, and the turn's end is left to
-            # Claude's own hooks.
+            # running BACKGROUND agent's prompt is still open in the
+            # terminal: the session keeps waiting on it, and the turn's end
+            # is left to Claude's own hooks. A foreground agent (or one
+            # whose launch is not known) dies with the interrupted turn,
+            # its dialog with it: the turn ends below, every prompt closed.
             running = [p for p in sess.open_prompts()
-                       if _prompt_owner(p) and (
-                           _prompt_owner(p) in sess.active_subagents
-                           or _prompt_owner(p) in sess.bg_agents)]
+                       if sess.agent_survives_interrupt(_prompt_owner(p))]
             if running:
                 closed, inline_closed = sess.close_prompts(
                     lambda p: not _prompt_owner(p))

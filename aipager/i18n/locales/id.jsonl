@@ -901,6 +901,7 @@
 {"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code sedang menampilkan permintaan lain lebih dulu, jadi jawab yang itu dulu sebelum yang ini."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "permintaan ini sudah tidak terbuka"}
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager tidak bisa tahu permintaan mana yang ditampilkan Claude Code lebih dulu, jadi jawab yang ini di terminal."}
+{"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude sedang menyelesaikan tugasnya, jadi ketuk permintaan ini lagi sebentar lagi."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram sedang membatasi chat ini - coba lagi setelah pukul {time}"}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "Sedang dikirim."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "Sudah dikirim."}

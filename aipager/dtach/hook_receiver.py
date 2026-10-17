@@ -204,12 +204,22 @@ def _permission_tool_use_id(msg: dict, tool_name: str, sess) -> str:
     """The id of the tool call a PermissionRequest asks about (roadmap
     8.102): the payload's own, else the parent's latest PreToolUse's when
     it named the same tool and the request is the parent's (no
-    ``agent_id``), else ``""``. Only a supplement to the prompt's time in
+    ``agent_id``), an agent's one unfinished call with the same tool and
+    whole input (8.120), else ``""``. Only a supplement to the prompt's time in
     the restart's transcript check: a wrong id (parallel calls of one
     tool) can only miss a restore, never make a wrong one."""
     own = _payload_tool_use_id(msg)
     if own:
         return own
+    agent_id = msg.get("agent_id") or ""
+    if agent_id and isinstance(agent_id, str):
+        # An agent's (roadmap 8.120): its one unfinished call with this
+        # tool and this whole input, so that call's end closes the prompt.
+        # Two such parallel calls give none, never a guess.
+        if sess is None:
+            return ""
+        return sess.agent_tool_call_for(
+            agent_id, tool_name, _input_digest(msg.get("tool_input", {})))
     last = sess.last_parent_tool_use if sess is not None else None
     if not (msg.get("agent_id") or "") and last and last[0] == tool_name:
         return last[1]
@@ -740,7 +750,11 @@ class HookReceiver:
                     tool_info.get("input_digest"), tool_info.get("summary")),
             }
             tool_info["order"] = order
-        if sess.status != Status.INTERACTIVE:
+        if sess.status != Status.INTERACTIVE and not sess.prompt_wait_carry:
+            # During the carry (Claude's Stop with an agent's prompt still
+            # open) the session is already waiting: a prompt then is one
+            # more, never the start of a new wait that would drop the
+            # carried ones.
             moved = self.registry.transition(session_name, Status.INTERACTIVE)
             if moved:
                 if source == "permission_request":
@@ -788,6 +802,11 @@ class HookReceiver:
         if sess.status != Status.INTERACTIVE:
             return False
         if not left:
+            if sess.resumed_after_stop:
+                # Carried over Claude's Stop (8.120): no turn of Claude's
+                # runs, and an agent's work never makes the session BUSY.
+                self.registry.transition(sess.name, Status.IDLE)
+                return True
             self.registry.transition(sess.name, Status.BUSY,
                                      preserve_job_state=preserve_job_state)
             return True
@@ -1235,6 +1254,8 @@ class HookReceiver:
                     # background-job endgame" requirement 2).
                     cont_sess.job_continuation_active = True
                     cont_sess.job_grace_until = 0.0
+                    # Claude's turn runs again (8.120).
+                    cont_sess.resumed_after_stop = False
                     if not (cont_sess.status == Status.INTERACTIVE
                             and _prompt_waits_on(cont_sess)):
                         # An open prompt stays open: an agent finishing
@@ -1275,7 +1296,25 @@ class HookReceiver:
                 return
             waiting = self.registry.get(session_name)
             transitioned = None
+            new_turn_while_waiting = False
             if (waiting is not None and waiting.status == Status.INTERACTIVE
+                    and waiting.resumed_after_stop):
+                # Claude's turn ended at a Stop that carried an agent's
+                # prompt over (8.120): this is a new turn, not a message
+                # into a running one. It gets its card; the agents'
+                # prompts stay open beside it.
+                waiting.close_prompts(_owned_by(""))
+                if waiting.open_prompts():
+                    waiting.prompt_wait_carry = True
+                    transitioned = self.registry.begin_turn_while_waiting(
+                        session_name)
+                    new_turn_while_waiting = transitioned is not None
+                    if not new_turn_while_waiting:
+                        waiting.prompt_wait_carry = False
+                else:
+                    transitioned = self.registry.transition(session_name,
+                                                            Status.BUSY)
+            elif (waiting is not None and waiting.status == Status.INTERACTIVE
                     and any(_perm_owner(p) for p in waiting.open_prompts())):
                 # A prompt typed at the terminal answers Claude's own
                 # dialogs, never an agent's (roadmap 8.120): with one of
@@ -1316,7 +1355,15 @@ class HookReceiver:
                 if prompt:
                     transitioned.turn_prompt = _person_text(
                         prompt, transitioned.last_prompt)
-                await self.notify_fn(transitioned, "user_prompt_submit", {})
+                try:
+                    await self.notify_fn(transitioned, "user_prompt_submit", {})
+                finally:
+                    if new_turn_while_waiting:
+                        # The card is out: wait on the agents' prompts
+                        # again, now inside this running turn.
+                        transitioned.prompt_wait_carry = False
+                        self.registry.resume_wait(session_name,
+                                                  after_stop=False)
 
         elif event == "queue_pickup":
             # The UserPromptSubmit hook matched (or fell back on) some of
@@ -1421,6 +1468,11 @@ class HookReceiver:
                     # tool calls carry no agent_id and still enter BUSY
                     # below. (The parent's statusline tokens ride its own
                     # PreToolUse; an agent's are not the turn's.)
+                    # Its call in flight, for its PermissionRequest that
+                    # carries no id (roadmap 8.120).
+                    sess.agent_tool_started(
+                        agent_id, _payload_tool_use_id(msg), tool_name,
+                        _input_digest(tool_input))
                     if agent_id in sess.active_subagents:
                         # A running agent of this turn's: its long tool
                         # keeps the stale-busy warning quiet, as the
@@ -1511,6 +1563,8 @@ class HookReceiver:
                 # anchor instead of restamping it; without it, this is a
                 # genuine new turn and restamps exactly as before this
                 # feature existed.
+                # Claude's own step: its turn runs (8.120).
+                sess.resumed_after_stop = False
                 if sess.status == Status.INTERACTIVE:
                     # Claude working again proves its own dialogs closed,
                     # never an agent's (roadmap 8.120): a background
@@ -1562,6 +1616,8 @@ class HookReceiver:
                 sess = self.registry.get_or_create(session_name)
                 ended = [p for p in sess.open_prompts()
                          if _finishes_prompt(msg, tool_name, tool_input, p)]
+                sess.agent_tool_ended(msg.get("agent_id") or "",
+                                      _payload_tool_use_id(msg))
                 if ended:
                     # Answered (in the terminal, if not by a tap): an old
                     # answer button on its message types nothing now
@@ -1636,6 +1692,8 @@ class HookReceiver:
                 f_input = msg.get("tool_input", {})
                 ended = [p for p in sess.open_prompts()
                          if _finishes_prompt(msg, tool_name, f_input, p)]
+                sess.agent_tool_ended(msg.get("agent_id") or "",
+                                      _payload_tool_use_id(msg))
                 if ended and msg.get("agent_id"):
                     # An agent's, refused in the terminal: the agent goes on
                     # (or stops), and the session with it once no other
@@ -1645,6 +1703,16 @@ class HookReceiver:
                     await self._prompts_closed(
                         sess, closed, inline_closed, "tool-refused",
                         preserve_job_state=bool(sess.active_subagents))
+                elif ended and any(not any(p is e for e in ended)
+                                   for p in sess.open_prompts()):
+                    # Claude's own, refused in the terminal while another
+                    # prompt is still open (8.120): its record goes, or the
+                    # gone dialog would still count as the one on top and
+                    # the others' keystroke taps would be refused.
+                    closed, inline_closed = sess.close_prompts(
+                        lambda p: any(p is e for e in ended))
+                    await self._prompts_closed(
+                        sess, closed, inline_closed, "tool-refused")
                 elif ended or _finishes_open_prompt(msg, tool_name, f_input, sess):
                     # Answered or refused: the dialog is closed (8.102).
                     # Claude's own refusal ends its turn (the session
@@ -1769,6 +1837,8 @@ class HookReceiver:
                             sess, closed, inline_closed,
                             "agent-stopped",
                             preserve_job_state=bool(sess.active_subagents))
+                # Its turn ended: no call of its own is in flight now.
+                sess.agent_tool_calls.pop(agent_id, None)
                 # Compute elapsed time if we have a matching start
                 elapsed = 0.0
                 waiting_for = sess.bg_agent_pause(agent_id, now_mono)

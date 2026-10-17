@@ -281,6 +281,12 @@ PROMPT_BEHIND = Msg(
     "Claude Code is showing another prompt first, so answer that one before this one.",
     note="Pop-up: two prompts are open and Claude Code shows the other one on top, so "
          "this tap would type into the wrong dialog; nothing was typed")
+PROMPT_SETTLING = Msg(
+    "toast.prompt_settling",
+    "Claude is finishing its turn, so tap this prompt again in a moment.",
+    note="Pop-up: Claude just ended its turn while an agent's prompt is still open; "
+         "for a moment the tap cannot be matched to it, nothing was typed and the "
+         "buttons stay")
 PROMPT_ORDER_UNKNOWN = Msg(
     "toast.prompt_order_unknown",
     "aipager can't tell which prompt Claude Code is showing first, so answer this one "
@@ -1806,7 +1812,14 @@ class CallbackDispatchMixin:
         refusal = None
         strip_refused = True  # take the refused message's buttons away
         tapped_id = resent_key[1]
-        if is_resent_copy:
+        if sess.prompt_wait_carry and sess.status != Status.INTERACTIVE:
+            # Claude's turn is ending with an agent's prompt still open
+            # (roadmap 8.120): for that moment no prompt is on record as
+            # open, though the agent's still is. Refused with no keys, and
+            # its buttons kept: the session waits on it again right after.
+            refusal = PROMPT_SETTLING
+            strip_refused = False
+        elif is_resent_copy:
             # Kept, not popped: the entry IS the guard, and the message
             # keeps its buttons if the edit below does not land. A missing
             # token on either side never matches (fail closed).
@@ -2326,6 +2339,14 @@ class CallbackDispatchMixin:
                 if left:
                     log.info("[%s] prompt closed (answered), %d still open",
                              sess.label, left)
+                    # What waited behind it (a deferred refusal) goes now,
+                    # and the card shows what the session still waits on.
+                    await self._after_prompts_changed(
+                        sess, {"inline_closed": False})
+                elif sess.resumed_after_stop:
+                    # The last prompt carried over Claude's Stop (8.120):
+                    # its turn is over, Claude sits at its input.
+                    self.registry.transition(session_name, Status.IDLE)
                 else:
                     # Mark session as busy after user interaction
                     self.registry.transition(session_name, Status.BUSY)
