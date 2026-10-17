@@ -213,6 +213,39 @@ def test_copy_root_is_judged_on_the_one_resolution(home, tmp_path, monkeypatch):
     assert exc.value.cause == ob.CAUSE_NOT_ALLOWED
 
 
+def test_a_long_name_is_cut_by_bytes_on_disk(home, tmp_path):
+    """200 three-byte letters are 600 UTF-8 bytes: the copy's name on disk
+    is cut to fit the file system (on a letter boundary), its suffix kept;
+    the name shown in the chat stays whole."""
+    long = "\u0641" * 150 + ".png"       # Arabic letter feh, 2 bytes each
+    long3 = "\u4e2d" * 150 + ".png"      # a CJK letter, 3 bytes each
+    for name in (long, long3, "a" * 300, "\u4e2d" * 300):
+        cut = ob.disk_name(name)
+        assert len(cut.encode("utf-8")) <= ob.DISK_NAME_MAX_BYTES
+        stem = cut[:-4] if name.endswith(".png") else cut
+        assert stem and name.startswith(stem)
+    assert ob.disk_name(long3).endswith(".png")
+    assert ob.disk_name("short.png") == "short.png"
+    # A clash suffix still fits in 255 bytes.
+    folder = tmp_path / "clash"
+    folder.mkdir()
+    from aipager import uploads
+    first = uploads.reserve_file(folder, ob.disk_name(long3))
+    second = uploads.reserve_file(folder, ob.disk_name(long3))
+    assert first != second and len(second.name.encode("utf-8")) <= 255
+
+
+def test_copy_of_a_long_name_reaches_the_disk(home, tmp_path, monkeypatch):
+    """The copy itself: a shown name of 200 three-byte letters (600 bytes)
+    gets a disk name that the file system takes."""
+    src = _file(tmp_path / "n" / "x.png", _png_bytes())
+    monkeypatch.setattr(ob, "shown_name", lambda entry: "\u4e2d" * 200 + ".png")
+    item = ob.copy_one(src, None, CHAT, None)
+    assert item.name == "\u4e2d" * 200 + ".png"
+    assert len(item.path.name.encode("utf-8")) <= 255
+    assert item.path.read_bytes() == _png_bytes()
+
+
 @pytest.mark.parametrize("make, cause", [
     (lambda d: str(d / "gone.png"), ob.CAUSE_GONE),
     (lambda d: _file(d / "e.txt", b""), ob.CAUSE_NOT_ALLOWED),

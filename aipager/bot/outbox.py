@@ -450,6 +450,30 @@ def shown_name(entry: str) -> str:
     return bidi_guard.reveal(name)[:200]
 
 
+#: The copy's name on disk, in UTF-8 bytes: a file system's 255 less room
+#: for the ``-2`` ... ``-99999`` a name clash adds (``uploads.reserve_file``).
+DISK_NAME_MAX_BYTES = 255 - 8
+
+
+def _cut_utf8(text: str, limit: int) -> str:
+    """*text* cut to at most *limit* UTF-8 bytes, on a character boundary."""
+    return text.encode("utf-8")[:max(limit, 0)].decode("utf-8", "ignore")
+
+
+def disk_name(name: str, limit: int = DISK_NAME_MAX_BYTES) -> str:
+    """The name a copy gets in the outbox folder: *name* within *limit*
+    UTF-8 bytes (a 200-character name of 3-byte letters is 600 bytes, and
+    the file system refuses it), cut on a character boundary, its suffix
+    kept when it is short."""
+    if len(name.encode("utf-8")) <= limit:
+        return name
+    stem, suffix = os.path.splitext(name)
+    if not stem or len(suffix.encode("utf-8")) > 16:
+        stem, suffix = name, ""
+    cut = _cut_utf8(stem, limit - len(suffix.encode("utf-8"))) + suffix
+    return cut if cut.strip(".") else "file"
+
+
 def allowed_root_for(snapshot, cwd: str | None) -> tuple[bool, str | None]:
     """``(bound, root)``: whether the session's snapshot holds it to a
     members' root, and the one folder it may send from (None: nothing)."""
@@ -541,7 +565,7 @@ def copy_one(entry: str, cwd: str | None, chat_id: int, display: str | None,
             raise CopyFailed(CAUSE_GONE, "moved-after-check")
         folder = uploads.ensure_chat_folder(outbox_dir(), chat_id)
         name = shown_name(entry)
-        dest = uploads.reserve_file(folder, name)
+        dest = uploads.reserve_file(folder, disk_name(name))
         out = os.open(dest, os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
                       | getattr(os, "O_CLOEXEC", 0))
         copied = 0
