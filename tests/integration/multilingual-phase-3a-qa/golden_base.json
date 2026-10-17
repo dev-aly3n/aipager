@@ -145,7 +145,7 @@
    "[keys] (('[via Telegram \u00b7 @aly]\\nhello 42 & <b>',), [])",
    "[keys] (('[via Telegram \u00b7 @aly]\\nsecond 7',), [])",
    "[keys] (('[via Telegram \u00b7 @aly]\\nspoken 3',), [])",
-   "[keys] (('[via Telegram \u00b7 @aly]\\nlook at 5 <files>/<ts>_notes_7.txt',), [])",
+   "[keys] (('[via Telegram \u00b7 @aly]\\nlook at 5 <files>/<chat>/<ts>_notes_7.txt',), [])",
    "\ud83c\udf99\ufe0f <i>Transcribing\u2026</i>",
    "\ud83c\udf99\ufe0f <i>Heard:</i> spoken 3"
   ],

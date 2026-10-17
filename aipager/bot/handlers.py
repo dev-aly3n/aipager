@@ -71,6 +71,7 @@ from aipager.bot.settings_menu import render_settings_root
 from aipager.config import (
     FILE_DOWNLOAD_DIR, KEYBOARD_PARENTS,
 )
+from aipager import uploads
 from aipager.state import QUEUE_CAP, Status, TrackedSession
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -701,21 +702,13 @@ def _claim_dialog_hold(sess) -> dict | None:
     return hold
 
 
-def _unique_save_path(directory: Path, filename: str) -> Path:
-    """``directory/filename``, or ``stem-2.ext``, ``stem-3.ext``… if taken.
-
-    Names are second-resolution (``{ts}_photo.jpg``) and every album
-    photo is ``photo.jpg``, so back-to-back items of one album would
-    otherwise overwrite each other and the prompt would hand claude the
-    same path N times. Unchanged for the no-collision case.
-    """
-    path = directory / filename
-    stem, suffix = Path(filename).stem, Path(filename).suffix
-    n = 2
-    while path.exists():
-        path = directory / f"{stem}-{n}{suffix}"
-        n += 1
-    return path
+def _upload_chat(update) -> int:
+    """The chat an upload came from, whose folder it goes to. Refuses
+    (``UnsafeUploadFolder``) when there is none, rather than guess."""
+    chat = calling_chat_id(update)
+    if chat is None:
+        raise uploads.UnsafeUploadFolder("no-chat", None)
+    return chat
 
 
 def _sent_to_line(glyph: str, what: str, label: str, tr=None) -> str:
@@ -2400,14 +2393,19 @@ class CommandHandlersMixin:
             return
 
         # Download the .ogg file
+        save_path = None
         try:
-            FILE_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
-            ts = int(time.time())
-            save_path = FILE_DOWNLOAD_DIR / f"{ts}_voice.ogg"
+            # This chat's own private folder (aipager/uploads.py).
+            folder = uploads.ensure_chat_folder(
+                FILE_DOWNLOAD_DIR, _upload_chat(update))
+            save_path = uploads.reserve_file(folder, f"{int(time.time())}_voice.ogg")
             tg_file = await msg.voice.get_file()
             await tg_file.download_to_drive(custom_path=str(save_path))
+            uploads.seal_file(save_path)
         except Exception:
             log.warning("Voice download failed", exc_info=True)
+            if save_path is not None:
+                save_path.unlink(missing_ok=True)  # the empty file it reserved
             await reply_text(msg, tr.text(MEDIA_DOWNLOAD_FAILED))
             return
 
@@ -2583,10 +2581,19 @@ class CommandHandlersMixin:
 
         save_path: Path | None = None
         try:
-            FILE_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
-            target = _unique_save_path(
-                FILE_DOWNLOAD_DIR, f"{int(time.time())}_{display_name}")
-            await _download_with_retry(media, target, display_name=display_name)
+            # This chat's own private folder (aipager/uploads.py): 0700,
+            # the file 0600, and another chat's restricted turns are kept
+            # off it by their policy snapshot.
+            folder = uploads.ensure_chat_folder(
+                FILE_DOWNLOAD_DIR, _upload_chat(update))
+            target = uploads.reserve_file(
+                folder, f"{int(time.time())}_{display_name}")
+            try:
+                await _download_with_retry(media, target, display_name=display_name)
+                uploads.seal_file(target)
+            except BaseException:
+                target.unlink(missing_ok=True)  # the empty file it reserved
+                raise
             save_path = target
         except Exception:
             log.warning("File download failed: %s", display_name, exc_info=True)

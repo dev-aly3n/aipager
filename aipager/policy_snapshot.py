@@ -410,6 +410,12 @@ def resolve_snapshot(role, scope, member, style_text: str = "",
         for p in getattr(root_bound, "deny", ()) or ():
             if isinstance(p, str) and p and "\x00" not in p:
                 no_access.add(p.rstrip("/") + "/**")
+        for g in getattr(root_bound, "deny_globs", ()) or ():
+            if isinstance(g, str) and g.startswith("/") and "\x00" not in g:
+                no_access.add(g)
+        for b in getattr(root_bound, "deny_bash", ()) or ():
+            if isinstance(b, str) and b and "\x00" not in b:
+                bash.add(b)
 
     out = {
         "origin": "telegram",

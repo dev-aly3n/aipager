@@ -386,7 +386,11 @@ cover):
   ("this role reads in the home folder only inside its own folder"),
   the session's scratchpad and its own reply file excepted. Every other
   chat's root folder is a protected path for the member, wherever it
-  is. Folders outside your home folder (`/usr`, `/etc`, `/srv`) stay
+  is, and so is every other chat's upload folder under
+  `/tmp/aipager-files/` (`Read`, `Grep`, `Glob` and the write tools;
+  for a role given Bash, a command naming one is refused, best effort),
+  with the files every chat shared there before per-chat folders.
+  Uploads made in the member's own chat stay readable. Folders outside your home folder (`/usr`, `/etc`, `/srv`) stay
   readable. A custom role with `bypass_role_denies` or `bypass_safety`
   but without `can_manage` writes and searches anywhere inside its root
   folder, and its reads in your home folder stay inside it too: only
@@ -509,7 +513,9 @@ their rules stay best-effort (below).
   projects, for example), where a `user`'s turn reads only inside its
   root folder. Its writes stay confined to the session folder and the
   scratchpad. A verified message from a member's session carries the
-  member's root folder.
+  member's root folder. Such a turn can also read every chat's uploads
+  in `/tmp/aipager-files/`, which a `user`'s turn reads only for its
+  own chat.
 - The root folder binds the file tools only. A custom role you give
   `Bash` can read outside it through the shell (the built-in `user`
   and `read_only` have no `Bash`). A custom role with `bypass_safety`
@@ -712,6 +718,30 @@ Inbound:
 This means: the daemon is not a remote attack surface. A network-
 level attacker cannot reach it without a foothold on the host.
 
+**Claude's text and Telegram's own downloads.** Telegram's
+servers download some addresses in a message by themselves: an image,
+video or audio block in a rich message, and the page behind a link
+preview. Claude's answers, its notes on the busy card, agent
+descriptions and tool arguments reach Telegram as Claude wrote them, so
+a prompt injection could make Claude write an address that carries a
+secret out, with no tool call and no permission prompt. aipager closes
+the first route, and the second where Telegram has a switch for it:
+
+- In every rich message, an image written as `![alt](url)` is sent as a
+  plain link with its alt text, and any other image syntax, and raw
+  `<img>`, `<video>`, `<audio>`, `<source>`, `<picture>`, `<figure>`,
+  `<iframe>`, `<embed>`, `<object>`, `<tg-document>`, `<tg-collage>`,
+  `<tg-slideshow>`, `<tg-button>` and `<tg-button-row>` tags, are shown
+  as text (`aipager/bot/media_guard.py`). Inside a code block, such as
+  an HTML snippet, this shows an extra `\` or `&lt;`.
+- Link previews are off on every plain-text and HTML message aipager
+  sends or edits (the plain fallbacks of answers and cards included),
+  its own too. Its Mini App links are buttons, which Telegram does not
+  fetch.
+
+Telegram documents no preview option for rich messages; whether it builds
+a link preview for one has not been checked against the live service.
+
 ## Mini App tunnel
 
 **The Mini App is on by default**, so on a stock install aipager opens
@@ -774,7 +804,8 @@ would rather not depend on Cloudflare at all.
 ## Voice transcription
 
 `faster-whisper` runs in-process. The audio is downloaded as `.ogg`
-into `/tmp/aipager-files/` (the folder uploaded files go to),
+into the chat's own folder under `/tmp/aipager-files/` (where uploaded
+files go, `0700`, the file `0600`),
 transcribed locally on CPU, and the file stays under your control. **No audio leaves the machine.**
 No third-party API. No key needed beyond the bot token to talk to
 Telegram in the first place.
@@ -942,12 +973,13 @@ Known limits:
 | Stranger sends bot a command | Chat ID filter rejects |
 | Stolen bot token | Use `/revoke` in @BotFather, re-config |
 | Compromised claude tool call | aipager's safety check refuses what a Telegram turn's rules deny; in Ask, Claude Code's own rules in `settings.json` decide what it asks about and a person's tap is the only allow; in Auto (the default for every new session) Claude Code's own safety check runs the calls it judges safe without a prompt and stops the risky ones for a person; a Full access session (admins, and a person in their own private chat) asks nothing, so only aipager's safety check stands in the way, and for an owner's own turns and terminal prompts nothing does ([who decides](#who-decides-whether-a-tool-call-runs)) |
-| Restricted Telegram user escalates to the owner | No shell, sessions started only inside the member's own root folder, writes and searches confined to the project inside it (never the home folder), no reads in the home folder outside the root folder, other members' root folders unreachable, credential files unreadable, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
+| Restricted Telegram user escalates to the owner | No shell, sessions started only inside the member's own root folder, writes and searches confined to the project inside it (never the home folder), no reads in the home folder outside the root folder, other members' root folders and other chats' uploads unreachable, credential files unreadable, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
 | A session's message claims an owner's authority | The message runs with the sending turn's proven rights, never the receiving session's earlier ones; without proof, read and think only ([messages between sessions](#messages-between-claude-sessions)) |
 | A group member borrows someone else's rights | Each message runs with its own sender's role in the chat it came from; a different sender's message waits for the running turn; if one joins anyway, the strictest rules win; slash commands from restricted roles are limited to the keyboard's ([team-mode enforcement](#team-mode-enforcement)) |
 | Group chatter reaches a session | In a group only commands, replies to the bot, mentions of it and marked keyboard taps are acted on ([groups](groups.md#what-the-bot-reads-in-a-group)) |
 | A removed member keeps access | `aipager config` reloads the daemon live; their held messages are dropped and a turn of theirs still running loses their old rights; removing them from the Telegram group stops them reading it ([groups → live reload](groups.md#live-reload)) |
 | Audit log tampering | Append-only; out of scope to prevent without a separate signing daemon |
+| A prompt injection makes Claude write an address that carries data out | Images and media tags in Claude's text are shown as links or text, never as media, and link previews are off on plain-text and HTML messages ([network surface](#network-surface)) |
 | Network attacker | No inbound port, not directly reachable |
 | Local privilege escalation | No sudo / setuid; daemon stays in user space |
 | Voice audio leaking to cloud | Transcription is local |

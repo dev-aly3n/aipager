@@ -148,7 +148,7 @@ behaviour.
 | `/tmp/claude-policy-<name>.json` | Canonical permission snapshot for the running turn | `aipager-hook` (written at pick-up), read by the `PreToolUse` check |
 | `/tmp/claude-policy-.floor-<uid>.json` | The safety floor, built-in list plus your `safety:` section, for the hook's fallbacks | aipager daemon |
 | `/tmp/claude-reply-<name>.txt` | The message you replied to, when you reply to an older message | aipager daemon |
-| `/tmp/aipager-files/` | Files and voice notes sent from Telegram | aipager daemon |
+| `/tmp/aipager-files/<chat>/` | Files and voice notes sent from Telegram, one private folder per chat (`0700`, files `0600`) | aipager daemon |
 | `/tmp/aipager.log` | Output of a self-restart when there is no service | aipager daemon |
 | `~/.claude/aipager-sessions.json` | Durable registry state | aipager daemon |
 | `~/.claude/aipager-audit.jsonl` | Allow / Deny / answer log | aipager daemon (append-only) |

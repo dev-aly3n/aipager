@@ -60,6 +60,7 @@ from aipager.bot.flood_budget import (
     FloodSkipped,
     rate_limit_args as _rate_limit_args,
 )
+from aipager.bot.media_guard import neutralize_media
 from aipager.config import TELEGRAM_MAX_RETRY_AFTER
 from aipager.report import counters as report_counters
 from aipager.report import store as report_store
@@ -332,7 +333,10 @@ async def send_rich_message(
     _raise_if_muted(chat_id)
     payload: dict = {
         "chat_id": chat_id,
-        "rich_message": {"markdown": markdown, "is_rtl": is_rtl},
+        # Every rich payload is built here or in edit_message_text_rich:
+        # neutralise media blocks so no text makes Telegram fetch a URL.
+        "rich_message": {"markdown": neutralize_media(markdown),
+                         "is_rtl": is_rtl},
     }
     if reply_to_message_id is not None:
         payload["reply_to_message_id"] = reply_to_message_id
@@ -498,7 +502,10 @@ async def edit_message_text_rich(
     payload: dict = {
         "chat_id": chat_id,
         "message_id": message_id,
-        "rich_message": {"markdown": markdown, "is_rtl": is_rtl},
+        # Every rich payload is built here or in edit_message_text_rich:
+        # neutralise media blocks so no text makes Telegram fetch a URL.
+        "rich_message": {"markdown": neutralize_media(markdown),
+                         "is_rtl": is_rtl},
     }
     if reply_markup is not None:
         payload["reply_markup"] = reply_markup

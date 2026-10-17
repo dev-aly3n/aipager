@@ -793,10 +793,11 @@ def claude_bytes(h, lang):
                                      mime_type="text/plain")
     doc.message.document.get_file = AsyncMock(return_value=tg_file)
     h.run(bot._handle_file(doc, ctx()))
-    # The saved file's folder, time stamp and de-duplicating suffix differ
-    # per run: the rest of what Claude reads is compared.
-    keys = [re.sub(r"\S*/aipager-files/\d+_notes_7(-\d+)?\.txt",
-                   "<files>/<ts>_notes_7.txt", k) for k in h.keys]
+    # The saved file's folder, its chat's folder (aipager/uploads.py), time
+    # stamp and de-duplicating suffix differ per run: the rest of what
+    # Claude reads is compared.
+    keys = [re.sub(r"\S*/aipager-files/c[0-9a-f]{24}/\d+_notes_7(-\d+)?\.txt",
+                   "<files>/<chat>/<ts>_notes_7.txt", k) for k in h.keys]
     return ["[keys] " + k for k in keys] + tg.out
 
 

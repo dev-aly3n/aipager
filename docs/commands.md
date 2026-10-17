@@ -1073,8 +1073,20 @@ call for its line; lines that go together are removed in one call.
 
 ### Files
 
-Uploaded files are downloaded to `/tmp/aipager-files/` (named
-`<time>_<file name>`) and the path is offered to claude: with a caption, the prompt is the
+Uploaded files are downloaded to a private folder of the chat they came
+from, `/tmp/aipager-files/<chat>/` (named `<time>_<file name>`; `<chat>`
+is a name made from the chat id and the bot token, which does not give
+the chat id away). The folders are readable only by the user aipager runs
+as (`0700`, files `0600`), and a member's turn in one chat cannot read,
+search or write another chat's uploads (see
+[security](security.md#team-mode-enforcement)). Files from before this
+change stay where they were, directly in `/tmp/aipager-files/`; nothing
+is moved or deleted, and aipager narrows the folder to `0700` when it
+starts, so only that user can reach them. A new bot token gives every
+chat a new folder; uploads from before it stay in the old ones, which a
+member's turn can no longer read. A download folder that is a symlink, or belongs to
+another user, is refused and the upload fails. The path is offered to
+claude: with a caption, the prompt is the
 caption followed by the path(s); without one it is just
 `check this: <path>` (or `check these: <paths>` for an album), so
 claude is pointed at the file without being told what to do with it.

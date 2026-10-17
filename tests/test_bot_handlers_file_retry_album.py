@@ -202,7 +202,8 @@ def test_single_photo_injects_immediately_with_existing_shape(
 
     sent.assert_awaited_once()
     assert sent.await_args.args[1] == f"check this: {downloads.written[0]}"
-    assert Path(downloads.written[0]).parent == tmp_path
+    # This chat's own folder under the download folder (aipager/uploads.py).
+    assert Path(downloads.written[0]).parent.parent == tmp_path
     assert Path(downloads.written[0]).name.endswith("_photo.jpg")
     assert bot._albums == {}
     assert sess.status == Status.BUSY
