@@ -505,7 +505,7 @@ _WORST_COUNTS = tuple(range(0, 121)) + (999,)
 _WORST_CLOCK = 999 * 3600 + 59 * 60 + 59
 _WIDE = "\U0001f600"  # one character, four UTF-8 bytes
 _AMP = "&"  # one character, five bytes once HTML-escaped
-_RESERVE: dict[tuple[str, bool], int] = {}
+_RESERVE: dict[tuple[str, bool, bool], int] = {}
 
 
 def _size(text) -> int:
@@ -561,8 +561,9 @@ def reserve_bytes(tr=None) -> int:
     tr = _tr(tr)
     # Per language AND direction: a block drawn left to right in a
     # right-to-left language (multilingual design 5.7, rule 5) carries
-    # other marks, so its own size.
-    key = (tr.code, tr.rtl)
+    # other marks, and so does a left-to-right language drawn right to
+    # left (its U+200E marks and isolates), so each its own size.
+    key = (tr.code, tr.rtl, tr.ltr_in_rtl)
     cached = _RESERVE.get(key)
     if cached is not None:
         return cached
