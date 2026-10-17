@@ -438,7 +438,8 @@ def _esc(text: str) -> str:
 
 
 def _utf16_len(text: str) -> int:
-    return len(text.encode("utf-16-le")) // 2
+    from aipager.bot.transport import utf16_len
+    return utf16_len(text)
 
 
 def _en():

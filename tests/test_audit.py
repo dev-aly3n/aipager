@@ -178,3 +178,18 @@ def test_append_omitting_via_defaults_to_empty_string(tmp_path):
                  path=log)
     record = json.loads(log.read_text().splitlines()[0])
     assert record["via"] == ""
+
+
+def test_record_without_a_file_keeps_its_shape(tmp_path):
+    log = tmp_path / "audit.jsonl"
+    audit.append(session="s", label="l", action="Allowed", tool="Bash", path=log)
+    record = json.loads(log.read_text())
+    assert "file_name" not in record and "file_size" not in record
+
+
+def test_record_of_a_file_names_it(tmp_path):
+    log = tmp_path / "audit.jsonl"
+    audit.append(session="s", label="l", action="FileSent", tool="SendUserFile",
+                 file_name="chart.png", file_size=1234, path=log)
+    record = json.loads(log.read_text())
+    assert (record["file_name"], record["file_size"]) == ("chart.png", 1234)

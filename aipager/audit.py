@@ -45,6 +45,8 @@ def append(*, session: str, label: str, action: str,
            reason: str = "",
            bypass_safety: bool = False,
            via: str = "",
+           file_name: str = "",
+           file_size: int | None = None,
            path: Path | None = None) -> bool:
     """Append a single record. Returns True on success, False on failure.
 
@@ -63,6 +65,10 @@ def append(*, session: str, label: str, action: str,
     instead of keystrokes") records how a permission tap was actually
     resolved — ``"hook_decision"`` or ``"keystroke_fallback"``. Default-
     empty, so every pre-existing call site's output is unchanged.
+
+    ``file_name`` / ``file_size`` name a file Claude sent to the chat (or
+    tried to): written only when ``file_name`` is set, so every other
+    record keeps its shape.
 
     ``path`` is overrideable for tests; production callers leave it as
     None so it picks up ``AUDIT_LOG_PATH``.
@@ -84,6 +90,9 @@ def append(*, session: str, label: str, action: str,
         "bypass_safety": bypass_safety,
         "via": via,
     }
+    if file_name:
+        record["file_name"] = file_name[:300]
+        record["file_size"] = file_size
     target = path or AUDIT_LOG_PATH
     check_write(target)
     try:

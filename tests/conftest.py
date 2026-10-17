@@ -284,6 +284,9 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         # aipager.i18n.persist, so one entry covers every reader.
         "aipager.config.LANGUAGE_STATE_FILE":
             home / ".local" / "state" / "aipager" / "languages.json",
+        # The outbox of files Claude sends (aipager.bot.outbox): read LATE.
+        "aipager.config.OUTBOX_DIR":
+            home / ".local" / "state" / "aipager" / "outbox",
         "aipager.config._KEYBOARD_CONFIG_PATH": cfg / "keyboard.json",
         # migrate.upgrade_to_v3() reads this (and its .retired.* siblings)
         # to recover Mini App settings — without a redirect it would read

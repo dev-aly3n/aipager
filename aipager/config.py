@@ -327,6 +327,12 @@ REPORT_RUNNING_FILE = Path.home() / ".local" / "share" / "aipager" / "running.js
 # snapshotted for the whole test run.
 LANGUAGE_STATE_FILE = Path.home() / ".local" / "state" / "aipager" / "languages.json"
 
+# Copies of the files Claude sends to a chat (SendUserFile), one private
+# folder per chat, until they are sent (aipager.bot.outbox). Under the
+# state folder, which every restricted turn's floor already covers. Read
+# late by the outbox.
+OUTBOX_DIR = Path.home() / ".local" / "state" / "aipager" / "outbox"
+
 # While calls flow, the file is ALSO rewritten this often even when
 # nothing material changed (roadmap 8.30). It carries each chat's rolling
 # HOUR now — the volume that got vm3 banned — and `aipager status`, a
