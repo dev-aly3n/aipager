@@ -440,6 +440,26 @@ def _summary_text(name: str, inp: dict) -> str:
     return name
 
 
+_SEND_PAYLOAD_LOGGED = False
+
+
+def _log_send_payload_once(msg: dict) -> None:
+    """The first SendUserFile PostToolUse of this daemon run, logged once
+    (cut to 4 KB): Claude Code's payload for it was read from its binary,
+    never seen, and the real-Claude test run records it from here."""
+    global _SEND_PAYLOAD_LOGGED
+    if _SEND_PAYLOAD_LOGGED:
+        return
+    _SEND_PAYLOAD_LOGGED = True
+    try:
+        shown = {k: msg.get(k) for k in ("tool_name", "tool_input", "tool_response",
+                                         "tool_use_id", "cwd", "agent_id")}
+        log.info("send_files_ran payload: %s",
+                 json.dumps(shown, ensure_ascii=False, default=str)[:4096])
+    except Exception:  # pragma: no cover - defensive
+        pass
+
+
 def _send_files(inp) -> list[str]:
     """SendUserFile's file list as strings (a bare string is one file);
     [] when it cannot be read."""
@@ -1456,6 +1476,18 @@ class HookReceiver:
             tool_name = msg.get("tool_name", "")
             tool_input = msg.get("tool_input", {})
 
+            if tool_name == send_check.SEND_TOOL:
+                # Files Claude asks to send: what the hook checks is the
+                # authority for what the daemon copies at PostToolUse.
+                sender = self.registry.get(session_name)
+                if sender is not None:
+                    await self.notify_fn(sender, "send_files_requested", {
+                        "tool_use_id": _payload_tool_use_id(msg),
+                        "tool_input": tool_input,
+                        "cwd": msg.get("cwd") or "",
+                        "agent_id": msg.get("agent_id", "") or "",
+                    })
+
             # AskUserQuestion blocks execution — handle as INTERACTIVE
             # (detected here because PreToolUse provides full tool_input
             #  with questions/options, unlike the Notification hook)
@@ -1708,6 +1740,15 @@ class HookReceiver:
                                  "agents line", sess.label,
                                  msg["agent_id"], child)
                     self.registry.mark_dirty()
+                if tool_name == send_check.SEND_TOOL:
+                    _log_send_payload_once(msg)
+                    await self.notify_fn(sess, "send_files_ran", {
+                        "tool_use_id": _payload_tool_use_id(msg),
+                        "tool_input": tool_input,
+                        "tool_response": msg.get("tool_response"),
+                        "cwd": msg.get("cwd") or "",
+                        "agent_id": msg.get("agent_id", "") or "",
+                    })
                 done_ctx = {
                     "tool_name": tool_name,
                     "tool_summary": summary,

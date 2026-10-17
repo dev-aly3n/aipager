@@ -479,6 +479,11 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · wartet noch auf deine Antwort oben"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Berechtigung: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Frage: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ {name} konnte nicht gesendet werden: Die Datei wurde gelöscht oder geändert, bevor aipager sie kopieren konnte."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ {name} konnte nicht gesendet werden: Die Datei darf nicht mehr gesendet werden."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ {name} konnte nicht gesendet werden."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ {name} konnte nicht gesendet werden: Telegram hat die Datei abgelehnt."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ {name} konnte nicht gesendet werden: Die Datei ist zu groß für Telegram."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Hier stecken versteckte Zeichen, die die Schreibrichtung ändern (angezeigt als ⟨U+...⟩). Ausgeführt wird vielleicht etwas anderes, als du siehst."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Erlauben"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Immer erlauben"}

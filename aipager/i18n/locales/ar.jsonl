@@ -479,6 +479,11 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · لا تزال بانتظار إجابتك في الأعلى"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "إذن: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "سؤال: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ تعذّر إرسال {name}: حُذف الملف أو تغيّر قبل أن ينسخه aipager."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ تعذّر إرسال {name}: لم يعد مسموحًا بإرساله."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ تعذّر إرسال {name}."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ تعذّر إرسال {name}: رفضه Telegram."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ تعذّر إرسال {name}: الملف أكبر مما يقبله Telegram."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ في هذا النص حروف مخفية تغيّر اتجاه الكتابة (تظهر بالشكل ⟨U+...⟩). قد يُنفَّذ شيء غير ما يظهر هنا."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ السماح"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 السماح دائمًا"}

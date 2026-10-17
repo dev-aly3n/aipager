@@ -479,6 +479,11 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · всё ещё ждёт твоего ответа выше"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Разрешение: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Вопрос: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ Не удалось отправить {name}: файл удалили или изменили до того, как aipager его скопировал."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ Не удалось отправить {name}: этот файл больше нельзя отправлять."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ Не удалось отправить {name}."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ Не удалось отправить {name}: Telegram не принял файл."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ Не удалось отправить {name}: файл слишком большой для Telegram."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Здесь есть скрытые символы, меняющие направление текста (показаны как ⟨U+...⟩). Выполниться может не то, что ты видишь."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Разрешить"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Разрешать всегда"}

@@ -479,6 +479,11 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · attend toujours votre réponse plus haut"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Autorisation : {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Question : {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ Impossible d'envoyer {name} : le fichier a été supprimé ou modifié avant qu'aipager ne le copie."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ Impossible d'envoyer {name} : son envoi n'est plus autorisé."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ Impossible d'envoyer {name}."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ Impossible d'envoyer {name} : Telegram l'a refusé."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ Impossible d'envoyer {name} : le fichier est trop gros pour Telegram."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Ce texte contient des caractères cachés qui changent le sens de l'écriture (affichés comme ⟨U+...⟩). Il peut exécuter autre chose que ce que vous voyez."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Autoriser"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Toujours autoriser"}

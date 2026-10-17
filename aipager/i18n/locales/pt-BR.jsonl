@@ -479,6 +479,11 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · ainda esperando sua resposta lá em cima"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Permissão: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Pergunta: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ Não foi possível enviar {name}: o arquivo foi apagado ou mudou antes que o aipager pudesse copiá-lo."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ Não foi possível enviar {name}: o envio dele não é mais permitido."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ Não foi possível enviar {name}."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ Não foi possível enviar {name}: o Telegram recusou o arquivo."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ Não foi possível enviar {name}: o arquivo é grande demais para o Telegram."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Este texto tem caracteres ocultos que mudam a direção da escrita (aparecem como ⟨U+...⟩). Pode executar algo diferente do que parece."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Permitir"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Sempre permitir"}

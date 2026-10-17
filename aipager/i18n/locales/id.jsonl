@@ -479,6 +479,11 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · masih menunggu jawabanmu di atas"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Izin: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Pertanyaan: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ {name} tidak terkirim: file itu sudah dihapus atau berubah sebelum aipager sempat menyalinnya."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ {name} tidak terkirim: file itu sudah tidak boleh dikirim."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ {name} tidak terkirim."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ {name} tidak terkirim: Telegram menolaknya."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ {name} tidak terkirim: ukurannya terlalu besar untuk Telegram."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Ini berisi karakter tersembunyi yang mengubah arah teks (ditampilkan sebagai ⟨U+...⟩). Yang dijalankan mungkin tidak sama dengan yang kamu lihat."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Izinkan"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Selalu izinkan"}

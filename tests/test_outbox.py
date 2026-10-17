@@ -137,7 +137,7 @@ def test_copy_batch_keeps_order_and_failures(home, tmp_path):
 
 
 def test_a_direction_control_in_a_name_is_shown(home, tmp_path):
-    p = _file(tmp_path / "gpj‮.exe", b"x")
+    p = _file(tmp_path / "gpj\u202e.exe", b"x")
     assert ob.copy_one(p, None, CHAT, None).name == "gpj⟨U+202E⟩.exe"
 
 
@@ -280,3 +280,99 @@ def test_held_anchor_moves_when_the_answer_lands_or_goes():
     due = box.due(CHAT)
     assert [p.anchor for p in due] == [77, 3]
     assert box.due(CHAT) == []
+
+
+# ---- the delivery ---------------------------------------------------------------
+
+class _Bot:
+    def __init__(self):
+        self.calls = []
+
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(name)
+
+        async def _m(*args, **kw):
+            self.calls.append((name, args, kw))
+            return None
+        return _m
+
+
+def _pending(home, tmp_path, names, caption=None):
+    items = [ob.copy_one(_file(tmp_path / n, _png_bytes() if n.endswith(".png") else b"x"),
+                         None, CHAT, None) for n in names]
+    batch = ob.Batch(session="claude-x", caption=caption, display=None, items=list(items),
+                     agent_id="", created=0.0)
+    ctx = {"session": "claude-x", "label": "x", "user_id": 7, "username": "alice",
+           "scope_label": "team", "scope_chat_id": CHAT}
+    return ob.Pending(session="claude-x", chat_id=CHAT, anchor=42, held_key=None,
+                      prompt_id=41, batches=[batch], created=0.0, audit=ctx), items
+
+
+def test_each_sent_file_adds_one_audit_record(home, tmp_path, run_async):
+    import json as _json
+    from aipager import audit, i18n
+    pending, items = _pending(home, tmp_path, ["a.png", "b.png", "c.txt"])
+    bot = _Bot()
+    assert run_async(ob.deliver(bot, pending, "x", i18n.get("en"))) is True
+    assert [c[0] for c in bot.calls] == ["send_media_group", "send_document"]
+    records = [_json.loads(x) for x in audit.AUDIT_LOG_PATH.read_text().splitlines()]
+    assert [(r["action"], r["tool"], r["file_name"], r["file_size"], r["username"])
+            for r in records] == [
+        ("FileSent", "SendUserFile", "a.png", items[0].size, "alice"),
+        ("FileSent", "SendUserFile", "b.png", items[1].size, "alice"),
+        ("FileSent", "SendUserFile", "c.txt", 1, "alice")]
+
+
+def test_copy_deleted_after_send(home, tmp_path, run_async):
+    from aipager import i18n
+    pending, items = _pending(home, tmp_path, ["a.png"])
+    assert items[0].path.exists()
+    run_async(ob.deliver(_Bot(), pending, "x", i18n.get("en")))
+    assert not items[0].path.exists()
+    assert pending.batches == []
+
+
+def test_a_mute_keeps_the_rest(home, tmp_path, run_async):
+    from aipager import i18n
+    from aipager.bot.flood import FloodMuted
+    pending, items = _pending(home, tmp_path, ["a.png", "b.txt"], caption="cap")
+
+    class _Muting(_Bot):
+        async def send_document(self, *a, **k):
+            raise FloodMuted(60, CHAT)
+    bot = _Muting()
+    assert run_async(ob.deliver(bot, pending, "x", i18n.get("en"))) is False
+    assert [c[0] for c in bot.calls] == ["send_photo"]
+    assert bot.calls[0][2]["caption"] == "💬 x\ncap"
+    assert [i.name for i in pending.batches[0].items] == ["b.txt"]
+    assert items[1].path.exists() and not items[0].path.exists()
+    # Claude's caption went with the first send only.
+    assert pending.batches[0].caption is None
+
+
+def test_newest_held_key():
+    from aipager.bot.held import HeldAnswers
+    held = HeldAnswers()
+    assert held.newest_key(CHAT, "s") is None
+    a = held.hold(chat_id=CHAT, session="s", label="s", rich_text="a", plain_text="a")
+    held.hold(chat_id=CHAT, session="t", label="t", rich_text="b", plain_text="b")
+    assert held.newest_key(CHAT, "s") == a.key
+    b = held.hold(chat_id=CHAT, session="s", label="s", rich_text="c", plain_text="c")
+    assert held.newest_key(CHAT, "s") == b.key and held.has_key(CHAT, a.key)
+
+
+def test_each_refused_file_adds_one_audit_record(mk_bot, run_async):
+    import json as _json
+    from aipager import audit
+    bot = mk_bot()
+    sess = bot.registry.get_or_create("claude-x")
+    run_async(bot.notify(sess, "send_files_refused", {"tool_use_id": "t", "files": [
+        {"path": "/home/alice/.ssh/id_rsa", "code": "floor", "reason": "a protected file"},
+        {"path": "b.png", "code": "missing", "reason": "no such file"}]}))
+    records = [_json.loads(x) for x in audit.AUDIT_LOG_PATH.read_text().splitlines()]
+    assert [(r["action"], r["tool"], r["file_name"], r["denied"], r["reason"])
+            for r in records] == [
+        ("FileRefused", "SendUserFile", "id_rsa", True, "floor: a protected file"),
+        ("FileRefused", "SendUserFile", "b.png", True, "missing: no such file")]
+    assert bot._app.bot.send_message.await_count == 0

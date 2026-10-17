@@ -32,14 +32,22 @@ import asyncio
 import errno
 import logging
 import os
+import re
 import stat as _stat
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from telegram import (
+    InputFile, InputMediaAudio, InputMediaDocument, InputMediaPhoto, InputMediaVideo,
+)
+from telegram.error import BadRequest, Forbidden
+
 from aipager import audit as audit_mod
 from aipager import bidi_guard, media_kind, safety, send_check, uploads
+from aipager.bot.flood import FloodMuted
 from aipager.bot.transport import utf16_len
+from aipager.i18n import Msg
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +80,41 @@ CAUSE_REFUSED = "refused"
 CAUSE_NOT_ALLOWED = "not_allowed"
 CAUSE_OTHER = "other"
 CAUSE_EXPIRED = "expired"
+
+#: The upload's own timeouts: PTB's default write timeout (about 20 s) is
+#: too short for a 50 MB file on a slow line.
+FILE_SEND_WRITE_TIMEOUT = 300.0
+FILE_SEND_READ_TIMEOUT = 60.0
+
+#: The one line a file that could not be sent gets in the chat, by cause.
+FAILED_LINES: dict[str, Msg] = {
+    CAUSE_TOO_BIG: Msg(
+        "outbox.failed.too_big", "⚠️ Couldn't send {name}: it is too big for Telegram.",
+        note="A file Claude sent to this chat could not be delivered: Telegram's size "
+             "limit. {name} is the file's name",
+        eg={"name": "report.pdf"}),
+    CAUSE_GONE: Msg(
+        "outbox.failed.gone",
+        "⚠️ Couldn't send {name}: the file was gone or changed before aipager could "
+        "copy it.",
+        note="A file Claude sent: it was deleted, moved or changed between Claude's "
+             "request and aipager's copy of it",
+        eg={"name": "report.pdf"}),
+    CAUSE_REFUSED: Msg(
+        "outbox.failed.refused", "⚠️ Couldn't send {name}: Telegram refused it.",
+        note="A file Claude sent: Telegram answered with an error",
+        eg={"name": "report.pdf"}),
+    CAUSE_NOT_ALLOWED: Msg(
+        "outbox.failed.not_allowed",
+        "⚠️ Couldn't send {name}: it is no longer allowed to be sent.",
+        note="A file Claude sent: aipager's second check, at the copy, refused it "
+             "(it became a protected file, or is outside the person's folder)",
+        eg={"name": "report.pdf"}),
+    CAUSE_OTHER: Msg(
+        "outbox.failed.other", "⚠️ Couldn't send {name}.",
+        note="A file Claude sent could not be delivered, for another reason",
+        eg={"name": "report.pdf"}),
+}
 
 
 def outbox_dir() -> Path:
@@ -637,3 +680,138 @@ def audit_file(ctx: dict, action: str, name: str, size: int | None = None,
             file_name=name or "?", file_size=size)
     except Exception:
         log.exception("turn file audit failed")
+
+
+# ---- the delivery -----------------------------------------------------------
+
+#: Telegram's words for a file over its limit ("Request Entity Too Large",
+#: PTB's "File too large").
+_TOO_BIG_RE = re.compile(r"too\s+(?:large|big)", re.IGNORECASE)
+
+
+def failed_line(tr, failure: Failure) -> str:
+    """The chat's line for one file that could not be sent."""
+    msg = FAILED_LINES.get(failure.cause, FAILED_LINES[CAUSE_OTHER])
+    return tr.text(msg, name=failure.name)
+
+
+def send_cause(exc: BaseException) -> str:
+    """The failure cause of a Telegram error on a file send."""
+    if _TOO_BIG_RE.search(str(exc)):
+        return CAUSE_TOO_BIG
+    if isinstance(exc, (BadRequest, Forbidden)):
+        return CAUSE_REFUSED
+    return CAUSE_OTHER
+
+
+def _input_file(item: Item) -> InputFile:
+    return InputFile(item.path.read_bytes(), filename=item.name)
+
+
+def _input_media(item: Item, caption: str | None):
+    kind = {media_kind.METHOD_PHOTO: InputMediaPhoto,
+            media_kind.METHOD_VIDEO: InputMediaVideo,
+            media_kind.METHOD_AUDIO: InputMediaAudio}.get(item.method, InputMediaDocument)
+    return kind(media=_input_file(item), caption=caption or None)
+
+
+def send_kwargs(anchor: int | None) -> dict:
+    """What every file send carries: silent, a reply to *anchor* that
+    still goes when that message is gone, and the upload's timeouts."""
+    return {"disable_notification": True, "reply_to_message_id": anchor or None,
+            "allow_sending_without_reply": True,
+            "write_timeout": FILE_SEND_WRITE_TIMEOUT,
+            "read_timeout": FILE_SEND_READ_TIMEOUT}
+
+
+async def send_planned(bot, chat_id: int, planned: Planned,
+                       anchor: int | None) -> bool:
+    """One Telegram send. False when the chat is flood-muted (nothing was
+    sent: the caller keeps the files); any other error is raised."""
+    kw = send_kwargs(anchor)
+    item = planned.items[0]
+    cap = planned.caption or None
+    try:
+        if planned.method == METHOD_MEDIA_GROUP:
+            media = [_input_media(it, cap if i == 0 else None)
+                     for i, it in enumerate(planned.items)]
+            await bot.send_media_group(chat_id, media=media, **kw)
+        elif planned.method == media_kind.METHOD_PHOTO:
+            await bot.send_photo(chat_id, photo=_input_file(item), caption=cap, **kw)
+        elif planned.method == media_kind.METHOD_VIDEO:
+            await bot.send_video(chat_id, video=_input_file(item), caption=cap, **kw)
+        elif planned.method == media_kind.METHOD_ANIMATION:
+            await bot.send_animation(chat_id, animation=_input_file(item),
+                                     caption=cap, **kw)
+        elif planned.method == media_kind.METHOD_AUDIO:
+            await bot.send_audio(chat_id, audio=_input_file(item), caption=cap, **kw)
+        else:
+            await bot.send_document(chat_id, document=_input_file(item),
+                                    caption=cap, **kw)
+    except FloodMuted:
+        return False
+    return True
+
+
+_upload_lock: asyncio.Lock | None = None
+
+
+def _lock() -> asyncio.Lock:
+    """One upload at a time, daemon-wide: PTB holds each upload in memory
+    and keeps a pool connection for as long as it takes."""
+    global _upload_lock
+    if _upload_lock is None:
+        _upload_lock = asyncio.Lock()
+    return _upload_lock
+
+
+async def deliver(bot, pending: Pending, label: str, tr) -> bool:
+    """Send a turn's files (*pending*), then one line per file that could
+    not be sent. True when everything is done; False when a flood mute
+    stopped it, with what is left still in *pending* (the caller queues
+    it again). Each file is audited and its copy deleted once settled."""
+    async with _lock():
+        while pending.batches:
+            batch = pending.batches[0]
+            while batch.items:
+                planned = plan_sends(batch.items, label, batch.caption)[0]
+                try:
+                    sent = await send_planned(bot, pending.chat_id, planned,
+                                              pending.anchor)
+                except Exception as exc:
+                    cause = send_cause(exc)
+                    log.warning("turn file failed: %s (%s: %s)",
+                                ", ".join(i.name for i in planned.items), cause, exc)
+                    for it in planned.items:
+                        batch.failures.append(Failure(it.name, it.size, cause))
+                        audit_file(pending.audit, ACTION_FAILED, it.name, it.size, cause)
+                else:
+                    if not sent:
+                        log.info("turn files held: chat %s is flood-muted",
+                                 pending.chat_id)
+                        return False
+                    for it in planned.items:
+                        log.info("turn file sent: %s (%s, %d bytes)", it.name,
+                                 planned.method, it.size)
+                        audit_file(pending.audit, ACTION_SENT, it.name, it.size)
+                # Claude's caption goes with the batch's first send only.
+                batch.caption = None
+                for it in planned.items:
+                    batch.items.remove(it)
+                    delete_copy(it)
+            while batch.failures:
+                failure = batch.failures[0]
+                try:
+                    await bot.send_message(
+                        pending.chat_id, failed_line(tr, failure),
+                        disable_notification=True,
+                        reply_to_message_id=pending.anchor or None,
+                        allow_sending_without_reply=True)
+                except FloodMuted:
+                    return False
+                except Exception:
+                    log.warning("turn file failure line not sent", exc_info=True)
+                batch.failures.pop(0)
+            pending.batches.pop(0)
+    return True
+

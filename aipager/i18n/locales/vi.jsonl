@@ -479,6 +479,11 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · vẫn đang chờ bạn trả lời ở trên"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Quyền: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Câu hỏi: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ Không gửi được {name}: file đã bị xóa hoặc thay đổi trước khi aipager kịp sao chép."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ Không gửi được {name}: file này không còn được phép gửi nữa."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ Không gửi được {name}."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ Không gửi được {name}: Telegram đã từ chối file này."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ Không gửi được {name}: file quá lớn để gửi qua Telegram."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Nội dung này có ký tự ẩn làm đổi hướng chữ (hiển thị là ⟨U+...⟩). Thứ thực sự chạy có thể khác với những gì bạn thấy."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Cho phép"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Luôn cho phép"}

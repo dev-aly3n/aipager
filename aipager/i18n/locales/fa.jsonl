@@ -479,6 +479,11 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · هنوز بالاتر منتظر جواب شماست"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "اجازه: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "سؤال: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ {name} ارسال نشد: فایل قبل از اینکه aipager از آن کپی بگیرد پاک شد یا تغییر کرد."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ {name} ارسال نشد: دیگر اجازهٔ ارسالش نیست."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ {name} ارسال نشد."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ {name} ارسال نشد: Telegram آن را قبول نکرد."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ {name} ارسال نشد: حجمش برای Telegram زیاد است."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ این متن حرف‌های پنهانی دارد که جهت نوشتن را عوض می‌کنند (به شکل ⟨U+...⟩ نشان داده شده‌اند). ممکن است چیزی غیر از آنچه می‌بینید اجرا شود."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ اجازه بده"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 همیشه اجازه بده"}

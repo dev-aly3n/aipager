@@ -479,6 +479,11 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · 위에서 아직 답변을 기다리고 있어요"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "권한: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "질문: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ {name} 파일을 보내지 못했어요: aipager가 복사하기 전에 파일이 삭제되었거나 바뀌었어요."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ {name} 파일을 보내지 못했어요: 이제 이 파일은 보낼 수 없어요."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ {name} 파일을 보내지 못했어요."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ {name} 파일을 보내지 못했어요: Telegram이 거부했어요."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ {name} 파일을 보내지 못했어요: Telegram에 보내기에는 너무 커요."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ 글자 방향을 바꾸는 숨은 문자가 들어 있어요(⟨U+...⟩로 표시). 보이는 것과 다른 것이 실행될 수 있어요."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ 허용"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 항상 허용"}

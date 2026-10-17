@@ -73,3 +73,24 @@ def test_refused_for_a_known_session_is_passed_on(run_async):
         {**_REFUSED, "session": "claude-known"}).encode()))
     assert calls == [("claude-known", "send_files_refused", {
         "tool_use_id": "t", "files": _REFUSED["files"]})]
+
+
+def test_pre_and_post_tool_use_pass_the_call_on(run_async):
+    recv, reg, calls = _receiver()
+    reg.get_or_create("claude-known")
+    inp = {"files": ["/work/a.png"], "status": "normal"}
+    run_async(recv._on_datagram(json.dumps({
+        "hook_event_name": "PreToolUse", "session": "claude-known",
+        "tool_name": "SendUserFile", "tool_input": inp, "tool_use_id": "toolu_5",
+        "cwd": "/work"}).encode()))
+    run_async(recv._on_datagram(json.dumps({
+        "hook_event_name": "PostToolUse", "session": "claude-known",
+        "tool_name": "SendUserFile", "tool_input": inp, "tool_use_id": "toolu_5",
+        "cwd": "/work", "tool_response": {"attachments": []}}).encode()))
+    kinds = [(c[1], c[2].get("tool_use_id")) for c in calls
+             if c[1] in ("send_files_requested", "send_files_ran")]
+    assert kinds == [("send_files_requested", "toolu_5"), ("send_files_ran", "toolu_5")]
+    ran = [c[2] for c in calls if c[1] == "send_files_ran"][0]
+    assert ran["tool_input"] == inp and ran["cwd"] == "/work"
+    done = [c[2] for c in calls if c[1] == "tool_done"][0]
+    assert done["tool_summary"] == "📎 Sending 1 file"

@@ -175,6 +175,8 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"sendnow\.[a-z0-9_.]+", "message", "chars", 200, ""),
     (r"notice\.[a-z0-9_.]+", "message", "chars", 700, ""),
     (r"chatmove\.[a-z0-9_.]+", "message", "chars", 300, ""),
+    # Files Claude sends (aipager/bot/outbox.py): a line in the chat.
+    (r"outbox\.[a-z0-9_.]+", "message", "chars", 300, ""),
 )
 
 

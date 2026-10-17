@@ -479,6 +479,11 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · досі чекає на твою відповідь вище"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Дозвіл: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Питання: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ Не вдалося надіслати {name}: файл видалили або змінили до того, як aipager його скопіював."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ Не вдалося надіслати {name}: цей файл більше не можна надсилати."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ Не вдалося надіслати {name}."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ Не вдалося надіслати {name}: Telegram не прийняв файл."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ Не вдалося надіслати {name}: файл завеликий для Telegram."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Тут є приховані символи, що змінюють напрямок тексту (показані як ⟨U+...⟩). Виконатися може не те, що ти бачиш."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Дозволити"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Дозволяти завжди"}
