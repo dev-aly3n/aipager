@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ e6f0c88 -->
+<!-- i18n-source: README.md @ c1510c0 -->
 
 <h3>Claude теперь просто ещё один чат.</h3>
 
