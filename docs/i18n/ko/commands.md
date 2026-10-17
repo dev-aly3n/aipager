@@ -1,6 +1,6 @@
 # 봇 명령과 화면
 
-<!-- i18n-source: docs/commands.md @ 054b893 -->
+<!-- i18n-source: docs/commands.md @ d99edfa -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../commands.md))
 

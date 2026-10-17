@@ -1,6 +1,6 @@
 # 机器人命令和界面
 
-<!-- i18n-source: docs/commands.md @ 054b893 -->
+<!-- i18n-source: docs/commands.md @ d99edfa -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../commands.md)）
 
