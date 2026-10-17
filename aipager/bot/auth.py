@@ -730,11 +730,19 @@ class AuthMixin:
         await self._auto_deny_notice(sess, tool_info, triggerer)
 
     async def _type_auto_deny(self, sess: TrackedSession, tool_name: str) -> bool:
-        """Down + Enter: the sequence the Deny button uses to walk
-        claude's "Allow / Deny" picker, into the dialog on top."""
-        ok = await inject.send_keys(sess.name, "Down")
-        if ok:
+        """The Deny button's own keys, into the dialog on top: Down
+        ``_DENY_OVERSHOOT`` times, then Enter, so the cursor stops on the
+        last row ("No") however many rows the dialog has. A single Down
+        stopped on row 2 of a three-row dialog ("Yes, and don't ask again"
+        or "switch to auto mode"): a tool the rules deny was allowed."""
+        from aipager.bot.callbacks import _DENY_OVERSHOOT
+        ok = True
+        for _ in range(_DENY_OVERSHOOT):
+            if not await inject.send_keys(sess.name, "Down"):
+                ok = False
+                break
             await _sleep(0.1)
+        if ok:
             ok = await inject.send_keys(sess.name, "Enter")
         if not ok:
             log.warning(

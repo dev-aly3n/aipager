@@ -223,8 +223,9 @@ def test_extra_auto_deny_waits_until_on_top(rig, monkeypatch):
     assert len(sess.open_prompts()) == 2
     assert rig.prompt_messages() == []
     rig.tap(CARD, "opt0")
-    # The question's Enter, then the refusal once its dialog is on top.
-    assert rig.keys == ["Enter", "Down", "Enter"]
+    # The question's Enter, then the refusal once its dialog is on top:
+    # the Deny button's own keys, down to the last row.
+    assert rig.keys == ["Enter"] + ["Down"] * 5 + ["Enter"]
     assert sess.open_prompts() == []
     assert sess.status == Status.BUSY
 

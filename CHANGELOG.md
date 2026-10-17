@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A second prompt is shown in Telegram.** When an agent asked for permission while Claude's question or another prompt was already open, Telegram never showed it, and the session could look busy while Claude still waited. Now every open prompt gets its own buttons, the session waits until the last one is answered, and a button that would type into the wrong dialog says so instead of guessing.
 - **A prompt answered at the terminal is noticed while a background agent works.** The check that notices it now counts only Claude's own activity and the asking agent's, so a busy background agent no longer keeps it from running.
 - **A restart with two prompts open no longer brings back the wrong one.** Neither comes back; their buttons say they were answered, and the prompts can still be answered in the terminal.
+- **A tool blocked by a role's rules is really refused.** When Claude Code's permission dialog had three rows, as a Bash, Write or Edit prompt often does, aipager's automatic Deny picked the second row instead of "No". That allowed the tool, and could add a standing rule or switch the session to auto mode. It now moves to the last row, as the Deny button does.
 
 ## [1.3.5] - 2026-10-17
 
