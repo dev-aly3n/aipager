@@ -91,7 +91,9 @@ def _assert_delivered(inst, name: str, label: str, path, since: int, log_since: 
     assert photo.method == "sendPhoto", photo.summary()
     assert list(photo.files.values())[0][1] == path.read_bytes()
     assert photo.params.get("disable_notification") is True
-    assert photo.text == f"💬 {label}", photo.text
+    # The session's name first; Claude's own caption, if it gave one, on
+    # the next line.
+    assert photo.text.split("\n")[0] == f"💬 {label}", photo.text
     # A reply to the turn's answer: a message of the bot's, sent before the
     # file, that is not the busy card.
     target = _reply_id(photo)
@@ -211,8 +213,13 @@ def test_real_claude_outside_the_session_folder_observation(fresh, case):
         flows.wait_turn_end(inst, name, label, since_log=log_since, timeout=240)
     except AssertionError:
         print(f"[{case}] the turn did not end within 240 s")
+    try:
+        # The files follow the answer, which goes out after the turn ends.
+        _wait_photo(fake, since, timeout=60)
+    except AssertionError:
+        print(f"[{case}] no file within 60 s of the turn's end")
     sent = [c for c in fake.calls(since=since)
             if c.method in ("sendPhoto", "sendDocument") and c.chat_id == DM]
-    print(f"[{case}] files sent: {[c.method for c in sent]}")
+    print(f"[{case}] files sent: {[(c.method, c.status) for c in sent]}")
     print(f"[{case}] screen:\n{inst.screen(name)}")
     _observe(inst, name, log_since, case)
