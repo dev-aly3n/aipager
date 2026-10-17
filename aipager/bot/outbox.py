@@ -775,19 +775,26 @@ def transcript_allowed(path: str) -> bool:
     resolved), owned by the daemon's own user. A datagram names the
     transcript too, so a path elsewhere (a file another user planted) is
     never read as one."""
+    return _allowed_transcript(path) is not None
+
+
+def _allowed_transcript(path: str) -> str | None:
+    """:func:`transcript_allowed`'s resolved path (the one to read), or None."""
     if not isinstance(path, str) or not path or "\x00" in path:
-        return False
+        return None
     real = safety._realpath(os.path.abspath(path))
     if not real.endswith(".jsonl"):
-        return False
+        return None
     if not any(safety._under(real, root) and real != root
                for root in _transcript_roots()):
-        return False
+        return None
     try:
         st = os.stat(real)
     except OSError:
-        return False
-    return _stat.S_ISREG(st.st_mode) and st.st_uid == _own_uid()
+        return None
+    if not _stat.S_ISREG(st.st_mode) or st.st_uid != _own_uid():
+        return None
+    return real
 
 
 def _own_uid() -> int:
@@ -821,11 +828,12 @@ def call_in_transcript(path: str, tool_use_id: str, files: list[str]) -> bool:
     """True when the transcript at *path* holds a SendUserFile ``tool_use``
     with this id and exactly these files. Reads at most the file's last
     TRANSCRIPT_TAIL_BYTES; never raises."""
-    if not tool_use_id or not files or not transcript_allowed(path):
+    real = _allowed_transcript(path) if tool_use_id and files else None
+    if real is None:
         return False
     needle = json_needle(tool_use_id)
     try:
-        with open(path, "rb") as fh:
+        with open(real, "rb", opener=_open_no_follow) as fh:
             size = os.fstat(fh.fileno()).st_size
             if size > TRANSCRIPT_TAIL_BYTES:
                 fh.seek(size - TRANSCRIPT_TAIL_BYTES)
@@ -848,6 +856,10 @@ def call_in_transcript(path: str, tool_use_id: str, files: list[str]) -> bool:
     except OSError:
         return False
     return False
+
+
+def _open_no_follow(path: str, flags: int) -> int:
+    return os.open(path, flags | getattr(os, "O_NOFOLLOW", 0))
 
 
 def json_needle(text: str) -> bytes:
