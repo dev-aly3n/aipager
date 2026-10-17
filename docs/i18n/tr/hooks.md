@@ -1,6 +1,6 @@
 # Hook olayları
 
-<!-- i18n-source: docs/hooks.md @ 8526c26 -->
+<!-- i18n-source: docs/hooks.md @ 054b893 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../hooks.md))
 
@@ -71,6 +71,8 @@ Claude Code izin istemek üzere. Çalışma kartı, Claude'un verdiği açıklam
 
 Hook, yapabildiğinde isteği kendisi yanıtlar. Kısa ömürlü bir yanıt soketi açar, adresini olayla birlikte gönderir ve dokunmanı 20 saniyeye kadar bekler. Zamanında gelen bir dokunuş `PermissionRequest` kararı olarak döner (izin ver, kuralla izin ver ya da reddet), böylece Claude Code kendi iletişim kutusunu göstermez. Dokunuş zamanında gelmezse hook aipager'a beklemenin bittiğini söyler (`permission_reply_timeout`) ve hiçbir şey yazdırmaz; aipager'a ulaşılamadığında ya da bu yolda bir şey bozulduğunda da hiçbir şey yazdırmaz. O zaman Claude Code kendi iletişim kutusunu terminalde gösterir ve daha sonraki bir dokunuş ona tuşlarla yanıt verir. Denetim kaydı (`~/.claude/aipager-audit.jsonl`), her dokunuşun hangi yoldan yanıt verdiğini yazar: `"via": "hook_decision"` ya da `"via": "keystroke_fallback"`.
 
+Başka bir istek açıkken gelen bir `PermissionRequest` de gösterilir, çalışma kartının altında kendi mesajı olarak. Yeniden gelen aynı iletişim kutusu (aynı soran, aynı araç ve aynı çağrı ya da aynı girdi) bir kez gösterilir. Claude Code bu hook'u bir `AskUserQuestion` için de çalıştırır; o soru zaten kendi `PreToolUse`'undan gösterilmiştir, bu yüzden hiçbir zaman ikinci kez gösterilmez. Bir arka plan ajanının iletişim kutusu terminalde ancak hook'u beklemeyi bıraktıktan sonra, orada zaten açık olan her iletişim kutusunun altında görünür; bu yüzden bir dokunuş tuşları yalnızca Claude Code'un önce gösterdiği isteğe yazar (bkz. [komutlar → izin istekleri](commands.md#permission-prompts)).
+
 ### <a id="posttooluse--posttoolusefailure"></a>`PostToolUse` / `PostToolUseFailure`
 
 Bir araç bitti ya da başarısız oldu. Çalışma kartındaki satırı donar (hata satırda işaretlenir) ve açık bir isteğe verilen yanıt fark edilir: bundan sonra onun için eski bir İzin ver ya da Reddet hiçbir şey yazmaz. Oturum son 200 araç satırını tutar.
@@ -83,7 +85,7 @@ Bir alt ajanın içinde yapılan bir `Agent` (ya da `Task`) çağrısı (olayı 
 
 aipager, Claude Code'un `notification_type` alanını okur:
 
-- `permission_prompt`: izin isteğinin daha yavaş ve daha eski sinyali. İsteği yalnızca `PermissionRequest` henüz göstermediyse gösterir.
+- `permission_prompt`: izin isteğinin daha yavaş ve daha eski sinyali. İsteği yalnızca hiçbir istek açık değilken gösterir: biri açıksa, bu `PermissionRequest`'in zaten gösterdiği iletişim kutusudur.
 - Bir izin isteği ya da soru beklerken `idle_prompt`: oturum bekliyor olarak kalır ve sohbet, bekleme başına bir kez `⬆️ jim · hâlâ yukarıdaki yanıtını bekliyor` alır.
 - Diğer durumlarda `idle_prompt`: `Stop` gibi işlenir (aşağıda). `Stop` olayı kaybolmuş bir görevi yakalar; zaten teslim edilmiş bir yanıt asla yeniden gönderilmez.
 

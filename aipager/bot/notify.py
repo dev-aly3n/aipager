@@ -346,6 +346,13 @@ def _separate_prompt_perm(tool_info: dict | None, summary: str,
     return perm
 
 
+def _prompt_owner(perm) -> str:
+    """The agent id that owns open prompt *perm*, ``""`` for Claude's own
+    or one whose tool is not known (roadmap 8.120)."""
+    info = perm.get("tool_info") if isinstance(perm, dict) else None
+    return str(info.get("agent_id") or "") if isinstance(info, dict) else ""
+
+
 #: :meth:`NotifyMixin._end_job_turn`'s answer when the job is still open.
 _JOB_STILL_OPEN = object()
 
@@ -411,6 +418,192 @@ class NotifyMixin:
             return (sess.pending_prompt_msg.get("text", ""),
                     sess.pending_prompt_msg.get("keyboard"))
         return None
+
+    async def _send_prompt_message(self, sess: TrackedSession,
+                                   tool_info: dict | None, context: dict,
+                                   slot: str) -> dict:
+        """Send a prompt as its own message and record it (roadmap 8.99,
+        factored out for 8.120). *slot* ``"primary"``: the prompt the wait
+        opened with, kept in ``pending_prompt_msg``. ``"extra"``: a prompt
+        that opened while another was open, appended to
+        ``extra_prompts`` and sent as a reply to the busy card. Returns the
+        record."""
+        bot = self._app.bot
+        label = sess.label
+        selector_text = context.get("selector_text", "")
+        selector_options = context.get("selector_options")
+        if tool_info and tool_info["name"] == "AskUserQuestion":
+            text, keyboard = self._build_ask_keyboard(sess, label, tool_info["input"])
+            questions = (tool_info.get("input") or {}).get("questions") or []
+            prompt_summary = (questions[0].get("question", "")
+                              if questions else "")
+        elif selector_options:
+            text, keyboard = self._build_selector_keyboard(sess, label,
+                                                            selector_text, selector_options)
+            prompt_summary = selector_text or str(PIN_NEEDS_INPUT)
+        else:
+            from aipager.bot import keyboards
+            prompt_tr = i18n.for_sess(sess)
+            tool_summary = tool_info["summary"] if tool_info else ""
+            text = prompt_tr.html(keyboards.SEPARATE_PERM, session=label)
+            if tool_summary:
+                text += f"\n<code>{html_mod.escape(tool_summary)}</code>"
+                text += _format_perm_detail(
+                    tool_summary, (tool_info or {}).get("detail") or "",
+                    tr=prompt_tr)
+            # This separate-message prompt keeps its Allow/Deny-only
+            # keyboard on purpose (review rev-iter1-004): Allow-always
+            # was never offered here. Stop stays absent as before;
+            # unifying with _build_permission_keyboard would change
+            # this surface's behaviour beyond the fix. Its taps
+            # answer through the hook like the inline prompt's
+            # (roadmap 8.99, ``pending_prompt_msg["perm"]`` below).
+            keyboard = self._separate_permission_keyboard(sess)
+            prompt_summary = tool_summary or str(PERM_NEEDED)
+
+        # Kept as SENT, before the send: the pinned bar summarises
+        # it and its "Answer" button re-sends it (8.31) — also after
+        # a ban that ate this send.
+        # Its identity is stamped NOW, while this prompt is the one
+        # pending, and kept in a local: the send below can wait in
+        # the limiter while the prompt is answered and another one
+        # shown, and the message must be bound to THIS prompt.
+        prompt_token = new_prompt_token()
+        prompt_record = {"text": text, "keyboard": keyboard,
+                         "summary": prompt_summary,
+                         "prompt_token": prompt_token,
+                         "perm": _separate_prompt_perm(
+                             tool_info, prompt_summary,
+                             context.get("hook_reply"))}
+        if slot == "primary":
+            sess.pending_prompt_msg = prompt_record
+            reply_to = sess.trigger_msg_id
+        else:
+            sess.extra_prompts.append(prompt_record)
+            # Under the card it waits beside (8.120), else the turn's
+            # message.
+            reply_to = (sess.busy_msg_id if sess.busy_msg_id and sess.busy_msg_id > 0
+                        else sess.trigger_msg_id)
+
+        # Wrapped for the gate (8.26 R2, the tolerance sweep). This
+        # is a DIRECT send inside `notify`, a 1726-line method: an
+        # unhandled `FloodMuted` here would propagate out of the
+        # whole notify call and abort everything after it —
+        # including the answer the gate exists to protect. The
+        # prompt itself is genuinely lost while the chat is banned
+        # (there is nowhere to put a permission dialog), but the
+        # turn survives, and Claude's own terminal prompt is still
+        # answerable.
+        try:
+            msg = await bot.send_message(
+                resolve_chat_id(sess), text, reply_markup=keyboard,
+                parse_mode="HTML",
+                reply_to_message_id=reply_to,
+            )
+        except FloodMuted:
+            log.info("[%s] permission prompt not sent — chat "
+                     "flood-muted", label)
+        else:
+            self.registry.track_message(
+                msg.message_id, sess.name, resolve_chat_id_int(sess) or 0)
+            # Bound to THIS prompt: a tap on it after the prompt is
+            # answered elsewhere is refused (8.31, callbacks.py).
+            self.register_prompt_surface(
+                resolve_chat_id_int(sess) or 0, msg.message_id, sess,
+                prompt_token)
+            # Where the message is, for a restart to bind it to the
+            # restored prompt (roadmap 8.102). Only on THIS prompt's
+            # record: the send may have waited in the limiter while
+            # it was answered and another one shown.
+            if (sess.pending_prompt_msg is prompt_record
+                    or any(r is prompt_record for r in sess.extra_prompts)):
+                prompt_record["msg_id"] = msg.message_id
+                prompt_record["chat_id"] = resolve_chat_id_int(sess) or 0
+                self.registry.mark_dirty()
+            await self._maybe_update_bot_name(sess.name)
+        return prompt_record
+
+    def _rule_denial(self, sess: TrackedSession, tool_name: str):
+        """``(denied, whose)``: whether the running turn's rules deny
+        *tool_name* (scope mode's, or legacy team.yaml's), and whose."""
+        if self.scopes is not None:
+            return self._auto_deny_decision(sess, tool_name)
+        if self.team is not None and self.team.rules.deny_tools:
+            triggerer = self._driver_user(sess)
+            if self.team.rules.tool_is_denied(tool_name, triggerer):
+                return True, triggerer
+        return False, None
+
+    async def _on_extra_prompt(self, sess: TrackedSession, context: dict) -> None:
+        """A prompt that opened while another is open (roadmap 8.120): its
+        own message with its own buttons, under the card."""
+        if sess.status != Status.INTERACTIVE and not sess.prompt_wait_carry:
+            log.info("[%s] a second prompt arrived after the wait ended - "
+                     "not shown", sess.label)
+            return
+        tool_info = context.get("tool_info")
+        if tool_info and tool_info.get("name") == "AskUserQuestion":
+            tool_info = {**tool_info,
+                         "input": bidi_guard.reveal_questions(tool_info.get("input"))}
+        if tool_info:
+            denied, whose = self._rule_denial(sess, tool_info.get("name", ""))
+            if denied:
+                await self._auto_deny_extra(sess, tool_info, whose, context)
+                return
+        await self._send_prompt_message(sess, tool_info, context, "extra")
+
+    async def _after_prompts_changed(self, sess: TrackedSession,
+                                     context: dict) -> None:
+        """Some open prompts closed and others are still open (roadmap
+        8.120): when the card's own prompt went, the card shows the
+        Waiting frame with no answer buttons (the others keep theirs), and
+        a refusal that waited for its dialog to be on top is typed once it
+        is."""
+        if sess.status != Status.INTERACTIVE:
+            return
+        card = sess.busy_msg_id
+        if (context.get("inline_closed") and sess.pending_permission is None
+                and card and card > 0):
+            self._stop_animation(sess)
+            text = self._build_busy_text(sess.label, "Waiting", sess)
+            await self._edit_busy_raw(card, text,
+                                      reply_markup=self._build_stop_keyboard(sess),
+                                      chat_id=resolve_chat_id(sess))
+        await self._run_due_auto_denies(sess)
+
+    async def _on_prompts_carried(self, sess: TrackedSession) -> None:
+        """Claude's turn ended with an agent's prompt still open (roadmap
+        8.120): the answer is out, and the session waits on that prompt
+        again. The card's inline prompt is sent again as its own message
+        (the card now shows the answer); a prompt with its own message
+        keeps it."""
+        carried = sess.carried_inline_prompt
+        sess.carried_inline_prompt = None
+        if carried is None and sess.pending_permission is not None:
+            # The job's interim path keeps the card: its prompt moves off it.
+            carried = sess.pending_permission
+            sess.mark_prompt_closed(sess.busy_msg_id)
+            sess.pending_permission = None
+        if carried is None and not sess.open_prompts():
+            # Every carried prompt closed during the carry (its agent's
+            # tool ended, the agent stopped): nothing is left to wait on,
+            # and Claude's turn is over. The session stays IDLE, and what
+            # was held behind the dialog goes out.
+            log.info("[%s] carried prompts closed during the Stop - not "
+                     "waiting", sess.label)
+            if sess.dialog_hold is not None:
+                sess.dialog_hold["closed"] = "answered"
+            self.registry.mark_dirty()
+            return
+        if self.registry.resume_wait(sess.name) is None:
+            return
+        log.info("[%s] waiting on %d open prompts after the turn ended",
+                 sess.label, len(sess.open_prompts()) + (1 if carried else 0))
+        if carried is not None and self._app is not None:
+            await self._send_prompt_message(
+                sess, carried.get("tool_info"),
+                {"hook_reply": carried.get("hook_reply")}, "primary")
+        self.registry.mark_dirty()
 
     async def _send_merged_final(
         self, sess: TrackedSession, answer: str, *,
@@ -1522,6 +1715,11 @@ class NotifyMixin:
         """
         if not sess.pending_queue:
             return
+        if sess.prompt_wait_carry:
+            # A turn's end with an agent's prompt still open (roadmap
+            # 8.120): typed now, the message would land in that dialog.
+            # It goes out once the last prompt is answered.
+            return
         if self._turn_sender_differs(sess, sess.pending_queue[0][4]):
             # Roadmap 8.77 (D-H): the finish path has just started a turn
             # for a message Claude had queued, and it is someone else's.
@@ -1715,6 +1913,17 @@ class NotifyMixin:
         # ── The model changed (hook_receiver's statusline) ──
         # The bar no longer shows the model (8.31 R6): nothing to do.
         if event == "pinned_update":
+            return
+
+        # ── roadmap 8.120: more than one open prompt ──
+        if event == "extra_prompt":
+            await self._on_extra_prompt(sess, context)
+            return
+        if event == "prompt_closed":
+            await self._after_prompts_changed(sess, context)
+            return
+        if event == "prompts_carried":
+            await self._on_prompts_carried(sess)
             return
 
         # ── A mute lifted and this session has an answer waiting (8.29) ──
@@ -2116,6 +2325,28 @@ class NotifyMixin:
                 if (sent.get("wait_started_at") or 0) >= sess.interactive_entered_at:
                     perm = sent
             refused = not (perm or {}).get("ask_question")
+            # Roadmap 8.120: the interrupt ended Claude's own dialogs. A
+            # running BACKGROUND agent's prompt is still open in the
+            # terminal: the session keeps waiting on it, and the turn's end
+            # is left to Claude's own hooks. A foreground agent (or one
+            # whose launch is not known) dies with the interrupted turn,
+            # its dialog with it: the turn ends below, every prompt closed.
+            running = [p for p in sess.open_prompts()
+                       if sess.agent_survives_interrupt(_prompt_owner(p))]
+            if running:
+                # Prompt by prompt: Claude's own and every agent's that
+                # died with the turn close, so a dead foreground agent's
+                # buttons can never type into a background agent's dialog.
+                closed, inline_closed = sess.close_prompts(
+                    lambda p: not sess.agent_survives_interrupt(
+                        _prompt_owner(p)))
+                log.info("[%s] prompt closed (answered in the terminal), %d "
+                         "still open", sess.label, len(sess.open_prompts()))
+                self.registry.mark_dirty()
+                if closed:
+                    await self._after_prompts_changed(
+                        sess, {"inline_closed": inline_closed})
+                return
             await self._end_turn_ended_at_dialog(
                 sess, refused=refused, by="", confirmed=True,
                 carried_on=carried_on,
@@ -2930,6 +3161,11 @@ class NotifyMixin:
                     sess.close_turn(finishing_turn)
                 # Stop animation and clean up busy message
                 self._stop_animation(sess)
+                if sess.prompt_wait_carry and sess.pending_permission:
+                    # An agent's prompt outlives Claude's turn (roadmap
+                    # 8.120): kept, and sent again as its own message once
+                    # this answer is out (``prompts_carried``).
+                    sess.carried_inline_prompt = sess.pending_permission
                 sess.pending_permission = None  # clear stale inline permission if any
                 # The turn is over: no prompt on its card is open any more,
                 # so an old answer button on it types nothing (8.102).
@@ -3651,8 +3887,6 @@ class NotifyMixin:
                 # control as a visible marker. Answers go by position.
                 tool_info = {**tool_info,
                              "input": bidi_guard.reveal_questions(tool_info.get("input"))}
-            selector_text = context.get("selector_text", "")
-            selector_options = context.get("selector_options")
 
             # Rule check: a tool the running turn's rules deny is answered
             # Deny here, with no prompt shown. Claude sees a Deny through
@@ -3750,88 +3984,7 @@ class NotifyMixin:
             if not can_inline:
                 # Fallback: send separate message (original behavior)
                 sess.pending_permission = None  # ensure clean state
-
-                if tool_info and tool_info["name"] == "AskUserQuestion":
-                    text, keyboard = self._build_ask_keyboard(sess, label, tool_info["input"])
-                    questions = (tool_info.get("input") or {}).get("questions") or []
-                    prompt_summary = (questions[0].get("question", "")
-                                      if questions else "")
-                elif selector_options:
-                    text, keyboard = self._build_selector_keyboard(sess, label,
-                                                                    selector_text, selector_options)
-                    prompt_summary = selector_text or str(PIN_NEEDS_INPUT)
-                else:
-                    from aipager.bot import keyboards
-                    prompt_tr = i18n.for_sess(sess)
-                    tool_summary = tool_info["summary"] if tool_info else ""
-                    text = prompt_tr.html(keyboards.SEPARATE_PERM, session=label)
-                    if tool_summary:
-                        text += f"\n<code>{html_mod.escape(tool_summary)}</code>"
-                        text += _format_perm_detail(
-                            tool_summary, (tool_info or {}).get("detail") or "",
-                            tr=prompt_tr)
-                    # This separate-message prompt keeps its Allow/Deny-only
-                    # keyboard on purpose (review rev-iter1-004): Allow-always
-                    # was never offered here. Stop stays absent as before;
-                    # unifying with _build_permission_keyboard would change
-                    # this surface's behaviour beyond the fix. Its taps
-                    # answer through the hook like the inline prompt's
-                    # (roadmap 8.99, ``pending_prompt_msg["perm"]`` below).
-                    keyboard = self._separate_permission_keyboard(sess)
-                    prompt_summary = tool_summary or str(PERM_NEEDED)
-
-                # Kept as SENT, before the send: the pinned bar summarises
-                # it and its "Answer" button re-sends it (8.31) — also after
-                # a ban that ate this send.
-                # Its identity is stamped NOW, while this prompt is the one
-                # pending, and kept in a local: the send below can wait in
-                # the limiter while the prompt is answered and another one
-                # shown, and the message must be bound to THIS prompt.
-                prompt_token = new_prompt_token()
-                prompt_record = {"text": text, "keyboard": keyboard,
-                                 "summary": prompt_summary,
-                                 "prompt_token": prompt_token,
-                                 "perm": _separate_prompt_perm(
-                                     tool_info, prompt_summary,
-                                     context.get("hook_reply"))}
-                sess.pending_prompt_msg = prompt_record
-
-                # Wrapped for the gate (8.26 R2, the tolerance sweep). This
-                # is a DIRECT send inside `notify`, a 1726-line method: an
-                # unhandled `FloodMuted` here would propagate out of the
-                # whole notify call and abort everything after it —
-                # including the answer the gate exists to protect. The
-                # prompt itself is genuinely lost while the chat is banned
-                # (there is nowhere to put a permission dialog), but the
-                # turn survives, and Claude's own terminal prompt is still
-                # answerable.
-                try:
-                    msg = await bot.send_message(
-                        resolve_chat_id(sess), text, reply_markup=keyboard,
-                        parse_mode="HTML",
-                        reply_to_message_id=sess.trigger_msg_id,
-                    )
-                except FloodMuted:
-                    log.info("[%s] permission prompt not sent — chat "
-                             "flood-muted", label)
-                else:
-                    self.registry.track_message(
-                        msg.message_id, sess.name, resolve_chat_id_int(sess) or 0)
-                    # Bound to THIS prompt: a tap on it after the prompt is
-                    # answered elsewhere is refused (8.31, callbacks.py).
-                    self.register_prompt_surface(
-                        resolve_chat_id_int(sess) or 0, msg.message_id, sess,
-                        prompt_token)
-                    # Where the message is, for a restart to bind it to the
-                    # restored prompt (roadmap 8.102). Only on THIS prompt's
-                    # record: the send may have waited in the limiter while
-                    # it was answered and another one shown.
-                    if sess.pending_prompt_msg is prompt_record:
-                        sess.pending_prompt_msg["msg_id"] = msg.message_id
-                        sess.pending_prompt_msg["chat_id"] = (
-                            resolve_chat_id_int(sess) or 0)
-                        self.registry.mark_dirty()
-                    await self._maybe_update_bot_name(sess.name)
+                await self._send_prompt_message(sess, tool_info, context, "primary")
 
         elif sess.status == Status.BUSY:
             # Session went back to working — edit the last idle/interactive message

@@ -1,6 +1,6 @@
 # Sự kiện hook
 
-<!-- i18n-source: docs/hooks.md @ 8526c26 -->
+<!-- i18n-source: docs/hooks.md @ 054b893 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../hooks.md))
 
@@ -71,6 +71,8 @@ Claude Code sắp xin quyền. Thẻ làm việc trở thành yêu cầu cấp q
 
 Hook tự trả lời yêu cầu khi có thể. Nó mở một socket trả lời ngắn hạn, gửi địa chỉ của socket cùng với sự kiện, và chờ bạn chạm tối đa 20 giây. Một lần chạm kịp lúc sẽ quay về thành một quyết định `PermissionRequest` (cho phép, cho phép kèm quy tắc, hoặc từ chối), nên Claude Code không bao giờ hiện hộp thoại của nó. Nếu không có lần chạm nào kịp lúc, hook báo cho aipager rằng thời gian chờ đã hết (`permission_reply_timeout`) và không in gì; nó cũng không in gì khi không liên lạc được với aipager hoặc khi có gì đó trên đường này hỏng. Khi đó Claude Code hiện hộp thoại của nó trong terminal, và một lần chạm sau đó trả lời hộp thoại bằng cách gõ phím. Log kiểm tra (`~/.claude/aipager-audit.jsonl`) ghi lại mỗi lần chạm đã trả lời theo cách nào, `"via": "hook_decision"` hoặc `"via": "keystroke_fallback"`.
 
+Một `PermissionRequest` đến trong khi một yêu cầu khác đang mở cũng được hiện, thành tin nhắn riêng bên dưới thẻ làm việc. Cùng một hộp thoại đến lần nữa (cùng người hỏi, cùng công cụ và lần gọi, hoặc cùng đầu vào) chỉ được hiện một lần. Claude Code cũng chạy hook này cho một `AskUserQuestion`; câu hỏi đó đã được hiện từ `PreToolUse` của nó, nên không bao giờ được hiện lần thứ hai. Hộp thoại của một agent chạy nền chỉ xuất hiện trong terminal sau khi hook của nó thôi chờ, nằm dưới mọi hộp thoại đang mở ở đó; vì vậy một lần chạm chỉ gõ phím vào yêu cầu mà Claude Code hiện trước (xem [lệnh → yêu cầu cấp quyền](commands.md#permission-prompts)).
+
 ### <a id="posttooluse--posttoolusefailure"></a>`PostToolUse` / `PostToolUseFailure`
 
 Một công cụ đã xong, hoặc thất bại. Dòng của nó trên thẻ làm việc được chốt lại (thất bại được đánh dấu trên dòng), và câu trả lời cho một yêu cầu đang mở được ghi nhận: một nút Cho phép hoặc Từ chối cũ của yêu cầu đó không gõ gì nữa. Phiên giữ 200 dòng công cụ mới nhất.
@@ -83,7 +85,7 @@ Một lần gọi `Agent` (hoặc `Task`) bên trong một subagent (sự kiện
 
 aipager đọc `notification_type` của Claude Code:
 
-- `permission_prompt`: một tín hiệu xin quyền chậm hơn và cũ hơn. Nó chỉ hiện yêu cầu khi `PermissionRequest` chưa hiện.
+- `permission_prompt`: một tín hiệu xin quyền chậm hơn và cũ hơn. Nó chỉ hiện yêu cầu khi không có yêu cầu nào đang mở: nếu có một yêu cầu đang mở, đó là hộp thoại mà `PermissionRequest` đã hiện.
 - `idle_prompt` trong lúc một yêu cầu cấp quyền hoặc một câu hỏi đang chờ: phiên vẫn ở trạng thái chờ, và chat nhận được `⬆️ jim · vẫn đang chờ bạn trả lời ở trên`, mỗi lần chờ một lần.
 - `idle_prompt` trong các trường hợp khác: được xử lý như `Stop` (bên dưới). Nó bắt được một việc mà `Stop` bị mất; một câu trả lời đã được gửi thì không bao giờ gửi lại.
 

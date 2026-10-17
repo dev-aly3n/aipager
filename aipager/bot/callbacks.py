@@ -68,7 +68,7 @@ from aipager.team import (
 # now. Re-export the names this module uses internally so the
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
-from aipager.bot.dashboard import ALREADY_ANSWERED, PINNED_ANSWER_VERB, current_prompt_token
+from aipager.bot.dashboard import ALREADY_ANSWERED, PINNED_ANSWER_VERB, open_prompt_tokens
 from aipager.bot.flood import MUTE, clear_time
 from aipager.bot.transport import (  # noqa: F401
     _message_chat_id,
@@ -272,6 +272,27 @@ SHORT_CB_GONE = Msg("toast.session_unavailable", "That session is no longer avai
 PROMPT_EXPIRED = Msg("toast.prompt_expired", "this prompt has expired",
                      note="Pop-up: a tap on a prompt message that is no longer the prompt "
                           "Claude Code is waiting on")
+#: What Claude reads when aipager refuses a tool through its hook (never
+#: translated: tests/test_claude_facing_golden.py pins it).
+DENIED_VIA_AIPAGER = "Denied via aipager"
+
+PROMPT_BEHIND = Msg(
+    "toast.prompt_behind_other",
+    "Claude Code is showing another prompt first, so answer that one before this one.",
+    note="Pop-up: two prompts are open and Claude Code shows the other one on top, so "
+         "this tap would type into the wrong dialog; nothing was typed")
+PROMPT_SETTLING = Msg(
+    "toast.prompt_settling",
+    "Claude is finishing its turn, so tap this prompt again in a moment.",
+    note="Pop-up: Claude just ended its turn while an agent's prompt is still open; "
+         "for a moment the tap cannot be matched to it, nothing was typed and the "
+         "buttons stay")
+PROMPT_ORDER_UNKNOWN = Msg(
+    "toast.prompt_order_unknown",
+    "aipager can't tell which prompt Claude Code is showing first, so answer this one "
+    "in the terminal.",
+    note="Pop-up: two prompts are open and the order Claude Code shows them in is not "
+         "known, so typing could answer the wrong one; nothing was typed")
 CANT_STOP = Msg("toast.cant_stop", "You can't stop this session.",
                 note="Pop-up: the person may not stop this session")
 NOT_HERE = Msg("toast.session_not_here", "That session isn't running here.",
@@ -426,6 +447,27 @@ _DECISION_ICONS = {
 # dialog: refused on a surface whose prompt is known closed (roadmap 8.102).
 # ``submit`` is a multi-select question's Submit button.
 _CARD_ANSWER_VERBS = frozenset({"allow", "allow_always", "deny", "submit"})
+
+
+def _prompt_for_token(sess, token) -> tuple[str | None, dict | None]:
+    """``(where, perm)`` of the open prompt bound to *token* (roadmap
+    8.120): ``"inline"`` (the card's, via a bar copy), ``"separate"`` (the
+    primary sent as its own message) or ``"extra"``; ``(None, None)`` when
+    none is."""
+    if token is None:
+        return None, None
+    perm = sess.pending_permission
+    if isinstance(perm, dict) and perm.get("prompt_token") == token:
+        return "inline", perm
+    sent = sess.pending_prompt_msg
+    if isinstance(sent, dict) and sent.get("prompt_token") == token \
+            and isinstance(sent.get("perm"), dict):
+        return "separate", sent["perm"]
+    for rec in sess.extra_prompts:
+        if (isinstance(rec, dict) and rec.get("prompt_token") == token
+                and isinstance(rec.get("perm"), dict)):
+            return "extra", rec["perm"]
+    return None, None
 
 
 _PERMS_POLL_COUNT = 15
@@ -1764,16 +1806,24 @@ class CallbackDispatchMixin:
         )
         surface = self._resent_prompts.get(resent_key)
         is_resent_copy = surface is not None
-        current_token = current_prompt_token(sess)
+        # Every open prompt's identity (roadmap 8.120), not only the
+        # first: a prompt that opened while another was open has its own.
+        open_tokens = open_prompt_tokens(sess)
         refusal = None
         strip_refused = True  # take the refused message's buttons away
         tapped_id = resent_key[1]
-        if is_resent_copy:
+        if sess.prompt_wait_carry and sess.status != Status.INTERACTIVE:
+            # Claude's turn is ending with an agent's prompt still open
+            # (roadmap 8.120): for that moment no prompt is on record as
+            # open, though the agent's still is. Refused with no keys, and
+            # its buttons kept: the session waits on it again right after.
+            refusal = PROMPT_SETTLING
+            strip_refused = False
+        elif is_resent_copy:
             # Kept, not popped: the entry IS the guard, and the message
             # keeps its buttons if the edit below does not land. A missing
             # token on either side never matches (fail closed).
-            if (surface[1] is None or current_token is None
-                    or surface[1] != current_token):
+            if surface[1] is None or surface[1] not in open_tokens:
                 refusal = ALREADY_ANSWERED
         elif ((is_option or action in _CARD_ANSWER_VERBS)
                 and sess.prompt_known_closed(tapped_id)):
@@ -1836,9 +1886,20 @@ class CallbackDispatchMixin:
         # tap on that message (or the bar's copy of it) reaches here with
         # the prompt still current (the refusal check above).
         separate_perm = None
-        if not perm and is_resent_copy:
-            separate_perm = (sess.pending_prompt_msg or {}).get("perm") or None
-            perm = separate_perm or {}
+        if is_resent_copy:
+            # The tapped message's token picks its prompt (roadmap 8.120):
+            # the card's own (a bar copy), the one sent as its own message,
+            # or one of those that opened while another was open.
+            where, picked = _prompt_for_token(sess, surface[1])
+            if where in ("separate", "extra"):
+                separate_perm = picked
+                perm = picked
+            elif where is None and not perm:
+                separate_perm = (sess.pending_prompt_msg or {}).get("perm") or None
+                perm = separate_perm or {}
+        if (is_option or action in ("submit", "continue")) and await self._keys_refused(
+                query, person, sess, perm):
+            return
         # Taken before any key is typed: the keystroke fallback's watch
         # reads only what Claude wrote after it (roadmap 8.99).
         answered_at = time.time()
@@ -2006,17 +2067,9 @@ class CallbackDispatchMixin:
                     wait_start = perm.get("wait_started_at", 0)
                     if wait_start and sess.busy_started_at:
                         sess.busy_started_at += time.monotonic() - wait_start
-                    sess.pending_permission = None
                     # Answered: a later tap on the card is refused (8.102).
-                    sess.mark_prompt_closed(sess.busy_msg_id)
-                    self.registry.transition(session_name, Status.BUSY)
-                    keyboard = self._build_stop_keyboard(sess)
-                    text = self._build_busy_text(sess.label, "Working", sess)
-                    await self._edit_busy_raw(
-                        sess.busy_msg_id, text, reply_markup=keyboard,
-                        chat_id=resolve_chat_id(sess))
-                    self._start_animation(sess)
-                    log.info("[%s] Multi-select submit complete", sess.label)
+                    if await self._inline_prompt_answered(sess, perm):
+                        log.info("[%s] Multi-select submit complete", sess.label)
             else:
                 await self._safe_answer(query, person.text(SEND_KEYS_FAILED))
             return
@@ -2050,6 +2103,8 @@ class CallbackDispatchMixin:
                 ok = True
                 perm["hook_reply"] = None  # one decision per parked hook
             else:
+                if await self._keys_refused(query, person, sess, perm):
+                    return
                 via = "keystroke_fallback"
                 ok = await inject.send_keys(session_name, "Enter")
         elif action == "allow_always":
@@ -2101,6 +2156,8 @@ class CallbackDispatchMixin:
                              "(always_available=%r)", sess.label,
                              perm_info.get("always_available"))
                     report_store.record_counter("allow_always_degraded")
+            elif await self._keys_refused(query, person, sess, perm):
+                return
             elif perm_info.get("always_available") is True:
                 via = "keystroke_fallback"
                 verb = ACTION_VERBS[action]
@@ -2138,8 +2195,8 @@ class CallbackDispatchMixin:
                     member if member is not None and member.id != 0 else None
                 )
                 reason = (
-                    f"Denied via aipager by {attribution_label(actor_for_reason)}"
-                    if actor_for_reason else "Denied via aipager"
+                    f"{DENIED_VIA_AIPAGER} by {attribution_label(actor_for_reason)}"
+                    if actor_for_reason else DENIED_VIA_AIPAGER
                 )
                 try:
                     # PermissionRequest's {behavior, message, interrupt}
@@ -2158,6 +2215,8 @@ class CallbackDispatchMixin:
                 ok = True
                 perm["hook_reply"] = None  # one decision per parked hook
             else:
+                if await self._keys_refused(query, person, sess, perm):
+                    return
                 via = "keystroke_fallback"
                 if (perm.get("tool_info") or {}).get("name") != "AskUserQuestion":
                     claude_held = await self._claude_queue_before_typed_refusal(sess)
@@ -2182,7 +2241,9 @@ class CallbackDispatchMixin:
                 VERB_TOAST, verb=Safe(card_rows.verb_text(person, verb, "text")),
                 session=sess.label))
 
-            if is_resent_copy and sess.pending_permission:
+            inline_answer = (sess.pending_permission is not None
+                             and perm is sess.pending_permission)
+            if is_resent_copy and inline_answer:
                 # Answered from the bar's copy of an inline prompt: the
                 # busy card is updated below as usual, and the copy shows
                 # the verdict instead of its buttons. (A separate message
@@ -2195,7 +2256,7 @@ class CallbackDispatchMixin:
                 except Exception:
                     pass
 
-            if sess.pending_permission:
+            if inline_answer:
                 # Collapse current question into tool_history, write the
                 # audit record and post the attributed line.
                 perm = sess.pending_permission
@@ -2247,17 +2308,8 @@ class CallbackDispatchMixin:
                     wait_start = perm.get("wait_started_at", 0)
                     if wait_start and sess.busy_started_at:
                         sess.busy_started_at += time.monotonic() - wait_start
-                    sess.pending_permission = None
                     # Answered: a later tap on the card is refused (8.102).
-                    sess.mark_prompt_closed(sess.busy_msg_id)
-                    # Transition back to BUSY and restart animation
-                    self.registry.transition(session_name, Status.BUSY)
-                    keyboard = self._build_stop_keyboard(sess)
-                    text = self._build_busy_text(sess.label, "Working", sess)
-                    await self._edit_busy_raw(
-                        sess.busy_msg_id, text, reply_markup=keyboard,
-                        chat_id=resolve_chat_id(sess))
-                    self._start_animation(sess)
+                    await self._inline_prompt_answered(sess, perm)
                     log.info("[%s] Inline permission: %s (via=%s)",
                              sess.label, verb, via or "n/a")
             else:
@@ -2279,8 +2331,25 @@ class CallbackDispatchMixin:
                 # other message keeps its old handling.
                 if separate_perm or (tapped_id and tapped_id == sess.busy_msg_id):
                     sess.mark_prompt_closed(tapped_id)
-                # Mark session as busy after user interaction
-                self.registry.transition(session_name, Status.BUSY)
+                left = 0
+                if separate_perm:
+                    # Only this prompt closes (roadmap 8.120).
+                    sess.close_prompts(lambda p: p is separate_perm)
+                    left = len(sess.open_prompts())
+                if left:
+                    log.info("[%s] prompt closed (answered), %d still open",
+                             sess.label, left)
+                    # What waited behind it (a deferred refusal) goes now,
+                    # and the card shows what the session still waits on.
+                    await self._after_prompts_changed(
+                        sess, {"inline_closed": False})
+                elif sess.resumed_after_stop:
+                    # The last prompt carried over Claude's Stop (8.120):
+                    # its turn is over, Claude sits at its input.
+                    self.registry.transition(session_name, Status.IDLE)
+                else:
+                    # Mark session as busy after user interaction
+                    self.registry.transition(session_name, Status.BUSY)
                 log.info("[%s] %s (via=%s)", sess.label, verb, via or "n/a")
                 try:
                     await edit_text(query, f"{original_text}\n\n" + shared.text(
@@ -2320,6 +2389,51 @@ class CallbackDispatchMixin:
                     answered_at=answered_at)
         else:
             await self._safe_answer(query, person.text(SEND_FAILED, session=session_name))
+
+    async def _keys_refused(self, query, person, sess, perm) -> bool:
+        """Refuse a tap whose keys could land in another dialog (roadmap
+        8.120): with more than one prompt open, keys go only to the one
+        Claude Code certainly shows first. A refused tap types nothing,
+        changes nothing and keeps its buttons. True when refused."""
+        if not isinstance(perm, dict) or not perm:
+            return False
+        verdict = sess.keys_verdict(perm, time.monotonic())
+        if verdict == "yes":
+            return False
+        if verdict == "behind":
+            log.info("[%s] tap refused: another prompt is on top", sess.label)
+            await self._safe_answer(query, person.text(PROMPT_BEHIND))
+        else:
+            log.info("[%s] tap refused: which prompt is on top is not known",
+                     sess.label)
+            await self._safe_answer(query, person.text(PROMPT_ORDER_UNKNOWN))
+        return True
+
+    async def _inline_prompt_answered(self, sess, perm) -> bool:
+        """The card's own prompt was answered: closed, and its buttons type
+        nothing (8.102). With no other prompt open the card works again
+        (BUSY, Working, its animation); with others open it shows the
+        Waiting frame without answer buttons (roadmap 8.120). True when the
+        session works again."""
+        sess.close_prompts(lambda p: p is perm)
+        if sess.pending_permission is perm:
+            sess.pending_permission = None
+        sess.mark_prompt_closed(sess.busy_msg_id)
+        left = len(sess.open_prompts())
+        if left:
+            log.info("[%s] prompt closed (answered), %d still open",
+                     sess.label, left)
+            await self._after_prompts_changed(sess, {"inline_closed": True})
+            return False
+        # Transition back to BUSY and restart animation
+        self.registry.transition(sess.name, Status.BUSY)
+        keyboard = self._build_stop_keyboard(sess)
+        text = self._build_busy_text(sess.label, "Working", sess)
+        await self._edit_busy_raw(
+            sess.busy_msg_id, text, reply_markup=keyboard,
+            chat_id=resolve_chat_id(sess))
+        self._start_animation(sess)
+        return True
 
     async def _record_prompt_answer(self, sess, perm: dict, verb: str, member,
                                     via: str, *, decision: str | None = None,

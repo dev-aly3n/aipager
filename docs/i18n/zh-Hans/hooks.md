@@ -1,6 +1,6 @@
 # Hook 事件
 
-<!-- i18n-source: docs/hooks.md @ 8526c26 -->
+<!-- i18n-source: docs/hooks.md @ 054b893 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../hooks.md)）
 
@@ -71,6 +71,8 @@ Claude Code 即将请求权限。工作卡片变成这个请求，在 Claude 对
 
 hook 能回答时就自己回答这个请求。它打开一个短期的回复套接字，把地址随事件一起发出，并最多等你点按 20 秒。及时的点按会作为 `PermissionRequest` 决定返回（允许、带规则的允许，或拒绝），这样 Claude Code 就不会显示它自己的对话框。如果没有及时的点按，hook 会告诉 aipager 等待结束了（`permission_reply_timeout`），并且不打印任何内容；在联系不上 aipager 或这条路径上任何环节出错时，它也什么都不打印。这时 Claude Code 会在终端里显示它自己的对话框，之后的点按会通过输入按键来回答它。审计日志（`~/.claude/aipager-audit.jsonl`）记录每次点按是以哪种方式回答的：`"via": "hook_decision"` 或 `"via": "keystroke_fallback"`。
 
+在另一个请求开着时到达的 `PermissionRequest` 也会显示，作为单独的消息放在工作卡片下面。同一个对话框再次到达（同一个提问者、同一个工具和同一次调用，或者同样的输入）只显示一次。Claude Code 也会为 `AskUserQuestion` 运行这个 hook；这个问题已经通过它的 `PreToolUse` 显示了，所以永远不会显示第二次。后台代理的对话框只有在它的 hook 不再等待之后才会出现在终端里，排在那里已经打开的所有对话框下面；所以点按只会把按键输入到 Claude Code 最先显示的那个请求里（见[命令 → 权限请求](commands.md#permission-prompts)）。
+
 ### <a id="posttooluse--posttoolusefailure"></a>`PostToolUse` / `PostToolUseFailure`
 
 某个工具完成了，或失败了。它在工作卡片上的那一行会定格（失败会在那一行上标出），并且会注意到对未结请求的回答：针对它的旧的允许或拒绝按钮之后不会再输入任何东西。会话保留最新的 200 行工具记录。
@@ -83,7 +85,7 @@ hook 能回答时就自己回答这个请求。它打开一个短期的回复套
 
 aipager 读取 Claude Code 的 `notification_type`：
 
-- `permission_prompt`：一个更慢、更旧的权限请求信号。只有在 `PermissionRequest` 还没显示时，它才显示这个请求。
+- `permission_prompt`：一个更慢、更旧的权限请求信号。只有在没有任何请求开着时，它才显示这个请求：如果有一个开着，那就是 `PermissionRequest` 已经显示的对话框。
 - 有权限请求或问题在等待时的 `idle_prompt`：会话保持等待状态，聊天里会收到 `⬆️ jim · 仍在等你回复上面的内容`，每次等待一次。
 - 其他情况下的 `idle_prompt`：按 `Stop` 处理（见下文）。它能接住 `Stop` 丢失的任务；已经送达的回答绝不会再发一次。
 

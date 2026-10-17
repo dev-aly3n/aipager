@@ -1,6 +1,6 @@
 # Hook 이벤트
 
-<!-- i18n-source: docs/hooks.md @ 8526c26 -->
+<!-- i18n-source: docs/hooks.md @ 054b893 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../hooks.md))
 
@@ -71,6 +71,8 @@ Claude Code가 곧 권한을 요청해요. 작업 카드가 이 요청으로 바
 
 hook은 답할 수 있으면 직접 이 요청에 답해요. 짧게 쓰는 응답 소켓을 열고, 그 주소를 이벤트와 함께 보내고, 내가 누를 때까지 최대 20초 기다려요. 제때 누르면 `PermissionRequest` 결정으로 돌아가서(허용, 규칙과 함께 허용, 또는 거부) Claude Code가 자기 대화 상자를 보여 주지 않아요. 제때 누르지 않으면 hook은 기다림이 끝났다고 aipager에 알리고(`permission_reply_timeout`) 아무것도 출력하지 않아요. aipager에 연결할 수 없거나 이 경로에서 무엇이든 실패해도 아무것도 출력하지 않아요. 그러면 Claude Code가 터미널에 자기 대화 상자를 보여 주고, 나중에 누르면 키를 입력해서 답해요. 감사 로그(`~/.claude/aipager-audit.jsonl`)에는 각 누름이 어느 방식으로 답했는지 남아요. `"via": "hook_decision"` 또는 `"via": "keystroke_fallback"`이에요.
 
+다른 요청이 열려 있는 동안 도착한 `PermissionRequest`도 작업 카드 아래 별도 메시지로 보여 줘요. 같은 대화 상자가 다시 오면(같은 요청자, 같은 도구와 같은 호출, 또는 같은 입력) 한 번만 보여 줘요. Claude Code는 `AskUserQuestion`에도 이 hook을 실행하는데, 그 질문은 이미 `PreToolUse`로 보여 줬으니 두 번 보여 주지 않아요. 백그라운드 에이전트의 대화 상자는 그 hook이 기다리기를 멈춘 뒤에야 터미널에 나타나고, 이미 열린 대화 상자들 아래에 놓여요. 그래서 탭은 Claude Code가 먼저 보여 주는 요청에만 키를 입력해요([명령 → 권한 요청](commands.md#permission-prompts) 참고).
+
 ### <a id="posttooluse--posttoolusefailure"></a>`PostToolUse` / `PostToolUseFailure`
 
 도구가 끝났거나 실패했어요. 작업 카드의 그 줄이 고정되고(실패는 그 줄에 표시돼요), 열려 있는 요청에 대한 답을 알아채요. 그 요청을 위한 예전 허용이나 거부 버튼은 이후 아무것도 입력하지 않아요. 세션은 최신 도구 줄 200개를 보관해요.
@@ -83,7 +85,7 @@ Claude Code가 백그라운드로 옮긴 `Bash` 호출은 `backgroundTaskId`를 
 
 aipager는 Claude Code의 `notification_type`을 읽어요:
 
-- `permission_prompt`: 더 느리고 오래된 권한 요청 신호예요. `PermissionRequest`가 아직 보여 주지 않았을 때만 이 요청을 보여 줘요.
+- `permission_prompt`: 더 느리고 오래된 권한 요청 신호예요. 열린 요청이 없을 때만 이 요청을 보여 줘요. 하나가 열려 있으면 그건 `PermissionRequest`가 이미 보여 준 대화 상자예요.
 - 권한 요청이나 질문이 기다리는 중의 `idle_prompt`: 세션은 대기 상태로 남고, 채팅에는 `⬆️ jim · 위에서 아직 답변을 기다리고 있어요`가 기다림마다 한 번 와요.
 - 그 밖의 `idle_prompt`: `Stop`처럼 처리해요(아래 참고). `Stop`을 놓친 작업을 잡아 줘요. 이미 전달된 답변은 절대 다시 보내지 않아요.
 

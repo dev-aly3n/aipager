@@ -898,7 +898,10 @@
 {"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} đang khởi động lại - chạm lại sau giây lát"}
 {"k": "toast.perms_stale", "src": "4e34769b", "v": "Thẻ này đã cũ - không có gì thay đổi"}
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} vẫn đang khởi động - thử lại sau giây lát"}
+{"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code đang hiện một yêu cầu khác trước, nên hãy trả lời yêu cầu đó trước rồi mới tới yêu cầu này."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "yêu cầu này không còn mở"}
+{"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager không biết Claude Code đang hiện yêu cầu nào trước, nên hãy trả lời yêu cầu này trong terminal."}
+{"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude đang làm xong việc, nên hãy chạm lại vào yêu cầu này sau giây lát."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram đang giới hạn chat này - thử lại sau {time}"}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "Đang gửi rồi."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "Đã gửi rồi."}

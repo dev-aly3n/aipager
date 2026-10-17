@@ -1,6 +1,6 @@
 # Dépannage
 
-<!-- i18n-source: docs/troubleshooting.md @ bb690d5 -->
+<!-- i18n-source: docs/troubleshooting.md @ 054b893 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../troubleshooting.md))
 
@@ -144,7 +144,7 @@ aipager session <label> --continue # un nouveau dtach, la dernière conversation
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Une demande d'autorisation sans nouvelles depuis 5 minutes
 
-Si une session attend une demande d'autorisation ou une question et que Claude Code ne donne aucune nouvelle pendant 5 minutes, aipager lit la conversation enregistrée de la session. Ce n'est que si elle montre que la demande est finie (répondue dans le terminal, et la nouvelle s'est perdue) qu'aipager arrête de l'attendre et compte de nouveau la session comme au travail. Sinon la demande reste ouverte aussi longtemps qu'il le faut : la carte et la barre épinglée disent toujours que la session a besoin de votre réponse, aucune note « toujours au travail » n'est envoyée, et vos messages sont retenus jusqu'à votre réponse (voir [texte](commands.md#text)). Un Claude Code qui se ferme avec la demande ouverte termine la session. Les boutons de la demande répondent toujours à la boîte de dialogue si elle est encore ouverte (voir [réponses](commands.md#idle-responses)).
+Si une session attend une demande d'autorisation ou une question et que Claude Code ne donne aucune nouvelle pendant 5 minutes, aipager lit la conversation enregistrée de la session. Seules comptent les nouvelles de Claude et celles de l'agent qui a demandé : un agent en arrière-plan qui continue de travailler n'empêche pas cette vérification. Ce n'est que si elle montre que la demande est finie (répondue dans le terminal, et la nouvelle s'est perdue) qu'aipager arrête de l'attendre et compte de nouveau la session comme au travail. Sinon la demande reste ouverte aussi longtemps qu'il le faut : la carte et la barre épinglée disent toujours que la session a besoin de votre réponse, aucune note « toujours au travail » n'est envoyée, et vos messages sont retenus jusqu'à votre réponse (voir [texte](commands.md#text)). Un Claude Code qui se ferme avec la demande ouverte termine la session. Les boutons de la demande répondent toujours à la boîte de dialogue si elle est encore ouverte (voir [réponses](commands.md#idle-responses)).
 
 Changer l'attente :
 

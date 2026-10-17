@@ -179,7 +179,10 @@ def test_authorize_swallows_pending_record_failure(mk_bot, mk_update, run_async,
 
 # ---- _auto_deny ----------------------------------------------------------
 
-def test_auto_deny_injects_down_enter_and_marks_busy(mk_bot, run_async, monkeypatch):
+def test_auto_deny_types_the_deny_buttons_keys_and_marks_busy(mk_bot, run_async, monkeypatch):
+    """The Deny button's keys: five Downs clamp onto the last row ("No")
+    whatever the dialog's length. One Down stopped on row 2 of a three-row
+    Bash dialog ("Yes, and don't ask again" / "switch to auto mode")."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
     sess.pending_permission = {"x": "y"}  # should be cleared
@@ -190,9 +193,8 @@ def test_auto_deny_injects_down_enter_and_marks_busy(mk_bot, run_async, monkeypa
     monkeypatch.setattr("aipager.bot.auth._sleep", _no_sleep)
 
     run_async(bot._auto_deny(sess, {"name": "Bash", "summary": "git push --force"}, _admin()))
-    # Sent Down then Enter
     keys = [c.args[1] for c in sent.await_args_list]
-    assert keys == ["Down", "Enter"]
+    assert keys == ["Down"] * 5 + ["Enter"]
     # Session transitioned to BUSY
     assert sess.status == Status.BUSY
     assert sess.pending_permission is None

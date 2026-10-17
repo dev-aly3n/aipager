@@ -1,6 +1,6 @@
 # Eventos de hook
 
-<!-- i18n-source: docs/hooks.md @ 8526c26 -->
+<!-- i18n-source: docs/hooks.md @ 054b893 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../hooks.md))
 
@@ -71,6 +71,8 @@ O Claude Code vai pedir permissão. O cartão de atividade vira o pedido, com o 
 
 O hook responde o pedido sozinho quando consegue. Ele abre um socket de resposta de vida curta, manda o endereço com o evento e espera o seu toque por até 20 segundos. Um toque a tempo volta como uma decisão do `PermissionRequest` (permitir, permitir com a regra, ou negar), então o Claude Code nunca mostra a caixa de diálogo dele. Se nenhum toque chegar a tempo, o hook avisa o aipager que a espera acabou (`permission_reply_timeout`) e não imprime nada; também não imprime nada quando não consegue chegar ao aipager ou quando algo falha nesse caminho. Aí o Claude Code mostra a caixa de diálogo dele no terminal, e um toque depois a responde digitando as teclas. O registro de auditoria (`~/.claude/aipager-audit.jsonl`) guarda por qual caminho cada toque respondeu: `"via": "hook_decision"` ou `"via": "keystroke_fallback"`.
 
+Um `PermissionRequest` que chega enquanto outro pedido está aberto também é mostrado, como uma mensagem própria abaixo do cartão de atividade. O mesmo diálogo visto de novo (o mesmo autor, a mesma ferramenta e a mesma chamada, ou a mesma entrada) é mostrado uma vez só. O Claude Code também roda esse hook para um `AskUserQuestion`; essa pergunta já aparece a partir do `PreToolUse` dela, então nunca é mostrada uma segunda vez. O diálogo de um agente em segundo plano só aparece no terminal depois que o hook dele parou de esperar, embaixo de qualquer diálogo já aberto ali; por isso um toque só digita teclas no pedido que o Claude Code mostra primeiro (veja [comandos → pedidos de permissão](commands.md#permission-prompts)).
+
 ### <a id="posttooluse--posttoolusefailure"></a>`PostToolUse` / `PostToolUseFailure`
 
 Uma ferramenta terminou, ou falhou. A linha dela no cartão de atividade fica fixa (uma falha é marcada na linha), e a resposta a um pedido aberto é percebida: um Permitir ou Negar antigo para ele não digita mais nada depois disso. A sessão guarda as 200 linhas de ferramentas mais recentes.
@@ -83,7 +85,7 @@ Uma chamada `Agent` (ou `Task`) feita dentro de um subagente (o evento dela traz
 
 O aipager lê o `notification_type` do Claude Code:
 
-- `permission_prompt`: um sinal mais lento e antigo de um pedido de permissão. Só mostra o pedido quando o `PermissionRequest` ainda não o mostrou.
+- `permission_prompt`: um sinal mais lento e antigo de um pedido de permissão. Ele só mostra o pedido quando nenhum pedido está aberto: com um aberto, é o diálogo que o `PermissionRequest` já mostrou.
 - `idle_prompt` enquanto um pedido de permissão ou uma pergunta espera: a sessão continua esperando, e o chat recebe `⬆️ jim · ainda esperando sua resposta lá em cima`, uma vez por espera.
 - `idle_prompt` nos outros casos: tratado como `Stop` (abaixo). Pega uma tarefa cujo `Stop` se perdeu; uma resposta já entregue nunca é enviada de novo.
 

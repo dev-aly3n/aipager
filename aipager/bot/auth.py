@@ -722,23 +722,96 @@ class AuthMixin:
         proceeds normally.
         """
         tool_name = tool_info.get("name", "?")
-        summary = tool_info.get("summary", "")[:120]
+        await self._type_auto_deny(sess, tool_name)
 
-        # Inject Down + Enter — same sequence the Deny button uses to
-        # walk claude's "Allow / Deny" picker.
-        ok = await inject.send_keys(sess.name, "Down")
-        if ok:
+        # Restore BUSY (claude is proceeding past the denied prompt).
+        self.registry.transition(sess.name, Status.BUSY)
+        sess.pending_permission = None
+        await self._auto_deny_notice(sess, tool_info, triggerer)
+
+    async def _type_auto_deny(self, sess: TrackedSession, tool_name: str) -> bool:
+        """The Deny button's own keys, into the dialog on top: Down
+        ``_DENY_OVERSHOOT`` times, then Enter, so the cursor stops on the
+        last row ("No") however many rows the dialog has. A single Down
+        stopped on row 2 of a three-row dialog ("Yes, and don't ask again"
+        or "switch to auto mode"): a tool the rules deny was allowed."""
+        from aipager.bot.callbacks import _DENY_OVERSHOOT
+        ok = True
+        for _ in range(_DENY_OVERSHOOT):
+            if not await inject.send_keys(sess.name, "Down"):
+                ok = False
+                break
             await _sleep(0.1)
+        if ok:
             ok = await inject.send_keys(sess.name, "Enter")
         if not ok:
             log.warning(
                 "[%s] auto-deny key injection failed for %s",
                 sess.label, tool_name,
             )
+        return ok
 
-        # Restore BUSY (claude is proceeding past the denied prompt).
-        self.registry.transition(sess.name, Status.BUSY)
-        sess.pending_permission = None
+    async def _auto_deny_extra(self, sess: TrackedSession, tool_info: dict,
+                               triggerer: TeamUser | None, context: dict) -> None:
+        """Auto-deny a prompt that opened while another is open (roadmap
+        8.120). Through its parked hook when it waits, which reaches that
+        very request whatever dialog is on top; otherwise the refusal is
+        recorded as an open prompt with no message and typed only once its
+        dialog is certainly on top (:meth:`_run_due_auto_denies`)."""
+        from aipager.bot.callbacks import DENIED_VIA_AIPAGER
+        from aipager.dtach import hook_reply
+        tool_name = tool_info.get("name", "?")
+        try:
+            answered = hook_reply.send_decision(
+                context.get("hook_reply"),
+                hook_reply.deny_decision(message=DENIED_VIA_AIPAGER,
+                                         interrupt=False))
+        except Exception:  # noqa: BLE001 - the keys below are the fallback
+            answered = False
+        if answered:
+            await self._auto_deny_notice(sess, tool_info, triggerer)
+            return
+        from aipager.bot.notify import _separate_prompt_perm
+        perm = _separate_prompt_perm(tool_info, tool_info.get("summary", ""), None)
+        sess.extra_prompts.append({
+            "text": "", "keyboard": None, "summary": tool_info.get("summary", ""),
+            "prompt_token": None, "perm": perm, "auto_deny_due": True,
+            "auto_deny_by": triggerer,
+        })
+        log.info("[%s] auto-deny of %s waits until its dialog is on top",
+                 sess.label, tool_name)
+        await self._run_due_auto_denies(sess)
+
+    async def _run_due_auto_denies(self, sess: TrackedSession) -> None:
+        """Type each waiting auto-deny whose dialog is now certainly on top
+        (:meth:`TrackedSession.keys_verdict`), one at a time: answering
+        one uncovers the next. BUSY once no prompt is left open."""
+        import time as _time
+        for _ in range(len(sess.extra_prompts) + 1):
+            if sess.status != Status.INTERACTIVE:
+                return
+            due = [rec for rec in sess.extra_prompts
+                   if isinstance(rec, dict) and rec.get("auto_deny_due")]
+            ready = next((rec for rec in due
+                          if sess.keys_verdict(rec.get("perm"), _time.monotonic())
+                          == "yes"), None)
+            if ready is None:
+                return
+            perm = ready["perm"]
+            info = perm.get("tool_info") or {}
+            ready["auto_deny_due"] = False
+            await self._type_auto_deny(sess, info.get("name", "?"))
+            sess.close_prompts(lambda p, perm=perm: p is perm)
+            await self._auto_deny_notice(sess, info, ready.get("auto_deny_by"))
+            if not sess.open_prompts():
+                self.registry.transition(sess.name, Status.BUSY)
+
+    async def _auto_deny_notice(self, sess: TrackedSession, tool_info: dict,
+                                triggerer: TeamUser | None) -> None:
+        """The chat line, the audit record and the log line of an
+        auto-deny."""
+        tool_name = tool_info.get("name", "?")
+        summary = tool_info.get("summary", "")[:120]
 
         # Plain words, no config key (roadmap 8.88c): who it was blocked
         # for, and under which role.

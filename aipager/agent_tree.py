@@ -85,6 +85,20 @@ def launched_child(msg: object) -> str:
     return child
 
 
+def async_launched(msg: object) -> str:
+    """The id of the agent an ``Agent`` / ``Task`` ``PostToolUse`` says runs
+    on asynchronously (``tool_response.isAsync`` true), or "": any caller,
+    the main loop included (roadmap 8.120). An agent launched in the
+    foreground and moved to the background mid-run reports it here."""
+    if not isinstance(msg, dict) or msg.get("tool_name") not in _AGENT_TOOLS:
+        return ""
+    response = msg.get("tool_response")
+    if not isinstance(response, dict) or response.get("isAsync") is not True:
+        return ""
+    child = response.get("agentId")
+    return child if _is_agent_id(child) else ""
+
+
 # ── walking the links ───────────────────────────────────────────────────────
 
 #: Joins two agent names where a row names the agent that started another

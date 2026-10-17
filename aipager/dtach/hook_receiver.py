@@ -19,7 +19,9 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from aipager import agent_tree, bg_shells, bidi_guard, perm_modes, statusline_file
+from aipager import (
+    agent_tree, bg_shells, bidi_guard, perm_modes, prompt_stack, statusline_file,
+)
 from aipager.config import (
     HOOK_DEDUP_WINDOW_SECONDS,
     RICH_SUMMARIES,
@@ -202,12 +204,22 @@ def _permission_tool_use_id(msg: dict, tool_name: str, sess) -> str:
     """The id of the tool call a PermissionRequest asks about (roadmap
     8.102): the payload's own, else the parent's latest PreToolUse's when
     it named the same tool and the request is the parent's (no
-    ``agent_id``), else ``""``. Only a supplement to the prompt's time in
+    ``agent_id``), an agent's one unfinished call with the same tool and
+    whole input (8.120), else ``""``. Only a supplement to the prompt's time in
     the restart's transcript check: a wrong id (parallel calls of one
     tool) can only miss a restore, never make a wrong one."""
     own = _payload_tool_use_id(msg)
     if own:
         return own
+    agent_id = msg.get("agent_id") or ""
+    if agent_id and isinstance(agent_id, str):
+        # An agent's (roadmap 8.120): its one unfinished call with this
+        # tool and this whole input, so that call's end closes the prompt.
+        # Two such parallel calls give none, never a guess.
+        if sess is None:
+            return ""
+        return sess.agent_tool_call_for(
+            agent_id, tool_name, _input_digest(msg.get("tool_input", {})))
     last = sess.last_parent_tool_use if sess is not None else None
     if not (msg.get("agent_id") or "") and last and last[0] == tool_name:
         return last[1]
@@ -248,12 +260,41 @@ def _open_prompt_owner(sess) -> str | None:
     return None
 
 
+def _perm_owner(perm) -> str | None:
+    """Whose dialog one open prompt is: the asking agent's id, ``""`` for
+    Claude's own, None when its tool is not known (roadmap 8.120)."""
+    info = perm.get("tool_info") if isinstance(perm, dict) else None
+    if not isinstance(info, dict):
+        return None
+    return str(info.get("agent_id") or "")
+
+
+def _owned_by(*owners: str):
+    """A :meth:`TrackedSession.close_prompts` predicate: the prompts of
+    *owners*, and any whose owner is not known (as before 8.120, a tool
+    call ends the wait on such a prompt)."""
+    def pred(perm) -> bool:
+        owner = _perm_owner(perm)
+        return owner is None or owner in owners
+    return pred
+
+
+def _agent_running(sess, agent_id: str) -> bool:
+    return bool(agent_id) and (agent_id in sess.active_subagents
+                               or agent_id in sess.bg_agents)
+
+
 def _prompt_waits_on(sess) -> bool:
-    """Whether the open prompt is one still waiting for an answer: the
-    session's own, or a running agent's (one that has ended asks nothing
-    any more)."""
-    owner = _open_prompt_owner(sess)
-    return owner == "" or bool(owner and owner in sess.active_subagents)
+    """Whether an open prompt is still waiting for an answer: Claude's
+    own, or a running agent's (one that has ended asks nothing any more).
+    Every open prompt counts (roadmap 8.120), not only the first."""
+    prompts = (sess.open_prompts() if hasattr(sess, "open_prompts")
+               else [p for p in (sess.pending_permission,) if p])
+    for perm in prompts:
+        owner = _perm_owner(perm)
+        if owner == "" or (owner and owner in sess.active_subagents):
+            return True
+    return False
 
 
 def _finishes_open_prompt(msg: dict, tool_name: str, tool_input,
@@ -274,6 +315,12 @@ def _finishes_open_prompt(msg: dict, tool_name: str, tool_input,
     carried none) is never closed here; a tap, its turn's end or the
     restart's transcript check still close it."""
     perm = sess.pending_permission if sess is not None else None
+    return _finishes_prompt(msg, tool_name, tool_input, perm)
+
+
+def _finishes_prompt(msg: dict, tool_name: str, tool_input, perm) -> bool:
+    """:func:`_finishes_open_prompt` for any one open prompt's context
+    (roadmap 8.120: the card's, a separate message's, or one of several)."""
     if not isinstance(perm, dict):
         return False
     info = perm.get("tool_info")
@@ -662,6 +709,144 @@ class HookReceiver:
             # Only this turn's hold (never a newer one's) is given up.
             sess.release_turn_state(held_turn)
 
+    async def _raise_prompt(self, session_name: str, tool_info: dict | None,
+                            context: dict, *, source: str,
+                            own_tool_use_id: str = "") -> None:
+        """A prompt Claude Code is showing (roadmap 8.120): the first of a
+        wait moves the session INTERACTIVE and is drawn as before; one that
+        opens while another is open is drawn as its own message
+        (``extra_prompt``), unless it is the same dialog seen again.
+
+        *source*: ``"permission_request"``, ``"notification"`` (the
+        ``permission_prompt`` fallback) or ``"question"`` (AskUserQuestion
+        at PreToolUse). The duplicate rules no longer lean on
+        ``transition()``'s same-state no-op:
+
+        - the Notification fallback never adds a prompt while one is open
+          (the PermissionRequest for the same dialog came first);
+        - a PermissionRequest for AskUserQuestion never adds one (its
+          PreToolUse drew the question); its hook's request id is kept on
+          that question, for the dialog order;
+        - any other PermissionRequest whose prompt key (owner, tool, its
+          own call id, else its input's digest) matches an open prompt's
+          is the same dialog."""
+        sess = self.registry.get_or_create(session_name)
+        now = time.monotonic()
+        order = None
+        if isinstance(tool_info, dict):
+            owner = str(tool_info.get("agent_id") or "")
+            reply = context.get("hook_reply")
+            request_id = reply.get("request_id") if isinstance(reply, dict) else ""
+            order = {
+                "owner": owner,
+                "launch": (prompt_stack.OWN if not owner
+                           else sess.agent_launch(owner)),
+                "arrived": now,
+                "request_id": request_id if isinstance(request_id, str) else "",
+                "timed_out_at": 0.0,
+                "owner_hook_at": now,
+                "key": prompt_stack.prompt_key(
+                    owner, tool_info.get("name"), own_tool_use_id,
+                    tool_info.get("input_digest"), tool_info.get("summary")),
+            }
+            tool_info["order"] = order
+        if sess.status != Status.INTERACTIVE and not sess.prompt_wait_carry:
+            # During the carry (Claude's Stop with an agent's prompt still
+            # open) the session is already waiting: a prompt then is one
+            # more, never the start of a new wait that would drop the
+            # carried ones.
+            moved = self.registry.transition(session_name, Status.INTERACTIVE)
+            if moved:
+                if source == "permission_request":
+                    log.info("[%s] PermissionRequest: %s", moved.label,
+                             (tool_info or {}).get("summary", ""))
+                await self.notify_fn(moved, "permission_prompt", context)
+            return
+        summary = (tool_info or {}).get("summary", "") if isinstance(tool_info, dict) else ""
+        if source == "notification" or order is None:
+            log.info("[%s] prompt already open, not shown again: %s",
+                     sess.label, summary)
+            return
+        if source == "permission_request" and tool_info.get("name") == "AskUserQuestion":
+            for perm in sess.open_prompts():
+                info = perm.get("tool_info")
+                other = info.get("order") if isinstance(info, dict) else None
+                if (isinstance(other, dict) and info.get("name") == "AskUserQuestion"
+                        and other.get("owner") == order["owner"]
+                        and not other.get("request_id") and order["request_id"]):
+                    other["request_id"] = order["request_id"]
+                    break
+            log.info("[%s] prompt already open, not shown again: %s",
+                     sess.label, summary)
+            return
+        for perm in sess.open_prompts():
+            info = perm.get("tool_info")
+            other = info.get("order") if isinstance(info, dict) else None
+            if isinstance(other, dict) and other.get("key") == order["key"]:
+                log.info("[%s] prompt already open, not shown again: %s",
+                         sess.label, summary)
+                return
+        log.info("[%s] another open prompt: %s (agent %s)", sess.label,
+                 summary, order["owner"] or "-")
+        await self.notify_fn(sess, "extra_prompt", context)
+
+    async def _prompts_closed(self, sess, closed: int, inline_closed: bool,
+                              reason: str, *,
+                              preserve_job_state: bool = False) -> bool:
+        """After a hook closed *closed* of the open prompts: BUSY when none
+        is left (True), else the bot repaints what changed (False)."""
+        left = len(sess.open_prompts())
+        if closed:
+            log.info("[%s] prompt closed (%s), %d still open", sess.label,
+                     reason, left)
+        if sess.status != Status.INTERACTIVE:
+            return False
+        if not left:
+            if sess.resumed_after_stop:
+                # Carried over Claude's Stop (8.120): no turn of Claude's
+                # runs, and an agent's work never makes the session BUSY.
+                self.registry.transition(sess.name, Status.IDLE)
+                return True
+            self.registry.transition(sess.name, Status.BUSY,
+                                     preserve_job_state=preserve_job_state)
+            return True
+        if closed:
+            self.registry.mark_dirty()
+            await self.notify_fn(sess, "prompt_closed",
+                                 {"inline_closed": inline_closed})
+        return False
+
+    def _carry_agent_prompts(self, session_name: str) -> bool:
+        """Claude's Stop while it waits on prompts (roadmap 8.120): its own
+        and those of agents no longer running are closed, and if a running
+        agent's prompt is still open the turn ends with it carried over
+        (``prompt_wait_carry``). True when one is carried."""
+        sess = self.registry.get(session_name)
+        if sess is None or sess.status != Status.INTERACTIVE:
+            return False
+
+        def gone(perm) -> bool:
+            owner = _perm_owner(perm)
+            return not (owner and _agent_running(sess, owner))
+
+        if not any(not gone(p) for p in sess.open_prompts()):
+            return False
+        sess.close_prompts(gone)
+        sess.prompt_wait_carry = True
+        log.info("[%s] turn ended with %d agent prompts open - still waiting",
+                 sess.label, len(sess.open_prompts()))
+        return True
+
+    async def _end_carry(self, session_name: str) -> None:
+        """The carried turn is finished: wait on its prompts again."""
+        sess = self.registry.get(session_name)
+        if sess is None:
+            return
+        try:
+            await self.notify_fn(sess, "prompts_carried", {})
+        finally:
+            sess.prompt_wait_carry = False
+
     async def _on_datagram(self, data: bytes) -> None:
         try:
             msg = json.loads(data)
@@ -770,6 +955,18 @@ class HookReceiver:
         # counts except the two that arrive without any turn behind them.
         if event not in _NOT_TURN_EVIDENCE:
             sess_ref.turn_hook_at = now_mono
+        # The INTERACTIVE watchdog's quiet time (roadmap 8.120): Claude's
+        # own hooks, and the hooks of an agent that owns an open prompt;
+        # another agent working says nothing about a dialog.
+        if hook_agent_id:
+            for perm in sess_ref.open_prompts():
+                info = perm.get("tool_info")
+                order = info.get("order") if isinstance(info, dict) else None
+                if (isinstance(order, dict)
+                        and info.get("agent_id") == hook_agent_id):
+                    order["owner_hook_at"] = now_mono
+        elif event not in _NOT_TURN_EVIDENCE and event not in _INTERNAL_HOOK_EVENTS:
+            sess_ref.parent_hook_at = now_mono
         if transcript_path:
             sess_ref.transcript_path = transcript_path
             # The transcript filename IS Claude Code's session id —
@@ -907,10 +1104,9 @@ class HookReceiver:
                     "tool_info": tool_info, "transcript_path": transcript_path,
                     "hook_reply": hook_reply_ctx,
                 }
-                sess = self.registry.transition(session_name, Status.INTERACTIVE)
-                if sess:
-                    log.info("[%s] PermissionRequest: %s", sess.label, tool_info["summary"])
-                    await self.notify_fn(sess, "permission_prompt", context)
+                await self._raise_prompt(
+                    session_name, tool_info, context, source="permission_request",
+                    own_tool_use_id=_payload_tool_use_id(msg))
             return
 
         elif event == "permission_reply_timeout":
@@ -927,15 +1123,38 @@ class HookReceiver:
             # notice for a session that's already gone must not
             # resurrect a fresh, empty TrackedSession.
             sess = self.registry.get(session_name)
-            # The inline prompt's context, and a separate-message prompt's
-            # (roadmap 8.99: ``pending_prompt_msg["perm"]``), alike.
+            # The inline prompt's context, a separate-message prompt's
+            # (roadmap 8.99: ``pending_prompt_msg["perm"]``) and every
+            # other open prompt's (8.120), alike. For a background agent's
+            # prompt this is also when its dialog enters the terminal, under
+            # every dialog already there (aipager/prompt_stack.py).
             separate = (sess.pending_prompt_msg or {}) if sess else {}
-            for pending in ((sess.pending_permission if sess else None),
-                            separate.get("perm")):
-                hr = pending.get("hook_reply") if isinstance(pending, dict) else None
-                if (isinstance(hr, dict)
-                        and hr.get("request_id") == msg.get("aipager_request_id")):
+            pendings = [(sess.pending_permission if sess else None),
+                        separate.get("perm")]
+            if sess is not None:
+                pendings += [rec.get("perm") for rec in sess.extra_prompts
+                             if isinstance(rec, dict)]
+                pendings.append(sess.carried_inline_prompt)
+            request_id = msg.get("aipager_request_id")
+            for pending in pendings:
+                if not isinstance(pending, dict):
+                    continue
+                hr = pending.get("hook_reply")
+                info = pending.get("tool_info")
+                order = info.get("order") if isinstance(info, dict) else None
+                hit = (isinstance(hr, dict) and request_id
+                       and hr.get("request_id") == request_id)
+                if hit:
                     pending["hook_reply"] = None
+                if (isinstance(order, dict) and request_id
+                        and (hit or order.get("request_id") == request_id)
+                        and not order.get("timed_out_at")):
+                    order["timed_out_at"] = now_mono
+            if sess is not None and any(
+                    isinstance(rec, dict) and rec.get("auto_deny_due")
+                    for rec in sess.extra_prompts):
+                # A refusal waiting for its dialog to be on top may type now.
+                await self.notify_fn(sess, "prompt_closed", {"inline_closed": False})
             return
 
         elif event == "permission_prompt":
@@ -972,12 +1191,11 @@ class HookReceiver:
                 # not close it (an agent's own prompt: its id).
                 if msg.get("agent_id"):
                     tool_info["agent_id"] = msg["agent_id"]
-            new_status = Status.INTERACTIVE
             context = {"tool_info": tool_info, "transcript_path": transcript_path}
-
-            sess = self.registry.transition(session_name, new_status)
-            if sess:
-                await self.notify_fn(sess, event, context)
+            # Only when no prompt is open (roadmap 8.120): with one open,
+            # this is the dialog its PermissionRequest already drew.
+            await self._raise_prompt(session_name, tool_info, context,
+                                     source="notification")
 
         elif event == "UserPromptSubmit":
             prompt = msg.get("prompt", "")
@@ -1036,6 +1254,8 @@ class HookReceiver:
                     # background-job endgame" requirement 2).
                     cont_sess.job_continuation_active = True
                     cont_sess.job_grace_until = 0.0
+                    # Claude's turn runs again (8.120).
+                    cont_sess.resumed_after_stop = False
                     if not (cont_sess.status == Status.INTERACTIVE
                             and _prompt_waits_on(cont_sess)):
                         # An open prompt stays open: an agent finishing
@@ -1074,7 +1294,37 @@ class HookReceiver:
                     await self.notify_fn(fresh, "user_prompt_submit",
                                          {"self_woken": True})
                 return
-            transitioned = self.registry.transition(session_name, Status.BUSY)
+            waiting = self.registry.get(session_name)
+            transitioned = None
+            new_turn_while_waiting = False
+            if (waiting is not None and waiting.status == Status.INTERACTIVE
+                    and waiting.resumed_after_stop):
+                # Claude's turn ended at a Stop that carried an agent's
+                # prompt over (8.120): this is a new turn, not a message
+                # into a running one. It gets its card; the agents'
+                # prompts stay open beside it.
+                waiting.close_prompts(_owned_by(""))
+                if waiting.open_prompts():
+                    waiting.prompt_wait_carry = True
+                    transitioned = self.registry.begin_turn_while_waiting(
+                        session_name)
+                    new_turn_while_waiting = transitioned is not None
+                    if not new_turn_while_waiting:
+                        waiting.prompt_wait_carry = False
+                else:
+                    transitioned = self.registry.transition(session_name,
+                                                            Status.BUSY)
+            elif (waiting is not None and waiting.status == Status.INTERACTIVE
+                    and any(_perm_owner(p) for p in waiting.open_prompts())):
+                # A prompt typed at the terminal answers Claude's own
+                # dialogs, never an agent's (roadmap 8.120): with one of
+                # those still open the session keeps waiting on it, as a
+                # message sent into a running turn does.
+                closed, inline_closed = waiting.close_prompts(_owned_by(""))
+                await self._prompts_closed(waiting, closed, inline_closed,
+                                           "typed-prompt")
+            else:
+                transitioned = self.registry.transition(session_name, Status.BUSY)
             # Origin tagging (Phase D): the daemon prefixes Telegram prompts
             # with "[via Telegram …]" on line 1. A markerless prompt was
             # typed into the terminal directly. Empty payload → leave
@@ -1105,7 +1355,15 @@ class HookReceiver:
                 if prompt:
                     transitioned.turn_prompt = _person_text(
                         prompt, transitioned.last_prompt)
-                await self.notify_fn(transitioned, "user_prompt_submit", {})
+                try:
+                    await self.notify_fn(transitioned, "user_prompt_submit", {})
+                finally:
+                    if new_turn_while_waiting:
+                        # The card is out: wait on the agents' prompts
+                        # again, now inside this running turn.
+                        transitioned.prompt_wait_carry = False
+                        self.registry.resume_wait(session_name,
+                                                  after_stop=False)
 
         elif event == "queue_pickup":
             # The UserPromptSubmit hook matched (or fell back on) some of
@@ -1187,12 +1445,10 @@ class HookReceiver:
                     # A subagent's question: never saved (see the
                     # PermissionRequest branch).
                     tool_info["agent_id"] = ask_agent
-                sess_aq = self.registry.transition(session_name, Status.INTERACTIVE)
-                if sess_aq:
-                    await self.notify_fn(sess_aq, "permission_prompt", {
-                        "tool_info": tool_info,
-                        "transcript_path": transcript_path,
-                    })
+                await self._raise_prompt(session_name, tool_info, {
+                    "tool_info": tool_info,
+                    "transcript_path": transcript_path,
+                }, source="question", own_tool_use_id=_payload_tool_use_id(msg))
                 return
 
             if tool_name:
@@ -1212,14 +1468,19 @@ class HookReceiver:
                     # tool calls carry no agent_id and still enter BUSY
                     # below. (The parent's statusline tokens ride its own
                     # PreToolUse; an agent's are not the turn's.)
+                    # Its call in flight, for its PermissionRequest that
+                    # carries no id (roadmap 8.120).
+                    sess.agent_tool_started(
+                        agent_id, _payload_tool_use_id(msg), tool_name,
+                        _input_digest(tool_input))
                     if agent_id in sess.active_subagents:
                         # A running agent of this turn's: its long tool
                         # keeps the stale-busy warning quiet, as the
                         # parent's own would.
                         sess.pending_tool_started_at = time.monotonic()
-                    owner = (_open_prompt_owner(sess)
-                             if sess.status == Status.INTERACTIVE else None)
-                    if sess.status == Status.INTERACTIVE and owner in (None, agent_id):
+                    if sess.dialog_is_open():
+                        # (INTERACTIVE, or the Stop carrying an agent's
+                        # prompt over: a close then must be seen, 8.120.)
                         # Its tool running means the permission prompt
                         # it waited on was answered (in the terminal):
                         # the session is working again, as before 8.58.
@@ -1231,10 +1492,14 @@ class HookReceiver:
                         # question within a second, and the card's next
                         # frame drew over it). With no prompt on record
                         # the owner is not known, and this stays as it was.
-                        self.registry.transition(
-                            session_name, Status.BUSY,
-                            preserve_job_state=bool(sess.active_subagents),
-                        )
+                        # Every open prompt counts (roadmap 8.120): BUSY only
+                        # once none is left.
+                        closed, inline_closed = sess.close_prompts(
+                            _owned_by(agent_id))
+                        await self._prompts_closed(
+                            sess, closed, inline_closed,
+                            "agent-tool-call",
+                            preserve_job_state=bool(sess.active_subagents))
                     # Its latest tool, for the status block under an
                     # answer (any agent, attached to a card or not).
                     sess.bg_agent_tool(agent_id, tool_name,
@@ -1249,7 +1514,8 @@ class HookReceiver:
                         sess.agent_call_launched(
                             _clean_text(tool_input.get("subagent_type"), 80),
                             _clean_text(tool_input.get("description"), 200),
-                            now_mono, launcher=agent_id)
+                            now_mono, launcher=agent_id,
+                            background=tool_input.get("run_in_background") is True)
                     await self.notify_fn(sess, "tool_use", {
                         "tool_name": tool_name,
                         "tool_summary": summary,
@@ -1265,7 +1531,8 @@ class HookReceiver:
                     sess.agent_call_launched(
                         _clean_text(tool_input.get("subagent_type"), 80),
                         _clean_text(tool_input.get("description"), 200),
-                        now_mono, launcher="")
+                        now_mono, launcher="",
+                        background=tool_input.get("run_in_background") is True)
                 # Mark tool-in-flight so session_monitor's stale-busy
                 # warning stands down for the duration — no hooks fire
                 # between PreToolUse and PostToolUse, so a long tool
@@ -1298,7 +1565,17 @@ class HookReceiver:
                 # anchor instead of restamping it; without it, this is a
                 # genuine new turn and restamps exactly as before this
                 # feature existed.
-                if sess.status != Status.BUSY:
+                # Claude's own step: its turn runs (8.120).
+                sess.resumed_after_stop = False
+                if sess.status == Status.INTERACTIVE:
+                    # Claude working again proves its own dialogs closed,
+                    # never an agent's (roadmap 8.120): a background
+                    # agent's prompt stays open while Claude goes on.
+                    closed, inline_closed = sess.close_prompts(_owned_by(""))
+                    await self._prompts_closed(
+                        sess, closed, inline_closed, "claude-tool-call",
+                        preserve_job_state=sess.job_work_running())
+                elif sess.status != Status.BUSY:
                     self.registry.transition(
                         session_name, Status.BUSY,
                         preserve_job_state=sess.job_work_running(),
@@ -1339,15 +1616,30 @@ class HookReceiver:
                 tool_input = msg.get("tool_input", {})
                 summary = _summarize_tool(tool_name, tool_input)
                 sess = self.registry.get_or_create(session_name)
-                if _finishes_open_prompt(msg, tool_name, tool_input, sess):
+                ended = [p for p in sess.open_prompts()
+                         if _finishes_prompt(msg, tool_name, tool_input, p)]
+                sess.agent_tool_ended(msg.get("agent_id") or "",
+                                      _payload_tool_use_id(msg))
+                if ended:
                     # Answered (in the terminal, if not by a tap): an old
-                    # answer button on the card types nothing now (8.102).
-                    sess.mark_prompt_closed(sess.busy_msg_id)
+                    # answer button on its message types nothing now
+                    # (8.102), whichever of the open prompts it was (8.120).
+                    closed, inline_closed = sess.close_prompts(
+                        lambda p: any(p is e for e in ended))
                     # And the session works again from here, not from its
                     # next tool call: a message held behind the dialog goes
-                    # out now (the bot's dialog-hold release).
-                    if sess.status == Status.INTERACTIVE:
-                        self.registry.transition(session_name, Status.BUSY)
+                    # out now (the bot's dialog-hold release). Only once no
+                    # other prompt is open.
+                    await self._prompts_closed(sess, closed, inline_closed,
+                                               "tool-ran")
+                elif _finishes_open_prompt(msg, tool_name, tool_input, sess):
+                    # The card's prompt outside a wait (a late end).
+                    sess.mark_prompt_closed(sess.busy_msg_id)
+                async_child = agent_tree.async_launched(msg)
+                if async_child:
+                    # Runs on in the background (8.120): a foreground agent
+                    # moved there mid-run asks "under" from now on.
+                    sess.bg_agent_went_async(async_child)
                 if (not msg.get("agent_id")
                         or msg.get("agent_id") in sess.active_subagents):
                     # A detached background agent's tool ending says
@@ -1399,18 +1691,39 @@ class HookReceiver:
             if tool_name:
                 summary = _summarize_tool(tool_name, msg.get("tool_input", {}))
                 sess = self.registry.get_or_create(session_name)
-                if _finishes_open_prompt(msg, tool_name,
-                                         msg.get("tool_input", {}), sess):
+                f_input = msg.get("tool_input", {})
+                ended = [p for p in sess.open_prompts()
+                         if _finishes_prompt(msg, tool_name, f_input, p)]
+                sess.agent_tool_ended(msg.get("agent_id") or "",
+                                      _payload_tool_use_id(msg))
+                if ended and msg.get("agent_id"):
+                    # An agent's, refused in the terminal: the agent goes on
+                    # (or stops), and the session with it once no other
+                    # prompt is open (8.120).
+                    closed, inline_closed = sess.close_prompts(
+                        lambda p: any(p is e for e in ended))
+                    await self._prompts_closed(
+                        sess, closed, inline_closed, "tool-refused",
+                        preserve_job_state=bool(sess.active_subagents))
+                elif ended and any(not any(p is e for e in ended)
+                                   for p in sess.open_prompts()):
+                    # Claude's own, refused in the terminal while another
+                    # prompt is still open (8.120): its record goes, or the
+                    # gone dialog would still count as the one on top and
+                    # the others' keystroke taps would be refused.
+                    closed, inline_closed = sess.close_prompts(
+                        lambda p: any(p is e for e in ended))
+                    await self._prompts_closed(
+                        sess, closed, inline_closed, "tool-refused")
+                elif ended or _finishes_open_prompt(msg, tool_name, f_input, sess):
                     # Answered or refused: the dialog is closed (8.102).
-                    sess.mark_prompt_closed(sess.busy_msg_id)
-                    if msg.get("agent_id") and sess.status == Status.INTERACTIVE:
-                        # An agent's, refused in the terminal: the agent
-                        # goes on (or stops), and the session with it.
-                        # (Claude's own refusal ends its turn: the session
-                        # monitor's dialog_ended_in_terminal.)
-                        self.registry.transition(
-                            session_name, Status.BUSY,
-                            preserve_job_state=bool(sess.active_subagents))
+                    # Claude's own refusal ends its turn (the session
+                    # monitor's dialog_ended_in_terminal): its record stays
+                    # for that, only its buttons stop typing.
+                    for perm in ended:
+                        sess.mark_prompt_closed(sess.prompt_surface(perm))
+                    if not ended:
+                        sess.mark_prompt_closed(sess.busy_msg_id)
                 if (not msg.get("agent_id")
                         or msg.get("agent_id") in sess.active_subagents):
                     # A detached background agent's tool ending says
@@ -1515,14 +1828,21 @@ class HookReceiver:
             agent_type = msg.get("agent_type", "unknown")
             if agent_id:
                 sess = self.registry.get_or_create(session_name)
-                if (sess.status == Status.INTERACTIVE
-                        and _open_prompt_owner(sess) == agent_id):
+                if sess.dialog_is_open():
+                    # (Also during the Stop that carries its prompt over:
+                    # that prompt must not be waited on again, 8.120.)
                     # The asking agent's turn ended (a finish or a pause):
-                    # the dialog it asked in is gone, however it ended.
-                    sess.mark_prompt_closed(sess.busy_msg_id)
-                    self.registry.transition(
-                        session_name, Status.BUSY,
-                        preserve_job_state=bool(sess.active_subagents))
+                    # the dialogs it asked in are gone, however it ended.
+                    # By exact id: a phantom stop closes nothing (8.120).
+                    closed, inline_closed = sess.close_prompts(
+                        lambda p: _perm_owner(p) == agent_id)
+                    if closed:
+                        await self._prompts_closed(
+                            sess, closed, inline_closed,
+                            "agent-stopped",
+                            preserve_job_state=bool(sess.active_subagents))
+                # Its turn ended: no call of its own is in flight now.
+                sess.agent_tool_calls.pop(agent_id, None)
                 # Compute elapsed time if we have a matching start
                 elapsed = 0.0
                 waiting_for = sess.bg_agent_pause(agent_id, now_mono)
@@ -1810,65 +2130,70 @@ class HookReceiver:
             return  # no further notification — animation reads cached values
 
         elif event == "StopFailure":
-            # The turn is over, whatever step it was in (see the Stop branch).
-            sess_ref.parent_tool_started_at = None
-            # A turn ended in failure — no Stop is emitted, so we must
-            # finalize here or the session strands in BUSY. Unlike the
-            # Stop handler, StopFailure never carries last_assistant_message,
-            # so the debounce bypass that requires it cannot fire. We always
-            # finalize: call transition() and fall back to get() if the
-            # session was already IDLE (race or duplicate). This is the
-            # exact stranding bug being fixed — do not gate on debounce.
-            #
-            # Snapshot outstanding notes BEFORE anything below (notably
-            # notify_fn's queue drain) can write a new one — see
-            # expire_notes_after_turn_end's docstring for why the
-            # ordering matters (a note absorbed mid-turn must be swept;
-            # a note some LATER turn writes must never be touched by
-            # this one's sweep).
-            pre_notes = list_outstanding_notes(session_name)
-            _sf = self.registry.get(session_name)
-            if _sf is not None:
-                _sf.last_prompt_origin = "telegram"  # fail-closed
-                _sf.pending_tool_started_at = None
-                _sf.compact_started_at = None
-            sess = self.registry.transition(session_name, Status.IDLE)
-            if sess is None:
-                # Already IDLE (or debounce blocked) — get the session so
-                # we can still notify. Finalizing must not be skipped.
-                log.info("[%s] Stop while already IDLE (debounced or "
-                         "repeated) — finalizing anyway", session_name)
-                sess = self.registry.get(session_name)
-            if sess is None:
-                return
+            carry = self._carry_agent_prompts(session_name)
+            try:
+                # The turn is over, whatever step it was in (see the Stop branch).
+                sess_ref.parent_tool_started_at = None
+                # A turn ended in failure — no Stop is emitted, so we must
+                # finalize here or the session strands in BUSY. Unlike the
+                # Stop handler, StopFailure never carries last_assistant_message,
+                # so the debounce bypass that requires it cannot fire. We always
+                # finalize: call transition() and fall back to get() if the
+                # session was already IDLE (race or duplicate). This is the
+                # exact stranding bug being fixed — do not gate on debounce.
+                #
+                # Snapshot outstanding notes BEFORE anything below (notably
+                # notify_fn's queue drain) can write a new one — see
+                # expire_notes_after_turn_end's docstring for why the
+                # ordering matters (a note absorbed mid-turn must be swept;
+                # a note some LATER turn writes must never be touched by
+                # this one's sweep).
+                pre_notes = list_outstanding_notes(session_name)
+                _sf = self.registry.get(session_name)
+                if _sf is not None:
+                    _sf.last_prompt_origin = "telegram"  # fail-closed
+                    _sf.pending_tool_started_at = None
+                    _sf.compact_started_at = None
+                sess = self.registry.transition(session_name, Status.IDLE)
+                if sess is None:
+                    # Already IDLE (or debounce blocked) — get the session so
+                    # we can still notify. Finalizing must not be skipped.
+                    log.info("[%s] Stop while already IDLE (debounced or "
+                             "repeated) — finalizing anyway", session_name)
+                    sess = self.registry.get(session_name)
+                if sess is None:
+                    return
 
-            # Build summary from transcript only — no last_assistant_message
-            # on StopFailure. An empty summary is acceptable.
-            notify_ctx: dict = {"summary": ""}
-            tracked = self.registry.get(session_name)
-            tp = transcript_path or (tracked.transcript_path if tracked else "")
-            if tp:
-                try:
-                    md = extract_last_response(
-                        tp, since=sess.turn_entered_wall or None,
-                    )
-                    if md and RICH_SUMMARIES and "```" in md:
-                        html_summary = markdown_to_telegram_html(md)
-                        notify_ctx = {
-                            "summary": html_summary,
-                            "html_summary": True,
-                            "raw_md": md,
-                        }
-                    elif md:
-                        notify_ctx = {"summary": md}
-                    elif md == "":
-                        notify_ctx["no_response"] = True
-                except Exception:
-                    log.info("[%s] StopFailure: transcript summary failed",
-                             session_name)
-            log.info("[%s] StopFailure: transitioned to IDLE", sess.label)
-            await self.notify_fn(sess, "idle_prompt", notify_ctx)
-            await expire_notes_after_turn_end(session_name, pre_notes)
+                # Build summary from transcript only — no last_assistant_message
+                # on StopFailure. An empty summary is acceptable.
+                notify_ctx: dict = {"summary": ""}
+                tracked = self.registry.get(session_name)
+                tp = transcript_path or (tracked.transcript_path if tracked else "")
+                if tp:
+                    try:
+                        md = extract_last_response(
+                            tp, since=sess.turn_entered_wall or None,
+                        )
+                        if md and RICH_SUMMARIES and "```" in md:
+                            html_summary = markdown_to_telegram_html(md)
+                            notify_ctx = {
+                                "summary": html_summary,
+                                "html_summary": True,
+                                "raw_md": md,
+                            }
+                        elif md:
+                            notify_ctx = {"summary": md}
+                        elif md == "":
+                            notify_ctx["no_response"] = True
+                    except Exception:
+                        log.info("[%s] StopFailure: transcript summary failed",
+                                 session_name)
+                log.info("[%s] StopFailure: transitioned to IDLE", sess.label)
+                await self.notify_fn(sess, "idle_prompt", notify_ctx)
+                await expire_notes_after_turn_end(session_name, pre_notes)
+            finally:
+                if carry:
+                    await self._end_carry(session_name)
 
         elif event.lower() in ("idle_prompt", "idle", "stop", "notification"):
             if event.lower() == "stop":
@@ -1902,157 +2227,162 @@ class HookReceiver:
                     log.debug("[%s] idle notification while waiting — already "
                               "reminded this wait", waiting.label)
                 return
-            # Turn finished — reset origin fail-closed (Phase D §3.7a) so the
-            # window before the next prompt is treated as restricted.
-            #
-            # Same pre-notify snapshot as the StopFailure branch above —
-            # see expire_notes_after_turn_end's docstring.
-            pre_notes = list_outstanding_notes(session_name)
-            _idle = self.registry.get(session_name)
-            if _idle is not None:
-                _idle.last_prompt_origin = "telegram"
-                _idle.pending_tool_started_at = None
-                _idle.compact_started_at = None
-            sess = self.registry.transition(session_name, Status.IDLE)
-            if sess is None:
-                # Force notification if there's an undelivered response
-                # (user sent a prompt via Telegram but debounce suppressed IDLE)
-                log.info("[%s] Stop while already IDLE (debounced or "
-                         "repeated) — finalizing anyway", session_name)
-                tracked = self.registry.get(session_name)
-                # An undelivered answer must reach the finish path whether
-                # or not a reply target is still set: a queued message
-                # Claude popped as the next turn fires no hook, so that
-                # turn's Stop lands on an already-IDLE session whose
-                # previous finish cleared the target — requiring it here
-                # silently dropped the answer (2026-09-05,
-                # "anchor-on-transcript-consumption"). The delivered-digest
-                # ring keeps a repeated Stop from re-sending.
-                late_msg = _strip_leaked_tool_xml(
-                    msg.get("last_assistant_message", "") or ""
-                )
-                # When the text had to come from the transcript: the
-                # timestamp of the entry it was read from (roadmap 8.39).
-                late_written_at: float | None = None
-                if not late_msg and tracked:
-                    # Some hook variants omit last_assistant_message; the
-                    # normal Stop path below falls back to the transcript,
-                    # and so must this one (review rev-iter1-004). Claude
-                    # Code's idle Notification (`idle_prompt`, 60 s after
-                    # a Stop) is one of them — the event behind the
-                    # 2026-09-24 re-send after a restart.
-                    late_tp = transcript_path or tracked.transcript_path
-                    if late_tp:
-                        try:
-                            late_msg, late_written_at = (
-                                extract_last_response_entry(
-                                    late_tp,
-                                    since=tracked.turn_entered_wall or None,
-                                )
-                            )
-                            late_msg = late_msg or ""
-                        except Exception:
-                            late_msg = ""
-                # Written before the last confirmed delivery was selected:
-                # that text already existed when an answer went out, so it
-                # IS that answer or something older — never an undelivered
-                # one. Survives a restart where a digest mismatch (the
-                # transcript's text vs the hook's) would not.
-                predates_delivery = bool(
-                    tracked and late_written_at is not None
-                    and tracked.answer_delivered_wall
-                    and late_written_at < tracked.answer_delivered_wall
-                )
-                if predates_delivery:
-                    # INFO only when the stamp is what refused it (the ring
-                    # did not): that is the case worth seeing in the journal.
-                    log.log(
-                        logging.DEBUG if tracked.was_delivered(
-                            hashlib.md5(late_msg.encode("utf-8")).hexdigest()
-                        ) else logging.INFO,
-                        "[%s] the transcript's newest answer predates the "
-                        "last delivered one — not re-sending", tracked.label,
+            carry = self._carry_agent_prompts(session_name)
+            try:
+                # Turn finished — reset origin fail-closed (Phase D §3.7a) so the
+                # window before the next prompt is treated as restricted.
+                #
+                # Same pre-notify snapshot as the StopFailure branch above —
+                # see expire_notes_after_turn_end's docstring.
+                pre_notes = list_outstanding_notes(session_name)
+                _idle = self.registry.get(session_name)
+                if _idle is not None:
+                    _idle.last_prompt_origin = "telegram"
+                    _idle.pending_tool_started_at = None
+                    _idle.compact_started_at = None
+                sess = self.registry.transition(session_name, Status.IDLE)
+                if sess is None:
+                    # Force notification if there's an undelivered response
+                    # (user sent a prompt via Telegram but debounce suppressed IDLE)
+                    log.info("[%s] Stop while already IDLE (debounced or "
+                             "repeated) — finalizing anyway", session_name)
+                    tracked = self.registry.get(session_name)
+                    # An undelivered answer must reach the finish path whether
+                    # or not a reply target is still set: a queued message
+                    # Claude popped as the next turn fires no hook, so that
+                    # turn's Stop lands on an already-IDLE session whose
+                    # previous finish cleared the target — requiring it here
+                    # silently dropped the answer (2026-09-05,
+                    # "anchor-on-transcript-consumption"). The delivered-digest
+                    # ring keeps a repeated Stop from re-sending.
+                    late_msg = _strip_leaked_tool_xml(
+                        msg.get("last_assistant_message", "") or ""
                     )
-                late_digest = (
-                    hashlib.md5(late_msg.encode("utf-8")).hexdigest()
-                    if late_msg else ""
-                )
-                just_stopped = bool(
-                    tracked and tracked.user_stopped_at
-                    and (time.monotonic() - tracked.user_stopped_at)
-                    < _STOP_SUPPRESS_SECONDS
-                )
-                if (tracked and late_msg and not just_stopped
-                        and not predates_delivery
-                        and late_msg.strip() != NO_RESPONSE_TEXT
-                        and not tracked.was_delivered(late_digest)):
-                    sess = tracked  # bypass debounce — an answer is waiting
-                else:
-                    return
-
-            notify_ctx: dict = {"summary": ""}
-
-            # Primary: last_assistant_message from hook JSON (always current)
-            # Scrub any leaked tool-invocation XML the assistant may have
-            # typed as plain text (long-context degradation on newer
-            # models). extract_last_response scrubs the fallback path.
-            last_msg = _strip_leaked_tool_xml(
-                msg.get("last_assistant_message", "")
-            )
-
-            # The hook payload has no model field, so the no-response
-            # placeholder can only be recognised by its text. Exact match on
-            # the stripped string, never a substring: a real answer is free
-            # to quote the phrase.
-            no_response = last_msg.strip() == NO_RESPONSE_TEXT
-            if no_response:
-                last_msg = ""
-
-            if last_msg and RICH_SUMMARIES and "```" in last_msg:
-                # Rich HTML formatting for code-heavy responses
-                try:
-                    html_summary = markdown_to_telegram_html(last_msg)
-                    notify_ctx = {
-                        "summary": html_summary,
-                        "html_summary": True,
-                        "raw_md": last_msg,
-                    }
-                    log.info("[%s] Rich summary from hook (%d chars)", session_name, len(html_summary))
-                except Exception:
-                    notify_ctx = {"summary": last_msg}
-            elif last_msg:
-                notify_ctx = {"summary": last_msg}
-            else:
-                # Fallback: transcript (for hooks that don't include last_assistant_message)
-                tracked = self.registry.get(session_name)
-                tp = transcript_path or (tracked.transcript_path if tracked else "")
-                if tp:
-                    try:
-                        # The turn-start guard: a turn that ended on tool
-                        # calls has no text of its own, and the newest
-                        # text in the file is then the previous answer.
-                        md = extract_last_response(
-                            tp, since=sess.turn_entered_wall or None,
+                    # When the text had to come from the transcript: the
+                    # timestamp of the entry it was read from (roadmap 8.39).
+                    late_written_at: float | None = None
+                    if not late_msg and tracked:
+                        # Some hook variants omit last_assistant_message; the
+                        # normal Stop path below falls back to the transcript,
+                        # and so must this one (review rev-iter1-004). Claude
+                        # Code's idle Notification (`idle_prompt`, 60 s after
+                        # a Stop) is one of them — the event behind the
+                        # 2026-09-24 re-send after a restart.
+                        late_tp = transcript_path or tracked.transcript_path
+                        if late_tp:
+                            try:
+                                late_msg, late_written_at = (
+                                    extract_last_response_entry(
+                                        late_tp,
+                                        since=tracked.turn_entered_wall or None,
+                                    )
+                                )
+                                late_msg = late_msg or ""
+                            except Exception:
+                                late_msg = ""
+                    # Written before the last confirmed delivery was selected:
+                    # that text already existed when an answer went out, so it
+                    # IS that answer or something older — never an undelivered
+                    # one. Survives a restart where a digest mismatch (the
+                    # transcript's text vs the hook's) would not.
+                    predates_delivery = bool(
+                        tracked and late_written_at is not None
+                        and tracked.answer_delivered_wall
+                        and late_written_at < tracked.answer_delivered_wall
+                    )
+                    if predates_delivery:
+                        # INFO only when the stamp is what refused it (the ring
+                        # did not): that is the case worth seeing in the journal.
+                        log.log(
+                            logging.DEBUG if tracked.was_delivered(
+                                hashlib.md5(late_msg.encode("utf-8")).hexdigest()
+                            ) else logging.INFO,
+                            "[%s] the transcript's newest answer predates the "
+                            "last delivered one — not re-sending", tracked.label,
                         )
-                        if md and RICH_SUMMARIES and "```" in md:
-                            html_summary = markdown_to_telegram_html(md)
-                            notify_ctx = {
-                                "summary": html_summary,
-                                "html_summary": True,
-                                "raw_md": md,
-                            }
-                        elif md:
-                            notify_ctx = {"summary": md}
-                        elif md == "":
-                            no_response = True
+                    late_digest = (
+                        hashlib.md5(late_msg.encode("utf-8")).hexdigest()
+                        if late_msg else ""
+                    )
+                    just_stopped = bool(
+                        tracked and tracked.user_stopped_at
+                        and (time.monotonic() - tracked.user_stopped_at)
+                        < _STOP_SUPPRESS_SECONDS
+                    )
+                    if (tracked and late_msg and not just_stopped
+                            and not predates_delivery
+                            and late_msg.strip() != NO_RESPONSE_TEXT
+                            and not tracked.was_delivered(late_digest)):
+                        sess = tracked  # bypass debounce — an answer is waiting
+                    else:
+                        return
+
+                notify_ctx: dict = {"summary": ""}
+
+                # Primary: last_assistant_message from hook JSON (always current)
+                # Scrub any leaked tool-invocation XML the assistant may have
+                # typed as plain text (long-context degradation on newer
+                # models). extract_last_response scrubs the fallback path.
+                last_msg = _strip_leaked_tool_xml(
+                    msg.get("last_assistant_message", "")
+                )
+
+                # The hook payload has no model field, so the no-response
+                # placeholder can only be recognised by its text. Exact match on
+                # the stripped string, never a substring: a real answer is free
+                # to quote the phrase.
+                no_response = last_msg.strip() == NO_RESPONSE_TEXT
+                if no_response:
+                    last_msg = ""
+
+                if last_msg and RICH_SUMMARIES and "```" in last_msg:
+                    # Rich HTML formatting for code-heavy responses
+                    try:
+                        html_summary = markdown_to_telegram_html(last_msg)
+                        notify_ctx = {
+                            "summary": html_summary,
+                            "html_summary": True,
+                            "raw_md": last_msg,
+                        }
+                        log.info("[%s] Rich summary from hook (%d chars)", session_name, len(html_summary))
                     except Exception:
-                        log.info("[%s] Transcript summary failed", session_name)
+                        notify_ctx = {"summary": last_msg}
+                elif last_msg:
+                    notify_ctx = {"summary": last_msg}
+                else:
+                    # Fallback: transcript (for hooks that don't include last_assistant_message)
+                    tracked = self.registry.get(session_name)
+                    tp = transcript_path or (tracked.transcript_path if tracked else "")
+                    if tp:
+                        try:
+                            # The turn-start guard: a turn that ended on tool
+                            # calls has no text of its own, and the newest
+                            # text in the file is then the previous answer.
+                            md = extract_last_response(
+                                tp, since=sess.turn_entered_wall or None,
+                            )
+                            if md and RICH_SUMMARIES and "```" in md:
+                                html_summary = markdown_to_telegram_html(md)
+                                notify_ctx = {
+                                    "summary": html_summary,
+                                    "html_summary": True,
+                                    "raw_md": md,
+                                }
+                            elif md:
+                                notify_ctx = {"summary": md}
+                            elif md == "":
+                                no_response = True
+                        except Exception:
+                            log.info("[%s] Transcript summary failed", session_name)
 
-            if no_response:
-                notify_ctx["no_response"] = True
+                if no_response:
+                    notify_ctx["no_response"] = True
 
-            await self.notify_fn(sess, "idle_prompt", notify_ctx)
-            await expire_notes_after_turn_end(session_name, pre_notes)
+                await self.notify_fn(sess, "idle_prompt", notify_ctx)
+                await expire_notes_after_turn_end(session_name, pre_notes)
+            finally:
+                if carry:
+                    await self._end_carry(session_name)
 
         else:
             # auth_success, etc. — just ensure session is tracked

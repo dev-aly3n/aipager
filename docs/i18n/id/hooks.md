@@ -1,6 +1,6 @@
 # Event hook
 
-<!-- i18n-source: docs/hooks.md @ 8526c26 -->
+<!-- i18n-source: docs/hooks.md @ 054b893 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../hooks.md))
 
@@ -71,6 +71,8 @@ Claude Code akan meminta izin. Kartu kerja berubah menjadi permintaan, dengan pe
 
 Hook menjawab permintaan itu sendiri kalau bisa. Ia membuka soket balasan berumur pendek, mengirim alamatnya bersama event, dan menunggu ketukanmu sampai 20 detik. Ketukan yang tepat waktu kembali sebagai keputusan `PermissionRequest` (izinkan, izinkan dengan aturan, atau tolak), jadi Claude Code tidak menampilkan dialognya sendiri. Kalau ketukan tidak datang tepat waktu, hook memberi tahu aipager bahwa penantiannya berakhir (`permission_reply_timeout`) dan tidak mencetak apa pun; ia juga tidak mencetak apa pun kalau aipager tidak bisa dihubungi atau ada yang rusak di jalur ini. Lalu Claude Code menampilkan dialognya di terminal, dan ketukan yang lebih belakangan menjawabnya dengan mengetikkan tombol. Log audit (`~/.claude/aipager-audit.jsonl`) mencatat jalur mana yang dipakai setiap ketukan: `"via": "hook_decision"` atau `"via": "keystroke_fallback"`.
 
+`PermissionRequest` yang datang saat permintaan lain sedang terbuka juga ditampilkan, sebagai pesannya sendiri di bawah kartu kerja. Dialog yang sama yang datang lagi (peminta, alat dan pemanggilan yang sama, atau input yang sama) hanya ditampilkan sekali. Claude Code juga menjalankan hook ini untuk `AskUserQuestion`; pertanyaan itu sudah tampil dari `PreToolUse`-nya, jadi tidak pernah ditampilkan dua kali. Dialog agen latar belakang baru muncul di terminal setelah hook-nya berhenti menunggu, di bawah dialog apa pun yang sudah terbuka di sana; karena itu ketukan hanya mengetik ke permintaan yang ditampilkan Claude Code lebih dulu (lihat [perintah → permintaan izin](commands.md#permission-prompts)).
+
 ### <a id="posttooluse--posttoolusefailure"></a>`PostToolUse` / `PostToolUseFailure`
 
 Sebuah alat selesai atau gagal. Barisnya di kartu kerja membeku (error ditandai di baris itu), dan jawaban atas permintaan yang terbuka dicatat: Izinkan atau Tolak yang lama untuk permintaan itu tidak mengetik apa pun lagi. Sesi menyimpan 200 baris alat terakhir.
@@ -83,7 +85,7 @@ Pemanggilan `Agent` (atau `Task`) di dalam sebuah subagen (event-nya membawa `ag
 
 aipager membaca `notification_type` dari Claude Code:
 
-- `permission_prompt`: sinyal permintaan izin yang lebih lambat dan lebih lama. Hanya menampilkan permintaan kalau `PermissionRequest` belum melakukannya.
+- `permission_prompt`: sinyal permintaan izin yang lebih lambat dan lebih lama. Ia menampilkan permintaan hanya kalau tidak ada permintaan yang terbuka: kalau ada yang terbuka, itu dialog yang sudah ditampilkan `PermissionRequest`.
 - `idle_prompt` selama permintaan izin atau pertanyaan menunggu: sesi tetap dalam keadaan menunggu dan chat mendapat `⬆️ jim · masih menunggu jawabanmu di atas`, sekali per penantian.
 - `idle_prompt` dalam keadaan lain: diperlakukan seperti `Stop` (di bawah). Ini menangkap tugas yang `Stop`-nya hilang; jawaban yang sudah terkirim tidak pernah dikirim lagi.
 

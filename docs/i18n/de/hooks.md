@@ -1,6 +1,6 @@
 # Hook-Ereignisse
 
-<!-- i18n-source: docs/hooks.md @ 8526c26 -->
+<!-- i18n-source: docs/hooks.md @ 054b893 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../hooks.md))
 
@@ -71,6 +71,8 @@ Claude Code will gleich um Erlaubnis fragen. Die Arbeitskarte wird zur Anfrage, 
 
 Der Hook beantwortet die Anfrage selbst, wenn er kann. Er öffnet einen kurzlebigen Antwort-Socket, schickt dessen Adresse mit dem Ereignis und wartet bis zu 20 Sekunden auf dein Tippen. Ein rechtzeitiges Tippen kommt als Entscheidung `PermissionRequest` zurück (erlauben, mit der Regel erlauben oder ablehnen), Claude Code zeigt seinen eigenen Dialog dann nie. Kommt kein Tippen rechtzeitig, sagt der Hook aipager, dass das Warten vorbei ist (`permission_reply_timeout`), und gibt nichts aus; er gibt auch nichts aus, wenn aipager nicht erreichbar ist oder auf diesem Weg etwas schiefgeht. Claude Code zeigt dann seinen eigenen Dialog im Terminal, und ein späteres Tippen beantwortet ihn, indem es die Tasten eintippt. Das Audit-Log (`~/.claude/aipager-audit.jsonl`) hält fest, auf welchem Weg jedes Tippen geantwortet hat, `"via": "hook_decision"` oder `"via": "keystroke_fallback"`.
 
+Ein `PermissionRequest`, der kommt, während eine andere Anfrage offen ist, wird ebenfalls gezeigt, als eigene Nachricht unter der Arbeitskarte. Derselbe Dialog, der noch einmal kommt (derselbe Fragende, dasselbe Tool und derselbe Aufruf, oder dieselbe Eingabe), wird nur einmal gezeigt. Claude Code führt diesen Hook auch für ein `AskUserQuestion` aus; diese Frage ist schon über ihr `PreToolUse` zu sehen und wird deshalb nie ein zweites Mal gezeigt. Der Dialog eines Hintergrund-Agenten erscheint im Terminal erst, wenn sein Hook nicht mehr wartet, unter allen Dialogen, die dort schon offen sind. Deshalb gibt ein Tippen Tasten nur in die Anfrage ein, die Claude Code zuerst zeigt (siehe [Befehle → Berechtigungsanfragen](commands.md#permission-prompts)).
+
 ### <a id="posttooluse--posttoolusefailure"></a>`PostToolUse` / `PostToolUseFailure`
 
 Ein Tool ist fertig oder fehlgeschlagen. Seine Zeile auf der Arbeitskarte kommt zur Ruhe (ein Fehler wird auf der Zeile markiert), und eine Antwort auf eine offene Anfrage wird bemerkt: Ein altes Erlauben oder Ablehnen dafür tippt danach nichts mehr. Die Sitzung behält die neuesten 200 Tool-Zeilen.
@@ -83,7 +85,7 @@ Ein `Agent`-Aufruf (oder `Task`-Aufruf) innerhalb eines Subagenten (sein Ereigni
 
 aipager liest den `notification_type` von Claude Code:
 
-- `permission_prompt`: ein langsameres, älteres Signal für eine Berechtigungsanfrage. Es zeigt die Anfrage nur, wenn `PermissionRequest` das nicht schon getan hat.
+- `permission_prompt`: ein langsameres, älteres Signal für eine Berechtigungsanfrage. Es zeigt die Anfrage nur, wenn keine Anfrage offen ist: Ist eine offen, ist es der Dialog, den `PermissionRequest` schon gezeigt hat.
 - `idle_prompt`, während eine Berechtigungsanfrage oder eine Frage wartet: Die Sitzung bleibt wartend, und der Chat bekommt `⬆️ jim · wartet noch auf deine Antwort oben`, einmal pro Wartezeit.
 - `idle_prompt` sonst: wird wie `Stop` (unten) behandelt. Es fängt eine Aufgabe auf, deren `Stop` verloren ging; eine schon zugestellte Antwort wird nie noch einmal geschickt.
 

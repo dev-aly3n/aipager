@@ -898,7 +898,10 @@
 {"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} قيد إعادة التشغيل الآن - يمكنك الضغط مرة أخرى بعد قليل"}
 {"k": "toast.perms_stale", "src": "4e34769b", "v": "هذه البطاقة قديمة - لم يتغير شيء"}
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} لا تزال قيد البدء - يمكنك المحاولة بعد قليل"}
+{"k": "toast.prompt_behind_other", "src": "25c51410", "v": "يعرض Claude Code طلبًا آخر أولًا، لذا يمكنك الرد على ذلك الطلب قبل هذا الطلب."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "هذا الطلب لم يعد مفتوحًا"}
+{"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "لا يستطيع aipager معرفة أي طلب يعرضه Claude Code أولًا، لذا يمكنك الرد على هذا الطلب في الطرفية."}
+{"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "ينهي Claude مهمته الآن، لذا يمكنك الضغط على هذا الطلب مرة أخرى بعد قليل."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram يقيّد هذه الدردشة الآن - يمكنك المحاولة بعد الساعة {time}"}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "يجري الإرسال بالفعل."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "تم الإرسال بالفعل."}

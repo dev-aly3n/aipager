@@ -1,6 +1,6 @@
 # Eventi hook
 
-<!-- i18n-source: docs/hooks.md @ 8526c26 -->
+<!-- i18n-source: docs/hooks.md @ 054b893 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../hooks.md))
 
@@ -71,6 +71,8 @@ Claude Code sta per chiedere un permesso. La scheda di attività diventa la rich
 
 L'hook risponde da solo alla richiesta quando può. Apre un socket di risposta di breve durata, invia il suo indirizzo con l'evento e aspetta il tuo tocco fino a 20 secondi. Un tocco in tempo torna come decisione di `PermissionRequest` (consenti, consenti con regola o nega), quindi Claude Code non mostra il suo dialogo. Senza un tocco in tempo, l'hook dice ad aipager che l'attesa è finita (`permission_reply_timeout`) e non stampa niente; non stampa niente nemmeno quando aipager non è raggiungibile o qualcosa va storto lungo questa strada. Allora Claude Code mostra il suo dialogo nel terminale e un tocco successivo risponde scrivendo i tasti. Il log di audit (`~/.claude/aipager-audit.jsonl`) registra come ha risposto ogni tocco: `"via": "hook_decision"` oppure `"via": "keystroke_fallback"`.
 
+Anche un `PermissionRequest` che arriva mentre un'altra richiesta è aperta viene mostrato, come messaggio a parte sotto la scheda di attività. Lo stesso dialogo che arriva di nuovo (stesso richiedente, stesso strumento e stessa chiamata, o stesso input) viene mostrato una volta sola. Claude Code esegue questo hook anche per un `AskUserQuestion`; quella domanda è già mostrata dal suo `PreToolUse`, quindi non viene mai mostrata una seconda volta. Il dialogo di un agente in background compare nel terminale solo dopo che il suo hook ha smesso di aspettare, sotto ogni dialogo già aperto lì; per questo un tocco scrive tasti solo nella richiesta che Claude Code mostra per prima (vedi [comandi → richieste di permesso](commands.md#permission-prompts)).
+
 ### <a id="posttooluse--posttoolusefailure"></a>`PostToolUse` / `PostToolUseFailure`
 
 Uno strumento ha finito, o è fallito. La sua riga nella scheda di attività si fissa (un errore viene segnato sulla riga) e la risposta a una richiesta aperta viene notata: un vecchio pulsante Consenti o Nega per quella richiesta poi non scrive più niente. La sessione tiene le 200 righe di strumenti più recenti.
@@ -83,7 +85,7 @@ Una chiamata `Agent` (o `Task`) fatta dentro un subagent (il suo evento porta `a
 
 aipager legge il `notification_type` di Claude Code:
 
-- `permission_prompt`: un segnale di richiesta di permesso più lento e più vecchio. Mostra la richiesta solo se `PermissionRequest` non l'ha già fatto.
+- `permission_prompt`: un segnale di richiesta di permesso più lento e più vecchio. Mostra la richiesta solo quando non c'è nessuna richiesta aperta: se ce n'è una, è il dialogo che `PermissionRequest` ha già mostrato.
 - `idle_prompt` mentre una richiesta di permesso o una domanda è in attesa: la sessione resta in attesa e la chat riceve `⬆️ jim · aspetta ancora la tua risposta più in alto`, una volta per attesa.
 - `idle_prompt` negli altri casi: viene trattato come `Stop` (vedi sotto). Recupera un'attività il cui `Stop` è andato perso; una risposta già consegnata non viene mai rimandata.
 

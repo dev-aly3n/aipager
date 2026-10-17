@@ -898,7 +898,10 @@
 {"k": "toast.perms_restarting", "src": "2aa49458", "v": "{session} şu anda yeniden başlıyor: birazdan tekrar dokun"}
 {"k": "toast.perms_stale", "src": "4e34769b", "v": "Bu kart eskidi: hiçbir şey değişmedi"}
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} hâlâ başlıyor: birazdan tekrar dene"}
+{"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code önce başka bir isteği gösteriyor: önce onu, sonra bunu yanıtla."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "bu istek artık açık değil"}
+{"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager, Claude Code'un hangi isteği önce gösterdiğini bilemiyor: bunu terminalde yanıtla."}
+{"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude görevini bitiriyor, bu yüzden birazdan bu isteğe tekrar dokun."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram bu sohbeti sınırlıyor: {time} sonrasında tekrar dene"}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "Zaten gönderiliyor."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "Zaten gönderildi."}

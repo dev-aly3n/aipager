@@ -1,6 +1,6 @@
 # Pemecahan masalah
 
-<!-- i18n-source: docs/troubleshooting.md @ bb690d5 -->
+<!-- i18n-source: docs/troubleshooting.md @ 054b893 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../troubleshooting.md))
 
@@ -144,7 +144,7 @@ aipager session <label> --continue # dtach baru, percakapan terakhir di folder i
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Permintaan izin tanpa kabar selama 5 menit
 
-Kalau sebuah sesi sedang menunggu permintaan izin atau pertanyaan dan Claude Code tidak melaporkan apa pun selama 5 menit, aipager membaca percakapan sesi yang tersimpan. Hanya kalau percakapan itu menunjukkan permintaannya sudah selesai (dijawab di terminal, dan kabarnya hilang), aipager berhenti menunggunya dan menganggap sesi itu sedang bekerja lagi. Kalau tidak, permintaan itu tetap terbuka berapa lama pun: kartu dan bilah yang disematkan tetap bilang sesi itu butuh jawabanmu, tidak ada catatan "masih bekerja", dan pesanmu ditahan sampai kamu menjawab (lihat [teks](commands.md#text)). Claude Code yang tertutup saat permintaan masih terbuka mengakhiri sesinya. Tombol permintaan itu tetap menjawab di dialognya kalau dialog itu masih terbuka (lihat [jawaban](commands.md#idle-responses)).
+Kalau sebuah sesi sedang menunggu permintaan izin atau pertanyaan dan Claude Code tidak melaporkan apa pun selama 5 menit, aipager membaca percakapan sesi yang tersimpan. Hanya kabar dari Claude sendiri dan dari agen yang bertanya yang dihitung: agen latar belakang yang terus bekerja tidak menghalangi pemeriksaan ini. Hanya kalau percakapan itu menunjukkan permintaannya sudah selesai (dijawab di terminal, dan kabarnya hilang), aipager berhenti menunggunya dan menganggap sesi itu sedang bekerja lagi. Kalau tidak, permintaan itu tetap terbuka berapa lama pun: kartu dan bilah yang disematkan tetap bilang sesi itu butuh jawabanmu, tidak ada catatan "masih bekerja", dan pesanmu ditahan sampai kamu menjawab (lihat [teks](commands.md#text)). Claude Code yang tertutup saat permintaan masih terbuka mengakhiri sesinya. Tombol permintaan itu tetap menjawab di dialognya kalau dialog itu masih terbuka (lihat [jawaban](commands.md#idle-responses)).
 
 Untuk mengubah lamanya menunggu:
 

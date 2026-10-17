@@ -143,13 +143,22 @@ def snapshot(sess, now_mono: float, now_wall: float) -> dict | None:
     (its ``wait_started_at`` is not older than ``interactive_entered_at``)
     at a known wall time, its tool is named, it was not asked inside a
     subagent, and, for an AskUserQuestion, it is the restorable kind (one
-    question, single choice, untouched).
+    question, single choice, untouched). None, too, while more than one
+    prompt is open (roadmap 8.120).
     *now_mono* is unused today and kept for symmetry with the other
     computed keys of the save."""
     from aipager.state import Status  # local: state imports this module
 
     del now_mono
     if sess.status is not Status.INTERACTIVE:
+        return None
+    # Two or more prompts open (roadmap 8.120): none is saved. An agent's
+    # cannot be checked after a restart, and while the daemon was down the
+    # dialog on top may have been answered at the terminal before the
+    # transcript said so, uncovering another: a restored prompt not
+    # certainly on top could have its keys land in the other dialog.
+    open_prompts = getattr(sess, "open_prompts", None)
+    if callable(open_prompts) and len(open_prompts()) > 1:
         return None
     inline = sess.pending_permission
     record: dict = {"v": RECORD_VERSION}

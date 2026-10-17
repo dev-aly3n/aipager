@@ -399,6 +399,30 @@ one Telegram message is shortened: the busy card first shows fewer of its
 tool rows, then the longest of the question and the descriptions end in
 `…` at a word.
 
+**More than one prompt.** Claude Code can wait on two prompts at once:
+a background agent asks for permission while Claude asks you a question,
+or the other way round. aipager shows each of them: the first on the
+busy card (or as its own message), each later one as its own message
+under the card, with its own buttons. The session shows as waiting until
+the last one is answered, and a message you send meanwhile is held until
+then. Answer them in any order. Allow and Deny go through the permission
+hook while it waits, which reaches that very prompt wherever it is. A tap
+that has to type keys (a question's option, or Allow and Deny once the
+hook stopped waiting) types them only into the prompt Claude Code shows
+first: Claude Code shows one dialog at a time, and keys reach the one on
+top. Otherwise the tap types nothing, keeps its buttons and says
+`Claude Code is showing another prompt first, so answer that one before
+this one.`, or, when aipager can't tell the order (an agent it did not
+see start, for example), `aipager can't tell which prompt Claude Code is
+showing first, so answer this one in the terminal.` When the card's own
+prompt is answered first, the card shows Waiting with Stop only, and the
+other prompts keep their buttons. If Claude ends its turn while an
+agent's prompt is still open, the answer comes as usual and the session
+keeps waiting on that prompt, sent again as its own message. A restart
+with two or more prompts open brings none of them back: their buttons
+answer `already answered` and type nothing, and the prompts can still be
+answered in the terminal. One open prompt comes back as before.
+
 At 80% context the chat gets `⚠️ name · Context at 82% - auto-compact
 soon` with **📦 Compact Now**, which sends `/compact` to that session. It
 comes once per conversation: compacting does not bring it back, and a new
@@ -419,6 +443,10 @@ the `/mode` card under `⚠️ x1 moved on to new work, so nothing
 changed.`
 `/new`'s Replace says `x1 started working since. Send /new again to
 replace it.` when the session started a turn after its card was shown.
+
+A prompt's buttons are tied to that prompt. Once it is answered, in
+Telegram or in the terminal, they answer `already answered` and type
+nothing, also while another prompt of the session is still open.
 
 A `⚡ Send now` button acts only on the message it sits under: if
 Claude has already taken that message, the tap answers `Already taken`,
@@ -466,7 +494,10 @@ answers stays open for as long as Claude waits on it. aipager stops
 waiting on it only when Claude sends no news for 5 minutes and the
 saved conversation reads as past the prompt (the news of an answer
 lost); such a prompt is not known to be over, so its buttons still
-answer the dialog.
+answer the dialog. That news is Claude's own and the asking agent's: a
+background agent working on its own does not count, and the saved
+conversation says nothing about an agent's prompt, which waits for that
+agent's own news.
 
 A turn Claude starts **by itself** - a background agent reporting back
 with a `<task-notification>` when no job is open - gets its busy card

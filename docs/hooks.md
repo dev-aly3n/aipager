@@ -153,6 +153,16 @@ the terminal, and a later tap answers it by typing the keys. The audit log
 (`~/.claude/aipager-audit.jsonl`) records which way each tap answered,
 `"via": "hook_decision"` or `"via": "keystroke_fallback"`.
 
+A `PermissionRequest` that arrives while another prompt is open is shown
+too, as its own message under the busy card. The same dialog seen again
+(the same asker, tool and call, or the same input) is shown once. Claude
+Code runs this hook for an `AskUserQuestion` too; that question is
+already shown from its `PreToolUse`, so it is never drawn a second time.
+A background agent's dialog appears in the terminal only after its hook
+stopped waiting, under any dialog already open there, which is why a tap
+types keys only into the prompt Claude Code shows first (see
+[commands → permission prompts](commands.md#permission-prompts)).
+
 ### `PostToolUse` / `PostToolUseFailure`
 
 A tool finished, or failed. Its row on the busy card settles (a failure
@@ -180,7 +190,8 @@ for its own agent from one that finished (see `SubagentStart` /
 The daemon reads Claude Code's `notification_type`:
 
 - `permission_prompt`: a slower, older signal for a permission ask. It
-  shows the prompt only when `PermissionRequest` did not already.
+  shows the prompt only when no prompt is open: with one open, it is the
+  dialog `PermissionRequest` already showed.
 - `idle_prompt` while a permission prompt or a question waits: the
   session stays waiting, and the chat gets `⬆️ jim · still waiting for
   your answer above`, once per wait.

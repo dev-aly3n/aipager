@@ -1470,6 +1470,9 @@ class SessionOpsMixin:
             # The state flips here, synchronously, before any other await.
             sess.pending_tool_started_at = None
             sess.parent_tool_started_at = None
+            # Every open prompt goes with the turn (roadmap 8.120), and
+            # their buttons type nothing.
+            sess.close_all_prompts()
             sess.pending_permission = None
             # No prompt on the card is open any more: a stale answer
             # button on it types nothing (8.102).
@@ -1599,6 +1602,9 @@ class SessionOpsMixin:
         # (roadmap 8.77), and nobody's message waits for it any more.
         _clear_turn_open(sess.name)
         sess.turn_sender_id = None
+        # The job ends, background agents included: every open prompt
+        # with it (roadmap 8.120), and their buttons type nothing.
+        sess.close_all_prompts()
         sess.pending_permission = None
         sess.status = Status.IDLE
         # Genuinely end the job (design.md "model Claude Code
@@ -1782,6 +1788,7 @@ class SessionOpsMixin:
         await self._mark_not_delivered(
             sess, reactions.held_entries(sess.pending_queue))
         sess.pending_queue.clear()
+        sess.close_all_prompts()  # every open prompt (roadmap 8.120)
         sess.pending_permission = None
         sess.status = Status.IDLE
         # Interrupted like /stop: the turn is over (roadmap 8.77).

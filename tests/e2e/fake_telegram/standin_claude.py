@@ -60,6 +60,24 @@ payloads (so the real ``aipager-hook`` and ``aipager-statusline`` run).
     ``Read`` of its own (``PreToolUse``/``PostToolUse`` with ``agent_id``
     P) and stops for good (``background_tasks`` empty). Then the answer
     and ``Stop``.
+- A prompt containing ``two prompts: agent-first`` or ``two prompts:
+  claude-first`` plays two dialogs open at once (roadmap 8.120), with
+  Claude Code 2.1.302's dialog order: the main loop's Agent call starts
+  agent A in the background (``run_in_background``; ``SubagentStart`` A,
+  then the call's ``PostToolUse`` with ``isAsync``). A asks for ``Bash``
+  (``PermissionRequest`` with ``agent_id`` A) in its own thread, and the
+  main loop asks a two-option AskUserQuestion (its ``PreToolUse``, then the
+  ``PermissionRequest`` Claude Code runs for a question too), A first or
+  the question first. One dialog is on screen at a time: the one that
+  entered the terminal first, the others queued under it in order. The
+  question's dialog enters when it is asked; A's, being a background
+  agent's, only once its hook gave no decision (``awaitAutomatedChecks``
+  ``BeforeDialog``), and then under every dialog already open. Arrows and
+  Enter go to the dialog on screen; answering it shows the next. A's hook
+  decision answers A wherever it is. Each answer is logged with the
+  dialog it reached (``dialog_key``, ``hook_decision``,
+  ``question_answered``, ``agent_answer``). Then A's tool ends, A stops,
+  and the main loop answers and stops.
 - Every prompt and decision goes to
   ``$AIPAGER_INSTANCE_DIR/standin-<CLAUDE_DTACH_SESSION>.jsonl``.
 """
@@ -93,6 +111,15 @@ REJECTED_TOOL_RESULT = ("The user doesn't want to proceed with this tool use. Th
 INTERRUPT_MARKER = "[Request interrupted by user for tool use]"
 _NAME_RE = re.compile(r"create\s+([A-Za-z0-9_-]+)\.txt", re.I)
 _AGENTS_RE = re.compile(r"agents:\s*(launch|hold|finish)\b", re.I)
+_TWO_RE = re.compile(r"two prompts:\s*(agent-first|claude-first)\b", re.I)
+#: Claude Code 2.1.302's Bash permission dialog for an agent, top to bottom.
+AGENT_ROWS = ("Yes", "Yes, and don't ask again for make commands in this folder",
+              "No, and tell Claude what to do differently (esc)")
+#: The two-prompt scenario's question.
+TWO_QUESTION = {"questions": [{
+    "question": "Which checks should run?", "header": "Checks", "multiSelect": False,
+    "options": [{"label": "Only the fast ones", "description": "unit tests"},
+                {"label": "All of them", "description": "the whole suite"}]}]}
 _ARROWS_RE = re.compile(r"(?:\x1b\[[AB])+")
 
 
@@ -141,6 +168,11 @@ class StandIn:
         self.interrupted = False
         self.parent_uuid: str | None = None
         self.n = 0
+        # The two-prompt scenario's dialogs: [0] is on screen, the rest
+        # wait under it in the order they entered the terminal.
+        self.dialogs: list[dict] = []
+        # The hook processes of that scenario's threads ({"proc": ...}).
+        self.holders: list[dict] = []
 
     # -- records -------------------------------------------------------------
 
@@ -199,7 +231,8 @@ class StandIn:
                     out.append((h["command"], float(h.get("timeout") or 600)))
         return out
 
-    def fire(self, event: str, extra: dict | None = None, tool: str | None = None) -> list[dict]:
+    def fire(self, event: str, extra: dict | None = None, tool: str | None = None,
+             holder: dict | None = None) -> list[dict]:
         payload = {
             "session_id": self.session_id, "transcript_path": self.transcript,
             "cwd": self.cwd, "hook_event_name": event,
@@ -227,7 +260,12 @@ class StandIn:
                 self.log(event="hook_error", hook=event, error=str(e))
                 continue
             with self.lock:
-                self.hook_proc = proc
+                if holder is None:
+                    self.hook_proc = proc
+                else:
+                    # Another thread's hook (the two-prompt scenario): its
+                    # own dialog's key ends it, not the shared slot.
+                    holder["proc"] = proc
             try:
                 out, _ = proc.communicate(json.dumps(payload), timeout=timeout)
             except subprocess.TimeoutExpired:
@@ -235,7 +273,10 @@ class StandIn:
                 out, _ = proc.communicate()
             finally:
                 with self.lock:
-                    self.hook_proc = None
+                    if holder is None:
+                        self.hook_proc = None
+                    else:
+                        holder["proc"] = None
             try:
                 parsed = json.loads(out) if out and out.strip() else {}
             except ValueError:
@@ -274,7 +315,14 @@ class StandIn:
             return
         decision = "ok"
         agents = _AGENTS_RE.search(prompt)
-        if agents:
+        two = _TWO_RE.search(prompt)
+        if two:
+            decision = self._two_prompts_turn(two.group(1).lower())
+            if self.interrupted:
+                self.log(event="interrupted")
+                self.user_text("[Request interrupted by user]")
+                return
+        elif agents:
             decision = self._agents_turn(agents.group(1).lower())
             if self.interrupted:
                 self.log(event="interrupted")
@@ -426,6 +474,178 @@ class StandIn:
         self.log(event="agents", kind=kind, parent=p_id, child=c_id)
         return "agents finished"
 
+    # -- two dialogs open at once (roadmap 8.120) ----------------------------
+
+    def _push_dialog(self, dialog: dict) -> int:
+        """A dialog enters the terminal: under every dialog already open
+        (Claude Code queues a newer ask below the older ones, and puts a
+        background agent's under everything). Its place, 1 = on screen."""
+        with self.lock:
+            self.dialogs.append(dialog)
+            place = len(self.dialogs)
+        self.log(event="dialog_open", dialog=dialog["id"], place=place)
+        return place
+
+    def _wait_dialog(self, dialog: dict, limit: float = 600.0) -> str | None:
+        deadline = time.monotonic() + limit
+        while time.monotonic() < deadline:
+            with self.lock:
+                answer, stopped = dialog.get("answer"), self.interrupted
+            if answer is not None or stopped:
+                return answer
+            time.sleep(0.05)
+        return None
+
+    def _answer_top(self) -> bool:
+        """Enter: the dialog on screen takes the row it is on, and the next
+        one shows."""
+        with self.lock:
+            if not self.dialogs:
+                return False
+            top = self.dialogs.pop(0)
+            row = top["row"]
+            if top["kind"] == "question":
+                answer = f"row {row + 1}"
+            else:
+                answer = "rejected" if row == len(top["rows"]) - 1 else "allowed"
+            top["answer"] = answer
+            proc = (top.get("holder") or {}).get("proc")
+        self.log(event="dialog_key", dialog=top["id"], row=row + 1, answer=answer)
+        if proc is not None:
+            _kill_group(proc)   # a key at the dialog ends its hook
+        return True
+
+    def _agent_asks(self, agent_id: str, prompt_id: str, out: dict) -> None:
+        """Background agent A asks for Bash. Its dialog does not exist while
+        its hook waits; with no decision it enters under every dialog open."""
+        inner = self._in_agent(agent_id, "ship-reviewer", prompt_id)
+        b_input = {"command": "make check", "description": "Run the checks"}
+        tuid = f"toolu_standin_{uuid.uuid4().hex[:12]}"
+        self.fire("PreToolUse", dict(inner, tool_name="Bash", tool_input=b_input,
+                                     tool_use_id=tuid), tool="Bash")
+        holder: dict = {}
+        with self.lock:
+            self.holders.append(holder)
+        outs = self.fire("PermissionRequest", dict(
+            inner, tool_name="Bash", tool_input=b_input, permission_suggestions=[]),
+            tool="Bash", holder=holder)
+        behavior = None
+        for o in outs:
+            behavior = ((o.get("hookSpecificOutput") or {}).get("decision")
+                        or {}).get("behavior") or behavior
+        if self.interrupted:
+            out["answer"] = "interrupted"
+            return
+        if behavior in ("allow", "deny"):
+            self.log(event="hook_decision", dialog="A", behavior=behavior)
+            answer, by = ("allowed" if behavior == "allow" else "denied"), "hook"
+        else:
+            dialog = {"id": "A", "kind": "tool", "rows": AGENT_ROWS, "row": 0,
+                      "answer": None}
+            self._push_dialog(dialog)
+            answer, by = self._wait_dialog(dialog) or "no decision", "key"
+        self.log(event="agent_answer", dialog="A", answer=answer, by=by)
+        out["answer"] = answer
+        if answer == "allowed":
+            self.fire("PostToolUse", dict(
+                inner, tool_name="Bash", tool_input=b_input, tool_use_id=tuid,
+                tool_response={"stdout": "ok", "stderr": "", "interrupted": False}),
+                tool="Bash")
+        else:
+            self.fire("PostToolUseFailure", dict(
+                inner, tool_name="Bash", tool_input=b_input, tool_use_id=tuid,
+                error="The user doesn't want to proceed with this tool use."),
+                tool="Bash")
+        self.fire("SubagentStop", dict(
+            inner, stop_hook_active=False, last_assistant_message="Checks done.",
+            background_tasks=[], session_crons=[]))
+
+    def _open_question(self) -> tuple[dict, str] | None:
+        """The main loop asks its question: the dialog enters at once (under
+        any already open), and the PermissionRequest hooks run meanwhile."""
+        tuid = f"toolu_standin_{uuid.uuid4().hex[:12]}"
+        self.assistant([{"type": "tool_use", "id": tuid, "name": "AskUserQuestion",
+                         "input": TWO_QUESTION}], stop_reason="tool_use")
+        pre = self.fire("PreToolUse", {"tool_name": "AskUserQuestion",
+                                       "tool_input": TWO_QUESTION, "tool_use_id": tuid},
+                        tool="AskUserQuestion")
+        for o in pre:
+            hso = o.get("hookSpecificOutput") or {}
+            if (hso.get("permissionDecision") or o.get("decision")) in ("deny", "block"):
+                self.log(event="question_blocked")
+                return None
+        rows = tuple(o["label"] for o in TWO_QUESTION["questions"][0]["options"]) + (
+            "Type something.",)
+        dialog = {"id": "Q", "kind": "question", "rows": rows, "row": 0,
+                  "answer": None, "holder": {}}
+        with self.lock:
+            self.holders.append(dialog["holder"])
+        self._push_dialog(dialog)
+        threading.Thread(target=self.fire, args=("PermissionRequest", {
+            "tool_name": "AskUserQuestion", "tool_input": TWO_QUESTION,
+            "permission_suggestions": []}),
+            kwargs={"tool": "AskUserQuestion", "holder": dialog["holder"]},
+            daemon=True).start()
+        return dialog, tuid
+
+    def _finish_question(self, opened: tuple[dict, str] | None) -> str:
+        if opened is None:
+            return "blocked"
+        dialog, tuid = opened
+        answer = self._wait_dialog(dialog)
+        if answer is None:
+            return "interrupted"
+        row = int(answer.split()[1])
+        label = dialog["rows"][row - 1]
+        self.log(event="question_answered", dialog="Q", row=row, label=label)
+        question = TWO_QUESTION["questions"][0]["question"]
+        self.fire("PostToolUse", {
+            "tool_name": "AskUserQuestion", "tool_input": TWO_QUESTION,
+            "tool_use_id": tuid,
+            "tool_response": {"questions": TWO_QUESTION["questions"],
+                              "answers": {question: label}}}, tool="AskUserQuestion")
+        self.tool_result(tuid, f'User has answered your questions: "{question}"="{label}".',
+                         False)
+        return label
+
+    def _two_prompts_turn(self, order: str) -> str:
+        a_id, _c_id = self.agent_ids()
+        prompt_id = str(uuid.uuid4())
+        a_input = {"subagent_type": "ship-reviewer", "description": "Run the checks",
+                   "prompt": "Run the checks", "run_in_background": True}
+        tuid = f"toolu_standin_{uuid.uuid4().hex[:12]}"
+        self.assistant([{"type": "tool_use", "id": tuid, "name": "Agent",
+                         "input": a_input}], stop_reason="tool_use")
+        self.fire("PreToolUse", {"tool_name": "Agent", "tool_input": a_input,
+                                 "tool_use_id": tuid, "prompt_id": prompt_id}, tool="Agent")
+        self.fire("SubagentStart", {"agent_id": a_id, "agent_type": "ship-reviewer"})
+        self.fire("PostToolUse", {
+            "tool_name": "Agent", "tool_input": a_input, "tool_use_id": tuid,
+            "prompt_id": prompt_id,
+            "tool_response": {"isAsync": True, "status": "async_launched",
+                              "agentId": a_id, "description": "Run the checks"}},
+            tool="Agent")
+        self.tool_result(tuid, f"Async agent launched successfully. agentId: {a_id}", False)
+        # The busy card is up before anyone asks (its send is paced).
+        time.sleep(3.0)
+        agent_out: dict = {}
+        agent = threading.Thread(target=self._agent_asks, args=(a_id, prompt_id, agent_out),
+                                 daemon=True)
+        if order == "agent-first":
+            agent.start()
+            time.sleep(1.5)
+            label = self._finish_question(self._open_question())
+        else:
+            opened = self._open_question()
+            time.sleep(1.5)
+            agent.start()
+            label = self._finish_question(opened)
+        self.log(event="two_prompts", order=order, agent=a_id)
+        agent.join(timeout=600)
+        if self.interrupted:
+            return "interrupted"
+        return f"question {label}; agent {agent_out.get('answer', 'no decision')}"
+
     def _wait_hold(self, limit: float = 120.0) -> None:
         """A test may hold this session's next tool call (file
         ``standin-hold-<session>`` in the instance folder) to choose when
@@ -534,12 +754,14 @@ class StandIn:
     def interrupt(self) -> None:
         with self.lock:
             busy = self.turn is not None
-            proc = self.hook_proc
+            procs = [self.hook_proc] + [h.get("proc") for h in self.holders]
             if busy:
                 self.interrupted = True
                 self.queue.clear()
-        if proc is not None:
-            _kill_group(proc)
+                self.dialogs.clear()
+        for proc in procs:
+            if proc is not None:
+                _kill_group(proc)
         if busy:
             self.log(event="escape")
 
@@ -578,6 +800,18 @@ class StandIn:
             if not data:
                 _bye()
             text = data.decode("utf-8", errors="replace")
+            if self.dialogs and _ARROWS_RE.fullmatch(text):
+                # The dialog on screen takes the arrows (two-prompt scenario).
+                with self.lock:
+                    if self.dialogs:
+                        top = self.dialogs[0]
+                        for key in re.findall(r"\x1b\[([AB])", text):
+                            top["row"] = min(len(top["rows"]) - 1, max(
+                                0, top["row"] + (1 if key == "B" else -1)))
+                continue
+            if self.dialogs and text == "\r" and self._answer_top():
+                buf = ""
+                continue
             # aipager paces its keys (0.1 s apart), so an arrow and the
             # Enter after it arrive in separate reads; an Enter in the same
             # read as an arrow would fall through to the input buffer.

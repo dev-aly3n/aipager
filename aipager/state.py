@@ -31,6 +31,7 @@ from aipager import agent_tree as _agent_tree
 from aipager import bg_shells as _bg_shells
 from aipager import perm_modes as _perm_modes
 from aipager._test_guard import check_write
+from aipager import prompt_stack as _prompt_stack
 from aipager.open_prompt import (
     snapshot as snapshot_open_prompt, validate as validate_open_prompt,
 )
@@ -247,6 +248,9 @@ MAX_GONE_HISTORY: int = 50
 # (``TrackedSession.closed_prompt_msgs``). A stale client shows the last
 # few cards at most; older ids fall back to the answer taps' old handling.
 MAX_CLOSED_PROMPT_SURFACES: int = 16
+# Roadmap 8.120: how many unfinished tool calls are remembered per agent
+# (``TrackedSession.agent_tool_calls``), newest kept.
+AGENT_TOOL_CALLS_CAP: int = 32
 
 # How many delivered answer digests a session remembers
 # (``TrackedSession.delivered_digests``). Small on purpose: it exists to
@@ -631,6 +635,14 @@ class TrackedSession:
     # for its prompt when the names match. None when that PreToolUse had
     # no id. Transient.
     last_parent_tool_use: tuple[str, str] | None = None
+    # Roadmap 8.120: each agent's tool calls between their PreToolUse and
+    # their end, ``{agent_id: {tool_use_id: (tool_name, input_digest)}}``:
+    # an agent's PermissionRequest that carries no id of its own takes the
+    # one call of that agent with the same tool and the same whole input,
+    # so its PostToolUse closes the prompt. Two such calls (parallel calls
+    # with one input) give none. Bounded per agent
+    # (``AGENT_TOOL_CALLS_CAP``, newest kept). Transient.
+    agent_tool_calls: dict = field(default_factory=dict)
     # Roadmap 8.102: monotonic stamp of the latest entry into INTERACTIVE
     # (``SessionRegistry.transition``). A prompt dict counts as the open
     # prompt only if its ``wait_started_at`` is not older: that shuts out
@@ -652,6 +664,35 @@ class TrackedSession:
     # buttons still answer it. Bounded (MAX_CLOSED_PROMPT_SURFACES, newest
     # kept) and persisted, so a stale tap after a restart is refused too.
     closed_prompt_msgs: list[int] = field(default_factory=list)
+    # Roadmap 8.120: the prompts that opened while another was already
+    # open, in arrival order, each sent as its own message. Every entry has
+    # the ``pending_prompt_msg`` shape (``text, keyboard, summary,
+    # prompt_token, perm``, then ``msg_id, chat_id`` once sent). The first
+    # prompt of a wait stays in ``pending_permission`` / ``pending_prompt_msg``
+    # (the "primary"); ``open_prompts()`` lists them all. Transient, never
+    # saved: a restart with two or more open restores none of them.
+    extra_prompts: list = field(default_factory=list)
+    # Roadmap 8.120: monotonic stamp of the latest hook of Claude's own
+    # (no ``agent_id``) that says its turn is alive: the INTERACTIVE
+    # watchdog's quiet time is measured from it and the open prompts'
+    # owners' hooks, never from another agent's. Transient.
+    parent_hook_at: float = 0.0
+    # Roadmap 8.120: set by the hook receiver while Claude's Stop finishes
+    # the turn with an agent's prompt still open, so the IDLE moment keeps
+    # that prompt (``dialog_is_open`` stays true, no held message is typed
+    # into its dialog) and the session waits on it again afterwards.
+    # Transient.
+    prompt_wait_carry: bool = False
+    # The card's inline prompt kept through that Stop, sent again as its
+    # own message once the answer is out. Transient.
+    carried_inline_prompt: dict | None = None
+    # Roadmap 8.120: the session waits again on prompts carried over a
+    # Stop (``SessionRegistry.resume_wait``), with no turn of Claude's
+    # running: the last answer leaves it IDLE, not BUSY, and a prompt typed
+    # at the terminal starts a new turn. Cleared by any status change and
+    # by Claude's own turn activity (a tool call, a continuation).
+    # Transient.
+    resumed_after_stop: bool = False
     # Active subagents — keyed by agent_id ("agent activity rows on the
     # busy card"). Format: {agent_id: {"type": str, "started_at": float,
     # "last_seen": float, "history_idx": int | None, "activity": str,
@@ -1722,12 +1763,16 @@ class TrackedSession:
                 # ones (it would take another agent's child's place) and
                 # keeps the description it had.
                 desc, parent = recent.get("desc", ""), None
+                launch = recent.get("launch", "unknown")
             else:
-                desc, parent = self._match_agent_call(agent_type, now)
+                desc, parent, launch = self._match_agent_call(agent_type, now)
             self.bg_agents[agent_id] = {
                 "label": agent_type, "last_seen": now, "started": now,
                 "prose": "", "prose_msg": "", "tool": "", "tool_arg": "",
                 "desc": desc,
+                # Roadmap 8.120: how it was launched, for which of several
+                # open dialogs Claude Code shows first (prompt_stack).
+                "launch": launch,
             }
         self.bg_agents_recent.pop(agent_id, None)
         while len(self.bg_agents) > ACTIVE_SUBAGENTS_CAP:
@@ -1743,9 +1788,12 @@ class TrackedSession:
             if now - call["at"] <= AGENT_CALL_MAX_AGE]
 
     def _match_agent_call(self, agent_type: str,
-                          now: float) -> tuple[str, str | None]:
-        """``(description, parent)`` for a new agent of *agent_type*, from
-        the waiting Agent calls of that type; exact or nothing:
+                          now: float) -> tuple[str, str | None, str]:
+        """``(description, parent, launch)`` for a new agent of
+        *agent_type*, from the waiting Agent calls of that type; exact or
+        nothing. *launch* (roadmap 8.120) is ``"background"`` or
+        ``"foreground"`` only when every waiting call of the type agrees
+        (``run_in_background``), else ``"unknown"``:
 
         - none waiting: ``("", None)``;
         - exactly one: its description and its launcher (None for the
@@ -1759,37 +1807,46 @@ class TrackedSession:
         self._expire_agent_calls(now)
         same = [c for c in self.pending_agent_calls if c["type"] == agent_type]
         if not same:
-            return "", None
+            return "", None, "unknown"
+        kinds = {"background" if c.get("background") is True else "foreground"
+                 for c in same}
+        launch = kinds.pop() if len(kinds) == 1 else "unknown"
         launchers = {c.get("launcher", "") for c in same}
         if len(same) == 1:
             self.pending_agent_calls.remove(same[0])
-            return same[0]["desc"], same[0].get("launcher", "") or None
+            return same[0]["desc"], same[0].get("launcher", "") or None, launch
         if len(launchers) > 1:
             self.pending_agent_calls = [
                 c for c in self.pending_agent_calls if c["type"] != agent_type]
-            return "", None
+            return "", None, launch
         self.pending_agent_calls.remove(same[0])
         for call in same[1:]:
             call["desc"] = ""
-        return "", same[0].get("launcher", "") or None
+        return "", same[0].get("launcher", "") or None, launch
 
     def agent_call_launched(self, subagent_type: str, description: str,
-                            now: float, launcher: str = "") -> None:
+                            now: float, launcher: str = "", *,
+                            background: bool = False) -> None:
         """An Agent tool call: remember its type, description and launcher
         (the calling agent's id, "" for the session's own call) until the
         agent it starts says SubagentStart. A call with no type records
-        nothing (it could match nothing)."""
+        nothing (it could match nothing). *background*: the call asked to
+        run in the background (``run_in_background: true``, roadmap
+        8.120), kept only when true."""
         subagent_type = (subagent_type or "").strip() if isinstance(
             subagent_type, str) else ""
         if not subagent_type:
             return
         self._expire_agent_calls(now)
-        self.pending_agent_calls.append({
+        call = {
             "type": subagent_type,
             "desc": description if isinstance(description, str) else "",
             "at": now,
             "launcher": launcher if isinstance(launcher, str) else "",
-        })
+        }
+        if background is True:
+            call["background"] = True
+        self.pending_agent_calls.append(call)
         if len(self.pending_agent_calls) > AGENT_CALLS_CAP:
             del self.pending_agent_calls[:len(self.pending_agent_calls)
                                          - AGENT_CALLS_CAP]
@@ -1853,6 +1910,38 @@ class TrackedSession:
         self._end_in_lines(agent_id, "done", now)
         return True
 
+    def agent_launch(self, agent_id: str) -> str:
+        """How agent *agent_id* was launched (roadmap 8.120):
+        ``"background"``, ``"foreground"`` or ``"unknown"`` (a teammate, a
+        call that could not be matched, an agent not running)."""
+        info = self.bg_agents.get(agent_id) if agent_id else None
+        launch = info.get("launch") if isinstance(info, dict) else None
+        return launch if launch in ("background", "foreground") else "unknown"
+
+    def bg_agent_went_async(self, agent_id: str) -> None:
+        """An Agent call's end says *agent_id* runs on asynchronously: one
+        recorded as foreground was moved to the background mid-run, so
+        whether its next dialogs race their hook is no longer known."""
+        info = self.bg_agents.get(agent_id)
+        if isinstance(info, dict) and info.get("launch") == "foreground":
+            info["launch"] = "unknown"
+            info["went_async"] = True
+
+    def agent_survives_interrupt(self, agent_id: str | None) -> bool:
+        """Whether running agent *agent_id* goes on after Claude's turn is
+        interrupted at the terminal (roadmap 8.120): one launched in the
+        background, or a foreground one moved there mid-run. A foreground
+        agent, or one whose launch is not known, ends with the turn."""
+        if not agent_id:
+            return False
+        if (agent_id not in self.active_subagents
+                and agent_id not in self.bg_agents):
+            return False
+        info = self.bg_agents.get(agent_id)
+        if not isinstance(info, dict):
+            return False
+        return info.get("launch") == "background" or info.get("went_async") is True
+
     def bg_agent_touch(self, agent_id: str, now: float) -> None:
         """Any hook carrying *agent_id*: that agent is alive."""
         info = self.bg_agents.get(agent_id)
@@ -1887,9 +1976,13 @@ class TrackedSession:
         done on no evidence. A waiting agent is silent by nature while its
         own agents work: it is never dropped here while shielded
         (agent_shielded); sweep_unresumed_parents bounds it instead."""
+        # An agent that owns an open prompt fires no hooks while its
+        # dialog waits (roadmap 8.120): it is not silent, it is waiting.
+        owners = self.prompt_owners()
         silent = [a for a, info in self.bg_agents.items()
                   if now - info["last_seen"] > window
-                  and not self.agent_shielded(a, now)]
+                  and not self.agent_shielded(a, now)
+                  and a not in owners]
         for agent_id in silent:
             self.bg_agents.pop(agent_id, None)
             self._forget_agent_links(agent_id)
@@ -2776,7 +2869,193 @@ class TrackedSession:
         ``miniapp.sessions._STATUS_ACTION_KEYS``); this is the same rule
         for every inbound prompt path.
         """
-        return self.status is Status.INTERACTIVE
+        return self.status is Status.INTERACTIVE or self.prompt_wait_carry
+
+    # ── roadmap 8.120: more than one open prompt ───────────────────────────
+
+    def agent_tool_started(self, agent_id: str, tool_use_id: str,
+                           tool_name: str, digest: str) -> None:
+        """An agent's PreToolUse: its call is in flight until it ends."""
+        if not (agent_id and tool_use_id):
+            return
+        calls = self.agent_tool_calls.setdefault(agent_id, {})
+        calls.pop(tool_use_id, None)
+        calls[tool_use_id] = (tool_name, digest)
+        while len(calls) > AGENT_TOOL_CALLS_CAP:
+            calls.pop(next(iter(calls)))
+
+    def agent_tool_ended(self, agent_id: str, tool_use_id: str) -> None:
+        """An agent's PostToolUse / PostToolUseFailure."""
+        calls = self.agent_tool_calls.get(agent_id)
+        if calls is None:
+            return
+        calls.pop(tool_use_id, None)
+        if not calls:
+            self.agent_tool_calls.pop(agent_id, None)
+
+    def agent_tool_call_for(self, agent_id: str, tool_name: str,
+                            digest: str) -> str:
+        """The id of the one unfinished call of *agent_id* with this tool
+        and this whole input, else ``""`` (none, no digest, or two parallel
+        calls that cannot be told apart)."""
+        if not (agent_id and digest):
+            return ""
+        calls = self.agent_tool_calls.get(agent_id) or {}
+        found = [tuid for tuid, (name, dig) in calls.items()
+                 if name == tool_name and dig == digest]
+        return found[0] if len(found) == 1 else ""
+
+    def _primary_records(self) -> list[tuple[str, dict, dict | None]]:
+        """``[(where, perm, record)]`` of the primary prompt: the card's
+        inline prompt (``"inline"``, no record), else the prompt sent as
+        its own message during this wait (``"separate"``)."""
+        perm = self.pending_permission
+        if isinstance(perm, dict):
+            return [("inline", perm, None)]
+        sent = self.pending_prompt_msg
+        cand = sent.get("perm") if isinstance(sent, dict) else None
+        if (isinstance(cand, dict)
+                and (cand.get("wait_started_at") or 0) >= self.interactive_entered_at):
+            return [("separate", cand, sent)]
+        return []
+
+    def _open_records(self) -> list[tuple[str, dict, dict | None]]:
+        if self.status is not Status.INTERACTIVE and not self.prompt_wait_carry:
+            return []
+        out = self._primary_records()
+        carried = self.carried_inline_prompt
+        if self.prompt_wait_carry and isinstance(carried, dict):
+            # The card's prompt kept through Claude's Stop (8.120) is
+            # still open: a close during the carry (its agent's tool
+            # ended, the agent stopped) must see it, or it is sent again
+            # for a dialog that is gone. No surface: the card shows the
+            # answer, and its message comes once the carry ends.
+            out.insert(0, ("carried", carried, None))
+        for rec in self.extra_prompts:
+            perm = rec.get("perm") if isinstance(rec, dict) else None
+            if isinstance(perm, dict):
+                out.append(("extra", perm, rec))
+        return out
+
+    def open_prompts(self) -> list[dict]:
+        """The open prompts in arrival order (empty when none): the
+        primary, then every prompt that opened while it was open. Each is
+        the prompt's answer context (``tool_info``, ``hook_reply``, ...)."""
+        return [perm for _where, perm, _rec in self._open_records()]
+
+    def prompt_owners(self) -> set[str]:
+        """The agent ids that own an open prompt (Claude's own excluded):
+        an agent waiting on its dialog fires no hooks, so it is never
+        dropped as silent."""
+        owners = set()
+        for perm in self.open_prompts():
+            info = perm.get("tool_info")
+            if isinstance(info, dict) and info.get("agent_id"):
+                owners.add(str(info["agent_id"]))
+        return owners
+
+    def close_prompts(self, pred, *, mark: bool = True) -> tuple[int, bool]:
+        """Close every open prompt *pred(perm)* is true for: its surface
+        (the card for the inline one, else its own message) is marked
+        closed, so its buttons type nothing, and its record goes. When the
+        primary slot empties while others stay open, the oldest of them
+        becomes the primary (its message, token and registration are
+        unchanged). *mark* False leaves the surfaces unmarked (the
+        INTERACTIVE watchdog: a prompt nobody answered is not known
+        closed). Returns ``(closed_count, inline_closed)``."""
+        stamp = self.mark_prompt_closed if mark else (lambda _msg_id: None)
+        closed, inline_closed = 0, False
+        for where, perm, rec in self._open_records():
+            try:
+                hit = bool(pred(perm))
+            except Exception:  # noqa: BLE001 - a bad predicate closes nothing
+                hit = False
+            if not hit:
+                continue
+            closed += 1
+            if where == "inline":
+                stamp(self.busy_msg_id)
+                self.pending_permission = None
+                inline_closed = True
+            elif where == "carried":
+                self.carried_inline_prompt = None
+            elif where == "separate":
+                stamp(rec.get("msg_id"))
+                self.pending_prompt_msg = None
+            else:
+                stamp(rec.get("msg_id"))
+                self.extra_prompts = [r for r in self.extra_prompts if r is not rec]
+        shown = [r for r in self.extra_prompts
+                 if isinstance(r, dict) and not r.get("auto_deny_due")]
+        if (self.pending_permission is None and not self._primary_records()
+                and self.carried_inline_prompt is None and shown):
+            # A refusal waiting to be typed has no message: never the
+            # primary (the pinned bar's Answer would re-send nothing).
+            promoted = shown[0]
+            self.extra_prompts = [r for r in self.extra_prompts if r is not promoted]
+            promoted["promoted"] = True
+            self.pending_prompt_msg = promoted
+        return closed, inline_closed
+
+    def prompt_surface(self, perm) -> int | None:
+        """The message an open prompt's buttons sit on: the busy card for
+        the inline one, else its own message. None when not open."""
+        for where, p, rec in self._open_records():
+            if p is perm:
+                if where == "carried":
+                    return None
+                return self.busy_msg_id if where == "inline" else rec.get("msg_id")
+        return None
+
+    def keys_verdict(self, perm, now: float) -> str:
+        """Whether keys typed now reach open prompt *perm*'s dialog:
+        ``"yes"``, ``"behind"`` or ``"unknown"`` (aipager.prompt_stack).
+        Always ``"yes"`` with one prompt open."""
+        def order_of(p) -> dict:
+            info = p.get("tool_info") if isinstance(p, dict) else None
+            order = info.get("order") if isinstance(info, dict) else None
+            if isinstance(order, dict):
+                return order
+            # Recorded without one (restored, or its tool not known):
+            # Claude's own, there since it was shown.
+            return {"owner": "", "launch": _prompt_stack.OWN,
+                    "arrived": (p.get("wait_started_at") or 0.0)
+                    if isinstance(p, dict) else 0.0}
+        others = [order_of(p) for p in self.open_prompts() if p is not perm]
+        return _prompt_stack.keys_verdict(order_of(perm), others, now)
+
+    def close_all_prompts(self) -> tuple[int, bool]:
+        """Close every open prompt (/stop, kill, a turn ended at its
+        dialog): see :meth:`close_prompts`."""
+        result = self.close_prompts(lambda _perm: True)
+        for rec in self.extra_prompts:
+            self.mark_prompt_closed(rec.get("msg_id"))
+        self.extra_prompts = []
+        return result
+
+    def unsaved_prompt_surfaces(self) -> list[int]:
+        """The message ids of every open prompt's surface when more than
+        one prompt is open (none of them is saved for a restart), else
+        ``[]``: the card for an inline prompt, each sent message."""
+        records = self._open_records()
+        if len(records) < 2:
+            return []
+        ids = []
+        for where, _perm, rec in records:
+            if where == "carried":
+                continue
+            msg_id = self.busy_msg_id if where == "inline" else rec.get("msg_id")
+            if type(msg_id) is int and msg_id > 0 and msg_id not in ids:
+                ids.append(msg_id)
+        return ids
+
+    def _drop_extra_prompts(self) -> None:
+        """The wait ended: no prompt that opened during it is open any
+        more, and their buttons type nothing."""
+        for rec in self.extra_prompts:
+            if isinstance(rec, dict):
+                self.mark_prompt_closed(rec.get("msg_id"))
+        self.extra_prompts = []
 
     def dialog_release_pending(self) -> bool:
         """True when a dialog that held messages was answered and those
@@ -3067,6 +3346,9 @@ class SessionRegistry:
 
     def __init__(self):
         self._sessions: dict[str, TrackedSession] = {}  # keyed by session name
+        # Roadmap 8.120: name -> how many open prompts the save last logged
+        # as "none saved for a restart", so the line comes once per count.
+        self._unsaved_prompts_told: dict[str, int] = {}
         self._msg_map: dict[tuple[int, int], str] = {}  # (chat_id, msg_id) → session name
         # name → the label it carried when a /kill removed it. See
         # `remove(remember_label=True)`.
@@ -3490,8 +3772,14 @@ class SessionRegistry:
             if new_status == Status.INTERACTIVE:
                 sess.dialog_hold.pop("closed", None)
             elif sess.status == Status.INTERACTIVE:
+                # The last prompt carried over a Stop answered (8.120):
+                # Claude sits at its input, so what was held goes now.
                 sess.dialog_hold["closed"] = (
-                    "answered" if new_status == Status.BUSY else "ended")
+                    "answered" if (new_status == Status.BUSY
+                                   or (new_status == Status.IDLE
+                                       and sess.resumed_after_stop))
+                    else "ended")
+        sess.resumed_after_stop = False
         # Debounce: suppress rapid re-IDLE (e.g. user sends quick command,
         # Claude responds in <1s, triggers another idle notification)
         if new_status == Status.IDLE:
@@ -3511,6 +3799,14 @@ class SessionRegistry:
                 return None  # don't notify
             sess.last_idle_at = now
 
+        # Roadmap 8.120: the prompts that opened during a wait belong to
+        # it. A new wait starts with none, and a wait that ends closes the
+        # ones still recorded (their buttons type nothing), except across
+        # the Stop that carries an agent's prompt over (prompt_wait_carry).
+        if (new_status == Status.INTERACTIVE
+                or (sess.status == Status.INTERACTIVE
+                    and not sess.prompt_wait_carry)):
+            sess._drop_extra_prompts()
         # A new wait on a human gets its own reminder (roadmap 8.4).
         if new_status == Status.INTERACTIVE:
             sess.waiting_reminder_sent = False
@@ -3612,6 +3908,47 @@ class SessionRegistry:
         log.info("[%s] %s → %s", sess.label, old.name, new_status.name)
         self._dirty = True
         return sess
+
+    def resume_wait(self, name: str, *,
+                    after_stop: bool = True) -> TrackedSession | None:
+        """Back to INTERACTIVE after a Stop that left an agent's prompt
+        open (roadmap 8.120), without a new wait's stamps: the surviving
+        prompts were shown during this wait (``interactive_entered_at``
+        is kept) and a message held for them stays held. None when the
+        session is not known or is gone. *after_stop*: no turn of Claude's
+        runs (``resumed_after_stop``); False when a new turn just started
+        (:meth:`begin_turn_while_waiting`)."""
+        sess = self._sessions.get(name)
+        if sess is None or sess.status in (Status.GONE, Status.INTERACTIVE):
+            return None
+        old = sess.status
+        sess.status = Status.INTERACTIVE
+        sess.resumed_after_stop = after_stop
+        if sess.dialog_hold is not None:
+            sess.dialog_hold.pop("closed", None)
+        log.info("[%s] %s → %s (still waiting on a prompt)", sess.label,
+                 old.name, Status.INTERACTIVE.name)
+        self._dirty = True
+        return sess
+
+    def begin_turn_while_waiting(self, name: str) -> TrackedSession | None:
+        """A prompt typed at the terminal while the session waits on
+        prompts carried over a Stop (roadmap 8.120): Claude's turn was over,
+        so this is a new turn, entered from IDLE (its turn-start stamps, a
+        card of its own), while the agents' prompts stay recorded. The
+        caller holds ``prompt_wait_carry`` until it has sent the turn's card
+        and then calls :meth:`resume_wait` with ``after_stop=False``. None
+        when the session is not waiting after a Stop."""
+        sess = self._sessions.get(name)
+        if (sess is None or sess.status is not Status.INTERACTIVE
+                or not sess.resumed_after_stop):
+            return None
+        # Silently, as the IDLE debounce does: the Stop already ended the
+        # turn, and the wait is not over (no hold release, no extras
+        # dropped).
+        sess.status = Status.IDLE
+        sess.resumed_after_stop = False
+        return self.transition(name, Status.BUSY)
 
     def track_message(self, msg_id: int, session_name: str, chat_id: int) -> None:
         """Associate a Telegram message_id with a session (for reply lookups).
@@ -3978,8 +4315,26 @@ class SessionRegistry:
                 log.warning("[%s] open prompt not saved", sess.label,
                             exc_info=True)
                 open_prompt = None
+            unsaved = sess.unsaved_prompt_surfaces() if open_prompt is None else []
+            if not unsaved:
+                self._unsaved_prompts_told.pop(name, None)
             if open_prompt is not None:
                 d["open_prompt"] = open_prompt
+            elif unsaved:
+                told = self._unsaved_prompts_told
+                count = len(sess.open_prompts())
+                if told.get(name) != count:
+                    told[name] = count
+                    log.info("[%s] %d open prompts, none saved for a restart",
+                             sess.label, count)
+                # Two or more prompts open (roadmap 8.120): none is saved,
+                # since after a restart aipager could not tell which dialog
+                # is on top, and every one of their messages refuses its
+                # buttons after it. In the file only: the live prompts here
+                # still answer.
+                d["closed_prompt_msgs"] = (
+                    [m for m in d.get("closed_prompt_msgs", []) if m not in unsaved]
+                    + unsaved)[-MAX_CLOSED_PROMPT_SURFACES:]
             elif (sess.status == Status.INTERACTIVE and sess.pending_permission
                     and sess.busy_msg_id and sess.busy_msg_id > 0):
                 # The card's open prompt is not saved (asked inside a

@@ -1,6 +1,6 @@
 # 故障排除
 
-<!-- i18n-source: docs/troubleshooting.md @ bb690d5 -->
+<!-- i18n-source: docs/troubleshooting.md @ 054b893 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../troubleshooting.md)）
 
@@ -144,7 +144,7 @@ aipager session <label> --continue # 新的 dtach，接着这个文件夹最近�
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>一个权限请求 5 分钟没有消息
 
-如果一个会话在等一个权限请求或问题，而 Claude Code 5 分钟没有任何消息，aipager 会读取这个会话保存的对话。只有对话显示请求已经结束（在终端里回答了，而这个消息丢了），aipager 才不再等它，并重新把会话算作工作中。否则请求会一直开着，不管多久：卡片和置顶栏会一直显示会话需要你回答，不会发出“仍在工作”的提示，你的消息会被暂存，直到你回答（见[文本](commands.md#text)）。Claude Code 在请求打开时退出，会话就结束了。如果对话框仍然开着，请求上的按钮仍然可以回答它（见[空闲时的响应](commands.md#idle-responses)）。
+如果一个会话在等一个权限请求或问题，而 Claude Code 5 分钟没有任何消息，aipager 会读取这个会话保存的对话。只算 Claude 自己和提出请求的代理的消息：一直在工作的后台代理不会让这项检查无法进行。只有对话显示请求已经结束（在终端里回答了，而这个消息丢了），aipager 才不再等它，并重新把会话算作工作中。否则请求会一直开着，不管多久：卡片和置顶栏会一直显示会话需要你回答，不会发出“仍在工作”的提示，你的消息会被暂存，直到你回答（见[文本](commands.md#text)）。Claude Code 在请求打开时退出，会话就结束了。如果对话框仍然开着，请求上的按钮仍然可以回答它（见[空闲时的响应](commands.md#idle-responses)）。
 
 要修改等待时间：
 
