@@ -1728,8 +1728,9 @@ class NotifyMixin:
     async def flush_turn_files(self, sess: TrackedSession) -> int:
         """Deliver this session's files that waited (for a mute to lift, or
         for the held answer they follow to land), oldest first, then any
-        orphan copies: in the session's delivery task, so neither the
-        monitor's tick nor a held answer's flush waits for an upload.
+        orphan copies: in the session's delivery task (after the one that
+        runs, if any), so neither the monitor's tick nor a held answer's
+        flush waits for an upload.
         Driven by the session monitor's tick and by
         :meth:`flush_held_answers`. Returns how many waiting deliveries
         were handed to the task."""
@@ -1738,9 +1739,6 @@ class NotifyMixin:
         box = outbox.OUTBOX
         chat_id = self._files_chat(sess)
         if not chat_id or MUTE.is_muted(chat_id) or sess.name in _HELD_FLUSHING:
-            return 0
-        if box.delivering(sess.name):
-            # This session's delivery task runs: the next tick comes back.
             return 0
         # A held answer that is no longer held and never landed (dropped by
         # a cap, expired): its files reply to the prompt.
