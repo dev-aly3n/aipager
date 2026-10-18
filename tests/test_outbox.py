@@ -4,6 +4,7 @@ the caption, the day sweep."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import stat
@@ -839,6 +840,133 @@ def test_requeue_after_keeps_the_order():
     assert [x.session for x in box.pending[1]] == ["b", "c"]
 
 
+# ---- a turn Claude Code starts with no prompt hook (review rev-iter3-001) -------
+
+def _dequeue(wall):
+    return {"type": "queue-operation", "operation": "dequeue",
+            "timestamp": _iso(wall), "sessionId": "5b1d"}
+
+
+def _feedback(wall, meta=True, blocks=False):
+    text = "Stop hook feedback:\n[the goal]: not met yet"
+    line = {"type": "user", "message": {"role": "user", "content": (
+        [{"type": "text", "text": text}] if blocks else text)},
+        "timestamp": _iso(wall), "cwd": CWD}
+    if meta:
+        line["isMeta"] = True
+    return line
+
+
+def test_a_dequeue_after_the_last_turn_ended_is_a_hookless_start(home):
+    ended = time.time() - 30
+    tp = _transcript(home, lines=[_dequeue(ended + 1)])
+    assert ob.hookless_turn_started(str(tp), ended)
+    # Before the end (less the slack): a pop of an older turn.
+    assert not ob.hookless_turn_started(
+        str(tp), ended + 1 + ob.TRANSCRIPT_CLOCK_SLACK_SECONDS + 1)
+    assert ob.hookless_turn_started(
+        str(tp), ended + 1 + ob.TRANSCRIPT_CLOCK_SLACK_SECONDS - 0.5)
+    # No known end, or no transcript: nothing.
+    assert not ob.hookless_turn_started(str(tp), 0.0)
+    assert not ob.hookless_turn_started("", ended)
+
+
+def test_other_queue_lines_are_not_a_hookless_start(home):
+    ended = time.time() - 30
+    lines = [{**_dequeue(ended + 1), "operation": op}
+             for op in ("enqueue", "remove", "popAll")]
+    lines.append({**_dequeue(ended + 1), "timestamp": None})
+    tp = _transcript(home, lines=lines)
+    assert not ob.hookless_turn_started(str(tp), ended)
+
+
+def test_a_stop_hooks_feedback_is_a_hookless_start(home):
+    ended = time.time() - 30
+    for line, starts in ((_feedback(ended + 1), True),
+                         (_feedback(ended + 1, blocks=True), True),
+                         # A person's own message quoting the words: not.
+                         (_feedback(ended + 1, meta=False), False),
+                         ({**_feedback(ended + 1), "type": "assistant"}, False),
+                         # Another line Claude Code adds that names the
+                         # words without starting with them.
+                         ({**_feedback(ended + 1), "message": {
+                             "role": "user", "content": "Caveat: the messages "
+                             "below quote Stop hook feedback: from a log"}},
+                          False)):
+        tp = _transcript(home, lines=[line])
+        assert ob.hookless_turn_started(str(tp), ended) is starts, line
+
+
+def test_a_hookless_start_is_read_only_from_claudes_own_transcript(home, tmp_path,
+                                                                   monkeypatch):
+    ended = time.time() - 30
+    planted = tmp_path / "x.jsonl"
+    planted.write_text(json.dumps(_dequeue(ended + 1)) + "\n")
+    assert not ob.hookless_turn_started(str(planted), ended)
+    tp = _transcript(home, lines=[_dequeue(ended + 1)])
+    monkeypatch.setattr(ob, "_own_uid", lambda: os.geteuid() + 1)
+    assert not ob.hookless_turn_started(str(tp), ended)
+
+
+def test_wait_hookless_turn_waits_for_the_line(home, run_async, monkeypatch):
+    ended = time.time() - 30
+    tp = _transcript(home, lines=[])
+    monkeypatch.setattr(ob, "TRANSCRIPT_WAIT_SECONDS", 3.0)
+
+    async def go():
+        async def later():
+            await asyncio.sleep(0.3)
+            with open(tp, "a") as fh:
+                fh.write(json.dumps(_dequeue(time.time())) + "\n")
+        writer = asyncio.ensure_future(later())
+        got = await ob.wait_hookless_turn(str(tp), ended)
+        await writer
+        return got
+    assert run_async(go()) is True
+    monkeypatch.setattr(ob, "TRANSCRIPT_WAIT_SECONDS", 0.3)
+    assert run_async(ob.wait_hookless_turn(str(tp), time.time() + 60)) is False
+
+
+def test_transcript_call_files_are_claudes_own(home):
+    since = _since()
+    tp = _transcript(home, lines=[
+        _call("toolu_a", ["/w/a.png", "/w/b.png"]),
+        _call("toolu_r", ["/w/r.png"], name="Read"),
+        _call("toolu_old", ["/w/o.png"], wall=since - 600),
+        _call("toolu_nostamp", ["/w/n.png"], wall=False),
+        # Another folder still counts: the line is Claude's own call.
+        _call("toolu_cwd", ["/x/c.png"], cwd="/x"),
+        # A tool_use-shaped block in a line that is not the assistant's.
+        {**_call("toolu_u", ["/w/u.png"]), "type": "user"},
+    ])
+    assert ob.transcript_call_files(str(tp), "", "toolu_a", since) == [
+        "/w/a.png", "/w/b.png"]
+    assert ob.transcript_call_files(str(tp), "", "toolu_cwd", since) == ["/x/c.png"]
+    for tid in ("toolu_r", "toolu_old", "toolu_nostamp", "toolu_u", "toolu_none", ""):
+        assert ob.transcript_call_files(str(tp), "", tid, since) is None, tid
+    assert ob.transcript_call_files(str(tp), "", "toolu_a", 0.0) is None
+
+
+def test_transcript_call_files_looks_in_the_subagents_own_file(home):
+    tp = _transcript(home, lines=[])
+    sub = tp.with_suffix("") / "subagents" / "agent-a1.jsonl"
+    sub.parent.mkdir(parents=True)
+    sub.write_text(json.dumps(_call("toolu_s", ["/w/a.png"])) + "\n")
+    assert ob.transcript_call_files(str(tp), "a1", "toolu_s", _since()) == [
+        "/w/a.png"]
+    assert ob.transcript_call_files(str(tp), "", "toolu_s", _since()) is None
+
+
+def test_an_unconfirmed_batch_only_carries_lines():
+    batch = ob.unconfirmed_batch("s", ["/w/a.png", "/w/b c.pdf"], prompt_id=4,
+                                 tool_use_id="toolu_a")
+    assert batch.unconfirmed and batch.items == [] and batch.prompt_id == 4
+    assert [(f.name, f.cause) for f in batch.failures] == [
+        ("a.png", ob.CAUSE_UNVERIFIED), ("b c.pdf", ob.CAUSE_UNVERIFIED)]
+    assert len(ob.unconfirmed_batch("s", [f"/w/{i}" for i in range(150)]
+                                    ).failures) == 100
+
+
 def test_line_wall_reads_any_fraction_and_zone():
     """Python 3.10's fromisoformat takes only 3 or 6 fraction digits and no
     Z; every form reads the same here (review rev-iter3 nit)."""
@@ -855,3 +983,4 @@ def test_line_wall_reads_any_fraction_and_zone():
     for raw in ("2026-10-18T01:33:54.Z", "2026-10-18T01:33:54+2", "2026-13-18T01:33:54Z",
                 "2026-10-18T01:33:54Zjunk", "2026-10-18"):
         assert ob.line_wall({"timestamp": raw}) is None, raw
+

@@ -484,6 +484,7 @@
 {"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ تعذّر إرسال {name}."}
 {"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ تعذّر إرسال {name}: رفضه Telegram."}
 {"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ تعذّر إرسال {name}: الملف أكبر مما يقبله Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ تعذّر إرسال {name}: لم يتمكن aipager من التأكد من أن Claude أرسله ضمن هذه الجولة."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ في هذا النص حروف مخفية تغيّر اتجاه الكتابة (تظهر بالشكل ⟨U+...⟩). قد يُنفَّذ شيء غير ما يظهر هنا."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ السماح"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 السماح دائمًا"}

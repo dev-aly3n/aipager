@@ -205,3 +205,131 @@ def test_a_new_conversation_closes_the_turn(tmp_state_file):
     _dg(recv, hook_event_name="SessionStart", source="clear",
         transcript_path="/t/new.jsonl")
     assert not sess.files_turn_open
+
+
+# ---- a turn Claude Code starts with no prompt hook (review rev-iter3-001) -------
+
+def test_going_idle_keeps_when_the_turn_ended(tmp_state_file):
+    reg = SessionRegistry()
+    reg.transition(S, Status.BUSY)
+    sess = reg.get(S)
+    sess.transcript_path = "/t/a.jsonl"
+    sess.files_turn_opened(time.time())
+    before = time.time()
+    reg.transition(S, Status.IDLE)
+    assert not sess.files_turn_open
+    assert before <= sess.files_turn_closed_wall <= time.time()
+    # Gone: no later turn of that conversation can resume it.
+    reg.transition(S, Status.GONE)
+    assert sess.files_turn_closed_wall == 0.0
+
+
+def test_a_new_conversation_forgets_when_the_last_turn_ended(tmp_state_file):
+    recv, reg = _receiver()
+    reg.transition(S, Status.IDLE)
+    _dg(recv, hook_event_name="UserPromptSubmit", prompt="one")
+    _dg(recv, hook_event_name="Stop")
+    sess = reg.get(S)
+    assert sess.files_turn_closed_wall > 0
+    _dg(recv, hook_event_name="SessionStart", source="clear",
+        transcript_path="/t/new.jsonl")
+    assert sess.files_turn_closed_wall == 0.0
+
+
+def test_a_turn_resumes_in_the_transcript_noted_for_it():
+    sess = TrackedSession(name=S, label="frontend", status=Status.BUSY)
+    sess.transcript_path = "/t/a.jsonl"
+    sess.files_turn_opened(100.0)
+    sess.files_turn_closed(150.0)
+    # A datagram named another transcript since: the noted one stays.
+    sess.transcript_path = "/t/other.jsonl"
+    assert sess.files_turn_resumed(150.0) is True
+    assert (sess.files_turn_open, sess.files_turn_wall, sess.files_transcript) == (
+        True, 150.0, "/t/a.jsonl")
+    # Already open: nothing moves.
+    assert sess.files_turn_resumed(170.0) is False
+    assert sess.files_turn_wall == 150.0
+
+
+def test_a_turn_with_no_transcript_or_start_does_not_resume():
+    sess = TrackedSession(name=S, label="frontend", status=Status.BUSY)
+    assert sess.files_turn_resumed(150.0) is False
+    sess.files_transcript = "/t/a.jsonl"
+    assert sess.files_turn_resumed(0.0) is False
+    assert not sess.files_turn_open
+
+
+def test_a_stop_on_an_idle_session_moves_the_last_end(tmp_state_file):
+    """A turn Claude Code ran with no hook and no tool call ends with a Stop
+    on an already idle session: that end is the one a later start must
+    follow."""
+    recv, reg = _receiver()
+    reg.transition(S, Status.IDLE)
+    _dg(recv, hook_event_name="UserPromptSubmit", prompt="one")
+    _dg(recv, hook_event_name="Stop")
+    sess = reg.get(S)
+    first = sess.files_turn_closed_wall
+    time.sleep(0.01)
+    # (Another answer: an identical datagram is dropped as a duplicate.)
+    _dg(recv, hook_event_name="Stop", last_assistant_message="again")
+    assert sess.files_turn_closed_wall > first
+
+
+def test_a_stop_while_the_turn_is_open_or_never_ended_moves_nothing():
+    sess = TrackedSession(name=S, label="frontend", status=Status.IDLE)
+    sess.files_turn_stopped(500.0)          # no turn of it ended yet
+    assert sess.files_turn_closed_wall == 0.0
+    sess.files_turn_closed(100.0)
+    sess.files_transcript = "/t/a.jsonl"
+    sess.files_turn_resumed(100.0)
+    sess.files_turn_stopped(500.0)          # an interim Stop of a job
+    assert sess.files_turn_closed_wall == 100.0
+
+
+def test_when_the_turn_ended_survives_a_restart(tmp_state_file):
+    r1 = SessionRegistry()
+    r1.transition(S, Status.BUSY)
+    sess = r1.get(S)
+    sess.files_turn_opened(time.time() - 9)
+    r1.transition(S, Status.IDLE)
+    ended = sess.files_turn_closed_wall
+    r1.save()
+    r2 = SessionRegistry()
+    r2.load()
+    assert r2.get(S).files_turn_closed_wall == ended
+    data = json.loads(tmp_state_file.read_text())
+    for bad in ("soon", time.time() + 3600, -1, None):
+        data["sessions"][S]["files_turn_closed_wall"] = bad
+        tmp_state_file.write_text(json.dumps(data))
+        r3 = SessionRegistry()
+        r3.load()
+        assert r3.get(S).files_turn_closed_wall == 0.0, bad
+
+
+def test_a_queued_message_the_daemon_typed_resumes_the_turn(mk_bot):
+    """Claude Code pops a message the daemon typed while the last turn ran
+    as its next prompt, with no hook (_take_next_prompt)."""
+    bot = mk_bot()
+    sess = TrackedSession(name=S, label="frontend", status=Status.BUSY)
+    bot.registry._sessions[S] = sess
+    sess.transcript_path = "/t/a.jsonl"
+    sess.files_turn_opened(time.time() - 30)
+    bot.registry.transition(S, Status.IDLE)
+    assert not sess.files_turn_open
+    sess.queued_targets.append({"msg_id": 77, "chat_id": 1, "raw_text": "also"})
+    before = time.time()
+    assert bot._take_next_prompt(sess) is not None
+    assert sess.files_turn_open and sess.files_turn_wall >= before
+    assert sess.files_transcript == "/t/a.jsonl"
+
+
+def test_no_queued_message_resumes_nothing(mk_bot):
+    bot = mk_bot()
+    sess = TrackedSession(name=S, label="frontend", status=Status.BUSY)
+    bot.registry._sessions[S] = sess
+    sess.transcript_path = "/t/a.jsonl"
+    sess.files_turn_opened(time.time() - 30)
+    bot.registry.transition(S, Status.IDLE)
+    assert bot._take_next_prompt(sess) is None
+    assert not sess.files_turn_open
+

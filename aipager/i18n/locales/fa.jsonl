@@ -484,6 +484,7 @@
 {"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ {name} ارسال نشد."}
 {"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ {name} ارسال نشد: Telegram آن را قبول نکرد."}
 {"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ {name} ارسال نشد: حجمش برای Telegram زیاد است."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ {name} ارسال نشد: aipager نتوانست مطمئن شود که Claude آن را در همین کار فرستاده است."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ این متن حرف‌های پنهانی دارد که جهت نوشتن را عوض می‌کنند (به شکل ⟨U+...⟩ نشان داده شده‌اند). ممکن است چیزی غیر از آنچه می‌بینید اجرا شود."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ اجازه بده"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 همیشه اجازه بده"}

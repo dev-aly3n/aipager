@@ -2261,6 +2261,11 @@ class HookReceiver:
                     _sf.pending_tool_started_at = None
                     _sf.compact_started_at = None
                 sess = self.registry.transition(session_name, Status.IDLE)
+                # The newest end of Claude's own turn: a turn it starts
+                # with no hook must come after it (files Claude sends).
+                _ended = self.registry.get(session_name)
+                if _ended is not None:
+                    _ended.files_turn_stopped(time.time())
                 if sess is None:
                     # Already IDLE (or debounce blocked) — get the session so
                     # we can still notify. Finalizing must not be skipped.
@@ -2347,6 +2352,11 @@ class HookReceiver:
                     _idle.pending_tool_started_at = None
                     _idle.compact_started_at = None
                 sess = self.registry.transition(session_name, Status.IDLE)
+                # The newest end of Claude's own turn: a turn it starts
+                # with no hook must come after it (files Claude sends).
+                _ended = self.registry.get(session_name)
+                if _ended is not None:
+                    _ended.files_turn_stopped(time.time())
                 if sess is None:
                     # Force notification if there's an undelivered response
                     # (user sent a prompt via Telegram but debounce suppressed IDLE)

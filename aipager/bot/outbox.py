@@ -89,6 +89,9 @@ CAUSE_REFUSED = "refused"
 CAUSE_NOT_ALLOWED = "not_allowed"
 CAUSE_OTHER = "other"
 CAUSE_EXPIRED = "expired"
+#: The call could not be tied to a turn in the transcript (audit), and,
+#: only when Claude's own transcript shows the call, its chat line.
+CAUSE_UNVERIFIED = "unverified"
 
 #: The upload's own timeouts: PTB's default write timeout (about 20 s) is
 #: too short for a 50 MB file on a slow line.
@@ -118,6 +121,14 @@ FAILED_LINES: dict[str, Msg] = {
         "⚠️ Couldn't send {name}: it is no longer allowed to be sent.",
         note="A file Claude sent: aipager's second check, at the copy, refused it "
              "(it became a protected file, or is outside the person's folder)",
+        eg={"name": "report.pdf"}),
+    CAUSE_UNVERIFIED: Msg(
+        "outbox.failed.unverified",
+        "⚠️ Couldn't send {name}: aipager could not confirm that Claude sent it in "
+        "this turn.",
+        note="A file Claude really asked to send (its own record shows the request) "
+             "was not sent, because aipager could not tie the request to the "
+             "running turn. {name} is the file's name",
         eg={"name": "report.pdf"}),
     CAUSE_OTHER: Msg(
         "outbox.failed.other", "⚠️ Couldn't send {name}.",
@@ -202,6 +213,11 @@ class Batch:
     #: of the turn it was copied in: the transcript line must match both.
     cwd: str | None = None
     turn_wall: float = 0.0
+    #: Nothing to send, only the chat lines of a call Claude's own
+    #: transcript shows but that could not be tied to the turn (its
+    #: ``failures`` name the files that transcript line lists): already
+    #: looked for, never checked again.
+    unconfirmed: bool = False
 
 
 @dataclass
@@ -797,7 +813,6 @@ TRANSCRIPT_TAIL_BYTES = 64 * 1024 * 1024
 #: How far before the turn's start a call's timestamp may read (clock
 #: rounding: Claude Code and the daemon share the machine's clock).
 TRANSCRIPT_CLOCK_SLACK_SECONDS = 2.0
-CAUSE_UNVERIFIED = "unverified"
 
 _AGENT_ID_RE = re.compile(r"\A[A-Za-z0-9_-]{1,128}\Z")
 
@@ -950,6 +965,133 @@ def call_in_transcript(path: str, tool_use_id: str, files: list[str],
     except OSError:
         return False
     return False
+
+
+#: How Claude Code begins the text of the message it adds when a Stop hook
+#: blocks the stop (``Stop hook feedback:`` and the hook's words, an
+#: ``isMeta`` user line): the turn goes on with no UserPromptSubmit.
+#: (Claude Code's own text, matched, never shown: kept as bytes.)
+_STOP_FEEDBACK = b"Stop hook feedback:"
+STOP_FEEDBACK_PREFIX = _STOP_FEEDBACK.decode()
+_HOOKLESS_NEEDLES = (b'"queue-operation"', _STOP_FEEDBACK)
+
+
+def _tail_entries(path: str, needles: tuple[bytes, ...]):
+    """The JSON objects of the lines in the last TRANSCRIPT_TAIL_BYTES of
+    the transcript at *path* (only an allowed one, see
+    :func:`transcript_allowed`, opened with no link followed) holding one
+    of *needles*, in file order. Nothing when it cannot be read."""
+    real = _allowed_transcript(path)
+    if real is None:
+        return
+    try:
+        with open(real, "rb", opener=_open_no_follow) as fh:
+            size = os.fstat(fh.fileno()).st_size
+            if size > TRANSCRIPT_TAIL_BYTES:
+                fh.seek(size - TRANSCRIPT_TAIL_BYTES)
+                fh.readline()       # a partial first line
+            for line in fh:
+                if not any(n in line for n in needles):
+                    continue
+                try:
+                    entry = json.loads(line)
+                except (ValueError, RecursionError):
+                    continue
+                if isinstance(entry, dict):
+                    yield entry
+    except OSError:
+        return
+
+
+def _starts_hookless_turn(entry: dict) -> bool:
+    """A line Claude Code writes as it starts a turn that fires no
+    UserPromptSubmit: the ``dequeue`` of a queued message it takes as its
+    next prompt, or the feedback of a Stop hook that blocked the stop."""
+    etype = entry.get("type")
+    if etype == "queue-operation":
+        return entry.get("operation") == "dequeue"
+    if etype != "user" or entry.get("isMeta") is not True:
+        return False
+    message = entry.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    if isinstance(content, list) and content and isinstance(content[0], dict):
+        content = content[0].get("text")
+    return isinstance(content, str) and content.startswith(STOP_FEEDBACK_PREFIX)
+
+
+def hookless_turn_started(path: str, since: float) -> bool:
+    """True when the transcript at *path* shows Claude Code starting a turn
+    with no prompt hook (:func:`_starts_hookless_turn`) at or after
+    *since* (when the last turn ended, less the clock slack). Only Claude
+    Code writes that file: a datagram cannot make this true. Never
+    raises."""
+    if not path or not since > 0:
+        return False
+    for entry in _tail_entries(path, _HOOKLESS_NEEDLES):
+        if not _starts_hookless_turn(entry):
+            continue
+        wall = line_wall(entry)
+        if wall is not None and wall >= since - TRANSCRIPT_CLOCK_SLACK_SECONDS:
+            return True
+    return False
+
+
+async def wait_hookless_turn(path: str, since: float,
+                             wait: float | None = None) -> bool:
+    """:func:`hookless_turn_started`, waiting for it at most
+    TRANSCRIPT_WAIT_SECONDS (read on each call)."""
+    wait = TRANSCRIPT_WAIT_SECONDS if wait is None else wait
+    deadline = time.monotonic() + wait
+    while True:
+        if await asyncio.to_thread(hookless_turn_started, path, since):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        await asyncio.sleep(TRANSCRIPT_POLL_SECONDS)
+
+
+def transcript_call_files(transcript_path: str, agent_id: str,
+                          tool_use_id: str, since: float) -> list[str] | None:
+    """The files Claude's own SendUserFile call *tool_use_id* lists, from
+    an assistant line written at or after *since* (less the clock slack)
+    in the session's transcript or the agent's own beside it; None when
+    there is no such line. The names a chat line may show for a call that
+    could not be tied to its turn: they come from Claude Code's record,
+    never from a datagram. Never raises."""
+    if not isinstance(tool_use_id, str) or not tool_use_id or not since > 0:
+        return None
+    needle = json_needle(tool_use_id)
+    for path in transcript_candidates(transcript_path, agent_id):
+        for entry in _tail_entries(path, (needle,)):
+            message = entry.get("message")
+            if entry.get("type") != "assistant" or not isinstance(message, dict):
+                continue
+            wall = line_wall(entry)
+            if wall is None or wall < since - TRANSCRIPT_CLOCK_SLACK_SECONDS:
+                continue
+            content = message.get("content")
+            for block in content if isinstance(content, list) else ():
+                if (isinstance(block, dict) and block.get("type") == "tool_use"
+                        and block.get("id") == tool_use_id
+                        and block.get("name") == send_check.SEND_TOOL):
+                    listed = safety.path_targets(send_check.SEND_TOOL,
+                                                 block.get("input") or {})
+                    if listed:
+                        return list(listed)
+    return None
+
+
+def unconfirmed_batch(session: str, names: list[str], *, prompt_id=None,
+                      tool_use_id: str = "") -> Batch:
+    """A batch with nothing to send: one chat line per file a call Claude
+    really made lists (:func:`transcript_call_files`), saying it was not
+    sent (at most 100)."""
+    return Batch(session=session, caption=None, display=None, items=[],
+                 agent_id="", created=time.monotonic(),
+                 failures=[Failure(shown_name(n), None, CAUSE_UNVERIFIED)
+                           for n in names[:100]],
+                 tool_use_id=tool_use_id, prompt_id=prompt_id,
+                 unconfirmed=True)
 
 
 def _open_no_follow(path: str, flags: int) -> int:

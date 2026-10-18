@@ -1171,6 +1171,12 @@ class NotifyMixin:
         self.registry.mark_dirty()
         self.registry.transition(sess.name, Status.BUSY,
                                  preserve_job_state=in_job)
+        # A prompt the daemon typed itself (its note was picked up while
+        # the last turn ran) is this turn's: files Claude sends in it are
+        # from a turn a prompt opened (state.py files_turn_resumed).
+        if sess.files_turn_resumed(time.time()):
+            log.info("[%s] files turn resumed for queued message %s",
+                     sess.label, nxt.get("msg_id"))
         # Claude Code fires no hook for this turn: its sender is the popped
         # message's author (roadmap 8.77), None when not known.
         sess.turn_sender_id = nxt.get("driver_user_id")
@@ -1557,7 +1563,6 @@ class NotifyMixin:
         """A SendUserFile ran: copy its files now (in a thread), so a later
         change to them changes nothing that is sent. The finish path waits
         for the copy before it delivers."""
-        from aipager import policy_snapshot
         from aipager.bot import outbox
         req = outbox.OUTBOX.files_for_ran(
             sess.name, context.get("tool_use_id"), context.get("tool_input"),
@@ -1565,31 +1570,64 @@ class NotifyMixin:
         if req is None or not req.files:
             log.warning("[%s] turn files: no readable file list", sess.label)
             return
-        dropped = True
-        if not self._files_turn_live(sess):
-            # No turn opened by a prompt (or its job) runs: not a call of
-            # Claude's (a forged datagram, a replay). Nothing is read.
-            log.warning("[%s] turn files: a send with no turn running was "
-                        "dropped", sess.label)
-        elif not sess.files_call_used(req.tool_use_id):
+        if self._files_turn_live(sess):
+            self._track_file_copy(sess, self._checked_file_copy(sess, req, context))
+            return
+        if self._files_hookless_candidate(sess):
+            # The last turn ended and no prompt opened another, yet Claude
+            # works: a turn Claude Code began with no hook (a queued
+            # message it dequeued, a Stop hook's feedback). Nothing is
+            # read until its transcript shows that start.
+            self._track_file_copy(sess, self._copy_in_hookless_turn(
+                sess, req, context))
+            return
+        # No turn opened by a prompt (or its job) runs: not a call of
+        # Claude's (a forged datagram, a replay). Nothing is read.
+        log.warning("[%s] turn files: a send with no turn running was "
+                    "dropped", sess.label)
+        self._audit_unverified(sess, req.files)
+
+    def _audit_unverified(self, sess: TrackedSession, files) -> None:
+        from aipager.bot import outbox
+        ctx = self._file_audit_ctx(sess)
+        for entry in list(files)[:100]:
+            outbox.audit_file(ctx, outbox.ACTION_FAILED,
+                              outbox.shown_name(entry), None,
+                              outbox.CAUSE_UNVERIFIED)
+
+    def _track_file_copy(self, sess: TrackedSession, coro) -> None:
+        """Run a copy (a coroutine that returns its batch, or None) as a
+        tracked task: the finish path waits for it."""
+        from aipager.bot import outbox
+        if coro is None:
+            return
+        task = asyncio.create_task(coro)
+        outbox.OUTBOX.track(sess.name, task)
+        _BACKGROUND_TASKS.add(task)
+        task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+    def _checked_file_copy(self, sess: TrackedSession, req, context: dict,
+                           turn_wall: float | None = None,
+                           transcript: str | None = None):
+        """The copy of a call made in a live files turn (or in the hookless
+        turn begun after *turn_wall*, shown in *transcript*), as a
+        coroutine, or None when it is not copied (an id already copied or
+        none, no chat). The id is recorded here, with no await before
+        it."""
+        from aipager import policy_snapshot
+        from aipager.bot import outbox
+        if not sess.files_call_used(req.tool_use_id):
             # This call was copied already (a replayed datagram), or has no
             # id to find it by.
             log.warning("[%s] turn files: a call with no id or one already "
                         "copied was dropped", sess.label)
-        else:
-            dropped = False
-        if dropped:
-            ctx = self._file_audit_ctx(sess)
-            for entry in req.files[:100]:
-                outbox.audit_file(ctx, outbox.ACTION_FAILED,
-                                  outbox.shown_name(entry), None,
-                                  outbox.CAUSE_UNVERIFIED)
-            return
+            self._audit_unverified(sess, req.files)
+            return None
         self.registry.mark_dirty()
         chat_id = self._files_chat(sess)
         if not chat_id:
             log.warning("[%s] turn files: no chat to send them to", sess.label)
-            return
+            return None
         try:
             snap = policy_snapshot.read_snapshot(sess.name)
         except Exception:
@@ -1599,8 +1637,10 @@ class NotifyMixin:
 
         # The transcript and the turn start the daemon recorded when the
         # turn opened (state.py files_turn_opened), never this datagram's.
-        transcript_path = sess.files_transcript or ""
-        turn_wall = sess.files_turn_wall
+        transcript_path = (sess.files_transcript if transcript is None
+                           else transcript) or ""
+        if turn_wall is None:
+            turn_wall = sess.files_turn_wall
         prompt_id = sess.trigger_msg_id or None
 
         async def _copy():
@@ -1616,11 +1656,61 @@ class NotifyMixin:
                                   failure.size, failure.cause)
             outbox.OUTBOX.finish_copy(batch)
             return batch
+        return _copy()
 
-        task = asyncio.create_task(_copy())
-        outbox.OUTBOX.track(sess.name, task)
-        _BACKGROUND_TASKS.add(task)
-        task.add_done_callback(_BACKGROUND_TASKS.discard)
+    @staticmethod
+    def _files_hookless_candidate(sess: TrackedSession,
+                                  working: bool = True) -> bool:
+        """No files turn is live (checked first), a turn of the
+        conversation it looked in has ended (``files_turn_closed_wall``),
+        and Claude is working:
+        possibly a turn Claude Code started with no hook. Only a candidate
+        (a forged PreToolUse makes an idle session BUSY too): the
+        transcript must show the start (:meth:`_copy_in_hookless_turn`).
+        Not *working*: the request a PreToolUse brings, before that hook
+        moved the idle session to working (it is only kept, never read)."""
+        return (sess.files_turn_closed_wall > 0 and bool(sess.files_transcript)
+                and (not working
+                     or sess.status in (Status.BUSY, Status.INTERACTIVE)))
+
+    async def _copy_in_hookless_turn(self, sess: TrackedSession, req,
+                                     context: dict):
+        """A call that may be from a turn Claude Code began with no hook:
+        copied only once the transcript noted
+        for the conversation shows the start after the last turn ended
+        (outbox.hookless_turn_started; waits for it at most
+        ``outbox.TRANSCRIPT_WAIT_SECONDS``). Otherwise nothing is read
+        and each file is audited ``unverified``; when Claude's own
+        transcript shows this very call, the chat gets a line per file it
+        lists (names from that line, never from the datagram), so nobody
+        is left believing it was sent. Returns the batch, or None."""
+        from aipager.bot import outbox
+        since = sess.files_turn_closed_wall
+        transcript = sess.files_transcript
+        if await outbox.wait_hookless_turn(transcript, since):
+            # This call is from the turn that start began, even if that
+            # turn has ended by now (its Stop can come right after); it is
+            # looked for in that same transcript, written after *since*.
+            log.info("[%s] turn files: the transcript shows a turn begun "
+                     "with no prompt hook", sess.label)
+            coro = self._checked_file_copy(sess, req, context, turn_wall=since,
+                                           transcript=transcript)
+            return await coro if coro is not None else None
+        log.warning("[%s] turn files: no start of a turn after the last one "
+                    "ended, a send was dropped", sess.label)
+        self._audit_unverified(sess, req.files)
+        names = await asyncio.to_thread(
+            outbox.transcript_call_files, transcript,
+            req.agent_id or (context.get("agent_id") or ""),
+            req.tool_use_id, since)
+        if not names or not sess.files_call_used(req.tool_use_id):
+            return None
+        self.registry.mark_dirty()
+        batch = outbox.unconfirmed_batch(sess.name, names,
+                                         prompt_id=sess.trigger_msg_id or None,
+                                         tool_use_id=req.tool_use_id)
+        outbox.OUTBOX.finish_copy(batch)
+        return batch
 
     @staticmethod
     def _files_turn_live(sess: TrackedSession) -> bool:
@@ -1750,10 +1840,14 @@ class NotifyMixin:
         file (cause ``unverified``), nothing in the chat."""
         from aipager.bot import outbox
         ordered = sorted(batches, key=lambda b: b.created)
-        found = await asyncio.gather(*(outbox.verify_batch(b) for b in ordered))
+        found = await asyncio.gather(*(
+            outbox.verify_batch(b) for b in ordered if not b.unconfirmed))
+        found_iter = iter(found)
         out = []
-        for batch, ok in zip(ordered, found):
-            if ok:
+        for batch in ordered:
+            # A batch of chat lines only (Claude's own transcript showed the
+            # call): looked for already, nothing in it to send.
+            if batch.unconfirmed or next(found_iter):
                 out.append(batch)
                 continue
             if self._files_work_running(sess):
@@ -1768,6 +1862,17 @@ class NotifyMixin:
                 outbox.audit_file(audit, outbox.ACTION_FAILED, item.name,
                                   item.size, outbox.CAUSE_UNVERIFIED)
                 outbox.delete_copy(item)
+            # Claude's own transcript shows this call in the turn (its
+            # folder or file list did not match): a line per file that
+            # line lists, so nobody is left believing it went. A forged
+            # call cannot add such a line, and the names are Claude's.
+            names = await asyncio.to_thread(
+                outbox.transcript_call_files, batch.transcript_path,
+                batch.agent_id, batch.tool_use_id, batch.turn_wall)
+            if names:
+                out.append(outbox.unconfirmed_batch(
+                    sess.name, names, prompt_id=batch.prompt_id,
+                    tool_use_id=batch.tool_use_id))
         return out
 
     async def _send_turn_files(self, sess: TrackedSession, pending) -> bool:
@@ -2299,7 +2404,8 @@ class NotifyMixin:
         # Before the app check: recording, copying and auditing need no bot.
         if event == "send_files_requested":
             from aipager.bot.outbox import OUTBOX
-            if not self._files_turn_live(sess):
+            if not (self._files_turn_live(sess)
+                    or self._files_hookless_candidate(sess, working=False)):
                 # No turn or job runs: nothing Claude does can be asking.
                 log.warning("[%s] turn files: a request with no turn running "
                             "was ignored", sess.label)

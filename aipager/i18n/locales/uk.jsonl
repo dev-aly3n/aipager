@@ -484,6 +484,7 @@
 {"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ Не вдалося надіслати {name}."}
 {"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ Не вдалося надіслати {name}: Telegram не прийняв файл."}
 {"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ Не вдалося надіслати {name}: файл завеликий для Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ Не вдалося надіслати {name}: aipager не зміг підтвердити, що Claude надіслав цей файл у межах поточного завдання."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Тут є приховані символи, що змінюють напрямок тексту (показані як ⟨U+...⟩). Виконатися може не те, що ти бачиш."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Дозволити"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Дозволяти завжди"}

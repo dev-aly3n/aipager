@@ -610,9 +610,14 @@ def test_a_subagents_call_is_found_in_its_own_transcript(mk_bot, files_bot, rich
 
 def test_a_request_with_no_turn_running_is_not_recorded(mk_bot, files_bot, rich,
                                                         run_async, tmp_path):
+    """No turn runs, and none of this conversation ended (a new one): a
+    turn Claude Code starts with no hook cannot be starting either. (After
+    a turn ended, the request is kept in memory, as one may be: its files
+    are not read until the transcript shows that start.)"""
     bot = _bot(mk_bot, files_bot)
     sess = _sess(bot, tmp_path=tmp_path)
     bot.registry.transition(sess.name, Status.IDLE)
+    sess.files_turn_closed()
     pic = _pic(tmp_path)
 
     async def go():
@@ -1082,8 +1087,8 @@ def test_orphans_of_two_turns_each_reply_to_their_own_prompt(
 def test_a_send_whose_turn_ended_before_it_ran_is_dropped(mk_bot, files_bot, rich,
                                                           run_async, tmp_path):
     """The request came during the turn; the turn was over by its
-    PostToolUse (a forged Stop in between, or a replay of the pair): not
-    copied."""
+    PostToolUse (a forged Stop in between): not copied, and since Claude's
+    own transcript shows the call, the chat says it was not sent."""
     bot = _bot(mk_bot, files_bot)
     sess = _sess(bot, tmp_path=tmp_path)
     pic = _pic(tmp_path)
@@ -1102,7 +1107,16 @@ def test_a_send_whose_turn_ended_before_it_ran_is_dropped(mk_bot, files_bot, ric
         await _finish(bot, sess, "")
     run_async(go())
     assert files_bot.file_calls() == []
-    assert sess.files_sent_ids == []
+    assert _copies() == []
+    lines = [c[2]["_args"][1] for c in files_bot.calls if c[0] == "send_message"]
+    assert [x for x in lines if "chart.png" in x] == [
+        "⚠️ Couldn't send chart.png: aipager could not confirm that Claude sent "
+        "it in this turn."]
+
+
+def _copies():
+    root = outbox.outbox_dir()
+    return [p for p in root.rglob("*") if p.is_file()] if root.exists() else []
 
 
 def test_a_late_call_is_kept_while_a_tool_still_runs(mk_bot, files_bot, rich,
@@ -1190,3 +1204,4 @@ def test_a_cancelled_delivery_leaves_no_copy_claimed(mk_bot, files_bot, rich,
         return claimed
     assert run_async(go()) == 2
     assert outbox.OUTBOX.claimed == set()
+

@@ -484,6 +484,7 @@
 {"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ Не удалось отправить {name}."}
 {"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ Не удалось отправить {name}: Telegram не принял файл."}
 {"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ Не удалось отправить {name}: файл слишком большой для Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ Не удалось отправить {name}: aipager не смог подтвердить, что Claude отправил этот файл в рамках текущей задачи."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Здесь есть скрытые символы, меняющие направление текста (показаны как ⟨U+...⟩). Выполниться может не то, что ты видишь."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Разрешить"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Разрешать всегда"}

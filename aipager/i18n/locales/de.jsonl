@@ -484,6 +484,7 @@
 {"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ {name} konnte nicht gesendet werden."}
 {"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ {name} konnte nicht gesendet werden: Telegram hat die Datei abgelehnt."}
 {"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ {name} konnte nicht gesendet werden: Die Datei ist zu groß für Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ {name} konnte nicht gesendet werden: aipager konnte nicht bestätigen, dass Claude die Datei in diesem Durchlauf gesendet hat."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Hier stecken versteckte Zeichen, die die Schreibrichtung ändern (angezeigt als ⟨U+...⟩). Ausgeführt wird vielleicht etwas anderes, als du siehst."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Erlauben"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Immer erlauben"}

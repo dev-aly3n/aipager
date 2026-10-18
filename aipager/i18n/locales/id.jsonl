@@ -484,6 +484,7 @@
 {"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ {name} tidak terkirim."}
 {"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ {name} tidak terkirim: Telegram menolaknya."}
 {"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ {name} tidak terkirim: ukurannya terlalu besar untuk Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ {name} tidak terkirim: aipager tidak bisa memastikan Claude mengirimnya di giliran ini."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Ini berisi karakter tersembunyi yang mengubah arah teks (ditampilkan sebagai ⟨U+...⟩). Yang dijalankan mungkin tidak sama dengan yang kamu lihat."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Izinkan"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Selalu izinkan"}

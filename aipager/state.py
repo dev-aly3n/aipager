@@ -684,6 +684,14 @@ class TrackedSession:
     files_turn_wall: float = 0.0
     files_transcript: str = ""
     files_sent_ids: list[str] = field(default_factory=list)
+    # When the files turn last ended (a Stop, wall clock), kept with
+    # ``files_transcript``: a call of a turn Claude Code starts after it
+    # with no UserPromptSubmit (a queued message it dequeues, a Stop
+    # hook's feedback that makes it go on) counts, but only once that
+    # transcript shows the start (outbox.hookless_turn_started). Zero
+    # when no turn of this conversation ended yet (a new or resumed one,
+    # gone). Persisted.
+    files_turn_closed_wall: float = 0.0
     # Roadmap 8.120: the prompts that opened while another was already
     # open, in arrival order, each sent as its own message. Every entry has
     # the ``pending_prompt_msg`` shape (``text, keyboard, summary,
@@ -2768,9 +2776,37 @@ class TrackedSession:
         self.files_transcript = self.transcript_path or ""
         return True
 
-    def files_turn_closed(self) -> None:
-        """No turn or job runs any more: no file can come from one."""
+    def files_turn_resumed(self, wall: float) -> bool:
+        """A turn of the same conversation began at *wall* with no prompt
+        hook: a queued message the daemon typed, which Claude Code popped
+        when the last turn ended (notify._take_next_prompt). Open the
+        files turn again, still looking in the transcript noted for that
+        conversation (never a path a datagram names now). True when it
+        opened. (A start only the transcript shows does not open it: each
+        call of such a turn is proven on its own, see
+        outbox.hookless_turn_started.)"""
+        if self.files_turn_open or not self.files_transcript or wall <= 0:
+            return False
+        self.files_turn_open = True
+        self.files_turn_wall = wall
+        return True
+
+    def files_turn_closed(self, ended_wall: float = 0.0) -> None:
+        """No turn or job runs any more: no file can come from one.
+        *ended_wall* is when that turn ended (its Stop), kept so a turn
+        Claude Code starts with no hook after it can be proven
+        (``files_turn_closed_wall``); zero forgets it (a new
+        conversation, the session gone)."""
         self.files_turn_open = False
+        self.files_turn_closed_wall = ended_wall if ended_wall > 0 else 0.0
+
+    def files_turn_stopped(self, wall: float) -> None:
+        """Claude's own turn ended at *wall* (a Stop). With the files turn
+        closed already (a Stop on an idle session: a turn Claude Code ran
+        with no hook and no tool call), that turn's end is the newest one:
+        a later hookless start must come after it."""
+        if not self.files_turn_open and self.files_turn_closed_wall > 0:
+            self.files_turn_closed_wall = max(self.files_turn_closed_wall, wall)
 
     def files_call_used(self, tool_use_id: str) -> bool:
         """Record *tool_use_id* as copied. False when it already was (a
@@ -3816,8 +3852,12 @@ class SessionRegistry:
             # keeps it: the job is the turn, and its agent and its later
             # continuation run under the job's rules.
             sess.turn_sender_id = None
-            # And no file Claude sends can come from one (outbox.py).
-            sess.files_turn_closed()
+            # And no file Claude sends can come from one (outbox.py). An
+            # idle session keeps when it ended: a call of a turn Claude
+            # Code starts with no hook after it can still count
+            # (notify._copy_in_hookless_turn).
+            sess.files_turn_closed(
+                time.time() if new_status == Status.IDLE else 0.0)
         # Messages held for a dialog: how it closed, for the bot's release
         # (``dialog_hold``). Before the debounce below, which can return
         # early; a new dialog takes the mark back off.
@@ -4268,7 +4308,7 @@ class SessionRegistry:
         # Files Claude sends: the turn they may come from, and the call
         # ids already copied (see TrackedSession.files_turn_open).
         "files_turn_open", "files_turn_wall", "files_transcript",
-        "files_sent_ids",
+        "files_sent_ids", "files_turn_closed_wall",
         # NOT here, and not by oversight: `active_subagents` /
         # `finished_subagents` / `tool_history` are per-turn state, and the
         # subagent rows carry `started_at` / `last_seen` as
@@ -4624,6 +4664,12 @@ class SessionRegistry:
                                     else 0.0)
             if not sess.files_turn_wall:
                 sess.files_turn_open = False
+            try:
+                closed_wall = float(sd.get("files_turn_closed_wall") or 0.0)
+            except (TypeError, ValueError):
+                closed_wall = 0.0
+            sess.files_turn_closed_wall = (
+                closed_wall if 0.0 < closed_wall <= time.time() else 0.0)
             files_tp = sd.get("files_transcript")
             sess.files_transcript = files_tp if isinstance(files_tp, str) else ""
             raw_ids = sd.get("files_sent_ids") or []

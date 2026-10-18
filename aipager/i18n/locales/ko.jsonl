@@ -484,6 +484,7 @@
 {"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ {name} 파일을 보내지 못했어요."}
 {"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ {name} 파일을 보내지 못했어요: Telegram이 거부했어요."}
 {"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ {name} 파일을 보내지 못했어요: Telegram에 보내기에는 너무 커요."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ {name} 파일을 보내지 못했어요: Claude가 이번 작업에서 보낸 파일인지 aipager가 확인하지 못했어요."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ 글자 방향을 바꾸는 숨은 문자가 들어 있어요(⟨U+...⟩로 표시). 보이는 것과 다른 것이 실행될 수 있어요."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ 허용"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 항상 허용"}

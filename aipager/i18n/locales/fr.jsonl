@@ -484,6 +484,7 @@
 {"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ Impossible d'envoyer {name}."}
 {"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ Impossible d'envoyer {name} : Telegram l'a refusé."}
 {"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ Impossible d'envoyer {name} : le fichier est trop gros pour Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ Impossible d'envoyer {name} : aipager n'a pas pu confirmer que Claude l'a envoyé pendant ce tour."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Ce texte contient des caractères cachés qui changent le sens de l'écriture (affichés comme ⟨U+...⟩). Il peut exécuter autre chose que ce que vous voyez."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Autoriser"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Toujours autoriser"}

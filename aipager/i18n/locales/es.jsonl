@@ -484,6 +484,7 @@
 {"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ No se pudo enviar {name}."}
 {"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ No se pudo enviar {name}: Telegram lo rechazó."}
 {"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ No se pudo enviar {name}: es demasiado grande para Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ No se pudo enviar {name}: aipager no pudo confirmar que Claude lo enviara en este turno."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Este texto tiene caracteres ocultos que cambian la dirección de escritura (se muestran como ⟨U+...⟩). Puede ejecutar algo distinto de lo que ves."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Permitir"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Permitir siempre"}
