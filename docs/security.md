@@ -30,7 +30,7 @@ in a group only a message addressed to the bot (a command, a reply to
 it, a mention, or a tap on its keyboard) is acted on, whether or not
 the bot is a group admin (see [groups](groups.md)).
 
-This means the surface to "outside the world" is:
+This means the surface open to the outside world is:
 
 - The bot token (a secret).
 - The chat ID (a long integer).
@@ -789,9 +789,7 @@ over or stops it, or until the machine reboots; `aipager uninstall`
 stops it too. If the tunnel dies mid-run,
 aipager restarts it with backoff and republishes the new address; if
 it cannot come back up after several attempts, the button is removed
-rather than left pointing at a dead port (see [Network
-surface](#network-surface) above for the same "no button is an honest
-absence" principle applied to the loopback server itself).
+rather than left pointing at a dead port.
 
 Setting `MINIAPP_PUBLIC_URL` (or `aipager miniapp enable --url
 https://…`) disables the managed tunnel entirely - no cloudflared

@@ -208,7 +208,7 @@ one that has not, and it earns its speed back over the following hours.
 
 If a chat's rate falls below 0.2 calls/s - or its hourly budget's share
 for cards and bubbles is spent - it enters **minimal mode**: busy cards
-stop animating and show one static `⏳ working (updates paused)` line,
+stop animating and show one static `⏳ x1 · working (updates paused)` line,
 the typing bubble stops, and the pinned status bar shows
 `⏸ card updates paused (hourly limit)` (or `(rate limit)` when the rate
 is what put the chat there) and otherwise stops changing until it lifts.
@@ -265,7 +265,7 @@ so it cannot extend the ban:
   and including 0.7.14 the prompt went to Claude while the error
   message and its button stayed, so a second tap sent it again.
 - The main keyboard is held back too, including the one a restart sends
-  (up to 0.7.14 it was lost until something else refreshed it). It is
+  (up to and including 0.7.14 it was lost until something else refreshed it). It is
   sent after the ban lifts.
 
 After the ban lifts, things arrive in this order: held answers, then
