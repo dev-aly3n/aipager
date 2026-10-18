@@ -130,7 +130,7 @@ Para configurar, adicione o bot ao grupo como admin (para ele poder fixar a barr
 
 ### <a id="and-the-small-things"></a>E os detalhes
 
-- **Várias sessões, um bot.** Uma mensagem comum vai para a sessão com quem você falou por último; responda a uma mensagem de uma sessão para falar com ela, ou mande `/x1 <message>`.
+- **Várias sessões, um bot.** Uma mensagem comum vai para a última sessão com que você falou; responda a uma mensagem de uma sessão para falar com ela, ou mande `/x1 <message>`.
 - **Nada se mistura.** Uma mensagem enviada enquanto há um pedido de permissão ou uma pergunta aberta espera você responder, para nunca ser lida como a resposta.
 - **Fotos, arquivos e áudios.** Os áudios viram texto no seu computador, com o extra opcional `voice`.
 - **Ele avisa você.** Contexto quase cheio, conversa compactada, uma sessão que terminou e uma que está quieta há um tempo.
@@ -144,7 +144,7 @@ O Claude Code roda num terminal de verdade, dentro do `dtach`, para ninguém pre
 
 ## <a id="install"></a>Instalação
 
-Linux ou macOS, qualquer arquitetura. Você precisa do Claude Code com login feito neste computador e de um bot do Telegram: crie um com o [@BotFather](https://t.me/BotFather) e toque em Start nele.
+Linux ou macOS, qualquer arquitetura. Você precisa do Claude Code com login feito neste computador e de um bot do Telegram: crie um com o [@BotFather](https://t.me/BotFather) e toque em Iniciar nele.
 
 ```sh
 curl -fsSL https://aipager.run/install | sh   # uv, pipx ou Homebrew: o que você tiver
@@ -160,7 +160,7 @@ O instalador usa o `uv` se você tiver, senão o `pipx`, senão (no macOS) o Hom
 
 <br>
 
-Tem o Claude Code ou qualquer agente com shell? Crie o bot, toque em Start nele e salve o token do bot num arquivo que o seu agente nunca precise ler (cole o token, aperte Enter e depois Ctrl-D):
+Tem o Claude Code ou qualquer agente com shell? Crie o bot, toque em Iniciar nele e salve o token do bot num arquivo que o seu agente nunca precise ler (cole o token, aperte Enter e depois Ctrl-D):
 
 ```sh
 mkdir -p ~/.config/aipager
@@ -169,7 +169,7 @@ rm -f ~/.config/aipager/bot-token
 chmod 600 ~/.config/aipager/bot-token
 ```
 
-Depois dê este prompt ao seu agente:
+Depois mande esta mensagem ao seu agente:
 
 ```text
 Install aipager for me by following https://aipager.run/agent.md. My Telegram bot token is in ~/.config/aipager/bot-token and my Telegram user id is <your id>.
@@ -325,7 +325,7 @@ O aipager manda para o Telegram só o que você vê nos seus chats, com o seu pr
 
 <br>
 
-Um programinha que desacopla um terminal. Ele mantém o Claude Code vivo quando o terminal fecha ou o SSH cai, então uma resposta que você manda uma hora depois ainda chega a uma sessão viva. Ele vem com o aipager.
+Um programinha que desacopla um terminal. Ele mantém o Claude Code rodando quando o terminal fecha ou o SSH cai, então uma resposta que você manda uma hora depois ainda chega a uma sessão que está rodando. Ele vem com o aipager.
 
 </details>
 
@@ -389,7 +389,7 @@ systemd-run --user --scope -q -p MemoryMax=2G -p MemorySwapMax=0 \
 ruff check aipager tests
 ```
 
-O `dtach` vem com a dependência `dtach-bin`, então não precisa de mais nada. Rode os testes com limite de memória como acima (no macOS, sem `systemd-run`): senão um teste descontrolado pode tomar toda a memória da máquina. O processo de lançamento está em [CONTRIBUTING.md](../../../CONTRIBUTING.md).
+O `dtach` vem com a dependência `dtach-bin`, então não precisa de mais nada. Rode os testes com limite de memória como acima (no macOS, sem `systemd-run`): senão um teste descontrolado pode tomar toda a memória do computador. O processo de lançamento está em [CONTRIBUTING.md](../../../CONTRIBUTING.md).
 
 ## <a id="license"></a>Licença
 

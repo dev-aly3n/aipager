@@ -9,7 +9,7 @@
 <h3>Claude 只是又多了一个聊天。</h3>
 
 你的 [Claude Code](https://claude.com/claude-code) 会话就在 Telegram 里，和家人、朋友、团队的聊天挨在一起。<br>
-它们在你自己的电脑上运行。无论你在哪里，都能看进度、回答它的问题、交给它下一件事。
+它们在你自己的电脑上运行。无论你在哪里，都能看着它们、回答它们、给它们指方向。
 
 <p>
 <a href="https://pypi.org/project/aipager/"><img alt="PyPI" src="https://img.shields.io/pypi/v/aipager?style=flat-square&label=pypi&labelColor=181c20&color=2aabee"></a>
@@ -48,7 +48,7 @@ Claude 此刻在做什么：它运行的工具、上下文、花费和改动的�
 <td width="33%" valign="top">
 
 **⚡ 工作中也能说话**<br>
-即使 Claude 正在工作，你的消息也会立即输入到会话里，就像在终端里打字一样。👀 表示已送出，👍 表示 Claude 已经取走。
+即使 Claude 正在工作，你的消息也会立即输入到会话里，就像在终端里打字一样。👀 表示已送出，👍 表示 Claude 已经收下。
 
 </td>
 <td width="33%" valign="top">
@@ -68,13 +68,13 @@ Claude 此刻在做什么：它运行的工具、上下文、花费和改动的�
 <td width="33%" valign="top">
 
 **👥 为团队而做**<br>
-把机器人拉进群组。每条消息都以发送者的角色运行，成员可以被限制在自己的文件夹里，每一次点击都记在审计日志里。
+把机器人拉进群组。每条消息都以发送者的角色运行，成员可以被限制在自己的文件夹里，每一次点按都记在审计日志里。
 
 </td>
 <td width="33%" valign="top">
 
 **🔒 中间没有任何人**<br>
-没有 aipager 服务器，没有账号，没有开放端口。你的机器人令牌，你的电脑，你的聊天。
+没有 aipager 服务器，没有账号，没有开放端口。你的机器人 token，你的电脑，你的聊天。
 
 </td>
 </tr>
@@ -140,7 +140,7 @@ Claude 此刻在做什么：它运行的工具、上下文、花费和改动的�
 
 <img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/how-it-works.webp" width="100%" alt="Claude Code、它的 hook、aipager、Telegram 和你的聊天，排成一行">
 
-Claude Code 在 `dtach` 里的真实终端中运行，所以没人需要一直开着窗口。每一步都会触发一个 [hook](hooks.md)，它通过本地套接字向 aipager 发送一个数据报，aipager 再编辑你聊天里的一条消息。你的回答沿同一条路回去：要么是给正在等待调用的 hook 的决定，要么是输入到会话里的按键。终端始终是唯一的事实来源。详见[架构](architecture.md)。
+Claude Code 在 `dtach` 里的真实终端中运行，所以没人需要一直开着窗口。每一步都会触发一个 [hook](hooks.md)，它通过本地套接字向 aipager 发送一个数据报，aipager 再编辑你聊天里的一条消息。你的回答沿同一条路回去：要么是交给扣着这次调用的 hook 的决定，要么是输入到会话里的按键。终端始终是唯一的事实来源。详见[架构](architecture.md)。
 
 ## <a id="install"></a>安装
 
@@ -153,14 +153,14 @@ aipager service install                       # 注销后也让 aipager 继续�
 aipager session api                           # 这个文件夹里的 Claude Code，也在你的聊天里
 ```
 
-安装脚本有 `uv` 就用 `uv`，否则用 `pipx`，再否则（在 macOS 上）用 Homebrew，都没有时就安装 `uv`。`dtach` 随 aipager 一起提供（[`dtach-bin`](https://pypi.org/project/dtach-bin/) 包），所以不需要再装别的。`aipager config` 是一个向导：它检查机器人令牌和你的聊天，然后替你把 aipager 的 hook 加到 `~/.claude/settings.json` 里。你永远不需要手动编辑文件。
+安装脚本有 `uv` 就用 `uv`，否则用 `pipx`，再否则（在 macOS 上）用 Homebrew，都没有时就安装 `uv`。`dtach` 随 aipager 一起提供（[`dtach-bin`](https://pypi.org/project/dtach-bin/) 包），所以不需要再装别的。`aipager config` 是一个向导：它检查机器人 token 和你的聊天，然后替你把 aipager 的 hook 加到 `~/.claude/settings.json` 里。你永远不需要手动编辑文件。
 
 <details>
 <summary><b>让编程代理替你安装</b></summary>
 
 <br>
 
-有 Claude Code，或者任何能用 shell 的代理吗？创建机器人，在里面点 Start，然后把机器人令牌保存到一个代理永远不需要读取的文件里（粘贴令牌，按 Enter，再按 Ctrl-D）：
+有 Claude Code，或者任何能用 shell 的代理吗？创建机器人，在里面点 Start，然后把机器人 token 保存到一个代理永远不需要读取的文件里（粘贴 token，按 Enter，再按 Ctrl-D）：
 
 ```sh
 mkdir -p ~/.config/aipager
@@ -169,13 +169,13 @@ rm -f ~/.config/aipager/bot-token
 chmod 600 ~/.config/aipager/bot-token
 ```
 
-然后把这段提示词交给你的代理：
+然后把这段话交给你的代理：
 
 ```text
 Install aipager for me by following https://aipager.run/agent.md. My Telegram bot token is in ~/.config/aipager/bot-token and my Telegram user id is <your id>.
 ```
 
-如果你不知道自己的 Telegram 用户 ID，就直接这么说；代理能找到它。代理遵循的指南（包括如何安全地交出令牌）是[用代理安装](install-with-an-agent.md)。在脚本里，`aipager setup --token-file FILE --chat-id ID` 会不问任何问题地完成设置（[setup 命令](commands.md#command-line-aipager-setup-for-coding-agents)）。
+如果你不知道自己的 Telegram 用户 ID，就直接这么说；代理能找到它。代理遵循的指南（包括如何安全地交出 token）是[用代理安装](install-with-an-agent.md)。在脚本里，`aipager setup --token-file FILE --chat-id ID` 会不问任何问题地完成设置（[setup 命令](commands.md#command-line-aipager-setup-for-coding-agents)）。
 
 </details>
 
@@ -219,7 +219,7 @@ docker run -d --restart=unless-stopped --name aipager \
   ghcr.io/dev-aly3n/aipager:latest
 ```
 
-把希望 Claude 编辑的文件夹挂载到 `/workspace` 下。挂载 `~/.claude` 会带上你的 Claude 凭据和对话记录：在主机上运行一次 `claude` 登录，或者用 `docker exec -it aipager claude` 在容器里登录。
+把希望 Claude 编辑的文件夹挂载到 `/workspace` 下。挂载 `~/.claude` 会带上你的 Claude 凭据和保存的对话：在主机上运行一次 `claude` 登录，或者用 `docker exec -it aipager claude` 在容器里登录。
 
 标签：`latest`、`1.3`、`1.3.6`（一个对应精确版本，一个对应次版本）。
 
@@ -293,7 +293,7 @@ aipager doctor                            # 检查安装
 
 ## <a id="security"></a>安全
 
-- **没有 aipager 服务器。** aipager 用你自己的机器人令牌直接和 Telegram Bot API 通信。没有 aipager 账号，也没有 aipager 服务。
+- **没有 aipager 服务器。** aipager 用你自己的机器人 token 直接和 Telegram Bot API 通信。没有 aipager 账号，也没有 aipager 服务。
 - **没有开放端口。** aipager 只监听回环地址。Mini App 通过 Cloudflare 隧道对外，其中每个请求都必须带有 Telegram 的签名，`aipager miniapp disable` 可以关闭它。
 - **每个回答都有记录。** 每一次允许、拒绝和回答都会追加到 `~/.claude/aipager-audit.jsonl`，在群组里还会记下是谁点的。
 - **仍由 Claude Code 决定。** 需要问什么，由你的 Claude Code 设置决定。aipager 只负责转达问题，从不提升权限：没有 sudo，一切都以你的用户身份运行。
@@ -316,7 +316,7 @@ Claude 的应用和 Anthropic 托管的助手对话。aipager 把你连到在你
 
 <br>
 
-aipager 只把你在聊天里看到的内容，用你自己的机器人令牌发给 Telegram；中间没有任何 aipager 服务器。Claude Code 本身照常和 Anthropic 通信。
+aipager 只把你在聊天里看到的内容，用你自己的机器人 token 发给 Telegram；中间没有任何 aipager 服务器。Claude Code 本身照常和 Anthropic 通信。
 
 </details>
 
@@ -325,7 +325,7 @@ aipager 只把你在聊天里看到的内容，用你自己的机器人令牌发
 
 <br>
 
-一个让程序脱离终端的小工具。终端关闭或 SSH 断开时，它让 Claude Code 继续活着，所以一小时后发出的回答仍然能到达活着的会话。它随 aipager 一起提供。
+一个让程序脱离终端的小工具。终端关闭或 SSH 断开时，它让 Claude Code 继续运行，所以一小时后发出的回答仍然能到达还在运行的会话。它随 aipager 一起提供。
 
 </details>
 
@@ -343,7 +343,7 @@ aipager 只把你在聊天里看到的内容，用你自己的机器人令牌发
 
 <br>
 
-发送 `/update`：它会检查 aipager 和 Claude Code 并安装新版本，然后“🔄 立即重启”会把 aipager 重新拉起来，无论是否作为服务运行。期间你的会话照常运行。在命令行里，`aipager update` 会通过安装 aipager 的那个安装器来更新。
+发送 `/update`：它会检查 aipager 和 Claude Code 并安装新版本，然后“🔄 立即重启”会把 aipager 重新拉起来，无论是否作为服务运行。期间你的会话照常运行。在命令行里，`aipager update` 会通过安装 aipager 的那个安装程序来更新。
 
 </details>
 
@@ -389,7 +389,7 @@ systemd-run --user --scope -q -p MemoryMax=2G -p MemorySwapMax=0 \
 ruff check aipager tests
 ```
 
-`dtach` 随 `dtach-bin` 依赖一起提供，不需要别的。请像上面那样在内存上限下运行测试（macOS 上不用 `systemd-run`）：否则一个失控的测试可能占满整台机器的内存。发布流程见 [CONTRIBUTING.md](../../../CONTRIBUTING.md)。
+`dtach` 随 `dtach-bin` 依赖一起提供，不需要别的。请像上面那样在内存上限下运行测试（macOS 上不用 `systemd-run`）：否则一个失控的测试可能占满整台电脑的内存。发布流程见 [CONTRIBUTING.md](../../../CONTRIBUTING.md)。
 
 ## <a id="license"></a>许可证
 

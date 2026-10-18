@@ -37,7 +37,7 @@ aipager 让用户能在 Telegram 上操作 Claude Code 会话。完成后，用�
   ```
 
   然后粘贴 token，按 Enter，再按 Ctrl-D。只有用户自己能读这个文件（权限 600）。设置成功后可以删掉它（aipager 会在自己的配置里保留一份）。用户把路径告诉你（`~/.config/aipager/bot-token`）。token 永远不会进入你的对话，你把这个路径传给 `--token-file`。
-- **最快：直接粘贴到对话里**。这样也行，但要说清楚它意味着什么：token 会留在你的对话记录里，并被发送到你的模型服务商。如果这份记录将来可能被分享，用户之后应该向 @BotFather 发送 `/revoke`，并用 `aipager setup --force` 设置新的 token（第 3.2 步，加上 `--force`）。如果用户选了这种方式，请把 token 保存到同一个文件里，并且不要打印出来：最好用你自己的写文件工具，然后执行 `chmod 600 ~/.config/aipager/bot-token`。如果你只有 shell，就用 here-document 通过 stdin 传入，这样 token 不会成为写文件那条命令的参数：
+- **最快：直接粘贴到对话里**。这样也行，但要说清楚它意味着什么：token 会留在你保存的对话里，并被发送到你的模型服务商。如果这段对话将来可能被分享，用户之后应该向 @BotFather 发送 `/revoke`，并用 `aipager setup --force` 设置新的 token（第 3.2 步，加上 `--force`）。如果用户选了这种方式，请把 token 保存到同一个文件里，并且不要打印出来：最好用你自己的写文件工具，然后执行 `chmod 600 ~/.config/aipager/bot-token`。如果你只有 shell，就用 here-document 通过 stdin 传入，这样 token 不会成为写文件那条命令的参数：
 
   ```sh
   mkdir -p ~/.config/aipager

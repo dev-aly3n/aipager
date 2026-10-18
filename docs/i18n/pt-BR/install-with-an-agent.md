@@ -13,7 +13,7 @@ O aipager deixa essa pessoa usar sessões do Claude Code pelo Telegram. Quando v
 Peça à pessoa para fazer isto. Você não pode fazer por ela.
 
 1. **Criar o bot.** No Telegram, ela abre o [@BotFather](https://t.me/BotFather), manda `/newbot` e escolhe um nome e um nome de usuário. O BotFather responde com o token do bot (parecido com `123456789:AA...`).
-2. **Tocar em Start no bot.** Ela abre o bot novo (o BotFather dá o link `t.me/<bot username>`) e toca em Start. Um bot não pode escrever para quem não fez isso.
+2. **Tocar em Iniciar no bot.** Ela abre o bot novo (o BotFather dá o link `t.me/<bot username>`) e toca em Iniciar. Um bot não pode escrever para quem não fez isso.
 3. **Fazer login no Claude Code neste computador.** Se ela já usa o Claude Code aqui, não precisa fazer nada. Num servidor sem tela, ela roda `claude` uma vez no próprio terminal e faz login (aparece um link para abrir em outro aparelho). Se preferir um token de longa duração, ela roda `claude setup-token`, que só imprime o token: ela mesma o salva para as sessões do aipager, no próprio terminal (cola o token, aperta Enter e depois Ctrl-D):
 
    ```sh
@@ -36,7 +36,7 @@ Quem tem o token do bot controla o bot. Ofereça estas duas opções à pessoa e
   chmod 600 ~/.config/aipager/bot-token
   ```
 
-  depois cola o token, aperta Enter e aperta Ctrl-D. Só ela pode ler o arquivo (permissões 600). Ela pode apagá-lo quando a configuração der certo (o aipager guarda a própria cópia na configuração dele). Ela te diz o caminho (`~/.config/aipager/bot-token`). O token nunca entra no seu chat, e você passa o caminho para `--token-file`.
+  depois cola o token, aperta Enter e aperta Ctrl-D. Só ela pode ler o arquivo (permissões 600). Ela pode apagá-lo quando a configuração der certo (o aipager guarda a própria cópia na configuração dele). Ela passa o caminho para você (`~/.config/aipager/bot-token`). O token nunca entra no seu chat, e você passa o caminho para `--token-file`.
 - **A mais rápida: colar no chat.** Funciona, mas diga claramente o que isso significa: o token fica na sua conversa e é enviado ao seu provedor de modelos. Se essa conversa puder ser compartilhada algum dia, a pessoa deve depois mandar `/revoke` ao @BotFather e definir o token novo com `aipager setup --force` (passo 3.2, com `--force`). Se ela escolher isso, salve o token no mesmo arquivo sem imprimi-lo: de preferência com a sua própria ferramenta de escrever arquivos e depois `chmod 600 ~/.config/aipager/bot-token`. Se você só tiver um shell, passe-o pelo stdin com um here-document, para ele não ser um argumento do comando que o escreve:
 
   ```sh
@@ -76,7 +76,7 @@ Use o ID real da pessoa e o caminho do arquivo do token. Em vez de `--token-file
 
 O setup confere o token com o Telegram, confere este computador, manda à pessoa uma mensagem de teste ("aipager is set up for you. ...") e só então escreve a configuração, adiciona os hooks do Claude Code em `~/.claude/settings.json` e, com `--service`, instala e inicia o serviço em segundo plano. Se alguma verificação falhar, nada é escrito.
 
-Adicione `--dry-run` para ver antes o que mudaria. `--role admin` faz da pessoa admin em vez de dona (o padrão, dona, é o certo para quem configura o próprio computador).
+Adicione `--dry-run` para ver antes o que mudaria. `--role admin` dá à pessoa a função de admin em vez da de dono (o padrão, dono, é o certo para quem configura o próprio computador).
 
 ### <a id="33-if-the-person-does-not-know-their-telegram-id"></a>3.3 Se a pessoa não sabe o ID do Telegram dela
 
@@ -84,7 +84,7 @@ Adicione `--dry-run` para ver antes o que mudaria. `--role admin` faz da pessoa 
 aipager setup detect-chat --token-file ~/.config/aipager/bot-token --json
 ```
 
-Peça à pessoa para tocar em Start no bot (ou mandar qualquer mensagem) enquanto isto espera (até 5 minutos; `--timeout SECONDS` muda isso). Ele imprime o remetente mais recente em `candidate` (`id`, `first_name`, `last_name`, `username`) e não salva nada. Mostre o nome e o nome de usuário à pessoa e pergunte “É você?”. Só quando ela disser que sim, rode o passo 3.2 com `--chat-id` igual a `candidate.id`. Se `other_candidates` não for 0, outras pessoas também escreveram para o bot: confirme bem.
+Peça à pessoa para tocar em Iniciar no bot (ou mandar qualquer mensagem) enquanto isto espera (até 5 minutos; `--timeout SECONDS` muda isso). Ele imprime o remetente mais recente em `candidate` (`id`, `first_name`, `last_name`, `username`) e não salva nada. Mostre o nome e o nome de usuário à pessoa e pergunte “É você?”. Só quando ela disser que sim, rode o passo 3.2 com `--chat-id` igual a `candidate.id`. Se `other_candidates` não for 0, outras pessoas também escreveram para o bot: confirme bem.
 
 ### <a id="34-read-the-result"></a>3.4 Ler o resultado
 
@@ -97,10 +97,10 @@ Com `--json`, o setup imprime exatamente um objeto JSON no stdout. Leia `exit_co
 | 2 | `usage`, `token_malformed`, `token_stdin_timeout`, `bad_chat_id`, ... | Sua entrada estava errada; `fix` diz qual opção. `token_malformed`: o arquivo não tem um token de bot; peça à pessoa para conferir. |
 | 3 | `deps_missing` | Siga `fix` (cada item que falta também tem o próprio `fix` em `deps.items`) e rode o setup de novo. |
 | 4 | `token_rejected` | O Telegram recusou o token. Peça o token de novo à pessoa (ou um novo do @BotFather). |
-| 5 | `chat_not_started`, `bot_blocked` | Peça à pessoa para abrir o bot e tocar em Start (ou desbloqueá-lo), e rode o setup de novo. |
+| 5 | `chat_not_started`, `bot_blocked` | Peça à pessoa para abrir o bot e tocar em Iniciar (ou desbloqueá-lo), e rode o setup de novo. |
 | 6 | `existing_install` | O aipager já está configurado com outro token, chat ou função. Diga à pessoa o que é diferente e pergunte antes de adicionar `--force`. |
 | 7 | `telegram_unreachable` | Problema de rede ou o Telegram está ocupado. Espere um minuto e tente de novo. |
-| 8 | `detect_timeout` | O detect-chat não viu nenhuma mensagem. Peça à pessoa para tocar em Start de novo e rode outra vez. Com o alerta `updates_backlog`, tocar em Start não adianta: pergunte à pessoa o ID numérico dela. |
+| 8 | `detect_timeout` | O detect-chat não viu nenhuma mensagem. Peça à pessoa para tocar em Iniciar de novo e rode outra vez. Com o alerta `updates_backlog`, tocar em Iniciar não adianta: pergunte à pessoa o ID numérico dela. |
 | 9 | `daemon_running` | detect-chat: um aipager para este bot já está rodando e recebe as mensagens dele. Pergunte à pessoa o ID numérico dela (ou pergunte antes de pará-lo com `aipager service stop`). |
 | 10 | `updates_conflict` | detect-chat: outro programa lê as mensagens deste bot. Pergunte à pessoa o ID numérico dela. |
 | 130 | `interrupted` | Parado com Ctrl-C. |
@@ -129,7 +129,7 @@ Diga em poucas linhas:
 - Não imprima, não dê echo nem `cat` no token, e nunca o coloque numa linha de comando (`--token` é recusado de qualquer jeito). Passe-o só como arquivo ou pelo stdin.
 - Não edite `~/.config/aipager/` (fora o arquivo do token do passo 2) nem `~/.claude/settings.json` à mão. Quem os escreve são `aipager setup` e `aipager config`.
 - Não adicione `--force` sem perguntar à pessoa: ele substitui o token, o chat ou a função que ela já tem.
-- Não reinicie nem feche a sua própria sessão do Claude Code. Numa primeira instalação, a sessão em que você está não está sob o aipager, e não precisa estar: as sessões novas vêm de `/new` no Telegram ou de `aipager session <name>`. Se o aipager já estiver configurado e a pessoa falar com você por ele (por exemplo para rodar `setup --force` com um token novo), não pare nem reinicie o aipager você mesmo: sua tarefa e a resposta dela ficariam pela metade. Diga à pessoa para reiniciá-lo quando você terminar.
+- Não reinicie nem feche a sua própria sessão do Claude Code. Numa primeira instalação, a sessão em que você está não está sob o aipager, e não precisa estar: as sessões novas vêm de `/new` no Telegram ou de `aipager session <name>`. Se o aipager já estiver configurado e a pessoa falar com você por ele (por exemplo para rodar `setup --force` com um token novo), não pare nem reinicie o aipager por conta própria: sua tarefa e a resposta dela ficariam pela metade. Diga à pessoa para reiniciá-lo quando você terminar.
 
 ## <a id="5-groups"></a>5. Grupos
 

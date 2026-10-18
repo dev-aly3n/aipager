@@ -1,6 +1,6 @@
 # Arquitetura
 
-<!-- i18n-source: docs/architecture.md @ c91598e -->
+<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../architecture.md))
 
@@ -102,9 +102,9 @@ O reinício feito pelo Telegram depende de todo esse caminho terminar antes de o
 | `/tmp/claude-status-<name>.json` | Dados da linha de status de cada sessão | `aipager-statusline` |
 | `/tmp/claude-notes-<name>/` | Uma nota de permissões para cada mensagem do Telegram que ainda não foi pega, e uma marca `turn-open` que o hook mantém enquanto há uma tarefa em andamento (uma mensagem que entra na tarefa só pode deixar as regras dela mais rígidas) | aipager (escreve as notas), `aipager-hook` (consome as notas; escreve `turn-open`, e os dois a apagam) |
 | `/tmp/claude-policy-<name>.json` | A cópia de referência das permissões da tarefa em andamento | `aipager-hook` (escreve ao pegar a mensagem), lida pela verificação `PreToolUse` |
-| `/tmp/claude-policy-.floor-<uid>.json` | O piso de segurança, a lista própria mais a sua seção `safety:`, para os casos de reserva do hook | aipager |
+| `/tmp/claude-policy-.floor-<uid>.json` | O piso de segurança, a lista própria do aipager mais a sua seção `safety:`, para os casos de reserva do hook | aipager |
 | `/tmp/claude-reply-<name>.txt` | A mensagem que você respondeu, quando você responde a uma mensagem anterior | aipager |
-| `/tmp/aipager-files/` | Arquivos e áudios enviados pelo Telegram | aipager |
+| `/tmp/aipager-files/<chat>/` | Arquivos e áudios enviados pelo Telegram, uma pasta privada por chat (`0700`, arquivos `0600`) | aipager |
 | `/tmp/aipager.log` | A saída de um reinício próprio quando não há serviço | aipager |
 | `~/.claude/aipager-sessions.json` | O estado duradouro da lista de sessões | aipager |
 | `~/.claude/aipager-audit.jsonl` | Registro de permitir, negar e respostas | aipager (só acrescenta) |

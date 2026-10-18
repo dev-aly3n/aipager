@@ -61,7 +61,7 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 | start a session (/new) | crear una sesión, arrancar | iniciar sesión (it means sign in) |
 
 ## Vocabulary (one word per idea)
-- session: sesión (feminine: "x1 está lista", "x1 cerrada"); turn: turno where people take turns ("el turno de otra persona"), tarea for Claude's work on one message ("cuando termine esta tarea"); card: tarjeta; permission: permiso; a permission request: solicitud de permiso; question: pregunta.
+- session: sesión (feminine: "x1 está lista", "x1 terminada"); turn: turno where people take turns ("el turno de otra persona"), tarea for Claude's work on one message ("cuando termine esta tarea"); card: tarjeta; permission: permiso; a permission request: solicitud de permiso; question: pregunta.
 - allow: permitir (answered: permitido); deny: rechazar (answered: rechazado); stop: detener (stopped: detenido); resume: continuar / reanudar (the /resume button: Continuar); queue: cola; agent: agente; background: en segundo plano.
 - owner: propietario; admin: admin; member: miembro; chat: chat; group: grupo; settings: ajustes; folder: carpeta; model: modelo; role: rol; the Mini App is feminine ("la Mini App").
 - Kept in English: commit, token, diff, log, ctx. A diff is "cambios (diff)" where it is a label.

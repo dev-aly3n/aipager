@@ -77,9 +77,9 @@ hook 能回答时就自己回答这个请求。它打开一个短期的回复套
 
 某个工具完成了，或失败了。它在工作卡片上的那一行会定格（失败会在那一行上标出），并且会注意到对未结请求的回答：针对它的旧的允许或拒绝按钮之后不会再输入任何东西。会话保留最新的 200 行工具记录。
 
-被 Claude Code 移到后台的 `Bash` 调用会报告一个 `backgroundTaskId`。aipager 随后把它当作后台命令跟踪（只限主循环的：带 `agent_id` 的调用属于那个子代理），直到看到它结束：一个带 `<status>` 的 `<task-notification>`（在唤醒 Claude 的消息里，或者在任务进行中到达时出现在对话记录里）、针对它 ID 的 `TaskStop` 或 `KillShell`、会话结束，或两个小时（`AIPAGER_BG_SHELL_MAX_TRACK`，单位秒，默认 7200）。它在卡片上的那一行见[命令](commands.md#idle-responses)。
+被 Claude Code 移到后台的 `Bash` 调用会报告一个 `backgroundTaskId`。aipager 随后把它当作后台命令跟踪（只限主循环的：带 `agent_id` 的调用属于那个子代理），直到看到它结束：一个带 `<status>` 的 `<task-notification>`（在唤醒 Claude 的消息里，或者在任务进行中到达时出现在保存的对话里）、针对它 ID 的 `TaskStop` 或 `KillShell`、会话结束，或两个小时（`AIPAGER_BG_SHELL_MAX_TRACK`，单位秒，默认 7200）。它在卡片上的那一行见[命令](commands.md#idle-responses)。
 
-在子代理内部发起的 `Agent`（或 `Task`）调用（它的事件带有 `agent_id`）会报告它启动的代理的 ID。aipager 记住哪个代理启动了哪个，这样就能区分停下来等待自己的代理的代理和已经完成的代理（见下文 `SubagentStart` / `SubagentStop`）。
+在子代理内部发起的 `Agent`（或 `Task`）调用（它的事件带有 `agent_id`）会报告它启动的代理的 ID。aipager 记住哪个代理启动了哪个，这样就能分清一个代理是停下来等它启动的代理，还是已经完成了（见下文 `SubagentStart` / `SubagentStop`）。
 
 ### <a id="notification"></a>`Notification`
 
@@ -91,11 +91,11 @@ aipager 读取 Claude Code 的 `notification_type`：
 
 ### <a id="stop"></a>`Stop`
 
-任务结束了。会话变为就绪，工作卡片按你的布局定格，并发送 Claude 的回答（来自事件的 `last_assistant_message`，否则来自对话记录）。接着发送那些一直被暂缓、等任务结束的消息。仍在运行的后台代理和后台命令会让这份工作保持打开：卡片继续作为这份工作的状态，回答末尾附上这些工作的实时状态：每个代理在做什么，以及这份工作有多少后台命令在运行（见[命令 → 发出回答时仍在运行的代理](commands.md#agents-still-running-when-the-answer-goes-out)）。hook 会先清除任务的打开标记，除非 Claude 还持有一条会立刻成为下一个任务的排队消息。
+任务结束了。会话变为就绪，工作卡片按你的布局定格，并发送 Claude 的回答（来自事件的 `last_assistant_message`，否则来自保存的对话）。接着发送那些一直被暂缓、等任务结束的消息。仍在运行的后台代理和后台命令会让这份工作保持打开：卡片继续作为这份工作的状态，回答末尾附上这些工作的实时状态：每个代理在做什么，以及这份工作有多少后台命令在运行（见[命令 → 发出回答时仍在运行的代理](commands.md#agents-still-running-when-the-answer-goes-out)）。hook 会先清除任务的打开标记，除非 Claude 还持有一条会立刻成为下一个任务的排队消息。
 
 ### <a id="stopfailure"></a>`StopFailure`
 
-任务因 API 错误而结束。会话变为就绪，如果有回答，会像 `Stop` 一样送达；已知的错误（服务器过载、请求次数限制，……）会用简单的话说明。
+任务因 API 错误而结束。会话变为就绪，如果有回答，会像 `Stop` 一样送达；已知的错误（服务器过载、请求次数限制等）会用简单的话说明。
 
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
@@ -109,7 +109,7 @@ Claude 正在压缩它的上下文（`trigger` 为 `auto` 或 `manual`）。工�
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 
-Claude 自己的文字到达屏幕的那一刻。对话记录只在每一轮工具调用之后才写入，所以这是 Claude 此刻在说什么的唯一即时来源，也是把它的旁白送进工作卡片的东西。子代理的文字（任何带它 `agent_id` 的事件）绝不会被当作 Claude 自己的：它不会进入工作卡片的旁白、Mini App 或任务的日志，而会成为该代理在回答下方状态里的最新动态。hook 不会给这个事件附加状态行数据：Claude Code 在绘制时会等待它，而且每条消息会触发好几次。
+Claude 自己的文字到达屏幕的那一刻。保存的对话只在每一轮工具调用之后才写入，所以这是 Claude 此刻在说什么的唯一即时来源，也是把它的旁白送进工作卡片的东西。子代理的文字（任何带它 `agent_id` 的事件）绝不会被当作 Claude 自己的：它不会进入工作卡片的旁白、Mini App 或任务的日志，而会成为该代理在回答下方状态里的最新动态。hook 不会给这个事件附加状态行数据：Claude Code 在绘制时会等待它，而且每条消息会触发好几次。
 
 ### <a id="premodelswitch"></a>`PreModelSwitch`
 

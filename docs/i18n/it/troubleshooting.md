@@ -1,6 +1,6 @@
 # Risoluzione dei problemi
 
-<!-- i18n-source: docs/troubleshooting.md @ 054b893 -->
+<!-- i18n-source: docs/troubleshooting.md @ 1de34258 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../troubleshooting.md))
 
@@ -28,7 +28,7 @@ Se il controllo del socket non lo trova, `aipager start` si rifiuta comunque con
 1. `aipager status`: se la riga di aipager dice `not running`, avvialo.
 2. `aipager doctor`: i controlli `token_valid` e `chat_reachable` interrogano l'API di Telegram da cima a fondo e mostrano l'errore esatto.
 3. Chat sbagliata: esegui `aipager config` e scegli **Test bot reachability**. Per correggere una chat privata sbagliata, aggiungi quella giusta con **Add a DM scope** (vedi [come trovare gli ID](groups.md#finding-ids-auto-detect)), poi togli quella sbagliata in **Edit a scope**.
-4. Il bot non ha mai ricevuto `/start`: apri il bot in Telegram e tocca Start una volta.
+4. Il bot non ha mai ricevuto `/start`: apri il bot in Telegram e tocca «Avvia» una volta.
 
 ## <a id="busy-cards-got-slower"></a>Le schede di attività sono diventate più lente
 
@@ -115,7 +115,7 @@ aipager ferma gli invii alla chat esattamente per il tempo chiesto da Telegram e
 
 - Un messaggio che invii (testo, vocale, un file, un template rapido) arriva comunque a Claude e la sessione ci lavora. La sua scheda di attività viene trattenuta, non scartata: se l'attività è ancora in corso quando il blocco finisce, la scheda compare allora. Dopo un blocco la chat resta per un po' in modalità minima, quindi la scheda può arrivare qualche minuto dopo la fine del blocco. Se l'attività è finita durante il blocco, ricevi la risposta senza scheda.
 - **🔄 Riprova** durante un blocco non fa niente. Il messaggio non viene reinviato e il pulsante resta, così puoi toccarlo di nuovo dopo il blocco. Fino alla 0.7.14 compresa il messaggio andava a Claude mentre il messaggio di errore e il suo pulsante restavano, quindi un secondo tocco lo inviava di nuovo.
-- Anche la tastiera principale viene trattenuta, compresa quella che invia un riavvio (fino alla 0.7.14 andava persa finché qualcos'altro non la aggiornava). Viene inviata dopo la fine del blocco.
+- Anche la tastiera principale viene trattenuta, compresa quella che invia un riavvio (fino alla 0.7.14 compresa andava persa finché qualcos'altro non la aggiornava). Viene inviata dopo la fine del blocco.
 
 Dopo la fine del blocco le cose arrivano in quest'ordine: le risposte trattenute, poi le schede delle attività ancora in corso, poi la tastiera. Una scheda che deve aspettare la fine della modalità minima arriva dopo la tastiera.
 
@@ -220,7 +220,7 @@ L'ordine conta: ogni controllo dà per scontato che i precedenti siano passati. 
 | `config_parses` | `aipager.yaml` e `policy.yaml` si leggono; gira per primo, perché ogni controllo successivo legge la configurazione | l'errore indica il file e la riga |
 | `config` | `~/.config/aipager/aipager.yaml` esiste e contiene un token e una chat | `aipager config` |
 | `token_valid` | Il token funziona con `getMe` di Telegram | riesegui `aipager config` |
-| `chat_reachable` | Telegram conosce la chat configurata (`getChat`; non invia niente) | apri il bot, tocca Start |
+| `chat_reachable` | Telegram conosce la chat configurata (`getChat`; non invia niente) | apri il bot, tocca «Avvia» |
 | `team` | Le chat e i membri (o un vecchio `team.yaml`): dice se è uso personale o in team e segnala un vecchio `team.yaml` rovinato o non coerente | `aipager config` |
 | `role_shell_access` | Avvisa una volta per ogni ruolo di un membro che può eseguire Bash (le sue regole di sicurezza sono al meglio delle possibilità, non un confine; vedi [gruppi](groups.md#roles)) | non dare Bash a quel ruolo in `policy.yaml`, oppure accettalo |
 | `peer_messages` | Messaggi tra sessioni di Claude: dove si tengono le loro ricevute e se quella cartella è privata, se questo sistema può controllare l'ora di avvio di chi invia, e un avviso per ogni ruolo a cui una regola permette SendMessage (vedi [sicurezza](security.md#messages-between-claude-sessions)) | togli una cartella delle ricevute condivisa (aipager la ricrea), oppure non dare SendMessage a quel ruolo |
@@ -337,7 +337,7 @@ Un'installazione con pipx da un percorso locale: `pipx install --force /path/to/
 
 aipager si è fermato (o è stato riavviato) mentre `/update` installava, e l'installatore si è fermato con lui, quindi l'installazione potrebbe essere scritta a metà. Se aipager o Claude Code non funzionano bene, sistemali: per aipager, esegui il comando di reinstallazione del messaggio (per esempio `pipx install --force aipager`) e poi `systemctl --user restart aipager.service`; per Claude Code, esegui di nuovo `claude update`.
 
-Un Riavvia ora che non è riuscito a far ripartire aipager (senza servizio) lascia `restart.failed:` nel log di aipager con il comando da eseguire; eseguilo, e il nuovo aipager annuncia l'aggiornamento.
+Un «Riavvia ora» che non è riuscito a far ripartire aipager (senza servizio) lascia `restart.failed:` nel log di aipager con il comando da eseguire; eseguilo, e il nuovo aipager annuncia l'aggiornamento.
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>Una chat è nella lingua sbagliata
 
@@ -363,7 +363,7 @@ La tastiera di risposta di ogni chat è nella lingua di quella chat. Le parole d
 
 Invia una segnalazione di problemi: tocca **Segnala un problema** sotto `/help` nella tua chat privata con il bot, oppure esegui `aipager report` in un terminale. Vedi tutta la segnalazione prima che parta qualsiasi cosa, e non contiene chat, messaggi, nomi, percorsi o token (vedi [Segnalazioni di problemi](problem-reports.md)). Dopo l'invio ricevi un riferimento come `ap1-7c41d09e2b3a`.
 
-Poi, se vuoi parlarne, apri una issue su [github.com/dev-aly3n/aipager/issues](https://github.com/dev-aly3n/aipager/issues) e cita quel riferimento. Per favore non incollare nella issue l'output di `aipager doctor` o di `aipager logs`: contengono l'ID della tua chat, i percorsi della tua cartella home, i nomi delle sessioni e l'inizio dei tuoi messaggi. Se serve una riga del log, lo sviluppatore chiederà proprio quella riga, e potrai prima togliere tutto quello che è privato.
+Poi, se vuoi parlarne, apri una issue su [github.com/dev-aly3n/aipager/issues](https://github.com/dev-aly3n/aipager/issues) e cita quel riferimento. Per favore non incollare nella issue l'output di `aipager doctor` o di `aipager logs`: contengono l'ID della tua chat, i percorsi della tua cartella home, i nomi delle sessioni e l'inizio dei tuoi messaggi. Se serve una riga del log, chi sviluppa aipager ti chiederà proprio quella riga, e potrai prima togliere tutto quello che è privato.
 
 ## <a id="see-also"></a>Vedi anche
 

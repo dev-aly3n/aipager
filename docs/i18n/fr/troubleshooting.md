@@ -1,6 +1,6 @@
 # Dépannage
 
-<!-- i18n-source: docs/troubleshooting.md @ 054b893 -->
+<!-- i18n-source: docs/troubleshooting.md @ 1de34258 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../troubleshooting.md))
 
@@ -28,7 +28,7 @@ Si la vérification du socket ne le voit pas, `aipager start` refuse quand même
 1. `aipager status` : si la ligne d'aipager dit `not running`, démarrez-le.
 2. `aipager doctor` : les vérifications `token_valid` et `chat_reachable` interrogent l'API de Telegram de bout en bout et affichent l'erreur exacte.
 3. Mauvaise discussion : lancez `aipager config` et choisissez **Test bot reachability**. Pour corriger une mauvaise discussion privée, ajoutez la bonne avec **Add a DM scope** (voir [trouver les identifiants](groups.md#finding-ids-auto-detect)), puis retirez la mauvaise dans **Edit a scope**.
-4. Le bot n'a jamais reçu `/start` : ouvrez le bot dans Telegram et touchez Start une fois.
+4. Le bot n'a jamais reçu `/start` : ouvrez le bot dans Telegram et touchez Démarrer une fois.
 
 ## <a id="busy-cards-got-slower"></a>Les cartes d'activité sont devenues plus lentes
 
@@ -53,7 +53,7 @@ Le rythme ci-dessus vaut pour les deux premières minutes d'une tâche. Ensuite,
 
 L'horloge est arrondie vers le bas à son pas de 30 s, et les rafraîchissements sont espacés d'au moins 30 s, parfois un peu plus. La carte saute donc un pas de temps en temps : un rafraîchissement à 23 min 29 s affiche `23:00`, et si le suivant arrive à 24 min 1 s il affiche `24:00`, donc `23:30` est sauté.
 
-Une nouvelle ligne d'outil ou une nouvelle phrase attend le rafraîchissement suivant ; un **changement d'état** (la session qui passe de au travail à l'attente d'un agent en arrière-plan, et inversement) s'affiche tout de suite, au plus une fois toutes les 10 secondes. Les lignes des agents en direct et la ligne d'attente suivent les mêmes pas. La carte terminée affiche la durée de la tâche en vraies secondes (`23:17`).
+Une nouvelle ligne d'outil ou une nouvelle phrase attend le rafraîchissement suivant ; un **changement d'état** (la session qui passe du travail à l'attente d'un agent en arrière-plan, et inversement) s'affiche tout de suite, au plus une fois toutes les 10 secondes. Les lignes des agents en direct et la ligne d'attente suivent les mêmes pas. La carte terminée affiche la durée de la tâche en vraies secondes (`23:17`).
 
 C'est ce qui empêche une tâche de quatre heures de modifier un même message des milliers de fois : le 2026-09-23, une carte a fait exactement cela, et la discussion a été bloquée pendant sept heures. Pour garder le rythme rapide pendant toute une tâche, désactivez **`/settings` → ⏱ Mise à jour de carte (tâches longues)** (pour la discussion, ou pour une seule session depuis la Mini App ou `👤 Paramètres de chaque session`).
 
@@ -115,7 +115,7 @@ aipager réduit la discussion au silence pendant exactement le temps que Telegra
 
 - Un message que vous envoyez (texte, message vocal, fichier, modèle rapide) arrive quand même à Claude et la session y travaille. Sa carte d'activité est retenue, pas abandonnée : si la tâche tourne encore quand le blocage se lève, la carte apparaît à ce moment-là. Un blocage laisse la discussion en mode minimal un moment après, donc la carte peut mettre quelques minutes de plus que le blocage lui-même. Si la tâche s'est terminée pendant le blocage, vous recevez sa réponse et pas de carte.
 - **🔄 Réessayer** ne fait rien pendant un blocage. Le message n'est pas renvoyé et le bouton reste, pour que vous puissiez le toucher de nouveau une fois le blocage levé. Jusqu'à la 0.7.14 incluse, le message partait vers Claude alors que le message d'erreur et son bouton restaient, donc un second appui le renvoyait.
-- Le clavier principal est retenu lui aussi, y compris celui qu'envoie un redémarrage (jusqu'à la 0.7.14, il était perdu jusqu'à ce que quelque chose d'autre le rafraîchisse). Il est envoyé une fois le blocage levé.
+- Le clavier principal est retenu lui aussi, y compris celui qu'envoie un redémarrage (jusqu'à la 0.7.14 incluse, il était perdu jusqu'à ce que quelque chose d'autre le rafraîchisse). Il est envoyé une fois le blocage levé.
 
 Une fois le blocage levé, les choses arrivent dans cet ordre : les réponses retenues, puis les cartes des tâches qui tournent encore, puis le clavier. Une carte qui doit attendre la fin du mode minimal arrive après le clavier.
 
@@ -144,7 +144,7 @@ aipager session <label> --continue # un nouveau dtach, la dernière conversation
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Une demande d'autorisation sans nouvelles depuis 5 minutes
 
-Si une session attend une demande d'autorisation ou une question et que Claude Code ne donne aucune nouvelle pendant 5 minutes, aipager lit la conversation enregistrée de la session. Seules comptent les nouvelles de Claude et celles de l'agent qui a demandé : un agent en arrière-plan qui continue de travailler n'empêche pas cette vérification. Ce n'est que si elle montre que la demande est finie (répondue dans le terminal, et la nouvelle s'est perdue) qu'aipager arrête de l'attendre et compte de nouveau la session comme au travail. Sinon la demande reste ouverte aussi longtemps qu'il le faut : la carte et la barre épinglée disent toujours que la session a besoin de votre réponse, aucune note « toujours au travail » n'est envoyée, et vos messages sont retenus jusqu'à votre réponse (voir [texte](commands.md#text)). Un Claude Code qui se ferme avec la demande ouverte termine la session. Les boutons de la demande répondent toujours à la boîte de dialogue si elle est encore ouverte (voir [réponses](commands.md#idle-responses)).
+Si une session attend une demande d'autorisation ou une question et que Claude Code ne donne aucune nouvelle pendant 5 minutes, aipager lit la conversation enregistrée de la session. Seules comptent les nouvelles de Claude et celles de l'agent qui a demandé : un agent en arrière-plan qui continue de travailler n'empêche pas cette vérification. Ce n'est que si elle montre que la demande est finie (répondue dans le terminal, et la nouvelle s'est perdue) qu'aipager arrête de l'attendre et compte de nouveau la session comme au travail. Sinon la demande reste ouverte aussi longtemps qu'il le faut : la carte et la barre épinglée disent toujours que la session a besoin de votre réponse, aucune note « toujours au travail » n'est envoyée, et vos messages sont retenus jusqu'à votre réponse (voir [texte](commands.md#text)). Un Claude Code qui se ferme avec la demande ouverte termine la session. Les boutons de la demande répondent toujours à la boîte de dialogue si elle est encore ouverte (voir [réponses](commands.md#idle-responses)).
 
 Changer l'attente :
 
@@ -164,7 +164,7 @@ Si le bot a perdu la connexion pendant l'installation, l'installation elle-même
 
 ## <a id="open-app-shows-open-this-page-from-the-telegram-app-to-sign-in"></a>Ouvrir l'app affiche « Ouvrez cette page depuis l'app Telegram pour vous connecter. »
 
-La page s'est chargée, mais pas le script du SDK Mini App de Telegram (celui qui produit `initData`), donc la page n'a rien pour se connecter et ne fait aucun appel à l'API. Le message laisse croire que c'est votre faute ; la cause est réseau.
+La page s'est chargée, mais pas le script du SDK Mini App de Telegram (celui qui produit `initData`), donc la page n'a rien pour se connecter et ne fait aucun appel à l'API. Le message laisse croire que c'est votre faute ; la cause vient du réseau.
 
 Les versions récentes d'aipager récupèrent elles-mêmes ce script et le servent depuis l'origine de la page (`/telegram-web-app.js`), donc le téléphone n'a besoin de joindre que l'hôte qui a livré la page, pas `telegram.org` en plus. Si vous voyez cela sur une version plus ancienne, faites la mise à jour.
 
@@ -220,7 +220,7 @@ L'ordre compte : chaque vérification suppose que les précédentes ont réussi
 | `config_parses` | `aipager.yaml` et `policy.yaml` peuvent être lus ; passe en premier, puisque chaque vérification suivante lit la configuration | l'erreur nomme le fichier et la ligne |
 | `config` | `~/.config/aipager/aipager.yaml` existe et contient un token et une discussion | `aipager config` |
 | `token_valid` | Le token marche avec `getMe` de Telegram | relancer `aipager config` |
-| `chat_reachable` | Telegram connaît la discussion configurée (`getChat` ; rien n'est envoyé) | ouvrir le bot, toucher Start |
+| `chat_reachable` | Telegram connaît la discussion configurée (`getChat` ; rien n'est envoyé) | ouvrir le bot, toucher Démarrer |
 | `team` | Les discussions et les membres (ou un ancien `team.yaml`) : dit si c'est l'usage personnel ou l'usage en équipe, et signale un ancien `team.yaml` mal formé ou qui ne correspond pas | `aipager config` |
 | `role_shell_access` | Avertit une fois pour chaque rôle détenu par un membre qui peut lancer Bash (ses règles de sécurité sont au mieux, pas une barrière ; voir [groupes](groups.md#roles)) | ne donner aucun Bash à ce rôle dans `policy.yaml`, ou l'accepter |
 | `peer_messages` | Les messages entre sessions Claude : où sont gardés leurs reçus et si ce dossier est privé, si ce système peut vérifier l'heure de démarrage de l'expéditeur, et un avertissement pour chaque rôle qu'une règle autorise à utiliser SendMessage (voir [sécurité](security.md#messages-between-claude-sessions)) | supprimer un dossier de reçus partagé (aipager le recrée), ou ne donner aucun SendMessage à ce rôle |
@@ -341,7 +341,7 @@ Un Redémarrer maintenant qui n'a pas pu relancer aipager (sans service) laisse 
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>Une discussion est dans la mauvaise langue
 
-La langue d'aipager vient de ce qui a été choisi pour la discussion, pas des messages qu'elle contient. Ouvrez `/language` dans cette discussion et choisissez la langue que vous voulez : ce choix l'emporte sur tout le reste. Dans une discussion privée, **Automatique** suit la langue de votre app Telegram (Paramètres → Langue dans Telegram) ; une langue qu'aipager n'a pas s'affiche en anglais. Une discussion privée qui existait avant l'arrivée des langues reste en anglais tant que vous n'en choisissez pas une. Un groupe est en anglais tant qu'un admin n'a pas choisi sa langue. La langue ne change que les textes d'aipager lui-même : Claude répond dans la langue dans laquelle vous lui écrivez, quoi qu'affiche aipager. Voir [Langues](commands.md#languages).
+La langue d'aipager vient de ce qui a été choisi pour la discussion, pas des messages qu'elle contient. Ouvrez `/language` dans cette discussion et choisissez la langue que vous voulez : ce choix l'emporte sur tout le reste. Dans une discussion privée, **Automatique** suit la langue de votre app Telegram (Paramètres → Langue dans Telegram) ; une langue qu'aipager n'a pas s'affiche en anglais. Une discussion privée qui existait avant l'arrivée des langues reste en anglais tant que vous n'en choisissez pas une. Un groupe est en anglais tant qu'un admin n'a pas choisi sa langue. La langue ne change que les textes d'aipager lui-même : Claude répond dans la langue où vous lui écrivez, quoi qu'affiche aipager. Voir [Langues](commands.md#languages).
 
 ## <a id="the-bot-description-is-not-the-one-i-wrote"></a>La description du bot n'est pas celle que j'ai écrite
 

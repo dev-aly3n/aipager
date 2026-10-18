@@ -8,7 +8,7 @@
 
 <h3>Claude giờ chỉ là thêm một cuộc chat.</h3>
 
-Các phiên [Claude Code](https://claude.com/claude-code) của bạn ngay trong Telegram, cạnh gia đình, bạn bè và nhóm của bạn.<br>
+Các phiên [Claude Code](https://claude.com/claude-code) của bạn ngay trong Telegram, cạnh các chat với gia đình, bạn bè và nhóm của bạn.<br>
 Chúng chạy trên chính máy tính của bạn. Ở đâu bạn cũng theo dõi được, trả lời được và giao việc tiếp theo cho chúng.
 
 <p>
@@ -41,7 +41,7 @@ Chúng chạy trên chính máy tính của bạn. Ở đâu bạn cũng theo d�
 <tr>
 <td width="33%" valign="top">
 
-**📟 Một thẻ trực tiếp cho mỗi việc**<br>
+**📟 Một thẻ cập nhật liên tục cho mỗi việc**<br>
 Claude đang làm gì lúc này: các công cụ nó chạy, ngữ cảnh, chi phí và số dòng đã đổi, rồi tới câu trả lời. Thẻ tự cập nhật nên chat luôn gọn gàng.
 
 </td>
@@ -68,7 +68,7 @@ Yêu cầu cấp quyền và câu hỏi của Claude đến kèm một nút cho 
 <td width="33%" valign="top">
 
 **👥 Làm cho cả nhóm**<br>
-Thêm bot vào một nhóm. Mỗi tin nhắn chạy với vai trò của người gửi, thành viên có thể bị giới hạn trong thư mục riêng, và mọi lần chạm đều nằm trong nhật ký kiểm tra.
+Thêm bot vào một nhóm. Mỗi tin nhắn chạy với vai trò của người gửi, thành viên có thể bị giới hạn trong thư mục riêng, và mọi lần chạm đều nằm trong log kiểm tra.
 
 </td>
 <td width="33%" valign="top">
@@ -98,19 +98,19 @@ Mỗi phiên ở một trong ba chế độ, đổi bất cứ lúc nào bằng 
 |---|---|
 | 💬 **Chế độ Hỏi**<br>`/mode ask` | Claude hỏi trước mỗi thao tác. |
 | 🤖 **Chế độ Auto**, mặc định<br>`/mode auto` | Bước kiểm tra an toàn của chính Claude Code chạy các thao tác an toàn và dừng các thao tác rủi ro để bạn quyết định. |
-| 🔓 **Chế độ Toàn quyền**<br>`/mode full` | Mọi thứ chạy mà không có bất kỳ kiểm tra nào. Dành cho admin, và cho bạn trong chat riêng của chính bạn với bot. |
+| 🔓 **Chế độ Toàn quyền**<br>`/mode full` | Mọi thứ chạy mà không có bất kỳ kiểm tra nào. Dành cho quản trị viên, và cho bạn trong chat riêng của chính bạn với bot. |
 
 Chuyển giữa Chế độ Hỏi và Chế độ Auto diễn ra ngay tại chỗ, không khởi động lại. Vào hoặc ra khỏi Chế độ Toàn quyền sẽ khởi động lại phiên và giữ nguyên cuộc trò chuyện. Câu hỏi của Claude vẫn tới bạn ở mọi chế độ.
 
 ### <a id="your-team-in-one-group"></a>Nhóm của bạn, trong một nhóm chat
 
-Thêm bot vào một nhóm và giao cho mỗi thành viên một vai trò: `owner`, `admin`, `user` hoặc `read_only`. Trong nhóm, bot chỉ phản hồi lệnh, câu trả lời cho tin nhắn của nó và lượt nhắc tên (`@aipagerbot fix the tests`, `/web run the tests`), và mỗi tin nhắn chạy với vai trò của người gửi: công cụ mà vai trò đó không được dùng sẽ bị từ chối trước khi chạy. Thành viên `user` hoặc `read_only` chỉ làm việc trong thư mục gốc của riêng họ (mặc định `~/aipager-users/<label>`). Người khác cũng có thể có chat riêng của họ với bot.
+Thêm bot vào một nhóm và giao cho mỗi thành viên một vai trò: `owner`, `admin`, `user` hoặc `read_only`. Trong nhóm, bot chỉ phản hồi lệnh, câu trả lời cho tin nhắn của nó và lần nhắc đến bot (`@aipagerbot fix the tests`, `/web run the tests`), và mỗi tin nhắn chạy với vai trò của người gửi: công cụ mà vai trò đó không được dùng sẽ bị từ chối trước khi chạy. Thành viên `user` hoặc `read_only` chỉ làm việc trong thư mục gốc của riêng họ (mặc định `~/aipager-users/<label>`). Người khác cũng có thể có chat riêng của họ với bot.
 
 <img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/team.webp" width="100%" alt="Một nhóm chat của đội, nơi một lệnh bị từ chối vì vai trò của một thành viên trong khi các bài test vẫn qua">
 
 > **⚠️ Quan trọng:** Thêm một thành viên là cho họ quyền chạy mã trên máy tính của bạn. Hãy đọc [mô hình tin cậy](groups.md) trước khi chia sẻ bot.
 
-Để thiết lập, thêm bot vào nhóm với quyền admin (để nó ghim được thanh trạng thái của nhóm), chạy lại `aipager config` và chọn **Add a group scope**. Trình hướng dẫn sẽ thêm từng thành viên kèm vai trò, hỏi thư mục gốc của các thành viên và nạp lại cấu hình của aipager đang chạy.
+Để thiết lập, thêm bot vào nhóm với quyền quản trị viên (để nó ghim được thanh trạng thái của nhóm), chạy lại `aipager config` và chọn **Add a group scope**. Trình hướng dẫn sẽ thêm từng thành viên kèm vai trò, hỏi thư mục gốc của các thành viên và nạp lại cấu hình của aipager đang chạy.
 
 ### <a id="a-dashboard-inside-telegram"></a>Một bảng điều khiển ngay trong Telegram
 
@@ -140,7 +140,7 @@ Thêm bot vào một nhóm và giao cho mỗi thành viên một vai trò: `owne
 
 <img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/how-it-works.webp" width="100%" alt="Claude Code, hook của nó, aipager, Telegram và các chat của bạn, xếp thành hàng">
 
-Claude Code chạy trong một terminal thật, bên trong `dtach`, nên không ai phải giữ cửa sổ mở. Mỗi bước kích hoạt một [hook](hooks.md) gửi một datagram tới aipager qua socket cục bộ, và aipager sửa một tin nhắn trong chat của bạn. Câu trả lời của bạn quay về theo đúng đường đó: một quyết định gửi cho hook đang giữ lời gọi, hoặc các phím gõ vào phiên. Terminal vẫn là nguồn sự thật. Xem thêm ở [kiến trúc](architecture.md).
+Claude Code chạy trong một terminal thật, bên trong `dtach`, nên không ai phải giữ cửa sổ mở. Mỗi bước kích hoạt một [hook](hooks.md) gửi một datagram tới aipager qua socket cục bộ, và aipager cập nhật một tin nhắn trong chat của bạn. Câu trả lời của bạn quay về theo đúng đường đó: một quyết định gửi cho hook đang giữ lần gọi công cụ, hoặc các phím gõ vào phiên. Terminal vẫn là nơi mọi thứ thật sự diễn ra. Xem thêm ở [kiến trúc](architecture.md).
 
 ## <a id="install"></a>Cài đặt
 
@@ -202,7 +202,7 @@ Formula hoạt động khi bottle `python@3.12` của Homebrew và Command Line 
 
 ### <a id="docker"></a>Docker
 
-Một image tự đủ với Python, Node, `claude` và `dtach`, hợp cho VPS, NAS hoặc Raspberry Pi khi bạn không muốn có Python hay Node trên máy chủ. Hỗ trợ nhiều kiến trúc (amd64, arm64).
+Một image tự đủ với Python, Node, `claude` và `dtach`, hợp cho VPS, NAS hoặc Raspberry Pi khi bạn không muốn cài Python hay Node trên máy tính của mình. Hỗ trợ nhiều kiến trúc (amd64, arm64).
 
 ```sh
 # 1. Chạy trình hướng dẫn thiết lập một lần (tương tác)
@@ -219,7 +219,7 @@ docker run -d --restart=unless-stopped --name aipager \
   ghcr.io/dev-aly3n/aipager:latest
 ```
 
-Gắn (mount) các thư mục bạn muốn Claude sửa vào dưới `/workspace`. Mount `~/.claude` mang theo thông tin đăng nhập Claude và lịch sử trò chuyện của bạn: chạy `claude` một lần trên máy chủ để đăng nhập, hoặc `docker exec -it aipager claude` để đăng nhập bên trong container.
+Gắn (mount) các thư mục bạn muốn Claude sửa vào dưới `/workspace`. Mount `~/.claude` mang theo thông tin đăng nhập Claude và lịch sử trò chuyện của bạn: chạy `claude` một lần trên máy tính (ngoài container) để đăng nhập, hoặc `docker exec -it aipager claude` để đăng nhập bên trong container.
 
 Tag: `latest`, `1.3`, `1.3.6` (một cho phiên bản chính xác và một cho phiên bản minor).
 
@@ -272,7 +272,7 @@ Sau đó `aipager service install` sẽ tạo một unit người dùng của sy
 | `/mode` | Chuyển giữa Chế độ Hỏi, Chế độ Auto và Chế độ Toàn quyền. |
 | `/app` | Mở Mini App. |
 | `/language` | Chọn ngôn ngữ aipager dùng trong chat này. |
-| `/update` | Cập nhật aipager và Claude Code, rồi khởi động lại tại chỗ (admin). |
+| `/update` | Cập nhật aipager và Claude Code, rồi khởi động lại tại chỗ (quản trị viên). |
 | `/help` | Hướng dẫn ngắn theo từng việc. |
 
 Mọi lệnh, nút và cài đặt đều có trong [Lệnh của bot](commands.md).
@@ -294,9 +294,9 @@ aipager doctor                            # kiểm tra bản cài đặt
 ## <a id="security"></a>Bảo mật
 
 - **Không có máy chủ aipager.** aipager nói chuyện với Bot API của Telegram bằng chính token bot của bạn. Không có tài khoản aipager, cũng không có dịch vụ aipager.
-- **Không có cổng mở.** aipager chỉ lắng nghe trên loopback. Mini App đi ra ngoài qua một đường hầm Cloudflare, nơi mọi yêu cầu phải mang chữ ký của Telegram, và `aipager miniapp disable` sẽ tắt nó.
+- **Không có cổng mở.** aipager chỉ lắng nghe trên loopback. Mini App đi ra ngoài qua một tunnel Cloudflare, nơi mọi yêu cầu phải mang chữ ký của Telegram, và `aipager miniapp disable` sẽ tắt nó.
 - **Mọi câu trả lời đều được ghi lại.** Mỗi lần Cho phép, Từ chối và mỗi câu trả lời được ghi thêm vào `~/.claude/aipager-audit.jsonl`, kèm người đã chạm trong nhóm.
-- **Claude Code vẫn là bên quyết định.** Cài đặt Claude Code của bạn quy định điều gì cần hỏi. aipager chỉ chuyển câu hỏi đi và không bao giờ nâng quyền: không sudo, mọi thứ chạy bằng người dùng của bạn.
+- **Claude Code vẫn là bên quyết định.** Cài đặt Claude Code của bạn quy định điều gì cần hỏi. aipager chỉ chuyển câu hỏi đi và không bao giờ nâng quyền: không sudo, mọi thứ chạy bằng tài khoản người dùng của bạn.
 
 Toàn cảnh, gồm cả những gì bảo vệ thông tin đăng nhập Claude của bạn, có trong [mô hình bảo mật](security.md).
 
@@ -307,7 +307,7 @@ Toàn cảnh, gồm cả những gì bảo vệ thông tin đăng nhập Claude 
 
 <br>
 
-Ứng dụng của Claude nói chuyện với trợ lý do Anthropic lưu trữ. aipager kết nối bạn với một phiên Claude Code chạy trên chính máy tính của bạn: kho mã của bạn, công cụ của bạn, môi trường của bạn.
+Ứng dụng của Claude nói chuyện với trợ lý do Anthropic lưu trữ. aipager kết nối bạn với một phiên Claude Code chạy trên chính máy tính của bạn: repo của bạn, công cụ của bạn, môi trường của bạn.
 
 </details>
 
@@ -325,7 +325,7 @@ aipager chỉ gửi tới Telegram những gì bạn thấy trong chat của mì
 
 <br>
 
-Một chương trình nhỏ giúp tách terminal ra. Nó giữ Claude Code sống khi terminal đóng hoặc SSH bị ngắt, nên câu trả lời bạn gửi một giờ sau vẫn tới được một phiên còn sống. Nó đi kèm aipager.
+Một chương trình nhỏ giúp tách terminal ra. Nó giữ Claude Code tiếp tục chạy khi terminal đóng hoặc SSH bị ngắt, nên câu trả lời bạn gửi một giờ sau vẫn tới được một phiên đang chạy. Nó đi kèm aipager.
 
 </details>
 
@@ -371,7 +371,7 @@ Không tốn gì. aipager dùng giấy phép MIT, bot là của bạn, và Claud
 |---|---|
 | [Lệnh của bot](commands.md) | Mọi lệnh, nút, cài đặt và tùy chọn dòng lệnh |
 | [Chế độ làm việc nhóm và nhóm](groups.md) | Vai trò, thư mục gốc, ai được chạm vào gì, mô hình tin cậy |
-| [Mô hình bảo mật](security.md) | Ranh giới tin cậy, bí mật, nhật ký kiểm tra, mạng |
+| [Mô hình bảo mật](security.md) | Ranh giới tin cậy, bí mật, log kiểm tra, mạng |
 | [Sự kiện hook](hooks.md) | Mỗi hook của Claude Code làm gì trong aipager |
 | [Kiến trúc](architecture.md) | Các phần của aipager, file và socket của nó |
 | [Xử lý sự cố](troubleshooting.md) | `aipager doctor` và cách sửa các lỗi thường gặp |
