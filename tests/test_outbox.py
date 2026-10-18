@@ -320,6 +320,55 @@ def test_requests_expire(monkeypatch):
     assert box.take_request("s", "t2") is not None
 
 
+def test_requests_are_capped_per_session(caplog):
+    """A socket writer's flood of PreToolUse requests on one session keeps
+    only its newest MAX_REQUESTS_PER_SESSION; another session's stay."""
+    box = ob.Outbox()
+    box.record_request("other", "o1", {"files": ["x"]}, "/w")
+    extra = 44
+    with caplog.at_level("WARNING", logger="aipager.bot.outbox"):
+        for i in range(ob.MAX_REQUESTS_PER_SESSION + extra):
+            box.record_request("s", f"t{i}", {"files": [f"f{i}"]}, "/w")
+    mine = [k for k in box.requests if k[0] == "s"]
+    assert len(mine) == ob.MAX_REQUESTS_PER_SESSION
+    assert box.take_request("s", f"t{extra - 1}") is None
+    assert box.take_request("s", f"t{extra}") is not None
+    last = ob.MAX_REQUESTS_PER_SESSION + extra - 1
+    assert box.take_request("s", f"t{last}").files == [f"f{last}"]
+    assert box.take_request("other", "o1") is not None
+    assert any("older requests of s were dropped" in r.getMessage()
+               for r in caplog.records)
+
+
+def test_a_rerecorded_request_counts_as_the_newest():
+    """The same id recorded again moves to the newest end, so a flood
+    recorded in between does not push it out."""
+    box = ob.Outbox()
+    box.record_request("s", "real", {"files": ["a"]}, "/w")
+    for i in range(ob.MAX_REQUESTS_PER_SESSION - 1):
+        box.record_request("s", f"t{i}", {"files": ["b"]}, "/w")
+    box.record_request("s", "real", {"files": ["a"]}, "/w")
+    box.record_request("s", "late", {"files": ["c"]}, "/w")
+    assert box.take_request("s", "real") is not None
+    assert box.take_request("s", "t0") is None
+
+
+def test_requests_are_capped_in_all(monkeypatch, caplog):
+    """Many sessions under their own cap still keep at most MAX_REQUESTS
+    in all, the newest."""
+    monkeypatch.setattr(ob, "MAX_REQUESTS", 10)
+    box = ob.Outbox()
+    with caplog.at_level("WARNING", logger="aipager.bot.outbox"):
+        for i in range(15):
+            box.record_request(f"s{i}", "t", {"files": ["a"]}, "/w")
+    assert len(box.requests) == 10
+    assert box.take_request("s4", "t") is None
+    assert box.take_request("s5", "t") is not None
+    assert box.take_request("s14", "t") is not None
+    assert any("older requests were dropped" in r.getMessage()
+               for r in caplog.records)
+
+
 # ---- sorting ---------------------------------------------------------------------
 
 def test_eleven_photos_go_as_six_and_five():
@@ -925,6 +974,113 @@ def test_wait_hookless_turn_waits_for_the_line(home, run_async, monkeypatch):
     assert run_async(go()) is True
     monkeypatch.setattr(ob, "TRANSCRIPT_WAIT_SECONDS", 0.3)
     assert run_async(ob.wait_hookless_turn(str(tp), time.time() + 60)) is False
+
+
+def _count_hookless_reads(monkeypatch) -> list:
+    """Every transcript re-read a hookless wait does (its *since*)."""
+    seen: list = []
+    real = ob.hookless_turn_started
+
+    def spy(path, since):
+        seen.append(since)
+        return real(path, since)
+    monkeypatch.setattr(ob, "hookless_turn_started", spy)
+    return seen
+
+
+def test_concurrent_hookless_waits_share_one_reread_loop(home, run_async,
+                                                         monkeypatch):
+    """Twenty reports while one wait runs: one re-read loop, not twenty
+    (review 2026-10-18, rev-iter4-001)."""
+    ended = time.time() + 60          # no start can count: each wait times out
+    tp = str(_transcript(home, lines=[]))
+    monkeypatch.setattr(ob, "TRANSCRIPT_POLL_SECONDS", 0.1)
+    seen = _count_hookless_reads(monkeypatch)
+    box = ob.Outbox()
+    assert run_async(box.wait_hookless("s", tp, ended, wait=0.5)) is False
+    alone = len(seen)
+    assert alone >= 3
+    seen.clear()
+
+    async def many():
+        return await asyncio.gather(*(box.wait_hookless("s", tp, ended, wait=0.5)
+                                      for _ in range(20)))
+    assert run_async(many()) == [False] * 20
+    assert len(seen) <= alone + 1
+    assert box.hookless_waits == {}
+
+
+def test_a_joined_hookless_wait_lasts_as_long_as_the_joiners_own(
+        home, run_async, monkeypatch):
+    """A report that joins a wait near its end still waits its own full
+    time: a start written after the first wait's time but within the
+    joiner's is found, for both."""
+    ended = time.time() - 30
+    tp = _transcript(home, lines=[])
+    monkeypatch.setattr(ob, "TRANSCRIPT_POLL_SECONDS", 0.05)
+    box = ob.Outbox()
+
+    async def go():
+        first = asyncio.ensure_future(box.wait_hookless("s", str(tp), ended,
+                                                        wait=0.3))
+        await asyncio.sleep(0.2)
+        second = asyncio.ensure_future(box.wait_hookless("s", str(tp), ended,
+                                                         wait=1.5))
+        await asyncio.sleep(0.5)
+        with open(tp, "a") as fh:
+            fh.write(json.dumps(_dequeue(time.time())) + "\n")
+        return await first, await second
+    assert run_async(go()) == (True, True)
+
+
+def test_a_hookless_wait_for_another_turn_end_queues_behind(home, run_async,
+                                                            monkeypatch):
+    """A wait for another turn end does not run beside the running one:
+    every re-read of the first comes before any of the second."""
+    tp = str(_transcript(home, lines=[]))
+    monkeypatch.setattr(ob, "TRANSCRIPT_POLL_SECONDS", 0.05)
+    seen = _count_hookless_reads(monkeypatch)
+    box = ob.Outbox()
+    a, b = time.time() + 60, time.time() + 120
+
+    async def go():
+        return await asyncio.gather(box.wait_hookless("s", tp, a, wait=0.3),
+                                    box.wait_hookless("s", tp, b, wait=0.3))
+    assert run_async(go()) == [False, False]
+    assert set(seen) == {a, b}
+    assert seen == sorted(seen)
+    # Another session's wait is its own.
+    seen.clear()
+
+    async def two_sessions():
+        return await asyncio.gather(box.wait_hookless("s", tp, a, wait=0.3),
+                                    box.wait_hookless("t", tp, b, wait=0.3))
+    assert run_async(two_sessions()) == [False, False]
+    assert seen != sorted(seen)
+
+
+def test_a_cancelled_report_does_not_end_the_shared_wait(home, run_async,
+                                                         monkeypatch):
+    """The report that started a wait is cancelled; one that joined it
+    still gets the start when it is written."""
+    ended = time.time() - 30
+    tp = _transcript(home, lines=[])
+    monkeypatch.setattr(ob, "TRANSCRIPT_POLL_SECONDS", 0.05)
+    box = ob.Outbox()
+
+    async def go():
+        first = asyncio.ensure_future(box.wait_hookless("s", str(tp), ended,
+                                                        wait=2.0))
+        await asyncio.sleep(0.1)
+        second = asyncio.ensure_future(box.wait_hookless("s", str(tp), ended,
+                                                         wait=2.0))
+        await asyncio.sleep(0.1)
+        first.cancel()
+        await asyncio.sleep(0.1)
+        with open(tp, "a") as fh:
+            fh.write(json.dumps(_dequeue(time.time())) + "\n")
+        return await second
+    assert run_async(go()) is True
 
 
 def test_transcript_call_files_are_claudes_own(home):

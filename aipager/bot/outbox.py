@@ -62,6 +62,12 @@ log = logging.getLogger(__name__)
 
 #: How long a PreToolUse request waits for its PostToolUse.
 REQUEST_TTL_SECONDS = 30 * 60
+#: How many PreToolUse requests are kept per session (newest kept), and in
+#: all: a socket writer can send any number of them (review 2026-10-18,
+#: rev-iter4-001). Claude Code makes a call's PostToolUse right after its
+#: PreToolUse, so a genuine call's request is always among the newest.
+MAX_REQUESTS_PER_SESSION = 256
+MAX_REQUESTS = 4096
 #: How long a copy or a waiting delivery is kept before it is given up.
 KEEP_SECONDS = 24 * 3600
 #: Telegram's album and caption limits.
@@ -246,6 +252,14 @@ class Pending:
     audit: dict = field(default_factory=dict)
 
 
+@dataclass
+class _HooklessWait:
+    """One session's running :meth:`Outbox.wait_hookless`."""
+    key: tuple[str, float]
+    deadline: float
+    task: asyncio.Task | None = None
+
+
 # ---- the store -------------------------------------------------------------
 
 class Outbox:
@@ -254,6 +268,8 @@ class Outbox:
     def __init__(self, clock=time.monotonic) -> None:
         self._clock = clock
         self.requests: dict[tuple[str, str], Request] = {}
+        #: Each session's running hookless-turn wait (:meth:`wait_hookless`).
+        self.hookless_waits: dict[str, _HooklessWait] = {}
         self.in_flight: dict[str, set[asyncio.Task]] = {}
         self.batches: dict[str, list[Batch]] = {}
         self.pending: dict[int, list[Pending]] = {}
@@ -269,6 +285,7 @@ class Outbox:
 
     def clear(self) -> None:
         self.requests.clear()
+        self.hookless_waits.clear()
         self.in_flight.clear()
         self.batches.clear()
         self.pending.clear()
@@ -331,8 +348,11 @@ class Outbox:
                       display=display if isinstance(display, str) else None,
                       cwd=cwd if isinstance(cwd, str) and cwd else None,
                       agent_id=agent_id or "", created=self._clock())
+        # Popped first, so the dict's order is the order of recording.
+        self.requests.pop((session, tool_use_id), None)
         self.requests[(session, tool_use_id)] = req
         self._drop_old_requests()
+        self._cap_requests(session)
         return req
 
     def take_request(self, session: str, tool_use_id) -> Request | None:
@@ -369,6 +389,54 @@ class Outbox:
         for key in [k for k, r in self.requests.items()
                     if now - r.created > REQUEST_TTL_SECONDS]:
             del self.requests[key]
+
+    def _cap_requests(self, session: str) -> None:
+        """Keep the newest MAX_REQUESTS_PER_SESSION of *session*'s requests
+        and the newest MAX_REQUESTS in all."""
+        mine = [k for k in self.requests if k[0] == session]
+        extra = len(mine) - MAX_REQUESTS_PER_SESSION
+        if extra > 0:
+            for key in mine[:extra]:
+                del self.requests[key]
+            log.warning("turn files: %d older requests of %s were dropped "
+                        "(the newest %d are kept)", extra, session,
+                        MAX_REQUESTS_PER_SESSION)
+        extra = len(self.requests) - MAX_REQUESTS
+        if extra > 0:
+            for key in list(self.requests)[:extra]:
+                del self.requests[key]
+            log.warning("turn files: %d older requests were dropped (the "
+                        "newest %d are kept)", extra, MAX_REQUESTS)
+
+    # hookless turns --------------------------------------------------------
+
+    async def wait_hookless(self, session: str, path: str, since: float,
+                            wait: float | None = None) -> bool:
+        """:func:`wait_hookless_turn`, at most one per session at a time
+        (review 2026-10-18, rev-iter4-001): a call for the same transcript
+        and turn end while one runs joins it (its deadline moves out to
+        this call's own, so a joiner waits at least as long as alone),
+        and one for another waits until it is done, then starts its own.
+        So any number of reports costs one re-read loop per session."""
+        wait = TRANSCRIPT_WAIT_SECONDS if wait is None else wait
+        key = (path, since)
+        while True:
+            cur = self.hookless_waits.get(session)
+            if cur is None or cur.task is None or cur.task.done():
+                break
+            if cur.key == key:
+                cur.deadline = max(cur.deadline, time.monotonic() + wait)
+                return await asyncio.shield(cur.task)
+            await asyncio.wait([cur.task])
+        entry = _HooklessWait(key=key, deadline=time.monotonic() + wait)
+        entry.task = asyncio.create_task(_poll_hookless(path, since, entry))
+        self.hookless_waits[session] = entry
+
+        def _done(_t: asyncio.Task) -> None:
+            if self.hookless_waits.get(session) is entry:
+                del self.hookless_waits[session]
+        entry.task.add_done_callback(_done)
+        return await asyncio.shield(entry.task)
 
     # copies in flight ------------------------------------------------------
 
@@ -1066,11 +1134,17 @@ async def wait_hookless_turn(path: str, since: float,
     """:func:`hookless_turn_started`, waiting for it at most
     TRANSCRIPT_WAIT_SECONDS (read on each call)."""
     wait = TRANSCRIPT_WAIT_SECONDS if wait is None else wait
-    deadline = time.monotonic() + wait
+    entry = _HooklessWait(key=(path, since), deadline=time.monotonic() + wait)
+    return await _poll_hookless(path, since, entry)
+
+
+async def _poll_hookless(path: str, since: float, entry: _HooklessWait) -> bool:
+    """Re-read until the start shows or ``entry.deadline`` (which a joiner
+    may move later) has passed."""
     while True:
         if await asyncio.to_thread(hookless_turn_started, path, since):
             return True
-        if time.monotonic() >= deadline:
+        if time.monotonic() >= entry.deadline:
             return False
         await asyncio.sleep(TRANSCRIPT_POLL_SECONDS)
 

@@ -373,3 +373,61 @@ def test_a_send_that_cannot_be_a_hookless_turns_is_dropped_at_once(
                 [x["file_name"] for x in _failed()])
     in_flight, failed = run_async(go())
     assert in_flight == [] and failed == ["chart.png"]
+
+
+def test_forged_requests_on_an_idle_session_keep_only_the_newest(
+        mk_bot, files_bot, rich, run_async, tmp_path):
+    """The reviewer's probe (rev-iter4-001): forged SendUserFile PreToolUse
+    datagrams after a real turn ended are kept as requests (the session
+    may be starting a hookless turn), but no more than
+    MAX_REQUESTS_PER_SESSION of them, the newest."""
+    r = _rig(mk_bot, files_bot, tmp_path)
+    flood = outbox.MAX_REQUESTS_PER_SESSION + 20
+
+    async def go():
+        await r.prompt("one")
+        await r.tool("t1")
+        await r.stop("Done.")
+        for i in range(flood):
+            await r.dg(hook_event_name="PreToolUse", tool_name="SendUserFile",
+                       tool_use_id=f"toolu_{i}",
+                       tool_input={"files": [f"/work/{i}.png"]})
+    run_async(go())
+    kept = [k[1] for k in outbox.OUTBOX.requests if k[0] == NAME]
+    assert len(kept) == outbox.MAX_REQUESTS_PER_SESSION
+    assert kept[-1] == f"toolu_{flood - 1}" and "toolu_0" not in kept
+
+
+def test_forged_reports_on_a_working_session_share_one_wait(
+        mk_bot, files_bot, rich, run_async, tmp_path, monkeypatch):
+    """Many forged SendUserFile reports while the session works after a
+    real turn ended: one transcript re-read loop for the session, not one
+    per report; every report is still dropped and audited."""
+    monkeypatch.setattr(outbox, "TRANSCRIPT_WAIT_SECONDS", 0.6)
+    monkeypatch.setattr(outbox, "TRANSCRIPT_POLL_SECONDS", 0.1)
+    reads: list = []
+    real = outbox.hookless_turn_started
+
+    def spy(path, since):
+        reads.append(since)
+        return real(path, since)
+    monkeypatch.setattr(outbox, "hookless_turn_started", spy)
+    r = _rig(mk_bot, files_bot, tmp_path)
+    pic = _pic(tmp_path)
+    reports = 12
+
+    async def go():
+        await r.prompt("one")
+        await r.tool("t1")
+        await r.stop("Done.")
+        for i in range(reports):
+            await r.send(f"toolu_f{i}", [str(pic)], written=False)
+        await asyncio.sleep(0.05)       # the copy tasks reach their wait
+        waits = len(outbox.OUTBOX.hookless_waits)
+        await r.stop("")
+        return waits
+    assert run_async(go()) == 1
+    # One loop of 0.6 s at 0.1 s: about 7 reads (twelve loops: about 84).
+    assert 0 < len(reads) <= 12
+    assert files_bot.file_calls() == []
+    assert len(_failed()) == reports

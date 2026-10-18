@@ -1687,7 +1687,8 @@ class NotifyMixin:
         from aipager.bot import outbox
         since = sess.files_turn_closed_wall
         transcript = sess.files_transcript
-        if await outbox.wait_hookless_turn(transcript, since):
+        # One wait per session at a time (forged reports join it).
+        if await outbox.OUTBOX.wait_hookless(sess.name, transcript, since):
             # This call is from the turn that start began, even if that
             # turn has ended by now (its Stop can come right after); it is
             # looked for in that same transcript, written after *since*.
