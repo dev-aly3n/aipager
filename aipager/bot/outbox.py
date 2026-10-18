@@ -858,14 +858,27 @@ def transcript_candidates(transcript_path: str, agent_id: str) -> list[str]:
     return out
 
 
+_ISO_STAMP_RE = re.compile(
+    r"\A(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})(?:\.(\d{1,32}))?"
+    r"(Z|z|[+-]\d{2}:?\d{2})?\Z")
+
+
 def line_wall(entry: dict) -> float | None:
     """A transcript line's ``timestamp`` (ISO 8601, as Claude Code writes
-    it) as a Unix time, or None when it has none or it cannot be read."""
+    it) as a Unix time, or None when it has none or it cannot be read.
+    Any length of fraction and a ``Z`` or ``+HHMM`` suffix read the same
+    on every supported Python (3.10's ``fromisoformat`` takes neither)."""
     from datetime import datetime, timezone
     raw = entry.get("timestamp")
     if not isinstance(raw, str) or not raw or len(raw) > 64:
         return None
-    text = raw[:-1] + "+00:00" if raw.endswith(("Z", "z")) else raw
+    m = _ISO_STAMP_RE.match(raw)
+    if m is None:
+        return None
+    base, frac, zone = m.groups()
+    text = base + "." + (frac or "0")[:6].ljust(6, "0")
+    if zone and zone not in ("Z", "z"):
+        text += zone if ":" in zone else zone[:3] + ":" + zone[3:]
     try:
         stamp = datetime.fromisoformat(text)
     except ValueError:

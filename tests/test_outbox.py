@@ -837,3 +837,21 @@ def test_requeue_after_keeps_the_order():
     box.pending.clear()
     box.requeue_after(a, [b, c])        # a is not there: at the front
     assert [x.session for x in box.pending[1]] == ["b", "c"]
+
+
+def test_line_wall_reads_any_fraction_and_zone():
+    """Python 3.10's fromisoformat takes only 3 or 6 fraction digits and no
+    Z; every form reads the same here (review rev-iter3 nit)."""
+    base = 1792287234.0
+    for raw, want in (("2026-10-18T01:33:54.1Z", base + 0.1),
+                      ("2026-10-18T01:33:54.12345Z", base + 0.12345),
+                      ("2026-10-18T01:33:54.123456789z", base + 0.123456),
+                      ("2026-10-18T01:33:54Z", base),
+                      ("2026-10-18T03:33:54.5+0200", base + 0.5),
+                      ("2026-10-18T03:33:54.5+02:00", base + 0.5),
+                      ("2026-10-17T23:33:54-02:00", base),
+                      ("2026-10-18 01:33:54.25", base + 0.25)):
+        assert ob.line_wall({"timestamp": raw}) == pytest.approx(want), raw
+    for raw in ("2026-10-18T01:33:54.Z", "2026-10-18T01:33:54+2", "2026-13-18T01:33:54Z",
+                "2026-10-18T01:33:54Zjunk", "2026-10-18"):
+        assert ob.line_wall({"timestamp": raw}) is None, raw
