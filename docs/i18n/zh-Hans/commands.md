@@ -435,7 +435,7 @@ Claude 可以从它的会话里给你发文件：用你自己的话说就行（"
 - 每个文件都会先检查，对所有人都一样，owner 也不例外（[安全](security.md#files-claude-sends)）：aipager 的设置、Claude 的凭据、密钥和看起来像机密的文件永远不会发送；文件必须是普通文件、不能为空、最大 50 MB；成员只能发送聊天[根文件夹](groups.md#root-folders)里的文件。一个请求里只要有一个文件被拒绝，这个请求就什么都不发：Claude 会知道原因并告诉你，任务继续进行。
 - aipager 发送的是 Claude Code 读取文件时它做的一份私有副本，保存在 `~/.local/state/aipager/outbox/`，发送后立即删除，或一天后删除。
 - aipager 自己不设数量上限：发送节奏按 Telegram 的频率限制来，一个相册按每个文件各算一次。聊天被禁言期间，文件会等待，并跟在回答之后发出。
-- 发不出去的文件会在聊天里有一行说明，例如 `⚠️ 无法发送 report.pdf：Telegram 拒收了这个文件。` aipager 在 Claude 自己的对话记录里找不到请求的文件，不会有任何一行说明（[安全](security.md#files-claude-sends)）。 每个已发送、被拒绝或发送失败的文件在[审计日志](security.md#audit-log)里都有自己的记录。
+- 发不出去的文件会在聊天里有一行说明，例如 `⚠️ 无法发送 report.pdf：Telegram 拒收了这个文件。` aipager 在 Claude 自己的对话记录里找不到请求的文件，不会有任何一行说明（[安全](security.md#files-claude-sends)）。请求在对话记录里、但 aipager 无法把它和正在运行的任务对上的文件，会收到 `⚠️ 无法发送 report.pdf：aipager 无法确认这是 Claude 在本轮中发送的文件。` 在 Claude 工作时发送、被它接着处理的消息，以及 Stop hook 让它继续的任务（`/goal`），也会带来文件。 每个已发送、被拒绝或发送失败的文件在[审计日志](security.md#audit-log)里都有自己的记录。
 
 ### <a id="voice"></a>语音消息
 

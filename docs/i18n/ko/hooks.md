@@ -82,7 +82,7 @@ Claude Code가 백그라운드로 옮긴 `Bash` 호출은 `backgroundTaskId`를 
 
 서브에이전트 안에서 한 `Agent`(또는 `Task`) 호출은(그 이벤트에 `agent_id`가 있어요) 자기가 시작한 에이전트의 ID를 알려 줘요. aipager는 어느 에이전트가 어느 에이전트를 시작했는지 기억해서, 자기 에이전트를 기다리려고 멈춘 에이전트와 끝난 에이전트를 구별해요(아래 `SubagentStart` / `SubagentStop` 참고).
 
-실행된 `SendUserFile`의 파일은 aipager가 바로 복사해요. 호출마다 한 번, 그리고 프롬프트로 시작한 작업 동안에만 복사하고, 목록은 도구의 결과가 아니라 `PreToolUse`에서 본 목록을 쓰며, 파일마다 다시 확인해요. 사본은 aipager가 그 작업에 대해 적어 둔 대화 기록에서 그 작업 동안 쓰인 호출을 찾은 뒤, 작업의 답변 다음에 보내요([보안](security.md#files-claude-sends), [명령어](commands.md#files-claude-sends)).
+실행된 `SendUserFile`의 파일은 aipager가 바로 복사해요. 호출마다 한 번, 그리고 프롬프트로 시작한 작업 동안에만 복사하고, 목록은 도구의 결과가 아니라 `PreToolUse`에서 본 목록을 쓰며, 파일마다 다시 확인해요. 사본은 aipager가 그 작업에 대해 적어 둔 대화 기록에서 그 작업 동안 쓰인 호출을 찾은 뒤, 작업의 답변 다음에 보내요([보안](security.md#files-claude-sends), [명령어](commands.md#files-claude-sends)). Claude Code가 hook 없이 시작한 작업(다음으로 가져간 메시지, Stop hook의 피드백)은 대화 기록에 시작이 나오면 인정돼요.
 
 ### <a id="notification"></a>`Notification`
 

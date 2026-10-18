@@ -82,7 +82,7 @@ hook 能回答时就自己回答这个请求。它打开一个短期的回复套
 
 在子代理内部发起的 `Agent`（或 `Task`）调用（它的事件带有 `agent_id`）会报告它启动的代理的 ID。aipager 记住哪个代理启动了哪个，这样就能区分停下来等待自己的代理的代理和已经完成的代理（见下文 `SubagentStart` / `SubagentStop`）。
 
-已经运行的 `SendUserFile`，aipager 会立刻复制它的文件，每次调用只复制一次，而且只在以提示开始的任务期间复制，依据的是它的 `PreToolUse` 给出的列表（从不使用工具的结果），并逐个再检查一遍；副本在 aipager 为该任务记下的对话记录里找到这次调用、且它写于该任务期间之后，在任务的回答之后发送（[安全](security.md#files-claude-sends)、[命令](commands.md#files-claude-sends)）。
+已经运行的 `SendUserFile`，aipager 会立刻复制它的文件，每次调用只复制一次，而且只在以提示开始的任务期间复制，依据的是它的 `PreToolUse` 给出的列表（从不使用工具的结果），并逐个再检查一遍；副本在 aipager 为该任务记下的对话记录里找到这次调用、且它写于该任务期间之后，在任务的回答之后发送（[安全](security.md#files-claude-sends)、[命令](commands.md#files-claude-sends)）。Claude Code 在没有 hook 的情况下开始的任务（它接着处理的消息、Stop hook 的反馈）一旦对话记录显示已开始，就算数。
 
 ### <a id="notification"></a>`Notification`
 

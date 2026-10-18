@@ -82,7 +82,7 @@ Un `Bash` que Claude Code mandó a segundo plano informa un `backgroundTaskId`. 
 
 Una llamada `Agent` (o `Task`) hecha dentro de un subagente (su evento lleva `agent_id`) informa del ID del agente que arrancó. aipager recuerda qué agente arrancó a cuál, así puede distinguir un agente que paró para esperar a su propio agente de uno que terminó (ver `SubagentStart` / `SubagentStop` más abajo).
 
-Tras un `SendUserFile` que se ejecutó, aipager copia enseguida sus archivos, una vez por llamada y solo durante una tarea que empezó con un prompt, a partir de la lista que mostró su `PreToolUse` (nunca del resultado de la herramienta), comprobando cada uno otra vez; las copias se envían después de la respuesta de la tarea, una vez encontrada la llamada en la conversación guardada que aipager anotó para la tarea, escrita durante esa tarea ([seguridad](security.md#files-claude-sends), [comandos](commands.md#files-claude-sends)).
+Tras un `SendUserFile` que se ejecutó, aipager copia enseguida sus archivos, una vez por llamada y solo durante una tarea que empezó con un prompt, a partir de la lista que mostró su `PreToolUse` (nunca del resultado de la herramienta), comprobando cada uno otra vez; las copias se envían después de la respuesta de la tarea, una vez encontrada la llamada en la conversación guardada que aipager anotó para la tarea, escrita durante esa tarea ([seguridad](security.md#files-claude-sends), [comandos](commands.md#files-claude-sends)). Una tarea que Claude Code empieza sin hook (un mensaje que toma a continuación, la respuesta de un hook de Stop) cuenta en cuanto la conversación guardada muestra que empezó.
 
 ### <a id="notification"></a>`Notification`
 

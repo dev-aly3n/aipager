@@ -82,7 +82,7 @@ Pemanggilan `Bash` yang dipindahkan Claude Code ke latar belakang melaporkan `ba
 
 Pemanggilan `Agent` (atau `Task`) di dalam sebuah subagen (event-nya membawa `agent_id`) melaporkan ID agen yang dimulainya. aipager mengingat agen mana yang memulai agen mana, sehingga bisa membedakan agen yang berhenti untuk menunggu agennya sendiri dari agen yang sudah selesai (lihat `SubagentStart` / `SubagentStop` di bawah).
 
-Setelah `SendUserFile` dijalankan, aipager langsung menyalin file-filenya, sekali per panggilan dan hanya selama tugas yang dimulai dengan prompt, dari daftar yang ditunjukkan `PreToolUse`-nya (tidak pernah dari hasil alat itu), sambil memeriksa setiap file lagi; salinannya dikirim setelah jawaban tugas, begitu panggilannya ditemukan di riwayat percakapan yang dicatat aipager untuk tugas itu, ditulis selama tugas itu ([keamanan](security.md#files-claude-sends), [perintah](commands.md#files-claude-sends)).
+Setelah `SendUserFile` dijalankan, aipager langsung menyalin file-filenya, sekali per panggilan dan hanya selama tugas yang dimulai dengan prompt, dari daftar yang ditunjukkan `PreToolUse`-nya (tidak pernah dari hasil alat itu), sambil memeriksa setiap file lagi; salinannya dikirim setelah jawaban tugas, begitu panggilannya ditemukan di riwayat percakapan yang dicatat aipager untuk tugas itu, ditulis selama tugas itu ([keamanan](security.md#files-claude-sends), [perintah](commands.md#files-claude-sends)). Tugas yang dimulai Claude Code tanpa hook (pesan yang diambilnya berikutnya, balasan hook Stop) dihitung begitu riwayat percakapan menunjukkan awalnya.
 
 ### <a id="notification"></a>`Notification`
 

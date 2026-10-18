@@ -435,7 +435,7 @@ Claude는 세션에서 파일을 보내 줄 수 있어요. 평소 말로 부탁�
 - 모든 파일은 owner를 포함해 누구에게나 먼저 확인을 거쳐요([보안](security.md#files-claude-sends)). aipager 설정, Claude 자격 증명, 키, 비밀처럼 보이는 파일은 절대 보내지 않아요. 파일은 일반 파일이어야 하고, 비어 있지 않고, 50MB 이하여야 해요. 멤버는 채팅의 [루트 폴더](groups.md#root-folders) 안에 있는 파일만 보낼 수 있어요. 요청의 파일 하나가 거부되면 그 요청에서는 아무것도 보내지 않아요. Claude가 이유를 듣고 알려 주며, 작업은 계속돼요.
 - aipager는 Claude Code가 파일을 읽은 순간에 만든 비공개 사본을 보내요. 사본은 `~/.local/state/aipager/outbox/`에 보관되고, 보내면 바로, 아니면 하루 뒤에 지워져요.
 - aipager는 자체 개수 제한을 두지 않아요. 보내는 속도는 Telegram의 속도 제한에 맞추고, 앨범은 파일 하나당 하나로 셈해요. 채팅이 음소거된 동안에는 파일이 기다렸다가 답변 다음에 와요.
-- 보내지 못한 파일은 채팅에 한 줄로 알려 줘요. 예: `⚠️ report.pdf 파일을 보내지 못했어요: Telegram이 거부했어요.` Claude 자신의 대화 기록에서 aipager가 요청을 찾지 못한 파일은 채팅에 아무 줄도 남기지 않아요([보안](security.md#files-claude-sends)). 보내거나 거부되거나 실패한 파일마다 [감사 로그](security.md#audit-log)에 기록이 따로 남아요.
+- 보내지 못한 파일은 채팅에 한 줄로 알려 줘요. 예: `⚠️ report.pdf 파일을 보내지 못했어요: Telegram이 거부했어요.` Claude 자신의 대화 기록에서 aipager가 요청을 찾지 못한 파일은 채팅에 아무 줄도 남기지 않아요([보안](security.md#files-claude-sends)). 요청은 대화 기록에 있지만 aipager가 진행 중인 작업과 연결하지 못한 파일은 `⚠️ report.pdf 파일을 보내지 못했어요: Claude가 이번 작업에서 보낸 파일인지 aipager가 확인하지 못했어요.`를 받아요. Claude가 작업하는 동안 보내서 Claude가 다음으로 가져간 메시지와, Stop hook이 계속 이어 가게 하는 작업(`/goal`)에서도 파일이 와요. 보내거나 거부되거나 실패한 파일마다 [감사 로그](security.md#audit-log)에 기록이 따로 남아요.
 
 ### <a id="voice"></a>음성 메시지
 
