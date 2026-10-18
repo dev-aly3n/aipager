@@ -6,7 +6,7 @@
 
 Halaman ini untuk agen coding AI (Claude Code atau agen apa pun yang bisa memakai shell) yang diminta memasang dan mengatur aipager untuk orangnya. Ikuti langkah demi langkah. Setiap perintah di sini berjalan tanpa bertanya dan tidak pernah butuh terminal interaktif.
 
-aipager membuat orang ini bisa mengendalikan sesi Claude Code dari Telegram. Setelah selesai, orang itu punya bot Telegram yang hanya bicara dengannya, dan aipager berjalan di latar belakang di komputer ini.
+Dengan aipager, orang itu bisa mengendalikan sesi Claude Code dari Telegram. Setelah selesai, orang itu punya bot Telegram yang hanya bicara dengannya, dan aipager berjalan di latar belakang di komputer ini.
 
 ## <a id="1-what-only-the-person-can-do"></a>1. Yang hanya bisa dilakukan oleh orangnya sendiri
 
@@ -74,7 +74,7 @@ aipager setup --token-file ~/.config/aipager/bot-token --chat-id 123456789 --ser
 
 Pakai ID asli orang itu dan path file token-nya. Sebagai ganti `--token-file`, kamu bisa mengalirkan token lewat pipe dengan `--token-stdin` (misalnya `--token-stdin < path`); pipe-nya harus tertutup, setup menunggunya paling lama 30 detik.
 
-setup memeriksa token di Telegram, memeriksa komputer ini, mengirim satu pesan tes ke orang itu ("aipager is set up for you. ..."), dan baru setelah itu menulis konfigurasinya, menambahkan hook Claude Code ke `~/.claude/settings.json`, dan, dengan `--service`, memasang serta menjalankan layanan latar belakang. Kalau ada pemeriksaan yang gagal, tidak ada yang ditulis.
+setup memeriksa token di Telegram, memeriksa komputer ini, mengirim satu pesan tes ke orang itu (“aipager is set up for you. ...”), dan baru setelah itu menulis konfigurasinya, menambahkan hook Claude Code ke `~/.claude/settings.json`, dan, dengan `--service`, memasang serta menjalankan layanan latar belakang. Kalau ada pemeriksaan yang gagal, tidak ada yang ditulis.
 
 Tambahkan `--dry-run` untuk melihat dulu apa yang akan berubah. `--role admin` memberi orang itu peran admin sebagai ganti peran owner (bawaannya, owner, tepat untuk orang yang mengatur komputernya sendiri).
 
@@ -99,13 +99,13 @@ Dengan `--json`, setup mencetak tepat satu objek JSON ke stdout. Baca `exit_code
 | 4 | `token_rejected` | Telegram menolak token itu. Minta token lagi ke orangnya (atau yang baru dari @BotFather). |
 | 5 | `chat_not_started`, `bot_blocked` | Minta orangnya membuka bot dan mengetuk Start (atau membuka blokirnya), lalu jalankan setup lagi. |
 | 6 | `existing_install` | aipager sudah diatur dengan token, chat, atau peran lain. Beri tahu orangnya apa yang berbeda dan tanyakan dulu sebelum menambahkan `--force`. |
-| 7 | `telegram_unreachable` | Masalah jaringan, atau Telegram sedang sangat sibuk. Tunggu semenit lalu coba lagi. |
+| 7 | `telegram_unreachable` | Masalah jaringan, atau Telegram sedang sibuk. Tunggu semenit lalu coba lagi. |
 | 8 | `detect_timeout` | detect-chat tidak melihat pesan apa pun. Minta orangnya mengetuk Start lagi lalu jalankan ulang. Dengan peringatan `updates_backlog`, mengetuk Start tidak akan membantu: tanyakan ID numerik mereka. |
 | 9 | `daemon_running` | detect-chat: aipager untuk bot ini sudah berjalan dan menerima pesannya. Tanyakan ID numerik orangnya (atau minta izin dulu sebelum menghentikannya dengan `aipager service stop`). |
 | 10 | `updates_conflict` | detect-chat: ada program lain yang membaca pesan bot ini. Tanyakan ID numerik orangnya. |
 | 130 | `interrupted` | Dihentikan dengan Ctrl-C. |
 
-Kalau `daemon.restart_needed` bernilai true, aipager perlu dimulai ulang supaya perubahannya berlaku, atau setup tidak bisa mengetahui apakah aipager sedang berjalan (peringatan `daemon_unknown`). Ikuti `next_step`, yang menyebutkan yang mana (kalau ia menyarankan `aipager start`, yang tetap berjalan di latar depan, pilih `aipager service install` saja). Beri tahu orangnya dan mulai ulang (`aipager service stop`, lalu `aipager service start`) hanya kalau mereka meminta, dan jangan pernah dari dalam sesi yang dikendalikan orang itu lewat aipager (lihat 4). Daftar lengkap error, peringatan, dan kunci JSON ada di [referensi perintah setup](commands.md#command-line-aipager-setup-for-coding-agents).
+Kalau `daemon.restart_needed` bernilai true, aipager perlu dimulai ulang supaya perubahannya berlaku, atau setup tidak bisa mengetahui apakah aipager sedang berjalan (peringatan `daemon_unknown`). Ikuti `next_step`, yang menyebutkan yang mana (kalau `next_step` menyarankan `aipager start`, yang tetap berjalan di latar depan, pilih `aipager service install` saja). Beri tahu orangnya dan mulai ulang (`aipager service stop`, lalu `aipager service start`) hanya kalau mereka meminta, dan jangan pernah dari dalam sesi yang dikendalikan orang itu lewat aipager (lihat 4). Daftar lengkap error, peringatan, dan kunci JSON ada di [referensi perintah setup](commands.md#command-line-aipager-setup-for-coding-agents).
 
 ### <a id="35-check-the-install"></a>3.5 Memeriksa pemasangan
 

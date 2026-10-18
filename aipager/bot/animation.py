@@ -22,7 +22,7 @@ import httpx
 from telegram.error import RetryAfter
 
 from aipager import agent_tree, bg_shells, flood_policy, i18n, preferences
-from aipager.bot import card_rows, question_form
+from aipager.bot import card_rows, claude_bidi, question_form
 from aipager.bot.divider import DIVIDER_SEP, without_dividers
 from aipager.bot.footer import footer, without_last_footer
 from aipager.i18n import Msg, Plural, Safe, Span
@@ -50,7 +50,6 @@ from aipager.bot.flood_budget import (
     small_429_wait,
 )
 from aipager.bot.rich_message import (
-    message_rtl,
     edit_message_text_rich,
     get_rate_limiter,
     RichMessageBlocked,
@@ -837,6 +836,12 @@ def _build_sections(
         return card_rows.render_md(tr, summary)
 
     own = _own_row(tr)
+    # Claude's commentary keeps its own direction inside the card's
+    # (`claude_bidi.prose`): the direction *tr* renders in.
+    card_rtl = bool(tr.rtl or tr.ltr_in_rtl)
+
+    def prose(text: str) -> str:
+        return _quote(claude_bidi.prose(text, card_rtl))
 
     history = sess.tool_history
     if (not final and sess.stream_hook_live
@@ -894,7 +899,7 @@ def _build_sections(
 
     for i, (summary, done) in enumerate(history):
         for text in by_anchor.pop(i, ()):
-            _push("prose", _quote(text))
+            _push("prose", prose(text))
         if done == "failed":
             _push("run", own("❌", row(summary)))
         elif done == bg_shells.STOPPED:
@@ -944,7 +949,7 @@ def _build_sections(
                 _push("run", own("⏳", row(summary)))
     for slot in sorted(by_anchor):
         for text in by_anchor[slot]:
-            _push("prose", _quote(text))
+            _push("prose", prose(text))
     return sections
 
 
@@ -1014,7 +1019,10 @@ def _own_row(tr):
     cannot pull the rest of the row around it; nothing ever goes inside
     the span. A body rendered in the twin (a non-English row) loses its
     own end marks first, so the row carries one mark at each end. Claude's
-    prose quotes never go through it."""
+    prose quotes never go through it. In a left-to-right rendering, a
+    row whose first strong letter is Claude's right-to-left text (a
+    Persian question) starts with U+200E (:func:`claude_bidi.row`), so
+    every app lays it out left to right like the card's other rows."""
     if tr is not None and tr.ltr_in_rtl:
         def own(mark: str, body: str) -> str:
             body = tr.bare(body)
@@ -1022,6 +1030,8 @@ def _own_row(tr):
                 body = tr.isolate(body)
             return str(tr.line(f"{mark} {body}", kind="md"))
         return own
+    if tr is not None and not tr.rtl:
+        return lambda mark, body: claude_bidi.row(tr, f"{mark} {body}")
     return lambda mark, body: f"{mark} {body}"
 
 
@@ -1350,21 +1360,24 @@ def _agent_phrase(sess: TrackedSession, tr=None) -> tuple[str, str]:
 
 
 def _card_rtl(sess: TrackedSession, tr=None) -> bool:
-    """The card's ONE direction (multilingual design 5.7, rule 5): Claude's
-    own words decide once it has written some, before that the prompt the
-    turn answers (Claude answers in the language it is written to), and
-    only when neither has a letter the chat's language."""
-    commentary = " ".join(t for _a, t in sess.stream_commentary)
+    """The card's ONE direction: the chat's language's (operator,
+    2026-10-17), whatever language Claude or the prompt is written in.
+    The card is mostly aipager's own lines, so an English chat's card
+    reads left to right and a Persian or Arabic chat's right to left;
+    Claude's words on it keep their own direction
+    (:mod:`aipager.bot.claude_bidi`). A message that carries Claude's
+    ANSWER (the merged layout's finished card) is not a card: it takes
+    the answer's direction (``Notifier._answer_rtl``, design 5.7 rule
+    5) and passes it to :func:`build_stream_card_ex` itself."""
     tr = tr or i18n.for_sess(sess)
-    return message_rtl(tr.language_rtl, commentary, sess.turn_prompt)
+    return tr.language_rtl
 
 
 def card_tr(sess: TrackedSession, tr=None, *, rich: bool = True):
     """*tr* (the session's chat's when None) in the card's direction
-    (:func:`_card_rtl`): what draws aipager's own lines on the card, so a
-    Persian chat talking with Claude in English gets a card that reads
-    left to right. *rich* ``False`` for a card sent as HTML (no
-    ``is_rtl``): an English chat's lines need no marks there."""
+    (:func:`_card_rtl`, the chat language's own): what draws aipager's
+    own lines on the card. *rich* ``False`` for a card sent as HTML (no
+    ``is_rtl``)."""
     tr = tr or i18n.for_sess(sess)
     return tr.directed(_card_rtl(sess, tr), rich=rich)
 
@@ -1414,7 +1427,7 @@ def _status_line(
                 else tr.md(WAITING_WORKING, session=label, agents=Safe(phrase)))
         if sess.busy_started_at:
             line += f" · {_clock(sess.busy_started_at)}"
-        return tr.line(line, kind="md")
+        return claude_bidi.row(tr, tr.line(line, kind="md"))
 
     # ── Segments: state, label, verb, then the turn's live stats ──
     # Joined with " · " in every language (punctuation between stats).
@@ -1463,9 +1476,11 @@ def _status_line(
     if parts:
         line += " · " + " · ".join(parts)
     # Right to left at both ends in a right-to-left card, whatever its
-    # last part (a clock, a tally); left to right at both ends when an
-    # English chat's card follows Claude's right-to-left text.
-    return tr.line(line, kind="md")
+    # last part (a clock, a tally); left to right at both ends in the
+    # in-RTL twin (a merged Persian answer in an English chat). In a
+    # left-to-right card, a session name in Persian first would lay the
+    # line out right to left on iPhone and Android: U+200E first then.
+    return claude_bidi.row(tr, tr.line(line, kind="md"))
 
 
 def build_stream_card_ex(
@@ -1511,6 +1526,8 @@ def build_stream_card_ex(
     # ("peer message authority", display only).
     from aipager.bot import peer_notice
     peer_line = peer_notice.card_line(tr, getattr(sess, "peer_from", None))
+    if peer_line:
+        peer_line = claude_bidi.row(tr, peer_line)
 
     # Reserve: the status line plus the divider above it
     # (`_assemble_card`), so the fitter's budget is exactly what the BODY
@@ -2717,7 +2734,9 @@ class AnimationMixin:
         tr = i18n.for_sess(sess)
         is_rtl = _card_rtl(sess, tr)
         if paused:
-            markdown, hid = tr.directed(is_rtl).md(PAUSED_MD, session=sess.label), False
+            paused_tr = tr.directed(is_rtl)
+            markdown = claude_bidi.row(paused_tr, paused_tr.md(PAUSED_MD, session=sess.label))
+            hid = False
         else:
             markdown, hid = build_stream_card_ex(
                 sess, verb, final=final, waiting=waiting, tr=tr,

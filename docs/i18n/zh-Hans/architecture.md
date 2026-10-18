@@ -1,6 +1,6 @@
 # 架构
 
-<!-- i18n-source: docs/architecture.md @ c91598e -->
+<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../architecture.md)）
 
@@ -56,7 +56,7 @@ flowchart LR
 
 - **`TelegramBot`**（`aipager/bot/`）：持有一个 `python-telegram-bot` 的 `Application`。从 Telegram 接收更新，分发给消息、按钮和语音消息的处理程序，并让工作卡片、置顶状态栏和回答保持最新。
 - **`HookReceiver`**（`aipager/dtach/hook_receiver.py`）：在 `$XDG_RUNTIME_DIR/aipager.sock` 打开一个 Unix datagram 套接字，读取 `aipager-hook` 和 `aipager-statusline` 发来的 JSON，并按其中的 `hook_event_name`（对 aipager 自己的消息则按 `type`；见 [Hook 事件](hooks.md)）分派。
-- **`SessionMonitor`**（`aipager/session_monitor.py`）：每 2 秒醒来一次，扫描 `/tmp/claude-dtach-*.sock`，把找到的会话与会话列表对照，并运行各个看守：停止动的工作卡片、Claude Code 一直没取走的消息、5 分钟没有动静、保存的对话显示已经结束的权限请求（`AIPAGER_INTERACTIVE_TIMEOUT`）、结束时刻被错过的任务。
+- **`SessionMonitor`**（`aipager/session_monitor.py`）：每 2 秒醒来一次，扫描 `/tmp/claude-dtach-*.sock`，把找到的会话与会话列表对照，并运行各个看守：卡住不动的工作卡片、Claude Code 一直没取走的消息、5 分钟没有动静、保存的对话显示已经结束的权限请求（`AIPAGER_INTERACTIVE_TIMEOUT`）、结束时刻被错过的任务。
 - **`SessionRegistry`**（`aipager/state.py`）：按名称存放的 `TrackedSession` 对象。在关闭时，以及每当有需要在重启后保留的东西发生变化时，（原子地）保存到 `~/.claude/aipager-sessions.json`。
 - **Mini App 服务器**（`aipager/miniapp/server.py`）：一个监听 `127.0.0.1`、端口为 `MINIAPP_PORT`（默认 8765）的 aiohttp 应用，在开启期间（默认开启）通过托管的 Cloudflare 隧道提供给 Telegram。提供 `/app` 控制面板。
 
@@ -73,7 +73,7 @@ flowchart LR
 5. `SessionRegistry.load()`：读取 `~/.claude/aipager-sessions.json`。文件不存在或无法读取时，列表从空开始。
 6. 确定 Mini App 的地址（你自己的 URL，或 Tailscale），然后 `bot.start()`：开始从 Telegram 接收更新。
 7. `HookReceiver.start()`：删除残留的套接字文件，bind，开始监听。
-8. `bot.recover_sessions()`：恢复 aipager 停止时正在工作或等待中的会话的卡片和请求（见[命令 → 回答](commands.md#idle-responses)）。
+8. `bot.recover_sessions()`：恢复 aipager 停止时正在工作或等待中的会话的卡片和请求（见[命令 → 任务结束后的回答](commands.md#idle-responses)）。
 9. `SessionMonitor.start()`：开始每 2 秒一次的扫描。
 10. 启动 Mini App 服务器，然后启动隧道（未设置你自己的 URL 时），并发布 `📱 App` 按钮。
 11. aipager 等待信号：SIGINT 或 SIGTERM 让它停止，SIGUSR1 重新加载聊天和规则（[群组 → 无需重启的重新加载](groups.md#live-reload)）。
@@ -104,12 +104,12 @@ flowchart LR
 | `/tmp/claude-policy-<name>.json` | 当前任务的权限快照 | `aipager-hook`（取走消息时写入），由 `PreToolUse` 检查读取 |
 | `/tmp/claude-policy-.floor-<uid>.json` | 安全底线：内置列表加上你的 `safety:` 部分，供 hook 的后备路径使用 | aipager |
 | `/tmp/claude-reply-<name>.txt` | 你回复一条较早的消息时，你回复的那条消息 | aipager |
-| `/tmp/aipager-files/` | 从 Telegram 发来的文件和语音消息 | aipager |
+| `/tmp/aipager-files/<chat>/` | 从 Telegram 发来的文件和语音消息，每个聊天一个私有文件夹（`0700`，文件 `0600`） | aipager |
 | `/tmp/aipager.log` | 没有服务时自我重启的输出 | aipager |
 | `~/.claude/aipager-sessions.json` | 会话列表的持久状态 | aipager |
 | `~/.claude/aipager-audit.jsonl` | 允许 / 拒绝 / 回答的日志 | aipager（只追加） |
 | `~/.claude/aipager-flood-state.json` | 每个聊天的 Telegram 限流历史，跨重启保留（[故障排除](troubleshooting.md#the-bot-went-quiet-flood-control)） | aipager |
-| `~/.claude/aipager-tunnel.json`、`aipager-cloudflared.log` | aipager 持有的 Mini App 隧道：它的进程、本地端口和地址的哈希（从不保存地址本身），以便计划内重启后下一个 aipager 接管它（权限 600）；cloudflared 的警告 | aipager；保留隧道的守护进程和 `aipager uninstall` 也会删除这条记录 |
+| `~/.claude/aipager-tunnel.json`、`aipager-cloudflared.log` | aipager 持有的 Mini App 隧道：它的进程、本地端口和地址的哈希（从不保存地址本身），以便计划内重启后下一个 aipager 接管它（权限 600）；cloudflared 的警告 | aipager；保留下来的隧道的看守进程和 `aipager uninstall` 也会删除这条记录 |
 | `~/.claude/aipager-pending-users.json` | 在机器人不服务的群组里找过它的人，或在它服务的群组里但不是成员的人，供 `aipager config` 添加（权限 0600，每次写入都整个替换，保留最近 30 天里出现过的最新 200 人） | aipager（写入）、`aipager config`（读取） |
 | `~/aipager-users/<label>/` | 成员的默认[根文件夹](groups.md#root-folders)（权限 0700），`user` 和 `read_only` 成员在这里启动会话；`aipager uninstall` 会保留它们 | aipager（在成员第一次 `/new` 或第一次在 Mini App 里“启动会话”时创建） |
 | `~/.claude/settings.json` | Claude Code 的 hook 配置 | `aipager config` / `aipager setup`；每次启动时 aipager 会补上缺少的 aipager hook 或状态行，并设置 `skipDangerousModePermissionPrompt`（[安全](security.md#who-decides-whether-a-tool-call-runs)） |
@@ -148,7 +148,7 @@ flowchart LR
 
 ## <a id="why-dtach"></a>为什么用 dtach
 
-dtach 为每个 Claude Code 会话提供一个真正的 PTY，而不用把它绑在一个必须一直开着的终端上。aipager 用 `dtach -n` 启动会话，用 `dtach -p` 向它输入（消息、Escape、回答对话框的按键）；它从不读取屏幕，因为 hook 和对话记录已经说明了发生的事情。你可以在任何 shell 里用 `aipager session <name>` 以交互方式连接，直接操作。这个连接会跟随会话经历一次从 Telegram 触发的重启（`/mode` 切换到或离开完全访问、`/restart`、重启）：当会话的套接字消失时，它最多等待 15 秒让同一个套接字回来，然后自己重新连接。真正结束的会话会在等待之后把你带回 shell（Ctrl-C 可以提前结束等待）。连接时 dtach 的分离键是关闭的，所以 `Ctrl-\` 会传给 Claude；要离开，关闭终端或 tmux 窗格即可，会话会继续运行。
+dtach 为每个 Claude Code 会话提供一个真正的 PTY，而不用把它绑在一个必须一直开着的终端上。aipager 用 `dtach -n` 启动会话，用 `dtach -p` 向它输入（消息、Escape、回答对话框的按键）；它从不读取屏幕，因为 hook 和保存的对话已经说明了发生的事情。你可以在任何 shell 里用 `aipager session <name>` 以交互方式连接，直接操作。这个连接会跟随会话经历一次从 Telegram 触发的重启（`/mode` 切换到或离开完全访问模式、`/restart`、重启）：当会话的套接字消失时，它最多等待 15 秒让同一个套接字回来，然后自己重新连接。真正结束的会话会在等待之后把你带回 shell（Ctrl-C 可以提前结束等待）。连接时 dtach 的分离键是关闭的，所以 `Ctrl-\` 会传给 Claude；要离开，关闭终端或 tmux 窗格即可，会话会继续运行。
 
 结果是：Claude Code 运行起来就像你在终端里输入一样，但那个终端可以随来随去，而不打扰正在运行的会话。aipager 在每 2 秒一次的扫描中查找 `/tmp/claude-dtach-*.sock` 来发现会话。被发现的会话属于它的名称所对应的聊天；而在同时有私聊和群组的安装上，在终端里启动的会话属于所有者的私聊。
 

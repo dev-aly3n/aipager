@@ -249,7 +249,7 @@ even after a restart. A session's internal name with the old id
 (`/name__g<old id>`) works in the upgraded group and nowhere else. If
 the daemon was stopped during the upgrade, it notices at its next
 start. A turn that is running at the moment of the upgrade finishes and
-its answer reaches the upgraded group, but its progress card is not
+its answer reaches the upgraded group, but its busy card is not
 shown again for the rest of that turn. If the new id is already a scope
 of its own, nothing moves and the log says so; remove one of the two
 with `aipager config`. "Test bot reachability" in `aipager config`
@@ -387,9 +387,9 @@ Write and search confinement applies to every role without
 applies to every role without `can_manage`, whatever its bypasses: a
 role you define with `bypass_role_denies` or `bypass_safety` but not
 `can_manage` writes and searches anywhere inside its root folder (and
-its scratchpad), reads nothing in your home folder outside it, and
-nowhere else (with `bypass_safety`, in a session that runs outside its
-root folder, it writes only in its scratchpad). Only owners and admins
+its scratchpad) and nowhere else, and reads nothing in your home folder
+outside its root folder (with `bypass_safety`, in a session that runs
+outside its root folder, it writes only in its scratchpad). Only owners and admins
 are unrestricted.
 
 ### Root folders
@@ -701,7 +701,7 @@ asked for them: confirm cards and the `/new` cards, below.)
   anyone's who can act on the session. Resuming a session that was in
   Full access (typed `/resume x1`, the picker, Resume on the `/new` name
   card, or the Mini App) brings it back in Auto mode for anyone else,
-  and the reply says so: "Resumed x1 in Auto mode: Full access mode
+  and the reply says so: "♻️ Resumed x1 in Auto mode: Full access mode
   needs an admin."
 - **In their own private chat, a person may use Full access whatever
   their role** (a `user` included; not `read_only`, which sends no
@@ -947,7 +947,7 @@ a wall; see
   and it keeps the newest 200 people seen in the last 30 days.
 - `read_only` members **can read** prompts, answers and tool inputs.
   They can't act, but they see everything in the group. If some work
-  must stay hidden from someone, they don't belong in the group.
+  must stay hidden from someone, that person does not belong in the group.
 - On an install that has a DM, your terminal sessions and your DM
   sessions never show in a group (see
   [Where messages go](#where-messages-go)). A terminal session that an

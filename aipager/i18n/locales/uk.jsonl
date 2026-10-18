@@ -139,7 +139,7 @@
 {"k": "appcmd.no_dm", "src": "96dd0730", "v": "Mini App відкривається з твого особистого чату з ботом. Попроси власника бота додати тебе."}
 {"k": "appcmd.not_enabled", "src": "31154296", "v": "Сервер Mini App не ввімкнено на цьому комп'ютері.\nПопроси власника бота виконати {command} і перезапустити aipager."}
 {"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 Посилання на Mini App ще готується: спробуй /app знову за кілька секунд."}
-{"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 Цей бот не налаштовано спілкуватися з тобою. Попроси власника бота додати твій Telegram ID ({user_id}) командою {command}."}
+{"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 Цей бот не налаштований на спілкування з тобою. Попроси власника бота додати твій Telegram ID ({user_id}) командою {command}."}
 {"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "Натисни, щоб відкрити панель aipager:"}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} заблоковано"}
 {"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {tool} заблоковано для {person}"}
@@ -148,7 +148,7 @@
 {"k": "auth.read_only.team", "src": "87e66c02", "v": "👀 {who} - твоя роль <i>read_only</i>; ти можеш дивитися <code>/status</code>, але не керувати сесіями."}
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 Тебе немає в списку дозволених у цьому чаті. Попроси власника бота додати твій Telegram ID ({user_id}) командою {command}."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Тебе немає в списку дозволених для цього бота. Попроси власника бота додати твій Telegram ID ({user_id}) командою {command}."}
-{"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Цей бот не налаштовано спілкуватися з тобою. Попроси власника бота додати твій Telegram ID ({user_id}) командою {command}."}
+{"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Цей бот не налаштований на спілкування з тобою. Попроси власника бота додати твій Telegram ID ({user_id}) командою {command}."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager з'єднує цього бота із сесіями Claude Code на комп'ютері його власника. Тут ти можеш стежити за тим, що робить Claude, відповідати на його питання й запити на дозвіл і надсилати йому нові повідомлення. Користуватися ним можуть лише люди, яких додав власник."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Керуй сесіями Claude Code з Telegram."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Назад"}
@@ -534,10 +534,10 @@
 {"k": "rep.area.dashboard", "src": "319e1d71", "v": "закріплене повідомлення"}
 {"k": "rep.area.flood_budget", "src": "75f9bcb6", "v": "ліміт надсилання"}
 {"k": "rep.area.handlers", "src": "0ff1035f", "v": "обробка повідомлень"}
-{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "приймання хуків"}
+{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "приймання подій hook"}
 {"k": "rep.area.inject", "src": "d784f7db", "v": "надсилання повідомлень у Claude"}
 {"k": "rep.area.notify", "src": "c522bd84", "v": "надсилання повідомлень у Telegram"}
-{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "хук"}
+{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "hook"}
 {"k": "rep.area.server", "src": "8000cc31", "v": "Mini App"}
 {"k": "rep.area.session_monitor", "src": "1fff1160", "v": "стеження за сесіями"}
 {"k": "rep.area.session_ops", "src": "6b7d9e30", "v": "керування сесіями"}
@@ -1393,7 +1393,7 @@
 {"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: перед перезапуском чекає, поки всі сесії стануть готові."}
 {"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>Оновлення</b>"}
 {"k": "upd.hooks.finished", "src": "7aa89c72", "v": "✅ Оновлення aipager завершено: aipager тепер працює на {version}."}
-{"k": "upd.hooks.newer", "src": "d8c34918", "v": "⚠️ Оновлення aipager зроблено лише наполовину: хуки Claude Code уже працюють на {hook}, а сам aipager досі на {running}. Перезапусти aipager, щоб його завершити."}
+{"k": "upd.hooks.newer", "src": "d8c34918", "v": "⚠️ Оновлення aipager зроблено лише наполовину: hooks Claude Code уже працюють на {hook}, а сам aipager досі на {running}. Перезапусти aipager, щоб його завершити."}
 {"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (остання версія)"}
 {"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}
 {"k": "upd.line.ap_newer_blocked", "src": "6c0b194f", "v": "aipager {running} → {latest} (звідси не оновити: {reason})"}

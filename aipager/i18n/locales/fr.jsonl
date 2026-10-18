@@ -1122,7 +1122,7 @@
 {"k": "ui.new.cli_model", "src": "80e3c49d", "v": "le modèle par défaut de Claude Code"}
 {"k": "ui.new.create_failed", "src": "c55f566f", "v": "Impossible de créer cette session."}
 {"k": "ui.new.create_folder", "src": "e59f63fa", "v": "Créer le dossier"}
-{"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "Vous n'êtes pas autorisé à créer des sessions ici."}
+{"k": "ui.new.create_forbidden", "src": "e1222f1e", "v": "Vous n'avez pas le droit de créer des sessions ici."}
 {"k": "ui.new.create_unreachable", "src": "1f344c8c", "v": "Impossible de joindre le serveur. La session n'a pas été créée."}
 {"k": "ui.new.created", "src": "77ea75b5", "v": "Session créée."}
 {"k": "ui.new.creating", "src": "94d7d8ee", "v": "Création…"}
@@ -1134,7 +1134,7 @@
 {"k": "ui.new.folder_created", "src": "6b6ea299", "v": "Dossier créé."}
 {"k": "ui.new.folder_existed", "src": "bfe299bc", "v": "Ce dossier existait déjà, il est donc sélectionné."}
 {"k": "ui.new.folder_failed", "src": "4d757c2b", "v": "Impossible de créer ce dossier."}
-{"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "Vous n'êtes pas autorisé à créer des dossiers ici."}
+{"k": "ui.new.folder_forbidden", "src": "6d72af9e", "v": "Vous n'avez pas le droit de créer des dossiers ici."}
 {"k": "ui.new.folder_name", "src": "85f87fa3", "v": "Nom du nouveau dossier"}
 {"k": "ui.new.folder_pattern", "src": "c3b51490", "v": "Utilisez seulement des lettres sans accent, des chiffres, des points, des tirets et des tirets bas ; commencez par une lettre ou un chiffre."}
 {"k": "ui.new.folder_too_long", "src": "ae5dc64d", "v": "Le nom du dossier doit comporter {max} caractères au maximum."}

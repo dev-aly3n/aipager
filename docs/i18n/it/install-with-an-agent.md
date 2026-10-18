@@ -13,7 +13,7 @@ aipager permette alla persona di controllare le sessioni di Claude Code da Teleg
 Chiedi alla persona di fare queste cose. Tu non puoi farle al posto suo.
 
 1. **Creare il bot**. In Telegram, aprire [@BotFather](https://t.me/BotFather), inviare `/newbot` e scegliere un nome e un username. BotFather risponde con il token del bot (simile a `123456789:AA...`).
-2. **Toccare Start nel bot**. Aprire il nuovo bot (il link di BotFather ha la forma `t.me/<bot username>`) e toccare Start. Un bot non può scrivere a chi non l'ha fatto.
+2. **Toccare «Avvia» nel bot**. Aprire il nuovo bot (il link di BotFather ha la forma `t.me/<bot username>`) e toccare «Avvia» (Start). Un bot non può scrivere a chi non l'ha fatto.
 3. **Fare l'accesso a Claude Code su questo computer**. Se la persona usa già Claude Code qui, non c'è niente da fare. Su un server senza schermo, la persona esegue `claude` una volta nel suo terminale e fa l'accesso (mostra un link da aprire su un altro dispositivo). Se preferisce un token di lunga durata, esegue `claude setup-token`, che si limita a stampare il token: è la persona stessa a salvarlo per le sessioni di aipager nel suo terminale (incolla il token, premi Invio e poi Ctrl-D):
 
    ```sh
@@ -84,7 +84,7 @@ Aggiungi `--dry-run` per vedere prima cosa cambierebbe. `--role admin` rende la 
 aipager setup detect-chat --token-file ~/.config/aipager/bot-token --json
 ```
 
-Mentre il comando aspetta (fino a 5 minuti; cambialo con `--timeout SECONDS`), chiedi alla persona di toccare Start nel bot (o di mandargli un messaggio qualsiasi). Stampa l'ultimo mittente in `candidate` (`id`, `first_name`, `last_name`, `username`) e non salva niente. Mostra nome e username alla persona e chiedi: «Sei tu?». Solo quando la persona conferma, esegui il passo 3.2 con `candidate.id` come `--chat-id`. Se `other_candidates` non è 0, anche altre persone hanno scritto al bot: assicurati bene di chi è.
+Mentre il comando aspetta (fino a 5 minuti; cambialo con `--timeout SECONDS`), chiedi alla persona di toccare «Avvia» nel bot (o di mandargli un messaggio qualsiasi). Stampa l'ultimo mittente in `candidate` (`id`, `first_name`, `last_name`, `username`) e non salva niente. Mostra nome e username alla persona e chiedi: «Sei tu?». Solo quando la persona conferma, esegui il passo 3.2 con `candidate.id` come `--chat-id`. Se `other_candidates` non è 0, anche altre persone hanno scritto al bot: assicurati bene di chi è.
 
 ### <a id="34-read-the-result"></a>3.4 Leggere il risultato
 
@@ -97,10 +97,10 @@ Con `--json`, setup stampa su stdout uno e un solo oggetto JSON. Leggi `exit_cod
 | 2 | `usage`, `token_malformed`, `token_stdin_timeout`, `bad_chat_id`, ... | Il tuo input è sbagliato; `fix` dice quale opzione. `token_malformed`: il file non contiene un token di bot, chiedi alla persona di controllarlo. |
 | 3 | `deps_missing` | Segui `fix` (ogni elemento mancante ha anche il suo `fix` in `deps.items`), poi riesegui setup. |
 | 4 | `token_rejected` | Telegram ha rifiutato il token. Chiedi di nuovo il token alla persona (o uno nuovo a @BotFather). |
-| 5 | `chat_not_started`, `bot_blocked` | Chiedi alla persona di aprire il bot e toccare Start (o di sbloccarlo), poi riesegui setup. |
+| 5 | `chat_not_started`, `bot_blocked` | Chiedi alla persona di aprire il bot e toccare «Avvia» (o di sbloccarlo), poi riesegui setup. |
 | 6 | `existing_install` | aipager è già configurato con un altro token, un'altra chat o un altro ruolo. Di' alla persona cosa cambia e chiedi il suo consenso prima di aggiungere `--force`. |
 | 7 | `telegram_unreachable` | Problema di rete, o Telegram è occupato. Aspetta un minuto e riprova. |
-| 8 | `detect_timeout` | detect-chat non ha visto nessun messaggio. Chiedi alla persona di toccare di nuovo Start e riesegui. Se c'è l'avviso `updates_backlog`, toccare di nuovo Start non serve: chiedi alla persona il suo ID numerico. |
+| 8 | `detect_timeout` | detect-chat non ha visto nessun messaggio. Chiedi alla persona di toccare di nuovo «Avvia» e riesegui. Se c'è l'avviso `updates_backlog`, toccare di nuovo «Avvia» non serve: chiedi alla persona il suo ID numerico. |
 | 9 | `daemon_running` | detect-chat: un aipager per questo bot è già in esecuzione e riceve lui i messaggi. Chiedi alla persona il suo ID numerico (oppure, dopo averglielo chiesto, fermalo con `aipager service stop`). |
 | 10 | `updates_conflict` | detect-chat: un altro programma sta leggendo i messaggi di questo bot. Chiedi alla persona il suo ID numerico. |
 | 130 | `interrupted` | Interrotto con Ctrl-C. |

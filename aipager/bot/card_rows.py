@@ -19,7 +19,15 @@ summary, an older or unknown shape) is drawn as stored: tool summaries
 are never translated.
 
 English is the stored bytes, by construction: every function returns
-exactly what the card drew before for ``tr.code == "en"``.
+exactly what the card drew before for ``tr.code == "en"`` and a row
+with no right-to-left letter. An English row holding one (Claude's
+Persian question, a Persian agent activity) is drawn from its key like
+any other language's, its icon and verb outside the code span, in every
+rendering (the in-RTL twin of a merged Persian answer too); each of
+Claude's pieces sits in a code span of its own, isolated whole from
+outside it (by the ``Tr`` where it isolates parameters, else by
+:func:`aipager.bot.claude_bidi.span`), so a clock or a word after it is
+not pulled into Claude's phrase.
 
 Display only: nothing here decides anything. Daemon only; the hook's
 modules (``state``, ``bg_shells``, ``config``, ``policy_snapshot``) never
@@ -30,6 +38,7 @@ from __future__ import annotations
 
 import re
 
+from aipager.bot import claude_bidi
 from aipager.i18n import Msg, Plural, Safe, Span
 
 __all__ = ["ANSWER_VERBS", "live_agent", "live_agent_final", "live_shell", "live_shell_final",
@@ -140,6 +149,18 @@ def _verb_ids() -> dict[str, str]:
     return {english: action for action, english in ACTION_VERBS.items()}
 
 
+def _isolated(tr, code: str, text: str) -> Span:
+    """*code*, the code span drawn for Claude's *text*, as a parameter:
+    isolated whole when it must be (:func:`claude_bidi.span`)."""
+    return Span(claude_bidi.span(tr, code, text))
+
+
+def _plain_en(tr, *texts: str) -> bool:
+    """Whether *tr* draws the stored English row as it is: English, and
+    none of *texts* holds a right-to-left letter."""
+    return tr.code == "en" and not any(claude_bidi.has_rtl_letter(t) for t in texts if t)
+
+
 def verb_text(tr, verb: str, kind: str = "md") -> str:
     """The shown form of an answer *verb* as stored (English): an action
     verb, ``Selected option N``, ``Submitted (none)``, ``Selected: ...``;
@@ -155,7 +176,8 @@ def verb_text(tr, verb: str, kind: str = "md") -> str:
         return render(SUBMITTED_NONE)
     if verb.startswith("Selected: "):
         options = verb[len("Selected: "):]
-        return render(SELECTED, options=Span(_mono(options)) if kind == "md" else options)
+        return render(SELECTED, options=(_isolated(tr, _mono(options), options)
+                                         if kind == "md" else options))
     return verb
 
 
@@ -164,7 +186,7 @@ def _render(tr, summary: str, kind: str, code) -> str | None:
     render = getattr(tr, kind)
 
     def span(text: str):
-        return Span(code(text)) if kind == "md" else text
+        return _isolated(tr, code(text), text) if kind == "md" else text
 
     m = _AGENT_DONE_RE.match(summary)
     if m:
@@ -198,7 +220,7 @@ def render_md(tr, summary: str, *, code=None) -> str:
     passes its own one-line span)."""
     code = code or _mono
     summary = str(summary)
-    if tr.code == "en":
+    if _plain_en(tr, summary):
         return code(summary)
     drawn = _render(tr, summary, "md", code)
     return drawn if drawn is not None else code(summary)
@@ -218,27 +240,28 @@ def _agent_name(tr, info: dict):
     # A helper's card label names the agent at the top of its chain
     # ("pipeline-runner › ship-tester"): names, never translated.
     agent_type = info.get("card_label") or info.get("type")
-    return Span(_mono(agent_type)) if agent_type else Safe(tr.md(AGENT_WORD))
+    return _isolated(tr, _mono(agent_type), agent_type) if agent_type else Safe(tr.md(AGENT_WORD))
 
 
 def live_agent(tr, info: dict, unit: str = "s") -> str:
     """A running agent's row (Markdown): the English row in one code span,
     else the words outside the spans."""
     from aipager.bot import animation
-    if tr.code == "en":
-        return _mono(animation._agent_live_row(info, unit))
     activity = info.get("activity")
+    if _plain_en(tr, activity, info.get("card_label") or info.get("type")):
+        return _mono(animation._agent_live_row(info, unit))
     started = info.get("started_at", animation.time.monotonic())
     clock = tr.clock(animation.time.monotonic() - started, unit)
     return tr.md(AGENT_LIVE, agent=_agent_name(tr, info),
-                 activity=Span(_mono(activity)) if activity else Safe(tr.md(STARTING)),
+                 activity=(_isolated(tr, _mono(activity), activity) if activity
+                           else Safe(tr.md(STARTING))),
                  clock=Safe(clock))
 
 
 def live_agent_final(tr, info: dict) -> str:
     """A running agent on a settled card: no counter."""
     from aipager.bot import animation
-    if tr.code == "en":
+    if _plain_en(tr, info.get("card_label") or info.get("type")):
         name = info.get("card_label") or info.get("type") or "agent"
         return _mono(f"{animation._SUBAGENT_MARK}{name} (still running)")
     return tr.md(AGENT_STILL_RUNNING, agent=_agent_name(tr, info))
@@ -248,15 +271,15 @@ def live_shell(tr, label: str, started: float, unit: str = "s") -> str:
     """A running background shell's row (Markdown)."""
     from aipager import bg_shells
     from aipager.bot import animation
-    if tr.code == "en":
+    if _plain_en(tr, label):
         return _mono(bg_shells.live_row(label, animation._elapsed_str(started, unit)))
     clock = tr.clock(animation.time.monotonic() - started, unit)
-    return tr.md(SHELL_LIVE, label=Span(_mono(label)), clock=Safe(clock))
+    return tr.md(SHELL_LIVE, label=_isolated(tr, _mono(label), label), clock=Safe(clock))
 
 
 def live_shell_final(tr, label: str) -> str:
     """A running shell on a settled card: no counter."""
     from aipager import bg_shells
-    if tr.code == "en":
+    if _plain_en(tr, label):
         return _mono(bg_shells.final_live_row(label))
-    return tr.md(SHELL_STILL_RUNNING, label=Span(_mono(label)))
+    return tr.md(SHELL_STILL_RUNNING, label=_isolated(tr, _mono(label), label))

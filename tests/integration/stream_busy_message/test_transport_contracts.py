@@ -220,9 +220,10 @@ def test_identical_consecutive_renders_produce_one_http_call(mk_bot, run_async, 
 
 # ── SC-TRANS-8: RTL body → is_rtl=True in payload ───────────────────────────
 
-def test_rtl_body_sends_is_rtl_true(mk_bot, run_async, monkeypatch):
+def test_rtl_body_in_an_english_chat_sends_is_rtl_false(mk_bot, run_async, monkeypatch):
     """entrypoints.md: An RTL body results in is_rtl=True being passed to the
-    transport."""
+    transport. Changed 2026-10-17: the card follows the chat's language, so
+    in an English chat it is False whatever Claude writes."""
     import aipager.bot.rich_message as rm_mod
 
     bot = mk_bot()
@@ -240,8 +241,8 @@ def test_rtl_body_sends_is_rtl_true(mk_bot, run_async, monkeypatch):
     run_async(bot._edit_busy_rich(sess, "Working"))
 
     assert len(payloads) == 1
-    assert payloads[0].get("rich_message", {}).get("is_rtl") is True, (
-        "RTL body must produce is_rtl=True in the rich_message payload"
+    assert payloads[0].get("rich_message", {}).get("is_rtl") is False, (
+        "an English chat's card is left to right whatever Claude writes"
     )
 
 

@@ -1187,7 +1187,9 @@ def check_docs(root: Path = ROOT, codes=None) -> list[str]:
                 if _DOC_NATIVE_LIST.match(line):
                     problems.append(f"{where}: a numbered list item needs Latin digits (1.): "
                                     f"{line.strip()[:60]}")
-            for target in _DOC_LINK.findall("\n".join(_doc_prose(text))):
+            # A link written inside a code span (`![alt](url)`) is text, not a link.
+            prose = "\n".join(re.sub(r"`[^`]*`", "", line) for line in _doc_prose(text))
+            for target in _DOC_LINK.findall(prose):
                 if re.match(r"[a-z]+:", target):
                     continue
                 file, _, frag = target.partition("#")

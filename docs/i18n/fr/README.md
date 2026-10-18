@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ e6f0c88 -->
+<!-- i18n-source: README.md @ c1510c0 -->
 
 <h3>Claude, c'est une discussion de plus.</h3>
 
@@ -21,7 +21,7 @@ Elles tournent sur votre propre ordinateur. Vous les suivez, leur répondez et l
 
 **[Site web](https://aipager.run)** · **[Installation](#install)** · **[Documentation](#documentation)** · **[Sécurité](security.md)** · **[Journal des modifications](../../../CHANGELOG.md)**
 
-**Lire dans une autre langue :** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
+**Lire dans une autre langue :** [English](../../../README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [Português (Brasil)](../pt-BR/README.md) · [简体中文](../zh-Hans/README.md) · [Deutsch](../de/README.md) · [한국어](../ko/README.md) · [العربية](../ar/README.md) · [Bahasa Indonesia](../id/README.md) · [Українська](../uk/README.md) · [Italiano](../it/README.md) · [Türkçe](../tr/README.md) · [فارسی](../fa/README.md) · [Tiếng Việt](../vi/README.md)
 
 <sub>Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../../README.md))</sub>
 
@@ -53,7 +53,7 @@ Votre message est tapé dans la session tout de suite, même pendant que Claude 
 </td>
 <td width="33%" valign="top">
 
-**✅ Répondez d'un geste**<br>
+**✅ Répondez d'un appui**<br>
 Les demandes d'autorisation et les questions de Claude arrivent avec un bouton par réponse. Un bouton resté d'une tâche finie refuse au lieu d'agir sur la suivante.
 
 </td>
@@ -68,13 +68,13 @@ Les demandes d'autorisation et les questions de Claude arrivent avec un bouton p
 <td width="33%" valign="top">
 
 **👥 Pensé pour les équipes**<br>
-Mettez le bot dans un groupe. Chaque message s'exécute avec le rôle de la personne qui l'envoie, les membres peuvent être limités à leur propre dossier, et chaque geste est inscrit au journal d'audit.
+Mettez le bot dans un groupe. Chaque message est traité avec le rôle de la personne qui l'envoie, les membres peuvent être limités à leur propre dossier, et chaque appui est inscrit au journal d'audit.
 
 </td>
 <td width="33%" valign="top">
 
 **🔒 Rien au milieu**<br>
-Pas de serveur aipager, pas de compte, pas de port ouvert. Votre jeton de bot, votre ordinateur, vos discussions.
+Pas de serveur aipager, pas de compte, pas de port ouvert. Votre token de bot, votre ordinateur, vos discussions.
 
 </td>
 </tr>
@@ -84,7 +84,7 @@ Pas de serveur aipager, pas de compte, pas de port ouvert. Votre jeton de bot, v
 
 ### <a id="questions-come-to-you"></a>Les questions viennent à vous
 
-Quand Claude vous demande quelque chose ou a besoin d'une autorisation, la question arrive dans votre discussion avec un bouton par réponse, et la barre épinglée dit ce qui vous attend. Votre geste est tapé dans la session comme si vous étiez au clavier, et le terminal affiche la même réponse.
+Quand Claude vous demande quelque chose ou a besoin d'une autorisation, la question arrive dans votre discussion avec un bouton par réponse, et la barre épinglée dit ce qui vous attend. Votre appui est tapé dans la session comme si vous étiez au clavier, et le terminal affiche la même réponse.
 
 <img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/question.webp" width="100%" alt="Claude demande s'il faut allonger le délai ou attendre le cookie ; la réponse choisie dans Telegram est sélectionnée dans le terminal">
 
@@ -100,11 +100,11 @@ Chaque session est dans l'un des trois modes, changé à tout moment avec `/mode
 | 🤖 **Mode Automatique**, le mode par défaut<br>`/mode auto` | La vérification de sécurité de Claude Code lui-même laisse passer les actions sûres et arrête les risquées pour que vous décidiez. |
 | 🔓 **Mode Accès complet**<br>`/mode full` | Tout s'exécute sans aucune vérification. Pour les admins, et pour vous dans votre propre discussion privée avec le bot. |
 
-Entre Mode Demander et Mode Automatique, le changement se fait sur place, sans redémarrage. Passer en Mode Accès complet ou en sortir redémarre la session et garde la conversation. Les questions de Claude vous arrivent dans tous les modes.
+Entre le Mode Demander et le Mode Automatique, le changement se fait sur place, sans redémarrage. Passer en Mode Accès complet ou en sortir redémarre la session et garde la conversation. Les questions de Claude vous arrivent dans tous les modes.
 
 ### <a id="your-team-in-one-group"></a>Votre équipe, dans un groupe
 
-Ajoutez le bot à un groupe et donnez un rôle à chaque membre : `owner`, `admin`, `user` ou `read_only`. Dans le groupe, le bot ne réagit qu'aux commandes, aux réponses à ses messages et aux mentions (`@aipagerbot fix the tests`, `/web run the tests`), et chaque message s'exécute avec le rôle de la personne qui l'envoie : un outil que le rôle n'a pas le droit d'utiliser est refusé avant de s'exécuter. Un membre `user` ou `read_only` ne travaille que dans son propre dossier racine (`~/aipager-users/<label>` par défaut). D'autres personnes peuvent aussi avoir leur propre discussion privée avec le bot.
+Ajoutez le bot à un groupe et donnez un rôle à chaque membre : `owner`, `admin`, `user` ou `read_only`. Dans le groupe, le bot ne réagit qu'aux commandes, aux réponses à ses messages et aux mentions (`@aipagerbot fix the tests`, `/web run the tests`), et chaque message est traité avec le rôle de la personne qui l'envoie : un outil que le rôle n'a pas le droit d'utiliser est refusé avant de s'exécuter. Un membre `user` ou `read_only` ne travaille que dans son propre dossier racine (`~/aipager-users/<label>` par défaut). D'autres personnes peuvent aussi avoir leur propre discussion privée avec le bot.
 
 <img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/team.webp" width="100%" alt="Un groupe d'équipe où une commande est refusée à cause du rôle d'un membre pendant que les tests passent">
 
@@ -114,7 +114,7 @@ Pour le mettre en place, ajoutez le bot au groupe comme admin (pour qu'il puisse
 
 ### <a id="a-dashboard-inside-telegram"></a>Un tableau de bord dans Telegram
 
-`/app` ouvre la Mini App : vos sessions avec Arrêter, Terminer, Redémarrer, Renommer et le changement de mode, une vue diff pour chaque `Write` et `Edit`, les réglages et, pour le propriétaire, Signaler un problème. aipager la sert lui-même, elle est activée par défaut, et chaque requête est vérifiée avec la signature de Telegram. Si vous êtes dans plus d'une discussion, une rangée de noms en haut permet de passer de l'une à l'autre. Coupez-la avec `aipager miniapp disable`, ou faites-la pointer vers votre propre adresse ([comment](security.md#mini-app-tunnel)).
+`/app` ouvre la Mini App : vos sessions avec Arrêter, Terminer, Redémarrer, Renommer et le changement de mode, une vue diff pour chaque `Write` et `Edit`, les réglages et, pour le propriétaire, « Signaler un problème ». aipager la sert lui-même, elle est activée par défaut, et chaque requête est vérifiée avec la signature de Telegram. Si vous êtes dans plus d'une discussion, une rangée de noms en haut permet de passer de l'une à l'autre. Coupez-la avec `aipager miniapp disable`, ou faites-la pointer vers votre propre adresse ([comment](security.md#mini-app-tunnel)).
 
 ### <a id="fifteen-languages"></a>Quinze langues
 
@@ -123,7 +123,7 @@ Pour le mettre en place, ajoutez le bot au groupe comme admin (pour qu'il puisse
 - Parle English, Español, Русский, Português (Brasil), 简体中文, Français, Deutsch, 한국어, العربية, Bahasa Indonesia, Українська, Italiano, Türkçe, فارسی et Tiếng Việt.
 - Choisissez-en une avec `/language`, ou laissez une discussion privée suivre la langue de votre app Telegram.
 - Le persan et l'arabe se lisent de droite à gauche, avec leurs propres chiffres.
-- Seuls les textes d'aipager changent. Vos sessions, non : Claude répond dans la langue dans laquelle vous lui écrivez.
+- Seuls les textes d'aipager changent. Vos sessions, non : Claude répond dans la langue où vous lui écrivez.
 - Ce README et [la documentation](#documentation) sont traduits aussi.
 
 <br clear="right">
@@ -144,23 +144,23 @@ Claude Code tourne dans un vrai terminal, dans `dtach`, pour que personne n'ait 
 
 ## <a id="install"></a>Installation
 
-Linux ou macOS, toute architecture. Il vous faut Claude Code, connecté sur cet ordinateur, et un bot Telegram : créez-en un avec [@BotFather](https://t.me/BotFather) et appuyez sur Start dedans.
+Linux ou macOS, toute architecture. Il vous faut Claude Code, connecté sur cet ordinateur, et un bot Telegram : créez-en un avec [@BotFather](https://t.me/BotFather) et appuyez sur Démarrer dans sa discussion.
 
 ```sh
 curl -fsSL https://aipager.run/install | sh   # uv, pipx ou Homebrew : celui que vous avez
-aipager config                                # votre jeton de bot, votre discussion, les hooks de Claude Code
+aipager config                                # votre token de bot, votre discussion, les hooks de Claude Code
 aipager service install                       # garde aipager en marche après la déconnexion
 aipager session api                           # Claude Code dans ce dossier, et dans votre discussion
 ```
 
-L'installeur prend `uv` si vous l'avez, sinon `pipx`, sinon (sur macOS) Homebrew, et installe `uv` quand il n'y a rien. `dtach` est fourni avec aipager (le paquet [`dtach-bin`](https://pypi.org/project/dtach-bin/)), il n'y a donc rien d'autre à installer. `aipager config` est un assistant : il vérifie le jeton du bot et votre discussion, puis ajoute pour vous les hooks d'aipager à `~/.claude/settings.json`. Vous ne modifiez jamais un fichier à la main.
+L'installateur prend `uv` si vous l'avez, sinon `pipx`, sinon (sur macOS) Homebrew, et installe `uv` quand il n'y a rien. `dtach` est fourni avec aipager (le paquet [`dtach-bin`](https://pypi.org/project/dtach-bin/)), il n'y a donc rien d'autre à installer. `aipager config` est un assistant : il vérifie le token du bot et votre discussion, puis ajoute pour vous les hooks d'aipager à `~/.claude/settings.json`. Vous ne modifiez jamais un fichier à la main.
 
 <details>
 <summary><b>Laissez un agent de programmation l'installer</b></summary>
 
 <br>
 
-Vous avez Claude Code ou un autre agent avec un shell ? Créez le bot, appuyez sur Start dedans, et enregistrez le jeton du bot dans un fichier que votre agent n'aura jamais à lire (collez le jeton, appuyez sur Entrée, puis Ctrl-D) :
+Vous avez Claude Code ou un autre agent avec un shell ? Créez le bot, appuyez sur Démarrer dans sa discussion, et enregistrez le token du bot dans un fichier que votre agent n'aura jamais à lire (collez le token, appuyez sur Entrée, puis Ctrl-D) :
 
 ```sh
 mkdir -p ~/.config/aipager
@@ -175,7 +175,7 @@ Puis donnez ce prompt à votre agent :
 Install aipager for me by following https://aipager.run/agent.md. My Telegram bot token is in ~/.config/aipager/bot-token and my Telegram user id is <your id>.
 ```
 
-Si vous ne connaissez pas votre identifiant Telegram, dites-le plutôt ; l'agent peut le trouver. Le guide qu'il suit, y compris la façon de remettre le jeton en sécurité, est [Installer avec un agent](install-with-an-agent.md). Pour les scripts, `aipager setup --token-file FILE --chat-id ID` configure aipager sans poser de question ([la commande setup](commands.md#command-line-aipager-setup-for-coding-agents)).
+Si vous ne connaissez pas votre identifiant Telegram, dites-le plutôt ; l'agent peut le trouver. Le guide qu'il suit, y compris la façon de remettre le token en sécurité, est [Installer avec un agent](install-with-an-agent.md). Pour les scripts, `aipager setup --token-file FILE --chat-id ID` configure aipager sans poser de question ([la commande setup](commands.md#command-line-aipager-setup-for-coding-agents)).
 
 </details>
 
@@ -221,7 +221,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Montez sous `/workspace` les dossiers que Claude doit modifier. Le montage de `~/.claude` apporte vos identifiants Claude et l'historique de vos conversations : lancez `claude` une fois sur l'hôte pour vous connecter, ou `docker exec -it aipager claude` pour vous connecter dans le conteneur.
 
-Tags : `latest`, `1.3`, `1.3.5` (un par version exacte et un par version mineure).
+Tags : `latest`, `1.3`, `1.3.6` (un par version exacte et un par version mineure).
 
 ### <a id="nix"></a>Nix
 
@@ -269,11 +269,11 @@ Ajoutez aipager comme entrée du flake et mettez son paquet dans `environment.sy
 | `/new x1` | Lancer une session nommée x1. `/new x1 fix the tests` envoie aussi son premier message. |
 | `/x1` | Faire de x1 la session où vont vos messages. `/x1 <message>` lui envoie un message directement. |
 | `/stop` | Interrompre la tâche en cours et jeter ce qui est en file d'attente. |
-| `/mode` | Passer entre Mode Demander, Mode Automatique et Mode Accès complet. |
+| `/mode` | Passer d'un mode à l'autre : Mode Demander, Mode Automatique, Mode Accès complet. |
 | `/app` | Ouvrir la Mini App. |
 | `/language` | Choisir la langue qu'aipager parle dans cette discussion. |
 | `/update` | Mettre à jour aipager et Claude Code, puis redémarrer sur place (admins). |
-| `/help` | Un petit guide par tâche. |
+| `/help` | Un petit guide, organisé par besoin. |
 
 Chaque commande, bouton et réglage est dans [Commandes du bot](commands.md).
 
@@ -293,10 +293,10 @@ Pour quitter une session sans arrêter Claude, fermez le terminal ou le panneau 
 
 ## <a id="security"></a>Sécurité
 
-- **Pas de serveur aipager.** aipager parle à la Bot API de Telegram avec votre propre jeton de bot. Il n'y a ni compte aipager ni service aipager.
+- **Pas de serveur aipager.** aipager parle à la Bot API de Telegram avec votre propre token de bot. Il n'y a ni compte aipager ni service aipager.
 - **Pas de port ouvert.** aipager n'écoute que sur la boucle locale. La Mini App sort par un tunnel Cloudflare où chaque requête doit porter la signature de Telegram, et `aipager miniapp disable` la coupe.
 - **Chaque réponse est consignée.** Chaque Autoriser, Refuser et réponse est ajouté à `~/.claude/aipager-audit.jsonl`, avec qui a appuyé dans un groupe.
-- **Claude Code décide toujours.** Vos réglages de Claude Code disent ce qui doit être demandé. aipager ne fait que transmettre la question et ne s'élève jamais en privilèges : pas de sudo, tout tourne sous votre utilisateur.
+- **Claude Code décide toujours.** Vos réglages de Claude Code disent ce qui doit être demandé. aipager ne fait que transmettre la question et ne demande jamais plus de droits : pas de sudo, tout tourne sous votre utilisateur.
 
 Le tableau complet, y compris ce qui protège votre identifiant Claude, est dans [le modèle de sécurité](security.md).
 
@@ -316,7 +316,7 @@ Les apps de Claude parlent à l'assistant hébergé par Anthropic. aipager vous 
 
 <br>
 
-aipager n'envoie à Telegram que ce que vous voyez dans vos discussions, avec votre propre jeton de bot ; aucun serveur aipager entre les deux. Claude Code, lui, parle à Anthropic comme d'habitude.
+aipager n'envoie à Telegram que ce que vous voyez dans vos discussions, avec votre propre token de bot ; aucun serveur aipager entre les deux. Claude Code, lui, parle à Anthropic comme d'habitude.
 
 </details>
 
@@ -334,7 +334,7 @@ Un petit outil qui détache un terminal. Il garde Claude Code en vie quand le te
 
 <br>
 
-Les demandes attendent votre geste, `/stop` interrompt la tâche et jette tout ce qui attend, `/kill` termine la session, et les boutons d'une tâche finie refusent.
+Les demandes d'autorisation attendent votre appui, `/stop` interrompt la tâche et jette tout ce qui attend, `/kill` termine la session, et les boutons d'une tâche finie refusent.
 
 </details>
 
@@ -343,7 +343,7 @@ Les demandes attendent votre geste, `/stop` interrompt la tâche et jette tout c
 
 <br>
 
-Envoyez `/update` : il vérifie aipager et Claude Code et installe ce qui est nouveau, puis 🔄 Redémarrer maintenant relance aipager, en service ou non. Vos sessions continuent pendant ce temps. En ligne de commande, `aipager update` met à jour via l'installeur auquel appartient aipager.
+Envoyez `/update` : il vérifie aipager et Claude Code et installe ce qui est nouveau, puis 🔄 Redémarrer maintenant relance aipager, en service ou non. Vos sessions continuent pendant ce temps. En ligne de commande, `aipager update` met à jour avec l'installateur auquel appartient aipager.
 
 </details>
 
@@ -352,7 +352,7 @@ Envoyez `/update` : il vérifie aipager et Claude Code et installe ce qui est n
 
 <br>
 
-Le menu **Modèle** du clavier et la Mini App proposent les alias de famille de Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) et des modèles fixes comme `claude-opus-5-5` et `claude-sonnet-5-5`. Sur l'API d'Anthropic, un alias pointe vers le dernier modèle de sa famille. Sur Bedrock et Vertex, le même alias peut pointer vers une version plus ancienne, selon ce que propose votre fournisseur ; envoyez `/model <full-id>` pour choisir un modèle précis.
+Le menu **Modèle IA ›** du clavier et la Mini App proposent les alias de famille de Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) et des modèles fixes comme `claude-opus-5-5` et `claude-sonnet-5-5`. Sur l'API d'Anthropic, un alias pointe vers le dernier modèle de sa famille. Sur Bedrock et Vertex, le même alias peut pointer vers une version plus ancienne, selon ce que propose votre fournisseur ; envoyez `/model <full-id>` pour choisir un modèle précis.
 
 </details>
 
@@ -389,7 +389,7 @@ systemd-run --user --scope -q -p MemoryMax=2G -p MemorySwapMax=0 \
 ruff check aipager tests
 ```
 
-`dtach` est fourni par la dépendance `dtach-bin`, il ne faut rien d'autre. Lancez les tests avec une limite de mémoire comme ci-dessus (sur macOS, sans `systemd-run`) : sinon un test qui s'emballe peut prendre toute la mémoire de la machine. Le processus de publication est décrit dans [CONTRIBUTING.md](../../../CONTRIBUTING.md).
+`dtach` est fourni par la dépendance `dtach-bin`, il ne faut rien d'autre. Lancez les tests avec une limite de mémoire comme ci-dessus (sur macOS, sans `systemd-run`) : sinon un test qui s'emballe peut prendre toute la mémoire de l'ordinateur. Le processus de publication est décrit dans [CONTRIBUTING.md](../../../CONTRIBUTING.md).
 
 ## <a id="license"></a>Licence
 

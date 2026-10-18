@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ e6f0c88 -->
+<!-- i18n-source: README.md @ c1510c0 -->
 
 <h3>Claude es un chat más.</h3>
 
@@ -114,7 +114,7 @@ Para configurarlo, añade el bot al grupo como admin (para que pueda fijar la ba
 
 ### <a id="a-dashboard-inside-telegram"></a>Un panel dentro de Telegram
 
-`/app` abre la Mini App: tus sesiones con Detener, Terminar, Reiniciar, Cambiar nombre y el cambio de modo, un visor de diff para cada `Write` y `Edit`, los ajustes y, para el propietario, Informar de un problema. La sirve el propio aipager, está activada por defecto y cada solicitud se comprueba con la firma de Telegram. Si estás en más de un chat, una fila con los nombres de los chats arriba te deja pasar de uno a otro. Apágala con `aipager miniapp disable` o ponla en tu propia dirección ([cómo](security.md#mini-app-tunnel)).
+`/app` abre la Mini App: tus sesiones con Detener, Terminar, Reiniciar, Cambiar nombre y el cambio de modo, un visor de diff para cada `Write` y `Edit`, los ajustes y, para el propietario, Informar de un problema. La sirve el propio aipager, está activada por defecto y cada petición se comprueba con la firma de Telegram. Si estás en más de un chat, una fila con los nombres de los chats arriba te deja pasar de uno a otro. Apágala con `aipager miniapp disable` o ponla en tu propia dirección ([cómo](security.md#mini-app-tunnel)).
 
 ### <a id="fifteen-languages"></a>Quince idiomas
 
@@ -144,12 +144,12 @@ Claude Code se ejecuta en una terminal de verdad, dentro de `dtach`, para que na
 
 ## <a id="install"></a>Instalación
 
-Linux o macOS, cualquier arquitectura. Necesitas Claude Code con la sesión iniciada en esta computadora y un bot de Telegram: crea uno con [@BotFather](https://t.me/BotFather) y pulsa Start en él.
+Linux o macOS, cualquier arquitectura. Necesitas Claude Code, autenticado en esta computadora, y un bot de Telegram: crea uno con [@BotFather](https://t.me/BotFather) y pulsa Start en él.
 
 ```sh
 curl -fsSL https://aipager.run/install | sh   # uv, pipx o Homebrew: el que tengas
 aipager config                                # tu token del bot, tu chat, los hooks de Claude Code
-aipager service install                       # mantiene aipager en marcha aunque cierres sesión
+aipager service install                       # mantiene aipager en marcha aunque te desconectes
 aipager session api                           # Claude Code en esta carpeta, y en tu chat
 ```
 
@@ -219,9 +219,9 @@ docker run -d --restart=unless-stopped --name aipager \
   ghcr.io/dev-aly3n/aipager:latest
 ```
 
-Monta bajo `/workspace` las carpetas que quieres que Claude edite. El montaje de `~/.claude` lleva tus credenciales de Claude y el historial de conversaciones: ejecuta `claude` una vez en el host para iniciar sesión, o `docker exec -it aipager claude` para iniciarla dentro del contenedor.
+Monta bajo `/workspace` las carpetas que quieres que Claude edite. El montaje de `~/.claude` lleva tus credenciales de Claude y el historial de conversaciones: ejecuta `claude` una vez en el host para autenticarte, o `docker exec -it aipager claude` para autenticarte dentro del contenedor.
 
-Etiquetas: `latest`, `1.3`, `1.3.5` (una por versión exacta y una por versión menor).
+Etiquetas: `latest`, `1.3`, `1.3.6` (una por versión exacta y una por versión menor).
 
 ### <a id="nix"></a>Nix
 
@@ -294,7 +294,7 @@ Para salir de una sesión sin detener a Claude, cierra la terminal o el panel de
 ## <a id="security"></a>Seguridad
 
 - **Sin servidor de aipager.** aipager habla con la Bot API de Telegram con tu propio token del bot. No hay cuenta de aipager ni servicio de aipager.
-- **Sin puerto abierto.** aipager solo escucha en loopback. La Mini App sale por un túnel de Cloudflare donde cada solicitud debe llevar la firma de Telegram, y `aipager miniapp disable` lo apaga.
+- **Sin puerto abierto.** aipager solo escucha en loopback. La Mini App sale por un túnel de Cloudflare donde cada petición debe llevar la firma de Telegram, y `aipager miniapp disable` lo apaga.
 - **Cada respuesta queda registrada.** Cada Permitir, Rechazar y respuesta se añade a `~/.claude/aipager-audit.jsonl`, con quién lo tocó en un grupo.
 - **Claude Code sigue decidiendo.** Tu configuración de Claude Code dice qué hay que preguntar. aipager solo transmite la pregunta y nunca eleva privilegios: nada de sudo, todo se ejecuta con tu usuario.
 
@@ -389,7 +389,7 @@ systemd-run --user --scope -q -p MemoryMax=2G -p MemorySwapMax=0 \
 ruff check aipager tests
 ```
 
-`dtach` viene con la dependencia `dtach-bin`, así que no hace falta nada más. Ejecuta las pruebas con un límite de memoria como arriba (en macOS, sin `systemd-run`): si no, una prueba desbocada puede quedarse con toda la memoria de la máquina. El proceso de publicación está en [CONTRIBUTING.md](../../../CONTRIBUTING.md).
+`dtach` viene con la dependencia `dtach-bin`, así que no hace falta nada más. Ejecuta las pruebas con un límite de memoria como arriba (en macOS, sin `systemd-run`): si no, una prueba desbocada puede quedarse con toda la memoria de la computadora. El proceso de publicación está en [CONTRIBUTING.md](../../../CONTRIBUTING.md).
 
 ## <a id="license"></a>Licencia
 

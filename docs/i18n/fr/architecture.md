@@ -1,6 +1,6 @@
 # Architecture
 
-<!-- i18n-source: docs/architecture.md @ c91598e -->
+<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../architecture.md))
 
@@ -56,7 +56,7 @@ Un seul appel `asyncio.run` dans `aipager/cli/daemon.py` fait tout tourner. À l
 
 - **`TelegramBot`** (`aipager/bot/`) : possède une `Application` de `python-telegram-bot`. Il reçoit les mises à jour de Telegram, passe chacune au gestionnaire des messages, des boutons ou des messages vocaux, et tient à jour les cartes d'activité, la barre d'état épinglée et les réponses.
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`) : ouvre un socket datagram Unix à `$XDG_RUNTIME_DIR/aipager.sock`, lit le JSON qu'envoient `aipager-hook` et `aipager-statusline`, et répartit le travail selon son `hook_event_name` (ou `type`, pour les messages d'aipager lui-même ; voir [événements de hook](hooks.md)).
-- **`SessionMonitor`** (`aipager/session_monitor.py`) : se réveille toutes les 2 s pour parcourir `/tmp/claude-dtach-*.sock`, accorder les sessions qu'il trouve avec la liste des sessions, et faire tourner les surveillances : une carte d'activité qui ne bouge plus, un message que Claude Code n'a jamais reçu, une demande d'autorisation sans nouvelles depuis 5 minutes que la conversation enregistrée montre finie (`AIPAGER_INTERACTIVE_TIMEOUT`), une tâche dont la fin n'a pas été vue.
+- **`SessionMonitor`** (`aipager/session_monitor.py`) : se réveille toutes les 2 s pour parcourir `/tmp/claude-dtach-*.sock`, faire concorder les sessions qu'il trouve avec la liste des sessions, et faire tourner les surveillances : une carte d'activité qui ne bouge plus, un message que Claude Code n'a jamais reçu, une demande d'autorisation sans nouvelles depuis 5 minutes que la conversation enregistrée montre finie (`AIPAGER_INTERACTIVE_TIMEOUT`), une tâche dont la fin n'a pas été vue.
 - **`SessionRegistry`** (`aipager/state.py`) : les objets `TrackedSession`, rangés par nom. Enregistrés dans `~/.claude/aipager-sessions.json` (de façon atomique) à l'arrêt et chaque fois que change quelque chose qui doit survivre à un redémarrage.
 - **Le serveur de la Mini App** (`aipager/miniapp/server.py`) : une app aiohttp liée à `127.0.0.1` sur `MINIAPP_PORT` (par défaut 8765), publiée vers Telegram par un tunnel Cloudflare géré tant qu'elle est activée (c'est le cas par défaut). Il sert le tableau de bord de `/app`.
 
@@ -81,7 +81,7 @@ D'après `aipager/cli/daemon.py` :
 ## <a id="shutdown-sequence"></a>Ordre d'arrêt
 
 1. SIGINT ou SIGTERM déclenche l'événement `stop`.
-2. Un `/update` en cours reçoit un court délai, puis son installateur est arrêté (voir [commandes → mise à jour](commands.md#update)).
+2. Un `/update` en cours dispose d'un court délai, puis son installateur est arrêté (voir [commandes → mise à jour](commands.md#update)).
 3. `registry.save()`.
 4. Le tunnel s'arrête, puis le serveur de la Mini App.
 5. `session_monitor.stop()`, `hook_receiver.stop()` (ferme le socket et supprime son fichier).
@@ -96,22 +96,22 @@ Le redémarrage lancé depuis Telegram compte sur le fait que tout ce chemin ail
 |---|---|---|
 | `$XDG_RUNTIME_DIR/aipager.sock` | Socket datagram Unix pour les événements de hook (`/tmp/aipager.sock` sans `$XDG_RUNTIME_DIR` ; `$AIPAGER_SOCKET_PATH` remplace les deux) | aipager (se lie au socket) |
 | `aipager-reply-<id>.sock` (à côté du socket de contrôle) | Un socket de réponse de courte durée pour chaque demande d'autorisation que le hook attend | `aipager-hook` |
-| `aipager-flood-mute.json`, `aipager-flood-backoff.json` (à côté du socket de contrôle) | L'état actuel des limites de Telegram, pour `aipager status` et le doctor | aipager |
+| `aipager-flood-mute.json`, `aipager-flood-backoff.json` (à côté du socket de contrôle) | L'état actuel des limites de Telegram, pour `aipager status` et `aipager doctor` | aipager |
 | `aipager-modelswitch-<name>.json` (à côté du socket de contrôle) | Marque un changement de modèle tapé par aipager, pendant 30 s ([hooks](hooks.md#premodelswitch)) | aipager (écrit), `aipager-hook` (le prend) |
 | `/tmp/claude-dtach-<name>.sock` | Socket de contrôle dtach de chaque session | dtach |
-| `/tmp/claude-status-<name>.json` | Les données de la statusline de chaque session | `aipager-statusline` |
+| `/tmp/claude-status-<name>.json` | Les données de la ligne d'état de chaque session | `aipager-statusline` |
 | `/tmp/claude-notes-<name>/` | Une note d'autorisation pour chaque message Telegram pas encore pris, et une marque `turn-open` que le hook garde pendant qu'une tâche tourne (un message qui rejoint la tâche ne peut que rendre ses règles plus strictes) | aipager (notes, écrites), `aipager-hook` (notes consommées ; `turn-open` écrite, et effacée par les deux) |
 | `/tmp/claude-policy-<name>.json` | L'instantané de référence des autorisations de la tâche en cours | `aipager-hook` (écrit quand le message est pris), lu par la vérification `PreToolUse` |
 | `/tmp/claude-policy-.floor-<uid>.json` | Le socle de sécurité, la liste intégrée plus votre section `safety:`, pour les solutions de repli du hook | aipager |
 | `/tmp/claude-reply-<name>.txt` | Le message auquel vous avez répondu, quand vous répondez à un message plus ancien | aipager |
-| `/tmp/aipager-files/` | Les fichiers et les messages vocaux envoyés depuis Telegram | aipager |
+| `/tmp/aipager-files/<chat>/` | Les fichiers et les messages vocaux envoyés depuis Telegram, un dossier privé par discussion (`0700`, fichiers `0600`) | aipager |
 | `/tmp/aipager.log` | La sortie d'un redémarrage par aipager lui-même quand il n'y a pas de service | aipager |
 | `~/.claude/aipager-sessions.json` | L'état durable de la liste des sessions | aipager |
 | `~/.claude/aipager-audit.jsonl` | Le journal des Autoriser / Refuser / réponses | aipager (ajout seulement) |
 | `~/.claude/aipager-flood-state.json` | L'historique des limites de Telegram de chaque discussion, gardé d'un redémarrage à l'autre ([dépannage](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
-| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | Le tunnel de la Mini App que garde aipager : son processus, ses ports locaux et une empreinte de son adresse (jamais l'adresse), pour que l'aipager suivant puisse le reprendre après un redémarrage prévu (droits 600) ; les avertissements de cloudflared | aipager ; l'enregistrement est aussi supprimé par le gardien du tunnel gardé et par `aipager uninstall` |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | Le tunnel de la Mini App que garde aipager : son processus, ses ports locaux et une empreinte de son adresse (jamais l'adresse), pour que l'aipager suivant puisse le reprendre après un redémarrage prévu (droits 600) ; les avertissements de cloudflared | aipager ; l'enregistrement est aussi supprimé par le gardien du tunnel conservé et par `aipager uninstall` |
 | `~/.claude/aipager-pending-users.json` | Les personnes qui se sont adressées au bot dans un groupe qu'il ne sert pas, ou qui ne sont pas membres d'un groupe qu'il sert, pour qu'`aipager config` puisse les ajouter (droits 0600, réécrit en entier à chaque écriture, les 200 plus récentes vues dans les 30 derniers jours) | aipager (écrit), `aipager config` (lit) |
-| `~/aipager-users/<label>/` | Les [dossiers racines](groups.md#root-folders) par défaut des membres (droits 0700), où les membres `user` et `read_only` lancent leurs sessions ; gardés par `aipager uninstall` | aipager (créés au premier `/new` ou à la première Nouvelle session de la Mini App d'un membre) |
+| `~/aipager-users/<label>/` | Les [dossiers racines](groups.md#root-folders) par défaut des membres (droits 0700), où les membres `user` et `read_only` lancent leurs sessions ; gardés par `aipager uninstall` | aipager (créés au premier `/new` d'un membre ou à sa première « Nouvelle session » dans la Mini App) |
 | `~/.claude/settings.json` | La configuration des hooks de Claude Code | `aipager config` / `aipager setup` ; à chaque démarrage, aipager ajoute tout hook ou toute ligne d'état d'aipager qui manque et règle `skipDangerousModePermissionPrompt` ([sécurité](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | Les copies faites avant chaque réécriture | `aipager config`, `aipager setup`, `aipager uninstall` |
 | `~/.claude.json` | Le fichier de Claude Code lui-même : aipager marque comme fiable le dossier où une session démarre, juste avant qu'elle démarre (le dossier personnel compris, jamais `/` ni un dossier au-dessus du dossier personnel), pour que la question de confiance de Claude Code ne bloque pas une session lancée depuis Telegram. Rien n'est marqué au démarrage d'aipager. Jamais réécrit quand il ne peut pas être lu en entier ou qu'un Claude en cours d'exécution l'a modifié entre-temps | aipager |
@@ -132,7 +132,7 @@ Le redémarrage lancé depuis Telegram compte sur le fait que tout ce chemin ail
 | `~/.config/systemd/user/aipager.service` (Linux), `~/Library/LaunchAgents/com.aipager.daemon.plist` (macOS), et une copie `.bak.<time>` de celui qu'une installation remplace (sur Linux, seulement s'il est différent) | Le service en arrière-plan | `aipager service install` |
 | `~/Library/Logs/aipager.log` (macOS) | Le journal du service launchd, lu par `aipager logs` | launchd, pour le service |
 
-En plus de ceux-ci, aipager crée un nouveau dossier de session quand vous en demandez un (Nouveau dossier dans `/new` ou dans la Mini App), et les installateurs et le modèle vocal écrivent leurs propres fichiers quand vous faites une mise à jour ou utilisez les messages vocaux. Tout cela se trouve dans votre dossier personnel, sous `/tmp`, ou à côté du socket de contrôle. aipager ne demande jamais plus de droits ; voir [sécurité](security.md#privilege-boundary).
+En plus de ceux-ci, aipager crée un nouveau dossier de session quand vous en demandez un (« Nouveau dossier » dans `/new` ou dans la Mini App), et les installateurs et le modèle vocal écrivent leurs propres fichiers quand vous faites une mise à jour ou utilisez les messages vocaux. Tout cela se trouve dans votre dossier personnel, sous `/tmp`, ou à côté du socket de contrôle. aipager ne demande jamais plus de droits ; voir [sécurité](security.md#privilege-boundary).
 
 ### <a id="isolated-instance-for-testing"></a>Une instance isolée (pour les tests)
 
@@ -148,7 +148,7 @@ Ces deux réglages existent pour que les tests de bout en bout puissent faire to
 
 ## <a id="why-dtach"></a>Pourquoi dtach
 
-dtach donne à chaque session Claude Code un vrai PTY sans l'attacher à un terminal qui devrait rester ouvert. aipager lance une session avec `dtach -n` et tape dedans avec `dtach -p` (les messages, Échap, les touches qui répondent à une boîte de dialogue) ; il ne lit jamais l'écran, puisque les hooks et l'historique de la conversation disent ce qui se passe. Vous pouvez vous y attacher en interactif depuis n'importe quel shell avec `aipager session <name>` pour un accès direct. Cet attachement suit la session à travers un redémarrage lancé depuis Telegram (`/mode` vers ou depuis Accès complet, `/restart`, Redémarrer) : quand le socket de la session disparaît, il attend jusqu'à 15 s que le même socket revienne et se rattache tout seul. Une session vraiment terminée vous rend la main au shell après l'attente (Ctrl-C l'arrête plus tôt). L'attachement tourne avec la touche de détachement de dtach désactivée, donc `Ctrl-\` va à Claude ; pour partir, fermez le terminal ou le panneau tmux et la session continue de tourner.
+dtach donne à chaque session Claude Code un vrai PTY sans l'attacher à un terminal qui devrait rester ouvert. aipager lance une session avec `dtach -n` et tape dedans avec `dtach -p` (les messages, Échap, les touches qui répondent à une boîte de dialogue) ; il ne lit jamais l'écran, puisque les hooks et l'historique de la conversation disent ce qui se passe. Vous pouvez vous y attacher en interactif depuis n'importe quel shell avec `aipager session <name>` pour un accès direct. Cet attachement suit la session à travers un redémarrage lancé depuis Telegram (`/mode` vers le Mode Accès complet ou depuis celui-ci, `/restart`, Redémarrer) : quand le socket de la session disparaît, il attend jusqu'à 15 s que le même socket revienne et se rattache tout seul. Une session vraiment terminée vous rend la main au shell au bout de cette attente (Ctrl-C l'écourte). L'attachement tourne avec la touche de détachement de dtach désactivée, donc `Ctrl-\` va à Claude ; pour partir, fermez le terminal ou le panneau tmux et la session continue de tourner.
 
 Résultat : Claude Code tourne comme si vous tapiez dans un terminal, mais ce terminal peut aller et venir sans déranger la session en cours. aipager découvre les sessions en parcourant `/tmp/claude-dtach-*.sock` à chaque passage du moniteur toutes les 2 s. Une session découverte appartient à la discussion pour laquelle son nom a été créé, et une session lancée dans le terminal appartient à la discussion privée du propriétaire sur une installation qui a une discussion privée et un groupe.
 

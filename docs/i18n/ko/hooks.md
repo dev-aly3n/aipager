@@ -10,8 +10,8 @@ Claude Code는 작업의 정해진 순간에 hook 명령을 실행해요. 메시
 
 `aipager config`(또는 `aipager setup`)는 `~/.claude/settings.json` 파일에 aipager 항목을 추가하고, aipager는 시작할 때마다 그 항목을 확인해요:
 
-- 아래 16개 이벤트마다 `aipager-hook` 명령이 하나씩 있고, 도구 이벤트(`PreToolUse`, `PostToolUse`, `PermissionRequest`)의 matcher는 `*`이에요;
-- `PreModelSwitch`는 5초 제한 시간이 있고, `aipager config`와 `aipager setup`으로 설정하면 `PermissionRequest`는 30초 제한 시간이 있어요(hook 자체는 최대 20초 기다려요, 아래 참고). 나머지 항목은 Claude Code의 기본값을 써요;
+- 아래 16개 이벤트마다 `aipager-hook` 명령이 하나씩 있고, 도구 이벤트(`PreToolUse`, `PostToolUse`, `PermissionRequest`)의 matcher는 `*`이에요.
+- `PreModelSwitch`는 5초 제한 시간이 있고, `aipager config`와 `aipager setup`으로 설정하면 `PermissionRequest`는 30초 제한 시간이 있어요(hook 자체는 최대 20초 기다려요, 아래 참고). 나머지 항목은 Claude Code의 기본값을 써요.
 - `statusLine` 명령, 즉 `aipager-statusline`.
 
 `aipager uninstall`은 이 항목들을 다시 지워요([명령](commands.md#command-line-aipager-uninstall) 참고).
@@ -78,7 +78,7 @@ hook은 답할 수 있으면 직접 이 요청에 답해요. 짧게 쓰는 응�
 
 도구가 끝났거나 실패했어요. 작업 카드의 그 줄이 고정되고(실패는 그 줄에 표시돼요), 열려 있는 요청에 대한 답을 알아채요. 그 요청을 위한 예전 허용이나 거부 버튼은 이후 아무것도 입력하지 않아요. 세션은 최신 도구 줄 200개를 보관해요.
 
-Claude Code가 백그라운드로 옮긴 `Bash` 호출은 `backgroundTaskId`를 알려 줘요. 그러면 aipager는 그것을 백그라운드 명령으로 추적하는데(메인 루프의 것만이고, `agent_id`가 있는 호출은 그 서브에이전트의 것이에요), 끝나는 것을 볼 때까지예요. `<status>`가 있는 `<task-notification>`(Claude를 깨우는 메시지 안이나, 작업 중에 도착하면 대화 기록 안), 그 ID에 대한 `TaskStop`이나 `KillShell`, 세션 종료, 또는 두 시간(`AIPAGER_BG_SHELL_MAX_TRACK`, 초 단위, 기본값 7200)이에요. 카드의 그 줄은 [명령](commands.md#idle-responses)에 있어요.
+Claude Code가 백그라운드로 옮긴 `Bash` 호출은 `backgroundTaskId`를 알려 줘요. 그러면 aipager는 그것을 백그라운드 명령으로 추적하는데(메인 루프의 것만이고, `agent_id`가 있는 호출은 그 서브에이전트의 것이에요), 끝나는 것을 볼 때까지예요. `<status>`가 있는 `<task-notification>`(Claude를 깨우는 메시지 안이나, 작업 중에 도착하면 저장된 대화 안), 그 ID에 대한 `TaskStop`이나 `KillShell`, 세션 종료, 또는 두 시간(`AIPAGER_BG_SHELL_MAX_TRACK`, 초 단위, 기본값 7200)이에요. 카드의 그 줄은 [명령](commands.md#idle-responses)에 있어요.
 
 서브에이전트 안에서 한 `Agent`(또는 `Task`) 호출은(그 이벤트에 `agent_id`가 있어요) 자기가 시작한 에이전트의 ID를 알려 줘요. aipager는 어느 에이전트가 어느 에이전트를 시작했는지 기억해서, 자기 에이전트를 기다리려고 멈춘 에이전트와 끝난 에이전트를 구별해요(아래 `SubagentStart` / `SubagentStop` 참고).
 
@@ -94,7 +94,7 @@ aipager는 Claude Code의 `notification_type`을 읽어요:
 
 ### <a id="stop"></a>`Stop`
 
-작업이 끝났어요. 세션이 준비됨이 되고, 작업 카드가 내 배치에 따라 고정되고, Claude의 답변(이벤트의 `last_assistant_message`, 없으면 대화 기록에서)을 보내요. 그다음 작업이 끝나기를 기다리며 보류된 메시지를 보내요. 아직 실행 중인 백그라운드 에이전트와 백그라운드 명령은 그 일을 열어 둬요. 카드는 계속 그 일의 상태 역할을 하고, 답변 끝에는 그 작업들의 실시간 상태가 붙어요. 에이전트마다 무엇을 하고 있는지, 그리고 이 일의 백그라운드 명령이 몇 개 실행 중인지예요([명령 → 답변이 나갈 때 아직 실행 중인 에이전트](commands.md#agents-still-running-when-the-answer-goes-out) 참고). hook은 먼저 작업의 열림 표시를 지워요. Claude가 바로 다음 작업이 될 대기 중인 메시지를 가지고 있으면 예외예요.
+작업이 끝났어요. 세션이 준비됨이 되고, 작업 카드가 내 배치에 따라 고정되고, Claude의 답변(이벤트의 `last_assistant_message`, 없으면 저장된 대화에서)을 보내요. 그다음 작업이 끝나기를 기다리며 보류된 메시지를 보내요. 아직 실행 중인 백그라운드 에이전트와 백그라운드 명령은 그 일을 열어 둬요. 카드는 계속 그 일의 상태 역할을 하고, 답변 끝에는 그 작업들의 실시간 상태가 붙어요. 에이전트마다 무엇을 하고 있는지, 그리고 이 일의 백그라운드 명령이 몇 개 실행 중인지예요([명령 → 답변이 나갈 때 아직 실행 중인 에이전트](commands.md#agents-still-running-when-the-answer-goes-out) 참고). hook은 먼저 작업의 열림 표시를 지워요. Claude가 바로 다음 작업이 될 대기 중인 메시지를 가지고 있으면 예외예요.
 
 ### <a id="stopfailure"></a>`StopFailure`
 
@@ -112,7 +112,7 @@ Claude가 컨텍스트를 압축하고 있어요(`trigger`는 `auto` 또는 `man
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 
-Claude 자신의 글이 화면에 닿는 순간이에요. 대화 기록은 도구 호출 한 바퀴가 끝난 뒤에야 쓰이니까, 이것이 Claude가 지금 무슨 말을 하는지 알 수 있는 유일한 즉시 출처이고, Claude의 설명을 작업 카드에 넣어 주는 것도 이거예요. 서브에이전트의 글(그 `agent_id`가 있는 모든 이벤트)은 절대 Claude 자신의 글로 다루지 않아요. 작업 카드의 설명, Mini App, 작업 로그에 들어가지 않고, 답변 아래 상태에서 그 에이전트의 최신 활동이 돼요. hook은 이 이벤트에 상태 줄 데이터를 붙이지 않아요. Claude Code가 그리는 동안 이것을 기다리고, 메시지마다 여러 번 일어나니까요.
+Claude 자신의 글이 화면에 닿는 순간이에요. 저장된 대화는 도구 호출 한 바퀴가 끝난 뒤에야 쓰이니까, 이것이 Claude가 지금 무슨 말을 하는지 알 수 있는 유일한 즉시 출처이고, Claude의 설명을 작업 카드에 넣어 주는 것도 이거예요. 서브에이전트의 글(그 `agent_id`가 있는 모든 이벤트)은 절대 Claude 자신의 글로 다루지 않아요. 작업 카드의 설명, Mini App, 작업 로그에 들어가지 않고, 답변 아래 상태에서 그 에이전트의 최신 활동이 돼요. hook은 이 이벤트에 상태 줄 데이터를 붙이지 않아요. Claude Code가 그리는 동안 이것을 기다리고, 메시지마다 여러 번 일어나니까요.
 
 ### <a id="premodelswitch"></a>`PreModelSwitch`
 
@@ -121,16 +121,16 @@ Claude Code 2.1.251 이상은 모델을 바꾸기 전에 이것을 일으켜요.
 `aipager-hook`은 aipager가 직접 입력한 변경에만 `allow`로 답해요. 출처는 Mini App의 모델 선택이나 모델 키보드예요. 다른 모든 변경은 답을 받지 못해서 Claude Code가 평소처럼 물어요. 여기에는 봇 소유자가 터미널에서 직접 입력한 `/model`, 모델 선택기, SDK를 통한 변경이 들어가요.
 
 aipager는 표시 파일로 자기 변경을 알아봐요. `/model <name>`을 입력하기 바로 전에 aipager가 `aipager-modelswitch-<session>.json`을 써요:
-- 제어 소켓이 있는 폴더(보통 `$XDG_RUNTIME_DIR`)에 두고;
-- 원자적으로, 권한 0600으로 쓰고;
-- 모델과 Claude 세션 ID를 적고;
+- 제어 소켓이 있는 폴더(보통 `$XDG_RUNTIME_DIR`)에 두고,
+- 원자적으로, 권한 0600으로 쓰고,
+- 모델과 Claude 세션 ID를 적고,
 - 30초 뒤에 만료돼요.
 
 hook은 다음이 모두 맞을 때만 `allow`로 답해요:
-- 표시가 내 소유의 파일이고 심볼릭 링크가 아니에요;
-- 아직 만료되지 않았어요;
-- 같은 aipager 세션과 같은 Claude 세션 ID를 위한 거예요;
-- 기록된 모델이 대소문자 구분 없이 `requested_model`이나 `to_model`과 같아요;
+- 표시가 내 소유의 파일이고 심볼릭 링크가 아니에요.
+- 아직 만료되지 않았어요.
+- 같은 aipager 세션과 같은 Claude 세션 ID를 위한 거예요.
+- 기록된 모델이 대소문자 구분 없이 `requested_model`이나 `to_model`과 같아요.
 - `source`가 `command`예요.
 
 그다음 hook은 원자적인 이름 바꾸기로 표시를 가져가서 딱 한 번만 쓰이게 해요. 이 검사는 로컬 파일 하나만 읽고, 소켓도 쓰지 않고 기다리지도 않아요. 이 이벤트는 aipager로 넘기지 않아요.
@@ -141,8 +141,8 @@ Claude Code 2.1.101 이상은 모르는 hook 이벤트를 무시하니까, `PreM
 
 hook 이벤트가 아니에요. Claude Code는 상태 줄을 다시 그릴 때마다 `statusLine` 명령 `aipager-statusline`(`aipager.dtach.statusline_notify:main`)을 실행해요. 이 명령은:
 
-- Claude Code의 상태 JSON을 `/tmp/claude-status-<session>.json`에 써요(hook이 `sl_tokens`를 얻으려고 읽고, `aipager status`와 aipager도 읽어요);
-- aipager에 `statusline` datagram을 보내요. 모델, 컨텍스트 비율, 비용, token 수, 추가하고 지운 줄 수가 들어 있고, 작업 카드, `/status`, Mini App, 모델 변경이 적용됐는지 확인, 컨텍스트 경고에 쓰여요;
+- Claude Code의 상태 JSON을 `/tmp/claude-status-<session>.json`에 써요(hook이 `sl_tokens`를 얻으려고 읽고, `aipager status`와 aipager도 읽어요).
+- aipager에 `statusline` datagram을 보내요. 모델, 컨텍스트 비율, 비용, token 수, 추가하고 지운 줄 수가 들어 있고, 작업 카드, `/status`, Mini App, 모델 변경이 적용됐는지 확인, 컨텍스트 경고에 쓰여요.
 - 터미널의 상태 줄을 출력해요: `[name] Opus 5.5 | 42% ctx | $1.23`.
 
 ## <a id="aipagers-own-datagrams"></a>aipager 자체의 datagram

@@ -286,8 +286,13 @@ def test_the_paused_html_line_is_unmarked(mk_bot, run_async, monkeypatch):
     assert "x1" in text and not INVISIBLE.search(text)
 
 
-def test_a_moved_paused_card_in_a_right_to_left_message_is_marked(mk_bot, run_async,
-                                                                  monkeypatch):
+def test_a_moved_paused_card_in_an_english_chat_is_left_to_right(mk_bot, run_async,
+                                                                 monkeypatch):
+    # Changed 2026-10-17 (was: a right-to-left message, its line marked
+    # with U+200E at both ends): the card follows the chat's language, so
+    # an English chat's paused card is left to right under a Persian
+    # prompt; its line opens on the Persian name, so one U+200E first
+    # keeps it left to right on iPhone and Android too.
     from aipager.bot import animation as anim
     _english(4343)
     bot = mk_bot()
@@ -298,7 +303,6 @@ def test_a_moved_paused_card_in_a_right_to_left_message_is_marked(mk_bot, run_as
     rich = AsyncMock(return_value={"message_id": 56})
     monkeypatch.setattr(anim, "send_rich_message", rich)
     run_async(bot._send_card_copy(s, 9, verb="Working", final=False, waiting=False))
-    assert rich.await_args.kwargs["is_rtl"] is True
+    assert rich.await_args.kwargs["is_rtl"] is False
     text = rich.await_args.args[1]
-    assert text.startswith(LRM) and text.endswith(LRM)
-    assert FSI + "سفر" + PDI in text
+    assert text.startswith(LRM) and len(INVISIBLE.findall(text)) == 1 and "سفر" in text

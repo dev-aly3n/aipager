@@ -1,10 +1,10 @@
-# Laporan masalah: isi sebuah laporan
+# Laporan masalah: apa saja isinya
 
 <!-- i18n-source: docs/problem-reports.md @ 16ee949 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../problem-reports.md))
 
-Saat aipager menemui bug, kamu bisa mengirim laporan masalah ke orang yang merawatnya dengan satu ketukan. Kamu melihat seluruh laporan sebelum apa pun dikirim, tidak ada yang keluar dari komputermu sampai kamu bilang, dan laporan itu tidak pernah berisi chat, pesan, nama, path, atau token milikmu. Laporan disusun hanya dari daftar field yang tetap: versi, jumlah, tanggal, jawaban ya/tidak, pilihan dari daftar tetap, lokasi di kode aipager sendiri, dan nama bug aipager yang berawalan `ap1-`, ditambah catatan singkat hanya kalau kamu menulisnya.
+Saat aipager menemui bug, kamu bisa mengirim laporan masalah ke orang yang merawatnya dengan satu ketukan. Kamu melihat seluruh laporan sebelum apa pun dikirim, tidak ada yang keluar dari komputermu sampai kamu setuju, dan laporan itu tidak pernah berisi chat, pesan, nama, path, atau token milikmu. Laporan disusun hanya dari daftar field yang tetap: versi, jumlah, tanggal, jawaban ya/tidak, pilihan dari daftar tetap, lokasi di kode aipager sendiri, dan nama bug aipager yang berawalan `ap1-`, ditambah catatan singkat hanya kalau kamu menulisnya.
 
 ## <a id="how-to-send-one"></a>Cara mengirimnya
 
@@ -19,12 +19,12 @@ Yang bisa mengirim laporan dari Telegram hanya pemilik instalasi aipager: orang 
 Kartu pratinjau menampilkan laporan persis seperti yang akan dikirim: JSON dalam blok terlipat yang bisa kamu buka, atau, kalau terlalu panjang untuk satu pesan, file `report.json` sebagai balasan ke kartu. Tombolnya:
 
 - **📤 Kirim**: mengirim laporan persis ini, sekali. Kartu lalu menampilkan `Terkirim. Kode referensi: ap1-...`.
-- **✏️ Tambah catatan**: pesanmu berikutnya di chat ini dalam 10 menit menjadi catatan laporan (dipotong di 500 karakter), dan kartu menampilkan laporan lagi dengan catatan itu sebelum kamu mengirimnya. Kalau kamu melakukan hal lain (sebuah perintah, tombol lain, foto, tindakan di Mini App), pertanyaan catatan ditutup tanpa catatan, dan setelah 10 menit pesan berikutnya dikirim ke Claude seperti biasa. Pertanyaan itu punya **‹ Kembali**, yang kembali ke pratinjau tanpa catatan, dan Batal.
+- **✏️ Tambah catatan**: pesanmu berikutnya di chat ini dalam 10 menit menjadi catatan laporan (dipotong di 500 karakter), dan kartu menampilkan laporan lagi dengan catatan itu sebelum kamu mengirimnya. Kalau kamu melakukan hal lain (perintah, tombol lain, foto, tindakan di Mini App), pertanyaan catatan ditutup tanpa catatan, dan setelah 10 menit pesan berikutnya dikirim ke Claude seperti biasa. Pertanyaan itu punya **‹ Kembali**, yang kembali ke pratinjau tanpa catatan, dan Batal.
 - **✖️ Batal**: tidak ada yang dikirim.
 
-Pratinjau tetap terbuka 24 jam, dan 5 yang terbaru tetap terbuka (yang ke-6 menutup yang paling lama). Setelah aipager dimulai ulang, kartu lama tidak bisa dikirim lagi: buka “Laporkan masalah” lagi untuk mendapat yang baru. Laporan yang dibuka di Mini App bisa dikirim dalam 24 jam (3 yang terbaru); setelah mulai ulang, halaman itu memuat laporan baru.
+Pratinjau tetap terbuka 24 jam, dan 5 yang terbaru tetap terbuka (membuka yang ke-6 menutup yang paling lama). Setelah aipager dimulai ulang, kartu lama tidak bisa dikirim lagi: buka “Laporkan masalah” lagi untuk mendapat yang baru. Laporan yang dibuka di Mini App bisa dikirim dalam 24 jam (3 yang terbaru); setelah mulai ulang, halaman itu memuat laporan baru.
 
-## <a id="what-a-report-holds"></a>Isi sebuah laporan
+## <a id="what-a-report-holds"></a>Isi laporan
 
 Setiap bagian, dengan kata-kata sederhana. Setiap nilai dicocokkan dengan daftar nilai yang diizinkan sebelum pratinjau ditampilkan dan sekali lagi sebelum dikirim; apa pun yang tidak cocok diganti dengan `<invalid>` atau dibuang, tapi tidak pernah dikirim apa adanya.
 
@@ -39,11 +39,11 @@ Setiap bagian, dengan kata-kata sederhana. Setiap nilai dicocokkan dengan daftar
 - `python`: versi Python dan apakah itu CPython atau PyPy.
 - `os`: sistem (`linux`, `darwin`, `windows`, `freebsd`), jenis prosesor, distribusi Linux dari daftar tetap beserta nomor versinya, versi kernel major.minor, jenis kontainer kalau ada (`docker`, `lxc`, `wsl`, `podman`), dan apakah aipager diatur sebagai layanan systemd atau launchd.
 - `deps`: versi pustaka yang dipakai aipager (python-telegram-bot, httpx, aiohttp, PyYAML, rich, questionary, dtach-bin).
-- `claude_code`: versi Claude Code, berapa instalasi Claude Code yang ditemukan, dan cara ia login (`env`, `file`, `keychain`, atau kenapa hal itu tidak bisa diketahui). Tidak pernah data login-nya sendiri.
+- `claude_code`: versi Claude Code, berapa instalasi Claude Code yang ditemukan, dan cara Claude Code login (`env`, `file`, `keychain`, atau kenapa hal itu tidak bisa diketahui). Tidak pernah data login-nya sendiri.
 
 **Pengaturanmu dalam angka**
-- `config`: mode (`personal`, `team`, `scope`); berapa chat pribadi dan berapa grup yang diatur; berapa peran buatan sendiri yang ada (namanya tidak disertakan); fitur mana yang menyala (Mini App, jenis tunnel-nya, pesan suara, pratinjau perubahan, ringkasan kaya).
-- `runtime`: sudah berapa lama aipager berjalan, sebagai rentang (`<10m`, `10m-1h`, `1-24h`, `1-7d`, `>7d`); berapa sesi yang dimulai dan sedang berjalan; berapa kali aipager berhenti tanpa diduga dalam 7 hari terakhir dan bagaimana ia berakhir terakhir kali (`clean`, `crash`, `reboot`).
+- `config`: mode (`personal`, `team`, `scope`); berapa chat pribadi dan berapa grup yang diatur; berapa peran buatan sendiri yang ada (namanya tidak disertakan); fitur mana yang menyala (Mini App, jenis tunnel-nya, pesan suara, pratinjau perubahan, ringkasan berformat).
+- `runtime`: sudah berapa lama aipager berjalan, sebagai rentang (`<10m`, `10m-1h`, `1-24h`, `1-7d`, `>7d`); berapa sesi yang berjalan dan berapa yang sedang bekerja; berapa kali aipager berhenti tanpa diduga dalam 7 hari terakhir dan bagaimana aipager berhenti terakhir kali (`clean`, `crash`, `reboot`).
 - `doctor`: hasil (`ok`, `warn`, `fail`) dari daftar pemeriksaan kesehatan yang tetap, kalau tersedia tanpa menjalankan ulang pemeriksaan (laporan dari bot dan dari terminal membiarkan field ini kosong).
 - `flood`: keadaan batas Telegram, dirangkum dari semua chat: pemblokiran dalam 7 hari terakhir, apakah sekarang ada chat yang pengirimannya dimatikan, dalam mode minimal, atau sedang diperlambat, dan bagian anggaran per jam dari chat tersibuk sebagai rentang. Tanpa ID chat.
 
@@ -52,7 +52,7 @@ Setiap bagian, dengan kata-kata sederhana. Setiap nilai dicocokkan dengan daftar
 - `log_digest_24h`: untuk 15 lokasi di kode aipager yang paling sering menulis peringatan atau error ke log dalam 24 jam terakhir, lokasinya (`aipager/state.py:1234`), tingkatnya, dan berapa kali. Tidak pernah teks log-nya.
 - `errors`: sampai 10 error yang dicatat aipager, masing-masing dengan:
   - `fingerprint`: nama bug berawalan `ap1-` (hash dari jenis error dan nama sampai 8 lokasi di kode aipager, tidak pernah teks atau data);
-  - di mana terjadinya (aipager sendiri, hook, baris status, sebuah perintah, Mini App), bagaimana ia tertangkap, dan apakah itu bug atau hanya sesuatu yang tidak biasa (`tier`);
+  - di mana terjadinya (aipager sendiri, hook, baris status, perintah, Mini App), bagaimana error itu tertangkap, dan apakah itu bug atau hanya sesuatu yang tidak biasa (`tier`);
   - untuk error yang ditulis aipager ke log, nama logger-nya (modul `aipager`, `asyncio`, atau bagian dari `telegram.ext`);
   - nama jenis exception (misalnya `builtins.KeyError`, atau `<other>` untuk exception dari luar daftar paket tetap), jenis sampai tiga penyebabnya, dan nama nomor error seperti `ENOSPC`;
   - untuk error hook, event hook dan alatnya (alat bawaan dengan namanya, alat MCP apa pun sebagai `mcp`);
@@ -79,12 +79,12 @@ Tepat sebelum mengirim, aipager membaca [report-endpoint.json](https://github.co
 aipager memperhatikan bug-nya sendiri dan sesekali menawarkan untuk mengirim laporan tentangnya di chat pribadimu: `aipager mengalami error internal N kali (TypeError di kartu kerja). Dengan laporan, masalah ini lebih cepat diperbaiki. ...` dengan **Lihat laporan**, **Nanti saja**, dan **Jangan tanya lagi**. “Lihat laporan” membuka kartu pratinjau yang hanya berisi error-error ini; tidak ada yang dikirim sampai kamu mengetuk Kirim di sana.
 
 Tawaran hanya datang kalau semua ini terpenuhi:
-- Ini memang bug di aipager: error di kode aipager sendiri yang terjadi setidaknya dua kali dengan jarak setidaknya 10 menit, atau langsung kalau aipager crash saat berjalan sebagai layanan (`aipager start` di latar depan yang dimatikan, misalnya dengan menutup terminalnya, hanya dihitung). Error yang dilaporkan ke aipager oleh hook, program baris status, atau sebuah perintah (termasuk hook yang kehabisan memori) juga harus tersebar setidaknya selama sehari, jadi satu error seperti itu tidak pernah memicu tawaran; untuk itu ada tombol “Laporkan ini” di notifikasinya. Hal yang bukan kesalahan aipager (batas Telegram, jaringan, disk penuh) tidak pernah memicu tawaran; hal itu hanya dihitung untuk laporan yang kamu kirim sendiri.
+- Ini memang bug di aipager: error di kode aipager sendiri yang terjadi setidaknya dua kali dengan jarak setidaknya 10 menit, atau langsung kalau aipager crash saat berjalan sebagai layanan (`aipager start` di latar depan yang dimatikan, misalnya dengan menutup terminalnya, hanya dihitung). Error yang dilaporkan ke aipager oleh hook, program baris status, atau perintah (termasuk hook yang kehabisan memori) juga harus tersebar setidaknya selama sehari, jadi satu error seperti itu tidak pernah memicu tawaran; untuk itu ada tombol “Laporkan ini” di notifikasinya. Hal yang bukan kesalahan aipager (batas Telegram, jaringan, disk penuh) tidak pernah memicu tawaran; hal itu hanya dihitung untuk laporan yang kamu kirim sendiri.
 - Paling banyak satu tawaran setiap 3 hari, dengan semua yang terkumpul di satu tawaran itu.
 - Tidak dalam 48 jam pertama setelah aipager pertama kali dijalankan di komputer ini (pembaruan tidak mengulang hitungannya), dan tidak dalam satu jam pertama setelah aipager dimulai ulang.
 - Hanya saat tidak ada yang berjalan dan tidak ada yang menunggu dikirim selama 2 menit, dan chat pribadimu dengan bot dipakai dalam 30 menit terakhir. Tidak pernah di grup, dan tidak pernah selama Telegram membatasi chat itu.
 - Setiap bug ditawarkan sekali per versi aipager. Setelah jawaban apa pun, bug itu tidak ditawarkan lagi di versi itu; setelah pembaruan, bug itu bisa muncul lagi hanya kalau terjadi lagi.
-- **Nanti saja** dan **Jangan tanya lagi** sama-sama dihitung sebagai “tidak”, begitu juga tawaran yang tidak dijawab dalam sehari. **Lihat laporan** mengulang hitungannya, meskipun kamu kemudian membatalkan. Dua “tidak” berturut-turut mematikan tawaran otomatis: kalau yang kedua berupa ketukan, sebuah baris akan memberitahumu; bagaimanapun juga, hal itu terlihat di `/settings`.
+- **Nanti saja** dan **Jangan tanya lagi** sama-sama dihitung sebagai “tidak”, begitu juga tawaran yang tidak dijawab dalam sehari. **Lihat laporan** mengulang hitungannya, meskipun kamu kemudian membatalkan. Dua “tidak” berturut-turut mematikan tawaran otomatis: kalau yang kedua berupa ketukan, satu baris pesan memberitahumu; bagaimanapun juga, hal itu terlihat di `/settings`.
 - Tidak pernah untuk instalasi pengembangan (aipager dipasang dari folder lokal, salinan git, atau dalam mode editable).
 
 Untuk mematikan tawaran otomatis, buka `/settings` di chat pribadimu: **Laporan masalah: Mati**. Saat dua “tidak” mematikannya, halaman yang sama punya **Tawarkan lagi**. `reports.json` yang ada tapi tidak bisa dibaca juga mematikan tawaran otomatis (aipager tidak bisa lagi tahu jawaban sebelumnya); **Tawarkan lagi** juga memperbaiki ini. Di komputer tanpa chat untuk bertanya, atur `AIPAGER_REPORT_PROMPTS=0` di environment aipager. “Laporkan masalah” dan `aipager report` selalu berjalan, apa pun isi pengaturan ini.

@@ -6,7 +6,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ e6f0c88 -->
+<!-- i18n-source: README.md @ c1510c0 -->
 
 <h3>حالا Claude هم یکی از چت‌های شماست.</h3>
 
@@ -132,7 +132,7 @@
 
 ### <a id="and-the-small-things"></a>و چیزهای کوچک
 
-- **چند سشن، یک ربات.** پیام معمولی به سشنی ارسال می‌شود که آخرین بار با آن حرف زده‌اید؛ برای حرف زدن با سشن دیگر، روی یکی از پیام‌هایش ریپلای کنید یا &lrm;`/x1 <message>`&lrm; را بفرستید.
+- **چند سشن، یک ربات.** پیام معمولی به سشنی ارسال می‌شود که آخرین بار با آن حرف زده‌اید؛ برای حرف زدن با سشن دیگر، به یکی از پیام‌هایش جواب بدهید یا &lrm;`/x1 <message>`&lrm; را بفرستید.
 - **هیچ‌چیز قاطی نمی‌شود.** پیامی که وقتی یک درخواست اجازه یا سؤال باز است می‌فرستید، صبر می‌کند تا جواب بدهید، پس هیچ‌وقت جواب آن حساب نمی‌شود.
 - **عکس، فایل و ویس.** ویس‌ها روی کامپیوتر خودتان به متن تبدیل می‌شوند، با افزونهٔ اختیاری `voice`.
 - **خبرتان می‌کند.** هشدار کانتکست، کامپکت شدن گفتگو، سشنی که بسته شد و سشنی که مدتی ساکت مانده.
@@ -214,7 +214,7 @@ snap install aipager                           # Snap: با محدودیت کا�
 
 <br>
 
-فرمول brew وقتی کار می‌کند که بستهٔ `python@3.12` هوم‌برو با Xcode و Command Line Tools شما هماهنگ باشد، اما هر از گاهی این دو از هم جدا می‌افتند. روی macOS 26 نصب با خطای `pyexpat _XML_SetAllocTrackerActivationThreshold` می‌خوابد ([issue در upstream](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). معمولاً آپدیت Xcode و Command Line Tools درستش می‌کند، ولی با `uv tool install aipager` کلاً به این مشکل نمی‌خورید. فرمول، `dtach` را از Homebrew می‌گیرد و aipager را در یک محیط Python نصب می‌کند که Homebrew مدیریتش می‌کند.
+فرمول brew وقتی کار می‌کند که بستهٔ `python@3.12` هوم‌برو با Xcode و Command Line Tools شما هماهنگ باشد، اما هر از گاهی این دو از هم جدا می‌افتند. روی macOS 26 نصب با خطای `pyexpat _XML_SetAllocTrackerActivationThreshold` شکست می‌خورد ([issue در upstream](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)). معمولاً آپدیت Xcode و Command Line Tools درستش می‌کند، ولی با `uv tool install aipager` کلاً به این مشکل نمی‌خورید. فرمول، `dtach` را از Homebrew می‌گیرد و aipager را در یک محیط Python نصب می‌کند که Homebrew مدیریتش می‌کند.
 
 </details>
 
@@ -243,7 +243,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 پوشه‌هایی را که می‌خواهید Claude ویرایششان کند زیر &lrm;`/workspace` مونت کنید. مونت &lrm;`~/.claude` اطلاعات ورود Claude و تاریخچهٔ گفتگوهایتان را به کانتینر می‌برد؛ برای لاگین، یک بار `claude` را روی خود سیستم اجرا کنید، یا با `docker exec -it aipager claude` داخل کانتینر لاگین کنید.
 
-تگ‌ها: `latest`،&rlm; `1.3`،&rlm; `1.3.5` (یکی برای هر نسخهٔ دقیق و یکی برای هر نسخهٔ minor).
+تگ‌ها: `latest`،&rlm; `1.3`،&rlm; `1.3.6` (یکی برای هر نسخهٔ دقیق و یکی برای هر نسخهٔ minor).
 
 ### <a id="nix"></a>Nix
 

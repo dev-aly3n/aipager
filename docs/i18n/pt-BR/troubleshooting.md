@@ -1,6 +1,6 @@
 # Solução de problemas
 
-<!-- i18n-source: docs/troubleshooting.md @ 054b893 -->
+<!-- i18n-source: docs/troubleshooting.md @ 1de34258 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../troubleshooting.md))
 
@@ -28,7 +28,7 @@ Se a verificação do socket não o enxergar, o `aipager start` ainda assim se r
 1. `aipager status`: se a linha do aipager disser `not running`, inicie-o.
 2. `aipager doctor`: as verificações `token_valid` e `chat_reachable` falam com a API do Telegram de ponta a ponta e mostram o erro exato.
 3. Chat errado: rode `aipager config` e escolha **Test bot reachability**. Para corrigir um chat privado errado, adicione o certo com **Add a DM scope** (veja [descobrir IDs](groups.md#finding-ids-auto-detect)) e depois tire o errado em **Edit a scope**.
-4. Nunca tocaram em `/start` no bot: abra o bot no Telegram e toque em Start uma vez.
+4. Nunca tocaram em `/start` no bot: abra o bot no Telegram e toque em Iniciar uma vez.
 
 ## <a id="busy-cards-got-slower"></a>Os cartões de atividade ficaram mais lentos
 
@@ -115,7 +115,7 @@ O aipager silencia o chat exatamente pelo tempo que o Telegram pediu e **não fa
 
 - Uma mensagem que você manda (texto, áudio, um arquivo, um template) ainda chega ao Claude e a sessão trabalha nela. O cartão de atividade dela fica guardado, não é descartado: se a tarefa ainda estiver em andamento quando o bloqueio acabar, o cartão aparece nessa hora. Um bloqueio deixa o chat em modo mínimo por um tempo depois, então o cartão pode demorar alguns minutos a mais que o próprio bloqueio. Se a tarefa terminou durante o bloqueio, você recebe a resposta e nenhum cartão.
 - **🔄 Tentar de novo** não faz nada durante um bloqueio. A mensagem não é reenviada e o botão fica, para você tocar de novo depois que o bloqueio acabar. Até a 0.7.14, inclusive, a mensagem chegava ao Claude enquanto a mensagem de erro e o botão dela ficavam, então um segundo toque a enviava de novo.
-- O teclado principal também fica guardado, incluindo o que um reinício envia (até a 0.7.14 ele se perdia até outra coisa atualizá-lo). Ele é enviado depois que o bloqueio acaba.
+- O teclado principal também fica guardado, incluindo o que um reinício envia (até a 0.7.14, inclusive, ele se perdia até outra coisa atualizá-lo). Ele é enviado depois que o bloqueio acaba.
 
 Depois que o bloqueio acaba, as coisas chegam nesta ordem: as respostas guardadas, depois os cartões das tarefas ainda em andamento, depois o teclado. Um cartão que precisa esperar o fim do modo mínimo chega depois do teclado.
 
@@ -144,7 +144,7 @@ aipager session <label> --continue # dtach novo, a última conversa da pasta
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Um pedido de permissão sem notícias por 5 minutos
 
-Se uma sessão espera um pedido de permissão ou uma pergunta e o Claude Code não dá notícias por 5 minutos, o aipager lê a conversa salva da sessão. Só contam as notícias do próprio Claude e as do agente que pediu: um agente em segundo plano que continua trabalhando não impede essa verificação. Só se ela mostrar que o pedido acabou (respondido no terminal, e a notícia se perdeu) o aipager para de esperá-lo e volta a contar a sessão como trabalhando. Senão o pedido continua aberto pelo tempo que for: o cartão e a barra fixada continuam dizendo que a sessão precisa da sua resposta, nenhum aviso de "ainda trabalhando" é enviado, e suas mensagens ficam retidas até você responder (veja [texto](commands.md#text)). Um Claude Code que fecha com o pedido aberto encerra a sessão. Se a caixa de diálogo ainda estiver aberta, os botões do pedido ainda a respondem (veja [respostas](commands.md#idle-responses)).
+Se uma sessão espera um pedido de permissão ou uma pergunta e o Claude Code não dá notícias por 5 minutos, o aipager lê a conversa salva da sessão. Só contam as notícias do próprio Claude e as do agente que pediu: um agente em segundo plano que continua trabalhando não impede essa verificação. Só se ela mostrar que o pedido acabou (respondido no terminal, e a notícia se perdeu) o aipager para de esperá-lo e volta a contar a sessão como trabalhando. Senão o pedido continua aberto pelo tempo que for: o cartão e a barra fixada continuam dizendo que a sessão precisa da sua resposta, nenhum aviso de “ainda trabalhando” é enviado, e suas mensagens ficam retidas até você responder (veja [texto](commands.md#text)). Um Claude Code que fecha com o pedido aberto encerra a sessão. Se a caixa de diálogo ainda estiver aberta, os botões do pedido ainda a respondem (veja [respostas](commands.md#idle-responses)).
 
 Mudar a espera:
 
@@ -220,7 +220,7 @@ A ordem importa: cada verificação posterior supõe que as anteriores passaram.
 | `config_parses` | `aipager.yaml` e `policy.yaml` podem ser lidos; roda primeiro, porque todas as outras leem a configuração | o erro diz o arquivo e a linha |
 | `config` | `~/.config/aipager/aipager.yaml` existe e tem um token e um chat | `aipager config` |
 | `token_valid` | O token funciona com o `getMe` do Telegram | rode `aipager config` de novo |
-| `chat_reachable` | O Telegram conhece o chat configurado (`getChat`; nada é enviado) | abra o bot e toque em Start |
+| `chat_reachable` | O Telegram conhece o chat configurado (`getChat`; nada é enviado) | abra o bot e toque em Iniciar |
 | `team` | Os chats e os membros (ou um `team.yaml` antigo): diz se é uso pessoal ou em equipe, e aponta um `team.yaml` antigo quebrado ou que não bate | `aipager config` |
 | `role_shell_access` | Alerta uma vez para cada função que um membro tem e que pode rodar Bash (as regras de segurança dela são de melhor esforço, não um limite; veja [uso em equipe](groups.md#roles)) | não dê Bash a essa função no `policy.yaml`, ou aceite |
 | `peer_messages` | Mensagens entre sessões do Claude: onde os recibos delas são guardados e se essa pasta é privada, se este sistema consegue conferir a hora de início do remetente, e um alerta para cada função a que uma política deixa usar SendMessage (veja [Modelo de segurança](security.md#messages-between-claude-sessions)) | apague uma pasta de recibos compartilhada (o aipager a recria), ou não dê SendMessage a essa função |
@@ -250,7 +250,7 @@ echo 'claude_path: /home/you/.local/bin/claude' >> ~/.config/aipager/aipager.yam
 
 ## <a id="sessions-cant-authenticate-under-the-systemd-service-but-claude-works-fine-in-a-terminal"></a>As sessões não conseguem fazer login sob o serviço do systemd, mas o `claude` funciona bem num terminal
 
-Os serviços `systemctl --user` nunca leem `~/.bashrc` nem `~/.profile`, então uma linha `export CLAUDE_CODE_OAUTH_TOKEN=…` neles nunca chega ao aipager. Em vez disso, o serviço usa o `LoadCredential=` do systemd e lê `~/.config/aipager/daemon.env`: um arquivo simples `KEY=VALUE`, com permissões 0600, criado sozinho na primeira vez que você roda `aipager service install` (copiado de um `config.env` antigo se ele tinha um token, senão procurado uma vez no seu shell de login, senão deixado vazio com um alerta). Se continuar vazio, o `aipager doctor --fix` procura de novo nos mesmos lugares quando você diz sim e adiciona a linha que encontrar, mantendo as outras linhas do arquivo; ele nunca imprime o token. Ou adicione a linha você mesmo:
+Os serviços `systemctl --user` nunca leem `~/.bashrc` nem `~/.profile`, então uma linha `export CLAUDE_CODE_OAUTH_TOKEN=…` neles nunca chega ao aipager. Em vez disso, o serviço usa o `LoadCredential=` do systemd e lê `~/.config/aipager/daemon.env`: um arquivo simples `KEY=VALUE`, com permissões 0600, criado sozinho na primeira vez que você roda `aipager service install` (copiado de um `config.env` antigo se ele tinha um token, senão procurado uma vez no seu shell de login, senão deixado vazio com um alerta). Se continuar vazio, o `aipager doctor --fix` procura de novo nos mesmos lugares quando você diz sim e adiciona a linha que encontrar, mantendo as outras linhas do arquivo; ele nunca imprime o token. Ou adicione a linha à mão:
 
 ```sh
 cat ~/.config/aipager/daemon.env          # veja o que tem (ou não tem)
@@ -308,7 +308,7 @@ Um Claude Code instalado com `sudo npm install -g` fica numa pasta que só o roo
 
 Uma instalação do pipx feita a partir de uma URL do git se atualiza por essa fonte do git, não pelo PyPI. Quando a fonte não tem nada mais novo, o `/update` diz `already at A - this pipx install upgrades from its git source, which has nothing newer`. Publique ou escolha a versão nova lá, ou mude para o PyPI com `pipx install --force aipager`.
 
-**Sem serviço**, um aipager que nenhum gerenciador de serviços reinicia (`aipager start` num terminal ou tmux, Docker, launchd) instala uma atualização, mas continua rodando o código antigo até reiniciar. O `/update` então diz `O aipager B está instalado e esperando um reinício (rodando agora: A).`, e os hooks do Claude Code, que começam do zero a cada evento, podem já rodar o B: o dono recebe um aviso de que a atualização está pela metade (dois minutos depois de os hooks rodarem o B pela primeira vez, então um reinício logo depois da instalação nunca o mostra, e quando nenhuma tarefa estiver em andamento no chat privado do dono). Quando o aipager passa a rodar o B, esse aviso vira `✅ A atualização do aipager terminou: o aipager agora está no B.`, sem o botão. Toque em **🔄 Reiniciar agora** (na mensagem da atualização, no aviso ou em **Configurações → Atualizações** da Mini App). O aipager espera até nenhuma tarefa estar em andamento, para de forma limpa e inicia a versão nova no lugar: o mesmo processo no mesmo terminal, janela do tmux ou contêiner, com o mesmo comando e o mesmo ambiente.
+**Sem serviço**, um aipager que nenhum gerenciador de serviços reinicia (`aipager start` num terminal ou tmux, Docker, launchd) instala uma atualização, mas continua rodando o código antigo até reiniciar. O `/update` então diz `O aipager B está instalado e esperando um reinício (rodando agora: A).`, e os hooks do Claude Code, que começam do zero a cada evento, podem já rodar o B: o dono recebe um aviso de que a atualização está pela metade (dois minutos depois de os hooks rodarem o B pela primeira vez, então um reinício logo depois da instalação nunca o mostra, e quando nenhuma tarefa estiver em andamento no chat privado do dono). Quando o aipager passa a rodar o B, esse aviso vira `✅ A atualização do aipager terminou: o aipager agora está no B.`, sem o botão. Toque em **🔄 Reiniciar agora** (na mensagem da atualização, no aviso ou em **Configurações → Atualizações** do Mini App). O aipager espera até nenhuma tarefa estar em andamento, para de forma limpa e inicia a versão nova no lugar: o mesmo processo no mesmo terminal, janela do tmux ou contêiner, com o mesmo comando e o mesmo ambiente.
 
 Se o início no lugar falhar, uma cópia separada inicia o aipager quando o processo antigo já tiver saído. A saída dela vai então para o log do reinício próprio (`aipager.log` na pasta da instância, ou `/tmp/aipager.log`) em vez do seu terminal, e o log do aipager diz o comando a rodar se essa cópia não voltar. Se o próprio interpretador sumiu (o ambiente dele foi removido), ou nada pôde ser iniciado, o aipager sai com o código 1, o log do aipager termina com `restart.failed:` e o comando a rodar, e o próximo início anuncia a atualização.
 
@@ -359,7 +359,7 @@ Em persa e árabe, o aipager coloca marcas invisíveis de direção no próprio 
 
 O teclado de cada chat está no idioma desse chat. As palavras do teclado principal (status, stop, new, kill e as outras) são entendidas em todos os chats, em todos os idiomas, e as palavras em inglês sempre funcionam. A palavra de um botão de template ou de comando é diferente: digitada num chat com outro idioma, é uma mensagem para o Claude, não um botão, então um “Clear” em russo nunca roda `/clear` num chat em persa ou em inglês. Use o próprio botão, ou o comando em inglês (`/clear`). Se um teclado parecer desatualizado depois que o idioma do chat mudou, mande `/start` para receber o atual. Uma palavra que também é o nome de uma das suas sessões fala com essa sessão. O `/mode` sempre lê `ask`, `auto` e `full` como o modo, e uma palavra de modo traduzida como uma sessão só quando uma sessão em andamento tem exatamente esse nome.
 
-## <a id="still-stuck"></a>Ainda travado?
+## <a id="still-stuck"></a>Ainda sem solução?
 
 Mande um relatório de problemas: toque em **Relatar um problema** no `/help` do seu chat privado com o bot, ou rode `aipager report` num terminal. Você vê o relatório inteiro antes de qualquer coisa ser enviada, e ele não tem chats, mensagens, nomes, caminhos nem tokens (veja [Relatórios de problemas](problem-reports.md)). Depois do envio, você recebe uma referência como `ap1-7c41d09e2b3a`.
 

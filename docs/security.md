@@ -30,7 +30,7 @@ in a group only a message addressed to the bot (a command, a reply to
 it, a mention, or a tap on its keyboard) is acted on, whether or not
 the bot is a group admin (see [groups](groups.md)).
 
-This means the surface to "outside the world" is:
+This means the surface open to the outside world is:
 
 - The bot token (a secret).
 - The chat ID (a long integer).
@@ -508,11 +508,11 @@ their rules stay best-effort (below).
   floor is weaker than a built-in `user`: such a turn can read any file
   in your home folder that is not a protected path (your other
   projects, for example), where a `user`'s turn reads only inside its
-  root folder. Its writes stay confined to the session folder and the
+  root folder. Such a turn can also read every chat's uploads in
+  `/tmp/aipager-files/`, which a `user`'s turn reads only for its own
+  chat. Its writes stay confined to the session folder and the
   scratchpad. A verified message from a member's session carries the
-  member's root folder. Such a turn can also read every chat's uploads
-  in `/tmp/aipager-files/`, which a `user`'s turn reads only for its
-  own chat.
+  member's root folder.
 - The root folder binds the file tools only. A custom role you give
   `Bash` can read outside it through the shell (the built-in `user`
   and `read_only` have no `Bash`). A custom role with `bypass_safety`
@@ -800,9 +800,7 @@ over or stops it, or until the machine reboots; `aipager uninstall`
 stops it too. If the tunnel dies mid-run,
 aipager restarts it with backoff and republishes the new address; if
 it cannot come back up after several attempts, the button is removed
-rather than left pointing at a dead port (see [Network
-surface](#network-surface) above for the same "no button is an honest
-absence" principle applied to the loopback server itself).
+rather than left pointing at a dead port.
 
 Setting `MINIAPP_PUBLIC_URL` (or `aipager miniapp enable --url
 https://…`) disables the managed tunnel entirely - no cloudflared

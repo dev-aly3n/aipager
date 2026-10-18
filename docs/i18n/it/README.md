@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ e6f0c88 -->
+<!-- i18n-source: README.md @ c1510c0 -->
 
 <h3>Claude è una chat in più.</h3>
 
@@ -92,7 +92,7 @@ Quando Claude ti chiede qualcosa o ha bisogno di un permesso, la domanda arriva 
 
 Ogni sessione è in una di tre modalità, da cambiare quando vuoi con `/mode`, anche mentre Claude lavora.
 
-<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/modes.webp" width="100%" alt="La stessa attività in Modalità «Chiedi», Modalità «Automatico» e Modalità «Completo»">
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/modes.webp" width="100%" alt="La stessa attività in modalità «Chiedi», «Automatico» e «Completo»">
 
 | Modalità | Cosa succede |
 |---|---|
@@ -100,7 +100,7 @@ Ogni sessione è in una di tre modalità, da cambiare quando vuoi con `/mode`, a
 | 🤖 **Modalità «Automatico»**, quella predefinita<br>`/mode auto` | Il controllo di sicurezza di Claude Code fa partire le azioni sicure e ferma quelle rischiose perché decida tu. |
 | 🔓 **Modalità «Completo»**<br>`/mode full` | Tutto viene eseguito senza alcun controllo. Per gli admin, e per te nella tua chat privata con il bot. |
 
-Tra Modalità «Chiedi» e Modalità «Automatico» si passa sul posto, senza riavvio. Entrare in Modalità «Completo» o uscirne riavvia la sessione e tiene la conversazione. Le domande di Claude ti arrivano in ogni modalità.
+Tra la modalità «Chiedi» e la modalità «Automatico» si passa sul posto, senza riavvio. Passare alla modalità «Completo», o uscirne, riavvia la sessione e la conversazione resta. Le domande di Claude ti arrivano in ogni modalità.
 
 ### <a id="your-team-in-one-group"></a>Il tuo team, in un gruppo
 
@@ -133,7 +133,7 @@ Per configurarlo, aggiungi il bot al gruppo come admin (così può fissare la ba
 - **Tante sessioni, un solo bot.** Un messaggio normale va alla sessione con cui hai parlato per ultima; rispondi a un messaggio di una sessione per parlare con quella, o invia `/x1 <message>`.
 - **Niente si mescola.** Un messaggio inviato mentre c'è una richiesta di permesso o una domanda aperta aspetta la tua risposta, così non viene mai letto come la risposta.
 - **Foto, file e vocali.** I vocali diventano testo sul tuo computer, con l'extra opzionale `voice`.
-- **Ti avvisa.** Contesto quasi pieno, conversazione compattata, una sessione che è finita e una che da un po' non dà notizie.
+- **Ti avvisa.** Contesto quasi pieno, conversazione compattata, una sessione che è terminata e una che da un po' non dà notizie.
 - **Le sessioni sopravvivono a tutto.** Claude gira dentro `dtach`, quindi continua a lavorare anche se chiudi il terminale, perdi la connessione SSH o riavvii aipager.
 
 ## <a id="how-it-works"></a>Come funziona
@@ -144,7 +144,7 @@ Claude Code gira in un vero terminale, dentro `dtach`, così nessuno deve tenere
 
 ## <a id="install"></a>Installazione
 
-Linux o macOS, qualsiasi architettura. Ti servono Claude Code, con l'accesso fatto su questo computer, e un bot di Telegram: creane uno con [@BotFather](https://t.me/BotFather) e premi Start al suo interno.
+Linux o macOS, qualsiasi architettura. Ti servono Claude Code, con l'accesso fatto su questo computer, e un bot di Telegram: creane uno con [@BotFather](https://t.me/BotFather) e premi «Avvia» nella sua chat.
 
 ```sh
 curl -fsSL https://aipager.run/install | sh   # uv, pipx o Homebrew: quello che hai
@@ -153,14 +153,14 @@ aipager service install                       # tiene aipager acceso anche dopo 
 aipager session api                           # Claude Code in questa cartella, e nella tua chat
 ```
 
-L'installer usa `uv` se ce l'hai, altrimenti `pipx`, altrimenti (su macOS) Homebrew, e installa `uv` quando non c'è nessuno dei tre. `dtach` arriva con aipager (il pacchetto [`dtach-bin`](https://pypi.org/project/dtach-bin/)), quindi non c'è altro da installare. `aipager config` è una procedura guidata: controlla il token del bot e la tua chat, poi aggiunge per te gli hook di aipager a `~/.claude/settings.json`. Non modifichi mai un file a mano.
+L'installatore usa `uv` se ce l'hai, altrimenti `pipx`, altrimenti (su macOS) Homebrew, e installa `uv` quando non c'è nessuno dei tre. `dtach` arriva con aipager (il pacchetto [`dtach-bin`](https://pypi.org/project/dtach-bin/)), quindi non c'è altro da installare. `aipager config` è una procedura guidata: controlla il token del bot e la tua chat, poi aggiunge per te gli hook di aipager a `~/.claude/settings.json`. Non modifichi mai un file a mano.
 
 <details>
 <summary><b>Fallo installare a un agente di programmazione</b></summary>
 
 <br>
 
-Hai Claude Code, o un qualsiasi agente con una shell? Crea il bot, premi Start al suo interno e salva il token del bot in un file che il tuo agente non debba mai leggere (incolla il token, premi Invio, poi Ctrl-D):
+Hai Claude Code, o un qualsiasi agente con una shell? Crea il bot, premi «Avvia» nella sua chat e salva il token del bot in un file che il tuo agente non debba mai leggere (incolla il token, premi Invio, poi Ctrl-D):
 
 ```sh
 mkdir -p ~/.config/aipager
@@ -169,7 +169,7 @@ rm -f ~/.config/aipager/bot-token
 chmod 600 ~/.config/aipager/bot-token
 ```
 
-Poi dai al tuo agente questo prompt:
+Poi dai al tuo agente questo messaggio:
 
 ```text
 Install aipager for me by following https://aipager.run/agent.md. My Telegram bot token is in ~/.config/aipager/bot-token and my Telegram user id is <your id>.
@@ -221,7 +221,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Monta sotto `/workspace` le cartelle che vuoi far modificare a Claude. Il mount di `~/.claude` porta con sé le tue credenziali di Claude e la cronologia delle conversazioni: esegui `claude` una volta sull'host per fare l'accesso, o `docker exec -it aipager claude` per farlo dentro il container.
 
-Tag: `latest`, `1.3`, `1.3.5` (uno per la versione esatta e uno per la versione minore).
+Tag: `latest`, `1.3`, `1.3.6` (uno per la versione esatta e uno per la versione minore).
 
 ### <a id="nix"></a>Nix
 
@@ -269,7 +269,7 @@ Poi `aipager service install` crea un'unità utente di systemd.
 | `/new x1` | Avviare una sessione chiamata x1. `/new x1 fix the tests` invia anche il primo messaggio. |
 | `/x1` | Fare di x1 la sessione a cui vanno i tuoi messaggi. `/x1 <message>` le invia un messaggio diretto. |
 | `/stop` | Interrompere l'attività in corso e scartare quello che è in coda. |
-| `/mode` | Passare tra Modalità «Chiedi», Modalità «Automatico» e Modalità «Completo». |
+| `/mode` | Passare tra la modalità «Chiedi», «Automatico» e «Completo». |
 | `/app` | Aprire la Mini App. |
 | `/language` | Scegliere la lingua in cui aipager parla in questa chat. |
 | `/update` | Aggiornare aipager e Claude Code e poi riavviare sul posto (admin). |
@@ -343,7 +343,7 @@ Le richieste aspettano il tuo tocco, `/stop` interrompe l'attività e scarta tut
 
 <br>
 
-Invia `/update`: controlla aipager e Claude Code e installa quello che c'è di nuovo, poi 🔄 Riavvia ora rimette in piedi aipager, che sia un servizio o no. Le tue sessioni intanto continuano. Da riga di comando, `aipager update` aggiorna tramite l'installer a cui appartiene aipager.
+Invia `/update`: controlla aipager e Claude Code e installa quello che c'è di nuovo, poi «🔄 Riavvia ora» rimette in piedi aipager, che sia un servizio o no. Le tue sessioni intanto continuano. Da riga di comando, `aipager update` aggiorna tramite l'installatore a cui appartiene aipager.
 
 </details>
 
@@ -389,7 +389,7 @@ systemd-run --user --scope -q -p MemoryMax=2G -p MemorySwapMax=0 \
 ruff check aipager tests
 ```
 
-`dtach` arriva con la dipendenza `dtach-bin`, quindi non serve altro. Esegui i test con un limite di memoria come sopra (su macOS, senza `systemd-run`): altrimenti un test fuori controllo può prendersi tutta la memoria della macchina. Il processo di rilascio è in [CONTRIBUTING.md](../../../CONTRIBUTING.md).
+`dtach` arriva con la dipendenza `dtach-bin`, quindi non serve altro. Esegui i test con un limite di memoria come sopra (su macOS, senza `systemd-run`): altrimenti un test fuori controllo può prendersi tutta la memoria del computer. Il processo di rilascio è in [CONTRIBUTING.md](../../../CONTRIBUTING.md).
 
 ## <a id="license"></a>Licenza
 

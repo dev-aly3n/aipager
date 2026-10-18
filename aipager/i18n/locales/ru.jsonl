@@ -534,10 +534,10 @@
 {"k": "rep.area.dashboard", "src": "319e1d71", "v": "закреплённое сообщение"}
 {"k": "rep.area.flood_budget", "src": "75f9bcb6", "v": "лимит отправки"}
 {"k": "rep.area.handlers", "src": "0ff1035f", "v": "обработка сообщений"}
-{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "приём хуков"}
+{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "приём событий hook"}
 {"k": "rep.area.inject", "src": "d784f7db", "v": "отправка сообщений в Claude"}
 {"k": "rep.area.notify", "src": "c522bd84", "v": "отправка сообщений в Telegram"}
-{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "хук"}
+{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "hook"}
 {"k": "rep.area.server", "src": "8000cc31", "v": "Mini App"}
 {"k": "rep.area.session_monitor", "src": "1fff1160", "v": "наблюдение за сессиями"}
 {"k": "rep.area.session_ops", "src": "6b7d9e30", "v": "управление сессиями"}
@@ -1393,7 +1393,7 @@
 {"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: перед перезапуском ждёт, пока все сессии станут готовы."}
 {"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>Обновления</b>"}
 {"k": "upd.hooks.finished", "src": "7aa89c72", "v": "✅ Обновление aipager завершено: aipager теперь работает на {version}."}
-{"k": "upd.hooks.newer", "src": "d8c34918", "v": "⚠️ Обновление aipager сделано только наполовину: хуки Claude Code уже работают на {hook}, а сам aipager всё ещё на {running}. Перезапусти aipager, чтобы его завершить."}
+{"k": "upd.hooks.newer", "src": "d8c34918", "v": "⚠️ Обновление aipager сделано только наполовину: hooks Claude Code уже работают на {hook}, а сам aipager всё ещё на {running}. Перезапусти aipager, чтобы его завершить."}
 {"k": "upd.line.ap_current", "src": "6c20b655", "v": "aipager {running} (последняя версия)"}
 {"k": "upd.line.ap_newer", "src": "a3d9656f", "v": "aipager {running} → {latest}"}
 {"k": "upd.line.ap_newer_blocked", "src": "6c0b194f", "v": "aipager {running} → {latest} (отсюда не обновить: {reason})"}

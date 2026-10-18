@@ -2,7 +2,7 @@
 
 # معماری
 
-<!-- i18n-source: docs/architecture.md @ c91598e -->
+<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../architecture.md))
 
@@ -110,7 +110,7 @@ flowchart LR
 | &lrm;`/tmp/claude-policy-<name>.json` | عکس فوری اصلی از اجازه‌های کار در جریان | `aipager-hook` (موقع برداشتن پیام می‌نویسد)، بررسی `PreToolUse` می‌خواندش |
 | &lrm;`/tmp/claude-policy-.floor-<uid>.json` | کف ایمنی، یعنی فهرست داخلی به‌علاوهٔ بخش `safety:`&lrm; شما، برای حالت‌های جایگزین هوک | aipager |
 | &lrm;`/tmp/claude-reply-<name>.txt` | پیامی که به آن جواب دادید، وقتی به یک پیام قدیمی‌تر جواب می‌دهید | aipager |
-| &lrm;`/tmp/aipager-files/`&lrm; | فایل‌ها و ویس‌هایی که از تلگرام فرستاده شده | aipager |
+| &lrm;`/tmp/aipager-files/<chat>/`&lrm; | فایل‌ها و ویس‌هایی که از تلگرام فرستاده شده، در یک پوشهٔ خصوصی برای هر چت (`0700`، فایل‌ها `0600`) | aipager |
 | &lrm;`/tmp/aipager.log` | خروجی ری‌استارت خودکار وقتی سرویسی در کار نیست | aipager |
 | &lrm;`~/.claude/aipager-sessions.json` | وضعیت ماندگار فهرست سشن‌ها | aipager |
 | &lrm;`~/.claude/aipager-audit.jsonl` | لاگ اجازه دادن، رد کردن و جواب‌ها | aipager (فقط اضافه می‌کند) |

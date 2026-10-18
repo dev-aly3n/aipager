@@ -182,6 +182,11 @@ def test_a_link_inside_a_code_block_is_not_a_link(tmp_path):
     assert _check(tmp_path) == []
 
 
+def test_a_link_inside_a_code_span_is_not_a_link(tmp_path):
+    _append(_tree(tmp_path) / "README.md", "`![alt](url)` [x](comands.md)\n")
+    assert _check(tmp_path) == ["docs/i18n/fa/README.md: link to a missing file: comands.md"]
+
+
 def test_a_long_dash_outside_code_is_named(tmp_path):
     _append(_tree(tmp_path) / "hooks.md", "یک \u2014 دو\n`a \u2014 b`\n")
     assert _check(tmp_path) == [

@@ -687,7 +687,7 @@ def _card_helpers(env):
         ("🤖 pipeline-runner › ship-tester · 2 tool calls · 0:15", True),
         ("🤖 pipeline-runner › Explore", False),
     ]
-    # Claude's words: the card follows their direction, as card.busy does.
+    # Claude's words: the card keeps the chat's direction, as card.busy does.
     sess.stream_commentary = [(0, "Now the agent.")]
     sess.finished_subagents = [{"history_idx": 1, "tools": ["Read: /a", "Bash: ls"]}]
     sess.active_subagents = {
@@ -2707,14 +2707,17 @@ def unmarked_words(text: str, known=KNOWN) -> list[str]:
 #: phase 3a registry imported below.
 PENDING: set[str] = set()
 
-#: The surfaces that carry Claude's text, which is English in every
+#: The surfaces that carry Claude's ANSWER, which is English in every
 #: scenario here: their direction is that text's, not the chat's
 #: (multilingual design 5.7, rule 5), so in fa and ar they read left to
 #: right. The right-to-left sweeps check them with
 #: :func:`assert_follows_claude`; tests/test_message_direction.py covers
-#: both directions.
-FOLLOWS_CLAUDE = frozenset({"answer.headers", "card.busy", "card.final", "card.legacy",
-                            "card.waiting", "card.helpers", "held.late_marker"})
+#: both directions. The busy card (card.busy, card.final, card.waiting,
+#: card.helpers, card.legacy) is not one of them: it takes the chat's
+#: direction whatever Claude writes (operator, 2026-10-17), so in fa and
+#: ar it is judged like every other right-to-left surface, its English
+#: commentary isolated (tests/test_card_follows_chat_language.py).
+FOLLOWS_CLAUDE = frozenset({"answer.headers", "held.late_marker"})
 
 
 def assert_follows_claude(name: str, text: str) -> None:

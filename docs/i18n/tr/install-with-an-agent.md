@@ -13,7 +13,7 @@ aipager, bu kişinin Claude Code oturumlarını Telegram'dan yönetmesini sağla
 Bunları kişiden yapmasını iste. Onun yerine sen yapamazsın.
 
 1. **Bir bot oluşturmak.** Telegram'da [@BotFather](https://t.me/BotFather) sohbetini açmak, `/newbot` göndermek, bir ad ve kullanıcı adı seçmek. BotFather bir bot token'ıyla yanıt verir (`123456789:AA...` gibi görünür).
-2. **Botta Start'a dokunmak.** Yeni botu açmak (BotFather bir `t.me/<bot username>` bağlantısı verir) ve Start'a dokunmak. Bot, bunu yapmamış birine mesaj yazamaz.
+2. **Botta Başlat'a dokunmak.** Yeni botu açmak (BotFather bir `t.me/<bot username>` bağlantısı verir) ve Başlat'a dokunmak. Bot, bunu yapmamış birine mesaj yazamaz.
 3. **Bu bilgisayarda Claude Code'a giriş yapmak.** Kişi burada zaten Claude Code kullanıyorsa bir şey yapmaya gerek yok. Ekranı olmayan bir sunucuda kendi terminalinde bir kez `claude` çalıştırır ve giriş yapar (orada başka bir cihazda açılacak bir bağlantı olur). Uzun ömürlü bir token tercih ederse `claude setup-token` çalıştırır; bu komut yalnızca token'ı yazdırır: kişi onu aipager oturumları için kendi terminalinde kendisi kaydeder (token'ı yapıştırmak, Enter'a, sonra Ctrl-D'ye basmak):
 
    ```sh
@@ -84,7 +84,7 @@ setup token'ı Telegram'da doğrular, bu bilgisayarı kontrol eder, kişiye bir 
 aipager setup detect-chat --token-file ~/.config/aipager/bot-token --json
 ```
 
-Komut beklerken (5 dakikaya kadar; `--timeout SECONDS` bu süreyi değiştirir) kişiden botta Start'a dokunmasını (ya da bota herhangi bir mesaj göndermesini) iste. Komut en son göndereni `candidate` içinde yazdırır (`id`, `first_name`, `last_name`, `username`) ve hiçbir şey kaydetmez. Kişiye adı ve kullanıcı adını göster ve “Bu sen misin?” diye sor. Yalnızca kişi evet derse adım 3.2'yi `candidate.id` değerine eşit `--chat-id` ile çalıştır. `other_candidates` 0 değilse bota başka kişiler de yazmış demektir: özellikle dikkatli kontrol et.
+Komut beklerken (5 dakikaya kadar; `--timeout SECONDS` bu süreyi değiştirir) kişiden botta Başlat'a dokunmasını (ya da bota herhangi bir mesaj göndermesini) iste. Komut en son göndereni `candidate` içinde yazdırır (`id`, `first_name`, `last_name`, `username`) ve hiçbir şey kaydetmez. Kişiye adı ve kullanıcı adını göster ve “Bu sen misin?” diye sor. Yalnızca kişi evet derse adım 3.2'yi `candidate.id` değerine eşit `--chat-id` ile çalıştır. `other_candidates` 0 değilse bota başka kişiler de yazmış demektir: özellikle dikkatli kontrol et.
 
 ### <a id="34-read-the-result"></a>3.4 Sonucu okumak
 
@@ -97,10 +97,10 @@ Komut beklerken (5 dakikaya kadar; `--timeout SECONDS` bu süreyi değiştirir) 
 | 2 | `usage`, `token_malformed`, `token_stdin_timeout`, `bad_chat_id`, ... | Girdin hatalıydı; `fix` bayrağı söyler. `token_malformed`: dosyada bot token'ı yok, kişiden kontrol etmesini iste. |
 | 3 | `deps_missing` | `fix` adımlarını izle (eksik her öğenin `deps.items` içinde kendi `fix` değeri var), sonra setup'ı yeniden çalıştır. |
 | 4 | `token_rejected` | Telegram token'ı reddetti. Kişiden token'ı yeniden (ya da @BotFather'dan yenisini) iste. |
-| 5 | `chat_not_started`, `bot_blocked` | Kişiden botu açmasını, Start'a dokunmasını (ya da engeli kaldırmasını) iste, sonra setup'ı yeniden çalıştır. |
+| 5 | `chat_not_started`, `bot_blocked` | Kişiden botu açmasını, Başlat'a dokunmasını (ya da engeli kaldırmasını) iste, sonra setup'ı yeniden çalıştır. |
 | 6 | `existing_install` | aipager zaten başka bir token, sohbet ya da rolle yapılandırılmış. Kişiye neyin farklı olduğunu söyle ve `--force` eklemeden önce sor. |
 | 7 | `telegram_unreachable` | Ağ sorunu ya da Telegram aşırı yüklü. Bir dakika bekleyip yeniden dene. |
-| 8 | `detect_timeout` | detect-chat hiç mesaj görmedi. Kişiden Start'a yeniden dokunmasını iste ve tekrar çalıştır. `updates_backlog` uyarısıyla Start'a dokunmak işe yaramaz: kişiye sayısal kimliğini sor. |
+| 8 | `detect_timeout` | detect-chat hiç mesaj görmedi. Kişiden Başlat'a yeniden dokunmasını iste ve tekrar çalıştır. `updates_backlog` uyarısıyla Başlat'a dokunmak işe yaramaz: kişiye sayısal kimliğini sor. |
 | 9 | `daemon_running` | detect-chat: bu bot için zaten çalışan bir aipager var ve mesajlarını o alıyor. Kişiye sayısal kimliğini sor (ya da `aipager service stop` ile durdurmadan önce izin iste). |
 | 10 | `updates_conflict` | detect-chat: bu botun mesajlarını başka bir program okuyor. Kişiye sayısal kimliğini sor. |
 | 130 | `interrupted` | Ctrl-C ile durduruldu. |

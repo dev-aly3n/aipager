@@ -1184,7 +1184,7 @@
 {"k": "ui.rename.reserved", "src": "9440c7ea", "v": "“{name}” é o nome de um comando do bot."}
 {"k": "ui.rename.too_long", "src": "9b31bc40", "v": "O nome da sessão deve ter no máximo {max} caracteres."}
 {"k": "ui.report.also_through", "src": "1d1b7026", "v": "Também passou por: {names}"}
-{"k": "ui.report.as_written", "src": "21532af3", "v": "Enviada exatamente como você escrever."}
+{"k": "ui.report.as_written", "src": "21532af3", "v": "Enviada exatamente como foi escrita."}
 {"k": "ui.report.bad_note", "src": "c92adef7", "v": "Não foi possível adicionar essa nota. Tente uma mais curta e simples."}
 {"k": "ui.report.card_text", "src": "45e21208", "v": "Conte ao criador do aipager o que deu errado. Você vê o relatório inteiro antes de qualquer envio."}
 {"k": "ui.report.copied", "src": "dd2ce2e2", "v": "Copiado."}
@@ -1365,11 +1365,11 @@
 {"k": "upd.ap.installed", "src": "01a08996", "v": "✅ <b>aipager</b> {frm} → {to} instalado."}
 {"k": "upd.ap.installed_shutdown", "src": "d2a325d6", "v": "✅ <b>aipager</b> {frm} → {to} instalado; o aipager está desligando, então nada foi reiniciado: na próxima vez ele inicia com {to}."}
 {"k": "upd.ap.not_found", "src": "f74b4ba7", "v": "❌ <b>aipager</b>: <code>{kind}</code> não foi encontrado (procurado em {path})"}
-{"k": "upd.ap.prepare_failed", "src": "65e6b15f", "v": "✅ <b>aipager</b> {frm} → {to} instalado, mas o reinício não pôde ser preparado ({error}). Reinicie você mesmo: <code>{cmd}</code>"}
-{"k": "upd.ap.restart_cancelled", "src": "23b8320e", "v": "✅ <b>aipager</b> {frm} → {to} instalado, mas o reinício foi cancelado. Reinicie você mesmo: <code>{cmd}</code>"}
+{"k": "upd.ap.prepare_failed", "src": "65e6b15f", "v": "✅ <b>aipager</b> {frm} → {to} instalado, mas o reinício não pôde ser preparado ({error}). Reinicie por conta própria: <code>{cmd}</code>"}
+{"k": "upd.ap.restart_cancelled", "src": "23b8320e", "v": "✅ <b>aipager</b> {frm} → {to} instalado, mas o reinício foi cancelado. Reinicie por conta própria: <code>{cmd}</code>"}
 {"k": "upd.ap.restart_offer", "src": "67c4cb2a", "v": "Toque em “Reiniciar agora” para rodá-la (o aipager espera até nenhuma tarefa estar em andamento)."}
 {"k": "upd.ap.restarting", "src": "e68754da", "v": "⏳ <b>aipager</b> {frm} → {to} instalado, reiniciando…"}
-{"k": "upd.ap.schedule_failed", "src": "8ded320b", "v": "✅ <b>aipager</b> {frm} → {to} instalado, mas não foi possível agendar o reinício: {detail}. Reinicie você mesmo: <code>{cmd}</code>"}
+{"k": "upd.ap.schedule_failed", "src": "8ded320b", "v": "✅ <b>aipager</b> {frm} → {to} instalado, mas não foi possível agendar o reinício: {detail}. Reinicie por conta própria: <code>{cmd}</code>"}
 {"k": "upd.ap.timeout", "src": "f834e535", "v": "⏱ A atualização do <b>aipager</b> não terminou em {seconds} s e foi interrompida; nada foi reiniciado e continua rodando {running}. A instalação pode ter ficado pela metade: reinstale com <code>{hint}</code> antes do próximo reinício."}
 {"k": "upd.ap.waiting", "src": "dc25cdd1", "v": "⏳ <b>aipager</b> {frm} → {to} instalado; reinicia quando a tarefa atual terminar"}
 {"k": "upd.busy.restarting", "src": "6d1c5479", "v": "⏳ O aipager está prestes a reiniciar para se atualizar. Tente /update de novo quando ele voltar."}
@@ -1416,7 +1416,7 @@
 {"k": "upd.output_in_log", "src": "3c62a9b7", "v": "(a saída está no log do aipager)"}
 {"k": "upd.prompt", "src": "8a30cb51", "v": "⬆️ <b>Atualizações</b>\n\nVeja se há uma versão mais nova do aipager ou do Claude Code."}
 {"k": "upd.reason.unknown_install", "src": "0ab6e3a7", "v": "tipo de instalação desconhecido"}
-{"k": "upd.reason.yourself", "src": "8ebd1480", "v": "reinicie você mesmo"}
+{"k": "upd.reason.yourself", "src": "8ebd1480", "v": "reinicie por conta própria"}
 {"k": "upd.restart.auto", "src": "47924d9e", "v": "Reinício: automático, quando nenhuma tarefa estiver em andamento."}
 {"k": "upd.restart.button", "src": "ce3642ee", "v": "Reinício: toque em “Reiniciar agora” quando estiver instalado."}
 {"k": "upd.restart.manual", "src": "8e3998af", "v": "Reinício: manual ({reason})"}
@@ -1449,7 +1449,7 @@
 {"k": "upd.summary.up_to_date", "src": "2772acac", "v": "Tudo está atualizado."}
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "Reinicie o aipager para concluir a atualização."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ A atualização parou por um erro inesperado (veja o log do aipager)."}
-{"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ O reinício agendado não aconteceu: a nova versão está instalada, mas a antiga continua rodando. Reinicie você mesmo: {command}"}
+{"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ O reinício agendado não aconteceu: a nova versão está instalada, mas a antiga continua rodando. Reinicie por conta própria: {command}"}
 {"k": "whoami.any", "src": "195d97a4", "v": "(todas)"}
 {"k": "whoami.bypass_role_denies", "src": "9ed1452d", "v": "  bypass_role_denies: {value}"}
 {"k": "whoami.bypass_safety", "src": "a09645db", "v": "  bypass_safety: {value}"}

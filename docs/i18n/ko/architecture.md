@@ -1,6 +1,6 @@
 # 아키텍처
 
-<!-- i18n-source: docs/architecture.md @ c91598e -->
+<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../architecture.md))
 
@@ -60,7 +60,7 @@ flowchart LR
 - **`SessionRegistry`** (`aipager/state.py`): 이름별로 저장된 `TrackedSession` 객체들이에요. 종료할 때와, 재시작 뒤에도 남아야 하는 것이 바뀔 때마다 `~/.claude/aipager-sessions.json`에 (원자적으로) 저장해요.
 - **Mini App 서버** (`aipager/miniapp/server.py`): `127.0.0.1`의 `MINIAPP_PORT`(기본값 8765)에서 듣는 aiohttp 앱이고, 켜져 있는 동안(기본으로 켜져 있어요) 관리형 Cloudflare 터널을 통해 Telegram에 제공돼요. `/app` 대시보드를 제공해요.
 
-모두 같은 loop 위에서 작업으로 실행돼요. loop를 막을 수 있는 일은 별도 스레드에서 실행해요. 음성 메시지를 글로 바꾸기, 문제 신고 보고서를 만들고 보내기, 업데이트 확인과 재시작 계획, Mini App 스크립트와 `cloudflared` 다운로드, 그리고 시작할 때의 로그인 확인이에요.
+모두 같은 loop 위에서 태스크로 실행돼요. loop를 막을 수 있는 일은 별도 스레드에서 실행해요. 음성 메시지를 글로 바꾸기, 문제 신고 보고서를 만들고 보내기, 업데이트 확인과 재시작 계획, Mini App 스크립트와 `cloudflared` 다운로드, 그리고 시작할 때의 로그인 확인이에요.
 
 ## <a id="boot-sequence"></a>시작 순서
 
@@ -73,7 +73,7 @@ flowchart LR
 5. `SessionRegistry.load()`: `~/.claude/aipager-sessions.json` 파일을 읽어요. 파일이 없거나 읽을 수 없으면 빈 목록으로 시작해요.
 6. Mini App 주소(내 URL, 또는 Tailscale)를 정한 다음 `bot.start()`: Telegram에서 업데이트를 받기 시작해요.
 7. `HookReceiver.start()`: 남아 있는 소켓 파일을 지우고, bind하고, 듣기 시작해요.
-8. `bot.recover_sessions()`: aipager가 멈췄을 때 작업 중이었거나 기다리던 세션의 카드와 요청을 되살려요([명령 → 응답](commands.md#idle-responses) 참고).
+8. `bot.recover_sessions()`: aipager가 멈췄을 때 작업 중이었거나 기다리던 세션의 카드와 요청을 되살려요([명령 → 작업이 끝났을 때의 답변](commands.md#idle-responses) 참고).
 9. `SessionMonitor.start()`: 2초마다 하는 검사를 시작해요.
 10. Mini App 서버를 시작하고, 그다음 터널을 시작하고(내 URL을 설정하지 않았을 때), `📱 App` 버튼을 올려요.
 11. aipager는 신호를 기다려요. SIGINT나 SIGTERM은 멈추게 하고, SIGUSR1은 채팅과 규칙을 다시 불러와요([그룹 → 재시작 없이 다시 불러오기](groups.md#live-reload)).
@@ -104,14 +104,14 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 | `/tmp/claude-policy-<name>.json` | 현재 작업의 권한 스냅숏 | `aipager-hook` (메시지를 가져갈 때 씀), `PreToolUse` 검사가 읽어요 |
 | `/tmp/claude-policy-.floor-<uid>.json` | 안전 기준선: 기본 목록과 내 `safety:` 부분, hook의 대체 경로용 | aipager |
 | `/tmp/claude-reply-<name>.txt` | 예전 메시지에 답장할 때, 내가 답장한 그 메시지 | aipager |
-| `/tmp/aipager-files/` | Telegram에서 보낸 파일과 음성 메시지 | aipager |
+| `/tmp/aipager-files/<chat>/` | Telegram에서 보낸 파일과 음성 메시지, 채팅마다 비공개 폴더 하나(`0700`, 파일은 `0600`) | aipager |
 | `/tmp/aipager.log` | 서비스가 없을 때 자체 재시작의 출력 | aipager |
 | `~/.claude/aipager-sessions.json` | 세션 목록의 저장된 상태 | aipager |
 | `~/.claude/aipager-audit.jsonl` | 허용 / 거부 / 답변 로그 | aipager (추가만 함) |
 | `~/.claude/aipager-flood-state.json` | 채팅마다의 Telegram 속도 제한 기록, 재시작해도 유지돼요([문제 해결](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
 | `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | aipager가 붙잡고 있는 Mini App 터널: 프로세스, 로컬 포트, 주소의 해시(주소 자체는 절대 아님)를 적어 두어서 계획된 재시작 뒤 다음 aipager가 이어받을 수 있게 해요(권한 600). cloudflared의 경고도 있어요 | aipager. 유지된 터널의 감시 프로세스와 `aipager uninstall`도 이 기록을 지워요 |
 | `~/.claude/aipager-pending-users.json` | 봇이 서비스하지 않는 그룹에서 봇을 부른 사람, 또는 서비스하는 그룹에 있지만 멤버가 아닌 사람, `aipager config`로 추가할 수 있게(권한 0600, 쓸 때마다 통째로 바꿈, 최근 30일 동안 나타난 최신 200명 보관) | aipager (씀), `aipager config` (읽음) |
-| `~/aipager-users/<label>/` | 멤버의 기본 [루트 폴더](groups.md#root-folders)(권한 0700), `user`와 `read_only` 멤버가 여기서 세션을 시작해요. `aipager uninstall`은 이것을 남겨 둬요 | aipager (멤버가 처음 `/new`를 쓰거나 Mini App에서 처음 “세션 시작”을 할 때 만들어요) |
+| `~/aipager-users/<label>/` | 멤버의 기본 [루트 폴더](groups.md#root-folders)(권한 0700), `user`와 `read_only` 멤버가 여기서 세션을 시작해요. `aipager uninstall`은 이것을 남겨 둬요 | aipager (멤버가 처음 `/new`를 쓰거나 Mini App에서 처음 “새 세션”을 누를 때 만들어요) |
 | `~/.claude/settings.json` | Claude Code의 hook 설정 | `aipager config` / `aipager setup`. 시작할 때마다 aipager가 빠진 aipager hook이나 상태 줄을 채우고 `skipDangerousModePermissionPrompt`를 설정해요([보안](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | 다시 쓰기 전마다 만드는 백업 | `aipager config`, `aipager setup`, `aipager uninstall` |
 | `~/.claude.json` | Claude Code 자체 파일: aipager가 세션이 시작될 폴더를 시작 직전에 신뢰하는 폴더로 표시해서(홈 폴더도 포함, `/`나 홈 폴더 위의 폴더는 절대 아님), Claude Code의 신뢰 질문이 Telegram에서 시작한 세션을 막지 않게 해요. aipager가 시작할 때는 아무것도 표시하지 않아요. 전체를 읽을 수 없거나 실행 중인 Claude가 그사이 바꿨다면 절대 다시 쓰지 않아요 | aipager |
@@ -144,11 +144,11 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 
 `AIPAGER_TELEGRAM_API_BASE`(예: `http://127.0.0.1:41234`)는 모든 Bot API 요청과 파일 다운로드를 `https://api.telegram.org` 대신 그 주소로 보내요. `AIPAGER_TELEGRAM_API_ALLOW_REMOTE=1`을 설정하지 않는 한 이 주소는 이 컴퓨터(`localhost`나 루프백 주소)여야 해요. 그래야 오타 하나로 봇 token이 다른 곳으로 가지 않아요.
 
-이 두 설정은 끝에서 끝까지 테스트가 내 진짜 aipager 옆에서, 로컬 Telegram 대역을 상대로 두 번째 aipager를 실행할 수 있게 하려고 있어요. 둘 다 설정하지 않으면 모든 경로와 주소는 위 표와 같아요.
+이 두 설정은 E2E 테스트가 내 진짜 aipager 옆에서, 로컬에서 Telegram을 흉내 내는 서버를 상대로 두 번째 aipager를 실행할 수 있게 하려고 있어요. 둘 다 설정하지 않으면 모든 경로와 주소는 위 표와 같아요.
 
 ## <a id="why-dtach"></a>왜 dtach인가요
 
-dtach는 Claude Code 세션마다 진짜 PTY를 주면서도, 계속 열어 둬야 하는 터미널에 묶어 두지 않아요. aipager는 `dtach -n`으로 세션을 시작하고 `dtach -p`로 입력해요(메시지, Escape, 대화 상자에 답하는 키). 화면은 절대 읽지 않아요. hook과 대화 기록이 이미 무슨 일이 있었는지 알려 주니까요. 어떤 shell에서든 `aipager session <name>`으로 대화형으로 연결해서 직접 쓸 수 있어요. 이 연결은 Telegram에서 시작한 세션 재시작(`/mode`로 전체 권한 모드로 바꾸거나 빠져나올 때, `/restart`, 재시작)을 따라가요. 세션의 소켓이 사라지면 같은 소켓이 돌아오기를 최대 15초 기다렸다가 스스로 다시 연결해요. 정말로 끝난 세션은 기다린 뒤 shell로 돌려보내요(Ctrl-C로 기다림을 일찍 끝낼 수 있어요). 연결 중에는 dtach의 분리 키가 꺼져 있어서 `Ctrl-\`가 Claude에게 전달돼요. 나가려면 터미널이나 tmux 창을 닫으면 되고, 세션은 계속 실행돼요.
+dtach는 Claude Code 세션마다 진짜 PTY를 주면서도, 계속 열어 둬야 하는 터미널에 묶어 두지 않아요. aipager는 `dtach -n`으로 세션을 시작하고 `dtach -p`로 입력해요(메시지, Escape, 대화 상자에 답하는 키). 화면은 절대 읽지 않아요. hook과 저장된 대화가 이미 무슨 일이 있었는지 알려 주니까요. 어떤 shell에서든 `aipager session <name>`으로 대화형으로 연결해서 직접 쓸 수 있어요. 이 연결은 Telegram에서 시작한 세션 재시작(`/mode`로 전체 권한 모드로 바꾸거나 빠져나올 때, `/restart`, 재시작)을 따라가요. 세션의 소켓이 사라지면 같은 소켓이 돌아오기를 최대 15초 기다렸다가 스스로 다시 연결해요. 정말로 끝난 세션은 기다린 뒤 shell로 돌려보내요(Ctrl-C로 기다림을 일찍 끝낼 수 있어요). 연결 중에는 dtach의 분리 키가 꺼져 있어서 `Ctrl-\`가 Claude에게 전달돼요. 나가려면 터미널이나 tmux 창을 닫으면 되고, 세션은 계속 실행돼요.
 
 결과적으로 Claude Code는 내가 터미널에서 입력할 때처럼 실행되지만, 그 터미널은 실행 중인 세션을 방해하지 않고 왔다 갔다 할 수 있어요. aipager는 2초마다 하는 검사에서 `/tmp/claude-dtach-*.sock`을 찾아 세션을 발견해요. 발견된 세션은 이름에 해당하는 채팅에 속하고, 개인 채팅과 그룹이 둘 다 있는 설치에서 터미널로 시작한 세션은 소유자의 개인 채팅에 속해요.
 

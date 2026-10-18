@@ -1,16 +1,19 @@
 """One direction per message that carries Claude's text (multilingual
 design 5.7, rule 5; operator live test 2026-10-10).
 
-In a Persian or Arabic chat talking with Claude in English, the busy card
-(its status line, tool rows, agent rows, fold summaries) and the answer
+In a Persian or Arabic chat talking with Claude in English, the answer
 (its header, its Finished line, the agents block under it, a late marker)
-read LEFT TO RIGHT: no U+200F at a line start, a U+200E where a line would
+reads LEFT TO RIGHT: no U+200F at a line start, a U+200E where a line would
 otherwise start with a right-to-left word, every right-to-left phrase kept
 whole in U+2067...U+2069, parameters still isolated, numbers in the
-language's digits. When Claude writes Persian or Arabic they read right to
-left as before; before Claude has written anything they follow the prompt
-the turn answers; with neither, the chat's language. Messages that are
-aipager's own keep the chat's direction. English never changes.
+language's digits. When Claude writes Persian or Arabic it reads right to
+left as before; before Claude has written anything it follows the prompt
+the turn answers; with neither, the chat's language. The busy card is
+aipager's own (operator, 2026-10-17): it keeps the chat's direction
+whatever Claude or the prompt is written in, Claude's English commentary
+on it isolated left to right; only the merged layout's finished card,
+which carries the answer, takes the answer's direction. English never
+changes.
 
 The card's rotating verb is the chat language's own (a short list per
 language); English keeps SPINNER_VERBS byte for byte.
@@ -184,16 +187,18 @@ def test_the_prompt_text_is_the_persons_own(prompt, raw, want):
 # ---- the busy card ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("code", RTL_LANGS)
-def test_card_under_english_commentary_reads_left_to_right(code):
+def test_card_under_english_commentary_keeps_the_chats_direction(code):
+    # Changed 2026-10-17: the card follows the chat's language, not
+    # Claude's English (was: reads left to right with no U+200F).
     s = _session(commentary=(ENGLISH,))
     card = unfooter(animation.build_stream_card(s, "Calculating", tr=i18n.get(code)))
-    assert _no_rlm_at_line_start(card)
-    assert RLM not in card
-    status = _status(card)
-    assert status.startswith("⏳ **" + FSI + "aipager_boss" + PDI + "** · " + LRM + RLI)
+    assert _status(card).startswith(RLM + "⏳ **" + FSI + "aipager_boss" + PDI + "**")
+    assert RLI not in card
+    # Claude's English sentence keeps its own direction inside the card.
+    assert "> " + LRM + "\u2066" + ENGLISH + PDI + LRM in card.split("\n")
     agent = [line for line in card.split("\n") if "pipeline-runner" in line][0]
-    assert agent.startswith("⏳ " + LRM)          # an agent row opens left to right
-    assert animation._card_rtl(s, i18n.get(code)) is False
+    assert agent.startswith("⏳ " + RLM)          # an agent row opens right to left
+    assert animation._card_rtl(s, i18n.get(code)) is True
 
 
 @pytest.mark.parametrize("code", RTL_LANGS)
@@ -206,36 +211,40 @@ def test_card_under_own_script_commentary_reads_right_to_left(code):
 
 
 @pytest.mark.parametrize("code", RTL_LANGS)
-@pytest.mark.parametrize("prompt,rtl", [(ENGLISH, False), ("own", True), ("", True),
-                                        ("12", True)],
+@pytest.mark.parametrize("prompt", [ENGLISH, "own", "", "12"],
                          ids=["english-prompt", "own-prompt", "no-prompt", "digit-prompt"])
-def test_card_before_commentary_follows_the_prompt_then_the_chat(code, prompt, rtl):
+def test_card_before_commentary_follows_the_chat_whatever_the_prompt(code, prompt):
+    # Changed 2026-10-17 (was: follows the prompt, then the chat).
     s = _session(prompt=OWN_SCRIPT[code] if prompt == "own" else prompt)
     s.active_subagents = {}
     s.tool_history = []
     card = unfooter(animation.build_stream_card(s, "Working", tr=i18n.get(code)))
-    assert card.startswith(RLM) is rtl
-    assert (LRM in card) is (not rtl)
-    assert animation._card_rtl(s, i18n.get(code)) is rtl
+    assert card.startswith(RLM)
+    assert LRM not in card
+    assert animation._card_rtl(s, i18n.get(code)) is True
 
 
-def test_commentary_wins_over_the_prompt():
-    s = _session(prompt=PERSIAN, commentary=(ENGLISH,))
-    assert animation._card_rtl(s, i18n.get("fa")) is False
-    s = _session(prompt=ENGLISH, commentary=(PERSIAN,))
-    assert animation._card_rtl(s, i18n.get("fa")) is True
+@pytest.mark.parametrize("code,want", [("fa", True), ("ar", True), ("en", False),
+                                       ("de", False)])
+def test_neither_commentary_nor_prompt_turns_the_card(code, want):
+    # Changed 2026-10-17 (was: Claude's commentary wins over the prompt).
+    for prompt, words in ((PERSIAN, ENGLISH), (ENGLISH, PERSIAN), (ARABIC, ARABIC),
+                          (ENGLISH, ENGLISH), ("", "")):
+        s = _session(prompt=prompt, commentary=(words,) if words else ())
+        assert animation._card_rtl(s, i18n.get(code)) is want
 
 
 @pytest.mark.parametrize("code", RTL_LANGS)
-def test_the_final_card_status_line_reads_left_to_right(code):
-    s = _session(prompt=ENGLISH)
+def test_the_final_card_status_line_reads_right_to_left(code):
+    # Changed 2026-10-17 (was: reads left to right under an English prompt).
+    s = _session(prompt=ENGLISH, commentary=(ENGLISH,))
     s.active_subagents = {}
     status = _status(unfooter(animation.build_stream_card(
         s, animation.FINAL_VERB, final=True, tr=i18n.get(code))))
     tr = i18n.get(code)
-    assert status.startswith("✅ **")
-    assert " · " + LRM + RLI + str(tr.md(animation._VERB_MSGS["Done"])).strip(RLM) + PDI \
-        in status
+    assert status.startswith(RLM + "✅ **") and status.endswith(RLM)
+    assert LRM not in status and RLI not in status
+    assert " · " + str(tr.md(animation._VERB_MSGS["Done"])) + " · " in status
     assert tr.clock(123) in status and "Agent ×" + tr.num(1) in status
 
 
@@ -248,24 +257,30 @@ def test_the_fold_summary_and_still_running_row_read_left_to_right(code):
     assert row.startswith(LRM) and RLM not in row
 
 
-@pytest.mark.parametrize("code", RTL_LANGS)
-def test_the_rich_card_edit_sends_the_cards_direction(code, mk_bot, run_async, monkeypatch):
+@pytest.mark.parametrize("code,other,want", [("fa", ENGLISH, True), ("ar", ENGLISH, True),
+                                             ("en", PERSIAN, False), ("en", ARABIC, False)])
+@pytest.mark.parametrize("final", [False, True], ids=["live", "final"])
+def test_the_rich_card_edit_sends_the_chats_direction(code, other, want, final, mk_bot,
+                                                      run_async, monkeypatch):
+    # Changed 2026-10-17 (was: is_rtl False under an English prompt in fa/ar).
     from aipager import preferences
     from aipager.bot import animation as anim
     preferences.set_ui_language(4242, code)
     bot = mk_bot()
-    s = _session(prompt=ENGLISH, chat=4242)
+    s = _session(prompt=other, commentary=(other,), chat=4242)
     s.busy_msg_id = 55
     bot.registry._sessions[s.name] = s
     edit = AsyncMock(return_value={"message_id": 55})
     monkeypatch.setattr(anim, "edit_message_text_rich", edit)
-    run_async(bot._edit_busy_rich(s, "Calculating"))
-    assert edit.await_args.kwargs["is_rtl"] is False
-    assert RLM not in edit.await_args.args[2]
+    run_async(bot._edit_busy_rich(s, "Calculating", final=final))
+    assert edit.await_args.kwargs["is_rtl"] is want
+    status = unfooter(edit.await_args.args[2]).rsplit("\n", 1)[-1]
+    assert status.startswith(RLM) is want
 
 
 @pytest.mark.parametrize("code", RTL_LANGS)
-def test_the_first_card_text_follows_the_prompt(code, mk_bot, run_async):
+def test_the_first_card_text_follows_the_chat(code, mk_bot, run_async):
+    # Changed 2026-10-17 (was: follows the prompt).
     from aipager import preferences
     preferences.set_ui_language(4242, code)
     bot = mk_bot()
@@ -273,10 +288,10 @@ def test_the_first_card_text_follows_the_prompt(code, mk_bot, run_async):
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=7))
     run_async(bot.send_busy(s))
     text = bot._app.bot.send_message.await_args.args[1]
-    assert not text.startswith(RLM) and RLI in text
+    assert text.startswith(RLM) and RLI not in text
     s.turn_prompt = OWN_SCRIPT[code]
     run_async(bot.send_busy(s))
-    assert bot._app.bot.send_message.await_args.args[1].startswith(RLM)
+    assert bot._app.bot.send_message.await_args.args[1] == text
 
 
 def test_an_english_card_is_the_same_whatever_the_prompt():
@@ -600,18 +615,21 @@ def test_an_interim_answer_and_its_block_take_the_answers_direction(code, mk_bot
 
 @pytest.mark.parametrize("code", RTL_LANGS)
 def test_a_moved_paused_card_takes_the_cards_direction(code, mk_bot, run_async, monkeypatch):
+    # Changed 2026-10-17: the chat's direction under an English prompt
+    # (was: is_rtl False, the line left to right).
     from aipager.bot import animation as anim
     bot = mk_bot()
     s = _chat_session(bot, code)
     s.turn_prompt = ENGLISH
+    s.stream_commentary = [(0, ENGLISH)]
     s.busy_msg_id = 55
     s.stream_last_rendered = anim._PAUSED_CARD_TEXT
     rich = AsyncMock(return_value={"message_id": 56})
     monkeypatch.setattr(anim, "send_rich_message", rich)
     run_async(bot._send_card_copy(s, 9, verb="Working", final=False, waiting=False))
     text = rich.await_args.args[1]
-    assert rich.await_args.kwargs["is_rtl"] is False
-    assert not text.startswith(RLM) and RLI in text
+    assert rich.await_args.kwargs["is_rtl"] is True
+    assert text.startswith(RLM) and RLI not in text and LRM not in text
 
 
 @pytest.mark.parametrize("code", RTL_LANGS)
@@ -627,7 +645,8 @@ def test_the_paused_line_takes_the_cards_direction(code, mk_bot, run_async, monk
     bot._edit_busy_raw = AsyncMock(return_value=True)
     assert run_async(bot._render_paused_card(s)) is True
     text = bot._edit_busy_raw.await_args.args[1]
-    assert not text.startswith(RLM) and RLI in text
+    # Changed 2026-10-17: the chat's direction (was: left to right).
+    assert text.startswith(RLM) and RLI not in text
 
 
 @pytest.mark.parametrize("code", ["en", "fa", "ru"])
@@ -654,13 +673,15 @@ def test_the_animation_rotates_the_chats_list(code, mk_bot, run_async):
 
 @pytest.mark.parametrize("code", RTL_LANGS)
 @pytest.mark.parametrize("agents", [0, 1], ids=["finishing", "working"])
-def test_the_waiting_card_reads_left_to_right_under_english(code, agents):
+def test_the_waiting_card_keeps_the_chats_direction_under_english(code, agents):
+    # Changed 2026-10-17 (was: reads left to right, no U+200F).
     s = _session(commentary=(ENGLISH,))
     s.status = Status.IDLE
     if not agents:
         s.active_subagents = {}
     card = unfooter(animation.build_stream_card(s, "Working", waiting=True, tr=i18n.get(code)))
-    assert RLM not in card and RLI in _status(card)
+    status = _status(card)
+    assert status.startswith(RLM) and status.endswith(RLM) and RLI not in status
 
 
 def test_a_middle_dot_between_two_phrases_splits_them():

@@ -257,8 +257,8 @@
 {"k": "grp.dropped_anon", "src": "c67a8cca", "v": {"other": "{n} pesan tidak dikirim ke Claude: pengirim ini sudah tidak boleh mengirim pesan di sini."}}
 {"k": "grp.dropped_anon_one", "src": "8946b17f", "v": "Tidak dikirim ke Claude: pengirim ini sudah tidak boleh mengirim pesan di sini."}
 {"k": "grp.dropped_one", "src": "4ab273e1", "v": "Tidak dikirim ke Claude: {who} sudah tidak boleh mengirim pesan di sini."}
-{"k": "grp.help_talk", "src": "07beac8e", "v": "<b>Bicara:</b> balas pesan sebuah sesi, atau sebut {mention} · /&lt;nama&gt; pesan"}
-{"k": "grp.help_talk_no_username", "src": "4c1fc9fd", "v": "<b>Bicara:</b> balas pesan sebuah sesi, atau sebut bot · /&lt;nama&gt; pesan"}
+{"k": "grp.help_talk", "src": "07beac8e", "v": "<b>Bicara:</b> balas pesan dari sesi, atau sebut {mention} · /&lt;nama&gt; pesan"}
+{"k": "grp.help_talk_no_username", "src": "4c1fc9fd", "v": "<b>Bicara:</b> balas pesan dari sesi, atau sebut bot · /&lt;nama&gt; pesan"}
 {"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "Kirim pesan atas namamu sendiri untuk memakai bot."}
 {"k": "held.late_marker", "src": "e38c307b", "v": {"other": "⏳ terlambat sampai: tertahan {n} menit karena batas Telegram"}}
 {"k": "held.too_old", "src": "7391de5a", "v": "Pesan itu sudah terlalu lama dan tidak dikirim; kirim lagi."}
@@ -267,7 +267,7 @@
 {"k": "help.manage", "src": "75144040", "v": "<b>Kelola:</b> /status, lalu ⋮ (mulai ulang, ganti nama, diff, akhiri, hapus)"}
 {"k": "help.settings", "src": "ab2b823b", "v": "<b>Pengaturan:</b> /settings · /mode (Mode Tanya, Auto, atau Akses penuh)"}
 {"k": "help.start", "src": "276a9c1b", "v": "<b>Mulai:</b> /new nama · /resume"}
-{"k": "help.talk_dm", "src": "c3ef5195", "v": "<b>Bicara:</b> ketik saja (masuk ke sesi ✍️) · balas sebuah pesan · /&lt;nama&gt; pesan"}
+{"k": "help.talk_dm", "src": "c3ef5195", "v": "<b>Bicara:</b> ketik saja (masuk ke sesi ✍️) · balas pesan · /&lt;nama&gt; pesan"}
 {"k": "help.tip", "src": "67a93e6b", "v": "<i>Tips: mengetuk perintah langsung mengirimnya. Untuk menambah teks dulu, tekan lama (ponsel) atau tekan Tab (desktop).</i>"}
 {"k": "help.title", "src": "8fffe930", "v": "<b>Cara memakai aipager</b>"}
 {"k": "home.btn.new", "src": "19b62fc4", "v": "🆕 Sesi baru"}
@@ -419,7 +419,7 @@
 {"k": "newflow.expired", "src": "6f9c9ea0", "v": "⏱ Kartu sesi baru ini sudah kedaluwarsa. Kirim /new lagi."}
 {"k": "newflow.folder_page", "src": "f6e221a1", "v": "📁 <b>Folder</b>\n\nSesi ini bekerja di folder mana?"}
 {"k": "newflow.full_needs_admin_note", "src": "3d60c811", "v": "Mode Akses penuh khusus admin, jadi sesi ini dimulai dalam Mode Auto."}
-{"k": "newflow.group_name_ask", "src": "eb31141c", "v": "Balas pesan ini dengan sebuah nama, dan kalau mau, apa yang dikerjakan pertama:"}
+{"k": "newflow.group_name_ask", "src": "eb31141c", "v": "Balas pesan ini dengan nama, dan kalau mau, apa yang dikerjakan pertama:"}
 {"k": "newflow.hint_folder", "src": "f27c8294", "v": "📁 Pilih dulu folder proyek dengan tombol “📁 Folder”."}
 {"k": "newflow.just_send", "src": "0b7a9b82", "v": "✍️ Kirim saja pesan, nanti masuk ke {session}."}
 {"k": "newflow.model_page", "src": "580279ec", "v": "🧠 <b>Model</b>\n\nSesi ini bekerja dengan model apa?"}
@@ -443,7 +443,7 @@
 {"k": "newflow.ready_later", "src": "4d69ea9f", "v": "Nanti: ketuk {session} di papan ketik, atau balas pesan {session} mana pun."}
 {"k": "newflow.ready_models", "src": "1bccc9f4", "v": "🧠 <b>{session}</b>: pilih model.\n\nModelnya langsung berganti di sini, percakapan tetap ada."}
 {"k": "newflow.ready_settings", "src": "d40af8c6", "v": "{mode} · 🧠 {model} · 📁 <code>{folder}</code>"}
-{"k": "newflow.send_name", "src": "9b892a4c", "v": "Kirim sebuah nama, dan kalau mau, apa yang dikerjakan pertama:"}
+{"k": "newflow.send_name", "src": "9b892a4c", "v": "Kirim nama, dan kalau mau, apa yang dikerjakan pertama:"}
 {"k": "newflow.settings_line", "src": "a770b6d4", "v": "{mode} · 🧠 {model} · 📁 {folder}"}
 {"k": "newflow.settings_no_folder", "src": "810727a6", "v": "{mode} · 🧠 {model} · 📁 belum ada folder proyek"}
 {"k": "newflow.started_over", "src": "3a2633bc", "v": "↩️ Dibatalkan - mulai lagi dari awal."}
@@ -832,7 +832,7 @@
 {"k": "set.text.reports_env_off", "src": "408411eb", "v": "Tawaran juga dimatikan di komputer ini lewat AIPAGER_REPORT_PROMPTS=0."}
 {"k": "set.text.reports_intro", "src": "4fe65258", "v": "Kalau aipager mengalami error internal yang sama lebih dari sekali, aipager bisa menawarkan untuk mengirim laporan. Kamu selalu melihat laporannya dulu, dan tidak ada yang dikirim kecuali kamu mengetuk “Kirim”.\n\nTanya aku: sesekali menawarkan (paling sering sekali dalam 3 hari).\nMati: tidak pernah menawarkan. “Laporkan masalah” di /help selalu bisa dipakai."}
 {"k": "set.text.reports_title", "src": "036f0be5", "v": "🐞 <b>Laporan masalah</b>"}
-{"k": "set.text.root", "src": "25c10fde", "v": "⚙️ <b>Pengaturan</b>\n\nCara Claude menjawab di chat ini. Ketuk sebuah bagian untuk mengubahnya."}
+{"k": "set.text.root", "src": "25c10fde", "v": "⚙️ <b>Pengaturan</b>\n\nCara Claude menjawab di chat ini. Ketuk bagian untuk mengubahnya."}
 {"k": "set.text.row", "src": "b98927cc", "v": "{title}: {value}"}
 {"k": "set.text.spref_field", "src": "53c8e84c", "v": "{title} - untuk [<b>{session}</b>]\n\n{title} sesi ini; khusus untuk sesi ini, pilihan ini menggantikan /settings chat."}
 {"k": "set.text.spref_none", "src": "3856fe99", "v": "👤 <b>Preferensi per sesi</b>\n\nBelum ada sesi."}
@@ -877,7 +877,7 @@
 {"k": "toast.invalid_callback", "src": "19c5c4a4", "v": "Tombol ini tidak dikenali"}
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "Nilai ini tidak diizinkan"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "Tombol ini sudah usang - kirim /kill lagi"}
-{"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} sedang menunggu jawaban atas sebuah permintaan. Jawab dulu, lalu ganti mode."}
+{"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} sedang menunggu jawaban atas permintaan. Jawab dulu, lalu ganti mode."}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} sudah mengerjakan hal baru - untuk menghentikannya, ketuk ⏹ Hentikan lagi"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} sudah mengerjakan hal baru - kirim /stop lagi"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "Kamu tidak boleh mengubah sesi ini."}
@@ -889,7 +889,7 @@
 {"k": "toast.new_folder_gone", "src": "4b183fca", "v": "Folder itu sudah tidak ada di daftar."}
 {"k": "toast.new_invalid_model", "src": "ae01cc11", "v": "Model ini tidak bisa dipilih"}
 {"k": "toast.new_model_gone", "src": "0f464c34", "v": "Model itu sudah tidak ada di daftar."}
-{"k": "toast.new_no_folder_yet", "src": "87860358", "v": "Belum ada folder - mulai dulu sesi dari folder sebuah proyek sungguhan."}
+{"k": "toast.new_no_folder_yet", "src": "87860358", "v": "Belum ada folder - mulai dulu sesi dari folder proyek sungguhan."}
 {"k": "toast.new_not_yours", "src": "393f95a6", "v": "Sesi baru ini bukan milikmu."}
 {"k": "toast.new_only_sender", "src": "9e109f78", "v": "Hanya orang yang mengirim /new yang bisa memakai kartu ini."}
 {"k": "toast.new_started_since", "src": "e8602889", "v": "Sementara itu {session} sudah mulai bekerja. Kirim /new lagi untuk menggantinya."}
@@ -1003,7 +1003,7 @@
 {"k": "ui.answer.unreachable", "src": "f159beba", "v": "Tidak bisa terhubung ke server. Tidak ada yang dikirim."}
 {"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude sedang menanyakan sesuatu kepadamu."}
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Buka {session}"}
-{"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude ingin memakai sebuah alat."}
+{"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude ingin memakai alat."}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Kosongkan antrean"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Ringkas sekarang"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Hapus"}
@@ -1407,7 +1407,7 @@
 {"k": "upd.manual.needed", "src": "9abdaf5e", "v": "Perlu mulai ulang: {reason}"}
 {"k": "upd.manual.would_kill", "src": "df06a1e3", "v": "Sesi yang akan tertutup kalau dimulai ulang: {labels}"}
 {"k": "upd.marker.done", "src": "5a3ca85c", "v": {"other": "✅ aipager diperbarui {frm} → {to}, {n} sesi tersambung lagi"}}
-{"k": "upd.marker.interrupted", "src": "66f4f0b7", "v": "⚠️ Sebuah pembaruan terputus saat aipager dimatikan; pemasangannya mungkin tidak lengkap. Sekarang {running} yang berjalan. Kalau ada yang aneh, {fix}."}
+{"k": "upd.marker.interrupted", "src": "66f4f0b7", "v": "⚠️ Pembaruan terputus saat aipager dimatikan; pemasangannya mungkin tidak lengkap. Sekarang {running} yang berjalan. Kalau ada yang aneh, {fix}."}
 {"k": "upd.marker.not_back", "src": "d253a83a", "v": "⚠️ Belum kembali: {labels}"}
 {"k": "upd.marker.wrong_version", "src": "17ebf14f", "v": "⚠️ aipager sudah dimulai ulang tapi yang berjalan {running}, bukan {to}."}
 {"k": "upd.note.ap_broken", "src": "421b5511", "v": "aipager {installed} sudah terpasang tetapi tidak bisa dimuat. Pasang ulang dengan {command}."}

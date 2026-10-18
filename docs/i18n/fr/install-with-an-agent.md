@@ -13,7 +13,7 @@ aipager permet à cette personne de piloter des sessions Claude Code depuis Tele
 Demandez à la personne de faire ceci. Vous ne pouvez pas le faire à sa place.
 
 1. **Créer le bot.** Dans Telegram, ouvrir [@BotFather](https://t.me/BotFather), envoyer `/newbot`, choisir un nom et un nom d'utilisateur. BotFather répond avec le token du bot (il ressemble à `123456789:AA...`).
-2. **Appuyer sur Start dans le bot.** Ouvrir le nouveau bot (BotFather donne le lien `t.me/<bot username>`) et appuyer sur Start. Un bot ne peut pas écrire à quelqu'un qui ne l'a pas fait.
+2. **Appuyer sur Démarrer dans le bot.** Ouvrir le nouveau bot (BotFather donne le lien `t.me/<bot username>`) et appuyer sur Démarrer (« Start » si Telegram est en anglais). Un bot ne peut pas écrire à quelqu'un qui ne l'a pas fait.
 3. **Se connecter à Claude Code sur cet ordinateur.** Si la personne utilise déjà Claude Code ici, il n'y a rien à faire. Sur un serveur sans écran, elle lance `claude` une fois dans son propre terminal et se connecte (il affiche un lien à ouvrir sur un autre appareil). Si elle préfère un token de longue durée, elle lance `claude setup-token`, qui ne fait qu'afficher le token : elle l'enregistre elle-même pour les sessions d'aipager, dans son propre terminal (coller le token, appuyer sur Entrée, puis sur Ctrl-D) :
 
    ```sh
@@ -37,7 +37,7 @@ Quiconque a le token du bot contrôle le bot. Proposez ces deux façons à la pe
   ```
 
   puis colle le token, appuie sur Entrée, et appuie sur Ctrl-D. Elle seule peut lire le fichier (droits 600). Elle peut le supprimer une fois la configuration réussie (aipager garde sa propre copie dans sa configuration). Elle vous donne le chemin (`~/.config/aipager/bot-token`). Le token n'entre jamais dans votre conversation, et vous passez le chemin à `--token-file`.
-- **La plus rapide : le coller dans la conversation.** Cela marche, mais dites clairement ce que cela implique : le token reste dans votre historique de conversation et est envoyé au fournisseur de votre modèle. Si cet historique peut un jour être partagé, la personne devra ensuite envoyer `/revoke` à @BotFather et mettre le nouveau token avec `aipager setup --force` (étape 3.2, avec `--force`). Si elle choisit cette voie, enregistrez le token dans le même fichier sans l'afficher : de préférence avec votre propre outil d'écriture de fichiers, puis `chmod 600 ~/.config/aipager/bot-token`. Si vous n'avez qu'un shell, passez-le sur stdin avec un here-document, pour qu'il ne soit pas un argument de la commande qui l'écrit :
+- **La plus rapide : le coller dans la conversation.** Cela marche, mais dites clairement ce que cela implique : le token reste dans votre historique de conversation et est envoyé au fournisseur de votre modèle. Si cet historique peut un jour être partagé, la personne devra ensuite envoyer `/revoke` à @BotFather et enregistrer le nouveau token avec `aipager setup --force` (étape 3.2, avec `--force`). Si elle choisit cette voie, enregistrez le token dans le même fichier sans l'afficher : de préférence avec votre propre outil d'écriture de fichiers, puis `chmod 600 ~/.config/aipager/bot-token`. Si vous n'avez qu'un shell, passez-le sur stdin avec un here-document, pour qu'il ne soit pas un argument de la commande qui l'écrit :
 
   ```sh
   mkdir -p ~/.config/aipager
@@ -84,7 +84,7 @@ Ajoutez `--dry-run` pour voir d'abord ce qui changerait. `--role admin` donne à
 aipager setup detect-chat --token-file ~/.config/aipager/bot-token --json
 ```
 
-Demandez à la personne d'appuyer sur Start dans le bot (ou de lui envoyer n'importe quel message) pendant que la commande attend (jusqu'à 5 minutes ; `--timeout SECONDS` change ce délai). Elle affiche l'expéditeur le plus récent dans `candidate` (`id`, `first_name`, `last_name`, `username`) et n'enregistre rien. Montrez le nom et le nom d'utilisateur à la personne et demandez-lui « C'est bien vous ? ». Seulement si elle dit oui, lancez l'étape 3.2 avec `--chat-id` égal à `candidate.id`. Si `other_candidates` n'est pas 0, d'autres personnes ont aussi écrit au bot : vérifiez encore mieux.
+Demandez à la personne d'appuyer sur Démarrer dans le bot (ou de lui envoyer n'importe quel message) pendant que la commande attend (jusqu'à 5 minutes ; `--timeout SECONDS` change ce délai). Elle affiche l'expéditeur le plus récent dans `candidate` (`id`, `first_name`, `last_name`, `username`) et n'enregistre rien. Montrez le nom et le nom d'utilisateur à la personne et demandez-lui « C'est bien vous ? ». Seulement si elle dit oui, lancez l'étape 3.2 avec `--chat-id` égal à `candidate.id`. Si `other_candidates` n'est pas 0, d'autres personnes ont aussi écrit au bot : vérifiez encore mieux.
 
 ### <a id="34-read-the-result"></a>3.4 Lire le résultat
 
@@ -97,10 +97,10 @@ Avec `--json`, setup affiche exactement un objet JSON sur stdout. Lisez `exit_co
 | 2 | `usage`, `token_malformed`, `token_stdin_timeout`, `bad_chat_id`, ... | Votre entrée était fausse ; `fix` nomme l'option. `token_malformed` : le fichier ne contient pas de token de bot, demandez à la personne de le vérifier. |
 | 3 | `deps_missing` | Suivez `fix` (chaque élément manquant a aussi son propre `fix` dans `deps.items`), puis relancez setup. |
 | 4 | `token_rejected` | Telegram a refusé le token. Redemandez le token à la personne (ou un nouveau à @BotFather). |
-| 5 | `chat_not_started`, `bot_blocked` | Demandez à la personne d'ouvrir le bot, d'appuyer sur Start (ou de le débloquer), puis relancez setup. |
+| 5 | `chat_not_started`, `bot_blocked` | Demandez à la personne d'ouvrir le bot, d'appuyer sur Démarrer (ou de le débloquer), puis relancez setup. |
 | 6 | `existing_install` | aipager est déjà configuré avec un autre token, une autre discussion ou un autre rôle. Dites à la personne ce qui diffère et demandez-lui avant d'ajouter `--force`. |
 | 7 | `telegram_unreachable` | Problème de réseau ou Telegram est surchargé. Attendez une minute et réessayez. |
-| 8 | `detect_timeout` | detect-chat n'a vu aucun message. Demandez à la personne d'appuyer à nouveau sur Start et relancez. Avec l'avertissement `updates_backlog`, appuyer sur Start n'aide pas : demandez à la personne son identifiant numérique. |
+| 8 | `detect_timeout` | detect-chat n'a vu aucun message. Demandez à la personne d'appuyer à nouveau sur Démarrer et relancez. Avec l'avertissement `updates_backlog`, appuyer sur Démarrer n'aide pas : demandez à la personne son identifiant numérique. |
 | 9 | `daemon_running` | detect-chat : un aipager pour ce bot tourne déjà et reçoit ses messages. Demandez à la personne son identifiant numérique (ou demandez-lui avant de l'arrêter avec `aipager service stop`). |
 | 10 | `updates_conflict` | detect-chat : un autre programme lit les messages de ce bot. Demandez à la personne son identifiant numérique. |
 | 130 | `interrupted` | Arrêté avec Ctrl-C. |

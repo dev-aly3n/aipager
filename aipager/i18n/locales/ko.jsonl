@@ -458,11 +458,11 @@
 {"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · 컨텍스트 {percent} 사용 - 곧 자동으로 압축해요"}
 {"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · 메모리 한도 도달"}
 {"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · <code>{tool}</code> 실행 중 메모리 한도 도달"}
-{"k": "notice.memcap_hook", "src": "657f02c3", "v": "<code>{hook}</code> 훅이 메모리 한도 {limit}GB를 넘어 중지됐어요. 도구를 확인하던 중이었다면 Claude Code가 그 도구를 거부했을 가능성이 크고, Claude가 다시 시도할 수 있어요. 아니라면 그 이벤트 하나만 건너뛴 거예요. 세션은 계속 실행돼요."}
+{"k": "notice.memcap_hook", "src": "657f02c3", "v": "<code>{hook}</code> hook이 메모리 한도 {limit}GB를 넘어 중지됐어요. 도구를 확인하던 중이었다면 Claude Code가 그 도구를 거부했을 가능성이 크고, Claude가 다시 시도할 수 있어요. 아니라면 그 이벤트 하나만 건너뛴 거예요. 세션은 계속 실행돼요."}
 {"k": "notice.memcap_nudge_cli", "src": "726ab6ea", "v": "<i>이런 일이 계속되면 터미널에서 {command} 명령을 실행해 aipager 개발자에게 보고서를 보내 주세요.</i>"}
 {"k": "notice.memcap_nudge_owner", "src": "446f75d0", "v": "<i>이런 일이 계속되면 소유자가 “이 문제 신고”를 눌러 aipager 개발자에게 보고서를 보낼 수 있어요.</i>"}
-{"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> 훅이 메모리 한도 {limit}GB를 넘어서 상태 표시줄 업데이트를 한 번 건너뛰었어요. 세션은 계속 실행돼요."}
-{"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Claude Code가 메시지를 받지 않았어요\n\n보낸 뒤 {grace}초 안에 훅이 하나도 오지 않았어요. “/”로 시작하는 메시지는 명령으로 처리돼요. 터미널을 확인해 주세요."}
+{"k": "notice.memcap_statusline", "src": "e223e66d", "v": "<code>{hook}</code> hook이 메모리 한도 {limit}GB를 넘어서 상태 표시줄 업데이트를 한 번 건너뛰었어요. 세션은 계속 실행돼요."}
+{"k": "notice.not_taken", "src": "26215b09", "v": "⚠️ <b>{session}</b> · Claude Code가 메시지를 받지 않았어요\n\n보낸 뒤 {grace}초 안에 hook이 하나도 오지 않았어요. “/”로 시작하는 메시지는 명령으로 처리돼요. 터미널을 확인해 주세요."}
 {"k": "notice.peer.halt_from", "src": "61e473d1", "v": "이 작업은 <b>{session}</b> 세션에서 왔어요."}
 {"k": "notice.peer.halt_narrowed", "src": "be630ab5", "v": "다른 세션의 메시지가 이 작업에 합류해 권한을 줄였어요."}
 {"k": "notice.peer.halt_unverified", "src": "e3cb70d4", "v": "이 작업은 aipager가 확인하지 못한 다른 세션에서 왔어요."}
@@ -534,10 +534,10 @@
 {"k": "rep.area.dashboard", "src": "319e1d71", "v": "고정된 표시줄"}
 {"k": "rep.area.flood_budget", "src": "75f9bcb6", "v": "전송 한도"}
 {"k": "rep.area.handlers", "src": "0ff1035f", "v": "메시지 처리"}
-{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "훅 수신기"}
+{"k": "rep.area.hook_receiver", "src": "617c16eb", "v": "hook 수신기"}
 {"k": "rep.area.inject", "src": "d784f7db", "v": "Claude로 메시지 보내기"}
 {"k": "rep.area.notify", "src": "c522bd84", "v": "Telegram으로 메시지 보내기"}
-{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "훅"}
+{"k": "rep.area.notify_hook", "src": "a7fb0956", "v": "hook"}
 {"k": "rep.area.server", "src": "8000cc31", "v": "Mini App"}
 {"k": "rep.area.session_monitor", "src": "1fff1160", "v": "세션 감시"}
 {"k": "rep.area.session_ops", "src": "6b7d9e30", "v": "세션 제어"}
@@ -553,8 +553,8 @@
 {"k": "rep.offer.declined", "src": "5d912282", "v": "알겠어요. 이 버전에서는 aipager가 이 일로 다시 묻지 않아요."}
 {"k": "rep.offer.internal", "src": "4df624aa", "v": {"other": "aipager에서 내부 오류가 {n}번 생겼어요 ({area}의 {error})."}}
 {"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "aipager에서 내부 오류가 한 번 생겼어요 ({area}의 {error})."}
-{"k": "rep.offer.memcap", "src": "698bc999", "v": {"other": "aipager 훅이 메모리 한도에 {n}번 도달했어요."}}
-{"k": "rep.offer.memcap_once", "src": "63461898", "v": "aipager 훅이 메모리 한도에 한 번 도달했어요."}
+{"k": "rep.offer.memcap", "src": "698bc999", "v": {"other": "aipager hook이 메모리 한도에 {n}번 도달했어요."}}
+{"k": "rep.offer.memcap_once", "src": "63461898", "v": "aipager hook이 메모리 한도에 한 번 도달했어요."}
 {"k": "rep.offer.not_opened", "src": "1df3fb0a", "v": "보고서 미리 보기를 열지 못했어요. /help의 “문제 신고”로 새 미리 보기를 열 수 있어요."}
 {"k": "rep.offer.off", "src": "3706223b", "v": "자동 제안을 껐어요. 다시 켜려면 /settings에서 “문제 신고”로 가세요."}
 {"k": "rep.offer.preview", "src": "0835e626", "v": "아래에 보고서 미리 보기를 열었어요."}
@@ -1192,7 +1192,7 @@
 {"k": "ui.report.daily_cap_title", "src": "9bdf248a", "v": "하루 한도에 도달했어요"}
 {"k": "ui.report.err.crash", "src": "78d1bcc4", "v": "aipager 비정상 종료"}
 {"k": "ui.report.err.error", "src": "7f2f6a15", "v": "오류"}
-{"k": "ui.report.err.hook_cap", "src": "f4162559", "v": "aipager 훅이 메모리 한도에 도달했어요"}
+{"k": "ui.report.err.hook_cap", "src": "f4162559", "v": "aipager hook이 메모리 한도에 도달했어요"}
 {"k": "ui.report.err.logged_in", "src": "ad58db0c", "v": "{area}에서 기록된 오류"}
 {"k": "ui.report.err.type_in", "src": "15f9e48c", "v": "{area}의 {type}"}
 {"k": "ui.report.err_detail", "src": "97fb369f", "v": "{fingerprint}, 처음 발생 {day}, 버전 {versions}"}

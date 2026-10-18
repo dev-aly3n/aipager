@@ -1,6 +1,6 @@
 # Sorun giderme
 
-<!-- i18n-source: docs/troubleshooting.md @ 054b893 -->
+<!-- i18n-source: docs/troubleshooting.md @ 1de34258 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../troubleshooting.md))
 
@@ -28,7 +28,7 @@ Soket kontrolü onu fark etmezse `aipager start` yine de `aipager is already run
 1. `aipager status`: aipager satırında `not running` yazıyorsa onu başlat.
 2. `aipager doctor`: `token_valid` ve `chat_reachable` kontrolleri Telegram API'sine baştan sona gider ve tam hatayı gösterir.
 3. Yanlış sohbet: `aipager config` çalıştır ve **Test bot reachability** seç. Yanlış bir özel sohbeti düzeltmek için doğrusunu **Add a DM scope** ile ekle (bkz. [kimlikleri bulmak](groups.md#finding-ids-auto-detect)), sonra yanlış olanı **Edit a scope** içinden kaldır.
-4. Bota hiç `/start` gönderilmemiş: Telegram'da botu aç ve bir kez Start'a dokun.
+4. Bota hiç `/start` gönderilmemiş: Telegram'da botu aç ve bir kez Başlat'a dokun.
 
 ## <a id="busy-cards-got-slower"></a>Çalışma kartları yavaşladı
 
@@ -115,7 +115,7 @@ aipager sohbete gönderimi tam olarak Telegram'ın istediği süre boyunca kapat
 
 - Gönderdiğin bir mesaj (metin, sesli mesaj, dosya, hızlı şablon) yine Claude'a ulaşır ve oturum onun üzerinde çalışır. Çalışma kartı atılmaz, bekletilir: engelleme kalktığında görev hâlâ sürüyorsa kart o zaman görünür. Engellemeden sonra sohbet bir süre daha minimal modda kalır, bu yüzden kart engellemenin bitişinden birkaç dakika sonra görünebilir. Görev engelleme sırasında bittiyse yanıtını alırsın, kart almazsın.
 - Engelleme sırasında **🔄 Yeniden dene** hiçbir şey yapmaz. Mesaj yeniden gönderilmez ve düğme kalır, böylece engellemeden sonra yeniden dokunabilirsin. 0.7.14 dahil o zamana kadar mesaj Claude'a gidiyor, düğmeli hata mesajı ise kalıyordu, böylece ikinci dokunuş onu bir kez daha gönderiyordu.
-- Ana klavye de bekletilir, yeniden başlatmanın gönderdiği dahil (0.7.14'e kadar başka bir şey onu yenileyene kadar kayboluyordu). Engellemeden sonra gönderilir.
+- Ana klavye de bekletilir, yeniden başlatmanın gönderdiği dahil (0.7.14 ve öncesinde başka bir şey onu yenileyene kadar kayboluyordu). Engellemeden sonra gönderilir.
 
 Engelleme kalktıktan sonra her şey şu sırayla gelir: bekletilen yanıtlar, sonra hâlâ süren görevlerin kartları, sonra klavye. Minimal modun bitmesini beklemek zorunda kalan bir kart klavyeden sonra gelir.
 
@@ -144,7 +144,7 @@ aipager session <label> --continue # yeni bir dtach, bu klasörün son konuşmas
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>5 dakikadır haber gelmeyen bir izin isteği
 
-Bir oturum bir izin isteğini ya da soruyu bekliyorsa ve Claude Code 5 dakika boyunca hiçbir şey bildirmezse aipager oturumun kayıtlı sohbetini okur. Yalnızca Claude'un kendisinden ve soran ajandan gelen haberler sayılır: çalışmaya devam eden bir arka plan ajanı bu denetimin yapılmasını engellemez. aipager isteği beklemeyi ancak sohbet isteğin bittiğini gösterirse (terminalde yanıtlanmış ve haberi kaybolmuşsa) bırakır ve oturumu yeniden çalışıyor sayar. Aksi halde istek ne kadar sürerse sürsün açık kalır: kart ve sabitlenmiş çubuk oturumun yanıtını beklediğini söylemeye devam eder, "hâlâ çalışıyor" notu gelmez ve mesajların sen yanıt verene kadar bekletilir (bkz. [metin](commands.md#text)). İstek açıkken kapanan bir Claude Code oturumu sona erdirir. İsteğin düğmeleri, iletişim kutusu hâlâ açıksa onda yanıt vermeye devam eder (bkz. [yanıtlar](commands.md#idle-responses)).
+Bir oturum bir izin isteğini ya da soruyu bekliyorsa ve Claude Code 5 dakika boyunca hiçbir şey bildirmezse aipager oturumun konuşma geçmişini okur. Yalnızca Claude'un kendisinden ve soran ajandan gelen haberler sayılır: çalışmaya devam eden bir arka plan ajanı bu denetimin yapılmasını engellemez. aipager isteği beklemeyi ancak konuşma geçmişi isteğin bittiğini gösterirse (terminalde yanıtlanmış ve haberi kaybolmuşsa) bırakır ve oturumu yeniden çalışıyor sayar. Aksi halde istek ne kadar sürerse sürsün açık kalır: kart ve sabitlenmiş çubuk oturumun yanıtını beklediğini söylemeye devam eder, "hâlâ çalışıyor" notu gelmez ve mesajların sen yanıt verene kadar bekletilir (bkz. [metin](commands.md#text)). İstek açıkken kapanan bir Claude Code oturumu sona erdirir. İsteğin düğmeleri, iletişim kutusu hâlâ açıksa onda yanıt vermeye devam eder (bkz. [yanıtlar](commands.md#idle-responses)).
 
 Beklemeyi değiştirmek için:
 
@@ -164,7 +164,7 @@ Bot kurulumun ortasında bağlantıyı kaybettiyse bilgisayardaki kurulumun kend
 
 ## <a id="open-app-shows-open-this-page-from-the-telegram-app-to-sign-in"></a>Uygulamayı açınca “Giriş yapmak için bu sayfayı Telegram uygulamasından aç.” görünüyor
 
-Sayfa yüklendi ama Telegram'ın Mini App SDK betiği (`initData` veren betik) yüklenmedi, bu yüzden sayfanın giriş yapacak bir şeyi yok ve hiçbir API çağrısı yapmıyor. Mesaj suç sendeymiş gibi duyuluyor; aslında neden ağdır.
+Sayfa yüklendi ama Telegram'ın Mini App SDK betiği (`initData` veren betik) yüklenmedi, bu yüzden sayfanın giriş yapacak bir şeyi yok ve hiçbir API çağrısı yapmıyor. Mesaj sanki suç sendeymiş gibi konuşuyor; aslında neden ağdır.
 
 Yeni aipager sürümleri bu betiği kendileri indirir ve sayfanın kaynağından sunar (`/telegram-web-app.js`), böylece telefonun yalnızca sayfayı sunan sunucuya ulaşması gerekir, ayrıca `telegram.org` adresine değil. Bunu eski bir sürümde görüyorsan güncelle.
 
@@ -220,7 +220,7 @@ Sıra önemlidir: her kontrol öncekilerin geçtiğini varsayar. Beklenmedik bir
 | `config_parses` | `aipager.yaml` ve `policy.yaml` okunabiliyor; ilk o gelir, çünkü sonraki tüm kontroller yapılandırmayı okur | hata dosyayı ve satırı söyler |
 | `config` | `~/.config/aipager/aipager.yaml` var ve içinde bir token ve bir sohbet var | `aipager config` |
 | `token_valid` | Token Telegram'da `getMe` ile çalışıyor | `aipager config` komutunu yeniden çalıştır |
-| `chat_reachable` | Telegram yapılandırılmış sohbeti tanıyor (`getChat`; hiçbir şey gönderilmez) | botu aç, Start'a dokun |
+| `chat_reachable` | Telegram yapılandırılmış sohbeti tanıyor (`getChat`; hiçbir şey gönderilmez) | botu aç, Başlat'a dokun |
 | `team` | Sohbetler ve üyeler (ya da eski `team.yaml`): kişisel mi ekip modu mu olduğunu söyler ve bozuk ya da uyuşmayan eski bir `team.yaml` dosyasını işaretler | `aipager config` |
 | `role_shell_access` | Bash çalıştırabilen her üye rolü için bir kez uyarır (o rolün güvenlik kuralları elden geldiğince çalışır, bir sınır değildir; bkz. [gruplar](groups.md#roles)) | bu role `policy.yaml` içinde Bash verme ya da kabullen |
 | `peer_messages` | Claude oturumları arasındaki mesajlar: makbuzlarının nerede tutulduğu ve bu klasörün kapalı olup olmadığı, bu sistemin gönderenin başlangıç zamanını doğrulayıp doğrulayamayacağı ve bir kuralın SendMessage izni verdiği her rol için bir uyarı (bkz. [güvenlik](security.md#messages-between-claude-sessions)) | paylaşılan makbuz klasörünü kaldır (aipager yeniden oluşturur) ya da bu role SendMessage verme |
@@ -312,7 +312,7 @@ Bir git URL'inden yapılmış bir pipx kurulumu PyPI'dan değil, o git kaynağı
 
 Yerinde başlatma başarısız olursa, eski süreç gittikten sonra ayrı bir kopya aipager'ı başlatır. Bu durumda çıktısı terminaline değil kendi kendini yeniden başlatma günlüğüne (örnek klasöründeki `aipager.log` ya da `/tmp/aipager.log`) gider, ve bu kopya geri gelmezse aipager günlüğü çalıştırılacak komutu söyler. Yorumlayıcının kendisi yoksa (ortamı silindiyse) ya da hiçbir şey başlatılamadıysa, aipager 1 koduyla çıkar, aipager günlüğü `restart.failed:` ve çalıştırılacak komutla biter, ve bir sonraki başlangıç güncellemeyi duyurur.
 
-**Şimdi yeniden başlat** düğmesi yoksa, mesaj kurulumuna uygun adımları verir: bir terminalde ya da tmux'ta Ctrl+C'ye bas ve `aipager start` çalıştır; macOS'ta `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; Docker'da sunucuda `docker restart <container>`. Bir Docker konteynerini yeniden oluşturmak (`down` sonrasında `docker compose up` ya da yeniden `docker run`) onu imajından başlatır, bu da o imajdaki aipager sürümünü geri getirir: daha yeni bir aipager'ı tutmak için daha yeni bir imaj kullan.
+**Şimdi yeniden başlat** düğmesi yoksa, mesaj kurulumuna uygun adımları verir: bir terminalde ya da tmux'ta Ctrl+C'ye bas ve `aipager start` çalıştır; macOS'ta `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; Docker'da, Docker'ın çalıştığı bilgisayarda `docker restart <container>`. Bir Docker konteynerini yeniden oluşturmak (`down` sonrasında `docker compose up` ya da yeniden `docker run`) onu imajından başlatır, bu da o imajdaki aipager sürümünü geri getirir: daha yeni bir aipager'ı tutmak için daha yeni bir imaj kullan.
 
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>aipager bir güncellemeden sonra geri gelmedi
 
