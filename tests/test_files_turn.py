@@ -179,3 +179,29 @@ def test_a_prompt_that_was_not_typed_opens_nothing(mk_bot, run_async, monkeypatc
                         AsyncMock(return_value=False))
     run_async(bot._inject_prompt(sess, "send me the chart"))
     assert not sess.files_turn_open
+
+
+def test_a_later_prompt_of_the_turn_names_the_transcript_again(tmp_state_file):
+    """A turn opened before Claude's transcript was the one it writes (a
+    /clear typed from Telegram): the next prompt's transcript is the one
+    looked in, and the turn's start stays."""
+    recv, reg = _receiver()
+    reg.transition(S, Status.IDLE)
+    _dg(recv, hook_event_name="UserPromptSubmit", prompt="one")
+    sess = reg.get(S)
+    wall = sess.files_turn_wall
+    _dg(recv, hook_event_name="UserPromptSubmit", prompt="two",
+        transcript_path="/t/b.jsonl")
+    assert (sess.files_turn_wall, sess.files_transcript) == (wall, "/t/b.jsonl")
+
+
+def test_a_new_conversation_closes_the_turn(tmp_state_file):
+    recv, reg = _receiver()
+    reg.transition(S, Status.IDLE)
+    _dg(recv, hook_event_name="UserPromptSubmit", prompt="/clear")
+    sess = reg.get(S)
+    _dg(recv, hook_event_name="SessionStart", source="compact")
+    assert sess.files_turn_open
+    _dg(recv, hook_event_name="SessionStart", source="clear",
+        transcript_path="/t/new.jsonl")
+    assert not sess.files_turn_open

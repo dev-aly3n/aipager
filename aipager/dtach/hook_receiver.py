@@ -1275,6 +1275,12 @@ class HookReceiver:
                 # turn files Claude sends may come from (state.py
                 # files_turn_opened). A tool call's hook never opens one.
                 sess_ref.files_turn_opened(time.time())
+                if transcript_path:
+                    # The transcript this prompt went into. A turn opened
+                    # earlier (a slash command typed from Telegram, a
+                    # message the running turn absorbs) follows it; its
+                    # start stays.
+                    sess_ref.files_transcript = transcript_path
             # NOT a place to clear the parent's step: Claude Code fires this
             # the moment a message is QUEUED behind a running step, and
             # clearing there erased the very step the Send now line reads
@@ -2110,7 +2116,10 @@ class HookReceiver:
             # SessionStart with source=compact fires after compaction completes
             source = msg.get("source", "")
             if source != "compact":
-                self.registry.get_or_create(session_name)
+                # A new or resumed conversation: no turn of it runs yet, so
+                # none that files Claude sends may come from (a /clear typed
+                # from Telegram opened one for the conversation it ended).
+                self.registry.get_or_create(session_name).files_turn_closed()
                 # A process (re)starting under this id — `--resume` of a
                 # conversation /kill just ended keeps its id — is not the
                 # killed one: its exit must be announced again.
