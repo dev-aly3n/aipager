@@ -86,17 +86,18 @@ class Daemon:
                   "delete_message", "set_message_reaction",
                   "edit_message_reply_markup", "pin_chat_message"):
             setattr(b, m, recorder(m))
+        self.cwd = str(home / "proj")
         self.transcript = home / ".claude" / "projects" / "-proj" / f"{SID}.jsonl"
         self.transcript.parent.mkdir(parents=True, exist_ok=True)
         self._line({"type": "user", "message": {"content": kit.MARKERS["owner"]}})
         self.rec = HookReceiver(self.reg, self.bot.notify)
-        self.cwd = str(home / "proj")
         self.n = 0
 
     # -- transcript ----------------------------------------------------------
     def _line(self, obj, path=None):
+        # As Claude Code writes it: with the session's cwd and a timestamp.
         with open(path or self.transcript, "a") as f:
-            f.write(json.dumps(obj) + "\n")
+            f.write(json.dumps(kit.claude_line(obj, self.cwd)) + "\n")
 
     def write_call(self, tid, tin, *, name=TOOL, path=None, role="assistant"):
         self._line({"type": role, "message": {"role": role, "content": [{

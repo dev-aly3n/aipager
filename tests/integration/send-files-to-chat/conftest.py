@@ -265,10 +265,11 @@ def turn(mk_bot, home, tmp_path, run_async):
                 tid = f"toolu_{i}"
                 # Claude Code writes the call in the transcript.
                 with open(t, "a") as f:
-                    f.write(json.dumps({"type": "assistant", "message": {
-                        "role": "assistant", "content": [{
-                            "type": "tool_use", "id": tid, "name": TOOL,
-                            "input": tin}]}}) + "\n")
+                    f.write(json.dumps(kit.claude_line({
+                        "type": "assistant", "message": {
+                            "role": "assistant", "content": [{
+                                "type": "tool_use", "id": tid, "name": TOOL,
+                                "input": tin}]}}, where)) + "\n")
                 await dg(hook_event_name="PreToolUse", tool_name=TOOL,
                          tool_use_id=tid, tool_input=tin)
                 await asyncio.sleep(0.02)

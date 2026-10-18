@@ -1270,6 +1270,11 @@ class HookReceiver:
 
         elif event == "UserPromptSubmit":
             prompt = msg.get("prompt", "")
+            if not hook_agent_id:
+                # Prompt evidence of a turn (or a job's continuation): the
+                # turn files Claude sends may come from (state.py
+                # files_turn_opened). A tool call's hook never opens one.
+                sess_ref.files_turn_opened(time.time())
             # NOT a place to clear the parent's step: Claude Code fires this
             # the moment a message is QUEUED behind a running step, and
             # clearing there erased the very step the Send now line reads

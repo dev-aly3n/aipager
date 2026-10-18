@@ -40,6 +40,18 @@ def _bot(mk_bot, files_bot):
     return bot
 
 
+def _default_transcript() -> Path:
+    return (Path(os.environ["CLAUDE_CONFIG_DIR"]) / "projects" / "-proj"
+            / "5b1d7363-0000-0000-0000-000000000001.jsonl")
+
+
+def _new_turn(bot, sess):
+    """A turn starts as a prompt starts one: BUSY, and the turn files may
+    come from opened (what a UserPromptSubmit or a typed prompt does)."""
+    bot.registry.transition(sess.name, Status.BUSY)
+    sess.files_turn_opened(time.time())
+
+
 def _sess(bot, name="dev", chat=CHAT, kind="dm", tmp_path=None):
     sess = bot.registry.get_or_create(f"claude-{name}")
     sess.label = name
@@ -48,8 +60,18 @@ def _sess(bot, name="dev", chat=CHAT, kind="dm", tmp_path=None):
     sess.trigger_msg_id = TRIGGER
     if tmp_path is not None:
         sess.cwd = str(tmp_path)
-    bot.registry.transition(sess.name, Status.BUSY)
+    if not sess.transcript_path:
+        sess.transcript_path = str(_default_transcript())
+    _new_turn(bot, sess)
     return sess
+
+
+def _claude_line(obj, cwd):
+    """*obj* as Claude Code writes a transcript line: with its cwd and a
+    UTC timestamp."""
+    from datetime import datetime, timezone
+    stamp = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    return {**obj, "cwd": cwd, "timestamp": stamp.replace("+00:00", "Z")}
 
 
 def _pic(tmp_path, name="chart.png", w=64, h=48):
@@ -58,20 +80,18 @@ def _pic(tmp_path, name="chart.png", w=64, h=48):
     return p
 
 
-def _claude_writes_the_call(sess, tool_use_id, inp):
+def _claude_writes_the_call(sess, tool_use_id, inp, cwd=None):
     """What Claude Code writes in the session's transcript for the call:
-    the assistant's SendUserFile tool_use (the daemon sends nothing it
-    cannot find there)."""
-    tp = Path(sess.transcript_path) if sess.transcript_path else (
-        Path(os.environ["CLAUDE_CONFIG_DIR"]) / "projects" / "-proj"
-        / "5b1d7363-0000-0000-0000-000000000001.jsonl")
+    the assistant's SendUserFile tool_use, with its cwd and timestamp (the
+    daemon sends nothing it cannot find there, from this turn and folder)."""
+    tp = Path(sess.files_transcript or sess.transcript_path
+              or _default_transcript())
     tp.parent.mkdir(parents=True, exist_ok=True)
     with open(tp, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps({"type": "assistant", "message": {
+        fh.write(json.dumps(_claude_line({"type": "assistant", "message": {
             "role": "assistant", "content": [{
                 "type": "tool_use", "id": tool_use_id, "name": "SendUserFile",
-                "input": inp}]}}) + "\n")
-    sess.transcript_path = str(tp)
+                "input": inp}]}}, cwd or sess.cwd)) + "\n")
 
 
 async def _send_files(bot, sess, paths, *, tool_use_id="toolu_1", caption=None,
@@ -82,7 +102,7 @@ async def _send_files(bot, sess, paths, *, tool_use_id="toolu_1", caption=None,
     if display:
         inp["display"] = display
     cwd = str(paths[0].parent)
-    _claude_writes_the_call(sess, tool_use_id, inp)
+    _claude_writes_the_call(sess, tool_use_id, inp, cwd)
     await bot.notify(sess, "send_files_requested",
                      {"tool_use_id": tool_use_id, "tool_input": inp, "cwd": cwd})
     await bot.notify(sess, "send_files_ran", {
@@ -450,7 +470,7 @@ def test_a_sessions_deliveries_go_one_at_a_time_in_order(mk_bot, files_bot, rich
                           "cwd": str(tmp_path)})
         bot.registry.transition(sess.name, Status.IDLE)
         await bot.notify(sess, "idle_prompt", {"summary": "The first."})
-        bot.registry.transition(sess.name, Status.BUSY)
+        _new_turn(bot, sess)
         await _send_files(bot, sess, [second], tool_use_id="toolu_b")
         bot.registry.transition(sess.name, Status.IDLE)
         await bot.notify(sess, "idle_prompt", {"summary": "The second."})
@@ -527,7 +547,8 @@ def test_a_transcript_outside_claudes_folder_is_never_read(mk_bot, files_bot, ri
     pic = _pic(tmp_path)
     planted = tmp_path / "planted" / "x.jsonl"
     planted.parent.mkdir()
-    sess.transcript_path = str(planted)
+    # As if the turn had started with the planted path tracked.
+    sess.transcript_path = sess.files_transcript = str(planted)
 
     async def go():
         _claude_writes_the_call(sess, "toolu_1", {"files": [str(pic)], "status": "normal"})
@@ -572,9 +593,10 @@ def test_a_subagents_call_is_found_in_its_own_transcript(mk_bot, files_bot, rich
         main = Path(sess.transcript_path)
         sub = main.with_suffix("") / "subagents" / "agent-a1b2c3.jsonl"
         sub.parent.mkdir(parents=True)
-        sub.write_text(json.dumps({"type": "assistant", "message": {"content": [{
-            "type": "tool_use", "id": "toolu_sub", "name": "SendUserFile",
-            "input": inp}]}}) + "\n")
+        sub.write_text(json.dumps(_claude_line({"type": "assistant", "message": {
+            "content": [{"type": "tool_use", "id": "toolu_sub",
+                         "name": "SendUserFile", "input": inp}]}},
+            str(tmp_path))) + "\n")
         await bot.notify(sess, "send_files_requested",
                          {"tool_use_id": "toolu_sub", "tool_input": inp,
                           "cwd": str(tmp_path), "agent_id": "a1b2c3"})
@@ -686,7 +708,7 @@ def test_a_slow_copy_stays_with_its_own_turn(mk_bot, files_bot, rich, run_async,
         await _send_files(bot, sess, [first], tool_use_id="toolu_a")
         bot.registry.transition(sess.name, Status.IDLE)
         await bot.notify(sess, "idle_prompt", {"summary": "The first."})
-        bot.registry.transition(sess.name, Status.BUSY)
+        _new_turn(bot, sess)
         await _send_files(bot, sess, [second], tool_use_id="toolu_b")
         await asyncio.sleep(0.2)            # turn two's copy is done
         bot.registry.transition(sess.name, Status.IDLE)
@@ -724,7 +746,7 @@ def test_a_slow_copy_held_by_a_mute_is_sent_once(mk_bot, files_bot, rich, run_as
         await _send_files(bot, sess, [first], tool_use_id="toolu_a")
         bot.registry.transition(sess.name, Status.IDLE)
         await bot.notify(sess, "idle_prompt", {"summary": "The first."})
-        bot.registry.transition(sess.name, Status.BUSY)
+        _new_turn(bot, sess)
         await _send_files(bot, sess, [second], tool_use_id="toolu_b")
         await asyncio.sleep(0.2)
         bot.registry.transition(sess.name, Status.IDLE)
@@ -779,7 +801,7 @@ def test_a_mute_during_a_flush_keeps_every_waiting_delivery(mk_bot, files_bot, r
         MUTE.mute(CHAT, 600, source="test")
         await _send_files(bot, sess, [first], tool_use_id="toolu_a")
         await _finish(bot, sess, "")
-        bot.registry.transition(sess.name, Status.BUSY)
+        _new_turn(bot, sess)
         sess.busy_msg_id = 701
         await _send_files(bot, sess, [second], tool_use_id="toolu_b")
         await _finish(bot, sess, "")
@@ -793,3 +815,125 @@ def test_a_mute_during_a_flush_keeps_every_waiting_delivery(mk_bot, files_bot, r
     run_async(_settled(bot, sess, bot.flush_turn_files(sess)))
     assert [c[2]["photo"].filename for c in files_bot.file_calls()] == [
         "first.png", "second.png"]
+
+
+# ---- what a forged datagram cannot create (rev-iter2-001) ----------------------
+
+def test_a_send_after_a_hook_alone_made_the_session_busy_is_dropped(
+        mk_bot, files_bot, rich, run_async, tmp_path):
+    """An idle session that a tool call's hook moved to BUSY (a forged
+    PreToolUse does this by itself) has no turn opened by a prompt: the
+    pair is dropped, even with the call in the transcript."""
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    pic = _pic(tmp_path)
+    inp = {"files": [str(pic)], "status": "normal"}
+
+    async def go():
+        await _finish(bot, sess, "Done.")
+        bot.registry.transition(sess.name, Status.BUSY)   # no prompt
+        _claude_writes_the_call(sess, "toolu_x", inp)
+        await _forged_pair(bot, sess, pic, tool_use_id="toolu_x")
+        await _finish(bot, sess, "")
+    run_async(go())
+    assert files_bot.file_calls() == []
+    assert not [p for p in outbox.outbox_dir().rglob("*") if p.is_file()]
+    failed = [r for r in _audit_records() if r["action"] == "FileFailed"]
+    assert [(r["file_name"], r["reason"]) for r in failed] == [
+        ("chart.png", outbox.CAUSE_UNVERIFIED)]
+
+
+def test_a_call_already_copied_is_never_copied_again(mk_bot, files_bot, rich,
+                                                     run_async, tmp_path):
+    """The same call's datagrams again, inside the same turn (a replay that
+    the turn rule does not stop): one send, the second pair dropped."""
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    pic = _pic(tmp_path)
+
+    async def go():
+        await _send_files(bot, sess, [pic], tool_use_id="toolu_1")
+        await _forged_pair(bot, sess, pic, tool_use_id="toolu_1")
+        await _finish(bot, sess, "Done.")
+    run_async(go())
+    assert [c[0] for c in files_bot.file_calls()] == ["send_photo"]
+    failed = [r for r in _audit_records() if r["action"] == "FileFailed"]
+    assert [(r["file_name"], r["reason"]) for r in failed] == [
+        ("chart.png", outbox.CAUSE_UNVERIFIED)]
+    assert sess.files_sent_ids == ["toolu_1"]
+
+
+def test_a_call_written_before_the_turn_began_is_not_sent(mk_bot, files_bot, rich,
+                                                          run_async, tmp_path):
+    """A real call of an earlier turn (an hour old, never delivered): played
+    again in this turn, it is not from this turn."""
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    pic = _pic(tmp_path)
+    inp = {"files": [str(pic)], "status": "normal"}
+
+    async def go():
+        tp = Path(sess.files_transcript)
+        tp.parent.mkdir(parents=True, exist_ok=True)
+        line = _claude_line({"type": "assistant", "message": {"content": [{
+            "type": "tool_use", "id": "toolu_old", "name": "SendUserFile",
+            "input": inp}]}}, str(tmp_path))
+        line["timestamp"] = "2026-01-01T00:00:00.000Z"
+        with open(tp, "a") as fh:
+            fh.write(json.dumps(line) + "\n")
+        await _forged_pair(bot, sess, pic, tool_use_id="toolu_old")
+        await _finish(bot, sess, "Done.")
+    run_async(go())
+    assert files_bot.file_calls() == []
+
+
+def test_a_call_from_another_folder_is_not_sent(mk_bot, files_bot, rich, run_async,
+                                               tmp_path):
+    """The call is Claude's, but the pair names another folder (where a
+    relative name is another file): nothing is sent."""
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    other = tmp_path / "other"
+    other.mkdir()
+    pic = _pic(other)
+    inp = {"files": ["chart.png"], "status": "normal"}
+
+    async def go():
+        _claude_writes_the_call(sess, "toolu_rel", inp, str(tmp_path))
+        await bot.notify(sess, "send_files_requested",
+                         {"tool_use_id": "toolu_rel", "tool_input": inp,
+                          "cwd": str(other)})
+        await bot.notify(sess, "send_files_ran",
+                         {"tool_use_id": "toolu_rel", "tool_input": inp,
+                          "cwd": str(other)})
+        await _finish(bot, sess, "Done.")
+    run_async(go())
+    assert pic.exists()
+    assert files_bot.file_calls() == []
+
+
+def test_the_transcript_is_the_one_tracked_when_the_turn_began(
+        mk_bot, files_bot, rich, run_async, tmp_path):
+    """A later datagram names another transcript of the same user (the
+    daemon's tracked path follows it): the call there is not looked for."""
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    pic = _pic(tmp_path)
+    inp = {"files": [str(pic)], "status": "normal"}
+    began = sess.files_transcript
+    other = Path(began).parent / "0000aaaa-other.jsonl"
+
+    async def go():
+        sess.transcript_path = str(other)
+        with open(other, "a") as fh:
+            fh.write(json.dumps(_claude_line({"type": "assistant", "message": {
+                "content": [{"type": "tool_use", "id": "toolu_o",
+                             "name": "SendUserFile", "input": inp}]}},
+                str(tmp_path))) + "\n")
+        await _forged_pair(bot, sess, pic, tool_use_id="toolu_o")
+        await _finish(bot, sess, "Done.")
+    Path(began).parent.mkdir(parents=True, exist_ok=True)
+    run_async(go())
+    assert sess.files_transcript == began
+    assert files_bot.file_calls() == []
+

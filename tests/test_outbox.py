@@ -540,10 +540,35 @@ def _transcript(home, name="5b1d.jsonl", lines=()):
     return tp
 
 
-def _call(tid, files, name="SendUserFile"):
-    return {"type": "assistant", "message": {"content": [
+#: The turn the calls below are from: it started a minute ago, from /w.
+CWD = "/w"
+
+
+def _since():
+    return time.time() - 60
+
+
+def _iso(wall):
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(wall, timezone.utc).isoformat(
+        timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _call(tid, files, name="SendUserFile", cwd=CWD, wall=None):
+    """A line as Claude Code writes it: with its cwd and timestamp."""
+    line = {"type": "assistant", "message": {"content": [
         {"type": "text", "text": "Here."},
         {"type": "tool_use", "id": tid, "name": name, "input": {"files": files}}]}}
+    if cwd is not None:
+        line["cwd"] = cwd
+    if wall is not False:
+        line["timestamp"] = _iso(time.time() if wall is None else wall)
+    return line
+
+
+def _in(tp, tid, files, cwd=CWD, since=None):
+    return ob.call_in_transcript(str(tp), tid, files, cwd,
+                                 _since() if since is None else since)
 
 
 def test_transcript_allowed_only_under_claudes_projects(home, tmp_path, monkeypatch):
@@ -590,23 +615,72 @@ def test_call_in_transcript_matches_id_name_and_files(home):
             {"type": "tool_use", "id": "toolu_q", "name": "SendUserFile",
              "input": {"files": ["/w/q.png"]}}]}},
     ])
-    assert ob.call_in_transcript(str(tp), "toolu_a", ["/w/a.png"])
-    assert not ob.call_in_transcript(str(tp), "toolu_a", ["/w/b.png"])
-    assert not ob.call_in_transcript(str(tp), "toolu_a", ["/w/a.png", "/w/b.png"])
-    assert not ob.call_in_transcript(str(tp), "toolu_r", ["/w/r.png"])
+    assert _in(tp, "toolu_a", ["/w/a.png"])
+    assert not _in(tp, "toolu_a", ["/w/b.png"])
+    assert not _in(tp, "toolu_a", ["/w/a.png", "/w/b.png"])
+    assert not _in(tp, "toolu_r", ["/w/r.png"])
     # Named only in a user line (a tool result, or a prompt quoting it).
-    assert not ob.call_in_transcript(str(tp), "toolu_u", ["/w/a.png"])
-    assert not ob.call_in_transcript(str(tp), "toolu_q", ["/w/q.png"])
-    assert not ob.call_in_transcript(str(tp), "", ["/w/a.png"])
+    assert not _in(tp, "toolu_u", ["/w/a.png"])
+    assert not _in(tp, "toolu_q", ["/w/q.png"])
+    assert not _in(tp, "", ["/w/a.png"])
+
+
+def test_call_in_transcript_must_be_written_during_the_turn(home):
+    """A call written before the batch's turn began (an old call, replayed)
+    matches nothing; the clock slack is the only allowance."""
+    turn = time.time() - 30
+    slack = ob.TRANSCRIPT_CLOCK_SLACK_SECONDS
+    tp = _transcript(home, lines=[
+        _call("toolu_old", ["/w/a.png"], wall=turn - 3600),
+        _call("toolu_edge", ["/w/a.png"], wall=turn - slack + 0.5),
+        _call("toolu_late", ["/w/a.png"], wall=turn - slack - 0.5),
+        _call("toolu_now", ["/w/a.png"], wall=turn + 5),
+        _call("toolu_none", ["/w/a.png"], wall=False),
+    ])
+    assert not _in(tp, "toolu_old", ["/w/a.png"], since=turn)
+    assert _in(tp, "toolu_edge", ["/w/a.png"], since=turn)
+    assert not _in(tp, "toolu_late", ["/w/a.png"], since=turn)
+    assert _in(tp, "toolu_now", ["/w/a.png"], since=turn)
+    # No timestamp, or no turn start known: never a match.
+    assert not _in(tp, "toolu_none", ["/w/a.png"], since=turn)
+    assert not _in(tp, "toolu_now", ["/w/a.png"], since=0.0)
+    with open(tp, "a") as fh:
+        bad = _call("toolu_bad", ["/w/a.png"])
+        bad["timestamp"] = "yesterday"
+        fh.write(json.dumps(bad) + "\n")
+    assert not _in(tp, "toolu_bad", ["/w/a.png"], since=turn)
+
+
+def test_call_in_transcript_must_be_from_the_batchs_folder(home):
+    """A call made from another folder (where a relative name means another
+    file) matches nothing."""
+    tp = _transcript(home, lines=[
+        _call("toolu_a", ["a.png"], cwd="/w"),
+        _call("toolu_n", ["a.png"], cwd=None),
+    ])
+    assert _in(tp, "toolu_a", ["a.png"], cwd="/w")
+    assert _in(tp, "toolu_a", ["a.png"], cwd="/w/")
+    assert not _in(tp, "toolu_a", ["a.png"], cwd="/home/alice")
+    assert not _in(tp, "toolu_a", ["a.png"], cwd=None)
+    assert not _in(tp, "toolu_n", ["a.png"], cwd="/w")
+
+
+def test_line_wall_reads_claude_codes_timestamps():
+    assert ob.line_wall({"timestamp": "2026-10-18T01:33:54.123Z"}) == pytest.approx(1792287234.123)
+    assert ob.line_wall({"timestamp": "2026-10-18T03:33:54+02:00"}) == 1792287234.0
+    assert ob.line_wall({"timestamp": "2026-10-18T01:33:54"}) == 1792287234.0
+    for raw in (None, "", 5, "x" * 65, "not a time"):
+        assert ob.line_wall({"timestamp": raw}) is None
+    assert ob.line_wall({}) is None
 
 
 def test_call_in_transcript_reads_only_the_tail(home, monkeypatch):
     tp = _transcript(home, lines=[_call("toolu_a", ["/w/a.png"])])
     with open(tp, "a") as fh:
         fh.write(json.dumps({"type": "user", "message": {"content": "x" * 5000}}) + "\n")
-    assert ob.call_in_transcript(str(tp), "toolu_a", ["/w/a.png"])
+    assert _in(tp, "toolu_a", ["/w/a.png"])
     monkeypatch.setattr(ob, "TRANSCRIPT_TAIL_BYTES", 1000)
-    assert not ob.call_in_transcript(str(tp), "toolu_a", ["/w/a.png"])
+    assert not _in(tp, "toolu_a", ["/w/a.png"])
 
 
 def test_batch_in_transcript_looks_in_the_subagents_own_file(home):
@@ -616,7 +690,7 @@ def test_batch_in_transcript_looks_in_the_subagents_own_file(home):
     sub.write_text(json.dumps(_call("toolu_s", ["/w/a.png"])) + "\n")
     batch = ob.Batch(session="s", caption=None, display=None, items=[], agent_id="a1",
                      created=0.0, tool_use_id="toolu_s", files=["/w/a.png"],
-                     transcript_path=str(tp))
+                     transcript_path=str(tp), cwd=CWD, turn_wall=_since())
     assert ob.batch_in_transcript(batch)
     batch.agent_id = "../a1"
     assert not ob.batch_in_transcript(batch)
@@ -635,7 +709,7 @@ def test_verify_batch_waits_a_bounded_time(home, monkeypatch):
     tp = _transcript(home, lines=[])
     batch = ob.Batch(session="s", caption=None, display=None, items=[], agent_id="",
                      created=0.0, tool_use_id="toolu_late", files=["/w/a.png"],
-                     transcript_path=str(tp))
+                     transcript_path=str(tp), cwd=CWD, turn_wall=_since())
     monkeypatch.setattr(ob, "TRANSCRIPT_POLL_SECONDS", 0.05)
 
     async def late():

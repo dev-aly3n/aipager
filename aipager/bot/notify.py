@@ -1565,17 +1565,26 @@ class NotifyMixin:
         if req is None or not req.files:
             log.warning("[%s] turn files: no readable file list", sess.label)
             return
-        if not req.seen and not self._files_turn_live(sess):
-            # No PreToolUse was seen for this call and no turn or job runs:
-            # not a call of Claude's (a forged datagram). Nothing is read.
-            log.warning("[%s] turn files: a send with no request and no turn "
-                        "running was dropped", sess.label)
+        why = None
+        if not self._files_turn_live(sess):
+            # No turn opened by a prompt (or its job) runs: not a call of
+            # Claude's (a forged datagram, a replay). Nothing is read.
+            why = "no turn running"
+        elif not req.tool_use_id:
+            why = "no call id"
+        elif not sess.files_call_used(req.tool_use_id):
+            # This call was copied already: a replayed datagram.
+            why = "a call already copied"
+        if why is not None:
+            log.warning("[%s] turn files: a send with %s was dropped",
+                        sess.label, why)
             ctx = self._file_audit_ctx(sess)
             for entry in req.files[:100]:
                 outbox.audit_file(ctx, outbox.ACTION_FAILED,
                                   outbox.shown_name(entry), None,
                                   outbox.CAUSE_UNVERIFIED)
             return
+        self.registry.mark_dirty()
         chat_id = self._files_chat(sess)
         if not chat_id:
             log.warning("[%s] turn files: no chat to send them to", sess.label)
@@ -1587,7 +1596,10 @@ class NotifyMixin:
         bound, allowed = outbox.allowed_root_for(snap, req.cwd)
         ctx = self._file_audit_ctx(sess)
 
-        transcript_path = sess.transcript_path or ""
+        # The transcript and the turn start the daemon recorded when the
+        # turn opened (state.py files_turn_opened), never this datagram's.
+        transcript_path = sess.files_transcript or ""
+        turn_wall = sess.files_turn_wall
         prompt_id = sess.trigger_msg_id or None
 
         async def _copy():
@@ -1597,7 +1609,7 @@ class NotifyMixin:
                     context.get("agent_id") or ""),
                 bound=bound, allowed_root=allowed,
                 tool_use_id=req.tool_use_id, transcript_path=transcript_path,
-                prompt_id=prompt_id)
+                prompt_id=prompt_id, turn_wall=turn_wall)
             for failure in batch.failures:
                 outbox.audit_file(ctx, outbox.ACTION_FAILED, failure.name,
                                   failure.size, failure.cause)
@@ -1611,10 +1623,14 @@ class NotifyMixin:
 
     @staticmethod
     def _files_turn_live(sess: TrackedSession) -> bool:
-        """A turn or a background job of this session is running: the only
-        time Claude can be calling SendUserFile."""
-        return (sess.status in (Status.BUSY, Status.INTERACTIVE)
-                or sess.job_background_open())
+        """A turn opened by prompt evidence (a prompt the daemon typed, a
+        UserPromptSubmit) still runs, or its background job does: the only
+        time Claude can be calling SendUserFile. A tool call's hook alone
+        never counts: a forged PreToolUse moves an idle session to BUSY by
+        itself (review 2026-10-18, rev-iter2-001)."""
+        return sess.files_turn_open and (
+            sess.status in (Status.BUSY, Status.INTERACTIVE)
+            or sess.job_background_open())
 
     def _deliver_turn_files(self, sess: TrackedSession, anchor,
                             prompt_id, held_before: str | None):
@@ -1698,9 +1714,7 @@ class NotifyMixin:
         (cause ``unverified``), nothing in the chat."""
         from aipager.bot import outbox
         ordered = sorted(batches, key=lambda b: b.created)
-        found = await asyncio.gather(*(
-            outbox.verify_batch(b, lambda: sess.transcript_path or "")
-            for b in ordered))
+        found = await asyncio.gather(*(outbox.verify_batch(b) for b in ordered))
         out = []
         for batch, ok in zip(ordered, found):
             if ok:

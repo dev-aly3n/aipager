@@ -22,6 +22,15 @@ TAIL = ". Tell the person which file could not be sent and why."
 HEAD = "SendUserFile refused, nothing was sent: "
 
 
+def claude_line(obj: dict, cwd: str) -> dict:
+    """*obj* as Claude Code writes a transcript line: with its ``cwd`` and
+    a UTC ``timestamp`` (the daemon matches a SendUserFile call to the
+    turn and folder by them)."""
+    from datetime import datetime, timezone
+    stamp = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    return {**obj, "cwd": cwd, "timestamp": stamp.replace("+00:00", "Z")}
+
+
 def reason_for(*items: tuple[str, str]) -> str:
     """The exact refusal sentence of entrypoints.md for (shown, why) items."""
     return HEAD + "; ".join(f"{s} ({w})" for s, w in items) + TAIL

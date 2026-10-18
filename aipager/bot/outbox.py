@@ -6,9 +6,11 @@ The PreToolUse hook already checked every file (``aipager.send_check``,
 socket, which any local process can write, so here each file is:
 
 1. **taken from the PreToolUse request** for that ``tool_use_id`` (the
-   input that was checked, recorded only while a turn or job runs), or
-   from the PostToolUse ``tool_input`` when that request was missed and a
-   turn or job runs; never from Claude Code's ``tool_response``;
+   input that was checked), or from the PostToolUse ``tool_input`` when
+   that request was missed; never from Claude Code's ``tool_response``;
+   either only while a turn opened by a prompt (or its background job)
+   runs, and never twice for one call id
+   (``TrackedSession.files_turn_open``, ``files_call_used``);
 2. **checked again**: the send floor and file checks, and the root of the
    session's current snapshot for a member, all on one resolution of the
    path, which is the one opened;
@@ -21,8 +23,10 @@ socket, which any local process can write, so here each file is:
    albums of 2-10, documents with documents, audio with audio, an
    animation on its own, each album at most 50 MiB;
 5. **delivered** after the answer (``notify``, in a background task per
-   session, one at a time), only once the call is found in the session's
-   transcript (:func:`verify_batch`), and its copy deleted.
+   session, one at a time, in order), only once the call is found in the
+   transcript the daemon tracked for the session when the turn started,
+   written during that turn, from the same folder (:func:`verify_batch`),
+   and its copy deleted.
 
 Copies and waiting deliveries live in memory, like held answers: a
 restart loses them, and the day sweep deletes what is left on disk.
@@ -194,6 +198,10 @@ class Batch:
     #: The prompt of the turn it was copied in (the reply target when the
     #: turn's own finish did not take it).
     prompt_id: int | None = None
+    #: The folder the call named its files from, and the wall-clock start
+    #: of the turn it was copied in: the transcript line must match both.
+    cwd: str | None = None
+    turn_wall: float = 0.0
 
 
 @dataclass
@@ -729,13 +737,14 @@ def copy_batch(session: str, chat_id: int, files: list[str], cwd: str | None,
                caption: str | None, display: str | None, agent_id: str = "",
                *, bound: bool = False, allowed_root: str | None = None,
                tool_use_id: str = "", transcript_path: str = "",
-               prompt_id: int | None = None, clock=time.monotonic) -> Batch:
+               prompt_id: int | None = None, turn_wall: float = 0.0,
+               clock=time.monotonic) -> Batch:
     """Copy every file of one call, in order (blocking: run it in a
     thread). A file that fails is a :class:`Failure` of the batch."""
     batch = Batch(session=session, caption=caption, display=display, items=[],
                   agent_id=agent_id, created=clock(), tool_use_id=tool_use_id,
                   files=list(files), transcript_path=transcript_path,
-                  prompt_id=prompt_id)
+                  prompt_id=prompt_id, cwd=cwd, turn_wall=turn_wall)
     for entry in files:
         try:
             batch.items.append(copy_one(entry, cwd, chat_id, display, bound=bound,
@@ -753,7 +762,13 @@ def copy_batch(session: str, chat_id: int, files: list[str], cwd: str | None,
 # The control socket can be written by any local process, so a datagram
 # alone never sends a file: the call it names must be in the session's
 # transcript, which only Claude Code writes, as a SendUserFile ``tool_use``
-# with that id and that file list (review 2026-10-17, rev-iter1-002).
+# with that id and that file list (review 2026-10-17, rev-iter1-002),
+# written during the turn the batch was copied in (its ``timestamp``) from
+# the batch's folder (its ``cwd``), so an old call replayed later, or one
+# re-aimed at another folder, matches nothing (review 2026-10-18,
+# rev-iter2-001). The transcript is the one the daemon tracked for the
+# session when that turn started (``Batch.transcript_path``), never one a
+# later datagram names.
 # Claude Code writes its transcript lazily (after the tool-result round),
 # so the check waits for it, at most TRANSCRIPT_WAIT_SECONDS; a call not
 # found by then is not sent (fail closed) and each of its files gets a
@@ -764,6 +779,9 @@ TRANSCRIPT_WAIT_SECONDS = 20.0
 TRANSCRIPT_POLL_SECONDS = 0.25
 #: How much of a transcript's end is read (the call is from this turn).
 TRANSCRIPT_TAIL_BYTES = 64 * 1024 * 1024
+#: How far before the turn's start a call's timestamp may read (clock
+#: rounding: Claude Code and the daemon share the machine's clock).
+TRANSCRIPT_CLOCK_SLACK_SECONDS = 2.0
 CAUSE_UNVERIFIED = "unverified"
 
 _AGENT_ID_RE = re.compile(r"\A[A-Za-z0-9_-]{1,128}\Z")
@@ -825,6 +843,41 @@ def transcript_candidates(transcript_path: str, agent_id: str) -> list[str]:
     return out
 
 
+def line_wall(entry: dict) -> float | None:
+    """A transcript line's ``timestamp`` (ISO 8601, as Claude Code writes
+    it) as a Unix time, or None when it has none or it cannot be read."""
+    from datetime import datetime, timezone
+    raw = entry.get("timestamp")
+    if not isinstance(raw, str) or not raw or len(raw) > 64:
+        return None
+    text = raw[:-1] + "+00:00" if raw.endswith(("Z", "z")) else raw
+    try:
+        stamp = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    try:
+        return stamp.timestamp()
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _same_folder(a, b) -> bool:
+    return (isinstance(a, str) and isinstance(b, str) and bool(a) and bool(b)
+            and os.path.normpath(a) == os.path.normpath(b))
+
+
+def _line_in_turn(entry: dict, cwd: str | None, since: float) -> bool:
+    """The line was written from *cwd*, at or after *since* (the turn's
+    start, less the clock slack)."""
+    if not _same_folder(entry.get("cwd"), cwd):
+        return False
+    wall = line_wall(entry)
+    return (wall is not None and since > 0
+            and wall >= since - TRANSCRIPT_CLOCK_SLACK_SECONDS)
+
+
 def _block_matches(block, tool_use_id: str, files: list[str]) -> bool:
     if not isinstance(block, dict) or block.get("type") != "tool_use":
         return False
@@ -834,10 +887,12 @@ def _block_matches(block, tool_use_id: str, files: list[str]) -> bool:
     return listed is not None and list(listed) == list(files)
 
 
-def call_in_transcript(path: str, tool_use_id: str, files: list[str]) -> bool:
+def call_in_transcript(path: str, tool_use_id: str, files: list[str],
+                       cwd: str | None, since: float) -> bool:
     """True when the transcript at *path* holds a SendUserFile ``tool_use``
-    with this id and exactly these files. Reads at most the file's last
-    TRANSCRIPT_TAIL_BYTES; never raises."""
+    with this id and exactly these files, on an assistant line written
+    from *cwd* no earlier than *since* (the turn's start, wall clock).
+    Reads at most the file's last TRANSCRIPT_TAIL_BYTES; never raises."""
     real = _allowed_transcript(path) if tool_use_id and files else None
     if real is None:
         return False
@@ -857,7 +912,8 @@ def call_in_transcript(path: str, tool_use_id: str, files: list[str]) -> bool:
                     continue
                 message = entry.get("message") if isinstance(entry, dict) else None
                 if (not isinstance(entry, dict) or entry.get("type") != "assistant"
-                        or not isinstance(message, dict)):
+                        or not isinstance(message, dict)
+                        or not _line_in_turn(entry, cwd, since)):
                     continue
                 content = message.get("content")
                 if isinstance(content, list) and any(
@@ -877,26 +933,23 @@ def json_needle(text: str) -> bytes:
     return json.dumps(text).encode("utf-8")
 
 
-def batch_in_transcript(batch: Batch, transcript_path: str = "") -> bool:
-    """One look: is *batch*'s call in its session's transcript (the one
-    the batch was copied under, or *transcript_path*, the session's now)?"""
-    paths: list[str] = []
-    for tp in (batch.transcript_path, transcript_path):
-        for cand in transcript_candidates(tp, batch.agent_id):
-            if cand not in paths:
-                paths.append(cand)
-    return any(call_in_transcript(p, batch.tool_use_id, batch.files) for p in paths)
+def batch_in_transcript(batch: Batch) -> bool:
+    """One look: is *batch*'s call in the transcript the daemon tracked
+    for its session when the turn started (or, for a subagent's call, in
+    that agent's own transcript beside it), from this turn and folder?"""
+    paths = transcript_candidates(batch.transcript_path, batch.agent_id)
+    return any(call_in_transcript(p, batch.tool_use_id, batch.files, batch.cwd,
+                                  batch.turn_wall) for p in paths)
 
 
-async def verify_batch(batch: Batch, transcript_path=lambda: "",
-                       wait: float | None = None) -> bool:
-    """Wait (at most TRANSCRIPT_WAIT_SECONDS) for *batch*'s call to show
-    in the transcript. *transcript_path* returns the session's transcript
-    now (it is read again on each look)."""
+async def verify_batch(batch: Batch, wait: float | None = None) -> bool:
+    """Wait (at most TRANSCRIPT_WAIT_SECONDS, read on each call so a test
+    can lower it through the module) for *batch*'s call to show in the
+    transcript."""
     wait = TRANSCRIPT_WAIT_SECONDS if wait is None else wait
     deadline = time.monotonic() + wait
     while True:
-        if await asyncio.to_thread(batch_in_transcript, batch, transcript_path()):
+        if await asyncio.to_thread(batch_in_transcript, batch):
             return True
         if time.monotonic() >= deadline:
             return False
