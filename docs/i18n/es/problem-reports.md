@@ -39,7 +39,7 @@ Cada parte, en palabras sencillas. Cada valor se comprueba contra la lista de va
 - `python`: la versión de Python y si es CPython o PyPy.
 - `os`: el sistema (`linux`, `darwin`, `windows`, `freebsd`), el tipo de procesador, la distribución de Linux de una lista fija y su número de versión, la versión major.minor del kernel, el tipo de contenedor si lo hay (`docker`, `lxc`, `wsl`, `podman`), y si aipager está configurado como servicio de systemd o launchd.
 - `deps`: las versiones de las bibliotecas de las que depende aipager (python-telegram-bot, httpx, aiohttp, PyYAML, rich, questionary, dtach-bin).
-- `claude_code`: la versión de Claude Code, cuántas instalaciones de Claude Code se encontraron, y cómo inicia sesión (`env`, `file`, `keychain`, o por qué no se pudo saber). Nunca el inicio de sesión en sí.
+- `claude_code`: la versión de Claude Code, cuántas instalaciones de Claude Code se encontraron, y cómo se autentica (`env`, `file`, `keychain`, o por qué no se pudo saber). Nunca las credenciales en sí.
 
 **Tu configuración, solo como cantidades**
 - `config`: el tipo de uso (`personal`, `team`, `scope`); cuántos chats privados y cuántos grupos hay configurados; cuántos roles personalizados existen (sin sus nombres); qué funciones están activadas (la Mini App, su tipo de túnel, la voz, las vistas previas de diff, los resúmenes enriquecidos).

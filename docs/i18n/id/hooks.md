@@ -4,7 +4,7 @@
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../hooks.md))
 
-Claude Code menjalankan perintah hook pada momen tertentu dalam sebuah tugas: pesan dikirim, alat akan dijalankan, alat selesai, tugas berakhir, dan seterusnya. aipager mengait ke setiap momen itu dan mengubahnya menjadi tindakan di Telegram: kartu kerja, permintaan izin, jawaban, notifikasi, dan log audit.
+Claude Code menjalankan perintah hook pada momen tertentu dalam tugas: pesan dikirim, alat akan dijalankan, alat selesai, tugas berakhir, dan seterusnya. aipager mengait ke setiap momen itu dan mengubahnya menjadi tindakan di Telegram: kartu kerja, permintaan izin, jawaban, notifikasi, dan log audit.
 
 ## <a id="how-it-is-wired"></a>Cara pemasangannya
 
@@ -33,7 +33,7 @@ Datagram itu adalah JSON hook milik Claude Code sendiri dengan field tambahan da
 | `session` | Ditambahkan aipager: nama sesi menurut aipager, `claude-<name>`, dari variabel `CLAUDE_DTACH_SESSION` yang diatur aipager saat memulai sesi. Event dari sesi Claude Code yang tidak dimulai aipager datang tanpa nama, dan aipager mengabaikannya. |
 | `sl_tokens` | Ditambahkan aipager, di setiap event kecuali `MessageDisplay`, kalau file baris status sesi itu ada: `context_pct`, `total_output`, `total_input`, `current_output`, `lines_added`, dan `lines_removed`. |
 
-Event alat juga membawa `tool_name` dan `tool_input`. Setiap event di dalam subagen membawa `agent_id` (dan event subagen juga membawa `agent_type`); event milik loop utama tidak membawanya, dan dari situ aipager menaruh pemanggilan alat sebuah agen di baris agen itu.
+Event alat juga membawa `tool_name` dan `tool_input`. Setiap event di dalam subagen membawa `agent_id` (dan event subagen juga membawa `agent_type`); event milik loop utama tidak membawanya, dan dari situ aipager menaruh pemanggilan alat milik agen di baris agen itu sendiri.
 
 ## <a id="event-reference"></a>Referensi event
 
@@ -41,7 +41,7 @@ Penangan aipager ada di `aipager/dtach/hook_receiver.py`; pekerjaan hook sendiri
 
 ### <a id="sessionstart"></a>`SessionStart`
 
-Sebuah sesi mulai, dilanjutkan, atau percakapannya diringkas. Sesi yang belum dilacak aipager akan didaftarkan. Setelah peringkasan, kartu menampilkan `📦 name · Percakapan diringkas: 82% → 4%` (lihat [PreCompact](#precompact--postcompact)). Untuk percakapan baru, hook juga melepas penanda tugas terbuka dari tugas sebelumnya.
+Sesi dimulai, dilanjutkan, atau percakapannya diringkas. Sesi yang belum dilacak aipager akan didaftarkan. Setelah peringkasan, kartu menampilkan `📦 name · Percakapan diringkas: 82% → 4%` (lihat [PreCompact](#precompact--postcompact)). Untuk percakapan baru, hook juga melepas penanda tugas terbuka dari tugas sebelumnya.
 
 ### <a id="sessionend"></a>`SessionEnd`
 
@@ -49,18 +49,18 @@ Sesi berakhir. Sesi itu ditandai GONE: hilang dari bilah status yang disematkan 
 
 ### <a id="userpromptsubmit"></a>`UserPromptSubmit`
 
-Claude mengambil sebuah pesan, yang diketik di terminal atau dikirim dari Telegram.
+Claude mengambil pesan, yang diketik di terminal atau dikirim dari Telegram.
 
-Hook pertama-tama mencocokkan pesan itu dengan catatan izin sesi (`/tmp/claude-notes-<session>/`, satu untuk setiap pesan Telegram yang diketik aipager) dan menulis aturan tugas ke `/tmp/claude-policy-<session>.json`, yang dibaca pemeriksaan [PreToolUse](#pretooluse) (lihat [keamanan → cara aturan diterapkan di tim](security.md#team-mode-enforcement)). Hook memberi tahu aipager pesan mana yang diambil Claude (datagram `queue_pickup`) sebelum meneruskan event. Lalu, kalau ada, ia mencetak konteks tambahan untuk Claude: gaya jawaban yang dipilih di `/settings` dan, saat membalas pesan yang lebih lama, isi pesan itu dan kapan dikirim. Pesan `<task-notification>` (Claude membangunkan dirinya sendiri saat agen atau perintah latar belakang selesai) adalah lanjutan dari pekerjaan yang sama: pesan ini tidak cocok dengan catatan mana pun dan mempertahankan aturan tugas.
+Hook pertama-tama mencocokkan pesan itu dengan catatan izin sesi (`/tmp/claude-notes-<session>/`, satu untuk setiap pesan Telegram yang diketik aipager) dan menulis aturan tugas ke `/tmp/claude-policy-<session>.json`, yang dibaca pemeriksaan [PreToolUse](#pretooluse) (lihat [keamanan → cara aturan diterapkan di tim](security.md#team-mode-enforcement)). Hook memberi tahu aipager pesan mana yang diambil Claude (datagram `queue_pickup`) sebelum meneruskan event. Lalu, kalau ada, hook mencetak konteks tambahan untuk Claude: gaya jawaban yang dipilih di `/settings` dan, saat membalas pesan yang lebih lama, isi pesan itu dan kapan dikirim. Pesan `<task-notification>` (Claude membangunkan dirinya sendiri saat agen atau perintah latar belakang selesai) adalah lanjutan dari pekerjaan yang sama: pesan ini tidak cocok dengan catatan mana pun dan mempertahankan aturan tugas.
 
 aipager menandai sesi sedang bekerja, membuka kartu kerja kalau belum ada (pesan dari Telegram sudah punya), dan mengubah 👀 pada pesan yang diambil Claude menjadi 👍. Pesan yang dikirim selama tugas berjalan mendapat 👍 saat Claude memasukkannya ke tugas itu atau memulai tugas berikutnya dengannya.
 
 ### <a id="pretooluse"></a>`PreToolUse`
 
-Sebuah alat akan dijalankan. Pemeriksaan keamanan milik aipager sendiri berjalan di sini, di dalam hook, sebelum Claude Code melihat aturan izinnya sendiri:
+Alat akan dijalankan. Pemeriksaan keamanan milik aipager sendiri berjalan di sini, di dalam hook, sebelum Claude Code melihat aturan izinnya sendiri:
 
 - Tugas yang dimulai dari Telegram terikat pada aturan peran pengirimnya dan pada batas bawah keamanan (path yang dilindungi, pola perintah), yang hanya bisa dilewati peran `owner`; tugas yang tidak bisa dikaitkan aipager ke siapa pun mendapat batas bawah itu; pesan yang kamu ketik di terminal tidak dibatasi. Aturannya dijelaskan di [grup](groups.md#how-rules-work) dan [keamanan](security.md#team-mode-enforcement).
-- Saat sebuah aturan menolak pemanggilan, hook mencetak keputusan `deny`, Claude Code menolak alat itu tanpa bertanya, dan aipager mengetahuinya (`safety_blocked`): tugas berhenti dengan `🛑 x1 · Diblokir aturan keamanan: ... (dihentikan)`, dan setiap pemanggilan alat berikutnya dalam tugas itu juga ditolak.
+- Saat aturan menolak pemanggilan, hook mencetak keputusan `deny`, Claude Code menolak alat itu tanpa bertanya, dan aipager mengetahuinya (`safety_blocked`): tugas berhenti dengan `🛑 x1 · Diblokir aturan keamanan: ... (dihentikan)`, dan setiap pemanggilan alat berikutnya dalam tugas itu juga ditolak.
 - Pemeriksaan yang rusak sendiri akan menolak, kecuali aturan sesi berhasil dibaca dan memberi pengecualian pemilik.
 
 Di sisi aipager, pemanggilan itu menjadi satu baris di kartu kerja (pemanggilan subagen masuk ke baris agen itu), dan `Write` atau `Edit` menampilkan pratinjau perubahan saat `/settings` → Pratinjau perubahan (diff) menyala (bawaannya mati). Pemanggilan `AskUserQuestion` menjadi pertanyaan dengan satu tombol per opsi; pertanyaan yang diajukan agen pembantu Claude Code saat tidak ada tugas yang berjalan tidak ditampilkan (bukan Claude yang bertanya kepadamu). Pemanggilan `Agent` milik Claude sendiri menyimpan `subagent_type` dan `description` untuk agen yang dimulainya, dan pemanggilan subagen adalah tindakan terakhir agen itu: keduanya terlihat di status di bawah jawaban selama agen bekerja di latar belakang.
@@ -69,23 +69,23 @@ Di sisi aipager, pemanggilan itu menjadi satu baris di kartu kerja (pemanggilan 
 
 Claude Code akan meminta izin. Kartu kerja berubah menjadi permintaan, dengan perintah atau path yang sebenarnya di bawah deskripsi yang diberikan Claude (lihat [perintah → permintaan izin](commands.md#permission-prompts)): Izinkan, Tolak, Hentikan, dan Selalu izinkan hanya saat Claude Code menawarkan aturan sungguhan untuk diingat.
 
-Hook menjawab permintaan itu sendiri kalau bisa. Ia membuka soket balasan berumur pendek, mengirim alamatnya bersama event, dan menunggu ketukanmu sampai 20 detik. Ketukan yang tepat waktu kembali sebagai keputusan `PermissionRequest` (izinkan, izinkan dengan aturan, atau tolak), jadi Claude Code tidak menampilkan dialognya sendiri. Kalau ketukan tidak datang tepat waktu, hook memberi tahu aipager bahwa penantiannya berakhir (`permission_reply_timeout`) dan tidak mencetak apa pun; ia juga tidak mencetak apa pun kalau aipager tidak bisa dihubungi atau ada yang rusak di jalur ini. Lalu Claude Code menampilkan dialognya di terminal, dan ketukan yang lebih belakangan menjawabnya dengan mengetikkan tombol. Log audit (`~/.claude/aipager-audit.jsonl`) mencatat jalur mana yang dipakai setiap ketukan: `"via": "hook_decision"` atau `"via": "keystroke_fallback"`.
+Hook menjawab permintaan itu sendiri kalau bisa. Hook membuka soket balasan berumur pendek, mengirim alamatnya bersama event, dan menunggu ketukanmu sampai 20 detik. Ketukan yang tepat waktu kembali sebagai keputusan `PermissionRequest` (izinkan, izinkan dengan aturan, atau tolak), jadi Claude Code tidak menampilkan dialognya sendiri. Kalau ketukan tidak datang tepat waktu, hook memberi tahu aipager bahwa penantiannya berakhir (`permission_reply_timeout`) dan tidak mencetak apa pun; hook juga tidak mencetak apa pun kalau aipager tidak bisa dihubungi atau ada yang rusak di jalur ini. Lalu Claude Code menampilkan dialognya di terminal, dan ketukan yang lebih belakangan menjawabnya dengan mengetikkan tombol. Log audit (`~/.claude/aipager-audit.jsonl`) mencatat jalur mana yang dipakai setiap ketukan: `"via": "hook_decision"` atau `"via": "keystroke_fallback"`.
 
 `PermissionRequest` yang datang saat permintaan lain sedang terbuka juga ditampilkan, sebagai pesannya sendiri di bawah kartu kerja. Dialog yang sama yang datang lagi (peminta, alat dan pemanggilan yang sama, atau input yang sama) hanya ditampilkan sekali. Claude Code juga menjalankan hook ini untuk `AskUserQuestion`; pertanyaan itu sudah tampil dari `PreToolUse`-nya, jadi tidak pernah ditampilkan dua kali. Dialog agen latar belakang baru muncul di terminal setelah hook-nya berhenti menunggu, di bawah dialog apa pun yang sudah terbuka di sana; karena itu ketukan hanya mengetik ke permintaan yang ditampilkan Claude Code lebih dulu (lihat [perintah → permintaan izin](commands.md#permission-prompts)).
 
 ### <a id="posttooluse--posttoolusefailure"></a>`PostToolUse` / `PostToolUseFailure`
 
-Sebuah alat selesai atau gagal. Barisnya di kartu kerja membeku (error ditandai di baris itu), dan jawaban atas permintaan yang terbuka dicatat: Izinkan atau Tolak yang lama untuk permintaan itu tidak mengetik apa pun lagi. Sesi menyimpan 200 baris alat terakhir.
+Alat selesai atau gagal. Barisnya di kartu kerja membeku (error ditandai di baris itu), dan jawaban atas permintaan yang terbuka dicatat: Izinkan atau Tolak yang lama untuk permintaan itu tidak mengetik apa pun lagi. Sesi menyimpan 200 baris alat terakhir.
 
-Pemanggilan `Bash` yang dipindahkan Claude Code ke latar belakang melaporkan `backgroundTaskId`. aipager lalu melacaknya sebagai perintah latar belakang (hanya perintah loop utama: pemanggilan dengan `agent_id` milik subagen itu) sampai ia melihat akhirnya: `<task-notification>` dengan `<status>` (di pesan yang membangunkan Claude, atau di riwayat percakapan kalau datang di tengah tugas), `TaskStop` atau `KillShell` dengan ID-nya, sesi berakhir, atau dua jam (`AIPAGER_BG_SHELL_MAX_TRACK`, dalam detik, bawaannya 7200). Tentang barisnya di kartu, lihat [perintah](commands.md#idle-responses).
+Pemanggilan `Bash` yang dipindahkan Claude Code ke latar belakang melaporkan `backgroundTaskId`. aipager lalu melacaknya sebagai perintah latar belakang (hanya perintah loop utama: pemanggilan dengan `agent_id` milik subagen itu) sampai akhirnya terlihat: `<task-notification>` dengan `<status>` (di pesan yang membangunkan Claude, atau di riwayat percakapan kalau datang di tengah tugas), `TaskStop` atau `KillShell` dengan ID-nya, sesi berakhir, atau dua jam (`AIPAGER_BG_SHELL_MAX_TRACK`, dalam detik, bawaannya 7200). Tentang barisnya di kartu, lihat [perintah](commands.md#idle-responses).
 
-Pemanggilan `Agent` (atau `Task`) di dalam sebuah subagen (event-nya membawa `agent_id`) melaporkan ID agen yang dimulainya. aipager mengingat agen mana yang memulai agen mana, sehingga bisa membedakan agen yang berhenti untuk menunggu agennya sendiri dari agen yang sudah selesai (lihat `SubagentStart` / `SubagentStop` di bawah).
+Pemanggilan `Agent` (atau `Task`) di dalam subagen (event-nya membawa `agent_id`) melaporkan ID agen yang dimulainya. aipager mengingat agen mana yang memulai agen mana, sehingga bisa membedakan agen yang berhenti untuk menunggu agennya sendiri dari agen yang sudah selesai (lihat `SubagentStart` / `SubagentStop` di bawah).
 
 ### <a id="notification"></a>`Notification`
 
 aipager membaca `notification_type` dari Claude Code:
 
-- `permission_prompt`: sinyal permintaan izin yang lebih lambat dan lebih lama. Ia menampilkan permintaan hanya kalau tidak ada permintaan yang terbuka: kalau ada yang terbuka, itu dialog yang sudah ditampilkan `PermissionRequest`.
+- `permission_prompt`: sinyal permintaan izin yang lebih lambat dan lebih lama. aipager menampilkan permintaan hanya kalau tidak ada permintaan yang terbuka: kalau ada yang terbuka, itu dialog yang sudah ditampilkan `PermissionRequest`.
 - `idle_prompt` selama permintaan izin atau pertanyaan menunggu: sesi tetap dalam keadaan menunggu dan chat mendapat `⬆️ jim · masih menunggu jawabanmu di atas`, sekali per penantian.
 - `idle_prompt` dalam keadaan lain: diperlakukan seperti `Stop` (di bawah). Ini menangkap tugas yang `Stop`-nya hilang; jawaban yang sudah terkirim tidak pernah dikirim lagi.
 
@@ -99,9 +99,9 @@ Tugas berakhir dengan error API. Sesi menjadi siap dan jawaban, kalau ada, dikir
 
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
-Sebuah subagen mulai atau selesai. Masing-masing punya baris sendiri di kartu kerja, `🤖 <type> · <activity> · <elapsed>`, dengan pemanggilan alatnya sendiri dilipat di bawahnya, dan saat berhenti membeku menjadi `✅ 🤖 <type> · N alat · <elapsed>`. `SubagentStart` tidak menyebut agen mana yang memulainya: aipager mencocokkannya dengan pemanggilan `Agent` (`PreToolUse`) bertipe sama yang sedang menunggu. Kalau semua pemanggilan itu datang dari satu agen, agen baru langsung dikaitkan dengan agen itu (barisnya di kartu menjadi `🤖 pipeline-runner › ship-tester`, dan di status di bawah jawaban ia muncul di bawah agen itu); kalau datang dari agen yang berbeda, tidak ada yang dikaitkan sampai `PostToolUse` milik agen yang memulainya menyebutnya. Deskripsi sebuah pemanggilan hanya dipakai kalau tepat satu pemanggilan bertipe itu sedang menunggu. Subagen yang `SubagentStop`-nya tidak pernah datang dihapus setelah diam selama 30 menit (`AIPAGER_SUBAGENT_SILENCE`, dalam detik; tidak ada event jenis apa pun dengan ID-nya). Agen yang sedang bekerja mengirim event alat setiap beberapa detik, jadi yang dihapus dengan cara ini hanya agen yang berhentinya terlewat (mulai ulang, datagram yang hilang); satu pemanggilan alat yang berjalan 30 menit tanpa satu pun event di bawah ID agen itu juga menghapusnya. `AIPAGER_SUBAGENT_TTL` diterima sebagai nama lama untuk pengaturan yang sama. Event `SubagentStop` tanpa tipe dan dengan ID tak dikenal sering datang dan diabaikan.
+Subagen mulai atau selesai. Masing-masing punya baris sendiri di kartu kerja, `🤖 <type> · <activity> · <elapsed>`, dengan pemanggilan alatnya sendiri dilipat di bawahnya, dan saat berhenti membeku menjadi `✅ 🤖 <type> · N alat · <elapsed>`. `SubagentStart` tidak menyebut agen mana yang memulainya: aipager mencocokkannya dengan pemanggilan `Agent` (`PreToolUse`) bertipe sama yang sedang menunggu. Kalau semua pemanggilan itu datang dari satu agen, agen baru langsung dikaitkan dengan agen itu (barisnya di kartu menjadi `🤖 pipeline-runner › ship-tester`, dan di status di bawah jawaban agen baru itu muncul di bawah agen tersebut); kalau datang dari agen yang berbeda, tidak ada yang dikaitkan sampai `PostToolUse` milik agen yang memulainya menyebutnya. Deskripsi pemanggilan hanya dipakai kalau tepat satu pemanggilan bertipe itu sedang menunggu. Subagen yang `SubagentStop`-nya tidak pernah datang dihapus setelah diam selama 30 menit (`AIPAGER_SUBAGENT_SILENCE`, dalam detik; tidak ada event jenis apa pun dengan ID-nya). Agen yang sedang bekerja mengirim event alat setiap beberapa detik, jadi yang dihapus dengan cara ini hanya agen yang berhentinya terlewat (mulai ulang, datagram yang hilang); satu pemanggilan alat yang berjalan 30 menit tanpa satu pun event di bawah ID agen itu juga menghapusnya. `AIPAGER_SUBAGENT_TTL` diterima sebagai nama lama untuk pengaturan yang sama.
 
-Agen latar belakang yang berhenti selagi agen yang dimulainya masih berjalan juga mendapat `SubagentStop`. aipager menganggapnya jeda, bukan akhir: agen itu tetap berjalan (barisnya, pekerjaan, status di bawah jawaban, bilah yang disematkan). `SubagentStart` berikutnya dengan ID yang sama adalah lanjutannya dan tidak menambah baris kedua; panggilan alat apa pun oleh agen itu sendiri juga dihitung sebagai lanjutan. Ia selesai saat berhenti tanpa ada lagi agennya sendiri yang berjalan. Kalau ia belum melanjutkan dua menit setelah yang terakhir dari mereka selesai, ia tidak lagi dihitung berjalan, tetapi tidak pernah ditampilkan selesai. Agen yang berjalan, termasuk yang menunggu, tetap disimpan saat aipager dimulai ulang.
+Agen latar belakang yang berhenti selagi agen yang dimulainya masih berjalan juga mendapat `SubagentStop`. aipager menganggapnya jeda, bukan akhir: agen itu tetap berjalan (barisnya, pekerjaan, status di bawah jawaban, bilah yang disematkan). `SubagentStart` berikutnya dengan ID yang sama adalah lanjutannya dan tidak menambah baris kedua; panggilan alat apa pun oleh agen itu sendiri juga dihitung sebagai lanjutan. Agen itu selesai saat berhenti tanpa ada lagi agennya sendiri yang berjalan. Kalau agen itu belum melanjutkan dua menit setelah yang terakhir dari mereka selesai, agen itu tidak lagi dihitung berjalan, tetapi tidak pernah ditampilkan selesai. Agen yang berjalan, termasuk yang menunggu, tetap disimpan saat aipager dimulai ulang. Event `SubagentStop` tanpa tipe dan dengan ID tak dikenal sering datang dan diabaikan.
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
@@ -113,11 +113,11 @@ Teks milik Claude sendiri pada saat muncul di layar. Riwayat percakapan baru dit
 
 ### <a id="premodelswitch"></a>`PreModelSwitch`
 
-Claude Code 2.1.251 dan yang lebih baru memanggilnya sebelum mengganti model. Isinya membawa `from_model`, `to_model`, `requested_model`, dan `source` (`command` untuk `/model` yang diketik, atau `picker` atau `sdk`). Sebelum mengganti, Claude Code biasanya bertanya "Switch model?", karena jawaban berikutnya harus membaca ulang seluruh percakapan. Hook yang menjawab `permissionDecision: "allow"` meloloskan penggantian tanpa pertanyaan itu.
+Claude Code 2.1.251 dan yang lebih baru memanggilnya sebelum mengganti model. Isinya membawa `from_model`, `to_model`, `requested_model`, dan `source` (`command` untuk `/model` yang diketik, atau `picker` atau `sdk`). Sebelum mengganti, Claude Code biasanya bertanya “Switch model?”, karena jawaban berikutnya harus membaca ulang seluruh percakapan. Hook yang menjawab `permissionDecision: "allow"` meloloskan penggantian tanpa pertanyaan itu.
 
 `aipager-hook` menjawab `allow` hanya untuk penggantian yang diketik aipager sendiri, dari pemilih model di Mini App atau dari keyboard model. Penggantian lain tidak mendapat jawaban, jadi Claude Code bertanya seperti biasa. Ini berlaku untuk `/model` yang diketik operator di terminal, pilihan dari daftar, dan penggantian lewat SDK.
 
-aipager mengenali penggantiannya sendiri dari sebuah file penanda. Tepat sebelum mengetik `/model <name>`, aipager menulis `aipager-modelswitch-<session>.json`:
+aipager mengenali penggantiannya sendiri dari file penanda. Tepat sebelum mengetik `/model <name>`, aipager menulis `aipager-modelswitch-<session>.json`:
 - file itu ada di folder tempat soket kontrol berada (biasanya `$XDG_RUNTIME_DIR`);
 - ditulis secara atomik, dengan izin 0600;
 - berisi model dan ID sesi Claude;
@@ -132,7 +132,7 @@ Hook menjawab `allow` hanya kalau semua ini terpenuhi:
 
 Lalu hook mengambil penanda itu dengan penggantian nama atomik, supaya hanya berlaku sekali. Pemeriksaan ini membaca satu file lokal, tanpa soket, tanpa menunggu. Event ini tidak diteruskan ke aipager.
 
-Claude Code 2.1.101 dan yang lebih baru mengabaikan event hook yang tidak dikenalnya, jadi versi lama tanpa `PreModelSwitch` tidak terpengaruh. Satu kasus masih bisa memunculkan pertanyaan itu: mengganti ke atau dari `opusplan` bisa membuat Claude Code bertanya ke hook dua kali, dan hanya pertanyaan pertama yang menemukan penandanya, jadi Claude Code bertanya "Switch model?" di terminal.
+Claude Code 2.1.101 dan yang lebih baru mengabaikan event hook yang tidak dikenalnya, jadi versi lama tanpa `PreModelSwitch` tidak terpengaruh. Satu kasus masih bisa memunculkan pertanyaan itu: mengganti ke atau dari `opusplan` bisa membuat Claude Code bertanya ke hook dua kali, dan hanya pertanyaan pertama yang menemukan penandanya, jadi Claude Code bertanya “Switch model?” di terminal.
 
 ## <a id="the-status-line"></a>Baris status
 
@@ -152,7 +152,7 @@ Selain event hook, program pembantu mengirim beberapa pesan milik mereka sendiri
 | `safety_blocked` | hook | Saat `PreToolUse`, ketika pemeriksaan keamanan menolak pemanggilan. |
 | `permission_reply_timeout` | hook | Penantian `PermissionRequest` berakhir tanpa ketukan. |
 | `statusline` | baris status | Setiap kali baris status digambar ulang. |
-| `hook_memory_cap_hit` | hook, baris status | Sebuah proses mentok di batas memorinya. |
+| `hook_memory_cap_hit` | hook, baris status | Prosesnya mentok di batas memorinya. |
 | `report_error` | hook, perintah `aipager` | Terjadi error: hanya jenis error dan lokasinya di kode aipager, tidak pernah isi event-nya, untuk [laporan masalah](problem-reports.md). |
 
 ## <a id="the-permission-flow"></a>Alur permintaan izin

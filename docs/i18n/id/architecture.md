@@ -1,10 +1,10 @@
 # Arsitektur
 
-<!-- i18n-source: docs/architecture.md @ c91598e -->
+<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../architecture.md))
 
-aipager adalah program asyncio satu proses yang berjalan di latar belakang. Ia menghubungkan tiga dunia: chat Telegram-mu, proses Claude Code yang kamu jalankan di bawah `dtach`, dan sistem hook Claude Code. Semuanya lewat satu event loop: tanpa pool worker, tanpa database, tanpa antrean antarproses.
+aipager adalah program asyncio satu proses yang berjalan di latar belakang. Program ini menghubungkan tiga dunia: chat Telegram-mu, proses Claude Code yang kamu jalankan di bawah `dtach`, dan sistem hook Claude Code. Semuanya lewat satu event loop: tanpa pool worker, tanpa database, tanpa antrean antarproses.
 
 ## <a id="component-diagram"></a>Diagram bagian-bagiannya
 
@@ -56,8 +56,8 @@ Satu pemanggilan `asyncio.run` di `aipager/cli/daemon.py` menjalankan semuanya. 
 
 - **`TelegramBot`** (`aipager/bot/`): memiliki `Application` dari `python-telegram-bot`. Menerima pembaruan dari Telegram, membagikannya ke penangan pesan, tombol, dan pesan suara, serta menjaga kartu kerja, bilah status yang disematkan, dan jawaban tetap terbaru.
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): membuka soket datagram Unix di `$XDG_RUNTIME_DIR/aipager.sock`, membaca JSON yang dikirim `aipager-hook` dan `aipager-statusline`, lalu membagi pekerjaan berdasarkan `hook_event_name` (atau `type`, untuk pesan milik aipager sendiri; lihat [event hook](hooks.md)).
-- **`SessionMonitor`** (`aipager/session_monitor.py`): bangun setiap 2 dtk untuk memindai `/tmp/claude-dtach-*.sock`, mencocokkan sesi yang ditemukan dengan daftar sesi, dan menjalankan para penjaga: kartu kerja yang berhenti bergerak, pesan yang tidak pernah diterima Claude Code, permintaan izin tanpa kabar selama 5 menit yang menurut percakapan tersimpan sudah selesai (`AIPAGER_INTERACTIVE_TIMEOUT`), tugas yang akhirnya terlewat.
-- **`SessionRegistry`** (`aipager/state.py`): objek `TrackedSession` berdasarkan nama. Disimpan ke `~/.claude/aipager-sessions.json` (secara atomik) saat dimatikan dan setiap kali ada yang berubah yang harus bertahan melewati mulai ulang.
+- **`SessionMonitor`** (`aipager/session_monitor.py`): bangun setiap 2 dtk untuk memindai `/tmp/claude-dtach-*.sock`, mencocokkan sesi yang ditemukan dengan daftar sesi, dan menjalankan para penjaga: kartu kerja yang berhenti bergerak, pesan yang tidak pernah diterima Claude Code, permintaan izin tanpa kabar selama 5 menit yang menurut percakapan tersimpan sudah selesai (`AIPAGER_INTERACTIVE_TIMEOUT`), tugas yang selesainya terlewat.
+- **`SessionRegistry`** (`aipager/state.py`): objek `TrackedSession` berdasarkan nama. Disimpan ke `~/.claude/aipager-sessions.json` (secara atomik) saat dimatikan dan setiap kali ada perubahan yang harus tetap ada setelah mulai ulang.
 - **Server Mini App** (`aipager/miniapp/server.py`): aplikasi aiohttp di `127.0.0.1` pada port `MINIAPP_PORT` (bawaannya 8765), bisa dijangkau Telegram lewat tunnel Cloudflare yang dikelola selama menyala (bawaannya menyala). Menyajikan dasbor `/app`.
 
 Semua ini berjalan sebagai task di loop yang sama. Pekerjaan yang akan memblokir loop berjalan di thread terpisah: mengubah pesan suara menjadi teks, menyusun dan mengirim laporan masalah, mengecek pembaruan dan menyiapkan mulai ulang, mengunduh skrip Mini App dan `cloudflared`, serta pemeriksaan login saat mulai.
@@ -104,19 +104,19 @@ Mulai ulang dari Telegram mengandalkan seluruh jalur ini selesai sebelum penggan
 | `/tmp/claude-policy-<name>.json` | Snapshot izin untuk tugas yang sedang berjalan | `aipager-hook` (menulis saat mengambil pesan), dibaca pemeriksaan `PreToolUse` |
 | `/tmp/claude-policy-.floor-<uid>.json` | Batas bawah keamanan: daftar bawaan ditambah bagian `safety:` milikmu, untuk jalur cadangan hook | aipager |
 | `/tmp/claude-reply-<name>.txt` | Pesan yang kamu balas, kalau itu pesan yang lebih lama | aipager |
-| `/tmp/aipager-files/` | File dan pesan suara yang dikirim dari Telegram | aipager |
+| `/tmp/aipager-files/<chat>/` | File dan pesan suara yang dikirim dari Telegram, satu folder pribadi untuk setiap chat (`0700`, file `0600`) | aipager |
 | `/tmp/aipager.log` | Keluaran mulai ulang oleh aipager sendiri saat tidak ada layanan | aipager |
 | `~/.claude/aipager-sessions.json` | Keadaan daftar sesi yang tahan lama | aipager |
 | `~/.claude/aipager-audit.jsonl` | Log Izinkan / Tolak / jawaban | aipager (hanya menambahkan) |
 | `~/.claude/aipager-flood-state.json` | Riwayat batas Telegram per chat, disimpan antar mulai ulang ([pemecahan masalah](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
 | `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | Tunnel Mini App yang dipegang aipager: prosesnya, port lokalnya, dan hash alamatnya (tidak pernah alamatnya), supaya aipager berikutnya bisa mengambil alihnya setelah mulai ulang yang direncanakan (izin 600); peringatan dari cloudflared | aipager; catatannya juga dihapus oleh penjaga tunnel yang dipertahankan dan `aipager uninstall` |
 | `~/.claude/aipager-pending-users.json` | Orang yang menyapa bot di grup yang tidak dilayaninya, atau yang bukan anggota grup yang dilayaninya, supaya `aipager config` bisa menambahkan mereka (izin 0600, ditulis ulang utuh setiap kali, 200 orang terakhir dalam 30 hari) | aipager (menulis), `aipager config` (membaca) |
-| `~/aipager-users/<label>/` | [Folder utama](groups.md#root-folders) bawaan para anggota (izin 0700), tempat anggota `user` dan `read_only` memulai sesinya; `aipager uninstall` menyimpannya | aipager (dibuat saat `/new` pertama atau “Sesi baru” pertama di Mini App oleh seorang anggota) |
+| `~/aipager-users/<label>/` | [Folder utama](groups.md#root-folders) bawaan para anggota (izin 0700), tempat anggota `user` dan `read_only` memulai sesinya; `aipager uninstall` menyimpannya | aipager (dibuat saat anggota pertama kali memakai `/new` atau “Sesi baru” di Mini App) |
 | `~/.claude/settings.json` | Konfigurasi hook Claude Code | `aipager config` / `aipager setup`; setiap kali mulai, aipager menambahkan hook atau baris status aipager yang belum ada dan mengatur `skipDangerousModePermissionPrompt` ([keamanan](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | Cadangan sebelum setiap penulisan ulang | `aipager config`, `aipager setup`, `aipager uninstall` |
 | `~/.claude.json` | File milik Claude Code sendiri: aipager menandai folder tempat sesi dimulai sebagai tepercaya tepat sebelum sesi dimulai (termasuk folder home, tidak pernah `/` atau folder di atas folder home), supaya pertanyaan kepercayaan Claude Code tidak menghentikan sesi yang dimulai dari Telegram. Saat aipager mulai, tidak ada yang ditandai. Tidak pernah ditulis ulang kalau tidak bisa dibaca utuh atau Claude yang sedang berjalan mengubahnya di sela-sela itu | aipager |
-| `~/.claude/.credentials.json` → `.credentials.json.stale` | File login Claude Code, disisihkan saat sebuah sesi dimulai dengan `CLAUDE_CODE_OAUTH_TOKEN` diatur dan file itu hanya berisi login yang kedaluwarsa atau kosong (kalau tidak, file itu akan mengalahkan token); untuk membatalkan, kembalikan ke tempatnya | aipager |
-| `~/.config/aipager/aipager.yaml` | Token bot, chat, anggota + peran, pengaturan Mini App | `aipager config` (izin 600); aipager memindahkan entri sebuah grup saat Telegram mengubahnya menjadi supergroup, dan menyimpan salinan `aipager.yaml.bak.<time>` saat memindahkan pengaturan Mini App lama ke sana |
+| `~/.claude/.credentials.json` → `.credentials.json.stale` | File login Claude Code, disisihkan saat sesi dimulai dengan `CLAUDE_CODE_OAUTH_TOKEN` diatur dan file itu hanya berisi login yang kedaluwarsa atau kosong (kalau tidak, file itu akan mengalahkan token); untuk membatalkan, kembalikan ke tempatnya | aipager |
+| `~/.config/aipager/aipager.yaml` | Token bot, chat, anggota + peran, pengaturan Mini App | `aipager config` (izin 600); aipager memindahkan entri grup saat Telegram mengubahnya menjadi supergroup, dan menyimpan salinan `aipager.yaml.bak.<time>` saat memindahkan pengaturan Mini App lama ke sana |
 | `~/.config/aipager/policy.yaml` | Aturan per peran + tambahan untuk batas bawah keamanan | kamu (diperiksa dengan `aipager policy validate`); templat berkomentar ditulis sekali saat memindahkan instalasi lama |
 | `~/.config/aipager/preferences.json` | Pilihan `/settings` per chat dan per sesi | aipager |
 | `~/.config/aipager/daemon.env` | Kredensial Claude untuk sesi yang dimulai | kamu / `aipager service install` / `aipager doctor --fix` (izin 600) |
@@ -148,7 +148,7 @@ Kedua pengaturan ini ada supaya tes end-to-end bisa menjalankan aipager kedua te
 
 ## <a id="why-dtach"></a>Kenapa dtach
 
-dtach memberi setiap sesi Claude Code sebuah PTY sungguhan tanpa mengikatnya ke terminal yang harus tetap terbuka. aipager memulai sesi dengan `dtach -n` dan mengetik ke dalamnya dengan `dtach -p` (pesan, Escape, tombol untuk menjawab dialog); ia tidak pernah membaca layar, karena yang terjadi diketahui dari hook dan riwayat percakapan. Kamu bisa menyambung secara interaktif untuk akses langsung dari shell mana pun dengan `aipager session <name>`. Sambungan seperti itu mengikuti sesinya melewati mulai ulang dari Telegram (`/mode` ke atau dari Akses penuh, `/restart`, Mulai ulang): saat soket sesi hilang, ia menunggu sampai 15 dtk sampai soket yang sama kembali lalu menyambung lagi sendiri. Sesi yang benar-benar berakhir mengembalikanmu ke shell setelah menunggu (Ctrl-C mengakhiri penantian lebih awal). Sambungan ini berjalan dengan tombol lepas dtach dimatikan, jadi `Ctrl-\` diteruskan ke Claude; untuk keluar, tutup terminal atau panel tmux, dan sesinya tetap berjalan.
+dtach memberi setiap sesi Claude Code PTY sungguhan tanpa mengikatnya ke terminal yang harus tetap terbuka. aipager memulai sesi dengan `dtach -n` dan mengetik ke dalamnya dengan `dtach -p` (pesan, Escape, tombol untuk menjawab dialog); aipager tidak pernah membaca layar, karena yang terjadi diketahui dari hook dan riwayat percakapan. Kamu bisa menyambung secara interaktif untuk akses langsung dari shell mana pun dengan `aipager session <name>`. Sambungan seperti itu mengikuti sesinya melewati mulai ulang dari Telegram (`/mode` ke atau dari Akses penuh, `/restart`, Mulai ulang): saat soket sesi hilang, sambungan itu menunggu hingga 15 dtk sampai soket yang sama kembali lalu menyambung lagi sendiri. Sesi yang benar-benar berakhir mengembalikanmu ke shell setelah menunggu (Ctrl-C mengakhiri penantian lebih awal). Sambungan ini berjalan dengan tombol lepas dtach dimatikan, jadi `Ctrl-\` diteruskan ke Claude; untuk keluar, tutup terminal atau panel tmux, dan sesinya tetap berjalan.
 
 Hasilnya: Claude Code berjalan sama seperti saat kamu mengetik di terminal, tapi terminal itu bisa datang dan pergi tanpa mengganggu sesi yang sedang berjalan. aipager menemukan sesi dengan memindai `/tmp/claude-dtach-*.sock` di setiap putaran monitor 2 detik. Sesi yang ditemukan menjadi milik chat tempat namanya dibuat, sedangkan sesi yang dimulai di terminal, pada instalasi dengan chat pribadi dan grup, menjadi milik chat pribadi pemilik.
 

@@ -2,11 +2,11 @@
 
 # البنية
 
-<!-- i18n-source: docs/architecture.md @ c91598e -->
+<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../architecture.md))
 
-&rlm;aipager برنامج asyncio يعمل في الخلفية في عملية واحدة. يربط بين ثلاثة عوالم: دردشتك في Telegram، وعمليات Claude Code التي تعمل تحت `dtach`، ونظام الهوكات في Claude Code. كل شيء يمر عبر event loop واحدة: بلا worker pool، وبلا قاعدة بيانات، وبلا طوابير بين العمليات.
+&rlm;aipager برنامج asyncio يعمل في الخلفية في عملية واحدة. يربط بين ثلاثة عوالم: دردشتك في Telegram، وعمليات Claude Code التي تعمل تحت `dtach`، ونظام الهوكات في Claude Code. كل شيء يمر عبر حلقة أحداث واحدة (event loop): لا مجموعات خيوط عاملة، ولا قواعد بيانات، ولا طوابير بين العمليات.
 
 ## <a id="component-diagram"></a>مخطط الأجزاء
 
@@ -102,7 +102,7 @@ flowchart LR
 |---|---|---|
 | &lrm;`$XDG_RUNTIME_DIR/aipager.sock` | مقبس datagram من نوع Unix لأحداث الهوك (&lrm;`/tmp/aipager.sock` عند غياب &lrm;`$XDG_RUNTIME_DIR`؛ و&lrm;`$AIPAGER_SOCKET_PATH` مقدَّم على كليهما) | aipager (bind) |
 | `aipager-reply-<id>.sock` (بجانب مقبس التحكم) | مقبس رد قصير العمر لكل طلب إذن ينتظره الهوك | `aipager-hook` |
-| `aipager-flood-mute.json`،&rlm; `aipager-flood-backoff.json` (بجانب مقبس التحكم) | حالة حدود السرعة الحالية في Telegram، من أجل `aipager status` وdoctor | aipager |
+| `aipager-flood-mute.json`،&rlm; `aipager-flood-backoff.json` (بجانب مقبس التحكم) | حالة حدود السرعة الحالية في Telegram، من أجل `aipager status` و`aipager doctor` | aipager |
 | `aipager-modelswitch-<name>.json` (بجانب مقبس التحكم) | يعلّم تبديل نموذج كتبه aipager، لمدة ٣٠ ثانية ([الهوكات](hooks.md#premodelswitch)) | aipager (يكتب)، `aipager-hook` (يأخذه) |
 | &lrm;`/tmp/claude-dtach-<name>.sock` | مقبس التحكم الخاص بـ dtach لكل جلسة | dtach |
 | &lrm;`/tmp/claude-status-<name>.json` | بيانات سطر الحالة لكل جلسة | `aipager-statusline` |
@@ -110,14 +110,14 @@ flowchart LR
 | &lrm;`/tmp/claude-policy-<name>.json` | لقطة الأذونات المعتمدة للمهمة الجارية | `aipager-hook` (يكتبها عند أخذ الرسالة)، ويقرؤها فحص `PreToolUse` |
 | &lrm;`/tmp/claude-policy-.floor-<uid>.json` | الحد الأدنى للأمان: القائمة المدمجة مع قسم `safety:`&lrm; الخاص بك، للمسارات الاحتياطية في الهوك | aipager |
 | &lrm;`/tmp/claude-reply-<name>.txt` | الرسالة التي رددت عليها، عند الرد على رسالة أقدم | aipager |
-| &lrm;`/tmp/aipager-files/`&lrm; | الملفات والرسائل الصوتية المرسلة من Telegram | aipager |
+| &lrm;`/tmp/aipager-files/<chat>/`&lrm; | الملفات والرسائل الصوتية المرسلة من Telegram، في مجلد خاص لكل دردشة (`0700`، والملفات `0600`) | aipager |
 | &lrm;`/tmp/aipager.log` | مخرجات إعادة التشغيل الذاتية عند غياب الخدمة | aipager |
 | &lrm;`~/.claude/aipager-sessions.json` | الحالة الدائمة لقائمة الجلسات | aipager |
 | &lrm;`~/.claude/aipager-audit.jsonl` | سجل السماح / الرفض / الإجابات | aipager (إضافة فقط) |
 | &lrm;`~/.claude/aipager-flood-state.json` | سجل حدود السرعة في Telegram لكل دردشة، محفوظ عبر إعادات التشغيل ([حل المشكلات](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
 | &lrm;`~/.claude/aipager-tunnel.json` و`aipager-cloudflared.log` | نفق Mini App الذي يحتفظ به aipager: عمليته ومنافذه المحلية وبصمة عنوانه (لا العنوان نفسه أبدًا)، حتى يتولاه aipager التالي بعد إعادة تشغيل مخطط لها (الصلاحية 600)؛ وتحذيرات cloudflared | aipager؛ ويحذف هذا السجل أيضًا حارس النفق المحفوظ والأمر `aipager uninstall` |
 | &lrm;`~/.claude/aipager-pending-users.json` | الأشخاص الذين خاطبوا البوت في مجموعة لا يخدمها، أو ليسوا أعضاء في مجموعة يخدمها، لكي يضيفهم `aipager config` (الصلاحية 0600، يُستبدل كاملًا عند كل كتابة، أحدث ٢٠٠ شخص ظهروا خلال آخر ٣٠ يومًا) | aipager (يكتب)، `aipager config` (يقرأ) |
-| &lrm;`~/aipager-users/<label>/`&lrm; | [المجلدات الجذرية](groups.md#root-folders) الافتراضية للأعضاء (الصلاحية 0700)، حيث يبدأ أعضاء `user` و`read_only` جلساتهم؛ ويحتفظ بها `aipager uninstall` | aipager (يُنشئها عند أول &lrm;`/new` أو أول «بدء الجلسة» في Mini App لعضو) |
+| &lrm;`~/aipager-users/<label>/`&lrm; | [المجلدات الجذرية](groups.md#root-folders) الافتراضية للأعضاء (الصلاحية 0700)، حيث يبدأ أعضاء `user` و`read_only` جلساتهم؛ ويحتفظ بها `aipager uninstall` | aipager (يُنشئها عند أول &lrm;`/new` أو أول «جلسة جديدة» في Mini App لعضو) |
 | &lrm;`~/.claude/settings.json` | إعداد الهوكات في Claude Code | `aipager config` /&rlm; `aipager setup`؛ وعند كل بدء يضيف aipager أي هوك أو سطر حالة لـ aipager ينقص ويضبط `skipDangerousModePermissionPrompt` ([الأمان](security.md#who-decides-whether-a-tool-call-runs)) |
 | &lrm;`~/.claude/settings.json.bak.*`&lrm; | نسخ احتياطية قبل كل إعادة كتابة | `aipager config`،&rlm; `aipager setup`،&rlm; `aipager uninstall` |
 | &lrm;`~/.claude.json` | ملف Claude Code نفسه: يعلّم aipager المجلد الذي تبدأ فيه الجلسة بأنه موثوق قبل بدئها مباشرة (بما في ذلك المجلد الرئيسي، وليس `/` أو مجلدًا أعلى من المجلد الرئيسي أبدًا)، حتى لا يوقف سؤال الثقة في Claude Code جلسة بدأت من Telegram. لا يُعلَّم أي شيء عند بدء aipager. ولا تُعاد كتابته أبدًا إذا تعذّرت قراءته كاملًا أو غيّره Claude يعمل في الأثناء | aipager |
@@ -146,7 +146,7 @@ flowchart LR
 
 الملفات الموجودة في مجلدك الرئيسي لا تنتقل، لذا يلزم توجيه `HOME` أيضًا إلى مجلد منفصل. يرفض `aipager start` العمل عندما يكون مجلد النسخة مضبوطًا و`HOME` هو مجلدك الرئيسي الحقيقي، أو عندما لا يكون المجلد مسارًا مطلقًا إلى مجلد مملوك لك، أو عندما يكون أطول من أن يصلح مسارًا لمقبس.
 
-&rlm;&lrm;`/update` و&lrm;`/restart` غير معزولين: يعملان على حزمة aipager المثبّتة وعلى الخدمة `aipager.service`، فلا تُرسلان أبدًا إلى نسخة اختبار.
+&rlm;&lrm;`/update` و&lrm;`/restart` غير معزولين: يعملان على حزمة aipager المثبّتة وعلى الخدمة `aipager.service`، فلا ينبغي إرسالهما أبدًا إلى نسخة اختبار.
 
 يرسل `AIPAGER_TELEGRAM_API_BASE` (مثلًا `http://127.0.0.1:41234`) كل طلب Bot API وكل تنزيل ملف إلى ذلك العنوان بدل `https://api.telegram.org`. يجب أن يكون هذا العنوان هو هذا الكمبيوتر (`localhost` أو عنوان loopback) ما لم يُضبط `AIPAGER_TELEGRAM_API_ALLOW_REMOTE=1`، حتى لا يرسل خطأ مطبعي توكن البوت إلى مكان آخر.
 

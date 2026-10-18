@@ -785,7 +785,7 @@
 {"k": "set.layout.title", "src": "415df682", "v": "🖼 Cómo se ve la respuesta"}
 {"k": "set.length.title", "src": "0b4f4428", "v": "📏 Longitud de respuesta"}
 {"k": "set.level.title", "src": "4e19b762", "v": "🎓 Nivel de vocabulario"}
-{"k": "set.opt.cadence.off", "src": "b44b98a6", "v": "Desactivado - mismo ritmo todo el turno"}
+{"k": "set.opt.cadence.off", "src": "b44b98a6", "v": "Desactivado - mismo ritmo toda la tarea"}
 {"k": "set.opt.cadence.on", "src": "3843eb22", "v": "Activado - más lento en tareas largas"}
 {"k": "set.opt.chat_default", "src": "58286063", "v": "{option} (por defecto del chat)"}
 {"k": "set.opt.diffs.off", "src": "64a190d9", "v": "Desactivado - solo la tarjeta"}
