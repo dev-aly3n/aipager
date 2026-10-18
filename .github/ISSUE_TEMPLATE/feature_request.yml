@@ -1,0 +1,38 @@
+name: Feature request
+description: An idea for something aipager could do, or do better.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Questions and "how do I ..." are best asked in [Discussions](https://github.com/dev-aly3n/aipager/discussions).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you want to do
+      description: The situation, and what gets in your way today. This helps more than any particular solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+      description: How it could work in Telegram, the Mini App or the terminal. Sketches and screenshots are welcome; cover anything private in them.
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do instead today
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Busy cards and answers
+        - Permission prompts and questions
+        - Groups, members and roles
+        - The Mini App
+        - Commands and settings
+        - Install, update and the service
+        - Languages and translations
+        - Something else

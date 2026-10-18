@@ -1,0 +1,102 @@
+name: Bug report
+description: Something in aipager does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        **A security problem?** Please do not file it here. Report it privately instead, see [SECURITY.md](https://github.com/dev-aly3n/aipager/blob/main/SECURITY.md).
+
+        **Never paste** your bot token, `aipager doctor` output or `aipager logs` here. They hold your chat id, your home folder's paths, session names and the start of your prompts. If a log line is needed, the maintainer will ask for that one line, and you can remove anything private from it first.
+
+        The quickest way to send the technical details is a problem report: tap **Report a problem** under `/help` in your private chat with the bot, or run `aipager report`. You see the whole report before anything is sent, and it holds no chats, prompts, names, paths or tokens ([what it holds](https://github.com/dev-aly3n/aipager/blob/main/docs/problem-reports.md)). Then put its reference below.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you saw, and what you expected instead. A screenshot helps; cover anything private in it.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen again
+      placeholder: |
+        1. Send a prompt to a session in a group
+        2. Tap Allow on the permission card
+        3. ...
+  - type: input
+    id: reference
+    attributes:
+      label: Problem report reference
+      description: The reference shown after you sent a problem report, if you sent one.
+      placeholder: ap1-7c41d09e2b3a
+  - type: input
+    id: aipager_version
+    attributes:
+      label: aipager version
+      description: The output of `aipager version`.
+      placeholder: "1.3.7"
+    validations:
+      required: true
+  - type: input
+    id: claude_version
+    attributes:
+      label: Claude Code version
+      description: The output of `claude --version`.
+      placeholder: "2.1.302"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How aipager is installed
+      options:
+        - pipx
+        - uv
+        - Homebrew
+        - pip
+        - Docker
+        - snap
+        - Nix
+        - AUR
+        - From a git checkout
+        - Something else, or not sure
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      placeholder: Ubuntu 24.04, macOS 15, WSL 2, ...
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where it happened
+      multiple: true
+      options:
+        - A private chat with the bot
+        - A group
+        - The Mini App
+        - The terminal (aipager commands)
+        - Not sure
+  - type: dropdown
+    id: telegram_app
+    attributes:
+      label: Telegram app, if it is about how something looks
+      multiple: true
+      options:
+        - Android
+        - iPhone or iPad
+        - Desktop (Windows, Linux or macOS)
+        - Telegram for macOS
+        - Web
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Settings you changed, the message layout, the session's mode, the chat's language, ...

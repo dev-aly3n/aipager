@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem privately
+    url: https://github.com/dev-aly3n/aipager/security/advisories/new
+    about: Please never in a public issue. See SECURITY.md.
+  - name: Ask a question
+    url: https://github.com/dev-aly3n/aipager/discussions
+    about: How do I ..., is this expected, help with setting it up.
+  - name: Read the docs
+    url: https://aipager.run/docs
+    about: Commands, groups, security and troubleshooting.

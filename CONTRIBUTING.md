@@ -1,5 +1,24 @@
 # Contributing to aipager
 
+Thanks for helping. Bug reports, ideas, translations and code are all welcome.
+
+## Reporting a bug or asking for something
+
+- **A bug:** open a [bug report](https://github.com/dev-aly3n/aipager/issues/new?template=bug_report.yml). The quickest way to send the details is a problem report (**Report a problem** under `/help`, or `aipager report`): you see it before it is sent, and it holds no chats, prompts, names, paths or tokens. Put its `ap1-` reference in the issue. Please do not paste `aipager doctor` output or `aipager logs`: they hold your chat id, your paths and the start of your prompts.
+- **A security problem:** never in a public issue. See [SECURITY.md](SECURITY.md).
+- **An idea:** open a [feature request](https://github.com/dev-aly3n/aipager/issues/new?template=feature_request.yml). Questions go to [Discussions](https://github.com/dev-aly3n/aipager/discussions).
+
+## Changing the code
+
+- For anything bigger than a small fix, please open an issue first, so the approach is agreed before you spend time on it.
+- [CLAUDE.md](CLAUDE.md) lists what is true and non-obvious in this codebase (the lazy transcript, background agents, the permission dialog) and the rules every change follows.
+- Every guard gets a test that fails when the guard is removed: break the guard, watch the test fail, then put it back.
+- No test may reach the real Telegram API, start a real `claude` or `dtach`, or write to your real `~/.claude/` or `~/.config/aipager/`. `tests/conftest.py` stops the first two.
+- A change people will notice goes in `CHANGELOG.md` under `[Unreleased]`, and in `docs/` where it touches commands or hooks.
+- Text people read in Telegram or the Mini App is translated into 14 languages: see [tools/i18n/TRANSLATING.md](tools/i18n/TRANSLATING.md), and run `python tools/i18n.py extract` after adding or changing a key. The docs' translations live in `docs/i18n/<code>/`, and a fix to a translation is welcome on its own.
+
+By contributing, you agree that your work is released under the [MIT License](LICENSE) and to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Local development
 
 ```sh
