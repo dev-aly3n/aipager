@@ -1667,16 +1667,24 @@ class NotifyMixin:
             copies = box.claim_copies(sess.name)
             held_now = self._held_key_now(sess)
             held = held_now if held_now and held_now != held_before else None
-            audit = self._file_audit_ctx(sess)
-
-            async def _run() -> None:
-                await self._turn_files_now(sess, batches, copies, anchor,
-                                           prompt_id, held, audit)
-            return box.run_delivery(sess.name, _run, _BACKGROUND_TASKS)
+            return self._start_delivery(sess, batches, copies, anchor,
+                                        prompt_id, held)
         except Exception:
             log.warning("[%s] turn files: delivery not started", sess.label,
                         exc_info=True)
             return None
+
+    def _start_delivery(self, sess: TrackedSession, batches, copies, anchor,
+                        prompt_id, held: str | None):
+        """Run :meth:`_turn_files_now` for these batches in the session's
+        delivery task chain (after its earlier deliveries)."""
+        from aipager.bot import outbox
+        audit = self._file_audit_ctx(sess)
+
+        async def _run() -> None:
+            await self._turn_files_now(sess, batches, copies, anchor,
+                                       prompt_id, held, audit)
+        return outbox.OUTBOX.run_delivery(sess.name, _run, _BACKGROUND_TASKS)
 
     async def _turn_files_now(self, sess: TrackedSession, batches, copies,
                               anchor, prompt_id, held: str | None,
@@ -1685,17 +1693,21 @@ class NotifyMixin:
         try:
             from aipager.bot import outbox
             box = outbox.OUTBOX
-            if copies:
-                try:
-                    await box.wait_tasks(copies)
-                finally:
-                    # One still running goes into the store when it ends.
-                    box.unclaim([t for t in copies if not t.done()])
-            for task in copies:
-                batch = outbox.task_batch(task)
-                if batch is not None and (batch.items or batch.failures):
-                    batches.append(batch)
-                box.unclaim([task])
+            try:
+                if copies:
+                    try:
+                        await box.wait_tasks(copies)
+                    finally:
+                        # One still running goes into the store when it ends.
+                        box.unclaim([t for t in copies if not t.done()])
+                for task in copies:
+                    batch = outbox.task_batch(task)
+                    if batch is not None and (batch.items or batch.failures):
+                        batches.append(batch)
+                    box.unclaim([task])
+            finally:
+                # Cancelled while waiting: no copy stays claimed for good.
+                box.unclaim(copies)
             batches = await self._verified_batches(sess, batches, audit)
             if not batches:
                 return
@@ -1800,6 +1812,9 @@ class NotifyMixin:
                     except Exception:
                         log.warning("[%s] turn files: delivery failed",
                                     sess.label, exc_info=True)
+                        for batch in pending.batches:
+                            for item in batch.items:
+                                outbox.delete_copy(item)
                         done = True
                     if not done:
                         # Kept in order: the one that failed went back to
@@ -1814,9 +1829,9 @@ class NotifyMixin:
         """Copied files no finish took (the copy ended after the finish had
         stopped waiting, or a background agent's call the transcript had
         not caught up with): delivered once the session is idle with no
-        finish out and no job or work still running, as replies to the
-        prompt of the turn they were copied in, and only once their call is
-        found in the transcript."""
+        finish out and no job or work still running, each turn's batches
+        as replies to the prompt of the turn they were copied in, and only
+        once their call is found in the transcript."""
         from aipager.bot import outbox
         box = outbox.OUTBOX
         if (sess.status is not Status.IDLE or box.in_flight.get(sess.name)
@@ -1831,10 +1846,21 @@ class NotifyMixin:
         if any(now - b.created < _ORPHAN_FILES_SECONDS
                for b in box.batches[sess.name]):
             return
-        prompt_id = next((b.prompt_id for b in box.batches[sess.name]
-                          if b.prompt_id), None)
-        self._deliver_turn_files(sess, prompt_id, prompt_id,
-                                 self._held_key_now(sess))
+        # One delivery per turn, in order, each replying to its own prompt.
+        # No answer of theirs is held any more (their turns ended earlier).
+        groups: list[tuple[int | None, list]] = []
+        for batch in box.take_batches(sess.name):
+            if groups and groups[-1][0] == batch.prompt_id:
+                groups[-1][1].append(batch)
+            else:
+                groups.append((batch.prompt_id, [batch]))
+        for prompt_id, batches in groups:
+            try:
+                self._start_delivery(sess, batches, [], prompt_id, prompt_id,
+                                     None)
+            except Exception:
+                log.warning("[%s] turn files: delivery not started", sess.label,
+                            exc_info=True)
 
     async def _deliver_job_interim(
         self, sess: TrackedSession, content: str, turn_end_wall: float,

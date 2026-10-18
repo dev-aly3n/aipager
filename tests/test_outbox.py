@@ -453,6 +453,22 @@ def test_due_keeps_a_sessions_order_behind_a_held_answer():
     assert box.pending == {}
 
 
+def test_a_copy_that_raised_is_logged(caplog):
+    import asyncio
+
+    async def boom():
+        raise OSError("disk full")
+
+    async def go():
+        task = asyncio.ensure_future(boom())
+        await asyncio.wait([task])
+        return ob.task_batch(task)
+    with caplog.at_level("WARNING", logger="aipager.bot.outbox"):
+        assert asyncio.run(go()) is None
+    [rec] = [r for r in caplog.records if "a copy failed" in r.getMessage()]
+    assert rec.exc_info and "disk full" in str(rec.exc_info[1])
+
+
 # ---- the delivery ---------------------------------------------------------------
 
 class _Bot:

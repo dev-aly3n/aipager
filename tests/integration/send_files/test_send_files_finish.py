@@ -1052,3 +1052,27 @@ def test_a_newer_turns_files_wait_behind_older_ones_after_a_mute(
     assert names == ["first.png", "second.png"]
     assert not outbox.OUTBOX.has_pending(sess.name)
 
+
+# ---- orphans: each turn's own prompt ----------------------------------------------
+
+def test_orphans_of_two_turns_each_reply_to_their_own_prompt(
+        mk_bot, files_bot, rich, run_async, tmp_path):
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    first, second = _pic(tmp_path, "first.png"), _pic(tmp_path, "second.png")
+
+    async def go():
+        sess.trigger_msg_id = 21
+        await _send_files(bot, sess, [first], tool_use_id="toolu_a")
+        await outbox.OUTBOX.wait_in_flight(sess.name)
+        sess.trigger_msg_id = 22
+        await _send_files(bot, sess, [second], tool_use_id="toolu_b")
+        await outbox.OUTBOX.wait_in_flight(sess.name)
+        bot.registry.transition(sess.name, Status.IDLE)
+        for b in outbox.OUTBOX.batches[sess.name]:
+            b.created -= 120
+        await _settled(bot, sess, bot.flush_turn_files(sess))
+    run_async(go())
+    got = [(c[2]["photo"].filename, c[2]["reply_to_message_id"])
+           for c in files_bot.file_calls()]
+    assert got == [("first.png", 21), ("second.png", 22)]

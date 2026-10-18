@@ -516,8 +516,13 @@ OUTBOX = Outbox()
 
 def task_batch(task: asyncio.Task) -> Batch | None:
     """The batch a finished copy task made, or None (still running,
-    cancelled, failed, or no batch)."""
-    if not task.done() or task.cancelled() or task.exception() is not None:
+    cancelled, failed, or no batch). A copy that raised is logged with
+    its exception."""
+    if not task.done() or task.cancelled():
+        return None
+    exc = task.exception()
+    if exc is not None:
+        log.warning("turn files: a copy failed", exc_info=exc)
         return None
     result = task.result()
     return result if isinstance(result, Batch) else None
