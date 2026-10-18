@@ -1071,6 +1071,8 @@ class LifecycleMixin:
         """The live prompt objects for *rec*: ``pending_permission`` for
         an inline prompt, ``pending_prompt_msg`` (registered as a prompt
         surface) for a separate one. Returns where its buttons are."""
+        # The turn asked something: its card is not an empty one.
+        sess.turn_prompt_shown = True
         perm = rec["perm"]
         question = perm["question"]
         # A prompt saved by an older daemon may still hold raw direction

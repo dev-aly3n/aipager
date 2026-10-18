@@ -204,6 +204,9 @@ def test_card_final_move_copy_is_never_repainted_busy(
     chat.held_once = True  # nothing waits: the edit asks during the delete
     bot = _bot(mk_bot, chat)
     s = _sess(trigger=7, card_trigger=5)
+    # A tool turn: a card with nothing on it is not moved but deleted
+    # (`_drop_empty_card`, below).
+    s.tool_history = [("Bash: ls", True)]
     bot.registry._sessions[s.name] = s
     late: list = []
 
@@ -220,6 +223,39 @@ def test_card_final_move_copy_is_never_repainted_busy(
     assert ("send", "card", 77) in chat.log, chat.log
     assert late == [None]
     assert ("edit", "busy", 77) not in chat.log, chat.log
+
+
+def test_empty_card_delete_is_never_followed_by_a_busy_repaint(
+        mk_bot, monkeypatch, run_async):
+    """A turn that ran no tool: its card is deleted, under the card-edit
+    lock, instead of moved. An edit that asks for the lock during that
+    delete finds the card retired and sends nothing, and no final card
+    goes out anywhere."""
+    set_preference(CHAT, "layout", "card")
+    chat = _Chat(monkeypatch, new_id=77)
+    chat.held_once = True
+    bot = _bot(mk_bot, chat)
+    s = _sess(trigger=7, card_trigger=5)
+    bot.registry._sessions[s.name] = s
+    late: list = []
+
+    async def _during_delete():
+        late.append(asyncio.ensure_future(bot._edit_busy_rich(s, "Working")))
+        await _spin()
+
+    chat.on_delete = _during_delete
+
+    async def scenario():
+        bot.registry.transition(s.name, Status.IDLE)
+        await bot.notify(s, "idle_prompt", {"raw_md": ANSWER})
+        return await late[0]
+
+    assert run_async(scenario()) is None
+    assert chat.log[0] == ("delete", "", 42), chat.log
+    assert [e for e in chat.log if e[1] in ("busy", "final", "card")] == [], \
+        chat.log
+    assert ("send", "answer", 77) in chat.log, chat.log
+    assert s.busy_msg_id is None
 
 
 # ── a superseded waiting card, settled while its log goes out ────────────

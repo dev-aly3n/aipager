@@ -2,12 +2,15 @@
 
 Two rules, each with its reproductions:
 
-R1 — a `card`-layout turn whose finished card has NO timeline content
-(``animation.final_card_has_timeline``: no tool row, no subagent row, no
-prose the card would keep) is delivered as ONE message: the answer, whose
-first line carries the stats. The bare "✅ label · Done · Ns" card does not
-stay. It is a fresh send (an edit would be silent), and the card is deleted
-after it — two calls, where the kept card cost three.
+R1 — a `card`-layout turn whose finished card would be empty
+(``notify._card_is_empty``: no tool row, no subagent row, no prose the
+card would keep, no agent, no background shell, no prompt) is delivered
+as ONE message: the answer, whose first line carries the stats. Reverted
+on 2026-09-27 ("it must respect the settings") and brought back on
+2026-10-18 at the operator's request ("these Done empty messages are
+still bad"), with his rule: "delete it before it get its final looks".
+The card is deleted while it still says Working, BEFORE the answer and
+with no Done render first; the answer is a fresh send.
 
 R2 — a turn Claude woke itself for (hook_receiver's fresh
 ``<task-notification>`` path, ``user_prompt_submit`` with
@@ -35,7 +38,7 @@ from aipager import preferences as prefs
 from aipager.bot import notify as notify_mod
 from aipager.bot.animation import final_card_has_timeline
 from aipager.state import Status, TrackedSession
-from tests.footer_text import as_md
+from tests.footer_text import as_md, unfooter
 
 CHAT = 555
 TRIGGER = 7
@@ -1076,40 +1079,359 @@ def test_the_pinned_bar_follows_a_turn_whose_card_was_never_sent(
     assert after == "💤 cat (idle)"
 
 
-# ── layout decides (operator 2026-09-27, reversing 8.32 R1) ──────────────
-# "Busy card + result" promises the card stays; a tool-less turn deleting
-# it made the chat look random next to tool turns that kept theirs.
+# ── an empty card goes before it says Done (operator 2026-10-18) ─────────
+# Reverses 2026-09-27's "every turn follows the layout" for one case: a
+# `card`-layout turn that made no tool call. The operator: "these Done
+# empty messages are still bad", and on the order, "not delete it if it
+# has no tool call after it got final. but delete it before it get its
+# final looks." So no Done render may ever precede the delete.
 
-def test_a_toolless_card_layout_turn_keeps_its_card(mk_bot, run_async, wire):
-    """`card` layout, zero tools: the card is finalised in place (no Stop
-    button) and the answer arrives as its own message, the same shape as
-    a turn that ran tools. Nothing is deleted."""
+def _done_renders(w: _Wire) -> list[dict]:
+    """Every card edit that drew the finished (Done) status line."""
+    return [p for p in w.of("editMessageText")
+            if "· Done" in unfooter(
+                str(p.get("rich_message", {}).get("markdown", "")))]
+
+
+def test_a_toolless_card_turn_deletes_its_card_before_any_done_render(
+    mk_bot, run_async, wire,
+):
+    """Zero tools: the card is deleted as it stands (no final edit at all,
+    before or after), then the answer goes out under the prompt with the
+    stats on its first line, exactly as `replace` sends it."""
     bot = _wire_bot(mk_bot, wire)
     sess = _sess()
     _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
-    methods = wire.methods()
-    assert "delete_message" not in methods
-    assert "sendRichMessage" in methods
+    assert wire.methods() == ["delete_message", "sendRichMessage"]
+    assert wire.of("delete_message")[0]["message_id"] == CARD
+    # The same ESSENTIAL call `replace` makes (no ornament class).
+    assert "rate_limit_args" not in wire.of("delete_message")[0]
+    assert _done_renders(wire) == []
     (answer,) = wire.of("sendRichMessage")
     assert answer["reply_to_message_id"] == TRIGGER
-    assert ANSWER in answer["rich_message"]["markdown"]
-    # The card carries the stats, so the answer opens with the short line,
-    # not "💬 name · Finished (Ns)" (which is only for a turn with no card).
-    first = answer["rich_message"]["markdown"].split("\n", 1)[0]
-    assert "Finished" not in first and first.startswith("💬")
+    md = answer["rich_message"]["markdown"]
+    first, _, rest = md.partition("\n\n")
+    assert first.startswith("💬 **q** · Finished (")
+    assert rest == ANSWER
+    assert sess.busy_msg_id is None
 
 
-def test_card_layout_is_the_same_with_and_without_tools(mk_bot, run_async, wire):
-    """Both turns end with a kept card and a separate answer: the shape
-    no longer depends on whether a tool ran."""
+def test_a_toolless_turn_owes_the_answer_no_finished_card_head_start(
+    mk_bot, run_async, wire, monkeypatch,
+):
+    """No finished card was shown, so FINISH_CARD_GRACE_SECONDS is not
+    slept before the answer."""
+    slept: list[float] = []
+
+    async def _sleep(seconds):
+        slept.append(seconds)
+
+    monkeypatch.setattr(notify_mod, "_finish_sleep", _sleep)
+    monkeypatch.setattr(notify_mod, "FINISH_CARD_GRACE_SECONDS", 5.0)
+    bot = _wire_bot(mk_bot, wire)
+    _finish(run_async, bot, _sess(), summary=ANSWER)
+    assert wire.methods() == ["delete_message", "sendRichMessage"]
+    assert slept == []
+
+
+def test_card_layout_drops_only_the_toolless_card(mk_bot, run_async, wire):
+    """The same answer with and without one tool call: only the tool-less
+    turn loses its card; the tool turn's card is finished and kept."""
     shapes = []
     for tools in ((), (("Bash: ls", True),)):
         wire.calls.clear()
         bot = _wire_bot(mk_bot, wire)
         sess = _sess(tools=tools)
         _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
-        shapes.append("delete_message" in wire.methods())
-    assert shapes == [False, False]
+        shapes.append(wire.methods())
+    assert shapes == [["delete_message", "sendRichMessage"],
+                      ["editMessageText", "sendRichMessage"]]
+
+
+def test_streamed_text_the_answer_carries_does_not_keep_the_card(
+    mk_bot, run_async, wire,
+):
+    """A card that only showed Claude's text streaming in is empty: that
+    text is the answer, trimmed off the card by `_drop_answer_tail`."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess()
+    sess.stream_commentary = [(0, ANSWER)]  # the transcript fallback
+    _finish(run_async, bot, sess, summary=ANSWER)
+    assert wire.methods() == ["delete_message", "sendRichMessage"]
+
+
+def test_streamed_text_the_answer_does_not_carry_keeps_the_card(
+    mk_bot, run_async, wire,
+):
+    """Prose the answer does not repeat stays on the card, so the card is
+    not empty and is finished as before."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess()
+    sess.stream_commentary = [(0, "Let me check the notes first.")]
+    _finish(run_async, bot, sess, summary=ANSWER)
+    assert wire.methods() == ["editMessageText", "sendRichMessage"]
+
+
+def _question_info():
+    return {"name": "AskUserQuestion", "summary": "Which one?",
+            "input": {"questions": [{
+                "question": "Which one?", "multiSelect": False,
+                "options": [{"label": "a"}, {"label": "b"}]}]}}
+
+
+def test_a_turn_that_asked_a_question_keeps_its_card(mk_bot, run_async, wire):
+    """AskUserQuestion records no tool row, but the card held the question:
+    it is not an empty card, and it is finished and kept."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess()
+    sess.status = Status.INTERACTIVE
+
+    async def _go():
+        await bot.notify(sess, "permission_prompt",
+                         {"tool_info": _question_info()})
+        sess.status = Status.IDLE
+        await bot.notify(sess, "idle_prompt", {"summary": ANSWER})
+        await _drain_background()
+
+    run_async(_bounded(_go()))
+    assert sess.tool_history == []
+    assert "delete_message" not in wire.methods()
+    assert _done_renders(wire), wire.calls
+    assert wire.methods()[-1] == "sendRichMessage"
+
+
+def test_a_turn_whose_prompt_went_out_as_its_own_message_keeps_its_card(
+    mk_bot, run_async, wire,
+):
+    """A prompt sent as its own message (`_send_prompt_message`) counts
+    too: the turn asked something."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess()
+
+    async def _go():
+        await bot._send_prompt_message(sess, _question_info(), {}, "extra")
+        await bot.notify(sess, "idle_prompt", {"summary": ANSWER})
+        await _drain_background()
+
+    run_async(_bounded(_go()))
+    assert sess.turn_prompt_shown is True
+    assert "delete_message" not in wire.methods()
+    assert _done_renders(wire), wire.calls
+
+
+def test_a_prompt_restored_after_a_restart_counts_as_the_turn_asking(mk_bot):
+    """A restart brings an open prompt back onto the card
+    (`_rebuild_open_prompt`): the turn asked something, so its card is not
+    an empty one."""
+    bot = mk_bot()
+    sess = _sess()
+    perm = {"tool_name": "Bash", "tool_summary": "Bash: make", "detail": "",
+            "always_available": False, "standing_rule_suggestion": None,
+            "hook_reply": None, "question": None}
+    rec = {"kind": "inline", "card_msg_id": CARD, "msg_id": 0, "chat_id": CHAT,
+           "text": "", "summary": "Bash: make", "tool_use_id": "toolu_1",
+           "shown_wall": time.time() - 5, "perm": perm}
+    bot._rebuild_open_prompt(sess, rec, time.monotonic())
+    assert sess.turn_prompt_shown is True
+    assert notify_mod._card_is_empty(sess) is False
+
+
+def test_a_turn_that_ran_an_agent_keeps_its_card(mk_bot, run_async, wire):
+    """An agent launched and finished inside the turn: its row is on the
+    card, so the card is finished and kept."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess()
+
+    async def _go():
+        await bot.notify(sess, "subagent_start", {
+            "agent_type": "general-purpose", "agent_id": "a1"})
+        await bot.notify(sess, "subagent_stop", {
+            "agent_type": "general-purpose", "agent_id": "a1"})
+        sess.status = Status.IDLE
+        await bot.notify(sess, "idle_prompt", {"summary": ANSWER})
+        await _drain_background()
+
+    run_async(_bounded(_go()))
+    assert "delete_message" not in wire.methods()
+    assert _done_renders(wire), wire.calls
+
+
+@pytest.mark.parametrize("work", [
+    "agent_counted", "agent_finished", "agent_running", "shell_running",
+    "prompt_shown",
+])
+def test_any_work_of_the_turn_makes_the_card_not_empty(work):
+    """`_card_is_empty`, one guard each, with no row on the card: an agent
+    counted, finished or still running, a running background shell of the
+    job, or a prompt raised."""
+    sess = _sess()
+    assert notify_mod._card_is_empty(sess) is True
+    if work == "agent_counted":
+        sess.subagent_count_this_turn = 1
+    elif work == "agent_finished":
+        sess.finished_subagents = [{"type": "general-purpose"}]
+    elif work == "agent_running":
+        sess.active_subagents = {"a1": {"type": "general-purpose"}}
+    elif work == "shell_running":
+        sess.bg_shells = {"t1": {"label": "sleep 9", "summary": "Bash: sleep 9",
+                                 "started": 0.0, "in_job": True,
+                                 "history_idx": None}}
+    else:
+        sess.turn_prompt_shown = True
+    assert notify_mod._card_is_empty(sess) is False
+
+
+def test_a_shell_outside_the_job_is_not_the_turns_work():
+    """A shell /stop took out of the job (or an earlier turn did not
+    carry) is no work of this turn's."""
+    sess = _sess()
+    sess.bg_shells = {"t1": {"label": "sleep 9", "summary": "Bash: sleep 9",
+                             "started": 0.0, "in_job": False,
+                             "history_idx": None}}
+    assert notify_mod._card_is_empty(sess) is True
+
+
+def test_a_moved_target_deletes_the_toolless_card_without_a_final_copy(
+    mk_bot, run_async, wire,
+):
+    """The turn absorbed a later message (the target moved to 31): a tool
+    turn's card would be re-sent there in its final form. A tool-less one
+    is deleted where it is, and only the answer goes under 31."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess()
+    sess.trigger_msg_id = 31
+    _finish(run_async, bot, sess, summary=ANSWER)
+    assert wire.methods() == ["delete_message", "sendRichMessage"]
+    assert wire.of("delete_message")[0]["message_id"] == CARD
+    (answer,) = wire.of("sendRichMessage")
+    assert answer["reply_to_message_id"] == 31
+    assert answer["rich_message"]["markdown"].startswith("💬 **q** · Finished (")
+
+
+def test_a_moved_target_still_re_anchors_a_tool_turns_final_card(
+    mk_bot, run_async, wire,
+):
+    """Unchanged for a tool turn: its finished card is copied under the new
+    target and the old one deleted."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess(tools=[("Read: /a.py", True)])
+    sess.trigger_msg_id = 31
+    _finish(run_async, bot, sess, summary=ANSWER)
+    copies = [p for p in wire.of("sendRichMessage")
+              if p.get("reply_to_message_id") == 31
+              and "· Done" in unfooter(p["rich_message"]["markdown"])]
+    assert copies, wire.calls
+    assert [p["message_id"] for p in wire.of("delete_message")] == [CARD]
+
+
+def _failing_delete(bot, w: _Wire):
+    async def _delete(*_a, **kwargs):
+        await asyncio.sleep(0)
+        w.calls.append(("delete_message", dict(kwargs)))
+        raise RuntimeError("Bad Request: message can't be deleted")
+    bot._app.bot.delete_message = _delete
+
+
+def test_a_card_that_cannot_be_deleted_is_still_finished(
+    mk_bot, run_async, wire,
+):
+    """Telegram refuses the delete (a message too old to delete, say): the
+    card must not stay on "Working" with its Stop button, so it gets its
+    final render after all, and the answer follows it with the short
+    line, as under any kept card."""
+    bot = _wire_bot(mk_bot, wire)
+    _failing_delete(bot, wire)
+    sess = _sess()
+    _finish(run_async, bot, sess, summary=ANSWER)
+    assert wire.methods() == ["delete_message", "editMessageText",
+                              "sendRichMessage"]
+    (final,) = _done_renders(wire)
+    assert final["message_id"] == CARD
+    assert "reply_markup" not in final or not final["reply_markup"]
+    assert wire.of("sendRichMessage")[0]["rich_message"]["markdown"] \
+        == f"💬 **q**\n\n{ANSWER}"
+    assert sess.busy_msg_id is None
+
+
+def test_an_edit_that_found_the_card_gone_leaves_nothing_to_delete(
+    mk_bot, run_async, wire,
+):
+    """A card edit holding the card-edit lock as the turn ends finds the
+    message gone (``busy_msg_id`` 0): the delete waiting behind it sends
+    nothing, and the answer still goes out with the stats."""
+    from aipager.bot.animation import _card_edit_lock
+
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess()
+
+    async def _scenario():
+        async with _card_edit_lock(sess):
+            finish = asyncio.create_task(
+                bot.notify(sess, "idle_prompt", {"summary": ANSWER}))
+            await _yield(50)
+            # The finish is waiting for this lock, at the card's delete.
+            assert not finish.done()
+            assert wire.calls == []
+            sess.busy_msg_id = 0  # RichMessageGone, as _edit_busy_rich does
+        await finish
+        await _drain_background()
+
+    run_async(_bounded(_scenario()))
+    assert wire.methods() == ["sendRichMessage"]
+    assert wire.of("sendRichMessage")[0]["rich_message"]["markdown"] \
+        .startswith("💬 **q** · Finished (")
+    assert sess.busy_msg_id is None
+
+
+def test_a_muted_chat_sends_nothing_for_the_toolless_card(
+    mk_bot, run_async, wire,
+):
+    """Flood-muted: neither the delete nor a fallback final edit is tried
+    (the gate would refuse both), and the answer is held with the stats."""
+    from aipager.bot.flood import MUTE
+    from aipager.bot.held import HELD
+
+    bot = _wire_bot(mk_bot, wire)
+    _failing_delete(bot, wire)
+    sess = _sess()
+    MUTE.mute(CHAT, 600)
+    _finish(run_async, bot, sess, summary=ANSWER)
+    assert wire.calls == []
+    (held,) = HELD.pending(CHAT)
+    assert held.rich_text.startswith("💬 **q** · Finished (")
+
+
+def test_an_earlier_turns_work_does_not_keep_the_new_turns_card(
+    mk_bot, run_async, wire,
+):
+    """A turn that ran tools, an agent and a prompt is followed by a quick
+    tool-less turn: the new turn's card starts clean, so it is the empty
+    one and is deleted with no Done render."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _busy_sess(bot)
+    sess.tool_history = [("Read: /home/alice/a.py", True)]
+    sess.finished_subagents = [{"type": "general-purpose"}]
+    sess.subagent_count_this_turn = 1
+    sess.turn_prompt_shown = True
+
+    async def _go():
+        await bot.notify(sess, "user_prompt_submit", {})
+        await _yield()
+        card_id = sess.busy_msg_id
+        bot.registry.transition(sess.name, Status.IDLE)
+        await bot.notify(sess, "idle_prompt", {"summary": ANSWER})
+        await _drain_background()
+        await _yield()
+        return card_id
+
+    card_id = run_async(_bounded(_go()))
+    assert len(_cards(wire)) == 1
+    assert card_id and card_id > 0
+    assert [p["message_id"] for p in wire.of("delete_message")] == [card_id]
+    assert _done_renders(wire) == []
+    assert wire.of("sendRichMessage")[-1]["rich_message"]["markdown"] \
+        .startswith("💬 **cat** · Finished")
+    assert not sess.animation_running()
 
 
 # ── the finish waits for an in-flight card change (animate_lock) ─────────
@@ -1122,15 +1444,18 @@ def _final_edits(wire, msg_id):
             if p.get("message_id") == msg_id]
 
 
+@pytest.mark.parametrize("tools", [(), (("Read: /a.py", True),)],
+                         ids=["toolless", "with-tool"])
 def test_an_in_flight_re_anchor_is_waited_for_and_its_card_settled(
-    mk_bot, run_async, wire,
+    mk_bot, run_async, wire, tools,
 ):
     """A live tick's re-anchor holds ``animate_lock`` and swaps the card to
     a new message (77) as the turn finishes. The finish must settle the
     card the re-anchor leaves behind, not the old id, or 77 stays on
-    "Working" for good."""
+    "Working" for good: a tool turn finishes 77, a tool-less one deletes
+    77 (operator 2026-10-18), never the old id."""
     bot = _wire_bot(mk_bot, wire)
-    sess = _sess()
+    sess = _sess(tools=tools)
 
     async def _scenario():
         started = asyncio.Event()
@@ -1149,17 +1474,25 @@ def test_an_in_flight_re_anchor_is_waited_for_and_its_card_settled(
         await _drain_background()
 
     run_async(_bounded(_scenario()))
-    assert _final_edits(wire, 77), wire.calls
     assert not _final_edits(wire, CARD)
-    assert "delete_message" not in wire.methods()
+    if tools:
+        assert _final_edits(wire, 77), wire.calls
+        assert "delete_message" not in wire.methods()
+    else:
+        assert not _final_edits(wire, 77), wire.calls
+        assert [p["message_id"] for p in wire.of("delete_message")] == [77]
 
 
+@pytest.mark.parametrize("with_tool", [False, True],
+                         ids=["toolless", "with-tool"])
 def test_a_card_whose_send_is_in_flight_at_the_finish_is_settled(
-    mk_bot, run_async, wire, gate,
+    mk_bot, run_async, wire, gate, with_tool,
 ):
     """The late card's send (88) is still in flight as the turn ends: the
-    finish waits for it and then settles it like any kept card, instead of
-    the card landing afterwards and animating a turn that is over."""
+    finish waits for it and then settles it, instead of the card landing
+    afterwards and animating a turn that is over. Settled is finished in
+    place for a tool turn, deleted for a tool-less one (operator
+    2026-10-18)."""
     bot = _wire_bot(mk_bot, wire)
     sess = _busy_sess(bot)
     release = {}
@@ -1178,6 +1511,8 @@ def test_a_card_whose_send_is_in_flight_at_the_finish_is_settled(
         gate.event.set()
         await _yield()
         assert "event" in release  # the late send is in flight
+        if with_tool:
+            sess.record_tool("Bash: ls", True)
         bot.registry.transition(sess.name, Status.IDLE)
         finish = asyncio.create_task(
             bot.notify(sess, "idle_prompt", {"summary": ANSWER}))
@@ -1188,5 +1523,61 @@ def test_a_card_whose_send_is_in_flight_at_the_finish_is_settled(
         await _yield()
 
     run_async(_bounded(_scenario()))
-    assert _final_edits(wire, 88), wire.calls
+    if with_tool:
+        assert _final_edits(wire, 88), wire.calls
+        assert "delete_message" not in wire.methods()
+    else:
+        assert not _final_edits(wire, 88), wire.calls
+        assert [p["message_id"] for p in wire.of("delete_message")] == [88]
     assert not sess.animation_running()
+
+
+@pytest.mark.parametrize("layout", ["merged", "replace"])
+def test_a_moved_target_still_moves_a_toolless_turn_in_the_other_layouts(
+    mk_bot, run_async, wire, layout,
+):
+    """Only the `card` layout drops an empty card and skips the final
+    re-anchor: in `merged` and `replace` a tool-less turn whose target moved
+    to 31 still lands its answer under 31, as it did before."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess(layout=layout)
+    sess.trigger_msg_id = 31
+    _finish(run_async, bot, sess, summary=ANSWER)
+    sent = wire.of("sendRichMessage")
+    assert [p["reply_to_message_id"] for p in sent] == [31]
+    assert [p["message_id"] for p in wire.of("delete_message")] == [CARD]
+    assert "editMessageText" not in wire.methods()
+    if layout == "merged":
+        # Re-anchored: card and answer as one new message under 31, then
+        # the old card is deleted (not the answer edited into it).
+        assert wire.methods() == ["sendRichMessage", "delete_message"]
+        md = sent[0]["rich_message"]["markdown"]
+        assert "· Done" in md and ANSWER in md
+    else:
+        assert wire.methods() == ["delete_message", "sendRichMessage"]
+
+
+def test_an_api_error_turn_keeps_its_toolless_card(mk_bot, run_async, wire):
+    """An API error is not an answer: its notice goes out without the
+    stats, so the card is finished in place as the turn's record, not
+    deleted."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess()
+    _finish(run_async, bot, sess, summary="API Error: 500 internal server error")
+    assert "delete_message" not in wire.methods(), wire.calls
+    (final,) = _done_renders(wire)
+    assert final["message_id"] == CARD
+
+
+def test_a_dropped_card_attaches_no_full_log_for_a_live_frames_cut(
+    mk_bot, run_async, wire,
+):
+    """A live frame cut the card (``last_card_truncated``), then the turn
+    ended with no tool: the card is gone and the answer carries everything,
+    so no full-log file is sent for rows no one can see."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess()
+    sess.last_card_truncated = True
+    _finish(run_async, bot, sess, summary=ANSWER)
+    assert wire.methods() == ["delete_message", "sendRichMessage"]
+    assert sess.last_card_truncated is False

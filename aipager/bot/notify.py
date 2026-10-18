@@ -77,7 +77,7 @@ from aipager.bot.animation import (
     _expire_tool_batch,
     _md_escape, _read_stream_text, _sync_anchors_from_transcript,
     build_full_log,
-    build_stream_card_ex,
+    build_stream_card_ex, final_card_has_timeline,
 )
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -245,6 +245,29 @@ def settled_agent_row(agent_type: str, tool_count: int, elapsed: float) -> str:
     plural = "" if tool_count == 1 else "s"
     return (f"\U0001f916 {agent_type} · {tool_count} tool call{plural}"
             f" · {clock(elapsed)}")
+
+
+def _card_is_empty(sess: TrackedSession) -> bool:
+    """Whether a finishing turn's busy card has nothing on it but its
+    status line: the turn made no tool call (operator, 2026-10-18).
+
+    Read from the state the card itself is drawn from, all of it reset
+    when this turn's card was opened (``_send_busy_and_animate``), so an
+    earlier turn's rows never count: no section the finished card would
+    keep (``final_card_has_timeline``: a tool row, an agent row, or prose
+    left after ``_drop_answer_tail`` trimmed what the answer carries), no
+    agent launched (``subagent_count_this_turn``, the agents finished or
+    still running), no background shell of the job, and no permission or
+    question prompt raised (``turn_prompt_shown``). Call it AFTER the trim.
+    """
+    return not (
+        final_card_has_timeline(sess)
+        or sess.subagent_count_this_turn
+        or sess.finished_subagents
+        or sess.active_subagents
+        or sess.job_shell_ids()
+        or sess.turn_prompt_shown
+    )
 
 
 def _drop_answer_tail(sess: TrackedSession, answer: str) -> None:
@@ -438,6 +461,7 @@ class NotifyMixin:
         record."""
         bot = self._app.bot
         label = sess.label
+        sess.turn_prompt_shown = True
         selector_text = context.get("selector_text", "")
         selector_options = context.get("selector_options")
         if tool_info and tool_info["name"] == "AskUserQuestion":
@@ -983,8 +1007,10 @@ class NotifyMixin:
 
     def _delete_card_later(self, sess: TrackedSession, msg_id: int) -> None:
         """Delete a finished turn's busy card once its answer is out. Unused
-        since 2026-09-27 (the layout setting decides the card for every turn;
-        8.32 R1's tool-less delete was reverted). Never raises, never waits.
+        by the finish path since 2026-09-27 (8.32 R1's tool-less delete
+        after the answer was reverted; since 2026-10-18 an empty card is
+        deleted BEFORE the answer, by ``_drop_empty_card``). Never raises,
+        never waits.
 
         Card housekeeping, so an ORNAMENT, like the re-anchor's own delete:
         leaving a stale card behind is cosmetic, taking an answer's token to
@@ -1025,6 +1051,44 @@ class NotifyMixin:
         task = asyncio.create_task(_delete())
         _BACKGROUND_TASKS.add(task)
         task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+    async def _drop_empty_card(self, sess: TrackedSession) -> bool:
+        """Delete a finishing turn's busy card that has nothing on it
+        (``_card_is_empty``), as it stands: still "Working", never edited
+        into its Done form first (operator, 2026-10-18). True once the card
+        is gone, False when the delete failed and the card is still there
+        (the caller then finishes it in place, so it never stays on
+        "Working").
+
+        The same call `replace` makes for its card: ESSENTIAL and sent
+        before the answer. Not attempted while the gate refuses the card
+        (``_card_refused_now``: the chat is flood-muted, or in minimal mode,
+        where the delete would take the chat's scarce token and hold the
+        answer back behind it): False, and the final edit the caller then
+        tries is refused before any request, so nothing goes out for the
+        card, as before this change. Under the card-edit lock, like the
+        merged finish: an edit already waiting in that lock lands first,
+        and one that gets the lock afterwards finds ``busy_msg_id`` retired
+        and sends nothing."""
+        if self._card_refused_now(sess):
+            return False
+        async with _card_edit_lock(sess):
+            msg_id = sess.busy_msg_id
+            if not msg_id or msg_id <= 0:
+                # The edit this waited behind found the card gone.
+                sess.busy_msg_id = None
+                return True
+            try:
+                await self._app.bot.delete_message(
+                    chat_id=resolve_chat_id(sess), message_id=msg_id,
+                )
+            except Exception:
+                log.info("[%s] empty card %s could not be deleted — it is "
+                         "finished in place instead", sess.label, msg_id,
+                         exc_info=True)
+                return False
+            sess.busy_msg_id = None
+            return True
 
     async def _apply_consumption(
         self, sess: TrackedSession, consumed: list[dict], *,
@@ -3787,18 +3851,46 @@ class NotifyMixin:
                     _drop_answer_tail(
                         sess, context.get("raw_md") or context.get("summary") or "",
                     )
-                # ── the layout setting decides the card, always ─────────────────
-                # 8.32 R1 deleted a `card`-layout turn's card when it had no
-                # timeline (no tools), delivering the answer alone. That broke
-                # the operator's own setting: "Busy card + result" promises the
-                # card stays and the answer arrives as its own message, and
-                # tool turns kept theirs, so the chat looked random (operator,
-                # 2026-09-27: "it must respect the settings"). Every turn now
-                # follows the layout: `card` keeps the card, `replace` removes
-                # it, `merged` folds the answer in. The deletion hooks below
-                # stay wired for a future layout that wants them, and are
-                # inert while this stays 0.
-                toolless_card_msg_id = 0
+                # ── a card with nothing on it goes before it says Done ─────────
+                # In the `card` layout a turn that ran no tool keeps no card:
+                # it is deleted here, still showing "Working", and never
+                # edited into "✅ label · Done · 0:03" first; the answer then
+                # opens with the stats, as in `replace` (operator,
+                # 2026-10-18: "these Done empty messages are still bad", and
+                # "delete it before it get its final looks"). This reverses
+                # 2026-09-27's "every turn follows the layout", which kept
+                # such a card because the chat looked random next to tool
+                # turns; an empty Done card above the answer only repeats
+                # its first line. Turns that ran a tool, and the `merged`
+                # and `replace` layouts, are unchanged.
+                #
+                # Empty is `_card_is_empty`: nothing on the card's own
+                # timeline (read after the trim above, so streamed text the
+                # answer carries does not count), no agent, no background
+                # shell and no prompt this turn. Only with a fresh answer to
+                # carry the stats: a turn with nothing to deliver keeps its
+                # card as the one record that it ended (8.32 R1's rule).
+                # The id read here is the settled one: the `animate_lock`
+                # above waited out any re-anchor in flight.
+                drop_empty_card = False
+                if (layout == "card" and sess.busy_msg_id and sess.busy_msg_id > 0
+                        and _card_is_empty(sess)):
+                    _candidate = (context.get("raw_md") or context.get("summary")
+                                  or "")
+                    # An API error is not an answer: its notice goes out
+                    # without the stats, so the card stays the record of
+                    # the turn, as before.
+                    if _candidate and not _detect_api_error(_candidate):
+                        _cand_digest = hashlib.md5(
+                            _candidate.encode("utf-8")).hexdigest()
+                        drop_empty_card = not (
+                            _cand_digest == sess.last_idle_summary_hash
+                            or sess.was_delivered(_cand_digest))
+                if drop_empty_card:
+                    # No re-anchor either: a final card under the new target
+                    # is exactly what must not appear. The answer replies to
+                    # the turn's current target on its own.
+                    reanchor_needed = False
                 card_already_final = False
                 merged_send_as_new = False
                 if reanchor_needed and layout == "card":
@@ -3831,13 +3923,27 @@ class NotifyMixin:
                         # out — so scrollback reads card, header, body.
                         # (the trim already ran above, before any final render.)
                         if layout == "card":
-                            if card_already_final:
+                            if drop_empty_card and await self._drop_empty_card(sess):
+                                # Gone (or found gone): no finished card, so
+                                # no head start for the answer, and the
+                                # answer's first line carries the stats.
+                                log.info("[%s] the turn ran no tool — its card "
+                                         "is removed, the answer carries the "
+                                         "stats", label)
+                                # Nothing hidden: no card is left whose rows
+                                # a full log would make up for (a live
+                                # frame's cut must not attach one).
+                                sess.last_card_truncated = False
+                            elif card_already_final:
                                 # _reanchor_busy_card already rendered the
                                 # exact same final content under the new
                                 # message a moment ago — a second POST here
                                 # would be redundant, harmless-but-wasteful.
                                 card_kept = True
                             else:
+                                # Also a toolless card whose delete failed:
+                                # it must still end finished, never stay on
+                                # "Working".
                                 try:
                                     card_kept = await self._edit_busy_rich(
                                         sess, FINAL_VERB, final=True,
@@ -3974,8 +4080,6 @@ class NotifyMixin:
                         await self._maybe_update_bot_name(sess.name)
                     except Exception:
                         log.warning("Failed to send error notification", exc_info=True)
-                    if toolless_card_msg_id:
-                        self._delete_card_later(sess, toolless_card_msg_id)
                     # Files Claude sent before the error: under the prompt
                     # (in the background).
                     self._deliver_turn_files(
@@ -4360,11 +4464,6 @@ class NotifyMixin:
                 if _answer_digests and (_answer_landed or merged_delivered):
                     sess.confirm_delivered(_answer_digests, turn_end_wall)
 
-                # Inert while toolless_card_msg_id stays 0 (the layout decides
-                # the card, 2026-09-27); kept for a layout that wants it.
-                if toolless_card_msg_id:
-                    self._delete_card_later(sess, toolless_card_msg_id)
-
                 if (sess.turn_seq == finishing_turn
                         and sess.trigger_msg_id == finish_trigger):
                     # Reply cycle complete — unless a newer turn has begun, or a
@@ -4383,8 +4482,9 @@ class NotifyMixin:
                 # file per close, superseding the old answer-only
                 # response file: complete chronological play-by-play plus the
                 # full answer, so hidden history is always recoverable.
-                # For layout=card and layout=merged this flag comes from the
-                # FINAL render (stashed by _edit_busy_rich / _send_merged_final
+                # For layout=card (except a dropped empty card, which resets
+                # it: nothing is left hidden) and layout=merged this flag
+                # comes from the FINAL render (stashed by _edit_busy_rich / _send_merged_final
                 # respectively). For layout=replace no final card is ever
                 # rendered — the busy card is deleted outright — so the flag
                 # reflects the last interim tick: a deliberate proxy (review
@@ -4459,6 +4559,9 @@ class NotifyMixin:
                                     sess.label, exc_info=True)
         elif sess.status == Status.INTERACTIVE:
             self._stop_animation(sess)
+            # The turn asked something: its card is not an empty one, and
+            # the finish keeps it (`_card_is_empty`).
+            sess.turn_prompt_shown = True
             tool_info = context.get("tool_info")
             if tool_info and tool_info.get("name") == "AskUserQuestion":
                 # Whatever found it (the hook, or the transcript fallback),

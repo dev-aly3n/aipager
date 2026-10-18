@@ -171,8 +171,9 @@ def test_card_send_racing_the_stop_is_settled_per_layout(replay, vloop,
     """Regression guard (main's card lock already covers it): the card's
     send is still waiting on the flood gate when the turn's Stop arrives.
     The finish waits for it and settles it as the layout says:
-    ``card`` keeps it (Stop off), ``replace`` deletes it, ``merged`` folds
-    the answer into it."""
+    ``replace`` deletes it, ``merged`` folds the answer into it, and
+    ``card`` deletes it too, as the turn ran no tool (an empty card is
+    removed, operator 2026-10-18)."""
     _layout(layout)
     r = replay
     real_send_busy = r.bot.send_busy
@@ -197,7 +198,7 @@ def test_card_send_racing_the_stop_is_settled_per_layout(replay, vloop,
     _run(vloop, scenario())
     (card,) = r.chat.cards.values()
     assert r.chat.live_cards() == []
-    if layout == "replace":
+    if layout in ("replace", "card"):
         assert card["deleted"]
     else:
         assert not card["deleted"] and card["stop"] is False
