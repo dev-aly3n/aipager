@@ -927,3 +927,42 @@ def test_standin_plays_send_user_file(tmp_path, monkeypatch):
     log = [json.loads(line) for line in (inst / "standin-claude-fts__d1.jsonl").read_text()
            .splitlines()]
     assert [e.get("decision") for e in log if e["event"] == "decision"] == ["sent", "sent"]
+
+
+def test_standin_queues_a_message_the_way_claude_code_does(tmp_path, monkeypatch):
+    """With the scenario's queue file, a message typed while a turn runs
+    gets its enqueue line and UserPromptSubmit at submit, and runs as the
+    next turn after a dequeue line, with no hook; without it, as before."""
+    home, inst, proj = tmp_path / "h", tmp_path / "i", tmp_path / "p"
+    for d in (home / ".claude", inst, proj):
+        d.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(inst))
+    monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-ftq__d1")
+    monkeypatch.chdir(proj)
+    s = standin_claude.StandIn(["--dangerously-skip-permissions"])
+    fired: list = []
+    monkeypatch.setattr(s, "fire", lambda event, extra=None, tool=None, holder=None:
+                        fired.append((event, (extra or {}).get("prompt"))) or [])
+    (inst / "standin-cc-queue-claude-ftq__d1").write_text("")
+    (inst / "standin-hold-claude-ftq__d1").write_text("")
+    s.submit("hold this turn. Reply with exactly: one")
+    for _ in range(100):
+        if any(e == ("UserPromptSubmit", "hold this turn. Reply with exactly: one")
+               for e in fired):
+            break
+        time.sleep(0.05)
+    s.submit("Reply with exactly: two")
+    assert ("UserPromptSubmit", "Reply with exactly: two") in fired
+    (inst / "standin-hold-claude-ftq__d1").unlink()
+    for _ in range(200):
+        if s.turn is None:
+            break
+        time.sleep(0.05)
+    entries = [json.loads(line) for line in Path(s.transcript).read_text().splitlines()]
+    ops = [e["operation"] for e in entries if e["type"] == "queue-operation"]
+    assert ops == ["enqueue", "dequeue"]
+    assert [e for e in fired if e[0] == "UserPromptSubmit"] == [
+        ("UserPromptSubmit", "hold this turn. Reply with exactly: one"),
+        ("UserPromptSubmit", "Reply with exactly: two")]
+    assert [e[0] for e in fired].count("Stop") == 2

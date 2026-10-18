@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import re
 import struct
+import time
 import zlib
 
 import pytest
@@ -155,6 +156,57 @@ def test_standin_refused_file_is_soft_and_sends_nothing(fresh):
     flows.prompt_turn(inst, DM, ALICE, name, "Reply with exactly: still here",
                       "still here")
     flows.wait_text(fake, DM, "still here", since=since)
+
+
+@pytest.mark.parametrize("typed_in", ["telegram", "terminal"])
+def test_standin_a_request_queued_while_a_turn_runs_sends_the_file(fresh, typed_in):
+    """The request comes while an earlier turn still runs, and Claude Code
+    takes it up as its next turn (a ``dequeue`` transcript line, no hook;
+    its UserPromptSubmit fired at submit). Sent from Telegram, the daemon
+    typed it itself and resumes the files turn; typed in the terminal,
+    the transcript's dequeue line proves the turn began. Either way the
+    file arrives after that turn's answer, as a reply to it."""
+    if ftc.claude_mode() != "standin":
+        pytest.skip("stand-in run")
+    inst = fresh
+    fake = inst.fake
+    label = "ft9q" if typed_in == "telegram" else "ft9t"
+    name = inst.new_session(DM, ALICE, label)
+    path = inst.session_folder(name) / "queued.png"
+    path.write_bytes(png())
+    (inst.inst_dir / f"standin-cc-queue-{name}").write_text("")
+    inst.hold_tools(name)
+    try:
+        flows.settle(fake)
+        since, log_since = fake.mark(), inst.log_mark()
+        before = len(inst.prompts_seen(name))
+        fake.inject_text(DM, fti.user(ALICE), "hold this turn. Reply with exactly: first done")
+        flows.wait_prompt(inst, name, "hold this turn", after=before)
+        inst.wait_log(f"[{label}]", "→ BUSY", since=log_since)
+        request = EN_PROMPT.format(path=path)
+        if typed_in == "telegram":
+            fake.inject_text(DM, fti.user(ALICE), request)
+        else:
+            # The text, then Enter in its own read (as a terminal sends it).
+            inst.send_keys(name, request.encode())
+            time.sleep(0.3)
+            inst.send_keys(name, b"\r")
+        fti.wait_until(lambda: any(e.get("event") == "queued"
+                                   for e in inst.standin_log(name)),
+                       60, "the request to be queued behind the running turn",
+                       lambda: inst.log_tail(25))
+    finally:
+        inst.release_tools(name)
+    photo = _assert_delivered(inst, name, label, path, since, log_since)
+    events = [e.get("event") for e in inst.standin_log(name)]
+    assert "dequeued" in events, events
+    lines = inst.log_lines(log_since)
+    proof = ("files turn resumed for queued message" if typed_in == "telegram"
+             else "the transcript shows a turn begun with no prompt hook")
+    assert any(proof in line for line in lines), inst.log_tail(40)
+    assert not any("was dropped" in line or "not in the transcript" in line
+                   for line in lines), inst.log_tail(40)
+    print(f"[queued-{typed_in}] {photo.summary()}")
 
 
 # ---- real Claude ----------------------------------------------------------------------

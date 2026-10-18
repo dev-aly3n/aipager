@@ -126,6 +126,9 @@ INTERRUPT_MARKER = "[Request interrupted by user for tool use]"
 _NAME_RE = re.compile(r"create\s+([A-Za-z0-9_-]+)\.txt", re.I)
 _AGENTS_RE = re.compile(r"agents:\s*(launch|hold|finish)\b", re.I)
 _TWO_RE = re.compile(r"two prompts:\s*(agent-first|claude-first)\b", re.I)
+#: "hold this turn": the turn waits on the hold file before it answers (a
+#: turn that is still running when the test sends the next message).
+_HOLD_RE = re.compile(r"\bhold this turn\b", re.I)
 #: Claude Code 2.1.302's Bash permission dialog for an agent, top to bottom.
 AGENT_ROWS = ("Yes", "Yes, and don't ask again for make commands in this folder",
               "No, and tell Claude what to do differently (esc)")
@@ -172,11 +175,16 @@ class StandIn:
         self.hold_path = os.path.join(inst, f"standin-hold-{self.session or 'nosession'}")
         self.deadline_path = os.path.join(
             inst, f"standin-hook-deadline-{self.session or 'nosession'}")
+        # Present: a message typed while a turn runs is queued the way
+        # Claude Code 2.1.259+ queues it (see :meth:`submit`). Absent (every
+        # older scenario): it simply runs after the turn, with its hook then.
+        self.cc_queue_path = os.path.join(
+            inst, f"standin-cc-queue-{self.session or 'nosession'}")
         self.dialog_answer: str | None = None
         self.in_permission = False
         self.dialog_row = 0
         self.lock = threading.Lock()
-        self.queue: list[str] = []
+        self.queue: list[tuple[str, bool]] = []
         self.turn: threading.Thread | None = None
         self.hook_proc: subprocess.Popen | None = None
         self.interrupted = False
@@ -206,6 +214,16 @@ class StandIn:
         entry.setdefault("isSidechain", False)
         entry.setdefault("userType", "external")
         self.parent_uuid = entry["uuid"]
+        with open(self.transcript, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+
+    def queue_line(self, operation: str, content: str | None = None) -> None:
+        """A ``queue-operation`` transcript line, as Claude Code writes one
+        the moment it queues or pops a message (not chained by uuid)."""
+        entry = {"type": "queue-operation", "operation": operation,
+                 "timestamp": _now_iso(), "sessionId": self.session_id}
+        if content is not None:
+            entry["content"] = content
         with open(self.transcript, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
 
@@ -319,15 +337,23 @@ class StandIn:
 
     # -- a turn --------------------------------------------------------------
 
-    def run_turn(self, prompt: str) -> None:
+    def run_turn(self, prompt: str, queued: bool = False) -> None:
         self.interrupted = False
+        if queued:
+            # Popped from Claude Code's queue as the next turn: a dequeue
+            # line and no hook (its UserPromptSubmit fired at submit).
+            self.queue_line("dequeue")
+            self.log(event="dequeued", prompt=prompt)
         self.log(event="prompt", prompt=prompt)
         self.user_text(prompt)
-        outs = self.fire("UserPromptSubmit", {"prompt": prompt})
-        if any(o.get("decision") == "block" for o in outs):
-            self.log(event="blocked_prompt")
-            return
+        if not queued:
+            outs = self.fire("UserPromptSubmit", {"prompt": prompt})
+            if any(o.get("decision") == "block" for o in outs):
+                self.log(event="blocked_prompt")
+                return
         decision = "ok"
+        if _HOLD_RE.search(prompt):
+            self._wait_hold()
         agents = _AGENTS_RE.search(prompt)
         two = _TWO_RE.search(prompt)
         if two:
@@ -778,9 +804,9 @@ class StandIn:
                 if not self.queue:
                     self.turn = None
                     return
-                prompt = self.queue.pop(0)
+                prompt, queued = self.queue.pop(0)
             try:
-                self.run_turn(prompt)
+                self.run_turn(prompt, queued)
             except Exception as e:  # noqa: BLE001 - never die mid-session
                 self.log(event="turn_error", error=repr(e))
             sys.stdout.write("\r\n❯ ")
@@ -788,10 +814,19 @@ class StandIn:
 
     def submit(self, prompt: str) -> None:
         with self.lock:
-            self.queue.append(prompt)
+            queued = self.turn is not None and os.path.exists(self.cc_queue_path)
+            self.queue.append((prompt, queued))
             if self.turn is None:
                 self.turn = threading.Thread(target=self._turn_loop, daemon=True)
                 self.turn.start()
+        if queued:
+            # Claude Code queues a message typed while a turn runs: the
+            # enqueue line and its UserPromptSubmit come now, at submit.
+            self.queue_line("enqueue", prompt)
+            self.fire("UserPromptSubmit", {"prompt": prompt}, holder={})
+            # Logged once its hook has run: a scenario that waits for it
+            # knows the daemon was told before this turn ends.
+            self.log(event="queued", prompt=prompt)
 
     def _answer_dialog(self, answer: str) -> bool:
         """A key while the permission dialog is up answers it."""
