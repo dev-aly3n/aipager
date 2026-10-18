@@ -201,14 +201,21 @@ def _status_line(bot, mk_update, run_async, age):
     return line
 
 
-@pytest.mark.parametrize("age,clock", [
-    (192.3, "3:12"), (599.3, "9:59"), (600.3, "10:00"),
-    (1425.3, "23:45"), (3599.3, "59:59"), (3600.3, "1:00:00"),
+@pytest.mark.parametrize("age,clock,next_clock", [
+    (192.3, "3:12", "3:13"), (599.3, "9:59", "10:00"),
+    (600.3, "10:00", "10:01"), (1425.3, "23:45", "23:46"),
+    (3599.3, "59:59", "1:00:00"), (3600.3, "1:00:00", "1:00:01"),
 ])
 def test_status_says_working_with_a_true_seconds_clock(
-        status_bot, mk_update, run_async, age, clock):
+        status_bot, mk_update, run_async, age, clock, next_clock):
+    started = time.monotonic()
     line = _status_line(status_bot, mk_update, run_async, age)
-    assert f"⚙️ working {clock}" in line
+    # The clock is real, and each age leaves 0.7 s before the next second.
+    # A loaded CI runner took longer than that once (2026-10-18), so only a
+    # call that slow may show the next second.
+    crossed = time.monotonic() - started >= 0.7
+    assert (f"⚙️ working {clock}" in line
+            or (crossed and f"⚙️ working {next_clock}" in line))
 
 
 # ---- the busy card status line and the settled card -------------------------------

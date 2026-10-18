@@ -302,6 +302,12 @@ def _drop(path):
     return edit
 
 
+def _future_shown_wall(rec):
+    # An hour ahead of when the test RUNS: a value taken at collection was
+    # already past by the time a slow CI run (1:25, 2026-10-18) reached it.
+    rec["shown_wall"] = time.time() + 3600
+
+
 _INVALID = [
     ("inline", "version-2", _set(["v"], 2)),
     ("inline", "version-bool", _set(["v"], True)),
@@ -310,7 +316,7 @@ _INVALID = [
     ("inline", "missing-tool-use-id", _drop(["tool_use_id"])),
     ("inline", "tool-use-id-int", _set(["tool_use_id"], 7)),
     ("inline", "tool-use-id-too-long", _set(["tool_use_id"], "t" * 201)),
-    ("inline", "future-shown-wall", _set(["shown_wall"], time.time() + 3600)),
+    ("inline", "future-shown-wall", _future_shown_wall),
     ("inline", "nan-shown-wall", _set(["shown_wall"], float("nan"))),
     ("inline", "inf-shown-wall", _set(["shown_wall"], float("inf"))),
     ("inline", "zero-shown-wall", _set(["shown_wall"], 0)),
