@@ -937,3 +937,93 @@ def test_the_transcript_is_the_one_tracked_when_the_turn_began(
     assert sess.files_transcript == began
     assert files_bot.file_calls() == []
 
+
+# ---- a background agent's call the transcript has not caught up with -----------
+# (rev-iter2-002)
+
+def _job_open(sess, agent="a1b2c3"):
+    sess.active_subagents[agent] = {"started_at": time.monotonic(),
+                                    "agent_type": "general-purpose"}
+
+
+def _sub_line(sess, agent, tid, inp, cwd):
+    sub = (Path(sess.files_transcript).with_suffix("") / "subagents"
+           / f"agent-{agent}.jsonl")
+    sub.parent.mkdir(parents=True, exist_ok=True)
+    with open(sub, "a") as fh:
+        fh.write(json.dumps(_claude_line({"type": "assistant", "message": {
+            "content": [{"type": "tool_use", "id": tid, "name": "SendUserFile",
+                         "input": inp}]}}, cwd)) + "\n")
+
+
+def test_a_background_agents_late_call_is_kept_while_its_job_runs(
+        mk_bot, files_bot, rich, run_async, tmp_path):
+    """The agent's call is not in its transcript when the interim answer's
+    delivery looks (longer than the wait): the batch is kept, not dropped,
+    and goes once the call shows and the job finishes."""
+    import asyncio
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    pic = _pic(tmp_path)
+    inp = {"files": [str(pic)], "status": "normal"}
+
+    async def go():
+        _job_open(sess)
+        await bot.notify(sess, "send_files_requested",
+                         {"tool_use_id": "toolu_sub", "tool_input": inp,
+                          "cwd": str(tmp_path), "agent_id": "a1b2c3"})
+        await bot.notify(sess, "send_files_ran",
+                         {"tool_use_id": "toolu_sub", "tool_input": inp,
+                          "cwd": str(tmp_path), "agent_id": "a1b2c3"})
+        bot.registry.transition(sess.name, Status.IDLE)
+        assert sess.files_turn_open    # the job keeps the turn open
+        await bot._handle_job_interim(sess, {"summary": "An agent still runs."},
+                                      time.time(), reply_to=TRIGGER)
+        await outbox.OUTBOX.settled(sess.name)
+        kept = outbox.OUTBOX.has_batches(sess.name)
+        # Orphans are not adopted while the job runs.
+        for b in outbox.OUTBOX.batches.get(sess.name, ()):
+            b.created -= 120
+        await _settled(bot, sess, bot.flush_turn_files(sess))
+        sent_early = list(files_bot.file_calls())
+        # Claude Code writes the agent's transcript; the agent finishes.
+        _sub_line(sess, "a1b2c3", "toolu_sub", inp, str(tmp_path))
+        sess.active_subagents.clear()
+        await _settled(bot, sess, bot.flush_turn_files(sess))
+        await asyncio.sleep(0)
+        return kept, sent_early
+    kept, sent_early = run_async(go())
+    assert kept and sent_early == []
+    assert [c[0] for c in files_bot.file_calls()] == ["send_photo"]
+    assert [r for r in _audit_records() if r["action"] == "FileFailed"] == []
+
+
+def test_a_late_call_is_dropped_once_nothing_runs(mk_bot, files_bot, rich,
+                                                  run_async, tmp_path):
+    """Kept while the job ran; the job is over and the call never showed:
+    dropped then, with its FileFailed record."""
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    pic = _pic(tmp_path)
+    inp = {"files": [str(pic)], "status": "normal"}
+
+    async def go():
+        _job_open(sess)
+        await bot.notify(sess, "send_files_ran",
+                         {"tool_use_id": "toolu_sub", "tool_input": inp,
+                          "cwd": str(tmp_path), "agent_id": "a1b2c3"})
+        bot.registry.transition(sess.name, Status.IDLE)
+        await bot._handle_job_interim(sess, {"summary": "An agent still runs."},
+                                      time.time(), reply_to=TRIGGER)
+        await outbox.OUTBOX.settled(sess.name)
+        sess.active_subagents.clear()
+        for b in outbox.OUTBOX.batches.get(sess.name, ()):
+            b.created -= 120
+        await _settled(bot, sess, bot.flush_turn_files(sess))
+    run_async(go())
+    assert files_bot.file_calls() == []
+    assert not outbox.OUTBOX.has_batches(sess.name)
+    failed = [r for r in _audit_records() if r["action"] == "FileFailed"]
+    assert [(r["file_name"], r["reason"]) for r in failed] == [
+        ("chart.png", outbox.CAUSE_UNVERIFIED)]
+

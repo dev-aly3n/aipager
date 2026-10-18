@@ -1632,6 +1632,19 @@ class NotifyMixin:
             sess.status in (Status.BUSY, Status.INTERACTIVE)
             or sess.job_background_open())
 
+    @staticmethod
+    def _files_work_running(sess: TrackedSession, batch) -> bool:
+        """Work of this session still runs (a background job, a tool call,
+        the agent that made *batch*'s call): its transcript may not have
+        caught up yet (Claude Code writes it lazily)."""
+        try:
+            return bool(sess.job_background_open()
+                        or sess.work_in_flight(time.monotonic())
+                        or (batch.agent_id
+                            and batch.agent_id in sess.active_subagents))
+        except Exception:  # pragma: no cover - defensive
+            return False
+
     def _deliver_turn_files(self, sess: TrackedSession, anchor,
                             prompt_id, held_before: str | None):
         """Send the files Claude sent this turn, after its answer (*anchor*:
@@ -1709,9 +1722,13 @@ class NotifyMixin:
     async def _verified_batches(self, sess: TrackedSession, batches,
                                 audit: dict) -> list:
         """The batches whose call is in the session's transcript (each
-        waits for it, at most ``outbox.TRANSCRIPT_WAIT_SECONDS``). Any other
-        is dropped: its copies deleted, a FileFailed record per file
-        (cause ``unverified``), nothing in the chat."""
+        waits for it, at most ``outbox.TRANSCRIPT_WAIT_SECONDS``). One not
+        found while the session's work still runs (a background agent's
+        call, whose transcript Claude Code writes lazily) goes back into
+        the store, to be looked for again at the job's next finish or as
+        an orphan once nothing runs (review 2026-10-18, rev-iter2-002).
+        Any other is dropped: its copies deleted, a FileFailed record per
+        file (cause ``unverified``), nothing in the chat."""
         from aipager.bot import outbox
         ordered = sorted(batches, key=lambda b: b.created)
         found = await asyncio.gather(*(outbox.verify_batch(b) for b in ordered))
@@ -1719,6 +1736,12 @@ class NotifyMixin:
         for batch, ok in zip(ordered, found):
             if ok:
                 out.append(batch)
+                continue
+            if self._files_work_running(sess, batch):
+                log.info("[%s] turn files: call %s not in the transcript yet, "
+                         "kept while work runs", sess.label,
+                         batch.tool_use_id or "?")
+                outbox.OUTBOX.add_batch(batch)
                 continue
             log.warning("[%s] turn files: call %s not in the transcript, "
                         "nothing sent", sess.label, batch.tool_use_id or "?")
@@ -1781,13 +1804,17 @@ class NotifyMixin:
 
     def _adopt_orphan_files(self, sess: TrackedSession, chat_id) -> None:
         """Copied files no finish took (the copy ended after the finish had
-        stopped waiting): delivered once the session is idle with no finish
-        out, as replies to the prompt of the turn they were copied in, and
-        only once their call is found in the transcript."""
+        stopped waiting, or a background agent's call the transcript had
+        not caught up with): delivered once the session is idle with no
+        finish out and no job or work still running, as replies to the
+        prompt of the turn they were copied in, and only once their call is
+        found in the transcript."""
         from aipager.bot import outbox
         box = outbox.OUTBOX
         if (sess.status is not Status.IDLE or box.in_flight.get(sess.name)
                 or not box.batches.get(sess.name)):
+            return
+        if sess.job_background_open() or sess.work_in_flight(time.monotonic()):
             return
         gate = sess.finish_gate
         if isinstance(gate, asyncio.Event) and not gate.is_set():
