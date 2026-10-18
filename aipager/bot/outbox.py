@@ -66,6 +66,8 @@ REQUEST_TTL_SECONDS = 30 * 60
 KEEP_SECONDS = 24 * 3600
 #: Telegram's album and caption limits.
 ALBUM_MAX_ITEMS = 10
+#: How many turns' answers the outbox remembers (Outbox.note_answer).
+ANSWERS_KEPT = 64
 ALBUM_MAX_BYTES = send_check.FILE_MAX_BYTES
 CAPTION_MAX = 1024
 CAPTION_MARK = "💬"
@@ -260,6 +262,10 @@ class Outbox:
         #: Copies a delivery waits for: their batch goes to that delivery
         #: (the task's result), never into the store for another to take.
         self.claimed: set[asyncio.Task] = set()
+        #: (session, prompt id) -> the message the turn's files reply to
+        #: (its answer), newest ANSWERS_KEPT: for a batch of that turn
+        #: found only at a later finish.
+        self.answers: dict[tuple[str, int], int] = {}
 
     def clear(self) -> None:
         self.requests.clear()
@@ -267,6 +273,7 @@ class Outbox:
         self.batches.clear()
         self.pending.clear()
         self.deliveries.clear()
+        self.answers.clear()
         self.claimed.clear()
 
     # delivery tasks ----------------------------------------------------------
@@ -424,6 +431,23 @@ class Outbox:
             return
         self.add_batch(batch)
 
+    def note_answer(self, session: str, prompt_id, anchor) -> None:
+        """The files of the turn of *prompt_id* reply to *anchor*."""
+        if type(prompt_id) is not int or type(anchor) is not int or anchor <= 0:
+            return
+        key = (session, prompt_id)
+        self.answers.pop(key, None)
+        self.answers[key] = anchor
+        while len(self.answers) > ANSWERS_KEPT:
+            del self.answers[next(iter(self.answers))]
+
+    def answer_for(self, session: str, prompt_id) -> int | None:
+        """The message the files of the turn of *prompt_id* reply to, when
+        known (:meth:`note_answer`)."""
+        if type(prompt_id) is not int:
+            return None
+        return self.answers.get((session, prompt_id))
+
     def has_batches(self, session: str) -> bool:
         return bool(self.batches.get(session)) or bool(self.in_flight.get(session))
 
@@ -440,6 +464,7 @@ class Outbox:
                 if p.held_key == held_key:
                     p.held_key = None
                     p.anchor = message_id
+                    self.note_answer(p.session, p.prompt_id, message_id)
 
     def answer_gone(self, held_key: str) -> None:
         """The held answer *held_key* will never be sent: its files reply

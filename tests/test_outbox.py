@@ -984,3 +984,26 @@ def test_line_wall_reads_any_fraction_and_zone():
                 "2026-10-18T01:33:54Zjunk", "2026-10-18"):
         assert ob.line_wall({"timestamp": raw}) is None, raw
 
+
+def test_the_outbox_remembers_each_turns_answer():
+    box = ob.Outbox()
+    box.note_answer("s", 21, 900)
+    assert box.answer_for("s", 21) == 900
+    assert box.answer_for("t", 21) is None and box.answer_for("s", None) is None
+    for bad in ((None, 5), (21, None), (21, 0), ("21", 5)):
+        box.note_answer("s", *bad)
+    assert box.answer_for("s", 21) == 900
+    for i in range(ob.ANSWERS_KEPT):
+        box.note_answer("s", 1000 + i, 5000 + i)
+    assert box.answer_for("s", 21) is None
+    assert box.answer_for("s", 1000 + ob.ANSWERS_KEPT - 1) == 5000 + ob.ANSWERS_KEPT - 1
+    box.clear()
+    assert box.answers == {}
+
+
+def test_a_held_answer_that_lands_is_remembered():
+    box = ob.Outbox()
+    box.queue(ob.Pending(session="s", chat_id=1, anchor=None, held_key="k",
+                         prompt_id=21, batches=[], created=0.0))
+    box.answer_landed("k", 777)
+    assert box.answer_for("s", 21) == 777

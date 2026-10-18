@@ -1750,6 +1750,9 @@ class NotifyMixin:
         try:
             from aipager.bot import outbox
             box = outbox.OUTBOX
+            # The answer this turn's files reply to: a batch of this turn
+            # kept back and found at a later finish replies to it too.
+            box.note_answer(sess.name, prompt_id, anchor)
             if not box.has_batches(sess.name):
                 return None
             batches = box.take_batches(sess.name)
@@ -1801,29 +1804,52 @@ class NotifyMixin:
             if not batches:
                 return
             chat_id = self._files_chat(sess)
-            pending = outbox.Pending(
+            own_prompt = prompt_id or None
+            # A batch kept back from an earlier turn of this session (its
+            # call was not in the transcript yet while work ran) replies to
+            # that turn's answer when it is known, else to its prompt: one
+            # delivery per earlier turn, in order, before this turn's own.
+            groups: list[tuple[int | None, list]] = []
+            own: list = []
+            for batch in batches:
+                if batch.prompt_id is None or batch.prompt_id == own_prompt:
+                    own.append(batch)
+                elif groups and groups[-1][0] == batch.prompt_id:
+                    groups[-1][1].append(batch)
+                else:
+                    groups.append((batch.prompt_id, [batch]))
+            pendings = [(outbox.Pending(
                 session=sess.name, chat_id=chat_id,
-                anchor=(anchor or None), held_key=None,
-                prompt_id=prompt_id or None, batches=batches,
-                created=time.monotonic(), audit=audit)
-            if held:
-                pending.held_key, pending.anchor = held, None
-                box.queue(pending)
-                log.info("[%s] turn files held behind the held answer", sess.label)
-                return
-            if MUTE.is_muted(chat_id):
-                box.queue(pending)
-                log.info("[%s] turn files held: the chat is flood-muted", sess.label)
-                return
-            if box.has_pending(sess.name):
-                # Older files of this session still wait (a mute that just
-                # lifted, a held answer not landed yet): these go after
-                # them, never before (review 2026-10-18, rev-iter2-003).
-                box.queue(pending)
-                log.info("[%s] turn files wait behind earlier ones", sess.label)
-                await self.flush_turn_files(sess)
-                return
-            await self._send_turn_files(sess, pending)
+                anchor=box.answer_for(sess.name, pid) or pid, held_key=None,
+                prompt_id=pid, batches=group, created=time.monotonic(),
+                audit=audit), None) for pid, group in groups]
+            if own:
+                pendings.append((outbox.Pending(
+                    session=sess.name, chat_id=chat_id,
+                    anchor=(anchor or None), held_key=None,
+                    prompt_id=own_prompt, batches=own,
+                    created=time.monotonic(), audit=audit), held))
+            for pending, held_key in pendings:
+                if held_key:
+                    pending.held_key, pending.anchor = held_key, None
+                    box.queue(pending)
+                    log.info("[%s] turn files held behind the held answer",
+                             sess.label)
+                elif MUTE.is_muted(chat_id):
+                    box.queue(pending)
+                    log.info("[%s] turn files held: the chat is flood-muted",
+                             sess.label)
+                elif box.has_pending(sess.name):
+                    # Older files of this session still wait (a mute that
+                    # just lifted, a held answer not landed yet): these go
+                    # after them, never before (review 2026-10-18,
+                    # rev-iter2-003).
+                    box.queue(pending)
+                    log.info("[%s] turn files wait behind earlier ones",
+                             sess.label)
+                    await self.flush_turn_files(sess)
+                else:
+                    await self._send_turn_files(sess, pending)
         except Exception:
             log.warning("[%s] turn files: delivery failed", sess.label,
                         exc_info=True)

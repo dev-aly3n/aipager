@@ -1205,3 +1205,40 @@ def test_a_cancelled_delivery_leaves_no_copy_claimed(mk_bot, files_bot, rich,
     assert run_async(go()) == 2
     assert outbox.OUTBOX.claimed == set()
 
+
+def test_a_kept_batch_found_at_a_later_turn_replies_to_its_own_answer(
+        mk_bot, files_bot, rich, run_async, tmp_path):
+    """A background agent's call not yet in its transcript at the job's
+    interim answer is kept; the job ends and a new turn finishes before
+    anything adopted it: the file replies to its own turn's answer, not to
+    the later one's (review 2026-10-18, rev-iter3 nit)."""
+    import asyncio
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    pic = _pic(tmp_path)
+    inp = {"files": [str(pic)], "status": "normal"}
+
+    async def go():
+        _job_open(sess)
+        await bot.notify(sess, "send_files_ran",
+                         {"tool_use_id": "toolu_sub", "tool_input": inp,
+                          "cwd": str(tmp_path), "agent_id": "a1b2c3"})
+        bot.registry.transition(sess.name, Status.IDLE)
+        await bot._handle_job_interim(sess, {"summary": "An agent still runs."},
+                                      time.time(), reply_to=TRIGGER)
+        await outbox.OUTBOX.settled(sess.name)
+        assert outbox.OUTBOX.has_batches(sess.name)
+        interim_id = _rich_ids(files_bot)[-1]
+        # The agent's call shows, the job ends, the next turn runs.
+        _sub_line(sess, "a1b2c3", "toolu_sub", inp, str(tmp_path))
+        sess.active_subagents.clear()
+        sess.trigger_msg_id = TRIGGER + 1
+        _new_turn(bot, sess)
+        await _finish(bot, sess, "The second answer.")
+        await asyncio.sleep(0)
+        return interim_id
+    interim_id = run_async(go())
+    second_id = _rich_ids(files_bot)[-1]
+    [photo] = files_bot.file_calls()
+    assert interim_id != second_id
+    assert photo[2]["reply_to_message_id"] == interim_id
