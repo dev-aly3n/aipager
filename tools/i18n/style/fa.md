@@ -84,6 +84,7 @@ Spell a loanword the common Persian way, with a zero-width non-joiner where it s
 | busy / working | در حال کار |
 | waiting on you | منتظر شما |
 | admin | ادمین |
+| root folder (the folder a chat's members are held to) | پوشهٔ اعضا (the setting, the chat's: پوشهٔ اعضای چت; the section: پوشه‌های اعضا); one member's: پوشهٔ خودش / پوشهٔ خودتان, as the catalog says; never پوشهٔ ریشه |
 | owner | مالک |
 | member | عضو |
 | mode (Ask, Auto, Full access) | مود (never حالت) |
