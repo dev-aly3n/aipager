@@ -82,7 +82,7 @@ Un appel `Bash` que Claude Code a mis en arrière-plan indique un `backgroundTas
 
 Un appel `Agent` (ou `Task`) fait à l'intérieur d'un sous-agent (son événement porte `agent_id`) donne l'ID de l'agent qu'il a lancé. aipager retient quel agent a lancé lequel, et peut ainsi distinguer un agent qui s'est arrêté pour attendre son propre agent d'un agent qui a fini (voir `SubagentStart` / `SubagentStop` plus bas).
 
-Après un `SendUserFile` qui a tourné, aipager copie aussitôt ses fichiers, à partir de la liste que montrait son `PreToolUse` (jamais du résultat de l'outil), en vérifiant chacun à nouveau ; les copies sont envoyées après la réponse de la tâche, une fois l'appel trouvé dans l'historique de la conversation de la session ([sécurité](security.md#files-claude-sends), [commandes](commands.md#files-claude-sends)).
+Après un `SendUserFile` qui a tourné, aipager copie aussitôt ses fichiers, une fois par appel et seulement pendant une tâche qui a commencé par un prompt, à partir de la liste que montrait son `PreToolUse` (jamais du résultat de l'outil), en vérifiant chacun à nouveau ; les copies sont envoyées après la réponse de la tâche, une fois l'appel trouvé dans l'historique qu'aipager a noté au début de la tâche, écrit pendant cette tâche ([sécurité](security.md#files-claude-sends), [commandes](commands.md#files-claude-sends)).
 
 ### <a id="notification"></a>`Notification`
 

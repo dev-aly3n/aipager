@@ -435,7 +435,7 @@ Claude può mandarti file dalla sua sessione: chiediglielo con parole tue («man
 - Ogni file viene prima controllato, per tutti, owner compreso ([sicurezza](security.md#files-claude-sends)): le impostazioni di aipager, le credenziali di Claude, le chiavi e i file che sembrano segreti non vengono mai mandati; un file deve essere un file normale, non vuoto e di al massimo 50 MB; un membro manda solo file della [cartella radice](groups.md#root-folders) della chat. Se un file di una richiesta viene rifiutato, di quella richiesta non parte niente: Claude sa perché e te lo dice, e l'attività continua.
 - aipager manda una copia privata fatta quando Claude Code ha letto il file, tenuta in `~/.local/state/aipager/outbox/` e cancellata appena mandata, o dopo un giorno.
 - aipager non mette limiti di numero suoi: gli invii seguono il ritmo dei limiti di Telegram, e un album conta uno per file. Mentre la chat è silenziata, i file aspettano e arrivano dopo la risposta.
-- Un file che non si può mandare riceve una riga nella chat, per esempio `⚠️ Non è stato possibile inviare report.pdf: Telegram l'ha rifiutato.` Ogni file mandato, rifiutato o non riuscito ha la sua voce nel [log di audit](security.md#audit-log).
+- Un file che non si può mandare riceve una riga nella chat, per esempio `⚠️ Non è stato possibile inviare report.pdf: Telegram l'ha rifiutato.` Un file la cui richiesta aipager non trova nella cronologia di Claude stesso non riceve nessuna riga ([sicurezza](security.md#files-claude-sends)). Ogni file mandato, rifiutato o non riuscito ha la sua voce nel [log di audit](security.md#audit-log).
 
 ### <a id="voice"></a>Vocali
 

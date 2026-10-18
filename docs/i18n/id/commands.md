@@ -435,7 +435,7 @@ Claude bisa mengirimimu file dari sesinya: minta dengan kata-katamu sendiri ("ki
 - Setiap file diperiksa dulu, untuk semua orang, owner juga ([keamanan](security.md#files-claude-sends)): pengaturan aipager, kredensial Claude, kunci, dan file yang tampak seperti rahasia tidak pernah dikirim; file harus file biasa, tidak kosong, dan paling besar 50 MB; anggota hanya mengirim file di dalam [folder utama](groups.md#root-folders) chat itu. Kalau satu file dalam sebuah permintaan ditolak, tidak ada yang dikirim dari permintaan itu: Claude diberi tahu alasannya dan memberitahumu, dan tugas berjalan terus.
 - aipager mengirim salinan pribadi yang dibuatnya saat Claude Code membaca file itu, disimpan di `~/.local/state/aipager/outbox/` dan dihapus begitu terkirim, atau setelah sehari.
 - aipager tidak memasang batas jumlah sendiri: pengiriman mengikuti batas laju Telegram, dan satu album dihitung satu per file. Selama chat dibisukan, file menunggu lalu menyusul jawabannya.
-- File yang tidak bisa dikirim mendapat satu baris di chat, misalnya `⚠️ report.pdf tidak terkirim: Telegram menolaknya.` Setiap file yang terkirim, ditolak, atau gagal punya catatannya sendiri di [log audit](security.md#audit-log).
+- File yang tidak bisa dikirim mendapat satu baris di chat, misalnya `⚠️ report.pdf tidak terkirim: Telegram menolaknya.` File yang permintaannya tidak ditemukan aipager di riwayat percakapan Claude sendiri tidak mendapat baris apa pun ([keamanan](security.md#files-claude-sends)). Setiap file yang terkirim, ditolak, atau gagal punya catatannya sendiri di [log audit](security.md#audit-log).
 
 ### <a id="voice"></a>Pesan suara
 

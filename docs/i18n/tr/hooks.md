@@ -82,7 +82,7 @@ Claude Code'un arka plana taşıdığı bir `Bash` çağrısı bir `backgroundTa
 
 Bir alt ajanın içinde yapılan bir `Agent` (ya da `Task`) çağrısı (olayı `agent_id` taşır) başlattığı ajanın kimliğini bildirir. aipager hangi ajanın hangisini başlattığını hatırlar; böylece kendi ajanını beklemek için duran bir ajanı bitmiş olandan ayırabilir (aşağıda `SubagentStart` / `SubagentStop`).
 
-Çalışmış bir `SendUserFile`'ın dosyalarını aipager hemen kopyalar; listeyi `PreToolUse`'un gösterdiği listeden alır (asla aracın sonucundan değil) ve her dosyayı yeniden denetler; kopyalar, çağrı oturumun konuşma geçmişinde bulunduktan sonra, görevin cevabından sonra gönderilir ([güvenlik](security.md#files-claude-sends), [komutlar](commands.md#files-claude-sends)).
+Çalışmış bir `SendUserFile`'ın dosyalarını aipager hemen kopyalar; bunu her çağrı için bir kez ve yalnızca bir istemle başlamış bir görev sırasında yapar, listeyi `PreToolUse`'un gösterdiği listeden alır (asla aracın sonucundan değil) ve her dosyayı yeniden denetler; kopyalar, çağrı aipager'ın görevin başında not ettiği konuşma geçmişinde, o görev sırasında yazılmış olarak bulunduktan sonra, görevin cevabından sonra gönderilir ([güvenlik](security.md#files-claude-sends), [komutlar](commands.md#files-claude-sends)).
 
 ### <a id="notification"></a>`Notification`
 
