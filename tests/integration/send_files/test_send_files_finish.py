@@ -1154,28 +1154,39 @@ def test_a_waiting_delivery_that_raises_leaves_no_copy(mk_bot, files_bot, rich,
 def test_a_cancelled_delivery_leaves_no_copy_claimed(mk_bot, files_bot, rich,
                                                     run_async, tmp_path,
                                                     monkeypatch):
+    """Cancelled (a shutdown) while it waits for two claimed copies, one of
+    which has ended by then: neither stays claimed."""
     import asyncio
     real = outbox.copy_batch
-    slow = threading.Event()
+    gates = {"first": threading.Event(), "second": threading.Event()}
 
-    def slow_copy(*a, **k):
-        slow.wait(5)
+    def gated_copy(*a, **k):
+        name = "first" if any("first" in f for f in a[2]) else "second"
+        gates[name].wait(5)
         return real(*a, **k)
-    monkeypatch.setattr(outbox, "copy_batch", slow_copy)
+    monkeypatch.setattr(outbox, "copy_batch", gated_copy)
     bot = _bot(mk_bot, files_bot)
     sess = _sess(bot, tmp_path=tmp_path)
 
     async def go():
-        await _send_files(bot, sess, [_pic(tmp_path)])
+        await _send_files(bot, sess, [_pic(tmp_path, "first.png")],
+                          tool_use_id="toolu_a")
+        await _send_files(bot, sess, [_pic(tmp_path, "second.png")],
+                          tool_use_id="toolu_b")
         bot.registry.transition(sess.name, Status.IDLE)
         await bot.notify(sess, "idle_prompt", {"summary": "Done."})
         task = outbox.OUTBOX.deliveries[sess.name]
-        await asyncio.sleep(0.1)
-        claimed = bool(outbox.OUTBOX.claimed)
+        await asyncio.sleep(0.05)
+        claimed = len(outbox.OUTBOX.claimed)
+        gates["first"].set()
+        for _ in range(250):            # the first copy ends (at most 5 s)
+            if len(outbox.OUTBOX.in_flight.get(sess.name, ())) <= 1:
+                break
+            await asyncio.sleep(0.02)
         task.cancel()
         await asyncio.wait([task])
-        slow.set()
+        gates["second"].set()
         await outbox.OUTBOX.wait_in_flight(sess.name)
         return claimed
-    assert run_async(go()) is True
+    assert run_async(go()) == 2
     assert outbox.OUTBOX.claimed == set()

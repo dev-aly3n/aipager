@@ -105,6 +105,12 @@ def test_unusable_saved_values_restore_as_no_turn(tmp_state_file):
     r3 = SessionRegistry()
     r3.load()
     assert r3.get(S).files_turn_open is False
+    # Only a real true opens it, even with a usable start.
+    entry.update(files_turn_open="yes", files_turn_wall=time.time() - 5)
+    tmp_state_file.write_text(json.dumps(data))
+    r4 = SessionRegistry()
+    r4.load()
+    assert r4.get(S).files_turn_open is False
 
 
 # ---- what opens it: prompt evidence only ------------------------------------------
