@@ -54,7 +54,7 @@ Claude가 일하는 중이어도 내 메시지가 바로 세션에 입력돼요.
 <td width="33%" valign="top">
 
 **✅ 탭 한 번으로 답해요**<br>
-권한 요청과 Claude의 질문은 답마다 버튼이 붙어서 와요. 끝난 작업에 남은 버튼은 다음 작업에 작용하지 않고 거절해요.
+권한 요청과 Claude의 질문은 답마다 버튼이 붙어서 와요. 끝난 작업에 남은 버튼은 다음 작업에 작용하지 않고 거부돼요.
 
 </td>
 </tr>
@@ -74,7 +74,7 @@ Claude가 일하는 중이어도 내 메시지가 바로 세션에 입력돼요.
 <td width="33%" valign="top">
 
 **🔒 중간에 아무것도 없어요**<br>
-aipager 서버도, 계정도, 열린 포트도 없어요. 내 봇 토큰, 내 컴퓨터, 내 채팅뿐이에요.
+aipager 서버도, 계정도, 열린 포트도 없어요. 내 봇 token, 내 컴퓨터, 내 채팅뿐이에요.
 
 </td>
 </tr>
@@ -84,7 +84,7 @@ aipager 서버도, 계정도, 열린 포트도 없어요. 내 봇 토큰, 내 �
 
 ### <a id="questions-come-to-you"></a>질문이 나에게 와요
 
-Claude가 무언가를 묻거나 권한이 필요하면, 질문이 답마다 버튼이 붙은 채로 내 채팅에 오고, 고정된 막대가 무엇이 나를 기다리는지 알려 줘요. 내가 누른 답은 키보드 앞에 앉아 있는 것처럼 세션에 입력되고, 터미널에도 같은 답이 보여요.
+Claude가 무언가를 묻거나 권한이 필요하면, 질문이 답마다 버튼이 붙은 채로 내 채팅에 오고, 고정된 표시줄이 무엇이 나를 기다리는지 알려 줘요. 내가 누른 답은 키보드 앞에 앉아 있는 것처럼 세션에 입력되고, 터미널에도 같은 답이 보여요.
 
 <img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/question.webp" width="100%" alt="Claude가 타임아웃을 늘릴지 쿠키를 기다릴지 묻고, Telegram에서 누른 답이 터미널에서 선택돼요">
 
@@ -104,13 +104,13 @@ Claude가 무언가를 묻거나 권한이 필요하면, 질문이 답마다 버
 
 ### <a id="your-team-in-one-group"></a>그룹 하나에 팀 전체
 
-봇을 그룹에 추가하고 멤버마다 역할을 줘요: `owner`, `admin`, `user`, `read_only`. 그룹에서 봇은 명령, 봇의 메시지에 단 답장, 멘션에만 반응하고(`@aipagerbot fix the tests`, `/web run the tests`), 메시지는 보낸 사람의 역할로 실행돼요. 역할이 쓸 수 없는 도구는 실행 전에 거절돼요. `user`나 `read_only` 멤버는 자기 루트 폴더 안에서만 일해요(기본값은 `~/aipager-users/<label>`). 다른 사람도 봇과 자기만의 개인 채팅을 가질 수 있어요.
+봇을 그룹에 추가하고 멤버마다 역할을 줘요: `owner`, `admin`, `user`, `read_only`. 그룹에서 봇은 명령, 봇의 메시지에 단 답장, 멘션에만 반응하고(`@aipagerbot fix the tests`, `/web run the tests`), 메시지는 보낸 사람의 역할로 실행돼요. 역할이 쓸 수 없는 도구는 실행 전에 거부돼요. `user`나 `read_only` 멤버는 자기 루트 폴더 안에서만 일해요(기본값은 `~/aipager-users/<label>`). 다른 사람도 봇과 자기만의 개인 채팅을 가질 수 있어요.
 
-<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/team.webp" width="100%" alt="멤버의 역할 때문에 명령이 거절되는 동안 테스트는 통과하는 팀 그룹">
+<img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/team.webp" width="100%" alt="멤버의 역할 때문에 명령이 거부되는 동안 테스트는 통과하는 팀 그룹">
 
 > **⚠️ 중요:** 멤버를 추가하면 그 사람에게 내 컴퓨터에서 코드를 실행할 권한을 주는 거예요. 봇을 공유하기 전에 [신뢰 모델](groups.md)을 읽어 보세요.
 
-설정하려면 봇을 그룹에 관리자로 추가하고(그룹의 상태 막대를 고정할 수 있게), `aipager config`를 다시 실행한 뒤 **Add a group scope**를 고르세요. 마법사가 멤버마다 역할을 붙여 추가하고, 멤버들의 루트 폴더를 묻고, 실행 중인 aipager의 설정을 다시 불러와요.
+설정하려면 봇을 그룹에 관리자로 추가하고(그룹의 상태 표시줄을 고정할 수 있게), `aipager config`를 다시 실행한 뒤 **Add a group scope**를 고르세요. 마법사가 멤버마다 역할을 붙여 추가하고, 멤버들의 루트 폴더를 묻고, 실행 중인 aipager의 설정을 다시 불러와요.
 
 ### <a id="a-dashboard-inside-telegram"></a>Telegram 안의 대시보드
 
@@ -153,14 +153,14 @@ aipager service install                       # 로그아웃해도 aipager가 �
 aipager session api                           # 이 폴더의 Claude Code를 내 채팅에서도
 ```
 
-설치 스크립트는 `uv`가 있으면 그걸 쓰고, 없으면 `pipx`, 그것도 없으면(macOS에서) Homebrew를 쓰고, 아무것도 없으면 `uv`를 설치해요. `dtach`는 aipager와 함께 와요([`dtach-bin`](https://pypi.org/project/dtach-bin/) 패키지). 그래서 따로 설치할 게 없어요. `aipager config`는 마법사예요. 봇 토큰과 내 채팅을 확인한 다음 aipager의 hook을 `~/.claude/settings.json`에 알아서 추가해요. 파일을 직접 고칠 일은 없어요.
+설치 스크립트는 `uv`가 있으면 그걸 쓰고, 없으면 `pipx`, 그것도 없으면(macOS에서) Homebrew를 쓰고, 아무것도 없으면 `uv`를 설치해요. `dtach`는 aipager와 함께 와요([`dtach-bin`](https://pypi.org/project/dtach-bin/) 패키지). 그래서 따로 설치할 게 없어요. `aipager config`는 마법사예요. 봇 token과 내 채팅을 확인한 다음 aipager의 hook을 `~/.claude/settings.json`에 알아서 추가해요. 파일을 직접 고칠 일은 없어요.
 
 <details>
 <summary><b>코딩 에이전트에게 설치를 맡기기</b></summary>
 
 <br>
 
-Claude Code나 셸을 쓸 수 있는 에이전트가 있나요? 봇을 만들고 그 안에서 Start를 누른 다음, 봇 토큰을 에이전트가 읽을 필요가 없는 파일에 저장하세요(토큰을 붙여 넣고 Enter, 그다음 Ctrl-D):
+Claude Code나 shell을 쓸 수 있는 에이전트가 있나요? 봇을 만들고 그 안에서 Start를 누른 다음, 봇 token을 에이전트가 읽을 필요가 없는 파일에 저장하세요(token을 붙여 넣고 Enter, 그다음 Ctrl-D):
 
 ```sh
 mkdir -p ~/.config/aipager
@@ -175,7 +175,7 @@ chmod 600 ~/.config/aipager/bot-token
 Install aipager for me by following https://aipager.run/agent.md. My Telegram bot token is in ~/.config/aipager/bot-token and my Telegram user id is <your id>.
 ```
 
-내 Telegram 사용자 ID를 모르면 그렇다고 말하면 돼요. 에이전트가 찾을 수 있어요. 에이전트가 따르는 안내서는 토큰을 안전하게 넘기는 방법까지 담은 [에이전트로 설치하기](install-with-an-agent.md)예요. 스크립트에서는 `aipager setup --token-file FILE --chat-id ID`가 아무것도 묻지 않고 aipager를 설정해요([setup 명령](commands.md#command-line-aipager-setup-for-coding-agents)).
+내 Telegram 사용자 ID를 모르면 그렇다고 말하면 돼요. 에이전트가 찾을 수 있어요. 에이전트가 따르는 안내서는 token을 안전하게 넘기는 방법까지 담은 [에이전트로 설치하기](install-with-an-agent.md)예요. 스크립트에서는 `aipager setup --token-file FILE --chat-id ID`가 아무것도 묻지 않고 aipager를 설정해요([setup 명령](commands.md#command-line-aipager-setup-for-coding-agents)).
 
 </details>
 
@@ -219,7 +219,7 @@ docker run -d --restart=unless-stopped --name aipager \
   ghcr.io/dev-aly3n/aipager:latest
 ```
 
-Claude가 고칠 폴더를 `/workspace` 아래에 마운트하세요. `~/.claude` 마운트로 Claude 로그인 정보와 대화 기록이 함께 들어가요. 로그인하려면 호스트에서 `claude`를 한 번 실행하거나, 컨테이너 안에서 `docker exec -it aipager claude`로 로그인하세요.
+Claude가 고칠 폴더를 `/workspace` 아래에 마운트하세요. `~/.claude` 마운트로 Claude 로그인 정보와 저장된 대화가 함께 들어가요. 로그인하려면 호스트에서 `claude`를 한 번 실행하거나, 컨테이너 안에서 `docker exec -it aipager claude`로 로그인하세요.
 
 태그: `latest`, `1.3`, `1.3.6`(정확한 버전마다 하나, 마이너 버전마다 하나).
 
@@ -293,7 +293,7 @@ Claude를 멈추지 않고 세션에서 나가려면 터미널이나 tmux 창을
 
 ## <a id="security"></a>보안
 
-- **aipager 서버가 없어요.** aipager는 내 봇 토큰으로 Telegram Bot API와 바로 이야기해요. aipager 계정도, aipager 서비스도 없어요.
+- **aipager 서버가 없어요.** aipager는 내 봇 token으로 Telegram Bot API와 바로 이야기해요. aipager 계정도, aipager 서비스도 없어요.
 - **열린 포트가 없어요.** aipager는 루프백에서만 들어요. Mini App은 Cloudflare 터널로 밖에 나가는데, 그곳의 모든 요청은 Telegram의 서명이 있어야 하고, `aipager miniapp disable`로 끌 수 있어요.
 - **모든 답이 기록돼요.** 허용, 거부, 그리고 모든 답이 `~/.claude/aipager-audit.jsonl`에 덧붙여져요. 그룹에서는 누가 눌렀는지도 함께요.
 - **결정은 여전히 Claude Code가 해요.** 무엇을 물어볼지는 내 Claude Code 설정이 정해요. aipager는 질문을 전달할 뿐이고 권한을 올리는 일이 없어요. sudo도 없고, 모든 것이 내 사용자로 실행돼요.
@@ -316,7 +316,7 @@ Claude 앱은 Anthropic이 운영하는 어시스턴트와 이야기해요. aipa
 
 <br>
 
-aipager는 내 채팅에서 보이는 것만 내 봇 토큰으로 Telegram에 보내요. 중간에 aipager 서버는 없어요. Claude Code 자체는 늘 하던 대로 Anthropic과 이야기해요.
+aipager는 내 채팅에서 보이는 것만 내 봇 token으로 Telegram에 보내요. 중간에 aipager 서버는 없어요. Claude Code 자체는 늘 하던 대로 Anthropic과 이야기해요.
 
 </details>
 
@@ -334,7 +334,7 @@ aipager는 내 채팅에서 보이는 것만 내 봇 토큰으로 Telegram에 �
 
 <br>
 
-요청은 내가 누를 때까지 기다리고, `/stop`은 작업을 멈추고 대기열을 비우고, `/kill`은 세션을 끝내고, 끝난 작업의 버튼은 거절해요.
+요청은 내가 누를 때까지 기다리고, `/stop`은 작업을 멈추고 대기열을 비우고, `/kill`은 세션을 끝내고, 끝난 작업의 버튼은 눌러도 거부돼요.
 
 </details>
 

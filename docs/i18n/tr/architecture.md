@@ -1,6 +1,6 @@
 # Mimari
 
-<!-- i18n-source: docs/architecture.md @ c91598e -->
+<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../architecture.md))
 
@@ -56,7 +56,7 @@ flowchart LR
 
 - **`TelegramBot`** (`aipager/bot/`): `python-telegram-bot` kütüphanesinin `Application` nesnesine sahiptir. Telegram'dan güncellemeleri alır, onları mesaj, düğme ve sesli mesaj işleyicilerine dağıtır ve çalışma kartlarını, sabitlenmiş durum satırını ve yanıtları güncel tutar.
 - **`HookReceiver`** (`aipager/dtach/hook_receiver.py`): `$XDG_RUNTIME_DIR/aipager.sock` konumunda bir Unix datagram soketi açar, `aipager-hook` ve `aipager-statusline` programlarının gönderdiği JSON'u okur ve işi `hook_event_name` alanına (ya da aipager'ın kendi mesajları için `type` alanına; bkz. [hook olayları](hooks.md)) göre dağıtır.
-- **`SessionMonitor`** (`aipager/session_monitor.py`): her 2 sn'de bir uyanır; `/tmp/claude-dtach-*.sock` dosyalarını tarar, bulunan oturumları oturum listesiyle karşılaştırır ve bekçileri çalıştırır: hareket etmeyi bırakan bir çalışma kartı, Claude Code'un hiç almadığı bir mesaj, 5 dakikadır haber gelmeyen ve kayıtlı sohbete göre bitmiş bir izin isteği (`AIPAGER_INTERACTIVE_TIMEOUT`), sonu kaçırılmış bir görev.
+- **`SessionMonitor`** (`aipager/session_monitor.py`): her 2 sn'de bir uyanır; `/tmp/claude-dtach-*.sock` dosyalarını tarar, bulunan oturumları oturum listesiyle karşılaştırır ve bekçileri çalıştırır: hareket etmeyi bırakan bir çalışma kartı, Claude Code'un hiç almadığı bir mesaj, 5 dakikadır haber gelmeyen ve konuşma geçmişine göre bitmiş bir izin isteği (`AIPAGER_INTERACTIVE_TIMEOUT`), sonu kaçırılmış bir görev.
 - **`SessionRegistry`** (`aipager/state.py`): adlarıyla `TrackedSession` nesneleri. Kapanışta ve yeniden başlatmadan sağ çıkması gereken bir şey her değiştiğinde `~/.claude/aipager-sessions.json` dosyasına (atomik olarak) kaydedilir.
 - **Mini App sunucusu** (`aipager/miniapp/server.py`): `127.0.0.1` üzerinde, `MINIAPP_PORT` portunda (varsayılan 8765) bir aiohttp uygulaması; açık olduğu sürece (varsayılan böyle) yönetilen bir Cloudflare tüneliyle Telegram'a açılır. `/app` panelini sunar.
 
@@ -81,7 +81,7 @@ Bunların hepsi aynı döngüde görevler olarak çalışır. Döngüyü bloke e
 ## <a id="shutdown-sequence"></a>Kapanış sırası
 
 1. SIGINT ya da SIGTERM `stop` olayını tetikler.
-2. Süren bir `/update` kısa bir süre alır, sonra kurucusu durdurulur (bkz. [komutlar → güncelleme](commands.md#update)).
+2. Süren bir `/update` işlemine kısa bir süre tanınır, sonra kurucusu durdurulur (bkz. [komutlar → güncelleme](commands.md#update)).
 3. `registry.save()`.
 4. Tünel durur, ardından Mini App sunucusu.
 5. `session_monitor.stop()`, `hook_receiver.stop()` (soketi kapatır ve dosyasını siler).
@@ -104,7 +104,7 @@ Telegram'dan yeniden başlatma, yerine gelen sürecin sokete bağlanmasından ö
 | `/tmp/claude-policy-<name>.json` | Süren görevin izin anlık görüntüsü | `aipager-hook` (bir mesajı aldığında yazar), `PreToolUse` kontrolü okur |
 | `/tmp/claude-policy-.floor-<uid>.json` | Güvenliğin alt sınırı: yerleşik liste artı senin `safety:` bölümün, hook'un yedek yolları için | aipager |
 | `/tmp/claude-reply-<name>.txt` | Daha eski bir mesajı yanıtladığında, yanıtladığın mesaj | aipager |
-| `/tmp/aipager-files/` | Telegram'dan gönderilen dosyalar ve sesli mesajlar | aipager |
+| `/tmp/aipager-files/<chat>/` | Telegram'dan gönderilen dosyalar ve sesli mesajlar; her sohbet için ayrı ve özel bir klasör (`0700`, dosyalar `0600`) | aipager |
 | `/tmp/aipager.log` | Hizmet yokken aipager'ın kendini yeniden başlatmasının çıktısı | aipager |
 | `~/.claude/aipager-sessions.json` | Oturum listesinin kalıcı durumu | aipager |
 | `~/.claude/aipager-audit.jsonl` | İzin ver / Reddet / yanıtların kaydı | aipager (yalnızca sonuna ekler) |

@@ -53,8 +53,8 @@ Deine Nachricht wird sofort in die Sitzung getippt, auch während Claude arbeite
 </td>
 <td width="33%" valign="top">
 
-**✅ Antworten mit einem Tipp**<br>
-Berechtigungsanfragen und Fragen von Claude kommen mit einem Button pro Antwort. Ein Button, der von einer fertigen Aufgabe übrig ist, verweigert, statt auf die nächste zu wirken.
+**✅ Antworten mit einem Tippen**<br>
+Berechtigungsanfragen und Fragen von Claude kommen mit einem Button pro Antwort. Ein Button, der von einer fertigen Aufgabe übrig ist, ist veraltet und wirkt nicht auf die nächste.
 
 </td>
 </tr>
@@ -68,7 +68,7 @@ Berechtigungsanfragen und Fragen von Claude kommen mit einem Button pro Antwort.
 <td width="33%" valign="top">
 
 **👥 Gemacht für Teams**<br>
-Füg den Bot zu einer Gruppe hinzu. Jede Nachricht läuft mit der Rolle der Person, die sie schickt, Mitglieder lassen sich auf ihren eigenen Ordner beschränken, und jeder Tipp steht im Audit-Log.
+Füg den Bot zu einer Gruppe hinzu. Jede Nachricht läuft mit der Rolle der Person, die sie schickt, Mitglieder lassen sich auf ihren eigenen Ordner beschränken, und jedes Tippen steht im Audit-Log.
 
 </td>
 <td width="33%" valign="top">
@@ -84,7 +84,7 @@ Kein aipager-Server, kein Konto, kein offener Port. Dein Bot-Token, dein Compute
 
 ### <a id="questions-come-to-you"></a>Fragen kommen zu dir
 
-Wenn Claude dich etwas fragt oder eine Berechtigung braucht, landet die Frage mit einem Button pro Antwort in deinem Chat, und die angeheftete Leiste sagt, was auf dich wartet. Dein Tipp wird in die Sitzung getippt, als säßest du an der Tastatur, und das Terminal zeigt dieselbe Antwort.
+Wenn Claude dich etwas fragt oder eine Berechtigung braucht, landet die Frage mit einem Button pro Antwort in deinem Chat, und die angeheftete Leiste sagt, was auf dich wartet. Deine Antwort wird in die Sitzung getippt, als säßest du an der Tastatur, und das Terminal zeigt dieselbe Antwort.
 
 <img src="https://raw.githubusercontent.com/dev-aly3n/aipager/main/docs/assets/question.webp" width="100%" alt="Claude fragt, ob es das Timeout erhöhen oder auf das Cookie warten soll; die in Telegram getippte Antwort wird im Terminal gewählt">
 
@@ -100,7 +100,7 @@ Jede Sitzung ist in einem von drei Modi, jederzeit mit `/mode` gewechselt, auch 
 | 🤖 **Auto-Modus**, der Standard<br>`/mode auto` | Die eigene Sicherheitsprüfung von Claude Code lässt sichere Aktionen durch und stoppt riskante, damit du entscheidest. |
 | 🔓 **Vollzugriff-Modus**<br>`/mode full` | Alles läuft ohne jede Prüfung. Für Admins und für dich in deinem eigenen privaten Chat mit dem Bot. |
 
-Zwischen Fragen-Modus und Auto-Modus wird direkt gewechselt, ohne Neustart. Der Wechsel in den Vollzugriff-Modus oder aus ihm heraus startet die Sitzung neu und behält die Unterhaltung. Fragen von Claude kommen in jedem Modus zu dir.
+Zwischen Fragen-Modus und Auto-Modus wird direkt gewechselt, ohne Neustart. Der Wechsel in den Vollzugriff-Modus oder aus ihm heraus startet die Sitzung neu; die Unterhaltung bleibt erhalten. Fragen von Claude kommen in jedem Modus zu dir.
 
 ### <a id="your-team-in-one-group"></a>Dein Team in einer Gruppe
 
@@ -144,7 +144,7 @@ Claude Code läuft in einem echten Terminal, in `dtach`, damit niemand ein Fenst
 
 ## <a id="install"></a>Installation
 
-Linux oder macOS, jede Architektur. Du brauchst Claude Code, auf diesem Computer angemeldet, und einen Telegram-Bot: Erstell einen mit [@BotFather](https://t.me/BotFather) und tippe darin auf Start.
+Linux oder macOS, jede Architektur. Du brauchst Claude Code, auf diesem Computer angemeldet, und einen Telegram-Bot: Erstell einen mit [@BotFather](https://t.me/BotFather) und tippe darin auf „Starten“.
 
 ```sh
 curl -fsSL https://aipager.run/install | sh   # uv, pipx oder Homebrew: was du eben hast
@@ -160,7 +160,7 @@ Das Installationsskript nimmt `uv`, wenn du es hast, sonst `pipx`, sonst (auf ma
 
 <br>
 
-Du hast Claude Code oder einen anderen Agenten mit Shell? Erstell den Bot, tippe darin auf Start und speichere den Token des Bots in einer Datei, die dein Agent nie lesen muss (Token einfügen, Enter drücken, dann Ctrl-D):
+Du hast Claude Code oder einen anderen Agenten mit Shell? Erstell den Bot, tippe darin auf „Starten“ und speichere den Token des Bots in einer Datei, die dein Agent nie lesen muss (Token einfügen, Enter drücken, dann Ctrl-D):
 
 ```sh
 mkdir -p ~/.config/aipager
@@ -175,7 +175,7 @@ Dann gib deinem Agenten diesen Prompt:
 Install aipager for me by following https://aipager.run/agent.md. My Telegram bot token is in ~/.config/aipager/bot-token and my Telegram user id is <your id>.
 ```
 
-Wenn du deine Telegram-User-ID nicht kennst, sag das stattdessen; der Agent kann sie herausfinden. Die Anleitung, der er folgt, auch dazu, wie der Token sicher übergeben wird, ist [Mit einem Agenten installieren](install-with-an-agent.md). Für Skripte richtet `aipager setup --token-file FILE --chat-id ID` aipager ohne jede Frage ein ([der Befehl setup](commands.md#command-line-aipager-setup-for-coding-agents)).
+Wenn du deine Telegram-ID nicht kennst, sag das stattdessen; der Agent kann sie herausfinden. Die Anleitung, der er folgt, auch dazu, wie der Token sicher übergeben wird, ist [Mit einem Agenten installieren](install-with-an-agent.md). Für Skripte richtet `aipager setup --token-file FILE --chat-id ID` aipager ohne jede Frage ein ([der Befehl setup](commands.md#command-line-aipager-setup-for-coding-agents)).
 
 </details>
 
@@ -277,7 +277,7 @@ Danach richtet `aipager service install` eine systemd-Benutzereinheit ein.
 
 Jeder Befehl, jeder Button und jede Einstellung steht in [Befehle des Bots](commands.md).
 
-### <a id="on-the-command-line"></a>Auf der Kommandozeile
+### <a id="on-the-command-line"></a>Auf der Befehlszeile
 
 ```sh
 aipager start                             # aipager selbst, im Vordergrund
@@ -325,7 +325,7 @@ aipager schickt an Telegram nur, was du in deinen Chats siehst, mit deinem eigen
 
 <br>
 
-Ein winziges Programm, das ein Terminal abkoppelt. Es hält Claude Code am Leben, wenn das Terminal geschlossen wird oder SSH abbricht, sodass eine Antwort, die du eine Stunde später schickst, noch eine laufende Sitzung erreicht. Es kommt mit aipager.
+Ein winziges Programm, das ein Terminal abkoppelt. Es hält Claude Code am Laufen, wenn das Terminal geschlossen wird oder SSH abbricht, sodass eine Antwort, die du eine Stunde später schickst, noch eine laufende Sitzung erreicht. Es kommt mit aipager.
 
 </details>
 
@@ -334,7 +334,7 @@ Ein winziges Programm, das ein Terminal abkoppelt. Es hält Claude Code am Leben
 
 <br>
 
-Anfragen warten auf deinen Tipp, `/stop` unterbricht die Aufgabe und verwirft alles Wartende, `/kill` beendet die Sitzung, und Buttons einer fertigen Aufgabe verweigern.
+Anfragen warten auf dein Tippen, `/stop` unterbricht die Aufgabe und verwirft alles Wartende, `/kill` beendet die Sitzung, und Buttons einer fertigen Aufgabe sind veraltet und tun nichts mehr.
 
 </details>
 
@@ -343,7 +343,7 @@ Anfragen warten auf deinen Tipp, `/stop` unterbricht die Aufgabe und verwirft al
 
 <br>
 
-Schick `/update`: Es prüft aipager und Claude Code und installiert, was neu ist, und 🔄 Jetzt neu starten bringt aipager wieder hoch, ob als Dienst oder nicht. Deine Sitzungen laufen dabei weiter. Auf der Kommandozeile aktualisiert `aipager update` über das Installationsprogramm, dem aipager gehört.
+Schick `/update`: Es prüft aipager und Claude Code und installiert, was neu ist, und „🔄 Jetzt neu starten“ startet aipager neu, ob als Dienst oder nicht. Deine Sitzungen laufen dabei weiter. Auf der Befehlszeile aktualisiert `aipager update` über den Installer, dem aipager gehört.
 
 </details>
 
@@ -369,7 +369,7 @@ Nichts. aipager steht unter der MIT-Lizenz, der Bot gehört dir, und Claude Code
 
 | Seite | Worum es geht |
 |---|---|
-| [Befehle des Bots](commands.md) | Jeder Befehl, jeder Button, jede Einstellung und jede Option der Kommandozeile |
+| [Befehle des Bots](commands.md) | Jeder Befehl, jeder Button, jede Einstellung und jede Option der Befehlszeile |
 | [Teambetrieb und Gruppen](groups.md) | Rollen, Stammordner, wer was antippen darf, das Vertrauensmodell |
 | [Sicherheitsmodell](security.md) | Vertrauensgrenze, Geheimnisse, Audit-Log, Netzwerk |
 | [Hook-Ereignisse](hooks.md) | Was jeder Hook von Claude Code in aipager tut |

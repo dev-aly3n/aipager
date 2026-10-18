@@ -74,7 +74,7 @@ aipager setup --token-file ~/.config/aipager/bot-token --chat-id 123456789 --ser
 
 Dùng ID thật của người dùng và đường dẫn của file token. Thay cho `--token-file`, bạn có thể đưa token qua pipe với `--token-stdin` (ví dụ `--token-stdin < path`); pipe phải được đóng, và setup chờ nó tối đa 30 giây.
 
-Setup kiểm tra token với Telegram, kiểm tra máy tính này, gửi cho người dùng một tin nhắn thử ("aipager is set up for you. ..."), và chỉ sau đó mới ghi cấu hình, thêm các hook của Claude Code vào `~/.claude/settings.json`, và, với `--service`, cài và khởi động dịch vụ chạy nền. Nếu có bước kiểm tra nào thất bại, không có gì được ghi.
+Setup kiểm tra token với Telegram, kiểm tra máy tính này, gửi cho người dùng một tin nhắn thử (“aipager is set up for you. ...”), và chỉ sau đó mới ghi cấu hình, thêm các hook của Claude Code vào `~/.claude/settings.json`, và, với `--service`, cài và khởi động dịch vụ chạy nền. Nếu có bước kiểm tra nào thất bại, không có gì được ghi.
 
 Thêm `--dry-run` để xem trước những gì sẽ thay đổi. `--role admin` cho người dùng vai trò quản trị viên thay vì chủ sở hữu (mặc định là chủ sở hữu, đúng cho người tự thiết lập máy tính của mình).
 

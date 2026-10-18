@@ -1,6 +1,6 @@
 # Fehlerbehebung
 
-<!-- i18n-source: docs/troubleshooting.md @ 054b893 -->
+<!-- i18n-source: docs/troubleshooting.md @ 1de34258 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../troubleshooting.md))
 
@@ -28,7 +28,7 @@ Wenn die Socket-Prüfung es übersieht, verweigert `aipager start` trotzdem mit 
 1. `aipager status`: Wenn die Zeile von aipager `not running` sagt, starte es.
 2. `aipager doctor`: Die Prüfungen `token_valid` und `chat_reachable` fragen die Telegram-API von Anfang bis Ende ab und zeigen den genauen Fehler.
 3. Falscher Chat: Führ `aipager config` aus und wähl **Test bot reachability**. Um einen falschen privaten Chat zu korrigieren, füg den richtigen mit **Add a DM scope** hinzu (siehe [IDs herausfinden](groups.md#finding-ids-auto-detect)) und entfern dann den falschen unter **Edit a scope**.
-4. Der Bot hat nie `/start` bekommen: Öffne den Bot in Telegram und tippe einmal auf Start.
+4. Der Bot hat nie `/start` bekommen: Öffne den Bot in Telegram und tippe einmal auf „Starten“.
 
 ## <a id="busy-cards-got-slower"></a>Die Arbeitskarten sind langsamer geworden
 
@@ -42,7 +42,7 @@ So werden die Karten schneller: Lass weniger Sitzungen gleichzeitig pro Chat lau
 
 ### <a id="a-long-turns-card-refreshes-less-often"></a>Die Karte einer langen Aufgabe wird seltener aktualisiert
 
-Das Tempo oben gilt für die ersten zwei Minuten einer Aufgabe. Danach wird die Karte **langsamer, je älter die Aufgabe wird**, und ab 10 Minuten springt ihre Uhr in 30-Sekunden-Schritten, passend zur Aktualisierung, damit sie nie eingefroren aussieht:
+Das Tempo oben gilt für die ersten zwei Minuten einer Aufgabe. Danach wird die Karte **langsamer, je älter die Aufgabe wird**, und ab 10 Minuten springt ihre Uhr in 30-Sekunden-Schritten, passend zur Aktualisierung, damit es nie so aussieht, als hinge sie:
 
 | Alter der Aufgabe | Karte höchstens alle | Uhr zeigt |
 |---|---|---|
@@ -115,7 +115,7 @@ aipager schaltet den Chat genau so lange stumm, wie Telegram verlangt hat, und m
 
 - Eine Nachricht, die du schickst (Text, Sprachnachricht, eine Datei, eine schnelle Vorlage), erreicht Claude trotzdem, und die Sitzung arbeitet daran. Ihre Arbeitskarte wird zurückgehalten, nicht verworfen: Läuft die Aufgabe noch, wenn die Sperre aufgehoben wird, erscheint die Karte dann. Eine Sperre lässt den Chat danach noch eine Weile im Minimalmodus, die Karte kann also ein paar Minuten länger brauchen als die Sperre selbst. Ist die Aufgabe während der Sperre fertig geworden, bekommst du ihre Antwort und keine Karte.
 - **🔄 Erneut versuchen** tut während einer Sperre nichts. Die Nachricht wird nicht noch einmal geschickt und der Button bleibt, du kannst also nach der Sperre noch einmal darauf tippen. Bis einschließlich 0.7.14 ging die Nachricht an Claude, während die Fehlermeldung und ihr Button blieben, ein zweites Tippen schickte sie also noch einmal.
-- Die Haupttastatur wird ebenfalls zurückgehalten, auch die, die ein Neustart schickt (bis 0.7.14 ging sie verloren, bis etwas anderes sie aktualisiert hat). Sie wird nach der Sperre geschickt.
+- Die Haupttastatur wird ebenfalls zurückgehalten, auch die, die ein Neustart schickt (bis einschließlich 0.7.14 ging sie verloren, bis etwas anderes sie aktualisiert hat). Sie wird nach der Sperre geschickt.
 
 Nach der Sperre kommt alles in dieser Reihenfolge: zurückgehaltene Antworten, dann Karten für Aufgaben, die noch laufen, dann die Tastatur. Eine Karte, die auf das Ende des Minimalmodus warten muss, kommt nach der Tastatur.
 
@@ -144,7 +144,7 @@ aipager session <label> --continue # neues dtach, die letzte Unterhaltung des Or
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Eine Berechtigungsanfrage seit 5 Minuten ohne Neuigkeiten
 
-Wenn eine Sitzung auf eine Berechtigungsanfrage oder eine Frage wartet und Claude Code 5 Minuten lang nichts meldet, liest aipager das gespeicherte Gespräch der Sitzung. Dabei zählt nur, was Claude selbst und der fragende Agent melden: Ein Hintergrund-Agent, der weiterarbeitet, hält diese Prüfung nicht auf. Nur wenn es zeigt, dass die Anfrage vorbei ist (im Terminal beantwortet, und die Nachricht davon ging verloren), hört aipager auf, auf sie zu warten, und zählt die Sitzung wieder als arbeitend. Sonst bleibt die Anfrage offen, egal wie lange es dauert: Die Karte und die angeheftete Leiste sagen weiter, dass die Sitzung deine Antwort braucht, es kommt kein Hinweis „arbeitet noch“, und deine Nachrichten werden zurückgehalten, bis du antwortest (siehe [Text](commands.md#text)). Ein Claude Code, das sich mit offener Anfrage beendet, beendet die Sitzung. Die Buttons der Anfrage beantworten den Dialog weiterhin, wenn er noch offen ist (siehe [Antworten](commands.md#idle-responses)).
+Wenn eine Sitzung auf eine Berechtigungsanfrage oder eine Frage wartet und Claude Code 5 Minuten lang nichts meldet, liest aipager die gespeicherte Unterhaltung der Sitzung. Dabei zählt nur, was Claude selbst und der fragende Agent melden: Ein Hintergrund-Agent, der weiterarbeitet, hält diese Prüfung nicht auf. Nur wenn es zeigt, dass die Anfrage vorbei ist (im Terminal beantwortet, und die Nachricht davon ging verloren), hört aipager auf, auf sie zu warten, und zählt die Sitzung wieder als arbeitend. Sonst bleibt die Anfrage offen, egal wie lange es dauert: Die Karte und die angeheftete Leiste sagen weiter, dass die Sitzung deine Antwort braucht, es kommt kein Hinweis „arbeitet noch“, und deine Nachrichten werden zurückgehalten, bis du antwortest (siehe [Text](commands.md#text)). Ein Claude Code, das sich mit offener Anfrage beendet, beendet die Sitzung. Die Buttons der Anfrage beantworten den Dialog weiterhin, wenn er noch offen ist (siehe [Antworten](commands.md#idle-responses)).
 
 Die Wartezeit ändern:
 
@@ -220,7 +220,7 @@ Die Reihenfolge zählt: Jede spätere Prüfung setzt voraus, dass die früheren 
 | `config_parses` | `aipager.yaml` und `policy.yaml` lassen sich lesen; läuft als Erste, weil jede spätere Prüfung die Konfiguration liest | der Fehler nennt Datei und Zeile |
 | `config` | `~/.config/aipager/aipager.yaml` existiert und hat einen Token und einen Chat | `aipager config` |
 | `token_valid` | Der Token funktioniert mit `getMe` von Telegram | `aipager config` noch einmal ausführen |
-| `chat_reachable` | Telegram kennt den eingerichteten Chat (`getChat`; es wird nichts gesendet) | den Bot öffnen, auf Start tippen |
+| `chat_reachable` | Telegram kennt den eingerichteten Chat (`getChat`; es wird nichts gesendet) | den Bot öffnen, auf „Starten“ tippen |
 | `team` | Die Chats und Mitglieder (oder ein altes `team.yaml`): sagt, ob persönlicher Betrieb oder Teambetrieb, und meldet ein fehlerhaftes oder nicht passendes altes `team.yaml` | `aipager config` |
 | `role_shell_access` | Warnt einmal für jede Rolle, die ein Mitglied hat und mit der Bash laufen kann (ihre Sicherheitsregeln sind nur nach bestem Bemühen, keine Grenze; siehe [Gruppen](groups.md#roles)) | dieser Rolle in `policy.yaml` kein Bash geben, oder es hinnehmen |
 | `peer_messages` | Nachrichten zwischen Claude-Sitzungen: wo ihre Belege liegen und ob dieser Ordner privat ist, ob dieses System die Startzeit des Absenders prüfen kann, und eine Warnung für jede Rolle, der eine Regel SendMessage erlaubt (siehe [Sicherheit](security.md#messages-between-claude-sessions)) | einen gemeinsam genutzten Ordner für Belege entfernen (aipager legt ihn neu an), oder dieser Rolle kein SendMessage geben |
@@ -312,7 +312,7 @@ Eine pipx-Installation aus einer git-URL aktualisiert aus dieser git-Quelle, nic
 
 Schlägt der Start an Ort und Stelle fehl, startet eine abgekoppelte Kopie aipager, sobald der alte Prozess weg ist. Ihre Ausgabe geht dann in das Log des Selbstneustarts (`aipager.log` im Ordner der Instanz oder `/tmp/aipager.log`) statt in dein Terminal, und das Log von aipager nennt den Befehl, den du ausführen musst, falls diese Kopie nicht zurückkommt. Ist der Interpreter selbst weg (seine Umgebung wurde entfernt) oder ließ sich nichts starten, beendet sich aipager mit Code 1, das Log von aipager endet mit `restart.failed:` und dem Befehl, den du ausführen musst, und der nächste Start meldet das Update.
 
-Gibt es keinen Button **Jetzt neu starten**, nennt die Nachricht die Schritte für dein Setup: in einem Terminal oder tmux Ctrl+C drücken und `aipager start` ausführen; auf macOS `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; in Docker `docker restart <container>` auf dem Host. Ein Docker-Container, der neu erzeugt wird (`docker compose up` nach `down` oder noch einmal `docker run`), startet aus seinem Image, und das bringt die aipager-Version aus diesem Image zurück: Um ein neueres aipager zu behalten, nimm ein neueres Image.
+Gibt es keinen Button **Jetzt neu starten**, nennt die Nachricht die Schritte für dein Setup: in einem Terminal oder tmux Ctrl+C drücken und `aipager start` ausführen; auf macOS `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; in Docker `docker restart <container>` auf dem Computer, auf dem Docker läuft. Ein Docker-Container, der neu erzeugt wird (`docker compose up` nach `down` oder noch einmal `docker run`), startet aus seinem Image, und das bringt die aipager-Version aus diesem Image zurück: Um ein neueres aipager zu behalten, nimm ein neueres Image.
 
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>aipager ist nach einem Update nicht zurückgekommen
 

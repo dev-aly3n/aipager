@@ -13,7 +13,7 @@ Mit aipager steuert diese Person Claude-Code-Sitzungen aus Telegram. Wenn du fer
 Bitte die Person, das zu tun. Du kannst es nicht für sie erledigen.
 
 1. **Den Bot erstellen.** In Telegram [@BotFather](https://t.me/BotFather) öffnen, `/newbot` senden, einen Namen und einen Benutzernamen wählen. BotFather antwortet mit dem Token des Bots (er sieht aus wie `123456789:AA...`).
-2. **Im Bot auf Start tippen.** Den neuen Bot öffnen (BotFather verlinkt ihn als `t.me/<bot username>`) und auf Start tippen. Ein Bot kann niemandem schreiben, der das nicht getan hat.
+2. **Im Bot auf „Starten“ tippen.** Den neuen Bot öffnen (BotFather verlinkt ihn als `t.me/<bot username>`) und auf „Starten“ tippen. Ein Bot kann niemandem schreiben, der das nicht getan hat.
 3. **Claude Code auf diesem Computer anmelden.** Wenn die Person Claude Code hier schon nutzt, ist nichts zu tun. Auf einem Server ohne Bildschirm führt sie einmal `claude` in ihrem eigenen Terminal aus und meldet sich an (es zeigt einen Link, den man auf einem anderen Gerät öffnet). Wenn sie lieber einen langlebigen Token will, führt sie `claude setup-token` aus, das den Token nur ausgibt: Sie speichert ihn selbst für die Sitzungen von aipager, in ihrem eigenen Terminal (Token einfügen, Enter drücken, dann Ctrl-D):
 
    ```sh
@@ -84,7 +84,7 @@ Füg `--dry-run` hinzu, um zuerst zu sehen, was sich ändern würde. `--role adm
 aipager setup detect-chat --token-file ~/.config/aipager/bot-token --json
 ```
 
-Bitte die Person, im Bot auf Start zu tippen (oder ihm irgendeine Nachricht zu schicken), während der Befehl wartet (bis zu 5 Minuten; `--timeout SECONDS` ändert das). Er gibt den neuesten Absender in `candidate` aus (`id`, `first_name`, `last_name`, `username`) und speichert nichts. Zeig der Person den Namen und den Benutzernamen und frag „Bist du das?“. Nur wenn sie ja sagt, führ Schritt 3.2 mit `--chat-id` gleich `candidate.id` aus. Wenn `other_candidates` nicht 0 ist, haben auch andere Leute dem Bot geschrieben: Sei dann besonders sorgfältig.
+Bitte die Person, im Bot auf „Starten“ zu tippen (oder ihm irgendeine Nachricht zu schicken), während der Befehl wartet (bis zu 5 Minuten; `--timeout SECONDS` ändert das). Er gibt den neuesten Absender in `candidate` aus (`id`, `first_name`, `last_name`, `username`) und speichert nichts. Zeig der Person den Namen und den Benutzernamen und frag „Bist du das?“. Nur wenn sie ja sagt, führ Schritt 3.2 mit `--chat-id` gleich `candidate.id` aus. Wenn `other_candidates` nicht 0 ist, haben auch andere Leute dem Bot geschrieben: Sei dann besonders sorgfältig.
 
 ### <a id="34-read-the-result"></a>3.4 Das Ergebnis lesen
 
@@ -97,10 +97,10 @@ Mit `--json` gibt setup genau ein JSON-Objekt auf stdout aus. Lies `exit_code` (
 | 2 | `usage`, `token_malformed`, `token_stdin_timeout`, `bad_chat_id`, ... | Deine Eingabe war falsch; `fix` nennt die Option. `token_malformed`: Die Datei enthält keinen Bot-Token, bitte die Person, sie zu prüfen. |
 | 3 | `deps_missing` | Folge `fix` (jedes fehlende Teil hat auch sein eigenes `fix` in `deps.items`), dann führ setup noch einmal aus. |
 | 4 | `token_rejected` | Telegram hat den Token abgelehnt. Bitte die Person noch einmal um den Token (oder um einen neuen von @BotFather). |
-| 5 | `chat_not_started`, `bot_blocked` | Bitte die Person, den Bot zu öffnen, auf Start zu tippen (oder ihn zu entsperren), dann führ setup noch einmal aus. |
+| 5 | `chat_not_started`, `bot_blocked` | Bitte die Person, den Bot zu öffnen, auf „Starten“ zu tippen (oder ihn zu entsperren), dann führ setup noch einmal aus. |
 | 6 | `existing_install` | aipager ist schon mit einem anderen Token, Chat oder einer anderen Rolle eingerichtet. Sag der Person, was sich unterscheidet, und frag, bevor du `--force` hinzufügst. |
 | 7 | `telegram_unreachable` | Netzwerkprobleme oder Telegram ist ausgelastet. Warte eine Minute und versuch es noch einmal. |
-| 8 | `detect_timeout` | detect-chat hat keine Nachricht gesehen. Bitte die Person, noch einmal auf Start zu tippen, und führ den Befehl erneut aus. Mit der Warnung `updates_backlog` hilft Start nicht: Frag die Person nach ihrer numerischen ID. |
+| 8 | `detect_timeout` | detect-chat hat keine Nachricht gesehen. Bitte die Person, noch einmal auf „Starten“ zu tippen, und führ den Befehl erneut aus. Mit der Warnung `updates_backlog` hilft „Starten“ nicht: Frag die Person nach ihrer numerischen ID. |
 | 9 | `daemon_running` | detect-chat: Ein aipager für diesen Bot läuft schon und bekommt seine Nachrichten. Frag die Person nach ihrer numerischen ID (oder frag sie, bevor du es mit `aipager service stop` stoppst). |
 | 10 | `updates_conflict` | detect-chat: Ein anderes Programm liest die Nachrichten dieses Bots. Frag die Person nach ihrer numerischen ID. |
 | 130 | `interrupted` | Mit Ctrl-C gestoppt. |

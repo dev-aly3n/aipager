@@ -181,7 +181,7 @@ def test_areas_in_the_viewers_language():
     report = {"errors": [{"frames": [{"file": "aipager/dtach/notify_hook.py"}]},
                          {"frames": [{"file": "aipager/bot/zzz.py"}]}, "x"]}
     assert report_drafts.areas(report) == ["the hook", "zzz", "aipager"]
-    assert report_drafts.areas(report, tr=i18n.get("ru")) == ["хук", "zzz", "aipager"]
+    assert report_drafts.areas(report, tr=i18n.get("ru")) == ["hook", "zzz", "aipager"]
 
 
 def _tap(user, chat, data):

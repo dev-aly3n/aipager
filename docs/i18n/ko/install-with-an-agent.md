@@ -121,7 +121,7 @@ aipager doctor --json
 
 - 봇(`@` + `bot_username`)과 테스트 메시지가 보내졌는지(`test_message`);
 - 무엇을 설정했는지(`changed`, 그리고 `service.result`);
-- Claude 세션을 시작하는 방법: Telegram에서 봇에게 `/new`를 보내거나 터미널에서 `aipager session <name>`을 실행해요;
+- Claude 세션을 시작하는 방법: Telegram에서 봇에게 `/new`를 보내거나 터미널에서 `aipager session <name>`을 실행해요.
 - `doctor`가 짚은 문제와, 무언가를 요구한다면 `next_step`.
 
 ## <a id="4-what-you-must-not-do"></a>4. 절대 하면 안 되는 일

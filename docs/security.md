@@ -511,11 +511,11 @@ their rules stay best-effort (below).
   floor is weaker than a built-in `user`: such a turn can read any file
   in your home folder that is not a protected path (your other
   projects, for example), where a `user`'s turn reads only inside its
-  root folder. Its writes stay confined to the session folder and the
+  root folder. Such a turn can also read every chat's uploads in
+  `/tmp/aipager-files/`, which a `user`'s turn reads only for its own
+  chat. Its writes stay confined to the session folder and the
   scratchpad. A verified message from a member's session carries the
-  member's root folder. Such a turn can also read every chat's uploads
-  in `/tmp/aipager-files/`, which a `user`'s turn reads only for its
-  own chat.
+  member's root folder.
 - The root folder binds the file tools only. A custom role you give
   `Bash` can read outside it through the shell (the built-in `user`
   and `read_only` have no `Bash`). A custom role with `bypass_safety`

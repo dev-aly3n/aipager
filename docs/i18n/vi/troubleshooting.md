@@ -1,6 +1,6 @@
 # Xử lý sự cố
 
-<!-- i18n-source: docs/troubleshooting.md @ 054b893 -->
+<!-- i18n-source: docs/troubleshooting.md @ 1de34258 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../troubleshooting.md))
 
@@ -115,7 +115,7 @@ aipager tắt việc gửi vào chat đúng khoảng thời gian Telegram yêu c
 
 - Một tin nhắn bạn gửi (chữ, tin nhắn thoại, file, mẫu nhanh) vẫn tới Claude và phiên vẫn làm việc với nó. Thẻ làm việc của nó được giữ lại, không bị bỏ: nếu việc vẫn đang chạy khi lệnh chặn hết, thẻ sẽ hiện ra lúc đó. Sau một lệnh chặn, chat còn ở chế độ tối thiểu một thời gian, nên thẻ có thể đến muộn hơn lúc hết chặn vài phút. Nếu việc đã xong trong lúc bị chặn, bạn nhận được câu trả lời và không có thẻ.
 - **🔄 Thử lại** không làm gì trong lúc bị chặn. Tin nhắn không được gửi lại và nút vẫn còn, nên bạn có thể chạm lại sau khi hết chặn. Cho tới bản 0.7.14, tin nhắn vẫn đi tới Claude trong khi thông báo lỗi và nút của nó vẫn còn, nên chạm lần hai sẽ gửi nó thêm lần nữa.
-- Bàn phím chính cũng được giữ lại, kể cả bàn phím mà một lần khởi động lại gửi đi (cho tới bản 0.7.14 nó bị mất cho tới khi có gì khác làm mới nó). Nó được gửi sau khi hết chặn.
+- Bàn phím chính cũng được giữ lại, kể cả bàn phím mà một lần khởi động lại gửi đi (ở bản 0.7.14 trở về trước, nó bị mất cho tới khi có gì khác làm mới nó). Nó được gửi sau khi hết chặn.
 
 Sau khi hết chặn, mọi thứ đến theo thứ tự này: các câu trả lời bị giữ, rồi thẻ của các việc vẫn đang chạy, rồi bàn phím. Một thẻ phải chờ chế độ tối thiểu kết thúc thì đến sau bàn phím.
 
@@ -132,7 +132,7 @@ Những điều KHÔNG nên làm:
 
 ## <a id="a-session-dropped-off-the-pinned-status-bar-it-is-gone"></a>Một phiên biến khỏi thanh trạng thái được ghim (nó đã GONE)
 
-Tiến trình dtach của phiên đó đã thoát (máy khởi động lại, `pkill claude`, ai đó gõ `exit` trong phiên dtach đang kết nối). Hãy tạo lại phiên: cuộc trò chuyện vẫn còn trong thư mục `~/.claude/projects/...` của nó.
+Tiến trình dtach của phiên đó đã thoát (máy tính khởi động lại, `pkill claude`, ai đó gõ `exit` trong phiên dtach đang kết nối). Hãy tạo lại phiên: cuộc trò chuyện vẫn còn trong thư mục `~/.claude/projects/...` của nó.
 
 Cách dễ nhất là `/resume <label>` trong Telegram (hoặc chỉ `/resume` để chọn từ danh sách): nó khởi động lại phiên và tiếp tục cuộc trò chuyện. Từ dòng lệnh:
 
@@ -144,7 +144,7 @@ aipager session <label> --continue # dtach mới, cuộc trò chuyện gần nh�
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Một yêu cầu cấp quyền không có tin gì trong 5 phút
 
-Nếu một phiên đang chờ một yêu cầu cấp quyền hay câu hỏi và Claude Code không báo gì trong 5 phút, aipager đọc cuộc trò chuyện đã lưu của phiên. Chỉ tin từ chính Claude và từ agent đã hỏi được tính: một agent chạy nền vẫn tiếp tục làm việc không cản việc kiểm tra này. Chỉ khi nó cho thấy yêu cầu đã xong (đã trả lời trong terminal, và tin đó bị mất) thì aipager mới thôi chờ và coi phiên là đang làm việc trở lại. Nếu không, yêu cầu vẫn mở dù mất bao lâu: thẻ và thanh ghim vẫn báo phiên cần bạn trả lời, không có ghi chú "vẫn đang làm" nào được gửi, và tin nhắn của bạn được giữ lại cho đến khi bạn trả lời (xem [văn bản](commands.md#text)). Claude Code thoát khi yêu cầu còn mở thì phiên kết thúc. Các nút của yêu cầu vẫn trả lời hộp thoại nếu nó vẫn đang mở (xem [phản hồi khi rảnh](commands.md#idle-responses)).
+Nếu một phiên đang chờ một yêu cầu cấp quyền hay câu hỏi và Claude Code không báo gì trong 5 phút, aipager đọc cuộc trò chuyện đã lưu của phiên. Chỉ tin từ chính Claude và từ agent đã hỏi được tính: một agent chạy nền vẫn tiếp tục làm việc không cản việc kiểm tra này. Chỉ khi nó cho thấy yêu cầu đã xong (đã trả lời trong terminal, và tin đó bị mất) thì aipager mới thôi chờ và coi phiên là đang làm việc trở lại. Nếu không, yêu cầu vẫn mở dù mất bao lâu: thẻ và thanh được ghim vẫn báo phiên cần bạn trả lời, không có ghi chú “vẫn đang làm việc” nào được gửi, và tin nhắn của bạn được giữ lại cho đến khi bạn trả lời (xem [chữ](commands.md#text)). Claude Code thoát khi yêu cầu còn mở thì phiên kết thúc. Các nút của yêu cầu vẫn trả lời hộp thoại nếu nó vẫn đang mở (xem [câu trả lời khi việc kết thúc](commands.md#idle-responses)).
 
 Để đổi thời gian chờ:
 
@@ -156,13 +156,13 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # tính bằng giây
 
 Nút `[📦 Cài tính năng thoại]` chạy trình cài đặt và sửa tin nhắn của nó vài giây một lần trong lúc cài (`vẫn đang chạy… (25 giây)`). Nếu việc cài thất bại, tin nhắn hiện mã thoát và 500 ký tự cuối trong đầu ra của trình cài đặt. Các nguyên nhân thường gặp:
 
-- Mạng: pip không kết nối được tới PyPI. Kiểm tra kết nối từ máy đang chạy aipager.
+- Mạng: pip không kết nối được tới PyPI. Kiểm tra kết nối từ máy tính đang chạy aipager.
 - Ổ đĩa: `~/.cache/huggingface/` cần khoảng 74 MB cho mô hình và bộ nhớ đệm wheel của pip cần thêm khoảng 250 MB. Hãy giải phóng dung lượng trước.
 - Permission denied: venv chỉ đọc. Chuyển sang `uv tool install`, cách này luôn dùng một venv thuộc về người dùng của bạn.
 
 Nếu bot mất kết nối giữa lúc cài, bản thân việc cài trên máy thường đã xong: hãy khởi động lại aipager và thử lại một tin nhắn thoại.
 
-## <a id="open-app-shows-open-this-page-from-the-telegram-app-to-sign-in"></a>Mở ứng dụng thì thấy “Hãy mở trang này từ ứng dụng Telegram để đăng nhập.”
+## <a id="open-app-shows-open-this-page-from-the-telegram-app-to-sign-in"></a>Mở Mini App thì thấy “Hãy mở trang này từ ứng dụng Telegram để đăng nhập.”
 
 Trang đã tải, nhưng script Mini App SDK của Telegram (script tạo ra `initData`) thì không, nên trang không có gì để đăng nhập và không gọi API nào cả. Câu thông báo nghe như lỗi của bạn; thực ra nguyên nhân là ở mạng.
 
@@ -171,10 +171,10 @@ Các phiên bản aipager gần đây tự tải script đó và phục vụ nó
 Sau đó, theo thứ tự:
 
 1. Xem mã nguồn của trang. Nếu thẻ `<script>` của nó trỏ tới `https://telegram.org/js/telegram-web-app.js`, aipager vẫn chưa tải được script và trang đang tạm tải nó từ Telegram, mà đó chính là trường hợp hỏng trên điện thoại không kết nối được tới `telegram.org`. aipager tải script khi máy chủ Mini App khởi động và thử lại nhiều nhất mỗi ngày một lần, nên khởi động lại aipager sẽ thử lại ngay; `journalctl --user -u aipager | grep "webapp sdk"` cho biết điều gì đã sai (thường là `telegram.org` bị chặn hoặc bị lọc).
-2. Nếu thẻ trỏ tới `/telegram-web-app.js`, hãy kiểm tra rằng aipager phục vụ nó: `curl -sI http://127.0.0.1:8765/telegram-web-app.js` trên máy chạy aipager (đổi cổng nếu bạn đã đổi) phải trả lời `200` với `Content-Type: application/javascript`. Bản sao nằm trong `~/.local/share/aipager/webapp-sdk/`.
+2. Nếu thẻ trỏ tới `/telegram-web-app.js`, hãy kiểm tra rằng aipager phục vụ nó: `curl -sI http://127.0.0.1:8765/telegram-web-app.js` trên máy tính chạy aipager (đổi cổng nếu bạn đã đổi) phải trả lời `200` với `Content-Type: application/javascript`. Bản sao nằm trong `~/.local/share/aipager/webapp-sdk/`.
 3. Bạn đã mở URL trong một trình duyệt thường chứ không phải từ nút `/app` hay nút menu của bot: khi đó thông báo này là đúng. SDK chỉ tạo ra `initData` bên trong Telegram.
 4. Trang đã mở quá năm phút: `initData` hết hạn và trang yêu cầu được mở lại. Chạm `/app` lần nữa.
-5. Bạn đã chạm `📱 App` trên bàn phím từ một phiên bản aipager cũ hơn. Telegram không cấp `initData` cho Mini App được mở từ một nút bàn phím, nên bàn phím của aipager không còn nút đó nữa. Gửi `/start` để nhận bàn phím hiện tại, rồi mở app bằng nút menu hoặc `/app`.
+5. Bạn đã chạm `📱 App` trên bàn phím từ một phiên bản aipager cũ hơn. Telegram không cấp `initData` cho Mini App được mở từ một nút bàn phím, nên bàn phím của aipager không còn nút đó nữa. Gửi `/start` để nhận bàn phím hiện tại, rồi mở Mini App bằng nút menu hoặc `/app`.
 
 ## <a id="pyexpat-_xml_setalloctrackeractivationthreshold-on-brew-install"></a>`pyexpat _XML_SetAllocTrackerActivationThreshold` khi cài bằng brew
 
@@ -302,7 +302,7 @@ Khi không có dịch vụ (hoặc trên macOS), hãy khởi động lại aipag
 
 ## <a id="claude-code-update-installed-with-npm-into-a-folder-you-cant-write-to"></a>Cập nhật Claude Code: được cài bằng npm vào một thư mục bạn không ghi được
 
-Một bản Claude Code cài bằng `sudo npm install -g` nằm trong thư mục mà chỉ root sửa được (như `/usr/lib/node_modules`), nên `claude update` chạy với người dùng của bạn sẽ thất bại với `global folder isn't writable`. `/update` và Mini App hiện bản mới hơn với `không cập nhật được từ đây: installed with npm into a folder your user can't write to` và không có nút nào cho nó. Hãy chạy `claude install` một lần, dưới đúng người dùng mà aipager đang chạy: nó chuyển sang trình cài đặt riêng của Claude Code trong thư mục home của bạn, thứ cập nhật được mà không cần sudo. Sau đó khởi động lại aipager (`systemctl --user restart aipager.service`, hoặc theo cách bạn đã khởi động nó): một aipager đang chạy giữ bản Claude Code nó tìm thấy lúc khởi động, và sau khi khởi động lại nó lấy bản mới nhất tìm được. Nếu `claude_path` trong `aipager.yaml` (`aipager doctor --fix` có thể đặt nó) hoặc `AIPAGER_CLAUDE_BIN` trỏ tới bản npm, hãy trỏ nó tới `~/.local/bin/claude` hoặc xóa nó trước, vì chúng luôn thắng.
+Một bản Claude Code cài bằng `sudo npm install -g` nằm trong thư mục mà chỉ root sửa được (như `/usr/lib/node_modules`), nên `claude update` chạy với người dùng của bạn sẽ thất bại với `global folder isn't writable`. `/update` và Mini App hiện bản mới hơn với `không cập nhật được từ đây: installed with npm into a folder your user can't write to` và không có nút nào cho nó. Hãy chạy `claude install` một lần, bằng đúng tài khoản người dùng đang chạy aipager: nó chuyển sang trình cài đặt riêng của Claude Code trong thư mục home của bạn, thứ cập nhật được mà không cần sudo. Sau đó khởi động lại aipager (`systemctl --user restart aipager.service`, hoặc theo cách bạn đã khởi động nó): một aipager đang chạy giữ bản Claude Code nó tìm thấy lúc khởi động, và sau khi khởi động lại nó lấy bản mới nhất tìm được. Nếu `claude_path` trong `aipager.yaml` (`aipager doctor --fix` có thể đặt nó) hoặc `AIPAGER_CLAUDE_BIN` trỏ tới bản npm, hãy trỏ nó tới `~/.local/bin/claude` hoặc xóa nó trước, vì chúng luôn thắng.
 
 ## <a id="updated-but-the-version-didnt-change"></a>Đã cập nhật nhưng phiên bản không đổi
 
@@ -312,7 +312,7 @@ Một bản cài pipx tạo từ một URL git được nâng cấp từ nguồn
 
 Nếu khởi động tại chỗ thất bại, một bản sao tách riêng sẽ khởi động aipager khi tiến trình cũ đã thoát. Đầu ra của nó khi đó đi vào log tự khởi động lại (`aipager.log` trong thư mục của phiên bản cài, hoặc `/tmp/aipager.log`) thay vì terminal của bạn, và log của aipager nêu lệnh cần chạy nếu bản sao đó không quay lại. Nếu chính trình thông dịch đã mất (môi trường của nó đã bị xóa), hoặc không khởi động được gì, aipager thoát với mã 1, log của aipager kết thúc bằng `restart.failed:` cùng lệnh cần chạy, và lần khởi động tiếp theo sẽ thông báo bản cập nhật.
 
-Khi không có nút **Khởi động lại ngay**, tin nhắn đưa ra các bước cho cách cài của bạn: trong terminal hoặc tmux, nhấn Ctrl+C rồi chạy `aipager start`; trên macOS, `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; trong Docker, `docker restart <container>` trên máy chủ. Tạo lại một container Docker (`docker compose up` sau `down`, hoặc `docker run` lần nữa) sẽ khởi động nó từ image, điều này mang lại phiên bản aipager trong image đó: để giữ một aipager mới hơn, hãy dùng một image mới hơn.
+Khi không có nút **Khởi động lại ngay**, tin nhắn đưa ra các bước cho cách cài của bạn: trong terminal hoặc tmux, nhấn Ctrl+C rồi chạy `aipager start`; trên macOS, `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; trong Docker, `docker restart <container>` trên máy tính (ngoài container). Tạo lại một container Docker (`docker compose up` sau `down`, hoặc `docker run` lần nữa) sẽ khởi động nó từ image, điều này mang lại phiên bản aipager trong image đó: để giữ một aipager mới hơn, hãy dùng một image mới hơn.
 
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>aipager không chạy lại sau khi cập nhật
 
@@ -337,7 +337,7 @@ Một bản cài pipx từ đường dẫn trên máy: `pipx install --force /pa
 
 aipager đã dừng (hoặc được khởi động lại) trong lúc `/update` đang cài, và trình cài đặt cũng bị dừng theo, nên bản cài có thể mới được ghi một nửa. Nếu aipager hoặc Claude Code chạy không ổn, hãy sửa: với aipager, chạy lệnh cài lại trong tin nhắn (ví dụ `pipx install --force aipager`) rồi `systemctl --user restart aipager.service`; với Claude Code, chạy lại `claude update`.
 
-Một lần Khởi động lại ngay không khởi động lại được aipager (khi không có dịch vụ) để lại `restart.failed:` trong log của aipager cùng lệnh cần chạy; hãy chạy lệnh đó, và aipager mới sẽ thông báo bản cập nhật.
+Một lần chạm “Khởi động lại ngay” mà không khởi động lại được aipager (khi không có dịch vụ) để lại `restart.failed:` trong log của aipager cùng lệnh cần chạy; hãy chạy lệnh đó, và aipager mới sẽ thông báo bản cập nhật.
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>Một chat đang dùng sai ngôn ngữ
 
