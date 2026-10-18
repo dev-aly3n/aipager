@@ -1565,19 +1565,22 @@ class NotifyMixin:
         if req is None or not req.files:
             log.warning("[%s] turn files: no readable file list", sess.label)
             return
-        why = None
+        dropped = True
         if not self._files_turn_live(sess):
             # No turn opened by a prompt (or its job) runs: not a call of
             # Claude's (a forged datagram, a replay). Nothing is read.
-            why = "no turn running"
+            log.warning("[%s] turn files: a send with no turn running was "
+                        "dropped", sess.label)
         elif not req.tool_use_id:
-            why = "no call id"
+            log.warning("[%s] turn files: a send with no call id was dropped",
+                        sess.label)
         elif not sess.files_call_used(req.tool_use_id):
             # This call was copied already: a replayed datagram.
-            why = "a call already copied"
-        if why is not None:
-            log.warning("[%s] turn files: a send with %s was dropped",
-                        sess.label, why)
+            log.warning("[%s] turn files: a call already copied was dropped",
+                        sess.label)
+        else:
+            dropped = False
+        if dropped:
             ctx = self._file_audit_ctx(sess)
             for entry in req.files[:100]:
                 outbox.audit_file(ctx, outbox.ACTION_FAILED,
