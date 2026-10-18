@@ -435,6 +435,24 @@ def test_held_anchor_moves_when_the_answer_lands_or_goes():
     assert box.due(CHAT) == []
 
 
+def test_due_keeps_a_sessions_order_behind_a_held_answer():
+    """An older delivery still waiting for its held answer keeps the newer
+    ones of its session waiting (rev-iter2-003); another session's go."""
+    box = ob.Outbox()
+
+    def q(session, held, prompt):
+        box.queue(ob.Pending(session=session, chat_id=CHAT, anchor=None if held else 9,
+                             held_key=held, prompt_id=prompt, batches=[], created=0.0))
+    q("s", "k1", 1)
+    q("s", None, 2)
+    q("other", None, 3)
+    assert [p.prompt_id for p in box.due(CHAT)] == [3]
+    assert box.due(CHAT, "s") == []
+    box.answer_landed("k1", 77)
+    assert [p.prompt_id for p in box.due(CHAT, "s")] == [1, 2]
+    assert box.pending == {}
+
+
 # ---- the delivery ---------------------------------------------------------------
 
 class _Bot:

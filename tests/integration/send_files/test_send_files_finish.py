@@ -1027,3 +1027,28 @@ def test_a_late_call_is_dropped_once_nothing_runs(mk_bot, files_bot, rich,
     assert [(r["file_name"], r["reason"]) for r in failed] == [
         ("chart.png", outbox.CAUSE_UNVERIFIED)]
 
+
+# ---- a newer turn's files never overtake older waiting ones (rev-iter2-003) -------
+
+def test_a_newer_turns_files_wait_behind_older_ones_after_a_mute(
+        mk_bot, files_bot, rich, run_async, tmp_path):
+    """Turn 1's files wait out a mute; the mute lifts and turn 2 finishes
+    before the monitor's flush: turn 1's go first."""
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    first, second = _pic(tmp_path, "first.png"), _pic(tmp_path, "second.png")
+
+    async def go():
+        await _send_files(bot, sess, [first], tool_use_id="toolu_a")
+        MUTE.mute(CHAT, 600, source="test")
+        await _finish(bot, sess, "")
+        assert outbox.OUTBOX.has_pending(sess.name)
+        MUTE.clear()
+        _new_turn(bot, sess)
+        await _send_files(bot, sess, [second], tool_use_id="toolu_b")
+        await _finish(bot, sess, "")
+    run_async(go())
+    names = [c[2]["photo"].filename for c in files_bot.file_calls()]
+    assert names == ["first.png", "second.png"]
+    assert not outbox.OUTBOX.has_pending(sess.name)
+

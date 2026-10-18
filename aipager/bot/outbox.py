@@ -436,11 +436,21 @@ class Outbox:
 
     def due(self, chat_id: int, session: str | None = None) -> list[Pending]:
         """The deliveries of *chat_id* (of one session when given) whose
-        anchor is known, oldest first, taken out of the store."""
+        anchor is known, oldest first, taken out of the store. A session's
+        deliveries keep their order: one still waiting for its held answer
+        keeps every later one of that session waiting too."""
         items = self.pending.get(chat_id) or []
-        out = [p for p in items if p.held_key is None
-               and (session is None or p.session == session)]
-        rest = [p for p in items if p not in out]
+        blocked: set[str] = set()
+        out = []
+        for p in items:
+            if session is not None and p.session != session:
+                continue
+            if p.held_key is not None:
+                blocked.add(p.session)
+            elif p.session not in blocked:
+                out.append(p)
+        taken = {id(p) for p in out}
+        rest = [p for p in items if id(p) not in taken]
         if rest:
             self.pending[chat_id] = rest
         else:

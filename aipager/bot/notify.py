@@ -1714,6 +1714,14 @@ class NotifyMixin:
                 box.queue(pending)
                 log.info("[%s] turn files held: the chat is flood-muted", sess.label)
                 return
+            if box.has_pending(sess.name):
+                # Older files of this session still wait (a mute that just
+                # lifted, a held answer not landed yet): these go after
+                # them, never before (review 2026-10-18, rev-iter2-003).
+                box.queue(pending)
+                log.info("[%s] turn files wait behind earlier ones", sess.label)
+                await self.flush_turn_files(sess)
+                return
             await self._send_turn_files(sess, pending)
         except Exception:
             log.warning("[%s] turn files: delivery failed", sess.label,
