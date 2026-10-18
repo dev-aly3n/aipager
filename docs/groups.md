@@ -249,7 +249,7 @@ even after a restart. A session's internal name with the old id
 (`/name__g<old id>`) works in the upgraded group and nowhere else. If
 the daemon was stopped during the upgrade, it notices at its next
 start. A turn that is running at the moment of the upgrade finishes and
-its answer reaches the upgraded group, but its progress card is not
+its answer reaches the upgraded group, but its busy card is not
 shown again for the rest of that turn. If the new id is already a scope
 of its own, nothing moves and the log says so; remove one of the two
 with `aipager config`. "Test bot reachability" in `aipager config`
