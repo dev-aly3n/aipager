@@ -968,6 +968,20 @@ def small_429_wait(exc: RetryAfter, chat_id: int | None) -> float | None:
     return wait
 
 
+#: The Bot API method that sends several messages in one call.
+MEDIA_GROUP_ENDPOINT = "sendMediaGroup"
+
+
+def _request_cost(endpoint: str, data) -> int:
+    """How many messages one call makes: an album (``sendMediaGroup``)
+    makes one per item, as Telegram counts them; everything else one."""
+    if endpoint == MEDIA_GROUP_ENDPOINT and isinstance(data, dict):
+        media = data.get("media")
+        if isinstance(media, (list, tuple)) and media:
+            return len(media)
+    return 1
+
+
 class BudgetRateLimiter(BaseRateLimiter):
     """The daemon's one rate limiter, on both HTTP paths (R10).
 
@@ -1824,7 +1838,7 @@ class BudgetRateLimiter(BaseRateLimiter):
 
     async def _acquire_blocking(
         self, budget: ChatBudget | None, *, reserve: float = 0.0,
-        cls: str = PRIORITY_ESSENTIAL, endpoint: str = "",
+        cls: str = PRIORITY_ESSENTIAL, endpoint: str = "", cost: int = 1,
     ) -> None:
         """Wait until every limit that applies has room, then spend it.
 
@@ -1856,10 +1870,20 @@ class BudgetRateLimiter(BaseRateLimiter):
         again HERE, in the synchronous block that takes, is what keeps
         "ornaments ≤ share in every rolling hour" strictly true. Card
         callers already read `FloodSkipped` as "nothing sent".
+
+        ``cost`` is how many messages the call makes (an album of N items
+        makes N, :func:`_request_cost`): it waits for and spends that many
+        of each limit, clamped to what each limit can ever hold, so a
+        10-item album never waits for ever on a smaller bucket.
         """
         if budget is None:
             await self._wait_for_overall()
             return
+        chat_cost = float(min(max(int(cost), 1),
+                              max(int(budget.chat.capacity - reserve), 1)))
+        window_cost = float(min(max(int(cost), 1), max(budget.window.limit, 1)))
+        overall_cost = float(min(max(int(cost), 1),
+                                 max(int(self._overall.capacity), 1)))
         ticket: asyncio.Future = asyncio.get_running_loop().create_future()
         # The reserve IS the ornament marker: it is the only class that
         # asks for one (see `process_request`).
@@ -1894,9 +1918,9 @@ class BudgetRateLimiter(BaseRateLimiter):
                 self._decay(budget, now)
                 wait = max(
                     budget.retry_until - now,
-                    budget.chat.time_until(1.0 + reserve),
-                    budget.window.time_until(1.0),
-                    self._overall.time_until(1.0),
+                    budget.chat.time_until(chat_cost + reserve),
+                    budget.window.time_until(window_cost),
+                    self._overall.time_until(overall_cost),
                 )
                 if wait <= 0:
                     # The mute, again, at the instant of taking. The gate
@@ -1916,9 +1940,9 @@ class BudgetRateLimiter(BaseRateLimiter):
                             and self._ornament_share_spent(budget)):
                         budget.ornaments_suspended += 1
                         raise FloodSkipped(budget.chat_id, endpoint)
-                    budget.chat.take(1.0)
-                    budget.window.take(1.0)
-                    self._overall.take(1.0)
+                    budget.chat.take(chat_cost)
+                    budget.window.take(window_cost)
+                    self._overall.take(overall_cost)
                     self._record(budget, cls)
                     return
                 await self._sleep(wait)
@@ -2115,17 +2139,17 @@ class BudgetRateLimiter(BaseRateLimiter):
             await self._acquire_blocking(
                 budget,
                 reserve=(_SKIP_RESERVE if cls == PRIORITY_ORNAMENT else 0.0),
-                cls=cls, endpoint=endpoint,
+                cls=cls, endpoint=endpoint, cost=_request_cost(endpoint, data),
             )
         return await self._run(
             budget, callback, args, kwargs, endpoint, chat_id, kind=kind,
-            cls=cls,
+            cls=cls, cost=_request_cost(endpoint, data),
         )
 
     async def _run(
         self, budget, callback, args, kwargs, endpoint, chat_id,
         *, kind: str = "blocking", allow_retry: bool = True,
-        cls: str = PRIORITY_ESSENTIAL,
+        cls: str = PRIORITY_ESSENTIAL, cost: int = 1,
     ):
         """Run the callback whose budget has already been paid.
 
@@ -2202,10 +2226,11 @@ class BudgetRateLimiter(BaseRateLimiter):
             # The retry is a call like any other: it counts in the hour
             # under its OWN class, and an ornament retry is refused if the
             # hour's ornament share went while it waited (8.30 Q7).
-            await self._acquire_blocking(budget, cls=cls, endpoint=endpoint)
+            await self._acquire_blocking(budget, cls=cls, endpoint=endpoint,
+                                         cost=cost)
             return await self._run(
                 budget, callback, args, kwargs, endpoint, chat_id,
-                kind=kind, allow_retry=False, cls=cls,
+                kind=kind, allow_retry=False, cls=cls, cost=cost,
             )
 
     # ── persistence (8.28) ───────────────────────────────────────────────

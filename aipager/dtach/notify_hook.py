@@ -1005,11 +1005,23 @@ def _run(session: str, cap_slot: list) -> None:
                 block = enforce.fail_closed(data)
                 decide_error = e
             if block and block.get("soft"):
-                # A parallel tool call found the peer check still running:
-                # deny this one call WITHOUT the sticky marker, so the turn
-                # is not halted ("peer message authority", C8).
+                # A parallel tool call found the peer check still running,
+                # or a file Claude asked to send was refused: deny this one
+                # call WITHOUT the sticky marker, so the turn is not halted
+                # ("peer message authority", C8; SendUserFile).
                 print(enforce.soft_deny_json(block["reason"]))
                 sys.stdout.flush()
+                if info.get("send_refusals"):
+                    # After the answer: for the daemon's audit only.
+                    try:
+                        _udp({
+                            "hook_event_name": "send_files_refused",
+                            "session": data.get("session", ""),
+                            "tool_use_id": data.get("tool_use_id", ""),
+                            "files": info["send_refusals"],
+                        })
+                    except Exception as e:
+                        _debug(f"send_files_refused notify failed: {e}")
             elif block:
                 # Deny first: a failure reporting it must not undo it.
                 print(enforce.deny_decision_json(block["reason"]))

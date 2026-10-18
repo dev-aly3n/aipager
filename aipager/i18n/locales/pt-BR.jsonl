@@ -194,6 +194,7 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (ainda trabalhando)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "agente"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"many": "📎 Enviando {n} arquivos", "one": "📎 Enviando {n} arquivo", "other": "📎 Enviando {n} arquivos"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "comando em segundo plano: {label} - concluído ({clock})"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "comando em segundo plano: {label} - terminou com erro ({clock})"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "comando em segundo plano: {label} - terminou com erro (código de saída {code})"}
@@ -478,6 +479,12 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · ainda esperando sua resposta lá em cima"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Permissão: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Pergunta: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ Não foi possível enviar {name}: o arquivo foi apagado ou mudou antes que o aipager pudesse copiá-lo."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ Não foi possível enviar {name}: o envio dele não é mais permitido."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ Não foi possível enviar {name}."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ Não foi possível enviar {name}: o Telegram recusou o arquivo."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ Não foi possível enviar {name}: o arquivo é grande demais para o Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ Não foi possível enviar {name}: o aipager não conseguiu confirmar que o Claude o enviou nesta tarefa."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Este texto tem caracteres ocultos que mudam a direção da escrita (aparecem como ⟨U+...⟩). Pode executar algo diferente do que parece."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Permitir"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Sempre permitir"}

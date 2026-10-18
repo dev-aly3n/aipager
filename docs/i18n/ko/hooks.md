@@ -1,6 +1,6 @@
 # Hook 이벤트
 
-<!-- i18n-source: docs/hooks.md @ 054b893 -->
+<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../hooks.md))
 
@@ -61,6 +61,7 @@ aipager는 세션을 작업 중으로 표시하고, 작업 카드가 아직 없�
 
 - Telegram에서 시작한 작업은 보낸 사람 역할의 규칙과 안전 기준선(보호된 경로, 명령 패턴)을 따르고, `owner` 역할만 건너뛸 수 있어요. aipager가 누구의 것인지 알 수 없는 작업은 안전 기준선을 받아요. 터미널에서 입력한 메시지는 제한되지 않아요. 규칙은 [그룹](groups.md#how-rules-work)과 [보안](security.md#team-mode-enforcement)에 있어요.
 - 규칙이 이 호출을 거부하면 hook은 `deny` 결정을 출력하고, Claude Code는 묻지 않고 그 도구를 거부하고, aipager에 알려요(`safety_blocked`). 작업은 `🛑 x1 · 안전 규칙으로 차단됨: ... (중지됨)`으로 멈추고, 그 작업의 이후 모든 도구 호출도 거부돼요.
+- `SendUserFile` 호출(Claude가 채팅으로 파일을 보내는 것)은 owner의 작업과 터미널에서 입력한 메시지를 포함해 모든 작업에서 확인해요: 전송 하한선, 파일 확인, 작업 자체의 규칙([보안](security.md#files-claude-sends)). 거부된 호출은 "aipager safety policy" 표시가 없는 `deny`를 받아요. Claude는 이유를 읽고 알려 주며, 작업은 계속되고, 훅은 감사 로그를 위해 파일마다 이름을 적은 `send_files_refused`를 aipager에 보내요.
 - 검사 자체에서 오류가 나면 거부해요. 세션의 규칙을 읽을 수 있고 소유자에게 건너뛰기 권한을 주는 경우는 예외예요.
 
 aipager 쪽에서는 이 호출이 작업 카드의 한 줄이 되고(서브에이전트의 호출은 그 에이전트 줄에 들어가요), `/settings` → 변경 사항 미리 보기 (diff)가 켜져 있으면(기본은 꺼짐) `Write`나 `Edit`가 변경 미리 보기를 보여 줘요. `AskUserQuestion` 호출은 선택지마다 버튼이 하나씩 있는 질문이 돼요. 작업이 진행 중이지 않을 때 Claude Code의 보조 에이전트가 하는 질문은 보여 주지 않아요(Claude가 나에게 묻는 게 아니니까요). Claude 자신의 `Agent` 호출은 시작한 에이전트의 `subagent_type`과 `description`을 남기고, 서브에이전트의 호출은 그 에이전트의 최신 활동이에요. 에이전트가 백그라운드에서 실행되는 동안 둘 다 답변 아래 상태에 나와요.
@@ -80,6 +81,8 @@ hook은 답할 수 있으면 직접 이 요청에 답해요. 짧게 쓰는 응�
 Claude Code가 백그라운드로 옮긴 `Bash` 호출은 `backgroundTaskId`를 알려 줘요. 그러면 aipager는 그것을 백그라운드 명령으로 추적하는데(메인 루프의 것만이고, `agent_id`가 있는 호출은 그 서브에이전트의 것이에요), 끝나는 것을 볼 때까지예요. `<status>`가 있는 `<task-notification>`(Claude를 깨우는 메시지 안이나, 작업 중에 도착하면 저장된 대화 안), 그 ID에 대한 `TaskStop`이나 `KillShell`, 세션 종료, 또는 두 시간(`AIPAGER_BG_SHELL_MAX_TRACK`, 초 단위, 기본값 7200)이에요. 카드의 그 줄은 [명령](commands.md#idle-responses)에 있어요.
 
 서브에이전트 안에서 한 `Agent`(또는 `Task`) 호출은(그 이벤트에 `agent_id`가 있어요) 자기가 시작한 에이전트의 ID를 알려 줘요. aipager는 어느 에이전트가 어느 에이전트를 시작했는지 기억해서, 자기 에이전트를 기다리려고 멈춘 에이전트와 끝난 에이전트를 구별해요(아래 `SubagentStart` / `SubagentStop` 참고).
+
+실행된 `SendUserFile`의 파일은 aipager가 바로 복사해요. 호출마다 한 번, 그리고 프롬프트로 시작한 작업 동안에만 복사하고, 목록은 도구의 결과가 아니라 `PreToolUse`에서 본 목록을 쓰며, 파일마다 다시 확인해요. 사본은 aipager가 그 작업에 대해 적어 둔 대화 기록에서 그 작업 동안 쓰인 호출을 찾은 뒤, 작업의 답변 다음에 보내요([보안](security.md#files-claude-sends), [명령어](commands.md#files-claude-sends)). Claude Code가 hook 없이 시작한 작업(다음으로 가져간 메시지, Stop hook의 피드백)은 대화 기록에 시작이 나오면 인정돼요.
 
 ### <a id="notification"></a>`Notification`
 
@@ -150,6 +153,7 @@ hook 이벤트 말고도, 이 보조 프로그램들은 같은 소켓으로 aipa
 |---|---|---|
 | `queue_pickup` | hook | `UserPromptSubmit` 때: Claude가 어떤 Telegram 메시지를 가져갔는지. |
 | `safety_blocked` | hook | `PreToolUse` 때, 안전 검사가 호출을 거부했어요. |
+| `send_files_refused` | 훅 | `PreToolUse`에서 Claude가 보내려던 파일이 거부되었을 때: 감사 로그를 위한 파일별 이유. |
 | `permission_reply_timeout` | hook | `PermissionRequest` 기다림이 누름 없이 끝났어요. |
 | `statusline` | 상태 줄 | 상태 줄을 다시 그릴 때마다. |
 | `hook_memory_cap_hit` | hook, 상태 줄 | 프로세스가 메모리 한도에 닿았어요. |

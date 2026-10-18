@@ -21,7 +21,7 @@ import threading
 import time
 from pathlib import Path
 
-from aipager import daemon_secrets, instance
+from aipager import claude_launch, daemon_secrets, instance
 from aipager.dtach import redraw as _dtach_redraw
 from aipager.dtach.inject import _RESERVED, normalize_session_name
 from aipager.errors import friendly_error, friendly_warn
@@ -328,6 +328,19 @@ def _with_mode_flag(claude_args: list[str]) -> list[str]:
     return [*perm_modes.launch_args(perm_modes.AUTO), *claude_args]
 
 
+def _claude_version(claude_bin: str | None) -> str | None:
+    """The version of *claude_bin* when it is the binary aipager resolves
+    (already probed, no new run), else None (unknown)."""
+    from aipager import claude_resolve
+    try:
+        resolved = claude_resolve.try_resolve_claude_binary()
+    except Exception:
+        return None
+    if resolved is None or not claude_bin or resolved.chosen.path != claude_bin:
+        return None
+    return resolved.chosen.version
+
+
 def launch(name: str, claude_args: list[str] | None = None,
           *, claude_bin: str | None = None) -> int:
     """Create or reattach a Claude Code session inside dtach.
@@ -394,11 +407,7 @@ def launch(name: str, claude_args: list[str] | None = None,
         )
         return 1
 
-    sys_prompt = (
-        f'Your session name is "{name}". '
-        f'When users address you by this name, respond naturally '
-        f'-- it is your name in this session.'
-    )
+    sys_prompt = claude_launch.base_system_prompt(name, _claude_version(claude_bin))
 
     sock_path = Path(sock)
 
@@ -435,6 +444,7 @@ def launch(name: str, claude_args: list[str] | None = None,
         spawn = subprocess.run(
             [dtach, "-n", sock, "-Ez",
              "env", f"CLAUDE_DTACH_SESSION={session}",
+             f"{claude_launch.ATTACHMENTS_ENV}=1",
              claude_bin or "claude",
              "--append-system-prompt", sys_prompt,
              *_with_mode_flag(claude_args)],

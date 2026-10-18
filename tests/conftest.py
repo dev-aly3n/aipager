@@ -284,6 +284,9 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         # aipager.i18n.persist, so one entry covers every reader.
         "aipager.config.LANGUAGE_STATE_FILE":
             home / ".local" / "state" / "aipager" / "languages.json",
+        # The outbox of files Claude sends (aipager.bot.outbox): read LATE.
+        "aipager.config.OUTBOX_DIR":
+            home / ".local" / "state" / "aipager" / "outbox",
         "aipager.config._KEYBOARD_CONFIG_PATH": cfg / "keyboard.json",
         # migrate.upgrade_to_v3() reads this (and its .retired.* siblings)
         # to recover Mini App settings — without a redirect it would read
@@ -966,10 +969,18 @@ def _isolate_flood_mute(_isolate_home_paths, tmp_path, monkeypatch):
     # would otherwise make "did this write?" depend on test ordering.
     held.HELD.clear()
     flood_state.clear()
+    # The outbox of files Claude sends holds deliveries waiting for the
+    # same mute: the same kind of state (aipager/bot/outbox.py), and its
+    # upload lock belongs to one event loop.
+    from aipager.bot import outbox
+    outbox.OUTBOX.clear()
+    monkeypatch.setattr(outbox, "_upload_lock", None)
+    monkeypatch.setattr("aipager.session_monitor._outbox_swept_at", None)
     monkeypatch.setattr(rich_message, "_rate_limiter", None)
     yield
     flood.MUTE.clear()
     held.HELD.clear()
+    outbox.OUTBOX.clear()
     flood_state.clear()
 
 

@@ -1,6 +1,6 @@
 # Sự kiện hook
 
-<!-- i18n-source: docs/hooks.md @ 054b893 -->
+<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../hooks.md))
 
@@ -61,6 +61,7 @@ Một công cụ sắp chạy. Đây là nơi bước kiểm tra an toàn của 
 
 - Một việc bắt đầu từ Telegram phải theo quy tắc vai trò của người gửi và mức an toàn tối thiểu (các đường dẫn được bảo vệ, các mẫu lệnh), thứ mà chỉ vai trò `owner` được bỏ qua; một việc mà aipager không biết là của ai thì nhận mức an toàn tối thiểu; tin nhắn bạn gõ trong terminal thì không bị giới hạn. Các quy tắc được mô tả ở [nhóm](groups.md#how-rules-work) và [bảo mật](security.md#team-mode-enforcement).
 - Khi một quy tắc từ chối lần gọi, hook in ra quyết định `deny`, Claude Code từ chối công cụ mà không hỏi, và aipager được báo (`safety_blocked`): việc dừng lại với `🛑 x1 · Bị quy tắc an toàn chặn: ... (đã dừng)`, và mọi lần gọi công cụ sau đó trong việc này cũng bị từ chối.
+- Một lời gọi `SendUserFile` (Claude gửi file vào chat) được kiểm tra cho mọi việc, kể cả việc của owner và tin nhắn gõ trong terminal: mức sàn gửi, các kiểm tra file và quy tắc riêng của việc ([bảo mật](security.md#files-claude-sends)). Lời gọi bị từ chối nhận một `deny` không có dấu "aipager safety policy": Claude đọc lý do và nói lại với bạn, việc vẫn tiếp tục, và hook gửi cho aipager `send_files_refused` kèm từng file, để ghi vào log kiểm tra.
 - Một bước kiểm tra bị hỏng sẽ từ chối, trừ khi quy tắc của phiên đọc được và cho phép chủ sở hữu bỏ qua.
 
 Ở phía aipager, lần gọi trở thành một dòng trên thẻ làm việc (lần gọi của một subagent nằm trên dòng của agent đó), và một `Write` hoặc `Edit` hiện bản xem trước thay đổi khi `/settings` → Xem trước thay đổi (diff) đang bật (mặc định tắt). Một lần gọi `AskUserQuestion` trở thành câu hỏi với một nút cho mỗi phương án; câu hỏi do một agent phụ trợ của Claude Code đặt ra khi không có việc nào đang chạy thì không được hiện (đó không phải Claude hỏi bạn). Lần gọi `Agent` của chính Claude để lại `subagent_type` và `description` cho agent mà nó khởi động, và lần gọi của một subagent là hoạt động mới nhất của agent đó: cả hai hiện trong phần trạng thái dưới câu trả lời trong lúc agent chạy nền.
@@ -80,6 +81,8 @@ Một công cụ đã xong, hoặc thất bại. Dòng của nó trên thẻ là
 Một lần gọi `Bash` mà Claude Code đã chuyển xuống chạy nền sẽ báo một `backgroundTaskId`. Khi đó aipager theo dõi nó như một lệnh chạy nền (chỉ của vòng chính: một lần gọi mang `agent_id` thuộc về subagent đó) cho tới khi thấy nó kết thúc: một `<task-notification>` có `<status>` (trong tin nhắn đánh thức Claude, hoặc trong cuộc trò chuyện đã lưu khi nó đến giữa chừng một việc), một `TaskStop` hoặc `KillShell` với ID của nó, phiên kết thúc, hoặc hai giờ (`AIPAGER_BG_SHELL_MAX_TRACK`, tính bằng giây, mặc định 7200). Xem [lệnh](commands.md#idle-responses) về dòng của nó trên thẻ.
 
 Một lần gọi `Agent` (hoặc `Task`) bên trong một subagent (sự kiện của nó mang `agent_id`) cho biết ID của agent mà nó đã khởi chạy. aipager nhớ agent nào đã khởi chạy agent nào, nhờ đó phân biệt được một agent dừng lại để chờ agent của riêng nó với một agent đã xong (xem `SubagentStart` / `SubagentStop` bên dưới).
+
+Với một `SendUserFile` đã chạy, aipager sao chép file của nó ngay, mỗi lời gọi một lần và chỉ trong một việc bắt đầu bằng một prompt, theo danh sách mà `PreToolUse` của nó cho thấy (không bao giờ theo kết quả của công cụ), kiểm tra lại từng file; các bản sao được gửi sau câu trả lời của việc, khi đã tìm thấy lời gọi trong lịch sử trò chuyện mà aipager ghi lại cho việc đó, được ghi trong chính việc đó ([bảo mật](security.md#files-claude-sends), [lệnh](commands.md#files-claude-sends)). Một việc mà Claude Code bắt đầu không có hook (một tin nhắn nó lấy tiếp theo, phản hồi của một hook Stop) được tính ngay khi lịch sử trò chuyện cho thấy việc đã bắt đầu.
 
 ### <a id="notification"></a>`Notification`
 
@@ -150,6 +153,7 @@ Ngoài các sự kiện hook, các chương trình phụ trợ còn gửi cho ai
 |---|---|---|
 | `queue_pickup` | hook | Ở `UserPromptSubmit`: những tin nhắn Telegram nào Claude đã nhận. |
 | `safety_blocked` | hook | Ở `PreToolUse`, khi bước kiểm tra an toàn đã từ chối lần gọi. |
+| `send_files_refused` | hook | Ở `PreToolUse`, khi file mà Claude muốn gửi bị từ chối: từng file và lý do, để ghi vào log kiểm tra. |
 | `permission_reply_timeout` | hook | Một lần chờ `PermissionRequest` kết thúc mà không có lần chạm nào. |
 | `statusline` | dòng trạng thái | Mỗi lần dòng trạng thái được vẽ lại. |
 | `hook_memory_cap_hit` | hook, dòng trạng thái | Tiến trình đã chạm giới hạn bộ nhớ của nó. |

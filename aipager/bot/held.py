@@ -222,6 +222,19 @@ class HeldAnswers:
             out.extend(per_chat.values())
         return sorted(out, key=lambda e: e.held_at)
 
+    def newest_key(self, chat_id, session: str) -> str | None:
+        """The key of *session*'s newest entry for *chat_id*, or None. The
+        finish path asks before and after an answer send: a new key means
+        that answer was held, and the turn's files wait behind it."""
+        newest = None
+        for entry in self._entries.get(chat_id, {}).values():
+            if entry.session == session:
+                newest = entry.key
+        return newest
+
+    def has_key(self, chat_id, key: str) -> bool:
+        return key in self._entries.get(chat_id, {})
+
     def count(self, chat_id=None) -> int:
         if chat_id is not None:
             return len(self._entries.get(chat_id, {}))

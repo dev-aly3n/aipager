@@ -194,6 +194,7 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (لا يزال يعمل)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "وكيل"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} ← {verb}"}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"few": "📎 {n} ملفات قيد الإرسال", "many": "📎 {n} ملفًا قيد الإرسال", "one": "📎 ملف واحد قيد الإرسال", "other": "📎 {n} ملف قيد الإرسال", "two": "📎 ملفان قيد الإرسال", "zero": "📎 {n} ملف قيد الإرسال"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "أمر في الخلفية: {label} - انتهى ({clock})"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "أمر في الخلفية: {label} - انتهى بخطأ ({clock})"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "أمر في الخلفية: {label} - انتهى بخطأ (رمز الخروج {code})"}
@@ -478,6 +479,12 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · لا تزال بانتظار إجابتك في الأعلى"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "إذن: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "سؤال: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ تعذّر إرسال {name}: حُذف الملف أو تغيّر قبل أن ينسخه aipager."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ تعذّر إرسال {name}: لم يعد مسموحًا بإرساله."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ تعذّر إرسال {name}."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ تعذّر إرسال {name}: رفضه Telegram."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ تعذّر إرسال {name}: الملف أكبر مما يقبله Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ تعذّر إرسال {name}: لم يتمكن aipager من التأكد من أن Claude أرسله ضمن هذه المهمة."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ في هذا النص حروف مخفية تغيّر اتجاه الكتابة (تظهر بالشكل ⟨U+...⟩). قد يُنفَّذ شيء غير ما يظهر هنا."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ السماح"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 السماح دائمًا"}

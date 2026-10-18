@@ -120,6 +120,7 @@ in the hook, before Claude Code looks at its permission rules:
   (`safety_blocked`): the turn stops with `🛑 x1 · Blocked by safety
   policy: ... (stopped)`, and every later tool call in that turn is
   denied too.
+- A `SendUserFile` call (Claude sending files to the chat) is checked for every turn, the owner's and a terminal prompt's included: the send floor, the file checks and the turn's own rules ([security](security.md#files-claude-sends)). A refused call gets a `deny` without the "aipager safety policy" mark: Claude reads why and tells you, the turn goes on, and the hook sends the daemon `send_files_refused`, naming each file, for the audit log.
 - A check that fails denies, unless the session's rules could be read
   and grant the owner's bypass.
 
@@ -184,6 +185,8 @@ An `Agent` (or `Task`) call made inside a subagent (its event carries
 which agent started which, so it can tell an agent that stopped to wait
 for its own agent from one that finished (see `SubagentStart` /
 `SubagentStop` below).
+
+A `SendUserFile` that ran has its files copied by the daemon at once, once per call and only during a turn that started with a prompt, from the list its `PreToolUse` showed (never from the tool's result), each checked again; the copies are sent after the turn's answer, once the call is found in the transcript the daemon noted for the turn, written during that turn ([security](security.md#files-claude-sends), [commands](commands.md#files-claude-sends)). A turn Claude Code starts with no hook (a message it takes up next, a Stop hook's feedback) counts once the transcript shows it began.
 
 ### `Notification`
 
@@ -341,6 +344,7 @@ their own on the same socket:
 |---|---|---|
 | `queue_pickup` | hook | At `UserPromptSubmit`: which Telegram messages Claude took. |
 | `safety_blocked` | hook | At `PreToolUse`, when the safety check denied the call. |
+| `send_files_refused` | hook | At `PreToolUse`, when files Claude asked to send were refused: each file and why, for the audit log. |
 | `permission_reply_timeout` | hook | A `PermissionRequest` wait ended with no tap. |
 | `statusline` | status line | At each status-line redraw. |
 | `hook_memory_cap_hit` | hook, status line | The process hit its memory cap. |

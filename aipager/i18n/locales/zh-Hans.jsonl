@@ -194,6 +194,7 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent}（仍在运行）"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "代理"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"other": "📎 正在发送 {n} 个文件"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "后台命令：{label}，已完成（{clock}）"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "后台命令：{label}，出错结束（{clock}）"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "后台命令：{label}，出错结束（退出码 {code}）"}
@@ -478,6 +479,12 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · 仍在等你回复上面的内容"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "权限：{summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "问题：{summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ 无法发送 {name}：在 aipager 复制之前，文件已被删除或改动。"}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ 无法发送 {name}：这个文件已不再允许发送。"}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ 无法发送 {name}。"}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ 无法发送 {name}：Telegram 拒收了这个文件。"}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ 无法发送 {name}：文件太大，Telegram 不接收。"}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ 无法发送 {name}：aipager 无法确认这是 Claude 在这个任务中发送的文件。"}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ 这段文字里有会改变书写方向的隐藏字符（显示为 ⟨U+...⟩）。实际运行的可能和你看到的不一样。"}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ 允许"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 始终允许"}

@@ -194,6 +194,7 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (vẫn đang chạy)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "agent"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"other": "📎 Đang gửi {n} file"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "lệnh chạy nền: {label} - đã xong ({clock})"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "lệnh chạy nền: {label} - kết thúc với lỗi ({clock})"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "lệnh chạy nền: {label} - kết thúc với lỗi (mã thoát {code})"}
@@ -478,6 +479,12 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · vẫn đang chờ bạn trả lời ở trên"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Quyền: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Câu hỏi: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ Không gửi được {name}: file đã bị xóa hoặc thay đổi trước khi aipager kịp sao chép."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ Không gửi được {name}: file này không còn được phép gửi nữa."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ Không gửi được {name}."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ Không gửi được {name}: Telegram đã từ chối file này."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ Không gửi được {name}: file quá lớn để gửi qua Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ Không gửi được {name}: aipager không xác nhận được Claude đã gửi file này trong việc này."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Nội dung này có ký tự ẩn làm đổi hướng chữ (hiển thị là ⟨U+...⟩). Thứ thực sự chạy có thể khác với những gì bạn thấy."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Cho phép"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Luôn cho phép"}

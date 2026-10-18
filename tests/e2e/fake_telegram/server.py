@@ -40,7 +40,8 @@ SUPPORTED_METHODS = (
     "getMe", "getUpdates", "deleteWebhook", "getChat", "sendMessage",
     "sendRichMessage", "editMessageText", "editMessageReplyMarkup",
     "deleteMessage", "deleteMessages", "setMessageReaction", "pinChatMessage",
-    "sendDocument", "sendChatAction", "answerCallbackQuery", "setMyCommands",
+    "sendDocument", "sendPhoto", "sendVideo", "sendAnimation", "sendAudio",
+    "sendMediaGroup", "sendChatAction", "answerCallbackQuery", "setMyCommands",
     "deleteMyCommands", "getMyCommands", "setChatMenuButton", "getFile",
     "getMyDescription", "setMyDescription", "getMyShortDescription",
     "setMyShortDescription",
@@ -142,6 +143,10 @@ class Call:
         for key in ("text", "caption"):
             if key in p:
                 return _plain(str(p[key]), p.get("parse_mode"))
+        media = p.get("media")
+        if isinstance(media, list) and media and isinstance(media[0], dict) \
+                and "caption" in media[0]:
+            return _plain(str(media[0]["caption"]), media[0].get("parse_mode"))
         return ""
 
     def summary(self) -> str:
@@ -486,6 +491,75 @@ class FakeBotApi:
         msg = self._bot_message(cid, p, **body)
         self._store(msg, from_bot=True)
         return msg
+
+    # Files aipager sends for Claude (SendUserFile): one handler shape per
+    # kind, and the album. Each answers the Message Telegram would.
+    def _upload(self, p, f, field: str) -> tuple[str, bytes]:
+        if field in f:
+            return f[field]
+        ref = str(p.get(field, ""))
+        if ref.startswith("attach://") and ref[len("attach://"):] in f:
+            return f[ref[len("attach://"):]]
+        if ref in self._files:
+            return self._files[ref]
+        raise _Fail(ApiError(400, "Bad Request: wrong file identifier/HTTP URL specified"))
+
+    def _media_body(self, kind: str, filename: str, data: bytes, caption, parse_mode):
+        file_id, uniq = self._register_file(filename, data, kind + "s")
+        if kind == "photo":
+            body: dict = {"photo": [{"file_id": file_id, "file_unique_id": uniq,
+                                     "width": 1, "height": 1, "file_size": len(data)}]}
+        else:
+            body = {kind: {"file_id": file_id, "file_unique_id": uniq,
+                           "file_name": filename, "file_size": len(data)}}
+        if caption:
+            body["caption"] = _plain(str(caption), parse_mode)
+        return body
+
+    def _send_media(self, p, f, kind: str):
+        cid = p.get("chat_id")
+        filename, data = self._upload(p, f, kind)
+        msg = self._bot_message(cid, p, **self._media_body(
+            kind, filename, data, p.get("caption"), p.get("parse_mode")))
+        self._store(msg, from_bot=True)
+        return msg
+
+    def _m_sendPhoto(self, p, f):
+        return self._send_media(p, f, "photo")
+
+    def _m_sendVideo(self, p, f):
+        return self._send_media(p, f, "video")
+
+    def _m_sendAnimation(self, p, f):
+        return self._send_media(p, f, "animation")
+
+    def _m_sendAudio(self, p, f):
+        return self._send_media(p, f, "audio")
+
+    def _m_sendMediaGroup(self, p, f):
+        cid = p.get("chat_id")
+        media = p.get("media")
+        if not isinstance(media, list) or not 2 <= len(media) <= 10:
+            raise _Fail(ApiError(400, "Bad Request: wrong number of media in the album"))
+        kinds = [m.get("type") if isinstance(m, dict) else None for m in media]
+        if any(k not in ("photo", "video", "audio", "document") for k in kinds):
+            raise _Fail(ApiError(400, "Bad Request: wrong media type"))
+        for lone in ("audio", "document"):
+            if lone in kinds and any(k != lone for k in kinds):
+                raise _Fail(ApiError(400, f"Bad Request: {lone} can't be mixed with "
+                                          "other media types"))
+        self._chat_obj(cid)
+        group = f"fakegroup{next(self._file_ids)}"
+        out = []
+        for m in media:
+            filename, data = self._upload(m, f, "media")
+            body = self._media_body(m["type"], filename, data, m.get("caption"),
+                                    m.get("parse_mode"))
+            body["media_group_id"] = group
+            msg = self._bot_message(cid, p, **body)
+            self._store(msg, from_bot=True)
+            out.append(msg)
+        return out
 
     def _m_sendChatAction(self, p, f):
         self._chat_obj(p.get("chat_id"))

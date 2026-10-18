@@ -194,6 +194,7 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (hâlâ çalışıyor)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "ajan"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"one": "📎 {n} dosya gönderiliyor", "other": "📎 {n} dosya gönderiliyor"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "arka plan komutu: {label} - bitti ({clock})"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "arka plan komutu: {label} - hatayla bitti ({clock})"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "arka plan komutu: {label} - hatayla bitti (çıkış kodu {code})"}
@@ -478,6 +479,12 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · hâlâ yukarıdaki yanıtını bekliyor"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "İzin: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Soru: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ {name} gönderilemedi: dosya aipager kopyalayamadan silindi ya da değişti."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ {name} gönderilemedi: bu dosyayı göndermeye artık izin yok."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ {name} gönderilemedi."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ {name} gönderilemedi: Telegram dosyayı kabul etmedi."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ {name} gönderilemedi: Telegram için fazla büyük."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ {name} gönderilemedi: aipager, Claude'un bu dosyayı bu görevde gönderdiğini doğrulayamadı."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Burada yazı yönünü değiştiren gizli karakterler var (⟨U+...⟩ olarak gösteriliyor). Gördüğünden farklı bir şey çalışabilir."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ İzin ver"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Hep izin ver"}

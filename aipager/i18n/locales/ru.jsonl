@@ -194,6 +194,7 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (ещё работает)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "агент"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"few": "📎 Отправка: {n} файла", "many": "📎 Отправка: {n} файлов", "one": "📎 Отправка: {n} файл", "other": "📎 Отправка: {n} файла"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "фоновая команда: {label} - завершена ({clock})"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "фоновая команда: {label} - завершена с ошибкой ({clock})"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "фоновая команда: {label} - завершена с ошибкой (код выхода {code})"}
@@ -478,6 +479,12 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · всё ещё ждёт твоего ответа выше"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Разрешение: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Вопрос: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ Не удалось отправить {name}: файл удалили или изменили до того, как aipager его скопировал."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ Не удалось отправить {name}: этот файл больше нельзя отправлять."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ Не удалось отправить {name}."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ Не удалось отправить {name}: Telegram не принял файл."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ Не удалось отправить {name}: файл слишком большой для Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ Не удалось отправить {name}: aipager не смог подтвердить, что Claude отправил этот файл в рамках текущей задачи."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Здесь есть скрытые символы, меняющие направление текста (показаны как ⟨U+...⟩). Выполниться может не то, что ты видишь."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Разрешить"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Разрешать всегда"}

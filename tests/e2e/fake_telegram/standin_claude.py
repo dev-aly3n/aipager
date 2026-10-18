@@ -78,6 +78,15 @@ payloads (so the real ``aipager-hook`` and ``aipager-statusline`` run).
   dialog it reached (``dialog_key``, ``hook_decision``,
   ``question_answered``, ``agent_answer``). Then A's tool ends, A stops,
   and the main loop answers and stops.
+- A prompt asking for a file, "send me the image at <path>" (or the
+  Persian "... \u062f\u0631 <path> \u0647\u0633\u062a ..."), plays Claude
+  Code 2.1.302's SendUserFile with ``CLAUDE_CODE_ATTACHMENTS_BY_PATH``: the
+  tool_use (``files`` a list, ``status`` normal), ``PreToolUse``; on a deny
+  the hook's reason is the tool result and the answer quotes it; else (a
+  read-only tool, no dialog) ``PostToolUse`` with a 2.1.302-shaped
+  ``tool_response`` (``attachments`` with the absolute ``path``, ``size``,
+  ``isImage``, ``media_type``, ``pathValidated``), the tool result "1 file
+  delivered to user.", the answer and ``Stop``.
 - Every prompt and decision goes to
   ``$AIPAGER_INSTANCE_DIR/standin-<CLAUDE_DTACH_SESSION>.jsonl``.
 """
@@ -86,6 +95,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import mimetypes
 import os
 import re
 import signal
@@ -98,6 +108,10 @@ import uuid
 VERSION = "2.1.291"
 
 _REPLY_RE = re.compile(r"Reply with exactly:\s*(.+)", re.I)
+# "send me the image at <path>", and the Persian "<...> \u062f\u0631 <path>
+# \u0647\u0633\u062a <...>" ("the picture that is at <path>").
+_SEND_EN_RE = re.compile(r"send me the (?:image|file|picture|photo) at (\S+)", re.I)
+_SEND_FA_RE = re.compile("\u062f\u0631 (\\S+) \u0647\u0633\u062a")
 
 #: Claude Code 2.1.291's Write permission dialog, top to bottom. Row 1
 #: reads as a plain "allowed" here: the stand-in keeps no session mode.
@@ -112,6 +126,9 @@ INTERRUPT_MARKER = "[Request interrupted by user for tool use]"
 _NAME_RE = re.compile(r"create\s+([A-Za-z0-9_-]+)\.txt", re.I)
 _AGENTS_RE = re.compile(r"agents:\s*(launch|hold|finish)\b", re.I)
 _TWO_RE = re.compile(r"two prompts:\s*(agent-first|claude-first)\b", re.I)
+#: "hold this turn": the turn waits on the hold file before it answers (a
+#: turn that is still running when the test sends the next message).
+_HOLD_RE = re.compile(r"\bhold this turn\b", re.I)
 #: Claude Code 2.1.302's Bash permission dialog for an agent, top to bottom.
 AGENT_ROWS = ("Yes", "Yes, and don't ask again for make commands in this folder",
               "No, and tell Claude what to do differently (esc)")
@@ -158,11 +175,16 @@ class StandIn:
         self.hold_path = os.path.join(inst, f"standin-hold-{self.session or 'nosession'}")
         self.deadline_path = os.path.join(
             inst, f"standin-hook-deadline-{self.session or 'nosession'}")
+        # Present: a message typed while a turn runs is queued the way
+        # Claude Code 2.1.259+ queues it (see :meth:`submit`). Absent (every
+        # older scenario): it simply runs after the turn, with its hook then.
+        self.cc_queue_path = os.path.join(
+            inst, f"standin-cc-queue-{self.session or 'nosession'}")
         self.dialog_answer: str | None = None
         self.in_permission = False
         self.dialog_row = 0
         self.lock = threading.Lock()
-        self.queue: list[str] = []
+        self.queue: list[tuple[str, bool]] = []
         self.turn: threading.Thread | None = None
         self.hook_proc: subprocess.Popen | None = None
         self.interrupted = False
@@ -192,6 +214,16 @@ class StandIn:
         entry.setdefault("isSidechain", False)
         entry.setdefault("userType", "external")
         self.parent_uuid = entry["uuid"]
+        with open(self.transcript, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+
+    def queue_line(self, operation: str, content: str | None = None) -> None:
+        """A ``queue-operation`` transcript line, as Claude Code writes one
+        the moment it queues or pops a message (not chained by uuid)."""
+        entry = {"type": "queue-operation", "operation": operation,
+                 "timestamp": _now_iso(), "sessionId": self.session_id}
+        if content is not None:
+            entry["content"] = content
         with open(self.transcript, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
 
@@ -305,15 +337,23 @@ class StandIn:
 
     # -- a turn --------------------------------------------------------------
 
-    def run_turn(self, prompt: str) -> None:
+    def run_turn(self, prompt: str, queued: bool = False) -> None:
         self.interrupted = False
+        if queued:
+            # Popped from Claude Code's queue as the next turn: a dequeue
+            # line and no hook (its UserPromptSubmit fired at submit).
+            self.queue_line("dequeue")
+            self.log(event="dequeued", prompt=prompt)
         self.log(event="prompt", prompt=prompt)
         self.user_text(prompt)
-        outs = self.fire("UserPromptSubmit", {"prompt": prompt})
-        if any(o.get("decision") == "block" for o in outs):
-            self.log(event="blocked_prompt")
-            return
+        if not queued:
+            outs = self.fire("UserPromptSubmit", {"prompt": prompt})
+            if any(o.get("decision") == "block" for o in outs):
+                self.log(event="blocked_prompt")
+                return
         decision = "ok"
+        if _HOLD_RE.search(prompt):
+            self._wait_hold()
         agents = _AGENTS_RE.search(prompt)
         two = _TWO_RE.search(prompt)
         if two:
@@ -328,6 +368,9 @@ class StandIn:
                 self.log(event="interrupted")
                 self.user_text("[Request interrupted by user]")
                 return
+        elif _SEND_EN_RE.search(prompt) or _SEND_FA_RE.search(prompt):
+            m = _SEND_EN_RE.search(prompt) or _SEND_FA_RE.search(prompt)
+            decision = self._send_file_turn(m.group(1).rstrip(".,;:!?"))
         elif "write tool" in prompt.lower():
             m = _NAME_RE.search(prompt)
             name = m.group(1) if m else "standin"
@@ -368,6 +411,43 @@ class StandIn:
         self.fire("Stop", {"stop_hook_active": False, "last_assistant_message": answer})
         self.log(event="stop", answer=answer)
         self.statusline()
+
+    # -- a file sent to the person (SendUserFile) ------------------------------
+
+    def _send_file_turn(self, path: str) -> str:
+        tool_input = {"files": [path], "status": "normal"}
+        tool_use_id = f"toolu_standin_{uuid.uuid4().hex[:12]}"
+        self.assistant([{"type": "tool_use", "id": tool_use_id, "name": "SendUserFile",
+                         "input": tool_input}])
+        pre = self.fire("PreToolUse", {"tool_name": "SendUserFile",
+                                       "tool_input": tool_input,
+                                       "tool_use_id": tool_use_id}, tool="SendUserFile")
+        reason = None
+        for o in pre:
+            hso = o.get("hookSpecificOutput") or {}
+            if hso.get("permissionDecision") == "deny" or o.get("decision") == "block":
+                reason = hso.get("permissionDecisionReason") or o.get("reason") or "denied"
+        if reason is not None:
+            self.tool_result(tool_use_id, reason, True)
+            self.log(event="decision", tool="SendUserFile", decision="denied",
+                     reason=reason, path=path)
+            return f"could not send: {reason}"
+        full = path if os.path.isabs(path) else os.path.join(self.cwd, path)
+        try:
+            size = os.path.getsize(full)
+        except OSError:
+            size = 0
+        media_type = mimetypes.guess_type(full)[0] or "application/octet-stream"
+        response = {"attachments": [{
+            "path": os.path.abspath(full), "size": size,
+            "isImage": media_type.startswith("image/"), "media_type": media_type,
+            "pathValidated": True}]}
+        self.fire("PostToolUse", {"tool_name": "SendUserFile", "tool_input": tool_input,
+                                  "tool_response": response,
+                                  "tool_use_id": tool_use_id}, tool="SendUserFile")
+        self.tool_result(tool_use_id, "1 file delivered to user.", False)
+        self.log(event="decision", tool="SendUserFile", decision="sent", path=path)
+        return "sent"
 
     # -- a tree of background agents (agents-line-waiting) -------------------
 
@@ -724,9 +804,9 @@ class StandIn:
                 if not self.queue:
                     self.turn = None
                     return
-                prompt = self.queue.pop(0)
+                prompt, queued = self.queue.pop(0)
             try:
-                self.run_turn(prompt)
+                self.run_turn(prompt, queued)
             except Exception as e:  # noqa: BLE001 - never die mid-session
                 self.log(event="turn_error", error=repr(e))
             sys.stdout.write("\r\n❯ ")
@@ -734,10 +814,19 @@ class StandIn:
 
     def submit(self, prompt: str) -> None:
         with self.lock:
-            self.queue.append(prompt)
+            queued = self.turn is not None and os.path.exists(self.cc_queue_path)
+            self.queue.append((prompt, queued))
             if self.turn is None:
                 self.turn = threading.Thread(target=self._turn_loop, daemon=True)
                 self.turn.start()
+        if queued:
+            # Claude Code queues a message typed while a turn runs: the
+            # enqueue line and its UserPromptSubmit come now, at submit.
+            self.queue_line("enqueue", prompt)
+            self.fire("UserPromptSubmit", {"prompt": prompt}, holder={})
+            # Logged once its hook has run: a scenario that waits for it
+            # knows the daemon was told before this turn ends.
+            self.log(event="queued", prompt=prompt)
 
     def _answer_dialog(self, answer: str) -> bool:
         """A key while the permission dialog is up answers it."""

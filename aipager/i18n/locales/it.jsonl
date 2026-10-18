@@ -194,6 +194,7 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (ancora al lavoro)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "agente"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"many": "📎 Invio di {n} file", "one": "📎 Invio di {n} file", "other": "📎 Invio di {n} file"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "comando in background: {label} - finito ({clock})"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "comando in background: {label} - finito con un errore ({clock})"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "comando in background: {label} - finito con un errore (codice di uscita {code})"}
@@ -478,6 +479,12 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · aspetta ancora la tua risposta più in alto"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Permesso: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Domanda: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ Non è stato possibile inviare {name}: il file è stato eliminato o modificato prima che aipager potesse copiarlo."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ Non è stato possibile inviare {name}: non è più consentito inviarlo."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ Non è stato possibile inviare {name}."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ Non è stato possibile inviare {name}: Telegram l'ha rifiutato."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ Non è stato possibile inviare {name}: è troppo grande per Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ Non è stato possibile inviare {name}: aipager non è riuscito a confermare che Claude l'abbia inviato in questa attività."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Questo testo contiene caratteri nascosti che cambiano la direzione di scrittura (mostrati come ⟨U+...⟩). Potrebbe eseguire qualcosa di diverso da quello che vedi."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Consenti"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Consenti sempre"}

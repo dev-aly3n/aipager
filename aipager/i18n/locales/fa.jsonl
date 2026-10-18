@@ -194,6 +194,7 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (هنوز کار می‌کند)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "ایجنت"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} ← {verb}"}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"one": "📎 در حال ارسال {n} فایل", "other": "📎 در حال ارسال {n} فایل"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "دستور پس‌زمینه: {label} - تمام شد ({clock})"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "دستور پس‌زمینه: {label} - با خطا تمام شد ({clock})"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "دستور پس‌زمینه: {label} - با خطا تمام شد (کد خروج {code})"}
@@ -478,6 +479,12 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · هنوز بالاتر منتظر جواب شماست"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "اجازه: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "سؤال: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ {name} ارسال نشد: فایل قبل از اینکه aipager از آن کپی بگیرد پاک شد یا تغییر کرد."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ {name} ارسال نشد: دیگر اجازهٔ ارسالش نیست."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ {name} ارسال نشد."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ {name} ارسال نشد: Telegram آن را قبول نکرد."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ {name} ارسال نشد: حجمش برای Telegram زیاد است."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ {name} ارسال نشد: aipager نتوانست مطمئن شود که Claude آن را در همین کار فرستاده است."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ این متن حرف‌های پنهانی دارد که جهت نوشتن را عوض می‌کنند (به شکل ⟨U+...⟩ نشان داده شده‌اند). ممکن است چیزی غیر از آنچه می‌بینید اجرا شود."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ اجازه بده"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 همیشه اجازه بده"}

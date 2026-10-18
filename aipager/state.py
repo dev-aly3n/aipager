@@ -248,6 +248,10 @@ MAX_GONE_HISTORY: int = 50
 # (``TrackedSession.closed_prompt_msgs``). A stale client shows the last
 # few cards at most; older ids fall back to the answer taps' old handling.
 MAX_CLOSED_PROMPT_SURFACES: int = 16
+# How many SendUserFile call ids a session remembers as already copied
+# (``TrackedSession.files_sent_ids``), newest kept: no call is copied or
+# sent twice, a replayed datagram included.
+MAX_FILES_SENT_IDS: int = 256
 # Roadmap 8.120: how many unfinished tool calls are remembered per agent
 # (``TrackedSession.agent_tool_calls``), newest kept.
 AGENT_TOOL_CALLS_CAP: int = 32
@@ -664,6 +668,35 @@ class TrackedSession:
     # buttons still answer it. Bounded (MAX_CLOSED_PROMPT_SURFACES, newest
     # kept) and persisted, so a stale tap after a restart is refused too.
     closed_prompt_msgs: list[int] = field(default_factory=list)
+    # Files Claude sends (SendUserFile, aipager/bot/outbox.py): the turn
+    # they may come from. Opened only by prompt evidence (a prompt the
+    # daemon typed, a UserPromptSubmit), never by a tool call's hook, so a
+    # forged PreToolUse that moves an idle session to BUSY opens nothing;
+    # closed when the session goes idle with no background job open, or
+    # gone. ``files_turn_wall`` is the wall-clock start a call's transcript
+    # line must not predate, ``files_transcript`` the transcript the
+    # daemon tracked for the session then (the one a call is looked up
+    # in, never a path a later datagram names). ``files_sent_ids`` are the
+    # call ids already copied (bounded, MAX_FILES_SENT_IDS). All four are
+    # persisted, so a restart mid-turn keeps the turn and replays stay
+    # refused.
+    files_turn_open: bool = False
+    files_turn_wall: float = 0.0
+    files_transcript: str = ""
+    files_sent_ids: list[str] = field(default_factory=list)
+    # When the files turn last ended (a Stop, wall clock), kept with
+    # ``files_transcript``: a call of a turn Claude Code starts after it
+    # with no UserPromptSubmit (a queued message it dequeues, a Stop
+    # hook's feedback that makes it go on) counts, but only once that
+    # transcript shows the start (outbox.hookless_turn_started). Zero
+    # when no turn of this conversation ended yet (a new or resumed one,
+    # gone). Persisted.
+    files_turn_closed_wall: float = 0.0
+    # Monotonic moment the files turn opened (transient): an open turn on
+    # an idle session with no job that is older than
+    # session_monitor.FILES_TURN_UNSTARTED_SECONDS started nothing (a
+    # typed prompt that ran no turn) and is closed.
+    files_turn_opened_at: float = 0.0
     # Roadmap 8.120: the prompts that opened while another was already
     # open, in arrival order, each sent as its own message. Every entry has
     # the ``pending_prompt_msg`` shape (``text, keyboard, summary,
@@ -2732,6 +2765,67 @@ class TrackedSession:
         return (type(msg_id) is int and msg_id > 0
                 and msg_id in self.closed_prompt_msgs)
 
+    def files_turn_opened(self, wall: float) -> bool:
+        """Prompt evidence that a turn starts at *wall* (a prompt the
+        daemon typed, a UserPromptSubmit): opens the turn files may come
+        from, unless one is already open (a message absorbed by a running
+        turn, a background job's continuation), whose start stays. The
+        transcript is the one the daemon tracks for the session now (and
+        the first one it learns, when it knew none). True when it opened."""
+        if self.files_turn_open:
+            if not self.files_transcript and self.transcript_path:
+                self.files_transcript = self.transcript_path
+            return False
+        self.files_turn_open = True
+        self.files_turn_wall = wall
+        self.files_transcript = self.transcript_path or ""
+        self.files_turn_opened_at = time.monotonic()
+        return True
+
+    def files_turn_resumed(self, wall: float) -> bool:
+        """A turn of the same conversation began at *wall* with no prompt
+        hook: a queued message the daemon typed, which Claude Code popped
+        when the last turn ended (notify._take_next_prompt). Open the
+        files turn again, still looking in the transcript noted for that
+        conversation (never a path a datagram names now). True when it
+        opened. (A start only the transcript shows does not open it: each
+        call of such a turn is proven on its own, see
+        outbox.hookless_turn_started.)"""
+        if self.files_turn_open or not self.files_transcript or wall <= 0:
+            return False
+        self.files_turn_open = True
+        self.files_turn_wall = wall
+        self.files_turn_opened_at = time.monotonic()
+        return True
+
+    def files_turn_closed(self, ended_wall: float = 0.0) -> None:
+        """No turn or job runs any more: no file can come from one.
+        *ended_wall* is when that turn ended (its Stop), kept so a turn
+        Claude Code starts with no hook after it can be proven
+        (``files_turn_closed_wall``); zero forgets it (a new
+        conversation, the session gone)."""
+        self.files_turn_open = False
+        self.files_turn_closed_wall = ended_wall if ended_wall > 0 else 0.0
+
+    def files_turn_stopped(self, wall: float) -> None:
+        """Claude's own turn ended at *wall* (a Stop). With the files turn
+        closed already (a Stop on an idle session: a turn Claude Code ran
+        with no hook and no tool call), that turn's end is the newest one:
+        a later hookless start must come after it."""
+        if not self.files_turn_open and self.files_turn_closed_wall > 0:
+            self.files_turn_closed_wall = max(self.files_turn_closed_wall, wall)
+
+    def files_call_used(self, tool_use_id: str) -> bool:
+        """Record *tool_use_id* as copied. False when it already was (a
+        replay, or a duplicate), or is not a usable id."""
+        if not isinstance(tool_use_id, str) or not tool_use_id:
+            return False
+        if tool_use_id in self.files_sent_ids:
+            return False
+        self.files_sent_ids.append(tool_use_id)
+        del self.files_sent_ids[:-MAX_FILES_SENT_IDS]
+        return True
+
     def persisted_digests(self) -> list[str]:
         """The ring as written to the state file: confirmed digests only,
         oldest first."""
@@ -3765,6 +3859,12 @@ class SessionRegistry:
             # keeps it: the job is the turn, and its agent and its later
             # continuation run under the job's rules.
             sess.turn_sender_id = None
+            # And no file Claude sends can come from one (outbox.py). An
+            # idle session keeps when it ended: a call of a turn Claude
+            # Code starts with no hook after it can still count
+            # (notify._copy_in_hookless_turn).
+            sess.files_turn_closed(
+                time.time() if new_status == Status.IDLE else 0.0)
         # Messages held for a dialog: how it closed, for the bot's release
         # (``dialog_hold``). Before the debounce below, which can return
         # early; a new dialog takes the mark back off.
@@ -4212,6 +4312,10 @@ class SessionRegistry:
         "pending_card_deletes",
         # Roadmap 8.102: prompt surfaces whose prompt is known closed.
         "closed_prompt_msgs",
+        # Files Claude sends: the turn they may come from, and the call
+        # ids already copied (see TrackedSession.files_turn_open).
+        "files_turn_open", "files_turn_wall", "files_transcript",
+        "files_sent_ids", "files_turn_closed_wall",
         # NOT here, and not by oversight: `active_subagents` /
         # `finished_subagents` / `tool_history` are per-turn state, and the
         # subagent rows carry `started_at` / `last_seen` as
@@ -4274,6 +4378,9 @@ class SessionRegistry:
                 elif f == "closed_prompt_msgs":
                     val = [m for m in val if type(m) is int and m > 0][
                         -MAX_CLOSED_PROMPT_SURFACES:]
+                elif f == "files_sent_ids":
+                    val = [t for t in val if isinstance(t, str) and t][
+                        -MAX_FILES_SENT_IDS:]
                 d[f] = val
             # The mode as an older daemon reads it (a rollback): Full
             # access was its Auto; Ask and Auto read as its Ask, never
@@ -4553,6 +4660,30 @@ class SessionRegistry:
                 sess.closed_prompt_msgs = [
                     m for m in raw_closed if type(m) is int and m > 0][
                         -MAX_CLOSED_PROMPT_SURFACES:]
+            # Files Claude sends: the open turn and the ids already copied.
+            # Anything unusable restores as no turn and no ids.
+            sess.files_turn_open = sd.get("files_turn_open") is True
+            try:
+                files_wall = float(sd.get("files_turn_wall") or 0.0)
+            except (TypeError, ValueError):
+                files_wall = 0.0
+            sess.files_turn_wall = (files_wall if 0.0 < files_wall <= time.time()
+                                    else 0.0)
+            if not sess.files_turn_wall:
+                sess.files_turn_open = False
+            try:
+                closed_wall = float(sd.get("files_turn_closed_wall") or 0.0)
+            except (TypeError, ValueError):
+                closed_wall = 0.0
+            sess.files_turn_closed_wall = (
+                closed_wall if 0.0 < closed_wall <= time.time() else 0.0)
+            files_tp = sd.get("files_transcript")
+            sess.files_transcript = files_tp if isinstance(files_tp, str) else ""
+            raw_ids = sd.get("files_sent_ids") or []
+            if isinstance(raw_ids, list):
+                sess.files_sent_ids = [
+                    t for t in raw_ids if isinstance(t, str) and t][
+                        -MAX_FILES_SENT_IDS:]
             try:
                 sess.answer_delivered_wall = float(
                     sd.get("answer_delivered_wall") or 0.0)

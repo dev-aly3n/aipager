@@ -1101,10 +1101,18 @@ class SessionOpsMixin:
         # this is above zero (bot/send_now.py). Raised with no await
         # before the injection starts.
         sess.prompt_injecting += 1
+        typed_wall = time.time()
         try:
             ok = await inject.send_text_and_enter(sess.name, body)
         finally:
             sess.prompt_injecting -= 1
+        if ok and not reactions.is_slash_command(text):
+            # Prompt evidence: the turn files Claude sends may come from
+            # (state.py files_turn_opened; kept when one already runs). A
+            # slash command opens nothing: most run no turn (/cost,
+            # /model, /clear), and one that does fires its own
+            # UserPromptSubmit, which opens it.
+            sess.files_turn_opened(typed_wall)
         if ok and was_idle:
             sess.prompt_sent_at = time.monotonic()
             sess.prompt_sent_msg = (

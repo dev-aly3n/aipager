@@ -50,6 +50,8 @@ GATED_FAMILIES: set[str] = {
     "edit_message_text", "edit_message_reply_markup", "edit_message_caption",
     "edit_text",
     "send_message", "send_document", "send_photo",
+    # Files Claude sends (SendUserFile): every kind of upload and the album.
+    "send_media_group", "send_video", "send_animation", "send_audio",
     "delete_message", "delete_messages", "send_chat_action",
 }
 

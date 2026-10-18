@@ -363,6 +363,25 @@ def card_suppression_transition(seen: set, chat_key, suppressed: bool):
     return None
 
 
+#: How long a files turn may stay open on an idle session with no job
+#: before it counts as one that started nothing (session_monitor's tick
+#: closes it, :func:`files_turn_unstarted`). A real turn makes the session
+#: busy within a second of its prompt; a typed prompt that runs no turn,
+#: or a turn ended with no Stop through a path that sets the session idle
+#: directly (an interrupt, a prompt Claude Code refused), leaves it open.
+FILES_TURN_UNSTARTED_SECONDS: float = 15.0
+
+
+def files_turn_unstarted(sess: TrackedSession, now: float) -> bool:
+    """Whether *sess*'s files turn (the turn files Claude sends may come
+    from, ``TrackedSession.files_turn_open``) is open on an idle session
+    with no background job, and opened more than
+    FILES_TURN_UNSTARTED_SECONDS ago (*now* is monotonic). Pure."""
+    return (sess.files_turn_open and sess.status == Status.IDLE
+            and not sess.job_background_open()
+            and now - sess.files_turn_opened_at > FILES_TURN_UNSTARTED_SECONDS)
+
+
 def prompt_not_taken(sess: TrackedSession, now: float) -> bool:
     """Did Claude Code refuse the Telegram send that put *sess* into
     BUSY? Pure — no I/O, no clock inside (roadmap 8.11).
@@ -508,6 +527,50 @@ def _has_held_answer(sess) -> bool:
         return False
 
 
+def _has_pending_files(sess) -> bool:
+    """Does *sess* have files Claude sent waiting to be delivered (for a
+    mute to lift, a held answer to land, or copies no finish took)? Late
+    import, never raises, cheap when nothing waits."""
+    try:
+        from aipager.bot.outbox import OUTBOX
+
+        if not OUTBOX.pending and not OUTBOX.batches:
+            return False
+        return (OUTBOX.has_pending(sess.name)
+                or (sess.status is Status.IDLE and bool(OUTBOX.batches.get(sess.name))))
+    except Exception:  # pragma: no cover - defensive
+        return False
+
+
+#: The outbox's day sweep runs at most this often (monotonic seconds).
+_OUTBOX_SWEEP_EVERY = 60.0
+_outbox_swept_at: float | None = None
+
+
+def _sweep_outbox() -> None:
+    """Give up the files that waited more than a day (each audited, no
+    chat line: the chat may still be muted) and delete copies a day old.
+    Throttled to once a minute; never raises."""
+    global _outbox_swept_at
+    now = time.monotonic()
+    if _outbox_swept_at is not None and now - _outbox_swept_at < _OUTBOX_SWEEP_EVERY:
+        return
+    _outbox_swept_at = now
+    try:
+        from aipager.bot import outbox
+
+        for p in outbox.OUTBOX.sweep():
+            for b in p.batches:
+                for item in b.items:
+                    outbox.audit_file(p.audit or {"session": p.session},
+                                      outbox.ACTION_FAILED, item.name, item.size,
+                                      outbox.CAUSE_EXPIRED)
+                log.warning("turn file failed: %d file(s) of %s waited a day "
+                            "and were dropped", len(b.items), p.session)
+    except Exception:  # pragma: no cover - defensive
+        log.warning("outbox sweep failed", exc_info=True)
+
+
 def _held_chat_key(sess):
     """The chat key ``_hold_answer`` files this session's answers under:
     the numeric chat, else the raw one. Never raises."""
@@ -567,6 +630,8 @@ def _sweep_flood_backoff() -> None:
     # for a ban to lift — delivering it later as news would be worse than
     # the WARNING `expire()` logs for it.
     held.HELD.expire()
+    # And the files Claude sent that waited a day (aipager/bot/outbox.py).
+    _sweep_outbox()
     # And the DURABLE state (8.28). Same shape as the registry's own
     # `save_if_dirty()` two lines up the call stack in `_loop`: a dirty
     # flag plus this 2 s tick IS the debounce, so there is no timer of our
@@ -940,6 +1005,14 @@ class SessionMonitor:
                 log.warning("Failed to notify compact_timeout for %s", expired_name)
 
         for name, sess in self.registry.all_sessions().items():
+            # A files turn on an idle session that never started (a typed
+            # prompt that ran no turn): no file Claude sends can come from
+            # it any more.
+            if files_turn_unstarted(sess, now):
+                log.info("[%s] files turn closed: no turn started from it",
+                         sess.label)
+                sess.files_turn_closed(sess.files_turn_closed_wall)
+                self.registry.mark_dirty()
             # Messages held while a dialog was open, and the dialog is not
             # open any more: the bot sends them on (answered) and deletes
             # its "answer it first" notice. Normally done at once by the
@@ -1070,6 +1143,14 @@ class SessionMonitor:
                         "Failed to flush held answers for %s", name,
                         exc_info=True,
                     )
+            # The files Claude sent that wait for the same mute (or behind
+            # a held answer): after the answers, on the same tick.
+            if _has_pending_files(sess):
+                try:
+                    await self.notify_fn(sess, "turn_files_flush", {})
+                except Exception:
+                    log.warning("Failed to flush turn files for %s", name,
+                                exc_info=True)
 
             # Roadmap 8.41: the running-agents set gets the same silence
             # bound as the job's table — a lost SubagentStop can pin

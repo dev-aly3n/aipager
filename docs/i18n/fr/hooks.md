@@ -1,6 +1,6 @@
 # Événements de hook
 
-<!-- i18n-source: docs/hooks.md @ 054b893 -->
+<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../hooks.md))
 
@@ -61,6 +61,7 @@ Un outil va s'exécuter. C'est là que tourne la vérification de sécurité d'a
 
 - Une tâche lancée depuis Telegram est tenue par les règles du rôle de la personne qui l'a envoyée et par le socle de sécurité (chemins protégés, motifs de commandes), dont seul le rôle `owner` est exempté ; une tâche qu'aipager ne peut attribuer à personne reçoit le socle ; un message que vous avez tapé dans le terminal n'est pas limité. Les règles sont dans [groupes](groups.md#how-rules-work) et [sécurité](security.md#team-mode-enforcement).
 - Quand une règle refuse l'appel, le hook affiche une décision `deny`, Claude Code refuse l'outil sans demander, et aipager est prévenu (`safety_blocked`) : la tâche s'arrête avec `🛑 x1 · Bloqué par une règle de sécurité : ... (arrêtée)`, et chaque appel d'outil suivant de cette tâche est refusé aussi.
+- Un appel à `SendUserFile` (Claude envoie des fichiers dans le chat) est vérifié pour chaque tâche, celle du propriétaire et un message tapé dans le terminal compris : le plancher d'envoi, les vérifications de fichier et les règles de la tâche ([sécurité](security.md#files-claude-sends)). Un appel refusé reçoit un `deny` sans la marque « aipager safety policy » : Claude lit pourquoi et vous le dit, la tâche continue, et le hook envoie à aipager `send_files_refused`, avec chaque fichier, pour le journal d'audit.
 - Une vérification qui échoue refuse, sauf si les règles de la session ont pu être lues et donnent l'exemption du propriétaire.
 
 Côté aipager, l'appel devient une ligne sur la carte d'activité (l'appel d'un sous-agent va sur la ligne de cet agent), et un `Write` ou un `Edit` affiche un aperçu du diff quand `/settings` → Aperçus des diffs est activé (désactivé par défaut). Un appel `AskUserQuestion` devient la question avec un bouton par option ; une question posée par un agent d'aide de Claude Code alors qu'aucune tâche ne tourne n'est pas affichée (ce n'est pas Claude qui vous demande quelque chose). L'appel `Agent` de Claude lui-même laisse son `subagent_type` et sa `description` pour l'agent qu'il lance, et l'appel d'un sous-agent est la dernière activité de cet agent : les deux s'affichent dans l'état sous une réponse pendant que l'agent tourne en arrière-plan.
@@ -80,6 +81,8 @@ Un outil a fini, ou a échoué. Sa ligne sur la carte d'activité se fige (un é
 Un appel `Bash` que Claude Code a mis en arrière-plan indique un `backgroundTaskId`. aipager le suit alors comme une commande en arrière-plan (seulement celles de la boucle principale : un appel qui porte `agent_id` appartient à ce sous-agent) jusqu'à ce que sa fin soit vue : un `<task-notification>` avec un `<status>` (dans le message qui réveille Claude, ou dans l'historique de la conversation quand il arrive en pleine tâche), un `TaskStop` ou un `KillShell` de son identifiant, la fin de la session, ou deux heures (`AIPAGER_BG_SHELL_MAX_TRACK`, en secondes, par défaut 7200). Voir [commandes](commands.md#idle-responses) pour sa ligne sur la carte.
 
 Un appel `Agent` (ou `Task`) fait à l'intérieur d'un sous-agent (son événement porte `agent_id`) donne l'ID de l'agent qu'il a lancé. aipager retient quel agent a lancé lequel, et peut ainsi distinguer un agent qui s'est arrêté pour attendre son propre agent d'un agent qui a fini (voir `SubagentStart` / `SubagentStop` plus bas).
+
+Après un `SendUserFile` qui a tourné, aipager copie aussitôt ses fichiers, une fois par appel et seulement pendant une tâche qui a commencé par un prompt, à partir de la liste que montrait son `PreToolUse` (jamais du résultat de l'outil), en vérifiant chacun à nouveau ; les copies sont envoyées après la réponse de la tâche, une fois l'appel trouvé dans l'historique qu'aipager a noté pour la tâche, écrit pendant cette tâche ([sécurité](security.md#files-claude-sends), [commandes](commands.md#files-claude-sends)). Une tâche que Claude Code commence sans hook (un message qu'il prend ensuite, le retour d'un hook Stop) compte dès que l'historique montre son début.
 
 ### <a id="notification"></a>`Notification`
 
@@ -150,6 +153,7 @@ En plus des événements de hook, les programmes d'aide envoient à aipager quel
 |---|---|---|
 | `queue_pickup` | hook | À `UserPromptSubmit` : quels messages Telegram Claude a pris. |
 | `safety_blocked` | hook | À `PreToolUse`, quand la vérification de sécurité a refusé l'appel. |
+| `send_files_refused` | hook | À `PreToolUse`, quand des fichiers que Claude voulait envoyer ont été refusés : chaque fichier et la raison, pour le journal d'audit. |
 | `permission_reply_timeout` | hook | Une attente de `PermissionRequest` s'est terminée sans appui. |
 | `statusline` | ligne d'état | À chaque redessin de la ligne d'état. |
 | `hook_memory_cap_hit` | hook, ligne d'état | Le processus a atteint sa limite de mémoire. |

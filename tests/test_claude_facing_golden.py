@@ -32,6 +32,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 GOLDEN = Path(__file__).parent / "golden" / "claude_facing.json"
+#: What Claude reads about files it sends (SendUserFile), kept apart so
+#: the corpus above stays byte-identical to the feature bases that pin it
+#: (tests/integration/*: answer-agents-status-line, multilingual-phase-5,
+#: three-modes-auto-default).
+SEND_GOLDEN = Path(__file__).parent / "golden" / "claude_facing_send.json"
 
 GROUP = -1001
 DM = 555
@@ -137,6 +142,31 @@ def _safety() -> dict[str, str]:
         out[f"path.{i}"] = repr(safety.path_violation(
             tool, ti, ("~/.claude/**", "**/.config/aipager/**"), (),
             cwd="/work", write_roots=("/work",)))
+    return out
+
+
+def send_corpus() -> dict[str, str]:
+    """What Claude reads about the files it sends: each refusal, the
+    soft deny payload it arrives in."""
+    from aipager import send_check as sc
+    from aipager.dtach import enforce
+    out = {}
+    for code in sc._WHY_WORDS:
+        one = sc.Refusal("/work/a.png", code, sc._why(code))
+        two = sc.Refusal("b.pdf", "missing", sc._why("missing"))
+        out[f"send.reason.{code}.one"] = sc.refusal_reason([one])
+        out[f"send.reason.{code}.two"] = sc.refusal_reason([two, one])
+    out["send.reason.unreadable_list"] = sc.refusal_reason(
+        [sc.Refusal("", "unreadable_list", "")])
+    out["send.turn_rules"] = sc.turn_rule_reason(
+        "SendUserFile on protected path ~/.claude/**")
+    out["send.unchecked"] = sc.SEND_UNCHECKED_REASON
+    out["pretool.soft_deny"] = enforce.soft_deny_json(
+        sc.refusal_reason([sc.Refusal("a.png", "missing", sc._why("missing"))]))
+    from aipager import claude_launch
+    out["send_files_note"] = claude_launch.SEND_FILES_NOTE
+    out["base_prompt.new"] = claude_launch.base_system_prompt("x1", "2.1.302")
+    out["base_prompt.old"] = claude_launch.base_system_prompt("x1", "2.1.300")
     return out
 
 
@@ -294,6 +324,26 @@ def test_claude_facing_text_is_byte_identical(mk_bot, monkeypatch, run_async):
     assert sorted(corpus) == sorted(golden)
     changed = [k for k in corpus if corpus[k] != golden[k]]
     assert not changed, f"Claude-facing text changed: {changed}"
+
+
+def test_send_text_claude_reads_is_byte_identical():
+    corpus = send_corpus()
+    if os.environ.get("AIPAGER_RECORD_CLAUDE_GOLDEN") == "1":
+        SEND_GOLDEN.write_text(_dump(corpus), encoding="utf-8")
+        pytest.skip("send golden recorded")
+    golden = json.loads(SEND_GOLDEN.read_text(encoding="utf-8"))
+    assert sorted(corpus) == sorted(golden)
+    changed = [k for k in corpus if corpus[k] != golden[k]]
+    assert not changed, f"Claude-facing text changed: {changed}"
+
+
+@pytest.mark.parametrize("code", ["fa", "ru"])
+def test_send_text_is_the_same_in_persian_and_russian(code):
+    from aipager import preferences
+    for chat in (GROUP, DM, ALY, BOB):
+        preferences.set_ui_language(chat, code)
+    golden = json.loads(SEND_GOLDEN.read_text(encoding="utf-8"))
+    assert send_corpus() == golden
 
 
 def test_the_deny_reason_names_the_person():

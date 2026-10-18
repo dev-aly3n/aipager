@@ -1,6 +1,6 @@
 # Eventos de hook
 
-<!-- i18n-source: docs/hooks.md @ 054b893 -->
+<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../hooks.md))
 
@@ -61,6 +61,7 @@ Uma ferramenta está para rodar. É aqui que roda a verificação de segurança 
 
 - Uma tarefa que começou pelo Telegram fica presa às regras da função de quem a mandou e ao piso de segurança (caminhos protegidos, padrões de comandos), do qual só a função `owner` está isenta; uma tarefa que o aipager não consegue atribuir a ninguém recebe o piso; uma mensagem que você digitou no terminal não tem restrições. As regras estão em [uso em equipe](groups.md#how-rules-work) e em [Modelo de segurança](security.md#team-mode-enforcement).
 - Quando uma regra nega a execução, o hook imprime uma decisão `deny`, o Claude Code recusa a ferramenta sem perguntar, e o aipager é avisado (`safety_blocked`): a tarefa é interrompida com `🛑 x1 · Bloqueado por uma regra de segurança: ... (interrompida)`, e todas as ferramentas seguintes dessa tarefa também são negadas.
+- Uma chamada a `SendUserFile` (o Claude enviando arquivos para o chat) é verificada para toda tarefa, a do owner e uma mensagem digitada no terminal incluídas: o piso de envio, as verificações de arquivo e as regras da própria tarefa ([segurança](security.md#files-claude-sends)). Uma chamada recusada recebe um `deny` sem a marca "aipager safety policy": o Claude lê o motivo e te conta, a tarefa continua, e o hook manda para o aipager `send_files_refused` com cada arquivo, para o registro de auditoria.
 - Uma verificação que falha nega, a não ser que as regras da sessão possam ser lidas e deem a isenção do dono.
 
 Do lado do aipager, a execução vira uma linha do cartão de atividade (a de um subagente vai na linha desse agente), e um `Write` ou `Edit` mostra uma prévia do diff quando `/settings` → Prévias de diff está ligado (por padrão, desligado). Uma chamada `AskUserQuestion` vira a pergunta com um botão por opção; uma que um agente auxiliar do Claude Code faz quando não há tarefa em andamento não aparece (não é o Claude perguntando a você). A chamada `Agent` do próprio Claude deixa `subagent_type` e `description` para o agente que ela inicia, e uma execução de um subagente é a última atividade desse agente: as duas aparecem no status embaixo de uma resposta enquanto o agente trabalha em segundo plano.
@@ -80,6 +81,8 @@ Uma ferramenta terminou, ou falhou. A linha dela no cartão de atividade fica fi
 Um `Bash` que o Claude Code mandou para segundo plano informa um `backgroundTaskId`. O aipager passa a acompanhá-lo como um comando em segundo plano (só os do loop principal: uma chamada com `agent_id` é desse subagente) até ver o fim: um `<task-notification>` com um `<status>` (na mensagem que acorda o Claude, ou na conversa salva quando chega no meio de uma tarefa), um `TaskStop` ou `KillShell` com o ID dele, o fim da sessão, ou duas horas (`AIPAGER_BG_SHELL_MAX_TRACK`, em segundos, padrão 7200). Veja [comandos](commands.md#idle-responses) para a linha dele no cartão.
 
 Uma chamada `Agent` (ou `Task`) feita dentro de um subagente (o evento dela traz `agent_id`) informa o ID do agente que ela começou. O aipager lembra qual agente começou qual, e assim distingue um agente que parou para esperar pelo próprio agente de um que terminou (veja `SubagentStart` / `SubagentStop` mais abaixo).
+
+Depois de um `SendUserFile` que rodou, o aipager copia na hora os arquivos dele, uma vez por chamada e só durante uma tarefa que começou com um prompt, da lista que o `PreToolUse` mostrou (nunca do resultado da ferramenta), verificando cada um de novo; as cópias são enviadas depois da resposta da tarefa, quando a chamada é encontrada na conversa salva que o aipager anotou para a tarefa, gravada durante essa tarefa ([segurança](security.md#files-claude-sends), [comandos](commands.md#files-claude-sends)). Uma tarefa que o Claude Code começa sem hook (uma mensagem que ele pega em seguida, o retorno de um hook de Stop) conta assim que a conversa salva mostra que ela começou.
 
 ### <a id="notification"></a>`Notification`
 
@@ -150,6 +153,7 @@ Além dos eventos de hook, os ajudantes mandam ao aipager algumas mensagens pró
 |---|---|---|
 | `queue_pickup` | hook | No `UserPromptSubmit`: quais mensagens do Telegram o Claude pegou. |
 | `safety_blocked` | hook | No `PreToolUse`, quando a verificação de segurança negou a execução. |
+| `send_files_refused` | hook | No `PreToolUse`, quando arquivos que o Claude queria enviar foram recusados: cada arquivo e o motivo, para o registro de auditoria. |
 | `permission_reply_timeout` | hook | A espera de um `PermissionRequest` terminou sem nenhum toque. |
 | `statusline` | linha de status | A cada redesenho da linha de status. |
 | `hook_memory_cap_hit` | hook, linha de status | O processo chegou ao limite de memória. |

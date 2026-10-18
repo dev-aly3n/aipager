@@ -20,7 +20,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from aipager import (
-    agent_tree, bg_shells, bidi_guard, perm_modes, prompt_stack, statusline_file,
+    agent_tree, bg_shells, bidi_guard, perm_modes, prompt_stack, safety, send_check,
+    statusline_file,
 )
 from aipager.config import (
     HOOK_DEDUP_WINDOW_SECONDS,
@@ -58,7 +59,7 @@ log = logging.getLogger(__name__)
 #: The ``hook_event_name`` values aipager's own hook sends for its own
 #: datagrams (not Claude Code events); kept equal to the hook's by a test.
 _INTERNAL_HOOK_EVENTS = frozenset({"queue_pickup", "safety_blocked", "permission_reply_timeout",
-                                   "peer_resolved"})
+                                   "peer_resolved", "send_files_refused"})
 
 #: Where a hook's memory-cap hit is recorded (problem reports, 8.112): the
 #: hook's own main, by the hook name its cap datagram carries.
@@ -433,7 +434,41 @@ def _summary_text(name: str, inp: dict) -> str:
         return f"WebSearch: {inp.get('query', '')[:80]}"
     if name == "NotebookEdit":
         return f"NotebookEdit: {inp.get('notebook_path', '')}"
+    if name == send_check.SEND_TOOL:
+        files = _send_files(inp)
+        return send_check.sending_row(len(files)) if files else name
     return name
+
+
+_SEND_PAYLOAD_LOGGED = False
+
+
+def _log_send_payload_once(msg: dict) -> None:
+    """The first SendUserFile PostToolUse of this daemon run, logged once
+    (cut to 4 KB): Claude Code's payload for it was read from its binary,
+    never seen, and the real-Claude test run records it from here."""
+    global _SEND_PAYLOAD_LOGGED
+    if _SEND_PAYLOAD_LOGGED:
+        return
+    _SEND_PAYLOAD_LOGGED = True
+    try:
+        shown = {k: msg.get(k) for k in ("tool_name", "tool_input", "tool_response",
+                                         "tool_use_id", "cwd", "agent_id")}
+        log.info("send_files_ran payload: %s",
+                 json.dumps(shown, ensure_ascii=False, default=str)[:4096])
+    except Exception:  # pragma: no cover - defensive
+        pass
+
+
+def _send_files(inp) -> list[str]:
+    """SendUserFile's file list as strings (a bare string is one file);
+    [] when it cannot be read."""
+    files = inp.get("files") if isinstance(inp, dict) else None
+    if isinstance(files, str):
+        files = [files]
+    if not isinstance(files, list):
+        return []
+    return [f for f in files if isinstance(f, str)]
 
 
 def _clean_text(value, limit: int) -> str:
@@ -462,6 +497,9 @@ def _activity_arg(name: str, inp) -> str:
         return _clean_text(inp.get("pattern", ""), 80)
     elif name == "WebSearch":
         return _clean_text(inp.get("query", ""), 80)
+    elif name == send_check.SEND_TOOL:
+        files = _send_files(inp)
+        value = files[0] if files else ""
     elif name == "WebFetch":
         url = inp.get("url", "")
         if not isinstance(url, str):
@@ -524,7 +562,24 @@ def _standing_rule_suggestion(suggestions: object) -> dict | None:
 
 def _read_outside_working_dir(tool_name: str, tool_input: object, cwd: str) -> bool:
     """True when ``tool_name`` is one of :data:`_OUTSIDE_READ_TOOLS` and its
-    path lies outside ``cwd`` (see :func:`_outside_working_dir`)."""
+    path lies outside ``cwd`` (see :func:`_outside_working_dir`).
+
+    SendUserFile runs each of its files through Claude Code's Read check,
+    so it may draw the same dialog: it counts as outside when ANY file (or
+    a file list that cannot be read) lies outside ``cwd``. Whether it
+    really draws that dialog is not known (it was not seen in the binary
+    strings), so this answers on the safe side: an "Allow always" for it
+    is gated like a Read's."""
+    if tool_name == send_check.SEND_TOOL:
+        files = (tool_input.get("files") if isinstance(tool_input, dict)
+                 else None)
+        if isinstance(files, str):
+            files = [files]
+        if not isinstance(files, list) or not files:
+            return True
+        return any(_outside_working_dir(
+            safety._expand_tool_home(safety._js_trim(f)) if isinstance(f, str) else f,
+            cwd) for f in files)
     spec = _OUTSIDE_READ_TOOLS.get(tool_name)
     if spec is None:
         return False
@@ -582,6 +637,8 @@ def _detail_text(name: str, inp: dict) -> str:
     if name == "NotebookEdit":
         path = inp.get("notebook_path", "")
         return path if isinstance(path, str) else ""
+    if name == send_check.SEND_TOOL:
+        return "\n".join(_send_files(inp))
     return ""
 
 
@@ -903,6 +960,20 @@ class HookReceiver:
             return
         self._recent_fingerprints[fp] = now_mono
 
+        if event == "send_files_refused":
+            # The PreToolUse hook refused files Claude asked to send (it
+            # already told Claude why). For the audit only, and only for a
+            # session the daemon already knows: any local process can
+            # write here, so this never creates one.
+            sess = self.registry.get(session_name)
+            files = msg.get("files")
+            if sess is not None and isinstance(files, list):
+                await self.notify_fn(sess, "send_files_refused", {
+                    "tool_use_id": msg.get("tool_use_id", ""),
+                    "files": [f for f in files[:100] if isinstance(f, dict)],
+                })
+            return
+
         # Problem reports (8.112): a hook event aipager never installed is
         # Claude Code drift, counted (its name never kept).
         hook_event = msg.get("hook_event_name")
@@ -1199,6 +1270,17 @@ class HookReceiver:
 
         elif event == "UserPromptSubmit":
             prompt = msg.get("prompt", "")
+            if not hook_agent_id:
+                # Prompt evidence of a turn (or a job's continuation): the
+                # turn files Claude sends may come from (state.py
+                # files_turn_opened). A tool call's hook never opens one.
+                sess_ref.files_turn_opened(time.time())
+                if transcript_path:
+                    # The transcript this prompt went into. A turn opened
+                    # earlier (a slash command typed from Telegram, a
+                    # message the running turn absorbs) follows it; its
+                    # start stays.
+                    sess_ref.files_transcript = transcript_path
             # NOT a place to clear the parent's step: Claude Code fires this
             # the moment a message is QUEUED behind a running step, and
             # clearing there erased the very step the Send now line reads
@@ -1404,6 +1486,18 @@ class HookReceiver:
         elif event == "PreToolUse":
             tool_name = msg.get("tool_name", "")
             tool_input = msg.get("tool_input", {})
+
+            if tool_name == send_check.SEND_TOOL:
+                # Files Claude asks to send: what the hook checks is the
+                # authority for what the daemon copies at PostToolUse.
+                sender = self.registry.get(session_name)
+                if sender is not None:
+                    await self.notify_fn(sender, "send_files_requested", {
+                        "tool_use_id": _payload_tool_use_id(msg),
+                        "tool_input": tool_input,
+                        "cwd": msg.get("cwd") or "",
+                        "agent_id": msg.get("agent_id", "") or "",
+                    })
 
             # AskUserQuestion blocks execution — handle as INTERACTIVE
             # (detected here because PreToolUse provides full tool_input
@@ -1657,6 +1751,15 @@ class HookReceiver:
                                  "agents line", sess.label,
                                  msg["agent_id"], child)
                     self.registry.mark_dirty()
+                if tool_name == send_check.SEND_TOOL:
+                    _log_send_payload_once(msg)
+                    await self.notify_fn(sess, "send_files_ran", {
+                        "tool_use_id": _payload_tool_use_id(msg),
+                        "tool_input": tool_input,
+                        "tool_response": msg.get("tool_response"),
+                        "cwd": msg.get("cwd") or "",
+                        "agent_id": msg.get("agent_id", "") or "",
+                    })
                 done_ctx = {
                     "tool_name": tool_name,
                     "tool_summary": summary,
@@ -2013,7 +2116,10 @@ class HookReceiver:
             # SessionStart with source=compact fires after compaction completes
             source = msg.get("source", "")
             if source != "compact":
-                self.registry.get_or_create(session_name)
+                # A new or resumed conversation: no turn of it runs yet, so
+                # none that files Claude sends may come from (a /clear typed
+                # from Telegram opened one for the conversation it ended).
+                self.registry.get_or_create(session_name).files_turn_closed()
                 # A process (re)starting under this id — `--resume` of a
                 # conversation /kill just ended keeps its id — is not the
                 # killed one: its exit must be announced again.
@@ -2155,6 +2261,11 @@ class HookReceiver:
                     _sf.pending_tool_started_at = None
                     _sf.compact_started_at = None
                 sess = self.registry.transition(session_name, Status.IDLE)
+                # The newest end of Claude's own turn: a turn it starts
+                # with no hook must come after it (files Claude sends).
+                _ended = self.registry.get(session_name)
+                if _ended is not None:
+                    _ended.files_turn_stopped(time.time())
                 if sess is None:
                     # Already IDLE (or debounce blocked) — get the session so
                     # we can still notify. Finalizing must not be skipped.
@@ -2241,6 +2352,11 @@ class HookReceiver:
                     _idle.pending_tool_started_at = None
                     _idle.compact_started_at = None
                 sess = self.registry.transition(session_name, Status.IDLE)
+                # The newest end of Claude's own turn: a turn it starts
+                # with no hook must come after it (files Claude sends).
+                _ended = self.registry.get(session_name)
+                if _ended is not None:
+                    _ended.files_turn_stopped(time.time())
                 if sess is None:
                     # Force notification if there's an undelivered response
                     # (user sent a prompt via Telegram but debounce suppressed IDLE)

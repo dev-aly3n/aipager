@@ -52,6 +52,11 @@ log = logging.getLogger("aipager.bot.transport")
 MARKDOWN_MIME = "text/markdown"
 
 
+def utf16_len(text: str) -> int:
+    """*text*'s length as Telegram counts it: in UTF-16 code units."""
+    return len(text.encode("utf-16-le")) // 2
+
+
 def document_upload(data: bytes, filename: str) -> InputFile:
     """``data`` as a ``send_document`` payload named ``filename``, with a
     ``.md`` name always sent as ``text/markdown``.

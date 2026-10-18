@@ -194,6 +194,7 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (sigue trabajando)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "agente"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"many": "📎 Enviando {n} archivos", "one": "📎 Enviando {n} archivo", "other": "📎 Enviando {n} archivos"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "comando en segundo plano: {label} - terminado ({clock})"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "comando en segundo plano: {label} - terminó con error ({clock})"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "comando en segundo plano: {label} - terminó con error (código de salida {code})"}
@@ -478,6 +479,12 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · sigue esperando tu respuesta arriba"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Permiso: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Pregunta: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ No se pudo enviar {name}: el archivo se borró o cambió antes de que aipager pudiera copiarlo."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ No se pudo enviar {name}: ya no está permitido enviarlo."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ No se pudo enviar {name}."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ No se pudo enviar {name}: Telegram lo rechazó."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ No se pudo enviar {name}: es demasiado grande para Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ No se pudo enviar {name}: aipager no pudo confirmar que Claude lo enviara en esta tarea."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Este texto tiene caracteres ocultos que cambian la dirección de escritura (se muestran como ⟨U+...⟩). Puede ejecutar algo distinto de lo que ves."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Permitir"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Permitir siempre"}

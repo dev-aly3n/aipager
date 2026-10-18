@@ -194,6 +194,7 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (läuft noch)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "Agent"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"one": "📎 {n} Datei wird gesendet", "other": "📎 {n} Dateien werden gesendet"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "Hintergrundbefehl: {label} - fertig ({clock})"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "Hintergrundbefehl: {label} - mit Fehler beendet ({clock})"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "Hintergrundbefehl: {label} - mit Fehler beendet (Exit-Code {code})"}
@@ -478,6 +479,12 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · wartet noch auf deine Antwort oben"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Berechtigung: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Frage: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ {name} konnte nicht gesendet werden: Die Datei wurde gelöscht oder geändert, bevor aipager sie kopieren konnte."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ {name} konnte nicht gesendet werden: Die Datei darf nicht mehr gesendet werden."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ {name} konnte nicht gesendet werden."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ {name} konnte nicht gesendet werden: Telegram hat die Datei abgelehnt."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ {name} konnte nicht gesendet werden: Die Datei ist zu groß für Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ {name} konnte nicht gesendet werden: aipager konnte nicht bestätigen, dass Claude die Datei in dieser Aufgabe gesendet hat."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Hier stecken versteckte Zeichen, die die Schreibrichtung ändern (angezeigt als ⟨U+...⟩). Ausgeführt wird vielleicht etwas anderes, als du siehst."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Erlauben"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Immer erlauben"}

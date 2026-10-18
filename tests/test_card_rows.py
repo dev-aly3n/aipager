@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from aipager import bg_shells, i18n, preferences
+from aipager import bg_shells, i18n, preferences, send_check
 from aipager.bot import animation, card_rows
 from aipager.bot.notify import settled_agent_row
 from aipager.i18n import locales
@@ -34,6 +34,8 @@ def _rows():
         "❓ Which database? → Selected option 2",
         "❓ Pick some → Selected: A, B",
         "❓ Pick some → Submitted (none)",
+        send_check.sending_row(1),
+        send_check.sending_row(3),
     ]
 
 
@@ -75,6 +77,18 @@ def test_names_stay_in_the_code_span_and_words_go_outside(qps):
     assert "`npm test`" in md
     md = card_rows.render_md(qps, "🔑 Bash: rm -rf build/ → Allowed")
     assert "`Bash: rm -rf build/`" in md and "Allowed" not in md
+
+
+def test_the_sending_row_is_counted_in_the_chat_language(qps):
+    for n in (1, 2, 11):
+        row = send_check.sending_row(n)
+        assert card_rows.render_md(qps, row) == i18n.get("qps").n(
+            card_rows.SENDING_FILES, n, kind="md")
+        assert card_rows.render_text(qps, row) == i18n.get("qps").n(
+            card_rows.SENDING_FILES, n, kind="text")
+    en = i18n.get("en")
+    assert en.n(card_rows.SENDING_FILES, 1, kind="text") == send_check.sending_row(1)
+    assert en.n(card_rows.SENDING_FILES, 4, kind="text") == send_check.sending_row(4)
 
 
 def test_persian_rows_keep_marks_out_of_the_spans():

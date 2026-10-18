@@ -194,6 +194,7 @@
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (masih berjalan)"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "agen"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"other": "📎 Mengirim {n} file"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "perintah latar belakang: {label} - selesai ({clock})"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "perintah latar belakang: {label} - selesai dengan error ({clock})"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "perintah latar belakang: {label} - selesai dengan error (kode keluar {code})"}
@@ -478,6 +479,12 @@
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · masih menunggu jawabanmu di atas"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Izin: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Pertanyaan: {summary}"}
+{"k": "outbox.failed.gone", "src": "a6fd4b38", "v": "⚠️ {name} tidak terkirim: file itu sudah dihapus atau berubah sebelum aipager sempat menyalinnya."}
+{"k": "outbox.failed.not_allowed", "src": "1146a803", "v": "⚠️ {name} tidak terkirim: file itu sudah tidak boleh dikirim."}
+{"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ {name} tidak terkirim."}
+{"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ {name} tidak terkirim: Telegram menolaknya."}
+{"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ {name} tidak terkirim: ukurannya terlalu besar untuk Telegram."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ {name} tidak terkirim: aipager tidak bisa memastikan Claude mengirimnya di tugas ini."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Ini berisi karakter tersembunyi yang mengubah arah teks (ditampilkan sebagai ⟨U+...⟩). Yang dijalankan mungkin tidak sama dengan yang kamu lihat."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Izinkan"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Selalu izinkan"}
