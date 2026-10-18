@@ -14,7 +14,7 @@ Pídele a la persona que haga esto. Tú no puedes hacerlo por ella.
 
 1. **Crear el bot.** En Telegram, que abra [@BotFather](https://t.me/BotFather), envíe `/newbot` y elija un nombre y un nombre de usuario. BotFather responde con el token del bot (parece `123456789:AA...`).
 2. **Pulsar Start en el bot.** Que abra el bot nuevo (BotFather da el enlace `t.me/<bot username>`) y pulse Start. Un bot no puede escribirle a alguien que no hizo esto.
-3. **Iniciar sesión en Claude Code en esta computadora.** Si ya usa Claude Code aquí, no hace falta nada. En un servidor sin pantalla, ejecuta `claude` una vez en su propia terminal e inicia sesión (muestra un enlace para abrir en otro dispositivo). Si prefiere un token de larga duración, ejecuta `claude setup-token`, que solo imprime el token: lo guarda ella misma para las sesiones de aipager, en su propia terminal (pega el token, pulsa Enter y luego Ctrl-D):
+3. **Autenticarse en Claude Code en esta computadora.** Si ya usa Claude Code aquí, no hace falta nada. En un servidor sin pantalla, la persona ejecuta `claude` una vez en su propia terminal y se autentica (muestra un enlace para abrir en otro dispositivo). Si prefiere un token de larga duración, la persona ejecuta `claude setup-token`, que solo imprime el token: lo guarda ella misma para las sesiones de aipager, en su propia terminal (pega el token, pulsa Enter y luego Ctrl-D):
 
    ```sh
    mkdir -p ~/.config/aipager
@@ -27,7 +27,7 @@ Pídele a la persona que haga esto. Tú no puedes hacerlo por ella.
 
 Quien tiene el token del bot controla el bot. Ofrécele a la persona estas dos opciones y deja que elija.
 
-- **La más segura: un archivo que tú nunca lees.** En su propia terminal, ejecuta:
+- **La más segura: un archivo que tú nunca lees.** En su propia terminal, la persona ejecuta:
 
   ```sh
   mkdir -p ~/.config/aipager
@@ -129,7 +129,7 @@ Díselo en pocas líneas:
 - No imprimas, no hagas echo ni `cat` del token, y nunca lo pongas en una línea de comandos (`--token` se rechaza de todas formas). Pásalo solo como archivo o por stdin.
 - No edites `~/.config/aipager/` (aparte del archivo del token del paso 2) ni `~/.claude/settings.json` a mano. Los escriben `aipager setup` y `aipager config`.
 - No añadas `--force` sin preguntarle a la persona: reemplaza su token, chat o rol actuales.
-- No reinicies ni cierres tu propia sesión de Claude Code. En una primera instalación, la sesión en la que estás no está bajo aipager, y no hace falta que lo esté: las sesiones nuevas salen de `/new` en Telegram o de `aipager session <name>`. Si aipager ya está configurado y la persona habla contigo a través de él (por ejemplo para ejecutar `setup --force` con un token nuevo), no detengas ni reinicies aipager tú: tu tarea y su respuesta quedarían a medias. Dile a la persona que lo reinicie cuando termines.
+- No reinicies ni termines tu propia sesión de Claude Code. En una primera instalación, la sesión en la que estás no está bajo aipager, y no hace falta que lo esté: las sesiones nuevas salen de `/new` en Telegram o de `aipager session <name>`. Si aipager ya está configurado y la persona habla contigo a través de él (por ejemplo para ejecutar `setup --force` con un token nuevo), no detengas ni reinicies aipager tú: tu tarea y su respuesta quedarían a medias. Dile a la persona que lo reinicie cuando termines.
 
 ## <a id="5-groups"></a>5. Grupos
 

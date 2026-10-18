@@ -1,6 +1,6 @@
 # Pemecahan masalah
 
-<!-- i18n-source: docs/troubleshooting.md @ 054b893 -->
+<!-- i18n-source: docs/troubleshooting.md @ 1de3425 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../troubleshooting.md))
 
@@ -34,7 +34,7 @@ Kalau pemeriksaan soket tidak menangkapnya, `aipager start` tetap menolak dengan
 
 Telegram mengizinkan kira-kira satu pesan per detik ke satu chat (dan 20 per menit ke grup). Setiap pesan dan setiap edit dihitung. aipager memberi setiap chat anggarannya sendiri, kira-kira 1 panggilan per detik dengan sedikit ruang untuk lonjakan, dan kartu kerja di chat itu **berbagi** anggaran itu. Indikator “sedang mengetik…” juga termasuk dalam anggaran ini, sebagai **hal paling tidak penting** yang dikirim chat itu (lihat “Gelembung mengetik” di bawah).
 
-Bagian untuk gelembung disisihkan lebih dulu (satu panggilan setiap 4,5 detik selama tugas tertua yang sedang berjalan di chat itu berumur kurang dari sepuluh menit, lebih jarang saat tugas itu menua; lihat “Gelembung mengetik”), dan kartu berbagi sisanya. Jadi satu kartu di chat pribadi diperbarui kira-kira setiap 4,8 detik; dengan dua sesi yang bekerja di satu chat, setiap kartu kira-kira setiap 9,7 detik; dengan tiga, kira-kira setiap 14,5. **Kartu yang lambat adalah anggaran yang sedang bekerja, bukan bug.** Jawaban, pesan balasan, dan respons tombol tidak pernah diperlambat demi kartu: mereka punya token cadangan, sedangkan edit kartu yang tidak kebagian panggilan dilewati dan dicoba lagi di putaran berikutnya, bukan mengantre di depan jawabanmu.
+Bagian untuk gelembung disisihkan lebih dulu (satu panggilan setiap 4,5 detik selama tugas tertua yang sedang berjalan di chat itu berumur kurang dari sepuluh menit, lebih jarang saat tugas itu menua; lihat “Gelembung mengetik”), dan kartu berbagi sisanya. Jadi satu kartu di chat pribadi diperbarui kira-kira setiap 4,8 detik; dengan dua sesi yang bekerja di satu chat, setiap kartu kira-kira setiap 9,7 detik; dengan tiga, kira-kira setiap 14,5. **Kartu yang lambat adalah anggaran yang sedang bekerja, bukan bug.** Jawaban, pesan balasan, dan respons tombol tidak pernah diperlambat demi kartu: semuanya punya token cadangan, sedangkan edit kartu yang tidak kebagian panggilan dilewati dan dicoba lagi di putaran berikutnya, bukan mengantre di depan jawabanmu.
 
 Di **grup**, batasnya 20 panggilan per menit, berapa pun sesi di dalamnya, dan satu gelembung saja akan menghabiskan dua pertiganya. Kartu-kartu grup bersama-sama tetap mendapat satu pembaruan setiap 10 detik (11 dtk untuk satu kartu) dan gelembung mendapat sisanya: karena itu di grup gelembung bisa sesekali hilang satu-dua detik.
 
@@ -51,7 +51,7 @@ Laju di atas berlaku selama dua menit pertama tugas. Setelah itu kartu **melamba
 | 10–60 mnt | 30 dtk | `23:00`, `23:30` |
 | lebih dari 60 mnt | 30 dtk | `1:23:00`, `1:23:30` |
 
-Jam dibulatkan ke bawah ke langkah 30 detiknya, dan pembaruan datang paling sering setiap 30 detik, kadang sedikit lebih jarang. Jadi kartu sesekali melewatkan satu langkah: pembaruan di 23 mnt 29 dtk menunjukkan `23:00`, dan kalau yang berikutnya datang di 24 mnt 1 dtk, ia menunjukkan `24:00` dan `23:30` terlewat.
+Jam dibulatkan ke bawah ke langkah 30 detiknya, dan pembaruan datang paling sering setiap 30 detik, kadang sedikit lebih jarang. Jadi kartu sesekali melewatkan satu langkah: pembaruan di 23 mnt 29 dtk menunjukkan `23:00`, dan kalau yang berikutnya datang di 24 mnt 1 dtk, kartu menunjukkan `24:00`, jadi `23:30` terlewat.
 
 Baris alat atau kalimat baru menunggu pembaruan berikutnya; **perubahan keadaan** (sesi berpindah dari bekerja ke menunggu agen latar belakang dan sebaliknya) langsung ditampilkan, paling sering sekali setiap 10 detik. Baris agen yang hidup dan baris penantian bergerak dengan langkah yang sama. Kartu yang sudah selesai menunjukkan durasi tugas dalam detik sebenarnya (`23:17`).
 
@@ -61,10 +61,10 @@ Inilah yang mencegah tugas empat jam mengedit satu pesan ribuan kali: pada 2026-
 
 Gelembung “sedang mengetik…” mengirim **satu** putaran per chat, berapa pun sesi yang bekerja di sana (di semua klien Telegram gelembungnya satu per chat), setiap `TYPING_INDICATOR_INTERVAL` detik (bawaannya 4,5: Telegram menghapus status mengetik setelah 5; `0` mematikan gelembung). Dalam anggaran chat, gelembung ini dihitung sebagai hal paling tidak penting yang dikirim chat itu:
 
-- ia **melambat seiring tugas menua**, mengikuti umur tugas tertua yang sedang berjalan di chat itu: setiap 4,5 dtk selama sepuluh menit pertama (gelembung menyala terus), lalu setiap 15 dtk; Telegram menampilkannya selama 5 dtk, jadi gelembung untuk tugas yang sudah lama berkedip, tidak menyala terus. Pada 4,5 dtk gelembung itu sendiri akan menjadi 800 panggilan per jam, dan batas per jam (di bawah) akan mematikannya lama sekali; mematikan **⏱ Pembaruan kartu tugas panjang** menahannya di 4,5 dtk;
-- ia **muncul sejak awal setiap tugas**; kartu yang masih muda diperbarui sedikit lebih lambat untuk memberinya ruang: bagian gelembung disisihkan sebelum kartu berbagi sisanya (di atas), jadi bersama-sama keduanya tidak pernah melewati batas chat;
-- ia tidak pernah mengambil token yang dibutuhkan edit kartu: gelembung yang seharusnya dikirim tepat setelah edit kartu menunggu setengah detik (`TYPING_RETRY_WAKE`) lalu mencoba lagi, jadi paling banyak terlambat satu-dua detik, tapi tidak pernah hilang;
-- ia yang pertama dilepas saat volume per jam chat itu membesar (di bawah);
+- **melambat seiring tugas menua**, mengikuti umur tugas tertua yang sedang berjalan di chat itu: setiap 4,5 dtk selama sepuluh menit pertama (gelembung menyala terus), lalu setiap 15 dtk; Telegram menampilkannya selama 5 dtk, jadi gelembung untuk tugas yang sudah lama berkedip, tidak menyala terus. Pada 4,5 dtk gelembung itu sendiri akan menjadi 800 panggilan per jam, dan batas per jam (di bawah) akan mematikannya lama sekali; mematikan **⏱ Pembaruan kartu tugas panjang** menahannya di 4,5 dtk;
+- **muncul sejak awal setiap tugas**; kartu yang masih muda diperbarui sedikit lebih lambat untuk memberinya ruang: bagian gelembung disisihkan sebelum kartu berbagi sisanya (di atas), jadi bersama-sama keduanya tidak pernah melewati batas chat;
+- tidak pernah mengambil token yang dibutuhkan edit kartu: gelembung yang seharusnya dikirim tepat setelah edit kartu menunggu setengah detik (`TYPING_RETRY_WAKE`) lalu mencoba lagi, jadi paling banyak terlambat satu-dua detik, tapi tidak pernah hilang;
+- menjadi yang pertama dilepas saat volume per jam chat itu membesar (di bawah);
 - 429 pada gelembung itu sendiri hanya memblokir gelembung, selama yang diminta Telegram (kartu tetap berjalan), tapi memulai rezim peringatan enam jam untuk chat itu (laju dibatasi 0,5 panggilan/dtk, jadi kartu juga melambat);
 - **pemblokiran** pada gelembung (`retry_after` di atas batas di bawah) mematikan pengiriman ke chat itu persis seperti pemblokiran pada panggilan lain: tidak ada lagi yang dikirim ke sana, dan jawaban tugas ditahan lalu dikirim setelah blokir dicabut.
 
@@ -72,7 +72,7 @@ Dulu gelembung ini gratis (satu putaran per sesi yang bekerja, di luar anggaran 
 
 ## <a id="the-bot-slowed-down-a-rate-limit-429"></a>Bot melambat: batas permintaan (429)
 
-Kalau Telegram tetap membatasi sebuah chat, ia menjawab satu panggilan dengan `429` dan `retry_after` beberapa detik. aipager berhenti menghubungi chat itu persis selama itu, lalu mencoba lagi satu pengiriman yang tertunda dan **menggandakan interval kartu chat itu** (sampai ×8). Setiap menit yang tenang membaginya dua kembali ke normal.
+Kalau Telegram tetap membatasi satu chat, Telegram menjawab satu panggilan dengan `429` dan `retry_after` beberapa detik. aipager berhenti menghubungi chat itu persis selama itu, lalu mencoba lagi satu pengiriman yang tertunda dan **menggandakan interval kartu chat itu** (sampai ×8). Setiap menit yang tenang membaginya dua kembali ke normal.
 
 Yang kamu lihat:
 
@@ -97,7 +97,7 @@ Setiap chat juga punya **jam** bergeser: paling banyak `FLOOD_HOURLY_MAX` (1200)
 
 Sejak 0.7.13, laju kirim tetap setiap chat **dipelajari, bukan diasumsikan**. Telegram tidak menerbitkan batas yang benar-benar berlaku untuk botmu (tergantung riwayat akunmu belakangan ini), jadi aipager memulai setiap chat pada 0,5 panggilan/dtk, menambah 0,1 untuk setiap menit yang tenang sampai batas atas 1/dtk, membaginya dua saat 429, dan menurunkannya ke 0,05 setelah pemblokiran. Bot yang baru saja diblokir berjalan jauh lebih hati-hati daripada yang belum, dan memperoleh kembali lajunya dalam beberapa jam berikutnya.
 
-Kalau laju sebuah chat turun di bawah 0,2 panggilan/dtk, atau bagian anggaran per jamnya untuk kartu dan gelembung habis, chat itu masuk ke **mode minimal**: kartu kerja berhenti beranimasi dan menampilkan satu baris diam `⏳ x1 · sedang bekerja (kartu sementara tidak diperbarui)`, gelembung mengetik berhenti, dan bilah status yang disematkan menampilkan `⏸ kartu sementara tidak diperbarui (batas per jam Telegram)` (atau `(batas Telegram)` kalau lajunya yang membawa chat ke sana) dan selain itu tidak berubah sampai keadaan ini lewat. **Jawaban, pesan balasan, dan permintaan izin tetap dikirim**: itulah intinya. Kartu adalah sekitar 95% dari yang dikirim bot ini dan jawaban sekitar 5%, jadi di bawah tekanan bot mengorbankan piksel, bukan pekerjaan. `aipager doctor` menampilkan mode minimal sebagai peringatan, supaya kartu yang dijeda tidak pernah dikira rusak; mode ini hilang sendiri saat lajunya pulih.
+Kalau laju chat turun di bawah 0,2 panggilan/dtk, atau bagian anggaran per jamnya untuk kartu dan gelembung habis, chat itu masuk ke **mode minimal**: kartu kerja berhenti beranimasi dan menampilkan satu baris diam `⏳ x1 · sedang bekerja (kartu sementara tidak diperbarui)`, gelembung mengetik berhenti, dan bilah status yang disematkan menampilkan `⏸ kartu sementara tidak diperbarui (batas per jam Telegram)` (atau `(batas Telegram)` kalau lajunya yang membawa chat ke sana) dan selain itu tidak berubah sampai keadaan ini lewat. **Jawaban, pesan balasan, dan permintaan izin tetap dikirim**: itulah intinya. Kartu adalah sekitar 95% dari yang dikirim bot ini dan jawaban sekitar 5%, jadi di bawah tekanan bot mengorbankan piksel, bukan pekerjaan. `aipager doctor` menampilkan mode minimal sebagai peringatan, supaya kartu yang dijeda tidak pernah dikira rusak; mode ini hilang sendiri saat lajunya pulih.
 
 ## <a id="the-bot-went-quiet-flood-control"></a>Bot jadi diam: pemblokiran Telegram (flood control)
 
@@ -114,14 +114,14 @@ aipager mematikan pengiriman ke chat itu persis selama yang diminta Telegram dan
 **Mengirim pesan ke bot selama pemblokiran aman, dan tidak ada yang hilang.** Tidak ada yang kamu lakukan di chat yang membuat bot menghubungi Telegram selama pengiriman ke chat itu dimatikan, jadi itu tidak bisa memperpanjang pemblokiran:
 
 - Pesan yang kamu kirim (teks, pesan suara, file, templat cepat) tetap sampai ke Claude, dan sesi tetap mengerjakannya. Kartu kerjanya ditahan, bukan dibuang: kalau tugasnya masih berjalan saat blokir dicabut, kartu itu muncul saat itu. Setelah pemblokiran, chat tetap dalam mode minimal untuk beberapa waktu, jadi kartu bisa muncul beberapa menit setelah pemblokiran berakhir. Kalau tugasnya selesai selama pemblokiran, kamu mendapat jawabannya dan tidak ada kartu.
-- **🔄 Coba lagi** selama pemblokiran tidak melakukan apa pun. Pesannya tidak dikirim lagi, dan tombolnya tetap ada, jadi kamu bisa mengetuknya lagi setelah pemblokiran. Sampai 0.7.14, pesannya tetap dikirim ke Claude sementara pesan error dengan tombolnya tetap ada, jadi ketukan kedua mengirimnya sekali lagi.
-- Keyboard utama juga ditahan, termasuk yang dikirim mulai ulang (sampai 0.7.14 keyboard itu hilang sampai ada hal lain yang menyegarkannya). Keyboard itu dikirim setelah pemblokiran.
+- **🔄 Coba lagi** selama pemblokiran tidak melakukan apa pun. Pesannya tidak dikirim lagi, dan tombolnya tetap ada, jadi kamu bisa mengetuknya lagi setelah pemblokiran. Sampai dengan 0.7.14, pesannya tetap dikirim ke Claude sementara pesan error dengan tombolnya tetap ada, jadi ketukan kedua mengirimnya sekali lagi.
+- Keyboard utama juga ditahan, termasuk yang dikirim mulai ulang (sampai dengan 0.7.14 keyboard itu hilang sampai ada hal lain yang menyegarkannya). Keyboard itu dikirim setelah pemblokiran.
 
 Setelah blokir dicabut, semuanya datang dengan urutan ini: jawaban yang ditahan, lalu kartu dari tugas yang masih berjalan, lalu keyboard. Kartu yang harus menunggu mode minimal selesai datang setelah keyboard.
 
 **Jawaban tidak hilang.** Jawaban yang selesai saat pengiriman ke chat dimatikan ditahan dan dikirim beberapa detik setelah blokir dicabut, dengan baris pertama `⏳ terlambat sampai: tertahan 42 menit karena batas Telegram`. Kamu tidak perlu bertanya lagi, dan kalau bertanya, kedua jawaban akan datang, yang lama dulu: pemblokiran beberapa jam mencakup beberapa tugas, dan kamu butuh jawaban masing-masing. (Jawaban yang ditahan tersimpan di memori: kalau kamu memulai ulang aipager saat ada yang menunggu, jawaban itu hilang; log saat mati mengatakan berapa. Satu chat menahan paling banyak 20 dan tidak ada yang lebih tua dari 24 jam; apa pun yang dibuang karena salah satu alasan itu dicatat sebagai peringatan di log, dengan keterangan apa isinya.)
 
-**Pemblokiran membuat chat lebih lambat sesudahnya, bukan lebih cepat.** Begitu pemblokiran dipasang, laju yang dipelajari chat itu jatuh ke dasar dan pemblokiran itu dihitung; jam-jam saat pengiriman dimatikan tidak mengembalikan apa pun, pertumbuhan dimulai lagi dari saat blokir dicabut, dan selama **tujuh hari** (`FLOOD_BAN_MEMORY_DAYS`) batas atas laju chat *dan* anggaran per jamnya dibagi satu ditambah jumlah pemblokiran minggu itu: satu pemblokiran membagi keduanya dua, dua pemblokiran membaginya tiga. `aipager status` menampilkan semua ini. (Dulu ingatan ini hanya 24 jam dan hanya membagi batas atas; sebuah chat yang diblokir pada 2026-09-19 kembali ke kecepatan penuh dan diblokir selama tujuh jam pada 2026-09-23.) Lima pemblokiran atau lebih dalam seminggu menahan chat di mode minimal sampai pemblokiran-pemblokiran itu kedaluwarsa: jawaban tetap dikirim, kartu tetap dijeda.
+**Pemblokiran membuat chat lebih lambat sesudahnya, bukan lebih cepat.** Begitu pemblokiran dipasang, laju yang dipelajari chat itu jatuh ke dasar dan pemblokiran itu dihitung; jam-jam saat pengiriman dimatikan tidak mengembalikan apa pun, pertumbuhan dimulai lagi dari saat blokir dicabut, dan selama **tujuh hari** (`FLOOD_BAN_MEMORY_DAYS`) batas atas laju chat *dan* anggaran per jamnya dibagi satu ditambah jumlah pemblokiran minggu itu: satu pemblokiran membagi keduanya dua, dua pemblokiran membaginya tiga. `aipager status` menampilkan semua ini. (Dulu ingatan ini hanya 24 jam dan hanya membagi batas atas; chat yang diblokir pada 2026-09-19 kembali ke kecepatan penuh dan diblokir selama tujuh jam pada 2026-09-23.) Lima pemblokiran atau lebih dalam seminggu menahan chat di mode minimal sampai pemblokiran-pemblokiran itu kedaluwarsa: jawaban tetap dikirim, kartu tetap dijeda.
 
 Yang JANGAN dilakukan:
 
@@ -130,7 +130,7 @@ Yang JANGAN dilakukan:
 
 Cara menghindarinya: kurangi sesi yang berjalan bersamaan di satu chat, atau beri sesi yang paling sibuk chat-nya sendiri (`aipager config`).
 
-## <a id="a-session-dropped-off-the-pinned-status-bar-it-is-gone"></a>Sebuah sesi hilang dari bilah status yang disematkan (statusnya GONE)
+## <a id="a-session-dropped-off-the-pinned-status-bar-it-is-gone"></a>Sesi hilang dari bilah status yang disematkan (statusnya GONE)
 
 Proses dtach sesi itu berakhir (komputer dinyalakan ulang, `pkill claude`, seseorang mengetik `exit` di sesi dtach yang tersambung). Buat ulang sesinya: percakapannya masih ada di foldernya di `~/.claude/projects/...`.
 
@@ -144,7 +144,7 @@ aipager session <label> --continue # dtach baru, percakapan terakhir di folder i
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Permintaan izin tanpa kabar selama 5 menit
 
-Kalau sebuah sesi sedang menunggu permintaan izin atau pertanyaan dan Claude Code tidak melaporkan apa pun selama 5 menit, aipager membaca percakapan sesi yang tersimpan. Hanya kabar dari Claude sendiri dan dari agen yang bertanya yang dihitung: agen latar belakang yang terus bekerja tidak menghalangi pemeriksaan ini. Hanya kalau percakapan itu menunjukkan permintaannya sudah selesai (dijawab di terminal, dan kabarnya hilang), aipager berhenti menunggunya dan menganggap sesi itu sedang bekerja lagi. Kalau tidak, permintaan itu tetap terbuka berapa lama pun: kartu dan bilah yang disematkan tetap bilang sesi itu butuh jawabanmu, tidak ada catatan "masih bekerja", dan pesanmu ditahan sampai kamu menjawab (lihat [teks](commands.md#text)). Claude Code yang tertutup saat permintaan masih terbuka mengakhiri sesinya. Tombol permintaan itu tetap menjawab di dialognya kalau dialog itu masih terbuka (lihat [jawaban](commands.md#idle-responses)).
+Kalau sesi sedang menunggu permintaan izin atau pertanyaan dan Claude Code tidak melaporkan apa pun selama 5 menit, aipager membaca percakapan sesi yang tersimpan. Hanya kabar dari Claude sendiri dan dari agen yang bertanya yang dihitung: agen latar belakang yang terus bekerja tidak menghalangi pemeriksaan ini. Hanya kalau percakapan itu menunjukkan permintaannya sudah selesai (dijawab di terminal, dan kabarnya hilang), aipager berhenti menunggunya dan menganggap sesi itu sedang bekerja lagi. Kalau tidak, permintaan itu tetap terbuka berapa lama pun: kartu dan bilah yang disematkan tetap bilang sesi itu butuh jawabanmu, tidak ada catatan “masih bekerja”, dan pesanmu ditahan sampai kamu menjawab (lihat [teks](commands.md#text)). Claude Code yang tertutup saat permintaan masih terbuka mengakhiri sesinya. Tombol permintaan itu tetap menjawab di dialognya kalau dialog itu masih terbuka (lihat [jawaban](commands.md#idle-responses)).
 
 Untuk mengubah lamanya menunggu:
 
@@ -199,7 +199,7 @@ uv tool install --reinstall aipager
 
 ## <a id="the-session-list-was-lost-or-damaged"></a>Daftar sesi hilang atau rusak
 
-aipager menyimpan sesinya di `~/.claude/aipager-sessions.json` dan menulis ulang file itu secara atomik (file baru, lalu diganti nama), jadi penulisan yang terputus meninggalkan file lama tetap utuh. Kalau file itu tetap tidak ada, tidak bisa dibaca, atau bukan JSON yang valid, aipager mencatat di log bahwa ia mulai dari awal (peringatan, kalau file itu ada tapi tidak bisa dibaca) dan mulai dengan daftar kosong; ia tidak berhenti. File ini tidak punya cadangan. Tidak ada yang penting yang hilang:
+aipager menyimpan sesinya di `~/.claude/aipager-sessions.json` dan menulis ulang file itu secara atomik (file baru, lalu diganti nama), jadi penulisan yang terputus meninggalkan file lama tetap utuh. Kalau file itu tetap tidak ada, tidak bisa dibaca, atau bukan JSON yang valid, aipager mencatat di log bahwa daftar sesi dimulai dari awal (peringatan, kalau file itu ada tapi tidak bisa dibaca) dan mulai dengan daftar kosong; aipager tidak berhenti. File ini tidak punya cadangan. Tidak ada yang penting yang hilang:
 
 - sesi yang sedang berjalan ditemukan lagi pada putaran monitor pertama, dari soket dtach-nya (`/tmp/claude-dtach-*.sock`);
 - setiap percakapan masih ada di folder Claude Code sendiri `~/.claude/projects/...`, jadi `aipager session <name> --continue` di folder sesi itu melanjutkannya (`--resume` membiarkanmu memilih);
@@ -207,7 +207,7 @@ aipager menyimpan sesinya di `~/.claude/aipager-sessions.json` dan menulis ulang
 
 Kalau aipager terus crash saat mulai, `aipager logs` (atau `journalctl --user -u aipager`) mengatakan sebabnya; sisihkan file itu (`mv ~/.claude/aipager-sessions.json ~/aipager-sessions.json.old`) untuk menyingkirkannya dari dugaan.
 
-## <a id="a-session-launch-fails"></a>Sebuah sesi gagal dimulai
+## <a id="a-session-launch-fails"></a>Sesi gagal dimulai
 
 Peluncuran yang ditolak dtach menampilkan alasannya dalam satu baris di chat (soketnya sudah ada, shell tidak bisa dieksekusi, tidak ada pseudo-terminal, nama terlalu panjang, akses ditolak, folder tidak ada); pesan dtach sendiri, dengan path-nya, ada di `aipager logs`.
 
@@ -223,7 +223,7 @@ Urutannya penting: setiap pemeriksaan menganggap pemeriksaan sebelumnya sudah lo
 | `chat_reachable` | Telegram mengenal chat yang diatur (`getChat`; tidak ada yang dikirim) | buka bot, ketuk Start |
 | `team` | Chat dan anggota (atau `team.yaml` lama): menyebutkan apakah ini mode pribadi atau mode tim, dan menandai `team.yaml` lama yang rusak atau tidak cocok | `aipager config` |
 | `role_shell_access` | Memperingatkan sekali untuk setiap peran anggota yang bisa menjalankan Bash (aturan keamanannya bekerja sebisanya, bukan batas; lihat [grup](groups.md#roles)) | jangan beri peran itu Bash di `policy.yaml`, atau terima saja |
-| `peer_messages` | Pesan antarsesi Claude: di mana tanda terimanya disimpan dan apakah folder itu tertutup, apakah sistem ini bisa memeriksa waktu mulai pengirim, dan peringatan untuk setiap peran yang diberi SendMessage oleh sebuah aturan (lihat [keamanan](security.md#messages-between-claude-sessions)) | hapus folder tanda terima bersama (aipager membuatnya lagi), atau jangan beri peran itu SendMessage |
+| `peer_messages` | Pesan antarsesi Claude: di mana tanda terimanya disimpan dan apakah folder itu tertutup, apakah sistem ini bisa memeriksa waktu mulai pengirim, dan peringatan untuk setiap peran yang diberi SendMessage lewat aturan (lihat [keamanan](security.md#messages-between-claude-sessions)) | hapus folder tanda terima bersama (aipager membuatnya lagi), atau jangan beri peran itu SendMessage |
 | `claude` | Menemukan program `claude` dengan cara yang sama seperti setiap peluncuran (`claude_path` di `aipager.yaml` atau `$AIPAGER_CLAUDE_BIN` langsung menang; kalau tidak, yang terbaru dari `~/.local/bin`, PATH, dan Homebrew), dan mencantumkan setiap instalasi LAIN yang ditemukan | pasang Claude Code atau atur `claude_path` / `AIPAGER_CLAUDE_BIN` |
 | `claude_auth` | Mencoba `claude auth status` di environment yang sama dengan yang didapat sesi sungguhan. **Tidak pernah gagal**: “belum login” dan “percobaannya sendiri gagal” ditampilkan berbeda, dan keduanya tidak menghalangi peluncuran sesi | `claude auth login`, atau atur kunci API / `CLAUDE_CODE_OAUTH_TOKEN` |
 | `dtach` | Program `dtach` ditemukan (`dtach-bin` milik aipager sendiri atau yang ada di PATH) | `uv tool install --reinstall aipager` |
@@ -250,7 +250,7 @@ echo 'claude_path: /home/you/.local/bin/claude' >> ~/.config/aipager/aipager.yam
 
 ## <a id="sessions-cant-authenticate-under-the-systemd-service-but-claude-works-fine-in-a-terminal"></a>Sesi tidak bisa login di bawah layanan systemd, tapi `claude` lancar di terminal
 
-Layanan `systemctl --user` tidak pernah membaca `~/.bashrc` atau `~/.profile`, jadi baris `export CLAUDE_CODE_OAUTH_TOKEN=…` di sana tidak pernah sampai ke aipager. Sebagai gantinya, layanan memakai `LoadCredential=` dari systemd dan membaca `~/.config/aipager/daemon.env`: file `KEY=VALUE` biasa dengan izin 0600 yang dibuat otomatis saat `aipager service install` pertama kali dijalankan (dipindahkan dari `config.env` lama kalau di sana ada token, kalau tidak dicari sekali di shell login-mu, kalau tidak dibiarkan kosong dengan peringatan). Kalau masih kosong, `aipager doctor --fix` mencari lagi di tempat-tempat yang sama kalau kamu menjawab ya, dan menambahkan baris yang ditemukannya sambil mempertahankan baris lain di file itu; ia tidak pernah mencetak token-nya. Atau tambahkan barisnya dengan tangan:
+Layanan `systemctl --user` tidak pernah membaca `~/.bashrc` atau `~/.profile`, jadi baris `export CLAUDE_CODE_OAUTH_TOKEN=…` di sana tidak pernah sampai ke aipager. Sebagai gantinya, layanan memakai `LoadCredential=` dari systemd dan membaca `~/.config/aipager/daemon.env`: file `KEY=VALUE` biasa dengan izin 0600 yang dibuat otomatis saat `aipager service install` pertama kali dijalankan (dipindahkan dari `config.env` lama kalau di sana ada token, kalau tidak dicari sekali di shell login-mu, kalau tidak dibiarkan kosong dengan peringatan). Kalau masih kosong, `aipager doctor --fix` mencari lagi di tempat-tempat yang sama kalau kamu menjawab ya, dan menambahkan baris yang ditemukannya sambil mempertahankan baris lain di file itu; perintah itu tidak pernah mencetak token-nya. Atau tambahkan barisnya dengan tangan:
 
 ```sh
 cat ~/.config/aipager/daemon.env          # lihat apa yang ada (atau tidak ada)
@@ -298,19 +298,19 @@ uv tool upgrade aipager
 systemctl --user restart aipager.service
 ```
 
-Tanpa layanan (atau di macOS), mulai ulang aipager dengan cara yang sama seperti ia dimulai.
+Tanpa layanan (atau di macOS), mulai ulang aipager dengan cara yang sama seperti saat kamu menjalankannya.
 
 ## <a id="claude-code-update-installed-with-npm-into-a-folder-you-cant-write-to"></a>Pembaruan Claude Code: dipasang dengan npm ke folder yang tidak bisa kamu tulisi
 
-Claude Code yang dipasang dengan `sudo npm install -g` ada di folder yang hanya bisa diubah root (seperti `/usr/lib/node_modules`), jadi `claude update` sebagai penggunamu gagal dengan `global folder isn't writable`. `/update` dan Mini App menampilkan versi yang lebih baru dengan `tidak bisa diperbarui dari sini: installed with npm into a folder your user can't write to` dan tanpa tombol untuknya. Jalankan `claude install` sekali sebagai pengguna yang menjalankan aipager: ini beralih ke installer Claude Code sendiri di folder home-mu, yang bisa memperbarui tanpa sudo. Lalu mulai ulang aipager (`systemctl --user restart aipager.service`, atau dengan cara ia dimulai): aipager yang sedang berjalan memegang Claude Code yang ditemukannya saat mulai, dan setelah mulai ulang ia mengambil yang terbaru dari yang ditemukannya. Kalau `claude_path` di `aipager.yaml` (`aipager doctor --fix` bisa mengaturnya) atau `AIPAGER_CLAUDE_BIN` menunjuk ke salinan npm, arahkan ke `~/.local/bin/claude` atau hapus dulu, karena keduanya selalu menang.
+Claude Code yang dipasang dengan `sudo npm install -g` ada di folder yang hanya bisa diubah root (seperti `/usr/lib/node_modules`), jadi `claude update` sebagai penggunamu gagal dengan `global folder isn't writable`. `/update` dan Mini App menampilkan versi yang lebih baru dengan `tidak bisa diperbarui dari sini: installed with npm into a folder your user can't write to` dan tanpa tombol untuknya. Jalankan `claude install` sekali sebagai pengguna yang menjalankan aipager: ini beralih ke installer Claude Code sendiri di folder home-mu, yang bisa memperbarui tanpa sudo. Lalu mulai ulang aipager (`systemctl --user restart aipager.service`, atau dengan cara kamu menjalankannya): aipager yang sedang berjalan memegang Claude Code yang ditemukannya saat mulai, dan setelah mulai ulang aipager mengambil yang terbaru dari yang ditemukannya. Kalau `claude_path` di `aipager.yaml` (`aipager doctor --fix` bisa mengaturnya) atau `AIPAGER_CLAUDE_BIN` menunjuk ke salinan npm, arahkan ke `~/.local/bin/claude` atau hapus dulu, karena keduanya selalu menang.
 
 ## <a id="updated-but-the-version-didnt-change"></a>Sudah diperbarui, tapi versinya tidak berubah
 
 Instalasi pipx dari URL git diperbarui dari sumber git itu, bukan dari PyPI. Saat di sumbernya tidak ada yang lebih baru, `/update` menampilkan `✅ aipager sudah di A - instalasi pipx ini diperbarui dari sumber git-nya, dan di sana tidak ada versi yang lebih baru.`. Push atau pilih versi baru di sana, atau pindah ke PyPI dengan `pipx install --force aipager`.
 
-**Tanpa layanan**, aipager yang tidak dimulai ulang oleh pengelola layanan mana pun (`aipager start` di terminal atau tmux, Docker, launchd) memasang pembaruan tetapi tetap menjalankan kode lama sampai ia dimulai ulang. `/update` lalu mengatakan `aipager B sudah terpasang dan menunggu dimulai ulang (yang berjalan: A).`, dan hook Claude Code, yang mulai baru di setiap event, mungkin sudah menjalankan B: pemilik mendapat satu pemberitahuan bahwa pembaruan baru setengah jalan (dua menit setelah hook pertama kali menjalankan B, jadi mulai ulang yang langsung menyusul pemasangan tidak pernah memunculkannya, dan setelah tidak ada tugas yang berjalan di chat pribadi pemilik). Setelah aipager menjalankan B, pemberitahuan itu berubah menjadi `✅ Pembaruan aipager sudah selesai: aipager sekarang sudah menjalankan B.`, tanpa tombolnya. Ketuk **🔄 Mulai ulang sekarang** (di pesan pembaruan, di pemberitahuan, atau di **Pengaturan → Pembaruan** Mini App). aipager menunggu sampai tidak ada tugas yang berjalan, berhenti dengan rapi, dan menjalankan versi baru di tempat: proses yang sama di terminal, jendela tmux, atau kontainer yang sama, dengan perintah dan lingkungan yang sama.
+**Tanpa layanan**, aipager yang tidak dimulai ulang oleh pengelola layanan mana pun (`aipager start` di terminal atau tmux, Docker, launchd) memasang pembaruan tetapi tetap menjalankan kode lama sampai aipager dimulai ulang. `/update` lalu mengatakan `aipager B sudah terpasang dan menunggu dimulai ulang (yang berjalan: A).`, dan hook Claude Code, yang mulai baru di setiap event, mungkin sudah menjalankan B: pemilik mendapat satu pemberitahuan bahwa pembaruan baru setengah jalan (dua menit setelah hook pertama kali menjalankan B, jadi mulai ulang yang langsung menyusul pemasangan tidak pernah memunculkannya, dan setelah tidak ada tugas yang berjalan di chat pribadi pemilik). Setelah aipager menjalankan B, pemberitahuan itu berubah menjadi `✅ Pembaruan aipager sudah selesai: aipager sekarang sudah menjalankan B.`, tanpa tombolnya. Ketuk **🔄 Mulai ulang sekarang** (di pesan pembaruan, di pemberitahuan, atau di **Pengaturan → Pembaruan** Mini App). aipager menunggu sampai tidak ada tugas yang berjalan, berhenti dengan rapi, dan menjalankan versi baru di tempat: proses yang sama di terminal, jendela tmux, atau kontainer yang sama, dengan perintah dan lingkungan yang sama.
 
-Kalau menjalankan di tempat gagal, sebuah salinan terpisah menjalankan aipager setelah proses lama hilang. Keluarannya lalu masuk ke log mulai ulang sendiri (`aipager.log` di folder instans, atau `/tmp/aipager.log`), bukan ke terminalmu, dan log aipager menyebut perintah yang harus dijalankan kalau salinan itu tidak kembali. Kalau interpreternya sendiri hilang (lingkungannya dihapus), atau tidak ada yang bisa dijalankan, aipager keluar dengan kode 1, log aipager berakhir dengan `restart.failed:` dan perintah yang harus dijalankan, dan awal berikutnya mengumumkan pembaruan.
+Kalau menjalankan di tempat gagal, salinan terpisah menjalankan aipager setelah proses lama hilang. Keluarannya lalu masuk ke log mulai ulang sendiri (`aipager.log` di folder instans, atau `/tmp/aipager.log`), bukan ke terminalmu, dan log aipager menyebut perintah yang harus dijalankan kalau salinan itu tidak kembali. Kalau interpreternya sendiri hilang (lingkungannya dihapus), atau tidak ada yang bisa dijalankan, aipager keluar dengan kode 1, log aipager berakhir dengan `restart.failed:` dan perintah yang harus dijalankan, dan saat aipager mulai lagi, pembaruan itu diumumkan.
 
 Kalau tidak ada tombol **Mulai ulang sekarang**, pesannya memberi langkah untuk penyiapanmu: di terminal atau tmux, tekan Ctrl+C lalu jalankan `aipager start`; di macOS, `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; di Docker, `docker restart <container>` di host. Membuat ulang kontainer Docker (`docker compose up` setelah `down`, atau `docker run` lagi) menjalankannya dari image-nya, yang mengembalikan versi aipager di image itu: untuk mempertahankan aipager yang lebih baru, pakai image yang lebih baru.
 
@@ -333,15 +333,15 @@ systemctl --user restart aipager.service
 
 Instalasi pipx dari path lokal: `pipx install --force /path/to/aipager` pada commit yang lama. Kalau ada pengumuman usang yang menunggu, hapus dengan `rm -f ~/.local/share/aipager/update-restart.json` (toh diabaikan setelah 24 jam); `~/.local/share/aipager/update.lock` hanyalah file kunci dan aman dihapus saat tidak ada pembaruan yang berjalan.
 
-## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>“Sebuah pembaruan terputus saat aipager dimatikan”
+## <a id="an-update-was-interrupted-when-aipager-shut-down"></a>“Pembaruan terputus saat aipager dimatikan”
 
 aipager berhenti (atau dimulai ulang) saat `/update` sedang memasang, dan installer ikut berhenti bersamanya, jadi pemasangannya mungkin baru tertulis setengah. Kalau aipager atau Claude Code berperilaku aneh, perbaiki: untuk aipager, jalankan perintah pasang ulang dari pesannya (misalnya `pipx install --force aipager`) lalu `systemctl --user restart aipager.service`; untuk Claude Code, jalankan lagi `claude update`.
 
 Mulai ulang sekarang yang tidak bisa menjalankan aipager lagi (tanpa layanan) meninggalkan `restart.failed:` di log aipager beserta perintah yang harus dijalankan; jalankan perintah itu, dan aipager yang baru mengumumkan pembaruan.
 
-## <a id="a-chat-is-in-the-wrong-language"></a>Sebuah chat memakai bahasa yang salah
+## <a id="a-chat-is-in-the-wrong-language"></a>Chat memakai bahasa yang salah
 
-Bahasa aipager berasal dari yang dipilih untuk chat itu, bukan dari pesan-pesan di dalamnya. Buka `/language` di chat itu dan pilih bahasa yang kamu mau: pilihan ini mengalahkan semuanya. Di chat pribadi, **Otomatis** mengikuti bahasa aplikasi Telegram-mu (Pengaturan → Bahasa di Telegram); bahasa yang tidak dimiliki aipager ditampilkan dalam bahasa Inggris. Chat pribadi yang sudah ada sebelum ada bahasa tetap berbahasa Inggris sampai kamu memilih bahasa. Grup tetap berbahasa Inggris sampai seorang admin memilihkan bahasa untuknya. Bahasa hanya mengubah teks aipager sendiri: Claude menjawab dalam bahasa yang kamu pakai untuk menulis kepadanya, apa pun yang ditampilkan aipager. Lihat [Bahasa](commands.md#languages).
+Bahasa aipager berasal dari yang dipilih untuk chat itu, bukan dari pesan-pesan di dalamnya. Buka `/language` di chat itu dan pilih bahasa yang kamu mau: pilihan ini mengalahkan semuanya. Di chat pribadi, **Otomatis** mengikuti bahasa aplikasi Telegram-mu (Pengaturan → Bahasa di Telegram); bahasa yang tidak dimiliki aipager ditampilkan dalam bahasa Inggris. Chat pribadi yang sudah ada sebelum ada bahasa tetap berbahasa Inggris sampai kamu memilih bahasa. Grup tetap berbahasa Inggris sampai admin memilihkan bahasa untuknya. Bahasa hanya mengubah teks aipager sendiri: Claude menjawab dalam bahasa yang kamu pakai untuk menulis kepadanya, apa pun yang ditampilkan aipager. Lihat [Bahasa](commands.md#languages).
 
 ## <a id="the-bot-description-is-not-the-one-i-wrote"></a>Deskripsi bot bukan yang ditulis di BotFather
 
@@ -353,7 +353,7 @@ aipager menyimpan apa yang dipelajarinya tentang bahasa (siapa yang sudah ada di
 
 ## <a id="right-to-left-text-looks-wrong"></a>Teks kanan-ke-kiri terlihat salah
 
-Dalam bahasa Persia dan Arab, aipager memasukkan tanda arah yang tak terlihat ke teksnya, supaya setiap baris terbaca dari kanan ke kiri sementara nama sesi, perintah, dan kode tetap dari kiri ke kanan. Kalau sebuah baris tetap terlihat berantakan, penyebabnya paling sering klien Telegram yang menggambar teks berarah campuran dengan caranya sendiri: coba di klien lain (ponsel dibandingkan Desktop atau Web) sebelum melaporkannya. Jawaban Claude sendiri ditampilkan seperti yang ditulis Claude, tanpa tanda tambahan.
+Dalam bahasa Persia dan Arab, aipager memasukkan tanda arah yang tak terlihat ke teksnya, supaya setiap baris terbaca dari kanan ke kiri sementara nama sesi, perintah, dan kode tetap dari kiri ke kanan. Kalau ada baris yang tetap terlihat berantakan, penyebabnya paling sering klien Telegram yang menggambar teks berarah campuran dengan caranya sendiri: coba di klien lain (ponsel dibandingkan Desktop atau Web) sebelum melaporkannya. Jawaban Claude sendiri ditampilkan seperti yang ditulis Claude, tanpa tanda tambahan.
 
 ## <a id="a-translated-keyboard-word-does-nothing-in-another-chat"></a>Kata keyboard yang diterjemahkan tidak berfungsi di chat lain
 

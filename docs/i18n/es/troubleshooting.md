@@ -1,6 +1,6 @@
 # Solución de problemas
 
-<!-- i18n-source: docs/troubleshooting.md @ 054b893 -->
+<!-- i18n-source: docs/troubleshooting.md @ 1de3425 -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../troubleshooting.md))
 
@@ -38,7 +38,7 @@ Primero se reserva la parte de la burbuja (una llamada cada 4,5 segundos mientra
 
 En un **grupo** el límite es de 20 llamadas por minuto, haya las sesiones que haya, y la burbuja sola usaría dos tercios. Las tarjetas del grupo juntas mantienen una actualización cada 10 segundos (11 s para una tarjeta), y la burbuja se queda con el resto, así que en un grupo puede cortarse un segundo o dos de vez en cuando.
 
-Para que las tarjetas vayan más rápido: ejecuta menos sesiones a la vez por chat, o dales a las más activas un chat propio (`aipager config`). También puedes ajustar `STREAM_EDIT_INTERVAL` (por defecto `1.2`, el ritmo mientras la tarjeta muestra texto) y `BUSY_EDIT_INTERVAL` (por defecto `3.0`, cuando está tranquila), como variables de entorno de aipager (mira [ajustes del entorno](commands.md#settings-in-the-environment)). Ponerlas *por debajo* del mínimo de cada chat no hace daño y no cambia nada: el mínimo manda, y es lo que mantiene el chat dentro del límite de Telegram pongas lo que pongas.
+Para que las tarjetas vayan más rápido: ejecuta menos sesiones a la vez por chat, o dales a las más activas un chat propio (`aipager config`). También puedes ajustar `STREAM_EDIT_INTERVAL` (por defecto `1.2`, el ritmo mientras la tarjeta muestra texto) y `BUSY_EDIT_INTERVAL` (por defecto `3.0`, cuando está tranquila), como variables de entorno de aipager (mira [ajustes del entorno](commands.md#settings-in-the-environment)). Ponerlas *por debajo* del mínimo de cada chat no hace daño y no cambia nada: el mínimo tiene prioridad, y es lo que mantiene el chat dentro del límite de Telegram pongas lo que pongas.
 
 ### <a id="a-long-turns-card-refreshes-less-often"></a>La tarjeta de una tarea larga se actualiza menos
 
@@ -115,7 +115,7 @@ aipager silencia el chat exactamente el tiempo que pidió Telegram y **no hace n
 
 - Un mensaje que envías (texto, audio, un archivo, una plantilla) igual llega a Claude y la sesión trabaja en él. Su tarjeta de actividad se retiene, no se descarta: si la tarea sigue en curso cuando el bloqueo termina, la tarjeta aparece entonces. Un bloqueo deja el chat en modo mínimo un rato después, así que la tarjeta puede tardar unos minutos más que el propio bloqueo. Si la tarea terminó durante el bloqueo, recibes su respuesta y ninguna tarjeta.
 - **🔄 Reintentar** no hace nada durante un bloqueo. El mensaje no se reenvía y el botón se queda, para que lo vuelvas a tocar cuando el bloqueo termine. Hasta la 0.7.14 incluida, el mensaje llegaba a Claude mientras el mensaje de error y su botón se quedaban, así que un segundo toque lo volvía a enviar.
-- El teclado principal también se retiene, incluido el que envía un reinicio (hasta la 0.7.14 se perdía hasta que otra cosa lo actualizaba). Se envía cuando termina el bloqueo.
+- El teclado principal también se retiene, incluido el que envía un reinicio (hasta la 0.7.14 incluida se perdía hasta que otra cosa lo actualizaba). Se envía cuando termina el bloqueo.
 
 Cuando el bloqueo termina, las cosas llegan en este orden: las respuestas retenidas, luego las tarjetas de las tareas que siguen en curso, luego el teclado. Una tarjeta que tiene que esperar a que termine el modo mínimo llega después del teclado.
 
@@ -224,8 +224,8 @@ El orden importa: cada comprobación posterior supone que las anteriores pasaron
 | `team` | Los chats y los miembros (o un `team.yaml` antiguo): dice si es uso personal o en equipo, y señala un `team.yaml` antiguo roto o que no encaja | `aipager config` |
 | `role_shell_access` | Avisa una vez por cada rol que tiene un miembro y puede ejecutar Bash (sus reglas de seguridad son de mejor esfuerzo, no un límite; mira [uso en equipo](groups.md#roles)) | no le des Bash a ese rol en `policy.yaml`, o acéptalo |
 | `peer_messages` | Mensajes entre sesiones de Claude: dónde se guardan sus recibos y si esa carpeta es privada, si este sistema puede comprobar la hora de inicio del remitente, y un aviso por cada rol al que una política le deja usar SendMessage (mira [Modelo de seguridad](security.md#messages-between-claude-sessions)) | borra una carpeta de recibos compartida (aipager la vuelve a crear), o no le des SendMessage a ese rol |
-| `claude` | Encuentra el ejecutable `claude` igual que cada arranque (`claude_path` en `aipager.yaml` o `$AIPAGER_CLAUDE_BIN` mandan sin discusión; si no, la versión más nueva entre `~/.local/bin`, el PATH y Homebrew), y lista cualquier OTRA instalación distinta que encuentre | instala Claude Code, o pon `claude_path` / `AIPAGER_CLAUDE_BIN` |
-| `claude_auth` | Ejecuta `claude auth status` en el mismo entorno que recibe una sesión real. **Nunca da FAIL**: «no ha iniciado sesión» y «la propia comprobación falló» se informan por separado, y ninguno impide arrancar una sesión | `claude auth login`, o pon una clave de API / `CLAUDE_CODE_OAUTH_TOKEN` |
+| `claude` | Encuentra el ejecutable `claude` igual que cada arranque (`claude_path` en `aipager.yaml` o `$AIPAGER_CLAUDE_BIN` ganan siempre; si no, la versión más nueva entre `~/.local/bin`, el PATH y Homebrew), y lista cualquier OTRA instalación distinta que encuentre | instala Claude Code, o pon `claude_path` / `AIPAGER_CLAUDE_BIN` |
+| `claude_auth` | Ejecuta `claude auth status` en el mismo entorno que recibe una sesión real. **Nunca da FAIL**: «sin autenticar» y «la propia comprobación falló» se informan por separado, y ninguno impide arrancar una sesión | `claude auth login`, o pon una clave de API / `CLAUDE_CODE_OAUTH_TOKEN` |
 | `dtach` | Se encontró el ejecutable `dtach` (el `dtach-bin` propio de aipager, o uno en el PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` y `aipager-statusline` están en el PATH | `uv tool install --reinstall aipager` |
 | `settings_json` | `~/.claude/settings.json` tiene conectados los hooks de aipager | `aipager config` |
@@ -240,7 +240,7 @@ Ejecuta `aipager doctor --fix` para buscar de forma interactiva una credencial d
 
 ## <a id="the-daemon-cant-find-claude-or-picks-the-wrong-install"></a>aipager no encuentra `claude`, o elige la instalación equivocada
 
-Antes había seis sitios que buscaban `claude` por su cuenta y podían no coincidir entre sí. Ahora todos pasan por un solo buscador (`aipager/claude_resolve.py`). `claude_path` en `aipager.yaml`, y luego `$AIPAGER_CLAUDE_BIN`, mandan sin discusión cuando funcionan. Si no, se comprueba cada `claude` que haya en `~/.local/bin`, en el `$PATH` y en las carpetas de Homebrew, y gana la versión más nueva (así que cambiar el orden del `$PATH` no cambia la elección cuando la otra instalación es más nueva). Ejecuta `aipager doctor` para ver exactamente cuál eligió y qué más encontró; si gana la equivocada, fija la correcta:
+Antes había seis sitios que buscaban `claude` por su cuenta y podían no coincidir entre sí. Ahora todos pasan por un solo buscador (`aipager/claude_resolve.py`). `claude_path` en `aipager.yaml`, y luego `$AIPAGER_CLAUDE_BIN`, ganan siempre cuando funcionan. Si no, se comprueba cada `claude` que haya en `~/.local/bin`, en el `$PATH` y en las carpetas de Homebrew, y gana la versión más nueva (así que cambiar el orden del `$PATH` no cambia la elección cuando la otra instalación es más nueva). Ejecuta `aipager doctor` para ver exactamente cuál eligió y qué más encontró; si gana la equivocada, fija la correcta:
 
 ```sh
 aipager doctor --fix        # elegir de forma interactiva entre las instalaciones encontradas
@@ -248,9 +248,9 @@ aipager doctor --fix        # elegir de forma interactiva entre las instalacione
 echo 'claude_path: /home/you/.local/bin/claude' >> ~/.config/aipager/aipager.yaml
 ```
 
-## <a id="sessions-cant-authenticate-under-the-systemd-service-but-claude-works-fine-in-a-terminal"></a>Las sesiones no pueden iniciar sesión bajo el servicio de systemd, pero `claude` funciona bien en una terminal
+## <a id="sessions-cant-authenticate-under-the-systemd-service-but-claude-works-fine-in-a-terminal"></a>Las sesiones no pueden autenticarse bajo el servicio de systemd, pero `claude` funciona bien en una terminal
 
-Los servicios `systemctl --user` nunca leen `~/.bashrc` ni `~/.profile`, así que una línea `export CLAUDE_CODE_OAUTH_TOKEN=…` ahí nunca llega a aipager. El servicio usa en su lugar el `LoadCredential=` de systemd y lee `~/.config/aipager/daemon.env`: un archivo sencillo `KEY=VALUE`, con permisos 0600, que se crea solo la primera vez que ejecutas `aipager service install` (se copia de un `config.env` antiguo si tenía un token, si no se busca una vez en tu shell de inicio de sesión, y si no se deja vacío con una advertencia). Si sigue vacío, `aipager doctor --fix` vuelve a buscar en los mismos sitios cuando le dices que sí y añade la línea que encuentra, conservando las demás líneas del archivo; nunca imprime el token. O añade la línea tú:
+Los servicios `systemctl --user` nunca leen `~/.bashrc` ni `~/.profile`, así que una línea `export CLAUDE_CODE_OAUTH_TOKEN=…` ahí nunca llega a aipager. El servicio usa en su lugar el `LoadCredential=` de systemd y lee `~/.config/aipager/daemon.env`: un archivo sencillo `KEY=VALUE`, con permisos 0600, que se crea solo la primera vez que ejecutas `aipager service install` (se copia de un `config.env` antiguo si tenía un token, si no se busca una vez en tu shell de login, y si no se deja vacío con una advertencia). Si sigue vacío, `aipager doctor --fix` vuelve a buscar en los mismos sitios cuando le dices que sí y añade la línea que encuentra, conservando las demás líneas del archivo; nunca imprime el token. O añade la línea tú:
 
 ```sh
 cat ~/.config/aipager/daemon.env          # mira qué hay (o qué no hay)
@@ -265,9 +265,9 @@ Mira [Modelo de seguridad → la credencial de Claude](security.md#the-claude-cr
 
 `aipager doctor` y `aipager status` antes miraban siempre `/tmp/aipager.sock`. Bajo el servicio de systemd, el socket de control ahora está en `$XDG_RUNTIME_DIR/aipager.sock` (y solo vuelve a `/tmp` cuando `$XDG_RUNTIME_DIR` no está puesto: contenedores, WSL1, distribuciones mínimas). Solo se movió este socket; los sockets de dtach de cada sesión (`/tmp/claude-dtach-*.sock`) no cambian. Si necesitas un sitio concreto, cámbialo con `AIPAGER_SOCKET_PATH`.
 
-## <a id="update-says-the-restart-would-kill-sessions-killmode"></a>`/update` dice que el reinicio cerraría las sesiones (KillMode)
+## <a id="update-says-the-restart-would-kill-sessions-killmode"></a>`/update` dice que el reinicio terminaría las sesiones (KillMode)
 
-Los servicios escritos antes de esta versión no tienen la línea `KillMode=`, así que systemd usa `control-group`: detener o reiniciar `aipager.service` cierra todas las sesiones de Claude que arrancó aipager. Por eso `/update` instala la versión nueva pero no reinicia aipager, y lista las sesiones que cerraría un reinicio. Arréglalo una vez:
+Los servicios escritos antes de esta versión no tienen la línea `KillMode=`, así que systemd usa `control-group`: detener o reiniciar `aipager.service` termina todas las sesiones de Claude que arrancó aipager. Por eso `/update` instala la versión nueva pero no reinicia aipager, y lista las sesiones que terminaría un reinicio. Arréglalo una vez:
 
 ```
 aipager service install
@@ -302,7 +302,7 @@ Sin el servicio (o en macOS), reinicia aipager de la forma en que lo arrancaste.
 
 ## <a id="claude-code-update-installed-with-npm-into-a-folder-you-cant-write-to"></a>Actualización de Claude Code: instalado con npm en una carpeta donde no puedes escribir
 
-Un Claude Code instalado con `sudo npm install -g` vive en una carpeta que solo root puede cambiar (como `/usr/lib/node_modules`), así que `claude update` ejecutado con tu usuario falla con `global folder isn't writable`. `/update` y la Mini App muestran la versión más nueva con `can't update from here: installed with npm into a folder your user can't write to` y sin botón para ella. Ejecuta `claude install` una vez con el usuario con el que funciona aipager: pasa al instalador propio de Claude Code bajo tu carpeta personal, que se actualiza sin sudo. Luego reinicia aipager (`systemctl --user restart aipager.service`, o de la forma en que lo arrancaste): un aipager en marcha se queda con el Claude Code que encontró al arrancar, y después del reinicio toma el más nuevo que encuentre. Si `claude_path` en `aipager.yaml` (`aipager doctor --fix` puede ponerlo) o `AIPAGER_CLAUDE_BIN` apunta al de npm, apúntalo primero a `~/.local/bin/claude` o quítalo, porque esos dos siempre mandan.
+Un Claude Code instalado con `sudo npm install -g` vive en una carpeta que solo root puede cambiar (como `/usr/lib/node_modules`), así que `claude update` ejecutado con tu usuario falla con `global folder isn't writable`. `/update` y la Mini App muestran la versión más nueva con `can't update from here: installed with npm into a folder your user can't write to` y sin botón para ella. Ejecuta `claude install` una vez con el usuario con el que funciona aipager: pasa al instalador propio de Claude Code bajo tu carpeta personal, que se actualiza sin sudo. Luego reinicia aipager (`systemctl --user restart aipager.service`, o de la forma en que lo arrancaste): un aipager en marcha se queda con el Claude Code que encontró al arrancar, y después del reinicio toma el más nuevo que encuentre. Si `claude_path` en `aipager.yaml` (`aipager doctor --fix` puede ponerlo) o `AIPAGER_CLAUDE_BIN` apunta al de npm, apúntalo primero a `~/.local/bin/claude` o quítalo, porque esos dos siempre ganan.
 
 ## <a id="updated-but-the-version-didnt-change"></a>Se actualizó, pero la versión no cambió
 
@@ -310,7 +310,7 @@ Una instalación de pipx hecha desde una URL de git se actualiza desde esa fuent
 
 **Sin servicio**, un aipager que ningún gestor de servicios reinicia (`aipager start` en una terminal o tmux, Docker, launchd) instala una actualización pero sigue con el código viejo hasta que se reinicia. `/update` dice entonces `aipager B está instalado y espera un reinicio (ahora funciona A).`, y los hooks de Claude Code, que arrancan de nuevo en cada evento, puede que ya usen B: el propietario recibe un aviso de que la actualización está a medias (dos minutos después de que los hooks usaran B por primera vez, así que un reinicio justo después de instalar nunca lo muestra, y cuando no haya ninguna tarea en curso en el chat privado del propietario). Cuando aipager ya usa B, ese aviso pasa a `✅ La actualización de aipager terminó: aipager ya está en B.`, sin su botón. Toca **🔄 Reiniciar ahora** (en el mensaje de la actualización, en el aviso o en **Ajustes → Actualizaciones** de la Mini App). aipager espera a que no haya ninguna tarea en curso, se detiene limpiamente y arranca la versión nueva en el sitio: el mismo proceso en la misma terminal, ventana de tmux o contenedor, con el mismo comando y el mismo entorno.
 
-Si el arranque en el sitio falla, una copia separada arranca aipager cuando el proceso viejo ya no está. Su salida va entonces al log del reinicio propio (`aipager.log` en la carpeta de la instancia, o `/tmp/aipager.log`) en vez de a tu terminal, y el log de aipager indica el comando que hay que ejecutar si esa copia no vuelve. Si el propio intérprete ya no está (se borró su entorno), o no se pudo arrancar nada, aipager sale con el código 1, el log de aipager termina con `restart.failed:` y el comando que hay que ejecutar, y el siguiente arranque anuncia la actualización.
+Si el arranque en el sitio falla, una copia separada arranca aipager cuando el proceso viejo ya no está. Su salida va entonces al log del reinicio que aipager hace por su cuenta (`aipager.log` en la carpeta de la instancia, o `/tmp/aipager.log`) en vez de a tu terminal, y el log de aipager indica el comando que hay que ejecutar si esa copia no vuelve. Si el propio intérprete ya no está (se borró su entorno), o no se pudo arrancar nada, aipager sale con el código 1, el log de aipager termina con `restart.failed:` y el comando que hay que ejecutar, y el siguiente arranque anuncia la actualización.
 
 Cuando no hay botón **Reiniciar ahora**, el mensaje da los pasos para tu instalación: en una terminal o tmux, pulsa Ctrl+C y ejecuta `aipager start`; en macOS, `launchctl kickstart -k gui/<uid>/com.aipager.daemon`; en Docker, `docker restart <container>` en el host. Volver a crear un contenedor de Docker (`docker compose up` después de `down`, o `docker run` otra vez) lo arranca desde su imagen, y eso devuelve la versión de aipager de esa imagen: para quedarte con un aipager más nuevo, usa una imagen más nueva.
 
@@ -341,7 +341,7 @@ Un Reiniciar ahora que no pudo volver a arrancar aipager (sin servicio) deja `re
 
 ## <a id="a-chat-is-in-the-wrong-language"></a>Un chat está en el idioma equivocado
 
-El idioma de aipager sale de lo que se eligió para el chat, no de los mensajes que hay en él. Abre `/language` en ese chat y elige el idioma que quieres: esa elección manda sobre todo lo demás. En un chat privado, **Automático (tu idioma de Telegram)** sigue el idioma de tu app de Telegram (Ajustes → Idioma en Telegram); un idioma que aipager no tiene se ve en inglés. Un chat privado que ya existía antes de que hubiera idiomas sigue en inglés hasta que elijas uno. Un grupo está en inglés hasta que un admin elige su idioma. El idioma solo cambia los textos de aipager: Claude responde en el idioma en que le escribes, muestre lo que muestre aipager. Mira [Idiomas](commands.md#languages).
+El idioma de aipager sale de lo que se eligió para el chat, no de los mensajes que hay en él. Abre `/language` en ese chat y elige el idioma que quieres: esa elección tiene prioridad sobre todo lo demás. En un chat privado, **Automático (tu idioma de Telegram)** sigue el idioma de tu app de Telegram (Ajustes → Idioma en Telegram); un idioma que aipager no tiene se ve en inglés. Un chat privado que ya existía antes de que hubiera idiomas sigue en inglés hasta que elijas uno. Un grupo está en inglés hasta que un admin elige su idioma. El idioma solo cambia los textos de aipager: Claude responde en el idioma en que le escribes, muestre lo que muestre aipager. Mira [Idiomas](commands.md#languages).
 
 ## <a id="the-bot-description-is-not-the-one-i-wrote"></a>La descripción del bot no es la que escribí
 
