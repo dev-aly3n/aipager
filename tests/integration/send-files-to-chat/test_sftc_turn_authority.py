@@ -222,6 +222,12 @@ def rig(mk_bot, home, run_async):
             box["r"] = r
             await scenario(r)
         run_async(go())
+        # Whatever the scenario left running (a flush, a delivery) is
+        # cancelled and run to its end NOW, while every fixture of the test
+        # (rich_api's Telegram double above all) is still in place: left to
+        # run_async's teardown, it ran after those were undone, and a held
+        # answer's send reached the suite's real-Telegram guard.
+        run_async.close()
         return box["r"]
     return _run
 
