@@ -981,13 +981,14 @@ def test_a_background_agents_late_call_is_kept_while_its_job_runs(
                                       time.time(), reply_to=TRIGGER)
         await outbox.OUTBOX.settled(sess.name)
         kept = outbox.OUTBOX.has_batches(sess.name)
-        # Orphans are not adopted while the job runs.
+        # Claude Code writes the agent's transcript; orphans are still not
+        # adopted while the job runs.
+        _sub_line(sess, "a1b2c3", "toolu_sub", inp, str(tmp_path))
         for b in outbox.OUTBOX.batches.get(sess.name, ()):
             b.created -= 120
         await _settled(bot, sess, bot.flush_turn_files(sess))
         sent_early = list(files_bot.file_calls())
-        # Claude Code writes the agent's transcript; the agent finishes.
-        _sub_line(sess, "a1b2c3", "toolu_sub", inp, str(tmp_path))
+        # The agent finishes.
         sess.active_subagents.clear()
         await _settled(bot, sess, bot.flush_turn_files(sess))
         await asyncio.sleep(0)
@@ -1076,3 +1077,105 @@ def test_orphans_of_two_turns_each_reply_to_their_own_prompt(
     got = [(c[2]["photo"].filename, c[2]["reply_to_message_id"])
            for c in files_bot.file_calls()]
     assert got == [("first.png", 21), ("second.png", 22)]
+
+
+def test_a_send_whose_turn_ended_before_it_ran_is_dropped(mk_bot, files_bot, rich,
+                                                          run_async, tmp_path):
+    """The request came during the turn; the turn was over by its
+    PostToolUse (a forged Stop in between, or a replay of the pair): not
+    copied."""
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    pic = _pic(tmp_path)
+    inp = {"files": [str(pic)], "status": "normal"}
+
+    async def go():
+        _claude_writes_the_call(sess, "toolu_x", inp)
+        await bot.notify(sess, "send_files_requested",
+                         {"tool_use_id": "toolu_x", "tool_input": inp,
+                          "cwd": str(tmp_path)})
+        bot.registry.transition(sess.name, Status.IDLE)
+        bot.registry.transition(sess.name, Status.BUSY)   # a hook, no prompt
+        await bot.notify(sess, "send_files_ran",
+                         {"tool_use_id": "toolu_x", "tool_input": inp,
+                          "cwd": str(tmp_path)})
+        await _finish(bot, sess, "")
+    run_async(go())
+    assert files_bot.file_calls() == []
+    assert sess.files_sent_ids == []
+
+
+def test_a_late_call_is_kept_while_a_tool_still_runs(mk_bot, files_bot, rich,
+                                                     run_async, tmp_path):
+    """No job, but a tool call of the session is still in flight when the
+    delivery looks: the batch is kept, then sent once the call shows and
+    the tool is done."""
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    pic = _pic(tmp_path)
+    inp = {"files": [str(pic)], "status": "normal"}
+
+    async def go():
+        await _forged_pair(bot, sess, pic, tool_use_id="toolu_t")
+        sess.pending_tool_started_at = time.monotonic()
+        await _finish(bot, sess, "Done.")
+        kept = outbox.OUTBOX.has_batches(sess.name)
+        sess.pending_tool_started_at = None
+        _claude_writes_the_call(sess, "toolu_t", inp)
+        for b in outbox.OUTBOX.batches.get(sess.name, ()):
+            b.created -= 120
+        await _settled(bot, sess, bot.flush_turn_files(sess))
+        return kept
+    assert run_async(go()) is True
+    assert [c[0] for c in files_bot.file_calls()] == ["send_photo"]
+
+
+def test_a_waiting_delivery_that_raises_leaves_no_copy(mk_bot, files_bot, rich,
+                                                       run_async, tmp_path,
+                                                       monkeypatch):
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+
+    async def go():
+        await _send_files(bot, sess, [_pic(tmp_path)])
+        MUTE.mute(CHAT, 600, source="test")
+        await _finish(bot, sess, "")
+        MUTE.clear()
+
+        async def boom(*a, **k):
+            raise RuntimeError("unexpected")
+        monkeypatch.setattr(type(bot), "_send_turn_files", boom)
+        await _settled(bot, sess, bot.flush_turn_files(sess))
+    run_async(go())
+    assert files_bot.file_calls() == []
+    assert not [p for p in outbox.outbox_dir().rglob("*") if p.is_file()]
+
+
+def test_a_cancelled_delivery_leaves_no_copy_claimed(mk_bot, files_bot, rich,
+                                                    run_async, tmp_path,
+                                                    monkeypatch):
+    import asyncio
+    real = outbox.copy_batch
+    slow = threading.Event()
+
+    def slow_copy(*a, **k):
+        slow.wait(5)
+        return real(*a, **k)
+    monkeypatch.setattr(outbox, "copy_batch", slow_copy)
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+
+    async def go():
+        await _send_files(bot, sess, [_pic(tmp_path)])
+        bot.registry.transition(sess.name, Status.IDLE)
+        await bot.notify(sess, "idle_prompt", {"summary": "Done."})
+        task = outbox.OUTBOX.deliveries[sess.name]
+        await asyncio.sleep(0.1)
+        claimed = bool(outbox.OUTBOX.claimed)
+        task.cancel()
+        await asyncio.wait([task])
+        slow.set()
+        await outbox.OUTBOX.wait_in_flight(sess.name)
+        return claimed
+    assert run_async(go()) is True
+    assert outbox.OUTBOX.claimed == set()

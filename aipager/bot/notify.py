@@ -1571,13 +1571,11 @@ class NotifyMixin:
             # Claude's (a forged datagram, a replay). Nothing is read.
             log.warning("[%s] turn files: a send with no turn running was "
                         "dropped", sess.label)
-        elif not req.tool_use_id:
-            log.warning("[%s] turn files: a send with no call id was dropped",
-                        sess.label)
         elif not sess.files_call_used(req.tool_use_id):
-            # This call was copied already: a replayed datagram.
-            log.warning("[%s] turn files: a call already copied was dropped",
-                        sess.label)
+            # This call was copied already (a replayed datagram), or has no
+            # id to find it by.
+            log.warning("[%s] turn files: a call with no id or one already "
+                        "copied was dropped", sess.label)
         else:
             dropped = False
         if dropped:
@@ -1636,15 +1634,13 @@ class NotifyMixin:
             or sess.job_background_open())
 
     @staticmethod
-    def _files_work_running(sess: TrackedSession, batch) -> bool:
-        """Work of this session still runs (a background job, a tool call,
-        the agent that made *batch*'s call): its transcript may not have
-        caught up yet (Claude Code writes it lazily)."""
+    def _files_work_running(sess: TrackedSession) -> bool:
+        """Work of this session still runs (a background job, a tool call):
+        a call it made may not be in its transcript yet (Claude Code
+        writes it lazily)."""
         try:
             return bool(sess.job_background_open()
-                        or sess.work_in_flight(time.monotonic())
-                        or (batch.agent_id
-                            and batch.agent_id in sess.active_subagents))
+                        or sess.work_in_flight(time.monotonic()))
         except Exception:  # pragma: no cover - defensive
             return False
 
@@ -1760,7 +1756,7 @@ class NotifyMixin:
             if ok:
                 out.append(batch)
                 continue
-            if self._files_work_running(sess, batch):
+            if self._files_work_running(sess):
                 log.info("[%s] turn files: call %s not in the transcript yet, "
                          "kept while work runs", sess.label,
                          batch.tool_use_id or "?")
