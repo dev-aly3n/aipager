@@ -5,6 +5,7 @@ the caption, the day sweep."""
 from __future__ import annotations
 
 import asyncio
+import gc
 import json
 import os
 import stat
@@ -1081,6 +1082,110 @@ def test_a_cancelled_report_does_not_end_the_shared_wait(home, run_async,
             fh.write(json.dumps(_dequeue(time.time())) + "\n")
         return await second
     assert run_async(go()) is True
+
+
+def _settle(seconds: float = 0.05):
+    """Real sleep: lets a wait with a fake clock run a few re-reads."""
+    return asyncio.sleep(seconds)
+
+
+def test_joiners_cannot_push_a_hookless_wait_past_its_cap(run_async,
+                                                         monkeypatch):
+    """Reports joining a wait move its end out to their own, but never
+    past its start plus HOOKLESS_MAX_STRETCH waits (rev-iter5-001)."""
+    monkeypatch.setattr(ob, "TRANSCRIPT_POLL_SECONDS", 0.005)
+    monkeypatch.setattr(ob, "hookless_turn_started", lambda p, s: False)
+    now = [1000.0]
+    box = ob.Outbox(clock=lambda: now[0])
+    wait = ob.TRANSCRIPT_WAIT_SECONDS
+    cap = now[0] + ob.HOOKLESS_MAX_STRETCH * wait
+
+    async def go():
+        calls = [asyncio.ensure_future(box.wait_hookless("s", "/x", 1.0))]
+        await _settle()
+        # A joiner within the cap gets its own full wait.
+        now[0] += wait * 0.75
+        calls.append(asyncio.ensure_future(box.wait_hookless("s", "/x", 1.0)))
+        now[0] += wait * 0.99
+        await _settle()
+        assert not any(c.done() for c in calls)
+        # One past it: its own end would be after the cap.
+        calls.append(asyncio.ensure_future(box.wait_hookless("s", "/x", 1.0)))
+        await _settle()
+        now[0] = cap - 0.01
+        await _settle()
+        assert not any(c.done() for c in calls)
+        now[0] = cap
+        await _settle()
+        assert all(c.done() for c in calls)
+        return [c.result() for c in calls]
+    assert run_async(go()) == [False, False, False]
+    assert box.hookless_waits == {}
+
+
+def test_reports_past_the_joiner_cap_get_none_at_once(run_async, monkeypatch):
+    """At most HOOKLESS_MAX_JOINERS reports join one wait; the next gets
+    None at once, and none of them moves the wait's end."""
+    monkeypatch.setattr(ob, "TRANSCRIPT_POLL_SECONDS", 0.005)
+    monkeypatch.setattr(ob, "hookless_turn_started", lambda p, s: False)
+    now = [1000.0]
+    box = ob.Outbox(clock=lambda: now[0])
+    wait = ob.TRANSCRIPT_WAIT_SECONDS
+
+    async def go():
+        first = asyncio.ensure_future(box.wait_hookless("s", "/x", 1.0))
+        await _settle()
+        joined = [asyncio.ensure_future(box.wait_hookless("s", "/x", 1.0))
+                  for _ in range(ob.HOOKLESS_MAX_JOINERS)]
+        await _settle()
+        assert not any(j.done() for j in joined)
+        now[0] += wait * 0.5
+        extra = asyncio.ensure_future(box.wait_hookless("s", "/x", 1.0))
+        await _settle()
+        assert extra.done() and extra.result() is None
+        assert box.hookless_waits["s"].joiners == ob.HOOKLESS_MAX_JOINERS
+        # The extra did not move the end out to its own.
+        now[0] = 1000.0 + wait
+        await _settle()
+        return first.done(), extra.result(), [j.result() for j in joined
+                                              if j.done()]
+    first_done, extra, joined = run_async(go())
+    assert first_done and extra is None
+    assert joined == [False] * ob.HOOKLESS_MAX_JOINERS
+
+
+def test_a_failed_shared_wait_with_no_awaiter_left_is_retrieved(
+        run_async, monkeypatch):
+    """The only report waiting is cancelled and the wait then raises:
+    asyncio does not log "Task exception was never retrieved"."""
+    monkeypatch.setattr(ob, "TRANSCRIPT_POLL_SECONDS", 0.005)
+    gate = {"raise": False}
+
+    def reads(path, since):
+        if gate["raise"]:
+            raise RuntimeError("executor gone")
+        return False
+    monkeypatch.setattr(ob, "hookless_turn_started", reads)
+    box = ob.Outbox()
+    unretrieved: list = []
+
+    async def go():
+        loop = asyncio.get_running_loop()
+        loop.set_exception_handler(lambda _l, ctx: unretrieved.append(ctx))
+        call = asyncio.ensure_future(box.wait_hookless("s", "/x", 1.0,
+                                                       wait=30.0))
+        await _settle()
+        task = box.hookless_waits["s"].task
+        call.cancel()
+        gate["raise"] = True
+        await asyncio.wait([task])
+        del task, call
+        await _settle()
+        gc.collect()
+        await _settle()
+    run_async(go())
+    assert box.hookless_waits == {}
+    assert [c.get("message") for c in unretrieved] == []
 
 
 def test_transcript_call_files_are_claudes_own(home):

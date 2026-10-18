@@ -46,6 +46,7 @@ import stat as _stat
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from telegram import (
     InputFile, InputMediaAudio, InputMediaDocument, InputMediaPhoto, InputMediaVideo,
@@ -254,10 +255,15 @@ class Pending:
 
 @dataclass
 class _HooklessWait:
-    """One session's running :meth:`Outbox.wait_hookless`."""
+    """One session's running :meth:`Outbox.wait_hookless`. Joiners move
+    *deadline* out, never past *start* plus HOOKLESS_MAX_STRETCH times
+    their own wait; at most HOOKLESS_MAX_JOINERS join."""
     key: tuple[str, float]
     deadline: float
     task: asyncio.Task | None = None
+    start: float = 0.0
+    joiners: int = 0
+    clock: Callable[[], float] = time.monotonic
 
 
 # ---- the store -------------------------------------------------------------
@@ -411,13 +417,20 @@ class Outbox:
     # hookless turns --------------------------------------------------------
 
     async def wait_hookless(self, session: str, path: str, since: float,
-                            wait: float | None = None) -> bool:
+                            wait: float | None = None) -> bool | None:
         """:func:`wait_hookless_turn`, at most one per session at a time
         (review 2026-10-18, rev-iter4-001): a call for the same transcript
         and turn end while one runs joins it (its deadline moves out to
-        this call's own, so a joiner waits at least as long as alone),
-        and one for another waits until it is done, then starts its own.
-        So any number of reports costs one re-read loop per session."""
+        this call's own, so a joiner waits at least as long as alone,
+        though never past the wait's start plus HOOKLESS_MAX_STRETCH
+        times its own wait: 40 s with the default TRANSCRIPT_WAIT_SECONDS,
+        so one joining within its own wait of the start is never cut
+        short), and one for another waits until it is done, then starts
+        its own. So any number of reports costs one re-read loop per
+        session, and a stream of them cannot keep it (and the copies
+        joined to it) running (rev-iter5-001).
+        None, at once, for a call past HOOKLESS_MAX_JOINERS joiners: it
+        is treated as a wait that found nothing, with nothing read."""
         wait = TRANSCRIPT_WAIT_SECONDS if wait is None else wait
         key = (path, since)
         while True:
@@ -425,14 +438,26 @@ class Outbox:
             if cur is None or cur.task is None or cur.task.done():
                 break
             if cur.key == key:
-                cur.deadline = max(cur.deadline, time.monotonic() + wait)
+                if cur.joiners >= HOOKLESS_MAX_JOINERS:
+                    log.warning("turn files: more than %d reports joined "
+                                "the transcript wait of %s, one was dropped",
+                                HOOKLESS_MAX_JOINERS, session)
+                    return None
+                cur.joiners += 1
+                own = min(self._clock() + wait,
+                          cur.start + HOOKLESS_MAX_STRETCH * wait)
+                cur.deadline = max(cur.deadline, own)
                 return await asyncio.shield(cur.task)
             await asyncio.wait([cur.task])
-        entry = _HooklessWait(key=key, deadline=time.monotonic() + wait)
+        start = self._clock()
+        entry = _HooklessWait(key=key, deadline=start + wait, start=start,
+                              clock=self._clock)
         entry.task = asyncio.create_task(_poll_hookless(path, since, entry))
         self.hookless_waits[session] = entry
 
-        def _done(_t: asyncio.Task) -> None:
+        def _done(t: asyncio.Task) -> None:
+            if not t.cancelled():
+                t.exception()       # retrieved, even with no awaiter left
             if self.hookless_waits.get(session) is entry:
                 del self.hookless_waits[session]
         entry.task.add_done_callback(_done)
@@ -901,6 +926,13 @@ def copy_batch(session: str, chat_id: int, files: list[str], cwd: str | None,
 #: How long a delivery waits for the call to appear in the transcript.
 TRANSCRIPT_WAIT_SECONDS = 20.0
 TRANSCRIPT_POLL_SECONDS = 0.25
+#: How far reports joining a hookless-turn wait (Outbox.wait_hookless) can
+#: move its end: its start plus this many of the joiner's own wait
+#: (TRANSCRIPT_WAIT_SECONDS unless a test passes another). And how
+#: many may join one wait; any more are treated as a wait that found
+#: nothing (review 2026-10-18, rev-iter5-001).
+HOOKLESS_MAX_STRETCH = 2
+HOOKLESS_MAX_JOINERS = MAX_REQUESTS_PER_SESSION
 #: How much of a transcript's end is read (the call is from this turn).
 TRANSCRIPT_TAIL_BYTES = 64 * 1024 * 1024
 #: How far before the turn's start a call's timestamp may read (clock
@@ -1144,7 +1176,7 @@ async def _poll_hookless(path: str, since: float, entry: _HooklessWait) -> bool:
     while True:
         if await asyncio.to_thread(hookless_turn_started, path, since):
             return True
-        if time.monotonic() >= entry.deadline:
+        if entry.clock() >= entry.deadline:
             return False
         await asyncio.sleep(TRANSCRIPT_POLL_SECONDS)
 

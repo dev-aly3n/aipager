@@ -431,3 +431,37 @@ def test_forged_reports_on_a_working_session_share_one_wait(
     assert 0 < len(reads) <= 12
     assert files_bot.file_calls() == []
     assert len(_failed()) == reports
+
+
+def test_reports_past_the_joiner_cap_are_dropped_with_no_scan(
+        mk_bot, files_bot, rich, run_async, tmp_path, monkeypatch):
+    """More forged reports than may join one wait (rev-iter5-001): the
+    extras are dropped at once like a failed wait, audited unverified,
+    and never scan the transcript for the call."""
+    monkeypatch.setattr(outbox, "TRANSCRIPT_WAIT_SECONDS", 0.5)
+    monkeypatch.setattr(outbox, "TRANSCRIPT_POLL_SECONDS", 0.1)
+    monkeypatch.setattr(outbox, "HOOKLESS_MAX_JOINERS", 3)
+    scans: list = []
+    real = outbox.transcript_call_files
+
+    def spy(*a, **kw):
+        scans.append(a[2])
+        return real(*a, **kw)
+    monkeypatch.setattr(outbox, "transcript_call_files", spy)
+    r = _rig(mk_bot, files_bot, tmp_path)
+    pic = _pic(tmp_path)
+    reports = 7
+
+    async def go():
+        await r.prompt("one")
+        await r.tool("t1")
+        await r.stop("Done.")
+        for i in range(reports):
+            await r.send(f"toolu_f{i}", [str(pic)], written=False)
+        await asyncio.sleep(0.05)       # the copy tasks reach their wait
+        await r.stop("")
+    run_async(go())
+    # The one that started the wait and the three that joined it.
+    assert sorted(scans) == [f"toolu_f{i}" for i in range(4)]
+    assert files_bot.file_calls() == []
+    assert len(_failed()) == reports

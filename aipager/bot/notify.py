@@ -1687,8 +1687,11 @@ class NotifyMixin:
         from aipager.bot import outbox
         since = sess.files_turn_closed_wall
         transcript = sess.files_transcript
-        # One wait per session at a time (forged reports join it).
-        if await outbox.OUTBOX.wait_hookless(sess.name, transcript, since):
+        # One wait per session at a time (forged reports join it; None
+        # when too many have: dropped like a failed wait, with no scan).
+        started = await outbox.OUTBOX.wait_hookless(sess.name, transcript,
+                                                    since)
+        if started:
             # This call is from the turn that start began, even if that
             # turn has ended by now (its Stop can come right after); it is
             # looked for in that same transcript, written after *since*.
@@ -1700,6 +1703,8 @@ class NotifyMixin:
         log.warning("[%s] turn files: no start of a turn after the last one "
                     "ended, a send was dropped", sess.label)
         self._audit_unverified(sess, req.files)
+        if started is None:
+            return None
         names = await asyncio.to_thread(
             outbox.transcript_call_files, transcript,
             req.agent_id or (context.get("agent_id") or ""),
