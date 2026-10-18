@@ -4266,6 +4266,7 @@ class AnimationMixin:
             # busy-message numbers reflect THIS turn, not lifetime.
             sess.cost_baseline = None
             sess.subagent_count_this_turn = 0
+            sess.turn_prompt_shown = False
             # A genuinely NEW job starts here (design.md "model Claude Code
             # background-agent jobs") — the dedup hash from any PREVIOUS
             # job must not suppress this one's first interim/final answer

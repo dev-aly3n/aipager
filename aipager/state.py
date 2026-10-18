@@ -545,6 +545,12 @@ class TrackedSession:
     # Subagent count THIS TURN (item 4.5) — increment per subagent_start,
     # reset on BUSY transition.
     subagent_count_this_turn: int = 0
+    # A permission or question prompt was raised during THIS turn (on the
+    # card or as its own message); reset with the turn's card. A `card`
+    # layout turn that ran no tool and raised no prompt has its card
+    # removed at the finish instead of left as an empty Done card
+    # (operator, 2026-10-18). Transient.
+    turn_prompt_shown: bool = False
     # Lines changed tracking (lazy baseline, same pattern as output tokens)
     lines_added_baseline: int | None = None
     lines_removed_baseline: int | None = None

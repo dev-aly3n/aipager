@@ -101,8 +101,9 @@ from the answer. In the card layout the answer deliberately follows the
 finished card by a moment, so the card is seen to say Finished before
 the answer lands under it; tune or disable that head start with
 `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at
-once). The message layout decides the card for every turn, whether or
-not tools ran.
+once). In the card layout a turn that made no tool call keeps no card:
+the card is removed before it would say Done, and the answer's first
+line carries the stats, as in the replace layout.
 
 ### Per-session dynamic commands
 
@@ -474,7 +475,7 @@ session. While the chat is
 does nothing at all - the prompt is not re-sent and the button stays -
 so tap it again once the ban has lifted.
 
-In the card layout ("Busy card + result") the finished card always stays above the answer, for every turn, as the record of how it was reached: its tool rows, agent rows and what Claude said between them, or just `✅ name · Done · Ns` for a turn that ran no tools. The answer arrives as its own (notifying) message. To have one message per turn instead, choose "Merged into busy message" (the answer goes into the card) or "Replace with result" (the card is removed and the answer stands alone).
+In the card layout ("Busy card + result") the finished card stays above the answer as the record of how it was reached: its tool rows, agent rows and what Claude said between them. The answer arrives as its own (notifying) message. A turn that made no tool call (no tool, agent, background shell or prompt) would leave only `✅ name · Done · Ns`, so its card is removed while it still says Working, never turned into Done, and the answer's first line carries the time instead (`💬 name · Finished (…)`). Sending you a file does not count as a tool call here: the files follow the answer. A turn with no answer to show, or one that ended in an API error, keeps its card. To have one message per turn instead, choose "Merged into busy message" (the answer goes into the card) or "Replace with result" (the card is removed and the answer stands alone).
 
 Each turn has exactly one busy card. A message you send while a turn
 runs never adds a second card for that turn, and a card whose turn has
