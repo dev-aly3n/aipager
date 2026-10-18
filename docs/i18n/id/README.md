@@ -221,7 +221,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Mount folder yang ingin diedit Claude di bawah `/workspace`. Mount `~/.claude` membawa kredensial Claude dan riwayat percakapanmu: jalankan `claude` sekali di host untuk login, atau `docker exec -it aipager claude` untuk login di dalam kontainer.
 
-Tag: `latest`, `1.3`, `1.3.6` (satu per versi persis dan satu per versi minor).
+Tag: `latest`, `1.3`, `1.3.7` (satu per versi persis dan satu per versi minor).
 
 ### <a id="nix"></a>Nix
 

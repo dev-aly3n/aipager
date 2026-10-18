@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.7] - 2026-10-18
+
 ### Added
 - **Claude can send you files.** Ask a session in your own words ("send me the screenshot", "send me the image at ~/proj/chart.png") and the file arrives in that session's chat right after the answer, as a reply to it, without a notification sound. Images come as photos (or as files when Telegram's photo limits do not allow it), GIFs as animations, MP4s as videos, MP3 and M4A files as audio, anything else as a file; 2 to 10 photos and videos come as one album, captioned with the session's name and Claude's own caption. While the turn runs the busy card says `📎 Sending 2 files`, and a file that cannot be sent gets one line saying why (one whose request is not in Claude's own transcript is only in the audit log). A message you send while Claude works, which it takes up as its next turn, can bring files too, and so can a turn a Stop hook keeps going (`/goal`). Every session aipager starts now gets Claude Code's SendUserFile tool (Claude Code 2.1.301 or newer); a session started before this update needs `/restart` (or a mode switch that restarts it, or Resume) to get it.
 
