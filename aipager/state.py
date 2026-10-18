@@ -692,6 +692,11 @@ class TrackedSession:
     # when no turn of this conversation ended yet (a new or resumed one,
     # gone). Persisted.
     files_turn_closed_wall: float = 0.0
+    # Monotonic moment the files turn opened (transient): an open turn on
+    # an idle session with no job that is older than
+    # session_monitor.FILES_TURN_UNSTARTED_SECONDS started nothing (a
+    # typed prompt that ran no turn) and is closed.
+    files_turn_opened_at: float = 0.0
     # Roadmap 8.120: the prompts that opened while another was already
     # open, in arrival order, each sent as its own message. Every entry has
     # the ``pending_prompt_msg`` shape (``text, keyboard, summary,
@@ -2774,6 +2779,7 @@ class TrackedSession:
         self.files_turn_open = True
         self.files_turn_wall = wall
         self.files_transcript = self.transcript_path or ""
+        self.files_turn_opened_at = time.monotonic()
         return True
 
     def files_turn_resumed(self, wall: float) -> bool:
@@ -2789,6 +2795,7 @@ class TrackedSession:
             return False
         self.files_turn_open = True
         self.files_turn_wall = wall
+        self.files_turn_opened_at = time.monotonic()
         return True
 
     def files_turn_closed(self, ended_wall: float = 0.0) -> None:

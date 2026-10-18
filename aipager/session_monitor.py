@@ -363,6 +363,25 @@ def card_suppression_transition(seen: set, chat_key, suppressed: bool):
     return None
 
 
+#: How long a files turn may stay open on an idle session with no job
+#: before it counts as one that started nothing (session_monitor's tick
+#: closes it, :func:`files_turn_unstarted`). A real turn makes the session
+#: busy within a second of its prompt; a typed prompt that runs no turn,
+#: or a turn ended with no Stop through a path that sets the session idle
+#: directly (an interrupt, a prompt Claude Code refused), leaves it open.
+FILES_TURN_UNSTARTED_SECONDS: float = 15.0
+
+
+def files_turn_unstarted(sess: TrackedSession, now: float) -> bool:
+    """Whether *sess*'s files turn (the turn files Claude sends may come
+    from, ``TrackedSession.files_turn_open``) is open on an idle session
+    with no background job, and opened more than
+    FILES_TURN_UNSTARTED_SECONDS ago (*now* is monotonic). Pure."""
+    return (sess.files_turn_open and sess.status == Status.IDLE
+            and not sess.job_background_open()
+            and now - sess.files_turn_opened_at > FILES_TURN_UNSTARTED_SECONDS)
+
+
 def prompt_not_taken(sess: TrackedSession, now: float) -> bool:
     """Did Claude Code refuse the Telegram send that put *sess* into
     BUSY? Pure — no I/O, no clock inside (roadmap 8.11).
@@ -986,6 +1005,14 @@ class SessionMonitor:
                 log.warning("Failed to notify compact_timeout for %s", expired_name)
 
         for name, sess in self.registry.all_sessions().items():
+            # A files turn on an idle session that never started (a typed
+            # prompt that ran no turn): no file Claude sends can come from
+            # it any more.
+            if files_turn_unstarted(sess, now):
+                log.info("[%s] files turn closed: no turn started from it",
+                         sess.label)
+                sess.files_turn_closed(sess.files_turn_closed_wall)
+                self.registry.mark_dirty()
             # Messages held while a dialog was open, and the dialog is not
             # open any more: the bot sends them on (answered) and deletes
             # its "answer it first" notice. Normally done at once by the

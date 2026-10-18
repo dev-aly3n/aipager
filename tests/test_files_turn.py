@@ -333,3 +333,61 @@ def test_no_queued_message_resumes_nothing(mk_bot):
     assert bot._take_next_prompt(sess) is None
     assert not sess.files_turn_open
 
+
+# ---- a typed prompt that starts no turn (review rev-iter3-002) ---------------------
+
+def test_a_typed_slash_command_opens_nothing(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name=S, label="frontend", status=Status.IDLE)
+    bot.registry._sessions[S] = sess
+    monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter",
+                        AsyncMock(return_value=True))
+    for command in ("/cost", " /model sonnet", "/clear"):
+        run_async(bot._inject_prompt(sess, command))
+        assert not sess.files_turn_open, command
+
+
+def _stale(sess, age):
+    sess.files_turn_opened(time.time())
+    sess.files_turn_opened_at = time.monotonic() - age
+
+
+def test_an_idle_turn_that_started_nothing_is_unstarted():
+    from aipager import session_monitor as sm
+    sess = TrackedSession(name=S, label="frontend", status=Status.IDLE)
+    _stale(sess, sm.FILES_TURN_UNSTARTED_SECONDS + 1)
+    assert sm.files_turn_unstarted(sess, time.monotonic())
+    # Young, busy, interactive, closed or a job running: not.
+    sess.files_turn_opened_at = time.monotonic() - 1
+    assert not sm.files_turn_unstarted(sess, time.monotonic())
+    sess.files_turn_opened_at = time.monotonic() - sm.FILES_TURN_UNSTARTED_SECONDS - 1
+    for status in (Status.BUSY, Status.INTERACTIVE):
+        sess.status = status
+        assert not sm.files_turn_unstarted(sess, time.monotonic()), status
+    sess.status = Status.IDLE
+    sess.active_subagents["a1"] = {"started_at": time.monotonic()}
+    assert not sm.files_turn_unstarted(sess, time.monotonic())
+    sess.active_subagents.clear()
+    sess.files_turn_closed()
+    assert not sm.files_turn_unstarted(sess, time.monotonic())
+
+
+def test_the_monitor_closes_an_idle_turn_that_started_nothing(
+        tmp_state_file, run_async, monkeypatch):
+    from aipager import session_monitor as sm
+    reg = SessionRegistry()
+    reg.transition(S, Status.IDLE)
+    sess = reg.get(S)
+    _stale(sess, sm.FILES_TURN_UNSTARTED_SECONDS + 1)
+    sess.files_turn_closed_wall = 123.0
+
+    async def _names():
+        return [S]
+
+    async def notify_fn(*_a, **_kw):
+        return None
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions", _names)
+    run_async(asyncio.wait_for(sm.SessionMonitor(reg, notify_fn)._scan(), 5))
+    assert not sess.files_turn_open
+    # Not a turn end: the last real one is kept.
+    assert sess.files_turn_closed_wall == 123.0
