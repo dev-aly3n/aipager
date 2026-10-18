@@ -484,7 +484,7 @@
 {"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ {name} gönderilemedi."}
 {"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ {name} gönderilemedi: Telegram dosyayı kabul etmedi."}
 {"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ {name} gönderilemedi: Telegram için fazla büyük."}
-{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ {name} gönderilemedi: aipager, Claude'un bu dosyayı bu turda gönderdiğini doğrulayamadı."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ {name} gönderilemedi: aipager, Claude'un bu dosyayı bu görevde gönderdiğini doğrulayamadı."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Burada yazı yönünü değiştiren gizli karakterler var (⟨U+...⟩ olarak gösteriliyor). Gördüğünden farklı bir şey çalışabilir."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ İzin ver"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Hep izin ver"}

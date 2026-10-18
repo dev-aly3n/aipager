@@ -1,6 +1,6 @@
 # Chế độ làm việc nhóm và nhóm
 
-<!-- i18n-source: docs/groups.md @ a236da1 -->
+<!-- i18n-source: docs/groups.md @ fc3db1c6 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../groups.md))
 

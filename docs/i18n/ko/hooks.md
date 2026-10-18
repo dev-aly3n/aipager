@@ -1,6 +1,6 @@
 # Hook 이벤트
 
-<!-- i18n-source: docs/hooks.md @ 054b893 -->
+<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../hooks.md))
 

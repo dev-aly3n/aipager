@@ -2,7 +2,7 @@
 
 # مدل امنیتی
 
-<!-- i18n-source: docs/security.md @ a236da1 -->
+<!-- i18n-source: docs/security.md @ fc3db1c6 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../security.md))
 

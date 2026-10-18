@@ -1,6 +1,6 @@
 # Hook 事件
 
-<!-- i18n-source: docs/hooks.md @ 054b893 -->
+<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../hooks.md)）
 

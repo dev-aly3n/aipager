@@ -1,6 +1,6 @@
 # 团队模式与群组
 
-<!-- i18n-source: docs/groups.md @ a236da1 -->
+<!-- i18n-source: docs/groups.md @ fc3db1c6 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../groups.md)）
 

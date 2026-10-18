@@ -1,6 +1,6 @@
 # Модель безопасности
 
-<!-- i18n-source: docs/security.md @ a236da1 -->
+<!-- i18n-source: docs/security.md @ fc3db1c6 -->
 
 > Эта страница переведена с английской; если они расходятся, верна английская версия. ([English](../../security.md))
 

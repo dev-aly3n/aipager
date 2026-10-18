@@ -1,6 +1,6 @@
 # Uso em equipe e grupos
 
-<!-- i18n-source: docs/groups.md @ a236da1 -->
+<!-- i18n-source: docs/groups.md @ fc3db1c6 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../groups.md))
 

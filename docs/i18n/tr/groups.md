@@ -1,6 +1,6 @@
 # Ekip modu ve gruplar
 
-<!-- i18n-source: docs/groups.md @ a236da1 -->
+<!-- i18n-source: docs/groups.md @ fc3db1c6 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../groups.md))
 

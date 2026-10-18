@@ -484,7 +484,7 @@
 {"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ Không gửi được {name}."}
 {"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ Không gửi được {name}: Telegram đã từ chối file này."}
 {"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ Không gửi được {name}: file quá lớn để gửi qua Telegram."}
-{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ Không gửi được {name}: aipager không xác nhận được Claude đã gửi file này trong lượt này."}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ Không gửi được {name}: aipager không xác nhận được Claude đã gửi file này trong việc này."}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ Nội dung này có ký tự ẩn làm đổi hướng chữ (hiển thị là ⟨U+...⟩). Thứ thực sự chạy có thể khác với những gì bạn thấy."}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ Cho phép"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 Luôn cho phép"}

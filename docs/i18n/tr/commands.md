@@ -1,6 +1,6 @@
 # Komutlar ve bot arayüzü
 
-<!-- i18n-source: docs/commands.md @ a236da1 -->
+<!-- i18n-source: docs/commands.md @ fc3db1c6 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../commands.md))
 
@@ -435,7 +435,7 @@ Claude oturumundan sana dosya gönderebilir: kendi sözlerinle iste ("ekran gör
 - Her dosya önce denetlenir, owner dahil herkes için ([güvenlik](security.md#files-claude-sends)): aipager'ın ayarları, Claude'un kimlik bilgileri, anahtarlar ve gizli bilgiye benzeyen dosyalar asla gönderilmez; dosya normal bir dosya olmalı, boş olmamalı ve en çok 50 MB olmalı; bir üye yalnızca sohbetin [kök klasörü](groups.md#root-folders) içindeki dosyaları gönderir. Bir isteğin bir dosyası reddedilirse o istekten hiçbir şey gönderilmez: Claude nedenini öğrenir ve sana söyler, görev de devam eder.
 - aipager, Claude Code dosyayı okuduğu anda aldığı özel bir kopyayı gönderir; kopya `~/.local/state/aipager/outbox/` içinde tutulur ve gönderilince ya da bir gün sonra silinir.
 - aipager'ın kendine ait bir sayı sınırı yoktur: gönderimler Telegram'ın hız sınırlarına göre ayarlanır, bir albüm her dosya için bir sayılır. Sohbet susturulmuşken dosyalar bekler ve cevabın ardından gelir.
-- Gönderilemeyen bir dosya sohbette bir satır alır, örneğin `⚠️ report.pdf gönderilemedi: Telegram dosyayı kabul etmedi.` İsteğini aipager'ın Claude'un kendi konuşma geçmişinde bulamadığı bir dosya hiçbir satır almaz ([güvenlik](security.md#files-claude-sends)). İsteği orada olan ama aipager'ın çalışan göreve bağlayamadığı bir dosya `⚠️ report.pdf gönderilemedi: aipager, Claude'un bu dosyayı bu turda gönderdiğini doğrulayamadı.` satırını alır. Dosyalar, Claude çalışırken gönderdiğiniz ve sıradaki olarak aldığı bir mesajdan ve bir Stop hook'unun sürdürdüğü bir görevden (`/goal`) de gelir. Gönderilen, reddedilen ya da başarısız olan her dosyanın [denetim kaydında](security.md#audit-log) kendi kaydı vardır.
+- Gönderilemeyen bir dosya sohbette bir satır alır, örneğin `⚠️ report.pdf gönderilemedi: Telegram dosyayı kabul etmedi.` İsteğini aipager'ın Claude'un kendi konuşma geçmişinde bulamadığı bir dosya hiçbir satır almaz ([güvenlik](security.md#files-claude-sends)). İsteği orada olan ama aipager'ın çalışan göreve bağlayamadığı bir dosya `⚠️ report.pdf gönderilemedi: aipager, Claude'un bu dosyayı bu görevde gönderdiğini doğrulayamadı.` satırını alır. Dosyalar, Claude çalışırken gönderdiğiniz ve sıradaki olarak aldığı bir mesajdan ve bir Stop hook'unun sürdürdüğü bir görevden (`/goal`) de gelir. Gönderilen, reddedilen ya da başarısız olan her dosyanın [denetim kaydında](security.md#audit-log) kendi kaydı vardır.
 
 ### <a id="voice"></a>Sesli mesajlar
 

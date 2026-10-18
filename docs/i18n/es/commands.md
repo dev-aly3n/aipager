@@ -1,6 +1,6 @@
 # Comandos e interfaz del bot
 
-<!-- i18n-source: docs/commands.md @ a236da1 -->
+<!-- i18n-source: docs/commands.md @ fc3db1c6 -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../commands.md))
 
@@ -435,7 +435,7 @@ Claude puede enviarte archivos desde su sesión: pídeselo con tus propias palab
 - Cada archivo se comprueba antes, para todos, el owner incluido ([seguridad](security.md#files-claude-sends)): los ajustes de aipager, las credenciales de Claude, las claves y los archivos que parecen secretos nunca se envían; un archivo debe ser un archivo normal, no vacío y de 50 MB como máximo; un miembro solo envía archivos de la [carpeta raíz](groups.md#root-folders) del chat. Si se rechaza un archivo de una petición, no se envía nada de esa petición: Claude sabe por qué y te lo dice, y la tarea sigue.
 - aipager envía una copia privada que hizo cuando Claude Code leyó el archivo, guardada en `~/.local/state/aipager/outbox/` y borrada en cuanto se envía, o al cabo de un día.
 - aipager no pone ningún límite de cantidad propio: los envíos siguen el ritmo de los límites de Telegram, y un álbum cuenta uno por archivo. Mientras el chat está silenciado, los archivos esperan y llegan detrás de la respuesta.
-- Un archivo que no se puede enviar recibe una línea en el chat, por ejemplo `⚠️ No se pudo enviar report.pdf: Telegram lo rechazó.` Un archivo cuya petición aipager no encuentra en la propia conversación guardada de Claude no recibe ninguna línea ([seguridad](security.md#files-claude-sends)). Uno cuya petición sí está ahí pero que aipager no puede vincular a la tarea en curso recibe `⚠️ No se pudo enviar report.pdf: aipager no pudo confirmar que Claude lo enviara en este turno.` También llegan archivos de un mensaje que envías mientras Claude trabaja y que toma a continuación, y de una tarea que un hook de Stop mantiene en marcha (`/goal`). Cada archivo enviado, rechazado o fallido tiene su propio registro en el [registro de auditoría](security.md#audit-log).
+- Un archivo que no se puede enviar recibe una línea en el chat, por ejemplo `⚠️ No se pudo enviar report.pdf: Telegram lo rechazó.` Un archivo cuya petición aipager no encuentra en la propia conversación guardada de Claude no recibe ninguna línea ([seguridad](security.md#files-claude-sends)). Uno cuya petición sí está ahí pero que aipager no puede vincular a la tarea en curso recibe `⚠️ No se pudo enviar report.pdf: aipager no pudo confirmar que Claude lo enviara en esta tarea.` También llegan archivos de un mensaje que envías mientras Claude trabaja y que toma a continuación, y de una tarea que un hook de Stop mantiene en marcha (`/goal`). Cada archivo enviado, rechazado o fallido tiene su propio registro en el [registro de auditoría](security.md#audit-log).
 
 ### <a id="voice"></a>Voz
 

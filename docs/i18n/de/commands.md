@@ -1,6 +1,6 @@
 # Befehle und Oberfläche des Bots
 
-<!-- i18n-source: docs/commands.md @ a236da1 -->
+<!-- i18n-source: docs/commands.md @ fc3db1c6 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../commands.md))
 
@@ -435,7 +435,7 @@ Claude kann dir Dateien aus seiner Sitzung schicken: Bitte es in deinen eigenen 
 - Jede Datei wird zuerst geprüft, für alle, auch für den Owner ([Sicherheit](security.md#files-claude-sends)): Die Einstellungen von aipager, die Zugangsdaten von Claude, Schlüssel und Dateien, die wie Geheimnisse aussehen, werden nie geschickt; eine Datei muss eine normale Datei sein, nicht leer und höchstens 50 MB groß; ein Mitglied schickt nur Dateien im [Stammordner](groups.md#root-folders) des Chats. Wird eine Datei einer Anfrage abgelehnt, wird nichts von dieser Anfrage geschickt: Claude erfährt den Grund und sagt ihn dir, und die Aufgabe läuft weiter.
 - aipager schickt eine private Kopie, die es gemacht hat, als Claude Code die Datei gelesen hat. Sie liegt in `~/.local/state/aipager/outbox/` und wird gelöscht, sobald sie geschickt ist, oder nach einem Tag.
 - aipager setzt keine eigene Grenze für die Anzahl: Gesendet wird im Takt von Telegrams Limits, ein Album zählt eine pro Datei. Solange der Chat stummgeschaltet ist, warten die Dateien und kommen nach der Antwort.
-- Eine Datei, die sich nicht schicken lässt, bekommt eine Zeile im Chat, zum Beispiel `⚠️ report.pdf konnte nicht gesendet werden: Telegram hat die Datei abgelehnt.` Eine Datei, deren Anfrage aipager nicht in Claudes eigenem Gesprächsverlauf findet, bekommt keine Zeile ([Sicherheit](security.md#files-claude-sends)). Eine Datei, deren Anfrage dort steht, die aipager aber nicht der laufenden Aufgabe zuordnen kann, bekommt `⚠️ report.pdf konnte nicht gesendet werden: aipager konnte nicht bestätigen, dass Claude die Datei in diesem Durchlauf gesendet hat.` Dateien kommen auch aus einer Nachricht, die du schickst, während Claude arbeitet, und die es als Nächstes übernimmt, und aus einer Aufgabe, die ein Stop-Hook weiterlaufen lässt (`/goal`). Jede geschickte, abgelehnte oder fehlgeschlagene Datei hat einen eigenen Eintrag im [Audit-Log](security.md#audit-log).
+- Eine Datei, die sich nicht schicken lässt, bekommt eine Zeile im Chat, zum Beispiel `⚠️ report.pdf konnte nicht gesendet werden: Telegram hat die Datei abgelehnt.` Eine Datei, deren Anfrage aipager nicht in Claudes eigenem Gesprächsverlauf findet, bekommt keine Zeile ([Sicherheit](security.md#files-claude-sends)). Eine Datei, deren Anfrage dort steht, die aipager aber nicht der laufenden Aufgabe zuordnen kann, bekommt `⚠️ report.pdf konnte nicht gesendet werden: aipager konnte nicht bestätigen, dass Claude die Datei in dieser Aufgabe gesendet hat.` Dateien kommen auch aus einer Nachricht, die du schickst, während Claude arbeitet, und die es als Nächstes übernimmt, und aus einer Aufgabe, die ein Stop-Hook weiterlaufen lässt (`/goal`). Jede geschickte, abgelehnte oder fehlgeschlagene Datei hat einen eigenen Eintrag im [Audit-Log](security.md#audit-log).
 
 ### <a id="voice"></a>Sprache
 

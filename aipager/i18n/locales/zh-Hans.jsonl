@@ -484,7 +484,7 @@
 {"k": "outbox.failed.other", "src": "e37a511a", "v": "⚠️ 无法发送 {name}。"}
 {"k": "outbox.failed.refused", "src": "48720b69", "v": "⚠️ 无法发送 {name}：Telegram 拒收了这个文件。"}
 {"k": "outbox.failed.too_big", "src": "fe4835b7", "v": "⚠️ 无法发送 {name}：文件太大，Telegram 不接收。"}
-{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ 无法发送 {name}：aipager 无法确认这是 Claude 在本轮中发送的文件。"}
+{"k": "outbox.failed.unverified", "src": "5c4fdf00", "v": "⚠️ 无法发送 {name}：aipager 无法确认这是 Claude 在这个任务中发送的文件。"}
 {"k": "perm.bidi_warning", "src": "acae2a55", "v": "⚠️ 这段文字里有会改变书写方向的隐藏字符（显示为 ⟨U+...⟩）。实际运行的可能和你看到的不一样。"}
 {"k": "perm.btn.allow", "src": "cf869136", "v": "✅ 允许"}
 {"k": "perm.btn.allow_always", "src": "10cbad11", "v": "🟢 始终允许"}
