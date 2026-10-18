@@ -761,3 +761,35 @@ def test_a_job_interim_answer_does_not_wait_for_the_upload(mk_bot, files_bot, ri
     assert run_async(go()), "the interim answer waited for the upload"
     [photo] = files_bot.file_calls()
     assert photo[2]["reply_to_message_id"] == _rich_ids(files_bot)[0]
+
+
+def test_a_mute_during_a_flush_keeps_every_waiting_delivery(mk_bot, files_bot, rich,
+                                                            run_async, tmp_path):
+    """Two turns' files wait for a mute. The ban comes back with the first
+    send of the flush: both deliveries are kept, and go out in order once
+    it lifts."""
+    from aipager.bot.flood import FloodMuted
+    bot = _bot(mk_bot, files_bot)
+    sess = _sess(bot, tmp_path=tmp_path)
+    sess.busy_msg_id = 700
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    first, second = _pic(tmp_path, "first.png"), _pic(tmp_path, "second.png")
+
+    async def turns():
+        MUTE.mute(CHAT, 600, source="test")
+        await _send_files(bot, sess, [first], tool_use_id="toolu_a")
+        await _finish(bot, sess, "")
+        bot.registry.transition(sess.name, Status.BUSY)
+        sess.busy_msg_id = 701
+        await _send_files(bot, sess, [second], tool_use_id="toolu_b")
+        await _finish(bot, sess, "")
+    run_async(turns())
+    assert files_bot.file_calls() == []
+    MUTE.clear()
+    files_bot.fail["send_photo"] = FloodMuted(600, CHAT)
+    run_async(_settled(bot, sess, bot.flush_turn_files(sess)))
+    assert files_bot.file_calls() == []
+    del files_bot.fail["send_photo"]
+    run_async(_settled(bot, sess, bot.flush_turn_files(sess)))
+    assert [c[2]["photo"].filename for c in files_bot.file_calls()] == [
+        "first.png", "second.png"]

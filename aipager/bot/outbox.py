@@ -446,6 +446,16 @@ class Outbox:
     def requeue_front(self, pending: Pending) -> None:
         self.pending.setdefault(pending.chat_id, []).insert(0, pending)
 
+    def requeue_after(self, first: Pending, rest: list[Pending]) -> None:
+        """Put *rest* back right after *first* (already back in the store),
+        in their order; at the front when *first* is not there. All are
+        deliveries of one chat (:meth:`due` takes them by chat)."""
+        if not rest:
+            return
+        items = self.pending.setdefault(first.chat_id, [])
+        at = next((i + 1 for i, p in enumerate(items) if p is first), 0)
+        items[at:at] = rest
+
     # the day sweep ---------------------------------------------------------
 
     def sweep(self, now: float | None = None) -> list[Pending]:

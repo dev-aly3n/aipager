@@ -713,3 +713,19 @@ def test_a_running_copy_is_claimed_by_one_delivery_only():
     assert first == [task] and second == []
     assert ob.task_batch(task) is not None
     assert not box.batches.get("s")
+
+
+def test_requeue_after_keeps_the_order():
+    box = ob.Outbox()
+
+    def p(name):
+        return ob.Pending(session=name, chat_id=1, anchor=None, held_key=None,
+                          prompt_id=None, batches=[], created=0.0)
+    a, b, c, d = p("a"), p("b"), p("c"), p("d")
+    box.queue(d)
+    box.requeue_front(a)
+    box.requeue_after(a, [b, c])
+    assert [x.session for x in box.pending[1]] == ["a", "b", "c", "d"]
+    box.pending.clear()
+    box.requeue_after(a, [b, c])        # a is not there: at the front
+    assert [x.session for x in box.pending[1]] == ["b", "c"]

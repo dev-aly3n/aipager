@@ -1757,8 +1757,9 @@ class NotifyMixin:
                                     sess.label, exc_info=True)
                         done = True
                     if not done:
-                        for rest in reversed(due[i + 1:]):
-                            box.requeue_front(rest)
+                        # Kept in order: the one that failed went back to
+                        # the front, the rest follow it.
+                        box.requeue_after(pending, due[i + 1:])
                         return
             box.run_delivery(sess.name, _send_due, _BACKGROUND_TASKS)
         self._adopt_orphan_files(sess, chat_id)
