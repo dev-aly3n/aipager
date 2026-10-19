@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.8] - 2026-10-19
+
 ### Changed
 - **Any model name Claude Code takes can be typed for a new session.** On `/new`'s model step and in the Mini App, a typed name may now hold `/`, `@`, `~` and `,` as well as letters, digits and `. _ - :`, up to 128 characters, as the names of gateways and providers do (`vendor/model`, a Vertex `model@date`, a Bedrock ARN). It must still start with a letter, a digit or `~`. The Mini App also takes the `[1m]` ending now, as the server already did.
 
