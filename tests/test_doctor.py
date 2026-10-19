@@ -170,10 +170,11 @@ def test_check_settings_a_folder_in_the_files_place_fails(monkeypatch, tmp_path)
 @pytest.mark.parametrize("hooks", [
     {"Stop": ["text"]},
     {"Stop": [{"hooks": "aipager-hook"}]},
+    {"Stop": [{"hooks": 5}]},
     {"Stop": [{"hooks": ["aipager-hook"]}]},
     {"Stop": [{"hooks": [{"command": 7}]}]},
     {"Stop": [None, 3, {"hooks": [None, {"command": None}]}]},
-], ids=["block-text", "inner-text", "hook-text", "command-number", "nulls"])
+], ids=["block-text", "inner-text", "inner-number", "hook-text", "command-number", "nulls"])
 def test_check_settings_odd_hook_entries_are_skipped(monkeypatch, tmp_path, hooks):
     """Hook entries of the wrong shape are skipped: no aipager hook is
     found (WARN), and with a real entry beside them it still is (OK)."""
