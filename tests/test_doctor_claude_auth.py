@@ -9,6 +9,16 @@ import pytest
 from aipager import claude_resolve, doctor
 
 
+@pytest.fixture(autouse=True)
+def _wide_console(monkeypatch):
+    """Wide enough that rich wraps no line: a wrap at a space drops that
+    space, so whether a sentence still matched depended on how long the
+    temp path in it was (a short --basetemp made it wrap mid-sentence)."""
+    from aipager import ui
+    monkeypatch.setattr(ui.console, "_width", 10_000)
+    monkeypatch.setattr(ui.err_console, "_width", 10_000)
+
+
 def _install(path="/x/claude", version="2.1.235"):
     return claude_resolve.ClaudeInstall(path=path, realpath=path, version=version)
 
