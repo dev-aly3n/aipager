@@ -10,6 +10,8 @@ lines of logger ``aipager.claude_bootstrap``.
 
 from __future__ import annotations
 
+import json
+
 import argparse
 import logging
 
@@ -189,10 +191,14 @@ def test_a_changed_config_dir_is_wired_before_the_next_launch(cc):
 
 
 def test_ensure_session_hooks_is_a_no_op_for_a_file_already_wired(cc):
-    """A file this process wired is not rewritten on every launch."""
+    """A file this process wired is not rewritten on every launch: an edit
+    after wiring that kept aipager's hooks stays as the user wrote it
+    (review-1 rev-iter1-004: one that dropped them is wired again)."""
     paths = claude_paths.locate({CCD: str(cc.x)})
     claude_bootstrap.ensure_session_hooks(paths)
-    marker = '{"user": "edited after wiring"}'
+    data = json.loads((cc.x / "settings.json").read_text())
+    data["user"] = "edited after wiring"
+    marker = json.dumps(data)
     (cc.x / "settings.json").write_text(marker)
     claude_bootstrap.ensure_session_hooks(paths)
     assert (cc.x / "settings.json").read_text() == marker

@@ -362,7 +362,7 @@ def _isolate_home_paths(tmp_path, monkeypatch):
     # every test at the operator's real config folder.
     monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
     # The settings files this process wired hooks into: per test.
-    monkeypatch.setattr(import_module("aipager.claude_bootstrap"), "_WIRED", set())
+    monkeypatch.setattr(import_module("aipager.claude_bootstrap"), "_WIRED", {})
     return originals
 
 

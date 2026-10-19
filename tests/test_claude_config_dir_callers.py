@@ -142,11 +142,6 @@ def test_a_changed_config_dir_is_wired_before_the_next_launch(cfg, tmp_path, mon
     first = claude_paths.for_sessions()
     assert _has_our_hook(first.user_settings)
 
-    # A file this process wired is not written again at each launch.
-    _write(first.user_settings, {"theirs": True})
-    assert claude_bootstrap.ensure_session_hooks(first) is True
-    assert json.loads(first.user_settings.read_text()) == {"theirs": True}
-
     # daemon.env now names another folder: wired at the next launch.
     other = tmp_path / "other-config"
     _set_daemon_env(other)
@@ -154,6 +149,73 @@ def test_a_changed_config_dir_is_wired_before_the_next_launch(cfg, tmp_path, mon
     assert second.user_settings == other / "settings.json"
     assert claude_bootstrap.ensure_session_hooks(second) is True
     assert _has_our_hook(other / "settings.json")
+
+
+def test_a_launch_reads_a_wired_file_only_when_it_changed(cfg, tmp_path, monkeypatch):
+    """A file this process found wired costs a stat per launch, not a read."""
+    _hooks_on_path(monkeypatch)
+    claude_bootstrap.bootstrap_claude_settings(str(tmp_path))
+    paths = claude_paths.for_sessions()
+    reads = []
+    real_wired = claude_bootstrap.hooks_wired
+    monkeypatch.setattr(claude_bootstrap, "hooks_wired",
+                        lambda path: reads.append(path) or real_wired(path))
+
+    assert claude_bootstrap.ensure_session_hooks(paths) is True
+    assert reads == []
+
+
+def test_a_launch_keeps_a_users_edit_that_left_the_hooks(cfg, tmp_path, monkeypatch, caplog):
+    """An edit that kept aipager's hooks is read, not written over."""
+    _hooks_on_path(monkeypatch)
+    claude_bootstrap.bootstrap_claude_settings(str(tmp_path))
+    paths = claude_paths.for_sessions()
+    data = json.loads(paths.user_settings.read_text())
+    data["model"] = "opus"
+    edited = json.dumps(data, indent=4)
+    paths.user_settings.write_text(edited)
+    caplog.clear()
+
+    assert claude_bootstrap.ensure_session_hooks(paths) is True
+    assert paths.user_settings.read_text() == edited
+    assert "lost aipager's hooks" not in caplog.text
+
+
+@pytest.mark.parametrize("how", ["rewritten", "removed"])
+def test_a_file_that_lost_its_hooks_is_wired_again_before_a_launch(
+        cfg, tmp_path, monkeypatch, caplog, how):
+    """A file this process wired that lost aipager's hooks since (a hand
+    edit, another tool rewriting it, a restore) gets them back before the
+    next session starts, and the log says so."""
+    _hooks_on_path(monkeypatch)
+    claude_bootstrap.bootstrap_claude_settings(str(tmp_path))
+    paths = claude_paths.for_sessions()
+    if how == "rewritten":
+        _write(paths.user_settings, {"theirs": True})
+    else:
+        paths.user_settings.unlink()
+    caplog.clear()
+
+    with caplog.at_level(logging.WARNING):
+        assert claude_bootstrap.ensure_session_hooks(paths) is True
+    assert _has_our_hook(paths.user_settings)
+    if how == "rewritten":
+        assert json.loads(paths.user_settings.read_text())["theirs"] is True
+    assert "lost aipager's hooks since they were wired" in caplog.text
+
+
+def test_a_file_that_lost_its_hooks_and_cannot_be_wired_says_so(
+        cfg, tmp_path, monkeypatch, caplog):
+    _hooks_on_path(monkeypatch)
+    claude_bootstrap.bootstrap_claude_settings(str(tmp_path))
+    paths = claude_paths.for_sessions()
+    _write(paths.user_settings, "{ not json")
+    caplog.clear()
+
+    with caplog.at_level(logging.WARNING):
+        assert claude_bootstrap.ensure_session_hooks(paths) is False
+    assert "sessions will start without aipager's hooks" in caplog.text
+    assert paths.user_settings.read_text() == "{ not json"
 
 
 def test_a_launch_whose_wiring_fails_says_so(cfg, monkeypatch, caplog):

@@ -691,9 +691,20 @@ def hooks_wired(path: Path) -> bool:
         return False
 
 
-#: Real paths of the settings files this process wired aipager's hooks
-#: into, so a launch rewires only when the sessions' file changed.
-_WIRED: set[str] = set()
+#: Real paths of the settings files this process found aipager's hooks
+#: in, each with the file's stat when it did (:func:`_file_stamp`): a
+#: launch reads the file again only when that changed.
+_WIRED: dict[str, tuple[int, int, int] | None] = {}
+
+
+def _file_stamp(path: str) -> tuple[int, int, int] | None:
+    """``(inode, size, mtime_ns)`` of *path*, or None when it cannot be
+    stat'ed: any edit, replacement or removal changes it."""
+    try:
+        st = os.stat(path)
+    except (OSError, ValueError):
+        return None
+    return (st.st_ino, st.st_size, st.st_mtime_ns)
 
 
 def _wire_and_check(paths: claude_paths.ClaudePaths) -> bool:
@@ -711,7 +722,8 @@ def _wire_and_check(paths: claude_paths.ClaudePaths) -> bool:
     except Exception:
         log.debug("claude bootstrap: failed to wire hooks", exc_info=True)
     if hooks_wired(paths.user_settings):
-        _WIRED.add(os.path.realpath(paths.user_settings))
+        real = os.path.realpath(paths.user_settings)
+        _WIRED[real] = _file_stamp(real)
         return True
     log.warning("claude bootstrap: sessions will start without aipager's hooks: %s has no "
                 "%s entry (is %s on PATH, and is the file valid JSON?) - run `aipager "
@@ -721,12 +733,24 @@ def _wire_and_check(paths: claude_paths.ClaudePaths) -> bool:
 
 def ensure_session_hooks(paths: claude_paths.ClaudePaths) -> bool:
     """Make sure the settings file a session about to start reads has
-    aipager's hooks: a no-op for a file this process already wired, so a
-    ``CLAUDE_CONFIG_DIR`` changed in daemon.env since start is wired at
-    the next launch. True when the file has them. Never raises."""
+    aipager's hooks, so a ``CLAUDE_CONFIG_DIR`` changed in daemon.env since
+    start is wired at the next launch. A file this process already found
+    wired costs one stat; once it changed it is read again, and when it
+    lost the hooks (a hand edit, another tool rewriting it, a restore)
+    they are wired again, with a WARNING. True when the file has them.
+    Never raises."""
     try:
-        if os.path.realpath(paths.user_settings) in _WIRED:
-            return True
+        real = os.path.realpath(paths.user_settings)
+        if real in _WIRED:
+            stamp = _file_stamp(real)
+            if stamp is not None and stamp == _WIRED[real]:
+                return True
+            if hooks_wired(paths.user_settings):
+                _WIRED[real] = stamp
+                return True
+            del _WIRED[real]
+            log.warning("claude bootstrap: %s lost aipager's hooks since they were wired; "
+                        "wiring them again", paths.user_settings)
         return _wire_and_check(paths)
     except Exception:
         log.debug("claude bootstrap: failed to check the sessions' hooks", exc_info=True)
