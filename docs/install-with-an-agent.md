@@ -147,7 +147,7 @@ stderr: read it, and see 3.1 for an old aipager.
 | Exit | `error` | What you do |
 |---|---|---|
 | 0 | | `installed`, `updated` or `unchanged`: done, go to 3.5. `dry_run`: nothing was written; run the same command again without `--dry-run`. detect-chat `found`: confirm the person as in 3.3, then run 3.2. |
-| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | Show `message` and `fix` to the person. `ambiguous_install`: the person fixes it in `aipager config`. Do not edit files by hand. |
+| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | Show `message` and `fix` to the person. `ambiguous_install`: the person fixes it in `aipager config`. `settings_invalid` that asks for an absolute `CLAUDE_CONFIG_DIR`: the fix names the file to change (`daemon.env` or a Claude Code settings file); ask the person for the folder, change that one value only if they say so, then run setup again. Do not edit any other file by hand. |
 | 2 | `usage`, `token_malformed`, `token_stdin_timeout`, `bad_chat_id`, ... | Your input was wrong; `fix` names the flag. `token_malformed`: the file does not hold a bot token, ask the person to check it. |
 | 3 | `deps_missing` | Follow `fix` (each missing item also has its own `fix` in `deps.items`), then run setup again. |
 | 4 | `token_rejected` | Telegram refused the token. Ask the person for the token again (or a new one from @BotFather). |
