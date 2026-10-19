@@ -49,6 +49,10 @@ _FIX_CONFIG = "aipager config"
 _TOKEN_ROW = "Telegram bot token"
 #: The row :func:`check_settings_json` reports on.
 _SETTINGS_ROW = "Claude Code settings.json"
+#: The row :func:`check_service_unit_path` reports on.
+_UNIT_PATH_ROW = "service unit PATH"
+#: The fix for a settings file that cannot be read as settings.
+_FIX_RESTORE = "restore the auto-backup or re-run `aipager config`"
 
 
 @dataclass
@@ -341,22 +345,22 @@ def check_service_unit_path() -> CheckResult:
     and not-installed are both OK — not applicable, not a problem.
     """
     if platform.system().lower() != "linux":
-        return CheckResult(OK, "service unit PATH", detail=["not applicable on this OS"])
+        return CheckResult(OK, _UNIT_PATH_ROW, detail=["not applicable on this OS"])
 
     from aipager.service import LINUX_UNIT_PATH
     if not LINUX_UNIT_PATH.exists():
-        return CheckResult(OK, "service unit PATH", detail=["service not installed"])
+        return CheckResult(OK, _UNIT_PATH_ROW, detail=["service not installed"])
 
     try:
-        text = LINUX_UNIT_PATH.read_text()
-    except OSError as e:
-        return CheckResult(WARN, "service unit PATH", detail=[str(e)])
+        text = LINUX_UNIT_PATH.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        return CheckResult(WARN, _UNIT_PATH_ROW, detail=[str(e)])
 
     import re
     m = re.search(r"^Environment=PATH=(?P<value>.*)$", text, re.MULTILINE)
     if not m:
         return CheckResult(
-            FAIL, "service unit PATH",
+            FAIL, _UNIT_PATH_ROW,
             detail=["installed unit has no Environment=PATH="],
             fix="aipager service install --yes  # re-render the unit",
         )
@@ -366,13 +370,13 @@ def check_service_unit_path() -> CheckResult:
     try:
         resolved = claude_resolve.resolve_claude_binary(force=True)
     except claude_resolve.ClaudeNotFoundError:
-        return CheckResult(WARN, "service unit PATH",
+        return CheckResult(WARN, _UNIT_PATH_ROW,
                            detail=["can't verify - no claude binary resolves"])
     claude_dir = str(Path(resolved.chosen.path).parent)
     if claude_dir in unit_path_dirs:
-        return CheckResult(OK, "service unit PATH", detail=[claude_dir])
+        return CheckResult(OK, _UNIT_PATH_ROW, detail=[claude_dir])
     return CheckResult(
-        FAIL, "service unit PATH",
+        FAIL, _UNIT_PATH_ROW,
         detail=[f"unit's PATH does not include {claude_dir}"],
         fix="aipager service install --yes  # re-render with the current PATH",
     )
@@ -429,34 +433,32 @@ def _config_dir_notes(paths) -> tuple[list[str], str | None]:
 
 
 def _settings_file_result(path: Path) -> CheckResult:
-    if not path.exists():
-        return CheckResult(
-            FAIL, _SETTINGS_ROW,
-            detail=["not found"],
-            fix=_FIX_CONFIG,
-        )
+    """The row for one settings file. Never raises: the file is the user's
+    (any folder ``CLAUDE_CONFIG_DIR`` names), so any content, a folder in
+    its place or a file this user cannot read gives a row, not a crash."""
     try:
-        data = json.loads(path.read_text())
-    except json.JSONDecodeError as e:
+        if not path.exists():
+            return CheckResult(
+                FAIL, _SETTINGS_ROW,
+                detail=["not found"],
+                fix=_FIX_CONFIG,
+            )
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, RecursionError) as e:
+        # ValueError covers invalid JSON and text that is not UTF-8.
         return CheckResult(FAIL, _SETTINGS_ROW,
-                           detail=[f"invalid JSON: {e}"],
-                           fix="restore the auto-backup or re-run `aipager config`")
+                           detail=[f"{path}: {_read_error(e)}"],
+                           fix=_FIX_RESTORE)
+    if not isinstance(data, dict):
+        return CheckResult(FAIL, _SETTINGS_ROW,
+                           detail=[f"{path}: not a JSON object"],
+                           fix=_FIX_RESTORE)
     hooks = data.get("hooks", {})
     if not isinstance(hooks, dict):
         return CheckResult(FAIL, _SETTINGS_ROW,
                            detail=[f"hooks key is {type(hooks).__name__}, expected dict"],
                            fix="back up settings.json and re-run `aipager config`")
-    has_aipager_hook = False
-    for entries in hooks.values():
-        if not isinstance(entries, list):
-            continue
-        for block in entries:
-            for h in (block or {}).get("hooks", []):
-                cmd = (h or {}).get("command", "")
-                if cmd == "aipager-hook" or cmd.endswith("/aipager-hook"):
-                    has_aipager_hook = True
-                    break
-    if not has_aipager_hook:
+    if not _has_aipager_hook(hooks):
         return CheckResult(WARN, _SETTINGS_ROW,
                            detail=["no aipager-hook entry found"],
                            fix=_FIX_CONFIG)
@@ -465,6 +467,34 @@ def _settings_file_result(path: Path) -> CheckResult:
                            detail=["no statusLine entry"],
                            fix=_FIX_CONFIG)
     return CheckResult(OK, _SETTINGS_ROW)
+
+
+def _read_error(e: BaseException) -> str:
+    if isinstance(e, json.JSONDecodeError):
+        return f"invalid JSON: {e}"
+    if isinstance(e, UnicodeDecodeError):
+        return "not UTF-8 text"
+    if isinstance(e, RecursionError):
+        return "nested too deep to read"
+    return f"cannot read: {e}"
+
+
+def _has_aipager_hook(hooks: dict) -> bool:
+    """An ``aipager-hook`` command anywhere in the hooks block. Entries of
+    the wrong shape are skipped, as Claude Code skips them."""
+    for entries in hooks.values():
+        if not isinstance(entries, list):
+            continue
+        for block in entries:
+            inner = block.get("hooks") if isinstance(block, dict) else None
+            if not isinstance(inner, list):
+                continue
+            for h in inner:
+                cmd = h.get("command") if isinstance(h, dict) else None
+                if isinstance(cmd, str) and (
+                        cmd == "aipager-hook" or cmd.endswith("/aipager-hook")):
+                    return True
+    return False
 
 
 def check_hook_scripts() -> CheckResult:

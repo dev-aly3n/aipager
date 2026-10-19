@@ -128,6 +128,67 @@ def test_check_settings_invalid_json(monkeypatch, tmp_path):
     assert "invalid JSON" in " ".join(r.detail)
 
 
+def _settings_bytes(tmp_path, monkeypatch, raw: bytes):
+    p = tmp_path / ".claude" / "settings.json"
+    p.parent.mkdir()
+    p.write_bytes(raw)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
+    return p
+
+
+@pytest.mark.parametrize("raw", [b"[1]", b'"text"', b"null", b"42", b"true"],
+                         ids=["list", "string", "null", "number", "bool"])
+def test_check_settings_valid_json_that_is_not_an_object_fails(monkeypatch, tmp_path, raw):
+    """Valid JSON that is not an object is no settings file: FAIL with the
+    restore fix, not an AttributeError the runner shows as a crash."""
+    _settings_bytes(tmp_path, monkeypatch, raw)
+    r = doctor.check_settings_json()
+    assert r.status == doctor.FAIL
+    assert "not a JSON object" in " ".join(r.detail)
+    assert "aipager config" in r.fix
+
+
+@pytest.mark.parametrize("raw, said", [
+    (b"\xff\xfe{}", "not UTF-8 text"),
+    (b"[" * 100000 + b"]" * 100000, "nested too deep"),
+], ids=["not-utf8", "too-deep"])
+def test_check_settings_unreadable_content_fails(monkeypatch, tmp_path, raw, said):
+    _settings_bytes(tmp_path, monkeypatch, raw)
+    r = doctor.check_settings_json()
+    assert r.status == doctor.FAIL
+    assert said in " ".join(r.detail)
+
+
+def test_check_settings_a_folder_in_the_files_place_fails(monkeypatch, tmp_path):
+    (tmp_path / ".claude" / "settings.json").mkdir(parents=True)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
+    r = doctor.check_settings_json()
+    assert r.status == doctor.FAIL
+    assert "cannot read" in " ".join(r.detail)
+
+
+@pytest.mark.parametrize("hooks", [
+    {"Stop": ["text"]},
+    {"Stop": [{"hooks": "aipager-hook"}]},
+    {"Stop": [{"hooks": ["aipager-hook"]}]},
+    {"Stop": [{"hooks": [{"command": 7}]}]},
+    {"Stop": [None, 3, {"hooks": [None, {"command": None}]}]},
+], ids=["block-text", "inner-text", "hook-text", "command-number", "nulls"])
+def test_check_settings_odd_hook_entries_are_skipped(monkeypatch, tmp_path, hooks):
+    """Hook entries of the wrong shape are skipped: no aipager hook is
+    found (WARN), and with a real entry beside them it still is (OK)."""
+    p = _settings_bytes(tmp_path, monkeypatch,
+                        json.dumps({"hooks": hooks, "statusLine": {"x": 1}}).encode())
+    r = doctor.check_settings_json()
+    assert r.status == doctor.WARN
+    assert "no aipager-hook entry found" in r.detail
+
+    real = {"hooks": [{"type": "command", "command": "/x/bin/aipager-hook"}]}
+    hooks = {k: [*v, real] for k, v in hooks.items()}
+    p.write_text(json.dumps({"hooks": hooks, "statusLine": {"x": 1}}))
+    assert doctor.check_settings_json().status == doctor.OK
+
+
 def test_check_settings_hooks_wrong_type(monkeypatch, tmp_path):
     p = tmp_path / ".claude" / "settings.json"
     p.parent.mkdir()

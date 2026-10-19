@@ -138,6 +138,16 @@ def test_check_service_unit_path_not_installed_is_ok(monkeypatch, tmp_path):
     assert r.status == doctor.OK
 
 
+def test_check_service_unit_path_not_utf8_warns(monkeypatch, tmp_path):
+    """A unit file that is not UTF-8 text gives a row, not a crash."""
+    monkeypatch.setattr(doctor.platform, "system", lambda: "Linux")
+    unit = tmp_path / "aipager.service"
+    unit.write_bytes(b"[Service]\n\xff\xfe\n")
+    monkeypatch.setattr("aipager.service.LINUX_UNIT_PATH", unit)
+    r = doctor.check_service_unit_path()
+    assert r.status == doctor.WARN
+
+
 def test_check_service_unit_path_missing_environment_path_fails(monkeypatch, tmp_path):
     monkeypatch.setattr(doctor.platform, "system", lambda: "Linux")
     unit = tmp_path / "aipager.service"
