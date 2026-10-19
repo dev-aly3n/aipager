@@ -317,6 +317,20 @@
 {"k": "log.final_answer", "src": "f0ea5fc3", "v": "## Jawaban akhir"}
 {"k": "log.memory", "src": "df926a90", "v": {"other": "_Hanya {n} baris alat terbaru yang disimpan; pada tugas yang sangat panjang, baris lama mungkin sudah hilang._"}}
 {"k": "log.title", "src": "2d9e96f5", "v": "# {session} - log lengkap"}
+{"k": "login.fix.cloud", "src": "99b6f423", "v": "Cek kredensial penyedia cloud kamu, di komputer tempat aipager berjalan."}
+{"k": "login.fix.gateway", "src": "250eb193", "v": "Cek key untuk alamat di {name}, di komputer tempat aipager berjalan."}
+{"k": "login.fix.login", "src": "c8947c81", "v": "Jalankan {command} di komputer tempat aipager berjalan."}
+{"k": "login.fix.variable", "src": "c2bf0313", "v": "Cek atau ganti {name} di komputer tempat aipager berjalan."}
+{"k": "login.found", "src": "91657bbb", "v": "Ditemukan: {kinds}"}
+{"k": "login.kind.api_key", "src": "fbd04c29", "v": "API key ({name})"}
+{"k": "login.kind.auth_token", "src": "4a4de002", "v": "token autentikasi ({name})"}
+{"k": "login.kind.bedrock_token", "src": "5d77e4f5", "v": "token Bedrock ({name})"}
+{"k": "login.kind.cloud_switch", "src": "b29720b1", "v": "setelan penyedia cloud ({name})"}
+{"k": "login.kind.setup_token", "src": "f2ada5c8", "v": "token setup-token ({name})"}
+{"k": "login.kind.stored_login", "src": "917d972e", "v": "login Claude yang tersimpan"}
+{"k": "login.missing", "src": "ed849a76", "v": "⚠️ Claude belum login, dan aku tidak menemukan kredensial di tempat mana pun yang aku tahu."}
+{"k": "login.rejected", "src": "51a6b23b", "v": "⚠️ Claude menolak kredensialnya, kemungkinan sudah kedaluwarsa atau dicabut."}
+{"k": "login.unused", "src": "e10a4542", "v": "⚠️ Claude belum login, padahal aku menemukan kredensial di komputer ini yang tidak dipakai Claude."}
 {"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ File ini tidak bisa diunduh: {names}"}
 {"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ File ini tidak bisa diunduh: {names}"}
 {"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ File ini tidak bisa diunduh, sisa album tetap dikirim tanpanya: {names}"}

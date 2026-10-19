@@ -317,6 +317,20 @@
 {"k": "log.final_answer", "src": "f0ea5fc3", "v": "## Resposta final"}
 {"k": "log.memory", "src": "df926a90", "v": {"many": "_Só as últimas {n} linhas de ferramentas ficam guardadas; em tarefas muito longas, as mais antigas podem já ter sumido._", "one": "_Só as últimas {n} linhas de ferramentas ficam guardadas; em tarefas muito longas, as mais antigas podem já ter sumido._", "other": "_Só as últimas {n} linhas de ferramentas ficam guardadas; em tarefas muito longas, as mais antigas podem já ter sumido._"}}
 {"k": "log.title", "src": "2d9e96f5", "v": "# {session} - log completo"}
+{"k": "login.fix.cloud", "src": "99b6f423", "v": "Confira as credenciais do seu provedor de nuvem, no computador onde o aipager está rodando."}
+{"k": "login.fix.gateway", "src": "250eb193", "v": "Confira a chave do endereço em {name}, no computador onde o aipager está rodando."}
+{"k": "login.fix.login", "src": "c8947c81", "v": "Rode {command} no computador onde o aipager está rodando."}
+{"k": "login.fix.variable", "src": "c2bf0313", "v": "Confira ou troque {name} no computador onde o aipager está rodando."}
+{"k": "login.found", "src": "91657bbb", "v": "Encontrado: {kinds}"}
+{"k": "login.kind.api_key", "src": "fbd04c29", "v": "chave de API ({name})"}
+{"k": "login.kind.auth_token", "src": "4a4de002", "v": "token de autenticação ({name})"}
+{"k": "login.kind.bedrock_token", "src": "5d77e4f5", "v": "token do Bedrock ({name})"}
+{"k": "login.kind.cloud_switch", "src": "b29720b1", "v": "ajuste de provedor de nuvem ({name})"}
+{"k": "login.kind.setup_token", "src": "f2ada5c8", "v": "token do setup-token ({name})"}
+{"k": "login.kind.stored_login", "src": "917d972e", "v": "login do Claude salvo"}
+{"k": "login.missing", "src": "ed849a76", "v": "⚠️ O Claude não está logado e não encontrei nenhuma credencial nos lugares onde sei procurar."}
+{"k": "login.rejected", "src": "51a6b23b", "v": "⚠️ O Claude recusou a credencial dele, que provavelmente expirou ou foi revogada."}
+{"k": "login.unused", "src": "e10a4542", "v": "⚠️ O Claude não está logado, embora eu tenha encontrado neste computador uma credencial que ele não está usando."}
 {"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ Não foi possível baixar os arquivos: {names}"}
 {"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ Não foi possível baixar o arquivo: {names}"}
 {"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ Não foi possível baixar estes arquivos; o resto do álbum foi enviado sem eles: {names}"}

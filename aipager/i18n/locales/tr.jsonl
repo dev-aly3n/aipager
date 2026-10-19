@@ -317,6 +317,20 @@
 {"k": "log.final_answer", "src": "f0ea5fc3", "v": "## Son yanıt"}
 {"k": "log.memory", "src": "df926a90", "v": {"one": "_Yalnızca son {n} araç satırı saklanır; çok uzun görevlerde eski satırlar silinmiş olabilir._", "other": "_Yalnızca son {n} araç satırı saklanır; çok uzun görevlerde eski satırlar silinmiş olabilir._"}}
 {"k": "log.title", "src": "2d9e96f5", "v": "# {session} - tam günlük"}
+{"k": "login.fix.cloud", "src": "99b6f423", "v": "aipager'ın çalıştığı bilgisayarda, bulut sağlayıcının kimlik bilgilerini kontrol et."}
+{"k": "login.fix.gateway", "src": "250eb193", "v": "aipager'ın çalıştığı bilgisayarda, {name} içindeki adresin anahtarını kontrol et."}
+{"k": "login.fix.login", "src": "c8947c81", "v": "aipager'ın çalıştığı bilgisayarda {command} komutunu çalıştır."}
+{"k": "login.fix.variable", "src": "c2bf0313", "v": "aipager'ın çalıştığı bilgisayarda {name} değerini kontrol et ya da değiştir."}
+{"k": "login.found", "src": "91657bbb", "v": "Bulunanlar: {kinds}"}
+{"k": "login.kind.api_key", "src": "fbd04c29", "v": "API anahtarı ({name})"}
+{"k": "login.kind.auth_token", "src": "4a4de002", "v": "kimlik doğrulama token'ı ({name})"}
+{"k": "login.kind.bedrock_token", "src": "5d77e4f5", "v": "Bedrock token'ı ({name})"}
+{"k": "login.kind.cloud_switch", "src": "b29720b1", "v": "bulut sağlayıcı ayarı ({name})"}
+{"k": "login.kind.setup_token", "src": "f2ada5c8", "v": "setup-token anahtarı ({name})"}
+{"k": "login.kind.stored_login", "src": "917d972e", "v": "kayıtlı Claude oturumu"}
+{"k": "login.missing", "src": "ed849a76", "v": "⚠️ Claude'da oturum açık değil ve bakmayı bildiğim hiçbir yerde kimlik bilgisi bulamadım."}
+{"k": "login.rejected", "src": "51a6b23b", "v": "⚠️ Claude kimlik bilgisini reddetti; büyük ihtimalle süresi doldu ya da iptal edildi."}
+{"k": "login.unused", "src": "e10a4542", "v": "⚠️ Claude'da oturum açık değil, ama bu bilgisayarda Claude'un kullanmadığı bir kimlik bilgisi buldum."}
 {"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ Dosyalar indirilemedi: {names}"}
 {"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ Dosya indirilemedi: {names}"}
 {"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ Bu dosyalar indirilemedi, albümün geri kalanı onlarsız gönderildi: {names}"}

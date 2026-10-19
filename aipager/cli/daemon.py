@@ -288,10 +288,10 @@ async def _finish_auth_check(bot, provenance) -> None:
     from aipager import claude_bootstrap
 
     try:
-        text = await asyncio.to_thread(
+        notice = await asyncio.to_thread(
             claude_bootstrap.recover_auth_or_notice, provenance.pending)
-        if text:
-            await bot.send_startup_notice(text)
+        if notice is not None:
+            await bot.send_startup_notice(notice)
     except Exception:
         log.debug("startup auth check failed", exc_info=True)
 

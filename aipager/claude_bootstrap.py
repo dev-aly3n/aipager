@@ -77,8 +77,8 @@ class ProvenanceInfo:
 
     ``.pending`` is set only when Claude reported itself logged out, and
     carries what :func:`recover_auth_or_notice` needs to go looking for a
-    credential that works. Whatever text that eventually produces is
-    built by :func:`aipager.claude_resolve.format_auth_notice`, which is
+    credential that works. What that eventually says in Telegram is an
+    :class:`AuthNotice`, worded by :mod:`aipager.bot.auth_notice`, which is
     deliberately machine-free — see its docstring for why it and
     ``.lines`` are not the same string.
     """
@@ -796,8 +796,55 @@ def bootstrap_claude_settings(workdir: str | None = None) -> ProvenanceInfo | No
     )
 
 
-def recover_auth_or_notice(pending: PendingAuthCheck) -> str | None:
-    """Run the recovery sweep; return the Telegram text, or ``None``.
+#: The credential kind of Claude's own saved login (its credentials file).
+#: The other kinds are the environment variables that hold one.
+STORED_LOGIN = "stored login"
+
+
+@dataclass(frozen=True)
+class AuthNotice:
+    """What the startup auth notice says, for :mod:`aipager.bot.auth_notice`
+    to word in each chat's language.
+
+    Machine-free by construction: *found* holds only the names of the
+    environment variables a credential was found in (:func:`_kinds_in`) and
+    :data:`STORED_LOGIN`, never a value, a path, a file name or a version.
+    *fix* is what to do about it (:func:`_fix_for`): ``"login"``,
+    ``"gateway"``, ``"cloud"`` or ``"variable"``."""
+
+    found: tuple[str, ...] = ()
+    rejected: bool = False
+    fix: str = "login"
+    #: For ``fix == "variable"``: the variables holding the refused credential.
+    variables: tuple[str, ...] = ()
+
+
+def _fix_for(env: Mapping[str, str], *, rejected: bool = False) -> tuple[str, tuple[str, ...]]:
+    """What fixes a refused or missing credential in the setup Claude Code
+    runs with (*env* with Claude's settings env laid over it), and for
+    ``"variable"`` the variables to look at: the cloud provider's
+    credentials when a provider switch is on, the key for the address when
+    ANTHROPIC_BASE_URL points at a gateway or another provider, the
+    variables themselves when a token or key in the environment was
+    refused (Claude Code uses it before a saved login, so logging in again
+    changes nothing), else a Claude login."""
+    from aipager import claude_resolve
+
+    effective = claude_env(env)
+    if any(_switch_on(effective.get(var)) for var in _CLOUD_SWITCHES):
+        return "cloud", ()
+    if claude_resolve.uses_custom_endpoint(effective):
+        return "gateway", ()
+    # The Bedrock token is read only with the Bedrock switch on (returned
+    # "cloud" above): here it is one Claude Code ignored.
+    held = tuple(var for var in _kinds_in(effective) if var in _ANTHROPIC_CREDENTIAL_VARS)
+    if rejected and held:
+        return "variable", held
+    return "login", ()
+
+
+def recover_auth_or_notice(pending: PendingAuthCheck) -> AuthNotice | None:
+    """Run the recovery sweep; return what to tell Telegram, or ``None``.
 
     Blocking (subprocesses) — call it via ``asyncio.to_thread`` so it
     never stalls the event loop. ``None`` means a working credential was
@@ -827,44 +874,41 @@ def recover_auth_or_notice(pending: PendingAuthCheck) -> str | None:
     if recovered:
         log.info("claude bootstrap: recovered a working credential; staying quiet")
         return None
-    return claude_resolve.format_auth_notice(
-        found_kinds, rejected=check.state == "rejected")
+    rejected = check.state == "rejected"
+    fix, variables = _fix_for(pending.session_env, rejected=rejected)
+    return AuthNotice(found=tuple(found_kinds), rejected=rejected, fix=fix,
+                      variables=variables)
 
 
-# Mirrors claude_resolve._ENV_AUTH_VARS, which is what attributes a
-# *working* auth to "env". Reporting a narrower set here would tell a
-# Bedrock/Vertex operator "couldn't find a credential anywhere" while a
-# perfectly real, credential-shaped variable was sitting in the
-# environment being rejected.
-_ENV_KINDS: tuple[tuple[str, str], ...] = (
-    ("CLAUDE_CODE_OAUTH_TOKEN", "setup token"),
+# Every variable that holds a credential, plus the cloud provider switches
+# (_CLOUD_SWITCHES): a wider set than claude_resolve._ENV_AUTH_VARS, which
+# only attributes a *working* auth to "env". Reporting a narrower set here
+# would tell a Bedrock/Vertex operator "couldn't find a credential
+# anywhere" while a perfectly real, credential-shaped variable was sitting
+# in the environment being rejected. Each is reported by its name.
+_CREDENTIAL_VARS = (
+    "CLAUDE_CODE_OAUTH_TOKEN",
     # A gateway's or provider's bearer token, not a `claude setup-token` one.
-    ("ANTHROPIC_AUTH_TOKEN", "auth token"),
-    ("ANTHROPIC_API_KEY", "API key"),
-    ("AWS_BEARER_TOKEN_BEDROCK", "Bedrock token"),
-    ("CLAUDE_CODE_USE_BEDROCK", "Bedrock setting"),
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_API_KEY",
+    "AWS_BEARER_TOKEN_BEDROCK",
 )
-_AUTH_ENV_KEYS = frozenset(k for k, _ in _ENV_KINDS)
-_BOOLEAN_AUTH_VARS = frozenset({"CLAUDE_CODE_USE_BEDROCK"})
+_AUTH_ENV_KEYS = frozenset((*_CREDENTIAL_VARS, *_CLOUD_SWITCHES))
+#: The ones Claude Code uses without a cloud provider switch, before a saved login.
+_ANTHROPIC_CREDENTIAL_VARS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN",
+                              "ANTHROPIC_API_KEY")
 
 
-def _kinds_in(env: dict[str, str]) -> list[str]:
-    """Human-readable credential kinds present in *env*. Never values."""
-    kinds: list[str] = []
-    for var, kind in _ENV_KINDS:
-        value = (env.get(var) or "").strip()
-        if not value:
-            continue
-        # Only the Bedrock switch is a boolean; "0"/"false"/"no" there
-        # means deliberately OFF, and reporting it as a credential would
-        # send the operator to fix something they turned off on purpose.
-        # The others are opaque secrets — a token whose literal value is
-        # "0" is still a token, and second-guessing its content here
-        # would be wrong.
-        if var in _BOOLEAN_AUTH_VARS and value.lower() in ("0", "false", "no"):
-            continue
-        if kind not in kinds:
-            kinds.append(kind)
+def _kinds_in(env: Mapping[str, str]) -> list[str]:
+    """The credentials present in *env*, by variable name, in a fixed order.
+    Never values. A token or key counts when it is not blank: one whose
+    literal value is "0" is still a token. A cloud provider switch counts
+    only when Claude Code reads it as on (:func:`_switch_on`): reporting
+    one it reads as off would send the operator to fix something they
+    turned off on purpose."""
+    kinds = [var for var in _CREDENTIAL_VARS
+             if isinstance(env.get(var), str) and env[var].strip()]
+    kinds += [var for var in _CLOUD_SWITCHES if _switch_on(env.get(var))]
     return kinds
 
 
@@ -887,7 +931,9 @@ def _recover_auth(
     """
     from aipager import claude_resolve, daemon_secrets
 
-    found: list[str] = list(_kinds_in(failing_env))
+    # As Claude Code runs: with its settings env laid over the environment,
+    # where its docs put a cloud provider's switch.
+    found: list[str] = list(_kinds_in(claude_env(failing_env)))
 
     def _remember(kind: str) -> None:
         if kind not in found:
@@ -940,7 +986,7 @@ def _recover_auth(
     except Exception:
         shell_token = None
     if shell_token:
-        _remember("setup token")
+        _remember("CLAUDE_CODE_OAUTH_TOKEN")
         if shell_token != failing_env.get("CLAUDE_CODE_OAUTH_TOKEN"):
             candidates.append(
                 ("login shell", {"CLAUDE_CODE_OAUTH_TOKEN": shell_token}))

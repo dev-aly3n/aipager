@@ -317,6 +317,20 @@
 {"k": "log.final_answer", "src": "f0ea5fc3", "v": "## Réponse finale"}
 {"k": "log.memory", "src": "df926a90", "v": {"many": "_Seules les {n} dernières lignes d'outils sont gardées ; dans les tâches très longues, les plus anciennes ont peut-être déjà disparu._", "one": "_Seules les {n} dernières lignes d'outils sont gardées ; dans les tâches très longues, les plus anciennes ont peut-être déjà disparu._", "other": "_Seules les {n} dernières lignes d'outils sont gardées ; dans les tâches très longues, les plus anciennes ont peut-être déjà disparu._"}}
 {"k": "log.title", "src": "2d9e96f5", "v": "# {session} - journal complet"}
+{"k": "login.fix.cloud", "src": "99b6f423", "v": "Vérifiez les identifiants de votre fournisseur cloud, sur l'ordinateur où tourne aipager."}
+{"k": "login.fix.gateway", "src": "250eb193", "v": "Vérifiez la clé de l'adresse indiquée dans {name}, sur l'ordinateur où tourne aipager."}
+{"k": "login.fix.login", "src": "c8947c81", "v": "Lancez {command} sur l'ordinateur où tourne aipager."}
+{"k": "login.fix.variable", "src": "c2bf0313", "v": "Vérifiez ou remplacez {name} sur l'ordinateur où tourne aipager."}
+{"k": "login.found", "src": "91657bbb", "v": "Trouvé : {kinds}"}
+{"k": "login.kind.api_key", "src": "fbd04c29", "v": "clé API ({name})"}
+{"k": "login.kind.auth_token", "src": "4a4de002", "v": "jeton d'authentification ({name})"}
+{"k": "login.kind.bedrock_token", "src": "5d77e4f5", "v": "jeton Bedrock ({name})"}
+{"k": "login.kind.cloud_switch", "src": "b29720b1", "v": "réglage de fournisseur cloud ({name})"}
+{"k": "login.kind.setup_token", "src": "f2ada5c8", "v": "jeton setup-token ({name})"}
+{"k": "login.kind.stored_login", "src": "917d972e", "v": "connexion Claude enregistrée"}
+{"k": "login.missing", "src": "ed849a76", "v": "⚠️ Claude n'est pas connecté, et je n'ai trouvé d'identifiants nulle part où je sais chercher."}
+{"k": "login.rejected", "src": "51a6b23b", "v": "⚠️ Claude a refusé ses identifiants, qui ont sans doute expiré ou été révoqués."}
+{"k": "login.unused", "src": "e10a4542", "v": "⚠️ Claude n'est pas connecté, alors que j'ai trouvé sur cet ordinateur des identifiants qu'il n'utilise pas."}
 {"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ Impossible de télécharger les fichiers : {names}"}
 {"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ Impossible de télécharger le fichier : {names}"}
 {"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ Impossible de télécharger ces fichiers ; le reste de l'album a été envoyé sans eux : {names}"}

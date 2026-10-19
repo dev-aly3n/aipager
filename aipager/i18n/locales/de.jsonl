@@ -317,6 +317,20 @@
 {"k": "log.final_answer", "src": "f0ea5fc3", "v": "## Endgültige Antwort"}
 {"k": "log.memory", "src": "df926a90", "v": {"one": "_Gespeichert sind nur die letzten {n} Tool-Zeilen; bei sehr langen Aufgaben können ältere schon fehlen._", "other": "_Gespeichert sind nur die letzten {n} Tool-Zeilen; bei sehr langen Aufgaben können ältere schon fehlen._"}}
 {"k": "log.title", "src": "2d9e96f5", "v": "# {session} - vollständiges Log"}
+{"k": "login.fix.cloud", "src": "99b6f423", "v": "Prüf auf dem Computer, auf dem aipager läuft, die Zugangsdaten deines Cloud-Anbieters."}
+{"k": "login.fix.gateway", "src": "250eb193", "v": "Prüf auf dem Computer, auf dem aipager läuft, den Schlüssel für die Adresse in {name}."}
+{"k": "login.fix.login", "src": "c8947c81", "v": "Führ {command} auf dem Computer aus, auf dem aipager läuft."}
+{"k": "login.fix.variable", "src": "c2bf0313", "v": "Prüf oder ersetze {name} auf dem Computer, auf dem aipager läuft."}
+{"k": "login.found", "src": "91657bbb", "v": "Gefunden: {kinds}"}
+{"k": "login.kind.api_key", "src": "fbd04c29", "v": "API-Schlüssel ({name})"}
+{"k": "login.kind.auth_token", "src": "4a4de002", "v": "Auth-Token ({name})"}
+{"k": "login.kind.bedrock_token", "src": "5d77e4f5", "v": "Bedrock-Token ({name})"}
+{"k": "login.kind.cloud_switch", "src": "b29720b1", "v": "Schalter für einen Cloud-Anbieter ({name})"}
+{"k": "login.kind.setup_token", "src": "f2ada5c8", "v": "Setup-Token ({name})"}
+{"k": "login.kind.stored_login", "src": "917d972e", "v": "gespeicherte Claude-Anmeldung"}
+{"k": "login.missing", "src": "ed849a76", "v": "⚠️ Claude ist nicht angemeldet, und ich habe nirgends, wo ich suchen kann, Zugangsdaten gefunden."}
+{"k": "login.rejected", "src": "51a6b23b", "v": "⚠️ Claude hat seine Zugangsdaten abgelehnt, sie sind wahrscheinlich abgelaufen oder widerrufen."}
+{"k": "login.unused", "src": "e10a4542", "v": "⚠️ Claude ist nicht angemeldet, obwohl ich auf diesem Computer Zugangsdaten gefunden habe, die Claude nicht nutzt."}
 {"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ Die Dateien konnten nicht heruntergeladen werden: {names}"}
 {"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ Die Datei konnte nicht heruntergeladen werden: {names}"}
 {"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ Diese Dateien konnten nicht heruntergeladen werden, der Rest des Albums wurde ohne sie gesendet: {names}"}

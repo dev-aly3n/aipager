@@ -113,7 +113,10 @@ def test_run_daemon_completes_and_starts_every_component_with_auth_absent(
     bot.recover_sessions.assert_awaited_once()
 
     bot.send_startup_notice.assert_awaited_once()
-    (notice_text,), _ = bot.send_startup_notice.await_args
+    (notice,), _ = bot.send_startup_notice.await_args
+    from aipager import i18n
+    from aipager.bot import auth_notice
+    notice_text = auth_notice.render(notice, i18n.get("en"))
     assert "isn't logged in" in notice_text, notice_text
     assert "claude auth login" in notice_text, notice_text
     # The notice used to carry format_provenance()'s journal line, which
