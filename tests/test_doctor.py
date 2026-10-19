@@ -509,9 +509,9 @@ def test_settings_json_relative_fix_names_daemon_env_while_its_value_is_relative
     (folder / "rel").mkdir()
     (folder / "rel" / "settings.json").write_text(
         json.dumps({"env": {"CLAUDE_CONFIG_DIR": "rel2"}}))
-    assert claude_paths.for_sessions().relative_settings_file is not None
     r = doctor.check_settings_json()
     assert str(no_config_dir) in r.fix
+    assert str(folder / "rel" / "settings.json") not in r.fix
 
 
 def test_settings_json_shows_a_settings_layer_move_as_a_detail(no_config_dir, tmp_path):

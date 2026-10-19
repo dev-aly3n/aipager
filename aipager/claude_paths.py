@@ -95,8 +95,13 @@ class ClaudePaths:
     moved_by_settings: bool
     #: The settings file whose ``env`` block holds the relative
     #: ``CLAUDE_CONFIG_DIR`` behind ``relative`` (None: no such value, or
-    #: it is the session's environment's own).
+    #: the session's environment's own value is relative: that one is fixed
+    #: first, as the settings file it leads to depends on the folder).
     relative_settings_file: Path | None
+    #: The relative ``CLAUDE_CONFIG_DIR`` text behind ``relative`` (the
+    #: environment's own, else the one in ``relative_settings_file``), or
+    #: None when ``relative`` is false.
+    relative_value: str | None
     global_config: Path
     #: ``global_config`` is the legacy ``.config.json``.
     legacy: bool
@@ -242,12 +247,16 @@ def locate(env: Mapping[str, str], *, cwd: str | None = None) -> ClaudePaths:
     config_home, home_rel = start_home, start_rel
     moved = False
     projects_home, projects_rel = start_home, start_rel
+    # The environment's own relative value is the one to fix first: the
+    # settings file it leads to depends on the session's folder.
+    rel_value = value if start_rel else None
     rel_file = None
     if hop is not None:
         config_home, home_rel = _home_from(hop[0], cwd)
         moved = config_home != start_home
         projects_home, projects_rel = config_home, home_rel
-        rel_file = hop[1] if home_rel else None
+        if home_rel and rel_value is None:
+            rel_value, rel_file = hop
         if moved:
             # The moved file's env block is applied too, but sets off no
             # further load: a CLAUDE_CONFIG_DIR there moves only the
@@ -257,8 +266,10 @@ def locate(env: Mapping[str, str], *, cwd: str | None = None) -> ClaudePaths:
                                  *managed])
             if final is not None and final[0] != hop[0]:
                 projects_home, projects_rel = _home_from(final[0], cwd)
-                if projects_rel and rel_file is None:
-                    rel_file = final[1]
+                if projects_rel and rel_value is None:
+                    rel_value, rel_file = final
+    if not (home_rel or projects_rel):
+        rel_value = rel_file = None
     return ClaudePaths(
         config_home=config_home,
         start_home=start_home,
@@ -267,6 +278,7 @@ def locate(env: Mapping[str, str], *, cwd: str | None = None) -> ClaudePaths:
         global_relative=global_rel,
         moved_by_settings=moved,
         relative_settings_file=rel_file,
+        relative_value=rel_value,
         global_config=global_config,
         legacy=legacy,
         user_settings=config_home / "settings.json",

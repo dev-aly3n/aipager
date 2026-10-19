@@ -488,6 +488,41 @@ def test_a_relative_value_in_a_settings_env_block_is_fixed_there(tmp_path, monke
     assert str(daemon_secrets.DAEMON_ENV_PATH) not in fix
 
 
+def test_the_problem_line_shows_the_relative_value_from_a_settings_file(
+        tmp_path, monkeypatch):
+    """The value shown next to "is not an absolute path" is the relative one,
+    not the (absolute) start home it was read from."""
+    monkeypatch.setattr(daemon_secrets, "_recovered", {})
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
+    _write(_default() / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": "rel/cfg"}})
+    problem, _fix = settings_patch.relative_home()
+    assert 'not an absolute path ("rel/cfg")' in problem
+    assert str(_default()) not in problem
+
+
+def test_the_problem_line_shows_an_empty_session_value_quoted(tmp_path, monkeypatch):
+    monkeypatch.setattr(daemon_secrets, "_recovered", {})
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", "")
+    monkeypatch.chdir(tmp_path)
+    problem, _fix = settings_patch.relative_home()
+    assert 'not an absolute path ("")' in problem
+
+
+def test_a_relative_session_value_is_fixed_in_daemon_env_over_a_relative_inner_file(
+        tmp_path, monkeypatch):
+    """The session's value is relative and the settings file it leads to
+    holds another relative value: the fix still names daemon.env."""
+    monkeypatch.setattr(daemon_secrets, "_recovered", {})
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", "rel")
+    monkeypatch.chdir(tmp_path)
+    inner = _write(tmp_path / "rel" / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": "rel2"}})
+    problem, fix = settings_patch.relative_home()
+    assert str(daemon_secrets.DAEMON_ENV_PATH) in fix
+    assert str(inner) not in fix
+    assert 'not an absolute path ("rel")' in problem
+
+
 def test_the_wizard_still_writes_an_absolute_config_dir(cfg, capsys):
     """Control for the test above: an absolute value is patched."""
     settings_patch._step_settings()

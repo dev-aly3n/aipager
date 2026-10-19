@@ -437,10 +437,9 @@ def _config_dir_notes(paths) -> tuple[list[str], str | None]:
         notes.append(f"transcripts go to {paths.projects}")
     if paths.relative or paths.global_relative:
         notes.append(f"{key} is not an absolute path")
-        # daemon.env does not override a settings file's env block.
-        where = daemon_secrets.DAEMON_ENV_PATH
-        if paths.relative_settings_file is not None and not paths.global_relative:
-            where = paths.relative_settings_file
+        # daemon.env does not override a settings file's env block. The
+        # file is None while daemon.env's own value is relative (fixed first).
+        where = paths.relative_settings_file or daemon_secrets.DAEMON_ENV_PATH
         warn = f"set an absolute {key} in {where}"
     return notes, warn
 

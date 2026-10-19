@@ -248,6 +248,45 @@ def test_a_relative_session_value_names_no_settings_file(home, tmp_path):
     assert p.relative and p.relative_settings_file is None
 
 
+def test_a_relative_session_value_names_no_file_over_a_relative_inner_value(home, tmp_path):
+    """The session's own value is relative and the settings file it leads to
+    holds another relative one: no file is named (the environment's value is
+    fixed first; the file it leads to depends on the folder)."""
+    folder = tmp_path / "proj"
+    _write(folder / "rel" / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": "rel2"}})
+    p = claude_paths.locate({"CLAUDE_CONFIG_DIR": "rel"}, cwd=str(folder))
+    assert p.relative and p.config_home == folder / "rel2"
+    assert p.relative_settings_file is None
+    assert p.relative_value == "rel"
+
+
+def test_an_empty_session_value_names_no_file_over_a_relative_inner_value(home, tmp_path):
+    """An empty value is relative too (the folder itself) but leaves the
+    global config alone: still no file is named."""
+    folder = tmp_path / "proj"
+    _write(folder / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": "rel2"}})
+    p = claude_paths.locate({"CLAUDE_CONFIG_DIR": ""}, cwd=str(folder))
+    assert p.relative and not p.global_relative
+    assert p.relative_settings_file is None
+    assert p.relative_value == ""
+
+
+def test_a_relative_value_from_a_settings_file_is_kept(home, tmp_path):
+    _write(home / ".claude" / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": "rel"}})
+    p = claude_paths.locate({}, cwd=str(tmp_path / "proj"))
+    assert p.relative_value == "rel"
+
+
+def test_a_relative_session_value_moved_to_an_absolute_home_keeps_no_value(home, tmp_path):
+    """Nothing relative decides the settings or the transcripts: no value."""
+    folder = tmp_path / "proj"
+    _write(folder / "rel" / "settings.json",
+           {"env": {"CLAUDE_CONFIG_DIR": str(tmp_path / "abs")}})
+    p = claude_paths.locate({"CLAUDE_CONFIG_DIR": "rel"}, cwd=str(folder))
+    assert not p.relative and p.global_relative
+    assert p.relative_value is None and p.relative_settings_file is None
+
+
 def test_an_absolute_setup_names_no_relative_settings_file(home, tmp_path):
     _write(home / ".claude" / "settings.json",
            {"env": {"CLAUDE_CONFIG_DIR": str(tmp_path / "moved")}})
@@ -296,6 +335,7 @@ def test_a_relative_last_value_names_the_moved_file(home, tmp_path):
     moved = _write(c1 / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": "rel"}})
     p = claude_paths.locate({}, cwd=str(tmp_path / "proj"))
     assert p.relative and p.relative_settings_file == moved
+    assert p.relative_value == "rel"
 
 
 def test_a_settings_value_that_is_not_text_moves_nothing(home):

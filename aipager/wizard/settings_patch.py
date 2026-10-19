@@ -27,7 +27,8 @@ _REINSTALL = "uv tool install --reinstall aipager"
 
 #: Why aipager writes no hooks for a relative CLAUDE_CONFIG_DIR, and the fix.
 #: The daemon follows the same rule (claude_bootstrap._log_relative).
-RELATIVE_HOME = ("CLAUDE_CONFIG_DIR is not an absolute path ({home}): Claude Code "
+#: ``{value}``: the relative value itself, JSON-quoted (it can be empty).
+RELATIVE_HOME = ("CLAUDE_CONFIG_DIR is not an absolute path ({value}): Claude Code "
                  "keeps its settings inside each session's folder, and aipager "
                  "writes no hooks there.")
 #: ``{where}``: daemon.env, or the settings file whose ``env`` block holds
@@ -346,7 +347,8 @@ def relative_home() -> tuple[str, str] | None:
     if not paths.relative:
         return None
     where = paths.relative_settings_file or daemon_secrets.DAEMON_ENV_PATH
-    return RELATIVE_HOME.format(home=paths.start_home), RELATIVE_FIX.format(where=where)
+    value = json.dumps(paths.relative_value or "", ensure_ascii=False)
+    return RELATIVE_HOME.format(value=value), RELATIVE_FIX.format(where=where)
 
 
 def plan_settings(path: Path | None = None) -> SettingsPlan:
