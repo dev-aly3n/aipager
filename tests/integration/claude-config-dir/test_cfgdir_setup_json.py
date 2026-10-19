@@ -13,6 +13,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 from _cfgdir_kit import has_hooks
 
 _AS_DIR = Path(__file__).resolve().parents[1] / "agent-setup"
@@ -65,3 +67,76 @@ def test_setup_follows_a_settings_env_move(env, cc):
     wjson(cc.home_settings, {"env": {CCD: str(cc.x)}})
     env.setup()
     assert has_hooks(cc.x / "settings.json")
+
+
+# ---- a relative config home: refused, nothing written (review-1 rev-iter1-003) -------
+
+_RELATIVE = ["", "  ", "relcfg"]
+_RELATIVE_IDS = ["empty", "whitespace", "relative"]
+
+
+def _rel_target(cc, value):
+    return (cc.work / value / "settings.json") if value else (cc.work / "settings.json")
+
+
+@pytest.mark.parametrize("value", _RELATIVE, ids=_RELATIVE_IDS)
+def test_setup_refuses_a_relative_config_dir(env, cc, monkeypatch, value):
+    monkeypatch.chdir(cc.work)
+    monkeypatch.setenv(CCD, value)
+    r = env.setup()
+    assert (r.code, r.json["error"]) == (1, "settings_invalid")
+
+
+@pytest.mark.parametrize("value", _RELATIVE, ids=_RELATIVE_IDS)
+def test_setup_writes_no_settings_into_a_relative_config_dir(env, cc, monkeypatch, value):
+    monkeypatch.chdir(cc.work)
+    monkeypatch.setenv(CCD, value)
+    env.setup()
+    assert not _rel_target(cc, value).exists()
+
+
+def test_setup_with_a_relative_config_dir_writes_no_default_file(env, cc, monkeypatch):
+    monkeypatch.chdir(cc.work)
+    monkeypatch.setenv(CCD, "relcfg")
+    env.setup()
+    assert not cc.home_settings.exists()
+
+
+def test_setup_with_a_relative_config_dir_writes_nothing(env, cc, monkeypatch):
+    monkeypatch.chdir(cc.work)
+    monkeypatch.setenv(CCD, "relcfg")
+    before = env.snapshot()
+    env.setup()
+    assert env.snapshot() == before
+
+
+def test_setup_refuses_a_relative_daemon_env_value(env, cc, monkeypatch):
+    monkeypatch.chdir(cc.work)
+    cc.set_daemon_env(CLAUDE_CONFIG_DIR="relcfg")
+    r = env.setup()
+    assert (r.code, r.json["error"]) == (1, "settings_invalid")
+
+
+def test_setup_refusal_message_is_relative_homes_problem(env, cc, monkeypatch):
+    from aipager.wizard import settings_patch
+    monkeypatch.chdir(cc.work)
+    monkeypatch.setenv(CCD, "relcfg")
+    problem, _fix = settings_patch.relative_home()
+    assert env.setup().json["message"] == problem
+
+
+def test_setup_refusal_fix_is_relative_homes_fix(env, cc, monkeypatch):
+    from aipager.wizard import settings_patch
+    monkeypatch.chdir(cc.work)
+    monkeypatch.setenv(CCD, "relcfg")
+    _problem, fix = settings_patch.relative_home()
+    assert env.setup().json["fix"] == fix
+
+
+def test_setup_leaves_a_projects_own_settings_file_alone(env, cc, monkeypatch):
+    raw = '{"project": "own file"}'
+    (cc.work / "settings.json").write_text(raw)
+    monkeypatch.chdir(cc.work)
+    monkeypatch.setenv(CCD, "")
+    env.setup()
+    assert (cc.work / "settings.json").read_text() == raw
