@@ -682,6 +682,49 @@ def test_transcript_allowed_only_under_claudes_projects(home, tmp_path, monkeypa
     assert ob.transcript_allowed(str(alt))
 
 
+def _daemon_env_config_dir(tmp_path, value):
+    from aipager import daemon_secrets
+    daemon_secrets.DAEMON_ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
+    daemon_secrets.DAEMON_ENV_PATH.write_text(f"CLAUDE_CONFIG_DIR={value}\n")
+
+
+def _alt_transcript(cfg):
+    alt = cfg / "projects" / "-p" / "a.jsonl"
+    alt.parent.mkdir(parents=True)
+    alt.write_text("")
+    return alt
+
+
+def test_a_daemon_env_config_dir_is_a_transcript_root(home, tmp_path, monkeypatch):
+    """Sessions aipager starts get daemon.env's CLAUDE_CONFIG_DIR and write
+    their transcripts under it; the daemon's own env never has it."""
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
+    cfg = tmp_path / "cfg"
+    alt = _alt_transcript(cfg)
+    assert not ob.transcript_allowed(str(alt))
+    _daemon_env_config_dir(tmp_path, cfg)
+    assert ob.transcript_allowed(str(alt))
+    monkeypatch.setattr(ob, "_own_uid", lambda: os.geteuid() + 1)
+    assert not ob.transcript_allowed(str(alt))
+
+
+def test_the_default_projects_folder_stays_a_root(home, tmp_path, monkeypatch):
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
+    _daemon_env_config_dir(tmp_path, tmp_path / "cfg")
+    assert ob.transcript_allowed(str(_transcript(home)))
+
+
+def test_a_relative_config_dir_is_not_a_transcript_root(home, tmp_path, monkeypatch):
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
+    monkeypatch.chdir(tmp_path)
+    alt = _alt_transcript(tmp_path / "rel")
+    _daemon_env_config_dir(tmp_path, "rel")
+    assert not ob.transcript_allowed(str(alt))
+
+
 def test_transcript_owned_by_another_user_is_not_read(home, monkeypatch):
     tp = _transcript(home)
     monkeypatch.setattr(ob, "_own_uid", lambda: os.geteuid() + 1)

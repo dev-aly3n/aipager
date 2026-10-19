@@ -485,18 +485,20 @@ def claude_channel_info(realpath: str | None = None) -> tuple[str, str]:
     ``channel`` is Claude Code's own ``autoUpdatesChannel`` (latest|stable|
     rc; anything else → latest), so the "latest" we show is the version
     ``claude update`` would actually install. ``method`` comes from
-    ``installMethod`` in ``~/.claude.json``, else from where the resolved
-    binary lives.
+    ``installMethod`` in Claude Code's global config (``~/.claude.json``, or
+    wherever ``CLAUDE_CONFIG_DIR`` puts it for the sessions), else from
+    where the resolved binary lives.
     """
-    from aipager import claude_bootstrap
+    from aipager import claude_paths
 
-    settings = _load_json(claude_bootstrap._SETTINGS)
+    paths = claude_paths.for_sessions()
+    settings = _load_json(paths.user_settings)
     channel = settings.get("autoUpdatesChannel")
     if channel not in _CHANNELS:
         channel = "latest"
 
     method = "unknown"
-    raw = _load_json(claude_bootstrap._CLAUDE_JSON).get("installMethod")
+    raw = _load_json(paths.global_config).get("installMethod")
     if isinstance(raw, str):
         if raw == "native":
             method = "native"

@@ -66,7 +66,7 @@ class Argv:
             return await _REAL_LAUNCH(name, **kw)
 
         monkeypatch.setattr(inject, "_create_subprocess_exec", _exec)
-        monkeypatch.setattr(inject, "_conversation_exists", lambda sid: True)
+        monkeypatch.setattr(inject, "_conversation_exists", lambda sid, projects=None: True)
         monkeypatch.setattr(inject.Path, "is_socket", lambda self: sock["up"])
         monkeypatch.setattr(inject, "kill_session", _kill)
         monkeypatch.setattr(inject, "launch_session", _launch)

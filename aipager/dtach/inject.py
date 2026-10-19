@@ -38,8 +38,19 @@ _create_subprocess_exec = asyncio.create_subprocess_exec
 _key_gap_sleep = asyncio.sleep
 
 
-def _credentials_file_is_fresh() -> bool:
-    """Return True iff ~/.claude/.credentials.json holds an unexpired token.
+def _credentials_path(path: Path | None) -> Path:
+    """*path*, or the credentials file of the sessions' environment
+    (``~/.claude/.credentials.json``, or ``$CLAUDE_CONFIG_DIR``'s)."""
+    if path is not None:
+        return path
+    from aipager import claude_paths
+    return claude_paths.for_sessions().credentials
+
+
+def _credentials_file_is_fresh(path: Path | None = None) -> bool:
+    """Return True iff Claude Code's credentials file (*path*, default the
+    sessions' ``~/.claude/.credentials.json`` or ``$CLAUDE_CONFIG_DIR``'s)
+    holds an unexpired token.
 
     Used by launch_session to decide whether to strip
     ``CLAUDE_CODE_OAUTH_TOKEN`` from the environment of spawned claude
@@ -65,7 +76,7 @@ def _credentials_file_is_fresh() -> bool:
     which is itself a broken state where they'd need to re-login
     anyway.
     """
-    path = Path.home() / ".claude" / ".credentials.json"
+    path = _credentials_path(path)
     try:
         data = json.loads(path.read_text())
         expires_at = data["claudeAiOauth"]["expiresAt"]
@@ -75,8 +86,8 @@ def _credentials_file_is_fresh() -> bool:
         return False
 
 
-def _credentials_file_has_token() -> bool:
-    """Return True iff ~/.claude/.credentials.json holds a real,
+def _credentials_file_has_token(path: Path | None = None) -> bool:
+    """Return True iff Claude Code's credentials file holds a real,
     non-empty ``claudeAiOauth.accessToken``.
 
     Guards :func:`_stash_expired_credentials_file` against renaming
@@ -92,7 +103,7 @@ def _credentials_file_has_token() -> bool:
     behavior (401 on interactive if env token is shadowed), while
     false-positive would DELETE a working config.
     """
-    path = Path.home() / ".claude" / ".credentials.json"
+    path = _credentials_path(path)
     try:
         data = json.loads(path.read_text())
         token = data["claudeAiOauth"]["accessToken"]
@@ -101,8 +112,8 @@ def _credentials_file_has_token() -> bool:
         return False
 
 
-def _credentials_file_is_dead_placeholder() -> bool:
-    """Return True iff ~/.claude/.credentials.json has BOTH
+def _credentials_file_is_dead_placeholder(path: Path | None = None) -> bool:
+    """Return True iff Claude Code's credentials file has BOTH
     ``claudeAiOauth.accessToken`` and ``claudeAiOauth.refreshToken`` as
     empty strings.
 
@@ -120,7 +131,7 @@ def _credentials_file_is_dead_placeholder() -> bool:
     internal refresh path can try. Only the "both empty" case is
     definitively dead-on-arrival.
     """
-    path = Path.home() / ".claude" / ".credentials.json"
+    path = _credentials_path(path)
     try:
         data = json.loads(path.read_text())
         oauth = data["claudeAiOauth"]
@@ -132,9 +143,10 @@ def _credentials_file_is_dead_placeholder() -> bool:
         return False
 
 
-def _stash_expired_credentials_file() -> Path | None:
-    """Rename an expired ~/.claude/.credentials.json aside so claude
-    falls back to CLAUDE_CODE_OAUTH_TOKEN.
+def _stash_expired_credentials_file(path: Path | None = None) -> Path | None:
+    """Rename an expired credentials file (*path*, default the sessions'
+    ``~/.claude/.credentials.json`` or ``$CLAUDE_CONFIG_DIR``'s) aside so
+    claude falls back to CLAUDE_CODE_OAUTH_TOKEN.
 
     Claude Code's INTERACTIVE mode prefers the credentials file over
     the env token even when the file's ``expiresAt`` is in the past,
@@ -165,12 +177,12 @@ def _stash_expired_credentials_file() -> Path | None:
     """
     if not os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
         return None
-    creds = Path.home() / ".claude" / ".credentials.json"
+    creds = _credentials_path(path)
     if not creds.exists():
         return None
-    dead_placeholder = _credentials_file_is_dead_placeholder()
+    dead_placeholder = _credentials_file_is_dead_placeholder(creds)
     traditionally_expired = (
-        _credentials_file_has_token() and not _credentials_file_is_fresh()
+        _credentials_file_has_token(creds) and not _credentials_file_is_fresh(creds)
     )
     if not (dead_placeholder or traditionally_expired):
         return None
@@ -792,10 +804,12 @@ _PROJECT_DIR = os.environ.get("AIPAGER_WORK_DIR", os.getcwd())
 # import. See aipager.claude_resolve for the shared six-call-site resolver.
 
 
-def _conversation_exists(session_id: str) -> bool:
+def _conversation_exists(session_id: str, projects: Path | None = None) -> bool:
     """True when Claude Code has a transcript it could resume for *session_id*.
 
-    Transcripts live at ``~/.claude/projects/<cwd-slug>/<session-id>.jsonl``.
+    Transcripts live at ``<projects>/<cwd-slug>/<session-id>.jsonl``, where
+    *projects* is the sessions' ``~/.claude/projects`` (or
+    ``$CLAUDE_CONFIG_DIR``'s: :mod:`aipager.claude_paths`).
     The slug depends on the directory the session ran in, which the caller
     does not always know, so match on the id across every project — a session
     id is a UUID, so a hit in the wrong project is not a realistic collision.
@@ -806,7 +820,9 @@ def _conversation_exists(session_id: str) -> bool:
     if not session_id:
         return False
     try:
-        projects = Path.home() / ".claude" / "projects"
+        if projects is None:
+            from aipager import claude_paths
+            projects = claude_paths.for_sessions().projects
         return any(projects.glob(f"*/{session_id}.jsonl"))
     except OSError:
         log.debug("conversation lookup failed for %s", session_id, exc_info=True)
@@ -925,9 +941,17 @@ async def launch_session(
                     name, cwd)
         return False, "original project dir is gone"
 
+    # The environment the session gets, and where Claude Code keeps its
+    # files for it (CLAUDE_CONFIG_DIR in daemon.env or the daemon's env, or
+    # a settings env block, moves them): read once, used for every check
+    # below and for the spawn.
+    from aipager import claude_paths
+    session_env = daemon_secrets.build_session_env()
+    paths = claude_paths.locate(session_env, cwd=launch_cwd)
+
     # Build the bash -c command — wraps claude with env vars and prompt
     perms = perm_modes.launch_flag(mode)
-    if resume_id and not _conversation_exists(resume_id):
+    if resume_id and not _conversation_exists(resume_id, paths.projects):
         # Claude Code exits 1 with "No conversation found with session ID"
         # when asked to resume something it cannot find, and a session that
         # has not taken a turn yet has no conversation on disk. `/perms`
@@ -968,7 +992,7 @@ async def launch_session(
     # cleanly from inside a parent Claude.
     #
     # `unset CLAUDE_CODE_OAUTH_TOKEN`: only stripped when a fresh
-    # ~/.claude/.credentials.json is on disk. See
+    # credentials file (the session's: paths.credentials) is on disk. See
     # _credentials_file_is_fresh() for the rationale — briefly:
     # stripping unbreaks interactive users who did `claude auth login`
     # (fresh credentials, stale env token) but breaks headless users
@@ -982,12 +1006,12 @@ async def launch_session(
     # interactive mode otherwise picks the expired file over the env
     # token and 401s on first API call. See
     # _stash_expired_credentials_file() for the full rationale.
-    stashed = _stash_expired_credentials_file()
+    stashed = _stash_expired_credentials_file(paths.credentials)
     if stashed is not None:
         log.info("[%s] stashed expired credentials.json → %s "
                  "(env token will be used instead)", name, stashed.name)
     unset_token = ("unset CLAUDE_CODE_OAUTH_TOKEN; "
-                   if _credentials_file_is_fresh() else "")
+                   if _credentials_file_is_fresh(paths.credentials) else "")
     log.info(
         "[%s] launch: %s CLAUDE_CODE_OAUTH_TOKEN (credentials file %s)",
         name,
@@ -1026,15 +1050,18 @@ async def launch_session(
     # The same goes for Claude Code's "use this API key?" question and its
     # first-run screens: they are answered in the same write, from the very
     # environment the session gets (claude_bootstrap.prepare_session_start).
+    # aipager's hooks too: wired at daemon start, and again here when the
+    # session's settings file is another one (CLAUDE_CONFIG_DIR changed).
     from aipager import claude_bootstrap, safety
-    session_env = daemon_secrets.build_session_env()
     try:
+        claude_bootstrap.ensure_session_hooks(paths)
         trust = launch_cwd
         if safety.holds_home_folder(launch_cwd):
             trust = None
             log.info("[%s] the session's folder is / or a folder above the home folder "
                      "- not marked trusted for Claude Code", name)
-        for change in claude_bootstrap.prepare_session_start(trust, session_env):
+        for change in claude_bootstrap.prepare_session_start(trust, session_env,
+                                                             cwd=launch_cwd):
             if change == "trusted":
                 log.info("[%s] marked the session's folder trusted for Claude Code", name)
             elif change == "key-approved":

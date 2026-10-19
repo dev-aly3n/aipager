@@ -5,13 +5,15 @@ from __future__ import annotations
 import json
 
 from aipager import claude_bootstrap
+from aipager import claude_paths
+from pathlib import Path
 
 
 def test_writes_bypass_flag_to_empty_settings(tmp_path, monkeypatch):
     settings = tmp_path / "settings.json"
     claude_json = tmp_path / ".claude.json"
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", claude_json)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(claude_json).parent)
 
     claude_bootstrap.bootstrap_claude_settings("/workspace")
 
@@ -22,8 +24,8 @@ def test_writes_bypass_flag_to_empty_settings(tmp_path, monkeypatch):
 def test_preserves_existing_settings_keys(tmp_path, monkeypatch):
     settings = tmp_path / "settings.json"
     settings.write_text(json.dumps({"theme": "dark", "myCustomKey": 42}))
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
     # No aipager-hook available — keeps this test focused on the bypass flag
     monkeypatch.setattr(claude_bootstrap.shutil, "which", lambda cmd: None)
     monkeypatch.setattr(claude_bootstrap.sys, "executable", "/nonexistent/python")
@@ -39,9 +41,9 @@ def test_preserves_existing_settings_keys(tmp_path, monkeypatch):
 def test_leaves_claude_json_alone(tmp_path, monkeypatch):
     """The work folder is marked trusted when a session starts in it
     (inject.launch_session), not at daemon start."""
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(tmp_path / "settings.json").parent)
     claude_json = tmp_path / ".claude.json"
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", claude_json)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(claude_json).parent)
 
     claude_bootstrap.bootstrap_claude_settings("/workspace")
 
@@ -63,8 +65,8 @@ def test_idempotent_on_already_set_flags(tmp_path, monkeypatch):
             "hasTrustDialogAccepted": True,
         }}
     }))
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", claude_json)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(claude_json).parent)
 
     mtime_settings = settings.stat().st_mtime_ns
     mtime_claude = claude_json.stat().st_mtime_ns
@@ -82,7 +84,7 @@ def test_does_not_clobber_other_projects(tmp_path, monkeypatch):
             "/other": {"hasTrustDialogAccepted": False, "myKey": "preserve me"},
         }
     }))
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", claude_json)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(claude_json).parent)
 
     assert claude_bootstrap.ensure_folder_trusted("/workspace") is True
 
@@ -98,8 +100,8 @@ def test_leaves_a_corrupted_settings_file_alone(tmp_path, monkeypatch):
     permissions for the one key aipager wanted. Nothing raises."""
     settings = tmp_path / "settings.json"
     settings.write_text("{ not valid json")
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
 
     claude_bootstrap.bootstrap_claude_settings("/workspace")
 
@@ -114,8 +116,8 @@ def test_wires_aipager_hook_when_helper_resolves(tmp_path, monkeypatch):
     sl_bin = tmp_path / "aipager-statusline"
     sl_bin.write_text("#!/bin/sh\nexit 0\n")
     sl_bin.chmod(0o755)
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
     monkeypatch.setattr(claude_bootstrap.shutil, "which",
                         lambda cmd: str(tmp_path / cmd) if cmd in {"aipager-hook", "aipager-statusline"} else None)
 
@@ -142,8 +144,8 @@ def test_wires_aipager_hook_when_helper_resolves(tmp_path, monkeypatch):
 
 def test_hooks_idempotent_no_duplicate(tmp_path, monkeypatch):
     settings = tmp_path / "settings.json"
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
     monkeypatch.setattr(claude_bootstrap.shutil, "which",
                         lambda cmd: f"/usr/bin/{cmd}" if cmd in {"aipager-hook", "aipager-statusline"} else None)
 
@@ -166,8 +168,8 @@ def test_skips_hook_wiring_when_helper_missing(tmp_path, monkeypatch):
     """If aipager-hook isn't on PATH (broken install), don't write a
     bare command that claude can't execute."""
     settings = tmp_path / "settings.json"
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
     monkeypatch.setattr(claude_bootstrap.shutil, "which", lambda cmd: None)
     monkeypatch.setattr(claude_bootstrap.sys, "executable", "/nonexistent/python")
 
@@ -249,8 +251,8 @@ _OLD_EVENTS = (
 def test_new_events_wired_on_fresh_install(tmp_path, monkeypatch):
     """On a fresh settings.json the four new events are subscribed."""
     settings = tmp_path / "settings.json"
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
     monkeypatch.setattr(claude_bootstrap.shutil, "which",
                         lambda cmd: f"/usr/bin/{cmd}" if cmd in {"aipager-hook", "aipager-statusline"} else None)
 
@@ -277,8 +279,8 @@ def test_new_events_patched_into_existing_settings(tmp_path, monkeypatch):
             existing_hooks[event] = [{"hooks": [{"type": "command", "command": "/usr/bin/aipager-hook"}]}]
     settings.write_text(json.dumps({"hooks": existing_hooks}))
 
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
     monkeypatch.setattr(claude_bootstrap.shutil, "which",
                         lambda cmd: f"/usr/bin/{cmd}" if cmd in {"aipager-hook", "aipager-statusline"} else None)
 
@@ -309,8 +311,8 @@ def test_bootstrap_returns_none_when_claude_does_not_resolve(tmp_path, monkeypat
     """The autouse no-real-claude fixture means discovery yields nothing —
     bootstrap must still complete (its other file-patching work) and
     simply report no provenance."""
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(tmp_path / "settings.json").parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
 
     result = claude_bootstrap.bootstrap_claude_settings("/workspace")
 
@@ -324,8 +326,8 @@ def test_bootstrap_returns_provenance_lines_matching_format_provenance(
         tmp_path, monkeypatch):
     from aipager import claude_resolve
 
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(tmp_path / "settings.json").parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
 
     resolved = claude_resolve.ResolvedClaude(
         chosen=claude_resolve.ClaudeInstall(
@@ -354,8 +356,8 @@ def test_bootstrap_probes_auth_through_build_session_env_not_bare_environ(
     token never enters the latter."""
     from aipager import claude_resolve, daemon_secrets
 
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(tmp_path / "settings.json").parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
 
     resolved = claude_resolve.ResolvedClaude(
         chosen=claude_resolve.ClaudeInstall(

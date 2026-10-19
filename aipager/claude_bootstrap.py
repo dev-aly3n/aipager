@@ -4,6 +4,11 @@ Three things block a fresh container/headless aipager install from
 working over Telegram, because the wizard (``aipager config``) is
 normally what writes them:
 
+Claude Code's files are wherever it keeps them for the sessions'
+environment (``$CLAUDE_CONFIG_DIR``, the legacy ``.config.json``, a
+settings ``env`` block that moves them): :mod:`aipager.claude_paths`
+names them. Below, ``~/.claude`` and ``~/.claude.json`` are the defaults.
+
 1. ``~/.claude/settings.json`` — without ``skipDangerousModePermissionPrompt``,
    claude shows a "WARNING: Bypass Permissions mode" picker every time
    it's launched with ``--dangerously-skip-permissions`` (which aipager
@@ -31,7 +36,7 @@ the wizard sets when the user accepts the prompts interactively — a
 Telegram-only user (containerized friend deploy, SSH-less host) never
 sees those prompts, so aipager has to write the acceptance for them.
 
-Best-effort: failures are logged and skipped so a missing ``~/.claude``
+Best-effort: failures are logged and skipped so a missing config
 directory or non-writable filesystem never blocks daemon startup. A file
 that cannot be read whole, or that a running Claude changes meanwhile, is
 left as it is (:func:`_update_json`).
@@ -51,6 +56,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from aipager import claude_paths
 from aipager._test_guard import check_write
 
 log = logging.getLogger(__name__)
@@ -112,9 +118,6 @@ class ProvenanceInfo:
             )
 
 
-_SETTINGS = Path.home() / ".claude" / "settings.json"
-_CLAUDE_JSON = Path.home() / ".claude.json"
-
 # Mirror the wizard's hook surface so containerized deploys get the
 # same coverage as `aipager config`. Kept in sync with
 # ``aipager.wizard._constants.HOOK_EVENTS`` (the wizard is the canonical
@@ -168,7 +171,7 @@ def _before_replace(path: Path) -> None:
     before the check that *path* is unchanged."""
 
 
-def _update_json(path: Path, change) -> bool:
+def _update_json(path: Path, change, *, empty_ok: bool = False) -> bool:
     """Apply *change* to the JSON object in *path* and write it back, only
     when that is safe. *change* edits the dict in place and returns True
     when it changed it. True when the file was written. Never raises for a
@@ -184,7 +187,11 @@ def _update_json(path: Path, change) -> bool:
     then left as it is: a change of Claude's is never lost to ours.
     Claude Code 2.1.301 names no lock file for it, so there is none to
     take. A symlinked file (a dotfile manager's) is written where it points,
-    the link kept; the file keeps its mode."""
+    the link kept; the file keeps its mode.
+
+    *empty_ok*: an existing 0-byte file reads as ``{}``. Only for the legacy
+    ``.config.json``, which Claude Code uses (and writes into) even when it
+    is empty (claude_paths)."""
     # A new file's mode comes from the name asked for: a link
     # ~/.claude.json -> dotfiles/claude.json still holds a dot-file.
     new_mode = 0o600 if Path(path).name.startswith(".") else 0o644
@@ -203,7 +210,7 @@ def _update_json(path: Path, change) -> bool:
                     # Read while Claude wrote it: maybe torn, read again
                     # rather than give up on it as broken.
                     continue
-                data = json.loads(raw.decode("utf-8"))
+                data = {} if empty_ok and raw == b"" else json.loads(raw.decode("utf-8"))
         except (OSError, ValueError) as e:
             log.warning("claude bootstrap: %s is not readable JSON (%s) - left as it is",
                         path, type(e).__name__)
@@ -243,14 +250,14 @@ def _update_json(path: Path, change) -> bool:
     return False
 
 
-def _ensure_bypass_accepted() -> bool:
-    """Return True if the settings file was modified."""
+def _ensure_bypass_accepted(paths: claude_paths.ClaudePaths) -> bool:
+    """Return True if the sessions' settings file was modified."""
     def change(settings: dict) -> bool:
         if settings.get("skipDangerousModePermissionPrompt") is True:
             return False
         settings["skipDangerousModePermissionPrompt"] = True
         return True
-    return _update_json(_SETTINGS, change)
+    return _update_json(paths.user_settings, change)
 
 
 def _trusted(projects: dict, folder: str) -> bool:
@@ -267,19 +274,20 @@ def _trusted(projects: dict, folder: str) -> bool:
         path = parent
 
 
-def _already_trusted(folder: str) -> bool:
-    """*folder* or a folder above it is trusted in ~/.claude.json (read
-    only; an unreadable file counts as not trusted)."""
+def _already_trusted(folder: str, paths: claude_paths.ClaudePaths) -> bool:
+    """*folder* or a folder above it is trusted in Claude Code's global
+    config (read only; an unreadable file counts as not trusted)."""
     try:
-        data = json.loads(_read_bytes(_CLAUDE_JSON))
+        data = json.loads(_read_bytes(paths.global_config))
     except (OSError, ValueError):
         return False
     projects = data.get("projects") if isinstance(data, dict) else None
     return isinstance(projects, dict) and _trusted(projects, os.path.realpath(folder))
 
 
-def ensure_folder_trusted(folder: str) -> bool:
-    """Trust *folder* in ~/.claude.json, as answering Claude Code's "Do you
+def ensure_folder_trusted(folder: str, env: Mapping[str, str] | None = None) -> bool:
+    """Trust *folder* in Claude Code's global config for *env* (default: the
+    sessions' environment), as answering Claude Code's "Do you
     trust this folder?" with yes would, unless it or a folder above it is
     trusted already. True when the file was written.
 
@@ -287,12 +295,20 @@ def ensure_folder_trusted(folder: str) -> bool:
     message sent to it lands on the dialog as Enter on "No, exit" and the
     session ends. The key is the folder's real path, the one Claude Code
     looks up."""
+    if env is None:
+        from aipager import daemon_secrets
+        env = daemon_secrets.build_session_env()
+    paths = claude_paths.locate(env, cwd=folder)
+    if paths.global_relative:
+        _log_relative(paths)
+        return False
     folder = os.path.realpath(folder)
-    return _update_json(_CLAUDE_JSON, lambda data: _trust_in(data, folder))
+    return _update_json(paths.global_config, lambda data: _trust_in(data, folder),
+                        empty_ok=paths.legacy)
 
 
 def _trust_in(data: dict, folder: str) -> bool:
-    """Mark the real path *folder* trusted in the parsed ~/.claude.json
+    """Mark the real path *folder* trusted in the parsed global config
     *data*, unless it or a folder above it is. True when *data* changed."""
     projects = data.setdefault("projects", {})
     if not isinstance(projects, dict) or _trusted(projects, folder):
@@ -340,31 +356,17 @@ _CLOUD_SWITCHES = ("CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
 _TOKEN_VARS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN")
 
 
-def _claude_settings() -> dict:
-    """~/.claude/settings.json, or {} when it cannot be read whole."""
-    try:
-        data = json.loads(_SETTINGS.read_bytes())
-    except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def _settings_env(settings: dict) -> dict[str, str]:
-    block = settings.get("env")
-    if not isinstance(block, dict):
-        return {}
-    return {k: v for k, v in block.items() if isinstance(k, str) and isinstance(v, str)}
-
-
-def claude_env(env: Mapping[str, str], settings: dict | None = None) -> dict[str, str]:
-    """The environment Claude Code runs with: *env* with the ``env`` block of
-    ~/.claude/settings.json laid over it, which is what Claude Code does.
-    A project's ``.claude/settings*.json`` and managed settings can set or
-    blank a key too and are not read: then a session is no better off than
-    without these answers. Values are secrets: never log them."""
-    if settings is None:
-        settings = _claude_settings()
-    return {**env, **_settings_env(settings)}
+def claude_env(env: Mapping[str, str], *, folder: str | None = None) -> dict[str, str]:
+    """The environment Claude Code runs with: *env* with the ``env`` blocks
+    of its settings laid over it, as Claude Code does: the user settings
+    file (and the one a ``CLAUDE_CONFIG_DIR`` there moves it to), then, for
+    a *folder*, its ``.claude/settings.json`` and ``settings.local.json``,
+    then managed settings (:func:`aipager.claude_paths.settings_layers`).
+    MDM profiles, the registry and server-delivered settings are not read.
+    Values are secrets: never log them."""
+    paths = claude_paths.locate(env, cwd=folder)
+    layers = claude_paths.settings_layers(paths, folder, project=folder is not None)
+    return claude_paths.layered_env(env, layers)
 
 
 def _switch_on(value: str | None) -> bool:
@@ -372,12 +374,13 @@ def _switch_on(value: str | None) -> bool:
     return isinstance(value, str) and value.strip().lower() in ("1", "true", "yes", "on")
 
 
-def _helper_set(settings: dict) -> bool:
-    helper = settings.get("apiKeyHelper")
+def _helper_set(layers: list[tuple[str, dict]]) -> bool:
+    helper = claude_paths.layer_value(layers, "apiKeyHelper")
     return isinstance(helper, str) and bool(helper.strip())
 
 
-def _other_login(data: dict, env: Mapping[str, str], settings: dict) -> bool:
+def _other_login(data: dict, env: Mapping[str, str], layers: list[tuple[str, dict]],
+                 paths: claude_paths.ClaudePaths) -> bool:
     """Something other than ANTHROPIC_API_KEY logs a session in: a token in
     its environment, a saved claude.ai or Console login, or an apiKeyHelper.
     The login file's existence is checked; it is never read."""
@@ -389,21 +392,23 @@ def _other_login(data: dict, env: Mapping[str, str], settings: dict) -> bool:
     saved_key = data.get("primaryApiKey")
     if isinstance(saved_key, str) and saved_key.strip():
         return True
-    if _helper_set(settings):
+    if _helper_set(layers):
         return True
     try:
-        return (_SETTINGS.parent / ".credentials.json").exists()
+        return paths.credentials.exists()
     except OSError:
         return False
 
 
-def _key_set_on_purpose(key: str, settings: dict) -> bool:
-    """*key* was set for Claude Code or for aipager: it is the one in Claude
-    Code's settings.json, or in aipager's own credential file. Otherwise it
-    was only inherited from the environment aipager was started in."""
+def _key_set_on_purpose(key: str, layers: list[tuple[str, dict]]) -> bool:
+    """*key* was set for Claude Code or for aipager: it is the one in one of
+    Claude Code's settings files the session reads (user, a trusted folder's
+    project or local, managed), or in aipager's own credential file.
+    Otherwise it was only inherited from the environment aipager was started
+    in."""
     from aipager import daemon_secrets
 
-    sources = (_settings_env(settings).get(_API_KEY),
+    sources = (*(block.get(_API_KEY) for block in claude_paths.layer_env(layers)),
                daemon_secrets.read_daemon_credential().get(_API_KEY),
                daemon_secrets.recovered_credential().get(_API_KEY))
     return any(isinstance(v, str) and v.strip() == key for v in sources)
@@ -493,25 +498,28 @@ class _SessionCredential:
     the environment it gets. Holds the key: never log it."""
 
     run_env: dict = field(repr=False)
-    settings: dict = field(repr=False)
-    #: Claude Code reads ~/.claude.json (CLAUDE_CONFIG_DIR is not set).
-    own_file: bool = True
+    layers: list = field(repr=False)
+    paths: claude_paths.ClaudePaths
     cloud: bool = False
     #: The ANTHROPIC_API_KEY Claude Code would ask about, trimmed, or "".
     key: str = field(default="", repr=False)
     on_purpose: bool = False
 
 
-def _session_credential(env: Mapping[str, str]) -> _SessionCredential:
-    settings = _claude_settings()
-    run_env = claude_env(env, settings)
-    # CLAUDE_CONFIG_DIR moves Claude Code's config to a file this does not write.
-    own_file = not (run_env.get("CLAUDE_CONFIG_DIR") or "").strip()
+def _session_credential(env: Mapping[str, str], *, folder: str | None = None,
+                        project: bool = False,
+                        paths: claude_paths.ClaudePaths | None = None) -> _SessionCredential:
+    """*folder*'s project and local settings count only when *project*:
+    Claude Code reads them in a trusted folder only."""
+    if paths is None:
+        paths = claude_paths.locate(env, cwd=folder)
+    layers = claude_paths.settings_layers(paths, folder, project=project)
+    run_env = claude_paths.layered_env(env, layers)
     cloud = any(_switch_on(run_env.get(var)) for var in _CLOUD_SWITCHES)
-    key = (run_env.get(_API_KEY) or "").strip() if own_file and not cloud else ""
-    return _SessionCredential(run_env=run_env, settings=settings, own_file=own_file,
+    key = (run_env.get(_API_KEY) or "").strip() if not cloud else ""
+    return _SessionCredential(run_env=run_env, layers=layers, paths=paths,
                               cloud=cloud, key=key,
-                              on_purpose=bool(key) and _key_set_on_purpose(key, settings))
+                              on_purpose=bool(key) and _key_set_on_purpose(key, layers))
 
 
 def refused_key_strands_sessions(env: Mapping[str, str]) -> bool:
@@ -524,31 +532,44 @@ def refused_key_strands_sessions(env: Mapping[str, str]) -> bool:
         cred = _session_credential(env)
         if not cred.key:
             return False
-        data = json.loads(_read_bytes(_CLAUDE_JSON))
+        data = json.loads(_read_bytes(cred.paths.global_config))
         if not isinstance(data, dict) or _key_state(data, cred.key) != "rejected":
             return False
-        other = _other_login(data, cred.run_env, cred.settings)
+        other = _other_login(data, cred.run_env, cred.layers, cred.paths)
         return not other and api_key_answer("rejected", cred.on_purpose, other) is None
     except Exception:
         return False
 
 
-def prepare_session_start(folder: str | None, env: Mapping[str, str]) -> list[str]:
-    """Answer, in ~/.claude.json, the questions Claude Code would open a
+def prepare_session_start(folder: str | None, env: Mapping[str, str], *,
+                          cwd: str | None = None) -> list[str]:
+    """Answer, in Claude Code's global config for *env* (``~/.claude.json``,
+    ``$CLAUDE_CONFIG_DIR/.claude.json`` or the legacy ``.config.json``:
+    :mod:`aipager.claude_paths`), the questions Claude Code would open a
     session with, as its owner would in a terminal. A session started from
     Telegram cannot answer them: the first message lands on one as Enter.
 
     - *folder* (a real path, or None for none): trusted, as
       :func:`ensure_folder_trusted` does.
-    - The ANTHROPIC_API_KEY the session gets (*env* with Claude Code's
-      settings.json ``env`` over it): answered per :func:`api_key_answer`.
+    - *cwd*: the folder the session starts in, also when *folder* is None
+      (a folder that holds the home folder is never trusted here). Its
+      project and local settings count only when it is trusted (now or
+      already), as Claude Code reads them only then.
+    - The ANTHROPIC_API_KEY the session gets (*env* with the ``env`` blocks
+      of Claude Code's settings over it): answered per :func:`api_key_answer`.
     - The first-run screens: marked done when the session has a credential
       that needs no login screen.
 
     One read and one write of the file, under :func:`_update_json`'s rules.
     Returns what changed: ``"trusted"``, ``"key-approved"``,
     ``"key-declined"``, ``"onboarded"``. Never logs a key or part of one."""
-    cred = _session_credential(env)
+    base = cwd if cwd is not None else folder
+    paths = claude_paths.locate(env, cwd=base)
+    if paths.global_relative:
+        _log_relative(paths)
+        return []
+    project = base is not None and (folder is not None or _already_trusted(base, paths))
+    cred = _session_credential(env, folder=base, project=project, paths=paths)
     folder = os.path.realpath(folder) if folder is not None else None
     done: list[str] = []
     notes: list[str] = []
@@ -559,29 +580,36 @@ def prepare_session_start(folder: str | None, env: Mapping[str, str]) -> list[st
         notes.clear()
         if folder is not None and _trust_in(data, folder):
             done.append("trusted")
-        if cred.own_file:
-            other = _other_login(data, cred.run_env, cred.settings)
-            key_used = False
-            if cred.key:
-                answered, key_used = _answer_key(data, cred.key, cred.on_purpose, other, notes)
-                if answered:
-                    done.append(answered)
-            if (data.get("hasCompletedOnboarding") is not True
-                    and (key_used or cred.cloud or other)):
-                data["hasCompletedOnboarding"] = True
-                done.append("onboarded")
+        other = _other_login(data, cred.run_env, cred.layers, cred.paths)
+        key_used = False
+        if cred.key:
+            answered, key_used = _answer_key(data, cred.key, cred.on_purpose, other, notes)
+            if answered:
+                done.append(answered)
+        if (data.get("hasCompletedOnboarding") is not True
+                and (key_used or cred.cloud or other)):
+            data["hasCompletedOnboarding"] = True
+            done.append("onboarded")
         return bool(done)
 
-    wrote = _update_json(_CLAUDE_JSON, change)
+    wrote = _update_json(paths.global_config, change, empty_ok=paths.legacy)
     for note in notes:
         _log_note(note)
     return list(done) if wrote else []
 
 
+def _log_relative(paths: claude_paths.ClaudePaths) -> None:
+    """A relative CLAUDE_CONFIG_DIR puts Claude Code's files inside each
+    session's own folder: aipager writes none of them there."""
+    log.warning("claude bootstrap: CLAUDE_CONFIG_DIR is not an absolute path, so Claude Code "
+                "keeps its config inside each session's folder (%s here); aipager does not "
+                "write there - set an absolute CLAUDE_CONFIG_DIR", paths.start_home)
+
+
 def _log_note(note: str) -> None:
     if note == "odd-record":
         log.warning("claude bootstrap: Claude Code's record of API key answers in "
-                    "~/.claude.json is not in the expected shape - left as it is")
+                    "its global config is not in the expected shape - left as it is")
     elif note == "refused-no-login":
         log.warning("claude bootstrap: Claude Code was told not to use the ANTHROPIC_API_KEY "
                     "sessions get, and nothing else logs them in: they will answer \"Not "
@@ -637,16 +665,72 @@ def _has_hook_cmd(entries: list, bare_name: str) -> bool:
     return False
 
 
-def _ensure_hooks_and_statusline() -> bool:
-    """Wire aipager-hook into every hook event + statusLine. Idempotent."""
+def _ensure_hooks_and_statusline(paths: claude_paths.ClaudePaths) -> bool:
+    """Wire aipager-hook into every hook event + statusLine of the settings
+    file the sessions read. Idempotent. True when the file was written."""
     hook_path = _resolve(_HOOK_CMD)
     statusline_path = _resolve(_STATUSLINE_CMD)
     if not hook_path:
         log.debug("claude bootstrap: %s not on PATH; skipping hook wiring", _HOOK_CMD)
         return False
 
-    return _update_json(_SETTINGS, lambda settings: _wire_hooks(
+    return _update_json(paths.user_settings, lambda settings: _wire_hooks(
         settings, hook_path, statusline_path))
+
+
+def hooks_wired(path: Path) -> bool:
+    """The settings file at *path* has an ``aipager-hook`` command entry
+    (read only; an unreadable file has none)."""
+    hooks = claude_paths.read_settings(path).get("hooks")
+    if not isinstance(hooks, dict):
+        return False
+    try:
+        return any(isinstance(entries, list) and _has_hook_cmd(entries, _HOOK_CMD)
+                   for entries in hooks.values())
+    except (AttributeError, TypeError):
+        return False
+
+
+#: Real paths of the settings files this process wired aipager's hooks
+#: into, so a launch rewires only when the sessions' file changed.
+_WIRED: set[str] = set()
+
+
+def _wire_and_check(paths: claude_paths.ClaudePaths) -> bool:
+    """Wire the hooks into *paths*' settings file and say loudly when the
+    sessions will have none. True when the file has aipager's hooks."""
+    if paths.relative:
+        _log_relative(paths)
+        log.warning("claude bootstrap: sessions will start without aipager's hooks "
+                    "(Claude Code reads them from %s)", paths.user_settings)
+        return False
+    try:
+        if _ensure_hooks_and_statusline(paths):
+            log.info("claude bootstrap: wired %s hooks + statusLine into %s",
+                     _HOOK_CMD, paths.user_settings)
+    except Exception:
+        log.debug("claude bootstrap: failed to wire hooks", exc_info=True)
+    if hooks_wired(paths.user_settings):
+        _WIRED.add(os.path.realpath(paths.user_settings))
+        return True
+    log.warning("claude bootstrap: sessions will start without aipager's hooks: %s has no "
+                "%s entry (is %s on PATH, and is the file valid JSON?) - run `aipager "
+                "doctor`", paths.user_settings, _HOOK_CMD, _HOOK_CMD)
+    return False
+
+
+def ensure_session_hooks(paths: claude_paths.ClaudePaths) -> bool:
+    """Make sure the settings file a session about to start reads has
+    aipager's hooks: a no-op for a file this process already wired, so a
+    ``CLAUDE_CONFIG_DIR`` changed in daemon.env since start is wired at
+    the next launch. True when the file has them. Never raises."""
+    try:
+        if os.path.realpath(paths.user_settings) in _WIRED:
+            return True
+        return _wire_and_check(paths)
+    except Exception:
+        log.debug("claude bootstrap: failed to check the sessions' hooks", exc_info=True)
+        return False
 
 
 def _wire_hooks(settings: dict, hook_path: str, statusline_path: str | None) -> bool:
@@ -718,9 +802,19 @@ def bootstrap_claude_settings(workdir: str | None = None) -> ProvenanceInfo | No
     """
     if workdir is None:
         workdir = os.environ.get("AIPAGER_WORK_DIR", os.getcwd())
+    from aipager import claude_resolve, daemon_secrets
+
+    # The environment sessions get: it says where Claude Code keeps the
+    # files written below, and it is what auth is probed with further down.
+    session_env = daemon_secrets.build_session_env()
+    paths = claude_paths.locate(session_env, cwd=workdir)
+    if paths.from_env:
+        log.info("claude bootstrap: sessions read Claude Code's config from %s "
+                 "(CLAUDE_CONFIG_DIR)", paths.config_home)
     try:
-        if _ensure_bypass_accepted():
-            log.info("claude bootstrap: set skipDangerousModePermissionPrompt=true in %s", _SETTINGS)
+        if not paths.relative and _ensure_bypass_accepted(paths):
+            log.info("claude bootstrap: set skipDangerousModePermissionPrompt=true in %s",
+                     paths.user_settings)
     except Exception:
         log.debug("claude bootstrap: failed to patch settings.json", exc_info=True)
     # The work folder is not marked trusted here: launch_session marks a
@@ -730,7 +824,7 @@ def bootstrap_claude_settings(workdir: str | None = None) -> ProvenanceInfo | No
     # once at start.
     try:
         from aipager import safety
-        if safety.holds_home_folder(workdir) and not _already_trusted(workdir):
+        if safety.holds_home_folder(workdir) and not _already_trusted(workdir, paths):
             log.warning("claude bootstrap: the default session folder %s is / or a folder "
                         "above the home folder and Claude Code does not trust it; a session "
                         "started there stops at its \"Do you trust this folder?\" question - "
@@ -738,14 +832,7 @@ def bootstrap_claude_settings(workdir: str | None = None) -> ProvenanceInfo | No
                         "in the home folder) or set AIPAGER_WORK_DIR", workdir)
     except Exception:
         log.debug("claude bootstrap: failed to check the default session folder", exc_info=True)
-    try:
-        if _ensure_hooks_and_statusline():
-            log.info("claude bootstrap: wired %s hooks + statusLine into %s",
-                     _HOOK_CMD, _SETTINGS)
-    except Exception:
-        log.debug("claude bootstrap: failed to wire hooks", exc_info=True)
-
-    from aipager import claude_resolve, daemon_secrets
+    _wire_and_check(paths)
 
     try:
         resolved = claude_resolve.resolve_claude_binary()
@@ -761,7 +848,6 @@ def bootstrap_claude_settings(workdir: str | None = None) -> ProvenanceInfo | No
         # never enters the daemon's own environ, so probing against it
         # would falsely report "not logged in" while sessions
         # authenticate fine. See claude_resolve's module docstring.
-        session_env = daemon_secrets.build_session_env()
         auth = claude_resolve.detect_auth(
             resolved.chosen.path, resolved.chosen.version, session_env,
         )
@@ -943,7 +1029,7 @@ def _recover_auth(
     # itself, so there is no overlay to try — its presence is only worth
     # reporting, and only as a kind.
     try:
-        if (Path.home() / ".claude" / ".credentials.json").exists():
+        if claude_paths.locate(failing_env).credentials.exists():
             _remember("stored login")
     except OSError:
         pass

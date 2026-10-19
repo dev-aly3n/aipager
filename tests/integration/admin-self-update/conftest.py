@@ -123,8 +123,8 @@ class World:
                    lambda **kw: real_detect(**{**self._detect_kwargs(), **kw}))
         mp.setattr(claude_resolve, "resolve_claude_binary", self._resolve_claude)
         # Claude Code's own settings (redirected to tmp by the root conftest).
-        from aipager import claude_bootstrap
-        cj = claude_bootstrap._CLAUDE_JSON
+        from aipager import claude_paths
+        cj = claude_paths.locate({}).global_config
         cj.parent.mkdir(parents=True, exist_ok=True)
         cj.write_text(json.dumps({"installMethod": "native"}))
         # Short, deterministic timings.

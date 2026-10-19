@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from aipager import claude_resolve
+from aipager import claude_paths, claude_resolve
 from aipager.claude_resolve import CredentialCheck, validate_credential
 
 
@@ -99,7 +99,7 @@ def test_probe_cleans_up_its_temp_cwd_and_transcript(monkeypatch, tmp_path):
     operator's home directory."""
     fake_home = tmp_path / "home"
     (fake_home / ".claude" / "projects").mkdir(parents=True)
-    monkeypatch.setattr("pathlib.Path.home", staticmethod(lambda: fake_home))
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", fake_home / ".claude")
 
     seen = {}
 
@@ -135,7 +135,7 @@ def test_cleanup_never_touches_a_real_project_directory(monkeypatch, tmp_path):
     fake_home = tmp_path / "home"
     projects = fake_home / ".claude" / "projects"
     projects.mkdir(parents=True)
-    monkeypatch.setattr("pathlib.Path.home", staticmethod(lambda: fake_home))
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", fake_home / ".claude")
 
     # A cwd that does NOT carry the probe prefix...
     victim_cwd = tmp_path / "important-work"
@@ -174,7 +174,7 @@ def test_project_slug_matches_claude_codes_real_rule(cwd, expected, monkeypatch,
     no-opped and probe transcripts accumulated in the operator's home
     directory forever.
     """
-    monkeypatch.setattr("pathlib.Path.home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
     assert claude_resolve._probe_project_dir(cwd).name == expected
 
 

@@ -9,6 +9,7 @@ import socket as _socket
 
 import pytest
 
+from aipager import claude_paths
 from aipager.dtach import inject
 
 
@@ -497,13 +498,13 @@ def test_conversation_exists_finds_a_transcript(tmp_path, monkeypatch):
     projects = tmp_path / ".claude" / "projects" / "-home-aly"
     projects.mkdir(parents=True)
     (projects / "abc-123.jsonl").write_text("{}\n")
-    monkeypatch.setattr(inject.Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
     assert inject._conversation_exists("abc-123") is True
 
 
 def test_conversation_exists_false_for_an_unknown_id(tmp_path, monkeypatch):
     (tmp_path / ".claude" / "projects").mkdir(parents=True)
-    monkeypatch.setattr(inject.Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
     assert inject._conversation_exists("nope-999") is False
     assert inject._conversation_exists("") is False
 
@@ -525,7 +526,7 @@ def test_launch_drops_resume_when_the_conversation_is_missing(
         proc.returncode = 0
         return proc
 
-    monkeypatch.setattr(inject, "_conversation_exists", lambda sid: False)
+    monkeypatch.setattr(inject, "_conversation_exists", lambda sid, projects=None: False)
     monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
     monkeypatch.setattr(inject, "_PROJECT_DIR", str(tmp_path))
     run_async(inject.launch_session("jim", mode="ask", resume_id="ghost-id",
@@ -547,7 +548,7 @@ def test_launch_keeps_resume_when_the_conversation_exists(
         proc.returncode = 0
         return proc
 
-    monkeypatch.setattr(inject, "_conversation_exists", lambda sid: True)
+    monkeypatch.setattr(inject, "_conversation_exists", lambda sid, projects=None: True)
     monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
     monkeypatch.setattr(inject, "_PROJECT_DIR", str(tmp_path))
     run_async(inject.launch_session("jim", mode="ask", resume_id="real-id",

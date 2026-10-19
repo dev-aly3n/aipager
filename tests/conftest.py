@@ -242,15 +242,12 @@ def _isolate_home_paths(tmp_path, monkeypatch):
     home = tmp_path / "home"
     cfg = home / ".config" / "aipager"
     claude = home / ".claude"
-    settings = claude / "settings.json"
     config_env = cfg / "config.env"
     team_yaml = cfg / "team.yaml"
     sessions_json = claude / "aipager-sessions.json"
     flood_state_json = claude / "aipager-flood-state.json"
 
     targets = {
-        "aipager.claude_bootstrap._SETTINGS": settings,
-        "aipager.claude_bootstrap._CLAUDE_JSON": home / ".claude.json",
         # Where Claude Code keeps its config when CLAUDE_CONFIG_DIR is not
         # set (aipager.claude_paths), and its managed settings folder:
         # absent, so a machine with managed settings changes no outcome.
@@ -330,8 +327,6 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         "aipager.self_update.HOOK_NOTICES_PATH":
             home / ".local" / "share" / "aipager" / "update-hook-notices.json",
         # Wizard constants + every by-value re-import of them.
-        "aipager.wizard._constants.CLAUDE_SETTINGS": settings,
-        "aipager.wizard.settings_patch.CLAUDE_SETTINGS": settings,
         "aipager.wizard._constants.CONFIG_DIR": cfg,
         "aipager.wizard.daemon_io.CONFIG_DIR": cfg,
         "aipager.wizard.draft.CONFIG_DIR": cfg,
@@ -361,6 +356,8 @@ def _isolate_home_paths(tmp_path, monkeypatch):
     # (aipager.claude_paths): a test that wants one sets it itself.
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
     monkeypatch.delenv("CLAUDE_CODE_CUSTOM_OAUTH_URL", raising=False)
+    # The settings files this process wired hooks into: per test.
+    monkeypatch.setattr(import_module("aipager.claude_bootstrap"), "_WIRED", set())
     return originals
 
 

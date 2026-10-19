@@ -736,8 +736,9 @@ def test_webapp_sdk_write(fake_home):
 
 
 def test_claude_probe_cleanup(fake_home, monkeypatch, tmp_path):
-    from aipager import claude_resolve
+    from aipager import claude_paths, claude_resolve
     monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", fake_home / ".claude")
     probe_cwd = tmp_path / f"{claude_resolve._PROBE_DIR_PREFIX}abcdef0123456789"
     project = claude_resolve._probe_project_dir(str(probe_cwd))
     project.mkdir(parents=True)
@@ -771,8 +772,8 @@ def test_setup_refuses_before_sending_or_writing(fake_home, tmp_path,
         monkeypatch.setattr(scope, "CONFIG_PATH",
                             fake_home / ".config" / "aipager" / "aipager.yaml")
     elif target == "settings.json":
-        monkeypatch.setattr(settings_patch, "CLAUDE_SETTINGS",
-                            fake_home / ".claude" / "settings.json")
+        monkeypatch.setattr(settings_patch, "sessions_settings_path",
+                            lambda: fake_home / ".claude" / "settings.json")
     else:
         monkeypatch.setattr(audit, "AUDIT_LOG_PATH",
                             fake_home / ".claude" / "aipager-audit.jsonl")

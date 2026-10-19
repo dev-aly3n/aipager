@@ -24,6 +24,7 @@ import pytest
 
 from aipager import claude_bootstrap, daemon_secrets
 from aipager.dtach import inject as dtach_inject
+from aipager import claude_paths
 
 KEY = "sk-ant-api03-" + "A" * 30 + "tail-of-the-key-0001"
 TAIL = KEY[-20:]
@@ -50,8 +51,8 @@ def home(tmp_path, monkeypatch):
         "daemon_env": tmp_path / "cfg" / "daemon.env",
     }
     paths["daemon_env"].parent.mkdir()
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", paths["claude_json"])
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", paths["settings"])
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(paths["claude_json"]).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(paths["settings"]).parent)
     monkeypatch.setattr(daemon_secrets, "DAEMON_ENV_PATH", paths["daemon_env"])
     monkeypatch.setattr(daemon_secrets, "_recovered", {})
     return paths
@@ -321,17 +322,24 @@ def test_a_switch_claude_code_reads_as_on_counts(home, value):
     assert home["claude_json"].read_text() == raw
 
 
-def test_claude_config_dir_moves_the_file_so_nothing_is_answered(home, tmp_path):
+def test_claude_config_dir_answers_go_to_the_config_dir_file(home, tmp_path):
+    """With CLAUDE_CONFIG_DIR set Claude Code reads $CLAUDE_CONFIG_DIR/.claude.json
+    (measured with 2.1.303), so the answers go there and ~/.claude.json is
+    left as it was."""
     folder = tmp_path / "proj"
     folder.mkdir()
     home["claude_json"].write_text("{}")
+    cfgdir = tmp_path / "cfgdir"
 
     done = claude_bootstrap.prepare_session_start(
-        str(folder), {"ANTHROPIC_API_KEY": KEY, "CLAUDE_CONFIG_DIR": str(tmp_path / "cfgdir")})
+        str(folder), {"ANTHROPIC_API_KEY": KEY, "CLAUDE_CONFIG_DIR": str(cfgdir)})
 
-    assert done == ["trusted"]
-    data = _read(home["claude_json"])
-    assert "customApiKeyResponses" not in data and "hasCompletedOnboarding" not in data
+    assert done == ["trusted", "key-approved", "onboarded"]
+    assert home["claude_json"].read_text() == "{}"
+    data = _read(cfgdir / ".claude.json")
+    assert data["customApiKeyResponses"]["approved"] == [TAIL]
+    assert data["hasCompletedOnboarding"] is True
+    assert data["projects"][str(folder.resolve())]["hasTrustDialogAccepted"] is True
 
 
 @pytest.mark.parametrize("record", [
@@ -500,14 +508,19 @@ def test_a_change_by_claude_meanwhile_is_kept_and_reported_once(home, tmp_path, 
     ("approved", False),
     ("new", False),
     ("no key", False),
-    ("refused, but CLAUDE_CONFIG_DIR moves the file", False),
+    ("refused in ~/.claude.json, but CLAUDE_CONFIG_DIR moves the file", False),
+    ("refused in CLAUDE_CONFIG_DIR's file", True),
 ])
 def test_refused_key_strands_sessions(home, case, want):
     """The doctor check behind "sessions answer Not logged in"; with
-    CLAUDE_CONFIG_DIR set Claude Code does not read this file at all."""
+    CLAUDE_CONFIG_DIR set Claude Code reads $CLAUDE_CONFIG_DIR/.claude.json
+    instead of ~/.claude.json."""
     env = {} if case == "no key" else {"ANTHROPIC_API_KEY": KEY}
-    if case.endswith("CLAUDE_CONFIG_DIR moves the file"):
-        env["CLAUDE_CONFIG_DIR"] = "/home/alice/claude-config"
+    cfgdir = home["daemon_env"].parent.parent / "cfgdir"
+    if "CLAUDE_CONFIG_DIR" in case:
+        env["CLAUDE_CONFIG_DIR"] = str(cfgdir)
+        cfgdir.mkdir()
+        _write(cfgdir / ".claude.json", {})
     data: dict = {"customApiKeyResponses": {"approved": [], "rejected": [TAIL]}}
     if case == "approved":
         data = {"customApiKeyResponses": {"approved": [TAIL], "rejected": []}}
@@ -517,7 +530,8 @@ def test_refused_key_strands_sessions(home, case, want):
         data["oauthAccount"] = {"accountUuid": "u"}
     elif case == "refused, in daemon.env, no login":
         home["daemon_env"].write_text(f"ANTHROPIC_API_KEY={KEY}\n")
-    _write(home["claude_json"], data)
+    _write(cfgdir / ".claude.json" if case.endswith("CLAUDE_CONFIG_DIR's file")
+           else home["claude_json"], data)
 
     assert claude_bootstrap.refused_key_strands_sessions(env) is want
 
@@ -552,7 +566,7 @@ def test_launch_answers_before_the_session_starts_with_the_env_it_gets(
     seen_env: list = []
     real = claude_bootstrap.prepare_session_start
     monkeypatch.setattr(claude_bootstrap, "prepare_session_start",
-                        lambda f, env: (seen_env.append(env), real(f, env))[1])
+                        lambda f, env, **kw: (seen_env.append(env), real(f, env, **kw))[1])
     seen: dict = {}
     _spawn_recorder(monkeypatch, seen, home["claude_json"])
 
@@ -586,7 +600,7 @@ def test_launch_above_home_answers_the_key_but_trusts_nothing(
 
 def test_launch_goes_on_when_the_answers_cannot_be_written(
         home, tmp_path, monkeypatch, run_async):
-    def _boom(folder, env):
+    def _boom(folder, env, **kw):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(claude_bootstrap, "prepare_session_start", _boom)
@@ -632,21 +646,25 @@ def test_a_key_in_claude_settings_with_spaces_around_it_counts_as_set_on_purpose
 
 
 def test_a_value_in_claude_settings_that_is_not_text_is_ignored(home, tmp_path):
-    """A number where a key belongs must not cost the folder its trust."""
+    """A number where a key belongs must not cost the folder its trust, and
+    a number as CLAUDE_CONFIG_DIR moves nothing: the answers still go to
+    the default file."""
     folder = tmp_path / "proj"
     folder.mkdir()
     _write(home["settings"], {"env": {"ANTHROPIC_API_KEY": 123, "CLAUDE_CONFIG_DIR": 7}})
     _write(home["claude_json"], ONBOARDED)
 
     assert claude_bootstrap.prepare_session_start(str(folder), {}) == ["trusted"]
+    assert _read(home["claude_json"])["projects"][str(folder.resolve())][
+        "hasTrustDialogAccepted"] is True
 
 
 @pytest.mark.parametrize("env,data,settings", [
     ({"ANTHROPIC_AUTH_TOKEN": "  "}, {}, {}),
     ({}, {"primaryApiKey": "  "}, {}),
     ({}, {}, {"apiKeyHelper": "  "}),
-    ({"CLAUDE_CONFIG_DIR": "  "}, {}, {}),
-], ids=["blank-token", "blank-saved-key", "blank-helper", "blank-config-dir"])
+    ({"CLAUDE_CONFIG_DIR": ""}, {}, {}),
+], ids=["blank-token", "blank-saved-key", "blank-helper", "empty-config-dir"])
 def test_a_blank_value_counts_as_none(home, env, data, settings):
     _write(home["claude_json"], {**ONBOARDED, **data})
     if settings:
@@ -654,3 +672,137 @@ def test_a_blank_value_counts_as_none(home, env, data, settings):
 
     assert claude_bootstrap.prepare_session_start(
         None, {"ANTHROPIC_API_KEY": KEY, **env}) == ["key-approved"]
+
+
+def test_a_whitespace_config_dir_writes_nothing(home, tmp_path):
+    """Claude Code does not trim CLAUDE_CONFIG_DIR (measured with 2.1.303):
+    "  " is a folder of that name inside the session's folder, global
+    config included. aipager writes nothing inside a session's folder."""
+    folder = tmp_path / "proj"
+    folder.mkdir()
+    _write(home["claude_json"], {})
+
+    assert claude_bootstrap.prepare_session_start(
+        str(folder), {"ANTHROPIC_API_KEY": KEY, "CLAUDE_CONFIG_DIR": "  "},
+        cwd=str(folder)) == []
+    assert _read(home["claude_json"]) == {}
+    assert not (folder / "  ").exists()
+
+
+# ---- project, local and managed settings ------------------------------------------
+
+def _managed(name: str, data) -> Path:
+    base = claude_paths.MANAGED_SETTINGS_DIR
+    path = base / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write(path, data)
+    return path
+
+
+@pytest.mark.parametrize("where", ["project", "local"])
+def test_a_key_in_the_folders_settings_counts_as_set_on_purpose(home, tmp_path, where):
+    """Claude Code reads a trusted folder's .claude/settings.json and
+    settings.local.json env: a key there was put there for it."""
+    folder = tmp_path / "proj"
+    (folder / ".claude").mkdir(parents=True)
+    name = "settings.json" if where == "project" else "settings.local.json"
+    _write(folder / ".claude" / name, {"env": {"ANTHROPIC_API_KEY": KEY}})
+    _write(home["claude_json"], LOGGED_IN)
+
+    assert claude_bootstrap.prepare_session_start(str(folder), {}, cwd=str(folder)) == [
+        "trusted", "key-approved"]
+
+
+def test_a_managed_key_counts_as_set_on_purpose(home):
+    _managed("managed-settings.json", {"env": {"ANTHROPIC_API_KEY": KEY}})
+    _write(home["claude_json"], LOGGED_IN)
+
+    assert claude_bootstrap.prepare_session_start(None, {}) == ["key-approved"]
+
+
+def test_an_untrusted_folders_project_key_is_not_on_purpose(home, tmp_path):
+    """A folder that is not trusted (here: one that holds the home folder,
+    so it is not trusted now either): Claude Code does not read its project
+    settings, so their key is neither the session's nor on purpose."""
+    folder = tmp_path / "proj"
+    (folder / ".claude").mkdir(parents=True)
+    _write(folder / ".claude" / "settings.json", {"env": {"ANTHROPIC_API_KEY": KEY}})
+    _write(home["claude_json"], LOGGED_IN)
+
+    # The inherited key next to a login is declined; the project one is ignored.
+    assert claude_bootstrap.prepare_session_start(
+        None, {"ANTHROPIC_API_KEY": KEY}, cwd=str(folder)) == ["key-declined"]
+
+
+def test_a_folder_trusted_before_counts_its_project_key(home, tmp_path):
+    folder = tmp_path / "proj"
+    (folder / ".claude").mkdir(parents=True)
+    _write(folder / ".claude" / "settings.json", {"env": {"ANTHROPIC_API_KEY": KEY}})
+    _write(home["claude_json"], {**LOGGED_IN, "projects": {
+        str(folder.resolve()): {"hasTrustDialogAccepted": True}}})
+
+    assert claude_bootstrap.prepare_session_start(None, {}, cwd=str(folder)) == [
+        "key-approved"]
+
+
+def test_managed_settings_win_over_project_settings(home, tmp_path):
+    """A managed cloud switch: Claude Code never asks about a key then."""
+    folder = tmp_path / "proj"
+    (folder / ".claude").mkdir(parents=True)
+    _write(folder / ".claude" / "settings.json", {"env": {"CLAUDE_CODE_USE_BEDROCK": "0"}})
+    _managed("managed-settings.d/10-cloud.json", {"env": {"CLAUDE_CODE_USE_BEDROCK": "1"}})
+    _write(home["claude_json"], ONBOARDED)
+
+    assert claude_bootstrap.prepare_session_start(
+        str(folder), {"ANTHROPIC_API_KEY": KEY}, cwd=str(folder)) == ["trusted"]
+    assert "customApiKeyResponses" not in _read(home["claude_json"])
+
+
+def test_a_managed_api_key_helper_is_another_login(home):
+    _managed("managed-settings.json", {"apiKeyHelper": "/usr/local/bin/get-key"})
+    _write(home["claude_json"], ONBOARDED)
+
+    assert claude_bootstrap.prepare_session_start(None, {"ANTHROPIC_API_KEY": KEY}) == [
+        "key-declined"]
+
+
+def test_an_empty_claude_json_is_left_alone(home, tmp_path):
+    """A 0-byte ~/.claude.json is not JSON for Claude Code either: never
+    replaced by aipager's near-empty one."""
+    folder = tmp_path / "proj"
+    folder.mkdir()
+    home["claude_json"].write_bytes(b"")
+
+    assert claude_bootstrap.prepare_session_start(str(folder), {}) == []
+    assert home["claude_json"].read_bytes() == b""
+
+
+def test_an_empty_legacy_config_is_written(home, tmp_path):
+    """An empty, writable ~/.claude/.config.json with no ~/.claude.json is
+    the file Claude Code uses (measured with 2.1.303), and it writes into
+    it: so do the answers."""
+    folder = tmp_path / "proj"
+    folder.mkdir()
+    legacy = home["settings"].parent / ".config.json"
+    legacy.write_bytes(b"")
+    legacy.chmod(0o644)
+
+    assert claude_bootstrap.prepare_session_start(
+        str(folder), {"CLAUDE_CODE_OAUTH_TOKEN": "x"}) == ["trusted", "onboarded"]
+    assert _read(legacy)["hasCompletedOnboarding"] is True
+    assert not home["claude_json"].exists()
+
+
+def test_the_custom_oauth_file_gets_the_answers(home, tmp_path):
+    folder = tmp_path / "proj"
+    folder.mkdir()
+    _write(home["claude_json"], {})
+
+    done = claude_bootstrap.prepare_session_start(
+        str(folder), {"CLAUDE_CODE_CUSTOM_OAUTH_URL": "https://login.example.com",
+                      "CLAUDE_CODE_OAUTH_TOKEN": "x"})
+
+    assert done == ["trusted", "onboarded"]
+    assert _read(home["claude_json"]) == {}
+    custom = home["claude_json"].parent / ".claude-custom-oauth.json"
+    assert _read(custom)["hasCompletedOnboarding"] is True

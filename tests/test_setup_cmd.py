@@ -125,7 +125,7 @@ class Env:
     @property
     def settings_path(self) -> Path:
         from aipager.wizard import settings_patch
-        return settings_patch.CLAUDE_SETTINGS
+        return settings_patch.sessions_settings_path()
 
     def run(self, *argv, stdin=None):
         self.capsys.readouterr()

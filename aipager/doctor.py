@@ -43,6 +43,14 @@ FAIL = "fail"
 _MARKERS = {OK: "✓", WARN: "⚠", FAIL: "✗"}
 
 
+#: The fix most rows name: the setup wizard.
+_FIX_CONFIG = "aipager config"
+#: The row :func:`check_token_valid` reports on.
+_TOKEN_ROW = "Telegram bot token"
+#: The row :func:`check_settings_json` reports on.
+_SETTINGS_ROW = "Claude Code settings.json"
+
+
 @dataclass
 class CheckResult:
     status: str          # one of OK / WARN / FAIL
@@ -108,7 +116,7 @@ def check_config() -> CheckResult:
             FAIL,
             "Telegram config",
             detail=[f"missing {', '.join(missing)}"],
-            fix="aipager config",
+            fix=_FIX_CONFIG,
         )
     return CheckResult(OK, "Telegram config", detail=[f"chat {CHAT_ID}"])
 
@@ -116,28 +124,28 @@ def check_config() -> CheckResult:
 def check_token_valid() -> CheckResult:
     from aipager.config import BOT_TOKEN
     if not BOT_TOKEN:
-        return CheckResult(FAIL, "Telegram bot token",
+        return CheckResult(FAIL, _TOKEN_ROW,
                            detail=["no token configured"],
-                           fix="aipager config")
+                           fix=_FIX_CONFIG)
     bad_base = telegram_endpoint.check()
     if bad_base:
-        return CheckResult(FAIL, "Telegram bot token", detail=bad_base,
+        return CheckResult(FAIL, _TOKEN_ROW, detail=bad_base,
                            fix=f"unset {telegram_endpoint.BASE_ENV}")
     body, err = _http_json(telegram_endpoint.method_url(BOT_TOKEN, "getMe"))
     if err:
         if "401" in err:
-            return CheckResult(FAIL, "Telegram bot token",
+            return CheckResult(FAIL, _TOKEN_ROW,
                                detail=["Telegram rejected the token (HTTP 401)"],
                                fix="aipager config  # then paste a fresh token from @BotFather")
-        return CheckResult(WARN, "Telegram bot token",
+        return CheckResult(WARN, _TOKEN_ROW,
                            detail=[err],
                            fix="check your network and retry")
     if not (body and body.get("ok")):
-        return CheckResult(FAIL, "Telegram bot token",
+        return CheckResult(FAIL, _TOKEN_ROW,
                            detail=["getMe returned ok=false"],
-                           fix="aipager config")
+                           fix=_FIX_CONFIG)
     me = body["result"]
-    return CheckResult(OK, "Telegram bot token",
+    return CheckResult(OK, _TOKEN_ROW,
                        detail=[f"@{me.get('username', '?')}"])
 
 
@@ -147,7 +155,7 @@ def check_chat_reachable() -> CheckResult:
     if not BOT_TOKEN or not CHAT_ID:
         return CheckResult(FAIL, "Telegram chat",
                            detail=["bot token or chat id missing"],
-                           fix="aipager config")
+                           fix=_FIX_CONFIG)
     bad_base = telegram_endpoint.check()
     if bad_base:
         return CheckResult(FAIL, "Telegram chat", detail=bad_base,
@@ -371,22 +379,71 @@ def check_service_unit_path() -> CheckResult:
 
 
 def check_settings_json() -> CheckResult:
-    path = Path.home() / ".claude" / "settings.json"
+    """The settings file the daemon's sessions read (``~/.claude/settings.json``,
+    or ``$CLAUDE_CONFIG_DIR``'s, or where a settings ``env`` block moves it:
+    :mod:`aipager.claude_paths`) has aipager's hooks and statusLine. Doctor
+    runs in this shell, not in the service: where ``CLAUDE_CONFIG_DIR``
+    comes from is shown, and a value only this shell has is a warning."""
+    from aipager import claude_paths, daemon_secrets
+
+    paths = claude_paths.locate(daemon_secrets.build_session_env())
+    notes, warn = _config_dir_notes(paths)
+    if paths.relative:
+        return CheckResult(WARN, _SETTINGS_ROW, detail=notes, fix=warn)
+    result = _settings_file_result(paths.user_settings)
+    result.detail.extend(notes)
+    if warn and result.status == OK:
+        result.status, result.fix = WARN, warn
+    return result
+
+
+def _config_dir_notes(paths) -> tuple[list[str], str | None]:
+    """Detail lines on where ``CLAUDE_CONFIG_DIR`` puts Claude Code's files,
+    and the fix of the warning they call for (None: none)."""
+    from aipager import daemon_secrets, service
+
+    notes: list[str] = []
+    warn = None
+    if not paths.from_env:
+        return notes, warn
+    key = "CLAUDE_CONFIG_DIR"
+    in_file = daemon_secrets.read_daemon_credential().get(key)
+    shell = os.environ.get(key)
+    if paths.moved_by_settings:
+        notes.append(f"Claude Code's settings move its config to {paths.config_home}; "
+                     "aipager follows it")
+    else:
+        where = "daemon.env" if in_file is not None else "this shell"
+        notes.append(f"sessions read {paths.user_settings} ({key} from {where})")
+    if in_file is not None and shell is not None and shell != in_file:
+        notes.append(f"a `claude` started in this shell reads {shell} instead")
+    if (in_file is None and shell is not None
+            and (service.LINUX_UNIT_PATH.exists() or service.MACOS_PLIST_PATH.exists())):
+        warn = f"put {key} in {daemon_secrets.DAEMON_ENV_PATH} and restart aipager"
+    if paths.projects.parent != paths.config_home:
+        notes.append(f"transcripts go to {paths.projects}")
+    if paths.relative or paths.global_relative:
+        notes.append(f"{key} is not an absolute path")
+        warn = f"set an absolute {key} in {daemon_secrets.DAEMON_ENV_PATH}"
+    return notes, warn
+
+
+def _settings_file_result(path: Path) -> CheckResult:
     if not path.exists():
         return CheckResult(
-            FAIL, "Claude Code settings.json",
+            FAIL, _SETTINGS_ROW,
             detail=["not found"],
-            fix="aipager config",
+            fix=_FIX_CONFIG,
         )
     try:
         data = json.loads(path.read_text())
     except json.JSONDecodeError as e:
-        return CheckResult(FAIL, "Claude Code settings.json",
+        return CheckResult(FAIL, _SETTINGS_ROW,
                            detail=[f"invalid JSON: {e}"],
                            fix="restore the auto-backup or re-run `aipager config`")
     hooks = data.get("hooks", {})
     if not isinstance(hooks, dict):
-        return CheckResult(FAIL, "Claude Code settings.json",
+        return CheckResult(FAIL, _SETTINGS_ROW,
                            detail=[f"hooks key is {type(hooks).__name__}, expected dict"],
                            fix="back up settings.json and re-run `aipager config`")
     has_aipager_hook = False
@@ -400,14 +457,14 @@ def check_settings_json() -> CheckResult:
                     has_aipager_hook = True
                     break
     if not has_aipager_hook:
-        return CheckResult(WARN, "Claude Code settings.json",
+        return CheckResult(WARN, _SETTINGS_ROW,
                            detail=["no aipager-hook entry found"],
-                           fix="aipager config")
+                           fix=_FIX_CONFIG)
     if not data.get("statusLine"):
-        return CheckResult(WARN, "Claude Code settings.json",
+        return CheckResult(WARN, _SETTINGS_ROW,
                            detail=["no statusLine entry"],
-                           fix="aipager config")
-    return CheckResult(OK, "Claude Code settings.json")
+                           fix=_FIX_CONFIG)
+    return CheckResult(OK, _SETTINGS_ROW)
 
 
 def check_hook_scripts() -> CheckResult:

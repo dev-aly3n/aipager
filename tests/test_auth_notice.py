@@ -245,8 +245,8 @@ def test_the_fixes_in_english():
 def _bootstrap_with_auth(monkeypatch, tmp_path, auth, *, recover=None):
     """Drive bootstrap_claude_settings() with everything real stubbed out
     except the auth decision under test."""
-    monkeypatch.setattr(claude_bootstrap, "_ensure_bypass_accepted", lambda: False)
-    monkeypatch.setattr(claude_bootstrap, "_ensure_hooks_and_statusline", lambda: False)
+    monkeypatch.setattr(claude_bootstrap, "_ensure_bypass_accepted", lambda paths: False)
+    monkeypatch.setattr(claude_bootstrap, "_ensure_hooks_and_statusline", lambda paths: False)
 
     chosen = claude_resolve.ClaudeInstall(
         path=str(tmp_path / "claude"), realpath=str(tmp_path / "claude"),

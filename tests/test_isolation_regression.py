@@ -75,8 +75,6 @@ def test_dumping_scope_writes_to_tmp_not_home():
 # by-value ``from x import CONST`` keeps its own copy, so patching the
 # defining module alone would leave the consumer pointing at real home.
 _REDIRECTED = [
-    ("aipager.claude_bootstrap._SETTINGS", _CLAUDE / "settings.json"),
-    ("aipager.claude_bootstrap._CLAUDE_JSON", Path.home() / ".claude.json"),
     ("aipager.claude_paths.DEFAULT_CONFIG_HOME", _CLAUDE),
     ("aipager.claude_paths.DEFAULT_GLOBAL_DIR", Path.home()),
     # Managed settings: a machine that has some must not change outcomes.
@@ -99,9 +97,6 @@ _REDIRECTED = [
      Path.home() / "Library" / "LaunchAgents" / "com.aipager.daemon.plist"),
     ("aipager.service.MACOS_LOG_PATH",
      Path.home() / "Library" / "Logs" / "aipager.log"),
-    ("aipager.wizard._constants.CLAUDE_SETTINGS", _CLAUDE / "settings.json"),
-    ("aipager.wizard.settings_patch.CLAUDE_SETTINGS",
-     _CLAUDE / "settings.json"),
     ("aipager.wizard._constants.CONFIG_DIR", _CFG),
     ("aipager.wizard.daemon_io.CONFIG_DIR", _CFG),
     ("aipager.wizard.draft.CONFIG_DIR", _CFG),

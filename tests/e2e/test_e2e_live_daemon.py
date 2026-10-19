@@ -238,7 +238,7 @@ def live_session(monkeypatch, run_async) -> LiveSession:
     monkeypatch.setattr(inject, "_resolve_dtach", lambda: dtach)
     monkeypatch.setattr(inject, "_DTACH", dtach, raising=False)
     # No moving the operator's ~/.claude/.credentials.json from a test.
-    monkeypatch.setattr(inject, "_stash_expired_credentials_file", lambda: None)
+    monkeypatch.setattr(inject, "_stash_expired_credentials_file", lambda path=None: None)
     harness.child_env_clean(monkeypatch)
     label = f"e2elive-{uuid.uuid4().hex[:6]}"
     name = f"{label}__d{CHAT_ID}"

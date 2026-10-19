@@ -261,7 +261,7 @@ class Env:
     @property
     def settings_path(self) -> Path:
         import aipager.wizard.settings_patch as sp
-        return Path(sp.CLAUDE_SETTINGS)
+        return Path(sp.sessions_settings_path())
 
     @property
     def audit_path(self) -> Path:

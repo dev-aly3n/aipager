@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import socket
 
-from aipager import doctor
+import pytest
+
+from aipager import claude_paths, doctor
 
 
 # ----- check_config -----
@@ -111,7 +113,7 @@ def test_check_hook_scripts_present(monkeypatch):
 # ----- check_settings_json -----
 
 def test_check_settings_missing(monkeypatch, tmp_path):
-    monkeypatch.setattr(doctor.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
     r = doctor.check_settings_json()
     assert r.status == doctor.FAIL
 
@@ -120,7 +122,7 @@ def test_check_settings_invalid_json(monkeypatch, tmp_path):
     p = tmp_path / ".claude" / "settings.json"
     p.parent.mkdir()
     p.write_text("{ not json")
-    monkeypatch.setattr(doctor.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
     r = doctor.check_settings_json()
     assert r.status == doctor.FAIL
     assert "invalid JSON" in " ".join(r.detail)
@@ -130,7 +132,7 @@ def test_check_settings_hooks_wrong_type(monkeypatch, tmp_path):
     p = tmp_path / ".claude" / "settings.json"
     p.parent.mkdir()
     p.write_text(json.dumps({"hooks": "not-a-dict"}))
-    monkeypatch.setattr(doctor.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
     r = doctor.check_settings_json()
     assert r.status == doctor.FAIL
     assert "hooks key is str" in " ".join(r.detail)
@@ -145,7 +147,7 @@ def test_check_settings_complete(monkeypatch, tmp_path):
         },
         "statusLine": {"type": "command", "command": "aipager-statusline"},
     }))
-    monkeypatch.setattr(doctor.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
     r = doctor.check_settings_json()
     assert r.status == doctor.OK
 
@@ -311,3 +313,102 @@ def test_check_team_healthy_returns_ok(monkeypatch, tmp_path):
     monkeypatch.setattr("aipager.config.CHAT_ID", "-100123")
     r = doctor.check_team()
     assert r.status == doctor.OK
+
+
+# ----- check_settings_json follows CLAUDE_CONFIG_DIR -----
+
+def _ours(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "aipager-hook"}]}]},
+        "statusLine": {"type": "command", "command": "aipager-statusline"},
+    }))
+
+
+@pytest.fixture
+def no_config_dir(monkeypatch, tmp_path):
+    from aipager import daemon_secrets
+    monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
+    monkeypatch.setattr(daemon_secrets, "_recovered", {})
+    return daemon_secrets.DAEMON_ENV_PATH
+
+
+def _daemon_env(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+
+
+def test_settings_json_checks_the_config_dirs_file(no_config_dir, tmp_path):
+    cfg = tmp_path / "claude-config"
+    _daemon_env(no_config_dir, f"CLAUDE_CONFIG_DIR={cfg}\n")
+    _ours(claude_paths.DEFAULT_CONFIG_HOME / "settings.json")
+    r = doctor.check_settings_json()
+    assert r.status == doctor.FAIL          # the sessions' file is missing
+
+    (cfg).mkdir()
+    (cfg / "settings.json").write_text(json.dumps({"hooks": {}}))
+    assert doctor.check_settings_json().status == doctor.WARN
+
+    _ours(cfg / "settings.json")
+    r = doctor.check_settings_json()
+    assert r.status == doctor.OK
+    assert any(str(cfg / "settings.json") in d and "daemon.env" in d for d in r.detail)
+
+
+def test_settings_json_says_when_the_value_comes_from_this_shell(
+        no_config_dir, tmp_path, monkeypatch):
+    cfg = tmp_path / "claude-config"
+    _ours(cfg / "settings.json")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(cfg))
+    r = doctor.check_settings_json()
+    assert r.status == doctor.OK            # no service installed
+    assert any("this shell" in d for d in r.detail)
+
+
+def test_settings_json_warns_for_shell_only_value_with_a_service(
+        no_config_dir, tmp_path, monkeypatch):
+    from aipager import service
+    cfg = tmp_path / "claude-config"
+    _ours(cfg / "settings.json")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(cfg))
+    service.LINUX_UNIT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    service.LINUX_UNIT_PATH.write_text("[Unit]\n")
+    r = doctor.check_settings_json()
+    assert r.status == doctor.WARN
+    assert "daemon.env" in r.fix
+
+
+def test_settings_json_warns_for_relative_config_dir(no_config_dir, tmp_path):
+    _daemon_env(no_config_dir, "CLAUDE_CONFIG_DIR=relative/config\n")
+    r = doctor.check_settings_json()
+    assert r.status == doctor.WARN
+    assert any("not an absolute path" in d for d in r.detail)
+
+
+def test_settings_json_shows_a_settings_layer_move_as_a_detail(no_config_dir, tmp_path):
+    """Measured with 2.1.303: Claude Code follows a CLAUDE_CONFIG_DIR in its
+    settings env; aipager does too, so it is a detail, not a warning."""
+    moved = tmp_path / "moved"
+    settings = claude_paths.DEFAULT_CONFIG_HOME / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(json.dumps({"env": {"CLAUDE_CONFIG_DIR": str(moved)}}))
+    _ours(moved / "settings.json")
+    r = doctor.check_settings_json()
+    assert r.status == doctor.OK
+    assert any(str(moved) in d and "aipager follows it" in d for d in r.detail)
+
+
+def test_settings_json_with_nothing_set_is_todays_row(no_config_dir):
+    _ours(claude_paths.DEFAULT_CONFIG_HOME / "settings.json")
+    r = doctor.check_settings_json()
+    assert (r.status, r.title, r.detail, r.fix) == (
+        doctor.OK, "Claude Code settings.json", [], None)
+
+
+def test_claude_env_sees_a_managed_base_url(no_config_dir):
+    from aipager import claude_bootstrap, claude_resolve
+    managed = claude_paths.MANAGED_SETTINGS_DIR / "managed-settings.json"
+    managed.parent.mkdir(parents=True, exist_ok=True)
+    managed.write_text(json.dumps({"env": {"ANTHROPIC_BASE_URL": "https://gw.example.com"}}))
+    env = claude_bootstrap.claude_env({})
+    assert claude_resolve.uses_custom_endpoint(env)

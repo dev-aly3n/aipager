@@ -22,6 +22,8 @@ from aipager import claude_resolve
 # exercising the real implementation below call this name directly,
 # bypassing the patched module attribute entirely.
 from aipager.claude_resolve import _candidate_paths as _real_candidate_paths
+from aipager import claude_paths
+from pathlib import Path
 
 
 def _write_fixture_claude(
@@ -429,8 +431,8 @@ def test_all_call_sites_resolve_the_same_binary_from_the_same_candidates(
 
     fx = _write_fixture_claude(tmp_path / "claude", version="2.1.235")
     monkeypatch.setattr(claude_resolve, "_candidate_paths", lambda: [(str(fx), 4)])
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(tmp_path / "settings.json").parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
 
     # 1) preflight.require_claude()
     resolved_path = preflight.require_claude()

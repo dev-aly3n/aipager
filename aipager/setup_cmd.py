@@ -4,8 +4,9 @@ coding agents).
 Produces the same install as the first-run wizard (``aipager config``):
 ``bot_token`` plus one DM scope whose only member is the person (role
 owner, or admin) in ``aipager.yaml`` (mode 0600, through ``scope_io``),
-the Claude Code hooks and statusLine in ``~/.claude/settings.json``
-(through ``settings_patch``), the same dependency check, and with
+the Claude Code hooks and statusLine in the ``settings.json`` the daemon's
+sessions read (``~/.claude/settings.json``, or ``$CLAUDE_CONFIG_DIR``'s;
+through ``settings_patch``), the same dependency check, and with
 ``--service`` the background service. It reuses the wizard's code
 through its non-printing cores and never reaches a prompt.
 
@@ -31,6 +32,7 @@ import re
 import stat
 import sys
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 
 # ----- exit codes (stable, documented in docs/commands.md) -----
 EXIT_OK = 0
@@ -451,7 +453,7 @@ def _base_doc(command: str, args: argparse.Namespace) -> dict:
         "dry_run": bool(getattr(args, "dry_run", False)),
         "bot_username": None, "chat_id": None, "role": None,
         "changed": [], "test_message": "not_attempted", "deps": None,
-        "settings_json": {"path": str(settings_patch.CLAUDE_SETTINGS),
+        "settings_json": {"path": str(settings_patch.sessions_settings_path()),
                           "status": "not_checked", "backup": None,
                           "repointed": 0},
         "daemon": None,
@@ -549,12 +551,13 @@ def _setup(args: argparse.Namespace, run: _Run) -> int:
     deps = settings_patch.check_deps()
     doc["deps"] = _deps_doc(deps)
     settings_plan = None
+    settings_path = Path(doc["settings_json"]["path"])
     try:
-        settings_plan = settings_patch.plan_settings()
+        settings_plan = settings_patch.plan_settings(settings_path)
     except (ValueError, OSError) as e:
         errors["settings_invalid"] = SetupError(
             EXIT_FAILURE, "settings_invalid", str(e),
-            f"Fix {settings_patch.CLAUDE_SETTINGS} (it must be valid JSON), "
+            f"Fix {settings_path} (it must be valid JSON), "
             "then run this again.")
     else:
         doc["settings_json"]["repointed"] = settings_plan.repointed

@@ -15,8 +15,8 @@ from pathlib import Path
 
 from aipager._test_guard import check_write
 from aipager.ui import console, ok, step
+from aipager import claude_paths
 from aipager.wizard._constants import (
-    CLAUDE_SETTINGS,
     HOOK_CMD, STATUSLINE_CMD, HOOK_EVENTS, TOOL_MATCHER_EVENTS,
     PERMISSION_REQUEST_HOOK_TIMEOUT_SECONDS, MODEL_SWITCH_HOOK_TIMEOUT_SECONDS,
 )
@@ -301,7 +301,7 @@ def _merge_hooks(settings: dict) -> int:
 
 @dataclass(frozen=True)
 class SettingsPlan:
-    """What :func:`apply_settings` would do to ``~/.claude/settings.json``:
+    """What :func:`apply_settings` would do to Claude Code's ``settings.json``:
     ``new_text`` is the merged file, ``changed`` whether it differs from
     ``existing_text`` (always ``True`` for a file that does not exist
     yet), ``repointed`` how many entries an earlier install left that the
@@ -315,12 +315,20 @@ class SettingsPlan:
     repointed: int
 
 
-def plan_settings() -> SettingsPlan:
-    """Read, validate and merge ``settings.json`` in memory. Writes
-    nothing and prints nothing. Raises ``ValueError`` for a file that is
+def sessions_settings_path() -> Path:
+    """The ``settings.json`` the daemon's sessions read: this environment
+    plus aipager's daemon.env (``$CLAUDE_CONFIG_DIR/settings.json`` when
+    set, or where a settings ``env`` block moves it; :mod:`aipager.claude_paths`)."""
+    return claude_paths.for_sessions().user_settings
+
+
+def plan_settings(path: Path | None = None) -> SettingsPlan:
+    """Read, validate and merge *path* (default: :func:`sessions_settings_path`)
+    in memory. Writes nothing and prints nothing. Raises ``ValueError`` for a file that is
     not valid JSON or has the wrong shape, ``OSError`` when it cannot be
     read, with the same messages :func:`_step_settings` shows."""
-    path = CLAUDE_SETTINGS
+    if path is None:
+        path = sessions_settings_path()
     settings: dict = {}
     existing_text = ""
     exists = path.exists()
@@ -515,13 +523,14 @@ def _commands_mentioning_us(settings: dict) -> tuple[str, ...]:
         c for c in commands if HOOK_CMD in c or STATUSLINE_CMD in c))
 
 
-def plan_unpatch() -> UnpatchPlan:
-    """Read ``settings.json`` and work out the file without aipager's
-    entries. Writes nothing and never raises. A file that is a link, cannot
+def plan_unpatch(path: Path | None = None) -> UnpatchPlan:
+    """Read *path* (default: :func:`sessions_settings_path`) and work out the
+    file without aipager's entries. Writes nothing and never raises. A file that is a link, cannot
     be read, is not JSON or has hooks Claude Code would not read is never
     rewritten; it is reported as a problem only when it may hold aipager's
     entries (it mentions them, or cannot be read at all)."""
-    path = CLAUDE_SETTINGS
+    if path is None:
+        path = sessions_settings_path()
     try:
         data = path.read_bytes()
     except FileNotFoundError:
