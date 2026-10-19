@@ -459,7 +459,8 @@ def render_sessions_rich(sessions: list[dict]) -> None:
             # Free text (a command, a question): never read as markup.
             metrics_parts.append(rich_escape(waiting_text(s)))
         if s["model"]:
-            metrics_parts.append(s["model"])
+            # Claude Code's display name, any text: never read as markup.
+            metrics_parts.append(rich_escape(s["model"]))
         if s["context_pct"] is not None:
             metrics_parts.append(f"{int(s['context_pct'])}% ctx")
         if s["cost_usd"] is not None:
@@ -485,7 +486,7 @@ def render_sessions_plain(sessions: list[dict]) -> None:
         if waiting_text(s):
             parts.append(rich_escape(waiting_text(s)))
         if s["model"]:
-            parts.append(s["model"])
+            parts.append(rich_escape(s["model"]))
         if s["context_pct"] is not None:
             parts.append(f"{int(s['context_pct'])}% ctx")
         if s["cost_usd"] is not None:

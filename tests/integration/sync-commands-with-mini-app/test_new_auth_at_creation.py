@@ -80,7 +80,8 @@ def _pick_full(helpers, bot):
     _run(bot._handle_callback(upd, MagicMock()))
 
 
-def test_an_owner_demoted_before_naming_does_not_get_full_access(mk_bot, helpers):
+def test_an_owner_demoted_before_naming_does_not_get_full_access(
+        mk_bot, helpers, daemon_folder):
     """The core security property: the card chose Full access, the caller
     lost the right to it before sending the name. No Full access session:
     Auto, and the card says why."""
@@ -89,10 +90,9 @@ def test_an_owner_demoted_before_naming_does_not_get_full_access(mk_bot, helpers
     _pick_full(helpers, bot)
     # The owner's card starts in the daemon's folder: bob's root folder
     # here, or root folders would refuse the start for that reason.
-    from aipager.dtach import inject
     bot.scopes = helpers.make_scopes(
         chat_id=CHAT, kind="group", members=[(USER, "bob", "user")],
-        root=inject._PROJECT_DIR)
+        root=daemon_folder)
 
     _send_name(helpers, bot)
 

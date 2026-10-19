@@ -164,6 +164,26 @@ def registry():
     return SessionRegistry()
 
 
+@pytest.fixture
+def daemon_folder(tmp_path, monkeypatch):
+    """The daemon's own folder (where an owner's card starts and a session
+    with no folder of its own runs), made a folder a member's root may be.
+
+    Tests that hand a member this folder as their root must not use the
+    pytest process's cwd: ``root_rule.root_problem`` refuses a root inside
+    Claude Code's temp folder (``/tmp/claude-*``), so a run from a tree
+    copy there would refuse the root and fail for that reason alone."""
+    from aipager import root_rule
+    from aipager.dtach import inject
+
+    folder = tmp_path / "team"
+    folder.mkdir()
+    problem = root_rule.root_problem(str(folder))
+    assert problem is None, f"{folder} cannot be a root here: {problem}"
+    monkeypatch.setattr(inject, "_PROJECT_DIR", str(folder))
+    return str(folder)
+
+
 # --------------------------------------------------------------------------- #
 # Multi-step surfaces (the wizard, the ⋮ menu, /settings) render by editing #
 # ONE message across turns via ``bot._app.bot.edit_message_text`` — the    #

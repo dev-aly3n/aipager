@@ -94,6 +94,16 @@ def _resolve_record(label: str,
 _MODE_NAMES = {"ask": "Ask", "auto": "Auto", "full": "Full access"}
 
 
+def _saved_model(sd: dict) -> str | None:
+    """The model the session was started on or switched to (``launch_model``),
+    as the Telegram resume and restart pass it, or ``None`` for Claude
+    Code's default. Anything but non-blank text counts as none."""
+    model = sd.get("launch_model")
+    if not isinstance(model, str) or not model.strip():
+        return None
+    return model.strip()
+
+
 def _resume_one(label: str, *, force_full: bool = False) -> int:
     """Resume a single session by label. Returns shell exit code.
 
@@ -173,7 +183,7 @@ def _resume_one(label: str, *, force_full: bool = False) -> int:
     mode = perm_modes.FULL if force_full else perm_modes.mode_from_saved(sd)
     ok, err = _asyncio.run(dtach_inject.launch_session(
         full_label, resume_id=resume_id, cwd=cwd or None,
-        mode=mode, is_relaunch=True,
+        mode=mode, is_relaunch=True, model=_saved_model(sd),
     ))
     if not ok:
         friendly_error(f"couldn't resume {full_label!r}: {err}")
@@ -186,7 +196,9 @@ def _resume_one(label: str, *, force_full: bool = False) -> int:
         from aipager.ui import console
         console.print()
         console.print("[muted]Last response:[/muted]")
-        console.print(f"  {preview}")
+        # Claude's own words, as written: a Markdown link or a "[/x]" is
+        # not markup, and a ":smile:" is not an emoji code.
+        console.print(f"  {preview}", markup=False, emoji=False)
     print(f"\nAttach with: dtach -a {sock}")
     return 0
 
