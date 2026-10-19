@@ -33,7 +33,7 @@ def spawn(monkeypatch):
         return _proc()
 
     monkeypatch.setattr(inject, "_create_subprocess_exec", _fake_exec)
-    monkeypatch.setattr(inject, "_conversation_exists", lambda sid: True)
+    monkeypatch.setattr(inject, "_conversation_exists", lambda sid, projects=None: True)
     calls = {"n": 0}
 
     def _is_socket(self):

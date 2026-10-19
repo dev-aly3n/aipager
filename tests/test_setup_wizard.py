@@ -137,7 +137,7 @@ def test_validate_schema_rejects_str_event_value():
 def test_step_settings_jsonc_comment_hint(monkeypatch, tmp_path, capsys):
     settings_file = tmp_path / "settings.json"
     settings_file.write_text("// a comment\n{}\n")
-    monkeypatch.setattr(settings_patch, "CLAUDE_SETTINGS", settings_file)
+    monkeypatch.setattr(settings_patch, "sessions_settings_path", lambda: settings_file)
 
     with pytest.raises(ValueError) as exc:
         settings_patch._step_settings()
@@ -146,7 +146,7 @@ def test_step_settings_jsonc_comment_hint(monkeypatch, tmp_path, capsys):
 
 def test_step_settings_skips_backup_if_unchanged(monkeypatch, tmp_path, capsys):
     settings_file = tmp_path / "settings.json"
-    monkeypatch.setattr(settings_patch, "CLAUDE_SETTINGS", settings_file)
+    monkeypatch.setattr(settings_patch, "sessions_settings_path", lambda: settings_file)
     monkeypatch.setattr(settings_patch.shutil, "which",
                         lambda name: f"/usr/bin/{name}")
 
@@ -594,7 +594,7 @@ def test_repoint_is_reported_once_not_twice(monkeypatch, tmp_path):
     }}, indent=2) + "\n")
 
     lines: list[str] = []
-    monkeypatch.setattr(settings_patch, "CLAUDE_SETTINGS", settings_file)
+    monkeypatch.setattr(settings_patch, "sessions_settings_path", lambda: settings_file)
     monkeypatch.setattr(settings_patch.shutil, "which",
                         lambda n: f"/usr/bin/{n}")
     monkeypatch.setattr(settings_patch.console, "print",

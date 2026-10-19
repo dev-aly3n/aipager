@@ -9,6 +9,16 @@ import pytest
 from aipager import claude_resolve, doctor
 
 
+@pytest.fixture(autouse=True)
+def _wide_console(monkeypatch):
+    """Wide enough that rich wraps no line: a wrap at a space drops that
+    space, so whether a sentence still matched depended on how long the
+    temp path in it was (a short --basetemp made it wrap mid-sentence)."""
+    from aipager import ui
+    monkeypatch.setattr(ui.console, "_width", 10_000)
+    monkeypatch.setattr(ui.err_console, "_width", 10_000)
+
+
 def _install(path="/x/claude", version="2.1.235"):
     return claude_resolve.ClaudeInstall(path=path, realpath=path, version=version)
 
@@ -136,6 +146,16 @@ def test_check_service_unit_path_not_installed_is_ok(monkeypatch, tmp_path):
     monkeypatch.setattr("aipager.service.LINUX_UNIT_PATH", tmp_path / "missing.service")
     r = doctor.check_service_unit_path()
     assert r.status == doctor.OK
+
+
+def test_check_service_unit_path_not_utf8_warns(monkeypatch, tmp_path):
+    """A unit file that is not UTF-8 text gives a row, not a crash."""
+    monkeypatch.setattr(doctor.platform, "system", lambda: "Linux")
+    unit = tmp_path / "aipager.service"
+    unit.write_bytes(b"[Service]\n\xff\xfe\n")
+    monkeypatch.setattr("aipager.service.LINUX_UNIT_PATH", unit)
+    r = doctor.check_service_unit_path()
+    assert r.status == doctor.WARN
 
 
 def test_check_service_unit_path_missing_environment_path_fails(monkeypatch, tmp_path):

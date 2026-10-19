@@ -75,8 +75,10 @@ def test_dumping_scope_writes_to_tmp_not_home():
 # by-value ``from x import CONST`` keeps its own copy, so patching the
 # defining module alone would leave the consumer pointing at real home.
 _REDIRECTED = [
-    ("aipager.claude_bootstrap._SETTINGS", _CLAUDE / "settings.json"),
-    ("aipager.claude_bootstrap._CLAUDE_JSON", Path.home() / ".claude.json"),
+    ("aipager.claude_paths.DEFAULT_CONFIG_HOME", _CLAUDE),
+    ("aipager.claude_paths.DEFAULT_GLOBAL_DIR", Path.home()),
+    # Managed settings: a machine that has some must not change outcomes.
+    ("aipager.claude_paths.MANAGED_SETTINGS_DIR", Path("/etc/claude-code")),
     ("aipager.team.PENDING_USERS_PATH",
      _CLAUDE / "aipager-pending-users.json"),
     ("aipager.team.TEAM_CONFIG_PATH", _CFG / "team.yaml"),
@@ -95,9 +97,6 @@ _REDIRECTED = [
      Path.home() / "Library" / "LaunchAgents" / "com.aipager.daemon.plist"),
     ("aipager.service.MACOS_LOG_PATH",
      Path.home() / "Library" / "Logs" / "aipager.log"),
-    ("aipager.wizard._constants.CLAUDE_SETTINGS", _CLAUDE / "settings.json"),
-    ("aipager.wizard.settings_patch.CLAUDE_SETTINGS",
-     _CLAUDE / "settings.json"),
     ("aipager.wizard._constants.CONFIG_DIR", _CFG),
     ("aipager.wizard.daemon_io.CONFIG_DIR", _CFG),
     ("aipager.wizard.draft.CONFIG_DIR", _CFG),
@@ -117,6 +116,19 @@ def test_home_write_targets_are_isolated(dotted, real):
     assert "pytest-" in str(value), (
         f"{dotted} should be under a pytest tmp_path, got: {value}"
     )
+
+
+@pytest.mark.parametrize("name", ["CLAUDE_CONFIG_DIR", "CLAUDE_CODE_CUSTOM_OAUTH_URL",
+                                  "CREDENTIALS_DIRECTORY"])
+def test_claude_config_env_is_scrubbed(name):
+    """Each one moves Claude Code's files (aipager.claude_paths) away from
+    the redirected defaults above, to wherever the operator's shell points
+    them (CREDENTIALS_DIRECTORY through the claude_oauth file the session
+    env reads before daemon.env), so a test never sees one it did not set
+    itself."""
+    import os
+
+    assert name not in os.environ
 
 
 def test_uninstall_removal_lists_are_isolated():

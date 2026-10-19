@@ -13,7 +13,7 @@ Walks the user through:
   1. Bot token + verify via getMe
   2. Chat ID via getUpdates auto-detect (or manual paste) + test send
   3. Dep check (dtach, claude, hook scripts)
-  4. Patch ~/.claude/settings.json with hooks + statusLine (back up first)
+  4. Patch Claude Code's settings.json with hooks + statusLine (back up first)
   5. Write ~/.config/aipager/config.env (0600)
 
 Idempotent — safe to re-run; existing aipager-hook entries are not
@@ -31,7 +31,6 @@ from questionary import Style
 CONFIG_DIR = Path.home() / ".config" / "aipager"
 CONFIG_ENV = CONFIG_DIR / "config.env"
 TEAM_YAML = CONFIG_DIR / "team.yaml"
-CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
 
 HOOK_CMD = "aipager-hook"
 STATUSLINE_CMD = "aipager-statusline"

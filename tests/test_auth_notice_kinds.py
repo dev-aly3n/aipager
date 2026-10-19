@@ -13,17 +13,17 @@ import json
 
 import pytest
 
-from aipager import claude_bootstrap, claude_resolve
+from aipager import claude_bootstrap, claude_paths, claude_resolve
 from aipager.claude_bootstrap import AuthNotice, PendingAuthCheck
 
 
-@pytest.fixture(autouse=True)
-def _no_settings(monkeypatch, tmp_path):
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
-
-
 def _settings(tmp_path, env):
-    (tmp_path / "settings.json").write_text(json.dumps({"env": env}))
+    """Claude Code's user settings file: conftest points its config home
+    at this test's tmp home, so with nothing written there is none."""
+    path = claude_paths.DEFAULT_CONFIG_HOME / "settings.json"
+    assert path.is_relative_to(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"env": env}))
 
 
 # ---- the kinds ---------------------------------------------------------------

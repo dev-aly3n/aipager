@@ -320,15 +320,18 @@ def try_resolve_claude_binary(*, force: bool = False) -> ResolvedClaude | None:
 def _attribute_source(env: dict[str, str]) -> str:
     """Cosmetic-only best-effort guess at *where* a confirmed login lives.
 
-    Never gates a decision — see the module docstring. Honours
-    ``CLAUDE_CONFIG_DIR`` (unlike the legacy, deliberately-not-extended
-    ``_credentials_file_is_fresh``).
+    Never gates a decision — see the module docstring. Looks for the
+    credentials file where Claude Code keeps it for *env*
+    (:mod:`aipager.claude_paths`).
     """
     if any(env.get(v) for v in _ENV_AUTH_VARS):
         return "env"
-    config_dir = env.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude")
-    if (Path(config_dir) / ".credentials.json").exists():
-        return "file"
+    from aipager import claude_paths
+    try:
+        if claude_paths.locate(env).credentials.exists():
+            return "file"
+    except OSError:
+        pass
     if platform.system().lower() == "darwin":
         return "keychain"
     return "unknown"
@@ -471,10 +474,12 @@ def _make_probe_dir() -> str:
     return path
 
 
-def _probe_project_dir(cwd: str) -> Path:
-    """Where Claude Code will write this probe's transcript.
+def _probe_project_dir(cwd: str, projects_root: Path | None = None) -> Path:
+    """Where Claude Code will write this probe's transcript: under
+    *projects_root* (default ``~/.claude/projects``; the probe's own one
+    comes from :func:`aipager.claude_paths.locate`).
 
-    Claude slugifies the working directory into ``~/.claude/projects``.
+    Claude slugifies the working directory into its ``projects`` folder.
     The rule is "every character that is not alphanumeric becomes a
     hyphen" — measured, not assumed: cwd
     ``/tmp/aipager-slug.test_dir-x.y`` produces
@@ -486,7 +491,10 @@ def _probe_project_dir(cwd: str) -> Path:
     accumulated forever, ~1 start in 8.
     """
     slug = re.sub(r"[^A-Za-z0-9]", "-", str(cwd))
-    return Path.home() / ".claude" / "projects" / slug
+    if projects_root is None:
+        from aipager import claude_paths
+        projects_root = claude_paths.DEFAULT_CONFIG_HOME / "projects"
+    return projects_root / slug
 
 
 def _run_probe(claude_path: str, env: dict[str, str], cwd: str,
@@ -531,6 +539,9 @@ def validate_credential(
         # anywhere up to `cmd_doctor`, so it would take down the whole
         # `aipager doctor` command instead of degrading to one grey row.
         return CredentialCheck("unknown", f"could not create probe dir: {e}")
+    from aipager import claude_paths
+    # Where this probe's transcript lands: the env's config home decides it.
+    projects_root = claude_paths.locate(env, cwd=tmpdir).projects
     try:
         try:
             code, output = _run_probe(claude_path, env, tmpdir, timeout)
@@ -562,23 +573,26 @@ def validate_credential(
             return CredentialCheck("absent", "claude reports no credential")
         return CredentialCheck("unknown", f"exit {code}")
     finally:
-        _cleanup_probe_artifacts(tmpdir)
+        _cleanup_probe_artifacts(tmpdir, projects_root)
 
 
-def _cleanup_probe_artifacts(tmpdir: str) -> None:
+def _cleanup_probe_artifacts(tmpdir: str, projects_root: Path | None = None) -> None:
     """Remove the temp cwd and the transcript Claude wrote for it.
 
-    Guarded on the path actually living under ``~/.claude/projects`` and
-    carrying this probe's own unique temp-directory name, so a bug here
-    can never delete one of the operator's real project histories.
+    Guarded on the path actually living directly under *projects_root*
+    (default ``~/.claude/projects``: the probe's environment decides it)
+    and carrying this probe's own unique temp-directory name, so a bug
+    here can never delete one of the operator's real project histories.
     """
     try:
         shutil.rmtree(tmpdir, ignore_errors=True)
     except Exception:
         pass
     try:
-        project = _probe_project_dir(tmpdir)
-        projects_root = Path.home() / ".claude" / "projects"
+        if projects_root is None:
+            from aipager import claude_paths
+            projects_root = claude_paths.DEFAULT_CONFIG_HOME / "projects"
+        project = _probe_project_dir(tmpdir, projects_root)
         if (project.parent == projects_root
                 and _PROBE_DIR_PREFIX in project.name
                 and project.is_dir()):

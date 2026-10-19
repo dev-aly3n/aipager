@@ -23,7 +23,7 @@ import time
 
 import pytest
 
-from aipager import claude_bootstrap, updater
+from aipager import claude_bootstrap, claude_paths, updater
 from aipager.wizard import settings_patch
 from aipager.wizard._constants import HOOK_EVENTS
 
@@ -43,7 +43,7 @@ USER = {
 
 
 def _path():
-    return settings_patch.CLAUDE_SETTINGS
+    return settings_patch.sessions_settings_path()
 
 
 def _write(obj) -> str:
@@ -90,7 +90,7 @@ def test_uninstall_takes_out_exactly_what_the_wizard_put_in(at_opt, user):
 
 def test_uninstall_takes_out_what_the_daemon_put_in(at_opt):
     _write(copy.deepcopy(USER))
-    assert claude_bootstrap._ensure_hooks_and_statusline() is True
+    assert claude_bootstrap._ensure_hooks_and_statusline(claude_paths.locate({})) is True
     settings_patch.apply_unpatch(settings_patch.plan_unpatch())
     assert _read() == USER
 
@@ -320,7 +320,7 @@ def test_nothing_of_aipagers_means_no_settings_line(monkeypatch, capsys):
 
 def test_the_warning_shows_the_path_as_it_is_named(monkeypatch, capsys, tmp_path):
     odd = tmp_path / "[bold]home" / ".claude" / "settings.json"
-    monkeypatch.setattr(settings_patch, "CLAUDE_SETTINGS", odd)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", odd.parent)
     _write(json.dumps(OURS_ONLY)[:-1])
     err = _flat(_uninstall(monkeypatch, capsys).err)
     assert f"{odd} is left as it is: it is not valid JSON." in err

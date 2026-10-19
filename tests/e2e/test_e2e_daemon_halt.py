@@ -110,7 +110,7 @@ def test_halt_for_safety_interrupts_real_dtach(
     monkeypatch.setattr(inject, "_resolve_dtach", lambda: dtach)
     monkeypatch.setattr(inject, "_DTACH", dtach, raising=False)
     # No moving the operator's ~/.claude/.credentials.json from a test.
-    monkeypatch.setattr(inject, "_stash_expired_credentials_file", lambda: None)
+    monkeypatch.setattr(inject, "_stash_expired_credentials_file", lambda path=None: None)
     harness.child_env_clean(monkeypatch)
     monkeypatch.delenv("AIPAGER_INSTANCE_DIR", raising=False)  # it would outrank the socket
     hook_sock = tmp_path / "hooks.sock"

@@ -14,12 +14,26 @@ from pathlib import Path
 
 
 from aipager._test_guard import check_write
-from aipager.ui import console, ok, step
+from aipager.ui import console, ok, step, warn
+from aipager import claude_paths
 from aipager.wizard._constants import (
-    CLAUDE_SETTINGS,
     HOOK_CMD, STATUSLINE_CMD, HOOK_EVENTS, TOOL_MATCHER_EVENTS,
     PERMISSION_REQUEST_HOOK_TIMEOUT_SECONDS, MODEL_SWITCH_HOOK_TIMEOUT_SECONDS,
 )
+
+
+#: The fix for a missing aipager program.
+_REINSTALL = "uv tool install --reinstall aipager"
+
+#: Why aipager writes no hooks for a relative CLAUDE_CONFIG_DIR, and the fix.
+#: The daemon follows the same rule (claude_bootstrap._log_relative).
+#: ``{value}``: the relative value itself, JSON-quoted (it can be empty).
+RELATIVE_HOME = ("CLAUDE_CONFIG_DIR is not an absolute path ({value}): Claude Code "
+                 "keeps its settings inside each session's folder, and aipager "
+                 "writes no hooks there.")
+#: ``{where}``: daemon.env, or the settings file whose ``env`` block holds
+#: the relative value (daemon.env does not override that).
+RELATIVE_FIX = "Set an absolute CLAUDE_CONFIG_DIR in {where}, then run this again."
 
 
 @dataclass(frozen=True)
@@ -56,10 +70,8 @@ def check_deps() -> list[DepStatus]:
                   "uv tool install --reinstall aipager  # or `brew install dtach`"),
         DepStatus("claude", claude_p,
                   "Install Claude Code: https://docs.anthropic.com/claude/docs/claude-code"),
-        DepStatus("aipager-hook", hook_p,
-                  "uv tool install --reinstall aipager"),
-        DepStatus("aipager-statusline", statusline_p,
-                  "uv tool install --reinstall aipager"),
+        DepStatus("aipager-hook", hook_p, _REINSTALL),
+        DepStatus("aipager-statusline", statusline_p, _REINSTALL),
     ]
 
 
@@ -301,7 +313,7 @@ def _merge_hooks(settings: dict) -> int:
 
 @dataclass(frozen=True)
 class SettingsPlan:
-    """What :func:`apply_settings` would do to ``~/.claude/settings.json``:
+    """What :func:`apply_settings` would do to Claude Code's ``settings.json``:
     ``new_text`` is the merged file, ``changed`` whether it differs from
     ``existing_text`` (always ``True`` for a file that does not exist
     yet), ``repointed`` how many entries an earlier install left that the
@@ -315,12 +327,42 @@ class SettingsPlan:
     repointed: int
 
 
-def plan_settings() -> SettingsPlan:
-    """Read, validate and merge ``settings.json`` in memory. Writes
-    nothing and prints nothing. Raises ``ValueError`` for a file that is
-    not valid JSON or has the wrong shape, ``OSError`` when it cannot be
-    read, with the same messages :func:`_step_settings` shows."""
-    path = CLAUDE_SETTINGS
+def sessions_settings_path() -> Path:
+    """The ``settings.json`` the daemon's sessions read: this environment
+    plus aipager's daemon.env (``$CLAUDE_CONFIG_DIR/settings.json`` when
+    set, or where a settings ``env`` block moves it; :mod:`aipager.claude_paths`)."""
+    return claude_paths.for_sessions().user_settings
+
+
+def relative_home() -> tuple[str, str] | None:
+    """``(problem, fix)`` when the sessions' ``CLAUDE_CONFIG_DIR`` is relative
+    (an empty or whitespace value included), else None. Claude Code then
+    reads its settings from inside each session's folder, so a write here
+    would merge aipager's hooks into whatever ``settings.json`` sits in the
+    folder this command runs from: the wizard and setup write nothing, as
+    the daemon does not."""
+    from aipager import daemon_secrets
+
+    paths = claude_paths.for_sessions()
+    if not paths.relative:
+        return None
+    where = paths.relative_settings_file or daemon_secrets.DAEMON_ENV_PATH
+    value = json.dumps(paths.relative_value or "", ensure_ascii=False)
+    return RELATIVE_HOME.format(value=value), RELATIVE_FIX.format(where=where)
+
+
+def plan_settings(path: Path | None = None) -> SettingsPlan:
+    """Read, validate and merge *path* (default: :func:`sessions_settings_path`)
+    in memory. Writes nothing and prints nothing. Raises ``ValueError`` for a file that is
+    not valid JSON or has the wrong shape, or with no *path* when the
+    sessions' config home is relative (:func:`relative_home`), ``OSError``
+    when it cannot be read, with the same messages :func:`_step_settings`
+    shows."""
+    if path is None:
+        relative = relative_home()
+        if relative is not None:
+            raise ValueError(" ".join(relative))
+        path = sessions_settings_path()
     settings: dict = {}
     existing_text = ""
     exists = path.exists()
@@ -361,7 +403,9 @@ def _backup_settings(plan: SettingsPlan) -> Path | None:
         backup = plan.path.with_name(f"{plan.path.name}.bak.{int(time.time())}")
         backup.write_text(plan.existing_text)
         return backup
-    plan.path.parent.mkdir(parents=True, exist_ok=True)
+    # Private, as Claude Code makes its config folder (it will hold the
+    # login and transcripts); an existing folder keeps its mode.
+    plan.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     return None
 
 
@@ -385,6 +429,10 @@ def apply_settings(plan: SettingsPlan) -> str | None:
 
 def _step_settings(step_label: str = "[4/5]") -> None:
     step(f"{step_label}  Claude Code integration")
+    relative = relative_home()
+    if relative is not None:
+        warn(*relative)
+        return
     plan = plan_settings()
     if not plan.changed:
         ok(f"{plan.path} already up to date")
@@ -515,13 +563,14 @@ def _commands_mentioning_us(settings: dict) -> tuple[str, ...]:
         c for c in commands if HOOK_CMD in c or STATUSLINE_CMD in c))
 
 
-def plan_unpatch() -> UnpatchPlan:
-    """Read ``settings.json`` and work out the file without aipager's
-    entries. Writes nothing and never raises. A file that is a link, cannot
+def plan_unpatch(path: Path | None = None) -> UnpatchPlan:
+    """Read *path* (default: :func:`sessions_settings_path`) and work out the
+    file without aipager's entries. Writes nothing and never raises. A file that is a link, cannot
     be read, is not JSON or has hooks Claude Code would not read is never
     rewritten; it is reported as a problem only when it may hold aipager's
     entries (it mentions them, or cannot be read at all)."""
-    path = CLAUDE_SETTINGS
+    if path is None:
+        path = sessions_settings_path()
     try:
         data = path.read_bytes()
     except FileNotFoundError:
@@ -637,6 +686,8 @@ def unpatch_summary(plan: UnpatchPlan) -> str:
     """``aipager's 16 hooks and its status line``, ``aipager's 1 hook`` or
     ``aipager's status line``, for the uninstall lines."""
     hooks = f"{plan.hooks} hook{'s' if plan.hooks != 1 else ''}"
-    if plan.hooks and plan.status_line:
-        return f"aipager's {hooks} and its status line"
-    return f"aipager's {hooks}" if plan.hooks else "aipager's status line"
+    if not plan.hooks:
+        return "aipager's status line"
+    if plan.status_line:
+        hooks = f"{hooks} and its status line"
+    return f"aipager's {hooks}"

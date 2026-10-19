@@ -388,7 +388,7 @@ def _edit_flow() -> int:
                     needs_restart = True
             elif choice == "reinstall_hooks":
                 _step_settings(step_label="[~]")
-                # Hooks live in ~/.claude/settings.json (read by Claude
+                # Hooks live in Claude Code's settings.json (read by Claude
                 # Code itself) — no daemon restart needed.
             elif choice == "view_policy":
                 _view_policy()

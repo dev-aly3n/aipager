@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import socket
 
-from aipager import doctor
+import pytest
+
+from aipager import claude_paths, doctor
 
 
 # ----- check_config -----
@@ -111,7 +113,7 @@ def test_check_hook_scripts_present(monkeypatch):
 # ----- check_settings_json -----
 
 def test_check_settings_missing(monkeypatch, tmp_path):
-    monkeypatch.setattr(doctor.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
     r = doctor.check_settings_json()
     assert r.status == doctor.FAIL
 
@@ -120,17 +122,79 @@ def test_check_settings_invalid_json(monkeypatch, tmp_path):
     p = tmp_path / ".claude" / "settings.json"
     p.parent.mkdir()
     p.write_text("{ not json")
-    monkeypatch.setattr(doctor.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
     r = doctor.check_settings_json()
     assert r.status == doctor.FAIL
     assert "invalid JSON" in " ".join(r.detail)
+
+
+def _settings_bytes(tmp_path, monkeypatch, raw: bytes):
+    p = tmp_path / ".claude" / "settings.json"
+    p.parent.mkdir()
+    p.write_bytes(raw)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
+    return p
+
+
+@pytest.mark.parametrize("raw", [b"[1]", b'"text"', b"null", b"42", b"true"],
+                         ids=["list", "string", "null", "number", "bool"])
+def test_check_settings_valid_json_that_is_not_an_object_fails(monkeypatch, tmp_path, raw):
+    """Valid JSON that is not an object is no settings file: FAIL with the
+    restore fix, not an AttributeError the runner shows as a crash."""
+    _settings_bytes(tmp_path, monkeypatch, raw)
+    r = doctor.check_settings_json()
+    assert r.status == doctor.FAIL
+    assert "not a JSON object" in " ".join(r.detail)
+    assert "aipager config" in r.fix
+
+
+@pytest.mark.parametrize("raw, said", [
+    (b"\xff\xfe{}", "not UTF-8 text"),
+    (b"[" * 100000 + b"]" * 100000, "nested too deep"),
+], ids=["not-utf8", "too-deep"])
+def test_check_settings_unreadable_content_fails(monkeypatch, tmp_path, raw, said):
+    _settings_bytes(tmp_path, monkeypatch, raw)
+    r = doctor.check_settings_json()
+    assert r.status == doctor.FAIL
+    assert said in " ".join(r.detail)
+
+
+def test_check_settings_a_folder_in_the_files_place_fails(monkeypatch, tmp_path):
+    (tmp_path / ".claude" / "settings.json").mkdir(parents=True)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
+    r = doctor.check_settings_json()
+    assert r.status == doctor.FAIL
+    assert "cannot read" in " ".join(r.detail)
+
+
+@pytest.mark.parametrize("hooks", [
+    {"Stop": ["text"]},
+    {"Stop": [{"hooks": "aipager-hook"}]},
+    {"Stop": [{"hooks": 5}]},
+    {"Stop": [{"hooks": ["aipager-hook"]}]},
+    {"Stop": [{"hooks": [{"command": 7}]}]},
+    {"Stop": [None, 3, {"hooks": [None, {"command": None}]}]},
+], ids=["block-text", "inner-text", "inner-number", "hook-text", "command-number", "nulls"])
+def test_check_settings_odd_hook_entries_are_skipped(monkeypatch, tmp_path, hooks):
+    """Hook entries of the wrong shape are skipped: no aipager hook is
+    found (WARN), and with a real entry beside them it still is (OK)."""
+    p = _settings_bytes(tmp_path, monkeypatch,
+                        json.dumps({"hooks": hooks, "statusLine": {"x": 1}}).encode())
+    r = doctor.check_settings_json()
+    assert r.status == doctor.WARN
+    assert "no aipager-hook entry found" in r.detail
+
+    real = {"hooks": [{"type": "command", "command": "/x/bin/aipager-hook"}]}
+    hooks = {k: [*v, real] for k, v in hooks.items()}
+    p.write_text(json.dumps({"hooks": hooks, "statusLine": {"x": 1}}))
+    assert doctor.check_settings_json().status == doctor.OK
 
 
 def test_check_settings_hooks_wrong_type(monkeypatch, tmp_path):
     p = tmp_path / ".claude" / "settings.json"
     p.parent.mkdir()
     p.write_text(json.dumps({"hooks": "not-a-dict"}))
-    monkeypatch.setattr(doctor.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
     r = doctor.check_settings_json()
     assert r.status == doctor.FAIL
     assert "hooks key is str" in " ".join(r.detail)
@@ -145,7 +209,7 @@ def test_check_settings_complete(monkeypatch, tmp_path):
         },
         "statusLine": {"type": "command", "command": "aipager-statusline"},
     }))
-    monkeypatch.setattr(doctor.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")
     r = doctor.check_settings_json()
     assert r.status == doctor.OK
 
@@ -311,3 +375,169 @@ def test_check_team_healthy_returns_ok(monkeypatch, tmp_path):
     monkeypatch.setattr("aipager.config.CHAT_ID", "-100123")
     r = doctor.check_team()
     assert r.status == doctor.OK
+
+
+# ----- check_settings_json follows CLAUDE_CONFIG_DIR -----
+
+def _ours(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "aipager-hook"}]}]},
+        "statusLine": {"type": "command", "command": "aipager-statusline"},
+    }))
+
+
+@pytest.fixture
+def no_config_dir(monkeypatch, tmp_path):
+    from aipager import daemon_secrets
+    monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
+    monkeypatch.setattr(daemon_secrets, "_recovered", {})
+    return daemon_secrets.DAEMON_ENV_PATH
+
+
+def _daemon_env(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+
+
+def test_settings_json_checks_the_config_dirs_file(no_config_dir, tmp_path):
+    cfg = tmp_path / "claude-config"
+    _daemon_env(no_config_dir, f"CLAUDE_CONFIG_DIR={cfg}\n")
+    _ours(claude_paths.DEFAULT_CONFIG_HOME / "settings.json")
+    r = doctor.check_settings_json()
+    assert r.status == doctor.FAIL          # the sessions' file is missing
+
+    (cfg).mkdir()
+    (cfg / "settings.json").write_text(json.dumps({"hooks": {}}))
+    assert doctor.check_settings_json().status == doctor.WARN
+
+    _ours(cfg / "settings.json")
+    r = doctor.check_settings_json()
+    assert r.status == doctor.OK
+    assert any(str(cfg / "settings.json") in d and "daemon.env" in d for d in r.detail)
+
+
+def test_settings_json_says_when_the_value_comes_from_this_shell(
+        no_config_dir, tmp_path, monkeypatch):
+    cfg = tmp_path / "claude-config"
+    _ours(cfg / "settings.json")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(cfg))
+    r = doctor.check_settings_json()
+    assert r.status == doctor.OK            # no service installed
+    assert any("this shell" in d for d in r.detail)
+
+
+def test_settings_json_says_when_the_value_comes_from_claude_codes_settings(
+        no_config_dir, tmp_path, monkeypatch):
+    """A settings env block that names the start home itself moves nothing,
+    but it is where the value came from: not this shell."""
+    home = claude_paths.DEFAULT_CONFIG_HOME
+    _ours(home / "settings.json")
+    data = json.loads((home / "settings.json").read_text())
+    data["env"] = {"CLAUDE_CONFIG_DIR": str(home)}
+    (home / "settings.json").write_text(json.dumps(data))
+    r = doctor.check_settings_json()
+    assert r.status == doctor.OK
+    detail = " ".join(r.detail)
+    assert "CLAUDE_CONFIG_DIR from Claude Code's settings" in detail
+    assert "this shell" not in detail
+
+
+def test_settings_json_names_the_services_credentials_file_as_the_source(
+        no_config_dir, tmp_path, monkeypatch):
+    """Inside the service, the value comes from systemd's copy of daemon.env
+    in $CREDENTIALS_DIRECTORY: doctor names that file."""
+    cfg = tmp_path / "claude-config"
+    _ours(cfg / "settings.json")
+    creds = tmp_path / "creds"
+    creds.mkdir()
+    (creds / "claude_oauth").write_text(f"CLAUDE_CONFIG_DIR={cfg}\n")
+    monkeypatch.setenv("CREDENTIALS_DIRECTORY", str(creds))
+    r = doctor.check_settings_json()
+    assert r.status == doctor.OK
+    detail = " ".join(r.detail)
+    assert f"CLAUDE_CONFIG_DIR from {creds / 'claude_oauth'}" in detail
+    assert "daemon.env" not in detail and "Claude Code's settings" not in detail
+
+
+def test_settings_json_warns_for_shell_only_value_with_a_service(
+        no_config_dir, tmp_path, monkeypatch):
+    from aipager import service
+    cfg = tmp_path / "claude-config"
+    _ours(cfg / "settings.json")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(cfg))
+    service.LINUX_UNIT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    service.LINUX_UNIT_PATH.write_text("[Unit]\n")
+    r = doctor.check_settings_json()
+    assert r.status == doctor.WARN
+    assert "daemon.env" in r.fix
+
+
+def test_settings_json_warns_for_relative_config_dir(no_config_dir, tmp_path):
+    _daemon_env(no_config_dir, "CLAUDE_CONFIG_DIR=relative/config\n")
+    r = doctor.check_settings_json()
+    assert r.status == doctor.WARN
+    assert any("not an absolute path" in d for d in r.detail)
+
+
+def test_settings_json_relative_fix_names_daemon_env_for_a_daemon_env_value(no_config_dir):
+    _daemon_env(no_config_dir, "CLAUDE_CONFIG_DIR=relative/config\n")
+    assert str(no_config_dir) in doctor.check_settings_json().fix
+
+
+def test_settings_json_relative_fix_names_the_settings_file_for_its_value(no_config_dir):
+    """A relative value in a settings env block is not overridden by
+    daemon.env: the fix names the settings file."""
+    start = claude_paths.DEFAULT_CONFIG_HOME / "settings.json"
+    start.parent.mkdir(parents=True, exist_ok=True)
+    start.write_text(json.dumps({"env": {"CLAUDE_CONFIG_DIR": "relative/config"}}))
+    r = doctor.check_settings_json()
+    assert r.status == doctor.WARN
+    assert str(start) in r.fix
+    assert "daemon.env" not in r.fix
+
+
+def test_settings_json_relative_fix_names_daemon_env_while_its_value_is_relative(
+        no_config_dir, tmp_path, monkeypatch):
+    """A relative daemon.env value decides the global config too (which no
+    settings file moves): that one is fixed first, even when the settings
+    file it leads to holds a relative value as well."""
+    folder = tmp_path / "proj"
+    folder.mkdir()
+    monkeypatch.chdir(folder)
+    _daemon_env(no_config_dir, "CLAUDE_CONFIG_DIR=rel\n")
+    (folder / "rel").mkdir()
+    (folder / "rel" / "settings.json").write_text(
+        json.dumps({"env": {"CLAUDE_CONFIG_DIR": "rel2"}}))
+    r = doctor.check_settings_json()
+    assert str(no_config_dir) in r.fix
+    assert str(folder / "rel" / "settings.json") not in r.fix
+
+
+def test_settings_json_shows_a_settings_layer_move_as_a_detail(no_config_dir, tmp_path):
+    """Measured with 2.1.303: Claude Code follows a CLAUDE_CONFIG_DIR in its
+    settings env; aipager does too, so it is a detail, not a warning."""
+    moved = tmp_path / "moved"
+    settings = claude_paths.DEFAULT_CONFIG_HOME / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(json.dumps({"env": {"CLAUDE_CONFIG_DIR": str(moved)}}))
+    _ours(moved / "settings.json")
+    r = doctor.check_settings_json()
+    assert r.status == doctor.OK
+    assert any(str(moved) in d and "aipager follows it" in d for d in r.detail)
+
+
+def test_settings_json_with_nothing_set_is_todays_row(no_config_dir):
+    _ours(claude_paths.DEFAULT_CONFIG_HOME / "settings.json")
+    r = doctor.check_settings_json()
+    assert (r.status, r.title, r.detail, r.fix) == (
+        doctor.OK, "Claude Code settings.json", [], None)
+
+
+def test_claude_env_sees_a_managed_base_url(no_config_dir):
+    from aipager import claude_bootstrap, claude_resolve
+    managed = claude_paths.MANAGED_SETTINGS_DIR / "managed-settings.json"
+    managed.parent.mkdir(parents=True, exist_ok=True)
+    managed.write_text(json.dumps({"env": {"ANTHROPIC_BASE_URL": "https://gw.example.com"}}))
+    env = claude_bootstrap.claude_env({})
+    assert claude_resolve.uses_custom_endpoint(env)

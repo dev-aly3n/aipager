@@ -84,9 +84,9 @@ def _never_touch_real_claude_credentials_file(monkeypatch):
     this package goes through these no-ops instead of touching
     ``~/.claude/.credentials.json`` on the real machine."""
     monkeypatch.setattr(
-        "aipager.dtach.inject._credentials_file_is_fresh", lambda: False)
+        "aipager.dtach.inject._credentials_file_is_fresh", lambda path=None: False)
     monkeypatch.setattr(
-        "aipager.dtach.inject._stash_expired_credentials_file", lambda: None)
+        "aipager.dtach.inject._stash_expired_credentials_file", lambda path=None: None)
 
 
 @pytest.fixture(autouse=True)

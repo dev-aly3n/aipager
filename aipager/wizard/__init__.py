@@ -6,7 +6,7 @@ Submodules:
 - ``team_setup`` — team.yaml creation flow.
 - ``edit_menu`` — re-running wizard when a config already exists.
 - ``telegram_api`` — Telegram REST helpers used by first_run / edit flows.
-- ``settings_patch`` — patches ``~/.claude/settings.json`` with hooks + statusLine.
+- ``settings_patch`` — patches Claude Code's ``settings.json`` (the sessions' one) with hooks + statusLine.
 - ``daemon_io`` — config.env read/write + SIGUSR1 hot-reload signalling.
 - ``display`` — questionary wrapper, spinner context, current-config panel.
 - ``_constants`` — shared paths, hook event names, prompt style.

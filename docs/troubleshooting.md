@@ -483,7 +483,7 @@ A check that crashes on an unexpected environment shows as a single
 | `claude_auth` | Probes `claude auth status` in the same environment a real session gets. **Never FAILs**: "not logged in" and "the probe itself failed" are reported distinctly, and neither stops a session from launching. It also warns when Claude Code was told not to use the sessions' `ANTHROPIC_API_KEY` and nothing else logs them in | `claude auth login`, or set an API key / `CLAUDE_CODE_OAUTH_TOKEN`; with `ANTHROPIC_BASE_URL` set, the key for that address ([providers](#using-an-api-key-a-gateway-or-another-provider)) |
 | `dtach` | `dtach` binary found (aipager's own `dtach-bin`, or one on PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` and `aipager-statusline` are on PATH | `uv tool install --reinstall aipager` |
-| `settings_json` | `~/.claude/settings.json` has the aipager hooks wired up | `aipager config` |
+| `settings_json` | The `settings.json` the daemon's sessions read (`~/.claude/settings.json`, or the one `CLAUDE_CONFIG_DIR` points to) has the aipager hooks wired up; with `CLAUDE_CONFIG_DIR` set it names the file and where the value came from | `aipager config` |
 | `daemon` | Daemon is running and its socket answers; also shows Telegram rate-limit state (see [above](#the-bot-slowed-down-a-rate-limit-429)) | `aipager start` |
 | `service_installed` | Optional: service unit is present | `aipager service install` |
 | `service_unit_path` | Linux only: the *installed* unit's `Environment=PATH=` actually contains the resolved claude binary's directory, parsed as text, since doctor cannot see systemd's own PATH from the operator's interactive shell | `aipager service install --yes` |
@@ -549,19 +549,25 @@ the like) or another company's Anthropic-format address set in
 only; other models can behave differently.
 
 - **Where the settings go.** In the `env` block of
-  `~/.claude/settings.json`, which every Claude Code session reads, or in
+  `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`), which
+  every Claude Code session reads, or in
   `~/.config/aipager/daemon.env`, which only the sessions aipager starts
   get: one `KEY=value` a line, with no quotes (they would become part of
-  the value). A service (`aipager service install`) never reads your
+  the value). The `env` blocks of a trusted launch folder's
+  `.claude/settings.json` and `.claude/settings.local.json` and of managed
+  settings (`managed-settings.json` and `managed-settings.d/` in
+  `/etc/claude-code` on Linux, `/Library/Application Support/ClaudeCode`
+  on macOS) count too, as they do for Claude Code. A service (`aipager service install`) never reads your
   shell's profile, so an `export` there does not reach it. Restart aipager
   after you change `daemon.env`.
 - **Which key setting.** For a gateway or another provider, Claude Code's
   docs suggest `ANTHROPIC_AUTH_TOKEN`, which it never asks about. For
   `ANTHROPIC_API_KEY` it asks once "Do you want to use this API key?", and
   a session started from Telegram cannot answer, so aipager answers in
-  `~/.claude.json` right before the session starts:
-  - Yes, when the key is set in `settings.json` or `daemon.env`, or when
-    nothing else can log the session in.
+  Claude Code's global config (`~/.claude.json`, or the file
+  `CLAUDE_CONFIG_DIR` puts it in) right before the session starts:
+  - Yes, when the key is set in one of those settings files or
+    `daemon.env`, or when nothing else can log the session in.
   - No, when the key only comes from the environment aipager was started
     in and you are logged in to Claude another way: your sessions stay on
     that login and its plan. To use the key, turn it on in a terminal
@@ -591,6 +597,55 @@ only; other models can behave differently.
   subscription (a ChatGPT plan, for example) through a local proxy. That
   company has not approved Claude Code for its plans, and such use can put
   that account at risk.
+
+**Claude Code's config in another folder (`CLAUDE_CONFIG_DIR`).**
+Claude Code keeps its settings, login, transcripts and global config in
+`~/.claude` and `~/.claude.json`, or in the folder `CLAUDE_CONFIG_DIR`
+names. aipager follows the same variable, so its hooks and status line go
+in the `settings.json` your sessions read and its answers in the file
+Claude Code reads (checked with Claude Code 2.1.303):
+
+- **Set it in `~/.config/aipager/daemon.env`** and restart aipager. A
+  service never reads your shell's profile, so an `export` reaches only
+  the `aipager start` of that shell. At start the daemon wires its hooks
+  into `$CLAUDE_CONFIG_DIR/settings.json` and logs `sessions read Claude
+  Code's config from ...`; if you change the value while it runs, the
+  next session it starts gets them, as does a settings file that lost
+  them since. When the hooks cannot be wired, the
+  log says `sessions will start without aipager's hooks` and
+  `aipager doctor` warns.
+- **Use a full path.** Claude Code takes the value as it is: no `~`, and
+  a relative value (an empty one too) means a folder inside each
+  session's own folder. aipager writes nothing there: the log and
+  `aipager doctor` warn, `aipager setup` stops with the fix, and
+  `aipager config` skips its Claude Code step with a warning that shows
+  the fix and carries on. The fix names the file that holds the value:
+  `daemon.env`, or the settings file whose `env` block sets it.
+- **Set in Claude Code's own settings.** A `CLAUDE_CONFIG_DIR` in the
+  `env` block of `~/.claude/settings.json` (or of managed settings) moves
+  the settings file, the login and the transcripts, but not
+  `~/.claude.json`. aipager follows that as well; `aipager doctor` says
+  where.
+- **`aipager config` and `aipager setup`** patch the file the daemon's
+  sessions read: your shell's environment plus `daemon.env`. A `claude`
+  you start in a shell with another value reads another file and has no
+  aipager hooks; `aipager doctor` names it.
+- **The legacy `.config.json`.** When `<config folder>/.config.json` is
+  in use (for example, it exists and is not empty), Claude Code reads it
+  instead of `.claude.json`, and so does aipager. With an empty
+  `CLAUDE_CONFIG_DIR` that file would be in the session's own folder, and
+  aipager writes nothing there.
+- **What aipager cannot read.** Managed settings delivered by an MDM
+  profile (macOS), the Windows registry or Claude's servers, and the
+  `--settings` flag. A key or a provider switch set only there is not
+  seen when aipager answers the start-up questions; Claude Code then asks,
+  as it would without aipager.
+- **The deny list.** The default rules that keep restricted roles and
+  sent files off Claude's credentials name `~/.claude/**` and
+  `~/.claude.json*`. A `CLAUDE_CONFIG_DIR` somewhere else is not covered
+  by them, so keep it inside `~/.claude` (the Docker image's is) when
+  people who are not admins use your sessions
+  ([security](security.md#who-decides-whether-a-tool-call-runs)).
 
 ## The daemon's control socket moved
 
@@ -722,6 +777,20 @@ Docker, `docker restart <container>` on the host. Recreating a Docker
 container (`docker compose up` after `down`, or `docker run` again)
 starts it from its image, which brings back the aipager version in that
 image: to keep a newer aipager, use a newer image.
+
+The image sets `CLAUDE_CONFIG_DIR=/home/aipager/.claude`, so Claude
+Code's global config (`.claude.json`: folder trust, its first-run state,
+the API key answers, your account and user MCP servers) is kept in the
+`.claude` volume with the rest and survives a recreate. Images before
+this one kept it at `/home/aipager/.claude.json`, in the container
+itself. On the first start of the new image the old file is not read:
+your login in the volume's `.credentials.json` still works, and aipager
+answers the folder trust and first-run questions again when a session
+starts, but user MCP servers added with `claude mcp add --scope user`
+have to be added again. If you bind-mount your host's `~/.claude` (as the
+README's commands do), the file appears there as `~/.claude/.claude.json`;
+your host's Claude Code does not read it (it uses `~/.claude.json`). A
+named volume keeps the two apart.
 
 ## The daemon didn't come back after an update
 

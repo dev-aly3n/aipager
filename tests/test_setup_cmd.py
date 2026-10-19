@@ -125,7 +125,7 @@ class Env:
     @property
     def settings_path(self) -> Path:
         from aipager.wizard import settings_patch
-        return settings_patch.CLAUDE_SETTINGS
+        return settings_patch.sessions_settings_path()
 
     def run(self, *argv, stdin=None):
         self.capsys.readouterr()
@@ -502,6 +502,45 @@ def test_invalid_settings_json_blocks_the_yaml_write(env):
     assert code == 1 and doc["error"] == "settings_invalid"
     assert env.tg.sends == []
     assert env.snapshot() == before
+
+
+@pytest.mark.parametrize("value", ["rel", "", " "], ids=["relative", "empty", "space"])
+def test_a_relative_config_dir_blocks_the_setup(env, monkeypatch, tmp_path, value):
+    """A relative CLAUDE_CONFIG_DIR would put aipager's hooks into a
+    settings.json inside the folder setup runs from: setup writes nothing
+    and names the fix, as the daemon writes no hooks there."""
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", value)
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    before = env.snapshot()
+    code, doc, _o, _e = env.setup()
+    assert code == 1 and doc["error"] == "settings_invalid"
+    assert "not an absolute path" in doc["message"]
+    assert "Set an absolute CLAUDE_CONFIG_DIR" in doc["fix"]
+    assert env.tg.sends == []
+    assert env.snapshot() == before
+    assert sorted(work.rglob("*")) == []
+
+
+def test_a_relative_session_value_is_fixed_in_daemon_env_not_in_the_file_it_leads_to(
+        env, monkeypatch, tmp_path):
+    """The sessions' own CLAUDE_CONFIG_DIR is relative and the settings file
+    it leads to (from this folder) holds another relative value: setup names
+    daemon.env, as doctor does, never a file inside the relative folder
+    (sessions in other folders do not read it)."""
+    from aipager import daemon_secrets
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", "rel")
+    work = tmp_path / "work"
+    inner = work / "rel" / "settings.json"
+    inner.parent.mkdir(parents=True)
+    inner.write_text(json.dumps({"env": {"CLAUDE_CONFIG_DIR": "rel2"}}))
+    monkeypatch.chdir(work)
+    code, doc, _o, _e = env.setup()
+    assert code == 1 and doc["error"] == "settings_invalid"
+    assert str(daemon_secrets.DAEMON_ENV_PATH) in doc["fix"]
+    assert str(inner) not in doc["fix"]
+    assert 'not an absolute path ("rel")' in doc["message"]
 
 
 def test_exit_priority(env):

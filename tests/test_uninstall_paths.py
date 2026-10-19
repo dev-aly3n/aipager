@@ -53,6 +53,7 @@ NOT_AIPAGERS_DATA_ANY_NAME = {
 #: Files that use the bare home folder itself (not a path under it), and
 #: how many times: one more is a path this test cannot follow.
 BARE_HOME_USERS = {
+    "claude_paths.py": (1, "the folder Claude Code's global config (.claude.json) is in"),
     "install_source.py": (1, "builds PATH entries"),
     "service.py": (2, "fills the home folder into the service unit"),
     "safety.py": (3, "expands ~ in the protected-path patterns"),

@@ -18,6 +18,8 @@ import pytest
 
 from aipager.dtach import model_switch_marker as msm
 from aipager.dtach import notify_hook
+from aipager import claude_paths
+from pathlib import Path
 
 BASE = "/unused-because-marker_path-is-redirected"
 SESSION = "claude-cat"
@@ -398,12 +400,12 @@ def test_daemon_start_adds_premodelswitch_to_an_existing_install_idempotently(
     settings.write_text(json.dumps({"hooks": {"Stop": [{"hooks": [
         {"type": "command", "command": "/usr/bin/aipager-hook"}]}]},
         "statusLine": {"type": "command", "command": "/usr/bin/aipager-statusline"}}))
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
     monkeypatch.setattr(
         claude_bootstrap.shutil, "which",
         lambda cmd: f"/usr/bin/{cmd}"
         if cmd in {"aipager-hook", "aipager-statusline"} else None)
-    assert claude_bootstrap._ensure_hooks_and_statusline() is True
+    assert claude_bootstrap._ensure_hooks_and_statusline(claude_paths.locate({})) is True
     data = json.loads(settings.read_text())
     assert data["hooks"]["PreModelSwitch"] == [{"hooks": [{
         "type": "command", "command": "/usr/bin/aipager-hook", "timeout": 5}]}]
@@ -414,7 +416,7 @@ def test_daemon_start_adds_premodelswitch_to_an_existing_install_idempotently(
                 for h in b["hooks"]:
                     assert "timeout" not in h, event
     before = settings.read_text()
-    claude_bootstrap._ensure_hooks_and_statusline()
+    claude_bootstrap._ensure_hooks_and_statusline(claude_paths.locate({}))
     assert settings.read_text() == before
 
 

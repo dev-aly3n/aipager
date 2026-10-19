@@ -60,7 +60,7 @@ def require_config() -> None:
         f"  Missing: {', '.join(missing)}",
         "",
         "  Run this once to set up your Telegram bot and patch",
-        "  ~/.claude/settings.json:",
+        "  Claude Code's settings.json:",
         "",
         "      aipager config",
         "",

@@ -334,11 +334,16 @@ def cmd_uninstall(args=None) -> int:
     if is_macos:
         for p in _MACOS_PATHS_TO_REMOVE:
             console.print(f"  • [path]{p}[/path]")
-    unpatch = settings_patch.plan_unpatch()
-    if unpatch.new_text is not None:
-        console.print(f"  • {settings_patch.unpatch_summary(unpatch)} in "
-                      f"[path]{rich_escape(str(unpatch.path))}[/path] "
-                      "(your other settings there stay)", soft_wrap=True)
+    # The settings file the daemon's sessions read, and ~/.claude's if that
+    # is another one (an earlier install, or CLAUDE_CONFIG_DIR set later).
+    from aipager import claude_paths, daemon_secrets
+    settings_files = claude_paths.hook_settings_candidates(daemon_secrets.build_session_env())
+    unpatches = [settings_patch.plan_unpatch(path) for path in settings_files]
+    for unpatch in unpatches:
+        if unpatch.new_text is not None:
+            console.print(f"  • {settings_patch.unpatch_summary(unpatch)} in "
+                          f"[path]{rich_escape(str(unpatch.path))}[/path] "
+                          "(your other settings there stay)", soft_wrap=True)
     console.print()
     kept = _kept_paths()
     if kept:
@@ -350,13 +355,14 @@ def cmd_uninstall(args=None) -> int:
         console.print()
     console.print("[muted]Not touched: your Telegram bot, the rest of Claude "
                   "Code's settings.json, and any[/muted]")
-    console.print("[muted]                ~/.claude/settings.json.bak.* "
+    console.print("[muted]                settings.json.bak.* "
                   "backups.[/muted]")
     console.print()
-    if unpatch.problem:
-        friendly_warn(*_settings_by_hand(unpatch))
-    if unpatch.left:
-        friendly_warn(*_settings_left(unpatch))
+    for unpatch in unpatches:
+        if unpatch.problem:
+            friendly_warn(*_settings_by_hand(unpatch))
+        if unpatch.left:
+            friendly_warn(*_settings_left(unpatch))
 
     if not force:
         # Only when actually prompting — `uninstall -y` must keep working
@@ -383,26 +389,27 @@ def cmd_uninstall(args=None) -> int:
     # 8.119): left there, every session would run a program removed below.
     # After the stop: the daemon adds them again when it starts. Read again
     # here, in case the file changed while the question was open.
-    unpatch = settings_patch.plan_unpatch()
-    if unpatch.new_text is not None:
-        try:
-            backup = settings_patch.apply_unpatch(unpatch)
-        except settings_patch.SettingsChanged as e:
-            friendly_warn(*_settings_by_hand(replace(unpatch, problem=str(e))))
-        except Exception as e:      # never stops the uninstall half way
-            friendly_warn(*_settings_by_hand(replace(
-                unpatch, problem=f"writing it failed ({str(e) or type(e).__name__})")))
-        else:
-            ui_ok(f"removed {settings_patch.unpatch_summary(unpatch)} from "
-                  f"[path]{rich_escape(str(unpatch.path))}[/path] (backup: {backup})")
-            if unpatch.hooks:
-                # They load their hooks when they start.
-                console.print("  [muted]Claude Code sessions already open keep running "
-                              "them until you restart them.[/muted]")
-    elif unpatch.problem:
-        friendly_warn(*_settings_by_hand(unpatch))
-    if unpatch.left:
-        friendly_warn(*_settings_left(unpatch))
+    for path in settings_files:
+        unpatch = settings_patch.plan_unpatch(path)
+        if unpatch.new_text is not None:
+            try:
+                backup = settings_patch.apply_unpatch(unpatch)
+            except settings_patch.SettingsChanged as e:
+                friendly_warn(*_settings_by_hand(replace(unpatch, problem=str(e))))
+            except Exception as e:      # never stops the uninstall half way
+                friendly_warn(*_settings_by_hand(replace(
+                    unpatch, problem=f"writing it failed ({str(e) or type(e).__name__})")))
+            else:
+                ui_ok(f"removed {settings_patch.unpatch_summary(unpatch)} from "
+                      f"[path]{rich_escape(str(unpatch.path))}[/path] (backup: {backup})")
+                if unpatch.hooks:
+                    # They load their hooks when they start.
+                    console.print("  [muted]Claude Code sessions already open keep running "
+                                  "them until you restart them.[/muted]")
+        elif unpatch.problem:
+            friendly_warn(*_settings_by_hand(unpatch))
+        if unpatch.left:
+            friendly_warn(*_settings_left(unpatch))
 
     # 3. Remove tmp sockets / statusline files
     _remove_tmp_sockets()

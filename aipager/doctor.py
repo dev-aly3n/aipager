@@ -43,6 +43,20 @@ FAIL = "fail"
 _MARKERS = {OK: "✓", WARN: "⚠", FAIL: "✗"}
 
 
+#: The fix most rows name: the setup wizard.
+_FIX_CONFIG = "aipager config"
+#: The row :func:`check_token_valid` reports on.
+_TOKEN_ROW = "Telegram bot token"
+#: The row :func:`check_settings_json` reports on.
+_SETTINGS_ROW = "Claude Code settings.json"
+#: The row :func:`check_service_unit_path` reports on.
+_UNIT_PATH_ROW = "service unit PATH"
+#: The row :func:`check_team` reports on.
+_TEAM_ROW = "team config"
+#: The fix for a settings file that cannot be read as settings.
+_FIX_RESTORE = "restore the auto-backup or re-run `aipager config`"
+
+
 @dataclass
 class CheckResult:
     status: str          # one of OK / WARN / FAIL
@@ -108,7 +122,7 @@ def check_config() -> CheckResult:
             FAIL,
             "Telegram config",
             detail=[f"missing {', '.join(missing)}"],
-            fix="aipager config",
+            fix=_FIX_CONFIG,
         )
     return CheckResult(OK, "Telegram config", detail=[f"chat {CHAT_ID}"])
 
@@ -116,28 +130,28 @@ def check_config() -> CheckResult:
 def check_token_valid() -> CheckResult:
     from aipager.config import BOT_TOKEN
     if not BOT_TOKEN:
-        return CheckResult(FAIL, "Telegram bot token",
+        return CheckResult(FAIL, _TOKEN_ROW,
                            detail=["no token configured"],
-                           fix="aipager config")
+                           fix=_FIX_CONFIG)
     bad_base = telegram_endpoint.check()
     if bad_base:
-        return CheckResult(FAIL, "Telegram bot token", detail=bad_base,
+        return CheckResult(FAIL, _TOKEN_ROW, detail=bad_base,
                            fix=f"unset {telegram_endpoint.BASE_ENV}")
     body, err = _http_json(telegram_endpoint.method_url(BOT_TOKEN, "getMe"))
     if err:
         if "401" in err:
-            return CheckResult(FAIL, "Telegram bot token",
+            return CheckResult(FAIL, _TOKEN_ROW,
                                detail=["Telegram rejected the token (HTTP 401)"],
                                fix="aipager config  # then paste a fresh token from @BotFather")
-        return CheckResult(WARN, "Telegram bot token",
+        return CheckResult(WARN, _TOKEN_ROW,
                            detail=[err],
                            fix="check your network and retry")
     if not (body and body.get("ok")):
-        return CheckResult(FAIL, "Telegram bot token",
+        return CheckResult(FAIL, _TOKEN_ROW,
                            detail=["getMe returned ok=false"],
-                           fix="aipager config")
+                           fix=_FIX_CONFIG)
     me = body["result"]
-    return CheckResult(OK, "Telegram bot token",
+    return CheckResult(OK, _TOKEN_ROW,
                        detail=[f"@{me.get('username', '?')}"])
 
 
@@ -147,7 +161,7 @@ def check_chat_reachable() -> CheckResult:
     if not BOT_TOKEN or not CHAT_ID:
         return CheckResult(FAIL, "Telegram chat",
                            detail=["bot token or chat id missing"],
-                           fix="aipager config")
+                           fix=_FIX_CONFIG)
     bad_base = telegram_endpoint.check()
     if bad_base:
         return CheckResult(FAIL, "Telegram chat", detail=bad_base,
@@ -333,22 +347,22 @@ def check_service_unit_path() -> CheckResult:
     and not-installed are both OK — not applicable, not a problem.
     """
     if platform.system().lower() != "linux":
-        return CheckResult(OK, "service unit PATH", detail=["not applicable on this OS"])
+        return CheckResult(OK, _UNIT_PATH_ROW, detail=["not applicable on this OS"])
 
     from aipager.service import LINUX_UNIT_PATH
     if not LINUX_UNIT_PATH.exists():
-        return CheckResult(OK, "service unit PATH", detail=["service not installed"])
+        return CheckResult(OK, _UNIT_PATH_ROW, detail=["service not installed"])
 
     try:
-        text = LINUX_UNIT_PATH.read_text()
-    except OSError as e:
-        return CheckResult(WARN, "service unit PATH", detail=[str(e)])
+        text = LINUX_UNIT_PATH.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        return CheckResult(WARN, _UNIT_PATH_ROW, detail=[str(e)])
 
     import re
     m = re.search(r"^Environment=PATH=(?P<value>.*)$", text, re.MULTILINE)
     if not m:
         return CheckResult(
-            FAIL, "service unit PATH",
+            FAIL, _UNIT_PATH_ROW,
             detail=["installed unit has no Environment=PATH="],
             fix="aipager service install --yes  # re-render the unit",
         )
@@ -358,56 +372,141 @@ def check_service_unit_path() -> CheckResult:
     try:
         resolved = claude_resolve.resolve_claude_binary(force=True)
     except claude_resolve.ClaudeNotFoundError:
-        return CheckResult(WARN, "service unit PATH",
+        return CheckResult(WARN, _UNIT_PATH_ROW,
                            detail=["can't verify - no claude binary resolves"])
     claude_dir = str(Path(resolved.chosen.path).parent)
     if claude_dir in unit_path_dirs:
-        return CheckResult(OK, "service unit PATH", detail=[claude_dir])
+        return CheckResult(OK, _UNIT_PATH_ROW, detail=[claude_dir])
     return CheckResult(
-        FAIL, "service unit PATH",
+        FAIL, _UNIT_PATH_ROW,
         detail=[f"unit's PATH does not include {claude_dir}"],
         fix="aipager service install --yes  # re-render with the current PATH",
     )
 
 
 def check_settings_json() -> CheckResult:
-    path = Path.home() / ".claude" / "settings.json"
-    if not path.exists():
-        return CheckResult(
-            FAIL, "Claude Code settings.json",
-            detail=["not found"],
-            fix="aipager config",
-        )
+    """The settings file the daemon's sessions read (``~/.claude/settings.json``,
+    or ``$CLAUDE_CONFIG_DIR``'s, or where a settings ``env`` block moves it:
+    :mod:`aipager.claude_paths`) has aipager's hooks and statusLine. Doctor
+    runs in this shell, not in the service: where ``CLAUDE_CONFIG_DIR``
+    comes from is shown, and a value only this shell has is a warning."""
+    from aipager import claude_paths, daemon_secrets
+
+    paths = claude_paths.locate(daemon_secrets.build_session_env())
+    notes, warn = _config_dir_notes(paths)
+    if paths.relative:
+        return CheckResult(WARN, _SETTINGS_ROW, detail=notes, fix=warn)
+    result = _settings_file_result(paths.user_settings)
+    result.detail.extend(notes)
+    if warn and result.status == OK:
+        result.status, result.fix = WARN, warn
+    return result
+
+
+def _config_dir_notes(paths) -> tuple[list[str], str | None]:
+    """Detail lines on where ``CLAUDE_CONFIG_DIR`` puts Claude Code's files,
+    and the fix of the warning they call for (None: none)."""
+    from aipager import daemon_secrets, service
+
+    notes: list[str] = []
+    warn = None
+    if not paths.from_env:
+        return notes, warn
+    key = "CLAUDE_CONFIG_DIR"
+    source, values = daemon_secrets.read_daemon_credential_from()
+    in_file = values.get(key)
+    shell = os.environ.get(key)
+    if paths.moved_by_settings:
+        notes.append(f"Claude Code's settings move its config to {paths.config_home}; "
+                     "aipager follows it")
+    else:
+        if in_file is not None:
+            # The service's copy ($CREDENTIALS_DIRECTORY) is named by its path.
+            where = "daemon.env" if source == daemon_secrets.DAEMON_ENV_PATH else str(source)
+        elif shell is not None:
+            where = "this shell"
+        else:  # a settings env block that names the start home itself
+            where = "Claude Code's settings"
+        notes.append(f"sessions read {paths.user_settings} ({key} from {where})")
+    if in_file is not None and shell is not None and shell != in_file:
+        notes.append(f"a `claude` started in this shell reads {shell} instead")
+    if (in_file is None and shell is not None
+            and (service.LINUX_UNIT_PATH.exists() or service.MACOS_PLIST_PATH.exists())):
+        warn = f"put {key} in {daemon_secrets.DAEMON_ENV_PATH} and restart aipager"
+    if paths.projects.parent != paths.config_home:
+        notes.append(f"transcripts go to {paths.projects}")
+    if paths.relative or paths.global_relative:
+        notes.append(f"{key} is not an absolute path")
+        # daemon.env does not override a settings file's env block. The
+        # file is None while daemon.env's own value is relative (fixed first).
+        where = paths.relative_settings_file or daemon_secrets.DAEMON_ENV_PATH
+        warn = f"set an absolute {key} in {where}"
+    return notes, warn
+
+
+def _settings_file_result(path: Path) -> CheckResult:
+    """The row for one settings file. Never raises: the file is the user's
+    (any folder ``CLAUDE_CONFIG_DIR`` names), so any content, a folder in
+    its place or a file this user cannot read gives a row, not a crash."""
     try:
-        data = json.loads(path.read_text())
-    except json.JSONDecodeError as e:
-        return CheckResult(FAIL, "Claude Code settings.json",
-                           detail=[f"invalid JSON: {e}"],
-                           fix="restore the auto-backup or re-run `aipager config`")
+        if not path.exists():
+            return CheckResult(
+                FAIL, _SETTINGS_ROW,
+                detail=["not found"],
+                fix=_FIX_CONFIG,
+            )
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, RecursionError) as e:
+        # ValueError covers invalid JSON and text that is not UTF-8.
+        return CheckResult(FAIL, _SETTINGS_ROW,
+                           detail=[f"{path}: {_read_error(e)}"],
+                           fix=_FIX_RESTORE)
+    if not isinstance(data, dict):
+        return CheckResult(FAIL, _SETTINGS_ROW,
+                           detail=[f"{path}: not a JSON object"],
+                           fix=_FIX_RESTORE)
     hooks = data.get("hooks", {})
     if not isinstance(hooks, dict):
-        return CheckResult(FAIL, "Claude Code settings.json",
+        return CheckResult(FAIL, _SETTINGS_ROW,
                            detail=[f"hooks key is {type(hooks).__name__}, expected dict"],
                            fix="back up settings.json and re-run `aipager config`")
-    has_aipager_hook = False
+    if not _has_aipager_hook(hooks):
+        return CheckResult(WARN, _SETTINGS_ROW,
+                           detail=["no aipager-hook entry found"],
+                           fix=_FIX_CONFIG)
+    if not data.get("statusLine"):
+        return CheckResult(WARN, _SETTINGS_ROW,
+                           detail=["no statusLine entry"],
+                           fix=_FIX_CONFIG)
+    return CheckResult(OK, _SETTINGS_ROW)
+
+
+def _read_error(e: BaseException) -> str:
+    if isinstance(e, json.JSONDecodeError):
+        return f"invalid JSON: {e}"
+    if isinstance(e, UnicodeDecodeError):
+        return "not UTF-8 text"
+    if isinstance(e, RecursionError):
+        return "nested too deep to read"
+    return f"cannot read: {e}"
+
+
+def _has_aipager_hook(hooks: dict) -> bool:
+    """An ``aipager-hook`` command anywhere in the hooks block. Entries of
+    the wrong shape are skipped, as Claude Code skips them."""
     for entries in hooks.values():
         if not isinstance(entries, list):
             continue
         for block in entries:
-            for h in (block or {}).get("hooks", []):
-                cmd = (h or {}).get("command", "")
-                if cmd == "aipager-hook" or cmd.endswith("/aipager-hook"):
-                    has_aipager_hook = True
-                    break
-    if not has_aipager_hook:
-        return CheckResult(WARN, "Claude Code settings.json",
-                           detail=["no aipager-hook entry found"],
-                           fix="aipager config")
-    if not data.get("statusLine"):
-        return CheckResult(WARN, "Claude Code settings.json",
-                           detail=["no statusLine entry"],
-                           fix="aipager config")
-    return CheckResult(OK, "Claude Code settings.json")
+            inner = block.get("hooks") if isinstance(block, dict) else None
+            if not isinstance(inner, list):
+                continue
+            for h in inner:
+                cmd = h.get("command") if isinstance(h, dict) else None
+                if isinstance(cmd, str) and (
+                        cmd == "aipager-hook" or cmd.endswith("/aipager-hook")):
+                    return True
+    return False
 
 
 def check_hook_scripts() -> CheckResult:
@@ -560,14 +659,14 @@ def check_team() -> CheckResult:
     if not TEAM_CONFIG_PATH.exists():
         scopes_line = _scope_mode_line()
         if scopes_line:
-            return CheckResult(OK, "team config", detail=[scopes_line])
-        return CheckResult(OK, "team config", detail=["personal mode (no team.yaml)"])
+            return CheckResult(OK, _TEAM_ROW, detail=[scopes_line])
+        return CheckResult(OK, _TEAM_ROW, detail=["personal mode (no team.yaml)"])
 
     try:
         team = load_team(TEAM_CONFIG_PATH)
     except TeamConfigError as e:
         return CheckResult(
-            FAIL, "team config",
+            FAIL, _TEAM_ROW,
             detail=[f"team.yaml malformed: {e}"],
             fix="edit ~/.config/aipager/team.yaml or re-run `aipager config`",
         )
@@ -575,7 +674,7 @@ def check_team() -> CheckResult:
     if team is None:
         # Present but `mode != team` — treat as personal.
         return CheckResult(
-            OK, "team config",
+            OK, _TEAM_ROW,
             detail=["team.yaml present but mode != team (personal mode)"],
         )
 
@@ -619,7 +718,7 @@ def check_team() -> CheckResult:
     if issues:
         status = FAIL if any("CHAT_ID" in i for i in issues) else WARN
         return CheckResult(
-            status, "team config",
+            status, _TEAM_ROW,
             detail=[
                 f"team mode · {len(team.users)} user(s) · "
                 f"{team.admin_count()} admin(s)",
@@ -631,7 +730,7 @@ def check_team() -> CheckResult:
 
     if suggestions:
         return CheckResult(
-            WARN, "team config",
+            WARN, _TEAM_ROW,
             detail=[
                 f"team mode · {len(team.users)} user(s) · "
                 f"{team.admin_count()} admin(s)",
@@ -640,7 +739,7 @@ def check_team() -> CheckResult:
         )
 
     return CheckResult(
-        OK, "team config",
+        OK, _TEAM_ROW,
         detail=[
             f"team mode · {len(team.users)} user(s) · "
             f"{team.admin_count()} admin(s) · "

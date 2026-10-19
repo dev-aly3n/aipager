@@ -25,6 +25,8 @@ import pytest
 
 from aipager.dtach import hook_receiver as hr
 from aipager.state import SessionRegistry, Status
+from aipager import claude_paths
+from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
@@ -340,8 +342,8 @@ def test_bootstrap_does_not_wire_excluded_event(tmp_path, monkeypatch, excluded_
     from aipager import claude_bootstrap
 
     settings = tmp_path / "settings.json"
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
     monkeypatch.setattr(claude_bootstrap.shutil, "which",
                         lambda cmd: f"/usr/bin/{cmd}" if cmd in {"aipager-hook", "aipager-statusline"} else None)
 
@@ -368,8 +370,8 @@ def test_bootstrap_hook_events_count_is_16(tmp_path, monkeypatch):
     from aipager import claude_bootstrap
 
     settings = tmp_path / "settings.json"
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
     monkeypatch.setattr(claude_bootstrap.shutil, "which",
                         lambda cmd: f"/usr/bin/{cmd}" if cmd in {"aipager-hook", "aipager-statusline"} else None)
 
@@ -392,8 +394,8 @@ def test_bootstrap_hook_events_includes_all_four_new_events(tmp_path, monkeypatc
     _NEW_EVENTS = ("StopFailure", "PostCompact", "SubagentStart", "PostToolUseFailure")
 
     settings = tmp_path / "settings.json"
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
     monkeypatch.setattr(claude_bootstrap.shutil, "which",
                         lambda cmd: f"/usr/bin/{cmd}" if cmd in {"aipager-hook", "aipager-statusline"} else None)
 
@@ -415,8 +417,8 @@ def test_bootstrap_preserves_unrelated_settings_key(tmp_path, monkeypatch):
 
     settings = tmp_path / "settings.json"
     settings.write_text(json.dumps({"myCustomKey": "keep-me", "theme": "dark"}))
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(tmp_path / ".claude.json").parent)
     monkeypatch.setattr(claude_bootstrap.shutil, "which",
                         lambda cmd: f"/usr/bin/{cmd}" if cmd in {"aipager-hook", "aipager-statusline"} else None)
 

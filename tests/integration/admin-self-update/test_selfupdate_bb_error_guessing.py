@@ -103,8 +103,8 @@ def test_only_documented_hosts_are_fetched(world, personal_bot, h, run_async):
     ("latest", "/latest"), ("stable", "/stable"), ("rc", "/rc"), ("bogus", "/latest"),
 ])
 def test_native_claude_channel_is_honoured(world, personal_bot, h, run_async, channel, expected_suffix):
-    from aipager import claude_bootstrap
-    s = claude_bootstrap._SETTINGS
+    from aipager import claude_paths
+    s = claude_paths.locate({}).user_settings
     s.parent.mkdir(parents=True, exist_ok=True)
     s.write_text('{"autoUpdatesChannel": "%s"}' % channel)
     run_async(personal_bot.updates.status(force=True))
@@ -113,16 +113,16 @@ def test_native_claude_channel_is_honoured(world, personal_bot, h, run_async, ch
 
 
 def test_npm_install_uses_npm_dist_tags(world, personal_bot, h, run_async):
-    from aipager import claude_bootstrap
-    claude_bootstrap._CLAUDE_JSON.write_text('{"installMethod": "npm-global"}')
+    from aipager import claude_paths
+    claude_paths.locate({}).global_config.write_text('{"installMethod": "npm-global"}')
     run_async(personal_bot.updates.status(force=True))
     assert any("registry.npmjs.org" in u for u in world.urls)
 
 
 def test_npm_rc_channel_maps_to_next_tag(world, personal_bot, h, run_async, monkeypatch):
-    from aipager import claude_bootstrap
-    claude_bootstrap._CLAUDE_JSON.write_text('{"installMethod": "npm-global"}')
-    s = claude_bootstrap._SETTINGS
+    from aipager import claude_paths
+    claude_paths.locate({}).global_config.write_text('{"installMethod": "npm-global"}')
+    s = claude_paths.locate({}).user_settings
     s.parent.mkdir(parents=True, exist_ok=True)
     s.write_text('{"autoUpdatesChannel": "rc"}')
     monkeypatch.setattr(self_update, "_http_get", lambda url, *, timeout, max_bytes:
@@ -132,8 +132,8 @@ def test_npm_rc_channel_maps_to_next_tag(world, personal_bot, h, run_async, monk
 
 
 def test_unknown_claude_install_method_is_unknown(world, personal_bot, h, run_async):
-    from aipager import claude_bootstrap
-    claude_bootstrap._CLAUDE_JSON.write_text('{}')
+    from aipager import claude_paths
+    claude_paths.locate({}).global_config.write_text('{}')
     world.claude_path = "/opt/elsewhere/claude"
     status = run_async(personal_bot.updates.status(force=True))
     assert status["claude"]["latest"] is None

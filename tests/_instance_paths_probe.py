@@ -37,7 +37,7 @@ def main() -> None:
         pathlib.Path.is_socket = _is_socket
 
     from aipager import (
-        claude_bootstrap,
+        claude_paths,
         config,
         daemon_secrets,
         instance,
@@ -102,8 +102,8 @@ def main() -> None:
             "flood_state": str(config.FLOOD_STATE_FILE),
             "config_path": str(scope.CONFIG_PATH),
             "daemon_env": str(daemon_secrets.DAEMON_ENV_PATH),
-            "claude_settings": str(claude_bootstrap._SETTINGS),
-            "claude_json": str(claude_bootstrap._CLAUDE_JSON),
+            "claude_settings": str(claude_paths.locate({}).user_settings),
+            "claude_json": str(claude_paths.locate({}).global_config),
             "xdg_config_env": str(config._XDG_CONFIG),
             "lock": str(pathlib.Path.home() / ".local" / "share" / "aipager"
                         / "daemon.lock"),

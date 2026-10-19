@@ -110,7 +110,7 @@ def _capture(monkeypatch):
 
 def test_step_settings_new_file(monkeypatch, which):
     lines = _capture(monkeypatch)
-    path = settings_patch.CLAUDE_SETTINGS
+    path = settings_patch.sessions_settings_path()
     settings_patch._step_settings("[4/4]")
     n = len(settings_patch.HOOK_EVENTS)
     assert lines == [("step", "[4/4]  Claude Code integration"),
@@ -122,7 +122,7 @@ def test_step_settings_new_file(monkeypatch, which):
 
 def test_step_settings_up_to_date(monkeypatch, which):
     settings_patch._step_settings()
-    path = settings_patch.CLAUDE_SETTINGS
+    path = settings_patch.sessions_settings_path()
     before = path.read_bytes()
     lines = _capture(monkeypatch)
     settings_patch._step_settings("[4/4]")
@@ -132,7 +132,7 @@ def test_step_settings_up_to_date(monkeypatch, which):
 
 
 def test_step_settings_repoint_backup_order(monkeypatch, which):
-    path = settings_patch.CLAUDE_SETTINGS
+    path = settings_patch.sessions_settings_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     stale = {"hooks": {"Stop": [{"hooks": [{"type": "command",
                                             "command": "/old/bin/aipager-hook"}]}]},
@@ -151,7 +151,7 @@ def test_step_settings_repoint_backup_order(monkeypatch, which):
 
 
 def test_plan_settings_writes_nothing_and_apply_matches_step(monkeypatch, which, tmp_path):
-    path = settings_patch.CLAUDE_SETTINGS
+    path = settings_patch.sessions_settings_path()
     plan = settings_patch.plan_settings()
     assert plan.changed and not plan.exists and not path.exists()
     assert settings_patch.apply_settings(plan) is None
@@ -163,7 +163,7 @@ def test_plan_settings_writes_nothing_and_apply_matches_step(monkeypatch, which,
 
 
 def test_plan_settings_rejects_bad_json_like_the_step(monkeypatch, which):
-    path = settings_patch.CLAUDE_SETTINGS
+    path = settings_patch.sessions_settings_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("// comment\n{}")
     with pytest.raises(ValueError, match="comments"):

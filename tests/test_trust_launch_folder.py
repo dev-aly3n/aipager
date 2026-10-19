@@ -25,13 +25,14 @@ import pytest
 
 from aipager import claude_bootstrap, safety
 from aipager.dtach import inject as dtach_inject
+from aipager import claude_paths
 
 
 @pytest.fixture
 def claude_json(tmp_path, monkeypatch) -> Path:
     path = tmp_path / "home" / ".claude.json"
     path.parent.mkdir()
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", path)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(path).parent)
     return path
 
 
@@ -299,9 +300,9 @@ def test_the_file_keeps_its_mode_and_its_own_letters(tmp_path, monkeypatch):
     folder = "/home/alice/\u067e\u0631\u0648\u0698\u0647"
     settings.write_text(json.dumps({"projects_note": folder}, ensure_ascii=False))
     os.chmod(settings, 0o600)
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
 
-    assert claude_bootstrap._ensure_bypass_accepted() is True
+    assert claude_bootstrap._ensure_bypass_accepted(claude_paths.locate({})) is True
 
     assert stat.S_IMODE(settings.stat().st_mode) == 0o600
     assert folder in settings.read_text(encoding="utf-8")
@@ -310,7 +311,7 @@ def test_the_file_keeps_its_mode_and_its_own_letters(tmp_path, monkeypatch):
 # ---- the bootstrap uses the same guarded write ----------------------------------
 
 def test_the_bootstrap_never_writes_a_broken_claude_json(claude_json, tmp_path, monkeypatch):
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(tmp_path / "settings.json").parent)
     claude_json.write_bytes(b'{"oauthAccount": {')
 
     claude_bootstrap.bootstrap_claude_settings(str(tmp_path))
@@ -321,7 +322,7 @@ def test_the_bootstrap_never_writes_a_broken_claude_json(claude_json, tmp_path, 
 def test_the_bootstrap_never_marks_the_work_folder_trusted(claude_json, tmp_path, monkeypatch):
     """A folder is marked when a session starts in it, never at daemon
     start: the work folder may never get a session."""
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(tmp_path / "settings.json").parent)
     raw = _write(claude_json, {"oauthAccount": {"x": 1}})
 
     claude_bootstrap.bootstrap_claude_settings(str(tmp_path))
@@ -340,7 +341,7 @@ def test_the_bootstrap_warns_when_sessions_would_start_above_home(
     home = tmp_path / "h"
     (home / "project").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(tmp_path / "settings.json").parent)
     workdir = {"root": Path("/"), "above home": tmp_path, "above home, trusted": tmp_path,
                "above home, a folder below it trusted": tmp_path,
                "home": home, "project": home / "project"}[where]
@@ -369,10 +370,10 @@ def test_the_bootstrap_goes_on_when_the_folder_check_raises(claude_json, tmp_pat
         raise FileNotFoundError("the daemon's folder was removed")
 
     monkeypatch.setattr(safety, "holds_home_folder", _boom)
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(tmp_path / "settings.json").parent)
     wired = []
     monkeypatch.setattr(claude_bootstrap, "_ensure_hooks_and_statusline",
-                        lambda: wired.append(True) or False)
+                        lambda paths: wired.append(True) or False)
 
     claude_bootstrap.bootstrap_claude_settings("relative/folder")
 
@@ -530,7 +531,7 @@ def test_launch_never_trusts_a_folder_that_holds_the_home_folder(
 
 
 def test_launch_goes_on_when_trusting_raises(claude_json, tmp_path, monkeypatch, run_async):
-    def _boom(folder, env):
+    def _boom(folder, env, **kw):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(claude_bootstrap, "prepare_session_start", _boom)

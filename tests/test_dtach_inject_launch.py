@@ -33,7 +33,7 @@ def test_launch_session_includes_resume_flag(tmp_path, monkeypatch, run_async):
     monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _fake_exec)
     # The flag is only passed when a conversation actually exists to resume;
     # this test is about the pass-through, so say it does.
-    monkeypatch.setattr(dtach_inject, "_conversation_exists", lambda sid: True)
+    monkeypatch.setattr(dtach_inject, "_conversation_exists", lambda sid, projects=None: True)
     # is_socket() is called twice: once for the "already exists" pre-check
     # (must return False) and again during the post-launch appearance wait
     # (must return True so the loop exits successfully).
@@ -210,7 +210,7 @@ def test_launch_session_strips_inherited_oauth_token(tmp_path, monkeypatch, run_
 
     monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
     monkeypatch.setattr(dtach_inject, "_credentials_file_is_fresh",
-                        lambda: True)
+                        lambda path=None: True)
 
     ok, _ = run_async(dtach_inject.launch_session("jim", mode="ask"))
     assert ok
@@ -239,7 +239,7 @@ def test_launch_session_keeps_oauth_token_when_no_credentials_file(
 
     monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
     monkeypatch.setattr(dtach_inject, "_credentials_file_is_fresh",
-                        lambda: False)
+                        lambda path=None: False)
 
     ok, _ = run_async(dtach_inject.launch_session("jim", mode="ask"))
     assert ok
@@ -260,8 +260,10 @@ def _write_creds(home: str, payload) -> None:
 
 
 def _patch_home(monkeypatch, tmp_path):
-    monkeypatch.setattr(dtach_inject.Path, "home",
-                        classmethod(lambda cls: tmp_path))
+    """Claude Code's default config home at <tmp_path>/.claude, the folder
+    :func:`_write_creds` writes into (aipager.claude_paths)."""
+    from aipager import claude_paths
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(tmp_path) / ".claude")
 
 
 def test_credentials_file_is_fresh_missing_file_returns_false(

@@ -943,13 +943,25 @@ _AGENT_ID_RE = re.compile(r"\A[A-Za-z0-9_-]{1,128}\Z")
 
 
 def _transcript_roots() -> list[str]:
-    """The folders Claude Code keeps transcripts in: ``projects`` under
-    ``~/.claude`` and under ``$CLAUDE_CONFIG_DIR`` when set, resolved."""
+    """The folders Claude Code keeps transcripts in, resolved: ``projects``
+    under ``~/.claude``, under this process's ``$CLAUDE_CONFIG_DIR`` when it
+    is absolute, and the one the daemon's sessions use (aipager's daemon.env
+    or a settings ``env`` block can move it: :mod:`aipager.claude_paths`)
+    when an absolute ``CLAUDE_CONFIG_DIR`` decides it. A relative value adds
+    no folder."""
+    from aipager import claude_paths
+
     roots = [os.path.expanduser("~/.claude/projects")]
     env = os.environ.get("CLAUDE_CONFIG_DIR")
     if env and os.path.isabs(env):
         roots.append(os.path.join(env, "projects"))
-    return [safety._realpath(r) for r in roots]
+    try:
+        paths = claude_paths.for_sessions()
+        if paths.from_env and not paths.relative:
+            roots.append(str(paths.projects))
+    except Exception:
+        pass
+    return list(dict.fromkeys(safety._realpath(r) for r in roots))
 
 
 def transcript_allowed(path: str) -> bool:

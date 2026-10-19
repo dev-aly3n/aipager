@@ -16,6 +16,8 @@ import json
 import pytest
 
 from aipager import claude_bootstrap, claude_resolve, daemon_secrets, doctor
+from aipager import claude_paths
+from pathlib import Path
 
 KEY = "sk-ant-api03-" + "B" * 30 + "tail-of-the-key-0002"
 
@@ -74,7 +76,7 @@ def test_doctor_points_a_gateway_at_its_key_not_at_a_claude_login(monkeypatch):
 def test_doctor_reads_the_address_from_claude_settings_too(monkeypatch, tmp_path):
     settings = tmp_path / "settings.json"
     settings.write_text(json.dumps({"env": {"ANTHROPIC_BASE_URL": "http://localhost:4000"}}))
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
+    monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", Path(settings).parent)
 
     r = _doctor(monkeypatch, env={"ANTHROPIC_AUTH_TOKEN": "gw"},
                 auth=claude_resolve.AuthStatus(True, "oauth_token", "env"), check="rejected")
@@ -94,7 +96,7 @@ def test_doctor_warns_when_a_refused_key_leaves_sessions_with_no_login(monkeypat
     claude_json = tmp_path / ".claude.json"
     claude_json.write_text(json.dumps(
         {"customApiKeyResponses": {"approved": [], "rejected": [KEY[-20:]]}}))
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", claude_json)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(claude_json).parent)
 
     r = _doctor(monkeypatch, env={"ANTHROPIC_API_KEY": KEY},
                 auth=claude_resolve.AuthStatus(True, "api_key", "env"))
@@ -109,7 +111,7 @@ def test_doctor_is_quiet_about_a_refused_key_next_to_a_login(monkeypatch, tmp_pa
     claude_json.write_text(json.dumps({
         "oauthAccount": {"accountUuid": "u"},
         "customApiKeyResponses": {"approved": [], "rejected": [KEY[-20:]]}}))
-    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", claude_json)
+    monkeypatch.setattr(claude_paths, "DEFAULT_GLOBAL_DIR", Path(claude_json).parent)
 
     r = _doctor(monkeypatch, env={"ANTHROPIC_API_KEY": KEY},
                 auth=claude_resolve.AuthStatus(True, "api_key", "env"))

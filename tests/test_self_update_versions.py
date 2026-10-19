@@ -120,13 +120,13 @@ def test_latest_aipager_rejects_malformed_version(monkeypatch):
 # ----- Claude Code ----------------------------------------------------------------
 
 def _claude_files(settings=None, claude_json=None):
-    from aipager import claude_bootstrap
-    claude_bootstrap._SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+    from aipager import claude_paths
+    claude_paths.locate({}).user_settings.parent.mkdir(parents=True, exist_ok=True)
     if settings is not None:
-        claude_bootstrap._SETTINGS.write_text(json.dumps(settings))
+        claude_paths.locate({}).user_settings.write_text(json.dumps(settings))
     if claude_json is not None:
-        claude_bootstrap._CLAUDE_JSON.parent.mkdir(parents=True, exist_ok=True)
-        claude_bootstrap._CLAUDE_JSON.write_text(json.dumps(claude_json))
+        claude_paths.locate({}).global_config.parent.mkdir(parents=True, exist_ok=True)
+        claude_paths.locate({}).global_config.write_text(json.dumps(claude_json))
 
 
 def test_claude_latest_uses_configured_channel(monkeypatch):

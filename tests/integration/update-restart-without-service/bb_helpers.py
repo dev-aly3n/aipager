@@ -76,9 +76,9 @@ class BBEnv:
         mp.setattr(install_source, "resolve_tool", lambda n: f"/abs/bin/{n}")
         mp.setattr(self_update, "_system", lambda: "Linux")
         mp.setattr(claude_resolve, "try_resolve_claude_binary", self._resolve)
-        from aipager import claude_bootstrap
-        claude_bootstrap._CLAUDE_JSON.parent.mkdir(parents=True, exist_ok=True)
-        claude_bootstrap._CLAUDE_JSON.write_text(json.dumps({"installMethod": "native"}))
+        from aipager import claude_paths
+        claude_paths.locate({}).global_config.parent.mkdir(parents=True, exist_ok=True)
+        claude_paths.locate({}).global_config.write_text(json.dumps({"installMethod": "native"}))
         for name, value in (
             ("GATE_POLL_SECONDS", 0.01), ("GATE_SETTLE_POLLS", 2),
             ("GATE_MAX_WAIT_SECONDS", 30), ("GATE_DECISION_MAX_SECONDS", 30),

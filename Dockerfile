@@ -3,7 +3,9 @@
 # Self-contained aipager workstation: python + node + claude code +
 # dtach + aipager. Designed for cloud / headless deployments where
 # users don't want to install Python or Node on the host. Mount
-# ~/.claude and a config volume; see the README.
+# ~/.claude and a config volume; see the README. Claude Code keeps all
+# of its config in the ~/.claude volume, its global config
+# (.claude.json) included, so recreating the container keeps it.
 
 # ----- builder: produce the aipager wheel from source -----
 FROM python:3.12-slim AS builder
@@ -54,8 +56,17 @@ RUN useradd -m -u 1000 -s /bin/bash aipager
 USER aipager
 WORKDIR /home/aipager
 
+# Claude Code keeps its global config (folder trust, first-run state, the
+# API key answers, the account and user MCP servers) in .claude.json,
+# which by default lives beside ~/.claude, in the container layer, and is
+# lost when the container is recreated. With CLAUDE_CONFIG_DIR set it is
+# $CLAUDE_CONFIG_DIR/.claude.json: in the volume below, with everything
+# else Claude Code keeps. aipager follows the same variable.
+ENV CLAUDE_CONFIG_DIR=/home/aipager/.claude
+
 # Mount points the user typically wires up:
-#   /home/aipager/.claude         — claude credentials + sessions
+#   /home/aipager/.claude         — claude credentials, settings, sessions
+#                                   and its global config (.claude.json)
 #   /home/aipager/.config/aipager — bot token, chat id, settings
 # A project dir at /workspace is conventional but not declared as a
 # named volume — the user mounts whichever directories they want

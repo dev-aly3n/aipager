@@ -672,8 +672,8 @@ def _npm_claude(env, monkeypatch, *, writable):
     `installMethod: global`, the npm dist-tags lookup faked; the package
     folder made read-only for this user through ``os.access``."""
     import os
-    from aipager import claude_bootstrap
-    claude_bootstrap._CLAUDE_JSON.write_text(json.dumps({"installMethod": "global"}))
+    from aipager import claude_paths
+    claude_paths.locate({}).global_config.write_text(json.dumps({"installMethod": "global"}))
     package = env.tmp_path / "usr" / "lib" / "node_modules" / "@anthropic-ai" / "claude-code"
     package.mkdir(parents=True)
     (package / "cli.js").write_text("")
