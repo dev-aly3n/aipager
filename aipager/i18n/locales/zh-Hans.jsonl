@@ -629,6 +629,7 @@
 {"k": "route.kill_none", "src": "1c62fda9", "v": "没有可结束的会话。"}
 {"k": "route.kill_which", "src": "65bf98de", "v": "要结束哪个会话？"}
 {"k": "route.mention_alone", "src": "c8588bc4", "v": "请单独发送 {command}，不要同时提及机器人。"}
+{"k": "route.model_default_saved", "src": "4bb8fd32", "v": "📌 Claude Code 也把它设成了新会话的默认模型。"}
 {"k": "route.model_now", "src": "721a5dbc", "v": "🧠 现在是 {model}"}
 {"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "另一位成员的消息还没被 Claude 取走，请在它之后再切换模型。"}
 {"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
@@ -892,6 +893,7 @@
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "这个值不被允许"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "这个按钮已过时，请重新发送 /kill"}
 {"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} 正在等待回答一个请求。请先回答，再切换模式。"}
+{"k": "toast.model_checking", "src": "022b96f4", "v": "Claude Code 还在检查新模型：请稍后再点一次。"}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} 已开始新的任务，要停止它请再点一次 ⏹ 停止"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} 已开始新的任务，请重新发送 /stop"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "你无权更改这个会话。"}
@@ -1127,6 +1129,7 @@
 {"k": "ui.menu.changed", "src": "512ec84b", "v": "这个会话已变化。请重新打开菜单。"}
 {"k": "ui.model.failed", "src": "a8ef2ee3", "v": "无法切换模型。"}
 {"k": "ui.model.now", "src": "3dd35778", "v": "模型现在是 {model}。"}
+{"k": "ui.model.now_default", "src": "adbd22e1", "v": "模型现在是 {model}，Claude Code 也把它设成了新会话的默认模型。"}
 {"k": "ui.model.switching", "src": "4a9961a0", "v": "正在更换…"}
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "模型"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "未确认（请检查会话）"}

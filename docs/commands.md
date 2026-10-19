@@ -215,6 +215,18 @@ A live session's page has a **Model** control showing the model the session repo
   next message would be typed into it. For the same reason, aipager
   refuses another switch of that session for a minute after an
   unconfirmed one, or until the session reports a new model.
+- **A message sent right after a switch waits.** Claude Code first
+  checks the model with a request (for up to 15 seconds) and loses
+  anything typed meanwhile, so a message you send then is held (👀) and
+  goes to Claude once the session reports the new model, or after 17
+  seconds.
+- **The model also becomes Claude Code's default for new sessions.**
+  As with `/model` in the terminal, Claude Code saves the model you
+  switch to in its `settings.json`, and every new session without a
+  model of its own starts on it. The chat reply, the session's Ready
+  card and the Mini App say so when that happens. A session started
+  with its own model (on `/new`'s model step, or from the `/settings`
+  defaults) keeps it.
 
 ## The pinned status bar
 

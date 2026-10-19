@@ -629,6 +629,7 @@
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Tidak ada sesi untuk diakhiri."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "Sesi mana yang diakhiri?"}
 {"k": "route.mention_alone", "src": "c8588bc4", "v": "Kirim {command} sendirian, tanpa menyebut bot."}
+{"k": "route.model_default_saved", "src": "4bb8fd32", "v": "📌 Claude Code juga menjadikannya model bawaan untuk sesi baru."}
 {"k": "route.model_now", "src": "721a5dbc", "v": "🧠 sekarang {model}"}
 {"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "pesan anggota lain belum dibaca Claude - ganti model setelah itu."}
 {"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
@@ -892,6 +893,7 @@
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "Nilai ini tidak diizinkan"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "Tombol ini sudah usang - kirim /kill lagi"}
 {"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} sedang menunggu jawaban atas permintaan. Jawab dulu, lalu ganti mode."}
+{"k": "toast.model_checking", "src": "022b96f4", "v": "Claude Code masih mengecek model baru: ketuk lagi sebentar lagi."}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} sudah mengerjakan hal baru - untuk menghentikannya, ketuk ⏹ Hentikan lagi"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} sudah mengerjakan hal baru - kirim /stop lagi"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "Kamu tidak boleh mengubah sesi ini."}
@@ -1127,6 +1129,7 @@
 {"k": "ui.menu.changed", "src": "512ec84b", "v": "Sesi ini sudah berubah. Buka lagi menunya."}
 {"k": "ui.model.failed", "src": "a8ef2ee3", "v": "Tidak bisa mengganti model."}
 {"k": "ui.model.now", "src": "3dd35778", "v": "Model sekarang {model}."}
+{"k": "ui.model.now_default", "src": "adbd22e1", "v": "Model sekarang {model}, dan Claude Code juga menjadikannya bawaan untuk sesi baru."}
 {"k": "ui.model.switching", "src": "4a9961a0", "v": "mengganti…"}
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "Model"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "belum dikonfirmasi (periksa sesinya)"}

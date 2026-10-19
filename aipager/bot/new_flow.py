@@ -1009,12 +1009,14 @@ async def create_from_text(
 def render_ready(
     bot: TelegramBot, update: Update | None, sess: TrackedSession, *,
     model_label: str | None = None, first_message: bool = False, note: str = "",
-    changed: str = "", tr=None,
+    changed: str = "", tr=None, default_saved: bool = False,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Where every way of starting a session ends: what it got, and what
     to do next, in *tr*'s language (the chat's when None). ``changed``
     (plain text): what a tap on the card just changed and who did it,
-    shown in a group (roadmap 8.91c); ``note`` (plain text) a warning."""
+    shown in a group (roadmap 8.91c); ``note`` (plain text) a warning;
+    ``default_saved``: a model switch from the card that Claude Code also
+    made the default for new sessions."""
     from aipager.bot import session_parity  # local: avoids an import cycle
     chat_id = sess.scope_chat_id or (calling_chat_id(update) if update else 0) or 0
     tr = tr or i18n.for_chat(chat_id)
@@ -1035,6 +1037,9 @@ def render_ready(
     ]
     if changed:
         lines.append(tr.html(READY_CHANGED, changed=changed))
+    if default_saved:
+        from aipager.bot.session_ops import MODEL_DEFAULT_SAVED  # local: import cycle
+        lines.append(tr.html(MODEL_DEFAULT_SAVED))
     if note:
         lines.append(tr.html(WARNING_LINE, text=note))
     lines.append("")
@@ -1084,6 +1089,50 @@ def _render_ready_models(
     return tr.html(READY_MODELS, session=sess.label), InlineKeyboardMarkup(rows)
 
 
+#: The Ready card follow-ups in flight (kept so they are not collected).
+_READY_FOLLOW_TASKS: set = set()
+#: How many Ready cards' tap counts are kept (a follow-up lasts ~16 s).
+_READY_TAPS_KEPT = 256
+
+
+def _count_ready_tap(bot: TelegramBot, chat_id: int, msg_id) -> None:
+    """One more tap on the Ready card *msg_id*: a follow-up edit started
+    before it no longer knows what the card shows."""
+    taps = getattr(bot, "_ready_card_taps", None)
+    if taps is None:
+        taps = bot._ready_card_taps = {}
+    taps[(chat_id, msg_id)] = taps.get((chat_id, msg_id), 0) + 1
+    while len(taps) > _READY_TAPS_KEPT:   # the oldest cards first
+        taps.pop(next(iter(taps)))
+
+
+def _ready_taps(bot: TelegramBot, chat_id: int, msg_id) -> int:
+    return (getattr(bot, "_ready_card_taps", None) or {}).get((chat_id, msg_id), 0)
+
+
+async def _say_default_saved(
+    bot: TelegramBot, update: Update, chat_id: int, msg_id, sess: TrackedSession,
+    previous: str, changed: str, taps: int,
+) -> None:
+    """After a model switch from the Ready card: once the session reports it,
+    the card says when Claude Code also made it the default for new
+    sessions, as the chat's /model reply does. Left alone when the card was
+    tapped again meanwhile (it may show the model list or another change),
+    or the session ended. Never raises."""
+    from aipager.bot.session_ops import await_default_saved, await_model_change
+    try:
+        if not await await_model_change(sess, previous):
+            return
+        if not await await_default_saved(sess):
+            return
+        if _ready_taps(bot, chat_id, msg_id) != taps or sess.status is Status.GONE:
+            return
+        text, kb = render_ready(bot, update, sess, changed=changed, default_saved=True)
+        await _edit_at(bot, chat_id, msg_id, text, kb)
+    except Exception:
+        log.debug("[%s] the Ready card's default note failed", sess.label, exc_info=True)
+
+
 async def _handle_ready_callback(
     bot: TelegramBot, update: Update, query: CallbackQuery,
     session_name: str, action: str,
@@ -1101,6 +1150,7 @@ async def _handle_ready_callback(
     if not bot._can_prompt_user(actor, chat_id):
         await bot._safe_answer(query, person.text(TOAST_CANT_CHANGE), show_alert=True)
         return
+    _count_ready_tap(bot, chat_id, msg_id)
 
     async def _rerender(note: str = "", changed: str = "") -> None:
         text, kb = render_ready(bot, update, sess, note=note, changed=changed)
@@ -1207,10 +1257,15 @@ async def _handle_ready_callback(
             await _rerender()
             return
         await bot._safe_answer(query, person.text(TOAST_SWITCHING_TO, model=label))
-        text, kb = render_ready(
-            bot, update, sess, model_label=label,
-            changed=(tr.text(CHANGED_MODEL, model=label, person=Command(by)) if by else ""))
+        changed = tr.text(CHANGED_MODEL, model=label, person=Command(by)) if by else ""
+        text, kb = render_ready(bot, update, sess, model_label=label, changed=changed)
         await _edit_at(bot, chat_id, msg_id, text, kb)
+        if outcome.previous_model:
+            task = asyncio.create_task(_say_default_saved(
+                bot, update, chat_id, msg_id, sess, outcome.previous_model, changed,
+                _ready_taps(bot, chat_id, msg_id)))
+            _READY_FOLLOW_TASKS.add(task)
+            task.add_done_callback(_READY_FOLLOW_TASKS.discard)
         return
 
     await bot._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))

@@ -1024,6 +1024,15 @@ class SessionMonitor:
                 except Exception:
                     log.warning("Failed to settle the dialog hold for %s",
                                 name, exc_info=True)
+            # Messages held while a typed /model checked its model, and the
+            # check's time ran out with no statusline change (a refused
+            # model, or one Claude Code calls by the same name).
+            if sess.model_hold and not sess.model_check_running():
+                try:
+                    await self.notify_fn(sess, "model_hold_settle", {})
+                except Exception:
+                    log.warning("Failed to settle the model hold for %s",
+                                name, exc_info=True)
             # A dialog answered "No" at the terminal (roadmap 8.113): Claude
             # Code ends the turn like an interrupt and fires no hook, so
             # only the transcript tells. Checked before the watchdog below,

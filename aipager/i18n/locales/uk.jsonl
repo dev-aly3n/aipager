@@ -629,6 +629,7 @@
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Немає сесій, які можна завершити."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "Яку сесію завершити?"}
 {"k": "route.mention_alone", "src": "c8588bc4", "v": "Надішли {command} окремо, без згадки бота."}
+{"k": "route.model_default_saved", "src": "4bb8fd32", "v": "📌 Claude Code зробив її моделлю за замовчуванням і для нових сесій."}
 {"k": "route.model_now", "src": "721a5dbc", "v": "🧠 тепер {model}"}
 {"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "в іншого учасника є повідомлення, яке Claude ще не забрав; зміни модель після нього."}
 {"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
@@ -892,6 +893,7 @@
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "Неприпустиме значення"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "Ця кнопка застаріла: надішли /kill знову"}
 {"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} чекає на відповідь на запит. Спершу дай відповідь, потім змінюй режим."}
+{"k": "toast.model_checking", "src": "022b96f4", "v": "Claude Code ще перевіряє нову модель: натисни ще раз трохи згодом."}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} почала нове завдання: натисни «⏹ Зупинити» ще раз, щоб зупинити її"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} почала нове завдання: надішли /stop ще раз"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "Ти не можеш змінити цю сесію."}
@@ -1127,6 +1129,7 @@
 {"k": "ui.menu.changed", "src": "512ec84b", "v": "Ця сесія змінилася. Відкрий меню знову."}
 {"k": "ui.model.failed", "src": "a8ef2ee3", "v": "Не вдалося змінити модель."}
 {"k": "ui.model.now", "src": "3dd35778", "v": "Тепер модель {model}."}
+{"k": "ui.model.now_default", "src": "adbd22e1", "v": "Тепер модель {model}, і Claude Code зробив її моделлю за замовчуванням для нових сесій."}
 {"k": "ui.model.switching", "src": "4a9961a0", "v": "змінюю…"}
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "Модель"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "не підтверджено (перевір сесію)"}

@@ -629,6 +629,7 @@
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Không có phiên nào để kết thúc."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "Kết thúc phiên nào?"}
 {"k": "route.mention_alone", "src": "c8588bc4", "v": "Hãy gửi riêng {command}, không nhắc tới bot."}
+{"k": "route.model_default_saved", "src": "4bb8fd32", "v": "📌 Claude Code cũng đặt nó làm mô hình mặc định cho các phiên mới."}
 {"k": "route.model_now", "src": "721a5dbc", "v": "🧠 giờ là {model}"}
 {"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "tin nhắn của một thành viên khác vẫn chưa được Claude nhận - hãy đổi mô hình sau đó."}
 {"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
@@ -892,6 +893,7 @@
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "Giá trị này không được phép"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "Nút này đã cũ - hãy gửi lại /kill"}
 {"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} đang chờ trả lời một yêu cầu. Hãy trả lời trước, rồi đổi chế độ."}
+{"k": "toast.model_checking", "src": "022b96f4", "v": "Claude Code vẫn đang kiểm tra mô hình mới: lát nữa hãy chạm lại."}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} đã làm việc mới - để dừng, hãy chạm ⏹ Dừng lần nữa"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} đã làm việc mới - hãy gửi lại /stop"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "Bạn không được phép thay đổi phiên này."}
@@ -1127,6 +1129,7 @@
 {"k": "ui.menu.changed", "src": "512ec84b", "v": "Phiên này đã thay đổi. Hãy mở lại menu."}
 {"k": "ui.model.failed", "src": "a8ef2ee3", "v": "Không đổi được mô hình."}
 {"k": "ui.model.now", "src": "3dd35778", "v": "Mô hình giờ là {model}."}
+{"k": "ui.model.now_default", "src": "adbd22e1", "v": "Mô hình giờ là {model}, và Claude Code cũng đặt nó làm mặc định cho các phiên mới."}
 {"k": "ui.model.switching", "src": "4a9961a0", "v": "đang đổi…"}
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "Mô hình"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "chưa xác nhận (hãy kiểm tra phiên)"}

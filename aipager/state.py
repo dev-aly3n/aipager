@@ -810,6 +810,21 @@ class TrackedSession:
     # counting as soon as the session reports anything else — whoever
     # (or whatever) observed it.
     model_switch_pending_from: str = ""
+    # Monotonic end of the time a typed `/model` may still be checking its
+    # model. Claude Code (2.1.303, probed) first sends the model a request,
+    # giving up after 15 s, and keystrokes typed meanwhile are lost: a
+    # message is held until the statusline reports the switch or this
+    # passes (``model_check_running``). Transient, never persisted.
+    model_check_until: float = 0.0
+    # A message was held for that check: sent on once it is over
+    # (``notify``'s ``_settle_model_hold``, the session monitor's backstop).
+    model_hold: bool = False
+    # Claude Code's default model for new sessions (``model`` in its user
+    # settings) when the switch was typed: it saves a typed `/model` there,
+    # and the switch's confirmation says so when it changed.
+    model_default_from: str | None = None
+    # The model that switch typed: the default Claude Code saves must be it.
+    model_switch_to: str = ""
     turn_hook_at: float = 0.0
     # One "still waiting for your answer" reminder per INTERACTIVE wait
     # (roadmap 8.4): set by the hook receiver when Claude Code's idle
@@ -2884,6 +2899,20 @@ class TrackedSession:
         current = self.model_name or ""
         baseline = self.model_switch_pending_from
         return not (baseline and current and current != baseline)
+
+    def model_check_running(self) -> bool:
+        """Is a typed ``/model`` maybe still checking its model, so that a
+        message typed now would be lost? Until the statusline reports the
+        switch (``model_switch_pending`` ends) or ``model_check_until``
+        passes, whichever comes first."""
+        return time.monotonic() < self.model_check_until and self.model_switch_pending()
+
+    def model_hold_active(self) -> bool:
+        """Must text wait before it is typed, because of a typed ``/model``?
+        While its check may run, and while messages held for it still wait
+        to go out (the window's end is noticed on the monitor's next tick):
+        then it goes after them."""
+        return self.model_check_running() or (self.model_hold and bool(self.pending_queue))
 
     # -- Permission mode (aipager/perm_modes.py) ---------------------------
 

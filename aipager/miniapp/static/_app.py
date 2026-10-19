@@ -1279,7 +1279,8 @@ APP_JS = r"""
         if (lastDetailData && lastDetailData.label === label) {
           lastDetailData.model = r.data.model;
         }
-        showNotice(t("ui.model.now", { model: r.data.model }), "ok");
+        showNotice(t(r.data.saved_default ? "ui.model.now_default" : "ui.model.now",
+                     { model: r.data.model }), "ok");
       } else if (r.status === 200) {
         modelSwitch = { label: label, previous: previous,
                         text: MODEL_UNCONFIRMED_TEXT, pending: false };

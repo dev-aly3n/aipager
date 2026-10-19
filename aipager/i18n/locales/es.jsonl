@@ -629,6 +629,7 @@
 {"k": "route.kill_none", "src": "1c62fda9", "v": "No hay sesiones que terminar."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "¿Qué sesión terminar?"}
 {"k": "route.mention_alone", "src": "c8588bc4", "v": "Envía {command} solo, sin mencionar al bot."}
+{"k": "route.model_default_saved", "src": "4bb8fd32", "v": "📌 Claude Code también lo dejó como modelo predeterminado para las sesiones nuevas."}
 {"k": "route.model_now", "src": "721a5dbc", "v": "🧠 ahora {model}"}
 {"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "otro miembro tiene un mensaje que Claude aún no tomó; cambia el modelo después."}
 {"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
@@ -892,6 +893,7 @@
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "Ese valor no está permitido"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "Este botón es antiguo: envía /kill otra vez"}
 {"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} está esperando la respuesta a una solicitud. Respóndela primero y luego cambia el modo."}
+{"k": "toast.model_checking", "src": "022b96f4", "v": "Claude Code todavía está comprobando el modelo nuevo: vuelve a tocar en un momento."}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} empezó otra tarea: toca ⏹ Detener otra vez para detenerla"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} empezó otra tarea: envía /stop otra vez"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "No puedes cambiar esta sesión."}
@@ -1127,6 +1129,7 @@
 {"k": "ui.menu.changed", "src": "512ec84b", "v": "Esta sesión cambió. Vuelve a abrir el menú."}
 {"k": "ui.model.failed", "src": "a8ef2ee3", "v": "No se pudo cambiar el modelo."}
 {"k": "ui.model.now", "src": "3dd35778", "v": "El modelo ahora es {model}."}
+{"k": "ui.model.now_default", "src": "adbd22e1", "v": "El modelo ahora es {model}, y Claude Code también lo dejó como predeterminado para las sesiones nuevas."}
 {"k": "ui.model.switching", "src": "4a9961a0", "v": "cambiando…"}
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "Modelo"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "no confirmado (revisa la sesión)"}

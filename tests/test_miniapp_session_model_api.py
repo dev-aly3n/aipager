@@ -426,12 +426,54 @@ def test_the_switch_is_confirmed_when_the_statusline_reports_a_new_model(
             assert await resp.json() == {
                 "status": "switched", "label": "dev",
                 "model": "Opus 5.5", "previous_model": "Sonnet 5",
+                "saved_default": False,
             }
             # Resolved on the change, not by running out the clock.
             assert time.monotonic() - started < 4.0
         finally:
             await client.close()
     run_async(_run())
+
+
+def test_the_page_is_told_when_claude_code_made_it_the_default(
+    server, run_async, monkeypatch, tmp_path,
+):
+    """Claude Code saves a typed /model as the default for new sessions:
+    the answer says so when Claude's user settings show a new default."""
+    from aipager import claude_bootstrap
+
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps({"model": "sonnet"}))
+    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
+
+    async def _run():
+        sess = _mk_session(server, "dev", model_name="Sonnet 5")
+        send = _pty(monkeypatch)
+        server.model_confirm_seconds = 5.0
+
+        async def _switch_later(*_a, **_k):
+            def _switched():
+                settings.write_text(json.dumps({"model": "claude-opus-5-5"}))
+                sess.model_name = "Opus 5.5"
+            asyncio.get_running_loop().call_later(0.1, _switched)
+            return True
+        send.side_effect = _switch_later
+        client = await _client_for(server)
+        try:
+            resp = await _post(client, "dev", {"model": "claude-opus-5-5"})
+            body = await resp.json()
+            assert body["status"] == "switched" and body["saved_default"] is True
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_the_page_shows_the_default_line_only_when_told():
+    """The page picks its notice by the answer's flag, never by text."""
+    from aipager.miniapp.static import _app
+
+    assert ('t(r.data.saved_default ? "ui.model.now_default" : "ui.model.now",'
+            in _app.APP_JS)
 
 
 def test_the_switch_is_unconfirmed_when_the_model_never_changes(

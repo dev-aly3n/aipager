@@ -629,6 +629,7 @@
 {"k": "route.kill_none", "src": "1c62fda9", "v": "종료할 세션이 없어요."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "어느 세션을 종료할까요?"}
 {"k": "route.mention_alone", "src": "c8588bc4", "v": "봇을 멘션하지 말고 {command} 명령만 따로 보내세요."}
+{"k": "route.model_default_saved", "src": "4bb8fd32", "v": "📌 Claude Code가 이 모델을 새 세션의 기본 모델로도 정했어요."}
 {"k": "route.model_now", "src": "721a5dbc", "v": "🧠 현재 {model}"}
 {"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "다른 멤버의 메시지를 Claude가 아직 가져가지 않았어요. 그다음에 모델을 바꿔 주세요."}
 {"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
@@ -892,6 +893,7 @@
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "허용되지 않는 값이에요"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "이 버튼은 오래됐어요. /kill을 다시 보내세요"}
 {"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} 세션이 요청에 대한 답을 기다리고 있어요. 먼저 답한 뒤 모드를 바꾸세요."}
+{"k": "toast.model_checking", "src": "022b96f4", "v": "Claude Code가 아직 새 모델을 확인하고 있어요. 잠시 후 다시 눌러 주세요."}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} 세션이 새 작업을 시작했어요. 중지하려면 ⏹ 중지를 다시 누르세요"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} 세션이 새 작업을 시작했어요. /stop을 다시 보내세요"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "이 세션을 바꿀 권한이 없어요."}
@@ -1127,6 +1129,7 @@
 {"k": "ui.menu.changed", "src": "512ec84b", "v": "이 세션이 바뀌었어요. 메뉴를 다시 여세요."}
 {"k": "ui.model.failed", "src": "a8ef2ee3", "v": "모델을 바꾸지 못했어요."}
 {"k": "ui.model.now", "src": "3dd35778", "v": "이제 모델은 {model}이에요."}
+{"k": "ui.model.now_default", "src": "adbd22e1", "v": "이제 모델은 {model}이에요. Claude Code가 이 모델을 새 세션의 기본 모델로도 정했어요."}
 {"k": "ui.model.switching", "src": "4a9961a0", "v": "바꾸는 중…"}
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "모델"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "확인 안 됨 (세션을 확인하세요)"}

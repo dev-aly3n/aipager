@@ -52,7 +52,9 @@ from aipager.bot import (
     session_parity,
 )
 from aipager.bot.session_ops import (
+    MODEL_DEFAULT_SAVED,
     MODEL_UNCONFIRMED,
+    await_default_saved,
     await_model_change,
     clear_model_switch_pending,
     mark_model_switch_sent,
@@ -848,8 +850,15 @@ class CommandHandlersMixin:
             # it, this message would run under that turn's rules; held, it
             # drains at the turn's end and runs as its sender.
             held_reason = "another sender's turn running"
+        # A `/model` was just typed and Claude Code may still be checking
+        # the model: text typed now would be lost. Held, it goes out once
+        # the statusline reports the switch or the check's time is up
+        # (`_settle_model_hold`).
+        # Also while messages held for it wait to go out: this one goes
+        # after them (`model_hold_active`).
+        for_model = not held_reason and sess.model_hold_active()
 
-        if not held_reason:
+        if not held_reason and not for_model:
             return False
         if not sess.queue_prompt(text, update.message.message_id, reply_context,
                                  driver_id_from_update(update)):
@@ -863,8 +872,13 @@ class CommandHandlersMixin:
             # Recorded before any await: a dialog answered meanwhile then
             # marks the hold answered, and this message goes out with it.
             _claim_dialog_hold(sess)
+        if for_model:
+            sess.model_hold = True
         await self._react(update, reactions.HANDED_OFF)
-        log.info("[%s] Held (%s): %s", sess.label, held_reason, text[:80])
+        if for_model:
+            log.info("[%s] Held (model check running): %s", sess.label, text[:80])
+        else:
+            log.info("[%s] Held (%s): %s", sess.label, held_reason, text[:80])
         if for_dialog:
             await self._tell_held_for_dialog(update, sess)
         return True
@@ -2980,6 +2994,9 @@ class CommandHandlersMixin:
         tr = i18n.for_sess(sess)
         if new_model:
             text = f"{header}\n{tr.html(MODEL_NOW, model=new_model)}"
+            if await await_default_saved(sess):
+                # As in the terminal: Claude Code made it the default too.
+                text += f"\n{tr.html(MODEL_DEFAULT_SAVED)}"
         else:
             text = f"{header}\n{tr.html(WARNING_LINE, text=tr.text(MODEL_UNCONFIRMED))}"
         try:

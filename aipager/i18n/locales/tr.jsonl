@@ -629,6 +629,7 @@
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Sonlandırılacak oturum yok."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "Hangi oturum sonlandırılsın?"}
 {"k": "route.mention_alone", "src": "c8588bc4", "v": "{command} komutunu botu anmadan, tek başına gönder."}
+{"k": "route.model_default_saved", "src": "4bb8fd32", "v": "📌 Claude Code bunu yeni oturumlar için varsayılan model de yaptı."}
 {"k": "route.model_now", "src": "721a5dbc", "v": "🧠 artık {model}"}
 {"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "başka bir üyenin Claude'un henüz almadığı bir mesajı var; modeli ondan sonra değiştir."}
 {"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
@@ -892,6 +893,7 @@
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "Geçersiz değer"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "Bu düğme eskidi: /kill komutunu tekrar gönder"}
 {"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} bir isteğe yanıt bekliyor. Önce yanıt ver, sonra modu değiştir."}
+{"k": "toast.model_checking", "src": "022b96f4", "v": "Claude Code yeni modeli hâlâ kontrol ediyor: biraz sonra tekrar dokun."}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} yeni bir göreve başladı: durdurmak için “⏹ Durdur” düğmesine tekrar dokun"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} yeni bir göreve başladı: /stop komutunu tekrar gönder"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "Bu oturumu değiştiremezsin."}
@@ -1127,6 +1129,7 @@
 {"k": "ui.menu.changed", "src": "512ec84b", "v": "Bu oturum değişti. Menüyü yeniden aç."}
 {"k": "ui.model.failed", "src": "a8ef2ee3", "v": "Model değiştirilemedi."}
 {"k": "ui.model.now", "src": "3dd35778", "v": "Model artık {model}."}
+{"k": "ui.model.now_default", "src": "adbd22e1", "v": "Model artık {model}; Claude Code bunu yeni oturumlar için varsayılan model de yaptı."}
 {"k": "ui.model.switching", "src": "4a9961a0", "v": "değiştiriliyor…"}
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "Model"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "onaylanmadı (oturumu kontrol et)"}

@@ -2506,7 +2506,7 @@ class MiniAppServer:
         """
         from aiohttp import web
 
-        from aipager.bot.session_ops import await_model_change
+        from aipager.bot.session_ops import await_default_saved, await_model_change
         from aipager.config import MODEL_CHOICES
         from aipager.miniapp.launch import validate_model
         from aipager.miniapp.sessions import MODEL_SWITCH_UNCONFIRMED
@@ -2561,9 +2561,13 @@ class MiniAppServer:
             sess, outcome.previous_model, timeout=self.model_confirm_seconds,
         )
         if new_model:
+            # Claude Code saves a typed /model as the default for new
+            # sessions too: the page says so when it did.
+            saved = await await_default_saved(sess)
             return web.json_response({
                 "status": "switched", "label": outcome.label,
                 "model": new_model, "previous_model": outcome.previous_model,
+                "saved_default": saved is not None,
             })
         return web.json_response({
             "status": "unconfirmed", "label": outcome.label,
