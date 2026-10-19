@@ -223,7 +223,10 @@ def _update_json(path: Path, change, *, empty_ok: bool = False) -> bool:
         check_write(path)
         tmp = None
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
+            # A folder aipager creates is private, as Claude Code makes its
+            # own (it will hold the login and transcripts); an existing one
+            # keeps its mode.
+            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".",
                                        suffix=".tmp")
             with os.fdopen(fd, "w", encoding="utf-8") as f:

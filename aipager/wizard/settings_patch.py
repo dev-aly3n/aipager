@@ -399,7 +399,9 @@ def _backup_settings(plan: SettingsPlan) -> Path | None:
         backup = plan.path.with_name(f"{plan.path.name}.bak.{int(time.time())}")
         backup.write_text(plan.existing_text)
         return backup
-    plan.path.parent.mkdir(parents=True, exist_ok=True)
+    # Private, as Claude Code makes its config folder (it will hold the
+    # login and transcripts); an existing folder keeps its mode.
+    plan.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     return None
 
 

@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
+import stat
 import time
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -120,6 +122,31 @@ def test_start_with_a_relative_config_dir_writes_nothing_and_says_so(
     assert not (work / "rel").exists()
     assert "CLAUDE_CONFIG_DIR is not an absolute path" in caplog.text
     assert "sessions will start without aipager's hooks" in caplog.text
+
+
+@pytest.mark.parametrize("who", ["daemon", "wizard"])
+def test_a_config_folder_aipager_creates_is_private(tmp_path, monkeypatch, who):
+    """It will hold Claude Code's login and transcripts: 0700, as Claude
+    Code makes it. A folder that exists keeps its mode."""
+    monkeypatch.setattr(daemon_secrets, "_recovered", {})
+    old_umask = os.umask(0o022)
+    try:
+        for folder, created in ((tmp_path / "new-config", True),
+                                (tmp_path / "old-config", False)):
+            if not created:
+                folder.mkdir(mode=0o755)
+                folder.chmod(0o755)
+            _set_daemon_env(folder)
+            _hooks_on_path(monkeypatch)
+            if who == "daemon":
+                claude_bootstrap.bootstrap_claude_settings(str(tmp_path))
+            else:
+                settings_patch.apply_settings(settings_patch.plan_settings())
+            assert _has_our_hook(folder / "settings.json")
+            mode = stat.S_IMODE(folder.stat().st_mode)
+            assert mode == (0o700 if created else 0o755), (folder, oct(mode))
+    finally:
+        os.umask(old_umask)
 
 
 def test_a_config_dir_set_in_settings_wires_the_moved_file(tmp_path, monkeypatch):
