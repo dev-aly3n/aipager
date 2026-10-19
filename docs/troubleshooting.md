@@ -614,8 +614,9 @@ Claude Code reads (checked with Claude Code 2.1.303):
   `aipager doctor` warns.
 - **Use a full path.** Claude Code takes the value as it is: no `~`, and
   a relative value (an empty one too) means a folder inside each
-  session's own folder. aipager writes nothing there; the log and
-  `aipager doctor` warn.
+  session's own folder. aipager writes nothing there: the log and
+  `aipager doctor` warn, and `aipager config` and `aipager setup` stop
+  with the fix.
 - **Set in Claude Code's own settings.** A `CLAUDE_CONFIG_DIR` in the
   `env` block of `~/.claude/settings.json` (or of managed settings) moves
   the settings file, the login and the transcripts, but not

@@ -330,6 +330,36 @@ def test_plan_settings_and_setup_name_the_config_dirs_file(cfg):
     assert doc["settings_json"]["path"] == str(cfg / "settings.json")
 
 
+@pytest.mark.parametrize("value", ["rel", "", " "], ids=["relative", "empty", "space"])
+def test_the_wizard_writes_no_hooks_into_a_relative_config_dir(
+        tmp_path, monkeypatch, capsys, value):
+    """A relative CLAUDE_CONFIG_DIR (an empty one is the folder itself)
+    would put aipager's hooks into a settings.json inside the folder
+    `aipager config` runs from: the wizard writes nothing and says why,
+    as the daemon does."""
+    monkeypatch.setattr(daemon_secrets, "_recovered", {})
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", value)
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+
+    with pytest.raises(ValueError, match="not an absolute path"):
+        settings_patch.plan_settings()
+    settings_patch._step_settings()
+
+    assert sorted(work.rglob("*")) == []
+    assert not (_default() / "settings.json").exists()
+    out = " ".join(capsys.readouterr().err.split())
+    assert "not an absolute path" in out
+    assert "Set an absolute CLAUDE_CONFIG_DIR" in out
+
+
+def test_the_wizard_still_writes_an_absolute_config_dir(cfg, capsys):
+    """Control for the test above: an absolute value is patched."""
+    settings_patch._step_settings()
+    assert _has_our_hook(cfg / "settings.json")
+
+
 def test_uninstall_cleans_both_settings_files(cfg, monkeypatch, capsys):
     ours = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": HOOK}]}]},
             "model": "opus"}

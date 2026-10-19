@@ -504,6 +504,25 @@ def test_invalid_settings_json_blocks_the_yaml_write(env):
     assert env.snapshot() == before
 
 
+@pytest.mark.parametrize("value", ["rel", "", " "], ids=["relative", "empty", "space"])
+def test_a_relative_config_dir_blocks_the_setup(env, monkeypatch, tmp_path, value):
+    """A relative CLAUDE_CONFIG_DIR would put aipager's hooks into a
+    settings.json inside the folder setup runs from: setup writes nothing
+    and names the fix, as the daemon writes no hooks there."""
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", value)
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    before = env.snapshot()
+    code, doc, _o, _e = env.setup()
+    assert code == 1 and doc["error"] == "settings_invalid"
+    assert "not an absolute path" in doc["message"]
+    assert "Set an absolute CLAUDE_CONFIG_DIR" in doc["fix"]
+    assert env.tg.sends == []
+    assert env.snapshot() == before
+    assert sorted(work.rglob("*")) == []
+
+
 def test_exit_priority(env):
     _write_yaml([_dm(CHAT)], token=TOKEN2)
     env.deps_missing = {"dtach"}

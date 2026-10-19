@@ -552,14 +552,20 @@ def _setup(args: argparse.Namespace, run: _Run) -> int:
     doc["deps"] = _deps_doc(deps)
     settings_plan = None
     settings_path = Path(doc["settings_json"]["path"])
-    try:
-        settings_plan = settings_patch.plan_settings(settings_path)
-    except (ValueError, OSError) as e:
+    relative = settings_patch.relative_home()
+    if relative is not None:
+        # Nothing is written into a relative config home (settings_patch).
         errors["settings_invalid"] = SetupError(
-            EXIT_FAILURE, "settings_invalid", str(e),
-            f"Fix {settings_path} (it must be valid JSON), "
-            "then run this again.")
+            EXIT_FAILURE, "settings_invalid", *relative)
     else:
+        try:
+            settings_plan = settings_patch.plan_settings(settings_path)
+        except (ValueError, OSError) as e:
+            errors["settings_invalid"] = SetupError(
+                EXIT_FAILURE, "settings_invalid", str(e),
+                f"Fix {settings_path} (it must be valid JSON), "
+                "then run this again.")
+    if settings_plan is not None:
         doc["settings_json"]["repointed"] = settings_plan.repointed
         doc["settings_json"]["status"] = ("would_change" if settings_plan.changed
                                           else "unchanged")
