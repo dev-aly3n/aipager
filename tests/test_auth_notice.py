@@ -24,7 +24,7 @@ from unittest.mock import MagicMock as _M
 
 import pytest
 
-from aipager import claude_bootstrap, claude_resolve, daemon_secrets, i18n
+from aipager import claude_bootstrap, claude_paths, claude_resolve, daemon_secrets, i18n
 from aipager.bot import auth_notice
 from aipager.claude_bootstrap import STORED_LOGIN, AuthNotice, ProvenanceInfo
 from aipager.claude_resolve import AuthStatus
@@ -395,9 +395,12 @@ def _sweep_env(monkeypatch, tmp_path, *, daemon_env=None, shell_token=None,
     monkeypatch.setattr(daemon_secrets, "DAEMON_ENV_PATH", env_path)
 
     fake_home = tmp_path / "home"
-    (fake_home / ".claude").mkdir(parents=True)
+    # Claude Code's config home: conftest points it at the tmp home.
+    claude_home = claude_paths.DEFAULT_CONFIG_HOME
+    assert claude_home.is_relative_to(tmp_path)
+    claude_home.mkdir(parents=True, exist_ok=True)
     if creds_file:
-        (fake_home / ".claude" / ".credentials.json").write_text("{}")
+        (claude_home / ".credentials.json").write_text("{}")
     monkeypatch.setattr("pathlib.Path.home", staticmethod(lambda: fake_home))
 
     monkeypatch.setattr(
@@ -532,9 +535,8 @@ def test_the_sweep_reports_what_claude_settings_hold(monkeypatch, tmp_path):
     it is a credential found, by name, like one in the environment."""
     import json
     _sweep_env(monkeypatch, tmp_path)
-    settings = tmp_path / "settings.json"
+    settings = claude_paths.DEFAULT_CONFIG_HOME / "settings.json"
     settings.write_text(json.dumps({"env": {"CLAUDE_CODE_USE_VERTEX": "1"}}))
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
     _recovered, found = claude_bootstrap._recover_auth("/x/claude", "2.1.235", {})
     assert "CLAUDE_CODE_USE_VERTEX" in found
 
