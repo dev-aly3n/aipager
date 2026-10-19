@@ -24,14 +24,23 @@ from unittest.mock import MagicMock as _M
 
 import pytest
 
-from aipager import claude_bootstrap, claude_resolve, daemon_secrets
-from aipager.claude_bootstrap import ProvenanceInfo
-from aipager.claude_resolve import AuthStatus, format_auth_notice
+from aipager import claude_bootstrap, claude_resolve, daemon_secrets, i18n
+from aipager.bot import auth_notice
+from aipager.claude_bootstrap import STORED_LOGIN, AuthNotice, ProvenanceInfo
+from aipager.claude_resolve import AuthStatus
+from aipager.i18n.locales import LOCALES
 from aipager.cli import daemon
 
 from tests.test_cli_daemon_run import _patch_components
 
-DETAILED = "claude: /home/aly/.local/bin/claude (2.1.235) · auth: oauth_token (env)"
+DETAILED = "claude: /home/alice/.local/bin/claude (2.1.235) · auth: oauth_token (env)"
+
+#: Every language aipager speaks.
+LANGUAGES = tuple(LOCALES)
+
+
+def _text(notice, code="en"):
+    return auth_notice.render(notice, i18n.get(code))
 
 
 def _run_daemon_with(monkeypatch, provenance):
@@ -99,7 +108,7 @@ def test_start_with_no_provenance_at_all_sends_nothing(monkeypatch):
 
 def test_logged_out_start_sends_exactly_one_message(monkeypatch):
     monkeypatch.setattr(claude_bootstrap, "recover_auth_or_notice",
-                        lambda p: format_auth_notice(["setup token"]))
+                        lambda p: AuthNotice(found=("CLAUDE_CODE_OAUTH_TOKEN",)))
     bot = _run_daemon_with(monkeypatch, ProvenanceInfo(
         lines=[DETAILED], auth_ok=False,
         pending=claude_bootstrap.PendingAuthCheck("/x/claude", "2.1.235", {})))
@@ -110,23 +119,33 @@ def test_the_detailed_provenance_line_is_never_what_gets_sent(monkeypatch):
     """Belt and braces: even when we DO speak, the journal text is not
     the text that goes out."""
     monkeypatch.setattr(claude_bootstrap, "recover_auth_or_notice",
-                        lambda p: format_auth_notice([]))
+                        lambda p: AuthNotice())
     bot = _run_daemon_with(monkeypatch, ProvenanceInfo(
         lines=[DETAILED], auth_ok=False,
         pending=claude_bootstrap.PendingAuthCheck("/x/claude", "2.1.235", {})))
     sent = bot.send_startup_notice.await_args.args[0]
-    assert sent != DETAILED
-    assert "/home/" not in sent
+    assert isinstance(sent, AuthNotice)
+    assert "/home/" not in _text(sent)
 
 
 # ---- the message itself leaks nothing ----------------------------------
 
-@pytest.mark.parametrize("kinds", [
-    [], ["setup token"], ["API key"], ["stored login"],
-    ["setup token", "API key"], ["setup token", "API key", "stored login"],
-])
-def test_notice_never_contains_machine_detail(kinds):
-    text = format_auth_notice(kinds)
+_KINDS = [
+    (), ("CLAUDE_CODE_OAUTH_TOKEN",), ("ANTHROPIC_API_KEY",), (STORED_LOGIN,),
+    ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"),
+    ("ANTHROPIC_AUTH_TOKEN", "AWS_BEARER_TOKEN_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
+     STORED_LOGIN),
+]
+
+
+@pytest.mark.parametrize("code", LANGUAGES)
+@pytest.mark.parametrize("fix", ["login", "gateway", "cloud", "variable"])
+@pytest.mark.parametrize("rejected", [False, True], ids=["unused", "rejected"])
+@pytest.mark.parametrize("kinds", _KINDS, ids=lambda k: "+".join(k) or "none")
+def test_notice_never_contains_machine_detail(kinds, rejected, fix, code):
+    variables = ("ANTHROPIC_API_KEY",) if fix == "variable" else ()
+    text = _text(AuthNotice(found=kinds, rejected=rejected, fix=fix,
+                            variables=variables), code)
     home = str(Path.home())
     forbidden = {
         "/home/": "an absolute home path",
@@ -142,19 +161,83 @@ def test_notice_never_contains_machine_detail(kinds):
         assert needle not in text, f"notice leaked {why}: {text!r}"
     assert not re.search(r"\d+\.\d+\.\d+", text), (
         f"notice leaked a version number: {text!r}")
-    # The operator still has to be told what to do about it.
-    assert "claude auth login" in text
+    # The operator still has to be told what to do about it: the command
+    # for a Claude login, the variable for a gateway.
+    assert ("claude auth login" in text) == (fix == "login"), text
+    assert ("ANTHROPIC_BASE_URL" in text) == (fix == "gateway"), text
+    # Every kind found is named, by the variable it is in.
+    for kind in kinds:
+        if kind != STORED_LOGIN:
+            assert kind in text, (kind, text)
+
+
+@pytest.mark.parametrize("code", LANGUAGES)
+def test_each_case_has_its_own_first_line(code):
+    """Rejected, found but not used, and nothing found read differently
+    in every language."""
+    firsts = {_text(notice, code).split("\n")[0] for notice in (
+        AuthNotice(), AuthNotice(found=("ANTHROPIC_API_KEY",)),
+        AuthNotice(found=("ANTHROPIC_API_KEY",), rejected=True))}
+    assert len(firsts) == 3
+
+
+@pytest.mark.parametrize("code", LANGUAGES)
+def test_each_fix_reads_differently(code):
+    lasts = {_text(AuthNotice(fix=fix, variables=("ANTHROPIC_API_KEY",)), code)
+             .split("\n")[-1] for fix in ("login", "gateway", "cloud", "variable")}
+    assert len(lasts) == 4
 
 
 def test_notice_names_the_kind_it_found():
-    assert "setup token" in format_auth_notice(["setup token"])
-    assert "API key" in format_auth_notice(["API key"])
-    assert "couldn't find a credential" in format_auth_notice([])
+    assert "setup token (CLAUDE_CODE_OAUTH_TOKEN)" in _text(
+        AuthNotice(found=("CLAUDE_CODE_OAUTH_TOKEN",)))
+    assert "auth token (ANTHROPIC_AUTH_TOKEN)" in _text(
+        AuthNotice(found=("ANTHROPIC_AUTH_TOKEN",)))
+    assert "API key (ANTHROPIC_API_KEY)" in _text(AuthNotice(found=("ANTHROPIC_API_KEY",)))
+    assert "Bedrock token (AWS_BEARER_TOKEN_BEDROCK)" in _text(
+        AuthNotice(found=("AWS_BEARER_TOKEN_BEDROCK",)))
+    assert "saved Claude login" in _text(AuthNotice(found=(STORED_LOGIN,)))
+    assert "couldn't find a credential" in _text(AuthNotice())
 
 
-def test_notice_articles_are_grammatical():
-    assert "an API key" in format_auth_notice(["API key"])
-    assert "a setup token" in format_auth_notice(["setup token"])
+@pytest.mark.parametrize("switch", claude_bootstrap._CLOUD_SWITCHES)
+def test_every_cloud_switch_is_named(switch):
+    assert f"cloud provider switch ({switch})" in _text(AuthNotice(found=(switch,)))
+
+
+def test_a_kind_it_does_not_know_is_left_out_not_shown_raw():
+    text = _text(AuthNotice(found=("SOME_FUTURE_VAR", "ANTHROPIC_API_KEY")))
+    assert "SOME_FUTURE_VAR" not in text
+    assert "Found: API key (ANTHROPIC_API_KEY)" in text
+    alone = _text(AuthNotice(found=("SOME_FUTURE_VAR",)))
+    assert "Found:" not in alone and "SOME_FUTURE_VAR" not in alone
+    # Nothing it can name: it says it found nothing, not "found one".
+    assert alone.startswith("⚠️ Claude isn't logged in, and I couldn't find")
+
+
+def test_a_variable_it_does_not_know_is_not_named_in_the_fix():
+    text = _text(AuthNotice(fix="variable", variables=("SOME_FUTURE_VAR",)))
+    assert "SOME_FUTURE_VAR" not in text
+    assert text.endswith("Run `claude auth login` on the machine running aipager.")
+
+
+def test_the_kinds_are_one_list():
+    text = _text(AuthNotice(found=("ANTHROPIC_API_KEY", STORED_LOGIN)))
+    assert "Found: API key (ANTHROPIC_API_KEY), saved Claude login" in text
+
+
+def test_the_fixes_in_english():
+    assert _text(AuthNotice(fix="variable", variables=(
+        "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"))).endswith(
+        "Check or replace CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY on the machine "
+        "running aipager.")
+    assert _text(AuthNotice()).endswith(
+        "Run `claude auth login` on the machine running aipager.")
+    assert _text(AuthNotice(fix="gateway")).endswith(
+        "Check the key for the address in ANTHROPIC_BASE_URL on the machine "
+        "running aipager.")
+    assert _text(AuthNotice(fix="cloud")).endswith(
+        "Check your cloud provider's credentials on the machine running aipager.")
 
 
 # ---- when the daemon decides to speak ----------------------------------
@@ -217,7 +300,7 @@ def test_successful_recovery_stays_quiet(monkeypatch, tmp_path):
     monkeypatch.setattr(claude_resolve, "validate_credential",
                         lambda *a, **k: claude_resolve.CredentialCheck("absent"))
     monkeypatch.setattr(claude_bootstrap, "_recover_auth",
-                        lambda *a, **k: (True, ["setup token"]))
+                        lambda *a, **k: (True, ["CLAUDE_CODE_OAUTH_TOKEN"]))
     pending = claude_bootstrap.PendingAuthCheck("/x/claude", "2.1.235", {})
     assert claude_bootstrap.recover_auth_or_notice(pending) is None
 
@@ -226,11 +309,11 @@ def test_failed_recovery_reports_what_it_found(monkeypatch, tmp_path):
     monkeypatch.setattr(claude_resolve, "validate_credential",
                         lambda *a, **k: claude_resolve.CredentialCheck("absent"))
     monkeypatch.setattr(claude_bootstrap, "_recover_auth",
-                        lambda *a, **k: (False, ["setup token"]))
+                        lambda *a, **k: (False, ["CLAUDE_CODE_OAUTH_TOKEN"]))
     pending = claude_bootstrap.PendingAuthCheck("/x/claude", "2.1.235", {})
-    text = claude_bootstrap.recover_auth_or_notice(pending)
-    assert "setup token" in text
-    assert "/home/" not in text
+    notice = claude_bootstrap.recover_auth_or_notice(pending)
+    assert notice == AuthNotice(found=("CLAUDE_CODE_OAUTH_TOKEN",), rejected=False,
+                                fix="login")
 
 
 # ---- the deferred check, as the daemon actually runs it ----------------
@@ -241,15 +324,16 @@ def test_finish_auth_check_runs_the_sweep_and_sends_only_when_needed(
 
     bot = _M()
     bot.send_startup_notice = _AM()
+    notice = AuthNotice(found=("ANTHROPIC_API_KEY",), fix="gateway")
     monkeypatch.setattr(claude_bootstrap, "recover_auth_or_notice",
-                        lambda pending: "\u26a0\ufe0f needs login")
+                        lambda pending: notice)
     info = ProvenanceInfo(
         lines=[DETAILED], auth_ok=False,
         pending=claude_bootstrap.PendingAuthCheck("/x/claude", "2.1.235", {}))
 
     asyncio.run(daemon._finish_auth_check(bot, info))
 
-    bot.send_startup_notice.assert_awaited_once_with("\u26a0\ufe0f needs login")
+    bot.send_startup_notice.assert_awaited_once_with(notice)
 
 
 def test_finish_auth_check_stays_silent_when_the_sweep_recovers(monkeypatch):
@@ -337,7 +421,7 @@ def test_sweep_recovers_a_working_login_shell_token(monkeypatch, tmp_path):
     _sweep_env(monkeypatch, tmp_path, shell_token="good", works={"good"})
     recovered, found = claude_bootstrap._recover_auth("/x/claude", "2.1.235", {})
     assert recovered is True
-    assert "setup token" in found
+    assert "CLAUDE_CODE_OAUTH_TOKEN" in found
     # and real session launches must now get it
     assert daemon_secrets.build_session_env({})["CLAUDE_CODE_OAUTH_TOKEN"] == "good"
 
@@ -361,7 +445,7 @@ def test_sweep_reports_kinds_but_recovers_nothing_when_all_are_rejected(
                shell_token="also-nope", works=set(), creds_file=True)
     recovered, found = claude_bootstrap._recover_auth("/x/claude", "2.1.235", {})
     assert recovered is False
-    assert set(found) == {"API key", "stored login", "setup token"}
+    assert set(found) == {"ANTHROPIC_API_KEY", STORED_LOGIN, "CLAUDE_CODE_OAUTH_TOKEN"}
 
 
 def test_sweep_never_writes_to_the_credential_file(monkeypatch, tmp_path):
@@ -421,3 +505,63 @@ def test_recovered_credential_is_in_process_only(monkeypatch, tmp_path):
         if f.is_file() and "good" in f.read_text(errors="ignore")
     ]
     assert leaked == [], f"the recovered token was persisted to {leaked}"
+
+
+# ---- right to left -----------------------------------------------------
+
+@pytest.mark.parametrize("code", ["fa", "ar"])
+@pytest.mark.parametrize("fix", ["login", "gateway", "cloud"])
+def test_every_line_sits_right_and_no_two_marks_touch(code, fix):
+    """Persian and Arabic: each line of the notice (its first word is the
+    Latin "Claude", the kinds are Latin variable names) still sits on the
+    right on iPhone, and the kinds nested in the "Found" line bring no mark
+    of their own next to the line's."""
+    from tests.bidi_uba import sits_right_on_iphone
+
+    text = _text(AuthNotice(found=("ANTHROPIC_API_KEY", STORED_LOGIN,
+                                   "CLAUDE_CODE_USE_VERTEX"), fix=fix), code)
+    for line in filter(None, text.split("\n")):
+        assert sits_right_on_iphone(line), repr(line)
+    assert "\u200f\u200f" not in text
+    found = [line for line in text.split("\n") if "ANTHROPIC_API_KEY" in line][0]
+    assert found.count("\u200f") == 2, repr(found)
+
+
+def test_the_sweep_reports_what_claude_settings_hold(monkeypatch, tmp_path):
+    """Claude Code's docs put a cloud provider's switch in its settings env:
+    it is a credential found, by name, like one in the environment."""
+    import json
+    _sweep_env(monkeypatch, tmp_path)
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps({"env": {"CLAUDE_CODE_USE_VERTEX": "1"}}))
+    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
+    _recovered, found = claude_bootstrap._recover_auth("/x/claude", "2.1.235", {})
+    assert "CLAUDE_CODE_USE_VERTEX" in found
+
+
+def test_a_cloud_switch_only_in_daemon_env_is_probed(monkeypatch, tmp_path):
+    """daemon.env is re-probed when it differs from the failing environment
+    in any credential, a cloud provider switch included: that is the setup
+    sessions will get."""
+    _sweep_env(monkeypatch, tmp_path, daemon_env="CLAUDE_CODE_USE_VERTEX=1\n")
+    probed = []
+
+    def _validate(path, env, **k):
+        probed.append(dict(env))
+        return claude_resolve.CredentialCheck("valid")
+
+    monkeypatch.setattr(claude_resolve, "validate_credential", _validate)
+    recovered, found = claude_bootstrap._recover_auth("/x/claude", "2.1.235", {})
+    assert recovered is True
+    assert probed and probed[0].get("CLAUDE_CODE_USE_VERTEX") == "1"
+    assert "CLAUDE_CODE_USE_VERTEX" in found
+
+
+def test_an_unrelated_daemon_env_line_is_not_probed_again(monkeypatch, tmp_path):
+    _sweep_env(monkeypatch, tmp_path, daemon_env="SOME_OTHER=1\n")
+    probed = []
+    monkeypatch.setattr(claude_resolve, "validate_credential",
+                        lambda path, env, **k: probed.append(env) or
+                        claude_resolve.CredentialCheck("valid"))
+    recovered, _found = claude_bootstrap._recover_auth("/x/claude", "2.1.235", {})
+    assert recovered is False and probed == []

@@ -979,9 +979,7 @@ def _daemon_env_state(path) -> str:
     # Any credential Claude Code takes counts, a gateway's
     # ANTHROPIC_AUTH_TOKEN and a cloud provider switch included: --fix must
     # not offer to add a second, OAuth one next to them.
-    found = claude_bootstrap._kinds_in(values) or any(
-        claude_bootstrap._switch_on(values.get(var)) for var in claude_bootstrap._CLOUD_SWITCHES)
-    return "credential" if found else "none"
+    return "credential" if claude_bootstrap._kinds_in(values) else "none"
 
 
 def _fix_daemon_credential() -> None:

@@ -30,6 +30,7 @@ import pytest
 from telegram.error import RetryAfter
 
 import aipager.bot.rich_message as rm
+from aipager.claude_bootstrap import AuthNotice
 from aipager import config, status
 from aipager.bot import flood
 from aipager.bot.flood import MUTE, FloodMuted
@@ -296,7 +297,7 @@ def test_startup_notice_skips_a_muted_chat_and_still_reaches_the_others(
     bot._app.bot.send_message = AsyncMock(return_value="MSG")
     MUTE.mute(-200, 5000)
     with caplog.at_level(logging.INFO, logger="aipager.bot.lifecycle"):
-        run_async(bot.send_startup_notice("claude is not authenticated"))
+        run_async(bot.send_startup_notice(AuthNotice()))
     chats = [c.args[0] for c in bot._app.bot.send_message.await_args_list]
     assert chats == [100]
     assert any("skipped" in r.getMessage() and "-200" in r.getMessage()

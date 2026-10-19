@@ -317,6 +317,20 @@
 {"k": "log.final_answer", "src": "f0ea5fc3", "v": "## Respuesta final"}
 {"k": "log.memory", "src": "df926a90", "v": {"many": "_Solo se guardan las últimas {n} filas de herramientas; en tareas muy largas puede que ya falten las más antiguas._", "one": "_Solo se guardan las últimas {n} filas de herramientas; en tareas muy largas puede que ya falten las más antiguas._", "other": "_Solo se guardan las últimas {n} filas de herramientas; en tareas muy largas puede que ya falten las más antiguas._"}}
 {"k": "log.title", "src": "2d9e96f5", "v": "# {session} - registro completo"}
+{"k": "login.fix.cloud", "src": "99b6f423", "v": "Revisa las credenciales de tu proveedor en la nube, en la computadora donde corre aipager."}
+{"k": "login.fix.gateway", "src": "250eb193", "v": "Revisa la clave de la dirección que hay en {name}, en la computadora donde corre aipager."}
+{"k": "login.fix.login", "src": "c8947c81", "v": "Ejecuta {command} en la computadora donde corre aipager."}
+{"k": "login.fix.variable", "src": "c2bf0313", "v": "Revisa o reemplaza {name} en la computadora donde corre aipager."}
+{"k": "login.found", "src": "91657bbb", "v": "Encontrado: {kinds}"}
+{"k": "login.kind.api_key", "src": "fbd04c29", "v": "clave de API ({name})"}
+{"k": "login.kind.auth_token", "src": "4a4de002", "v": "token de autenticación ({name})"}
+{"k": "login.kind.bedrock_token", "src": "5d77e4f5", "v": "token de Bedrock ({name})"}
+{"k": "login.kind.cloud_switch", "src": "b29720b1", "v": "ajuste de proveedor en la nube ({name})"}
+{"k": "login.kind.setup_token", "src": "f2ada5c8", "v": "token de setup-token ({name})"}
+{"k": "login.kind.stored_login", "src": "917d972e", "v": "inicio de sesión de Claude guardado"}
+{"k": "login.missing", "src": "ed849a76", "v": "⚠️ Claude no tiene la sesión iniciada y no encontré ninguna credencial en los sitios donde sé buscar."}
+{"k": "login.rejected", "src": "51a6b23b", "v": "⚠️ Claude rechazó su credencial, que probablemente caducó o fue revocada."}
+{"k": "login.unused", "src": "e10a4542", "v": "⚠️ Claude no tiene la sesión iniciada, aunque encontré en esta computadora una credencial que no está usando."}
 {"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ No se pudieron descargar los archivos: {names}"}
 {"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ No se pudo descargar el archivo: {names}"}
 {"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ No se pudieron descargar estos archivos; el resto del álbum se envió sin ellos: {names}"}

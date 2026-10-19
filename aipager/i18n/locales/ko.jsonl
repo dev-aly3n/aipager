@@ -317,6 +317,20 @@
 {"k": "log.final_answer", "src": "f0ea5fc3", "v": "## 최종 답변"}
 {"k": "log.memory", "src": "df926a90", "v": {"other": "_최근 도구 기록 {n}줄만 보관해요. 아주 긴 작업에서는 오래된 줄이 이미 사라졌을 수 있어요._"}}
 {"k": "log.title", "src": "2d9e96f5", "v": "# {session} - 전체 로그"}
+{"k": "login.fix.cloud", "src": "99b6f423", "v": "aipager가 실행 중인 컴퓨터에서 클라우드 제공업체의 로그인 정보를 확인하세요."}
+{"k": "login.fix.gateway", "src": "250eb193", "v": "aipager가 실행 중인 컴퓨터에서 {name}에 있는 주소의 키를 확인하세요."}
+{"k": "login.fix.login", "src": "c8947c81", "v": "aipager가 실행 중인 컴퓨터에서 다음 명령을 실행하세요: {command}"}
+{"k": "login.fix.variable", "src": "c2bf0313", "v": "aipager가 실행 중인 컴퓨터에서 다음 값을 확인하거나 바꾸세요: {name}"}
+{"k": "login.found", "src": "91657bbb", "v": "찾은 것: {kinds}"}
+{"k": "login.kind.api_key", "src": "fbd04c29", "v": "API 키 ({name})"}
+{"k": "login.kind.auth_token", "src": "4a4de002", "v": "인증 토큰 ({name})"}
+{"k": "login.kind.bedrock_token", "src": "5d77e4f5", "v": "Bedrock 토큰 ({name})"}
+{"k": "login.kind.cloud_switch", "src": "b29720b1", "v": "클라우드 제공업체 설정 ({name})"}
+{"k": "login.kind.setup_token", "src": "f2ada5c8", "v": "setup-token 토큰 ({name})"}
+{"k": "login.kind.stored_login", "src": "917d972e", "v": "저장된 Claude 로그인"}
+{"k": "login.missing", "src": "ed849a76", "v": "⚠️ Claude에 로그인되어 있지 않고, 찾아볼 수 있는 곳 어디에서도 로그인 정보를 찾지 못했어요."}
+{"k": "login.rejected", "src": "51a6b23b", "v": "⚠️ Claude가 로그인 정보를 거부했어요. 만료되었거나 취소된 것 같아요."}
+{"k": "login.unused", "src": "e10a4542", "v": "⚠️ Claude에 로그인되어 있지 않지만, 이 컴퓨터에서 Claude가 쓰지 않는 로그인 정보를 찾았어요."}
 {"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ 이 파일들을 다운로드할 수 없어요: {names}"}
 {"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ 이 파일을 다운로드할 수 없어요: {names}"}
 {"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ 이 파일들을 다운로드할 수 없어서 나머지 앨범만 보냈어요: {names}"}

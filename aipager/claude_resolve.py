@@ -609,61 +609,9 @@ def uses_custom_endpoint(env: Mapping[str, str]) -> bool:
     return not any(host == h or host.endswith("." + h) for h in _ANTHROPIC_HOSTS)
 
 
-def _with_article(kind: str) -> str:
-    return f"{'an' if kind[:1].lower() in 'aeiou' else 'a'} {kind}"
-
-
-def format_auth_notice(found_kinds: list[str], *, rejected: bool = False) -> str:
-    """Render the ONLY thing this daemon ever says to Telegram about auth.
-
-    Deliberately says nothing about the machine. ``format_provenance``
-    above — absolute binary paths, versions, every install found — is for
-    the local journal and ``aipager doctor``, both of which stay on the
-    operator's own machine. A Telegram message does not: it is stored on
-    Telegram's servers, forwardable, screenshottable, and in a team scope
-    it reaches every member of every configured group. Naming the home
-    directory there leaks the OS username and the machine's layout to an
-    audience that has no use for either.
-
-    So this reports only the *kind* of credential found — enough for the
-    operator to know which thing to go fix — and never where it lives,
-    which version anything is, or what it is called on disk. Anything
-    added here must keep that property; ``tests/test_auth_notice.py``
-    asserts it against the rendered text.
-
-    *found_kinds* is the de-duplicated list of human-readable credential
-    kinds the recovery sweep turned up, in discovery order.
-    """
-    fix = "Run `claude auth login` on the machine running aipager."
-    if rejected:
-        # Distinct from "nothing found": something IS configured, it just
-        # doesn't work any more. Expiry is by far the likeliest cause and
-        # naming it saves the operator hunting for a missing file that is
-        # sitting right where it should be.
-        what = _with_article(found_kinds[0]) if found_kinds else "a credential"
-        return (
-            f"\u26a0\ufe0f Claude rejected {what} - it has probably expired "
-            "or been revoked.\n\n" + fix
-        )
-    if not found_kinds:
-        return (
-            "\u26a0\ufe0f Claude isn't logged in, and I couldn't find a "
-            "credential anywhere I know to look.\n\n" + fix
-        )
-    phrases = [_with_article(k) for k in found_kinds]
-    if len(phrases) == 1:
-        what = phrases[0]
-    else:
-        what = ", ".join(phrases[:-1]) + f" and {phrases[-1]}"
-    return (
-        f"\u26a0\ufe0f Claude isn't logged in, though I did find {what} on "
-        "this machine - Claude isn't picking it up.\n\n" + fix
-    )
-
-
 __all__ = [
     "AuthStatus", "ClaudeInstall", "ClaudeNotFoundError", "ResolvedClaude",
-    "CredentialCheck", "detect_auth", "format_auth_notice",
+    "CredentialCheck", "detect_auth",
     "format_provenance", "validate_credential",
     "refresh_claude_binary", "resolve_claude_binary",
     "try_resolve_claude_binary",

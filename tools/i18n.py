@@ -129,6 +129,8 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"pin\.btn\.[a-z0-9_]+", "button", "cells", 40, ""),
     (r"pin\.[a-z0-9_.]+", "message", "chars", 120, ""),
     (r"flood\.[a-z0-9_.]+", "message", "chars", 120, ""),
+    # The startup notice about Claude's login (aipager/bot/auth_notice.py).
+    (r"login\.[a-z0-9_.]+", "message", "chars", 300, ""),
     (r"status\.btn\.[a-z0-9_]+", "button", "cells", 40, ""),
     (r"status\.[a-z0-9_.]+", "message", "chars", 200, ""),
     (r"lang\.beta", "button", "cells", 40, "endonym"),

@@ -317,6 +317,20 @@
 {"k": "log.final_answer", "src": "f0ea5fc3", "v": "## Câu trả lời cuối cùng"}
 {"k": "log.memory", "src": "df926a90", "v": {"other": "_Chỉ giữ {n} dòng công cụ gần nhất; với những việc rất dài, các dòng cũ hơn có thể đã mất._"}}
 {"k": "log.title", "src": "2d9e96f5", "v": "# {session} - log đầy đủ"}
+{"k": "login.fix.cloud", "src": "99b6f423", "v": "Hãy kiểm tra thông tin đăng nhập của nhà cung cấp đám mây, trên máy tính đang chạy aipager."}
+{"k": "login.fix.gateway", "src": "250eb193", "v": "Hãy kiểm tra khóa cho địa chỉ trong {name}, trên máy tính đang chạy aipager."}
+{"k": "login.fix.login", "src": "c8947c81", "v": "Hãy chạy {command} trên máy tính đang chạy aipager."}
+{"k": "login.fix.variable", "src": "c2bf0313", "v": "Hãy kiểm tra hoặc thay {name} trên máy tính đang chạy aipager."}
+{"k": "login.found", "src": "91657bbb", "v": "Đã tìm thấy: {kinds}"}
+{"k": "login.kind.api_key", "src": "fbd04c29", "v": "khóa API ({name})"}
+{"k": "login.kind.auth_token", "src": "4a4de002", "v": "token xác thực ({name})"}
+{"k": "login.kind.bedrock_token", "src": "5d77e4f5", "v": "token Bedrock ({name})"}
+{"k": "login.kind.cloud_switch", "src": "b29720b1", "v": "thiết lập nhà cung cấp đám mây ({name})"}
+{"k": "login.kind.setup_token", "src": "f2ada5c8", "v": "token setup-token ({name})"}
+{"k": "login.kind.stored_login", "src": "917d972e", "v": "đăng nhập Claude đã lưu"}
+{"k": "login.missing", "src": "ed849a76", "v": "⚠️ Claude chưa đăng nhập, và không tìm thấy thông tin đăng nhập ở bất kỳ chỗ nào có thể tìm."}
+{"k": "login.rejected", "src": "51a6b23b", "v": "⚠️ Claude đã từ chối thông tin đăng nhập của nó, có lẽ đã hết hạn hoặc bị thu hồi."}
+{"k": "login.unused", "src": "e10a4542", "v": "⚠️ Claude chưa đăng nhập, dù trên máy tính này có thông tin đăng nhập mà Claude không dùng."}
 {"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ Không tải được các file này: {names}"}
 {"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ Không tải được file này: {names}"}
 {"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ Không tải được các file này, phần còn lại của album vẫn được gửi: {names}"}

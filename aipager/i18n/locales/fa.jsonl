@@ -317,6 +317,20 @@
 {"k": "log.final_answer", "src": "f0ea5fc3", "v": "## جواب نهایی"}
 {"k": "log.memory", "src": "df926a90", "v": {"one": "_فقط {n} ردیف آخر ابزارها نگه داشته می‌شود؛ در کارهای خیلی طولانی ردیف‌های قدیمی‌تر شاید نباشند._", "other": "_فقط {n} ردیف آخر ابزارها نگه داشته می‌شود؛ در کارهای خیلی طولانی ردیف‌های قدیمی‌تر شاید نباشند._"}}
 {"k": "log.title", "src": "2d9e96f5", "v": "# {session} - گزارش کامل"}
+{"k": "login.fix.cloud", "src": "99b6f423", "v": "روی کامپیوتری که aipager روی آن اجراست، اطلاعات ورود سرویس ابری‌تان را چک کنید."}
+{"k": "login.fix.gateway", "src": "250eb193", "v": "روی کامپیوتری که aipager روی آن اجراست، کلیدِ آدرسی را که در {name} آمده چک کنید."}
+{"k": "login.fix.login", "src": "c8947c81", "v": "روی کامپیوتری که aipager روی آن اجراست، {command} را اجرا کنید."}
+{"k": "login.fix.variable", "src": "c2bf0313", "v": "روی کامپیوتری که aipager روی آن اجراست، {name} را چک یا عوض کنید."}
+{"k": "login.found", "src": "91657bbb", "v": "پیدا شد: {kinds}"}
+{"k": "login.kind.api_key", "src": "fbd04c29", "v": "کلید API ({name})"}
+{"k": "login.kind.auth_token", "src": "4a4de002", "v": "توکن احراز هویت ({name})"}
+{"k": "login.kind.bedrock_token", "src": "5d77e4f5", "v": "توکن Bedrock ({name})"}
+{"k": "login.kind.cloud_switch", "src": "b29720b1", "v": "تنظیم سرویس ابری ({name})"}
+{"k": "login.kind.setup_token", "src": "f2ada5c8", "v": "توکن setup-token ({name})"}
+{"k": "login.kind.stored_login", "src": "917d972e", "v": "لاگین ذخیره‌شدهٔ Claude"}
+{"k": "login.missing", "src": "ed849a76", "v": "⚠️ Claude لاگین نیست و در هیچ‌کدام از جاهایی که می‌شناسم اطلاعات ورودی پیدا نکردم."}
+{"k": "login.rejected", "src": "51a6b23b", "v": "⚠️ Claude اطلاعات ورودش را قبول نکرد؛ احتمالاً تاریخش گذشته یا باطل شده."}
+{"k": "login.unused", "src": "e10a4542", "v": "⚠️ Claude لاگین نیست، با اینکه روی این کامپیوتر اطلاعات ورودی پیدا کردم که Claude از آن استفاده نمی‌کند."}
 {"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ این فایل‌ها دانلود نشدند: {names}"}
 {"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ این فایل دانلود نشد: {names}"}
 {"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ این فایل‌ها دانلود نشدند و بقیهٔ آلبوم بدون آن‌ها ارسال شد: {names}"}

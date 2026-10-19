@@ -317,6 +317,20 @@
 {"k": "log.final_answer", "src": "f0ea5fc3", "v": "## 最终回答"}
 {"k": "log.memory", "src": "df926a90", "v": {"other": "_只保留最近 {n} 行工具记录；很长的任务中较早的行可能已经没了。_"}}
 {"k": "log.title", "src": "2d9e96f5", "v": "# {session} - 完整日志"}
+{"k": "login.fix.cloud", "src": "99b6f423", "v": "请在运行 aipager 的电脑上检查云服务商的登录凭据。"}
+{"k": "login.fix.gateway", "src": "250eb193", "v": "请在运行 aipager 的电脑上检查 {name} 中地址对应的密钥。"}
+{"k": "login.fix.login", "src": "c8947c81", "v": "请在运行 aipager 的电脑上运行 {command}。"}
+{"k": "login.fix.variable", "src": "c2bf0313", "v": "请在运行 aipager 的电脑上检查或更换 {name}。"}
+{"k": "login.found", "src": "91657bbb", "v": "找到：{kinds}"}
+{"k": "login.kind.api_key", "src": "fbd04c29", "v": "API 密钥（{name}）"}
+{"k": "login.kind.auth_token", "src": "4a4de002", "v": "认证令牌（{name}）"}
+{"k": "login.kind.bedrock_token", "src": "5d77e4f5", "v": "Bedrock 令牌（{name}）"}
+{"k": "login.kind.cloud_switch", "src": "b29720b1", "v": "云服务商开关（{name}）"}
+{"k": "login.kind.setup_token", "src": "f2ada5c8", "v": "setup-token 令牌（{name}）"}
+{"k": "login.kind.stored_login", "src": "917d972e", "v": "已保存的 Claude 登录"}
+{"k": "login.missing", "src": "ed849a76", "v": "⚠️ Claude 没有登录，我在所有知道的位置都没找到登录凭据。"}
+{"k": "login.rejected", "src": "51a6b23b", "v": "⚠️ Claude 拒绝了它的登录凭据，可能已过期或被撤销。"}
+{"k": "login.unused", "src": "e10a4542", "v": "⚠️ Claude 没有登录，不过我在这台电脑上找到了 Claude 没在用的登录凭据。"}
 {"k": "media.album_failed_many", "src": "d5c0706e", "v": "❌ 这些文件下载失败：{names}"}
 {"k": "media.album_failed_one", "src": "fbe66a07", "v": "❌ 这个文件下载失败：{names}"}
 {"k": "media.album_left_out_many", "src": "aaa8fc18", "v": "❌ 这些文件下载失败，相册的其余部分已照常发送：{names}"}

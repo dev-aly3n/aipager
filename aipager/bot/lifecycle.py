@@ -1767,7 +1767,7 @@ class LifecycleMixin:
 
         Note the breadth: in a team setup this is every member of every
         configured group, which is exactly why the text they receive is
-        machine-free (see ``claude_resolve.format_auth_notice``).
+        machine-free (see :mod:`aipager.bot.auth_notice`).
 
         Multi-scope: every configured scope's chat_id. Legacy: the
         single CHAT_ID, parsed the same defensively as
@@ -1781,14 +1781,15 @@ class LifecycleMixin:
         except (TypeError, ValueError):
             return []
 
-    async def send_startup_notice(self, text: str) -> None:
-        """Send the one-time startup auth warning to every chat.
+    async def send_startup_notice(self, notice) -> None:
+        """Send the one-time startup auth warning to every chat, each in its
+        own language.
 
         Called only when Claude is genuinely unauthenticated and the
         recovery sweep found nothing that works — a healthy start sends
-        nothing. *text* must never contain machine detail; the caller
-        builds it with ``claude_resolve.format_auth_notice``, not from
-        ``format_provenance``'s journal lines.
+        nothing. *notice* is a ``claude_bootstrap.AuthNotice``, worded by
+        :mod:`aipager.bot.auth_notice`, which names no machine detail;
+        never ``format_provenance``'s journal lines.
 
         Fire-and-forget from ``_run_daemon()`` — called once, after
         :meth:`start` has already begun polling, so a slow or failing
@@ -1801,8 +1802,20 @@ class LifecycleMixin:
         """
         if not self._app:
             return
+        from aipager import i18n
+        from aipager.bot import auth_notice
+
         for chat_id in self._all_notify_chat_ids():
             try:
+                try:
+                    text = auth_notice.render(notice, self._menu_tr(chat_id))
+                except Exception:
+                    # The one message that says no session can log in: in
+                    # English rather than not at all.
+                    log.warning("Startup notice for chat %s could not be worded "
+                                "in its language; sending it in English", chat_id,
+                                exc_info=True)
+                    text = auth_notice.render(notice, i18n.get("en"))
                 await _send_with_retry(self._app.bot, chat_id=chat_id, text=text)
             except FloodMuted as e:
                 # R4: never a startup send into a ban.

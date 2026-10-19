@@ -117,8 +117,9 @@ def test_doctor_is_quiet_about_a_refused_key_next_to_a_login(monkeypatch, tmp_pa
 
 
 def test_an_auth_token_is_not_called_a_setup_token():
-    assert claude_bootstrap._kinds_in({"ANTHROPIC_AUTH_TOKEN": "gw"}) == ["auth token"]
-    assert claude_bootstrap._kinds_in({"CLAUDE_CODE_OAUTH_TOKEN": "t"}) == ["setup token"]
+    assert claude_bootstrap._kinds_in({"ANTHROPIC_AUTH_TOKEN": "gw"}) == ["ANTHROPIC_AUTH_TOKEN"]
+    assert claude_bootstrap._kinds_in({"CLAUDE_CODE_OAUTH_TOKEN": "t"}) == [
+        "CLAUDE_CODE_OAUTH_TOKEN"]
 
 
 @pytest.mark.parametrize("line,state", [
