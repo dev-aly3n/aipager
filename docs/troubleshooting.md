@@ -555,8 +555,9 @@ only; other models can behave differently.
   get: one `KEY=value` a line, with no quotes (they would become part of
   the value). The `env` blocks of a trusted launch folder's
   `.claude/settings.json` and `.claude/settings.local.json` and of managed
-  settings (`/etc/claude-code/managed-settings.json` and
-  `managed-settings.d/`) count too, as they do for Claude Code. A service (`aipager service install`) never reads your
+  settings (`managed-settings.json` and `managed-settings.d/` in
+  `/etc/claude-code` on Linux, `/Library/Application Support/ClaudeCode`
+  on macOS) count too, as they do for Claude Code. A service (`aipager service install`) never reads your
   shell's profile, so an `export` there does not reach it. Restart aipager
   after you change `daemon.env`.
 - **Which key setting.** For a gateway or another provider, Claude Code's
@@ -609,7 +610,8 @@ Claude Code reads (checked with Claude Code 2.1.303):
   the `aipager start` of that shell. At start the daemon wires its hooks
   into `$CLAUDE_CONFIG_DIR/settings.json` and logs `sessions read Claude
   Code's config from ...`; if you change the value while it runs, the
-  next session it starts gets them. When the hooks cannot be wired, the
+  next session it starts gets them, as does a settings file that lost
+  them since. When the hooks cannot be wired, the
   log says `sessions will start without aipager's hooks` and
   `aipager doctor` warns.
 - **Use a full path.** Claude Code takes the value as it is: no `~`, and
@@ -626,9 +628,11 @@ Claude Code reads (checked with Claude Code 2.1.303):
   sessions read: your shell's environment plus `daemon.env`. A `claude`
   you start in a shell with another value reads another file and has no
   aipager hooks; `aipager doctor` names it.
-- **The legacy `.config.json`.** When `<config folder>/.config.json`
-  exists and is not empty, Claude Code uses it instead of `.claude.json`,
-  and so does aipager.
+- **The legacy `.config.json`.** When `<config folder>/.config.json` is
+  in use (for example, it exists and is not empty), Claude Code reads it
+  instead of `.claude.json`, and so does aipager. With an empty
+  `CLAUDE_CONFIG_DIR` that file would be in the session's own folder, and
+  aipager writes nothing there.
 - **What aipager cannot read.** Managed settings delivered by an MDM
   profile (macOS), the Windows registry or Claude's servers, and the
   `--settings` flag. A key or a provider switch set only there is not
